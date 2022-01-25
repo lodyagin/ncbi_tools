@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/93
 *
-* $Revision: 6.1 $
+* $Revision: 6.3 $
 *
 * File Description:  Object Print Utilities
 *
@@ -40,6 +40,12 @@
 * 04-24-94 Kans        Template sought first in program, then DATA directory
 *
 * $Log: prtutil.c,v $
+* Revision 6.3  2004/02/02 18:09:34  kans
+* typo in PrintTemplateSetLoadEx
+*
+* Revision 6.2  2004/02/02 17:30:21  kans
+* PrintTemplateSetLoadEx takes a local string, used to make internal copy of objprt.prt in Sequin
+*
 * Revision 6.1  1998/12/29 19:55:53  kans
 * more informative error message if FindPath fails
 *
@@ -113,7 +119,7 @@ NLM_EXTERN PrintTemplatePtr PrintTemplateFind (CharPtr name)
 *       If path== NULL, looks for "prt.prt" in the "data" directory
 *
 *****************************************************************************/
-NLM_EXTERN Boolean PrintTemplateSetLoad ( CharPtr path )
+static Boolean PrintTemplateSetLoadInt ( CharPtr path, Boolean verbose )
 {
 	AsnIoPtr aip;
 	FILE *f;
@@ -127,7 +133,9 @@ NLM_EXTERN Boolean PrintTemplateSetLoad ( CharPtr path )
 	if (path != NULL && *path != '\0' && StringRChr (path, DIRDELIMCHR) != NULL) {
 		StringNCpy (fullpath, path, sizeof (fullpath) - 1);
 		if ((aip = AsnIoOpen (fullpath, "r")) == NULL) {
-			ErrPost(CTX_NCBIOBJ, 1, "Couldn't open [%s]", fullpath);
+		    if (verbose) {
+	    		ErrPost(CTX_NCBIOBJ, 1, "Couldn't open [%s]", fullpath);
+		    }
 			return FALSE;
 		}
 	} else {
@@ -150,18 +158,24 @@ NLM_EXTERN Boolean PrintTemplateSetLoad ( CharPtr path )
 			if (FindPath ("NCBI", "NCBI", "DATA", fullpath, sizeof (fullpath) - 1)) {
 				FileBuildPath (fullpath, NULL, filename);
 				if ((aip = AsnIoOpen (fullpath, "r")) == NULL) {
-					ErrPost(CTX_NCBIOBJ, 1, "Couldn't open [%s]", fullpath);
+				    if (verbose) {
+					    ErrPost(CTX_NCBIOBJ, 1, "Couldn't open [%s]", fullpath);
+				    }
 					return FALSE;
 				}
 			} else {
-				ErrPost(CTX_NCBIOBJ, 1, "FindPath failed in PrintTemplateSetLoad - ncbi configuration file missing or incorrect");
+			    if (verbose) {
+			    	ErrPost(CTX_NCBIOBJ, 1, "FindPath failed in PrintTemplateSetLoad - ncbi configuration file missing or incorrect");
+			    }
 				return FALSE;
 			}
 		} else {
 			ErrSetMessageLevel (lastLevel);
 			FileClose (f);
 			if ((aip = AsnIoOpen(fullpath, "r")) == NULL) {
-				ErrPost(CTX_NCBIOBJ, 1, "Couldn't open [%s]", fullpath);
+			    if (verbose) {
+				    ErrPost(CTX_NCBIOBJ, 1, "Couldn't open [%s]", fullpath);
+			    }
 				return FALSE;
 			}
 		}
@@ -171,6 +185,40 @@ NLM_EXTERN Boolean PrintTemplateSetLoad ( CharPtr path )
 
     AsnIoClose(aip);
     return retval;
+}
+
+static Boolean LoadObjPrtFromLocalString (CharPtr localStr)
+
+{
+  Boolean     retval = FALSE;
+#ifndef WIN16
+  AsnIoMemPtr aimp;
+
+  aimp = AsnIoMemOpen ("r", (BytePtr) localStr, (Int4) StringLen (localStr));
+  if (aimp == NULL || aimp->aip == NULL) return FALSE;
+  retval = PrintTemplateSetAsnRead (aimp->aip);
+  AsnIoMemClose (aimp);
+#endif
+  return retval;
+}
+
+NLM_EXTERN Boolean PrintTemplateSetLoadEx ( CharPtr path, CharPtr localStr )
+
+{
+  Boolean  verbose = TRUE;
+
+  if (StringDoesHaveText (localStr)) {
+    verbose = FALSE;
+  }
+  if (PrintTemplateSetLoadInt (path, verbose)) return TRUE;
+  if (verbose) return FALSE;
+  return LoadObjPrtFromLocalString (localStr);
+}
+
+NLM_EXTERN Boolean PrintTemplateSetLoad ( CharPtr path )
+
+{
+  return PrintTemplateSetLoadEx (path, NULL);
 }
 
 /*****************************************************************************

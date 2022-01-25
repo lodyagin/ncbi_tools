@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: megablast.c,v 6.107 2003/05/30 17:31:09 coulouri Exp $";
+static char const rcsid[] = "$Id: megablast.c,v 6.111 2004/01/27 20:47:18 dondosha Exp $";
 
-/* $Id: megablast.c,v 6.107 2003/05/30 17:31:09 coulouri Exp $
+/* $Id: megablast.c,v 6.111 2004/01/27 20:47:18 dondosha Exp $
 **************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -28,6 +28,18 @@ static char const rcsid[] = "$Id: megablast.c,v 6.107 2003/05/30 17:31:09 coulou
 ************************************************************************** 
  * $Revision 6.13$ *  
  * $Log: megablast.c,v $
+ * Revision 6.111  2004/01/27 20:47:18  dondosha
+ * Set no_traceback option to 2 for -D4, 1 for -D0, 0 for others
+ *
+ * Revision 6.110  2003/11/05 22:28:06  dondosha
+ * No need to shift subsequence coordinates in tabular output, since they are already shifted in the seqalign
+ *
+ * Revision 6.109  2003/10/30 17:30:49  dondosha
+ * Fixed error in previous commit - output file pointer has to be set for all cases
+ *
+ * Revision 6.108  2003/10/29 17:48:15  dondosha
+ * Added -D4 option for 2-stage greedy gapped extension with format identical to -D2
+ *
  * Revision 6.107  2003/05/30 17:31:09  coulouri
  * add rcsid
  *
@@ -396,7 +408,8 @@ enum {
    MBLAST_ENDPOINTS = 0,
    MBLAST_SEGMENTS,
    MBLAST_ALIGNMENTS,
-   MBLAST_ALIGN_INFO
+   MBLAST_ALIGN_INFO,
+   MBLAST_DELAYED_TRACEBACK
 };
 
 static int LIBCALLBACK
@@ -912,6 +925,7 @@ Int2 Main (void)
    Boolean lcase_masking;
    BlastOutputPtr boutp = NULL;
    MBXmlPtr mbxp = NULL;
+   Boolean traditional_formatting;
    
     StringCpy(buf, "megablast ");
     StringNCat(buf, BlastGetVersionNumber(), sizeof(buf)-StringLen(buf)-1);
@@ -947,14 +961,17 @@ Int2 Main (void)
 	}
 
 	align_type = BlastGetTypes(blast_program, &query_is_na, &db_is_na);
- 
+   traditional_formatting = 
+      (myargs[12].intvalue == MBLAST_ALIGNMENTS ||
+       myargs[12].intvalue == MBLAST_DELAYED_TRACEBACK);
+
         if (myargs[15].strvalue) {
            if (myargs[15].strvalue[0] == 'f' || myargs[15].strvalue[0] == 'F' ||
                myargs[15].strvalue[0] == '0')
               believe_query = FALSE;
            else
               believe_query = TRUE;
-        } else if (myargs[12].intvalue == MBLAST_ALIGNMENTS && 
+        } else if (traditional_formatting && 
                    !myargs[14].strvalue)
            believe_query = FALSE;
         else
@@ -1058,9 +1075,11 @@ Int2 Main (void)
 	   options->gifile = StringSave(myargs[22].strvalue);
    
 	if (myargs[12].intvalue == MBLAST_ENDPOINTS)
-	   options->no_traceback = TRUE;
+      options->no_traceback = 1;
+   else if (myargs[12].intvalue == MBLAST_DELAYED_TRACEBACK)
+	   options->no_traceback = 2;
 	else
-	   options->no_traceback = FALSE;
+	   options->no_traceback = 0;
 
 	options->megablast_full_deflines = (Boolean) myargs[27].intvalue;
         options->perc_identity = (FloatLo) myargs[30].floatvalue;
@@ -1077,10 +1096,9 @@ Int2 Main (void)
 	StrCpy(prefix, "");
 
 	global_fp = outfp;
-        if (myargs[12].intvalue != MBLAST_ALIGNMENTS)
-           options->output = outfp;
+        options->output = outfp;
 
-	if (myargs[12].intvalue==MBLAST_ALIGNMENTS) {
+	if (traditional_formatting) {
 	   if (align_view < 7) {
               if (html) {
                  fprintf(outfp, "<HTML>\n<TITLE>MEGABLAST Search Results</TITLE>\n");
@@ -1233,7 +1251,7 @@ Int2 Main (void)
            }
               
               
-	   if (myargs[12].intvalue==MBLAST_ALIGNMENTS) {
+	   if (traditional_formatting) {
 	      dbinfo = NULL;
 	      ka_params = NULL;
 	      ka_params_gap = NULL;
@@ -1333,7 +1351,7 @@ Int2 Main (void)
                        BlastPrintTabulatedResults(seqalign, 
                           query_bsp_array[index], NULL, number_of_alignments,
                           blast_program, !options->gapped_calculation, 
-                          believe_query, options->required_start, 0, 
+                          believe_query, 0, 0, 
                           global_fp, (align_view == 9));
 
                        SeqAlignSetFree(seqalign);

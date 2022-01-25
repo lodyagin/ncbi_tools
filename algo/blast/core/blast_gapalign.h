@@ -1,4 +1,4 @@
-/* $Id: blast_gapalign.h,v 1.27 2003/10/27 20:50:20 dondosha Exp $
+/* $Id: blast_gapalign.h,v 1.28 2003/12/10 23:14:34 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,7 +32,7 @@ Author: Ilya Dondoshansky
 Contents: Structures and functions prototypes used for BLAST gapped extension
 
 ******************************************************************************
- * $Revision: 1.27 $
+ * $Revision: 1.28 $
  * */
 
 #ifndef __BLAST_GAPALIGN__
@@ -246,8 +246,6 @@ Int2 BLAST_GetGappedScore (Uint1 program_number, BLAST_SequenceBlk* query,
  * @param subject The subject sequence [in]
  * @param gap_align The gapped alignment structure [in] [out]
  * @param score_options Scoring parameters [in]
- * @param ext_options Extension options, specifying which algorithm to use
- *                     for gapped extension [in]
  * @param q_start Offset in query where to start alignment [in]
  * @param s_start Offset in subject where to start alignment [in]
  * @param subject_length Maximal allowed extension in subject [in]
@@ -256,8 +254,29 @@ Int2 BLAST_GappedAlignmentWithTraceback(Uint1 program,
         Uint1* query, Uint1* subject, 
         BlastGapAlignStruct* gap_align, 
         const BlastScoringOptions* score_options,
-        const BlastExtensionOptions* ext_options,
         Int4 q_start, Int4 s_start, Int4 query_length, Int4 subject_length);
+
+/** Greedy gapped alignment, with or without traceback.
+ * Given two sequences, relevant options and an offset pair, fills the
+ * gap_align structure with alignment endpoints and, if traceback is 
+ * performed, gap information.
+ * @param query The query sequence [in]
+ * @param subject The subject sequence [in]
+ * @param query_length The query sequence length [in]
+ * @param subject The subject sequence length [in]
+ * @param gap_align The structure holding various information and memory 
+ *        needed for gapped alignment [in] [out]
+ * @param score_options Options related to scoring alignments [in]
+ * @param q_off Starting offset in query [in]
+ * @param s_off Starting offset in subject [in]
+ * @param compressed_subject Is subject sequence compressed? [in]
+ * @param do_traceback Should traceback be saved? [in]
+ */
+Int2 
+BLAST_GreedyGappedAlignment(Uint1* query, Uint1* subject, 
+   Int4 query_length, Int4 subject_length, BlastGapAlignStruct* gap_align,
+   const BlastScoringOptions* score_options, 
+   Int4 q_off, Int4 s_off, Boolean compressed_subject, Boolean do_traceback);
 
 /** Perform a gapped alignment with traceback for PHI BLAST
  * @param program Type of BLAST program [in]

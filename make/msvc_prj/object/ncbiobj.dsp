@@ -85,6 +85,10 @@ SOURCE=..\..\..\api\aliread.c
 # End Source File
 # Begin Source File
 
+SOURCE=..\..\..\util\creaders\alnread.c
+# End Source File
+# Begin Source File
+
 SOURCE=..\..\..\api\asn2ff1.c
 # End Source File
 # Begin Source File
@@ -109,7 +113,27 @@ SOURCE=..\..\..\api\asn2ff6.c
 # End Source File
 # Begin Source File
 
-SOURCE=..\..\..\api\asn2gnbk.c
+SOURCE=..\..\..\api\asn2gnb1.c
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\api\asn2gnb2.c
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\api\asn2gnb3.c
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\api\asn2gnb4.c
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\api\asn2gnb5.c
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\api\asn2gnb6.c
 # End Source File
 # Begin Source File
 
@@ -489,6 +513,10 @@ SOURCE=..\..\..\asnstat\allpub.h
 # End Source File
 # Begin Source File
 
+SOURCE=..\..\..\util\creaders\alnread.h
+# End Source File
+# Begin Source File
+
 SOURCE=..\..\..\api\asn2ff.h
 # End Source File
 # Begin Source File
@@ -622,6 +650,10 @@ SOURCE=..\..\..\asnstat\cdrom.h
 # Begin Source File
 
 SOURCE=..\..\..\api\codon.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\util\creaders\creaders_export.h
 # End Source File
 # Begin Source File
 

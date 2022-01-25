@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: blastconcat.c,v 1.4 2003/05/30 17:25:36 coulouri Exp $";
+static char const rcsid[] = "$Id: blastconcat.c,v 1.5 2003/12/29 15:42:46 coulouri Exp $";
 
 /* ===========================================================================
 *
@@ -33,8 +33,11 @@ Contents: implementation of functions needed for query multiplexing
           functionality.
 
 ******************************************************************************/
-/* $Revision: 1.4 $ 
+/* $Revision: 1.5 $ 
 *  $Log: blastconcat.c,v $
+*  Revision 1.5  2003/12/29 15:42:46  coulouri
+*  tblastn query concatenation fixes from morgulis
+*
 *  Revision 1.4  2003/05/30 17:25:36  coulouri
 *  add rcsid
 *
@@ -876,6 +879,56 @@ void LIBCALL InitHitLists PROTO(( BlastSearchBlkPtr search ))
       ++hitlist_array[query_num]->hspcnt;
     }
   }
+}
+/* TEMPORARY FUNCTION - FOR DEBUGGING ONLY */
+void LIBCALL MQ_CheckLists PROTO(( BLASTResultHitlistPtr PNTR local, Int4 lsize,
+                                   BLASTResultHitlistPtr PNTR res, Int4 rsize ))
+{
+  Int4 i, j;
+
+  for( i = 0; i < lsize; ++i )
+  {
+    int found = 0;
+
+    for( j = 0; j < rsize; ++j )
+      if( local[i] == res[j] )
+      {
+        found = 1;
+        break;
+      }
+
+    if( !found )
+    {
+      fprintf( stderr, "ERROR: %d is not in res\n", i );
+      return;
+    }
+  }
+}
+
+/* ResultIndex1():
+
+   This function first calls the binary search via ResultIndex(). Then tries
+   to locate the exact object in the array by pointer.
+
+*/
+Int4 LIBCALL ResultIndex1 PROTO(( BLASTResultHitlistPtr ptr,
+                                 BLASTResultHitlistPtr PNTR results,
+				 Int4 num_elements ))
+{
+  Int4 del_index = ResultIndex( ptr->best_evalue, ptr->high_score,
+                                ptr->subject_id, results, num_elements );
+  ASSERT( del_index < num_elements );
+  
+  if( results[del_index] == ptr ) return del_index;
+
+  while( del_index >= 0 && results[del_index]->subject_id == ptr->subject_id )
+    --del_index;
+
+  while( ++del_index < num_elements && results[del_index] != ptr );
+
+  ASSERT( del_index < num_elements );
+
+  return del_index;
 }
 
 /* ResultIndex():

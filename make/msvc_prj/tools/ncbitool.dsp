@@ -171,10 +171,6 @@ SOURCE=..\..\..\tools\ncbisort.c
 # End Source File
 # Begin Source File
 
-SOURCE=..\..\..\tools\newkar.c
-# End Source File
-# Begin Source File
-
 SOURCE=..\..\..\tools\objscoremat.c
 # End Source File
 # Begin Source File

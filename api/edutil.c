@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 2/4/94
 *
-* $Revision: 6.20 $
+* $Revision: 6.21 $
 *
 * File Description:  Sequence editing utilities
 *
@@ -39,6 +39,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: edutil.c,v $
+* Revision 6.21  2003/11/03 19:37:42  bollin
+* SegLocToPartsEx now handles SEQLOC_PNT as well as SEQLOC_INT
+*
 * Revision 6.20  2003/06/03 20:25:34  kans
 * SeqLocReplaceID works on bonds if both ends bonded to the same Seq-id
 *
@@ -441,24 +444,36 @@ NLM_EXTERN SeqLocPtr LIBCALL SegLocToPartsEx (BioseqPtr seg, SeqLocPtr slp, Bool
 					&split);
 				while (tmp2 != NULL)
 				{
-					next = tmp2->next;
-					tmp2->next = NULL;
-					if (tmp2->choice == SEQLOC_INT)
-					{
-						if (nullsBetween  && notFirst) {
-							tmp3 = ValNodeNew (NULL);
-							if (tmp3 != NULL) {
-								tmp3->choice = SEQLOC_NULL;
-								SeqLocAdd (&newloc, tmp3, TRUE, FALSE);
-							}
-						}
-						notFirst = TRUE;
-						sintp = (SeqIntPtr)(tmp2->data.ptrvalue);
-						sintp->from += tstart;
-						sintp->to += tstart;
-						SeqLocAdd(&newloc, tmp2, TRUE, FALSE);
-					}
-					tmp2 = next;
+				  next = tmp2->next;
+				  tmp2->next = NULL;
+				  if (tmp2->choice == SEQLOC_INT)
+				  {
+				    if (nullsBetween  && notFirst) {
+				      tmp3 = ValNodeNew (NULL);
+				      if (tmp3 != NULL) {
+				        tmp3->choice = SEQLOC_NULL;
+				        SeqLocAdd (&newloc, tmp3, TRUE, FALSE);
+				      }
+				    }
+				    notFirst = TRUE;
+				    sintp = (SeqIntPtr)(tmp2->data.ptrvalue);
+				    sintp->from += tstart;
+				    sintp->to += tstart;
+				    SeqLocAdd(&newloc, tmp2, TRUE, FALSE);
+				  }
+                                  else if (tmp2->choice == SEQLOC_PNT)
+                                  {
+				    if (nullsBetween  && notFirst) {
+				      tmp3 = ValNodeNew (NULL);
+				      if (tmp3 != NULL) {
+				        tmp3->choice = SEQLOC_NULL;
+				        SeqLocAdd (&newloc, tmp3, TRUE, FALSE);
+				      }
+				    }
+				    notFirst = TRUE;
+                                    SeqLocAdd (&newloc, tmp2, TRUE, FALSE);
+                                  }
+				  tmp2 = next;
 				}
 				left_end = right_end + 1;
 			}

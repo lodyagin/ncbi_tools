@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: blastool.c,v 6.253 2003/09/12 16:02:06 dondosha Exp $";
+static char const rcsid[] = "$Id: blastool.c,v 6.258 2003/12/30 15:14:40 camacho Exp $";
 
 /* ===========================================================================
 *
@@ -34,8 +34,25 @@ Contents: Utilities for BLAST
 
 ******************************************************************************/
 /*
-* $Revision: 6.253 $
+* $Revision: 6.258 $
 * $Log: blastool.c,v $
+* Revision 6.258  2003/12/30 15:14:40  camacho
+* Fix to MergeDbGiListsWithOIDLists:
+* When searching gi lists for matches in rdfp linked list, isolate each
+* element of the linked list first.
+*
+* Revision 6.257  2003/12/23 23:28:27  dondosha
+* Use number of identities from the seqalign to calculate percent identity in tabular output
+*
+* Revision 6.256  2003/12/12 16:01:23  madden
+* Change to signature of BlastCutoffs, remove BlastCutoffs_simple
+*
+* Revision 6.255  2003/11/10 16:59:42  dondosha
+* Print the seqid in AcknowledgeBlastQuery for any non-local id
+*
+* Revision 6.254  2003/10/29 17:46:59  dondosha
+* Allow 2-stage greedy extension in megablast
+*
 * Revision 6.253  2003/09/12 16:02:06  dondosha
 * If gap open is non-zero for megablast, require gap extension option to be non-zero too
 *
@@ -1076,30 +1093,50 @@ FormatBlastParameters(BlastSearchBlkPtr search)
            cutoff = 0;
         }
         if (search->last_context <= 1) {
-           evalue = pbp->cutoff_e;
-           if (StringCmp(search->prog_name, "blastn") == 0 ||
-               search->pbp->gapped_calculation == FALSE) {
-	     /* AM: Changed to support query concatenation. */
-             if( !search->mult_queries )
-               BlastCutoffs(&cutoff, &evalue, search->sbp->kbp[search->first_context], (Nlm_FloatHi) search->context[search->first_context].query->effective_length, (Nlm_FloatHi) search->dblen_eff, FALSE);
-             else
-               { BlastCutoffs(&cutoff, &evalue, search->sbp->kbp[search->first_context], (Nlm_FloatHi) search->mult_queries->MinLenEff, (Nlm_FloatHi) search->dblen_eff, FALSE); }
-
-              sprintf(buffer, "S2: %ld (%4.1f bits)", (long) cutoff, (((cutoff)*(search->sbp->kbp[search->first_context]->Lambda))-(search->sbp->kbp[search->first_context]->logK))/NCBIMATH_LN2);
-           } else {
-	     if( !search->mult_queries )
-               BlastCutoffs(&cutoff, &evalue, search->sbp->kbp_gap[search->first_context], (Nlm_FloatHi) search->context[search->first_context].query->effective_length, (Nlm_FloatHi) search->dblen_eff, FALSE);
-             else
-               BlastCutoffs( &cutoff, &evalue, 
-	                     search->sbp->kbp_gap[search->first_context],
-			     (Nlm_FloatHi)search->mult_queries->MinLenEff, 
-			     (Nlm_FloatHi)search->dblen_eff, FALSE );
-
-              sprintf(buffer, "S2: %ld (%4.1f bits)", (long) cutoff, (((cutoff)*(search->sbp->kbp_gap[search->first_context]->Lambda))-(search->sbp->kbp_gap[search->first_context]->logK))/NCBIMATH_LN2);
-           }
-           add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
+          evalue = pbp->cutoff_e;
+          if (StringCmp(search->prog_name, "blastn") == 0 ||
+              search->pbp->gapped_calculation == FALSE) {
+            /* AM: Changed to support query concatenation. */
+            if( !search->mult_queries ) {
+              Nlm_FloatHi search_sp =
+                search->context[search->first_context]
+                .query->effective_length *
+                (Nlm_FloatHi) search->dblen_eff;
+              BlastCutoffs(&cutoff, &evalue,
+                           search->sbp->kbp[search->first_context],
+                           search_sp, FALSE, 0.0 );
+            } else {
+              Nlm_FloatHi search_sp =
+                search->mult_queries->MinLenEff *
+                (Nlm_FloatHi) search->dblen_eff;
+              BlastCutoffs(&cutoff, &evalue,
+                           search->sbp->kbp[search->first_context],
+                           search_sp, FALSE, 0.0 );
+            }
+            
+            sprintf(buffer, "S2: %ld (%4.1f bits)", (long) cutoff, (((cutoff)*(search->sbp->kbp[search->first_context]->Lambda))-(search->sbp->kbp[search->first_context]->logK))/NCBIMATH_LN2);
+          } else {
+            if( !search->mult_queries ) {
+              Nlm_FloatHi search_sp =
+                search->context[search->first_context]
+                .query->effective_length *
+                (Nlm_FloatHi) search->dblen_eff;
+              BlastCutoffs(&cutoff, &evalue,
+                           search->sbp->kbp_gap[search->first_context],
+                           search_sp, FALSE, 0.0  );
+            } else {
+              Nlm_FloatHi search_sp =
+                search->mult_queries->MinLenEff *
+                (Nlm_FloatHi)search->dblen_eff;
+              BlastCutoffs( &cutoff, &evalue, 
+                            search->sbp->kbp_gap[search->first_context],
+                            search_sp, FALSE, 0.0 );
+            }
+            sprintf(buffer, "S2: %ld (%4.1f bits)", (long) cutoff, (((cutoff)*(search->sbp->kbp_gap[search->first_context]->Lambda))-(search->sbp->kbp_gap[search->first_context]->logK))/NCBIMATH_LN2);
+          }
+          add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
         }
-	return ret_buffer;
+        return ret_buffer;
 }
 
 /*
@@ -1430,7 +1467,7 @@ AcknowledgeBlastQuery(BioseqPtr bsp, Int4 line_length, FILE *outfp, Boolean beli
 		ff_AddString("<b>Query=</b> ");
 	else
 		ff_AddString("Query= ");
-	if (bsp->id && believe_query)
+	if (bsp->id && (bsp->id->choice != SEQID_LOCAL || believe_query))
 	{
 		SeqIdWrite(bsp->id, buffer, PRINTID_FASTA_LONG, BUFFER_LENGTH);
 		if (StringNCmp(buffer, "lcl|", 4) == 0)
@@ -2622,7 +2659,11 @@ static
 void MergeDbGiListsWithOIDLists(ReadDBFILEPtr rdfp_chain, ValNodePtr *err_ret,
         BlastGiListPtr *bglpp) 
 {
-    ReadDBFILEPtr  rdfp = NULL, rdfp_tmp = NULL;
+    ReadDBFILEPtr rdfp = NULL;  /* holds an individual element of the
+                                   rdfp_chain linked list */
+    ReadDBFILEPtr rdfp_tmp = NULL; /* holds the rest of the rdfp linked list
+                                      when searching for gis in a rdfp element
+                                      */
     BlastDoubleInt4Ptr	list=NULL, global_list = NULL;
     BlastGiListPtr tmp_list = NULL;
     Int4	i, index, ngis = 0, total_num_gis = 0, start;
@@ -2646,6 +2687,10 @@ void MergeDbGiListsWithOIDLists(ReadDBFILEPtr rdfp_chain, ValNodePtr *err_ret,
             ErrPostEx(SEV_FATAL, 1, 0, "Out of memory");
             return;
         }
+
+        /* Isolate the current rdfp element */
+        rdfp_tmp = rdfp->next;
+        rdfp->next = NULL;
            
         /* See which gis in rdfp->gilist belong to this rdfp */
         for (index=0, i=0; i < ngis; i++) {
@@ -2657,6 +2702,9 @@ void MergeDbGiListsWithOIDLists(ReadDBFILEPtr rdfp_chain, ValNodePtr *err_ret,
                 index++;
             }
         }
+
+        /* Restore the rdfp_chain linked list */
+        rdfp->next = rdfp_tmp;
 
         /* After this point we don't really need the rdfp->gilist */
         rdfp->gilist = Int4ListFree(rdfp->gilist);
@@ -4917,6 +4965,17 @@ void BlastPrintTabulatedResultsEx(SeqAlignPtr seqalign, BioseqPtr query_bsp,
       q_shift, s_shift, fp, num_formatted, print_query_info);
 }
 
+static Int4 FindNumIdentInScore(ScorePtr score)
+{
+   Int4 num_ident = 0;
+   for ( ; score; score = score->next) {
+      if (!strcmp(score->id->str, "num_ident")) {
+         num_ident = score->value.intvalue;
+      }
+   }
+   return num_ident;
+}
+
 void BlastPrintTabularResults(SeqAlignPtr seqalign, BioseqPtr query_bsp,
         SeqLocPtr query_slp, Int4 num_alignments, CharPtr blast_program, 
         Boolean is_ungapped, Boolean is_ooframe, Boolean believe_query, 
@@ -5056,6 +5115,8 @@ void BlastPrintTabularResults(SeqAlignPtr seqalign, BioseqPtr query_bsp,
                } else
                   num_gap_opens++;
             }
+            if ((num_ident = FindNumIdentInScore(sap->score)) > 0)
+               perc_ident = num_ident;
             perc_ident = perc_ident / align_length * 100;
             
             if (dsp->strands[0] != dsp->strands[1]) {
@@ -6433,7 +6494,7 @@ BLASTPostSearchLogic(BlastSearchBlkPtr search, BLAST_OptionsBlkPtr options,
                   seqalign = SumBlastGetGappedAlignmentTraceback(
                                 search, index, FALSE, FALSE, 
                                 sequence+1, length);
-               } else if (!search->pbp->mb_params->no_traceback) {
+               } else {
                   /* Mega BLAST with non-greedy extension */
                   SumBlastGetGappedAlignmentEx(search, index, FALSE, FALSE, 
                                                sequence+1, length, TRUE,

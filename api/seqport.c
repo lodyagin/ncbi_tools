@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/13/91
 *
-* $Revision: 6.82 $
+* $Revision: 6.86 $
 *
 * File Description:  Ports onto Bioseqs
 *
@@ -39,6 +39,18 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: seqport.c,v $
+* Revision 6.86  2003/11/18 17:08:46  kans
+* added MapNa4ByteTo4BitString, use in seqport read and get char
+*
+* Revision 6.85  2003/11/18 16:23:05  kans
+* fixed InitNa2to4Bit, use MapNa2ByteTo4BitString in SeqPortQuickGetResidue
+*
+* Revision 6.84  2003/11/17 22:44:31  kans
+* added MapNa2ByteTo4BitString in preparation for faster SeqPortRead from 2na to 4na
+*
+* Revision 6.83  2003/11/05 21:17:22  bollin
+* added new option for Retranslate Coding Regions to handle stop codons at end of complete CDS during retranslate while ignoring stop codons
+*
 * Revision 6.82  2003/08/18 21:07:35  kans
 * RevCompStr was stepping on str variable
 *
@@ -420,6 +432,8 @@ NLM_EXTERN Boolean LIBCALL SeqPortAdjustLength (SeqPortPtr spp);
 static Uint1Ptr Na2toIUPAC = NULL;
 static Uint1Ptr Na4toIUPAC = NULL;
 static Uint1Ptr Na2toNa4 = NULL;
+static Uint1Ptr Na2to4Bit = NULL;
+static Uint1Ptr Na4to4Bit = NULL;
 static TNlmMutex seqport_mutex = NULL;
 
 
@@ -646,6 +660,160 @@ NLM_EXTERN Uint2Ptr LIBCALL MapNa2ByteToNa4String (Uint1Ptr bytep, Uint2Ptr buf,
     bytep++;
     index = 2 * byte;
     bp = (Uint2Ptr)  (Na2toNa4 + index);
+    /* copy 2 bytes at a time */
+    /*
+    for (j = 0; j < 2; j++) {
+      *ptr = *bp;
+      ptr++;
+      bp++;
+    }
+    */
+    *ptr = *bp;
+    ptr++;
+  }
+
+  return ptr;
+}
+
+static void InitNa2to4Bit (void)
+
+{
+  Int2  base [4], index, j;
+  Uint1  convert [4] = {1, 2, 4, 8};
+  Int4  ret;
+  Uint1Ptr Na2to4Bit_local = NULL;
+
+  ret = NlmMutexLockEx (&seqport_mutex);  /* protect this section */
+  if (ret) {
+    ErrPostEx (SEV_FATAL, 0, 0, "MapNa2ByteTo4BitString mutex failed [%ld]", (long) ret);
+    return;
+  }
+
+  if (Na2to4Bit == NULL) {
+    Na2to4Bit_local = MemNew (sizeof (Uint1) * 1024);
+
+    if (Na2to4Bit_local != NULL) {
+      for (base [0] = 0; base [0] < 4; (base [0])++) {
+        for (base [1] = 0; base [1] < 4; (base [1])++) {
+          for (base [2] = 0; base [2] < 4; (base [2])++) {
+            for (base [3] = 0; base [3] < 4; (base [3])++) {
+              index = 4 * (base [0] * 64 + base [1] * 16 + base [2] * 4 + base [3]);
+              for (j = 0; j < 4; j++) {
+                Na2to4Bit_local [index + j] = convert [(base [j])];
+              }
+            }
+          }
+        }
+      }
+    }
+    Na2to4Bit = Na2to4Bit_local;
+  }
+
+  NlmMutexUnlock (seqport_mutex);
+}
+
+NLM_EXTERN Uint4Ptr LIBCALL MapNa2ByteTo4BitString (Uint1Ptr bytep, Uint4Ptr buf, Int4 total)
+
+{
+  Uint4Ptr  bp;
+  Uint1     byte;
+  Int2      index;
+  Int4      k;
+  Uint4Ptr  ptr;
+
+  if (bytep == NULL || buf == NULL) return buf;
+  ptr = buf;
+
+  /* initialize array if not yet set (first time function is called) */
+
+  if (Na2to4Bit == NULL) {
+    InitNa2to4Bit ();
+  }
+
+  if (Na2to4Bit == NULL) return buf;
+
+  /* now return 4 byte string for each compressed byte */
+
+  for (k = 0; k < total; k++) {
+    byte = *bytep;
+    bytep++;
+    index = 4 * byte;
+    bp = (Uint4Ptr) (Na2to4Bit + index);
+    /* copy 4 bytes at a time */
+    /*
+    for (j = 0; j < 4; j++) {
+      *ptr = *bp;
+      ptr++;
+      bp++;
+    }
+    */
+    *ptr = *bp;
+    ptr++;
+  }
+
+  return ptr;
+}
+
+static void InitNa4to4Bit (void)
+
+{
+  Int2  base [2], index, j;
+  Char  convert [16] = {15, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
+  Int4  ret;
+  Uint1Ptr Na4to4Bit_local = NULL;
+
+  ret = NlmMutexLockEx (&seqport_mutex);  /* protect this section */
+  if (ret) {
+    ErrPostEx (SEV_FATAL, 0, 0, "MapNa4ByteToIUPACString mutex failed [%ld]", (long) ret);
+    return;
+  }
+
+  if (Na4to4Bit == NULL) {
+    Na4to4Bit_local = MemNew (sizeof (Uint1) * 512);
+
+    if (Na4to4Bit_local != NULL) {
+      for (base [0] = 0; base [0] < 16; (base [0])++) {
+        for (base [1] = 0; base [1] < 16; (base [1])++) {
+          index = 2 * (base [0] * 16 + base [1]);
+          for (j = 0; j < 2; j++) {
+            Na4to4Bit_local [index + j] = convert [(base [j])];
+          }
+        }
+      }
+    }
+    Na4to4Bit = Na4to4Bit_local;
+  }
+
+  NlmMutexUnlock (seqport_mutex);
+}
+
+NLM_EXTERN Uint2Ptr LIBCALL MapNa4ByteTo4BitString (Uint1Ptr bytep, Uint2Ptr buf, Int4 total)
+
+{
+  Uint2Ptr  bp;
+  Uint1     byte;
+  Int2      index;
+  Int4      k;
+  Uint2Ptr  ptr;
+
+  if (bytep == NULL || buf == NULL) return buf;
+  ptr = buf;
+
+  /* initialize array if not yet set (first time function is called) */
+
+  if (Na4to4Bit == NULL) {
+    InitNa4to4Bit ();
+  }
+
+  if (Na4to4Bit == NULL) return buf;
+
+  /* now return 2 character string for each compressed byte */
+
+  for (k = 0; k < total; k++) {
+    byte = *bytep;
+    bytep++;
+    index = 2 * byte;
+    bp = (Uint2Ptr)  (Na4to4Bit + index);
     /* copy 2 bytes at a time */
     /*
     for (j = 0; j < 2; j++) {
@@ -1210,11 +1378,10 @@ SeqLocFindNext((SeqLocPtr)(currchunk->data.ptrvalue), currseg);
 		SeqPortSetUpAlphabet(spp, curr_code, newcode);
 		spp->bp = bsp->seq_data;
 
-	 /* allocate fast lookup caches for 2na or 4na to iupacna conversion */
+	 /* allocate fast lookup caches for 2na or 4na to iupacna or 4na conversion */
 
-		if (newcode == Seq_code_iupacna &&
-		    (curr_code == Seq_code_ncbi2na ||
-		     curr_code == Seq_code_ncbi4na)) {
+		if ((newcode == Seq_code_iupacna || newcode == Seq_code_ncbi4na) &&
+		    (curr_code == Seq_code_ncbi2na || curr_code == Seq_code_ncbi4na)) {
 		    spp->cacheq = (SPCacheQPtr) MemNew (sizeof (SPCacheQ));
 		}
 
@@ -1656,10 +1823,18 @@ static Uint1 LIBCALL SeqPortQuickGetResidue (SeqPortPtr spp, SPCacheQPtr spcpq, 
 
       ptr = spcpq->buf;
 
-      if (spp->oldcode == Seq_code_ncbi2na) {
-        ptr = (CharPtr) MapNa2ByteToIUPACString (bytes, (Uint4Ptr) ptr, total);
-      } else if (spp->oldcode == Seq_code_ncbi4na) {
-        ptr = (CharPtr) MapNa4ByteToIUPACString (bytes, (Uint2Ptr) ptr, total);
+      if (spp->newcode == Seq_code_iupacna) {
+        if (spp->oldcode == Seq_code_ncbi2na) {
+          ptr = (CharPtr) MapNa2ByteToIUPACString (bytes, (Uint4Ptr) ptr, total);
+        } else if (spp->oldcode == Seq_code_ncbi4na) {
+          ptr = (CharPtr) MapNa4ByteToIUPACString (bytes, (Uint2Ptr) ptr, total);
+        }
+      } else if (spp->newcode == Seq_code_ncbi4na) {
+        if (spp->oldcode == Seq_code_ncbi2na) {
+          ptr = (CharPtr) MapNa2ByteTo4BitString (bytes, (Uint4Ptr) ptr, total);
+        } else if (spp->oldcode == Seq_code_ncbi4na) {
+          ptr = (CharPtr) MapNa4ByteTo4BitString (bytes, (Uint2Ptr) ptr, total);
+        }
       }
 
       spcpq->total = ptr - spcpq->buf;
@@ -2441,7 +2616,70 @@ NLM_EXTERN ByteStorePtr ProteinFromCdRegionEx (SeqFeatPtr sfp, Boolean include_s
   tbl = (TransTablePtr) GetAppProperty (str);
   tableExists = (Boolean) (tbl != NULL);
 
-  bs = TransTableTranslateCdRegion (&tbl, sfp, include_stop, remove_trailingX);
+  bs = TransTableTranslateCdRegion (&tbl, sfp, include_stop, remove_trailingX,
+                                    FALSE);
+
+  /* save FSA in genetic code-specific app property name */
+
+  if (! tableExists) {
+    SetAppProperty (str, (Pointer) tbl);
+  }
+
+  return bs;
+}
+
+NLM_EXTERN ByteStorePtr ProteinFromCdRegionExWithTrailingCodonHandling
+(
+  SeqFeatPtr sfp,
+  Boolean include_stop,
+  Boolean remove_trailingX,
+  Boolean no_stop_at_end_of_complete_cds
+)
+
+{
+  ByteStorePtr   bs;
+  CdRegionPtr    crp;
+  Int2           genCode = 0;
+  Char           str [32];
+  Boolean        tableExists = FALSE;
+  TransTablePtr  tbl = NULL;
+  ValNodePtr     vnp;
+
+  if (sfp == NULL || sfp->data.choice != SEQFEAT_CDREGION) return NULL;
+  crp = (CdRegionPtr) sfp->data.value.ptrvalue;
+  if (crp == NULL) return NULL;
+
+  /* find genetic code */
+
+  if (crp->genetic_code != NULL) {
+    vnp = (ValNodePtr) crp->genetic_code->data.ptrvalue;
+    while (vnp != NULL) {
+      if (vnp->choice == 2) {
+        genCode = (Int2) vnp->data.intvalue;
+      }
+      vnp = vnp->next;
+    }
+  }
+
+  if (genCode == 7) {
+    genCode = 4;
+  } else if (genCode == 8) {
+    genCode = 1;
+  } else if (genCode == 0) {
+    genCode = 1;
+  }
+
+  /* set app property name for storing desired FSA */
+
+  sprintf (str, "TransTableFSAforGenCode%d", (int) genCode);
+
+  /* get FSA for desired genetic code if it already exists */
+
+  tbl = (TransTablePtr) GetAppProperty (str);
+  tableExists = (Boolean) (tbl != NULL);
+
+  bs = TransTableTranslateCdRegion (&tbl, sfp, include_stop, remove_trailingX,
+                                    no_stop_at_end_of_complete_cds);
 
   /* save FSA in genetic code-specific app property name */
 
@@ -4944,7 +5182,8 @@ static ByteStorePtr TransTableTranslateCommon (
   Uint1 frame,
   CodeBreakPtr code_break,
   Boolean include_stop,
-  Boolean remove_trailingX
+  Boolean remove_trailingX,
+  Boolean no_stop_at_end_of_complete_cds
 )
 
 {
@@ -5084,7 +5323,10 @@ static ByteStorePtr TransTableTranslateCommon (
     }
     is_first = FALSE;
 
-    if ((! include_stop) && aa == '*') {
+    if (aa == '*'
+      && (! include_stop
+        || (no_stop_at_end_of_complete_cds && ! partial && *(txt + 1) == 0)))
+    {
       got_stop = TRUE;
       residue = '\0'; /* signal end of loop */
 
@@ -5152,14 +5394,16 @@ NLM_EXTERN ByteStorePtr TransTableTranslateSeqLoc (
 
 {
   return TransTableTranslateCommon (tblptr, location, NULL, FALSE, genCode,
-                                    frame, NULL, include_stop, remove_trailingX);
+                                    frame, NULL, include_stop,
+                                    remove_trailingX, FALSE);
 }
 
 NLM_EXTERN ByteStorePtr TransTableTranslateCdRegion (
   TransTablePtr  PNTR tblptr,
   SeqFeatPtr cds,
   Boolean include_stop,
-  Boolean remove_trailingX
+  Boolean remove_trailingX,
+  Boolean no_stop_at_end_of_complete_cds
 )
 
 {
@@ -5185,7 +5429,8 @@ NLM_EXTERN ByteStorePtr TransTableTranslateCdRegion (
 
   return TransTableTranslateCommon (tblptr, cds->location, cds->product, cds->partial,
                                     genCode, crp->frame, crp->code_break,
-                                    include_stop, remove_trailingX);
+                                    include_stop, remove_trailingX,
+                                    no_stop_at_end_of_complete_cds);
 }
 
 /* allow reuse of translation tables by saving as AppProperty */

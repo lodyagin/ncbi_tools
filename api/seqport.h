@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/13/91
 *
-* $Revision: 6.33 $
+* $Revision: 6.36 $
 *
 * File Description:  Ports onto Bioseqs
 *
@@ -40,6 +40,15 @@
 *
 *
 * $Log: seqport.h,v $
+* Revision 6.36  2003/11/18 17:08:46  kans
+* added MapNa4ByteTo4BitString, use in seqport read and get char
+*
+* Revision 6.35  2003/11/17 22:44:31  kans
+* added MapNa2ByteTo4BitString in preparation for faster SeqPortRead from 2na to 4na
+*
+* Revision 6.34  2003/11/05 21:17:22  bollin
+* added new option for Retranslate Coding Regions to handle stop codons at end of complete CDS during retranslate while ignoring stop codons
+*
 * Revision 6.33  2002/11/11 18:02:40  kans
 * added SeqPortStream to efficiently stream through a sequence
 *
@@ -344,6 +353,9 @@ Uint2 or Uint4 for fast integer copying.
 NLM_EXTERN Uint4Ptr LIBCALL MapNa2ByteToIUPACString PROTO((Uint1Ptr bytep, Uint4Ptr buf, Int4 total));
 NLM_EXTERN Uint2Ptr LIBCALL MapNa4ByteToIUPACString PROTO((Uint1Ptr bytep, Uint2Ptr buf, Int4 total));
 NLM_EXTERN Uint2Ptr LIBCALL MapNa2ByteToNa4String PROTO((Uint1Ptr bytep, Uint2Ptr buf, Int4 total));
+NLM_EXTERN Uint4Ptr LIBCALL MapNa2ByteTo4BitString PROTO((Uint1Ptr bytep, Uint4Ptr buf, Int4 total));
+NLM_EXTERN Uint2Ptr LIBCALL MapNa4ByteTo4BitString PROTO((Uint1Ptr bytep, Uint2Ptr buf, Int4 total));
+
 
 /*****************************************************************************
 *
@@ -420,6 +432,7 @@ NLM_EXTERN Uint4 BioseqHash PROTO((BioseqPtr bsp));
 *****************************************************************************/
 NLM_EXTERN ByteStorePtr ProteinFromCdRegion PROTO(( SeqFeatPtr sfp, Boolean include_stop));
 NLM_EXTERN ByteStorePtr ProteinFromCdRegionEx PROTO((SeqFeatPtr sfp, Boolean include_stop, Boolean remove_trailingX));
+NLM_EXTERN ByteStorePtr ProteinFromCdRegionExWithTrailingCodonHandling PROTO((SeqFeatPtr sfp, Boolean include_stop, Boolean remove_trailingX, Boolean no_stop_at_end_of_complete_cds));
 
 /*****************************************************************************
 *
@@ -662,7 +675,8 @@ NLM_EXTERN ByteStorePtr TransTableTranslateCdRegion (
   TransTablePtr  PNTR tblptr,
   SeqFeatPtr cds,
   Boolean include_stop,
-  Boolean remove_trailingX
+  Boolean remove_trailingX,
+  Boolean no_stop_at_end_of_complete_cds
 );
 
 NLM_EXTERN ByteStorePtr TransTableTranslateSeqLoc (

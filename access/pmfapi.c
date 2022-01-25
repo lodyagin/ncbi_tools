@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   5/5/00
 *
-* $Revision: 1.62 $
+* $Revision: 1.63 $
 *
 * File Description: 
 *
@@ -234,6 +234,12 @@ static void ChangeMedlineAuthorsToISO (
   if (cap == NULL) return;
   alp = cap->authors;
   if (alp == NULL || alp->choice != 2) return;
+
+  /* do not convert if too big for buffers */
+
+  for (tmp = alp->names; tmp != NULL; tmp = tmp->next) {
+    if (StringLen ((CharPtr) tmp->data.ptrvalue) > 70) return;
+  }
 
   oldnames = alp->names;
   alp->names = NULL;

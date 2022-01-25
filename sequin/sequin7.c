@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/3/98
 *
-* $Revision: 6.122 $
+* $Revision: 6.134 $
 *
 * File Description: 
 *
@@ -1119,7 +1119,7 @@ static SeqLocPtr AskForInterval (SeqEntryPtr sep, BioseqPtr nuc, BioseqPtr prot)
   d = CreateIntervalEditorDialog (g, NULL, 4, 2, sep, TRUE, FALSE);
   c = HiddenGroup (g, 2, 0, NULL);
   SetGroupSpacing (c, 10, 2);
-  PushButton (c, "Accept", AcceptAskProc);
+  DefaultButton (c, "Accept", AcceptAskProc);
   PushButton (c, "Cancel", CancelAskProc);
   AlignObjects (ALIGN_CENTER, (HANDLE) d, (HANDLE) c, (HANDLE) m, NULL);
   Show (w);
@@ -2624,7 +2624,7 @@ extern ForM CreateGenomeCenterForm (Int2 left, Int2 top, CharPtr title,
   Hide (ffp->controlblock);
 
   c = HiddenGroup (h, 2, 0, NULL);
-  ffp->okBtn = PushButton (c, "Accept", AcceptFa2htgs);
+  ffp->okBtn = DefaultButton (c, "Accept", AcceptFa2htgs);
   SetObjectExtra (ffp->okBtn, ffp, NULL);
   Disable (ffp->okBtn);
   b = PushButton (c, "Cancel", CancelFa2htgs);
@@ -3115,7 +3115,7 @@ extern void PrepareToConvertToCDS (SeqEntryPtr sep, Uint2 entityID,
   ccp->retain = CheckBox (h, "Retain original features", NULL);
 
   c = HiddenGroup (h, 4, 0, NULL);
-  b = PushButton (c, "Accept", DoConvertToCDS);
+  b = DefaultButton (c, "Accept", DoConvertToCDS);
   SetObjectExtra (b, ccp, NULL);
   PushButton (c, "Cancel", StdCancelButtonProc);
 
@@ -3548,6 +3548,7 @@ typedef struct cdsetformdata {
 
   PopuP          protSubType;
   GrouP          protSubGrp;
+  ButtoN         leaveDlgUp;
 } CdsetFormData, PNTR CdsetFormPtr;
 
 typedef struct geneprotfind {
@@ -4101,6 +4102,7 @@ static Boolean CleanupEachCDSFunc (GatherContextPtr gcp)
   ProtRefPtr    prp;
   SeqFeatPtr    sfp;
   CharPtr       str;
+  UIEnum        val;
 
   if (gcp == NULL) return TRUE;
   cfp = (CdsetFormPtr) gcp->userdata;
@@ -4122,6 +4124,15 @@ static Boolean CleanupEachCDSFunc (GatherContextPtr gcp)
   } else if (sfp->data.choice == SEQFEAT_CDREGION) {
     cds = sfp;
   } else return TRUE;
+
+  /* if a protein subtype is selected, delete only that subtype */
+  if (cfp->protSubType != NULL && prot != NULL && prp != NULL) {
+    if (GetEnumPopup (cfp->protSubType, prot_subtype_alist, &val)) {
+      if (val < 5 && (Uint1) val != prp->processed) {
+        return TRUE;
+      }
+    }
+  }
 
   /* If there is a string constraint, only delete if */
   /* the field contains that string.                 */
@@ -4359,7 +4370,11 @@ static void DoProcessCDSet (ButtoN b)
   sep = GetTopSeqEntryForEntityID (cfp->input_entityID);
   SeqEntryExplore (sep, NULL, CleanupEmptyFeatCallback);
   ObjMgrSendMsg (OM_MSG_UPDATE, cfp->input_entityID, 0, 0);
-  Remove (cfp->form);
+  if (GetStatus (cfp->leaveDlgUp)) {
+    Show (cfp->form);
+  } else {
+    Remove (cfp->form);
+  }
 }
 
 static Boolean SetCDSExample (GatherContextPtr gcp)
@@ -4591,7 +4606,22 @@ static void CleanupCdsetForm (GraphiC g, VoidPtr data)
   StdCleanupFormProc (g, data);
 }
 
+static void ClearProcessCDSetDlg (ButtoN b)
 
+{
+  CdsetFormPtr  cfp;
+
+  cfp = (CdsetFormPtr) GetObjectExtra (b);
+  if (cfp == NULL) return;
+
+  SetValue ( cfp->fromfield, 0);
+  SetValue ( cfp->tofield, 0);
+  SetValue ( cfp->protSubType, 0);
+  SafeHide (cfp->protSubGrp);
+  SetTitle ( cfp->findthis, "");
+  SetTitle ( cfp->replacewith, "");
+  SafeSetTitle (cfp->example, "");
+}
 
 static void ProcessCDSet (IteM i, Int2 type)
 
@@ -4725,7 +4755,14 @@ static void ProcessCDSet (IteM i, Int2 type)
   cfp->example = StaticPrompt (x, "", 14 * stdCharWidth, 0, programFont, 'l');
 
   y = NULL;
-  cfp->protSubGrp = NULL;
+
+  cfp->protSubGrp = HiddenGroup (h, 2, 0, NULL);
+  StaticPrompt (cfp->protSubGrp, "Protein subtype", 0, dialogTextHeight, programFont, 'l');
+  cfp->protSubType = PopupList (cfp->protSubGrp, TRUE, NULL);
+  InitEnumPopup (cfp->protSubType, prot_subtype_alist, NULL);
+  SetEnumPopup (cfp->protSubType, prot_subtype_alist, (UIEnum) 5);
+  SafeHide (cfp->protSubGrp);
+
   switch (type) {
     case REMOVE_CDSET :
       y = HiddenGroup (h, 2, 0, NULL);
@@ -4746,13 +4783,6 @@ static void ProcessCDSet (IteM i, Int2 type)
       cfp->findthis = DialogText (y, "", 14, NULL);
       break;
     case EDIT_CDSET :
-      cfp->protSubGrp = HiddenGroup (h, 2, 0, NULL);
-      StaticPrompt (cfp->protSubGrp, "Protein subtype", 0, dialogTextHeight, programFont, 'l');
-      cfp->protSubType = PopupList (cfp->protSubGrp, TRUE, NULL);
-      InitEnumPopup (cfp->protSubType, prot_subtype_alist, NULL);
-      SetEnumPopup (cfp->protSubType, prot_subtype_alist, (UIEnum) 5);
-      Hide (cfp->protSubGrp);
-
       y = HiddenGroup (h, 2, 0, NULL);
       StaticPrompt (y, "Find", 0, dialogTextHeight, programFont, 'c');
       cfp->findthis = DialogText (y, "", 14, NULL);
@@ -4766,9 +4796,12 @@ static void ProcessCDSet (IteM i, Int2 type)
   b1 = PushButton (h, "Legend", CDSetLegend);
 
   c = HiddenGroup (w, 4, 0, NULL);
-  b = PushButton (c, "Accept", DoProcessCDSet);
+  b = DefaultButton (c, "Accept", DoProcessCDSet);
   SetObjectExtra (b, cfp, NULL);
   PushButton (c, "Cancel", StdCancelButtonProc);
+  b = PushButton (c, "Clear", ClearProcessCDSetDlg);
+  SetObjectExtra (b, cfp, NULL);
+  cfp->leaveDlgUp = CheckBox (c, "Leave Dialog Up", NULL);
 
   AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) b1, (HANDLE) y,
                 (HANDLE) cfp->protSubGrp, NULL);
@@ -5085,7 +5118,7 @@ extern void SwapQualifiers (IteM i)
   /* Create Accept and Cancel buttons */
 
   c = HiddenGroup (w, 4, 0, NULL);
-  b = PushButton (c, "Accept", DoSwapQualifiers);
+  b = DefaultButton (c, "Accept", DoSwapQualifiers);
   SetObjectExtra (b, cfp, NULL);
   PushButton (c, "Cancel", StdCancelButtonProc);
 
@@ -5332,15 +5365,15 @@ static void CommonFindReplaceProc (ButtoN b, Boolean replace, Boolean replaceAll
 
   ffp = (FindFormPtr) GetObjectExtra (b);
   if (ffp != NULL) {
-    findme = SaveStringFromText (ffp->findTxt);
+    findme = JustSaveStringFromText (ffp->findTxt);
     ObjMgrDeSelect (0, 0, 0, 0, NULL);
     caseCounts = GetStatus (ffp->caseCounts);
     wholeWord = GetStatus (ffp->wholeWord);
     doSeqIdLocal = GetStatus (ffp->doSeqIdLocal);
     if (replace) {
-      changeme = SaveStringFromText (ffp->replaceTxt);
+      changeme = JustSaveStringFromText (ffp->replaceTxt);
       FindReplaceInEntity (ffp->input_entityID, findme, changeme, caseCounts, wholeWord, replaceAll,
-                           TRUE, UPDATE_ONCE, NULL, NULL, NULL, doSeqIdLocal);
+                           FALSE, UPDATE_ONCE, NULL, NULL, NULL, doSeqIdLocal);
       GetRidOfEmptyFeatsDescStrings (ffp->input_entityID, NULL);
       ObjMgrSetDirtyFlag (ffp->input_entityID, TRUE);
       ObjMgrSendMsg (OM_MSG_UPDATE, ffp->input_entityID, 0, 0);
@@ -5437,7 +5470,6 @@ static void FindByLabelOrPosProc (ButtoN b)
     ObjMgrAlsoSelect (context.entityID, context.itemID, OBJ_SEQFEAT, 0, NULL);
   }
 
-  Remove (ffp->form);
 }
 
 static void ClearFindTextProc (ButtoN b)
@@ -5597,6 +5629,22 @@ extern void FindStringProc (IteM i)
     Show (w);
     Select (w);
   }
+}
+
+extern void FindStringProcToolBtn (ButtoN b)
+
+{
+  BaseFormPtr  bfp;
+  ForM         w;
+
+  bfp = (BaseFormPtr) GetObjectExtra (b);
+  if (bfp == NULL) return;
+
+  w = CreateFindForm (-90, -66, "Find", bfp->input_entityID,
+                      bfp->input_itemID, bfp->input_itemtype, FIND_ASN);
+  Show (w);
+  Select (w);
+
 }
 
 extern void FindFlatfileProc (IteM i)
@@ -6576,7 +6624,7 @@ static Boolean CDSMeetsStringConstraint (SeqFeatPtr sfp,
   return FALSE;
 }
 
-static Boolean MeetsStringConstraint (SeqFeatPtr  sfp,
+extern Boolean MeetsStringConstraint (SeqFeatPtr  sfp,
 				      CharPtr     findThisStr)
 {
   GBQualPtr gbqp;
@@ -6937,27 +6985,22 @@ static void DoEditPartials (ButtoN b)
   pfp->orderjoinpolicy = GetValue (pfp->orderJoinState);
   pfp->findThisStr = JustSaveStringFromText (pfp->findThis);
 
-  val = GetValue (pfp->feature);
-  vnp = NULL;
-  if (val > 0) {
-    vnp = pfp->featlist;
-    while (vnp != NULL && val > 1) {
-      val--;
-      vnp = vnp->next;
-    }
-  }
-
-  if (vnp != NULL)
-    pfp->subtype = vnp->choice;
-  else
-    pfp->subtype = 0;
-
   pfp->omp = ObjMgrGet ();
   pfp->omtp = NULL;
   if (pfp->omp != NULL)
     pfp->omtp = ObjMgrTypeFind (pfp->omp, OBJ_SEQFEAT, NULL, NULL);
 
-  SeqEntryExplore (sep, (Pointer) pfp, PartialCallback);
+  val = 1;
+  for (vnp = pfp->featlist; vnp != NULL; vnp = vnp->next)
+  {
+    if (GetItemStatus ( pfp->feature, val))
+    {
+      pfp->subtype = vnp->choice;
+
+      SeqEntryExplore (sep, (Pointer) pfp, PartialCallback);
+    }
+    val++;
+  }
 
   ArrowCursor ();
   Update ();
@@ -6997,18 +7040,14 @@ extern void EditFeaturePartials (IteM i)
   BaseFormPtr        bfp;
   ButtoN             b;
   GrouP              c;
-  FeatDefPtr         curr;
   GrouP              g;
   GrouP              h;
   ValNodePtr         head;
   GrouP              k;
-  Uint1              key;
-  CharPtr            label = NULL;
   Int2               listHeight;
   PartialFormPtr     pfp;
   SeqEntryPtr        sep;
   StdEditorProcsPtr  sepp;
-  Uint2              subtype;
   ValNodePtr         vnp;
   WindoW             w;
   GrouP              x;
@@ -7049,42 +7088,16 @@ extern void EditFeaturePartials (IteM i)
   } else {
     listHeight = 8;
   }
-  pfp->feature = SingleList (g, 16, listHeight, NULL);
+  pfp->feature = MultiList (g, 16, listHeight, NULL);
 
-  head = ValNodeNew (NULL);
-  curr = FeatDefFindNext (NULL, &key, &label, FEATDEF_ANY, TRUE);
-  while (curr != NULL) {
-    if (key != FEATDEF_BAD) {
-      subtype = curr->featdef_key;
-      if (subtype != FEATDEF_misc_RNA &&
-          subtype != FEATDEF_precursor_RNA &&
-          subtype != FEATDEF_mat_peptide &&
-          subtype != FEATDEF_sig_peptide &&
-          subtype != FEATDEF_transit_peptide &&
-          subtype != FEATDEF_Imp_CDS) {
-        vnp = ValNodeNew (head);
-        if (head == NULL) {
-          head = vnp;
-        }
-        if (vnp != NULL) {
-          vnp->choice = subtype;
-          vnp->data.ptrvalue = StringSave (curr->typelabel);
-        }
+  head = BuildFeatureValNodeList (TRUE, "[ALL FEATURES]", 0, FALSE, TRUE);
+  if (head != NULL)
+  {
+    for (vnp = head; vnp != NULL; vnp = vnp->next) {
+      if ( vnp->data.ptrvalue != NULL ) {
+        ListItem (pfp->feature, (CharPtr) vnp->data.ptrvalue);
       }
     }
-    curr = FeatDefFindNext (curr, &key, &label, FEATDEF_ANY, TRUE);
-  }
-  if (head != NULL) {
-    head = SortValNode (head, SortVnpByString);
-    vnp = ValNodeNew (NULL);
-    if (vnp != NULL) {
-      vnp->choice = 0;
-      vnp->data.ptrvalue = StringSave ("[ALL FEATURES]");
-    }
-    vnp->next = head;
-    head = vnp;
-    for (vnp = head; vnp != NULL; vnp = vnp->next)
-      ListItem (pfp->feature, (CharPtr) vnp->data.ptrvalue);
   }
   pfp->featlist = head;
 
@@ -7133,7 +7146,7 @@ extern void EditFeaturePartials (IteM i)
   pfp->findThis = DialogText (y, "", 14, NULL);
 
   c = HiddenGroup (h, 4, 0, NULL);
-  b = PushButton (c, "Accept", DoEditPartials);
+  b = DefaultButton (c, "Accept", DoEditPartials);
   SetObjectExtra (b, pfp, NULL);
   PushButton (c, "Cancel", StdCancelButtonProc);
 
@@ -8321,7 +8334,7 @@ extern void EditSeqEndsProc (IteM i)
   SafeDisable (esp->trimCountText);
 
   c = HiddenGroup (h, 4, 0, NULL);
-  b = PushButton (c, "Accept", DoEditSeqEndsProc);
+  b = DefaultButton (c, "Accept", DoEditSeqEndsProc);
   SetObjectExtra (b, esp, NULL);
   PushButton (c, "Cancel", StdCancelButtonProc);
 

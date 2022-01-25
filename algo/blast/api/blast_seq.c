@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: blast_seq.c,v 1.26 2003/09/17 16:20:56 dondosha Exp $";
+static char const rcsid[] = "$Id: blast_seq.c,v 1.33 2003/12/03 17:30:25 dondosha Exp $";
 /*
 * ===========================================================================
 *
@@ -33,20 +33,20 @@ Author: Ilya Dondoshansky
 Contents: Functions converting between SeqLocs and structures used in BLAST.
 
 ******************************************************************************
- * $Revision: 1.26 $
+ * $Revision: 1.33 $
  * */
 
 #include <seqport.h>
 #include <sequtil.h>
 #include <objloc.h>
-#include "blast_seq.h"
+#include <algo/blast/api/blast_seq.h>
 #include <algo/blast/core/blast_filter.h>
 #include <algo/blast/core/blast_util.h>
 #include <algo/blast/core/blast_stat.h> /* Needed for NCBI4NA_TO_BLASTNA definition only */
 
-BlastMask* BlastMaskFromSeqLoc(SeqLocPtr mask_slp, Int4 index)
+BlastMaskLoc* BlastMaskLocFromSeqLoc(SeqLocPtr mask_slp, Int4 index)
 {
-   BlastMask* new_mask = (BlastMask*) calloc(1, sizeof(BlastMask));
+   BlastMaskLoc* new_mask = (BlastMaskLoc*) calloc(1, sizeof(BlastMaskLoc));
    BlastSeqLoc* loc,* last_loc = NULL,* head_loc = NULL;
    SeqIntPtr si;
 
@@ -69,7 +69,7 @@ BlastMask* BlastMaskFromSeqLoc(SeqLocPtr mask_slp, Int4 index)
    return new_mask;
 }
 
-SeqLocPtr BlastMaskToSeqLoc(Uint1 program_number, BlastMask* mask_loc, 
+SeqLocPtr BlastMaskLocToSeqLoc(Uint1 program_number, BlastMaskLoc* mask_loc, 
                             SeqLocPtr slp)
 {
    BlastSeqLoc* loc;
@@ -142,10 +142,10 @@ SeqLocPtr BlastMaskToSeqLoc(Uint1 program_number, BlastMask* mask_loc,
    return mask_head;
 }
 
-Int2 BlastMaskDNAToProtein(BlastMask** mask_loc_ptr, SeqLocPtr slp)
+Int2 BlastMaskLocDNAToProtein(BlastMaskLoc** mask_loc_ptr, SeqLocPtr slp)
 {
    Int2 status = 0;
-   BlastMask* last_mask = NULL,* head_mask = NULL,* mask_loc; 
+   BlastMaskLoc* last_mask = NULL,* head_mask = NULL,* mask_loc; 
    Int4 dna_length;
    BlastSeqLoc* dna_loc,* prot_loc_head,* prot_loc_last;
    DoubleInt* dip;
@@ -168,9 +168,9 @@ Int2 BlastMaskDNAToProtein(BlastMask** mask_loc_ptr, SeqLocPtr slp)
          coordinates */
       for (context = 0; context < NUM_FRAMES; ++context) {
          if (!last_mask) {
-            head_mask = last_mask = (BlastMask *) calloc(1, sizeof(BlastMask));
+            head_mask = last_mask = (BlastMaskLoc *) calloc(1, sizeof(BlastMaskLoc));
          } else {
-            last_mask->next = (BlastMask *) calloc(1, sizeof(BlastMask));
+            last_mask->next = (BlastMaskLoc *) calloc(1, sizeof(BlastMaskLoc));
             last_mask = last_mask->next;
          }
          
@@ -203,7 +203,7 @@ Int2 BlastMaskDNAToProtein(BlastMask** mask_loc_ptr, SeqLocPtr slp)
    }
 
    /* Free the mask with nucleotide coordinates */
-   BlastMaskFree(*mask_loc_ptr);
+   BlastMaskLocFree(*mask_loc_ptr);
    /* Return the new mask with protein coordinates */
    *mask_loc_ptr = head_mask;
 
@@ -211,11 +211,11 @@ Int2 BlastMaskDNAToProtein(BlastMask** mask_loc_ptr, SeqLocPtr slp)
 }
 
 
-Int2 BlastMaskProteinToDNA(BlastMask** mask_loc_ptr, SeqLocPtr slp)
+Int2 BlastMaskLocProteinToDNA(BlastMaskLoc** mask_loc_ptr, SeqLocPtr slp)
 {
    Int2 status = 0;
    Int4 index;
-   BlastMask* mask_loc;
+   BlastMaskLoc* mask_loc;
    BlastSeqLoc* loc;
    DoubleInt* dip;
    Int4 dna_length;
@@ -270,6 +270,7 @@ static Int4 BLAST_SetUpQueryInfo(SeqLocPtr slp, Uint1 program,
    BlastQueryInfo* query_info;
    Int4* context_offsets;
    Int4 index;
+   Int4 total_contexts;
 
    if (translate)
       num_frames = 6;
@@ -285,6 +286,8 @@ static Int4 BLAST_SetUpQueryInfo(SeqLocPtr slp, Uint1 program,
    query_info->first_context = 0;
    query_info->num_queries = ValNodeLen(slp);
    query_info->last_context = query_info->num_queries*num_frames - 1;
+   total_contexts = query_info->last_context + 1;
+
    if ((strand = SeqLocStrand(slp)) == Seq_strand_minus) {
       if (translate)
          query_info->first_context = 3;
@@ -298,14 +301,14 @@ static Int4 BLAST_SetUpQueryInfo(SeqLocPtr slp, Uint1 program,
    }
 
    if ((context_offsets = (Int4*) 
-      malloc((query_info->last_context+2)*sizeof(Int4))) == NULL)
+      malloc((total_contexts+1)*sizeof(Int4))) == NULL)
       return -1;
 
    if ((query_info->eff_searchsp_array = 
-      (Int8*) malloc((query_info->last_context+1)*sizeof(Int8))) == NULL)
+      (Int8*) malloc(total_contexts*sizeof(Int8))) == NULL)
       return -1;
    if ((query_info->length_adjustments =
-        (Int4*) malloc((query_info->last_context+1)*sizeof(Int4))) == NULL)
+        (Int4*) malloc(total_contexts*sizeof(Int4))) == NULL)
        return -1;
 
    context_offsets[0] = 0;
@@ -352,7 +355,6 @@ static Int4 BLAST_SetUpQueryInfo(SeqLocPtr slp, Uint1 program,
          context_offsets[index+1] = context_offsets[index] + length + 1;
       }
    }
-   query_info->total_length = context_offsets[index];
 
    *query_info_ptr = query_info;
    return 0;

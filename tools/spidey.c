@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: spidey.c,v 6.64 2003/10/21 15:26:17 kans Exp $";
+static char const rcsid[] = "$Id: spidey.c,v 6.67 2003/12/12 21:25:26 kskatz Exp $";
 
 /* ===========================================================================
 *
@@ -30,13 +30,22 @@ static char const rcsid[] = "$Id: spidey.c,v 6.64 2003/10/21 15:26:17 kans Exp $
 *
 * Version Creation Date:   5/01
 *
-* $Revision: 6.64 $
+* $Revision: 6.67 $
 *
 * File Description: mrna-to-genomic alignment algorithms and functions
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: spidey.c,v $
+* Revision 6.67  2003/12/12 21:25:26  kskatz
+* Fixed bug in SPI_CheckForPolyAExon() where multiple SeqAlignPtr's to the same object were not handled carefully: one of the ptr's was being accessed when the object was freed via the other ptr.
+*
+* Revision 6.66  2003/12/12 17:57:04  kskatz
+* Fixed a potential array bounds read error in SPI_CheckMrnaOrder()
+*
+* Revision 6.65  2003/12/10 16:53:22  kskatz
+* Ensured that 'ovl' when used is never negative once set in SPI_AdjustOverlaps() [see revision 6.57]
+*
 * Revision 6.64  2003/10/21 15:26:17  kans
 * fixed typo of SPI_IvalPt to SPI_IvalPtr
 *
@@ -4325,18 +4334,22 @@ static void SPI_CheckForPolyAExon(SeqAlignPtr sap)
       sap_target = amaip->saps[amaip->numsaps-1];
    salp = (SeqAlignPtr)(sap->segs);
    salp_prev = NULL;
-   while (salp != NULL)
-   {
-      if (salp == sap_target)
-      {
-         if (salp_prev == NULL)
-            sap->segs = (Pointer)(sap_target->next);
-         else
-            salp_prev->next = sap_target->next;
-         SeqAlignFree(sap_target);
-      }
-      salp_prev = salp;
-      salp = salp->next;
+   while (salp != NULL){
+       if (salp == sap_target){
+           if (salp_prev == NULL){
+               sap->segs = (Pointer)(sap_target->next);
+           }
+           else {
+               salp_prev->next = sap_target->next;
+           }
+           SeqAlignFree(sap_target);
+           sap_target = 0;
+           salp = 0;
+       }
+       else {
+           salp_prev = salp;
+           salp = salp->next;
+       }
    }
    AMAlignIndexFreeEitherIndex(sap);
    AlnMgr2IndexLite(sap);
@@ -5812,7 +5825,7 @@ static void SPI_AdjustOverlaps(SeqAlignPtr sap1, SeqAlignPtr sap2, Int4 n, SPI_m
       }
       ovl = -ovl;
    }
-   ovl = MIN(abs(ovl), start2-stop1);
+   ovl = MIN(abs(ovl), abs(start2-stop1));
    if (spot->interspecies == TRUE)
       fluff = SPI_FLUFF;
    else
@@ -5841,7 +5854,7 @@ static void SPI_AdjustOverlaps(SeqAlignPtr sap1, SeqAlignPtr sap2, Int4 n, SPI_m
       }
       i = 0;
       buf = (Uint1Ptr)MemNew((2*fluff+ovl+spllen+2)*sizeof(Uint1));
-      buf2 = (Uint1Ptr)MemNew((2*fluff+(abs(ovl))+spllen+2)*sizeof(Uint1));
+      buf2 = (Uint1Ptr)MemNew((2*fluff+ovl+spllen+2)*sizeof(Uint1));
       SeqPortRead(spp, buf2, 2*fluff+ovl+spllen+2);
       for (f=0; f<SPI_NUMSITES; f++)
       {
@@ -10691,7 +10704,8 @@ static void SPI_CheckMrnaOrder(SPI_IvalPtr PNTR spi_pp, const int num)
   
     for (x = 0, ival = spi_pp[x], ival2 = spi_pp[x + 1]; 
          x < num && ival != 0 && ival2 != 0; 
-         ++x, ival = spi_pp[x], ival2 = spi_pp[x + 1]){
+         ++x, ival = spi_pp[x], 
+             ival2 = (x + 1 < num ? spi_pp[x + 1] : 0)){
         if (x < num - 2){ /* three to window */
             ival3 = spi_pp[x + 2];
             if ((ival->strand == Seq_strand_plus == ival2->strand

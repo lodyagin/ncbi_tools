@@ -45,6 +45,8 @@
 #define ERR_SEQ_INST_UnexpectedIdentifierChange  1,41
 #define ERR_SEQ_INST_InternalNsInSeqLit  1,42
 #define ERR_SEQ_INST_SeqLitGapLength0  1,43
+#define ERR_SEQ_INST_TpaAssmeblyProblem  1,44
+#define ERR_SEQ_INST_SeqLocLength  1,45
 #define ERR_SEQ_DESCR  2,0
 #define ERR_SEQ_DESCR_BioSourceMissing  2,1
 #define ERR_SEQ_DESCR_InvalidForType  2,2
@@ -93,6 +95,7 @@
 #define ERR_SEQ_PKG_InconsistentMolInfoBiomols  4,12
 #define ERR_SEQ_PKG_ArchaicFeatureLocation  4,13
 #define ERR_SEQ_PKG_ArchaicFeatureProduct  4,14
+#define ERR_SEQ_PKG_GraphPackagingProblem  4,15
 #define ERR_SEQ_FEAT  5,0
 #define ERR_SEQ_FEAT_InvalidForType  5,1
 #define ERR_SEQ_FEAT_PartialProblem  5,2
@@ -160,6 +163,9 @@
 #define ERR_SEQ_FEAT_BadTrnaAA  5,64
 #define ERR_SEQ_FEAT_OnlyGeneXrefs  5,65
 #define ERR_SEQ_FEAT_UTRdoesNotAbutCDS  5,66
+#define ERR_SEQ_FEAT_BadConflictFlag  5,67
+#define ERR_SEQ_FEAT_ConflictFlagSet  5,68
+#define ERR_SEQ_FEAT_LocusTagProblem  5,69
 #define ERR_SEQ_ALIGN  6,0
 #define ERR_SEQ_ALIGN_SeqIdProblem  6,1
 #define ERR_SEQ_ALIGN_StrandRev  6,2

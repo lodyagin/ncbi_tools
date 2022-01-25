@@ -473,6 +473,10 @@ NLM_EXTERN TSeqPtr BioseqToTSeq (BioseqPtr bsp)
 			case SEQID_DDBJ:
 			case SEQID_EMBL:
 			case SEQID_SWISSPROT:
+		    case SEQID_OTHER:
+		    case SEQID_TPG:
+		    case SEQID_TPE:
+		    case SEQID_TPD:
 				SeqIdWrite(sip, buf, PRINTID_TEXTID_ACC_VER, 250);
 				tsp->accver = StringSave(buf);
 				break;
@@ -580,6 +584,10 @@ static TSeqPtr BioseqToMiniTSeq (BioseqPtr bsp)
 			case SEQID_DDBJ:
 			case SEQID_EMBL:
 			case SEQID_SWISSPROT:
+		    case SEQID_OTHER:
+		    case SEQID_TPG:
+		    case SEQID_TPE:
+		    case SEQID_TPD:
 				SeqIdWrite(sip, buf, PRINTID_TEXTID_ACC_VER, 250);
 				tsp->accver = StringSave(buf);
 				break;

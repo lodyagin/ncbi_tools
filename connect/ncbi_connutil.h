@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_CONNUTIL__H
 #define CONNECT___NCBI_CONNUTIL__H
 
-/*  $Id: ncbi_connutil.h,v 6.33 2003/09/23 21:00:33 lavr Exp $
+/*  $Id: ncbi_connutil.h,v 6.35 2004/01/14 18:51:41 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -530,6 +530,8 @@ typedef enum {
     /* standard MIMEs */
     eMIME_Html,          /* "html"                                     */
     eMIME_Plain,         /* "plain"                                    */
+    eMIME_Xml,           /* "xml"                                      */
+    eMIME_XmlSoap,       /* "xml+soap"                                 */
     /* eMIME_???,           "<subtype>" here go other NCBI subtypes    */
     eMIME_Unknown        /* "x-unknown"     (an arbitrary binary data) */
 } EMIME_SubType;
@@ -640,6 +642,12 @@ extern NCBI_XCONNECT_EXPORT size_t HostPortToString
 /*
  * --------------------------------------------------------------------------
  * $Log: ncbi_connutil.h,v $
+ * Revision 6.35  2004/01/14 18:51:41  lavr
+ * +eMIME_XmlSoap
+ *
+ * Revision 6.34  2004/01/07 19:24:40  lavr
+ * Added MIME subtype eMIME_Xml
+ *
  * Revision 6.33  2003/09/23 21:00:33  lavr
  * Reorder included header files
  *

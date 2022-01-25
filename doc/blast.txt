@@ -1,10 +1,12 @@
 README for stand-alone BLAST
 
-$Date: 2003/06/30 16:30:18 $
+$Date: 2004/02/04 15:44:35 $
 
 This document provides information on stand-alone BLAST.  Topics covered are
 setting up stand-alone BLAST, command-line options for stand-alone BLAST,
 and a release history of the different versions.
+
+NCBI provides binaries for the following platforms:
 
 Apple MacOS 9 (powerpc)
 Apple MacOS X (powerpc)
@@ -12,7 +14,7 @@ DEC/Compaq/HP OSF1 5.1 (alpha)
 FreeBSD 4.5 (ia32)
 HP HPUX 11 (hppa, ia64)
 IBM AIX 5.1 (power4, powerpc)
-Linux (kernel 2.4, glibc 2.2.4) (ia32, ia64)
+Linux (kernel 2.4, glibc 2.2.5) (ia32, ia64, amd64)
 Microsoft Windows 2000 (ia32)
 SGI IRIX 6.5 (mips)
 Sun Solaris 7 (ia32)
@@ -1014,6 +1016,25 @@ References
 
 Release History
 ---------------
+Notes for the 2.2.8 release: 
+
+* Correction to tblastx alignment computation
+
+Notes for 2.2.7 release (2/2/04):
+
+* Standalone BLAST is now available for amd64-linux. 
+
+* formatdb now restricts volume sizes to 1G on 32-bit platforms
+  for performance reasons. 
+
+* The -A option has been removed from formatdb, that is, all databases
+  will be created with ASN.1 deflines. 
+
+* tblastn query concatenation now works correctly on 64-bit platforms. 
+
+* The wwwblast source code has been merged into the C toolkit tree and
+  is no longer distributed with the binaries. 
+
 Notes for 2.2.6 release (4/9/03):
 
 Enhancements:

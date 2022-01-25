@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/10/95
 *
-* $Revision: 6.0 $
+* $Revision: 6.1 $
 *
 * File Description: 
 *
@@ -182,7 +182,7 @@ static void
 }
 
 static void
-/*FCN*/UpdateControls (
+/*FCN*/UpdateDlgControls (
   void
 ){
   if ( totalFeatures == 0 ){
@@ -322,7 +322,7 @@ static void
   FillGroupList(TRUE);
   SetGroupValue ( curGroupInd );
   SaveGroupArray();
-  UpdateControls();
+  UpdateDlgControls();
 }
 
 static void
@@ -347,7 +347,7 @@ static void
   FillGroupList(TRUE);
   SetGroupValue ( curGroupInd );
   SaveGroupArray();
-  UpdateControls();
+  UpdateDlgControls();
 }
 
 static void
@@ -382,7 +382,7 @@ static void
     curFeatureInd = 0;
     SetFeatValue ( curFeatureInd );
   }
-  UpdateControls();
+  UpdateDlgControls();
   SaveGroupArray();
 }
 
@@ -436,7 +436,7 @@ static void
       SetFeatValue ( curFeatureInd );
     }
     SaveGroupArray();
-    UpdateControls();
+    UpdateDlgControls();
   }
 }
 
@@ -457,7 +457,7 @@ static void
   FillGroupList(TRUE);
   SetGroupValue ( curGroupInd );
   SaveGroupArray();
-  UpdateControls();
+  UpdateDlgControls();
 }
 
 static void
@@ -491,7 +491,7 @@ static void
     curFeatureInd = 0;
     SetFeatValue ( curFeatureInd );
   }
-  UpdateControls();
+  UpdateDlgControls();
 }
 
 static void
@@ -504,7 +504,7 @@ static void
     curFeatureInd = GetValue ( featList ) - 1;
   }
   if ( curFeatureInd > nHideFeatures ) curFeatureInd--;
-  UpdateControls();
+  UpdateDlgControls();
 }
 
 static void
@@ -521,7 +521,7 @@ static void
   FillFeatList(TRUE);
   SetFeatValue ( curFeatureInd );
   SaveFeatureArray();
-  UpdateControls();
+  UpdateDlgControls();
 }
 
 static void
@@ -546,7 +546,7 @@ static void
   FillFeatList(TRUE);
   SetFeatValue ( curFeatureInd );
   SaveFeatureArray();
-  UpdateControls();
+  UpdateDlgControls();
 }
 
 static void
@@ -581,7 +581,7 @@ static void
   FillFeatList(TRUE);
   SetFeatValue ( curFeatureInd );
   SaveFeatureArray();
-  UpdateControls();
+  UpdateDlgControls();
 }
 
 static void
@@ -601,7 +601,7 @@ static void
   FillFeatList(TRUE);
   SetFeatValue ( curFeatureInd );
   SaveFeatureArray();
-  UpdateControls();
+  UpdateDlgControls();
 }
 
 static void 
@@ -694,7 +694,7 @@ GrouP
   FillGroupList(FALSE);
   SetGroupValue (curGroupInd);
   FillFeatPopup(FALSE);
-  UpdateControls ();
+  UpdateDlgControls ();
   return g;
 }
 

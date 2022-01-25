@@ -1,4 +1,4 @@
-/* $Id: blast_options.h,v 1.49 2003/10/24 20:54:54 camacho Exp $
+/* $Id: blast_options.h,v 1.52 2004/02/02 18:53:22 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -36,7 +36,7 @@ Detailed Contents:
 	- Options to be used for different tasks of the BLAST search
 
 ******************************************************************************
- * $Revision: 1.49 $
+ * $Revision: 1.52 $
  * */
 
 #ifndef __BLASTOPTIONS__
@@ -125,7 +125,7 @@ extern "C" {
 #define PSI_ETHRESH 0.005
 #define PSI_MAX_NUM_PASSES 1
 #define PSI_PSEUDO_COUNT_CONST 9
-#define PSI_SCALING_FACTOR 1
+#define PSI_SCALING_FACTOR 32
 
 /** Default genetic code for query and/or database */
 #define BLAST_GENETIC_CODE 1
@@ -221,6 +221,7 @@ typedef struct BlastExtensionOptions {
    double gap_trigger;/**< Score in bits for starting gapped extension */
    Int4 algorithm_type; /**< E.g. for blastn: dynamic programming; 
                            greedy without traceback; greedy with traceback */
+   Boolean skip_traceback; /**< Is traceback information needed in results? */
 } BlastExtensionOptions;
 
 typedef struct BlastExtensionParameters {
@@ -276,8 +277,6 @@ typedef struct BlastHitSavingOptions {
    Int4 min_hit_length;
    Boolean is_neighboring; /**< FIXME: neighboring is specified by a percent 
                              identity and a minimum hit length */
-
-   Boolean gapped_calculation;	/**< gapping is used. */
 
    /* Will be dealt with when needed *
    Uint1 handle_results_method; **< Formatting results on the fly if set to 
@@ -464,6 +463,7 @@ BlastInitialWordParametersFree(BlastInitialWordParameters* parameters);
  * @param sbp Statistical (Karlin-Altschul) information [in]
  * @param query_info Query information [in]
  * @param eff_len_options Effective lengths options [in]
+ * @param gapped_calculation Is gapped calculation used for statistics? [in]
  * @param parameters Resulting parameters [out]
 */
 Int2
@@ -473,7 +473,7 @@ BlastInitialWordParametersNew(Uint1 program_number,
    BlastExtensionParameters* ext_params, BlastScoreBlk* sbp, 
    BlastQueryInfo* query_info, 
    const BlastEffectiveLengthsOptions* eff_len_options, 
-   BlastInitialWordParameters* *parameters);
+   Boolean gapped_calculation, BlastInitialWordParameters* *parameters);
 
 /** Deallocate memory for BlastExtensionOptions.
  * @param options Structure to free [in]
@@ -669,13 +669,12 @@ Int2 BlastHitSavingOptionsNew(Uint1 program,
 
 /** Allocate memory for BlastHitSavingOptions.
  * @param options The options [in] [out]
- * @param is_gapped Specifies that search is gapped [in]
  * @param evalue The expected value threshold [in]
  * @param hitlist_size How many database sequences to save per query? [in]
 */
 Int2
 BLAST_FillHitSavingOptions(BlastHitSavingOptions* options, 
-   Boolean is_gapped, double evalue, Int4 hitlist_size);
+                           double evalue, Int4 hitlist_size);
 
 /** Deallocate memory for BlastHitSavingOptions*. 
  * @param parameters Structure to free [in]

@@ -1,4 +1,4 @@
-.TH TBL2ASN 1 2003-04-27 NCBI "NCBI Tools User's Manual"
+.TH TBL2ASN 1 2003-11-10 NCBI "NCBI Tools User's Manual"
 .SH NAME
 tbl2asn \- prepare a GenBank submission using an ASCII feature table
 .SH SYNOPSIS
@@ -9,10 +9,13 @@ tbl2asn \- prepare a GenBank submission using an ASCII feature table
 [\|\fB\-c\fP\|]
 [\|\fB\-d\fP\|]
 [\|\fB\-g\fP\|]
-[\|\fB\-f\fP\ \fIfilename\fP\|]
+[\|\fB\-i\fP\ \fIfilename\fP\|]
+[\|\fB\-j\fP\ \fIstr\fP\|]
 [\|\fB\-k\fP\|]
+[\|\fB\-l\fP\|]
 [\|\fB\-m\fP\|]
 [\|\fB\-n\fP\ \fIstr\fP\|]
+[\|\fB\-o\fP\ \fIfilename\fP\|]
 [\|\fB\-p\fP\ \fIstr\fP\|]
 [\|\fB\-q\fP\|]
 [\|\fB\-r\fP\ \fIstr\fP\|]
@@ -20,6 +23,7 @@ tbl2asn \- prepare a GenBank submission using an ASCII feature table
 [\|\fB\-t\fP\ \fIfilename\fP\|]
 [\|\fB\-v\fP\|]
 [\|\fB\-x\fP\ \fIstr\fP\|]
+[\|\fB\-y\fP\ \fIstr\fP\|]
 .SH DESCRIPTION
 \fBtbl2asn\fP reads a template along with sequence and table files,
 and outputs ASN.1 for submission to GenBank. Thus, the submitter does
@@ -45,20 +49,29 @@ Annotate longest ORF
 \fB\-d\fP
 Read FASTAs as Delta
 .TP
-\fB\-f\fP\ \fIfilename\fP
-Read only this file
-.TP
 \fB\-g\fP
 Input is a genomic product set
 .TP
+\fB\-i\fP\ \fIfilename\fP
+Single input file
+.TP
+\fB\-j\fP\ \fIstr\fP
+Source qualifiers
+.TP
 \fB\-k\fP
 Set conflict on mismatch
+.TP
+\fB\-l\fP
+Read FASTA+Gap Alignment
 .TP
 \fB\-m\fP
 Allow alternative starts
 .TP
 \fB\-n\fP\ \fIstr\fP
 Organism name
+.TP
+\fB\-o\fP\ \fIfilename\fP
+Single output file
 .TP
 \fB\-p\fP\ \fIstr\fP
 Path to files
@@ -80,6 +93,9 @@ Validate
 .TP
 \fB\-x\fP\ \fIstr\fP
 Suffix (default = \fB.fsa\fP)
+.TP
+\fB\-y\fP\ \fIstr\fP
+Comment
 .SH AUTHOR
 The National Center for Biotechnology Information.
 .SH SEE ALSO

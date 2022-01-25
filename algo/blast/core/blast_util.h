@@ -1,4 +1,4 @@
-/* $Id: blast_util.h,v 1.34 2003/10/21 13:02:28 camacho Exp $
+/* $Id: blast_util.h,v 1.36 2004/01/28 02:57:29 ucko Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -34,7 +34,7 @@ Contents: Various auxiliary BLAST utility functions
 Detailed Contents: 
 
 ******************************************************************************
- * $Revision: 1.34 $
+ * $Revision: 1.36 $
  * */
 #ifndef __BLAST_UTIL__
 #define __BLAST_UTIL__
@@ -151,6 +151,8 @@ Int2 BLAST_QueryInfoInit(Uint1 program_number,
 Int4 BLAST_GetTranslation(const Uint1* query_seq, 
    const Uint1* query_seq_rev, Int4 nt_length, Int2 frame, Uint1* buffer, 
    const Uint1* genetic_code);
+
+
 
 /** Translate a nucleotide sequence without ambiguity codes.
  * This is used for the first-pass translation of the database.
@@ -269,6 +271,25 @@ Int2 BLAST_GetAllTranslations(const Uint1* nucl_seq, Uint1 encoding,
         Int4 nucl_length, Uint1* genetic_code, 
         Uint1** translation_buffer_ptr, Int4** frame_offsets_ptr,
         Uint1** mixed_seq_ptr);
+
+/** Get one frame translation - needed when only parts of subject sequences
+ * are translated. 
+ * @param nucl_seq Pointer to start of nucleotide sequence to be translated [in]
+ * @param nucl_length Length of nucleotide sequence to be translated [in]
+ * @param frame What frame to translate into [in]
+ * @param genetic_code What genetic code to use? [in]
+ * @param translation_buffer_ptr Pointer to buffer with translated 
+ *                               sequence [out]
+ * @param protein_length Length of the translation buffer [out] 
+ * @param mixed_seq_ptr Pointer to buffer with mixed frame sequence, in case
+ *                      of out-of-frame gapping; buffer filled only if argument
+ *                      not NULL. [out]
+ */
+int GetPartialTranslation(const Uint1* nucl_seq,
+        Int4 nucl_length, Int2 frame, Uint1* genetic_code,
+        Uint1** translation_buffer_ptr, Int4* protein_length, 
+        Uint1** mixed_seq_ptr);
+
 
 /** Convert translation frame into a context for the concatenated translation
  * buffer.

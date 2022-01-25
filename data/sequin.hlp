@@ -5,8 +5,7 @@
   
 <!-- if you use the following meta tags, uncomment them.
  <META NAME="keywords" CONTENT="Sequin">
- <META NAME="description" CONTENT="Sequin is a stand-alone software tool developed by the NCBI for submitting and updating entries to the GenBank, EMBL, or DDBJ sequence databases. ">
--->
+ <META NAME="description" CONTENT="Sequin is a stand-alone software tool developed by the NCBI for submitting and updating entries to the GenBank, EMBL, or DDBJ sequence databases. "> -->
  <link rel="stylesheet" href="ncbi_sequin.css">
 
 
@@ -2288,7 +2287,7 @@ this location.
 
 #Region containing polycistronic transcript under the control of the same regulatory sequences.
 
-*ori_T
+*oriT
 
 Origin of transfer; region of DNA where transfer is initiated during the process of conjugation or mobilization.
 
@@ -3442,21 +3441,42 @@ added to the sequence. Features are described in more detail in the
 above section entitled
 <A HREF="#Features">
 Features.
-</A>  
-#The seventh option, Publications, allows you to add a Publication Feature
+</A>
+#If you are submitting a set of similar sequences, you can add the same
+feature across the entire span of each by using the Batch Feature Apply
+option.  The feature must span the entire nucleotide sequence of each member;
+you can not annotate specific nucleotide locations using this option (for
+this, see <A HREF="#FeaturePropagate">Feature Propagate</A>).  For each
+feature, you will be prompted to designate whether the feature is 5' or 3'
+partial and whether is is on the plus or minus strand.  You may also add a
+comment of other qualifier to the feature.  The Add Qualifier option allows
+you to add a qualifier to an existing feature.  You must specify the feature
+and qualifier in the Add Qualifier pop-up box.  Source qualifiers can be added
+to all entries using the Add Source Qualifier option.  Qualifiers specific to
+the CDS and gene can be added using Add CDS-Gene-Prot and RNA qualifiers using
+Add RNA Qual.  In each case, a pop-up box appears with qualifier options
+appropriate for that feature.
+
+#The Batch Feature Edit function allows you to edit existing qualifiers.  For
+each menu choice, a pop-up box allows you to select the feature containing the
+qualifier and the specific qualifier to be edited.  You can use the
+Find/Replace text boxes to edit the information contained within the
+qualifier.
+
+#The Publications option allows you to add a Publication Feature
 or Publication Descriptor to the record.  Publications are described in
 more detail in the above section entitled
 <A HREF="#Publications">
 Publications.
 </A>  
-#The eighth option, Descriptors, allows you to add Descriptors to the
+#The Descriptors option allows you to add Descriptors to the
 record.  Descriptors are described in more detail in the section
 entitled
 <A HREF="#Descriptors">
 Descriptors,
 </A>
 above.
-#The ninth option Generate Definition Line, will generate a title for your
+#The Generate Defintion Line option will generate a title for your
 sequence based on the information provided in the record.  This option will
 work
 for single sequences as well as sets of sequences, and can handle complex
@@ -3946,7 +3966,7 @@ ALT="Table of Contents" ALIGN=top BORDER=2></A>
 <P CLASS=medium1><B>Questions or Comments?</B>
 <BR>Write to the <A HREF="mailto:info@ncbi.nlm.nih.gov">NCBI Service
 Desk</A></P>
-<P CLASS=medium1>Revised October 20, 2003
+<P CLASS=medium1>Revised January 30, 2004
 
 </CENTER>
 

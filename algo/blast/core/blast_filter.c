@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: blast_filter.c,v 1.34 2003/10/17 20:12:50 dondosha Exp $";
+static char const rcsid[] = "$Id: blast_filter.c,v 1.38 2004/01/07 21:17:30 dondosha Exp $";
 /*
 * ===========================================================================
 *
@@ -33,7 +33,7 @@ Author: Ilya Dondoshansky
 Contents: All code related to query sequence masking/filtering for BLAST
 
 ******************************************************************************
- * $Revision: 1.34 $
+ * $Revision: 1.38 $
  * */
 
 #include <algo/blast/core/blast_def.h>
@@ -73,9 +73,9 @@ BlastSeqLoc* BlastSeqLocFree(BlastSeqLoc* loc)
    return NULL;
 }
 
-BlastMask* BlastMaskFree(BlastMask* mask_loc)
+BlastMaskLoc* BlastMaskLocFree(BlastMaskLoc* mask_loc)
 {
-   BlastMask* next_loc;
+   BlastMaskLoc* next_loc;
    while (mask_loc) {
       next_loc = mask_loc->next;
       BlastSeqLocFree(mask_loc->loc_list);
@@ -103,7 +103,8 @@ static int DoubleIntSortByStartPosition(const void *vp1, const void *vp2)
 
 /* This will go in place of CombineSeqLocs to combine filtered locations */
 Int2
-CombineMaskLocations(BlastSeqLoc* mask_loc, BlastSeqLoc* *mask_loc_out)
+CombineMaskLocations(BlastSeqLoc* mask_loc, BlastSeqLoc* *mask_loc_out,
+                     Int4 link_value)
 {
    Int2 status=0;		/* return value. */
    Int4 start, stop;	/* USed to merge overlapping SeqLoc's. */
@@ -118,12 +119,12 @@ CombineMaskLocations(BlastSeqLoc* mask_loc, BlastSeqLoc* *mask_loc_out)
 
    /* Put all the SeqLoc's into one big linked list. */
    loc_head = last_loc = 
-      (BlastSeqLoc*) MemDup(mask_loc, sizeof(BlastSeqLoc));
+      (BlastSeqLoc*) BlastMemDup(mask_loc, sizeof(BlastSeqLoc));
          
    /* Copy all locations, so loc points at the end of the chain */
    while (last_loc->next) {		
       last_loc->next = 
-         (BlastSeqLoc*)MemDup(last_loc->next, sizeof(BlastSeqLoc));
+         (BlastSeqLoc*) BlastMemDup(last_loc->next, sizeof(BlastSeqLoc));
       last_loc = last_loc->next;
    }
    
@@ -141,7 +142,7 @@ CombineMaskLocations(BlastSeqLoc* mask_loc, BlastSeqLoc* *mask_loc_out)
       di = loc_var->ptr;
       if (loc_var->next)
          di_next = loc_var->next->ptr;
-      if (di_next && stop+1 >= di_next->i1) {
+      if (di_next && ((stop + link_value) > di_next->i1)) {
          stop = MAX(stop, di_next->i2);
       } else {
          di_tmp = (DoubleInt*) malloc(sizeof(DoubleInt));
@@ -152,8 +153,8 @@ CombineMaskLocations(BlastSeqLoc* mask_loc, BlastSeqLoc* *mask_loc_out)
          else
             new_loc_last = ListNodeAddPointer(&new_loc_last, 0, di_tmp);
          if (loc_var->next) {
-               start = di_next->i1;
-               stop = di_next->i2;
+             start = di_next->i1;
+             stop = di_next->i2;
          }
       }
       loc_var = loc_var->next;
@@ -174,7 +175,7 @@ CombineMaskLocations(BlastSeqLoc* mask_loc, BlastSeqLoc* *mask_loc_out)
 Int2 
 BLAST_ComplementMaskLocations(Uint1 program_number, 
    BlastQueryInfo* query_info, 
-   BlastMask* mask_loc, BlastSeqLoc* *complement_mask) 
+   BlastMaskLoc* mask_loc, BlastSeqLoc* *complement_mask) 
 {
    Int4 start_offset, end_offset, filter_start, filter_end;
    Int4 context, index;
@@ -191,6 +192,9 @@ BLAST_ComplementMaskLocations(Uint1 program_number,
         context <= query_info->last_context; ++context) {
       start_offset = query_info->context_offsets[context];
       end_offset = query_info->context_offsets[context+1] - 2;
+      /* For blastn: check if this strand is not searched at all */
+      if (end_offset < start_offset)
+          continue;
       index = (is_na ? context / 2 : context);
       reverse = (is_na && ((context & 1) != 0));
       first = TRUE;
@@ -218,7 +222,7 @@ BLAST_ComplementMaskLocations(Uint1 program_number,
          /* Reverse the order of the locations */
          for (start_loc = mask_loc->loc_list; start_loc; 
               start_loc = start_loc->next) {
-            loc = (BlastSeqLoc*) MemDup(start_loc, sizeof(BlastSeqLoc));
+            loc = (BlastSeqLoc*) BlastMemDup(start_loc, sizeof(BlastSeqLoc));
             loc->next = prev_loc;
             prev_loc = loc;
          }

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/30/01
 *
-* $Revision: 6.46 $
+* $Revision: 6.47 $
 *
 * File Description: 
 *
@@ -2480,11 +2480,12 @@ static Int4Ptr GetCheckedUids (SummFormPtr sfp, Int2Ptr nump)
 static void LaunchMedlineViewer (Int4 uid)
 
 {
-  Pointer         dataptr;
-  Uint2           datatype;
-  Uint2           entityID;
-  Int2            handled;
-  PubmedEntryPtr  pep;
+  Pointer          dataptr;
+  Uint2            datatype;
+  Uint2            entityID;
+  Int2             handled;
+  MedlineEntryPtr  mep;
+  PubmedEntryPtr   pep;
 
   WatchCursor ();
   Update ();
@@ -2496,7 +2497,11 @@ static void LaunchMedlineViewer (Int4 uid)
     return;
   }
   datatype = OBJ_MEDLINE_ENTRY;
-  dataptr = (Pointer) (MedlineEntryPtr) pep->medent;
+  mep = (MedlineEntryPtr) pep->medent;
+  if (mep != NULL && mep->uid == 0) {
+    mep->uid = uid;
+  }
+  dataptr = (Pointer) mep;
   entityID = ObjMgrRegister (datatype, dataptr);
   if (dataptr == NULL || entityID == 0) {
     ArrowCursor ();

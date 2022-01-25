@@ -1,3 +1,4 @@
+/* $Id: salpedit.c,v 6.31 2003/11/07 21:22:06 kans Exp $ */
 #include <ncbi.h>
 #include <ncbimisc.h> /* ValNodeLen */
 #include <sequtil.h> /* for GetScoreAndEvalue, SeqIdDupList */
@@ -2199,7 +2200,7 @@ static void sort_list_order(ValNodePtr PNTR ph_list, Uint1 strand)
             }
 
         }
-        /* 
+#if 0
         {
             FILE *tmp_fp;
             tmp_fp = FileOpen("Ins.test", "w");
@@ -2222,7 +2223,7 @@ static void sort_list_order(ValNodePtr PNTR ph_list, Uint1 strand)
                     Message(MSG_ERROR, "Fail in get_lns");
                     exit(1);
                 }
-                // inconsistent orientation from LNS //
+                /* inconsistent orientation from LNS */
             if((strand == Seq_strand_minus && val == 0) || 
                (strand != Seq_strand_minus && val== 1)) 
                 {
@@ -2245,7 +2246,7 @@ static void sort_list_order(ValNodePtr PNTR ph_list, Uint1 strand)
                 }
             FileClose(tmp_fp);
         }
-*/
+#endif
 	delete_bad_node(&h_list, 1);
 
 	if(h_list == NULL)

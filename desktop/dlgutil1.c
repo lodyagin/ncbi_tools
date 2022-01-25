@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.40 $
+* $Revision: 6.42 $
 *
 * File Description: 
 *
@@ -515,6 +515,7 @@ static Boolean GeneGatherFunc (GatherContextPtr gcp)
 {
   FeatureFormPtr  ffp;
   GeneGatherPtr   ggp;
+  GeneRefPtr      grp;
   ObjMgrTypePtr   omtp;
   SeqFeatPtr      sfp;
   Char            thislabel [41];
@@ -548,6 +549,22 @@ static Boolean GeneGatherFunc (GatherContextPtr gcp)
         }
         if (vnp != NULL) {
           vnp->data.ptrvalue = StringSave (thislabel);
+          grp = (GeneRefPtr) sfp->data.value.ptrvalue;
+          if (grp != NULL) {
+            if (grp->locus != NULL) {
+              vnp->choice = 1;
+            } else if (grp->desc != NULL) {
+              vnp->choice = 2;
+            } else if (grp->locus_tag != NULL) {
+              vnp->choice = 3;
+            } else if (grp->syn != NULL) {
+              vnp->choice = 4;
+            } else if (grp->db != NULL) {
+              vnp->choice = 5;
+            } else if (grp->maploc != NULL) {
+              vnp->choice = 6;
+            }
+          }
         }
       }
     }
@@ -648,11 +665,21 @@ static Boolean GeneMatchFunc (GatherContextPtr gcp)
         genexref = ggp->genexref;
         if (genexref != NULL) {
           grp = (GeneRefPtr) sfp->data.value.ptrvalue;
-          if (StringICmp (genexref->locus, grp->locus) == 0) {
-            ggp->val = ggp->idx;
-            ggp->xrefmatch = TRUE;
-            if (ffp != NULL) {
-              SetValue (ffp->useGeneXref, 2);
+          if (! StringHasNoText (genexref->locus)) {
+            if (StringICmp (genexref->locus, grp->locus) == 0) {
+              ggp->val = ggp->idx;
+              ggp->xrefmatch = TRUE;
+              if (ffp != NULL) {
+                SetValue (ffp->useGeneXref, 2);
+              }
+            }
+          } else if (! StringHasNoText (genexref->locus_tag)) {
+            if (StringICmp (genexref->locus_tag, grp->locus_tag) == 0) {
+              ggp->val = ggp->idx;
+              ggp->xrefmatch = TRUE;
+              if (ffp != NULL) {
+                SetValue (ffp->useGeneXref, 2);
+              }
             }
           }
         }
@@ -1127,7 +1154,14 @@ extern Boolean FeatFormReplaceWithoutUpdateProc (ForM f)
               i--;
             }
             if (vnp != NULL) {
-              grp = CreateNewGeneRef ((CharPtr) vnp->data.ptrvalue, NULL, NULL, FALSE);
+              if (vnp->choice == 1) {
+                grp = CreateNewGeneRef ((CharPtr) vnp->data.ptrvalue, NULL, NULL, FALSE);
+              } else if (vnp->choice == 3) {
+                grp = GeneRefNew ();
+                if (grp != NULL) {
+                  grp->locus_tag = StringSave ((CharPtr) vnp->data.ptrvalue);
+                }
+              }
             }
           }
           if (grp != NULL) {
@@ -2965,7 +2999,7 @@ static void SeqLocPtrToIntervalPage (DialoG d, Pointer data)
 static Pointer IntervalPageToSeqLocPtr (DialoG d)
 
 {
-  BioseqPtr        bsp;
+  BioseqPtr        bsp, prev_bsp;
   Char             ch;
   SeqLocPtr        firstSlp;
   Int4             from;
@@ -2992,7 +3026,7 @@ static Pointer IntervalPageToSeqLocPtr (DialoG d)
   SeqIntPtr        sip;
   SeqLocPtr        slp;
   SeqPntPtr        spp;
-  Int2             strand;
+  Int2             strand, prev_strand;
   TagListPtr       tlp;
   Int4             tmp;
   SeqLocPtr        tmploc1;
@@ -3008,6 +3042,8 @@ static Pointer IntervalPageToSeqLocPtr (DialoG d)
   tlp = GetObjectExtra (ipp->ivals);
   if (tlp == NULL) return NULL;
 
+  prev_bsp = NULL;
+  prev_strand = Seq_strand_unknown;
   slp = NULL;
   sfp = SeqFeatNew ();
   if (sfp != NULL) {
@@ -3119,10 +3155,9 @@ static Pointer IntervalPageToSeqLocPtr (DialoG d)
             if (strand > Seq_strand_both_rev) {
               strand = Seq_strand_other;
             }
+            prev_strand = strand;
           } else {
-            /*
-            okay = FALSE;
-            */
+            strand = prev_strand;
           }
           MemFree (txt);
         }
@@ -3136,10 +3171,24 @@ static Pointer IntervalPageToSeqLocPtr (DialoG d)
         bsp = NULL;
         txt = ExtractTagListColumn ((CharPtr) vnp->data.ptrvalue, ipp->nucsOK ? 3 : 2);
         if (txt != NULL) {
-          if (StrToInt (txt, &val2) && val2 > 0 && val2 <= ipp->count) {
+          if (! StrToInt (txt, &val2) || val2 <= 0)
+          {
+            if (prev_bsp != NULL)
+            {
+              bsp = prev_bsp;
+            }
+            else
+            {
+              okay = FALSE;
+            }
+          }
+          else if (val2 <= ipp->count)
+          {
             sep = ipp->bsptr [val2];
-            if (sep != NULL && sep->choice == 1) {
+            if (sep != NULL && sep->choice == 1)
+            {
               bsp = (BioseqPtr) sep->data.ptrvalue;
+              prev_bsp = bsp;
             } else {
               okay = FALSE;
             }

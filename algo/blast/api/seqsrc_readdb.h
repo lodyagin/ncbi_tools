@@ -1,4 +1,4 @@
-/*  $Id: seqsrc_readdb.h,v 1.7 2003/08/19 22:05:44 camacho Exp $
+/*  $Id: seqsrc_readdb.h,v 1.8 2003/12/03 16:50:37 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -51,6 +51,8 @@ extern "C" {
 typedef struct ReaddbNewArgs {
     char* dbname;     /**< Database name */
     Boolean is_protein; /**< Is this database protein? */
+   Int4 first_db_seq; /**< Ordinal id of the first sequence to search */
+   Int4 final_db_seq; /**< Ordinal id of the last sequence to search */
 } ReaddbNewArgs;
 
 /** Readdb sequence source constructor 

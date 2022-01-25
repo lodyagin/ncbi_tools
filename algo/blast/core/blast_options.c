@@ -26,6 +26,36 @@
 **************************************************************************
  *
  * $Log: blast_options.c,v $
+ * Revision 1.78  2004/02/03 18:33:39  dondosha
+ * Correction to previous change: word size can be 11 if discontiguous words
+ *
+ * Revision 1.77  2004/02/03 16:17:33  dondosha
+ * Require word size to be >= 12 with megablast lookup table
+ *
+ * Revision 1.76  2004/02/02 18:49:32  dondosha
+ * Fixes for minor compiler warnings
+ *
+ * Revision 1.75  2003/12/31 20:04:47  dondosha
+ * Round best stride to a number divisible by 4 for all values except 6 and 7
+ *
+ * Revision 1.74  2003/12/31 16:04:37  coulouri
+ * use -1 to disable protein neighboring words
+ *
+ * Revision 1.73  2003/12/08 16:03:05  coulouri
+ * Propagate protein neighboring threshold even if it is zero
+ *
+ * Revision 1.72  2003/11/24 23:18:32  dondosha
+ * Added gap_decay_rate argument to BLAST_Cutoffs; removed BLAST_Cutoffs_simple
+ *
+ * Revision 1.71  2003/11/12 18:17:46  dondosha
+ * Correction in calculating scanning stride
+ *
+ * Revision 1.70  2003/11/04 23:22:47  dondosha
+ * Do not calculate hit saving cutoff score for PHI BLAST
+ *
+ * Revision 1.69  2003/10/30 19:34:01  dondosha
+ * Removed gapped_calculation from BlastHitSavingOptions structure
+ *
  * Revision 1.68  2003/10/24 20:55:10  camacho
  * Rename GetDefaultStride
  *
@@ -328,7 +358,7 @@
  *
 */
 
-static char const rcsid[] = "$Id: blast_options.c,v 1.68 2003/10/24 20:55:10 camacho Exp $";
+static char const rcsid[] = "$Id: blast_options.c,v 1.78 2004/02/03 18:33:39 dondosha Exp $";
 
 #include <algo/blast/core/blast_options.h>
 #include <algo/blast/core/blast_gapalign.h>
@@ -473,7 +503,7 @@ BlastInitialWordParametersNew(Uint1 program_number,
    BlastExtensionParameters* ext_params, BlastScoreBlk* sbp, 
    BlastQueryInfo* query_info, 
    const BlastEffectiveLengthsOptions* eff_len_options, 
-   BlastInitialWordParameters* *parameters)
+   Boolean gapped_calculation, BlastInitialWordParameters* *parameters)
 {
    Int4 context = query_info->first_context;
    Int4 cutoff_score = 0, s2 = 0;
@@ -493,8 +523,7 @@ BlastInitialWordParametersNew(Uint1 program_number,
    (*parameters)->x_dropoff = (Int4)
       ceil(word_options->x_dropoff*NCBIMATH_LN2/sbp->kbp_std[context]->Lambda);
 
-   if (hit_params->options->gapped_calculation && 
-       program_number != blast_type_blastn)
+   if (program_number != blast_type_blastn && gapped_calculation)
       kbp = sbp->kbp_gap[context];
    else
       kbp = sbp->kbp_std[context];
@@ -507,14 +536,14 @@ BlastInitialWordParametersNew(Uint1 program_number,
       eff_len_options->dbseq_num;
 
    e2 = UNGAPPED_CUTOFF_EVALUE;
-   BLAST_Cutoffs(&s2, &e2, kbp, MIN(avglen, qlen), avglen, TRUE);
+   BLAST_Cutoffs(&s2, &e2, kbp, MIN(avglen, qlen)*avglen, TRUE, 
+                 hit_params->gap_decay_rate);
 
    cutoff_score = MIN(hit_params->cutoff_score, s2);
 
    /* For non-blastn programs, the cutoff score should not be larger than 
       gap trigger */
-   if (hit_params->options->gapped_calculation && 
-       program_number != blast_type_blastn) {
+   if (gapped_calculation && program_number != blast_type_blastn) {
       (*parameters)->cutoff_score = 
          MIN((Int4)ext_params->gap_trigger, cutoff_score);
    } else {
@@ -741,6 +770,16 @@ BlastScoringOptionsValidate(Uint1 program_number,
 	if (options == NULL)
 		return 1;
 
+   if (program_number == blast_type_tblastx && 
+              options->gapped_calculation)
+   {
+		Int4 code=2;
+		Int4 subcode=1;
+      Blast_MessageWrite(blast_msg, 2, code, subcode, 
+         "Gapped search is not allowed for tblastx");
+		return (Int2) code;
+   }
+
 	if (program_number == blast_type_blastn)
 	{
 		if (options->penalty >= 0)
@@ -893,6 +932,8 @@ Int4 CalculateBestStride(Int4 word_size, Boolean var_words, Int4 lut_type)
 {
    Int4 lut_width;
    Int4 extra = 1;
+   Uint1 remainder;
+   Int4 stride;
 
    if (lut_type == MB_LOOKUP_TABLE)
       lut_width = 12;
@@ -901,10 +942,18 @@ Int4 CalculateBestStride(Int4 word_size, Boolean var_words, Int4 lut_type)
    else
       lut_width = 4;
 
-   if (var_words && ((word_size % COMPRESSION_RATIO) == 0) )
+   remainder = word_size % COMPRESSION_RATIO;
+
+   if (var_words && (remainder == 0) )
       extra = COMPRESSION_RATIO;
 
-   return word_size - lut_width + extra;
+   stride = word_size - lut_width + extra;
+
+   remainder = stride % 4;
+
+   if (stride > 8 || (stride > 4 && remainder == 1) ) 
+      stride -= remainder;
+   return stride;
 }
 
 Int2 
@@ -927,8 +976,16 @@ BLAST_FillLookupTableOptions(LookupTableOptions* options,
       }
    }
 
-   if (threshold)
+   /* if the supplied threshold is -1, disable neighboring words */
+   if (threshold == -1)
+      options->threshold = 0;
+
+   /* if the supplied threshold is > 0, use it */
+   if (threshold > 0)
       options->threshold = threshold;
+
+   /* otherwise, use the default */
+
    if (use_pssm)
       options->use_pssm = use_pssm;
    if (word_size)
@@ -937,7 +994,7 @@ BLAST_FillLookupTableOptions(LookupTableOptions* options,
       if (!ag_blast) {
          options->scan_step = COMPRESSION_RATIO;
       } else {
-         options->scan_step = CalculateBestStride(word_size, variable_wordsize,
+         options->scan_step = CalculateBestStride(options->word_size, variable_wordsize,
                                                   options->lut_type);
       }
    }
@@ -989,7 +1046,8 @@ LookupTableOptionsValidate(Uint1 program_number,
 
 	if (options->word_size <= 0)
 	{
-		Blast_MessageWrite(blast_msg, 2, code, subcode, "Word-size must be greater than zero");
+		Blast_MessageWrite(blast_msg, 2, code, subcode, 
+                         "Word-size must be greater than zero");
 		return (Int2) code;
 	} else if (program_number == blast_type_blastn && options->word_size < 7)
 	{
@@ -1010,6 +1068,14 @@ LookupTableOptionsValidate(Uint1 program_number,
 		Blast_MessageWrite(blast_msg, 2, code, subcode, "Megablast lookup table only supported with blastn");
 		return (Int2) code;
 	}
+
+   if (options->lut_type == MB_LOOKUP_TABLE && options->word_size < 12 && 
+       options->mb_template_length == 0) {
+      Blast_MessageWrite(blast_msg, 2, code, subcode, 
+                         "Word size must be 12 or greater with megablast"
+                         " lookup table");
+      return (Int2) code;
+   }
 
    if (program_number == blast_type_blastn && 
        options->mb_template_length > 0) {
@@ -1065,12 +1131,11 @@ Int2 BlastHitSavingOptionsNew(Uint1 program_number,
 
 Int2
 BLAST_FillHitSavingOptions(BlastHitSavingOptions* options, 
-   Boolean is_gapped, double evalue, Int4 hitlist_size)
+                           double evalue, Int4 hitlist_size)
 {
    if (!options)
       return 1;
 
-   options->gapped_calculation = is_gapped;
    if (hitlist_size)
       options->hitlist_size = hitlist_size;
    if (evalue)
@@ -1086,14 +1151,6 @@ BlastHitSavingOptionsValidate(Uint1 program_number,
 {
 	if (options == NULL)
 		return 1;
-
-   if (program_number == blast_type_tblastx && options->gapped_calculation) {
-		Int4 code=2;
-		Int4 subcode=1;
-      Blast_MessageWrite(blast_msg, 2, code, subcode, 
-         "Gapped search is not allowed for tblastx");
-		return (Int2) code;
-   }
 
 	if (options->hitlist_size < 1)
 	{
@@ -1135,6 +1192,7 @@ BlastHitSavingParametersNew(Uint1 program_number,
    BlastHitSavingParameters* params;
    BLAST_KarlinBlk* kbp;
    double evalue = options->expect_value;
+   Boolean gapped_calculation = TRUE;
 
    if (!options || !parameters)
       return 1;
@@ -1149,20 +1207,24 @@ BlastHitSavingParametersNew(Uint1 program_number,
 
    params->handle_results = handle_results;
 
-   if (sbp->kbp_gap && sbp->kbp_gap[query_info->first_context])
+   if (sbp->kbp_gap && sbp->kbp_gap[query_info->first_context]) {
       kbp = sbp->kbp_gap[query_info->first_context];
-   else
+   } else {
       kbp = sbp->kbp[query_info->first_context];
+      gapped_calculation = FALSE;
+   }
 
    if (options->cutoff_score > 0) {
       params->cutoff_score = options->cutoff_score;
-   } else {
-      BLAST_Cutoffs_simple(&(params->cutoff_score), &evalue, kbp, 
+   } else if (!options->phi_align) {
+      BLAST_Cutoffs(&(params->cutoff_score), &evalue, kbp, 
          (double)query_info->eff_searchsp_array[query_info->first_context], 
-         FALSE);
+         FALSE, 0);
+   } else {
+      params->cutoff_score = 0;
    }
    
-   if (program_number == blast_type_blastn || !options->gapped_calculation) {
+   if (program_number == blast_type_blastn || !gapped_calculation) {
       params->gap_prob = BLAST_GAP_PROB;
       params->gap_decay_rate = BLAST_GAP_DECAY_RATE;
    } else {

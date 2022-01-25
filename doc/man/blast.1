@@ -1,4 +1,4 @@
-.TH BLAST 1 2003-04-27 NCBI "NCBI Tools User's Manual"
+.TH BLAST 1 2003-11-10 NCBI "NCBI Tools User's Manual"
 .SH NAME
 bl2seq, blastall, blastcl3, blastpgp, impala, megablast, rpsblast, seedtop \- Basic Local Alignment Search Tool
 .SH SYNOPSIS
@@ -626,7 +626,8 @@ Do not perform gapped alignment (N/A for tblastx)
 Generate words for every base of the database (default is every 4th)
 .TP
 \fB\-h\fP\ \fIX\fP (blastpgp, impala)
-e-value threshold for inclusion in multipass model (default = 0.005)
+e-value threshold for inclusion in multipass model (default = 0.002
+for blastpgp, 0.005 for impala)
 .TP
 \fB\-i\fP\ \fIfilename\fP
 Read (first) sequence from \fIfilename\fP (default is stdin)

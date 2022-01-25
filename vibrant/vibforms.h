@@ -29,13 +29,16 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.8 $
+* $Revision: 6.9 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: vibforms.h,v $
+* Revision 6.9  2004/01/16 22:35:38  kans
+* added WidestString and WidestAlist
+*
 * Revision 6.8  2002/08/07 18:13:42  kans
 * G/SetPrimitiveIDs, itemID is Uint4
 *
@@ -204,7 +207,9 @@ extern Nlm_CharPtr Nlm_SaveStringFromText (Nlm_TexT t);
 extern ValNodePtr Nlm_SetTextFromVnp (Nlm_TexT t, ValNodePtr vnp);
 extern ValNodePtr Nlm_GetVnpFromText (Nlm_TexT t, ValNodePtr vnp, Nlm_Boolean last);
 extern Nlm_Int2 Nlm_MaxStringWidths (Nlm_CharPtr PNTR strs);
+extern Nlm_CharPtr Nlm_WidestString (Nlm_CharPtr PNTR strs);
 extern Nlm_Int2 Nlm_MaxAlistWidths (Nlm_EnumFieldAssocPtr al);
+extern Nlm_CharPtr Nlm_WidestAlist (Nlm_EnumFieldAssocPtr al);
 extern Nlm_GrouP Nlm_MultiLinePrompt (Nlm_GrouP prnt, Nlm_CharPtr text, Nlm_Int2 maxWidth, Nlm_FonT font);
 extern Nlm_GrouP Nlm_MultiLinePromptEx (Nlm_GrouP prnt, Nlm_CharPtr text, Nlm_Int2 maxWidth, Nlm_FonT font, Nlm_Boolean stripSpaces);
 
@@ -513,7 +518,9 @@ extern Nlm_CharPtr Nlm_ExtractTagListColumn (Nlm_CharPtr source, Nlm_Int2 col);
 #define SetTextFromVnp Nlm_SetTextFromVnp
 #define GetVnpFromText Nlm_GetVnpFromText
 #define MaxStringWidths Nlm_MaxStringWidths
+#define WidestString Nlm_WidestString
 #define MaxAlistWidths Nlm_MaxAlistWidths
+#define WidestAlist Nlm_WidestAlist
 #define MultiLinePrompt Nlm_MultiLinePrompt
 #define MultiLinePromptEx Nlm_MultiLinePromptEx
 #define JustInvalObject Nlm_JustInvalObject

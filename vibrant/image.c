@@ -27,7 +27,7 @@
 *
 * Author:  Alex Smirnov,  Denis Vakatov
 *
-* $Revision: 6.6 $
+* $Revision: 6.7 $
 *
 * File Description:
 *       Image(pixmap) processing.
@@ -37,6 +37,9 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: image.c,v $
+* Revision 6.7  2003/11/17 17:03:29  kans
+* changed C++ style comments to C comments
+*
 * Revision 6.6  2002/03/28 13:35:48  kans
 * only include MoreCarbonAccessors.h if not OS_UNIX_DARWIN
 *
@@ -365,8 +368,8 @@ Nlm_Boolean Nlm_AllocateImage ( Nlm_Image image, Nlm_Uint2Ptr width,
   im->pixelMap->bounds.left = 0;
   im->pixelMap->bounds.top = 0;
   im->pixelMap->cmpSize = 8;
-// 2001-03-22:  Joshua Juran
-// Evidently these two members don't exist in Carbon.  So don't set them.
+  /* 2001-03-22:  Joshua Juran */
+  /* Evidently these two members don't exist in Carbon.  So don't set them. */
 #if !TARGET_API_MAC_CARBON
   im->pixelMap->planeBytes = 0;
   im->pixelMap->pmReserved = 0;

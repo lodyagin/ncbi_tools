@@ -1,4 +1,4 @@
-/* $Id: blast_lookup.c,v 1.3 2003/10/22 16:45:28 dondosha Exp $
+/* $Id: blast_lookup.c,v 1.16 2004/01/26 19:39:27 coulouri Exp $
 
 * ===========================================================================
 *
@@ -29,9 +29,9 @@
 #include <algo/blast/core/blast_def.h>
 #include <algo/blast/core/blast_options.h>
 #include <algo/blast/core/blast_lookup.h>
-#include <algo/blast/core/util.h>
+#include <algo/blast/core/lookup_util.h>
 
-static char const rcsid[] = "$Id: blast_lookup.c,v 1.3 2003/10/22 16:45:28 dondosha Exp $";
+static char const rcsid[] = "$Id: blast_lookup.c,v 1.16 2004/01/26 19:39:27 coulouri Exp $";
 
 static void AddWordHits( LookupTable *lookup,
 			 Int4** matrix,
@@ -65,12 +65,21 @@ Int4 LookupTableNew(const LookupTableOptions* opt,
 		      Boolean is_protein)
 {
    LookupTable* lookup = *lut = 
-      (LookupTable*) malloc(sizeof(LookupTable));
+      (LookupTable*) calloc(1, sizeof(LookupTable));
+
+   ASSERT(lookup != NULL);
 
   if (is_protein) {
+    Int4 i;
+
     lookup->charsize = ilog2(opt->alphabet_size) + 1;
     lookup->wordsize = opt->word_size;
-    lookup->backbone_size = iexp(2,lookup->charsize*opt->word_size);
+
+    lookup->backbone_size = 0;
+    for(i=0;i<lookup->wordsize;i++)
+        lookup->backbone_size |= (opt->alphabet_size - 1) << (i * lookup->charsize);
+    lookup->backbone_size += 1;
+
     lookup->mask = makemask(opt->word_size * lookup->charsize);
   } else {
      lookup->word_length = opt->word_size;
@@ -90,8 +99,11 @@ Int4 LookupTableNew(const LookupTableOptions* opt,
   lookup->threshold = opt->threshold;
   lookup->thin_backbone = 
      (Int4**) calloc(lookup->backbone_size , sizeof(Int4*));
-  lookup->use_pssm = opt->use_pssm;
+  ASSERT(lookup->thin_backbone != NULL);
 
+  lookup->use_pssm = opt->use_pssm;
+  lookup->neighbors=NULL;
+  lookup->overflow=NULL;
   return 0;
 }
 
@@ -105,16 +117,18 @@ Int4 BlastAaLookupAddWordHit(LookupTable* lookup, /* in/out: the lookup table */
   Int4 * chain = NULL;
     
   /* compute its index, */
+
   _ComputeIndex(lookup->wordsize,lookup->charsize,lookup->mask, w, &index);
 
   ASSERT(index < lookup->backbone_size);
-      
+
   /* if backbone cell is null, initialize a new chain */
   if (lookup->thin_backbone[index] == NULL)
     {
       chain_size = 8;
       hits_in_chain = 0;
-      chain = (Int4*) malloc( chain_size * sizeof(Int4) );
+      chain = (Int4*) calloc( chain_size, sizeof(Int4) );
+      ASSERT(chain != NULL);
       chain[0] = chain_size;
       chain[1] = hits_in_chain;
       lookup->thin_backbone[index] = chain;
@@ -132,6 +146,8 @@ Int4 BlastAaLookupAddWordHit(LookupTable* lookup, /* in/out: the lookup table */
     {
       chain_size = chain_size * 2;
       chain = (Int4*) realloc(chain, chain_size * sizeof(Int4) );
+      ASSERT(chain != NULL);
+
       lookup->thin_backbone[index] = chain;
       chain[0] = chain_size;
     }
@@ -156,10 +172,12 @@ Int4 _BlastAaLookupFinalize(LookupTable* lookup)
 /* allocate the new lookup table */
  lookup->thick_backbone = (LookupBackboneCell *)
     calloc(lookup->backbone_size , sizeof(LookupBackboneCell));
+    ASSERT(lookup->thick_backbone != NULL);
 
  /* allocate the pv_array */
  lookup->pv = (PV_ARRAY_TYPE *)
-    calloc((lookup->backbone_size >> PV_ARRAY_BTS) , sizeof(PV_ARRAY_TYPE));
+    calloc((lookup->backbone_size >> PV_ARRAY_BTS) + 1 , sizeof(PV_ARRAY_TYPE));
+  ASSERT(lookup->pv != NULL);
 
  /* find out how many cells have >3 hits */
  for(i=0;i<lookup->backbone_size;i++)
@@ -175,7 +193,8 @@ Int4 _BlastAaLookupFinalize(LookupTable* lookup)
  lookup->longest_chain = longest_chain;
 
  /* allocate the overflow array */
- lookup->overflow = (Int4*) malloc( overflow_cells_needed * sizeof(Int4) );
+ lookup->overflow = (Int4*) calloc( overflow_cells_needed, sizeof(Int4) );
+ ASSERT(lookup->overflow != NULL);
 
 /* for each position in the lookup table backbone, */
 for(i=0;i<lookup->backbone_size;i++)
@@ -207,7 +226,7 @@ for(i=0;i<lookup->backbone_size;i++)
 	      num_overflows++;
 
 	      lookup->thick_backbone[i].num_used = lookup->thin_backbone[i][1];
-	      lookup->thick_backbone[i].payload.overflow = & (lookup->overflow[overflow_cursor]);
+	      lookup->thick_backbone[i].payload.overflow_cursor = overflow_cursor;
 	      for(j=0;j<lookup->thin_backbone[i][1];j++)
 		{
                 lookup->overflow[overflow_cursor] = lookup->thin_backbone[i][j+2];
@@ -260,6 +279,7 @@ static NCBI_INLINE void  _ComputeIndex(Int4 wordsize,
   Int4 i;
 
   *index = 0;
+
   for(i=0;i<wordsize;i++)
 {
     *index = ((*index << charsize) | word[i]) & mask;
@@ -337,7 +357,7 @@ Int4 BlastAaScanSubject(const LookupTableWrap* lookup_wrap,
 		src = lookup->thick_backbone[index].payload.entries;
 	      else
 		/* hits live in overflow array */
-		src = lookup->thick_backbone[index].payload.overflow;
+		src = & (lookup->overflow [ lookup->thick_backbone[index].payload.overflow_cursor ] );
 	      
 	      /* copy the hits. */
 	      for(i=0;i<numhits;i++)
@@ -390,8 +410,8 @@ Int4 BlastAaLookupIndexQueries(LookupTable* lookup,
     }
 
   /* free neighbor array*/
-  sfree(lookup->neighbors);
-  lookup->neighbors=NULL;
+  if (lookup->neighbors != NULL)
+    sfree(lookup->neighbors);
 
   return 0;
 }
@@ -408,7 +428,7 @@ Int4 _BlastAaLookupIndexQuery(LookupTable* lookup,
   for(loc=location; loc; loc=loc->next)
     {
       from = ((DoubleInt*) loc->ptr)->i1;
-      to = ((DoubleInt*) loc->ptr)->i2 - lookup->wordsize;
+      to = ((DoubleInt*) loc->ptr)->i2 - lookup->wordsize + 1;
 
       for(w=from;w<=to;w++)
 	{
@@ -436,6 +456,7 @@ Int4 MakeAllWordSequence(LookupTable* lookup)
   lookup->neighbors_length = len;
 
   lookup->neighbors = (Uint1*) malloc( len );
+  ASSERT(lookup->neighbors != NULL);
 
   /* generate the de Bruijn sequence */
 
@@ -444,30 +465,34 @@ Int4 MakeAllWordSequence(LookupTable* lookup)
   /* unwrap it */
 
   for(i=0;i<(n-1);i++)
-    lookup->neighbors[len-((n-1)+1)+i] = lookup->neighbors[i];
+    lookup->neighbors[len-n+1+i] = lookup->neighbors[i];
   
   return 0;
 }
 
 Int4 AddNeighboringWords(LookupTable* lookup, Int4 ** matrix, BLAST_SequenceBlk* query, Int4 offset)
 {
-  Uint1* w = NULL;
-
-
-  if (query)
-	w = query->sequence + offset;
   
-  if (lookup->threshold == 0)
+  if (lookup->use_pssm)
+  {
+      AddPSSMWordHits(lookup, matrix, offset);
+  }
+  else
+  {
+    Uint1* w = NULL;
+    ASSERT(query != NULL);
+    w = query->sequence + offset;
+  
+    if (lookup->threshold == 0)
     {
       BlastAaLookupAddWordHit(lookup, w, offset);
       lookup->exact_matches++;
-      return 0;
     }
-  
-  if (lookup->use_pssm)
-      AddPSSMWordHits(lookup, matrix, offset);
-  else
+    else
+    {
       AddWordHits(lookup, matrix, w, offset);
+    }
+  }
   return 0;
 }
 
@@ -475,7 +500,7 @@ static void AddWordHits(LookupTable* lookup, Int4** matrix,
 			Uint1* word, Int4 offset)
 {
   Uint1* s = lookup->neighbors;
-  Uint1* s_end=s + lookup->neighbors_length - lookup->wordsize;
+  Uint1* s_end=s + lookup->neighbors_length - lookup->wordsize + 1;
   Uint1* w = word;
   Uint1 different;
   Int4 score;
@@ -500,7 +525,13 @@ static void AddWordHits(LookupTable* lookup, Int4** matrix,
         while (s < s_end)
           {
             if ( (s[0] == w[0]) || (p0[s[0]] >= threshold) )
+	    {
                 BlastAaLookupAddWordHit(lookup,s,offset);
+		if (s[0] == w[0])
+		    lookup->exact_matches++;
+		else
+		    lookup->neighbor_matches++;
+	    }
             s++;
   	  }
 
@@ -516,7 +547,13 @@ static void AddWordHits(LookupTable* lookup, Int4** matrix,
 	    different = (w[0] ^ s[0]) | (w[1] ^ s[1]);
   
             if ( !different || (score >= threshold) )
+	    {
                 BlastAaLookupAddWordHit(lookup,s,offset);
+		if (!different)
+		    lookup->exact_matches++;
+		else
+		    lookup->neighbor_matches++;
+	    }
             s++;
 	  }
 
@@ -533,7 +570,13 @@ static void AddWordHits(LookupTable* lookup, Int4** matrix,
 	    different = (w[0] ^ s[0]) | (w[1] ^ s[1]) | (w[2] ^ s[2]);
   
             if ( !different || (score >= threshold) )
+	    {
                 BlastAaLookupAddWordHit(lookup,s,offset);
+		if (!different)
+		    lookup->exact_matches++;
+		else
+		    lookup->neighbor_matches++;
+	    }
             s++;
   	  }
 
@@ -551,7 +594,13 @@ static void AddWordHits(LookupTable* lookup, Int4** matrix,
               }
   
             if ( !different || (score >= threshold) )
+	    {
                 BlastAaLookupAddWordHit(lookup,s,offset);
+		if (!different)
+		    lookup->exact_matches++;
+		else
+		    lookup->neighbor_matches++;
+	    }
             s++;
   	  }
 
@@ -731,8 +780,7 @@ Int4 BlastNaScanSubject_AG(const LookupTableWrap* lookup_wrap,
          
          if (NA_PV_TEST(pv_array, index, PV_ARRAY_BTS)) {
             num_hits = lookup->thick_backbone[index].num_used;
-            if (num_hits == 0)
-               continue;
+            ASSERT(num_hits != 0);
             if (num_hits > (max_hits - total_hits))
                break;
             if ( num_hits <= HITS_ON_BACKBONE )
@@ -740,11 +788,9 @@ Int4 BlastNaScanSubject_AG(const LookupTableWrap* lookup_wrap,
                lookup_pos = lookup->thick_backbone[index].payload.entries;
             else
                /* hits live in overflow array */
-               lookup_pos = (Int4*)
-                  (lookup->thick_backbone[index].payload.overflow);
+               lookup_pos = & ( lookup->overflow[lookup->thick_backbone[index].payload.overflow_cursor] );
             
-            s_off = 
-               ((s - abs_start) + compressed_wordsize)*COMPRESSION_RATIO;
+            s_off = (s - abs_start)*COMPRESSION_RATIO;
             while (num_hits) {
                q_off = *((Uint4 *) lookup_pos); /* get next query offset */
                lookup_pos++;
@@ -770,13 +816,13 @@ Int4 BlastNaScanSubject_AG(const LookupTableWrap* lookup_wrap,
          index = 0;
          for (i = 0; i < compressed_wordsize; ++i)
             index = ((index)<<FULL_BYTE_SHIFT) | (*s++);
+
          adjusted_index = 
-            (((index)<<bit) & lookup->mask) | ((*s)>>(FULL_BYTE_SHIFT-bit));
+            BlastNaLookupAdjustIndex(s, index, lookup->mask, bit);
          
          if (NA_PV_TEST(pv_array, adjusted_index, PV_ARRAY_BTS)) {
             num_hits = lookup->thick_backbone[adjusted_index].num_used;
-            if (num_hits == 0)
-               continue;
+            ASSERT(num_hits != 0);
             if (num_hits > (max_hits - total_hits))
                break;
             if ( num_hits <= HITS_ON_BACKBONE )
@@ -784,8 +830,7 @@ Int4 BlastNaScanSubject_AG(const LookupTableWrap* lookup_wrap,
                lookup_pos = lookup->thick_backbone[adjusted_index].payload.entries;
             else
                /* hits live in overflow array */
-               lookup_pos = (Int4*)
-                 (lookup->thick_backbone[adjusted_index].payload.overflow);
+               lookup_pos = & (lookup->overflow [ lookup->thick_backbone[adjusted_index].payload.overflow_cursor]);
             
             while (num_hits) {
                q_off = *((Uint4 *) lookup_pos); /* get next query offset */
@@ -793,7 +838,7 @@ Int4 BlastNaScanSubject_AG(const LookupTableWrap* lookup_wrap,
                num_hits--;
                
                q_offsets[total_hits] = q_off;
-               s_offsets[total_hits++] = s_off + reduced_word_length;
+               s_offsets[total_hits++] = s_off;
             }
          }
       }
@@ -818,105 +863,54 @@ Int4 BlastNaScanSubject(const LookupTableWrap* lookup_wrap,
    Int4 q_off;
    PV_ARRAY_TYPE *pv_array = lookup->pv;
    Int4 total_hits = 0;
-   Boolean full_byte_scan = (lookup->scan_step % COMPRESSION_RATIO == 0);
+   Int4 reduced_word_length = lookup->reduced_wordsize*COMPRESSION_RATIO;
    Int4 i;
 
    abs_start = subject->sequence;
    s = abs_start + start_offset/COMPRESSION_RATIO;
    /* s_end points to the place right after the last full sequence byte */ 
-   s_end = abs_start + (*end_offset)/COMPRESSION_RATIO;
+   s_end = 
+      abs_start + (*end_offset + reduced_word_length)/COMPRESSION_RATIO;
+
    index = 0;
    
    /* Compute the first index */
    for (i = 0; i < lookup->reduced_wordsize; ++i)
       index = ((index)<<FULL_BYTE_SHIFT) | *s++;
 
-   if (full_byte_scan) {
-      /* s points to the byte right after the end of the current word */
-      while (s <= s_end) {
-         if (NA_PV_TEST(pv_array, index, PV_ARRAY_BTS)) {
-            num_hits = lookup->thick_backbone[index].num_used;
-            if (num_hits == 0)
-               continue;
-            if (num_hits > (max_hits - total_hits))
-               break;
-            if ( num_hits <= HITS_ON_BACKBONE )
-               /* hits live in thick_backbone */
-               lookup_pos = lookup->thick_backbone[index].payload.entries;
-            else
-               /* hits live in overflow array */
-               lookup_pos = 
-                  (Int4*)(lookup->thick_backbone[index].payload.overflow);
-            
-            /* Save the hits offsets */
-            s_off = (s - abs_start)*COMPRESSION_RATIO;
-            while (num_hits) {
-               q_off = *((Uint4 *) lookup_pos); /* get next query offset */
-               lookup_pos++;
-               num_hits--;
-               
-               q_offsets[total_hits] = q_off;
-               s_offsets[total_hits++] = s_off;
-            }
-         }
-
-         /* Compute the next value of the index */
-         index = (((index)<<FULL_BYTE_SHIFT) & lookup->mask) | (*s++);  
-
-      }
-      /* Ending offset should point to the start of the word that ends 
-         at s */
-      *end_offset = ((s - abs_start) - lookup->reduced_wordsize)*COMPRESSION_RATIO;
-   } else {
-      Int4 scan_shift = 2*lookup->scan_step;
-      Uint1 bit = 2*(start_offset % COMPRESSION_RATIO);
-      Int4 adjusted_index;
-
-      /* s points to the byte right after the end of the current word */
-      while (s <= s_end) {
-         /* Adjust the word index by the base within a byte */
-         adjusted_index = BlastNaLookupAdjustIndex(s, index, lookup->mask,
-                                                   bit);
+   /* s points to the byte right after the end of the current word */
+   while (s <= s_end) {
+      if (NA_PV_TEST(pv_array, index, PV_ARRAY_BTS)) {
+         num_hits = lookup->thick_backbone[index].num_used;
+         ASSERT(num_hits != 0);
+         if (num_hits > (max_hits - total_hits))
+            break;
+         if ( num_hits <= HITS_ON_BACKBONE )
+            /* hits live in thick_backbone */
+            lookup_pos = lookup->thick_backbone[index].payload.entries;
+         else
+            /* hits live in overflow array */
+            lookup_pos = & (lookup->overflow[lookup->thick_backbone[index].payload.overflow_cursor]);
          
-         if (NA_PV_TEST(pv_array, index, PV_ARRAY_BTS)) {
-            num_hits = lookup->thick_backbone[index].num_used;
-            if (num_hits == 0)
-               continue;
-            if (num_hits > (max_hits - total_hits))
-               break;
-            if ( num_hits <= HITS_ON_BACKBONE )
-               /* hits live in thick_backbone */
-               lookup_pos = lookup->thick_backbone[index].payload.entries;
-            else
-               /* hits live in overflow array */
-               lookup_pos = 
-                  (Int4*)(lookup->thick_backbone[index].payload.overflow);
+         /* Save the hits offsets */
+         s_off = (s - abs_start)*COMPRESSION_RATIO - reduced_word_length;
+         while (num_hits) {
+            q_off = *((Uint4 *) lookup_pos); /* get next query offset */
+            lookup_pos++;
+            num_hits--;
             
-            /* Save the hits offsets */
-            s_off = (s - abs_start)*COMPRESSION_RATIO + bit/2;
-            while (num_hits) {
-               q_off = *((Uint4 *) lookup_pos); /* get next query offset */
-               lookup_pos++;
-               num_hits--;
-               
-               q_offsets[total_hits] = q_off;
-               s_offsets[total_hits++] = s_off;
-            }
-         }
-         bit += scan_shift;
-         if (bit >= FULL_BYTE_SHIFT) {
-            /* Advance to the next full byte */
-            bit -= FULL_BYTE_SHIFT;
-            index = BlastNaLookupComputeIndex(FULL_BYTE_SHIFT, 
-                                lookup->mask, s++, index);
+            q_offsets[total_hits] = q_off;
+            s_offsets[total_hits++] = s_off;
          }
       }
-      /* Ending offset should point to the start of the word that ends 
-         at s */
-      *end_offset = 
-         ((s - abs_start) - lookup->reduced_wordsize)*COMPRESSION_RATIO
-         + bit/2;
+
+      /* Compute the next value of the index */
+      index = (((index)<<FULL_BYTE_SHIFT) & lookup->mask) | (*s++);  
+
    }
+   /* Ending offset should point to the start of the word that ends 
+      at s */
+   *end_offset = (s - abs_start)*COMPRESSION_RATIO - reduced_word_length;
 
    return total_hits;
 }
@@ -981,7 +975,8 @@ static Int4 BlastNaLookupAddWordHit(LookupTable* lookup, Uint1* w,
     {
       chain_size = 8;
       hits_in_chain = 0;
-      chain = malloc( chain_size * sizeof(Int4) );
+      chain = calloc( chain_size, sizeof(Int4) );
+      ASSERT(chain != NULL);
       chain[0] = chain_size;
       chain[1] = hits_in_chain;
       lookup->thin_backbone[index] = chain;
@@ -999,6 +994,7 @@ static Int4 BlastNaLookupAddWordHit(LookupTable* lookup, Uint1* w,
     {
       chain_size = chain_size * 2;
       chain = realloc(chain, chain_size * sizeof(Int4) );
+      ASSERT(chain != NULL);
       lookup->thin_backbone[index] = chain;
       chain[0] = chain_size;
     }
@@ -1025,12 +1021,12 @@ Int4 BlastNaLookupIndexQuery(LookupTable* lookup, BLAST_SequenceBlk* query,
 
   for(loc=location; loc; loc=loc->next) {
      from = ((DoubleInt*) loc->ptr)->i1;
-     to = ((DoubleInt*) loc->ptr)->i2;
+     to = ((DoubleInt*) loc->ptr)->i2 + 1;
      
      sequence = query->sequence + from;
-     /* Make the offsets point to the ends of the words */
-     from += lookup->reduced_wordsize*COMPRESSION_RATIO;
-     for(offset = from; offset < to; offset++) {
+     /* Last offset is such that full word fits in the sequence */
+     to -= lookup->reduced_wordsize*COMPRESSION_RATIO;
+     for(offset = from; offset <= to; offset++) {
 	BlastNaLookupAddWordHit(lookup, sequence, offset);
 	++sequence;
      }

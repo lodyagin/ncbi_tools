@@ -627,7 +627,7 @@ NLM_EXTERN RealValuePtr LIBCALL RealValueAsnRead PROTO (( AsnIoPtr, AsnTypePtr))
 NLM_EXTERN Boolean LIBCALL RealValueAsnWrite PROTO (( RealValuePtr , AsnIoPtr, AsnTypePtr));
 
 typedef ValNodePtr MovePtr;
-typedef ValNode Move;
+typedef ValNode Move_t;
 #define Move_rotate 1
 #define Move_translate 2
 

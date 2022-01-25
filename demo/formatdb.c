@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: formatdb.c,v 6.91 2003/10/01 18:59:56 camacho Exp $";
+static char const rcsid[] = "$Id: formatdb.c,v 6.92 2004/01/29 14:56:44 camacho Exp $";
 
 /*****************************************************************************
 
@@ -32,11 +32,14 @@ static char const rcsid[] = "$Id: formatdb.c,v 6.91 2003/10/01 18:59:56 camacho 
    
    Version Creation Date: 10/01/96
 
-   $Revision: 6.91 $
+   $Revision: 6.92 $
 
    File Description:  formats FASTA databases for use by BLAST
 
    $Log: formatdb.c,v $
+   Revision 6.92  2004/01/29 14:56:44  camacho
+   Removed -A option, FORMATDB_VER_TEXT no longer supported
+
    Revision 6.91  2003/10/01 18:59:56  camacho
    Fix to creation of custom databases using a gi list and alias files when the
    source database spans multiple volumes.
@@ -418,8 +421,6 @@ Args dump_args[] = {
       "F", NULL, NULL, TRUE, 's', ARG_BOOLEAN, 0.0, 0, NULL},
     { "Verbose: check for non-unique string ids in the database",
       "F", NULL, NULL, TRUE, 'V', ARG_BOOLEAN, 0.0, 0, NULL},
-    { "Create ASN.1 structured deflines",
-      "T", NULL, NULL, TRUE, 'A', ARG_BOOLEAN, 0.0, 0, NULL},
     { "Create an alias file with this name\n"
       "        use the gifile arg (below) if set to calculate db size\n"
       "        use the BLAST db specified with -i (above)", 
@@ -452,7 +453,6 @@ enum {
     dbsize_arg,
     sparse_arg,
     nonunique_arg,
-    asn1_deflines_arg,
     alias_fn_arg,
     gifile_arg,
     bin_gifile_arg,
@@ -669,9 +669,7 @@ Int2 Main(void)
                             dump_args[basename_arg].strvalue,
                             dump_args[alias_fn_arg].strvalue,
                             ((Int8)dump_args[dbsize_arg].intvalue)*1000000, 0,
-                            dump_args[asn1_deflines_arg].intvalue ?
-                                FORMATDB_VER : FORMATDB_VER_TEXT ,
-                            FALSE, 0);
+                            FORMATDB_VER, FALSE, 0);
     if (options == NULL)
         return 1;
 

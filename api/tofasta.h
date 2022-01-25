@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/12/91
 *
-* $Revision: 6.20 $
+* $Revision: 6.21 $
 *
 * File Description:  various sequence objects to fasta output
 *
@@ -39,6 +39,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: tofasta.h,v $
+* Revision 6.21  2003/11/18 19:04:29  kans
+* added BioseqFastaStream, rapid generator based on SeqPortStream
+*
 * Revision 6.20  2002/07/18 19:28:35  kans
 *  working implementation of BioseqRawToFastaExtraEx, always zero out all of MyFsa struct, no need for fake seqloc
 *
@@ -236,6 +239,16 @@ NLM_EXTERN Boolean SeqEntrysToDefline PROTO((SeqEntryPtr sep,
                                   FILE *fp, Boolean is_na, Uint1 group_segs));
 NLM_EXTERN Boolean BioseqRawToFastaX PROTO((BioseqPtr bsp, MyFsaPtr mfp, Boolean is_na));
 NLM_EXTERN Boolean BioseqToFastaX PROTO((BioseqPtr bsp, MyFsaPtr mfp, Boolean is_na));
+
+/*****************************************************************************
+*
+*   BioseqFastaStream(bsp, fp, expandGaps, maxlen)
+*
+*   	Rapid FASTA generator using SeqPortStream
+*
+*****************************************************************************/
+NLM_EXTERN void BioseqFastaStream PROTO((BioseqPtr bsp, FILE *fp, Boolean expandGaps, Int2 linelen));
+
 
 /*****************************************************************************
 *

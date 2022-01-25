@@ -1,4 +1,4 @@
-/* $Id: wwwblast.c,v 1.8 2003/06/04 16:12:51 dondosha Exp $
+/* $Id: wwwblast.c,v 1.13 2004/01/16 17:35:20 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,27 @@
 *
 * Initial Creation Date: 03/15/2000
 *
-* $Revision: 1.8 $
+* $Revision: 1.13 $
 *
 * File Description:
 *        Standalone WWW Blast CGI program.
 *
 * $Log: wwwblast.c,v $
+* Revision 1.13  2004/01/16 17:35:20  dondosha
+* Fixed mouseover problems
+*
+* Revision 1.12  2003/11/20 22:19:35  dondosha
+* Pass www_root_path to the PrintDefLines... function
+*
+* Revision 1.11  2003/11/20 20:10:52  dondosha
+* Decide whether to print header only after the output type is determined
+*
+* Revision 1.10  2003/11/20 19:10:33  dondosha
+* Do not print progress messages if XML output requested
+*
+* Revision 1.9  2003/11/05 22:40:28  dondosha
+* Do not shift coordinates for tabular output if query is a subsequence - they are already shifted in the seqalign
+*
 * Revision 1.8  2003/06/04 16:12:51  dondosha
 * Set db genetic code for formatting
 *
@@ -179,6 +194,19 @@ static int LIBCALLBACK WWWTickCallback(Int4 sequence_number,
     
     return 1;
 }
+
+/* Callback in case of XML output should not print anything to the stdout */
+static int LIBCALLBACK WWWXMLTickCallback(Int4 sequence_number, 
+                                          Int4 number_of_positive_hits)
+{
+   if(!TestSTDOut()) {
+      return -1;
+   }
+   fflush(stdout);
+   
+   return 1;
+}
+
 static Int4 get_number_alignment(SeqAlignPtr align)
 {
     Int4 num = 0;
@@ -378,10 +406,11 @@ TraditionalBlastReportEngineWithImage(SeqLocPtr slp, BioseqPtr bsp, BlastNet3Hpt
                                   theInfo->number_of_alignments,
                                   program, 
                                   !theInfo->options->gapped_calculation,
-                                  FALSE, SeqLocStart(slp), 0, stdout,
+                                  FALSE, 0, 0, stdout,
                                   (theInfo->align_view == HitTableWithHeader));
        SeqAlignSetFree(seqalign);
     } else {
+    Int4 query_number = 1;
     while (seqalign) {
         if (!options->is_megablast_search)
             next_seqalign = NULL;
@@ -430,7 +459,7 @@ TraditionalBlastReportEngineWithImage(SeqLocPtr slp, BioseqPtr bsp, BlastNet3Hpt
             seqannot->data = seqalign;
             
             if(theInfo->show_overview) {
-                Char f_name[64], title[1024], href[64];
+                Char f_name[64], title[1024], href[64], form_name[16];
                 Int4 align_num;       
                 
                 sprintf(f_name, "%ld%ld.gif", (long)random(), (long)getpid());
@@ -443,18 +472,23 @@ TraditionalBlastReportEngineWithImage(SeqLocPtr slp, BioseqPtr bsp, BlastNet3Hpt
                         "</H3>\n", theInfo->www_root_path, (long)align_num);
                 
                 /* Open HTML form */
-                fprintf(stdout, "<FORM NAME=\"BLASTFORM\">\n");
+                sprintf(form_name, "BLASTFORM%ld", query_number);
+                fprintf(stdout, "<FORM NAME=\"%s\">\n", form_name);
                 fflush(stdout);
                 
-                PrintAlignmentOverview(seqannot, stdout, 
-                                       "BLASTFORM", href, f_name, title); 
+                PrintOneAlignmentOverview(seqannot, stdout, form_name, href, f_name,
+                                          title, query_number);
+                ++query_number;
             }
             
             prune = BlastPruneHitsFromSeqAlign(seqalign, theInfo->number_of_descriptions, NULL);
             ObjMgrSetHold();
             init_buff_ex(85);
             
-            PrintDefLinesFromSeqAlignEx2(prune->sap, 80, stdout, theInfo->print_options, FIRST_PASS, NULL, theInfo->number_of_descriptions, database, theInfo->www_blast_type);
+            PrintDefLinesFromSeqAlignWithPath(prune->sap, 80, stdout, 
+               theInfo->print_options, FIRST_PASS, NULL, 
+               theInfo->number_of_descriptions, database, 
+               theInfo->www_blast_type, theInfo->www_root_path);
             free_buff();
             
             prune = BlastPruneHitsFromSeqAlign(seqalign, theInfo->number_of_alignments, prune);
@@ -504,7 +538,7 @@ TraditionalBlastReportEngineWithImage(SeqLocPtr slp, BioseqPtr bsp, BlastNet3Hpt
         if (seqannot)
             seqannot = SeqAnnotFree(seqannot);
         seqalign = next_seqalign;
-        fprintf(stdout, "<PRE>\n");
+        fprintf(stdout, "<PRE>\n</form>\n");
     }
     } /* End if not hit table */ 
     if (!done) { /* seqalign == NULL */
@@ -768,6 +802,8 @@ Boolean WWWBlastDoSearch(WWWBlastInfoPtr theInfo)
     Boolean tabular_output = (theInfo->align_view == HitTable || 
                               theInfo->align_view == HitTableWithHeader);
     MBXmlPtr mbxp = NULL;
+    int LIBCALLBACK (*callback)(Int4, Int4);
+    Int4 query_number;
 
     if(theInfo == NULL)
 	return FALSE;
@@ -805,8 +841,12 @@ Boolean WWWBlastDoSearch(WWWBlastInfoPtr theInfo)
         other_returns = NULL;
         error_returns = NULL;
         
-        if(!theInfo->xml_output)
+        if(!theInfo->xml_output) {
             printf("</PRE>\n");
+            callback = WWWTickCallback;
+        } else {
+            callback = WWWXMLTickCallback;
+        }
 
         if (!is_megablast) {
             if (SeqIdComp(SeqLocId(lcase_mask), SeqLocId(query_slp)) == 
@@ -817,15 +857,15 @@ Boolean WWWBlastDoSearch(WWWBlastInfoPtr theInfo)
                 lcase_mask = lcase_mask->next;
             }
             if (query_slp) {
-                seqalign = BioseqBlastEngineByLocEx(query_slp, theInfo->program, theInfo->database, options, &other_returns, &error_returns, WWWTickCallback, NULL, theInfo->gi_list, theInfo->gi_list_total);
+                seqalign = BioseqBlastEngineByLocEx(query_slp, theInfo->program, theInfo->database, options, &other_returns, &error_returns, callback, NULL, theInfo->gi_list, theInfo->gi_list_total);
             } else {
-                seqalign = BioseqBlastEngineEx(theInfo->fake_bsp, theInfo->program, theInfo->database, options, &other_returns, &error_returns, WWWTickCallback, NULL, theInfo->gi_list, theInfo->gi_list_total);
+                seqalign = BioseqBlastEngineEx(theInfo->fake_bsp, theInfo->program, theInfo->database, options, &other_returns, &error_returns, callback, NULL, theInfo->gi_list, theInfo->gi_list_total);
             }
         } else {
            if (options->no_traceback)
-            seqalignp = BioseqMegaBlastEngineByLoc(query_slp, theInfo->program, theInfo->database, options, &other_returns, &error_returns, WWWTickCallback, NULL, theInfo->gi_list, theInfo->gi_list_total, AppendMegaBlastHit);
+            seqalignp = BioseqMegaBlastEngineByLoc(query_slp, theInfo->program, theInfo->database, options, &other_returns, &error_returns, callback, NULL, theInfo->gi_list, theInfo->gi_list_total, AppendMegaBlastHit);
            else
-            seqalignp = BioseqMegaBlastEngineByLoc(query_slp, theInfo->program, theInfo->database, options, &other_returns, &error_returns, WWWTickCallback, NULL, theInfo->gi_list, theInfo->gi_list_total, NULL);
+            seqalignp = BioseqMegaBlastEngineByLoc(query_slp, theInfo->program, theInfo->database, options, &other_returns, &error_returns, callback, NULL, theInfo->gi_list, theInfo->gi_list_total, NULL);
         }
 
         if(!theInfo->xml_output)
@@ -904,6 +944,7 @@ Boolean WWWBlastDoSearch(WWWBlastInfoPtr theInfo)
         }
 
         ReadDBBioseqSetDbGeneticCode(theInfo->options->db_genetic_code);
+        query_number = 1;
 
         for (index=0; !done; index++) {
             if (is_megablast)
@@ -943,8 +984,8 @@ Boolean WWWBlastDoSearch(WWWBlastInfoPtr theInfo)
                         query_slp, theInfo->number_of_alignments, 
                         theInfo->program, 
                         !theInfo->options->gapped_calculation, FALSE, 
-                        (query_slp ? SeqLocStart(query_slp) : 0), 0, 
-                        stdout, (theInfo->align_view == HitTableWithHeader));
+                        0, 0, stdout, 
+                        (theInfo->align_view == HitTableWithHeader));
                 } else {
                     seqannot = SeqAnnotNew();
                     seqannot->type = 2;
@@ -969,7 +1010,7 @@ Boolean WWWBlastDoSearch(WWWBlastInfoPtr theInfo)
                     /* Now printing nice gif with alignment overview */
                     
                     if(theInfo->show_overview) {
-                        Char f_name[64], title[1024], href[64];
+                        Char f_name[64], title[1024], href[64], form_name[16];
                         Int4 align_num;
                         
                         sprintf(f_name, "%ld%ld.gif", (long)random(), (long)getpid());
@@ -984,19 +1025,21 @@ Boolean WWWBlastDoSearch(WWWBlastInfoPtr theInfo)
                         
                         
                         /* Open HTML form */
-                        fprintf(stdout, "<FORM NAME=\"BLASTFORM\">\n");
+                        sprintf(form_name, "BLASTFORM%ld", query_number);
+                        fprintf(stdout, "<FORM NAME=\"%s\">\n", form_name);
                         fflush(stdout);
                         
-                        PrintAlignmentOverview(seqannot, stdout, 
-                                               "BLASTFORM", href, f_name, title); 
+                        PrintOneAlignmentOverview(seqannot, stdout, form_name, href, 
+                                                  f_name, title, query_number); 
+                        ++query_number;
                     }
                     
                     prune = BlastPruneHitsFromSeqAlign(seqalign, theInfo->number_of_descriptions, NULL);
                     ObjMgrSetHold();
                     init_buff_ex(85);
-                    PrintDefLinesFromSeqAlignEx2(prune->sap, 80, stdout, 
+                    PrintDefLinesFromSeqAlignWithPath(prune->sap, 80, stdout, 
                        theInfo->print_options, FIRST_PASS, NULL, -1,
-                       NULL, theInfo->www_blast_type);
+                       NULL, theInfo->www_blast_type, theInfo->www_root_path);
                     free_buff();
                     
                     prune = BlastPruneHitsFromSeqAlign(seqalign, theInfo->number_of_alignments, prune);
@@ -1080,6 +1123,7 @@ Boolean WWWBlastDoSearch(WWWBlastInfoPtr theInfo)
             }
             if(!theInfo->xml_output && seqannot != NULL)
                 seqannot = SeqAnnotFree(seqannot);
+            fprintf(stdout, "</form>\n");
         }
         
         matrix = BLAST_MatrixDestruct(matrix);
@@ -1184,7 +1228,7 @@ static void WWWBlastPrintTopHeader(WWWBlastInfoPtr theInfo)
     
     fprintf(stdout, "<BODY BGCOLOR=\"#FFFFFF\" LINK=\"#0000FF\" "
             "VLINK=\"#660099\" ALINK=\"#660099\">\n");
-    fprintf(stdout, "<map name=img_map1>\n");
+    fprintf(stdout, "<map name=img_map0>\n");
     fprintf(stdout, "<area shape=rect coords=2,1,48,21 "
             "href=\"http://www.ncbi.nlm.nih.gov\">\n");
     fprintf(stdout, "<area shape=rect coords=385,1,435,21 "
@@ -1194,7 +1238,7 @@ static void WWWBlastPrintTopHeader(WWWBlastInfoPtr theInfo)
     fprintf(stdout, "<area shape=rect coords=487,1,508,21 "
             "href=\"%s/blast/docs/blast_help.html\">\n", theInfo->www_root_path);
     fprintf(stdout, "</map>\n"); 
-    fprintf(stdout, "<IMG USEMAP=#img_map1 WIDTH=509 HEIGHT=22 "
+    fprintf(stdout, "<IMG USEMAP=#img_map0 WIDTH=509 HEIGHT=22 "
             "SRC=\"%s/blast/images/blast_results.gif\" ISMAP> \n", 
             theInfo->www_root_path);
 }
@@ -1241,14 +1285,14 @@ Int2 Main(void)
     if((theInfo = WWWBlastReadArgs(NULL)) == NULL)
         return 1;
     
-    if (!theInfo->xml_output) 
-       WWWBlastPrintTopHeader(theInfo);
-
     /* Read options into structure */
     if(!WWWCreateSearchOptions(theInfo)) {
         return 1;
     }
     
+    if (!theInfo->xml_output) 
+       WWWBlastPrintTopHeader(theInfo);
+
     /* validate them */
     if(!WWWValidateOptions(theInfo)) {
         return 1;

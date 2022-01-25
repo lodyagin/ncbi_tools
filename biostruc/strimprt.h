@@ -28,7 +28,7 @@
 *
 * Version Creation Date:   Circa 1994
 *
-* $Revision: 6.0 $
+* $Revision: 6.1 $
 *
 * File Description: General Header For Extra MMDB Defines
 *
@@ -38,6 +38,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: strimprt.h,v $
+* Revision 6.1  2003/12/09 15:55:32  bauer
+* renamed Ascii and Binart to BIOSTRUC_ASCII and BIOSTRUC_BINARY
+*
 * Revision 6.0  1997/08/25 18:11:53  madden
 * Revision changed to 6.0
 *
@@ -74,8 +77,8 @@
 #define ResidueGraphPtr_biostruc 2
 #define ResidueGraphPtr_standard_graphs 3
 
-#define Ascii 0
-#define Binary 1
+#define BIOSTRUC_ASCII 0
+#define BIOSTRUC_BINARY 1
 
 #define PDBSECS 0
 #define NCBISECS 1

@@ -9,8 +9,8 @@
 #include <asn.h>
 #endif
 
-static char * asnfilename = "cdd.h17";
-static AsnValxNode avnx[64] = {
+static char * asnfilename = "cdd.h19";
+static AsnValxNode avnx[70] = {
     {20,"unassigned" ,0,0.0,&avnx[1] } ,
     {20,"finished-ok" ,1,0.0,&avnx[2] } ,
     {20,"pending-release" ,2,0.0,&avnx[3] } ,
@@ -51,37 +51,43 @@ static AsnValxNode avnx[64] = {
     {20,"demoted" ,51,0.0,&avnx[38] } ,
     {20,"demoted-3d" ,52,0.0,&avnx[39] } ,
     {20,"other" ,255,0.0,NULL } ,
-    {20,"unassigned" ,0,0.0,&avnx[41] } ,
-    {20,"percent-id" ,1,0.0,&avnx[42] } ,
-    {20,"kimura-corrected" ,2,0.0,&avnx[43] } ,
-    {20,"aligned-score" ,3,0.0,&avnx[44] } ,
-    {20,"aligned-score-ext" ,4,0.0,&avnx[45] } ,
-    {20,"aligned-score-filled" ,5,0.0,&avnx[46] } ,
-    {20,"blast-footprint" ,6,0.0,&avnx[47] } ,
-    {20,"blast-full" ,7,0.0,&avnx[48] } ,
+    {20,"classical" ,0,0.0,&avnx[41] } ,
+    {20,"fusion" ,1,0.0,&avnx[42] } ,
+    {20,"deletion" ,2,0.0,&avnx[43] } ,
+    {20,"permutation" ,3,0.0,&avnx[44] } ,
     {20,"other" ,255,0.0,NULL } ,
-    {20,"unassigned" ,0,0.0,&avnx[50] } ,
-    {20,"single-linkage" ,1,0.0,&avnx[51] } ,
-    {20,"neighbor-joining" ,2,0.0,&avnx[52] } ,
-    {20,"fast-minimum-evolution" ,3,0.0,&avnx[53] } ,
+    {20,"unassigned" ,0,0.0,&avnx[46] } ,
+    {20,"percent-id" ,1,0.0,&avnx[47] } ,
+    {20,"kimura-corrected" ,2,0.0,&avnx[48] } ,
+    {20,"aligned-score" ,3,0.0,&avnx[49] } ,
+    {20,"aligned-score-ext" ,4,0.0,&avnx[50] } ,
+    {20,"aligned-score-filled" ,5,0.0,&avnx[51] } ,
+    {20,"blast-footprint" ,6,0.0,&avnx[52] } ,
+    {20,"blast-full" ,7,0.0,&avnx[53] } ,
     {20,"other" ,255,0.0,NULL } ,
     {20,"unassigned" ,0,0.0,&avnx[55] } ,
-    {20,"blosum45" ,1,0.0,&avnx[56] } ,
-    {20,"blosum62" ,2,0.0,&avnx[57] } ,
-    {20,"blosum80" ,3,0.0,&avnx[58] } ,
-    {20,"pam30" ,4,0.0,&avnx[59] } ,
-    {20,"pam70" ,5,0.0,&avnx[60] } ,
-    {20,"pam250" ,6,0.0,&avnx[61] } ,
+    {20,"single-linkage" ,1,0.0,&avnx[56] } ,
+    {20,"neighbor-joining" ,2,0.0,&avnx[57] } ,
+    {20,"fast-minimum-evolution" ,3,0.0,&avnx[58] } ,
+    {20,"other" ,255,0.0,NULL } ,
+    {20,"unassigned" ,0,0.0,&avnx[60] } ,
+    {20,"blosum45" ,1,0.0,&avnx[61] } ,
+    {20,"blosum62" ,2,0.0,&avnx[62] } ,
+    {20,"blosum80" ,3,0.0,&avnx[63] } ,
+    {20,"pam30" ,4,0.0,&avnx[64] } ,
+    {20,"pam70" ,5,0.0,&avnx[65] } ,
+    {20,"pam250" ,6,0.0,&avnx[66] } ,
     {20,"other" ,255,0.0,NULL } ,
     {2,NULL,0,0.0,NULL } ,
-    {2,NULL,0,0.0,NULL } };
+    {2,NULL,0,0.0,NULL } ,
+    {2,NULL,1,0.0,NULL } };
 
-static AsnType atx[184] = {
+static AsnType atx[194] = {
   {401, "Cdd-id" ,1,0,0,0,0,1,0,0,NULL,&atx[11],&atx[1],0,&atx[12]} ,
   {0, "uid" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[3]} ,
   {302, "INTEGER" ,0,2,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} ,
   {0, "gid" ,128,1,0,0,0,0,0,0,NULL,&atx[4],NULL,0,NULL} ,
-  {422, "Global-id" ,1,0,0,0,0,0,0,0,NULL,&atx[10],&atx[5],0,&atx[38]} ,
+  {427, "Global-id" ,1,0,0,0,0,0,0,0,NULL,&atx[10],&atx[5],0,&atx[38]} ,
   {0, "accession" ,128,0,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[7]} ,
   {323, "VisibleString" ,0,26,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} ,
   {0, "release" ,128,1,0,1,0,0,0,0,NULL,&atx[6],NULL,0,&atx[8]} ,
@@ -92,22 +98,22 @@ static AsnType atx[184] = {
   {402, "Cdd-id-set" ,1,0,0,0,0,1,0,0,NULL,&atx[14],&atx[13],0,&atx[15]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[0],NULL,0,NULL} ,
   {312, "SEQUENCE OF" ,0,16,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} ,
-  {403, "Cdd" ,1,0,0,0,0,1,0,0,NULL,&atx[10],&atx[16],0,&atx[172]} ,
+  {403, "Cdd" ,1,0,0,0,0,1,0,0,NULL,&atx[10],&atx[16],0,&atx[167]} ,
   {0, "name" ,128,0,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[17]} ,
   {0, "id" ,128,1,0,0,0,0,0,0,NULL,&atx[12],NULL,0,&atx[18]} ,
   {0, "description" ,128,2,0,1,0,0,0,0,NULL,&atx[19],NULL,0,&atx[54]} ,
-  {426, "Cdd-descr-set" ,1,0,0,0,0,0,0,0,NULL,&atx[53],&atx[20],0,&atx[66]} ,
+  {431, "Cdd-descr-set" ,1,0,0,0,0,0,0,0,NULL,&atx[53],&atx[20],0,&atx[66]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[21],NULL,0,NULL} ,
-  {425, "Cdd-descr" ,1,0,0,0,0,0,0,0,NULL,&atx[11],&atx[22],0,&atx[19]} ,
+  {430, "Cdd-descr" ,1,0,0,0,0,0,0,0,NULL,&atx[11],&atx[22],0,&atx[19]} ,
   {0, "othername" ,128,0,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[23]} ,
   {0, "category" ,128,1,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[24]} ,
   {0, "comment" ,128,2,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[25]} ,
   {0, "reference" ,128,3,0,0,0,0,0,0,NULL,&atx[26],NULL,0,&atx[27]} ,
-  {408, "Pub" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[58]} ,
+  {409, "Pub" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[58]} ,
   {0, "create-date" ,128,4,0,0,0,0,0,0,NULL,&atx[28],NULL,0,&atx[29]} ,
-  {407, "Date" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[26]} ,
+  {408, "Date" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[26]} ,
   {0, "tax-source" ,128,5,0,0,0,0,0,0,NULL,&atx[30],NULL,0,&atx[31]} ,
-  {413, "Org-ref" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[106]} ,
+  {414, "Org-ref" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[106]} ,
   {0, "source" ,128,6,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[32]} ,
   {0, "status" ,128,7,0,0,0,0,0,0,NULL,&atx[2],&avnx[0],0,&atx[33]} ,
   {0, "update-date" ,128,8,0,0,0,0,0,0,NULL,&atx[28],NULL,0,&atx[34]} ,
@@ -115,16 +121,16 @@ static AsnType atx[184] = {
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[6],NULL,0,NULL} ,
   {0, "source-id" ,128,10,0,0,0,0,0,0,NULL,&atx[12],NULL,0,&atx[37]} ,
   {0, "repeats" ,128,11,0,0,0,0,0,0,NULL,&atx[38],NULL,0,&atx[43]} ,
-  {423, "Cdd-repeat" ,1,0,0,0,0,0,0,0,NULL,&atx[10],&atx[39],0,&atx[47]} ,
+  {428, "Cdd-repeat" ,1,0,0,0,0,0,0,0,NULL,&atx[10],&atx[39],0,&atx[47]} ,
   {0, "count" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[40]} ,
   {0, "location" ,128,1,0,1,0,0,0,0,NULL,&atx[41],NULL,0,&atx[42]} ,
-  {416, "Seq-loc" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[122]} ,
+  {417, "Seq-loc" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[122]} ,
   {0, "avglen" ,128,2,0,1,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
   {0, "old-root" ,128,12,0,0,0,0,0,0,NULL,&atx[12],NULL,0,&atx[44]} ,
   {0, "curation-status" ,128,13,0,0,0,0,0,0,NULL,&atx[2],&avnx[10],0,&atx[45]} ,
   {0, "readonly-status" ,128,14,0,0,0,0,0,0,NULL,&atx[2],&avnx[20],0,&atx[46]} ,
   {0, "book-ref" ,128,15,0,0,0,0,0,0,NULL,&atx[47],NULL,0,NULL} ,
-  {424, "Cdd-book-ref" ,1,0,0,0,0,0,0,0,NULL,&atx[10],&atx[48],0,&atx[21]} ,
+  {429, "Cdd-book-ref" ,1,0,0,0,0,0,0,0,NULL,&atx[10],&atx[48],0,&atx[21]} ,
   {0, "bookname" ,128,0,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[49]} ,
   {0, "textelement" ,128,1,0,0,0,0,0,0,NULL,&atx[50],&avnx[24],0,&atx[51]} ,
   {310, "ENUMERATED" ,0,10,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} ,
@@ -133,17 +139,17 @@ static AsnType atx[184] = {
   {314, "SET OF" ,0,17,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} ,
   {0, "seqannot" ,128,3,0,1,0,0,0,0,NULL,&atx[14],&atx[55],0,&atx[57]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[56],NULL,0,NULL} ,
-  {411, "Seq-annot" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[60]} ,
+  {412, "Seq-annot" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[60]} ,
   {0, "features" ,128,4,0,1,0,0,0,0,NULL,&atx[58],NULL,0,&atx[59]} ,
-  {409, "Biostruc-annot-set" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[64]} ,
+  {410, "Biostruc-annot-set" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[64]} ,
   {0, "sequences" ,128,5,0,1,0,0,0,0,NULL,&atx[60],NULL,0,&atx[61]} ,
-  {412, "Seq-entry" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[30]} ,
+  {413, "Seq-entry" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[30]} ,
   {0, "profile-range" ,128,6,0,1,0,0,0,0,NULL,&atx[62],NULL,0,&atx[63]} ,
-  {415, "Seq-interval" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[41]} ,
+  {416, "Seq-interval" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[41]} ,
   {0, "trunc-master" ,128,7,0,1,0,0,0,0,NULL,&atx[64],NULL,0,&atx[65]} ,
-  {410, "Bioseq" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[56]} ,
+  {411, "Bioseq" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[56]} ,
   {0, "posfreq" ,128,8,0,1,0,0,0,0,NULL,&atx[66],NULL,0,&atx[74]} ,
-  {427, "Matrix" ,1,0,0,0,0,0,0,0,NULL,&atx[10],&atx[67],0,&atx[76]} ,
+  {432, "Matrix" ,1,0,0,0,0,0,0,0,NULL,&atx[10],&atx[67],0,&atx[76]} ,
   {0, "ncolumns" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[68]} ,
   {0, "nrows" ,128,1,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[69]} ,
   {0, "row-labels" ,128,2,0,1,0,0,0,0,NULL,&atx[14],&atx[70],0,&atx[71]} ,
@@ -153,10 +159,10 @@ static AsnType atx[184] = {
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
   {0, "scoremat" ,128,9,0,1,0,0,0,0,NULL,&atx[66],NULL,0,&atx[75]} ,
   {0, "distance" ,128,10,0,1,0,0,0,0,NULL,&atx[76],NULL,0,&atx[82]} ,
-  {428, "Triangle" ,1,0,0,0,0,0,0,0,NULL,&atx[10],&atx[77],0,&atx[91]} ,
+  {433, "Triangle" ,1,0,0,0,0,0,0,0,NULL,&atx[10],&atx[77],0,&atx[91]} ,
   {0, "nelements" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[78]} ,
   {0, "scores" ,128,1,0,1,0,0,0,0,NULL,&atx[79],NULL,0,&atx[80]} ,
-  {418, "Score-set" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[125]} ,
+  {419, "Score-set" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[125]} ,
   {0, "div-ranks" ,128,2,0,1,0,0,0,0,NULL,&atx[14],&atx[81],0,NULL} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
   {0, "parent" ,128,11,0,1,0,0,0,0,NULL,&atx[0],NULL,0,&atx[83]} ,
@@ -165,10 +171,10 @@ static AsnType atx[184] = {
   {0, "neighbors" ,128,14,0,1,0,0,0,0,NULL,&atx[12],NULL,0,&atx[86]} ,
   {0, "pending" ,128,15,0,1,0,0,0,0,NULL,&atx[14],&atx[87],0,&atx[99]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[88],NULL,0,NULL} ,
-  {430, "Update-align" ,1,0,0,0,0,0,0,0,NULL,&atx[10],&atx[89],0,&atx[101]} ,
+  {435, "Update-align" ,1,0,0,0,0,0,0,0,NULL,&atx[10],&atx[89],0,&atx[101]} ,
   {0, "description" ,128,0,0,1,0,0,0,0,NULL,&atx[14],&atx[90],0,&atx[97]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[91],NULL,0,NULL} ,
-  {429, "Update-comment" ,1,0,0,0,0,0,0,0,NULL,&atx[11],&atx[92],0,&atx[88]} ,
+  {434, "Update-comment" ,1,0,0,0,0,0,0,0,NULL,&atx[11],&atx[92],0,&atx[88]} ,
   {0, "comment" ,128,0,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[93]} ,
   {0, "addthis" ,128,1,0,0,0,0,0,0,NULL,&atx[41],NULL,0,&atx[94]} ,
   {0, "replaces" ,128,2,0,0,0,0,0,0,NULL,&atx[41],NULL,0,&atx[95]} ,
@@ -178,92 +184,102 @@ static AsnType atx[184] = {
   {0, "type" ,128,2,0,0,0,0,0,0,NULL,&atx[2],&avnx[34],0,NULL} ,
   {0, "rejects" ,128,16,0,1,0,0,0,0,NULL,&atx[14],&atx[100],0,&atx[107]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[101],NULL,0,NULL} ,
-  {431, "Reject-id" ,1,0,0,0,0,0,0,0,NULL,&atx[10],&atx[102],0,&atx[117]} ,
+  {436, "Reject-id" ,1,0,0,0,0,0,0,0,NULL,&atx[10],&atx[102],0,&atx[117]} ,
   {0, "description" ,128,0,0,1,0,0,0,0,NULL,&atx[14],&atx[103],0,&atx[104]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[91],NULL,0,NULL} ,
   {0, "ids" ,128,1,0,0,0,0,0,0,NULL,&atx[53],&atx[105],0,NULL} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[106],NULL,0,NULL} ,
-  {414, "Seq-id" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[62]} ,
+  {415, "Seq-id" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[62]} ,
   {0, "master3d" ,128,17,0,1,0,0,0,0,NULL,&atx[53],&atx[108],0,&atx[109]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[106],NULL,0,NULL} ,
   {0, "alignannot" ,128,18,0,1,0,0,0,0,NULL,&atx[110],NULL,0,&atx[124]} ,
-  {434, "Align-annot-set" ,1,0,0,0,0,0,0,0,NULL,&atx[14],&atx[111],0,&atx[131]} ,
+  {439, "Align-annot-set" ,1,0,0,0,0,0,0,0,NULL,&atx[14],&atx[111],0,&atx[130]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[112],NULL,0,NULL} ,
-  {433, "Align-annot" ,1,0,0,0,0,0,0,0,NULL,&atx[10],&atx[113],0,&atx[110]} ,
+  {438, "Align-annot" ,1,0,0,0,0,0,0,0,NULL,&atx[10],&atx[113],0,&atx[110]} ,
   {0, "location" ,128,0,0,0,0,0,0,0,NULL,&atx[41],NULL,0,&atx[114]} ,
   {0, "description" ,128,1,0,1,0,0,0,0,NULL,&atx[6],NULL,0,&atx[115]} ,
   {0, "evidence" ,128,2,0,1,0,0,0,0,NULL,&atx[14],&atx[116],0,NULL} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[117],NULL,0,NULL} ,
-  {432, "Feature-evidence" ,1,0,0,0,0,0,0,0,NULL,&atx[11],&atx[118],0,&atx[112]} ,
+  {437, "Feature-evidence" ,1,0,0,0,0,0,0,0,NULL,&atx[11],&atx[118],0,&atx[112]} ,
   {0, "comment" ,128,0,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[119]} ,
   {0, "reference" ,128,1,0,0,0,0,0,0,NULL,&atx[26],NULL,0,&atx[120]} ,
   {0, "bsannot" ,128,2,0,0,0,0,0,0,NULL,&atx[58],NULL,0,&atx[121]} ,
   {0, "seqfeat" ,128,3,0,0,0,0,0,0,NULL,&atx[122],NULL,0,&atx[123]} ,
-  {417, "Seq-feat" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[79]} ,
+  {418, "Seq-feat" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[79]} ,
   {0, "book-ref" ,128,4,0,0,0,0,0,0,NULL,&atx[47],NULL,0,NULL} ,
   {0, "style-dictionary" ,128,19,0,1,0,0,0,0,NULL,&atx[125],NULL,0,&atx[126]} ,
-  {419, "Cn3d-style-dictionary" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[127]} ,
+  {420, "Cn3d-style-dictionary" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[127]} ,
   {0, "user-annotations" ,128,20,0,1,0,0,0,0,NULL,&atx[127],NULL,0,&atx[128]} ,
-  {420, "Cn3d-user-annotations" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[140]} ,
-  {0, "ancestors" ,128,21,0,1,0,0,0,0,NULL,&atx[129],NULL,0,&atx[139]} ,
-  {436, "Lineage-info" ,1,0,0,0,0,0,0,0,NULL,&atx[11],&atx[130],0,&atx[142]} ,
-  {0, "simpleparent" ,128,0,0,0,0,0,0,0,NULL,&atx[131],NULL,0,&atx[134]} ,
-  {435, "Domain-parent" ,1,0,0,0,0,0,0,0,NULL,&atx[10],&atx[132],0,&atx[129]} ,
-  {0, "parentid" ,128,0,0,0,0,0,0,0,NULL,&atx[0],NULL,0,&atx[133]} ,
-  {0, "seqannot" ,128,1,0,1,0,0,0,0,NULL,&atx[56],NULL,0,NULL} ,
-  {0, "complexparents" ,128,1,0,0,0,0,0,0,NULL,&atx[10],&atx[135],0,NULL} ,
-  {0, "fusionparents" ,128,0,0,1,0,0,0,0,NULL,&atx[14],&atx[136],0,&atx[137]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[131],NULL,0,NULL} ,
-  {0, "deletionparent" ,128,1,0,1,0,0,0,0,NULL,&atx[14],&atx[138],0,NULL} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[131],NULL,0,NULL} ,
-  {0, "scoreparams" ,128,22,0,1,0,0,0,0,NULL,&atx[140],NULL,0,&atx[141]} ,
-  {421, "Score-matrix-parameters" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[4]} ,
-  {0, "seqtree" ,128,23,0,1,0,0,0,0,NULL,&atx[142],NULL,0,NULL} ,
-  {437, "Sequence-tree" ,1,0,0,0,0,0,0,0,NULL,&atx[10],&atx[143],0,&atx[145]} ,
-  {0, "cdAccession" ,128,0,0,1,0,0,0,0,NULL,&atx[6],NULL,0,&atx[144]} ,
-  {0, "algorithm" ,128,1,0,0,0,0,0,0,NULL,&atx[145],NULL,0,&atx[154]} ,
-  {438, "Algorithm-type" ,1,0,0,0,0,0,0,0,NULL,&atx[10],&atx[146],0,&atx[157]} ,
-  {0, "scoring-Scheme" ,128,0,0,0,0,0,0,0,NULL,&atx[2],&avnx[40],0,&atx[147]} ,
-  {0, "clustering-Method" ,128,1,0,0,0,0,0,0,NULL,&atx[2],&avnx[49],0,&atx[148]} ,
-  {0, "score-Matrix" ,128,2,0,1,0,0,0,0,NULL,&atx[2],&avnx[54],0,&atx[149]} ,
-  {0, "gapOpen" ,128,3,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[150]} ,
-  {0, "gapExtend" ,128,4,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[151]} ,
-  {0, "gapScaleFactor" ,128,5,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[152]} ,
-  {0, "nTerminalExt" ,128,6,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[153]} ,
+  {421, "Cn3d-user-annotations" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[135]} ,
+  {0, "ancestors" ,128,21,0,1,0,0,0,0,NULL,&atx[14],&atx[129],0,&atx[134]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[130],NULL,0,NULL} ,
+  {440, "Domain-parent" ,1,0,0,0,0,0,0,0,NULL,&atx[10],&atx[131],0,&atx[137]} ,
+  {0, "parent-type" ,128,0,0,0,0,0,0,0,NULL,&atx[2],&avnx[40],0,&atx[132]} ,
+  {0, "parentid" ,128,1,0,0,0,0,0,0,NULL,&atx[0],NULL,0,&atx[133]} ,
+  {0, "seqannot" ,128,2,0,1,0,0,0,0,NULL,&atx[56],NULL,0,NULL} ,
+  {0, "scoreparams" ,128,22,0,1,0,0,0,0,NULL,&atx[135],NULL,0,&atx[136]} ,
+  {422, "Score-matrix-parameters" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[183]} ,
+  {0, "seqtree" ,128,23,0,1,0,0,0,0,NULL,&atx[137],NULL,0,NULL} ,
+  {441, "Sequence-tree" ,1,0,0,0,0,0,0,0,NULL,&atx[10],&atx[138],0,&atx[140]} ,
+  {0, "cdAccession" ,128,0,0,1,0,0,0,0,NULL,&atx[6],NULL,0,&atx[139]} ,
+  {0, "algorithm" ,128,1,0,0,0,0,0,0,NULL,&atx[140],NULL,0,&atx[149]} ,
+  {442, "Algorithm-type" ,1,0,0,0,0,0,0,0,NULL,&atx[10],&atx[141],0,&atx[152]} ,
+  {0, "scoring-Scheme" ,128,0,0,0,0,0,0,0,NULL,&atx[2],&avnx[45],0,&atx[142]} ,
+  {0, "clustering-Method" ,128,1,0,0,0,0,0,0,NULL,&atx[2],&avnx[54],0,&atx[143]} ,
+  {0, "score-Matrix" ,128,2,0,1,0,0,0,0,NULL,&atx[2],&avnx[59],0,&atx[144]} ,
+  {0, "gapOpen" ,128,3,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[145]} ,
+  {0, "gapExtend" ,128,4,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[146]} ,
+  {0, "gapScaleFactor" ,128,5,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[147]} ,
+  {0, "nTerminalExt" ,128,6,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[148]} ,
   {0, "cTerminalExt" ,128,7,0,1,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
-  {0, "isAnnotated" ,128,2,0,0,1,0,0,0,&avnx[62],&atx[155],NULL,0,&atx[156]} ,
+  {0, "isAnnotated" ,128,2,0,0,1,0,0,0,&avnx[67],&atx[150],NULL,0,&atx[151]} ,
   {301, "BOOLEAN" ,0,1,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} ,
-  {0, "root" ,128,3,0,0,0,0,0,0,NULL,&atx[157],NULL,0,NULL} ,
-  {439, "SeqTree-node" ,1,0,0,0,0,0,0,0,NULL,&atx[10],&atx[158],0,&atx[169]} ,
-  {0, "isAnnotated" ,128,0,0,0,1,0,0,0,&avnx[63],&atx[155],NULL,0,&atx[159]} ,
-  {0, "name" ,128,1,0,1,0,0,0,0,NULL,&atx[6],NULL,0,&atx[160]} ,
-  {0, "distance" ,128,2,0,1,0,0,0,0,NULL,&atx[161],NULL,0,&atx[162]} ,
+  {0, "root" ,128,3,0,0,0,0,0,0,NULL,&atx[152],NULL,0,NULL} ,
+  {443, "SeqTree-node" ,1,0,0,0,0,0,0,0,NULL,&atx[10],&atx[153],0,&atx[164]} ,
+  {0, "isAnnotated" ,128,0,0,0,1,0,0,0,&avnx[68],&atx[150],NULL,0,&atx[154]} ,
+  {0, "name" ,128,1,0,1,0,0,0,0,NULL,&atx[6],NULL,0,&atx[155]} ,
+  {0, "distance" ,128,2,0,1,0,0,0,0,NULL,&atx[156],NULL,0,&atx[157]} ,
   {309, "REAL" ,0,9,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} ,
-  {0, "children" ,128,3,0,0,0,0,0,0,NULL,&atx[11],&atx[163],0,&atx[168]} ,
-  {0, "children" ,128,0,0,0,0,0,0,0,NULL,&atx[14],&atx[164],0,&atx[165]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[157],NULL,0,NULL} ,
-  {0, "footprint" ,128,1,0,0,0,0,0,0,NULL,&atx[10],&atx[166],0,NULL} ,
-  {0, "seqRange" ,128,0,0,0,0,0,0,0,NULL,&atx[62],NULL,0,&atx[167]} ,
+  {0, "children" ,128,3,0,0,0,0,0,0,NULL,&atx[11],&atx[158],0,&atx[163]} ,
+  {0, "children" ,128,0,0,0,0,0,0,0,NULL,&atx[14],&atx[159],0,&atx[160]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[152],NULL,0,NULL} ,
+  {0, "footprint" ,128,1,0,0,0,0,0,0,NULL,&atx[10],&atx[161],0,NULL} ,
+  {0, "seqRange" ,128,0,0,0,0,0,0,0,NULL,&atx[62],NULL,0,&atx[162]} ,
   {0, "rowId" ,128,1,0,1,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
-  {0, "annotation" ,128,4,0,1,0,0,0,0,NULL,&atx[169],NULL,0,NULL} ,
-  {440, "Node-annotation" ,1,0,0,0,0,0,0,0,NULL,&atx[10],&atx[170],0,NULL} ,
-  {0, "presentInChildCD" ,128,0,0,1,0,0,0,0,NULL,&atx[6],NULL,0,&atx[171]} ,
+  {0, "annotation" ,128,4,0,1,0,0,0,0,NULL,&atx[164],NULL,0,NULL} ,
+  {444, "Node-annotation" ,1,0,0,0,0,0,0,0,NULL,&atx[10],&atx[165],0,NULL} ,
+  {0, "presentInChildCD" ,128,0,0,1,0,0,0,0,NULL,&atx[6],NULL,0,&atx[166]} ,
   {0, "note" ,128,1,0,1,0,0,0,0,NULL,&atx[6],NULL,0,NULL} ,
-  {404, "Cdd-set" ,1,0,0,0,0,1,0,0,NULL,&atx[53],&atx[173],0,&atx[174]} ,
+  {404, "Cdd-set" ,1,0,0,0,0,1,0,0,NULL,&atx[53],&atx[168],0,&atx[169]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[15],NULL,0,NULL} ,
-  {405, "Cdd-tree" ,1,0,0,0,0,1,0,0,NULL,&atx[10],&atx[175],0,&atx[182]} ,
-  {0, "name" ,128,0,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[176]} ,
-  {0, "id" ,128,1,0,0,0,0,0,0,NULL,&atx[12],NULL,0,&atx[177]} ,
-  {0, "description" ,128,2,0,1,0,0,0,0,NULL,&atx[19],NULL,0,&atx[178]} ,
-  {0, "parent" ,128,3,0,1,0,0,0,0,NULL,&atx[0],NULL,0,&atx[179]} ,
-  {0, "children" ,128,4,0,1,0,0,0,0,NULL,&atx[12],NULL,0,&atx[180]} ,
-  {0, "siblings" ,128,5,0,1,0,0,0,0,NULL,&atx[12],NULL,0,&atx[181]} ,
+  {405, "Cdd-tree" ,1,0,0,0,0,1,0,0,NULL,&atx[10],&atx[170],0,&atx[177]} ,
+  {0, "name" ,128,0,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[171]} ,
+  {0, "id" ,128,1,0,0,0,0,0,0,NULL,&atx[12],NULL,0,&atx[172]} ,
+  {0, "description" ,128,2,0,1,0,0,0,0,NULL,&atx[19],NULL,0,&atx[173]} ,
+  {0, "parent" ,128,3,0,1,0,0,0,0,NULL,&atx[0],NULL,0,&atx[174]} ,
+  {0, "children" ,128,4,0,1,0,0,0,0,NULL,&atx[12],NULL,0,&atx[175]} ,
+  {0, "siblings" ,128,5,0,1,0,0,0,0,NULL,&atx[12],NULL,0,&atx[176]} ,
   {0, "neighbors" ,128,6,0,1,0,0,0,0,NULL,&atx[12],NULL,0,NULL} ,
-  {406, "Cdd-tree-set" ,1,0,0,0,0,1,0,0,NULL,&atx[14],&atx[183],0,&atx[28]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[174],NULL,0,NULL} };
+  {406, "Cdd-tree-set" ,1,0,0,0,0,1,0,0,NULL,&atx[14],&atx[178],0,&atx[179]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[169],NULL,0,NULL} ,
+  {407, "Cdd-pref-nodes" ,1,0,0,0,0,1,0,0,NULL,&atx[10],&atx[180],0,&atx[28]} ,
+  {0, "preferred-nodes" ,128,0,0,0,0,0,0,0,NULL,&atx[181],NULL,0,&atx[186]} ,
+  {424, "Cdd-org-ref-set" ,1,0,0,0,0,0,0,0,NULL,&atx[53],&atx[182],0,&atx[191]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[183],NULL,0,NULL} ,
+  {423, "Cdd-org-ref" ,1,0,0,0,0,0,0,0,NULL,&atx[10],&atx[184],0,&atx[181]} ,
+  {0, "reference" ,128,0,0,0,0,0,0,0,NULL,&atx[30],NULL,0,&atx[185]} ,
+  {0, "active" ,128,1,0,0,1,0,0,0,&avnx[69],&atx[150],NULL,0,NULL} ,
+  {0, "model-organisms" ,128,1,0,1,0,0,0,0,NULL,&atx[181],NULL,0,&atx[187]} ,
+  {0, "optional-nodes" ,128,2,0,1,0,0,0,0,NULL,&atx[181],NULL,0,&atx[188]} ,
+  {0, "description" ,128,3,0,1,0,0,0,0,NULL,&atx[189],NULL,0,NULL} ,
+  {426, "Cdd-pref-node-descr-set" ,1,0,0,0,0,0,0,0,NULL,&atx[53],&atx[190],0,&atx[4]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[191],NULL,0,NULL} ,
+  {425, "Cdd-pref-node-descr" ,1,0,0,0,0,0,0,0,NULL,&atx[11],&atx[192],0,&atx[189]} ,
+  {0, "create-date" ,128,0,0,0,0,0,0,0,NULL,&atx[28],NULL,0,&atx[193]} ,
+  {0, "description" ,128,1,0,0,0,0,0,0,NULL,&atx[6],NULL,0,NULL} };
 
 static AsnModule ampx[1] = {
-  { "NCBI-Cdd" , "cdd.h17",&atx[0],NULL,NULL,0,0} };
+  { "NCBI-Cdd" , "cdd.h19",&atx[0],NULL,NULL,0,0} };
 
 static AsnValxNodePtr avn = avnx;
 static AsnTypePtr at = atx;
@@ -311,23 +327,44 @@ static AsnModulePtr amp = ampx;
 #define CDD_style_dictionary &at[124]
 #define CDD_user_annotations &at[126]
 #define CDD_ancestors &at[128]
-#define CDD_scoreparams &at[139]
-#define CDD_seqtree &at[141]
+#define CDD_ancestors_E &at[129]
+#define CDD_scoreparams &at[134]
+#define CDD_seqtree &at[136]
 
-#define CDD_SET &at[172]
-#define CDD_SET_E &at[173]
+#define CDD_SET &at[167]
+#define CDD_SET_E &at[168]
 
-#define CDD_TREE &at[174]
-#define CDD_TREE_name &at[175]
-#define CDD_TREE_id &at[176]
-#define CDD_TREE_description &at[177]
-#define CDD_TREE_parent &at[178]
-#define CDD_TREE_children &at[179]
-#define CDD_TREE_siblings &at[180]
-#define CDD_TREE_neighbors &at[181]
+#define CDD_TREE &at[169]
+#define CDD_TREE_name &at[170]
+#define CDD_TREE_id &at[171]
+#define CDD_TREE_description &at[172]
+#define CDD_TREE_parent &at[173]
+#define CDD_TREE_children &at[174]
+#define CDD_TREE_siblings &at[175]
+#define CDD_TREE_neighbors &at[176]
 
-#define CDD_TREE_SET &at[182]
-#define CDD_TREE_SET_E &at[183]
+#define CDD_TREE_SET &at[177]
+#define CDD_TREE_SET_E &at[178]
+
+#define CDD_PREF_NODES &at[179]
+#define CDD_PREF_NODES_preferred_nodes &at[180]
+#define CDD_PREF_NODES_model_organisms &at[186]
+#define CDD_PREF_NODES_optional_nodes &at[187]
+#define CDD_PREF_NODES_description &at[188]
+
+#define CDD_ORG_REF &at[183]
+#define CDD_ORG_REF_reference &at[184]
+#define CDD_ORG_REF_active &at[185]
+
+#define CDD_ORG_REF_SET &at[181]
+#define CDD_ORG_REF_SET_E &at[182]
+
+#define CDD_PREF_NODE_DESCR &at[191]
+#define CDD_PREF_NODE_DESCR_create_date &at[192]
+#define CDD_PREF_NODE_DESCR_description &at[193]
+
+#define CDD_PREF_NODE_DESCR_SET &at[189]
+#define CDD_PREF_NODE_DESCR_SET_E &at[190]
 
 #define GLOBAL_ID &at[4]
 #define GLOBAL_ID_accession &at[5]
@@ -418,46 +455,39 @@ static AsnModulePtr amp = ampx;
 #define ALIGN_ANNOT_SET &at[110]
 #define ALIGN_ANNOT_SET_E &at[111]
 
-#define DOMAIN_PARENT &at[131]
+#define DOMAIN_PARENT &at[130]
+#define DOMAIN_PARENT_parent_type &at[131]
 #define DOMAIN_PARENT_parentid &at[132]
 #define DOMAIN_PARENT_seqannot &at[133]
 
-#define LINEAGE_INFO &at[129]
-#define LINEAGE_INFO_simpleparent &at[130]
-#define LINEAGE_INFO_complexparents &at[134]
-#define LINEAGE_INFO_complexparents_fusionparents &at[135]
-#define LINEAGE_INFO_complexparents_fusionparents_E &at[136]
-#define LINEAGE_INFO_complexparents_deletionparent &at[137]
-#define LINEAGE_INFO_complexparents_deletionparent_E &at[138]
+#define SEQUENCE_TREE &at[137]
+#define SEQUENCE_TREE_cdAccession &at[138]
+#define SEQUENCE_TREE_algorithm &at[139]
+#define SEQUENCE_TREE_isAnnotated &at[149]
+#define SEQUENCE_TREE_root &at[151]
 
-#define SEQUENCE_TREE &at[142]
-#define SEQUENCE_TREE_cdAccession &at[143]
-#define SEQUENCE_TREE_algorithm &at[144]
-#define SEQUENCE_TREE_isAnnotated &at[154]
-#define SEQUENCE_TREE_root &at[156]
+#define ALGORITHM_TYPE &at[140]
+#define ALGORITHM_TYPE_scoring_Scheme &at[141]
+#define ALGORITHM_TYPE_clustering_Method &at[142]
+#define ALGORITHM_TYPE_score_Matrix &at[143]
+#define ALGORITHM_TYPE_gapOpen &at[144]
+#define ALGORITHM_TYPE_gapExtend &at[145]
+#define ALGORITHM_TYPE_gapScaleFactor &at[146]
+#define ALGORITHM_TYPE_nTerminalExt &at[147]
+#define ALGORITHM_TYPE_cTerminalExt &at[148]
 
-#define ALGORITHM_TYPE &at[145]
-#define ALGORITHM_TYPE_scoring_Scheme &at[146]
-#define ALGORITHM_TYPE_clustering_Method &at[147]
-#define ALGORITHM_TYPE_score_Matrix &at[148]
-#define ALGORITHM_TYPE_gapOpen &at[149]
-#define ALGORITHM_TYPE_gapExtend &at[150]
-#define ALGORITHM_TYPE_gapScaleFactor &at[151]
-#define ALGORITHM_TYPE_nTerminalExt &at[152]
-#define ALGORITHM_TYPE_cTerminalExt &at[153]
+#define SEQTREE_NODE &at[152]
+#define SEQTREE_NODE_isAnnotated &at[153]
+#define SEQTREE_NODE_name &at[154]
+#define SEQTREE_NODE_distance &at[155]
+#define SEQTREE_NODE_children &at[157]
+#define SEQTREE_NODE_children_children &at[158]
+#define SEQTREE_NODE_children_children_E &at[159]
+#define SEQTREE_NODE_children_footprint &at[160]
+#define SEQTREE_NODE_children_footprint_seqRange &at[161]
+#define SEQTREE_NODE_children_footprint_rowId &at[162]
+#define SEQTREE_NODE_annotation &at[163]
 
-#define SEQTREE_NODE &at[157]
-#define SEQTREE_NODE_isAnnotated &at[158]
-#define SEQTREE_NODE_name &at[159]
-#define SEQTREE_NODE_distance &at[160]
-#define SEQTREE_NODE_children &at[162]
-#define SEQTREE_NODE_children_children &at[163]
-#define SEQTREE_NODE_children_children_E &at[164]
-#define SEQTREE_NODE_children_footprint &at[165]
-#define SEQTREE_NODE_children_footprint_seqRange &at[166]
-#define SEQTREE_NODE_children_footprint_rowId &at[167]
-#define SEQTREE_NODE_annotation &at[168]
-
-#define NODE_ANNOTATION &at[169]
-#define NODE_ANNOTATION_presentInChildCD &at[170]
-#define NODE_ANNOTATION_note &at[171]
+#define NODE_ANNOTATION &at[164]
+#define NODE_ANNOTATION_presentInChildCD &at[165]
+#define NODE_ANNOTATION_note &at[166]

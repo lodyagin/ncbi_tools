@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.9 $
+* $Revision: 6.13 $
 *
 * File Description: 
 *       Vibrant alias definitions
@@ -37,6 +37,19 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: vibdefns.h,v $
+* Revision 6.13  2004/02/04 15:21:02  kans
+* make GetTextVScrollBar and GetTextHScrollBar extern, to add search function to general text viewer
+*
+* Revision 6.12  2004/01/05 17:11:20  kans
+* added defines for functions to control dual monitor usage
+*
+* Revision 6.11  2003/10/30 17:32:16  kans
+* removed define for SetTextColor, which was conflicting with Win32 symbol
+*
+* Revision 6.10  2003/10/29 19:10:00  bazhin
+* Added function Nlm_SetTextColor(Nlm_TexT t, Nlm_Uint4 r, Nlm_Uint4 g,
+*                                 Nlm_Uint4 b).
+*
 * Revision 6.9  2002/01/09 15:23:54  kans
 * added HasAquaMenuLayout
 *
@@ -252,6 +265,11 @@ extern "C" {
 #define SetWindowExtra Nlm_SetWindowExtra
 #define GetWindowExtra Nlm_GetWindowExtra
 
+#define HasDualScreen Nlm_HasDualScreen
+#define UseFullScreen Nlm_UseFullScreen
+#define UseLeftScreen Nlm_UseLeftScreen
+#define UseRightScreen Nlm_UseRightScreen
+
 #define NormalGroup Nlm_NormalGroup
 #define HiddenGroup Nlm_HiddenGroup
 #define SetGroupMargins Nlm_SetGroupMargins
@@ -322,6 +340,8 @@ extern "C" {
 #define SetTextCursorPos Nlm_SetTextCursorPos
 #define GetTextCursorPos Nlm_GetTextCursorPos
 #define SetTextCursorBlinkRate Nlm_SetTextCursorBlinkRate
+#define GetTextVScrollBar Nlm_GetTextVScrollBar
+#define GetTextHScrollBar Nlm_GetTextHScrollBar
 
 #define StaticPrompt Nlm_StaticPrompt
 

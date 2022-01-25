@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: salign.c,v 6.6 2003/05/30 17:25:37 coulouri Exp $";
+static char const rcsid[] = "$Id: salign.c,v 6.7 2003/12/29 21:45:37 coulouri Exp $";
 
 /*   salign.c
 * ===========================================================================
@@ -395,7 +395,7 @@ static SeqAlignPtr SortBlastHits (SeqAlignPtr salp, Int4 threshold, Uint1 choice
   Boolean     goOn = TRUE;
   Boolean     ok;
 
-  if (salp == NULL || choice < 0)
+  if (salp == NULL)
      return salp;
   sap = SeqAnnotForSeqAlign (salp);
   sap2 = (SeqAnnotPtr) AsnIoMemCopy ((Pointer) sap, (AsnReadFunc) SeqAnnotAsnRead, (AsnWriteFunc) SeqAnnotAsnWrite);

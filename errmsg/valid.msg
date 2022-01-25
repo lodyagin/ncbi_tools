@@ -159,6 +159,13 @@ $^   SeqLitGapLength0, 43
 A SeqLit component of a delta Bioseq can specify a gap, but it should not be a gap
 of 0 length.
 
+$^   TpaAssmeblyProblem, 44
+Third party annotation records should have a TpaAssembly user object and a
+Seq-hist.assembly alignment for the PRIMARY block.
+
+$^   SeqLocLength, 45
+A SeqLoc component of a delta Bioseq is suspiciously small.
+
 $$ SEQ_DESCR, 2
 
 $^   BioSourceMissing, 1
@@ -333,6 +340,9 @@ A feature location should refer to the accession or gi number, not a local or ge
 
 $^   ArchaicFeatureProduct, 14
 A feature product should refer to the accession or gi number, not a local or general ID.
+
+$^   GraphPackagingProblem, 15
+A graph should be packaged on its bioseq, or on a set containing the Bioseq.
 
 $$ SEQ_FEAT, 5
 
@@ -607,6 +617,17 @@ the inheritance by overlap.
 
 $^   UTRdoesNotAbutCDS, 66
 The 5'UTR and 3'UTR features should exactly abut the CDS feature.
+
+$^   BadConflictFlag, 67
+The coding region conflict flag is set, but the translated product is the
+same as the instantiated product Bioseq.
+
+$^   ConflictFlagSet, 68
+The coding region conflict flag is appropriately set, but this record should
+be brought to the attention of the source database for possible correction.
+
+$^   LocusTagProblem, 69
+A gene locus_tag should be a single token, with no spaces.
 
 $$ SEQ_ALIGN, 6
 

@@ -30,8 +30,26 @@ Author: Tom Madden
 Contents: #defines and definitions for structures used by BLAST.
 
 ******************************************************************************/
-/* $Revision: 6.149 $ 
+/* $Revision: 6.155 $ 
 * $Log: blastdef.h,v $
+* Revision 6.155  2004/02/04 15:35:03  camacho
+* Rollback to fix problems in release 2.2.7
+*
+* Revision 6.154  2004/01/27 20:46:06  dondosha
+* Allow values 0, 1, 2 for no_traceback megablast option
+*
+* Revision 6.153  2004/01/05 22:09:26  madden
+* Put back dashes in date
+*
+* Revision 6.152  2004/01/02 13:44:32  coulouri
+* Revert to hardcoded BLAST_RELEASE_DATE
+*
+* Revision 6.151  2003/12/29 15:51:18  coulouri
+* Bump version, use __DATE__ instead of hardcoded date
+*
+* Revision 6.150  2003/11/06 19:52:13  dondosha
+* Added error MBTemplateType, so it can be returned when wordsize/template length combination is wrong
+*
 * Revision 6.149  2003/10/02 19:30:11  madden
 * add field seAlign to SWResults for use in kappa.c
 *
@@ -856,8 +874,8 @@ extern "C" {
 #endif
 
 /* the version of BLAST. */
-#define BLAST_ENGINE_VERSION "2.2.6"
-#define BLAST_RELEASE_DATE "Apr-09-2003"
+#define BLAST_ENGINE_VERSION "2.2.8"
+#define BLAST_RELEASE_DATE "Jan-05-2004"
 
 /* Defines for program numbers. (Translated in BlastGetProgramNumber). */
 #define blast_type_undefined 0
@@ -1104,7 +1122,7 @@ typedef struct _blast_optionsblk {
         Int4            max_num_patterns; /* Maximum number of patterns to be used in PHI-Blast search */
 	Boolean         no_check_score;
         Boolean         is_megablast_search; /* Is this a MegaBlast search? */
-        Boolean         no_traceback;    /* No traceback in MegaBLAST extension */
+        Uint1         no_traceback;    /* No traceback in MegaBLAST extension */
         Boolean         is_rps_blast;     /* If this RPS Blast ? */
         SeqLocPtr       query_lcase_mask; /* Masking of input DNA regions */
         Boolean         sort_gi_list;     /* Should the gi list be sorted? */
@@ -1170,7 +1188,7 @@ struct _blast_wizardoptionsblk {
     CharPtr         matrix;
     MBDiscWordType  mb_disc_type;
     Int2            mb_template_length;
-    Boolean         no_traceback;
+    Uint1           no_traceback;
     Int2            penalty;
     FloatLo         perc_identity;
     Boolean         perform_culling;
@@ -1254,11 +1272,12 @@ typedef enum {
    TEMPL_11_18_OPT = 8,
    TEMPL_12_18_OPT = 9,
    TEMPL_11_21_OPT = 10,
-   TEMPL_12_21_OPT = 11
+   TEMPL_12_21_OPT = 11,
+   TEMPL_ERROR = -1
 } MBTemplateType;
 
 typedef struct _mb_parameter_blk_ {
-   Boolean no_traceback;    /* No traceback in greedy extension */
+   Uint1 no_traceback;    /* No traceback in greedy extension */
    Boolean is_neighboring;  /* Is this a neighboring task? */ 
    Boolean full_seqids;     /* Print full seqids in tabular output? */
    FloatLo perc_identity;   /* Identity percentage cut-off */

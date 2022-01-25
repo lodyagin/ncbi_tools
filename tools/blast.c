@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: blast.c,v 6.391 2003/10/23 17:46:17 dondosha Exp $";
+static char const rcsid[] = "$Id: blast.c,v 6.398 2004/02/03 17:54:16 dondosha Exp $";
 
-/* $Id: blast.c,v 6.391 2003/10/23 17:46:17 dondosha Exp $
+/* $Id: blast.c,v 6.398 2004/02/03 17:54:16 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -49,9 +49,30 @@ Detailed Contents:
 	further manipulation.
 
 ******************************************************************************
- * $Revision: 6.391 $
+ * $Revision: 6.398 $
  *
  * $Log: blast.c,v $
+ * Revision 6.398  2004/02/03 17:54:16  dondosha
+ * Correction to revision 6.391 in function BlastGetDbChunk
+ *
+ * Revision 6.397  2004/01/06 22:37:10  dondosha
+ * Use BLAST_HSPfree function
+ *
+ * Revision 6.396  2003/12/29 15:42:46  coulouri
+ * tblastn query concatenation fixes from morgulis
+ *
+ * Revision 6.395  2003/12/12 16:01:23  madden
+ * Change to signature of BlastCutoffs, remove BlastCutoffs_simple
+ *
+ * Revision 6.394  2003/12/10 17:05:27  dondosha
+ * Added function ReevaluateScoreWithAmbiguities to reevaluate score for one HSP; use it after greedy traceback
+ *
+ * Revision 6.393  2003/11/19 18:09:13  dondosha
+ * Use consistent rounding in length adjustment calculation
+ *
+ * Revision 6.392  2003/11/10 20:15:29  dondosha
+ * Bug fix in BLASTMergeHsps
+ *
  * Revision 6.391  2003/10/23 17:46:17  dondosha
  * Fix in BlastGetDbChunk for looking up ordinal ids within a range
  *
@@ -3011,7 +3032,7 @@ Boolean BlastGetDbChunk(ReadDBFILEPtr rdfp, Int4Ptr start, Int4Ptr stop,
 		Int4 gi;
 		
 		for(gi = gi_start; (gi < gi_end) && (oidindex < thr_info->db_chunk_size);) {
-		    Int4 bit_end = ((gi_end - gi + bit_start) < MASK_WORD_SIZE) ? (gi_end - gi) : MASK_WORD_SIZE;
+		    Int4 bit_end = ((gi_end - gi + bit_start) < MASK_WORD_SIZE) ? (gi_end - gi + bit_start) : MASK_WORD_SIZE;
 		    Int4 bit;
 		    
 		    Uint4 mask_index = gi / MASK_WORD_SIZE;
@@ -3256,7 +3277,7 @@ do_blast_search(VoidPtr ptr)
                    if (!search->handle_results)
                       status = BlastReevaluateWithAmbiguities(search, index1);
                 } else {
-                   MegaBlastReevaluateWithAmbiguities(search, index1);
+                   MegaBlastReevaluateWithAmbiguities(search);
                 }
 		
                 if (search->handle_results)
@@ -3289,7 +3310,7 @@ do_blast_search(VoidPtr ptr)
                    if (!search->handle_results)
                       status = BlastReevaluateWithAmbiguities(search, index);
                 } else {
-                   MegaBlastReevaluateWithAmbiguities(search, index);
+                   MegaBlastReevaluateWithAmbiguities(search);
                 }
                 if (search->handle_results)
                    search->handle_results((VoidPtr) search);
@@ -4004,7 +4025,7 @@ Boolean BlastCalculateEffectiveLengths(BLAST_OptionsBlkPtr options,
 		}
 		else
 		{
-			*length_adjustment = (Int4) ((kbp->logK)+log((Nlm_FloatHi)(length-last_length_adjustment)*(Nlm_FloatHi)(MAX(1, (dblen)-(dbseq_num*last_length_adjustment)))))/(kbp->H);
+			*length_adjustment = Nlm_Nint(((kbp->logK)+log((Nlm_FloatHi)(length-last_length_adjustment)*(Nlm_FloatHi)(MAX(1, (dblen)-(dbseq_num*last_length_adjustment)))))/(kbp->H));
 		}
 		if (*length_adjustment >= length-min_query_length)
 		{
@@ -5918,8 +5939,7 @@ BLASTMergeHsps(BlastSearchBlkPtr search, BLAST_HSPPtr hsp1, BLAST_HSPPtr hsp2,
       if (new_segment1->s_end <= new_segment2->s_end) {
          new_segment1 = new_segment1->next;
          num1++;
-      }
-      if (new_segment1->s_end >= new_segment2->s_end) {
+      } else {
          new_segment2 = new_segment2->next;
          num2++;
       }
@@ -6054,9 +6074,7 @@ BLASTMergeHitLists(BlastSearchBlkPtr search, BLAST_HitListPtr hitlist1,
              OVERLAP_DIAG_CLOSE) {
             if (merge_hsps) {
                if (BLASTMergeHsps(search, hspp1[index], hspp2[index1], start)) {
-                  hspp2[index1]->gap_info = 
-                     GapXEditBlockDelete(hspp2[index1]->gap_info);
-                  hspp2[index1] = MemFree(hspp2[index1]);
+                  hspp2[index1] = BLAST_HSPFree(hspp2[index1]);
                   break;
                }
             } else { /* No gap information available */
@@ -6161,8 +6179,7 @@ BlastReapPartialHitlistByEvalue(BlastSearchBlkPtr search, Int4 start)
                                                  searchsp_eff);
 
             if (hsp->evalue > 10*search->pbp->cutoff_e) {
-               hsp->gap_info = GapXEditBlockDelete(hsp->gap_info);
-               hsp = MemFree(hsp);
+               hsp = BLAST_HSPFree(hsp);
                search->current_hitlist->hsp_array[index] = NULL;
             }
          }
@@ -7824,8 +7841,8 @@ BlastWordExtend_prelim(BlastSearchBlkPtr search, Int4 q_off, Int4 s_off, Int4 wo
         /* AM: Support for query multiplexing. */
 	if( search->prog_number == blast_type_tblastn && search->mult_queries )
 	{
-	  query_num = GetQueryNum( search->mult_queries, q_off, 
-	                           q_off + word_width + 1, 0 );
+	  query_num = GetQueryNum( search->mult_queries, q_off - word_width + 1, 
+	                           q_off + 1, 0 );
           X = search->mult_queries->dropoff_2nd_pass_array[query_num];
 	}
 	else X=pbp->X;
@@ -9459,6 +9476,7 @@ BlastSaveCurrentHitlist(BlastSearchBlkPtr search)
 	/* AM: Support for query concatenation. */
 	if( search->mult_queries && !retval ) return 0;
 
+
 	if (search->pbp->gapped_calculation &&
 		search->prog_number != blast_type_blastn)
 		kbp = search->sbp->kbp_gap[search->first_context];
@@ -9745,10 +9763,8 @@ BlastSaveCurrentHitlist(BlastSearchBlkPtr search)
 		        mq_worst_result 
 			  = result_info->results[result_info->NumResults - 1];
                         --tmp_num_results;
-                        del_index = ResultIndex( mq_worst_result->best_evalue,
-			                         mq_worst_result->high_score,
-						 mq_worst_result->subject_id,
-						 results, hitlist_count );
+			del_index = ResultIndex1( mq_worst_result,
+			                          results, hitlist_count );
                         BlastFreeHeap( search, results[del_index] );
 
 			if( results[del_index]->seqalign )
@@ -9881,27 +9897,26 @@ blast_set_parameters(BlastSearchBlkPtr search,
 
 	meff = (Nlm_FloatHi) search->context[search->first_context].query->length;
 	if (pbp->mb_params)
-	   BlastCutoffs_simple(&s, &e, kbp, searchsp, TRUE);
+	   BlastCutoffs(&s, &e, kbp, searchsp, TRUE, search->pbp->gap_decay_rate );
 	else
 	{
 	   if (pbp->gapped_calculation && search->prog_number != blast_type_blastn)
-	   { /* AM: Changed to support query concatenation. */
-	     if( !search->mult_queries )
-	   	BlastCutoffs_simple(&s, &e, kbp_gap, searchsp, FALSE);
-             else
-	        BlastCutoffs_simple( &s, &e, kbp_gap, 
-		                     search->mult_queries->MinSearchSpEff, 
-				     FALSE );
-           }
+     { /* AM: Changed to support query concatenation. */
+       if( !search->mult_queries )
+         BlastCutoffs(&s, &e, kbp_gap, searchsp, FALSE, 0.0 );
+       else
+         BlastCutoffs( &s, &e, kbp_gap,
+                       search->mult_queries->MinSearchSpEff, 
+                       FALSE, 0.0 );
+     }
 	   else
-	   { /* AM: Changed to support query concatenation. */
-	     if( !search->mult_queries )
-	   	BlastCutoffs_simple(&s, &e, kbp, searchsp, FALSE);
-             else
-	        BlastCutoffs_simple( &s, &e, kbp, 
-		                     search->mult_queries->MinSearchSpEff, 
-				     FALSE ); 
-           }
+     { /* AM: Changed to support query concatenation. */
+       if( !search->mult_queries )
+         BlastCutoffs(&s, &e, kbp, searchsp, FALSE, 0.0 );
+       else
+         BlastCutoffs( &s, &e, kbp, search->mult_queries->MinSearchSpEff, 
+                        FALSE, 0.0 ); 
+     }
 	}
 	/* Determine the secondary cutoff score, S2, to use */
 	if (e2 == 0. && !pbp->cutoff_s2_set)
@@ -9920,24 +9935,26 @@ blast_set_parameters(BlastSearchBlkPtr search,
 /*
 		BlastCutoffs(&s2, &e2, kbp, meff, avglen, TRUE);
 */
-		if (pbp->gapped_calculation && search->prog_number != blast_type_blastn)
-		{
-		  if( !search->mult_queries )
-			BlastCutoffs(&s2, &e2, kbp_gap, MIN(avglen,meff), avglen, TRUE);
-                  else
-		    BlastCutoffs( &s2, &e2, kbp_gap, 
-		                  MIN( avglen,search->mult_queries->MinLen ), 
-				  avglen, TRUE ); 
-                }
-		else
-		{ /* AM: Changed to support query concatenation. */
-		  if( !search->mult_queries )
-			BlastCutoffs(&s2, &e2, kbp, MIN(avglen,meff), avglen, TRUE);
-                  else
-		    BlastCutoffs( &s2, &e2, kbp, 
-		                  MIN(avglen,2*(search->mult_queries->MinLen)), 
-				  avglen, TRUE ); 
-                }
+    if (pbp->gapped_calculation && search->prog_number != blast_type_blastn)
+    {
+      if( !search->mult_queries )
+        BlastCutoffs(&s2, &e2, kbp_gap, MIN(avglen,meff) * avglen,
+                     TRUE, search->pbp->gap_decay_rate );
+      else
+        BlastCutoffs( &s2, &e2, kbp_gap, 
+                      MIN( avglen,search->mult_queries->MinLen ) * avglen,
+                      TRUE, search->pbp->gap_decay_rate ); 
+    }
+    else
+    { /* AM: Changed to support query concatenation. */
+      if( !search->mult_queries )
+        BlastCutoffs(&s2, &e2, kbp, MIN(avglen,meff) * avglen,
+                     TRUE, search->pbp->gap_decay_rate );
+      else
+        BlastCutoffs( &s2, &e2, kbp, 
+                      MIN(avglen,2*(search->mult_queries->MinLen)) * avglen,
+                      TRUE, search->pbp->gap_decay_rate ); 
+    }
 		/* Adjust s2 to be in line with s, as necessary */
 		s2 = MAX(s2, 1);
 		if (s2 > s)
@@ -11351,9 +11368,7 @@ BlastReapHitlistByEvalue (BlastSearchBlkPtr search)
 			if (hsp->evalue > cutoff &&
 				(search->pbp->no_check_score || search->pbp->cutoff_s > hsp->score))
 			{
-                            hsp_array[index]->gap_info = 
-                               GapXEditBlockDelete(hsp_array[index]->gap_info);
-                            hsp_array[index] = MemFree(hsp_array[index]);
+                            hsp_array[index] = BLAST_HSPFree(hsp_array[index]);
                             hsp_deleted = TRUE;
 			}
 			else

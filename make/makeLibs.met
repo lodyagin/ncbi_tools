@@ -14,15 +14,15 @@ property pSaveContinueOnErrors : false
 
 -- Whether to recreate existing project files.
 property pAlwaysCreateProjects : false
+
 -- Which targets to build.
 -- All of the targets are populated all the time. These affect what is compiled & built.
 property pCreateMachOTargets : true
 property pCreateCarbonTargets : false
 property pCreateWinTargets : false
 
-property pCreateDebugTargets : true
 property pCreateOptimizedTargets : true
-
+property pCreateDebugTargets : false
 property pCreateProfiledTargets : false
 
 -- Whether to have the projects use CVS or not.
@@ -34,13 +34,12 @@ property pShouldBuild : true
 property pStationeryName : "LibraryStationery"
 
 -- the handler GetTargetSpecs should change if these do.
-property pTargetKeyWords : "Mach-O Carbon Win32 Debug Final"
+property pTargetKeyWords : "Mach-O Carbon Win32 Debug Final Profile"
 
 
 global gStartupDisk
 global gHomeDir
 global gDistribRoot
-global gAccessRoot
 global gProjectsDir
 global gSourceDir
 global gIncludeDir
@@ -55,18 +54,15 @@ on ProjectData(projName, features, aFileData)
 		set projName to characters 1 through 25 of projName as string
 	end if
 	
-	tell application "CodeWarrior IDE"
-		
-		if features does not contain "C" and features does not contain "C++" then
-			copy "C" to end of features
-		end if
-		set myFeatures to features
-		
-		return {name:projName, features:myFeatures, rsrcs:{}, settings:Â
-			{Prefix File:"", ppcProject:{}}, projLibs:{}, sysPaths:{}, fileData:Â
-			aFileData}
-		
-	end tell
+	if features does not contain "C" and features does not contain "C++" then
+		copy "C" to end of features
+	end if
+	set myFeatures to features
+	
+	return {name:projName, features:myFeatures, rsrcs:{}, settings:Â
+		{prefixFile:"", ppcProject:{}}, projLibs:{}, sysPaths:{}, fileData:Â
+		aFileData}
+	
 end ProjectData
 
 on AddProject(projData)
@@ -115,7 +111,7 @@ end mkFileDataExceptFiles
 on DataPlusPrefixFile(dataRec, prefix)
 	tell application "CodeWarrior IDE"
 		
-		set the Prefix File of dataRec's settings to prefix
+		set the prefixFile of dataRec's settings to prefix
 		return dataRec
 		
 	end tell
@@ -140,8 +136,8 @@ end EndsWith
 
 on SetProjectData()
 	
-	-- Not Okay under Mach-O
-	--AddSimpleProject("mitsock", {}, "connect:mitsock")
+	-- Only needed for Carbon
+	AddSimpleProject("mitsock", {}, "connect:mitsock")
 	
 	AddProject(ProjectData("ncbi", {"winprefix"}, {Â
 		mkFileDataExceptFiles("corelib:", {"drwnflpt.c", "drwnfspc.c", "drwnmfls.c", "ncbiargs.c", "ncbimain.c"}), Â
@@ -154,7 +150,10 @@ on SetProjectData()
 		mkFileDataExceptFiles("object:", {"objmime.c"}), Â
 		mkFileDataExceptFiles("access:", {"strucapi.c"}), Â
 		mkFileData("api:"), Â
+		mkFileData("util:creaders:"), Â
 		mkFileDataExceptFiles("ddv:", {"ddvmain.c"})}))
+	
+	AddSimpleProject("vibrant", {"winprefix"}, "vibrant")
 	
 	AddSimpleProjectExceptFiles("ncbicdr", {}, "cdromlib", {"acccn3ds.c", "accentr.c", "accmmdbs.c", "accutils.c"})
 	
@@ -199,8 +198,6 @@ on SetProjectData()
 		mkFileDataExceptFiles("network:taxon1:taxon2:", {"txcproc.c"}), Â
 		mkFileDataExceptFiles("network:taxon1:common:", {"checkid.c"})}), "tax2.pfx"))
 	
-	AddSimpleProject("vibrant", {"winprefix"}, "vibrant")
-	
 	AddSimpleProjectListFiles("ncbiconn", {"winprefix"}, "connect", Â
 		{"ncbi_buffer", "ncbi_socket", "ncbi_core", "ncbi_core_c", "ncbi_util", "ncbi_priv", Â
 			"ncbi_ansi_ext", "ncbi_connection", "ncbi_connector", "ncbi_connutil", Â
@@ -210,6 +207,12 @@ on SetProjectData()
 			"ncbi_socket_connector", "ncbi_sendmail"})
 	
 	AddSimpleProjectExceptFiles("netcli", {}, "network:nsclilib", {"ni_encr.c", "ni_list.c", "ni_lib.c"})
+	
+	AddSimpleProject("ncbispell", {}, "network:spell:client")
+
+	AddSimpleProject("ncbiblast", {}, "algo:blast:core")
+	
+	AddSimpleProject("ncbiblastapi", {}, "algo:blast:api")
 	
 end SetProjectData
 
@@ -267,15 +270,6 @@ on ModuleRoot()
 	return modRoot
 end ModuleRoot
 
-on AccessRoot()
-	if my IsOSX() then
-		-- strip off the volume name at the front.
-		return my stripVolName(gDistribRoot)
-	else
-		return gDistribRoot
-	end if
-end AccessRoot
-
 on GetMyPath()
 	set myPath to path to me as string
 	if myPath contains "Script Editor" or Â
@@ -299,7 +293,6 @@ on SetGlobals()
 		set gStartupDisk to startup disk as string
 		set gHomeDir to my HomeDir()
 		set gDistribRoot to my ModuleRoot()
-		set gAccessRoot to my AccessRoot()
 		
 		set gIncludeDir to gDistribRoot & "include:"
 		set gSourceDir to gDistribRoot
@@ -369,20 +362,35 @@ on CopyHeaders()
 	end tell
 end CopyHeaders
 
-on SetUserPaths()
-	tell application "CodeWarrior IDE"
-		
-		set pathsToAdd to {}
-		-- Put the ncbi root, recursively at the end of the user paths.
-		copy {name:gAccessRoot, recursive:true, origin:absolute} to end of pathsToAdd
-		Set Preferences of panel "Access Paths" to {User Paths:pathsToAdd}
-		
-	end tell
-end SetUserPaths
 
-on SetSysPaths()
-	-- This was all done in the Stationery project.
-end SetSysPaths
+on AppendAccessPath(aPath, isRecursive, isUserPath)
+	tell application "CodeWarrior IDE"
+		if (aPath does not end with ":") then set aPath to aPath & ":"
+		
+		set aPath to POSIX path of aPath
+		set pathsToAdd to {{name:aPath, recursive:isRecursive, origin:root relative, root:"OS X Volume", format:Unix Path}}
+		if isUserPath then
+			Set Preferences of panel "Access Paths" to {User Paths:pathsToAdd}
+		else
+			Set Preferences of panel "Access Paths" to {System Paths:pathsToAdd}
+		end if
+	end tell
+end AppendAccessPath
+
+
+on AppendPrefixFile(filename)
+	tell application "CodeWarrior IDE"
+		try -- CW ver. 8
+			Set Preferences of panel "C/C++ Compiler" to {Prefix File:prefixFile}
+		end try
+		try -- CW ver. 9
+			set oldtext to Get Preferences of {Prefix Text} from panel "C/C++ Preprocessor"
+			set oldtext to (Prefix Text of oldtext)
+			set prefixFileInclude to (oldtext & return & "#include \"" & filename & "\"")
+			Set Preferences of panel "C/C++ Preprocessor" to {Prefix Text:prefixFileInclude}
+		end try
+	end tell
+end AppendPrefixFile
 
 
 on SetupTarget(proj, targetIndex)
@@ -400,11 +408,10 @@ on SetupTarget(proj, targetIndex)
 		
 		if targetName contains "Debug" then
 			set targetDebug to true
-			if pCreateProfiledTargets then
-				set targetProfile to true
-			else
-				set targetProfile to false
-			end if
+			set targetProfile to false
+		else if targetName contains "Profile" then
+			set targetDebug to false
+			set targetProfile to true
 		else -- if targeName contains "Final" then
 			set targetDebug to false
 			set targetProfile to false
@@ -451,10 +458,12 @@ on SetupTarget(proj, targetIndex)
 		end if
 		
 		-- Debug or not.
-		if not targetDebug then
-			set targetFilename to targetFilename & "_O" -- for Optimized.
-		else
+		if targetDebug then
 			set targetFilename to targetFilename & "_D"
+		else if targetProfile then
+			set targetFilename to targetFilename & "_P"
+		else
+			set targetFilename to targetFilename & "_O" -- for Optimized.
 		end if
 		
 		set targetFilename to targetFilename & ".lib"
@@ -479,8 +488,12 @@ on SetupTarget(proj, targetIndex)
 			Set Preferences of panel targetPanelName to ppcProject of projSettings
 		end if
 		
-		my SetUserPaths()
-		-- my SetSysPaths() -- done in the stationery project.
+		
+		if targetAPI is "Mach-O" then
+			my AppendAccessPath(gDistribRoot, true, false) -- end of system paths.
+		else
+			my AppendAccessPath(gDistribRoot, true, true) -- end of user paths.
+		end if
 		
 		-- Add per-project system paths.
 		set pathsToAdd to {}
@@ -491,7 +504,7 @@ on SetupTarget(proj, targetIndex)
 			Set Preferences of panel "Access Paths" to {System Paths:pathsToAdd}
 		
 		-- Set the appropriate prefix file.
-		set prefixFile to Prefix File of projSettings
+		set prefixFile to prefixFile of projSettings
 		if targetAPI is "Win32" and projFeatures contains "winprefix" then
 			set prefixFile to "Win32Headers.pch"
 		else
@@ -502,13 +515,7 @@ on SetupTarget(proj, targetIndex)
 			end if
 		end if
 		if prefixFile is not "" then
-			try -- CW ver. 8
-				Set Preferences of panel "C/C++ Compiler" to {Prefix File:prefixFile}
-			end try
-			try -- CW ver. 9
-				set prefixFileInclude to "#include \"" & prefixFile & "\""
-				Set Preferences of panel "C/C++ Preprocessor" to {Prefix Text:prefixFileInclude}
-			end try
+			my AppendPrefixFile(prefixFile)
 		end if
 		
 	end tell
@@ -540,7 +547,7 @@ on SetupTarget(proj, targetIndex)
 	tell application "CodeWarrior IDE"
 		
 		-- take care of debugging and profiling settings
-		if targetDebug then
+		if targetDebug or targetProfile then
 			set the debug of every target file of target targetIndex Â
 				of project document 1 to true
 		end if
@@ -571,6 +578,7 @@ on SetupTarget(proj, targetIndex)
 		
 	end tell
 end SetupTarget
+
 
 on GetTargetFiles(i)
 	tell application "CodeWarrior IDE"
@@ -789,19 +797,23 @@ on GetTargetSpecs()
 		end if
 	end repeat
 	-- no Build files? match what the script parameters say to match.
-	-- NOTE: This is dependent on pTargetKeyWords
+	-- NOTE: This is dependent on pTargetKeyWords and the target names in the stationery.
 	if (count items of targetSpecs) is 0 then
-		if pCreateDebugTargets or pCreateOptimizedTargets then
-			if pCreateDebugTargets and pCreateOptimizedTargets then
-				set debugspec to ""
-			else if pCreateDebugTargets then
-				set debugspec to "Debug"
-			else if pCreateOptimizedTargets then
-				set debugspec to "Final"
-			end if
-			if pCreateMachOTargets then copy ("Mach-O" & " " & debugspec) to end of targetSpecs
-			if pCreateCarbonTargets then copy ("Carbon" & " " & debugspec) to end of targetSpecs
-			if pCreateWinTargets then copy ("Win32" & " " & debugspec) to end of targetSpecs
+		set debugspec to ""
+		if pCreateDebugTargets then
+			if pCreateMachOTargets then copy ("Mach-O Debug") to end of targetSpecs
+			if pCreateCarbonTargets then copy ("Carbon Debug") to end of targetSpecs
+			if pCreateWinTargets then copy ("Win32 Debug") to end of targetSpecs
+		end if
+		if pCreateProfiledTargets then
+			if pCreateMachOTargets then copy ("Mach-O Profile") to end of targetSpecs
+			if pCreateCarbonTargets then copy ("Carbon Profile") to end of targetSpecs
+			if pCreateWinTargets then copy ("Win32 Profile") to end of targetSpecs
+		end if
+		if pCreateOptimizedTargets then
+			if pCreateMachOTargets then copy ("Mach-O Final") to end of targetSpecs
+			if pCreateCarbonTargets then copy ("Carbon Final") to end of targetSpecs
+			if pCreateWinTargets then copy ("Win32 Final") to end of targetSpecs
 		end if
 	end if
 	return targetSpecs

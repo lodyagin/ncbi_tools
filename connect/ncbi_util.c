@@ -1,4 +1,4 @@
-/*  $Id: ncbi_util.c,v 6.29 2003/09/02 21:05:14 lavr Exp $
+/*  $Id: ncbi_util.c,v 6.31 2003/11/14 13:04:38 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -44,9 +44,6 @@
 #  include <time.h>
 #endif
 
-#if defined(OS_MSWIN)  &&  defined(COMP_METRO)
-char *_strtime( char *timestr );
-#endif
 
 /* Static function pre-declarations to avoid C++ compiler warnings
  */
@@ -171,8 +168,7 @@ extern char* LOG_ComposeMessage
 
     /* Pre-calculate total message length */
     if ((format_flags & fLOG_DateTime) != 0) {
-#if  defined(NCBI_OS_MSWIN)  &&  !defined(COMP_METRO) 
-/*Should be compiler-dependent, but C-Toolkit lacks it*/
+#ifdef NCBI_OS_MSWIN /*Should be compiler-dependent but C-Tkit lacks it*/
         _strdate(&datetime[datetime_len]);
         datetime_len += strlen(&datetime[datetime_len]);
         datetime[datetime_len++] = ' ';
@@ -504,6 +500,12 @@ extern const char* CORE_GetPlatform(void)
 /*
  * ---------------------------------------------------------------------------
  * $Log: ncbi_util.c,v $
+ * Revision 6.31  2003/11/14 13:04:38  lavr
+ * Little changes in comments [no code changes]
+ *
+ * Revision 6.30  2003/11/13 19:53:41  rsmith
+ * Took out metrowerks specific #ifdef's (COMP_METRO). Not needed anymore.
+ *
  * Revision 6.29  2003/09/02 21:05:14  lavr
  * Proper indentation of compilation conditionals
  *

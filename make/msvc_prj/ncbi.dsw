@@ -293,8 +293,23 @@ Package=<4>
     Begin Project Dependency
     Project_Dep_Name exe_sequin
     End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "all_internal"=.\internal\all_internal.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
     Begin Project Dependency
-    Project_Dep_Name exe_sequin_ogl
+    Project_Dep_Name exe_ssequin
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name smartnet
     End Project Dependency
 }}}
 
@@ -377,6 +392,9 @@ Package=<4>
     Begin Project Dependency
     Project_Dep_Name regexp
     End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name blast
+    End Project Dependency
 }}}
 
 ###############################################################################
@@ -398,6 +416,21 @@ Package=<4>
     Begin Project Dependency
     Project_Dep_Name all_lib
     End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name all_internal
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "blast"=.\blast\blast.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
 }}}
 
 ###############################################################################
@@ -949,6 +982,9 @@ Package=<4>
     End Project Dependency
     Begin Project Dependency
     Project_Dep_Name ncbimain
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name blast
     End Project Dependency
 }}}
 
@@ -2046,9 +2082,6 @@ Package=<4>
     Project_Dep_Name ncbitool
     End Project Dependency
     Begin Project Dependency
-    Project_Dep_Name vibrant
-    End Project Dependency
-    Begin Project Dependency
     Project_Dep_Name ncbinacc
     End Project Dependency
     Begin Project Dependency
@@ -2448,9 +2481,6 @@ Package=<4>
     Project_Dep_Name vibnet
     End Project Dependency
     Begin Project Dependency
-    Project_Dep_Name ncbicn3d
-    End Project Dependency
-    Begin Project Dependency
     Project_Dep_Name netblast
     End Project Dependency
     Begin Project Dependency
@@ -2463,13 +2493,7 @@ Package=<4>
     Project_Dep_Name ncbidesk
     End Project Dependency
     Begin Project Dependency
-    Project_Dep_Name ddvlib
-    End Project Dependency
-    Begin Project Dependency
     Project_Dep_Name ncbitxc2
-    End Project Dependency
-    Begin Project Dependency
-    Project_Dep_Name ncbiid1
     End Project Dependency
     Begin Project Dependency
     Project_Dep_Name medarch
@@ -2499,7 +2523,7 @@ Package=<4>
 
 ###############################################################################
 
-Project: "exe_sequin_ogl"=.\sequin\sequin_ogl\exe_sequin_ogl.dsp - Package Owner=<4>
+Project: "exe_ssequin"=.\sequin\ssequin\exe_ssequin.dsp - Package Owner=<4>
 
 Package=<5>
 {{{
@@ -2508,10 +2532,10 @@ Package=<5>
 Package=<4>
 {{{
     Begin Project Dependency
-    Project_Dep_Name vibnet
+    Project_Dep_Name smartnet
     End Project Dependency
     Begin Project Dependency
-    Project_Dep_Name ncbicn3d_ogl
+    Project_Dep_Name vibnet
     End Project Dependency
     Begin Project Dependency
     Project_Dep_Name netblast
@@ -2526,13 +2550,7 @@ Package=<4>
     Project_Dep_Name ncbidesk
     End Project Dependency
     Begin Project Dependency
-    Project_Dep_Name ddvlib
-    End Project Dependency
-    Begin Project Dependency
     Project_Dep_Name ncbitxc2
-    End Project Dependency
-    Begin Project Dependency
-    Project_Dep_Name ncbiid1
     End Project Dependency
     Begin Project Dependency
     Project_Dep_Name medarch
@@ -2557,6 +2575,9 @@ Package=<4>
     End Project Dependency
     Begin Project Dependency
     Project_Dep_Name ncbi
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbispel
     End Project Dependency
 }}}
 
@@ -2721,6 +2742,18 @@ Package=<4>
 
 ###############################################################################
 
+Project: "ncbispel"=.\network\spell\client\ncbispel.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+}}}
+
+###############################################################################
+
 Project: "ncbitool"=.\tools\ncbitool.dsp - Package Owner=<4>
 
 Package=<5>
@@ -2782,6 +2815,18 @@ Package=<4>
 ###############################################################################
 
 Project: "regexp"=.\regexp\regexp.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+}}}
+
+###############################################################################
+
+Project: "smartnet"=.\internal\smart\smartnet\smartnet.dsp - Package Owner=<4>
 
 Package=<5>
 {{{

@@ -1,4 +1,4 @@
-/* $Id: blast_input.h,v 1.9 2003/08/25 22:25:46 dondosha Exp $
+/* $Id: blast_input.h,v 1.10 2003/12/03 17:30:25 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -31,7 +31,7 @@ Author: Ilya Dondoshansky
 
 Contents: Reading FASTA sequences for BLAST
 
-$Revision: 1.9 $
+$Revision: 1.10 $
 
 ******************************************************************************/
 
@@ -65,7 +65,7 @@ extern "C" {
  */
 Boolean
 BLAST_GetQuerySeqLoc(FILE *infp, Boolean query_is_na, Uint1 strand,
-   Int4 from, Int4 to, BlastMask** lcase_mask, SeqLocPtr* query_slp, Int4 ctr_start,
+   Int4 from, Int4 to, BlastMaskLoc** lcase_mask, SeqLocPtr* query_slp, Int4 ctr_start,
    Int4* num_queries);
 
 /** Given a file containing sequence(s) in fasta format,

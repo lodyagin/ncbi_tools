@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/12/91
 *
-* $Revision: 6.121 $
+* $Revision: 6.125 $
 *
 * File Description:  various sequence objects to fasta output
 *
@@ -39,6 +39,18 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: tofasta.c,v $
+* Revision 6.125  2004/01/21 19:22:14  kans
+* UseOrgMods capitalizes first letter of created defline
+*
+* Revision 6.124  2003/12/23 20:58:51  kans
+* ProtDefLine takes prp->activity if prp->name and prp->desc are not set
+*
+* Revision 6.123  2003/11/18 19:04:29  kans
+* added BioseqFastaStream, rapid generator based on SeqPortStream
+*
+* Revision 6.122  2003/11/05 19:24:55  kans
+* BioseqToFastaX checks for virtual with do_virtual not set, prints a single dash as the sequence
+*
 * Revision 6.121  2003/08/04 19:51:02  kans
 * for complete chromosome title, if > 3 clones (by counting semicolons) then just display count, not full text of clones
 *
@@ -1366,6 +1378,15 @@ NLM_EXTERN Boolean BioseqToFastaX (BioseqPtr bsp, MyFsaPtr mfp, Boolean is_na)
 		code = mfp->code;
 	    }
 
+	    if (repr == Seq_repr_virtual && (! mfp->do_virtual)) {
+	        StringCpy (mfp->buf, "-");
+                (*(mfp->myfunc))(bsp, FASTA_SEQLINE, mfp->buf, StringLen(mfp->buf),
+                                 mfp->mydata);
+            (*(mfp->myfunc))(bsp, FASTA_EOS, mfp->buf, StringLen(mfp->buf),
+                             mfp->mydata);
+            return TRUE;
+	    }
+
             spp = FastaSeqPortEx (bsp, is_na, mfp->do_virtual, code, mfp->seqloc);
             if (spp == NULL) return FALSE;
             
@@ -1379,6 +1400,85 @@ NLM_EXTERN Boolean BioseqToFastaX (BioseqPtr bsp, MyFsaPtr mfp, Boolean is_na)
                              mfp->mydata);
         }
         return TRUE;
+}
+
+
+/*****************************************************************************
+*
+*   BioseqFastaStream(bsp, fp, expandGaps, maxlen)
+*
+*   	Rapid FASTA generator using SeqPortStream
+*
+*****************************************************************************/
+
+typedef struct streamfsa {
+  FILE     *fp;
+  Char     buf [130];
+  Int2     idx;
+  Int2     linelen;
+} StreamFsa, PNTR StreamFsaPtr;
+
+static void LIBCALLBACK FsaStreamProc (
+  CharPtr sequence,
+  Pointer userdata
+)
+
+{
+  Char          ch;
+  StreamFsaPtr  sfp;
+
+  if (StringHasNoText (sequence) || userdata == NULL) return;
+  sfp = (StreamFsaPtr) userdata;
+
+  ch = *sequence;
+  while (ch != '\0') {
+    sfp->buf [sfp->idx] = ch;
+    (sfp->idx)++;
+
+    if (sfp->idx >= sfp->linelen) {
+      sfp->buf [sfp->idx] = '\0';
+      fprintf (sfp->fp, "%s\n", sfp->buf);
+      sfp->idx = 0;
+    }
+
+    sequence++;
+    ch = *sequence;
+  }
+}
+
+NLM_EXTERN void BioseqFastaStream (BioseqPtr bsp, FILE *fp, Boolean expandGaps, Int2 linelen)
+
+{
+  Char         buf [4096];
+  Char         id [42];
+  StreamFsa    sf;
+
+  if (bsp == NULL || fp == NULL) return;
+  if (linelen > 128) {
+    linelen = 128;
+  }
+  if (linelen < 1) {
+    linelen = 60;
+  }
+
+  id [0] = '\0';
+  SeqIdWrite (bsp->id, id, PRINTID_FASTA_LONG, sizeof (id) - 1);
+
+  buf [0] = '\0';
+  CreateDefLine (NULL, bsp, buf, sizeof (buf) - 1, 0, NULL, NULL);
+
+  fprintf (fp, ">%s %s\n", id, buf);
+
+  MemSet ((Pointer) &sf, 0, sizeof (StreamFsa));
+  sf.fp = fp;
+  sf.idx = 0;
+  sf.linelen = linelen;
+  SeqPortStream (bsp, expandGaps, (Pointer) &sf, FsaStreamProc);
+
+  if (sf.idx > 0) {
+    sf.buf [sf.idx] = '\0';
+    fprintf (fp, "%s\n", sf.buf);
+  }
 }
 
 
@@ -3037,8 +3137,12 @@ static CharPtr FindProtDefLine(BioseqPtr bsp)
 					}
 				}
 			}
-		} else if (prp->desc) {
+		} else if (prp && prp->desc) {
 			title = StringSave(prp->desc);
+		} else if (prp && prp->activity) {
+		    if (prp->activity->data.ptrvalue) {
+		        title = StringSave (prp->activity->data.ptrvalue);
+		    }
 		}
 	} 
 	if (title == NULL) {
@@ -3271,6 +3375,7 @@ static CharPtr UseOrgMods(BioseqPtr bsp, CharPtr suffix)
 	OrgNamePtr         	onp;
 	OrgRefPtr          	orp;
 	SubSourcePtr       	ssp;
+	Char                ch;
 	CharPtr				name = NULL, chr = NULL, str = NULL,
 						cln = NULL, map = NULL, def=NULL;
 	Int2 				deflen = 0;
@@ -3333,6 +3438,7 @@ static CharPtr UseOrgMods(BioseqPtr bsp, CharPtr suffix)
 	}
 	deflen += StringLen (suffix) + 2;
 	def = (CharPtr) MemNew(deflen+1);
+	if (def == NULL) return NULL;
 	if (name) {
 		def = StringCat(def, name);
 		MemFree(name);
@@ -3357,6 +3463,9 @@ static CharPtr UseOrgMods(BioseqPtr bsp, CharPtr suffix)
 		def = StringCat(def, " ");
 		def = StringCat(def, suffix);
 	}
+	TrimSpacesAroundString (def);
+	ch = def [0];
+	def [0] = TO_UPPER (ch);
 	return def;
 }
 

@@ -37,6 +37,15 @@
 * Date     Name        Description of modification
 *
 * $Log: lsqfetch.c,v $
+* Revision 6.19  2003/11/13 17:18:02  kans
+* added SearchAltIndex, finished Alt fetch for chimp revision
+*
+* Revision 6.18  2003/11/12 23:49:11  kans
+* SortIfpByID needed LIBCALLBACK for PC
+*
+* Revision 6.17  2003/11/12 23:38:48  kans
+* changing AltIndexedFastaLibFetchEnable prototype, implementation not yet finished
+*
 * Revision 6.16  2003/08/27 21:24:05  kans
 * enable alt indexed fasta looks up previously registered function, changes settings for new path
 *
@@ -87,6 +96,15 @@
 * Revision changed to 6.0
 *
 * $Log: lsqfetch.c,v $
+* Revision 6.19  2003/11/13 17:18:02  kans
+* added SearchAltIndex, finished Alt fetch for chimp revision
+*
+* Revision 6.18  2003/11/12 23:49:11  kans
+* SortIfpByID needed LIBCALLBACK for PC
+*
+* Revision 6.17  2003/11/12 23:38:48  kans
+* changing AltIndexedFastaLibFetchEnable prototype, implementation not yet finished
+*
 * Revision 6.16  2003/08/27 21:24:05  kans
 * enable alt indexed fasta looks up previously registered function, changes settings for new path
 *
@@ -1374,6 +1392,18 @@ NLM_EXTERN void IndexedFastaLibFetchDisable (void)
 
 static CharPtr altfastalibfetchproc = "AltIndexedFastaLibBioseqFetch";
 
+typedef struct idfip {
+  CharPtr        seqid;
+  FastaIndexPtr  fip;
+} IdFip, PNTR IdFipPtr;
+
+typedef struct alibftch {
+  CharPtr     path;
+  ValNodePtr  fiplist;
+  IdFipPtr    index;
+  Int4        numids;
+} AltLibFetchData, PNTR AltLibFetchPtr;
+
 static void ChangeLocalToGenbank (BioseqPtr bsp, Pointer userdata)
 
 {
@@ -1390,38 +1420,79 @@ static void ChangeLocalToGenbank (BioseqPtr bsp, Pointer userdata)
   SeqMgrReplaceInBioseqIndex (bsp);
 }
 
+static FastaIndexPtr SearchAltIndex (
+  AltLibFetchPtr alfp,
+  CharPtr seqid
+)
+
+{
+  int       compare;
+  IdFipPtr  ifp;
+  Int4      L, R, mid;
+
+  if (alfp == NULL || alfp->index == NULL) return NULL;
+  ifp = alfp->index;
+  if (StringHasNoText (seqid)) return NULL;
+
+  L = 0;
+  R = alfp->numids - 1;
+  while (L < R) {
+    mid = (L + R) / 2;
+    compare = StringICmp (ifp [mid].seqid, seqid);
+    if (compare < 0) {
+      L = mid + 1;
+    } else {
+      R = mid;
+    }
+  }
+
+  if (StringICmp (ifp [R].seqid, seqid) == 0) {
+    return ifp [R].fip;
+  }
+
+  return NULL;
+}
+
 static Int2 LIBCALLBACK AltIndexedFastaLibBioseqFetchFunc (Pointer data)
 
 {
+  AltLibFetchPtr    alfp;
   BioseqPtr         bsp;
   Pointer           dataptr = NULL;
   Uint2             datatype, entityID = 0;
   Char              file [FILENAME_MAX], path [PATH_MAX], id [41];
-  FastaLibFetchPtr  flfp;
+  FastaIndexPtr     fip;
   FILE              *fp;
   Int4              offset;
   OMProcControlPtr  ompcp;
   ObjMgrProcPtr     ompp;
   SeqEntryPtr       sep = NULL;
   SeqIdPtr          sip;
+  CharPtr           tmp;
 
   ompcp = (OMProcControlPtr) data;
   if (ompcp == NULL) return OM_MSG_RET_ERROR;
   ompp = ompcp->proc;
   if (ompp == NULL) return OM_MSG_RET_ERROR;
-  flfp = (FastaLibFetchPtr) ompp->procdata;
-  if (flfp == NULL) return OM_MSG_RET_ERROR;
+  alfp = (AltLibFetchPtr) ompp->procdata;
+  if (alfp == NULL) return OM_MSG_RET_ERROR;
   sip = (SeqIdPtr) ompcp->input_data;
   if (sip == NULL) return OM_MSG_RET_ERROR;
 
   if (sip->choice == SEQID_GENBANK) {
 
     SeqIdWrite (sip, id, PRINTID_REPORT, sizeof (id));
-    if (flfp->currentfip != NULL) {
-      offset = SearchFastaIndex (flfp->currentfip, id);
+    fip = SearchAltIndex (alfp, id);
+    if (fip != NULL) {
+      offset = SearchFastaIndex (fip, id);
       if (offset < 0) return OM_MSG_RET_ERROR;
-      sprintf (file, "%s.fsa", flfp->fastaname);
-      StringNCpy_0 (path, flfp->path, sizeof (path));
+      StringCpy (file, fip->file);
+      tmp = StringStr (file, ".idx");
+      if (tmp != NULL) {
+        *tmp = '\0';
+      }
+      StringCat (file, ".fa");
+      StringNCpy_0 (path, fip->path, sizeof (path));
       FileBuildPath (path, NULL, file);
       fp = FileOpen (path, "r");
       if (fp == NULL) return OM_MSG_RET_ERROR;
@@ -1443,41 +1514,94 @@ static Int2 LIBCALLBACK AltIndexedFastaLibBioseqFetchFunc (Pointer data)
   return OM_MSG_RET_DONE;
 }
 
-NLM_EXTERN Boolean AltIndexedFastaLibFetchEnable (CharPtr path, CharPtr fastaname)
+static int LIBCALLBACK SortIfpByID (VoidPtr vp1, VoidPtr vp2)
 
 {
-  Char              file [FILENAME_MAX];
-  FastaLibFetchPtr  flfp = NULL;
-  Boolean           is_new = FALSE;
-  ObjMgrPtr         omp;
-  ObjMgrProcPtr     ompp;
-  Char              str [PATH_MAX];
+  IdFipPtr ifp1, ifp2;
+
+  if (vp1 == NULL || vp2 == NULL) return 0;
+  ifp1 = (IdFipPtr) vp1;
+  ifp2 = (IdFipPtr) vp2;
+  if (ifp1 == NULL || ifp2 == NULL) return 0;
+  return StringICmp (ifp1->seqid, ifp2->seqid);
+}
+
+NLM_EXTERN Boolean AltIndexedFastaLibFetchEnable (CharPtr path)
+
+{
+  AltLibFetchPtr  alfp = NULL;
+  Char            file [FILENAME_MAX];
+  FastaIndexPtr   fip;
+  ValNodePtr      head;
+  Int4            i;
+  IdFipPtr        ifp;
+  Boolean         is_new = FALSE;
+  Int4            j;
+  Int4            numids = 0;
+  ObjMgrPtr       omp;
+  ObjMgrProcPtr   ompp;
+  Char            str [PATH_MAX];
+  CharPtr         tmp;
+  ValNodePtr      vnp;
 
   StringNCpy_0 (str, path, sizeof (str));
   TrimSpacesAroundString (str);
   omp = ObjMgrGet ();
   ompp = ObjMgrProcFind (omp, 0, altfastalibfetchproc, OMPROC_FETCH);
   if (ompp != NULL) {
-    flfp = (FastaLibFetchPtr) ompp->procdata;
-    if (flfp != NULL) {
-      flfp->path = MemFree (flfp->path);
-      flfp->fastaname = MemFree (flfp->fastaname);
-      flfp->currentfip = FreeFastaIndex (flfp->currentfip);
+    alfp = (AltLibFetchPtr) ompp->procdata;
+    if (alfp != NULL) {
+      alfp->path = MemFree (alfp->path);
+      for (vnp = alfp->fiplist; vnp != NULL; vnp = vnp->next) {
+        fip = (FastaIndexPtr) vnp->data.ptrvalue;
+        FreeFastaIndex (fip);
+      }
+      alfp->fiplist = ValNodeFree (alfp->fiplist);
+      alfp->index = MemFree (alfp->index);
     }
   } else {
-    flfp = (FastaLibFetchPtr) MemNew (sizeof (FastaLibFetchData));
+    alfp = (AltLibFetchPtr) MemNew (sizeof (AltLibFetchData));
     is_new = TRUE;
   }
-  if (flfp != NULL) {
-    flfp->path = StringSave (str);
-    flfp->fastaname = StringSave (fastaname);
-    sprintf (file, "%s.idx", fastaname);
-    FileBuildPath (str, NULL, file);
-    flfp->currentfip = ReadFastaIndex (str);
+  if (alfp != NULL) {
+    alfp->path = StringSave (str);
+    head = DirCatalog (str);
+    for (vnp = head; vnp != NULL; vnp = vnp->next) {
+      if (vnp->choice == 0) {
+        tmp = (CharPtr) vnp->data.ptrvalue;
+        if (StringStr (tmp, ".idx") != NULL) {
+          StringCpy (str, alfp->path);
+          sprintf (file, "%s", tmp);
+          FileBuildPath (str, NULL, file);
+          fip = ReadFastaIndex (str);
+          if (fip != NULL) {
+            ValNodeAddPointer (&(alfp->fiplist), 0, (Pointer) fip);
+            numids += fip->numlines;
+          }
+        }
+      }
+    }
+    ValNodeFreeData (head);
+    ifp = (IdFipPtr) MemNew (sizeof (IdFip) * (numids + 2));
+    alfp->index = ifp;
+    alfp->numids = numids;
+    if (ifp != NULL) {
+      i = 0;
+      for (vnp = alfp->fiplist; vnp != NULL; vnp = vnp->next) {
+        fip = (FastaIndexPtr) vnp->data.ptrvalue;
+        if (fip != NULL) {
+          for (j = 0; j < fip->numlines; j++, i++) {
+            ifp [i].seqid = fip->seqids [j];
+            ifp [i].fip = fip;
+          }
+        }
+      }
+      HeapSort (ifp, (size_t) numids, sizeof (IdFip), SortIfpByID);
+    }
   }
   if (is_new) {
     ObjMgrProcLoad (OMPROC_FETCH, altfastalibfetchproc, altfastalibfetchproc,
-                    OBJ_SEQID, 0, OBJ_BIOSEQ, 0, (Pointer) flfp,
+                    OBJ_SEQID, 0, OBJ_BIOSEQ, 0, (Pointer) alfp,
                     AltIndexedFastaLibBioseqFetchFunc, PROC_PRIORITY_DEFAULT);
   }
   return TRUE;
@@ -1486,20 +1610,26 @@ NLM_EXTERN Boolean AltIndexedFastaLibFetchEnable (CharPtr path, CharPtr fastanam
 NLM_EXTERN void AltIndexedFastaLibFetchDisable (void)
 
 {
-  FastaLibFetchPtr  flfp;
-  ObjMgrPtr         omp;
-  ObjMgrProcPtr     ompp;
+  AltLibFetchPtr  alfp;
+  FastaIndexPtr   fip;
+  ObjMgrPtr       omp;
+  ObjMgrProcPtr   ompp;
+  ValNodePtr      vnp;
 
   omp = ObjMgrGet ();
   ompp = ObjMgrProcFind (omp, 0, altfastalibfetchproc, OMPROC_FETCH);
   if (ompp == NULL) return;
   ObjMgrFreeUserData (0, ompp->procid, OMPROC_FETCH, 0);
-  flfp = (FastaLibFetchPtr) ompp->procdata;
-  if (flfp == NULL) return;
-  MemFree (flfp->path);
-  MemFree (flfp->fastaname);
-  FreeFastaIndex (flfp->currentfip);
-  MemFree (flfp);
+  alfp = (AltLibFetchPtr) ompp->procdata;
+  if (alfp == NULL) return;
+  alfp->path = MemFree (alfp->path);
+  for (vnp = alfp->fiplist; vnp != NULL; vnp = vnp->next) {
+    fip = (FastaIndexPtr) vnp->data.ptrvalue;
+    FreeFastaIndex (fip);
+  }
+  alfp->fiplist = ValNodeFree (alfp->fiplist);
+  alfp->index = MemFree (alfp->index);
+  MemFree (alfp);
 }
 
 /* common function for creating indexes of fasta library files */

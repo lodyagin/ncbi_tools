@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/23/91
 *
-* $Revision: 6.23 $
+* $Revision: 6.24 $
 *
 * File Description: 
 *   	miscellaneous functions
@@ -43,6 +43,9 @@
 * 02-16-94 Epstein     Retired Gestalt functions and definitions
 *
 * $Log: ncbimisc.c,v $
+* Revision 6.24  2003/12/03 02:10:23  kans
+* added defines missing from Mac OS 10.3 headers
+*
 * Revision 6.23  2002/11/06 21:25:10  ucko
 * Don't assume MIPS is IRIX, or HPPA is HP/UX; allow Linux too, for both.
 *
@@ -154,6 +157,16 @@
 #ifdef OS_MAC
 #include <TextUtils.h>
 #endif
+
+/* Missing from /usr/include/gcc/darwin/3.3/machine/limits.h */
+#ifdef __MWERKS__
+#ifdef OS_UNIX_DARWIN
+#ifndef __CHAR_BIT__
+#define __CHAR_BIT__ 8
+#endif
+#endif
+#endif
+/* End missing from /usr/include/gcc/darwin/3.3/machine/limits.h */
 
 /*
 TRIPLE_MARK is the character inserted before the thousands, millions,

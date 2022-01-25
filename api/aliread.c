@@ -383,7 +383,7 @@ CharPtr ReadAlignFileLine (FILE PNTR        alignFilePtr,
   Int4    segmentLen = 0;
   Int4    segmentCount = 1;
   Boolean done = FALSE;
-  Char    ch;
+  Char    ch = 0;
 
   /* Allocate memory for the line.  More */
   /* can be added later as necessary.    */
@@ -408,11 +408,14 @@ CharPtr ReadAlignFileLine (FILE PNTR        alignFilePtr,
 	{
 	  done = TRUE;
 	  ch = (Char) NLM_GETC (alignFilePtr);
-	  if (ch != '\r')
+	  if (ch != '\r') {
 	    ungetc (ch, alignFilePtr);
+	  
+	  }
 	}
-      else if (ch == '\r')
-	done = TRUE;
+      else if (ch == '\r') {
+        done = TRUE;
+      }
       else
 	{
 	  lineStr[totalLen] = ch;
@@ -450,6 +453,7 @@ CharPtr ReadAlignFileLine (FILE PNTR        alignFilePtr,
     *isEOF = TRUE;
 
   lineStr[totalLen] = '\0';
+
   return lineStr;
 }
 
@@ -1160,8 +1164,9 @@ ValNodePtr Ali_ReadLines (FILE PNTR        alignFilePtr,
 
       lineStr = ReadAlignFileLine(alignFilePtr, errorListPtr,
 				  configPtr, &isEOF);
-      if (lineStr == NULL)
+      if (lineStr == NULL) {
 	return NULL;
+      }
 
       rowNum++;
 

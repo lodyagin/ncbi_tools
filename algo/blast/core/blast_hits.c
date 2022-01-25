@@ -1,4 +1,4 @@
-/* $Id: blast_hits.c,v 1.46 2003/10/21 22:15:34 camacho Exp $
+/* $Id: blast_hits.c,v 1.65 2004/02/02 18:49:32 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -37,10 +37,10 @@ Detailed Contents:
           alignment
 
 ******************************************************************************
- * $Revision: 1.46 $
+ * $Revision: 1.65 $
  * */
 
-static char const rcsid[] = "$Id: blast_hits.c,v 1.46 2003/10/21 22:15:34 camacho Exp $";
+static char const rcsid[] = "$Id: blast_hits.c,v 1.65 2004/02/02 18:49:32 dondosha Exp $";
 
 #include <algo/blast/core/blast_options.h>
 #include <algo/blast/core/blast_extend.h>
@@ -116,7 +116,7 @@ BlastHSP* BlastHSPFree(BlastHSP* hsp)
 }
 
 Int2 BLAST_GetNonSumStatsEvalue(Uint1 program, BlastQueryInfo* query_info,
-        BlastHSPList* hsp_list, BlastHitSavingOptions* hit_options, 
+        BlastHSPList* hsp_list, const BlastScoringOptions* score_options, 
         BlastScoreBlk* sbp)
 {
    BlastHSP* hsp;
@@ -124,18 +124,15 @@ Int2 BLAST_GetNonSumStatsEvalue(Uint1 program, BlastQueryInfo* query_info,
    BLAST_KarlinBlk** kbp;
    Int4 hsp_cnt;
    Int4 index;
-   Uint1 factor;
    
    if (hsp_list == NULL)
       return 1;
    
-   if (hit_options->gapped_calculation && program != blast_type_blastn)
+   if (score_options->gapped_calculation && program != blast_type_blastn)
       kbp = sbp->kbp_gap_std;
    else
       kbp = sbp->kbp_std;
    
-   factor = ((program == blast_type_blastn) ? 2 : 1);
-
    hsp_cnt = hsp_list->hspcnt;
    hsp_array = hsp_list->hsp_array;
    for (index=0; index<hsp_cnt; index++) {
@@ -151,7 +148,7 @@ Int2 BLAST_GetNonSumStatsEvalue(Uint1 program, BlastQueryInfo* query_info,
       } else {
          hsp->evalue = 
             BLAST_KarlinStoE_simple(hsp->score, kbp[hsp->context],
-               (double)query_info->eff_searchsp_array[hsp->context/factor]);
+               (double)query_info->eff_searchsp_array[hsp->context]);
       }
    }
    
@@ -260,7 +257,6 @@ BlastHSPGetNumIdentical(Uint1* query, Uint1* subject,
    Int4* align_length_ptr)
 {
    Int4 i, num_ident, align_length, q_off, s_off;
-   Int2 context;
    Uint1* q,* s;
    GapEditBlock* gap_info;
    GapEditScript* esp;
@@ -270,7 +266,6 @@ BlastHSPGetNumIdentical(Uint1* query, Uint1* subject,
    if (!gap_info && is_gapped)
       return -1;
 
-   context = hsp->context;
    q_off = hsp->query.offset;
    s_off = hsp->subject.offset;
 
@@ -322,26 +317,45 @@ BlastHSPGetNumIdentical(Uint1* query, Uint1* subject,
 
 /** Comparison callback function for sorting HSPs by e-value */
 static int
-evalue_compare_hsps(const void* v1, const void* v2)
+score_compare_hsps(const void* v1, const void* v2)
 {
    BlastHSP* h1,* h2;
    
    h1 = *((BlastHSP**) v1);
    h2 = *((BlastHSP**) v2);
 
-   if (h1->evalue < h2->evalue)
-      return -1;
-   else if (h1->evalue > h2->evalue)
-      return 1;
+   /* No need to check e-values, because for the same subject sequence e-value
+      is always inverse proportional to score. However e-values are less 
+      sensitive, since they both can be 0, when scores are large but 
+      different. */
    if (h1->score > h2->score)
       return -1;
    else if (h1->score < h2->score)
       return 1;
+   /* Tie-breakers: decreasing subject offsets; decreasing subject ends, 
+      decreasing query offsets, decreasing query ends */
+   else if (h1->subject.offset > h2->subject.offset)
+      return -1;
+   else if (h1->subject.offset < h2->subject.offset)
+      return 1;
+   else if (h1->subject.end > h2->subject.end)
+      return -1;
+   else if (h1->subject.end < h2->subject.end)
+      return 1;
+   else if (h1->query.offset > h2->query.offset)
+      return -1;
+   else if (h1->query.offset < h2->query.offset)
+      return 1;
+   else if (h1->query.end > h2->query.end)
+      return -1;
+   else if (h1->query.end < h2->query.end)
+      return 1;
+
    return 0;
 }
 
-/** Comparison callback function for sorting HSPs by diagonal and removing
- * the HSPs contained in or identical to other HSPs.
+/** Comparison callback function for sorting HSPs by diagonal and flagging
+ * the HSPs contained in or identical to other HSPs for future deletion.
 */
 static int
 diag_uniq_compare_hsps(const void* v1, const void* v2)
@@ -364,13 +378,6 @@ diag_uniq_compare_hsps(const void* v1, const void* v2)
    else if (h1->context > h2->context)
       return 1;
    
-   /* If the two HSP's have same coordinates, they are equal */
-   if (h1->query.offset == h2->query.offset && 
-       h1->query.end == h2->query.end && 
-       h1->subject.offset == h2->subject.offset &&
-       h1->subject.end == h2->subject.end)
-      return 0;
-   
    /* Check if one HSP is contained in the other, if so, 
       leave only the longer one, given it has lower evalue */
    if (h1->query.offset >= h2->query.offset && 
@@ -378,19 +385,31 @@ diag_uniq_compare_hsps(const void* v1, const void* v2)
        h1->subject.offset >= h2->subject.offset && 
        h1->subject.end <= h2->subject.end && 
        h1->evalue >= h2->evalue) { 
-      *hp1 = BlastHSPFree(*hp1);
-      return 1; 
+      (*hp1)->score = 0;
    } else if (h1->query.offset <= h2->query.offset &&  
               h1->query.end >= h2->query.end &&  
               h1->subject.offset <= h2->subject.offset && 
               h1->subject.end >= h2->subject.end && 
               h1->evalue <= h2->evalue) { 
-      *hp2 = BlastHSPFree(*hp2);
-      return -1; 
+      (*hp2)->score = 0;
    }
    
    return (h1->query.offset - h1->subject.offset) -
       (h2->query.offset - h2->subject.offset);
+}
+
+static int
+null_compare_hsps(const void* v1, const void* v2)
+{
+   BlastHSP* h1,* h2;
+   
+   h1 = *((BlastHSP**) v1);
+   h2 = *((BlastHSP**) v2);
+   
+   if ((h1 && h2) || (!h1 && !h2))
+      return 0;
+   else if (!h1) return 1;
+   else return -1;
 }
 
 /** Are the two HSPs within a given diagonal distance of each other? */
@@ -406,11 +425,22 @@ BlastSortUniqHspArray(BlastHSPList* hsp_list)
    Int2 context;
    double evalue;
 
-   qsort(hsp_list->hsp_array, hsp_list->hspcnt, sizeof(BlastHSP*), 
-            diag_uniq_compare_hsps);
+   qsort(hsp_array, hsp_list->hspcnt, sizeof(BlastHSP*), 
+         diag_uniq_compare_hsps);
+   /* Delete all HSPs that were flagged in qsort */
+   for (index = 0, new_hspcnt = 0; index < hsp_list->hspcnt; ++index) {
+      if (hsp_array[index]->score == 0) {
+         hsp_array[index] = BlastHSPFree(hsp_array[index]);
+      }
+   }      
+   /* Move all nulled out HSPs to the end */
+   qsort(hsp_array, hsp_list->hspcnt, sizeof(BlastHSP*),
+         null_compare_hsps);
+
    for (index=1, new_hspcnt=0; index<hsp_list->hspcnt; index++) {
-      if (hsp_array[index]==NULL) 
-	 continue;
+      if (!hsp_array[index])
+         break;
+
       q_off = hsp_array[index]->query.offset;
       s_off = hsp_array[index]->subject.offset;
       q_end = hsp_array[index]->query.end;
@@ -461,64 +491,31 @@ BlastSortUniqHspArray(BlastHSPList* hsp_list)
    return 0;
 }
 
-/** Reevaluate the HSPs in an HSP list, using ambiguity information. 
- * This is/can only done either for an ungapped search, or if traceback is 
- * already available.
- * Subject sequence is uncompressed and saved here. Number of identities is
- * calculated for each HSP along the way. 
- * @param hsp_list The list of HSPs for one subject sequence [in] [out]
- * @param query_blk The query sequence [in]
- * @param subject_blk The subject sequence [in] [out]
- * @param hit_options The options related to saving hits [in]
- * @param query_info Auxiliary query information [in]
- * @param sbp The statistical information [in]
- * @param score_options The scoring options [in]
- * @param rdfp The BLAST database structure (for retrieving uncompressed
- *             sequence) [in]
- */
-static Int2 
-BLAST_ReevaluateWithAmbiguities(BlastHSPList* hsp_list,
-   BLAST_SequenceBlk* query_blk, BLAST_SequenceBlk* subject_blk, 
-   const BlastHitSavingOptions* hit_options, BlastQueryInfo* query_info, 
-   BlastScoreBlk* sbp, const BlastScoringOptions* score_options, 
-   const BlastSeqSrc* bssp)
+Boolean ReevaluateHSPWithAmbiguities(BlastHSP* hsp, 
+           Uint1* query_start, Uint1* subject_start, 
+           const BlastHitSavingOptions* hit_options, 
+           const BlastScoringOptions* score_options, 
+           BlastQueryInfo* query_info, BlastScoreBlk* sbp)
 {
    Int4 sum, score, gap_open, gap_extend;
    Int4** matrix;
-   BlastHSP** hsp_array,* hsp;
-   Uint1* query,* subject,* query_start,* subject_start = NULL;
+   Uint1* query,* subject;
    Uint1* new_q_start,* new_s_start,* new_q_end,* new_s_end;
-   Int4 index, context, hspcnt, i;
+   Int4 index;
    Int2 factor = 1;
    Uint1 mask = 0x0f;
-   GapEditScript* esp,* last_esp,* prev_esp,* first_esp;
-   Boolean purge, delete_hsp;
+   GapEditScript* esp,* last_esp = NULL,* prev_esp,* first_esp = NULL;
+   Boolean delete_hsp;
    double searchsp_eff;
-   Int4 last_esp_num;
-   Int2 status = 0;
+   Int4 last_esp_num = 0;
    Int4 align_length;
-   BLAST_KarlinBlk** kbp;
-   GetSeqArg seq_arg;
-
-   if (!hsp_list)
-      return status;
-
-   hspcnt = hsp_list->hspcnt;
-   hsp_array = hsp_list->hsp_array;
-   memset((void*) &seq_arg, 0, sizeof(seq_arg));
-
-   /* In case of no traceback, return without doing anything */
-   if (!hsp_list->traceback_done && hit_options->gapped_calculation) {
-      return status;
-   }
-
-   if (hsp_list->hspcnt == 0)
-      /* All HSPs have been deleted */
-      return status;
+   BLAST_KarlinBlk* kbp;
+   Boolean gapped_calculation = score_options->gapped_calculation;
 
    /* NB: this function is called only for BLASTn, so we know where the 
       Karlin block is */
-   kbp = sbp->kbp_std;
+   kbp = sbp->kbp_std[hsp->context];
+   searchsp_eff = (double)query_info->eff_searchsp_array[hsp->context];
 
    if (score_options->gap_open == 0 && score_options->gap_extend == 0) {
       if (score_options->reward % 2 == 1) 
@@ -533,79 +530,70 @@ BLAST_ReevaluateWithAmbiguities(BlastHSPList* hsp_list,
 
    matrix = sbp->matrix;
 
-   /* Retrieve the unpacked subject sequence and save it in the 
-      sequence_start element of the subject structure.
-      NB: for the BLAST 2 Sequences case, the uncompressed sequence must 
-      already be there */
-   if (bssp) {
-      seq_arg.oid = subject_blk->oid;
-      seq_arg.encoding = BLASTNA_ENCODING;
-      BLASTSeqSrcGetSequence(bssp, (void*) &seq_arg);
-
-#if 0
-      readdb_get_sequence_ex(rdfp, subject_blk->oid, 
-         &subject_blk->sequence_start, &buf_len, TRUE);
-      subject_blk->sequence = subject_blk->sequence_start + 1;
-      subject_blk->sequence_start_allocated = TRUE;
-#endif
-      subject_blk->sequence_start = seq_arg.seq->sequence_start;
-      subject_blk->sequence = seq_arg.seq->sequence_start + 1;
-   }
-   /* The sequence in blastna encoding is now stored in sequence_start */
-   subject_start = subject_blk->sequence_start + 1;
-
-   purge = FALSE;
-   for (index=0; index<hspcnt; index++) {
-      if (hsp_array[index] == NULL)
-         continue;
-      else
-         hsp = hsp_array[index];
-
-      context = hsp->context;
-
-      query_start = query_blk->sequence + query_info->context_offsets[context];
-      searchsp_eff = (double)query_info->eff_searchsp_array[context/2];
-      
-      query = query_start + hsp->query.offset; 
-      subject = subject_start + hsp->subject.offset;
-      score = 0;
-      sum = 0;
-      new_q_start = new_q_end = query;
-      new_s_start = new_s_end = subject;
-      i = 0;
-
+   query = query_start + hsp->query.offset; 
+   subject = subject_start + hsp->subject.offset;
+   score = 0;
+   sum = 0;
+   new_q_start = new_q_end = query;
+   new_s_start = new_s_end = subject;
+   index = 0;
+   
+   if (!gapped_calculation) {
+      for (index = 0; index < hsp->subject.length; ++index) {
+         sum += factor*matrix[*query & mask][*subject];
+         query++;
+         subject++;
+         if (sum < 0) {
+            if (BLAST_KarlinStoE_simple(score, kbp, searchsp_eff)
+                > hit_options->expect_value) {
+               /* Start from new offset */
+               new_q_start = query;
+               new_s_start = subject;
+               score = sum = 0;
+            } else {
+               /* Stop here */
+               break;
+            }
+         } else if (sum > score) {
+            /* Remember this point as the best scoring end point */
+            score = sum;
+            new_q_end = query;
+            new_s_end = subject;
+         }
+      }
+   } else {
       esp = hsp->gap_info->esp;
       prev_esp = NULL;
       last_esp = first_esp = esp;
       last_esp_num = 0;
-
+      
       while (esp) {
          if (esp->op_type == GAPALIGN_SUB) {
             sum += factor*matrix[*query & mask][*subject];
             query++;
             subject++;
-            i++;
+            index++;
          } else if (esp->op_type == GAPALIGN_DEL) {
             sum -= gap_open + gap_extend * esp->num;
             subject += esp->num;
-            i += esp->num;
+            index += esp->num;
          } else if (esp->op_type == GAPALIGN_INS) {
             sum -= gap_open + gap_extend * esp->num;
             query += esp->num;
-            i += esp->num;
+            index += esp->num;
          }
          
          if (sum < 0) {
-            if (BLAST_KarlinStoE_simple(score, kbp[context],
-                   searchsp_eff) > hit_options->expect_value) {
+            if (BLAST_KarlinStoE_simple(score, kbp, searchsp_eff)
+                > hit_options->expect_value) {
                /* Start from new offset */
                new_q_start = query;
                new_s_start = subject;
                score = sum = 0;
-               if (i < esp->num) {
-                  esp->num -= i;
+               if (index < esp->num) {
+                  esp->num -= index;
                   first_esp = esp;
-                  i = 0;
+                  index = 0;
                } else {
                   first_esp = esp->next;
                }
@@ -622,32 +610,34 @@ BLAST_ReevaluateWithAmbiguities(BlastHSPList* hsp_list,
             /* Remember this point as the best scoring end point */
             score = sum;
             last_esp = esp;
-            last_esp_num = i;
+            last_esp_num = index;
             new_q_end = query;
             new_s_end = subject;
          }
-         if (i >= esp->num) {
-            i = 0;
+         if (index >= esp->num) {
+            index = 0;
             prev_esp = esp;
             esp = esp->next;
          }
-      }
+      } /* loop on edit scripts */
+   } /* if (gapped_calculation) */
 
-      score /= factor;
-
-      delete_hsp = FALSE;
-      hsp->score = score;
-      hsp->evalue = 
-         BLAST_KarlinStoE_simple(score, kbp[context], searchsp_eff);
-      if (hsp->evalue > hit_options->expect_value) {
-         delete_hsp = TRUE;
-      } else {
-         hsp->query.length = new_q_end - new_q_start;
-         hsp->subject.length = new_s_end - new_s_start;
-         hsp->query.offset = new_q_start - query_start;
-         hsp->query.end = hsp->query.offset + hsp->query.length;
-         hsp->subject.offset = new_s_start - subject_start;
-         hsp->subject.end = hsp->subject.offset + hsp->subject.length;
+   score /= factor;
+   
+   delete_hsp = FALSE;
+   hsp->score = score;
+   hsp->evalue = 
+      BLAST_KarlinStoE_simple(score, kbp, searchsp_eff);
+   if (hsp->evalue > hit_options->expect_value) {
+      delete_hsp = TRUE;
+   } else {
+      hsp->query.length = new_q_end - new_q_start;
+      hsp->subject.length = new_s_end - new_s_start;
+      hsp->query.offset = new_q_start - query_start;
+      hsp->query.end = hsp->query.offset + hsp->query.length;
+      hsp->subject.offset = new_s_start - subject_start;
+      hsp->subject.end = hsp->subject.offset + hsp->subject.length;
+      if (gapped_calculation) {
          /* Make corrections in edit block and free any parts that
             are no longer needed */
          if (first_esp != hsp->gap_info->esp) {
@@ -659,17 +649,103 @@ BLAST_ReevaluateWithAmbiguities(BlastHSPList* hsp_list,
             last_esp->next = NULL;
          }
          last_esp->num = last_esp_num;
-         BlastHSPGetNumIdentical(query_start, subject_start, hsp, 
-            hit_options->gapped_calculation, &hsp->num_ident, &align_length);
-         /* Check if this HSP passes the percent identity test */
-         if (((double)hsp->num_ident) / align_length * 100 < 
-             hit_options->percent_identity)
-            delete_hsp = TRUE;
       }
+      BlastHSPGetNumIdentical(query_start, subject_start, hsp, 
+         gapped_calculation, &hsp->num_ident, &align_length);
+      /* Check if this HSP passes the percent identity test */
+      if (((double)hsp->num_ident) / align_length * 100 < 
+          hit_options->percent_identity)
+         delete_hsp = TRUE;
+   }
+   
+   if (delete_hsp) { /* This HSP is now below the cutoff */
+      if (gapped_calculation && first_esp != NULL && 
+          first_esp != hsp->gap_info->esp)
+         GapEditScriptDelete(first_esp);
+   }
+  
+   return delete_hsp;
+} 
 
+/** Reevaluate all HSPs in an HSP list, using ambiguity information. 
+ * This is/can only done either for an ungapped search, or if traceback is 
+ * already available.
+ * Subject sequence is uncompressed and saved here. Number of identities is
+ * calculated for each HSP along the way. 
+ * @param hsp_list The list of HSPs for one subject sequence [in] [out]
+ * @param query_blk The query sequence [in]
+ * @param subject_blk The subject sequence [in] [out]
+ * @param hit_options The options related to saving hits [in]
+ * @param query_info Auxiliary query information [in]
+ * @param sbp The statistical information [in]
+ * @param score_options The scoring options [in]
+ * @param rdfp The BLAST database structure (for retrieving uncompressed
+ *             sequence) [in]
+ */
+static Int2 
+ReevaluateHSPListWithAmbiguities(BlastHSPList* hsp_list,
+   BLAST_SequenceBlk* query_blk, BLAST_SequenceBlk* subject_blk, 
+   const BlastHitSavingOptions* hit_options, BlastQueryInfo* query_info, 
+   BlastScoreBlk* sbp, const BlastScoringOptions* score_options, 
+   const BlastSeqSrc* bssp)
+{
+   BlastHSP** hsp_array,* hsp;
+   Uint1* query_start,* subject_start = NULL;
+   Int4 index, context, hspcnt;
+   Boolean purge, delete_hsp;
+   Int2 status = 0;
+   GetSeqArg seq_arg;
+   Boolean gapped_calculation = score_options->gapped_calculation;
+
+   if (!hsp_list)
+      return status;
+
+   hspcnt = hsp_list->hspcnt;
+   hsp_array = hsp_list->hsp_array;
+   memset((void*) &seq_arg, 0, sizeof(seq_arg));
+
+   /* In case of no traceback, return without doing anything */
+   if (!hsp_list->traceback_done && gapped_calculation) {
+      if (hsp_list->hspcnt > 1)
+         status = BlastSortUniqHspArray(hsp_list);
+      return status;
+   }
+
+   if (hsp_list->hspcnt == 0)
+      /* All HSPs have been deleted */
+      return status;
+
+   /* Retrieve the unpacked subject sequence and save it in the 
+      sequence_start element of the subject structure.
+      NB: for the BLAST 2 Sequences case, the uncompressed sequence must 
+      already be there */
+   if (bssp) {
+      seq_arg.oid = subject_blk->oid;
+      seq_arg.encoding = BLASTNA_ENCODING;
+      BLASTSeqSrcGetSequence(bssp, (void*) &seq_arg);
+
+      subject_blk->sequence_start = seq_arg.seq->sequence_start;
+      subject_blk->sequence = seq_arg.seq->sequence_start + 1;
+   }
+   /* The sequence in blastna encoding is now stored in sequence_start */
+   subject_start = subject_blk->sequence_start + 1;
+
+   purge = FALSE;
+   for (index=0; index<hspcnt; index++) {
+      if (hsp_array[index] == NULL)
+         continue;
+      else
+         hsp = hsp_array[index];
+
+      context = hsp->context;
+
+      query_start = query_blk->sequence + query_info->context_offsets[context];
+
+      delete_hsp = 
+         ReevaluateHSPWithAmbiguities(hsp, query_start, subject_start,
+            hit_options, score_options, query_info, sbp);
+      
       if (delete_hsp) { /* This HSP is now below the cutoff */
-         if (first_esp != NULL && first_esp != hsp->gap_info->esp)
-            GapEditScriptDelete(first_esp);
          hsp_array[index] = BlastHSPFree(hsp_array[index]);
          purge = TRUE;
       }
@@ -758,8 +834,10 @@ evalue_compare_hsp_lists(const void* v1, const void* v2)
    h2 = *(BlastHSPList**) v2;
    
    /* If any of the HSP lists is empty, it is considered "worse" than the 
-      other */
-   if (h1->hspcnt == 0)
+      other, unless the other is also empty. */
+   if (h1->hspcnt == 0 && h2->hspcnt == 0)
+      return 0;
+   else if (h1->hspcnt == 0)
       return 1;
    else if (h2->hspcnt == 0)
       return -1;
@@ -827,6 +905,7 @@ static void InsertBlastHSPListInHeap(BlastHitList* hit_list,
       }
       hit_list->worst_evalue = 
          hit_list->hsplist_array[0]->hsp_array[0]->evalue;
+      hit_list->low_score = hit_list->hsplist_array[0]->hsp_array[0]->score;
 }
 
 /** Insert a new HSP list into the hit list.
@@ -858,7 +937,11 @@ static Int2 BLAST_UpdateHitList(BlastHitList* hit_list,
       hit_list->hsplist_array[hit_list->hsplist_count++] = hsp_list;
       hit_list->worst_evalue = 
          MAX(hsp_list->hsp_array[0]->evalue, hit_list->worst_evalue);
-   } else if (hsp_list->hsp_array[0]->evalue >= hit_list->worst_evalue) {
+      hit_list->low_score = 
+         MIN(hsp_list->hsp_array[0]->score, hit_list->low_score);
+   } else if ((hsp_list->hsp_array[0]->evalue > hit_list->worst_evalue) ||
+              ((hsp_list->hsp_array[0]->evalue == hit_list->worst_evalue) &&
+               (hsp_list->hsp_array[0]->score <= hit_list->low_score))) {
       /* This hit list is less significant than any of those already saved;
          discard it */
       BlastHSPListFree(hsp_list);
@@ -887,6 +970,7 @@ static BlastHitList* BLAST_HitListNew(Int4 hitlist_size)
    BlastHitList* new_hitlist = (BlastHitList*) 
       calloc(1, sizeof(BlastHitList));
    new_hitlist->hsplist_max = hitlist_size;
+   new_hitlist->low_score = INT4_MAX;
    return new_hitlist;
 }
 
@@ -908,9 +992,9 @@ static BlastHitList* BLAST_HitListFree(BlastHitList* hitlist)
 static BlastHSPList* BlastHSPListDup(BlastHSPList* hsp_list)
 {
    BlastHSPList* new_hsp_list = (BlastHSPList*) 
-      MemDup(hsp_list, sizeof(BlastHSPList));
+      BlastMemDup(hsp_list, sizeof(BlastHSPList));
    new_hsp_list->hsp_array = (BlastHSP**) 
-      MemDup(hsp_list->hsp_array, hsp_list->hspcnt*sizeof(BlastHSP*));
+      BlastMemDup(hsp_list->hsp_array, hsp_list->hspcnt*sizeof(BlastHSP*));
    new_hsp_list->allocated = hsp_list->hspcnt;
 
    return new_hsp_list;
@@ -918,7 +1002,7 @@ static BlastHSPList* BlastHSPListDup(BlastHSPList* hsp_list)
 
 /* Documentation in blast_hits.h */
 Int2 BLAST_SaveHitlist(Uint1 program, BLAST_SequenceBlk* query,
-        BLAST_SequenceBlk* subject, BlastResults* results, 
+        BLAST_SequenceBlk* subject, BlastHSPResults* results, 
         BlastHSPList* hsp_list, BlastHitSavingParameters* hit_parameters, 
         BlastQueryInfo* query_info, BlastScoreBlk* sbp, 
         const BlastScoringOptions* score_options, const BlastSeqSrc* bssp,
@@ -935,7 +1019,7 @@ Int2 BLAST_SaveHitlist(Uint1 program, BLAST_SequenceBlk* query,
       return 0;
 
    if (program == blast_type_blastn) {
-      status = BLAST_ReevaluateWithAmbiguities(hsp_list, query, subject, 
+      status = ReevaluateHSPListWithAmbiguities(hsp_list, query, subject, 
                   hit_options, query_info, sbp, score_options, bssp);
       context_factor = 2;
    } else if (program == blast_type_blastx || 
@@ -948,7 +1032,7 @@ Int2 BLAST_SaveHitlist(Uint1 program, BLAST_SequenceBlk* query,
    /* Sort the HSPs by e-value */
    if (hsp_list->hspcnt > 1) {
       qsort(hsp_list->hsp_array, hsp_list->hspcnt, sizeof(BlastHSP*), 
-               evalue_compare_hsps);
+               score_compare_hsps);
    }
 
    /* *******************************************************************
@@ -1034,15 +1118,15 @@ Int2 BLAST_SaveHitlist(Uint1 program, BLAST_SequenceBlk* query,
                           hsp_list, thr_info);
    }
    
-   return 0; 
+   return status; 
 }
 
-Int2 BLAST_ResultsInit(Int4 num_queries, BlastResults** results_ptr)
+Int2 BLAST_ResultsInit(Int4 num_queries, BlastHSPResults** results_ptr)
 {
-   BlastResults* results;
+   BlastHSPResults* results;
    Int2 status = 0;
 
-   results = (BlastResults*) malloc(sizeof(BlastResults));
+   results = (BlastHSPResults*) malloc(sizeof(BlastHSPResults));
 
    results->num_queries = num_queries;
    results->hitlist_array = (BlastHitList**) 
@@ -1052,7 +1136,7 @@ Int2 BLAST_ResultsInit(Int4 num_queries, BlastResults** results_ptr)
    return status;
 }
 
-BlastResults* BLAST_ResultsFree(BlastResults* results)
+BlastHSPResults* BLAST_ResultsFree(BlastHSPResults* results)
 {
    Int4 index;
 
@@ -1066,7 +1150,25 @@ BlastResults* BLAST_ResultsFree(BlastResults* results)
    return NULL;
 }
 
-Int2 BLAST_SortResults(BlastResults* results)
+static void BlastHitListPurge(BlastHitList* hit_list)
+{
+   Int4 index, hsplist_count;
+   
+   if (!hit_list)
+      return;
+   
+   hsplist_count = hit_list->hsplist_count;
+   for (index = 0; index < hsplist_count && 
+           hit_list->hsplist_array[index]->hspcnt > 0; ++index);
+   
+   hit_list->hsplist_count = index;
+   /* Free all empty HSP lists */
+   for ( ; index < hsplist_count; ++index) {
+      BlastHSPListFree(hit_list->hsplist_array[index]);
+   }
+}
+
+Int2 BLAST_SortResults(BlastHSPResults* results)
 {
    Int4 index;
    BlastHitList* hit_list;
@@ -1077,6 +1179,7 @@ Int2 BLAST_SortResults(BlastResults* results)
          qsort(hit_list->hsplist_array, hit_list->hsplist_count, 
                   sizeof(BlastHSPList*), evalue_compare_hsp_lists);
       }
+      BlastHitListPurge(hit_list);
    }
    return 0;
 }
@@ -1287,8 +1390,7 @@ BLAST_MergeHsps(BlastHSP* hsp1, BlastHSP* hsp2, Int4 start)
       if (new_segment1->s_end <= new_segment2->s_end) {
          new_segment1 = new_segment1->next;
          num1++;
-      }
-      if (new_segment1->s_end >= new_segment2->s_end) {
+      } else {
          new_segment2 = new_segment2->next;
          num2++;
       }

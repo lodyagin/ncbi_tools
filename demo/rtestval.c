@@ -5,7 +5,7 @@
 *       check for stop codons
 *       Check for and fix non 3.0 asn spec things
 *
-* $Id: rtestval.c,v 1.10 2003/05/13 16:02:42 coulouri Exp $
+* $Id: rtestval.c,v 1.11 2003/11/14 18:07:54 kans Exp $
 *
 *****************************************************************************/
 #include <accid1.h>
@@ -158,6 +158,10 @@ Int2 Main(void)
 	vsp->cutoff = (Int2)(myargs[10].intvalue);
 	vsp->useSeqMgrIndexes = (Boolean)(myargs[12].intvalue); /* indexed validate */
 	vsp->validateAlignments = (Boolean)(myargs[13].intvalue);
+	if (vsp->validateAlignments) {
+      vsp->alignFindRemoteBsp = TRUE;
+      vsp->doSeqHistAssembly = TRUE;
+	}
 	vsp->farIDsInAlignments = (Boolean)(myargs[13].intvalue);
 	vsp->alwaysRequireIsoJTA = (Boolean)(myargs[14].intvalue);
 	vsp->farFetchCDSproducts = (Boolean) (myargs[15].intvalue && myargs[16].intvalue);

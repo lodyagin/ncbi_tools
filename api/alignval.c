@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/3/99
 *
-* $Revision: 6.37 $
+* $Revision: 6.38 $
 *
 * File Description:  To validate sequence alignment.
 *
@@ -67,6 +67,7 @@ typedef struct saval {
   Boolean     delete_salp;
   Boolean     delete_bsp;
   Boolean     retdel;
+  Boolean     do_hist_assembly;
   ValNodePtr  ids;
   Uint2       entityID;
   Boolean     dirty;
@@ -1840,6 +1841,7 @@ NLM_EXTERN Boolean ValidateSeqAlign (SeqAlignPtr salp, Uint2 entityID, Boolean m
      sv.delete_salp = delete_salp;
      sv.delete_bsp = delete_bsp;
      sv.retdel = TRUE;
+     sv.do_hist_assembly = FALSE;
      sv.ids = NULL;
      sv.entityID = entityID; 
      sv.dirty = FALSE;   
@@ -1963,7 +1965,7 @@ NLM_EXTERN Int2 LIBCALLBACK ValidateSeqAlignFromData (Pointer data)
      ValidateSeqAlign (salp, 0, TRUE, TRUE, TRUE, FALSE, FALSE, NULL);
   }
   if (sep!=NULL) {
-     ValidateSeqAlignInSeqEntry (sep, TRUE, TRUE, TRUE, TRUE, FALSE);
+     ValidateSeqAlignInSeqEntry (sep, TRUE, TRUE, TRUE, TRUE, FALSE, TRUE);
   }
   return OM_MSG_RET_DONE;
 }
@@ -2008,7 +2010,9 @@ static void ValidateSeqAlignCallback (SeqEntryPtr sep, Pointer mydata,
         bsp = (BioseqPtr) sep->data.ptrvalue;
         if (bsp!=NULL) {
            ValidateSeqAlignInAnnot (bsp->annot, svp);
-           ValidateSeqAlignInHist (bsp->hist, svp);
+           if (svp != NULL && svp->do_hist_assembly) {
+              ValidateSeqAlignInHist (bsp->hist, svp);
+           }
         }
      }   
      else if(IS_Bioseq_set(sep)) {
@@ -2024,7 +2028,8 @@ static void ValidateSeqAlignCallback (SeqEntryPtr sep, Pointer mydata,
 
 NLM_EXTERN Boolean ValidateSeqAlignInSeqEntry (SeqEntryPtr sep, Boolean message, 
                                  Boolean msg_success, Boolean find_remote_bsp, 
-                                 Boolean delete_bsp, Boolean delete_salp)
+                                 Boolean delete_bsp, Boolean delete_salp,
+                                 Boolean do_hist_assembly)
 {
   SeqEntryPtr      sep_head;
   Uint2            entityID;
@@ -2042,6 +2047,7 @@ NLM_EXTERN Boolean ValidateSeqAlignInSeqEntry (SeqEntryPtr sep, Boolean message,
         sv.delete_salp = delete_salp;
         sv.delete_bsp = delete_bsp;
         sv.retdel = TRUE;
+        sv.do_hist_assembly = do_hist_assembly;
         sv.ids = NULL;
         sv.entityID = entityID; 
         sv.dirty = FALSE;
@@ -2058,9 +2064,10 @@ NLM_EXTERN Boolean ValidateSeqAlignInSeqEntry (SeqEntryPtr sep, Boolean message,
 
 
 /* alignment validator private for regular validator */
-NLM_EXTERN Boolean ValidateSeqAlignWithinValidator (ValidStructPtr vsp, SeqEntryPtr sep);
 
-NLM_EXTERN Boolean ValidateSeqAlignWithinValidator (ValidStructPtr vsp, SeqEntryPtr sep)
+NLM_EXTERN Boolean ValidateSeqAlignWithinValidator (ValidStructPtr vsp, SeqEntryPtr sep, Boolean find_remote_bsp, Boolean do_hist_assembly);
+
+NLM_EXTERN Boolean ValidateSeqAlignWithinValidator (ValidStructPtr vsp, SeqEntryPtr sep, Boolean find_remote_bsp, Boolean do_hist_assembly)
 
 {
   GatherContext  gc;
@@ -2076,7 +2083,7 @@ NLM_EXTERN Boolean ValidateSeqAlignWithinValidator (ValidStructPtr vsp, SeqEntry
   vsp->sfp = NULL;
   vsp->descr = NULL;
   MemSet ((Pointer) &gc, 0, sizeof (GatherContext));
-  rsult = ValidateSeqAlignInSeqEntry (sep, FALSE, FALSE, TRUE, FALSE, FALSE);
+  rsult = ValidateSeqAlignInSeqEntry (sep, FALSE, FALSE, find_remote_bsp, FALSE, FALSE, do_hist_assembly);
   useLockByID = TRUE;
   useValErr = FALSE;
   useVsp = NULL;

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/28/00
 *
-* $Revision: 1.10 $
+* $Revision: 1.11 $
 *
 * File Description: 
 *
@@ -37,6 +37,9 @@
 * --------------------------------------------------------------------------
 *
 * $Log: qblastapi.h,v $
+* Revision 1.11  2003/11/03 20:51:04  madden
+* add BLASTGetBOByRIDEx
+*
 * Revision 1.10  2003/01/15 22:04:50  madden
 * Moved BLASTGetSeqAnnotByRIDEx from internal
 *
@@ -212,6 +215,7 @@ NLM_EXTERN Nlm_Boolean BLASTGetQuerySummary(CharPtr RID, Int4 query_number,
    ASN.1 will be returned as CharPtr buffer
 */
 NLM_EXTERN CharPtr BLASTGetBOByRID(CharPtr RID);
+NLM_EXTERN CharPtr BLASTGetBOByRIDEx(CharPtr RID, Nlm_CharPtr host_machine, Nlm_Uint2 host_port, Nlm_CharPtr host_path);
 
 #ifdef __cplusplus
 }

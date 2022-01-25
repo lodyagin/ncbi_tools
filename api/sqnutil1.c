@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/2/97
 *
-* $Revision: 6.283 $
+* $Revision: 6.288 $
 *
 * File Description: 
 *
@@ -1671,6 +1671,7 @@ NLM_EXTERN void PromoteXrefsEx (SeqFeatPtr sfp, BioseqPtr bsp, Uint2 entityID, B
   CharPtr              ptr;
   CharPtr              rnaseq;
   SeqEntryPtr          sep;
+  SeqHistPtr           shp;
   SeqIdPtr             sip;
   SeqEntryPtr          target = NULL;
   Uint4                version = 0;
@@ -1963,6 +1964,14 @@ NLM_EXTERN void PromoteXrefsEx (SeqFeatPtr sfp, BioseqPtr bsp, Uint2 entityID, B
                       *(prevqual) = gbq->next;
                       gbq->next = NULL;
                       StringNCpy_0 (id, gbq->val, sizeof (id));
+                      GBQualFree (gbq);
+                    } else if (StringICmp (gbq->qual, "secondary_accession") == 0) {
+                      *(prevqual) = gbq->next;
+                      gbq->next = NULL;
+                      shp = ParseStringIntoSeqHist (NULL, gbq->val);
+                      if (shp != NULL) {
+                        pbsp->hist = shp;
+                      }
                       GBQualFree (gbq);
                     } else {
                       prevqual = (GBQualPtr PNTR) &(gbq->next);
@@ -2285,6 +2294,41 @@ static void CleanDoubleQuote (CharPtr str)
   }
 }
 
+static CharPtr RemoveSpacesBetweenTildes (CharPtr str)
+
+{
+  Char     ch;
+  CharPtr  dst;
+ CharPtr  ptr;
+  CharPtr  tmp;
+
+  if (str == NULL || str [0] == '\0') return str;
+
+  dst = str;
+  ptr = str;
+  ch = *ptr;
+  while (ch != '\0') {
+    *dst = ch;
+    dst++;
+    ptr++;
+    if (ch == '~') {
+      tmp = ptr;
+      ch = *tmp;
+      while (ch != 0 && ch <= ' ') {
+        tmp++;
+        ch = *tmp;
+      }
+      if (ch == '~') {
+        ptr = tmp;
+      }
+    }
+    ch = *ptr;
+  }
+  *dst = '\0';
+
+  return str;
+}
+
 static Boolean AlreadyInVnpList (ValNodePtr head, ValNodePtr curr)
 
 {
@@ -2493,43 +2537,53 @@ extern Boolean ParseCodeBreak (SeqFeatPtr sfp, CharPtr val)
   /* parse location */
   pos = SimpleValuePos (val);
   cbp->loc = Nlm_gbparseint (pos, &locmap, &sitesmap, &num_errs, sip);
-  MemFree (pos);
   if (cbp->loc == NULL) {
     CodeBreakFree (cbp);
     ErrPostEx (SEV_WARNING, ERR_FEATURE_LocationParsing,
                "transl_except parsing failed, %s, drop the transl_except", pos);
+    MemFree (pos);
     return FALSE;
   }
-  sintp = cbp->loc->data.ptrvalue;
-  if (sintp == NULL) return FALSE;
-  if (sintp->from > sintp->to) {
-    temp = sintp->from;
-    sintp->from = sintp->to;
-    sintp->to = temp;
+  if (cbp->loc->choice == SEQLOC_PNT) {
+    /* allow a single point */
   }
-  sintp->strand = SeqLocStrand (sfp->location);
-  strand = sintp->strand;
-  diff = SeqLocStop(cbp->loc) - SeqLocStart(cbp->loc); /* SeqLocStop/Start does not do what you think */
-  /*
-  if ((diff != 2 && (strand != Seq_strand_minus)) ||
-      (diff != -2 && (strand == Seq_strand_minus))) {
-    pos_range = TRUE;
-  }
-  */
-  if (diff != 2) {
-    pos_range = TRUE;
-  }
-  if (num_errs > 0 || pos_range) {
-    CodeBreakFree (cbp);
-    ErrPostEx (SEV_WARNING, ERR_FEATURE_LocationParsing,
-               "transl_except range is wrong, %s, drop the transl_except", pos);
-    return FALSE;
-  }
-  if (SeqLocCompare (sfp->location, cbp->loc) != SLC_B_IN_A) {
-    CodeBreakFree (cbp);
-    ErrPostEx (SEV_WARNING, ERR_FEATURE_LocationParsing,
-               "/transl_except not in CDS: %s", val);
-    return FALSE;
+  if (cbp->loc->choice == SEQLOC_INT) {
+    sintp = cbp->loc->data.ptrvalue;
+    if (sintp == NULL) {
+      MemFree (pos);
+      return FALSE;
+    }
+    if (sintp->from > sintp->to) {
+      temp = sintp->from;
+      sintp->from = sintp->to;
+      sintp->to = temp;
+    }
+    sintp->strand = SeqLocStrand (sfp->location);
+    strand = sintp->strand;
+    diff = SeqLocStop(cbp->loc) - SeqLocStart(cbp->loc); /* SeqLocStop/Start does not do what you think */
+    /*
+    if ((diff != 2 && (strand != Seq_strand_minus)) ||
+        (diff != -2 && (strand == Seq_strand_minus))) {
+      pos_range = TRUE;
+    }
+    */
+    if (diff != 2) {
+      pos_range = TRUE;
+    }
+    if (num_errs > 0 || pos_range) {
+      CodeBreakFree (cbp);
+      ErrPostEx (SEV_WARNING, ERR_FEATURE_LocationParsing,
+                 "transl_except range is wrong, %s, drop the transl_except", pos);
+      MemFree (pos);
+      return FALSE;
+    }
+    if (SeqLocCompare (sfp->location, cbp->loc) != SLC_B_IN_A) {
+      CodeBreakFree (cbp);
+      ErrPostEx (SEV_WARNING, ERR_FEATURE_LocationParsing,
+                 "/transl_except not in CDS: %s", val);
+      MemFree (pos);
+      return FALSE;
+    }
   }
 
   /* add to code break list */
@@ -2542,6 +2596,7 @@ extern Boolean ParseCodeBreak (SeqFeatPtr sfp, CharPtr val)
     }
     lastcbp->next = cbp;
   }
+  MemFree (pos);
   return TRUE;
 }
 
@@ -5825,7 +5880,7 @@ static void CleanupFeatureStrings (SeqFeatPtr sfp, Boolean stripSerial, ValNodeP
           }
         }
       }
-      if (prp->processed == 2 && prp->name == NULL) {
+      if ((prp->processed == 1 || prp->processed == 2) && prp->name == NULL) {
         ValNodeCopyStr (&(prp->name), 0, "unnamed");
       }
       break;
@@ -6250,6 +6305,7 @@ static void CleanupDescriptorStrings (ValNodePtr sdp, Boolean stripSerial, ValNo
       break;
     case Seq_descr_comment :
       CleanVisStringJunk ((CharPtr PNTR) &sdp->data.ptrvalue);
+      RemoveSpacesBetweenTildes ((CharPtr) sdp->data.ptrvalue);
       break;
     case Seq_descr_num :
       break;
@@ -7588,7 +7644,8 @@ static Boolean CheckAsnloadPath (CharPtr dirname, CharPtr subdir)
 static Boolean CheckDataPath (CharPtr dirname, CharPtr subdir)
 
 {
-  return (Boolean) (FileExists (dirname, subdir, "seqcode.val"));
+  if (FileExists (dirname, subdir, "seqcode.val")) return TRUE;
+  return (Boolean) (FileExists (dirname, subdir, "objprt.prt"));
 }
 
 static Boolean CheckErrMsgPath (CharPtr dirname, CharPtr subdir)
@@ -7616,7 +7673,7 @@ NLM_EXTERN Boolean UseLocalAsnloadDataAndErrMsg (void)
   Char     appPath[PATH_MAX];
   CharPtr  ptr;
 
-  ProgramPath (appPath, sizeof (path));
+  ProgramPath (appPath, sizeof (appPath));
   StrCpy(path, appPath);
   /* data a sibling of our application? */
   ptr = StringRChr (path, DIRDELIMCHR);

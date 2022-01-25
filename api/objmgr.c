@@ -29,13 +29,16 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.49 $
+* $Revision: 6.50 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: objmgr.c,v $
+* Revision 6.50  2003/12/22 15:29:28  kans
+* ObjMgrSendMsg calls SeqMgrClearFeatureIndexes on OM_MSG_DEL as well as OM_MSG_UPDATE
+*
 * Revision 6.49  2002/07/30 14:41:45  kans
 * removed omdp->rearranged
 *
@@ -4416,7 +4419,8 @@ NLM_EXTERN Boolean LIBCALL ObjMgrSendMsg(Uint2 msg, Uint2 entityID, Uint2 itemID
 
 	if (msg == OM_MSG_UPDATE) {
 		SeqMgrClearFeatureIndexes (entityID, NULL);
-	}
+	} else if (msg == OM_MSG_DEL)
+		SeqMgrClearFeatureIndexes (entityID, NULL);
 	omp = ObjMgrReadLock();
 	omdp = ObjMgrFindByEntityID(omp, entityID, NULL);
 	if (omdp != NULL)

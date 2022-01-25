@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_SENDMAIL__H
 #define CONNECT___NCBI_SENDMAIL__H
 
-/*  $Id: ncbi_sendmail.h,v 6.14 2003/09/02 20:45:45 lavr Exp $
+/*  $Id: ncbi_sendmail.h,v 6.16 2003/12/09 15:38:02 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -61,9 +61,11 @@ typedef struct {
     const char*  bcc;           /* Blind carbon copy recipient(s)        */
     char         from[1024];    /* Originator address                    */
     const char*  header;        /* Custom header fields ('\n'-separated) */
+    size_t       body_size;     /* Message body size (if specified)      */ 
     const char*  mx_host;       /* Host to contact sendmail at           */
     short        mx_port;       /* Port to contact sendmail at           */
     STimeout     mx_timeout;    /* Timeout for all network transactions  */
+    unsigned     mx_no_header;  /* Boolean whether to complete MX header */
 } SSendMailInfo;
 
 
@@ -72,6 +74,20 @@ typedef struct {
  * can be specified in the form "Name" <address>; recipients should
  * be separated by commas. In case of address-only recipients (no "Name"
  * part above), angle brackets around the address may be omitted.
+ *
+ * NOTE about message body size:
+ * If not specified (0) and by default the message body size is calculated
+ * as strlen() of passed body argument, which must be NUL-terminated.
+ * Otherwise, exactly "body_size" bytes are read from the location pointed
+ * to by "body" parameter and are sent in the message.
+ *
+ * NOTE about MX header:
+ * message header is automatically prepended to a message that has
+ * "mx_no_header" flag cleared (default).  Otherwise, only "header" part
+ * (if any) is sent to the mail exchanger, and the rest of the header and
+ * the message body is passed "as is" following it.
+ * Message header separator and proper message formatting is then
+ * the caller's responsibility.
  */
 
 
@@ -95,7 +111,7 @@ extern NCBI_XCONNECT_EXPORT SSendMailInfo* SendMailInfo_Init
 /* Send a simple message to recipient(s) defined in 'to',
  * and having subject 'subject', which may be empty (both NULL and "" treated
  * equally as empty subjects), and message body 'body' (may be NULL/empty,
- * if not empty, lines are separated by '\n').
+ * if not empty, lines are separated by '\n', must be NUL-terminated).
  * Return value 0 means success; otherwise descriptive error message
  * gets returned. Communicaiton parameters for connection with sendmail
  * are set using default values as described in SendMailInfo_Init().
@@ -110,6 +126,8 @@ extern NCBI_XCONNECT_EXPORT const char* CORE_SendMail
  * all additional parameters of the message and the communication via
  * argument 'info'. In case of 'info' == NULL, the call is completely
  * equivalent to CORE_SendMail().
+ * NB: Body is not neccessarily NUL-terminated if "info" contains non-default
+ * (non-zero) message body size (see SSendMailInfo::body_size above).
  */
 extern NCBI_XCONNECT_EXPORT const char* CORE_SendMailEx
 (const char*          to,
@@ -130,6 +148,12 @@ extern NCBI_XCONNECT_EXPORT const char* CORE_SendMailEx
 /*
  * --------------------------------------------------------------------------
  * $Log: ncbi_sendmail.h,v $
+ * Revision 6.16  2003/12/09 15:38:02  lavr
+ * +SSendMailInfo::body_size and remarks about its use
+ *
+ * Revision 6.15  2003/12/04 14:54:39  lavr
+ * Extend API with no-header and multiple recipient capabilities
+ *
  * Revision 6.14  2003/09/02 20:45:45  lavr
  * -<connect/connect_export.h> -- now included from <connect/ncbi_types.h>
  *

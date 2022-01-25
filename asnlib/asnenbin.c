@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 3/4/91
 *
-* $Revision: 6.5 $
+* $Revision: 6.6 $
 *
 * File Description:
 *   Special binary (BER) encoder for ASN.1
@@ -42,6 +42,9 @@
 * 04-20-93 Schuler     LIBCALL calling convention
 *
 * $Log: asnenbin.c,v $
+* Revision 6.6  2003/11/07 20:57:02  beloslyu
+* fix the c++ style comments to a C ones
+*
 * Revision 6.5  2003/08/01 16:55:24  gouriano
 * workaround MSVC++.NET optimization bug
 *
@@ -360,7 +363,7 @@ NLM_EXTERN void AsnEnBinInteger (Int4 theInt, AsnIoPtr aip, AsnTypePtr atp)
 	{
 		for (i = 0; i < 3; i++)
 			octets[i] = octets[i+1];
-// dirty workaround of an optimization bug of MSVC++.NET compiler
+/* dirty workaround of an optimization bug of MSVC++.NET compiler */
 #if defined(_MSC_VER) 
 #  if _MSC_VER < 1300
 		octets[3] = 0;
@@ -424,7 +427,7 @@ NLM_EXTERN void AsnEnBinBigInt (Int8 theInt, AsnIoPtr aip, AsnTypePtr atp)
 	{
 		for (i = 0; i < 7; i++)
 			octets[i] = octets[i+1];
-// dirty workaround of an optimization bug of MSVC++.NET compiler
+/* dirty workaround of an optimization bug of MSVC++.NET compiler */
 #if defined(_MSC_VER) 
 #  if _MSC_VER < 1300
 		octets[7] = 0;

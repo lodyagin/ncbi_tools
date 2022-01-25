@@ -1,4 +1,4 @@
-/* $Id: wblast2.c,v 1.7 2003/07/14 18:43:17 dondosha Exp $
+/* $Id: wblast2.c,v 1.8 2003/12/19 18:12:37 coulouri Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -27,12 +27,15 @@
 *
 * Initial Creation Date: 10/23/2000
 *
-* $Revision: 1.7 $
+* $Revision: 1.8 $
 *
 * File Description:
 *        BLAST 2 Sequences CGI program
 *
 * $Log: wblast2.c,v $
+* Revision 1.8  2003/12/19 18:12:37  coulouri
+* fix name collision in aix
+*
 * Revision 1.7  2003/07/14 18:43:17  dondosha
 * Changed Entrez references syntax
 *
@@ -452,7 +455,7 @@ static Boolean run_status;
 /* Flag to indicate which signals were received */ 
 static Uint8 sigflag = 0;
 /* set of signal masks */
-static Uint8 sigmask[64];
+static Uint8 wb2_sigmask[64];
 
 #define WBLAST2_SEARCH 0
 #define WBLAST2_FORMAT 1
@@ -463,7 +466,7 @@ void PrepareSigmask(void)
 {
    int ii;
    for( ii = 0; ii < 64; ii++ ) {
-      sigmask[ii] = 1 << ii;
+      wb2_sigmask[ii] = 1 << ii;
    }
 }
 
@@ -472,7 +475,7 @@ static int GetSignal()
 {
    int ii;
    for( ii = 0; ii < 64; ii++ ) {
-      if( sigflag & sigmask[ii] ) {
+      if( sigflag & wb2_sigmask[ii] ) {
          break;
       }
    }
@@ -483,7 +486,7 @@ static int GetSignal()
 /** set signal flag */
 static void sighandler(int sig)
 {
-   sigflag |= sigmask[sig];
+   sigflag |= wb2_sigmask[sig];
 }
 
 static void	Blast2SeqMainPage(CharPtr warning, CharPtr seq1, CharPtr seq2, CharPtr one, CharPtr two, ValNodePtr error, Boolean is_prot, BLAST_OptionsBlkPtr options, Int2 mtrx, Int4 from, Int4 to, Int4 ffrom, Int4 tto, Int2 filter, Int2 pagecount) {

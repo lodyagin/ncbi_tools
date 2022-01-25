@@ -1,4 +1,4 @@
-/* $Id: ncbithr.c,v 6.37 2003/09/19 22:58:38 coulouri Exp $ */
+/* $Id: ncbithr.c,v 6.38 2003/12/04 18:02:43 rsmith Exp $ */
 /*****************************************************************************
 
     Name: ncbithr.c
@@ -35,6 +35,9 @@
  Modification History:
 -----------------------------------------------------------------------------
 * $Log: ncbithr.c,v $
+* Revision 6.38  2003/12/04 18:02:43  rsmith
+* Move includes out of definition of NlmCPUNumber.
+*
 * Revision 6.37  2003/09/19 22:58:38  coulouri
 * NetBSD does not (yet?) have pthread_attr_setschedpolicy()
 *
@@ -2562,24 +2565,26 @@ NLM_EXTERN Boolean NlmThreadsAvailable(void)
 }
 
 
+#if defined(OS_UNIX_DARWIN)
+#include <mach/mach.h>
+#include <mach/mach_host.h>
+#include <mach/host_info.h> 
+#endif
+
 NLM_EXTERN Int4 NlmCPUNumber(void)
 {
 #if defined(OS_UNIX_DARWIN)
 
-#include <mach/mach.h>
-#include <mach/mach_host.h>
-#include <mach/host_info.h>
+  host_basic_info_data_t hinfo;
+  mach_msg_type_number_t hinfo_count = HOST_BASIC_INFO_COUNT;
+  kern_return_t rc;
 
-host_basic_info_data_t hinfo;
-mach_msg_type_number_t hinfo_count = HOST_BASIC_INFO_COUNT;
-kern_return_t rc;
+  rc=host_info( mach_host_self(), HOST_BASIC_INFO, (host_info_t) &hinfo, &hinfo_count);
 
-rc=host_info( mach_host_self(), HOST_BASIC_INFO, (host_info_t) &hinfo, &hinfo_count);
+  if (rc != KERN_SUCCESS)
+    return -1;
 
-if (rc!=KERN_SUCCESS)
- return -1;
-
-return hinfo.avail_cpus;
+  return hinfo.avail_cpus;
 
 #elif defined(WIN32)
   SYSTEM_INFO sysInfo;

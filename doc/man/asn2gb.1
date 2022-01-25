@@ -1,4 +1,4 @@
-.TH ASN2GB 1 2003-04-27 NCBI "NCBI Tools User's Manual"
+.TH ASN2GB 1 2003-11-10 NCBI "NCBI Tools User's Manual"
 .SH NAME
 asn2gb \- convert ASN.1 biological data to a GenBank-style flat format
 .SH SYNOPSIS
@@ -23,12 +23,12 @@ asn2gb \- convert ASN.1 biological data to a GenBank-style flat format
 [\|\fB\-s\fP\ \fIstyle\fP\|]
 [\|\fB\-t\fP\ \fIN\fP\|]
 [\|\fB\-u\fP\ \fIN\fP\|]
-[\|\fB\-x\fP\ \fIacc\fP\|]
+.\" [\|\fB\-x\fP\ \fIacc\fP\|] \" disabled
 [\|\fB\-y\fP\ \fIN\fP\|]
 .SH DESCRIPTION
-\fBasn2ff\fP converts descriptions of biological sequences from NCBI's
+\fBasn2gb\fP converts descriptions of biological sequences from NCBI's
 ASN.1 format to one of several flat-file formats, and is the successor
-to \fBasn2gb\fP(1).
+to \fBasn2ff\fP(1).
 .SH OPTIONS
 A summary of options is included below.
 .TP
@@ -182,9 +182,9 @@ Hide most imported features
 Hide SNP features
 .PD
 .RE
-.TP
-\fB\-x\fP\ \fIacc\fP
-Accession to extract
+.\" .TP
+.\" \fB\-x\fP\ \fIacc\fP
+.\" Accession to extract
 .TP
 \fB\-y\fP\ \fIN\fP
 Feature itemID

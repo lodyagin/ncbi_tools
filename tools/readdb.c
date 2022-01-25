@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: readdb.c,v 6.424 2003/10/01 19:03:50 camacho Exp $";
+static char const rcsid[] = "$Id: readdb.c,v 6.432 2004/02/04 15:35:04 camacho Exp $";
 
-/* $Id: readdb.c,v 6.424 2003/10/01 19:03:50 camacho Exp $ */
+/* $Id: readdb.c,v 6.432 2004/02/04 15:35:04 camacho Exp $ */
 /*
 * ===========================================================================
 *
@@ -50,7 +50,7 @@ Detailed Contents:
 *
 * Version Creation Date:   3/22/95
 *
-* $Revision: 6.424 $
+* $Revision: 6.432 $
 *
 * File Description: 
 *       Functions to rapidly read databases from files produced by formatdb.
@@ -65,6 +65,25 @@ Detailed Contents:
 *
 * RCS Modification History:
 * $Log: readdb.c,v $
+* Revision 6.432  2004/02/04 15:35:04  camacho
+* Rollback to fix problems in release 2.2.7
+*
+* Revision 6.429  2004/01/29 20:48:07  coulouri
+* Only limit volume sizes on 32-bit platforms
+*
+* Revision 6.428  2004/01/28 19:34:51  camacho
+* Added sanity check for alias files
+*
+* Revision 6.427  2004/01/26 13:52:31  camacho
+* Do not use snprintf
+*
+* Revision 6.426  2004/01/23 21:13:54  camacho
+* 1. Refactored code to create multiple volumes.
+* 2. Set the maximum sequence file size to 1GB.
+*
+* Revision 6.425  2004/01/12 23:06:36  camacho
+* Sort link bit gi lists
+*
 * Revision 6.424  2003/10/01 19:03:50  camacho
 * Fix in readdb_get_totals_ex2 to use the alias file length/number of entries when
 * gilist is populated.
@@ -1755,6 +1774,7 @@ static ValNodePtr IntValNodeCopy(ValNodePtr vnp);
 static int LIBCALLBACK ID_Compare(VoidPtr i, VoidPtr j);
 static void FDBBlastDefLineSetBit(Int2 bit_no, ValNodePtr PNTR retval);
 static ReadDBFILEPtr readdb_merge_gifiles (ReadDBFILEPtr rdfp_chain);
+static Boolean s_IsTextFile(const char* filename);
 
 #if defined(OS_UNIX_SOL) || defined(OS_UNIX_LINUX)
 #ifdef  HAVE_MADVISE
@@ -2447,6 +2467,11 @@ readdb_read_alias_file(CharPtr filename)
     fp = FileOpen(filename, "r");
     if (fp == NULL)
         return NULL;
+
+    if (!s_IsTextFile(filename)) {
+        ErrPostEx(SEV_ERROR, 0, 1, "%s is not a valid alias file\n", filename);
+        return NULL;
+    }
 
     file_path = Nlm_FilePathFind(filename);
     
@@ -6893,7 +6918,7 @@ typedef enum {
     lexEOF
 } LexTokens;
 
-static CharPtr    getline (FILE *fp, CharPtr buf)
+static CharPtr    getLine (FILE *fp, CharPtr buf)
 {
     buf[0] = '\0';
     while (!buf || (buf[0] == '#') || (buf[0] == '\0') || (buf[0] == '\n')) {
@@ -6957,7 +6982,7 @@ Int2    ParseDBConfigFile(DataBaseIDPtr *dbidsp, CharPtr path)
     if (!(fp = FileOpen(full_filename, "r")))
     return 0;
     
-    getline(fp, buf);
+    getLine(fp, buf);
 
     /* first line is number of databases */
     number_of_DBs = parseInt(buf);
@@ -6967,7 +6992,7 @@ Int2    ParseDBConfigFile(DataBaseIDPtr *dbidsp, CharPtr path)
     
     /* each next line is contains name, id and type of a DB */
     for (i=0; i < number_of_DBs; i++) {
-    getline(fp, buf);
+    getLine(fp, buf);
     sscanf(buf, "%s%s%s", name, dbid, isprot);
     (retval+i)->name   = parseString(name);
     (retval+i)->id     = parseInt(dbid);
@@ -7482,6 +7507,7 @@ ValNodePtr FDBLoadLinksTable(void)
             ErrPostEx(SEV_ERROR,0,0,"Could not read %s", filename);
             continue;
         }
+        HeapSort(gis->i, gis->count, sizeof(Int4), ID_Compare);
         lk_info = (LinkInfoPtr) MemNew(sizeof(LinkInfo));
         lk_info->bit_number = bit;
         lk_info->gi_list = gis;
@@ -8370,6 +8396,146 @@ static Boolean FDBDumpDefline(FormatDBPtr fdbp, CharPtr title, CharPtr seq_id)
   return TRUE;
 }
 
+/* Maximum size of sequence file: 1GB */
+#if LONG_BIT!=64
+#define SEQFILE_SIZE_MAX 1000000000UL
+#endif
+
+/* Creates a new volume of the blast database being created if the sequence
+ * being added causes it to exceed the volume limitations (number of
+ * letters/sequences) */
+static Int4 FDBCreateNewVolume(FormatDBPtr fdbp, 
+                               const ByteStorePtr seq,
+                               Int4 seq_length,
+                               const Uint4Ptr ambiguities)
+{
+  FDB_optionsPtr options = fdbp->options;
+  Int4 amb_size = 0; /* size of ambiguities for this sequence */
+  Int4 seq_size = 0; /* length of sequence file with new sequence being added */
+  Int4 hdr_size = 0; /* size of the header file without new sequence */
+  Char extension_prefix = options->is_protein ? 'p' : 'n';
+
+  if (ambiguities) {
+      amb_size = sizeof(*ambiguities) * ((*ambiguities)&0x7fffffffUL);
+  }
+  seq_size = (ftell(fdbp->fd_seq) + BSLen(seq) + 1 + amb_size);
+  hdr_size = ftell(fdbp->aip_def ? fdbp->aip_def->fp : fdbp->fd_def);
+
+  if ( /* if bases_in_volume was specified, don't exceed that */
+       (options->bases_in_volume && 
+        (fdbp->TotalLen + seq_length > options->bases_in_volume)) ||
+       /* if sequences_in_volume was specified, don't exceed that (will be
+        * deprecated) */
+       (options->sequences_in_volume && 
+        (fdbp->num_of_seqs+1) > options->sequences_in_volume)  ||
+       /* if sequence file is about to grow larger than SEQFILE_SIZE_MAX */
+#if defined(SEQFILE_SIZE_MAX)
+       ( seq_size > SEQFILE_SIZE_MAX) ||
+#endif
+       /* if header file is about to grow too large (assuming header can not 
+        * exceed 2G - 2000000000b) */
+       ( hdr_size > 2000000000UL)
+      )
+    {
+      Char dbnamebuf[PATH_MAX];
+      FormatDBPtr tmp_fdbp = NULL;
+#if 0
+      ErrLogPrintf("New volume : tell:%d  seq:%d  amd:%d  total: %d  (%d)\n",
+                   ftell(fdbp->fd_seq),BSLen(*seq_data),amb_size,
+                   seq_size, seq_size > 0x7fffffff );
+#endif
+      if (options->volume == 1) {
+          sprintf(dbnamebuf, "%s.00", options->base_name);
+      } else {
+          sprintf(dbnamebuf, "%s", options->base_name);
+      }
+      ErrLogPrintf("Closing volume %s with %ld sequences, %s letters"
+                   "(.%csq file = %ld bytes; .%chr file = %ld bytes)\n", 
+                   options->base_name, fdbp->num_of_seqs, 
+                   Nlm_Int8tostr(fdbp->TotalLen, 1),
+                   extension_prefix, (long)seq_size, 
+                   extension_prefix, (long)hdr_size);
+      tmp_fdbp = (FormatDBPtr) MemNew(sizeof(FormatDB));
+      MemCpy(tmp_fdbp, fdbp, sizeof(FormatDB));
+
+      if(FormatDBClose(tmp_fdbp))
+         return 9;
+      options->volume++;
+      
+      /* When second volume is created, add suffix .00 to all 
+         first volume files */
+      if (options->volume == 1)
+        {
+          Char  oldnamebuf[FILENAME_MAX], newnamebuf[FILENAME_MAX];
+          int len = StringLen(options->base_name) + 2;
+          sprintf(oldnamebuf, "%s.%cin", options->base_name, extension_prefix);
+          sprintf(newnamebuf, "%s.00.%cin", options->base_name,
+                  extension_prefix);
+          if (FileLength(oldnamebuf) > 0)
+            FileRename(oldnamebuf, newnamebuf);
+          StringCpy(oldnamebuf + len, "hr");
+          StringCpy(newnamebuf + len + 3, "hr");
+          if (FileLength(oldnamebuf) > 0)
+            FileRename(oldnamebuf, newnamebuf);
+          StringCpy(oldnamebuf + len, "sq");
+          StringCpy(newnamebuf + len + 3, "sq");
+          if (FileLength(oldnamebuf) > 0)
+            FileRename(oldnamebuf, newnamebuf);
+          StringCpy(oldnamebuf + len, "nd");
+          StringCpy(newnamebuf + len + 3, "nd");
+          if (FileLength(oldnamebuf) > 0)
+            FileRename(oldnamebuf, newnamebuf);
+          StringCpy(oldnamebuf + len, "ni");
+          StringCpy(newnamebuf + len + 3, "ni");
+          if (FileLength(oldnamebuf) > 0)
+            FileRename(oldnamebuf, newnamebuf);
+          StringCpy(oldnamebuf + len, "sd");
+          StringCpy(newnamebuf + len + 3, "sd");
+          if (FileLength(oldnamebuf) > 0)
+            FileRename(oldnamebuf, newnamebuf);
+          StringCpy(oldnamebuf + len, "si");
+          StringCpy(newnamebuf + len + 3, "si");
+          if (FileLength(oldnamebuf) > 0)
+            FileRename(oldnamebuf, newnamebuf);
+         if (options->dump_info) {
+             StringCpy(oldnamebuf + len, "di");
+             StringCpy(newnamebuf + len + 3, "di");
+             if (FileLength(oldnamebuf) > 0)
+                 FileRename(oldnamebuf, newnamebuf);
+         }
+         if (options->is_protein) {
+             /* PIG ISAM files */
+             StringCpy(oldnamebuf + len, "pd");
+             StringCpy(newnamebuf + len + 3, "pd");
+             if (FileLength(oldnamebuf) > 0)
+                 FileRename(oldnamebuf, newnamebuf);
+             StringCpy(oldnamebuf + len, "pi");
+             StringCpy(newnamebuf + len + 3, "pi");
+             if (FileLength(oldnamebuf) > 0)
+                 FileRename(oldnamebuf, newnamebuf);
+         }
+
+          MemFree(options->base_name);
+          newnamebuf[len+1] = NULLB;
+          options->base_name = StringSave(newnamebuf);
+        }
+
+      {
+        CharPtr ptr;
+      ptr = options->base_name + StringLen(options->base_name) - 2;
+      sprintf(ptr, "%02ld", (long) options->volume);
+      }
+      
+      if ((tmp_fdbp = FormatDBInit(options)) == NULL)
+        return 2;
+      
+      MemCpy(fdbp, tmp_fdbp, sizeof(FormatDB));
+      MemFree(tmp_fdbp);
+    }
+
+  return 0;
+}
+
 Int2 FDBAddSequence (FormatDBPtr fdbp, BlastDefLinePtr bdp, 
                      Uint1 seq_data_type, ByteStorePtr *seq_data, 
                      Int4 SequenceLen, 
@@ -8493,8 +8659,8 @@ Int2 FDBAddSequence2 (FormatDBPtr fdbp, BlastDefLinePtr bdp,
 {
   Uint4               hash;
   Boolean             bdp_was_allocated = FALSE;
-  FormatDBPtr         tmp_fdbp;
   DI_Record direc;
+  Int4 retval = 0;
   
 #if 0
   /* testing heap overuse */
@@ -8508,101 +8674,9 @@ Int2 FDBAddSequence2 (FormatDBPtr fdbp, BlastDefLinePtr bdp,
   }
 
   /* If too many bases in thise file, start a new volume */
-  if (fdbp->options->bases_in_volume > 0 || fdbp->options->sequences_in_volume > 0 || 1)
-    {
-      FDB_optionsPtr options = fdbp->options;
-      int amb_size= sizeof(*AmbCharPtr)*(AmbCharPtr==NULL?0:(*AmbCharPtr)&0x7fffffffUL);
-      int nl = (ftell(fdbp->fd_seq) + BSLen(*seq_data) + 1 + amb_size);
-      int hdrsize = ftell(fdbp->aip_def?fdbp->aip_def->fp:fdbp->fd_def) ;
+  if ( (retval = FDBCreateNewVolume(fdbp, *seq_data, SequenceLen, AmbCharPtr)))
+      return retval;
 
-      if ((options->bases_in_volume && (fdbp->TotalLen + SequenceLen > options->bases_in_volume)) ||
-          (options->sequences_in_volume && (fdbp->num_of_seqs+1) > options->sequences_in_volume)  ||
-          ( nl > 0x7fffffffUL) ||
-          ( hdrsize > 2000000000UL /* assuming header can not exceed 2G - 2000000000b */ )
-          )
-        {
-          ErrLogPrintf("New volume : tell:%d  seq:%d  amd:%d  total: %d  (%d)\n",
-                       ftell(fdbp->fd_seq),BSLen(*seq_data),amb_size,
-                       nl, nl > 0x7fffffff );
-          tmp_fdbp = (FormatDBPtr) MemNew(sizeof(FormatDB));
-          MemCpy(tmp_fdbp, fdbp, sizeof(FormatDB));
-
-          if(FormatDBClose(tmp_fdbp))
-             return 9;
-          options->volume++;
-          
-          /* When second volume is created, add suffix .00 to all 
-             first volume files */
-          if (options->volume == 1)
-            {
-              Char  oldnamebuf[FILENAME_MAX], newnamebuf[FILENAME_MAX];
-              int len = StringLen(options->base_name) + 2;
-              sprintf(oldnamebuf, "%s.%cin", options->base_name,
-                      fdbp->options->is_protein ? 'p' : 'n');
-              sprintf(newnamebuf, "%s.00.%cin", options->base_name, 
-                      fdbp->options->is_protein ? 'p' : 'n');
-              if (FileLength(oldnamebuf) > 0)
-                FileRename(oldnamebuf, newnamebuf);
-              StringCpy(oldnamebuf + len, "hr");
-              StringCpy(newnamebuf + len + 3, "hr");
-              if (FileLength(oldnamebuf) > 0)
-                FileRename(oldnamebuf, newnamebuf);
-              StringCpy(oldnamebuf + len, "sq");
-              StringCpy(newnamebuf + len + 3, "sq");
-              if (FileLength(oldnamebuf) > 0)
-                FileRename(oldnamebuf, newnamebuf);
-              StringCpy(oldnamebuf + len, "nd");
-              StringCpy(newnamebuf + len + 3, "nd");
-              if (FileLength(oldnamebuf) > 0)
-                FileRename(oldnamebuf, newnamebuf);
-              StringCpy(oldnamebuf + len, "ni");
-              StringCpy(newnamebuf + len + 3, "ni");
-              if (FileLength(oldnamebuf) > 0)
-                FileRename(oldnamebuf, newnamebuf);
-              StringCpy(oldnamebuf + len, "sd");
-              StringCpy(newnamebuf + len + 3, "sd");
-              if (FileLength(oldnamebuf) > 0)
-                FileRename(oldnamebuf, newnamebuf);
-              StringCpy(oldnamebuf + len, "si");
-              StringCpy(newnamebuf + len + 3, "si");
-              if (FileLength(oldnamebuf) > 0)
-                FileRename(oldnamebuf, newnamebuf);
-             if (options->dump_info) {
-                 StringCpy(oldnamebuf + len, "di");
-                 StringCpy(newnamebuf + len + 3, "di");
-                 if (FileLength(oldnamebuf) > 0)
-                     FileRename(oldnamebuf, newnamebuf);
-             }
-             if (options->is_protein) {
-                 /* PIG ISAM files */
-                 StringCpy(oldnamebuf + len, "pd");
-                 StringCpy(newnamebuf + len + 3, "pd");
-                 if (FileLength(oldnamebuf) > 0)
-                     FileRename(oldnamebuf, newnamebuf);
-                 StringCpy(oldnamebuf + len, "pi");
-                 StringCpy(newnamebuf + len + 3, "pi");
-                 if (FileLength(oldnamebuf) > 0)
-                     FileRename(oldnamebuf, newnamebuf);
-             }
-
-              MemFree(options->base_name);
-              newnamebuf[len+1] = NULLB;
-              options->base_name = StringSave(newnamebuf);
-            }
-
-          {
-            CharPtr ptr;
-          ptr = options->base_name + StringLen(options->base_name) - 2;
-          sprintf(ptr, "%02ld", (long) options->volume);
-          }
-          
-          if ((tmp_fdbp = FormatDBInit(options)) == NULL)
-            return 2;
-          
-          MemCpy(fdbp, tmp_fdbp, sizeof(FormatDB));
-          MemFree(tmp_fdbp);
-        }
-    } /* bases in volume > 0 */
   assert(ftell(fdbp->fd_seq)+BSLen(*seq_data) + 1 + (AmbCharPtr==NULL?0:(*AmbCharPtr)&0x7fffffffUL) < 0x7fffffffUL );
   fdbp->TotalLen += SequenceLen;
     
@@ -9018,7 +9092,7 @@ static    Int2    FDBFinish (FormatDBPtr fdbp)
         /* Information */
 
     if(fdbp->options->version == 0) /* Not Set */
-        fdbp->options->version = FORMATDB_VER_TEXT;
+        fdbp->options->version = FORMATDB_VER;
     
     if (!FormatDbUint4Write(fdbp->options->version, fdbp->fd_ind))
         return 1;
@@ -12103,5 +12177,26 @@ readdb_pig2oid(ReadDBFILEPtr rdfp, Int4 pig, Int4Ptr start)
         }
     }
 
+    return retval;
+}
+
+static Boolean s_IsTextFile(const char* filename)
+{
+    FILE* fp = NULL;
+    Boolean retval = TRUE;
+    Int4 i = 0;
+
+    if ( !(fp = FileOpen(filename, "r"))) {
+        return FALSE;
+    }
+
+    for (i = 0; i < 10 && !feof(fp); i++) {
+        int c = getc(fp);
+        if ( ! (isprint(c) || isspace(c)) ) {
+            retval = FALSE;
+            break;
+        }
+    }
+    FileClose(fp);
     return retval;
 }

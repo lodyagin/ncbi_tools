@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   5/5/00
 *
-* $Revision: 6.71 $
+* $Revision: 6.79 $
 *
 * File Description: 
 *
@@ -61,7 +61,7 @@
 #include <simple.h>
 #include <aliparse.h>
 
-#define TBL2ASN_APP_VER "2.5"
+#define TBL2ASN_APP_VER "2.8"
 
 CharPtr TBL2ASN_APPLICATION = TBL2ASN_APP_VER;
 
@@ -162,6 +162,7 @@ static void ValidateOneFile (
   if (vsp != NULL) {
     vsp->useSeqMgrIndexes = TRUE;
     vsp->suppressContext = TRUE;
+    vsp->seqSubmitParent = TRUE;
     oldErrSev = ErrSetMessageLevel (SEV_NONE);
     ValidateSeqEntry (sep, vsp);
     ValidStructFree (vsp);
@@ -552,6 +553,16 @@ static OrgStuff commonOrgStuff [] = {
     "PLN", 1, 1, 39947
   },
   {
+    "Aspergillus nidulans FGSC A4", "",
+    "Eukaryota; Fungi; Ascomycota; Pezizomycotina; Eurotiomycetes; Eurotiales; Trichocomaceae; Emericella",
+    "PLN", 1, 4, 227321
+  },
+  {
+    "environmental sequence", "",
+    "unclassified; environmental samples",
+    "UNA", 1, 2, 256318
+  },
+  {
     NULL, NULL, NULL, NULL, 0, 0, 0
   }
 };
@@ -778,42 +789,62 @@ static BioseqPtr AttachSeqAnnotEntity (Uint2 entityID, SeqAnnotPtr sap, Boolean 
   return bsp;
 }
 
-static CharPtr TrimBracketsFromString (CharPtr str)
+static CharPtr TrimBracketsFromString (CharPtr str, SqnTagPtr stp)
 
 {
   Uchar    ch;	/* to use 8bit characters in multibyte languages */
+  Int2     count;
   CharPtr  dst;
   CharPtr  ptr;
 
-  if (StringHasNoText (str)) return str;
+  if (StringHasNoText (str) || stp == NULL) return str;
 
   /* remove bracketed fields */
 
+  count = 0;
   dst = str;
   ptr = str;
   ch = *ptr;
   while (ch != '\0') {
     if (ch == '[') {
-      ptr++;
-      ch = *ptr;
-      while (ch != '\0' && ch != ']' && ch != '"') {
+      if (count < stp->num_tags && (! stp->used [count])) {
+        *dst = ch;
+        dst++;
         ptr++;
         ch = *ptr;
-      }
-      if (ch == '"') {
-        ptr++;
-        ch = *ptr;
-        while (ch != '\0' && ch != '"') {
+        while (ch != '\0' && ch != ']') {
+          *dst = ch;
+          dst++;
           ptr++;
           ch = *ptr;
         }
-      }
-      while (ch != '\0' && ch != ']') {
+        *dst = ch;
+        dst++;
+        ptr++;
+        ch = *ptr;
+      } else {
+        ptr++;
+        ch = *ptr;
+        while (ch != '\0' && ch != ']' && ch != '"') {
+          ptr++;
+          ch = *ptr;
+        }
+        if (ch == '"') {
+          ptr++;
+          ch = *ptr;
+          while (ch != '\0' && ch != '"') {
+            ptr++;
+            ch = *ptr;
+          }
+        }
+        while (ch != '\0' && ch != ']') {
+          ptr++;
+          ch = *ptr;
+        }
         ptr++;
         ch = *ptr;
       }
-      ptr++;
-      ch = *ptr;
+      count++;
     } else {
       *dst = ch;
       dst++;
@@ -1037,14 +1068,14 @@ static void ProcessOneNuc (
     }
   }
 
-  if (stp != NULL) {
-    SqnTagFree (stp);
-  }
-
-  TrimBracketsFromString (ttl);
+  TrimBracketsFromString (ttl, stp);
   if (! StringHasNoText (ttl)) {
     str = StringSave (ttl);
     SeqDescrAddPointer (&(bsp->descr), Seq_descr_title, (Pointer) str);
+  }
+
+  if (stp != NULL) {
+    SqnTagFree (stp);
   }
 
   ValNodeFreeData (vnp);
@@ -1173,6 +1204,60 @@ static void ReplaceOnePeptide (
         }
       }
     }
+  }
+
+  MemFree (str1);
+  MemFree (str2);
+}
+
+static void ReplaceOneRNA (
+  SimpleSeqPtr ssp,
+  Boolean conflict
+)
+
+{
+  ByteStorePtr  bs;
+  BioseqPtr     bsp;
+  SeqIdPtr      sip;
+  CharPtr       str1, str2;
+
+  if (ssp == NULL || ssp->numid < 1) return;
+
+  sip = MakeSeqID (ssp->id [0]);
+  bsp = BioseqFind (sip);
+  SeqIdFree (sip);
+  if (bsp == NULL || bsp->repr != Seq_repr_raw) return;
+
+  /* remove trailing X and * */
+
+  bs = ssp->seq;
+  ssp->seqlen = BSLen (bs);
+
+  str1 = BSMerge (ssp->seq, NULL);
+  str2 = GetSequenceByBsp (bsp);
+
+  if (StringCmp (str1, str2) != 0) {
+
+    /* swap sequence byte stores */
+
+    bs = bsp->seq_data;
+    bsp->seq_data = ssp->seq;
+    ssp->seq = bs;
+    bsp->length = BSLen (bsp->seq_data);
+    bsp->seq_data_type = Seq_code_iupacna;
+
+    /*
+    mrna = SeqMgrGetRNAgivenProduct (bsp, NULL);
+    if (mrna != NULL) {
+
+      if (conflict) {
+        mrna->excpt = TRUE;
+        if (StringHasNoText (mrna->except_text)) {
+          mrna->except_text = StringSave ("RNA editing");
+        }
+      }
+    }
+    */
   }
 
   MemFree (str1);
@@ -2128,6 +2213,29 @@ static void ProcessOneRecord (
     FileClose (fp);
   }
 
+  /* read one or more feature tables from .rna file */
+
+  fp = OpenOneFile (directory, base, ".rna");
+  if (fp != NULL) {
+
+    /* indexing needed to find mRNA from transcript product to set RNA editing exception */
+
+    SeqMgrIndexFeatures (entityID, NULL);
+
+    while ((dataptr = ReadAsnFastaOrFlatFile (fp, &datatype, NULL, FALSE, TRUE, TRUE, TRUE)) != NULL) {
+      if (datatype == OBJ_FASTA) {
+
+        ssp = (SimpleSeqPtr) dataptr;
+        ReplaceOneRNA (ssp, tbl->conflict);
+        SimpleSeqFree (ssp);
+
+      } else {
+        ObjMgrFree (datatype, dataptr);
+      }
+    }
+    FileClose (fp);
+  }
+
   /* read one or more quality score blocks from .qvl file */
 
   fp = OpenOneFile (directory, base, ".qvl");
@@ -2222,7 +2330,11 @@ static void ProcessOneRecord (
     if (! tbl->genprodset) {
       VisitFeaturesInSep (sep, NULL, ClearRnaProducts);
     }
-    InstantiateProteinTitles (entityID, NULL);
+    if (SeqMgrFeaturesAreIndexed (entityID)) {
+      InstantiateProteinTitles (entityID, NULL);
+    } else {
+      Message (MSG_POSTERR, "Unable to instantiate protein titles due to dropped index");
+    }
     if (tbl->genprodset) {
       /* need to reindex before instantiating mRNA titles */
       SeqMgrIndexFeatures (entityID, NULL);

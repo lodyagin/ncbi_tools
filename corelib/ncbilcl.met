@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/31/94
 *
-* $Revision: 6.10 $
+* $Revision: 6.11 $
 *
 * File Description:
 *		system dependent header
@@ -41,6 +41,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: ncbilcl.met,v $
+* Revision 6.11  2003/11/07 18:32:41  rsmith
+* need pascal keyword on Mac builds.
+*
 * Revision 6.10  2003/05/05 15:01:53  rsmith
 * support for targeting Win32 systems with Codewarrior on Mac.
 *
@@ -378,7 +381,6 @@ typedef int (FAR PASCAL *Nlm_FnPtr)();
 #define far
 #define huge
 #define cdecl
-#define pascal
 #define _pascal
 #define _near
 #define _far

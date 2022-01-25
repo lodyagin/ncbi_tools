@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.21 $
+* $Revision: 6.24 $
 *
 * File Description: 
 *       Vibrant procedure definitions
@@ -37,6 +37,15 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: vibprocs.h,v $
+* Revision 6.24  2004/02/04 15:21:02  kans
+* make GetTextVScrollBar and GetTextHScrollBar extern, to add search function to general text viewer
+*
+* Revision 6.23  2004/01/05 17:08:09  kans
+* added functions to control use of dual screens
+*
+* Revision 6.22  2003/10/29 19:19:34  kans
+* added prototype for Nlm_SetTextColor
+*
 * Revision 6.21  2002/04/30 18:25:12  bazhin
 * Added function "Nlm_SetWindowConfigureCallback(WindoW w)", which
 * allows to catch events, when window just moved without resizing.
@@ -335,6 +344,14 @@ Nlm_VoidPtr Nlm_GetWindowExtra PROTO((Nlm_WindoW w));
 
 void        Nlm_SetWindowConfigureCallback PROTO((Nlm_WindoW w));
 
+/* Dual screen functions control centering where the window left parameter is negative */
+
+Nlm_Boolean Nlm_HasDualScreen (void);
+void Nlm_UseFullScreen (void);
+void Nlm_UseLeftScreen (void);
+void Nlm_UseRightScreen (void);
+
+
 /***  GROUPING OBJECT  ***/
 
 /*
@@ -537,6 +554,7 @@ size_t    Nlm_TextLength PROTO((Nlm_TexT t));
 void      Nlm_SelectText PROTO((Nlm_TexT t, Nlm_Int2 begin, Nlm_Int2 end));
 void      Nlm_SetTextEditable PROTO((Nlm_TexT t, Nlm_Boolean editable));
 void      Nlm_SetTextCursorBlinkRate PROTO((Nlm_TexT t, Nlm_Int2 msec));
+void      Nlm_SetTextColor PROTO((Nlm_TexT t, Nlm_Uint4 r, Nlm_Uint4 g, Nlm_Uint4 b));
 
 /* return the new insertion position in the text(it may differ from "pos"
  * if an error occured or "pos" is out of limits)
@@ -544,6 +562,10 @@ void      Nlm_SetTextCursorBlinkRate PROTO((Nlm_TexT t, Nlm_Int2 msec));
 Nlm_Int2  Nlm_SetTextCursorPos PROTO((Nlm_TexT t, Nlm_Int2 pos));
 
 Nlm_Int2  Nlm_GetTextCursorPos PROTO((Nlm_TexT t));
+
+Nlm_BaR    Nlm_GetTextVScrollBar PROTO((Nlm_TexT t));
+Nlm_BaR    Nlm_GetTextHScrollBar PROTO((Nlm_TexT t));
+
 
 
 /***  Static Prompt Objects  ***/

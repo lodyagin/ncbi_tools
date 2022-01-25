@@ -1,4 +1,4 @@
-/* $Id: blast_hits.h,v 1.13 2003/09/25 15:15:55 dondosha Exp $
+/* $Id: blast_hits.h,v 1.18 2003/12/12 22:57:31 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,7 +32,7 @@ Author: Ilya Dondoshansky
 Contents: Structures used for saving BLAST hits
 
 ******************************************************************************
- * $Revision: 1.13 $
+ * $Revision: 1.18 $
  * */
 #ifndef __BLAST_HITS__
 #define __BLAST_HITS__
@@ -49,18 +49,19 @@ typedef struct BlastHitList {
    Int4 hsplist_count; /**< Filled size of the HSP lists array */
    Int4 hsplist_max; /**< Maximal allowed size of the HSP lists array */
    double worst_evalue; /**< Highest of the best e-values among the HSP 
-                            lists */
+                           lists */
+   Int4 low_score; /**< The lowest of the best scores among the HSP lists */
    Boolean heapified; /**< Is this hit list already heapified? */
    BlastHSPList** hsplist_array; /**< Array of HSP lists for individual
                                           database hits */
 } BlastHitList;
 
 /** The structure to contain all BLAST results, for multiple queries */
-typedef struct BlastResults {
+typedef struct BlastHSPResults {
    Int4 num_queries; /**< Number of query sequences */
    BlastHitList** hitlist_array; /**< Array of results for individual
                                           query sequences */
-} BlastResults;
+} BlastHSPResults;
 
 /** BLAST_SaveHitlist
  *  Save the current hit list to appropriate places in the results structure
@@ -81,7 +82,7 @@ typedef struct BlastResults {
  * @param thr_info Information shared between multiple search threads [in]
  */
 Int2 BLAST_SaveHitlist(Uint1 program, BLAST_SequenceBlk* query, 
-        BLAST_SequenceBlk* subject, BlastResults* results, 
+        BLAST_SequenceBlk* subject, BlastHSPResults* results, 
         BlastHSPList* hsp_list, BlastHitSavingParameters* hit_parameters, 
         BlastQueryInfo* query_info, BlastScoreBlk* sbp, 
         const BlastScoringOptions* score_options, const BlastSeqSrc* bssp,
@@ -92,10 +93,10 @@ Int2 BLAST_SaveHitlist(Uint1 program, BLAST_SequenceBlk* query,
  *                    for [in]
  * @param results_ptr The allocated structure [out]
  */
-Int2 BLAST_ResultsInit(Int4 num_queries, BlastResults** results_ptr);
+Int2 BLAST_ResultsInit(Int4 num_queries, BlastHSPResults** results_ptr);
 
 /** Sort each hit list in the BLAST results by best e-value */
-Int2 BLAST_SortResults(BlastResults* results);
+Int2 BLAST_SortResults(BlastHSPResults* results);
 
 /** Calculate the expected values for all HSPs in a hit list. In case of 
  * multiple queries, the offsets are assumed to be already adjusted to 
@@ -104,11 +105,11 @@ Int2 BLAST_SortResults(BlastResults* results);
  * @param query_info Auxiliary query information - needed only for effective
                      search space calculation if it is not provided [in]
  * @param hsp_list List of HSPs for one subject sequence [in] [out]
- * @param hit_options Options containing the e-value cut-off [in]
+ * @param score_options Needed only to check if gapped calculation is done [in]
  * @param sbp Structure containing statistical information [in]
  */
 Int2 BLAST_GetNonSumStatsEvalue(Uint1 program, BlastQueryInfo* query_info,
-        BlastHSPList* hsp_list, BlastHitSavingOptions* hit_options, 
+        BlastHSPList* hsp_list, const BlastScoringOptions* score_options, 
         BlastScoreBlk* sbp);
 
 /** Calculate e-value for an HSP found by PHI BLAST.
@@ -131,6 +132,26 @@ void PHIGetEvalue(BlastHSPList* hsp_list, BlastScoreBlk* sbp);
 */
 Int2 BLAST_ReapHitlistByEvalue(BlastHSPList* hsp_list, 
                                BlastHitSavingOptions* hit_options);
+
+/** Reevaluate the HSP's score, e-value and percent identity after taking
+ * into account the ambiguity information. Needed for blastn only, either
+ * after a greedy gapped extension, or for ungapped search.
+ * @param hsp The HSP structure [in] [out]
+ * @param query_start Pointer to the start of the query sequence [in]
+ * @param subject_start Pointer to the start of the subject sequence [in]
+ * @param hit_options Hit saving options with e-value cut-off [in]
+ * @param score_options Scoring options [in]
+ * @param query_info Query information structure, containing effective search
+ *                   space(s) [in]
+ * @param sbp Score block with Karlin-Altschul parameters [in]
+ * @return Should this HSP be deleted after the score reevaluation?
+ */
+Boolean ReevaluateHSPWithAmbiguities(BlastHSP* hsp, 
+           Uint1* query_start, Uint1* subject_start, 
+           const BlastHitSavingOptions* hit_options, 
+           const BlastScoringOptions* score_options, 
+           BlastQueryInfo* query_info, BlastScoreBlk* sbp);
+
 
 /** Cleans out the NULLed out HSP's from the HSP array,
  *	moving the BLAST_HSPPtr's up to fill in the gaps.
@@ -193,7 +214,7 @@ BlastHSP* BlastHSPFree(BlastHSP* hsp);
 BlastHSPList* BlastHSPListFree(BlastHSPList* hsp_list);
 
 /** Deallocate memory for BLAST results */
-BlastResults* BLAST_ResultsFree(BlastResults* results);
+BlastHSPResults* BLAST_ResultsFree(BlastHSPResults* results);
 
 #ifdef __cplusplus
 }

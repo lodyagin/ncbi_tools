@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/1/91
 *
-* $Revision: 6.35 $
+* $Revision: 6.36 $
 *
 * File Description: 
 *       Vibrant drawing functions.
@@ -37,6 +37,9 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: ncbidraw.c,v $
+* Revision 6.36  2003/11/17 17:03:30  kans
+* changed C++ style comments to C comments
+*
 * Revision 6.35  2003/03/19 21:13:22  kans
 * protect UNIX version of ScrollRect
 *
@@ -6311,8 +6314,8 @@ extern void Nlm_CopyPixmap ( Nlm_RectPtr r, Nlm_Int1Ptr source,
   pixelMap->bounds.left = 0;
   pixelMap->bounds.top = 0;
   pixelMap->cmpSize = 8;
-// 2001-03-22:  Joshua Juran
-// Evidently these two members don't exist in Carbon.  So don't set them.
+  /* 2001-03-22:  Joshua Juran */
+  /* Evidently these two members don't exist in Carbon.  So don't set them. */
 #if !TARGET_API_MAC_CARBON
   pixelMap->planeBytes = 0;
   pixelMap->pmReserved = 0;
@@ -6415,10 +6418,10 @@ extern void Nlm_SetUpDrawingTools (void)
 
   Nlm_updateRgn = (Nlm_RegioN) (NewRgn ());
   SetRectRgn ((Nlm_RgnTool) Nlm_updateRgn, -32768, -32768, 32767, 32767);
-  //HLock ((Handle) Nlm_updateRgn);
+  /* HLock ((Handle) Nlm_updateRgn); */
   GetRegionBounds(Nlm_updateRgn, &bounds);
   Local__RectToolToRecT (&bounds, &Nlm_updateRect);
-  //HUnlock ((Handle) Nlm_updateRgn);
+  /* HUnlock ((Handle) Nlm_updateRgn); */
 
   Nlm_fontList = NULL;
   Nlm_fontInUse = NULL;

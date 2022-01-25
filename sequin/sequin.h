@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.99 $
+* $Revision: 6.119 $
 *
 * File Description: 
 *
@@ -165,6 +165,7 @@ extern void EditFeatureStrand (IteM i);
 extern void PrefixAuthorityWithOrganism (IteM i);
 extern void UpdateFastaSet (IteM i);
 extern void SeqLocAdjustByOffset (SeqLocPtr slp, Int4 offset);
+extern SeqLocPtr SeqLocWholeNew (BioseqPtr bsp);
 extern SeqFeatPtr SeqFeatCopy (SeqFeatPtr sfp);
 extern SeqLocPtr SeqLocReplaceLocalID (SeqLocPtr slp,
 				       SeqIdPtr  new_sip);
@@ -214,6 +215,21 @@ extern ForM CreateGenomeCenterForm (Int2 left, Int2 top, CharPtr title,
 extern Boolean HasZeroLengthSequence (ForM newForm);
 extern Boolean SequencesFormHasProteins (ForM f);
 extern Boolean SequencesFormHasTooManyNucleotides (ForM f);
+
+extern void AppendOrReplaceString (
+  CharPtr PNTR string_loc,
+  CharPtr new_value,
+  Boolean PNTR asked_question,
+  Boolean PNTR do_replace,
+  Boolean PNTR use_semicolon
+);
+
+extern void ConsolidateOrganismNotes (IteM i);
+extern void ConsolidateLikeModifiersWithSemicolons (IteM i);
+extern void ConsolidateLikeModifiersWithoutSemicolons (IteM i);
+
+extern void ExtendPartialFeatures (IteM i);
+extern void TrimOrganismName (IteM i);
 
 extern void ConfirmSequencesFormParsing (ForM f, FormActnFunc putItAllTogether);
 
@@ -282,6 +298,8 @@ extern void SetupSpecialMenu (MenU m, BaseFormPtr bfp);
 extern void SetupNewFeaturesMenu (MenU m, BaseFormPtr bfp);
 extern void SetupNewDescriptorsMenu (MenU m, BaseFormPtr bfp);
 extern void SetupNewPublicationsMenu (MenU m, BaseFormPtr bfp);
+extern void SetupBatchApplyMenu (MenU s, BaseFormPtr bfp);
+extern void SetupBatchEditMenu (MenU s, BaseFormPtr bfp);
 extern MenU CreateAnalysisMenu (WindoW w, BaseFormPtr bfp, Boolean bspviewOK, Boolean docsumOK);
 extern void SetupSequinFilters (void);
 extern void SetupBioseqPageList (void);
@@ -294,6 +312,7 @@ extern void SequinCheckSocketsProc (void);
 
 extern Int4 MySeqEntryToAsn3 (SeqEntryPtr sep, Boolean strip, Boolean correct, Boolean force);
 extern void ValSeqEntryForm (ForM f);
+extern void ValSeqEntryFormEx (ForM f, Boolean doAligns);
 
 extern void InitSequinExtras (void);
 extern void FiniSequinExtras (void);
@@ -356,6 +375,7 @@ extern void VectorScreenProc (IteM i);
 extern void GenerateAutomaticDefLinesCommon (IteM i, Boolean addMods, Boolean smartMods, ButtoN b);
 extern void ForceTaxonFixupBtn (IteM i, ButtoN b);
 extern void CommonAddOrgOrModsToDefLines (IteM i, Int2 orgmod, Int2 subsource, ButtoN b);
+extern void PrefixDefLines (IteM i);
 extern void MRnaFromCdsProc (Uint2 entityID);
 extern void BioseqViewFormToolBar (GrouP h);
 extern Boolean DoBuildContig (void);
@@ -391,6 +411,7 @@ extern void SimplePowerBlastProc (IteM i);
 extern CharPtr MergeValNodeStrings (ValNodePtr list, Boolean useReturn);
 extern CharPtr JustSaveStringFromText (TexT t);
 
+extern void CommonApplyToAllProc (BaseFormPtr bfp, Int2 type);
 extern void ApplyTitle (IteM i);
 extern void ApplyCDS (IteM i);
 extern void ApplyRRNA (IteM i);
@@ -399,6 +420,7 @@ extern void LoadTPAAccessionNumbersFromFile (IteM i);
 extern void LoadSecondaryAccessionNumbersFromFile (IteM i);
 extern void LoadHistoryAccessionNumbersFromFile (IteM i);
 extern void LoadOrganismModifierTable (IteM i);
+extern void LoadFeatureQualifierTable (IteM i);
 
 extern void RemoveRNA (IteM i);
 extern void ConvertRNA (IteM i);
@@ -421,6 +443,7 @@ extern void AutoParseFeatureTableProc (IteM i);
 extern void RecomputeSuggest (IteM i);
 extern void RetranslateCdRegionsNoStop (IteM i);
 extern void RetranslateCdRegionsDoStop (IteM i);
+extern void RetranslateCdRegionsNoStopExceptEndCompleteCDS (IteM i);
 extern void AddGlobalCodeBreak (IteM i);
 extern void CorrectCDSGenCodes (IteM i);
 /* extern void CorrectCDSStartCodon (IteM i); */
@@ -432,7 +455,16 @@ extern void GenerateAutoDefLinesWithMods (IteM i);
 extern void GenerateAutoDefLinesSmartMods (IteM i);
 extern void testAutoDef (IteM i);
 extern void testAutoDefWithOptions (IteM i);
-extern void AutoDefBaseFormCommon (BaseFormPtr bfp, Boolean use_form);
+extern void AutoDefWithoutModifiers (IteM i);
+extern void AutoDefBaseFormCommon (BaseFormPtr bfp, Boolean use_form, Boolean use_modifiers);
+extern void AutoDefToolBtn (ButtoN b);
+extern void AutoDefOptionsToolBtn (ButtoN b);
+
+extern void RemoveDefLinesToolBtn (ButtoN b);
+extern void FindStringProcToolBtn (ButtoN b);
+extern void ParseLocalIDToSourceToolBtn (ButtoN b);
+extern void ResolveExistingLocalIDsToolBtn (ButtoN b);
+extern void GroupExplodeToolBtn (ButtoN b);
 
 extern void EditEvidenceFlag (IteM i);
 extern void EditExceptionFlag (IteM i);
@@ -454,9 +486,13 @@ extern void SelectBioseq (IteM i);
 
 extern void FuseFeature (IteM i);
 
+extern void MakeExonsFromCDSIntervals (IteM i);
+extern void MakeExonsFromMRNAIntervals (IteM i);
+
 extern Int2 LIBCALLBACK CreateDeleteByTextWindow (Pointer data);
 extern void ParseAsnOrFlatfileToAnywhere (IteM i);
 extern void ParseCommentToAnywhere (IteM i);
+extern void ParseLocalIDToAnywhere (IteM i);
 extern void RemoveTextInsideString (IteM i);
 extern void RemoveTextOutsideString (IteM i);
 
@@ -472,6 +508,8 @@ extern void FindFlatfileProc (IteM i);
 extern void FindGeneProc (IteM i);
 extern void FindProtProc (IteM i);
 extern void FindPosProc (IteM i);
+
+extern Boolean MeetsStringConstraint (SeqFeatPtr sfp, CharPtr str);
 
 extern Boolean SaveSeqSubmitProc (BaseFormPtr bfp, Boolean saveAs);
 
@@ -581,7 +619,30 @@ typedef struct sequencesform {
   Int2            currConfirmCount;
 } SequencesForm, PNTR SequencesFormPtr;
 
+typedef int (LIBCALLBACK *CompareFunc) (Nlm_VoidPtr, Nlm_VoidPtr);
 
+extern int LIBCALLBACK CompareImpFeatEnumFieldAssoc (VoidPtr ptr1, VoidPtr ptr2);
+extern int LIBCALLBACK CompareFeatureValNodeStrings (VoidPtr ptr1, VoidPtr ptr2);
+
+extern ValNodePtr InsertMostUsedFeatureValNodes (ValNodePtr old_list);
+
+extern void SortEnumFieldAssocPtrArray (EnumFieldAssocPtr alist, CompareFunc compar);
+
+extern ValNodePtr FindExactStringInStrings ( ValNodePtr strings, CharPtr value);
+
+extern EnumFieldAssocPtr InsertMostUsedFeatureEnumFieldAssoc (
+  EnumFieldAssocPtr alist
+);
+
+extern ValNodePtr BuildFeatureValNodeList (
+  Boolean prefer_most_used,
+  CharPtr wild_card_name,
+  Int4 wild_card_value,
+  Boolean skip_unusual,
+  Boolean skip_import
+);
+
+extern void SetTaxNameAndRemoveTaxRef (OrgRefPtr orp, CharPtr taxname);
 
 #ifdef __cplusplus
 }

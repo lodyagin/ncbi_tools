@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/2/97
 *
-* $Revision: 6.152 $
+* $Revision: 6.160 $
 *
 * File Description: 
 *
@@ -1308,6 +1308,7 @@ NLM_EXTERN CharPtr SqnTagFind (SqnTagPtr stp, CharPtr tag)
   if (stp == NULL || StringHasNoText (tag)) return NULL;
   for (i = 0; i < stp->num_tags; i++) {
     if (stp->tag [i] != NULL && StringICmp (stp->tag [i], tag) == 0) {
+      stp->used [i] = TRUE;
       return stp->val [i];
     }
   }
@@ -1732,6 +1733,52 @@ static void AddStringToSeqHist (
   }
   sip->data.ptrvalue = (Pointer) tsip;
   tsip->accession = StringSave (str);
+}
+
+NLM_EXTERN SeqHistPtr ParseStringIntoSeqHist (
+  SeqHistPtr shp,
+  CharPtr str
+)
+
+{
+  Char     ch;
+  CharPtr  last;
+  CharPtr  ptr;
+  CharPtr  tmp;
+
+  if (shp == NULL) {
+    shp = SeqHistNew ();
+    if (shp == NULL) return shp;
+  }
+
+  if (str != NULL) {
+    tmp = StringSave (str);
+    last = tmp;
+    ptr = last;
+    ch = *ptr;
+    while (ch != '\0') {
+      if (ch == ',') {
+        *ptr = '\0';
+        if (! StringHasNoText (last)) {
+          TrimSpacesAroundString (last);
+          AddStringToSeqHist (shp, last);
+        }
+        ptr++;
+        last = ptr;
+        ch = *ptr;
+      } else {
+        ptr++;
+        ch = *ptr;
+      }
+    }
+    if (! StringHasNoText (last)) {
+      TrimSpacesAroundString (last);
+      AddStringToSeqHist (shp, last);
+    }
+    MemFree (tmp);
+  }
+
+  return shp;
 }
 
 NLM_EXTERN SeqHistPtr ParseTitleIntoSeqHist (
@@ -3150,11 +3197,11 @@ static Boolean ParseFeatTableLine (CharPtr line, Int4Ptr startP, Int4Ptr stopP,
   *partial3P = partial3;
   *ispointP = ispoint;
   *isminusP = isminus;
-  *featP = featType;
-  *qualP = qualType;
-  *valP = qualVal;
+  *featP = StringSaveNoNull (featType);
+  *qualP = StringSaveNoNull (qualType);
+  *valP = StringSaveNoNull (qualVal);
 
-  ValNodeFree (parsed);
+  ValNodeFreeData (parsed);
   return TRUE;
 }
 
@@ -4146,6 +4193,8 @@ NLM_EXTERN void AddQualifierToFeature (SeqFeatPtr sfp, CharPtr qual, CharPtr val
         prp->desc = MemFree (prp->desc);
         prp->desc = StringSaveNoNull (val);
       }
+    } else if (sfp->data.choice == SEQFEAT_CDREGION && StringCmp (qual, "secondary_accession") == 0) {
+      bail = FALSE;
     } else if (ifp != NULL && StringICmp (ifp->key, "variation") == 0 && ParseQualIntoSnpUserObject (sfp, qual, val)) {
     } else if (ifp != NULL && StringICmp (ifp->key, "STS") == 0 && ParseQualIntoStsUserObject (sfp, qual, val)) {
     } else if (ifp != NULL && StringICmp (ifp->key, "misc_feature") == 0 && ParseQualIntoCloneUserObject (sfp, qual, val)) {
@@ -4661,6 +4710,10 @@ static SeqAnnotPtr ReadFeatureTable (FILE *fp, CharPtr seqid, CharPtr annotname)
         ParseWhitespaceIntoTabs (line);
       }
 
+      feat = NULL;
+      qual = NULL;
+      val = NULL;
+
       if (ParseFeatTableLine (line, &start, &stop, &partial5, &partial3, &ispoint, &isminus, &feat, &qual, &val, offset)) {
         if (feat != NULL && start >= 0 && stop >= 0) {
 
@@ -4865,6 +4918,10 @@ static SeqAnnotPtr ReadFeatureTable (FILE *fp, CharPtr seqid, CharPtr annotname)
           }
           ErrPostEx (SEV_ERROR, ERR_SEQ_FEAT_WrongQualOnImpFeat, "Qualifier '%s' has no value on %s feature at %s", qual, label, loc);
           MemFree (loc);
+
+        } else if (feat != NULL) {
+
+          ErrPostEx (SEV_ERROR, ERR_SEQ_FEAT_ImpFeatBadLoc, "Bad location on feature %s (start %ld, stop %ld)", feat, (long) start, (long) stop);
         }
 
       } else if (*line == '[') {
@@ -4881,13 +4938,11 @@ static SeqAnnotPtr ReadFeatureTable (FILE *fp, CharPtr seqid, CharPtr annotname)
         SqnTagFree (stp);
       }
 
-/* Uncomment next lines if Purify reports memory leaks here. */
+      /* ParseFeatTableLine copies these three strings, so free here */
 
-      /*
-      MemFree (feat);
-      MemFree (qual);
-      MemFree (val);
-      */
+      feat = MemFree (feat);
+      qual = MemFree (qual);
+      val = MemFree (val);
 
     }
 
@@ -5786,6 +5841,7 @@ NLM_EXTERN Pointer ReadAsnFastaOrFlatFile (FILE *fp, Uint2Ptr datatypeptr, Uint2
           tmp = StringChr (line + 1, '[');
           if (tmp != NULL) {
             if (StringStr (tmp, "[") != NULL && StringStr (tmp, "=") != NULL) {
+              TrimSpacesAroundString (tmp);
               title = StringSave (tmp);
             }
           } else if (fastaAsSimpleSeq) {
@@ -5815,6 +5871,7 @@ NLM_EXTERN Pointer ReadAsnFastaOrFlatFile (FILE *fp, Uint2Ptr datatypeptr, Uint2
                 tmp += StringLen (seqid);
                 if (! StringHasNoText (tmp)) {
                   TrimSpacesAroundString (tmp);
+                  title = MemFree (title);
                   title = StringSaveNoNull (tmp);
                 }
               }
@@ -6360,6 +6417,9 @@ NLM_EXTERN TextFsaPtr TextFsaFree (TextFsaPtr tbl)
   }
 
   MemFree (statePtr);
+
+  ValNodeFreeData (tbl->siteList);
+
   return MemFree (tbl);
 }
 

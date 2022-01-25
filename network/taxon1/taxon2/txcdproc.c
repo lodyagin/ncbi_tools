@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   07/15/97
 *
-* $Revision: 1.15 $
+* $Revision: 1.16 $
 *
 * File Description: 
 *       API for Taxonomy service
@@ -44,6 +44,9 @@
 *
 * RCS Modification History:
 * $Log: txcdproc.c,v $
+* Revision 1.16  2003/11/04 17:13:58  soussov
+* adds NetFini() call if service can not start properly
+*
 * Revision 1.15  2003/06/12 16:46:25  soussov
 * changes severity for AsnRead failures
 *
@@ -215,6 +218,7 @@ static Boolean TaxServInit(void)
     Taxon1ReqFree (taxrp);
 
     if((taxbp = NetTaxArchReadAsn()) == NULL) {
+        NetFini();
         return FALSE;
     }
     else  {

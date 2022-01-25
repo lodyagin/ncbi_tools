@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/2/97
 *
-* $Revision: 6.92 $
+* $Revision: 6.94 $
 *
 * File Description: 
 *
@@ -216,6 +216,7 @@ typedef struct sqntag {
   Int2     num_tags;
   CharPtr  tag [MAX_SQN_TAGS];
   CharPtr  val [MAX_SQN_TAGS];
+  Boolean  used [MAX_SQN_TAGS];
 } SqnTag, PNTR SqnTagPtr;
 
 NLM_EXTERN SqnTagPtr SqnTagParse (CharPtr ttl);
@@ -259,6 +260,11 @@ NLM_EXTERN GBBlockPtr ParseTitleIntoGenBank (
 NLM_EXTERN SeqHistPtr ParseTitleIntoSeqHist (
   SqnTagPtr stp,
   SeqHistPtr shp
+);
+
+NLM_EXTERN SeqHistPtr ParseStringIntoSeqHist (
+  SeqHistPtr shp,
+  CharPtr str
 );
 
 NLM_EXTERN UserObjectPtr ParseTitleIntoTpaAssembly (

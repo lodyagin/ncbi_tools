@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.55 $
+* $Revision: 6.58 $
 *
 * File Description:
 *       Vibrant miscellaneous functions
@@ -37,6 +37,15 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: vibutils.c,v $
+* Revision 6.58  2004/02/03 23:36:21  sinyakov
+* Nlm_CheckThisLevel(): call Nlm_GetNext() before calling Nlm_DoGainFocus()
+*
+* Revision 6.57  2003/11/17 17:03:30  kans
+* changed C++ style comments to C comments
+*
+* Revision 6.56  2003/11/07 16:06:58  rsmith
+* Changed Mac printing system calls from deprecated ones to modern ones primarily to ease building with precompiled headers.
+*
 * Revision 6.55  2003/05/05 12:38:07  rsmith
 * casts to make call to RegQueryValueEx safer in Nlm_GetExecPath. Needed by Codewarrior when compiling to Win32.
 *
@@ -391,26 +400,24 @@ either.
 */
 
 #include <ncbilcl.h>
-#include <vibtypes.h>
-#include <vibprocs.h>
-#include <vibincld.h>
-#include <ncbiport.h>
 
 #ifdef WIN_MAC
-# include <Navigation.h>
 # if TARGET_API_MAC_CARBON
-// Use non-session APIs of the Carbon Printing Manager, for easy porting
-#ifdef PM_USE_SESSION_APIS
-#undef PM_USE_SESSION_APIS
-#endif
-#  define PM_USE_SESSION_APIS 0
+/* Use non-session APIs of the Carbon Printing Manager, for easy porting */
 #  include <PMApplication.h>
 #  include <FullPath.h>
 # endif
 # ifdef OS_UNIX_DARWIN
 #  include <LaunchServices.h>
 # endif
+# include <Navigation.h>
 #endif
+
+#include <vibtypes.h>
+#include <vibprocs.h>
+#include <vibincld.h>
+#include <ncbiport.h>
+
 
 #ifdef WIN_MOTIF
 #include <sys/times.h>
@@ -455,6 +462,8 @@ static Nlm_BoxData      recentBoxData;
 
 #ifdef WIN_MAC
 # if TARGET_API_MAC_CARBON
+static PMPrintSession  printSession;
+
 static PMPageFormat    pageFormat = kPMNoPageFormat;
 static PMPrintSettings printSettings = kPMNoPrintSettings;
 static PMPrintContext  thePrintingPort = kPMNoReference;
@@ -2452,12 +2461,14 @@ static Nlm_GraphiC Nlm_CheckThisLevel (Nlm_GraphiC a, Nlm_Char ch)
 {
   Nlm_GraphiC  p;
   Nlm_GraphiC  q;
+  Nlm_GraphiC  n;
 
   q = NULL;
   p = a;
   while (p != NULL && q == NULL) {
+    n = Nlm_GetNext (p);
     q = Nlm_DoGainFocus (p, ch, FALSE);
-    p = Nlm_GetNext (p);
+    p = n;
   }
   return q;
 }
@@ -3961,29 +3972,38 @@ static void Nlm_SetupPrinterDeviceContext(HDC prHDC)
 
 #ifdef WIN_MAC
 # if TARGET_API_MAC_CARBON
+
 extern Nlm_WindoW Nlm_StartPrinting (void)
 {
   OSStatus status;
   Boolean accepted;
   
-  status = PMBegin();
+/*  status = PMBegin(); */
+  status = PMCreateSession(&printSession);
   if (status != noErr) return NULL;
-  status = PMNewPageFormat(&pageFormat);
+/*  status = PMNewPageFormat(&pageFormat); */
+  status = PMCreatePageFormat(&pageFormat);
   if (status != noErr || pageFormat == kPMNoPageFormat) return NULL;
-  status = PMDefaultPageFormat(pageFormat);
+/*  status = PMDefaultPageFormat(pageFormat); */
+  status = PMSessionDefaultPageFormat(printSession, pageFormat);
   if (status != noErr) return NULL;
-  status = PMPageSetupDialog(pageFormat, &accepted);
+/*  status = PMPageSetupDialog(pageFormat, &accepted); */
+  status = PMSessionPageSetupDialog(printSession, pageFormat, &accepted);
   if (status != noErr) return NULL;
-  status = PMNewPrintSettings(&printSettings);
+/*  status = PMNewPrintSettings(&printSettings); */
+  status = PMCreatePrintSettings(&printSettings);
   if (status != noErr || printSettings == kPMNoPrintSettings) return NULL;
-  status = PMDefaultPrintSettings(printSettings);
+/*  status = PMDefaultPrintSettings(printSettings); */
+  status = PMSessionDefaultPrintSettings (printSession, printSettings);
   if (status != noErr) return NULL;
-  status = PMPrintDialog(printSettings, pageFormat, &accepted);
+/*  status = PMPrintDialog(printSettings, pageFormat, &accepted); */
+  status = PMSessionPrintDialog(printSession, printSettings, pageFormat, &accepted);
   if (!accepted) status = kPMCancel;
   if (status != noErr) return NULL;
   
-  status = PMBeginDocument(printSettings, pageFormat, &thePrintingPort);
-  if ((status != noErr) || (thePrintingPort == kPMNoReference)) return NULL;
+/*  status = PMBeginDocument(printSettings, pageFormat, &thePrintingPort); */
+  status = PMSessionBeginDocument(printSession, printSettings, pageFormat);
+  if (status != noErr) return NULL;
   
   return Nlm_CurrentWindow();
 }
@@ -4091,35 +4111,28 @@ extern void Nlm_EndPrinting (Nlm_WindoW w)
 
   Nlm_nowPrinting = FALSE;
   if (w != NULL) {
-    (void)PMEndDocument(thePrintingPort);
-    status = PMError();
+    status = PMSessionError(printSession);
     if (status != noErr) {
-      Nlm_Message (MSG_ERROR, "PMEndDocument error %d", status);
+      Nlm_Message (MSG_ERROR, "PM Session error %d", status);
     }
-// This call is not supported under Carbon, need to figure out
-// how Apple wants us to deal with this ...  churchill 12/28/99
-#if 0
-    PrPicFile (prHdl, 0L, 0L, 0L, &prStat);
-    prerr = PrError ();
-    if (prerr != noErr) {
-      Nlm_Message (MSG_ERROR, "PrPicFile error %d", prerr);
-    }
-    prPort = NULL;
-    Nlm_UseWindow (w);
-#endif
+    /* (void)PMEndDocument(thePrintingPort); */
+    PMSessionEndDocument (printSession);
   }
   if (pageFormat != kPMNoPageFormat) {
-    (void)PMDisposePageFormat(pageFormat);
+   /* (void)PMDisposePageFormat(pageFormat); */
+    PMRelease(pageFormat);
     pageFormat = kPMNoPageFormat;
   }
   if (printSettings != kPMNoPrintSettings) {
-    (void)PMDisposePrintSettings(printSettings);
+  /*  (void)PMDisposePrintSettings(printSettings); */
+    PMRelease(printSettings);
     printSettings = kPMNoPrintSettings;
   }
-  (void)PMEnd();
+  /* (void)PMEnd(); */
+  PMRelease(printSession);
 }
 
-# else  // not TARGET_API_MAC_CARBON
+# else  /* not TARGET_API_MAC_CARBON */
 
 extern void Nlm_EndPrinting (Nlm_WindoW w)
 {
@@ -4132,8 +4145,8 @@ extern void Nlm_EndPrinting (Nlm_WindoW w)
     if (prerr != noErr) {
       Nlm_Message (MSG_ERROR, "PrCloseDoc error %d", prerr);
     }
-// This call is not supported under Carbon, need to figure out
-// how Apple wants us to deal with this ...  churchill 12/28/99
+    /* This call is not supported under Carbon, need to figure out
+    how Apple wants us to deal with this ...  churchill 12/28/99 */
     PrPicFile (prHdl, 0L, 0L, 0L, &prStat);
     prerr = PrError ();
     if (prerr != noErr) {
@@ -4363,8 +4376,9 @@ extern Nlm_Boolean Nlm_StartPage (void)
 {
   OSStatus status;
   
-  status = PMBeginPage(thePrintingPort, NULL);
-  if (status != noErr) return false;  // ??
+/*  status = PMBeginPage(thePrintingPort, NULL); */
+  status = PMSessionBeginPage(printSession, pageFormat, NULL);
+  if (status != noErr) return false;  /* ?? */
   
   return true;
 }
@@ -4432,8 +4446,9 @@ extern Nlm_Boolean Nlm_EndPage (void)
 {
   OSStatus status;
   
-  status = PMEndPage(thePrintingPort);
-  if (status != noErr) return false;  // ??
+/*  status = PMEndPage(thePrintingPort); */
+  status = PMSessionEndPage(printSession);
+  if (status != noErr) return false;  /* ?? */
   
   return true;
 }
@@ -4502,10 +4517,12 @@ static OSType Nlm_GetOSType (Nlm_CharPtr str, OSType dfault)
   return rsult;
 }
 
-// 2001-03-22:  Joshua Juran
-// Working directory records are gone in Carbon.
-// However, so is Standard File.  The code which calls Nav Services instead of SF
-// doesn't need this function, so we don't define it.
+/*
+ 2001-03-22:  Joshua Juran
+ Working directory records are gone in Carbon.
+ However, so is Standard File.  The code which calls Nav Services instead of SF
+ doesn't need this function, so we don't define it.
+*/
 # if !TARGET_API_MAC_CARBON
 static void Nlm_GetFilePath (Nlm_Int2 currentVol, Nlm_CharPtr path, size_t maxsize)
 
@@ -4773,14 +4790,14 @@ static Nlm_Boolean Nlm_NavServGetInputFileName (Nlm_CharPtr fileName, size_t max
         filterProc = NewNavObjectFilterUPP(MyNavFilterProc);
     }
 
-    //  Specify default options for dialog box
+    /*  Specify default options for dialog box */
     anErr = NavGetDefaultDialogOptions(&dialogOptions);
     if (anErr == noErr)
     {
-        //  Adjust the options to fit our needs
-        //  Set this option
+        /*  Adjust the options to fit our needs */
+        /*  Set this option */
         dialogOptions.dialogOptionFlags |= kNavSelectDefaultLocation;
-        //  Clear this one
+        /*  Clear this one */
         dialogOptions.dialogOptionFlags ^= kNavAllowPreviews;
 
         anErr = AECreateDesc(typeFSS, &fss,
@@ -4788,8 +4805,8 @@ static Nlm_Boolean Nlm_NavServGetInputFileName (Nlm_CharPtr fileName, size_t max
                              &defaultLocation );
         if (anErr == noErr)
         {
-            // Get 'open' resource. A nil handle being returned is OK,
-            // this simply means no automatic file filtering.
+            /* Get 'open' resource. A nil handle being returned is OK,
+               this simply means no automatic file filtering. */
             NavTypeListHandle typeList = (NavTypeListHandle)GetResource(
                                         'open', 128);
             NavReplyRecord reply;
@@ -4799,7 +4816,7 @@ static Nlm_Boolean Nlm_NavServGetInputFileName (Nlm_CharPtr fileName, size_t max
                                    typeList, 0);
             if (anErr == noErr && reply.validRecord)
             {
-                //  Deal with multiple file selection
+                /*  Deal with multiple file selection */
                 long    count;
 
                 anErr = AECountItems(&(reply.selection), &count);
@@ -4830,7 +4847,7 @@ static Nlm_Boolean Nlm_NavServGetInputFileName (Nlm_CharPtr fileName, size_t max
                         }
                     }
                 }
-                //  Dispose of NavReplyRecord, resources, descriptors
+                /*  Dispose of NavReplyRecord, resources, descriptors */
                 anErr = NavDisposeReply(&reply);
             }
             if (typeList != NULL)
@@ -5120,10 +5137,10 @@ static Nlm_Boolean Nlm_NavServGetOutputFileName (Nlm_CharPtr fileName, size_t ma
     anErr = NavGetDefaultDialogOptions (&dialogOptions);
     if (anErr == noErr)
     {
-        //  Adjust the options to fit our needs
-        //  Set this option
+        /*  Adjust the options to fit our needs */
+        /*  Set this option */
         dialogOptions.dialogOptionFlags |= kNavNoTypePopup;
-        //  Clear this one
+        /*  Clear this one */
         dialogOptions.dialogOptionFlags ^= kNavAllowStationery;
 
         anErr = AECreateDesc(typeFSS, &fss,
@@ -5131,7 +5148,7 @@ static Nlm_Boolean Nlm_NavServGetOutputFileName (Nlm_CharPtr fileName, size_t ma
                              &defaultLocation );
         if (anErr == noErr) {
 
-            //  One way to get the name for the file to be saved.
+            /*  One way to get the name for the file to be saved. */
             Nlm_StringNCpy_0 ((Nlm_CharPtr) dialogOptions.savedFileName, dfault, 255);
             Nlm_CtoPstr ((Nlm_CharPtr) dialogOptions.savedFileName);
 
@@ -5153,10 +5170,12 @@ static Nlm_Boolean Nlm_NavServGetOutputFileName (Nlm_CharPtr fileName, size_t ma
                 {
                     if (reply.replacing)
                     {
-                        // Make sure you save a temporary file
-                        // so you can check for problems before replacing
-                        // an existing file. Once the save is confirmed,
-                        // swap the files and delete the original.
+                        /*
+                         Make sure you save a temporary file
+                         so you can check for problems before replacing
+                         an existing file. Once the save is confirmed,
+                         swap the files and delete the original.
+                        */
                         Nlm_ConvertFilename (&documentFSSpec, filename);
                         Nlm_StringNCpy_0 (fileName, filename, maxsize);
                         rsult = TRUE;
@@ -5170,7 +5189,7 @@ static Nlm_Boolean Nlm_NavServGetOutputFileName (Nlm_CharPtr fileName, size_t ma
 
                     if ( anErr == noErr)
                     {
-                        // DO NOT call NavCompleteSave() to complete
+                        /* DO NOT call NavCompleteSave() to complete */
                         /* anErr = NavCompleteSave(&reply,
                                                 kNavTranslateInPlace); */
                     }

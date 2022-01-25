@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/1/91
 *
-* $Revision: 6.8 $
+* $Revision: 6.9 $
 *
 * File Description:
 *               underlying window toolbox import
@@ -37,6 +37,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ncbiwin.h,v $
+* Revision 6.9  2003/11/07 15:54:44  rsmith
+* Remove obsolete and uneeded Macintosh headers Types.h and Windows.h
+*
 * Revision 6.8  2003/05/05 12:00:10  rsmith
 * Change definitions before including windows.h when compiling with Codewarrior for Windows.
 *
@@ -145,8 +148,10 @@
 #include <Quickdraw.h>
 #include <TextEdit.h>
 #include <ToolUtils.h>
+/*
 #include <Types.h>
 #include <Windows.h>
+*/
 #include <Sound.h>
 #include <Folders.h>
 #endif

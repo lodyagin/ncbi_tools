@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.210 $
+* $Revision: 6.212 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
@@ -39,6 +39,12 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: seqmgr.c,v $
+* Revision 6.212  2003/12/12 20:59:48  kans
+* added StrandsMatch to consolate code after TestForOverlap, allow both on candidate to be treated as plus
+*
+* Revision 6.211  2003/11/13 21:59:24  kans
+* GetSeqIdForGI separates SEQID_OTHER from other types, so RefSeq takes higher priority over General
+*
 * Revision 6.210  2003/10/24 19:49:11  kans
 * operon feature of equal range sorted before gene, mRNA, CDS
 *
@@ -2095,7 +2101,7 @@ NLM_EXTERN SeqIdPtr LIBCALL GetSeqIdForGI (Int4 gi)
 	ObjMgrProcPtr ompp;
 	OMProcControl ompc;
 	Int2 ret;
-	SeqIdPtr sip, sip2=NULL, other=NULL, gb=NULL;
+	SeqIdPtr sip, sip2=NULL, otherh=NULL, otherl = NULL, gb=NULL;
 	ValNode vn;
 
 
@@ -2118,7 +2124,7 @@ NLM_EXTERN SeqIdPtr LIBCALL GetSeqIdForGI (Int4 gi)
 		        case SEQID_GIBBMT:
       		  case SEQID_PATENT:
 		        case SEQID_GENERAL:
-						other = sip;
+						otherl = sip;
 						break;
 					case SEQID_GI:
 					   break;
@@ -2135,8 +2141,8 @@ NLM_EXTERN SeqIdPtr LIBCALL GetSeqIdForGI (Int4 gi)
 						gb = sip;
 						break;
 					default:
-						if (other == NULL)
-							other = sip;
+						if (otherh == NULL)
+							otherh = sip;
 						break;
 		    }
 		}
@@ -2145,8 +2151,10 @@ NLM_EXTERN SeqIdPtr LIBCALL GetSeqIdForGI (Int4 gi)
 
 	if (gb != NULL)
 		sip2 = gb;
-	else if (other != NULL)
-		sip2 = other;
+	else if (otherh != NULL)
+		sip2 = otherh;
+	else if (otherl != NULL)
+		sip2 = otherl;
 
 	if (sip2 != NULL)
 		return SeqIdDup(sip2);
@@ -7670,6 +7678,17 @@ static Boolean CheckInternalExonBoundaries (Int2 numivalsA, Int4Ptr ivalsA, Int2
   return TRUE;
 }
 
+static Boolean StrandsMatch (Uint1 featstrand, Uint1 locstrand)
+
+{
+  if (featstrand == locstrand) return TRUE;
+  if (locstrand == Seq_strand_unknown && featstrand != Seq_strand_minus) return TRUE;
+  if (featstrand == Seq_strand_unknown && locstrand != Seq_strand_minus) return TRUE;
+  if (featstrand == Seq_strand_both && locstrand != Seq_strand_minus) return TRUE;
+  if (locstrand == Seq_strand_both) return TRUE;
+  return FALSE;
+}
+
 static Int4 TestForOverlap (SMFeatItemPtr feat, SeqLocPtr slp,
                             Int4 left, Int4 right, Int2 overlapType,
                             Int2 numivals, Int4Ptr ivals)
@@ -7972,10 +7991,7 @@ static SeqFeatPtr SeqMgrGetBestOverlappingFeat (SeqLocPtr slp, Uint2 subtype,
     diff = TestForOverlap (feat, slp, left, right, overlapType, numivals, ivals);
     if (diff >= 0) {
 
-      if (feat->strand == strand ||
-          (strand == Seq_strand_unknown && feat->strand != Seq_strand_minus) ||
-          (feat->strand == Seq_strand_unknown && strand != Seq_strand_minus) ||
-          strand == Seq_strand_both) {
+      if (StrandsMatch (feat->strand, strand)) {
 
         if (userfunc != NULL && context != NULL && goOn) {
           SeqMgrBestOverlapSetContext (feat, omdp, userdata, context);
@@ -8009,9 +8025,7 @@ static SeqFeatPtr SeqMgrGetBestOverlappingFeat (SeqLocPtr slp, Uint2 subtype,
       diff = TestForOverlap (feat, slp, left, right, overlapType, numivals, ivals);
       if (diff >= 0) {
 
-        if (feat->strand == strand ||
-            (strand == Seq_strand_unknown && feat->strand != Seq_strand_minus) ||
-            (feat->strand == Seq_strand_unknown && strand != Seq_strand_minus)) {
+        if (StrandsMatch (feat->strand, strand)) {
 
           if (userfunc != NULL && context != NULL && goOn) {
             SeqMgrBestOverlapSetContext (feat, omdp, userdata, context);
@@ -8069,10 +8083,7 @@ NLM_EXTERN Int4 TestFeatOverlap (SeqFeatPtr sfpA, SeqFeatPtr sfpB, Int2 overlapT
                          overlapType, sfipA->numivals, sfipA->ivals);
   if (diff < 0) return -1;
 
-  if (sfipB->strand == sfipA->strand ||
-      (sfipA->strand == Seq_strand_unknown && sfipB->strand != Seq_strand_minus) ||
-      (sfipB->strand == Seq_strand_unknown && sfipA->strand != Seq_strand_minus) ||
-      sfipA->strand == Seq_strand_both) {
+  if (StrandsMatch (sfipB->strand, sfipA->strand)) {
     return diff;
   }
 

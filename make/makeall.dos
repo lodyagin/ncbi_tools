@@ -1,4 +1,4 @@
-# $Id: makeall.dos,v 6.158 2003/01/07 22:11:29 lavr Exp $
+# $Id: makeall.dos,v 6.159 2003/11/28 15:19:09 camacho Exp $
 ##################################################
 ###  Makefile for non-network-based libraries + asntool
 #####
@@ -106,7 +106,7 @@ OBJ23 = +csim.obj +db_slist.obj +dust.obj +falign.obj +g_any.obj \
 	+urkutil.obj +urkpcc.obj +urkptpf.obj \
 	+urkepi.obj +urkfltr.obj +urkdust.obj +urksigu.obj +seg.obj \
 	+urkbias.obj +urkcnsrt.obj +urktree.obj +pseed3.obj +pattern1.obj \
-	+impatool.obj +posit2.obj +newkar.obj +mbalign.obj \
+	+impatool.obj +posit2.obj +mbalign.obj \
 	+vecscrn.obj +mblast.obj +rpsutil.obj +kappa.obj  \
 	+xmlblast.obj +bxmlobj.obj +dotseq.obj +spidey.obj +motif.obj
 

@@ -1,4 +1,4 @@
-/* $Id: blast_format.h,v 1.15 2003/08/25 22:25:46 dondosha Exp $
+/* $Id: blast_format.h,v 1.17 2003/12/03 17:30:24 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,7 +32,7 @@ Author: Ilya Dondoshansky
 Contents: Functions needed for formatting of BLAST results
 
 ******************************************************************************
- * $Revision: 1.15 $
+ * $Revision: 1.17 $
  * */
 #ifndef __BLAST_FORMAT__
 #define __BLAST_FORMAT__
@@ -61,7 +61,7 @@ typedef struct BlastFormattingOptions {
    Uint4 print_options;
    Boolean believe_query;
    Boolean html;
-   FILE *outfp;
+   void* outfp; /**< Output file: either FILE* or AsnIoPtr */
    Int4 number_of_descriptions;
    Int4 number_of_alignments;
    Boolean ungapped; /**< Should this be here????? */
@@ -116,7 +116,7 @@ typedef struct MBXml {
  */
 Int2 BLAST_FormatResults(SeqAlignPtr head, char* blast_database,
         char* blast_program, Int4 num_queries, 
-        SeqLocPtr query_slp, BlastMask* mask_loc, 
+        SeqLocPtr query_slp, BlastMaskLoc* mask_loc, 
         BlastFormattingOptions* format_options, Boolean is_ooframe);
 
 /** Print the summary at the end of the BLAST report.
@@ -145,7 +145,7 @@ Int2 PrintOutputFooter(Uint1 program_number,
 Int2 BLAST_PrintOutputHeader(BlastFormattingOptions* format_options,
         Boolean greedy_extension, ReaddbNewArgs* readdb_args);
 
-void BLAST_PrintIntermediateResults(BlastResults* results, 
+void BLAST_PrintIntermediateResults(BlastHSPResults* results, 
         BlastQueryInfo* query_info, SeqLocPtr query_slp, 
         ReadDBFILEPtr rdfp, SeqIdPtr seqid, BlastScoreBlk* sbp, 
         char* filename);

@@ -1,4 +1,4 @@
-/* $Id: blast_seqalign.h,v 1.11 2003/08/25 22:25:46 dondosha Exp $
+/* $Id: blast_seqalign.h,v 1.12 2003/12/03 17:30:26 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,7 +32,7 @@ Author: Ilya Dondoshansky
 Contents: Functions to convert BLAST results to the SeqAlign form
 
 ******************************************************************************
- * $Revision: 1.11 $
+ * $Revision: 1.12 $
  * */
 #ifndef __BLAST_SEQALIGN__
 #define __BLAST_SEQALIGN__
@@ -62,7 +62,7 @@ extern "C" {
  * @param is_gapped Is this a gapped alignment search? [in]
  * @param head_seqalign List of SeqAlign's [out]
  */
-Int2 BLAST_ResultsToSeqAlign(Uint1 program_number, BlastResults* results, 
+Int2 BLAST_ResultsToSeqAlign(Uint1 program_number, BlastHSPResults* results, 
         SeqLocPtr query_slp, BlastSeqSrc* bssp, SeqLocPtr subject_slp, 
         BlastScoringOptions* score_options, BlastScoreBlk* sbp,
         Boolean is_gapped, SeqAlignPtr* head_seqalign);

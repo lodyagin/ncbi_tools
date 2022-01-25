@@ -1,4 +1,4 @@
-/* $Id: cddserver.c,v 1.41 2003/10/07 21:21:09 bauer Exp $
+/* $Id: cddserver.c,v 1.42 2003/11/19 14:37:52 bauer Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 2/10/2000
 *
-* $Revision: 1.41 $
+* $Revision: 1.42 $
 *
 * File Description:
 *         CD WWW-Server, Cd summary pages and alignments directly from the
@@ -38,6 +38,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cddserver.c,v $
+* Revision 1.42  2003/11/19 14:37:52  bauer
+* more consistent use of PSSM-IDs
+*
 * Revision 1.41  2003/10/07 21:21:09  bauer
 * initial changes to support drawing of hierarchies
 *
@@ -193,8 +196,8 @@
 
 #undef DEBUG
 #undef NOCN3D4
-#undef USE_CDTRK
-#undef DRAW_TREES
+#define USE_CDTRK
+#define DRAW_TREES
   
 typedef struct _private_tree_node_ {
   CdTreeNodePtr      pcdtree;
@@ -1752,7 +1755,10 @@ static void CDDSrvInfoBlk(CddPtr pcdd, FILE *table, CharPtr dbversion,
     }
   }    
   fprintf(table,"<FORM METHOD=\"POST\" ACTION=\"%scddsrv.cgi\" name=\"listform\" enctype=\"application/x-www-form-urlencoded\">\n",URLBase);
-  fprintf(table,"            <INPUT TYPE=\"HIDDEN\" NAME=\"uid\" VALUE=\"%s\">\n",cCDDid);
+  if (iPssmId > 0) {
+    fprintf(table,"            <INPUT TYPE=\"HIDDEN\" NAME=\"uid\" VALUE=\"%d\">\n",iPssmId);
+  } else
+    fprintf(table,"            <INPUT TYPE=\"HIDDEN\" NAME=\"uid\" VALUE=\"%s\">\n",cCDDid);
   fprintf(table,"            <INPUT TYPE=\"HIDDEN\" NAME=\"version\" VALUE=\"%s\">\n",dbversion);
   fprintf(table,"            <INPUT TYPE=\"HIDDEN\" NAME=\"ascbin\" VALUE=\"5\">\n");
   fprintf(table,"</FORM>\n");
@@ -1773,7 +1779,10 @@ static void CDDSrvInfoBlk(CddPtr pcdd, FILE *table, CharPtr dbversion,
 /* Begin Viewing Form                                                        */
 /*---------------------------------------------------------------------------*/
   fprintf(table,"          <FORM METHOD=\"POST\" ACTION=\"%scddsrv.cgi\" name=\"mainform\">\n",URLBase);
-  fprintf(table,"            <INPUT TYPE=\"HIDDEN\" NAME=\"uid\" VALUE=\"%s\">\n",cCDDid);
+  if (iPssmId > 0) {
+    fprintf(table,"            <INPUT TYPE=\"HIDDEN\" NAME=\"uid\" VALUE=\"%d\">\n",iPssmId); 
+  } else
+    fprintf(table,"            <INPUT TYPE=\"HIDDEN\" NAME=\"uid\" VALUE=\"%s\">\n",cCDDid);
   fprintf(table,"            <INPUT TYPE=\"HIDDEN\" NAME=\"version\" VALUE=\"%s\">\n",dbversion);
   if (txids) {
     vnp = txids; while (vnp) {
@@ -2613,6 +2622,56 @@ static void CddSrvRemoveNotes(CddPtr pcdd)
 
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
+/* return the consensus sequence as a Seq-Entry                              */
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+static void CddSrvReturnConsensus(CddPtr pcdd, Int4 iPssmId)
+{
+
+  AsnIoPtr              aip;
+  SeqEntryPtr           sep, sepThis;
+  BioseqSetPtr          bssp;
+  BioseqPtr             bsp;
+  SeqIdPtr              sip, sipNew;
+  DbtagPtr              dbtp;
+  ObjectIdPtr           oidp;
+  
+  bssp = (BioseqSetPtr) pcdd->sequences->data.ptrvalue;
+  sepThis = (SeqEntryPtr) bssp->seq_set;
+  while (sepThis) {
+    bsp = sepThis->data.ptrvalue;
+    sip = bsp->id;
+    if (SipIsConsensus(sip)) {
+      sep = sepThis;
+      sep->next = NULL;
+      if (iPssmId > 0) {   /* add a SeqId to consensus, which records PSSMid */
+        sipNew = (SeqIdPtr) ValNodeNew(NULL);
+	sipNew->choice = SEQID_GENERAL;
+	dbtp = (DbtagPtr) DbtagNew();
+	dbtp->db = StringSave("CDD");
+	oidp = ObjectIdNew();
+	oidp->id = iPssmId;
+	dbtp->tag = oidp;
+	sipNew->data.ptrvalue = dbtp;
+	sipNew->next = sip;
+	bsp->id = sipNew;
+      }
+      break;
+    }
+    sepThis = sepThis->next;
+  }
+  strcpy(OutputName,GetTempName("cddsrv"));
+  aip = AsnIoOpen(OutputName, "w");
+  SeqEntryAsnWrite((SeqEntryPtr) sep, aip, NULL);
+  AsnIoClose(aip);
+  printf("Content-type: text/html\n\n");
+  PrintFile(OutputName);
+  RemoveTempFiles();   
+  return;
+}
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
 /* MAIN Function for cddserver                                               */
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
@@ -2688,6 +2747,7 @@ Int2 Main()
   Boolean                  bHasConsensus      = FALSE;
   Boolean                  bShowTax           = FALSE;
   Boolean                  bEvidenceViewer    = FALSE;
+  Boolean                  bConsensusOnly     = FALSE;
   Char                     CDDalign[PATH_MAX], CDDidx[PATH_MAX];
   Char                     CDDfile[PATH_MAX], ErrMsg[PATH_MAX];
   Char                     chain[2], cChain;
@@ -2772,6 +2832,13 @@ Int2 Main()
     www_arg =  WWWGetValueByIndex(www_info, indx);
     CddDrawFamilyTree(www_arg);
     exit(0);
+  }
+
+/*---------------------------------------------------------------------------*/
+/* CD-Server as server for consensus sequences (formatted as SeqEntry)       */
+/*---------------------------------------------------------------------------*/
+  if ((indx = WWWFindName(www_info, "GETCSEQ")) >= 0) {
+    bConsensusOnly = TRUE;
   }
 
 /*---------------------------------------------------------------------------*/
@@ -2887,6 +2954,18 @@ Int2 Main()
   }
   CddSrvRemoveNotes(pcdd);
   bHasConsensus = CddHasConsensus(pcdd);
+/*---------------------------------------------------------------------------*/
+/* return consensus sequence if required                                     */
+/*---------------------------------------------------------------------------*/
+  if (bConsensusOnly) {
+    if (bHasConsensus) {
+      CddSrvReturnConsensus(pcdd,iPssmId);
+    } else {
+      CddHtmlError("This CD does not have a consensus sequence!");
+    }
+    exit(0);
+  }
+
   alen = CddGetAlignmentLength(pcdd);
 
 /*---------------------------------------------------------------------------*/

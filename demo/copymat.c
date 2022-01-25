@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: copymat.c,v 6.25 2003/05/30 17:31:09 coulouri Exp $";
+static char const rcsid[] = "$Id: copymat.c,v 6.30 2004/01/30 20:34:45 coulouri Exp $";
 
 /*
 * ===========================================================================
@@ -36,6 +36,22 @@ Contents: main routines for copymatrices program to convert
 score matrices output by makematrices into a single byte-encoded file.
    
 $Log: copymat.c,v $
+Revision 6.30  2004/01/30 20:34:45  coulouri
+fix minor nit to FileWrite call
+
+Revision 6.29  2004/01/26 19:40:48  coulouri
+* Correct buffer overrun
+* Use offset rather than pointer in LookupBackboneCell
+
+Revision 6.28  2003/11/24 18:18:47  coulouri
+Correction to previous fix for 64-bit irix
+
+Revision 6.27  2003/11/21 18:01:15  ivanov
+Added extern definition for impalaMakeFileNames()
+
+Revision 6.26  2003/11/20 15:44:32  camacho
+Tom Madden's changes to use lookup table contruction code from algo/blast.
+
 Revision 6.25  2003/05/30 17:31:09  coulouri
 add rcsid
 
@@ -107,10 +123,39 @@ Changed a little format of RPS lookup tables file.
 #include <sequtil.h>
 #include <seqport.h>
 #include <tofasta.h>
-#include <blast.h>
-#include <blastpri.h>
-#include <posit.h>
-#include <profiles.h>
+
+#ifndef MAXLINELEN
+#   define MAXLINELEN 2000
+#endif
+#ifndef MAX_NAME_LENGTH
+#   define MAX_NAME_LENGTH 500
+#endif
+#ifndef PRO_ALPHABET_SIZE
+#   define PRO_ALPHABET_SIZE  26
+#endif
+#ifndef SORT_THRESHOLD
+#   define SORT_THRESHOLD 20
+#endif
+#ifndef RPS_MAGIC_NUMBER
+#   define RPS_MAGIC_NUMBER 7702
+#endif
+/*factor used to multiply the gapped K parameter to make it
+  more accurate in most cases*/
+#ifndef PRO_K_MULTIPLIER
+#   define PRO_K_MULTIPLIER 1.2
+#endif
+#include <algo/blast/core/blast_lookup.h>
+#include <algo/blast/core/blast_options.h>
+
+typedef Int4 ScoreRow[PRO_ALPHABET_SIZE];
+extern Boolean LIBCALL 
+IMPALAPrintHelp PROTO((Boolean html, Int4 line_length, Char * programName, 
+                       FILE *outfp));
+extern void  LIBCALL
+impalaMakeFileNames PROTO((Char * matrixDbName, Char * auxiliaryFileName,
+                           Char * mmapFileName, Char * seqFileName,
+                           Char *matrixFileName, Char * ckptFileName,
+                           Char *directoryPrefix));
 
 #define NUMARG (sizeof(myargs)/sizeof(myargs[0]))
 
@@ -333,6 +378,40 @@ static Int4 findTotalLength(FILE *matrixAuxiliaryFile, Int4 numProfiles,
     return(totalLength);
 }
 
+static Boolean RPSUpdateOffsets(LookupTable *lookup)
+{
+    Uint4 len;
+    Int4 index;
+    Int4 num_used;
+    Int4 offset_diff;
+
+    len = lookup->backbone_size;
+    offset_diff = lookup->wordsize - 1;
+
+    /* Walk through table, copying info into mod_lt[] */
+    for(index = 0; index < len; index++) {
+        
+        if((num_used=lookup->thick_backbone[index].num_used) <= 3)
+        {
+            while (num_used > 0)
+            {
+                num_used--;
+            	lookup->thick_backbone[index].payload.entries[num_used] += offset_diff;
+            }
+        }
+        else
+        {
+            while (num_used > 0)
+            {
+                 num_used--;
+                 lookup->overflow [ lookup->thick_backbone[index].payload.overflow_cursor + num_used] += offset_diff;
+            }
+        }
+    }
+    return TRUE;
+}
+
+
 /* #define RPS_THRESHOLD 11 */
 /* #define RPS_WORDSIZE  3 */
 
@@ -341,50 +420,44 @@ static Int4 findTotalLength(FILE *matrixAuxiliaryFile, Int4 numProfiles,
    pointers relative to the start of "mod_lookup_table_memory" chunk 
    RPS Blast will calculate real pointers in run time using these values
 */
-Boolean RPSUpdatePointers(LookupTablePtr lookup)
+Boolean RPSUpdatePointers(LookupTable *lookup, Uint4 *new_overflow, Uint4 *new_overflow_size)
 {
-    ModLAEntry * mod_lt;
     Uint4 len;
     Int4 index;
-    ModLookupPositionPtr start_address;
+    Uint4 *start_address;
     long mlpp_address;
-    ModLookupPositionPtr *lpp;
+    Uint4 *new_overflow_cursor;
+    Int4 *src;
+    Int4 first_hit;
 
-    len = lookup->array_size;
-    mod_lt=lookup->mod_lt;
-    start_address = (ModLookupPositionPtr) lookup->mod_lookup_table_memory;
+    len = lookup->backbone_size;
+
+    start_address = new_overflow_cursor = new_overflow;
 
     /* Walk through table, copying info into mod_lt[] */
     for(index = 0; index < len; index++) {
         
-        if(mod_lt[index].num_used <= 3)
+        if(lookup->thick_backbone[index].num_used <= 3)
             continue;
 
-#if 1
+        src = &(lookup->overflow[lookup->thick_backbone[index].payload.overflow_cursor]);
+        MemCpy(new_overflow_cursor, &src[1], sizeof(Uint4)*(lookup->thick_backbone[index].num_used-1));
 
-        /* Taking pointer to 4/8 bytes address */        
-        lpp= (ModLookupPositionPtr *) &mod_lt[index].entries[1];
-        
-        mlpp_address = (long) *lpp;
+        mlpp_address = (long) new_overflow_cursor;
+
+	new_overflow_cursor += lookup->thick_backbone[index].num_used-1;
+	first_hit = src[0];
+
         mlpp_address -= (long) start_address;
         
         /* Now this is new relative address - usually small  */
-        *lpp  = (ModLookupPositionPtr) mlpp_address;
-
-#if defined(OS_UNIX_IRIX)
-        if(sizeof(ModLookupPositionPtr) == 8) { /* 64bit build */
-            mlpp_address = mod_lt[index].entries[1];
-            mod_lt[index].entries[1] = mod_lt[index].entries[2];
-            mod_lt[index].entries[2] = mlpp_address;
-        }
-#endif
-        
-#else
-        mod_lt[index].entries[1] -= (int) start_address;
-        mod_lt[index].entries[2] = 0; /* Not used */
-#endif
+        lookup->thick_backbone[index].payload.entries[1] = (Int4) mlpp_address;
+        lookup->thick_backbone[index].payload.entries[0] = first_hit;
 
     }
+
+    *new_overflow_size = new_overflow_cursor - new_overflow;
+
     return TRUE;
 }
 
@@ -392,17 +465,24 @@ Boolean RPSUpdatePointers(LookupTablePtr lookup)
    Write lookup table to the disk into file "*.loo", which will be
    used memory-mapped during RPS Blast search 
 */
-Boolean RPSDumpLookupTable(LookupTablePtr lookup, FILE *fd)
+Boolean RPSDumpLookupTable(LookupTable *lookup, FILE *fd)
 {
+    Uint4 *new_overflow;
+    Uint4 new_overflow_size;
 
-    RPSUpdatePointers(lookup);
+    RPSUpdateOffsets(lookup);
 
-    FileWrite(lookup->mod_lt, sizeof(ModLAEntry), 1+lookup->array_size, fd);
-    if(lookup->mod_lookup_table_size) {
-        FileWrite(lookup->mod_lookup_table_memory, 
-                  lookup->mod_lookup_table_size, 
-                  sizeof(ModLookupPosition), fd);
-    }
+    new_overflow = malloc(lookup->overflow_size*sizeof(Uint4)); 
+    RPSUpdatePointers(lookup, new_overflow, &new_overflow_size);
+
+    FileWrite(lookup->thick_backbone, sizeof(LookupBackboneCell), lookup->backbone_size, fd);
+    if(new_overflow_size)
+        FileWrite(new_overflow,
+                  sizeof(Uint4),
+                  new_overflow_size,
+                  fd);
+
+    sfree(new_overflow);
     
     return TRUE;
 }
@@ -415,25 +495,63 @@ Boolean RPSCreateLookupFile(ScoreRow *combinedMatrix, Int4 numProfiles,
                             Int4Ptr seqlens, CharPtr filename, 
                             Nlm_FloatHi scalingFactor)
 {
-    LookupTablePtr lookup;
-    BlastAllWordPtr all_words;
-    Int4 start, i, header_size, all_length, magicNumber;
+    BlastScoreBlk *sbp;
+    DoubleInt *double_int;
     FILE *fd;
+    Int4  **posMatrix;
+    Int4 start, i, header_size, all_length, magicNumber;
     Int4Ptr offsets;
-    BLAST_ScorePtr PNTR posMatrix;
     Int4 num_lookups;
+    ListNode *lookup_segment=NULL;
+    LookupTable *lookup;
+    LookupTableWrap* lookup_wrap_ptr=NULL;
+    LookupTableOptions* lookup_options;
+   
 
     if((fd = FileOpen(filename, "wb")) == NULL)
         return FALSE;
     
     num_lookups = 1; /* Single lookup table for all set */
-    lookup = lookup_new(PRO_ALPHABET_SIZE, 3, 0);
 
-    all_words = BlastPopulateAllWordArrays(3, PRO_ALPHABET_SIZE);
+    all_length = seqlens[numProfiles] - seqlens[0];
+    
+    posMatrix = MemNew((all_length + 1) * sizeof(Int4 *));
+    for (i = 0; i < all_length; i++) {
+        posMatrix[i] = (Int4 *) &(combinedMatrix[i][0]);
+    }
+    
+    /* Last row is necessary */
+    posMatrix[all_length] = MemNew(sizeof(Int4) * PRO_ALPHABET_SIZE);
+
+    for(i = 0; i < PRO_ALPHABET_SIZE; i++) {
+        posMatrix[all_length][i] = -INT2_MAX;
+    }
+
+    sbp = BlastScoreBlkNew(BLASTAA_SEQ_CODE, 1);
+    sbp->posMatrix = posMatrix;
+    LookupTableOptionsNew(blast_type_blastp, &lookup_options);
+    BLAST_FillLookupTableOptions(lookup_options, blast_type_blastp, FALSE, 
+	(Int4) (myargs[3].floatvalue*scalingFactor), myargs[4].intvalue, FALSE, FALSE, TRUE);  /* add last arg for psi-blast?? */
+
+
+    double_int = (DoubleInt*) calloc(1, sizeof(DoubleInt));
+    double_int->i1 = 0;
+    double_int->i2 = all_length;
+
+    ListNodeAddPointer(&lookup_segment, 0, double_int);
+
+    /* Need query for psi-blast??  where to put the PSSM? */
+    LookupTableWrapInit(NULL, lookup_options, lookup_segment, sbp, &lookup_wrap_ptr);
+   
+    sbp->posMatrix = NULL;
+    sbp = BlastScoreBlkFree(sbp);
+    lookup_options = LookupTableOptionsFree(lookup_options);
+    lookup_segment = ListNodeFreeData(lookup_segment);
+
+    lookup = (LookupTable*) lookup_wrap_ptr->lut;
 
     /* Only Uint4 maximum length for lookup file allowed in current
        implementation */
-
     header_size = (numProfiles+1)*sizeof(Int4) + 8*sizeof(Int4);
     
     /* Beginning of file will be allocated for lookup offsets */
@@ -441,31 +559,10 @@ Boolean RPSCreateLookupFile(ScoreRow *combinedMatrix, Int4 numProfiles,
     
     offsets = MemNew(sizeof(Int4) * (num_lookups + 1));
     
-    all_length = seqlens[numProfiles] - seqlens[0];
-    
-    posMatrix = MemNew((all_length + 1) * sizeof(BLAST_Score *));
-    for (i = 0; i < all_length; i++) {
-        posMatrix[i] = (BLAST_Score *) &(combinedMatrix[i][0]);
-    }
-    
-    /* Last row is necessary */
-    posMatrix[all_length] = MemNew(sizeof(BLAST_Score) * PRO_ALPHABET_SIZE);
-    for(i = 0; i < PRO_ALPHABET_SIZE; i++) {
-        posMatrix[all_length][i] = -INT2_MAX;
-    }
 
     offsets[0] = ftell(fd);
     
     start = seqlens[0]; /* 0 */
-    
-    if(BlastNewFindWordsEx(lookup, &posMatrix[start], 0, all_length, 
-                           all_words, (Int4) (myargs[3].floatvalue*scalingFactor), 
-                           myargs[4].intvalue, 0) < 0) {
-        ErrPostEx(SEV_ERROR, 0,0, "Failure to create llokup table");
-        return FALSE;
-    }
-    
-    lookup_position_aux_destruct(lookup);
     
     RPSDumpLookupTable(lookup, fd);
     
@@ -477,9 +574,9 @@ Boolean RPSCreateLookupFile(ScoreRow *combinedMatrix, Int4 numProfiles,
     magicNumber = RPS_MAGIC_NUMBER;
     FileWrite(&magicNumber, sizeof(Int4), 1, fd); /* header[0] */
     FileWrite(&num_lookups, sizeof(Int4), 1, fd); /* header[1] */
-    FileWrite(&lookup->num_pos_added, sizeof(Int4), 1, fd); /* header[2] */
-    FileWrite(&lookup->num_unique_pos_added, sizeof(Int4), 1, fd); /* header[3] */
-    FileWrite(&lookup->mod_lookup_table_size, sizeof(Int4), 1, fd); /* header[4] */
+    FileWrite(&lookup->neighbor_matches, sizeof(Int4), 1, fd); /* header[2] */
+    FileWrite(&lookup->neighbor_matches, sizeof(Int4), 1, fd); /* header[3] */
+    FileWrite(&lookup->overflow_size, sizeof(Int4), 1, fd); /* header[4] */
     
     /* Now writing recorded offsets in the beginning of the file */
     
@@ -487,27 +584,14 @@ Boolean RPSCreateLookupFile(ScoreRow *combinedMatrix, Int4 numProfiles,
     FileWrite(offsets, sizeof(Int4), num_lookups + 1, fd);
     FileClose(fd);
     
-/* comment out for now, why is this here?
-    if (scalingFactor != 1.0) {
-        for(j = 0; j < all_length; j++) {
-            for(i = 0; i < PRO_ALPHABET_SIZE; i++) {
-                combinedMatrix[j][i] /= scalingFactor;
-            }
-        }
-    }
-*/
-
     /* Final memory cleenup */
-    
-    lookup = lookup_destruct(lookup);
     
     MemFree(posMatrix[all_length]);
     MemFree(posMatrix);
 
-    BlastAllWordDestruct(all_words);
-    
     return TRUE;
 }
+
 /* -- SSH --
    Create file <database_name> (without extention), which is concatenation
    of all FASTA files used. Used by RPS Blast.

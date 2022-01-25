@@ -1,5 +1,5 @@
 static char const rcsid[] =
-    "$Id: blast_setup.c,v 1.62 2003/10/27 23:02:11 dondosha Exp $";
+    "$Id: blast_setup.c,v 1.66 2004/02/03 21:09:52 dondosha Exp $";
 /* ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,7 +32,7 @@ Author: Tom Madden
 
 Contents: Utilities initialize/setup BLAST.
 
-$Revision: 1.62 $
+$Revision: 1.66 $
 
 ******************************************************************************/
 
@@ -48,7 +48,7 @@ $Revision: 1.62 $
  * @param query_info Query information containing context information [in]
  *
 */
-static Int2
+Int2
 BlastScoreBlkGappedFill(BlastScoreBlk * sbp,
                         const BlastScoringOptions * scoring_options,
                         Uint1 program, BlastQueryInfo * query_info)
@@ -394,7 +394,7 @@ Int2 BLAST_MainSetUp(Uint1 program_number,
                      const BlastHitSavingOptions * hit_options,
                      BLAST_SequenceBlk * query_blk,
                      BlastQueryInfo * query_info,
-                     BlastSeqLoc ** lookup_segments, BlastMask * *filter_out,
+                     BlastSeqLoc ** lookup_segments, BlastMaskLoc * *filter_out,
                      BlastScoreBlk * *sbpp, Blast_Message * *blast_message)
 {
     BlastScoreBlk *sbp;
@@ -407,10 +407,10 @@ Int2 BLAST_MainSetUp(Uint1 program_number,
     BlastSeqLoc *filter_slp = NULL;     /* SeqLocPtr computed for filtering. */
     BlastSeqLoc *filter_slp_combined;   /* Used to hold combined SeqLoc's */
     BlastSeqLoc *loc;           /* Iterator variable */
-    BlastMask *last_filter_out = NULL;
+    BlastMaskLoc *last_filter_out = NULL;
     Uint1 *buffer;              /* holds sequence for plus strand or protein. */
     Boolean reverse;            /* Indicates the strand when masking filtered locations */
-    BlastMask *mask_slp, *next_mask_slp; /* Auxiliary locations for lower 
+    BlastMaskLoc *mask_slp, *next_mask_slp; /* Auxiliary locations for lower 
                                             case masks */
     Int4 context_offset;
     Boolean no_forward_strand; 
@@ -447,8 +447,9 @@ Int2 BLAST_MainSetUp(Uint1 program_number,
         } else {
            status = BlastScoreBlkGappedFill(sbp, scoring_options, 
                        program_number, query_info);
-           if (status)
+           if (status) {
               return status;
+           }
         }
 
         *sbpp = sbp;
@@ -502,15 +503,20 @@ Int2 BLAST_MainSetUp(Uint1 program_number,
 
             /* Attach the lower case mask locations to the filter locations 
                and combine them */
-            if (filter_slp && mask_slp) {
-                for (loc = filter_slp; loc->next; loc = loc->next) ;
-                loc->next = mask_slp->loc_list;
+            if (mask_slp) {
+                if (filter_slp) {
+                    for (loc = filter_slp; loc->next; loc = loc->next);
+                    loc->next = mask_slp->loc_list;
+                } else {
+                    filter_slp = mask_slp->loc_list;
+                }
                 /* Set location list to NULL, to allow safe memory deallocation */
                 mask_slp->loc_list = NULL;
             }
 
             filter_slp_combined = NULL;
-            CombineMaskLocations(filter_slp, &filter_slp_combined);
+            CombineMaskLocations(filter_slp, &filter_slp_combined, 0);
+
             filter_slp = BlastSeqLocFree(filter_slp);
 
             /* NB: for translated searches filter locations are returned in 
@@ -520,10 +526,10 @@ Int2 BLAST_MainSetUp(Uint1 program_number,
             if (filter_slp_combined) {
                 if (!last_filter_out) {
                     last_filter_out = *filter_out =
-                        (BlastMask *) calloc(1, sizeof(BlastMask));
+                        (BlastMaskLoc *) calloc(1, sizeof(BlastMaskLoc));
                 } else {
                     last_filter_out->next =
-                        (BlastMask *) calloc(1, sizeof(BlastMask));
+                        (BlastMaskLoc *) calloc(1, sizeof(BlastMaskLoc));
                     last_filter_out = last_filter_out->next;
                 }
                 last_filter_out->index = index;
@@ -541,8 +547,11 @@ Int2 BLAST_MainSetUp(Uint1 program_number,
 
             if (!hit_options->phi_align &&
                 (status = BLAST_ScoreBlkFill(sbp, (char *) buffer,
-                                             query_length, context)))
-                return status;
+                                             query_length, context))) {
+               Blast_MessageWrite(blast_message, 2, 2, 1, 
+                  "Query completely filtered; nothing left to search");
+               return status;
+            }
         }
     }
 
@@ -561,7 +570,7 @@ Int2 BLAST_MainSetUp(Uint1 program_number,
 
     /* Free the filtering locations if masking done for lookup table only */
     if (mask_at_hash) {
-        *filter_out = BlastMaskFree(*filter_out);
+        *filter_out = BlastMaskLocFree(*filter_out);
     }
 
     /* Get "ideal" values if the calculated Karlin-Altschul params bad. */

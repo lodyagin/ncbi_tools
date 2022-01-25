@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/10/95
 *
-* $Revision: 6.0 $
+* $Revision: 6.1 $
 *
 * File Description: 
 *
@@ -319,7 +319,7 @@ static void
 }
 
 static void
-/*FCN*/UpdateControls ( 
+/*FCN*/UpdateDlgControls ( 
   Boolean panel,
   Boolean other
 ){
@@ -617,7 +617,7 @@ static void
     Nlm_SetMuskCParamEd( curClass, inClipSchema[i].subClass,
                          inClipSchema[i].pType, inClipBoard[i] );
   }
-  UpdateControls(TRUE,TRUE);
+  UpdateDlgControls(TRUE,TRUE);
 }
 
 static void
@@ -702,7 +702,7 @@ static void
 ){
   LoadFeatAr ();
   FillFetureList(TRUE);
-  UpdateControls(TRUE,TRUE);
+  UpdateDlgControls(TRUE,TRUE);
   UpdateTools();
 }
 
@@ -711,7 +711,7 @@ static void
   LisT l
 ){
   curExtraInd = GetValue (l) - 1;
-  UpdateControls(TRUE,TRUE);
+  UpdateDlgControls(TRUE,TRUE);
   UpdateTools();
 }
 
@@ -758,7 +758,7 @@ static void
       Enable ( applayButton );
     }
   }
-  UpdateControls(TRUE,TRUE);
+  UpdateDlgControls(TRUE,TRUE);
   UpdateTools();
 }
 
@@ -782,7 +782,7 @@ static void
   if ( GetStatus(b) ) val = (BigScalar)TRUE;
   else val = (BigScalar)FALSE;
   Nlm_SetMuskCParamEd(curClass,MSM_SEG_BORD,MSM_TRUEFALSE,val);
-  UpdateControls(TRUE,FALSE);
+  UpdateDlgControls(TRUE,FALSE);
 }
 
 static void
@@ -804,7 +804,7 @@ static void
   }
   val = (BigScalar)(GetValue(g)-1);
   Nlm_SetMuskCParamEd(curClass,MSM_FGAP,MSM_STYLE,val);
-  UpdateControls(TRUE,FALSE);
+  UpdateDlgControls(TRUE,FALSE);
 }
 
 static void
@@ -846,7 +846,7 @@ static void
     }
   }
   Nlm_SetMuskCParamEd(curClass,curSubClass,MSM_STYLE,val);
-  UpdateControls(TRUE,FALSE);
+  UpdateDlgControls(TRUE,FALSE);
 }
 
 static void
@@ -882,7 +882,7 @@ static void
     if ( GetStatus (orientCheckBox[curDlg]) ) val |= MSM_SEG_SHOWORIENT;
   }
   Nlm_SetMuskCParamEd(curClass,MSM_SEGMENT, MSM_STYLE, val);
-  UpdateControls(TRUE,FALSE);
+  UpdateDlgControls(TRUE,FALSE);
   UpdateTools ();
 }
 
@@ -905,7 +905,7 @@ static void
   }
   val = (BigScalar)GetValue(p) * 2 + 2;
   Nlm_SetMuskCParamEd(curClass,MSM_SEGMENT, MSM_HEIGHT, val);
-  UpdateControls(TRUE,FALSE);
+  UpdateDlgControls(TRUE,FALSE);
 }
 
 static void
@@ -1236,7 +1236,7 @@ static GrouP
                    NULL );
   }
   curSubDlg[curDlg] = 0;
-  UpdateControls (FALSE,TRUE);
+  UpdateDlgControls (FALSE,TRUE);
   return gRet;
 } /* End of CreateDlgFeatures () */
 
@@ -1308,7 +1308,7 @@ static void
       Nlm_SetMuskCParamEd(curClass,curSubClass,MSM_HEIGHT,fsize);
     }
   }
-  UpdateControls ( TRUE, TRUE );
+  UpdateDlgControls ( TRUE, TRUE );
 }
 
 static void  Nlm_SetTDef (
@@ -1322,7 +1322,7 @@ static void  Nlm_SetTDef (
     Show ( featPopuP );
     LoadFeatAr();
     FillFetureList (TRUE);
-    UpdateControls (TRUE,TRUE);
+    UpdateDlgControls (TRUE,TRUE);
   }
   UpdateTools();
 }

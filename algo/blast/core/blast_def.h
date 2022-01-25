@@ -1,4 +1,4 @@
-/* $Id: blast_def.h,v 1.27 2003/10/15 16:59:43 coulouri Exp $
+/* $Id: blast_def.h,v 1.29 2003/12/03 16:31:45 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -34,7 +34,7 @@ Contents: Definitions of major structures used throughout BLAST
 Detailed Contents: 
 
 ******************************************************************************
- * $Revision: 1.27 $
+ * $Revision: 1.29 $
  * */
 #ifndef __BLAST_DEF__
 #define __BLAST_DEF__
@@ -73,11 +73,11 @@ void __sfree(void** x); /* implemented in lib/util.c */
 #endif
 
 /** Structure for keeping the query masking information */
-typedef struct BlastMask {
+typedef struct BlastMaskLoc {
    Int4 index; /**< Index of the query sequence this mask is applied to */
    ListNode* loc_list; /**< List of mask locations */
-   struct BlastMask* next; /**< Pointer to the next query mask */
-} BlastMask;
+   struct BlastMaskLoc* next; /**< Pointer to the next query mask */
+} BlastMaskLoc;
 
 /** Structure to hold a sequence. */
 typedef struct BLAST_SequenceBlk {
@@ -94,7 +94,7 @@ typedef struct BLAST_SequenceBlk {
                                         for sequence_start */
    Uint1* oof_sequence; /**< Mixed-frame protein representation of a
                              nucleotide sequence for out-of-frame alignment */
-   BlastMask* lcase_mask; /**< Locations to be masked from operations on this 
+   BlastMaskLoc* lcase_mask; /**< Locations to be masked from operations on this 
                            sequence: lookup table for query; scanning for
                            subject. */
 } BLAST_SequenceBlk;
@@ -105,7 +105,6 @@ typedef struct BlastQueryInfo {
    Int2 first_context; /**< Index of the first element of the context array */
    Int2 last_context;  /**< Index of the last element of the context array */
    int num_queries;   /**< Number of query sequences */
-   Int4 total_length; /**< Total length of all query sequences/strands/frames */
    Int4* context_offsets; /**< Offsets of the individual queries in the
                                concatenated super-query */
    Int4* length_adjustments; /**< Length adjustments for boundary conditions */

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.39 $
+* $Revision: 6.42 $
 *
 * File Description: 
 *
@@ -1297,6 +1297,10 @@ static void GeneXrefWarn (GrouP g)
 
 {
   Int2  val;
+  Boolean indexerVersion;
+
+  indexerVersion = (Boolean) (GetAppProperty ("InternalNcbiSequin") != NULL);
+  if (indexerVersion) return;
 
   val = GetValue (g);
   if (val == 2) {
@@ -1670,10 +1674,17 @@ extern Boolean FileToScrollText (TexT t, CharPtr path)
 
   if (t != NULL && path != NULL && *path != '\0') {
     len = FileLength (path);
+    max = (Int4) INT2_MAX;
 #ifdef WIN_MOTIF
     max = INT4_MAX;
-#else
-    max = (Int4) INT2_MAX;
+#endif
+#ifdef WIN_MSWIN
+    max = INT4_MAX;
+#endif
+#ifdef WIN_MAC
+#ifdef OS_UNIX_DARWIN
+    max = INT4_MAX;
+#endif
 #endif
     if (len > 0 && len < max - 4) {
       str = MemNew (sizeof (char) * (len + 3));

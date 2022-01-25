@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.16 $
+* $Revision: 6.18 $
 *
 * File Description: 
 *       Vibrant menu functions
@@ -37,6 +37,12 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: vibmenus.c,v $
+* Revision 6.18  2004/01/20 23:35:38  sinyakov
+* [WIN_MSWIN] implemented menu accelerators
+*
+* Revision 6.17  2003/11/17 17:03:30  kans
+* changed C++ style comments to C comments
+*
 * Revision 6.16  2003/03/27 19:35:43  kans
 * Nlm_PrepareTitle removes non-Mac accelerator from Mac menu item
 *
@@ -822,7 +828,7 @@ static void Nlm_DeskAccProc (Nlm_ChoicE c)
 
 {
 #if TARGET_API_MAC_CARBON >= 1
-    // Carbon will create, fill, and handle everything in the Apple menu
+    /* Carbon will create, fill, and handle everything in the Apple menu */
     return;
 #else
   Nlm_MenuTool  h;
@@ -3920,6 +3926,172 @@ static void Nlm_AddTitleAccel(Widget w, Nlm_CharPtr title, Nlm_Int4 flags)
 }
 #endif /* WIN_MOTIF */
 
+#ifdef WIN_MSWIN
+
+extern Nlm_Handle Nlm_GetWindowHAccel (Nlm_WindoW w);
+extern void Nlm_SetWindowHAccel (Nlm_WindoW w, Nlm_Handle h);
+
+static void Nlm_AddAccel(Nlm_MenU m, Nlm_Int2 id, Nlm_Char key)
+{
+    HACCEL haccel = NULL;   /* handle to accelerator table */
+
+    int i;                  /* loop counter */
+    LPACCEL lpaccelNew;     /* pointer to new accelerator table */
+    HACCEL haccelOld;       /* handle to old accelerator table  */
+    int nAccelerators;      /* number of accelerators in table  */
+
+    BYTE fAccelFlags;       /* accelerator flags */
+
+    Nlm_WindoW w;	    /* top-level window that contains the menu */
+
+    if(key == 0)
+	/* no accelerator key specified */
+	return;
+
+    if(IS_ALPHA(key))
+    {
+        fAccelFlags = FCONTROL;
+	key = TO_UPPER(key) - 'A' + 1;
+    }
+    else
+    if(IS_DIGIT(key))
+    {
+        fAccelFlags = FCONTROL | FVIRTKEY;
+    }
+    else
+	/* key is not supported */
+	return;
+
+    /* Get top-level window */
+    w = Nlm_GetParentWindow((Nlm_GraphiC)m);
+    if(w == NULL)
+	/* failure */
+	return;
+
+    haccel = Nlm_GetWindowHAccel(w);
+
+    /* Save the current accelerator table. */
+
+    haccelOld = haccel; 
+ 
+    /* Count the number of entries in the current 
+       table, allocate a buffer for the table, and 
+       then copy the table into the buffer,
+       reserving space for a new accelerator */
+ 
+    if(haccelOld)
+	nAccelerators = CopyAcceleratorTable(haccelOld, NULL, 0); 
+    else
+	nAccelerators = 0;
+
+    lpaccelNew = (LPACCEL) Nlm_MemNew((nAccelerators + 1) * sizeof(ACCEL));
+    if(lpaccelNew == NULL)
+	/* failure */
+	return;
+ 
+    if(lpaccelNew != NULL && nAccelerators) 
+        CopyAcceleratorTable(haccel, lpaccelNew, nAccelerators); 
+ 
+    /* Find the accelerator that the user modified 
+       and change its flags and virtual-key code 
+       as appropriate. */
+ 
+    for(i = 0; i < nAccelerators; ++i) 
+    {
+	if(lpaccelNew[i].cmd == (WORD) id ||
+	   (lpaccelNew[i].fVirt == fAccelFlags &&
+            lpaccelNew[i].key == key))
+	    break;
+    } 
+ 
+    lpaccelNew[i].cmd = id; 
+    lpaccelNew[i].fVirt = fAccelFlags; 
+    lpaccelNew[i].key = key;
+
+    if(i == nAccelerators)
+	/* new accelerator added */
+	++nAccelerators;
+
+    /* Create the new accelerator table, and 
+       destroy the old one. */
+ 
+    if(haccelOld)
+        DestroyAcceleratorTable(haccelOld); 
+    haccel = CreateAcceleratorTable(lpaccelNew, nAccelerators);
+
+    Nlm_SetWindowHAccel(w, haccel);
+
+    Nlm_MemFree(lpaccelNew);
+}
+
+
+static void Nlm_PrepareTitleMsWin(Nlm_CharPtr temp, Nlm_CharPtr title,
+				  size_t siztemp, Nlm_CharPtr paccel,
+				  Nlm_Boolean isMenu)
+{
+    /* duplicate existing '&',
+       mark mnemo char with single '&',
+       add accelerator description */
+
+    Nlm_Char  accel = '\0';
+    Nlm_Char  mnemo = '\0';
+    Nlm_Uint4 mnemo_pos = 0;
+    Nlm_Uint4 src_pos = 0;
+    Nlm_Uint4 dest_pos = 0;
+
+    Nlm_TitleGetAccel(temp, &accel, &mnemo, &mnemo_pos);
+
+    if(isMenu)
+        accel = '\0';
+
+    if(paccel != NULL)
+	*paccel = accel;
+
+    for(src_pos = 0, dest_pos = 0;
+	title[src_pos] != '\0' && dest_pos+1 < siztemp;
+	++src_pos)
+    {
+	if(mnemo && src_pos == mnemo_pos)
+	{
+	    if(dest_pos + 2 < siztemp)
+	    {
+		temp[dest_pos++] = '&';
+		temp[dest_pos++] = title[src_pos];
+	    }
+	    else
+		break;
+	}
+	else
+	if(title[src_pos] == '&')
+	{
+	    if(dest_pos + 2 < siztemp)
+	    {
+		temp[dest_pos++] = '&';
+		temp[dest_pos++] = title[src_pos];
+	    }
+	    else
+		break;
+	}
+	else
+	if(title[src_pos] == '/')
+	    break;
+	else
+	    temp[dest_pos++] = title[src_pos];
+    }
+
+    temp[dest_pos] = '\0';
+
+    if(accel != '\0' && dest_pos + 7 < siztemp)
+    {
+	Nlm_StrCpy(temp+dest_pos, "\tCtrl- ");
+	if(IS_ALPHA(accel))
+	    temp[dest_pos+6] = TO_UPPER(accel);
+        else
+	    temp[dest_pos+6] = accel;
+    }
+}
+#endif /* WIN_MSWIN */
+
 
 static void Nlm_PrepareTitle(Nlm_CharPtr temp, Nlm_CharPtr title,
                              size_t siztemp, Nlm_Boolean isMenu)
@@ -3935,21 +4107,6 @@ static void Nlm_PrepareTitle(Nlm_CharPtr temp, Nlm_CharPtr title,
       if ( Nlm_StrngPos(temp, "/ ", 0, FALSE, &pos) )
         temp[pos] = '\0';
     }
-  }}
-#endif
-
-#ifdef WIN_MSWIN
-  {{
-    Nlm_Char  mnemo;
-    Nlm_Uint4 pos;
-
-    if (Nlm_TitleGetAccel(temp, NULL, &mnemo, &pos)  &&  mnemo)
-      { /* temp := title[ 0..poslet-1 ] + '&' + title[ poslet..END ] */
-        Nlm_StringNCpy_0(temp+pos+1, title+pos, siztemp-pos-1);
-        temp[pos] = '&';
-      }
-
-    Nlm_StripTitleAccel( temp );
   }}
 #endif
 }
@@ -3988,9 +4145,14 @@ static Nlm_ItemTool Nlm_AppendItems(Nlm_MenU m, Nlm_IteM i,
 #endif
 
 #ifdef WIN_MSWIN
+  {{
+  Nlm_Char accel;
+  Nlm_PrepareTitleMsWin(temp, itemNames, sizeof(temp), &accel, FALSE);
   AppendMenu(h, MF_ENABLED, nextMenuNum, temp);
+  Nlm_AddAccel(m, nextMenuNum, accel);
   if (nextMenuNum < 32767)
     nextMenuNum++;
+  }}
 #endif
 
 #ifdef WIN_MOTIF
@@ -4820,6 +4982,7 @@ static void Nlm_NewPopup (Nlm_MenU m, Nlm_CharPtr title, Nlm_RectPtr r)
   mb  = (Nlm_MenuBaR) Nlm_GetParent ((Nlm_GraphiC) m);
   mbh = Nlm_GetMenuBarHandle( mb );
   h = CreateMenu();
+  Nlm_PrepareTitleMsWin(temp, title, sizeof (temp), NULL, TRUE);
   AppendMenu(mbh, MF_POPUP | MF_ENABLED, (UINT)h, temp);
 #endif
 
@@ -5525,6 +5688,7 @@ extern Nlm_MenU Nlm_SubMenu (Nlm_MenU m, Nlm_CharPtr title)
                                &r, sizeof(Nlm_ItemRec), subItemProcs);
   if (i != NULL) {
 #ifdef WIN_MSWIN
+    Nlm_PrepareTitleMsWin(temp, title, sizeof(temp), NULL, TRUE);
     Nlm_NewSubMenuAndItem(i, sub, temp);
 #else /* WIN_MOTIF */
     Nlm_NewCascadingMenu(m, i, sub, temp);

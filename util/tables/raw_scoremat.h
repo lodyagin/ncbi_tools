@@ -1,7 +1,7 @@
 #ifndef UTIL_TABLES___SCOREMAT__H
 #define UTIL_TABLES___SCOREMAT__H
 
-/*  $Id: raw_scoremat.h,v 1.1 2003/08/21 19:48:19 ucko Exp $
+/*  $Id: raw_scoremat.h,v 1.2 2003/12/29 21:25:50 ucko Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -76,6 +76,7 @@ extern NCBI_TABLES_EXPORT const SNCBIPackedScoreMatrix NCBISM_Blosum62;
 extern NCBI_TABLES_EXPORT const SNCBIPackedScoreMatrix NCBISM_Blosum80;
 extern NCBI_TABLES_EXPORT const SNCBIPackedScoreMatrix NCBISM_Pam30;
 extern NCBI_TABLES_EXPORT const SNCBIPackedScoreMatrix NCBISM_Pam70;
+extern NCBI_TABLES_EXPORT const SNCBIPackedScoreMatrix NCBISM_Pam250;
 
 #ifdef __cplusplus
 }
@@ -85,6 +86,9 @@ extern NCBI_TABLES_EXPORT const SNCBIPackedScoreMatrix NCBISM_Pam70;
 * ===========================================================================
 *
 * $Log: raw_scoremat.h,v $
+* Revision 1.2  2003/12/29 21:25:50  ucko
+* +PAM250
+*
 * Revision 1.1  2003/08/21 19:48:19  ucko
 * Add tables library (shared with C) for raw score matrices, etc.
 *

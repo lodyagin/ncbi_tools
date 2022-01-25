@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: mbalign.c,v 6.40 2003/05/30 17:25:36 coulouri Exp $";
+static char const rcsid[] = "$Id: mbalign.c,v 6.41 2003/10/29 17:46:59 dondosha Exp $";
 
-/* $Id: mbalign.c,v 6.40 2003/05/30 17:25:36 coulouri Exp $
+/* $Id: mbalign.c,v 6.41 2003/10/29 17:46:59 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,12 +32,15 @@ static char const rcsid[] = "$Id: mbalign.c,v 6.40 2003/05/30 17:25:36 coulouri 
 *
 * Initial Creation Date: 10/27/1999
 *
-* $Revision: 6.40 $
+* $Revision: 6.41 $
 *
 * File Description:
 *        Alignment functions for Mega Blast program
 *
 * $Log: mbalign.c,v $
+* Revision 6.41  2003/10/29 17:46:59  dondosha
+* Allow 2-stage greedy extension in megablast
+*
 * Revision 6.40  2003/05/30 17:25:36  coulouri
 * add rcsid
 *
@@ -691,6 +694,8 @@ Int4 MegaBlastGreedyAlign(const UcharPtr s1, Int4 len1,
     }
     if (S==NULL) 
        space = 0;
+    else if (!space)
+       abmp->space = space = new_mb_space();
     else 
        refresh_mb_space(space);
     
@@ -935,7 +940,9 @@ Int4 MegaBlastAffineGreedyAlign (const UcharPtr s1, Int4 len1,
     flast_d = abmp->flast_d_affine;
     if (S==NULL) {
         space = 0;
-    } else { 
+    } else if (!space) {
+       abmp->space = space = new_mb_space();
+    } else {
         refresh_mb_space(space);
     }
     max_row = max_row_free + D_diff;

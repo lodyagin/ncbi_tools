@@ -1,4 +1,4 @@
-/* $Id: mb_lookup.c,v 1.20 2003/10/20 20:41:14 dondosha Exp $
+/* $Id: mb_lookup.c,v 1.27 2004/02/02 18:49:33 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -34,14 +34,14 @@ Contents: Functions responsible for the creation of a lookup table
 Detailed Contents: 
 
 ******************************************************************************
- * $Revision: 1.20 $
+ * $Revision: 1.27 $
  */
 #include <algo/blast/core/blast_options.h>
 #include <algo/blast/core/blast_def.h>
 #include <algo/blast/core/mb_lookup.h>
 
 
-static char const rcsid[] = "$Id: mb_lookup.c,v 1.20 2003/10/20 20:41:14 dondosha Exp $";
+static char const rcsid[] = "$Id: mb_lookup.c,v 1.27 2004/02/02 18:49:33 dondosha Exp $";
 
 MBLookupTable* MBLookupTableDestruct(MBLookupTable* mb_lt)
 {
@@ -103,6 +103,9 @@ static DiscTemplateType GetDiscTemplateType(Int2 weight, Uint1 length,
    return TEMPL_CONTIGUOUS; /* All unsupported cases default to 0 */
 }
 
+#define SMALL_QUERY_CUTOFF 15000
+#define LARGE_QUERY_CUTOFF 800000
+
 /** Documentation in mb_lookup.h */
 Int2 MB_LookupTableNew(BLAST_SequenceBlk* query, ListNode* location,
         MBLookupTable** mb_lt_ptr,
@@ -121,6 +124,7 @@ Int2 MB_LookupTableNew(BLAST_SequenceBlk* query, ListNode* location,
    Int4 pv_shift, pv_array_bts, pv_size, pv_index;
    Int2 word_length, extra_length;
    Int4 last_offset;
+   Int4 table_entries;
 #ifdef USE_HASH_TABLE
    Int4 hash_shift, hash_mask, crc, size, length;
    Uint1* hash_buf;
@@ -143,8 +147,8 @@ Int2 MB_LookupTableNew(BLAST_SequenceBlk* query, ListNode* location,
    }
 
    template_type = GetDiscTemplateType(lookup_options->word_size,
-                                     lookup_options->mb_template_length, 
-                                     lookup_options->mb_template_type);
+                      lookup_options->mb_template_length, 
+                      (DiscWordType)lookup_options->mb_template_type);
    query_length = query->length;
    mb_lt = (MBLookupTable*) calloc(1, sizeof(MBLookupTable));
     
@@ -166,8 +170,51 @@ Int2 MB_LookupTableNew(BLAST_SequenceBlk* query, ListNode* location,
    mb_lt->hashsize = 1<<size;
    hash_shift = (32 - size)/2;
    hash_mask = mb_lt->hashsize - 1;
+   pv_shift = 0;
+
 #else
-   mb_lt->hashsize = (1<<(8*width));
+
+   if (width == 2) {
+      mb_lt->hashsize = 1 << 16;
+      pv_shift = 0;
+   }
+   else {
+
+      /* determine the approximate number of hashtable entries */
+      table_entries = 0;
+      for (loc = location; loc; loc = loc->next) {
+         from = ((DoubleInt*) loc->ptr)->i1;
+         to = ((DoubleInt*) loc->ptr)->i2;
+         table_entries += (to - from);
+      }
+
+      /* To fit in the external cache of latter-day micro-
+         processors, the PV array must be compressed. pv_shift
+	 below is the power of two that the array size is
+	 divided by. The target PV array size is 128 kBytes.
+
+	 If the query is too small or too large, the compression 
+	 should be higher. Small queries don't reuse the PV array,
+	 and large queries saturate it. In either case, cache
+	 is better used on other data. */
+
+      if (lookup_options->word_size == 11 && lookup_options->mb_template_length > 0) {
+         mb_lt->hashsize = 1 << 22;
+         if( table_entries <= SMALL_QUERY_CUTOFF ||
+	     table_entries >= LARGE_QUERY_CUTOFF )
+            pv_shift = 3;
+	 else
+            pv_shift = 2;
+      }
+      else {
+         mb_lt->hashsize = 1 << 24;
+         if( table_entries <= SMALL_QUERY_CUTOFF ||
+	     table_entries >= LARGE_QUERY_CUTOFF )
+            pv_shift = 5;
+	 else
+            pv_shift = 4;
+      }
+   }
 #endif
 
    if (lookup_options->mb_template_length > 0) {
@@ -210,14 +257,10 @@ Int2 MB_LookupTableNew(BLAST_SequenceBlk* query, ListNode* location,
    }
 
    if (two_templates) {
-      if (lookup_options->word_size >= 12) {
-         if ((mb_lt->hashtable2 = (Int4*) 
-              calloc(mb_lt->hashsize, sizeof(Int4))) == NULL) {
-            MBLookupTableDestruct(mb_lt);
-            return -1;
-         }
-      } else {/* For weight 11 no need for extra main table */
-         mb_lt->hashtable2 = mb_lt->hashtable;
+      if ((mb_lt->hashtable2 = (Int4*) 
+           calloc(mb_lt->hashsize, sizeof(Int4))) == NULL) {
+         MBLookupTableDestruct(mb_lt);
+         return -1;
       }
       if ((mb_lt->next_pos2 = (Int4*) 
            calloc((query_length+1), sizeof(Int4))) == NULL) {
@@ -227,18 +270,24 @@ Int2 MB_LookupTableNew(BLAST_SequenceBlk* query, ListNode* location,
    }
 
    for (loc = location; loc; loc = loc->next) {
+      /* We want index to be always pointing to the start of the word.
+         Since sequence pointer points to the end of the word, subtract
+         word length from the loop boundaries. 
+      */
       from = ((DoubleInt*) loc->ptr)->i1;
-      to = ((DoubleInt*) loc->ptr)->i2;
+      to = ((DoubleInt*) loc->ptr)->i2 - word_length;
 
       seq = query->sequence_start + from;
       pos = seq + word_length;
       
       ecode = 0;
-
-      last_offset = to + 1 - extra_length;
+      /* Also add 1 to all indices, because lookup table indices count 
+         from 1. */
+      from -= word_length - 2;
+      last_offset = to + 2 - extra_length;
       amb_cond = TRUE;
 
-      for (index = from + 1; index <= last_offset; index++) {
+      for (index = from; index <= last_offset; index++) {
          val = *++seq;
          if ((val & nuc_mask) != 0) { /* ambiguity or gap */
             ecode = 0;
@@ -326,15 +375,14 @@ Int2 MB_LookupTableNew(BLAST_SequenceBlk* query, ListNode* location,
                   if (two_templates) {
                      switch (template_type) {
                      case TEMPL_11_16:
-                        ecode2 = GET_WORD_INDEX_11_16_OPT(ecode) | 
-                           SECOND_TEMPLATE_BIT;
+                        ecode2 = GET_WORD_INDEX_11_16_OPT(ecode);
                         break;
                      case TEMPL_12_16:
                         ecode2 = GET_WORD_INDEX_12_16_OPT(ecode);
                         break;
                      case TEMPL_11_18:
                         ecode2 = (GET_WORD_INDEX_11_18_OPT(ecode)) |
-                           (GET_EXTRA_CODE_18_OPT(seq)) | SECOND_TEMPLATE_BIT;
+                           (GET_EXTRA_CODE_18_OPT(seq));
                         break;
                      case TEMPL_12_18:
                         ecode2 = (GET_WORD_INDEX_12_18_OPT(ecode)) |
@@ -342,7 +390,7 @@ Int2 MB_LookupTableNew(BLAST_SequenceBlk* query, ListNode* location,
                         break;
                      case TEMPL_11_21:
                         ecode2 = (GET_WORD_INDEX_11_21_OPT(ecode)) |
-                           (GET_EXTRA_CODE_21_OPT(seq)) | SECOND_TEMPLATE_BIT;
+                           (GET_EXTRA_CODE_21_OPT(seq));
                         break;
                      case TEMPL_12_21:
                         ecode2 = (GET_WORD_INDEX_12_21_OPT(ecode)) |
@@ -374,16 +422,7 @@ Int2 MB_LookupTableNew(BLAST_SequenceBlk* query, ListNode* location,
       }
    }
    
-#ifdef USE_HASH_TABLE
-   /* If hash table is used instead of index table, no need for extra reduction
-      of pv_array size */
-   pv_shift = 0;
-#else
-   /* For 12-mer based lookup table need to make presense bit array much 
-      smaller, so it stays in cache, even though this allows for collisions */
-   pv_shift = (width < 3) ? 0 : 5;
-#endif
-   mb_lt->pv_array_bts = pv_array_bts = PV_ARRAY_BTS + pv_shift;
+   mb_lt->pv_array_bts = pv_array_bts = PV_ARRAY_BTS + pv_shift; 
 
 #ifdef QUESTION_PV_ARRAY_USE
    if (mb_lt->num_unique_pos_added < 
@@ -443,7 +482,6 @@ Int2 MB_LookupTableNew(BLAST_SequenceBlk* query, ListNode* location,
 
    mb_lt->longest_chain = longest_chain;
 
-
    *mb_lt_ptr = mb_lt;
 
    return 0;
@@ -500,6 +538,10 @@ Int4 MB_AG_ScanSubject(const LookupTableWrap* lookup_wrap,
    Boolean full_byte_scan = mb_lt->full_byte_scan;
    Uint1 pv_array_bts = mb_lt->pv_array_bts;
    
+   /* Since the test for number of hits here is done after adding them, 
+      subtract the longest chain length from the allowed offset array size. */
+   max_hits -= mb_lt->longest_chain;
+
    abs_start = subject->sequence;
    s = abs_start + start_offset/COMPRESSION_RATIO;
    compressed_scan_step = mb_lt->scan_step / COMPRESSION_RATIO;
@@ -518,15 +560,14 @@ Int4 MB_AG_ScanSubject(const LookupTableWrap* lookup_wrap,
          
          if (NA_PV_TEST(pv_array, index, pv_array_bts)) {
             q_off = mb_lt->hashtable[index];
-            s_off = 
-               ((s - abs_start) + compressed_wordsize)*COMPRESSION_RATIO;
+            s_off = (s - abs_start)*COMPRESSION_RATIO;
+            if (q_off && (total_hits >= max_hits))
+               break;
             while (q_off) {
-               q_offsets[total_hits] = q_off;
+               q_offsets[total_hits] = q_off - 1;
                s_offsets[total_hits++] = s_off;
                q_off = mb_lt->next_pos[q_off];
             }
-            if (total_hits >= max_hits)
-               break;
          }
       }
       *end_offset = (s - abs_start)*COMPRESSION_RATIO;
@@ -544,16 +585,15 @@ Int4 MB_AG_ScanSubject(const LookupTableWrap* lookup_wrap,
          /* Adjust the word index by the base within a byte */
          adjusted_index = BlastNaLookupAdjustIndex(s, index, mb_lt->mask,
                                                    bit);
-         
          if (NA_PV_TEST(pv_array, adjusted_index, pv_array_bts)) {
             q_off = mb_lt->hashtable[adjusted_index];
+            if (q_off && (total_hits >= max_hits))
+               break;
             while (q_off) {
-               q_offsets[total_hits] = q_off;
-               s_offsets[total_hits++] = s_off + word_size; 
+               q_offsets[total_hits] = q_off - 1;
+               s_offsets[total_hits++] = s_off; 
                q_off = mb_lt->next_pos[q_off];
             }
-            if (total_hits >= max_hits)
-               break;
          }
       }
       *end_offset = s_off;
@@ -568,33 +608,30 @@ Int4 MB_AG_ScanSubject(const LookupTableWrap* lookup_wrap,
  *        the word (needed when word template is longer than 16 bases) [in]
  * @param word A piece of the sequence packed into an integer [in]
  * @param template_type What type of discontiguous word template to use [in]
- * @param second_template_bit When index has fewer bits than the lookup table 
- *        width, the indices for the second template are distinguished from 
- *        those for the first template by setting a special bit. [in]
  * @return The lookup table index of the discontiguous word [out]
  */
 static NCBI_INLINE Int4 ComputeDiscontiguousIndex(Uint1* subject, Int4 word,
-                  Uint1 template_type, Int4 second_template_bit)
+                  Uint1 template_type)
 {
    Int4 index;
    Int4 extra_code;   
 
    switch (template_type) {
    case TEMPL_11_16:
-      index = GET_WORD_INDEX_11_16(word) | second_template_bit;
+      index = GET_WORD_INDEX_11_16(word);
       break;
    case TEMPL_12_16:
       index = GET_WORD_INDEX_12_16(word);
       break;
    case TEMPL_11_16_OPT:
-      index = GET_WORD_INDEX_11_16_OPT(word) | second_template_bit;
+      index = GET_WORD_INDEX_11_16_OPT(word);
       break;
    case TEMPL_12_16_OPT:
       index = GET_WORD_INDEX_12_16_OPT(word);
       break;
    case TEMPL_11_18: 
      extra_code = (Int4) GET_EXTRA_CODE_PACKED_4_18(subject);
-     index = (GET_WORD_INDEX_11_18(word) | extra_code) | second_template_bit;
+     index = (GET_WORD_INDEX_11_18(word) | extra_code);
      break;
    case TEMPL_12_18: 
       extra_code = (Int4) GET_EXTRA_CODE_PACKED_4_18(subject);
@@ -602,8 +639,7 @@ static NCBI_INLINE Int4 ComputeDiscontiguousIndex(Uint1* subject, Int4 word,
       break;
    case TEMPL_11_18_OPT: 
       extra_code = (Int4) GET_EXTRA_CODE_PACKED_4_18_OPT(subject);
-      index = (GET_WORD_INDEX_11_18_OPT(word) | extra_code) | 
-         second_template_bit;
+      index = (GET_WORD_INDEX_11_18_OPT(word) | extra_code);
       break;
    case TEMPL_12_18_OPT:
       extra_code = (Int4) GET_EXTRA_CODE_PACKED_4_18_OPT(subject);
@@ -611,8 +647,7 @@ static NCBI_INLINE Int4 ComputeDiscontiguousIndex(Uint1* subject, Int4 word,
       break;
    case TEMPL_11_21: 
       extra_code = (Int4) GET_EXTRA_CODE_PACKED_4_21(subject);
-      index = (GET_WORD_INDEX_11_21(word) | extra_code) | 
-         second_template_bit;
+      index = (GET_WORD_INDEX_11_21(word) | extra_code);
       break;
    case TEMPL_12_21:
       extra_code = (Int4) GET_EXTRA_CODE_PACKED_4_21(subject);
@@ -620,8 +655,7 @@ static NCBI_INLINE Int4 ComputeDiscontiguousIndex(Uint1* subject, Int4 word,
       break;
    case TEMPL_11_21_OPT: 
       extra_code = (Int4) GET_EXTRA_CODE_PACKED_4_21_OPT(subject);
-      index = (GET_WORD_INDEX_11_21_OPT(word) | extra_code) | 
-         second_template_bit;
+      index = (GET_WORD_INDEX_11_21_OPT(word) | extra_code);
       break;
    case TEMPL_12_21_OPT:
       extra_code = (Int4) GET_EXTRA_CODE_PACKED_4_21_OPT(subject);
@@ -650,13 +684,10 @@ static NCBI_INLINE Int4 ComputeDiscontiguousIndex(Uint1* subject, Int4 word,
  *        a compressed sequence byte [in]
  * @param template_type What discontiguous word template to use for index 
  *        computation [in]
- * @param second_template_bit Bit to set if this index is for a second 
- *        template [in]
  * @return The lookup index for the discontiguous word.
 */
 static NCBI_INLINE Int4 ComputeDiscontiguousIndex_1b(const Uint1* word_start, 
-                      Int4 word, Uint1 sequence_bit, Uint1 template_type,
-                      Int4 second_template_bit)
+                      Int4 word, Uint1 sequence_bit, Uint1 template_type)
 {
    Int4 index;
    Uint1* subject = (Uint1 *) word_start;
@@ -672,21 +703,20 @@ static NCBI_INLINE Int4 ComputeDiscontiguousIndex_1b(const Uint1* word_start,
 
    switch (template_type) {
    case TEMPL_11_16:
-      index = GET_WORD_INDEX_11_16(word) | second_template_bit;
+      index = GET_WORD_INDEX_11_16(word);
       break;
    case TEMPL_12_16:
       index = GET_WORD_INDEX_12_16(word);
       break;
    case TEMPL_11_16_OPT:
-      index = GET_WORD_INDEX_11_16_OPT(word) | second_template_bit;
+      index = GET_WORD_INDEX_11_16_OPT(word);
       break;
    case TEMPL_12_16_OPT:
       index = GET_WORD_INDEX_12_16_OPT(word);
       break;
    case TEMPL_11_18: 
       GET_EXTRA_CODE_PACKED_18(subject, bit, tmpval, extra_code);
-      index = (GET_WORD_INDEX_11_18(word) | extra_code) | 
-         second_template_bit;
+      index = (GET_WORD_INDEX_11_18(word) | extra_code);
       break;
    case TEMPL_12_18: 
       GET_EXTRA_CODE_PACKED_18(subject, bit, tmpval, extra_code);
@@ -694,8 +724,7 @@ static NCBI_INLINE Int4 ComputeDiscontiguousIndex_1b(const Uint1* word_start,
       break;
    case TEMPL_11_18_OPT: 
       GET_EXTRA_CODE_PACKED_18_OPT(subject, bit, tmpval, extra_code);
-      index = (GET_WORD_INDEX_11_18_OPT(word) | extra_code) | 
-         second_template_bit;
+      index = (GET_WORD_INDEX_11_18_OPT(word) | extra_code);
       break;
    case TEMPL_12_18_OPT:
       GET_EXTRA_CODE_PACKED_18_OPT(subject, bit, tmpval, extra_code);
@@ -703,8 +732,7 @@ static NCBI_INLINE Int4 ComputeDiscontiguousIndex_1b(const Uint1* word_start,
       break;
    case TEMPL_11_21: 
       GET_EXTRA_CODE_PACKED_21(subject, bit, tmpval, extra_code);
-      index = (GET_WORD_INDEX_11_21(word) | extra_code) | 
-         second_template_bit;
+      index = (GET_WORD_INDEX_11_21(word) | extra_code);
       break;
    case TEMPL_12_21:
       GET_EXTRA_CODE_PACKED_21(subject, bit, tmpval, extra_code);
@@ -712,8 +740,7 @@ static NCBI_INLINE Int4 ComputeDiscontiguousIndex_1b(const Uint1* word_start,
       break;
    case TEMPL_11_21_OPT: 
       GET_EXTRA_CODE_PACKED_21_OPT(subject, bit, tmpval, extra_code);
-      index = (GET_WORD_INDEX_11_21_OPT(word) | extra_code) | 
-         second_template_bit;
+      index = (GET_WORD_INDEX_11_21_OPT(word) | extra_code);
       break;
    case TEMPL_12_21_OPT:
       GET_EXTRA_CODE_PACKED_21_OPT(subject, bit, tmpval, extra_code);
@@ -747,10 +774,16 @@ Int4 MB_ScanSubject(const LookupTableWrap* lookup,
    Uint4* q_ptr = q_offsets,* s_ptr = s_offsets;
    PV_ARRAY_TYPE *pv_array = mb_lt->pv_array;
    Uint1 pv_array_bts = mb_lt->pv_array_bts;
+   Int4 compressed_wordsize = mb_lt->compressed_wordsize;
 
 #ifdef DEBUG_LOG
    FILE *logfp0 = fopen("new0.log", "a");
 #endif   
+
+   /* Since the test for number of hits here is done after adding them, 
+      subtract the longest chain length from the allowed offset array size.
+   */
+   max_hits -= mb_lt->longest_chain;
 
    abs_start = subject->sequence;
    s = abs_start + start_offset/COMPRESSION_RATIO;
@@ -758,22 +791,25 @@ Int4 MB_ScanSubject(const LookupTableWrap* lookup,
 
    s = BlastNaLookupInitIndex(mb_lt->compressed_wordsize, s, &index);
 
+   /* In the following code, s points to the byte right after the end of 
+      the word. */
    while (s <= s_end) {
       if (NA_PV_TEST(pv_array, index, pv_array_bts)) {
          query_offset = mb_lt->hashtable[index];
-         subject_offset = (s - abs_start)*COMPRESSION_RATIO;
+         subject_offset = 
+            ((s - abs_start) - compressed_wordsize)*COMPRESSION_RATIO;
+         if (query_offset && (hitsfound >= max_hits))
+            break;
          while (query_offset) {
 #ifdef DEBUG_LOG
             fprintf(logfp0, "%ld\t%ld\t%ld\n", query_offset, 
                     subject_offset, index);
 #endif
-            *(q_ptr++) = query_offset;
+            *(q_ptr++) = query_offset - 1;
             *(s_ptr++) = subject_offset;
             ++hitsfound;
             query_offset = mb_lt->next_pos[query_offset];
          }
-         if (hitsfound >= max_hits)
-            break;
       }
       /* Compute the next value of the lookup index 
          (shifting sequence by a full byte) */
@@ -782,7 +818,7 @@ Int4 MB_ScanSubject(const LookupTableWrap* lookup,
    }
 
    *end_offset = 
-     ((s - abs_start) - mb_lt->compressed_wordsize)*COMPRESSION_RATIO;
+     ((s - abs_start) - compressed_wordsize)*COMPRESSION_RATIO;
 #ifdef DEBUG_LOG
    fclose(logfp0);
 #endif
@@ -808,11 +844,16 @@ Int4 MB_DiscWordScanSubject(const LookupTableWrap* lookup,
    Uint1 second_template_type = mb_lt->second_template_type;
    PV_ARRAY_TYPE *pv_array = mb_lt->pv_array;
    Uint1 pv_array_bts = mb_lt->pv_array_bts;
+   Int4 compressed_wordsize = mb_lt->compressed_wordsize;
 
 #ifdef DEBUG_LOG
    FILE *logfp0 = fopen("new0.log", "a");
 #endif   
    
+   /* Since the test for number of hits here is done after adding them, 
+      subtract the longest chain length from the allowed offset array size. */
+   max_hits -= mb_lt->longest_chain;
+
    abs_start = subject->sequence;
    s_start = abs_start + start_offset/COMPRESSION_RATIO;
    s_end = abs_start + (*end_offset)/COMPRESSION_RATIO;
@@ -823,33 +864,36 @@ Int4 MB_DiscWordScanSubject(const LookupTableWrap* lookup,
    if (full_byte_scan) {
 
      while (s <= s_end) {
-       index = ComputeDiscontiguousIndex(s, word, template_type, 0);
+       index = ComputeDiscontiguousIndex(s, word, template_type);
 
        if (two_templates) {
-          index2 = ComputeDiscontiguousIndex(s, word, second_template_type, 
-                                             SECOND_TEMPLATE_BIT);
+          index2 = ComputeDiscontiguousIndex(s, word, second_template_type);
        }
        if (NA_PV_TEST(pv_array, index, pv_array_bts)) {
           query_offset = mb_lt->hashtable[index];
-          subject_offset = (s - abs_start)*COMPRESSION_RATIO;
+          subject_offset = 
+             ((s - abs_start) - compressed_wordsize)*COMPRESSION_RATIO;
+          if (query_offset && (hitsfound >= max_hits))
+             break;
           while (query_offset) {
 #ifdef DEBUG_LOG
              fprintf(logfp0, "%ld\t%ld\t%ld\n", query_offset, 
                      subject_offset, index);
 #endif
-             *(q_ptr++) = query_offset;
+             *(q_ptr++) = query_offset - 1;
              *(s_ptr++) = subject_offset;
              ++hitsfound;
              query_offset = mb_lt->next_pos[query_offset];
           }
-          if (hitsfound >= max_hits)
-             break;
        }
        if (two_templates && NA_PV_TEST(pv_array, index2, pv_array_bts)) {
           query_offset = mb_lt->hashtable2[index2];
-          subject_offset = (s - abs_start)*COMPRESSION_RATIO;
+          subject_offset = 
+             ((s - abs_start) - compressed_wordsize)*COMPRESSION_RATIO;
+          if (query_offset && (hitsfound >= max_hits))
+             break;
           while (query_offset) {
-             q_offsets[hitsfound] = query_offset;
+             q_offsets[hitsfound] = query_offset - 1;
              s_offsets[hitsfound++] = subject_offset;
              query_offset = mb_lt->next_pos2[query_offset];
           }
@@ -868,33 +912,39 @@ Int4 MB_DiscWordScanSubject(const LookupTableWrap* lookup,
                                          bit);
    
          index = ComputeDiscontiguousIndex_1b(s, adjusted_word, bit,
-                    template_type, 0);
+                    template_type);
        
          if (two_templates)
             index2 = ComputeDiscontiguousIndex_1b(s, adjusted_word, bit,
-                        second_template_type, SECOND_TEMPLATE_BIT);
+                        second_template_type);
 
          if (NA_PV_TEST(pv_array, index, pv_array_bts)) {
             query_offset = mb_lt->hashtable[index];
-            subject_offset = (s - abs_start)*COMPRESSION_RATIO + bit/2;
+            subject_offset = 
+               ((s - abs_start) - compressed_wordsize)*COMPRESSION_RATIO
+               + bit/2;
+            if (query_offset && (hitsfound >= max_hits))
+               break;
             while (query_offset) {
 #ifdef DEBUG_LOG
                fprintf(logfp0, "%ld\t%ld\t%ld\n", query_offset, 
                        subject_offset, index);
 #endif
-               *(q_ptr++) = query_offset;
+               *(q_ptr++) = query_offset - 1;
                *(s_ptr++) = subject_offset;
                ++hitsfound;
                query_offset = mb_lt->next_pos[query_offset];
             }
-            if (hitsfound >= max_hits)
-               break;
          }
          if (two_templates && NA_PV_TEST(pv_array, index2, pv_array_bts)) {
             query_offset = mb_lt->hashtable2[index2];
-            subject_offset = (s - abs_start)*COMPRESSION_RATIO + bit/2;
+            subject_offset = 
+               ((s - abs_start) - compressed_wordsize)*COMPRESSION_RATIO
+               + bit/2;
+            if (query_offset && (hitsfound >= max_hits))
+               break;
             while (query_offset) {
-               q_offsets[hitsfound] = query_offset;
+               q_offsets[hitsfound] = query_offset - 1;
                s_offsets[hitsfound++] = subject_offset;
                query_offset = mb_lt->next_pos2[query_offset];
             }
@@ -909,7 +959,7 @@ Int4 MB_DiscWordScanSubject(const LookupTableWrap* lookup,
       }
    }
    *end_offset = 
-     ((s - abs_start) - mb_lt->compressed_wordsize)*COMPRESSION_RATIO;
+     ((s - abs_start) - compressed_wordsize)*COMPRESSION_RATIO;
 #ifdef DEBUG_LOG
    fclose(logfp0);
 #endif

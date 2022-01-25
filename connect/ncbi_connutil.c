@@ -1,4 +1,4 @@
-/*  $Id: ncbi_connutil.c,v 6.60 2003/08/27 16:27:37 lavr Exp $
+/*  $Id: ncbi_connutil.c,v 6.63 2004/01/14 18:52:39 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -1264,6 +1264,8 @@ static const char* s_MIME_SubType[eMIME_Unknown+1] = {
     "x-www-form",
     "html",
     "plain",
+    "xml",
+    "xml+soap",
     "x-unknown"
 };
 
@@ -1460,22 +1462,24 @@ extern size_t HostPortToString(unsigned int   host,
                                char*          buf,
                                size_t         buflen)
 {
-    char abuf[16/*sizeof("255.255.255.255")*/ + 10/*:port*/];
+    char   x_buf[16/*sizeof("255.255.255.255")*/ + 8/*:port*/];
     size_t n;
 
     if (!buf || !buflen)
         return 0;
     if (!host)
-        *abuf = 0;
-    else if (SOCK_ntoa(host, abuf, sizeof(abuf)) != 0)
+        *x_buf = 0;
+    else if (SOCK_ntoa(host, x_buf, sizeof(x_buf)) != 0) {
+        *buf = 0;
         return 0;
+    }
+    n = strlen(x_buf);
     if (port || !host)
-        sprintf(abuf + strlen(abuf), ":%hu", port);
-    n = strlen(abuf);
-    assert(n < sizeof(abuf));
+        n += sprintf(x_buf + n, ":%hu", port);
+    assert(n < sizeof(x_buf));
     if (n >= buflen)
         n = buflen - 1;
-    memcpy(buf, abuf, n);
+    memcpy(buf, x_buf, n);
     buf[n] = 0;
     return n;
 }
@@ -1484,6 +1488,15 @@ extern size_t HostPortToString(unsigned int   host,
 /*
  * --------------------------------------------------------------------------
  * $Log: ncbi_connutil.c,v $
+ * Revision 6.63  2004/01/14 18:52:39  lavr
+ * Recognize eMIME_XmlSoap and corresponding text representation "xml+soap"
+ *
+ * Revision 6.62  2004/01/07 19:23:29  lavr
+ * "xml" added as a MIME subtype
+ *
+ * Revision 6.61  2003/11/12 17:46:12  lavr
+ * HostPortToString() changed to be a little more efficient
+ *
  * Revision 6.60  2003/08/27 16:27:37  lavr
  * Add "Host:" tag to be able to take advantage of Apache VHosts
  *

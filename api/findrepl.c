@@ -44,6 +44,9 @@
 * RCS Modification History:
 * -------------------------
 * $Log: findrepl.c,v $
+* Revision 6.11  2003/11/21 17:58:46  bollin
+* remove tax ref and common name when changing taxonomy name via ASN Find/Replace
+*
 * Revision 6.10  2003/07/31 20:54:54  kans
 * FindReplaceString does not need do_replace argument
 *
@@ -906,6 +909,30 @@ static void FindReplPubdesc (
   }
 }
 
+static void RemoveTaxRef (OrgRefPtr orp)
+{
+  ValNodePtr      vnp, next;
+  ValNodePtr PNTR prev;
+  DbtagPtr        dbt;
+
+  vnp = orp->db;
+  if (vnp == NULL) return;
+  prev = (ValNodePtr PNTR) &(orp->db);
+  while (vnp != NULL) {
+    next = vnp->next;
+    dbt = (DbtagPtr) vnp->data.ptrvalue;
+    if (dbt != NULL && StringICmp ((CharPtr) dbt->db, "taxon") == 0) {
+      *prev = vnp->next;
+      vnp->next = NULL;
+      DbtagFree (dbt);
+      ValNodeFree (vnp);
+    } else {
+      prev = (ValNodePtr PNTR) &(vnp->next);
+    }
+    vnp = next;
+  }
+}
+
 static void FindReplBioSource (
   BioSourcePtr biop,
   OrgRefPtr orp,
@@ -916,6 +943,7 @@ static void FindReplBioSource (
   OrgModPtr      omp;
   OrgNamePtr     onp;
   SubSourcePtr   ssp;
+  CharPtr        old_taxname;
 
   if (biop != NULL) {
     orp = biop->org;
@@ -930,7 +958,14 @@ static void FindReplBioSource (
     }
   }
   if (orp != NULL) {
+    old_taxname = StringSave (orp->taxname);
     FindReplString (&(orp->taxname), fsp);
+    if (StringCmp (old_taxname, orp->taxname) != 0)
+    {
+      RemoveTaxRef (orp);
+      orp->common = MemFree (orp->common);
+    }
+    MemFree (old_taxname);
     FindReplString (&(orp->common), fsp);
     FindReplStringList (orp->mod, fsp);
     FindReplStringList (orp->syn, fsp);

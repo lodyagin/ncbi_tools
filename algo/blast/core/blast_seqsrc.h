@@ -1,4 +1,4 @@
-/*  $Id: blast_seqsrc.h,v 1.9 2003/08/21 19:38:50 camacho Exp $
+/*  $Id: blast_seqsrc.h,v 1.12 2003/12/15 18:20:46 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -76,10 +76,23 @@ typedef Int4 (*GetInt4FnPtr) (void*, void*);
  * passed to user-defined implementation */
 typedef Int8 (*GetInt8FnPtr) (void*, void*);
 
-/** Function pointer typedef to return a null terminated string containing a
- * sequence identifier. First argument is the BlastSeqSrc structure used, second
+/** Function pointer typedef to return a null terminated string. 
+ * First argument is the BlastSeqSrc structure used, second
  * argument is passed to user-defined implementation. */
-typedef char* (*GetSeqIdFnPtr) (void*, void*);
+typedef char* (*GetStrFnPtr) (void*, void*);
+
+
+/** Function pointer typedef to return a boolean value. 
+ * First argument is the BlastSeqSrc structure used, second
+ * argument is passed to user-defined implementation. */
+typedef Boolean (*GetBoolFnPtr) (void*, void*);
+
+
+/** Function pointer typedef to return a sequence identifier. The returned SeqId
+ * is cast to a void pointer.
+ * First argument is the BlastSeqSrc structure used, second
+ * argument is passed to user-defined implementation. */
+typedef void* (*GetSeqIdFnPtr) (void*, void*);
 
 /** Function pointer typedef to retrieve sequences from data structure embedded
  * in the BlastSeqSrc structure.
@@ -128,6 +141,8 @@ typedef struct BlastSeqSrcIterator {
     /** Size of the chunks to advance over the BlastSeqSrc, also size of 
       * oid_list member */
     unsigned int  chunk_sz;
+    /* Starting oid for the next chunk/range */
+    unsigned int next_oid;
 } BlastSeqSrcIterator;
 
 /** Allocated and initialized an iterator over a BlastSeqSrc. 
@@ -199,10 +214,20 @@ BlastSeqSrc* BlastSeqSrcFree(BlastSeqSrc* bssp);
     (*GetGetMaxSeqLen(bssp))(GetDataStructure(bssp), NULL)
 #define BLASTSeqSrcGetTotLen(bssp) \
     (*GetGetTotLen(bssp))(GetDataStructure(bssp), NULL)
+#define BLASTSeqSrcGetName(bssp) \
+    (*GetGetName(bssp))(GetDataStructure(bssp), NULL)
+#define BLASTSeqSrcGetDefinition(bssp) \
+    (*GetGetDefinition(bssp))(GetDataStructure(bssp), NULL)
+#define BLASTSeqSrcGetDate(bssp) \
+    (*GetGetDate(bssp))(GetDataStructure(bssp), NULL)
+#define BLASTSeqSrcGetIsProt(bssp) \
+    (*GetGetIsProt(bssp))(GetDataStructure(bssp), NULL)
 #define BLASTSeqSrcGetSequence(bssp, arg) \
     (*GetGetSequence(bssp))(GetDataStructure(bssp), arg)
 #define BLASTSeqSrcGetSeqIdStr(bssp, arg) \
     (*GetGetSeqIdStr(bssp))(GetDataStructure(bssp), arg)
+#define BLASTSeqSrcGetSeqId(bssp, arg) \
+    (*GetGetSeqId(bssp))(GetDataStructure(bssp), arg)
 #define BLASTSeqSrcGetSeqLen(bssp, arg) \
     (*GetGetSeqLen(bssp))(GetDataStructure(bssp), arg)
 #define BLASTSeqSrcGetNextChunk(bssp, iterator) \
@@ -225,8 +250,13 @@ DECLARE_MEMBER_FUNCTIONS(void*, DataStructure, BlastSeqSrc*);
 DECLARE_MEMBER_FUNCTIONS(GetInt4FnPtr, GetNumSeqs, BlastSeqSrc*);
 DECLARE_MEMBER_FUNCTIONS(GetInt4FnPtr, GetMaxSeqLen, BlastSeqSrc*);
 DECLARE_MEMBER_FUNCTIONS(GetInt8FnPtr, GetTotLen, BlastSeqSrc*);
+DECLARE_MEMBER_FUNCTIONS(GetStrFnPtr, GetName, BlastSeqSrc*);
+DECLARE_MEMBER_FUNCTIONS(GetStrFnPtr, GetDefinition, BlastSeqSrc*);
+DECLARE_MEMBER_FUNCTIONS(GetStrFnPtr, GetDate, BlastSeqSrc*);
+DECLARE_MEMBER_FUNCTIONS(GetBoolFnPtr, GetIsProt, BlastSeqSrc*);
 DECLARE_MEMBER_FUNCTIONS(GetSeqBlkFnPtr, GetSequence, BlastSeqSrc*);
-DECLARE_MEMBER_FUNCTIONS(GetSeqIdFnPtr, GetSeqIdStr, BlastSeqSrc*);
+DECLARE_MEMBER_FUNCTIONS(GetStrFnPtr, GetSeqIdStr, BlastSeqSrc*);
+DECLARE_MEMBER_FUNCTIONS(GetSeqIdFnPtr, GetSeqId, BlastSeqSrc*);
 DECLARE_MEMBER_FUNCTIONS(GetInt4FnPtr, GetSeqLen, BlastSeqSrc*);
 DECLARE_MEMBER_FUNCTIONS(GetNextChunkFnPtr, GetNextChunk, BlastSeqSrc*);
 DECLARE_MEMBER_FUNCTIONS(AdvanceIteratorFnPtr, IterNext, BlastSeqSrc*);

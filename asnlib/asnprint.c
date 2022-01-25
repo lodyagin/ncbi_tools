@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 3/4/91
 *
-* $Revision: 6.18 $
+* $Revision: 6.20 $
 *
 * File Description:
 *   Routines for printing ASN.1 value notation (text) messages and
@@ -42,6 +42,12 @@
 * 3/4/91   Kans        Stricter typecasting for GNU C and C++
 *
 * $Log: asnprint.c,v $
+* Revision 6.20  2003/12/03 19:31:09  gouriano
+* Corrected DTD generation (a different approach)
+*
+* Revision 6.19  2003/12/02 19:52:48  gouriano
+* Corrected DTD generation
+*
 * Revision 6.18  2003/09/15 16:16:32  kans
 * added AsnWriteEx, AsnTxtWriteEx, and AsnPrintStream
 *
@@ -1901,7 +1907,7 @@ static void AsnXMLElementStart(AsnTypePtr atp, AsnIoPtr aip)
 
 	AsnPrintString(GetXMLname(atp), aip);
 
-	atp2 = AsnFindBaseType(atp);
+	atp2 = AsnFindBaseTypeDTD(atp);
 	if (atp2 == atp)
 	{
 		if ((isa == ENUM_TYPE) || (isa == BOOLEAN_TYPE) ||
@@ -2351,7 +2357,8 @@ static Boolean AsnPrintTypeXML (AsnTypePtr atp, AsnIoPtr aip)
 				if ((atp->optional) || (atp->hasdefault))
 					repeat = "*";
 				else
-					repeat = "+";
+					repeat = "*";
+//					repeat = "+";
 				AsnXMLElementAdd(NULL, atp->branch, repeat, aip, FALSE);
 				break;
 			case INTEGER_TYPE:
@@ -2483,7 +2490,7 @@ static Boolean AsnPrintTypeXML (AsnTypePtr atp, AsnIoPtr aip)
 	}
 	else  /* primitive.. all text */
 	{
-		atp2 = AsnFindBaseType(atp);
+		atp2 = AsnFindBaseTypeDTD(atp);
 		if (atp2 != NULL)
 		{
 			isa = AsnFindBaseIsa(atp);

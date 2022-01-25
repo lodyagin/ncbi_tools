@@ -1,6 +1,6 @@
 #!/bin/csh -f
 #
-# $Id: makedis.csh,v 1.90 2003/11/12 20:39:54 beloslyu Exp $
+# $Id: makedis.csh,v 1.95 2004/02/03 20:37:31 ucko Exp $
 #
 ##                            PUBLIC DOMAIN NOTICE                          
 #               National Center for Biotechnology Information
@@ -154,6 +154,9 @@ case Linux:
 		breaksw
 	case "parisc":
 		set platform=hppalinux
+		breaksw
+	case "i?86":
+		set platform=linux-x86
 		breaksw
 	default:
 		set platform=linux
@@ -313,7 +316,7 @@ else
 endif
 
 set VIBWWWBLAST=(psiblast.REAL psiblast_cs.REAL blast.REAL blast_cs.REAL)
-set NONVIBWWWBLAST=(nph-viewgif.cgi wblast2_cs.REAL bl2bag.cgi)
+set NONVIBWWWBLAST=(nph-viewgif.cgi wblast2.REAL wblast2_cs.REAL bl2bag.cgi)
 set WWWBLAST=($VIBWWWBLAST $NONVIBWWWBLAST)
 
 if ( "$HAVE_MOTIF" == 1 ) then
@@ -336,7 +339,7 @@ if ( "$HAVE_MOTIF" == 1 ) then
 		OGLLIBS=\"$OGL_LIBS $PNG_LIBS\" \
 		VIBFLAG=\"$NCBI_VIBFLAG\" \
 		VIB=\"Psequin Nentrez udv ddv blastcl3 \
-		idfetch bl2seq asn2xml asn2gb entrez2 gbseqget \
+		idfetch bl2seq asn2gb entrez2 gbseqget \
 		$WWWBLAST $OGL_TARGETS\") 
 else if ( "$HAVE_MAC" == 1 ) then
 	set ALL_VIB=(LIB30=libncbicn3d.a \
@@ -357,8 +360,9 @@ else if ( "$HAVE_MAC" == 1 ) then
 		VIBLIBS=\"$NCBI_DISTVIBLIBS\" \
 		OGLLIBS=\"$OGL_LIBS $PNG_LIBS\" \
 		VIBFLAG=\"$NCBI_VIBFLAG\" \
+		VIB_POST_LINK=\"/Developer/Tools/Rez -t APPL ../link/macmet/Carbon.r -o\" \
 		VIB=\"Psequin udv ddv blastcl3 \
-		idfetch bl2seq asn2xml asn2gb entrez2 gbseqget $WWWBLAST \") 
+		idfetch bl2seq asn2gb entrez2 gbseqget $WWWBLAST \") 
 else # no Motif, build only ascii-based applications
     set OGL_NCBI_LIBS=""
     set OGL_INCLUDE=""
@@ -367,7 +371,7 @@ else # no Motif, build only ascii-based applications
 
 	set ALL_VIB=()
 	set DEMO_VIB=()
-	set NET_VIB=(VIB=\"blastcl3 idfetch bl2seq asn2xml asn2gb $NONVIBWWWBLAST \") 
+	set NET_VIB=(VIB=\"blastcl3 idfetch bl2seq asn2gb $NONVIBWWWBLAST \") 
 endif
 
 set CMD='make $MFLG \
@@ -465,7 +469,7 @@ else
 	getpub getseq gil2bin idfetch impala indexpub makemat makeset \
 	megablast ncbisort netentcf rpsblast seedtop seqtest sequin entrez2 \
 	tbl2asn test_regexp testcore testobj testval udv vecscreen Cn3D \
-	$WWWBLAST )
+	blast debruijn $WWWBLAST )
 	if ( -x ./$i ) then
 		rm -f ../bin/$i
 		if ( $os == "Darwin" ) then

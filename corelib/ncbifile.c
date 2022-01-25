@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/4/91
 *
-* $Revision: 6.32 $
+* $Revision: 6.34 $
 *
 * File Description: 
 *     portable file routines
@@ -43,6 +43,12 @@
 * 11-27-94 Ostell      moved includes to ncbiwin.h to avoid conflict MSC
 *
 * $Log: ncbifile.c,v $
+* Revision 6.34  2004/01/23 20:07:16  kans
+* fix to FileGets under Darwin, was losing last character if buffer was shorter than line being read
+*
+* Revision 6.33  2003/11/17 17:17:57  kans
+* changed C++ comments to C comments
+*
 * Revision 6.32  2003/05/05 11:53:37  rsmith
 * Codewarrior compiling for Win32 does not know about setmode or tempnam.
 *
@@ -236,12 +242,12 @@ static char * _this_file = __FILE__;
 
 #ifdef OS_MAC
 #define INLINE_MOREFILES
-//#include "FullPath.h"
-//#include "MoreFilesExtra.h"
+/* #include "FullPath.h" */
+/* #include "MoreFilesExtra.h" */
 #ifdef INLINE_MOREFILES
 
-// MoreFilesExtras.c
-// -----------------
+/* MoreFilesExtras.c */
+/* ----------------- */
 
 /*
 **	Apple Macintosh Developer Technical Support
@@ -441,14 +447,14 @@ static OSErr MacPathname2FSSpec(const char *inPathname, FSSpec *outFSS)
 		return paramErr;
 	}
 	
-	err = HGetVol(NULL, &vRefNum, &dirID);  // default volume and directory
+	err = HGetVol(NULL, &vRefNum, &dirID);  /* default volume and directory */
 	if (err != noErr) return err;
 	
 	len = strlen(inPathname);
 	
 	p = strchr(inPathname, ':');
 	if (p == NULL) {
-		// Partial pathname -- filename only
+		/* Partial pathname -- filename only */
 		Str31 filename;
 		assert(len <= 31);
 		c2pstrcpy(filename, inPathname);
@@ -457,21 +463,21 @@ static OSErr MacPathname2FSSpec(const char *inPathname, FSSpec *outFSS)
 		Str31 name;
 		int nameLen;
 		if (inPathname[0] == ':') {
-			// Relative pathname including directory path
+			/* Relative pathname including directory path */
 			
 		} else {
-			// Absolute pathname
-			//Str31 volName;  // We would use Str28 if it was defined -- 27, plus 1 for ':'.
+			/* Absolute pathname */
+			/* Str31 volName;  We would use Str28 if it was defined -- 27, plus 1 for ':'. */
 			nameLen = p - inPathname;
 			assert(nameLen <= 27);
 			name[0] = nameLen + 1;
-			memcpy(name + 1, inPathname, nameLen + 1);  // Copy the volume name and the colon.
+			memcpy(name + 1, inPathname, nameLen + 1);  /* Copy the volume name and the colon. */
 			err = DetermineVRefNum(name, 0, &vRefNum);
 			if (err != noErr) return err;
 			dirID = 2;
 		}
-		// vRefNum and dirID now specify the directory in which we should descend
-		// the path pointed to by p (pointing to the first colon).
+		/* vRefNum and dirID now specify the directory in which we should descend
+		   the path pointed to by p (pointing to the first colon). */
 		p++;
 		while (p != NULL && *p != '\0') {
 			char *q = strchr(p, ':');
@@ -493,7 +499,7 @@ static OSErr MacPathname2FSSpec(const char *inPathname, FSSpec *outFSS)
 					p = q + 1;
 				}
 			} else {
-				q = strchr(p, '\0');  // go to end of string
+				q = strchr(p, '\0');  /* go to end of string */
 				nameLen = q - p;
 				assert(nameLen > 0);
 				assert(nameLen <= 31);
@@ -521,7 +527,7 @@ static OSErr MacFSSpec2FullPathname(const FSSpec *inFSS, char **outPathname)
 	err = FSpGetFullPath(inFSS, &fullPathLength, &h);
 	if (err != noErr) return err;
 	
-	assert(fullPathLength >= 2);  // An absolute pathname must be at least two chars long
+	assert(fullPathLength >= 2);  /* An absolute pathname must be at least two chars long */
 	fullPath = (char *)Nlm_Malloc(fullPathLength + 1);
 	if (fullPath == NULL) {
 		err = memFullErr;
@@ -755,7 +761,7 @@ NLM_EXTERN char * LIBCALL  Nlm_FileGets (Nlm_CharPtr ptr, size_t size, FILE *fp)
 	ch = fgetc (fp);
 	count = 0;
 	tmp = ptr;
-	while (ch != EOF && ch != '\0' && ch != '\n' && ch != '\r' && count < size - 1) {
+	while (ch != EOF && ch != '\0' && ch != '\n' && ch != '\r' && count < size - 2) {
 	  *tmp = ch;
 	  tmp++;
 	  count++;
@@ -763,6 +769,10 @@ NLM_EXTERN char * LIBCALL  Nlm_FileGets (Nlm_CharPtr ptr, size_t size, FILE *fp)
 	}
 	if (ch == '\n' || ch == '\r') {
 	  *tmp = '\n';
+	  tmp++;
+	  count++;
+	} else if (ch != EOF && ch != '\0') {
+	  *tmp = ch;
 	  tmp++;
 	  count++;
 	}
@@ -1017,14 +1027,14 @@ NLM_EXTERN void LIBCALL Nlm_FileCreate (Nlm_CharPtr fileName, Nlm_CharPtr type, 
   if (fileName != NULL && fileName [0] != '\0') {
 
 #ifdef OS_MAC
-    // note: the following assumes either full pathname or that the current
-    // directory is the proper location to find/create the file
+    /* note: the following assumes either full pathname or that the current
+       directory is the proper location to find/create the file */
 
     Nlm_StringNCpy_0(temp, fileName, sizeof(temp));
     Nlm_CtoPstr ( temp);
     fError = FSMakeFSSpec( 0, 0, (StringPtr)temp, &spec);
     
-    // file not found, so create it...
+    /* file not found, so create it... */
     if( fError == fnfErr){
         fType = Nlm_GetOSType (type, 'TEXT');
         fCreator = Nlm_GetOSType (creator, '    ');

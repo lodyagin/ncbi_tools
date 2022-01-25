@@ -1,4 +1,4 @@
-/*  $Id: raw_scoremat.c,v 1.2 2003/10/02 15:37:34 ivanov Exp $
+/*  $Id: raw_scoremat.c,v 1.3 2003/12/29 21:25:50 ucko Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -40,6 +40,7 @@
 #include "sm_blosum80.c"
 #include "sm_pam30.c"
 #include "sm_pam70.c"
+#include "sm_pam250.c"
 
 static const char kNCBIstdaa[] = "-ABCDEFGHIKLMNPQRSTVWXYZU*";
 
@@ -112,6 +113,9 @@ void NCBISM_Unpack(const SNCBIPackedScoreMatrix* psm,
 /*
  * ===========================================================================
  * $Log: raw_scoremat.c,v $
+ * Revision 1.3  2003/12/29 21:25:50  ucko
+ * +PAM250
+ *
  * Revision 1.2  2003/10/02 15:37:34  ivanov
  * Get rid of compilation warnings
  *

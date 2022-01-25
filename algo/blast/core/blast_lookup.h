@@ -1,4 +1,4 @@
-/* $Id: blast_lookup.h,v 1.1 2003/09/10 19:37:26 dondosha Exp $
+/* $Id: blast_lookup.h,v 1.2 2004/01/26 19:39:27 coulouri Exp $
 
 * ===========================================================================
 *
@@ -75,7 +75,7 @@ extern "C" {
     Int4 num_used;       /* num valid positions */
 
     union {
-      Int4* overflow;
+      Int4 overflow_cursor;
       Int4 entries[HITS_ON_BACKBONE];
     } payload;
 

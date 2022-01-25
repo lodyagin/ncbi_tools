@@ -1,4 +1,4 @@
-/* $Id: txalign.c,v 6.79 2003/09/26 20:54:10 dondosha Exp $
+/* $Id: txalign.c,v 6.81 2003/11/25 16:24:03 dondosha Exp $
 ***************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -27,13 +27,19 @@
 *
 * File Name:  txalign.c
 *
-* $Revision: 6.79 $
+* $Revision: 6.81 $
 * 
 * File Description:  Formating of text alignment for the BLAST output
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: txalign.c,v $
+* Revision 6.81  2003/11/25 16:24:03  dondosha
+* Use query number for synchronizeCheck; do not show structure link if RID not available
+*
+* Revision 6.80  2003/11/20 22:09:26  dondosha
+* Added a PrindDefLinesFromSeqAlignWithPath function with an argument to provide root path for image links
+*
 * Revision 6.79  2003/09/26 20:54:10  dondosha
 * Revert change in revision 6.77, as it turned trace.cgi links should have stayed as they were
 *
@@ -688,15 +694,17 @@ static void addLinkoutForDefline(BioseqPtr bsp, SeqIdPtr sip, FILE* fp){
 	  bdlpTemp=bdlpTemp->next;
 	}
 	bdlpTemp=bdlp;
-	while(bdlpTemp){
-	  if(checkLinkoutType(bdlpTemp, linkout_structure)){
-	    hasLinkout=TRUE;
-	    gi=GetGIForSeqId(bdlpTemp->seqid);
-	    fprintf(fp, URL_Structure, RID_glb, firstGi, gi, CDD_RID_glb, "onegroup", StringCmp(Entrez_Query_Term, "") ? Entrez_Query_Term:"none");
-	    break;
-	  }
-	  bdlpTemp=bdlpTemp->next;
-	}
+        if (RID_glb) {
+           while(bdlpTemp){
+              if(checkLinkoutType(bdlpTemp, linkout_structure)){
+                 hasLinkout=TRUE;
+                 gi=GetGIForSeqId(bdlpTemp->seqid);
+                 fprintf(fp, URL_Structure, RID_glb, firstGi, gi, CDD_RID_glb, "onegroup", StringCmp(Entrez_Query_Term, "") ? Entrez_Query_Term:"none");
+                 break;
+              }
+              bdlpTemp=bdlpTemp->next;
+           }
+        }
 	bdlpTemp=bdlp;
 	while(bdlpTemp){
 	  if(checkLinkoutType(bdlpTemp, linkout_geo)){
@@ -749,7 +757,7 @@ static void addLinkoutForBioseq(BioseqPtr bsp, SeqIdPtr sip, SeqIdPtr firstSip, 
 	  hasLinkout=TRUE;	
 	  fprintf(fp, URL_Unigene,  gi);
 	}
-	if(checkLinkoutType(actualBdlp, linkout_structure)){
+	if(RID_glb && checkLinkoutType(actualBdlp, linkout_structure)){
 	  hasLinkout=TRUE;
 	  fprintf(fp, URL_Structure, RID_glb, firstGi, gi, CDD_RID_glb, "onepair", StringCmp(Entrez_Query_Term, "") ? Entrez_Query_Term:"none");
 	}
@@ -1712,7 +1720,7 @@ static CharPtr DrawTextToBuffer(ValNodePtr tdp_list, CharPtr PNTR m_buf, Boolean
 					/*check box for getting sequence*/
 					if(options&TXALIGN_HTML&&options&TXALIGN_MASTER&&DbHasGi&&(options&TXALIGN_GET_SEQUENCE)){
 					  Char checkboxBuf[200];
-					  sprintf(checkboxBuf, "<input type=\"checkbox\" name=\"getSeqGi\" value=\"%ld\" onClick=\"synchronizeCheck(this.value, 'getSeqAlignment', 'getSeqGi', this.checked)\">", sip->data.intvalue);
+					  sprintf(checkboxBuf, "<input type=\"checkbox\" name=\"getSeqGi\" value=\"%ld\" onClick=\"synchronizeCheck(this.value, 'getSeqAlignment%ld', 'getSeqGi', this.checked)\">", sip->data.intvalue, query_number_glb);
 					  sprintf(docbuf+pos,checkboxBuf);
 					  
 					  pos += StringLen(checkboxBuf);
@@ -1761,7 +1769,7 @@ static CharPtr DrawTextToBuffer(ValNodePtr tdp_list, CharPtr PNTR m_buf, Boolean
 		if(!load){
 		  if(options&TXALIGN_HTML&&options&TXALIGN_MASTER&&DbHasGi&&(options&TXALIGN_GET_SEQUENCE)){
 		    Char checkboxBuf[200];
-		    sprintf(checkboxBuf, "<input type=\"checkbox\" name=\"getSeqMaster\" value=\"\" onClick=\"uncheckable('getSeqAlignment', 'getSeqMaster')\">");
+		    sprintf(checkboxBuf, "<input type=\"checkbox\" name=\"getSeqMaster\" value=\"\" onClick=\"uncheckable('getSeqAlignment%ld', 'getSeqMaster')\">", query_number_glb);
 		    sprintf(docbuf+pos,checkboxBuf);
 		  
 		    pos += StringLen(checkboxBuf);
@@ -4580,9 +4588,9 @@ Tx_PrintDefLine(BlastDefLinePtr bdsp, CharPtr buffer, Int4 length)
 }
 
 NLM_EXTERN Boolean LIBCALL
-PrintDefLinesFromSeqAlignEx2(SeqAlignPtr seqalign, Int4 line_length, FILE *outfp, Uint4 options,
+PrintDefLinesFromSeqAlignWithPath(SeqAlignPtr seqalign, Int4 line_length, FILE *outfp, Uint4 options,
 		Int4 mode, Int2Ptr marks, Int4 number_of_descriptions,
-		CharPtr db_name, CharPtr blast_type)
+		CharPtr db_name, CharPtr blast_type, CharPtr www_root_path)
 {
     BioseqPtr bsp;
     Boolean found_next_one, found_gnl_id, same_id, found_score=FALSE, make_link=FALSE;
@@ -4602,7 +4610,6 @@ PrintDefLinesFromSeqAlignEx2(SeqAlignPtr seqalign, Int4 line_length, FILE *outfp
     Char tool_url[128];
     DbtagPtr db_tag;
     ObjectIdPtr oip;
-    CharPtr www_root_path = NULL;
     Int2 ColumnDistance=2, extraSpace=0, extraSpace2=0, strLen=0, maxEvalWidth=5, maxNWidth=2;
     Char tempBuf[64], tempBuf2[64];
       
@@ -4617,7 +4624,8 @@ PrintDefLinesFromSeqAlignEx2(SeqAlignPtr seqalign, Int4 line_length, FILE *outfp
     }
 
 #ifdef OS_UNIX
-    www_root_path = getenv("WWW_ROOT_PATH");
+    if (!www_root_path)
+       www_root_path = getenv("WWW_ROOT_PATH");
 #endif
     
     if(!StringICmp(blast_type, "fruitfly")) {
@@ -4651,7 +4659,7 @@ PrintDefLinesFromSeqAlignEx2(SeqAlignPtr seqalign, Int4 line_length, FILE *outfp
     /*AAS*/
     if (!(options & TXALIGN_DO_NOT_PRINT_TITLE)) {
         if ((mode == FIRST_PASS) || (mode == NOT_FIRST_PASS_REPEATS)) {
-	  if(options&TXALIGN_SHOW_LINKOUT&&options&TXALIGN_HTML){
+	  if(RID_glb && options&TXALIGN_SHOW_LINKOUT&&options&TXALIGN_HTML){
 	    if(PairwiseSeqAlignHasLinkout(seqalign, linkout_structure)){
 	    
 	      fprintf(outfp, URL_Structure_Overview,  RID_glb, 0, 0, CDD_RID_glb, "overview", StringCmp(Entrez_Query_Term, "") ? Entrez_Query_Term:"none");
@@ -4883,14 +4891,14 @@ PrintDefLinesFromSeqAlignEx2(SeqAlignPtr seqalign, Int4 line_length, FILE *outfp
                             firstnew = FALSE;
                             fprintf(outfp, "<a name = Evalue></a>");
                         }
-                        fprintf(outfp, "<br><IMG SRC=\"%s/images/new.gif\" WIDTH=25 HEIGHT=15 ALT=\"New sequence mark\">", www_root_path == NULL? "/blast" : www_root_path);
+                        fprintf(outfp, "<br><IMG SRC=\"%s/blast/images/new.gif\" WIDTH=25 HEIGHT=15 ALT=\"New sequence mark\">", www_root_path == NULL? "" : www_root_path);
                     } else {
-                        fprintf(outfp, "<br><IMG SRC=\"%s/images/bg.gif\" WIDTH=25 HEIGHT=15 ALT=\" \">",  www_root_path == NULL? "/blast" : www_root_path);
+                        fprintf(outfp, "<br><IMG SRC=\"%s/blast/images/bg.gif\" WIDTH=25 HEIGHT=15 ALT=\" \">",  www_root_path == NULL? "" : www_root_path);
                     }
                     if (txsp->waschecked) {
-                        fprintf(outfp, "<IMG SRC=\"%s/images/checked.gif\" WIDTH=15 HEIGHT=15 ALT=\"Checked mark\">",  www_root_path == NULL? "/blast" : www_root_path);
+                        fprintf(outfp, "<IMG SRC=\"%s/blast/images/checked.gif\" WIDTH=15 HEIGHT=15 ALT=\"Checked mark\">",  www_root_path == NULL? "" : www_root_path);
                     } else {
-                        fprintf(outfp, "<IMG SRC=\"%s/images/bg.gif\" WIDTH=15 HEIGHT=15 ALT=\" \">",  www_root_path == NULL? "/blast" : www_root_path);
+                        fprintf(outfp, "<IMG SRC=\"%s/blast/images/bg.gif\" WIDTH=15 HEIGHT=15 ALT=\" \">",  www_root_path == NULL? "" : www_root_path);
                     }
                 }
                 fprintf(outfp, "%s", HTML_buffer);
@@ -5180,6 +5188,16 @@ PrintDefLinesFromSeqAlignEx2(SeqAlignPtr seqalign, Int4 line_length, FILE *outfp
     }
     
     return TRUE;
+}
+
+NLM_EXTERN Boolean LIBCALL
+PrintDefLinesFromSeqAlignEx2(SeqAlignPtr seqalign, Int4 line_length, FILE *outfp, Uint4 options,
+		Int4 mode, Int2Ptr marks, Int4 number_of_descriptions,
+		CharPtr db_name, CharPtr blast_type)
+{
+   return PrintDefLinesFromSeqAlignWithPath(seqalign, line_length, outfp,
+             options, mode, marks, number_of_descriptions, db_name, 
+             blast_type, NULL);
 }
 
 NLM_EXTERN Boolean LIBCALL
@@ -5576,7 +5594,7 @@ static Boolean TX_PrintDeflinesWithAsn(BlastDefLinePtr PNTR bdsp,
 	  bestid = SeqIdFindBest(tbdsp->seqid, SEQID_GI);
 	  firstSip=bestid;
 	  if(bestid->choice == SEQID_GI&&asop->html_hot_link&&(asop->txalign_options&TXALIGN_GET_SEQUENCE)){
-	    fprintf(asop->fp,  "<input type=\"checkbox\" name=\"getSeqGi\" value=\"%ld\" onClick=\"synchronizeCheck(this.value, 'getSeqAlignment', 'getSeqGi', this.checked)\">", bestid->data.intvalue);
+	    fprintf(asop->fp,  "<input type=\"checkbox\" name=\"getSeqGi\" value=\"%ld\" onClick=\"synchronizeCheck(this.value, 'getSeqAlignment%ld', 'getSeqGi', this.checked)\">", bestid->data.intvalue, query_number_glb);
 	  }
 		    
 	  fprintf(asop->fp, ">");
@@ -5696,7 +5714,7 @@ NLM_EXTERN int LIBCALLBACK FormatScoreFunc(AlignStatOptionPtr asop)
 		      bestid = SeqIdFindBest(bsp->id, SEQID_GI);
 		      firstSip=bestid;
 		      if(bestid->choice == SEQID_GI&&asop->html_hot_link&&(asop->txalign_options&TXALIGN_GET_SEQUENCE)){
-			fprintf(asop->fp,  "<input type=\"checkbox\" name=\"getSeqGi\" value=\"%ld\" onClick=\"synchronizeCheck(this.value, 'getSeqAlignment', 'getSeqGi', this.checked)\">", bestid->data.intvalue);
+			fprintf(asop->fp,  "<input type=\"checkbox\" name=\"getSeqGi\" value=\"%ld\" onClick=\"synchronizeCheck(this.value, 'getSeqAlignment%ld', 'getSeqGi', this.checked)\">", bestid->data.intvalue, query_number_glb);
 		      }
 		      fprintf(asop->fp, ">");
 		      first = FALSE;

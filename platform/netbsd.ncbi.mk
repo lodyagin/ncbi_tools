@@ -1,5 +1,5 @@
 #
-# $Id: netbsd.ncbi.mk,v 1.8 2003/05/07 17:40:12 beloslyu Exp $
+# $Id: netbsd.ncbi.mk,v 1.9 2003/11/17 16:05:41 coulouri Exp $
 #
 # That platform is not supported and is contributed to NCBI by 
 #                     Brook Milligan <brook@trillium.NMSU.Edu>
@@ -9,8 +9,8 @@ NCBI_MAKE_SHELL = /bin/sh
 NCBI_AR=ar
 NCBI_CC = gcc -pipe
 NCBI_CFLAGS1 = -c
-NCBI_LDFLAGS1 = -O
-NCBI_OPTFLAG = -O
+NCBI_LDFLAGS1 = -O2
+NCBI_OPTFLAG = -O2
 NCBI_BIN_MASTER = /home/coremake/ncbi/bin
 NCBI_BIN_COPY = /home/coremake/ncbi/bin
 NCBI_INCDIR = /home/coremake/ncbi/include

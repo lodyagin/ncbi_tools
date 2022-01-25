@@ -14,10 +14,9 @@ THREAD_LIBS = -lpthread
 #NCBI_OTHERLIBS += -lposix4 -lresolv -lsocket -lrpcsvc -lnsl -lgen
 # Solaris Sparc
 #NCBI_OTHERLIBS += -lposix4 -lresolv -lsocket -lrpcsvc -lnsl
-# Darwin
+# MacOS
 #NCBI_OTHERLIBS = -lc
 #THREAD_LIBS =
-#DEFINE = -DDARWIN
 
 #
 CC=cc 
@@ -46,6 +45,8 @@ DEBUG_FLAG = -g
 #OPTIMIZED compilation
 LIBS = $(NCBI_LIBDIR)
 DEBUG_FLAG = -O
+# For MacOS, use the following line:
+#DEBUG_FLAG = -O2 -g
 
 OBJ_FILES = wwwbutl.c $(LIBS)/ncbithr.o
 
@@ -60,49 +61,58 @@ INCDIR = -I. -I$(NCBI_INCDIR)
 #BLASTQUE = /home/dondosha/BlastQueue
 #INCDIR = -I$(BLASTQUE)/Client -I$(BLASTQUE)/ASN.1 -I. -I$(NCBI_INCDIR)
 
+CFLAGS = -c $(DEBUG_FLAG) $(INCDIR)
+#For MacOS, add the following line:
+#CFLAGS += -no-cpp-precomp -Wno-long-double
+ 
 # For standalone model
-CFLAGS=  $(DEBUG_FLAG) $(INCDIR)
+LDFLAGS = $(DEBUG_FLAG) $(INCDIR)
+#For MacOS, add the following line:
+#LDFLAGS += -framework CoreServices
 
 # Use client/server for gi/accession lookups
-CFLAGS_CS = $(DEBUG_FLAG) $(INCDIR) -DNCBI_ENTREZ_CLIENT
+LDFLAGS_CS = $(DEBUG_FLAG) $(INCDIR) -DNCBI_ENTREZ_CLIENT
+#For MacOS, add the following line:
+#LDFLAGS_CS += -framework CoreServices 
 
 # For full NCBI Client-server model
-#CFLAGS_FCS= -c $(DEBUG_FLAG) $(INCDIR) -DNCBI_CLIENT_SERVER
+#CFLAGS += -DNCBI_CLIENT_SERVER
+#LDFLAGS_CS += -DNCBI_CLIENT_SERVER
 
 .c.o:   Makefile
-	$(CC) -c $(CFLAGS) $<
+	$(CC) $(CFLAGS) $<
 
 all: psiblast.REAL psiblast_cs.REAL  blast.REAL blast_cs.REAL nph-viewgif.cgi wblast2.REAL wblast2_cs.REAL bl2bag.cgi 
 
 blast.REAL: wwwblast.c $(OBJ_FILES) Makefile
-	$(CC)  $(CFLAGS) wwwblast.c $(OBJ_FILES) \
+	$(CC) $(LDFLAGS) wwwblast.c $(OBJ_FILES) \
 	-L$(LIBS) $(ALL_LIBS) -o ./blast.REAL
 	mv ./blast.REAL ..
 blast_cs.REAL: wwwblast.c $(OBJ_FILES) Makefile
-	$(CC) $(CFLAGS_CS) wwwblast.c $(OBJ_FILES) \
+	$(CC) $(LDFLAGS_CS) wwwblast.c $(OBJ_FILES) \
 	-L$(LIBS) $(ALL_LIBS_CS) -o ./blast_cs.REAL
 	mv ./blast_cs.REAL ..
 psiblast.REAL: psiblast.o $(OBJ_FILES) Makefile
-	$(CC) $(CFLAGS) psiblast.o $(OBJ_FILES) \
+	$(CC) $(LDFLAGS) psiblast.o $(OBJ_FILES) \
 	-L$(LIBS) $(ALL_LIBS) -o ./psiblast.REAL
 	mv ./psiblast.REAL ../psiblast.REAL
 psiblast_cs.REAL: psiblast.o $(OBJ_FILES) Makefile
-	$(CC) $(CFLAGS_CS) psiblast.o $(OBJ_FILES) \
+	$(CC) $(LDFLAGS_CS) psiblast.o $(OBJ_FILES) \
 	-L$(LIBS) $(ALL_LIBS_CS) -o ./psiblast_cs.REAL
 	mv ./psiblast_cs.REAL ../psiblast_cs.REAL
 nph-viewgif.cgi: viewgif.o
 	$(CC) viewgif.o -o nph-viewgif.cgi
 	mv nph-viewgif.cgi ..
 wblast2.REAL : wblast2.c 
-	$(CC) $(CFLAGS) $(BL2_DEFINE) wblast2.c \
+	$(CC) $(LDFLAGS) $(BL2_DEFINE) wblast2.c \
 	-L$(LIBS) $(BL2_LIBS) -o ./wblast2.REAL
 	mv wblast2.REAL ..
 wblast2_cs.REAL : wblast2.c $(BL2_OBJ)
-	$(CC) $(CFLAGS_CS) $(BL2_DEFINE) wblast2.c $(BL2_OBJ) \
+	$(CC) $(LDFLAGS_CS) $(BL2_DEFINE) wblast2.c $(BL2_OBJ) \
 	-L$(LIBS) $(BL2_LIBS_CS) -o ./wblast2_cs.REAL
 	mv wblast2_cs.REAL ..
 bl2bag.cgi : bl2bag.o
-	$(CC) bl2bag.o -L$(LIBS) -lncbi -lm -o bl2bag.cgi
+	$(CC) $(LDFLAGS) bl2bag.o -L$(LIBS) -lncbi -lm -o bl2bag.cgi
 	mv bl2bag.cgi ..
 
 xml:

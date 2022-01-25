@@ -1,4 +1,4 @@
-/* $Id: blast_util.c,v 1.51 2003/10/21 13:02:36 camacho Exp $
+/* $Id: blast_util.c,v 1.56 2004/02/03 21:42:20 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,7 +32,7 @@ Author: Ilya Dondoshansky
 Contents: Various BLAST utilities
 
 ******************************************************************************
- * $Revision: 1.51 $
+ * $Revision: 1.56 $
  * */
 
 #include <algo/blast/core/blast_def.h>
@@ -40,7 +40,7 @@ Contents: Various BLAST utilities
 #include <algo/blast/core/blast_stat.h>
 #include <algo/blast/core/blast_filter.h>
 
-static char const rcsid[] = "$Id: blast_util.c,v 1.51 2003/10/21 13:02:36 camacho Exp $";
+static char const rcsid[] = "$Id: blast_util.c,v 1.56 2004/02/03 21:42:20 dondosha Exp $";
 
 Int2
 BlastSetUp_SeqBlkNew (const Uint1* buffer, Int4 length, Int2 context,
@@ -93,6 +93,7 @@ Int2 BlastSeqBlkSetSequence(BLAST_SequenceBlk* seq_blk,
     seq_blk->sequence_start = (Uint1*) sequence;
     seq_blk->sequence = (Uint1*) sequence + 1;
     seq_blk->length = seqlen;
+    seq_blk->oof_sequence = NULL;
 
     return 0;
 }
@@ -106,6 +107,7 @@ Int2 BlastSeqBlkSetCompressedSequence(BLAST_SequenceBlk* seq_blk,
 
     seq_blk->sequence_allocated = TRUE;
     seq_blk->sequence = (Uint1*) sequence;
+    seq_blk->oof_sequence = NULL;
 
     return 0;
 }
@@ -136,12 +138,14 @@ MakeBlastSequenceBlk(ReadDBFILEPtr db, BLAST_SequenceBlk** seq_blk,
 Int2 BlastSequenceBlkClean(BLAST_SequenceBlk* seq_blk)
 {
    if (!seq_blk)
-      return 1;
+       return 1;
 
    if (seq_blk->sequence_allocated) 
-      sfree(seq_blk->sequence);
+       sfree(seq_blk->sequence);
    if (seq_blk->sequence_start_allocated)
-      sfree(seq_blk->sequence_start);
+       sfree(seq_blk->sequence_start);
+   if (seq_blk->oof_sequence)
+       sfree(seq_blk->oof_sequence);
 
    return 0;
 }
@@ -152,7 +156,7 @@ BLAST_SequenceBlk* BlastSequenceBlkFree(BLAST_SequenceBlk* seq_blk)
       return NULL;
 
    BlastSequenceBlkClean(seq_blk);
-   BlastMaskFree(seq_blk->lcase_mask);
+   BlastMaskLocFree(seq_blk->lcase_mask);
    sfree(seq_blk);
    return NULL;
 }
@@ -893,6 +897,65 @@ Int2 BLAST_GetAllTranslations(const Uint1* nucl_seq, Uint1 encoding,
 
    return 0;
 }
+
+int GetPartialTranslation(const Uint1* nucl_seq,
+        Int4 nucl_length, Int2 frame, Uint1* genetic_code,
+        Uint1** translation_buffer_ptr, Int4* protein_length, 
+        Uint1** mixed_seq_ptr)
+{
+   Uint1* translation_buffer;
+   Uint1* nucl_seq_rev = NULL;
+   Int4 length;
+   
+   if ((translation_buffer = 
+        (Uint1*) malloc(2*(nucl_length+1)+1)) == NULL)
+      return -1;
+   if (translation_buffer_ptr)
+      *translation_buffer_ptr = translation_buffer;
+
+   if (frame < 0) {
+      /* First produce the reverse strand of the nucleotide sequence */
+      GetReverseNuclSequence(nucl_seq, nucl_length, &nucl_seq_rev);
+   } 
+
+   if (!mixed_seq_ptr) {
+      length = 
+         BLAST_GetTranslation(nucl_seq, nucl_seq_rev, 
+            nucl_length, frame, translation_buffer, genetic_code);
+      if (protein_length)
+         *protein_length = length;
+   } else {
+      Int4 index;
+      Int2 frame_sign = ((frame < 0) ? -1 : 1);
+      Int4 offset = 0;
+      Int4 frame_offsets[3];
+      Uint1* seq;
+
+      for (index = 1; index <= 3; ++index) {
+         length = 
+            BLAST_GetTranslation(nucl_seq, nucl_seq_rev, 
+               nucl_length, frame_sign*index, translation_buffer+offset, 
+               genetic_code);
+         frame_offsets[index-1] = offset;
+         offset += length + 1;
+      }
+
+      *mixed_seq_ptr = (Uint1*) malloc(2*(nucl_length+1));
+      if (protein_length)
+         *protein_length = 2*nucl_length - 1;
+      for (index = 0, seq = *mixed_seq_ptr; index <= nucl_length; 
+           ++index, ++seq) {
+         *seq = translation_buffer[frame_offsets[index%3]+(index/3)];
+      }
+   }
+
+   sfree(nucl_seq_rev);
+   if (!translation_buffer_ptr)
+      sfree(translation_buffer);
+
+   return 0;
+}
+
 
 Int2 FrameToContext(Int2 frame) 
 {

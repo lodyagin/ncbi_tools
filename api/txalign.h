@@ -1,4 +1,4 @@
-/* $Id: txalign.h,v 6.15 2002/12/11 16:24:51 jianye Exp $
+/* $Id: txalign.h,v 6.16 2003/11/20 22:09:26 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 03/13/94
 *
-* $Revision: 6.15 $
+* $Revision: 6.16 $
 *
 * File Description:
 *         External include file for various alignments
@@ -38,6 +38,9 @@
 *
 *
 * $Log: txalign.h,v $
+* Revision 6.16  2003/11/20 22:09:26  dondosha
+* Added a PrindDefLinesFromSeqAlignWithPath function with an argument to provide root path for image links
+*
 * Revision 6.15  2002/12/11 16:24:51  jianye
 * added structure linkout
 *
@@ -475,8 +478,6 @@ NLM_EXTERN Boolean ShowTextAlignFromAnnot3 PROTO((
                     CharPtr blast_type,
                     Int4Ptr PNTR posMatrix
                     ));
-
-
 /* Simple printing function:
    Can be used while debugging.. options kept to a minimum 
    fp==NULL ==> stdout 
@@ -569,6 +570,19 @@ NLM_EXTERN Boolean LIBCALL PrintDefLinesFromSeqAlignEx2 PROTO((
 		    Int4 number_of_descriptions,
 		    CharPtr db_name,
 		    CharPtr blast_type
+		    ));
+
+NLM_EXTERN Boolean LIBCALL PrintDefLinesFromSeqAlignWithPath PROTO((
+		    SeqAlignPtr seqalign, 
+		    Int4 line_length, 
+		    FILE *outfp, 
+		    Uint4 options, 
+		    Int4 mode, 
+		    Int2Ptr marks, 
+		    Int4 number_of_descriptions,
+		    CharPtr db_name,
+		    CharPtr blast_type,
+                    CharPtr www_root_path
 		    ));
 
 /*

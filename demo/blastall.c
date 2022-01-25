@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: blastall.c,v 6.135 2003/08/21 15:37:54 dondosha Exp $";
+static char const rcsid[] = "$Id: blastall.c,v 6.136 2003/11/05 22:28:06 dondosha Exp $";
 
-/* $Id: blastall.c,v 6.135 2003/08/21 15:37:54 dondosha Exp $
+/* $Id: blastall.c,v 6.136 2003/11/05 22:28:06 dondosha Exp $
 **************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -28,6 +28,9 @@ static char const rcsid[] = "$Id: blastall.c,v 6.135 2003/08/21 15:37:54 dondosh
 ************************************************************************** 
  * 
  * $Log: blastall.c,v $
+ * Revision 6.136  2003/11/05 22:28:06  dondosha
+ * No need to shift subsequence coordinates in tabular output, since they are already shifted in the seqalign
+ *
  * Revision 6.135  2003/08/21 15:37:54  dondosha
  * Corrections for out-of-frame tabular output and megablast XML output
  *
@@ -1571,7 +1574,7 @@ Int2 Main (void)
 	         BlastPrintTabularResults(curr_seqalign, query_bsp, slp, 
                number_of_alignments, blast_program, 
                !options->gapped_calculation, options->is_ooframe,
-               believe_query, from, 0, global_fp, NULL, (align_view == 9));
+               believe_query, 0, 0, global_fp, NULL, (align_view == 9));
 
 	         SeqAlignSetFree(curr_seqalign);
 	      }

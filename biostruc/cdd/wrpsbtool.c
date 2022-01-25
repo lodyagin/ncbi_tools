@@ -1,4 +1,4 @@
-/* $Id: wrpsbtool.c,v 1.20 2003/10/07 21:16:06 bauer Exp $
+/* $Id: wrpsbtool.c,v 1.21 2003/11/19 14:34:31 bauer Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 4/19/2000
 *
-* $Revision: 1.20 $
+* $Revision: 1.21 $
 *
 * File Description:
 *         tools for WWW-RPS BLAST 
@@ -37,6 +37,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: wrpsbtool.c,v $
+* Revision 1.21  2003/11/19 14:34:31  bauer
+* changes to support SeqAnnot export
+*
 * Revision 1.20  2003/10/07 21:16:06  bauer
 * support generation of Sequence Annotation from CD-Search results
 *
@@ -87,7 +90,7 @@
 *
 * Revision 1.4  2000/08/01 21:23:03  bauer
 * added Entrez-Hotlink for Query
-*
+*
 * Revision 1.3  2000/07/24 15:43:37  bauer
 * fixed problem with pairwise alignment displays involvinb profile-only CDs
 *
@@ -104,6 +107,7 @@
 #include <blastdef.h>
 #include <ddvcreate.h>
 #include <wrpsb.h>
+#include "cddutil.h"
 #include <wrpsbtool.h>
 
 /*---------------------------------------------------------------------------*/
@@ -276,8 +280,29 @@ void WRPSBSearchFoot(Boolean bAnnotOnly, Boolean bNoWrap)
 /* output simple error message as HTML                                       */
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
-void WRPSBHtmlError(CharPtr cErrTxt) 
+void WRPSBHtmlError(CharPtr cErrTxt, Boolean bAnnotOnly) 
 {
+  AsnIoPtr      aip;
+  SeqAnnotPtr   sap;
+  AnnotDescPtr  adp;
+
+  if (bAnnotOnly) {
+    WRPSBSearchHead(NULL,NULL,TRUE,TRUE);
+    sap = SeqAnnotNew();
+    sap->type = 1;
+    sap->data = NULL;
+    adp = (AnnotDescPtr) ValNodeNew(NULL);
+    adp->choice = Annot_descr_name;
+    adp->data.ptrvalue = StringSave(cErrTxt);
+    sap->desc = adp;
+    strcpy(OutputName,GetTempName("wrpsbcl3"));
+    aip = AsnIoOpen(OutputName, "w");
+    SeqAnnotAsnWrite((SeqAnnotPtr) sap, aip, NULL);
+    AsnIoClose(aip);
+    PrintFile(OutputName);
+    RemoveTempFiles();   
+    exit(1);  
+  }
   WRPSBSearchHead("CD-Search Error","CD-Search Error Message",FALSE,FALSE);
   printf("<BR><h3>%s</h3>\n",cErrTxt);
   WRPSBSearchFoot(FALSE, FALSE);
@@ -1435,16 +1460,16 @@ Boolean WRPSBCl3DisplayBlastPairList(AlignmentAbstractPtr aap,
 /* need to explicitly get the subject sequence from a FASTA file (versions..)*/
 /*---------------------------------------------------------------------------*/
     sfp = FileOpen(aap->cSeqFile,"r");
-    if (!sfp) WRPSBHtmlError("Could not find subject sequence!");
+    if (!sfp) WRPSBHtmlError("Could not find subject sequence!", FALSE);
     sep = FastaToSeqEntry(sfp,FALSE);
     FileClose(sfp);
-    if (!sep) WRPSBHtmlError("Could not read subject sequence!");
+    if (!sep) WRPSBHtmlError("Could not read subject sequence!", FALSE);
     bsp = (BioseqPtr) sep->data.ptrvalue;
 
     /* bsp = BioseqLockById(new_id); */
     subject_length = bsp->length;
     if (maxsubjaln >= subject_length) {
-      WRPSBHtmlError("Error in RPS-Blast alignment!");
+      WRPSBHtmlError("Error in RPS-Blast alignment!", FALSE);
     }
     aligned_fraction = 1.0 - aap->nmissg - aap->cmissg;
     if (aap->nmissg >= 0.2 || aap->cmissg >= 0.2) {
@@ -1524,5 +1549,778 @@ static void borkPutchar( gdIOCtx* ctx, int a )
     borkPutbuf(ctx, onechar, 1);
 }
 
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+/* check whether a hit is unique, or to a CD hit somewhere else in the list  */
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+static Boolean WRPSBHitIsNew(AlignmentAbstractPtr aapThis,
+                             AlignmentAbstractPtr aapHead,
+			     Dart_Connect *Connection,
+			     Int4 *cDartFam, Int4 cDartFamNum)
+{
+  AlignmentAbstractPtr aap;
+  int                  Size, i;
+  unsigned             Gilist[DARTSIZELIMIT];
+  char                 Accession[DARTSIZELIMIT][30];
+  
+  if (!aapThis) return FALSE;
+  for (i=0;i<cDartFamNum;i++) {
+    if (cDartFam[i] == aapThis->pssmid) {
+     aapThis->bIsArch = TRUE;
+     return(TRUE);    
+    }
+  }
+  if (Connection) {
+    if (aapThis->pssmid > 0) {
+      if (Dart_SameSim(Connection,aapThis->pssmid,Gilist,DARTSIZELIMIT,&Size)) {
+        for (i=0;i<Size;i++) {
+          if (!Dart_CDGi2Acc(Connection,Gilist[i],Accession[i],30)) {
+	    Accession[i][0] = '\0';
+          }
+	}
+      }
+    } else {
+      if (Dart_Related(Connection,aapThis->cCDDid,Gilist,DARTSIZELIMIT,&Size,NULL)) {
+        for (i=0;i<Size;i++) {
+          if (!Dart_CDGi2Acc(Connection,Gilist[i],Accession[i],30)) {
+	    Accession[i][0] = '\0';
+          }
+	}
+      }
+    }
+  } else {
+    Size = 0;
+  }
+  
+  aap = aapHead; while (aap) {
+    if (aapThis->pssmid > -1 && aap->pssmid > -1) {
+      if (aapThis->pssmid == aap->pssmid) {
+        aapThis->colcyc = aap->colcyc;
+        return FALSE;
+      }
+    }
+    for (i=0;i<Size;i++) {
+      if (Nlm_StrCmp(Accession[i],aap->cCDDid) == 0) {
+        aapThis->colcyc = aap->colcyc;
+        return FALSE;
+      }
+    }
+    if (Nlm_StrCmp(CDDlocat,"inhouse")==0) {   /* map names just for inhouse */
+      if (aapThis->cCDDid && aap->cCDDid) {
+        if (Nlm_StrCmp(aapThis->cCDDid,aap->cCDDid) == 0) {
+          aapThis->colcyc = aap->colcyc;
+          return FALSE;
+        }
+      }
+      if (Nlm_StrICmp(aapThis->cGraphId,aap->cGraphId) == 0) {
+        aapThis->colcyc = aap->colcyc;
+        return FALSE;
+      }
+    }
+    aap = aap->next;
+  }
+  return TRUE;			     
+}
 
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+/* define the indents on a block containing repeats according to the alignmt */
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+static void WRPSBIndentsViaSeqAlign(CddRepeatPtr pcdr,
+                                    AlignmentAbstractPtr aap,
+				    Int4 iGraphWidth,
+				    Int4 length)
+{
+  SeqLocPtr      slp;
+  SeqIntPtr      sintp;
+  Int4Ptr        istarts;
+  Int4           i = 0, j, s1, s2;
+  CddExpAlignPtr pCDea;
+  DenseSegPtr    dsp;
+  
+  istarts = MemNew(pcdr->count * sizeof (Int4));
+  slp = (SeqLocPtr) pcdr->location->data.ptrvalue;
+  while (slp) {
+    sintp = (SeqIntPtr) slp->data.ptrvalue;
+    istarts[i] = sintp->from; i++;
+    slp = slp->next;
+  }
+  
+  pCDea = CddExpAlignNew();
+  CddExpAlignAlloc(pCDea,length);
+  dsp = aap->salp->segs;
+  for (i=0;i<dsp->numseg;i++) {
+    s1 = dsp->starts[i*2];
+    s2 = dsp->starts[i*2+1]; 
+    if (s1 >=0 && s2>= 0) {
+      for (j=0;j<dsp->lens[i];j++) {
+        pCDea->adata[s1+j]=s2+j;
+      }
+    }
+  }
+  aap->indents = MemNew(pcdr->count * sizeof (Int4));
+  aap->nindents = 0;
+  for (i=0;i<pcdr->count;i++) {
+    for (j=0;j<length;j++) {
+      if (pCDea->adata[j] >= istarts[i]) {
+        s1 = (j * iGraphWidth) / (length - 1);
+	if (s1 > aap->gstart && s1 < aap->gstop) {
+	  aap->indents[aap->nindents] = s1;
+	  aap->nindents++;
+	}
+	break;
+      }
+    }
+  }
+  MemFree(istarts);
+}
 
+static CddDescPtr FindDescByPSSMid(CddDescPtr pcdd, Int4 pssmid)
+{
+  CddDescPtr pcddThis;
+  pcddThis = pcdd;
+  while(pcddThis) {
+    if (pcddThis->iPssmId == pssmid) return (pcddThis);
+    pcddThis = pcddThis->next;
+  }
+  return(NULL);
+}
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+/* fill in the Alignment Abstract Data Structure                             */
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+AlignmentAbstractPtr WRPSBCl3AbstractAlignment(BlastPruneSapStructPtr prune,
+                                               BioseqPtr query_bsp,
+                                               Int4 iGraphWidth,
+                                               Int4 *mxr,
+                                               Int4 iGraphMode,
+                                               CharPtr dbversion,
+                                               Boolean *bAnyPdb,
+					       Dart_Connect *Connection,
+					       Boolean bFull,
+					       CharPtr cCDDefault,
+					       CharPtr cDATApath,
+					       CharPtr cCDDPrefix,
+					       CharPtr cCDDPost_C,
+					       CharPtr cCDDPost_O,
+					       CharPtr cTREextens,
+					       CharPtr cSEQextens,
+					       CharPtr cOASIScgi,
+					       CharPtr cCDDcgi,
+					       CddDescPtr pcdd,
+					       Int4    *cDartFam,
+					       Int4    cDartFamNum,
+					       Boolean bAnnotOnly)
+{
+  Boolean              *bConflict;
+  Boolean              bDbIsOasis = TRUE, found_score = FALSE;
+  Int4                 maxrow = 1, i, pssmid;
+  Int4                 lastcol = -1;
+  Int4                 iCount = 0, replen;
+  Int4                 iColValue, number, score, fullCDstart, fullCDstop, nindent;
+  Int4                 *iOvrlap, *iMutual, isize;
+  AlignmentAbstractPtr aap, aapThis, aapTmp, aapHead = NULL;
+  CddDescPtr           pcddThis;
+  BioseqPtr            bsp;
+  CddTreePtr           pcddt;
+  CddDescrPtr          description;
+  CddRepeatPtr         pcdr;
+  CharPtr              cTemp;
+  CharPtr              cCurrDesc;
+  DbtagPtr             dbtp;
+  DenseSegPtr          dsp;
+  ObjectIdPtr          oidp;
+  ScorePtr             thisScorePtr;
+  SeqAlignPtr          sap;
+  SeqIdPtr             sip, gi_list;
+  TxDfLineStructPtr    txsp;
+  Nlm_FloatHi          evalue, bit_score;
+  Char                 path[PATH_MAX], hpath[PATH_MAX];
+  Char                 buffer[BUFFER_LENGTH+1];
+  Char                 cDatabase[16];
+  Char                 cCDDid[16];
+  Char                 CDDidx[PATH_MAX];
+
+  if (bFull) {
+    Nlm_StrCpy(CDDidx,cDATApath);
+    Nlm_StrCat(CDDidx,"/cdd.idx");
+    *bAnyPdb = FALSE;
+  }
+/*  if (Nlm_StrCmp(myargs[1].strvalue,"cdd_prop")==0) bDbIsOasis = FALSE; */
+  
+  sap = prune->sap;
+  while (sap) {
+    iCount++;
+    aapThis = (AlignmentAbstractPtr)MemNew(sizeof(AlignmentAbstract));
+    aapThis->salp = sap; aapThis->pssmid = -1;
+    dsp = sap->segs;
+    for (i=0;i<dsp->numseg;i++) {
+      if (dsp->starts[2*i] > -1) {
+        aapThis->mstart = dsp->starts[2*i];
+	aapThis->nmissg = (Nlm_FloatHi) dsp->starts[2*i+1];
+	fullCDstart = aapThis->mstart - aapThis->nmissg;
+        break;
+      }
+    }
+    for (i=0;i<dsp->numseg;i++) {
+      if (dsp->starts[2*i] > -1) {
+        aapThis->mstop = dsp->starts[2*i]+dsp->lens[i]-1;
+	aapThis->cmissg = (Nlm_FloatHi) (dsp->starts[2*i+1]+dsp->lens[i]-1);
+      }
+    }
+    aapThis->score = sap->score;
+    sip = dsp->ids->next;
+    if (bFull) {
+      aapThis->gstart = (aapThis->mstart * iGraphWidth) / (query_bsp->length-1);
+      aapThis->gstop =  (aapThis->mstop  * iGraphWidth) / (query_bsp->length-1);
+    }
+    thisScorePtr = sap->score;
+    found_score = GetScoreAndEvalue(sap, &score, &bit_score, &evalue, &number);
+    if      (evalue >  100.0   ) iColValue = 204;
+    else if (evalue >    1.0   ) iColValue = 153;
+    else if (evalue >    0.01  ) iColValue = 102;
+    else if (evalue >    0.0001) iColValue =  51;
+    else                         iColValue =   0;
+    if (bFull) {
+      bsp = BioseqLockById(sip);
+      if (!bsp) {
+        if (sip->choice == SEQID_GENERAL) {
+          dbtp = sip->data.ptrvalue;
+	  if (Nlm_StrCmp(dbtp->db,"Cdd") == 0) {
+	    oidp = dbtp->tag;
+	    CddPssmIdFromAcc(&pssmid, oidp->str, CDDidx);
+            oidp = ObjectIdNew();
+	    oidp->id = pssmid;
+	    dbtp = DbtagNew();
+	    dbtp->db = StringSave("CDD");
+	    dbtp->tag = oidp;
+	    sip->data.ptrvalue = dbtp;
+            bsp = BioseqLockById(sip);
+          }
+	}
+      }
+    } else bsp = NULL;
+    if (bsp) aapThis->nmissg = aapThis->nmissg/(Nlm_FloatHi)bsp->length;
+    if (bsp) {
+      fullCDstop = aapThis->mstop + bsp->length - 1 - aapThis->cmissg;
+      aapThis->cmissg = ((Nlm_FloatHi)bsp->length-1.0-aapThis->cmissg)/(Nlm_FloatHi) bsp->length;
+    }
+    txsp = (TxDfLineStructPtr) MemNew(sizeof(TxDfLineStruct));
+    txsp->segs_str = NULL;
+    txsp->segs_buflen = 0;
+    if(bsp != NULL) {
+      gi_list = GetUseThisGi(sap);
+      if (gi_list) {
+        FilterTheDefline(bsp, gi_list, buffer, BUFFER_LENGTH, &(txsp->title));
+        gi_list = SeqIdSetFree(gi_list);
+        sip = SeqIdFree(sip);
+        txsp->id = SeqIdParse(buffer);
+      } else {
+        SeqIdWrite(bsp->id, buffer, PRINTID_FASTA_LONG, BUFFER_LENGTH);
+        txsp->title = StringSave(BioseqGetTitle(bsp));
+        txsp->id = sip;
+      }
+      txsp->is_na = (bsp->mol != Seq_mol_aa);
+    } else {
+      SeqIdWrite(sip, buffer, PRINTID_FASTA_LONG, BUFFER_LENGTH);
+      txsp->title = StringSave("Unknown");
+      txsp->is_na = FALSE;
+      txsp->id = sip;
+    }
+    txsp->seqalign = sap;
+    txsp->buffer_id = StringSave(buffer);
+    txsp->score = score;
+    txsp->bit_score = bit_score;
+    txsp->evalue = evalue;
+    txsp->number = number;
+    txsp->found_score = found_score;
+    SeqAlignSegsStr(sap, 1, &txsp->segs_str, &txsp->segs_buflen, &txsp->segs_used);
+    txsp->isnew = FALSE;
+    txsp->waschecked = FALSE;
+    if(NULL != bsp) BioseqUnlock(bsp);
+    aapThis->defline = txsp;
+    isize = 2+strlen(aapThis->defline->title)+strlen(aapThis->defline->buffer_id);
+    if (isize < CDD_MAX_DESCR) isize = CDD_MAX_DESCR;
+    aapThis->long_defline = MemNew(sizeof(Char)*isize);
+    StrCpy(aapThis->long_defline, aapThis->defline->buffer_id);
+    StrCat(aapThis->long_defline," ");
+     cTemp = StringSave(txsp->buffer_id);
+    if (strncmp(cTemp,"gnl|",4)==0) {
+      strtok(cTemp,"|");
+      aapThis->cDatabase = StringSave(strtok(NULL,"|"));
+      Nlm_StrCpy(path,strtok(NULL,"|"));
+      aapThis->cCDDid = StringSave(strtok(path," "));
+      MemFree(cTemp);
+    } else WRPSBHtmlError("Could not interpret subject defline!", bAnnotOnly);
+   if (bFull) {
+      StrCat(aapThis->long_defline,aapThis->defline->title);
+    } else {
+      pcddThis = FindDescByPSSMid(pcdd,atoi(aapThis->cCDDid));
+      if (pcddThis) {
+        StrCat(aapThis->long_defline,pcddThis->cCddId);     
+        StrCat(aapThis->long_defline,", ");     
+        StrCat(aapThis->long_defline,pcddThis->cSourc);     
+        StrCat(aapThis->long_defline,", ");     
+        StrCat(aapThis->long_defline,pcddThis->cDescr);
+	aapThis->nmissg = aapThis->nmissg/(Nlm_FloatHi)pcddThis->iPssmLength;
+        fullCDstop = aapThis->mstop + pcddThis->iPssmLength - 1 - aapThis->cmissg;
+        aapThis->cmissg = ((Nlm_FloatHi)pcddThis->iPssmLength-1.0-aapThis->cmissg)/(Nlm_FloatHi)pcddThis->iPssmLength;
+      } else {
+        CddSevError("Failed to retrieve information for a PSSM-Id!");
+      }    
+    }
+    aapThis->bIsProfile = FALSE;
+    if (StringICmp(aapThis->cDatabase,"Smart")==0) {
+      aapThis->red = 255;
+      aapThis->green = aapThis->blue = iColValue;
+      if (StrNCmp(aapThis->cCDDid,"smart0",6) == 0) {
+        cTemp = StringSave(txsp->title);
+        aapThis->cGraphId = StringSave(strtok(cTemp,","));
+	MemFree(cTemp);
+      } else {
+        aapThis->cGraphId = aapThis->cCDDid;
+      }
+    } else if (StringICmp(aapThis->cDatabase,"Pfam") ==0) {
+      aapThis->blue = 255;
+      aapThis->red = aapThis->green = iColValue;
+      cTemp = StringSave(txsp->title);
+      aapThis->cGraphId = StringSave(strtok(cTemp,","));
+      MemFree(cTemp);
+    } else if (StringICmp(aapThis->cDatabase,"scop1.39") ==0) {
+      aapThis->green = 255;
+      aapThis->red = aapThis->blue = iColValue;
+      aapThis->bIsProfile = TRUE;    
+      aapThis->cGraphId = aapThis->cCDDid;
+    } else if (StringICmp(aapThis->cDatabase,"Load") ==0) {
+      aapThis->green = iColValue;
+      aapThis->red = aapThis->blue = 255;    
+      cTemp = StringSave(aapThis->cCDDid);
+      if (strstr(cTemp,":")) {
+        strtok(cTemp,":");
+        aapThis->cGraphId = StringSave(strtok(NULL,":"));
+      } else {
+        strtok(cTemp,"_");
+        aapThis->cGraphId = StringSave(strtok(NULL,"_"));
+      }
+      MemFree(cTemp);
+    } else if (StringCmp(aapThis->cDatabase,"CDD") == 0) {
+      aapThis->pssmid = atoi(aapThis->cCDDid);
+      if (bFull) {
+        cTemp = StringSave(txsp->title);
+        aapThis->cCDDid = StringSave(strtok(cTemp,","));
+        aapThis->cGraphId = StringSave(strtok(NULL,","));
+        if (!aapThis->cGraphId) aapThis->cGraphId = StringSave("obsolete");
+      } else {
+        aapThis->cCDDid = StringSave(pcddThis->cCddId);
+	aapThis->cGraphId = StringSave(pcddThis->cSourc);
+      }
+      if (Nlm_StrNCmp(aapThis->cGraphId," ",1) == 0) aapThis->cGraphId = aapThis->cGraphId+1;
+      CddTruncStringAtFirstPunct(aapThis->cGraphId);
+      CddFillBlanksInString(aapThis->cGraphId);
+    } else if (StringCmp(aapThis->cDatabase,"Cdd") == 0) {
+      cTemp = StringSave(txsp->title);
+      if (Nlm_StrStr(cTemp,",") != NULL) {
+        if (Nlm_StrStr(cTemp,";") == NULL ||
+	    Nlm_StrStr(cTemp,",") < Nlm_StrStr(cTemp,";")) {
+	  aapThis->cGraphId = StringSave(strtok(cTemp,","));
+	} else aapThis->cGraphId = StringSave(strtok(cTemp,";"));
+      } else aapThis->cGraphId = StringSave(strtok(cTemp,";"));
+    } else if (StringCmp(aapThis->cDatabase,"Cog") == 0) {
+      cTemp = StringSave(txsp->title);
+      if (Nlm_StrStr(cTemp,",") != NULL) {
+        if (Nlm_StrStr(cTemp,";") == NULL ||
+	    Nlm_StrStr(cTemp,",") < Nlm_StrStr(cTemp,";")) {
+	  aapThis->cGraphId = StringSave(strtok(cTemp,","));
+	} else aapThis->cGraphId = StringSave(strtok(cTemp,";"));
+      } else aapThis->cGraphId = StringSave(strtok(cTemp,";"));
+    } else {
+      aapThis->green = iColValue;
+      aapThis->red = aapThis->blue = 255;    
+      aapThis->cGraphId = aapThis->cCDDid;
+    }
+    aapThis->bIsArch = FALSE;
+    aapThis->bIsArchComplete = FALSE;
+    if (!bFull && NULL != cDartFam) {
+      for (i=0;i<cDartFamNum;i++) {
+        if (aapThis->pssmid == cDartFam[i]) {
+	  aapThis->bIsArch = TRUE;
+          aapThis->bIsArchComplete = (aapThis->nmissg + aapThis->cmissg < 0.1);
+	  break;
+	}
+      }
+    } else {
+      if (WRPSBHitIsNew(aapThis,aapHead,Connection,cDartFam,cDartFamNum)) {
+        if (!aapThis->bIsArch) {
+          aapThis->colcyc = lastcol + 1;
+          if (aapThis->colcyc >= iNcolors) {
+            aapThis->colcyc -= iNcolors;
+          }
+          lastcol = aapThis->colcyc;
+        } else {
+          aapThis->bIsArchComplete = (aapThis->nmissg + aapThis->cmissg < 0.1);
+        }
+      }
+
+/*
+    if (evalue > 0.01) {
+      aapThis->red   = iDartCol[aapThis->colcyc+iNcolors][0];
+      aapThis->green = iDartCol[aapThis->colcyc+iNcolors][1];
+      aapThis->blue  = iDartCol[aapThis->colcyc+iNcolors][2];
+    
+    } else {
+      aapThis->red   = iDartCol[aapThis->colcyc][0];
+      aapThis->green = iDartCol[aapThis->colcyc][1];
+      aapThis->blue  = iDartCol[aapThis->colcyc][2];
+    }
+*/
+      if (aapThis->bIsArch) {
+        aapThis->colcyc = 255;
+        aapThis->red    = 200;
+        aapThis->green  = 200;
+        aapThis->blue   = 200;
+      } else {
+        aapThis->red   = iDartCol[aapThis->colcyc][0];
+        aapThis->green = iDartCol[aapThis->colcyc][1];
+        aapThis->blue  = iDartCol[aapThis->colcyc][2];
+      }
+      sprintf(aapThis->name,"ali%d",(Int4)random());
+      aapThis->bIsOasis = bDbIsOasis;
+      if (bDbIsOasis) {
+        Nlm_StrCpy(path,cCDDPrefix);
+        if (Nlm_StrNCmp(aapThis->cCDDid,"COG",3) == 0 || Nlm_StrNCmp(aapThis->cCDDid,"KOG",3) == 0) {
+          strcat(path,cCDDefault);
+        } else strcat(path,dbversion);
+        strcat(path,cCDDPost_O);
+        Nlm_StrCpy(hpath,cOASIScgi);
+      } else {
+        Nlm_StrCpy(path,cCDDPrefix);
+        strcat(path,dbversion);
+        strcat(path,cCDDPost_C);
+        Nlm_StrCpy(hpath,cCDDcgi);
+      }
+      strcat(path,"/"); strcat(path,aapThis->cCDDid); strcat(path,cTREextens);
+      strcat(hpath,aapThis->cCDDid);
+      strcat(hpath,"&version=");
+      if (Nlm_StrNCmp(aapThis->cCDDid,"COG",3) == 0 || Nlm_StrNCmp(aapThis->cCDDid,"KOG",3) == 0) {
+        strcat(hpath,CDDefault);
+      } else strcat(hpath,dbversion);
+      aapThis->cHtmlLink = StringSave(hpath);
+/*---------------------------------------------------------------------------*/
+/* Open Cdd tree file and add description to aapThis data structure          */
+/* changed to binary read to get prepared for the v1.00 rollout. Aron 6/12/00*/
+/*---------------------------------------------------------------------------*/
+      pcddt = (CddTreePtr) CddTreeReadFromFile(path,TRUE);
+      aapThis->bHasStructure = FALSE;
+      if (pcddt) {
+        aapThis->description = pcddt->description;
+        description = aapThis->description;
+        while (description) {
+          if (description->choice == CddDescr_comment) {
+            cCurrDesc = description->data.ptrvalue;
+            if (Nlm_StrCmp(cCurrDesc,"linked to 3D-structure")==0) {
+              aapThis->bHasStructure = TRUE;
+              *bAnyPdb = TRUE;
+            }
+          }
+	  if (description->choice == CddDescr_repeats) {
+	    pcdr = (CddRepeatPtr) description->data.ptrvalue;
+	    nindent = pcdr->count - 1;
+	    if (NULL == pcdr->location) {
+	      replen = (fullCDstop - fullCDstart + 1) / (nindent+1);
+	      aapThis->nindents = 0;
+	      aapThis->indents = MemNew(nindent * sizeof(Int4));
+	      for (i=0;i<nindent;i++) {
+	        fullCDstop = ((fullCDstart + (i+1)*replen) * iGraphWidth) / (query_bsp->length - 1);
+                if (fullCDstop > aapThis->gstart && fullCDstop < aapThis->gstop) {
+                  aapThis->indents[aapThis->nindents] = fullCDstop;
+	          aapThis->nindents++;
+	        }
+	      }
+	    } else {
+	      WRPSBIndentsViaSeqAlign(pcdr,aapThis,iGraphWidth,query_bsp->length);
+	    }
+	  }
+          description = description->next;
+        }
+      }
+/*---------------------------------------------------------------------------*/
+/* get the file name for the FASTA-sequence file which stores the subject..  */
+/*---------------------------------------------------------------------------*/
+      aapThis->cSeqFile = MemNew(PATH_MAX*sizeof(Char));
+      if (bDbIsOasis) {
+        Nlm_StrCpy(aapThis->cSeqFile,cCDDPrefix);
+        if (Nlm_StrNCmp(aapThis->cCDDid,"COG",3) == 0 || Nlm_StrNCmp(aapThis->cCDDid,"KOG",3) == 0) {
+          strcat(aapThis->cSeqFile,cCDDefault);
+        } else {
+          strcat(aapThis->cSeqFile,dbversion);
+        }
+        strcat(aapThis->cSeqFile,cCDDPost_O);
+      } else {
+        Nlm_StrCpy(aapThis->cSeqFile,CDDPrefix); strcat(aapThis->cSeqFile,dbversion);
+        strcat(aapThis->cSeqFile,cCDDPost_C);
+      }
+      strcat(aapThis->cSeqFile,"/"); strcat(aapThis->cSeqFile,aapThis->cCDDid);
+      strcat(aapThis->cSeqFile,cSEQextens);
+    }   
+/*---------------------------------------------------------------------------*/
+/* Check for overlaps and determine row number                               */
+/* Check for mutal overlap if condensed graphics is selected                 */
+/*---------------------------------------------------------------------------*/
+    iOvrlap = MemNew(maxrow*sizeof(Int4));
+    iMutual = MemNew(maxrow*sizeof(Int4));
+    for (i=0;i<maxrow;i++) iOvrlap[i]=0;
+    aapThis->row = 1; aapThis->bDrawThisOne = TRUE;
+    if (aapHead) {    
+      aapTmp = aapHead;
+      while (aapTmp) {
+        if (aapTmp->bDrawThisOne) {
+          if (OverlapInterval(aapTmp->mstart,aapTmp->mstop, aapThis->mstart,aapThis->mstop))
+            iOvrlap[aapTmp->row-1] = 1;
+          if (iGraphMode == 1 || iGraphMode == 3) {
+            if (OverlapMutual(aapTmp->mstart,aapTmp->mstop,aapThis->mstart,aapThis->mstop)) {
+              iMutual[aapTmp->row-1] = 1;
+	      if (aapThis->bIsArch) {
+	        if (aapThis->bIsArchComplete) {
+		  if (!aapTmp->bIsArch || !aapTmp->bIsArchComplete) iMutual[aapTmp->row-1] = 0; 
+		}
+	      } else {
+	        if (aapTmp->bIsArch) iMutual[aapTmp->row-1] = 0;
+	      }
+            }
+          }
+        }
+        aapTmp = aapTmp->next;
+      }
+      aapThis->row = 0;
+      for (i=0;i<maxrow;i++) {
+        if (iOvrlap[i]==0) {
+          aapThis->row = i+1;
+          break;
+        }
+      }
+      if (iGraphMode == 1 || iGraphMode == 3) for (i=0;i<maxrow;i++) {
+        if (iMutual[i]==1) {
+          aapThis->bDrawThisOne = FALSE;
+          break;
+        }
+      }
+      if (aapThis->row == 0) aapThis->row = maxrow+1;
+    }
+    MemFree(iMutual);
+    MemFree(iOvrlap);
+    if (aapThis->row > maxrow) maxrow = aapThis->row;
+
+    aapThis->next = NULL;
+
+    if (aapHead==NULL) {
+       aapHead = aapThis;
+       aap = aapHead;
+    } else {
+       aap->next = aapThis;
+       aap = aapThis;
+    }
+/*
+    if (txsp) {
+      txsp->buffer_id = MemFree(txsp->buffer_id);
+      txsp->title = MemFree(txsp->title);
+      txsp->segs_str = MemFree(txsp->segs_str);
+      txsp = MemFree(txsp);
+    }
+*/
+    sap = sap->next;
+  }
+  if (bFull) *mxr = maxrow;
+  return(aapHead);
+}
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+SeqAnnotPtr WRPSBCl3SeqAnnot(AlignmentAbstractPtr aapIn, FILE *table,
+                             Boolean bSeqAlign, Boolean bRetSeqAnnot)
+{
+  AsnIoPtr              aip;
+  AlignmentAbstractPtr  aap;
+  SeqAnnotPtr           sap;
+  SeqLocPtr             slp;
+  SeqFeatPtr            sfp, sfpHead = NULL, sfpTail = NULL;
+  DenseSegPtr           dsp;
+  SeqIdPtr              sipQuery;
+  SeqIntPtr             sintp;
+  DbtagPtr              dbtp;
+  ObjectIdPtr           oidp;
+  Char                  dupstr[PATH_MAX];
+  CharPtr               part1, rest, thispart;
+  UserObjectPtr         uop;
+  UserFieldPtr          ufp, ufpTail;
+  Nlm_FloatHi           evalue, bit_score;
+  Int4                  score, number, i, icnt;
+  Boolean               found_score;
+  AnnotDescPtr          adp, adp2;
+  DatePtr               dp;
+  SeqAlignPtr           salpTail = NULL, salpHead = NULL;
+
+  sap = SeqAnnotNew();
+  if (bSeqAlign) {
+    sap->type = 2; /* Sequence Alignment */
+  } else sap->type = 1; /* feature table */
+  adp = (AnnotDescPtr) ValNodeNew(NULL);
+  adp->choice = Annot_descr_name;
+  adp->data.ptrvalue = StringSave("CDDSearch");
+  sap->desc = adp;
+  adp2 = (AnnotDescPtr) ValNodeNew(NULL);
+  dp = DateCurr();
+  adp2->choice = Annot_descr_create_date;
+  adp2->data.ptrvalue = dp;
+  adp->next = adp2;
+  aap = aapIn;
+  while (aap) {
+    if (aap->bDrawThisOne) {
+      sfp = SeqFeatNew();
+      if (bSeqAlign) {
+        if (!salpHead) {
+	  salpHead = aap->salp;
+	} else salpTail->next = aap->salp;
+	  salpTail = aap->salp;
+	  salpTail->next = NULL;
+      } else {
+        sfp->data.choice = 9;
+        strncpy(dupstr,aap->long_defline,PATH_MAX);
+        part1 = strtok(dupstr," ");
+        if (part1) {
+          rest = dupstr + strlen(part1) + 1;
+        } else {
+          rest = StringSave(aap->long_defline);
+        }
+        icnt = 0;
+        for (i=0;i<Nlm_StrLen(rest);i++) {
+          if (rest[i] == ',') icnt++;
+	  if (icnt > 1) break;
+        }
+        if (icnt > 1) {
+          i = i+2;
+        } else i = 0;
+        thispart = &rest[i];
+        for (i=0;i<Nlm_StrLen(thispart);i++) {
+          if (thispart[i] == '.' || thispart[i] == ';') {
+	    thispart[i] = '\0';
+	    break;
+	  }
+        }
+        sfp->data.value.ptrvalue = StringSave(thispart);
+        sfp->comment = StringSave(aap->cGraphId);   /* comment is short name */
+        if (aap->nmissg >= 0.2 || aap->cmissg >= 0.2) sfp->partial = TRUE;
+        dsp = aap->salp->segs;
+        sipQuery = dsp->ids;
+        slp = (SeqLocPtr) ValNodeNew(NULL); slp->choice = SEQLOC_INT;
+        sintp=SeqIntNew(); sintp->from = aap->mstart; sintp->to = aap->mstop;
+        sintp->id = SeqIdDup(sipQuery); slp->data.ptrvalue = sintp;
+        sfp->location = slp;
+        if (sfp->partial) {
+          SetSeqLocPartial(sfp->location, aap->nmissg >= 0.2, aap->cmissg >= 0.2);
+        }
+        uop = UserObjectNew();
+        oidp = ObjectIdNew();
+        oidp->str = StringSave("cddScoreData");
+        uop->type = oidp;
+        ufp = UserFieldNew();
+        oidp = ObjectIdNew();
+        oidp->str = StringSave("definition");
+        ufp->label = oidp;
+        ufp->choice = 1;
+        ufp->data.ptrvalue =  StringSave(aap->cCDDid);
+        uop->data = ufp;
+        ufpTail = ufp;
+        ufp = UserFieldNew();
+        oidp = ObjectIdNew();
+        oidp->str = StringSave("short_name");
+        ufp->label = oidp;
+        ufp->choice = 1;
+        ufp->data.ptrvalue = StringSave(aap->cGraphId);     
+        ufpTail->next = ufp;
+        ufpTail = ufp;
+        found_score = GetScoreAndEvalue(aap->salp, &score, &bit_score, &evalue, &number);
+        if (found_score) {
+          ufp = UserFieldNew();
+          oidp = ObjectIdNew();
+          oidp->str = StringSave("score");
+          ufp->label = oidp;
+          ufp->choice = 2;
+          ufp->data.intvalue = score;     
+          ufpTail->next = ufp;
+          ufpTail = ufp;
+          ufp = UserFieldNew();
+          oidp = ObjectIdNew();
+          oidp->str = StringSave("evalue");
+          ufp->label = oidp;
+          ufp->choice = 3;
+          ufp->data.realvalue = evalue;     
+          ufpTail->next = ufp;
+          ufpTail = ufp;
+          ufp = UserFieldNew();
+          oidp = ObjectIdNew();
+          oidp->str = StringSave("bit_score");
+          ufp->label = oidp;
+          ufp->choice = 3;
+          ufp->data.realvalue = bit_score;     
+          ufpTail->next = ufp;
+          ufpTail = ufp;
+        }
+        sfp->ext = uop;
+        dbtp = DbtagNew();
+        dbtp->db = StringSave(aap->cDatabase);
+        oidp = ObjectIdNew();
+        oidp->id = aap->pssmid;
+        dbtp->tag = oidp;
+        sfp->dbxref = ValNodeNew(NULL);
+        sfp->dbxref->data.ptrvalue = dbtp;
+        if (!sfpHead) {
+          sfpHead = sfp;
+        } else {
+          sfpTail->next = sfp;
+        }
+        sfpTail = sfp;
+      }
+    }
+    aap = aap->next;
+  }
+  if (bSeqAlign) {
+    sap->data = salpHead;
+  } else sap->data = sfpHead;
+  if (bRetSeqAnnot) return(sap);
+  strcpy(OutputName,GetTempName("wrpsbcl3"));
+  aip = AsnIoOpen(OutputName, "w");
+  SeqAnnotAsnWrite((SeqAnnotPtr) sap, aip, NULL);
+  AsnIoClose(aip);
+  PrintFile(OutputName);
+  RemoveTempFiles();   
+  return(NULL);
+}
+
+AlignmentAbstractPtr AlignmentAbstractSetDestruct(AlignmentAbstractPtr aap)
+{
+  AlignmentAbstractPtr  aapThis, aapNext, aapHead;
+
+  aapThis = aap; aapHead = aap;
+  while (aapThis) {
+    aapNext = aapThis->next;
+    aapThis->long_defline = MemFree(aapThis->long_defline);
+    aapThis->cCDDid = MemFree(aapThis->cCDDid);
+    aapThis->cGraphId = MemFree(aapThis->cGraphId);
+    aapThis->cDatabase = MemFree(aapThis->cDatabase);
+    if (aapThis->defline)  {
+      aapThis->defline->buffer_id = MemFree(aapThis->defline->buffer_id);
+      aapThis->defline->title = MemFree(aapThis->defline->title);
+      aapThis->defline->segs_str = MemFree(aapThis->defline->segs_str);
+      aapThis->defline = MemFree(aapThis->defline);
+    }
+    aapThis = (AlignmentAbstractPtr) MemFree(aapThis);
+    aapThis = aapNext;
+  }
+  return(aapHead);
+}

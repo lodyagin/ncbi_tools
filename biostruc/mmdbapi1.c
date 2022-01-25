@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   03/14/95
 *
-* $Revision: 6.43 $
+* $Revision: 6.44 $
 *
 * File Description: 
 *
@@ -44,6 +44,9 @@
 * 95/08/30 C. Hogue    Minor changes.
 *
 * $Log: mmdbapi1.c,v $
+* Revision 6.44  2003/12/03 02:11:28  kans
+* added defines missing from Mac OS 10.3 headers
+*
 * Revision 6.43  2002/05/10 16:33:18  chenj
 * fix bugs in fnPBSFtoPSA
 *
@@ -288,6 +291,16 @@ NLM_EXTERN void VnpHeapSort PROTO ((ValNodePtr PNTR vnp, int (LIBCALLBACK *compa
 #include <mmdbapi1.h>
 #include <matrix.h>
 #include "prunebsc.h"  
+
+/* Missing from /usr/include/gcc/darwin/3.3/machine/limits.h */
+#ifdef __MWERKS__
+#ifdef OS_UNIX_DARWIN
+#ifndef __SCHAR_MAX__
+#define __SCHAR_MAX__ 127
+#endif
+#endif
+#endif
+/* End missing from /usr/include/gcc/darwin/3.3/machine/limits.h */
 
 PMBD LIBCALL NewMBD(void)
 {
@@ -2691,7 +2704,7 @@ void LIBCALLBACK DoReverseTransform(PFB pfbThis, Int4 iModel, Int4 iIndex, Point
   FloatLoPtr pflvData = NULL;
   FloatLoPtrPtr ppflmData = NULL;
   FloatLoPtrPtr ppflm = NULL;  
-  FloatLo flX,  flY,  flZ;
+  /* FloatLo flX,  flY,  flZ; */
   Int2 i,  j;
   
   if (IsAtomNode(pfbThis))

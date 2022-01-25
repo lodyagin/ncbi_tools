@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.14 $
+* $Revision: 6.18 $
 *
 * File Description: 
 *       Vibrant edit text functions
@@ -37,6 +37,19 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: vibtexts.c,v $
+* Revision 6.18  2004/02/04 15:21:03  kans
+* make GetTextVScrollBar and GetTextHScrollBar extern, to add search function to general text viewer
+*
+* Revision 6.17  2003/11/17 17:03:30  kans
+* changed C++ style comments to C comments
+*
+* Revision 6.16  2003/11/03 21:51:34  sinyakov
+* WIN_MSWIN: bugfix: strlen(title) moved out of loop condition
+*
+* Revision 6.15  2003/10/29 19:10:08  bazhin
+* Added function Nlm_SetTextColor(Nlm_TexT t, Nlm_Uint4 r, Nlm_Uint4 g,
+*                                 Nlm_Uint4 b).
+*
 * Revision 6.14  2003/07/30 13:51:42  johnson
 * MSWIN: multi-line text boxes now respond to 'enter' key
 *
@@ -346,7 +359,7 @@ static Nlm_TextTool Nlm_GetTextHandle (Nlm_TexT t)
   return tdata.handle;
 }
 
-static Nlm_BaR Nlm_GetTextVScrollBar (Nlm_TexT t)
+extern Nlm_BaR Nlm_GetTextVScrollBar (Nlm_TexT t)
 
 {
   Nlm_TextData  tdata;
@@ -355,7 +368,7 @@ static Nlm_BaR Nlm_GetTextVScrollBar (Nlm_TexT t)
   return tdata.vScrollBar;
 }
 
-static Nlm_BaR Nlm_GetTextHScrollBar (Nlm_TexT t)
+extern Nlm_BaR Nlm_GetTextHScrollBar (Nlm_TexT t)
 
 {
   Nlm_TextData  tdata;
@@ -1790,6 +1803,7 @@ static void Nlm_SetScrollText (Nlm_GraphiC t, Nlm_Int2 item,
 #endif
 #ifdef WIN_MSWIN
   Nlm_Uint4	count;
+  Nlm_Uint4     len;
   Nlm_CharPtr	tmp, newTitle;
 #endif
 
@@ -1822,9 +1836,10 @@ static void Nlm_SetScrollText (Nlm_GraphiC t, Nlm_Int2 item,
   if (count == 0)
     SetWindowText (h, title);
   else { /* replace UNIX <lf> with DOS <cr><lf> */
-    newTitle = (Nlm_CharPtr) MemNew(strlen(title)+count+1);
+    len = Nlm_StringLen (title);
+    newTitle = (Nlm_CharPtr) MemNew(len+count+1);
     tmp = newTitle;
-    for (count=0; count < strlen(title); ++count) {
+    for (count=0; count < len; ++count) {
 	if (title[count] == '\n' && (count == 0 || title[count-1] != '\r'))
 	    *tmp++ = '\r';
 	*tmp++ = title[count];
@@ -1963,31 +1978,31 @@ extern Nlm_TexT Nlm_CurrentText (void)
 static void Clipboard_TEToDeskScrap()
 {
 	OSErr err;
-	// Copy the TE scrap to the desk scrap.
+	/* Copy the TE scrap to the desk scrap. */
 	err = TEToScrap();
 }
 
 static void Clipboard_TECut(TEHandle inTE)
 {
-	// Cut the text into the TE scrap.
+	/* Cut the text into the TE scrap. */
 	TECut(inTE);
-	// Update the desk scrap.
+	/* Update the desk scrap. */
 	Clipboard_TEToDeskScrap();
 }
 
 static void Clipboard_TECopy(TEHandle inTE)
 {
-	// Copy the text into the TE scrap.
+	/* Copy the text into the TE scrap. */
 	TECopy(inTE);
-	// Update the desk scrap.
+	/* Update the desk scrap. */
 	Clipboard_TEToDeskScrap();
 }
 
 static void Clipboard_TEPaste(TEHandle inTE)
 {
-//#if TARGET_API_MAC_CARBON
-	//ScrapRef scrap;
-	//OSStatus status = GetCurrentScrap(&scrap);
+    /* #if TARGET_API_MAC_CARBON */
+	/* ScrapRef scrap; */
+	/* OSStatus status = GetCurrentScrap(&scrap); */
 	OSErr err = TEFromScrap();
 	TEPaste(inTE);
 }
@@ -3973,6 +3988,23 @@ extern void Nlm_SetTextCursorBlinkRate(Nlm_TexT t, Nlm_Int2 msec)
     if(h == NULL)
         return;
     XtSetArg(args[0], XmNblinkRate, msec);
+    XtSetValues(h, args, 1);
+#endif
+    return;
+}
+
+extern void Nlm_SetTextColor(Nlm_TexT t, Nlm_Uint4 r, Nlm_Uint4 g, Nlm_Uint4 b)
+{
+#ifdef WIN_MOTIF
+    Nlm_TextTool h;
+    Arg          args[2];
+
+    if(t == NULL)
+        return;
+    h = Nlm_GetTextHandle(t);
+    if(h == NULL)
+        return;
+    XtSetArg(args[0], XmNforeground, Nlm_GetColorRGB(r, g, b));
     XtSetValues(h, args, 1);
 #endif
     return;

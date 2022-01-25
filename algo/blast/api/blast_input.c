@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: blast_input.c,v 1.8 2003/09/15 21:18:30 dondosha Exp $";
+static char const rcsid[] = "$Id: blast_input.c,v 1.10 2003/12/03 17:30:25 dondosha Exp $";
 /* ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -31,30 +31,30 @@ Author: Ilya Dondoshansky
 
 Contents: Reading FASTA sequences for BLAST
 
-$Revision: 1.8 $
+$Revision: 1.10 $
 
 ******************************************************************************/
 #include <objloc.h>
 #include <tofasta.h>
-#include "blast_input.h"
-#include "blast_seq.h"
+#include <algo/blast/api/blast_input.h>
+#include <algo/blast/api/blast_seq.h>
 
 #define MAX_NUM_QUERIES 16383 /* == 1/2 INT2_MAX */
 #define MAX_TOTAL_LENGTH 20000000
 
 Boolean
 BLAST_GetQuerySeqLoc(FILE *infp, Boolean query_is_na, Uint1 strand,
-   Int4 start, Int4 end, BlastMask** lcase_mask, SeqLocPtr* query_slp, 
+   Int4 start, Int4 end, BlastMaskLoc** lcase_mask, SeqLocPtr* query_slp, 
    Int4 ctr_start, Int4* num_queries)
 {
    Int8 total_length;
    BioseqPtr query_bsp;
    SeqLocPtr mask_slp, last_slp;
-   BlastMask* last_mask;
+   BlastMaskLoc* last_mask;
    char prefix[2];     /* for FastaToSeqEntryForDb */
    Int2 ctr = ctr_start + 1; /* Counter for FastaToSeqEntryForDb */
    Int4 query_index = 0;
-   BlastMask* new_mask;
+   BlastMaskLoc* new_mask;
    SeqEntryPtr sep;
    Boolean done = TRUE;
    Int4 from, to;
@@ -79,7 +79,7 @@ BLAST_GetQuerySeqLoc(FILE *infp, Boolean query_is_na, Uint1 strand,
                                     &ctr, (lcase_mask ? &mask_slp : NULL))) != NULL)
    {
       if (mask_slp) {
-         new_mask = BlastMaskFromSeqLoc(mask_slp, query_index);
+         new_mask = BlastMaskLocFromSeqLoc(mask_slp, query_index);
          
          if (!last_mask)
             *lcase_mask = last_mask = new_mask;

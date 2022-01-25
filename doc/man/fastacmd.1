@@ -1,4 +1,4 @@
-.TH FASTACMD 1 2003-04-27 NCBI "NCBI Tools User's Manual"
+.TH FASTACMD 1 2003-11-10 NCBI "NCBI Tools User's Manual"
 .SH NAME
 fastacmd \- retrieve FASTA sequences from a BLAST database
 .SH SYNOPSIS
@@ -96,6 +96,21 @@ commas
 .TP
 \fB\-t\fP
 Definition line should contain target GI only
+.SH EXIT STATUS
+.RS
+.PD 0
+.IP 0
+Completed successfully.
+.IP 1
+An error (other than those below) occurred.
+.IP 2
+The BLAST database was not found.
+.IP 3
+A search (accession, GI, or taxonomy info) failed.
+.IP 4
+No taxonomy database was found.
+.PD
+.RE
 .SH AUTHOR
 The National Center for Biotechnology Information.
 .SH SEE ALSO

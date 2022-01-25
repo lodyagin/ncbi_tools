@@ -32,8 +32,14 @@ Contents: prototypes for "private" BLAST functions, these should not be called
 
 ******************************************************************************/
 
-/* $Revision: 6.109 $ 
+/* $Revision: 6.111 $ 
 * $Log: blastpri.h,v $
+* Revision 6.111  2004/01/16 23:43:43  dondosha
+* No more need for special argument for partial search: it is set in options
+*
+* Revision 6.110  2004/01/06 22:36:24  dondosha
+* Added BLAST_HSPFree function that frees the edit block and the HSP
+*
 * Revision 6.109  2003/08/20 22:12:56  dondosha
 * Added BlastPrintTabularResults with an extra boolean parameter for OOF alignments
 *
@@ -832,7 +838,6 @@ CharPtr FormatBlastParameters PROTO((BlastSearchBlkPtr search));
 
 
 SeqAlignPtr LIBCALL BioseqBlastEngineCore PROTO((BlastSearchBlkPtr search, BLAST_OptionsBlkPtr options, Int4Ptr *pos_matrix));
-SeqAlignPtr LIBCALL BioseqBlastEngineCoreEx PROTO((BlastSearchBlkPtr search, BLAST_OptionsBlkPtr options, Int4Ptr *pos_matrix, Boolean partial));
 
 Uint1Ptr GetSequenceWithDenseSeg PROTO((DenseSegPtr dsp, Boolean query, Int4Ptr start, Int4Ptr length));
 
@@ -1045,6 +1050,7 @@ SeqAlignPtr BlastClusterHitsFromSeqAlign PROTO((SeqAlignPtr seqalign, CharPtr pr
 SeqAlignPtr RedoAlignmentCore PROTO((BlastSearchBlkPtr search,   
   BLAST_OptionsBlkPtr options, Int4 hitlist_count, Boolean adjustParameters,
   Boolean SmithWaterman));
+BLAST_HSPPtr BLAST_HSPFree PROTO((BLAST_HSPPtr hsp));
 void BLASTResultFreeHsp PROTO((BLASTResultHitlistPtr result));
 void BLASTPostSearchLogic PROTO((BlastSearchBlkPtr search, BLAST_OptionsBlkPtr
                                  options, SeqAlignPtr PNTR seqalignp,

@@ -41,24 +41,37 @@ Platform Computing Corporation <http://www.platform.com>. Interface to
 "LSF" was implemented in NCBI, however this was not included in this
 suite. Standalone server assumes that users have their own BLAST or
 RPS-BLAST database(s), that should be searched and want to have a simple
-WWW interface to such search. It is STRONLY recommended that user has
+WWW interface to such search. It is STRONLY recommended that user have
 experience in installation and running standalone NCBI BLAST programs.
 
 After files are uncompressed, server is ready to be used immediately.
-Any customizations to the program are welcomed and may be done by
-experienced programmers using source code, which is also provided.
-
-Recompilation of the server executables requires that programmer has
-compiled NCBI toolkit libraries. This toolkit can be downloaded from the
-NCBI FTP web site: ftp://ftp.ncbi.nih.gov
+Any customizations to the program are welcomed. The source code for WWW
+BLAST is now part of the NCBI C toolkit, which can be downloaded from
+the NCBI FTP web site: ftp://ftp.ncbi.nih.gov
 <ftp://ftp.ncbi.nih.gov/toolbox/ncbi_tools/README.htm>
-After the NCBI toolkit is compiled, user needs to edit the Makefile in
-the blast/Src directory, and define the NCBI variable in the top line of
-the Makefile, so it points to the root directory where the NCBI toolkit
-is located.
+The compilation of the NCBI C toolkit includes the WWW BLAST
+executables. The files in the C toolkit most relevant for the WWW BLAST
+executables are: wwwblast.c, wwwbutl.c, psiblast.c, wblast2.c.
 
 
       What's new in this revision?
+
+February 2, 2004
+
+    * All source code moved to the NCBI C toolkit.
+    * Mouseover feature fixed in graphical overview.
+    * All binaries synchronized with the latest NCBI C toolkit release.
+      All future releases will be automatically synchronized with future
+      toolkit releases.
+    * Recompilation procedure changed. WWW BLAST binaries are now
+compiled as part of the C toolkit.
+
+November 21, 2003
+
+    * Fixed a bug with absent images on PSI-BLAST iterations.
+    * Removed header and progress messages from XML output.
+    * All binaries recompiled with the newest version of the NCBI C
+toolkit libra ries.
 
 May 9, 2003
 
@@ -487,10 +500,10 @@ the description of a configuration file.
       Server configuration file and logfile
 
 Default configuration file is "blast.rc" and logfile "wwwblast.log".
-Setting tag BLAST_TYPE to specific value may change these names.
-This is useful if few different search input pages use the same CGI
-search engine, but significantly different by content and priorities. A
-sample configuration file comes with this distribution:
+Setting tag BLAST_TYPE to specific value may change these names. This is
+useful if few different search input pages use the same CGI search
+engine, but significantly different by content and priorities. A sample
+configuration file comes with this distribution:
 
 This file will set how many CPUs will be used in the BLAST search and
 what databases may be used with what programs. Logfile currently stores

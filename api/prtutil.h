@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/93
 *
-* $Revision: 6.0 $
+* $Revision: 6.1 $
 *
 * File Description: Object Print Utilities
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: prtutil.h,v $
+* Revision 6.1  2004/02/02 17:30:21  kans
+* PrintTemplateSetLoadEx takes a local string, used to make internal copy of objprt.prt in Sequin
+*
 * Revision 6.0  1997/08/25 18:06:57  madden
 * Revision changed to 6.0
 *
@@ -84,6 +87,7 @@ extern "C" {
 *****************************************************************************/
 NLM_EXTERN PrintTemplatePtr PrintTemplateFind PROTO((CharPtr name));
 NLM_EXTERN Boolean PrintTemplateSetLoad PROTO(( CharPtr path ));
+NLM_EXTERN Boolean PrintTemplateSetLoadEx ( CharPtr path, CharPtr localStr );
 
 
 /*****************************************************************************

@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 1/1/94
 *
-* $Revision: 6.10 $
+* $Revision: 6.12 $
 *
 * File Description:  Sequence editing utilities
 *
@@ -39,6 +39,12 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: valid.h,v $
+* Revision 6.12  2003/12/02 15:37:37  kans
+* added vsp->seqSubmitParent for use by tbl2asn, which usually has a Seq-submit wrapper that is added on-the-fly and not indexed
+*
+* Revision 6.11  2003/11/14 18:07:17  kans
+* alignment parameters to find remote bsp, do seqhist assembly
+*
 * Revision 6.10  2003/03/05 18:47:45  ford
 * Added prototype for IsNuclAcc().
 *
@@ -151,8 +157,8 @@ typedef struct validstruct {
 	CharPtr errbuf;
 	Boolean patch_seq;             /* repair invalid sequence residues? */
 	Boolean non_ascii_chars;       /* non ascii chars found in read? */
-	Boolean suppress_no_pubs;
-	Boolean suppress_no_biosrc;
+	Boolean suppress_no_pubs;      /* internal use for no pub anywhere message */
+	Boolean suppress_no_biosrc;    /* internal use for no biosource anywhere message */
 	SpellCheckFunc spellfunc;
 	SpellCallBackFunc spellcallback;
 	GatherContextPtr gcp;          /* used for reporting the errors */
@@ -164,9 +170,12 @@ typedef struct validstruct {
 	Boolean suppressContext;       /* suppress context part of message */
 	Boolean validateAlignments;    /* call alignval test suite */
 	Boolean farIDsInAlignments;    /* fetch to get far IDs in alignments */
+	Boolean alignFindRemoteBsp;    /* do remote fetching in alignment validation */
+	Boolean doSeqHistAssembly;     /* do alignment validation in Seq-hist.assembly */
 	Boolean alwaysRequireIsoJTA;   /* force check for iso_jta */
 	Boolean farFetchCDSproducts;   /* lock CDS->products for CdTransCheck, if necessary */
 	Boolean validateIDSet;         /* look for gain or loss of general IDs on sequence update */
+	Boolean seqSubmitParent;       /* flag from tbl2asn to suppress no pub message */
 	TextFsaPtr sourceQualTags;     /* for detecting structured qual tags in notes */
 } ValidStruct, PNTR ValidStructPtr;
 

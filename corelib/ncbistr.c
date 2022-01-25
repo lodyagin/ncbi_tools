@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/4/91
 *
-* $Revision: 6.12 $
+* $Revision: 6.13 $
 *
 * File Description: 
 *   	portable string routines
@@ -37,6 +37,9 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: ncbistr.c,v $
+* Revision 6.13  2003/12/03 02:10:24  kans
+* added defines missing from Mac OS 10.3 headers
+*
 * Revision 6.12  2003/09/15 16:21:32  kans
 * moved StringDoesHaveText from sqnutils3.c
 *
@@ -160,6 +163,16 @@
  
 #include <ncbi.h>
 #include <ncbiwin.h>
+
+/* Missing from /usr/include/gcc/darwin/3.3/machine/limits.h */
+#ifdef __MWERKS__
+#ifdef OS_UNIX_DARWIN
+#ifndef __CHAR_BIT__
+#define __CHAR_BIT__ 8
+#endif
+#endif
+#endif
+/* End missing from /usr/include/gcc/darwin/3.3/machine/limits.h */
 
 /* ClearDestString clears the destination string if the source is NULL. */
 static Nlm_CharPtr NEAR Nlm_ClearDestString (Nlm_CharPtr to, size_t max)

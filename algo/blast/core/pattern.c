@@ -1,4 +1,4 @@
-/* $Id: pattern.c,v 1.6 2003/10/16 15:52:08 coulouri Exp $
+/* $Id: pattern.c,v 1.8 2003/12/04 16:27:13 camacho Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,13 +32,13 @@ Author: Ilya Dondoshansky
 Contents: Functions for finding pattern matches in sequence.
 
 ******************************************************************************
- * $Revision: 1.6 $
+ * $Revision: 1.8 $
  * */
 
 #include <algo/blast/core/blast_def.h>
 #include <algo/blast/core/pattern.h>
 
-static char const rcsid[] = "$Id: pattern.c,v 1.6 2003/10/16 15:52:08 coulouri Exp $";
+static char const rcsid[] = "$Id: pattern.c,v 1.8 2003/12/04 16:27:13 camacho Exp $";
 
 /*Looks for 1 bits in the same position of s and mask
   Let rightOne be the rightmost position where s and mask both have
@@ -147,7 +147,8 @@ static Int4 find_hitsS_DNA(Int4* hitArray, const Uint1* seq, Int4 pos, Int4 len,
     remain = len % 4;
   }
   for (i = 0; i < end; i++) {
-    if (tmp = (prefixMatchedBitPattern & patternSearch->DNAwhichPrefixPosPtr[seq[i]])) {
+    if ( (tmp = (prefixMatchedBitPattern &
+                 patternSearch->DNAwhichPrefixPosPtr[seq[i]]))) {
       for (j = 0; j < 4; j++) {
 	if (tmp & patternSearch->match_mask) {
 	  hitArray[twiceNumHits++] = i*4+j + pos;
@@ -160,7 +161,8 @@ static Int4 find_hitsS_DNA(Int4* hitArray, const Uint1* seq, Int4 pos, Int4 len,
     prefixMatchedBitPattern = (((prefixMatchedBitPattern << 4) | mask2) & patternSearch->DNAwhichSuffixPosPtr[seq[i]]);
   }
   /* In the last byte check bits only up to 'remain' */
-  if (tmp = (prefixMatchedBitPattern & patternSearch->DNAwhichPrefixPosPtr[seq[i]])) {
+  if ( (tmp = (prefixMatchedBitPattern &
+               patternSearch->DNAwhichPrefixPosPtr[seq[i]]))) {
      for (j = 0; j < remain; j++) {
         if (tmp & patternSearch->match_mask) {
            hitArray[twiceNumHits++] = i*4+j + pos;
@@ -223,7 +225,7 @@ static Int4 and(Int4 *result, Int4 *a, Int4 *b, patternSearchItems *patternSearc
     Int4 returnValue = 0;
 
     for (i = 0; i < patternSearch->numWords; i++) 
-      if (result[i] = (a[i] & b[i])) 
+      if ( (result[i] = (a[i] & b[i]) ) ) 
 	returnValue = 1;
     return returnValue;
 }
@@ -386,7 +388,7 @@ static Int4 find_hitsLL(Int4 *hitArray, const Uint1* seq, Int4 len, Boolean is_d
     return twiceNumHits;
 }
 
-Int4 find_hits(Int4 *hitArray, const Uint1* seq, Int4 len, 
+Int4 FindPatternHits(Int4 *hitArray, const Uint1* seq, Int4 len, 
                Boolean is_dna, patternSearchItems * patternSearch)
 {
     if (patternSearch->flagPatternLength == ONE_WORD_PATTERN) 

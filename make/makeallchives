@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# $Id: makeallchives,v 1.63 2003/06/03 16:40:51 beloslyu Exp $
+# $Id: makeallchives,v 1.68 2004/01/06 17:13:48 coulouri Exp $
 #
 #
 # Creates all archives from a directory above 'ncbi'
@@ -92,13 +92,13 @@ EOF
 		;;
 	blast)
 		f="blastall blastpgp seedtop formatdb fastacmd copymat makemat \
-impala megablast blastclust rpsblast bl2seq ../doc/README.imp \
-../doc/README.bls ../doc/README.mbl ../doc/README.bcl ../doc/README.rps \
-../doc/README.formatdb ../doc/README.fastacmd ../doc/README-qm"
+impala megablast blastclust rpsblast bl2seq ../doc/impala.txt \
+../doc/blast.txt ../doc/megablast.txt ../doc/blastclust.txt ../doc/rpsblast.txt \
+../doc/formatdb.txt ../doc/fastacmd.txt ../doc/README-qm"
 		rm -f archive/blast/data/sequin.hlp
 		;;
 	netblast)
-		f="blastcl3 ../doc/firewall.html ../doc/README.nbl"
+		f="blastcl3 ../doc/firewall.html ../doc/netblast.txt"
 		;;
 	*)
 		;;
@@ -265,4 +265,30 @@ do
 	#and remove it
 	rm -fr $A
 done
+
+# build wwwblast archive
+
+# cd archive && cvs export -d blast -r HEAD distrib/network/wwwblast && cd ..
+
+mkdir blast
+
+cp -r ../ncbi/network/wwwblast/* blast 
+
+find blast -type d -name CVS | xargs rm -rf
+find blast -type d -name Src | xargs rm -rf
+
+for file in psiblast.REAL psiblast_cs.REAL blast.REAL blast_cs.REAL wblast2.REAL wblast2_cs.REAL bl2bag.cgi nph-viewgif.cgi
+do
+cp ../ncbi/build/$file blast
+done
+
+mkdir -p blast/TmpGifs
+chmod 777 blast/TmpGifs
+chmod 666 blast/*.log
+
+tar -cpf wwwblast-$platform.tar blast
+gzip wwwblast-$platform.tar
+
+rm -rf blast
+
 exit 0

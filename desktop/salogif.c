@@ -1,4 +1,4 @@
-/*  $RCSfile: salogif.c,v $  $Revision: 6.3 $  $Date: 2003/07/15 14:36:31 $
+/*  $RCSfile: salogif.c,v $  $Revision: 6.7 $  $Date: 2004/02/02 23:40:25 $
 * ==========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -25,13 +25,25 @@
 *
 * Author:	Jinghui Zhang
 *
-* $Revision: 6.3 $
+* $Revision: 6.7 $
 *
 * File Description:
 *	 The Blast Search result visualization utilities  
 *
 * --------------------------------------------------------------------------
 * $Log: salogif.c,v $
+* Revision 6.7  2004/02/02 23:40:25  dondosha
+* Modify query bioseq id so it is a gi id, if possible, because this is the rule in seqaligns coming from BLAST
+*
+* Revision 6.6  2004/01/23 22:48:57  jianye
+* restore seqid in PrintOneAlignmentOverview and initialize some varialbes
+*
+* Revision 6.5  2003/11/20 18:36:08  dondosha
+* Added function PrintOneAlignmentOverview to create an overview gif for one of the multiple query sequences
+*
+* Revision 6.4  2003/10/31 02:51:14  dondosha
+* Always use first seqid for master (query) sequence instead of "best" id in ModMaxAlign
+*
 * Revision 6.3  2003/07/15 14:36:31  dondosha
 * Added #defines for substitutes to fprintf and fflush, needed for gzip compression of Web BLAST results
 *
@@ -244,7 +256,7 @@ static Boolean print_defline_for_sequence
 static Boolean PrintImageMapForGlobal
 (GlobalDrawPtr g_draw, Int4 pntX, Int4 pntY, 
  Int4 scale, CharPtr title_buf, SeqAlignPtr align,
- FILE *fp, const Char* formname)
+ FILE *fp, const Char* formname, int query_index)
 {
   AlignRegionPtr arp;
   ValNodePtr curr;
@@ -262,7 +274,7 @@ static Boolean PrintImageMapForGlobal
       if(gbp->has_fish_align == FALSE && gbp->arp_list != NULL)
         {
           if(retval == FALSE)
-            fprintf(fp, "<map name=img_map>\n"); 
+            fprintf(fp, "<map name=img_map%d>\n", query_index); 
           for(curr = gbp->arp_list; curr != NULL; curr = curr->next)
             {
               arp = (AlignRegionPtr)curr->data.ptrvalue;
@@ -343,7 +355,7 @@ static Boolean alignment_is_redundant
   Int4 c_len, r_len;
   Boolean load;
   Int2 i;
-  Int4 start, stop;
+  Int4 start = 0 , stop = 0;
   SeqIdPtr sip;
 
   len = 0;
@@ -441,7 +453,7 @@ static void update_redundant_val
   Int4 c_len;
   Boolean load;
   Int2 i;
-  Int4 start, stop;
+  Int4 start = 0, stop = 0;
 
   switch(align->segtype) {
   case 3:
@@ -629,7 +641,7 @@ static SeqAlignPtr ModMaxAlign
     return (*h_align);
   if(*h_align == NULL || m_bsp == NULL)
     return (*h_align); 
-  m_sip = SeqIdFindBest(m_bsp->id, 0);
+  m_sip = m_bsp->id;
 
   val = (Uint1Ptr)MemNew((size_t)m_bsp->length * sizeof(Int1));
   curr = *h_align;
@@ -684,6 +696,19 @@ NLM_EXTERN Boolean PrintAlignmentOverview
  const Char* gif_name,
  const Char* title)
 {
+   return PrintOneAlignmentOverview(h_annot, fp, formname, href, gif_name, 
+                                    title, 1);
+}
+
+NLM_EXTERN Boolean PrintOneAlignmentOverview
+(SeqAnnotPtr h_annot,
+ FILE*       fp,
+ const Char* formname,
+ const Char* href,
+ const Char* gif_name,
+ const Char* title,
+ int query_index)
+{
   SeqEntryPtr sep;
   Boolean is_new_sep;
   SeqAnnotPtr sap, annot, prev;
@@ -699,6 +724,7 @@ NLM_EXTERN Boolean PrintAlignmentOverview
   FILE *gif_fp;
   Int4 align_num;
   Char title_buf[201], tmpbuf[64];
+  SeqIdPtr idtemp, idtail;
 
   if(h_annot == NULL || fp == NULL)
     return FALSE;
@@ -710,6 +736,12 @@ NLM_EXTERN Boolean PrintAlignmentOverview
   if(master_bsp == NULL)
     return FALSE;
   bsp = master_bsp;
+  /* Make sure a gi id is used, if possible, since this is the id that is 
+     saved in the seqalign. */
+  idtemp= bsp->id;
+  bsp->id = SeqIdFindBest(bsp->id, SEQID_GI);
+  idtail = bsp->id->next;
+  bsp->id->next = NULL;
   sep = SeqEntryFind(bsp->id);
   if(sep == NULL)
     {
@@ -770,7 +802,8 @@ NLM_EXTERN Boolean PrintAlignmentOverview
 
     /*print out the image map*/
     if(!PrintImageMapForGlobal(g_draw, pBox.left, pBox.top, 1, title_buf,
-                               (SeqAlignPtr)(annot->data), fp, formname))
+                               (SeqAlignPtr)(annot->data), fp, formname,
+                               query_index))
       printf("Fail to print the image map\n");
     fflush(fp);
 
@@ -797,9 +830,9 @@ NLM_EXTERN Boolean PrintAlignmentOverview
     ExitMuskStyles();
     fprintf(fp, "<CENTER>\n");
 
-    fprintf(fp, "<IMG WIDTH=%d HEIGHT=%d USEMAP=#img_map BORDER=1 "
+    fprintf(fp, "<IMG WIDTH=%d HEIGHT=%d USEMAP=#img_map%d ORDER=1 "
             "SRC=\"%s%s\" ISMAP>", 
-            (int)width, (int)height, href, gif_name);
+            (int)width, (int)height, query_index, href, gif_name);
 
     fprintf(fp, "</CENTER>\n");
     fprintf(fp, "<HR>\n<PRE>\n");
@@ -829,7 +862,10 @@ NLM_EXTERN Boolean PrintAlignmentOverview
   else
     prev->next = NULL;
   SeqAnnotFree(sap);
-
+  /* Restore the link of seqids if it was broken */
+  bsp->id->next = idtail;
+  /* Restore the original first seqid in the bioseq */
+  master_bsp->id = idtemp; 
   BioseqUnlock(master_bsp);
 
   return retval;

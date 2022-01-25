@@ -1,4 +1,4 @@
-/* $Id: blast_engine.c,v 1.86 2003/10/27 23:50:29 dondosha Exp $
+/* $Id: blast_engine.c,v 1.98 2004/02/03 21:41:55 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -33,7 +33,7 @@ Contents: High level BLAST functions
 
 ******************************************************************************/
 
-static char const rcsid[] = "$Id: blast_engine.c,v 1.86 2003/10/27 23:50:29 dondosha Exp $";
+static char const rcsid[] = "$Id: blast_engine.c,v 1.98 2004/02/03 21:41:55 dondosha Exp $";
 
 #include <algo/blast/core/blast_engine.h>
 #include <algo/blast/core/lookup_wrap.h>
@@ -104,10 +104,10 @@ static void TranslateHSPsToDNAPCoord(Uint1 program,
                subject_frame - 1;
          } else {
             init_hsp->s_off = (init_hsp->s_off * CODON_LENGTH) + 
-               subject_length - subject_frame - 1;
+               subject_length - subject_frame;
             init_hsp->ungapped_data->s_start = 
                (init_hsp->ungapped_data->s_start * CODON_LENGTH) + 
-               subject_length - subject_frame - 1;
+               subject_length - subject_frame;
          }
       }
    }
@@ -195,6 +195,11 @@ BLAST_SearchEngineCore(Uint1 program_number, BLAST_SequenceBlk* query,
       combined_hsp_list = NULL;
       
       for (chunk = 0; chunk < num_chunks; ++chunk) {
+         if (chunk > 0) {
+            offset += subject->length - DBSEQ_CHUNK_OVERLAP;
+            subject->sequence += 
+               (subject->length - DBSEQ_CHUNK_OVERLAP)/COMPRESSION_RATIO;
+         }
          subject->length = MIN(total_subject_length - offset, 
                                MAX_DBSEQ_LEN);
          
@@ -203,7 +208,7 @@ BLAST_SearchEngineCore(Uint1 program_number, BLAST_SequenceBlk* query,
          return_stats->db_hits +=
             aux_struct->WordFinder(subject, query, lookup, 
                gap_align->sbp->matrix, word_params, ewp, query_offsets, 
-               subject_offsets, OFFSET_ARRAY_SIZE, init_hitlist);
+               subject_offsets, GetOffsetArraySize(lookup), init_hitlist);
             
          if (init_hitlist->total == 0)
             continue;
@@ -249,7 +254,7 @@ BLAST_SearchEngineCore(Uint1 program_number, BLAST_SequenceBlk* query,
          if (hit_options->do_sum_stats == TRUE) {
             status = BLAST_LinkHsps(program_number, hsp_list, query_info,
                         subject, gap_align->sbp, hit_params, 
-                        hit_options->gapped_calculation);
+                        score_options->gapped_calculation);
          } else if (hit_options->phi_align) {
             /* These e-values will not be accurate yet, since we don't know
                the number of pattern occurrencies in the database. That
@@ -259,7 +264,7 @@ BLAST_SearchEngineCore(Uint1 program_number, BLAST_SequenceBlk* query,
             /* Calculate e-values for all HSPs */
             status = 
                BLAST_GetNonSumStatsEvalue(program_number, query_info, 
-                  hsp_list, hit_options, gap_align->sbp);
+                  hsp_list, score_options, gap_align->sbp);
          }
 
          /* Discard HSPs that don't pass the e-value test */
@@ -269,13 +274,10 @@ BLAST_SearchEngineCore(Uint1 program_number, BLAST_SequenceBlk* query,
          /* Allow merging of HSPs either if traceback is already 
             available, or if it is an ungapped search */
          if (MergeHSPLists(hsp_list, &combined_hsp_list, offset,
-             (Uint1) (hsp_list->traceback_done || !hit_options->gapped_calculation), FALSE)) {
+             (Uint1) (hsp_list->traceback_done || !score_options->gapped_calculation), FALSE)) {
             /* HSPs from this list are moved elsewhere, reset count to 0 */
             hsp_list->hspcnt = 0;
          }
-         offset += subject->length - DBSEQ_CHUNK_OVERLAP;
-         subject->sequence += 
-            (subject->length - DBSEQ_CHUNK_OVERLAP)/COMPRESSION_RATIO;
       } /* End loop on chunks of subject sequence */
       
       MergeHSPLists(combined_hsp_list, hsp_list_out, 0, 
@@ -312,28 +314,80 @@ FillReturnXDropoffsInfo(BlastReturnStat* return_stats,
    return 0;
 }
 
+/* Computes the effective search space for the given parameters */
+static
+Int8 ComputeEffectiveSearchSpace(BLAST_KarlinBlk* kbp, /* [in] */
+                                 Uint1 program_number, /* [in] */
+                                 Int4 query_length,    /* [in] */
+                                 const BlastScoringOptions* 
+                                 scoring_options,      /* [in] */
+                                 double alpha,         /* [in] */
+                                 double beta,          /* [in] */
+                                 Int8 db_length,       /* [in] */
+                                 Int4 db_num_seqs,     /* [in] */
+                                 Int4* length_adjustment_out  /* [out] */
+                                )
+{
+    Int4 length_adjustment = 0;  /* length adjustment for current iteration. */
+    Int4 last_length_adjustment = 0;/* length adjustment in previous iteration.*/
+    Int4 min_query_length;   /* lower bound on query length. */
+    Int2 i; /* Iteration index for calculating length adjustment */
+    Int8 effective_length, effective_db_length; /* effective lengths of 
+                                                  query and database */
+    Int8 retval = 0;
+
+    ASSERT(kbp);
+
+    min_query_length = (Int4) (1/(kbp->K));
+
+    for (i=0; i<5; i++) {
+
+        if (program_number != blast_type_blastn && 
+            scoring_options->gapped_calculation) {
+
+            length_adjustment = BLAST_Nint((((kbp->logK)+log((double)(query_length-last_length_adjustment)*(double)MAX(db_num_seqs, db_length-db_num_seqs*last_length_adjustment)))*alpha/kbp->Lambda) + beta);
+
+        } else {
+
+            length_adjustment = BLAST_Nint((kbp->logK+log((double)(query_length-last_length_adjustment)*(double)MAX(1, db_length-db_num_seqs*last_length_adjustment)))/(kbp->H));
+        }
+
+        if (length_adjustment >= query_length-min_query_length) {
+            length_adjustment = query_length-min_query_length;
+            break;
+        }
+        
+        if (ABS(last_length_adjustment-length_adjustment) <= 1)
+            break;
+        last_length_adjustment = length_adjustment;
+    }
+    effective_length = 
+        MAX(query_length - length_adjustment, min_query_length);
+    effective_db_length = MAX(1, db_length - db_num_seqs*length_adjustment);
+     
+    retval = effective_length * effective_db_length;
+
+    if (length_adjustment_out) {
+        *length_adjustment_out = length_adjustment;
+    }
+
+    return retval;
+}
+
 Int2 BLAST_CalcEffLengths (Uint1 program_number, 
    const BlastScoringOptions* scoring_options,
    const BlastEffectiveLengthsOptions* eff_len_options, 
    const BlastScoreBlk* sbp, BlastQueryInfo* query_info)
 {
-   double alpha, beta; /*alpha and beta for new scoring system */
-   Int4 min_query_length;   /* lower bound on query length. */
+   double alpha=0, beta=0; /*alpha and beta for new scoring system */
    Int4 length_adjustment = 0;  /* length adjustment for current iteration. */
-   Int4 last_length_adjustment;/* length adjustment in previous iteration.*/
    Int4 index;		/* loop index. */
    Int4	db_num_seqs;	/* number of sequences in database. */
    Int8	db_length;	/* total length of database. */
    BLAST_KarlinBlk* *kbp_ptr; /* Array of Karlin block pointers */
-   BLAST_KarlinBlk* kbp; /* Karlin-Blk pointer from ScoreBlk. */
    Int4 query_length;   /* length of an individual query sequence */
-   Int8 effective_length, effective_db_length; /* effective lengths of 
-                                                  query and database */
-   Int8 effective_search_space; /* Effective search space for a given 
+   Int8 effective_search_space = 0; /* Effective search space for a given 
                                    sequence/strand/frame */
-   Int2 i; /* Iteration index for calculating length adjustment */
-   Uint1 num_strands;
-   Boolean skip = FALSE;
 
    if (sbp == NULL || eff_len_options == NULL)
       return 1;
@@ -359,66 +413,31 @@ Int2 BLAST_CalcEffLengths (Uint1 program_number,
    else
       kbp_ptr = sbp->kbp_std; 
    
-   if (program_number == blast_type_blastn)
-      num_strands = 2;
-   else
-      num_strands = 1;
+   for (index = query_info->first_context;
+        index <= query_info->last_context;
+        index++) {
 
-   for (index = query_info->first_context; 
-        index <= query_info->last_context; index++) {
-      if ((index % num_strands) == 0) 
-         skip = FALSE;
       if (eff_len_options->searchsp_eff) {
          effective_search_space = eff_len_options->searchsp_eff;
       } else {
-         query_length = BLAST_GetQueryLength(query_info, index);
-         
-         if (query_length <= 0) {
-            /* This strand of this query is not searched */
-            query_info->eff_searchsp_array[index] = 0;
-            query_info->length_adjustments[index] = 0;
-            continue;
+         if ( (query_length = BLAST_GetQueryLength(query_info, index)) <= 0) {
+             continue;
          }
-
-         if (!skip) {
-            /* Use the correct Karlin block. For blastn, two identical Karlin
-               blocks are allocated for each sequence (one per strand), but we
-               only need one of them.
-            */
-            kbp = kbp_ptr[index];
-            length_adjustment = 0;
-            last_length_adjustment = 0;
-            min_query_length = (Int4) (1/(kbp->K));
-            
-            for (i=0; i<5; i++) {
-               if (program_number != blast_type_blastn && 
-                   scoring_options->gapped_calculation) {
-                  length_adjustment = BLAST_Nint((((kbp->logK)+log((double)(query_length-last_length_adjustment)*(double)MAX(db_num_seqs, db_length-db_num_seqs*last_length_adjustment)))*alpha/kbp->Lambda) + beta);
-               } else {
-                  length_adjustment = (Int4) ((kbp->logK+log((double)(query_length-last_length_adjustment)*(double)MAX(1, db_length-db_num_seqs*last_length_adjustment)))/(kbp->H));
-               }
-               
-               if (length_adjustment >= query_length-min_query_length) {
-                  length_adjustment = query_length-min_query_length;
-                  break;
-               }
-               
-               if (ABS(last_length_adjustment-length_adjustment) <= 1)
-                  break;
-               last_length_adjustment = length_adjustment;
-            }
-            effective_length = 
-               MAX(query_length - length_adjustment, min_query_length);
-            effective_db_length = MAX(1, db_length - db_num_seqs*length_adjustment);
-            
-            effective_search_space = effective_length * effective_db_length;
-            skip = TRUE;
-         }
+         /* Use the correct Karlin block. For blastn, two identical Karlin
+            blocks are allocated for each sequence (one per strand), but we
+            only need one of them.
+         */
+         effective_search_space = ComputeEffectiveSearchSpace(kbp_ptr[index],
+                                                              program_number,
+                                                              query_length,
+                                                              scoring_options,
+                                                              alpha, beta,
+                                                              db_length,
+                                                              db_num_seqs,
+                                                              &length_adjustment);
       }
-
       query_info->eff_searchsp_array[index] = effective_search_space;
       query_info->length_adjustments[index] = length_adjustment;
-
 
    }
 
@@ -504,7 +523,8 @@ BLAST_SetUpAuxStructures(Uint1 program_number,
                                query_info, hit_params);
 
    BlastInitialWordParametersNew(program_number, word_options, *hit_params, 
-      *ext_params, sbp, query_info, eff_len_options, word_params);
+      *ext_params, sbp, query_info, eff_len_options, 
+      scoring_options->gapped_calculation, word_params);
 
    if ((status = BLAST_GapAlignStructNew(scoring_options, *ext_params, 
                     max_subject_length, query->length, sbp, gap_align))) {
@@ -685,7 +705,7 @@ BLAST_DatabaseSearchEngine(Uint1 program_number,
    const BlastEffectiveLengthsOptions* eff_len_options,
    const PSIBlastOptions* psi_options, 
    const BlastDatabaseOptions* db_options,
-   BlastResults* results, BlastReturnStat* return_stats)
+   BlastHSPResults* results, BlastReturnStat* return_stats)
 {
    BlastCoreAuxStruct* aux_struct = NULL;
    BlastThrInfo* thr_info = NULL;
@@ -781,11 +801,11 @@ BLAST_DatabaseSearchEngine(Uint1 program_number,
    /* Now sort the hit lists for all queries */
    BLAST_SortResults(results);
 
-   if (hit_options->gapped_calculation) {
+   if (!ext_options->skip_traceback && score_options->gapped_calculation) {
       status = 
          BLAST_ComputeTraceback(program_number, results, query, query_info,
             bssp, gap_align, score_options, ext_params, hit_params,
-            db_options);
+            db_options, psi_options);
    }
 
    /* Do not destruct score block here */
@@ -812,7 +832,7 @@ BLAST_TwoSequencesEngine(Uint1 program_number,
    const BlastEffectiveLengthsOptions* eff_len_options,
    const PSIBlastOptions* psi_options, 
    const BlastDatabaseOptions* db_options,
-   BlastResults* results, BlastReturnStat* return_stats)
+   BlastHSPResults* results, BlastReturnStat* return_stats)
 {
    BlastCoreAuxStruct* aux_struct = NULL;
    BlastHSPList* hsp_list; 
@@ -850,7 +870,7 @@ BLAST_TwoSequencesEngine(Uint1 program_number,
    BlastCoreAuxStructFree(aux_struct);
    sfree(word_params);
 
-   if (hit_options->gapped_calculation) {
+   if (score_options->gapped_calculation) {
       status = 
          BLAST_TwoSequencesTraceback(program_number, results, query, 
             query_info, subject, gap_align, score_options, ext_params, 

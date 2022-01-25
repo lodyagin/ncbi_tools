@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: blastkar.c,v 6.90 2003/06/30 20:01:32 dondosha Exp $";
+static char const rcsid[] = "$Id: blastkar.c,v 6.95 2003/12/12 16:00:34 madden Exp $";
 
 /* ===========================================================================
 *
@@ -49,8 +49,24 @@ Detailed Contents:
 	- calculate pseuod-scores from p-values.
 
 ****************************************************************************** 
- * $Revision: 6.90 $
+ * $Revision: 6.95 $
  * $Log: blastkar.c,v $
+ * Revision 6.95  2003/12/12 16:00:34  madden
+ * Add gap_decay_rate to BlastCutoffs, remove BlastCutoffs_simple, protection against overflow, removal of defunct _real variables (all from Mike Gertz)
+ *
+ * Revision 6.94  2003/11/30 03:36:38  camacho
+ * Fix compilation error
+ *
+ * Revision 6.93  2003/11/28 22:39:40  camacho
+ * +static keyword to BlastKarlinLtoH
+ *
+ * Revision 6.92  2003/11/28 15:16:38  camacho
+ * Combine newkar.c's contents with blastkar.c
+ *
+ * Revision 6.91  2003/11/26 19:08:10  madden
+ * simplified BlastKarlinLtoH and BlastKarlinLHtoK and provided better protection against overflow, new function NlmKarlinLambdaNR (all from Mike Gertz)
+ *
+ *
  * Revision 6.90  2003/06/30 20:01:32  dondosha
  * Correction in logic of finding matrices by BLASTMAT environment variable
  *
@@ -2975,10 +2991,10 @@ BlastKarlinkGapBlkFill(BLAST_KarlinBlkPtr kbp, Int4 gap_open, Int4 gap_extend, I
 			{
 				if (kbp)
 				{
-					kbp->Lambda_real = kbp->Lambda = values[index][3];
-					kbp->K_real = kbp->K = values[index][4];
-					kbp->logK_real = kbp->logK = log(kbp->K);
-					kbp->H_real = kbp->H = values[index][5];
+					kbp->Lambda = values[index][3];
+					kbp->K = values[index][4];
+					kbp->logK = log(kbp->K);
+					kbp->H = values[index][5];
 				}
 				found_values = TRUE;
 				break;
@@ -3127,6 +3143,40 @@ BlastKarlinReportAllowedValues(const Char *matrix_name, ValNodePtr PNTR error_re
 	return 0;
 }
 
+/*
+	BlastKarlinLtoH
+
+	Calculate H, the relative entropy of the p's and q's
+*/
+static Nlm_FloatHi LIBCALL
+BlastKarlinLtoH(BLAST_ScoreFreqPtr sfp, Nlm_FloatHi	lambda)
+{
+	BLAST_Score	score;
+	Nlm_FloatHi	H, etonlam, sum, scale;
+
+	Nlm_FloatHi PNTR probs = sfp->sprob;
+	BLAST_Score low   = sfp->obs_min,  high  = sfp->obs_max;
+
+	if (lambda < 0.) {
+		return -1.;
+	}
+	if (BlastScoreChk(low, high) != 0) return -1.;
+
+	etonlam = exp( - lambda );
+  sum = low * probs[low];
+  for( score = low + 1; score <= high; score++ ) {
+    sum = score * probs[score] + etonlam * sum;
+  }
+
+  scale = Nlm_Powi( etonlam, high );
+  if( scale > 0 ) {
+    H = lambda * sum/scale;
+  } else { /* Underflow of exp( -lambda * high ) */
+    H = lambda * exp( lambda * high + log(sum) );
+  }
+	return H;
+}
+
 /* 
         Everything below here was (more or less) copied from the old 
         karlin.c and could work separately from the stuff above. 
@@ -3206,40 +3256,40 @@ BlastKarlinBlkCalc(BLAST_KarlinBlkPtr kbp, BLAST_ScoreFreqPtr sfp)
 
 	/* Calculate the parameter Lambda */
 
-	kbp->Lambda_real = kbp->Lambda = BlastKarlinLambdaNR(sfp);
+	kbp->Lambda = BlastKarlinLambdaNR(sfp);
 	if (kbp->Lambda < 0.)
 		goto ErrExit;
 
 
 	/* Calculate H */
 
-	kbp->H_real = kbp->H = BlastKarlinLtoH(sfp, kbp->Lambda);
+	kbp->H = BlastKarlinLtoH(sfp, kbp->Lambda);
 	if (kbp->H < 0.)
 		goto ErrExit;
 
 
 	/* Calculate K and log(K) */
 
-	kbp->K_real = kbp->K = BlastKarlinLHtoK(sfp, kbp->Lambda, kbp->H);
+	kbp->K = BlastKarlinLHtoK(sfp, kbp->Lambda, kbp->H);
 	if (kbp->K < 0.)
 		goto ErrExit;
-	kbp->logK_real = kbp->logK = log(kbp->K);
+	kbp->logK = log(kbp->K);
 
 	/* Normal return */
 	return 0;
 
 ErrExit:
-	kbp->Lambda = kbp->H = kbp->K
-		= kbp->Lambda_real = kbp->H_real = kbp->K_real = -1.;
+	kbp->Lambda = kbp->H = kbp->K = -1.;
 #ifdef BLASTKAR_HUGE_VAL
-	kbp->logK_real = kbp->logK = BLASTKAR_HUGE_VAL;
+	kbp->logK = BLASTKAR_HUGE_VAL;
 #else
-	kbp->logK_real = kbp->logK = 1.e30;
+	kbp->logK = 1.e30;
 #endif
 	return 1;
 }
 #define DIMOFP0	(iter*range + 1)
 #define DIMOFP0_MAX (BLAST_KARLIN_K_ITER_MAX*BLAST_SCORE_RANGE_MAX+1)
+
 
 Nlm_FloatHi
 BlastKarlinLHtoK(BLAST_ScoreFreqPtr sfp, Nlm_FloatHi	lambda, Nlm_FloatHi H)
@@ -3260,7 +3310,7 @@ BlastKarlinLHtoK(BLAST_ScoreFreqPtr sfp, Nlm_FloatHi	lambda, Nlm_FloatHi H)
 	int		iter;
 	Nlm_FloatHi	sumlimit;
 	Nlm_FloatHi	PNTR p, PNTR ptrP, PNTR ptr1, PNTR ptr2, PNTR ptr1e;
-	Nlm_FloatHi	etolami, etolam;
+	Nlm_FloatHi	x;
         Boolean         bi_modal_score = FALSE;
 
 	if (lambda <= 0. || H <= 0.) {
@@ -3289,7 +3339,7 @@ BlastKarlinLHtoK(BLAST_ScoreFreqPtr sfp, Nlm_FloatHi	lambda, Nlm_FloatHi H)
 	range = high - low;
 
 	av = H/lambda;
-	etolam = exp((Nlm_FloatHi)lambda);
+	x = exp((Nlm_FloatHi) -lambda);
 
 	if (low == -1 || high == 1) {
            if (high == 1)
@@ -3298,7 +3348,7 @@ BlastKarlinLHtoK(BLAST_ScoreFreqPtr sfp, Nlm_FloatHi	lambda, Nlm_FloatHi H)
               score_avg = sfp->score_avg / d;
               K = (score_avg * score_avg) / av;
            }
-           return K * (1.0 - 1./etolam);
+           return K * (1.0 - x);
 	}
 
 	sumlimit = BLAST_KARLIN_K_SUMLIMIT_DEFAULT;
@@ -3341,11 +3391,13 @@ BlastKarlinLHtoK(BLAST_ScoreFreqPtr sfp, Nlm_FloatHi	lambda, Nlm_FloatHi H)
               if (ptrP - P0 <= range)
                  --last;
            }
-           etolami = Nlm_Powi((Nlm_FloatHi)etolam, lo - 1);
-           for (sum = 0., i = lo; i != 0; ++i) {
-              etolami *= etolam;
-              sum += *++ptrP * etolami;
-           }
+					 /* Horner's rule */
+					 sum = *++ptrP;
+					 for( i = lo + 1; i < 0; i++ ) {
+						 sum = *++ptrP + sum * x;
+					 }
+					 sum *= x;
+
            for (; i <= hi; ++i)
               sum += *++ptrP;
            oldsum2 = oldsum;
@@ -3366,92 +3418,21 @@ BlastKarlinLHtoK(BLAST_ScoreFreqPtr sfp, Nlm_FloatHi	lambda, Nlm_FloatHi H)
            }
         }
 
-	if (etolam > 0.05) 
-	{
-           etolami = 1 / etolam;
-           K = exp((Nlm_FloatHi)-2.0*Sum) / (av*(1.0 - etolami));
+	if (x <  1.0 / 0.05 ) {
+		K = exp((double)-2.0*Sum) / (av*(1.0 - x));
+	} else {
+		K = -exp((double)-2.0*Sum) / (av*Expm1(-(double)lambda));
 	}
-	else
-           K = -exp((Nlm_FloatHi)-2.0*Sum) / (av*Nlm_Expm1(-(Nlm_FloatHi)lambda));
 
 CleanUp:
 #ifndef BLAST_KARLIN_K_STACKP
 	if (P0 != NULL)
 		MemFree(P0);
 #endif
+
 	return K;
 }
 
-/*
-	BlastKarlinLambdaBis
-
-	Calculate Lambda using the bisection method (slow).
-*/
-Nlm_FloatHi
-BlastKarlinLambdaBis(BLAST_ScoreFreqPtr sfp)
-{
-	register Nlm_FloatHi	PNTR sprob;
-	Nlm_FloatHi	lambda, up, newval;
-	BLAST_Score	i, low, high, d;
-	int		j;
-	register Nlm_FloatHi	sum, x0, x1;
-
-	if (sfp->score_avg >= 0.) {
-		return -1.;
-	}
-	low = sfp->obs_min;
-	high = sfp->obs_max;
-	if (BlastScoreChk(low, high) != 0)
-		return -1.;
-
-	sprob = sfp->sprob;
-
-        /* Find greatest common divisor of all scores */
-    	for (i = 1, d = -low; i <= high-low && d > 1; ++i) {
-           if (sprob[i+low] != 0)
-              d = Nlm_Gcd(d, i);
-        }
-
-        high = high / d;
-        low = low / d;
-
-	up = BLAST_KARLIN_LAMBDA0_DEFAULT;
-	for (lambda=0.; ; ) {
-		up *= 2;
-		x0 = exp((Nlm_FloatHi)up);
-		x1 = Nlm_Powi((Nlm_FloatHi)x0, low - 1);
-		if (x1 > 0.) {
-			for (sum=0., i=low; i<=high; ++i)
-				sum += sprob[i*d] * (x1 *= x0);
-		}
-		else {
-			for (sum=0., i=low; i<=high; ++i)
-				sum += sprob[i*d] * exp(up * i);
-		}
-		if (sum >= 1.0)
-			break;
-		lambda = up;
-	}
-
-	for (j=0; j<BLAST_KARLIN_LAMBDA_ITER_DEFAULT; ++j) {
-		newval = (lambda + up) / 2.;
-		x0 = exp((Nlm_FloatHi)newval);
-		x1 = Nlm_Powi((Nlm_FloatHi)x0, low - 1);
-		if (x1 > 0.) {
-			for (sum=0., i=low; i<=high; ++i)
-				sum += sprob[i*d] * (x1 *= x0);
-		}
-		else {
-			for (sum=0., i=low; i<=high; ++i)
-				sum += sprob[i*d] * exp(newval * i);
-		}
-		if (sum > 1.0)
-			up = newval;
-		else
-			lambda = newval;
-	}
-	return (lambda + up) / (2. * d);
-}
 
 /******************* Fast Lambda Calculation Subroutine ************************
 	Version 1.0	May 16, 1991
@@ -3461,98 +3442,187 @@ BlastKarlinLambdaBis(BLAST_ScoreFreqPtr sfp)
 	guess (lambda0) obtained perhaps by the bisection method.
 *******************************************************************************/
 
+/**
+ * Find positive solution to sum_{i=low}^{high} exp(i lambda) = 1.
+ * 
+ * @param probs probabilities of a score occuring 
+ * @param d the gcd of the possible scores. This equals 1 if the scores
+ * are not a lattice
+ * @param low the lowest possible score
+ * @param high the highest possible score
+ * @param lambda0 an initial value for lambda
+ * @param tolx the tolerance to which lambda must be computed
+ * @param itmax the maximum number of times the function may be
+ * evaluated
+ * @param maxNewton the maximum permissible number of Newton
+ * iteration. After that the computation will proceed by bisection.
+ * @param itn a pointer to an integer that will receive the actually
+ * number of iterations performed.
+ *
+ * Let phi(lambda) =  sum_{i=low}^{high} exp(i lambda) - 1. Then phi(lambda)
+ * may be written
+ *
+ *     phi(lamdba) = exp(u lambda) p( exp(-lambda) )
+ *
+ * where p(x) is a polynomial that has exactly two zeros, one at x = 1
+ * and one at y = exp(-lamdba). It is simpler, more numerically
+ * efficient and stable to apply Newton's method to p(x) than to
+ * phi(lambda).
+ *
+ * We define a safeguarded Newton iteration as follows. Let the
+ * initial interval of uncertainty be [0,1]. If p'(x) >= 0, we bisect
+ * the interval. Otherwise we try a Newton step. If the Newton iterate
+ * lies in the current interval of uncertainty and it reduces the
+ * value of | p(x) | by at least 10%, we accept the new
+ * point. Otherwise, we bisect the current interval of uncertainty.
+ * It is clear that this method converges to a zero of p(x).  Since
+ * p'(x) > 0 in an interval containing x = 1, the method cannot
+ * converge to x = 1 and therefore converges to the only other zero,
+ * y.
+ */
+
+static Nlm_FloatHi 
+NlmKarlinLambdaNR( Nlm_FloatHi PNTR probs, BLAST_Score d,
+									 BLAST_Score low, BLAST_Score high, 
+									 Nlm_FloatHi lambda0, Nlm_FloatHi tolx,
+									 int itmax, int maxNewton, int * itn ) 
+{
+  int k;
+  Nlm_FloatHi x0, x, a = 0, b = 1;
+  Nlm_FloatHi f = 4;  /* Larger than any possible value of the poly in [0,1] */
+  int isNewton = 0; /* we haven't yet taken a Newton step. */
+
+  assert( d > 0 );
+
+	x0 = exp( -lambda0 );
+  x = ( 0 < x0 && x0 < 1 ) ? x0 : .5;
+  
+  for( k = 0; k < itmax; k++ ) { /* all iteration indices k */
+    int i;
+    Nlm_FloatHi g, fold = f;
+    int wasNewton = isNewton; /* If true, then the previous step was a */
+                              /* Newton step */
+    isNewton  = 0;            /* Assume that this step is not */
+    
+    /* Horner's rule for evaluating a polynomial and its derivative */
+    g = 0;
+    f = probs[low];
+    for( i = low + d; i < 0; i += d ) {
+      g = x * g + f;
+      f = f * x + probs[i];
+    }
+    g = x * g + f;
+    f = f * x + probs[0] - 1;
+    for( i = d; i <= high; i += d ) {
+      g = x * g + f;
+      f = f * x + probs[i];
+    }
+    /* End Horner's rule */
+
+    if( f > 0 ) {
+      a = x; /* move the left endpoint */
+    } else if( f < 0 ) { 
+      b = x; /* move the right endpoint */
+    } else { /* f == 0 */
+      break; /* x is an exact solution */
+    }
+    if( b - a < 2 * a * ( 1 - b ) * tolx ) {
+      /* The midpoint of the interval converged */
+      x = (a + b) / 2; break;
+    }
+
+    if( k >= maxNewton ||
+        /* If convergence of Newton's method appears to be failing; or */
+				( wasNewton && fabs( f ) > .9 * fabs(fold) ) ||  
+        /* if the previous iteration was a Newton step but didn't decrease 
+         * f sufficiently; or */
+        g >= 0 
+        /* if a Newton step will move us away from the desired solution */
+        ) { /* then */
+      /* bisect */
+      x = (a + b)/2;
+    } else {
+      /* try a Newton step */
+      double p = - f/g;
+      double y = x + p;
+      if( y <= a || y >= b ) { /* The proposed iterate is not in (a,b) */
+        x = (a + b)/2;
+      } else { /* The proposed iterate is in (a,b). Accept it. */
+        isNewton = 1;
+        x = y;
+        if( fabs( p ) < tolx * x * (1-x) ) break; /* Converged */
+      } /* else the proposed iterate is in (a,b) */
+    } /* else try a Newton step. */ 
+  } /* end for all iteration indices k */
+	*itn = k; 
+  return -log(x)/d;
+}
+
+
 Nlm_FloatHi
 BlastKarlinLambdaNR(BLAST_ScoreFreqPtr sfp)
 {
 	BLAST_Score	low;			/* Lowest score (must be negative)  */
 	BLAST_Score	high;			/* Highest score (must be positive) */
-	int		j;
+	int		itn;
 	BLAST_Score	i, d;
 	Nlm_FloatHi PNTR	sprob;
-	Nlm_FloatHi	lambda0, sum, slope, temp, x0, x1, amt;
+	Nlm_FloatHi	returnValue;
 
 	low = sfp->obs_min;
 	high = sfp->obs_max;
 	if (sfp->score_avg >= 0.) {	/* Expected score must be negative */
 		return -1.0;
 	}
-	if (BlastScoreChk(low, high) != 0)
-		return -1.;
-
-	lambda0 = BLAST_KARLIN_LAMBDA0_DEFAULT;
-
+	if (BlastScoreChk(low, high) != 0) return -1.;
+	
 	sprob = sfp->sprob;
-        /* Find greatest common divisor of all scores */
-    	for (i = 1, d = -low; i <= high-low && d > 1; ++i) {
-           if (sprob[i+low] != 0)
-              d = Nlm_Gcd(d, i);
-        }
-
-        high = high / d;
-        low = low / d;
-	/* Calculate lambda */
-
-	for (j=0; j<20; ++j) { /* limit of 20 should never be close-approached */
-		sum = -1.0;
-		slope = 0.0;
-		if (lambda0 < 0.01)
-			break;
-		x0 = exp((Nlm_FloatHi)lambda0);
-		x1 = Nlm_Powi((Nlm_FloatHi)x0, low - 1);
-		if (x1 == 0.)
-			break;
-		for (i=low; i<=high; i++) {
-			sum += (temp = sprob[i*d] * (x1 *= x0));
-			slope += temp * i;
-		}
-		lambda0 -= (amt = sum/slope);
-		if (ABS(amt/lambda0) < BLAST_KARLIN_LAMBDA_ACCURACY_DEFAULT) {
-			/*
-			Does it appear that we may be on the verge of converging
-			to the ever-present, zero-valued solution?
-			*/
-			if (lambda0 > BLAST_KARLIN_LAMBDA_ACCURACY_DEFAULT)
-				return lambda0 / d;
-			break;
+	/* Find greatest common divisor of all scores */
+	for (i = 1, d = -low; i <= high-low && d > 1; ++i) {
+		if (sprob[i+low] != 0) {
+			d = Nlm_Gcd(d, i);
 		}
 	}
-	return BlastKarlinLambdaBis(sfp);
+	returnValue =
+		NlmKarlinLambdaNR( sprob, d, low, high,
+											 BLAST_KARLIN_LAMBDA0_DEFAULT,
+											 BLAST_KARLIN_LAMBDA_ACCURACY_DEFAULT,
+											 20, 20 + BLAST_KARLIN_LAMBDA_ITER_DEFAULT, &itn );
+
+
+	return returnValue;
 }
 
-/*
-	BlastKarlinLtoH
-
-	Calculate H, the relative entropy of the p's and q's
-*/
 Nlm_FloatHi LIBCALL
-BlastKarlinLtoH(BLAST_ScoreFreqPtr sfp, Nlm_FloatHi	lambda)
+impalaKarlinLambdaNR(BLAST_ScoreFreqPtr sfp, Nlm_FloatHi initialLambda)
 {
-	BLAST_Score	score;
-	Nlm_FloatHi	av, etolam, etolami;
+	Nlm_FloatHi returnValue;
+	int itn;
+	Nlm_FloatHi PNTR	sprob = sfp->sprob;
 
-	if (lambda < 0.) {
-		return -1.;
+	if (sfp->score_avg >= 0.) {	/* Expected score must be negative */
+		return -1.0;
 	}
-	if (BlastScoreChk(sfp->obs_min, sfp->obs_max) != 0)
-		return -1.;
-
-	etolam = exp((Nlm_FloatHi)lambda);
-	etolami = Nlm_Powi((Nlm_FloatHi)etolam, sfp->obs_min - 1);
-	if (etolami > 0.) 
 	{
-	    av = 0.0;
-	    for (score=sfp->obs_min; score<=sfp->obs_max; score++)
-   			av += sfp->sprob[score] * score * (etolami *= etolam);
-	}
-	else 
-	{
-	    av = 0.0;
-	    for (score=sfp->obs_min; score<=sfp->obs_max; score++)
-   			av += sfp->sprob[score] * score * exp(lambda * score);
+		Boolean foundPositive = FALSE;
+		BLAST_Score	j;
+		for(j = 1; j <=sfp->obs_max; j++) {
+			if (sprob[j] > 0.0) {
+				foundPositive = TRUE;
+				break;
+			}
+		}
+		if (!foundPositive) return(-1);
 	}
 
-    	return lambda * av;
+	returnValue =
+		NlmKarlinLambdaNR( sprob, 1, sfp->obs_min, sfp->obs_max,
+			                 initialLambda, BLAST_KARLIN_LAMBDA_ACCURACY_DEFAULT,
+											 20, 20 + BLAST_KARLIN_LAMBDA_ITER_DEFAULT, &itn );
+
+	return returnValue;
 }
+
 
 
 static Nlm_FloatHi
@@ -3584,19 +3654,9 @@ Int2 LIBCALL
 BlastCutoffs(BLAST_ScorePtr S, /* cutoff score */
 	Nlm_FloatHi PNTR E, /* expected no. of HSPs scoring at or above S */
 	BLAST_KarlinBlkPtr kbp,
-	Nlm_FloatHi qlen, /* length of query sequence */
-	Nlm_FloatHi dblen, /* length of database or database sequence */
-	Nlm_Boolean dodecay) /* TRUE ==> use gapdecay feature */
-{
-	return BlastCutoffs_simple(S, E, kbp, qlen*dblen, dodecay);
-}
-
-Int2 LIBCALL
-BlastCutoffs_simple(BLAST_ScorePtr S, /* cutoff score */
-	Nlm_FloatHi PNTR E, /* expected no. of HSPs scoring at or above S */
-	BLAST_KarlinBlkPtr kbp,
 	Nlm_FloatHi searchsp, /* size of search space. */
-	Nlm_Boolean dodecay) /* TRUE ==> use gapdecay feature */
+	Nlm_Boolean dodecay,  /* TRUE ==> use gapdecay feature */
+  Nlm_FloatHi gap_decay_rate )
 {
 	BLAST_Score	s = *S, es;
 	Nlm_FloatHi	e = *E, esave;
@@ -3614,7 +3674,7 @@ BlastCutoffs_simple(BLAST_ScorePtr S, /* cutoff score */
 	if (e > 0.) 
 	{
 		if (dodecay)
-			e = BlastGapDecayInverse(e, 1, 0.5);
+			e = BlastGapDecayInverse(e, 1, gap_decay_rate);
 		es = BlastKarlinEtoS_simple(e, kbp, searchsp);
 	}
 	/*
@@ -3633,7 +3693,7 @@ BlastCutoffs_simple(BLAST_ScorePtr S, /* cutoff score */
 	{
 		e = BlastKarlinStoE_simple(s, kbp, searchsp);
 		if (dodecay)
-			e = BlastGapDecay(e, 1, 0.5);
+			e = BlastGapDecay(e, 1, gap_decay_rate);
 		*E = e;
 	}
 
@@ -4022,7 +4082,7 @@ BlastSmallGapSumE(BLAST_KarlinBlkPtr kbp, Int4 gap, Nlm_FloatHi gap_prob, Nlm_Fl
 			sum_e = sum_e/gap_prob;
 	}
 
-	return sum_e;
+	return (sum_e <= INT4_MAX) ?  sum_e : INT4_MAX;
 }
 
 /*
@@ -4057,7 +4117,7 @@ BlastUnevenGapSumE(BLAST_KarlinBlkPtr kbp, Int4 p_gap, Int4 n_gap, Nlm_FloatHi g
 			sum_e = sum_e/gap_prob;
 	}
 
-	return sum_e;
+	return (sum_e <= INT4_MAX) ?  sum_e : INT4_MAX; 
 }
 
 /*
@@ -4094,7 +4154,7 @@ BlastLargeGapSumE(BLAST_KarlinBlkPtr kbp, Nlm_FloatHi gap_prob, Nlm_FloatHi gap_
 			sum_e = sum_e/(1.0 - gap_prob);
 	}
 
-	return sum_e;
+	return (sum_e <= INT4_MAX) ?  sum_e : INT4_MAX; 
 }
 
 /********************************************************************

@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 3/4/91
 *
-* $Revision: 6.6 $
+* $Revision: 6.9 $
 *
 * File Description:
 *   Routines to deal with internal operations on AsnType objects.
@@ -43,6 +43,15 @@
 * 02-24-94 Schuler     Make AsnTypeStringToHex LIBCALL too
 *
 * $Log: asntypes.c,v $
+* Revision 6.9  2003/12/03 19:31:09  gouriano
+* Corrected DTD generation (a different approach)
+*
+* Revision 6.8  2003/12/02 21:40:17  gouriano
+* Revert back to rev 6.6
+*
+* Revision 6.7  2003/12/02 19:52:49  gouriano
+* Corrected DTD generation
+*
 * Revision 6.6  2000/07/25 20:30:58  ostell
 * added support for printing multiple ASN.1 modules as multiple XML DTD and .mod files
 *
@@ -229,6 +238,21 @@ NLM_EXTERN AsnTypePtr LIBCALL AsnFindBaseType (AsnTypePtr atp)
 		atp = atp->type;
 		if (atp->type == NULL)   /* not found */
 			return NULL;
+	}
+	return atp;
+}
+
+NLM_EXTERN AsnTypePtr LIBCALL AsnFindBaseTypeDTD (AsnTypePtr atp)
+{
+	if (atp == NULL) return NULL;
+
+	if (atp->type == NULL) return NULL;
+
+	if (! ISA_BASETYPE(atp->type->isa))
+	{
+		atp = atp->type;
+		if (atp->type == NULL)   /* not found */
+			return atp;
 	}
 	return atp;
 }
@@ -906,7 +930,7 @@ static void AddXMLname(AsnTypePtr atp, AsnTypePtr PNTR typestack, Int2 stackptr)
 			isa = AsnFindBaseIsa(atp2);
 			if ((doitem) && ((isa == SEQOF_TYPE) || (isa == SETOF_TYPE)))
 			{
-				atp2 = AsnFindBaseType(atp);
+				atp2 = AsnFindBaseTypeDTD(atp);
 				if (atp2 != NULL)
 				{
 				if (atp2->name == NULL)
@@ -957,12 +981,12 @@ static void AddXMLname(AsnTypePtr atp, AsnTypePtr PNTR typestack, Int2 stackptr)
 
 				for (i = (stackptr - 1); (i >= 0) && (! found); i--)
 				{
-					atp2 = AsnFindBaseType(typestack[i]);
+					atp2 = AsnFindBaseTypeDTD(typestack[i]);
 					if ((atp2 != NULL) && (atp2->name != NULL) && (IS_UPPER(*(atp2->name))))
 					{
 						while (i < stackptr)
 						{
-							atp2 = AsnFindBaseType(typestack[i]);
+							atp2 = AsnFindBaseTypeDTD(typestack[i]);
 							if (atp2->name == NULL)
 								tmp = StringMove(tmp, "E");
 							else
@@ -991,7 +1015,7 @@ static void AddXMLname(AsnTypePtr atp, AsnTypePtr PNTR typestack, Int2 stackptr)
 		}
 	}
 
-	atp2 = AsnFindBaseType(atp);
+	atp2 = AsnFindBaseTypeDTD(atp);
 	if ((! atp->imported) && (atp2 != NULL) && (atp2->type != NULL))
 	{
 		isa = atp2->type->isa;

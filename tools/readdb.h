@@ -41,7 +41,7 @@ Contents: defines and prototypes used by readdb.c and formatdb.c.
 *
 * Version Creation Date:   3/21/95
 *
-* $Revision: 6.143 $
+* $Revision: 6.145 $
 *
 * File Description: 
 *       Functions to rapidly read databases from files produced by formatdb.
@@ -56,6 +56,9 @@ Contents: defines and prototypes used by readdb.c and formatdb.c.
 *
 * RCS Modification History:
 * $Log: readdb.h,v $
+* Revision 6.145  2004/02/04 15:35:05  camacho
+* Rollback to fix problems in release 2.2.7
+*
 * Revision 6.143  2003/07/08 18:42:40  camacho
 * Elaborated fastacmd return values
 *

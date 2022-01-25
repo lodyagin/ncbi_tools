@@ -36,7 +36,7 @@ objcddAsnLoad(void)
 
 /**************************************************
 *    Generated object loaders for Module NCBI-Cdd
-*    Generated using ASNCODE Revision: 6.14 at Aug 14, 2003 10:05 AM
+*    Generated using ASNCODE Revision: 6.14 at Jan 15, 2004  1:40 PM
 *
 **************************************************/
 
@@ -361,7 +361,7 @@ CddFree(CddPtr ptr)
    MemFree(ptr -> name);
    CddIdSetFree(ptr -> id);
    CddDescrSetFree(ptr -> description);
-   { SeqAnnotPtr sap, next; sap = ptr -> seqannot; while(sap) { next = sap->next; sap->next = NULL; sap = SeqAnnotFree(sap); sap = next; } }
+   AsnGenericUserSeqOfFree(ptr -> seqannot, (AsnOptFreeFunc) SeqAnnotFree);
    BiostrucAnnotSetFree(ptr -> features);
    SeqEntryFree(ptr -> sequences);
    SeqIntFree(ptr -> profile_range);
@@ -379,7 +379,7 @@ CddFree(CddPtr ptr)
    AlignAnnotSetFree(ptr -> alignannot);
    Cn3dStyleDictionaryFree(ptr -> style_dictionary);
    Cn3dUserAnnotationsFree(ptr -> user_annotations);
-   LineageInfoFree(ptr -> ancestors);
+   AsnGenericUserSeqOfFree(ptr -> ancestors, (AsnOptFreeFunc) DomainParentFree);
    ScoreMatrixParametersFree(ptr -> scoreparams);
    SequenceTreeFree(ptr -> seqtree);
    return MemFree(ptr);
@@ -581,14 +581,14 @@ CddAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       atp = AsnReadId(aip,amp, atp);
    }
    if (atp == CDD_ancestors) {
-      ptr -> ancestors = LineageInfoAsnRead(aip, atp);
-      if (aip -> io_failure) {
+      ptr -> ancestors = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) DomainParentAsnRead, (AsnOptFreeFunc) DomainParentFree);
+      if (isError && ptr -> ancestors == NULL) {
          goto erret;
       }
       atp = AsnReadId(aip,amp, atp);
    }
    if (atp == CDD_scoreparams) {
-      ptr -> scoreparams = (ScoreMatrixParameters *)ScoreMatrixParametersAsnRead(aip, atp);
+      ptr -> scoreparams = ScoreMatrixParametersAsnRead(aip, atp);
       if (aip -> io_failure) {
          goto erret;
       }
@@ -666,7 +666,7 @@ CddAsnWrite(CddPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
          goto erret;
       }
    }
-   if (ptr->seqannot != NULL) if (SeqAnnotSetAsnWrite(ptr->seqannot,aip,CDD_seqannot,CDD_seqannot_E)==FALSE) goto erret;
+   AsnGenericUserSeqOfAsnWrite(ptr -> seqannot, (AsnWriteFunc) SeqAnnotAsnWrite, aip, CDD_seqannot, CDD_seqannot_E);
    if (ptr -> features != NULL) {
       if ( ! BiostrucAnnotSetAsnWrite(ptr -> features, aip, CDD_features)) {
          goto erret;
@@ -740,11 +740,7 @@ CddAsnWrite(CddPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
          goto erret;
       }
    }
-   if (ptr -> ancestors != NULL) {
-      if ( ! LineageInfoAsnWrite(ptr -> ancestors, aip, CDD_ancestors)) {
-         goto erret;
-      }
-   }
+   AsnGenericUserSeqOfAsnWrite(ptr -> ancestors, (AsnWriteFunc) DomainParentAsnWrite, aip, CDD_ancestors, CDD_ancestors_E);
    if (ptr -> scoreparams != NULL) {
       if ( ! ScoreMatrixParametersAsnWrite(ptr -> scoreparams, aip, CDD_scoreparams)) {
          goto erret;
@@ -1219,6 +1215,772 @@ CddTreeSetAsnWrite(CddTreeSetPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
    retval = AsnGenericUserSeqOfAsnWrite(ptr , (AsnWriteFunc) CddTreeAsnWrite, aip, atp, CDD_TREE_SET_E);
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
+*    CddPrefNodesNew()
+*
+**************************************************/
+NLM_EXTERN 
+CddPrefNodesPtr LIBCALL
+CddPrefNodesNew(void)
+{
+   CddPrefNodesPtr ptr = MemNew((size_t) sizeof(CddPrefNodes));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    CddPrefNodesFree()
+*
+**************************************************/
+NLM_EXTERN 
+CddPrefNodesPtr LIBCALL
+CddPrefNodesFree(CddPrefNodesPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   CddOrgRefSetFree(ptr -> preferred_nodes);
+   CddOrgRefSetFree(ptr -> model_organisms);
+   CddOrgRefSetFree(ptr -> optional_nodes);
+   CddPrefNodeDescrSetFree(ptr -> description);
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    CddPrefNodesAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+CddPrefNodesPtr LIBCALL
+CddPrefNodesAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   CddPrefNodesPtr ptr;
+
+   if (! loaded)
+   {
+      if (! objcddAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* CddPrefNodes ::= (self contained) */
+      atp = AsnReadId(aip, amp, CDD_PREF_NODES);
+   } else {
+      atp = AsnLinkType(orig, CDD_PREF_NODES);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = CddPrefNodesNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == CDD_PREF_NODES_preferred_nodes) {
+      ptr -> preferred_nodes = CddOrgRefSetAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == CDD_PREF_NODES_model_organisms) {
+      ptr -> model_organisms = CddOrgRefSetAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == CDD_PREF_NODES_optional_nodes) {
+      ptr -> optional_nodes = CddOrgRefSetAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == CDD_PREF_NODES_description) {
+      ptr -> description = CddPrefNodeDescrSetAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = CddPrefNodesFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    CddPrefNodesAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+CddPrefNodesAsnWrite(CddPrefNodesPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! objcddAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, CDD_PREF_NODES);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   if (ptr -> preferred_nodes != NULL) {
+      if ( ! CddOrgRefSetAsnWrite(ptr -> preferred_nodes, aip, CDD_PREF_NODES_preferred_nodes)) {
+         goto erret;
+      }
+   }
+   if (ptr -> model_organisms != NULL) {
+      if ( ! CddOrgRefSetAsnWrite(ptr -> model_organisms, aip, CDD_PREF_NODES_model_organisms)) {
+         goto erret;
+      }
+   }
+   if (ptr -> optional_nodes != NULL) {
+      if ( ! CddOrgRefSetAsnWrite(ptr -> optional_nodes, aip, CDD_PREF_NODES_optional_nodes)) {
+         goto erret;
+      }
+   }
+   if (ptr -> description != NULL) {
+      if ( ! CddPrefNodeDescrSetAsnWrite(ptr -> description, aip, CDD_PREF_NODES_description)) {
+         goto erret;
+      }
+   }
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
+*    CddOrgRefNew()
+*
+**************************************************/
+NLM_EXTERN 
+CddOrgRefPtr LIBCALL
+CddOrgRefNew(void)
+{
+   CddOrgRefPtr ptr = MemNew((size_t) sizeof(CddOrgRef));
+
+   ptr -> active = 1;
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    CddOrgRefFree()
+*
+**************************************************/
+NLM_EXTERN 
+CddOrgRefPtr LIBCALL
+CddOrgRefFree(CddOrgRefPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   OrgRefFree((OrgRefPtr)ptr -> reference);
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    CddOrgRefAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+CddOrgRefPtr LIBCALL
+CddOrgRefAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   CddOrgRefPtr ptr;
+
+   if (! loaded)
+   {
+      if (! objcddAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* CddOrgRef ::= (self contained) */
+      atp = AsnReadId(aip, amp, CDD_ORG_REF);
+   } else {
+      atp = AsnLinkType(orig, CDD_ORG_REF);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = CddOrgRefNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == CDD_ORG_REF_reference) {
+      ptr -> reference = OrgRefAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == CDD_ORG_REF_active) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> active = av.boolvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = CddOrgRefFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    CddOrgRefAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+CddOrgRefAsnWrite(CddOrgRefPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! objcddAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, CDD_ORG_REF);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   if (ptr -> reference != NULL) {
+      if ( ! OrgRefAsnWrite((OrgRefPtr)ptr -> reference, aip, CDD_ORG_REF_reference)) {
+         goto erret;
+      }
+   }
+   av.boolvalue = ptr -> active;
+   retval = AsnWrite(aip, CDD_ORG_REF_active,  &av);
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
+*    CddOrgRefSetFree()
+*
+**************************************************/
+NLM_EXTERN 
+CddOrgRefSetPtr LIBCALL
+CddOrgRefSetFree(CddOrgRefSetPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   AsnGenericUserSeqOfFree(ptr,  (AsnOptFreeFunc) CddOrgRefFree);
+   return NULL;
+}
+
+
+/**************************************************
+*
+*    CddOrgRefSetAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+CddOrgRefSetPtr LIBCALL
+CddOrgRefSetAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   CddOrgRefSetPtr ptr;
+
+   if (! loaded)
+   {
+      if (! objcddAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* CddOrgRefSet ::= (self contained) */
+      atp = AsnReadId(aip, amp, CDD_ORG_REF_SET);
+   } else {
+      atp = AsnLinkType(orig, CDD_ORG_REF_SET);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   func = NULL;
+
+   ptr  = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) CddOrgRefAsnRead, (AsnOptFreeFunc) CddOrgRefFree);
+   if (isError && ptr  == NULL) {
+      goto erret;
+   }
+
+
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = CddOrgRefSetFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    CddOrgRefSetAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+CddOrgRefSetAsnWrite(CddOrgRefSetPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! objcddAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, CDD_ORG_REF_SET);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   retval = AsnGenericUserSeqOfAsnWrite(ptr , (AsnWriteFunc) CddOrgRefAsnWrite, aip, atp, CDD_ORG_REF_SET_E);
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
+*    CddPrefNodeDescrFree()
+*
+**************************************************/
+NLM_EXTERN 
+CddPrefNodeDescrPtr LIBCALL
+CddPrefNodeDescrFree(ValNodePtr anp)
+{
+   Pointer pnt;
+
+   if (anp == NULL) {
+      return NULL;
+   }
+
+   pnt = anp->data.ptrvalue;
+   switch (anp->choice)
+   {
+   default:
+      break;
+   case CddPrefNodeDescr_create_date:
+      DateFree(anp -> data.ptrvalue);
+      break;
+   case CddPrefNodeDescr_description:
+      MemFree(anp -> data.ptrvalue);
+      break;
+   }
+   return MemFree(anp);
+}
+
+
+/**************************************************
+*
+*    CddPrefNodeDescrAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+CddPrefNodeDescrPtr LIBCALL
+CddPrefNodeDescrAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   ValNodePtr anp;
+   Uint1 choice;
+   Boolean isError = FALSE;
+   Boolean nullIsError = FALSE;
+   AsnReadFunc func;
+
+   if (! loaded)
+   {
+      if (! objcddAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* CddPrefNodeDescr ::= (self contained) */
+      atp = AsnReadId(aip, amp, CDD_PREF_NODE_DESCR);
+   } else {
+      atp = AsnLinkType(orig, CDD_PREF_NODE_DESCR);    /* link in local tree */
+   }
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   anp = ValNodeNew(NULL);
+   if (anp == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the CHOICE or OpenStruct value (nothing) */
+      goto erret;
+   }
+
+   func = NULL;
+
+   atp = AsnReadId(aip, amp, atp);  /* find the choice */
+   if (atp == NULL) {
+      goto erret;
+   }
+   if (atp == CDD_PREF_NODE_DESCR_create_date) {
+      choice = CddPrefNodeDescr_create_date;
+      func = (AsnReadFunc) DateAsnRead;
+   }
+   else if (atp == CDD_PREF_NODE_DESCR_description) {
+      choice = CddPrefNodeDescr_description;
+      if (AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      anp->data.ptrvalue = av.ptrvalue;
+   }
+   anp->choice = choice;
+   if (func != NULL)
+   {
+      anp->data.ptrvalue = (* func)(aip, atp);
+      if (aip -> io_failure) goto erret;
+
+      if (nullIsError && anp->data.ptrvalue == NULL) {
+         goto erret;
+      }
+   }
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return anp;
+
+erret:
+   anp = MemFree(anp);
+   aip -> io_failure = TRUE;
+   goto ret;
+}
+
+
+/**************************************************
+*
+*    CddPrefNodeDescrAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+CddPrefNodeDescrAsnWrite(CddPrefNodeDescrPtr anp, AsnIoPtr aip, AsnTypePtr orig)
+
+{
+   DataVal av;
+   AsnTypePtr atp, writetype = NULL;
+   Pointer pnt;
+   AsnWriteFunc func = NULL;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! objcddAsnLoad())
+      return FALSE;
+   }
+
+   if (aip == NULL)
+   return FALSE;
+
+   atp = AsnLinkType(orig, CDD_PREF_NODE_DESCR);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+   av.ptrvalue = (Pointer)anp;
+   if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) {
+      goto erret;
+   }
+
+   pnt = anp->data.ptrvalue;
+   switch (anp->choice)
+   {
+   case CddPrefNodeDescr_create_date:
+      writetype = CDD_PREF_NODE_DESCR_create_date;
+      func = (AsnWriteFunc) DateAsnWrite;
+      break;
+   case CddPrefNodeDescr_description:
+      av.ptrvalue = anp->data.ptrvalue;
+      retval = AsnWrite(aip, CDD_PREF_NODE_DESCR_description, &av);
+      break;
+   }
+   if (writetype != NULL) {
+      retval = (* func)(pnt, aip, writetype);   /* write it out */
+   }
+   if (!retval) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+/**************************************************
+*
+*    CddPrefNodeDescrSetFree()
+*
+**************************************************/
+NLM_EXTERN 
+CddPrefNodeDescrSetPtr LIBCALL
+CddPrefNodeDescrSetFree(CddPrefNodeDescrSetPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   AsnGenericChoiceSeqOfFree(ptr, (AsnOptFreeFunc) CddPrefNodeDescrFree);
+   return NULL;
+}
+
+
+/**************************************************
+*
+*    CddPrefNodeDescrSetAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+CddPrefNodeDescrSetPtr LIBCALL
+CddPrefNodeDescrSetAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   CddPrefNodeDescrSetPtr ptr;
+
+   if (! loaded)
+   {
+      if (! objcddAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* CddPrefNodeDescrSet ::= (self contained) */
+      atp = AsnReadId(aip, amp, CDD_PREF_NODE_DESCR_SET);
+   } else {
+      atp = AsnLinkType(orig, CDD_PREF_NODE_DESCR_SET);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   func = NULL;
+
+   ptr  = AsnGenericChoiceSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) CddPrefNodeDescrAsnRead, (AsnOptFreeFunc) CddPrefNodeDescrFree);
+   if (isError && ptr  == NULL) {
+      goto erret;
+   }
+
+
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = CddPrefNodeDescrSetFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    CddPrefNodeDescrSetAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+CddPrefNodeDescrSetAsnWrite(CddPrefNodeDescrSetPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! objcddAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, CDD_PREF_NODE_DESCR_SET);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   retval = AsnGenericChoiceSeqOfAsnWrite(ptr , (AsnWriteFunc) CddPrefNodeDescrAsnWrite, aip, atp, CDD_PREF_NODE_DESCR_SET_E);
    retval = TRUE;
 
 erret:
@@ -3718,6 +4480,13 @@ DomainParentAsnRead(AsnIoPtr aip, AsnTypePtr orig)
    atp = AsnReadId(aip,amp, atp);
    func = NULL;
 
+   if (atp == DOMAIN_PARENT_parent_type) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> parent_type = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
    if (atp == DOMAIN_PARENT_parentid) {
       ptr -> parentid = CddIdAsnRead(aip, atp);
       if (aip -> io_failure) {
@@ -3783,6 +4552,8 @@ DomainParentAsnWrite(DomainParentPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
       goto erret;
    }
 
+   av.intvalue = ptr -> parent_type;
+   retval = AsnWrite(aip, DOMAIN_PARENT_parent_type,  &av);
    if (ptr -> parentid != NULL) {
       if ( ! CddIdAsnWrite(ptr -> parentid, aip, DOMAIN_PARENT_parentid)) {
          goto erret;
@@ -3793,341 +4564,6 @@ DomainParentAsnWrite(DomainParentPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
          goto erret;
       }
    }
-   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
-      goto erret;
-   }
-   retval = TRUE;
-
-erret:
-   AsnUnlinkType(orig);       /* unlink local tree */
-   return retval;
-}
-
-
-
-/**************************************************
-*
-*    LineageInfo_complexparentsNew()
-*
-**************************************************/
-static 
-LineageInfo_complexparentsPtr LIBCALL
-LineageInfo_complexparentsNew(void)
-{
-   LineageInfo_complexparentsPtr ptr = MemNew((size_t) sizeof(LineageInfo_complexparents));
-
-   return ptr;
-
-}
-
-
-/**************************************************
-*
-*    LineageInfoFree()
-*
-**************************************************/
-NLM_EXTERN 
-LineageInfoPtr LIBCALL
-LineageInfoFree(ValNodePtr anp)
-{
-   Pointer pnt;
-
-   if (anp == NULL) {
-      return NULL;
-   }
-
-   pnt = anp->data.ptrvalue;
-   switch (anp->choice)
-   {
-   default:
-      break;
-   case LineageInfo_simpleparent:
-      DomainParentFree(anp -> data.ptrvalue);
-      break;
-   case LineageInfo_LineageInfo_Complexparents:
-      LineageInfo_complexparentsFree(anp -> data.ptrvalue);
-      break;
-   }
-   return MemFree(anp);
-}
-
-
-/**************************************************
-*
-*    LineageInfo_complexparentsFree()
-*
-**************************************************/
-static 
-LineageInfo_complexparentsPtr LIBCALL
-LineageInfo_complexparentsFree(LineageInfo_complexparentsPtr ptr)
-{
-
-   if(ptr == NULL) {
-      return NULL;
-   }
-   AsnGenericUserSeqOfFree(ptr -> fusionparents, (AsnOptFreeFunc) DomainParentFree);
-   AsnGenericUserSeqOfFree(ptr -> deletionparent, (AsnOptFreeFunc) DomainParentFree);
-   return MemFree(ptr);
-}
-
-
-/**************************************************
-*
-*    LineageInfoAsnRead()
-*
-**************************************************/
-NLM_EXTERN 
-LineageInfoPtr LIBCALL
-LineageInfoAsnRead(AsnIoPtr aip, AsnTypePtr orig)
-{
-   DataVal av;
-   AsnTypePtr atp;
-   ValNodePtr anp;
-   Uint1 choice;
-   Boolean isError = FALSE;
-   Boolean nullIsError = FALSE;
-   AsnReadFunc func;
-
-   if (! loaded)
-   {
-      if (! objcddAsnLoad()) {
-         return NULL;
-      }
-   }
-
-   if (aip == NULL) {
-      return NULL;
-   }
-
-   if (orig == NULL) {         /* LineageInfo ::= (self contained) */
-      atp = AsnReadId(aip, amp, LINEAGE_INFO);
-   } else {
-      atp = AsnLinkType(orig, LINEAGE_INFO);    /* link in local tree */
-   }
-   if (atp == NULL) {
-      return NULL;
-   }
-
-   anp = ValNodeNew(NULL);
-   if (anp == NULL) {
-      goto erret;
-   }
-   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the CHOICE or OpenStruct value (nothing) */
-      goto erret;
-   }
-
-   func = NULL;
-
-   atp = AsnReadId(aip, amp, atp);  /* find the choice */
-   if (atp == NULL) {
-      goto erret;
-   }
-   if (atp == LINEAGE_INFO_simpleparent) {
-      choice = LineageInfo_simpleparent;
-      func = (AsnReadFunc) DomainParentAsnRead;
-   }
-   else if (atp == LINEAGE_INFO_complexparents) {
-      choice = LineageInfo_LineageInfo_Complexparents;
-      func = (AsnReadFunc) LineageInfo_complexparentsAsnRead;
-   }
-   anp->choice = choice;
-   if (func != NULL)
-   {
-      anp->data.ptrvalue = (* func)(aip, atp);
-      if (aip -> io_failure) goto erret;
-
-      if (nullIsError && anp->data.ptrvalue == NULL) {
-         goto erret;
-      }
-   }
-
-ret:
-   AsnUnlinkType(orig);       /* unlink local tree */
-   return anp;
-
-erret:
-   anp = MemFree(anp);
-   aip -> io_failure = TRUE;
-   goto ret;
-}
-
-
-/**************************************************
-*
-*    LineageInfo_complexparentsAsnRead()
-*
-**************************************************/
-static 
-LineageInfo_complexparentsPtr LIBCALL
-LineageInfo_complexparentsAsnRead(AsnIoPtr aip, AsnTypePtr orig)
-{
-   DataVal av;
-   AsnTypePtr atp;
-   Boolean isError = FALSE;
-   AsnReadFunc func;
-   LineageInfo_complexparentsPtr ptr;
-
-   if (! loaded)
-   {
-      if (! objcddAsnLoad()) {
-         return NULL;
-      }
-   }
-
-   if (aip == NULL) {
-      return NULL;
-   }
-
-   if (orig == NULL) {         /* LineageInfo_complexparents ::= (self contained) */
-      atp = AsnReadId(aip, amp, LINEAGE_INFO_complexparents);
-   } else {
-      atp = AsnLinkType(orig, LINEAGE_INFO_complexparents);
-   }
-   /* link in local tree */
-   if (atp == NULL) {
-      return NULL;
-   }
-
-   ptr = LineageInfo_complexparentsNew();
-   if (ptr == NULL) {
-      goto erret;
-   }
-   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
-      goto erret;
-   }
-
-   atp = AsnReadId(aip,amp, atp);
-   func = NULL;
-
-   if (atp == LINEAGE_INFO_complexparents_fusionparents) {
-      ptr -> fusionparents = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) DomainParentAsnRead, (AsnOptFreeFunc) DomainParentFree);
-      if (isError && ptr -> fusionparents == NULL) {
-         goto erret;
-      }
-      atp = AsnReadId(aip,amp, atp);
-   }
-   if (atp == LINEAGE_INFO_complexparents_deletionparent) {
-      ptr -> deletionparent = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) DomainParentAsnRead, (AsnOptFreeFunc) DomainParentFree);
-      if (isError && ptr -> deletionparent == NULL) {
-         goto erret;
-      }
-      atp = AsnReadId(aip,amp, atp);
-   }
-
-   if (AsnReadVal(aip, atp, &av) <= 0) {
-      goto erret;
-   }
-   /* end struct */
-
-ret:
-   AsnUnlinkType(orig);       /* unlink local tree */
-   return ptr;
-
-erret:
-   aip -> io_failure = TRUE;
-   ptr = LineageInfo_complexparentsFree(ptr);
-   goto ret;
-}
-
-
-
-/**************************************************
-*
-*    LineageInfoAsnWrite()
-*
-**************************************************/
-NLM_EXTERN Boolean LIBCALL 
-LineageInfoAsnWrite(LineageInfoPtr anp, AsnIoPtr aip, AsnTypePtr orig)
-
-{
-   DataVal av;
-   AsnTypePtr atp, writetype = NULL;
-   Pointer pnt;
-   AsnWriteFunc func = NULL;
-   Boolean retval = FALSE;
-
-   if (! loaded)
-   {
-      if (! objcddAsnLoad())
-      return FALSE;
-   }
-
-   if (aip == NULL)
-   return FALSE;
-
-   atp = AsnLinkType(orig, LINEAGE_INFO);   /* link local tree */
-   if (atp == NULL) {
-      return FALSE;
-   }
-
-   if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
-
-   av.ptrvalue = (Pointer)anp;
-   if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) {
-      goto erret;
-   }
-
-   pnt = anp->data.ptrvalue;
-   switch (anp->choice)
-   {
-   case LineageInfo_simpleparent:
-      writetype = LINEAGE_INFO_simpleparent;
-      func = (AsnWriteFunc) DomainParentAsnWrite;
-      break;
-   case LineageInfo_LineageInfo_Complexparents:
-      writetype = LINEAGE_INFO_complexparents;
-      func = (AsnWriteFunc) LineageInfo_complexparentsAsnWrite;
-      break;
-   }
-   if (writetype != NULL) {
-      retval = (* func)(pnt, aip, writetype);   /* write it out */
-   }
-   if (!retval) {
-      goto erret;
-   }
-   retval = TRUE;
-
-erret:
-   AsnUnlinkType(orig);       /* unlink local tree */
-   return retval;
-}
-
-
-/**************************************************
-*
-*    LineageInfo_complexparentsAsnWrite()
-*
-**************************************************/
-static Boolean LIBCALL 
-LineageInfo_complexparentsAsnWrite(LineageInfo_complexparentsPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
-{
-   DataVal av;
-   AsnTypePtr atp;
-   Boolean retval = FALSE;
-
-   if (! loaded)
-   {
-      if (! objcddAsnLoad()) {
-         return FALSE;
-      }
-   }
-
-   if (aip == NULL) {
-      return FALSE;
-   }
-
-   atp = AsnLinkType(orig, LINEAGE_INFO_complexparents);   /* link local tree */
-   if (atp == NULL) {
-      return FALSE;
-   }
-
-   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
-   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
-      goto erret;
-   }
-
-   AsnGenericUserSeqOfAsnWrite(ptr -> fusionparents, (AsnWriteFunc) DomainParentAsnWrite, aip, LINEAGE_INFO_complexparents_fusionparents, LINEAGE_INFO_complexparents_fusionparents_E);
-   AsnGenericUserSeqOfAsnWrite(ptr -> deletionparent, (AsnWriteFunc) DomainParentAsnWrite, aip, LINEAGE_INFO_complexparents_deletionparent, LINEAGE_INFO_complexparents_deletionparent_E);
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
    }

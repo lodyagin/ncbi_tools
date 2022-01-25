@@ -25,6 +25,15 @@
  * Author Karl Sirotkin
  *
  $Log: idfetch.c,v $
+ Revision 1.30  2004/02/03 21:25:16  yaschenk
+ relaxing ranges for -g and -e
+
+ Revision 1.29  2003/12/17 20:35:38  kans
+ initialize status, send NORMAL_STYLE to SeqEntrytoGnbk instead of 0 (also fixed in asn2gnbk), pass lookup flags
+
+ Revision 1.28  2003/11/19 16:35:19  yaschenk
+ relaxing ranges for -g and -c
+
  Revision 1.27  2003/03/28 18:48:39  yaschenk
  tuning ObjMgr, adding STREAM_SEQ_PORT_FIRST to SeqEntryToGnbk
 
@@ -183,21 +192,21 @@ Args myargs[] = {
 6=quality scores (Seq-entry only)\n\t\t\t\
 7=Entrez DocSums\n","1", "1", "7", FALSE, 't', ARG_INT, 0.0, 0, NULL } ,
 {"Database to use (special meaning for -q flag: n - nucleotide, p - protein)",NULL,NULL,NULL,TRUE,'d',ARG_STRING,0.0,0,NULL},
-	{"Entity number (retrieval number) to dump" ,"0","0","99999999",TRUE,'e',ARG_INT,0.0,0,NULL},
+	{"Entity number (retrieval number) to dump" ,"0",NULL,NULL,TRUE,'e',ARG_INT,0.0,0,NULL},
         {"Type of lookup:\t\
 0 - get Seq-entry\n\t\t\t\
 1 - get gi state (output to stderr)\n\t\t\t\
 2 - get SeqIds\n\t\t\t\
 3 - get gi historyn (sequence change only)\n\t\t\t\
 4 - get gi revision history (any change to asn.1)\n", "0","0","4",TRUE,'i',ARG_INT,0.0,0,NULL},
-	{"GI id for single Entity to dump" ,"0","0","99999999",TRUE,'g',ARG_INT,0.0,0,NULL},
+	{"GI id for single Entity to dump" ,"0",NULL,NULL,TRUE,'g',ARG_INT,0.0,0,NULL},
 	{"File with list of gi's, accessions, accession.version's, fasta seqid's to dump",NULL,NULL,NULL,TRUE,'G',ARG_FILE_IN,0.0,0,NULL},
 	{"Max complexity:\t\
 0 - get the whole blob\n\t\t\t\
 1 - get the bioseq of interest\n\t\t\t\
 2 - get the minimal bioseq-set containing the bioseq of interest\n\t\t\t\
 3 - get the minimal nuc-prot containing the bioseq of interest\n\t\t\t\
-4 - get the minimal pub-set containing the bioseq of interest\n" ,"0","0","4",TRUE,'c',ARG_INT,0.0,0,NULL},
+4 - get the minimal pub-set containing the bioseq of interest\n" ,"0",NULL,NULL,TRUE,'c',ARG_INT,0.0,0,NULL},
  	{"flaTtened SeqId, format: \n		\'type(name,accession,release,version)\'\n			as \'5(HUMHBB)\' or \n		type=accession, or \n		type:number ",
 		NULL,NULL,NULL,TRUE,'f',ARG_STRING,0.0,0,NULL},
  	{"Fasta style SeqId ENCLOSED IN QUOTES:\n\t\t\t\
@@ -857,7 +866,7 @@ static Boolean ProcessOneDocSum (Int4 num, Int4Ptr uids)
 static Boolean IdFetch_func(Int4 gi,CharPtr db, Int4 ent,Int2 maxplex)
 {
   SeqEntryPtr	sep=NULL;
-  Int4		status,gi_state;
+  Int4		status = 0,gi_state;
   SeqIdPtr	sip_ret=NULL;
   SeqId		si={SEQID_GI,0,0};
   ID1SeqHistPtr	ishp=NULL;
@@ -991,7 +1000,8 @@ static Boolean IdFetch_func(Int4 gi,CharPtr db, Int4 ent,Int2 maxplex)
       if(!SeqEntryToFlat(sep, fp, GENBANK_FMT, RELEASE_MODE)){
 #else 
       AssignIDsInEntity(0,OBJ_SEQENTRY,sep);
-      if(!SeqEntryToGnbk(sep,NULL,GENBANK_FMT,ENTREZ_MODE,0,SHOW_CONTIG_FEATURES|ONLY_NEAR_FEATURES,STREAM_SEQ_PORT_FIRST,0,NULL,fp)){
+      if(!SeqEntryToGnbk(sep,NULL,GENBANK_FMT,ENTREZ_MODE,0,SHOW_CONTIG_FEATURES|ONLY_NEAR_FEATURES,
+         LOOKUP_FAR_COMPONENTS|LOOKUP_FAR_LOCATIONS|LOOKUP_FAR_PRODUCTS|LOOKUP_FAR_HISTORY|STREAM_SEQ_PORT_FIRST,0,NULL,fp)){
 #endif
         ErrPostEx(SEV_WARNING,0,0,
                   "GenBank Format does not exist for this sequence ");
@@ -1004,7 +1014,8 @@ static Boolean IdFetch_func(Int4 gi,CharPtr db, Int4 ent,Int2 maxplex)
       if(!SeqEntryToFlat(sep, fp, GENPEPT_FMT, RELEASE_MODE))
 #else 
       AssignIDsInEntity(0,OBJ_SEQENTRY,sep);
-      if(!SeqEntryToGnbk(sep,NULL,GENPEPT_FMT,ENTREZ_MODE,0,SHOW_CONTIG_FEATURES|ONLY_NEAR_FEATURES,STREAM_SEQ_PORT_FIRST,0,NULL,fp))
+      if(!SeqEntryToGnbk(sep,NULL,GENPEPT_FMT,ENTREZ_MODE,0,SHOW_CONTIG_FEATURES|ONLY_NEAR_FEATURES,
+        LOOKUP_FAR_COMPONENTS|LOOKUP_FAR_LOCATIONS|LOOKUP_FAR_PRODUCTS|LOOKUP_FAR_HISTORY|STREAM_SEQ_PORT_FIRST,0,NULL,fp))
 #endif
       {
         ErrPostEx(SEV_WARNING,0,0,

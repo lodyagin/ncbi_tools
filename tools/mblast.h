@@ -32,8 +32,17 @@ Contents: prototypes for "public" Mega BLAST functions (ones that other utilitil
 
 ******************************************************************************/
 
-/* $Revision: 6.46 $ 
+/* $Revision: 6.49 $ 
 * $Log: mblast.h,v $
+* Revision 6.49  2004/01/16 23:43:44  dondosha
+* No more need for special argument for partial search: it is set in options
+*
+* Revision 6.48  2003/12/10 17:05:28  dondosha
+* Added function ReevaluateScoreWithAmbiguities to reevaluate score for one HSP; use it after greedy traceback
+*
+* Revision 6.47  2003/10/29 17:47:00  dondosha
+* Allow 2-stage greedy extension in megablast
+*
 * Revision 6.46  2002/09/03 13:52:45  kans
 * added prototypes for MegaBlastWordFinder and MegaBlastGappedAlign for Mac compiler
 *
@@ -232,9 +241,6 @@ BioseqMegaBlastEngineByLoc PROTO((SeqLocPtr slp, CharPtr progname, CharPtr datab
 SeqAlignPtr PNTR
 BioseqMegaBlastEngineCore PROTO((BlastSearchBlkPtr search, BLAST_OptionsBlkPtr options));
 
-SeqAlignPtr PNTR
-BioseqMegaBlastEngineCoreEx PROTO((BlastSearchBlkPtr search, BLAST_OptionsBlkPtr options, Boolean partial));
-
 BlastSearchBlkPtr BlastFillQueryOffsets PROTO((BlastSearchBlkPtr search, SeqLocPtr query_slp, Int4 wordsize));
 
 BlastSearchBlkPtr 
@@ -258,8 +264,11 @@ MegaBlastGetNumIdentical PROTO((Uint1Ptr query, Uint1Ptr subject,
                                 Int4 q_start, Int4 s_start, Int4 length, 
                                 Boolean reverse));
 
+Boolean ReevaluateScoreWithAmbiguities(BlastSearchBlkPtr search,
+           Uint1Ptr subject_start, BLAST_HSPPtr hsp);
+
 Int2
-MegaBlastReevaluateWithAmbiguities PROTO((BlastSearchBlkPtr search, Int4 sequence_number));
+MegaBlastReevaluateWithAmbiguities PROTO((BlastSearchBlkPtr search));
 
 Int4 BinarySearchInt4 PROTO((Int4 n, Int4Ptr A, Int4 size));
 
@@ -277,9 +286,10 @@ MegaBlastParameterBlkPtr
 MegaBlastParameterBlkNew PROTO((BLAST_OptionsBlkPtr options));
 
 Int4 
-MegaBlastWordFinder(BlastSearchBlkPtr search, LookupTablePtr lookup);
-Int2 MegaBlastGappedAlign(BlastSearchBlkPtr search);
+MegaBlastWordFinder PROTO((BlastSearchBlkPtr search, LookupTablePtr lookup));
 
+void PerformGreedyAlignmentWithTraceback(GapAlignBlkPtr gap_align,
+        GreedyAlignMemPtr gamp, BLAST_ScoreBlkPtr sbp);
 
 #ifdef __cplusplus
 }

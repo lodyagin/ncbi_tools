@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   07/24/95
 *
-* $Revision: 6.8 $
+* $Revision: 6.9 $
 *
 * File Description:
 *
@@ -44,6 +44,9 @@
 * 95/08/30 C. Hogue    Moved globals into mmdbapi2.c.
 *
 * $Log: mmdbapi2.c,v $
+* Revision 6.9  2003/12/03 02:11:28  kans
+* added defines missing from Mac OS 10.3 headers
+*
 * Revision 6.8  2000/08/22 19:47:33  lewisg
 * fix GetMMFromMSDBySeqId
 *
@@ -158,6 +161,16 @@
 #include <mmdbapi1.h>
 #include <mmdbapi2.h>
 #include <sequtil.h>
+
+/* Missing from /usr/include/gcc/darwin/3.3/machine/limits.h */
+#ifdef __MWERKS__
+#ifdef OS_UNIX_DARWIN
+#ifndef __SCHAR_MAX__
+#define __SCHAR_MAX__ 127
+#endif
+#endif
+#endif
+/* End missing from /usr/include/gcc/darwin/3.3/machine/limits.h */
 
 CharPtr NCBIstdaaUC = "-ABCDEFGHIKLMNPQRSTVWXYZU*";
 CharPtr NCBI4naUC = "-ACMGRSVTUWYHKDBN";

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.55 $
+* $Revision: 6.57 $
 *
 * File Description: 
 *
@@ -4696,7 +4696,7 @@ static ENUM_ALIST(rna_type_alist)
   {"snRNA",        5},
   {"scRNA",        6},
   {"snoRNA",       7},
-  {"Other RNA",  255},
+  {"misc_RNA",   255},
 END_ENUM_ALIST
 
 static Uint1 check_rna_type (Uint1 type)
@@ -4818,6 +4818,7 @@ static void RnaRefPtrToRnaPage (DialoG d, Pointer data)
 
   rpp = (RnaPagePtr) GetObjectExtra (d);
   rrp = (RnaRefPtr) data;
+
   if (rpp != NULL) {
     SetEnumPopup (rpp->type, rna_type_alist,
                   (UIEnum) check_rna_type (rrp->type));
@@ -4885,6 +4886,12 @@ static void RnaRefPtrToRnaPage (DialoG d, Pointer data)
             head = NULL;
             for (j = 0; j < 6; j++) {
               if (trna->codon [j] < 64) {
+				/* Note - it is important to set the fourth character in the codon array to NULL
+				 * because CodonForIndex only fills in the three characters of actual codon,
+				 * so if you StringCpy the codon array and the NULL character is not found after
+				 * the three codon characters, you will write in memory you did not intend to.
+				 */
+				codon [3] = 0;
                 if (CodonForIndex (trna->codon [j], Seq_code_iupacna, codon)) {
                   StringCpy (str, (CharPtr) codon);
                   str [3] = '\0';

@@ -1,4 +1,4 @@
-/* $Id: cddutil.h,v 1.51 2003/08/25 19:09:47 bauer Exp $
+/* $Id: cddutil.h,v 1.52 2003/12/09 22:21:35 bauer Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,16 @@
 *
 * Initial Version Creation Date: 12/15/1999
 *
-* $Revision: 1.51 $
+* $Revision: 1.52 $
 *
 * File Description: Header file for cdd api utility functions  
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cddutil.h,v $
+* Revision 1.52  2003/12/09 22:21:35  bauer
+* added CddCountResTypes
+*
 * Revision 1.51  2003/08/25 19:09:47  bauer
 * added SeqAlignReadFromFile
 *
@@ -493,6 +496,7 @@ Int2        LIBCALL CddTrimSeqAligns(CddPtr pcdd);
 /*---------------------------------------------------------------------------*/
 Nlm_FloatHi    LIBCALL SeqAlignConservation(SeqAlignPtr salp, Nlm_FloatHi fract,BioseqPtr bsp_master, Boolean bHasConsensus, Int4 offset);
 Nlm_FloatHiPtr LIBCALL SeqAlignInform(SeqAlignPtr salp, BioseqPtr bsp_master,Boolean bHasConsensus,Int4 offset);
+Int4 **        LIBCALL CddCountResTypes(CddPtr pcdd, Int4 *ncols);
 Nlm_FloatHiPtr LIBCALL CddAlignInform(CddPtr pcdd, Nlm_FloatHi * Niobs);
 Nlm_FloatHiPtr LIBCALL CddPssmInform(CddPtr pcdd);
 Nlm_FloatHiPtr LIBCALL CddPosFreqInform(Nlm_FloatHi **posFreq, Int4 ncol, Int4 nrow);

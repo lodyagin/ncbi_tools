@@ -32,8 +32,17 @@ Contents: definitions and prototypes used by blastkar.c to calculate BLAST
 
 ******************************************************************************/
 
-/* $Revision: 6.31 $ 
+/* $Revision: 6.34 $ 
 * $Log: blastkar.h,v $
+* Revision 6.34  2003/12/12 16:00:46  madden
+* Add gap_decay_rate to BlastCutoffs, remove BlastCutoffs_simple, removal of defunct _real variables (all from Mike Gertz)
+*
+* Revision 6.33  2003/11/28 22:39:41  camacho
+* +static keyword to BlastKarlinLtoH
+*
+* Revision 6.32  2003/11/26 19:09:09  madden
+* Remove ref to BlastKarlinLambdaBis (no longer needed per Mike Gertz)
+*
 * Revision 6.31  2003/02/27 19:07:56  madden
 * Add functions PrintMatrixMessage and PrintAllowedValuesMessage
 *
@@ -308,9 +317,6 @@ typedef struct {
 		Nlm_FloatHi	Lambda; /* Lambda value used in statistics */
 		Nlm_FloatHi	K, logK; /* K value used in statistics */
 		Nlm_FloatHi	H; /* H value used in statistics */
-		/* "real" values are ones actually found, may be replaced by above */
-		Nlm_FloatHi	Lambda_real, K_real, logK_real, H_real;
-		Int4 q_frame, s_frame; /* reading frame for query and subject.*/
 		Nlm_FloatHi	paramC;	/* for use in seed. */
 	} BLAST_KarlinBlk, PNTR BLAST_KarlinBlkPtr;
 
@@ -499,11 +505,7 @@ Int2 LIBCALL BlastKarlinReportAllowedValues(const Char *matrix_name, ValNodePtr 
 
 Nlm_FloatHi BlastKarlinLHtoK PROTO((BLAST_ScoreFreqPtr sfp, Nlm_FloatHi lambda, Nlm_FloatHi H));
 
-Nlm_FloatHi BlastKarlinLambdaBis PROTO((BLAST_ScoreFreqPtr sfp));
-
 Nlm_FloatHi BlastKarlinLambdaNR PROTO((BLAST_ScoreFreqPtr sfp));
-
-Nlm_FloatHi LIBCALL BlastKarlinLtoH PROTO((BLAST_ScoreFreqPtr sfp, Nlm_FloatHi  lambda));
 
 BLAST_Score LIBCALL BlastKarlinEtoS PROTO((Nlm_FloatHi  E, BLAST_KarlinBlkPtr kbp, Nlm_FloatHi  qlen, Nlm_FloatHi  dblen));
 
@@ -521,10 +523,9 @@ Nlm_FloatHi LIBCALL BlastKarlinStoE PROTO((BLAST_Score S, BLAST_KarlinBlkPtr kbp
 
 Nlm_FloatHi LIBCALL BlastKarlinStoE_simple PROTO((BLAST_Score S, BLAST_KarlinBlkPtr kbp, Nlm_FloatHi  searchsp));
 
-Int2 LIBCALL BlastCutoffs PROTO((BLAST_ScorePtr S, Nlm_FloatHi PNTR E, BLAST_KarlinBlkPtr kbp, Nlm_FloatHi qlen, Nlm_FloatHi dblen, Nlm_Boolean dodecay));
+Int2 LIBCALL BlastCutoffs PROTO((BLAST_ScorePtr S, Nlm_FloatHi PNTR E, BLAST_KarlinBlkPtr kbp, Nlm_FloatHi search_sp, Nlm_Boolean dodecay,
+  Nlm_FloatHi gap_decay_rate));
 
-
-Int2 LIBCALL BlastCutoffs_simple PROTO((BLAST_ScorePtr S, Nlm_FloatHi PNTR E, BLAST_KarlinBlkPtr kbp, Nlm_FloatHi search_sp, Nlm_Boolean dodecay));
 Nlm_FloatHi LIBCALL BlastKarlinStoLen PROTO((BLAST_KarlinBlkPtr kbp, BLAST_Score S));
 
 /* SumP function. Called by BlastSmallGapSumE and BlastLargeGapSumE. */

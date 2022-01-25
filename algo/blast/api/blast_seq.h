@@ -1,4 +1,4 @@
-/* $Id: blast_seq.h,v 1.8 2003/08/25 22:25:46 dondosha Exp $
+/* $Id: blast_seq.h,v 1.9 2003/12/03 17:30:25 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -35,7 +35,7 @@ Contents: Functions converting from SeqLocs to structures used in BLAST and
 Detailed Contents: 
 
 ******************************************************************************
- * $Revision: 1.8 $
+ * $Revision: 1.9 $
  * */
 #ifndef __BLAST_SEQ__
 #define __BLAST_SEQ__
@@ -54,18 +54,18 @@ extern "C" {
 
 #define NUM_FRAMES 6
 
-/** Convert a SeqLoc of type int or packed_int to a BlastMask structure.
+/** Convert a SeqLoc of type int or packed_int to a BlastMaskLoc structure.
  * @param mask_slp The SeqLoc to be converted [in]
  * @param index The ordinal number of the sequence to be assigned to the new 
- *              BlastMask
- * @return Pointer to the allocated BlastMask structure.
+ *              BlastMaskLoc
+ * @return Pointer to the allocated BlastMaskLoc structure.
  */
-BlastMask* BlastMaskFromSeqLoc(SeqLocPtr mask_slp, Int4 index);
+BlastMaskLoc* BlastMaskLocFromSeqLoc(SeqLocPtr mask_slp, Int4 index);
 
-/** Convert a BlastMask list to a list of SeqLocs, used for formatting 
+/** Convert a BlastMaskLoc list to a list of SeqLocs, used for formatting 
  * BLAST results.
  */
-SeqLocPtr BlastMaskToSeqLoc(Uint1 program_number, BlastMask* mask_loc, 
+SeqLocPtr BlastMaskLocToSeqLoc(Uint1 program_number, BlastMaskLoc* mask_loc, 
                             SeqLocPtr slp);
 
 /** Duplicate masks in 6 frames for each nucleotide sequence, converting
@@ -73,13 +73,13 @@ SeqLocPtr BlastMaskToSeqLoc(Uint1 program_number, BlastMask* mask_loc,
  * @param mask_loc_ptr Masks list to be modified [in] [out]
  * @param slp List of nucleotide query SeqLoc's [in]
  */
-Int2 BlastMaskDNAToProtein(BlastMask** mask_loc_ptr, SeqLocPtr slp);
+Int2 BlastMaskLocDNAToProtein(BlastMaskLoc** mask_loc_ptr, SeqLocPtr slp);
 
 /** Convert all masks' protein coordinates to nucleotide.
  * @param mask_loc_ptr Masks list to be modified [in] [out]
  * @param slp List of nucleotide query SeqLoc's [in]
  */
-Int2 BlastMaskProteinToDNA(BlastMask** mask_loc_ptr, SeqLocPtr slp);
+Int2 BlastMaskLocProteinToDNA(BlastMaskLoc** mask_loc_ptr, SeqLocPtr slp);
 
 /** Given a list of query SeqLoc's, create the sequence block and the query
  * info structure. This is the last time SeqLoc is needed before formatting.

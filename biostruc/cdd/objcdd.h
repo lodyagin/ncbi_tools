@@ -20,7 +20,7 @@ extern "C" { /* } */
 /**************************************************
 *
 *    Generated objects for Module NCBI-Cdd
-*    Generated using ASNCODE Revision: 6.14 at Aug 14, 2003 10:05 AM
+*    Generated using ASNCODE Revision: 6.14 at Jan 15, 2004  1:40 PM
 *
 **************************************************/
 
@@ -86,7 +86,7 @@ typedef struct struct_Cdd {
    struct struct_Align_annot PNTR   alignannot;
    struct struct_Cn3d_style_dictionary PNTR   style_dictionary;
    struct struct_Cn3d_user_annotations PNTR   user_annotations;
-   ValNodePtr   ancestors;
+   struct struct_Domain_parent PNTR   ancestors;
    struct struct_Score_matrix_parameters PNTR   scoreparams;
    struct struct_Sequence_tree PNTR   seqtree;
 } Cdd, PNTR CddPtr;
@@ -158,6 +158,95 @@ NLM_EXTERN CddTreeSetPtr LIBCALL CddTreeSetFree PROTO ((CddTreeSetPtr ));
 NLM_EXTERN CddTreeSetPtr LIBCALL CddTreeSetNew PROTO (( void ));
 NLM_EXTERN CddTreeSetPtr LIBCALL CddTreeSetAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
 NLM_EXTERN Boolean LIBCALL CddTreeSetAsnWrite PROTO (( CddTreeSetPtr , AsnIoPtr, AsnTypePtr));
+
+#endif /* NLM_GENERATED_CODE_PROTO */
+
+
+
+/**************************************************
+*
+*    CddPrefNodes
+*
+**************************************************/
+typedef struct struct_Cdd_pref_nodes {
+   struct struct_Cdd_org_ref PNTR   preferred_nodes;
+   struct struct_Cdd_org_ref PNTR   model_organisms;
+   struct struct_Cdd_org_ref PNTR   optional_nodes;
+   ValNodePtr   description;
+} CddPrefNodes, PNTR CddPrefNodesPtr;
+
+
+NLM_EXTERN CddPrefNodesPtr LIBCALL CddPrefNodesFree PROTO ((CddPrefNodesPtr ));
+NLM_EXTERN CddPrefNodesPtr LIBCALL CddPrefNodesNew PROTO (( void ));
+NLM_EXTERN CddPrefNodesPtr LIBCALL CddPrefNodesAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL CddPrefNodesAsnWrite PROTO (( CddPrefNodesPtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    CddOrgRef
+*
+**************************************************/
+typedef struct struct_Cdd_org_ref {
+   struct struct_Cdd_org_ref PNTR next;
+   OrgRefPtr   reference;
+   Uint1   active;
+} CddOrgRef, PNTR CddOrgRefPtr;
+
+
+NLM_EXTERN CddOrgRefPtr LIBCALL CddOrgRefFree PROTO ((CddOrgRefPtr ));
+NLM_EXTERN CddOrgRefPtr LIBCALL CddOrgRefNew PROTO (( void ));
+NLM_EXTERN CddOrgRefPtr LIBCALL CddOrgRefAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL CddOrgRefAsnWrite PROTO (( CddOrgRefPtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    CddOrgRefSet
+*
+**************************************************/
+typedef struct struct_Cdd_org_ref CddOrgRefSet;
+typedef struct struct_Cdd_org_ref PNTR CddOrgRefSetPtr;
+#define CddOrgRefSetNew() Cdd_org_refNew() 
+
+#ifdef NLM_GENERATED_CODE_PROTO
+
+NLM_EXTERN CddOrgRefSetPtr LIBCALL CddOrgRefSetFree PROTO ((CddOrgRefSetPtr ));
+NLM_EXTERN CddOrgRefSetPtr LIBCALL CddOrgRefSetNew PROTO (( void ));
+NLM_EXTERN CddOrgRefSetPtr LIBCALL CddOrgRefSetAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL CddOrgRefSetAsnWrite PROTO (( CddOrgRefSetPtr , AsnIoPtr, AsnTypePtr));
+
+#endif /* NLM_GENERATED_CODE_PROTO */
+
+typedef ValNodePtr CddPrefNodeDescrPtr;
+typedef ValNode CddPrefNodeDescr;
+#define CddPrefNodeDescr_create_date 1
+#define CddPrefNodeDescr_description 2
+
+
+NLM_EXTERN CddPrefNodeDescrPtr LIBCALL CddPrefNodeDescrFree PROTO ((CddPrefNodeDescrPtr ));
+NLM_EXTERN CddPrefNodeDescrPtr LIBCALL CddPrefNodeDescrAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL CddPrefNodeDescrAsnWrite PROTO (( CddPrefNodeDescrPtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    CddPrefNodeDescrSet
+*
+**************************************************/
+typedef ValNode CddPrefNodeDescrSet;
+typedef ValNodePtr CddPrefNodeDescrSetPtr;
+#define CddPrefNodeDescrSetNew() ValNodeNew(NULL) 
+
+#ifdef NLM_GENERATED_CODE_PROTO
+
+NLM_EXTERN CddPrefNodeDescrSetPtr LIBCALL CddPrefNodeDescrSetFree PROTO ((CddPrefNodeDescrSetPtr ));
+NLM_EXTERN CddPrefNodeDescrSetPtr LIBCALL CddPrefNodeDescrSetNew PROTO (( void ));
+NLM_EXTERN CddPrefNodeDescrSetPtr LIBCALL CddPrefNodeDescrSetAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL CddPrefNodeDescrSetAsnWrite PROTO (( CddPrefNodeDescrSetPtr , AsnIoPtr, AsnTypePtr));
 
 #endif /* NLM_GENERATED_CODE_PROTO */
 
@@ -430,6 +519,7 @@ NLM_EXTERN Boolean LIBCALL AlignAnnotSetAsnWrite PROTO (( AlignAnnotSetPtr , Asn
 **************************************************/
 typedef struct struct_Domain_parent {
    struct struct_Domain_parent PNTR next;
+   Int4   parent_type;
    ValNodePtr   parentid;
    struct seqannot PNTR   seqannot;
 } DomainParent, PNTR DomainParentPtr;
@@ -439,41 +529,6 @@ NLM_EXTERN DomainParentPtr LIBCALL DomainParentFree PROTO ((DomainParentPtr ));
 NLM_EXTERN DomainParentPtr LIBCALL DomainParentNew PROTO (( void ));
 NLM_EXTERN DomainParentPtr LIBCALL DomainParentAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
 NLM_EXTERN Boolean LIBCALL DomainParentAsnWrite PROTO (( DomainParentPtr , AsnIoPtr, AsnTypePtr));
-
-typedef ValNodePtr LineageInfoPtr;
-typedef ValNode LineageInfo;
-#define LineageInfo_simpleparent 1
-#define LineageInfo_LineageInfo_Complexparents 2
-
-
-NLM_EXTERN LineageInfoPtr LIBCALL LineageInfoFree PROTO ((LineageInfoPtr ));
-NLM_EXTERN LineageInfoPtr LIBCALL LineageInfoAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-NLM_EXTERN Boolean LIBCALL LineageInfoAsnWrite PROTO (( LineageInfoPtr , AsnIoPtr, AsnTypePtr));
-
-
-
-/**************************************************
-*
-*    LineageInfo_complexparents
-*
-**************************************************/
-
-#ifdef NLM_GENERATED_CODE_PROTO
-
-typedef struct struct_LineageInfo_Complexparents {
-   struct struct_Domain_parent PNTR   fusionparents;
-   struct struct_Domain_parent PNTR   deletionparent;
-} LineageInfo_complexparents, PNTR LineageInfo_complexparentsPtr;
-#endif /* NLM_GENERATED_CODE_PROTO */
-
-#ifdef NLM_GENERATED_CODE_PROTO
-
-static LineageInfo_complexparentsPtr LIBCALL LineageInfo_complexparentsFree PROTO ((LineageInfo_complexparentsPtr ));
-static LineageInfo_complexparentsPtr LIBCALL LineageInfo_complexparentsNew PROTO (( void ));
-static LineageInfo_complexparentsPtr LIBCALL LineageInfo_complexparentsAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-static Boolean LIBCALL LineageInfo_complexparentsAsnWrite PROTO (( LineageInfo_complexparentsPtr , AsnIoPtr, AsnTypePtr));
-
-#endif /* NLM_GENERATED_CODE_PROTO */
 
 
 

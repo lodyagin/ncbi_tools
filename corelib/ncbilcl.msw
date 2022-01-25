@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/1/91
 *
-* $Revision: 6.4 $
+* $Revision: 6.5 $
 *
 * File Description:
 *               system dependent header
@@ -39,6 +39,10 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ncbilcl.msw,v $
+* Revision 6.5  2003/12/24 18:37:55  vakatov
+* More consistent #define of FAR and near (as per D.Sinyakov's request).
+* Also, get rid of all WIN16-related code (it's just not supported nowdays).
+*
 * Revision 6.4  2002/11/22 20:05:04  lavr
 * Configure HAVE_STRDUP and HAVE_STRCASECMP
 *
@@ -97,8 +101,8 @@
 #error MAC applications can be built with MSVC++ compiler only
 #endif
 
-#if !defined(WIN16) && !defined(WIN32) && !defined(_MAC)
-#error You must define one of: WIN16, WIN32, or _MAC 
+#if !defined(WIN32) && !defined(_MAC)
+#  error You must define one of:  WIN32 or _MAC 
 #endif
 
 
@@ -112,36 +116,6 @@
 #define WIN_MSWIN
 
 
-/*================[ Win16 ]===============*/
-#ifdef WIN16
-
-#define PLATFORM_NAME "Win16"
-#define PROC_I80X86
-
-#ifndef PASCAL
-#define PASCAL __pascal
-#define CDECL  __cdecl
-#define EXPORT __export
-#endif
-
-#ifndef FAR
-#define FAR    __far
-#define NEAR   __near
-#endif
-
-typedef signed   long  Nlm_Int4,  FAR * Nlm_Int4Ptr;
-typedef unsigned long  Nlm_Uint4, FAR * Nlm_Uint4Ptr;
-#define Int4           Nlm_Int4
-#define Int4Ptr        Nlm_Int4Ptr
-#define Uint4          Nlm_Uint4
-#define Uint4Ptr       Nlm_Uint4Ptr
-#define INT4_MIN       (-2147483647-1)
-#define INT4_MAX       2147483647
-#define UINT4_MAX      4294967295U
-
-#endif  /* WIN16 */
-
-
 /*================[ Win32 ]===============*/
 #ifdef WIN32
 
@@ -150,6 +124,9 @@ typedef unsigned long  Nlm_Uint4, FAR * Nlm_Uint4Ptr;
 
 #ifndef FAR
 #define FAR
+#endif
+
+#ifndef NEAR
 #define NEAR
 #endif
 
@@ -235,6 +212,8 @@ typedef unsigned long  Nlm_Uint4, FAR * Nlm_Uint4Ptr;
 
 #ifndef FAR
 #define FAR
+#endif
+#ifndef NEAR
 #define NEAR
 #endif
 

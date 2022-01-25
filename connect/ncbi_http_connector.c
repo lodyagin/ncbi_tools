@@ -1,4 +1,4 @@
-/*  $Id: ncbi_http_connector.c,v 6.59 2003/10/29 14:09:08 lavr Exp $
+/*  $Id: ncbi_http_connector.c,v 6.62 2003/11/26 12:57:11 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -265,8 +265,12 @@ static EIO_Status s_ConnectAndSend(SHttpConnector* uuu,int/*bool*/ drop_unread)
         if (status == eIO_Success) {
             assert(uuu->w_len == 0);
             if (!uuu->shut_down) {
-                /* 10/7/03: While this call here is perfectly legal, it could
-                 * cause connection severed by a buggy CISCO load-balancer.*/
+                /* 10/07/03: While this call here is perfectly legal, it could
+                 * cause connection severed by a buggy CISCO load-balancer. */
+                /* 10/28/03: CISCO's beta patch for their LB shows that the
+                 * problem has been fixed; no more 2'30" drops in connections
+                 * that shut down for write.  We still leave this commented
+                 * out to allow unpatched clients work seamlessly... */ 
                 /*SOCK_Shutdown(uuu->sock, eIO_Write);*/
                 uuu->shut_down = 1;
             }
@@ -324,7 +328,7 @@ static EIO_Status s_ReadHeader(SHttpConnector* uuu, char** redirect)
         }
         verify(BUF_Peek(uuu->http, header, size) == size);
         header[size] = '\0';
-        if (strcmp(&header[size - 4], "\r\n\r\n") == 0)
+        if (size >= 4  &&  strcmp(&header[size - 4], "\r\n\r\n") == 0)
             break/*full header captured*/;
         free(header);
 
@@ -408,7 +412,7 @@ static EIO_Status s_ReadHeader(SHttpConnector* uuu, char** redirect)
         free(header);
 
     /* skip & printout the content, if server error was flagged */
-    if (server_error  &&  uuu->net_info->debug_printout) {
+    if (uuu->net_info->debug_printout == eDebugPrintout_Some && server_error) {
         BUF    buf = 0;
         char*  body;
 
@@ -972,6 +976,14 @@ extern CONNECTOR HTTP_CreateConnectorEx
 /*
  * --------------------------------------------------------------------------
  * $Log: ncbi_http_connector.c,v $
+ * Revision 6.62  2003/11/26 12:57:11  lavr
+ * s_ReadHeader(): check header size first before looking for end-of-header
+ *
+ * Revision 6.61  2003/11/03 17:37:42  lavr
+ * Fix previous accidental commit and provide corrent change log info:
+ * 1. Added more notes about SOCK_Shutdown() being left commented out;
+ * 2. Do not print HTTP error body if data trace mode set to "DATA".
+ *
  * Revision 6.59  2003/10/29 14:09:08  lavr
  * Log levels and messages changed in some error reports
  *

@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 1/1/91
 *
-* $Revision: 6.10 $
+* $Revision: 6.11 $
 *
 * File Description:
 *   This header the interface to all the routines in the ASN.1 libraries
@@ -48,6 +48,9 @@
 * 02-24-94 Schuler     AsnTypeStringToHex moved here (from asntypes.h)
 *
 * $Log: asn.h,v $
+* Revision 6.11  2003/12/03 19:31:09  gouriano
+* Corrected DTD generation (a different approach)
+*
 * Revision 6.10  2003/09/15 16:16:32  kans
 * added AsnWriteEx, AsnTxtWriteEx, and AsnPrintStream
 *
@@ -390,6 +393,7 @@ NLM_EXTERN AsnTypePtr LIBCALL AsnTypeFind PROTO((AsnModulePtr amp, CharPtr str))
 #define AsnFind(x) AsnTypeFind(NULL,x)    /* find type (all) */
 NLM_EXTERN CharPtr LIBCALL AsnFindPrimName PROTO((AsnTypePtr atp));
 NLM_EXTERN AsnTypePtr LIBCALL AsnFindBaseType PROTO((AsnTypePtr atp));
+NLM_EXTERN AsnTypePtr LIBCALL AsnFindBaseTypeDTD PROTO((AsnTypePtr atp));
 NLM_EXTERN CharPtr LIBCALL AsnFindBaseName PROTO((AsnTypePtr atp));
 NLM_EXTERN Int2 LIBCALL AsnFindBaseIsa PROTO((AsnTypePtr atp));
 NLM_EXTERN AsnTypePtr LIBCALL AsnLinkType PROTO((AsnTypePtr type, AsnTypePtr localtype));

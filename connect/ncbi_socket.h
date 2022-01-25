@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_SOCKET__H
 #define CONNECT___NCBI_SOCKET__H
 
-/*  $Id: ncbi_socket.h,v 6.44 2003/10/24 16:51:11 lavr Exp $
+/*  $Id: ncbi_socket.h,v 6.48 2003/11/25 15:07:12 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -255,6 +255,12 @@ extern NCBI_XCONNECT_EXPORT void SOCK_SetReuseAddress
  */
 
 
+/*
+ */
+extern NCBI_XCONNECT_EXPORT const STimeout*SOCK_SetSelectInternalRestartTimeout
+(const STimeout* timeout);
+
+
 /* By default (on UNIX platforms) the SOCK API functions automagically call
  * "signal(SIGPIPE, SIG_IGN)" on initialization.  To prohibit this feature,
  * you must call SOCK_AllowSigPipeAPI() before you call any other
@@ -428,7 +434,7 @@ extern NCBI_XCONNECT_EXPORT EIO_Status SOCK_Reconnect
  * Cannot be applied to datagram sockets (eIO_InvalidArg results).
  */
 extern NCBI_XCONNECT_EXPORT EIO_Status SOCK_Shutdown
-(SOCK      sock,
+(SOCK      sock, /* [in] handle of the socket to shutdown            */
  EIO_Event how   /* [in] one of:  eIO_Read, eIO_Write, eIO_ReadWrite */
  );
 
@@ -442,6 +448,19 @@ extern NCBI_XCONNECT_EXPORT EIO_Status SOCK_Shutdown
  * NOTE2:  if there is output pending, that output will be flushed.
  */
 extern NCBI_XCONNECT_EXPORT EIO_Status SOCK_Close(SOCK sock);
+
+
+/* Close the connection, and conditionally destroy relevant internal data.
+ * NOTE1:  if eIO_Close timeout was specified (or NULL) then it blocks until
+ *         either all unsent data are sent, error flagged, or the timeout
+ *         expires.
+ * NOTE2:  if there is output pending, that output will be flushed.
+ * NOTE3:  SOCK_CloseEx(sock, 1) is equivalent to SOCK_Close(sock);
+ */
+extern NCBI_XCONNECT_EXPORT EIO_Status SOCK_CloseEx
+(SOCK        sock,    /* [in] handle of the socket to close           */
+ int/*bool*/ destroy  /* [in] =1 to destroy handle; =0 to keep handle */
+ );
 
 
 /* Block on the socket until either read/write (dep. on the "event" arg) is
@@ -608,11 +627,12 @@ extern NCBI_XCONNECT_EXPORT EIO_Status SOCK_PushBack
  );
 
 
-/* Return (for the specified "direction"):
+/* Return (for the specified "direction" [eIO_Open to check for closed sock]):
  *   eIO_Closed     -- if the connection was shutdown by SOCK_Shutdown(), or
  *                     (for "eIO_Read" only) if EOF was detected
+ *                     if "direction"==eIO_Open, this code means socket closed
  *   eIO_Unknown    -- if an error was detected during the last I/O
- *   eIO_InvalidArg -- if "direction" is not one of:  eIO_Read, eIO_Write
+ *   eIO_InvalidArg -- if "direction" is not one of:  Open, Read, Write
  *   eIO_Timeout    -- if the socket is not yet actually connected
  *   eIO_Success    -- otherwise (incl. eIO_Timeout on last I/O)
  *
@@ -620,11 +640,11 @@ extern NCBI_XCONNECT_EXPORT EIO_Status SOCK_PushBack
  *        as long as there is any unread (buffered) data left.
  *        Thus, when you are "peeking" data instead of actually reading it,
  *        then this is the only "non-destructive" way to check whether EOF
- *        or an error has occurred on read.
+ *        or an error has actually occurred on read.
  */
 extern NCBI_XCONNECT_EXPORT EIO_Status SOCK_Status
 (SOCK      sock,
- EIO_Event direction  /* [in] one of:  eIO_Read, eIO_Write */
+ EIO_Event direction  /* [in] one of:  eIO_Open, eIO_Read, eIO_Write */
  );
 
 
@@ -662,6 +682,7 @@ extern NCBI_XCONNECT_EXPORT EIO_Status SOCK_Write
 
 /* If there is outstanding connection or output data pending, cancel it.
  * Mark the socket as if it has been shut down for both reading and writing.
+ * Break actual connection if any was established.
  * Do not attempt to send anything upon SOCK_Close().
  * This call is available for stream sockets only.
  */
@@ -734,8 +755,8 @@ extern NCBI_XCONNECT_EXPORT ESwitch SOCK_SetReadOnWrite
  *
  *  Datagram socket is created with special DSOCK_Create[Ex] calls but the
  *  resulting object is a SOCK handle. That is, almost all SOCK routines
- *  may be applied to the handle. The only exception is SOCK_Shutdown().
- *  For datagram sockets there are differences in how I/O behaves:
+ *  may be applied to the handle. There are few exceptions, though.
+ *  In datagram sockets I/O differs from how it is done in stream sockets:
  *
  *  SOCK_Write() writes data into an internal message buffer, appending new
  *  data as they come with each SOCK_Write(). When the message is complete,
@@ -937,6 +958,18 @@ extern NCBI_XCONNECT_EXPORT char* SOCK_gethostbyaddr
 /*
  * ---------------------------------------------------------------------------
  * $Log: ncbi_socket.h,v $
+ * Revision 6.48  2003/11/25 15:07:12  lavr
+ * SOCK_Status() to accept eIO_Open
+ *
+ * Revision 6.47  2003/11/24 19:22:24  lavr
+ * SetSelectInternalRestartTimeout() to accept ptr to STimeout
+ *
+ * Revision 6.46  2003/11/18 20:18:49  lavr
+ * +SetSelectInternalRestartTimeout()
+ *
+ * Revision 6.45  2003/11/12 17:43:08  lavr
+ * +SOCK_CloseEx()
+ *
  * Revision 6.44  2003/10/24 16:51:11  lavr
  * GetTimeout(eIO_ReadWrite): return the lesser of eIO_Read and eIO_Write
  *

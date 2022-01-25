@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.146 $
+* $Revision: 6.155 $
 *
 * File Description: 
 *
@@ -1942,7 +1942,7 @@ static void LetUserFixNucleotideInfo (SequencesFormPtr sqfp)
     MultiLinePrompt (fnfp->pptGrp, sourceModMsg, 25 * stdCharWidth, programFont);
 
     c = HiddenGroup (h, 2, 0, NULL);
-    b = PushButton (c, "OK", AcceptNucleotideFixup);
+    b = DefaultButton (c, "OK", AcceptNucleotideFixup);
     SetObjectExtra (b, fnfp, NULL);
 
     AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) fnfp->modGrp,
@@ -2367,7 +2367,7 @@ static void LetUserFixProteinInfo (SequencesFormPtr sqfp)
     }
 
     c = HiddenGroup (w, 2, 0, NULL);
-    acceptBtn = PushButton (c, "OK", AcceptThisFixup);
+    acceptBtn = DefaultButton (c, "OK", AcceptThisFixup);
     SetObjectExtra (acceptBtn, fpfp, NULL);
 
     AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) c, (HANDLE) fpfp->orf, NULL);
@@ -2699,7 +2699,7 @@ extern Boolean ProcessOneNucleotideTitle (Int2 seqPackage, DialoG genbio, PopuP 
               biop->org = orp;
               if (orp != NULL) {
                 TrimSpacesAroundString (str);
-                orp->taxname = StringSave (str);
+                SetTaxNameAndRemoveTaxRef (orp, StringSave (str));
                 if (masterbiop != NULL) {
                   masterorp = masterbiop->org;
                   if (masterorp != NULL) {
@@ -2729,7 +2729,7 @@ extern Boolean ProcessOneNucleotideTitle (Int2 seqPackage, DialoG genbio, PopuP 
               orp = OrgRefNew ();
               biop->org = orp;
               if (orp != NULL) {
-                orp->taxname = StringSave (masterorp->taxname);
+                SetTaxNameAndRemoveTaxRef (orp, StringSave (masterorp->taxname));
                 orp->common = StringSave (masterorp->common);
                 masteronp = masterorp->orgname;
                 if (masteronp != NULL) {
@@ -2952,7 +2952,7 @@ extern Boolean ProcessOneNucleotideTitle (Int2 seqPackage, DialoG genbio, PopuP 
             orp = OrgRefNew ();
             biop->org = orp;
             if (orp != NULL) {
-              orp->taxname = StringSave (masterorp->taxname);
+              SetTaxNameAndRemoveTaxRef (orp, StringSave (masterorp->taxname));
               orp->common = StringSave (masterorp->common);
               onp = orp->orgname;
               if (onp == NULL) {
@@ -6969,7 +6969,7 @@ extern void LoadTPAAccessionNumbersFromFile (
     }
     if (need_seqid)
     {
-      seqid_len = StringCSpn (str, " ");
+      seqid_len = StringCSpn (str, " \t");
       if (seqid_len > 0)
       {
         StringNCpy (seqid, str, seqid_len);
@@ -6991,7 +6991,7 @@ extern void LoadTPAAccessionNumbersFromFile (
     found_end = FALSE;
     while (*cp != 0)
     {
-      if (*cp == ' ' || *cp == ',')
+      if (*cp == ' ' || *cp == ',' || *cp == '\t')
       {
         cp++;
       }
@@ -7108,6 +7108,38 @@ static void AddHistory (
   }
 }
 
+static Boolean DoIDsMatch (CharPtr seqid, BioseqPtr bsp, Boolean AllowLocal)
+{
+  Char         str [128];
+  Int4         seqid_len;
+  SeqIdPtr     sip;
+
+  if (bsp == NULL) return FALSE;
+
+  SeqIdWrite (bsp->id, str, PRINTID_REPORT, sizeof (str));
+  seqid_len = StringCSpn (str, ".");
+  if (seqid_len > 0)
+  {
+    str [ seqid_len ] = 0;
+  }
+  if (StringCmp (str, seqid) == 0) return TRUE;
+
+  for (sip = bsp->id; sip != NULL; sip = sip->next)
+  {
+    if (sip->choice == SEQID_LOCAL && AllowLocal)
+    {
+      SeqIdWrite (bsp->id, str, PRINTID_REPORT, sizeof (str));
+      seqid_len = StringCSpn (str, ".");
+      if (seqid_len > 0)
+      {
+        str [ seqid_len ] = 0;
+      }
+      if (StringCmp (str, seqid) == 0) return TRUE;
+    }
+  }
+  return FALSE;
+}
+
 static Boolean AddAccessionToGenbankBlock (
   CharPtr     seqid,
   ValNodePtr  acc_list,
@@ -7117,10 +7149,8 @@ static Boolean AddAccessionToGenbankBlock (
 {
   BioseqPtr    bsp;
   BioseqSetPtr bssp;
-  Int4         seqid_len;
   GBBlockPtr   gbp;
   ValNodePtr   last_one;
-  Char         str [128];
   SeqDescrPtr       sdp;
 
   if (seqid == NULL || acc_list == NULL
@@ -7145,13 +7175,7 @@ static Boolean AddAccessionToGenbankBlock (
 
   bsp = (BioseqPtr) sep->data.ptrvalue;
   if (bsp == NULL) return FALSE;
-  SeqIdWrite (bsp->id, str, PRINTID_REPORT, sizeof (str));
-  seqid_len = StringCSpn (str, ".");
-  if (seqid_len > 0)
-  {
-    str [ seqid_len ] = 0;
-  }
-  if (StringCmp (str, seqid) != 0) return FALSE;
+  if (! DoIDsMatch (seqid, bsp, TRUE)) return FALSE;
 
   sdp = BioseqGetSeqDescr (bsp, Seq_descr_genbank, NULL);
 
@@ -7319,5 +7343,395 @@ extern void LoadHistoryAccessionNumbersFromFile (
 )
 {
   LoadSecondaryAccessionNumbersPlusHistFromFile (i, TRUE);
+}
+
+/* This section of code is used for managing lists of features.
+ * Sometimes the features will be displayed alphabetically, sometimes
+ * they will be displayed alphabetically with a list of the most used features
+ * also appearing at the top of the list.
+ */
+
+/* This is used to compare feature names with the special alphabetical order */
+static int CompareFeatureNames (CharPtr cp1, CharPtr cp2)
+{
+  /* NULL name goes at the end */
+  if (cp1 == NULL && cp2 == NULL) return 0;
+  if (cp1 == NULL) return 1;
+  if (cp2 == NULL) return -1;
+
+  /* starts with a space goes at the beginning */
+  if (cp1 [0] == ' ' && cp2 [0] == ' ') return 0;
+  if (cp1 [0] == ' ') return -1;
+  if (cp2 [0] == ' ') return 1;
+
+  /* Is "All" or [ALL FEATURES] goes at the beginning */
+  if ((StringCmp (cp1, "All") == 0
+    || StringCmp (cp1, "[ALL FEATURES]") == 0)
+    && (StringCmp (cp2, "All") == 0
+    || StringCmp (cp2, "[ALL FEATURES]") == 0))
+  {
+    return 0;
+  }
+  if (StringCmp (cp1, "All") == 0
+    || StringCmp (cp1, "[ALL FEATURES]") == 0)
+  {
+    return -1;
+  }
+  if (StringCmp (cp2, "All") == 0
+    || StringCmp (cp2, "[ALL FEATURES]") == 0)
+  {
+    return 1;
+  }
+
+  /* starts with a number -> goes at the end */
+  if (cp1 [0] >= '0' && cp1 [0] <= '9'
+   && cp2 [0] >= '0' && cp2 [0] <= '9')
+  {
+    return StringICmp (cp1, cp2);
+  }
+  if (cp1 [0] >= '0' && cp1 [0] <= '9')
+  {
+    return 1;
+  }
+  if (cp2 [0] >= '0' && cp2 [0] <= '9')
+  {
+    return -1;
+  }
+
+  /* starts with a tilde or dash - sort with other tildes, put before numbers after alphas */
+  if (cp1 [0] == '~' && cp2 [0] == '~') 
+  {
+    return StringICmp (cp1 + 1, cp2 + 1);
+  }
+  if (cp1 [0] == '~') return 1;
+  if (cp2 [0] == '~') return -1;
+
+  if (cp1 [0] == '-' && cp2 [0] == '-') 
+  {
+    return StringICmp (cp1 + 1, cp2 + 1);
+  }
+  if (cp1 [0] == '-') return 1;
+  if (cp2 [0] == '-') return -1;
+
+  return StringICmp (cp1, cp2);
+}
+
+extern int LIBCALLBACK CompareFeatureValNodeStrings (VoidPtr ptr1, VoidPtr ptr2)
+{
+  ValNodePtr vnp1, vnp2;
+
+  if (ptr1 == NULL || ptr2 == NULL) return 0;
+
+  vnp1 = *((ValNodePtr PNTR) ptr1);
+  vnp2 = *((ValNodePtr PNTR) ptr2);
+
+  if (vnp1 == NULL || vnp2 == NULL) return 0;
+
+  return CompareFeatureNames (vnp1->data.ptrvalue, vnp2->data.ptrvalue);
+}
+
+extern int LIBCALLBACK CompareImpFeatEnumFieldAssoc (VoidPtr ptr1, VoidPtr ptr2)
+{
+  ValNodePtr        vnp1, vnp2;
+  EnumFieldAssocPtr ap1, ap2;
+
+  if (ptr1 == NULL || ptr2 == NULL) return 0;
+
+  vnp1 = *((ValNodePtr PNTR) ptr1);
+  vnp2 = *((ValNodePtr PNTR) ptr2);
+  if (vnp1 == NULL || vnp2 == NULL) return 0;
+
+  ap1 = (EnumFieldAssocPtr) vnp1->data.ptrvalue;
+  ap2 = (EnumFieldAssocPtr) vnp2->data.ptrvalue;
+  if (ap1 == NULL || ap2 == NULL) return 0;
+
+  return CompareFeatureNames (ap1->name, ap2->name);
+}
+
+CharPtr MostUsedFeatureList[] = { 
+  "CDS",
+  "exon",
+  "Gene",
+  "intron",
+  "mRNA",
+  "rRNA",
+  "RNA"
+};
+
+extern ValNodePtr InsertMostUsedFeatureValNodes (ValNodePtr old_list)
+{
+  ValNodePtr new_list, new_item, old_item;
+  Int4       index;
+
+  new_list = NULL;
+  for (index = 0;
+       index < sizeof (MostUsedFeatureList) / sizeof (CharPtr);
+       index ++)
+  {
+    old_item = FindExactStringInStrings ( old_list, MostUsedFeatureList [index])
+;
+    if (old_item == NULL) continue;
+    new_item = ValNodeNew ( new_list);
+    if (new_item == NULL) return old_list;
+    new_item->choice = old_item->choice;
+    new_item->data.ptrvalue = StringSave (MostUsedFeatureList [index]);
+    if (new_list == NULL) new_list = new_item;
+  }
+  if (new_item != NULL)
+  {
+    if (old_list != NULL &&
+      ( StringCmp (old_list->data.ptrvalue, "All") == 0
+       || StringCmp (old_list->data.ptrvalue, "[ALL FEATURES]") == 0))
+    {
+      new_item->next = old_list->next;
+      old_list->next = new_list;
+      new_list = old_list;
+    }
+    else
+    {
+      new_item->next = old_list;
+    }
+  }
+  else
+  {
+    new_list = old_list;
+  }
+  return new_list;
+}
+
+static EnumFieldAssocPtr FindEnumFieldAssoc (
+  EnumFieldAssocPtr alist,
+  CharPtr findStr
+)
+{
+  EnumFieldAssocPtr ap;
+  
+  for (ap = alist; ap != NULL && ap->name != NULL; ap++)
+  {
+    if (StringCmp (ap->name, findStr) == 0) return ap;
+  }
+  return NULL;
+}
+
+static void CopyEnumFieldAssoc (EnumFieldAssocPtr ap1, EnumFieldAssocPtr ap2)
+{
+  if (ap1 == NULL || ap2 == NULL) return;
+
+  ap1->name = StringSave (ap2->name);
+  ap1->value = ap2->value;
+}
+
+extern EnumFieldAssocPtr InsertMostUsedFeatureEnumFieldAssoc (
+  EnumFieldAssocPtr alist
+)
+{
+  Int4              num_total_fields, index, new_index;
+  EnumFieldAssocPtr ap, new_alist, old_ap;
+
+  num_total_fields = sizeof (MostUsedFeatureList) / sizeof (CharPtr);
+
+  for (ap = alist; ap != NULL && ap->name != NULL; ap++)
+  {
+    num_total_fields ++;
+  }
+  /* need the last null field */
+  num_total_fields ++;
+
+  new_alist = MemNew (num_total_fields * sizeof (EnumFieldAssoc));
+  if (new_alist == NULL) return alist;
+
+  /* copy the first item if wildcard */
+  if (StringCmp (alist->name, "[ALL FEATURES]") == 0)
+  {
+    CopyEnumFieldAssoc (new_alist, alist);
+    new_index = 1;
+  }
+  else
+  {
+    new_index = 0;
+  }
+
+  for (index = 0;
+       index < sizeof (MostUsedFeatureList) / sizeof (CharPtr);
+       index ++)
+  {
+    old_ap = FindEnumFieldAssoc (alist, MostUsedFeatureList [index]);
+    if (old_ap == NULL) continue;
+    CopyEnumFieldAssoc (new_alist + new_index++, old_ap);
+  }
+
+  for (ap = alist; ap != NULL && ap->name != NULL; ap++)
+  {
+    CopyEnumFieldAssoc (new_alist + new_index ++, ap);
+  }
+  /* copy over the last null field */
+  if (ap != NULL)
+  {
+    CopyEnumFieldAssoc (new_alist + new_index ++, ap);
+  }
+  return new_alist;
+  
+}
+
+extern void SortEnumFieldAssocPtrArray (EnumFieldAssocPtr alist, CompareFunc compar)
+{
+  ValNodePtr        head, vnp;
+  EnumFieldAssocPtr ap;
+  Int4              index;
+
+  /* first, create ValNode list so we can sort the data */
+  head = NULL;
+  for (ap = alist; ap != NULL && ap->name != NULL; ap++)
+  {
+    vnp = ValNodeNew (head);
+    if (vnp == NULL) return;
+    vnp->data.ptrvalue = MemNew (sizeof (EnumFieldAssoc));
+    if (vnp->data.ptrvalue == NULL) return;
+    MemCpy (vnp->data.ptrvalue, ap, sizeof (EnumFieldAssoc));
+    if (head == NULL) head = vnp;
+  }
+
+  /* Now sort the ValNode list */
+  head = SortValNode (head, compar);
+
+  /* Now repopulate the EnumFieldAssoc list */
+  index = 0;
+  for (vnp = head; vnp != NULL; vnp = vnp->next)
+  {
+    MemCpy (alist + index++, vnp->data.ptrvalue, sizeof (EnumFieldAssoc));
+  }
+
+  /* And free the ValNode list */
+  ValNodeFreeData (head);
+}
+
+static Uint2 UnusualFeatureTypes [] = {
+  FEATDEF_ORG,
+  FEATDEF_mutation,
+  FEATDEF_site_ref,
+  FEATDEF_gap,
+  FEATDEF_NON_STD_RESIDUE,
+  FEATDEF_NUM
+};
+ 
+extern ValNodePtr BuildFeatureValNodeList (
+  Boolean prefer_most_used,
+  CharPtr wild_card_name,
+  Int4    wild_card_value,
+  Boolean skip_unusual,
+  Boolean skip_import
+)
+{
+  FeatDefPtr  curr;
+  ValNodePtr  head, vnp;
+  Uint1       key;
+  CharPtr     label = NULL;
+  Uint2       subtype;
+  Int4        index;
+  Boolean     skip;
+  Char        str [256];
+
+  head = NULL;
+  curr = FeatDefFindNext (NULL, &key, &label, FEATDEF_ANY, TRUE);
+  while (curr != NULL) {
+    skip = FALSE;
+    if (skip_unusual)
+    {
+      for (index = 0;
+           ! skip && index < sizeof ( UnusualFeatureTypes ) / sizeof (Uint2);
+           index ++)
+      {
+        if (curr->featdef_key == UnusualFeatureTypes [ index ]) skip = TRUE;
+      }
+    }
+    if (key != FEATDEF_BAD && ! skip) {
+      
+      subtype = curr->featdef_key;
+      if (subtype != FEATDEF_misc_RNA &&
+          subtype != FEATDEF_precursor_RNA &&
+          subtype != FEATDEF_mat_peptide &&
+          subtype != FEATDEF_sig_peptide &&
+          subtype != FEATDEF_transit_peptide &&
+          subtype != FEATDEF_Imp_CDS)
+      {
+        StringNCpy_0 (str, curr->typelabel, sizeof (str) - 1);
+      }
+      else if (! skip_import)
+      {
+        StringNCpy_0 (str, curr->typelabel, sizeof (str) - 10);
+        StringCat (str, "_imp");
+      }
+      else
+      {
+        skip = TRUE;
+      }
+      if (! skip)
+      {
+        vnp = ValNodeNew (head);
+        if (head == NULL) {
+          head = vnp;
+        }
+        if (vnp != NULL) {
+          vnp->choice = subtype;
+          vnp->data.ptrvalue = StringSave (str);
+        }
+      }
+    }
+    curr = FeatDefFindNext (curr, &key, &label, FEATDEF_ANY, TRUE);
+  }
+  if (head != NULL) {
+    head = SortValNode (head, CompareFeatureValNodeStrings);
+    head = InsertMostUsedFeatureValNodes (head);
+    if (wild_card_name != NULL)
+    {
+      vnp = ValNodeNew (NULL);
+      if (vnp != NULL) {
+        vnp->choice = wild_card_value;
+        vnp->data.ptrvalue = StringSave (wild_card_name);
+        vnp->next = head;
+        head = vnp;
+      }
+    }
+  }
+  return head;
+}
+
+extern void SetTaxNameAndRemoveTaxRef (OrgRefPtr orp, CharPtr taxname)
+{
+  ValNodePtr      vnp, next;
+  ValNodePtr PNTR prev;
+  DbtagPtr        dbt;
+  Boolean         remove_taxrefs;
+
+  if (orp == NULL) return;
+
+  if ( taxname == NULL || orp->taxname == NULL
+    || StringCmp (taxname, orp->taxname) != 0)
+  {
+    remove_taxrefs = TRUE;
+  }
+  MemFree (orp->taxname);
+  orp->taxname = taxname;
+
+  if (! remove_taxrefs) return;
+
+  orp->common = MemFree (orp->common);
+
+  vnp = orp->db;
+  if (vnp == NULL) return;
+  prev = (ValNodePtr PNTR) &(orp->db);
+  while (vnp != NULL) {
+    next = vnp->next;
+    dbt = (DbtagPtr) vnp->data.ptrvalue;
+    if (dbt != NULL && StringICmp ((CharPtr) dbt->db, "taxon") == 0) {
+      *prev = vnp->next;
+      vnp->next = NULL;
+      DbtagFree (dbt);
+      ValNodeFree (vnp);
+    } else {
+      prev = (ValNodePtr PNTR) &(vnp->next);
+    }
+    vnp = next;
+  }
 }
 

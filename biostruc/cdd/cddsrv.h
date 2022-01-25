@@ -1,4 +1,4 @@
-/* $Id: cddsrv.h,v 1.16 2003/10/07 21:21:09 bauer Exp $
+/* $Id: cddsrv.h,v 1.17 2003/11/19 14:37:52 bauer Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 9/20/1999
 *
-* $Revision: 1.16 $
+* $Revision: 1.17 $
 *
 * File Description:
 *         header file for the CD-server CGI-bin
@@ -37,6 +37,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cddsrv.h,v $
+* Revision 1.17  2003/11/19 14:37:52  bauer
+* more consistent use of PSSM-IDs
+*
 * Revision 1.16  2003/10/07 21:21:09  bauer
 * initial changes to support drawing of hierarchies
 *
@@ -160,9 +163,11 @@ typedef struct cddsum {
 } CddSum, PNTR CddSumPtr;
 
 typedef struct cdddesc {
+  Int4                iPssmId;
   Char                cCddId[PATH_MAX];
   Char                cDescr[CDD_MAX_DESCR];
   Char                cSourc[PATH_MAX];
+  Int4                iPssmLength;
   struct cdddesc PNTR next;
 } CddDesc, PNTR CddDescPtr;
 

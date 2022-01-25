@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: gapxdrop.c,v 6.75 2003/08/20 22:11:49 dondosha Exp $";
+static char const rcsid[] = "$Id: gapxdrop.c,v 6.76 2003/11/07 21:52:52 dondosha Exp $";
 
 /* ===========================================================================
 *
@@ -34,8 +34,11 @@ Author: Gennadiy Savchuk, Jinqhui Zhang, Tom Madden
 Contents: Functions to perform a gapped alignment on two sequences.
 
 ****************************************************************************/
-/* $Revision: 6.75 $
+/* $Revision: 6.76 $
 * $Log: gapxdrop.c,v $
+* Revision 6.76  2003/11/07 21:52:52  dondosha
+* Fixed SEMI_G_ALIGN_EX so it produces correct scores, by making code exactly correspond to ALIGN_EX
+*
 * Revision 6.75  2003/08/20 22:11:49  dondosha
 * Removed some garbage code
 *
@@ -807,7 +810,7 @@ ALIGN_EX(Uint1Ptr A, Uint1Ptr B, Int4 M, Int4 N, Int4Ptr S, Int4Ptr pei,
 	}
 	if (best_score - c > X){
 	  if (tt == i) tt++;
-	  else { dp->CC =  MININT; }
+	  else { dp->CC = MININT; }
 	} else {
 	  cb = i;
 	  if (c > best_score) {
@@ -924,6 +927,7 @@ static Int4 SEMI_G_ALIGN_EX(Uint1Ptr A, Uint1Ptr B, Int4 M, Int4 N,
   register GapXDPPtr dp;
   Uint1Ptr Bptr;
   Int4 B_increment=1;
+  Int4 next_c, next_f;
   
   if(!score_only) {
     return ALIGN_EX(A, B, M, N, S, pei, pej, sapp, gap_align, query_offset, reversed, reverse_sequence);
@@ -946,12 +950,12 @@ static Int4 SEMI_G_ALIGN_EX(Uint1Ptr A, Uint1Ptr B, Int4 M, Int4 N,
   dyn_prog = (GapXDPPtr)Nlm_Malloc(j);
 
   dyn_prog[0].CC = 0; c = dyn_prog[0].DD = -m;
-  dyn_prog[0].FF = -m;
+  dyn_prog[0].FF = -m - decline_penalty;
   for(i = 1; i <= N; i++) {
     if(c < -X) break;
     dyn_prog[i].CC = c;
     dyn_prog[i].DD = c - m; 
-    dyn_prog[i].FF = c-m;
+    dyn_prog[i].FF = c-m - decline_penalty;
     c -= h;
   }
 
@@ -985,64 +989,50 @@ static Int4 SEMI_G_ALIGN_EX(Uint1Ptr A, Uint1Ptr B, Int4 M, Int4 N,
       e = c =f = MININT;
       Bptr = &B[tt];
       if(reverse_sequence)
-	Bptr = &B[N-tt];
+         Bptr = &B[N-tt];
       for (cb = i = tt, dp = &dyn_prog[i]; i < j; i++) {
+         d = dp->DD;
 	 Bptr += B_increment;
-	  d = dp->DD;
-	  if (e < f) e = f;
-	  if (d < f) d = f;
-	  if (c < d || c < e) {
-	      if (d < e) {
-		  c = e;
-	      } else {
-		  c = d; 
-	      }
-	      if (best_score - c > X) {
-		  c = dp->CC+wa[*Bptr]; f = dp->FF;
-		  if (tt == i) tt++;
-		  else { dp->CC =dp->FF= MININT;}
-	      } else {
-		  cb = i;
-                  if ((c-=m) > (d-=h)) {
-                      dp->DD = c;
-                  } else {
-                      dp->DD = d;
-                  }
-                  if (c > (e-=h)) {
-                      e = c;
-                  }
-                  c+=m;
-		  d = dp->CC+wa[*Bptr]; dp->CC = c; c=d;
-		  d = dp->FF; dp->FF = f-decline_penalty; f = d;
-	      }
-	  } else {
-	      if (best_score - c > X){
-		  c = dp->CC+wa[*Bptr]; f= dp->FF;
-		  if (tt == i) tt++;
-		  else { dp->CC =dp->FF= MININT;}
-	      } else {
-		  cb = i; 
-		  if (c > best_score) {
-		      best_score = c;
-		      *pei = j_r; *pej = i;
-		  } 
-		  if ((c-=m) > (d-=h)) {
-		      dp->DD = c; 
-		  } else {
-		      dp->DD = d;
-		  } 
-		  if (c > (e-=h)) {
-		      e = c;
-		  } 
-		  c+=m;
-		  d = dp->FF;
-		  if (c-g>f) dp->FF = c-g-decline_penalty; else dp->FF = f-decline_penalty;
-		  f = d;
-		  d = dp->CC+wa[*Bptr]; dp->CC = c; c = d;
-	      }
-	  }
-	  dp++;
+         next_c = dp->CC+wa[*Bptr];   /* Bptr is & B[i+1]; */
+         next_f = dp->FF;
+
+         if (c < f) c = f;
+         if (f > d) d = f;
+         else if (c < d) c= d;
+         
+         if (f > e) e = f;
+         else if (c < e) c = e;
+         
+         if (best_score - c > X){
+            if (tt == i) tt++;
+            else { dp->CC = MININT; }
+         } else {
+            cb = i;
+            if (c > best_score) {
+               best_score = c;
+               *pei = j_r; *pej = i;
+            }
+            if ((c-=m) > (d-=h)) {
+               dp->DD = c; 
+            } else {
+               dp->DD = d;
+            } 
+            if (c > (e-=h)) {
+               e = c; 
+            }
+            c+=m; 
+            if (f < c-g) { 
+               dp->FF = c-g-decline_penalty; 
+            } else {
+               dp->FF = f-decline_penalty;
+            }
+            dp->CC = c;
+         }
+         c = next_c;
+         f = next_f;
+         dp++;
       }
+
       if (tt == j) break;
       if (cb < j-1) { j = cb+1;}
       else while (e >= best_score-X && j <= N) {
@@ -1054,7 +1044,6 @@ static Int4 SEMI_G_ALIGN_EX(Uint1Ptr A, Uint1Ptr B, Int4 M, Int4 N,
       }
   }
   
-
   MemFree(dyn_prog);
 
   return best_score;

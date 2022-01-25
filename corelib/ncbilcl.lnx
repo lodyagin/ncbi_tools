@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/1/94
 *
-* $Revision: 6.8 $
+* $Revision: 6.9 $
 *
 * File Description:
 *		system dependent header
@@ -38,6 +38,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ncbilcl.lnx,v $
+* Revision 6.9  2004/01/21 22:31:20  ucko
+* Define PROC_X86_64 on x86-64 systems.
+*
 * Revision 6.8  2002/11/22 20:05:04  lavr
 * Configure HAVE_STRDUP and HAVE_STRCASECMP
 *
@@ -100,6 +103,8 @@
 #define PROC_SH /* ? */
 #elif defined(__sparc__) || #cpu(sparc) || #cpu(sparc64) || #machine(sparc) || #machine(sparc64)
 #define PROC_SPARC
+#elif defined(__x86_64__) || #cpu(x86_64)
+#define PROC_X86_64
 #else
 #warning Unknown processor type.  Please define something appropriate.
 #endif

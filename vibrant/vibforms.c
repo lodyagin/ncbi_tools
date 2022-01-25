@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.12 $
+* $Revision: 6.13 $
 *
 * File Description: 
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: vibforms.c,v $
+* Revision 6.13  2004/01/16 22:35:37  kans
+* added WidestString and WidestAlist
+*
 * Revision 6.12  2002/01/09 15:11:23  kans
 * SetEnumPopupEx and SetEnumPopupByNameEx to suppress error if 0 or NULL initial value, called by dialog creators
 *
@@ -1218,6 +1221,30 @@ extern Int2 MaxStringWidths (CharPtr PNTR strs)
   return (max + 2);
 }
 
+extern CharPtr WidestString (CharPtr PNTR strs)
+
+{
+  Int2     i;
+  Int2     len;
+  Int2     max;
+  CharPtr  str;
+
+  str = NULL;
+  max = 0;
+  if (strs != NULL) {
+    i = 0;
+    while (strs [i] != NULL) {
+      len = StringWidth (strs [i]);
+      if (len > max) {
+        max = len;
+        str = strs [i];
+      }
+      i++;
+    }
+  }
+  return str;
+}
+
 extern Int2 MaxAlistWidths (EnumFieldAssocPtr al)
 
 {
@@ -1244,6 +1271,28 @@ extern Int2 MaxAlistWidths (EnumFieldAssocPtr al)
 #endif
   }
   return max;
+}
+
+extern CharPtr WidestAlist (EnumFieldAssocPtr al)
+
+{
+  Int2     i;
+  Int2     len;
+  Int2     max;
+  CharPtr  str;
+
+  str = NULL;
+  max = 0;
+  if (al != NULL) {
+    for (i = 1; al->name != NULL; i++, al++) {
+      len = StringWidth (al->name);
+      if (len > max) {
+        max = len;
+        str = al->name;
+      }
+    }
+  }
+  return str;
 }
 
 extern GrouP MultiLinePromptEx (GrouP prnt, CharPtr text, Int2 maxWidth, FonT font, Boolean stripSpaces)

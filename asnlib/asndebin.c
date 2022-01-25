@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 3/4/91
 *
-* $Revision: 6.5 $
+* $Revision: 6.6 $
 *
 * File Description:
 *   Special binary form (BER) decoder for ASN.1
@@ -45,6 +45,9 @@
 * 08-01-93 Gish        AsnDeBinReadString calls MemGet instead of MemNew
 *
 * $Log: asndebin.c,v $
+* Revision 6.6  2003/12/10 15:41:19  sirotkin
+* As per toolkit RT request 15030485 and Jim Ostell, afety checks after ato2=AsnFindBaseIsa(atp) were added.
+*
 * Revision 6.5  2002/10/09 19:16:31  ivanov
 * Fixed buffer overrun in the AsnDeBinReadReal()
 *
@@ -118,9 +121,15 @@ NLM_EXTERN AsnTypePtr LIBCALL  AsnBinReadId (AsnIoPtr aip, AsnTypePtr atp)
 
 		if (used == ASNDEBIN_EOF)      /* end of file */
 			return NULL;
+                /* see RT toolbox ticket 15030485 for the below fix */
 
 		atp2 = AsnFindBaseType(atp);   /* find the base type */
-		if (atp2 == NULL) return NULL;
+		if (atp2 == NULL)
+			return atp2;
+		if (atp2->type == NULL)
+			return atp2->type;
+		isa = atp2->type->isa;
+
 
 		if (atp2->type->isa != CHOICE_TYPE)
 		{

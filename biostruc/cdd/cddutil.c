@@ -1,4 +1,4 @@
-/* $Id: cddutil.c,v 1.89 2003/10/07 21:19:39 bauer Exp $
+/* $Id: cddutil.c,v 1.91 2003/12/09 22:21:35 bauer Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,19 @@
 *
 * Initial Version Creation Date: 10/18/1999
 *
-* $Revision: 1.89 $
+* $Revision: 1.91 $
 *
 * File Description: CDD utility routines
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cddutil.c,v $
+* Revision 1.91  2003/12/09 22:21:35  bauer
+* added CddCountResTypes
+*
+* Revision 1.90  2003/12/09 18:48:05  bauer
+* commented out deprecated fields in BlastKarlinBlkCopy
+*
 * Revision 1.89  2003/10/07 21:19:39  bauer
 * made CddMasterIs3D more general
 *
@@ -2009,6 +2015,73 @@ Nlm_FloatHiPtr LIBCALL SeqAlignInform(SeqAlignPtr salp, BioseqPtr bsp_master,
   MemFree(ntypes);
   MemFree(standardProb);
   return(Informativeness);
+}
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+/* Calculate per column information content for a CDD from the seqalign      */
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+Int4 ** LIBCALL CddCountResTypes(CddPtr pcdd, Int4 *ncols)
+{
+  BioseqSetPtr       bssp;
+  Boolean            bHasConsensus = CddHasConsensus(pcdd);
+  Int4               offset, qlength, i, j, c;
+  Int4             **ResFreqTable;
+  SeqAlignPtr        salp;
+  DenseDiagPtr       ddp;
+  SeqIdPtr           sip;
+  BioseqPtr          bsp;
+  Uint1             *buffer;
+  SeqPortPtr         spp;
+
+  if (!pcdd) return(NULL);
+  if (!pcdd->trunc_master) return(NULL);
+  bssp = pcdd->sequences->data.ptrvalue;
+  offset = pcdd->profile_range->from;
+  qlength = pcdd->trunc_master->length;
+  *ncols = qlength;  
+  ResFreqTable = MemNew(qlength*sizeof(Int4 *));
+  for (i=0;i<qlength;i++) {
+    ResFreqTable[i] = MemNew(26*sizeof(Int4));
+    for (j=0;j<26;j++) ResFreqTable[i][j] = 0;
+  }
+  salp = pcdd->seqannot->data;
+  if (!bHasConsensus) {   /* count residues in the master/representative too */
+    ddp = salp->segs;
+    sip = ddp->id;
+    bsp = CddRetrieveBioseqById(sip,bssp->seq_set);
+    buffer = MemNew((bsp->length)*sizeof(Uint1));
+    spp = SeqPortNew(bsp, 0, bsp->length-1, Seq_strand_unknown, Seq_code_ncbistdaa);
+    for (i=0; i<bsp->length;i++) buffer[i] = SeqPortGetResidue(spp);
+    spp = SeqPortFree(spp);
+    while (ddp) {
+      for (c=ddp->starts[0];c<ddp->starts[0]+ddp->len;c++) {
+        ResFreqTable[c-offset][buffer[c]]++;
+      }
+      ddp = ddp->next;
+    }
+    MemFree(buffer);
+  }  
+  while (salp) {
+    ddp = salp->segs;
+    sip = ddp->id->next;
+    bsp = CddRetrieveBioseqById(sip,bssp->seq_set);
+    buffer = MemNew((bsp->length)*sizeof(Uint1));
+    spp = SeqPortNew(bsp, 0, bsp->length-1, Seq_strand_unknown, Seq_code_ncbistdaa);
+    for (i=0; i<bsp->length;i++) buffer[i] = SeqPortGetResidue(spp);
+    spp = SeqPortFree(spp);
+    while (ddp) {
+      for (c=ddp->starts[1];c<ddp->starts[1]+ddp->len;c++) {
+        i = ddp->starts[0]-offset+c-ddp->starts[1];
+        ResFreqTable[i][buffer[c]]++;
+      }
+      ddp = ddp->next;
+    }
+    MemFree(buffer);
+    salp = salp->next;
+  }
+  return(ResFreqTable);
 }
 
 /*---------------------------------------------------------------------------*/
@@ -4603,12 +4676,12 @@ static void BlastKarlinBlkCopy(BLAST_KarlinBlkPtr kbp_in,BLAST_KarlinBlkPtr kbp_
   kbp_out->K = kbp_in->K;
   kbp_out->logK = kbp_in->logK;
   kbp_out->H = kbp_in->H;
-  kbp_out->Lambda_real = kbp_in->Lambda_real;
+/*  kbp_out->Lambda_real = kbp_in->Lambda_real;
   kbp_out->K_real = kbp_in->K_real;
   kbp_out->logK_real = kbp_in->logK_real;
   kbp_out->H_real = kbp_in->H_real;
   kbp_out->q_frame = kbp_in->q_frame;
-  kbp_out->s_frame = kbp_in->s_frame;
+  kbp_out->s_frame = kbp_in->s_frame; */
   kbp_out->paramC = kbp_in->paramC;
 }
 
@@ -4671,13 +4744,13 @@ Seq_Mtf * LIBCALL CddDenDiagCposComp2KBP(BioseqPtr bspFake, Int4 iPseudo,
   if (iPseudo <= 0) {                             /* need to determine first */
     AInf = SeqAlignInform(salp, bspFake, bHasConsensus, 0); 
     for (i=0;i<bspFake->length;i++) SumAInf += AInf[i];
-    if (SumAInf > 84) iPseudo = 10;                    /* purely empirical   */
-    else if (SumAInf > 55) iPseudo = 7;
-    else if (SumAInf > 43) iPseudo = 5;
-    else if (SumAInf > 41.5) iPseudo = 4;
-    else if (SumAInf > 40) iPseudo = 3;
-    else if (SumAInf > 39) iPseudo = 2;
-    else iPseudo = 1;
+    if      (SumAInf > 84  ) iPseudo = 10;             /* purely empirical   */
+    else if (SumAInf > 55  ) iPseudo =  7;
+    else if (SumAInf > 43  ) iPseudo =  5;
+    else if (SumAInf > 41.5) iPseudo =  4;
+    else if (SumAInf > 40  ) iPseudo =  3;
+    else if (SumAInf > 39  ) iPseudo =  2;
+    else                     iPseudo =  1;
     MemFree(AInf);
     if (pcdd && bWriteOut) printf("%s AInf:%6.1f PseudoCt: %d\n",cAccession,SumAInf, iPseudo);
   }

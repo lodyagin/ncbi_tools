@@ -1,4 +1,4 @@
-/*  $Id: test_ncbi_http_connector.c,v 6.13 2003/05/14 03:58:43 lavr Exp $
+/*  $Id: test_ncbi_http_connector.c,v 6.14 2003/11/04 12:26:06 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -57,6 +57,7 @@ extern "C" {
 }
 #endif /* __cplusplus */
 
+/*ARGSUSED*/
 static void s_REG_Get
 (void*       user_data,
  const char* section,
@@ -141,6 +142,9 @@ int main(void)
 /*
  * --------------------------------------------------------------------------
  * $Log: test_ncbi_http_connector.c,v $
+ * Revision 6.14  2003/11/04 12:26:06  lavr
+ * s_GetReg() marked with ARGSUSED, because user_data is not used in there
+ *
  * Revision 6.13  2003/05/14 03:58:43  lavr
  * Match changes in respective APIs of the tests
  *

@@ -1,4 +1,4 @@
-/* $Id: blast_seqalign.c,v 1.24 2003/09/15 21:18:30 dondosha Exp $
+/* $Id: blast_seqalign.c,v 1.27 2003/12/03 17:30:25 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,12 +32,12 @@ Author: Ilya Dondoshansky
 Contents: Conversion of BLAST results to the SeqAlign form
 
 ******************************************************************************
- * $Revision: 1.24 $
+ * $Revision: 1.27 $
  * */
 
-static char const rcsid[] = "$Id: blast_seqalign.c,v 1.24 2003/09/15 21:18:30 dondosha Exp $";
+static char const rcsid[] = "$Id: blast_seqalign.c,v 1.27 2003/12/03 17:30:25 dondosha Exp $";
 
-#include "blast_seqalign.h"
+#include <algo/blast/api/blast_seqalign.h>
 
 extern Int4 LIBCALL HspArrayPurge PROTO((BlastHSP** hsp_array, 
                        Int4 hspcnt, Boolean clear_num));
@@ -1321,7 +1321,7 @@ BLAST_GapInfoToSeqAlign(Uint1 program_number, BlastHSPList* hsp_list,
 }
 
 Int2 BLAST_ResultsToSeqAlign(Uint1 program_number, 
-        BlastResults* results, SeqLocPtr query_slp, 
+        BlastHSPResults* results, SeqLocPtr query_slp, 
         BlastSeqSrc* bssp, SeqLocPtr subject_slp,
         BlastScoringOptions* score_options, BlastScoreBlk* sbp,
         Boolean is_gapped, SeqAlignPtr* head_seqalign)
@@ -1357,6 +1357,7 @@ Int2 BLAST_ResultsToSeqAlign(Uint1 program_number,
             char* id_str = BLASTSeqSrcGetSeqIdStr(bssp, (void*) &hsp_list->oid);
             subject_id = SeqIdParse(id_str);
             subject_length = BLASTSeqSrcGetSeqLen(bssp, (void*) &hsp_list->oid); 
+            sfree(id_str);
          }
          if (is_gapped) {
             BLAST_GapInfoToSeqAlign(program_number, hsp_list, query_id, 

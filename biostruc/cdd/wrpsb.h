@@ -1,4 +1,4 @@
-/* $Id: wrpsb.h,v 1.15 2003/10/07 21:15:15 bauer Exp $
+/* $Id: wrpsb.h,v 1.16 2003/11/19 14:34:31 bauer Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 1/19/2000
 *
-* $Revision: 1.15 $
+* $Revision: 1.16 $
 *
 * File Description:
 *         Header file for WWW-RPS BLAST client
@@ -37,6 +37,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: wrpsb.h,v $
+* Revision 1.16  2003/11/19 14:34:31  bauer
+* changes to support SeqAnnot export
+*
 * Revision 1.15  2003/10/07 21:15:15  bauer
 * support generation of Sequence Annotation from CD-Search results
 *
@@ -92,10 +95,10 @@
 #define DEFAULT_DATALIB    "cdd"
 #define DEFAULT_EVALUE     "0.01"
 #define DEFAULT_NHITS      "25"
-#define NUMARGS            (sizeof(myargs)/sizeof(myargs[0]))
+/* #define NUMARGS            (sizeof(myargs)/sizeof(myargs[0])) */
 #define RPS_MAGIC_NUMBER   7702
 #define WRPSB_GRAPH_WIDTH  600
-#define WRPSB_GRAPH_MAXROW 25
+#define WRPSB_GRAPH_MAXROW 12
 #define WRPSB_GRAPH_HEIGHT 16
 #define WRPSB_GRAPH_SPACER  4
 #define BUFFER_LENGTH      3072
@@ -111,6 +114,9 @@
 #define RETRIEVEPRECALC    4
 #define DRAWQUEUED         5
 #define DRAWONLY           6
+#define DARTSIZELIMIT      1500
+#define DARTFAMILYNUM      15000
+
 
 
 typedef struct _txdfline_struct {
@@ -197,7 +203,7 @@ static Char    CDDpath[PATH_MAX];
 static Char    ENTREZurl[PATH_MAX];
 static Char    DOCSUMurl[PATH_MAX];
 static Char    MAILto[PATH_MAX];
-static FILE    *OutputFile = NULL;
+static FILE    *OutputFile;
 static Char    OutputName[200];
 static Char    gunzip[PATH_MAX];
 static Char    MMDBpath[PATH_MAX];
@@ -207,7 +213,7 @@ static Char    CDDextens[PATH_MAX];
 static Char    RAWextens[PATH_MAX];
 static Char    TREextens[PATH_MAX];
 static Char    SEQextens[PATH_MAX];
-static Int2    SortOn = 0;
+static Int2    SortOn;
 static Int4    cnt_MMDBid;
 static Char    cCDDid[PATH_MAX];
 static Char    CDDdescr[PATH_MAX];
@@ -240,6 +246,9 @@ static Char    CDDlocat[PATH_MAX];
 static Char    ODBCINI[PATH_MAX];
 static Char    DARTUSER[PATH_MAX];
 static Char    DARTPASS[PATH_MAX];
+
+static unsigned iDartFam[DARTFAMILYNUM];
+static Int4   iDartFamNum;
 
 /*---------------------------------------------------------------------------*/
 /* DART color scheme                                                         */

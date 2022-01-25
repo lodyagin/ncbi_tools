@@ -1,4 +1,4 @@
-/* $Id: pattern.h,v 1.1 2003/09/09 22:03:54 dondosha Exp $
+/* $Id: pattern.h,v 1.2 2003/12/03 16:22:55 dondosha Exp $
 
 * ===========================================================================
 *
@@ -34,7 +34,7 @@ Contents: Functions for finding pattern matches in sequence.
 Detailed Contents: 
 
 ******************************************************************************
- * $Revision: 1.1 $
+ * $Revision: 1.2 $
  * */
 
 #include <algo/blast/core/blast_def.h>
@@ -130,7 +130,7 @@ typedef struct seedSearchItems {
  * @param patternSearch Pattern information [in]
  * @return Twice the number of hits (length of hitArray filled in)
 */
-Int4 find_hits(Int4 *hitArray, const Uint1* seq, Int4 len, 
+Int4 FindPatternHits(Int4 *hitArray, const Uint1* seq, Int4 len, 
                Boolean is_dna, patternSearchItems * patternSearch);
 
 #ifdef __cplusplus

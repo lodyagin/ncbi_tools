@@ -1,4 +1,4 @@
-/* $Id: phi_lookup.c,v 1.6 2003/10/16 15:52:08 coulouri Exp $
+/* $Id: phi_lookup.c,v 1.8 2004/02/02 18:49:33 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,7 +32,7 @@ Author: Ilya Dondoshansky
 Contents: Functions for accessing the lookup table for PHI-BLAST
 
 ******************************************************************************
- * $Revision: 1.6 $
+ * $Revision: 1.8 $
  * */
 
 #include <algo/blast/core/blast_def.h>
@@ -41,7 +41,7 @@ Contents: Functions for accessing the lookup table for PHI-BLAST
 #include <algo/blast/core/phi_lookup.h>
 #include <algo/blast/core/blast_message.h>
 
-static char const rcsid[] = "$Id: phi_lookup.c,v 1.6 2003/10/16 15:52:08 coulouri Exp $";
+static char const rcsid[] = "$Id: phi_lookup.c,v 1.8 2004/02/02 18:49:33 dondosha Exp $";
 
 #define seedepsilon 0.00001
 #define allone  ((1 << ALPHABET_SIZE) - 1)
@@ -674,7 +674,7 @@ Int4 PHIBlastIndexQuery(PHILookupTable* lookup,
 {
    ListNode* loc;
    Int4 from, to;
-   Int4 offset, loc_length;
+   Int4 loc_length;
    Uint1* sequence;
    patternSearchItems* pattern_info = lookup->pattern_info;
    Int4* hitArray;
@@ -686,11 +686,10 @@ Int4 PHIBlastIndexQuery(PHILookupTable* lookup,
       from = ((DoubleInt*) loc->ptr)->i1;
       to = ((DoubleInt*) loc->ptr)->i2;
       loc_length = to - from + 1;
-      offset = 0;
       sequence = query->sequence + from;
       
-      twiceNumHits = find_hits(hitArray, sequence, loc_length, is_dna,
-                               pattern_info);
+      twiceNumHits = FindPatternHits(hitArray, sequence, loc_length, is_dna,
+                                     pattern_info);
       
       for (i = 0; i < twiceNumHits; i += 2) {
          PHIBlastAddPatternHit(lookup, hitArray[i+1]+from, 
@@ -719,7 +718,7 @@ Int4 PHIBlastScanSubject(const LookupTableWrap* lookup_wrap,
         Int4* offset_ptr, Uint4 * query_offsets, Uint4 * subject_offsets, 
         Int4 array_size)
 {
-   Uint1* subject, *query, *subject_start;
+   Uint1* subject, *query;
    PHILookupTable* lookup = (PHILookupTable*) lookup_wrap->lut;
    Int4 index, count = 0, twiceNumHits, i;
    Int4 *start_offsets = lookup->start_offsets;
@@ -728,14 +727,14 @@ Int4 PHIBlastScanSubject(const LookupTableWrap* lookup_wrap,
    Int4 hitArray[MAX_HIT];
 
    query = query_blk->sequence;
-   subject = subject_start = subject_blk->sequence;
+   subject = subject_blk->sequence;
    /* It must be guaranteed that all pattern matches for a given 
       subject sequence are processed in one call to this function.
    */
    *offset_ptr = subject_blk->length;
 
-   twiceNumHits = find_hits(hitArray, subject, subject_blk->length, 
-                            lookup->is_dna, lookup->pattern_info);
+   twiceNumHits = FindPatternHits(hitArray, subject, subject_blk->length, 
+                                  lookup->is_dna, lookup->pattern_info);
 
 
    for (i = 0; i < twiceNumHits; i += 2) {

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 6.27 $
+* $Revision: 6.28 $
 *
 * File Description:  New GenBank flatfile generator, private header
 *
@@ -272,6 +272,12 @@ NLM_EXTERN Asn2gbJobPtr asn2gnbk_cleanup (
 
 NLM_EXTERN CharPtr asn2gnbk_dbxref (
   DbtagPtr dbt
+);
+
+/* public function to get string of genbank-style feature qualifiers */
+
+NLM_EXTERN CharPtr FormatFeatureQuals (
+  SeqFeatPtr sfp
 );
 
 

@@ -1,4 +1,4 @@
-/* $Id: ncbisrti.h,v 6.2 1998/06/01 14:52:38 madden Exp $
+/* $Id: ncbisrti.h,v 6.3 2003/12/03 02:10:52 kans Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,15 @@
 *
 * Initial Version Creation Date: 03/24/1997
 *
-* $Revision: 6.2 $
+* $Revision: 6.3 $
 *
 * File Description:
 *         Internal include file for SORTing library
 *
 * $Log: ncbisrti.h,v $
+* Revision 6.3  2003/12/03 02:10:52  kans
+* added defines missing from Mac OS 10.3 headers
+*
 * Revision 6.2  1998/06/01 14:52:38  madden
 * Change to using TmpNam
 *
@@ -76,6 +79,16 @@
 #define PREFIX "/tmp"                      /* Default prefix */
 
 #endif /* OS_UNIX */
+
+/* Missing from /usr/include/gcc/darwin/3.3/machine/limits.h */
+#ifdef __MWERKS__
+#ifdef OS_UNIX_DARWIN
+#ifndef __SCHAR_MAX__
+#define __SCHAR_MAX__ 127
+#endif
+#endif
+#endif
+/* End missing from /usr/include/gcc/darwin/3.3/machine/limits.h */
 
 #define MERGEALLOC 16384
 

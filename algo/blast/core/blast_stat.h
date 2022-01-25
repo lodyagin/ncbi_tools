@@ -1,4 +1,4 @@
-/* $Id: blast_stat.h,v 1.17 2003/08/11 14:57:16 dondosha Exp $
+/* $Id: blast_stat.h,v 1.19 2003/11/24 23:18:18 dondosha Exp $
 *
 *                            PUBLIC DOMAIN NOTICE
 *               National Center for Biotechnology Information
@@ -32,7 +32,7 @@ Contents: definitions and prototypes used by blastkar.c to calculate BLAST
 
 ******************************************************************************/
 
-/* $Revision: 1.17 $ 
+/* $Revision: 1.19 $ 
  * */
 #ifndef __BLASTKAR__
 #define __BLASTKAR__
@@ -105,9 +105,6 @@ typedef struct BLAST_KarlinBlk {
 		double	Lambda; /* Lambda value used in statistics */
 		double	K, logK; /* K value used in statistics */
 		double	H; /* H value used in statistics */
-		/* "real" values are ones actually found, may be replaced by above */
-		double	Lambda_real, K_real, logK_real, H_real;
-		Int4 q_frame, s_frame; /* reading frame for query and subject.*/
 		double	paramC;	/* for use in seed. */
 	} BLAST_KarlinBlk;
 
@@ -273,10 +270,16 @@ char* BLAST_PrintAllowedValues(const char *matrix, Int4 gap_open, Int4 gap_exten
 
 double BLAST_KarlinStoE_simple (Int4 S, BLAST_KarlinBlk* kbp, double  searchsp);
 
-Int2 BLAST_Cutoffs (Int4 *S, double* E, BLAST_KarlinBlk* kbp, double qlen, double dblen, Boolean dodecay);
-
-
-Int2 BLAST_Cutoffs_simple (Int4 *S, double* E, BLAST_KarlinBlk* kbp, double search_sp, Boolean dodecay);
+/** Calculate the cutoff score from the expected number of HSPs or vice versa.
+ * @param S The calculated score [in] [out]
+ * @param E The calculated e-value [in] [out]
+ * @param kbp The Karlin-Altschul statistical parameters [in]
+ * @param searchsp The effective search space [in]
+ * @param dodecay Use gap decay feature? [in]
+ * @param gap_decay_rate Gap decay rate to use, if dodecay is set [in]
+ */
+Int2 BLAST_Cutoffs (Int4 *S, double* E, BLAST_KarlinBlk* kbp, 
+                    double searchsp, Boolean dodecay, double gap_decay_rate);
 
 /* Functions to calculate SumE (for large and small gaps). */
 double BLAST_SmallGapSumE (BLAST_KarlinBlk* kbp, Int4 gap, double gap_prob, double gap_decay_rate, Int2 num,  double xsum, Int4 query_length, Int4 subject_length);

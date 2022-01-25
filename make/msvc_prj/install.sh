@@ -1,5 +1,5 @@
 #! /bin/sh
-# $Id: install.sh,v 1.29 2003/10/09 18:46:48 ivanov Exp $
+# $Id: install.sh,v 1.33 2004/01/29 16:18:37 ivanov Exp $
 # Authors:  Denis Vakatov    (vakatov@ncbi.nlm.nih.gov)
 #           Vladimir Ivanov  (ivanov@ncbi.nlm.nih.gov)
 #           Anton Lavrentiev (lavr@ncbi.nlm.nih.gov)
@@ -10,7 +10,7 @@
 # Cmd.-line args  -- source and destination
 script="$0"
 builddir="${1:-//u/coremake/ncbi}"
-target="${2:-//u/coremake/public/ncbi}"
+target="${2:-//u/coremake/public/ncbi.last}"
 
 if test -n "$3" ; then
   echo "USAGE:  `basename $script` [build_dir] [install_dir]"
@@ -39,11 +39,14 @@ incdir="$target"/include
 srcdir="$target"/src
 bindir="$target"/bin
 datdir="$target"/data
+errdir="$target"/errmsg
 
 # Alternate dirs (mirrors)
 srcdir_a="$target"/altsrc
 dbgdir_a="$target"/dbglib
 libdir_a="$target"/lib
+datdir_a="$target"/../c/data
+errdir_a="$target"/../c/errmsg
 
 
 # Check
@@ -92,9 +95,12 @@ makedir "$srcdir"/tools
 makedir "$srcdir"/vibrant
 makedir "$bindir"   -p
 makedir "$datdir"   -p
+makedir "$errdir"   -p
 makedir "$srcdir_a" -p
 makedir "$dbgdir_a" -p
 makedir "$libdir_a" -p
+makedir "$datdir_a" -p
+makedir "$errdir_a" -p
 
 
 # Copy files
@@ -207,6 +213,9 @@ done
 
 # Data
 cp -pr "$builddir"/data/* "$datdir"
+cp -pr "$builddir"/data/* "$datdir_a"
+cp -pr "$builddir"/errmsg/* "$errdir"
+cp -pr "$builddir"/errmsg/* "$errdir_a"
 
 
 # Fill alt source tree

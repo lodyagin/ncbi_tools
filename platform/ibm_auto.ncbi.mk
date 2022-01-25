@@ -1,5 +1,5 @@
 #
-# $Id: ibm_auto.ncbi.mk,v 1.8 2003/05/22 18:22:14 beloslyu Exp $
+# $Id: ibm_auto.ncbi.mk,v 1.9 2004/01/09 19:01:51 beloslyu Exp $
 #
 # Initial version ddas@us.ibm.com 08/19/1999
 # Replace r6k with ibm_auto or ibm_pwr3:  cpsosa@us.ibm.com Jun-2001
@@ -13,7 +13,7 @@
 NCBI_DEFAULT_LCL = ibm
 NCBI_MAKE_SHELL = /bin/sh
 NCBI_AR = ar
-NCBI_CC = xlc_r
+NCBI_CC = xlc_r -qlanglvl=stdc99
 NCBI_CFLAGS1 = -c -qcpluscmt
 NCBI_LDFLAGS1 = -bmaxdata:0x40000000 -bmaxstack:0x10000000 -DPOSIX_THREADS_AVAIL -D_LARGE_FILES
 NCBI_OPTFLAG = -O3 -qmaxmem=-1 -qarch=auto -qcache=auto -DPOSIX_THREADS_AVAIL -D_LARGE_FILES

@@ -29,13 +29,16 @@
 *
 * Version Creation Date:   6/3/99
 *
-* $Revision: 6.13 $
+* $Revision: 6.14 $
 *
 * File Description:
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: alignval.h,v $
+* Revision 6.14  2003/11/14 18:06:42  kans
+* added do_hist_assembly parameter
+*
 * Revision 6.13  1999/11/23 21:47:31  vakatov
 * Fixed for C++ and/or DLL compilation
 *
@@ -79,8 +82,8 @@ NLM_EXTERN Boolean ValidateSeqAlign (SeqAlignPtr salp, Uint2 entityID, Boolean m
 
 NLM_EXTERN Boolean ValidateSeqAlignInSeqEntry (SeqEntryPtr sep, Boolean message, 
                                  Boolean msg_success, Boolean find_remote_bsp, 
-                                 Boolean delete_bsp, Boolean delete_salp);
-
+                                 Boolean delete_bsp, Boolean delete_salp,
+                                 Boolean do_hist_assembly);
 
 
 #define Err_SeqId 1

@@ -34,6 +34,9 @@
 *
 * RCS Modification History:
 * $Log: netblap3.c,v $
+* Revision 1.105  2004/01/27 20:53:12  dondosha
+* Value of no_traceback megablast option is now Uint1 instead of Boolean
+*
 * Revision 1.104  2003/01/13 18:08:26  bealer
 * - Replace nonstandard snprintf() function with strcpy/strcat/strlen.
 *
@@ -800,7 +803,7 @@ BlastOptionsToParameters (BLAST_OptionsBlkPtr options)
         parameters->smith_waterman = options->smith_waterman;
         parameters->is_megablast = options->is_megablast_search;
         parameters->query_lcase_mask = (ValNodePtr) options->query_lcase_mask;
-        parameters->endpoint_results = options->no_traceback;
+        parameters->endpoint_results = (Boolean) options->no_traceback;
         parameters->percent_identity = (FloatHi) options->perc_identity;
         parameters->first_db_seq = options->first_db_seq;
         parameters->final_db_seq = options->final_db_seq;
@@ -2768,7 +2771,8 @@ parametersToOptions (BlastParametersPtr parameters, CharPtr program, ValNodePtr 
 		options->is_megablast_search = parameters->is_megablast;
                 options->query_lcase_mask = 
                    (SeqLocPtr) parameters->query_lcase_mask;
-                options->no_traceback = parameters->endpoint_results;
+                if (parameters->endpoint_results)
+                   options->no_traceback = 1; 
                 options->perc_identity = (FloatLo) parameters->percent_identity;
                 options->first_db_seq = parameters->first_db_seq;
                 options->final_db_seq = parameters->final_db_seq;

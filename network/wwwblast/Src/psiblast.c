@@ -1,4 +1,4 @@
-/* $Id: psiblast.c,v 1.3 2003/07/15 19:57:11 coulouri Exp $
+/* $Id: psiblast.c,v 1.4 2003/11/21 17:51:32 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,15 @@
 *
 * Initial Version Creation Date: 04/21/2000
 *
-* $Revision: 1.3 $
+* $Revision: 1.4 $
 *
 * File Description:
 *         WWW PSI BLAST Main file
 *
 * $Log: psiblast.c,v $
+* Revision 1.4  2003/11/21 17:51:32  dondosha
+* Minor bug fix
+*
 * Revision 1.3  2003/07/15 19:57:11  coulouri
 * use sigaction()
 *
@@ -349,7 +352,7 @@ Int2 Main (void)
     }
     
     fprintf(stdout, "<FORM NAME=\"PSI_BLAST\" METHOD=\"POST\" "
-            "ACTION=\"%s/step%d\" ENCTYPE= \"multipart/form-data\">\n", 
+            "ACTION=\"%s?step%d\" ENCTYPE= \"multipart/form-data\">\n", 
             getenv("SCRIPT_NAME") == NULL ? "" : getenv("SCRIPT_NAME"),
             /* WWWGetPort(theInfo->info), */ psidata->StepNumber);
     

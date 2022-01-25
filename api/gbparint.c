@@ -28,6 +28,10 @@
 * Author:  Karl Sirotkin
 *
 * $Log: gbparint.c,v $
+* Revision 6.6  2003/12/05 16:42:11  bazhin
+* Nlm_gbparselex() and Nlm_gbparselex_ver() functions now can handle
+* RefSeq and WGS accessions.
+*
 * Revision 6.5  2001/06/07 17:00:54  tatiana
 * added gi option in Nlm_gbparselex()
 *
@@ -1830,6 +1834,35 @@ NLM_EXTERN SeqLocPtr Nlm_gbreplace_ver(Boolean PNTR keep_rawPt, int PNTR parenPt
 	return retval;
 }
 
+/**********************************************************/
+static int Nlm_gbparse_accprefix(CharPtr acc)
+{
+    CharPtr p;
+    int     ret;
+
+    if(acc == NULL || *acc == '\0')
+        return(0);
+
+    for(p = acc; IS_ALPHA(*p) != 0;)
+        p++;
+    ret = p - acc;
+    if(*p == '_')
+    {
+        if(ret == 2)
+        {
+            for(p++; IS_ALPHA(*p) != 0;)
+                p++;
+            ret = p - acc;
+            if(ret != 3 && ret != 7)
+                ret = 1;
+        }
+        else
+            ret = 1;
+    }
+    else if(ret != 1 && ret != 2 && ret != 4)
+        ret = 1;
+    return(ret);
+}
 
 
 char Saved_ch;
@@ -1919,7 +1952,7 @@ Nlm_gbparselex(CharPtr linein, ValNodePtr PNTR lexed)
 			case '5': case '6': case '7': case '8': case '9':
 				skip_new_token = FALSE;
 				current_token -> choice = GBPARSE_INT_NUMBER;
-				for (dex=0, spare = current_col; isdigit(*spare); spare ++){
+				for (dex=0, spare = current_col; isdigit((int) *spare); spare ++){
 					dex ++ ;
 				}
 				current_token -> data.ptrvalue = MemNew(dex+1);
@@ -2176,19 +2209,14 @@ Nlm_gbparselex(CharPtr linein, ValNodePtr PNTR lexed)
 /* new accessions have .version !!  2/15/1999 */
 				skip_new_token = FALSE;
 				current_token -> choice = GBPARSE_INT_ACCESION;
-				if (IS_ALPHA(*(current_col + 1))) {
-					spare = current_col + 2;
-					dex = 2;
-				} else {
-					spare = current_col + 1;
-					dex = 1;
-				}
-				for (; isdigit(*spare); spare ++){
+				dex = Nlm_gbparse_accprefix(current_col);
+				spare = current_col + dex;
+				for (; isdigit((int) *spare); spare ++){
 					dex ++ ;
 				}
 				if (*spare == '.') {
 					dex ++ ;
-					for (spare++; isdigit(*spare); spare ++){
+					for (spare++; isdigit((int) *spare); spare ++){
 						dex ++ ;
 					}
 				}
@@ -2302,7 +2330,7 @@ Nlm_gbparselex_ver(CharPtr linein, ValNodePtr PNTR lexed, Boolean accver)
 			case '5': case '6': case '7': case '8': case '9':
 				skip_new_token = FALSE;
 				current_token -> choice = GBPARSE_INT_NUMBER;
-				for (dex=0, spare = current_col; isdigit(*spare); spare ++){
+				for (dex=0, spare = current_col; isdigit((int) *spare); spare ++){
 					dex ++ ;
 				}
 				current_token -> data.ptrvalue = MemNew(dex+1);
@@ -2559,19 +2587,14 @@ Nlm_gbparselex_ver(CharPtr linein, ValNodePtr PNTR lexed, Boolean accver)
 /* new accessions have .version !!  2/15/1999 */
 				skip_new_token = FALSE;
 				current_token -> choice = GBPARSE_INT_ACCESION;
-				if (IS_ALPHA(*(current_col + 1))) {
-					spare = current_col + 2;
-					dex = 2;
-				} else {
-					spare = current_col + 1;
-					dex = 1;
-				}
-				for (; isdigit(*spare); spare ++){
+				dex = Nlm_gbparse_accprefix(current_col);
+				spare = current_col + dex;
+				for (; isdigit((int) *spare); spare ++){
 					dex ++ ;
 				}
 				if (accver != FALSE && *spare == '.') {
 					dex ++ ;
-					for (spare++; isdigit(*spare); spare ++){
+					for (spare++; isdigit((int) *spare); spare ++){
 						dex ++ ;
 					}
 				}
@@ -2616,7 +2639,7 @@ Nlm_gbparselex_ver(CharPtr linein, ValNodePtr PNTR lexed, Boolean accver)
 NLM_EXTERN CharPtr
 Nlm_non_white(CharPtr ch)
 {
-   while (isspace(*++ch))if (! *ch) break;
+   while (isspace((int) *++ch))if (! *ch) break;
       ;
    return ch;
 }

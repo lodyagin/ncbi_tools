@@ -1,4 +1,4 @@
-# $Id: readme.dos,v 6.12 2002/04/29 18:12:06 vakatov Exp $
+# $Id: readme.dos,v 6.13 2004/01/26 17:04:53 vakatov Exp $
 # By Denis Vakatov, NCBI
 
 
@@ -31,6 +31,8 @@ Building the NCBI C Toolkit
       "all - Win32 Release"
       "all - Win32 DebugMT"
       "all - Win32 ReleaseMT"
+      "all - Win32 DebugDLL"
+      "all - Win32 ReleaseDLL"
 3.2) Or, you can choose to build any library(es) or application(s)
      in any configuration by using either the list of
      project configuration here or "ClassView" (or "FileView") frame.

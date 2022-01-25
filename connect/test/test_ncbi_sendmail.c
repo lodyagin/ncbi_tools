@@ -1,4 +1,4 @@
-/*  $Id: test_ncbi_sendmail.c,v 6.9 2003/05/14 03:58:43 lavr Exp $
+/*  $Id: test_ncbi_sendmail.c,v 6.11 2003/12/09 15:39:30 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -44,6 +44,11 @@
 
 int main(void)
 {
+    const char custom_body[] =
+        "Subject: Custom sized body\n"
+        "\n"
+        "Custom sized body\n"
+        "0123456789\n"; /* these 11 chars to ignore */
     const char* body[] = {
         "This is a simple test",
         "This is a test with\n.",
@@ -62,7 +67,8 @@ int main(void)
     };
     const char* to[] = {
         "lavr",
-        "lavr@pavo"
+        "lavr@pavo",
+        " \"Anton Lavrentiev\"   <lavr@pavo>  , lavr, <lavr>   ",
     };
     size_t i, j, k, n, m;
     const char* mx_host;
@@ -98,9 +104,11 @@ int main(void)
     CORE_LOG(eLOG_Note, "Phase 2 of 2: Testing CORE_SendMailEx");
 
     SendMailInfo_Init(&info);
-    mx_port = info.mx_port;
     mx_host = info.mx_host;
+    mx_port = info.mx_port;
     mx_tmo  = info.mx_timeout;
+
+    info.mx_host = "localhost";
 
     CORE_LOG(eLOG_Note, "Testing bad port");
     info.mx_port = 10;
@@ -117,6 +125,7 @@ int main(void)
     CORE_LOGF(eLOG_Note, ("Test passed: %s", retval));
 
     CORE_LOG(eLOG_Note, "Testing timeout");
+    info.mx_host = "www.ncbi.nlm.nih.gov";
     info.mx_timeout.sec = 5;
     info.mx_port = 80;
     retval = CORE_SendMailEx("lavr", "CORE_SendMailEx Test", "Test", &info);
@@ -135,7 +144,7 @@ int main(void)
         CORE_LOG(eLOG_Fatal, "Test failed");
     CORE_LOGF(eLOG_Note, ("Test passed: %s", retval));
 
-    info.mx_host = mx_host;
+    info.mx_host = "localhost";
 
     CORE_LOG(eLOG_Note, "Testing cc");
     info.cc = "vakatov";
@@ -186,13 +195,41 @@ int main(void)
         CORE_LOG(eLOG_Fatal, "Test failed");
     CORE_LOGF(eLOG_Note, ("Test passed: %s", retval));
 
+    CORE_LOG(eLOG_Note, "Testing AS-IS message");
+    info.mx_no_header = 1/*true*/;
+    retval = CORE_SendMailEx("lavr",
+                             "BAD SUBJECT SHOULD NOT APPEAR BUT IGNORED",
+                             "From: yourself\n"
+                             "To: yourself\n"
+                             "Subject: AS-IS message\n"
+                             "\n"
+                             "AS-IS",
+                             &info);
+    if (retval)
+        CORE_LOGF(eLOG_Fatal, ("Test failed: %s", retval));
+    CORE_LOG(eLOG_Note, "Test passed");
+
+    CORE_LOG(eLOG_Note, "Testing AS-IS custom sized message");
+    info.body_size = strlen(custom_body) - 11/*to ignore*/;
+    retval = CORE_SendMailEx("<lavr@pavo>",
+                             "BAD SUBJECT SHOULD NOT APPEAR BUT IGNORED",
+                             custom_body,
+                             &info);
+    if (retval)
+        CORE_LOGF(eLOG_Fatal, ("Test failed: %s", retval));
+    CORE_LOG(eLOG_Note, "Test passed");
+
+    info.body_size = 0;
+    info.mx_no_header = 0;
+    info.mx_host = mx_host;
+
     CORE_LOG(eLOG_Note, "Testing bad from");
     strcpy(info.from, "blahblah@blahblah");
     retval = CORE_SendMailEx("lavr", "CORE_SendMailEx Test", "Test", &info);
     if (!retval)
         CORE_LOG(eLOG_Error, "Test failed");
     else
-        CORE_LOGF(eLOG_Error, ("Test passed: %s", retval));
+        CORE_LOGF(eLOG_Note, ("Test passed: %s", retval));
 
     CORE_LOG(eLOG_Note, "Testing bad magic");
     info.magic_number = 0;
@@ -209,6 +246,12 @@ int main(void)
 /*
  * --------------------------------------------------------------------------
  * $Log: test_ncbi_sendmail.c,v $
+ * Revision 6.11  2003/12/09 15:39:30  lavr
+ * Added new test of custom-sized message body
+ *
+ * Revision 6.10  2003/12/05 18:39:35  lavr
+ * Test multiple recipients and as-is message
+ *
  * Revision 6.9  2003/05/14 03:58:43  lavr
  * Match changes in respective APIs of the tests
  *

@@ -1,5 +1,5 @@
 #! /bin/sh
-# $Id: fwd_check.sh,v 1.14 2003/09/29 14:04:45 lavr Exp $
+# $Id: fwd_check.sh,v 1.15 2004/01/16 19:03:45 lavr Exp $
 # Author:   Denis Vakatov (vakatov@ncbi,nlm.nih.gov)
 # Modified: Anton Lavrentiev (lavr@ncbi.nlm.nih.gov)
 #
@@ -20,8 +20,8 @@ cat <<EOF
 ;130.14.22.2	5859	RETIRED
 ;130.14.22.8	5840	RETIRED
 ;130.14.22.30	5810	RETIRED
-130.14.22.31	5812	OBSOLESCENT
-130.14.22.32	5811	OBSOLESCENT
+130.14.22.31	5812	RETIRED
+130.14.22.32	5811	RETIRED
 130.14.22.12	5845	INTERNAL
 130.14.29.112	5860	RESERVED
 130.14.29.112	5861	OK

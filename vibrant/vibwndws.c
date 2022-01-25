@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.54 $
+* $Revision: 6.61 $
 *
 * File Description:
 *       Vibrant main, event loop, and window functions
@@ -37,6 +37,31 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: vibwndws.c,v $
+* Revision 6.61  2004/02/03 23:34:58  sinyakov
+* Nlm_WindowGainFocus(): call Nlm_GetNext() before calling Nlm_DoGainFocus()
+*
+* Revision 6.60  2004/01/20 23:35:38  sinyakov
+* [WIN_MSWIN] implemented menu accelerators
+*
+* Revision 6.59  2004/01/05 18:42:40  kans
+* record screen mode at time of window creation
+*
+* Revision 6.58  2004/01/05 17:08:09  kans
+* added functions to control use of dual screens
+*
+* Revision 6.57  2003/12/03 17:45:21  kans
+* For OS_MAC, always include Profiler.h
+*
+* Revision 6.56  2003/11/17 17:03:30  kans
+* changed C++ style comments to C comments
+*
+* Revision 6.55  2003/11/03 21:57:48  sinyakov
+* WIN_MSWIN: added ability to put a message into message processing loop
+* to call a callback function within the main GUI thread
+* callback function address is passed in WPARAM,
+* callback function parameter is passed in LPARAM
+* this functionality is used by Win32 implementation of smartnet.c module
+*
 * Revision 6.54  2003/04/09 18:16:53  kans
 * motif version of Nlm_ProcessKeyPress sets ctrlKey and shftKey, clears cmmdKey and optKey, leaves dblClick alone
 *
@@ -619,10 +644,10 @@
 #ifdef WIN_MAC
 #include <Appearance.h>
 #include <Navigation.h>
-# if !defined(OS_UNIX_DARWIN)
-#  include <Profiler.h>
-# endif
-# include "MoreCarbonAccessors.h"
+#if __profile__
+#include <Profiler.h>
+#endif
+#include "MoreCarbonAccessors.h"
 #endif
 
 #if defined(WIN_MOTIF) && defined(_DEBUG) && !defined(__hpux)
@@ -690,6 +715,14 @@ extern void Nlm_ConvertFilename ( FSSpec *fss, Nlm_CharPtr filename );
 #endif
 #endif
 
+typedef enum {
+  USE_FULL_SCREEN = 1,
+  USE_LEFT_SCREEN,
+  USE_RIGHT_SCREEN
+} Nlm_ScreenMode;
+
+static Nlm_ScreenMode Nlm_screenMode = USE_FULL_SCREEN;
+
 typedef  struct  Nlm_shelldata {
   struct Nlm_shelldata PNTR next;
   Nlm_ShellTool             shell;
@@ -720,6 +753,7 @@ typedef  struct  Nlm_windowdata {
   Nlm_WndFreeProc  cleanup;
   Nlm_WndActnProc  timer;
   Nlm_WindoW       modalOwner; /* esl++ to support nested modal dialogs */
+  Nlm_ScreenMode   screenMode;
 #ifdef WIN_MOTIF
   Visual      *visual;
   Nlm_Boolean cMap_fixed;
@@ -727,6 +761,7 @@ typedef  struct  Nlm_windowdata {
 #ifdef WIN_MSWIN
   Nlm_Uint4        style;
   Nlm_Uint4        ex_style;
+  Nlm_Handle	   haccel;
 #endif
 } Nlm_WindowData;
 
@@ -758,7 +793,7 @@ AEEventHandlerUPP HandleAEQuitAppPtr;
 AEEventHandlerUPP HandleAEAnswerPtr;
 #endif
 typedef SInt32 AERefCon;
-//typedef UInt32 AERefCon;
+/* typedef UInt32 AERefCon; */
 #endif
 
 #ifdef WIN_MSWIN
@@ -932,6 +967,7 @@ static void Nlm_LoadWindowData (Nlm_WindoW w, Nlm_WindowTool hdl,
     wdptr->cleanup = cln;
     wdptr->timer = tmr;
     wdptr->modalOwner = NULL; /* esl++ */
+    wdptr->screenMode = Nlm_screenMode; /* jk */
 #ifdef WIN_MOTIF
     wdptr->visual = NULL;
     wdptr->cMap_fixed = FALSE;
@@ -1200,6 +1236,32 @@ extern Nlm_Boolean Nlm_IsWindowDying (Nlm_WindoW w)
   if (w != NULL) {
     Nlm_GetWindowData (w, &wdata);
     rsult = wdata.dying;
+  }
+  return rsult;
+}
+
+static void Nlm_SetScreenMode (Nlm_WindoW w, Nlm_ScreenMode screenMode)
+
+{
+  Nlm_WindowData  wdata;
+
+  if (w != NULL) {
+    Nlm_GetWindowData (w, &wdata);
+    wdata.screenMode = screenMode;
+    Nlm_SetWindowData (w, &wdata);
+  }
+}
+
+static Nlm_ScreenMode Nlm_GetScreenMode (Nlm_WindoW w)
+
+{
+  Nlm_ScreenMode  rsult;
+  Nlm_WindowData  wdata;
+
+  rsult = USE_FULL_SCREEN;
+  if (w != NULL) {
+    Nlm_GetWindowData (w, &wdata);
+    rsult = wdata.screenMode;
   }
   return rsult;
 }
@@ -2152,10 +2214,10 @@ extern void Nlm_SetUpdateRegion (WindowPtr wptr)
 
   if (wptr != NULL) {
     GetPortVisibleRegion(GetWindowPort(wptr), Nlm_updateRgn);
-    //HLock ((Handle) Nlm_updateRgn);
+    /* HLock ((Handle) Nlm_updateRgn); */
     GetRegionBounds(Nlm_updateRgn, &bounds);
     Nlm_RectToolToRecT (&bounds, &Nlm_updateRect);
-    //HUnlock ((Handle) Nlm_updateRgn);
+    /* HUnlock ((Handle) Nlm_updateRgn); */
   }
 }
 #endif
@@ -2797,6 +2859,7 @@ static void Nlm_NewWindow (Nlm_WindoW w, Nlm_Int2 type, Nlm_Int2 procID,
   Nlm_GetWindowData(w, &wdata);
   wdata.style    = style;
   wdata.ex_style = ex_style;
+  wdata.haccel   = 0;
   Nlm_SetWindowData(w, &wdata);
   }}
 #endif
@@ -3047,6 +3110,35 @@ static void Nlm_RemoveWindow (Nlm_GraphiC w, Nlm_Boolean savePort)
   Nlm_Update ();
 }
 
+NLM_EXTERN void Nlm_UseFullScreen (void)
+
+{
+  Nlm_screenMode = USE_FULL_SCREEN;
+}
+
+NLM_EXTERN void Nlm_UseLeftScreen (void)
+
+{
+  Nlm_screenMode = USE_LEFT_SCREEN;
+}
+
+NLM_EXTERN void Nlm_UseRightScreen (void)
+
+{
+  Nlm_screenMode = USE_RIGHT_SCREEN;
+}
+
+NLM_EXTERN Nlm_Boolean Nlm_HasDualScreen (void)
+
+{
+  if (screenBitBounds.right > 2000 && screenBitBounds.bottom < 800) {
+    return TRUE;
+  } else if (screenBitBounds.right > 2500 && screenBitBounds.bottom < 1100) {
+    return TRUE;
+  }
+  return FALSE;
+}
+
 /* esl: extraWidth parameter added */
 static void Nlm_ResizeWindow (Nlm_GraphiC w, Nlm_Int2 dragHeight,
                               Nlm_Int2 scrollWidth, Nlm_Int2 minWidth,
@@ -3062,6 +3154,7 @@ static void Nlm_ResizeWindow (Nlm_GraphiC w, Nlm_Int2 dragHeight,
   Nlm_RecT        r;
   Nlm_Int4        rleft;
   Nlm_Int4        rtop;
+  Nlm_ScreenMode  screenMode;
   Nlm_Int4        toppix;
   Nlm_WindowTool  wptr;
 #ifdef WIN_MOTIF
@@ -3104,10 +3197,31 @@ static void Nlm_ResizeWindow (Nlm_GraphiC w, Nlm_Int2 dragHeight,
       height = r.bottom + extraHeight;
     if (r.left < 0)
       {
-        free = screenBitBounds.right - width;
-        rleft = (Nlm_Int4)r.left;
-        leftpix = free * (-rleft) / 100;
-        r.left = (Nlm_Int2)leftpix;
+        if (Nlm_HasDualScreen ()) {
+          screenMode = Nlm_GetScreenMode ((Nlm_WindoW) w);
+          if (screenMode == USE_LEFT_SCREEN) {
+            free = screenBitBounds.right / 2 - width;
+            rleft = (Nlm_Int4)r.left;
+            leftpix = free * (-rleft) / 100;
+            r.left = (Nlm_Int2)leftpix;
+          } else if (screenMode == USE_RIGHT_SCREEN) {
+            free = screenBitBounds.right / 2 - width;
+            rleft = (Nlm_Int4)r.left;
+            leftpix = free * (-rleft) / 100;
+            r.left = (Nlm_Int2)leftpix;
+            r.left += screenBitBounds.right / 2;
+          } else {
+            free = screenBitBounds.right - width;
+            rleft = (Nlm_Int4)r.left;
+            leftpix = free * (-rleft) / 100;
+            r.left = (Nlm_Int2)leftpix;
+          }
+        } else {
+          free = screenBitBounds.right - width;
+          rleft = (Nlm_Int4)r.left;
+          leftpix = free * (-rleft) / 100;
+          r.left = (Nlm_Int2)leftpix;
+        }
       }
     if (r.top < 0)
       {
@@ -3929,7 +4043,7 @@ static Nlm_Boolean Nlm_ZoomClick (Nlm_GraphiC w, Nlm_PoinT pt)
     
     if (TrackBox (wptr, ptool, windowLoc)) {
       Rect bounds;
-      // WindowPeek::dataHandle is not supported under Carbon.
+      /* WindowPeek::dataHandle is not supported under Carbon. */
 #if OPAQUE_TOOLBOX_STRUCTS
       ZoomWindowIdeal(wptr, part, &idealSize);
 #else
@@ -4697,12 +4811,14 @@ static Nlm_GraphiC Nlm_WindowGainFocus (Nlm_GraphiC w, Nlm_Char ch, Nlm_Boolean 
 {
   Nlm_GraphiC  p;
   Nlm_GraphiC  q;
+  Nlm_GraphiC  n;
 
   q = NULL;
   p = Nlm_GetChild (w);
   while (p != NULL && q == NULL) {
+    n = Nlm_GetNext (p);
     q = Nlm_DoGainFocus (p, ch, savePort);
-    p = Nlm_GetNext (p);
+    p = n;
   }
   return q;
 }
@@ -5418,7 +5534,7 @@ static void Nlm_HandleEvent (void)
       mess = (Nlm_currentEvent.message & osEvtMessageMask) >> 24;
       if (mess == suspendResumeMessage) {
         if (Nlm_currentEvent.message & resumeFlag) {
-          // Resume
+          /* Resume */
 #if !TARGET_API_MAC_CARBON
           if (Nlm_currentEvent.message & convertClipboardFlag) {
             /* 2001-05-14:  JDJ
@@ -6421,11 +6537,13 @@ void main ()
 #endif
 
 #if TARGET_API_MAC_CARBON >= 1
-  // carbon changes the API: pass the number of master pointers to allocate
-  //MoreMasters (1280);
-  // 2001-03-22:  Joshua Juran
-  // CarbonDater report says to use MoreMasterPointers() instead of MoreMasters().
-  // Universal Interfaces 3.3.2 declares MoreMasters(void) under Carbon.
+  /*
+   carbon changes the API: pass the number of master pointers to allocate
+   MoreMasters (1280);
+   2001-03-22:  Joshua Juran
+   CarbonDater report says to use MoreMasterPointers() instead of MoreMasters().
+   Universal Interfaces 3.3.2 declares MoreMasters(void) under Carbon.
+  */
   MoreMasterPointers(1280);
   FlushEvents (everyEvent, 0);
   /* the rest of the toolbox is done for us can't init them...
@@ -6836,14 +6954,18 @@ extern void Nlm_RemoveDyingWindows (void)
     Nlm_currentWindowTool = GetWindowFromPort(tempPort);
     Nlm_SetUpdateRegion (GetWindowFromPort(tempPort));
     SetPenState (&state);
-    // 2001-03-22:  Joshua Juran
-    // Carbon does not support application-supplied storage for windows.
+    /* 2001-03-22:  Joshua Juran
+       Carbon does not support application-supplied storage for windows. */
     DisposeWindow(wptr);
 #endif
 #ifdef WIN_MSWIN
     if ( wdata.cMap != NULL ){
       DeleteObject( wdata.cMap );
       wdata.cMap = NULL;
+    }
+    if ( wdata.haccel != NULL ){
+      DestroyAcceleratorTable(wdata.haccel);
+      wdata.haccel = NULL;
     }
     Nlm_currentHDC = tempPort;
     RemoveProp (wptr, (LPSTR) "Nlm_VibrantProp");
@@ -6988,6 +7110,93 @@ static void Nlm_ProcessKeyPress (XEvent *event)
 }
 #endif
 
+#ifdef WIN_MSWIN
+
+typedef void (LIBCALLBACK *CallbackProc)(void* data);
+static UINT idWMVibrantCallback = 0;
+
+static void Nlm_InitVibrantCallback ()
+
+{
+    idWMVibrantCallback = RegisterWindowMessage("VibrantCallback");
+}
+
+
+static Nlm_Boolean Nlm_ProcessVibrantCallback (LPMSG lpMsg)
+
+{
+    if(idWMVibrantCallback && idWMVibrantCallback == lpMsg->message)
+    {
+	CallbackProc proc = (CallbackProc)lpMsg->wParam;
+	proc((void*)(lpMsg->lParam));
+	return TRUE;
+    }
+    else
+	return FALSE;
+}
+#endif
+
+#ifdef WIN_MSWIN
+
+extern Nlm_Handle Nlm_GetWindowHAccel (Nlm_WindoW w)
+
+{
+  Nlm_Handle      rsult;
+  Nlm_WindowData  wdata;
+
+  rsult = (Nlm_Handle) 0;
+  if (w != NULL) {
+    Nlm_GetWindowData (w, &wdata);
+    rsult = wdata.haccel;
+  }
+  return rsult;
+}
+
+
+extern void Nlm_SetWindowHAccel (Nlm_WindoW w, Nlm_Handle h)
+
+{
+  Nlm_WindowData  wdata;
+
+  if (w != NULL) {
+    Nlm_GetWindowData (w, &wdata);
+    wdata.haccel = h;
+    Nlm_SetWindowData (w, &wdata);
+  }
+}
+
+
+static Nlm_Boolean Nlm_ProcessAccelerator (LPMSG lpMsg)
+
+{
+    if(lpMsg->hwnd != NULL &&
+       (lpMsg->message == WM_KEYDOWN ||
+        lpMsg->message == WM_KEYUP ||
+	lpMsg->message == WM_SYSKEYDOWN ||
+	lpMsg->message == WM_SYSKEYUP ||
+	lpMsg->message == WM_CHAR))
+    {
+        Nlm_WindoW w = (Nlm_WindoW) GetProp (lpMsg->hwnd, (LPSTR) "Nlm_VibrantProp");
+	if(w != NULL)
+	{
+	    Nlm_WindoW p = Nlm_GetParentWindow((Nlm_GraphiC)w);
+	    if(p != NULL)
+	    {
+		Nlm_WindowData wdata;
+		Nlm_GetWindowData(p, &wdata);
+		if(wdata.haccel != NULL)
+		{
+		    int ret = TranslateAccelerator(wdata.handle, wdata.haccel, lpMsg);
+		    return ret != 0;
+		}
+	    }
+	}
+    }
+
+    return FALSE;
+}
+#endif
+
 extern void Nlm_ProcessAnEvent (void)
 
 {
@@ -7003,6 +7212,7 @@ extern void Nlm_ProcessAnEvent (void)
     if (GetMessage (&Nlm_currentMssg, NULL, 0, 0)) {
       TranslateMessage (&Nlm_currentMssg);
       Nlm_ProcessKeyPress (&Nlm_currentMssg);
+      Nlm_ProcessVibrantCallback(&Nlm_currentMssg);
       DispatchMessage (&Nlm_currentMssg);
     }
   }
@@ -7076,6 +7286,7 @@ extern void Nlm_ProcessEventOrIdle (void)
     if (GetMessage (&Nlm_currentMssg, NULL, 0, 0)) {
       TranslateMessage (&Nlm_currentMssg);
       Nlm_ProcessKeyPress (&Nlm_currentMssg);
+      Nlm_ProcessVibrantCallback(&Nlm_currentMssg);
       DispatchMessage (&Nlm_currentMssg);
     }
   }
@@ -7115,6 +7326,7 @@ extern void Nlm_ProcessExternalEvent (void)
     if (GetMessage (&Nlm_currentMssg, NULL, 0, 0)) {
       TranslateMessage (&Nlm_currentMssg);
       Nlm_ProcessKeyPress (&Nlm_currentMssg);
+      Nlm_ProcessVibrantCallback(&Nlm_currentMssg);
       DispatchMessage (&Nlm_currentMssg);
     }
   }
@@ -7150,6 +7362,7 @@ extern void Nlm_ProcessEvents (void)
   }
 #endif
 #ifdef WIN_MSWIN
+  Nlm_InitVibrantCallback ();
   if (registeredDropProc != NULL) {
     DragAcceptFiles(Nlm_currentHWnd, TRUE);
   }
@@ -7162,9 +7375,12 @@ extern void Nlm_ProcessEvents (void)
       }
     }
     if (GetMessage (&Nlm_currentMssg, NULL, 0, 0)) {
-      TranslateMessage (&Nlm_currentMssg);
-      Nlm_ProcessKeyPress (&Nlm_currentMssg);
-      DispatchMessage (&Nlm_currentMssg);
+      if(!Nlm_ProcessAccelerator(&Nlm_currentMssg)) {
+	TranslateMessage (&Nlm_currentMssg);
+	Nlm_ProcessKeyPress (&Nlm_currentMssg);
+	Nlm_ProcessVibrantCallback(&Nlm_currentMssg);
+	DispatchMessage (&Nlm_currentMssg);
+      }
       Nlm_RemoveDyingWindows ();
     }
   }

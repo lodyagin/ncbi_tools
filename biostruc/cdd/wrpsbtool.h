@@ -1,4 +1,4 @@
-/* $Id: wrpsbtool.h,v 1.10 2003/10/07 21:16:57 bauer Exp $
+/* $Id: wrpsbtool.h,v 1.11 2003/11/19 14:34:32 bauer Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 4/19/2000
 *
-* $Revision: 1.10 $
+* $Revision: 1.11 $
 *
 * File Description:
 *         header for WWW-RPS BLAST tools
@@ -37,6 +37,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: wrpsbtool.h,v $
+* Revision 1.11  2003/11/19 14:34:32  bauer
+* changes to support SeqAnnot export
+*
 * Revision 1.10  2003/10/07 21:16:57  bauer
 * support generation of Sequence Annotation from CD-Search results
 *
@@ -94,6 +97,18 @@
 #define DDV_COLOR_MAX 33
 
 #include <gd_io.h>
+#include "dart.h"
+
+#define CDD_MAX_DESCR 3072
+
+typedef struct cdddesc {
+  Int4                iPssmId;
+  Char                cCddId[PATH_MAX];
+  Char                cDescr[CDD_MAX_DESCR];
+  Char                cSourc[PATH_MAX];
+  Int4                iPssmLength;
+  struct cdddesc PNTR next;
+} CddDesc, PNTR CddDescPtr;
 
 typedef struct borkIOCtx {
   gdIOCtx	ctx;
@@ -109,7 +124,7 @@ static     void                   freeBorkCtx(gdIOCtx *ctx);
            Boolean                OverlapInterval(Int4 from1, Int4 to1, Int4 from2, Int4 to2);
            void                   WRPSBSearchHead(CharPtr title, CharPtr banner, Boolean bAnnotOnly, Boolean bNoWrap);
            void                   WRPSBSearchFoot(Boolean bAnnotOnly, Boolean bNoWrap);
-           void                   WRPSBHtmlError(CharPtr cErrTxt); 
+           void                   WRPSBHtmlError(CharPtr cErrTxt, Boolean bAnnotOnly); 
            Int4                   max(Int4 i1, Int4 i2);
            Int4                   min(Int4 i1, Int4 i2);
            Boolean                print_score_eonly(FloatHi evalue, CharPtr buf);
@@ -134,3 +149,38 @@ static     void                   DDV_InitDefSAPdispStyles_BLAST(DDV_Disp_OptPtr
 static     Boolean                DDV_DisplayNewBLAST(SeqAlignPtr sap, ValNodePtr mask,Int4Ptr PNTR matrix,Uint4 disp_format,Pointer disp_data,FILE *fp);
            Boolean                WRPSBDisplayBlastPairList(AlignmentAbstractPtr aap,ValNodePtr mask, FILE *fp,Boolean is_na, Uint4 tx_option,Uint1 ColorSchema,RPSBlastOptionsPtr rpsbop);
            Boolean                WRPSBCl3DisplayBlastPairList(AlignmentAbstractPtr aap,ValNodePtr mask, FILE *fp,Boolean is_na, Uint4 tx_option,Uint1 ColorSchema,BioseqPtr query_bsp, CharPtr dbversion, CharPtr urlcgi);
+static     Boolean                WRPSBHitIsNew(AlignmentAbstractPtr aapThis,
+                                                AlignmentAbstractPtr aapHead,
+			                        Dart_Connect *Connection,
+						Int4 *cDartFam,
+						Int4 cDartFamNum);
+static     void                   WRPSBIndentsViaSeqAlign(CddRepeatPtr pcdr,
+                                                          AlignmentAbstractPtr aap,
+				                          Int4 iGraphWidth,
+				                          Int4 length);
+           AlignmentAbstractPtr   WRPSBCl3AbstractAlignment(BlastPruneSapStructPtr prune,
+                                                            BioseqPtr query_bsp,
+                                                            Int4 iGraphWidth,
+                                                            Int4 *mxr,
+                                                            Int4 iGraphMode,
+                                                            CharPtr dbversion,
+                                                            Boolean *bAnyPdb,
+					                    Dart_Connect *Connection,
+					                    Boolean bFull,
+					                    CharPtr cCDDefault,
+					                    CharPtr cDATApath,
+					                    CharPtr cCDDPrefix,
+					                    CharPtr cCDDPost_C,
+					                    CharPtr cCDDPost_O,
+					                    CharPtr cTREextens,
+					                    CharPtr cSEQextens,
+					                    CharPtr cOASIScgi,
+					                    CharPtr cCDDcgi,
+							    CddDescPtr pcdd,
+					                    Int4 *cDartFam,
+					                    Int4 cDartFamNum,
+							    Boolean bAnnotOnly);
+           SeqAnnotPtr            WRPSBCl3SeqAnnot(AlignmentAbstractPtr aapIn, FILE *table,
+                                                   Boolean bSeqAlign, Boolean bRetSeqAnnot);
+           AlignmentAbstractPtr   AlignmentAbstractSetDestruct(AlignmentAbstractPtr aap);
+

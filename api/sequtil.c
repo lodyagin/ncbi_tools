@@ -29,13 +29,28 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.139 $
+* $Revision: 6.144 $
 *
 * File Description:  Sequence Utilities for objseq and objsset
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: sequtil.c,v $
+* Revision 6.144  2004/01/16 16:37:01  kans
+* added CM as scaffold/CON record
+*
+* Revision 6.143  2003/12/18 19:35:53  kans
+* added CQ and CR prefixes
+*
+* Revision 6.142  2003/12/16 16:03:04  kans
+* added CL as ncbi gss
+*
+* Revision 6.141  2003/11/10 16:12:33  kans
+* added CK as genbank est
+*
+* Revision 6.140  2003/10/31 20:51:24  kans
+* added CI and CJ as DDBJ ESTs to WHICH_db_accession
+*
 * Revision 6.139  2003/10/24 14:36:12  kans
 * added CH as GenBank CONN to WHICH_db_accession
 *
@@ -8765,7 +8780,8 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
 	      (StringICmp(temp,"CA") == 0) || 
 	      (StringICmp(temp,"CB") == 0) || 
 	      (StringICmp(temp,"CD") == 0) || 
-	      (StringICmp(temp,"CF") == 0) ) {                /* NCBI EST */
+	      (StringICmp(temp,"CF") == 0) || 
+	      (StringICmp(temp,"CK") == 0) ) {                /* NCBI EST */
               retcode = ACCN_NCBI_EST;
           } else if ((StringICmp(temp,"BV") == 0)) {      /* NCBI STS */
               retcode = ACCN_NCBI_STS;
@@ -8777,7 +8793,8 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
           } else if ((StringICmp(temp,"AE") == 0)) {      /* NCBI genome project data */
               retcode = ACCN_NCBI_GENOME;
           } else if ((StringICmp(temp,"AH") == 0) ||
-                     (StringICmp(temp,"CH") == 0)) {      /* NCBI segmented set header Bioseq */
+                     (StringICmp(temp,"CH") == 0) ||      /* NCBI segmented set header Bioseq */
+                     (StringICmp(temp,"CM") == 0)) {
               retcode = ACCN_NCBI_SEGSET | ACCN_AMBIGOUS_MOL; /* A few segmented
                                                                  proteins are AH */
           } else if ((StringICmp(temp,"AS") == 0)) {      /* NCBI "other" */
@@ -8790,7 +8807,8 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
                      (StringICmp(temp,"BZ") == 0) ||
                      (StringICmp(temp,"CC") == 0) ||
                      (StringICmp(temp,"CE") == 0) ||
-                     (StringICmp(temp,"CG") == 0) )  {     /* NCBI GSS */
+                     (StringICmp(temp,"CG") == 0) ||
+                     (StringICmp(temp,"CL") == 0) )  {     /* NCBI GSS */
               retcode = ACCN_NCBI_GSS;
           } else if ((StringICmp(temp,"AR") == 0)) {      /* NCBI patent */
               retcode = ACCN_NCBI_PATENT;
@@ -8809,11 +8827,13 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
                      (StringICmp(temp,"AM") == 0)) {     /* EMBL direct submission */
               retcode = ACCN_EMBL_DIRSUB;
           } else if ((StringICmp(temp,"AL") == 0) ||
-                     (StringICmp(temp,"BX") == 0)) {      /* EMBL genome project data */
+                     (StringICmp(temp,"BX") == 0)||
+                     (StringICmp(temp,"CR") == 0)) {      /* EMBL genome project data */
               retcode = ACCN_EMBL_GENOME;
           } else if ((StringICmp(temp,"AN") == 0)) {      /* EMBL CON division */
               retcode = ACCN_EMBL_CON;
-          } else if ((StringICmp(temp,"AX") == 0)) {      /* EMBL patent division */
+          } else if ((StringICmp(temp,"AX") == 0) ||
+                     (StringICmp(temp,"CQ") == 0)) {      /* EMBL patent division */
               retcode = ACCN_EMBL_PATENT;
           } else if ((StringICmp(temp,"AT") == 0) || 
                      (StringICmp(temp,"AU") == 0) ||
@@ -8822,7 +8842,9 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
                      (StringICmp(temp,"BJ") == 0) ||
                      (StringICmp(temp,"BP") == 0) ||
                      (StringICmp(temp,"BW") == 0) ||
-                     (StringICmp(temp,"BY") == 0)) {      /* DDBJ EST's */
+                     (StringICmp(temp,"BY") == 0) ||
+                     (StringICmp(temp,"CI") == 0) ||
+                     (StringICmp(temp,"CJ") == 0)) {      /* DDBJ EST's */
               retcode = ACCN_DDBJ_EST;
           } else if ((StringICmp(temp,"AB") == 0)) {      /* DDBJ direct submission */
               retcode = ACCN_DDBJ_DIRSUB;

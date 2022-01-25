@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.409 $
+* $Revision: 6.431 $
 *
 * File Description: 
 *
@@ -120,12 +120,10 @@ static char *time_of_compilation = "now";
 #include <taxutil.h>
 
 #ifdef USE_SPELL
-#ifdef WIN_MOTIF
 #include <spellapi.h>
 #endif
-#endif
 
-#define SEQ_APP_VER "5.00"
+#define SEQ_APP_VER "5.16"
 
 #ifndef CODECENTER
 static char* sequin_version_binary = "Sequin Indexer Services Version " SEQ_APP_VER " " __DATE__ " " __TIME__;
@@ -207,6 +205,7 @@ static IteM  findGeneItem = NULL;
 static IteM  findProtItem = NULL;
 static IteM  findPosItem = NULL;
 static IteM  validateItem = NULL;
+static MenU  validateMenu = NULL;
 static IteM  spellItem = NULL;
 static IteM  vectorScreenItem = NULL;
 static IteM  powerBlastItem = NULL;
@@ -274,6 +273,8 @@ static Boolean  dirsubMode = FALSE;
 static MenU     newDescMenu = NULL;
 static MenU     newFeatMenu = NULL;
 static MenU     newPubMenu = NULL;
+static MenU     batchApplyMenu = NULL;
+static MenU     batchEditMenu = NULL;
 static MenU     specialMenu = NULL;
 static MenU     analysisMenu = NULL;
 static Boolean  initialFormsActive = FALSE;
@@ -386,7 +387,7 @@ static Boolean OkayToWriteTheEntity (Uint2 entityID, ForM f)
 
 {
   Boolean         allRawOrSeg = TRUE;
-  MsgAnswer       ans;
+  MsgAnswer       ans = ANS_OK;
   Int2            errors;
   Int2            j;
   ErrSev          oldErrSev;
@@ -405,7 +406,7 @@ static Boolean OkayToWriteTheEntity (Uint2 entityID, ForM f)
     }
   }
   WatchCursor ();
- Update ();
+  Update ();
   vsp = ValidStructNew ();
   if (vsp != NULL) {
     /*SetChecklistValue (checklistForm, 6);*/
@@ -418,6 +419,11 @@ static Boolean OkayToWriteTheEntity (Uint2 entityID, ForM f)
     }
     oldErrSev = ErrSetMessageLevel (SEV_MAX);
     vsp->validateAlignments = TRUE;
+    vsp->alignFindRemoteBsp = TRUE;
+    vsp->doSeqHistAssembly = FALSE;
+    for (j = 0; j < 6; j++) {
+      vsp->errors [j] = 0;
+    }
     ValidateSeqEntry (sep, vsp);
     ErrSetMessageLevel (oldErrSev);
     ErrClear ();
@@ -432,13 +438,12 @@ static Boolean OkayToWriteTheEntity (Uint2 entityID, ForM f)
         errors += vsp->errors [j];
       }
     }
-    ValidStructFree (vsp);
     UseWindow ((WindoW) f);
     if (errors > 0) {
       ArrowCursor ();
       Update ();
       if (subtoolMode || smartnetMode) {
-        ans = Message (MSG_OKC, "%s\nFatal %d, Error %d, Warning %d, Info %d\n%s",
+        ans = Message (MSG_OKC, "%s\nReject %d, Error %d, Warning %d, Info %d\n%s",
                        "Submission failed validation test with:",
                        (int) vsp->errors [4], (int) vsp->errors [3],
                        (int) vsp->errors [2], (int) vsp->errors [1],
@@ -446,14 +451,15 @@ static Boolean OkayToWriteTheEntity (Uint2 entityID, ForM f)
       } else {
         ans = Message (MSG_OKC, validFailMsg);
       }
-      if (ans != ANS_OK) {
-        /*SetChecklistValue (checklistForm, 5);*/
-        return FALSE;
-      }
     }
+    ValidStructFree (vsp);
   }
   ArrowCursor ();
   Update ();
+  if (ans != ANS_OK) {
+    /*SetChecklistValue (checklistForm, 5);*/
+    return FALSE;
+  }
   return TRUE;
 }
 
@@ -1250,7 +1256,7 @@ static void SmartnetDoneFunc (BaseFormPtr bfp)
 
             /* reset update date in smart mode if GenBank or RefGene, and not HTGS */
 
-            SeqMgrExploreBioseqs (entityID, 0, (Pointer) resetUpdateDate, AllGenBankOrRefSeq, TRUE, TRUE, TRUE);
+            SeqMgrExploreBioseqs (bfp->input_entityID, 0, (Pointer) &resetUpdateDate, AllGenBankOrRefSeq, TRUE, TRUE, TRUE);
             if (/* ans == ANS_YES */ resetUpdateDate) {
                 SeqEntryExplore (sep, NULL, RemoveUpdateDates);
                 sdp = CreateNewDescriptor (sep, Seq_descr_update_date);
@@ -1433,6 +1439,11 @@ static void ProcessDoneButton (ForM f)
     }
     oldErrSev = ErrSetMessageLevel (SEV_MAX);
     vsp->validateAlignments = TRUE;
+    vsp->alignFindRemoteBsp = TRUE;
+    vsp->doSeqHistAssembly = FALSE;
+    for (j = 0; j < 6; j++) {
+      vsp->errors [j] = 0;
+    }
     ValidateSeqEntry (sep, vsp);
     ErrSetMessageLevel (oldErrSev);
     ErrClear ();
@@ -1463,7 +1474,12 @@ static void ProcessDoneButton (ForM f)
           vsp->suppressContext = ShouldSetSuppressContext ();
           oldErrHook = ErrSetHandler (ValidErrHook);
           oldErrSev = ErrSetMessageLevel (SEV_NONE);
-	  vsp->validateAlignments = TRUE;
+          vsp->validateAlignments = TRUE;
+          vsp->alignFindRemoteBsp = TRUE;
+          vsp->doSeqHistAssembly = FALSE;
+          for (j = 0; j < 6; j++) {
+            vsp->errors [j] = 0;
+          }
           ValidateSeqEntry (sep, vsp);
           ErrSetMessageLevel (oldErrSev);
           ErrSetHandler (oldErrHook);
@@ -1574,7 +1590,7 @@ static void Cn3DWinShowProc (IteM i)
 #endif
 */
 
-extern void ValSeqEntryForm (ForM f)
+extern void ValSeqEntryFormEx (ForM f, Boolean doAligns)
 
 {
   Boolean         allRawOrSeg = TRUE;
@@ -1613,15 +1629,22 @@ extern void ValSeqEntryForm (ForM f)
         }
         HideValidateDoc ();
         vsp->suppressContext = ShouldSetSuppressContext ();
-        vsp->validateAlignments = TRUE;
-        vsp->farIDsInAlignments = (Boolean) (subtoolMode || smartnetMode || dirsubMode);
-        if (GetSequinAppParam ("SETTINGS", "VALIDATEFARALIGNIDS", NULL, str, sizeof (str))) {
-          if (StringICmp (str, "TRUE") == 0) {
-            vsp->farIDsInAlignments = TRUE;
+        if (doAligns) {
+          vsp->validateAlignments = TRUE;
+          vsp->alignFindRemoteBsp = TRUE;
+          vsp->doSeqHistAssembly = TRUE;
+          vsp->farIDsInAlignments = (Boolean) (subtoolMode || smartnetMode || dirsubMode);
+          if (GetSequinAppParam ("SETTINGS", "VALIDATEFARALIGNIDS", NULL, str, sizeof (str))) {
+            if (StringICmp (str, "TRUE") == 0) {
+              vsp->farIDsInAlignments = TRUE;
+            }
           }
         }
         oldErrHook = ErrSetHandler (ValidErrHook);
         oldErrSev = ErrSetMessageLevel (SEV_NONE);
+        for (j = 0; j < 6; j++) {
+          vsp->errors [j] = 0;
+        }
         ValidateSeqEntry (sep, vsp);
         ErrSetMessageLevel (oldErrSev);
         ErrSetHandler (oldErrHook);
@@ -1647,6 +1670,12 @@ extern void ValSeqEntryForm (ForM f)
   }
 }
 
+extern void ValSeqEntryForm (ForM f)
+
+{
+  ValSeqEntryFormEx (f, TRUE);
+}
+
 static void ValSeqEntryProc (IteM i)
 
 {
@@ -1662,8 +1691,22 @@ static void ValSeqEntryProc (IteM i)
   }
 }
 
+static void ValSeqEntryProcNoAln (IteM i)
+
+{
+  BaseFormPtr  bfp;
+
+#ifdef WIN_MAC
+  bfp = (BaseFormPtr) currentFormDataPtr;
+#else
+  bfp = (BaseFormPtr) GetObjectExtra (i);
+#endif
+  if (bfp != NULL) {
+    ValSeqEntryFormEx (bfp->form, FALSE);
+  }
+}
+
 #ifdef USE_SPELL
-#ifdef WIN_MOTIF
 static void SpellCheckTheForm (ForM f)
 
 {
@@ -1715,6 +1758,9 @@ static void SpellCheckTheForm (ForM f)
         vsp->suppressContext = ShouldSetSuppressContext ();
         oldErrHook = ErrSetHandler (ValidErrHook);
         oldErrSev = ErrSetMessageLevel (SEV_NONE);
+        for (j = 0; j < 6; j++) {
+          vsp->errors [j] = 0;
+        }
         ValidateSeqEntry (sep, vsp);
         ErrSetMessageLevel (oldErrSev);
         ErrSetHandler (oldErrHook);
@@ -1758,7 +1804,6 @@ static void SpellCheckSeqEntryProc (IteM i)
     SpellCheckTheForm (bfp->form);
   }
 }
-#endif
 #endif
 
 extern Int4 MySeqEntryToAsn3Ex (SeqEntryPtr sep, Boolean strip, Boolean correct, Boolean force, Boolean dotaxon);
@@ -3266,10 +3311,13 @@ static void BioseqViewFormActivated (WindoW w)
                    (HANDLE) newDescMenu,
                    (HANDLE) newFeatMenu,
                    (HANDLE) newPubMenu,
+                   (HANDLE) batchApplyMenu,
+                   (HANDLE) batchEditMenu,
                    (HANDLE) prepareItem,
-                   (HANDLE) validateItem,
                    (HANDLE) edithistoryitem,
                    NULL);
+  Enable (validateItem);
+  Enable (validateMenu);
   Enable (aluItem);
   Enable (submitItem);
   Enable (specialMenu);
@@ -3552,8 +3600,9 @@ static void MacDeactProc (WindoW w)
                    (HANDLE) newDescMenu,
                    (HANDLE) newFeatMenu,
                    (HANDLE) newPubMenu,
+                   (HANDLE) batchApplyMenu,
+                   (HANDLE) batchEditMenu,
                    (HANDLE) prepareItem,
-                   (HANDLE) validateItem,
                    (HANDLE) editsequenceitem,
                    (HANDLE) editseqalignitem,
                    (HANDLE) editseqsubitem,
@@ -3564,6 +3613,8 @@ static void MacDeactProc (WindoW w)
                    (HANDLE) featPropItem,
                    (HANDLE) updalignitem,
                    NULL);
+  Disable (validateItem);
+  Disable (validateMenu);
   Disable (aluItem);
   Disable (submitItem);
   Disable (vectorScreenItem);
@@ -4218,10 +4269,9 @@ static void AcceptChangeTargetProc (ButtoN b)
 
   cfp = (ChangeTargetFormPtr) GetObjectExtra (b);
   if (cfp == NULL) return;
-  Hide (cfp->form);
   GetTitle (cfp->seqid, str, sizeof (str));
   SetBioseqViewTarget (cfp->base, str);
-  Remove (cfp->form);
+  SetTitle (cfp->seqid, "");
 }
 
 static void ChangeTargetMessageProc (ForM f, Int2 mssg)
@@ -4415,7 +4465,7 @@ static void PreferencesProc (IteM i)
   SetGroupSpacing (g, 10, 10);
   pfp->prefs = CreateEntrezPrefsDialog (g, NULL);
   c = HiddenGroup (g, 2, 0, NULL);
-  b = PushButton (c, "Accept", AcceptPrefsProc);
+  b = DefaultButton (c, "Accept", AcceptPrefsProc);
   SetObjectExtra (b, pfp, NULL);
   PushButton (c, "Cancel", StdCancelButtonProc);
   AlignObjects (ALIGN_CENTER, (HANDLE) pfp->prefs, (HANDLE) c, NULL);
@@ -5929,7 +5979,7 @@ static void CommonAddSeq (IteM i, Int2 type)
                 orp = OrgRefNew ();
                 biop->org = orp;
                 if (orp != NULL) {
-                  orp->taxname = StringSave (str);
+                  SetTaxNameAndRemoveTaxRef (orp, StringSave (str));
                 }
                 vnp = CreateNewDescriptor (sep, Seq_descr_source);
                 if (vnp != NULL) {
@@ -5944,7 +5994,7 @@ static void CommonAddSeq (IteM i, Int2 type)
               orp = OrgRefNew ();
               biop->org = orp;
               if (orp != NULL) {
-                orp->taxname = StringSave (tax);
+                SetTaxNameAndRemoveTaxRef (orp, tax);
               }
               vnp = CreateNewDescriptor (sep, Seq_descr_source);
               if (vnp != NULL) {
@@ -6093,7 +6143,6 @@ static void UpdateSeqWithAcc (IteM i)
   BaseFormPtr  bfp;
   BioseqPtr    bsp;
   SeqEntryPtr  sep;
-  SeqEntryPtr  source_sep = NULL;
 
 #ifdef WIN_MAC
   bfp = currentFormDataPtr;
@@ -6115,7 +6164,6 @@ static void ExtendSeqWithAcc (IteM i)
   BaseFormPtr  bfp;
   BioseqPtr    bsp;
   SeqEntryPtr  sep;
-  SeqEntryPtr  source_sep = NULL;
 
 #ifdef WIN_MAC
   bfp = currentFormDataPtr;
@@ -6394,14 +6442,20 @@ static void BioseqViewFormMenus (WindoW w)
     i = CommandItem (m, "Find by Position...", FindPosProc);
     SetObjectExtra (i, bfp, NULL);
     SeparatorItem (m);
-    i = CommandItem (m, "Validate.../ V", ValSeqEntryProc);
-    SetObjectExtra (i, bfp, NULL);
+    if (indexerVersion) {
+      sub = SubMenu (m, "Validate/ V");
+      i = CommandItem (sub, "Validate Record/ R", ValSeqEntryProc);
+      SetObjectExtra (i, bfp, NULL);
+      i = CommandItem (sub, "Validate no Alignments/ A", ValSeqEntryProcNoAln);
+      SetObjectExtra (i, bfp, NULL);
+    } else {
+      i = CommandItem (m, "Validate/ V", ValSeqEntryProc);
+      SetObjectExtra (i, bfp, NULL);
+    }
 #ifdef USE_SPELL
-#ifdef WIN_MOTIF
     SeparatorItem (m);
     i = CommandItem (m, "Spell Check...", SpellCheckSeqEntryProc);
     SetObjectExtra (i, bfp, NULL);
-#endif
 #endif
 /*#ifdef USE_BLAST*/
     if (useBlast) {
@@ -6447,8 +6501,10 @@ static void BioseqViewFormMenus (WindoW w)
       sub = SubMenu (m, "Font Selection");
       i = CommandItem (sub, "Display Font...", DisplayFontChangeProc);
       SetObjectExtra (i, bfp, NULL);
+      /*
       SeparatorItem (m);
       CreateLegendItem (m, bfp);
+      */
     }
 
 /*#ifdef EXTRA_SERVICES*/
@@ -6484,6 +6540,11 @@ static void BioseqViewFormMenus (WindoW w)
     m = PulldownMenu (w, "Annotate/ A");
     SetupNewFeaturesMenu (m, bfp);
     SeparatorItem (m);
+    sub = SubMenu (m, "Batch Feature Apply");
+    SetupBatchApplyMenu (sub, bfp);
+    sub = SubMenu (m, "Batch Feature Edit");
+    SetupBatchEditMenu (sub, bfp);
+    SeparatorItem (m);
     sub = SubMenu (m, "Publications");
     SetupNewPublicationsMenu (sub, bfp);
     SeparatorItem (m);
@@ -6498,8 +6559,10 @@ static void BioseqViewFormMenus (WindoW w)
       sub = SubMenu (m, "Font Selection");
       i = CommandItem (sub, "Display Font...", DisplayFontChangeProc);
       SetObjectExtra (i, bfp, NULL);
+      /*
       SeparatorItem (m);
       CreateLegendItem (m, bfp);
+      */
       SeparatorItem (m);
       sub = SubMenu (m, "Layout Override");
       CreateNewLayoutMenu (sub, bfp);
@@ -8186,15 +8249,11 @@ static void SetupDesktop (void)
   medviewprocs.createMenus = MedlineViewFormMenus;
 #endif
   medviewprocs.showAsnPage = TRUE;
-#ifdef WIN_MOTIF
   if (indexerVersion) {
     medviewprocs.useScrollText = TRUE;
   } else {
     medviewprocs.useScrollText = FALSE;
   }
-#else
-  medviewprocs.useScrollText = FALSE;
-#endif
   medviewprocs.handleMessages = SequinMedlineFormMessage;
   medviewprocs.makeControls = DoMakeMedViewerLinkControls;
   SetAppProperty ("MedlineDisplayForm", &medviewprocs);
@@ -8218,6 +8277,11 @@ static void SetupDesktop (void)
   seqviewprocs.createMenus = BioseqViewFormMenus;
 #endif
 #ifdef WIN_MOTIF
+  if (indexerVersion) {
+    seqviewprocs.createToolBar = BioseqViewFormToolBar; /* now in separate window */
+  }
+#endif
+#ifdef WIN_MSWIN
   if (indexerVersion) {
     seqviewprocs.createToolBar = BioseqViewFormToolBar; /* now in separate window */
   }
@@ -8289,15 +8353,11 @@ static void SetupDesktop (void)
 #ifdef WIN_MAC
   txtviewprocs.activateForm = TextViewProcFormActivated;
 #endif
-#ifdef WIN_MOTIF
   if (indexerVersion) {
     txtviewprocs.useScrollText = TRUE;
   } else {
     txtviewprocs.useScrollText = FALSE;
   }
-#else
-  txtviewprocs.useScrollText = FALSE;
-#endif
   SetAppProperty ("TextDisplayForm", &txtviewprocs);
 
   SetAppProperty ("HelpMessageProc", (Pointer) ProcessHelpMessage);
@@ -9095,12 +9155,16 @@ static void SetupMacMenus (void)
   findProtItem = CommandItem (m, "Find by Protein...", FindProtProc);
   findPosItem = CommandItem (m, "Find by Position...", FindPosProc);
   SeparatorItem (m);
-  validateItem = CommandItem (m, "Validate...", ValSeqEntryProc);
+  if (indexerVersion) {
+    validateMenu = SubMenu (m, "Validate");
+    CommandItem (validateMenu, "Validate Record/ V", ValSeqEntryProc);
+    CommandItem (validateMenu, "Validate no Alignments", ValSeqEntryProcNoAln);
+  } else {
+    validateItem = CommandItem (m, "Validate", ValSeqEntryProc);
+  }
 #ifdef USE_SPELL
-#ifdef WIN_MOTIF
   SeparatorItem (m);
   spellItem = CommandItem (m, "Spell Check...", SpellCheckSeqEntryProc);
-#endif
 #endif
 /*#ifdef USE_BLAST*/
   if (useBlast) {
@@ -9142,8 +9206,10 @@ static void SetupMacMenus (void)
     docsumfontItem = CommandItem (sub, "DocSum Font...", DocSumFontChangeProc);
   }
   displayfontItem = CommandItem (sub, "Display Font...", DisplayFontChangeProc);
+  /*
   SeparatorItem (m);
   legendItem = CreateLegendItem (m, NULL);
+  */
   SeparatorItem (m);
   sub = SubMenu (m, "Query Style");
   queryChoice = CreateQueryTypeChoice (sub, NULL);
@@ -9200,6 +9266,11 @@ static void SetupMacMenus (void)
 
   newFeatMenu = PulldownMenu (NULL, "Annotate");
   SetupNewFeaturesMenu (newFeatMenu, NULL);
+  SeparatorItem (newFeatMenu);
+  batchApplyMenu = SubMenu (newFeatMenu, "Batch Feature Apply");
+  SetupBatchApplyMenu (batchApplyMenu, NULL);
+  batchEditMenu = SubMenu (newFeatMenu, "Batch Feature Edit");
+  SetupBatchEditMenu (batchEditMenu, NULL);
   SeparatorItem (newFeatMenu);
   newPubMenu = SubMenu (newFeatMenu, "Publications");
   SetupNewPublicationsMenu (newPubMenu, NULL);
@@ -10261,7 +10332,6 @@ static VoidPtr LIBCALLBACK DumbUserDataFree (VoidPtr Pointer)
 static void SMCancelAllEdit(void)
 {
     ObjMgrPtr      omp;
-    ObjMgrDataPtr  tmp;
     OMUserDataPtr  omudp;
     Int2           num;
     SMUserDataPtr  sm_usr_data = NULL;
@@ -10307,7 +10377,7 @@ static Int4 SMReadBioseqObj(VoidPtr data, CharPtr buffer, Int4 length, Int4 fd)
     Int4           headlen;
     BioseqPtr      bsp;
     BioseqSetPtr   bssp = NULL, bssp2;
-    SeqEntryPtr    sep = NULL, sep1, sep2, oldsep;
+    SeqEntryPtr    sep = NULL, sep1, sep2;
     ObjMgrData     omdata;
     ObjMgrDataPtr  omdptop = NULL;
     Uint2          parenttype = 0;
@@ -10497,10 +10567,9 @@ static Int4 SMWriteBioseqObj(VoidPtr bio_data,
                              VoidPtr data)
 {
     ByteStorePtr    bsp;
-    Nlm_BSUnitPtr   bsup;
     AsnIoBSPtr      aibp;
     CharPtr buffer;
-    Int4 length, totlen, bytes =0;
+    Int4 length, totlen;
 
     bsp = BSNew(1024);
 
@@ -10563,6 +10632,8 @@ static Int4 SMWriteBioseqObj(VoidPtr bio_data,
 }
 #endif
 
+extern CharPtr objPrtMemStr;
+
 Int2 Main (void)
 
 {
@@ -10583,7 +10654,6 @@ Int2 Main (void)
   */
   OMUserDataPtr  omudp;
   PaneL          p;
-  Int2           procval = OM_MSG_RET_NOPROC;
   CharPtr        ptr;
   SeqEntryPtr    sep;
   Int4           smartPort = 0; 
@@ -10732,6 +10802,16 @@ Int2 Main (void)
           entrezMode = TRUE;
         else if (StringCmp (argv[i], "-h") == 0)
           nohelpMode = TRUE;
+#ifdef USE_SMARTNET
+        else if (StringNCmp (argv[i], "-z", 2) == 0) {
+          smartnetMode = TRUE;
+          dirsubMode = TRUE;
+          if(*(argv[i]+2) != NULLB)
+            smartPort = atoi(argv[i]+2);
+          else
+            smartPort = SM_SERVER_PORT;
+        }
+#endif
       }
   }}
 #endif
@@ -10782,24 +10862,12 @@ Int2 Main (void)
   }
 
   SetTitle (w, "Loading print templates");
-  /* objprt.prt still needed for Edit Citations button */
-  if (! PrintTemplateSetLoad ("objprt.prt")) {
+  /* objprt.prt still needed for Edit Citations button and Desktop view */
+  if (! PrintTemplateSetLoadEx ("objprt.prt", objPrtMemStr)) {
     ArrowCursor ();
     Message (MSG_FATAL, "PrintTemplateSetLoad objprt.prt failed");
     return 0;
   }
-  /*
-  if (! PrintTemplateSetLoad ("asn2ff.prt")) {
-    ArrowCursor ();
-    Message (MSG_FATAL, "PrintTemplateSetLoad asn2ff.prt failed");
-    return 0;
-  }
-  if (! PrintTemplateSetLoad ("makerpt.prt")) {
-    ArrowCursor ();
-    Message (MSG_FATAL, "PrintTemplateSetLoad makerpt.prt failed");
-    return 0;
-  }
-  */
 
   SetTitle (w, "Loading sequence alphabet converter");
   if (! SeqCodeSetLoad ()) {
@@ -11079,6 +11147,13 @@ Int2 Main (void)
           CleanupSequin ();
           return 0;
         } else {
+          if (! nohelpMode) {
+            SetTitle (w, "Creating help window");
+            if (helpForm == NULL) {
+              helpForm = CreateHelpForm (-95, -5, "Sequin Help", "sequin.hlp",
+                                         HideHelpForm, HelpActivateProc);
+            }
+          }
           SendHelpScrollMessage (helpForm, "Editing the Record", NULL);
         }
         ObjMgrSetOptions (OM_OPT_FREE_IF_NO_VIEW, subtoolEntityID);
@@ -11164,16 +11239,19 @@ Int2 Main (void)
   } else if (startupForm != NULL) {
     Show (startupForm);
     Select (startupForm);
-    if (! nohelpMode) {
-      Show (helpForm);
-      SendHelpScrollMessage (helpForm, "Introduction", NULL);
-    }
     Update ();
     initSubmitForm = CreateInitSubmitterForm (-5, -67, "Submitting Authors",
                                               GetFormat, BackToStartup,
                                               SubmitBlockActivateProc);
     formatForm = CreateFormatForm (-5, -67, "Sequence Format",
                                    GetOrgAndSeq, BackToSubmitter, FormatActivateProc);
+    if (! nohelpMode) {
+      Update ();
+      Show (helpForm);
+      Select (helpForm);
+      Update ();
+      SendHelpScrollMessage (helpForm, "Introduction", NULL);
+    }
   } else {
     Message (MSG_FATAL, "Unable to create window.");
     CleanupSequin ();

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/26/97
 *
-* $Revision: 6.153 $
+* $Revision: 6.166 $
 *
 * File Description:
 *
@@ -76,6 +76,7 @@
 #include <subutil.h>
 #include <explore.h>
 #include <import.h>
+#include <salutil.h>
 
 static void CommonLaunchBioseqViewer (SeqEntryPtr sep, CharPtr path, Boolean directToEditor)
 
@@ -819,7 +820,7 @@ void EditLocusProc (IteM i)
   StaticPrompt (g, "Accession: ", 0, stdLineHeight, systemFont, 'l');
   elp->accnnumber = StaticPrompt (g, "", 20 * stdCharWidth, stdLineHeight, systemFont, 'l');
   c = HiddenGroup (w, 2, 0, NULL);
-  b = PushButton (c, "Accept", StdAcceptFormButtonProc);
+  b = DefaultButton (c, "Accept", StdAcceptFormButtonProc);
   SetObjectExtra (b, elp, NULL);
   PushButton (c, "Cancel", StdCancelButtonProc);
   AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) c, NULL);
@@ -3197,7 +3198,7 @@ static ForM CreatePowBlastForm (Uint2 entityID, SeqEntryPtr sep)
     AlignObjects (ALIGN_MIDDLE, (HANDLE) ppt4, (HANDLE) pfp->stringency, NULL);
 
     c = HiddenGroup (w, 4, 0, NULL);
-    pfp->accept = PushButton (c, "Accept", PowBlastFormAcceptProc);
+    pfp->accept = DefaultButton (c, "Accept", PowBlastFormAcceptProc);
     SetObjectExtra (pfp->accept, pfp, NULL);
     Disable (pfp->accept);
     PushButton (c, "Cancel", StdCancelButtonProc);
@@ -5546,7 +5547,7 @@ static ForM CreateAutoParseForm (Uint2 entityID, SeqEntryPtr sep, BioseqPtr targ
     }
 
     c = HiddenGroup (w, 4, 0, NULL);
-    b = PushButton (c, "Accept", AutoParseAcceptProc);
+    b = DefaultButton (c, "Accept", AutoParseAcceptProc);
     SetObjectExtra (b, afp, NULL);
     PushButton (c, "Cancel", StdCancelButtonProc);
 
@@ -5857,7 +5858,7 @@ void AutoParseFeatureTableProc (IteM i)
     SetValue (ppp->tabDelimited, 1);
 
     c = HiddenGroup (w, 4, 0, NULL);
-    b = PushButton (c, "Accept", PreParseAcceptProc);
+    b = DefaultButton (c, "Accept", PreParseAcceptProc);
     SetObjectExtra (b, ppp, NULL);
     PushButton (c, "Cancel", StdCancelButtonProc);
 
@@ -6011,6 +6012,7 @@ typedef struct qualformdata {
   EnumFieldAssoc PNTR realalist;
   EnumFieldAssoc PNTR alist;
   ValNodePtr     bsplist;
+  ButtoN         leaveDlgUp;
 } QualFormData, PNTR QualFormPtr;
 
 static void LIBCALLBACK AsnWriteQualifierForDCallBack (AsnExpOptStructPtr pAEOS)
@@ -6170,83 +6172,6 @@ extern void SeqLocAdjustByOffset (SeqLocPtr slp,
   default :
     break;
   }
-}
-
-/*=========================================================================*/
-/*                                                                         */
-/* SeqLocAddToEnd ()                                                       */
-/*                                                                         */
-/*=========================================================================*/
-
-static Boolean SeqLocAddToEnd (SeqLocPtr slp, Int4 length)
-{
-  SeqIntPtr sinp;
-
-  switch (slp->choice) {
-  case SEQLOC_INT :
-    sinp = (SeqIntPtr) slp->data.ptrvalue;
-    if (NULL == sinp)
-      return FALSE;
-    sinp->to += length;
-    break;
-  case SEQLOC_EMPTY :
-  case SEQLOC_NULL :
-  case SEQLOC_WHOLE :
-  case SEQLOC_PNT :
-  case SEQLOC_PACKED_PNT :
-  case SEQLOC_PACKED_INT :
-  case SEQLOC_MIX :
-  case SEQLOC_EQUIV :
-  case SEQLOC_BOND :
-  case SEQLOC_FEAT :
-  default :
-    break;
-  }
-
-  return TRUE;
-}
-
-/*=========================================================================*/
-/*                                                                         */
-/* SeqLocGetLength ()                                                      */
-/*                                                                         */
-/*=========================================================================*/
-
-static Int4 SeqLocGetLength (SeqLocPtr slp)
-{
-  SeqIntPtr sinp;
-  Int4      length;
-
-  switch (slp->choice) {
-  case SEQLOC_INT :
-
-    sinp = (SeqIntPtr) slp->data.ptrvalue;
-    if (NULL == sinp)
-      return 0;
-
-    if (sinp->from < sinp->to)
-      length = sinp->to - sinp->from + 1;
-    else
-      length = sinp->from - sinp->to + 1;
-
-    break;
-
-  case SEQLOC_EMPTY :
-  case SEQLOC_NULL :
-  case SEQLOC_WHOLE :
-  case SEQLOC_PNT :
-  case SEQLOC_PACKED_PNT :
-  case SEQLOC_PACKED_INT :
-  case SEQLOC_MIX :
-  case SEQLOC_EQUIV :
-  case SEQLOC_BOND :
-  case SEQLOC_FEAT :
-  default :
-    length = 0;
-    break;
-  }
-
-  return length;
 }
 
 /*=========================================================================*/
@@ -6437,6 +6362,41 @@ static void ConvertProtsToMatPeptides (BioseqPtr bsp)
   return;
 }
 
+static void ConvertFirstMatProteinToPolyProtein (
+  BioseqPtr nucBsp,
+  SeqFeatPtr firstMatCDS
+)
+{
+
+  SeqLocPtr firstMatLoc;
+  BioseqPtr firstMatBsp;
+  Uint1     strand;
+
+  if (nucBsp == NULL
+    || firstMatCDS == NULL)
+  {
+    return;
+  }
+
+  firstMatBsp = BioseqFindFromSeqLoc (firstMatCDS->product);
+  if (firstMatBsp == NULL) return;
+
+  strand = SeqLocStrand (firstMatCDS->location);
+  firstMatLoc = firstMatCDS->location;
+  firstMatCDS->location = SeqLocMerge (nucBsp, firstMatLoc, NULL, FALSE, TRUE, FALSE);
+  expand_seq_loc (0, nucBsp->length - 1, strand, firstMatCDS->location);
+
+  SetSeqLocPartial (firstMatCDS->location, TRUE, TRUE);
+  firstMatCDS->partial = TRUE;
+  SeqLocFree (firstMatLoc);
+
+  firstMatBsp->seq_data = BSFree (firstMatBsp->seq_data);
+  firstMatBsp->seq_data = ProteinFromCdRegion (firstMatCDS, FALSE);
+  firstMatBsp->length = BSLen (firstMatBsp->seq_data);
+  SetSeqFeatProduct (firstMatCDS, firstMatBsp);
+
+}
+
 /*=========================================================================*/
 /*                                                                         */
 /* MergeProteinBioseqs ()                                                  */
@@ -6450,12 +6410,7 @@ static Boolean MergeProteinBioseqs (BioseqSetPtr bssp)
   BioseqPtr          protBsp;
   SeqEntryPtr        sep;
   Int4               offset;
-  Uint1              seqtype;
-  SeqPortPtr         spp;
-  Int2               residue;
   SeqFeatPtr         cdsSfp;
-  SeqFeatPtr         firstProtCDS;
-  Int4               cdsLen;
   Boolean            found;
   SeqMgrFeatContext  fcontext;
 
@@ -6489,8 +6444,9 @@ static Boolean MergeProteinBioseqs (BioseqSetPtr bssp)
       /* offset for the next Bioseq.   */
       
       if (NULL == firstProtBsp)	{
+        ConvertFirstMatProteinToPolyProtein (bsp, cdsSfp);
+        protBsp = BioseqFindFromSeqLoc (cdsSfp->product);
 	firstProtBsp = protBsp;
-	firstProtCDS = SeqMgrGetCDSgivenProduct (firstProtBsp, NULL);
 	offset = firstProtBsp->length;
       }
       
@@ -6500,41 +6456,16 @@ static Boolean MergeProteinBioseqs (BioseqSetPtr bssp)
       else {
 
 	/* Move all features to 1st protein Bioseq */
-	
+	offset = fcontext.left / 3;
+
 	MoveProteinAnnots (firstProtBsp, protBsp, &offset);
-	
-	/* Merge the actual sequences */
-	
-	seqtype = Seq_code_ncbieaa;
-	spp = SeqPortNew(protBsp, 0, protBsp->length-1, protBsp->strand,
-			 seqtype);
-	
-	while ((residue = SeqPortGetResidue(spp)) != SEQPORT_EOF) {
-	  if (! IS_residue(residue))
-	    ErrPost(CTX_NCBIOBJ, 1, "Non-residue in MergeProteinBioseqs [%d]",
-		    (int)residue);
-	  else 
-	    BSPutByte(firstProtBsp->seq_data, residue);
-	}
-	
-	SeqPortFree(spp);
-	firstProtBsp->length += protBsp->length;
-	
-	/* Mark for deletion the original Bioseq */
-	
-	offset += protBsp->length;
+
+        /* Mark for deletion the original Bioseq */
 	protBsp->idx.deleteme = TRUE;
-
-	/* Mark for deletion any CDS */
-	/* pointing to this Bioseq.  */
-
-	cdsSfp = SeqMgrGetCDSgivenProduct (protBsp, NULL);
+        /* Mark for deletion the CDS */
+        /* pointing to this Bioseq.  */
 	cdsSfp->idx.deleteme = TRUE;
 
-	/* Adjust the length of the merged Bioseq's CDS */
-
-	cdsLen = SeqLocGetLength (cdsSfp->location);
-	SeqLocAddToEnd (firstProtCDS->location, cdsLen);
       }
 
     cdsSfp = SeqMgrGetNextFeature (protBsp, cdsSfp, SEQFEAT_CDREGION,
@@ -8112,7 +8043,11 @@ static void DoProcessQualifier (ButtoN b)
           qfp->findStr = JustSaveStringFromText (qfp->findthis);
           PrepareToConvertToCDS (sep, qfp->input_entityID,
 				 qfp->subtype, qfp->findStr);
-          Remove (qfp->form);
+          if (GetStatus (qfp->leaveDlgUp)) {
+            Show (qfp->form);
+          } else {
+            Remove (qfp->form);
+          }
           return;
 	}
       }
@@ -8151,7 +8086,11 @@ static void DoProcessQualifier (ButtoN b)
   DeleteMarkedObjects (qfp->input_entityID, 0, NULL);
   ObjMgrSetDirtyFlag (qfp->input_entityID, TRUE);
   ObjMgrSendMsg (OM_MSG_UPDATE, qfp->input_entityID, 0, 0);
-  Remove (qfp->form);
+  if (GetStatus (qfp->leaveDlgUp)) {
+    Show (qfp->form);
+  } else {
+    Remove (qfp->form);
+  }
 }
 
 static void QualMessageProc (ForM f, Int2 mssg)
@@ -8177,6 +8116,15 @@ static void CleanupQualForm (GraphiC g, VoidPtr data)
   if (qfp != NULL) {
     MemFree (qfp->findStr);
     MemFree (qfp->replaceStr);
+    if (qfp->alist != NULL
+      && qfp->alist != qfp->realalist
+      && qfp->alist != qfp->realalist + 1)
+    {
+      for (j = 0; qfp->alist [j].name != NULL; j++) {
+        MemFree (qfp->alist [j].name);
+      }
+      MemFree (qfp->alist);
+    }
     if (qfp->realalist != NULL) {
       for (j = 0; qfp->realalist [j].name != NULL; j++) {
         MemFree (qfp->realalist [j].name);
@@ -8258,6 +8206,7 @@ static void ProcessQualifier (IteM i, Int2 type)
   } else {
     ap = import_featdef_alist (FALSE, FALSE, FALSE);
   }
+  SortEnumFieldAssocPtrArray (ap, CompareImpFeatEnumFieldAssoc);
   qfp->realalist = ap;
   if (type == CONVERT_FEAT) {
     ap++;
@@ -8265,7 +8214,15 @@ static void ProcessQualifier (IteM i, Int2 type)
     ap->name = MemFree (ap->name);
     ap->name = StringSave ("[ALL FEATURES]");
   }
-  qfp->alist = ap;
+ 
+  if (type == CONVERT_FEAT)
+  { 
+    qfp->alist = InsertMostUsedFeatureEnumFieldAssoc (ap);
+  }
+  else
+  {
+    qfp->alist = ap;
+  }
 
   h = HiddenGroup (w, -1, 0, NULL);
   SetGroupSpacing (h, 10, 10);
@@ -8365,9 +8322,10 @@ static void ProcessQualifier (IteM i, Int2 type)
   }
 
   c = HiddenGroup (h, 4, 0, NULL);
-  b = PushButton (c, "Accept", DoProcessQualifier);
+  b = DefaultButton (c, "Accept", DoProcessQualifier);
   SetObjectExtra (b, qfp, NULL);
   PushButton (c, "Cancel", StdCancelButtonProc);
+  qfp->leaveDlgUp = CheckBox (c, "Leave Dialog Up", NULL);
 
   AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) k, (HANDLE) c, NULL);
   RealizeWindow (w);
@@ -8455,9 +8413,10 @@ static ENUM_ALIST(subsource_and_orgmod_subtype_alistX)
   {"Isolation-source",      128},
   {"Lab-host",              116},
   {"Map",                   102},
+  {"Note - OrgMod",          55},
+  {"Note - SubSource",      155},
   {"Old Lineage",            53}, /* 253 */
   {"Old Name",               54}, /* 254 */
-  {"OrgMod Note",            55},
   {"Pathovar",               11},
   {"Plasmid-name",          119},
   {"Plastid-name",          122},
@@ -8474,7 +8433,6 @@ static ENUM_ALIST(subsource_and_orgmod_subtype_alistX)
   {"Sub-species",            22},
   {"Subclone",              104},
   {"Subgroup",               16},
-  {"SubSource Note",        155},
   {"Substrain",               3},
   {"Subtype",                 5},
   {"Synonym",                28},
@@ -8522,9 +8480,10 @@ static ENUM_ALIST(subsource_and_orgmod_subtype_remove_alistX)
   {"Isolation-source",      128},
   {"Lab-host",              116},
   {"Map",                   102},
+  {"Note - OrgMod",          55},
+  {"Note - SubSource",      155},
   {"Old Lineage",            53}, /* 253 */
   {"Old Name",               54}, /* 254 */
-  {"OrgMod Note",            55},
   {"Pathovar",               11},
   {"Plasmid-name",          119},
   {"Plastid-name",          122},
@@ -8541,7 +8500,6 @@ static ENUM_ALIST(subsource_and_orgmod_subtype_remove_alistX)
   {"Sub-species",            22},
   {"Subclone",              104},
   {"Subgroup",               16},
-  {"SubSource Note",        155},
   {"Substrain",               3},
   {"Subtype",                 5},
   {"Synonym",                28},
@@ -8617,13 +8575,79 @@ typedef struct sourceformdata {
 
   Boolean        replaceOldAsked;
   Boolean        doReplaceAll;
+  Boolean        use_semicolon;
+  ButtoN         leaveDlgUp;
 } SourceFormData, PNTR SourceFormPtr;
+
+extern void AppendOrReplaceString (
+  CharPtr PNTR string_loc,
+  CharPtr new_value,
+  Boolean PNTR asked_question,
+  Boolean PNTR do_replace,
+  Boolean PNTR use_semicolon
+)
+{
+  MsgAnswer ans;
+  CharPtr   tmp_value, tmp_new_value;
+
+  if (string_loc == NULL
+    || new_value == NULL
+    || asked_question == NULL
+    || do_replace == NULL
+    || use_semicolon == NULL)
+  {
+    return;
+  }
+
+  if (! *asked_question && !StringHasNoText (*string_loc))
+  {
+    *asked_question = TRUE;
+    ArrowCursor ();
+    ans = Message (MSG_YN, "Do you wish to overwrite existing content?");
+    *do_replace = (Boolean) (ans == ANS_YES);
+    if (! *use_semicolon)
+    {
+      if (! *do_replace)
+      {
+        ans = Message (MSG_YN, "Separate items with semicolon?");
+        *use_semicolon = (Boolean) (ans == ANS_YES);
+      }
+    }
+    WatchCursor ();
+    Update ();
+  }
+  if (*do_replace || StringHasNoText (*string_loc))
+  {
+    MemFree (*string_loc);
+    *string_loc = StringSave (new_value);
+  }
+  else
+  {
+    tmp_value = MemNew (StringLen (*string_loc) + StringLen ( new_value) + 3);
+    if (tmp_value == NULL) return;
+    StringCpy (tmp_value, *string_loc);
+    TrimSpacesAroundString (tmp_value);
+    if (*use_semicolon)
+    {
+      StringCat (tmp_value, "; ");
+    }
+    else
+    {
+      StringCat (tmp_value, " ");
+    }
+    tmp_new_value = StringSave (new_value);
+    TrimSpacesAroundString (tmp_new_value);
+    StringCat (tmp_value, tmp_new_value);
+    MemFree (tmp_new_value);
+    MemFree (*string_loc);
+    *string_loc = tmp_value;
+  }
+}
 
 static SubSourcePtr FindSubSource (BioSourcePtr biop, Uint1 subtype, SourceFormPtr sfp,
                                    Boolean forceRemove, Boolean convertNote, Boolean is_feat)
 
 {
-  MsgAnswer     ans;
   SubSourcePtr  PNTR  prev;
   SubSourcePtr  ssp;
   SubSourcePtr  tmp;
@@ -8640,18 +8664,6 @@ static SubSourcePtr FindSubSource (BioSourcePtr biop, Uint1 subtype, SourceFormP
           *prev = ssp->next;
           SubSourceFree (ssp);
           return NULL;
-        }
-      } else if (sfp->type == ADD_SOURCE) {
-        if (! sfp->replaceOldAsked) {
-          sfp->replaceOldAsked = TRUE;
-          ArrowCursor ();
-          ans = Message (MSG_YN, "Do you wish to overwrite existing modifiers?");
-          WatchCursor ();
-          Update ();
-          sfp->doReplaceAll = (Boolean) (ans == ANS_YES);
-        }
-        if (sfp->doReplaceAll) {
-          return ssp;
         }
       } else {
         return ssp;
@@ -8681,7 +8693,6 @@ static SubSourcePtr FindSubSource (BioSourcePtr biop, Uint1 subtype, SourceFormP
 static OrgModPtr FindOrgMod (BioSourcePtr biop, Uint1 subtype, SourceFormPtr sfp, Boolean forceRemove, Boolean convertNote)
 
 {
-  MsgAnswer   ans;
   OrgModPtr   mod;
   OrgNamePtr  onp;
   OrgRefPtr   orp;
@@ -8722,18 +8733,6 @@ static OrgModPtr FindOrgMod (BioSourcePtr biop, Uint1 subtype, SourceFormPtr sfp
           OrgModFree (mod);
           return NULL;
         }
-      } else if (sfp->type == ADD_SOURCE) {
-        if (! sfp->replaceOldAsked) {
-          sfp->replaceOldAsked = TRUE;
-          ArrowCursor ();
-          ans = Message (MSG_YN, "Do you wish to overwrite existing modifiers?");
-          WatchCursor ();
-          Update ();
-          sfp->doReplaceAll = (Boolean) (ans == ANS_YES);
-        }
-        if (sfp->doReplaceAll) {
-          return mod;
-        }
       } else {
         return mod;
       }
@@ -8771,7 +8770,7 @@ static void ConvertSourceString (OrgRefPtr orp, Int2 fromval, Int2 toval)
   switch (fromval) {
     case 1 :
       tmp = orp->taxname;
-      orp->taxname = NULL;
+      SetTaxNameAndRemoveTaxRef (orp, NULL);
       break;
     case 2 :
       tmp = orp->common; 
@@ -8797,7 +8796,7 @@ static void ConvertSourceString (OrgRefPtr orp, Int2 fromval, Int2 toval)
 
   switch (toval) {
     case 1 :
-      orp->taxname = tmp;
+      SetTaxNameAndRemoveTaxRef (orp, tmp);
       break;
     case 2 :
       orp->common = tmp;
@@ -8873,6 +8872,241 @@ static Uint1 AssignSubtype (Uint1 subtype)
   return subtype;
 }
 
+static void RemoveSubSourceByPtr (BioSourcePtr biop, SubSourcePtr to_remove)
+{
+  SubSourcePtr ssp, prev;
+
+  if (biop == NULL || to_remove == NULL) return;
+  
+  prev = NULL;
+  ssp = biop->subtype;
+  while (ssp != NULL)
+  {
+    if (ssp == to_remove)
+    {
+      if (prev == NULL)
+      {
+        biop->subtype = ssp->next;
+        ssp->next = NULL;
+        SubSourceFree (ssp);
+        ssp = biop->subtype;
+      }
+      else
+      {
+        prev->next = ssp->next;
+        ssp->next = NULL;
+        SubSourceFree (ssp);
+        ssp = prev->next;
+      }
+    }
+    else
+    {
+      prev = ssp;
+      ssp = ssp->next;
+    }
+  }
+}
+
+static void ConvertSubSourceModifier (
+  BioSourcePtr  biop,
+  SourceFormPtr sfp,
+  Boolean       is_feat,
+  SubSourcePtr  ssp_from
+)
+{
+  SubSourcePtr ssp_to;
+
+  if (biop == NULL || sfp == NULL || ssp_from == NULL) return;
+  ssp_to = FindSubSource (biop, sfp->toval - 100, sfp, TRUE, FALSE, is_feat);
+  if (ssp_to != NULL)
+  {
+    AppendOrReplaceString (&(ssp_to->name), ssp_from->name,
+                           &(sfp->replaceOldAsked),
+                           &(sfp->doReplaceAll),
+                           &(sfp->use_semicolon));
+    RemoveSubSourceByPtr (biop, ssp_from);
+  }
+  else
+  {
+    ssp_from->subtype = AssignSubtype (sfp->toval);
+  }
+}
+ 
+static void RemoveOrgModByPtr (BioSourcePtr biop, OrgModPtr to_remove)
+{
+  OrgModPtr mod, prev;
+  
+  if (biop == NULL
+    || biop->org == NULL
+    || biop->org->orgname == NULL
+    || biop->org->orgname->mod == NULL
+    || to_remove == NULL)
+  {
+    return;
+  }
+
+  prev = NULL;
+  mod = biop->org->orgname->mod;
+  while (mod != NULL)
+  {
+    if (mod == to_remove)
+    {
+      if (prev == NULL)
+      {
+        biop->org->orgname->mod = mod->next;
+        mod->next = NULL;
+        OrgModFree (mod);
+        mod = biop->org->orgname->mod;
+      }
+      else
+      {
+        prev->next = mod->next;
+        mod->next = NULL;
+        OrgModFree (mod);
+        mod = prev->next;
+      }
+    }
+    else
+    {
+      prev = mod;
+      mod = mod->next;
+    }
+  }
+}
+
+static void ConvertOrganismModifier (
+  BioSourcePtr  biop,
+  SourceFormPtr sfp,
+  Boolean       is_feat,
+  OrgModPtr     mod_from
+)
+{
+  OrgModPtr mod_to;
+
+  if (biop == NULL || sfp == NULL || mod_from == NULL) return;
+  mod_to = FindOrgMod (biop, sfp->toval, sfp, FALSE, FALSE);
+  if (mod_to != NULL)
+  {
+    AppendOrReplaceString (&(mod_to->subname), mod_from->subname,
+                           &(sfp->replaceOldAsked),
+                           &(sfp->doReplaceAll),
+                           &(sfp->use_semicolon));
+    RemoveOrgModByPtr (biop, mod_from);
+  }
+  else
+  {
+    mod_from->subtype = AssignSubtype (sfp->toval);
+  }
+}
+
+static void ConvertSubSourceToOrgMod (
+  BioSourcePtr biop,
+  SourceFormPtr sfp,
+  Boolean is_feat,
+  SubSourcePtr ssp
+)
+{
+  OrgModPtr mod;
+
+  if (biop == NULL
+    || sfp == NULL
+    || ssp == NULL)
+  {
+    return;
+  }
+
+  if (sfp->toval == 55)
+  {
+    mod = FindOrgMod (biop, 255, sfp, FALSE, FALSE);
+  }
+  else
+  {
+    mod = FindOrgMod (biop, sfp->toval, sfp, FALSE, FALSE);
+  }
+  if (mod == NULL)
+  {
+    if (biop->org == NULL) 
+    {
+      biop->org = OrgRefNew ();
+      if (biop->org == NULL) return;
+    } 
+    if (biop->org->orgname == NULL)
+    {
+      biop->org->orgname = OrgNameNew ();
+      if (biop->org->orgname == NULL) return;
+    }
+    mod = OrgModNew ();
+    if (sfp->toval == 55)
+    {
+      mod->subtype = 255;
+    }
+    else
+    {
+      mod->subtype = sfp->toval;
+    }
+    mod->subname = StringSave (ssp->name);
+    mod->next = biop->org->orgname->mod;
+    biop->org->orgname->mod = mod;
+  }
+  else
+  {
+    AppendOrReplaceString (&(mod->subname), ssp->name,
+                           &(sfp->replaceOldAsked),
+                           &(sfp->doReplaceAll),
+                           &(sfp->use_semicolon));
+  }
+  RemoveSubSourceByPtr (biop, ssp);
+}
+ 
+static void ConvertOrgModToSubSource (
+  BioSourcePtr biop,
+  SourceFormPtr sfp,
+  Boolean is_feat,
+  OrgModPtr mod
+)
+{
+  SubSourcePtr ssp;
+
+  if (biop == NULL
+    || sfp == NULL
+    || mod == NULL)
+  {
+    return;
+  }
+
+  if (sfp->toval == 155)
+  {
+    ssp = FindSubSource (biop, 255, sfp, FALSE, FALSE, is_feat);
+  }
+  else
+  {
+    ssp = FindSubSource (biop, sfp->toval - 100, sfp, FALSE, FALSE, is_feat);
+  }
+  if (ssp == NULL)
+  {
+    ssp = SubSourceNew ();
+    if (sfp->toval == 155)
+    {
+      ssp->subtype = 255;
+    }
+    else
+    {
+      ssp->subtype = sfp->toval - 100;
+    }
+    ssp->name = StringSave (mod->subname);
+    ssp->next = biop->subtype;
+    biop->subtype = ssp;
+  }
+  else
+  {
+    AppendOrReplaceString (&(ssp->name), mod->subname,
+                           &(sfp->replaceOldAsked),
+                           &(sfp->doReplaceAll),
+                           &(sfp->use_semicolon));
+  }
+  RemoveOrgModByPtr (biop, mod);
+}
+ 
 static void ProcessBioSourceFunc (BioSourcePtr biop, SourceFormPtr sfp, Boolean is_feat)
 
 {
@@ -8884,6 +9118,7 @@ static void ProcessBioSourceFunc (BioSourcePtr biop, SourceFormPtr sfp, Boolean 
   CharPtr       str = NULL;
   CharPtr       str1 = NULL;
   CharPtr       str2 = NULL;
+  CharPtr       tmp_str;
 
   if (biop == NULL || sfp == NULL) return;
   if (sfp->choice == 1) {
@@ -8913,19 +9148,13 @@ static void ProcessBioSourceFunc (BioSourcePtr biop, SourceFormPtr sfp, Boolean 
         if (sfp->toval < 1) return;
         if (StringHasNoText (sfp->findStr) || StringISearch (str, sfp->findStr) != NULL) {
           if (sfp->toval >= 100 && ssp != NULL) {
-            ssp->subtype = AssignSubtype (sfp->toval);
+            ConvertSubSourceModifier (biop, sfp, is_feat, ssp);
           } else if (sfp->toval < 100 && mod != NULL) {
-            mod->subtype = AssignSubtype (sfp->toval);
+            ConvertOrganismModifier (biop, sfp, is_feat, mod);
           } else if (sfp->toval < 100 && ssp != NULL) {
-            mod = FindOrgMod (biop, sfp->toval, sfp, FALSE, TRUE);
-            if (mod == NULL) return;
-            mod->subname = StringSave (str);
-            ssp = FindSubSource (biop, sfp->fromval - 100, sfp, TRUE, FALSE, is_feat);
+            ConvertSubSourceToOrgMod (biop, sfp, is_feat, ssp);
           } else if (sfp->toval >= 100 && mod != NULL) {
-            ssp = FindSubSource (biop, sfp->toval - 100, sfp, FALSE, TRUE, is_feat);
-            if (ssp == NULL) return;
-            ssp->name = StringSave (str);
-            mod = FindOrgMod (biop, sfp->fromval, sfp, TRUE, FALSE);
+            ConvertOrgModToSubSource (biop, sfp, is_feat, mod);
           }
         }
         break;
@@ -8944,19 +9173,23 @@ static void ProcessBioSourceFunc (BioSourcePtr biop, SourceFormPtr sfp, Boolean 
         break;
       case ADD_SOURCE :
         if (ssp != NULL) {
-          ssp->name = MemFree (ssp->name);
-          ssp->name = StringSave (sfp->findStr);
+          AppendOrReplaceString (&(ssp->name), sfp->findStr,
+                           &(sfp->replaceOldAsked),
+                           &(sfp->doReplaceAll),
+                           &(sfp->use_semicolon));
           if (ssp->name == NULL &&
               (ssp->subtype == SUBSRC_germline ||
                ssp->subtype == SUBSRC_rearranged ||
                ssp->subtype == SUBSRC_environmental_sample)) {
-            ssp->name = StringSave ("");
+              ssp->name = StringSave ("");
           } else if (ssp->subtype == SUBSRC_transgenic && (! is_feat)) {
             ssp->name = StringSave ("");
           }
         } else if (mod != NULL) {
-          mod->subname = MemFree (mod->subname);
-          mod->subname = StringSave (sfp->findStr);
+          AppendOrReplaceString (&(mod->subname), sfp->findStr,
+                           &(sfp->replaceOldAsked),
+                           &(sfp->doReplaceAll),
+                           &(sfp->use_semicolon));
         }
         break;
       default :
@@ -8975,7 +9208,6 @@ static void ProcessBioSourceFunc (BioSourcePtr biop, SourceFormPtr sfp, Boolean 
         }
         break;
       case EDIT_SOURCE :
-        break;
       case ADD_SOURCE :
         biop->genome = sfp->fromval;
         break;
@@ -9012,7 +9244,7 @@ static void ProcessBioSourceFunc (BioSourcePtr biop, SourceFormPtr sfp, Boolean 
         switch (sfp->fromval) {
           case 1 :
             if (orp != NULL) {
-              orp->taxname = MemFree (orp->taxname);
+              SetTaxNameAndRemoveTaxRef (orp, MemFree (orp->taxname));
             }
             break;
           case 2 :
@@ -9043,7 +9275,10 @@ static void ProcessBioSourceFunc (BioSourcePtr biop, SourceFormPtr sfp, Boolean 
             if (orp != NULL) {
               foundit = StringISearch (orp->taxname, sfp->findStr);
               if (foundit != NULL) {
-                EditSourceString (&(orp->taxname), sfp, foundit);
+                tmp_str = StringSave (orp->taxname);
+                foundit = StringISearch (tmp_str, sfp->findStr);
+                EditSourceString (&(tmp_str), sfp, foundit);
+                SetTaxNameAndRemoveTaxRef (orp, tmp_str);
               }
             }
             break;
@@ -9247,6 +9482,7 @@ static void DoProcessSource (ButtoN b)
     }
     if (sfp->type != EDIT_SOURCE
       || (! StringHasNoText (sfp->findStr))
+      || sfp->choice == 2
       || sfp->choice == 3) {
       sfp->replaceOldAsked = FALSE;
       sfp->doReplaceAll = FALSE;
@@ -9283,7 +9519,11 @@ static void DoProcessSource (ButtoN b)
   }
   ObjMgrSetDirtyFlag (sfp->input_entityID, TRUE);
   ObjMgrSendMsg (OM_MSG_UPDATE, sfp->input_entityID, 0, 0);
-  Remove (sfp->form);
+  if (GetStatus (sfp->leaveDlgUp)) {
+    Show (sfp->form);
+  } else {
+    Remove (sfp->form);
+  }
 }
 
 
@@ -9395,6 +9635,61 @@ static void SourceApplyToPartsProc (ButtoN b)
   }
 }
 
+static void ClearProcessSourceDlg (ButtoN b)
+{
+  SourceFormPtr  sfp;
+
+  sfp = (SourceFormPtr) GetObjectExtra (b);
+  if (sfp == NULL) return;
+
+  if ( sfp->onlyThisPart != NULL) {
+    Disable (sfp->onlyThisPart);
+  }
+  SetValue (sfp->sourceGroup, 1);
+  Hide (sfp->modGrp);
+  switch (sfp->type) {
+    case REMOVE_SOURCE :
+      SetEnumPopup (sfp->fromgen, biosource_genome_alistX, 0);
+      SetEnumPopup (sfp->fromref, orgref_textfield_alist, 0);
+      SetTitle (sfp->findthis, "");
+      SetValue (sfp->frommod, 1);
+      SetValue (sfp->fromorigin, 1);
+      break;
+    case CONVERT_SOURCE :
+      SetEnumPopup (sfp->fromgen, biosource_genome_alistX, 0);
+      SetEnumPopup (sfp->togen, biosource_genome_alistX, 0);
+      SetEnumPopup (sfp->fromref, orgref_textfield_alist, 0);
+      SetEnumPopup (sfp->toref, orgref_textfield_alist, 0);
+      SetTitle (sfp->findthis, "");
+      SetValue (sfp->frommod, 1);
+      SetValue (sfp->tomod, 1);
+      SetValue (sfp->fromorigin, 1);
+      SetValue (sfp->toorigin, 1);
+      break;
+    case EDIT_SOURCE :
+      SetEnumPopup (sfp->fromgen, biosource_genome_alistX, 0);
+      SetEnumPopup (sfp->fromref, orgref_textfield_alist, 0);
+      SetTitle (sfp->findthis, "");
+      SetTitle (sfp->replacewith, "");
+      SetValue (sfp->frommod, 1);
+      SetValue (sfp->fromorigin, 1);
+      break;
+    case ADD_SOURCE :
+      SetEnumPopup (sfp->fromgen, biosource_genome_alistX, 0);
+      SetTitle (sfp->findthis, "");
+      SetValue (sfp->frommod, 1);
+      SetValue (sfp->fromorigin, 1);
+      break;
+    default :
+      break;
+  }
+  Hide (sfp->genGrp);
+  Hide (sfp->refGrp);
+  Show (sfp->modGrp);
+  SafeHide (sfp->originGrp);
+  Select (sfp->findthis);
+}
+
 static void ProcessSource (IteM i, Int2 type)
 
 {
@@ -9465,6 +9760,8 @@ static void ProcessSource (IteM i, Int2 type)
     StaticPrompt (x, "Apply only to particular numbered segment", 0, dialogTextHeight, programFont, 'l');
     sfp->onlyThisPart = DialogText (x, "", 4, NULL);
     Disable (sfp->onlyThisPart);
+  } else {
+    sfp->onlyThisPart = NULL;
   }
 
   sfp->sourceGroup = HiddenGroup (h, 4, 0, ChangeSourceGroup);
@@ -9625,9 +9922,12 @@ static void ProcessSource (IteM i, Int2 type)
   SafeHide (sfp->originGrp);
 
   c = HiddenGroup (h, 4, 0, NULL);
-  b = PushButton (c, "Accept", DoProcessSource);
+  b = DefaultButton (c, "Accept", DoProcessSource);
   SetObjectExtra (b, sfp, NULL);
   PushButton (c, "Cancel", StdCancelButtonProc);
+  b = PushButton (c, "Clear", ClearProcessSourceDlg);
+  SetObjectExtra (b, sfp, NULL);
+  sfp->leaveDlgUp = CheckBox (c, "Leave Dialog Up", NULL);
 
   AlignObjects (ALIGN_CENTER, (HANDLE) c, (HANDLE) sfp->sourceGroup,
                 (HANDLE) sfp->modGrp, (HANDLE) sfp->genGrp,

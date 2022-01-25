@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: kappa.c,v 6.34 2003/10/22 20:37:19 madden Exp $";
+static char const rcsid[] = "$Id: kappa.c,v 6.37 2004/01/27 20:31:52 madden Exp $";
 
-/* $Id: kappa.c,v 6.34 2003/10/22 20:37:19 madden Exp $ 
+/* $Id: kappa.c,v 6.37 2004/01/27 20:31:52 madden Exp $ 
 *   ==========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -34,9 +34,18 @@ Author: Alejandro Schaffer
 Contents: Utilities for doing Smith-Waterman alignments and adjusting
     the scoring system for each match in blastpgp
 
- $Revision: 6.34 $
+ $Revision: 6.37 $
 
  $Log: kappa.c,v $
+ Revision 6.37  2004/01/27 20:31:52  madden
+ remove extra setting of kbp_gap
+
+ Revision 6.36  2004/01/06 17:48:44  dondosha
+ Do not free Karlin block in RedoAlignmentCore, because its pointer is passed outside
+
+ Revision 6.35  2003/12/01 19:15:27  madden
+ Add one byte to filteredMatchingSequence to prevent ABR/ABW
+
  Revision 6.34  2003/10/22 20:37:19  madden
  Set kbp to rescaled values, use upper-case for SCALING_FACTOR define
 
@@ -1584,6 +1593,7 @@ SeqAlignPtr RedoAlignmentCore(BlastSearchBlkPtr search,
    Int4 queryLength; /*the length of the query sequence*/
    Uint1Ptr matchingSequence; /*one sequence that matches the query*/
    Uint1Ptr  filteredMatchingSequence; /*other representations of matchingSequence*/
+   Uint1Ptr  filteredMatchingSequenceStart; /* other representations of matchingSequence with one more byte on beginning*/
    Int4 matchingSequenceLength; /*length of matching sequence*/
    Int4 matchStart, queryStart; /*starting positions for local alignment*/
    Int4 queryEnd, matchEnd, finalQueryEnd, finalMatchEnd; /*end positions of optimal local alignment*/
@@ -1740,12 +1750,10 @@ SeqAlignPtr RedoAlignmentCore(BlastSearchBlkPtr search,
      if (search->positionBased) 
      {
        search->sbp->kbp_gap_psi[0] = kbp;
-       search->sbp->kbp_gap[0] = kbp;
      }
      else 
      {
        search->sbp->kbp_gap_std[0] = kbp;
-       search->sbp->kbp_gap[0] = kbp;
      }
 
      resProb = (Nlm_FloatHi *) MemNew (PROTEIN_ALPHABET * sizeof(Nlm_FloatHi));
@@ -1812,7 +1820,8 @@ SeqAlignPtr RedoAlignmentCore(BlastSearchBlkPtr search,
      /*filteredMatchingSequence = matchingSequence;*/
 
      /* switch to this if we want to filter the match*/
-     filteredMatchingSequence = MemNew((matchingSequenceLength+1) * sizeof(Uint1));
+     filteredMatchingSequenceStart = MemNew((matchingSequenceLength+2) * sizeof(Uint1));
+     filteredMatchingSequence = filteredMatchingSequenceStart+1;
      segResult(bsp_db, matchingSequence, filteredMatchingSequence, matchingSequenceLength); 
      foundFirstAlignment = FALSE;
      if (adjustParameters) {
@@ -2076,7 +2085,7 @@ SeqAlignPtr RedoAlignmentCore(BlastSearchBlkPtr search,
      }
      index++;
      if (matchingSequence != filteredMatchingSequence)
-       MemFree(filteredMatchingSequence);
+       MemFree(filteredMatchingSequenceStart);
      if (bsp_db) {
        if (bioseq_unlock) {
          BioseqUnlock(bsp_db); bsp_db = NULL; 
@@ -2126,7 +2135,6 @@ SeqAlignPtr RedoAlignmentCore(BlastSearchBlkPtr search,
        freeStartFreqs(startFreqRatios,PROTEIN_ALPHABET);
        MemFree(queryProb);
      }
-     MemFree(kbp);
      MemFree(resProb);
      MemFree(scoreArray);
      MemFree(return_sfp);

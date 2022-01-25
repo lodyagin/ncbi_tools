@@ -31,8 +31,11 @@ Contents: type definitions and function prototypes for query
           multiplexing code.
 
 ******************************************************************************/
-/* $Revision: 1.1 $ 
+/* $Revision: 1.2 $ 
 *  $Log: blastconcatdef.h,v $
+*  Revision 1.2  2003/12/29 15:42:46  coulouri
+*  tblastn query concatenation fixes from morgulis
+*
 *  Revision 1.1  2003/03/24 20:47:28  madden
 *  Utilities for concatenation of blastn/tblastn queries
 *
@@ -143,6 +146,9 @@ Uint4 LIBCALL GetNumSpacers PROTO(( BLAST_OptionsBlkPtr options,
                                     Boolean believe_query,
 				    BspArray fake_bsp_arr ));
 void LIBCALL InitHitLists PROTO(( BlastSearchBlkPtr search ));
+Int4 LIBCALL ResultIndex1 PROTO(( BLASTResultHitlistPtr ptr,
+                                  BLASTResultHitlistPtr PNTR results,
+				  Int4 num_elements ));
 Int4 LIBCALL ResultIndex PROTO(( Nlm_FloatHi target_e, Int4 target_score, Int4 subject_id,
                                  BLASTResultHitlistPtr PNTR results,
 				 Int4 num_elements ));

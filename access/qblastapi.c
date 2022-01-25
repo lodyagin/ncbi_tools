@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/28/00
 *
-* $Revision: 1.24 $
+* $Revision: 1.28 $
 *
 * File Description: 
 *
@@ -37,6 +37,18 @@
 * --------------------------------------------------------------------------
 *
 * $Log: qblastapi.c,v $
+* Revision 1.28  2003/11/14 16:23:08  dondosha
+* If query id not local, append title to id to get defline in BLASTGetQuerySummary
+*
+* Revision 1.27  2003/11/12 21:19:03  kans
+* changed query_number to query_num - fixing typo
+*
+* Revision 1.26  2003/11/12 20:49:20  coulouri
+* Replace code accidentally removed between 1.24 and 1.25 in BlastGetQueryBioseqByRIDEx
+*
+* Revision 1.25  2003/11/03 20:50:53  madden
+* Fix problem with content length, remove call to QblastTestRID, add BLASTGetBOByRIDEx
+*
 * Revision 1.24  2003/01/17 20:40:29  madden
 * Put QUERY_NUMBER back in URL for fetching Seqannot
 *
@@ -755,40 +767,6 @@ static void LIBCALLBACK AsnIoErrorFunc(Int2 type, CharPtr message)
     return;
 }
 
-/*
-	Tests the RID to see if it's an in-house job
-	(i.e., indexer) kept in the LL queue, or a
-	normal one.
-
-	External jobs start with a 0 after the first dash
-	(e.g., 1018299345-016645-15460), internal jobs
-	do not.
-
-	Return value is TRUE for internal jobs, FALSE for external.
-
-*/
-static Boolean QblastTestRID(CharPtr RID)
-
-{
-	Boolean retval=TRUE;
-
-	while (*RID != NULLB)
-	{
-		if (*RID == '-')
-		{
-			RID++;
-			if (*RID == '0')
-				retval = FALSE;
-			else
-				retval = TRUE;
-			break;
-		}
-		RID++;
-	}
-
-	return retval;
-}
-
 /* Function to get SeqAnnot for RID. We suupose, that search already
    finished and results are exists on the Qblast repository */
 
@@ -819,8 +797,10 @@ NLM_EXTERN SeqAnnotPtr BLASTGetSeqAnnotByRIDEx(CharPtr RID,
     AsnIoConnPtr aicp;
     EIO_Status   status;
 
-    sprintf(query_string, "FORMAT_TYPE=ASN.1&CMD=Get&RID=%s&QUERY_NUMBER=%ld&FORMAT_OBJECT=Alignment", 
-	RID, (long) query_number);
+    sprintf(query_string,
+            "FORMAT_TYPE=ASN.1&CMD=Get&RID=%s&QUERY_NUMBER=%ld&FORMAT_OBJECT=Alignment", 
+            RID,
+            (long) query_number);
 
     conn = QUERY_OpenUrlQuery ((host_machine == NULL) ? "www.ncbi.nlm.nih.gov" : host_machine, 
 				(host_port <= 0) ? 80 : host_port, 
@@ -829,7 +809,7 @@ NLM_EXTERN SeqAnnotPtr BLASTGetSeqAnnotByRIDEx(CharPtr RID,
                                240, eMIME_T_Application, 
                                eMIME_WwwForm, eENCOD_Url, 0);
     
-    length = StringLen(query_string)+1;
+    length = StringLen(query_string);
     status = CONN_Write (conn, query_string, length , &n_written);    
     QUERY_SendQuery (conn);
     
@@ -860,19 +840,15 @@ NLM_EXTERN BioseqPtr BLASTGetQueryBioseqByRIDEx(CharPtr RID, int query_num)
     Int4         length;
     AsnIoConnPtr aicp;
     EIO_Status   status;
-    
-    /* sprintf(query_string, "RID=%s&ALIGNMENT_VIEW=11", RID); */
-    
-    if (QblastTestRID(RID) == FALSE)
-    	sprintf(query_string, "CMD=Get&RID=%s&FORMAT_OBJECT=Bioseq&FORMAT_TYPE=ASN.1&QUERY_NUMBER=%d", RID, query_num);
-    else
-    	sprintf(query_string, "CMD=Get&RID=%s&FORMAT_OBJECT=Bioseq&FORMAT_TYPE=ASN.1&QUERY_NUMBER=%d&CLIENT=DirSub", RID, query_num);
-    
-    /* conn = QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 80,  */
+
+    sprintf(query_string,
+            "FORMAT_TYPE=ASN.1&CMD=Get&RID=%s&QUERY_NUMBER=%ld&FORMAT_OBJECT=Bioseq", 
+            RID,
+            (long) query_num);
     
     conn = QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 80, 
                                "/blast/Blast.cgi", NULL, 
-                               "BLASTGetQueryBioseqByRID()", 
+                               "BLASTGetQueryBioseqByRIDEx()", 
                                30, eMIME_T_Application, 
                                eMIME_WwwForm, eENCOD_Url, 0);
 
@@ -896,7 +872,19 @@ NLM_EXTERN Nlm_Boolean BLASTGetQuerySummary(CharPtr RID, Int4 query_number,
     BioseqPtr bsp = BLASTGetQueryBioseqByRIDEx(RID, query_number);
     if(!bsp)
 	return FALSE;
-    *defline = StringSave(BioseqGetTitle(bsp));
+    if (bsp->id->choice == SEQID_LOCAL) {
+       *defline = StringSave(BioseqGetTitle(bsp));
+    } else {
+#define SEQID_LENGTH 255
+       Int4 id_length;
+       Char tmp[SEQID_LENGTH+1];
+       Int4 title_length = StringLen(BioseqGetTitle(bsp));
+       SeqIdWrite(bsp->id, tmp, PRINTID_FASTA_LONG, SEQID_LENGTH);
+       id_length = StringLen(tmp);
+       title_length += id_length + 3;
+       *defline = (CharPtr) MemNew(title_length*sizeof(Char));
+       sprintf(*defline, "%s %s", tmp, BioseqGetTitle(bsp));
+    }
     *query_length = BioseqGetLen(bsp);
     BioseqFree(bsp);
     return TRUE;
@@ -906,7 +894,13 @@ NLM_EXTERN Nlm_Boolean BLASTGetQuerySummary(CharPtr RID, Int4 query_number,
 /* Function to get BlastObject for RID. We suupose, that search already
    finished and results are exists on the Qblast repository. Blast Object
    ASN.1 will be returned as CharPtr buffer*/
-NLM_EXTERN CharPtr BLASTGetBOByRID(CharPtr RID)
+/*
+ * retrive blast object
+ */
+NLM_EXTERN CharPtr BLASTGetBOByRIDEx(CharPtr RID,
+                                     Nlm_CharPtr host_machine,
+                                     Nlm_Uint2 host_port,
+                                     Nlm_CharPtr host_path)
 {
     Char         query_string[256];
     CONN         conn;
@@ -916,21 +910,17 @@ NLM_EXTERN CharPtr BLASTGetBOByRID(CharPtr RID)
     EIO_Status   status;
     CharPtr      in_buff;
     
-/*
-    sprintf(query_string, "RID=%s&ALIGNMENT_VIEW=13", RID);
-*/
-    if (QblastTestRID(RID) == FALSE)
-    	sprintf(query_string, "CMD=Get&RID=%s&FORMAT_OBJECT=BlastObject&FORMAT_TYPE=ASN.1", RID);
-    else
-    	sprintf(query_string, "CMD=Get&RID=%s&FORMAT_OBJECT=BlastObject&FORMAT_TYPE=ASN.1&CLIENT=DirSub", RID);
-    
-    conn = QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 80, 
-                               "/blast/Blast.cgi", NULL, 
-                               "BLASTGetBOByRID()", 
+    sprintf(query_string, "CMD=Get&RID=%s&FORMAT_OBJECT=BlastObject&FORMAT_TYPE=ASN.1", RID);
+
+    conn = QUERY_OpenUrlQuery ((host_machine == NULL) ? "www.ncbi.nlm.nih.gov" : host_machine,
+                                (host_port <= 0) ? 80 : host_port,
+                                (host_path == NULL) ? "/blast/Blast.cgi" : host_path,
+				NULL,
+                               "BLASTGetBOByRIDEx()", 
                                30, eMIME_T_Application, 
                                eMIME_WwwForm, eENCOD_Url, 0);
 
-    length = StringLen(query_string) + 1;
+    length = StringLen(query_string);
     status = CONN_Write (conn, query_string, length , &n_written);    
     QUERY_SendQuery (conn);
     
@@ -959,4 +949,9 @@ NLM_EXTERN CharPtr BLASTGetBOByRID(CharPtr RID)
     
     CONN_Close(conn);
     return in_buff;
+}
+
+NLM_EXTERN CharPtr BLASTGetBOByRID(CharPtr RID)
+{
+	return BLASTGetBOByRIDEx(RID, NULL, 0, NULL);
 }

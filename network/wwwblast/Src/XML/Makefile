@@ -24,7 +24,7 @@ LDFLAGS = -I./ -I$(INCPATH) $(OPTFLAGS) -L$(LIBPATH) $(VIBFLAG) $(NEWASN2FF) -g
 bxmlobj.c: $(NCBI_ASNALL) blstxml.asn
 	$(ASNTOOL) -m blstxml.asn -M $(NCBI_ASNALL) -B bxmlobj -G -w100 -Z
 	$(ASNTOOL) -m blstxml.asn -o blstxml.h -w 100 -Z
-	$(ASNTOOL) -m blstxml.asn -X NCBI_BlastOutput.mod
+#	$(ASNTOOL) -m blstxml.asn -X NCBI_BlastOutput.mod
 #	mv bxmlobj.c ..
 #	mv blstxml.h ..
 #	mv bxmlobj.h ..

@@ -81,6 +81,7 @@ Boolean ID1ArchInit (void)
     }
 
     asnin = svcp->raip;
+    AsnIoSetBufsize(asnin,4390);
     asnout = svcp->waip;
     return TRUE;
 }
@@ -170,11 +171,12 @@ ID1ArchSeqEntryGet (Int4 gi,CharPtr db, Int4 ent, Int4Ptr status, Int2 maxplex)
 	Int4 i;
 	SeqEntryPtr sep=NULL;
 	Int4 retval = 0;
- 
+#if 0 
 	if (maxplex < 0 || maxplex > 4){
 		ErrPost(CTX_UNKNOWN, 2, "ID1ArchSeqEntryGet: maxplex(%d) out of range (0-4)", maxplex);
 		return NULL;
 	}
+#endif
 	for (i = 0; i < ID_SERV_RETRIES; i++){
 		if (i > 0){
 			if (! ReestablishNetID1Arch())
@@ -405,6 +407,7 @@ static Boolean GenericReestablishNet(CharPtr svcName, Boolean showErrs)
     }
 
     MemFree(buf);
+    AsnIoSetBufsize(asnin,4390);
     return retval;
 }
 

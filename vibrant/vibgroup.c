@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description: 
 *       Vibrant group functions
@@ -41,6 +41,11 @@
 *
 *
 * $Log: vibgroup.c,v $
+* Revision 6.2  2004/02/03 23:32:25  sinyakov
+* WIN_MSWIN: use InvalidateRect() to redraw group box inner space after it was moved
+* instead of UpdateWindow() which redraws only group box frame
+* Nlm_GroupGainFocus(): call Nlm_GetNext() before calling Nlm_DoGainFocus()
+*
 * Revision 6.1  1997/11/26 21:30:20  vakatov
 * Fixed errors and warnings issued by C and C++ (GNU and Sun) compilers
 *
@@ -883,7 +888,15 @@ static void Nlm_SetGroupPosition (Nlm_GraphiC a, Nlm_RectPtr r, Nlm_Boolean save
 
 #ifdef WIN_MSWIN
   if (is_realized  &&  (h != NULL))
-    UpdateWindow( h );
+  {
+    Nlm_RecT        r;
+    Nlm_RectTool    rtool;
+    Nlm_WindowTool  wptr;
+    wptr = Nlm_ParentWindowPtr (a);
+    Nlm_GetRect (a, &r);
+    Nlm_RecTToRectTool (&r, &rtool);
+    InvalidateRect (wptr, &rtool, TRUE);
+  }
 #endif
 
   Nlm_RestorePort( tempPort );
@@ -906,13 +919,15 @@ static Nlm_GraphiC Nlm_GroupGainFocus (Nlm_GraphiC a, Nlm_Char ch, Nlm_Boolean s
 {
   Nlm_GraphiC  p;
   Nlm_GraphiC  q;
+  Nlm_GraphiC  n;
 
   q = NULL;
   if (Nlm_GetVisible (a) && Nlm_GetEnabled (a)) {
     p = Nlm_GetChild (a);
     while (p != NULL && q == NULL) {
+      n = Nlm_GetNext (p);
       q = Nlm_DoGainFocus (p, ch, savePort);
-      p = Nlm_GetNext (p);
+      p = n;
     }
   }
   return q;

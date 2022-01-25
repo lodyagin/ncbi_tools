@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.7 $
+* $Revision: 6.8 $
 *
 * File Description: 
 *       Vibrant button functions
@@ -41,6 +41,9 @@
 *
 *
 * $Log: vibbutns.c,v $
+* Revision 6.8  2004/01/20 23:34:38  sinyakov
+* [WIN_MSWIN]: fixed to display '&' character in button text
+*
 * Revision 6.7  2002/03/07 19:18:21  kans
 * check box wid += 4 for Aqua
 *
@@ -970,6 +973,35 @@ LRESULT CALLBACK EXPORT ButtonProc (HWND hwnd, UINT message,
   Nlm_currentWindowTool = tempHWnd;
   return rsult;
 }
+
+
+static void Nlm_PrepareTitleMsWin(Nlm_CharPtr temp, Nlm_CharPtr title,
+				  size_t siztemp)
+{
+    /* duplicate existing '&' */
+    Nlm_Uint4 src_pos = 0;
+    Nlm_Uint4 dest_pos = 0;
+
+    for(src_pos = 0, dest_pos = 0;
+	title[src_pos] != '\0' && dest_pos+1 < siztemp;
+	++src_pos)
+    {
+	if(title[src_pos] == '&')
+	{
+	    if(dest_pos + 2 < siztemp)
+	    {
+		temp[dest_pos++] = '&';
+		temp[dest_pos++] = title[src_pos];
+	    }
+	    else
+		break;
+	}
+	else
+	    temp[dest_pos++] = title[src_pos];
+    }
+
+    temp[dest_pos] = '\0';
+}
 #endif
 
 #ifdef WIN_MOTIF
@@ -1057,7 +1089,11 @@ static void Nlm_NewButton (Nlm_ButtoN b, Nlm_CharPtr title,
 
   Nlm_GetRect ((Nlm_GraphiC) b, &r);
   wptr = Nlm_ParentWindowPtr ((Nlm_GraphiC) b);
+#ifdef WIN_MSWIN
+  Nlm_PrepareTitleMsWin (temp, title, sizeof (temp));
+#else
   Nlm_StringNCpy_0 (temp, title, sizeof (temp));
+#endif
   c = (Nlm_ControlTool) 0;
   border = 0;
   offset = 0;

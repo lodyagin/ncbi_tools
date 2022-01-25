@@ -29,13 +29,16 @@
 *
 * Version Creation Date:   9/13/96
 *
-* $Revision: 6.55 $
+* $Revision: 6.56 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: docsum.c,v $
+* Revision 6.56  2003/12/02 20:42:06  kans
+* fixed sprintf calls in SetDefaultFailureMessae
+*
 * Revision 6.55  2002/11/06 21:30:57  ucko
 * ChangeViewerLinkData: when extracting a string from vnp->data, use
 * ptrvalue rather than intvalue (which may be the wrong width)
@@ -672,16 +675,16 @@ static CharPtr SetDefaultFailureMessage (SummFormPtr sfp, Int2 item, CharPtr pre
   } else if (sfp->simple != NULL && sfp->uids == NULL) {
     ssp = sfp->simple [item - 1];
     if (ssp == NULL) {
-      sprintf ("%sIncorrect seq-entry for database %s", prefix, dbname);
+      sprintf (tmp, "%sIncorrect seq-entry for database %s", prefix, dbname);
     } else {
       StringCpy (buf, "?");
       if (ssp->numid > 0 && ssp->bestid < ssp->numid) {
         StringNCpy_0 (buf, ssp->id [ssp->bestid], sizeof (buf));
       }
-      sprintf ("%sProblem with sequence %s in %s database", prefix, buf, dbname);
+      sprintf (tmp, "%sProblem with sequence %s in %s database", prefix, buf, dbname);
     }
   } else {
-    sprintf ("%sInternal confusion for database %s", prefix, dbname);
+    sprintf (tmp, "%sInternal confusion for database %s", prefix, dbname);
   }
   return StringSave (tmp);
 }

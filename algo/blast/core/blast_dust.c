@@ -30,7 +30,7 @@ static char const rcsid[] = "$Id";
 *   
 * Version Creation Date: 05/28/2003
 *
-* $Revision: 1.16 $
+* $Revision: 1.17 $
 *
 * File Description: A utility to find low complexity NA regions.
 *                   This parallels functionality of dust.c from the C toolkit,
@@ -206,7 +206,6 @@ dust_triplet_find (Uint1* seq_start, Int4 icur, Int4 max, Uint1* s1)
    Int4 n;
    Uint1* s2,* s3;
    Int2 c;
-   Boolean flagVD;
    Uint1* seq = &seq_start[icur];
    Uint1 end_byte = NCBI4NA_TO_BLASTNA[NULLB];
    
@@ -232,7 +231,6 @@ dust_triplet_find (Uint1* seq_start, Int4 icur, Int4 max, Uint1* s1)
    *s2 |= c;
    
    /* triplet fill loop */
-   flagVD = TRUE;
    while ((c = *seq++) != end_byte && n < max) {
       c &= NCBI_2NA_MASK;
       *s1 <<= 2;

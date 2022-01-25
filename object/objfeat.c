@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.20 $
+* $Revision: 6.21 $
 *
 * File Description:  Object manager for module NCBI-SeqFeat
 *
@@ -2923,9 +2923,10 @@ NLM_EXTERN OrgRefPtr LIBCALL OrgRefFree (OrgRefPtr orp)
     if (orp == NULL)
         return (OrgRefPtr)NULL;
 
-    MemFree(orp->taxname);
-    MemFree(orp->common);
+    orp->taxname = MemFree(orp->taxname);
+    orp->common = MemFree(orp->common);
     ValNodeFreeData(orp->mod);
+	orp->mod = NULL;
     anp = orp->db;
     while (anp != NULL)
     {
@@ -2934,8 +2935,11 @@ NLM_EXTERN OrgRefPtr LIBCALL OrgRefFree (OrgRefPtr orp)
         MemFree(anp);
         anp = next;
     }
+	orp->db = NULL;
     ValNodeFreeData(orp->syn);
+	orp->syn = NULL;
 	OrgNameFree(orp->orgname);
+	orp->orgname = NULL;
     return (OrgRefPtr)MemFree(orp);
 }
 

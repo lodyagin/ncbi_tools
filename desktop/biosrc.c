@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.42 $
+* $Revision: 6.43 $
 *
 * File Description: 
 *
@@ -109,10 +109,10 @@ ENUM_ALIST(subsource_subtype_alist)
   {"Plasmid-name",          19},
   {"Plastid-name",          22},
   {"Pop-variant",           17},
+  {"Rearranged",            15},
   {"Segment",               24},
   {"Sex",                    7},
   {"Subclone",               4},
-  {"Rearranged",            15},
   {"Tissue-lib",            18},
   {"Tissue-type",           10},
   {"Transgenic",            26},

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/1/91
 *
-* $Revision: 6.0 $
+* $Revision: 6.1 $
 *
 * File Description:   Active graphics objects
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: palette.c,v $
+* Revision 6.1  2003/11/07 16:02:30  rsmith
+* Renamed static function NewPalette to Nlm_NewPalette to avoid a name conflict on Mac.
+*
 * Revision 6.0  1997/08/25 18:56:11  madden
 * Revision changed to 6.0
 *
@@ -314,7 +317,7 @@ static void PaletteClick (PaneL p, PoinT pt)
   }
 }
 
-static void NewPalette (PalettE p, Int2 minwid, PaletteProc actn)
+static void Nlm_NewPalette (PalettE p, Int2 minwid, PaletteProc actn)
 
 {
   PoinT        npt;
@@ -348,7 +351,7 @@ static void ResetPalette (PaneL p)
   if (pdata.drawHandles != NULL) {
     HandFree (pdata.drawHandles);
   }
-  NewPalette ((PalettE) p, pdata.width, pdata.action);
+  Nlm_NewPalette ((PalettE) p, pdata.width, pdata.action);
 }
 
 extern PalettE PalettePanel (SlatE s, Int2 pixwidth, PaletteProc actn)
@@ -363,7 +366,7 @@ extern PalettE PalettePanel (SlatE s, Int2 pixwidth, PaletteProc actn)
     p = (PalettE) CustomPanel (s,  DrawPalette, sizeof (PaletteData), ResetPalette);
     if (p != NULL) {
       SetPanelClick ((PaneL) p, PaletteClick, NULL, NULL, NULL);
-      NewPalette (p, pixwidth, actn);
+      Nlm_NewPalette (p, pixwidth, actn);
     }
     RestorePort (tempPort);
   }

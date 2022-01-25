@@ -1,6 +1,6 @@
 #	makefile for demo programs
 #
-#	$Id: makedemo.unx,v 6.64 2003/01/16 22:39:47 dondosha Exp $
+#	$Id: makedemo.unx,v 6.68 2004/01/02 22:05:16 coulouri Exp $
 #
 #	Sun with unbundled ANSI compiler [ make CC=acc ]
 #	Sun with Gnu C [ make CC=gcc ]
@@ -73,6 +73,8 @@ LIB20 =
 LIB22 = -lncbimmdb
 LIB23 = -lncbitool
 LIB50 = -lregexp
+LIB60 = -lblast
+LIB61 = -lblastapi
 NCBI_INCDIR = ../include
 NCBI_LIBDIR = ../lib
 NCBI_LINKINGLIBDIR = $(NCBI_LIBDIR)
@@ -94,20 +96,20 @@ EXE1 = testcore makeset \
     getmesh indexpub getpub testobj seqtest \
 	dosimple asn2ff getseq getfeat checksub asndhuff \
 	entrcmd errhdr cdscan findspl \
-	ncbisort fa2htgs fastacmd formatdb blastall blastpgp \
+	ncbisort fa2htgs fastacmd formatdb blast blastall blastpgp \
 	testval seedtop fmerge makemat copymat impala \
 	megablast vecscreen gil2bin tbl2asn blastclust rpsblast \
-	asn2xml \
+	asn2xml debruijn \
 	test_regexp demo_regexp demo_regexp_grep
 
 SRC1 = testcore.c makeset.c \
     getmesh.c indexpub.c getpub.c testobj.c seqtest.c dosimple.c asn2ff.c \
     getseq.c getfeat.c checksub.c asndhuff.c \
     entrcmd.c errhdr.c cdscan.c findspl.c \
-    ncbisort.c fa2htgs.c fastacmd.c formatdb.c blastall.c blastpgp.c \
-    testval.c seedtop.c fmerge.c makemat.c copymat.c profiles.c \
+    ncbisort.c fa2htgs.c fastacmd.c formatdb.c blast_driver.c blastall.c \
+    blastpgp.c testval.c seedtop.c fmerge.c makemat.c copymat.c profiles.c \
 	megablast.c vecscreen.c gil2bin.c tbl2asn.c blastclust.c rpsblast.c \
-	asn2xml.c \
+	asn2xml.c debruijn.c \
 	pcretest.c pcredemo.c pcregrep.c
 
 INTERNAL = testgen
@@ -274,6 +276,13 @@ formatdb : formatdb.c
 fmerge : fmerge.c
 	$(CC) -o fmerge $(LDFLAGS) fmerge.c $(LIB23) $(LIB2) $(LIB1) $(OTHERLIBS)
 
+# blast (reincarnation of blastall from algo/blast sources)
+
+blast : blast_driver.c
+	$(CC) -o blast $(LDFLAGS) blast_driver.c $(LIB61) $(LIB60) $(LIB23) $(LIB2) $(LIB1) $(OTHERLIBS)
+
+debruijn : debruijn.c
+	$(CC) -o debruijn $(LDFLAGS) debruijn.c $(LIB60) $(LIB1) $(OTHERLIBS)
 # blastall
 
 blastall : blastall.c $(THREAD_OBJ)
@@ -297,7 +306,7 @@ makemat : makemat.c $(THREAD_OBJ)
 # copymat
 
 copymat : copymat.c $(THREAD_OBJ)
-	$(CC) -o copymat $(LDFLAGS) copymat.c $(THREAD_OBJ) $(LIB23) $(LIB2) $(LIB1) $(OTHERLIBS) $(THREAD_OTHERLIBS)
+	$(CC) -o copymat $(LDFLAGS) copymat.c $(THREAD_OBJ) $(LIB60) $(LIB23) $(LIB2) $(LIB1) $(OTHERLIBS) $(THREAD_OTHERLIBS)
 
 # impala
 

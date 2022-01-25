@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: blastutl.c,v 6.417 2003/08/20 22:14:08 dondosha Exp $";
+static char const rcsid[] = "$Id: blastutl.c,v 6.431 2004/02/04 15:35:03 camacho Exp $";
 
 /* ===========================================================================
 *
@@ -32,12 +32,51 @@ Author: Tom Madden
 
 Contents: Utilities for BLAST
 
-$Revision: 6.417 $
+$Revision: 6.431 $
 
 ******************************************************************************/
 /*
  *
 * $Log: blastutl.c,v $
+* Revision 6.431  2004/02/04 15:35:03  camacho
+* Rollback to fix problems in release 2.2.7
+*
+* Revision 6.429  2004/01/30 16:54:45  dondosha
+* Check if HSP needs to be deleted after reevaluation with ambiguities, after greedy traceback
+*
+* Revision 6.428  2004/01/28 16:54:03  dondosha
+* Restored the code that shifts subject coordinates for blastn traceback with long subject sequences
+*
+* Revision 6.427  2004/01/25 05:06:21  dondosha
+* Translate only relevant parts of long subject sequences for tblastn traceback
+*
+* Revision 6.426  2004/01/16 23:43:44  dondosha
+* No more need for special argument for partial search: it is set in options
+*
+* Revision 6.425  2004/01/14 17:01:06  dondosha
+* Gapped alignment is position based only if posMatrix exists
+*
+* Revision 6.424  2004/01/09 18:13:24  dondosha
+* In [Get,Check]StartForGappedAlignment: if posMatrix not available, use square matrix for calculations
+*
+* Revision 6.423  2004/01/06 22:37:40  dondosha
+* Use BLAST_HSPfree function; in particular fixes a bug with wrong memory being freed
+*
+* Revision 6.422  2003/12/11 23:46:28  dondosha
+* Correction in setting hit ranges after repeats filtering
+*
+* Revision 6.421  2003/12/10 17:05:28  dondosha
+* Added function ReevaluateScoreWithAmbiguities to reevaluate score for one HSP; use it after greedy traceback
+*
+* Revision 6.420  2003/11/24 22:06:41  madden
+* Tblastn optimization, only fetch part of sequence needed
+*
+* Revision 6.419  2003/10/30 18:37:19  dondosha
+* Fix for megablast with non-greedy traceback
+*
+* Revision 6.418  2003/10/29 17:46:59  dondosha
+* Allow 2-stage greedy extension in megablast
+*
 * Revision 6.417  2003/08/20 22:14:08  dondosha
 * Little correction in call to OOFBlastHSPGetNumIdentical
 *
@@ -2490,7 +2529,7 @@ BlastTwoSequencesCoreEx (BlastSearchBlkPtr search, BioseqPtr subject_bsp, Uint1P
 	}
         if (search->pbp->mb_params) {
            search->subject->sequence = subject_seq;
-           MegaBlastReevaluateWithAmbiguities(search, 0);
+           MegaBlastReevaluateWithAmbiguities(search);
         }
         status = BlastReapHitlistByEvalue(search);
 
@@ -4210,7 +4249,7 @@ BlastGetSubjectIdEx(BlastSearchBlkPtr search, Int4 hit_number, Boolean ordinal_n
     Uint4	header;
     BLASTResultsStructPtr result_struct;
     
-    if (search->pbp->mb_params && search->pbp->mb_params->use_dyn_prog)
+    if (search->pbp->mb_params)
        result_struct = search->mb_result_struct[query_number];
     else
        result_struct = search->result_struct;
@@ -4352,13 +4391,6 @@ static int LIBCALLBACK ResultHspWithIdIndexCmp(VoidPtr v1, VoidPtr v2)
 SeqAlignPtr LIBCALL
 BioseqBlastEngineCore(BlastSearchBlkPtr search, BLAST_OptionsBlkPtr options,
                         Int4Ptr *pos_matrix)
-{
-   return BioseqBlastEngineCoreEx(search, options, pos_matrix, FALSE);
-}
-
-SeqAlignPtr LIBCALL
-BioseqBlastEngineCoreEx(BlastSearchBlkPtr search, BLAST_OptionsBlkPtr options,
-                        Int4Ptr *pos_matrix, Boolean partial)
 {
 	BLASTResultHspPtr hsp, hsp1;
 	BlastResultHspWithIdPtr PNTR hspp;
@@ -4565,7 +4597,7 @@ BioseqBlastEngineCoreEx(BlastSearchBlkPtr search, BLAST_OptionsBlkPtr options,
 	}
 #endif  /* Clustering hits */
 
-    if (partial) {
+    if (options->no_traceback) {
        BlastStopAwakeThread(search->thr_info);
        return NULL;
     }
@@ -6388,8 +6420,8 @@ GetTranslation(Uint1Ptr query_seq, Int4 nt_length, Int2 frame, Int4Ptr length, C
 		if (IS_residue(new_residue))
 		{
 			prot_seq[index_prot] = new_residue;
-			index_prot++;
 		}
+		index_prot++;
 	}
 	prot_seq[index_prot] = NULLB;
 	*length = index_prot-1;
@@ -7544,6 +7576,13 @@ FilterWithSeg (Uint1Ptr sequence, Int4 length, Uint1 alphabet)
 #endif
 }
 
+
+BLAST_HSPPtr BLAST_HSPFree(BLAST_HSPPtr hsp)
+{
+   hsp->gap_info = GapXEditBlockDelete(hsp->gap_info);
+   return (BLAST_HSPPtr) MemFree(hsp);
+}
+
 /* 
 	Frees memory used for HSP's on the ResultHitlist.
 	Should be called as the SeqAlignPtr for a hitlist
@@ -7784,6 +7823,7 @@ Int4 GetStartForGappedAlignment (BlastSearchBlkPtr search, BLAST_HSPPtr hsp, Uin
 {
     Int4 index1, max_offset, score, max_score, hsp_end;
     Uint1Ptr query_var, subject_var;
+    Boolean positionBased = (search->positionBased && search->sbp->posMatrix);
     
     if (hsp->query.length <= HSP_MAX_WINDOW) {
         max_offset = hsp->query.offset + hsp->query.length/2;
@@ -7794,19 +7834,23 @@ Int4 GetStartForGappedAlignment (BlastSearchBlkPtr search, BLAST_HSPPtr hsp, Uin
     query_var = query + hsp->query.offset;
     subject_var = subject + hsp->subject.offset;
     score=0;
-    for (index1=hsp->query.offset; index1<hsp_end; index1++) {
-        if (!(search->positionBased))
-            score += matrix[*query_var][*subject_var];
-        else
-            score += search->sbp->posMatrix[index1][*subject_var];
-        query_var++; subject_var++;
+    if (!positionBased) {
+       for (index1=hsp->query.offset; index1<hsp_end; index1++) {
+          score += matrix[*query_var][*subject_var];
+          query_var++; subject_var++;
+       }
+    } else {
+       for (index1=hsp->query.offset; index1<hsp_end; index1++) {
+          score += search->sbp->posMatrix[index1][*subject_var];
+          query_var++; subject_var++;
+       }
     }
     max_score = score;
     max_offset = hsp_end - 1;
     hsp_end = hsp->query.end - 
         MAX(0, hsp->query.length - hsp->subject.length);
     for (index1=hsp->query.offset + HSP_MAX_WINDOW; index1<hsp_end; index1++) {
-        if (!(search->positionBased)) {
+        if (!positionBased) {
             score -= matrix[*(query_var-HSP_MAX_WINDOW)][*(subject_var-HSP_MAX_WINDOW)];
             score += matrix[*query_var][*subject_var];
         } else {
@@ -7838,7 +7882,8 @@ CheckStartForGappedAlignment (BlastSearchBlkPtr search, BLAST_HSPPtr hsp, Uint1P
 {
 	Int4 index1, score, start, end, width;
 	Uint1Ptr query_var, subject_var;
-
+        Boolean positionBased = 
+           (search->positionBased && search->sbp->posMatrix);
 
 	width = MIN((hsp->query.gapped_start-hsp->query.offset), HSP_MAX_WINDOW/2);
 	start = hsp->query.gapped_start - width;
@@ -7851,7 +7896,7 @@ CheckStartForGappedAlignment (BlastSearchBlkPtr search, BLAST_HSPPtr hsp, Uint1P
 	score=0;
 	for (index1=start; index1<end; index1++)
 	{
-	  if (!(search->positionBased))
+	  if (!positionBased)
 	    score += matrix[*query_var][*subject_var];
 	  else
 	    score += search->sbp->posMatrix[index1][*subject_var];
@@ -7883,6 +7928,9 @@ GetDbSubjRatio(BlastSearchBlkPtr search, Int4 subject_length)
 	return db_subj_ratio;
 }
 
+/* The following value should be divisible by 3, to make sure that frames stay
+   the same when translations are restricted to partial sequence. */
+#define SUBJECT_ADJUSTMENT 2100
 SeqAlignPtr LIBCALL 
 BlastGetGapAlgnTbckWithReaddb (BlastSearchBlkPtr search, Int4 hit_number, Boolean ordinal_number)
 
@@ -7891,6 +7939,9 @@ BlastGetGapAlgnTbckWithReaddb (BlastSearchBlkPtr search, Int4 hit_number, Boolea
 	BioseqPtr subject_bsp;
 	Boolean subject_allocated = FALSE;
 	Int4 index1, subject_length, rev_subject_length;
+	Int4 subject_start, subject_end;
+	Int4 hsp_count;
+	BLASTResultHspPtr hsp_array;
 	SeqAlignPtr seqalign;
 	SeqPortPtr spp;
 	Uint1Ptr subject, rev_subject;
@@ -7904,9 +7955,29 @@ BlastGetGapAlgnTbckWithReaddb (BlastSearchBlkPtr search, Int4 hit_number, Boolea
     		spp = SeqPortNew(subject_bsp, 0, -1, Seq_strand_plus, Seq_code_ncbi4na);
 		/* make one longer to "protect" ALIGN. */
 		subject = MemNew((1+subject_bsp->length)*sizeof(Uint1));
-		for (index1=0; index1<subject_bsp->length; index1++)
+		hsp_array = result_hitlist->hsp_array;
+		hsp_count = result_hitlist->hspcnt;
+		for (index1=0; index1<hsp_count; index1++)
 		{
-			subject[index1] = SeqPortGetResidue(spp);
+			if (hsp_array[index1].subject_frame > 0)
+			{ /* Get subsequence corresponding to this hsp. */
+				Int4 offset;
+
+				subject_start = 3*hsp_array[index1].subject_offset;
+				subject_end = subject_start + 3*hsp_array[index1].subject_length;
+
+				/* add SUBJECT_ADJUSTMENT bases to either end. */
+				subject_start = MAX(subject_start - SUBJECT_ADJUSTMENT, 0);
+				subject_end = MIN(subject_end + SUBJECT_ADJUSTMENT, subject_bsp->length);
+
+				SeqPortSeek(spp, subject_start, SEEK_SET);
+
+				for (offset=subject_start; offset<subject_end; offset++)
+					subject[offset] = SeqPortGetResidue(spp);
+
+				if (subject_start == 0 && subject_end == subject_bsp->length)
+					break;    /* entire sequence has been fetched. */
+			}
 		}
 		/* Gap character in last space. */
 		subject[subject_bsp->length] = NULLB;
@@ -7916,9 +7987,29 @@ BlastGetGapAlgnTbckWithReaddb (BlastSearchBlkPtr search, Int4 hit_number, Boolea
     		spp = SeqPortNew(subject_bsp, 0, -1, Seq_strand_minus, Seq_code_ncbi4na);
 		/* make one longer to "protect" ALIGN. */
 		rev_subject = MemNew((1+subject_bsp->length)*sizeof(Uint1));
-		for (index1=0; index1<subject_bsp->length; index1++)
+		hsp_array = result_hitlist->hsp_array;
+		hsp_count = result_hitlist->hspcnt;
+		for (index1=0; index1<hsp_count; index1++)
 		{
-			rev_subject[index1] = SeqPortGetResidue(spp);
+			if (hsp_array[index1].subject_frame < 0)
+			{ /* Get subsequence corresponding to this hsp. */
+				Int4 offset;
+
+				subject_start = 3*hsp_array[index1].subject_offset;
+				subject_end = subject_start + 3*hsp_array[index1].subject_length;
+
+				/* add SUBJECT_ADJUSTMENT bases to either end. */
+				subject_start = MAX(subject_start - SUBJECT_ADJUSTMENT, 0);
+				subject_end = MIN(subject_end + SUBJECT_ADJUSTMENT, subject_bsp->length);
+
+				SeqPortSeek(spp, subject_start, SEEK_SET);
+
+				for (offset=subject_start; offset<subject_end; offset++)
+					rev_subject[offset] = SeqPortGetResidue(spp);
+
+				if (subject_start == 0 && subject_end == subject_bsp->length)
+					break;    /* entire sequence has been fetched. */
+			}
 		}
 		/* Gap character in last space. */
 		rev_subject[subject_bsp->length] = NULLB;
@@ -8598,11 +8689,11 @@ BlastHitRangeLoad (BlastSearchBlkPtr search, BLAST_HSPPtr *hsp_array, Int4 hspcn
 		if (hsp->query.frame >= 0)
 		{
 			tmp->gi = hsp->query.offset;
-			tmp->ordinal_id = hsp->query.end;
+			tmp->ordinal_id = hsp->query.end - 1;
 		}
 		else
 		{
-			tmp->gi = query_length - hsp->query.end - 1;
+			tmp->gi = query_length - hsp->query.end;
 			tmp->ordinal_id = query_length - hsp->query.offset - 1;
 		}
 		tmp++;
@@ -8677,9 +8768,8 @@ static void BLASTCheckHSPInclusion(BLAST_HSPPtr *hsp_array, Int4 hspcnt,
                            mean, that current HSP should be removed. */
 
                         if(hsp_array[index] != NULL) {
-                            hsp_array[index]->gap_info = GapXEditBlockDelete(hsp_array[index]->gap_info);
-                            hsp_array[index] = MemFree(hsp_array[index]);
-			    break;
+                           hsp_array[index] = BLAST_HSPFree(hsp_array[index]);
+                           break;
                         }
                     }
                 }
@@ -8688,6 +8778,7 @@ static void BLASTCheckHSPInclusion(BLAST_HSPPtr *hsp_array, Int4 hspcnt,
     }
     return;
 }
+
 
 /*
 	Take a BLAST_HSPPtr (array of HSP's) and get a traceback for them.
@@ -8717,7 +8808,9 @@ RealBlastGetGappedAlignmentTraceback(BlastSearchBlkPtr search, Uint1Ptr subject,
     Int4 max_start = MAX_DBSEQ_LEN / 2, start_shift;
     Int4 align_length;
     Int4 query_num; /* AM: Added to support query concatenation. */
-    
+    Boolean partial_translation;
+    Int4 translation_length;
+
     pbp = search->pbp;
     MemSet(&result_hsp, 0, sizeof(BLASTResultHsp));
     
@@ -8744,13 +8837,16 @@ RealBlastGetGappedAlignmentTraceback(BlastSearchBlkPtr search, Uint1Ptr subject,
     gap_align->shift_pen = pbp->shift_pen; 
     
     gap_align->discontinuous = pbp->discontinuous;
-    gap_align->positionBased = search->positionBased;
+    gap_align->positionBased = 
+       (search->positionBased && search->sbp->posMatrix);
     gap_align->gap_open = pbp->gap_open;
     gap_align->gap_extend = pbp->gap_extend;
     gap_align->decline_align = pbp->decline_align;
     gap_align->x_parameter = pbp->gap_x_dropoff_final;
     gap_align->matrix = search->sbp->matrix;
     gap_align->posMatrix = search->sbp->posMatrix;
+    partial_translation = (subject_length > SUBJECT_ADJUSTMENT);
+
     for (index=0; index<hspcnt; index++) {
         hsp_start_is_contained = FALSE;
         hsp_end_is_contained = FALSE;
@@ -8842,6 +8938,8 @@ RealBlastGetGappedAlignmentTraceback(BlastSearchBlkPtr search, Uint1Ptr subject,
                 gap_align->translate2 = FALSE;
             }
 
+            start_shift = 0;
+
             if (StringCmp(search->prog_name, "tblastn") == 0 ||
                 StringCmp(search->prog_name, "psitblastn") == 0) {
                 gap_align->translate1 = FALSE;
@@ -8851,7 +8949,32 @@ RealBlastGetGappedAlignmentTraceback(BlastSearchBlkPtr search, Uint1Ptr subject,
                     translated_subject = translated_subject_orig + 3;
                     translated_subject_length_orig = MemNew(8*sizeof(Int4));
                     translated_subject_length = translated_subject_length_orig + 3;
-                } if (translated_subject[hsp->subject.frame] == NULL) {
+                } 
+                if (partial_translation) {
+                   translated_subject[hsp->subject.frame] = 
+                      MemFree(translated_subject[hsp->subject.frame]);
+                   /* NB: since SUBJECT_ADJUSTMENT is divisible by 3, the frame
+                      will remain the same.
+                   */
+                   start_shift = 
+                      MAX(0, 3*hsp->subject.offset - SUBJECT_ADJUSTMENT);
+                   translation_length =
+                      MIN(3*hsp->subject.end + SUBJECT_ADJUSTMENT, subject_length)
+                      - start_shift;
+                   if (hsp->subject.frame > 0) {
+                      translated_subject[hsp->subject.frame] =
+                         GetTranslation(subject+start_shift, translation_length, hsp->subject.frame, &translated_subject_length[hsp->subject.frame], search->db_genetic_code);
+                   } else {
+                      translated_subject[hsp->subject.frame] =
+                         GetTranslation(rev_subject+start_shift, translation_length, hsp->subject.frame, &translated_subject_length[hsp->subject.frame], search->db_genetic_code);
+                   }
+                   /* Below, the start_shift will be used for the protein
+                      coordinates, so need to divide it by 3 */
+                   start_shift /= CODON_LENGTH;
+                   hsp->subject.offset -= start_shift;
+                   hsp->subject.gapped_start -= start_shift;
+
+                } else if (translated_subject[hsp->subject.frame] == NULL) {
                     if (hsp->subject.frame > 0) {
                         translated_subject[hsp->subject.frame] =
                             GetTranslation(subject, subject_length, hsp->subject.frame, &translated_subject_length[hsp->subject.frame], search->db_genetic_code);
@@ -8891,28 +9014,39 @@ RealBlastGetGappedAlignmentTraceback(BlastSearchBlkPtr search, Uint1Ptr subject,
                     gap_align->s_start = hsp->subject.gapped_start;
                 }
             }
-            
-            if (gap_align->s_start > max_start) {
-               start_shift = (gap_align->s_start / max_start) * max_start;
-               gap_align->subject = gap_align->subject + start_shift;
+
+            if (search->prog_number == blast_type_blastn) {
+               /* For blastn, use only part of a long subject sequence, 
+                  because the placeholders for the gapped alignment 
+                  information have only been allocated for at most a 
+                  certain length */
+               if (gap_align->s_start > max_start) {
+                  start_shift = (gap_align->s_start / max_start) * max_start;
+                  gap_align->subject = gap_align->subject + start_shift;
+                  
+                  gap_align->s_start %= max_start;
+               } else
+                  start_shift = 0;
                
-               gap_align->s_start %= max_start;
-            } else
-               start_shift = 0;
+               gap_align->subject_length =
+                  MIN(gap_align->subject_length - start_shift, 
+                      gap_align->s_start + hsp->subject.length + max_start);
+            }
 
-            gap_align->subject_length =
-               MIN(gap_align->subject_length - start_shift, 
-                   gap_align->s_start + hsp->subject.length + max_start);
-
-
-
-            if (do_traceback)
-                PerformGappedAlignmentWithTraceback(gap_align);
-            else
+            if (do_traceback) {
+               if (!search->pbp->mb_params || 
+                   search->pbp->mb_params->use_dyn_prog) {
+                  PerformGappedAlignmentWithTraceback(gap_align);
+               } else {
+                  PerformGreedyAlignmentWithTraceback(gap_align, search->abmp,
+                                                      search->sbp);
+               }
+            } else {
                 PerformGappedAlignment(gap_align);
-           
+            }
+
             if (gap_align->score >= min_score_to_keep) {
-                
+               
                 if(search->pbp->is_ooframe) {
                     hsp->query.offset = gap_align->subject_start + start_shift;
                     hsp->subject.offset = gap_align->query_start;
@@ -8940,7 +9074,16 @@ RealBlastGetGappedAlignmentTraceback(BlastSearchBlkPtr search, Uint1Ptr subject,
                 }
 
 		keep = TRUE;
-                if (search->prog_number == blast_type_blastp ||
+                /* If greedy alignment was used for traceback, we still need
+                   to reevaluate the score with ambiguity information */
+                if (search->pbp->mb_params &&
+                    !search->pbp->mb_params->use_dyn_prog &&
+                    ReevaluateScoreWithAmbiguities(search, subject, hsp)) {
+                   /* HSP became below the cutoff after reevaluation */
+                   keep = FALSE;
+                }
+
+                if (keep && search->prog_number == blast_type_blastp ||
                     search->prog_number == blast_type_blastn) {
                    if (search->pbp->mb_params) {
                       FloatHi searchsp_eff = (FloatHi) search->dblen_eff *
@@ -8985,37 +9128,39 @@ RealBlastGetGappedAlignmentTraceback(BlastSearchBlkPtr search, Uint1Ptr subject,
 #endif
                 }
 
-                if (search->pbp->is_ooframe) {
-                   OOFBlastHSPGetNumIdentical(gap_align->query, 
-                      gap_align->subject-start_shift, hsp, NULL, 
-                      &hsp->num_ident, &align_length);
-                } else {
-                   search->subject->sequence_start = 
-                      gap_align->subject - start_shift - 1;
-                   BlastHSPGetNumIdentical(search, hsp, NULL, &hsp->num_ident,
-                                           &align_length);
-                }
-                if (search->pbp->mb_params &&
-                    search->pbp->mb_params->use_dyn_prog) {
-                   if (hsp->num_ident * 100 < 
-                       align_length * search->pbp->mb_params->perc_identity) {
-                      keep = FALSE;
+                if (keep) {
+                   if (search->pbp->is_ooframe) {
+                      OOFBlastHSPGetNumIdentical(gap_align->query, 
+                                                 gap_align->subject-start_shift, hsp, NULL, 
+                                                 &hsp->num_ident, &align_length);
+                   } else {
+                      search->subject->sequence_start = 
+                         gap_align->subject - start_shift - 1;
+                      BlastHSPGetNumIdentical(search, hsp, NULL, &hsp->num_ident,
+                                              &align_length);
                    }
-                }
-                search->subject->sequence_start = NULL;
+                   if (search->pbp->mb_params &&
+                       search->pbp->mb_params->use_dyn_prog) {
+                      if (hsp->num_ident * 100 < 
+                          align_length * search->pbp->mb_params->perc_identity) {
+                         keep = FALSE;
+                      }
+                   }
+                   search->subject->sequence_start = NULL;
 
-		if (search->pbp->scalingFactor != 0.0 && search->pbp->scalingFactor != 1.0)
-		{	/* Scale down score for blastp and tblastn. */
-                	hsp->score = (hsp->score+(0.5*search->pbp->scalingFactor))/search->pbp->scalingFactor;
-		}
-
+                   if (search->pbp->scalingFactor != 0.0 && search->pbp->scalingFactor != 1.0)
+                      /* Scale down score for blastp and tblastn. */
+                      hsp->score = (hsp->score+(0.5*search->pbp->scalingFactor))/search->pbp->scalingFactor;
+                   
 				/* only one alignment considered for blast[np]. */
 				/* This may be changed by LinkHsps for blastx or tblastn. */
-                hsp->num = 1;
-		if ((search->prog_number == blast_type_tblastn ||
-		     search->prog_number == blast_type_psitblastn) && 
-                    search->pbp->longest_intron > 0) 
-                   hsp->evalue = BlastKarlinStoE_simple(hsp->score, search->sbp->kbp_gap[search->first_context], search->searchsp_eff);
+                   hsp->num = 1;
+                   if ((search->prog_number == blast_type_tblastn ||
+                        search->prog_number == blast_type_psitblastn) && 
+                       search->pbp->longest_intron > 0) 
+                      hsp->evalue = BlastKarlinStoE_simple(hsp->score, 
+                                       search->sbp->kbp_gap[search->first_context], search->searchsp_eff);
+                }
 
                 for (index2=0; index2<index && keep == TRUE; index2++) {
                     hsp2 = hsp_array[index2];
@@ -9035,10 +9180,11 @@ RealBlastGetGappedAlignmentTraceback(BlastSearchBlkPtr search, Uint1Ptr subject,
                         } else {
                             new_hspcnt--;
                             if (do_traceback) {
-                                seqalign_array[index2] = SeqAlignFree(seqalign_array[index2]);
-                                hsp_array[index2]->gap_info = GapXEditBlockDelete(hsp_array[index2]->gap_info);
+                                seqalign_array[index2] = 
+                                   SeqAlignFree(seqalign_array[index2]);
                             }
-                            hsp_array[index2] = MemFree(hsp_array[index2]);
+                            hsp_array[index2] = 
+                               BLAST_HSPFree(hsp_array[index2]);
                         }
                     }
                 }
@@ -9046,18 +9192,13 @@ RealBlastGetGappedAlignmentTraceback(BlastSearchBlkPtr search, Uint1Ptr subject,
                 if (keep) {
                     new_hspcnt++;
                 } else {
-                    hsp_array[index] = MemFree(hsp_array[index]);
-                    if (do_traceback)
-                        gap_align->edit_block = GapXEditBlockDelete(gap_align->edit_block);
+                   hsp_array[index] = BLAST_HSPFree(hsp_array[index]);
                 }
             } else {	/* Should be kept? */
-                hsp_array[index] = MemFree(hsp_array[index]);
-                if (do_traceback)
-                    gap_align->edit_block = GapXEditBlockDelete(gap_align->edit_block);
+                hsp_array[index] = BLAST_HSPFree(hsp_array[index]);
             }
         } else { /* Contained within another HSP, delete. */
-            hsp_array[index]->gap_info = GapXEditBlockDelete(hsp_array[index]->gap_info);
-            hsp_array[index] = MemFree(hsp_array[index]);
+            hsp_array[index] = BLAST_HSPFree(hsp_array[index]);
         }
     }
     if (search->pbp->scalingFactor != 0.0 && search->pbp->scalingFactor != 1.0)
@@ -9122,9 +9263,7 @@ RealBlastGetGappedAlignmentTraceback(BlastSearchBlkPtr search, Uint1Ptr subject,
        of HSPs per database sequence */
     if (search->pbp->hsp_num_max > new_hspcnt) {
        for (index=new_hspcnt; index<search->pbp->hsp_num_max; ++index) {
-          hsp_array[index]->gap_info = 
-             GapXEditBlockDelete(hsp_array[index]->gap_info);
-          hsp_array[index] = MemFree(hsp_array[index]);
+          hsp_array[index] = BLAST_HSPFree(hsp_array[index]);
        }
        new_hspcnt = MIN(new_hspcnt, search->pbp->hsp_num_max);
     }
@@ -9242,8 +9381,8 @@ SumBlastGetGappedAlignmentEx (BlastSearchBlkPtr search, Int4 hit_number, Boolean
 	SeqIdPtr subject_id=NULL, sip, subject_id_var;
 	Nlm_FloatHi current_evalue=DBL_MAX;
 	ValNodePtr vnp, vnp_start;
-        BLASTResultsStructPtr result_struct;
-        Boolean is_megablast = (search->pbp->mb_params && search->pbp->mb_params->use_dyn_prog);
+   BLASTResultsStructPtr result_struct;
+   Boolean is_megablast = (search->pbp->mb_params != NULL);
 
 	if (search == NULL)
 		return FALSE;
@@ -9555,7 +9694,8 @@ BlastPreliminaryGappedScore (BlastSearchBlkPtr search, Uint1Ptr subject, Int4 su
                 gap_align->is_ooframe = pbp->is_ooframe;
                 gap_align->shift_pen = pbp->shift_pen; 
                 gap_align->discontinuous = pbp->discontinuous;
-		gap_align->positionBased = search->positionBased;
+		gap_align->positionBased = 
+                   (search->positionBased && search->sbp->posMatrix);
 		gap_align->include_query = 0;
 		gap_align->gap_open = pbp->gap_open;
 		gap_align->gap_extend = pbp->gap_extend;
@@ -9874,7 +10014,8 @@ BlastGetGappedScore (BlastSearchBlkPtr search, Int4 subject_length, Uint1Ptr sub
                 gap_align->is_ooframe = pbp->is_ooframe;
                 gap_align->shift_pen = pbp->shift_pen; 
                 gap_align->discontinuous = pbp->discontinuous;
-		gap_align->positionBased = search->positionBased;
+		gap_align->positionBased = 
+                   (search->positionBased && search->sbp->posMatrix);
 		gap_align->include_query = 0;
 		gap_align->gap_open = pbp->gap_open;
 		gap_align->gap_extend = pbp->gap_extend;
@@ -10497,16 +10638,13 @@ bove.*/
 	{
 		if (new_index >= hspcnt)
 		{ /* this HSP is less significant than others on a full list.*/
-                   new_hsp->gap_info = GapXEditBlockDelete(new_hsp->gap_info);
-                   new_hsp = MemFree(new_hsp);
+                   new_hsp = BLAST_HSPFree(new_hsp);
                    return;
 		}
 		else
 		{ /* Delete the last HSP on the list. */
                    hspcnt = --current_hitlist->hspcnt;
-                   hsp_array[hspcnt]->gap_info = 
-                      GapXEditBlockDelete(hsp_array[hspcnt]->gap_info);
-                   hsp_array[hspcnt] = MemFree(hsp_array[hspcnt]);
+                   hsp_array[hspcnt] = BLAST_HSPFree(hsp_array[hspcnt]);
 		}
 	}
 	current_hitlist->hspcnt++;

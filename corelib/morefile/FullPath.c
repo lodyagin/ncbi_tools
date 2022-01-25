@@ -40,6 +40,8 @@
      Institutes of Health, Bethesda, Maryland, USA.
 */
 
+/* C++ style comments converted to C comments by NCBI */
+
 
 #ifndef WIN32
 
@@ -174,7 +176,7 @@ pascal	OSErr	FSpGetFullPath(const FSSpec *spec,
 			pb.dirInfo.ioDrDirID = tempSpec.parID;
 			pb.dirInfo.ioFDirIndex = 0;
 			result = PBGetCatInfoSync(&pb);
-			// Allow file/directory name at end of path to not exist.
+			/* Allow file/directory name at end of path to not exist. */
 			realResult = result;
 			if ( (result == noErr) || (result == fnfErr) )
 			{
@@ -218,7 +220,7 @@ pascal	OSErr	FSpGetFullPath(const FSSpec *spec,
 	{
 		/* Return the length */
 		*fullPathLength = GetHandleSize(*fullPath);
-		result = realResult;	// return realResult in case it was fnfErr
+		result = realResult;	/* return realResult in case it was fnfErr */
 	}
 	else
 	{

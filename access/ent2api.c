@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/29/99
 *
-* $Revision: 1.57 $
+* $Revision: 1.60 $
 *
 * File Description: 
 *
@@ -145,16 +145,52 @@ NLM_EXTERN CONN EntrezOpenConnection (
   Uint2    host_port = e2_host_port;
   CharPtr  host_path = e2_host_path;
   CharPtr  host_service = e2_service;
+#ifdef OS_UNIX
+  CharPtr  env_machine = NULL;
+  CharPtr  env_path = NULL;
+  CharPtr  env_port = NULL;
+  CharPtr  env_service = NULL;
+  int      val = 0;
+#endif
 
+#ifdef OS_UNIX
+  env_machine = (CharPtr) getenv ("NCBI_ENTREZ2_HOST_MACHINE");
+  if (! StringHasNoText (env_machine)) {
+    host_machine = env_machine;
+  }
+#endif
   if (StringHasNoText (host_machine)) {
     host_machine = "www.ncbi.nlm.nih.gov";
   }
+
+#ifdef OS_UNIX
+  env_port = (CharPtr) getenv ("NCBI_ENTREZ2_HOST_PORT");
+  if (! StringHasNoText (env_port)) {
+    if (sscanf (env_port, "%d", &val) == 1) {
+      host_port = (Uint2) val;
+    }
+  }
+#endif
   if (host_port == 0) {
     host_port = 80;
   }
-  if (StringHasNoText (host_path)) {
-    host_path = "/entrez/utils/entrez2server.fcgi";
+
+#ifdef OS_UNIX
+  env_path = (CharPtr) getenv ("NCBI_ENTREZ2_HOST_PATH");
+  if (! StringHasNoText (env_path)) {
+    host_path = env_path;
   }
+#endif
+  if (StringHasNoText (host_path)) {
+    host_path = "/entrez/eutils/entrez2server.fcgi";
+  }
+
+#ifdef OS_UNIX
+  env_service = (CharPtr) getenv ("NCBI_ENTREZ2_HOST_SERVICE");
+  if (! StringHasNoText (env_service)) {
+    host_service = env_service;
+  }
+#endif
   if (StringHasNoText (host_service)) {
     host_service = "Entrez2";
   }
@@ -932,6 +968,7 @@ NLM_EXTERN Boolean ValidateEntrez2InfoPtr (
   Char                       ch;
   CharPtr                    db;
   Int2                       dbcount;
+  CharPtr                    dbnames [256];
   CharPtr                    dsf;
   Int2                       dsfcount;
   Entrez2DbInfoPtr           e2db;
@@ -941,7 +978,9 @@ NLM_EXTERN Boolean ValidateEntrez2InfoPtr (
   CharPtr                    fld;
   Int2                       fldcount;
   Boolean                    hasLowCase;
+  Int2                       i;
   CharPtr                    last;
+  ValNodePtr                 lastvnp;
   size_t                     len1;
   size_t                     len2;
   CharPtr                    lnk;
@@ -965,6 +1004,19 @@ NLM_EXTERN Boolean ValidateEntrez2InfoPtr (
     sprintf (buf, "Entrez2 has no databases");
     ValNodeCopyStr (head, 0, buf);
     return FALSE;
+  }
+
+  for (i = 0; i < sizeof (dbnames) / sizeof (CharPtr); i++) {
+    dbnames [i] = "?";
+  }
+  i = 0;
+  for (e2db = e2ip->db_info; e2db != NULL; e2db = e2db->next) {
+    i++;
+    if (! StringHasNoText (e2db->db_name)) {
+      dbnames [i] = e2db->db_name;
+    } else if (! StringHasNoText (e2db->db_menu)) {
+      dbnames [i] = e2db->db_menu;
+    }
   }
 
   dbcount = 0;
@@ -1089,7 +1141,7 @@ NLM_EXTERN Boolean ValidateEntrez2InfoPtr (
         ValNodeCopyStr (head, 0, buf);
         rsult = FALSE;
       } else {
-        ValNodeCopyStr (&menuhead, 0, e2fip->field_menu);
+        ValNodeCopyStr (&menuhead, (Int2) dbcount, e2fip->field_menu);
         if (StringStr (e2fip->field_menu, "Date") != NULL) {
           if (! e2fip->is_date) {
             sprintf (buf, "Database %s field %s does not have is_date set", db, fld);
@@ -1203,12 +1255,13 @@ NLM_EXTERN Boolean ValidateEntrez2InfoPtr (
 
   menuhead = ValNodeSort (menuhead, SortVnpByStr);
   last = NULL;
+  lastvnp = NULL;
   for (vnp = menuhead; vnp != NULL; vnp = vnp->next) {
     str = (CharPtr) vnp->data.ptrvalue;
     if (StringHasNoText (str)) continue;
-    if (last != NULL) {
+    if (last != NULL && lastvnp != NULL) {
       if (StringICmp (last, str) == 0 && StringCmp (last, str) != 0) {
-        sprintf (buf, "Menu names %s and %s differ in capitalization", last, str);
+        sprintf (buf, "Menu names %s [%s] and %s [%s] differ in capitalization", last, dbnames [lastvnp->choice], str, dbnames [vnp->choice]);
         ValNodeCopyStr (head, 0, buf);
         rsult = FALSE;
       } else {
@@ -1224,7 +1277,7 @@ NLM_EXTERN Boolean ValidateEntrez2InfoPtr (
             } else if (StringICmp (last, "Rank") == 0 && StringICmp (str, "Ranked standard deviation") == 0) {
             } else if (StringICmp (last, "Book") == 0 && StringICmp (str, "Book's Topic") == 0) {
             } else {
-              sprintf (buf, "Menu names %s and %s may be unintended variants", last, str);
+              sprintf (buf, "Menu names %s [%s] and %s [%s] may be unintended variants", last, dbnames [lastvnp->choice], str, dbnames [vnp->choice]);
               ValNodeCopyStr (head, 0, buf);
               rsult = FALSE;
             }
@@ -1237,6 +1290,7 @@ NLM_EXTERN Boolean ValidateEntrez2InfoPtr (
       rsult = FALSE;
     }
     last = str;
+    lastvnp = vnp;
   }
   ValNodeFreeData (menuhead);
 

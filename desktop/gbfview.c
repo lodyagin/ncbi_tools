@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/5/97
 *
-* $Revision: 6.70 $
+* $Revision: 6.71 $
 *
 * File Description: 
 *
@@ -568,6 +568,7 @@ typedef struct lookforids {
   Boolean isNTorNW;
   Boolean isNC;
   Boolean isTPA;
+  Boolean isAEorCH;
 } LookForIDs, PNTR LookForIDsPtr;
 
 static void LookForSeqIDs (BioseqPtr bsp, Pointer userdata)
@@ -584,6 +585,14 @@ static void LookForSeqIDs (BioseqPtr bsp, Pointer userdata)
       case SEQID_EMBL :
       case SEQID_DDBJ :
         lfip->isGED = TRUE;
+        tsip = (TextSeqIdPtr) sip->data.ptrvalue;
+        if (tsip != NULL) {
+          if (StringNCmp (tsip->accession, "AE", 2) == 0) {
+            lfip->isAEorCH = TRUE;
+          } else if (StringNCmp (tsip->accession, "CH", 2) == 0) {
+            lfip->isAEorCH = TRUE;
+          }
+        }
         break;
       case SEQID_TPG :
       case SEQID_TPE :
@@ -613,7 +622,8 @@ static void LookForGEDetc (
   BoolPtr isGED,
   BoolPtr isNTorNW,
   BoolPtr isNC,
-  BoolPtr isTPA
+  BoolPtr isTPA,
+  BoolPtr isAEorCH
 )
 
 {
@@ -625,6 +635,7 @@ static void LookForGEDetc (
   *isNTorNW = lfi.isNTorNW;
   *isNC = lfi.isNC;
   *isTPA = lfi.isTPA;
+  *isAEorCH = lfi.isAEorCH;
 }
 
 static void LookForNonLocalID (BioseqPtr bsp, Pointer userdata)
@@ -894,6 +905,7 @@ static void PopulateFlatFile (BioseqViewPtr bvp, FmtType format, FlgType flags)
   FILE             *fp;
   Boolean          hastpaaligns;
   Int2             into;
+  Boolean          isAEorCH;
   Boolean          isGED;
   Boolean          isNTorNW;
   Boolean          isNC;
@@ -964,7 +976,7 @@ static void PopulateFlatFile (BioseqViewPtr bvp, FmtType format, FlgType flags)
   bsp = bvp->bsp;
   entityID = ObjMgrGetEntityIDForPointer (bsp);
   topsep = GetTopSeqEntryForEntityID (entityID);
-  LookForGEDetc (topsep, &isGED, &isNTorNW, &isNC, &isTPA);
+  LookForGEDetc (topsep, &isGED, &isNTorNW, &isNC, &isTPA, &isAEorCH);
 
   if ((flags & SHOW_CONTIG_FEATURES) != 0 || (flags & SHOW_CONTIG_SOURCES) != 0) {
     if (isNTorNW || isTPA) {
@@ -1066,6 +1078,8 @@ static void PopulateFlatFile (BioseqViewPtr bvp, FmtType format, FlgType flags)
     if (isNTorNW || isTPA) {
       flags |= ONLY_NEAR_FEATURES;
     } else if (isNC) {
+      flags |= NEAR_FEATURES_SUPPRESS;
+    } else if (isAEorCH) {
       flags |= NEAR_FEATURES_SUPPRESS;
     }
   }

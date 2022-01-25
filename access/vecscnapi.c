@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/13/00
 *
-* $Revision: 1.13 $
+* $Revision: 1.15 $
 *
 * File Description: 
 *
@@ -467,8 +467,11 @@ NLM_EXTERN Int4 VecScreenCheckQueue (
 
           /* estimated wait time has expired, so queue another check */
 
-          if (curr->secondsToWait < 60) {
+          if (curr->secondsToWait < 300) {
             curr->secondsToWait *= 2;
+            if (curr->secondsToWait > 300) {
+              curr->secondsToWait = 300;
+            }
           }
           curr->postedTime = GetSecs ();
 

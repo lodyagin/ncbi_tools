@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   07/10/96
 *
-* $Revision: 6.9 $
+* $Revision: 6.10 $
 *
 * File Description:
 *   	Memory- and MT-safe "sprintf()"
@@ -38,6 +38,9 @@
 * --------------------------------------------------------------------------
 *
 * $Log: tsprintf.c,v $
+* Revision 6.10  2003/12/12 23:28:25  dondosha
+* Correction for Opteron, at suggestion from Nicolas Joly
+*
 * Revision 6.9  2002/03/11 16:55:43  ivanov
 * Fixed fp_count() -- error with round-up numbers
 *
@@ -97,6 +100,13 @@
 
 #include <tsprintf.h>
 
+#ifndef va_copy
+# ifdef __va_copy
+#  define va_copy __va_copy
+# else
+#  define va_copy(d,s) ((d) = (s))
+# endif
+#endif
 
 /***********************************************************************
  *  INTERNAL
@@ -473,6 +483,7 @@ NLM_EXTERN const Char PNTR Nlm_TSPrintfArgs(const Char PNTR fmt, va_list args)
   CharPtr temp_buf;
   size_t  cut_fmt;
   char   *x_fmt;
+  va_list save;
 
 #ifdef OS_UNIX_PPCLINUX
 /*
@@ -483,7 +494,9 @@ NLM_EXTERN const Char PNTR Nlm_TSPrintfArgs(const Char PNTR fmt, va_list args)
   parsed_size = 2048;
   cut_fmt = 0;
 #else
-  parsed_size = vsprintf_count_args(fmt, args, &cut_fmt);
+  va_copy(save, args);
+  parsed_size = vsprintf_count_args(fmt, save, &cut_fmt);
+  va_end(save);
   if (parsed_size == 0)
     return NULL;
 #endif

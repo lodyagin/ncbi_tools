@@ -1,4 +1,4 @@
-/* $Id: wwwbutl.c,v 1.18 2003/08/13 14:35:33 dondosha Exp $
+/* $Id: wwwbutl.c,v 1.21 2004/01/16 17:35:20 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,21 @@
 *
 * Initial Version Creation Date: 04/21/2000
 *
-* $Revision: 1.18 $
+* $Revision: 1.21 $
 *
 * File Description:
 *         WWW BLAST/PSI/PHI utilities
 *
 * $Log: wwwbutl.c,v $
+* Revision 1.21  2004/01/16 17:35:20  dondosha
+* Fixed mouseover problems
+*
+* Revision 1.20  2003/11/20 22:19:35  dondosha
+* Pass www_root_path to the PrintDefLines... function
+*
+* Revision 1.19  2003/11/20 19:10:01  dondosha
+* Never print header for XML output
+*
 * Revision 1.18  2003/08/13 14:35:33  dondosha
 * When no percent identity cutoff, default value for mismatch penalty is -3 for blastn
 *
@@ -1920,7 +1929,7 @@ static void PrintRequestHeader(WWWBlastInfoPtr theInfo)
     printf("</HEAD>\n");
     printf("<BODY BGCOLOR=\"#FFFFFF\" LINK=\"#0000FF\" "
            "VLINK=\"#660099\" ALINK=\"#660099\">\n");
-    fprintf(stdout, "<map name=img_map1>\n");
+    fprintf(stdout, "<map name=img_map0>\n");
     fprintf(stdout, "<area shape=rect coords=2,1,48,21 "
             "href=\"http://www.ncbi.nlm.nih.gov\">\n");
     fprintf(stdout, "<area shape=rect coords=385,1,435,21 "
@@ -1930,7 +1939,7 @@ static void PrintRequestHeader(WWWBlastInfoPtr theInfo)
     fprintf(stdout, "<area shape=rect coords=487,1,508,21 "
             "href=\"%s/blast/docs/blast_help.html\">\n", theInfo->www_root_path);
     fprintf(stdout, "</map>\n"); 
-    fprintf(stdout, "<IMG USEMAP=#img_map1 WIDTH=509 HEIGHT=22 "
+    fprintf(stdout, "<IMG USEMAP=#img_map0 WIDTH=509 HEIGHT=22 "
             "SRC=\"%s/blast/images/psi_blast.gif\" ISMAP> \n", 
             theInfo->www_root_path);
     printf("<BR><BR><PRE>\n");
@@ -2336,7 +2345,9 @@ BLASTPrintDataPtr PSIBlastSearch(WWWBlastInfoPtr theInfo)
     if(theInfo == NULL)
 	return NULL;
 
-    PrintRequestHeader(theInfo); 
+    if (!theInfo->xml_output)
+       PrintRequestHeader(theInfo); 
+
     print_data = (BLASTPrintDataPtr) MemNew(sizeof(BLASTPrintData));
     
     psidata = MemNew(sizeof(PSIData));
@@ -2480,7 +2491,9 @@ BLASTPrintDataPtr PHIBlastSearch(WWWBlastInfoPtr theInfo)
     if(theInfo == NULL)
 	return NULL;
     
-    PrintRequestHeader(theInfo); 
+    if (!theInfo->xml_output)
+       PrintRequestHeader(theInfo); 
+
     print_data = (BLASTPrintDataPtr) MemNew(sizeof(BLASTPrintData));
     
     psidata = MemNew(sizeof(PSIData));
@@ -2742,8 +2755,11 @@ the alignment was checked on the previous iteration \
         
         fflush(stdout);
         print_options += TXALIGN_CHECK_BOX_CHECKED;
-        PrintDefLinesFromSeqAlignEx(GoodSeqAlignments, 80, stdout, print_options, FIRST_PASS, marks, theInfo->number_of_descriptions);
-        
+        PrintDefLinesFromSeqAlignWithPath(GoodSeqAlignments, 80, stdout,
+           print_options, FIRST_PASS, marks,
+           theInfo->number_of_descriptions, theInfo->database,
+           theInfo->www_blast_type, theInfo->www_root_path);
+
         print_options -= TXALIGN_CHECK_BOX_CHECKED;
         
         if (print_data->psidata->StepNumber == 0)
@@ -2757,7 +2773,11 @@ the alignment was checked on the previous iteration \
                    "Sequences with pattern at position %d and E-value WORSE than threshold</FONT></b></CENTER>\n", 
                    SeqLocStart(seqloc)+1);
             
-            PrintDefLinesFromSeqAlignEx(BadSeqAlignments, 80, stdout, print_options, FIRST_PASS, &marks[countGood], theInfo->number_of_descriptions - countGood);
+            PrintDefLinesFromSeqAlignWithPath(BadSeqAlignments, 80, stdout,
+               print_options, FIRST_PASS, &marks[countGood], 
+               theInfo->number_of_descriptions - countGood, 
+               theInfo->database, theInfo->www_blast_type, 
+               theInfo->www_root_path);
         }
 
         marks = MemFree(marks);
@@ -2979,8 +2999,9 @@ the alignment was checked on the previous iteration \
         printf("                          (bits) Value\n\n");
     }
     
-    PrintDefLinesFromSeqAlignEx(GoodSeqAlignments, 80, stdout, 
-                                print_options, FIRST_PASS, marks, theInfo->number_of_descriptions);
+    PrintDefLinesFromSeqAlignWithPath(GoodSeqAlignments, 80, stdout, 
+       print_options, FIRST_PASS, marks, theInfo->number_of_descriptions,
+       theInfo->database, theInfo->www_blast_type, theInfo->www_root_path);
     
     print_options -= TXALIGN_CHECK_BOX_CHECKED;
     
@@ -2995,7 +3016,10 @@ the alignment was checked on the previous iteration \
         printf("<HR><CENTER><b><FONT color=\"green\">"
                "Sequences with E-value WORSE than threshold </FONT></b></CENTER>\n");
     
-        PrintDefLinesFromSeqAlignEx(BadSeqAlignments, 80, stdout, print_options, FIRST_PASS, &marks[countGood], theInfo->number_of_descriptions - countGood);
+        PrintDefLinesFromSeqAlignWithPath(BadSeqAlignments, 80, stdout, 
+           print_options, FIRST_PASS, &marks[countGood], 
+           theInfo->number_of_descriptions - countGood, theInfo->database,
+           theInfo->www_blast_type, theInfo->www_root_path);
     }
 
     if (theInfo->number_of_descriptions) {

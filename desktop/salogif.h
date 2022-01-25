@@ -1,7 +1,7 @@
 #ifndef SALOGIF__H
 #define SALOGIF__H
 
-/*  $RCSfile: salogif.h,v $  $Revision: 6.1 $  $Date: 2000/03/20 19:00:28 $
+/*  $RCSfile: salogif.h,v $  $Revision: 6.2 $  $Date: 2003/11/20 18:36:08 $
 * ==========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -33,6 +33,9 @@
 *
 * --------------------------------------------------------------------------
 * $Log: salogif.h,v $
+* Revision 6.2  2003/11/20 18:36:08  dondosha
+* Added function PrintOneAlignmentOverview to create an overview gif for one of the multiple query sequences
+*
 * Revision 6.1  2000/03/20 19:00:28  shavirin
 * Initial revision in the new location.
 *
@@ -69,6 +72,20 @@ NLM_EXTERN Boolean PrintAlignmentOverview
  const Char* href,      /* hyperlink location of the GIF file */
  const Char* gif_name,  /* GIF file name */
  const Char* title      /* title printed at the top of generated HTML output */
+ );
+
+/* Shows alignments gif image for one query 
+ * from a set of multiple queries. 
+ */
+NLM_EXTERN Boolean PrintOneAlignmentOverview
+(SeqAnnotPtr h_annot,   /* output of blast search */
+ FILE*       fp,        /* file where output goes to */
+ const Char* formname,  /* it is needed to specify name of embeded HTML form,
+                           * create this form before if there is no one */
+ const Char* href,      /* hyperlink location of the GIF file */
+ const Char* gif_name,  /* GIF file name */
+ const Char* title,     /* title printed at the top of generated HTML output */
+ int query_index        /* Index of this query in the set of queries */
  );
 
 #ifdef __cplusplus

@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 5/25/95
 *
-* $Revision: 6.3 $
+* $Revision: 6.4 $
 *
 * File Description:  Utilities for fetching local sequences
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: lsqfetch.h,v $
+* Revision 6.4  2003/11/12 23:38:49  kans
+* changing AltIndexedFastaLibFetchEnable prototype, implementation not yet finished
+*
 * Revision 6.3  2003/08/27 19:27:43  kans
 * added AltIndexedFastaLibFetch functions for chimpanzee genome project
 *
@@ -254,9 +257,9 @@ NLM_EXTERN Boolean CheckDnaResidue PROTO((CharPtr seq_ptr, Int4 ck_len, Int4Ptr 
 NLM_EXTERN Boolean IndexedFastaLibFetchEnable (CharPtr path);
 NLM_EXTERN void IndexedFastaLibFetchDisable (void);
 
-/* alternative indexed FASTA lib functions - currently uses chimpanzee genome contig naming convention */
+/* alternative indexed FASTA lib functions - currently uses new chimpanzee genome contig naming convention */
 
-NLM_EXTERN Boolean AltIndexedFastaLibFetchEnable (CharPtr path, CharPtr fastaname);
+NLM_EXTERN Boolean AltIndexedFastaLibFetchEnable (CharPtr path);
 NLM_EXTERN void AltIndexedFastaLibFetchDisable (void);
 
 /* common function for creating indexes of fasta library files */
