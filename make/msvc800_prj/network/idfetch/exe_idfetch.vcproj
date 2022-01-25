@@ -3,7 +3,7 @@
 	ProjectType="Visual C++"
 	Version="8.00"
 	Name="exe_idfetch"
-	ProjectGUID="{67436D24-0D70-48D5-B1AE-6E8DFA978983}"
+	ProjectGUID="{07D81838-5829-440A-9F37-EC7EE475AC8D}"
 	>
 	<Platforms>
 		<Platform
@@ -76,7 +76,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="oldnames.lib wsock32.lib"
+				AdditionalDependencies="oldnames.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/idfetch.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
@@ -170,7 +170,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="oldnames.lib wsock32.lib"
+				AdditionalDependencies="oldnames.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/idfetch.exe"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"
@@ -266,7 +266,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="oldnames.lib wsock32.lib"
+				AdditionalDependencies="oldnames.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/idfetch.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
@@ -360,7 +360,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="oldnames.lib wsock32.lib"
+				AdditionalDependencies="oldnames.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/idfetch.exe"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"
@@ -456,7 +456,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="oldnames.lib wsock32.lib"
+				AdditionalDependencies="oldnames.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/idfetch.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
@@ -550,7 +550,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="oldnames.lib wsock32.lib"
+				AdditionalDependencies="oldnames.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/idfetch.exe"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"
@@ -646,7 +646,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="oldnames.lib wsock32.lib"
+				AdditionalDependencies="oldnames.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/idfetch.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
@@ -740,7 +740,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="oldnames.lib wsock32.lib"
+				AdditionalDependencies="oldnames.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/idfetch.exe"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"

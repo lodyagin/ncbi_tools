@@ -1,6 +1,6 @@
 #	makefile for asntool and ncbi core routines,
 #
-#	$Id: makeall.unx,v 6.291 2008/01/25 19:56:25 ucko Exp $
+#	$Id: makeall.unx,v 6.293 2008/10/17 13:33:14 lavr Exp $
 #
 #	cdromlib data access functions, vibrant, and entrez
 #	SunOS with unbundled ANSI compiler [ make LCL=acc RAN=ranlib CC=acc ]
@@ -202,7 +202,7 @@ SRC2 =	objacces.c objalign.c objall.c objbibli.c \
 	codon.c jzcoll.c jzmisc.c maputil.c mconsist.c macroapi.c \
 	salpedit.c salpstat.c salpacc.c salprop.c salsap.c salstruc.c salutil.c \
 	udvseq.c blocks.c pgppop.c samutil.c ddvcolor.c viewmgr.c ddvcreate.c \
-	jsavlt.c needleman.c txalign.c fdlobj.c alignmgr2.c alnread.c
+	jsavlt.c needleman.c txalign.c fdlobj.c alignmgr2.c alnread.c acerdapi.c aceread.c
 
 SRC3 =	cdentrez.c cdromlib.c cdnewlib.c casn.c cdconfig.c objentr.c
 
@@ -346,7 +346,7 @@ OBJ2 =	objacces.o objalign.o objall.o objbibli.o \
 	codon.o jzcoll.o jzmisc.o maputil.o mconsist.o macroapi.o \
 	salpedit.o salpstat.o salpacc.o salprop.o salsap.o salstruc.o salutil.o \
 	udvseq.o blocks.o pgppop.o samutil.o ddvcolor.o viewmgr.o ddvcreate.o \
-	jsavlt.o needleman.o txalign.o fdlobj.o alignmgr2.o alnread.o
+	jsavlt.o needleman.o txalign.o fdlobj.o alignmgr2.o alnread.o acerdapi.o aceread.o
 
 OBJ3 =  cdentrez.o cdromlib.o cdnewlib.o casn.o cdconfig.o objentr.o
 
@@ -697,11 +697,13 @@ copy :
 	$(SRCCOPY) ../connect/ncbi_priv.h .
 	$(SRCCOPY) ../connect/ncbi_comm.h .
 	$(SRCCOPY) ../connect/ncbi_config.h .
+	$(SRCCOPY) ../connect/ncbi_connssl.h .
 	-$(SRCCOPY) ../connect/ncbi_lbsm.h .
 	-$(SRCCOPY) ../connect/ncbi_lbsm_ipc.h .
 	$(SRCCOPY) ../connect/ncbi_host_infop.h .
 	$(SRCCOPY) ../connect/ncbi_server_infop.h .
 	$(SRCCOPY) ../connect/ncbi_servicep.h .
+	$(SRCCOPY) ../connect/ncbi_socketp.h .
 	$(SRCCOPY) ../connect/ncbi_dispd.h .
 	$(SRCCOPY) ../connect/ncbi_lbsmd.h .
 	$(SRCCOPY) ../connect/ncbi_local.h .

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/19/97
 *
-* $Revision: 6.35 $
+* $Revision: 6.36 $
 *
 * File Description: 
 *
@@ -231,6 +231,9 @@ NLM_EXTERN Boolean ValidateSeqAlignandACCInSeqEntry (SeqEntryPtr sep,
 
 NLM_EXTERN void    CalculateAlignmentOffsets (SeqEntryPtr sepnew, SeqEntryPtr sepold);
 NLM_EXTERN Boolean CheckAlignmentSequenceLengths (SeqAlignPtr salp);
+
+NLM_EXTERN Boolean UpdateOneSeqAlignFarPointer (SeqAlignPtr salp, Int4 pos);
+
 
 #endif
 

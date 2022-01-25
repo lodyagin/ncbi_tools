@@ -1,4 +1,4 @@
-/*  $Id: ncbi_service.c,v 6.94 2007/10/17 15:25:43 kazimird Exp $
+/* $Id: ncbi_service.c,v 6.99 2008/10/16 18:55:44 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -71,7 +71,7 @@ static char* s_ServiceName(const char* service, size_t depth)
     *s++ = '_';
     memcpy(s, CONN_SERVICE_NAME, sizeof(CONN_SERVICE_NAME));
     /* Looking for "service_CONN_SERVICE_NAME" in environment */
-    if (!(s = getenv(strupr(buf)))) {
+    if (!(s = getenv(strupr(buf)))  ||  !*s) {
         /* Looking for "CONN_SERVICE_NAME" in registry's section [service] */
         buf[len++] = '\0';
         CORE_REG_GET(buf, buf + len, srv, sizeof(srv), 0);
@@ -247,8 +247,8 @@ static SERV_ITER s_Open(const char*          service,
          !(op = SERV_DISPD_Open(iter, net_info, info, host_info)))) {
         if (!do_lbsmd  &&  !do_dispd) {
             CORE_LOGF_X(1, eLOG_Warning,
-                      ("[SERV]  No service mappers available for `%s'",
-                       service));
+                        ("[SERV]  No service mappers available for `%s'",
+                         service));
         }
         SERV_Close(iter);
         return 0;
@@ -545,8 +545,8 @@ int/*bool*/ SERV_Update(SERV_ITER iter, const char* text, int code)
             p = t;
             if (iter->op->Update  &&  (*iter->op->Update)(iter, p, code))
                 retval = 1/*updated*/;
-            if (strncasecmp(p, used_server_info,
-                            sizeof(used_server_info) - 1) == 0) {
+            if (!strncasecmp(p, used_server_info, sizeof(used_server_info) - 1)
+                &&  isdigit((unsigned char) p[sizeof(used_server_info) - 1])) {
                 p += sizeof(used_server_info) - 1;
                 if (sscanf(p, "%u: %n", &d1, &d2) >= 1  &&
                     (info = SERV_ReadInfoEx(p + d2, "")) != 0) {
@@ -573,16 +573,20 @@ static void s_SetDefaultReferer(SERV_ITER iter, SConnNetInfo* net_info)
         const char* args = net_info->args;
         char        port[8];
 
-        if (net_info->port  &&  net_info->port != DEF_CONN_PORT)
+        if (net_info->port)
             sprintf(port, ":%hu", net_info->port);
         else
             *port = '\0';
-        if (!(referer = (char*) malloc(7 + 1 + 1 + strlen(host) + strlen(port)
+        if (!(referer = (char*) malloc(8 + 1 + 1 + strlen(host) + strlen(port)
                                        + strlen(path) + strlen(args)))) {
             return;
         }
-        strcat(strcat(strcpy(strcpy(referer, "http://")+7, host), port), path);
-        if (args[0])
+        if (net_info->scheme == eURL_Https)
+            strcpy(referer, "https://"/*8*/);
+        else
+            strcpy(referer, "http://"/*7*/);
+        strcat(strcat(strcat(referer, host), port), path);
+        if (*args)
             strcat(strcat(referer, "?"), args);
     } else if ((str = strdup(iter->op->name)) != 0) {
         const char* host = net_info->client_host;
@@ -614,18 +618,20 @@ static void s_SetDefaultReferer(SERV_ITER iter, SConnNetInfo* net_info)
 }
 
 
-char* SERV_Print(SERV_ITER iter, SConnNetInfo* net_info)
+char* SERV_Print(SERV_ITER iter, SConnNetInfo* net_info, int/*bool*/ but_last)
 {
-    static const char client_revision[] = "Client-Revision: %hu.%hu\r\n";
-    static const char accepted_types[] = "Accepted-Server-Types:";
-    static const char server_count[] = "Server-Count: ";
+    static const char kClientRevision[] = "Client-Revision: %hu.%hu\r\n";
+    static const char kAcceptedServerTypes[] = "Accepted-Server-Types:";
+    static const char kUsedServerInfo[] = "Used-Server-Info: ";
+    static const char kServerCount[] = "Server-Count: ";
+    static const char kSkipInfo[] = "Skip-Info-%u: ";
     char buffer[128], *str;
     size_t buflen, i;
     TSERV_Type t;
     BUF buf = 0;
 
     /* Put client version number */
-    buflen = sprintf(buffer, client_revision,
+    buflen = sprintf(buffer, kClientRevision,
                      SERV_CLIENT_REVISION_MAJOR, SERV_CLIENT_REVISION_MINOR);
     assert(buflen < sizeof(buffer));
     if (!BUF_Write(&buf, buffer, buflen)) {
@@ -636,8 +642,8 @@ char* SERV_Print(SERV_ITER iter, SConnNetInfo* net_info)
         if (net_info && !net_info->http_referer && iter->op && iter->op->name)
             s_SetDefaultReferer(iter, net_info);
         /* Form accepted server types */
-        buflen = sizeof(accepted_types) - 1;
-        memcpy(buffer, accepted_types, buflen);
+        buflen = sizeof(kAcceptedServerTypes) - 1;
+        memcpy(buffer, kAcceptedServerTypes, buflen);
         for (t = 1; t; t <<= 1) {
             if (iter->type & t) {
                 const char* name = SERV_TypeStr((ESERV_Type) t);
@@ -645,7 +651,7 @@ char* SERV_Print(SERV_ITER iter, SConnNetInfo* net_info)
                 if (!namelen || buflen + 1 + namelen + 2 >= sizeof(buffer))
                     break;
                 buffer[buflen++] = ' ';
-                strcpy(&buffer[buflen], name);
+                memcpy(buffer + buflen, name, namelen);
                 buflen += namelen;
             }
         }
@@ -659,7 +665,7 @@ char* SERV_Print(SERV_ITER iter, SConnNetInfo* net_info)
         }
         /* How many server-infos for the dispatcher to send to us */
         if (iter->ismask  ||  (iter->pref  &&  iter->host)) {
-            if (!BUF_Write(&buf, server_count, sizeof(server_count) - 1)  ||
+            if (!BUF_Write(&buf, kServerCount, sizeof(kServerCount) - 1)  ||
                 !BUF_Write(&buf,
                            iter->ismask ? "10" : "ALL",
                            iter->ismask ?   2  :    3)                    ||
@@ -677,13 +683,17 @@ char* SERV_Print(SERV_ITER iter, SConnNetInfo* net_info)
             const char* name = SERV_NameOfInfo(iter->skip[i]);
             if (!(str = SERV_WriteInfo(iter->skip[i])))
                 break;
-            buflen = sprintf(buffer, "Skip-Info-%u: ", (unsigned) i + 1); 
+            if (but_last  &&  iter->last == iter->skip[i]) {
+                buflen = sizeof(kUsedServerInfo) - 1;
+                memcpy(buffer, kUsedServerInfo, buflen);
+            } else
+                buflen = sprintf(buffer, kSkipInfo, (unsigned) i + 1); 
             assert(buflen < sizeof(buffer) - 1);
-            if (!BUF_Write(&buf, buffer, buflen) ||
-                (name  &&  !BUF_Write(&buf, name, strlen(name))) ||
-                (name  &&  *name  &&  !BUF_Write(&buf, " ", 1)) ||
-                !BUF_Write(&buf, str, strlen(str)) ||
-                !BUF_Write(&buf, "\r\n", 2)) {
+            if (!BUF_Write(&buf, buffer, buflen)
+                ||  (name  &&  !BUF_Write(&buf, name, strlen(name)))
+                ||  (name  &&  *name  &&  !BUF_Write(&buf, " ", 1))
+                ||  !BUF_Write(&buf, str, strlen(str))
+                ||  !BUF_Write(&buf, "\r\n", 2)) {
                 free(str);
                 break;
             }
@@ -717,7 +727,7 @@ char* SERV_Print(SERV_ITER iter, SConnNetInfo* net_info)
  * n >= 2
  * Hence, the formula below always yields a value in the range [0.0 .. 1.0].
  */
-double SERV_Preference(double pref, double gap, unsigned int n)
+double SERV_Preference(double pref, double gap, size_t n)
 {
     double spread;
     assert(0.0 <= pref && pref <= 1.0);
@@ -726,7 +736,7 @@ double SERV_Preference(double pref, double gap, unsigned int n)
     if (gap >= pref)
         return gap;
     spread = 14.0/(n + 12.0);
-    if (gap >= spread*(1.0/(double) n))
+    if (gap >= spread/((double) n))
         return pref;
     else
         return 2.0/spread*gap*pref;

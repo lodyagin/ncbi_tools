@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 1/1/91
 *
-* $Revision: 6.13 $
+* $Revision: 6.14 $
 *
 * File Description:  Object manager interface for module NCBI-General
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: objgen.h,v $
+* Revision 6.14  2008/09/10 15:22:46  bollin
+* Added DbtagMatchEx and ObjectIdMatchEx, which are optionally case sensitive or case insensitive.
+*
 * Revision 6.13  2005/07/08 18:18:31  kans
 * added scratch pointer to EXTRA_OBJMGR_FIELDS
 *
@@ -228,6 +231,7 @@ NLM_EXTERN ObjectIdPtr LIBCALL ObjectIdFree PROTO(( ObjectIdPtr oid));
 NLM_EXTERN ObjectIdPtr LIBCALL ObjectIdAsnRead PROTO((AsnIoPtr aip, AsnTypePtr atp));
 NLM_EXTERN Boolean     LIBCALL ObjectIdAsnWrite PROTO((ObjectIdPtr oid, AsnIoPtr aip, AsnTypePtr atp));
 NLM_EXTERN Boolean     LIBCALL ObjectIdMatch PROTO((ObjectIdPtr a, ObjectIdPtr b));
+NLM_EXTERN Boolean     LIBCALL ObjectIdMatchEx PROTO((ObjectIdPtr a, ObjectIdPtr b, Boolean case_sensitive));
 NLM_EXTERN ObjectIdPtr LIBCALL ObjectIdDup PROTO((ObjectIdPtr oldid));
 
 /*****************************************************************************
@@ -244,6 +248,7 @@ NLM_EXTERN DbtagPtr LIBCALL DbtagNew PROTO((void));
 NLM_EXTERN DbtagPtr LIBCALL DbtagFree PROTO(( DbtagPtr dbt));
 NLM_EXTERN DbtagPtr LIBCALL DbtagAsnRead PROTO((AsnIoPtr aip, AsnTypePtr atp));
 NLM_EXTERN Boolean  LIBCALL DbtagAsnWrite PROTO((DbtagPtr dbt, AsnIoPtr aip, AsnTypePtr atp));
+NLM_EXTERN Boolean LIBCALL DbtagMatchEx PROTO((DbtagPtr a, DbtagPtr b, Boolean case_sensitive));
 NLM_EXTERN Boolean  LIBCALL DbtagMatch PROTO((DbtagPtr a, DbtagPtr b));
 NLM_EXTERN DbtagPtr LIBCALL DbtagDup PROTO((DbtagPtr oldtag));
 NLM_EXTERN Int2     LIBCALL DbtagLabel PROTO((DbtagPtr dbt, CharPtr buf, Int2 buflen));

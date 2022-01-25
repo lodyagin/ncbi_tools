@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.13 $
+* $Revision: 6.18 $
 *
 * File Description:  Object manager interface for module NCBI-SeqFeat
 *
@@ -37,75 +37,6 @@
 * --------------------------------------------------------------------------
 * Date	   Name        Description of modification
 * -------  ----------  -----------------------------------------------------
-*
-*
-* $Log: objfeat.h,v $
-* Revision 6.13  2005/05/23 12:52:44  bollin
-* added OrgModSetMatch, OrgNameMatch, OrgRefMatch, SubSourceSetMatch, and
-* BioSourceMatch functions
-*
-* Revision 6.12  2005/05/16 16:03:56  kans
-* added support for new sfp->ids and sfp->exts fields
-*
-* Revision 6.11  2002/06/03 17:43:48  kans
-* added locus_tag to GeneRef
-*
-* Revision 6.10  2001/10/02 21:47:54  kans
-* added hooks for writing extra descriptors or features (JO)
-*
-* Revision 6.9  2000/09/28 11:40:19  ostell
-* added endogenous_virus (19) to MolInfo.genome
-*
-* Revision 6.8  2000/01/16 19:18:32  kans
-* added specialCleanupFlag field to SeqFeatXref structure
-*
-* Revision 6.7  1999/12/14 17:30:39  ostell
-* changed protoplast to proplastid
-*
-* Revision 6.6  1999/10/06 18:45:27  kans
-* fixed nested comment warning
-*
-* Revision 6.5  1999/10/05 20:23:17  kans
-* fixed typo
-*
-* Revision 6.4  1999/10/05 19:05:45  ostell
-* added comments on BioSource.genome
-*
-* Revision 6.3  1999/09/27 17:48:37  kans
-* using GatherIndex structure
-*
-* Revision 6.2  1999/09/24 23:09:23  kans
-* adds EXTRA_OBJMGR_FIELDS to several objects
-*
-* Revision 6.1  1998/06/29 20:31:30  kans
-* explicit defines for FEATDEF_MAX, SEQFEAT_MAX, and SEQDESCR_MAX Boolean array sizes
-*
-* Revision 6.0  1997/08/25 18:49:53  madden
-* Revision changed to 6.0
-*
-* Revision 4.3  1997/08/20 19:17:06  madden
-* Version 6 of ASN.1
-*
-* Revision 4.2  1997/06/19 18:41:18  vakatov
-* [WIN32,MSVC++]  Adopted for the "NCBIOBJ.LIB" DLL'ization
-*
-* Revision 4.1  1996/05/20 19:43:50  ostell
-* added prot-ref.processed, virion, div
-*
- * Revision 4.0  1995/07/26  13:48:06  ostell
- * force revision to 4.0
- *
- * Revision 3.6  1995/07/12  22:02:07  ostell
- * added comment on OrgRef.db
- *
- * Revision 3.5  1995/07/11  18:46:25  ostell
- * added dbxref to Seqfeat
- * added anticodon to tRNA
- *
- * Revision 3.4  1995/05/15  21:22:00  ostell
- * added Log line
- *
-*
 *
 * ==========================================================================
 */
@@ -439,6 +370,7 @@ NLM_EXTERN ImpFeatPtr LIBCALL ImpFeatFree PROTO((ImpFeatPtr ifp));
 *      0 = no extension
 *      1 = name, ext.value.ptrvalue = CharPtr
 *      2 = trna, ext.value.ptrvalue = tRNA
+*      3 = gen, ext.value.ptrvalue = RnaGenPtr
 *
 *****************************************************************************/
 typedef struct rnaref {
@@ -464,6 +396,74 @@ typedef struct trna {
 	SeqLocPtr anticodon;  /* location of anticodon */
 } tRNA, PNTR tRNAPtr;   /*  0-63 = codon,  255=no data in cell */
 
+/**************************************************
+*
+*    RNAQual
+*
+**************************************************/
+typedef struct rnaqual {
+   struct rnaqual PNTR next;
+   CharPtr   qual;
+   CharPtr   val;
+} RNAQual, PNTR RNAQualPtr;
+
+NLM_EXTERN RNAQualPtr LIBCALL RNAQualNew PROTO (( void ));
+NLM_EXTERN RNAQualPtr LIBCALL RNAQualFree PROTO ((RNAQualPtr rqp));
+NLM_EXTERN RNAQualPtr LIBCALL RNAQualAsnRead PROTO (( AsnIoPtr aip, AsnTypePtr atp));
+NLM_EXTERN Boolean LIBCALL RNAQualAsnWrite PROTO (( RNAQualPtr rqp, AsnIoPtr aip, AsnTypePtr atp));
+
+/**************************************************
+*
+*    RNAQualSet
+*
+**************************************************/
+typedef struct rnaqual RNAQualSet;
+typedef struct rnaqual PNTR RNAQualSetPtr;
+#define RNAQualSetNew() RNAQualNew() 
+
+NLM_EXTERN RNAQualSetPtr LIBCALL RNAQualSetNew PROTO (( void ));
+NLM_EXTERN RNAQualSetPtr LIBCALL RNAQualSetFree PROTO ((RNAQualSetPtr rqp));
+NLM_EXTERN RNAQualSetPtr LIBCALL RNAQualSetAsnRead PROTO (( AsnIoPtr aip, AsnTypePtr atp));
+NLM_EXTERN Boolean LIBCALL RNAQualSetAsnWrite PROTO (( RNAQualSetPtr rqp, AsnIoPtr aip, AsnTypePtr atp));
+
+/**************************************************
+*
+*    RNAGen
+*
+**************************************************/
+typedef struct rnagen {
+   CharPtr   _class;
+   CharPtr   product;
+   RNAQualSetPtr quals;
+} RNAGen, PNTR RNAGenPtr;
+
+NLM_EXTERN RNAGenPtr LIBCALL RNAGenNew PROTO (( void ));
+NLM_EXTERN RNAGenPtr LIBCALL RNAGenFree PROTO ((RNAGenPtr rgp));
+NLM_EXTERN RNAGenPtr LIBCALL RNAGenAsnRead PROTO (( AsnIoPtr aip, AsnTypePtr atp));
+NLM_EXTERN Boolean LIBCALL RNAGenAsnWrite PROTO (( RNAGenPtr rgp, AsnIoPtr aip, AsnTypePtr atp));
+
+/**************************************************
+*
+*    GeneNomenclature
+*     Values for status field
+*      unknown 0
+*      official 1
+*      interim 2
+*
+**************************************************/
+typedef struct genenome {
+   Uint2     status;
+   CharPtr   symbol;
+   CharPtr   name;
+   DbtagPtr  source;
+} GeneNomenclature, PNTR GeneNomenclaturePtr;
+
+
+NLM_EXTERN GeneNomenclaturePtr LIBCALL GeneNomenclatureNew PROTO ((void));
+NLM_EXTERN Boolean LIBCALL GeneNomenclatureAsnWrite PROTO ((GeneNomenclaturePtr gnp, AsnIoPtr aip, AsnTypePtr atp));
+NLM_EXTERN GeneNomenclaturePtr LIBCALL GeneNomenclatureAsnRead PROTO ((AsnIoPtr aip, AsnTypePtr atp));
+NLM_EXTERN GeneNomenclaturePtr LIBCALL GeneNomenclatureFree PROTO ((GeneNomenclaturePtr gnp));
+
 /*****************************************************************************
 *
 *   GeneRef
@@ -478,6 +478,7 @@ typedef struct generef {
     ValNodePtr db;          /* ids in other databases */
     ValNodePtr syn;         /* synonyms for locus */
     CharPtr locus_tag;      /* systematic gene name */
+    GeneNomenclaturePtr formal_name; /* official nomenclature for RefSeq */
 } GeneRef, PNTR GeneRefPtr;
 
 NLM_EXTERN GeneRefPtr LIBCALL GeneRefNew PROTO((void));
@@ -595,6 +596,46 @@ NLM_EXTERN SubSourcePtr LIBCALL SubSourceSetAsnRead PROTO((AsnIoPtr aip, AsnType
 NLM_EXTERN SubSourcePtr LIBCALL SubSourceSetFree PROTO((SubSourcePtr ssp));
 NLM_EXTERN Boolean LIBCALL SubSourceSetMatch (SubSourcePtr ssp1, SubSourcePtr ssp2);
 
+typedef struct pcrprimer {
+   struct pcrprimer PNTR next;
+   CharPtr   seq;
+   CharPtr   name;
+} PCRPrimer, PNTR PCRPrimerPtr;
+
+NLM_EXTERN PCRPrimerPtr LIBCALL PCRPrimerNew PROTO ((void));
+NLM_EXTERN Boolean LIBCALL PCRPrimerAsnWrite PROTO ((PCRPrimerPtr ppp, AsnIoPtr aip, AsnTypePtr atp));
+NLM_EXTERN PCRPrimerPtr LIBCALL PCRPrimerAsnRead PROTO ((AsnIoPtr aip, AsnTypePtr atp));
+NLM_EXTERN PCRPrimerPtr LIBCALL PCRPrimerFree PROTO ((PCRPrimerPtr ppp));
+
+typedef struct pcrprimer PCRPrimerSet, PNTR PCRPrimerSetPtr;
+#define PCRPrimerSetNew() PCRPrimerNew()
+
+NLM_EXTERN PCRPrimerSetPtr LIBCALL PCRPrimerSetNew PROTO ((void));
+NLM_EXTERN Boolean LIBCALL PCRPrimerSetAsnWrite PROTO ((PCRPrimerSetPtr psp, AsnIoPtr aip, AsnTypePtr atp));
+NLM_EXTERN PCRPrimerSetPtr LIBCALL PCRPrimerSetAsnRead PROTO ((AsnIoPtr aip, AsnTypePtr atp));
+NLM_EXTERN PCRPrimerSetPtr LIBCALL PCRPrimerSetFree PROTO ((PCRPrimerSetPtr psp));
+
+typedef struct pcrreaction {
+   struct pcrreaction PNTR next;
+   PCRPrimerPtr  forward;
+   PCRPrimerPtr  reverse;
+} PCRReaction, PNTR PCRReactionPtr;
+
+NLM_EXTERN PCRReactionPtr LIBCALL PCRReactionNew PROTO ((void));
+NLM_EXTERN Boolean LIBCALL PCRReactionAsnWrite PROTO ((PCRReactionPtr prp, AsnIoPtr aip, AsnTypePtr atp));
+NLM_EXTERN PCRReactionPtr LIBCALL PCRReactionAsnRead PROTO ((AsnIoPtr aip, AsnTypePtr atp));
+NLM_EXTERN PCRReactionPtr LIBCALL PCRReactionFree PROTO ((PCRReactionPtr prp));
+
+typedef struct pcrreaction PCRReactionSet, PNTR PCRReactionSetPtr;
+#define PCRReactionSetNew() PCRReactionNew() 
+
+NLM_EXTERN PCRReactionSetPtr LIBCALL PCRReactionSetNew PROTO ((void));
+NLM_EXTERN Boolean LIBCALL PCRReactionSetAsnWrite PROTO ((PCRReactionSetPtr psp, AsnIoPtr aip, AsnTypePtr atp));
+NLM_EXTERN PCRReactionSetPtr LIBCALL PCRReactionSetAsnRead PROTO ((AsnIoPtr aip, AsnTypePtr atp));
+NLM_EXTERN PCRReactionSetPtr LIBCALL PCRReactionSetFree PROTO ((PCRReactionSetPtr psp));
+
+
+
 /******************************
 * BioSource
     current values for genome are: */
@@ -626,6 +667,7 @@ typedef struct biosource {
 	OrgRefPtr org;
 	SubSourcePtr subtype;
 	Boolean is_focus;         /* is main BioSource for molecule (when multiple) */
+	PCRReactionSetPtr  pcr_primers;
 } BioSource, PNTR BioSourcePtr;
 
 NLM_EXTERN BioSourcePtr LIBCALL BioSourceNew PROTO((void));

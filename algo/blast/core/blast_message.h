@@ -1,4 +1,4 @@
-/* $Id: blast_message.h,v 1.17 2007/02/08 15:25:47 kazimird Exp $
+/* $Id: blast_message.h,v 1.19 2008/07/23 18:55:44 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -35,6 +35,7 @@
 #define ALGO_BLAST_CORE__BLAST_MESSAGE__H
 
 #include <algo/blast/core/ncbi_std.h>
+#include <algo/blast/core/blast_export.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -58,7 +59,7 @@ typedef enum {
    eBlastSevFatal
 } EBlastSeverity;
 
-extern const int kBlastMessageNoContext;  /**< No single context is known to cause the error 
+extern NCBI_XBLAST_EXPORT const int kBlastMessageNoContext;  /**< No single context is known to cause the error 
                                                  (probably a setup issue). */
 
 /** Structure to hold the a message from the core of the BLAST engine. */
@@ -75,6 +76,7 @@ typedef struct Blast_Message {
  * @param blast_msg structure to be deallocated [in]
 */
 
+NCBI_XBLAST_EXPORT
 Blast_Message* Blast_MessageFree(Blast_Message* blast_msg);
 
 
@@ -85,6 +87,7 @@ Blast_Message* Blast_MessageFree(Blast_Message* blast_msg);
  * @param message User message to be saved [in]
 */
 
+NCBI_XBLAST_EXPORT
 Int2 Blast_MessageWrite(Blast_Message* *blast_msg, EBlastSeverity severity, 
                         int context, const char *message);
 
@@ -93,6 +96,7 @@ Int2 Blast_MessageWrite(Blast_Message* *blast_msg, EBlastSeverity severity,
  * @param blast_msg message to be printed [in]
 */
 
+NCBI_XBLAST_EXPORT
 Int2 Blast_MessagePost(Blast_Message* blast_msg);
 
 /* FIXME: should the code below and its implementation be moved to another
@@ -104,6 +108,7 @@ Int2 Blast_MessagePost(Blast_Message* blast_msg);
  * @param context context number so that query or frame can be found [in]
  * @return Blast_Message structure containing error description
  */
+NCBI_XBLAST_EXPORT
 void Blast_Perror(Blast_Message* *msg, Int2 error_code, int context);
 
 /** Convenient define to call the function Blast_PerrorEx. */
@@ -119,6 +124,7 @@ Blast_PerrorEx(msg, error_code, __FILE__, __LINE__, context)
  * @param lineno line number where the error ocurred in the file above [in]
  * @param context context number so that query or frame can be found [in]
  */
+NCBI_XBLAST_EXPORT
 void Blast_PerrorEx(Blast_Message* *msg,
                               Int2 error_code, 
                               const char* file_name, 

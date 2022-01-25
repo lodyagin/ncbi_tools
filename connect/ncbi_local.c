@@ -1,4 +1,4 @@
-/*  $Id: ncbi_local.c,v 1.14 2008/02/13 20:25:42 kazimird Exp $
+/*  $Id: ncbi_local.c,v 1.15 2008/05/25 01:25:38 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -36,7 +36,6 @@
 #include "ncbi_lb.h"
 #include "ncbi_local.h"
 #include "ncbi_priv.h"
-#include <string.h>
 #include <stdlib.h>
 
 

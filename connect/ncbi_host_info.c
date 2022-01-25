@@ -1,4 +1,4 @@
-/*  $Id: ncbi_host_info.c,v 6.10 2006/03/17 16:41:20 lavr Exp $
+/*  $Id: ncbi_host_info.c,v 6.12 2008/09/03 20:55:44 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -41,16 +41,8 @@
 #endif
 
 
-typedef struct SHostInfoTag {
-    const char* env;
-    const char* arg;
-    const char* val;
-    double      pad;    /* for proper 'hinfo' alignment; also as a magic */
-} SHOST_Info;
-
-
-HOST_INFO HINFO_Create(const void* hinfo, size_t hinfo_size, const char* env,
-                       const char* arg, const char* val)
+HOST_INFO HINFO_Create(unsigned int addr, const void* hinfo, size_t hinfo_size,
+                       const char* env, const char* arg, const char* val)
 {
     SHOST_Info* host_info;
     size_t      size;
@@ -67,6 +59,7 @@ HOST_INFO HINFO_Create(const void* hinfo, size_t hinfo_size, const char* env,
     size = sizeof(*host_info) + hinfo_size;
     if (!(host_info = (SHOST_Info*) calloc(1, size + e_s + a_s + v_s)))
         return 0;
+    host_info->addr = addr;
     memcpy((char*) host_info + sizeof(*host_info), hinfo, hinfo_size);
     s = (char*) host_info + size;
     if (e_s) {
@@ -86,19 +79,50 @@ HOST_INFO HINFO_Create(const void* hinfo, size_t hinfo_size, const char* env,
 }
 
 
+unsigned int HINFO_HostAddr(const HOST_INFO host_info)
+{
+    if (!host_info || host_info->pad != M_PI)
+        return 0;
+    return host_info->addr;
+}
+
+
 int HINFO_CpuCount(const HOST_INFO host_info)
 {
     if (!host_info || host_info->pad != M_PI)
         return -1;
-    return LBSM_HINFO_CpuCount((const char*) host_info + sizeof(*host_info));
+    return LBSM_HINFO_CpuCount(host_info);
 }
 
+
+int HINFO_CpuUnits(const HOST_INFO host_info)
+{
+    if (!host_info || host_info->pad != M_PI)
+        return -1;
+    return LBSM_HINFO_CpuUnits(host_info);
+}
+
+
+double HINFO_CpuClock(const HOST_INFO host_info)
+{
+    if (!host_info || host_info->pad != M_PI)
+        return 0.0;
+    return LBSM_HINFO_CpuClock(host_info);
+}
 
 int HINFO_TaskCount(const HOST_INFO host_info)
 {
     if (!host_info || host_info->pad != M_PI)
         return -1;
-    return LBSM_HINFO_TaskCount((const char*) host_info + sizeof(*host_info));
+    return LBSM_HINFO_TaskCount(host_info);
+}
+ 
+
+int HINFO_Memusage(const HOST_INFO host_info, double memusage[5])
+{
+    if (!host_info || host_info->pad != M_PI)
+        return -1;
+    return LBSM_HINFO_Memusage(host_info, memusage);
 }
 
 
@@ -106,8 +130,7 @@ int/*bool*/ HINFO_LoadAverage(const HOST_INFO host_info, double lavg[2])
 {
     if (!host_info || host_info->pad != M_PI)
         return 0;
-    return LBSM_HINFO_LoadAverage((const char*) host_info + sizeof(*host_info),
-                                  lavg);
+    return LBSM_HINFO_LoadAverage(host_info, lavg);
 }
 
 
@@ -115,15 +138,7 @@ int/*bool*/ HINFO_Status(const HOST_INFO host_info, double status[2])
 {
     if (!host_info || host_info->pad != M_PI)
         return 0;
-    return LBSM_HINFO_Status((const char*) host_info + sizeof(*host_info),
-                             status);
-}
-
-
-/*ARGSUSED*/
-int/*bool*/ HINFO_BLASTParams(const HOST_INFO host_info, unsigned int blast[8])
-{
-    return 0;
+    return LBSM_HINFO_Status(host_info, status);
 }
 
 
@@ -149,40 +164,3 @@ const char* HINFO_AffinityArgvalue(const HOST_INFO host_info)
         return 0;
     return host_info->val;
 }
-
-
-/*
- * --------------------------------------------------------------------------
- * $Log: ncbi_host_info.c,v $
- * Revision 6.10  2006/03/17 16:41:20  lavr
- * Fix a typo in the last rev's change log
- *
- * Revision 6.9  2006/03/17 16:39:56  lavr
- * Explicit casts to keep compiler happy
- *
- * Revision 6.8  2006/03/06 20:24:20  lavr
- * Added "const" qualifier to all host-infos when passed to getters
- *
- * Revision 6.7  2006/03/05 17:36:52  lavr
- * +HINFO_AffinityArgument, +HINFO_AffinityArgvalue; HINFO_Create modified
- *
- * Revision 6.6  2003/01/17 19:44:46  lavr
- * Reduce dependencies
- *
- * Revision 6.5  2002/10/29 22:19:07  lavr
- * Fix typo in the file description
- *
- * Revision 6.4  2002/10/29 00:31:08  lavr
- * Fixed hinfo overflow from the use of precalculated size
- *
- * Revision 6.3  2002/10/28 21:55:38  lavr
- * LBSM_HINFO introduced for readability to replace plain "const void*"
- *
- * Revision 6.2  2002/10/28 20:49:04  lavr
- * Conditionally define M_PI if it is not already defined by <math.h>
- *
- * Revision 6.1  2002/10/28 20:13:45  lavr
- * Initial revision
- *
- * ==========================================================================
- */

@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_LBSMD__H
 #define CONNECT___NCBI_LBSMD__H
 
-/*  $Id: ncbi_lbsmd.h,v 6.16 2007/04/20 01:55:30 kazimird Exp $
+/*  $Id: ncbi_lbsmd.h,v 6.19 2008/09/04 12:55:44 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
  * Author:  Anton Lavrentiev
  *
  * File Description:
- *   Low-level API to resolve NCBI service name to the server meta-address
+ *   Low-level API to resolve NCBI service name to server meta-address
  *   with the use of NCBI Load-Balancing Service Mapper (LBSMD).
  *
  */
@@ -59,10 +59,10 @@ extern NCBI_XCONNECT_EXPORT const char* LBSMD_GetConfig(void);
 
 
 /* Get (perhaps cached) copy of LBSM heap, which is guaranteed to be
- * current for given time "time".  If "time" passed as 0, current time
- * of the day is assumed.  Return NULL if the copy operation cannot
- * be performed (due to various reasons, including the original
- * LBSM shmem to be obsolete).
+ * current for given the time "time".  If "time" passed as 0, the heap
+ * (if present as shmem) will be returned regardless of its freshness.
+ * Return NULL if the copy operation cannot be performed (due to various
+ * reasons, including the original LBSM shmem to be stale).
  * Returned heap (if non-NULL) has a serial number reflecting which
  * shmem segment has been used to get the snapshot.  The serial number
  * is negated for newer heap structure, which has dedicated version
@@ -80,19 +80,25 @@ extern NCBI_XCONNECT_EXPORT HEAP LBSMD_GetHeapCopy(TNCBI_Time time);
 extern NCBI_XCONNECT_EXPORT ESwitch LBSMD_FastHeapAccess(ESwitch onoff);
 
 
-/* Host info getters */
-typedef const void* LBSM_HINFO;
-
-int LBSM_HINFO_CpuCount(LBSM_HINFO hinfo);
+int LBSM_HINFO_CpuCount(const HOST_INFO hinfo);
 
 
-int LBSM_HINFO_TaskCount(LBSM_HINFO hinfo);
+int LBSM_HINFO_CpuUnits(const HOST_INFO hinfo);
 
 
-int/*bool*/ LBSM_HINFO_LoadAverage(LBSM_HINFO hinfo, double lavg[2]);
+double LBSM_HINFO_CpuClock(const HOST_INFO hinfo);
 
 
-int/*bool*/ LBSM_HINFO_Status(LBSM_HINFO hinfo, double status[2]);
+int LBSM_HINFO_TaskCount(const HOST_INFO hinfo);
+
+
+int/*bool*/ LBSM_HINFO_Memusage(const HOST_INFO hinfo, double memusage[5]);
+
+
+int/*bool*/ LBSM_HINFO_LoadAverage(const HOST_INFO hinfo, double lavg[2]);
+
+
+int/*bool*/ LBSM_HINFO_Status(const HOST_INFO hinfo, double status[2]);
 
 
 #ifdef __cplusplus

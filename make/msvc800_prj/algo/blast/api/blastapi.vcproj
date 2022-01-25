@@ -3,7 +3,7 @@
 	ProjectType="Visual C++"
 	Version="8.00"
 	Name="blastapi"
-	ProjectGUID="{6058EDC4-453A-48B1-8E27-83820FFB7203}"
+	ProjectGUID="{70D686A3-082F-4F4C-B7A1-5A2F94D1F941}"
 	>
 	<Platforms>
 		<Platform

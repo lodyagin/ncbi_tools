@@ -1,4 +1,4 @@
-/*  $Id: ncbi_lbsmd_stub.c,v 6.14 2006/11/22 18:05:00 lavr Exp $
+/*  $Id: ncbi_lbsmd_stub.c,v 6.16 2008/09/03 20:55:44 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -65,77 +65,49 @@ extern HEAP LBSMD_GetHeapCopy(TNCBI_Time time/*ignored*/)
 
 
 /*ARGSUSED*/
-int LBSM_HINFO_CpuCount(LBSM_HINFO hinfo)
+int LBSM_HINFO_CpuCount(const HOST_INFO hinfo)
 {
     return -1;
 }
 
 
 /*ARGSUSED*/
-int LBSM_HINFO_TaskCount(LBSM_HINFO hinfo)
+int LBSM_HINFO_CpuUnits(const HOST_INFO hinfo)
 {
     return -1;
 }
 
 
 /*ARGSUSED*/
-int/*bool*/ LBSM_HINFO_LoadAverage(LBSM_HINFO hinfo, double lavg[2])
+double LBSM_HINFO_CpuClock(const HOST_INFO hinfo)
+{
+    return 0.0;
+}
+
+
+/*ARGSUSED*/
+int LBSM_HINFO_TaskCount(const HOST_INFO hinfo)
+{
+    return -1;
+}
+
+
+/*ARGSUSED*/
+int LBSM_HINFO_Memusage(const HOST_INFO hinfo, double memusage[5])
 {
     return 0/*failure*/;
 }
 
 
 /*ARGSUSED*/
-int/*bool*/ LBSM_HINFO_Status(LBSM_HINFO hinfo, double status[2])
+int/*bool*/ LBSM_HINFO_LoadAverage(const HOST_INFO hinfo, double lavg[2])
 {
     return 0/*failure*/;
 }
 
 
-/*
- * --------------------------------------------------------------------------
- * $Log: ncbi_lbsmd_stub.c,v $
- * Revision 6.14  2006/11/22 18:05:00  lavr
- * -LBSMD_KeepHeapAttached()
- *
- * Revision 6.13  2006/11/08 19:16:05  lavr
- * -<connect/ncbi_service_misc.h>
- *
- * Revision 6.12  2006/11/08 17:15:30  lavr
- * +LBSMD_FastHeapAccess()
- *
- * Revision 6.11  2006/10/23 21:17:34  lavr
- * -LBSM_KeepHeapAttached (has been deprecated a long ago)
- *
- * Revision 6.10  2006/03/06 20:28:21  lavr
- * Comments;  use proper LBSM_HINFO in all getters
- *
- * Revision 6.9  2006/03/06 14:42:04  lavr
- * SERV_LBSMD_Open() -- use new proto
- *
- * Revision 6.8  2006/03/05 17:44:12  lavr
- * Private API changes; cached HEAP copy; BLAST counters dropped
- *
- * Revision 6.7  2005/05/04 16:16:08  lavr
- * +<connect/ncbi_service_misc.h>, +LBSMD_GetConfig(), +LBSM_KeepHeapAttached()
- *
- * Revision 6.6  2003/08/11 19:08:56  lavr
- * Mention "non-inhouse" in file description
- *
- * Revision 6.5  2002/10/28 20:12:57  lavr
- * Module renamed and host info API included
- *
- * Revision 6.4  2002/10/11 19:52:57  lavr
- * +SERV_LBSMD_GetConfig()
- *
- * Revision 6.3  2002/04/13 06:40:44  lavr
- * Few tweaks to reduce the number of syscalls made
- *
- * Revision 6.2  2001/09/10 21:25:35  lavr
- * Unimportant code style compliance change
- *
- * Revision 6.1  2000/10/06 18:06:03  lavr
- * Initial revision
- *
- * ==========================================================================
- */
+/*ARGSUSED*/
+int/*bool*/ LBSM_HINFO_Status(const HOST_INFO hinfo, double status[2])
+{
+    return 0/*failure*/;
+}

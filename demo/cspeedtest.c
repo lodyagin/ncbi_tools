@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   12/17/07
 *
-* $Revision: 1.10 $
+* $Revision: 1.20 $
 *
 * File Description: 
 *
@@ -55,8 +55,16 @@
 #include <tofasta.h>
 #include <asn2gnbk.h>
 #include <valid.h>
+#include <suggslp.h>
 
-#define CSPEEDTEST_APP_VER "1.3"
+NLM_EXTERN CharPtr NewCreateDefLine (
+  ItemInfoPtr iip,
+  BioseqPtr bsp,
+  Boolean ignoreTitle,
+  Boolean extProtTitle
+);
+
+#define CSPEEDTEST_APP_VER "1.9"
 
 CharPtr CSPEEDTEST_APPLICATION = CSPEEDTEST_APP_VER;
 
@@ -69,11 +77,14 @@ typedef struct cspeedflags {
   Int4          maxcount;
   CharPtr       io;
   CharPtr       clean;
+  CharPtr       skip;
   CharPtr       index;
   CharPtr       seq;
   CharPtr       feat;
   CharPtr       desc;
   CharPtr       verify;
+  BioseqPtr     nucbsp;
+  Int2          genCode;
   AsnModulePtr  amp;
   AsnTypePtr    atp_bss;
   AsnTypePtr    atp_bsss;
@@ -92,6 +103,111 @@ static void DoVisitFeaturesTest (
 
 {
   /* empty visit callback */
+}
+
+static void DoVisitCodingRegions (
+  SeqFeatPtr sfp,
+  Pointer userdata
+)
+
+{
+  BioseqPtr      bsp;
+  CharPtr        caret5, caret3;
+  CSpeedFlagPtr  cfp;
+  Char           id [64];
+  SeqLocPtr      loc, slp;
+  Boolean        partial5, partial3;
+  SeqIdPtr       sip;
+  Int4           start, stop;
+
+  if (sfp == NULL || sfp->data.choice != SEQFEAT_CDREGION) return;
+  cfp = (CSpeedFlagPtr) userdata;
+  if (cfp == NULL || cfp->ofp == NULL) return;
+
+  loc = sfp->location;
+  bsp = BioseqFindFromSeqLoc (loc);
+  if (bsp == NULL) return;
+
+  StringCpy (id, "?");
+  if (sfp->product != NULL) {
+    sip = SeqLocId (sfp->product);
+    if (sip != NULL) {
+      SeqIdWrite (sip, id, PRINTID_FASTA_SHORT, sizeof (id) - 1);
+    }
+  }
+
+  fprintf (cfp->ofp, "%s\n", id);
+  slp = SeqLocFindNext (loc, NULL);
+  while (slp != NULL) {
+    start = GetOffsetInBioseq (slp, bsp, SEQLOC_START) + 1;
+    stop = GetOffsetInBioseq (slp, bsp, SEQLOC_STOP) + 1;
+    caret5 = "";
+    caret3 = "";
+    CheckSeqLocForPartial (slp, &partial5, &partial3);
+    if (partial5) {
+      caret5 = "<";
+    }
+    if (partial3) {
+      caret3 = ">";
+    }
+    fprintf (cfp->ofp, "%s%ld\t%s%ld\n", caret5, (long) start, caret3, (long) stop);
+    slp = SeqLocFindNext (loc, slp);
+  }
+}
+
+static void DoSuggestIntervals (
+  BioseqPtr bsp,
+  Pointer userdata
+)
+
+{
+  CharPtr        caret5, caret3;
+  CSpeedFlagPtr  cfp;
+  Char           id [64];
+  SeqLocPtr      loc, slp;
+  Boolean        partial5, partial3;
+  SeqAnnotPtr    sap;
+  SeqFeatPtr     sfp;
+  SeqIdPtr       sip;
+  Int4           start, stop;
+
+  if (bsp == NULL) return;
+  if (! ISA_aa (bsp->mol)) return;
+  cfp = (CSpeedFlagPtr) userdata;
+  if (cfp == NULL || cfp->ofp == NULL || cfp->nucbsp == NULL) return;
+
+  sip = SeqIdFindBest (bsp->id, 0);
+  if (sip == NULL) return;
+  SeqIdWrite (sip, id, PRINTID_FASTA_SHORT, sizeof (id) - 1);
+
+  sap = SuggestCodingRegion (cfp->nucbsp, bsp, cfp->genCode);
+  if (sap == NULL) return;
+  if (sap->type == 1) {
+    sfp = (SeqFeatPtr) sap->data;
+    if (sfp != NULL && sfp->data.choice == SEQFEAT_CDREGION) {
+      loc = sfp->location;
+      if (loc != NULL) {
+        fprintf (cfp->ofp, "%s\n", id);
+        slp = SeqLocFindNext (loc, NULL);
+        while (slp != NULL) {
+          start = GetOffsetInBioseq (slp, cfp->nucbsp, SEQLOC_START) + 1;
+          stop = GetOffsetInBioseq (slp, cfp->nucbsp, SEQLOC_STOP) + 1;
+          caret5 = "";
+          caret3 = "";
+          CheckSeqLocForPartial (slp, &partial5, &partial3);
+          if (partial5) {
+            caret5 = "<";
+          }
+          if (partial3) {
+            caret3 = ">";
+          }
+          fprintf (cfp->ofp, "%s%ld\t%s%ld\n", caret5, (long) start, caret3, (long) stop);
+          slp = SeqLocFindNext (loc, slp);
+        }
+      }
+    }
+  }
+  SeqAnnotFree (sap);
 }
 
 static void DoGeneOverlapPrintTest (
@@ -213,6 +329,105 @@ static void DoFastaDefline (
   if (cfp->ofp != NULL) {
     fprintf (cfp->ofp, ">%s %s\n", id, buf);
   }
+}
+
+static void DoNewFastaDefline (
+  BioseqPtr bsp,
+  Pointer userdata
+)
+
+{
+  BioseqSetPtr   bssp;
+  CSpeedFlagPtr  cfp;
+  Char           id [128];
+  CharPtr        title;
+
+  if (bsp == NULL) return;
+  cfp = (CSpeedFlagPtr) userdata;
+  if (cfp == NULL) return;
+
+  if (StringChr (cfp->skip, 's') != NULL) {
+    if (bsp->idx.parenttype == OBJ_BIOSEQSET) {
+      bssp = (BioseqSetPtr) bsp->idx.parentptr;
+      if (bssp != NULL) {
+        if (bssp->_class == BioseqseqSet_class_segset ||
+            bssp->_class == BioseqseqSet_class_parts) return;
+      }
+    }
+  }
+  if (StringChr (cfp->skip, 'v') != NULL) {
+    if (bsp->repr == Seq_repr_virtual) return;
+  }
+
+  id [0] = '\0';
+  SeqIdWrite (bsp->id, id, PRINTID_FASTA_LONG, sizeof (id) - 1);
+  title = NewCreateDefLine (NULL, bsp, FALSE, FALSE);
+  if (StringHasNoText (title)) {
+    title = StringSave ("?");
+  }
+
+  if (cfp->ofp != NULL) {
+    fprintf (cfp->ofp, ">%s %s\n", id, title);
+  }
+
+  MemFree (title);
+}
+
+static void DoFastaComp (
+  BioseqPtr bsp,
+  Pointer userdata,
+  Boolean ignoreExisting
+)
+
+{
+  Char           buf [4096];
+  CSpeedFlagPtr  cfp;
+  Char           id [128];
+  CharPtr        title;
+
+  if (bsp == NULL) return;
+  cfp = (CSpeedFlagPtr) userdata;
+  if (cfp == NULL) return;
+
+  id [0] = '\0';
+  SeqIdWrite (bsp->id, id, PRINTID_FASTA_LONG, sizeof (id) - 1);
+  buf [0] = '\0';
+  CreateDefLineExEx (NULL, bsp, buf, sizeof (buf) - 1, 0,
+                     NULL, NULL, ignoreExisting, FALSE);
+  title = NewCreateDefLine (NULL, bsp, ignoreExisting, FALSE);
+  if (StringHasNoText (title)) {
+    title = StringSave ("?");
+  }
+
+  if (StringCmp (buf, title) != 0) {
+    if (cfp->ofp != NULL) {
+      fprintf (cfp->ofp, "<  %s %s\n", id, buf);
+      fprintf (cfp->ofp, ">  %s %s\n", id, title);
+    }
+    printf ("<  %s %s\n", id, buf);
+    printf (">  %s %s\n", id, title);
+    fflush (stdout);
+  }
+
+  MemFree (title);
+}
+
+static void DoFastaExist (
+  BioseqPtr bsp,
+  Pointer userdata
+)
+
+{
+  DoFastaComp (bsp, userdata, FALSE);
+}
+
+static void DoFastaRegen (
+  BioseqPtr bsp,
+  Pointer userdata
+)
+
+{
+  DoFastaComp (bsp, userdata, TRUE);
 }
 
 static void DoFastaFeat (
@@ -344,6 +559,20 @@ static void LIBCALLBACK ValidCallback (
   fprintf (fp, "\n");
 }
 
+static void MarkTitles (
+  SeqDescrPtr sdp,
+  Pointer userdata
+)
+
+{
+  ObjValNodePtr  ovn;
+
+  if (sdp == NULL || sdp->choice != Seq_descr_title) return;
+  if (sdp->extended == 0) return;
+  ovn = (ObjValNodePtr) sdp;
+  ovn->idx.deleteme = TRUE;
+}
+
 static void DoProcess (
   SeqEntryPtr sep,
   Uint2 entityID,
@@ -351,11 +580,19 @@ static void DoProcess (
 )
 
 {
+  Char            id [64];
   ErrSev          oldErrSev;
   ValidStructPtr  vsp;
 
   if (sep == NULL || cfp == NULL) return;
 
+  if (StringChr (cfp->clean, 't') != NULL) {
+    VisitDescriptorsInSep (sep, NULL, MarkTitles);
+    DeleteMarkedObjects (entityID, 0, NULL);
+  }
+  if (StringChr (cfp->clean, 'a') != NULL) {
+    AssignIDsInEntity (entityID, 0, NULL);
+  }
   if (StringChr (cfp->clean, 'b') != NULL) {
     BasicSeqEntryCleanup (sep);
   }
@@ -367,7 +604,19 @@ static void DoProcess (
     SeqMgrIndexFeatures (entityID, 0);
   }
 
+  if (StringChr (cfp->seq, 'c') != NULL) {
+    VisitBioseqsInSep (sep, (Pointer) cfp, DoFastaExist);
+  }
+  if (StringChr (cfp->seq, 'C') != NULL) {
+    VisitBioseqsInSep (sep, (Pointer) cfp, DoFastaRegen);
+  }
   if (StringChr (cfp->seq, 's') != NULL) {
+    VisitBioseqsInSep (sep, (Pointer) cfp, DoFastaSeq);
+  }
+  if (StringChr (cfp->seq, 'S') != NULL) {
+    if (SeqMgrFeaturesAreIndexed (entityID) == 0) {
+      SeqMgrIndexFeatures (entityID, 0);
+    }
     VisitBioseqsInSep (sep, (Pointer) cfp, DoFastaSeq);
   }
   if (StringChr (cfp->seq, 'r') != NULL) {
@@ -376,6 +625,28 @@ static void DoProcess (
   if (StringChr (cfp->seq, 'd') != NULL) {
     VisitBioseqsInSep (sep, (Pointer) cfp, DoFastaDefline);
   }
+  if (StringChr (cfp->seq, 'D') != NULL) {
+    if (SeqMgrFeaturesAreIndexed (entityID) == 0) {
+      SeqMgrIndexFeatures (entityID, 0);
+    }
+    VisitBioseqsInSep (sep, (Pointer) cfp, DoFastaDefline);
+  }
+  if (StringChr (cfp->seq, 'T') != NULL) {
+    VisitDescriptorsInSep (sep, NULL, MarkTitles);
+    DeleteMarkedObjects (entityID, 0, NULL);
+    SeqMgrIndexFeatures (entityID, 0);
+    VisitBioseqsInSep (sep, (Pointer) cfp, DoFastaDefline);
+  }
+  if (StringChr (cfp->seq, 'x') != NULL) {
+    VisitBioseqsInSep (sep, (Pointer) cfp, DoNewFastaDefline);
+  }
+  if (StringChr (cfp->seq, 'X') != NULL) {
+    VisitDescriptorsInSep (sep, NULL, MarkTitles);
+    DeleteMarkedObjects (entityID, 0, NULL);
+    SeqMgrIndexFeatures (entityID, 0);
+    VisitBioseqsInSep (sep, (Pointer) cfp, DoNewFastaDefline);
+  }
+  
   if (StringChr (cfp->seq, 'f') != NULL) {
     VisitFeaturesInSep (sep, (Pointer) cfp, DoFastaFeat);
   }
@@ -407,6 +678,39 @@ static void DoProcess (
   if (StringChr (cfp->feat, 't') != NULL) {
     SeqEntryToGnbk (sep, NULL, FTABLE_FMT, SEQUIN_MODE, NORMAL_STYLE,
                     0, 0, SHOW_PROT_FTABLE, NULL, cfp->ofp);
+  }
+  if (StringChr (cfp->feat, 's') != NULL) {
+    if (SeqMgrFeaturesAreIndexed (entityID) == 0) {
+      SeqMgrIndexFeatures (entityID, 0);
+    }
+    cfp->nucbsp = FindNucBioseq (sep);
+    if (cfp->nucbsp != NULL) {
+      BioseqToGeneticCode (cfp->nucbsp, &(cfp->genCode), NULL, NULL, NULL, 0, NULL);
+      SeqIdWrite (cfp->nucbsp->id, id, PRINTID_FASTA_LONG, sizeof (id) - 1);
+      fprintf (cfp->ofp, "%s\n", id);
+      VisitBioseqsInSep (sep, (Pointer) cfp, DoSuggestIntervals);
+      cfp->nucbsp = NULL;
+      cfp->genCode = 0;
+    }
+  }
+  if (StringChr (cfp->feat, 'S') != NULL) {
+    if (SeqMgrFeaturesAreIndexed (entityID) == 0) {
+      SeqMgrIndexFeatures (entityID, 0);
+    }
+    cfp->nucbsp = FindNucBioseq (sep);
+    if (cfp->nucbsp != NULL) {
+      BioseqToGeneticCode (cfp->nucbsp, &(cfp->genCode), NULL, NULL, NULL, 0, NULL);
+      SetBatchSuggestNucleotide (cfp->nucbsp, cfp->genCode);
+      SeqIdWrite (cfp->nucbsp->id, id, PRINTID_FASTA_LONG, sizeof (id) - 1);
+      fprintf (cfp->ofp, "%s\n", id);
+      VisitBioseqsInSep (sep, (Pointer) cfp, DoSuggestIntervals);
+      ClearBatchSuggestNucleotide ();
+      cfp->nucbsp = NULL;
+      cfp->genCode = 0;
+    }
+  }
+  if (StringChr (cfp->feat, 'c') != NULL) {
+    VisitFeaturesInSep (sep, (Pointer) cfp, DoVisitCodingRegions);
   }
 
   if (StringChr (cfp->desc, 'b') != NULL) {
@@ -782,6 +1086,7 @@ static void ProcessMultipleRecord (
         }
 
         starttime = GetSecs ();
+
         for (x = 0; x < cfp->maxcount; x++) {
           DoProcess (sep, entityID, cfp);
         }
@@ -856,11 +1161,12 @@ static void ProcessOneRecord (
 #define X_argMaxCount     11
 #define O_argInOut        12
 #define K_argClean        13
-#define I_argIndex        14
-#define S_argSeq          15
-#define F_argFeat         16
-#define D_argDesc         17
-#define V_argVerify       18
+#define P_argSkip         14
+#define I_argIndex        15
+#define S_argSeq          16
+#define F_argFeat         17
+#define D_argDesc         18
+#define V_argVerify       19
 
 Args myargs [] = {
   {"Path to Files", NULL, NULL, NULL,
@@ -901,16 +1207,29 @@ Args myargs [] = {
    "      wb Write Binary ASN.1", NULL, NULL, NULL,
     TRUE, 'O', ARG_STRING, 0.0, 0, NULL},
   {"Cleanup\n"
+   "      t Remove Titles\n"
+   "      a AssignIDsInEntity\n"
    "      b BasicSeqEntryCleanup\n"
    "      s SeriousSeqEntryCleanup", NULL, NULL, NULL,
     TRUE, 'K', ARG_STRING, 0.0, 0, NULL},
+  {"Skip\n"
+   "      s Segmented Set Components\n"
+   "      v Virtual Bioseqs", NULL, NULL, NULL,
+    TRUE, 'P', ARG_STRING, 0.0, 0, NULL},
   {"Index\n"
    "      f Feature Indexing", NULL, NULL, NULL,
     TRUE, 'I', ARG_STRING, 0.0, 0, NULL},
   {"Sequence\n"
+   "      c Compare FASTA Deflines\n"
+   "      C Compare Regenerated FASTA Deflines\n"
    "      s FASTA of Sequence\n"
+   "      S Indexed FASTA\n"
    "      r Raw FASTA no Defline\n"
    "      d Just FASTA Defline\n"
+   "      D Indexed FASTA Defline\n"
+   "      T Regenerate FASTA Titles\n"
+   "      x New FASTA Titles\n"
+   "      X Regenerate new FASTA Titles\n"
    "      f FASTA by Feature\n"
    "      t FASTA of Translation", NULL, NULL, NULL,
     TRUE, 'S', ARG_STRING, 0.0, 0, NULL},
@@ -921,7 +1240,10 @@ Args myargs [] = {
    "      x Gene by Xref\n"
    "      o Operon by Overlap\n"
    "      d Feature by ID\n"
-   "      t Feature Table", NULL, NULL, NULL,
+   "      t Feature Table\n"
+   "      s Slow Suggest Intervals\n"
+   "      S Indexed Suggest Intervals\n"
+   "      c Coding Region Intervals", NULL, NULL, NULL,
     TRUE, 'F', ARG_STRING, 0.0, 0, NULL},
   {"Descriptor\n"
    "      b BioSource\n"
@@ -1042,6 +1364,7 @@ Int2 Main (void)
 
   cfd.io = myargs [O_argInOut].strvalue;
   cfd.clean = myargs [K_argClean].strvalue;
+  cfd.skip = myargs [P_argSkip].strvalue;
   cfd.index = myargs [I_argIndex].strvalue;
   cfd.seq = myargs [S_argSeq].strvalue;
   cfd.feat = myargs [F_argFeat].strvalue;
@@ -1089,6 +1412,7 @@ Int2 Main (void)
     fprintf (cfd.logfp, "Finished in %ld seconds\n", (long) runtime);
     FileClose (cfd.logfp);
   }
+  printf ("Finished in %ld seconds\n", (long) runtime);
 
   if (remote) {
     PubSeqFetchDisable ();

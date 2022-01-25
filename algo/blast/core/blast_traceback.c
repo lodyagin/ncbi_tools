@@ -1,4 +1,4 @@
-/* $Id: blast_traceback.c,v 1.206 2007/12/07 18:25:42 kazimird Exp $
+/* $Id: blast_traceback.c,v 1.207 2008/07/17 17:55:44 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -50,7 +50,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_traceback.c,v 1.206 2007/12/07 18:25:42 kazimird Exp $";
+    "$Id: blast_traceback.c,v 1.207 2008/07/17 17:55:44 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_traceback.h>
@@ -1029,7 +1029,7 @@ Int2 s_RPSComputeTraceback(EBlastProgramType program_number,
          corresponding to this sequence. */
       seq_arg.oid = hsp_list->oid;
       seq_arg.encoding = encoding;
-      if (BlastSeqSrcGetSequence(seq_src, (void*) &seq_arg) < 0)
+      if (BlastSeqSrcGetSequence(seq_src, &seq_arg) < 0)
           continue;
 
       db_seq_start = concat_db_info->contexts[hsp_list->oid].query_offset;
@@ -1057,7 +1057,7 @@ Int2 s_RPSComputeTraceback(EBlastProgramType program_number,
              *        need a warning here
              */
             hsp_list = Blast_HSPListFree(hsp_list);
-            BlastSeqSrcReleaseSequence(seq_src, (void*)&seq_arg);
+            BlastSeqSrcReleaseSequence(seq_src, &seq_arg);
             continue;
          }
          
@@ -1073,7 +1073,7 @@ Int2 s_RPSComputeTraceback(EBlastProgramType program_number,
          one_query, one_query_info, gap_align, sbp, score_params, 
          ext_params->options, hit_params, NULL, NULL);
 
-      BlastSeqSrcReleaseSequence(seq_src, (void*)&seq_arg);
+      BlastSeqSrcReleaseSequence(seq_src, &seq_arg);
 
       if (program_number != eBlastTypeRpsTblastn) {
          _PSIDeallocateMatrix((void**)sbp->psi_matrix->pssm->data, 
@@ -1203,7 +1203,7 @@ BLAST_ComputeTraceback(EBlastProgramType program_number,
             seq_arg.check_oid_exclusion = TRUE;
             
             BlastSequenceBlkClean(seq_arg.seq);
-            if (BlastSeqSrcGetSequence(seq_src, (void*) &seq_arg) < 0) {
+            if (BlastSeqSrcGetSequence(seq_src, &seq_arg) < 0) {
                Blast_HSPStreamResultBatchReset(batch);
                continue;
             }
@@ -1274,8 +1274,8 @@ BLAST_ComputeTraceback(EBlastProgramType program_number,
                         (whole) subject sequence */
                         
                      seq_arg.enable_ranges = FALSE;
-                     BlastSeqSrcReleaseSequence(seq_src, (void*)&seq_arg);
-                     BlastSeqSrcGetSequence(seq_src, (void*) &seq_arg);
+                     BlastSeqSrcReleaseSequence(seq_src, &seq_arg);
+                     BlastSeqSrcGetSequence(seq_src, &seq_arg);
                         
                      /* Retry the alignment */
                        
@@ -1311,7 +1311,7 @@ BLAST_ComputeTraceback(EBlastProgramType program_number,
          }      /* loop over one HSPList batch */
 
          if (perform_traceback) {
-            BlastSeqSrcReleaseSequence(seq_src, (void*)&seq_arg);
+            BlastSeqSrcReleaseSequence(seq_src, &seq_arg);
          }
 
       }         /* loop over all batches */

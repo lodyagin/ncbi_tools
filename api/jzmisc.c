@@ -176,6 +176,7 @@ NLM_EXTERN SeqIdPtr find_sip(SeqIdPtr sip)
   order [SEQID_TPE] = 5;
   order [SEQID_TPD] = 5;
   order [SEQID_GPIPE] = 9;
+  order [SEQID_NAMED_ANNOT_TRACK] = 9;
   order [SEQID_PATENT] = 10;
   order [SEQID_OTHER] = 1;
   order [SEQID_GENERAL] = 10;

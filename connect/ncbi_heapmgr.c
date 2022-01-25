@@ -1,4 +1,4 @@
-/*  $Id: ncbi_heapmgr.c,v 6.43 2008/02/21 15:26:12 kazimird Exp $
+/*  $Id: ncbi_heapmgr.c,v 6.45 2008/05/31 11:25:47 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -455,7 +455,7 @@ static SHEAP_Block* s_HEAP_Alloc(HEAP heap, TNCBI_Size size, int/*bool*/ fast)
         TNCBI_Size hsize = ((dsize + size + heap->chunk - 1)
                             / heap->chunk) * heap->chunk;
         SHEAP_HeapBlock* base = (SHEAP_HeapBlock*)
-            heap->resize(heap->base, (size_t) hsize, heap->arg);
+            heap->resize(heap->base, hsize, heap->arg);
         if (_HEAP_ALIGN(base, sizeof(SHEAP_Block)) != (unsigned long) base) {
             CORE_LOGF_X(9, eLOG_Warning,
                         ("Heap Alloc%s: Unaligned base (0x%08lX)",
@@ -697,17 +697,17 @@ static SHEAP_Block* s_HEAP_Walk(const HEAP heap, const SHEAP_Block* ptr)
                         CORE_LOGF_X(20, eLOG_Warning,
                                     ("Heap Walk%s: Used block @ free ptr %u",
                                      s_HEAP_Id(_id, heap), heap->free));
-                    } else if (HEAP_ISFREE(b)  &&
-                               (b->prevfree >= heap->size  ||
-                                b->nextfree >= heap->size  ||
-                                !HEAP_ISFREE(heap->base + b->prevfree)  ||
-                                !HEAP_ISFREE(heap->base + b->nextfree)  ||
-                                (b->prevfree != b->nextfree
-                                 && (heap->base + b->prevfree == b  ||
-                                     heap->base + b->nextfree == b)))) {
+                    } else if (HEAP_ISFREE(b)
+                               &&  (b->prevfree >= heap->size  ||
+                                    b->nextfree >= heap->size  ||
+                                    !HEAP_ISFREE(heap->base + b->prevfree)  ||
+                                    !HEAP_ISFREE(heap->base + b->nextfree)  ||
+                                    (b->prevfree != b->nextfree
+                                     &&  (heap->base + b->prevfree == b  ||
+                                          heap->base + b->nextfree == b)))) {
                         CORE_LOGF_X(21, eLOG_Warning,
                                     ("Heap Walk%s: Free list corrupt @%u/%u"
-                                     " (%u, <-%u, %u->)", s_HEAP_Id(_id,heap),
+                                     " (%u, <-%u, %u->)", s_HEAP_Id(_id, heap),
                                      HEAP_INDEX(b, heap->base), heap->size,
                                      b->head.size, b->prevfree, b->nextfree));
                     }
@@ -719,7 +719,7 @@ static SHEAP_Block* s_HEAP_Walk(const HEAP heap, const SHEAP_Block* ptr)
                     CORE_LOGF_X(22, eLOG_Error,
                                 ("Heap Walk%s: Misplaced last block @%u",
                                  s_HEAP_Id(_id,heap),
-                                 HEAP_INDEX(p,heap->base)));
+                                 HEAP_INDEX(p, heap->base)));
                 } else if (s_HEAP_newalk  &&  heap->chunk/*RW heap*/  &&
                            HEAP_ISLAST(b)  &&  heap->base + heap->last != b) {
                     CORE_LOGF_X(23, eLOG_Error,
@@ -819,7 +819,7 @@ HEAP HEAP_Trim(HEAP heap)
 
     if (heap->resize) {
         SHEAP_HeapBlock* base = (SHEAP_HeapBlock*)
-            heap->resize(heap->base, (size_t) hsize, heap->arg);
+            heap->resize(heap->base, hsize, heap->arg);
         if (!hsize)
             assert(!base);
         else if (!base)

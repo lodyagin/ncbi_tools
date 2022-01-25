@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.293 $
+* $Revision: 6.295 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
@@ -3825,6 +3825,7 @@ static Boolean SeqMgrClearBioseqExtraData (ObjMgrDataPtr omdp)
   bspextra->numsegs = 0;
 
   bspextra->min = INT4_MAX;
+  bspextra->processed = UINT1_MAX;
   bspextra->blocksize = 50;
 
   bspextra->protFeat = NULL;
@@ -5004,6 +5005,7 @@ static void CreateBioseqExtraBlock (ObjMgrDataPtr omdp, BioseqPtr bsp)
   bspextra->bsp = bsp;
   bspextra->omdp = omdp;
   bspextra->min = INT4_MAX;
+  bspextra->processed = UINT1_MAX;
 }
 
 static Boolean CountAlignmentsProc (GatherObjectPtr gop)
@@ -5135,6 +5137,7 @@ static void ProcessFeatureProducts (SeqFeatPtr sfp, Uint4 itemID, GatherObjectPt
   CharPtr           loclbl;
   Int4              min;
   ObjMgrDataPtr     omdp;
+  Uint1             processed;
   CharPtr           prodlbl;
   ProtRefPtr        prp;
   SeqFeatPtr        prt;
@@ -5242,6 +5245,7 @@ static void ProcessFeatureProducts (SeqFeatPtr sfp, Uint4 itemID, GatherObjectPt
   /* calculate largest protein feature on cds's product bioseq */
 
   min = INT4_MAX;
+  processed = UINT1_MAX;
   vn.choice = SEQLOC_WHOLE;
   vn.data.ptrvalue = (Pointer) bsp->id;
   vn.next = NULL;
@@ -5253,22 +5257,25 @@ static void ProcessFeatureProducts (SeqFeatPtr sfp, Uint4 itemID, GatherObjectPt
       prt = (SeqFeatPtr) sap->data;
       while (prt != NULL) {
         if (prt->data.choice == SEQFEAT_PROT) {
+          prp = (ProtRefPtr) prt->data.value.ptrvalue;
 
           /* get SeqId in bioseq that matches SeqId used for location */
 
           vn.data.ptrvalue = SeqIdWithinBioseq (bsp, prt->location);
 
           diff = SeqLocAinB (prt->location, slp);
-          if (diff >= 0) {
+          if (diff >= 0 && prp != NULL) {
             if (diff < min) {
               min = diff;
+              processed = prp->processed;
               /* if (omdp->tempload == TL_NOT_TEMP) { */
                 bspextra->protFeat = prt;
               /* } */
             } else if (diff == min) {
-              prp = (ProtRefPtr) prt->data.value.ptrvalue;
-              if (prp != NULL && prp->processed == 0) {
+              /* unprocessed 0 preferred over preprotein 1 preferred over mat peptide 2 */
+              if ( /* prp != NULL && prp->processed == 0 */ prp->processed < processed ) {
                 min = diff;
+                processed = prp->processed;
                 bspextra->protFeat = prt;
               }
             }
@@ -5841,6 +5848,8 @@ static Boolean RecordFeaturesInBioseqs (GatherObjectPtr gop)
   /* if indexing protein bioseq, store largest protein feature */
 
   if (sfp->data.choice == SEQFEAT_PROT) {
+    prp = (ProtRefPtr) sfp->data.value.ptrvalue;
+
     vn.choice = SEQLOC_WHOLE;
     vn.data.ptrvalue = (Pointer) bsp->id;
     vn.next = NULL;
@@ -5851,16 +5860,18 @@ static Boolean RecordFeaturesInBioseqs (GatherObjectPtr gop)
     vn.data.ptrvalue = (Pointer) SeqIdWithinBioseq (bsp, sfp->location);
 
     diff = SeqLocAinB (sfp->location, slp);
-    if (diff >= 0) {
+    if (diff >= 0 && prp != NULL) {
       if (diff < bspextra->min) {
         bspextra->min = diff;
+        bspextra->processed = prp->processed;
         /* if (omdp->tempload == TL_NOT_TEMP) { */
           bspextra->protFeat = sfp;
         /* } */
       } else if (diff == bspextra->min) {
-        prp = (ProtRefPtr) sfp->data.value.ptrvalue;
-        if (prp != NULL && prp->processed == 0) {
+        /* unprocessed 0 preferred over preprotein 1 preferred over mat peptide 2 */
+        if ( /* prp != NULL && prp->processed == 0 */ prp->processed < bspextra->processed ) {
           bspextra->min = diff;
+          bspextra->processed = prp->processed;
           bspextra->protFeat = sfp;
         }
       }
@@ -7704,7 +7715,7 @@ NLM_EXTERN Uint2 LIBCALL SeqMgrIndexFeaturesExEx (
       if (sap->type != 1) continue;
       for (sfp = (SeqFeatPtr) sap->data; sfp != NULL; sfp = sfp->next) {
         publist = NULL;
-        CleanUpSeqFeat (sfp, FALSE, TRUE, &publist);
+        CleanUpSeqFeat (sfp, FALSE, FALSE, TRUE, &publist);
         ValNodeFreeData (publist);
       }
     }

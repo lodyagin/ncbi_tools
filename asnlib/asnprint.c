@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 3/4/91
 *
-* $Revision: 6.23 $
+* $Revision: 6.24 $
 *
 * File Description:
 *   Routines for printing ASN.1 value notation (text) messages and
@@ -42,6 +42,9 @@
 * 3/4/91   Kans        Stricter typecasting for GNU C and C++
 *
 * $Log: asnprint.c,v $
+* Revision 6.24  2008/05/28 15:07:41  gouriano
+* Corrected alignment of output in AsnPrintString. Jira CXX-119
+*
 * Revision 6.23  2007/12/03 18:15:31  gouriano
 * Corrected line length in AsnPrintString
 *
@@ -1643,14 +1646,14 @@ NLM_EXTERN Boolean AsnPrintString (CharPtr the_string, AsnIoPtr aip)
 
         /* Check to necessety a new line */
 
-        if ( (current >= aip->linebuf + aip->linelength)  && *(str+1) )  {
+        if ( (current >= aip->linebuf + aip->linelength) )  {
 
             /* Get word break */
 
             size_t pos;
             int cnt_save;
             
-            *current = *(str+1);
+            *current = *(str+1) ? *(str+1) : *str;
             *(current+1) = 0;
             pos = AsnPrintGetWordBreak(str_begin, 
                                        aip->linepos - linepos_start);

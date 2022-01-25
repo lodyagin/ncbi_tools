@@ -1,4 +1,4 @@
-/* $Id: blast_filter.h,v 1.41 2007/12/20 22:55:46 kazimird Exp $
+/* $Id: blast_filter.h,v 1.42 2008/11/03 20:59:44 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -302,6 +302,18 @@ BlastFilteringOptionsFromString(EBlastProgramType program_number,
                                 const char* instructions, 
                                 SBlastFilterOptions* *filtering_options, 
                                 Blast_Message* *blast_message);
+
+/// Convert the filtering options structure to a string
+/// @param filtering_options filtering options structure, assumed to be
+/// correctly filled in [in]
+/// @return malloc'd string containing filtering options or NULL if there is
+/// not enough memory to create the return value. Caller
+/// must free() return value
+/// @sa TAutoCharPtr it is recommended that the caller store the return value
+/// in a TAutoCharPtr if working in C++ (defined in blast_aux.hpp)
+NCBI_XBLAST_EXPORT
+char*
+BlastFilteringOptionsToString(const SBlastFilterOptions* filtering_options);
 
 /** Determines whether this is a nucleotide query and whether this a minus strand or not
  *

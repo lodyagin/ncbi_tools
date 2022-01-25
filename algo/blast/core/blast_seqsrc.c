@@ -1,4 +1,4 @@
-/*  $Id: blast_seqsrc.c,v 1.35 2008/02/14 15:55:42 kazimird Exp $
+/*  $Id: blast_seqsrc.c,v 1.36 2008/07/17 17:55:44 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -36,7 +36,7 @@
 #ifndef SKIP_DOXYGEN_PROCESSING
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_seqsrc.c,v 1.35 2008/02/14 15:55:42 kazimird Exp $";
+    "$Id: blast_seqsrc.c,v 1.36 2008/07/17 17:55:44 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 #endif
 
@@ -230,12 +230,12 @@ BlastSeqSrcGetIsProt(const BlastSeqSrc* seq_src)
 
 Int2
 BlastSeqSrcGetSequence(const BlastSeqSrc* seq_src, 
-                       void* sequence)
+                       BlastSeqSrcGetSeqArg* getseq_arg)
 {
     ASSERT(seq_src);
     ASSERT(seq_src->GetSequence);
-    ASSERT(sequence);
-    return (*seq_src->GetSequence)(seq_src->DataStructure, sequence);
+    ASSERT(getseq_arg);
+    return (*seq_src->GetSequence)(seq_src->DataStructure, getseq_arg);
 }
 
 Int4
@@ -248,12 +248,12 @@ BlastSeqSrcGetSeqLen(const BlastSeqSrc* seq_src, void* oid)
 
 void
 BlastSeqSrcReleaseSequence(const BlastSeqSrc* seq_src,
-                           void* sequence)
+                           BlastSeqSrcGetSeqArg* getseq_arg)
 {
     ASSERT(seq_src);
     ASSERT(seq_src->ReleaseSequence);
-    ASSERT(sequence);
-    (*seq_src->ReleaseSequence)(seq_src->DataStructure, sequence);
+    ASSERT(getseq_arg);
+    (*seq_src->ReleaseSequence)(seq_src->DataStructure, getseq_arg);
 }
 
 #ifdef KAPPA_PRINT_DIAGNOSTICS

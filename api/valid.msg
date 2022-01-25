@@ -222,6 +222,15 @@ $^   WholeComponent, 62
 A delta sequence component should be described as a specific interval, not as
 the whole of a sequence.
 
+$^   TSAHistAssemblyMissing, 63
+The Bioseq has a TSA MolInfo tech but does not have a Seq-hist.assembly alignment.
+
+$^   ProteinsHaveGeneralID, 64
+One or more protein Bioseqs have a general Seq-id.
+
+$^   HighNContent, 65
+This sequence contains too many Ns.
+
 $$ SEQ_DESCR, 2
 
 $^   BioSourceMissing, 1
@@ -411,6 +420,34 @@ require a taxonomy consult.
 $^   RefGeneTrackingIllegalStatus, 51
 The RefGeneTracking user object has an illegal Status value.
 
+$^   ReplacedCountryCode, 52
+The country code (up to the first colon) is no longer on the approved list of countries.
+
+$^   BadInstitutionCode, 53
+The institution (or institution: collection) code is not on the approved list.
+
+$^   BadCollectionCode, 54
+The institution code is recognized, but the collection is not on the approved list.
+
+$^   BadVoucherID, 55
+The voucher is missing a specific identifier.
+
+$^   UnstructuredVoucher, 56
+The voucher needs to be structured as "<institution-code>:[<collection-code>:]<culture_id>".
+
+$^   ChromosomeLocation, 57
+BioSource location is not usually chromosome.
+
+$^   MultipleSourceQualifiers, 58
+BioSource has unexpected multiple qualifiers of the same type.
+
+$^   UnbalancedParentheses, 59
+Qualifier should have matching ( and ) parentheses or [ and ] brackets.
+
+$^   MultipleSourceVouchers, 60
+BioSource has unexpected multiple bio_material/culture_collection/specimen_voucher
+from the same institution.
+
 
 $$ GENERIC, 3
 
@@ -511,6 +548,9 @@ A graph should be packaged on its bioseq, or on a set containing the Bioseq.
 
 $^   InternalGenBankSet, 16
 An outer BioseqSet should not contain an internal BioseqSet of class genbank.
+
+$^   ConSetProblem, 17
+BioseqSet class should not be conset.
 
 $$ SEQ_FEAT, 5
 
@@ -1100,6 +1140,43 @@ The feature starts or stops within a sequence gap.
 $^ GeneOntologyTermMissingGOID, 151
 A Gene Ontology (GO) term is missing the GO Identifier.
 
+$^ PseudoRnaHasProduct, 152
+An RNA flagged as pseudo has a transcribed product.  There should be no
+transcribed product bioseq on a pseudo RNA.
+
+$^ PseudoRnaViaGeneHasProduct, 153
+An RNA overlapped by a pseudo gene has a transcribed product.  There
+should be no transcribed product bioseq on a pseudo RNA.
+
+$^ BadRRNAcomponentOrder, 154
+rRNA and ITS features are not in the expected order.
+
+$^ BadRRNAcomponentOverlap, 155
+rRNA and ITS or tRNA elements should not overlap.
+
+$^ MissingGeneLocusTag, 156
+If one gene in a record has a locus-tag value, all genes in the record
+should have a locus-tag value.
+
+$^ MultipleProtRefs, 157
+The name and description of the protein is missing from this entry. Every
+protein Bioseq must have one full-length Prot-ref feature to provide this
+information.
+
+$^   BadInternalCharacter, 158
+Biological names or labels should not end with question mark,
+exclamation point, or tilde.
+
+$^   BadTrailingCharacter, 159
+Biological names or labels should not contain underscore, period,
+comma, colon, or semicolon, 
+
+$^   BadTrailingHyphen, 160
+Biological names or labels should not end with a hyphen.
+
+$^   MultipleGeneOverlap, 161
+This genes completely contains two or more other genes.
+
 $$ SEQ_ALIGN, 6
 
 $^   SeqIdProblem, 1
@@ -1217,6 +1294,12 @@ Quality graphs overlap - may be due to an old fa2htgs bug.
 
 $^   GraphBioseqId, 17
 Quality graph does not map to Bioseq in record.
+
+$^   GraphACGTScoreMany, 18
+Quality score values for known bases should be above 0.
+
+$^   GraphNScoreMany, 19
+Quality score values for unknown bases should not be above 0.
 
 $$ SEQ_ANNOT, 8
 

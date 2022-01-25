@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 1/1/94
 *
-* $Revision: 6.39 $
+* $Revision: 6.45 $
 *
 * File Description:  Sequence editing utilities
 *
@@ -150,6 +150,7 @@ typedef struct validstruct {
 	Boolean inferenceAccnCheck;    /* lookup inference qualifier accession.version reference */
 	Boolean testLatLonSubregion;   /* validate coordinates of states and provinces within a country */
 	Boolean strictLatLonCountry;   /* bodies of water do not relax country vs. lat_lon mismatch */
+  Boolean indexerVersion;        /* special tests for GenBank indexers */
 	Int2 validationLimit;          /* limit validation to major classes in Valid1GatherProc */
 								   /* this section used for finer error reporting callback */
 	ValidErrorFunc errfunc;
@@ -159,11 +160,18 @@ typedef struct validstruct {
 	TextFsaPtr sourceQualTags;     /* for detecting structured qual tags in notes */
 	TextFsaPtr modifiedBases;      /* permitted modified bases in PCR_primer qualifier */
 	Boolean is_htg_in_sep;         /* record has technique of htgs 0 through htgs 3 */
+	Boolean is_barcode_sep;        /* record has technique barcode */
 	Boolean is_refseq_in_sep;      /* record has seqid of type other (refseq) */
+	Boolean only_lcl_gnl_in_sep;   /* record has seqid of only local or general */
+  Boolean has_gnl_prot_sep;      /* protein Bioseq has general seqid */
 	Boolean is_smupd_in_sep;       /* record in INSD internal processing */
 	Boolean feat_loc_has_gi;       /* at least one feature has a gi location reference */
 	Boolean feat_prod_has_gi;      /* at least one feature has a gi product reference */
 	Boolean far_fetch_failure;     /* a far location or bioseq with no fetch function */
+	VoidPtr rrna_array;            /* sorted feature index array of rRNA features */
+	VoidPtr trna_array;            /* sorted feature index array of tRNA features */
+	Int4 numrrna;                  /* number of rRNA features */
+	Int4 numtrna;                  /* number of tRNA features */
 } ValidStruct, PNTR ValidStructPtr;
 
 NLM_EXTERN Boolean ValidateSeqEntry PROTO((SeqEntryPtr sep, ValidStructPtr vsp));
@@ -185,6 +193,9 @@ NLM_EXTERN Boolean IsCountryInLatLonList (CharPtr country);
 NLM_EXTERN Boolean TestLatLonForCountry (CharPtr country, FloatHi lat, FloatHi lon);
 NLM_EXTERN CharPtr GuessCountryForLatLon (FloatHi lat, FloatHi lon);
 NLM_EXTERN Boolean StringContainsBodyOfWater (CharPtr str);
+
+NLM_EXTERN Boolean ParseStructuredVoucher (CharPtr subname, CharPtr PNTR inst, CharPtr PNTR id);
+NLM_EXTERN Boolean VoucherInstitutionIsValid (CharPtr inst);
 
 /* EC_number finite state machine persists to avoid expensive reload, should free on program exit */
 NLM_EXTERN void ECNumberFSAFreeAll (void);

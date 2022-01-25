@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.9 $
+* $Revision: 6.10 $
 *
 * File Description:  Object manager interface for module NCBI-Seq
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: objseq.h,v $
+* Revision 6.10  2008/03/05 18:32:51  kans
+* added support for the new TextAnnotId object
+*
 * Revision 6.9  2007/05/07 13:25:32  kans
 * added support for Seq-data.gap
 *
@@ -173,13 +176,31 @@ NLM_EXTERN Boolean LIBCALL SeqAsnLoad PROTO((void));
 
 /*****************************************************************************
 *
+*   TextAnnotId
+*
+*****************************************************************************/
+typedef struct textannotid {
+    CharPtr name,
+        accession,
+        release;
+	Int2 version;             /* INT2_MIN (ncbilcl.h) = not set */
+} TextAnnotId, PNTR TextAnnotIdPtr;
+
+NLM_EXTERN TextAnnotIdPtr LIBCALL TextAnnotIdNew PROTO((void));
+NLM_EXTERN Boolean      LIBCALL TextAnnotIdAsnWrite PROTO((TextAnnotIdPtr tsip, AsnIoPtr aip, AsnTypePtr atp));
+NLM_EXTERN TextAnnotIdPtr LIBCALL TextAnnotIdAsnRead PROTO((AsnIoPtr aip, AsnTypePtr atp));
+NLM_EXTERN TextAnnotIdPtr LIBCALL TextAnnotIdFree PROTO((TextAnnotIdPtr tsip));
+
+/*****************************************************************************
+*
 *   AnnotId is a choice using an ValNode, most types in data.ptrvalue
 *      except integers, in data.intvalue
 *   choice:
 *   0 = not set
     1 = local Object-id ,      -- local use
-	2 = ncbi INTEGER
-	3 = general Dbtag		   -- any database
+	2 = ncbi INTEGER ,
+	3 = general Dbtag ,        -- any database
+	4 = other Textannot-id
 *
 *****************************************************************************/
 
@@ -189,11 +210,11 @@ typedef ValNode AnnotId, PNTR AnnotIdPtr;
 #define ANNOTID_LOCAL ( (Uint1)1)
 #define ANNOTID_NCBI ( (Uint1)2)
 #define ANNOTID_GENERAL ((Uint1)3)
+#define ANNOTID_OTHER ((Uint1)4)
 
 NLM_EXTERN Boolean	 LIBCALL AnnotIdAsnWrite PROTO((AnnotIdPtr anp, AsnIoPtr aip, AsnTypePtr atp));
 NLM_EXTERN AnnotIdPtr LIBCALL AnnotIdAsnRead PROTO((AsnIoPtr aip, AsnTypePtr atp));
 NLM_EXTERN AnnotIdPtr LIBCALL AnnotIdFree PROTO((AnnotIdPtr anp));
-NLM_EXTERN AnnotIdPtr LIBCALL AnnotIdDup PROTO((AnnotIdPtr oldid));
 
 /*****************************************************************************
 *

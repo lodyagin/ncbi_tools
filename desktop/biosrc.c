@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.87 $
+* $Revision: 6.90 $
 *
 * File Description: 
 *
@@ -47,34 +47,10 @@
 #include <gather.h>
 #include <subutil.h>
 #include <explore.h>
+#define NLM_GENERATED_CODE_PROTO
+#include <objmacro.h>
+#include <macroapi.h>
 
-static ENUM_ALIST(biosource_genome_alist)
-  {" ",                    0},
-  {"Genomic",              1},
-  {"Chloroplast",          2},
-  {"Chromoplast",          3},
-  {"Kinetoplast",          4},
-  {"Mitochondrion",        5},
-  {"Plastid",              6},
-  {"Macronuclear",         7},
-  {"Extrachromosomal",     8},
-  {"Plasmid",              9},
-    /*
-  {"Transposon",          10},
-  {"Insertion Sequence",  11},
-    */
-  {"Cyanelle",            12},
-  {"Proviral",            13},
-  {"Virion",              14},
-  {"Nucleomorph",         15},
-  {"Apicoplast",          16},
-  {"Leucoplast",          17},
-  {"Proplastid",          18},
-  {"Endogenous-virus",    19},
-  {"Hydrogenosome",       20},
-  {"Chromosome",          21},
-  {"Chromatophore",       22},
-END_ENUM_ALIST
 
 extern EnumFieldAssoc  biosource_genome_simple_alist [];
 ENUM_ALIST(biosource_genome_simple_alist)
@@ -103,6 +79,7 @@ ENUM_ALIST(biosource_genome_simple_alist)
   {"Chromosome",          21},
   {"Chromatophore",       22},
 END_ENUM_ALIST
+
 
 extern EnumFieldAssoc  biosource_origin_alist [];
 ENUM_ALIST(biosource_origin_alist)
@@ -144,7 +121,7 @@ typedef struct genbiopage {
   Int2            nuclGC;
   Int2            mitoGC;
   Int4            taxID;
-  PopuP           genome;
+  DialoG          genome;
   PopuP           origin;
   ButtoN          is_focus;
   PopuP           simplecode;
@@ -167,7 +144,7 @@ typedef struct genbiopage {
 
   CharPtr         origTaxName;
   Boolean         stripOldName;
-  EnumFieldAssoc  PNTR genomeAlist;
+//  EnumFieldAssoc  PNTR genomeAlist;
   Uint1           orgname_choice;
   Pointer         orgname_data;
   EnumFieldAssocPtr orgmod_alists [2];
@@ -547,10 +524,14 @@ static void ChangeGencodePopups (GenBioPagePtr gbp)
 
 {
   UIEnum  genome;
+  ValNodePtr vnp;
 
   if (gbp != NULL) {
     if (gbp->simplecode != NULL) {
-      if (GetEnumPopup (gbp->genome, gbp->genomeAlist, &genome)) {
+      vnp = DialogToPointer (gbp->genome);
+      if (vnp != NULL) {
+        genome = GenomeFromSrcLoc (vnp->choice);
+        vnp = ValNodeFreeData (vnp);
         if (genome == 4 || genome == 5) {
           SafeSetValue (gbp->simplecode, gcIdToIndex [gbp->mitoGC]);
         } else if (genome == GENOME_chloroplast ||
@@ -961,6 +942,8 @@ static void BioSourcePtrToGenBioPage (DialoG d, Pointer data)
   OrgNamePtr     onp;
   OrgRefPtr      orp;
   WindoW         tempPort;
+  ValNode        vn;
+  ValNodePtr     vnp;
 
   gbp = (GenBioPagePtr) GetObjectExtra (d);
   biop = (BioSourcePtr) data;
@@ -995,7 +978,10 @@ static void BioSourcePtrToGenBioPage (DialoG d, Pointer data)
     PointerToDialog (gbp->orgmod_val_dlg, NULL);
     
     if (biop != NULL) {
-      SetEnumPopup (gbp->genome, gbp->genomeAlist, (UIEnum) biop->genome);
+      vn.choice = SrcLocFromGenome (biop->genome);
+      vn.data.ptrvalue = NULL;
+      vn.next = NULL;
+      PointerToDialog (gbp->genome, &vn);
       SetEnumPopup (gbp->origin, biosource_origin_alist, (UIEnum) biop->origin);
       SafeSetStatus (gbp->is_focus, biop->is_focus);
       if (biop->is_focus) {
@@ -1062,7 +1048,10 @@ static void BioSourcePtrToGenBioPage (DialoG d, Pointer data)
         gbp->mitoGC = onp->mgcode;
       }
       if (gbp->simplecode != NULL) {
-        if (GetEnumPopup (gbp->genome, gbp->genomeAlist, &genome)) {
+        vnp = DialogToPointer (gbp->genome);
+        if (vnp != NULL) {
+          genome = GenomeFromSrcLoc (vnp->choice);
+          vnp = ValNodeFreeData (vnp);
           if (genome == 4 || genome == 5) {
             SafeSetValue (gbp->simplecode, gcIdToIndex [onp->mgcode]);
           } else if (genome == GENOME_chloroplast ||
@@ -1115,14 +1104,18 @@ static Pointer GenBioPageToBioSourcePtr (DialoG d)
   Int2           num; /* contains number of items in gbp->orglist */
   Int4           row; /* contains closest row to match in gbp->orglist */
   Char           txt [256]; /* holds tax name copied from gbp->orglist */
+  ValNodePtr     vnp;
 
   biop = NULL;
   gbp = (GenBioPagePtr) GetObjectExtra (d);
   if (gbp != NULL) {
     biop = BioSourceNew ();
     if (biop != NULL) {
-      if (GetEnumPopup (gbp->genome, gbp->genomeAlist, &val)) {
-        biop->genome = (Uint1) val;
+
+      vnp = DialogToPointer (gbp->genome);
+      if (vnp != NULL) {
+        biop->genome = (Uint1) GenomeFromSrcLoc (vnp->choice);
+        vnp = ValNodeFreeData (vnp);
       }
       if (GetEnumPopup (gbp->origin, biosource_origin_alist, &val)) {
         biop->origin = (Uint1) val;
@@ -1172,7 +1165,10 @@ static Pointer GenBioPageToBioSourcePtr (DialoG d)
           gbp->orgname_data = NULL;
 
           if (gbp->simplecode != NULL) {
-            if (GetEnumPopup (gbp->genome, gbp->genomeAlist, &genome)) {
+            vnp = DialogToPointer (gbp->genome);
+            if (vnp != NULL) {
+              genome = GenomeFromSrcLoc (vnp->choice);
+              vnp = ValNodeFreeData (vnp);
               if (genome == 4 || genome == 5) {
                 onp->mgcode = gcIndexToId [GetValue (gbp->simplecode)];
                 onp->gcode = gcIndexToId [GetValue (gbp->gcode)];
@@ -1383,21 +1379,6 @@ static void BioSourceMessage (DialoG d, Int2 mssg)
   }
 }
 
-extern PopuP ReplaceBioSourceGenomePopup (DialoG d, PopuP genome);
-PopuP ReplaceBioSourceGenomePopup (DialoG d, PopuP genome)
-
-{
-  GenBioPagePtr  gbp;
-  PopuP          orig_genome = NULL;
-
-  gbp = (GenBioPagePtr) GetObjectExtra (d);
-  if (gbp != NULL) {
-    orig_genome = gbp->genome;
-    gbp->genome = genome;
-  }
-  return orig_genome;
-}
-
 
 extern PopuP ReplaceBioSourceGencodePopup (DialoG d, PopuP gencode);
 PopuP ReplaceBioSourceGencodePopup (DialoG d, PopuP gencode)
@@ -1415,6 +1396,44 @@ PopuP ReplaceBioSourceGencodePopup (DialoG d, PopuP gencode)
 }
 
 
+NLM_EXTERN ValNodePtr GetLocListForBioSource (BioSourcePtr biop)
+{
+  ValNodePtr loc_list, vnp, vnp_prev = NULL, vnp_next;
+  Boolean    indexerVersion;
+
+  indexerVersion = (Boolean) (GetAppProperty ("InternalNcbiSequin") != NULL);
+
+  loc_list = GetLocationList (FALSE);
+
+  /* remove chromosome, transposon, insertion seq if not already on biosource */
+  
+  vnp = loc_list;
+  while (vnp != NULL) {
+    vnp_next = vnp->next;
+    if ((vnp->choice == Source_location_chromosome && !indexerVersion
+          && (biop == NULL || biop->genome != GENOME_chromosome))
+        || (vnp->choice == Source_location_virion
+            && (biop == NULL || biop->genome != GENOME_virion))
+        || (vnp->choice == Source_location_transposon
+            && (biop == NULL || biop->genome != GENOME_transposon))
+        || (vnp->choice == Source_location_insertion_seq
+            && (biop == NULL || biop->genome != GENOME_insertion_seq))) {
+      if (vnp_prev == NULL) { 
+        loc_list = vnp->next;
+      } else {
+        vnp_prev->next= vnp->next;
+      }
+      vnp->next = NULL;
+      vnp = ValNodeFreeData (vnp);
+    } else {
+      vnp_prev = vnp;
+    }
+    vnp = vnp_next;
+  }
+  return loc_list;
+}
+
+
 extern DialoG CreateSimpleBioSourceDialog (GrouP h, CharPtr title)
 
 {
@@ -1428,6 +1447,7 @@ extern DialoG CreateSimpleBioSourceDialog (GrouP h, CharPtr title)
   RecT           r;
   GrouP          s;
   GrouP          x;
+  ValNode        vn;
 
   p = HiddenGroup (h, 1, 0, NULL);
   SetGroupSpacing (p, 10, 10);
@@ -1493,11 +1513,15 @@ extern DialoG CreateSimpleBioSourceDialog (GrouP h, CharPtr title)
     f = HiddenGroup (g, 3, 0, NULL);
     StaticPrompt (f, "Location of Sequence",
                   0, popupMenuHeight, programFont, 'l');
-    gbp->genome = PopupList (f, TRUE, SetGenome);
-    SetObjectExtra (gbp->genome, gbp, NULL);
-    gbp->genomeAlist = biosource_genome_simple_alist;
-    InitEnumPopup (gbp->genome, gbp->genomeAlist, NULL);
-    SetValue (gbp->genome, 2);
+
+    gbp->genome = ValNodeSelectionDialogExEx (f, GetLocListForBioSource (NULL), SHORT_SELECTION_LIST, ValNodeStringName,
+                                           ValNodeSimpleDataFree, ValNodeStringCopy,
+                                           ValNodeChoiceMatch, "location", 
+                                           NULL, NULL, FALSE, FALSE, TRUE, NULL);
+    vn.choice = Source_location_genomic;
+    vn.data.ptrvalue = NULL;
+    vn.next = NULL;
+    PointerToDialog (gbp->genome, &vn);
     ObjectRect (gbp->orglist, &r);
     MultiLinePrompt (g, useGenomicText, r.right - r.left - 2, programFont);
 
@@ -2307,6 +2331,7 @@ static DialoG CreateBioSourceDialog (GrouP h, CharPtr title, GrouP PNTR pages,
   Int2           z;
   Boolean        indexerVersion;
   Boolean        has_discontinued, has_discouraged;
+  ValNode        vn;
 
   p = HiddenGroup (h, 1, 0, NULL);
   SetGroupSpacing (p, 10, 10);
@@ -2394,11 +2419,16 @@ static DialoG CreateBioSourceDialog (GrouP h, CharPtr title, GrouP PNTR pages,
     f = HiddenGroup (g, 3, 0, NULL);
     StaticPrompt (f, "Location of Sequence",
                   0, popupMenuHeight, programFont, 'l');
-    gbp->genome = PopupList (f, TRUE, SetGenome);
-    SetObjectExtra (gbp->genome, gbp, NULL);
-    gbp->genomeAlist = biosource_genome_alist;
-    InitEnumPopup (gbp->genome, gbp->genomeAlist, NULL);
-    SetValue (gbp->genome, 2);
+
+    gbp->genome = ValNodeSelectionDialogExEx (f, GetLocListForBioSource (biop), SHORT_SELECTION_LIST, ValNodeStringName,
+                                           ValNodeSimpleDataFree, ValNodeStringCopy,
+                                           ValNodeChoiceMatch, "location", 
+                                           NULL, NULL, FALSE, FALSE, TRUE, NULL);
+    vn.choice = Source_location_genomic;
+    vn.data.ptrvalue = NULL;
+    vn.next = NULL;
+    PointerToDialog (gbp->genome, &vn);
+
     ObjectRect (gbp->orglist, &r);
     MultiLinePrompt (g, useGenomicText, r.right - r.left - 2, programFont);
 

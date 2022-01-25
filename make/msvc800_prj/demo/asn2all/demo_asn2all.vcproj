@@ -3,7 +3,7 @@
 	ProjectType="Visual C++"
 	Version="8.00"
 	Name="demo_asn2all"
-	ProjectGUID="{D3E7608D-BA37-41A8-8012-9DC2E44E2703}"
+	ProjectGUID="{1918A288-F0EE-446A-9865-5EDA2730E664}"
 	>
 	<Platforms>
 		<Platform
@@ -75,7 +75,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="oldnames.lib wsock32.lib"
+				AdditionalDependencies="oldnames.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/asn2all.exe"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"
@@ -170,7 +170,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="oldnames.lib wsock32.lib"
+				AdditionalDependencies="oldnames.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/asn2all.exe"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"
@@ -266,7 +266,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="oldnames.lib wsock32.lib"
+				AdditionalDependencies="oldnames.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/asn2all.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
@@ -361,7 +361,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="oldnames.lib wsock32.lib"
+				AdditionalDependencies="oldnames.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/asn2all.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
@@ -455,7 +455,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="oldnames.lib wsock32.lib"
+				AdditionalDependencies="oldnames.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/asn2all.exe"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"
@@ -550,7 +550,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="oldnames.lib wsock32.lib"
+				AdditionalDependencies="oldnames.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/asn2all.exe"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"
@@ -646,7 +646,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="oldnames.lib wsock32.lib"
+				AdditionalDependencies="oldnames.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/asn2all.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
@@ -741,7 +741,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="oldnames.lib wsock32.lib"
+				AdditionalDependencies="oldnames.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/asn2all.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"

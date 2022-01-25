@@ -9,7 +9,7 @@
 #include <asn.h>
 #endif
 
-static char * asnfilename = "asnseq.h19";
+static char * asnfilename = "asnseq.h20";
 static AsnValxNode avnx[164] = {
     {3,NULL,1,0.0,NULL } ,
     {2,NULL,0,0.0,NULL } ,
@@ -176,7 +176,7 @@ static AsnValxNode avnx[164] = {
     {20,"pdb" ,7,0.0,&avnx[163] } ,
     {20,"other" ,255,0.0,NULL } };
 
-static AsnType atx[213] = {
+static AsnType atx[219] = {
   {401, "Annotdesc" ,1,0,0,0,0,1,0,0,NULL,&atx[39],&atx[1],0,&atx[63]} ,
   {0, "name" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[3]} ,
   {323, "VisibleString" ,0,26,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} ,
@@ -233,7 +233,7 @@ static AsnType atx[213] = {
   {0, "src" ,128,7,0,0,0,0,0,0,NULL,&atx[54],NULL,0,&atx[55]} ,
   {429, "Seq-id" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[62]} ,
   {0, "align" ,128,8,0,0,0,0,0,0,NULL,&atx[56],NULL,0,&atx[61]} ,
-  {461, "Align-def" ,1,0,0,0,0,0,0,0,NULL,&atx[20],&atx[57],0,NULL} ,
+  {462, "Align-def" ,1,0,0,0,0,0,0,0,NULL,&atx[20],&atx[57],0,NULL} ,
   {0, "align-type" ,128,0,0,0,0,0,0,0,NULL,&atx[16],&avnx[11],0,&atx[58]} ,
   {0, "ids" ,128,1,0,1,0,0,0,0,NULL,&atx[60],&atx[59],0,NULL} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[54],NULL,0,NULL} ,
@@ -281,7 +281,7 @@ static AsnType atx[213] = {
   {0, "prf" ,128,19,0,0,0,0,0,0,NULL,&atx[102],NULL,0,&atx[103]} ,
   {435, "PRF-block" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[104]} ,
   {0, "pdb" ,128,20,0,0,0,0,0,0,NULL,&atx[104],NULL,0,&atx[105]} ,
-  {436, "PDB-block" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[212]} ,
+  {436, "PDB-block" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[218]} ,
   {0, "het" ,128,21,0,0,0,0,0,0,NULL,&atx[106],NULL,0,&atx[107]} ,
   {405, "Heterogen" ,1,0,0,0,0,1,0,0,NULL,&atx[2],NULL,0,&atx[110]} ,
   {0, "source" ,128,22,0,0,0,0,0,0,NULL,&atx[108],NULL,0,&atx[109]} ,
@@ -326,7 +326,7 @@ static AsnType atx[213] = {
   {0, "ncbistdaa" ,128,9,0,0,0,0,0,0,NULL,&atx[147],NULL,0,&atx[148]} ,
   {458, "NCBIstdaa" ,1,0,0,0,0,0,0,0,NULL,&atx[133],NULL,0,&atx[149]} ,
   {0, "gap" ,128,10,0,0,0,0,0,0,NULL,&atx[149],NULL,0,NULL} ,
-  {459, "Seq-gap" ,1,0,0,0,0,0,0,0,NULL,&atx[20],&atx[150],0,&atx[191]} ,
+  {459, "Seq-gap" ,1,0,0,0,0,0,0,0,NULL,&atx[20],&atx[150],0,&atx[197]} ,
   {0, "type" ,128,0,0,0,0,0,0,0,NULL,&atx[16],&avnx[143],0,&atx[151]} ,
   {0, "linkage" ,128,1,0,1,0,0,0,0,NULL,&atx[16],&avnx[153],0,NULL} ,
   {0, "ext" ,128,7,0,1,0,0,0,0,NULL,&atx[153],NULL,0,&atx[173]} ,
@@ -339,7 +339,7 @@ static AsnType atx[213] = {
   {0, "map" ,128,2,0,0,0,0,0,0,NULL,&atx[160],NULL,0,&atx[163]} ,
   {446, "Map-ext" ,1,0,0,0,0,0,0,0,NULL,&atx[26],&atx[161],0,&atx[166]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[162],NULL,0,NULL} ,
-  {424, "Seq-feat" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[206]} ,
+  {424, "Seq-feat" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[212]} ,
   {0, "delta" ,128,3,0,0,0,0,0,0,NULL,&atx[164],NULL,0,NULL} ,
   {417, "Delta-ext" ,1,0,0,0,0,1,0,0,NULL,&atx[26],&atx[165],0,&atx[51]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[166],NULL,0,NULL} ,
@@ -366,33 +366,39 @@ static AsnType atx[213] = {
   {0, "annot" ,128,3,0,1,0,0,0,0,NULL,&atx[60],&atx[187],0,NULL} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[188],NULL,0,NULL} ,
   {409, "Seq-annot" ,1,0,0,0,0,1,0,0,NULL,&atx[20],&atx[189],0,&atx[126]} ,
-  {0, "id" ,128,0,0,1,0,0,0,0,NULL,&atx[60],&atx[190],0,&atx[196]} ,
+  {0, "id" ,128,0,0,1,0,0,0,0,NULL,&atx[60],&atx[190],0,&atx[202]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[191],NULL,0,NULL} ,
-  {460, "Annot-id" ,1,0,0,0,0,0,0,0,NULL,&atx[39],&atx[192],0,&atx[56]} ,
+  {461, "Annot-id" ,1,0,0,0,0,0,0,0,NULL,&atx[39],&atx[192],0,&atx[56]} ,
   {0, "local" ,128,0,0,0,0,0,0,0,NULL,&atx[193],NULL,0,&atx[194]} ,
   {421, "Object-id" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[49]} ,
   {0, "ncbi" ,128,1,0,0,0,0,0,0,NULL,&atx[16],NULL,0,&atx[195]} ,
-  {0, "general" ,128,2,0,0,0,0,0,0,NULL,&atx[86],NULL,0,NULL} ,
-  {0, "db" ,128,1,0,1,0,0,0,0,NULL,&atx[16],&avnx[156],0,&atx[197]} ,
-  {0, "name" ,128,2,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[198]} ,
-  {0, "desc" ,128,3,0,1,0,0,0,0,NULL,&atx[63],NULL,0,&atx[199]} ,
-  {0, "data" ,128,4,0,0,0,0,0,0,NULL,&atx[39],&atx[200],0,NULL} ,
-  {0, "ftable" ,128,0,0,0,0,0,0,0,NULL,&atx[60],&atx[201],0,&atx[202]} ,
+  {0, "general" ,128,2,0,0,0,0,0,0,NULL,&atx[86],NULL,0,&atx[196]} ,
+  {0, "other" ,128,3,0,0,0,0,0,0,NULL,&atx[197],NULL,0,NULL} ,
+  {460, "Textannot-id" ,1,0,0,0,0,0,0,0,NULL,&atx[20],&atx[198],0,&atx[191]} ,
+  {0, "name" ,128,0,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[199]} ,
+  {0, "accession" ,128,1,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[200]} ,
+  {0, "release" ,128,2,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[201]} ,
+  {0, "version" ,128,3,0,1,0,0,0,0,NULL,&atx[16],NULL,0,NULL} ,
+  {0, "db" ,128,1,0,1,0,0,0,0,NULL,&atx[16],&avnx[156],0,&atx[203]} ,
+  {0, "name" ,128,2,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[204]} ,
+  {0, "desc" ,128,3,0,1,0,0,0,0,NULL,&atx[63],NULL,0,&atx[205]} ,
+  {0, "data" ,128,4,0,0,0,0,0,0,NULL,&atx[39],&atx[206],0,NULL} ,
+  {0, "ftable" ,128,0,0,0,0,0,0,0,NULL,&atx[60],&atx[207],0,&atx[208]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[162],NULL,0,NULL} ,
-  {0, "align" ,128,1,0,0,0,0,0,0,NULL,&atx[60],&atx[203],0,&atx[204]} ,
+  {0, "align" ,128,1,0,0,0,0,0,0,NULL,&atx[60],&atx[209],0,&atx[210]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[32],NULL,0,NULL} ,
-  {0, "graph" ,128,2,0,0,0,0,0,0,NULL,&atx[60],&atx[205],0,&atx[207]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[206],NULL,0,NULL} ,
+  {0, "graph" ,128,2,0,0,0,0,0,0,NULL,&atx[60],&atx[211],0,&atx[213]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[212],NULL,0,NULL} ,
   {425, "Seq-graph" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[8]} ,
-  {0, "ids" ,128,3,0,0,0,0,0,0,NULL,&atx[60],&atx[208],0,&atx[209]} ,
+  {0, "ids" ,128,3,0,0,0,0,0,0,NULL,&atx[60],&atx[214],0,&atx[215]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[54],NULL,0,NULL} ,
-  {0, "locs" ,128,4,0,0,0,0,0,0,NULL,&atx[60],&atx[210],0,&atx[211]} ,
+  {0, "locs" ,128,4,0,0,0,0,0,0,NULL,&atx[60],&atx[216],0,&atx[217]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[62],NULL,0,NULL} ,
-  {0, "seq-table" ,128,5,0,0,0,0,0,0,NULL,&atx[212],NULL,0,NULL} ,
+  {0, "seq-table" ,128,5,0,0,0,0,0,0,NULL,&atx[218],NULL,0,NULL} ,
   {437, "Seq-table" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[76]} };
 
 static AsnModule ampx[1] = {
-  { "NCBI-Sequence" , "asnseq.h19",&atx[0],NULL,NULL,0,0} };
+  { "NCBI-Sequence" , "asnseq.h20",&atx[0],NULL,NULL,0,0} };
 
 static AsnValxNodePtr avn = avnx;
 static AsnTypePtr at = atx;
@@ -462,21 +468,21 @@ static AsnModulePtr amp = ampx;
 #define SEQ_ANNOT &at[188]
 #define SEQ_ANNOT_id &at[189]
 #define SEQ_ANNOT_id_E &at[190]
-#define SEQ_ANNOT_db &at[196]
-#define SEQ_ANNOT_name &at[197]
-#define SEQ_ANNOT_desc &at[198]
-#define SEQ_ANNOT_data &at[199]
-#define SEQ_ANNOT_data_ftable &at[200]
-#define SEQ_ANNOT_data_ftable_E &at[201]
-#define SEQ_ANNOT_data_align &at[202]
-#define SEQ_ANNOT_data_align_E &at[203]
-#define SEQ_ANNOT_data_graph &at[204]
-#define SEQ_ANNOT_data_graph_E &at[205]
-#define SEQ_ANNOT_data_ids &at[207]
-#define SEQ_ANNOT_data_ids_E &at[208]
-#define SEQ_ANNOT_data_locs &at[209]
-#define SEQ_ANNOT_data_locs_E &at[210]
-#define SEQ_ANNOT_data_seq_table &at[211]
+#define SEQ_ANNOT_db &at[202]
+#define SEQ_ANNOT_name &at[203]
+#define SEQ_ANNOT_desc &at[204]
+#define SEQ_ANNOT_data &at[205]
+#define SEQ_ANNOT_data_ftable &at[206]
+#define SEQ_ANNOT_data_ftable_E &at[207]
+#define SEQ_ANNOT_data_align &at[208]
+#define SEQ_ANNOT_data_align_E &at[209]
+#define SEQ_ANNOT_data_graph &at[210]
+#define SEQ_ANNOT_data_graph_E &at[211]
+#define SEQ_ANNOT_data_ids &at[213]
+#define SEQ_ANNOT_data_ids_E &at[214]
+#define SEQ_ANNOT_data_locs &at[215]
+#define SEQ_ANNOT_data_locs_E &at[216]
+#define SEQ_ANNOT_data_seq_table &at[217]
 
 #define SEQ_DATA &at[126]
 #define SEQ_DATA_iupacna &at[127]
@@ -619,10 +625,17 @@ static AsnModulePtr amp = ampx;
 #define SEQ_GAP_type &at[150]
 #define SEQ_GAP_linkage &at[151]
 
+#define TEXTANNOT_ID &at[197]
+#define TEXTANNOT_ID_name &at[198]
+#define TEXTANNOT_ID_accession &at[199]
+#define TEXTANNOT_ID_release &at[200]
+#define TEXTANNOT_ID_version &at[201]
+
 #define ANNOT_ID &at[191]
 #define ANNOT_ID_local &at[192]
 #define ANNOT_ID_ncbi &at[194]
 #define ANNOT_ID_general &at[195]
+#define ANNOT_ID_other &at[196]
 
 #define ALIGN_DEF &at[56]
 #define ALIGN_DEF_align_type &at[57]

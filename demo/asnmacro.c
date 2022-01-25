@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/12/07
 *
-* $Revision: 1.3 $
+* $Revision: 1.4 $
 *
 * File Description: 
 *
@@ -146,7 +146,7 @@ static SeqAlignPtr LIBCALLBACK GetSeqAlignPiece (SeqLocPtr slp1, SeqLocPtr slp2)
 
 static SeqAlignPtr GlobalAlign2Seq (BioseqPtr bsp1, BioseqPtr bsp2, BoolPtr revcomp)
 {
-   return Sqn_GlobalAlign2SeqEx (bsp1, bsp2, revcomp, GetSeqAlign, GetSeqAlignPiece);
+   return Sqn_GlobalAlign2SeqEx (bsp1, bsp2, revcomp, GetSeqAlign, GetSeqAlignPiece, TRUE);
 }
 
 

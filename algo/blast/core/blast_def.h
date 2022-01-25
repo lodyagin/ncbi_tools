@@ -1,4 +1,4 @@
-/* $Id: blast_def.h,v 1.83 2008/01/31 23:55:41 kazimird Exp $
+/* $Id: blast_def.h,v 1.86 2008/11/03 20:59:44 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -150,6 +150,21 @@ typedef struct SSeqRange {
    Int4 right;  /**< right endpoint of range (zero based) */
 } SSeqRange;
 
+/** Create a new SSeqRange structure with both fields initialized
+ * @param start the start of the range [in]
+ * @param stop the end of the range [in]
+ */
+NCBI_XBLAST_EXPORT
+SSeqRange SSeqRangeNew(Int4 start, Int4 stop);
+
+/** Determine if two ranges intersect
+ * @param a first range to compare [in]
+ * @param b second range to compare [in]
+ * @return TRUE if they intersect, otherwise FALSE 
+ */
+NCBI_XBLAST_EXPORT
+Boolean SSeqRangeIntersectsWith(const SSeqRange* a, const SSeqRange* b);
+
 /** Used to hold a set of positions, mostly used for filtering. 
  * oid holds the index of the query sequence.
 */
@@ -190,6 +205,8 @@ typedef struct BLAST_SequenceBlk {
                                sequence as that byte is a NULL sentinel byte.*/
    Int4     length;         /**< Length of sequence. */
    Int2 frame; /**< Frame of the query, needed for translated searches */
+   Int2 subject_strand; /**< Strand of the subject sequence for translated searches. 
+                          Uses the same values as ENa_strand. */
    Int4 oid; /**< The ordinal id of the current sequence */
    Boolean sequence_allocated; /**< TRUE if memory has been allocated for 
                                   sequence */
@@ -215,6 +232,12 @@ typedef struct BLAST_SequenceBlk {
                               owned by the genetic code singleton. 
                               @sa gencode_singleton.h
                               */
+   /* BEGIN: Data members needed for masking subjects from a BLAST database */
+   SSeqRange* seq_ranges;   /**< Ranges of the sequence to search */
+   Uint4 num_seq_ranges;    /**< Number of elements in seq_ranges */
+   Boolean seq_ranges_allocated;   /**< TRUE if memory has been allocated for
+                                      seq_ranges */
+   /* END: Data members needed for masking subjects from a BLAST database */
 } BLAST_SequenceBlk;
 
 /** Information about a single pattern occurence in the query. */
@@ -232,6 +255,7 @@ typedef struct SPHIQueryInfo {
                                         structures. */
     Int4 allocated_size; /**< Allocated size of the occurrences array. */
     double probability; /**< Estimated probability of the pattern */
+    char* pattern;   /**< Pattern used, saved here for formatting purposes. */
 } SPHIQueryInfo;
 
 /************************* Progress monitoring/interruptible API *************/
@@ -268,14 +292,17 @@ typedef Boolean (*TInterruptFnPtr) (SBlastProgress* progress_info);
  * [in]
  * Implemented in blast_util.c 
  */
+NCBI_XBLAST_EXPORT
 SBlastProgress* SBlastProgressNew(void* user_data);
 
 /** Deallocates a SBlastProgress structure.
  * Implemented in blast_util.c */
+NCBI_XBLAST_EXPORT
 SBlastProgress* SBlastProgressFree(SBlastProgress* progress_info);
 
 /** Resets the progress structure to its original state (as if newly allocated)
  * for a fresh start without touching the user_data field */
+NCBI_XBLAST_EXPORT
 void SBlastProgressReset(SBlastProgress* progress_info);
 
 #ifdef __cplusplus

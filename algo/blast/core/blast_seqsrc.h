@@ -1,4 +1,4 @@
-/*  $Id: blast_seqsrc.h,v 1.48 2007/08/28 17:25:29 kazimird Exp $
+/*  $Id: blast_seqsrc.h,v 1.49 2008/07/17 17:55:44 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -170,6 +170,9 @@ Int8
 BlastSeqSrcGetTotLenStats(const BlastSeqSrc* seq_src);
 
 /** Get the Blast Sequence source name (e.g.: BLAST database name).
+ * Here the full name (path and file name) should be returned.  
+ * If an alias file is present the return value should be the full name of 
+ * the alias file.
  * @param seq_src the BLAST sequence source [in]
  */
 NCBI_XBLAST_EXPORT
@@ -184,7 +187,7 @@ Boolean
 BlastSeqSrcGetIsProt(const BlastSeqSrc* seq_src);
 
 /** Structure used as the second argument to functions satisfying the 
-  GetSeqBlkFnPtr signature, usually associated with index-based 
+  GetSeqBlkFnPtr signature, associated with index-based 
   implementations of the BlastSeqSrc interface. Index-based implementations
   include BLAST databases or an array/vector of sequences. */
 typedef struct BlastSeqSrcGetSeqArg {
@@ -195,17 +198,17 @@ typedef struct BlastSeqSrcGetSeqArg {
      * eBlastEncodingNucleotide, etc [in] */
     EBlastEncoding encoding;
 
-    /** Specify true here to disable this OID's ranges before
-     * fetching.  OID ranges are a (somewhat complicated) performance
-     * feature that allows less nucleotide unpacking to be done in
-     * some cases.  If in doubt, specify FALSE here.
-     * TRUE to disable ranges, FALSE to use them if they exist [in] */
+    /** Specify true here to enable this OID's ranges before fetching.
+     * OID ranges are a (somewhat complicated) performance feature that
+     * reduces the amount of nucleotide unpacking needed for some OIDs.
+     * If in doubt, specify FALSE here.
+     * TRUE to use ranges if they exist, FALSE to disable them. [in] */
     Boolean enable_ranges;
 
     /** Check whether an OID is excluded due to overlapping filtering.
      * The disease is rare, and the test for it is somewhat expensive,
      * so it is deferred to the traceback stage.
-     * TRUE to disable ranges, FALSE to use them if they exist [in] */
+     * TRUE to enable this test. [in] */
     Boolean check_oid_exclusion;
 
     /** Sequence to return, if NULL, it should allocated by GetSeqBlkFnPtr
@@ -222,13 +225,14 @@ typedef struct BlastSeqSrcGetSeqArg {
 
 /** Retrieve an individual sequence.
  * @param seq_src the BLAST sequence source [in]
- * @param sequence should be of type BlastSeqSrcGetSeqArg [in|out]
+ * @param getseq_arg arguments to aid retrieval of sequence data from the
+ * BlastSeqSrc [in|out]
  * @return one of the BLAST_SEQSRC_* defined in blast_seqsrc.h
  */
 NCBI_XBLAST_EXPORT
 Int2
 BlastSeqSrcGetSequence(const BlastSeqSrc* seq_src, 
-                       void* sequence);
+                       BlastSeqSrcGetSeqArg* getseq_arg);
 
 /** Retrieve sequence length (number of residues/bases)
  * @param seq_src the BLAST sequence source [in]
@@ -240,12 +244,12 @@ BlastSeqSrcGetSeqLen(const BlastSeqSrc* seq_src, void* oid);
 
 /** Deallocate individual sequence.
  * @param seq_src the BLAST sequence source [in]
- * @param sequence should be of type BlastSeqSrcGetSeqArg [in|out]
+ * @param getseq_arg contains sequence to deallocate [in|out]
  */
 NCBI_XBLAST_EXPORT
 void
 BlastSeqSrcReleaseSequence(const BlastSeqSrc* seq_src,
-                           void* sequence);
+                           BlastSeqSrcGetSeqArg* getseq_arg);
 
 /** Function to retrieve NULL terminated string containing the description 
  * of an initialization error or NULL. This function MUST ALWAYS be called 

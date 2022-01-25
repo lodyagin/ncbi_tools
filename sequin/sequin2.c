@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.647 $
+* $Revision: 6.661 $
 *
 * File Description: 
 *
@@ -59,8 +59,8 @@
 #include <salign.h>
 #include <edutil.h>
 #include <vsm.h>
-#include <accentr.h>
-#include <accutils.h>
+//#include <accentr.h>
+//#include <accutils.h>
 #include <pmfapi.h>
 #include <explore.h>
 #include <aliparse.h>
@@ -71,6 +71,8 @@
 #include <actutils.h>
 #include <salpanel.h>
 #include <findrepl.h>
+#include <macrodlg.h>
+#include <macroapi.h>
 
 extern EnumFieldAssoc  biosource_genome_simple_alist [];
 extern EnumFieldAssoc  biosource_origin_alist [];
@@ -2640,102 +2642,20 @@ ApplyImportModToTitle
   return title;
 }
 
-static ValNodePtr ReadOneColumnList (CharPtr line)
-{
-  CharPtr p_start, p_end;
-  Int4    plen;
-  Boolean found_end;
-  ValNodePtr col_list = NULL;
-
-  if (StringHasNoText (line)) return NULL;
-  p_start = line;
-  found_end = FALSE;
-  while (*p_start != 0 && !found_end)
-  {
-    plen = StringCSpn (p_start, "\t\n");
-    if (plen == 0)
-    {
-      if (col_list != NULL)
-      {
-        ValNodeAddStr (&col_list, 0, StringSave (""));
-      }
-      p_start++;
-      if (*p_start == 0) {
-        if (col_list != NULL)
-        {
-          ValNodeAddStr (&col_list, 0, StringSave (""));
-        }
-      }
-      continue;
-    }
-    if (plen == StringLen (p_start))
-    {
-      found_end = TRUE;
-    }
-    else
-    {
-      p_end = p_start + plen;
-      *p_end = 0;
-    }
-    TrimSpacesAroundString (p_start);
-    ValNodeAddStr (&col_list, 0, StringSave (p_start));
-    if (!found_end)
-    {
-      p_start = p_end + 1;
-    }
-  }
-  return col_list;  
-}
-
 static ValNodePtr ReadRowListFromFile (void)
 {
   Char          path [PATH_MAX];
-  Int4          max_columns, num_cols;
-  ValNodePtr    header_line;
-  ValNodePtr    line_list, column_list;
-  ValNodePtr    vnp;
-  ReadBufferData rbd;
-  CharPtr        line;
+  ValNodePtr    header_line = NULL;
+  FILE           *fp;
 
   path [0] = '\0';
   if (! GetInputFileName (path, sizeof (path), NULL, "TEXT")) return NULL;
-  
-  rbd.fp = FileOpen (path, "r");
-  if (rbd.fp == NULL) return NULL;
-  rbd.current_data = NULL;
-
-  line_list = NULL;
-  max_columns = 0;
-  header_line = NULL;
-  line = AbstractReadFunction (&rbd);
-  while (line != NULL) 
-  {
-    column_list = ReadOneColumnList (line);
-    if (column_list != NULL)
-    {
-      vnp = ValNodeAddPointer (&line_list, 0, column_list);
-      num_cols = ValNodeLen (column_list);
-      if (num_cols > max_columns)
-      {
-        max_columns = num_cols;
-        header_line = vnp;
-      }
-    }
-    line = MemFree (line);
-    line = AbstractReadFunction (&rbd);
-  }
-  FileClose (rbd.fp);
-  /* throw out all lines before header line */
-  if (header_line != line_list)
-  {
-    vnp = line_list;
-    while (vnp != NULL && vnp->next != header_line)
-    {
-      vnp = vnp->next;
-    }
-    vnp->next = NULL;
-    ValNodeFreeData (line_list);
-    line_list = NULL;
+  fp = FileOpen (path, "r");
+  if (fp == NULL) {
+    Message (MSG_ERROR, "Unable to open %s", path);
+  } else {
+    header_line = ReadTabTableFromFile (fp);
+    FileClose (fp);
   }
   return header_line;
 }
@@ -4379,14 +4299,15 @@ static SeqEntryPtr ImportOnlyProteinSequences
 }
  
 extern SeqEntryPtr 
-ImportSequencesFromFile
+ImportSequencesFromFileEx
 (FILE           *fp, 
  SeqEntryPtr     sep_list,
  Boolean         is_na, 
  Boolean         parse_id,
  CharPtr         supplied_id_txt,
  ValNodePtr PNTR err_msg_list,
- BoolPtr         chars_stripped)
+ BoolPtr         chars_stripped,
+ Boolean         allow_char_stripping)
 {
   Int4          count;
   SeqEntryPtr   last;
@@ -4478,7 +4399,7 @@ ImportSequencesFromFile
   while ((nextsep != NULL ||
          (lastchar == '\n' || lastchar == '['))
          && !isASN
-         && !this_chars_stripped)
+         && (allow_char_stripping || !this_chars_stripped))
   {
     if (nextsep != NULL) 
     {
@@ -4613,7 +4534,7 @@ ImportSequencesFromFile
     }
   }
   
-  if (this_chars_stripped || (lastchar != (Char) EOF && lastchar != NULLB && lastchar != (Char) 255))
+  if ((!allow_char_stripping && this_chars_stripped) || (lastchar != (Char) EOF && lastchar != NULLB && lastchar != (Char) 255))
   {
     if (!this_chars_stripped && !isASN) {
       bad_start = FindLineForStartOfBadRead (fp, pos);
@@ -4650,6 +4571,21 @@ ImportSequencesFromFile
 
   return sep_list;
 }
+
+
+extern SeqEntryPtr 
+ImportSequencesFromFile
+(FILE           *fp, 
+ SeqEntryPtr     sep_list,
+ Boolean         is_na, 
+ Boolean         parse_id,
+ CharPtr         supplied_id_txt,
+ ValNodePtr PNTR err_msg_list,
+ BoolPtr         chars_stripped)
+{
+  return ImportSequencesFromFileEx (fp, sep_list, is_na, parse_id, supplied_id_txt, err_msg_list, chars_stripped, FALSE);
+}
+
 
 static Boolean CollectIDsAndTitles (SeqEntryPtr new_list, SeqEntryPtr current_list, Boolean is_nuc);
 
@@ -6313,14 +6249,6 @@ ENUM_ALIST(nontextmodedit_alist)
   {"FALSE",             0},
   {"TRUE",              1},
 END_ENUM_ALIST
-
-EnumFieldAssocPtr nontextmodedit_alists [] = {
-  NULL, nontextmodedit_alist
-};
-
-EnumFieldAssocPtr locationmodedit_alists [] = {
-  NULL, biosource_genome_simple_alist
-};
 
 extern void ConfirmSequencesFormParsing (ForM f, FormActnFunc putItAllTogether)
 
@@ -8727,7 +8655,6 @@ static SeqLocPtr DefaultPairInterval (BioseqPtr nbsp, BioseqPtr pbsp, Int2 code)
 
 static Boolean FindFeaturesInIdenticalRegions (NucProtAssocPtr assoc_list)
 {
-  ValNodePtr dup_feature_bsp_list = NULL;
   Char       path [PATH_MAX];
   FILE       *fp;
   NucProtAssocPtr   vnp;
@@ -9707,7 +9634,7 @@ BuildAssociationListByMatch
 {
   IDAndTitleEditPtr iatep_nuc, iatep_prot;
   Int4       nuc_seq_num, prot_seq_num, found_num;
-  NucProtAssocPtr assoc_list = NULL, last = NULL;
+  NucProtAssocPtr assoc_list = NULL;
   BioseqPtr       nuc_bsp, prot_bsp;
   
   if (nuc_list == NULL || prot_list == NULL)
@@ -13847,15 +13774,14 @@ static void DisplayPosition (MultiOrganismSelectionDialogPtr dlg, Int4 pos)
     /* set location */
     col_vnp = col_vnp->next;
     location = col_vnp->data.ptrvalue;
+    vn.data.ptrvalue = NULL;
     if (StringHasNoText (location))
     {
-      vn.choice = 1;
-      vn.data.ptrvalue = "genomic";
+      vn.choice = Source_location_genomic;
     }
     else
     {
-      vn.choice = GetValForEnumName (biosource_genome_simple_alist, location);
-      vn.data.ptrvalue = location;
+      vn.choice = SrcLocFromGenome (GenomeFromLocName (location));
     }
     vn.next = NULL;
     PointerToDialog (dlg->location_dlg[row_num], &vn);
@@ -14335,8 +14261,15 @@ static DialoG MultiOrganismSelectionDialog (GrouP parent)
     SetTextSelect (dlg->tax_name_txt [k], MultiOrgText, NULL);
     SetObjectExtra (dlg->tax_name_txt [k], bp, NULL);
     
-    dlg->location_dlg [k] = EnumAssocSelectionDialog (id_grp, biosource_genome_simple_alist,
-                                             "location", FALSE, ChangeLocationPopup, bp);
+    dlg->location_dlg [k] = ValNodeSelectionDialogExEx (id_grp, 
+                                                 GetLocListForBioSource (NULL), 6,
+                                                 ValNodeStringName,
+                                                 ValNodeSimpleDataFree,
+                                                 ValNodeStringCopy,
+                                                 ValNodeChoiceMatch,
+                                                 "location code",
+                                                  ChangeLocationPopup, bp, FALSE,
+                                                  FALSE, TRUE, NULL);
                                              
     dlg->gcode_grp [k] = HiddenGroup (id_grp, 0, 0, NULL);
     dlg->gcode_btn [k] = PushButton (dlg->gcode_grp [k], 
@@ -14944,8 +14877,16 @@ static DialoG SingleModValDialog (GrouP parent, Boolean is_nontext, Int2 mod_typ
   }
   else if (dlg->mod_type == eModifierType_Location)
   {
-    dlg->strvalue_dlg = EnumAssocSelectionDialog (grp, biosource_genome_simple_alist,
-                                             "location", FALSE, NULL, NULL);
+    dlg->strvalue_dlg = ValNodeSelectionDialogExEx (grp, 
+                                                 GetLocListForBioSource (NULL), 6,
+                                                 ValNodeStringName,
+                                                 ValNodeSimpleDataFree,
+                                                 ValNodeStringCopy,
+                                                 ValNodeChoiceMatch,
+                                                 "location code",
+                                                  NULL, NULL, FALSE,
+                                                  FALSE, TRUE, NULL);
+
   }
   else if (dlg->mod_type == eModifierType_Origin)
   {
@@ -17670,7 +17611,6 @@ static GrouP CreateSourceTab (GrouP h, SequencesFormPtr sqfp)
   GrouP              mod_grp;
   GrouP              src_btns_grp;
   GrouP              k;
-  Int2               wid = 40;
   Int4               doc_width;
 
   if (h == NULL || sqfp == NULL)
@@ -22731,7 +22671,7 @@ static void PositionRefreshErrorListBtn (SeqIdEditPtr siep)
  * Problems with sequence IDs must be fixed; problems with titles that are left
  * unfixed will be cordoned off with double-quotation marks.
  */
-static Boolean FixIDsAndTitles (SeqEntryPtr new_list, SeqEntryPtr current_list, Boolean is_nuc)
+NLM_EXTERN Boolean FixIDsAndTitles (SeqEntryPtr new_list, SeqEntryPtr current_list, Boolean is_nuc)
 {
   WindoW                w;
   GrouP                 h, instr_grp, k, j, c, new_grp, current_grp = NULL;
@@ -26139,7 +26079,6 @@ extern Pointer ReadFromTPASmart (CharPtr accn, Uint2Ptr datatype, Uint2Ptr entit
 extern void LaunchDisplay (Uint2 entityID)
 {
   Int2          handled;
-  Boolean       isReplaced = FALSE;
   Char          str [32];
 
   seqviewprocs.filepath = str;
@@ -26175,7 +26114,7 @@ extern void DownloadAndDisplay (Int4 uid)
   Char          str [32];
 
   if (uid > 0) {
-    sep = PubSeqSynchronousQuery (uid, 0, -1);
+    sep = PubSeqSynchronousQuery (uid, 0, /* -1 */ 0);
     /* EntrezFini (); */
     if (sep == NULL) {
       ArrowCursor ();
@@ -26296,6 +26235,48 @@ static Boolean IsAllDigits (CharPtr str)
 }
 
 
+static Boolean StrToULong (CharPtr str, Uint4Ptr longval)
+
+{
+  Char           ch;
+  Int2           i;
+  Int2           len;
+  Char           local [64];
+  Boolean        nodigits;
+  Boolean        rsult;
+  unsigned long val;
+
+  rsult = FALSE;
+  if (longval != NULL) {
+    *longval = (Uint4) 0;
+  }
+  len = (Int2) StringLen (str);
+  if (len != 0) {
+    rsult = TRUE;
+    nodigits = TRUE;
+    for (i = 0; i < len; i++) {
+      ch = str [i];
+      if (ch == ' ' || ch == '+' || ch == '-') {
+      } else if (ch < '0' || ch > '9') {
+        rsult = FALSE;
+      } else {
+        nodigits = FALSE;
+      }
+    }
+    if (nodigits) {
+      rsult = FALSE;
+    }
+    if (rsult && longval != NULL) {
+      StringNCpy_0 (local, str, sizeof (local));
+      if (sscanf (local, "%lu", &val) == 1) {
+        *longval = val;
+      }
+    }
+  }
+  return rsult;
+}
+
+
 static void DownloadProc (ButtoN b)
 
 {
@@ -26311,9 +26292,9 @@ static void DownloadProc (ButtoN b)
   Int2          handled;
   Boolean       idTypes [NUM_SEQID];
   Boolean       isReplaced = FALSE;
-  Boolean       isTrace = FALSE;
   SeqEntryPtr   sep;
   Char          str [32];
+  Uint4         tid;
   Int4          uid;
   ForM          w;
 
@@ -26334,6 +26315,7 @@ static void DownloadProc (ButtoN b)
   }
   sep = NULL;
   uid = 0;
+  tid = 0;
   /*
   if (! EntrezIsInited ()) {
     if (! SequinEntrezInit ("Sequin", FALSE, NULL)) {
@@ -26368,10 +26350,11 @@ static void DownloadProc (ButtoN b)
     SeqIdFree (sip);
     */
     if (StringNICmp (str, "ti|", 3) == 0 && IsAllDigits (str + 3)) {
-      if (! StrToLong (str + 3, &uid)) {
-        uid = 0;
-      } else {
-        isTrace = TRUE;
+      if (! StrToULong (str + 3, &tid)) {
+        tid = 0;
+      }
+      if (tid > 0) {
+        sep = PubSeqSynchronousQueryTI (tid, 0, /* -1 */ 0);
       }
     } else {      
       uid = AccessionToGi (str);
@@ -26383,7 +26366,9 @@ static void DownloadProc (ButtoN b)
     }
   }
   if (uid > 0) {
-    sep = PubSeqSynchronousQueryEx (uid, 0, -1, isTrace);
+    sep = PubSeqSynchronousQuery (uid, 0, /* -1 */ 0);
+  }
+  if (uid > 0 || tid > 0) {
     /* EntrezFini (); */
     if (sep == NULL) {
       ArrowCursor ();
@@ -26573,7 +26558,7 @@ extern void DownloadAndUpdateProc (ButtoN b)
   ArrowCursor ();
   Update ();
   if (uid > 0) {
-    sep = PubSeqSynchronousQuery (uid, 0, -1);
+    sep = PubSeqSynchronousQuery (uid, 0, /* -1 */ 0);
     /* EntrezFini (); */
     if (sep == NULL) {
       Message (MSG_OK, "Unable to find this record in the database.");
@@ -26631,7 +26616,7 @@ extern void DownloadAndExtendProc (ButtoN b)
   ArrowCursor ();
   Update ();
   if (uid > 0) {
-    sep = PubSeqSynchronousQuery (uid, 0, -1);
+    sep = PubSeqSynchronousQuery (uid, 0, /* -1 */ 0);
     /* EntrezFini (); */
     if (sep == NULL) {
       Message (MSG_OK, "Unable to find this record in the database.");
@@ -27898,7 +27883,7 @@ extern ValNodePtr BuildFeatureValNodeList (
         if (curr->featdef_key == UnusualFeatureTypes [ index ]) skip = TRUE;
       }
     }
-    if (key != FEATDEF_BAD && ! skip) {
+    if (key != FEATDEF_BAD && ! skip && !IsUnwantedFeatureType(key)) {
       
       subtype = curr->featdef_key;
 	  if (subtype == FEATDEF_PUB)
@@ -28095,283 +28080,95 @@ extern void RemoveRedundantProproteinMiscFeats (IteM i)
 typedef struct typestraindata
 {
   FORM_MESSAGE_BLOCK
-  
-  TexT   find_this_txt;
-  ButtoN when_string_not_found_btn;
-  ButtoN case_insensitive_btn;
-  GrouP  string_loc_grp;
-  PopuP  field_choice_popup;
-  ButtoN remove_found_text_btn;
-  
-  Boolean when_string_not_found;
-  Boolean case_insensitive;
-  Int4    string_loc;
-  Int4    field_choice;
-  CharPtr find_this;
-  Boolean remove_found_text;
+
+  GrouP  strain_or_comment_grp;
+  DialoG string_constraint_dlg;
+  ButtoN remove_found_btn;
+
+  Boolean             search_strain;
+  StringConstraintPtr string_constraint;
+  Boolean             remove_found_text;
 } TypeStrainData, PNTR TypeStrainPtr;
 
-static Boolean MeetsTypeStrainConstraint (BioSourcePtr biop, TypeStrainPtr tsp)
-{
-  CharPtr      string_found = NULL;
-  CharPtr      search_text = NULL;
-  OrgModPtr    mod = NULL, prev_mod = NULL;
-  SubSourcePtr ssp = NULL, prev_ssp = NULL;
-  Boolean      rval;
-  CharPtr      cp, destp;
-  
-  if (biop == NULL) return FALSE;
-  if (tsp == NULL) return TRUE;
-  if (StringHasNoText (tsp->find_this)) return TRUE;
-  if (biop->org == NULL)
-  {
-  	if (tsp->when_string_not_found)
-  	{
-  	  return TRUE;
-  	}
-  	else
-  	{
-  	  return FALSE;
-  	}
-  }
-  
-  if (tsp->field_choice == 1)
-  {
-  	/* look for strain field */
-  	if (biop->org->orgname == NULL)
-  	{
-  	  if (tsp->when_string_not_found)
-  	  {
-  	  	return TRUE;
-  	  }
-  	  else
-  	  {
-  	  	return FALSE;
-  	  }
-  	}
-  	for (mod = biop->org->orgname->mod;
-  	     mod != NULL && mod->subtype != ORGMOD_strain;
-  	     mod = mod->next)
-  	{
-  	  prev_mod = mod;
-  	}
-  	if (mod != NULL)
-  	{
-  	  search_text = mod->subname;
-  	}
-  }
-  else if (tsp->field_choice == 2)
-  {
-    /* look for biosource comment */
-  	for (mod = biop->org->orgname->mod;
-  	     mod != NULL && mod->subtype != 255;
-  	     mod = mod->next)
-  	{
-  	  prev_mod = mod;
-  	}
-  	if (mod != NULL)
-  	{
-  	  search_text = mod->subname;
-  	}
-  	else
-  	{
-  	  for (ssp = biop->subtype; ssp != NULL && ssp->subtype != 255; ssp = ssp->next)
-  	  {
-  	  	prev_ssp = ssp;
-  	  }
-  	  if (ssp != NULL)
-  	  {
-  	  	search_text = ssp->name;
-  	  }
-  	}
-  }
-  else
-  {
-  	return FALSE;
-  }
-  if (search_text != NULL)
-  {
-  	if (tsp->case_insensitive)
-  	{
-  	  string_found = StringISearch (search_text, tsp->find_this);
-  	}
-  	else
-  	{
-  	  string_found = StringSearch (search_text, tsp->find_this);
-  	}
-  	if (string_found != NULL)
-  	{
-  	  if (tsp->string_loc == 2 && string_found != search_text)
-  	  {
-  	  	string_found = NULL;
-  	  }
-  	  else if (tsp->string_loc == 3)
-  	  {
-  	  	while (string_found != NULL && string_found[StringLen (tsp->find_this)] != 0)
-  	  	{
-  	      if (tsp->case_insensitive)
-  	      {
-  	        string_found = StringISearch (string_found + 1, tsp->find_this);
-          }
-          else
-          {
-            string_found = StringSearch (string_found + 1, tsp->find_this);
-          }
-  	  	}
-  	  }
-  	}
-  }
-  
-  if (string_found == NULL) 
-  {
-    if (tsp->when_string_not_found)
-  	{
-  	  rval = TRUE;
-  	}
-  	else
-  	{
-  	  rval = FALSE;
-  	}
-  }
-  else
-  {
-    if (tsp->when_string_not_found)
-  	{
-  	  rval = FALSE;
-  	}
-  	else
-  	{
-  	  rval = TRUE;
-  	  if (tsp->remove_found_text)
-  	  {
-  	  	if (string_found == search_text)
-  	  	{
-  	  	  if (StringLen (string_found) == StringLen (tsp->find_this))
-  	  	  {
-  	  	  	/* remove entire mod or ssp */
-  	  	  	if (mod != NULL)
-  	  	  	{
-  	  	  	  if (prev_mod == NULL)
-  	  	  	  {
-  	  	  	  	biop->org->orgname->mod = mod->next;
-  	  	  	  }
-  	  	  	  else
-  	  	  	  {
-  	  	  	  	prev_mod->next = mod->next;
-  	  	  	  }
-  	  	  	  mod->next = NULL;
-  	  	  	  OrgModFree (mod);
-  	  	  	}
-  	  	  	else if (ssp != NULL)
-  	  	  	{
-  	  	  	  if (prev_ssp == NULL)
-  	  	  	  {
-  	  	  	  	biop->subtype = ssp->next;
-  	  	  	  }
-  	  	  	  else
-  	  	  	  {
-  	  	  	  	prev_ssp->next = ssp->next;
-  	  	  	  	ssp->next = NULL;
-  	  	  	  	SubSourceFree (ssp);
-  	  	  	  }
-  	  	  	  ssp->next = NULL;
-  	  	  	  SubSourceFree (ssp);
-  	  	  	}
-  	  	  }
-  	  	  else
-  	  	  {
-  	  	  	/* remove first part of string and shift remainder */
-  	  	  	destp = search_text;
-  	  	  	for (cp = search_text + StringLen (tsp->find_this); *cp != 0; cp++)
-  	  	  	{
-  	  	  	  *destp++ = *cp;
-  	  	  	}
-  	  	  	*destp = 0;
-  	  	  }
-  	  	}
-  	  	else
-  	  	{
-  	  	  /* keep first part of string, skip match, keep remainder */
-  	  	  destp = string_found;
-  	  	  for (cp = string_found + StringLen (tsp->find_this); *cp != 0; cp++)
-  	  	  {
-  	  	  	*destp++ = *cp;
-  	  	  }
-  	  	  *destp = 0;
-  	  	}
-  	  }
-  	}
-  }
-  return rval;
-}
 
 static void AddTypeStrainCommentsProc (BioSourcePtr biop, Pointer userdata)
 {
-  OrgModPtr          mod, last_mod;
   TypeStrainPtr      tsp;
-  CharPtr            tmp;
-  CharPtr            short_format = "type strain of %s";
-  CharPtr            long_format = "%s; type strain of %s";
+  CharPtr            orig_note;
+  CharPtr            format = "type strain of %s";
+  CharPtr            match = NULL, orig_match, tmp, taxname;
+  ValNode            vn, vn_comment, vn_taxname;
 
   if (biop == NULL || biop->org == NULL || biop->org->taxname == NULL) return;
 
   tsp = (TypeStrainPtr) userdata;
-  
-  if (! MeetsTypeStrainConstraint (biop, tsp)) return;
-  
-  if (biop->org->orgname == NULL)
-  {
-    biop->org->orgname = OrgNameNew ();
-  }
 
-  mod = biop->org->orgname->mod;
-  last_mod = NULL;
-  
-  while (mod != NULL && mod->subtype != 255) {
-    last_mod = mod;
-    mod = mod->next;
+  vn_comment.choice = SourceQualChoice_textqual;
+  vn_comment.data.intvalue = Source_qual_orgmod_note;
+  vn_comment.next = NULL;
+  vn_taxname.choice = SourceQualChoice_textqual;
+  vn_taxname.data.intvalue = Source_qual_taxname;
+  vn_taxname.next = NULL;
+
+  orig_note = GetSourceQualFromBioSource (biop, &vn, NULL);
+  if (orig_note != NULL && StringStr (orig_note, "type strain of") != NULL) {
+    orig_note = MemFree (orig_note);
+    return;
   }
-  if (mod != NULL) {
-    if (StringStr (mod->subname, "type strain of") != NULL) return;
-    tmp = (CharPtr) MemNew (StringLen (long_format) + StringLen (mod->subname) 
-                            + StringLen (biop->org->taxname) + 1);
-    if (tmp != NULL) {
-      sprintf (tmp, long_format, mod->subname, biop->org->taxname);
-      MemFree (mod->subname);
-      mod->subname = tmp;
-    }
-  } else {
-    mod = OrgModNew ();
-    if (mod != NULL) {
-      mod->subtype = 255;
-      tmp = (CharPtr) MemNew (StringLen (short_format)
-                            + StringLen (biop->org->taxname) + 1);
-      if (tmp != NULL) {
-        sprintf (tmp, short_format, biop->org->taxname);
-        mod->subname = tmp;
+  orig_note = MemFree (orig_note);
+
+  taxname = GetSourceQualFromBioSource (biop, &vn_taxname, NULL);
+  
+  if (tsp != NULL && !IsStringConstraintEmpty (tsp->string_constraint)) {
+    if (tsp->search_strain) {
+      vn.choice = SourceQualChoice_textqual;
+      vn.data.intvalue = Source_qual_strain;
+      vn.next = NULL;  
+      match = GetSourceQualFromBioSource (biop, &vn, NULL);
+    } else {
+      vn.choice = SourceQualChoice_textqual;
+      vn.data.intvalue = Source_qual_orgmod_note;
+      vn.next = NULL;  
+      match = GetSourceQualFromBioSource (biop, &vn, NULL);
+      if (match == NULL) {
+        vn.choice = Source_qual_subsource_note;
+        match = GetSourceQualFromBioSource (biop, &vn, NULL);
       }
-      if (last_mod == NULL) {
-        biop->org->orgname->mod = mod;
+    }
+    if (!DoesStringMatchConstraint (match, tsp->string_constraint)) {
+      match = MemFree (match);
+      taxname = MemFree (taxname);
+      return;
+    }
+
+    orig_match = StringSave (match);
+    if (tsp->remove_found_text && RemoveStringConstraintPortionFromString (&match, tsp->string_constraint)) {
+      if (StringHasNoText (match)) {
+        RemoveSourceQualFromBioSource (biop, &vn, tsp->string_constraint);
       } else {
-        last_mod->next = mod;
+        TrimSpacesAroundString (match);
+        SetSourceQualInBioSource (biop, &vn, tsp->string_constraint, match, ExistingTextOption_replace_old);
       }
+      FindReplaceString (&taxname, orig_match, match, TRUE, TRUE);
+      SetSourceQualInBioSource (biop, &vn_taxname, NULL, taxname, ExistingTextOption_replace_old);
     }
+    orig_match = MemFree (orig_match);
+    match = MemFree (match);
   }
+
+  vn.choice = SourceQualChoice_textqual;
+  vn.data.intvalue = Source_qual_strain;
+  vn.next = NULL;  
+
+  if (!StringHasNoText (taxname)) {
+    tmp = (CharPtr) MemNew (sizeof (Char) * (StringLen (format) + StringLen (taxname)));
+    sprintf (tmp, format, taxname);
+    SetSourceQualInBioSource (biop, &vn_comment, NULL, tmp, ExistingTextOption_append_semi);
+    tmp = MemFree (tmp);
+  }
+  taxname = MemFree (taxname);
 }
 
-static void CleanupTypeStrainForm (GraphiC g, VoidPtr data)
-
-{
-  TypeStrainPtr tsp;
-
-  tsp = (TypeStrainPtr) data;
-  if (tsp != NULL)
-  {
-  	tsp->find_this = MemFree (tsp->find_this);
-  }
-  MemFree (tsp);
-  StdCleanupFormProc (g, data);
-}
 
 static void AddTypeStrainCommentsWithConstraintProc (ButtoN b)
 {
@@ -28383,15 +28180,18 @@ static void AddTypeStrainCommentsWithConstraintProc (ButtoN b)
   sep = GetTopSeqEntryForEntityID (tsp->input_entityID);
   if (sep == NULL) return;
 
-  tsp->find_this = SaveStringFromText (tsp->find_this_txt);  
-  tsp->when_string_not_found = GetStatus (tsp->when_string_not_found_btn);
-  tsp->case_insensitive = GetStatus (tsp->case_insensitive_btn);
-  tsp->string_loc = GetValue (tsp->string_loc_grp);
-  tsp->field_choice = GetValue (tsp->field_choice_popup);
-  tsp->remove_found_text = GetStatus (tsp->remove_found_text_btn);
+  tsp->string_constraint = DialogToPointer (tsp->string_constraint_dlg);
+  tsp->remove_found_text = GetStatus (tsp->remove_found_btn);
+  if (GetValue (tsp->strain_or_comment_grp) == 1) {
+    tsp->search_strain = TRUE;
+  } else {
+    tsp->search_strain = FALSE;
+  }
   
   /* Visit each bioseq to remove redundant proprotein misc feats */
   VisitBioSourcesInSep (sep, tsp, AddTypeStrainCommentsProc);
+
+  tsp->string_constraint = StringConstraintFree (tsp->string_constraint);
 
   ObjMgrSetDirtyFlag (tsp->input_entityID, TRUE);
   ObjMgrSendMsg (OM_MSG_UPDATE, tsp->input_entityID, 0, 0);
@@ -28405,8 +28205,10 @@ extern void AddTypeStrainCommentsWithConstraint (IteM i)
   BaseFormPtr    bfp;
   TypeStrainPtr  tsp;
   WindoW         w;
-  GrouP          h, k, l, m, c;
+  GrouP          h, c;
+  PrompT         p;
   ButtoN         b;
+  StringConstraintPtr scp;
 
 #ifdef WIN_MAC
   bfp = currentFormDataPtr;
@@ -28425,36 +28227,32 @@ extern void AddTypeStrainCommentsWithConstraint (IteM i)
 	return;
   }
   tsp->form = (ForM) w;
-  SetObjectExtra (w, tsp, CleanupTypeStrainForm);
+  SetObjectExtra (w, tsp, StdCleanupFormProc);
   
-  h = HiddenGroup (w, 1, 0, NULL);
-  k = HiddenGroup (h, 2, 0, NULL);
+  h = HiddenGroup (w, -1, 0, NULL);
 
-  StaticPrompt (k, "When this text is present", 0, dialogTextHeight, systemFont, 'c');
-  tsp->find_this_txt = DialogText (k, "", 15, NULL);
-  l = HiddenGroup (h, 2, 0, NULL);
-  StaticPrompt (l, "In ", 0, dialogTextHeight, systemFont, 'c');
-  tsp->field_choice_popup = PopupList (l, TRUE, NULL);
-  PopupItem (tsp->field_choice_popup, "Strain");
-  PopupItem (tsp->field_choice_popup, "Comment");
-  SetValue (tsp->field_choice_popup, 1);
-  tsp->string_loc_grp = HiddenGroup (h, 3, 0, NULL);
-  RadioButton (tsp->string_loc_grp, "Anywhere in field");
-  RadioButton (tsp->string_loc_grp, "At beginning of field");
-  RadioButton (tsp->string_loc_grp, "At end of field");
-  SetValue (tsp->string_loc_grp, 3);
-  m = HiddenGroup (h, 2, 0, NULL);
-  tsp->case_insensitive_btn = CheckBox (m, "Case Insensitive", NULL);
-  tsp->when_string_not_found_btn = CheckBox (m, "When string is not found", NULL);  
-  tsp->remove_found_text_btn = CheckBox (m, "Remove found text", NULL);
+  p = StaticPrompt (h, "When", 0, dialogTextHeight, systemFont, 'c');
+  tsp->strain_or_comment_grp = HiddenGroup (h, 2, 0, NULL);
+  RadioButton (tsp->strain_or_comment_grp, "Strain");
+  RadioButton (tsp->strain_or_comment_grp, "Comment");
+  SetValue (tsp->strain_or_comment_grp, 1);
+
+  tsp->string_constraint_dlg = StringConstraintDialog (h, NULL, FALSE, NULL, NULL);
+  scp = StringConstraintNew ();
+  scp->match_location = String_location_ends;
+  scp->case_sensitive = TRUE;
+  PointerToDialog (tsp->string_constraint_dlg, scp);
+  scp = StringConstraintFree (scp);
+
+  tsp->remove_found_btn = CheckBox (h, "Remove found text", NULL);
 
   c = HiddenGroup (h, 4, 0, NULL);
   b = DefaultButton (c, "Accept", AddTypeStrainCommentsWithConstraintProc);
   SetObjectExtra (b, tsp, NULL);
   b = PushButton (c, "Cancel", StdCancelButtonProc); 
   SetObjectExtra (b, tsp, NULL);
-  AlignObjects (ALIGN_CENTER, (HANDLE) k, (HANDLE) l, (HANDLE) tsp->string_loc_grp, 
-                (HANDLE) m, (HANDLE) c, NULL);
+  AlignObjects (ALIGN_CENTER, (HANDLE) p, (HANDLE) tsp->strain_or_comment_grp, (HANDLE) tsp->string_constraint_dlg, 
+                (HANDLE) tsp->remove_found_btn, (HANDLE) c, NULL);
   RealizeWindow (w);
   Show (w);
   Update ();
@@ -29270,6 +29068,18 @@ static void UnselectAllSequences (ButtoN b)
 }
 
 
+static void ResortMarkedSegCategories (ButtoN b)
+{
+  RemoveSeqFromAlignPtr rp;
+
+  rp = (RemoveSeqFromAlignPtr) GetObjectExtra (b);
+  if (rp != NULL) {
+    rp->seq_list = ValNodeSort (rp->seq_list, SortVnpByClickableItemChosen);
+    PointerToDialog (rp->clickable_list_dlg, rp->seq_list);
+  }
+}
+
+
 extern void RemoveSequencesFromRecord (IteM i)
 {
   BaseFormPtr              bfp;
@@ -29315,14 +29125,14 @@ extern void RemoveSequencesFromRecord (IteM i)
   
   h = HiddenGroup (w, -1, 0, NULL);
 
-  rp->clickable_list_dlg = CreateClickableListDialogEx (h, "Sequences to Remove", "",
+  rp->clickable_list_dlg = CreateClickableListDialogExEx (h, "Sequences to Remove", "",
                                                       "Use checkbox to mark sequences to remove",
                                                       "Single click to navigate to sequence in record",
                                                       ScrollToDiscrepancyItem, EditDiscrepancyItem, NULL,
                                                       GetDiscrepancyItemText,
                                                       stdCharWidth * 30,
                                                       stdCharWidth * 30 + 5,
-                                                      TRUE, FALSE);
+                                                      TRUE, FALSE, TRUE);
 
   k = HiddenGroup (h, 2, 0, NULL);
   rp->constraint_dlg =  StringConstraintDialogX (k, "Mark sequences where sequence ID", TRUE);
@@ -29347,6 +29157,8 @@ extern void RemoveSequencesFromRecord (IteM i)
   b = DefaultButton (c, "Accept", DoRemoveSequencesFromRecord);
   SetObjectExtra (b, rp, NULL);
   b = PushButton (c, "Unmark All Sequences", UnselectAllSequences);
+  SetObjectExtra (b, rp, NULL);
+  b = PushButton (c, "Resort Marked", ResortMarkedSegCategories);
   SetObjectExtra (b, rp, NULL);
   b = PushButton (c, "Cancel", StdCancelButtonProc); 
   SetObjectExtra (b, rp, NULL);

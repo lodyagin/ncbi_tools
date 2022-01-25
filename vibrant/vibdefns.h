@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.15 $
+* $Revision: 6.16 $
 *
 * File Description: 
 *       Vibrant alias definitions
@@ -37,6 +37,9 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: vibdefns.h,v $
+* Revision 6.16  2008/04/29 13:53:40  kans
+* fixes for warnings caught by mingw cross-compiler
+*
 * Revision 6.15  2005/01/24 15:01:25  kans
 * prototype UsePrimaryMonitor
 *
@@ -581,6 +584,9 @@ extern "C" {
 #define stdCharWidth Nlm_stdCharWidth
 
 #ifndef WIN_X
+#ifdef SetPort
+#undef SetPort
+#endif
 #define SetPort Nlm_SetPort
 #endif
 
@@ -631,6 +637,9 @@ extern "C" {
 #define FontSpec Nlm_FontSpec
 #define FontSpecPtr Nlm_FontSpecPtr
 
+#ifdef CreateFont
+#undef CreateFont
+#endif
 #define CreateFont Nlm_CreateFont
 #define GetResidentFont Nlm_GetResidentFont
 #define CopyFont Nlm_CopyFont
@@ -639,6 +648,9 @@ extern "C" {
 #define GetFontSpec Nlm_GetFontSpec
 #define EqualFontSpec Nlm_EqualFontSpec
 
+#ifdef ChooseFont
+#undef ChooseFont
+#endif
 #define ChooseFont Nlm_ChooseFont
 #define StrToFontSpec Nlm_StrToFontSpec
 #define FontSpecToStr Nlm_FontSpecToStr
@@ -667,6 +679,9 @@ extern "C" {
 #define PaintStringEx Nlm_PaintStringEx
 #define PaintText Nlm_PaintText
 #define DrawString Nlm_DrawString
+#ifdef DrawText
+#undef DrawText
+#endif
 #define DrawText Nlm_DrawText
 
 #define MoveTo Nlm_MoveTo

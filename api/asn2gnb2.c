@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.93 $
+* $Revision: 1.103 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -89,7 +89,20 @@ static CharPtr embl_divs [18] = {
 };
 
 static Uint1 imolToMoltype [16] = {
-  0, 1, 2, 5, 4, 3, 6, 7, 9, 1, 1, 2, 8, 2, 2, 2
+  0, 1, 2, 5, 4, 3, 6, 7, 9, 1, 1, 2, 8, 2, 10, 11
+};
+
+static CharPtr gbseq_strd [4] = {
+  NULL, "single", "double", "mixed"
+};
+
+static CharPtr gbseq_mol [16] = {
+  "?", "DNA", "RNA", "mRNA", "rRNA", "tRNA", "snRNA", "scRNA",
+  "AA", "DNA", "DNA", "cRNA", "snoRNA", "RNA", "ncRNA", "tmRNA "
+};
+
+static CharPtr gbseq_top [3] = {
+  NULL, "linear", "circular"
 };
 
 static DatePtr GetBestDate (
@@ -360,18 +373,6 @@ static Boolean LocusHasBadChars (
   }
   return FALSE;
 }
-
-static CharPtr gbseq_strd [4] = {
-  NULL, "single", "double", "mixed"
-};
-
-static CharPtr gbseq_mol [10] = {
-  "?", "DNA", "RNA", "tRNA", "rRNA", "mRNA", "uRNA", "snRNA", "snoRNA", "AA"
-};
-
-static CharPtr gbseq_top [3] = {
-  NULL, "linear", "circular"
-};
 
 static void LookupAccnForNavLink (
   Int4 gi,
@@ -863,6 +864,10 @@ NLM_EXTERN void AddLocusBlock (
       StringCpy (div, "HTC");
       StringCpy (dataclass, "HTC");
       break;
+    case MI_TECH_tsa :
+      StringCpy (div, "TSA");
+      StringCpy (dataclass, "TSA");
+      break;
     default :
       break;
   }
@@ -1181,26 +1186,21 @@ NLM_EXTERN void AddLocusBlock (
     gbseq->locus = StringSave (locus);
     gbseq->length = length;
     gbseq->division = StringSave (div);
-    /*
-    gbseq->strandedness = bsp->strand;
-    gbseq->moltype = imolToMoltype [imol];
-    gbseq->topology = topology;
-    */
 
-    moltype = (Int2) imolToMoltype [imol];
-    if (moltype < 0 || moltype > 9) {
-      moltype = 0;
-    }
-    gbseq->moltype = StringSave (gbseq_mol [moltype]);
+    gbseq->moltype = StringSave (gbseq_mol [imol]);
 
     strandedness = (Int2) bsp->strand;
     if (strandedness < 0 || strandedness > 3) {
       strandedness = 0;
     }
     if (strandedness == 0) {
+      moltype = (Int2) imolToMoltype [imol];
+      if (moltype < 0 || moltype > 11) {
+        moltype = 0;
+      }
       if (moltype == 1) {
         strandedness = 2; /* default to double strand for DNA */
-      } else if (moltype >= 2 && moltype <= 8) {
+      } else if ((moltype >= 2 && moltype <= 8) || moltype >= 10 && moltype <= 11) {
         strandedness = 1; /* default to single strand for RNA */
       }
     }
@@ -1272,15 +1272,16 @@ NLM_EXTERN void AddLocusBlock (
       ffstring = FFGetString(ajp);
 
       sprintf(gi_buf, "%ld", (long) gi);
-      FFAddOneString(ffstring, "<a href=", FALSE, FALSE, TILDE_IGNORE);
+      FFAddOneString(ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
       FFAddOneString(ffstring, link_featc, FALSE, FALSE, TILDE_IGNORE);
       FFAddOneString(ffstring, "val=", FALSE, FALSE, TILDE_IGNORE);
       FFAddOneString(ffstring, gi_buf, FALSE, FALSE, TILDE_IGNORE);
       if ( is_aa ) {
-        FFAddOneString(ffstring, "&view=gpwithparts>", FALSE, FALSE, TILDE_IGNORE);
+        FFAddOneString(ffstring, "&view=gpwithparts", FALSE, FALSE, TILDE_IGNORE);
       } else {
-        FFAddOneString(ffstring, "&view=gbwithparts>", FALSE, FALSE, TILDE_IGNORE);
+        FFAddOneString(ffstring, "&view=gbwithparts", FALSE, FALSE, TILDE_IGNORE);
       }
+      FFAddOneString(ffstring, "\">", FALSE, FALSE, TILDE_IGNORE);
       if (bsp->length > 1000000) {
         FFAddOneString(ffstring, "Click here to see all features and the sequence of this contig record.", FALSE, FALSE, TILDE_IGNORE);
       } else {
@@ -1444,6 +1445,10 @@ NLM_EXTERN void AddLocusBlock (
     StringCat (buf, "</div>\n");
     StringCat (buf, "<pre class=\"genbank\">");
     DoQuickLinkFormat (awp->afp, buf);
+  } else if (GetWWW (ajp)) {
+    buf [0] = '\0';
+    StringCat (buf, "<pre>");
+    DoQuickLinkFormat (awp->afp, buf);
   }
 
   if (awp->afp != NULL) {
@@ -1460,15 +1465,9 @@ NLM_EXTERN void AddDeflineBlock (
   Asn2gbSectPtr      asp;
   BaseBlockPtr       bbp;
   BioseqPtr          bsp;
-  Char               buf[4096]; 
-  /*CharPtr          buf;
-  size_t             buflen = 4096;*/ 
-  SeqMgrDescContext  dcontext;
+  Char               buf [4096]; 
   GBSeqPtr           gbseq;
   ItemInfo           ii;
-  MolInfoPtr         mip;
-  SeqDescrPtr        sdp;
-  Uint1              tech;
   StringItemPtr      ffstring;
 
   if (awp == NULL) return;
@@ -1482,25 +1481,15 @@ NLM_EXTERN void AddDeflineBlock (
   bbp = Asn2gbAddBlock (awp, DEFLINE_BLOCK, sizeof (BaseBlock));
   if (bbp == NULL) return;
 
-  tech = 0;
-  sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_molinfo, &dcontext);
-  if (sdp != NULL) {
-    mip = (MolInfoPtr) sdp->data.ptrvalue;
-    if (mip != NULL) {
-      tech = mip->tech;
-    }
-  }
-
   ffstring = FFGetString(ajp);
   if ( ffstring == NULL ) return;
 
-  /*buf = MemNew (sizeof (Char) * (buflen + 1));*/
   MemSet ((Pointer) (&ii), 0, sizeof (ItemInfo));
   MemSet ((Pointer) buf, 0, sizeof (buf));
 
   /* create default defline */
 
-  if ( CreateDefLine (&ii, bsp, buf, sizeof(buf), tech, NULL, NULL)) {
+  if (NewCreateDefLineBuf (&ii, bsp, buf, sizeof (buf), FALSE, FALSE)) {
     bbp->entityID = ii.entityID;
     bbp->itemID = ii.itemID;
     bbp->itemtype = ii.itemtype;
@@ -1530,11 +1519,14 @@ NLM_EXTERN void AddDeflineBlock (
 
   FFRecycleString(ajp, ffstring);
 
+  /*
   if (bbp->itemtype == 0) {
     bbp->entityID = bsp->idx.entityID;
     bbp->itemtype = bsp->idx.itemtype;
     bbp->itemID = bsp->idx.itemID;
   }
+  */
+
   if (awp->afp != NULL) {
     DoImmediateFormat (awp->afp, bbp);
   }
@@ -1549,8 +1541,8 @@ static void FF_www_accession (
   if (cstring == NULL || ffstring == NULL) return;
 
   if ( GetWWW(ajp) ) {
-    FFAddTextToString(ffstring, "<a href=", link_seq, NULL, FALSE, FALSE, TILDE_IGNORE);
-    FFAddTextToString(ffstring, "val=", cstring, ">", FALSE, FALSE, TILDE_IGNORE);
+    FFAddTextToString(ffstring, "<a href=\"", link_seq, NULL, FALSE, FALSE, TILDE_IGNORE);
+    FFAddTextToString(ffstring, "val=", cstring, "\">", FALSE, FALSE, TILDE_IGNORE);
     FFAddOneString(ffstring, cstring, FALSE, FALSE, TILDE_IGNORE);
     FFAddOneString(ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
   } else {
@@ -1795,6 +1787,7 @@ NLM_EXTERN void AddAccessionBlock (
   sip = NULL;
   if (accn == NULL) {
     accn = gpp;
+    gpp = NULL;
   }
   if (accn != NULL) {
     sip = accn;
@@ -1871,6 +1864,14 @@ NLM_EXTERN void AddAccessionBlock (
     separator = " ";
   }
 
+  if (gpp != NULL) {
+    SeqIdWrite (gpp, buf, PRINTID_TEXTID_ACC_ONLY, sizeof (buf));
+    FFAddTextToString(ffstring, separator, buf, NULL, FALSE, FALSE, TILDE_IGNORE);
+    if (awp->format == EMBL_FMT || awp->format == EMBLPEPT_FMT) {
+      FFAddOneChar(ffstring, ';', FALSE);
+    }
+  }
+
   if (ajp->ajp.slp == NULL) {
     sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_molinfo, &dcontext);
     if (sdp != NULL && wgsaccn != NULL) {
@@ -1889,15 +1890,15 @@ NLM_EXTERN void AddAccessionBlock (
         }
         if (! StringHasNoText (buf)) {
           if ( GetWWW(ajp) ) {
-            FFAddTextToString(ffstring, separator, "<a href=", link_wgs, FALSE, FALSE, TILDE_IGNORE);
-            FFAddTextToString(ffstring, "db=Nucleotide&cmd=Search&term=", buf, ">", FALSE, FALSE, TILDE_IGNORE);
+            FFAddTextToString(ffstring, separator, "<a href=\"", link_wgs, FALSE, FALSE, TILDE_IGNORE);
+            FFAddTextToString(ffstring, "db=Nucleotide&cmd=Search&term=", buf, "\">", FALSE, FALSE, TILDE_IGNORE);
             FFAddOneString (ffstring, buf, FALSE, FALSE, TILDE_TO_SPACES);
             FFAddOneString (ffstring, "</a>", FALSE, FALSE, TILDE_TO_SPACES);
           } else {
             FFAddTextToString(ffstring, separator, buf, NULL, FALSE, FALSE, TILDE_TO_SPACES);
           }
           if (awp->format == EMBL_FMT || awp->format == EMBLPEPT_FMT) {
-              FFAddOneChar(ffstring, ';', FALSE);
+            FFAddOneChar(ffstring, ';', FALSE);
           }
         }
       }
@@ -1983,6 +1984,7 @@ NLM_EXTERN void AddVersionBlock (
   BaseBlockPtr     bbp;
   BioseqPtr        bsp;
   Char             buf [41];
+  Uint1            format = PRINTID_TEXTID_ACC_VER;
   GBSeqPtr         gbseq;
   Int4             gi = -1;
   SeqIdPtr         gpp = NULL;
@@ -2029,6 +2031,7 @@ NLM_EXTERN void AddVersionBlock (
       case SEQID_GPIPE :
         /* should not override better accession */
         gpp = sip;
+        format = PRINTID_TEXTID_ACC_ONLY;
         break;
       default :
         break;
@@ -2070,7 +2073,7 @@ NLM_EXTERN void AddVersionBlock (
   version [0] = '\0';
 
   if (awp->format == EMBL_FMT || awp->format == EMBLPEPT_FMT) {
-    SeqIdWrite (accn, version, PRINTID_TEXTID_ACC_VER, sizeof (version) - 1);
+    SeqIdWrite (accn, version, format, sizeof (version) - 1);
 
     FFStartPrint (ffstring, awp->format, 0, 12, "VERSION", 12, 5, 5, "SV", TRUE);
 
@@ -2091,7 +2094,7 @@ NLM_EXTERN void AddVersionBlock (
   if (accn != NULL) {
 
     buf [0] = '\0';
-    SeqIdWrite (accn, buf, PRINTID_TEXTID_ACC_VER, sizeof (buf) - 1);
+    SeqIdWrite (accn, buf, format, sizeof (buf) - 1);
 
     if (gi > 0) {
       sprintf (version, "%s  GI:%ld", buf, (long) gi);
@@ -2170,10 +2173,10 @@ static void FF_asn2gb_www_projID (
 )
 
 {
-  FFAddOneString (ffstring, "<a href=", FALSE, FALSE, TILDE_IGNORE);
+  FFAddOneString (ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
   FFAddOneString (ffstring, link_projid, FALSE, FALSE, TILDE_IGNORE);
   FFAddOneString (ffstring, projID, FALSE, FALSE, TILDE_IGNORE);
-  FFAddOneString(ffstring, ">", FALSE, FALSE, TILDE_IGNORE);
+  FFAddOneString(ffstring, "\">", FALSE, FALSE, TILDE_IGNORE);
   FFAddOneString (ffstring, projID, FALSE, FALSE, TILDE_IGNORE);
   FFAddOneString(ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
 }
@@ -2390,7 +2393,8 @@ static Uint1 dbsource_fasta_order [NUM_SEQID] = {
   10, /* 16 = tpg */
   10, /* 17 = tpe */
   10, /* 18 = tpd */
-  10  /* 19 = gpp */
+  10, /* 19 = gpp */
+  10  /* 20 = nat */
 };
 
 static void AddToUniqueSipList (
@@ -2735,8 +2739,8 @@ static void AddSPBlock (
       if (acc != NULL) {
         if ( GetWWW(ajp) && has_link ) {
           sprintf(numbuf, "%ld", (long) sid->data.intvalue);
-          FFAddTextToString(ffstring, "<a href=", link_seq, NULL, FALSE, FALSE, TILDE_IGNORE);
-          FFAddTextToString(ffstring, "val=", numbuf, ">", FALSE, FALSE, TILDE_IGNORE);
+          FFAddTextToString(ffstring, "<a href=\"", link_seq, NULL, FALSE, FALSE, TILDE_IGNORE);
+          FFAddTextToString(ffstring, "val=", numbuf, "\">", FALSE, FALSE, TILDE_IGNORE);
           FFAddOneString(ffstring, acc, FALSE, FALSE, TILDE_IGNORE);
           FFAddOneString(ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
         } else {
@@ -2810,8 +2814,8 @@ static void AddSPBlock (
       FFAddOneString (ffstring, ":", FALSE, FALSE, TILDE_IGNORE);
       if ( GetWWW(ajp) && has_link) {
         FFAddOneChar (ffstring, ' ', FALSE);
-        FFAddTextToString(ffstring, "<a href=", link_omim, str, FALSE, FALSE, TILDE_IGNORE);
-        FFAddTextToString(ffstring, ">", str, "</a>", FALSE, FALSE, TILDE_IGNORE);
+        FFAddTextToString(ffstring, "<a href=\"", link_omim, str, FALSE, FALSE, TILDE_IGNORE);
+        FFAddTextToString(ffstring, "\">", str, "</a>", FALSE, FALSE, TILDE_IGNORE);
       } else {
         FFAddOneString(ffstring, str, FALSE, FALSE, TILDE_IGNORE);
       }
@@ -3163,14 +3167,14 @@ static Boolean FF_www_dbsource(
       }
 
       if (choice == SEQID_SWISSPROT) {
-        FFAddTextToString(ffstring, "<a href=", link, NULL, FALSE, FALSE, TILDE_IGNORE);
+        FFAddTextToString(ffstring, "<a href=\"", link, NULL, FALSE, FALSE, TILDE_IGNORE);
       } else {
-        FFAddTextToString(ffstring, "<a href=", link, "val=", FALSE, FALSE, TILDE_IGNORE);
+        FFAddTextToString(ffstring, "<a href=\"", link, "val=", FALSE, FALSE, TILDE_IGNORE);
       }
       for (text = temp; text != end; ++text ) {
         FFAddOneChar(ffstring, *text, FALSE);
       }
-      FFAddOneString(ffstring, ">", FALSE, FALSE, TILDE_IGNORE);
+      FFAddOneString(ffstring, "\">", FALSE, FALSE, TILDE_IGNORE);
 
       for (text = temp; text != end; ++text ) {
         FFAddOneChar(ffstring, *text, FALSE);
@@ -3899,8 +3903,8 @@ NLM_EXTERN void AddSegmentBlock (
     FFAddOneString (ffstring, buf, FALSE, FALSE, TILDE_IGNORE);
     SeqIdWrite (awp->parent->id, acc, PRINTID_TEXTID_ACC_VER, sizeof (acc) - 1);
 
-    FFAddTextToString(ffstring, "<a href=", link_seq, NULL, FALSE, FALSE, TILDE_IGNORE);
-    FFAddTextToString(ffstring, "val=", acc, ">", FALSE, FALSE, TILDE_IGNORE);
+    FFAddTextToString(ffstring, "<a href=\"", link_seq, NULL, FALSE, FALSE, TILDE_IGNORE);
+    FFAddTextToString(ffstring, "val=", acc, "\">", FALSE, FALSE, TILDE_IGNORE);
 
     sprintf (buf, "%ld", (long) awp->numsegs);
     FFAddOneString (ffstring, buf, FALSE, FALSE, TILDE_IGNORE);
@@ -4953,6 +4957,7 @@ NLM_EXTERN Boolean AddReferenceBlock (
   Int2               i = 0;
   IntRefBlockPtr     irp;
   Boolean            is_aa;
+  Boolean            is_ddbj = FALSE;
   Boolean            is_embl = FALSE;
   Boolean            is_patent = FALSE;
   Int2               j;
@@ -4988,6 +4993,8 @@ NLM_EXTERN Boolean AddReferenceBlock (
   for (sip = bsp->id; sip != NULL; sip = sip->next) {
     if (sip->choice == SEQID_EMBL) {
       is_embl = TRUE;
+    } else if (sip->choice == SEQID_DDBJ) {
+      is_ddbj = TRUE;
     } else if (sip->choice == SEQID_PATENT) {
       is_patent = TRUE;
     }
@@ -5152,6 +5159,11 @@ NLM_EXTERN Boolean AddReferenceBlock (
     }
     if (awp->mode == DUMP_MODE) {
       excise = FALSE;
+    }
+    /* do not hide duplicate EMBL and DDBJ publications */
+    if (is_embl || is_ddbj) {
+      excise = FALSE;
+      combine = TRUE;
     }
     /* does not fuse equivalent publication features for local, general, refseq, and 2+6 genbank ids */
     if (excise && awp->sourcePubFuse) {
@@ -5438,15 +5450,15 @@ NLM_EXTERN void AddWGSBlock (
               
                 if ( GetWWW(ajp) ) {
                   if (StringCmp (first, last) != 0) {
-                    FFAddTextToString(ffstring, "<a href=", link_wgs, NULL, FALSE, FALSE, TILDE_IGNORE);
+                    FFAddTextToString(ffstring, "<a href=\"", link_wgs, NULL, FALSE, FALSE, TILDE_IGNORE);
                     FFAddTextToString(ffstring, "db=Nucleotide&cmd=Search&term=", first, NULL, FALSE, FALSE, TILDE_IGNORE);
-                    FFAddTextToString(ffstring, ":", last, "[PACC]>", FALSE, FALSE, TILDE_IGNORE);
+                    FFAddTextToString(ffstring, ":", last, "[PACC]\">", FALSE, FALSE, TILDE_IGNORE);
                     sprintf (buf, "%s-%s", first, last);
                     FFAddOneString (ffstring, buf, FALSE, FALSE, TILDE_TO_SPACES);
                     FFAddOneString (ffstring, "</a>", FALSE, FALSE, TILDE_TO_SPACES);
                   } else {
-                    FFAddTextToString(ffstring, "<a href=", link_seq, NULL, FALSE, FALSE, TILDE_IGNORE);
-                    FFAddTextToString(ffstring, "val=", first, ">", FALSE, FALSE, TILDE_IGNORE);
+                    FFAddTextToString(ffstring, "<a href=\"", link_seq, NULL, FALSE, FALSE, TILDE_IGNORE);
+                    FFAddTextToString(ffstring, "val=", first, "\">", FALSE, FALSE, TILDE_IGNORE);
                     sprintf (buf, "%s", first);
                     FFAddOneString (ffstring, buf, FALSE, FALSE, TILDE_TO_SPACES);
                     FFAddOneString (ffstring, "</a>", FALSE, FALSE, TILDE_TO_SPACES);
@@ -5792,6 +5804,9 @@ NLM_EXTERN void AddSlashBlock (
   if (GetWWW (ajp) && awp->mode == ENTREZ_MODE && awp->afp != NULL &&
       (awp->format == GENBANK_FMT || awp->format == GENPEPT_FMT)) {
     sprintf (buf, "//</pre>\n<a name=\"slash_%ld\"></a>", (long) awp->currGi);
+    str = StringSave (buf);
+  } else if (GetWWW (ajp)) {
+    sprintf (buf, "//</pre>\n");
     str = StringSave (buf);
   } else {
     str = MemNew(sizeof(Char) * 4);

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/23/91
 *
-* $Revision: 6.16 $
+* $Revision: 6.19 $
 *
 * File Description:
 *   	prototypes of miscellaneous functions
@@ -43,6 +43,15 @@
 * 06-15-93 Schuler     Added macros for Gestalt functins.
 *
 * $Log: ncbimisc.h,v $
+* Revision 6.19  2008/09/11 20:30:37  bollin
+* Added ValNodePurge function.
+*
+* Revision 6.18  2008/07/21 20:15:22  bollin
+* Added ValNodeCompare function.
+*
+* Revision 6.17  2008/04/04 13:15:48  bollin
+* Added ValNodeUnique function
+*
 * Revision 6.16  2006/11/09 17:47:16  kans
 * added ValNodeMergeStrs
 *
@@ -297,6 +306,9 @@ NLM_EXTERN ValNodePtr  LIBCALL ValNodeExtract PROTO((ValNodePtr PNTR headptr, Nl
 NLM_EXTERN ValNodePtr  LIBCALL ValNodeExtractList PROTO((ValNodePtr PNTR headptr, Nlm_Int2 choice));
 NLM_EXTERN ValNodePtr  LIBCALL ValNodeFindNext PROTO((ValNodePtr head, ValNodePtr curr, Nlm_Int2 choice));
 NLM_EXTERN ValNodePtr  LIBCALL ValNodeSort PROTO((ValNodePtr list, int (LIBCALLBACK *compar) (VoidPtr, VoidPtr)));
+NLM_EXTERN void LIBCALL ValNodeUnique PROTO ((ValNodePtr PNTR list, int (LIBCALLBACK *compar )PROTO ((Nlm_VoidPtr, Nlm_VoidPtr )), ValNodePtr (LIBCALLBACK *valnodefree ) PROTO ((ValNodePtr))));
+NLM_EXTERN void LIBCALL ValNodePurge PROTO ((ValNodePtr PNTR list, Nlm_Boolean (LIBCALLBACK *do_remove ) PROTO ((ValNodePtr)), ValNodePtr (LIBCALLBACK *valnodefree ) PROTO ((ValNodePtr))));
+NLM_EXTERN int LIBCALL ValNodeCompare PROTO ((ValNodePtr vnp1, ValNodePtr vnp2, int (LIBCALLBACK *compar) (VoidPtr, VoidPtr)));
 NLM_EXTERN Nlm_CharPtr LIBCALL ValNodeMergeStrs PROTO((ValNodePtr list));
 
 /*** old prototypes ******

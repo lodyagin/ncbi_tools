@@ -3,7 +3,7 @@
 	ProjectType="Visual C++"
 	Version="8.00"
 	Name="demo_makemat"
-	ProjectGUID="{939AD270-6758-4304-9B42-F776B03B2B30}"
+	ProjectGUID="{94E610B4-1F24-4B0B-939C-8757B57FC6B7}"
 	>
 	<Platforms>
 		<Platform

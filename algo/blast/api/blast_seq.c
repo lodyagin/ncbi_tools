@@ -1,5 +1,5 @@
 #ifndef SKIP_DOXYGEN_PROCESSING
-static char const rcsid[] = "$Id: blast_seq.c,v 1.88 2007/03/14 19:50:30 papadopo Exp $";
+static char const rcsid[] = "$Id: blast_seq.c,v 1.89 2008/06/09 17:29:14 madden Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 /*
 * ===========================================================================
@@ -431,7 +431,7 @@ s_QueryInfoSetUp(SeqLocPtr slp, EBlastProgramType program,
          }
          
          for (frame = first_frame; frame <= last_frame; ++frame) {
-            protein_length = (length - frame%CODON_LENGTH)/CODON_LENGTH;
+            protein_length = BLAST_GetTranslatedProteinLength(length, index+frame);
             max_length = MAX(max_length, protein_length);
 
             s_QueryInfoSetContextInfo(query_info,

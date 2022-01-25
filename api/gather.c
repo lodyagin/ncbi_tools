@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/7/94
 *
-* $Revision: 6.51 $
+* $Revision: 6.52 $
 *
 * File Description: 
 *
@@ -37,325 +37,6 @@
 * --------------------------------------------------------------------------
 * Date     Name        Description of modification
 * -------  ----------  -----------------------------------------------------
-*
-* $Log: gather.c,v $
-* Revision 6.51  2007/05/22 12:14:30  bollin
-* If SeqSubmit has been marked for deletion, delete it.
-*
-* Revision 6.50  2006/11/15 19:18:52  bollin
-* Changed Int2 variables to Uint4 variables, to accomodate larger values for
-* itemID.
-*
-* Revision 6.49  2006/07/18 20:20:40  bollin
-* must use Uint4 instead of Uint2 to hold itemID values
-*
-* Revision 6.48  2006/07/13 17:06:38  bollin
-* use Uint4 instead of Uint2 for itemID values
-* removed unused variables
-* resolved compiler warnings
-*
-* Revision 6.47  2005/07/15 19:01:36  kans
-* minor fixes for Xcode warnings
-*
-* Revision 6.46  2005/07/11 16:02:36  kans
-* BioseqseqSet_class_empty_set prevents automatic freeing of fake empty bioseq set
-*
-* Revision 6.45  2005/06/23 18:55:45  kans
-* when deleting bioseqset, if seq_set is null, free bioseqset as well
-*
-* Revision 6.44  2005/06/21 17:31:00  kans
-* FastFindFeatDefType used by AssignIDs for features, checks if sfp->idx.subtype is already set
-*
-* Revision 6.43  2004/11/24 19:05:34  kans
-* AttachDataProc supports OBJ_ANNOTDESC inserting in OBJ_ANNOTDESC list
-*
-* Revision 6.42  2004/11/24 15:31:15  kans
-* support for OBJ_ANNOTDESC drag and drop
-*
-* Revision 6.41  2004/11/23 19:39:07  kans
-* added GatherAnnotDesc for Desktop support of SeqAnnot.AnnotDesc items
-*
-* Revision 6.40  2004/11/17 19:33:00  kans
-* VisitAnnotDesc called by VisitSeqAnnot for finding AnnotDesc, to be used for pubs on separately fetched CDD annots
-*
-* Revision 6.39  2004/10/25 20:13:27  kans
-* added AssignIDsInEntityEx and GatherObjectsInEntityEx to index remotely fetched features
-*
-* Revision 6.38  2002/05/08 18:58:09  kans
-* itemID is Uint4
-*
-* Revision 6.37  2002/04/13 20:23:53  kans
-* fixed get next descriptor unindexed
-*
-* Revision 6.36  2001/11/15 18:47:13  kans
-* fix to unindexed get next descriptor
-*
-* Revision 6.35  2001/11/15 18:34:52  kans
-* added GetNextDescriptorUnindexed, requires AssignIDsInEntity be called first
-*
-* Revision 6.34  2001/07/06 17:27:38  kans
-* AssignIDs does not clear deleteme flag
-*
-* Revision 6.33  2000/12/18 14:48:07  tatiana
-* turn off reordering
-*
-* Revision 6.32  2000/02/07 16:48:34  kans
-* fixed setting of context->index in SeqMgrGetNextFeatureByID
-*
-* Revision 6.31  2000/02/01 22:25:44  kans
-* indexed speedup now returns features in itemID order, not position order, to allow simple diff of e2index
-*
-* Revision 6.30  2000/01/07 03:01:42  kans
-* indexed speedup only if raw bioseq not part of segmented bioseq
-*
-* Revision 6.29  2000/01/07 02:48:13  kans
-* useSeqMgrIndexes now works with get_feats_location and get_feats_product, should be suitable for e2index speedup
-*
-* Revision 6.28  2000/01/07 00:56:02  kans
-* targeted bioseq presents features right after bioseq is visited
-*
-* Revision 6.27  2000/01/07 00:18:25  kans
-* targeted bioseq gather visits each seqannot, presents features in seqannot index
-*
-* Revision 6.26  2000/01/06 23:32:13  kans
-* targeted bioseq gather visits each seqfeat, checks against feature/bioseq index
-*
-* Revision 6.25  1999/11/30 17:07:51  egorov
-* Protect against dividing by zero.
-*
-* Revision 6.24  1999/10/29 18:06:26  kans
-* added GetPointerForIDs (with SW)
-*
-* Revision 6.23  1999/09/30 18:33:09  kans
-* delete marked objects corrects gatherindex.prevlink on remaining objects
-*
-* Revision 6.22  1999/09/29 21:10:53  kans
-* delete marked seqannot also frees seqannot if it has no remaining sap->data components
-*
-* Revision 6.21  1999/09/29 18:24:53  kans
-* added DeleteMarkedObjects
-*
-* Revision 6.20  1999/09/28 18:10:15  kans
-* added DeleteMarkedObjectsProc callback - not yet tested
-*
-* Revision 6.19  1999/09/28 12:10:24  kans
-* finished implementing lightweight GatherObjectsInEntity
-*
-* Revision 6.18  1999/09/27 22:02:45  kans
-* further implementation of lightweight gather replacement
-*
-* Revision 6.17  1999/09/27 17:46:59  kans
-* uses GatherIndex structure
-*
-* Revision 6.16  1999/09/26 20:44:25  kans
-* implemented most of VisitProc callbacks
-*
-* Revision 6.15  1999/09/26 00:17:14  kans
-* VisitObjectsInEntity prototype added
-*
-* Revision 6.14  1999/09/25 01:46:08  kans
-* AssignIDsInEntity split into internal function that can also call callback, EXTRA_OBJMGR_FIELDS values assigned to some objects
-*
-* Revision 6.13  1999/09/07 17:59:52  kans
-* AssignIDsInEntity takes datatype and dataptr for when entityID is 0, allowing unlinked components to be updated
-*
-* Revision 6.12  1999/09/07 17:13:09  kans
-* added AssignIDsInEntity
-*
-* Revision 6.11  1999/09/01 14:41:26  shavirin
-* Adjusted functions gather_align_data() and get_align_ends() to accept
-* discontinuous alignment type.
-*
-* Revision 6.10  1999/07/26 20:55:52  ostell
-* added recursive support for SAS_DISC SeqAlign
-*
-* Revision 6.9  1999/03/16 13:17:28  ostell
-* changes in SeqLocOffset() to deal with multi-interval seqloc which is
-* a subset of a feature.
-*
-* Revision 6.8  1999/01/13 23:34:19  kans
-* added GatherSpecificProcLaunch
-*
-* Revision 6.7  1998/08/24 18:27:07  kans
-* removed solaris -v -fd warnings
-*
-* Revision 6.6  1998/06/23 16:53:37  zjing
-* modify function check_reverse_strand
-*
-* Revision 6.5  1998/03/10 20:43:28  kans
-* IGCCBuild now handles delta seqs
-*
-* Revision 6.4  1998/03/02 22:15:35  zjing
-* fix gap collection in the minus strand in function gather_align_data
-*
-* Revision 6.3  1997/11/19 22:14:48  ostell
-* added support for multithreaded programs
-*
-* Revision 6.2  1997/10/10 17:01:37  kans
-* support for individual elements of OBJ_BIOSEQ_DELTA
-*
-* Revision 6.1  1997/09/30 19:59:35  zjing
-* bug fixes in gather_align_data
-*
-* Revision 6.0  1997/08/25 18:05:46  madden
-* Revision changed to 6.0
-*
-* Revision 5.15  1997/08/13 18:43:46  zjing
-* correct errors in gather_align_data for tblastn and tblastx
-*
-* Revision 5.14  1997/07/01 15:16:33  zjing
-* fix the strand in gathering continous std-seg
-*
-* Revision 5.13  1997/06/19 18:37:47  vakatov
-* [WIN32,MSVC++]  Adopted for the "NCBIOBJ.LIB" DLL'ization
-*
-* Revision 5.12  1997/04/23 12:44:49  zjing
-* correct a bug for tblastn display
-*
- * Revision 5.10  1997/03/17  21:22:00  kans
- * detach bioseq/bioseq set didn't unlink gcp->sep->next
- *
- * Revision 5.9  1997/01/15  17:25:45  zjing
- * a kludge fix for ck_extreme to display the features across zero properly
- *
- * Revision 5.8  1996/12/16  19:43:37  ostell
- * added an attachment/replacement of a Seq-loc to a feature in AttachDataProc
- *
- * Revision 5.7  1996/11/05  18:00:03  zjing
- * fix the problem of integer overflow for gather_align_data and speed up the process
- *
- * Revision 5.6  1996/08/29  01:18:34  ostell
- * added GatherAddExtraLoc for codebreak and trna.atncodon mapping
- *
- * Revision 5.5  1996/08/09  20:28:55  epstein
- * eliminate update_seq_loc()
- *
- * Revision 5.4  1996/08/06  19:56:03  kans
- * for SEQLOC_WHOLE, must call SeqIdFindBest on bsp->id
- *
- * Revision 5.3  1996/06/17  21:49:42  zjing
- * fix in gather_align_data for multiple alignments
- *
- * Revision 5.2  1996/06/10  18:35:36  zjing
- * fix in get_end_diag_val
- *
- * Revision 5.1  1996/06/10  15:08:53  epstein
- * replace make_seq_loc() with SeqLocIntNew() and make_pnt_loc with SeqLocPntNew()
- *
- * Revision 5.0  1996/05/28  13:23:23  ostell
- * Set to revision 5.0
- *
- * Revision 4.30  1996/05/22  20:35:25  ostell
- * changed GatherProcLaunch to cycle through proceedures in priority
- * order looking for OM_MSG_RET_DONE return, instead of just launching
- * the first one found.
- *
- * Revision 4.29  1996/05/06  14:49:12  zjing
- * fix a strand in load_align_data
- *
- * Revision 4.28  1996/04/24  20:12:13  ostell
- * removed an uncessary variable
- *
- * Revision 4.27  1996/04/08  15:44:02  kans
- * IGCC build scopes on omdp->choice or scope->scope
- *
- * Revision 4.26  1996/03/08  18:12:38  zjing
- * fix in check_reverse_strand for gather_align_data
- *
- * Revision 4.25  1996/02/28  04:53:06  ostell
- * added ObjMgrHold suport
- *
- * Revision 4.23  1996/01/22  13:28:11  kans
- * cast first parameter of MemSet to (Pointer) for SunOS compiler
- *
- * Revision 4.22  1996/01/03  23:01:04  ostell
- * added GatherOverWrite() to support find/replace external to Gather
- *
- * Revision 4.21  1995/12/22  20:12:01  ostell
- * added protection for NULL pointer on scope in IGCCBuild
- *
- * Revision 4.20  1995/12/22  14:42:30  ostell
- * added do_not_reload_from_cache to GatherScope
- * modified calls to support it
- * changed default behavior of gather to load and reclock entities
- *
- * Revision 4.19  1995/12/20  22:55:36  kans
- * bsp added to FocusSeqEntry, and MemSet (OBJ_MAX+1) bug fixed (JZ)
- *
- * Revision 4.18  1995/12/20  19:19:39  ostell
- * added GatherContext.igccp field
- * added FocusSeqEntry() function
- *
- * Revision 4.17  1995/12/20  15:05:15  zjing
- * Fix gather_align_data to get the end gaps in master sequence
- *
- * Revision 4.16  1995/12/15  15:17:07  kans
- * bsp is now initialized in IGCCBuild
- *
- * Revision 4.15  1995/12/15  02:47:01  ostell
- * fix to scoping for multiple records with same SeqId
- *
- * Revision 4.14  1995/12/14  21:43:04  ostell
- * added scope protection to IGCCBuild to protect against mulitple copies
- *
- * Revision 4.13  1995/12/13  19:28:13  ostell
- * more support for OBJ_SEQHIST_ALIGN
- *
- * Revision 4.12  1995/12/13  18:50:42  ostell
- * added support for OBJ_SEQHIST_ALIGN
- *
- * Revision 4.11  1995/11/21  23:08:38  ostell
- * added support in GatherContext for gatherstack
- *
- * Revision 4.10  1995/11/06  21:29:03  ostell
- * added newid and convert_loc to GatherScope, and new_loc to GatherContext
- * added functions ReMapIntFuzz and SeqLocReMap to support them
- * This allows SeqLocs on features to be copied into a remapped form by gather
- *
- * Revision 4.9  1995/10/06  19:25:24  ostell
- * added fields "ignore_top" and "stop_on_annot" to GatherScope
- * if "ignore_top" is TRUE, features on seglevel 0 are ignored
- * if "stop_on_annot" is TRUE, segments are traversed to a maximum depth
- * of gsp->seglevel, but traversing is stopped as soon as an annotation is
- * found.
- *
- * Revision 4.8  1995/10/01  20:51:28  kans
- * made GatherItemByDataProc static
- *
- * Revision 4.7  1995/09/30  03:38:31  ostell
- * Changed ObjMgrMessage functions to pass a structure
- * Added support for selecting regions
- * Added ability to remove entity when no more views on it
- *
- * Revision 4.6  1995/09/27  19:50:09  zjing
- * .
- *
- * Revision 4.1  1995/08/16  17:48:34  kans
- * add a chain parameter for gather Seq-align (jz)
- *
- * Revision 4.0  1995/07/26  13:49:01  ostell
- * force revision to 4.0
- *
- * Revision 1.38  1995/07/10  15:51:59  kans
- * changes in gather_align_data (zjing)
- *
- * Revision 1.37  1995/07/08  15:22:09  ostell
- * Set ObjMgrDirtyFlag on Attach..,Detach..,ReplaceDataForProc
- *
- * Revision 1.36  1995/06/02  17:53:17  kans
- * add gather range to gather bioseq
- *
- * Revision 1.35  1995/06/01  21:53:55  kans
- * support for Seq-align (zjing)
- *
- * Revision 1.34  1995/05/19  15:49:37  kans
- * fixed bug in mapping minus strand intervals
- *
- * Revision 1.33  1995/05/15  21:46:05  ostell
- * added Log line
- *
-*
-*
 *
 * ==========================================================================
 */
@@ -7058,19 +6739,25 @@ NLM_EXTERN SeqDescrPtr GetNextDescriptorUnindexed (
     sdp = sdp->next;
   }
 
-  if (curr == NULL || curr->extended == 0) return NULL;
-  ovp = (ObjValNodePtr) curr;
-  if (ovp->idx.parenttype == OBJ_BIOSEQ) {
-    bsp = (BioseqPtr) ovp->idx.parentptr;
-    if (bsp == NULL) return NULL;
+  if (curr != NULL && curr->extended != 0) {
+    ovp = (ObjValNodePtr) curr;
+    if (ovp->idx.parenttype == OBJ_BIOSEQ) {
+      bsp = (BioseqPtr) ovp->idx.parentptr;
+      if (bsp == NULL) return NULL;
+      if (bsp->idx.parenttype != OBJ_BIOSEQSET) return NULL;
+      bssp = (BioseqSetPtr) bsp->idx.parentptr;
+    } else if (ovp->idx.parenttype == OBJ_BIOSEQSET) {
+      bssp = (BioseqSetPtr) ovp->idx.parentptr;
+      if (bssp == NULL) return NULL;
+      if (bssp->idx.parenttype != OBJ_BIOSEQSET) return NULL;
+      bssp = (BioseqSetPtr) bssp->idx.parentptr;
+    } else {
+      return NULL;
+    }
+  } else {
     if (bsp->idx.parenttype != OBJ_BIOSEQSET) return NULL;
     bssp = (BioseqSetPtr) bsp->idx.parentptr;
-  } else if (ovp->idx.parenttype == OBJ_BIOSEQSET) {
-    bssp = (BioseqSetPtr) ovp->idx.parentptr;
-    if (bssp == NULL) return NULL;
-    if (bssp->idx.parenttype != OBJ_BIOSEQSET) return NULL;
-    bssp = (BioseqSetPtr) bssp->idx.parentptr;
-  } else return NULL;
+  }
 
   while (bssp != NULL) {
     for (sdp = bssp->descr; sdp != NULL; sdp = sdp->next) {

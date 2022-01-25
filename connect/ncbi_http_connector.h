@@ -1,7 +1,7 @@
 #ifndef CONNECT___HTTP_CONNECTOR__H
 #define CONNECT___HTTP_CONNECTOR__H
 
-/*  $Id: ncbi_http_connector.h,v 6.16 2006/11/08 19:41:04 lavr Exp $
+/* $Id: ncbi_http_connector.h,v 6.17 2008/10/16 18:55:44 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -119,6 +119,11 @@ extern "C" {
  *       the writes).  With this flag set, Flush() will result the data
  *       to be actually sent to server side, so the following write will form
  *       new request, and not get added to the previous one.
+ *  fHCC_InsecureRedirect --
+ *       for security reasons the following redirects comprise security risk
+ *       and, thus, are prohibited:  switching from https to http, and
+ *       re-posting data (regradless of the transport, either http or https).
+ *       This flag allows such redirects (if needed) to be honored.
  *
  * NOTE: the URL encoding/decoding (in the "fHCC_Url_*" cases and "info->args")
  *       is performed by URL_Encode() and URL_Decode() -- "ncbi_connutil.[ch]".
@@ -134,9 +139,10 @@ typedef enum {
     fHCC_UrlEncodeArgs    = 0x20, /* URL-encode "info->args"                 */
     fHCC_DropUnread       = 0x40, /* each microsession drops yet unread data */
     fHCC_NoUpread         = 0x80, /* do not use SOCK_ReadWhileWrite() at all */
-    fHCC_Flushable        = 0x100 /* connector will really flush on Flush()  */
+    fHCC_Flushable        = 0x100,/* connector will really flush on Flush()  */
+    fHCC_InsecureRedirect = 0x200 /* any redirect will be honored            */
 } EHCC_Flags;
-typedef int THCC_Flags;  /* binary OR of "EHttpCreateConnectorFlags"         */
+typedef unsigned int THCC_Flags;  /* bitwise OR of "EHCC_Flags"              */
 
 extern NCBI_XCONNECT_EXPORT CONNECTOR HTTP_CreateConnector
 (const SConnNetInfo* net_info,
@@ -203,61 +209,5 @@ extern NCBI_XCONNECT_EXPORT void HTTP_SetNcbiMessageHook
 
 
 /* @} */
-
-
-/*
- * --------------------------------------------------------------------------
- * $Log: ncbi_http_connector.h,v $
- * Revision 6.16  2006/11/08 19:41:04  lavr
- * Fix typo (left behind long ago) in comment URL_CreateConnector()->HTTP_...
- *
- * Revision 6.15  2006/01/17 20:17:15  lavr
- * DISP_SetMessageHook() moved from ncbi_service_misc.h to
- * ncbi_http_connector.h and renamed to HTTP_SetNcbiMessageHook()
- *
- * Revision 6.14  2005/08/12 16:09:32  lavr
- * +fHCC_Flushable
- *
- * Revision 6.13  2003/05/29 20:13:15  lavr
- * -#include <connect/ncbi_connector.h>
- *
- * Revision 6.12  2003/04/09 19:05:44  siyan
- * Added doxygen support
- *
- * Revision 6.11  2003/01/08 01:59:32  lavr
- * DLL-ize CONNECT library for MSVC (add NCBI_XCONNECT_EXPORT)
- *
- * Revision 6.10  2002/09/19 18:06:39  lavr
- * Additional blank line inserted after inclusion of headers
- *
- * Revision 6.9  2002/09/06 15:41:13  lavr
- * Log moved to end
- *
- * Revision 6.8  2001/09/28 20:46:13  lavr
- * Comments revised; parameter names adjusted
- *
- * Revision 6.7  2001/09/10 21:15:48  lavr
- * Readability issue: FParseHTTPHdr -> FParseHTTPHeader
- *
- * Revision 6.6  2001/05/23 21:52:00  lavr
- * +fHCC_NoUpread
- *
- * Revision 6.5  2001/01/25 16:53:22  lavr
- * New flag for HTTP_CreateConnectorEx: fHCC_DropUnread
- *
- * Revision 6.4  2000/12/29 17:41:44  lavr
- * Pretty printed; HTTP_CreateConnectorEx constructor interface changed
- *
- * Revision 6.3  2000/10/03 21:20:34  lavr
- * Request method changed from POST to {GET|POST}
- *
- * Revision 6.2  2000/09/26 22:02:55  lavr
- * HTTP request method added
- *
- * Revision 6.1  2000/04/21 19:40:58  vakatov
- * Initial revision
- *
- * ==========================================================================
- */
 
 #endif /* CONNECT___HTTP_CONNECTOR__H */

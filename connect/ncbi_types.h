@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_TYPES__H
 #define CONNECT___NCBI_TYPES__H
 
-/*  $Id: ncbi_types.h,v 6.14 2007/08/03 12:55:44 kazimird Exp $
+/*  $Id: ncbi_types.h,v 6.15 2008/07/21 16:55:48 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -84,6 +84,17 @@ extern NCBI_XCONNECT_EXPORT STimeout*     NcbiMsToTimeout
  );
 
 
+#ifndef NCBI_ESWITCH_DEFINED
+#define NCBI_ESWITCH_DEFINED
+
+/*
+ * ATTENTION!   Do not change this enumeration!
+ *
+ * It must always be kept in sync with its C++ counterpart defined in
+ * "corelib/ncbimisc.hpp". If you absolutely(sic!) need to alter this
+ * type, please apply equivalent changes to both definitions.
+ */
+
 /** Aux. enum to set/unset/default various features
  */
 typedef enum {
@@ -91,6 +102,8 @@ typedef enum {
     eOn,
     eDefault
 } ESwitch;
+
+#endif  /* !defined(NCBI_ESWITCH_DEFINED) */
 
 
 /** Fixed size analogs of size_t and time_t (mainly for IPC)

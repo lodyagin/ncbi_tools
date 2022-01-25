@@ -1,4 +1,4 @@
-/*  $Id: ncbi_socket_connector.c,v 6.22 2006/01/27 17:10:54 lavr Exp $
+/* $Id: ncbi_socket_connector.c,v 6.24 2008/10/31 11:25:51 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -55,7 +55,7 @@ typedef struct {
     unsigned int   max_try;   /* max.number of attempts to establish conn */
     void*          init_data; /* data to send to the server on connect    */
     size_t         init_size; /* size of the "inst_str" buffer            */
-    TSCC_Flags     flags;     /* see SOCK_CreateConnectorEx               */
+    TSOCK_Flags    flags;     /* see socket flags in ncbi_socket.h        */
 } SSockConnector;
 
 
@@ -129,7 +129,7 @@ static EIO_Status s_VT_Open
     unsigned int i = 0;
 
     do {
-        if (xxx->sock && !xxx->host) {
+        if (xxx->sock  &&  !xxx->host) {
             /* on-top (connected) connector for the 1st time - only once here*/
             unsigned int   host;
             unsigned short port;
@@ -142,15 +142,14 @@ static EIO_Status s_VT_Open
             xxx->port = port;
             status = eIO_Success;
         } else {
-            if ( !xxx->max_try )
+            if (!xxx->max_try)
                 break;
             /* connect/reconnect */
             status = xxx->sock ?
                 SOCK_Reconnect(xxx->sock, 0, 0, timeout) :
                 SOCK_CreateEx(xxx->host, xxx->port, timeout, &xxx->sock,
                               xxx->init_data, xxx->init_size,
-                              (xxx->flags & eSCC_DebugPrintout)
-                              ? eOn : eDefault);
+                              xxx->flags);
             if (xxx->init_data) {
                 free(xxx->init_data);
                 xxx->init_data = 0;
@@ -158,15 +157,7 @@ static EIO_Status s_VT_Open
             }
             i++;
         }
-
-        if (status == eIO_Success) {
-            SOCK_SetReadOnWrite(xxx->sock,
-                                (xxx->flags & eSCC_SetReadOnWrite)
-                                ? eOn : eDefault);
-            break;
-        }
-        /* error: continue trying */
-    } while (i < xxx->max_try);
+    } while (status != eIO_Success  &&  i < xxx->max_try);
 
     return status;
 }
@@ -293,13 +284,13 @@ static CONNECTOR s_Init
  unsigned int   max_try,
  const void*    init_data,
  size_t         init_size,
- TSCC_Flags     flags)
+ TSOCK_Flags    flags)
 {
     CONNECTOR       ccc = (SConnector    *) malloc(sizeof(SConnector));
     SSockConnector* xxx = (SSockConnector*) malloc(sizeof(*xxx));
 
     /* parameter check: either sock or host/port, not both */
-    assert((!sock && host && port) || (sock && !host && !port));
+    assert((!sock && host && port)  ||  (sock && !host && !port));
     assert(!init_size || init_data);
     /* initialize internal data structures */
     xxx->sock        = sock;
@@ -338,7 +329,7 @@ extern CONNECTOR SOCK_CreateConnector
  unsigned short port,
  unsigned int   max_try)
 {
-    return s_Init(0, host, port, max_try, 0, 0, 0);
+    return s_Init(0, host, port, max_try, 0, 0, fSOCK_LogDefault);
 }
 
 
@@ -348,7 +339,7 @@ extern CONNECTOR SOCK_CreateConnectorEx
  unsigned int   max_try,
  const void*    init_data,
  size_t         init_size,
- TSCC_Flags     flags)
+ TSOCK_Flags    flags)
 {
     return s_Init(0, host, port, max_try, init_data, init_size, flags);
 }
@@ -358,92 +349,14 @@ extern CONNECTOR SOCK_CreateConnectorOnTop
 (SOCK         sock,
  unsigned int max_try)
 {
-    return s_Init(sock, 0, 0, max_try, 0, 0, 0);
+    return s_Init(sock, 0, 0, max_try, 0, 0, fSOCK_LogDefault);
 }
 
 
 extern CONNECTOR SOCK_CreateConnectorOnTopEx
 (SOCK         sock,
  unsigned int max_try,
- TSCC_Flags   flags)
+ TSOCK_Flags  flags)
 {
     return s_Init(sock, 0, 0, max_try, 0, 0, flags);
 }
-
-
-/*
- * --------------------------------------------------------------------------
- * $Log: ncbi_socket_connector.c,v $
- * Revision 6.22  2006/01/27 17:10:54  lavr
- * Replace obsolete call names with current ones
- *
- * Revision 6.21  2006/01/11 20:21:08  lavr
- * Uniform creation/fill-up of connector structures
- *
- * Revision 6.20  2005/04/20 18:15:59  lavr
- * +<assert.h>
- *
- * Revision 6.19  2003/08/25 14:42:14  lavr
- * Employ new k..Timeout constants  --  log modification only
- *
- * Revision 6.18  2003/05/31 05:15:45  lavr
- * Add ARGSUSED where args are meant to be unused, remove Flush
- *
- * Revision 6.17  2003/05/27 15:04:31  lavr
- * +#include <stdio.h> (to define sprint's prototype on Mac)
- *
- * Revision 6.16  2003/05/14 03:54:23  lavr
- * SOCKET_CreateConnectorOnTopEx(): number of parameters changed
- * Implementation of CONN_Description() added
- *
- * Revision 6.15  2003/01/17 19:44:47  lavr
- * Reduce dependencies
- *
- * Revision 6.14  2002/12/04 16:55:45  lavr
- * Take advantage of SOCK_CreateEx()
- *
- * Revision 6.13  2002/10/28 15:46:21  lavr
- * Use "ncbi_ansi_ext.h" privately
- *
- * Revision 6.12  2002/10/22 15:11:24  lavr
- * Zero connector's handle to crash if revisited
- *
- * Revision 6.11  2002/08/12 15:12:46  lavr
- * Use persistent SOCK_Write()
- *
- * Revision 6.10  2002/08/12 15:06:58  lavr
- * Use persistent SOCK_Write()
- *
- * Revision 6.9  2002/08/07 16:37:45  lavr
- * EIO_ReadMethod enums changed accordingly;
- * eSCC_SetReadOnWrite processing added
- *
- * Revision 6.8  2002/04/26 16:37:05  lavr
- * Added setting of default timeout in meta-connector's setup routine
- * Remove all checks for kDefaultTimeout: now supplied good from CONN
- *
- * Revision 6.7  2001/12/04 15:55:07  lavr
- * +SOCK_CreateConnectorOnTop(), +SOCK_CreateConnectorOnTopEx()
- * Redesign of open-retry loop
- *
- * Revision 6.6  2001/04/24 21:30:27  lavr
- * Added treatment of kDefaultTimeout
- *
- * Revision 6.5  2001/01/25 17:04:44  lavr
- * Reversed:: DESTROY method calls free() to delete connector structure
- *
- * Revision 6.4  2001/01/23 23:09:47  lavr
- * Flags added to 'Ex' constructor
- *
- * Revision 6.3  2001/01/11 16:38:18  lavr
- * free(connector) removed from s_Destroy function
- * (now always called from outside, in METACONN_Remove)
- *
- * Revision 6.2  2000/12/29 18:16:26  lavr
- * Adapted for use of new connector structure.
- *
- * Revision 6.1  2000/04/07 20:05:38  vakatov
- * Initial revision
- *
- * ==========================================================================
- */

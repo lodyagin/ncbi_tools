@@ -3,7 +3,7 @@
 	ProjectType="Visual C++"
 	Version="8.00"
 	Name="demo_flint"
-	ProjectGUID="{00DEC39E-11F7-40B4-8840-0556F331A964}"
+	ProjectGUID="{6A9E4943-657C-4BBD-8074-E037055E7208}"
 	>
 	<Platforms>
 		<Platform
@@ -75,7 +75,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="oldnames.lib wsock32.lib"
+				AdditionalDependencies="oldnames.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/flint.exe"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"
@@ -170,7 +170,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="oldnames.lib wsock32.lib"
+				AdditionalDependencies="oldnames.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/flint.exe"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"
@@ -266,7 +266,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="oldnames.lib wsock32.lib"
+				AdditionalDependencies="oldnames.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/flint.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
@@ -361,7 +361,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="oldnames.lib wsock32.lib"
+				AdditionalDependencies="oldnames.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/flint.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
@@ -455,7 +455,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="oldnames.lib wsock32.lib"
+				AdditionalDependencies="oldnames.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/flint.exe"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"
@@ -550,7 +550,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="oldnames.lib wsock32.lib"
+				AdditionalDependencies="oldnames.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/flint.exe"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"
@@ -646,7 +646,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="oldnames.lib wsock32.lib"
+				AdditionalDependencies="oldnames.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/flint.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
@@ -741,7 +741,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="oldnames.lib wsock32.lib"
+				AdditionalDependencies="oldnames.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/flint.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"

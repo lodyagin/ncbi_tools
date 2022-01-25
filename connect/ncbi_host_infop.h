@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_HOST_INFOP__H
 #define CONNECT___NCBI_HOST_INFOP__H
 
-/*  $Id: ncbi_host_infop.h,v 6.3 2006/03/05 17:37:14 lavr Exp $
+/*  $Id: ncbi_host_infop.h,v 6.4 2008/09/03 20:55:44 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -42,28 +42,22 @@ extern "C" {
 #endif
 
 
-HOST_INFO HINFO_Create(const void* hinfo, size_t hinfo_size,
+typedef struct SHostInfoTag {
+    unsigned int addr;   /* host IP, network byte order                   */
+    const char*  env;
+    const char*  arg;
+    const char*  val;
+    double       pad;    /* for proper 'hinfo' alignment; also as a magic */
+} SHOST_Info;
+
+
+
+HOST_INFO HINFO_Create(unsigned int addr, const void* hinfo, size_t hinfo_size,
                        const char* env, const char* arg, const char* val);
 
 
 #ifdef __cplusplus
 }
 #endif
-
-
-/*
- * --------------------------------------------------------------------------
- * $Log: ncbi_host_infop.h,v $
- * Revision 6.3  2006/03/05 17:37:14  lavr
- * New proto for HINFO_Create
- *
- * Revision 6.2  2002/10/28 21:55:38  lavr
- * LBSM_HINFO introduced for readability to replace plain "const void*"
- *
- * Revision 6.1  2002/10/28 20:13:45  lavr
- * Initial revision
- *
- * ==========================================================================
- */
 
 #endif /* CONNECT___NCBI_HOST_INFOP__H */

@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_ASSERT__H
 #define CONNECT___NCBI_ASSERT__H
 
-/*  $Id: ncbi_assert.h,v 1.2 2006/03/04 16:59:40 lavr Exp $
+/*  $Id: ncbi_assert.h,v 1.3 2008/05/12 15:55:44 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,7 +34,7 @@
 
 #include "ncbi_config.h"
 
-#if defined(verify)
+#ifdef   verify
 #  undef verify
 #endif
 
@@ -53,18 +53,5 @@
 #  endif
 #  define verify(expr)  assert(expr)
 #endif
-
-
-/*
- * --------------------------------------------------------------------------
- * $Log: ncbi_assert.h,v $
- * Revision 1.2  2006/03/04 16:59:40  lavr
- * Formatting
- *
- * Revision 1.1  2005/04/20 18:11:23  lavr
- * Initial revision
- *
- * ==========================================================================
- */
 
 #endif /* CONNECT___NCBI_ASSERT__H */

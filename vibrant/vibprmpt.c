@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.2 $
+* $Revision: 6.3 $
 *
 * File Description: 
 *       Vibrant prompt functions
@@ -41,6 +41,9 @@
 *
 *
 * $Log: vibprmpt.c,v $
+* Revision 6.3  2008/04/29 13:43:50  kans
+* fixes for warnings caught by mingw cross-compiler
+*
 * Revision 6.2  2004/07/19 13:36:43  bollin
 * replaced obsolete XmFontListCreate function to get rid of run-time warnings
 *
@@ -473,14 +476,16 @@ static void Nlm_GetPromptTitle (Nlm_GraphiC p, Nlm_Int2 item,
   }
 }
 
-#ifndef WIN_MOTIF
+#ifdef WIN_MAC
 static void Nlm_InvalPrompt (Nlm_GraphiC p)
 {
   Nlm_RecT        r;
+/*
 #ifdef WIN_MSWIN
   Nlm_RectTool    rtool;
   Nlm_WindowTool  wptr;
 #endif
+*/
 
   if (Nlm_GetVisible (p) && Nlm_GetAllParentsVisible (p)) {
 #ifdef WIN_MAC
@@ -488,6 +493,7 @@ static void Nlm_InvalPrompt (Nlm_GraphiC p)
     Nlm_InsetRect (&r, -1, -1);
     Nlm_InvalRect (&r);
 #endif
+/*
 #ifdef WIN_MSWIN
     wptr = Nlm_ParentWindowPtr (p);
     Nlm_GetRect (p, &r);
@@ -501,6 +507,7 @@ static void Nlm_InvalPrompt (Nlm_GraphiC p)
     Nlm_RecTToRectTool (&r, &rtool);
     InvalidateRect (wptr, &rtool, TRUE);
 #endif
+*/
   }
 }
 #endif /* ndef WIN_MOTIF */

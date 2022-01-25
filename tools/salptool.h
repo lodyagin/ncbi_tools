@@ -21,20 +21,4 @@ NLM_EXTERN SeqAlignPtr SeqAlignSetGlobalFromLocal(SeqAlignPtr align,SeqLocPtr lo
 NLM_EXTERN Boolean TruncateAlignment (SeqAlignPtr salp, Int4 num_aln_pos, Boolean from_left);
 NLM_EXTERN SeqAlignPtr MakeDiscontiguousAlignments (SeqAlignPtr salp);
 
-#define ALNMGR_GAP           -2
-#define ALNMGR_ROW_UNDEFINED -1
-
-extern void 
-AlignmentIntervalToString 
-(SeqAlignPtr salp,
- Int4        row,
- Int4        start,
- Int4        stop,
- Int4        target_row,
- Boolean     view_whole_entity,
- Uint1Ptr    seqbuf,
- Uint1Ptr    alnbuf,
- Int4 PNTR   alnbuffer_len,
- Boolean     show_substitutions);
-
 #endif

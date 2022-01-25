@@ -241,6 +241,8 @@ The following are legal exception qualifier values
   rearrangement required for product
   modified codon recognition
   alternative start codon
+  dicistronic gene
+  transcribed pseudogene
 
 Since the International Nucleotide Sequence Database collaboration only
 allows "RNA editing" and "reasons given in citation" to appear in release
@@ -257,7 +259,8 @@ Gene Ontology (GO) terms can be indicated with the following qualifiers
 
 The value field is separated by vertical bars '|' into a descriptive
 string, the GO identifier (leading zeroes are retained), and optionally a
-PubMed ID and one or more GO evidence codes.
+PubMed ID (or GO Reference number starting with a leading 0) and one or more
+GO evidence codes.
 
 
 SOURCE TABLE FORMAT

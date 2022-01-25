@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/12/93
 *
-* $Revision: 6.21 $
+* $Revision: 6.22 $
 *
 * File Description:  Converts fielded text into final report in a document
 *
@@ -41,6 +41,9 @@
 * 01-25-94 DGG + JK    Fixed MapDocPoint bug
 *
 * $Log: document.c,v $
+* Revision 6.22  2008/04/29 13:43:50  kans
+* fixes for warnings caught by mingw cross-compiler
+*
 * Revision 6.21  2008/02/13 18:52:08  bollin
 * Added MapDocPointEx, which allows you to prefer the first matching column to
 * the last matching column.
@@ -2846,7 +2849,7 @@ extern void BulkAppendItem (DoC d, Int2 numItems, DocPrntProc proc,
   ParData    parData;
   RecT       r;
 
-  if (d != NULL && numItems <= 32767) {
+  if (d != NULL && /* numItems <= 32767 && */ numItems > 0) {
     GetPanelExtra ((PaneL) d, &ddata);
     if (ddata.master == NULL) {
       ddata.master = (MasterPtr) MemNew (sizeof (MasterData));

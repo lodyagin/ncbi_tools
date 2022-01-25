@@ -46,6 +46,9 @@
  *       GIF drawing functions
  *
  * $Log: gifgen.c,v $
+ * Revision 6.16  2008/04/29 13:40:53  kans
+ * fixes for warnings caught by mingw cross-compiler
+ *
  * Revision 6.15  2001/03/21 18:54:57  juran
  * Fix "for (...);" warnings by adding a space before the semicolon.
  *
@@ -439,14 +442,13 @@ static
  * and, s_GetOctant() rewritten to fix at the octant boundary points
  */
 
-
 static int s_GetOctant(int gx, int gy)
 {
   static const int OCTANT[3 /*gX?0*/][3 /*gY?0*/][3 /*|gX|?|gY|*/] = {
     /***********  gY < 0 *** gY = 0 *** gY > 0 */ 
-    /* gX < 0 */ 8, 8, 7,   0, 0, 7,   5, 6, 6,
-    /* gX = 0 */ 1, 0, 0,   0, 0, 0,   5, 0, 0,
-    /* gX > 0 */ 1, 2, 2,   0, 0, 3,   4, 4, 3
+    /* gX < 0 */ {{8, 8, 7},   {0, 0, 7},   {5, 6, 6}},
+    /* gX = 0 */ {{1, 0, 0},   {0, 0, 0},   {5, 0, 0}},
+    /* gX > 0 */ {{1, 2, 2},   {0, 0, 3},   {4, 4, 3}}
   };
 
 #define A_VS_B(a,b) (a < b) ? 0 : (a == b) ? 1 : 2

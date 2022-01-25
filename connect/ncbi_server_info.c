@@ -1,4 +1,4 @@
-/*  $Id: ncbi_server_info.c,v 6.66 2007/08/28 18:55:29 kazimird Exp $
+/* $Id: ncbi_server_info.c,v 6.70 2008/10/16 18:25:42 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -121,13 +121,12 @@ char* SERV_WriteInfo(const SSERV_Info* info)
     size_t reserve;
     char* str;
 
-    if (info->type != fSERV_Dns &&
-        info->mime_t != SERV_MIME_TYPE_UNDEFINED &&
-        info->mime_s != SERV_MIME_SUBTYPE_UNDEFINED) {
+    if (!(attr = s_GetAttrByType(info->type)))
+        return 0;
+    if (info->type != fSERV_Dns
+        &&  MIME_ComposeContentTypeEx(info->mime_t, info->mime_s,
+                                      info->mime_e, c_t, sizeof(c_t))) {
         char* p;
-        if (!MIME_ComposeContentTypeEx(info->mime_t, info->mime_s,
-                                       info->mime_e, c_t, sizeof(c_t)))
-            return 0;
         assert(c_t[strlen(c_t) - 2] == '\r' && c_t[strlen(c_t) - 1] == '\n');
         c_t[strlen(c_t) - 2] = 0;
         p = strchr(c_t, ' ');
@@ -136,7 +135,6 @@ char* SERV_WriteInfo(const SSERV_Info* info)
         memmove(c_t, p, strlen(p) + 1);
     } else
         *c_t = 0;
-    attr = s_GetAttrByType(info->type);
     reserve = attr->tag_len+1 + MAX_IP_ADDR_LEN + 1+5/*port*/ + 1+10/*flag*/ +
         1+9/*coef*/ + 3+strlen(c_t)/*cont.type*/ + 1+5/*locl*/ + 1+5/*priv*/ +
         1+7/*quorum*/ + 1+14/*rate*/ + 1+5/*sful*/ + 1+12/*time*/ + 1/*EOL*/;
@@ -191,6 +189,7 @@ SSERV_Info* SERV_ReadInfoEx(const char* info_str, const char* name)
 
     if (!str || (*str && !isspace((unsigned char)(*str))))
         return 0;
+    /* NB: "str" guarantees there is non-NULL attr */
     while (*str && isspace((unsigned char)(*str)))
         str++;
     if (!ispunct((unsigned char)(*str)) || *str == ':') {
@@ -403,17 +402,19 @@ const char* SERV_NameOfInfo(const SSERV_Info* info)
 
 size_t SERV_SizeOfInfo(const SSERV_Info *info)
 {
-    return info ? sizeof(*info) - sizeof(info->u) +
-        s_GetAttrByType(info->type)->vtable.SizeOf(&info->u) : 0;
+    const SSERV_Attr* attr = info ? s_GetAttrByType(info->type) : 0;
+    return attr
+        ? sizeof(*info) - sizeof(info->u) + attr->vtable.SizeOf(&info->u) : 0;
 }
 
 
 int/*bool*/ SERV_EqualInfo(const SSERV_Info *i1, const SSERV_Info *i2)
 {
+    const SSERV_Attr* attr;
     if (i1->type != i2->type || i1->host != i2->host || i1->port != i2->port)
         return 0;
-    return (s_GetAttrByType(i1->type)->vtable.Equal ?
-            s_GetAttrByType(i1->type)->vtable.Equal(&i1->u, &i2->u) : 1);
+    attr = s_GetAttrByType(i1->type/*==i2->type*/);
+    return attr->vtable.Equal ? attr->vtable.Equal(&i1->u, &i2->u) : 1;
 }
 
 
@@ -427,9 +428,10 @@ static char* s_Ncbid_Write(size_t reserve, const USERV_Info* u)
     const SSERV_NcbidInfo* info = &u->ncbid;
     char* str = (char*) malloc(reserve + strlen(SERV_NCBID_ARGS(info))+3);
 
-    if (str)
+    if (str) {
         sprintf(str + reserve, "%s",
                 *SERV_NCBID_ARGS(info) ? SERV_NCBID_ARGS(info) : "''");
+    }
     return str;
 }
 
@@ -441,13 +443,14 @@ static SSERV_Info* s_Ncbid_Read(const char** str, size_t add)
 
     if (!(args = strdup(*str)))
         return 0;
-    for (c = args; *c; c++)
+    for (c = args; *c; c++) {
         if (isspace((unsigned char)(*c))) {
             *c++ = '\0';
             while (*c && isspace((unsigned char)(*c)))
                 c++;
             break;
         }
+    }
     if ((info = SERV_CreateNcbidInfoEx(0, 80, args, add)) != 0)
         *str += c - args;
     free(args);
@@ -486,8 +489,8 @@ SSERV_Info* SERV_CreateNcbidInfoEx
         info->time         = 0;
         info->coef         = 0.0;
         info->rate         = 0.0;
-        info->mime_t       = SERV_MIME_TYPE_UNDEFINED;
-        info->mime_s       = SERV_MIME_SUBTYPE_UNDEFINED;
+        info->mime_t       = eMIME_T_Undefined;
+        info->mime_s       = eMIME_Undefined;
         info->mime_e       = eENCOD_None;
         info->flag         = SERV_DEFAULT_FLAG;
         memset(&info->reserved, 0, sizeof(info->reserved));
@@ -554,8 +557,8 @@ SSERV_Info* SERV_CreateStandaloneInfoEx
         info->time   = 0;
         info->coef   = 0.0;
         info->rate   = 0.0;
-        info->mime_t = SERV_MIME_TYPE_UNDEFINED;
-        info->mime_s = SERV_MIME_SUBTYPE_UNDEFINED;
+        info->mime_t = eMIME_T_Undefined;
+        info->mime_s = eMIME_Undefined;
         info->mime_e = eENCOD_None;
         info->flag   = SERV_DEFAULT_FLAG;
         memset(&info->reserved, 0, sizeof(info->reserved));
@@ -675,8 +678,8 @@ SSERV_Info* SERV_CreateHttpInfoEx
         info->time        = 0;
         info->coef        = 0.0;
         info->rate        = 0.0;
-        info->mime_t      = SERV_MIME_TYPE_UNDEFINED;
-        info->mime_s      = SERV_MIME_SUBTYPE_UNDEFINED;
+        info->mime_t      = eMIME_T_Undefined;
+        info->mime_s      = eMIME_Undefined;
         info->mime_e      = eENCOD_None;
         info->flag        = SERV_DEFAULT_FLAG;
         memset(&info->reserved, 0, sizeof(info->reserved));
@@ -756,8 +759,8 @@ SSERV_Info* SERV_CreateFirewallInfoEx(unsigned int host, unsigned short port,
         info->time   = 0;
         info->coef   = 0.0;
         info->rate   = 0.0;
-        info->mime_t = SERV_MIME_TYPE_UNDEFINED;
-        info->mime_s = SERV_MIME_SUBTYPE_UNDEFINED;
+        info->mime_t = eMIME_T_Undefined;
+        info->mime_s = eMIME_Undefined;
         info->mime_e = eENCOD_None;
         info->flag   = SERV_DEFAULT_FLAG;
         memset(&info->reserved, 0, sizeof(info->reserved));
@@ -816,8 +819,8 @@ SSERV_Info* SERV_CreateDnsInfoEx(unsigned int host, size_t add)
         info->time   = 0;
         info->coef   = 0.0;
         info->rate   = 0.0;
-        info->mime_t = SERV_MIME_TYPE_UNDEFINED;
-        info->mime_s = SERV_MIME_SUBTYPE_UNDEFINED;
+        info->mime_t = eMIME_T_Undefined;
+        info->mime_s = eMIME_Undefined;
         info->mime_e = eENCOD_None;
         info->flag   = SERV_DEFAULT_FLAG;
         memset(&info->reserved, 0, sizeof(info->reserved));
@@ -847,10 +850,6 @@ static const char kFIREWALL  [] = "FIREWALL";
 static const char kDNS       [] = "DNS";
 
 
-/* Note: be aware of the "prefixness" of tag constants and the order of
- * their appearances in the table below, as comparison is done via
- * "strncasecmp", which can result 'true' on a smaller fit fragment.
- */
 static const SSERV_Attr s_SERV_Attr[] = {
     { fSERV_Ncbid,
       kNCBID,      sizeof(kNCBID) - 1,
@@ -906,7 +905,7 @@ static const SSERV_Attr* s_GetAttrByTag(const char* tag)
         size_t i;
         for (i = 0;  i < sizeof(s_SERV_Attr)/sizeof(s_SERV_Attr[0]);  i++) {
             size_t len = s_SERV_Attr[i].tag_len;
-            if (strncasecmp(s_SERV_Attr[i].tag, tag, len) == 0
+            if (strncasecmp(tag, s_SERV_Attr[i].tag, len) == 0
                 &&  (!tag[len]  ||  isspace((unsigned char) tag[len])))
                 return &s_SERV_Attr[i];
         }

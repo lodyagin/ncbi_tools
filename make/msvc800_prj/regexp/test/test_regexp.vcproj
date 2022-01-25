@@ -3,7 +3,7 @@
 	ProjectType="Visual C++"
 	Version="8.00"
 	Name="test_regexp"
-	ProjectGUID="{B6875C47-6809-4972-A89D-0085058670C9}"
+	ProjectGUID="{DE57DBAD-377C-4E81-A2F2-EB68969F7724}"
 	>
 	<Platforms>
 		<Platform
@@ -71,7 +71,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="odbc32.lib odbccp32.lib wsock32.lib"
+				AdditionalDependencies="odbc32.lib odbccp32.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/test_regexp.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
@@ -159,7 +159,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="odbc32.lib odbccp32.lib wsock32.lib"
+				AdditionalDependencies="odbc32.lib odbccp32.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/test_regexp.exe"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"
@@ -249,7 +249,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="odbc32.lib odbccp32.lib wsock32.lib"
+				AdditionalDependencies="odbc32.lib odbccp32.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/test_regexp.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
@@ -337,7 +337,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="odbc32.lib odbccp32.lib wsock32.lib"
+				AdditionalDependencies="odbc32.lib odbccp32.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/test_regexp.exe"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"
@@ -428,7 +428,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="odbc32.lib odbccp32.lib wsock32.lib"
+				AdditionalDependencies="odbc32.lib odbccp32.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/test_regexp.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
@@ -517,7 +517,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="odbc32.lib odbccp32.lib wsock32.lib"
+				AdditionalDependencies="odbc32.lib odbccp32.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/test_regexp.exe"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"
@@ -608,7 +608,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="odbc32.lib odbccp32.lib wsock32.lib"
+				AdditionalDependencies="odbc32.lib odbccp32.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/test_regexp.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
@@ -697,7 +697,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="odbc32.lib odbccp32.lib wsock32.lib"
+				AdditionalDependencies="odbc32.lib odbccp32.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/test_regexp.exe"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"

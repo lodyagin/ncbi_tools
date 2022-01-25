@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 1/1/91
 *
-* $Revision: 6.14 $
+* $Revision: 6.15 $
 *
 * File Description:  Object manager for module NCBI-General
 *
@@ -43,6 +43,9 @@
 *                      it is linked as a DLL).
 *
 * $Log: objgen.c,v $
+* Revision 6.15  2008/09/10 15:22:46  bollin
+* Added DbtagMatchEx and ObjectIdMatchEx, which are optionally case sensitive or case insensitive.
+*
 * Revision 6.14  2008/01/25 15:24:21  kans
 * in UserFieldAsnRead, finished implementing ints, reals, oss as list, does not need num in advance
 *
@@ -860,7 +863,7 @@ erret:
 *   DbtagMatch(a, b)
 *
 *****************************************************************************/
-NLM_EXTERN Boolean LIBCALL DbtagMatch (DbtagPtr a, DbtagPtr b)
+NLM_EXTERN Boolean LIBCALL DbtagMatchEx (DbtagPtr a, DbtagPtr b, Boolean case_sensitive)
 {
 	if (a == b)
 		return TRUE;
@@ -868,11 +871,23 @@ NLM_EXTERN Boolean LIBCALL DbtagMatch (DbtagPtr a, DbtagPtr b)
 	if ((a == NULL) || (b == NULL))
 		return FALSE;
 
-	if (StringICmp(a->db, b->db))
+  if (case_sensitive) {
+    if (StringCmp (a->db, b->db) != 0) {
+      return FALSE;
+    }
+  } else if (StringICmp(a->db, b->db) != 0) {
 		return FALSE;
+  }
 
-	return ObjectIdMatch(a->tag, b->tag);
+	return ObjectIdMatchEx(a->tag, b->tag, case_sensitive);
 }
+
+
+NLM_EXTERN Boolean LIBCALL DbtagMatch (DbtagPtr a, DbtagPtr b)
+{
+  return DbtagMatchEx (a, b, FALSE);
+}
+
 
 /*****************************************************************************
 *
@@ -1044,31 +1059,68 @@ erret:
 *   Boolean ObjectIdMatch(a, b)
 *
 *****************************************************************************/
-NLM_EXTERN Boolean LIBCALL ObjectIdMatch (ObjectIdPtr a, ObjectIdPtr b)
+NLM_EXTERN Boolean LIBCALL ObjectIdMatchEx (ObjectIdPtr a, ObjectIdPtr b, Boolean case_sensitive)
 {
-	if (a == b)
-		return TRUE;
+  Boolean rval = FALSE;
 
-    if ((a == NULL) || (b == NULL))   /* only one is null */
-        return FALSE;
+  if (a == b)
+  {
+		rval = TRUE;
+  }
+
+  if ((a == NULL) || (b == NULL))   /* only one is null */
+  {
+    rval = FALSE;
+  }
 
 	if ((a->str != NULL) && (b->str != NULL))  /* same type */
 	{
-	    if (StringICmp(a->str, b->str))
-    	    return FALSE;
-		else
-			return TRUE;
-	}
-    else if ((a->str == NULL) && (b->str == NULL))  /* must be same kind */
+    if (case_sensitive)
     {
-        if (a->id == b->id)
-            return TRUE;
-        else
-            return FALSE;
+      if (StringCmp (a->str, b->str) == 0) 
+      {
+        rval = TRUE;
+      }
+      else
+      {
+        rval = FALSE;
+      }
     }
-    else                   /* different kinds */
-        return FALSE;
+    else 
+    {
+	    if (StringICmp(a->str, b->str) == 0)
+      {
+        rval = TRUE;
+      }
+      else
+      {
+        rval = FALSE;
+      }
+    }
+	}
+  else if ((a->str == NULL) && (b->str == NULL))  /* must be same kind */
+  {
+    if (a->id == b->id) 
+    {
+      rval = TRUE;
+    }
+    else
+    {
+      rval = FALSE;
+    }
+  }
+  else                   /* different kinds */
+  {
+    rval = FALSE;
+  }
+  return rval;
 }
+
+NLM_EXTERN Boolean LIBCALL ObjectIdMatch (ObjectIdPtr a, ObjectIdPtr b)
+{
+  return ObjectIdMatchEx (a, b, FALSE);
+}
+
 
 /*****************************************************************************
 *

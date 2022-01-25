@@ -31,7 +31,7 @@
 *   
 * Version Creation Date: 11/3/93
 *
-* $Revision: 6.64 $
+* $Revision: 6.68 $
 *
 * File Description: Utilities for creating ASN.1 submissions
 *
@@ -39,271 +39,6 @@
 * --------------------------------------------------------------------------
 * Date	   Name        Description of modification
 * -------  ----------  -----------------------------------------------------
-*
-*
-* $Log: subutil.h,v $
-* Revision 6.64  2007/11/28 21:47:58  kans
-* added defines for mip->biomol ncRNA and tmRNA
-*
-* Revision 6.63  2007/11/08 16:43:18  kans
-* added chromosome and chromatophore to BioSource.genome defines
-*
-* Revision 6.62  2007/10/11 21:57:44  kans
-* added AddGeneratedToRefGeneTrackUserObject, changed AddAccessionToRefGeneTrackUserObject
-*
-* Revision 6.61  2007/07/17 14:46:42  kans
-* added support for metagenome_source orgmod
-*
-* Revision 6.60  2007/06/21 15:42:04  kans
-* added OrgMod.subtype culture-collection and bio-material
-*
-* Revision 6.59  2007/06/08 14:48:46  kans
-* AddToGeneOntologyUserObject adds goref argument
-*
-* Revision 6.58  2007/04/05 19:14:13  bollin
-* Added function for adding a Pnt location to another location without creating
-* an intermediate SeqFeat.
-*
-* Revision 6.57  2006/10/25 21:37:32  kans
-* adding source qualifier metagenomic
-*
-* Revision 6.56  2006/09/18 18:40:30  kans
-* special symbols for structured comment prefix, suffix, for parsing flatfile
-*
-* Revision 6.55  2006/07/13 17:06:39  bollin
-* use Uint4 instead of Uint2 for itemID values
-* removed unused variables
-* resolved compiler warnings
-*
-* Revision 6.54  2006/05/05 19:49:40  kans
-* added StructuredComment user object creation functions
-*
-* Revision 6.53  2006/02/06 19:00:15  kans
-* added CreateFeatureFetchPolicyUserObject
-*
-* Revision 6.52  2006/01/23 16:39:57  kans
-* added CreateAnnotDescCommentPolicyUserObject
-*
-* Revision 6.51  2006/01/17 18:25:07  kans
-* support for genomeprojectsdb user object
-*
-* Revision 6.50  2005/06/10 14:06:16  kans
-* added GENOME_hydrogenosome define
-*
-* Revision 6.49  2005/03/30 21:13:49  bollin
-* added function AddIntToSeqLoc
-*
-* Revision 6.48  2005/01/13 22:04:53  kans
-* changed [left/right]_primer to [fwd/rev]_primer_[seq/name]
-*
-* Revision 6.47  2004/12/15 22:48:52  kans
-* added lat_lon through right_primer subsource defines for Barcode of Life project
-*
-* Revision 6.46  2003/10/21 18:16:05  bazhin
-* Replaced C++ comments with C ones.
-*
-* Revision 6.45  2003/10/16 17:16:33  mjohnson
-*
-* Added ORG_* and IS_ORG_* defines for origins. Use these constants
-* and macros instead of small integers.
-*
-* Revision 6.44  2003/07/11 18:22:45  kans
-* AddSourceToRefGeneTrackUserObject
-*
-* Revision 6.43  2002/07/09 16:17:35  kans
-* AddAccessionToTpaAssemblyUserObject takes from and to parameters
-*
-* Revision 6.42  2002/06/24 14:47:22  kans
-* added ORGMOD defines for gb_acronym, gb_anamorph, gb_synonym
-*
-* Revision 6.41  2002/06/04 14:40:30  kans
-* added AddPntToSeqFeat
-*
-* Revision 6.40  2002/03/27 19:26:31  kans
-* AddToGeneOntologyUserObject takes string for GO id to keep leading zeroes
-*
-* Revision 6.39  2001/12/12 16:01:47  kans
-* added MOLECULE_TYPE_TRANSCRIBED_RNA, SUBSRC_transgenic, SUBSRC_environmental_sample, and SUBSRC_isolation_source
-*
-* Revision 6.38  2001/12/11 16:50:41  kans
-* added TpaAssembly user object creation functions
-*
-* Revision 6.37  2001/12/10 13:47:44  kans
-* added MOLECULE_TYPE defines for CRNA and SNORNA
-*
-* Revision 6.36  2001/11/09 15:12:21  kans
-* moved collaborator to separate function per user object
-*
-* Revision 6.35  2001/11/09 13:21:08  kans
-* added collaborator field to reftrack user object
-*
-* Revision 6.34  2001/11/09 12:54:47  kans
-* added model evidence user object functions
-*
-* Revision 6.33  2001/07/29 16:23:58  kans
-* added AddOrganismToEntryEx to allow entry of taxonID
-*
-* Revision 6.32  2001/01/25 19:55:14  kans
-* added AddGenBankSetToSubmission for patents and other bulk submissions of unrelated sequences
-*
-* Revision 6.31  2000/11/15 23:18:00  kans
-* gene ontology user object functions
-*
-* Revision 6.30  2000/10/10 15:06:01  kans
-* added SUBSRC_endogenous_virus_name
-*
-* Revision 6.29  2000/09/28 11:41:33  ostell
-* added GENOME_endogenous_virus
-*
-* Revision 6.28  2000/09/20 12:32:54  kans
-* removed AddMethodToRefGeneTrackUserObject and AddSupportToRefGeneTrackUserObject
-*
-* Revision 6.27  2000/08/29 22:27:02  kans
-* reftrack support now has organism field
-*
-* Revision 6.26  2000/07/21 10:54:14  kans
-* added functions for adding Method and Support to RefGeneTrack user object
-*
-* Revision 6.25  2000/07/12 22:45:15  kans
-* added ORGMOD_old_lineage
-*
-* Revision 6.24  2000/06/20 17:17:28  kans
-* added orgmod.subtype authority through breed
-*
-* Revision 6.23  2000/06/14 16:41:20  kans
-* added SUBSRC_segment
-*
-* Revision 6.22  2000/03/10 18:35:46  kans
-* added CreateContigCloneUserObject for genome contig RefSeq records
-*
-* Revision 6.21  2000/02/26 23:55:34  kans
-* added AddPhrapGraphToSeqLit, using internal extended SeqLit to track, readjust graphs to current position of seqlit in delta seq - may need to move fields to public SeqLit if problems arise
-*
-* Revision 6.20  2000/02/24 23:15:00  kans
-* added AddSecondaryAccnToEntry
-*
-* Revision 6.19  2000/02/23 19:25:54  kans
-* AddFakeGapToDeltaSeq returns SeqLitPtr so program can set fuzz after SpreadGapsInDeltaSeq is no longer being called
-*
-* Revision 6.18  2000/02/23 18:28:39  kans
-* added AddFakeGapToDeltaSeq to set fuzz even if nonzero length is passed in
-*
-* Revision 6.17  2000/02/07 16:48:08  ostell
-* added AddDeltaSeqToNucProtEntry()
-*
-* Revision 6.16  1999/12/20 19:57:45  kans
-* added AddStatusToRefGeneTrackUserObject
-*
-* Revision 6.15  1999/12/14 17:32:45  ostell
-* changed protoplast to proplastid
-*
-* Revision 6.14  1999/10/05 20:36:01  kans
-* added more GENOME_ types (JO)
-*
-* Revision 6.13  1999/08/05 20:43:44  kans
-* added CreateSubmissionUserObject (JP)
-*
-* Revision 6.12  1999/03/17 22:49:38  kans
-* changed SUBSOURCE_ to SUBSRC_
-*
-* Revision 6.11  1999/03/17 20:04:40  kans
-* added SUBSOURCE_ and ORGMOD_ defines
-*
-* Revision 6.10  1998/10/02 17:48:12  kans
-* new parameters to AddAccessionToRefGeneTrackUserObject, and added CreateMrnaProteinLinkUserObject
-*
-* Revision 6.9  1998/09/29 15:34:20  kans
-* added comment for new choices in molinfo.completeness
-*
-* Revision 6.8  1998/09/23 16:41:49  kans
-* removed from and to from AddAccessionToRefGeneTrackUserObject
-*
-* Revision 6.7  1998/08/20 20:37:00  kans
-* add comment parameter to reftrack user object function
-*
-* Revision 6.6  1998/08/11 22:27:26  kans
-* added CreateRefGeneTrackUserObject and AddAccessionToRefGeneTrackUserObject
-*
-* Revision 6.5  1998/02/05 19:19:30  kans
-* added AddPhrapGraph
-*
-* Revision 6.4  1998/01/06 03:29:49  ostell
-* added AddGeneticCodetoEntry()
-*
-* Revision 6.3  1997/12/15 17:31:48  kans
-* backed out accidental checkin
-*
-* Revision 6.1  1997/11/25 20:56:04  ostell
-* GENOME_genomic changed from 2 to 1
-*
-* Revision 6.0  1997/08/25 18:07:39  madden
-* Revision changed to 6.0
-*
-* Revision 5.12  1997/07/11 18:23:29  kans
-* added Add[Pop/Phy/Mut]SetToSubmission
-*
-* Revision 5.11  1997/06/19 18:39:13  vakatov
-* [WIN32,MSVC++]  Adopted for the "NCBIOBJ.LIB" DLL'ization
-*
-* Revision 5.10  1997/05/16 19:14:03  ostell
-* moved prototype of NewDescrOnSeqEntry from subutil.c to subutil.h to make
-* it external.
-*
- * Revision 5.9  1997/03/17  17:18:46  tatiana
- * added defines for BioSource.genome
- *
- * Revision 5.8  1996/10/16  18:10:56  epstein
- * change C++ right paren to brace per Eric Hackborn
- *
- * Revision 5.7  1996/09/05  20:20:28  ostell
- * added CitSubUpdateBuild()
- *
- * Revision 5.6  1996/09/04  22:33:06  ostell
- * added MakeCommentFeature()
- *
- * Revision 5.5  1996/08/20  15:32:53  tatiana
- * prototypes added for AddAAsToByteStore and AddBasesToByteStore
- *
- * Revision 5.4  1996/06/14  19:00:06  ostell
- * fixed line wraps
- *
- * Revision 5.3  1996/06/14  18:07:38  ostell
- * added AddOrgModToEntry() and AddSubSourceToEntry()
- *
- * Revision 5.2  1996/06/14  17:27:18  ostell
- * added comments to subutil on BioSource and MolInfo attributes
- *
- * Revision 5.1  1996/06/13  03:34:53  ostell
- * added support for delta seqs and submittor_key
- * fixed memory leak in AddAminoAcidsToBioseq()
- *
- * Revision 5.0  1996/05/28  13:23:23  ostell
- * Set to revision 5.0
- *
- * Revision 4.2  1996/03/05  17:06:25  tatiana
- * remove static from GetDescrOnSeqEntry,
- * taxonomy added to AddOrganismToEntryNew arguments
- *
- * Revision 4.1  1996/01/31  02:35:00  ostell
- * added AddCodeBreakToCdRegion() and AddAntiCodonTotRNA()
- *
- * Revision 4.0  1995/07/26  13:49:01  ostell
- * force revision to 4.0
- *
- * Revision 1.8  1995/07/25  17:49:32  kans
- * added prototype for AddOrganismToEntryNew
- *
- * Revision 1.7  1995/07/25  14:48:17  tatiana
- * add new functions for Biosource and Molinfo
- *
- * Revision 1.6  1995/06/03  13:45:47  ostell
- * changes made in valid to use gather functions and ErrPostItem instead
- * of previous custom functions
- *
- * Revision 1.5  1995/05/15  21:46:05  ostell
- * added Log line
- *
-*
 *
 * ==========================================================================
 */
@@ -954,6 +689,9 @@ NLM_EXTERN Boolean AddGenomeToEntry (
 #define SUBSRC_fwd_primer_name 35
 #define SUBSRC_rev_primer_name 36
 #define SUBSRC_metagenomic 37
+#define SUBSRC_mating_type 38
+#define SUBSRC_linkage_group 39
+#define SUBSRC_haplogroup 40
 #define SUBSRC_other 255
 
 /*********************************************
@@ -983,6 +721,24 @@ NLM_EXTERN Boolean AddGenomeToEntry (
         transposon-name (20) ,
         insertion-seq-name (21) ,
         plastid-name (22) ,
+        country (23) ,
+        segment (24) ,
+        endogenous-virus-name (25) ,
+        transgenic (26) ,
+        environmental-sample (27) ,
+        isolation-source (28) ,
+        lat-lon (29) ,          -- +/- decimal degrees
+        collection-date (30) ,  -- DD-MMM-YYYY format
+        collected-by (31) ,     -- name of person who collected the sample
+        identified-by (32) ,    -- name of person who identified the sample
+        fwd-primer-seq (33) ,   -- sequence (possibly more than one; semicolon-separated)
+        rev-primer-seq (34) ,   -- sequence (possibly more than one; semicolon-separated)
+        fwd-primer-name (35) ,
+        rev-primer-name (36) ,
+        metagenomic (37) ,
+        mating-type (38) ,
+        linkage-group (39) ,
+        haplogroup (40) ,
         other (255) } ,
 
 *   value is an optional string to give the name (eg. of the
@@ -1077,9 +833,27 @@ NLM_EXTERN Boolean AddSubSourceToEntry (
         isolate (17) ,
         common (18) ,
         acronym (19) ,
-        dosage (20) ,           -- chromosome dosage of hybrid
-        nat-host (21) ,         -- natural host of this specimen
+        dosage (20) ,          -- chromosome dosage of hybrid
+        nat-host (21) ,        -- natural host of this specimen
         sub-species (22) ,
+        specimen-voucher (23) ,
+        authority (24) ,
+        forma (25) ,
+        forma-specialis (26) ,
+        ecotype (27) ,
+        synonym (28) ,
+        anamorph (29) ,
+        teleomorph (30) ,
+        breed (31) ,
+        gb-acronym (32) ,       -- used by taxonomy database
+        gb-anamorph (33) ,      -- used by taxonomy database
+        gb-synonym (34) ,       -- used by taxonomy database
+        culture-collection (35) ,
+        bio-material (36) ,
+        metagenome-source (37) ,
+        old-lineage (253) ,
+        old-name (254) ,
+        other (255) } ,         -- ASN5: old-name (254) will be added to next spec
   
 *   value is an optional string to give the name (eg. of the
 *     varient)
@@ -1679,6 +1453,7 @@ NLM_EXTERN UserObjectPtr CreateRefGeneTrackUserObject (void);
 NLM_EXTERN void AddStatusToRefGeneTrackUserObject (UserObjectPtr uop, CharPtr status);
 NLM_EXTERN void AddGeneratedToRefGeneTrackUserObject (UserObjectPtr uop, Boolean generated);
 NLM_EXTERN void AddCuratorToRefGeneTrackUserObject (UserObjectPtr uop, CharPtr collaborator);
+NLM_EXTERN void AddCuratorURLToRefGeneTrackUserObject (UserObjectPtr uop, CharPtr url);
 NLM_EXTERN void AddSourceToRefGeneTrackUserObject (UserObjectPtr uop, CharPtr genomicSource);
 NLM_EXTERN void AddAccessionToRefGeneTrackUserObject (UserObjectPtr uop, CharPtr field,
                                                       CharPtr accn, Int4 gi, Int4 from,

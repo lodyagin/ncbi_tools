@@ -1,4 +1,4 @@
-/* $Id: composition_adjustment.h,v 1.18 2006/09/18 18:16:21 gertz Exp $
+/* $Id: composition_adjustment.h,v 1.20 2008/08/21 19:55:43 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -77,7 +77,7 @@ void Blast_ReadAaComposition(Blast_AminoAcidComposition * composition,
 /** Information about a amino-acid substitution matrix */
 typedef struct Blast_MatrixInfo {
     char * matrixName;         /**< name of the matrix */
-    Int4    **startMatrix;     /**< Rescaled values of the original matrix */
+    int    **startMatrix;     /**< Rescaled values of the original matrix */
     double **startFreqRatios;  /**< frequency ratios used to calculate matrix
                                     scores */
     int      rows;             /**< the number of rows in the scoring
@@ -124,7 +124,7 @@ typedef struct Blast_CompositionWorkspace {
 /** Create a new Blast_CompositionWorkspace object, allocating memory
  * for all its component arrays. */
 NCBI_XBLAST_EXPORT
-Blast_CompositionWorkspace * Blast_CompositionWorkspaceNew();
+Blast_CompositionWorkspace * Blast_CompositionWorkspaceNew(void);
 
 
 /** Initialize the fields of a Blast_CompositionWorkspace for a specific
@@ -277,7 +277,7 @@ int Blast_CompositionMatrixAdj(int ** matrix,
  */
 NCBI_XBLAST_EXPORT
 int
-Blast_AdjustScores(Int4 ** matrix,
+Blast_AdjustScores(int ** matrix,
                    const Blast_AminoAcidComposition * query_composition,
                    int queryLength,
                    const Blast_AminoAcidComposition * subject_composition,
@@ -303,7 +303,7 @@ Blast_AdjustScores(Int4 ** matrix,
  * @param Lambda       the desired scale of the matrix
  */
 NCBI_XBLAST_EXPORT
-void Blast_Int4MatrixFromFreq(Int4 **matrix, int size, 
+void Blast_Int4MatrixFromFreq(int **matrix, int size, 
                               double ** freq, double Lambda);
 
 

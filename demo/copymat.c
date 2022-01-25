@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: copymat.c,v 6.48 2008/02/01 14:04:25 madden Exp $";
+static char const rcsid[] = "$Id: copymat.c,v 6.49 2008/11/04 16:44:38 maning Exp $";
 
 /*
 * ===========================================================================
@@ -36,6 +36,9 @@ Contents: main routines for copymatrices program to convert
 score matrices output by makematrices into a single byte-encoded file.
    
 $Log: copymat.c,v $
+Revision 6.49  2008/11/04 16:44:38  maning
+add type cast to fix compilation error
+
 Revision 6.48  2008/02/01 14:04:25  madden
 LookupTableWrapInit prototype change
 
@@ -448,19 +451,26 @@ static Boolean RPSUpdateOffsets(BlastAaLookupTable *lookup)
     Int4 index;
     Int4 num_used;
     Int4 offset_diff;
+    AaLookupBackboneCell *bbc;
+    Int4 *ovf;
 
     len = lookup->backbone_size;
     offset_diff = lookup->word_length - 1;
 
+    // database assumes backbone type of lookup table
+    ASSERT(lookup->bone_type == eBackbone);
+    bbc = (AaLookupBackboneCell *)(lookup->thick_backbone);
+    ovf = (Int4 *)(lookup->overflow);
+
     /* Walk through table, copying info into mod_lt[] */
     for(index = 0; index < len; index++) {
         
-        if((num_used=lookup->thick_backbone[index].num_used) <= 3)
+        if((num_used=bbc[index].num_used) <= 3)
         {
             while (num_used > 0)
             {
                 num_used--;
-            	lookup->thick_backbone[index].payload.entries[num_used] += offset_diff;
+            	bbc[index].payload.entries[num_used] += offset_diff;
             }
         }
         else
@@ -468,7 +478,7 @@ static Boolean RPSUpdateOffsets(BlastAaLookupTable *lookup)
             while (num_used > 0)
             {
                  num_used--;
-                 lookup->overflow [ lookup->thick_backbone[index].payload.overflow_cursor + num_used] += offset_diff;
+                 ovf[ bbc[index].payload.overflow_cursor + num_used] += offset_diff;
             }
         }
     }
@@ -493,6 +503,13 @@ Boolean RPSUpdatePointers(BlastAaLookupTable *lookup, Uint4 *new_overflow, Uint4
     Uint4 *new_overflow_cursor;
     Int4 *src;
     Int4 first_hit;
+    AaLookupBackboneCell *bbc;
+    Int4 *ovf;
+
+    // database assumes backbone type of lookup table
+    ASSERT(lookup->bone_type == eBackbone);
+    bbc = (AaLookupBackboneCell *)(lookup->thick_backbone);
+    ovf = (Int4 *)(lookup->overflow);
 
     len = lookup->backbone_size;
 
@@ -501,22 +518,22 @@ Boolean RPSUpdatePointers(BlastAaLookupTable *lookup, Uint4 *new_overflow, Uint4
     /* Walk through table, copying info into mod_lt[] */
     for(index = 0; index < len; index++) {
         
-        if(lookup->thick_backbone[index].num_used <= 3)
+        if(bbc[index].num_used <= 3)
             continue;
 
-        src = &(lookup->overflow[lookup->thick_backbone[index].payload.overflow_cursor]);
-        MemCpy(new_overflow_cursor, &src[1], sizeof(Uint4)*(lookup->thick_backbone[index].num_used-1));
+        src = &(ovf[bbc[index].payload.overflow_cursor]);
+        MemCpy(new_overflow_cursor, &src[1], sizeof(Uint4)*(bbc[index].num_used-1));
 
         mlpp_address = (long) new_overflow_cursor;
 
-	new_overflow_cursor += lookup->thick_backbone[index].num_used-1;
+	new_overflow_cursor += bbc[index].num_used-1;
 	first_hit = src[0];
 
         mlpp_address -= (long) start_address;
         
         /* Now this is new relative address - usually small  */
-        lookup->thick_backbone[index].payload.entries[1] = (Int4) mlpp_address;
-        lookup->thick_backbone[index].payload.entries[0] = first_hit;
+        bbc[index].payload.entries[1] = (Int4) mlpp_address;
+        bbc[index].payload.entries[0] = first_hit;
 
     }
 

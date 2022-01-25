@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/20/99
 *
-* $Revision: 6.469 $
+* $Revision: 6.476 $
 *
 * File Description: 
 *
@@ -4975,7 +4975,7 @@ static void ResolveDuplicateFeats (
   }
 }
 
-extern void AddCitSubToUpdatedSequence (BioseqPtr upd_bsp, Uint2 input_entityID)
+extern void AddCitSubToUpdatedSequence (BioseqPtr upd_bsp, Uint2 input_entityID, CharPtr update_txt)
 {
   SeqEntryPtr top_sep, upd_sep;
 
@@ -4983,7 +4983,7 @@ extern void AddCitSubToUpdatedSequence (BioseqPtr upd_bsp, Uint2 input_entityID)
   if (upd_sep == NULL) return;
   top_sep = GetTopSeqEntryForEntityID ( input_entityID);
   if (top_sep == NULL) return;
-  CreateUpdateCitSubFromBestTemplate (top_sep, upd_sep);
+  CreateUpdateCitSubFromBestTemplate (top_sep, upd_sep, update_txt);
 }
 
 static Boolean ExtendFeatures (UpsDataPtr udp, Int4 offset)
@@ -5322,7 +5322,7 @@ static Boolean ExtendOneSequence (UpsDataPtr udp)
     entityID = ObjMgrGetEntityIDForPointer (udp->oldbsp);
     if (GetStatus (udp->add_cit_subs))
     {
-      AddCitSubToUpdatedSequence ( udp->oldbsp, entityID);
+      AddCitSubToUpdatedSequence ( udp->oldbsp, entityID, kSubmitterUpdateText);
     }
   }
   return update;
@@ -6322,56 +6322,6 @@ static Boolean PrepareUpdateAlignmentForProtein
   return TRUE;
 }
 
-static Boolean CodingRegionHasTranslExcept (SeqFeatPtr sfp)
-{
-  CodeBreakPtr cbp;
-  Int4         len;
-  CdRegionPtr  crp;
-  SeqLocPtr    slp;
-  Int4         codon_start, codon_stop, pos, codon_length;
-  
-  if (sfp == NULL || sfp->data.choice != SEQFEAT_CDREGION
-      || (crp = (CdRegionPtr)sfp->data.value.ptrvalue) == NULL
-      || crp->code_break == NULL)
-  {
-  	return FALSE;
-  }
-
-  len = SeqLocLen (sfp->location);
-  if (crp->frame > 1) 
-  {
-  	len -= crp->frame - 1;
-  }
-  if (len % 3 == 0) 
-  {
-  	return FALSE;
-  }
-  for (cbp = crp->code_break; cbp != NULL; cbp = cbp->next)
-  {
-    codon_start = INT4_MAX;
-    codon_stop = -10;
-    slp = NULL;
-    while ((slp = SeqLocFindNext (cbp->loc, slp)) != NULL) {
-      pos = GetOffsetInLoc (slp, sfp->location, SEQLOC_START);
-      if (pos < codon_start)
-      {
-        codon_start = pos;
-        pos = GetOffsetInLoc (slp, sfp->location, SEQLOC_STOP);
-        if (pos > codon_stop)
-        {
-          codon_stop = pos;
-        }
-        codon_length = codon_stop - codon_start;      /* codon length */
-        if (codon_length >= 0 && codon_length <= 1 && codon_stop == len - 1)
-        {                       /*  a codon */
-          /* allowing a partial codon at the end */
-          return TRUE;
-        }
-      }
-    }
-  }
-  return FALSE;
-}
 
 typedef struct proteinfromcdsdata {
  Uint2      input_entityID;
@@ -6897,7 +6847,7 @@ static void UpdateOneSequence (
     if (add_cit_subs
       && (feature_update || StringCmp (udp->seq1, udp->seq2) != 0))
     {
-      AddCitSubToUpdatedSequence ( udp->oldbsp, entityID);
+      AddCitSubToUpdatedSequence ( udp->oldbsp, entityID, kSubmitterUpdateText);
     }
     if (update_proteins)
     {
@@ -9662,7 +9612,7 @@ static void ExtendAllSequencesInSetCallback (BioseqPtr bsp, Pointer userdata)
   
   if (esp->add_cit_sub)
   {
-    AddCitSubToUpdatedSequence ( bsp, esp->input_entityID);
+    AddCitSubToUpdatedSequence ( bsp, esp->input_entityID, kSubmitterUpdateText);
   }
   
   if (esp->log_fp != NULL)
@@ -10794,9 +10744,11 @@ typedef struct addtranslexceptdata {
   TexT        cds_comment;
   ButtoN      strict_checking_btn;
   ButtoN      extend_btn;
+  ButtoN      adjust_gene_btn;
   CharPtr     cds_comment_txt;
   Boolean     strict_checking;
   Boolean     extend;
+  Boolean     adjust_gene;
 } AddTranslExceptData, PNTR AddTranslExceptPtr; 
 
 
@@ -10909,7 +10861,7 @@ static Int4 AddTerminalExceptionLen (SeqFeatPtr sfp)
 }
 
 
-extern void AddTranslExcept (SeqFeatPtr sfp, CharPtr cds_comment, Boolean use_strict, Boolean extend)
+extern void AddTranslExcept (SeqFeatPtr sfp, CharPtr cds_comment, Boolean use_strict, Boolean extend, Boolean adjust_gene)
 
 {
   CdRegionPtr        crp;
@@ -10925,6 +10877,8 @@ extern void AddTranslExcept (SeqFeatPtr sfp, CharPtr cds_comment, Boolean use_st
   Boolean            table_is_local;
   CharPtr            new_comment;
   Int4               comment_len;
+  SeqFeatPtr         gene = NULL;
+  SeqMgrFeatContext  fcontext;
 
   if (sfp == NULL 
       || sfp->idx.subtype != FEATDEF_CDS
@@ -10941,6 +10895,12 @@ extern void AddTranslExcept (SeqFeatPtr sfp, CharPtr cds_comment, Boolean use_st
   } else {
     except_len = dna_len % 3;
   }
+
+  /* if adjusting gene, collect now before location changes */
+  if (adjust_gene) {
+    gene = SeqMgrGetOverlappingGene (sfp->location, &fcontext);
+  } 
+
   if (except_len == 0 && extend && !DoesCodingRegionEndWithStopCodon(sfp)) {
     except_len = AddTerminalExceptionLen (sfp);
     dna_len = SeqLocLen (sfp->location);
@@ -11056,6 +11016,16 @@ extern void AddTranslExcept (SeqFeatPtr sfp, CharPtr cds_comment, Boolean use_st
       }
   	}
   }
+
+  /* adjust gene if requested */
+  if (gene != NULL) 
+  {
+    if (SeqLocCompare (gene->location, sfp->location) != SLC_A_EQ_B)
+    {
+      gene->location = SeqLocFree (gene->location);
+      gene->location = SeqLocCopy (sfp->location);
+    }
+  }
 }
 
 
@@ -11065,6 +11035,7 @@ static void AddTranslExceptCallback (SeqFeatPtr sfp, Pointer userdata)
   AddTranslExceptPtr ap;
   Boolean            use_strict = FALSE;
   Boolean            extend = FALSE;
+  Boolean            adjust_gene = FALSE;
   CharPtr            cds_comment = NULL;
 
   ap = (AddTranslExceptPtr) userdata;
@@ -11073,9 +11044,10 @@ static void AddTranslExceptCallback (SeqFeatPtr sfp, Pointer userdata)
     cds_comment = ap->cds_comment_txt;
   	use_strict = ap->strict_checking;
     extend = ap->extend;
+    adjust_gene = ap->adjust_gene;
   }
 
-  AddTranslExcept (sfp, cds_comment, use_strict, extend);
+  AddTranslExcept (sfp, cds_comment, use_strict, extend, adjust_gene);
 }
 
 
@@ -11114,6 +11086,7 @@ static void DoAddTranslExceptWithComment (ButtoN b)
   ap->cds_comment_txt = SaveStringFromText (ap->cds_comment);
   ap->strict_checking = GetStatus (ap->strict_checking_btn);
   ap->extend = GetStatus (ap->extend_btn);
+  ap->adjust_gene = GetStatus (ap->adjust_gene_btn);
   if (StringHasNoText (ap->cds_comment_txt))
   {
   	ap->cds_comment_txt = MemFree (ap->cds_comment_txt);
@@ -11168,6 +11141,8 @@ extern void AddTranslExceptWithComment (IteM i)
   SetObjectExtra (clear_btn, ap, NULL);
   ap->strict_checking_btn = CheckBox (h, "Overhang must be T or TA", NULL);
   ap->extend_btn = CheckBox (h, "Extend for T/TA overhang", NULL);
+  ap->adjust_gene_btn = CheckBox (h, "Adjust gene to match coding region location", NULL);
+  SetStatus (ap->adjust_gene_btn, TRUE);
 
   c = HiddenGroup (h, 4, 0, NULL);
   b = DefaultButton (c, "Accept", DoAddTranslExceptWithComment);
@@ -11175,7 +11150,9 @@ extern void AddTranslExceptWithComment (IteM i)
   PushButton (c, "Cancel", StdCancelButtonProc);
   AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) clear_btn, 
                (HANDLE) ap->strict_checking_btn,
-               (HANDLE) ap->extend_btn, (HANDLE) c, NULL);
+               (HANDLE) ap->extend_btn, 
+               (HANDLE) ap->adjust_gene_btn, 
+               (HANDLE) c, NULL);
   RealizeWindow (w);
   Show (w);
   Update ();
@@ -12404,18 +12381,22 @@ ImportFeatureProduct
 (SeqFeatPtr  dup, 
  Boolean     keepProteinIDs, 
  SeqEntryPtr top,
- SeqIdPtr    nuc_sip)
+ SeqIdPtr    nuc_sip,
+ Uint2       update_entityID)
 {
   BioseqPtr   bsp, newbsp;
   SeqEntryPtr prdsep, newsep;
+  SeqEntryPtr newscope, oldscope;
   
   if (dup == NULL || dup->product == NULL || nuc_sip == NULL || top == NULL)
   {
     return;
   }
   
-  SeqEntrySetScope (NULL);
+  newscope = GetTopSeqEntryForEntityID (update_entityID);
+  oldscope = SeqEntrySetScope (newscope);
   bsp = BioseqFindFromSeqLoc (dup->product);
+  SeqEntrySetScope (oldscope);
   if (bsp != NULL) {
     prdsep = SeqMgrGetSeqEntryForData (bsp);
     if (prdsep != NULL) {
@@ -12550,7 +12531,7 @@ ImportFeaturesWithOffset
       default :
         break;
     }
-    ImportFeatureProduct (dup, keepProteinIDs, top, sip);
+    ImportFeatureProduct (dup, keepProteinIDs, top, sip, sfp->idx.entityID);
   }
 
   ReplaceBioSourceAndPubs (top, sdp);
@@ -12734,7 +12715,7 @@ static Boolean ImportFeaturesViaAlignment
           default :
             break;
         }
-        ImportFeatureProduct (dup, keepProteinIDs, top, sip);
+        ImportFeatureProduct (dup, keepProteinIDs, top, sip, sfp->idx.entityID);
       }
     }
 
@@ -13339,7 +13320,7 @@ UpdateOrExtendOneSequenceEx
               && ! AreSequenceResiduesIdentical(upp->orig_bsp, upp->update_bsp))))
      
   {
-    AddCitSubToUpdatedSequence (upp->orig_bsp, entityID);
+    AddCitSubToUpdatedSequence (upp->orig_bsp, entityID, kSubmitterUpdateText);
   }
   
   /* update proteins for coding regions on the updated sequence */
@@ -16983,7 +16964,8 @@ static SeqEntryPtr ReadUpdateSequences (Boolean is_na)
     Message (MSG_ERROR, "Unable to open %s", path);
     return NULL;
   }
-  sep_list = ImportSequencesFromFile (fp, NULL, is_na, TRUE, NULL, &err_msg_list, &chars_stripped);
+  sep_list = ImportSequencesFromFileEx (fp, NULL, is_na, TRUE, NULL, &err_msg_list, &chars_stripped, TRUE);
+
   ValNodeFreeData (err_msg_list);
   AddUniqueUpdateSequenceIDs (sep_list);
   FileClose (fp);
@@ -18660,7 +18642,6 @@ static void TestUpdateSequence (IteM i, Boolean is_indexer, Boolean do_update)
   is_na = ISA_na (orig_bsp->mol);
 
   /* Read in the update data from a file */
-  /* for now, just handling FASTA */
   update_list = ReadUpdateSequences (is_na);
   if (update_list == NULL)
   {
@@ -18879,7 +18860,7 @@ static SeqEntryPtr DownloadUpdateSequence (void)
       Update ();
       if (uid > 0) 
       {
-        fetched_sep = PubSeqSynchronousQuery (uid, 0, -1);
+        fetched_sep = PubSeqSynchronousQuery (uid, 0, /* -1 */ 0);
       }
       if (fetched_sep == NULL) 
       {

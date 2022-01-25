@@ -1,4 +1,4 @@
-/*  $Id: test_ncbi_sendmail.c,v 6.19 2006/06/15 19:52:47 lavr Exp $
+/*  $Id: test_ncbi_sendmail.c,v 6.20 2008/03/15 11:25:53 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -91,10 +91,12 @@ int main(int argc, const char* argv[])
     CORE_SetLOGFILE(stderr, 0/*false*/);
 
     if ((p = getenv("CONN_DEBUG_PRINTOUT")) != 0) {
-        if (strncasecmp(p, "1",    1) == 0  ||
-            strncasecmp(p, "YES",  3) == 0  ||
-            strncasecmp(p, "SOME", 4) == 0  ||
-            strncasecmp(p, "DATA", 4) == 0) {
+        if (strcasecmp(p, "1")    == 0  ||
+            strcasecmp(p, "ON")   == 0  ||
+            strcasecmp(p, "YES")  == 0  ||
+            strcasecmp(p, "TRUE") == 0  ||
+            strcasecmp(p, "SOME") == 0  ||
+            strcasecmp(p, "DATA") == 0) {
             SOCK_SetDataLoggingAPI(eOn);
         }
     }
@@ -290,67 +292,3 @@ int main(int argc, const char* argv[])
     CORE_LOG(eLOG_Note, "Test completed");
     return 0;
 }
-
-
-/*
- * --------------------------------------------------------------------------
- * $Log: test_ncbi_sendmail.c,v $
- * Revision 6.19  2006/06/15 19:52:47  lavr
- * Compatibility support in SSendMailInfo::mx_options
- *
- * Revision 6.18  2006/06/15 03:02:13  lavr
- * fSendMail_StripNonFQDNHost test added
- *
- * Revision 6.17  2005/12/14 21:44:55  lavr
- * Prettier formatting only
- *
- * Revision 6.16  2005/07/11 18:24:51  lavr
- * Spell ADDEND
- *
- * Revision 6.15  2005/06/04 00:15:43  lavr
- * Email from file test added
- *
- * Revision 6.14  2005/05/02 16:12:38  lavr
- * Use global random seed
- *
- * Revision 6.13  2005/03/21 17:30:28  lavr
- * Include "../ncbi_ansi_ext.h" (essential for Windows)
- *
- * Revision 6.12  2005/03/18 16:36:10  lavr
- * Additional test for \r\n in body; debug output provision
- *
- * Revision 6.11  2003/12/09 15:39:30  lavr
- * Added new test of custom-sized message body
- *
- * Revision 6.10  2003/12/05 18:39:35  lavr
- * Test multiple recipients and as-is message
- *
- * Revision 6.9  2003/05/14 03:58:43  lavr
- * Match changes in respective APIs of the tests
- *
- * Revision 6.8  2002/09/12 16:53:50  lavr
- * Do not write '\0' into test file; log moved to end
- *
- * Revision 6.7  2002/04/15 19:21:45  lavr
- * +#include "../test/test_assert.h"
- *
- * Revision 6.6  2002/03/22 19:48:58  lavr
- * Removed <stdio.h>: included from ncbi_util.h or ncbi_priv.h
- *
- * Revision 6.5  2001/03/07 20:49:29  lavr
- * Forgotten #include <string.h> added
- *
- * Revision 6.4  2001/03/06 04:32:31  lavr
- * Custom header test added
- *
- * Revision 6.3  2001/03/02 20:01:53  lavr
- * "../ncbi_priv.h" explained
- *
- * Revision 6.2  2001/02/28 17:48:07  lavr
- * Huge body test added
- *
- * Revision 6.1  2001/02/28 00:53:45  lavr
- * Initial revision
- *
- * ==========================================================================
- */

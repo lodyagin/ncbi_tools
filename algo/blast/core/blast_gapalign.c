@@ -1,4 +1,4 @@
-/* $Id: blast_gapalign.c,v 1.192 2007/06/15 15:25:33 kazimird Exp $
+/* $Id: blast_gapalign.c,v 1.194 2008/07/17 17:55:44 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -32,7 +32,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_gapalign.c,v 1.192 2007/06/15 15:25:33 kazimird Exp $";
+    "$Id: blast_gapalign.c,v 1.194 2008/07/17 17:55:44 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/ncbi_math.h>
@@ -343,7 +343,7 @@ enum {
     SCRIPT_OP_MASK       = 0x07, /**< Mask for edit script operations */
 
     SCRIPT_EXTEND_GAP_A  = 0x10, /**< continue a gap in A */
-    SCRIPT_EXTEND_GAP_B  = 0x40, /**< continue a gap in B */
+    SCRIPT_EXTEND_GAP_B  = 0x40  /**< continue a gap in B */
 };
 
 Int4
@@ -2701,6 +2701,14 @@ s_BlastDynProgNtGappedAlignment(BLAST_SequenceBlk* query_blk,
             (init_hsp->offsets.qs_offsets.s_off % COMPRESSION_RATIO);
    q_length = init_hsp->offsets.qs_offsets.q_off + offset_adjustment;
    s_length = init_hsp->offsets.qs_offsets.s_off + offset_adjustment;
+
+   /* This prevents the starting point from being at the end of a sequence
+      as mentioned in the comment above. */
+   if (q_length > query_blk->length || s_length > subject_blk->length)
+   {
+       q_length -= COMPRESSION_RATIO;
+       s_length -= COMPRESSION_RATIO;
+   }
 
    /* perform extension to left */
    score_left = s_BlastAlignPackedNucl(query, subject, q_length, s_length, 

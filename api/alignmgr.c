@@ -28,13 +28,17 @@
 *
 * Version Creation Date:   7/99
 *
-* $Revision: 6.179 $
+* $Revision: 6.180 $
 *
 * File Description: SeqAlign indexing and messaging functions
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: alignmgr.c,v $
+* Revision 6.180  2008/10/22 17:18:40  bollin
+* Improvement to function for freeing an alignment index - if a freefunc was
+* provided, use it.
+*
 * Revision 6.179  2004/05/20 19:44:28  bollin
 * removed unused variables
 *
@@ -803,8 +807,18 @@ NLM_EXTERN void AMFreeAllIndexes(SeqAlignPtr sap)
    {
       while (sap != NULL)
       {
-         SAIndexFree((Pointer)(sap->saip));
-         sap->saip = NULL;
+         if (sap->saip != NULL) 
+         {
+            if (sap->saip->freefunc != NULL) 
+            {
+              (sap->saip->freefunc) (sap->saip);
+            } 
+            else 
+            {
+              SAIndexFree((Pointer)(sap->saip));
+            }
+            sap->saip = NULL;
+         }
          sap = sap->next;
       }
    }

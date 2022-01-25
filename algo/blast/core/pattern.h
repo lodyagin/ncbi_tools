@@ -1,4 +1,4 @@
-/* $Id: pattern.h,v 1.15 2006/11/21 16:51:18 papadopo Exp $
+/* $Id: pattern.h,v 1.16 2008/04/15 15:55:45 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -204,7 +204,7 @@ SPHIQueryInfoFree(SPHIQueryInfo* pat_info);
  */
 NCBI_XBLAST_EXPORT
 SPHIQueryInfo* 
-SPHIQueryInfoCopy(SPHIQueryInfo* pat_info);
+SPHIQueryInfoCopy(const SPHIQueryInfo* pat_info);
 
 /** Finds all pattern hits in a given query and saves them in the 
  * previously allocated SPHIQueryInfo structure.

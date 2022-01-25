@@ -3,7 +3,7 @@
 	ProjectType="Visual C++"
 	Version="8.00"
 	Name="netentr"
-	ProjectGUID="{AB9DEE32-64FD-4700-84DF-485166A3E367}"
+	ProjectGUID="{FC4D800E-691F-4424-9645-83BB0C78301D}"
 	>
 	<Platforms>
 		<Platform

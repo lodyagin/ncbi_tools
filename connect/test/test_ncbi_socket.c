@@ -1,4 +1,4 @@
-/*  $Id: test_ncbi_socket.c,v 6.26 2007/10/19 11:25:50 kazimird Exp $
+/*  $Id: test_ncbi_socket.c,v 6.35 2008/11/14 22:44:42 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -31,6 +31,7 @@
  */
 
 #include "../ncbi_config.h"
+#include "../ncbi_priv.h"
 
 /* OS must be specified in the command-line ("-D....") or in the conf. header
  */
@@ -39,21 +40,23 @@
 #endif
 
 #include <connect/ncbi_socket.h>
-#include <connect/ncbi_util.h>
 #include <stdlib.h>
 #include <string.h>
 #if defined(NCBI_OS_UNIX)
 #  include <unistd.h>
-#  define X_SLEEP(x) ((void) sleep(x))
+#  define X_SLEEP(x) /*((void) sleep(x))*/
 #elif defined(NCBI_OS_MSWIN)
 #  include <windows.h>
-#  define X_SLEEP(x) ((void) Sleep(1000 * x))
+#  define X_SLEEP(x) /*((void) Sleep(1000 * x))*/
 #else
 #  define X_SLEEP(x) ((void) 0)
 #endif
 /* This header must go last */
 #include "test_assert.h"
 
+#define MIN_PORT 5001
+#define DEF_PORT 5555
+#define DEF_HOST "localhost"
 
 /* #define DO_CLIENT */
 /* #define DO_SERVER */
@@ -70,12 +73,6 @@
 
 /* test SOCK_Reconnect() */
 #define DO_RECONNECT
-
-
-
-/* Log stream
- */
-static FILE* log_fp;
 
 
 /* The simplest randezvous (a plain request-reply) test functions
@@ -98,7 +95,7 @@ static void TEST__client_1(SOCK sock)
     size_t     n_io, n_io_done;
     char       buf[TEST_BUFSIZE];
 
-    fprintf(log_fp, "[INFO] TEST__client_1(TC1)\n");
+    CORE_LOG(eLOG_Note, "TEST__client_1(TC1)");
 
     /* Send a short string */
     SOCK_SetDataLoggingAPI(eOn);
@@ -124,10 +121,9 @@ static void TEST__client_1(SOCK sock)
     n_io = strlen(s_S1) + 1;
     status = SOCK_Read(sock, buf, n_io, &n_io_done, eIO_ReadPeek);
     status = SOCK_Read(sock, buf, n_io, &n_io_done, eIO_ReadPlain);
-    if (status == eIO_Closed) {
-        fprintf(log_fp, "[WARNING] TC1:: connection closed\n");
-        assert(0);
-    }
+    if (status == eIO_Closed)
+        CORE_LOG(eLOG_Fatal, "TC1:: connection closed");
+
     assert(status == eIO_Success  &&  n_io == n_io_done);
     assert(strcmp(buf, s_S1) == 0);
     assert(SOCK_PushBack(sock, buf, n_io_done) == eIO_Success);
@@ -181,7 +177,7 @@ static void TEST__client_1(SOCK sock)
         free(blob);
     }}
 
-    /* Try to read more data (must hit EOF as the peer is shutdown) */
+    /* Try to read more data (must hit EOF as the peer is shut down) */
 #if !defined(NCBI_OS_MAC)
     assert(SOCK_Read(sock, buf, 1, &n_io_done, eIO_ReadPeek)
            == eIO_Closed);
@@ -230,7 +226,7 @@ static void TEST__server_1(SOCK sock)
     size_t     n_io, n_io_done;
     char       buf[TEST_BUFSIZE];
 
-    fprintf(log_fp, "[INFO] TEST__server_1(TS1)\n");
+    CORE_LOG(eLOG_Note, "TEST__server_1(TS1)");
 
     /* Receive and send back a short string */
     SOCK_SetDataLogging(sock, eOn);
@@ -293,19 +289,20 @@ static void TEST__server_1(SOCK sock)
 
     /* Shutdown on write */
 #ifdef NCBI_OS_MSWIN
-    assert(SOCK_Shutdown(sock, eIO_ReadWrite)    == eIO_Success);
+    assert(SOCK_Shutdown(sock, eIO_ReadWrite) == eIO_Success);
 #else
-    assert(SOCK_Shutdown(sock, eIO_Write)        == eIO_Success);
+    assert(SOCK_Shutdown(sock, eIO_Write)     == eIO_Success);
 #endif
-    assert(SOCK_Status  (sock, eIO_Write)        == eIO_Closed);
+    assert(SOCK_Status  (sock, eIO_Write)     == eIO_Closed);
     assert(SOCK_Write   (sock, 0, 0, &n_io_done, eIO_WritePersist)
-                                                 == eIO_Closed);
-    assert(SOCK_Status  (sock, eIO_Write)        == eIO_Closed);
+                                              == eIO_Closed);
+    assert(SOCK_Status  (sock, eIO_Write)     == eIO_Closed);
 #ifdef NCBI_OS_MSWIN
-    assert(SOCK_Status  (sock, eIO_Read)         == eIO_Closed);
+    assert(SOCK_Status  (sock, eIO_Read)      == eIO_Closed);
 #else
-    assert(SOCK_Status  (sock, eIO_Read)         == eIO_Success);
+    assert(SOCK_Status  (sock, eIO_Read)      == eIO_Success);
 #endif
+    assert(SOCK_Close   (sock)                == eIO_Success);
 }
 
 
@@ -334,7 +331,7 @@ static void TEST__client_2(SOCK sock)
     size_t     n_io, n_io_done, i;
     char       buf[W_FIELD * N_FIELD + 1];
 
-    fprintf(log_fp, "[INFO] TEST__client_2(TC2)\n");
+    CORE_LOG(eLOG_Note, "TEST__client_2(TC2)");
 
     /* fill out a buffer to send to server */
     memset(buf, 0, sizeof(buf));
@@ -362,9 +359,10 @@ static void TEST__client_2(SOCK sock)
             size_t j = i / N_RECONNECT;
             do {
                 status = SOCK_Reconnect(sock, 0, 0, 0);
-                fprintf(log_fp,
-                        "[INFO] TEST__client_2::reconnect: i=%lu, status=%s\n",
-                        (unsigned long)i, IO_StatusStr(status));
+                CORE_LOGF(eLOG_Note,
+                          ("TEST__client_2::reconnect: i=%lu, j=%lu, status=%s",
+                           (unsigned long) i, (unsigned long) j,
+                           IO_StatusStr(status)));
                 assert(status == eIO_Success);
                 assert(SOCK_Status(sock, eIO_Read)  == eIO_Success);
                 assert(SOCK_Status(sock, eIO_Write) == eIO_Success);
@@ -382,18 +380,17 @@ static void TEST__client_2(SOCK sock)
             X_SLEEP(1);
             status = SOCK_Write(sock, x_buf, n_io,
                                 &n_io_done, eIO_WritePersist);
-            if (status == eIO_Closed) {
-                fprintf(log_fp,
-                        "[ERROR] TC2::write: connection closed\n");
-                assert(0);
-            }
-            fprintf(log_fp, "[INFO] TC2::write "
-                    "i=%d, status=%7s, n_io=%5lu, n_io_done=%5lu"
-                    "\ntimeout(%d): %5lu sec, %6lu msec\n",
-                    (int)i, IO_StatusStr(status),
-                    (unsigned long)n_io, (unsigned long)n_io_done,
-                    (int)w_timeout_on,
-                    (unsigned long)w_to.sec, (unsigned long)w_to.usec);
+            if (status == eIO_Closed)
+                CORE_LOG(eLOG_Fatal, "TC2::write: connection closed");
+
+            CORE_LOGF(eLOG_Note,
+                      ("TC2::write:"
+                       " i=%d, status=%7s, n_io=%5lu, n_io_done=%5lu"
+                       " timeout(%d): %5lu sec, %6lu msec",
+                       (int)i, IO_StatusStr(status),
+                       (unsigned long)n_io, (unsigned long)n_io_done,
+                       (int)w_timeout_on,
+                       (unsigned long)w_to.sec, (unsigned long)w_to.usec));
             if ( !w_timeout_on ) {
                 assert(status == eIO_Success  &&  n_io_done == n_io);
             } else {
@@ -434,17 +431,16 @@ static void TEST__client_2(SOCK sock)
             }
             status = SOCK_Read(sock, x_buf, n_io, &n_io_done, eIO_ReadPlain);
             if (status == eIO_Closed) {
-                fprintf(log_fp,
-                        "[ERROR] TC2::read: connection closed\n");
                 assert(SOCK_Status(sock, eIO_Read) == eIO_Closed);
-                assert(0);
+                CORE_LOG(eLOG_Fatal, "TC2::read: connection closed");
             }
-            fprintf(log_fp, "[INFO] TC2::read: "
-                    "i=%d, status=%7s, n_io=%5lu, n_io_done=%5lu"
-                    "\ntimeout(%d): %5u sec, %6u usec\n",
-                    (int)i, IO_StatusStr(status),
-                    (unsigned long)n_io, (unsigned long)n_io_done,
-                    (int)r_timeout_on, r_to.sec, r_to.usec);
+            CORE_LOGF(eLOG_Note,
+                      ("TC2::read:"
+                       " i=%d, status=%7s, n_io=%5lu, n_io_done=%5lu"
+                       " timeout(%d): %5u sec, %6u usec",
+                       (int)i, IO_StatusStr(status),
+                       (unsigned long)n_io, (unsigned long)n_io_done,
+                       (int)r_timeout_on, r_to.sec, r_to.usec));
             if ( !r_timeout_on ) {
                 assert(status == eIO_Success  &&  n_io_done > 0);
             } else {
@@ -476,7 +472,7 @@ static void TEST__server_2(SOCK sock, LSOCK lsock)
     STimeout   r_to, w_to, rc_to;
     size_t     i;
 
-    fprintf(log_fp, "[INFO] TEST__server_2(TS2)\n");
+    CORE_LOG(eLOG_Note, "TEST__server_2(TS2)");
 
     r_to.sec   = 0;
     r_to.usec  = 0;
@@ -502,22 +498,25 @@ static void TEST__server_2(SOCK sock, LSOCK lsock)
         status = SOCK_Read(sock, buf, n_io, &n_io_done, eIO_ReadPlain);
         switch ( status ) {
         case eIO_Success:
-            fprintf(log_fp, "[INFO] TS2::read: "
-                    "[%lu], status=%7s, n_io=%5lu, n_io_done=%5lu\n",
-                    (unsigned long)i, IO_StatusStr(status),
-                    (unsigned long)n_io, (unsigned long)n_io_done);
+            CORE_LOGF(eLOG_Note,
+                      ("TS2::read:"
+                       " [%lu], status=%7s, n_io=%5lu, n_io_done=%5lu",
+                       (unsigned long)i, IO_StatusStr(status),
+                       (unsigned long)n_io, (unsigned long)n_io_done));
             assert(n_io_done > 0);
             break;
 
         case eIO_Closed:
-            fprintf(log_fp, "[INFO] TS2::read: connection closed\n");
+            CORE_LOG(eLOG_Note, "TS2::read: connection closed");
             assert(SOCK_Status(sock, eIO_Read) == eIO_Closed);
+            /* close connection */
+            status = SOCK_Close(sock);
+            assert(status == eIO_Success  ||  status == eIO_Closed);
             /* reconnect */
             if ( !lsock )
                 return;
 
-            fprintf(log_fp, "[INFO] TS2:: reconnect\n");
-            SOCK_Close(sock);
+            CORE_LOG(eLOG_Note, "TS2::reconnect");
             if ((status = LSOCK_Accept(lsock, &rc_to, &sock)) != eIO_Success)
                 return;
             assert(SOCK_Status(sock, eIO_Read) == eIO_Success);
@@ -525,9 +524,10 @@ static void TEST__server_2(SOCK sock, LSOCK lsock)
             goto l_reconnect;
 
         case eIO_Timeout:
-            fprintf(log_fp, "[INFO] TS2::read: "
-                    "[%lu] timeout expired: %5u sec, %6u usec\n",
-                    (unsigned long)i, r_to.sec, r_to.usec);
+            CORE_LOGF(eLOG_Note,
+                      ("TS2::read:"
+                       " [%lu] timeout expired: %5u sec, %6u usec",
+                       (unsigned long)i, r_to.sec, r_to.usec));
             assert(n_io_done == 0);
             s_DoubleTimeout(&r_to);
             status = SOCK_SetTimeout(sock, eIO_Read, &r_to);
@@ -536,10 +536,8 @@ static void TEST__server_2(SOCK sock, LSOCK lsock)
             break;
 
         default:
-            fprintf(log_fp, "[ERROR] TS2::read: status = %d\n",
-                    (int) status);
-            assert(0);
-            return;
+            CORE_LOGF(eLOG_Fatal,
+                      ("TS2::read: status = %d", (int) status));
         } /* switch */
 
         /* write(just the same) data back to client */
@@ -549,30 +547,29 @@ static void TEST__server_2(SOCK sock, LSOCK lsock)
             status = SOCK_Write(sock, buf, n_io, &n_io_done, eIO_WritePersist);
             switch ( status ) {
             case eIO_Success:
-                fprintf(log_fp, "[INFO] TS2::write: "
-                        "[%lu], status=%7s, n_io=%5lu, n_io_done=%5lu\n",
-                        (unsigned long)i, IO_StatusStr(status),
-                        (unsigned long)n_io, (unsigned long)n_io_done);
+                CORE_LOGF(eLOG_Note,
+                          ("TS2::write:"
+                           " [%lu], status=%7s, n_io=%5lu, n_io_done=%5lu",
+                           (unsigned long)i, IO_StatusStr(status),
+                           (unsigned long)n_io, (unsigned long)n_io_done));
                 assert(n_io_done > 0);
                 break;
             case eIO_Closed:
-                fprintf(log_fp, "[ERROR] TS2::write: connection closed\n");
-                assert(0);
+                CORE_LOG(eLOG_Fatal, "TS2::write: connection closed");
                 return;
             case eIO_Timeout:
-                fprintf(log_fp, "[INFO] TS2::write: "
-                        "[%lu] timeout expired: %5u sec, %6u usec\n",
-                        (unsigned long)i, w_to.sec, w_to.usec);
+                CORE_LOGF(eLOG_Note,
+                          ("TS2::write:"
+                           " [%lu] timeout expired: %5u sec, %6u usec",
+                           (unsigned long)i, w_to.sec, w_to.usec));
                 assert(n_io_done == 0);
                 s_DoubleTimeout(&w_to);
                 status = SOCK_SetTimeout(sock, eIO_Write, &w_to);
                 assert(status == eIO_Success);
                 break;
             default:
-                fprintf(log_fp, "[ERROR] TS2::write: status = %d\n",
-                        (int) status);
-                assert(0);
-                return;
+                CORE_LOGF(eLOG_Fatal,
+                          ("TS2::write: status = %d", (int) status));
             } /* switch */
 
             n_io  -= n_io_done;
@@ -594,13 +591,15 @@ static void TEST__client(const char*     server_host,
 {
     SOCK       sock;
     EIO_Status status;
+    char       tmo[80];
 
-    fprintf(log_fp, "[INFO] TEST__client(host = \"%s\", port = %hu, ",
-            server_host, server_port);
     if ( timeout )
-        fprintf(log_fp, "timeout = %u.%u)\n", timeout->sec, timeout->usec);
+        sprintf(tmo, "%u.%06u", timeout->sec, timeout->usec);
     else
-        fprintf(log_fp, "timeout = INFINITE)\n");
+        strcpy(tmo, "INFINITE");
+    CORE_LOGF(eLOG_Note,
+              ("TEST__client(host = \"%s\", port = %hu, timeout = %s",
+               server_host, server_port, tmo));
 
     /* Connect to server */
     status = SOCK_Create(server_host, server_port, timeout, &sock);
@@ -621,6 +620,8 @@ static void TEST__client(const char*     server_host,
     /* Close connection and exit */
     status = SOCK_Close(sock);
     assert(status == eIO_Success  ||  status == eIO_Closed);
+
+    CORE_LOG(eLOG_Note, "TEST COMPLETED");
 }
 
 
@@ -629,16 +630,16 @@ static void TEST__server(unsigned short port)
     LSOCK      lsock;
     EIO_Status status;
 
-    fprintf(log_fp, "[INFO] TEST__server(port = %hu)\n", port);
+    CORE_LOGF(eLOG_Note, ("TEST__server(port = %hu)", port));
 
     /* Create listening socket */
-    status = LSOCK_CreateEx(port, 1, &lsock, fLSCE_LogDefault);
+    status = LSOCK_CreateEx(port, N_RECONNECT * 10, &lsock, fSOCK_LogOn);
     assert(status == eIO_Success);
 
     /* Accept connections from clients and run test sessions */
     for (;;) {
-        /* Accept connection */
         SOCK sock;
+
         status = LSOCK_Accept(lsock, NULL, &sock);
         assert(status == eIO_Success);
 
@@ -647,6 +648,9 @@ static void TEST__server(unsigned short port)
          *      "TEST__[client|server]_1(SOCK sock)"
          */
         TEST__server_1(sock);
+
+        status = LSOCK_Accept(lsock, NULL, &sock);
+        assert(status == eIO_Success);
 
         /* Test a more complex case
          * The two peer functions are:
@@ -657,10 +661,6 @@ static void TEST__server(unsigned short port)
 #else
         TEST__server_2(sock, 0);
 #endif
-
-        /* Close connection */
-        status = SOCK_Close(sock);
-        assert(status == eIO_Success  ||  status == eIO_Closed);
 
 #ifdef TEST_SRV1_ONCE
         /* Close listening socket */
@@ -712,16 +712,22 @@ static int/*bool*/ TEST_LockHandler(void* user_data, EMT_Lock how)
         what_str = "eMT_TryLockRead";
         break;
     }
-    fprintf(log_fp, "TEST_LockHandler(\"%s\", %s)\n",
-            user_data ? (char*)user_data : "<NULL>", what_str);
+    fflush(stdout);
+    fprintf(stderr,
+            "TEST_LockHandler(\"%s\", %s)\n",
+            user_data ? (char*) user_data : "<NULL>", what_str);
+    fflush(stderr);
     return 1/*true*/;
 }
 
 
 static void TEST_LockCleanup(void* user_data)
 {
-    fprintf(log_fp, "TEST_LockCleanup(\"%s\")\n",
-            user_data ? (char*)user_data : "<NULL>");
+    fflush(stdout);
+    fprintf(stderr,
+            "TEST_LockCleanup(\"%s\")\n",
+            user_data ? (char*) user_data : "<NULL>");
+    fflush(stderr);
 }
 
 
@@ -741,22 +747,25 @@ static unsigned int TEST_gethostbyname(const char* name)
     char         buf[256];
     unsigned int host;
 
-    fprintf(log_fp, "------------\n");
+    CORE_LOG(eLOG_Note, "------------");
 
     host = SOCK_gethostbyname(name);
-    fprintf(log_fp, "SOCK_gethostbyname(\"%s\"):  0x%08X [%s]\n",
-            name, (unsigned int) SOCK_NetToHostLong(host), s_ntoa(host));
+    CORE_LOGF(eLOG_Note,
+              ("SOCK_gethostbyname(\"%s\"):  0x%08X [%s]",
+               name, (unsigned int) SOCK_NetToHostLong(host), s_ntoa(host)));
     if ( host ) {
         name = SOCK_gethostbyaddr(host, buf, sizeof(buf));
         if ( name ) {
             assert(name == buf);
             assert(0 < strlen(buf)  &&  strlen(buf) < sizeof(buf));
-            fprintf(log_fp, "SOCK_gethostbyaddr(0x%08X [%s]):  \"%s\"\n",
-                    (unsigned int) SOCK_NetToHostLong(host), s_ntoa(host),
-                    name);
+            CORE_LOGF(eLOG_Note,
+                      ("SOCK_gethostbyaddr(0x%08X [%s]):  \"%s\"",
+                       (unsigned int) SOCK_NetToHostLong(host), s_ntoa(host),
+                       name));
         } else {
-            fprintf(log_fp, "SOCK_gethostbyaddr(0x%08X [%s]):  <not found>\n",
-                    (unsigned int) SOCK_NetToHostLong(host), s_ntoa(host));
+            CORE_LOGF(eLOG_Note,
+                      ("SOCK_gethostbyaddr(0x%08X [%s]):  <not found>",
+                       (unsigned int) SOCK_NetToHostLong(host), s_ntoa(host)));
         }
     }
     return host;
@@ -768,24 +777,28 @@ static int/*bool*/ TEST_gethostbyaddr(unsigned int host)
     const char*  name;
     char         buf[1024];
 
-    fprintf(log_fp, "------------\n");
+    CORE_LOG(eLOG_Note, "------------");
 
     name = SOCK_gethostbyaddr(host, buf, sizeof(buf));
     if ( name ) {
         assert(name == buf);
         assert(0 < strlen(buf)  &&  strlen(buf) < sizeof(buf));
-        fprintf(log_fp, "SOCK_gethostbyaddr(0x%08X [%s]):  \"%s\"\n",
-                (unsigned int) SOCK_NetToHostLong(host), s_ntoa(host), name);
+        CORE_LOGF(eLOG_Note,
+                  ("SOCK_gethostbyaddr(0x%08X [%s]):  \"%s\"",
+                   (unsigned int) SOCK_NetToHostLong(host),
+                   s_ntoa(host), name));
     } else {
-        fprintf(log_fp, "SOCK_gethostbyaddr(0x%08X [%s]):  <not found>\n",
-                (unsigned int) SOCK_NetToHostLong(host), s_ntoa(host));
+        CORE_LOGF(eLOG_Note,
+                  ("SOCK_gethostbyaddr(0x%08X [%s]):  <not found>",
+                   (unsigned int) SOCK_NetToHostLong(host), s_ntoa(host)));
         return 0/*false*/;
     }
 
     host = SOCK_gethostbyname(name);
-    fprintf(log_fp, "SOCK_gethostbyname(\"%s\"):  0x%08X [%s]\n",
-            name, (unsigned int) SOCK_NetToHostLong(host), s_ntoa(host));
-      
+    CORE_LOGF(eLOG_Note,
+              ("SOCK_gethostbyname(\"%s\"):  0x%08X [%s]",
+               name, (unsigned int) SOCK_NetToHostLong(host), s_ntoa(host)));
+
     return 1/*true*/;
 }
 
@@ -794,7 +807,7 @@ static int/*bool*/ TEST_gethostbyaddr(unsigned int host)
  */
 static void TEST_gethostby(void)
 {
-    fprintf(log_fp, "\n===============================\n");
+    CORE_LOG(eLOG_Note, "===============================");
 
     assert( SOCK_HostToNetLong(0) == 0 );
     assert( SOCK_HostToNetLong(0xFFFFFFFF) == 0xFFFFFFFF );
@@ -815,7 +828,7 @@ static void TEST_gethostby(void)
     (void) TEST_gethostbyaddr(SOCK_gethostbyname("234.234.234.234"));
     (void) TEST_gethostbyaddr(0xFFFFFFFF);
 
-    fprintf(log_fp, "\n===============================\n");
+    CORE_LOG(eLOG_Note, "===============================");
 }
 
 
@@ -823,9 +836,10 @@ static int/*bool*/ TEST_isip(const char* ip)
 {
     int retval = SOCK_isip(ip);
 
-    fprintf(log_fp, "------------\n");
+    CORE_LOG(eLOG_Note, "------------");
     
-    fprintf(log_fp, "SOCK_isip(\"%s\"):  %s\n", ip, retval ? "True" : "False");
+    CORE_LOGF(eLOG_Note,
+              ("SOCK_isip(\"%s\"):  %s", ip, retval ? "True" : "False"));
 
     return retval;
 }
@@ -836,7 +850,7 @@ static int/*bool*/ TEST_isip(const char* ip)
  */
 static void TEST_SOCK_isip(void)
 {
-    fprintf(log_fp, "\n===============================\n");
+    CORE_LOG(eLOG_Note, "===============================");
 
     assert(TEST_isip("0")  &&  TEST_isip("0.0.0.0"));
     assert(TEST_gethostbyname("0") == 0);
@@ -882,7 +896,7 @@ static void TEST_SOCK_isip(void)
     assert(!TEST_isip("1.0100000000"));
     assert(!TEST_isip("0x100000000"));
 
-    fprintf(log_fp, "\n===============================\n");
+    CORE_LOG(eLOG_Note, "===============================");
 }
 
 
@@ -892,12 +906,11 @@ static void TEST_SOCK_isip(void)
  */
 extern int main(int argc, char** argv)
 {
-#define MIN_PORT 5001
-#define DEF_PORT 5555
-#define DEF_HOST "localhost"
-
-    /* Error log stream */
-    log_fp = stderr;
+    /* Setup log stream
+     */
+    CORE_SetLOGFormatFlags(fLOG_None          | fLOG_Level   |
+                           fLOG_OmitNoteLevel | fLOG_DateTime);
+    CORE_SetLOGFILE(stderr, 0/*false*/);
 
     /* Test client or server using hard-coded parameters */
 #if   defined(DO_SERVER)
@@ -906,27 +919,13 @@ extern int main(int argc, char** argv)
     argc = 3;
 #endif
 
-    /* Try to set various fake MT safety locks
-     */
-    CORE_SetLOCK( MT_LOCK_Create(0, TEST_LockHandler, TEST_LockCleanup) );
-    CORE_SetLOCK(0);
-    CORE_SetLOCK(0);
-    CORE_SetLOCK( MT_LOCK_Create(&TEST_LockUserData,
-                                 TEST_LockHandler, TEST_LockCleanup) );
-
-    /* Setup log stream
-     */
-    CORE_SetLOGFormatFlags(fLOG_None          | fLOG_Level   |
-                           fLOG_OmitNoteLevel | fLOG_DateTime);
-    CORE_SetLOGFILE(stderr, 0/*false*/);
-
     /* Printout local hostname
      */
     {{
         char local_host[64];
         assert(SOCK_gethostname(local_host, sizeof(local_host)) == 0);
-        fprintf(log_fp, "[INFO] Running NCBISOCK test on host \"%s\"\n",
-                local_host);
+        CORE_LOGF(eLOG_Note,
+                  ("Running NCBISOCK test on host \"%s\"", local_host));
     }}
 
     /* Parse cmd.-line args and decide whether it's a client or a server
@@ -946,7 +945,6 @@ extern int main(int argc, char** argv)
         TEST__server((unsigned short) port);
         assert(SOCK_ShutdownAPI() == eIO_Success);
         CORE_SetLOG(0);
-        CORE_SetLOCK(0);
         return 0;
     }
 
@@ -980,28 +978,32 @@ extern int main(int argc, char** argv)
         };
 #endif /* DO_CLIENT */
 
-        TEST_gethostby();
-
-        TEST_SOCK_isip();
-
-        TEST__client(server_host, (unsigned short)server_port, timeout);
+        TEST__client(server_host, (unsigned short) server_port, timeout);
         assert(SOCK_ShutdownAPI() == eIO_Success);
         CORE_SetLOG(0);
-        CORE_SetLOCK(0);
         return 0;
     }
     } /* switch */
 
-
-    /* USAGE
+    /* Try to set various fake MT safety locks
      */
-    fprintf(log_fp,
-            "\nUSAGE:\n"
-            "  Client: %s <srv_host> <port> [conn_timeout]\n"
-            "  Server: %s <port>\n"
-            " where <port> is greater than %d, and [conn_timeout] is double\n",
-            argv[0], argv[0], (int)MIN_PORT);
-    CORE_SetLOG(0);
+    CORE_SetLOCK( MT_LOCK_Create(0, TEST_LockHandler, TEST_LockCleanup) );
     CORE_SetLOCK(0);
-    return 1;
+    CORE_SetLOCK(0);
+    CORE_SetLOCK( MT_LOCK_Create(&TEST_LockUserData,
+                                 TEST_LockHandler, TEST_LockCleanup) );
+
+    TEST_gethostby();
+
+    TEST_SOCK_isip();
+
+    fprintf(stderr,
+            "\nClient/Server USAGE:\n"
+            "Client: %s <srv_host> <port> [timeout]\n"
+            "Server: %s <port>\n"
+            "where <port> is greater than %d, and [timeout] is a double\n\n",
+            argv[0], argv[0], MIN_PORT);
+    CORE_SetLOCK(0);
+    CORE_SetLOG(0);
+    return 0;
 }

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/13/91
 *
-* $Revision: 6.12 $
+* $Revision: 6.13 $
 *
 * File Description:
 *   	user alert and error messages
@@ -54,6 +54,9 @@
 *                      input will be read properly.
 *
 * $Log: ncbimsg.c,v $
+* Revision 6.13  2008/04/04 20:36:46  kans
+* cast MessageBox to (MsgAnswer) in Windows version to silence CodeWarrior warning
+*
 * Revision 6.12  2006/12/07 14:13:56  lavr
 * #include <stdio.h> just in case for *_FILENO macros
 *
@@ -396,7 +399,7 @@ MsgAnswer PASCAL _DefMessageHook (MsgKey key, ErrSev sev,
       UINT flags = MB_TASKMODAL | _sev_code[(int)sev];
       if (key > 0)
         flags |= (key-1);                    
-      answer = MessageBox(NULL,message,caption,flags);
+      answer = (MsgAnswer) MessageBox(NULL,message,caption,flags);
       return answer;
     }
 #endif

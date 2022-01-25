@@ -1,4 +1,4 @@
-/*  $Id: ncbi_ftp_connector.c,v 1.21 2007/10/17 15:25:43 kazimird Exp $
+/* $Id: ncbi_ftp_connector.c,v 1.24 2008/10/16 18:55:44 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -38,13 +38,11 @@
 #include "ncbi_ansi_ext.h"
 #include "ncbi_assert.h"
 #include "ncbi_priv.h"
-#include <connect/ncbi_buffer.h>
 #include <connect/ncbi_ftp_connector.h>
 #include <connect/ncbi_socket.h>
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
-
 
 #define NCBI_USE_ERRCODE_X   Connect_FTP
 
@@ -53,13 +51,11 @@
  *  INTERNAL -- Auxiliary types and static functions
  ***********************************************************************/
 
-
 typedef enum {
-    eFtpFeature_None = 0,
-    eFtpFeature_MDTM = 1,
-    eFtpFeature_SIZE = 2
-} EFtpFeature;
-typedef unsigned int TFtpFeatures; /* bitwise OR of individual EFtpFeature's */
+    fFtpFeature_MDTM = 1,
+    fFtpFeature_SIZE = 2
+} EFTP_Feature;
+typedef unsigned int TFTP_Features; /* bitwise OR of individual EFtpFeature's */
 
 
 /* All internal data necessary to perform the (re)connect and i/o
@@ -71,7 +67,7 @@ typedef struct {
     const char*    pass;
     const char*    path;
     const char*    name;
-    TFtpFeatures   feat;
+    TFTP_Features  feat;
     TFCDC_Flags    flag;
     SOCK           cntl;  /* control connection */
     SOCK           data;  /* data    connection */
@@ -311,7 +307,7 @@ static EIO_Status s_FTPAbort(SFTPConnector*  xxx,
         else {
             if (status == eIO_Timeout) {
                 CORE_LOG_X(1, eLOG_Warning,
-                         "[FTP]  Timed out on data connection abort");
+                           "[FTP]  Timed out on data connection abort");
             }
             SOCK_Abort(xxx->data);
         }
@@ -361,7 +357,9 @@ static EIO_Status s_FTPPasv(SFTPConnector* xxx)
     port = (unsigned short) i;
     if (SOCK_ntoa(host, buf, sizeof(buf)) == 0  &&
         SOCK_CreateEx(buf, port, &instant, &xxx->data, 0, 0,
-                      xxx->flag & eFCDC_LogData ? eOn : eDefault)
+                      xxx->flag & fFCDC_LogData
+                      ? fSOCK_LogOn
+                      : fSOCK_LogDefault)
         == eIO_Success) {
         return eIO_Success;
     }
@@ -423,15 +421,15 @@ static EIO_Status s_FTPExecute(SFTPConnector* xxx, const STimeout* timeout)
             s[size] = '\0';
         if (!(c = strchr(s, ' ')))
             c = s + strlen(s);
-        if (!(size = (size_t)(c - s))) {
+        if (!(size = (size_t)(c - s))  ||  size < 3  ||  size > 4) {
             status = eIO_Unknown;
-        } else if (strncasecmp(s, "CWD",  size) == 0) {
+        } else if (size == 3  &&  strncasecmp(s, "CWD",  3) == 0) {
             status = s_FTPChdir(xxx, s);
-        } else if (strncasecmp(s, "LIST", size) == 0  ||
-                   strncasecmp(s, "NLST", size) == 0  ||
-                   strncasecmp(s, "RETR", size) == 0) {
+        } else if (size == 4  && (strncasecmp(s, "LIST", 4) == 0  ||
+                                  strncasecmp(s, "NLST", 4) == 0  ||
+                                  strncasecmp(s, "RETR", 4) == 0)) {
             status = s_FTPRetrieve(xxx, s);
-        } else if (strncasecmp(s, "REST", size) == 0) {
+        } else if (size == 4  &&  strncasecmp(s, "REST", 4) == 0) {
             status = s_FTPCommand(xxx, s, 0);
             if (status == eIO_Success) {
                 int code;
@@ -507,7 +505,8 @@ static EIO_Status s_VT_Open
 
     assert(!xxx->data  &&  !xxx->cntl);
     status = SOCK_CreateEx(xxx->host, xxx->port, timeout, &xxx->cntl, 0, 0,
-                           xxx->flag & eFCDC_LogControl ? eOn : eDefault);
+                           xxx->flag & fFCDC_LogControl
+                           ? fSOCK_LogOn : fSOCK_LogDefault);
     if (status == eIO_Success)
         status = s_FTPLogin(xxx, timeout);
     if (status == eIO_Success)
@@ -721,7 +720,7 @@ extern CONNECTOR FTP_CreateDownloadConnector(const char*    host,
     CONNECTOR      ccc = (SConnector*)    malloc(sizeof(SConnector));
     SFTPConnector* xxx = (SFTPConnector*) malloc(sizeof(*xxx));
 
-    assert(!(flag & ~eFCDC_LogAll));
+    assert(!(flag & ~fFCDC_LogAll));
 
     xxx->data    = 0;
     xxx->cntl    = 0;

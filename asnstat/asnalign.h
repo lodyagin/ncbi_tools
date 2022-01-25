@@ -9,7 +9,7 @@
 #include <asn.h>
 #endif
 
-static char * asnfilename = "asnalign.h63";
+static char * asnfilename = "asnalign.h64";
 static AsnValxNode avnx[13] = {
     {20,"not-set" ,0,0.0,&avnx[1] } ,
     {20,"global" ,1,0.0,&avnx[2] } ,
@@ -139,11 +139,11 @@ static AsnType atx[161] = {
   {0, "scores" ,128,9,0,1,0,0,0,0,NULL,&atx[111],NULL,0,&atx[113]} ,
   {403, "Score-set" ,1,0,0,0,0,1,0,0,NULL,&atx[16],&atx[112],0,&atx[76]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[7],NULL,0,NULL} ,
-  {0, "splice-5-prime" ,128,10,0,1,0,0,0,0,NULL,&atx[114],NULL,0,&atx[117]} ,
+  {0, "acceptor-before-exon" ,128,10,0,1,0,0,0,0,NULL,&atx[114],NULL,0,&atx[117]} ,
   {420, "Splice-site" ,1,0,0,0,0,0,0,0,NULL,&atx[15],&atx[115],0,&atx[92]} ,
   {0, "bases" ,128,0,0,0,0,0,0,0,NULL,&atx[116],NULL,0,NULL} ,
   {323, "VisibleString" ,0,26,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} ,
-  {0, "splice-3-prime" ,128,11,0,1,0,0,0,0,NULL,&atx[114],NULL,0,&atx[118]} ,
+  {0, "donor-after-exon" ,128,11,0,1,0,0,0,0,NULL,&atx[114],NULL,0,&atx[118]} ,
   {0, "partial" ,128,12,0,1,0,0,0,0,NULL,&atx[119],NULL,0,&atx[120]} ,
   {301, "BOOLEAN" ,0,1,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} ,
   {0, "ext" ,128,13,0,1,0,0,0,0,NULL,&atx[25],&atx[121],0,NULL} ,
@@ -189,7 +189,7 @@ static AsnType atx[161] = {
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[122],NULL,0,NULL} };
 
 static AsnModule ampx[1] = {
-  { "NCBI-Seqalign" , "asnalign.h63",&atx[0],NULL,NULL,0,0} };
+  { "NCBI-Seqalign" , "asnalign.h64",&atx[0],NULL,NULL,0,0} };
 
 static AsnValxNodePtr avn = avnx;
 static AsnTypePtr at = atx;
@@ -321,8 +321,8 @@ static AsnModulePtr amp = ampx;
 #define SPLICED_EXON_parts &at[102]
 #define SPLICED_EXON_parts_E &at[103]
 #define SPLICED_EXON_scores &at[110]
-#define SPLICED_EXON_splice_5_prime &at[113]
-#define SPLICED_EXON_splice_3_prime &at[117]
+#define EXON_acceptor_before_exon &at[113]
+#define SPLICED_EXON_donor_after_exon &at[117]
 #define SPLICED_EXON_partial &at[118]
 #define SPLICED_EXON_ext &at[120]
 #define SPLICED_EXON_ext_E &at[121]

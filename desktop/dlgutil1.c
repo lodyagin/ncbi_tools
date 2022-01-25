@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.136 $
+* $Revision: 6.139 $
 *
 * File Description: 
 *
@@ -1155,6 +1155,7 @@ extern void SeqFeatPtrToCommon (FeatureFormPtr ffp, SeqFeatPtr sfp)
       SetTitle (ffp->geneAllele, "");
       SetTitle (ffp->geneDesc, "");
       SetTitle (ffp->locusTag, "");
+      SetTitle (ffp->geneSynonym, "");
       ggl.ffp = ffp;
       ggl.omp = ObjMgrGet ();
       ggl.slp = sfp->location;
@@ -1209,6 +1210,11 @@ extern void SeqFeatPtrToCommon (FeatureFormPtr ffp, SeqFeatPtr sfp)
         SetTitle (ffp->geneAllele, grp->allele);
         SetTitle (ffp->geneDesc, grp->desc);
         SetTitle (ffp->locusTag, grp->locus_tag);
+        if (grp->syn == NULL) {
+          SetTitle (ffp->geneSynonym, "");
+        } else {
+          SetTitle (ffp->geneSynonym, grp->syn->data.ptrvalue);
+        }
         SafeHide (ffp->editGeneBtn);
         SafeHide (ffp->newGeneGrp);
       } else if (ggl.val == 1 && grp != NULL && (! ggl.xrefmatch)) {
@@ -1218,6 +1224,11 @@ extern void SeqFeatPtrToCommon (FeatureFormPtr ffp, SeqFeatPtr sfp)
         SetTitle (ffp->geneAllele, grp->allele);
         SetTitle (ffp->geneDesc, grp->desc);
         SetTitle (ffp->locusTag, grp->locus_tag);
+        if (grp->syn == NULL) {
+          SetTitle (ffp->geneSynonym, "");
+        } else {
+          SetTitle (ffp->geneSynonym, grp->syn->data.ptrvalue);
+        }
         SafeHide (ffp->editGeneBtn);
         SafeShow (ffp->newGeneGrp);
       } else if (grp != NULL && (! ggl.xrefmatch)) {
@@ -1227,6 +1238,11 @@ extern void SeqFeatPtrToCommon (FeatureFormPtr ffp, SeqFeatPtr sfp)
         SetTitle (ffp->geneAllele, grp->allele);
         SetTitle (ffp->geneDesc, grp->desc);
         SetTitle (ffp->locusTag, grp->locus_tag);
+        if (grp->syn == NULL) {
+          SetTitle (ffp->geneSynonym, "");
+        } else {
+          SetTitle (ffp->geneSynonym, grp->syn->data.ptrvalue);
+        }
         SafeHide (ffp->editGeneBtn);
         SafeShow (ffp->newGeneGrp);
       } else if (ggl.val > 2) {
@@ -1269,6 +1285,7 @@ extern void SeqFeatPtrToCommon (FeatureFormPtr ffp, SeqFeatPtr sfp)
       SetTitle (ffp->geneAllele, "");
       SetTitle (ffp->geneDesc, "");
       SetTitle (ffp->locusTag, "");
+      SetTitle (ffp->geneSynonym, "");
       PointerToDialog (ffp->featcits, NULL);
       PointerToDialog (ffp->dbxrefs, NULL);
       PointerToDialog (ffp->gbquals, NULL);
@@ -1782,6 +1799,12 @@ extern Boolean FeatFormReplaceWithoutUpdateProc (ForM f)
               }
               grp->locus_tag = StringSave (locustag);
             }
+            if (!TextHasNoText (ffp->geneSynonym)) {
+              if (grp == NULL) {
+                grp = GeneRefNew ();
+              }
+              ValNodeAddPointer (&(grp->syn), 0, SaveStringFromText (ffp->geneSynonym));
+            }
           } else {
             vnp = ffp->geneNames;
             i = val - 3;
@@ -1979,6 +2002,12 @@ extern Boolean FeatFormReplaceWithoutUpdateProc (ForM f)
                 grp = GeneRefNew ();
               }
               grp->locus_tag = StringSave (locustag);
+            }
+            if (!TextHasNoText (ffp->geneSynonym)) {
+              if (grp == NULL) {
+                grp = GeneRefNew ();
+              }
+              ValNodeAddPointer (&(grp->syn), 0, SaveStringFromText (ffp->geneSynonym));
             }
             if (grp != NULL) {
               sfp = CreateNewFeature (sep, NULL, SEQFEAT_GENE, NULL);
@@ -6825,8 +6854,7 @@ static Pointer DbtagDialogToDbtagPtr (DialoG d)
                   leadingzero = TRUE;
                 }
                 while (ch != '\0') {
-                  if (ch == ' ' || ch == '+' || ch == '-') {
-                  } else if (! (IS_DIGIT (ch))) {
+                  if (! (IS_DIGIT (ch))) {
                     alldigits = FALSE;
                   } else if ('1'<= ch && ch <='9') {
                     notallzero = TRUE;
@@ -7478,10 +7506,10 @@ static void StringToSpecimenVoucherDlg (DialoG d, Pointer data)
   dlg = (SpecimenVoucherDlgPtr) GetObjectExtra (d);
   if (dlg == NULL) return;
   
+  ResetSpecimenVoucherDlg (dlg);
   str = (CharPtr) data;
   if (str == NULL)
   {
-    ResetSpecimenVoucherDlg (dlg);
     return;
   }
 

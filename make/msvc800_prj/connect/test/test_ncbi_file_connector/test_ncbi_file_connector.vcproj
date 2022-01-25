@@ -3,7 +3,7 @@
 	ProjectType="Visual C++"
 	Version="8.00"
 	Name="test_ncbi_file_connector"
-	ProjectGUID="{F171E3D9-FC0B-4404-B96F-AD98C055CD8B}"
+	ProjectGUID="{C48C5BDA-864E-4043-A8B6-90F595AE142C}"
 	>
 	<Platforms>
 		<Platform

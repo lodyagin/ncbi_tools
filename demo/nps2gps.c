@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   5/12/05
 *
-* $Revision: 1.13 $
+* $Revision: 1.14 $
 *
 * File Description:
 *
@@ -50,7 +50,7 @@
 #include <toasn3.h>
 #include <pmfapi.h>
 
-#define NPS2GPSAPP_VER "2.1"
+#define NPS2GPSAPP_VER "2.2"
 
 CharPtr NPS2GPSAPPLICATION = NPS2GPSAPP_VER;
 
@@ -61,6 +61,7 @@ typedef struct n2gdata {
   Boolean  lock;
   Boolean  byFeatID;
   Boolean  useProtID;
+  Boolean  refSeqTitles;
 } N2GData, PNTR N2GPtr;
 
 typedef struct npsseqs {
@@ -279,7 +280,8 @@ static void LclCopyGene (
 
 static void LclAddMrnaTitles (
   SeqLocPtr slp,
-  Pointer userdata
+  CharPtr organism,
+  Boolean refSeqTitles
 )
 
 {
@@ -289,7 +291,6 @@ static void LclAddMrnaTitles (
   SeqMgrFeatContext  gcontext;
   CharPtr            genelabel = NULL;
   size_t             len;
-  CharPtr            organism;
   SeqFeatPtr         sfp;
   CharPtr            str;
 
@@ -297,7 +298,6 @@ static void LclAddMrnaTitles (
   bsp = BioseqFindFromSeqLoc (slp);
   if (bsp == NULL) return;
   if (! ISA_na (bsp->mol)) return;
-  organism = (CharPtr) userdata;
   if (BioseqGetTitle (bsp) != NULL) return;
   sfp = SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_GENE, 0, &gcontext);
   if (sfp != NULL) {
@@ -333,9 +333,18 @@ static void LclAddMrnaTitles (
   }
   if (cdslabel != NULL && genelabel != NULL) {
     if (ccontext.partialL || ccontext.partialR) {
-      StringCat (str, " mRNA, partial cds.");
+      if (refSeqTitles) {
+        StringCat (str, " partial mRNA.");
+      } else {
+        StringCat (str, " mRNA, partial cds.");
+      }
     } else {
-      StringCat (str, " mRNA, complete cds.");
+      if (refSeqTitles) {
+        /* requested to make all mRNAs partial in defline */
+        StringCat (str, " partial mRNA.");
+      } else {
+        StringCat (str, " mRNA, complete cds.");
+      }
     }
   } else if (genelabel != NULL) {
     StringCat (str, " mRNA.");
@@ -808,7 +817,7 @@ static void NPStoGPS (
 
   sfp = SeqMgrGetNextFeature (bsp, NULL, 0, FEATDEF_mRNA, &mcontext);
   while (sfp != NULL) {
-    LclAddMrnaTitles (sfp->product, organism);
+    LclAddMrnaTitles (sfp->product, organism, ngp->refSeqTitles);
     sfp = SeqMgrGetNextFeature (bsp, sfp, 0, FEATDEF_mRNA, &mcontext);
   }
 
@@ -976,16 +985,17 @@ static void ProcessOneRecord (
 
 /* Args structure contains command-line arguments */
 
-#define p_argInputPath   0
-#define r_argOutputPath  1
-#define i_argInputFile   2
-#define o_argOutputFile  3
-#define f_argFilter      4
-#define x_argSuffix      5
-#define R_argRemote      6
-#define L_argLockFar     7
-#define F_argUseFeatID   8
-#define P_argUseProtID   9
+#define p_argInputPath     0
+#define r_argOutputPath    1
+#define i_argInputFile     2
+#define o_argOutputFile    3
+#define f_argFilter        4
+#define x_argSuffix        5
+#define R_argRemote        6
+#define L_argLockFar       7
+#define F_argUseFeatID     8
+#define P_argUseProtID     9
+#define D_argRefSeqTitles 10
 
 
 Args myargs [] = {
@@ -1009,6 +1019,8 @@ Args myargs [] = {
     TRUE, 'F', ARG_BOOLEAN, 0.0, 0, NULL},
   {"mRNA ID from Protein", "F", NULL, NULL,
     TRUE, 'P', ARG_BOOLEAN, 0.0, 0, NULL},
+  {"RefSeq mRNA Titles", "F", NULL, NULL,
+    TRUE, 'D', ARG_BOOLEAN, 0.0, 0, NULL},
 };
 
 Int2 Main (void)
@@ -1062,6 +1074,7 @@ Int2 Main (void)
   ngd.lock = (Boolean) myargs [L_argLockFar].intvalue;
   ngd.byFeatID = (Boolean) myargs [F_argUseFeatID].intvalue;
   ngd.useProtID = (Boolean) myargs [P_argUseProtID].intvalue;
+  ngd.refSeqTitles = (Boolean) myargs [D_argRefSeqTitles].intvalue;
 
   directory = (CharPtr) myargs [p_argInputPath].strvalue;
   results = (CharPtr) myargs [r_argOutputPath].strvalue;

@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: kappa.c,v 6.90 2008/02/08 21:51:38 camacho Exp $";
+static char const rcsid[] = "$Id: kappa.c,v 6.91 2008/07/24 13:13:03 madden Exp $";
 
-/* $Id: kappa.c,v 6.90 2008/02/08 21:51:38 camacho Exp $ 
+/* $Id: kappa.c,v 6.91 2008/07/24 13:13:03 madden Exp $ 
 *   ==========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -50,7 +50,7 @@ functions in this file have a 'Kappa_' prefix.  Please adhere to this
 convention to avoid a name clash with functions in blast_kappa.c (the
 name clash can matter in debuggers and search engines.)
 
- $Revision: 6.90 $
+ $Revision: 6.91 $
 
  Revision 6.75  2005/11/07 15:28:56  coulouri
  From Mike Gertz:
@@ -518,7 +518,7 @@ Kappa_GetScoreSetFromBlastHsp(
   Nlm_FloatHi scoreDivisor)
 {
   ScorePtr      score_set = NULL;       /* the new score set */
-  Int4          score;          /* the score, scaled using scoreDivisor */
+  int          score;          /* the score, scaled using scoreDivisor */
   Nlm_FloatHi   bit_score;      /* the integer-valued score, in bits */
   Nlm_FloatHi   evalue;         /* the e-value, with numbers too close to zero
                                    set to zero */
@@ -583,14 +583,14 @@ Kappa_SeqAlignsFromHitlist(
   BLAST_HitListPtr hitlist,
   SeqIdPtr subject_id,
   SeqIdPtr query_id,
-  Int4 queryOrigin,
-  Int4 queryLength,
+  int queryOrigin,
+  int queryLength,
   Nlm_FloatHi lambda,
   Nlm_FloatHi logK,
   Nlm_FloatHi scoreDivisor)
 {
   SeqAlignPtr aligns = NULL;  /* list of SeqAligns to be returned */
-  Int4        hsp_index;
+  int        hsp_index;
 
   for( hsp_index = hitlist->hspcnt - 1; hsp_index >= 0; hsp_index-- ) {
     /* iterate in reverse order over all HSPs in the hitlist */
@@ -635,7 +635,7 @@ Kappa_AdjustEvaluesForComposition(
   Nlm_FloatHi comp_p_value,
   BlastSearchBlkPtr search,
   Nlm_FloatHi LambdaRatio,
-  Int4 subject_id)
+  int subject_id)
 {
   int        hsp_index;
 
@@ -736,8 +736,8 @@ Kappa_SortedHitlistFromAligns(
     BLAST_HSPPtr hsp;           /* the new HSP for this alignment */
     /* queryExtent and matchExtent represent the extent of the
        alignment in the query and subject sequences respectively. */
-    Int4 queryExtent = align->queryEnd - align->queryStart;
-    Int4 matchExtent = align->matchEnd - align->matchStart;
+    int queryExtent = align->queryEnd - align->queryStart;
+    int matchExtent = align->matchEnd - align->matchStart;
 
     BlastSaveCurrentHsp(search, align->score, align->queryStart,
                         align->matchStart, matchExtent, context);
@@ -806,9 +806,9 @@ Kappa_HitlistEvaluateAndPurge(int * pbestScore, double *pbestEvalue,
                                    * alignments */
   Nlm_FloatHi bestEvalue;   /* best e-value among alignments in the
                                      hitlist */
-  Int4 bestScore;           /* best score among alignments in the
+  int bestScore;           /* best score among alignments in the
                                hitlist */
-  Int4 hsp_index;           /* index of the current HSP */
+  int hsp_index;           /* index of the current HSP */
 
   hitlist = search->current_hitlist;
   search->subject->length  = full_subject_length;
@@ -890,10 +890,10 @@ Kappa_GetStartFreqRatios(Nlm_FloatHi ** returnRatios,
                    Uint1Ptr query,
                    const char *matrixName,
                    Nlm_FloatHi **startNumerator,
-                   Int4 numPositions,
+                   int numPositions,
                    Boolean positionSpecific)
 {
-   Int4 i,j;
+   int i,j;
    FreqRatios * stdFreqRatios = NULL;
    /* a small cutoff used to determine whether it is necessary
     * to reverse the multiplication done in posit.c */
@@ -965,15 +965,15 @@ Kappa_GetStartFreqRatios(Nlm_FloatHi ** returnRatios,
 static void
 Kappa_ScalePosMatrix(BLAST_Score **fillPosMatrix, BLAST_Score **nonposMatrix,
                      const Char *matrixName, Nlm_FloatHi **posFreqs,
-                     Uint1 *query, Int4 queryLength, BLAST_ScoreBlkPtr sbp,
+                     Uint1 *query, int queryLength, BLAST_ScoreBlkPtr sbp,
                      Nlm_FloatHi localScalingFactor)
 {
 
      posSearchItems *posSearch; /*used to pass data into scaling routines*/
      compactSearchItems *compactSearch; /*used to pass data into scaling routines*/
-     Int4 i; /*loop index*/
+     int i; /*loop index*/
      BLAST_ResFreqPtr stdrfp; /* gets standard frequencies in prob field */
-     Int4 a; /*index over characters*/
+     int a; /*index over characters*/
 
 
      posSearch = (posSearchItems *) MemNew (1 * sizeof(posSearchItems));
@@ -1031,7 +1031,7 @@ Kappa_ScalePosMatrix(BLAST_Score **fillPosMatrix, BLAST_Score **nonposMatrix,
  */
 static BlastCompo_Alignment * 
 Kappa_ResultHspToDistinctAlign(BlastSearchBlkPtr search,
-                               BLASTResultHsp hsp_array[], Int4 hspcnt,
+                               BLASTResultHsp hsp_array[], int hspcnt,
                                double localScalingFactor)
 {
   BlastCompo_Alignment *aligns;  /* list of alignments to be returned */ 
@@ -1094,33 +1094,33 @@ Kappa_ResultHspToDistinctAlign(BlastSearchBlkPtr search,
 static void
 Kappa_SWFindFinalEndsUsingXdrop(
   BlastCompo_SequenceData * query,
-  Int4 queryStart,
-  Int4 queryEnd,
+  int queryStart,
+  int queryEnd,
   BlastCompo_SequenceData * subject,
-  Int4 matchStart,
-  Int4 matchEnd,
-  Int4 frame,
+  int matchStart,
+  int matchEnd,
+  int frame,
   GapAlignBlkPtr gap_align,
-  Int4 score)
+  int score)
 {
-  Int4 XdropAlignScore;         /* alignment score obtained using X-dropoff
+  int XdropAlignScore;         /* alignment score obtained using X-dropoff
                                  * method rather than Smith-Waterman */
-  Int4 doublingCount = 0;       /* number of times X-dropoff had to be
+  int doublingCount = 0;       /* number of times X-dropoff had to be
                                  * doubled */
-  Int4 *alignScript, *dummy;    /* the alignment script that will be
+  int *alignScript, *dummy;    /* the alignment script that will be
                                    generated below by the ALIGN
                                    routine. */
   GapXEditBlockPtr editBlock;   /* traceback info for this alignment */
   /* Extent of the alignment as computed by an x-drop alignment
    * (usually the same as (queryEnd - queryStart) and (matchEnd -
    * matchStart)) */
-  Int4 queryExtent, matchExtent;
+  int queryExtent, matchExtent;
 
   gap_align->query_start = queryStart;
   gap_align->subject_start = matchStart;
   do {
     alignScript =
-      (Int4 *) MemNew((subject->length + query->length + 3) * sizeof(Int4));
+      (int *) MemNew((subject->length + query->length + 3) * sizeof(int));
 
     XdropAlignScore =
       ALIGN(&query->data[queryStart - 1], &subject->data[matchStart - 1],
@@ -1179,7 +1179,7 @@ static void
 Kappa_MatchingSequenceInitialize(
   BlastCompo_MatchingSequence * self,
   BlastSearchBlkPtr search,
-  Int4 subject_index)
+  int subject_index)
 {
   Kappa_SequenceLocalData * local_data;
   
@@ -1295,10 +1295,10 @@ Kappa_SequenceGetTranslatedRange(const BlastCompo_MatchingSequence * self,
 				 const BlastCompo_Alignment *align,
 				 const Boolean shouldTestIdentical)
 {
-  Int4 i;
-  Int4 nucleotide_start;        /* position of the first nucleotide to be
+  int i;
+  int nucleotide_start;        /* position of the first nucleotide to be
                                  * translated */
-  Int4 num_nucleotides;         /* number of nucleotides to translate */
+  int num_nucleotides;         /* number of nucleotides to translate */
   Int2 translation_frame = (Int2) range->context;
   Kappa_SequenceLocalData * local_data = self->local_data;
 
@@ -1411,7 +1411,7 @@ Kappa_SequenceGetRange(
       Uint1Ptr origData;        /* data obtained from readdb_get_sequence;
                                  * this data cannot be modified, so we copy
                                  * it. */
-      Int4       idx;
+      int       idx;
       seqData->length    = readdb_get_sequence(local_data->rdfp, self->index,
                                                (Uint1Ptr PNTR) & origData );
       seqData->buffer    = MemNew((seqData->length + 2) * sizeof(Uint1));
@@ -1435,7 +1435,7 @@ Kappa_SequenceGetRange(
       SeqPortPtr spp = NULL;      /* a SeqPort used to read the
                                      sequence data */
       Uint1      residue;         /* an individual residue */
-      Int4       idx;
+      int       idx;
 
       seqData->length    = local_data->bsp_db->length;
       seqData->buffer    = MemNew((seqData->length + 2) * sizeof(Uint1));
@@ -1510,7 +1510,7 @@ Kappa_HitToGapAlign(
   GapAlignBlkPtr gap_align,
   BlastSearchBlkPtr search,
   BLAST_HSPPtr       hsp,
-  Int4 queryOrigin,
+  int queryOrigin,
   BlastCompo_SequenceRange * subject_range,
   BlastCompo_SequenceData * query,
   BlastCompo_SequenceData * subject)
@@ -1567,9 +1567,9 @@ Kappa_NewAlignFromGapAlign(
   GapAlignBlkPtr gap_align,
   EMatrixAdjustRule matrix_adjust_rule,
   BlastCompo_SequenceRange * query_range,
-  Int4 ccat_query_length,
+  int ccat_query_length,
   BlastCompo_SequenceRange * subject_range,
-  Int4 subjectLength)
+  int subjectLength)
 {
   int query_index, translation_frame;
   BlastCompo_Alignment * obj; /* the new alignment */
@@ -1641,14 +1641,14 @@ Kappa_NewAlignFromGapAlign(
  */
 static int
 Kappa_NewAlignmentUsingXdrop(BlastCompo_Alignment ** pnewAlign,
-                             Int4 * pqueryEnd, Int4 *pmatchEnd,
-                             Int4 queryStart, Int4 matchStart, Int4 score,
+                             int * pqueryEnd, int *pmatchEnd,
+                             int queryStart, int matchStart, int score,
                              BlastCompo_SequenceData * query,
                              BlastCompo_SequenceRange * query_range,
-                             Int4 queryLength,
+                             int queryLength,
                              BlastCompo_SequenceData * subject,
                              BlastCompo_SequenceRange * subject_range,
-                             Int4 subjectLength,
+                             int subjectLength,
                              BlastCompo_GappingParams * gapping_params,
                              EMatrixAdjustRule matrix_adjust_rule)
 { 
@@ -1736,10 +1736,10 @@ Kappa_RedoOneAlignment(BlastCompo_Alignment * in_align,
  * the original value of these parameters
  */
 typedef struct Kappa_SearchParameters {
-  Int4          gap_open;        /**< a penalty for the existence of a gap */
-  Int4          gapExtend;      /**< a penalty for each residue (or
+  int          gap_open;        /**< a penalty for the existence of a gap */
+  int          gapExtend;      /**< a penalty for each residue (or
                                       nucleotide) in the gap */
-  Int4          gapDecline;     /**< a penalty for declining to align a pair
+  int          gapDecline;     /**< a penalty for declining to align a pair
                                      of residues */
   int           gap_x_dropoff_final;  /**< value of the x-drop parameter
                                            for the final gapped alignment 
@@ -1795,7 +1795,7 @@ Kappa_SearchParametersFree(Kappa_SearchParameters ** searchParams)
  */
 static Kappa_SearchParameters *
 Kappa_SearchParametersNew(
-  Int4 rows,
+  int rows,
   ECompoAdjustModes compo_adjust_mode,
   Boolean positionBased)
 {
@@ -1871,7 +1871,7 @@ Kappa_RecordInitialSearch(Kappa_SearchParameters * searchParams,
   search->gap_align = NULL; /* break aliasing */
   
   if(compo_adjust_mode != eNoCompositionBasedStats) {
-    Int4 i, j;                  /* iteration indices */
+    int i, j;                  /* iteration indices */
     int rows;
     if (search->positionBased) {
       rows = search->context[0].query->length;
@@ -1936,7 +1936,7 @@ Kappa_RescaleSearch(BlastSearchBlkPtr search,
       (Boolean) (search->prog_number == blast_type_tblastn);
 
   search->gap_align->x_parameter   =
-    (Int4) (options->gap_x_dropoff_final * NCBIMATH_LN2 / kbp->Lambda);
+    (int) (options->gap_x_dropoff_final * NCBIMATH_LN2 / kbp->Lambda);
 }
 
 
@@ -1959,7 +1959,7 @@ Kappa_RestoreSearch(
                                  evaluate the significance of
                                  alignment of a query-subject
                                    pair */
-  Int4 i, j;                  /* iteration indices */
+  int i, j;                  /* iteration indices */
   search->pbp->gap_x_dropoff_final = searchParams->gap_x_dropoff_final;
   search->pbp->cutoff_e      = searchParams->original_expect_value;
   search->pbp->gap_open      = searchParams->gap_open;
@@ -2010,7 +2010,7 @@ Kappa_MatrixInfoInit(Blast_MatrixInfo * self,
                      const char * matrixName)
 {
   Uint1Ptr query;             /* the query sequence */
-  Int4 queryLength;           /* the length of the query sequence */
+  int queryLength;           /* the length of the query sequence */
   Nlm_FloatHi initialUngappedLambda;
 
   query       = search->context[0].query->sequence;
@@ -2276,12 +2276,12 @@ Kappa_CompoHeapToFlatList(BlastCompo_Heap * self)
 SeqAlignPtr *
 RedoAlignmentCore(BlastSearchBlkPtr search,
                   BLAST_OptionsBlkPtr options,
-                  Int4 hitlist_count,
-                  Int4 adjustParameters,
+                  int hitlist_count,
+                  int adjustParameters,
                   Boolean SmithWaterman)
 {
   int status = 0;               /* error status returned by routines */
-  Int4 match_index;             /* index over matches */
+  int match_index;             /* index over matches */
   SeqAlignPtr * results = NULL; /* an array of lists of SeqAligns to
                                    return */
   Nlm_FloatHi localScalingFactor;       /* the factor by which to
@@ -2307,13 +2307,13 @@ RedoAlignmentCore(BlastSearchBlkPtr search,
       *NRrecord = NULL;        /* stores all fields needed for
                                 * computing a compositionally adjusted
                                 * score matrix using Newton's method */
-  Int4 query_index;            /* loop index */
-  Int4 numQueries;             /* number of queries in the
+  int query_index;            /* loop index */
+  int numQueries;             /* number of queries in the
                                   concatenated query */
-  Int4 ccat_query_length;      /* length of the concatenated query, or
+  int ccat_query_length;      /* length of the concatenated query, or
                                   of the sole query if query
                                   concatenation is not in use */
-  Int4 maxQueryLength;         /* the greatest length among all queries */
+  int maxQueryLength;         /* the greatest length among all queries */
   BlastCompo_Alignment * incoming_aligns;  /* existing alignments for a match */
   BlastCompo_QueryInfo * query_info = NULL;
   Blast_RedoAlignParams * redo_align_params;
@@ -2478,7 +2478,7 @@ RedoAlignmentCore(BlastSearchBlkPtr search,
       if( alignments[query_index] != NULL) { /* alignments were found */
         Nlm_FloatHi bestEvalue;   /* best e-value among alignments in the
                                      hitlist */
-        Int4 bestScore;           /* best score among alignments in the
+        int bestScore;           /* best score among alignments in the
                                      hitlist */        
         BLAST_HitListPtr hitlist; /* a hitlist containing the newly-computed
                                    * alignments */

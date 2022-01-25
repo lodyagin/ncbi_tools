@@ -1,4 +1,4 @@
-/* $Id: blast_hits.c,v 1.217 2008/02/14 15:55:42 kazimird Exp $
+/* $Id: blast_hits.c,v 1.220 2008/07/17 17:55:44 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -32,7 +32,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_hits.c,v 1.217 2008/02/14 15:55:42 kazimird Exp $";
+    "$Id: blast_hits.c,v 1.220 2008/07/17 17:55:44 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/ncbi_math.h>
@@ -63,7 +63,7 @@ Int2 SBlastHitsParametersNew(const BlastHitSavingOptions* hit_options,
 
        prelim_hitlist_size = hit_options->hitlist_size;
        if (ext_options->compositionBasedStats)
-            prelim_hitlist_size *= 2;
+            prelim_hitlist_size = prelim_hitlist_size * 2 + 50;  
        else if (scoring_options->gapped_calculation)
             prelim_hitlist_size = MIN(2 * prelim_hitlist_size, 
                                       prelim_hitlist_size + 50);
@@ -265,14 +265,11 @@ s_HSPPHIGetEvalue(BlastHSP* hsp, BlastScoreBlk* sbp,
 {
    double paramC;
    double Lambda;
-   Int8 pattern_space;
   
    ASSERT(query_info && hsp && sbp && pattern_blk);
 
    paramC = sbp->kbp[0]->paramC;
    Lambda = sbp->kbp[0]->Lambda;
-
-   pattern_space = query_info->contexts[0].eff_searchsp;
 
    /* We have the actual number of occurrences of pattern in db. */
    hsp->evalue = paramC*(1+Lambda*hsp->score)*
@@ -1962,9 +1959,9 @@ Blast_HSPListReevaluateWithAmbiguitiesUngapped(EBlastProgramType program,
          (kTranslateSubject ? eBlastEncodingNcbi4na : eBlastEncodingNucleotide);
       seq_arg.seq = subject_blk;
       /* Return the packed sequence to the database */
-      BlastSeqSrcReleaseSequence(seq_src, (void*) &seq_arg);
+      BlastSeqSrcReleaseSequence(seq_src, &seq_arg);
       /* Get the unpacked sequence */
-      if ((status=BlastSeqSrcGetSequence(seq_src, (void*) &seq_arg)))
+      if ((status=BlastSeqSrcGetSequence(seq_src, &seq_arg)))
           return status;
    }
 
@@ -2395,15 +2392,10 @@ s_EvalueCompareHSPLists(const void* v1, const void* v2)
       return -1;
    if (h1->hsp_array[0]->score < h2->hsp_array[0]->score)
       return 1;
-   
+
    /* In case of equal best E-values and scores, order will be determined
       by ordinal ids of the subject sequences */
-   if (h1->oid > h2->oid)
-      return -1;
-   if (h1->oid < h2->oid)
-      return 1;
-
-   return 0;
+   return BLAST_CMP(h2->oid, h1->oid);
 }
 
 /** Callback for sorting hsp lists by their best e-value/score, in 
@@ -3045,8 +3037,8 @@ Int2 Blast_HSPResultsInsertHSPList(BlastHSPResults* results,
    ASSERT(hsp_list->query_index < results->num_queries);
 
    if (!results->hitlist_array[hsp_list->query_index]) {
-      results->hitlist_array[hsp_list->query_index] = 
-         Blast_HitListNew(hitlist_size);
+       results->hitlist_array[hsp_list->query_index] = 
+           Blast_HitListNew(hitlist_size);
    }
    Blast_HitListUpdate(results->hitlist_array[hsp_list->query_index], 
                        hsp_list);

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/3/95
 *
-* $Revision: 6.55 $
+* $Revision: 6.61 $
 *
 * File Description: 
 *
@@ -96,6 +96,7 @@ typedef struct validextra {
   FonT           font;
   ButtoN         find;
   TexT           searchfor;
+  size_t         srchtxtlen;
   PrompT         showncount;
   PrompT         summary;
   Int4           counts [6];
@@ -576,6 +577,7 @@ extern void ClearValidateWindow (void)
       vep->addedcount = 0;
       vep->remaining = 0;
       SetTitle (vep->searchfor, "");
+      vep->srchtxtlen = 0;
       if (Enabled (vep->find)) {
         Disable (vep->find);
       }
@@ -847,7 +849,6 @@ static CharPtr GetEcNumberReport (SeqFeatPtr sfp)
   SeqIdPtr  sip = NULL;
   BioseqPtr bsp;
   CharPtr   ec_number = NULL, tmp;
-  CharPtr   locus_tag = NULL;
   GBQualPtr gbq;
   ProtRefPtr prp;
   ValNodePtr vnp;
@@ -1607,7 +1608,8 @@ static void ValTextProc (TexT t)
 
   vep = GetObjectExtra (t);
   if (vep != NULL) {
-    if (TextLength (t) > 0) {
+    vep->srchtxtlen = TextLength (t);
+    if (vep->srchtxtlen > 0) {
       if (! Enabled (vep->find)) {
         Enable (vep->find);
       }
@@ -1831,7 +1833,7 @@ static CharPtr howToClickText =
 "Double click on an error item to launch the appropriate feature editor.";
 
 /* CreateValidateWindowEx is hidden, allowing a revalidate button */
-extern void CreateValidateWindowEx (ErrNotifyProc notify, CharPtr title,
+extern WindoW CreateValidateWindowEx (ErrNotifyProc notify, CharPtr title,
                                     FonT font, ErrSev sev, Int2 verbose,
                                     BaseFormPtr bfp, FormActnFunc revalProc,
                                     Boolean okaytosetviewtarget)
@@ -1946,6 +1948,7 @@ extern void CreateValidateWindowEx (ErrNotifyProc notify, CharPtr title,
         Disable (vep->find);
         vep->searchfor = DialogText (f, "", 15, ValTextProc);
         SetObjectExtra (vep->searchfor, vep, NULL);
+        vep->srchtxtlen = 0;
         vep->showncount = StaticPrompt (f, " 0000000 items shown", 0, dialogTextHeight, systemFont, 'l');
         SetTitle (vep->showncount, "");
 
@@ -2023,13 +2026,14 @@ extern void CreateValidateWindowEx (ErrNotifyProc notify, CharPtr title,
       vep->okaytosetviewtarget = okaytosetviewtarget;
     }
   }
+  return validWindow;
 }
 
-extern void CreateValidateWindow (ErrNotifyProc notify, CharPtr title,
+extern WindoW CreateValidateWindow (ErrNotifyProc notify, CharPtr title,
                                   FonT font, ErrSev sev, Int2 verbose)
 
 {
-  CreateValidateWindowEx (notify, title, font, sev, verbose, NULL, NULL, FALSE);
+  return CreateValidateWindowEx (notify, title, font, sev, verbose, NULL, NULL, FALSE);
 }
 
 extern void ShowValidateDoc (void)
@@ -2086,7 +2090,10 @@ extern void ShowValidateWindow (void)
   if (validWindow != NULL) {
     vep = GetObjectExtra (validWindow);
     if (vep != NULL) {
-      SetTitle (vep->searchfor, "");
+      if (vep->srchtxtlen > 0) {
+        SetTitle (vep->searchfor, "");
+        vep->srchtxtlen = 0;
+      }
       if (Enabled (vep->find)) {
         Disable (vep->find);
       }
@@ -2418,22 +2425,30 @@ extern void LIBCALLBACK ValidErrCallback (
     sprintf (str, "INFO: %ld      WARNING: %ld      ERROR: %ld      REJECT: %ld",
              (long) vep->counts [SEV_INFO], (long) vep->counts [SEV_WARNING],
              (long) vep->counts [SEV_ERROR], (long) vep->counts [SEV_REJECT]);
-    if (vep->totalcount < 30) {
+    if (vep->totalcount < 10) {
       vep->remaining = 1;
+    } else if (vep->totalcount < 20) {
+      vep->remaining = 10;
+    } else if (vep->totalcount < 50) {
+      vep->remaining = 25;
     } else if (vep->totalcount < 100) {
-      vep->remaining = 5;
-    } else if (vep->totalcount < 300) {
-      vep->remaining = 20;
-    } else if (vep->totalcount < 1000) {
       vep->remaining = 50;
-    } else if (vep->totalcount < 3000) {
+    } else if (vep->totalcount < 200) {
       vep->remaining = 100;
-    } else if (vep->totalcount < 10000) {
-      vep->remaining = 200;
-    } else if (vep->totalcount < 30000) {
+    } else if (vep->totalcount < 500) {
+      vep->remaining = 250;
+    } else if (vep->totalcount < 1000) {
       vep->remaining = 500;
-    } else {
+    } else if (vep->totalcount < 2000) {
       vep->remaining = 1000;
+    } else if (vep->totalcount < 5000) {
+      vep->remaining = 2500;
+    } else if (vep->totalcount < 10000) {
+      vep->remaining = 5000;
+    } else if (vep->totalcount < 20000) {
+      vep->remaining = 10000;
+    } else {
+      vep->remaining = 20000;
     }
     SetTitle (vep->summary, str);
     Update ();
@@ -2794,6 +2809,7 @@ static void CleanupSearchProc (WindoW w, VoidPtr data)
   MemFree (data);
 }
 
+/*
 static CharPtr descriptorNames [] = {
   "", "Molecule Type", "Modifiers", "Method", "Name", "Title",
   "Organism", "Comment", "Numbering", "Map Location", "PIR", 
@@ -2805,6 +2821,7 @@ static CharPtr descriptorNames [] = {
 static CharPtr pubNames [] = {
   "", "Pub Descriptor", "Pub Feature", "Cit On Feature", NULL
 };
+*/
 
 extern void CreateSearchWindow (SearchGatherProc gather, CharPtr title, Uint2 entityID)
 

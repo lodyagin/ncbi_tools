@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/3/98
 *
-* $Revision: 6.325 $
+* $Revision: 6.344 $
 *
 * File Description: 
 *
@@ -3487,15 +3487,6 @@ extern void ViewAlignmentSummary (IteM i)
   Select (f);
 }
 
-static ENUM_ALIST(prot_subtype_alist)
-  {" ",                    5},
-  {"Product",              0},
-  {"Pre-protein",          1},
-  {"Mature",               2},
-  {"Signal peptide",       3},
-  {"Transit peptide",      4},
-END_ENUM_ALIST
-
 typedef struct geneprotfind {
   SeqFeatPtr     cds;
   SeqFeatPtr     gene;
@@ -4271,7 +4262,7 @@ static void CopyFindReplBtn (ButtoN b)
   {
     return;
   }
-  str = SaveStringFromText (ffp->findTxt);
+  str = JustSaveStringFromText (ffp->findTxt);
   SetTitle (ffp->replaceTxt, str);
   str = MemFree (str);
 }
@@ -4422,6 +4413,24 @@ extern void FindStringProcToolBtn (ButtoN b)
   Select (w);
 
 }
+
+
+extern void FindFlatfileProcToolBtn (ButtoN b)
+
+{
+  BaseFormPtr  bfp;
+  ForM         w;
+
+  bfp = (BaseFormPtr) GetObjectExtra (b);
+  if (bfp == NULL) return;
+
+  w = CreateFindForm (-90, -66, "Flat File Find", bfp->input_entityID,
+                      bfp->input_itemID, bfp->input_itemtype, FIND_FLAT);
+  Show (w);
+  Select (w);
+
+}
+
 
 extern void FindFlatfileProc (IteM i)
 
@@ -5250,6 +5259,8 @@ extern Int4 MySeqEntryToAsn3Ex (SeqEntryPtr sep, Boolean strip, Boolean correct,
   GetRidOfLocusInSeqIds (0, sep);
   /* reindex, since CdEndCheck (from CdCheck) gets best overlapping gene */
   entityID = ObjMgrGetEntityIDForChoice (sep);
+  SeqMgrClearFeatureIndexes (entityID, NULL);
+  NormalizeDescriptorOrder (sep);
   SeqMgrIndexFeatures (entityID, NULL);
   CdCheck (sep, NULL);
   BasicSeqEntryCleanup (sep);
@@ -6646,7 +6657,7 @@ static void DoEditSeqEndsProc (ButtoN b)
         TrimFromSequenceEnd (esp, sep, bsp);
       if (add_cit_subs)
       {
-        AddCitSubToUpdatedSequence (bsp, esp->input_entityID);
+        AddCitSubToUpdatedSequence (bsp, esp->input_entityID, kSubmitterUpdateText);
       }
     }
   }
@@ -7713,6 +7724,11 @@ extern void ApplyTPAExperimentalKeyword (IteM i)
   ApplyKeyword (i, "TPA:experimental");
 }
 
+extern void ApplyTPAReassemblyKeyword (IteM i)
+{
+  ApplyKeyword (i, "TPA:reassembly");
+}
+
 static void DoApplyKeywords (ButtoN b)
 {
   KeywordFormPtr scfp;
@@ -7895,12 +7911,14 @@ typedef struct rnastrand
   
   DoC        doc;
   ButtoN     rev_feats;
+  ButtoN     use_smart_btn;
   SeqEntryPtr sep;
   ValNodePtr sequence_list;
   Int4       num_sequences;
   BoolPtr    selected;
   Int2       lineheight;  
   CharPtr    database;
+  Boolean    use_smart;
 } RNAStrandData, PNTR RNAStrandPtr;
 
 typedef enum 
@@ -8019,12 +8037,17 @@ RNABlastOptionNew(void)
 	 * options->gap_open = 5;
 	 * options->gap_extend = 2; 
 	 */
-  SBlastOptionsSetRewardPenaltyAndGapCosts(options, 1, -3, 5, 2, FALSE);
+  SBlastOptionsSetRewardPenaltyAndGapCosts(options, 2, -3, 5, 2, FALSE);
 	
 	extra_returns = Blast_SummaryReturnFree(extra_returns);
 	return options;
 }
 
+#if 0
+const CharPtr kRNAStrandDatabaseName = "rRNAstrand";
+#else
+const CharPtr kRNAStrandDatabaseName = "rRNA_blast";
+#endif
 
 static Int4
 RNAScreenSequence(BioseqPtr bsp, CharPtr database, SeqAlignPtr PNTR seqalign_ptr)
@@ -8049,7 +8072,7 @@ RNAScreenSequence(BioseqPtr bsp, CharPtr database, SeqAlignPtr PNTR seqalign_ptr
 	
 	slp = SeqLocWholeNew(bsp);
 	if (database == NULL) 
-	  database = "rRNAstrand";
+	  database = kRNAStrandDatabaseName;
 	
 	extra_returns = Blast_SummaryReturnNew();
 
@@ -8205,6 +8228,210 @@ static ValNodePtr GetRNAStrandednessFromLocalDatabase (SeqEntryPtr sep, CharPtr 
   }
   
   return rscd.sequence_list;
+}
+
+static void GetAccessionList (BioseqPtr bsp, Pointer userdata)
+{
+  ValNodePtr PNTR sequence_list;
+  SeqIdPtr        sip;
+
+  if (bsp == NULL || userdata == NULL) return;
+
+  sequence_list = (ValNodePtr PNTR) userdata;
+
+  for (sip = bsp->id; sip != NULL; sip = sip->next)
+  {
+    if (sip->choice == SEQID_GENBANK)
+    {
+      ValNodeAddPointer (sequence_list, 0, sip);
+      return;
+    }
+  }
+}
+
+
+/* Looks at a portion of the list of sequences for strand correction.
+ * Returns the number of sequences examined.
+ */
+static Int4
+GetSubListForRNAStrandCorrection
+(ValNodePtr start_list,
+ Int4       num_seqs,
+ CharPtr    RNAstrandcmd)
+{
+  Int4                    seq_num, cmd_len = 0, k;
+  ValNodePtr              vnp;
+  FILE *                  fp;
+  CharPtr                 args = NULL, cp, cp2, cmmd;
+  Char                    tmp_id [256];
+  Char                    path [PATH_MAX];
+  Char                    file_line [256];
+  Boolean                 found_id;
+#ifdef OS_MAC
+  CharPtr                 cmd_format = "%s -a \'%s\' > %s"; /* just to allow compilation */
+#endif
+#ifdef OS_UNIX
+  CharPtr                 cmd_format = "%s -a \'%s\' > %s";
+#endif
+#ifdef OS_MSWIN
+  CharPtr                 cmd_format = "%s -a \"%s\" > %s";
+#endif
+
+  if (start_list == NULL || num_seqs < 1 || StringHasNoText (RNAstrandcmd))
+  {
+    return 0;
+  }
+
+  TmpNam (path);
+ 
+  /* calculate length of string needed for command */
+  for (vnp = start_list, seq_num = 0;
+           vnp != NULL && seq_num < num_seqs;
+           vnp = vnp->next, seq_num++)
+  {
+    SeqIdWrite (vnp->data.ptrvalue, tmp_id, PRINTID_TEXTID_ACC_ONLY, sizeof (tmp_id) - 1);
+    cmd_len += StringLen (tmp_id) + 3;
+  }
+
+  args = (CharPtr) MemNew (cmd_len * sizeof (Char));
+  if (args == NULL)
+  {
+        Message (MSG_ERROR, "Unable to allocate memory for strand script argument list");
+    return 0;
+  }
+
+  cp = args;
+  for (vnp = start_list, seq_num = 0;
+           vnp != NULL && seq_num < num_seqs;
+           vnp = vnp->next, seq_num++)
+  {
+    SeqIdWrite (vnp->data.ptrvalue, cp, PRINTID_TEXTID_ACC_ONLY, cmd_len - (cp - args) - 1);
+    cp += StringLen (cp);
+    if (vnp->next != NULL && seq_num < num_seqs - 1)
+    {
+#ifdef OS_UNIX
+      StringCat (cp, ",");
+      cp ++;
+#else
+      StringCat (cp, ", ");
+      cp += 2;
+#endif
+    }
+  }
+
+
+  cmd_len += 3 + StringLen (cmd_format) + StringLen (RNAstrandcmd) + StringLen (path);
+  cmmd = (CharPtr) MemNew (cmd_len * sizeof (Char));
+  if (cmmd == NULL)
+  {
+    args = MemFree (args);
+        Message (MSG_ERROR, "Unable to allocate memory for RNA strand script command");
+    return 0;
+  }
+
+#ifdef OS_UNIX
+  sprintf (cmmd, cmd_format, RNAstrandcmd, args, path);
+  system (cmmd);
+#endif
+#ifdef OS_MSWIN
+  sprintf (cmmd, cmd_format, RNAstrandcmd, args, path);
+  RunSilent (cmmd);
+#endif
+ 
+  args = MemFree (args);
+  cmmd = MemFree (cmmd);
+ 
+  fp = FileOpen (path, "r");
+  if (fp == NULL) {
+    FileRemove (path);
+    return 0;
+  }
+
+
+  while (fgets (file_line, sizeof (file_line) - 1, fp) != NULL)
+  {
+    /* find SeqId that matches file line */
+    cp = StringChr (file_line, '\t');
+    if (cp == NULL)
+    {
+      continue;
+    }
+    *cp = 0;
+    cp++;
+    cp2 = StringChr (cp, '\n');
+    if (cp2 != NULL)
+    {
+      *cp2 = 0;
+    }
+    found_id = FALSE;
+    for (vnp = start_list, seq_num = 0;
+             vnp != NULL && seq_num < num_seqs;
+             vnp = vnp->next, seq_num++)
+        {
+      SeqIdWrite (vnp->data.ptrvalue, tmp_id, PRINTID_TEXTID_ACC_ONLY, sizeof (tmp_id) - 1);
+      if (StringCmp (tmp_id, file_line) == 0)
+      {
+        for (k = 1; k <= RNAstrand_IN_PROGRESS; k++)
+        {
+          if (StringCmp (cp, RNAstrand_strings [k - 1]) == 0
+              || (k == RNAstrand_MIXED
+                  && StringNCmp (cp, RNAstrand_strings [k - 1],
+                                 StringLen (RNAstrand_strings[k - 1])) == 0))
+          {
+            vnp->choice = k;
+          }
+        }
+      }
+    }
+  }
+
+  FileClose (fp);
+
+  FileRemove (path);
+  return seq_num;
+}
+
+
+static ValNodePtr GetStrandednessFromSMART (SeqEntryPtr sep)
+{
+  Char                    file_line [256];
+  ValNodePtr              sequence_list = NULL, vnp;
+  Int4                    num_sequences = 0, num_inspected;
+
+  if (sep == NULL) return NULL;
+
+  if (RNAstrandcmd == NULL) {
+    if (GetAppParam ("SEQUIN", "RNACORRECT", "RNASTRAND", NULL, file_line, sizeof (file_line))) {
+        RNAstrandcmd = StringSaveNoNull (file_line);
+    }
+  }
+  if (RNAstrandcmd == NULL)
+  {
+    Message (MSG_ERROR, "RNASTRAND not set in config file!");
+    return NULL;
+  }
+
+
+  VisitBioseqsInSep (sep, &sequence_list, GetAccessionList);
+
+  if (sequence_list == NULL)
+  {
+    Message (MSG_ERROR, "No sequences with accession numbers found!\n");
+    return NULL;
+  }
+
+  vnp = sequence_list;
+  while ((num_inspected = GetSubListForRNAStrandCorrection (vnp, 25, RNAstrandcmd)) != 0)
+  {
+    num_sequences += num_inspected;
+        while (num_inspected > 0 && vnp != NULL)
+        {
+          vnp = vnp->next;
+          num_inspected --;
+        }
+  }
+
+  return sequence_list;
 }
 
 
@@ -8579,8 +8806,12 @@ static void RefreshRNAStrandDialog (ButtoN b)
   {
     return;
   }
-  
-  new_seq_list = GetRNAStrandednessFromLocalDatabase (strand_info->sep, strand_info->database); 
+
+  if (strand_info->use_smart) {
+    new_seq_list = GetStrandednessFromSMART (strand_info->sep);
+  } else { 
+    new_seq_list = GetRNAStrandednessFromLocalDatabase (strand_info->sep, strand_info->database); 
+  }
   
   if (new_seq_list == NULL)
   {
@@ -8594,7 +8825,21 @@ static void RefreshRNAStrandDialog (ButtoN b)
 }
 
 
-extern Int2 LIBCALLBACK CorrectRNAStrandedness (Pointer data)
+static void ChangeStrandSmart (ButtoN b)
+{
+  RNAStrandPtr strand_info;
+  
+  strand_info = (RNAStrandPtr) GetObjectExtra (b);
+  if (strand_info == NULL)
+  {
+    return;
+  }
+  strand_info->use_smart = GetStatus (strand_info->use_smart_btn);
+  RefreshRNAStrandDialog (strand_info->use_smart_btn); 
+}
+
+
+static Int2 LIBCALLBACK CorrectRNAStrandednessEx (Pointer data, Boolean use_smart)
 
 {
   OMProcControlPtr        ompcp;
@@ -8617,7 +8862,14 @@ extern Int2 LIBCALLBACK CorrectRNAStrandedness (Pointer data)
   sep = GetTopSeqEntryForEntityID (ompcp->input_entityID);
   if (sep == NULL) return OM_MSG_RET_ERROR;
 
-  sequence_list = GetRNAStrandednessFromLocalDatabase (sep, "rRNAstrand"); 
+  if (use_smart)
+  {
+    sequence_list = GetStrandednessFromSMART (sep);
+  }
+  else 
+  {  
+    sequence_list = GetRNAStrandednessFromLocalDatabase (sep, kRNAStrandDatabaseName); 
+  }
   
   if (sequence_list == NULL)
   {
@@ -8635,7 +8887,8 @@ extern Int2 LIBCALLBACK CorrectRNAStrandedness (Pointer data)
   strand_info->sequence_list = sequence_list;
   strand_info->num_sequences = ValNodeLen (sequence_list);
   strand_info->selected = (BoolPtr) MemNew (strand_info->num_sequences * sizeof (Boolean));
-  strand_info->database = "rRNAstrand";
+  strand_info->database = kRNAStrandDatabaseName;
+  strand_info->use_smart = use_smart;
 
   /* initialize document paragraph format */
   strand_info->rnaParFmt.openSpace = FALSE;
@@ -8707,6 +8960,9 @@ extern Int2 LIBCALLBACK CorrectRNAStrandedness (Pointer data)
   SetObjectExtra (refresh_btn, strand_info, NULL);
   strand_info->rev_feats = CheckBox (h, "Also reverse features", NULL);
   SetStatus (strand_info->rev_feats, FALSE);
+  strand_info->use_smart_btn = CheckBox (h, "Use SMART for strand information", ChangeStrandSmart);
+  SetObjectExtra (strand_info->use_smart_btn, strand_info, NULL);
+  SetStatus (strand_info->use_smart_btn, strand_info->use_smart);
   
   c = HiddenGroup (h, 2, 0, NULL);
   b = PushButton (c, "Autocorrect Minus Strands", DoRNACorrection);
@@ -8715,12 +8971,23 @@ extern Int2 LIBCALLBACK CorrectRNAStrandedness (Pointer data)
 
   AlignObjects (ALIGN_CENTER, (HANDLE) strand_info->doc,
                               (HANDLE) refresh_btn,
+                              (HANDLE) strand_info->use_smart_btn,
                               (HANDLE) strand_info->rev_feats,
                               (HANDLE) c,
                               NULL);  
   RedrawRNAStrandDialog (strand_info);
   Show (w);
   return OM_MSG_RET_OK;
+}
+
+
+extern Int2 LIBCALLBACK CorrectRNAStrandedness (Pointer data)
+{
+  return CorrectRNAStrandednessEx (data, FALSE);
+}
+extern Int2 LIBCALLBACK CorrectRNAStrandednessUseSmart (Pointer data)
+{
+  return CorrectRNAStrandednessEx (data, TRUE);
 }
 
 /* collection_date has a controlled format.  
@@ -8733,507 +9000,6 @@ extern Int2 LIBCALLBACK CorrectRNAStrandedness (Pointer data)
  * 
  * If the date supplied is ambiguous (01/03/05), can you allow the indexer to choose which field goes in Mmm and which in DD.
  */
-
-static Int4 ReadNumberFromToken (CharPtr token, Int4 token_len)
-{
-  Int4 val = 0;
-  
-  if (token == NULL || !isdigit (*token))
-  {
-    return val;
-  }
-  while (token_len > 0)
-  {
-    val *= 10;
-    val += *token - '0';
-    token++;
-    token_len--;
-  }
-  
-  return val;
-}
-
-static Int4 GetYearFromNumber(Int4 year)
-{
-	Nlm_DayTime dt;
-
-  if (year < 1000)
-  {
-    GetDayTime (&dt);
-    if (year + 2000 > dt.tm_year + 1901)
-    {
-      year += 1900;
-    }
-    else
-    {
-      year += 2000;
-    }
-  }
-  return year;
-}
-
-static Int4 GetYearFromToken (CharPtr token, Int4 token_len)
-{
-  Int4        year = 0;
-  
-  if (token == NULL || token_len == 0 || token_len > 4)
-  {
-    return 0;
-  }
-  
-  year = GetYearFromNumber(ReadNumberFromToken (token, token_len));
-  
-  return year;
-}
-
-static CharPtr months [12] = 
-{ 
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December"
-};
-
-static CharPtr month_abbrevs [12] =
-{
-  "Jan", "Feb", "Mar", "Apr", "May", "Jun", 
-  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
-};
-
-static Int4 days_in_month [12] =
-{
-  31, 29, 31, 30, 31, 30,
-  31, 31, 30, 31, 30, 31
-};
-
-static Int4 GetDaysInMonth (CharPtr month)
-{
-  Int4 month_num;
-  
-  for (month_num = 0; month_num < 12; month_num++)
-  {
-    if (StringCmp (month, month_abbrevs [month_num]) == 0)
-    {
-      return days_in_month [month_num];
-    }
-  }
-  return 0;
-}
-
-static CharPtr GetMonthFromToken (CharPtr token, Int4 token_len)
-{
-  Int4    month_num;
-  
-  if (token == NULL || token_len == 0)
-  {
-    return NULL;
-  }
-  
-  if (isdigit (*token)) 
-  {
-    if (token_len > 2)
-    {
-      return NULL;
-    }
-    else
-    {
-      month_num = ReadNumberFromToken (token, token_len);
-      if (month_num == 0 || month_num > 12)
-      {
-        return NULL;
-      }
-      else
-      {
-        return month_abbrevs [month_num - 1];
-      }
-    }
-  }
-  else
-  {
-    for (month_num = 0; month_num < 12; month_num++)
-    {
-      if (StringNICmp (token, month_abbrevs[month_num], 3) == 0)
-      {
-        return month_abbrevs[month_num];
-      }
-    }
-    return NULL;
-  }
-}
-
-static Boolean
-ChooseDayAndYear 
-(Int4    num_1,
- Int4    num_2,
- CharPtr month,
- Boolean year_first,
- Int4Ptr day,
- Int4Ptr year)
-{  
-  if (day == NULL || year == NULL)
-  {
-    return FALSE;
-  }
-  
-  if (num_1 == 0 && num_2 == 0)
-  {
-    return FALSE;
-  }
-  else if (num_1 == 0)
-  {
-    *year = 2000;
-    *day = num_2;
-  }
-  else if (num_2 == 0)
-  {
-    *year = 2000;
-    *day = num_1;
-  }
-  else if (num_1 > GetDaysInMonth (month))
-  {
-    *year = num_1;
-    *day = num_2;
-  }
-  else if (num_2 > GetDaysInMonth (month))
-  {
-    *year = num_2;
-    *day = num_1;
-  }
-  else if (year_first)
-  {
-    *year = num_1;
-    *day = num_2;
-  }
-  else
-  {
-    *year = num_2;
-    *day = num_1;
-  }
-  
-  return TRUE;
-}
-
-static Boolean 
-ChooseMonthAndYear
-(Int4    num_1,
- Int4    num_2,
- Boolean month_first,
- CharPtr PNTR month,
- Int4Ptr year)
-{
-  if (year == NULL || month == NULL 
-      || (num_1 == 0 && num_2 == 0)
-      || (num_1 > 12 && num_2 > 12)
-      || (num_1 == 0 && num_2 > 12)
-      || (num_2 == 0 && num_1 > 12))
-  {
-    return FALSE;
-  }
-  
-  if (num_1 == 0)
-  {
-    *year = 2000;
-    *month = month_abbrevs[num_2 - 1];
-  }
-  else if (num_2 == 0)
-  {
-    *year = 2000;
-    *month = month_abbrevs[num_1 - 1];
-  }
-  else if (num_1 > 12)
-  {
-    *year = GetYearFromNumber(num_1);
-    *month = month_abbrevs [num_2 - 1];
-  }
-  else if (num_2 > 12)
-  {
-    *year = GetYearFromNumber(num_2);
-    *month = month_abbrevs [num_1 - 1];
-  }
-  else if (month_first)
-  {
-    *year = GetYearFromNumber(num_2);
-    *month = month_abbrevs [num_1 - 1];
-  }
-  else
-  {
-    *year = GetYearFromNumber(num_1);
-    *month = month_abbrevs [num_2 - 1];
-  }
-  return TRUE;
-}
-
-
-static Boolean ChooseMonthAndDay 
-(Int4    num_1,
- Int4    num_2,
- Boolean month_first,
- CharPtr PNTR month,
- Int4Ptr day)
-{
-  if (day == NULL || month == NULL || num_1 == 0 || num_2 == 0
-      || (num_1 > 12 && num_2 > 12))
-  {
-    return FALSE;
-  }
-  
-  if (num_1 > 12)
-  {
-    *day = num_1;
-    *month = month_abbrevs [num_2 - 1];
-  }
-  else if (num_2 > 12)
-  {
-    *day = num_2;
-    *month = month_abbrevs [num_1 - 1];
-  }
-  else if (month_first)
-  {
-    *day = num_2;
-    *month = month_abbrevs [num_1 - 1];
-  }
-  else
-  {
-    *day = num_1;
-    *month = month_abbrevs [num_2 - 1];
-  }
-  return TRUE;
-}
-
-static CharPtr ReformatDateString (CharPtr orig_date, Boolean month_first)
-{
-  CharPtr reformatted_date = NULL, cp;
-  Int4    year = 0, day = 0;
-  CharPtr month = NULL;
-  CharPtr token_list[3];
-  Int4    token_lens[3];
-  CharPtr delimiters = " \t,-/";
-  CharPtr numbers = "0123456789";
-  CharPtr letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
-  Int4    num_tokens = 0;
-  Int4    token_len;
-  Int4    month_token = -1;
-  Boolean is_num;
-  Int4    num_1, num_2, num_3;
-  
-  if (StringHasNoText (orig_date))
-  {
-    return NULL;
-  }
-  
-  /* divide our original date into tokens */
-  /* skip over any leading spaces */
-  cp = orig_date;
-  while (*cp != 0 && num_tokens < 3)
-  {
-    is_num = FALSE;
-    token_len = StringSpn (cp, numbers);  
-    if (token_len == 0)
-    {
-      token_len = StringSpn (cp, letters);
-    }
-    else
-    {
-      is_num = TRUE;
-    }
-    if (token_len == 0)
-    {
-      cp++;
-    }
-    else
-    {
-      if (!is_num)
-      {
-        if (month_token == -1)
-        {
-          month_token = num_tokens;
-        }
-        else
-        {
-          /* already found a month string */
-          return NULL;
-        }
-      }
-      token_list [num_tokens] = cp;
-      token_lens [num_tokens] = token_len;
-      num_tokens ++;
-      cp += token_len;
-    }
-  }
- 
-  if (num_tokens == 0 || *cp != 0)
-  {
-    return NULL;
-  }
-
-  if (num_tokens == 1)
-  {
-    if (month_token == 0)
-    {
-      return NULL;
-    }
-    year = GetYearFromToken (token_list [0], token_lens [0]);
-  }
-  else if (num_tokens == 2)
-  {
-    if (month_token == 0)
-    {
-      month = GetMonthFromToken (token_list [0], token_lens [0]);
-      year = GetYearFromToken (token_list [1], token_lens [1]);
-    }
-    else if (month_token == 1)
-    {
-      month = GetMonthFromToken (token_list [1], token_lens [1]);
-      year = GetYearFromToken (token_list [0], token_lens [0]);
-    }
-    else
-    {
-      num_1 = ReadNumberFromToken (token_list [0], token_lens [0]);
-      num_2 = ReadNumberFromToken (token_list [1], token_lens [1]);
-      if (! ChooseMonthAndYear (num_1, num_2, month_first, &month, &year))
-      {
-        return NULL;
-      }
-    }
-  }
-  else if (num_tokens == 3)
-  {
-    if (month_token == 0)
-    {
-      month = GetMonthFromToken (token_list [0], token_lens [0]);
-      num_1 = ReadNumberFromToken (token_list [1], token_lens [1]);
-      num_2 = ReadNumberFromToken (token_list [2], token_lens [2]);
-      if (!ChooseDayAndYear (num_1, num_2, month, FALSE, &day, &year))
-      {
-        return NULL;
-      }
-    }
-    else if (month_token == 1)
-    {
-      month = GetMonthFromToken (token_list [1], token_lens [1]);
-      num_1 = ReadNumberFromToken (token_list [0], token_lens [0]);
-      num_2 = ReadNumberFromToken (token_list [2], token_lens [2]);
-      if (!ChooseDayAndYear (num_1, num_2, month, FALSE, &day, &year))
-      {
-        return NULL;
-      }
-    }
-    else if (month_token == 2)
-    {
-      month = GetMonthFromToken (token_list [2], token_lens [2]);
-      num_1 = ReadNumberFromToken (token_list [0], token_lens [0]);
-      num_2 = ReadNumberFromToken (token_list [1], token_lens [1]);
-      if (!ChooseDayAndYear (num_1, num_2, month, FALSE, &day, &year))
-      {
-        return NULL;
-      }
-    }
-    else
-    {
-      num_1 = ReadNumberFromToken (token_list [0], token_lens [0]);
-      num_2 = ReadNumberFromToken (token_list [1], token_lens [1]);
-      num_3 = ReadNumberFromToken (token_list [2], token_lens [2]);
-      
-      if (num_1 > 31 || num_1 == 0)
-      {
-        year = num_1;
-        if (! ChooseMonthAndDay (num_2, num_3, month_first, &month, &day))
-        {
-          return NULL;
-        }
-      }
-      else if (num_2 > 31 || num_2 == 0)
-      {
-        year = num_2;
-        if (! ChooseMonthAndDay (num_1, num_3, month_first, &month, &day))
-        {
-          return NULL;
-        }
-      }
-      else if (num_3 > 31 || num_3 == 0)
-      {
-        year = num_3;
-        if (! ChooseMonthAndDay (num_1, num_2, month_first, &month, &day))
-        {
-          return NULL;
-        }
-      }
-      else if (num_1 > 0 && num_1 < 13 && num_2 > days_in_month [num_1] && num_3 <= days_in_month [num_1])
-      {
-        month = month_abbrevs [num_1 - 1];
-        year = num_2;
-        day = num_3;
-      }
-      else if (num_1 > 0 && num_1 < 13 && num_3 > days_in_month [num_1] && num_2 <= days_in_month [num_1])
-      {
-        month = month_abbrevs [num_1 - 1];
-        year = num_3;
-        day = num_2;
-      }
-      else if (num_2 > 0 && num_2 < 13 && num_1 > days_in_month [num_2] && num_3 <= days_in_month [num_1])
-      {
-        month = month_abbrevs [num_2 - 1];
-        year = num_1;
-        day = num_3;
-      }
-      else if (num_2 > 0 && num_2 < 13 && num_3 > days_in_month [num_2] && num_1 <= days_in_month [num_1])
-      {
-        month = month_abbrevs [num_2 - 1];
-        year = num_3;
-        day = num_1;
-      }
-      else if (num_3 > 0 && num_3 < 13 && num_1 > days_in_month [num_3] && num_2 <= days_in_month [num_1])
-      {
-        month = month_abbrevs [num_3 - 1];
-        year = num_1;
-        day = num_2;
-      }
-      else if (num_3 > 0 && num_3 < 13 && num_2 > days_in_month [num_3] && num_1 <= days_in_month [num_1])
-      {
-        month = month_abbrevs [num_3 - 1];
-        year = num_2;
-        day = num_1;
-      }
-      else
-      {
-        year = num_3;
-        if (! ChooseMonthAndDay (num_1, num_2, month_first, &month, &day))
-        {
-          year = num_1;
-          if (!ChooseMonthAndDay (num_2, num_3, month_first, &month, &day))
-          {
-            return NULL;
-          }
-        }
-      }
-                
-    }
-    year = GetYearFromNumber(year);
-  }
-  
-  if (month == NULL && day > 0)
-  {
-    return NULL;
-  }
-  
-  reformatted_date = (CharPtr) MemNew (sizeof (Char) * 12);
-  if (reformatted_date == NULL)
-  {
-    return NULL;
-  }
-   
-  if (month == NULL)
-  {
-    sprintf (reformatted_date, "%d", year);
-  }
-  else if (day == 0)
-  {
-    sprintf (reformatted_date, "%s-%d", month, year);
-  }
-  else
-  {
-    sprintf (reformatted_date, "%02d-%s-%d", day, month, year);
-  }
-  return reformatted_date;
-}
 
 typedef struct parsecollectiondate
 {
@@ -9260,7 +9026,7 @@ static void ParseCollectionDateCallback (BioSourcePtr biop, Pointer userdata)
   {
     if (ssp->subtype == SUBSRC_collection_date)
     {
-      reformatted_date = ReformatDateString (ssp->name, pcdp->month_first);
+      reformatted_date = ReformatDateStringEx (ssp->name, pcdp->month_first, NULL);
       if (reformatted_date == NULL)
       {
         pcdp->num_unsuccessful ++;
@@ -9294,7 +9060,7 @@ static void CountParseCollectionDateCallback (BioSourcePtr biop, Pointer userdat
   {
     if (ssp->subtype == SUBSRC_collection_date)
     {
-      reformatted_date = ReformatDateString (ssp->name, pcdp->month_first);
+      reformatted_date = ReformatDateStringEx (ssp->name, pcdp->month_first, NULL);
       if (reformatted_date == NULL)
       {
         pcdp->num_unsuccessful++;
@@ -10129,7 +9895,7 @@ static void AddGeneToList (SeqFeatPtr sfp, ValNodePtr PNTR list)
 
 static Boolean DoesGeneContainOtherFeatures (SeqFeatPtr gene, SeqFeatPtr one_feat)
 {
-  BioseqPtr         bsp, last_bsp = NULL;
+  BioseqPtr         bsp;
   SeqLocPtr slp;
   Int4              tmp;
   Int4              gene_left, gene_right;
@@ -10992,10 +10758,12 @@ typedef struct vecscreentool {
   DialoG          clickable_list;
   BaseFormPtr     bfp;
   GrouP           trim_options_grp;
-  
+  ButtoN          add_citsub_btn;  
+
   SeqEntryPtr     top_sep;
   LogInfoPtr      lip;
   Int4            trim_option;
+  ValNodePtr      trimmed_bsps;
   
 } VecScreenToolData, PNTR VecScreenToolPtr;
 
@@ -11177,7 +10945,7 @@ static SeqLocPtr GetFeatureListLoc (ValNodePtr feat_list, VecScreenToolPtr vstp)
 }
 
 
-static void CalculateDescription (ClickableItemPtr cip)
+extern void CalculateVectorDescription (ClickableItemPtr cip)
 {
   ValNodePtr vnp;
   Int4       len, loc_left, loc_right;
@@ -11265,7 +11033,7 @@ static void GetVectorContaminationList (BioseqPtr bsp, Pointer userdata)
         last_right = fcontext.right;
       } else {        
         /* calculate description for previous list */
-        CalculateDescription (cip);
+        CalculateVectorDescription (cip);
         cip = (ClickableItemPtr) MemNew (sizeof (ClickableItemData));
         if (cip != NULL) {
           cip->clickable_item_type = 0;
@@ -11287,7 +11055,7 @@ static void GetVectorContaminationList (BioseqPtr bsp, Pointer userdata)
     }
   }
   /* calculate description for last item */
-  CalculateDescription (cip);
+  CalculateVectorDescription (cip);
 }
 
 
@@ -11423,6 +11191,7 @@ static void TrimFeatureList (ValNodePtr feat_list, VecScreenToolPtr vstp)
   }
   SeqDeleteByLoc (delete_loc, TRUE, FALSE);  
   delete_loc = SeqLocFree (delete_loc);  
+  ValNodeAddPointer (&(vstp->trimmed_bsps), OBJ_BIOSEQ, bsp);
 }
 
 
@@ -11457,7 +11226,6 @@ static void TrimSelected (ValNodePtr vnp, Boolean do_all, VecScreenToolPtr vstp)
 
 static void CollectFeatureList (ValNodePtr feat_list, VecScreenToolPtr vstp, ValNodePtr PNTR loc_list)
 {
-  BioseqPtr  bsp = NULL;
   SeqLocPtr  delete_loc;
   
   /* create location to trim */
@@ -11683,17 +11451,29 @@ static void RefreshVecScreenList (VecScreenToolPtr vstp)
 static void TrimSelectedBtn (ButtoN b)
 {
   VecScreenToolPtr vstp;
+  ValNodePtr       vnp;
 
   vstp = (VecScreenToolPtr) GetObjectExtra (b);
   if (vstp == NULL) return;
   WatchCursor();
   Update();
+  vstp->trimmed_bsps = NULL;
   vstp->trim_option = GetValue (vstp->trim_options_grp);
   vstp->lip = OpenLog ("Trimmed Locations");
   LogSelected (vstp);
   TrimSelected (vstp->item_list, FALSE, vstp);
   CloseLog (vstp->lip);
   vstp->lip = FreeLog (vstp->lip);
+
+  /* add cit-subs */
+  if (GetStatus (vstp->add_citsub_btn)) {
+    for (vnp = vstp->trimmed_bsps; vnp != NULL; vnp = vnp->next) {
+      if (vnp->choice == OBJ_BIOSEQ) {
+        AddCitSubToUpdatedSequence (vnp->data.ptrvalue, vstp->input_entityID, kIndexerUpdateVecScreenText);
+      }
+    }
+  }
+  vstp->trimmed_bsps = ValNodeFree (vstp->trimmed_bsps);
   
   PointerToDialog (vstp->clickable_list, NULL);
   vstp->item_list = FreeClickableList (vstp->item_list);
@@ -11919,6 +11699,8 @@ extern void VecScreenTool (IteM i)
   SetObjectExtra (b1, drfp, NULL);
   MultiLinePrompt (g, "Removes misc_feats with VecScreen hits that you do not want to trim", stdCharWidth * 15, programFont);
 
+  drfp->add_citsub_btn = CheckBox (h, "Add CitSub update to trimmed sequences", NULL);
+
   c = HiddenGroup (h, 4, 0, NULL);
   SetGroupSpacing (c, 10, 10);
   
@@ -11928,7 +11710,14 @@ extern void VecScreenTool (IteM i)
   SetObjectExtra (b, drfp, NULL);
   PushButton (c, "Dismiss", StdCancelButtonProc);
 
-  AlignObjects (ALIGN_CENTER, (HANDLE) drfp->clickable_list, (HANDLE) sort_grp, (HANDLE) drfp->trim_options_grp, (HANDLE) c2, (HANDLE) g, (HANDLE) c, NULL);
+  AlignObjects (ALIGN_CENTER, (HANDLE) drfp->clickable_list,
+                              (HANDLE) sort_grp,
+                              (HANDLE) drfp->trim_options_grp,
+                              (HANDLE) c2,
+                              (HANDLE) g,
+                              (HANDLE) drfp->add_citsub_btn,
+                              (HANDLE) c,
+                              NULL);
 
   RealizeWindow (w);
   
@@ -13078,6 +12867,45 @@ static void BarcodeComprehensiveReportButton (ButtoN b)
 }
 
 
+static void ReportPolymorphismCallback (BioseqPtr bsp, Pointer data)
+{
+  Int4 num_p;
+  LogInfoPtr lip;
+  Char       id_txt[100];
+
+  if (bsp == NULL || data == NULL || !HasBARCODEKeyword(bsp)) {
+    return;
+  }
+
+  lip = (LogInfoPtr) data;
+  num_p = CountPolymorphismsInBioseq (bsp);
+  if (num_p > 0) {
+    SeqIdWrite (SeqIdFindBest (bsp->id, SEQID_GENBANK), id_txt, PRINTID_REPORT, sizeof (id_txt) - 1);
+    fprintf (lip->fp, "%s: %d polymophisms\n", id_txt, num_p);
+    lip->data_in_log = TRUE;
+  }
+
+}
+
+
+static void BarcodeReportPolymorphism (ButtoN b)
+{
+  BarcodeToolPtr         drfp;
+  LogInfoPtr             lip;
+
+  drfp = (BarcodeToolPtr) GetObjectExtra (b);
+  if (drfp == NULL) return;
+
+  lip = OpenLog ("Barcode Sequence Polymorphism");
+  VisitBioseqsInSep (GetTopSeqEntryForEntityID (drfp->input_entityID), lip, ReportPolymorphismCallback);
+  CloseLog (lip);
+  if (!lip->data_in_log) {
+    Message (MSG_OK, "No polymorphism found");
+  }
+  lip = FreeLog (lip);
+}
+
+
 extern void BarcodeTestTool (IteM i)
 {
   BaseFormPtr              bfp;
@@ -13140,13 +12968,16 @@ extern void BarcodeTestTool (IteM i)
   drfp->pass_fail_summary = StaticPrompt (h, "0 Pass, 0 Fail", 20 * stdCharWidth, dialogTextHeight, programFont, 'l');
   RefreshBarcodeList(drfp);
 
-  c3 = HiddenGroup (h, 8, 0, NULL);
+  c3 = HiddenGroup (h, 9, 0, NULL);
   SetGroupSpacing (c3, 10, 10);
   b = PushButton (c3, "Compliance Report", BarcodeTestComplianceReport);
   SetObjectExtra (b, drfp, NULL);
   b = PushButton (c3, "Failure Report", BarcodeReportButton);
   SetObjectExtra (b, drfp, NULL);
   b = PushButton (c3, "Comprehensive Report", BarcodeComprehensiveReportButton);
+  SetObjectExtra (b, drfp, NULL);
+
+  b = PushButton (c3, "Report Polymorphism", BarcodeReportPolymorphism);
   SetObjectExtra (b, drfp, NULL);
 
   b = PushButton (c3, "Replace Tags", BarcodeTestImportTagTable);
@@ -13774,7 +13605,6 @@ static void AddPieceToNote (CharPtr piece, CharPtr new_note)
 
 static void AddProductNamesFromProtRef (ProtRefPtr prp, CharPtr new_note)
 {
-  Int4       lens = 0;
   ValNodePtr vnp;
 
   /* if product name other than "hypothetical protein" is available, do
@@ -14896,7 +14726,8 @@ extern void LatLonCountryTool (IteM i)
 
 typedef struct specifichosttool {
   BARCODE_TOOL_BLOCK
-  ButtoN check_single_word;
+  ButtoN caps;
+  ButtoN paren;
 } SpecificHostToolData, PNTR SpecificHostToolPtr;
 
 static void CleanupSpecificHostTool (GraphiC g, VoidPtr data)
@@ -14921,7 +14752,7 @@ static void RefreshSpecificHostTool (Pointer data)
   PointerToDialog (vstp->clickable_list, NULL);
   vstp->item_list = SpecificHostFixListFree (vstp->item_list);
 
-  vstp->item_list = Taxon3GetSpecificHostFixesInSeqEntry (vstp->top_sep, GetStatus (vstp->check_single_word));
+  vstp->item_list = Taxon3GetSpecificHostFixesInSeqEntry (vstp->top_sep, GetStatus (vstp->caps), GetStatus (vstp->paren));
 
   PointerToDialog (vstp->clickable_list, vstp->item_list);  
 
@@ -14958,7 +14789,7 @@ static void SpecificHostAutocorrect (ButtoN b)
     if (s == NULL || StringHasNoText (s->bad_specific_host)) continue;
     if (ApplyOneSpecificHostFix (vnp->data.ptrvalue))
     {
-      fprintf (lip->fp, "Corrected %s (replaced %s with %s)\n", 
+      fprintf (lip->fp, "Corrected %s (replaced %s with %s)\n",
                s->bad_specific_host, s->old_taxname, s->new_taxname);
     }
     else
@@ -15008,7 +14839,7 @@ static void SpecificHostReport (ButtoN b)
       continue;
     }
     else if (!StringHasNoText (s->old_taxname) && !StringHasNoText (s->new_taxname))
-    { 
+    {
       fix = StringSave (s->bad_specific_host);
       FindReplaceString (&fix, s->old_taxname, s->new_taxname, TRUE, TRUE);
     }
@@ -15049,11 +14880,11 @@ extern void FixSpecificHostValues (IteM i)
 
   sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
 
-  fix_list = Taxon3GetSpecificHostFixesInSeqEntry (sep, TRUE);
+  fix_list = Taxon3GetSpecificHostFixesInSeqEntry (sep, FALSE, TRUE);
 
   if (fix_list == NULL)
   {
-    Message (MSG_OK, "No incorrectly formatted specific-host values found");
+    Message (MSG_OK, "All specific host values look up correctly");
     return;
   }
 
@@ -15098,8 +14929,12 @@ extern void FixSpecificHostValues (IteM i)
   SetGroupSpacing (h, 10, 10);
   
   drfp->clickable_list = SpecificHostResultsDisplay (h);
-  drfp->check_single_word = CheckBox (h, "Also check single-word specific host values", BarcodeRefreshButton);
-  SetObjectExtra (drfp->check_single_word, drfp, NULL);
+  drfp->caps = CheckBox (h, "Only check specific host values that start with capital letters", BarcodeRefreshButton);
+  SetObjectExtra (drfp->caps, drfp, NULL);
+  SetStatus (drfp->caps, TRUE);
+  drfp->paren = CheckBox (h, "Check text in parentheses", BarcodeRefreshButton);
+  SetObjectExtra (drfp->paren, drfp, NULL);
+  SetStatus (drfp->paren, FALSE);
 
   RefreshSpecificHostTool (drfp);
 
@@ -15115,7 +14950,7 @@ extern void FixSpecificHostValues (IteM i)
     
   PushButton (c, "Dismiss", StdCancelButtonProc);
 
-  AlignObjects (ALIGN_CENTER, (HANDLE) drfp->clickable_list, (HANDLE) drfp->check_single_word, (HANDLE) c, NULL);
+  AlignObjects (ALIGN_CENTER, (HANDLE) drfp->clickable_list, (HANDLE) drfp->caps, (HANDLE) drfp->paren, (HANDLE) c, NULL);
 
   RealizeWindow (w);
   

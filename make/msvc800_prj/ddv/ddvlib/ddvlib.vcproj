@@ -3,7 +3,7 @@
 	ProjectType="Visual C++"
 	Version="8.00"
 	Name="ddvlib"
-	ProjectGUID="{D2059A10-7A4D-471A-BAEA-76479FD2773D}"
+	ProjectGUID="{D22A2C91-05A3-4021-B3F2-AA249837A5D1}"
 	>
 	<Platforms>
 		<Platform

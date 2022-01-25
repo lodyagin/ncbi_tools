@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.10 $
+* $Revision: 6.11 $
 *
 * File Description:  Object manager interface for module NCBI-Seqalign
 *
@@ -39,6 +39,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: objalign.h,v $
+* Revision 6.11  2008/10/09 18:43:56  kans
+* splice_5_prime and splice_3_prime changed to acceptor_before_exon and donor_after_exon
+*
 * Revision 6.10  2007/05/12 21:03:32  kans
 * Spliced-seg code recompiled with -Z so product_length 0 is not always written
 *
@@ -402,8 +405,8 @@ typedef struct struct_Spliced_exon {
    Uint2   genomic_strand;
    ValNodePtr   parts;
    ScorePtr   scores;
-   struct struct_Splice_site PNTR   splice_5_prime;
-   struct struct_Splice_site PNTR   splice_3_prime;
+   struct struct_Splice_site PNTR   acceptor_before_exon;
+   struct struct_Splice_site PNTR   donor_after_exon;
    Uint1   partial;
    struct struct_User_object PNTR   ext;
 } SplicedExon, PNTR SplicedExonPtr;

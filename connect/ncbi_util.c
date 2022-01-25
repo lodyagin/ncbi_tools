@@ -1,4 +1,4 @@
-/* $Id: ncbi_util.c,v 6.49 2008/02/29 00:25:42 kazimird Exp $
+/* $Id: ncbi_util.c,v 6.54 2008/11/05 17:04:44 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -79,10 +79,11 @@ extern "C" {
 
 extern void CORE_SetLOCK(MT_LOCK lk)
 {
-    if (g_CORE_MT_Lock  &&  lk != g_CORE_MT_Lock) {
-        MT_LOCK_Delete(g_CORE_MT_Lock);
-    }
+    MT_LOCK old_lk = g_CORE_MT_Lock;
     g_CORE_MT_Lock = lk;
+    if (old_lk  &&  old_lk != lk) {
+        MT_LOCK_Delete(old_lk);
+    }
 }
 
 
@@ -100,12 +101,14 @@ extern MT_LOCK CORE_GetLOCK(void)
 
 extern void CORE_SetLOG(LOG lg)
 {
+    LOG old_lg;
     CORE_LOCK_WRITE;
-    if (g_CORE_Log  &&  lg != g_CORE_Log) {
-        LOG_Delete(g_CORE_Log);
-    }
+    old_lg = g_CORE_Log;
     g_CORE_Log = lg;
     CORE_UNLOCK;
+    if (old_lg  &&  old_lg != lg) {
+        LOG_Delete(old_lg);
+    }
 }
 
 
@@ -131,7 +134,7 @@ extern void CORE_SetLOGFILE
 (FILE*       fp,
  int/*bool*/ auto_close)
 {
-    CORE_SetLOGFILE_Ex(fp, 0, auto_close);
+    CORE_SetLOGFILE_Ex(fp, eLOG_Trace, auto_close);
 }
 
 
@@ -155,7 +158,7 @@ extern int/*bool*/ CORE_SetLOGFILE_NAME
 (const char* filename
  )
 {
-    return CORE_SetLOGFILE_NAME_Ex(filename, 0);
+    return CORE_SetLOGFILE_NAME_Ex(filename, eLOG_Trace);
 }
 
 
@@ -456,37 +459,36 @@ extern void LOG_ToFILE
  int/*bool*/ auto_close
  )
 {
-    LOG_ToFILE_Ex(lg, fp, 0, auto_close);
+    LOG_ToFILE_Ex(lg, fp, eLOG_Trace, auto_close);
 }
 
 
 /* Return non-zero value if "*beg" has reached the "end"
  */
-static int/*bool*/ s_SafeCopy(const char* src, char** beg, const char* end)
+static int/*bool*/ s_SafeCopy(const char* src, size_t len,
+                              char** beg, const char* end)
 {
-    assert(*beg <= end);
-    if ( src ) {
-        for ( ;  *src  &&  *beg != end;  src++, (*beg)++) {
-            **beg = *src;
-        }
-    }
+    assert(src);
+    for ( ;  len > 0  &&  *src  &&  *beg < end;  len--, src++, (*beg)++)
+        **beg = *src;
     **beg = '\0';
-    return (*beg == end);
+    return (*beg >= end);
 }
 
 
-extern const char* MessagePlusErrno
+extern const char* NcbiMessagePlusError
 (const char*  message,
- int          x_errno,
+ int          error,
  const char*  descr,
  char*        buf,
  size_t       buf_size)
 {
-    char* beg;
-    char* end;
+    size_t len;
+    char*  beg;
+    char*  end;
 
     /* Check for an empty result */
-    if (!x_errno  &&  (!descr  ||  !*descr))
+    if (!error  &&  (!descr  ||  !*descr))
         return !message  ||  !*message ? "" : message;
 
     /* Check and init */
@@ -498,78 +500,80 @@ extern const char* MessagePlusErrno
         return buf;  /* empty */
 
     /* Adjust the description, if necessary and possible */
-    if (x_errno  &&  !descr) {
-        descr = strerror(x_errno);
-        if ( !descr ) {
-            static const char s_UnknownErrno[] = "Error code is out of range";
-            descr = s_UnknownErrno;
-        }
+    if (error  &&  !descr) {
+        descr = error > 0 ? strerror(error) : 0;
+        if (!descr  ||  !*descr)
+            descr = "Error code is out of range";
     }
 
-    /* Compose:   <message> {errno=<x_errno>,<descr>} */
+    /* Compose:   <message> {error=<error>,<descr>} */
     beg = buf;
     end = buf + buf_size - 1;
 
     /* <message> */
-    if ( s_SafeCopy(message, &beg, end) )
+    if (message  &&  s_SafeCopy(message, strlen(message), &beg, end))
         return buf;
 
-    /* {errno=<x_errno>,<descr>} */
-    if (!x_errno  &&  (!descr  ||  !*descr))
+    /* {error=<error>,<descr>} */
+    if (!error  &&  (!descr  ||  !*descr))
         return buf;
 
-    /* "{errno=" */
-    if ( s_SafeCopy(" {errno=", &beg, end) )
+    /* "{error=" */
+    if (s_SafeCopy(" {error=", 8, &beg, end - 3))
         return buf;
 
-    /* <x_errno> */
-    if ( x_errno ) {
-        int/*bool*/ neg;
+    /* <error> */
+    if (error) {
         /* calculate length */
-        size_t len;
-        int    mod;
+        int/*bool*/ neg;
+        int         mod;
 
-        if (x_errno < 0) {
+        if (error < 0) {
             neg = 1/*true*/;
-            x_errno = -x_errno;
-        } else {
+            error = -error;
+        } else
             neg = 0/*false*/;
-        }
 
-        for (len = 1, mod = 1;  (x_errno / mod) > 9;  len++, mod *= 10)
+        for (len = 1, mod = 1;  (error / mod) > 9;  len++, mod *= 10)
             continue;
-        if ( neg )
+        if (neg)
             len++;
 
         /* ? not enough space */
         if (beg + len >= end) {
-            s_SafeCopy("...", &beg, end);
+            s_SafeCopy("...", 3, &beg, end);
             return buf;
         }
 
         /* ? add sign */ 
-        if (x_errno < 0) {
+        if (neg)
             *beg++ = '-';
-        }
 
         /* print error code */
         for ( ;  mod;  mod /= 10) {
-            assert(x_errno / mod < 10);
-            *beg++ = '0' + x_errno / mod;
-            x_errno %= mod;
+            assert(error / mod < 10);
+            *beg++ = '0' + error / mod;
+            error %= mod;
         }
         /* "," before "<descr>" */
-        if (descr  &&  *descr  &&  beg != end)
+        if (descr  &&  *descr  &&  beg < end)
             *beg++ = ',';
     }
 
     /* "<descr>" */
-    if ( s_SafeCopy(descr, &beg, end) )
-        return buf;
+    if (descr) {
+        len = strlen(descr);
+        while (len  &&  isspace((unsigned char) descr[len - 1]))
+            len--;
+        if (len > 1  &&  descr[len - 1] == '.')
+            len--;
+        if (s_SafeCopy(descr, len, &beg, end))
+            return buf;
+    }
 
     /* "}\0" */
     assert(beg <= end);
-    if (beg != end)
+    if (beg < end)
         *beg++ = '}';
     *beg = '\0';
 
@@ -584,12 +588,14 @@ extern const char* MessagePlusErrno
 
 extern void CORE_SetREG(REG rg)
 {
+    REG old_rg;
     CORE_LOCK_WRITE;
-    if (g_CORE_Registry  &&  rg != g_CORE_Registry) {
-        REG_Delete(g_CORE_Registry);
-    }
+    old_rg = g_CORE_Registry;
     g_CORE_Registry = rg;
     CORE_UNLOCK;
+    if (old_rg  &&  old_rg != rg) {
+        REG_Delete(old_rg);
+    }
 }
 
 
@@ -782,7 +788,7 @@ size_t CORE_GetVMPageSize(void)
 
 #ifdef NCBI_USE_PRECOMPILED_CRC32_TABLES
 
-static const unsigned int s_CRC32[256] = {
+static const unsigned int s_CRC32Table[256] = {
     0x00000000, 0x04c11db7, 0x09823b6e, 0x0d4326d9,
     0x130476dc, 0x17c56b6b, 0x1a864db2, 0x1e475005,
     0x2608edb8, 0x22c9f00f, 0x2f8ad6d6, 0x2b4bcb61,
@@ -851,13 +857,13 @@ static const unsigned int s_CRC32[256] = {
 
 #else
 
-static unsigned int s_CRC32[256];
+static unsigned int s_CRC32Table[256];
 
 static void s_CRC32_Init(void)
 {
     size_t i;
 
-    if (s_CRC32[255])
+    if (s_CRC32Table[255])
         return;
 
     for (i = 0;  i < 256;  i++) {
@@ -870,7 +876,7 @@ static void s_CRC32_Init(void)
             } else
                 byteCRC <<= 1;
         }
-        s_CRC32[i] = byteCRC;
+        s_CRC32Table[i] = byteCRC;
     }
 }
 
@@ -890,7 +896,7 @@ extern unsigned int CRC32_Update(unsigned int checksum,
     for (j = 0;  j < count;  j++) {
         size_t i = ((checksum >> 24) ^ *str++) & 0xFF;
         checksum <<= 8;
-        checksum  ^= s_CRC32[i];
+        checksum  ^= s_CRC32Table[i];
     }
 
     return checksum;

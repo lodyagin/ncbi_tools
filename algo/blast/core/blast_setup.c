@@ -1,4 +1,4 @@
-/* $Id: blast_setup.c,v 1.151 2007/05/22 20:55:36 kazimird Exp $
+/* $Id: blast_setup.c,v 1.152 2008/07/17 17:55:44 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,7 +34,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] =
-    "$Id: blast_setup.c,v 1.151 2007/05/22 20:55:36 kazimird Exp $";
+    "$Id: blast_setup.c,v 1.152 2008/07/17 17:55:44 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_setup.h>
@@ -873,6 +873,10 @@ Blast_SetPHIPatternInfo(EBlastProgramType            program,
     /* Save pattern probability, because it needs to be passed back to
        formatting stage, where lookup table will not be available. */
     query_info->pattern_info->probability = pattern_blk->patternProbability;
+
+   /* Also needed for formatting. */
+    query_info->pattern_info->pattern = 
+        (char*) (char *) BlastMemDup(pattern_blk->pattern, 1+strlen(pattern_blk->pattern));
 
     /* Save minimal pattern length in the length adjustment field, because 
        that is essentially its meaning. */

@@ -1,4 +1,4 @@
-/* $Id: blast_options.h,v 1.149 2008/01/24 21:25:45 kazimird Exp $
+/* $Id: blast_options.h,v 1.152 2008/11/03 20:59:44 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -96,7 +96,8 @@ extern "C" {
  *  will go into the BLAST lookup table when it is generated 
  */
 #define BLAST_WORD_THRESHOLD_BLASTP 11 /**< default neighboring threshold
-                                         (blastp/rpsblast) */
+                                         (blastp and for rpsblast at RPS-BLAST
+                                         database creation time) */
 #define BLAST_WORD_THRESHOLD_BLASTN 0 /**< default threshold (blastn) */
 #define BLAST_WORD_THRESHOLD_BLASTX 12 /**< default threshold (blastx) */
 #define BLAST_WORD_THRESHOLD_TBLASTN 13 /**< default neighboring threshold 
@@ -147,7 +148,7 @@ extern "C" {
                                   for */
 /** Defaults for PSI-BLAST options */
 #define PSI_INCLUSION_ETHRESH 0.002 /**< Inclusion threshold for PSI BLAST */
-#define PSI_PSEUDO_COUNT_CONST 9 /**< Pseudo-count constant for PSI-BLAST */
+#define PSI_PSEUDO_COUNT_CONST 0 /**< Pseudo-count constant for PSI-BLAST */
 
 /** Default genetic code for query and/or database */
 #define BLAST_GENETIC_CODE 1  /**< Use the standard genetic code for converting
@@ -214,6 +215,15 @@ typedef struct SRepeatFilterOptions {
     char* database;   /**< Nucleotide database for mini BLAST search. */
 } SRepeatFilterOptions;
 
+/** Filtering options for organism-specific filtering with Window
+    Masker.  The taxid and filename are alternative means of choosing
+    which Window Masker database to use.
+ */
+typedef struct SWindowMaskerOptions {
+    int          taxid;    /**< Select masking database for this TaxID. */
+    const char * database; /**< Use winmasker database at this location. */
+} SWindowMaskerOptions;
+
 /** All filtering options */
 typedef struct SBlastFilterOptions {
     Boolean mask_at_hash;         /**< mask query only for lookup table creation */
@@ -221,6 +231,7 @@ typedef struct SBlastFilterOptions {
     SSegOptions* segOptions;      /**< low-complexity filtering for proteins sequences 
             (includes translated nucleotides). */
     SRepeatFilterOptions* repeatFilterOptions;  /**< for organism specific repeat filtering. */
+    SWindowMaskerOptions* windowMaskerOptions;  /**< organism specific filtering with window masker. */
 } SBlastFilterOptions;
 
 
@@ -420,7 +431,7 @@ typedef struct PSIBlastOptions {
  *  to a subset.
  */
 typedef struct BlastDatabaseOptions {
-   Int4 genetic_code;  /**< Genetic code to use for translation, 
+   Int4 genetic_code;   /**< Genetic code to use for translation, 
                              tblast[nx] only */
 } BlastDatabaseOptions;
 
@@ -467,6 +478,15 @@ Int2 SSegOptionsNew(SSegOptions* *seg_options);
 NCBI_XBLAST_EXPORT
 Int2 SRepeatFilterOptionsResetDB(SRepeatFilterOptions* *repeat_options, const char* dbname);
 
+/** Resets name of db for window masker filtering.
+ * @param winmask_options options block constaining field to be reset [in|out]
+ * @param dbname name of the database(s) [in]
+ * @return zero on sucess
+ */
+NCBI_XBLAST_EXPORT
+Int2 SWindowMaskerOptionsResetDB(SWindowMaskerOptions ** winmask_options,
+                                 const char            * dbname);
+
 /** Frees SRepeatFilterOptions.
  * @param repeat_options object to free [in]
  * @return NULL pointer
@@ -474,12 +494,26 @@ Int2 SRepeatFilterOptionsResetDB(SRepeatFilterOptions* *repeat_options, const ch
 NCBI_XBLAST_EXPORT
 SRepeatFilterOptions* SRepeatFilterOptionsFree(SRepeatFilterOptions* repeat_options);
 
+/** Frees SWindowMaskerOptions.
+ * @param winmask_options object to free [in]
+ * @return NULL pointer
+ */
+NCBI_XBLAST_EXPORT SWindowMaskerOptions*
+SWindowMaskerOptionsFree(SWindowMaskerOptions * winmask_options);
+
 /** Allocates memory for SRepeatFilterOptions, fills in defaults.
  * @param repeat_options options that are being returned [in|out]
  * @return zero on sucess
  */
 NCBI_XBLAST_EXPORT
-Int2 SRepeatFilterOptionsNew(SRepeatFilterOptions* *repeat_options);
+Int2 SRepeatFilterOptionsNew(SRepeatFilterOptions ** repeat_options);
+
+/** Allocates memory for SWindowMaskerOptions, fills in defaults.
+ * @param winmask_options options that are being returned [in|out]
+ * @return zero on sucess
+ */
+NCBI_XBLAST_EXPORT
+Int2 SWindowMaskerOptionsNew(SWindowMaskerOptions ** winmask_options);
 
 /** Frees SBlastFilterOptions and all subservient structures.
  * @param filter_options object to free
@@ -515,6 +549,14 @@ typedef enum EFilterOptions {
  */
 NCBI_XBLAST_EXPORT
 Int2 SBlastFilterOptionsNew(SBlastFilterOptions* *filter_options, EFilterOptions type);
+
+/** Queries whether no masking is required
+ * @param filter_options the object to be queried [in]
+ * @return TRUE if no filtering is required or argument is NULL, FALSE
+ * otherwise
+ */
+NCBI_XBLAST_EXPORT
+Boolean SBlastFilterOptionsNoFiltering(const SBlastFilterOptions* filter_options);
 
 /** Queries whether masking should be done only for the lookup table or for the entire search.
  * @param filter_options the object to be queried [in]

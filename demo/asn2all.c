@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/26/04
 *
-* $Revision: 1.37 $
+* $Revision: 1.45 $
 *
 * File Description:
 *
@@ -53,7 +53,7 @@
 #include <pmfapi.h>
 #include <lsqfetch.h>
 
-#define ASN2ALL_APP_VER "2.4"
+#define ASN2ALL_APP_VER "3.2"
 
 CharPtr ASN2ALL_APPLICATION = ASN2ALL_APP_VER;
 
@@ -342,7 +342,6 @@ static void ProcessSingleRecord (
 
 {
   AsnIoPtr      aip;
-  AsnTypePtr    atp = NULL;
   BioseqPtr     bsp;
   ValNodePtr    bsplist;
   BioseqSetPtr  bssp;
@@ -363,7 +362,7 @@ static void ProcessSingleRecord (
       return;
     }
 
-    dataptr = ReadAsnFastaOrFlatFile (fp, &datatype, NULL, FALSE, FALSE, FALSE, FALSE);
+    dataptr = ReadAsnFastaOrFlatFile (fp, &datatype, NULL, FALSE, FALSE, TRUE, FALSE);
 
     FileClose (fp);
 

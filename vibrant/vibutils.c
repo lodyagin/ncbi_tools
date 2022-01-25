@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.75 $
+* $Revision: 6.78 $
 *
 * File Description:
 *       Vibrant miscellaneous functions
@@ -98,8 +98,10 @@ Nlm_Boolean  Nlm_optKey = FALSE;
 Nlm_Boolean  Nlm_shftKey = FALSE;
 Nlm_Boolean  Nlm_dblClick = FALSE;
 
-static Nlm_Boolean      errorBoxUp;
-static Nlm_Int2         errorBoxRsult;
+#ifndef WIN_MSWIN
+static Nlm_Boolean      errorBoxUp = FALSE;
+static Nlm_Int2         errorBoxRsult = 0;
+#endif
 
 static Nlm_GraphiC      recentGraphic = NULL;
 static Nlm_GraphicData  recentGraphicData;
@@ -126,7 +128,9 @@ static Nlm_Char  fileTypes [32] = {0};
 static Nlm_Boolean   abortPrint;
 static HDC           hPr = NULL;
 static int           prerr;
+/*
 static int           vibrant_disabled = 0;
+*/
 static int           disabled_count = 0;
 static PRINTDLG      pd;
 static OPENFILENAME  ofn;
@@ -592,10 +596,12 @@ static void s_CloseFatalModalWindow_W(Nlm_WindoW w)
 {
   s_FatalModalWindowUp = FALSE;
 }
+/*
 static void s_CloseFatalModalWindow_B(Nlm_ButtoN b)
 {
   s_CloseFatalModalWindow_W( Nlm_Parent(b) );
 }
+*/
 
 
 static MsgAnswer LIBCALLBACK Nlm_VibMessageHook (MsgKey key, ErrSev severity,
@@ -4715,7 +4721,12 @@ static Nlm_Boolean Nlm_NavServGetInputFileName (Nlm_CharPtr fileName, size_t max
 #endif
 
 #ifdef WIN_MSWIN
-LRESULT CALLBACK StopToolTips(int nCode,
+
+#ifndef TTM_POP
+#define TTM_POP                 (WM_USER + 28)
+#endif
+
+static LRESULT CALLBACK StopToolTips(int nCode,
     WPARAM wParam,
     LPARAM lParam
 )
@@ -5620,7 +5631,6 @@ extern void Nlm_SendOpenDocAppleEventEx (Nlm_CharPtr datafile, Nlm_CharPtr sig, 
   OSType theSignature;
   AEDescList theList;
   CFURLRef cfurl;
-  Nlm_Char  temp [256];
   ProcessSerialNumber  psn;
   Nlm_Boolean  okay = FALSE;
 
@@ -5835,16 +5845,50 @@ extern void Nlm_SendAppleScriptString (Nlm_CharPtr script)
 
 
 extern void Nlm_GetFileTypeAndCreator (Nlm_CharPtr filename, Nlm_CharPtr type, Nlm_CharPtr creator);
+#if TARGET_API_MAC_CARBON
+extern void Nlm_GetFileTypeAndCreator (Nlm_CharPtr filename, Nlm_CharPtr type, Nlm_CharPtr creator)
+{
+  OSType    fCreator;
+  Nlm_Int2  fError;
+  FInfo     fInfo;
+  OSType    fType;
+  Nlm_Char  temp [256];
+
+  if (type != NULL) {
+    *type = '\0';
+  }
+  if (creator != NULL) {
+    *creator = '\0';
+  }
+  Nlm_StringNCpy_0 (temp, filename, sizeof(temp));
+  Nlm_CtoPstr ((Nlm_CharPtr) temp);
+  fError = HGetFInfo ( 0, 0, (StringPtr) temp, &fInfo);
+  if (fError == 0) {
+    fType = fInfo.fdType;
+    fCreator = fInfo.fdCreator;
+    StringNCpy_0 (type, (Nlm_CharPtr) (&fType), 5);
+    StringNCpy_0 (creator, (Nlm_CharPtr) (&fCreator), 5);
+  }
+}
+
+#else
 extern void Nlm_GetFileTypeAndCreator (Nlm_CharPtr filename, Nlm_CharPtr type, Nlm_CharPtr creator)
 {
   OSStatus err;
-  
   FSRef fsref;
+  FSCatalogInfo catinfo;
+
+  if (type != NULL) {
+    *type = '\0';
+  }
+  if (creator != NULL) {
+    *creator = '\0';
+  }
+
   err = FSPathMakeRef ((const UInt8 *)filename, &fsref, NULL);
   if (err)
     return;
   
-  FSCatalogInfo catinfo;
   err = FSGetCatalogInfo (&fsref, kFSCatInfoGettableInfo, &catinfo, NULL, NULL, NULL);
   
   if (err == noErr && (catinfo.nodeFlags & kFSNodeIsDirectoryMask) == 0)
@@ -5854,7 +5898,7 @@ extern void Nlm_GetFileTypeAndCreator (Nlm_CharPtr filename, Nlm_CharPtr type, N
     
     if (type)
     {
-      *(Nlm_Int4 *)type = htonl (finfo.fileType);
+      *type = htonl (finfo.fileType);
       type[4] = 0;
     }
     if (creator)
@@ -5864,6 +5908,7 @@ extern void Nlm_GetFileTypeAndCreator (Nlm_CharPtr filename, Nlm_CharPtr type, N
     }
   }
 }
+#endif
 #endif
 
 
@@ -5911,6 +5956,7 @@ extern void Nlm_GetExecPath(char *filetype, char *buf, int buflen)
     HKEY hkResult;
     int i;
     char key[256];
+    DWORD len;
 
     if(buf == NULL || filetype == NULL || buflen < 1) return;
     if(strlen(filetype)>220) return;
@@ -5924,7 +5970,9 @@ extern void Nlm_GetExecPath(char *filetype, char *buf, int buflen)
         return;
     }
 
-    RegQueryValueEx(hkResult,"", NULL, NULL, (LPBYTE) buf, (LPDWORD) &buflen);
+    len = (DWORD) buflen;
+    RegQueryValueEx(hkResult,"", NULL, NULL, (LPBYTE) buf, (LPDWORD) &len);
+    buflen = (int) len;
     RegCloseKey(hkResult);
 
     for (i=1; i<buflen && buf[i] != '"'; i++) {}
@@ -6084,20 +6132,27 @@ static Nlm_Int2 Nlm_FntDlgGetSysFontList (Nlm_Boolean monoSpace)
   if (monoSpace)
   {
     int item;
+    int size;
+    char *name;
+    Nlm_FonT font;
+    int i;
+    int M;
+    int s;
+
     for (item = CountMenuItems (menuHforFontList); item > 0; item--)
     {
       CFStringRef cfname = NULL;
       CopyMenuItemTextAsCFString (menuHforFontList, item, &cfname);
       
-      int size = CFStringGetMaximumSizeForEncoding (CFStringGetLength (cfname), kCFStringEncodingUTF8);
-      char *name = malloc (size + 1);
+      size = CFStringGetMaximumSizeForEncoding (CFStringGetLength (cfname), kCFStringEncodingUTF8);
+      name = malloc (size + 1);
       CFStringGetCString (cfname, name, size + 1, kCFStringEncodingUTF8);
       
-      Nlm_FonT font = Nlm_GetFont (name, 12, 0, 0, 0, "");
+      font = Nlm_GetFont (name, 12, 0, 0, 0, "");
       
-      int i = Nlm_CharWidth ('i');
-      int M = Nlm_CharWidth ('M');
-      int s = Nlm_CharWidth (' ');
+      i = Nlm_CharWidth ('i');
+      M = Nlm_CharWidth ('M');
+      s = Nlm_CharWidth (' ');
       if( i != M || i != s )
         DeleteMenuItem (menuHforFontList, item);
       

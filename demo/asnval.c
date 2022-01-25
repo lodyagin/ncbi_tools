@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11/3/04
 *
-* $Revision: 1.56 $
+* $Revision: 1.76 $
 *
 * File Description:
 *
@@ -60,7 +60,7 @@
 #include <accpubseq.h>
 #endif
 
-#define ASNVAL_APP_VER "4.8"
+#define ASNVAL_APP_VER "5.9"
 
 CharPtr ASNVAL_APPLICATION = ASNVAL_APP_VER;
 
@@ -78,17 +78,20 @@ typedef struct valflags {
   Boolean  farFetchMRNAproducts;
   Boolean  locusTagGeneralMatch;
   Boolean  validateIDSet;
+  Boolean  seqSubmitParent;
   Boolean  ignoreExceptions;
   Boolean  validateExons;
   Boolean  inferenceAccnCheck;
   Boolean  testLatLonSubregion;
   Boolean  strictLatLonCountry;
+  Boolean  indexerVersion;
   Boolean  batch;
   Boolean  binary;
   Boolean  compressed;
   Boolean  lock;
   Boolean  useThreads;
   Boolean  usePUBSEQ;
+  Boolean  validateBarcode;
   Int2     verbosity;
   Int2     type;
   Int4     skipcount;
@@ -98,6 +101,7 @@ typedef struct valflags {
   FILE     *logfp;
   Int4     num_errors;
   Int4     fatal_errors;
+  Boolean  has_errors;
   Boolean  io_failure;
   Char     longest [64];
   time_t   worsttime;
@@ -514,7 +518,7 @@ static ValNodePtr DoLockFarComponents (
 }
 
 static CharPtr severityLabel [] = {
-  "NONE", "INFO", "WARN", "ERROR", "REJECT", "FATAL", "MAX", NULL
+  "NONE", "INFO", "WARNING", "ERROR", "REJECT", "FATAL", "MAX", NULL
 };
 
 static CharPtr compatSeverityLabel [] = {
@@ -522,12 +526,63 @@ static CharPtr compatSeverityLabel [] = {
 };
 
 typedef struct vcdaa {
-  FILE     *ofp;
-  Int2     verbosity;
-  Int2     lowCutoff;
-  Int2     highCutoff;
-  CharPtr  errcode;
+  FILE        *ofp;
+  Int2        verbosity;
+  Int2        lowCutoff;
+  Int2        highCutoff;
+  CharPtr     errcode;
+  ValFlagPtr  vfp;
 } VCData, PNTR VCPtr;
+
+static void XmlEncode (CharPtr dst, CharPtr src)
+
+{
+  Char  ch;
+
+  if (dst == NULL || src == NULL) return;
+
+  ch = *src;
+  while (ch != '\0') {
+    if (ch == '<') {
+      *dst = '&';
+      dst++;
+      *dst = 'l';
+      dst++;
+      *dst = 't';
+      dst++;
+      *dst = ';';
+      dst++;
+    } else if (ch == '>') {
+      *dst = '&';
+      dst++;
+      *dst = 'g';
+      dst++;
+      *dst = 't';
+      dst++;
+      *dst = ';';
+      dst++;
+    } else {
+      *dst = ch;
+      dst++;
+    }
+    src++;
+    ch = *src;
+  }
+  *dst = '\0';
+}
+
+
+static CharPtr GetXmlHeaderText (ErrSev cutoff)
+{
+  CharPtr         xml_header = NULL;
+  CharPtr         xml_4_fmt = "asnval version=\"%s\" severity_cutoff=\"%s\"";
+
+  xml_header = (CharPtr) MemNew (sizeof (Char) * (10 + StringLen (xml_4_fmt) + 
+                StringLen (ASNVAL_APPLICATION) + StringLen (severityLabel[cutoff])));
+  sprintf (xml_header, xml_4_fmt, ASNVAL_APPLICATION, severityLabel[cutoff]);
+  return xml_header;
+}
+
 
 static void LIBCALLBACK ValidCallback (
   ErrSev severity,
@@ -547,15 +602,21 @@ static void LIBCALLBACK ValidCallback (
 )
 
 {
-  Char     buf [256];
-  CharPtr  catname, errname;
-  FILE     *fp;
-  VCPtr    vcp;
+  Char        buf [256];
+  CharPtr     catname, errname, urlmssg = NULL;
+  ErrSev      cutoff;
+  FILE        *fp;
+  size_t      len;
+  VCPtr       vcp;
+  ValFlagPtr  vfp;
+  CharPtr     xml_header;
 
   vcp = (VCPtr) userdata;
   if (vcp == NULL) return;
   fp = vcp->ofp;
   if (fp == NULL) return;
+  vfp = vcp->vfp;
+  if (vfp == NULL) return;
 
   if (severity < SEV_NONE || severity > SEV_MAX) {
     severity = SEV_MAX;
@@ -628,7 +689,32 @@ static void LIBCALLBACK ValidCallback (
              accession, severityLabel [severity],
              catname, errname);
 
+  } else if (vcp->verbosity == 4) {
+
+    if (! vfp->has_errors) {
+      cutoff = (ErrSev) vcp->lowCutoff;
+      if (cutoff < SEV_NONE || cutoff > SEV_MAX) {
+        cutoff = SEV_MAX;
+      }
+
+      xml_header = GetXmlHeaderText (cutoff);
+      fprintf (fp, "<%s>\n", xml_header);
+      xml_header = MemFree (xml_header);
+    }
+
+    len = StringLen (message);
+    if (len > 0) {
+      urlmssg = MemNew (len * 3 + 2);
+      if (urlmssg != NULL) {
+        XmlEncode (urlmssg, message);
+        fprintf (fp, "  <message severity=\"%s\" seq-id=\"%s\" code=\"%s_%s\">%s</message>\n",
+                 severityLabel [severity], accession, catname, errname, urlmssg);
+        MemFree (urlmssg);
+      }
+    }
   }
+
+  vfp->has_errors = TRUE;
 }
 
 static void DoValidation (
@@ -641,6 +727,8 @@ static void DoValidation (
   Int2            i;
   VCData          vcd;
   ValidStructPtr  vsp;
+  ErrSev          cutoff;
+  CharPtr         xml_header = NULL;
 
   if (vfp == NULL) return;
 
@@ -653,6 +741,7 @@ static void DoValidation (
 
   vsp->cutoff = vfp->lowCutoff;
   vsp->validateAlignments = vfp->validateAlignments;
+  vsp->alignFindRemoteBsp = vfp->alignFindRemoteBsp;
   vsp->doSeqHistAssembly = vfp->doSeqHistAssembly;
   vsp->farIDsInAlignments = vfp->farIDsInAlignments;
   vsp->alwaysRequireIsoJTA = vfp->alwaysRequireIsoJTA;
@@ -660,11 +749,13 @@ static void DoValidation (
   vsp->farFetchMRNAproducts = vfp->farFetchMRNAproducts;
   vsp->locusTagGeneralMatch = vfp->locusTagGeneralMatch;
   vsp->validateIDSet = vfp->validateIDSet;
+  vsp->seqSubmitParent = vfp->seqSubmitParent;
   vsp->ignoreExceptions = vfp->ignoreExceptions;
   vsp->validateExons = vfp->validateExons;
   vsp->inferenceAccnCheck = vfp->inferenceAccnCheck;
   vsp->testLatLonSubregion = vfp->testLatLonSubregion;
   vsp->strictLatLonCountry = vfp->strictLatLonCountry;
+  vsp->indexerVersion = vfp->indexerVersion;
 
   if (ofp == NULL && vfp->outfp != NULL) {
     ofp = vfp->outfp;
@@ -675,6 +766,7 @@ static void DoValidation (
     vcd.lowCutoff = vfp->lowCutoff;
     vcd.highCutoff = vfp->highCutoff;
     vcd.errcode = vfp->errcode;
+    vcd.vfp = vfp;
     vsp->errfunc = ValidCallback;
     vsp->userdata = (Pointer) &vcd;
     vsp->convertGiToAccn = FALSE;
@@ -690,6 +782,22 @@ static void DoValidation (
   }
 
   ValidStructFree (vsp);
+  if (vfp->validateBarcode) {
+    if (vfp->verbosity == 4 && !vfp->has_errors) {
+      cutoff = (ErrSev) vfp->lowCutoff;
+      if (cutoff < SEV_NONE || cutoff > SEV_MAX) {
+        cutoff = SEV_MAX;
+      }
+      xml_header = GetXmlHeaderText(cutoff);
+    }
+    if (!BarcodeValidateOneSeqEntry (ofp, sep, FALSE,
+                                     vfp->verbosity == 4,
+                                     !vfp->has_errors,
+                                     xml_header)) {
+      vfp->has_errors = TRUE;
+    }
+    xml_header = MemFree (xml_header);
+  }
 }
 
 static void ProcessSingleRecord (
@@ -721,7 +829,7 @@ static void ProcessSingleRecord (
       return;
     }
 
-    dataptr = ReadAsnFastaOrFlatFile (fp, &datatype, NULL, FALSE, FALSE, FALSE, FALSE);
+    dataptr = ReadAsnFastaOrFlatFile (fp, &datatype, NULL, FALSE, FALSE, TRUE, FALSE);
 
     FileClose (fp);
 
@@ -840,6 +948,12 @@ static void ProcessSingleRecord (
       bsplist = UnlockFarComponents (bsplist);
 
       if (ofp != NULL) {
+        if (vfp->has_errors) {
+          if (vfp->verbosity == 4) {
+            fprintf (ofp, "</asnval>\n");
+          }
+          vfp->has_errors = FALSE;
+        }
         FileClose (ofp);
       }
 
@@ -1184,6 +1298,12 @@ static void ProcessMultipleRecord (
   }
 
   if (ofp != NULL) {
+    if (vfp->has_errors) {
+      if (vfp->verbosity == 4) {
+        fprintf (ofp, "</asnval>\n");
+      }
+      vfp->has_errors = FALSE;
+    }
     FileClose (ofp);
   }
 
@@ -1261,9 +1381,12 @@ static void ProcessOneRecord (
 #define T_argThreads      26
 #define L_argLogFile      27
 #define S_argSkipCount    28
-#define C_argMaxCount     29
+#define B_argBarcodeVal   29
+#define C_argMaxCount     30
 #ifdef INTERNAL_NCBI_ASN2VAL
-#define H_argAccessHUP    30
+#define w_argSeqSubParent 31
+#define H_argAccessHUP    32
+#define y_argAIndexer     33
 #endif
 
 #define LAT_LON_STATE    1
@@ -1306,7 +1429,7 @@ Args myargs [] = {
     TRUE, 'Y', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Ignore Transcription/Translation Exceptions", "F", NULL, NULL,
     TRUE, 'e', ARG_BOOLEAN, 0.0, 0, NULL},
-  {"Verbosity", "0", "0", "3",
+  {"Verbosity", "0", "0", "4",
     FALSE, 'v', ARG_INT, 0.0, 0, NULL},
   {"ASN.1 Type (a Any, e Seq-entry, b Bioseq, s Bioseq-set, m Seq-submit, t Batch Bioseq-set, u Batch Seq-submit)", "a", NULL, NULL,
     TRUE, 'a', ARG_STRING, 0.0, 0, NULL},
@@ -1328,11 +1451,17 @@ Args myargs [] = {
     TRUE, 'L', ARG_FILE_OUT, 0.0, 0, NULL},
   {"Skip Count", "0", NULL, NULL,
     TRUE, 'S', ARG_INT, 0.0, 0, NULL},
+  {"Barcode Validate", "F", NULL, NULL,
+    TRUE, 'B', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Max Count", "0", NULL, NULL,
     TRUE, 'C', ARG_INT, 0.0, 0, NULL},
 #ifdef INTERNAL_NCBI_ASN2VAL
+  {"SeqSubmitParent Flag", "F", NULL, NULL,
+    TRUE, 'w', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Internal Access to HUP", "F", NULL, NULL,
     TRUE, 'H', ARG_BOOLEAN, 0.0, 0, NULL},
+  {"Special Indexer Tests", "F", NULL, NULL,
+    TRUE, 'y', ARG_BOOLEAN, 0.0, 0, NULL},
 #endif
 };
 
@@ -1413,6 +1542,7 @@ Int2 Main (void)
   vfd.highCutoff = (Int2) myargs [P_argHighCutoff].intvalue;
   vfd.errcode = (CharPtr) myargs [E_argOnlyThisErr].strvalue;
   vfd.validateAlignments = (Boolean) myargs [A_argAlignments].intvalue;
+  vfd.alignFindRemoteBsp = (Boolean) (vfd.validateAlignments && remote);
   vfd.doSeqHistAssembly = (Boolean) myargs [A_argAlignments].intvalue;
   vfd.farIDsInAlignments = (Boolean) myargs [A_argAlignments].intvalue;
   vfd.alwaysRequireIsoJTA = (Boolean) myargs [J_argIsoJta].intvalue;
@@ -1423,6 +1553,8 @@ Int2 Main (void)
   vfd.ignoreExceptions = (Boolean) myargs [e_argIgnoreExcept].intvalue;
   vfd.validateExons = (Boolean) myargs [X_argExonSplice].intvalue;
   vfd.inferenceAccnCheck = (Boolean) myargs [G_argInfAccns].intvalue;
+  vfd.validateBarcode = (Boolean) myargs[B_argBarcodeVal].intvalue;
+
 
   val = (Int2) myargs [N_argLatLonStrict].intvalue;
   vfd.testLatLonSubregion = (Boolean) ((val & LAT_LON_STATE) != 0);
@@ -1435,6 +1567,11 @@ Int2 Main (void)
   if (vfd.maxcount < 1) {
     vfd.maxcount = INT4_MAX;
   }
+
+#ifdef INTERNAL_NCBI_ASN2VAL
+  vfd.seqSubmitParent = (Boolean) myargs [w_argSeqSubParent].intvalue;
+  vfd.indexerVersion = (Boolean) myargs [y_argAIndexer].intvalue;
+#endif
 
   batch = FALSE;
   binary = (Boolean) myargs [b_argBinary].intvalue;
@@ -1488,6 +1625,7 @@ Int2 Main (void)
   vfd.logfp = NULL;
   vfd.num_errors = 0;
   vfd.fatal_errors = 0;
+  vfd.has_errors = FALSE;
   vfd.io_failure = FALSE;
   vfd.longest [0] = '\0';
   vfd.worsttime = 0;
@@ -1563,6 +1701,12 @@ Int2 Main (void)
   run_time = stop_time - start_time;
 
   if (vfd.outfp != NULL) {
+    if (vfd.has_errors) {
+      if (vfd.verbosity == 4) {
+        fprintf (vfd.outfp, "</asnval>\n");
+      }
+      vfd.has_errors = FALSE;
+    }
     FileClose (vfd.outfp);
   }
 

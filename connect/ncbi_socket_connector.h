@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_SOCKET_CONNECTOR__H
 #define CONNECT___NCBI_SOCKET_CONNECTOR__H
 
-/*  $Id: ncbi_socket_connector.h,v 6.9 2003/05/14 03:48:51 lavr Exp $
+/* $Id: ncbi_socket_connector.h,v 6.11 2008/10/31 11:25:51 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -61,12 +61,11 @@ extern NCBI_XCONNECT_EXPORT CONNECTOR SOCK_CreateConnector
  );
 
 
-typedef enum {
-    eSCC_DebugPrintout  = 1,
-    eSCC_SetReadOnWrite = 2
+typedef enum { /* DEPRECATED -- DON'T USE! */
+    fSCC_DebugPrintout  = fSOCK_LogOn,
+    fSCC_Secure         = fSOCK_Secure,
+    fSCC_SetReadOnWrite = fSOCK_ReadOnWrite
 } ESCC_Flags;
-typedef unsigned int TSCC_Flags;  /* bitwise OR of "ESCC_Flags */
-
 
 /* Create new CONNECTOR structure to handle connection to a socket.
  * Make up to "max_try" attempts to connect to the "host:port" before
@@ -82,7 +81,7 @@ extern NCBI_XCONNECT_EXPORT CONNECTOR SOCK_CreateConnectorEx
  unsigned int   max_try,   /* max.number of attempts to establish connection */
  const void*    init_data, /* data to send to server on connect              */
  size_t         init_size, /* size of the "init_data" buffer                 */
- TSCC_Flags     flags      /* bitwise OR of additional flags: see above      */
+ TSOCK_Flags    flags      /* bitwise OR of additional flags: see above      */
  );
 
 
@@ -107,7 +106,7 @@ extern NCBI_XCONNECT_EXPORT CONNECTOR SOCK_CreateConnectorOnTop
 extern NCBI_XCONNECT_EXPORT CONNECTOR SOCK_CreateConnectorOnTopEx
 (SOCK         sock,      /* socket object                                    */
  unsigned int max_try,   /* max.# of tries to reconnect if disconnected      */
- TSCC_Flags   flags      /* bitwise OR of additional flags: see above        */
+ TSOCK_Flags  flags      /* bitwise OR of additional flags: see above        */
  );
 
 
@@ -117,39 +116,5 @@ extern NCBI_XCONNECT_EXPORT CONNECTOR SOCK_CreateConnectorOnTopEx
 
 
 /* @} */
-
-
-/*
- * --------------------------------------------------------------------------
- * $Log: ncbi_socket_connector.h,v $
- * Revision 6.9  2003/05/14 03:48:51  lavr
- * SOCKET_CreateConnectorOnTopEx(): init_data and init_size parameters removed
- *
- * Revision 6.8  2003/04/09 19:05:57  siyan
- * Added doxygen support
- *
- * Revision 6.7  2003/01/08 01:59:33  lavr
- * DLL-ize CONNECT library for MSVC (add NCBI_XCONNECT_EXPORT)
- *
- * Revision 6.6  2002/09/19 18:05:34  lavr
- * Header file guard macro changed; log moved to end
- *
- * Revision 6.5  2002/08/07 16:31:40  lavr
- * Added eSCC_SetReadOnWrite to constructor flags; log moved to end
- *
- * Revision 6.4  2002/01/12 22:15:28  lavr
- * Fixed function description to use not former but current parameter names
- *
- * Revision 6.3  2001/12/04 15:54:29  lavr
- * +SOCK_CreateConnectorOnTop(), +SOCK_CreateConnectorOnTopEx()
- *
- * Revision 6.2  2001/01/23 23:09:18  lavr
- * Flags added to 'Ex' constructor
- *
- * Revision 6.1  2000/04/07 20:05:37  vakatov
- * Initial revision
- *
- * ==========================================================================
- */
 
 #endif /* CONNECT___NCBI_SOCKET_CONNECTOR__H */

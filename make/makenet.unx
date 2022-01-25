@@ -1,6 +1,6 @@
 #   makefile for network demo programs and network entrez
 #
-#	$Id: makenet.unx,v 6.224 2008/01/25 19:56:25 ucko Exp $
+#	$Id: makenet.unx,v 6.231 2008/12/10 21:23:29 ucko Exp $
 #   test, ignore
 #
 #   Sun with unbundled ANSI compiler [ make CC=acc RAN=ranlib ]
@@ -389,7 +389,7 @@ utilities : $(EXEUTIL)
 
 vibutilities : $(EXEUTILVIB)
 
-.NO_PARALLEL:	copy nocopy Tentrez sequin Psequin sbtedit Ssequin elecpcr asn2fast asn2asn cleanasn cspeedtest Nbatch Nbatch3 Nentrcmd seqget idfetch test_ncbi_socket test_ncbi_dsock debug_server rtestval rasn2ff asn2gb asn2gb_psf asn2fsa asn2fsa_psf tbl2asn tbl2asn_psf raw2delt asn2all gene2xml asnval asnval_psf asndisc asndisc_psf asnmacro asnstrip flint gbseqget insdseqget trna2sap trna2tbl testent2 entrez2 spidey dotmatrix ingenue condense bl2seq
+.NO_PARALLEL: copy nocopy Tentrez sequin Psequin sbtedit Ssequin elecpcr asn2fast asn2asn cleanasn cspeedtest sugint Nbatch Nbatch3 Nentrcmd seqget idfetch test_nc bi_socket test_ncbi_dsock debug_server rtestval rasn2ff asn2gb asn2gb_psf asn2fsa asn2fsa_psf tbl2asn tbl2asn_psf raw2delt aceread_tst asn2all gene2xml asnval asnval_psf asndisc asndisc_psf demo_aceread_tst asnmacro asnstrip flint gbseqget insdseqget trna2sap trna2tbl testent2 entrez2 spidey dotmatrix ingenue condense bl2seq
 
 .WAIT:
 	echo Waiting...go
@@ -521,9 +521,11 @@ copy :
 	$(SRCCOPY) ../demo/asn2asn.c .
 	$(SRCCOPY) ../demo/cleanasn.c .
 	$(SRCCOPY) ../demo/cspeedtest.c .
+	$(SRCCOPY) ../demo/sugint.c .
 	$(SRCCOPY) ../demo/fetchent.c .
 	$(SRCCOPY) ../demo/udvmain.c .
 	$(SRCCOPY) ../demo/rtestval.c .
+	$(SRCCOPY) ../demo/aceread_tst.c .
 	$(SRCCOPY) ../demo/asn2ff.c .
 	$(SRCCOPY) ../demo/asn2gb.c .
 	$(SRCCOPY) ../demo/asn2fsa.c .
@@ -531,6 +533,7 @@ copy :
 	$(SRCCOPY) ../demo/gene2xml.c .
 	$(SRCCOPY) ../demo/asnval.c .
 	$(SRCCOPY) ../demo/asndisc.c .
+	$(SRCCOPY) ../demo/aceread_tst.c .
 	$(SRCCOPY) ../demo/asnmacro.c .
 	$(SRCCOPY) ../demo/asnstrip.c .
 	$(SRCCOPY) ../demo/tbl2asn.c .
@@ -550,6 +553,7 @@ copy :
 	$(SRCCOPY) ../demo/bl2seq.c .
 	$(SRCCOPY) ../demo/blastall.c .
 	$(SRCCOPY) ../demo/blast_driver.c .
+	$(SRCCOPY) ../demo/src_chk.c .
 	$(SRCCOPY) $(SRCUTILCOPY) .
 	-$(SRCCOPY) ../network/entrez/server/*.* .
 	-$(SRCCOPY) ../network/suggest/server/*.* .
@@ -892,7 +896,8 @@ ctliberr.o : ctliberr.c
 	$(CC) $(CFLAGS) $(IN_HOUSE_CFLAGS) -c ctliberr.c
 
 accpubseq.o : accpubseq.c
-	$(CC) $(CFLAGS) $(IN_HOUSE_CFLAGS) -c accpubseq.c
+# Disable optimization to work around a bug in ICC 8. :-/
+	$(CC) $(CFLAGS) $(IN_HOUSE_CFLAGS) -O0 -c accpubseq.c
 
 password.o : password.c
 	$(CC) $(CFLAGS) $(IN_HOUSE_CFLAGS) -c password.c
@@ -961,6 +966,12 @@ rtestval :	rtestval.c
 # remote asn2ff program (rasn2ff)
 rasn2ff :	asn2ff.c
 	$(CC) -o rasn2ff -DENABLE_ENTREZ -DENABLE_ID1 $(LDFLAGS) asn2ff.c $(LIB8) $(LIB3) $(LIB7) $(LIB6) $(LIB41) $(LIB2) $(LIB1) $(OTHERLIBS)
+
+# aceread_tst program (aceread_tst)
+aceread_tst :	aceread_tst.c
+	$(CC) -g -o aceread_tst $(LDFLAGS) aceread_tst.c $(THREAD_OBJ) $(LIB41) \
+		$(NETCLILIB) $(LIB23) $(LIBCOMPADJ) $(LIB2) $(LIB1) \
+		$(OTHERLIBS) $(THREAD_OTHERLIBS)
 
 # asn2gb program (asn2gb)
 asn2gb :	asn2gb.c
@@ -1046,6 +1057,12 @@ asndisc_psf :	asndisc.c
 	$(CC) -DINTERNAL_NCBI_ASNDISC -g -o asndisc_psf $(LDFLAGS) asndisc.c $(THREAD_OBJ) $(LIB_PS) \
 	$(LIB23) $(LIBCOMPADJ) $(LIB2) $(LIB1) $(NCBI_SYBLIBS_CT_r) \
 	$(OTHERLIBS) $(THREAD_OTHERLIBS)
+
+# demo_aceread_tst program (demo_aceread_tst)
+demo_aceread_tst :	aceread_tst.c
+	$(CC) -g -o demo_aceread_tst $(LDFLAGS) aceread_tst.c $(THREAD_OBJ) $(LIB41) \
+		$(NETCLILIB) $(LIB23) $(LIBCOMPADJ) $(LIB2) $(LIB1) \
+		$(OTHERLIBS) $(THREAD_OTHERLIBS)
 
 # asnmacro
 asnmacro : asnmacro.c 
@@ -1143,6 +1160,11 @@ cleanasn : cleanasn.c
 cspeedtest : cspeedtest.c
 	$(CC) -o cspeedtest $(LDFLAGS) cspeedtest.c $(LIB41) $(LIB23) $(LIB6) $(LIB2) $(LIB1) $(OTHERLIBS)
 
+# demo program (sugint)
+
+sugint : sugint.c
+	$(CC) -o sugint $(LDFLAGS) sugint.c $(LIB23) $(LIB2) $(LIB1) $(OTHERLIBS)
+
 # demo program (fetchent)
 
 fetchent : fetchent.c
@@ -1174,6 +1196,11 @@ bl2seq : bl2seq.c
 	$(CC) -o bl2seq $(LDFLAGS) bl2seq.c $(LIB61) $(LIB60) $(LIB23) \
 		$(LIBCOMPADJ) $(LIB41) $(NETCLILIB) $(LIB2) $(LIB1) \
 		$(OTHERLIBS)
+
+taxblast: taxblast_main.c $(BLIB41) $(BLIB40)
+	$(CC) -g -o taxblast $(LDFLAGS) taxblast_main.c \
+		$(LIB61) $(LIB60) $(LIB36) $(LIB41) $(LIB40) $(LIB23) $(LIBCOMPADJ) \
+		$(NETCLILIB) $(LIB2) $(LIB1) $(OTHERLIBS)
 
 # test client for the suggest network service
 suggcli: suggcli.c $(BNETCLILIB) $(BLIB24)
@@ -1435,5 +1462,10 @@ wblast2_cs.REAL : wblast2.c
 
 bl2bag.cgi : bl2bag.c
 	$(CC) -o bl2bag.cgi $(LDFLAGS) bl2bag.c $(LIB1) $(OTHERLIBS)
+
+# src_chk
+
+src_chk : src_chk.c 
+	$(CC) -o src_chk $(LDFLAGS) src_chk.c $(LIB2) $(LIB1) $(OTHERLIBS) 
 
 ##

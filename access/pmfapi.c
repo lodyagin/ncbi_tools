@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   5/5/00
 *
-* $Revision: 1.96 $
+* $Revision: 1.98 $
 *
 * File Description: 
 *
@@ -332,7 +332,7 @@ NLM_EXTERN CONN PubSeqFetchOpenConnection (
     retcode = 0;
   }
   if (flags < 0) {
-    flags = 1;
+    flags = -1;
   }
 
 #ifdef PUB_SEQ_FETCH_DEBUG
@@ -382,7 +382,7 @@ NLM_EXTERN CONN PubSeqFetchOpenConnection (
 }
 
 NLM_EXTERN CONN PubSeqFetchTraceOpenConnection (
-  Int4 tid,
+  Uint4 tid,
   Int2 retcode,
   Int4 flags
 )
@@ -400,17 +400,17 @@ NLM_EXTERN CONN PubSeqFetchTraceOpenConnection (
     retcode = 0;
   }
   if (flags < 0) {
-    flags = 1;
+    flags = -1;
   }
 
 #ifdef PUB_SEQ_FETCH_DEBUG
-  sprintf (query, "val=0:TRACE:%ld&save=idf&view=1&maxplex=%d&extrafeat=%ld", (long) tid, (int) retcode, (long) flags);
+  sprintf (query, "val=0:TRACE:%lu&save=idf&view=1&maxplex=%d&extrafeat=%ld", (unsigned long) tid, (int) retcode, (long) flags);
   return QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 80, "/entrez/viewer.fcgi",
                              query, "Entrez2Tool", 30, eMIME_T_NcbiData,
                              eMIME_AsnText, eENCOD_None, 0);
 #endif
 
-  sprintf (query, "val=0:TRACE:%ld&maxplex=%d&extrafeat=%ld", (long) tid, (int) retcode, (long) flags);
+  sprintf (query, "val=0:TRACE:%lu&maxplex=%d&extrafeat=%ld", (unsigned long) tid, (int) retcode, (long) flags);
   conn = QUERY_OpenServiceQuery ("SeqFetch", query, 30);
 
 #ifdef OS_UNIX
@@ -430,7 +430,7 @@ NLM_EXTERN CONN PubSeqFetchTraceOpenConnection (
     if (StringHasNoText (buf)) {
       StringCpy (buf, "?");
     }
-    ErrPostEx (SEV_ERROR, 0, 0, "PubSeqFetchTraceOpenConnection failed for ti %ld, date/time %s", (long) tid, buf);
+    ErrPostEx (SEV_ERROR, 0, 0, "PubSeqFetchTraceOpenConnection failed for ti %lu, date/time %s", (unsigned long) tid, buf);
     return conn;
   }
 
@@ -438,9 +438,9 @@ NLM_EXTERN CONN PubSeqFetchTraceOpenConnection (
   if (log_query_url) {
     str = CONN_Description (conn);
     if (str == NULL) {
-      ErrPostEx (SEV_ERROR, 0, 0, "CONN_Description failed for ti %ld", (long) tid);
+      ErrPostEx (SEV_ERROR, 0, 0, "CONN_Description failed for ti %lu", (unsigned long) tid);
     } else {
-      ErrPostEx (SEV_ERROR, 0, 0, "CONN_Description for ti %ld is %s", (long) tid, str);
+      ErrPostEx (SEV_ERROR, 0, 0, "CONN_Description for ti %lu is %s", (unsigned long) tid, str);
     }
     MemFree (str);
   }
@@ -1067,8 +1067,10 @@ NLM_EXTERN PubmedEntryPtr PubMedSynchronousQuery (
 }
 
 typedef struct psconfirm {
-  Int4  uid;
-  Int4  gi;
+  Int4   uid;
+  Uint4  tid;
+  Int4   gi;
+  Uint4  ti;
 } PsConfirm, PNTR PsConfirmPtr;
 
 static void ConfirmGiInSep (
@@ -1099,7 +1101,7 @@ static void ConfirmTiInSep (
 )
 
 {
-  Int4          ti;
+  Uint4          ti;
   PsConfirmPtr  psp;
   SeqIdPtr      sip;
   DbtagPtr      dbtag;
@@ -1110,21 +1112,20 @@ static void ConfirmTiInSep (
     if (sip->choice != SEQID_GENERAL) continue;
     dbtag = (DbtagPtr) sip->data.ptrvalue;
     if (dbtag == NULL || StringCmp (dbtag->db, "ti") != 0 || dbtag->tag == NULL) continue;
-    if (dbtag->tag->str == NULL && dbtag->tag->id > 0) {
-      ti = dbtag->tag->id;
-      if (psp->gi == 0 || ti == psp->uid) {
-        psp->gi = ti;
+    if (dbtag->tag->str == NULL && (Uint4) dbtag->tag->id > 0) {
+      ti = (Uint4) dbtag->tag->id;
+      if (psp->ti == 0 || ti == psp->tid) {
+        psp->ti = ti;
       }
     }
   }
 }
 
 
-NLM_EXTERN SeqEntryPtr PubSeqSynchronousQueryEx (
+NLM_EXTERN SeqEntryPtr PubSeqSynchronousQuery (
   Int4 uid,
   Int2 retcode,
-  Int4 flags,
-  Boolean is_trace
+  Int4 flags
 )
 
 {
@@ -1153,11 +1154,7 @@ NLM_EXTERN SeqEntryPtr PubSeqSynchronousQueryEx (
   }
 #endif
 
-  if (is_trace) {
-    conn = PubSeqFetchTraceOpenConnection (uid, retcode, flags);
-  } else {
-    conn = PubSeqFetchOpenConnection (uid, retcode, flags);
-  }
+  conn = PubSeqFetchOpenConnection (uid, retcode, flags);
 
   if (conn == NULL) return NULL;
 
@@ -1185,19 +1182,14 @@ NLM_EXTERN SeqEntryPtr PubSeqSynchronousQueryEx (
 
   if (sep != NULL) {
     ps.uid = uid;
+    ps.tid = 0;
     ps.gi = 0;
-    if (is_trace) {
-      VisitBioseqsInSep (sep, (Pointer) &ps, ConfirmTiInSep);
-    } else {
-      VisitBioseqsInSep (sep, (Pointer) &ps, ConfirmGiInSep);
-    }
+    ps.ti = 0;
+    VisitBioseqsInSep (sep, (Pointer) &ps, ConfirmGiInSep);
     if (ps.gi != uid) {
       ErrPostEx (SEV_ERROR, 0, 0,
-                 "PubSeqSynchronousQuery requested %s %ld but received %s %ld",
-                 is_trace ? "ti" : "gi",
-                 (long) uid,
-                 is_trace ? "ti" : "gi",
-                 (long) ps.gi);
+                 "PubSeqSynchronousQuery requested gi %ld but received gi %ld",
+                 (long) uid, (long) ps.gi);
     }
   } else {
     MakeDateTimeStamp (buf);
@@ -1205,8 +1197,7 @@ NLM_EXTERN SeqEntryPtr PubSeqSynchronousQueryEx (
       StringCpy (buf, "?");
     }
     ErrPostEx (SEV_ERROR, 0, 0,
-               "PubSeqSynchronousQuery failed for %s %ld, date/time %s, URL is %s",
-               is_trace ? "ti" : "gi",
+               "PubSeqSynchronousQuery failed for gi %ld, date/time %s, URL is %s",
                (long) uid, buf, str);
   }
 
@@ -1216,25 +1207,88 @@ NLM_EXTERN SeqEntryPtr PubSeqSynchronousQueryEx (
 }
 
 
-NLM_EXTERN SeqEntryPtr PubSeqSynchronousQuery (
-  Int4 uid,
-  Int2 retcode,
-  Int4 flags
-)
-
-{
-  return PubSeqSynchronousQueryEx (uid, retcode, flags, FALSE);
-}
-
-
 NLM_EXTERN SeqEntryPtr PubSeqSynchronousQueryTI (
-  Int4 uid,
+  Uint4 tid,
   Int2 retcode,
   Int4 flags
 )
 
 {
-  return PubSeqSynchronousQueryEx (uid, retcode, flags, TRUE);
+  Char         buf [32];
+  CONN         conn;
+  PsConfirm    ps;
+  SeqEntryPtr  sep;
+  CharPtr      str = NULL;
+#ifdef OS_UNIX
+  clock_t      starttime;
+  clock_t      stoptime;
+  struct tms   timebuf;
+#endif
+
+  if (tid < 1) return NULL;
+
+#ifdef OS_UNIX
+  if (! log_sync_query_set) {
+    str = (CharPtr) getenv ("NCBI_LOG_SYNC_QUERY_TIMES");
+    if (StringDoesHaveText (str)) {
+      if (StringICmp (str, "TRUE") == 0) {
+        log_sync_query_times = TRUE;
+      }
+    }
+    log_sync_query_set = TRUE;
+  }
+#endif
+
+  conn = PubSeqFetchTraceOpenConnection (tid, retcode, flags);
+
+  if (conn == NULL) return NULL;
+
+  QUERY_SendQuery (conn);
+
+#ifdef OS_UNIX
+  if (log_sync_query_times) {
+    starttime = times (&timebuf);
+  }
+#endif
+
+  str = CONN_Description (conn);
+  if (StringHasNoText (str)) {
+    str = StringSave ("?");
+  }
+
+  sep = PubSeqWaitForReply (conn);
+
+#ifdef OS_UNIX
+  if (log_sync_query_times) {
+    stoptime = times (&timebuf);
+    printf ("PubSeqWaitForReply %ld\n", (long) (stoptime - starttime));
+  }
+#endif
+
+  if (sep != NULL) {
+    ps.uid = 0;
+    ps.tid = tid;
+    ps.gi = 0;
+    ps.ti = 0;
+    VisitBioseqsInSep (sep, (Pointer) &ps, ConfirmTiInSep);
+    if (ps.ti != tid) {
+      ErrPostEx (SEV_ERROR, 0, 0,
+                 "PubSeqSynchronousQueryTI requested ti %lu but received ti %lu",
+                 (long) tid, (long) ps.ti);
+    }
+  } else {
+    MakeDateTimeStamp (buf);
+    if (StringHasNoText (buf)) {
+      StringCpy (buf, "?");
+    }
+    ErrPostEx (SEV_ERROR, 0, 0,
+               "PubSeqSynchronousQueryTI failed for ti %lu, date/time %s, URL is %s",
+               (long) tid, buf, str);
+  }
+
+  MemFree (str);
+
+  return sep;
 }
 
 NLM_EXTERN CharPtr GiRevHistSynchronousQuery (

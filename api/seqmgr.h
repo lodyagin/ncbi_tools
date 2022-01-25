@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.67 $
+* $Revision: 6.68 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: seqmgr.h,v $
+* Revision 6.68  2008/09/05 21:09:20  kans
+* for best protref, unprocessed 0 preferred over preprotein 1 preferred over mat peptide 2
+*
 * Revision 6.67  2007/05/29 15:14:32  bollin
 * Made SeqMgrGetOmdpForBioseq extern.
 *
@@ -1052,6 +1055,7 @@ typedef struct bioseqextra {
   Int4                numsegs;         /* number of segments in partslist array */
 
   Int4                min;             /* used for finding best protein feature */
+  Uint1               processed;       /* also used for finding best protein feature */
   Uint4               bspItemID;       /* for bioseq explore functions */
   Uint4               bspIndex;        /* for bioseq explore functions */
   Int2                blocksize;       /* size of SMFeatBlock.data array to avoid wasting space */

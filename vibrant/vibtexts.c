@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.36 $
+* $Revision: 6.37 $
 *
 * File Description: 
 *       Vibrant edit text functions
@@ -2757,7 +2757,7 @@ static void Nlm_SetScrollTextPosition (Nlm_GraphiC t, Nlm_RectPtr r,
 {
   Nlm_TextTool  h;
   Nlm_RecT      oldRect;
-  Nlm_WindoW    tempPort;
+  Nlm_WindoW    tempPort = NULL;
   Nlm_RecT      tr;
   Nlm_Boolean   wrap;
 #ifdef WIN_MAC

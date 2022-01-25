@@ -1,4 +1,4 @@
-/*  $Id: ncbi_core.c,v 6.18 2007/10/17 15:25:43 kazimird Exp $
+/* $Id: ncbi_core.c,v 6.20 2008/10/17 16:25:39 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -423,7 +423,7 @@ extern char* REG_Get
  size_t      value_size,
  const char* def_value)
 {
-    if (value_size <= 0  ||  !value)
+    if (!value  ||  value_size <= 0)
         return 0;
 
     if ( def_value )
@@ -440,24 +440,29 @@ extern char* REG_Get
 
         REG_UNLOCK;
     }
+
     return value;
 }
 
 
-extern void REG_Set
+extern int/*bool*/ REG_Set
 (REG          rg,
  const char*  section,
  const char*  name,
  const char*  value,
  EREG_Storage storage)
 {
+    int result;
     if ( rg ) {
         REG_LOCK_READ;
         REG_VALID;
 
-        if ( rg->set )
-            rg->set(rg->user_data, section, name, value, storage);
+        result =
+            rg->set ? rg->set(rg->user_data, section, name, value, storage) : 0;
 
         REG_UNLOCK;
-    }
+    } else
+        result = 0;
+
+    return result;
 }

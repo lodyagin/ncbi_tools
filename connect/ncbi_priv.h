@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_PRIV__H
 #define CONNECT___NCBI_PRIV__H
 
-/*  $Id: ncbi_priv.h,v 6.26 2008/02/28 19:55:44 kazimird Exp $
+/* $Id: ncbi_priv.h,v 6.37 2008/11/14 22:44:42 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -58,7 +58,7 @@ extern "C" {
  */
 
 extern NCBI_XCONNECT_EXPORT int g_NCBI_ConnectRandomSeed;
-extern NCBI_XCONNECT_EXPORT int g_NCBI_ConnectSrandAddend();
+extern NCBI_XCONNECT_EXPORT int g_NCBI_ConnectSrandAddend(void);
 #define NCBI_CONNECT_SRAND_ADDEND g_NCBI_ConnectSrandAddend()
 
 
@@ -110,7 +110,7 @@ extern NCBI_XCONNECT_EXPORT const char* g_CORE_Sprintf(const char* fmt, ...)
                    (g_CORE_Log, code, subcode, level, data, size, message) )
 
 #define DO_CORE_LOG_ERRNO(code, subcode, level, x_errno, x_descr, message) \
-    DO_CORE_LOG_X( LOG_WRITE_ERRNO_EX, level,                           \
+    DO_CORE_LOG_X( LOG_WRITE_ERRNO, level,                              \
                    (g_CORE_Log, code, subcode, level, message,          \
                     x_errno, x_descr) )
 
@@ -205,7 +205,7 @@ extern NCBI_XCONNECT_EXPORT const char* g_CORE_Sprintf(const char* fmt, ...)
 /* Here are only error codes used in C sources. For error codes used in
  * C++ sources (in C++ Toolkit) see include/connect/error_codes.hpp.
  */
-NCBI_C_DEFINE_ERRCODE_X(Connect_Connection, 301,  31);
+NCBI_C_DEFINE_ERRCODE_X(Connect_Connection, 301,  33);
 NCBI_C_DEFINE_ERRCODE_X(Connect_MetaConn,   302,   2);
 NCBI_C_DEFINE_ERRCODE_X(Connect_Util,       303,  12);
 NCBI_C_DEFINE_ERRCODE_X(Connect_Dispd,      304,   2);
@@ -215,11 +215,11 @@ NCBI_C_DEFINE_ERRCODE_X(Connect_HTTP,       307,  20);
 NCBI_C_DEFINE_ERRCODE_X(Connect_LB,         308,   0);
 NCBI_C_DEFINE_ERRCODE_X(Connect_Sendmail,   309,  31);
 NCBI_C_DEFINE_ERRCODE_X(Connect_Service,    310,   4);
-NCBI_C_DEFINE_ERRCODE_X(Connect_Socket,     311, 110);
+NCBI_C_DEFINE_ERRCODE_X(Connect_Socket,     311, 141);
 NCBI_C_DEFINE_ERRCODE_X(Connect_Crypt,      312,   6);
 NCBI_C_DEFINE_ERRCODE_X(Connect_LocalNet,   313,  11);
 NCBI_C_DEFINE_ERRCODE_X(Connect_Mghbn,      319,  16);
-NCBI_C_DEFINE_ERRCODE_X(Connect_LBSM,       320,  22);
+NCBI_C_DEFINE_ERRCODE_X(Connect_LBSM,       320,  23);
 NCBI_C_DEFINE_ERRCODE_X(Connect_LBSMD,      321,   8);
 
 

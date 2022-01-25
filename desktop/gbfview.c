@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/5/97
 *
-* $Revision: 6.98 $
+* $Revision: 6.99 $
 *
 * File Description: 
 *
@@ -1358,7 +1358,7 @@ static void PopulateFlatFile (BioseqViewPtr bvp, FmtType format, FlgType flags)
   }
   if (bvp->hasTargetControl && bvp->ffCustomBtn != NULL) {
     if (GetValue (bvp->ffCustomBtn) == 2) {
-      flags |= REFSEQ_CONVENTIONS | SHOW_TRANCRIPTION | SHOW_PEPTIDE;
+      flags |= REFSEQ_CONVENTIONS | SHOW_TRANCRIPTION | SHOW_PEPTIDE | FORCE_PRIMARY_BLOCK;
     }
   }
   if (bvp->hasTargetControl && bvp->ffRifCtrl != NULL) {
@@ -2042,7 +2042,7 @@ static void PopulateAsnOrXML (BioseqViewPtr bvp, CharPtr outmode, Boolean doGbse
     }
     if (bvp->hasTargetControl && bvp->ffCustomBtn != NULL) {
       if (GetValue (bvp->ffCustomBtn) == 2) {
-        flags = REFSEQ_CONVENTIONS | SHOW_TRANCRIPTION | SHOW_PEPTIDE;
+        flags = REFSEQ_CONVENTIONS | SHOW_TRANCRIPTION | SHOW_PEPTIDE | FORCE_PRIMARY_BLOCK;
       }
     }
     if (bvp->hasTargetControl && bvp->ffRifCtrl != NULL) {

@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.11 $
+* $Revision: 6.12 $
 *
 * File Description:  Object manager for module NCBI-Seqloc
 *
@@ -37,62 +37,6 @@
 * --------------------------------------------------------------------------
 * Date	   Name        Description of modification
 * -------  ----------  -----------------------------------------------------
-* 05-13-93 Schuler     All public functions are now declared LIBCALL.
-*
-*
-* $Log: objloc.c,v $
-* Revision 6.11  2007/10/04 14:30:35  madden
-* Fix typo in SeqIdDup
-*
-* Revision 6.10  2005/04/26 21:33:00  kans
-* added SEQID_GPIPE
-*
-* Revision 6.9  2005/03/10 17:18:43  kans
-* added SeqLocCopy as a convenience function in ncbiobj library
-*
-* Revision 6.8  2004/05/12 20:41:56  kans
-* set aip->io_failure in several erret blocks for compatibility of old object loaders with new ones
-*
-* Revision 6.7  2004/04/01 13:43:08  lavr
-* Spell "occurred", "occurrence", and "occurring"
-*
-* Revision 6.6  2001/08/06 20:07:26  ostell
-* added SEQID_TPG, TPE, TPD types
-*
-* Revision 6.5  2001/01/31 15:24:20  kans
-* PatentSeqId.seqid is now an Int4 (JO)
-*
-* Revision 6.4  2000/04/05 21:42:33  hurwitz
-* made SeqIdSetDup consistent with declaration
-*
-* Revision 6.3  2000/04/05 18:11:54  dondosha
-* Moved SeqIdSetDup from mblast.c
-*
-* Revision 6.2  1998/08/26 17:46:12  kans
-* fixed -v -fd warnings in label functions
-*
-* Revision 6.1  1998/08/24 18:28:05  kans
-* removed solaris -v -fd warnings
-*
-* Revision 6.0  1997/08/25 18:50:03  madden
-* Revision changed to 6.0
-*
-* Revision 4.3  1997/06/19 18:41:29  vakatov
-* [WIN32,MSVC++]  Adopted for the "NCBIOBJ.LIB" DLL'ization
-*
-* Revision 4.2  1996/12/09 16:57:20  kans
-* SeqLocAsnRead now returns NULL if not a legal choice
-*
- * Revision 4.1  1995/08/29  20:23:05  ostell
- * changed SeqIdPrint to SeqIdWrite
- *
- * Revision 4.0  1995/07/26  13:48:06  ostell
- * force revision to 4.0
- *
- * Revision 3.5  1995/05/15  21:22:00  ostell
- * added Log line
- *
-*
 *
 * ==========================================================================
 */
@@ -286,33 +230,6 @@ NLM_EXTERN Boolean LIBCALL SeqLocAsnLoad (void)
 
 /*****************************************************************************
 *
-*   SeqId is a choice using an ValNode, most types in data.ptrvalue
-*      except integers, in data.intvalue
-*   choice:
-*   0 = not set
-    1 = local Object-id ,        -- local use
-    2 = gibbsq INTEGER ,         -- Geninfo backbone seqid
-    3 = gibbmt INTEGER ,         -- Geninfo backbone moltype
-    4 = giim Giimport-id ,       -- Geninfo import id
-    5 = genbank Textseq-id ,
-    6 = embl Textseq-id ,
-    7 = pir Textseq-id ,
-    8 = swissprot Textseq-id ,
-    9 = patent Patent-seq-id ,
-    10 = other Textseq-id ,      -- catch all
-    11 = general Dbtag }         -- for other databases
-    12 = gi  INTEGER             -- GenInfo Integrated Database
-    13 = ddbj Textseq-id         -- ddbj
-	14 = prf Textseq-id ,        -- PRF SEQDB
-	15 = pdb PDB-seq-id          -- PDB sequence
-    16 = tpg Textseq-id ,        -- Third Party Annot/Seq Genbank
-    17 = tpe Textseq-id ,        -- Third Party Annot/Seq EMBL
-    18 = tpd Textseq-id ,        -- Third Party Annot/Seq DDBJ
-    19 = gpipe Textseq-id        -- Internal NCBI genome pipeline processing ID }
-*
-*****************************************************************************/
-/*****************************************************************************
-*
 *   SeqIdFree(anp)
 *       Frees one SeqId and associated data
 *
@@ -347,6 +264,7 @@ NLM_EXTERN SeqIdPtr LIBCALL SeqIdFree (SeqIdPtr anp)
 	    case SEQID_TPE:
 	    case SEQID_TPD:
         case SEQID_GPIPE:
+        case SEQID_NAMED_ANNOT_TRACK:
             TextSeqIdFree((TextSeqIdPtr)pnt);
             break;
         case SEQID_PATENT:      /* patent seq id */
@@ -476,6 +394,10 @@ NLM_EXTERN Boolean LIBCALL SeqIdAsnWrite (SeqIdPtr anp, AsnIoPtr aip, AsnTypePtr
             break;
         case SEQID_GPIPE:
             writetype = SEQ_ID_gpipe;
+            func = (AsnWriteFunc) TextSeqIdAsnWrite;
+            break;
+        case SEQID_NAMED_ANNOT_TRACK:
+            writetype = SEQ_ID_named_annot_track;
             func = (AsnWriteFunc) TextSeqIdAsnWrite;
             break;
     }
@@ -626,6 +548,11 @@ NLM_EXTERN SeqIdPtr LIBCALL SeqIdAsnRead (AsnIoPtr aip, AsnTypePtr orig)
     else if (atp == SEQ_ID_gpipe)
     {
         choice = SEQID_GPIPE;
+        func = (AsnReadFunc) TextSeqIdAsnRead;
+    }
+    else if (atp == SEQ_ID_named_annot_track)
+    {
+        choice = SEQID_NAMED_ANNOT_TRACK;
         func = (AsnReadFunc) TextSeqIdAsnRead;
     }
     else

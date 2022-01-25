@@ -1,6 +1,6 @@
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] =
-    "$Id: blast_psi.c,v 1.34 2007/12/07 18:25:42 kazimird Exp $";
+    "$Id: blast_psi.c,v 1.36 2008/04/15 15:55:45 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 /* ===========================================================================
  *
@@ -359,6 +359,9 @@ s_PSISavePssm(const _PSIInternalPssmData* internal_pssm,
     pssm->lambda = sbp->kbp_gap_psi[0]->Lambda;
     pssm->kappa = sbp->kbp_gap_psi[0]->K;
     pssm->h = sbp->kbp_gap_psi[0]->H;
+    pssm->ung_lambda = sbp->kbp_psi[0]->Lambda;
+    pssm->ung_kappa = sbp->kbp_psi[0]->K;
+    pssm->ung_h = sbp->kbp_psi[0]->H;
 }
 
 /****************************************************************************/
@@ -403,6 +406,14 @@ PSIMsaNew(const PSIMsaDimensions* dimensions)
         }
     }
 
+#ifdef DEBUG_PSSM_ENGINE
+    retval->seqinfo = (PSISeqInfo*) calloc(dimensions->num_seqs + 1,
+                                           sizeof(PSISeqInfo));
+    if ( !retval->seqinfo ) {
+        return PSIMsaFree(retval);
+    }
+#endif /* DEBUG_PSSM_ENGINE */
+
     return retval;
 }
 
@@ -422,6 +433,12 @@ PSIMsaFree(PSIMsa* msa)
     if ( msa->dimensions ) {
         sfree(msa->dimensions);
     }
+
+#ifdef DEBUG_PSSM_ENGINE
+    if ( msa->seqinfo ) {
+        sfree(msa->seqinfo);
+    }
+#endif /* DEBUG_PSSM_ENGINE */
 
     sfree(msa);
 
@@ -449,6 +466,9 @@ PSIMatrixNew(Uint4 query_length, Uint4 alphabet_size)
     retval->lambda = 0.0;
     retval->kappa = 0.0;
     retval->h = 0.0;
+    retval->ung_lambda = 0.0;
+    retval->ung_kappa = 0.0;
+    retval->ung_h = 0.0;
 
     return retval;
 }
@@ -544,6 +564,28 @@ PSIDiagnosticsResponseNew(Uint4 query_length, Uint4 alphabet_size,
         retval->gapless_column_weights = (double*) 
             calloc(query_length, sizeof(double));
         if ( !(retval->gapless_column_weights) ) {
+            return PSIDiagnosticsResponseFree(retval);
+        }
+    }
+
+    if (wants->sigma) {
+        retval->sigma = (double*) calloc(query_length, sizeof(double));
+        if ( !retval->sigma ) {
+            return PSIDiagnosticsResponseFree(retval);
+        }
+    }
+
+    if (wants->interval_sizes) {
+        retval->interval_sizes = (Uint4*) calloc(query_length, sizeof(Uint4));
+        if ( !retval->interval_sizes ) {
+            return PSIDiagnosticsResponseFree(retval);
+        }
+    }
+
+    if (wants->num_matching_seqs) {
+        retval->num_matching_seqs = 
+            (Uint4*) calloc(query_length, sizeof(Uint4));
+        if ( !retval->num_matching_seqs ) {
             return PSIDiagnosticsResponseFree(retval);
         }
     }

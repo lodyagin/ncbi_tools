@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: blastall.c,v 6.201 2008/01/02 14:02:06 madden Exp $";
+static char const rcsid[] = "$Id: blastall.c,v 6.202 2008/07/01 18:38:14 madden Exp $";
 
-/* $Id: blastall.c,v 6.201 2008/01/02 14:02:06 madden Exp $
+/* $Id: blastall.c,v 6.202 2008/07/01 18:38:14 madden Exp $
 **************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -28,6 +28,9 @@ static char const rcsid[] = "$Id: blastall.c,v 6.201 2008/01/02 14:02:06 madden 
 ************************************************************************** 
  * 
  * $Log: blastall.c,v $
+ * Revision 6.202  2008/07/01 18:38:14  madden
+ * Correct X3 value for blastn/megablast
+ *
  * Revision 6.201  2008/01/02 14:02:06  madden
  * Make composition-based score adjustments the default for blastp and tblastn
  *
@@ -1058,7 +1061,7 @@ static Args myargs[] = {
       "0.0", NULL, NULL, FALSE, 'y', ARG_FLOAT, 0.0, 0, NULL},         /* ARG_XDROP_UNGAPPED */       
     { "X dropoff value for final gapped alignment in bits " 
       "(0.0 invokes default behavior)\n"
-      "      blastn/megablast 50, tblastx 0, all others 25",
+      "      blastn/megablast 100, tblastx 0, all others 25",
       "0", NULL, NULL, FALSE, 'Z', ARG_INT, 0.0, 0, NULL},             /* ARG_XDROP_FINAL */
 #ifdef BLAST_CS_API
     { "RPS Blast search",            /* 34 */

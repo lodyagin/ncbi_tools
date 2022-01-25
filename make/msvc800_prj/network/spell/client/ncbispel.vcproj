@@ -3,7 +3,7 @@
 	ProjectType="Visual C++"
 	Version="8.00"
 	Name="ncbispel"
-	ProjectGUID="{8B58713F-B6F4-4A76-9888-309FDDFB985D}"
+	ProjectGUID="{4E3DA1E5-1E82-47C5-8749-92824C1A62B5}"
 	>
 	<Platforms>
 		<Platform

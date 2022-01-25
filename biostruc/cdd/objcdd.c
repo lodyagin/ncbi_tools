@@ -36,7 +36,7 @@ objcddAsnLoad(void)
 
 /**************************************************
 *    Generated object loaders for Module NCBI-Cdd
-*    Generated using ASNCODE Revision: 6.16 at Aug 27, 2007  9:39 AM
+*    Generated using ASNCODE Revision: 6.16 at Aug 21, 2008 10:43 AM
 *
 **************************************************/
 
@@ -2832,6 +2832,9 @@ CddDescrFree(ValNodePtr anp)
    case CddDescr_attribution:
       PubFree(anp -> data.ptrvalue);
       break;
+   case CddDescr_title:
+      MemFree(anp -> data.ptrvalue);
+      break;
    }
    return MemFree(anp);
 }
@@ -2981,6 +2984,13 @@ CddDescrAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       choice = CddDescr_attribution;
       func = (AsnReadFunc) PubAsnRead;
    }
+   else if (atp == CDD_DESCR_title) {
+      choice = CddDescr_title;
+      if (AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      anp->data.ptrvalue = av.ptrvalue;
+   }
    anp->choice = choice;
    if (func != NULL)
    {
@@ -3107,6 +3117,10 @@ CddDescrAsnWrite(CddDescrPtr anp, AsnIoPtr aip, AsnTypePtr orig)
    case CddDescr_attribution:
       writetype = CDD_DESCR_attribution;
       func = (AsnWriteFunc) PubAsnWrite;
+      break;
+   case CddDescr_title:
+      av.ptrvalue = anp->data.ptrvalue;
+      retval = AsnWrite(aip, CDD_DESCR_title, &av);
       break;
    }
    if (writetype != NULL) {

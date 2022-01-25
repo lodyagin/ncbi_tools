@@ -29,6 +29,9 @@
 * Version Creation Date:   1/27/96
 *
 * $Log: salstruc.c,v $
+* Revision 6.17  2008/08/13 14:25:32  bollin
+* Fixed bug in method for adjusting alignments affected by trimming sequences.
+*
 * Revision 6.16  2006/07/13 17:06:39  bollin
 * use Uint4 instead of Uint2 for itemID values
 * removed unused variables
@@ -1974,6 +1977,57 @@ NLM_EXTERN Boolean read_buffer_fromalignnode (EditAlignDataPtr adp, ValNodePtr *
   return TRUE;
 }
 
+
+static void AdjustAlignmentsInAnnot (SeqAnnotPtr PNTR p_sap, SeqLocPtr slp)
+{
+  SeqAnnotPtr sap, sap_prev = NULL, sap_next;
+  SeqAlignPtr salp, salp_prev = NULL, salp_next;
+
+  if (p_sap == NULL || *p_sap == NULL || slp == NULL) {
+    return;
+  }
+
+  sap = *p_sap;
+  while (sap != NULL) {
+    sap_next = sap->next;
+    if (sap->type == 2) {
+      salp = (SeqAlignPtr) sap->data;
+      salp_prev = NULL;
+      while (salp != NULL) {
+        salp_next = salp->next;
+        if (SeqAlignDeleteByLoc  (slp, salp) == NULL) {
+          if (salp_prev == NULL) {
+            sap->data = salp_next;
+          } else {
+            salp_prev->next = salp_next;
+          }
+        } else {
+          salp->saip = SeqAlignIndexFree (salp->saip);
+          AlnMgr2IndexSeqAlign (salp);
+
+          salp_prev = salp;
+        }
+        salp = salp_next;
+      }
+      if (sap->data == NULL) {
+        if (sap_prev == NULL) {
+          *p_sap = sap_next;
+        } else {
+          sap_prev->next = NULL;
+        }
+        sap->next = NULL;
+        sap = SeqAnnotFree (sap);
+      } else {
+        sap_prev = sap;
+      }
+    } else {
+      sap_prev = sap;
+    }
+    sap = sap_next;
+  }
+}
+
+
 /**********************************
 ***
 *** BioseqTrimN
@@ -1986,8 +2040,6 @@ NLM_EXTERN void SeqAlignDeleteByLocCallback (SeqEntryPtr sep, Pointer mydata,
 {
   BioseqPtr          bsp;
   BioseqSetPtr       bssp;
-  SeqAlignPtr        salp,
-                     salptmp;
   SeqLocPtr          slp;
 
   slp = (SeqLocPtr)(mydata);
@@ -1995,35 +2047,13 @@ NLM_EXTERN void SeqAlignDeleteByLocCallback (SeqEntryPtr sep, Pointer mydata,
      if (IS_Bioseq(sep)) {
         bsp = (BioseqPtr) sep->data.ptrvalue;
         if (bsp!=NULL) {
-           salp = is_salp_in_sap (bsp->annot, 2);
-           if (salp!=NULL) {
-              for (salptmp=salp; salptmp!=NULL; salptmp=salptmp->next)
-              {
-                 salptmp = SeqAlignDeleteByLoc  (slp, salptmp);
-                 if (salptmp != NULL)
-                 {
-                     salptmp->saip = SeqAlignIndexFree (salptmp->saip);
-                     AlnMgr2IndexSeqAlign (salptmp);
-                 }
-              }
-           }
+           AdjustAlignmentsInAnnot (&(bsp->annot), slp);
         }
      }
      else if(IS_Bioseq_set(sep)) {
         bssp = (BioseqSetPtr)sep->data.ptrvalue;
         if (bssp!=NULL) {
-           salp = is_salp_in_sap (bssp->annot, 2);
-           if (salp!=NULL) {
-              for (salptmp=salp; salptmp!=NULL; salptmp=salptmp->next)
-              {
-                 salptmp = SeqAlignDeleteByLoc  (slp, salptmp);
-                 if (salptmp != NULL)
-                 {
-                     salptmp->saip = SeqAlignIndexFree (salptmp->saip);
-                     AlnMgr2IndexSeqAlign (salptmp);
-                 }
-              }
-           }
+           AdjustAlignmentsInAnnot (&(bssp->annot), slp);
         }
      }
   }

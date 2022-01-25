@@ -82,11 +82,6 @@ pop-up menus and spreadsheets.
 #You may also use tables to import annotation of source information. 
 The formatting of these tables will be discussed below.
 
-#When entering information, you must use ASCII characters.  Non-ASCII
-characters, such as those with an accent or umlaut, can not be displayed
-properly.  If you enter a non-ASCII character, you will be prompted to select
-an alternative in a pop-up box.
- 
 *Overview of Sequin
 
 #If you are using Sequin for the first time, you will be prompted to
@@ -108,10 +103,10 @@ are working on a sequence submission for the first time, click on
 record, click on "Read Existing Record". If you would like to quit from
 Sequin, click on "Quit Program".
 
-#You can also "Read Existing Record" to read in a FASTA-formatted
-sequence file for analysis purposes.  The sequence will be displayed in Sequin and
-can be analyzed with tools such as CDD Search, but it should not be
-submitted because it does not have the appropriate annotations.
+#You can also "Read Existing Record" to read in a FASTA-formatted sequence
+file for analysis purposes.  The sequence will be displayed in Sequin and can
+be analyzed with tools such as CDD Search, but it should not be submitted
+because it does not have the appropriate annotations.
 
 #If you are running Sequin in its network-aware mode, you will see
 another button labeled "Download from Entrez".  This option allows you
@@ -293,11 +288,12 @@ with one or more sequences, please send each file in a separate email
 message.
 
 #-Segmented sequence: a collection of non-overlapping, non-contiguous
-sequences that cover a specified genetic region.  A standard example is
-a set of genomic DNA sequences that encode exons from a gene along with
-fragments of their flanking introns.  If the segmented set is part of
-an alignment, however, select the appropriate Population, Phylogenetic,
-or Mutation study button.
+sequences that cover a specified genetic region.  A standard example is a set
+of genomic DNA sequences that encode exons from a gene along with fragments of
+their flanking introns.  If the segmented set is part of an alignment,
+however, select the appropriate Population, Phylogenetic, or Mutation study
+button.  The Gapped sequence option may be a better display of the biology of
+these types of records.
 
 #-Gapped sequence: a single, non-contiguous mRNA or genomic DNA sequence.
 A gapped sequence contains specified gaps of know or unknown length
@@ -346,7 +342,7 @@ your submission would be considered an original submission.
 own annotations, your entry may be eligible for submission to the
 Third-Party Annotation Database
 
-<A HREF="http://www.ncbi.nlm.nih.gov/Genbank/tpa.html">
+<A HREF="http://www.ncbi.nlm.nih.gov/Genbank/TPA.html">
 (TPA)
 </A>
 .
@@ -438,21 +434,6 @@ listed in the spreadsheet above. After making changes, click on Refresh
 Error List to ensure that all errors have been corrected.  You must
 correct any errors involving the SeqID in order to proceed with your
 submission.  
-
-*FASTA Format for Segmented Sequence
-
-#Each segment of a segmented sequence must have its own SeqID, but the
-organism name and other modifiers are only indicated in the FASTA
-definition line of the first segment.  Square brackets are used to
-delimit the members of the segmented set.  For example,
-
-![
-!>A-0V-1-Apart1 [organism=Gallus gallus] [clone=C]
-!TCACTCTTTGGCAAC
-!>A-0V-1-Apart2
-!GACCCGTCGTCATAATAAAGATAGAGGGGCAACTAAAGGAAGCTCTA
-!TTAGATACAGGAGCAGATGATACAGTATTAGAAGAAAT 
-!]
 
 *FASTA Format for Gapped Sequence
 
@@ -757,29 +738,6 @@ Organism Page
 </A>
 .
 
-*Importing Aligned Sets of Segmented Sequences
-
-#Sequin can also read segmented sets that are part of an alignment if
-the sequences are in FASTA or FASTA+GAP format.  Each segment should
-have its own Sequence ID, but organism name and source modifiers should
-only be indicated for the first segment from each sequence. Square
-brackets are used to delimit the members of a set.  For example,
-
-![
-!>A-0V-1-Apart1 [organism=Gallus gallus] [strain=C]
-!TCACTCTTTGGCAAC
-!>A-0V-1-Apart2
-!GACCCGTCGTCATAATAAAGATAGAGGGGCAACTAAAGGAAGCTCTA
-!TTAGATACAGGAGCAGATGATACAGTATTAGAAGAAAT
-!]
-![
-!>A-0V-2-Apart1 [organism=Drosophila melanogaster] [strain=D]
-!TCACTCTTTGGCAAC
-!>A-0V-2-Apart2
-!GAAGCGTCGTCACAATAAAGATAGAGGGGCAACTAAAGGAAGCTCTA
-!TTAGATACAGGAGCAGATGATACAGTATTAGAAGAAAT
-!]
-
 >Nucleotide Page
 
 #The options on this page will vary depending on the 
@@ -901,6 +859,13 @@ mainly used for viral submissions.
 
 #-Small nucleolar RNA: A sequence derived from small nucleolar RNA, for
 example, the sequence of a cDNA derived from snoRNA.
+
+#-Transcribed RNA: A sequence derived from any transcribed RNA not
+listed above.  
+
+#-Tranfer-messenger RNA: A sequence derived from transfer-messenger RNA, 
+which acts as a tRNA first and then an mRNA that encodes a peptide tag.
+If the gene for the tmRNA was sequenced, use genomic DNA.
 
 **Specify Topology
 
@@ -1061,67 +1026,69 @@ the pull-down list.  You can change the location of all sequences
 globally by clicking on the Location button in the spreadsheet header. 
 The following is a brief description of the choices in this list:
 
+#-Apicoplast:   a reduced plastid characteristic of apicomplexans
+(e.g., Plasmodium).  NOTE: apicoplast should be applied ONLY to
+members of the Apicomplexa.
+
+#-Chloroplast:  a chlorophyllous plastid.
+
+#-Chromatophore:  a membrane-bound vesicle containing photosynthetic pigments
+in bacteria.
+
+#-Chromoplast:  a non-chlorophyllous, pigmented plastid, found in
+fruits and flowers.
+
+#-Cyanelle:  a specialized type of plastid found exclusively in
+glaucocystophytes (e.g., Cyanophora).  NOTE: cyanelle should be
+applied ONLY to members of the Glaucocystophyceae.
+
+#-Endogenous_virus:  a virus that has integrated permanently into the
+host genome, and which is inherited vertically through the
+germline of the host.
+
+#-Extrachromosomal:  other extrachromosomal elements not listed here,
+such as a B chromosome or an F factor.
+
 #-Genomic:  chromosome.  This category includes
 mitochondrial and chloroplast proteins that are encoded by the nuclear
 genome.
 
-#-Chloroplast:  a chlorophyllous plastid.
-
-#-Chromoplast:  a non-chlorophyllous, pigmented plastid, found in
-fruits and flowers.
+#-Hydrogenosome:  an organelle that produces hydrogen and ATP and is
+found mainly in ciliates, fungi and trichomonads.  Hydrogenosomes may
+be reduced mitochondria.
 
 #-Kinetoplast: a specialized type of mitochondrion found exclusively
 in Kinetoplastida (e.g., Leishmania).  NOTE: kinetoplast should
 be applied ONLY to members of the Kinetoplastida (trypanosomes and
 bodonids). 
 
+#-Leucoplast:  a plastid lacking pigments of any type.
+
+#-Macronuclear: a specialized type of nucleus found exclusively in the
+ciliated protists (e.g., Tetrahymena).  NOTE: macronucleus
+should be applied ONLY to members of the Ciliophora.
+
 #-Mitochondrion: a semi-autonomous, self-reproducing organelle that
 occurs in the cytoplasm of most eukaryotic cells. 
+
+#-Nucleomorph:  a reduced nuclear remnant found in Chlorarachniophyceae
+(e.g., Chlorarachnion) and Cryptophyta (e.g, Cryptomonas).  NOTE:
+nucleomorph should be applied ONLY to members of the
+Chlorarachniophyceae or Cryptophyta.
+
+#-Plasmid: extrachromosomal genetic element found in bacterial species.
+Note this does not include the cloning vector used to propagate
+the sequence of interest.
 
 #-Plastid: any of a class of double membrane-bound, light-harvesting
 organelles (or derived from same).  NOTE: plastid should be used
 ONLY when a more precise term, e.g., chloroplast, is not
 applicable. 
 
-#-Macronuclear: a specialized type of nucleus found exclusively in the
-ciliated protists (e.g., Tetrahymena).  NOTE: macronucleus
-should be applied ONLY to members of the Ciliophora. 
-
-#-Extrachromosomal:  other extrachromosomal elements not listed here,
-such as a B chromosome or an F factor.
-
-#-Plasmid: extrachromosomal genetic element found in bacterial species.
-Note this does not include the cloning vector used to propagate
-the sequence of interest. 
-
-#-Cyanelle:  a specialized type of plastid found exclusively in
-glaucocystophytes (e.g., Cyanophora).  NOTE: cyanelle should be
-applied ONLY to members of the Glaucocystophyceae. 
+#-Proplastid:  an immature plastid.
 
 #-Proviral:  a virus that is integrated into a host cell chromosome.
 
-#-Virion:  a completed virus particle.
-
-#-Nucleomorph:  a reduced nuclear remnant found in Chlorarachniophyceae
-(e.g., Chlorarachnion) and Cryptophyta (e.g, Cryptomonas).  NOTE:
-nucleomorph should be applied ONLY to members of the
-Chlorarachniophyceae or Cryptophyta.  
-
-#-Apicoplast:   a reduced plastid characteristic of apicomplexans
-(e.g., Plasmodium).  NOTE: apicoplast should be applied ONLY to
-members of the Apicomplexa.
-
-#-Leucoplast:  a plastid lacking pigments of any type.
-
-#-Proplastid:  an immature plastid.
-
-#-Endogenous_virus:  a virus that has integrated permanently into the
-host genome, and which is inherited vertically through the
-germ-line of the host.
-
-#-Hydrogenosome:  an organelle that produces hydrogen and ATP and is
-found mainly in ciliates, fungi and trichomonads.  Hydrogenosomes may
-be reduced mitochondria 
 
 **Genetic Code 
 
@@ -1142,17 +1109,16 @@ http://www.ncbi.nlm.nih.gov/htbin-post/Taxonomy/wprintgc?mode=c
 *Import Source Modifiers
 
 #Using this button allows you to import a tab-delimited table of source
-modifiers.  The first column in the table must contain the Sequince
+modifiers.  The first column in the table must contain the Sequence
 Identifiers (SeqIDs) used earlier in the submission and each subsequent
 column must contain a different source modifier.  The first row in the
 table must contain the labels for each column.  The label for the
 Sequence Identifiers column should be in the format "Seq_ID".  A list
-of available
+of
 <A HREF="http://www.ncbi.nlm.nih.gov/Sequin/modifiers.html"> 
 modifiers
 </A>
-in the format to be used in the column headers can be found at
-http://www.ncbi.nlm.nih.gov/Sequin/modifiers.html .
+in the format to be used in the column headers is available. 
 
 *Add Source Modifiers
 
@@ -1324,7 +1290,7 @@ your TPA sequence.  We can not accept primary sequences corresponding
 to Reference Sequences or those from proprietary databases.  More
 information about this can be found on the
 
-<A HREF="http://www.ncbi.nlm.nih.gov/Genbank/tpa.html">
+<A HREF="http://www.ncbi.nlm.nih.gov/Genbank/TPA.html">
 TPA
 </A>
 home page.
@@ -1640,7 +1606,7 @@ descriptor to bring up a form on which information can be added.
 
 #(2) Choose the option Descriptors from the Annotate menu.  
 
-*Annotate Menu
+*Annotate Menu - Descriptors
 
 #This menu allows you either to create new descriptors or to modify
 existing ones.  Select the descriptor that you wish to modify.
@@ -1866,6 +1832,14 @@ separate submission process.
 selection should only be used by members of the Consortium for the
 Barcodes of Life.
 
+#-Composite-WGS-HTGS: Nucleotide seqeunce has been assembled by large
+sequencing centers using a combination of whole genome shotgun and BAC-baed
+sequencing.
+
+#-TSA: Transcriptome Shotgun Assembly.  Shotgun assemblies of mRNA sequences
+from primary data submitted to dbEST, the short read archive (SRA) or the
+trace archive.
+
 #-Other: Do not use this designation.
 
 ***Class
@@ -1950,7 +1924,7 @@ menu, you must provide the nucleotide sequence location of the feature.
 highlight the sequence that the feature covers, and the location of the
 sequence will be automatically entered in the feature location box.
 
-*Annotate Menu
+*Annotate Menu - Features
 
 #This menu allows you to add or modify features on the sequence selected
 in the Target Sequence pop-up menu of the record viewer.  Features are
@@ -2435,7 +2409,7 @@ transcription.
 *repeat_region
 
 #Region of genome containing repeating units.  Some qualifiers such as
-rpt_type and mobile_element have controlled vocabularies.  These
+rpt_type, mobile_element and satellite have controlled vocabularies.  These
 qualifiers have check boxes or pull-down menus to ensure that the
 correct format is used.
 
@@ -2454,13 +2428,6 @@ particle (ribosome) that assembles amino acids into proteins.
 #Switch region of immunoglobulin heavy chains. Involved in the
 rearrangement of heavy chain DNA leading to the expression of a
 different immunoglobulin class from the same B-cell.
-
-*satellite
-
-#Many tandem repeats (identical or related) of a short basic repeating
-unit; many have a base composition or other property different from the
-genome average that allows them to be separated from the bulk (main
-band) genomic DNA.
 
 *sig_peptide
 
@@ -2708,7 +2675,11 @@ accented or non-ASCII characters.
 23-Mar-2005, Mar-2005, or 2005.
 
 #-Country: The country of origin of DNA samples used for epidemiological
-or population studies.
+or population studies.  A list of approved country designations can 
+be found on the 
+<A HREF="http://www.ncbi.nlm.nih.gov/projects/collab/country.html">
+ISDC web pages.</A>  Additional text may be added after a colon.  For example,
+/country="USA: Bethesda, MD"
 
 #-Dev-stage:  Developmental stage of organism.
 
@@ -2736,6 +2707,9 @@ is from unrearranged DNA.  You cannot include extra text when using this
 modifier; the text box will change to TRUE upon selection of this modifier
 from the pull-down list. 
 
+#-Haplogroup:  Combination of stable polymorphic variants clustered together
+in a specific combination which can indicate a common ancestor.
+
 #-Haplotype:  Haplotype of the organism.
 
 #-Identified-by:  Name of person who identified sample.  Do not use
@@ -2752,7 +2726,13 @@ collected.  Mandatory format is decimal degrees N/S E/W.  Selecting this
 modifier in the pull-down list will generate separate boxes for entering the
 information in the mandatory format.
 
+#-Linkage-group: Group of genes whose loci are physically connected and tend
+to segregate together during meiosis.
+ 
 #-Map:  Map location of the gene.
+
+#-Mating-type:  Designation of individual single-celled organisms and protists
+based on mating behavior.
 
 #-Metagenomic:  Identifies sequence from a culture-independent genomic
 analysis of an environmental sample submitted as part of a whole genome
@@ -2858,6 +2838,10 @@ was obtained (usually restricted to certain parasitic fungi).
 
 #-Group:  Do not select this item.
 
+#-Host:  Natural (as opposed to laboratory) host to the organism from which
+sequenced molecule was obtained.  Use of the Latin name of the host organism
+is preferred.
+
 #-Isolate:  Identification or description of the specific individual
 from which this sequence was obtained.  An example is Patient X14.
 
@@ -2875,11 +2859,6 @@ characterized by its antigenic properties.  Same as serogroup and
 serovar.
 
 #-Serovar:  See serotype.
-
-#-Specific-host:  When the sequence submission is from an organism that
-exists in a symbiotic, parasititc, or other special relationship with
-some second organism, use this modifier to identify the name of the
-host species.
 
 #-Specimen-voucher: Identifier of the physical specimen from which the
 sequence was obtained.  The qualifier is intended for use where the sample is
@@ -3696,6 +3675,9 @@ Nucleotide Definition Line (Title)
 </A>
 , above.
 
+#The Advanced Table Readers option imports a properly formatted structured
+comment table.  Please contact us if you wish to use this option.
+
 #Sort Unique Count by Group opens a new window which displays your record(s)
 the number of times an individual line appears in the flatfile(s).  This is
 particularly useful when checking that all records in a large set contain the
@@ -4081,7 +4063,7 @@ displayed in the upper left of the Alignment Assistant window.
 sequence.  The locations may be entered manually or can be determined
 based on highlighting the sequence as described above.
 
-**Apply to Alignnent
+**Apply to Alignment
 
 #Allows you to add the selected feature to all sequences within your
 alignment based on the alignment coordinates you have selected.  Note
@@ -4095,7 +4077,7 @@ be entered as the location relative to the alignment coordinates.
 <P CLASS=medium1><B>Questions or Comments?</B>
 <BR>Write to the <A HREF="mailto:info@ncbi.nlm.nih.gov">NCBI Service
 Desk</A></P>
-<P CLASS=medium1>Revised October 31, 2007
+<P CLASS=medium1>Revised October 29, 2008
 
 </CENTER>
 

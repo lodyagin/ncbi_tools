@@ -3,7 +3,7 @@
 	ProjectType="Visual C++"
 	Version="8.00"
 	Name="exe_ssequin"
-	ProjectGUID="{7469FFC1-059F-45B2-A9B8-B17CD881CA8D}"
+	ProjectGUID="{97642E7D-40F9-4BCB-B74B-4382D1B8139A}"
 	>
 	<Platforms>
 		<Platform
@@ -76,7 +76,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="oldnames.lib wsock32.lib"
+				AdditionalDependencies="oldnames.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/ssequin.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
@@ -171,7 +171,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="oldnames.lib wsock32.lib"
+				AdditionalDependencies="oldnames.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/ssequin.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
@@ -265,7 +265,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="oldnames.lib wsock32.lib"
+				AdditionalDependencies="oldnames.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/ssequin.exe"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"
@@ -360,7 +360,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="oldnames.lib wsock32.lib"
+				AdditionalDependencies="oldnames.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/ssequin.exe"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"
@@ -456,7 +456,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="oldnames.lib wsock32.lib"
+				AdditionalDependencies="oldnames.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/ssequin.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
@@ -551,7 +551,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="oldnames.lib wsock32.lib"
+				AdditionalDependencies="oldnames.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/ssequin.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
@@ -645,7 +645,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="oldnames.lib wsock32.lib"
+				AdditionalDependencies="oldnames.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/ssequin.exe"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"
@@ -740,7 +740,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="oldnames.lib wsock32.lib"
+				AdditionalDependencies="oldnames.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/ssequin.exe"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"

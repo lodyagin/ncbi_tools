@@ -3,7 +3,7 @@
 	ProjectType="Visual C++"
 	Version="8.00"
 	Name="test_ncbi_memory_connector"
-	ProjectGUID="{6F8036D0-9AEE-4B60-A65A-5A51A9D8725F}"
+	ProjectGUID="{4CFC9DD9-B7C6-4AAB-9E25-9C25B0A4F343}"
 	>
 	<Platforms>
 		<Platform
@@ -71,7 +71,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="odbc32.lib odbccp32.lib wsock32.lib"
+				AdditionalDependencies="odbc32.lib odbccp32.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/test_ncbi_memory_connector.exe"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"
@@ -162,7 +162,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="odbc32.lib odbccp32.lib wsock32.lib"
+				AdditionalDependencies="odbc32.lib odbccp32.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/test_ncbi_memory_connector.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
@@ -252,7 +252,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="odbc32.lib odbccp32.lib wsock32.lib"
+				AdditionalDependencies="odbc32.lib odbccp32.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/test_ncbi_memory_connector.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
@@ -341,7 +341,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="odbc32.lib odbccp32.lib wsock32.lib"
+				AdditionalDependencies="odbc32.lib odbccp32.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/test_ncbi_memory_connector.exe"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"
@@ -432,7 +432,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="odbc32.lib odbccp32.lib wsock32.lib"
+				AdditionalDependencies="odbc32.lib odbccp32.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/test_ncbi_memory_connector.exe"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"
@@ -524,7 +524,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="odbc32.lib odbccp32.lib wsock32.lib"
+				AdditionalDependencies="odbc32.lib odbccp32.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/test_ncbi_memory_connector.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
@@ -615,7 +615,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="odbc32.lib odbccp32.lib wsock32.lib"
+				AdditionalDependencies="odbc32.lib odbccp32.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/test_ncbi_memory_connector.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
@@ -705,7 +705,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="odbc32.lib odbccp32.lib wsock32.lib"
+				AdditionalDependencies="odbc32.lib odbccp32.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/test_ncbi_memory_connector.exe"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"

@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/12/91
 *
-* $Revision: 6.29 $
+* $Revision: 6.31 $
 *
 * File Description:  various sequence objects to fasta output
 *
@@ -37,130 +37,6 @@
 * --------------------------------------------------------------------------
 * Date	   Name        Description of modification
 * -------  ----------  -----------------------------------------------------
-*
-* $Log: tofasta.h,v $
-* Revision 6.29  2007/01/29 17:20:46  bollin
-* Added Ex methods to allow substitution of nucleotide sequence ID when exporting
-* protein FASTA.
-*
-* Revision 6.28  2006/07/13 17:06:39  bollin
-* use Uint4 instead of Uint2 for itemID values
-* removed unused variables
-* resolved compiler warnings
-*
-* Revision 6.27  2005/03/21 22:15:09  kans
-* added SeqLocFastaStream
-*
-* Revision 6.26  2004/10/14 19:36:34  kans
-* CreateDefLineExEx has extProtTitle argument, normally only use first protein name in defline
-*
-* Revision 6.25  2004/07/23 20:55:52  kans
-* added BioseqFastaMemStream that takes byte store instead of file pointer
-*
-* Revision 6.24  2004/07/16 19:37:37  kans
-* SeqPortStream and FastaStream functions return Int4, negative count if any fetch failures
-*
-* Revision 6.23  2004/04/21 14:42:36  kans
-* added blocklen and grouplen parameters to BioseqFastaStream and SeqEntryFastaStream, former also has do_defline parameter
-*
-* Revision 6.22  2004/03/15 19:56:09  kans
-* BioseqFastaStream takes StreamFlgType flags parameter, added SeqEntryFastaStream for exploration
-*
-* Revision 6.21  2003/11/18 19:04:29  kans
-* added BioseqFastaStream, rapid generator based on SeqPortStream
-*
-* Revision 6.20  2002/07/18 19:28:35  kans
-*  working implementation of BioseqRawToFastaExtraEx, always zero out all of MyFsa struct, no need for fake seqloc
-*
-* Revision 6.18  2002/07/14 21:04:32  camacho
-* Added option to print a subsequence of a raw bioseq to fasta format
-*
-* Revision 6.17  2002/01/16 17:02:04  camacho
-* Changed buflen and seqlen in MyFsa struct. to use Uint4, as well as some function prototypes
-*
-* Revision 6.16  2001/08/31 15:29:54  kans
-* added CreateDefLineEx to ignore existing title descriptor, force generation of protein title computationally
-*
-* Revision 6.15  2001/08/17 13:27:26  kans
-* ClearProteinTitlesInNucProts, do not do it for outside protein databases
-*
-* Revision 6.14  2001/06/25 23:47:48  kans
-* added InstantiateProteinTitles and ClearProteinTitles
-*
-* Revision 6.13  2001/02/27 21:52:37  madden
-* Added BioseqToFastaDump and FastaDumpFileFunc for dumping BLAST db in FASTA
-*
-* Revision 6.12  2000/10/12 16:03:58  kans
-* added SeqEntryToFastaEx, printid_general field to MyFsa structure, to support processing software that requires gnl ID in FASTA defline even in the presence of higher-priority ref ID
-*
-* Revision 6.11  2000/07/20 17:48:28  dondosha
-* Added function FastaToSeqBuffForDb analogous to FastaToSeqEntryForDbtofasta.c
-*
-* Revision 6.10  2000/05/30 19:44:45  ostell
-* added FastaSeqLineEx() with another parameter, do_virtual
-*
-* Revision 6.9  2000/04/03 22:09:26  kans
-* added ClearGenBankKeywords for RefSeq processing
-*
-* Revision 6.8  2000/03/29 22:00:23  kans
-* added NC_Cleanup function used internally for genome RefSeq processing
-*
-* Revision 6.7  2000/02/17 17:20:58  sicotte
-* Add Reading of Lowercase Characters as SeqLoc for inputting masking informatioin. Use FastaToSeqEntryForDb or FastaToSeqEntryInternalEx
-*
-* Revision 6.6  2000/02/04 16:38:29  kans
-* added FastaToSeqEntryForDb and FastaToSeqEntryInternalEx, giving control over generation of unique SeqID
-*
-* Revision 6.5  1999/09/20 18:37:55  shavirin
-* Added definition of the function Int4 GetOrderBySeqId().
-*
-* Revision 6.4  1998/02/23 16:51:27  egorov
-* Changes to make the tofasta.c independent on readdb.h
-*
-* Revision 6.2  1998/01/27 20:28:10  madden
-* Added BioseqRawToFastaExtra with line_length arg
-*
-* Revision 6.1  1997/10/22 16:44:07  shavirin
-* Added definitions for functions: FastaReadSequence() and FastaReadSequenceMem()
-*
-* Revision 6.0  1997/08/25 18:07:48  madden
-* Revision changed to 6.0
-*
-* Revision 5.6  1997/06/19 18:39:21  vakatov
-* [WIN32,MSVC++]  Adopted for the "NCBIOBJ.LIB" DLL'ization
-*
-* Revision 5.5  1996/10/22 16:00:50  shavirin
-* Added new Boolean no_sequence in MyFsa structure to disable
-* sequence printing
-*
- * Revision 5.4  1996/10/21  21:37:24  shavirin
- * Added definition for function SeqEntrysToDefline()
- *
- * Revision 5.3  1996/10/08  22:27:05  shavirin
- * Moved definition of functions FastaToSeqEntryEx and FastaToSeqBuffEx
- * into include file
- *
- * Revision 5.2  1996/08/15  18:15:23  tatiana
- * CreateDefLine() added
- *
- * Revision 5.1  1996/06/15  17:29:44  ostell
- * changed MyFsa structure by adding do_virtual and tech fields
- * added value of 3 for group_segs
- * addes support of tech to FastaDefLine()
- *
- * Revision 5.0  1996/05/28  13:23:23  ostell
- * Set to revision 5.0
- *
- * Revision 4.1  1996/03/13  19:50:23  shavirin
- * Added definition for new external function FastaToSeqBuff()
- *
- * Revision 4.0  1995/07/26  13:49:01  ostell
- * force revision to 4.0
- *
- * Revision 2.7  1995/05/09  18:43:09  ostell
- * added support for (accession) on GenPept deflines and [organism] on
- * GenPept and PRF deflines
- *
 *
 * ==========================================================================
 */
@@ -492,6 +368,29 @@ NLM_EXTERN Boolean CreateDefLineEx (ItemInfoPtr iip, BioseqPtr bsp, CharPtr buf,
                                     CharPtr accession, CharPtr organism, Boolean ignoreTitle);
 NLM_EXTERN Boolean CreateDefLineExEx (ItemInfoPtr iip, BioseqPtr bsp, CharPtr buf, Uint4 buflen, Uint1 tech,
                                       CharPtr accession, CharPtr organism, Boolean ignoreTitle, Boolean extProtTitle);
+
+/*****************************************************************************
+*
+*   NewCreateDefLine and NewCreateDefLineBuf replace the CreateDefLine family
+*
+*****************************************************************************/
+
+NLM_EXTERN CharPtr NewCreateDefLine (
+  ItemInfoPtr iip,
+  BioseqPtr bsp,
+  Boolean ignoreTitle,
+  Boolean extProtTitle
+);
+
+NLM_EXTERN Boolean NewCreateDefLineBuf (
+  ItemInfoPtr iip,
+  BioseqPtr bsp,
+  CharPtr buf,
+  Uint4 buflen,
+  Boolean ignoreTitle,
+  Boolean extProtTitle
+);
+
 /*****************************************************************************
 *
 *   FastaSeqPort(bsp, is_na, do_virtual)
@@ -548,6 +447,8 @@ NLM_EXTERN void ClearGenBankKeywords (Uint2 entityID, Pointer ptr);
 *****************************************************************************/
 NLM_EXTERN void InstantiateProteinTitles (Uint2 entityID, Pointer ptr);
 NLM_EXTERN void ClearProteinTitlesInNucProts (Uint2 entityID, Pointer ptr);
+
+NLM_EXTERN CharPtr MakeCompleteChromTitle (BioseqPtr bsp, Uint1 biomol, Uint1 completeness);
 
 
 #ifdef __cplusplus

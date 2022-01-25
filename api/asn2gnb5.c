@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.115 $
+* $Revision: 1.127 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -90,7 +90,7 @@ NLM_EXTERN Char nt_link [MAX_WWWBUF];
 #define DEF_LINK_NT  "http://www.ncbi.nlm.nih.gov/entrez/viewer.fcgi?view=graph&val="
 
 NLM_EXTERN Char doc_link [MAX_WWWBUF];
-#define DEF_LINK_DOC  "http://www.ncbi.nlm.nih.gov/genome/guide/build.html"
+#define DEF_LINK_DOC  "http://www.ncbi.nlm.nih.gov/genome/guide/build.shtml"
 
 NLM_EXTERN Char ev_link [MAX_WWWBUF];
 #define DEF_LINK_EV  "http://www.ncbi.nlm.nih.gov/sutils/evv.cgi?"
@@ -377,8 +377,38 @@ static Char link_tigrfam [MAX_WWWBUF];
 static Char link_vbrc [MAX_WWWBUF];
 #define DEF_LINK_VBRC "http://vbrc.org/query.asp?web_view=curation&web_id="
 
+static Char link_bhb_acc_prefix [MAX_WWWBUF];
+#define DEF_LINK_BHB_ACC_PREFIX "http://www.biohealthbase.org/GSearch/fluSegmentDetails.do?decorator="
+
+static Char link_bhb_loc_prefix [MAX_WWWBUF];
+#define DEF_LINK_BHB_LOC_PREFIX "http://www.biohealthbase.org/GSearch/details.do?decorator="
+
+static Char link_bhb_acc_suffix [MAX_WWWBUF];
+#define DEF_LINK_BHB_ACC_SUFFIX "&ncbiGenomicAccession="
+
+static Char link_bhb_loc_suffix [MAX_WWWBUF];
+#define DEF_LINK_BHB_LOC_SUFFIX "&locus="
+
+static Char link_biohealthbase [MAX_WWWBUF];
+#define DEF_LINK_BIOHEALTHBASE "http://www.biohealthbase.org/GSearch/fluSegmentDetails.do?bhbSubmissionId="
+
+static Char link_atcc [MAX_WWWBUF];
+#define DEF_LINK_ATCC "http://www.atcc.org/SearchCatalogs/linkin?id="
+
 static Char link_unigene [MAX_WWWBUF];
 #define DEF_LINK_UNIGENE "http://www.ncbi.nlm.nih.gov/sites/entrez?Db=unigene&Cmd=Search&Term="
+
+static Char link_pseudocap [MAX_WWWBUF];
+#define DEF_LINK_PSEUDOCAP "http://www.pseudomonas.com/getAnnotation.do?locusID="
+
+static Char link_pbmice [MAX_WWWBUF];
+#define DEF_LINK_PBMICE "http://www.idmshanghai.cn/PBmice/DetailedSearch.do?type=insert&id="
+
+static Char link_rapdb [MAX_WWWBUF];
+#define DEF_LINK_RAPDB "http://rapdb.dna.affrc.go.jp/cgi-bin/gbrowse_details/latest?name="
+
+static Char link_osa1 [MAX_WWWBUF];
+#define DEF_LINK_OSA1 "http://rice.plantbiology.msu.edu/cgi-bin/gbrowse/rice/?name="
 
 
 
@@ -502,7 +532,17 @@ NLM_EXTERN void InitWWW (IntAsn2gbJobPtr ajp)
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_NRESTDB", DEF_LINK_NRESTDB, link_nrestdb, MAX_WWWBUF);
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_TIGRFAM", DEF_LINK_TIGRFAM, link_tigrfam, MAX_WWWBUF);
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_VBRC", DEF_LINK_VBRC, link_vbrc, MAX_WWWBUF);
+  GetAppParam ("NCBI", "WWWENTREZ", "LINK_BHB_ACC_PREFIX", DEF_LINK_BHB_ACC_PREFIX, link_bhb_acc_prefix, MAX_WWWBUF);
+  GetAppParam ("NCBI", "WWWENTREZ", "LINK_BHB_LOC_PREFIX", DEF_LINK_BHB_LOC_PREFIX, link_bhb_loc_prefix, MAX_WWWBUF);
+  GetAppParam ("NCBI", "WWWENTREZ", "LINK_BHB_ACC_SUFFIX", DEF_LINK_BHB_ACC_SUFFIX, link_bhb_acc_suffix, MAX_WWWBUF);
+  GetAppParam ("NCBI", "WWWENTREZ", "LINK_BHB_LOC_SUFFIX", DEF_LINK_BHB_LOC_SUFFIX, link_bhb_loc_suffix, MAX_WWWBUF);
+  GetAppParam ("NCBI", "WWWENTREZ", "LINK_BIOHEALTHBASE", DEF_LINK_BIOHEALTHBASE, link_biohealthbase, MAX_WWWBUF);
+  GetAppParam ("NCBI", "WWWENTREZ", "LINK_ATCC", DEF_LINK_ATCC, link_atcc, MAX_WWWBUF);
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_UNIGENE", DEF_LINK_UNIGENE, link_unigene, MAX_WWWBUF);
+  GetAppParam ("NCBI", "WWWENTREZ", "LINK_PSEUDOCAP", DEF_LINK_PSEUDOCAP, link_pseudocap, MAX_WWWBUF);
+  GetAppParam ("NCBI", "WWWENTREZ", "LINK_PBMICE", DEF_LINK_PBMICE, link_pbmice, MAX_WWWBUF);
+  GetAppParam ("NCBI", "WWWENTREZ", "LINK_RAPDB", DEF_LINK_RAPDB, link_rapdb, MAX_WWWBUF);
+  GetAppParam ("NCBI", "WWWENTREZ", "LINK_OSA1", DEF_LINK_OSA1, link_osa1, MAX_WWWBUF);
 }
 
 NLM_EXTERN void FF_www_featloc(StringItemPtr ffstring, CharPtr loc)
@@ -540,8 +580,27 @@ static void FF_www_db_xref_std (
     identifier++;
 
   FFAddTextToString(ffstring, NULL, db, ":", FALSE, FALSE, TILDE_IGNORE);
-  FFAddTextToString(ffstring, "<a href=", link, identifier, FALSE, FALSE, TILDE_IGNORE);
-  FFAddTextToString(ffstring, ">", identifier, "</a>", FALSE, FALSE, TILDE_IGNORE);
+  FFAddTextToString(ffstring, "<a href=\"", link, identifier, FALSE, FALSE, TILDE_IGNORE);
+  FFAddTextToString(ffstring, "\">", identifier, "</a>", FALSE, FALSE, TILDE_IGNORE);
+}
+
+static void FF_www_db_xref_ext (
+  StringItemPtr ffstring,
+  CharPtr db,
+  CharPtr identifier,
+  CharPtr link,
+  CharPtr suffix
+)
+{
+  while (*identifier == ' ')
+    identifier++;
+
+  FFAddTextToString(ffstring, NULL, db, ":", FALSE, FALSE, TILDE_IGNORE);
+  FFAddTextToString(ffstring, "<a href=\"", link, identifier, FALSE, FALSE, TILDE_IGNORE);
+  if (StringDoesHaveText (suffix)) {
+    FFAddOneString(ffstring, suffix, FALSE, FALSE, TILDE_IGNORE);
+  }
+  FFAddTextToString(ffstring, "\">", identifier, "</a>", FALSE, FALSE, TILDE_IGNORE);
 }
 
 static void FF_www_db_xref_fly (
@@ -680,12 +739,12 @@ static void FF_www_db_xref_pid(
   ++identifier;
 
   FFAddTextToString(ffstring, NULL, db, ":g", FALSE, FALSE, TILDE_IGNORE);
-  FFAddTextToString(ffstring, "<a href=", link_seq, "val=", FALSE, FALSE, TILDE_IGNORE);
-  FFAddTextToString(ffstring, identifier, ">", identifier, FALSE, FALSE, TILDE_IGNORE);
+  FFAddTextToString(ffstring, "<a href=\"", link_seq, "val=", FALSE, FALSE, TILDE_IGNORE);
+  FFAddTextToString(ffstring, identifier, "\">", identifier, FALSE, FALSE, TILDE_IGNORE);
   FFAddOneString(ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
 }
 
-/*prefix = "<a href=%sval=gnl|dbest|%s>"; */
+/*prefix = "<a href=\"%sval=gnl|dbest|%s\">"; */
 static void FF_www_db_xref_dbEST(
   StringItemPtr ffstring,
   CharPtr db, 
@@ -696,8 +755,8 @@ static void FF_www_db_xref_dbEST(
     identifier++;
 
   FFAddTextToString(ffstring, NULL, db, ":", FALSE, FALSE, TILDE_IGNORE);
-  FFAddTextToString(ffstring, "<a href=", link_dbEST, "val=gnl|dbest|", FALSE, FALSE, TILDE_IGNORE);
-  FFAddTextToString(ffstring, identifier, ">", identifier, FALSE, FALSE, TILDE_IGNORE);
+  FFAddTextToString(ffstring, "<a href=\"", link_dbEST, "val=gnl|dbest|", FALSE, FALSE, TILDE_IGNORE);
+  FFAddTextToString(ffstring, identifier, "\">", identifier, FALSE, FALSE, TILDE_IGNORE);
   FFAddOneString(ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
 }
 
@@ -728,13 +787,13 @@ static void FF_www_db_xref_dbSTS(
 
   if (is_numeric) {
     FFAddTextToString(ffstring, NULL, db, ":", FALSE, FALSE, TILDE_IGNORE);
-    FFAddTextToString(ffstring, "<a href=", link_dbSTS, "val=gnl|dbsts|", FALSE, FALSE, TILDE_IGNORE);
-    FFAddTextToString(ffstring, identifier, ">", identifier, FALSE, FALSE, TILDE_IGNORE);
+    FFAddTextToString(ffstring, "<a href=\"", link_dbSTS, "val=gnl|dbsts|", FALSE, FALSE, TILDE_IGNORE);
+    FFAddTextToString(ffstring, identifier, "\">", identifier, FALSE, FALSE, TILDE_IGNORE);
     FFAddOneString(ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
   } else if (ValidateAccn (identifier) == 0) {
     FFAddTextToString(ffstring, NULL, db, ":", FALSE, FALSE, TILDE_IGNORE);
-    FFAddTextToString(ffstring, "<a href=", link_seq, "val=", FALSE, FALSE, TILDE_IGNORE);
-    FFAddTextToString(ffstring, identifier, ">", identifier, FALSE, FALSE, TILDE_IGNORE);
+    FFAddTextToString(ffstring, "<a href=\"", link_seq, "val=", FALSE, FALSE, TILDE_IGNORE);
+    FFAddTextToString(ffstring, identifier, "\">", identifier, FALSE, FALSE, TILDE_IGNORE);
     FFAddOneString(ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
   }
 }
@@ -749,8 +808,8 @@ static void FF_www_db_xref_niaEST(
     identifier++;
 
   FFAddTextToString(ffstring, NULL, db, ":", FALSE, FALSE, TILDE_IGNORE);
-  FFAddTextToString(ffstring, "<a href=", link_niaest, identifier, FALSE, FALSE, TILDE_IGNORE);
-  FFAddOneString(ffstring, "&val=1>", FALSE, FALSE, TILDE_IGNORE);
+  FFAddTextToString(ffstring, "<a href=\"", link_niaest, identifier, FALSE, FALSE, TILDE_IGNORE);
+  FFAddOneString(ffstring, "&val=1\">", FALSE, FALSE, TILDE_IGNORE);
   FFAddOneString(ffstring, identifier, FALSE, FALSE, TILDE_IGNORE);
   FFAddOneString(ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
 }
@@ -778,12 +837,12 @@ static void FF_www_db_xref_gdb(
       ++start;
     }
     *idp = '\0';
-    FFAddTextToString(ffstring, "<a href=", link_gdb, id, FALSE, FALSE, TILDE_IGNORE);  
-    FFAddTextToString(ffstring, ">", identifier, "</a>", FALSE, FALSE, TILDE_IGNORE);
+    FFAddTextToString(ffstring, "<a href=\"", link_gdb, id, FALSE, FALSE, TILDE_IGNORE);  
+    FFAddTextToString(ffstring, "\">", identifier, "</a>", FALSE, FALSE, TILDE_IGNORE);
   } else if ( IS_DIGIT(*identifier) ) {
     /* id */
-    FFAddTextToString(ffstring, "<a href=", link_gdb, identifier, FALSE, FALSE, TILDE_IGNORE);  
-    FFAddTextToString(ffstring, ">", identifier, "</a>", FALSE, FALSE, TILDE_IGNORE);
+    FFAddTextToString(ffstring, "<a href=\"", link_gdb, identifier, FALSE, FALSE, TILDE_IGNORE);  
+    FFAddTextToString(ffstring, "\">", identifier, "</a>", FALSE, FALSE, TILDE_IGNORE);
   } else {
     FFAddOneString(ffstring, identifier, FALSE, FALSE, TILDE_IGNORE);
   }
@@ -799,8 +858,8 @@ static void FF_www_db_xref_rebase (
     identifier++;
 
   FFAddTextToString(ffstring, NULL, db, ":", FALSE, FALSE, TILDE_IGNORE);
-  FFAddTextToString(ffstring, "<a href=", link_rebase, identifier, FALSE, FALSE, TILDE_IGNORE);
-  FFAddTextToString(ffstring, ".html>", identifier, "</a>", FALSE, FALSE, TILDE_IGNORE);
+  FFAddTextToString(ffstring, "<a href=\"", link_rebase, identifier, FALSE, FALSE, TILDE_IGNORE);
+  FFAddTextToString(ffstring, ".html\">", identifier, "</a>", FALSE, FALSE, TILDE_IGNORE);
 }
 
 static void FF_www_db_xref_hinvdb (
@@ -855,6 +914,75 @@ static void FF_www_db_xref_hprd (
   FF_www_db_xref_std (ffstring, db, identifier, link);
 }
 
+static void FF_www_db_xref_bhb (
+  StringItemPtr ffstring,
+  CharPtr db, 
+  CharPtr identifier,
+  BioseqPtr bsp
+)
+
+{
+  Char          ch;
+  Boolean       is_accession = FALSE;
+  Char          link [512];
+  CharPtr       ptr;
+  SeqIdPtr      sip;
+  Char          taxname [128];
+  TextSeqIdPtr  tsip;
+
+  if (bsp != NULL && ValidateAccn (identifier) == 0) {
+    for (sip = bsp->id; sip != NULL; sip = sip->next) {
+      switch (sip->choice) {
+        case SEQID_GENBANK :
+        case SEQID_EMBL :
+        case SEQID_DDBJ :
+        case SEQID_TPG :
+        case SEQID_TPE :
+        case SEQID_TPD :
+        case SEQID_OTHER :
+          tsip = (TextSeqIdPtr) sip->data.ptrvalue;
+          if (tsip != NULL) {
+            if (StringICmp (tsip->accession, identifier) == 0) {
+              is_accession = TRUE;
+            }
+          }
+          break;
+        default :
+          break;
+      }
+    }
+  }
+
+  if (! is_accession) {
+    FF_www_db_xref_std(ffstring, db, identifier, link_biohealthbase);
+    return;
+  }
+
+  if (bsp != NULL && BioseqToGeneticCode (bsp, NULL, NULL, NULL, taxname, sizeof (taxname), NULL)) {
+    ptr = StringChr (taxname, ' ');
+    if (ptr != NULL) {
+      *ptr = '\0';
+    }
+    ch = taxname [0];
+    if (IS_UPPER (ch)) {
+      taxname [0] = TO_LOWER (ch);
+    }
+    if (StringNICmp (taxname, "influenza", 9) == 0) {
+      StringCpy (link, link_bhb_acc_prefix);
+      StringCat (link, taxname);
+      StringCat (link, link_bhb_acc_suffix);
+    } else {
+      StringCpy (link, link_bhb_loc_prefix);
+      StringCat (link, taxname);
+      StringCat (link, link_bhb_loc_suffix);
+    }
+
+    FF_www_db_xref_std(ffstring, db, identifier, link);
+  } else {
+    FFAddTextToString(ffstring, db, ":", identifier, FALSE, FALSE, TILDE_IGNORE);
+  }
+}
+
 /*
 static void FF_www_db_xref_vector (
   StringItemPtr ffstring,
@@ -901,8 +1029,8 @@ static void FF_www_db_xref_null (
     identifier++;
 
   FFAddTextToString(ffstring, NULL, db, ":", FALSE, FALSE, TILDE_IGNORE);
-  FFAddTextToString(ffstring, "<a href=", link, NULL, FALSE, FALSE, TILDE_IGNORE);
-  FFAddTextToString(ffstring, ">", identifier, "</a>", FALSE, FALSE, TILDE_IGNORE);
+  FFAddTextToString(ffstring, "<a href=\"", link, NULL, FALSE, FALSE, TILDE_IGNORE);
+  FFAddTextToString(ffstring, "\">", identifier, "</a>", FALSE, FALSE, TILDE_IGNORE);
 }
 
 static void Do_www_db_xref(
@@ -1085,14 +1213,26 @@ static void Do_www_db_xref(
     FF_www_db_xref_std(ffstring, db, identifier, link_tigrfam);
   } else if ( StringCmp(db , "VBRC") == 0) {
     FF_www_db_xref_std(ffstring, db, identifier, link_vbrc);
+  } else if ( StringCmp(db , "BioHealthBase") == 0) {
+    FF_www_db_xref_bhb(ffstring, db, identifier, bsp);
+  } else if ( StringCmp(db , "ATCC") == 0) {
+    FF_www_db_xref_std(ffstring, db, identifier, link_atcc);
+  } else if ( StringCmp(db , "PseudoCap") == 0) {
+    FF_www_db_xref_std(ffstring, db, identifier, link_pseudocap);
+  } else if ( StringCmp(db , "PBmice") == 0) {
+    FF_www_db_xref_std(ffstring, db, identifier, link_pbmice);
+  } else if ( StringCmp(db , "RAP-DB") == 0) {
+    FF_www_db_xref_ext(ffstring, db, identifier, link_rapdb, ";class=locus_id");
+  } else if ( StringCmp(db , "Osa1") == 0) {
+    FF_www_db_xref_std(ffstring, db, identifier, link_osa1);
 
   /* for dbsource */
   } else if ( StringCmp(db , "UniGene") == 0) {
     FF_www_db_xref_std(ffstring, db, identifier, link_unigene);
   } else if ( StringCmp(db , "RefSeq") == 0) {
     FFAddTextToString(ffstring, NULL, db, ":", FALSE, FALSE, TILDE_IGNORE);
-    FFAddTextToString(ffstring, "<a href=", link_seq, "val=", FALSE, FALSE, TILDE_IGNORE);
-    FFAddTextToString(ffstring, identifier, ">", identifier, FALSE, FALSE, TILDE_IGNORE);
+    FFAddTextToString(ffstring, "<a href=\"", link_seq, "val=", FALSE, FALSE, TILDE_IGNORE);
+    FFAddTextToString(ffstring, identifier, "\">", identifier, FALSE, FALSE, TILDE_IGNORE);
     FFAddOneString(ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
 
   } else {  
@@ -2189,9 +2329,11 @@ static CharPtr FormatCitJour (
   title = (CharPtr) ttl->data.ptrvalue;
   if (StringLen (title) < 3) return StringSave (".");
 
+  /*
   if (imp->pubstatus == 3 || imp->pubstatus == 10) {
     ValNodeCopyStr (&head, 0, "(er) ");
   }
+  */
 
   ValNodeCopyStr (&head, 0, title);
 
@@ -2868,10 +3010,10 @@ static CharPtr FormatCitPat (
 
   if (! StringHasNoText (cpp->number)) {
     if (ajp != NULL && GetWWW (ajp) && StringCmp (cpp->country, "US") == 0) {
-      ValNodeCopyStr (&head, 0, "<a href=");
+      ValNodeCopyStr (&head, 0, "<a href=\"");
       ValNodeCopyStr (&head, 0, link_uspto);
       ValNodeCopyStr (&head, 0, cpp->number);
-      ValNodeCopyStr (&head, 0, ">");
+      ValNodeCopyStr (&head, 0, "\">");
       ValNodeCopyStr (&head, 0, cpp->number);
       ValNodeCopyStr (&head, 0, "</a>");
     } else {
@@ -3676,15 +3818,40 @@ static void  FF_www_muid(
   Char numbuf[40];
   
   if ( GetWWW(ajp) ) {
-    FFAddTextToString(ffstring, "<a href=", link_muid, NULL, FALSE, FALSE, TILDE_IGNORE);
+    FFAddTextToString(ffstring, "<a href=\"", link_muid, NULL, FALSE, FALSE, TILDE_IGNORE);
     sprintf(numbuf, "%ld", (long)muid);
-    FFAddTextToString(ffstring, NULL, numbuf, ">", FALSE, FALSE, TILDE_IGNORE);
+    FFAddTextToString(ffstring, NULL, numbuf, "\">", FALSE, FALSE, TILDE_IGNORE);
     FFAddOneString(ffstring, numbuf, FALSE, FALSE, TILDE_IGNORE);
     FFAddOneString(ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
   } else {
     sprintf(numbuf, "%ld", (long)muid);
     FFAddOneString(ffstring, numbuf, FALSE, FALSE, TILDE_IGNORE);
   }
+}
+
+static Uint1 GetJournalPubStatus (PubdescPtr pdp)
+
+{
+  CitArtPtr   cap;
+  CitJourPtr  cjp;
+  ImprintPtr  imp;
+  ValNodePtr  vnp;
+
+  if (pdp == NULL) return 0;
+
+  for (vnp = pdp->pub; vnp != NULL; vnp = vnp->next) {
+    if (vnp->choice != PUB_Article) continue;
+    cap = (CitArtPtr) vnp->data.ptrvalue;
+    if (cap == NULL) continue;
+    if (cap->from != 1) continue;
+    cjp = (CitJourPtr) cap->fromptr;
+    if (cjp == NULL) continue;
+    imp = cjp->imp;
+    if (imp == NULL) continue;
+    return imp->pubstatus;
+  }
+
+  return 0;
 }
 
 NLM_EXTERN CharPtr FormatReferenceBlock (
@@ -3733,6 +3900,8 @@ NLM_EXTERN CharPtr FormatReferenceBlock (
   PubmedEntryPtr     pep = NULL;
   Int4               pmid = 0;
   CharPtr            prefix = NULL;
+  Uint1              pubstatus;
+  CharPtr            pubstatnote;
   RefBlockPtr        rbp;
   ValNodePtr         remarks = NULL;
   CharPtr            remprefix = NULL;
@@ -4238,6 +4407,20 @@ NLM_EXTERN CharPtr FormatReferenceBlock (
   }
 
   if (pdp == NULL) {
+
+    if (csp != NULL) {
+      if (! StringHasNoText (csp->descr)) {
+        FFRecycleString(ajp, temp);
+        temp = FFGetString(ajp);
+ 
+        ValNodeCopyStr (&remarks, 0, csp->descr);
+        FFStartPrint (temp, afp->format, 2, 12, "REMARK", 12, 5, 5, NULL, FALSE);
+        /* FFAddOneString (temp, csp->descr, FALSE, TRUE, TILDE_EXPAND); */
+        AddCommentWithURLlinks(ajp, temp, NULL, csp->descr, NULL);
+        FFLineWrap(ffstring, temp, 12, 12, ASN2FF_GB_MAX, NULL);
+      }
+    }
+
     str = FFToCharPtr(ffstring);
 
     if (gbseq != NULL) {
@@ -4287,11 +4470,11 @@ NLM_EXTERN CharPtr FormatReferenceBlock (
           if (GetWWW (ajp)) {
             sprintf (buf, "CAMBIA Patent Lens: %s ", cpp->country);
             FFAddOneString (temp, buf, FALSE, FALSE, TILDE_EXPAND);
-            FFAddOneString (temp, "<a href=", FALSE, FALSE, TILDE_EXPAND);
+            FFAddOneString (temp, "<a href=\"", FALSE, FALSE, TILDE_EXPAND);
             FFAddOneString (temp, link_cambia, FALSE, FALSE, TILDE_EXPAND);
             FFAddOneString (temp, cpp->country, FALSE, FALSE, TILDE_EXPAND);
             FFAddOneString (temp, cpp->number, FALSE, FALSE, TILDE_EXPAND);
-            FFAddOneString (temp, "#list>", FALSE, FALSE, TILDE_EXPAND);
+            FFAddOneString (temp, "#list\">", FALSE, FALSE, TILDE_EXPAND);
             FFAddOneString (temp, cpp->number, FALSE, FALSE, TILDE_EXPAND);
             FFAddOneString (temp, "</a>", FALSE, FALSE, TILDE_EXPAND);
           } else {
@@ -4537,6 +4720,28 @@ NLM_EXTERN CharPtr FormatReferenceBlock (
           }
         }
       }
+    }
+
+    pubstatnote = NULL;
+    pubstatus = GetJournalPubStatus (pdp);
+    if (pubstatus == 3) {
+      pubstatnote = "Publication Status: Online-Only";
+    } else if (pubstatus == 10) {
+      pubstatnote = "Publication Status: Available-Online prior to print";
+    }
+    if (StringDoesHaveText (pubstatnote)) {
+      FFRecycleString(ajp, temp);
+      temp = FFGetString(ajp);
+
+      if (remprefix != NULL) {
+        ValNodeCopyStr (&remarks, 0, remprefix);
+      }
+      ValNodeCopyStr (&remarks, 0, pubstatnote);
+      remprefix = "; ";
+      FFStartPrint (temp, afp->format, 2, 12, prefix, 12, 5, 5, NULL, FALSE);
+      FFAddOneString (temp, pubstatnote, FALSE, FALSE, TILDE_EXPAND);
+      FFLineWrap(ffstring, temp, 12, 12, ASN2FF_GB_MAX, NULL);
+      prefix = NULL;
     }
 
   }

@@ -1,4 +1,4 @@
-/* $Id: pattern.c,v 1.22 2006/11/21 17:13:25 papadopo Exp $
+/* $Id: pattern.c,v 1.24 2008/07/17 17:55:44 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -56,7 +56,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: pattern.c,v 1.22 2006/11/21 17:13:25 papadopo Exp $";
+    "$Id: pattern.c,v 1.24 2008/07/17 17:55:44 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/pattern.h>
@@ -502,13 +502,14 @@ SPHIQueryInfoFree(SPHIQueryInfo* pat_info)
 {
     if (pat_info) {
         sfree(pat_info->occurrences);
+        sfree(pat_info->pattern);
         sfree(pat_info);
     }
     return NULL;
 }
 
 SPHIQueryInfo* 
-SPHIQueryInfoCopy(SPHIQueryInfo* pat_info)
+SPHIQueryInfoCopy(const SPHIQueryInfo* pat_info)
 {
     SPHIQueryInfo* retval = NULL;
     
@@ -517,6 +518,8 @@ SPHIQueryInfoCopy(SPHIQueryInfo* pat_info)
 
     retval = 
         (SPHIQueryInfo*) BlastMemDup(pat_info, sizeof(SPHIQueryInfo));
+    retval->pattern = 
+        (char *) BlastMemDup(pat_info->pattern, 1+strlen(pat_info->pattern));
     retval->occurrences = (SPHIPatternInfo*)
         BlastMemDup(pat_info->occurrences, 
                     pat_info->num_patterns*sizeof(SPHIPatternInfo));

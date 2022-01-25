@@ -3,7 +3,7 @@
 	ProjectType="Visual C++"
 	Version="8.00"
 	Name="demo_asnstrip"
-	ProjectGUID="{24B6F0A3-B354-4089-B489-560DEF53C75C}"
+	ProjectGUID="{6CCD3C0A-DC71-41AB-BAD3-F6E403BB39BC}"
 	>
 	<Platforms>
 		<Platform
@@ -75,7 +75,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="oldnames.lib wsock32.lib"
+				AdditionalDependencies="oldnames.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/asnstrip.exe"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"
@@ -170,7 +170,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="oldnames.lib wsock32.lib"
+				AdditionalDependencies="oldnames.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/asnstrip.exe"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"
@@ -266,7 +266,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="oldnames.lib wsock32.lib"
+				AdditionalDependencies="oldnames.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/asnstrip.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
@@ -361,7 +361,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="oldnames.lib wsock32.lib"
+				AdditionalDependencies="oldnames.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/asnstrip.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
@@ -455,7 +455,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="oldnames.lib wsock32.lib"
+				AdditionalDependencies="oldnames.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/asnstrip.exe"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"
@@ -550,7 +550,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="oldnames.lib wsock32.lib"
+				AdditionalDependencies="oldnames.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/asnstrip.exe"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"
@@ -646,7 +646,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="oldnames.lib wsock32.lib"
+				AdditionalDependencies="oldnames.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/asnstrip.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
@@ -741,7 +741,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="oldnames.lib wsock32.lib"
+				AdditionalDependencies="oldnames.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/asnstrip.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"

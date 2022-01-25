@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: formatrpsdb.c,v 1.25 2007/05/07 13:29:11 kans Exp $";
+static char const rcsid[] = "$Id: formatrpsdb.c,v 1.28 2008/11/04 16:26:59 boratyng Exp $";
 
 /*****************************************************************************
 
@@ -38,6 +38,17 @@ static char const rcsid[] = "$Id: formatrpsdb.c,v 1.25 2007/05/07 13:29:11 kans 
 
 ***************************************************************************
     $Log: formatrpsdb.c,v $
+    Revision 1.28  2008/11/04 16:26:59  boratyng
+    Synchronized with the new BlastAaLookupTable implementation
+
+    Revision 1.27  2008/08/13 13:33:21  ucko
+    Correct previous revision to build even with strict compilers (MSVC, MIPSpro):
+    - In FileWriteInChunks, cast ptr to char* to allow adding to it.
+    - In RPS_DbClose, drop unused mid-block declaration of chunk.
+
+    Revision 1.26  2008/08/12 16:53:12  boratyng
+    Added function that calls FileWrite for chunks of data in order to aviod FileWrite warning: size > SIZE_MAX
+
     Revision 1.25  2007/05/07 13:29:11  kans
     added casts for Seq-data.gap (SeqDataPtr, SeqGapPtr, ByteStorePtr)
 
@@ -93,12 +104,12 @@ static char const rcsid[] = "$Id: formatrpsdb.c,v 1.25 2007/05/07 13:29:11 kans 
     1. Modify scoremat IO to comply with new scoremat spec
     2. Remove check that residue frequencies read from scoremat are <= 1.0
     3. Add input argument to specify the underlying score matrix, or to
-    	use the score matrix specified in the scoremat if present
+      use the score matrix specified in the scoremat if present
 
     Revision 1.8  2004/09/15 18:06:13  papadopo
     1. Verify that the scale factor is the same for all input scoremats
     2. Do not use the scoremat 'identifier' field to determine the underlying
-    	score matrix; hardwire to BLOSUM62 temporarily
+      score matrix; hardwire to BLOSUM62 temporarily
     3. Use BlastSeqLoc's instead of ListNodes
 
     Revision 1.7  2004/08/25 14:47:50  camacho
@@ -897,6 +908,24 @@ Int2 RPSAddSequence(RPS_DbInfo *info,
     return 0;
 }
 
+/* Writes data to file in chunks in order to avoid allocations larger than
+   SIZE_MAX in FileWrite */
+
+size_t FileWriteInChunks(const void* ptr, size_t size, size_t n, FILE* stream)
+{
+    size_t chunk = SIZE_MAX / size;
+    size_t i;
+    size_t count = 0;
+
+    for (i=0;i < n;i+=chunk) {
+        count += FileWrite((char*)ptr + i*size, size,
+                           (n-i < chunk ? n-i : chunk), stream);
+    }
+
+    return count;
+}
+
+
 /* Once all sequences have been processed, perform
    final setup on the BLAST lookup table and finish
    up the RPS files */
@@ -913,7 +942,7 @@ void RPS_DbClose(RPS_DbInfo *info)
 
     /* Pack the lookup table into its compressed form */
 
-    if (BlastAaLookupFinalize(info->lookup) != 0) {
+    if (BlastAaLookupFinalize(info->lookup, eBackbone) != 0) {
         ErrPostEx(SEV_WARNING, 0, 0, "Failed to compress lookup table");
     }
     else {
@@ -933,7 +962,8 @@ void RPS_DbClose(RPS_DbInfo *info)
         /* for each lookup table cell */
 
         for (index = cursor = 0; index < lut->backbone_size; index++) {
-            cell = &lut->thick_backbone[index];
+            cell = (AaLookupBackboneCell*)lut->thick_backbone + index;
+
 
             if (cell->num_used == 0)
                 continue;
@@ -956,11 +986,12 @@ void RPS_DbClose(RPS_DbInfo *info)
                    offsets as well */
 
                 old_cursor = cell->payload.overflow_cursor;
-                cell->payload.entries[0] = lut->overflow[old_cursor] +
+                cell->payload.entries[0] = ((Int4*)lut->overflow)[old_cursor] +
                                         BLAST_WORDSIZE_PROT - 1;
                 cell->payload.entries[1] = cursor * sizeof(Int4);
                 for (i = 1; i < cell->num_used; i++, cursor++) {
-                    lut->overflow[cursor] = lut->overflow[old_cursor + i] +
+                    ((Int4*)lut->overflow)[cursor]
+                            = ((Int4*)lut->overflow)[old_cursor + i] +
                                         BLAST_WORDSIZE_PROT - 1;
                 }
             }
@@ -976,9 +1007,11 @@ void RPS_DbClose(RPS_DbInfo *info)
         FileWrite(&header, sizeof(header), 1, info->lookup_fd);
 
         /* write the thick backbone */
-        
-        FileWrite(lut->thick_backbone, sizeof(RPSBackboneCell),
+
+
+        FileWriteInChunks(lut->thick_backbone, sizeof(RPSBackboneCell),
                   lut->backbone_size, info->lookup_fd);
+        
 
         /* write extra backbone cells */
 
@@ -989,7 +1022,7 @@ void RPS_DbClose(RPS_DbInfo *info)
 
         /* write the new overflow array */
 
-        FileWrite(lut->overflow, sizeof(Int4), cursor, info->lookup_fd);
+        FileWriteInChunks(lut->overflow, sizeof(Int4), cursor, info->lookup_fd);
     }
 
     /* Free data, close files */

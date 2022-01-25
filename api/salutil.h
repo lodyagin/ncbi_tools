@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.4 $
+* $Revision: 6.6 $
 *
 * File Description: 
 *
@@ -121,6 +121,7 @@ NLM_EXTERN CharPtr PNTR SeqIdListToCharArray (SeqIdPtr id_list, Int2 n);
 
 NLM_EXTERN SeqIdPtr     SeqIdReplaceID (SeqIdPtr head, SeqIdPtr pre, SeqIdPtr sip, SeqIdPtr next);
 NLM_EXTERN BioseqPtr    BioseqReplaceID (BioseqPtr bsp, SeqIdPtr newsip);
+NLM_EXTERN void         ReplaceSeqIdWithSeqId (SeqIdPtr sip_old, SeqIdPtr sip_new, SeqEntryPtr sep);
 NLM_EXTERN SeqEntryPtr  SeqEntryReplaceSeqID (SeqEntryPtr source_sep, SeqIdPtr sip);
 /*********************************************************
 ***
@@ -262,6 +263,8 @@ NLM_EXTERN Boolean insertchar (CharPtr str, Int4 pos, SeqIdPtr target, Uint1 mol
 NLM_EXTERN Boolean insertchar_atcaret (CharPtr str, EditAlignDataPtr adp);
 
 NLM_EXTERN SeqEntryPtr getfirst_sep(SeqEntryPtr sep, Uint1 bsp_mol);
+
+NLM_EXTERN void CleanUpSegGap (SeqAlignPtr sap);
 
 #endif
 

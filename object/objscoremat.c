@@ -33,7 +33,7 @@ objscorematAsnLoad(void)
 
 /**************************************************
 *    Generated object loaders for Module NCBI-ScoreMat
-*    Generated using ASNCODE Revision: 6.15 at Oct 7, 2004  2:31 PM
+*    Generated using ASNCODE Revision: 6.16 at Jun 2, 2008 11:45 AM
 *
 **************************************************/
 
@@ -312,6 +312,11 @@ PssmIntermediateDataFree(PssmIntermediateDataPtr ptr)
    AsnGenericBaseSeqOfFree(ptr -> resFreqsPerPos ,ASNCODE_INTVAL_SLOT);
    AsnGenericBaseSeqOfFree(ptr -> weightedResFreqsPerPos ,ASNCODE_REALVAL_SLOT);
    AsnGenericBaseSeqOfFree(ptr -> freqRatios ,ASNCODE_REALVAL_SLOT);
+   AsnGenericBaseSeqOfFree(ptr -> informationContent ,ASNCODE_REALVAL_SLOT);
+   AsnGenericBaseSeqOfFree(ptr -> gaplessColumnWeights ,ASNCODE_REALVAL_SLOT);
+   AsnGenericBaseSeqOfFree(ptr -> sigma ,ASNCODE_REALVAL_SLOT);
+   AsnGenericBaseSeqOfFree(ptr -> intervalSizes ,ASNCODE_INTVAL_SLOT);
+   AsnGenericBaseSeqOfFree(ptr -> numMatchingSeqs ,ASNCODE_INTVAL_SLOT);
    return MemFree(ptr);
 }
 
@@ -384,6 +389,41 @@ PssmIntermediateDataAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       }
       atp = AsnReadId(aip,amp, atp);
    }
+   if (atp == PSSMINTERMEDIATEDATA_informationContent) {
+      ptr -> informationContent = AsnGenericBaseSeqOfAsnRead(aip, amp, atp, ASNCODE_REALVAL_SLOT, &isError);
+      if (isError && ptr -> informationContent == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == PSSMINTERMEDIATEDATA_gaplessColumnWeights) {
+      ptr -> gaplessColumnWeights = AsnGenericBaseSeqOfAsnRead(aip, amp, atp, ASNCODE_REALVAL_SLOT, &isError);
+      if (isError && ptr -> gaplessColumnWeights == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == PSSMINTERMEDIATEDATA_sigma) {
+      ptr -> sigma = AsnGenericBaseSeqOfAsnRead(aip, amp, atp, ASNCODE_REALVAL_SLOT, &isError);
+      if (isError && ptr -> sigma == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == PSSMINTERMEDIATEDATA_intervalSizes) {
+      ptr -> intervalSizes = AsnGenericBaseSeqOfAsnRead(aip, amp, atp, ASNCODE_INTVAL_SLOT, &isError);
+      if (isError && ptr -> intervalSizes == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == PSSMINTERMEDIATEDATA_numMatchingSeqs) {
+      ptr -> numMatchingSeqs = AsnGenericBaseSeqOfAsnRead(aip, amp, atp, ASNCODE_INTVAL_SLOT, &isError);
+      if (isError && ptr -> numMatchingSeqs == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
 
    if (AsnReadVal(aip, atp, &av) <= 0) {
       goto erret;
@@ -437,6 +477,11 @@ PssmIntermediateDataAsnWrite(PssmIntermediateDataPtr ptr, AsnIoPtr aip, AsnTypeP
    retval = AsnGenericBaseSeqOfAsnWrite(ptr -> resFreqsPerPos ,ASNCODE_INTVAL_SLOT, aip, PSSMINTERMEDIATEDATA_resFreqsPerPos, PSSMINTERMEDIATEDATA_resFreqsPerPos_E);
    retval = AsnGenericBaseSeqOfAsnWrite(ptr -> weightedResFreqsPerPos ,ASNCODE_REALVAL_SLOT, aip, PSSMINTERMEDIATEDATA_weightedResFreqsPerPos, PSSMINTERMEDIATEDATA_weightedResFreqsPerPos_E);
    retval = AsnGenericBaseSeqOfAsnWrite(ptr -> freqRatios ,ASNCODE_REALVAL_SLOT, aip, PSSMINTERMEDIATEDATA_freqRatios, PSSMINTERMEDIATEDATA_freqRatios_E);
+   retval = AsnGenericBaseSeqOfAsnWrite(ptr -> informationContent ,ASNCODE_REALVAL_SLOT, aip, PSSMINTERMEDIATEDATA_informationContent, PSSMINTERMEDIATEDATA_informationContent_E);
+   retval = AsnGenericBaseSeqOfAsnWrite(ptr -> gaplessColumnWeights ,ASNCODE_REALVAL_SLOT, aip, PSSMINTERMEDIATEDATA_gaplessColumnWeights, PSSMINTERMEDIATEDATA_gaplessColumnWeights_E);
+   retval = AsnGenericBaseSeqOfAsnWrite(ptr -> sigma ,ASNCODE_REALVAL_SLOT, aip, PSSMINTERMEDIATEDATA_sigma, PSSMINTERMEDIATEDATA_sigma_E);
+   retval = AsnGenericBaseSeqOfAsnWrite(ptr -> intervalSizes ,ASNCODE_INTVAL_SLOT, aip, PSSMINTERMEDIATEDATA_intervalSizes, PSSMINTERMEDIATEDATA_intervalSizes_E);
+   retval = AsnGenericBaseSeqOfAsnWrite(ptr -> numMatchingSeqs ,ASNCODE_INTVAL_SLOT, aip, PSSMINTERMEDIATEDATA_numMatchingSeqs, PSSMINTERMEDIATEDATA_numMatchingSeqs_E);
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
    }
@@ -566,6 +611,27 @@ PssmFinalDataAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       ptr -> scalingFactor = av.intvalue;
       atp = AsnReadId(aip,amp, atp);
    }
+   if (atp == PSSMFINALDATA_lambdaUngapped) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> lambdaUngapped = av.realvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == PSSMFINALDATA_kappaUngapped) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> kappaUngapped = av.realvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == PSSMFINALDATA_hUngapped) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> hUngapped = av.realvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
 
    if (AsnReadVal(aip, atp, &av) <= 0) {
       goto erret;
@@ -626,6 +692,12 @@ PssmFinalDataAsnWrite(PssmFinalDataPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    retval = AsnWrite(aip, PSSMFINALDATA_h,  &av);
    av.intvalue = ptr -> scalingFactor;
    retval = AsnWrite(aip, PSSMFINALDATA_scalingFactor,  &av);
+   av.realvalue = ptr -> lambdaUngapped;
+   retval = AsnWrite(aip, PSSMFINALDATA_lambdaUngapped,  &av);
+   av.realvalue = ptr -> kappaUngapped;
+   retval = AsnWrite(aip, PSSMFINALDATA_kappaUngapped,  &av);
+   av.realvalue = ptr -> hUngapped;
+   retval = AsnWrite(aip, PSSMFINALDATA_hUngapped,  &av);
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
    }
@@ -684,7 +756,6 @@ PssmParametersAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;
    AsnTypePtr atp;
-   Boolean isError = FALSE;
    AsnReadFunc func;
    PssmParametersPtr ptr;
 
@@ -862,7 +933,6 @@ PssmWithParametersAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;
    AsnTypePtr atp;
-   Boolean isError = FALSE;
    AsnReadFunc func;
    PssmWithParametersPtr ptr;
 
@@ -1029,7 +1099,6 @@ BlockPropertyAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;
    AsnTypePtr atp;
-   Boolean isError = FALSE;
    AsnReadFunc func;
    BlockPropertyPtr ptr;
 
@@ -1391,7 +1460,6 @@ LoopConstraintAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;
    AsnTypePtr atp;
-   Boolean isError = FALSE;
    AsnReadFunc func;
    LoopConstraintPtr ptr;
 
@@ -1723,7 +1791,6 @@ FormatRpsDbParametersAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;
    AsnTypePtr atp;
-   Boolean isError = FALSE;
    AsnReadFunc func;
    FormatRpsDbParametersPtr ptr;
 

@@ -113,8 +113,11 @@
 #define GBQUAL_bio_material     103
 #define GBQUAL_ncRNA_class      104
 #define GBQUAL_tag_peptide      105
+#define GBQUAL_mating_type      106
+#define GBQUAL_satellite        107
+#define GBQUAL_gene_synonym     108
 
-#define ParFlat_TOTAL_GBQUAL    106
+#define ParFlat_TOTAL_GBQUAL    109
 #define ParFlat_TOTAL_IntOr       3
 #define ParFlat_TOTAL_LRB         3
 #define ParFlat_TOTAL_Exp         2

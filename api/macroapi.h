@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11/15/2007
 *
-* $Revision: 1.31 $
+* $Revision: 1.69 $
 *
 * File Description: 
 *
@@ -49,7 +49,9 @@
 extern "C" {
 #endif
 
+NLM_EXTERN FieldTypePtr FieldTypeFromString (CharPtr str);
 NLM_EXTERN Int4 GetFeatdefFromFeatureType (Int4 feature_type);
+NLM_EXTERN Int4 GetFeatureTypeFromFeatdef (Int4 featdef);
 NLM_EXTERN CharPtr GetFeatureNameFromFeatureType (Int4 feature_type);
 NLM_EXTERN Int4 GetFeatureTypeByName (CharPtr feat_name);
 NLM_EXTERN void AddImportFeaturesToChoiceList (ValNodePtr PNTR feature_type_list);
@@ -60,15 +62,21 @@ NLM_EXTERN Int4 GetNumFeatQual (void);
 NLM_EXTERN void AddAllFeatureFieldsToChoiceList (ValNodePtr PNTR field_list);
 NLM_EXTERN CharPtr GetSourceQualName (Int4 srcqual);
 NLM_EXTERN Int4 GetSourceQualTypeByName (CharPtr qualname);
-NLM_EXTERN ValNodePtr GetSourceQualList (void);
+NLM_EXTERN Int4 GetSrcQualFromSubSrcOrOrgMod (Int4 qual, Boolean is_org_mod);
+NLM_EXTERN ValNodePtr GetSourceQualList (Boolean for_remove);
 NLM_EXTERN Boolean IsNonTextSourceQual (Int4 srcqual);
+NLM_EXTERN Boolean IsNonTextFieldType (FieldTypePtr field);
 NLM_EXTERN Int4 GenomeFromSrcLoc (Int4 srcloc);
+NLM_EXTERN Int4 SrcLocFromGenome (Int4 genome);
 NLM_EXTERN CharPtr LocNameFromGenome (Int4 genome);
+NLM_EXTERN Int4 GenomeFromLocName (CharPtr loc_name);
 NLM_EXTERN ValNodePtr GetLocationList (Boolean for_remove); 
 NLM_EXTERN Int4 OriginFromSrcOrig (Int4 srcorig);
 NLM_EXTERN CharPtr OriginNameFromOrigin (Int4 origin);
 NLM_EXTERN ValNodePtr GetOriginList (Boolean for_remove);
 NLM_EXTERN BioSourcePtr GetBioSourceFromObject (Uint1 choice, Pointer data);
+NLM_EXTERN ValNodePtr GetSourceQualSampleFieldList (SeqEntryPtr sep);
+NLM_EXTERN ValNodePtr GetSourceQualSampleFieldListForSeqEntryList (ValNodePtr list);
 NLM_EXTERN CharPtr CDSGeneProtNameFromField (Int4 field); 
 NLM_EXTERN CharPtr CDSGeneProtFeatureNameFromFeatureType (Int4 feature_type);
 NLM_EXTERN void AddAllCDSGeneProtFieldsToChoiceList (ValNodePtr PNTR field_list);
@@ -93,12 +101,26 @@ NLM_EXTERN ValNodePtr GetTopologyTypeList (void);
 NLM_EXTERN Int4 StrandFromStrandType (Int4 strand_type);
 NLM_EXTERN CharPtr StrandNameFromStrand (Int4 strand);
 NLM_EXTERN ValNodePtr GetStrandTypeList (void);
+NLM_EXTERN Int4 Asn1BondTypeFromMacroBondType (Int4 macro_bond_type);
+NLM_EXTERN Int4 MacroBondTypeFromAsn1BondType (Int4 asn1_bond_type); 
+NLM_EXTERN CharPtr GetMacroBondTypeName (Int4 macro_bond_type);
+NLM_EXTERN ValNodePtr GetBondTypeList (void);
+NLM_EXTERN Int4 Asn1SiteTypeFromMacroSiteType (Int4 macro_site_type);
+NLM_EXTERN Int4 MacroSiteTypeFromAsn1SiteType (Int4 asn1_site_type); 
+NLM_EXTERN CharPtr GetMacroSiteTypeName (Int4 macro_site_type);
+NLM_EXTERN ValNodePtr GetSiteTypeList (void);
 
 
 
 NLM_EXTERN FieldTypePtr GetFromFieldFromFieldPair (FieldPairTypePtr fieldpair);
 NLM_EXTERN FieldTypePtr GetToFieldFromFieldPair (FieldPairTypePtr fieldpair);
+NLM_EXTERN FieldPairTypePtr BuildFieldPairFromFromField (FieldTypePtr field_from);
 NLM_EXTERN Uint1 FieldTypeFromAECRAction (AECRActionPtr action);
+NLM_EXTERN Uint1 FieldTypeChoiceFromFieldPairTypeChoice (Uint1 field_pair_choice);
+NLM_EXTERN Int2 FeatureTypeFromFieldType (FieldTypePtr field);
+NLM_EXTERN Int4 GetFeatureTypeForRnaType (Int4 rnatype);
+NLM_EXTERN int CompareFieldTypes (FieldTypePtr vnp1, FieldTypePtr vnp2);
+NLM_EXTERN Boolean AreAECRActionFieldsEqual (AECRActionPtr action1, AECRActionPtr action2);
 NLM_EXTERN Uint1 GetBiomolForRnaType (Int4 rnatype);
 NLM_EXTERN CharPtr GetBiomolNameForRnaType (Int4 rnatype);
 NLM_EXTERN void AddAllRNASubtypesToChoiceList (ValNodePtr PNTR field_list);
@@ -106,36 +128,93 @@ NLM_EXTERN void AddAllRNASubtypesToChoiceList (ValNodePtr PNTR field_list);
 NLM_EXTERN CharPtr GetSourceQualFromBioSource (BioSourcePtr biop, SourceQualChoicePtr scp, StringConstraintPtr constraint);
 NLM_EXTERN CharPtr GetQualFromFeature (SeqFeatPtr sfp, FeatureFieldPtr field, StringConstraintPtr scp);
 NLM_EXTERN Boolean SetSourceQualInBioSource (BioSourcePtr biop, SourceQualChoicePtr scp, StringConstraintPtr constraint, CharPtr value, Uint2 existing_text);
+NLM_EXTERN Boolean RemoveSourceQualFromBioSource (BioSourcePtr biop, SourceQualChoicePtr scp, StringConstraintPtr constraint);
+NLM_EXTERN Boolean AllowSourceQualMulti (SourceQualChoicePtr s);
 
+
+/* RNA-field functions */
+NLM_EXTERN ValNodePtr GetRNATypeList (void);
+NLM_EXTERN ValNodePtr GetRnaFieldList (void);
+NLM_EXTERN CharPtr GetNameForRnaField (Int4 rnafield);
+NLM_EXTERN CharPtr SummarizeRnaType (RnaFeatTypePtr rt);
+NLM_EXTERN FeatureFieldPtr FeatureFieldFromRnaQual (RnaQualPtr rq);
+NLM_EXTERN RnaQualPtr RnaQualFromFeatureField (FeatureFieldPtr ffp);
+
+NLM_EXTERN CharPtr GetPubFieldLabel (Int4 pub_field);
+NLM_EXTERN ValNodePtr GetPubFieldList (void);
+
+NLM_EXTERN Boolean SetStringValue (CharPtr PNTR existing_val, CharPtr new_val, Uint2 existing_text);
 
 NLM_EXTERN Boolean IsStringConstraintEmpty (StringConstraintPtr scp);
 NLM_EXTERN Boolean DoesSingleStringMatchConstraint (CharPtr str, StringConstraintPtr scp);
 NLM_EXTERN Boolean DoesStringMatchConstraint (CharPtr str, StringConstraintPtr scp);
+NLM_EXTERN Boolean RemoveStringConstraintPortionFromString (CharPtr PNTR str, StringConstraintPtr scp);
 NLM_EXTERN Boolean IsSourceConstraintEmpty (SourceConstraintPtr scp);
 NLM_EXTERN Boolean DoesBiosourceMatchConstraint (BioSourcePtr biop, SourceConstraintPtr scp);
 NLM_EXTERN Boolean IsSequenceConstraintEmpty (SequenceConstraintPtr constraint);
+NLM_EXTERN Boolean IsPublicationConstraintEmpty (PublicationConstraintPtr constraint);
+NLM_EXTERN Boolean IsFieldConstraintEmpty (FieldConstraintPtr constraint);
 NLM_EXTERN Boolean IsCDSGeneProtQualConstraintEmpty (CDSGeneProtQualConstraintPtr constraint);
+NLM_EXTERN Boolean IsLocationConstraintEmpty (LocationConstraintPtr lcp);
+NLM_EXTERN Boolean DoesObjectMatchConstraintChoiceSet (Uint1 choice, Pointer data, ConstraintChoiceSetPtr csp);
+NLM_EXTERN ValNodePtr FreeObjectList (ValNodePtr vnp);
 NLM_EXTERN ValNodePtr GetObjectListForAECRAction (SeqEntryPtr sep, AECRActionPtr action);
-NLM_EXTERN Int4 DoApplyActionToObjectList (ApplyActionPtr action, ValNodePtr object_list, StringConstraintPtr scp);
-NLM_EXTERN Int4 DoEditActionToObjectList (EditActionPtr action, ValNodePtr object_list);
-NLM_EXTERN Int4 DoConvertActionToObjectList (ConvertActionPtr action, ValNodePtr object_list, StringConstraintPtr scp);
-NLM_EXTERN Int4 DoCopyActionToObjectList (CopyActionPtr action, ValNodePtr object_list, StringConstraintPtr scp);
-NLM_EXTERN Int4 DoSwapActionToObjectList (SwapActionPtr action, ValNodePtr object_list, StringConstraintPtr scp);
-NLM_EXTERN Int4 DoRemoveActionToObjectList (RemoveActionPtr action, ValNodePtr object_list, StringConstraintPtr scp);
-NLM_EXTERN Int4 DoParseActionToObjectList (AECRParseActionPtr action, ValNodePtr object_list, StringConstraintPtr scp);
+NLM_EXTERN ValNodePtr GetObjectListForFieldType (Uint1 field_type, SeqEntryPtr sep);
+NLM_EXTERN Int4 DoApplyActionToObjectList (ApplyActionPtr action, ValNodePtr object_list, Boolean also_change_mrna, StringConstraintPtr scp);
+NLM_EXTERN Int4 DoEditActionToObjectList (EditActionPtr action, ValNodePtr object_list, Boolean also_change_mrna);
+NLM_EXTERN Int4 DoConvertActionToObjectList (ConvertActionPtr action, ValNodePtr object_list, Boolean also_change_mrna, StringConstraintPtr scp);
+NLM_EXTERN Int4 DoCopyActionToObjectList (CopyActionPtr action, ValNodePtr object_list, Boolean also_change_mrna, StringConstraintPtr scp);
+NLM_EXTERN Int4 DoSwapActionToObjectList (SwapActionPtr action, ValNodePtr object_list, Boolean also_change_mrna, StringConstraintPtr scp);
+NLM_EXTERN Int4 DoRemoveActionToObjectList (RemoveActionPtr action, ValNodePtr object_list, Boolean also_change_mrna, StringConstraintPtr scp);
+NLM_EXTERN Int4 DoParseActionToObjectList (AECRParseActionPtr action, ValNodePtr object_list, Boolean also_change_mrna, StringConstraintPtr scp);
 NLM_EXTERN StringConstraintPtr FindStringConstraintInConstraintSetForField (FieldTypePtr field, ConstraintChoiceSetPtr csp);
+NLM_EXTERN StringConstraintPtr FindStringConstraintInConstraintSetForFieldPair (FieldPairTypePtr fieldpair, ConstraintChoiceSetPtr csp);
 NLM_EXTERN StringConstraintPtr StringConstraintFromFieldEdit (FieldEditPtr edit);
 
+NLM_EXTERN Boolean IsConversionSupported (Uint2 featdef_from, Uint2 featdef_to);
+
+NLM_EXTERN CharPtr GetTextPortionFromString (CharPtr str, TextPortionPtr text_portion);
 
 
+typedef struct aecrsample {
+  FieldTypePtr field;
+  CharPtr first_value;
+  Int4    num_found;
+  Boolean all_same;
+} AECRSampleData, PNTR AECRSamplePtr;
+
+NLM_EXTERN AECRSamplePtr AECRSampleFree (AECRSamplePtr sample);
+
+NLM_EXTERN ValNodePtr AECRSampleListFree (ValNodePtr list);
+NLM_EXTERN ValNodePtr GetAECRSampleListForSeqEntry (Uint1 field_type, SeqEntryPtr sep);
+NLM_EXTERN ValNodePtr GetAECRSampleList (AECRActionPtr act, SeqEntryPtr sep);
+NLM_EXTERN AECRSamplePtr GetFieldSampleFromList (ValNodePtr list, FieldTypePtr field);
+NLM_EXTERN void GetAECRExistingTextList (Uint1 field_type, SeqEntryPtr sep, FILE *fp);
+NLM_EXTERN AECRSamplePtr GetAECRSampleFromObjectList (ValNodePtr object_list, FieldTypePtr field);
+NLM_EXTERN void ExportFieldTable (Uint1 field_type, ValNodePtr src_field_list, SeqEntryPtr sep, FILE *fp);
+
+NLM_EXTERN ValNodePtr GetFieldListForFieldType (Uint1 field_type, SeqEntryPtr sep);
+
+NLM_EXTERN ValNodePtr GetSourceQualFieldListFromBioSource (BioSourcePtr biop);
+NLM_EXTERN void SortUniqueFieldTypeList (ValNodePtr PNTR field_list);
+NLM_EXTERN ValNodePtr LIBCALLBACK FieldTypeListFree (ValNodePtr list);
+NLM_EXTERN ValNodePtr LIBCALLBACK FieldTypeListCopy (ValNodePtr orig);
+
+NLM_EXTERN void ApplyMolinfoBlockToSeqEntry (SeqEntryPtr sep, MolinfoBlockPtr mib);
 
 NLM_EXTERN void ApplyMacroToSeqEntry (SeqEntryPtr sep, ValNodePtr macro, Int4Ptr pNumFields, Int4Ptr pNumFeat);
 
 /* for generating text representations of macro objects */
 NLM_EXTERN CharPtr SummarizeSourceQual (ValNodePtr field);
 NLM_EXTERN CharPtr FeatureFieldLabel (CharPtr feature_name, ValNodePtr field);
+NLM_EXTERN Boolean IsFeatureFieldEmpty (FeatureFieldPtr field);
 NLM_EXTERN Boolean IsFieldTypeEmpty (FieldTypePtr field);
 NLM_EXTERN CharPtr SummarizeFieldType (ValNodePtr vnp);
+NLM_EXTERN Boolean AllowFieldMulti (FieldTypePtr field);
+
+NLM_EXTERN CharPtr GetFieldValueForObject (Uint1 choice, Pointer data, FieldTypePtr field, StringConstraintPtr scp);
+NLM_EXTERN Boolean SetFieldValueForObject (Uint1 choice, Pointer data, FieldTypePtr field, StringConstraintPtr scp, CharPtr value, Uint2 existing_text);
+NLM_EXTERN BioseqPtr GetSequenceForObject (Uint1 choice, Pointer data);
 
 typedef enum {
   eTableMatchFeatureID = 1,
@@ -143,18 +222,28 @@ typedef enum {
   eTableMatchProteinID,
   eTableMatchDbxref,
   eTableMatchNucID,
-  eTableMatchBioSource
+  eTableMatchBioSource,
+  eTableMatchSourceQual
 } ETableMatchType;
 
 
+typedef struct matchtype {
+  Uint1   choice;
+  Pointer data;
+  Uint1   match_location;
+} MatchTypeData, PNTR MatchTypePtr;
 
 typedef struct tabcolumnconfig {
-  Uint2 match_type;
+  MatchTypePtr match_type;
   FieldTypePtr field;
   Uint2 existing_text;
   Boolean skip_blank;
   Boolean match_mrna;
+  ValNodePtr constraint;
 } TabColumnConfigData, PNTR TabColumnConfigPtr;
+
+NLM_EXTERN MatchTypePtr MatchTypeNew ();
+NLM_EXTERN MatchTypePtr MatchTypeFree (MatchTypePtr match_type);
 
 NLM_EXTERN TabColumnConfigPtr TabColumnConfigNew (void);
 NLM_EXTERN TabColumnConfigPtr TabColumnConfigFree (TabColumnConfigPtr t);
@@ -165,6 +254,8 @@ NLM_EXTERN ValNodePtr ValidateTabTableValues (ValNodePtr table, ValNodePtr colum
 NLM_EXTERN ValNodePtr ValidateFeatureFieldColumnNames (ValNodePtr header_line, ValNodePtr PNTR perr_list);
 NLM_EXTERN ValNodePtr FreeObjectTableForTabTable (ValNodePtr table);
 NLM_EXTERN ValNodePtr GetObjectTableForTabTable (SeqEntryPtr sep, ValNodePtr table, ValNodePtr columns, ValNodePtr PNTR p_err_list);
+NLM_EXTERN ValNodePtr GetSequenceListsForMatchTypeInTabTable (SeqEntryPtr sep, ValNodePtr table, Int4 col, MatchTypePtr match_type, ValNodePtr PNTR p_err_list);
+NLM_EXTERN ValNodePtr FreeSequenceLists (ValNodePtr lists);
 NLM_EXTERN ValNodePtr ApplyTableValuesToObjectTable (SeqEntryPtr sep, ValNodePtr table, ValNodePtr columns, ValNodePtr obj_table);
 NLM_EXTERN ValNodePtr CheckObjTableForRowsThatApplyToTheSameDestination (ValNodePtr obj_table);
 NLM_EXTERN ValNodePtr CheckObjTableForExistingText (SeqEntryPtr sep, ValNodePtr table, ValNodePtr columns, ValNodePtr obj_table);
@@ -176,6 +267,14 @@ NLM_EXTERN SeqFeatPtr GetmRNAForFeature (SeqFeatPtr sfp);
 NLM_EXTERN Boolean AdjustmRNAProductToMatchProteinProduct (SeqFeatPtr sfp);
 NLM_EXTERN Boolean IsFieldTypeCDSProduct (FieldTypePtr ft);
 
+NLM_EXTERN ValNodePtr GetPublicationTitlesInSep (SeqEntryPtr sep);
+NLM_EXTERN ValNodePtr GetBankitCommentsInSep (SeqEntryPtr sep);
+NLM_EXTERN ValNodePtr GetPublicationTitlesOnSep (SeqEntryPtr sep);
+NLM_EXTERN ValNodePtr GetBankitCommentsOnSep (SeqEntryPtr sep);
+
+NLM_EXTERN BioseqPtr GetRepresentativeBioseqFromBioseqSet (BioseqSetPtr bssp);
+
+NLM_EXTERN ValNodePtr ValNodeCopyPtr (ValNodePtr orig);
 
 #ifdef __cplusplus 
 } 

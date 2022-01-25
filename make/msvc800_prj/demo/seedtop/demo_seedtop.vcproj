@@ -3,7 +3,7 @@
 	ProjectType="Visual C++"
 	Version="8.00"
 	Name="demo_seedtop"
-	ProjectGUID="{136554B9-6A33-46F2-9595-5B3E90A00553}"
+	ProjectGUID="{1A6DA26C-BF6B-414F-BCF1-93FFE9C05CB6}"
 	>
 	<Platforms>
 		<Platform

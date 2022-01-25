@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_FTP_CONNECTOR__H
 #define CONNECT___NCBI_FTP_CONNECTOR__H
 
-/*  $Id: ncbi_ftp_connector.h,v 1.2 2005/05/18 18:17:02 lavr Exp $
+/* $Id: ncbi_ftp_connector.h,v 1.3 2008/10/16 18:55:44 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -52,11 +52,17 @@ extern "C" {
 
 
 typedef enum {
-    eFCDC_LogControl = 1,
-    eFCDC_LogData    = 2,
-    eFCDC_LogAll     = eFCDC_LogControl | eFCDC_LogData
+    fFCDC_LogControl = 1,
+    fFCDC_LogData    = 2,
+    fFCDC_LogAll     = fFCDC_LogControl | fFCDC_LogData
 } EFCDC_Flags;
 typedef unsigned int TFCDC_Flags;
+
+typedef enum { /* DEPRECATED -- DON'T USE */
+    eFCDC_LogControl = fFCDC_LogControl,
+    eFCDC_LogData    = fFCDC_LogData,
+    eFCDC_LogAll     = fFCDC_LogAll
+} EFCDC_OldFlags;
 
 
 /* Create new CONNECTOR structure to handle ftp download transfer.
@@ -78,18 +84,5 @@ extern NCBI_XCONNECT_EXPORT CONNECTOR FTP_CreateDownloadConnector
 
 
 /* @} */
-
-
-/*
- * --------------------------------------------------------------------------
- * $Log: ncbi_ftp_connector.h,v $
- * Revision 1.2  2005/05/18 18:17:02  lavr
- * Add EFCDC_Flags and TFCDC_Flags to better control underlying SOCK logs
- *
- * Revision 1.1  2004/12/06 17:48:19  lavr
- * Initial revision
- *
- * ==========================================================================
- */
 
 #endif /* CONNECT___NCBI_FTP_CONNECTOR__H */

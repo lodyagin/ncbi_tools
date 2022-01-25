@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_SERVICEP__H
 #define CONNECT___NCBI_SERVICEP__H
 
-/*  $Id: ncbi_servicep.h,v 6.43 2007/04/20 01:55:30 kazimird Exp $
+/*  $Id: ncbi_servicep.h,v 6.45 2008/05/31 11:25:47 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -162,14 +162,17 @@ extern NCBI_XCONNECT_EXPORT int/*bool*/ SERV_Update
 
 /* Private interface: print and return the HTTP-compliant header portion
  * (<CR><LF> separated lines, including the last line) out of the information
- * contained in the iterator; to be used in mapping requests to DISPD.
+ * contained in the iterator;  to be used in mapping requests to DISPD.
  * Also, if "net_info" is non-NULL and "net_info->http_referer" is NULL,
- * then fill out "net_info->http_referer" appropriately.
- * Return value must be 'free'd.
+ * then fill out "net_info->http_referer" accordingly.  "but_last" controls
+ * whether the currently taken info appears as the info to skip over
+ * (by the dispatcher) ["but_last"==0], or as just being used
+ * ["but_last"==1].  Return value must be 'free'd.
  */
 extern NCBI_XCONNECT_EXPORT char* SERV_Print
 (SERV_ITER     iter,
- SConnNetInfo* net_info
+ SConnNetInfo* net_info,
+ int/*bool*/   but_last
  );
 
 
@@ -192,9 +195,9 @@ extern NCBI_XCONNECT_EXPORT char* SERV_ServiceName(const char* service);
  * acceptable stretch for the gap (the number of candidates is n).
  */
 extern NCBI_XCONNECT_EXPORT double SERV_Preference
-(double       pref,
- double       gap,
- unsigned int n
+(double pref,
+ double gap,
+ size_t n
  );
 
 

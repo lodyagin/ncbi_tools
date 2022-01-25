@@ -1,4 +1,4 @@
-/*  $Id: test_ncbi_dsock.c,v 6.19 2006/11/27 21:33:44 lavr Exp $
+/* $Id: test_ncbi_dsock.c,v 6.21 2008/10/20 16:55:43 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -334,32 +334,26 @@ static int s_Client(int x_port, unsigned int max_try)
 
 int main(int argc, const char* argv[])
 {
-    unsigned long seed;
-    unsigned int  max_try = DEF_CONN_MAX_TRY;
-    const char*   env = getenv("CONN_DEBUG_PRINTOUT");
+    SConnNetInfo* net_info;
 
     CORE_SetLOGFormatFlags(fLOG_None          | fLOG_Level   |
                            fLOG_OmitNoteLevel | fLOG_DateTime);
     CORE_SetLOGFILE(stderr, 0/*false*/);
 
-    if (argc < 2 || argc > 5)
+    if (argc < 2  ||  argc > 5)
         return s_Usage(argv[0]);
 
     if (argc <= 4)
-        seed = (int) time(0) ^ NCBI_CONNECT_SRAND_ADDEND;
+        g_NCBI_ConnectRandomSeed = (int) time(0) ^ NCBI_CONNECT_SRAND_ADDEND;
     else
-        sscanf(argv[4], "%lu", &seed);
-    CORE_LOGF(eLOG_Note, ("Random SEED = %lu", seed));
-    g_NCBI_ConnectRandomSeed = seed;
+        g_NCBI_ConnectRandomSeed = atoi(argv[4]);
+    CORE_LOGF(eLOG_Note, ("Random SEED = %u", g_NCBI_ConnectRandomSeed));
     srand(g_NCBI_ConnectRandomSeed);
 
-    if (env && (strcasecmp(env, "1") == 0     ||
-                strcasecmp(env, "yes") == 0   ||
-                strcasecmp(env, "true") == 0  ||
-                strcasecmp(env, "some") == 0  ||
-                strcasecmp(env, "data") == 0)) {
+    assert((net_info = ConnNetInfo_Create(0)) != 0);
+    if (net_info->debug_printout != eDebugPrintout_None)
         SOCK_SetDataLoggingAPI(eOn);
-    }
+    ConnNetInfo_Destroy(net_info);
 
     if (argc > 3) {
         int mtu = atoi(argv[3]);
@@ -367,78 +361,12 @@ int main(int argc, const char* argv[])
             s_MTU = mtu - 32/*small protocol (IP/UDP) overhead*/;
     }
 
-    if (!(env = getenv("CONN_MAX_TRY"))  ||  !(max_try = atoi(env)))
-        max_try = DEF_CONN_MAX_TRY;
-
-    if (strcasecmp(argv[1], "client") == 0)
-        return s_Client(argv[2] ? atoi(argv[2]) : DEFAULT_PORT, max_try);
-
+    if (strcasecmp(argv[1], "client") == 0) {
+        return s_Client(argv[2] ? atoi(argv[2]) : DEFAULT_PORT,
+                        net_info->max_try);
+    }
     if (strcasecmp(argv[1], "server") == 0)
         return s_Server(argv[2] ? atoi(argv[2]) : DEFAULT_PORT);
 
     return s_Usage(argv[0]);
 }
-
-
-/*
- * --------------------------------------------------------------------------
- * $Log: test_ncbi_dsock.c,v $
- * Revision 6.19  2006/11/27 21:33:44  lavr
- * Lower MAX_DGRAM_SIZE for Linux (i686 seems to fail on former default 65000)
- *
- * Revision 6.18  2006/01/27 17:12:10  lavr
- * Replace obsolete call names with current ones
- *
- * Revision 6.17  2005/07/11 18:24:36  lavr
- * Spell ADDEND
- *
- * Revision 6.16  2005/05/02 16:12:27  lavr
- * Use global random seed
- *
- * Revision 6.15  2005/01/05 21:33:58  lavr
- * Introduce MTU and use it on AMD-64 buggy kernels
- *
- * Revision 6.14  2003/12/11 15:34:29  lavr
- * Lower maximal datagram size for Linux - 65535 didn't seem to work everywhere
- *
- * Revision 6.13  2003/12/10 17:24:16  lavr
- * Reattempt to send/receive a datagram on I/O errors in client
- *
- * Revision 6.12  2003/10/27 19:00:32  lavr
- * Limit datagram size for Darwin (which is BSD based)
- *
- * Revision 6.11  2003/05/29 18:03:06  lavr
- * Changed one client's message
- *
- * Revision 6.10  2003/05/14 03:58:43  lavr
- * Match changes in respective APIs of the tests
- *
- * Revision 6.9  2003/04/30 17:04:01  lavr
- * Conformance to slightly modified datagram socket API
- *
- * Revision 6.8  2003/03/25 15:07:21  lavr
- * Protect macros' values by enclosing in parentheses
- *
- * Revision 6.7  2003/03/25 15:04:13  lavr
- * Add IRIX-specific datagram size limit (60K)
- *
- * Revision 6.6  2003/02/28 14:46:36  lavr
- * Explicit casts for malloc()'ed memory
- *
- * Revision 6.5  2003/02/14 15:41:26  lavr
- * Limit packet size on OSF1, too
- *
- * Revision 6.4  2003/02/06 04:34:28  lavr
- * Do not exceed maximal dgram size on BSD; trickier readout in s_Server()
- *
- * Revision 6.3  2003/02/04 22:04:47  lavr
- * Protection from truncation to 0 in double->int conversion
- *
- * Revision 6.2  2003/01/17 01:26:44  lavr
- * Test improved/extended
- *
- * Revision 6.1  2003/01/16 16:33:06  lavr
- * Initial revision
- *
- * ==========================================================================
- */

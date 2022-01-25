@@ -1,5 +1,5 @@
 #! /bin/sh
-# $Id: install.sh,v 1.3 2007/01/29 14:45:38 ivanov Exp $
+# $Id: install.sh,v 1.4 2008/03/17 18:24:19 ivanov Exp $
 # Authors:  Denis Vakatov    (vakatov@ncbi.nlm.nih.gov)
 #           Vladimir Ivanov  (ivanov@ncbi.nlm.nih.gov)
 #           Anton Lavrentiev (lavr@ncbi.nlm.nih.gov)
@@ -11,7 +11,9 @@
 script="$0"
 builddir="${1:-//u/coremake/ncbi}"
 target="${2:-//u/coremake/public/ncbi.last}"
-arg_arch=${3:-32}
+compiler="${3:-msvc800}"
+compiler="${compiler}_prj"
+arg_arch=${4:-32}
 arch=''
 test "$arg_arch" = "64"  &&  arch="x64/"
 
@@ -211,11 +213,11 @@ cp -p "$builddir"/network/vibnet/*.h            "$incdir"
 for i in 'Debug' 'Release' ; do
   for j in '' 'DLL' ; do
     cfg="$arch$i$j"
-    if test -d "$builddir"/make/msvc800_prj/corelib/ncbi/$cfg ; then
+    if test -d "$builddir"/make/$compiler/corelib/ncbi/$cfg ; then
       # Object files
       makedir "$target/$i$j" -p
-      cp -p "$builddir"/make/msvc800_prj/corelib/ncbimain/$cfg/ncbimain.obj "$target/$i$j"
-      cp -p "$builddir"/make/msvc800_prj/corelib/ncbi/$cfg/ncbithr.obj      "$target/$i$j"
+      cp -p "$builddir"/make/$compiler/corelib/ncbimain/$cfg/ncbimain.obj "$target/$i$j"
+      cp -p "$builddir"/make/$compiler/corelib/ncbi/$cfg/ncbithr.obj      "$target/$i$j"
       # Libraries
       cp -p `find "$builddir" -name '*.lib' | grep "$cfg/"` "$target/$i$j"
     fi
@@ -224,7 +226,7 @@ done
 
 # Executables (one of ReleaseDLL, Release)
 for i in 'DLL' '' ; do
-  if test -d "$builddir"/make/msvc800_prj/corelib/ncbi/${arch}Release$i ; then
+  if test -d "$builddir"/make/$compiler/corelib/ncbi/${arch}Release$i ; then
     cp -p `find "$builddir" -name '*.exe' | grep "${arch}Release$i/"` "$bindir"
     break
   fi

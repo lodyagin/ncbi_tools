@@ -1,4 +1,4 @@
-/* $Id: actutils.h,v 6.16 2006/01/03 15:47:25 bollin Exp $
+/* $Id: actutils.h,v 6.17 2008/05/02 18:02:39 bollin Exp $
  *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,19 @@
 *
 * Version Creation Date:   2/00
 *
-* $Revision: 6.16 $
+* $Revision: 6.17 $
 *
 * File Description: utility functions for alignments
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: actutils.h,v $
+* Revision 6.17  2008/05/02 18:02:39  bollin
+* Fixed bug in ACT_CleanUpAlignments - if an alignment span is completely
+* contained in another alignment, remove the contained alignment.
+* Also added a flag to Sqn_GlobalAlign2SeqEx for whether or not the alignment
+* should be expanded to the ends of the sequence.
+*
 * Revision 6.16  2006/01/03 15:47:25  bollin
 * allow alignment callback for ACT_FindPiece so that it can use the new BLAST
 * library
@@ -220,7 +226,16 @@ typedef SeqAlignPtr (LIBCALLBACK *GetAlignmentFunc) (BioseqPtr bsp1, BioseqPtr b
 typedef SeqAlignPtr (LIBCALLBACK *GetAlignmentPieceFunc) (SeqLocPtr bsp1, SeqLocPtr bsp2);
 
 NLM_EXTERN SeqAlignPtr ACT_FindPiece(BioseqPtr bsp1, BioseqPtr bsp2, Int4 start1, Int4 stop1, Int4 start2, Int4 stop2, Uint1 strand, Int4 which_side, GetAlignmentPieceFunc aln_piece_func);
-NLM_EXTERN SeqAlignPtr Sqn_GlobalAlign2SeqEx (BioseqPtr bsp1, BioseqPtr bsp2, BoolPtr revcomp, GetAlignmentFunc aln_func, GetAlignmentPieceFunc aln_piece_func);
+NLM_EXTERN SeqAlignPtr 
+Sqn_GlobalAlign2SeqEx 
+(BioseqPtr bsp1,
+ BioseqPtr bsp2,
+ BoolPtr revcomp,
+ GetAlignmentFunc aln_func,
+ GetAlignmentPieceFunc aln_piece_func,
+ Boolean extend_ends);
+
+
 
 /***************************************************************************
 *

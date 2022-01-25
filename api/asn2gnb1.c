@@ -28,11 +28,10 @@
 * Author:  Karl Sirotkin, Tom Madden, Tatiana Tatusov, Jonathan Kans,
 *          Mati Shomrat
 *
-* $Id: asn2gnb1.c,v 1.139 2007/12/04 18:55:29 kans Exp $
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.139 $
+* $Revision: 1.162 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -64,6 +63,8 @@
 #include <Profiler.h>
 #endif
 #endif
+
+static Boolean FFIsStartOfLinkEx (StringItemPtr iter, Int4 pos, Int4Ptr lenP);
 
 /* utility functions */
 
@@ -186,7 +187,8 @@ NLM_EXTERN void FFAddString_NoRedund (
   StringItemPtr unique,
   CharPtr prefix,
   CharPtr string,
-  CharPtr suffix
+  CharPtr suffix,
+  Boolean convertQuotes
 )
 {
   CharPtr    str = string;
@@ -210,7 +212,7 @@ NLM_EXTERN void FFAddString_NoRedund (
   }
 
   if ( foundPos < 0 || !wholeWord ) {
-      FFAddTextToString(unique, prefix, string, suffix, FALSE, FALSE, TILDE_IGNORE);
+      FFAddTextToString(unique, prefix, string, suffix, FALSE, convertQuotes, TILDE_IGNORE);
   }
 }
 
@@ -480,6 +482,25 @@ NLM_EXTERN void FFExpandTildes (StringItemPtr sip, CharPtr PNTR cpp) {
 }
 
 
+NLM_EXTERN void FFSemicolonSeparateTildes (StringItemPtr sip, CharPtr PNTR cpp)
+
+{
+  Char replace = **cpp;
+
+  if ( **cpp == '~' ) {
+    if ( *((*cpp) + 1) == '~' ) {     /* "~~" -> '~' */
+      replace = '~';
+      (*cpp)++;
+    } else {
+      FFAddOneChar(sip, ';', FALSE);
+      replace = '\n';
+    }
+  } 
+
+  FFAddOneChar(sip, replace, FALSE);
+}
+
+
 NLM_EXTERN void FFReplaceTildesWithSpaces (StringItemPtr ffstring, CharPtr PNTR cpp) {
   Char replace = **cpp, lookahead;
   CharPtr cptr = *cpp;
@@ -617,6 +638,10 @@ NLM_EXTERN void FFProcessTildes (StringItemPtr sip, CharPtr PNTR cpp, Int2 tilde
       FFExpandTildes(sip, cpp);
       break;
 
+  case TILDE_SEMICOLON :
+      FFSemicolonSeparateTildes(sip, cpp);
+      break;
+
   case TILDE_OLD_EXPAND :
       FFOldExpand(sip, cpp);
       break;
@@ -680,16 +705,27 @@ NLM_EXTERN void FFAddOneString (
 )
 {
   CharPtr strp = string;
+  Char ch;
+  Char prevchar = '\0';
 
   if ( string == NULL ) return;
-  
-  while ( *strp != '\0' ) {
-    if ( (*strp == '`') || (*strp == '~') ) {
-      FFProcessTildes(sip, &strp, tildeAction);
+
+  ch = *strp;
+  while ( ch != '\0' ) {
+    if ( (ch == '`') || (ch == '~') ) {
+      if (tildeAction == TILDE_SEMICOLON && prevchar == ';') {
+        FFProcessTildes(sip, &strp, TILDE_EXPAND);
+      } else if (tildeAction == TILDE_SEMICOLON && prevchar == ' ') {
+        FFProcessTildes(sip, &strp, TILDE_EXPAND);
+      } else {
+        FFProcessTildes(sip, &strp, tildeAction);
+      }
     } else {
-      FFAddOneChar(sip, *strp, convertQuotes);
+      FFAddOneChar(sip, ch, convertQuotes);
     }
+    prevchar = ch;
     strp++;
+    ch = *strp;
   }
 
   if ( addPeriod ) {
@@ -704,9 +740,9 @@ NLM_EXTERN void FFCatenateSubString (
   Uint4 line_max
 )
 {
-  Int4 max_i, min_i, i;
+  Int4 max_i, min_i, i, len = 0;
   StringItemPtr current;
-  Boolean in_url = FALSE;
+  Boolean in_url = FALSE, found_start = FALSE;
   IntAsn2gbJobPtr ajp = (IntAsn2gbJobPtr)dest->iajp;
   Uint4 char_count = 0;
 
@@ -734,13 +770,14 @@ NLM_EXTERN void FFCatenateSubString (
         if ( ! in_url ) {
           if ( current->buf[i] == '<' ) {
             /* Watch out! */
-            if ( !FFIsStartOfLink(current, i) ) {
-              FFAddOneString(dest, "&lt;", FALSE, FALSE, TILDE_IGNORE);
-              ++char_count;
-              continue;
-            } else {
+            if (FFIsStartOfLinkEx (current, i, &len)) {
               FFAddOneChar(dest, '<', FALSE);
               in_url = TRUE;
+              found_start = TRUE;
+              continue;
+            } else {
+              FFAddOneString(dest, "&lt;", FALSE, FALSE, TILDE_IGNORE);
+              ++char_count;
               continue;
             }
           }
@@ -758,12 +795,26 @@ NLM_EXTERN void FFCatenateSubString (
           /* Common garden variety of character */
           FFAddOneChar(dest, current->buf[i], FALSE);
           ++char_count;
+
+          if (found_start && len > 0) {
+            len--;
+            if (len == 0) {
+              FFAddOneChar(dest, '"', FALSE);
+              found_start = FALSE;
+            }
+          }
         }
 
         else /* in_url */ {
+          if ( current->buf[i] == '&' ) {
+            /* encode ampersand for XHMLT */
+            FFAddOneString(dest, "&amp;", FALSE, FALSE, TILDE_IGNORE);
+            continue;
+          }  
           if ( current->buf[i] == '>' ) {
             FFAddOneChar(dest, '>', FALSE);
             in_url = FALSE;
+            found_start = FALSE;
             continue;
           }
 
@@ -817,10 +868,13 @@ NLM_EXTERN CharPtr FFToCharPtr (StringItemPtr sip) {
 static CharPtr url_anchor_strings [] = {
   "</A>",
   "<A HREF=/",
+  "<A HREF=\"/",
   "<A HREF=FTP://",
   "<A HREF=MAILTO:",
   "<A HREF=HTTP://",
   "<A HREF=HTTPS://",
+  "<A HREF=\"HTTP://",
+  "<A HREF=\"HTTPS://",
   NULL
 };
 
@@ -885,15 +939,15 @@ NLM_EXTERN void FFSkipLink (StringItemPtr PNTR iterp, Int4Ptr ip) {
   *ip = i;
 }
 
-NLM_EXTERN Boolean FFIsStartOfLink (StringItemPtr iter, Int4 pos)
+static Boolean FFIsStartOfLinkEx (StringItemPtr iter, Int4 pos, Int4Ptr lenP)
 
 {
   Char        ch;
   TextFsaPtr  fsa;
-  Int2        i;
+  Int4        i;
   ValNodePtr  matches;
-  Int2        max_url_len;
-  Int2        state = 0;
+  Int4        max_url_len;
+  Int4        state = 0;
 
   if ( iter == NULL || pos >= iter->pos ) return FALSE;
   if ( iter->buf [pos] != '<' ) return FALSE;
@@ -907,7 +961,12 @@ NLM_EXTERN Boolean FFIsStartOfLink (StringItemPtr iter, Int4 pos)
     ch = iter->buf [pos];
     ch = TO_UPPER (ch);
     state = TextFsaNext (fsa, state, ch, &matches);
-    if (matches != NULL) return TRUE;
+    if (matches != NULL) {
+      if (lenP != NULL) {
+        *lenP = i + 1;
+      }
+      return TRUE;
+    }
 
     pos++;
     if (pos >= iter->pos) {
@@ -918,6 +977,12 @@ NLM_EXTERN Boolean FFIsStartOfLink (StringItemPtr iter, Int4 pos)
   }
 
   return FALSE;
+}
+
+NLM_EXTERN Boolean FFIsStartOfLink (StringItemPtr iter, Int4 pos)
+
+{
+  return FFIsStartOfLinkEx (iter, pos, NULL);
 }
 
 /*
@@ -1299,10 +1364,31 @@ NLM_EXTERN Boolean FFExtractNextOpenLink(
       }
       if ( i == markup_size ) {
         if (buf_open_link != 0) {
-          char ch = FFCharAt( *p_line_sip, *p_line_pos );
-          for (i=0; '>' != (buf_open_link[i] = FFCharAt( *p_line_sip, *p_line_pos )); ++i)
-            ++(*p_line_pos);
-          buf_open_link[i+1] = 0;
+
+          char next;
+
+          for (i=0; '>' != (next = FFCharAt( *p_line_sip, *p_line_pos )); ++(*p_line_pos)) {
+
+            if (next == '&') {
+
+              MemCopy( buf_open_link+i, "&amp;", strlen( "&amp;" ) );
+
+              i += strlen("&amp;");
+
+            }
+
+            else {
+
+              buf_open_link[i++] = next;
+
+            }
+
+          }
+
+          buf_open_link[i++] = '>';
+
+          buf_open_link[i] = 0;
+
         } else {
           *p_line_pos += markup_size;
         }
@@ -1998,7 +2084,8 @@ static Boolean s_LocusGetBaseName (BioseqPtr parent, BioseqPtr segment, CharPtr 
     10, /* 16 = tpg */
     10, /* 17 = tpe */
     10, /* 18 = tpd */
-    10  /* 19 = gpp */
+    10, /* 19 = gpp */
+    10  /* 20 = nat */
   };
 
 /* DoOneSection builds a single report for one bioseq or segment */
@@ -2085,6 +2172,7 @@ NLM_EXTERN void DoOneSection (
   Boolean              hasRefs;
   Int4                 i;
   IntAsn2gbSectPtr     iasp;
+  Boolean              isGpipe = FALSE;
   Boolean              isRefSeq = FALSE;
   MolInfoPtr           mip;
   Boolean              nsgenome = FALSE;
@@ -2233,6 +2321,8 @@ NLM_EXTERN void DoOneSection (
       isRefSeq = TRUE;
     } else if (sip->choice == SEQID_GI) {
       awp->currGi = (Int4) sip->data.intvalue;
+    } else if (sip->choice == SEQID_GPIPE) {
+      isGpipe = TRUE;
     }
   }
 
@@ -2339,8 +2429,8 @@ NLM_EXTERN void DoOneSection (
       hasRefs = AddReferenceBlock (awp, isRefSeq);
       if (! hasRefs) {
         if (ajp->flags.needAtLeastOneRef) {
-          /* RefSeq does not require a publication */
-          if (! isRefSeq) {
+          /* RefSeq and Gpipe do not require a publication */
+          if ((! isRefSeq) && (! isGpipe)) {
             awp->failed = TRUE;
           }
         }
@@ -3172,7 +3262,7 @@ static Boolean IsSepRefseq (
 }
 
 typedef struct modeflags {
-  Boolean  flags [29];
+  Boolean  flags [30];
 } ModeFlags, PNTR ModeFlagsPtr;
 
 static ModeFlags flagTable [] = {
@@ -3182,16 +3272,16 @@ static ModeFlags flagTable [] = {
    TRUE,  TRUE,  TRUE,  TRUE,  TRUE,
    TRUE,  TRUE,  TRUE,  TRUE,  TRUE,
    TRUE,  TRUE,  TRUE,  TRUE,  TRUE,
-   TRUE,  TRUE,  TRUE,  TRUE,  TRUE,
-   TRUE,  TRUE,  TRUE,  TRUE},
+   TRUE,  TRUE,  FALSE, TRUE,  TRUE,
+   TRUE,  TRUE,  TRUE,  TRUE,  TRUE},
 
   /* ENTREZ_MODE */
   {FALSE, TRUE,  TRUE,  TRUE,  TRUE,
    FALSE, TRUE,  TRUE,  TRUE,  TRUE,
    TRUE,  TRUE,  FALSE, TRUE,  TRUE,
    TRUE,  TRUE,  FALSE, FALSE, TRUE,
-   TRUE,  TRUE,  TRUE,  TRUE,  TRUE,
-   TRUE,  TRUE,  TRUE,  FALSE},
+   TRUE,  TRUE,  FALSE, TRUE,  TRUE,
+   TRUE,  TRUE,  TRUE,  TRUE,  FALSE},
 
   /* SEQUIN_MODE */
   {FALSE, FALSE, FALSE, FALSE, FALSE,
@@ -3199,7 +3289,7 @@ static ModeFlags flagTable [] = {
    FALSE, FALSE, FALSE, FALSE, FALSE,
    FALSE, FALSE, FALSE, FALSE, FALSE,
    FALSE, FALSE, FALSE, FALSE, FALSE,
-   FALSE, TRUE,  FALSE, FALSE},
+   FALSE, TRUE,  FALSE, FALSE, FALSE},
 
   /* DUMP_MODE */
   {FALSE, FALSE, FALSE, FALSE, FALSE,
@@ -3207,7 +3297,7 @@ static ModeFlags flagTable [] = {
    FALSE, FALSE, FALSE, FALSE, FALSE,
    FALSE, FALSE, FALSE, FALSE, FALSE,
    FALSE, FALSE, FALSE, FALSE, FALSE,
-   FALSE, FALSE, FALSE, FALSE}
+   FALSE, FALSE, FALSE, FALSE, FALSE}
 };
 
 static void SetFlagsFromMode (
@@ -3260,6 +3350,7 @@ static void SetFlagsFromMode (
   ajp->flags.pyrrolysineToNote = *(bp++);
   ajp->flags.extraProductsToNote = *(bp++);
   ajp->flags.codonRecognizedToNote = *(bp++);
+  ajp->flags.hideSpecificGeneMaps = *(bp++);
   ajp->flags.forGbRelease = *(bp++);
 
   /* unapproved qualifiers suppressed for flatfile, okay for GBSeq XML */
@@ -3279,6 +3370,8 @@ static void SetFlagsFromMode (
     if (IsSepRefseq (sep)) {
 
       ajp->flags.srcQualsToNote = FALSE;
+      ajp->flags.geneSynsToNote = FALSE;
+      ajp->flags.codonRecognizedToNote = FALSE;
       ajp->flags.goQualsToNote = FALSE;
       ajp->flags.refSeqQualsToNote = FALSE;
 
@@ -3301,6 +3394,8 @@ static void SetFlagsFromMode (
     if (IsSepRefseq (sep)) {
 
       ajp->flags.srcQualsToNote = FALSE;
+      ajp->flags.geneSynsToNote = FALSE;
+      ajp->flags.codonRecognizedToNote = FALSE;
 
       /* selenocysteine always a separate qualifier for RefSeq */
 
@@ -3312,8 +3407,11 @@ static void SetFlagsFromMode (
 
   if (ajp->refseqConventions) {
     ajp->flags.srcQualsToNote = FALSE;
+    ajp->flags.geneSynsToNote = FALSE;
+    ajp->flags.codonRecognizedToNote = FALSE;
     ajp->flags.goQualsToNote = FALSE;
     ajp->flags.refSeqQualsToNote = FALSE;
+    ajp->flags.hideSpecificGeneMaps = FALSE;
   }
 }
 
@@ -3618,17 +3716,17 @@ static CharPtr bad_html_strings [] = {
 };
 
 static CharPtr defHead = "\
-<html>\n\
+<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\"\n\
+    \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">\n\
+<html lang=\"en\" xmlns=\"http://www.w3.org/1999/xhtml\" xml:lang=\"en\">\n\
 <head>\n\
 <meta http-equiv=\"Content-Type\" content=\"text/html; charset=us-ascii\" />\
 <title>GenBank entry</title>\n\
 </head>\n\
 <body>\n\
-<hr />\n\
-<pre>";
+<hr />";
 
 static CharPtr defTail = "\
-</pre>\n\
 <hr />\n\
 </body>\n\
 </html>\n";
@@ -4538,7 +4636,7 @@ static CharPtr goQualList [] = {
   "", "go_process", "go_component", "go_function", NULL
 };
 
-static void PrintFTUserFld (
+static void PrintGeneOntologyUserFld (
   UserFieldPtr ufp,
   Pointer userdata
 )
@@ -4650,11 +4748,92 @@ static void PrintFTUserFld (
       str [len - 1] = '\0';
       len--;
     }
+    StringCat (str, "\n");
   
     head = (ValNodePtr PNTR) userdata;
-    StringCat (str, "\n");
     ValNodeCopyStr (head, 0, str);
+    MemFree (str);
   }
+}
+
+static void PrintNomenclatureUserObject (
+  UserObjectPtr uop,
+  Pointer userdata
+)
+
+{
+  CharPtr          ds = NULL, me = NULL, nm = NULL, sy = NULL;
+  ValNodePtr PNTR  head;
+  size_t           len;
+  ObjectIdPtr      oip;
+  CharPtr          str = NULL;
+  UserFieldPtr     ufp;
+
+  if (uop == NULL) return;
+  oip = uop->type;
+  if (oip == NULL) return;
+  if (StringCmp (oip->str, "OfficialNomenclature") != 0) return;
+
+  for (ufp = uop->data; ufp != NULL; ufp = ufp->next) {
+    oip = ufp->label;
+    if (oip == NULL || oip->str == NULL) continue;
+    if (StringICmp (oip->str, "Symbol") == 0) {
+      if (ufp->choice == 1) {
+        str = (CharPtr) ufp->data.ptrvalue;
+        if (StringDoesHaveText (str)) {
+          sy = str;
+        }
+      }
+    } else if (StringICmp (oip->str, "Name") == 0) {
+      if (ufp->choice == 1) {
+        str = (CharPtr) ufp->data.ptrvalue;
+        if (StringDoesHaveText (str)) {
+          nm = str;
+        }
+      }
+    } else if (StringICmp (oip->str, "DataSource") == 0) {
+      if (ufp->choice == 1) {
+        str = (CharPtr) ufp->data.ptrvalue;
+        if (StringDoesHaveText (str)) {
+          ds = str;
+        }
+      }
+    } else if (StringICmp (oip->str, "Status") == 0) {
+      if (ufp->choice == 1) {
+        str = (CharPtr) ufp->data.ptrvalue;
+        if (StringDoesHaveText (str)) {
+          me = str;
+        }
+      }
+    }
+  }
+  if (me == NULL) {
+    me = "Unclassified";
+  }
+
+  if (StringHasNoText (sy)) return;
+
+  len = StringLen (ds) + StringLen (me) + StringLen (nm) + StringLen (sy) + 80;
+  str = (CharPtr) MemNew (len);
+  if (str == NULL) return;
+
+  StringCpy (str, "\t\t\tnomenclature\t");
+  StringCat (str, me);
+  StringCat (str, "|");
+  StringCat (str, sy);
+  StringCat (str, "|");
+  if (StringDoesHaveText (nm)) {
+    StringCat (str, nm);
+  }
+  StringCat (str, "|");
+  if (StringDoesHaveText (ds)) {
+    StringCat (str, ds);
+  }
+  StringCat (str, "\n");
+
+  head = (ValNodePtr PNTR) userdata;
+  ValNodeCopyStr (head, 0, str);
+  MemFree (str);
 }
 
 static void PrintFTUserObj (
@@ -4667,8 +4846,12 @@ static void PrintFTUserObj (
 
   if (uop == NULL) return;
   oip = uop->type;
-  if (oip == NULL || StringICmp (oip->str, "GeneOntology") != 0) return;
-  VisitUserFieldsInUop (uop, userdata, PrintFTUserFld);
+  if (oip == NULL) return;
+  if (StringICmp (oip->str, "GeneOntology") == 0) {
+    VisitUserFieldsInUop (uop, userdata, PrintGeneOntologyUserFld);
+  } else if (StringICmp (oip->str, "OfficialNomenclature") == 0) {
+    PrintNomenclatureUserObject (uop, userdata);
+  }
 }
 
 static void PrintFTCodeBreak (
@@ -4953,7 +5136,7 @@ static void PrintBioSourceFtableEntry (
         case ORGMOD_bio_material :
           sprintf (str, "\t\t\tbio_material\t");
           break;
-        case SCQUAL_metagenome_source :
+        case ORGMOD_metagenome_source :
           sprintf (str, "\t\t\tmetagenome_source\t");
           break;
         case ORGMOD_old_lineage :
@@ -5091,9 +5274,18 @@ static void PrintBioSourceFtableEntry (
       case SUBSRC_metagenomic :
         sprintf (str, "\t\t\tmetagenomic\t");
         break;
+      case SUBSRC_mating_type :
+        sprintf (str, "\t\t\tmating_type\t");
+        break;
+      case SUBSRC_linkage_group :
+        sprintf (str, "\t\t\tlinkage_group\t");
+        break;
+      case SUBSRC_haplogroup :
+        sprintf (str, "\t\t\thaplogroup\t");
+        break;
       case SUBSRC_other :
-          sprintf (str, "\t\t\tnote\t");
-          break;
+        sprintf (str, "\t\t\tnote\t");
+        break;
       default :
         str [0] = 0;
     }
@@ -5435,6 +5627,7 @@ NLM_EXTERN void PrintFtableLocAndQuals (
       }
       break;
     case SEQFEAT_PROT :
+      prod = BioseqFind (SeqLocId (sfp->product));
       prp = (ProtRefPtr) sfp->data.value.ptrvalue;
       if (prp != NULL) {
         if (prp->name != NULL) {
@@ -5476,11 +5669,31 @@ NLM_EXTERN void PrintFtableLocAndQuals (
         ValNodeCopyStr (head, 0, tmp);
       }
       */
+      if (prod != NULL) {
+        if (SeqIdWriteForTable (prod->id, str, sizeof (str), ajp, FALSE)) {
+          sprintf (tmp, "\t\t\tprotein_id\t%s\n", str);
+          ValNodeCopyStr (head, 0, tmp);
+        }
+      } else if (sfp->product != NULL) {
+        sip = SeqLocId (sfp->product);
+        if (sip != NULL) {
+          if (sip->choice == SEQID_GI) {
+            sip2 = GetSeqIdForGI (sip->data.intvalue);
+            if (sip2 != NULL) {
+              sip = sip2;
+            }
+          }
+          if (SeqIdWriteForTable (sip, str, sizeof (str), ajp, TRUE)) {
+            sprintf (tmp, "\t\t\tprotein_id\t%s\n", str);
+            ValNodeCopyStr (head, 0, tmp);
+          }
+        }
+      }
       break;
     case SEQFEAT_REGION :
       StringNCpy_0 (str, (CharPtr) sfp->data.value.ptrvalue, sizeof (str));
       if (! StringHasNoText (str)) {
-        sprintf (tmp, "\t\t\tregion\t%s\n", str);
+        sprintf (tmp, "\t\t\tregion_name\t%s\n", str);
         ValNodeCopyStr (head, 0, tmp);
       }
       break;
@@ -6304,4 +6517,5 @@ NLM_EXTERN Boolean BioseqToGnbk (
   }
   return SeqEntryToGnbk (sep, slp, format, mode, style, flags, locks, custom, extra, fp);
 }
+
 

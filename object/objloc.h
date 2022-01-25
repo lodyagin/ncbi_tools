@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.5 $
+* $Revision: 6.7 $
 *
 * File Description:  Object manager interface for module NCBI-Seqloc
 *
@@ -40,6 +40,12 @@
 *
 *
 * $Log: objloc.h,v $
+* Revision 6.7  2008/09/23 18:40:13  kans
+* increased NUM_SEQID
+*
+* Revision 6.6  2008/09/15 18:44:37  kans
+* added support for SEQID_NAMED_ANNOT_TRACK
+*
 * Revision 6.5  2005/04/26 21:33:00  kans
 * added SEQID_GPIPE
 *
@@ -140,7 +146,8 @@ NLM_EXTERN Boolean	LIBCALL SeqLocAsnLoad PROTO((void));
     16 = tpg Textseq-id ,        -- Third Party Annot/Seq Genbank
     17 = tpe Textseq-id ,        -- Third Party Annot/Seq EMBL
     18 = tpd Textseq-id ,        -- Third Party Annot/Seq DDBJ
-    19 = gpipe Textseq-id        -- Internal NCBI genome pipeline processing ID }
+    19 = gpipe Textseq-id ,      -- Internal NCBI genome pipeline processing ID }
+    20 = named-annot-track Textseq-id -- Internal named annotation tracking ID
 
 	WARNING: Some routines in sequtil.c (e.g. SeqIdPrint, SeqIdParse)
         and tofasta.c  use
@@ -149,7 +156,7 @@ NLM_EXTERN Boolean	LIBCALL SeqLocAsnLoad PROTO((void));
 *
 *****************************************************************************/
 
-#define NUM_SEQID 20     /* total number of SeqId types */
+#define NUM_SEQID 21     /* total number of SeqId types */
 
 #define SEQID_NOT_SET ( (Uint1)0)
 #define SEQID_LOCAL ( (Uint1)1)
@@ -176,6 +183,7 @@ NLM_EXTERN Boolean	LIBCALL SeqLocAsnLoad PROTO((void));
 #define SEQID_TPD ((Uint1)18)
 
 #define SEQID_GPIPE  ((Uint1)19)
+#define SEQID_NAMED_ANNOT_TRACK  ((Uint1)20)
 
 NLM_EXTERN Boolean	 LIBCALL SeqIdAsnWrite PROTO((SeqIdPtr anp, AsnIoPtr aip, AsnTypePtr atp));
 NLM_EXTERN SeqIdPtr LIBCALL SeqIdAsnRead PROTO((AsnIoPtr aip, AsnTypePtr atp));

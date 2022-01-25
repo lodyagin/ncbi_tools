@@ -1,4 +1,4 @@
-/*  $Id: socket_io_bouncer.c,v 6.8 2005/04/20 18:23:11 lavr Exp $
+/*  $Id: socket_io_bouncer.c,v 6.10 2008/10/23 20:55:38 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -33,11 +33,14 @@
 
 #include "../ncbi_ansi_ext.h"
 #include "../ncbi_assert.h"
+#include <connect/ncbi_connutil.h>
 #include <connect/ncbi_socket.h>
+#include <connect/ncbi_util.h>
 #include <stdio.h>
-#include <stdlib.h>
 /* This header must go last */
 #include "test_assert.h"
+
+#define MIN_PORT 5001
 
 
 static FILE* s_LogFile;
@@ -54,6 +57,7 @@ static void s_DoServer(unsigned short port, int n_cycle)
     EIO_Status status;
 
     fprintf(s_LogFile, "DoServer(port = %hu, n_cycle = %u)\n", port, n_cycle);
+    fflush(s_LogFile);
 
     /* Create listening socket */
     status = LSOCK_Create(port, 1, &lsock);
@@ -86,6 +90,7 @@ static void s_DoServer(unsigned short port, int n_cycle)
                 fprintf(s_LogFile,
                         "Failed to write -- DoServer(n_cycle = %d): %s\n",
                         n_cycle, IO_StatusStr(status));
+                fflush(s_LogFile);
                 break;
             }
         }
@@ -104,83 +109,52 @@ static void s_DoServer(unsigned short port, int n_cycle)
 
 int main(int argc, const char* argv[])
 {
-    /* variables */
-#define MIN_PORT 5001
-    unsigned short port = 0;
+    SConnNetInfo* net_info;
     int n_cycle = 100;
-    const char* env;
 
     /* logging */
     s_LogFile = fopen("socket_io_bouncer.log", "ab");
     assert(s_LogFile);
+    CORE_SetLOGFormatFlags(fLOG_None          | fLOG_Level   |
+                           fLOG_OmitNoteLevel | fLOG_DateTime);
+    CORE_SetLOGFILE(s_LogFile, 1/*auto-close*/);
+
+    assert((net_info = ConnNetInfo_Create(0)) != 0);
 
     /* cmd.-line args */
     switch ( argc ) {
     case 3: {
-        if (sscanf(argv[2], "%d", &n_cycle) != 1  ||  n_cycle <= 0)
+        if (sscanf(argv[2], "%d", &n_cycle) != 1)
+            n_cycle = -1;
+        if (n_cycle <= 0)
             break;
     }
     case 2: {
-        int i_port = -1;
-        if (sscanf(argv[1], "%d", &i_port) != 1  ||
-            i_port < MIN_PORT  ||  65535 < i_port)
-            break;
-        port = (unsigned short) i_port;
+        int port;
+        if (sscanf(argv[1], "%d", &port) == 1  &&  0 <= port && port <= 65535)
+            net_info->port = (unsigned short) port;
     }
     } /* switch */
 
-    if (port == 0) {
+    if (net_info->port < MIN_PORT  ||  n_cycle <= 0) {
         fprintf(stderr,
-                "Usage: %s <port> [n_cycle]\n where <port> not less than %d\n",
+                "Usage: %s <port> [n_cycle]\nwhere <port> not less than %d\n",
                 argv[0], (int) MIN_PORT);
         fprintf(s_LogFile,
-                "Usage: %s <port> [n_cycle]\n where <port> not less than %d\n",
+                "Usage: %s <port> [n_cycle]\nwhere <port> not less than %d\n",
                 argv[0], (int) MIN_PORT);
-        return 1;
+        return 1/*error*/;
     }
 
-    if ((env = getenv("CONN_DEBUG_PRINTOUT")) != 0 &&
-        (strcasecmp(env, "true") == 0 || strcasecmp(env, "1") == 0 ||
-         strcasecmp(env, "data") == 0 || strcasecmp(env, "all") == 0)) {
+    if (net_info->debug_printout != eDebugPrintout_None)
         SOCK_SetDataLoggingAPI(eOn);
-    }
 
     /* run */
-    s_DoServer(port, n_cycle);
+    s_DoServer(net_info->port, n_cycle);
 
     /* cleanup */
     verify(SOCK_ShutdownAPI() == eIO_Success);
-    fclose(s_LogFile);
+    ConnNetInfo_Destroy(net_info);
+    CORE_SetLOG(0);
     return 0;
 }
-
-
-/*
- * --------------------------------------------------------------------------
- * $Log: socket_io_bouncer.c,v $
- * Revision 6.8  2005/04/20 18:23:11  lavr
- * +"../ncbi_assert.h"
- *
- * Revision 6.7  2002/12/04 19:50:31  lavr
- * #include "../ncbi_ansi_ext.h" instead of <string.h> to define strcasecmp()
- *
- * Revision 6.6  2002/12/04 17:00:18  lavr
- * Open log file in append mode; toggle logging from the environment
- *
- * Revision 6.5  2002/08/12 15:10:43  lavr
- * Use persistent SOCK_Write()
- *
- * Revision 6.4  2002/08/07 16:38:08  lavr
- * EIO_ReadMethod enums changed accordingly; log moved to end
- *
- * Revision 6.3  2002/03/22 19:46:11  lavr
- * Test_assert.h made last among the include files
- *
- * Revision 6.2  2002/01/16 21:23:14  vakatov
- * Utilize header "test_assert.h" to switch on ASSERTs in the Release mode too
- *
- * Revision 6.1  2000/04/07 20:04:37  vakatov
- * Initial revision
- *
- * ==========================================================================
- */

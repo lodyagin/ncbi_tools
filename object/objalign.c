@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.15 $
+* $Revision: 6.16 $
 *
 * File Description:  Object manager for module NCBI-Seqalign
 *
@@ -2558,8 +2558,8 @@ SplicedExonFree(SplicedExonPtr ptr)
    SeqIdFree(ptr -> genomic_id);
    AsnGenericChoiceSeqOfFree(ptr -> parts, (AsnOptFreeFunc) SplicedExonChunkFree);
    ScoreSetFree((ScorePtr) ptr -> scores);
-   SpliceSiteFree(ptr -> splice_5_prime);
-   SpliceSiteFree(ptr -> splice_3_prime);
+   SpliceSiteFree(ptr -> acceptor_before_exon);
+   SpliceSiteFree(ptr -> donor_after_exon);
    AsnGenericUserSeqOfFree(ptr -> ext, (AsnOptFreeFunc) UserObjectFree);
    return MemFree(ptr);
 }
@@ -2682,15 +2682,15 @@ SplicedExonAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       }
       atp = AsnReadId(aip,amp, atp);
    }
-   if (atp == SPLICED_EXON_splice_5_prime) {
-      ptr -> splice_5_prime = SpliceSiteAsnRead(aip, atp);
+   if (atp == EXON_acceptor_before_exon) {
+      ptr -> acceptor_before_exon = SpliceSiteAsnRead(aip, atp);
       if (aip -> io_failure) {
          goto erret;
       }
       atp = AsnReadId(aip,amp, atp);
    }
-   if (atp == SPLICED_EXON_splice_3_prime) {
-      ptr -> splice_3_prime = SpliceSiteAsnRead(aip, atp);
+   if (atp == SPLICED_EXON_donor_after_exon) {
+      ptr -> donor_after_exon = SpliceSiteAsnRead(aip, atp);
       if (aip -> io_failure) {
          goto erret;
       }
@@ -2799,13 +2799,13 @@ SplicedExonAsnWrite(SplicedExonPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
          goto erret;
       }
    }
-   if (ptr -> splice_5_prime != NULL) {
-      if ( ! SpliceSiteAsnWrite(ptr -> splice_5_prime, aip, SPLICED_EXON_splice_5_prime)) {
+   if (ptr -> acceptor_before_exon != NULL) {
+      if ( ! SpliceSiteAsnWrite(ptr -> acceptor_before_exon, aip, EXON_acceptor_before_exon)) {
          goto erret;
       }
    }
-   if (ptr -> splice_3_prime != NULL) {
-      if ( ! SpliceSiteAsnWrite(ptr -> splice_3_prime, aip, SPLICED_EXON_splice_3_prime)) {
+   if (ptr -> donor_after_exon != NULL) {
+      if ( ! SpliceSiteAsnWrite(ptr -> donor_after_exon, aip, SPLICED_EXON_donor_after_exon)) {
          goto erret;
       }
    }

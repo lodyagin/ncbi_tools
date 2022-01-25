@@ -1,4 +1,4 @@
-/*  $Id: test_ncbi_core.c,v 6.15 2008/02/28 20:25:52 kazimird Exp $
+/*  $Id: test_ncbi_core.c,v 6.17 2008/05/14 17:55:45 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -65,14 +65,6 @@ extern "C" {
 /*****************************************************************************
  *  TEST_CORE -- test "ncbi_core.c"
  */
-
-static void TEST_CORE_Generic(void)
-{
-  /* STimeout */
-  static STimeout x_timeout = { 111111, 222222 };
-  x_timeout.sec  = (unsigned int) 333333;
-  x_timeout.usec = (unsigned int) 444444;
-}
 
 
 static void TEST_CORE_Io(void)
@@ -297,7 +289,6 @@ static void TEST_CORE_Log(void)
 static void TEST_CORE(void)
 {
   /* Do all TEST_CORE_***() tests */
-  DO_TEST(TEST_CORE_Generic);
   DO_TEST(TEST_CORE_Io);
   DO_TEST(TEST_CORE_Lock);
   DO_TEST(TEST_CORE_Log);
@@ -343,15 +334,18 @@ static void TEST_UTIL_Log(void)
 
   /* logging with errno */
   errno = 0;
-  LOG_WRITE_ERRNO(x_log, 0, 0, eLOG_Warning, 0);  
-  LOG_WRITE_ERRNO(x_log, 0, 0, eLOG_Error, "");
-  LOG_WRITE_ERRNO(x_log, 0, 0, eLOG_Critical, "OKAY");
+  LOG_WRITE_ERRNO(x_log, 0, 0, eLOG_Warning,  0,      errno, 0);  
+  LOG_WRITE_ERRNO(x_log, 0, 0, eLOG_Error,    "",     errno, 0);
+  LOG_WRITE_ERRNO(x_log, 0, 0, eLOG_Critical, "OKAY", errno, 0);
 
 #undef  THIS_FILE
 #define THIS_FILE 0
-  (void)strtod("1e-999999", 0);  LOG_WRITE_ERRNO(x_log, 0, 0, eLOG_Warning, 0);  
-  (void)strtod("1e-999999", 0);  LOG_WRITE_ERRNO(x_log, 0, 0, eLOG_Error, "");
-  (void)strtod("1e-999999", 0);  LOG_WRITE_ERRNO(x_log, 0, 0, eLOG_Critical, "FAIL");
+  (void)strtod("1e-999999", 0);
+  LOG_WRITE_ERRNO(x_log, 0, 0, eLOG_Warning,  0,      errno, 0);  
+  (void)strtod("1e-999999", 0);
+  LOG_WRITE_ERRNO(x_log, 0, 0, eLOG_Error,    "",     errno, 0);
+  (void)strtod("1e-999999", 0);
+  LOG_WRITE_ERRNO(x_log, 0, 0, eLOG_Critical, "FAIL", errno, 0);
 
   /* delete */
   verify(LOG_Delete(x_log) == 0);

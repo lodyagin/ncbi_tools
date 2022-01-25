@@ -3,7 +3,7 @@
 	ProjectType="Visual C++"
 	Version="8.00"
 	Name="demo_formatdb"
-	ProjectGUID="{FE555145-82E8-4721-B2CB-A60B94658A65}"
+	ProjectGUID="{E3869954-4989-4D90-8768-44713BDBA38A}"
 	>
 	<Platforms>
 		<Platform

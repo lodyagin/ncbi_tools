@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: posit.c,v 6.83 2007/05/07 13:30:54 kans Exp $";
+static char const rcsid[] = "$Id: posit.c,v 6.87 2008/10/03 18:09:17 madden Exp $";
 
-/* $Id: posit.c,v 6.83 2007/05/07 13:30:54 kans Exp $
+/* $Id: posit.c,v 6.87 2008/10/03 18:09:17 madden Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,10 +32,23 @@ static char const rcsid[] = "$Id: posit.c,v 6.83 2007/05/07 13:30:54 kans Exp $"
 
   Contents: utilities for position-based BLAST.
 
-  $Revision: 6.83 $ 
+  $Revision: 6.87 $ 
  *****************************************************************************
 
  * $Log: posit.c,v $
+ * Revision 6.87  2008/10/03 18:09:17  madden
+ * Change a few constants for pseudo counts (from A. Schaffer)
+ *
+ * Revision 6.86  2008/07/22 19:45:32  kans
+ * removed unused variables
+ *
+ * Revision 6.85  2008/03/31 16:21:58  kans
+ * CodeWarrior requred a cast to Blast_GetMatrixBackgroundFreq result
+ *
+ * Revision 6.84  2008/03/31 13:36:10  madden
+ * Implemented a new method to compute effective observations.
+ * Implemented a new entropy-based method to compute column-specific pseudocounts.
+ *
  * Revision 6.83  2007/05/07 13:30:54  kans
  * added casts for Seq-data.gap (SeqDataPtr, SeqGapPtr, ByteStorePtr)
  *
@@ -394,6 +407,14 @@ static char const rcsid[] = "$Id: posit.c,v 6.83 2007/05/07 13:30:54 kans Exp $"
 #include <txalign.h>
 #include <blastkar.h>
 
+#include <algo/blast/composition_adjustment/nlm_linear_algebra.h>
+#include <algo/blast/composition_adjustment/matrix_frequency_data.h>
+#include <algo/blast/composition_adjustment/composition_adjustment.h>
+#include <algo/blast/composition_adjustment/compo_heap.h>
+#include <algo/blast/composition_adjustment/smith_waterman.h>
+#include <algo/blast/composition_adjustment/redo_alignment.h>
+#include <algo/blast/composition_adjustment/unified_pvalues.h>
+
 /*small constants to test against 0*/
 #define posEpsilon 0.0001
 #define posEpsilon2 0.0000001
@@ -442,6 +463,13 @@ void LIBCALL posAllocateMemory(posSearchItems * posSearch,
       posSearch->posC[i][j] = 0;
  
   }
+  posSearch->posDistinctDistrib = (Int4 **) MemNew((querySize + 1) * sizeof(Int4* ));
+  for (i = 0; i <=querySize; i++)  {
+    posSearch->posDistinctDistrib[i] = (Int4 *) MemNew((EFFECTIVE_ALPHABET + 1) * sizeof(Int4));
+    for(j = 0; j <=EFFECTIVE_ALPHABET; j++)
+      posSearch->posDistinctDistrib[i][j] = 0;
+  }
+  posSearch->posNumParticipating = (Int4 *) MemNew((querySize + 1) * sizeof(Int4 ));
   posSearch->posGaplessColumnWeights = (Nlm_FloatHi *) MemNew((querySize + 1) * sizeof(Nlm_FloatHi));
   if (NULL == posSearch->posGaplessColumnWeights)
     exit(EXIT_FAILURE);
@@ -561,9 +589,12 @@ static void posFreeMemory(posSearchItems *posSearch, Int4 querySize)
     MemFree(posSearch->posMatrix[i]);
     MemFree(posSearch->posPrivateMatrix[i]);
     MemFree(posSearch->posMatchWeights[i]);
+    MemFree(posSearch->posDistinctDistrib[i]);
   }
 
   MemFree(posSearch->posC);
+  MemFree(posSearch->posDistinctDistrib);
+  MemFree(posSearch->posNumParticipating);
 
   for(i = 0; i <= posSearch->posDescMatrixLength; i++)
     MemFree(posSearch->posDescMatrix[i]);
@@ -1264,7 +1295,7 @@ void LIBCALL posComputeExtents(posSearchItems *posSearch, compactSearchItems * c
        }
      }
    }
- }
+}
  
 /*Compute weight of each sequence and letter in each position*/
 void LIBCALL posComputeSequenceWeights(posSearchItems *posSearch, compactSearchItems * compactSearch, Nlm_FloatHi weightExponent)
@@ -1280,6 +1311,7 @@ void LIBCALL posComputeSequenceWeights(posSearchItems *posSearch, compactSearchI
    Int4 *participatingSequences; /*array of participating sequences at a position*/
    Int4 *oldParticipatingSequences; /*array of participating sequences at a position*/
    Int4 posLocalVariety;  /*number of different characters at a position*/
+   Int4 posLocalStandardLet; /*posLocalVariety, not counting X or gap*/
    Int4 *posLocalC; /*counts of how many of each letter in this column*/
    Int4 c;
    Int4 thisSeq;
@@ -1346,17 +1378,24 @@ void LIBCALL posComputeSequenceWeights(posSearchItems *posSearch, compactSearchI
 	 for (i = posSearch->posExtents[qplace].leftExtent;
 	      i <= posSearch->posExtents[qplace].rightExtent; i++) {
 	   posLocalVariety = 0;
+	   posLocalStandardLet = 0;
 	   for(c = 0; c < alphabetSize; c++)
 	     posLocalC[c] = 0;
 	   for(seqIndex = 0; seqIndex < numParticipating; seqIndex++) {
 	     thisSeq = participatingSequences[seqIndex];
 	     /*used to check for GAP here*/ /*XX*/
-	     if (0 == posLocalC[posSearch->posDescMatrix[thisSeq][i].letter]) 
+	     if (0 == posLocalC[posSearch->posDescMatrix[thisSeq][i].letter]) {
 	       /*letter (not a gap) not seen before in this query pos.*/
 	       posLocalVariety++;  
+	       if ((GAP_CHAR != posSearch->posDescMatrix[thisSeq][i].letter)  &&
+		 (Xchar != posSearch->posDescMatrix[thisSeq][i].letter))
+		 posLocalStandardLet++;
+	     }
 	     posLocalC[posSearch->posDescMatrix[thisSeq][i].letter]++;
 	   }
 	   intervalSigma += posLocalVariety;
+	   posLocalStandardLet = MIN(posLocalStandardLet,EFFECTIVE_ALPHABET);
+	   posSearch->posDistinctDistrib[qplace][posLocalStandardLet]++;
 	   if (posLocalVariety > 1) {
 	     Sigma += posLocalVariety;
 	   }
@@ -1370,6 +1409,11 @@ void LIBCALL posComputeSequenceWeights(posSearchItems *posSearch, compactSearchI
 	   }
 	 }
        }
+       else {
+	 for (i = 0; i <= EFFECTIVE_ALPHABET; i++) {
+	   posSearch->posDistinctDistrib[qplace][i] = posSearch->posDistinctDistrib[qplace - 1][i];	   
+	 }
+       }	 
        if (Sigma > 0) {
 	 weightSum = 0;
 	 for (seqIndex = 0; seqIndex < numParticipating; seqIndex++) {
@@ -1400,6 +1444,7 @@ void LIBCALL posComputeSequenceWeights(posSearchItems *posSearch, compactSearchI
          if(posSearch->posDescMatrix[thisSeq][qplace].letter)
            posSearch->posGaplessColumnWeights[qplace] += posSearch->posA[thisSeq]; 
        }
+       posSearch->posNumParticipating[qplace] = numParticipating;
      }
    }
    MemFree(participatingSequences);
@@ -1410,6 +1455,89 @@ void LIBCALL posComputeSequenceWeights(posSearchItems *posSearch, compactSearchI
 static Nlm_FloatHi countsFunction(Nlm_FloatHi Sigma, Int4 intervalLength)
 {
   return(Sigma / intervalLength - 1);
+}
+
+#define MAX_IND_OBSERVATIONS  400
+
+
+/*initialize the expected number of observations
+  use background probabilities for this matrix
+  Calculate exp. # of distinct aa's as a function of independent trials   
+*/ 
+static void initializeExpNumObservations(double *expno, 
+				    double *backgroundProbabilities)
+
+{
+int     j,k ; /*loop indices*/
+double  weighted_sum; /*20 - this is how many distinct
+			 amino acids are expected*/
+
+   expno[0] = 0;
+   for (j=1;j<MAX_IND_OBSERVATIONS;++j) {
+     weighted_sum = 0;
+     for (k=0;k<EFFECTIVE_ALPHABET;++k) 
+       weighted_sum += exp(j*log(1.0-backgroundProbabilities[k]));
+     expno[j] = EFFECTIVE_ALPHABET-weighted_sum;
+   }
+}
+
+
+/*A method to estimate the effetive number of observations
+  in the interval for the specified columnNumber */
+
+static Nlm_FloatHi effectiveObservations(posSearchItems *posSearch, 
+					 Int4 columnNumber, Int4 queryLength,
+					 double *expno)
+{
+int     i,k; /*loop indices*/
+double  indep; /*number of independent observations to return*/
+int halfNumColumns; /*half the number of columns in the interval, rounded
+                      down*/
+int totalDistinctCounts; /*total number of distinct letters in columns
+		     used*/
+double aveDistinctAA; /*average number of distinct letters in columns used*/
+int columnsAccountedFor; /*how many of the columns had their
+                            distinct count totaled so far*/
+
+  
+ if (posSearch->posExtents[columnNumber].leftExtent < 0)
+   return(0);
+ if (posSearch->posExtents[columnNumber].rightExtent >= queryLength)
+   return(0);
+ 
+/*  Calculate the average number of distinct amino acids in the half of the
+    columns within the block in question with the most distinct amino acids;
+    +2 in the parentheses is for rounding up.*/
+
+ halfNumColumns = MAX(1,(posSearch->posExtents[columnNumber].rightExtent -
+			 posSearch->posExtents[columnNumber].leftExtent+2)/2);
+ k = EFFECTIVE_ALPHABET;
+ columnsAccountedFor = 0;
+ totalDistinctCounts = 0;
+ while (columnsAccountedFor < halfNumColumns) {
+   totalDistinctCounts += (posSearch->posDistinctDistrib[columnNumber][k] *k);
+   columnsAccountedFor += posSearch->posDistinctDistrib[columnNumber][k];
+   if (columnsAccountedFor > halfNumColumns) {
+     totalDistinctCounts -=
+       ((columnsAccountedFor - halfNumColumns) * k);
+     columnsAccountedFor = halfNumColumns;
+   }
+   k--;
+ }
+ aveDistinctAA = ((double) totalDistinctCounts)/
+   ((double) columnsAccountedFor);
+
+/*    Then use the following code to calculate the number of
+        independent observations corresponding to
+        aveDistinctAA.
+*/
+
+ for (i=1;i<MAX_IND_OBSERVATIONS && expno[i]<=aveDistinctAA;++i);
+ indep = (i==MAX_IND_OBSERVATIONS) ? i : 
+   i-(expno[i]-aveDistinctAA)/(expno[i]-expno[i-1]);
+ indep = MIN(indep, posSearch->posNumParticipating[columnNumber]);	
+ indep = MAX(0,indep - 1);
+ return(indep);
 }
 
 static Nlm_FloatHi posit_rounddown(Nlm_FloatHi value)
@@ -1424,6 +1552,7 @@ void LIBCALL posCheckWeights(posSearchItems *posSearch, compactSearchItems * com
    Int4 length, alphabetSize; /*length of query and number of characters in alphabet*/
    Int4  a, c; /*loop indices*/
    Nlm_FloatHi runningSum; /*partial total for a column*/
+
 
    length = compactSearch->qlength;
    alphabetSize = compactSearch->alphabetSize;
@@ -1572,6 +1701,129 @@ Nlm_FloatHi ** LIBCALL allocatePosFreqs(Int4 length, Int4 alphabetSize)
   return(returnArray); 
 }
 
+/*The following constants are used in 
+  posComputePseudoFreqs and columnSpecificPseudocounts */
+#define PSEUDO_MULTIPLIER 500
+#define PSEUDO_SMALL_INITIAL 5.5 /*small number of pseudocounts to
+                                   avoid 0 probabilities in entropy-based
+                                   method*/
+#define PSEUDO_NUMERATOR 0.0457  /*numerator of entropy-based method*/
+#define PSEUDO_EXPONENT 0.8  /*exponent of denominator*/
+#define PSEUDO_MAX 1000000 /*effective infinity*/
+#define ZERO_OBS_PSEUDO 30 /*arbitrary constant to use for columns with 
+                             zero observations in actual data*/
+
+static void  fillColumnProbabilities(double *probabilities, 
+				     posSearchItems *posSearch, 
+				     Int4 columnNumber)
+{
+   Int4 charOrder[EFFECTIVE_ALPHABET]; /*standard order of letters according to S. Altschul*/
+   Int4 c; /*loop index*/
+
+   charOrder[0] =  1;  /*A*/
+   charOrder[1] =  16; /*R*/
+   charOrder[2] =  13; /*N*/  
+   charOrder[3] =  4;  /*D*/ 
+   charOrder[4] =  3;  /*C*/
+   charOrder[5] =  15; /*Q*/
+   charOrder[6] =  5;  /*E*/ 
+   charOrder[7] =  7;  /*G*/
+   charOrder[8] =  8;  /*H*/
+   charOrder[9] =  9;  /*I*/
+   charOrder[10] = 11; /*L*/
+   charOrder[11] = 10; /*K*/
+   charOrder[12] = 12; /*M*/  
+   charOrder[13] =  6; /*F*/
+   charOrder[14] = 14; /*P*/
+   charOrder[15] = 17; /*S*/
+   charOrder[16] = 18; /*T*/
+   charOrder[17] = 20; /*W*/
+   charOrder[18] = 22; /*Y*/
+   charOrder[19] = 19; /*V*/
+
+   for(c = 0; c < EFFECTIVE_ALPHABET; c++) 
+     probabilities[c] = posSearch->posMatchWeights[columnNumber][charOrder[c]];
+}
+
+/*adjust the probabilities by assigning observations weight
+  to initialProbabilities and standardWeight to standardProbabilities*/
+static void adjustColumnProbabilities(double *initialProbabilities,
+				      double *probabilitiesToReturn,
+				      double standardWeight, 
+				      double *standardProbabilities, 
+				      double observations)
+{
+  double intermediateSums[EFFECTIVE_ALPHABET]; /*weighted sums for each letter*/
+  double overallSum; /*overall sum of weightedSums*/
+  Int4 c; /*loop index*/
+
+  overallSum = 0.0;
+  for(c = 0; c < EFFECTIVE_ALPHABET; c++) {
+    intermediateSums[c] =
+      (initialProbabilities[c] * observations) +
+      (standardProbabilities[c] * standardWeight);
+    overallSum += intermediateSums[c];
+  }
+  for(c = 0; c < EFFECTIVE_ALPHABET; c++) 
+    probabilitiesToReturn[c] = intermediateSums[c]/overallSum;
+}
+
+/*compute relative entropy of first distribution to second distribution*/
+
+static double computeRelativeEntropy(double *newDistribution,
+			      double *backgroundProbabilities)
+{
+   Int4 c; /*loop index*/
+   double returnValue; /*value to return*/
+   
+
+   returnValue = 0;
+   for(c = 0; c < EFFECTIVE_ALPHABET; c++) {
+     if (newDistribution[c] > posEpsilon)
+       returnValue += (newDistribution[c] * 
+		       log (newDistribution[c]/backgroundProbabilities[c]));
+   }
+   if (returnValue < posEpsilon)
+     returnValue = posEpsilon;
+   return(returnValue);
+}
+
+
+static double columnSpecificPseudocounts(posSearchItems *posSearch, 
+				  compactSearchItems *compactSearch, 
+				  Int4 columnNumber, 
+				  double *backgroundProbabilities,
+				  double observations)
+{
+  double columnProbabilitiesInitial[EFFECTIVE_ALPHABET];
+  double columnProbabilitiesAdjusted[EFFECTIVE_ALPHABET];
+  double relativeEntropy; /*relative entropy of this column to background probs.*/
+  double alpha; /*intermediate term*/
+  double pseudoDenominator; /*intermediate term*/
+  double returnValue;
+
+  fillColumnProbabilities(&(columnProbabilitiesInitial[0]), posSearch, columnNumber);
+  adjustColumnProbabilities(&(columnProbabilitiesInitial[0]), 
+			    &(columnProbabilitiesAdjusted[0]),
+			      compactSearch->standardProbWeight,
+			      backgroundProbabilities, observations);
+  relativeEntropy = computeRelativeEntropy(&(columnProbabilitiesAdjusted[0]),
+					   backgroundProbabilities);
+  pseudoDenominator = pow(relativeEntropy, compactSearch->HmethodDenominator);
+  alpha = compactSearch->HmethodNumerator/pseudoDenominator;
+  if (alpha < (1.0 - posEpsilon))
+    returnValue = PSEUDO_MULTIPLIER * alpha/ (1- alpha);
+  else
+    returnValue = PSEUDO_MAX;
+  /*extraOutputFile = fopen("Pseudocounts.txt","a");
+  fprintf(extraOutputFile,"%s\t%5d\t%3.6lf\t%3.6lf\t%3.6lf\t%3.6lf",compactSearch->queryFileName,columnNumber+1,observations+1,relativeEntropy,alpha,returnValue);
+  fprintf(extraOutputFile,"\n");
+  fclose(extraOutputFile);*/
+
+  return(returnValue);
+}
+
+
 Nlm_FloatHi ** LIBCALL posComputePseudoFreqs(posSearchItems *posSearch, compactSearchItems * compactSearch, Boolean Cpos)
 {
    Uint1Ptr q;  /*pointer to the query*/
@@ -1579,11 +1831,14 @@ Nlm_FloatHi ** LIBCALL posComputePseudoFreqs(posSearchItems *posSearch, compactS
    Int4 c; /*loop index*/
    Int4 a, aSub, alphabetSize; /*loop indices and size of alphabet*/
    Nlm_FloatHi lambda; /*Karlin-Altschul parameter*/
-   Nlm_FloatHi Sigma;  /*number of characters in an interval*/ 
-   Int4 intervalLength;  /*length of a block*/
    Nlm_FloatHi pseudo, numerator, denominator, qOverPEstimate; /*intermediate terms*/
    Nlm_FloatHi infoSum; /*sum used for information content*/
    Nlm_FloatHi **posFreqs; /*store frequencies*/
+   double observations; /*estimated number of independent observations*/
+   double  expno[MAX_IND_OBSERVATIONS+1]; /*table of expectations*/
+   double pseudoWeight; /*multiplier for pseudocounts term*/
+   double *backgroundProbabilities; /*background probabilities for matrix*/
+   double columnCounts; /*column-specific pseudocounts*/
 
    q = compactSearch->query;
    length = compactSearch->qlength;
@@ -1591,15 +1846,36 @@ Nlm_FloatHi ** LIBCALL posComputePseudoFreqs(posSearchItems *posSearch, compactS
    alphabetSize = compactSearch->alphabetSize;
    lambda = compactSearch->lambda_ideal;
    posFreqs = allocatePosFreqs(length, alphabetSize);
-
+   backgroundProbabilities = (double *) Blast_GetMatrixBackgroundFreq(compactSearch->standardMatrixName);
    if (!posSearch->stdFreqRatios) {
      posSearch->stdFreqRatios =
            PSIMatrixFrequencyRatiosNew(compactSearch->standardMatrixName);
    }
 
+   initializeExpNumObservations(&(expno[0]),  backgroundProbabilities);
+   compactSearch->standardProbWeight = PSEUDO_SMALL_INITIAL;
+   compactSearch->HmethodDenominator = PSEUDO_EXPONENT;
+   compactSearch->HmethodNumerator = PSEUDO_NUMERATOR;
+
    for(c = 0; c < length; c++) {
      if (Xchar != q[c]) {
        infoSum = 0;
+       observations = effectiveObservations(posSearch,c,
+                                            compactSearch->qlength,
+                                            &(expno[0]));
+       /* observations = countsFunction(posSearch->posSigma[c], 
+	  posSearch->posIntervalSizes[c]);*/
+       if (0 == compactSearch->pseudoCountConst)
+	 columnCounts = columnSpecificPseudocounts(posSearch,compactSearch, c, backgroundProbabilities, observations);
+	else
+	 columnCounts = compactSearch->pseudoCountConst;
+       if (columnCounts >= PSEUDO_MAX) {
+	 pseudoWeight = ZERO_OBS_PSEUDO;
+	 observations = 0;
+       }
+       else {
+	 pseudoWeight = columnCounts;
+       }
        for(a = 0; a < alphabetSize; a++) {
          if (compactSearch->standardProb[a] > posEpsilon) {
 	   pseudo = 0;
@@ -1608,20 +1884,18 @@ Nlm_FloatHi ** LIBCALL posComputePseudoFreqs(posSearchItems *posSearch, compactS
 	     if(compactSearch->matrix[a][aSub] != BLAST_SCORE_MIN) 
 	       pseudo += (posSearch->posMatchWeights[c][aSub] *
 			posSearch->stdFreqRatios->data[a][aSub]);
-	   pseudo *= (compactSearch->pseudoCountConst);
-           Sigma = posSearch->posSigma[c];
-           intervalLength = posSearch->posIntervalSizes[c];
+	   pseudo *= pseudoWeight;
 	   numerator = pseudo + 
-             (countsFunction(Sigma, intervalLength) * posSearch->posMatchWeights[c][a]/
+             (observations * posSearch->posMatchWeights[c][a]/
                 compactSearch->standardProb[a]);
-	   denominator = countsFunction(Sigma, intervalLength) + (compactSearch->pseudoCountConst); 
+	   denominator = observations + pseudoWeight;
 	   qOverPEstimate = numerator / denominator;
 	   /*Note artificial multiplication by standard probability to
              normalize*/
            posFreqs[c][a] = qOverPEstimate * compactSearch->standardProb[a];
 	 if (0.0 != qOverPEstimate && (compactSearch->standardProb[a] > posEpsilon))
 	   infoSum += qOverPEstimate * compactSearch->standardProb[a] * log(qOverPEstimate)/ NCBIMATH_LN2;
-	 }
+          }
         else
           posFreqs[c][a] = 0.0;
        }

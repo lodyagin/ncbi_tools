@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 2/4/94
 *
-* $Revision: 6.63 $
+* $Revision: 6.64 $
 *
 * File Description:  Sequence editing utilities
 *
@@ -39,6 +39,10 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: edutil.c,v $
+* Revision 6.64  2008/08/26 20:21:01  bollin
+* Fixed bug in function for converting raw sequences to delta, where the
+* gap is specified by location and is a replacement rather than an insertion.
+*
 * Revision 6.63  2007/07/02 19:17:26  bollin
 * Corrected functions for inserting and deleting from locations to handle
 * locations on segmented sets, corrected functions for inserting and deleting
@@ -2980,6 +2984,7 @@ AdjustFeaturesForInsertion
 	SeqMgrFeatContext fcontext;
 	ValNodePtr        prods, vnp;
 	BioseqContextPtr  bcp;
+  Boolean           partial5, partial3, changed;
   
   if (tobsp == NULL || to_id == NULL)
   {
@@ -2991,7 +2996,21 @@ AdjustFeaturesForInsertion
     sfp = NULL;
 		while ((sfp = SeqMgrGetNextFeature (tobsp, sfp, 0, 0, &fcontext)) != NULL)
 		{
-			sfp->location = SeqLocInsert (sfp->location, to_id,pos, len, do_split, NULL);
+      if (len > 0) {
+			  sfp->location = SeqLocInsert (sfp->location, to_id,pos, len, do_split, NULL);
+      } else {
+        changed = FALSE;
+        partial5 = FALSE;
+        partial3 = FALSE;
+        sfp->location = SeqEdSeqLocDelete (sfp->location, tobsp, pos, pos - len - 1, FALSE, &changed, &partial5, &partial3);
+        if (changed) {
+          if (sfp->location == NULL) {
+            sfp->idx.deleteme = TRUE;
+          }
+          SetSeqLocPartial (sfp->location, partial5, partial3);
+          sfp->partial |= partial5 || partial3;
+        }
+      }
 			switch (sfp->data.choice)
 			{
 				case SEQFEAT_CDREGION:   /* cdregion */
@@ -3000,7 +3019,17 @@ AdjustFeaturesForInsertion
 				  for (cbp = crp->code_break; cbp != NULL; cbp = nextcbp)
 					{
 						nextcbp = cbp->next;
-						cbp->loc = SeqLocInsert (cbp->loc, to_id,pos, len, do_split, NULL);
+            if (len > 0) {
+						  cbp->loc = SeqLocInsert (cbp->loc, to_id,pos, len, do_split, NULL);
+            } else {
+              changed = FALSE;
+              partial5 = FALSE;
+              partial3 = FALSE;
+              cbp->loc = SeqEdSeqLocDelete (cbp->loc, tobsp, pos, pos - len + 1, FALSE, &changed, &partial5, &partial3);
+              if (changed) {
+                SetSeqLocPartial (cbp->loc, partial5, partial3);
+              }
+            }
 						if (cbp->loc == NULL)
 						{
 							if (prevcbp != NULL)
@@ -3021,7 +3050,17 @@ AdjustFeaturesForInsertion
 						trp = (tRNAPtr)(rrp->ext.value.ptrvalue);
 						if (trp->anticodon != NULL)
 						{
-							trp->anticodon = SeqLocInsert (trp->anticodon, to_id,pos, len, do_split, NULL);
+              if (len > 0) {
+							  trp->anticodon = SeqLocInsert (trp->anticodon, to_id,pos, len, do_split, NULL);
+              } else {
+                changed = FALSE;
+                partial5 = FALSE;
+                partial3 = FALSE;
+                trp->anticodon = SeqEdSeqLocDelete (trp->anticodon, tobsp, pos, pos - len + 1, FALSE, &changed, &partial5, &partial3);
+                if (changed) {
+                  SetSeqLocPartial (trp->anticodon, partial5, partial3);
+                }
+              }
 						}
 					}
 					break;

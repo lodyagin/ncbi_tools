@@ -1,4 +1,4 @@
-/* $Id: blast_kappa.h,v 1.15 2007/05/08 20:55:30 kazimird Exp $
+/* $Id: blast_kappa.h,v 1.16 2008/07/23 16:55:47 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -72,6 +72,7 @@ extern "C" {
  * @return 0 on success, otherwise failure.
 */
 
+NCBI_XBLAST_EXPORT
 Int2
 Blast_RedoAlignmentCore(EBlastProgramType program_number,
                   BLAST_SequenceBlk * queryBlk,

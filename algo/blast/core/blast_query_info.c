@@ -1,4 +1,4 @@
-/* $Id: blast_query_info.c,v 1.5 2007/01/21 08:45:12 kazimird Exp $
+/* $Id: blast_query_info.c,v 1.6 2008/07/17 17:55:44 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,7 +34,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_query_info.c,v 1.5 2007/01/21 08:45:12 kazimird Exp $";
+    "$Id: blast_query_info.c,v 1.6 2008/07/17 17:55:44 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_util.h>
@@ -183,7 +183,7 @@ BlastQueryInfoGetEffSearchSpace(const BlastQueryInfo* qinfo,
 {
     Int8 retval = 0;
     Int4 i = 0;
-    const Uint4 kNumContexts = BLAST_GetNumberOfContexts(program);
+    const Int4 kNumContexts = (Int4)BLAST_GetNumberOfContexts(program);
     ASSERT(query_index < qinfo->num_queries);
 
     for (i = query_index*kNumContexts; i < (query_index+1)*kNumContexts; i++) {
@@ -201,7 +201,7 @@ BlastQueryInfoSetEffSearchSpace(BlastQueryInfo* qinfo,
                                 Int8 eff_searchsp)
 {
     Int4 i = 0;
-    const Uint4 kNumContexts = BLAST_GetNumberOfContexts(program);
+    const Int4 kNumContexts = (Int4)BLAST_GetNumberOfContexts(program);
     ASSERT(query_index < qinfo->num_queries);
 
     for (i = query_index*kNumContexts; i < (query_index+1)*kNumContexts; i++) {

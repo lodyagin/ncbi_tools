@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_ANSI_EXT__H
 #define CONNECT___NCBI_ANSI_EXT__H
 
-/*  $Id: ncbi_ansi_ext.h,v 6.15 2006/03/07 18:14:59 lavr Exp $
+/*  $Id: ncbi_ansi_ext.h,v 6.17 2008/05/01 16:25:34 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -35,6 +35,9 @@
 #include <connect/connect_export.h>
 #include "ncbi_config.h"
 #include <stddef.h>
+#if !defined(NCBI_CXX_TOOLKIT)  &&  !defined(_GNU_SOURCE)
+#  define _GNU_SOURCE
+#endif /*!NCBI_CXX_TOOLKIT && !_GNU_SOURCE*/
 #include <string.h>
 
 
@@ -131,58 +134,5 @@ extern NCBI_XCONNECT_EXPORT char* strncpy0(char* s1, const char* s2, size_t n);
 #ifdef __cplusplus
 } /* extern "C" */
 #endif
-
-
-/*
- * --------------------------------------------------------------------------
- * $Log: ncbi_ansi_ext.h,v $
- * Revision 6.15  2006/03/07 18:14:59  lavr
- * Formatting
- *
- * Revision 6.14  2006/03/07 17:18:52  lavr
- * +strndup
- *
- * Revision 6.13  2005/04/20 18:12:16  lavr
- * strdup() has got NCBI_XCONNECT_EXPORT
- *
- * Revision 6.12  2004/03/12 23:25:37  gorelenk
- * Added export prefixes.
- *
- * Revision 6.11  2002/10/28 15:41:25  lavr
- * Header made private (moved from include/connect to here)
- *
- * Revision 6.10  2002/09/24 15:01:17  lavr
- * File description indented uniformly
- *
- * Revision 6.9  2002/09/19 17:59:40  lavr
- * Header file guard macro changed; log moved to the end
- *
- * Revision 6.8  2000/11/07 21:19:35  vakatov
- * Compilation warning fixed;  plus, some code beautification...
- *
- * Revision 6.7  2000/10/18 21:15:19  lavr
- * strupr and strlwr added
- *
- * Revision 6.6  2000/10/06 16:39:22  lavr
- * <string.h> included and #defines now take care of functions declared
- * through macros (needed on Linux to prevent macro redefinitions)
- *
- * Revision 6.5  2000/10/05 21:26:07  lavr
- * ncbiconf.h removed
- *
- * Revision 6.4  2000/05/22 16:53:36  lavr
- * Minor change
- *
- * Revision 6.3  2000/05/17 18:51:28  vakatov
- * no HAVE_SIGACTION
- *
- * Revision 6.2  2000/05/17 16:09:57  lavr
- * Define prototypes of functions, usually defined but hidden in ANSI mode
- *
- * Revision 6.1  2000/05/15 19:03:07  lavr
- * Initial revision
- *
- * ==========================================================================
- */
 
 #endif /* CONNECT___NCBI_ANSI_EXT__H */

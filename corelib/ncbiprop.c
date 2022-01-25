@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   06-04-93
 *
-* $Revision: 6.3 $
+* $Revision: 6.4 $
 *
 * File Description:		Application Property Functions.
 *
@@ -59,6 +59,9 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: ncbiprop.c,v $
+* Revision 6.4  2008/04/29 13:40:53  kans
+* fixes for warnings caught by mingw cross-compiler
+*
 * Revision 6.3  2001/03/02 19:52:34  vakatov
 * Do not use "pid" in the app.context anymore.
 * It was needed for 16-bit MS-Win DLLs, a long time ago, and now it's
@@ -699,7 +702,7 @@ NLM_EXTERN long LIBCALL Nlm_GetAppProcessID (void)
 
 /* ----- Generic Version ----- */
 #ifdef USE_GETPID
-#if defined(COMP_MSC) || defined(COMP_BOR)
+#if defined(COMP_MSC) || defined(COMP_BOR) || defined(COMP_MINGW)
 #include <process.h>
 #endif
 

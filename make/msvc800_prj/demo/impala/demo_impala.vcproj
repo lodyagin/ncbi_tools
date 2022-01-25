@@ -3,7 +3,7 @@
 	ProjectType="Visual C++"
 	Version="8.00"
 	Name="demo_impala"
-	ProjectGUID="{B641C7E0-F29C-422C-B3C0-BC3C103BC973}"
+	ProjectGUID="{59199908-E393-464E-81CC-E7317DD6D7B8}"
 	>
 	<Platforms>
 		<Platform

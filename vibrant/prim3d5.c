@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   04/03/95
 *
-* $Revision: 6.2 $
+* $Revision: 6.3 $
 *
 * File Description: 
 *
@@ -38,6 +38,9 @@
 * Date     Name        Description of modification
 * -------  ----------  -----------------------------------------------------
 * $Log: prim3d5.c,v $
+* Revision 6.3  2008/04/29 13:43:50  kans
+* fixes for warnings caught by mingw cross-compiler
+*
 * Revision 6.2  1998/08/12 23:04:05  vakatov
 * [64-bit platforms]  Made "idBuffer" be VoidPtr[] rather than Int4[];
 * Fixed bugs mostly caused by casting between Int4 vars and 8-byte pointers
@@ -141,12 +144,12 @@ static void Nlm_Poly3DDraw ( Nlm_Poly3DPtr p )
   long          zsort[3];
   long          savex1, savex2,savecurz,x1,x2,curz;
   long          stepZX, stepColorX;
-  long          stepXY1, stepXY2, stepXYm;
-  long          stepZY, stepZYm, stepColorY, stepColorYm;
+  long          stepXY1, stepXY2, stepXYm = 0;
+  long          stepZY, stepZYm = 0, stepColorY, stepColorYm = 0;
   long          color10, savecolor10;  
   Int2          needCheck, needCheckFr;
   Int2          vi;
-  Int2          mLeft;
+  Int2          mLeft = 0;
   long          Nlm_stCon_image_end = (long)Nlm_stCon.image +
                                        Nlm_stCon.width * Nlm_stCon.height - 1;
 
@@ -585,11 +588,11 @@ static void Nlm_Poly3DHitT ( Nlm_Poly3DPtr p )
   long          zsort[3];
   long          savex1, savex2,savecurz,x1,x2,curz;
   long          stepZX;
-  long          stepXY1, stepXY2, stepXYm;
-  long          stepZY, stepZYm;
+  long          stepXY1, stepXY2, stepXYm = 0;
+  long          stepZY = 0, stepZYm = 0;
   Int2          needCheck, needCheckFr;
   Int2          vi;
-  Int2          mLeft;
+  Int2          mLeft = 0;
 
 
   reg1 = (long)p;

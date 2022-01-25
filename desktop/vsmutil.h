@@ -29,13 +29,16 @@
 *
 * Version Creation Date:   3/3/95
 *
-* $Revision: 6.9 $
+* $Revision: 6.10 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: vsmutil.h,v $
+* Revision 6.10  2008/09/17 14:18:09  kans
+* CreateValidateWindow variants return validator window handle
+*
 * Revision 6.9  2007/07/06 16:01:27  bollin
 * Added Bad Specific Host values to Validator Report.
 *
@@ -79,12 +82,12 @@ typedef void (LIBCALLBACK *ErrNotifyProc) PROTO((
               Uint2 entityID, Uint4 itemID, Uint2 itemtype,
               Boolean select, Boolean dblClick));
 
-extern void CreateValidateWindow (ErrNotifyProc notify, CharPtr title,
-                                  FonT font, ErrSev sev, Int2 verbose);
-extern void CreateValidateWindowEx (ErrNotifyProc notify, CharPtr title,
-                                    FonT font, ErrSev sev, Int2 verbose,
-                                    BaseFormPtr bfp, FormActnFunc revalProc,
-                                    Boolean okaytosetviewtarget);
+extern WindoW CreateValidateWindow (ErrNotifyProc notify, CharPtr title,
+                                    FonT font, ErrSev sev, Int2 verbose);
+extern WindoW CreateValidateWindowEx (ErrNotifyProc notify, CharPtr title,
+                                      FonT font, ErrSev sev, Int2 verbose,
+                                      BaseFormPtr bfp, FormActnFunc revalProc,
+                                      Boolean okaytosetviewtarget);
 extern void ShowValidateWindow (void);
 extern void ShowValidateDoc (void);
 extern void HideValidateDoc (void);

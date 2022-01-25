@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_HOST_INFO__H
 #define CONNECT___NCBI_HOST_INFO__H
 
-/*  $Id: ncbi_host_info.h,v 6.7 2006/03/06 20:23:59 lavr Exp $
+/*  $Id: ncbi_host_info.h,v 6.9 2008/09/03 20:55:44 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -53,76 +53,92 @@ extern "C" {
 #endif
 
 
-struct SHostInfoTag;
-typedef struct SHostInfoTag* HOST_INFO;
+struct SHostInfoTag;  /*forward declaration of an opaque private structure*/
+typedef struct SHostInfoTag* HOST_INFO; /*handle for the user code use*/
 
 
-/* Return CPU count or -1 if error occurred.
+/* Return CPU count or -1 if an error occurred.
  */
-extern NCBI_XCONNECT_EXPORT int HINFO_CpuCount(const HOST_INFO host_info);
+extern NCBI_XCONNECT_EXPORT
+int HINFO_CpuCount(const HOST_INFO host_info);
 
 
-/* Return task count or -1 if error occurred.
+/* Return number of actual CPU units, 0 if the number cannot
+ * be determined, or -1 if an error occurred.
  */
-extern NCBI_XCONNECT_EXPORT int HINFO_TaskCount(const HOST_INFO host_info);
+extern NCBI_XCONNECT_EXPORT
+int HINFO_CpuUnits(const HOST_INFO host_info);
+
+
+/* Return CPU clock rate (in MHz) or 0 if an error occurred.
+ */
+extern NCBI_XCONNECT_EXPORT
+double HINFO_CpuClock(const HOST_INFO host_info);
+
+
+/* Return task count or -1 if an error occurred.
+ */
+extern NCBI_XCONNECT_EXPORT
+int HINFO_TaskCount(const HOST_INFO host_info);
+
+
+/* Return non-zero on success and store memory usage (in MB
+ * in the provided array "memusage" at the following layout:
+ * index 0 = total RAM, MB;
+ * index 1 = discardable RAM (cached), MB;
+ * index 2 = free RAM, MB;
+ * index 3 = total swap, MB;
+ * index 4 = free swap, MB.
+ * Return 0 if an error occurred.
+ */
+extern NCBI_XCONNECT_EXPORT
+int/*bool*/ HINFO_Memusage(const HOST_INFO host_info, double memusage[5]);
 
 
 /* Return non-zero on success and store load averages in the
  * provided array "lavg", with the standard load average for last
  * minute stored at index [0], and instant load average
- * (aka BLAST) stored at index [1]. Return 0 on error.
+ * (aka BLAST) stored at index [1].  Return 0 on error.
  */
-extern NCBI_XCONNECT_EXPORT int/*bool*/ HINFO_LoadAverage
-(const HOST_INFO host_info,
- double          lavg[2]
- );
+extern NCBI_XCONNECT_EXPORT
+int/*bool*/ HINFO_LoadAverage(const HOST_INFO host_info, double lavg[2]);
 
 
 /* Return non-zero on success and store host status coefficients in
  * the provided array "status", with status based on the standard
  * load average stored at index [0], and that based on instant load
  * average stored at index [1]. Status may return as 0 if the host
- * does not provide such information. Return 0 on error.
+ * does not provide such information.  Return 0 on error.
  */
-extern NCBI_XCONNECT_EXPORT int/*bool*/ HINFO_Status
-(const HOST_INFO host_info,
- double          status[2]
- );
+extern NCBI_XCONNECT_EXPORT
+int/*bool*/ HINFO_Status(const HOST_INFO host_info, double status[2]);
 
 
-/* Obsolete.  Always returns 0 and does not touch its "blast" argument.
- */
-extern NCBI_XCONNECT_EXPORT int/*bool*/ HINFO_BLASTParams
-(const HOST_INFO host_info,
- unsigned int    blast[8]
- );
-
-
-/* Obtain and return host environment. The host environment is the
+/* Obtain and return host environment.  The host environment is the
  * sequence of lines (separated by \n), all having the form "name=value",
  * which are provided to load-balancing service mapping daemon (LBSMD)
- * in the configuration file on that host. Return 0 if the host
- * environment cannot be obtained. If completed successfully, the
+ * in the configuration file on that host.  Return 0 if the host
+ * environment cannot be obtained.  If completed successfully, the
  * host environment remains valid until the handle 'host_info' deleted
  * in the application program.
  */
-extern NCBI_XCONNECT_EXPORT const char* HINFO_Environment
-(const HOST_INFO host_info);
+extern NCBI_XCONNECT_EXPORT
+const char* HINFO_Environment(const HOST_INFO host_info);
 
 
 /* Obtain affinity argument and value that has keyed the service
  * selection (if affinities have been used at all).  NULL gets returned
- * as argument if no affinity has been found (in this case value
- * will be returned 0 as well).  Otherwise, NULL gets returned as
- * value if there was no particular value matched but the argument
+ * as argument if no affinity has been found (in this case the value
+ * will be returned NULL as well).  Otherwise, NULL gets returned as
+ * the value if there was no particular value matched but the argument
  * played alone; "" is the value has been used empty, or any other
- * substring from the host environment that has keyed the decision.
+ * substring from the host environment that keyed the selection decision.
  */
-extern NCBI_XCONNECT_EXPORT const char* HINFO_AffinityArgument
-(const HOST_INFO host_info);
+extern NCBI_XCONNECT_EXPORT
+const char* HINFO_AffinityArgument(const HOST_INFO host_info);
 
-extern NCBI_XCONNECT_EXPORT const char* HINFO_AffinityArgvalue
-(const HOST_INFO host_info);
+extern NCBI_XCONNECT_EXPORT
+const char* HINFO_AffinityArgvalue(const HOST_INFO host_info);
 
 
 #ifdef __cplusplus
@@ -131,33 +147,5 @@ extern NCBI_XCONNECT_EXPORT const char* HINFO_AffinityArgvalue
 
 
 /* @} */
-
-
-/*
- * --------------------------------------------------------------------------
- * $Log: ncbi_host_info.h,v $
- * Revision 6.7  2006/03/06 20:23:59  lavr
- * Added "const" qualifier to all host-infos when passed to getters
- *
- * Revision 6.6  2006/03/05 17:33:15  lavr
- * +HINFO_AffinityArgument, +HINFO_AffinityArgvalue
- *
- * Revision 6.5  2003/04/09 19:05:42  siyan
- * Added doxygen support
- *
- * Revision 6.4  2003/02/08 21:03:51  lavr
- * Unimportant change in comments
- *
- * Revision 6.3  2003/01/08 01:59:32  lavr
- * DLL-ize CONNECT library for MSVC (add NCBI_XCONNECT_EXPORT)
- *
- * Revision 6.2  2002/11/08 17:16:11  lavr
- * NULL parameter acceptance explicitly stated
- *
- * Revision 6.1  2002/10/28 20:12:02  lavr
- * Initial revision
- *
- * ==========================================================================
- */
 
 #endif /* CONNECT___NCBI_HOST_INFO__H */

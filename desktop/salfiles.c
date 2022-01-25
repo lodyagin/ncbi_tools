@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.100 $
+* $Revision: 6.101 $
 *
 * File Description: 
 *
@@ -2441,7 +2441,8 @@ static SeqIdPtr FindSeqIdForFastaExport (BioseqPtr bsp)
 	60,  /* 16 = tpg */
 	60,  /* 17 = tpe */
 	60,  /* 18 = tpd */
-	60   /* 19 = gpp */
+	60,  /* 19 = gpp */
+	60   /* 20 = nat */
 	};
 
   if (bsp == NULL || bsp->id == NULL) return NULL;

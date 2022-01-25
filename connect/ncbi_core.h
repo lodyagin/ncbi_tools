@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_CORE__H
 #define CONNECT___NCBI_CORE__H
 
-/* $Id: ncbi_core.h,v 6.33 2007/10/17 15:25:43 kazimird Exp $
+/* $Id: ncbi_core.h,v 6.34 2008/10/17 16:25:39 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -156,6 +156,13 @@ extern NCBI_XCONNECT_EXPORT const char* IO_StatusStr(EIO_Status status);
 
 
 /** Lock handle -- keeps all data needed for the locking and for the cleanup.
+ * The following are the minimal requirements for the lock:
+ * - if lock for read is available, then the lock must allow one nested lock
+ * for read when it has been already locked for write (naturally, by the
+ * same thread);
+ * - if lock for read is not available (i.e. the read lock is implemented
+ * as a write lock), the lock must allow recursive locking (by the same
+ * thread) of the depth of 2.
  */
 struct MT_LOCK_tag;
 typedef struct MT_LOCK_tag* MT_LOCK;
@@ -176,7 +183,7 @@ typedef enum {
 } EMT_Lock;
 
 
-/** MT locking callback (operates like a mutex or RW-lock).
+/** MT locking callback (operates like a [recursive] mutex or RW-lock).
  * @param user_data
  *  See "user_data" in MT_LOCK_Create()
  * @param how
@@ -533,11 +540,13 @@ typedef void (*FREG_Get)
  * @param value
  *  Key value to associate with the key
  * @param storage
- *  How to store the new setting, temporarily or permanently.
+ *  How to store the new setting, temporarily or permanently
+ * @return
+ *  Non-zero if successful (including replacing a value with itself)
  * @sa
  *  REG_Create, REG_Reset, EREG_Storage
  */
-typedef void (*FREG_Set)
+typedef int (*FREG_Set)
 (void*        user_data,
  const char*  section,
  const char*  name,
@@ -563,6 +572,8 @@ typedef void (*FREG_Cleanup)
  *  MT_LOCK_Delete() will be called on it when this REG gets destroyed
  *  -- be aware of it (hence, if the lock is also to be used with something
  *  else, then call MT_LOCK_AddRef() on it before passing to REG_Create)!
+ * Passing NULL callbacks below causes limiting the functionality
+ * only to those operations that have the callbacks set.
  * @param user_data
  *  Unspecified data to call "set", "get" and "cleanup" with 
  * @param get
@@ -680,10 +691,12 @@ extern NCBI_XCONNECT_EXPORT char* REG_Get
  *  The value to store
  * @param storage
  *  Whether to store temporarily or permanently
+ * @return
+ *  Non-zero if successful (including replacing a value with itself)
  * @sa
  *  REG_Create, EREG_Storage, REG_Get
  */
-extern NCBI_XCONNECT_EXPORT void REG_Set
+extern NCBI_XCONNECT_EXPORT int REG_Set
 (REG          rg,
  const char*  section,
  const char*  name,

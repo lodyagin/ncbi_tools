@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 6.103 $
+* $Revision: 6.117 $
 *
 * File Description:  New GenBank flatfile generator application
 *
@@ -48,9 +48,13 @@
 #include <sequtil.h>
 #include <sqnutils.h>
 #include <explore.h>
+#include <toasn3.h>
 #include <asn2gnbp.h>
 
-#define ASN2GB_APP_VER "4.4"
+/* asn2gnbi.h needed to test PUBSEQGetAccnVer in accpubseq.c */
+#include <asn2gnbi.h>
+
+#define ASN2GB_APP_VER "5.5"
 
 CharPtr ASN2GB_APPLICATION = ASN2GB_APP_VER;
 
@@ -190,7 +194,7 @@ static Int2 HandleSingleRecord (
       return 1;
     }
 
-    dataptr = ReadAsnFastaOrFlatFile (fp, &datatype, NULL, FALSE, FALSE, FALSE, FALSE);
+    dataptr = ReadAsnFastaOrFlatFile (fp, &datatype, NULL, FALSE, FALSE, TRUE, FALSE);
 
     FileClose (fp);
 
@@ -529,6 +533,52 @@ static CharPtr ffvew [] = {
   NULL
 };
 
+static void ReportDiffs (
+  CharPtr path1,
+  CharPtr path2,
+  CharPtr path3,
+  FILE* fp,
+  CharPtr ffdiff,
+  Boolean useFfdiff
+)
+
+{
+  Char    buf [256];
+  Char    cmmd [256];
+  size_t  ct;
+  FILE    *fpo;
+
+  if (useFfdiff) {
+    sprintf (cmmd, "%s -o %s -n %s -d reports", ffdiff, path1, path2);
+    system (cmmd);
+
+    sprintf (cmmd, "rm %s; rm %s", path1, path2);
+    system (cmmd);
+  } else {
+    sprintf (cmmd, "sort %s | uniq -c > %s.suc; rm %s", path1, path1, path1);
+    system (cmmd);
+
+    sprintf (cmmd, "sort %s | uniq -c > %s.suc; rm %s", path2, path2, path2);
+    system (cmmd);
+
+    sprintf (cmmd, "diff %s.suc %s.suc > %s", path1, path2, path3);
+    system (cmmd);
+
+    sprintf (cmmd, "cat %s", path3);
+    fpo = popen (cmmd, "r");
+    if (fpo != NULL) {
+      while ((ct = fread (buf, 1, sizeof (buf), fpo)) > 0) {
+        fwrite (buf, 1, ct, fp);
+        fflush (fp);
+      }
+      pclose (fpo);
+    }
+
+    sprintf (cmmd, "rm %s.suc; rm %s.suc", path1, path2);
+    system (cmmd);
+  }
+}
+
 static void CompareFlatFiles (
   CharPtr path1,
   CharPtr path2,
@@ -580,88 +630,19 @@ static void CompareFlatFiles (
     SaveAsn2gnbk (sep, path1, format, SEQUIN_MODE, style, flags, locks, custom);
     SaveAsn2gnbk (sep, path2, format, RELEASE_MODE, style, flags, locks, custom);
 
-    if (useFfdiff) {
-      sprintf (cmmd, "%s -o %s -n %s -d reports", ffdiff, path1, path2);
-      system (cmmd);
-
-      sprintf (cmmd, "rm %s; rm %s", path1, path2);
-      system (cmmd);
-    } else {
-      sprintf (cmmd, "sort %s | uniq -c > %s.suc; rm %s", path1, path1, path1);
-      system (cmmd);
-
-      sprintf (cmmd, "sort %s | uniq -c > %s.suc; rm %s", path2, path2, path2);
-      system (cmmd);
-
-      sprintf (cmmd, "diff %s.suc %s.suc > %s", path1, path2, path3);
-      system (cmmd);
-
-      sprintf (cmmd, "cat %s", path3);
-      fpo = popen (cmmd, "r");
-      if (fpo != NULL) {
-        while ((ct = fread (buf, 1, sizeof (buf), fpo)) > 0) {
-          fwrite (buf, 1, ct, fp);
-          fflush (fp);
-        }
-        pclose (fpo);
-      }
-
-      sprintf (cmmd, "rm %s.suc; rm %s.suc", path1, path2);
-      system (cmmd);
-    }
+    ReportDiffs (path1, path2, path3, fp, ffdiff, useFfdiff);
 
   } else if (batch == 3) {
 
+#ifdef ASN2GNBK_SUPPRESS_UNPUB_AFFIL
+    VisitPubdescsInSep (sep, NULL, FreeUnpubAffil);
+#endif
+
     SaveAsn2gnbk (sep, path1, format, mode, style, flags, locks, custom);
+    SeriousSeqEntryCleanupBulk (sep);
+    SaveAsn2gnbk (sep, path2, format, mode, style, flags, locks, custom);
 
-    aip = AsnIoOpen (path3, "w");
-    if (aip == NULL) return;
-
-    SeqEntryAsnWrite (sep, aip, NULL);
-    AsnIoClose (aip);
-
-    fsep = FindNthBioseq (sep, 1);
-    if (fsep == NULL || fsep->choice != 1) return;
-    bsp = (BioseqPtr) fsep->data.ptrvalue;
-    if (bsp == NULL) return;
-    SeqIdWrite (bsp->id, buf, PRINTID_FASTA_LONG, sizeof (buf));
-
-    arguments [0] = '\0';
-    sprintf (arguments, "-format %s -mode %s -style %s -view %s",
-             fffmt [(int) format], ffmod [(int) mode], ffstl [(int) style], ffvew [(int) format]);
-
-    sprintf (cmmd, "%s %s -i %s -o %s", asn2flat, arguments, path3, path2);
-    system (cmmd);
-
-    if (useFfdiff) {
-      sprintf (cmmd, "%s -o %s -n %s -d reports", ffdiff, path1, path2);
-      system (cmmd);
-
-      sprintf (cmmd, "rm %s; rm %s", path1, path2);
-      system (cmmd);
-    } else {
-      sprintf (cmmd, "sort %s | uniq -c > %s.suc; rm %s", path1, path1, path1);
-      system (cmmd);
-
-      sprintf (cmmd, "sort %s | uniq -c > %s.suc; rm %s", path2, path2, path2);
-      system (cmmd);
-
-      sprintf (cmmd, "diff %s.suc %s.suc > %s", path1, path2, path3);
-      system (cmmd);
-
-      sprintf (cmmd, "cat %s", path3);
-      fpo = popen (cmmd, "r");
-      if (fpo != NULL) {
-        while ((ct = fread (buf, 1, sizeof (buf), fpo)) > 0) {
-          fwrite (buf, 1, ct, fp);
-          fflush (fp);
-        }
-        pclose (fpo);
-      }
-
-      sprintf (cmmd, "rm %s.suc; rm %s.suc", path1, path2);
-      system (cmmd);
-    }
+    ReportDiffs (path1, path2, path3, fp, ffdiff, useFfdiff);
 
   } else if (batch == 4) {
 
@@ -691,37 +672,34 @@ static void CompareFlatFiles (
     sprintf (cmmd, "%s %s -i %s -o %s", asn2flat, arguments, path3, path2);
     system (cmmd);
 
-    if (useFfdiff) {
-      sprintf (cmmd, "%s -o %s -n %s -d reports", ffdiff, path1, path2);
-      system (cmmd);
-
-      sprintf (cmmd, "rm %s; rm %s", path1, path2);
-      system (cmmd);
-    } else {
-      sprintf (cmmd, "sort %s | uniq -c > %s.suc; rm %s", path1, path1, path1);
-      system (cmmd);
-
-      sprintf (cmmd, "sort %s | uniq -c > %s.suc; rm %s", path2, path2, path2);
-      system (cmmd);
-
-      sprintf (cmmd, "diff %s.suc %s.suc > %s", path1, path2, path3);
-      system (cmmd);
-
-      sprintf (cmmd, "cat %s", path3);
-      fpo = popen (cmmd, "r");
-      if (fpo != NULL) {
-        while ((ct = fread (buf, 1, sizeof (buf), fpo)) > 0) {
-          fwrite (buf, 1, ct, fp);
-          fflush (fp);
-        }
-        pclose (fpo);
-      }
-
-      sprintf (cmmd, "rm %s.suc; rm %s.suc", path1, path2);
-      system (cmmd);
-    }
+    ReportDiffs (path1, path2, path3, fp, ffdiff, useFfdiff);
 
   } else if (batch == 5) {
+
+    SaveAsn2gnbk (sep, path1, format, mode, style, flags, locks, custom);
+
+    aip = AsnIoOpen (path3, "w");
+    if (aip == NULL) return;
+
+    SeqEntryAsnWrite (sep, aip, NULL);
+    AsnIoClose (aip);
+
+    fsep = FindNthBioseq (sep, 1);
+    if (fsep == NULL || fsep->choice != 1) return;
+    bsp = (BioseqPtr) fsep->data.ptrvalue;
+    if (bsp == NULL) return;
+    SeqIdWrite (bsp->id, buf, PRINTID_FASTA_LONG, sizeof (buf));
+
+    arguments [0] = '\0';
+    sprintf (arguments, "-format %s -mode %s -style %s -view %s",
+             fffmt [(int) format], ffmod [(int) mode], ffstl [(int) style], ffvew [(int) format]);
+
+    sprintf (cmmd, "%s %s -i %s -o %s", asn2flat, arguments, path3, path2);
+    system (cmmd);
+
+    ReportDiffs (path1, path2, path3, fp, ffdiff, useFfdiff);
+
+  } else if (batch == 6) {
 
     aip = AsnIoOpen (path3, "w");
     if (aip == NULL) return;
@@ -974,7 +952,7 @@ static Int2 HandleMultipleRecords (
     return 1;
   }
 
-  if ((batch == 1 || batch == 3 || batch == 4 || batch == 5 || format != GENBANK_FMT) && extra == NULL) {
+  if ((batch == 1 || batch == 4 || batch == 5 || format != GENBANK_FMT) && extra == NULL) {
     ofp = FileOpen (outputFile, "w");
     if (ofp == NULL) {
       AsnIoClose (aip);
@@ -1064,7 +1042,7 @@ static Int2 HandleMultipleRecords (
           if (batch != 1) {
             printf ("%s\n", buf);
             fflush (stdout);
-            if (batch != 3 && batch != 4 && batch != 5) {
+            if (batch != 4 && batch != 5) {
               if (ofp != NULL) {
                 fprintf (ofp, "%s\n", buf);
                 fflush (ofp);
@@ -1282,6 +1260,24 @@ static SeqEntryPtr SeqEntryFromAccnOrGi (
 
   TrimSpacesAroundString (accn);
 
+#ifdef INTERNAL_NCBI_ASN2GB
+  /* temporary code to test PUBSEQGetAccnVer in accpubseq.c */
+
+  if (*accn == '*') {
+    Char buf [64];
+    accn++;
+    if (sscanf (accn, "%ld", &val) == 1) {
+      uid = (Int4) val;
+      if (GetAccnVerFromServer (uid, buf)) {
+        Message (MSG_POST, "GetAccnVerFromServer returned %s", buf);
+      } else {
+        Message (MSG_POST, "GetAccnVerFromServer failed");
+      }
+    }
+    return NULL;
+  }
+#endif
+
   alldigits = TRUE;
   ptr = accn;
   ch = *ptr;
@@ -1368,9 +1364,17 @@ Args myargs [] = {
     FALSE, 'h', ARG_INT, 0.0, 0, NULL},
   {"Custom Flags (4 HideFeats, 1792 HideRefs, 8192 HideSources, 262144 HideTranslation)", "0", NULL, NULL,
     FALSE, 'u', ARG_INT, 0.0, 0, NULL},
-  {"ASN.1 Type (a Any, e Seq-entry, b Bioseq, s Bioseq-set, m Seq-submit, t Batch Bioseq-set, u Batch Seq-submit)", "a", NULL, NULL,
+  {"ASN.1 Type\n"
+   "      Single Record: a Any, e Seq-entry, b Bioseq, s Bioseq-set, m Seq-submit\n"
+   "      Release File: t Batch Bioseq-set, u Batch Seq-submit\n", "a", NULL, NULL,
     TRUE, 'a', ARG_STRING, 0.0, 0, NULL},
-  {"Batch (1 Report, 2 Sequin/Release, 3 asn2gb/asn2flat, 4 asn2flat BSEC/nocleanup, 5 oldasn2gb/newasn2gb)", "0", "0", "5",
+  {"Batch\n"
+   "      1 Report\n"
+   "      2 Sequin/Release\n"
+   "      3 asn2gb SSEC/nocleanup\n"
+   "      4 asn2flat BSEC/nocleanup\n"
+   "      5 asn2gb/asn2flat\n"
+   "      6 oldasn2gb/newasn2gb)", "0", "0", "5",
     FALSE, 't', ARG_INT, 0.0, 0, NULL},
   {"Input File is Binary", "F", NULL, NULL,
     TRUE, 'b', ARG_BOOLEAN, 0.0, 0, NULL},
@@ -1533,6 +1537,12 @@ Int2 Main (
   } else if (StringICmp (str, "r") == 0) {
     do_gbseq = TRUE;
     format = GENPEPT_FMT;
+
+  } else if (StringICmp (str, "xz") == 0 || StringICmp (str, "zx") == 0) {
+    do_gbseq = TRUE;
+    do_insdseq = TRUE;
+    format = GENBANK_FMT;
+    altformat = GENPEPT_FMT;
 
   } else if (StringICmp (str, "x") == 0) {
     do_gbseq = TRUE;

@@ -299,6 +299,9 @@ Package=<4>
     Begin Project Dependency
     Project_Dep_Name demo_asnmacro
     End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name demo_aceread_tst
+    End Project Dependency
 }}}
 
 ###############################################################################
@@ -529,6 +532,39 @@ Package=<4>
 {{{
     Begin Project Dependency
     Project_Dep_Name ncbiconfig
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "demo_aceread_tst"=.\demo\aceread_tst\demo_aceread_tst.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name ncbiid1
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name netcli
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbitool
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbinacc
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbiobj
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbi
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbimain
     End Project Dependency
 }}}
 

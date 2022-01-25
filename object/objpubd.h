@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.12 $
+* $Revision: 6.13 $
 *
 * File Description:  Object manager interface for type Pubdesc from
 *                    NCBI-Sequence.  This is separate to avoid typedef
@@ -43,68 +43,6 @@
 * --------------------------------------------------------------------------
 * Date	   Name        Description of modification
 * -------  ----------  -----------------------------------------------------
-*
-* $Log: objpubd.h,v $
-* Revision 6.12  2007/12/04 17:50:55  kans
-* added MI_TECH_tsa
-*
-* Revision 6.11  2005/12/29 13:46:18  bollin
-* added PubdescContentMatch function
-*
-* Revision 6.10  2005/05/24 19:13:47  bollin
-* removed PubdescMatch function - was conflicting with local versions elsewhere.
-* Function is now a local function in desktop\seqsub.c
-*
-* Revision 6.9  2005/05/23 12:59:31  bollin
-* added PubdescMatch function
-*
-* Revision 6.8  2004/12/08 20:20:34  kans
-* changed MI_TECH_composite to MI_TECH_composite_wgs_htgs
-*
-* Revision 6.7  2004/12/08 19:59:24  kans
-* added MI_TECH_composite
-*
-* Revision 6.6  2004/08/30 18:08:52  kans
-* added MI_TECH_barcode
-*
-* Revision 6.5  2002/02/20 20:47:18  kans
-* added MI_TECH_wgs
-*
-* Revision 6.4  2000/09/28 11:53:13  ostell
-* added Pubdesc.reftype = 3
-*
-* Revision 6.3  2000/05/26 19:50:23  ostell
-* added MI_TECH_htc
-*
-* Revision 6.2  1999/02/12 18:45:22  ostell
-* added MI_TECH_htgs_0
-*
-* Revision 6.1  1998/06/12 18:02:26  kans
-* added MI_TECH_fli_cdna 17 define
-*
-* Revision 6.0  1997/08/25 18:50:32  madden
-* Revision changed to 6.0
-*
-* Revision 4.3  1997/08/20 19:17:13  madden
-* Version 6 of ASN.1
-*
-* Revision 4.2  1997/06/19 18:41:50  vakatov
-* [WIN32,MSVC++]  Adopted for the "NCBIOBJ.LIB" DLL'ization
-*
-* Revision 4.1  1996/06/13 21:09:08  ostell
-* added defines for MI_TECH
-*
- * Revision 4.0  1995/07/26  13:48:06  ostell
- * force revision to 4.0
- *
- * Revision 3.2  1995/07/11  18:49:20  ostell
- * added reftype
- *
- * Revision 3.1  1995/05/15  21:22:00  ostell
- * added Log line
- *
-*
-*
 *
 * ==========================================================================
 */
@@ -234,6 +172,7 @@ typedef struct molinfo {
 		tech;
 	CharPtr techexp;
 	Uint1 completeness;
+    CharPtr gbmoltype;
 } MolInfo, PNTR MolInfoPtr;
 
 #define MI_TECH_unknown 0

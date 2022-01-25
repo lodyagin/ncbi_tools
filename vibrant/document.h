@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/12/93
 *
-* $Revision: 6.4 $
+* $Revision: 6.5 $
 *
 * File Description:  Converts fielded text into final report in a document
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: document.h,v $
+* Revision 6.5  2008/04/29 13:53:40  kans
+* fixes for warnings caught by mingw cross-compiler
+*
 * Revision 6.4  2008/02/13 18:52:08  bollin
 * Added MapDocPointEx, which allows you to prefer the first matching column to
 * the last matching column.
@@ -296,6 +299,9 @@ extern void Nlm_DisplayFancy  PROTO((Nlm_DoC d, Nlm_CharPtr file, Nlm_ParPtr par
 #define AppendItem Nlm_AppendItem
 #define AppendText Nlm_AppendText
 #define ReplaceItem Nlm_ReplaceItem
+#ifdef ReplaceText
+#undef ReplaceText
+#endif
 #define ReplaceText Nlm_ReplaceText
 #define InsertItem Nlm_InsertItem
 #define InsertText Nlm_InsertText

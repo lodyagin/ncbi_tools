@@ -1,4 +1,4 @@
-/* $Id: blast_psi.h,v 1.18 2007/04/03 15:25:30 kazimird Exp $
+/* $Id: blast_psi.h,v 1.20 2008/04/15 15:55:45 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -60,6 +60,15 @@ typedef struct PSIMsaDimensions {
                           query (does not include the query) */
 } PSIMsaDimensions;
 
+#ifdef DEBUG_PSSM_ENGINE
+/** Sequence information structure */
+typedef struct PSISeqInfo {
+    int gi;                 /**< Sequence GI */
+    double bit_score;       /**< Bit score of this sequence aligned with query*/
+    double evalue;          /**< E-value of this sequence aligned with query*/
+} PSISeqInfo;
+#endif /* DEBUG_PSSM_ENGINE */
+
 /** Multiple sequence alignment (msa) data structure containing the raw data 
  * needed by the PSSM engine to create a PSSM. By convention, the first row of
  * the data field contains the query sequence */
@@ -68,6 +77,12 @@ typedef struct PSIMsa {
     PSIMsaCell**        data;       /**< actual data, dimensions are 
                                      (dimensions->num_seqs+1) by
                                      (dimensions->query_length) */
+#ifdef DEBUG_PSSM_ENGINE
+    PSISeqInfo*         seqinfo;    /** sequence information for a row of the
+                                      multiple sequence alignment, length is
+                                      dimensions->num_seqs+1 */
+                                     
+#endif /* DEBUG_PSSM_ENGINE */
 } PSIMsa;
 
 /** Allocates and initializes the multiple sequence alignment data structure
@@ -96,6 +111,9 @@ typedef struct PSIMatrix {
     double  lambda;     /**< Lambda Karlin-Altschul parameter */
     double  kappa;      /**< Kappa Karlin-Altschul parameter */
     double  h;          /**< H Karlin-Altschul parameter */
+    double  ung_lambda; /**< Ungapped Lambda Karlin-Altschul parameter */
+    double  ung_kappa;  /**< Ungapped Kappa Karlin-Altschul parameter */
+    double  ung_h;      /**< Ungapped H Karlin-Altschul parameter */
 } PSIMatrix;
 
 /** Allocates a new PSIMatrix structure 
@@ -126,6 +144,10 @@ typedef struct PSIDiagnosticsRequest {
     Boolean frequency_ratios;               /**< request frequency ratios */
     Boolean gapless_column_weights;         /**< request gapless column weights
                                               */
+    Boolean sigma;                          /**< request sigma */
+    Boolean interval_sizes;                 /**< request interval sizes */
+    Boolean num_matching_seqs;              /**< request number of matching 
+                                              sequences */
 } PSIDiagnosticsRequest;
 
 /** This structure contains the diagnostics information requested using the
@@ -146,6 +168,12 @@ typedef struct PSIDiagnosticsResponse {
                                              alphabet_size) */
     double* gapless_column_weights;        /**< Weights for columns without
                                              gaps (query_length elements) */
+    double* sigma;                         /**< sigma (query_length elements) */
+    Uint4* interval_sizes;                 /**< interval sizes of aligned
+                                             regions (query_length elements) */
+    Uint4* num_matching_seqs;              /**< number of matching sequences 
+                                             per query position (query_length
+                                             elements) */
     Uint4 query_length;                    /**< Specifies the number of
                                              positions in the PSSM */
     Uint4 alphabet_size;                   /**< Specifies length of alphabet */

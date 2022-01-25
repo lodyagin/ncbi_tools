@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: rpsblast.c,v 6.92 2007/08/21 20:07:01 kans Exp $";
+static char const rcsid[] = "$Id: rpsblast.c,v 6.93 2008/07/23 14:06:57 madden Exp $";
 
-/* $Id: rpsblast.c,v 6.92 2007/08/21 20:07:01 kans Exp $
+/* $Id: rpsblast.c,v 6.93 2008/07/23 14:06:57 madden Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -31,12 +31,15 @@ static char const rcsid[] = "$Id: rpsblast.c,v 6.92 2007/08/21 20:07:01 kans Exp
 *
 * Initial Version Creation Date: 12/14/1999
 *
-* $Revision: 6.92 $
+* $Revision: 6.93 $
 *
 * File Description:
 *         Main file for RPS BLAST program
 *
 * $Log: rpsblast.c,v $
+* Revision 6.93  2008/07/23 14:06:57  madden
+* Fix ASN.1 output (JIRA SB-89)
+*
 * Revision 6.92  2007/08/21 20:07:01  kans
 * include gencode_singleton.h, cast first argument to BlastFormattingInfoNew to fix CodeWarrior complaint
 *
@@ -575,6 +578,7 @@ Int2 Main(void)
    Blast_SummaryReturn* full_sum_returns = NULL;
    Boolean believe_query = (Boolean) myargs[OPT_BELIEVE_QUERY].intvalue;
    Char buf[256] = { '\0' };
+   BlastFormattingInfo* asn_format_info = NULL;
    GeneticCodeSingletonInit();
 
    StringCpy(buf, "rpsblast ");
@@ -654,6 +658,20 @@ Int2 Main(void)
                                    believe_query);
 
    BLAST_PrintOutputHeader(format_info);
+   if (myargs[OPT_ASNOUT].strvalue) {
+               /* This just prints out the ASN.1 to a secondary file. */
+               BlastFormattingInfoNew(eAlignViewAsnText, options,
+                            blast_program, dbname,
+                            myargs[OPT_ASNOUT].strvalue, &asn_format_info);
+
+               BlastFormattingInfoSetUpOptions(asn_format_info,
+                            myargs[OPT_NUM_DESC].intvalue,
+                            myargs[OPT_NUM_DESC].intvalue,
+                            FALSE,
+                            FALSE,
+                            FALSE,
+                            TRUE);
+   }
 
    /* Loop over sets of queries. */
    while (1) {
@@ -719,23 +737,9 @@ Int2 Main(void)
        /* format results */
        
        if (myargs[OPT_ASNOUT].strvalue) {
-                   /* This just prints out the ASN.1 to a secondary file. */
-                   BlastFormattingInfo* asn_format_info = NULL;
-                   BlastFormattingInfoNew(eAlignViewAsnText, options,
-                              blast_program, dbname,
-                              myargs[OPT_ASNOUT].strvalue, &asn_format_info);
-
-                   BlastFormattingInfoSetUpOptions(asn_format_info,
-                                       myargs[OPT_NUM_DESC].intvalue,
-                                       myargs[OPT_NUM_DESC].intvalue,
-                                       FALSE,
-                                       FALSE,
-                                       FALSE,
-                                       TRUE);
                    status =
                        BLAST_FormatResults(seqalign_arr, num_queries, query_slp,
                                    NULL, asn_format_info, sum_returns);
-                   asn_format_info = BlastFormattingInfoFree(asn_format_info);
        }
        
        status = 
@@ -756,6 +760,8 @@ Int2 Main(void)
 
    if (infp)
       FileClose(infp);
+    if (asn_format_info)
+      asn_format_info = BlastFormattingInfoFree(asn_format_info);
    
    /* Print the footer with summary information. */
    Blast_PrintOutputFooter(format_info, full_sum_returns);

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   5/5/00
 *
-* $Revision: 1.29 $
+* $Revision: 1.30 $
 *
 * File Description: 
 *
@@ -75,7 +75,7 @@ NLM_EXTERN CONN PubSeqFetchOpenConnection (
 );
 
 NLM_EXTERN CONN PubSeqFetchTraceOpenConnection (
-  Int4 tid,
+  Uint4 tid,
   Int2 retcode,
   Int4 flags
 );
@@ -141,15 +141,8 @@ NLM_EXTERN PubmedEntryPtr PubMedSynchronousQuery (
   Int4 uid
 );
 
-NLM_EXTERN SeqEntryPtr PubSeqSynchronousQueryEx (
-  Int4 uid,
-  Int2 retcode,
-  Int4 flags,
-  Boolean is_trace
-);
-
 NLM_EXTERN SeqEntryPtr PubSeqSynchronousQueryTI (
-  Int4 uid,
+  Uint4 tid,
   Int2 retcode,
   Int4 flags
 );

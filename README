@@ -51,9 +51,9 @@ Now there is no need to download any binary NCBI product for your
 platform to obtain the platform-specific ncbi.mk file.
 
 To build the NCBI toolkit you need to look for platform-dependent instructions:
-For UNIX:
+For UNIX (including Linux and Mac OS X):
     look at the file make/readme.unx
-For Mac:
+For alternative Mac instructions (using CodeWarrior):
     look at the file make/readme.mac
 For Microsoft Windows95/98/NT:
     look at the file make/readme.dos

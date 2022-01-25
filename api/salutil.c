@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.11 $
+* $Revision: 6.13 $
 *
 * File Description: 
 *
@@ -1156,6 +1156,48 @@ NLM_EXTERN BioseqPtr BioseqReplaceID (BioseqPtr bsp, SeqIdPtr newsip)
   SeqMgrReplaceInBioseqIndex (bsp);
   return bsp;
 }
+
+
+NLM_EXTERN void ReplaceSeqIdWithSeqId (SeqIdPtr sip_old, SeqIdPtr sip_new, SeqEntryPtr sep)
+{
+  BioseqPtr        bsp;
+  SeqEntryPtr      oldscope;
+  ReplaceSeqIdData rsid;
+  SeqIdPtr         tmp, prev = NULL, sip;
+  
+  if (sip_old == NULL || sip_new == NULL || sep == NULL) 
+  {
+    return;
+  }
+
+  oldscope = SeqEntrySetScope (sep);
+  rsid.old_id = sip_old;
+  rsid.new_id = sip_new;
+
+  bsp = BioseqFind (sip_old);
+  
+  VisitFeaturesInSep (sep, &rsid, ReplaceSeqIdCallback);
+  if (bsp != NULL) {
+    sip = bsp->id;
+    while (!SeqIdComp (sip, sip_old)) {
+      prev = sip;
+      sip = sip->next;
+    }
+    if (sip != NULL) {
+      tmp = SeqIdDup (sip_new);
+      tmp->next = sip->next;
+      sip->next = NULL;
+      SeqIdFree (sip);
+      if (prev == NULL) {
+        bsp->id = tmp;
+      } else {
+        prev->next = tmp;
+      }
+      SeqMgrReplaceInBioseqIndex (bsp);
+    }
+  }
+}
+
 
 static void SeqEntryReplaceSeqIDCallBack (SeqEntryPtr sep, Pointer mydata,
                                           Int4 index, Int2 indent)
@@ -3452,4 +3494,66 @@ static Uint2 GetEntityIDForBioseqSet (void)
   return eID;
 }
 */
+
+
+NLM_EXTERN void CleanUpSegGap (SeqAlignPtr sap)
+{
+   DenseSegPtr  dsp;
+   DenseSegPtr  dsp_new;
+   Boolean      found;
+   Int4         i;
+   Int4         j;
+   Int4         k;
+   Int4         numgap;
+
+   if (sap == NULL || sap->segtype != SAS_DENSEG)
+      return;
+   dsp = (DenseSegPtr)(sap->segs);
+   numgap = 0;
+   for (i=0; i<dsp->numseg; i++)
+   {
+      found = FALSE;
+      for (j=0; !found && j<dsp->dim; j++)
+      {
+         if (dsp->starts[i*dsp->dim+j] != -1)
+            found = TRUE;
+      }
+      if (!found)
+         numgap++;
+   }
+   if (numgap == 0)
+      return;
+   dsp_new = DenseSegNew();
+   dsp_new->dim = dsp->dim;
+   dsp_new->ids = dsp->ids;
+   dsp->ids = NULL;
+   dsp_new->numseg = dsp->numseg - numgap;
+   dsp_new->starts = (Int4Ptr)MemNew(dsp_new->numseg*dsp_new->dim*sizeof(Int4));
+   dsp_new->strands = (Uint1Ptr)MemNew(dsp_new->numseg*dsp_new->dim*sizeof(Uint1));
+   dsp_new->lens = (Int4Ptr)MemNew(dsp_new->numseg*sizeof(Int4));
+   k = 0;
+   for (i=0; i<dsp->numseg; i++)
+   {
+      found = FALSE;
+      for (j=0; !found && j<dsp->dim; j++)
+      {
+         if (dsp->starts[i*dsp->dim+j] != -1)
+            found = TRUE;
+      }
+      if (found)
+      {
+         for (j=0; j<dsp_new->dim; j++)
+         {
+            dsp_new->starts[k*dsp_new->dim+j] = dsp->starts[i*dsp->dim+j];
+            dsp_new->strands[k*dsp_new->dim+j] = dsp->strands[i*dsp->dim+j];
+         }
+         dsp_new->lens[k] = dsp->lens[i];
+         k++;
+      }
+   }
+   DenseSegFree(dsp);
+   sap->segs = (Pointer)(dsp_new);
+   return;
+}
+
 

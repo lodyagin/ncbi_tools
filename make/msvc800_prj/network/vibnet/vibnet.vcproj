@@ -3,7 +3,7 @@
 	ProjectType="Visual C++"
 	Version="8.00"
 	Name="vibnet"
-	ProjectGUID="{DE96F5AB-AC39-44FF-9BAB-36805FE07A86}"
+	ProjectGUID="{0487C33B-C05E-476D-B6DF-44AD9F7D53F6}"
 	>
 	<Platforms>
 		<Platform

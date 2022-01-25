@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: blastpgp.c,v 6.139 2008/01/02 20:16:11 madden Exp $";
+static char const rcsid[] = "$Id: blastpgp.c,v 6.140 2008/03/31 13:35:18 madden Exp $";
 
-/* $Id: blastpgp.c,v 6.139 2008/01/02 20:16:11 madden Exp $ */
+/* $Id: blastpgp.c,v 6.140 2008/03/31 13:35:18 madden Exp $ */
 /**************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -26,8 +26,12 @@ static char const rcsid[] = "$Id: blastpgp.c,v 6.139 2008/01/02 20:16:11 madden 
 * appreciated.                                                            *
 *                                                                         *
 **************************************************************************
- * $Revision: 6.139 $ 
+ * $Revision: 6.140 $ 
  * $Log: blastpgp.c,v $
+ * Revision 6.140  2008/03/31 13:35:18  madden
+ * Change semantics of -c option, so that a new method for effective observations is used always and a new entropy-based method for column-specific PSI-BLAST pseudocounts is used by default. If default is used (-c 0), then all constants are defined in posit.c; if only the new method of effective observations is used, then the value of -c should be set by the user at approximately 30.  (Changes
+ * submitted by Alejandro Schaffer).
+ *
  * Revision 6.139  2008/01/02 20:16:11  madden
  * XML output respects -v and -b option, JIRA SB-30
  *
@@ -674,8 +678,8 @@ static Args myargs[] = {
       "F", NULL, NULL, FALSE, 'I', ARG_BOOLEAN, 0.0, 0, NULL},
     { "e-value threshold for inclusion in multipass model",           /* ARG_EVALUE_INCLUSION_THRESHOLD */
       "0.002", NULL, NULL, FALSE, 'h', ARG_FLOAT, 0.0, 0, NULL},
-    { "Constant in pseudocounts for multipass version",               /* ARG_PSEUDOCOUNT_CONSTANT */
-      "9", NULL, NULL, FALSE, 'c', ARG_INT, 0.0, 0, NULL},
+    { "Constant in pseudocounts for multipass version; 0 uses entropy method; otherwise a value near 30 is recommended",               /* ARG_PSEUDOCOUNT_CONSTANT */
+      "0", NULL, NULL, FALSE, 'c', ARG_INT, 0.0, 0, NULL},
     { "Maximum number of passes to use in  multipass version",        /* ARG_MAX_PASSES */
       "1", NULL, NULL, FALSE, 'j', ARG_INT, 0.0, 0, NULL},
     { "Believe the query defline",                                    /* ARG_BELIEVEQUERY */

@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_SERVICE__H
 #define CONNECT___NCBI_SERVICE__H
 
-/*  $Id: ncbi_service.h,v 6.53 2008/02/04 15:56:18 kazimird Exp $
+/*  $Id: ncbi_service.h,v 6.54 2008/07/29 14:55:32 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -37,9 +37,9 @@
 #include <connect/ncbi_host_info.h>
 
 
-/* Revision 6.240 */
+/* Revision 6.250 */
 #define SERV_CLIENT_REVISION_MAJOR  6
-#define SERV_CLIENT_REVISION_MINOR  240
+#define SERV_CLIENT_REVISION_MINOR  250
 
 
 /** @addtogroup ServiceSupport

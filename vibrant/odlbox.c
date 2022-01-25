@@ -29,13 +29,16 @@
 *
 * Version Creation Date:   5/3/99
 *
-* $Revision: 6.3 $
+* $Revision: 6.4 $
 *
 * File Description: 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: odlbox.c,v $
+* Revision 6.4  2008/04/29 13:43:50  kans
+* fixes for warnings caught by mingw cross-compiler
+*
 * Revision 6.3  1999/06/07 15:41:31  durand
 * add LOG line to keep track of the history
 *
@@ -865,7 +868,7 @@ MIData			mid;
 ValNodePtr		vnp;
 RecT			rcP;
 
-Int4			oldDecal,oldCurPos;
+Int4			oldDecal,oldCurPos = 0;
 Boolean			bFirst=TRUE,bFirst2=FALSE;
 
 	/*retrieve lbox data*/

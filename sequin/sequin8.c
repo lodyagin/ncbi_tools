@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/3/98
 *
-* $Revision: 6.458 $
+* $Revision: 6.516 $
 *
 * File Description: 
 *
@@ -58,6 +58,7 @@
 #include <spidey.h>
 #include <blast.h>
 #include <salpanel.h>
+#include <seqpanel.h>
 #include <edutil.h>
 #include <tax3api.h>
 #include <asn2gnbp.h> /* included for discrepancy report */
@@ -66,6 +67,7 @@
 
 #include <macrodlg.h>
 #include <macroapi.h>
+#include <alignval.h>
 
 #define DEFLINE_MAX_LEN          380
 #define TEXT_MAX_LEN             64
@@ -4104,7 +4106,8 @@ extern void FuseFeature (IteM i)
           subtype != FEATDEF_mat_peptide &&
           subtype != FEATDEF_sig_peptide &&
           subtype != FEATDEF_transit_peptide &&
-          subtype != FEATDEF_Imp_CDS) {
+          subtype != FEATDEF_Imp_CDS &&
+          !IsUnwantedFeatureType(subtype)) {
         vnp = ValNodeNew (head);
         if (head == NULL) {
           head = vnp;
@@ -4559,6 +4562,7 @@ typedef struct refgeneuserdialog {
   GrouP         status;
   ButtoN        generated;
   TexT          curator;
+  TexT          url;
   TexT          source;
   Int2          indexer;
   DialoG        fields;
@@ -4785,6 +4789,18 @@ static void UserObjectPtrToRefGeneDialog (DialoG d, Pointer data)
     str = (CharPtr) curr->data.ptrvalue;
     SetTitle (rdp->curator, str);
   }
+
+  for (curr = uop->data; curr != NULL; curr = curr->next) {
+    oip = curr->label;
+    if (oip != NULL && StringICmp (oip->str, "CollaboratorURL") == 0) {
+      break;
+    }
+  }
+  if (curr != NULL && curr->choice == 1) {
+    str = (CharPtr) curr->data.ptrvalue;
+    SetTitle (rdp->url, str);
+  }
+
   for (curr = uop->data; curr != NULL; curr = curr->next) {
     oip = curr->label;
     if (oip != NULL && StringICmp (oip->str, "GenomicSource") == 0) {
@@ -4861,6 +4877,7 @@ static Pointer RefGeneDialogToUserObjectPtr (DialoG d)
   TagListPtr            tlp;
   CharPtr               txt [6];
   UserObjectPtr         uop;
+  Char                  url [512];
   long int              val;
   ValNodePtr            vnp;
 
@@ -4901,6 +4918,11 @@ static Pointer RefGeneDialogToUserObjectPtr (DialoG d)
   GetTitle (rdp->curator, curator, sizeof (curator));
   if (! StringHasNoText (curator)) {
     AddCuratorToRefGeneTrackUserObject (uop, curator);
+  }
+
+  GetTitle (rdp->url, url, sizeof (url));
+  if (! StringHasNoText (url)) {
+    AddCuratorURLToRefGeneTrackUserObject (uop, url);
   }
 
   if (rdp->indexer > 0) {
@@ -4968,6 +4990,7 @@ static DialoG CreateRefGeneDialog (GrouP g)
   TagListPtr            tlp;
   GrouP                 x;
   GrouP                 y;
+  GrouP                 z;
 
   p = HiddenGroup (g, -1, 0, NULL);
   SetGroupSpacing (p, 10, 10);
@@ -4996,8 +5019,11 @@ static DialoG CreateRefGeneDialog (GrouP g)
 
   y = HiddenGroup (p, 6, 0, NULL);
   rdp->generated = CheckBox (y, "Generated", NULL);
-  StaticPrompt (y, "Curator", 0, dialogTextHeight, programFont, 'l');
-  rdp->curator = DialogText (y, "", 14, NULL);
+  z = HiddenGroup (y, 2, 0, NULL);
+  StaticPrompt (z, "Curator", 0, dialogTextHeight, programFont, 'l');
+  rdp->curator = DialogText (z, "", 14, NULL);
+  StaticPrompt (z, "URL", 0, dialogTextHeight, programFont, 'r');
+  rdp->url = DialogText (z, "", 14, NULL);
   StaticPrompt (y, "Genomic Source", 0, dialogTextHeight, programFont, 'l');
   rdp->source = DialogText (y, "", 7, NULL);
 
@@ -5822,6 +5848,30 @@ static SeqIdPtr SqnSeqIdFindBestAccession (SeqIdPtr sip)
 	return SeqIdSelect (sip, order, NUM_SEQID);
 }
 
+
+static Boolean ValidateTPAHistAlign (BioseqPtr bsp, ValNodePtr PNTR errors)
+{
+  ValNodePtr new_errors;
+  Boolean    retval = TRUE;
+  SeqAlignPtr salp;
+
+  if (bsp == NULL || bsp->hist == NULL || bsp->hist->assembly == NULL) {
+    return FALSE;
+  }
+
+  for (salp = bsp->hist->assembly; salp != NULL; salp = salp->next) {
+    AlnMgr2IndexSingleChildSeqAlign(salp);
+  }
+
+  new_errors = ReportCoverageForBioseqSeqHist (bsp);
+  if (new_errors != NULL) {
+    ValNodeLink (errors, new_errors);
+    retval = FALSE;
+  }
+  return retval;
+}
+
+ 
 static Boolean CKA_ValidateSeqAlign(SeqAlignPtr sap, CKA_AccPtr acc_head, Int4 bioseqlen, ValNodePtr PNTR errors)
 {
    CKA_AccPtr        acc;
@@ -5838,7 +5888,7 @@ static Boolean CKA_ValidateSeqAlign(SeqAlignPtr sap, CKA_AccPtr acc_head, Int4 b
    Int4              max;
    Int4              n;
    Int4              prev;
-   Boolean           retval;
+   Boolean           retval = TRUE;
    CharPtr           textid;
    Char              textid2[42];
    CharPtr           err_msg;
@@ -6118,7 +6168,7 @@ static void PrintTPAHistErrors (LogInfoPtr lip, ValNodePtr errors)
 
   for (vnp = errors; vnp != NULL; vnp = vnp->next)
   {
-    fprintf (lip->fp, vnp->data.ptrvalue);
+    fprintf (lip->fp, "%s\n", vnp->data.ptrvalue);
     lip->data_in_log = TRUE;
   }
   fprintf (lip->fp, "\n\n");
@@ -6212,7 +6262,26 @@ static void CKA_RunChecker(SeqEntryPtr sep)
            acc = acc->next;
          }
 
-	       if (CKA_ValidateSeqAlign(sap, acc_head, bsp->length, &err_list))
+         if (sap != NULL) {
+            AlnMgr2IndexLite(sap);
+            AlnMgr2SortAlnSetByNthRowPos(sap, 1);
+	          /* make seq-hist and add it to record */
+	          if (bsp->hist != NULL)
+	          {
+	              shp = bsp->hist;
+	              if (shp->assembly != NULL)
+	                SeqAlignSetFree(shp->assembly);
+	              shp->assembly = (SeqAlignPtr)(sap->segs);
+	          }
+            else
+	          {
+	              shp = SeqHistNew();
+	              shp->assembly = (SeqAlignPtr)(sap->segs);
+	              bsp->hist = shp;
+	          }
+         }
+      
+         if (ValidateTPAHistAlign(bsp, &err_list)) 
          {
             fprintf (lip->fp, "Alignments were successfully created and are being added to %s.\n", textid);
             lip->data_in_log = TRUE;
@@ -6240,24 +6309,10 @@ static void CKA_RunChecker(SeqEntryPtr sep)
             err_list = ValNodeFreeData (err_list);
          }
 
-         AlnMgr2IndexLite(sap);
-         AlnMgr2SortAlnSetByNthRowPos(sap, 1);
-	       /* make seq-hist and add it to record */
-	       if (bsp->hist != NULL)
-	       {
-	          shp = bsp->hist;
-	          if (shp->assembly != NULL)
-	            SeqAlignSetFree(shp->assembly);
-	          shp->assembly = (SeqAlignPtr)(sap->segs);
-	       }
-         else
-	       {
-	          shp = SeqHistNew();
-	          shp->assembly = (SeqAlignPtr)(sap->segs);
-	          bsp->hist = shp;
-	       }
-         sap->segs = NULL;
-         SeqAlignFree(sap);
+         if (sap != NULL) {
+            sap->segs = NULL;
+            SeqAlignFree(sap);
+         }
 	     } 
      else
      {
@@ -6280,41 +6335,865 @@ static void CKA_RunChecker(SeqEntryPtr sep)
   lip = FreeLog (lip);
 }
 
-static void CKA_FindNuc(SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
-{
-   BioseqPtr      bsp;
-   BioseqPtr      PNTR bspptr;
 
-   bspptr = (BioseqPtr PNTR)data;
-   if (IS_Bioseq(sep))
-   {
-      bsp = (BioseqPtr)sep->data.ptrvalue;
-      if (ISA_na(bsp->mol))
-      {
-         *bspptr = bsp;
+typedef struct seqalignrow {
+  Int4 start;
+  Int4 stop;
+  Uint1 strand;
+} SeqAlignRowData, PNTR SeqAlignRowPtr;
+
+static SeqAlignRowPtr SeqAlignRowNew (Int4 start, Int4 stop, Uint1 strand)
+{
+  SeqAlignRowPtr r;
+  Int4 tmp;
+
+  r = (SeqAlignRowPtr) MemNew (sizeof (SeqAlignRowData));
+  r->start = start;
+  r->stop = stop;
+
+  if (r->start > r->stop) {
+    tmp = r->start;
+    r->start = r->stop;
+    r->stop = tmp;
+  }
+  r->strand = strand;
+  return r;
+}
+
+
+static SeqAlignRowPtr SeqAlignRowCopy (SeqAlignRowPtr orig)
+{
+  SeqAlignRowPtr r = NULL;
+
+  if (orig != NULL) {
+    r = SeqAlignRowNew (orig->start, orig->stop, orig->strand);
+  }
+  return r;
+}
+
+
+static SeqAlignRowPtr SeqAlignRowFree (SeqAlignRowPtr r)
+{
+  r = MemFree (r);
+  return r;
+}
+
+
+static Int4 RowDiff (SeqAlignRowPtr r1, SeqAlignRowPtr r2)
+{
+  Int4 diff = 0;
+
+  if (r1 == NULL || r2 == NULL) {
+    return -1;
+  }
+
+  diff = ABS(r1->start - r2->start) + ABS (r1->stop - r2->stop);
+  return diff;
+}
+
+
+static Int4 SeqAlignRowLen (SeqAlignRowPtr r) 
+{
+  Int4 len = 0;
+
+  if (r != NULL) {
+    len = r->stop - r->start + 1;
+  }
+  return len;
+}
+
+
+typedef struct seqalignsort {
+  SeqAlignRowPtr row1;
+  SeqAlignRowPtr row2;
+  SeqAlignPtr salp;
+} SeqAlignSortData, PNTR SeqAlignSortPtr;
+
+
+static SeqAlignSortPtr SeqAlignSortNew (SeqAlignPtr salp)
+{
+  SeqAlignSortPtr s;
+
+  if (salp == NULL) {
+    return NULL;
+  }
+
+  s = (SeqAlignSortPtr) MemNew (sizeof (SeqAlignSortData));
+  s->salp = salp;
+
+  AlnMgr2IndexSingleChildSeqAlign(salp);
+
+  s->row1 = SeqAlignRowNew (SeqAlignStart (salp, 0), SeqAlignStop (salp, 0), SeqAlignStrand (salp, 0));
+  s->row2 = SeqAlignRowNew (SeqAlignStart (salp, 1), SeqAlignStop (salp, 1), SeqAlignStrand (salp, 1));
+
+  return s;
+}
+
+
+static SeqAlignSortPtr SeqAlignSortFree (SeqAlignSortPtr s)
+{
+  if (s != NULL) {
+    s->row1 = SeqAlignRowFree (s->row1);
+    s->row2 = SeqAlignRowFree (s->row2);
+    s = MemFree (s);
+  }
+  return s;
+}
+
+
+static ValNodePtr SeqAlignSortListNew (SeqAlignPtr salp)
+{
+  ValNodePtr list = NULL;
+  SeqAlignPtr salp_next;
+
+  while (salp != NULL) {
+    salp_next = salp->next;
+    salp->next = NULL;
+    ValNodeAddPointer (&list, 0, SeqAlignSortNew (salp));
+    salp = salp_next;
+  }
+  return list;
+}
+
+
+static ValNodePtr SeqAlignSortListFree (ValNodePtr vnp)
+{
+  ValNodePtr vnp_next;
+
+  while (vnp != NULL) {
+    vnp_next = vnp->next;
+    vnp->next = NULL;
+    vnp->data.ptrvalue = SeqAlignSortFree (vnp->data.ptrvalue);
+    vnp = ValNodeFree (vnp);
+    vnp = vnp_next;
+  }
+  return vnp;
+}
+
+
+static SeqAlignRowPtr SeqAlignRowFromSeqAlignSort (SeqAlignSortPtr s, Int4 row)
+{
+  if (s == NULL) {
+    return NULL;
+  } else if (row == 1) {
+    return s->row1;
+  } else {
+    return s->row2;
+  }
+}
+
+
+static Uint1 SeqAlignSortRowStrand (SeqAlignSortPtr s, Int4 row)
+{
+  Uint1 strand = Seq_strand_plus;
+  SeqAlignRowPtr r;
+
+  r = SeqAlignRowFromSeqAlignSort (s, row);
+  if (r != NULL) {
+    strand = r->strand;
+  }
+  return strand;
+}
+
+
+static Uint1 SeqAlignSortListFindBestStrand (ValNodePtr vnp, Int4 row)
+{
+  Int4 num_plus = 0, num_minus = 0;
+  SeqAlignSortPtr s;
+
+  while (vnp != NULL) {
+    s = (SeqAlignSortPtr) vnp->data.ptrvalue;
+    if (s != NULL) {
+      if (SeqAlignSortRowStrand(s, row) == Seq_strand_minus) {
+        num_minus++;
+      } else {
+        num_plus++;
       }
-   }
+    }
+    vnp = vnp->next;
+  }
+
+  if (num_minus > num_plus) {
+    return Seq_strand_minus;
+  } else {
+    return Seq_strand_plus;
+  }
 }
 
-static int LIBCALLBACK CKA_CompareAlns(VoidPtr ptr1, VoidPtr ptr2)
+
+static void SeqAlignSortListMarkStrand (ValNodePtr vnp, Int4 row, Uint1 strand)
 {
-   Int4         len1;
-   Int4         len2;
-   SeqAlignPtr  sap1;
-   SeqAlignPtr  sap2;
-
-   sap1 = *((SeqAlignPtr PNTR) ptr1);
-   sap2 = *((SeqAlignPtr PNTR) ptr2);
-   if (sap1 == NULL || sap2 == NULL)
-      return 0;
-   len1 = AlnMgr2GetAlnLength(sap1, FALSE);
-   len2 = AlnMgr2GetAlnLength(sap2, FALSE);
-   if (len1 < len2)
-      return 1;
-   if (len1 > len2)
-      return -1;
-   return 0;
+  while (vnp != NULL) {
+    if (SeqAlignSortRowStrand (vnp->data.ptrvalue, row) == strand) {
+      vnp->choice = 1;
+    }
+    vnp = vnp->next;
+  }
 }
+
+
+static ValNodePtr SeqAlignSortListRemoveAll (ValNodePtr list)
+{
+  ValNodePtr vnp;
+  SeqAlignSortPtr s;
+
+  for (vnp = list; vnp != NULL; vnp = vnp->next) {
+    s = vnp->data.ptrvalue;
+    if (s != NULL && s->salp != NULL) {
+      s->salp->next = NULL;
+      s->salp = SeqAlignFree (s->salp);
+    }
+  }
+
+  list = SeqAlignSortListFree (list);
+  return list;
+}
+
+
+static void SeqAlignSortListRemoveMarked (ValNodePtr PNTR list)
+{
+  ValNodePtr remove_list;
+
+  if (list == NULL) {
+    return;
+  }
+
+  remove_list = ValNodeExtractList (list, 1);
+  remove_list = SeqAlignSortListRemoveAll (remove_list);
+}
+
+
+static Uint1 SeqAlignSortListRemoveConflictingStrands (ValNodePtr PNTR list, Int4 row)
+{
+  Uint1 strand;
+
+  if (list == NULL) {
+    return Seq_strand_plus;
+  }
+
+  strand = SeqAlignSortListFindBestStrand (*list, row);
+  if (strand == Seq_strand_plus) {
+    SeqAlignSortListMarkStrand (*list, row, Seq_strand_minus);
+  } else {
+    SeqAlignSortListMarkStrand (*list, row, Seq_strand_plus);
+  }
+
+  SeqAlignSortListRemoveMarked (list);
+  return strand;
+}
+
+
+static SeqAlignPtr SeqAlignFromSeqAlignSortList (ValNodePtr vnp)
+{
+  SeqAlignPtr salp_list = NULL, salp_prev = NULL;
+  SeqAlignSortPtr s;
+
+  while (vnp != NULL) {
+    s = (SeqAlignSortPtr) vnp->data.ptrvalue;
+    if (s != NULL && s->salp != NULL) {
+      s->salp->next = NULL;
+      if (salp_prev == NULL) {
+        salp_list = s->salp;
+      } else {
+        salp_prev->next = s->salp;
+      }
+      salp_prev = s->salp;
+      s->salp->next = NULL;
+    }
+    vnp = vnp->next;
+  }
+  return salp_list;
+}
+
+
+static int CompareSeqAlignRow (SeqAlignRowPtr r1, SeqAlignRowPtr r2)
+{
+  int rval = 0;
+
+  if (r1 == NULL && r2 == NULL) {
+    rval = 0;
+  } else if (r1 == NULL) {
+    rval = -1;
+  } else if (r2 == NULL) {
+    rval = 1;
+  } else if (r1->start < r2->start) {
+    rval = -1;
+  } else if (r1->start > r2->start) {
+    rval = 1;
+  } else if (r1->stop < r2->stop) {
+    rval = -1;
+  } else if (r1->stop > r2->stop) {
+    rval = 1;
+  } else if (r1->strand < r2->strand) {
+    rval = -1;
+  } else if (r1->strand > r2->strand) {
+    rval = 1;
+  }
+  return rval;
+}
+
+
+static int CompareSeqAlignSortPreferRow1 (SeqAlignSortPtr s1, SeqAlignSortPtr s2)
+{
+  int rval = 0;
+  if (s1 == NULL && s2 == NULL) {
+    rval = 0;
+  } else if (s1 == NULL) {
+    rval = -1;
+  } else if (s2 == NULL) {
+    rval = 1;
+  } else if ((rval = CompareSeqAlignRow (s1->row1,s2->row1)) == 0) {
+    rval = CompareSeqAlignRow (s1->row2, s2->row2);
+  }
+  return rval;
+}
+
+
+static int CompareSeqAlignSortPreferRow2 (SeqAlignSortPtr s1, SeqAlignSortPtr s2)
+{
+  int rval = 0;
+  if (s1 == NULL && s2 == NULL) {
+    rval = 0;
+  } else if (s1 == NULL) {
+    rval = -1;
+  } else if (s2 == NULL) {
+    rval = 1;
+  } else if ((rval = CompareSeqAlignRow (s1->row2,s2->row2)) == 0) {
+    rval = CompareSeqAlignRow (s1->row1, s2->row1);
+  }
+  return rval;
+}
+
+
+
+static int LIBCALLBACK SortVnpBySeqAlignSortRow1 (VoidPtr ptr1, VoidPtr ptr2)
+
+{
+  ValNodePtr  vnp1;
+  ValNodePtr  vnp2;
+
+  if (ptr1 != NULL && ptr2 != NULL) {
+    vnp1 = *((ValNodePtr PNTR) ptr1);
+    vnp2 = *((ValNodePtr PNTR) ptr2);
+    if (vnp1 != NULL && vnp2 != NULL) {
+      return CompareSeqAlignSortPreferRow1 (vnp1->data.ptrvalue, vnp2->data.ptrvalue);
+    }
+  }
+  return 0;
+}
+
+
+static int LIBCALLBACK SortVnpBySeqAlignSortRow2 (VoidPtr ptr1, VoidPtr ptr2)
+
+{
+  ValNodePtr  vnp1;
+  ValNodePtr  vnp2;
+
+  if (ptr1 != NULL && ptr2 != NULL) {
+    vnp1 = *((ValNodePtr PNTR) ptr1);
+    vnp2 = *((ValNodePtr PNTR) ptr2);
+    if (vnp1 != NULL && vnp2 != NULL) {
+      return CompareSeqAlignSortPreferRow2 (vnp1->data.ptrvalue, vnp2->data.ptrvalue);
+    }
+  }
+  return 0;
+}
+
+
+static ValNodePtr SeqAlignSortListExtractRepeats (ValNodePtr PNTR list, Int4 row, Int4 fuzz)
+{
+  ValNodePtr repeat_start, repeat_prev = NULL, vnp_prev = NULL, vnp;
+  ValNodePtr repeat_list = NULL;
+  SeqAlignSortPtr s1, s2;
+  SeqAlignRowPtr  interval, r2;
+  Int4            diff;
+  Boolean         is_repeat;
+
+  if (list == NULL || *list == NULL || (*list)->next == NULL) {
+    return NULL;
+  }
+
+  if (row == 1) {
+    *list = ValNodeSort (*list, SortVnpBySeqAlignSortRow1);
+  } else {
+    *list = ValNodeSort (*list, SortVnpBySeqAlignSortRow2);
+  }
+
+  repeat_start = *list;
+  s1 = repeat_start->data.ptrvalue;
+  interval = SeqAlignRowCopy (SeqAlignRowFromSeqAlignSort(s1, row));
+  vnp_prev = *list;
+  for (vnp = (*list)->next; vnp != NULL; vnp = vnp->next) {
+    s2 = vnp->data.ptrvalue;
+    is_repeat = FALSE;
+    r2 = SeqAlignRowFromSeqAlignSort (s2, row);
+
+    if (interval->start <= r2->start && interval->stop >= r2->stop) {
+      /* contained */
+      is_repeat = TRUE;
+    } else if (r2->start <= interval->start && r2->stop >= interval->stop) {
+      /* contained */
+      is_repeat = TRUE;
+    } else if ((diff = RowDiff (interval, r2)) > -1 && diff < fuzz) {
+      is_repeat = TRUE;
+    }
+    if (is_repeat) {
+      vnp_prev = vnp;
+      if (interval->start > r2->start) {
+        interval->start = r2->start;
+      }
+      if (interval->stop < r2->stop) {
+        interval->stop = r2->stop;
+      }
+    } else {
+      if (repeat_start->next == vnp) {
+        repeat_prev = vnp_prev;
+        vnp_prev = vnp;
+      } else {
+        if (repeat_prev == NULL) {
+          *list = vnp;
+        } else {
+          repeat_prev->next = vnp;
+        }
+        if (vnp_prev != NULL) {
+          vnp_prev->next = NULL;
+        }
+        ValNodeAddPointer (&repeat_list, 0, repeat_start);
+        vnp_prev = vnp;
+      }
+      repeat_start = vnp;
+      s1 = vnp->data.ptrvalue;
+      interval = SeqAlignRowFree (interval);
+      interval = SeqAlignRowCopy (SeqAlignRowFromSeqAlignSort(s1, row));
+    }
+  }
+
+  if (repeat_start->next != NULL) {
+    if (repeat_prev == NULL) {
+      *list = NULL;
+    } else {
+      repeat_prev->next = NULL;
+    }
+    ValNodeAddPointer (&repeat_list, 0, repeat_start);
+  }
+
+  interval = SeqAlignRowFree (interval);
+  return repeat_list;
+}
+
+
+static int SeqAlignRowFuzzyCompare (SeqAlignRowPtr r1, SeqAlignRowPtr r2, Int4 fuzz)
+{
+  if (r1 == NULL && r2 == NULL) {
+    return 0;
+  } else if (r1 == NULL) {
+    return -1;
+  } else if (r2 == NULL) {
+    return 1;
+  }
+
+  if (r1->stop < r2->start || r1->stop - r2->start < fuzz) {
+    return -1;
+  } else if (r2->stop < r1->start || r2->stop - r1->start < fuzz) {
+    return 1;
+  } else {
+    return 0;
+  }
+}
+
+
+static int SeqAlignSortFuzzyCompare (SeqAlignSortPtr s1, SeqAlignSortPtr s2, Int4 row, Int4 fuzz)
+{
+  if (s1 == NULL && s2 == NULL) {
+    return 0;
+  } else if (s1 == NULL) {
+    return -1;
+  } else if (s2 == NULL) {
+    return 1;
+  } else if (row == 1) {
+    return SeqAlignRowFuzzyCompare (s1->row1, s2->row1, fuzz);
+  } else {
+    return SeqAlignRowFuzzyCompare (s1->row2, s2->row2, fuzz);
+  }
+}
+
+
+static void SeqAlignSortListRemoveIntervalsOutOfOrder (ValNodePtr PNTR list, Int4 row, Int4 fuzz)
+{
+  ValNodePtr vnp, vnp_prev = NULL;
+
+  if (list == NULL) {
+    return;
+  }
+
+  for (vnp = *list; vnp != NULL; vnp = vnp->next) {
+    if (vnp_prev != NULL && SeqAlignSortFuzzyCompare (vnp_prev->data.ptrvalue, vnp->data.ptrvalue, row, fuzz) != -1) {
+      vnp->choice = 1;
+    } else if (vnp->next != NULL && SeqAlignSortFuzzyCompare (vnp->data.ptrvalue, vnp->next->data.ptrvalue, row, fuzz) != -1) {
+      if (vnp->next->next != NULL 
+          && SeqAlignSortFuzzyCompare (vnp->data.ptrvalue, vnp->next->next->data.ptrvalue, row, fuzz) == -1
+          && SeqAlignSortFuzzyCompare (vnp->next->data.ptrvalue, vnp->next->next->data.ptrvalue, row, fuzz) != -1) {
+        /* ok to keep this one, we'll toss the next one */
+      } else {
+        vnp->choice = 1;
+      }
+    }
+    if (vnp->choice == 0) {
+      vnp_prev = vnp;
+    }
+  }
+
+  SeqAlignSortListRemoveMarked (list);
+}
+
+
+static Int4 GetRepeatIntervalFuzz (SeqAlignSortPtr s_repeat, SeqAlignSortPtr s_before, SeqAlignSortPtr s_after, Int4 row)
+{
+  Int4 start_fuzz = 0, end_fuzz = 0;
+
+  if (s_repeat == NULL) {
+    return -1;
+  }
+
+  if (s_before != NULL) {
+    if (row == 1) {
+      start_fuzz = ABS (s_repeat->row1->start - s_before->row1->stop);
+    } else {
+      start_fuzz = ABS (s_repeat->row2->start - s_before->row2->stop);
+    }
+  }
+  if (s_after != NULL) {
+    if (row == 1) {
+      end_fuzz = ABS (s_after->row1->start - s_repeat->row1->stop);
+    } else {
+      end_fuzz = ABS (s_after->row2->start - s_repeat->row2->stop);
+    }
+  }
+
+  return start_fuzz + end_fuzz;
+}
+
+
+static int StrandedSeqAlignSortRowCompare (SeqAlignSortPtr s1, SeqAlignSortPtr s2, Int4 row, Int4 fuzz)
+{
+  SeqAlignRowPtr r1 = NULL, r2 = NULL;
+  int rval = 0;
+  Uint1 strand = Seq_strand_plus;
+
+  if (s1 == NULL || s2 == NULL) {
+    return 0;
+  } 
+
+  r1 = SeqAlignRowFromSeqAlignSort (s1, row);
+  r2 = SeqAlignRowFromSeqAlignSort (s2, row);
+  strand = r1->strand;
+
+  if (strand == Seq_strand_minus) {
+    if (r1->start < r2->start - fuzz) {
+      rval = 1;
+    } else if (r1->start >r2->start + fuzz) {
+      rval = -1;
+    }
+  } else {
+    if (r1->start > r2->start + fuzz) {
+      rval = 1;
+    } else if (r1->stop < r2->stop - fuzz) {
+      rval = -1;
+    } 
+  }
+
+  return rval;
+}
+
+
+static Boolean FindSeqAlignSortWithPoint (ValNodePtr list, Int4 point, Int4 row)
+{
+  ValNodePtr vnp;
+  SeqAlignRowPtr r;
+  SeqAlignSortPtr s;
+  Boolean found = FALSE;
+
+  for (vnp = list; vnp != NULL; vnp = vnp->next) {
+    s = vnp->data.ptrvalue;
+    r = SeqAlignRowFromSeqAlignSort (s, row);
+    if (point >= r->start && point <= r->stop) {
+      found = TRUE;
+    }
+  }
+  return found;
+}
+
+
+static ValNodePtr FindBestRepeat (ValNodePtr PNTR repeat_list, SeqAlignSortPtr s_before, SeqAlignSortPtr s_after, Int4 row, Int4 fuzz)
+{
+  Int4       best_diff = -1, diff;
+  ValNodePtr vnp, vnp_best = NULL, vnp_best_prev = NULL, vnp_prev = NULL;
+  SeqAlignSortPtr s_this;
+
+  if (repeat_list == NULL || *repeat_list == NULL) {
+    return NULL;
+  }
+
+  for (vnp = *repeat_list; vnp != NULL; vnp = vnp->next) {
+    s_this = vnp->data.ptrvalue;
+
+    if (StrandedSeqAlignSortRowCompare (s_this, s_before, row, fuzz) < 0
+      || StrandedSeqAlignSortRowCompare (s_this, s_after, row, fuzz) > 0) {
+      /* skip - already out of order */
+    } else {
+      diff = GetRepeatIntervalFuzz (vnp->data.ptrvalue, s_before, s_after, row);
+      if (diff > -1 && (best_diff < 0 || best_diff > diff)) {
+        vnp_best = vnp;
+        vnp_best_prev = vnp_prev;
+        best_diff = diff;
+      }
+    }
+    vnp_prev = vnp;
+  }
+
+  if (vnp_best != NULL) {
+    if (vnp_best_prev == NULL) {
+      *repeat_list = vnp_best->next;
+    } else {
+      vnp_best_prev->next = vnp_best->next;
+    }
+    vnp_best->next = NULL;
+  }
+
+  return vnp_best;
+}
+
+
+static void RemoveRepeatsCoincidingWithBest (ValNodePtr PNTR repeat_list, ValNodePtr best, Int4 row, Int4 fuzz)
+{
+  ValNodePtr vnp;
+  SeqAlignSortPtr s_best, s;
+  SeqAlignRowPtr r_best, r2;
+  Boolean        is_repeat;
+  Int4           diff;
+
+  if (repeat_list == NULL || *repeat_list == NULL || best == NULL) {
+    return;
+  }
+
+  s_best = best->data.ptrvalue;
+  r_best = SeqAlignRowFromSeqAlignSort (s_best, row);
+
+  for (vnp = *repeat_list; vnp != NULL; vnp = vnp->next) {
+    s = vnp->data.ptrvalue;
+    r2 = SeqAlignRowFromSeqAlignSort (s, row);
+
+    is_repeat = FALSE;
+    if (r_best->start <= r2->start && r_best->stop >= r2->stop) {
+      /* contained */
+      is_repeat = TRUE;
+    } else if (r2->start <= r_best->start && r2->stop >= r_best->stop) {
+      /* contained */
+      is_repeat = TRUE;
+    } else if (r2->stop < r_best->stop || r2->stop - r_best->stop < fuzz) {
+      is_repeat = TRUE;
+    } else if ((diff = RowDiff (r_best, r2)) > -1 && diff < fuzz) {
+      is_repeat = TRUE;
+    }
+
+    if (is_repeat) {
+      vnp->choice = 1;
+    }
+  }
+  SeqAlignSortListRemoveMarked (repeat_list);
+}
+
+
+static ValNodePtr ExtractLongestSeqAlignRow (ValNodePtr PNTR list, Int4 row)
+{
+  ValNodePtr vnp, vnp_prev = NULL, rval = NULL;
+  Int4       longest = 0, len;
+  Boolean    found = FALSE;
+
+  if (list == NULL || *list == NULL) {
+    return NULL;
+  }
+
+  for (vnp = *list; vnp != NULL; vnp = vnp->next) {
+    len = SeqAlignRowLen (SeqAlignRowFromSeqAlignSort (vnp->data.ptrvalue, row));
+    if (longest < len) {
+      longest = len;
+    }
+  }
+
+  for (vnp = *list; vnp != NULL && !found; vnp = vnp->next) {
+    len = SeqAlignRowLen (SeqAlignRowFromSeqAlignSort (vnp->data.ptrvalue, row));
+    if (len == longest) {
+      if (vnp_prev == NULL) {
+        *list = vnp->next;
+      } else {
+        vnp_prev->next = vnp->next;
+      }
+      vnp->next = NULL;
+      rval = vnp;
+      found = TRUE;
+    }
+    vnp_prev = vnp;
+  }
+  return rval;
+}
+
+
+static void InsertBestRepeat (ValNodePtr repeat_list, ValNodePtr PNTR sorted_list, Int4 row, Int4 fuzz)
+{
+  ValNodePtr vnp, vnp_prev = NULL, vnp_new;
+  SeqAlignSortPtr s_repeat, s, s_before = NULL;
+  Boolean         found = TRUE;
+  SeqAlignRowPtr  r1, r2;
+  Int4 other_row;
+
+  if (repeat_list == NULL || sorted_list == NULL) {
+    return;
+  }
+
+  if (row == 1) {
+    other_row = 2;
+  } else {
+    other_row = 1;
+  }
+  if (sorted_list == NULL || *sorted_list == NULL) {
+    /* keep longest, mark others for removal */
+    vnp = ExtractLongestSeqAlignRow (&repeat_list, row);
+    ValNodeLink (sorted_list,vnp);
+    repeat_list = SeqAlignSortListRemoveAll (repeat_list);
+  } else {
+    s_repeat = repeat_list->data.ptrvalue;
+    found = FALSE;
+    vnp = *sorted_list;
+
+    /* find first entry that is after this repeat, and insert before that */
+    while (vnp != NULL && !found) {
+      s = vnp->data.ptrvalue;
+      r1 = SeqAlignRowFromSeqAlignSort (s, row);
+      r2 = SeqAlignRowFromSeqAlignSort (s_repeat, row);
+
+      if (r1->start > r2->start || r2->start - r1->start < fuzz) {
+        while (repeat_list != NULL) {
+          /* extract best repeat */
+          vnp_new = FindBestRepeat (&repeat_list, s_before, vnp->data.ptrvalue, other_row, fuzz);
+          if (vnp_new == NULL) {
+            repeat_list = SeqAlignSortListRemoveAll (repeat_list);
+          } else {
+            RemoveRepeatsCoincidingWithBest (&repeat_list, vnp_new, row, fuzz);
+            vnp_new->next = vnp;
+            if (vnp_prev == NULL) {
+              *sorted_list = vnp_new;
+            } else {
+              vnp_prev->next = vnp_new;
+            }
+            vnp_prev = vnp_new;
+            s_before = vnp_new->data.ptrvalue;
+          }
+        }
+        found = TRUE;
+      }
+      if (!found) {
+        s_before = vnp->data.ptrvalue;
+        vnp_prev = vnp;
+        vnp = vnp->next;
+      }
+    }
+    if (!found) {
+      while (repeat_list != NULL) {
+        /* extract best repeat */
+        vnp_new = FindBestRepeat (&repeat_list, s_before, NULL, other_row, fuzz);
+        if (vnp_new == NULL) {
+          repeat_list = SeqAlignSortListRemoveAll (repeat_list);
+        } else {
+          RemoveRepeatsCoincidingWithBest (&repeat_list, vnp_new, row, fuzz);
+          vnp_new->next = NULL;
+          if (vnp_prev == NULL) {
+            *sorted_list = vnp_new;
+          } else {
+            vnp_prev->next = vnp_new;
+          }
+          vnp_prev = vnp_new;
+          s_before = vnp_new->data.ptrvalue;
+        }
+      }
+    }
+  }
+
+  SeqAlignSortListRemoveMarked (&repeat_list);
+  repeat_list = ValNodeFree (repeat_list);
+}
+
+
+static void SelectBestRepeatsFromList (SeqAlignPtr PNTR salp)
+{
+  ValNodePtr list, vnp;
+  ValNodePtr row1_repeats, row2_repeats;
+  Uint1 strand1, strand2;
+  SeqAlignPtr    tmp_salp;
+  Int4           fuzz = 15;
+
+  Int4           missing = 600;
+
+  if (salp == NULL || *salp == NULL || (*salp)->next == NULL) {
+    return;
+  }
+
+  list = SeqAlignSortListNew (*salp);
+
+  FindSeqAlignSortWithPoint (list, missing, 1);
+
+  /* remove conflicting strands for row 1 */
+  strand1 = SeqAlignSortListRemoveConflictingStrands (&list, 1);
+
+  /* remove conflicting strands for row 1 */
+  strand2 = SeqAlignSortListRemoveConflictingStrands (&list, 2);
+
+  FindSeqAlignSortWithPoint (list, missing, 1);
+
+  if (list != NULL && list->next != NULL) {
+    row1_repeats = SeqAlignSortListExtractRepeats (&list, 1, fuzz);
+    row2_repeats = SeqAlignSortListExtractRepeats (&list, 2, fuzz);
+
+    FindSeqAlignSortWithPoint (list, missing, 1);
+
+    /* remove scaffold intervals that are out of order */
+    list = ValNodeSort (list, SortVnpBySeqAlignSortRow1);
+    SeqAlignSortListRemoveIntervalsOutOfOrder (&list, 1, fuzz);
+    list = ValNodeSort (list, SortVnpBySeqAlignSortRow2);
+    SeqAlignSortListRemoveIntervalsOutOfOrder (&list, 2, fuzz);
+
+    FindSeqAlignSortWithPoint (list, missing, 1);
+
+    /* Remove overlaps.*/
+    list = ValNodeSort (list, SortVnpBySeqAlignSortRow1);
+    tmp_salp = SeqAlignFromSeqAlignSortList (list);
+    list = SeqAlignSortListFree (list);
+    ACT_RemoveInconsistentAlnsFromSet (tmp_salp, 1, 1);
+    list = SeqAlignSortListNew (tmp_salp);
+
+    FindSeqAlignSortWithPoint (list, missing, 1);
+
+    /* for each repeat on row 1, we want to pick the most consistent interval for row 2 */
+    list = ValNodeSort (list, SortVnpBySeqAlignSortRow1);
+    for (vnp = row1_repeats; vnp != NULL; vnp = vnp->next) {   
+      InsertBestRepeat (vnp->data.ptrvalue, &list, 1, fuzz);
+    }
+    row1_repeats = ValNodeFree (row1_repeats);
+
+    /* for each repeat on row 2, we want to pick the most consistent interval for row 1 */
+    list = ValNodeSort (list, SortVnpBySeqAlignSortRow2);
+    for (vnp = row2_repeats; vnp != NULL; vnp = vnp->next) {   
+      InsertBestRepeat (vnp->data.ptrvalue, &list, 2, fuzz);
+    }
+    row2_repeats = ValNodeFree (row2_repeats);
+  }
+
+  list = ValNodeSort (list, SortVnpBySeqAlignSortRow1);
+  *salp = SeqAlignFromSeqAlignSortList (list);
+
+  list = SeqAlignSortListFree (list);
+}
+
 
 static void amconssetfree(AMConsSetPtr acp)
 {
@@ -6356,6 +7235,7 @@ static int LIBCALLBACK CKA_SortForConsistent(VoidPtr ptr1, VoidPtr ptr2)
    else
       return 0;
 }
+
 
 static void CKA_RemoveInconsistentAlnsFromSet(SeqAlignPtr sap_head, Int4 fuzz)
 {
@@ -6556,6 +7436,7 @@ static void CKA_RemoveInconsistentAlnsFromSet(SeqAlignPtr sap_head, Int4 fuzz)
    AMAlignIndex2Free2(sap_head->saip);
    AlnMgr2IndexLite(sap_head);
 }
+
 
 static BioseqPtr ReadFromTraceDb (CharPtr number)
 
@@ -6820,6 +7701,9 @@ static SeqAlignPtr CKA_MakeAlign(BioseqPtr bsp, CKA_AccPtr acc_head, LogInfoPtr 
       acc_new_head = NULL;
       if (acc->sap != NULL && acc->sap->next != NULL)
       {
+         if (!CKA_blast_allow_repeats) {
+           SelectBestRepeatsFromList (&(acc->sap));
+         }
          AlnMgr2IndexLite(acc->sap);
          if (!CKA_blast_allow_repeats) {
            CKA_RemoveInconsistentAlnsFromSet(acc->sap, -1);
@@ -7154,6 +8038,7 @@ typedef struct assemblyuserdialog {
 typedef struct assemblyuserform {
   FEATURE_FORM_BLOCK
   SeqEntryPtr   sep;
+  SeqDescrPtr   orig_sdp;
 } AssemblyUserForm, PNTR AssemblyUserFormPtr;
 
 static void UserObjectPtrToAssemblyDialog (DialoG d, Pointer data)
@@ -7566,17 +8451,52 @@ static void TPAAssemblyFormAccept (ButtoN b)
 }
 
 
+static void PopulateAssemblyIntervals (ButtoN b)
+{
+  AssemblyUserFormPtr  afp;
+  BioseqPtr            bsp;
+  UserObjectPtr        uop;
+  SeqAlignPtr          salp;
+  Char                 id_txt[355];
+  SeqIdPtr             sip;
+  Int4                 primary_start, primary_stop;
+
+  afp = (AssemblyUserFormPtr) GetObjectExtra (b);
+  if (afp == NULL) {
+    return;
+  }
+
+  bsp = GetSequenceForObject (OBJ_SEQDESC, afp->orig_sdp);
+  if (bsp != NULL && bsp->hist != NULL && bsp->hist->assembly != NULL) {
+    uop = CreateTpaAssemblyUserObject  ();
+    /* populate user object with intervals */
+    for (salp = bsp->hist->assembly; salp != NULL; salp = salp->next) {
+      AlnMgr2IndexSingleChildSeqAlign (salp); 
+      sip = AlnMgr2GetNthSeqIdPtr (salp, 2);
+      SeqIdWrite (sip, id_txt, PRINTID_REPORT, sizeof (id_txt) - 1);
+      AlnMgr2GetNthSeqRangeInSA (salp, 2, &primary_start, &primary_stop);
+      AddAccessionToTpaAssemblyUserObject (uop, id_txt, primary_start, primary_stop);
+      sip = SeqIdFree (sip);
+    }
+
+    PointerToDialog (afp->data, uop);
+    uop = UserObjectFree (uop);
+  }
+}
+
+
 static ForM CreateAssemblyDescForm (Int2 left, Int2 top, Int2 width,
                                    Int2 height, CharPtr title, ValNodePtr sdp,
                                    SeqEntryPtr sep, FormActnFunc actproc)
 
 {
   AssemblyUserFormPtr  afp;
-  ButtoN               b;
+  ButtoN               b, pop_btn = NULL;
   GrouP                c;
   GrouP                g;
   StdEditorProcsPtr    sepp;
   WindoW               w;
+  BioseqPtr            bsp;
 
   w = NULL;
   afp = (AssemblyUserFormPtr) MemNew (sizeof (AssemblyUserForm));
@@ -7601,11 +8521,19 @@ static ForM CreateAssemblyDescForm (Int2 left, Int2 top, Int2 width,
     g = HiddenGroup (w, -1, 0, NULL);
     afp->data = CreateAssemblyDialog (g);
 
+    if (sdp != NULL) {
+      bsp = GetSequenceForObject (OBJ_SEQDESC, sdp);
+      if (bsp != NULL && bsp->hist != NULL && bsp->hist->assembly != NULL) {
+        pop_btn = PushButton (g, "Populate Intervals from Assembly Alignment", PopulateAssemblyIntervals);
+        SetObjectExtra (pop_btn, afp, NULL);
+      }
+    }
+
     c = HiddenGroup (w, 2, 0, NULL);
     b = DefaultButton (c, "Accept", TPAAssemblyFormAccept);
     SetObjectExtra (b, afp, NULL);
     PushButton (c, "Cancel", StdCancelButtonProc);
-    AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) c, NULL);
+    AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) c, (HANDLE) pop_btn, NULL);
     RealizeWindow (w);
   }
   return (ForM) w;
@@ -7691,12 +8619,1374 @@ extern Int2 LIBCALLBACK AssemblyUserGenFunc (Pointer data)
     if (sdp != NULL) {
       PointerToDialog (afp->data, (Pointer) sdp->data.ptrvalue);
       SetClosestParentIfDuplicating ((BaseFormPtr) afp);
+      afp->orig_sdp = sdp;
     }
   }
   Show (w);
   Select (w);
   return OM_MSG_RET_DONE;
 }
+
+
+/* advanced editor for Seq-hist assembly alignment */
+typedef struct assemblyalignmentdlg {
+  DIALOG_MESSAGE_BLOCK
+  DialoG intervals_dialog;
+
+  
+} AssemblyAlignmentDlgData, PNTR AssemblyAlignmentDlgPtr;
+
+Uint2 assmbly_aln_types [] = {
+  TAGLIST_TEXT, TAGLIST_TEXT, TAGLIST_TEXT, TAGLIST_TEXT, TAGLIST_PROMPT, TAGLIST_POPUP
+};
+
+Uint2 assmbly_aln_widths [] = {
+  16, 8, 8, 8, 8, 8, 0
+};
+
+ENUM_ALIST(assmbly_aln_strand_alist)
+  {"Plus",  0},
+  {"Minus",    1},
+END_ENUM_ALIST
+
+
+
+static EnumFieldAssocPtr assmbly_aln_alists[] = {
+  NULL, NULL, NULL, NULL, NULL, assmbly_aln_strand_alist
+};
+
+
+typedef struct assemblyalignmentinterval {
+  CharPtr prim_accession;
+  Int4    tpa_from;
+  Int4    tpa_to;
+  Int4    prim_from;
+  Uint1   prim_strand;
+  Uint2   percent_identity;
+} AssemblyAlignmentIntervalData, PNTR AssemblyAlignmentIntervalPtr;
+
+
+static AssemblyAlignmentIntervalPtr AssemblyAlignmentIntervalFree (AssemblyAlignmentIntervalPtr interval)
+{
+  if (interval != NULL) {
+    interval->prim_accession = MemFree (interval->prim_accession);
+    interval = MemFree (interval);
+  }
+  return interval;
+}
+
+
+static AssemblyAlignmentIntervalPtr AssemblyAlignmentIntervalFromTagListString (CharPtr str)
+{
+  AssemblyAlignmentIntervalPtr interval;
+  CharPtr cp;
+  Int4    len, val;
+
+  if (StringHasNoText (str)) {
+    return NULL;
+  }
+
+  interval = (AssemblyAlignmentIntervalPtr) MemNew (sizeof (AssemblyAlignmentIntervalData));
+  MemSet (interval, 0, sizeof (AssemblyAlignmentIntervalData));
+
+  cp = StringChr (str, '\t');
+  if (cp == NULL) {
+    interval->prim_accession = StringSave (str);
+  } else {
+    len = cp - str + 1;
+    interval->prim_accession = (CharPtr) MemNew (sizeof (Char) * len);
+    StringNCpy (interval->prim_accession, str, len - 1);
+    interval->prim_accession[len - 1] = 0;
+    str = cp + 1;
+    cp = StringChr (str, '\t');
+    interval->tpa_from = atoi (str);
+    if (cp != NULL) {
+      str = cp + 1;
+      cp = StringChr (str, '\t');
+      interval->tpa_to = atoi (str);
+      if (cp != NULL) {
+        str = cp + 1;
+        cp = StringChr (str, '\t');
+        interval->prim_from = atoi (str);
+        if (cp != NULL) {
+          cp = StringChr (cp + 1, '\t');
+          if (cp != NULL) {
+            val = atoi (cp + 1);
+            if (val == 1) {
+              interval->prim_strand = Seq_strand_minus;
+            } else {
+              interval->prim_strand = Seq_strand_plus;
+            }
+          }
+        }
+      }
+    }
+  }
+  return interval;
+}
+
+
+static CharPtr TagListStringFromAssemblyAlignmentInterval (AssemblyAlignmentIntervalPtr interval)
+{
+  CharPtr str, str_fmt = "%s\t%d\t%d\t%d\t%d (%d)\t%d\n";
+
+  if (interval == NULL) {
+    return NULL;
+  }
+
+  str = (CharPtr) MemNew (sizeof (Char) * (StringLen (str_fmt) + StringLen (interval->prim_accession) + 61));
+  sprintf (str, str_fmt, interval->prim_accession == NULL ? "" : interval->prim_accession,
+                         interval->tpa_from,
+                         interval->tpa_to,
+                         interval->prim_from,
+                         interval->prim_from + interval->tpa_to - interval->tpa_from,
+                         interval->percent_identity,
+                         interval->prim_strand == Seq_strand_minus ? 1 : 0);
+  return str;
+}
+
+
+static AssemblyAlignmentIntervalPtr AssemblyAlignmentIntervalFromSeqAlign (SeqAlignPtr salp)
+{
+  AssemblyAlignmentIntervalPtr interval;
+  DenseSegPtr dsp;
+  Char     id_txt[200];
+
+  if (salp == NULL || salp->dim != 2 || salp->segtype != SAS_DENSEG) {
+    return NULL;
+  }
+
+  dsp = (DenseSegPtr) salp->segs;
+  if (dsp == NULL || dsp->numseg != 1) {
+    return NULL;
+  }
+
+  interval = (AssemblyAlignmentIntervalPtr) MemNew (sizeof (AssemblyAlignmentIntervalData));
+  MemSet (interval, 0, sizeof (AssemblyAlignmentIntervalData));
+
+  /* first row is TPA, second row is primary */  
+  SeqIdWrite (dsp->ids->next, id_txt, PRINTID_REPORT, sizeof (id_txt) - 1);
+  interval->prim_accession = StringSave (id_txt);
+
+  interval->tpa_from = dsp->starts[0] + 1;
+  interval->tpa_to = dsp->starts[0] + dsp->lens[0];
+  interval->prim_from = dsp->starts[1] + 1;
+  if (dsp->strands == NULL) {
+    interval->prim_strand = Seq_strand_plus;
+  } else {
+    interval->prim_strand = dsp->strands[1];
+  }
+
+  interval->percent_identity = AlignmentPercentIdentity (salp, FALSE);
+
+  return interval;
+}
+
+
+static SeqAlignPtr SeqAlignFromAssemblyAlignmentInterval (AssemblyAlignmentIntervalPtr interval)
+{
+  SeqAlignPtr salp;
+  DenseSegPtr dsp;
+
+  if (interval == NULL) {
+    return NULL;
+  }
+  dsp = DenseSegNew ();
+  dsp->dim = 2;
+  dsp->numseg = 1;
+  dsp->starts = (Int4Ptr) MemNew (sizeof (Int4) * dsp->dim * dsp->numseg);
+  dsp->lens = (Int4Ptr) MemNew (sizeof (Int4) * dsp->numseg);
+  dsp->strands = (Uint1Ptr) MemNew (sizeof (Uint1) * dsp->dim * dsp->numseg);
+
+  dsp->ids = ValNodeNew (NULL);
+  dsp->ids->next = SeqIdFromAccessionDotVersion(interval->prim_accession);
+
+  dsp->starts[0] = interval->tpa_from - 1;
+  dsp->starts[1] = interval->prim_from - 1;
+  dsp->lens[0] = interval->tpa_to - interval->tpa_from + 1;
+  dsp->strands[0] = Seq_strand_plus;
+  dsp->strands[1] = interval->prim_strand;
+
+  salp = SeqAlignNew ();
+  salp->dim = 2;
+  salp->segtype = SAS_DENSEG;
+  salp->segs = dsp;
+  salp->type = SAT_PARTIAL;
+  return salp;
+}
+
+
+static void SeqAlignToAssemblyAlignmentDialog (DialoG d, Pointer data) 
+{
+  AssemblyAlignmentDlgPtr dlg;
+
+  dlg = (AssemblyAlignmentDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) {
+    return;
+  }
+
+  PointerToDialog (dlg->intervals_dialog, data);
+}
+
+
+static Pointer AssemblyAlignmentDialogToSeqAlign (DialoG d)
+{
+  AssemblyAlignmentDlgPtr dlg;
+  SeqAlignPtr salp = NULL;
+
+  dlg = (AssemblyAlignmentDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) {
+    return NULL;
+  }
+
+  salp = DialogToPointer (dlg->intervals_dialog);
+  
+  return salp;
+}
+
+
+static void SeqAlignToTagDlg (DialoG d, Pointer data)
+{
+  TagListPtr tlp;
+  SeqAlignPtr salp;
+  AssemblyAlignmentIntervalPtr interval;
+
+  tlp =(TagListPtr) GetObjectExtra (d);
+  if (tlp == NULL) {
+    return;
+  }
+
+  tlp->vnp = ValNodeFreeData (tlp->vnp);
+  SendMessageToDialog (tlp->dialog, VIB_MSG_RESET);
+  salp = (SeqAlignPtr) data;
+
+  while (salp != NULL) {
+    interval = AssemblyAlignmentIntervalFromSeqAlign (salp);
+    if (interval != NULL) {
+      ValNodeAddPointer (&(tlp->vnp), 0, TagListStringFromAssemblyAlignmentInterval (interval));
+      interval = AssemblyAlignmentIntervalFree (interval);
+    }
+    salp = salp->next;
+  }
+  SendMessageToDialog (tlp->dialog, VIB_MSG_REDRAW);
+}
+
+
+static Pointer SeqAlignFromTagDlg (DialoG d)
+{
+  TagListPtr tlp;
+  SeqAlignPtr salp = NULL, salp_last = NULL, salp_tmp;
+  ValNodePtr vnp;
+  AssemblyAlignmentIntervalPtr interval;
+
+  tlp =(TagListPtr) GetObjectExtra (d);
+  if (tlp == NULL) {
+    return NULL;
+  }
+
+  for (vnp = tlp->vnp; vnp != NULL; vnp = vnp->next) {
+    interval = AssemblyAlignmentIntervalFromTagListString (vnp->data.ptrvalue);
+    if (interval != NULL) {
+      salp_tmp = SeqAlignFromAssemblyAlignmentInterval (interval);
+      if (salp_tmp != NULL) {
+        if (salp_last == NULL) {
+          salp = salp_tmp;
+        } else {
+          salp_last->next = salp_tmp;
+        }
+        salp_last = salp_tmp;
+      }
+      interval = AssemblyAlignmentIntervalFree (interval);
+    }
+  }
+  return salp;
+}
+
+
+static DialoG CreateAssemblyAlignmentDialog (GrouP g)
+
+{
+  AssemblyAlignmentDlgPtr dlg;
+  GrouP                   p;
+  GrouP                   x;
+  GrouP                   y;
+
+  p = HiddenGroup (g, -1, 0, NULL);
+  SetGroupSpacing (p, 10, 10);
+
+  dlg = (AssemblyAlignmentDlgPtr) MemNew (sizeof (AssemblyAlignmentDlgData));
+  if (dlg == NULL) return NULL;
+
+  SetObjectExtra (p, dlg, NULL);
+  dlg->dialog = (DialoG) p;
+  dlg->todialog = SeqAlignToAssemblyAlignmentDialog;
+  dlg->fromdialog = AssemblyAlignmentDialogToSeqAlign;
+
+  x = HiddenGroup (p, 0, 2, NULL);
+  y = HiddenGroup (x, 6, 0, NULL);
+  StaticPrompt (y, "", 16 * stdCharWidth, 0, programFont, 'c');
+  StaticPrompt (y, "", 8 * stdCharWidth, 0, programFont, 'c');
+  StaticPrompt (y, "", 8 * stdCharWidth, 0, programFont, 'c');
+  StaticPrompt (y, "", 8 * stdCharWidth, 0, programFont, 'c');
+  StaticPrompt (y, "Primary To", 8 * stdCharWidth, 0, programFont, 'c');
+  StaticPrompt (y, "", 8 * stdCharWidth, 0, programFont, 'c');
+  StaticPrompt (y, "Accessions", 16 * stdCharWidth, 0, programFont, 'c');
+  StaticPrompt (y, "TPA From", 8 * stdCharWidth, 0, programFont, 'c');
+  StaticPrompt (y, "TPA To", 8 * stdCharWidth, 0, programFont, 'c');
+  StaticPrompt (y, "Primary From", 8 * stdCharWidth, 0, programFont, 'c');
+  StaticPrompt (y, "(Percent Identity)", 8 * stdCharWidth, 0, programFont, 'c');
+  StaticPrompt (y, "Primary Strand", 8 * stdCharWidth, 0, programFont, 'c');
+  dlg->intervals_dialog = CreateTagListDialogExEx (x, 6, 6, -1, assmbly_aln_types, assmbly_aln_widths, assmbly_aln_alists,
+                                                   TRUE, FALSE, SeqAlignToTagDlg, SeqAlignFromTagDlg,
+                                                   NULL, NULL, FALSE);
+
+
+  return (DialoG) p;
+}
+
+
+static void AddTPAIdToAlignment (SeqAlignPtr salp, BioseqPtr bsp)
+{
+  DenseSegPtr dsp;
+  SeqIdPtr    sip;
+
+  if (salp == NULL || salp->dim != 2 || salp->segtype != SAS_DENSEG || bsp == NULL) {
+    return;
+  }
+
+  dsp = salp->segs;
+  if (dsp == NULL) {
+    return;
+  }
+
+  sip = SeqIdFindWorst (bsp->id);
+  sip = SeqIdDup (sip);
+
+  sip->next = dsp->ids->next;
+  dsp->ids->next = NULL;
+  dsp->ids = SeqIdFree (dsp->ids);
+  dsp->ids = sip;
+}
+
+
+static void AddTPAIdToAlignmentList (SeqAlignPtr salp, BioseqPtr bsp)
+{
+  while (salp != NULL) {
+    AddTPAIdToAlignment (salp, bsp);
+    salp = salp->next;
+  }
+}
+
+typedef struct assemblyalignmentform {
+  FORM_MESSAGE_BLOCK
+  DialoG dlg;
+  BioseqPtr bsp;
+} AssemblyAlignmentFormData, PNTR AssemblyAlignmentFormPtr;
+
+
+static void CheckCoverageWithAddedIntervals (LogInfoPtr lip, BioseqPtr bsp, SeqAlignPtr salp)
+{
+  ValNodePtr err_list = NULL;
+  SeqAlignPtr salp_orig, salp_prev = NULL;
+
+  if (bsp == NULL) {
+    return;
+  }
+
+  if (bsp->hist == NULL) {
+    bsp->hist = SeqHistNew ();
+  }
+
+  salp_orig = bsp->hist->assembly;
+  while (salp_orig != NULL) {
+    salp_prev = salp_orig;
+    salp_orig = salp_orig->next;
+  }
+
+  if (salp_prev == NULL) {
+    bsp->hist->assembly = salp;
+  } else {
+    salp_prev->next = salp;
+  }
+
+  ValidateTPAHistAlign (bsp, &err_list);
+  if (err_list != NULL) {
+    fprintf (lip->fp, "Projected Coverage Problems\n");
+    PrintTPAHistErrors (lip, err_list);
+    lip->data_in_log = TRUE;
+    err_list = ValNodeFreeData (err_list);
+  }
+
+  if (salp_prev == NULL) {
+    bsp->hist->assembly = NULL;
+  } else {
+    salp_prev->next = NULL;
+  }
+}
+
+
+static Boolean ReportAssemblyIntervalProblems (BioseqPtr bsp, SeqAlignPtr salp)
+{
+  LogInfoPtr lip;
+  AssemblyAlignmentIntervalPtr interval;
+  Boolean    has_errors = FALSE;
+  SeqAlignPtr salp_tmp;
+
+  lip = OpenLog ("Assembly Alignment Interval Problems");
+  fprintf (lip->fp, "Primary Accession\tTPA From\tTPA To\tPrimary From\tPrimary To\tStrand\tPercent Identity\n");
+  for (salp_tmp = salp; salp_tmp != NULL; salp_tmp = salp_tmp->next) {
+    interval = AssemblyAlignmentIntervalFromSeqAlign (salp_tmp);
+    fprintf (lip->fp, "%s\t%d\t%d\t%d\t%d\t%s\t%d%s\n",
+             interval->prim_accession,
+             interval->tpa_from,
+             interval->tpa_to,
+             interval->prim_from,
+             interval->prim_from + interval->tpa_to - interval->tpa_from,
+             interval->prim_strand == Seq_strand_minus ? "c" : "",
+             interval->percent_identity,
+             interval->percent_identity < 75 ? "(Suspiciously low percent identity!)" : "");
+    if (interval->percent_identity < 75) {
+      lip->data_in_log = TRUE;
+    }
+    interval = AssemblyAlignmentIntervalFree (interval);
+  }
+  fprintf (lip->fp, "\n");
+  CheckCoverageWithAddedIntervals (lip, bsp, salp);
+  CloseLog (lip);
+  has_errors = lip->data_in_log;
+  return has_errors;
+}
+
+
+static void AcceptAssemblyAlignment (ButtoN b)
+{
+  AssemblyAlignmentFormPtr frm;
+  SeqAlignPtr              salp, salp_next;
+  ValNodePtr               list;
+  MsgAnswer                ans = ANS_OK;
+
+  frm = (AssemblyAlignmentFormPtr) GetObjectExtra (b);
+  if (frm == NULL) {
+    return;
+  }
+  salp = DialogToPointer (frm->dlg);
+  if (salp == NULL) {
+    Message (MSG_ERROR, "No intervals specified");
+    return;
+  }
+  AddTPAIdToAlignmentList (salp, frm->bsp);
+  if (ReportAssemblyIntervalProblems (frm->bsp, salp)) {
+    ans = Message (MSG_OKC, "Continue with errors?");
+  }
+
+  if (ans == ANS_OK) {
+    if (frm->bsp->hist == NULL) {
+      frm->bsp->hist = SeqHistNew ();
+    }
+
+    /* something is wrong here, alignment is not being sorted */
+    salp_next = salp;
+    while (salp_next->next != NULL) {
+      salp_next = salp_next->next;
+    }
+    salp_next->next = frm->bsp->hist->assembly;
+
+    list = SeqAlignSortListNew (salp);
+    list = ValNodeSort (list, SortVnpBySeqAlignSortRow1);
+    salp = SeqAlignFromSeqAlignSortList (list);
+    list = SeqAlignSortListFree (list);
+    frm->bsp->hist->assembly = salp;
+    ObjMgrSetDirtyFlag (frm->bsp->idx.entityID, TRUE);
+    ObjMgrSendMsg (OM_MSG_UPDATE, frm->bsp->idx.entityID, 0, 0);
+    Remove (frm->form);
+  } else {
+    while (salp != NULL) {
+      salp_next = salp->next;
+      salp->next = NULL;
+      salp = SeqAlignFree (salp);
+      salp = salp_next;
+    }
+  }
+}
+
+
+static void CheckAssemblyAlignment (ButtoN b)
+{
+  AssemblyAlignmentFormPtr frm;
+  SeqAlignPtr              salp, salp_next;
+
+  frm = (AssemblyAlignmentFormPtr) GetObjectExtra (b);
+  if (frm == NULL) {
+    return;
+  }
+
+  salp = DialogToPointer (frm->dlg);
+  if (salp == NULL) {
+    Message (MSG_ERROR, "No intervals specified");
+    return;
+  }
+  AddTPAIdToAlignmentList (salp, frm->bsp);
+  PointerToDialog (frm->dlg, salp);
+  ReportAssemblyIntervalProblems (frm->bsp, salp);
+  
+  while (salp != NULL) {
+    salp_next = salp->next;
+    salp->next = NULL;
+    salp = SeqAlignFree (salp);
+    salp = salp_next;
+  }
+}
+
+
+extern void AdvancedAssemblyAlignmentEditor (IteM i)
+{
+  BaseFormPtr        bfp;
+  BioseqPtr   bsp;
+  WindoW      w;
+  GrouP       h, c;
+  AssemblyAlignmentFormPtr frm;
+  ButtoN                   b;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+
+  bsp = GetBioseqGivenIDs (bfp->input_entityID, bfp->input_itemID, bfp->input_itemtype);
+  if (bsp == NULL) {
+    Message (MSG_ERROR, "Must select single Bioseq!");
+    return;
+  }
+
+  frm = (AssemblyAlignmentFormPtr) MemNew (sizeof (AssemblyAlignmentFormData));
+  frm->bsp = bsp;
+
+  w = FixedWindow (-50, -33, -10, -10, "Add Intervals to Assembly Alignment", StdCloseWindowProc);
+  SetObjectExtra (w, frm, StdCleanupExtraProc);
+  frm->form = (ForM) w;
+
+  h = HiddenGroup (w, -1, 0, NULL);
+  SetGroupSpacing (h, 10, 10);
+
+  frm->dlg = CreateAssemblyAlignmentDialog(h);
+
+  c = HiddenGroup (h, 3, 0, NULL);
+  b = PushButton (c, "Accept", AcceptAssemblyAlignment);
+  SetObjectExtra (b, frm, NULL);
+  b = PushButton (c, "Check", CheckAssemblyAlignment);
+  SetObjectExtra (b, frm, NULL);
+  b = PushButton (c, "Cancel", StdCancelButtonProc);
+
+  AlignObjects (ALIGN_CENTER, (HANDLE) frm->dlg, (HANDLE) c, NULL);
+
+  Show (w);
+  Update ();
+}
+
+typedef enum {
+  eAssemblyIntervalInfo_NoAction = 0,
+  eAssemblyIntervalInfo_Remove,
+  eAssemblyIntervalInfo_Truncate_Left,
+  eAssemblyIntervalInfo_Truncate_Right,
+  eAssemblyIntervalInfo_Truncate_Both
+} EAssemblyIntervalInfoAction;
+
+
+typedef struct assemblyintervalinfo {
+  SeqAlignPtr salp;
+  Int4        prim_left;
+  Int4        prim_right;
+  Uint1       prim_strand;
+  Int4        tpa_left;
+  Int4        tpa_right;
+  CharPtr     prim_id;
+  ValNodePtr  conflict_list;
+  EAssemblyIntervalInfoAction action;
+} AssemblyIntervalInfoData, PNTR AssemblyIntervalInfoPtr;
+
+typedef enum {
+  eIntervalConflict_none,
+  eIntervalConflict_a_contains_b,
+  eIntervalConflict_a_contained_in_b,
+  eIntervalConflict_a_overlaps_b_on_5,
+  eIntervalConflict_a_overlaps_b_on_3
+} EIntervalConflict;
+
+
+static Int4 FindIntervalConflict (Int4 left1, Int4 right1, Int4 left2, Int4 right2, Int4 overlap)
+{
+  if (right1 < left2 + overlap || left1 > right2 - overlap) {
+    return eIntervalConflict_none;
+  } else if (left1 <= left2 && right1 < right2 && right1 - left2  + 1> overlap) {
+    return eIntervalConflict_a_overlaps_b_on_5;
+  } else if (left1 > left2 && right1 >= right2 && right2 - left1  + 1> overlap) {
+    return eIntervalConflict_a_overlaps_b_on_3;
+  } else if (left1 <= left2 && right1 >= right2) {
+    return eIntervalConflict_a_contains_b;
+  } else if (left2 <= left1 && right2 >= right2) {
+    return eIntervalConflict_a_contained_in_b;
+  } else {
+    Message (MSG_ERROR, "Conflict calculation failed");
+    return eIntervalConflict_none;
+  }
+}
+
+
+
+typedef struct intervalconflictinfo {
+  AssemblyIntervalInfoPtr conflict_interval;
+  EIntervalConflict prim_conflict;
+  EIntervalConflict tpa_conflict;
+} IntervalConflictInfoData, PNTR IntervalConflictInfoPtr;
+
+
+static IntervalConflictInfoPtr IntervalConflictInfoNew (AssemblyIntervalInfoPtr conflict_interval, EIntervalConflict prim_conflict, EIntervalConflict tpa_conflict)
+{
+  IntervalConflictInfoPtr ip;
+
+  ip = (IntervalConflictInfoPtr) MemNew (sizeof (IntervalConflictInfoData));
+  ip->conflict_interval = conflict_interval;
+  ip->prim_conflict = prim_conflict;
+  ip->tpa_conflict = tpa_conflict;
+  return ip;
+}
+
+
+static IntervalConflictInfoPtr IntervalConflictInfoFree (IntervalConflictInfoPtr ip)
+{
+  if (ip != NULL) {
+    ip = MemFree (ip);
+  }
+  return ip;
+}
+
+
+static ValNodePtr IntervalConflictInfoListFree (ValNodePtr vnp)
+{
+  ValNodePtr vnp_next;
+
+  while (vnp != NULL) {
+    vnp_next = vnp->next;
+    vnp->data.ptrvalue = IntervalConflictInfoFree (vnp->data.ptrvalue);
+    vnp->next = NULL;
+    vnp = ValNodeFree (vnp);
+    vnp = vnp_next;
+  }
+  return vnp;
+}
+
+
+static AssemblyIntervalInfoPtr AssemblyIntervalInfoFree (AssemblyIntervalInfoPtr ip)
+{
+  if (ip != NULL) {
+    ip->prim_id = MemFree (ip->prim_id);
+    ip->conflict_list = IntervalConflictInfoListFree (ip->conflict_list);
+    ip = MemFree (ip);
+  }
+  return ip;
+}
+
+
+static ValNodePtr AssemblyIntervalInfoListFree (ValNodePtr vnp)
+{
+  ValNodePtr vnp_next;
+
+  while (vnp != NULL) {
+    vnp_next = vnp->next;
+    vnp->data.ptrvalue = AssemblyIntervalInfoFree (vnp->data.ptrvalue);
+    vnp->next = NULL;
+    vnp = ValNodeFree (vnp);
+    vnp = vnp_next;
+  }
+  return vnp;
+}
+
+
+static void TruncateForConflictsOnLeft (AssemblyIntervalInfoPtr ai)
+{
+  IntervalConflictInfoPtr ip;
+  ValNodePtr vnp;
+  Int4       prim_change, tpa_change;
+
+  if (ai == NULL || ai->conflict_list == NULL) {
+    return;
+  }
+
+  for (vnp = ai->conflict_list; vnp != NULL; vnp = vnp->next) {
+    if (vnp->choice == 1) {
+      ip = (IntervalConflictInfoPtr) vnp->data.ptrvalue;
+      prim_change = 0;
+      tpa_change = 0;
+      if (ip->tpa_conflict == eIntervalConflict_a_overlaps_b_on_5) {
+        tpa_change = ip->conflict_interval->tpa_right - ai->tpa_left;
+        if (tpa_change > 0) {
+          ai->tpa_left += tpa_change;
+          if (ai->prim_strand == Seq_strand_minus) {
+            ai->prim_right -= tpa_change;
+          } else {
+            ai->prim_left += tpa_change;
+          }
+        }
+      }
+      if (ip->prim_conflict == eIntervalConflict_a_overlaps_b_on_5) {
+        prim_change = ip->conflict_interval->prim_right - ai->prim_left; 
+        if (prim_change > 0) {
+          ai->prim_left += prim_change;
+          if (ai->prim_strand == Seq_strand_minus) {
+            ai->tpa_right -= prim_change;
+          } else {
+            ai->tpa_left += prim_change;
+          }
+        }
+      }
+      vnp->choice = 0;
+    }
+  }
+}
+
+
+static void TruncateForConflictsOnRight (AssemblyIntervalInfoPtr ai)
+{
+  IntervalConflictInfoPtr ip;
+  ValNodePtr vnp;
+  Int4       prim_change, tpa_change;
+
+  if (ai == NULL || ai->conflict_list == NULL) {
+    return;
+  }
+
+  for (vnp = ai->conflict_list; vnp != NULL; vnp = vnp->next) {
+    if (vnp->choice == 1) {
+      ip = (IntervalConflictInfoPtr) vnp->data.ptrvalue;
+      prim_change = 0;
+      tpa_change = 0;
+      if (ip->tpa_conflict == eIntervalConflict_a_overlaps_b_on_3) {
+        tpa_change = ai->tpa_right - ip->conflict_interval->tpa_left;
+        if (tpa_change > 0) {
+          ai->tpa_right -= tpa_change;
+          if (ai->prim_strand == Seq_strand_minus) {
+            ai->prim_left += tpa_change;
+          } else {
+            ai->prim_right -= tpa_change;
+          }
+        }
+      }
+      if (ip->prim_conflict == eIntervalConflict_a_overlaps_b_on_3) {
+        prim_change = ai->prim_right - ip->conflict_interval->prim_left; 
+        if (prim_change > 0) {
+          ai->prim_right -= prim_change;
+          if (ai->prim_strand == Seq_strand_minus) {
+            ai->tpa_left += prim_change;
+          } else {
+            ai->tpa_right -= prim_change;
+          }
+        }
+      }
+      vnp->choice = 0;
+    }
+  }
+}
+
+
+static void ReevaluateConflicts (AssemblyIntervalInfoPtr ip, Int4 overlap)
+{
+  ValNodePtr vnp;
+  IntervalConflictInfoPtr cp;
+
+  if (ip == NULL) {
+    return;
+  }
+
+  for (vnp = ip->conflict_list; vnp != NULL; vnp = vnp->next) {
+    cp = vnp->data.ptrvalue;
+    if (cp->conflict_interval->action == eAssemblyIntervalInfo_Remove) {
+      vnp->choice = 0;
+    } else if (FindIntervalConflict (ip->tpa_left, ip->tpa_right, 
+                                     cp->conflict_interval->tpa_left, cp->conflict_interval->tpa_right, overlap) == eIntervalConflict_none
+               && FindIntervalConflict (ip->prim_left, ip->prim_right,
+                                        cp->conflict_interval->tpa_left, cp->conflict_interval->tpa_right, overlap) == eIntervalConflict_none) {
+      vnp->choice = 0;
+    } else {
+      vnp->choice = 1;
+    }
+  }
+}
+
+
+static void RecalculateAssemblyIntervalInfoEndpoints (AssemblyIntervalInfoPtr ip, Int4 overlap)
+{
+  IntervalConflictInfoPtr cp;
+  ValNodePtr vnp;
+
+  if (ip == NULL) {
+    return;
+  }
+
+  /* calculate endpoints */
+  AlnMgr2IndexSingleChildSeqAlign (ip->salp);
+  ip->prim_strand = SeqAlignStrand (ip->salp, 2);
+  AlnMgr2GetNthSeqRangeInSA (ip->salp, 1, &(ip->tpa_left), &(ip->tpa_right));
+  AlnMgr2GetNthSeqRangeInSA (ip->salp, 2, &(ip->prim_left), &(ip->prim_right));
+  
+  /* apply changes for conflicts and actions */
+  if (ip->action == eAssemblyIntervalInfo_Truncate_Left) {
+    TruncateForConflictsOnLeft (ip);
+  } else if (ip->action == eAssemblyIntervalInfo_Truncate_Right) {
+    TruncateForConflictsOnRight (ip);
+  } else if (ip->action == eAssemblyIntervalInfo_Truncate_Both) {
+    TruncateForConflictsOnLeft (ip);
+    TruncateForConflictsOnRight (ip);
+  } 
+
+  ReevaluateConflicts (ip, overlap);
+  for (vnp = ip->conflict_list; vnp != NULL; vnp = vnp->next) {
+    cp = vnp->data.ptrvalue;
+    ReevaluateConflicts (cp->conflict_interval, overlap);
+  }
+}
+
+
+static AssemblyIntervalInfoPtr AssemblyIntervalInfoNew (SeqAlignPtr salp, Int4 overlap)
+{
+  AssemblyIntervalInfoPtr ip;
+  Char        id_txt[255];
+  SeqIdPtr    sip;
+  BioseqPtr   bsp;
+
+  if (salp == NULL) {
+    return NULL;
+  }
+
+  ip = (AssemblyIntervalInfoPtr) MemNew (sizeof (AssemblyIntervalInfoData));
+  ip->salp = salp;
+  AlnMgr2IndexSingleChildSeqAlign (ip->salp);
+
+  sip = AlnMgr2GetNthSeqIdPtr (salp, 2);
+  bsp = BioseqLockById (sip);
+  if (bsp != NULL) {
+    sip = SeqIdFree (sip);
+    sip = SeqIdDup (SeqIdFindBest (bsp->id, SEQID_GENBANK));
+    BioseqUnlock (bsp);
+  }
+
+  SeqIdWrite (sip, id_txt, PRINTID_REPORT, sizeof (id_txt) - 1);
+  sip = SeqIdFree (sip);
+
+  ip->prim_id = StringSave (id_txt);
+  RecalculateAssemblyIntervalInfoEndpoints (ip, overlap);
+  return ip;
+}
+
+
+static CharPtr SummarizeAssemblyInterval (AssemblyIntervalInfoPtr ip)
+{
+  CharPtr summary = NULL;
+  CharPtr fmt = "%d-%d %s %d-%d%s";
+  Int4    len;
+
+  if (ip == NULL) {
+    return NULL;
+  }
+
+  len = StringLen (fmt) + StringLen (ip->prim_id) + 60;
+  if (ip->prim_strand == Seq_strand_minus) {
+    len += 3;
+  }
+  summary = (CharPtr) MemNew (sizeof (Char) + len);
+  sprintf (summary, fmt, ip->tpa_left + 1, ip->tpa_right + 1,
+                         ip->prim_id, 
+                         ip->prim_left + 1, ip->prim_right + 1,
+                         ip->prim_strand == Seq_strand_minus ? "(c)" : "");
+  return summary;
+}
+
+
+static CharPtr SummarizeConflictList (ValNodePtr list)
+{
+  CharPtr summary = NULL, str, conflict = "Conflict with ";
+  ValNodePtr vnp, strings = NULL;
+  IntervalConflictInfoPtr ip;
+  Int4 len = 0;
+
+  for (vnp = list; vnp != NULL; vnp = vnp->next) {
+    if (vnp->choice == 1 && vnp->data.ptrvalue != NULL) {
+      ip = (IntervalConflictInfoPtr) vnp->data.ptrvalue;
+      str = SummarizeAssemblyInterval (ip->conflict_interval);
+      ValNodeAddPointer (&strings, 0, str);
+      len += StringLen (str) + 3;
+    }
+  }
+  if (strings == NULL) {
+    summary = StringSave ("No conflicts");
+  } else {
+    summary = (CharPtr) MemNew (sizeof (Char) * (StringLen (conflict) + len));
+    StringCpy (summary, conflict);
+    for (vnp = strings; vnp != NULL; vnp = vnp->next) {
+      StringCat (summary, vnp->data.ptrvalue);
+      if (vnp->next != NULL) {
+        StringCat (summary, ", ");
+      }
+    }
+    strings = ValNodeFreeData (strings);
+  }
+  return summary;
+}
+
+
+static void RemoveConflictLists (ValNodePtr list)
+{
+  AssemblyIntervalInfoPtr ip;
+
+  while (list != NULL) {
+    ip = (AssemblyIntervalInfoPtr) list->data.ptrvalue;
+    ip->conflict_list = IntervalConflictInfoListFree (ip->conflict_list);
+    list = list->next;
+  }
+}
+
+
+static void BuildConflictLists (ValNodePtr list, Int4 overlap)
+{
+  ValNodePtr vnp1, vnp2;
+  AssemblyIntervalInfoPtr ip1, ip2;
+  EIntervalConflict prim_conflict, tpa_conflict;
+  IntervalConflictInfoPtr conflict;
+
+  if (list == NULL || list->next == NULL) {
+    return;
+  }
+
+  RemoveConflictLists (list);
+
+  for (vnp1 = list; vnp1->next != NULL; vnp1 = vnp1->next) {
+    ip1 = (AssemblyIntervalInfoPtr) vnp1->data.ptrvalue;
+    for (vnp2 = vnp1->next; vnp2 != NULL; vnp2 = vnp2->next) {
+      ip2 = (AssemblyIntervalInfoPtr) vnp2->data.ptrvalue;
+      if (StringCmp (ip1->prim_id, ip2->prim_id) == 0) {
+        tpa_conflict = FindIntervalConflict (ip1->tpa_left, ip1->tpa_right, ip2->tpa_left, ip2->tpa_right, overlap);
+        prim_conflict = FindIntervalConflict (ip1->prim_left, ip1->prim_right, ip2->prim_left, ip2->prim_right, overlap);
+        if (tpa_conflict != eIntervalConflict_none || prim_conflict != prim_conflict) {
+          conflict = IntervalConflictInfoNew (ip2, prim_conflict, tpa_conflict);
+          ValNodeAddPointer (&(ip1->conflict_list), 1, conflict);
+        }
+        tpa_conflict = FindIntervalConflict (ip2->tpa_left, ip2->tpa_right, ip1->tpa_left, ip1->tpa_right, overlap);
+        prim_conflict = FindIntervalConflict (ip2->prim_left, ip2->prim_right, ip1->prim_left, ip1->prim_right, overlap);
+        if (tpa_conflict != eIntervalConflict_none || prim_conflict != prim_conflict) {
+          conflict = IntervalConflictInfoNew (ip1, prim_conflict, tpa_conflict);
+          ValNodeAddPointer (&(ip2->conflict_list), 1, conflict);
+        }
+      }
+    }
+  }
+}
+
+
+static ValNodePtr AssemblyIntervalInfoListFromSeqAlign (SeqAlignPtr salp, Int4 overlap)
+{
+  ValNodePtr list = NULL;
+
+  while (salp != NULL) {
+    ValNodeAddPointer (&list, 0, AssemblyIntervalInfoNew (salp, overlap));
+    salp = salp->next;
+  }
+
+  BuildConflictLists (list, overlap);
+  return list;
+}
+
+
+typedef struct assemblyalignmentintervalresolutiondlg {
+  DIALOG_MESSAGE_BLOCK
+  DialoG intervals_dialog;
+  TexT   overlap;
+  ValNodePtr list;
+} AssemblyAlignmentIntervalResolutionDlgData, PNTR AssemblyAlignmentIntervalResolutionDlgPtr;
+
+CharPtr assmbly_aln_int_res_labels [] = {
+  "Action",
+  "Alignment",
+  "Conflicts With" };
+
+Uint2 assmbly_aln_int_res_types [] = {
+  TAGLIST_POPUP, TAGLIST_PROMPT, TAGLIST_PROMPT
+};
+
+Uint2 assmbly_aln_int_res_widths [] = {
+  10, 15, 30, 0
+};
+
+ENUM_ALIST(assmbly_aln_int_res_action_alist)
+  {"No change",  eAssemblyIntervalInfo_NoAction},
+  {"Remove",     eAssemblyIntervalInfo_Remove},
+  {"Truncate Left", eAssemblyIntervalInfo_Truncate_Left},
+  {"Truncate Right", eAssemblyIntervalInfo_Truncate_Right},
+  {"Truncate Both", eAssemblyIntervalInfo_Truncate_Both},
+END_ENUM_ALIST
+
+
+static EnumFieldAssocPtr assmbly_aln_int_res_alists[] = {
+  assmbly_aln_int_res_action_alist, NULL, NULL
+};
+
+
+static CharPtr SummarizeOneIntervalResolutionRow (AssemblyIntervalInfoPtr ip) 
+{
+  CharPtr str, int_str, conf_str, fmt = "%d\t%s\t%s\n";
+
+  if (ip == NULL) {
+    return NULL;
+  }
+
+  int_str = SummarizeAssemblyInterval (ip);
+  conf_str = SummarizeConflictList (ip->conflict_list);
+  str = (CharPtr) MemNew (sizeof (Char) * (StringLen (fmt) + 15 + StringLen (int_str) + StringLen (conf_str)));
+  sprintf (str, fmt, ip->action, int_str, conf_str);
+  int_str = MemFree (int_str);
+  conf_str = MemFree (conf_str);
+
+  return str;
+}
+
+static void UpdateConflicts (Pointer userdata)
+{
+  AssemblyAlignmentIntervalResolutionDlgPtr dlg;
+  AssemblyIntervalInfoPtr ip;
+  TagListPtr tlp;
+  ValNodePtr vnp, vnp_t;
+  Int4 action;
+  Boolean any_change = FALSE;
+  CharPtr str;
+  Int4    overlap = 0;
+  
+  dlg = (AssemblyAlignmentIntervalResolutionDlgPtr) userdata;
+  
+  if (dlg == NULL) {
+    return;
+  }
+
+  tlp = (TagListPtr) GetObjectExtra (dlg->intervals_dialog);
+  if (tlp == NULL) {
+    return;
+  }
+
+  if (!TextHasNoText (dlg->overlap)) {
+    str = SaveStringFromText (dlg->overlap);
+    overlap = atoi (str);
+    str = MemFree (str);
+    if (overlap < 0) {
+      overlap = 0;
+    }
+  }
+
+  /* now update conflict lists */
+  for (vnp = dlg->list, vnp_t = tlp->vnp; vnp != NULL && tlp->vnp != NULL; vnp = vnp->next, vnp_t = vnp_t->next) {
+    ip = (AssemblyIntervalInfoPtr) vnp->data.ptrvalue;
+    str = ExtractTagListColumn ((CharPtr) vnp_t->data.ptrvalue, 0);
+    action = atoi (str);
+    str = MemFree (str);
+    if (action != ip->action) {
+      ip->action = action;
+      RecalculateAssemblyIntervalInfoEndpoints (ip, overlap);
+      any_change = TRUE;
+    }
+  }
+
+  if (any_change) {
+    for (vnp = dlg->list, vnp_t = tlp->vnp; vnp != NULL && tlp->vnp != NULL; vnp = vnp->next, vnp_t = vnp_t->next) {
+      ip = (AssemblyIntervalInfoPtr) vnp->data.ptrvalue;
+      vnp_t->data.ptrvalue = MemFree (vnp_t->data.ptrvalue);
+      vnp_t->data.ptrvalue = SummarizeOneIntervalResolutionRow (ip);
+    }
+    
+    /* update dialog */
+    SendMessageToDialog (tlp->dialog, VIB_MSG_REDRAW);
+    SendMessageToDialog (tlp->dialog, VIB_MSG_ENTER);
+  }
+}  
+
+static TaglistCallback assmbly_int_res_callback_list[3] = 
+ { UpdateConflicts, UpdateConflicts, UpdateConflicts };
+
+static void SeqAlignToAssemblyAlignmentIntervalResolutionDialog (DialoG d, Pointer data)
+{
+  AssemblyAlignmentIntervalResolutionDlgPtr dlg;
+  SeqAlignPtr salp;
+  ValNodePtr  vnp;
+  CharPtr     str;
+  Int4        overlap = 0;
+  TagListPtr  tlp;
+
+  dlg = (AssemblyAlignmentIntervalResolutionDlgPtr) GetObjectExtra (d);
+  salp = (SeqAlignPtr) data;
+  if (dlg == NULL) {
+    return;
+  }
+  tlp = (TagListPtr) GetObjectExtra (dlg->intervals_dialog);
+  if (tlp == NULL) {
+    return;
+  }
+  SendMessageToDialog (tlp->dialog, VIB_MSG_RESET);
+  tlp->vnp = ValNodeFreeData (tlp->vnp);
+
+  if (!TextHasNoText (dlg->overlap)) {
+    str = SaveStringFromText (dlg->overlap);
+    overlap = atoi (str);
+    str = MemFree (str);
+    if (overlap < 0) {
+      overlap = 0;
+    }
+  }
+
+  dlg->list = AssemblyIntervalInfoListFree (dlg->list);
+  dlg->list = AssemblyIntervalInfoListFromSeqAlign (salp, overlap);
+
+  for (vnp = dlg->list; vnp != NULL; vnp = vnp->next) {
+    str = SummarizeOneIntervalResolutionRow (vnp->data.ptrvalue);
+    ValNodeAddPointer (&(tlp->vnp), 0, str);
+  }
+
+  SendMessageToDialog (tlp->dialog, VIB_MSG_REDRAW);
+  tlp->max = MAX ((Int2) 0, (Int2) (ValNodeLen (tlp->vnp) - tlp->rows));
+  CorrectBarMax (tlp->bar, tlp->max);
+  CorrectBarPage (tlp->bar, tlp->rows - 1, tlp->rows - 1);
+  if (tlp->max > 0) {
+    SafeShow (tlp->bar);
+  } else {
+    SafeHide (tlp->bar);
+  }
+  SendMessageToDialog (tlp->dialog, VIB_MSG_ENTER);
+
+}
+
+
+static Pointer AssemblyAlignmentIntervalResolutionDialogToSeqAlign (DialoG d)
+{
+  AssemblyAlignmentIntervalResolutionDlgPtr dlg;
+  AssemblyIntervalInfoPtr ai;
+  SeqAlignPtr salp_list = NULL, salp_prev = NULL, salp;
+  ValNodePtr vnp;
+
+  dlg = (AssemblyAlignmentIntervalResolutionDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) {
+    return NULL;
+  }
+
+  for (vnp = dlg->list; vnp != NULL; vnp = vnp->next) {
+    ai = vnp->data.ptrvalue;
+    if (ai->action != eAssemblyIntervalInfo_Remove) {
+      salp = (SeqAlignPtr) AsnIoMemCopy (ai->salp, (AsnReadFunc) SeqAlignAsnRead, (AsnWriteFunc) SeqAlignAsnWrite);
+      /* TODO: truncate alignments */
+
+      /* add to list */
+      if (salp_prev == NULL) {
+        salp_list = salp;
+      } else {
+        salp_prev->next = salp;
+      }
+      salp_prev = salp;
+    }
+  }
+
+  return (Pointer) salp_list;
+}
+
+
+static void ChangeAssemblyAlignmentIntervalResolutionOverlap (TexT t)
+{
+  AssemblyAlignmentIntervalResolutionDlgPtr  dlg;
+  AssemblyIntervalInfoPtr ip;
+  TagListPtr tlp;
+  ValNodePtr vnp, vnp_t;
+  CharPtr    str;
+  Int4       overlap = 0;
+
+  dlg = (AssemblyAlignmentIntervalResolutionDlgPtr) GetObjectExtra (t);
+  if (dlg == NULL) {
+    return;
+  }
+
+  tlp = (TagListPtr) GetObjectExtra (dlg->intervals_dialog);
+  if (tlp == NULL) {
+    return;
+  }
+
+  if (!TextHasNoText (dlg->overlap)) {
+    str = SaveStringFromText (dlg->overlap);
+    overlap = atoi (str);
+    str = MemFree (str);
+    if (overlap < 0) {
+      overlap = 0;
+    }
+  }
+
+  BuildConflictLists (dlg->list, overlap);
+
+  /* change text */
+  for (vnp = dlg->list, vnp_t = tlp->vnp; vnp != NULL && tlp->vnp != NULL; vnp = vnp->next, vnp_t = vnp_t->next) {
+    ip = (AssemblyIntervalInfoPtr) vnp->data.ptrvalue;
+    RecalculateAssemblyIntervalInfoEndpoints (ip, overlap);
+    vnp_t->data.ptrvalue = MemFree (vnp_t->data.ptrvalue);
+    vnp_t->data.ptrvalue = SummarizeOneIntervalResolutionRow (ip);
+  }
+  
+  /* update dialog */
+  SendMessageToDialog (tlp->dialog, VIB_MSG_REDRAW);
+  SendMessageToDialog (tlp->dialog, VIB_MSG_ENTER);
+
+}
+
+
+static void CleanupAssemblyAlignmentIntervalResolutionDialog (GraphiC g, VoidPtr data)
+
+{
+  AssemblyAlignmentIntervalResolutionDlgPtr  dlg;
+
+  dlg = (AssemblyAlignmentIntervalResolutionDlgPtr) data;
+  if (dlg != NULL) {
+    dlg->list =  AssemblyIntervalInfoListFree (dlg->list);
+    dlg = MemFree (dlg);
+  }
+}
+
+
+static DialoG CreateAssemblyAlignmentIntervalResolutionDialog (GrouP g)
+
+{
+  AssemblyAlignmentIntervalResolutionDlgPtr dlg;
+  GrouP                   p;
+  GrouP                   x, y, z;
+  Int4                    i;
+  Int4                    num_columns = sizeof (assmbly_aln_int_res_labels) / sizeof (CharPtr);
+
+  p = HiddenGroup (g, -1, 0, NULL);
+  SetGroupSpacing (p, 10, 10);
+
+  dlg = (AssemblyAlignmentIntervalResolutionDlgPtr) MemNew (sizeof (AssemblyAlignmentIntervalResolutionDlgData));
+  if (dlg == NULL) return NULL;
+
+  SetObjectExtra (p, dlg, CleanupAssemblyAlignmentIntervalResolutionDialog);
+  dlg->dialog = (DialoG) p;
+  
+  dlg->todialog = SeqAlignToAssemblyAlignmentIntervalResolutionDialog;
+  dlg->fromdialog = AssemblyAlignmentIntervalResolutionDialogToSeqAlign;
+
+  z = HiddenGroup (p, 2, 0, NULL);
+  StaticPrompt (z, "Allowable Overlap", 0, 0, programFont, 'r');
+  dlg->overlap = DialogText (z, "5", 5, ChangeAssemblyAlignmentIntervalResolutionOverlap);
+  SetObjectExtra (dlg->overlap, dlg, NULL);
+
+  x = HiddenGroup (p, 0, 2, NULL);
+  y = HiddenGroup (x, num_columns, 0, NULL);
+  for (i = 0; i < num_columns; i++) {
+      StaticPrompt (y, assmbly_aln_int_res_labels[i], assmbly_aln_int_res_widths[i] * stdCharWidth, 0, programFont, 'l');
+  }
+  dlg->intervals_dialog = CreateTagListDialogExEx (x, 6, num_columns, -1, assmbly_aln_int_res_types, 
+                                                   assmbly_aln_int_res_widths, assmbly_aln_int_res_alists,
+                                                   TRUE, TRUE, NULL, NULL,
+                                                   assmbly_int_res_callback_list, dlg, FALSE);
+
+  AlignObjects (ALIGN_CENTER, (HANDLE) z, (HANDLE) x, NULL);
+  return (DialoG) p;
+}
+
+
+typedef struct assemblyalignmentintervalresolutionfrm {
+  FORM_MESSAGE_BLOCK
+  DialoG dlg;
+
+  BioseqPtr bsp;
+} AssemblyAlignmentIntervalResolutionFrmData, PNTR AssemblyAlignmentIntervalResolutionFrmPtr;
+
+
+static void AcceptAssemblyAlignmentIntervalResolution (ButtoN b)
+{
+  AssemblyAlignmentIntervalResolutionFrmPtr frm;
+  SeqAlignPtr new_assem, salp, salp_next;
+
+  frm = (AssemblyAlignmentIntervalResolutionFrmPtr) GetObjectExtra (b);
+  if (frm == NULL) {
+    return;
+  }
+
+  /* TODO: check for problems before accepting */
+
+  new_assem = DialogToPointer (frm->dlg);
+  if (new_assem == NULL) {
+    Message (MSG_ERROR, "No intervals left in assembly!");
+    return;
+  }
+
+  /* remove old assembly */
+  salp = frm->bsp->hist->assembly;
+  frm->bsp->hist->assembly = NULL;
+  while (salp != NULL) {
+    salp_next = salp->next;
+    salp->next = NULL;
+    salp = SeqAlignFree (salp);
+    salp = salp_next;
+  }
+
+  /* assign new assembly */
+  frm->bsp->hist->assembly = new_assem;
+
+  ObjMgrSetDirtyFlag (frm->bsp->idx.entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, frm->bsp->idx.entityID, 0, 0);
+  Remove (frm->form);
+}
+
+
+extern void AssemblyAlignmentIntervalResolution (IteM i)
+{
+  BaseFormPtr        bfp;
+  BioseqPtr   bsp;
+  WindoW      w;
+  GrouP       h, c;
+  AssemblyAlignmentIntervalResolutionFrmPtr frm;
+  ButtoN                   b;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+
+  bsp = GetBioseqGivenIDs (bfp->input_entityID, bfp->input_itemID, bfp->input_itemtype);
+  if (bsp == NULL) {
+    Message (MSG_ERROR, "Must select single Bioseq!");
+    return;
+  }
+  if (bsp->hist == NULL || bsp->hist->assembly == NULL) {
+    Message (MSG_ERROR, "No assembly alignment!");
+    return;
+  }
+  frm = (AssemblyAlignmentIntervalResolutionFrmPtr) MemNew (sizeof (AssemblyAlignmentIntervalResolutionFrmData));
+  frm->bsp = bsp;
+
+  w = FixedWindow (-50, -33, -10, -10, "Resolve Assembly Alignment Intervals", StdCloseWindowProc);
+  SetObjectExtra (w, frm, StdCleanupExtraProc);
+  frm->form = (ForM) w;
+
+  h = HiddenGroup (w, -1, 0, NULL);
+  SetGroupSpacing (h, 10, 10);
+
+  frm->dlg = CreateAssemblyAlignmentIntervalResolutionDialog(h);
+  PointerToDialog (frm->dlg, bsp->hist->assembly);
+
+  c = HiddenGroup (h, 3, 0, NULL);
+  b = PushButton (c, "Accept", AcceptAssemblyAlignmentIntervalResolution);
+  SetObjectExtra (b, frm, NULL);
+/*  b = PushButton (c, "Check", CheckAssemblyAlignmentIntervalResolution);
+  SetObjectExtra (b, frm, NULL); */
+  b = PushButton (c, "Cancel", StdCancelButtonProc);
+
+  AlignObjects (ALIGN_CENTER, (HANDLE) frm->dlg, (HANDLE) c, NULL);
+  Show (w);
+  Update ();
+}
+
 
 
 typedef struct historyformdata {
@@ -8107,6 +10397,1350 @@ extern void EditSequenceHistory (IteM i)
   Show (w);
   Update ();
 }
+
+
+typedef struct nw {
+  Int4 score;
+  Int4 traceback_pos;
+} NWData, PNTR NWPtr;
+
+
+static Int4 SegmentsNeededForAlignment (CharPtr buf1, CharPtr buf2)
+{
+  CharPtr cp1, cp2;
+  Boolean gap1, gap2, change = FALSE;
+  Int4    num_segs = 1;
+
+  cp1 = buf1;
+  cp2 = buf2;
+  if (*cp1 == '-') {
+    gap1 = TRUE;
+  } else {
+    gap1 = FALSE;
+  }
+  cp1++;
+  if (*cp2 == '-') {
+    gap2 = TRUE;
+  } else {
+    gap2 = FALSE;
+  }
+  cp2++;
+  while (*cp1 != 0 && *cp2 != 0) {
+    change = FALSE;
+    if (*cp1 == '-') {
+      if (!gap1) {
+        gap1 = TRUE;
+        change = TRUE;
+      }
+    } else if (gap1) {
+      gap1 = FALSE;
+      change = TRUE;
+    }
+    if (*cp2 == '-') {
+      if (!gap2) {
+        gap2 = TRUE;
+        change = TRUE;
+      }
+    } else if (gap2) {
+      gap2 = FALSE;
+      change = TRUE;
+    }
+    if (change) {
+      num_segs ++;
+    }
+    cp1++;
+    cp2++;
+  }
+  return num_segs;
+}
+
+static void 
+FillInStartsAndLensForAlignment 
+(DenseSegPtr dsp,
+ CharPtr     buf1,
+ CharPtr     buf2)
+{
+  CharPtr cp1, cp2;
+  Boolean gap1, gap2, change = FALSE;
+  Int4    num_segs = 0;
+  Int4    pos1 = 0, pos2 = 0;
+
+  cp1 = buf1;
+  cp2 = buf2;
+  if (*cp1 == '-') {
+    dsp->starts[dsp->dim * num_segs] = -1;
+    gap1 = TRUE;
+  } else {
+    dsp->starts[dsp->dim * num_segs] = pos1;
+    gap1 = FALSE;
+    pos1++;
+  }
+  cp1++;
+  if (*cp2 == '-') {
+    gap2 = TRUE;
+    dsp->starts[dsp->dim * num_segs + 1] = -1;
+  } else {
+    dsp->starts[dsp->dim * num_segs + 1] = pos2;
+    gap2 = FALSE;
+    pos2++;
+  }
+  cp2++;
+  dsp->lens[num_segs] = 1;
+
+  while (*cp1 != 0 && *cp2 != 0) {
+    change = FALSE;
+    if (*cp1 == '-') {
+      if (!gap1) {
+        gap1 = TRUE;
+        change = TRUE;
+      }
+    } else {
+      if (gap1) {
+        gap1 = FALSE;
+        change = TRUE;
+      }
+    }
+    if (*cp2 == '-') {
+      if (!gap2) {
+        gap2 = TRUE;
+        change = TRUE;
+      }
+    } else {
+      if (gap2) {
+        gap2 = FALSE;
+        change = TRUE;
+      }
+    }
+    if (change) {
+      num_segs ++;
+      if (gap1) {
+        dsp->starts[dsp->dim * num_segs] = -1;
+      } else {
+        dsp->starts[dsp->dim * num_segs] = pos1;
+      }
+      if (gap2) {
+        dsp->starts[dsp->dim * num_segs + 1] = -1;
+      } else {
+        dsp->starts[dsp->dim * num_segs + 1] = pos2;
+      }
+      dsp->lens[num_segs] = 1;
+    } else {
+      dsp->lens[num_segs]++;
+    }
+    cp1++;
+    cp2++;
+    if (!gap1) {
+      pos1++;
+    }
+    if (!gap2) {
+      pos2++;
+    }
+  }
+}
+
+
+static void AdjustStringAlingmentForOffsetAndStrand (DenseSegPtr dsp, Int4 start1, Int4 start2, Int4 stop2, Uint1 strand2)
+{
+  Int4 i;
+
+  if (dsp == NULL) {
+    return;
+  }
+
+  for (i = 0; i < dsp->numseg; i++) {
+    if (dsp->starts[2 * i] != -1) {
+      dsp->starts[2 * i] += start1;
+    }
+    if (dsp->starts[2 * i + 1] != -1) {
+      if (strand2 == Seq_strand_plus) {
+        dsp->starts[2 * i + 1] += start2;
+      } else {
+        dsp->starts[2 * i + 1] = stop2 - dsp->starts[2 * i + 1] - dsp->lens[i];
+      }
+    }
+  }
+}
+
+
+/* assumption - first interval always on plus strand */
+static SeqAlignPtr NWAlignmentForInterval (SeqIdPtr sip1, SeqIdPtr sip2, Int4 start1, Int4 stop1, Int4 start2, Int4 stop2)
+{
+  BioseqPtr bsp1, bsp2;
+  Int4      len1, len2, tmp, i, row, col, back_row, back_col;
+  Uint1     strand2 = Seq_strand_plus;
+  CharPtr   buf1, buf2;
+  CharPtr   alnbuf1, alnbuf2, cp1, cp2;
+  NWPtr     matrix;
+  Int4      gap_penalty = -1;
+  Int4      mismatch_penalty = -1;
+  Int4      match_score = 1;
+  Int4      left, up, diag;
+  Int4      num_segs;
+  DenseSegPtr dsp;
+  SeqAlignPtr salp = NULL;
+
+  if (sip1 == NULL || sip2 == NULL) {
+    return NULL;
+  }
+
+  bsp1 = BioseqLockById (sip1);
+  bsp2 = BioseqLockById (sip2);
+  
+  if (bsp1 != NULL && bsp2 != NULL) {
+    if (stop2 < start2) {
+      strand2 = Seq_strand_minus;
+      tmp = start2;
+      start2 = stop2;
+      stop2 = tmp;
+    }
+    len1 = stop1 - start1 + 1;
+    len2 = stop2 - start2 + 1;
+    buf1 = MemNew (sizeof (Char) * (len1 + 1));
+    buf2 = MemNew (sizeof (Char) * (len2 + 1));
+    SeqPortStreamInt (bsp1, start1, stop1, Seq_strand_plus, STREAM_EXPAND_GAPS | STREAM_CORRECT_INVAL, (Pointer) buf1, NULL);
+    SeqPortStreamInt (bsp2, start2, stop2, strand2, STREAM_EXPAND_GAPS | STREAM_CORRECT_INVAL, (Pointer) buf2, NULL);
+
+    matrix = (NWPtr) MemNew (sizeof (NWData) * (len1 + 1) * (len2 + 1));
+    /* initalize matrix */
+    MemSet (matrix, 0, sizeof (NWData) * (len1 + 1) * (len2 + 1));
+    matrix[0].score = 0;
+    matrix[0].traceback_pos = 0;
+    row = 0;
+    for (col = 1; col <= len1; col++) {
+      matrix[(row * (len1  + 1)) + col].score = matrix[(row * (len1  + 1)) + col - 1].score + gap_penalty;
+      matrix[(row * (len1  + 1)) + col].traceback_pos = (row * (len1  + 1)) + col - 1;
+    }
+    col = 0;
+    for (row = 1; row <= len2; row++) {
+      matrix[(row * (len1  + 1)) + col].score = matrix[((row - 1) * (len1  + 1)) + col].score + gap_penalty;
+      matrix[(row * (len1  + 1)) + col].traceback_pos = ((row - 1) * (len1  + 1)) + col;
+    }
+
+    /* fill in scores */
+    for (row = 1; row <= len2; row++) {
+      for (col = 1; col <= len1; col++) {
+        /* diagonal */
+        diag = matrix[((row - 1) * (len1  + 1)) + col - 1].score;
+        if (buf1[col - 1] == buf2[row - 1]) {
+          diag += match_score;
+        } else {
+          diag += mismatch_penalty;
+        }
+        left = matrix[((row) * (len1  + 1)) + col - 1].score + gap_penalty;
+        up = matrix[((row - 1) * (len1  + 1)) + col].score + gap_penalty;
+
+        /* choose best */
+        if (left > diag && left > up) {
+          matrix[((row) * (len1 + 1)) + col].score = left + gap_penalty;
+          matrix[((row) * (len1 + 1)) + col].traceback_pos = ((row) * (len1  + 1)) + col - 1;
+        } else if (up > diag && up > left) {
+          matrix[((row) * (len1 + 1)) + col].score = up + gap_penalty;
+          matrix[((row) * (len1 + 1)) + col].traceback_pos = ((row - 1) * (len1  + 1)) + col;
+        } else {
+          matrix[((row) * (len1 + 1)) + col].score = diag;
+          matrix[((row) * (len1 + 1)) + col].traceback_pos = ((row - 1) * (len1  + 1)) + col - 1;
+        }
+        
+      }
+    }
+
+    /* trace back, create alignment strings */
+    alnbuf1 = (CharPtr) MemNew (sizeof (Char) * (len1 + len2 + 1));
+    alnbuf2 = (CharPtr) MemNew (sizeof (Char) * (len1 + len2 + 1));
+    cp1 = alnbuf1 + len1 + len2;
+    cp2 = alnbuf2 + len1 + len2;
+    *cp1 = 0;
+    *cp2 = 0;
+    cp1--;
+    cp2--;
+    row = len2;
+    col = len1;
+    while (row > 0 || col > 0) {
+      back_row = matrix[(row * (len1 + 1)) + col].traceback_pos / (len1 + 1);
+      back_col = matrix[(row * (len1 + 1)) + col].traceback_pos % (len1 + 1);
+      if (row == back_row) {
+        *cp1 = buf1[col - 1];
+        *cp2 = '-';
+      } else if (col == back_col) {
+        *cp1 = '-';
+        *cp2 = buf2[row - 1];
+      } else {
+        *cp1 = buf1[col - 1];
+        *cp2 = buf2[row - 1];
+      }
+      cp1--;
+      cp2--;
+      row = back_row;
+      col = back_col;
+    }
+
+    /* no longer need matrix or original sequence buffers */
+    matrix = MemFree (matrix);
+    buf1 = MemFree (buf1);
+    buf2 = MemFree (buf2);
+
+    /* count number of segments needed */
+    num_segs = SegmentsNeededForAlignment (cp1 + 1, cp2 + 1);
+        
+    /* create DenseSeg */
+    dsp = DenseSegNew ();
+    dsp->dim = 2;
+    dsp->ids = SeqIdDup (sip1);
+    dsp->ids->next = SeqIdDup (sip2);
+    dsp->numseg = num_segs;
+    dsp->lens = (Int4Ptr)MemNew (sizeof (Int4) * dsp->numseg);
+    dsp->starts = (Int4Ptr)MemNew (sizeof (Int4) * dsp->dim * dsp->numseg);
+    dsp->strands = (Uint1Ptr)MemNew (sizeof (Uint1) * dsp->dim * dsp->numseg);
+
+    /* fill in strands */
+    for (i = 0; i < dsp->numseg; i++) {
+      dsp->strands[2 * i] = Seq_strand_plus;
+      dsp->strands[2 * i + 1] = strand2;
+    }
+    /* fill in starts and lens */
+    FillInStartsAndLensForAlignment (dsp, cp1 + 1, cp2 + 1);
+
+    /* no longer need FASTA+GAP alignment strings */
+    alnbuf1 = MemFree (alnbuf1);
+    alnbuf2 = MemFree (alnbuf2);
+
+    /* adjust for real sequence position and strand */
+    AdjustStringAlingmentForOffsetAndStrand (dsp, start1, start2, stop2, strand2);
+
+    salp = SeqAlignNew ();
+    salp->segs = dsp;
+    salp->segtype = SAS_DENSEG;
+    salp->dim = 2;
+  }
+  BioseqUnlock (bsp1);
+  BioseqUnlock (bsp2);
+  AlnMgr2IndexSingleChildSeqAlign (salp);  
+  return salp;
+}
+
+
+/* Assumptions:
+ * first interval always on plus strand
+ */
+static SeqAlignPtr AlignmentForInterval (SeqIdPtr sip1, SeqIdPtr sip2, Int4 start1, Int4 stop1, Int4 start2, Int4 stop2)
+{
+  DenseSegPtr dsp;
+  SeqAlignPtr salp = NULL;
+  Int4        len1, len2, i;
+  Uint1       strand = Seq_strand_plus;
+
+  if (sip1 == NULL || sip2 == NULL) {
+    return NULL;
+  }
+
+  salp = NWAlignmentForInterval(sip1, sip2, start1, stop1, start2, stop2);
+  if (salp != NULL) {
+    return salp;
+  }
+
+  dsp = DenseSegNew ();
+  dsp->dim = 2;
+  dsp->ids = SeqIdDup (sip1);
+  dsp->ids->next = SeqIdDup (sip2);
+  len1 = stop1 - start1 + 1;
+
+  if (stop2 > start2) {
+    len2 = stop2 - start2 + 1;
+  } else {
+    len2 = start2 - stop2 + 1;
+    strand = Seq_strand_minus;
+  }
+
+  if (len1 == len2) {
+    dsp->numseg = 1;
+  } else {
+    dsp->numseg = 2;
+  }
+
+  dsp->starts = (Int4Ptr) MemNew (sizeof (Int4) * dsp->dim * dsp->numseg);
+  dsp->strands = (Uint1Ptr) MemNew (sizeof (Uint1) * dsp->dim * dsp->numseg);
+  dsp->lens = (Int4Ptr) MemNew (sizeof (Int4) * dsp->dim);
+  
+  if (len1 == len2) {
+    dsp->lens[0] = len1;
+  } else if (len1 > len2) {
+    dsp->lens[0] = len2;
+    dsp->lens[1] = len1 - len2;
+  } else {
+    dsp->lens[0] = len1;
+    dsp->lens[1] = len2 - len1;
+  }
+
+  dsp->starts[0] = start1;
+  if (strand == Seq_strand_minus) {
+    dsp->starts[1] = stop2;
+  } else {
+    dsp->starts[1] = start2;
+  }  
+
+  for (i = 0; i < dsp->numseg; i++) {
+    dsp->strands[2 * i] = Seq_strand_plus;
+    dsp->strands[2 * i + 1] = strand;
+  }
+
+  if (dsp->numseg > 1) {
+    if (len1 > len2) {
+      dsp->starts[2] = dsp->starts[0] + dsp->lens[0];
+      dsp->starts[3] = -1;
+    } else {
+      dsp->starts[2] = -1;
+      if (strand == Seq_strand_minus) {
+        dsp->starts[3] = dsp->starts[1] + dsp->lens[0] + dsp->lens[1] - 1;
+      } else {
+        dsp->starts[3] = dsp->starts[1] + dsp->lens[0];
+      }
+    }
+  }
+
+  salp = SeqAlignNew ();
+  salp->segtype = SAS_DENSEG;
+  salp->segs = dsp;
+  
+  AlnMgr2IndexSingleChildSeqAlign (salp);  
+  return salp;
+}
+
+
+static void ReportCreatedAlignment (LogInfoPtr lip, SeqAlignPtr salp)
+{
+  Int4        from_1, to_1, from_2, to_2;
+  Uint1       strand;
+  Char        id1[255], id2[255];
+  SeqIdPtr    sip;
+  BioseqPtr   bsp;
+
+  if (lip == NULL || lip->fp == NULL || salp == NULL) {
+    return;
+  }
+
+  sip = AlnMgr2GetNthSeqIdPtr (salp, 1);
+  bsp = BioseqLockById (sip);
+  if (bsp != NULL) {
+    sip = SeqIdFree (sip);
+    sip = SeqIdDup (SeqIdFindBest (bsp->id, SEQID_GENBANK));
+    BioseqUnlock (bsp);
+  }
+
+  SeqIdWrite (sip, id1, PRINTID_REPORT, sizeof (id1) - 1);
+  sip = SeqIdFree (sip);
+  sip = AlnMgr2GetNthSeqIdPtr (salp, 2);
+  bsp = BioseqLockById (sip);
+  if (bsp != NULL) {
+    sip = SeqIdFree (sip);
+    sip = SeqIdDup (SeqIdFindBest (bsp->id, SEQID_GENBANK));
+    BioseqUnlock (bsp);
+  }
+  SeqIdWrite (sip, id2, PRINTID_REPORT, sizeof (id2) - 1);
+  sip = SeqIdFree (sip);
+  
+  strand = SeqAlignStrand (salp, 2);
+  AlnMgr2GetNthSeqRangeInSA (salp, 1, &from_1, &to_1);
+  AlnMgr2GetNthSeqRangeInSA (salp, 2, &from_2, &to_2);
+  fprintf (lip->fp, "Created alignment to cover space between local alignments: %s:%d-%d, %s:%d-%d%s\n",
+                     id1, from_1, to_1, id2, from_2, to_2,
+                     strand == Seq_strand_minus ? "(c)" : "");
+
+  WriteAlignmentInterleaveToFileEx (salp, lip->fp, 40, FALSE, TRUE);
+}
+
+
+static void FillInAlignmentHoles (SeqAlignPtr salp_list, LogInfoPtr lip)
+{
+  SeqAlignPtr salp, salp_new;
+  Int4        start1_this, start1_next;
+  Int4        stop1_this, stop1_next;
+  Int4        start2_this, start2_next;
+  Int4        stop2_this, stop2_next;
+  Uint1       strand;
+  SeqIdPtr    sip1, sip2;
+
+  if (salp_list == NULL || salp_list->next == NULL) {
+    return;
+  }
+
+  sip1 = AlnMgr2GetNthSeqIdPtr (salp_list, 1);
+  sip2 = AlnMgr2GetNthSeqIdPtr (salp_list, 2);
+
+  /* note - unlike the other functions, SeqAlignStrand uses 0-based index */
+  strand = SeqAlignStrand (salp_list, 1);
+
+  salp = salp_list;
+  AlnMgr2GetNthSeqRangeInSA (salp, 1, &start1_this, &stop1_this);
+  AlnMgr2GetNthSeqRangeInSA (salp, 2, &start2_this, &stop2_this);
+  
+  while (salp->next != NULL) {
+    AlnMgr2GetNthSeqRangeInSA (salp->next, 1, &start1_next, &stop1_next);
+    AlnMgr2GetNthSeqRangeInSA (salp->next, 2, &start2_next, &stop2_next);
+    if (start1_next > stop1_this + 1
+        || (strand == Seq_strand_minus && start2_next < stop2_this - 1)
+        || (strand != Seq_strand_minus && start2_next > stop2_this + 1)) {
+      if (strand == Seq_strand_minus) {
+        salp_new = AlignmentForInterval (sip1, sip2, stop1_this + 1, start1_next - 1, stop2_this - 1, start2_next + 1);
+      } else {
+        salp_new = AlignmentForInterval (sip1, sip2, stop1_this + 1, start1_next - 1, stop2_this + 1, start2_next - 1);
+      }
+      ReportCreatedAlignment (lip, salp_new);
+      salp_new->next = salp->next;
+      salp->next = salp_new;
+      salp = salp_new;
+    }
+    start1_this = start1_next;
+    stop1_this = stop1_next;
+    start2_this = start2_next;
+    stop2_this = stop2_next;
+    salp = salp->next;
+  }
+
+}
+
+
+static SeqAlignPtr MergeAlignments (SeqAlignPtr salp_list)
+{
+  SeqAlignPtr salp_new = NULL, salp, salp_next;
+  DenseSegPtr dsp, dsp_new;
+  Int4        seg_num, k;
+
+  if (salp_list == NULL || salp_list->next == NULL) {
+    return salp_list;
+  }
+
+  dsp_new = DenseSegNew ();
+  dsp_new->dim = 2;
+  dsp_new->ids = AlnMgr2GetNthSeqIdPtr (salp_list, 1);
+  dsp_new->ids->next = AlnMgr2GetNthSeqIdPtr (salp_list, 2);
+
+  /* get total number of segments */
+  for (salp = salp_list; salp != NULL; salp = salp->next) {
+    dsp = (DenseSegPtr) salp->segs;
+    dsp_new->numseg += dsp->numseg;
+  }
+
+  dsp_new->starts = (Int4Ptr) MemNew (sizeof (Int4) * dsp_new->dim * dsp_new->numseg);
+  dsp_new->strands = (Uint1Ptr) MemNew (sizeof (Uint1) * dsp_new->dim * dsp_new->numseg);
+  dsp_new->lens = (Int4Ptr) MemNew (sizeof (Int4) * dsp_new->numseg);
+  
+  seg_num = 0;
+  for (salp = salp_list; salp != NULL; salp = salp_next) {
+    salp_next = salp->next;
+    dsp = (DenseSegPtr) salp->segs;
+    for (k = 0; k < dsp->numseg; k++) {
+      dsp_new->lens[seg_num] = dsp->lens[k];
+      dsp_new->starts[2 * seg_num] = dsp->starts[2 * k];
+      dsp_new->starts[2 * seg_num + 1] = dsp->starts[2 * k + 1];
+      dsp_new->strands[2 * seg_num] = dsp->strands[2 * k];
+      dsp_new->strands[2 * seg_num + 1] = dsp->strands[2 * k + 1];
+      seg_num++;
+    }
+    salp->next = NULL;
+    salp = SeqAlignFree (salp);
+  }
+
+  salp_new = SeqAlignNew ();
+  salp_new->segtype = SAS_DENSEG;
+  salp_new->segs = dsp_new;
+  salp_new->dim = 2;
+
+  return salp_new;
+}
+
+
+static Boolean MatchWithAmbiguity (Char ch1, Char ch2)
+{
+  Boolean rval = FALSE;
+
+  ch1 = toupper (ch1);
+  ch2 = toupper (ch2);
+
+  if (ch1 == ch2) {
+    return TRUE;
+  }
+  if (ch1 == 'X' || ch2 == 'X') {
+    return TRUE;
+  }
+  switch (ch1) {
+    case 'A':
+      if (ch2 == 'M' || ch2 == 'R' || ch2 == 'W' || ch2 == 'V' || ch2 == 'H' || ch2 == 'D') {
+        rval = TRUE;
+      }
+      break;
+    case 'T':
+      if (ch2 == 'K' || ch2 == 'Y' || ch2 == 'W' || ch2 == 'B' || ch2 == 'H' || ch2 == 'D') {
+        rval = TRUE;
+      }
+      break;
+    case 'G':
+      if (ch2 == 'K' || ch2 == 'R' || ch2 == 'S' || ch2 == 'B' || ch2 == 'V' || ch2 == 'D') {
+        rval = TRUE;
+      }
+      break;
+    case 'C':
+      if (ch2 == 'M' || ch2 == 'Y' || ch2 == 'S' || ch2 == 'B' || ch2 == 'V' || ch2 == 'H') {
+        rval = TRUE;
+      }
+      break;
+    case 'K':
+      if (ch2 == 'G' || ch2 == 'T' || ch2 == 'B' || ch2 == 'D') {
+        rval = TRUE;
+      }
+      break;
+    case 'M':
+      if (ch2 == 'A' || ch2 == 'C' || ch2 == 'V' || ch2 == 'H') {
+        rval = TRUE;
+      }
+      break;
+    case 'R':
+      if (ch2 == 'A' || ch2 == 'G' || ch2 == 'V' || ch2 == 'D') {
+        rval = TRUE;
+      }
+      break;
+    case 'Y':
+      if (ch2 == 'C' || ch2 == 'T' || ch2 == 'B' || ch2 == 'H') {
+        rval = TRUE;
+      }
+      break;
+    case 'S':
+      if (ch2 == 'C' || ch2 == 'G' || ch2 == 'B' || ch2 == 'V') {
+        rval = TRUE;
+      }
+      break;
+    case 'W':
+      if (ch2 == 'A' || ch2 == 'T' || ch2 == 'H' || ch2 == 'D') {
+        rval = TRUE;
+      }
+      break;
+    case 'B':
+      if (ch2 == 'C' || ch2 == 'G' || ch2 == 'T' || ch2 == 'K' || ch2 == 'Y' || ch2 == 'S') {
+        rval = TRUE;
+      }
+      break;
+    case 'V':
+      if (ch2 == 'A' || ch2 == 'C' || ch2 == 'G' || ch2 == 'M' || ch2 == 'R' || ch2 == 'S') {
+        rval = TRUE;
+      }
+      break;
+    case 'H':
+      if (ch2 == 'A' || ch2 == 'C' || ch2 == 'T' || ch2 == 'M' || ch2 == 'Y' || ch2 == 'W') {
+        rval = TRUE;
+      }
+      break;
+    case 'D':
+      if (ch2 == 'A' || ch2 == 'G' || ch2 == 'T' || ch2 == 'K' || ch2 == 'R' || ch2 == 'W') {
+        rval = TRUE;
+      }
+      break;
+  }
+  return rval;
+}  
+  
+
+/* expand for ambiguity characters and poly-A tail */
+static SeqAlignPtr ExtendAlignmentList (SeqAlignPtr salp_list)
+{
+  Int4        from_1, to_1, from_2, to_2, len1, len2, len_check, len_extend;
+  SeqAlignPtr salp_tmp;
+  BioseqPtr   bsp1 = NULL;
+  BioseqPtr   bsp2 = NULL;
+  Uint1       strand;
+  CharPtr     buf1, buf2;
+  Int2        ctr;
+  SeqIdPtr    sip1, sip2;
+  DenseSegPtr dsp;
+
+  if (salp_list == NULL) {
+    return salp_list;
+  }
+
+  strand = SeqAlignStrand (salp_list, 1);
+  AlnMgr2IndexSingleChildSeqAlign (salp_list);
+
+  sip1 = AlnMgr2GetNthSeqIdPtr (salp_list, 1);
+  bsp1 = BioseqLockById (sip1);
+  sip2 = AlnMgr2GetNthSeqIdPtr (salp_list, 2);
+  bsp2 = BioseqLockById (sip2);
+
+  AlnMgr2GetNthSeqRangeInSA (salp_list, 1, &from_1, &to_1);  
+  AlnMgr2GetNthSeqRangeInSA (salp_list, 2, &from_2, &to_2);  
+
+  if (from_1 > 0 
+      && ((strand == Seq_strand_plus && from_2 > 0)
+          || (strand == Seq_strand_minus && to_2 < bsp2->length - 1))) {
+    len1 = from_1;
+    if (strand == Seq_strand_plus) {
+      len2 = from_2;
+    } else {
+      len2 = bsp2->length - to_2 - 1;
+    }
+    if (len1 > len2) {
+      len_check = len2;
+    } else {
+      len_check = len1;
+    }
+    buf1 = (CharPtr) MemNew (sizeof (Char) * (len_check  + 1));
+    buf2 = (CharPtr) MemNew (sizeof (Char) * (len_check  + 1));
+    ctr = SeqPortStreamInt (bsp1, from_1 - len_check, from_1 - 1, Seq_strand_plus, STREAM_EXPAND_GAPS | STREAM_CORRECT_INVAL, (Pointer) buf1, NULL);
+    buf1[ctr] = 0;
+    if (strand == Seq_strand_plus) {
+      ctr = SeqPortStreamInt (bsp2, from_2 - len_check, from_2 - 1, Seq_strand_plus, STREAM_EXPAND_GAPS | STREAM_CORRECT_INVAL, (Pointer) buf2, NULL);
+    } else {
+      ctr = SeqPortStreamInt (bsp2, to_2 + 1, to_2 + len_check, Seq_strand_minus, STREAM_EXPAND_GAPS | STREAM_CORRECT_INVAL, (Pointer) buf2, NULL);
+    }
+    buf2[ctr] = 0;
+
+    len_extend = 0;
+    while (len_extend < len_check 
+           && MatchWithAmbiguity (buf1[len_check - len_extend - 1], buf2[len_check - len_extend - 1])) {
+      len_extend++;
+    }
+    buf1 = MemFree (buf1);
+    buf2 = MemFree (buf2);
+    if (len_extend > 0) {
+      dsp = (DenseSegPtr) salp_list->segs;
+      dsp->lens[0] += len_extend;
+      dsp->starts[0] -= len_extend;
+      if (strand == Seq_strand_plus) {
+        dsp->starts[1] -= len_extend;
+      }
+      SeqAlignIndexFree(salp_list->saip);
+      salp_list->saip = NULL;
+      AlnMgr2IndexSingleChildSeqAlign (salp_list);
+    }
+  }
+
+  /* extend at other end */
+  salp_tmp = salp_list;
+  while (salp_tmp->next != NULL) {
+    salp_tmp = salp_tmp->next;
+  }
+
+  AlnMgr2IndexSingleChildSeqAlign (salp_tmp);
+
+  AlnMgr2GetNthSeqRangeInSA (salp_tmp, 1, &from_1, &to_1);  
+  AlnMgr2GetNthSeqRangeInSA (salp_tmp, 2, &from_2, &to_2);
+  if (to_1 < bsp1->length - 1
+      && ((strand == Seq_strand_plus && to_2 < bsp2->length - 1)
+          || (strand == Seq_strand_minus && from_2 > 0))) {
+    len1 = bsp1->length - to_1 - 1;
+    if (strand == Seq_strand_plus) {
+      len2 = bsp2->length - to_2 - 1;
+    } else {
+      len2 = from_2;
+    }
+    if (len1 > len2) {
+      len_check = len2;
+    } else {
+      len_check = len1;
+    }
+    if (len_check > 0) {
+      buf1 = (CharPtr) MemNew (sizeof (Char) * (len_check  + 1));
+      buf2 = (CharPtr) MemNew (sizeof (Char) * (len_check  + 1));
+      ctr = SeqPortStreamInt (bsp1, to_1 + 1, to_1 + len_check, Seq_strand_plus, STREAM_EXPAND_GAPS | STREAM_CORRECT_INVAL, (Pointer) buf1, NULL);
+      buf1[ctr] = 0;
+      if (strand == Seq_strand_plus) {
+        ctr = SeqPortStreamInt (bsp2, to_2 + 1, to_2 + len_check, Seq_strand_plus, STREAM_EXPAND_GAPS | STREAM_CORRECT_INVAL, (Pointer) buf2, NULL);
+      } else {
+        ctr = SeqPortStreamInt (bsp2, from_2 - len_check, from_2 - 1, Seq_strand_minus, STREAM_EXPAND_GAPS | STREAM_CORRECT_INVAL, (Pointer) buf2, NULL);
+      }
+      buf2[ctr] = 0;
+
+      len_extend = 0;
+      while (len_extend < len_check 
+            && MatchWithAmbiguity (buf1[len_extend], buf2[len_extend])) {
+        len_extend++;
+      }
+      buf1 = MemFree (buf1);
+      buf2 = MemFree (buf2);
+      if (len_extend > 0) {
+        dsp = (DenseSegPtr) salp_tmp->segs;
+        dsp->lens[dsp->numseg - 1] += len_extend;
+        if (strand == Seq_strand_minus) {
+          dsp->starts[(dsp->numseg - 1) * dsp->dim + 1] -= len_extend;
+        }
+        SeqAlignIndexFree(salp_tmp->saip);
+        salp_tmp->saip = NULL;
+        AlnMgr2IndexSingleChildSeqAlign (salp_tmp);
+      }
+    }
+  }   
+
+  BioseqUnlock (bsp1);
+  BioseqUnlock (bsp2);
+  sip1 = SeqIdFree (sip1);  
+  sip2 = SeqIdFree (sip2);  
+
+  return salp_list;
+}
+
+
+static void ReportInitialBlastResults (LogInfoPtr lip, SeqAlignPtr salp_list)
+{
+  Int4        from_1, to_1, from_2, to_2;
+  Uint1       strand;
+  Char        id1[255], id2[255];
+  SeqIdPtr    sip;
+  BioseqPtr   bsp;
+
+  if (lip == NULL || lip->fp == NULL || salp_list == NULL) {
+    return;
+  }
+
+  AlnMgr2IndexSingleChildSeqAlign (salp_list);
+  sip = AlnMgr2GetNthSeqIdPtr (salp_list, 1);
+  bsp = BioseqLockById (sip);
+  if (bsp != NULL) {
+    sip = SeqIdFree (sip);
+    sip = SeqIdDup (SeqIdFindBest (bsp->id, SEQID_GENBANK));
+    BioseqUnlock (bsp);
+  }
+  SeqIdWrite (sip, id1, PRINTID_REPORT, sizeof (id1) - 1);
+  sip = SeqIdFree (sip);
+  sip = AlnMgr2GetNthSeqIdPtr (salp_list, 2);
+  bsp = BioseqLockById (sip);
+  if (bsp != NULL) {
+    sip = SeqIdFree (sip);
+    sip = SeqIdDup (SeqIdFindBest (bsp->id, SEQID_GENBANK));
+    BioseqUnlock (bsp);
+  }
+  SeqIdWrite (sip, id2, PRINTID_REPORT, sizeof (id2) - 1);
+  sip = SeqIdFree (sip);
+  fprintf (lip->fp, "Initial BLAST results\n");
+  while (salp_list != NULL) {
+    AlnMgr2IndexSingleChildSeqAlign (salp_list);
+    strand = SeqAlignStrand (salp_list, 2);
+    AlnMgr2GetNthSeqRangeInSA (salp_list, 1, &from_1, &to_1);
+    AlnMgr2GetNthSeqRangeInSA (salp_list, 2, &from_2, &to_2);
+    fprintf (lip->fp, "%s:%d-%d, %s:%d-%d%s\n", id1, from_1, to_1, id2, from_2, to_2,
+             strand == Seq_strand_minus ? "(c)" : "");
+    salp_list = salp_list->next;
+  }
+  lip->data_in_log = TRUE;
+}
+
+
+static void ReportForRemoval (LogInfoPtr lip, SeqAlignPtr salp, CharPtr reason)
+{
+  Int4        from_1, to_1, from_2, to_2;
+  Uint1       strand;
+  Char        id1[255], id2[255];
+  SeqIdPtr    sip;
+
+  if (lip == NULL || lip->fp == NULL || salp == NULL) {
+    return;
+  }
+
+  sip = AlnMgr2GetNthSeqIdPtr (salp, 1);
+  SeqIdWrite (sip, id1, PRINTID_REPORT, sizeof (id1) - 1);
+  sip = SeqIdFree (sip);
+  sip = AlnMgr2GetNthSeqIdPtr (salp, 2);
+  SeqIdWrite (sip, id2, PRINTID_REPORT, sizeof (id2) - 1);
+  sip = SeqIdFree (sip);
+  AlnMgr2IndexSingleChildSeqAlign (salp);
+  strand = SeqAlignStrand (salp, 2);
+  AlnMgr2GetNthSeqRangeInSA (salp, 1, &from_1, &to_1);
+  AlnMgr2GetNthSeqRangeInSA (salp, 2, &from_2, &to_2);
+  fprintf (lip->fp, "Removed alignment %s:%d-%d, %s:%d-%d%s %s\n",
+                     id1, from_1, to_1, id2, from_2, to_2,
+                     strand == Seq_strand_minus ? "(c)" : "", reason);
+}
+
+
+/* Assume earlier alignments are better.  
+ * Remove all alignments that are not the same strand as the first.
+ * Remove all alignments that overlap on the first sequence.
+ * Remove all alignments that overlap on the second sequence.
+ * use Needleman-Wunsch to fill in holes between alignments.
+ */
+static SeqAlignPtr CombineTSAAlignments (SeqAlignPtr salp)
+{
+  SeqAlignPtr salp_tmp, salp_match, salp_prev, salp_next;
+  Uint1       strand;
+  Int4        from_1, to_1, from_2, to_2;
+  LogInfoPtr  lip = NULL;
+
+  if (salp == NULL) {
+    return salp;
+  }
+
+  for (salp_tmp = salp; salp_tmp != NULL; salp_tmp = salp_tmp->next) {
+    /* if alignment is to minus strand for first sequence, flip alignment */
+    if (SeqAlignStrand (salp_tmp, 0) != Seq_strand_plus) {
+      FlipAlignment (salp_tmp);
+    }
+  }
+
+  if (salp->next != NULL) {
+    lip = OpenLog ("TSA Alignment Adjustments");
+  }
+
+  ReportInitialBlastResults (lip, salp);
+
+  if (salp->next != NULL) {
+    /* remove alignments that are not the same strand as the initial alignment */
+    strand = SeqAlignStrand (salp, 1);
+    salp_prev = salp;
+    AlnMgr2IndexSingleChildSeqAlign (salp);
+    salp_tmp = salp->next;
+    while (salp_tmp != NULL) {
+      AlnMgr2IndexSingleChildSeqAlign (salp_tmp);
+      salp_next = salp_tmp->next;
+      if (SeqAlignStrand (salp_tmp, 1) != strand) {
+        ReportForRemoval (lip, salp_tmp, "because strands do not match.");
+        salp_prev->next = salp_tmp->next;
+        salp_tmp->next = NULL;
+        salp_tmp = SeqAlignFree (salp_tmp);
+      }
+      salp_tmp = salp_next;
+    }
+  }
+  
+  /* remove alignments that overlap on the first sequence */
+  salp_match = salp;
+  while (salp_match != NULL) {
+    salp_prev = salp_match;
+    salp_tmp = salp_match->next;
+    AlnMgr2GetNthSeqRangeInSA (salp_match, 1, &from_1, &to_1);
+    while (salp_tmp != NULL) {
+      salp_next = salp_tmp->next;
+      AlnMgr2GetNthSeqRangeInSA (salp_tmp, 1, &from_2, &to_2);
+      if ((from_2 >= from_1 && from_2 <= to_1) || (to_2 >= from_1 && to_2 <= to_1)) { 
+        ReportForRemoval (lip, salp_tmp, "because alignments overlap for first sequence.");
+        salp_prev->next = salp_tmp->next;
+        salp_tmp->next = NULL;
+        salp_tmp = SeqAlignFree (salp_tmp);
+      }
+      salp_tmp = salp_next;
+    }
+    salp_match = salp_match->next;
+  }
+
+  if (salp->next != NULL) {
+    /* remove alignments that overlap on the second sequence */
+    salp_match = salp;
+    while (salp_match != NULL) {
+      salp_prev = salp_match;
+      salp_tmp = salp_match->next;
+      AlnMgr2GetNthSeqRangeInSA (salp_match, 2, &from_1, &to_1);
+      while (salp_tmp != NULL) {
+        salp_next = salp_tmp->next;
+        AlnMgr2GetNthSeqRangeInSA (salp_tmp, 2, &from_2, &to_2);
+        if ((from_2 >= from_1 && from_2 <= to_1) || (to_2 >= from_1 && to_2 <= to_1)) { 
+          ReportForRemoval (lip, salp_tmp, "because alignments overlap for second sequence.");
+          salp_prev->next = salp_tmp->next;
+          salp_tmp->next = NULL;
+          salp_tmp = SeqAlignFree (salp_tmp);
+        }
+        salp_tmp = salp_next;
+      }
+      salp_match = salp_match->next;
+    }
+  }
+
+  /* sort remaining alignments by start position on the first sequence */
+  salp = SortPairwiseAlignmentsByFirstSeqRange (salp);
+
+  /* temporary hack.  only interested in "unusual" errors. */
+  if (lip != NULL) {
+    lip->data_in_log = FALSE;
+  }
+
+  if (salp->next != NULL) {
+    /* remove alignments that are out of order on the second sequence */
+    salp_prev = salp;
+    AlnMgr2GetNthSeqRangeInSA (salp_prev, 2, &from_1, &to_1);
+    salp_tmp = salp->next;
+    while (salp_tmp != NULL) {
+      AlnMgr2GetNthSeqRangeInSA (salp_tmp, 2, &from_2, &to_2);
+      if (from_2 < from_1) {
+        ReportForRemoval (lip, salp_tmp, "because alignments are out of order for second sequence.");
+        salp_prev->next = salp_tmp->next;
+        salp_tmp->next = NULL;
+        salp_tmp = SeqAlignFree (salp_tmp);
+      } else {
+        salp_prev = salp_tmp;
+        from_1 = from_2;
+        to_1 = to_2;
+      }
+      salp_tmp = salp_prev->next;
+    }
+  }
+
+  /* fill in holes */
+  FillInAlignmentHoles (salp, lip);
+
+  /* extend for good matches */
+  salp = ExtendAlignmentList (salp);
+
+  /* make new alignment by stringing together local alignments */
+  salp = MergeAlignments (salp);
+  CloseLog (lip);
+  lip = FreeLog (lip);
+  return salp;
+}
+
+
+NLM_EXTERN SeqAlignPtr GetSeqAlignTSA (BioseqPtr bsp1, BioseqPtr bsp2)
+{
+   BLAST_SummaryOptions *options = NULL;
+   SeqAlignPtr           salp = NULL;
+   
+   if (bsp1 == NULL || bsp2 == NULL) return NULL;
+
+   BLAST_SummaryOptionsInit(&options);
+   options->filter_string = StringSave ("m L");
+   options->word_size = 20;
+   options->cutoff_evalue = act_get_eval (1);
+   options->hint = eNone;
+   if (ISA_na (bsp1->mol))
+   {
+     options->program = eBlastn;
+   }
+   else
+   {
+     options->program = eBlastp;
+   }
+
+   BLAST_TwoSequencesSearch(options, bsp1, bsp2, &salp);
+
+   /* if there were no alignments from the first search, try again
+    * with low-complexity masking turned off.
+    */
+   if (salp == NULL) {
+     options->filter_string = MemFree (options->filter_string);
+     options->filter_string = StringSave ("m F");
+     BLAST_TwoSequencesSearch(options, bsp1, bsp2, &salp);
+   }
+
+   BLAST_SummaryOptionsFree(options);
+
+   if (salp != NULL) {
+     salp = CombineTSAAlignments (salp);
+     AlnMgr2IndexSeqAlign(salp);
+   }
+   return salp;
+}
+
+
+/* code for editing TSA assembly */
+typedef struct tsaassemblydialog {
+  DIALOG_MESSAGE_BLOCK
+  DialoG        intervals;
+  BioseqPtr     consensus_bsp;
+} TSAAssemblyDialog, PNTR TSAAssemblyDialogPtr;
+
+
+Uint2 tsa_assembly_types [] = {
+  TAGLIST_TEXT, TAGLIST_PROMPT, TAGLIST_PROMPT
+};
+
+
+Uint2 tsa_assembly_widths [] = {
+  16, 16, 16, 0
+};
+
+
+static void SetTSAAssemblyDialogConsensusBioseq (DialoG d, BioseqPtr bsp)
+{
+  TSAAssemblyDialogPtr dlg;
+
+  dlg = (TSAAssemblyDialogPtr) GetObjectExtra (d);
+  if (dlg != NULL) {
+    dlg->consensus_bsp = bsp;
+  }
+}
+
+
+static void SeqAlignsToTSAAssemblyDialog (DialoG d, Pointer data)
+{
+  TSAAssemblyDialogPtr  dlg;
+  TagListPtr            tlp;
+  SeqAlignPtr           salp_list, salp, salp_tmp;
+  ValNodePtr            data_list = NULL;
+  Int4                  tsa_from, tsa_to, primary_from, primary_to;
+  SeqIdPtr              sip;
+  Char                  id_buf[255];
+  CharPtr               str;
+  CharPtr               fmt = "%s\t%d-%d%s\t%d-%d\n";
+  Uint1                 strand;
+  BioseqPtr             bsp;
+
+  dlg = (TSAAssemblyDialogPtr) GetObjectExtra (d);
+  if (dlg == NULL) {
+    return;
+  }
+
+  tlp = (TagListPtr) GetObjectExtra (dlg->intervals);
+  if (tlp == NULL) {
+    return;
+  }
+
+  salp_list = (SeqAlignPtr) data;
+
+  salp = salp_list;
+  while (salp != NULL) {
+    salp_tmp = salp->next;
+    salp->next = NULL;
+    AlnMgr2IndexSeqAlign (salp);
+    AlnMgr2GetNthSeqRangeInSA(salp, 1, &tsa_from, &tsa_to);
+    AlnMgr2GetNthSeqRangeInSA(salp, 2, &primary_from, &primary_to);
+    sip = AlnMgr2GetNthSeqIdPtr (salp, 2);
+    bsp = BioseqLockById (sip);
+    if (bsp != NULL) {
+      sip = SeqIdFree (sip);
+      sip = SeqIdDup (SeqIdFindBest (bsp->id, SEQID_GENBANK));
+      BioseqUnlock (bsp);
+    }
+    SeqIdWrite (sip, id_buf, PRINTID_FASTA_SHORT, sizeof (id_buf) - 1);
+    sip = SeqIdFree (sip);
+    strand = AlnMgr2GetNthStrand (salp, 2);
+    str = (CharPtr) MemNew (sizeof (Char) * (StringLen (fmt) + StringLen (id_buf) + 70));
+    sprintf (str, fmt, id_buf, primary_from + 1, primary_to + 1, strand == Seq_strand_minus ? "(c)" : "", tsa_from + 1, tsa_to + 1);
+    ValNodeAddPointer (&data_list, 0, str);
+    salp->next = salp_tmp;
+    salp = salp->next;
+  }
+
+  SendMessageToDialog (tlp->dialog, VIB_MSG_RESET);
+  tlp->vnp = data_list;
+  SendMessageToDialog (tlp->dialog, VIB_MSG_REDRAW);
+  tlp->max = MAX ((Int2) 0, (Int2) (ValNodeLen (data_list) - tlp->rows));
+  CorrectBarMax (tlp->bar, tlp->max);
+  CorrectBarPage (tlp->bar, tlp->rows - 1, tlp->rows - 1);
+  if (tlp->max > 0) {
+    SafeShow (tlp->bar);
+  } else {
+    SafeHide (tlp->bar);
+  }
+  SendMessageToDialog (tlp->dialog, VIB_MSG_ENTER);
+}
+
+
+static void TSATableCallback (Pointer data)
+{
+  ProcessExternalEvent ();
+}
+
+
+static Pointer TSAAssemblyDialogToTranscriptomeIdsList (DialoG d)
+{
+  TSAAssemblyDialogPtr  dlg;
+  TagListPtr            tlp;
+  ValNodePtr            vnp;
+  CharPtr               txt;
+  Int4                  num_cols = 6;
+  TranscriptomeIdsPtr   t;
+  ValNodePtr            token_list = NULL;
+
+  dlg = (TSAAssemblyDialogPtr) GetObjectExtra (d);
+  if (dlg == NULL) {
+    return NULL;
+  }
+
+  tlp = (TagListPtr) GetObjectExtra (dlg->intervals);
+  if (tlp == NULL) {
+    return NULL;
+  }
+
+  if (dlg->consensus_bsp == NULL) {
+    return NULL;
+  }
+
+  for (vnp = tlp->vnp; vnp != NULL; vnp = vnp->next) {
+    txt = ExtractTagListColumn (vnp->data.ptrvalue, 0);
+    if (StringHasNoText (txt)) {
+      txt = MemFree (txt);
+    } else {
+      ValNodeAddPointer (&token_list, 0, txt);
+    }
+  }
+  t = TranscriptomeIdsNew (dlg->consensus_bsp, token_list);
+  vnp = ValNodeNew (NULL);
+  vnp->choice = 0;
+  vnp->data.ptrvalue = t;
+  return vnp;
+}
+
+
+static DialoG CreateTSAAssemblyDialog (GrouP g)
+
+{
+  TSAAssemblyDialogPtr  dlg;
+  GrouP                  p;
+  GrouP                  x;
+  GrouP                  y;
+
+  p = HiddenGroup (g, -1, 0, NULL);
+  SetGroupSpacing (p, 10, 10);
+
+  dlg = (TSAAssemblyDialogPtr) MemNew (sizeof (TSAAssemblyDialog));
+  if (dlg == NULL) return NULL;
+
+  SetObjectExtra (p, dlg, NULL);
+  dlg->dialog = (DialoG) p;
+  dlg->todialog = SeqAlignsToTSAAssemblyDialog;
+  dlg->fromdialog = TSAAssemblyDialogToTranscriptomeIdsList;
+
+  x = HiddenGroup (p, 0, 2, NULL);
+  y = HiddenGroup (x, 3, 0, NULL);
+  /* first line */
+  StaticPrompt (y, "PrimaryID", 16 * stdCharWidth, 0, programFont, 'c');
+  StaticPrompt (y, "Primary Interval", 16 * stdCharWidth, 0, programFont, 'c');
+  StaticPrompt (y, "TSA Interval", 16 * stdCharWidth, 0, programFont, 'c');
+  dlg->intervals = CreateTagListDialogEx3 (x, 10, 3, 1, tsa_assembly_types, tsa_assembly_widths, NULL, TRUE, FALSE, NULL, NULL, 
+                                           NULL, NULL, FALSE, TRUE);
+
+  return (DialoG) p;
+}
+
+
+static void ShowAssemblyAlignment (SeqAlignPtr salp)
+{
+  LogInfoPtr lip;
+
+  if (salp == NULL) {
+    return;
+  }
+
+  lip = OpenLog ("Assembly Alignments");
+  while (salp != NULL) {
+    WriteAlignmentInterleaveToFileEx (salp, lip->fp, 40, FALSE, TRUE);
+    lip->data_in_log = TRUE;
+    salp = salp->next;
+  }
+  CloseLog (lip);
+  lip = FreeLog (lip);
+}
+
+
+typedef struct tsaassemblyform {
+  FORM_MESSAGE_BLOCK
+  DialoG intervals;
+
+} TSAAssemblyFormData, PNTR TSAAssemblyFormPtr;
+
+
+static void AcceptTSAAssembly (ButtoN b)
+{
+  TSAAssemblyFormPtr frm;
+  BioseqPtr          bsp;
+  ValNodePtr         err_list, coverage_report, vnp, ids_list, match_errs;
+  SeqAlignPtr        salp, salp_next;
+  LogInfoPtr         lip;
+
+  frm = (TSAAssemblyFormPtr) GetObjectExtra (b);
+  if (frm == NULL) {
+    return;
+  }
+  bsp = GetBioseqGivenIDs (frm->input_entityID, frm->input_itemID, frm->input_itemtype);
+  if (bsp == NULL) {
+    return;
+  }
+
+  WatchCursor();
+  Update();
+  SetTSAAssemblyDialogConsensusBioseq (frm->intervals, bsp);
+  
+  ids_list = DialogToPointer (frm->intervals);
+
+  /* remove existing assembly */
+  if (bsp->hist != NULL) {
+    salp = bsp->hist->assembly;
+    bsp->hist->assembly = NULL;
+    while (salp != NULL) {
+      salp_next = salp->next;
+      salp->next = NULL;
+      salp = SeqAlignFree (salp);
+      salp = salp_next;
+    }
+  }
+
+  if (ids_list == NULL) {
+    Message (MSG_ERROR, "TSA assembly removed");
+  } else {
+    err_list = MakeTranscriptomeAssemblySeqHist (ids_list->data.ptrvalue, GetSeqAlignTSA, TSATableCallback, NULL);
+    coverage_report = ReportCoverageForTranscriptomeIdsListSeqHist (ids_list);
+    match_errs = ReportConsensusMatchForBioseqSeqHist (bsp);
+    ValNodeLink (&coverage_report, match_errs);
+    ids_list = TranscriptomeIdsListFree (ids_list);
+
+    ValNodeLink (&coverage_report, err_list);
+    err_list = coverage_report;
+
+    if (err_list != NULL) {
+      lip = OpenLog ("TSA Table Problems");
+      for (vnp = err_list; vnp != NULL; vnp = vnp->next) {
+        fprintf (lip->fp, "%s\n", vnp->data.ptrvalue);
+      }
+      lip->data_in_log = TRUE;
+      CloseLog (lip);
+      lip = FreeLog (lip);
+      err_list = ValNodeFreeData (err_list);
+    }
+  }
+
+  ObjMgrSetDirtyFlag (frm->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, frm->input_entityID, 0, 0);
+  Remove (frm->form);
+  ArrowCursor();
+  Update();
+}
+
+
+NLM_EXTERN void EditTSAAssembly (IteM i)
+{
+  BaseFormPtr        bfp;
+  WindoW             w;
+  TSAAssemblyFormPtr frm;
+  BioseqPtr          bsp;
+  GrouP              h, c;
+  ButtoN             b;
+  
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+  
+  bsp = GetBioseqGivenIDs (bfp->input_entityID, bfp->input_itemID, bfp->input_itemtype);
+  if (bsp == NULL) {
+    Message (MSG_ERROR, "Must select sequence for editing TSA Assembly");
+    return;
+  }
+  frm = (TSAAssemblyFormPtr) MemNew (sizeof (TSAAssemblyFormData));
+  if (frm == NULL) return;
+  frm->input_entityID = bfp->input_entityID;
+  frm->input_itemID = bfp->input_itemID;
+  frm->input_itemtype = bfp->input_itemtype;
+
+  w = FixedWindow (-50, -33, -10, -10, "TSA Assembly", StdCloseWindowProc);
+  SetObjectExtra (w, frm, StdCleanupFormProc);
+  frm->form = (ForM) w;
+  h = HiddenGroup (w, -1, 0, NULL);
+  frm->intervals = CreateTSAAssemblyDialog (h);
+
+  if (bsp->hist == NULL) {
+    PointerToDialog (frm->intervals, NULL);
+  } else {
+    PointerToDialog (frm->intervals, bsp->hist->assembly);
+  }
+
+
+  c = HiddenGroup (h, 2, 0, NULL);
+  b = PushButton (c, "Accept", AcceptTSAAssembly);
+  SetObjectExtra (b, frm, NULL);
+  PushButton (c, "Cancel", StdCancelButtonProc);
+  
+  AlignObjects (ALIGN_CENTER, (HANDLE) frm->intervals, (HANDLE) c, NULL);
+  RealizeWindow (w);
+  Show (w);
+  Update ();    
+
+}
+
 
 /* automatic defline generator */
 
@@ -9585,9 +13219,9 @@ static void RemoveSeqLitEnd (SeqLitPtr slip, Int4 change_len, Uint2 which_end)
 
 static void ExpandGapsToIncludeFlankingNs (BioseqPtr bsp, Pointer userdata)
 {
-  DeltaSeqPtr  dsp, prev_dsp = NULL;
+  DeltaSeqPtr  dsp, prev_dsp = NULL, next_dsp = NULL, prev_prev_dsp = NULL;
   Int4         change_len;
-  SeqLitPtr    slip, prev_slip, next_slip;
+  SeqLitPtr    slip, prev_slip = NULL, next_slip;
   
   if (bsp == NULL || bsp->repr != Seq_repr_delta 
       || bsp->seq_ext_type != 4 || bsp->seq_ext == NULL)
@@ -9598,6 +13232,7 @@ static void ExpandGapsToIncludeFlankingNs (BioseqPtr bsp, Pointer userdata)
   dsp = bsp->seq_ext;
   while (dsp != NULL) 
   {
+    next_dsp = dsp->next;
     /* look for gap of known length */
     if (IsDeltaSeqKnownGap(dsp) && !DoesDeltaSeqHaveGapTypeOrLinkage(dsp)) 
     {
@@ -9614,7 +13249,20 @@ static void ExpandGapsToIncludeFlankingNs (BioseqPtr bsp, Pointer userdata)
         {
           RemoveSeqLitEnd (prev_slip, change_len, SEQLOC_RIGHT_END);
           slip->length += change_len;
+          if (prev_slip->length == 0) {
+            if (prev_prev_dsp == NULL) {
+              bsp->seq_ext = dsp;
+            } else {
+              prev_prev_dsp->next = dsp;
+            }
+            prev_dsp->next = NULL;
+            prev_dsp = DeltaSeqFree (prev_dsp);
+            prev_dsp = dsp;
+          }
         }
+      } else {
+        prev_prev_dsp = prev_dsp;
+        prev_dsp = dsp;
       }
       /* check for Ns after gap of known length */
       if (dsp->next != NULL && dsp->next->choice == 2
@@ -9625,14 +13273,21 @@ static void ExpandGapsToIncludeFlankingNs (BioseqPtr bsp, Pointer userdata)
         next_slip = (SeqLitPtr) dsp->next->data.ptrvalue;
         change_len = CountNsAtEndOfSeqLit (next_slip, SEQLOC_LEFT_END);
             
-        if (change_len > 0)
+        if (change_len < next_slip->length)
         {
           RemoveSeqLitEnd (next_slip, change_len, SEQLOC_LEFT_END);
           slip->length += change_len;
         }
+        else 
+        {
+          dsp->next = next_dsp->next;
+          next_dsp->next = NULL;
+          next_dsp = DeltaSeqFree (next_dsp);
+          next_dsp = dsp->next;
+        }
       }
     }
-    dsp = dsp->next;
+    dsp = next_dsp;
   }    
   BioseqPack (bsp);
 }
@@ -9675,6 +13330,34 @@ static Boolean CanCombineDeltaSeq (DeltaSeqPtr dsp1, DeltaSeqPtr dsp2)
 }
 
 
+static void RemoveZeroLengthSeqLits (BioseqPtr bsp)
+{
+  DeltaSeqPtr dsp, prev = NULL, dsp_next;
+  SeqLitPtr slip;
+
+  if (bsp == NULL || bsp->repr != Seq_repr_delta) {
+    return;
+  }
+
+  for (dsp = (DeltaSeqPtr) bsp->seq_ext; dsp != NULL; dsp = dsp_next) {
+    dsp_next = dsp->next;
+    if (dsp->choice == 2 && (slip = (SeqLitPtr) (dsp->data.ptrvalue)) != NULL 
+        && slip->length == 0 && slip->seq_data_type == 1) {
+      if (prev == NULL) {
+        bsp->seq_ext = dsp->next;
+      } else {
+        prev->next = dsp->next;
+      }
+      dsp->next = NULL;
+      dsp = DeltaSeqFree (dsp);
+    } else {
+      prev = dsp;
+    }
+  }
+}
+
+
+
 extern void CombineAdjacentGapsOnBioseq (BioseqPtr bsp, Pointer userdata)
 {
   SeqLitPtr  litp, pitp;
@@ -9689,6 +13372,8 @@ extern void CombineAdjacentGapsOnBioseq (BioseqPtr bsp, Pointer userdata)
   {
     return;
   }
+
+  RemoveZeroLengthSeqLits (bsp);
   
   /* combine adjacent gaps */
   prev = (DeltaSeqPtr) bsp->seq_ext;
@@ -10076,7 +13761,6 @@ static Int2 LIBCALLBACK ClickableListFormMsgFunc (OMMsgStructPtr ommsp)
   currentport = ParentWindow (clfp->form);
   temport = SavePort (currentport);
   UseWindow (currentport);
-  Select (clfp->form);
   switch (ommsp->message) 
   {
       case OM_MSG_UPDATE:
@@ -10087,14 +13771,16 @@ static Int2 LIBCALLBACK ClickableListFormMsgFunc (OMMsgStructPtr ommsp)
       case OM_MSG_SELECT: 
           break;
       case OM_MSG_DEL:
-          Remove (clfp->form);
+          clfp->clickable_list_data = FreeClickableList (clfp->clickable_list_data);
+          PointerToDialog (clfp->clickable_list_dlg, NULL);
           break;
       case OM_MSG_HIDE:
           break;
       case OM_MSG_SHOW:
           break;
       case OM_MSG_FLUSH:
-          Remove (clfp->form);	
+          clfp->clickable_list_data = FreeClickableList (clfp->clickable_list_data);
+          PointerToDialog (clfp->clickable_list_dlg, NULL);
           break;
       default:
           break;
@@ -10146,6 +13832,47 @@ static void ClickableListFormMessage (ForM f, Int2 mssg)
 
 /* There will only be one Discrepancy Report window at a time */
 static WindoW discrepancyReportWindow = NULL;
+static WindoW oncallerReportWindow = NULL;
+
+static WindoW GetWindowForReportType (EDiscrepancyReportType report_type)
+{
+  WindoW w = NULL;
+
+  switch (report_type) {
+    case eReportTypeDiscrepancy:
+      w = discrepancyReportWindow;
+      break;
+    case eReportTypeOnCaller:
+      w = oncallerReportWindow;
+      break;
+  }
+  return w;
+}
+
+
+static void ClearWindowForReportType (WindoW w)
+{
+  if (discrepancyReportWindow == w) {
+    discrepancyReportWindow = NULL;
+  }
+  if (oncallerReportWindow == w) {
+    oncallerReportWindow = NULL;
+  }
+}
+
+
+static void SetWindowForReportType (WindoW w, EDiscrepancyReportType report_type)
+{
+  switch (report_type) {
+    case eReportTypeDiscrepancy:
+      discrepancyReportWindow = w;
+      break;
+    case eReportTypeOnCaller:
+      oncallerReportWindow = w;
+      break;
+  }
+}
+
 
 typedef void (*DiscrepancyCallback) (ValNodePtr item_list, Pointer userdata);
 typedef void (*DiscrepancyCallbackDataFree) (Pointer userdata);
@@ -10170,7 +13897,7 @@ static void CleanupDiscrepancyReportForm (GraphiC g, VoidPtr data)
     drfp->clickable_list_data = FreeClickableList (drfp->clickable_list_data);
     drfp->dcp = DiscrepancyConfigFree (drfp->dcp);
     ObjMgrFreeUserData (drfp->input_entityID, drfp->procid, drfp->proctype, drfp->userkey);
-    discrepancyReportWindow = NULL;
+    ClearWindowForReportType ((WindoW) drfp->form);
   }
   StdCleanupFormProc (g, data);
 }
@@ -10206,10 +13933,11 @@ static void SelectDiscrepancyList(ButtoN b)
   }
 }
 
+
 /* This function returns TRUE if there was a change to the discrepancy config,
  * FALSE otherwise.
  */
-static Boolean EditDiscrepancyConfig (DiscrepancyConfigPtr dcp)
+static Boolean EditDiscrepancyConfig (DiscrepancyConfigPtr dcp, EDiscrepancyReportType report_type)
 {
   WindoW                w;
   GrouP                 h, g, k, c;
@@ -10231,12 +13959,16 @@ static Boolean EditDiscrepancyConfig (DiscrepancyConfigPtr dcp)
   h = HiddenGroup (w, -1, 0, NULL);
   SetGroupSpacing (h, 10, 10);
   
-  g = NormalGroup (h, 0, 10, "Discrepancy Tests to Run", programFont, NULL);
+  g = NormalGroup (h, 0, 14, "Discrepancy Tests to Run", programFont, NULL);
   SetGroupSpacing (g, 10, 10);
   for (i = 0; i < MAX_DISC_TYPE; i++)
   {
-    test_options[i] = CheckBox (g, GetDiscrepancyTestConfName ((DiscrepancyType) i), NULL);
-    SetStatus (test_options[i], dcp->conf_list[i]);
+    if (IsTestTypeAppropriateForReportType (i, report_type)) {
+      test_options[i] = CheckBox (g, GetDiscrepancyTestConfName ((DiscrepancyType) i), NULL);
+      SetStatus (test_options[i], dcp->conf_list[i]);
+    } else {
+      test_options[i] = NULL;
+    }
   }
   
   use_feature_table_format_btn = CheckBox (h, "Use feature table format for features in report", NULL);
@@ -10804,41 +14536,76 @@ static void GenerateDiscrepancyReport (ButtoN b)
 }
 
 
-static void ReactivateDiscrepancyReport ()
+static void ReactivateDiscrepancyReport (EDiscrepancyReportType report_type)
 {
   DiscrepancyReportFormPtr drfp;
+  WindoW                   w;
 
-  if (discrepancyReportWindow == NULL) 
+  w = GetWindowForReportType (report_type);
+  if (w == NULL) 
   {
-    CreateDiscrepancyReportWindow ();
+    CreateReportWindow (report_type);
   }
   
-  drfp = (DiscrepancyReportFormPtr) GetObjectExtra (discrepancyReportWindow);
+  drfp = (DiscrepancyReportFormPtr) GetObjectExtra (w);
   if (drfp == NULL)
   {
-    Remove (discrepancyReportWindow);
-    discrepancyReportWindow = NULL;
-    CreateDiscrepancyReportWindow ();
+    Remove (w);
+    ClearWindowForReportType (w);
+    CreateReportWindow (report_type);
+    w = GetWindowForReportType (report_type);
   }
     
   /* populate discrepancy lists */
   RecheckDiscrepancyProc (drfp->recheck_btn);
-  Show (discrepancyReportWindow);  
-  Select (discrepancyReportWindow);
+  Show (w);  
+  Select (w);
+}
+
+
+
+static void EditReportConfigBtn (EDiscrepancyReportType report_type)
+{
+  DiscrepancyReportFormPtr drfp;
+  WindoW                   w;
+
+  w = GetWindowForReportType (report_type);
+  
+  drfp = (DiscrepancyReportFormPtr) GetObjectExtra (w);
+  if (drfp == NULL) return;
+  
+  if (EditDiscrepancyConfig (drfp->dcp, report_type))
+  {
+    RecheckDiscrepancyProc (drfp->recheck_btn);
+  }
 }
 
 
 static void EditDiscrepancyConfigBtn (ButtoN b)
 {
-  DiscrepancyReportFormPtr drfp;
-  
-  drfp = (DiscrepancyReportFormPtr) GetObjectExtra (discrepancyReportWindow);
-  if (drfp == NULL) return;
-  
-  if (EditDiscrepancyConfig (drfp->dcp))
-  {
-    RecheckDiscrepancyProc (b);
+  EditReportConfigBtn (eReportTypeDiscrepancy);
+}
+
+
+static void EditOnCallerConfigBtn (ButtoN b)
+{
+  EditReportConfigBtn (eReportTypeOnCaller);
+}
+
+
+static Nlm_BtnActnProc GetReportEditButtonProc (EDiscrepancyReportType report_type)
+{
+  Nlm_BtnActnProc proc = NULL;
+
+  switch (report_type) {
+    case eReportTypeDiscrepancy:
+      proc = EditDiscrepancyConfigBtn;
+      break;
+    case eReportTypeOnCaller:
+      proc = EditOnCallerConfigBtn;
+      break;
   }
+  return proc;
 }
 
 
@@ -10847,18 +14614,97 @@ extern void CreateStdValidatorFormMenus (WindoW w);
 #endif
 
 
-extern void CreateDiscrepancyReportWindow (void)
+static CharPtr GetReportName (EDiscrepancyReportType report_type)
+{
+  CharPtr report_name = "";
+
+  switch (report_type) {
+    case eReportTypeDiscrepancy:
+      report_name = "Discrepancy Report";
+      break;
+    case eReportTypeOnCaller:
+      report_name = "On Caller Tool";
+      break;
+  }
+  return report_name;
+}
+
+
+static CharPtr GetReportConfigName (EDiscrepancyReportType report_type)
+{
+  CharPtr report_name = "";
+
+  switch (report_type) {
+    case eReportTypeDiscrepancy:
+      report_name = "DISCREPANCY_REPORT";
+      break;
+    case eReportTypeOnCaller:
+      report_name = "ON_CALLER_TOOL";
+      break;
+  }
+  return report_name;
+}
+
+
+static void AdjustConfigForReportType (EDiscrepancyReportType report_type, DiscrepancyConfigPtr dcp)
+{
+  Int4 i;
+
+  if (dcp == NULL) {
+    return;
+  }
+
+  for (i = 0; i < MAX_DISC_TYPE; i++) {
+    if (!IsTestTypeAppropriateForReportType (i, report_type)) {
+      dcp->conf_list[i] = FALSE;
+    }
+  }
+
+}
+
+
+static void ExpandAllDiscReportItems (ButtoN b)
+{
+  DiscrepancyReportFormPtr d;
+
+  d = (DiscrepancyReportFormPtr) GetObjectExtra (b);
+  if (d == NULL) {
+    return;
+  }
+
+  ExpandClickableItemList (d->clickable_list_data);
+
+  PointerToDialog (d->clickable_list_dlg, d->clickable_list_data);
+}
+
+
+static void ContractAllDiscReportItems (ButtoN b)
+{
+  DiscrepancyReportFormPtr d;
+
+  d = (DiscrepancyReportFormPtr) GetObjectExtra (b);
+  if (d == NULL) {
+    return;
+  }
+  ContractClickableItemList (d->clickable_list_data);
+
+  PointerToDialog (d->clickable_list_dlg, d->clickable_list_data);
+}
+
+
+extern void CreateReportWindow (EDiscrepancyReportType report_type)
 {
   DiscrepancyReportFormPtr drfp;
   GrouP                    h;
   ButtoN                   b;
   GrouP                    c;
+  GrouP                    c1;
   WindoW                   w;
   OMUserDataPtr            omudp;
 
-  if (discrepancyReportWindow != NULL)
+  if (GetWindowForReportType(report_type) != NULL)
   {
-    ReactivateDiscrepancyReport ();
+    ReactivateDiscrepancyReport (report_type);
     return; 
   }
   
@@ -10868,14 +14714,17 @@ extern void CreateDiscrepancyReportWindow (void)
     return;
   }
   
-  w = FixedWindow (-50, -33, -10, -10, "Discrepancy Report", StdCloseWindowProc);
+  w = FixedWindow (-50, -33, -10, -10, GetReportName (report_type), StdCloseWindowProc);
   SetObjectExtra (w, drfp, CleanupDiscrepancyReportForm);
   drfp->form = (ForM) w;
   drfp->formmessage = ClickableListFormMessage;
   drfp->exportform = DiscrepancyReportExportProc;
   
   /* read in config file */
-  drfp->dcp = ReadDiscrepancyConfig();
+  drfp->dcp = ReadDiscrepancyConfigEx(GetReportConfigName (report_type));
+
+  /* adjust for report type */
+  AdjustConfigForReportType (report_type, drfp->dcp);
   
   /* register to receive update messages */
   drfp->userkey = OMGetNextUserKey ();
@@ -10898,7 +14747,14 @@ extern void CreateDiscrepancyReportWindow (void)
   drfp->clickable_list_dlg = CreateClickableListDialog (h, "Discrepancies", "Affected Items",
                                                     ScrollToDiscrepancyItem, EditDiscrepancyItem, NULL,
                                                     GetDiscrepancyItemText);
-                                                    
+                              
+  c1 = HiddenGroup (h, 2, 0, NULL);
+  SetGroupSpacing (c1, 10, 10);
+  b = PushButton (c1, "Expand All", ExpandAllDiscReportItems);
+  SetObjectExtra (b, drfp, NULL);
+  b = PushButton (c1, "Contract All", ContractAllDiscReportItems);
+  SetObjectExtra (b, drfp, NULL);
+
   c = HiddenGroup (h, 4, 0, NULL);
   SetGroupSpacing (c, 10, 10);
   b = PushButton (c, "Generate Report", GenerateDiscrepancyReport);
@@ -10906,20 +14762,21 @@ extern void CreateDiscrepancyReportWindow (void)
   drfp->recheck_btn = PushButton (c, "Recheck", RecheckDiscrepancyProc);
   SetObjectExtra (drfp->recheck_btn, drfp, NULL);
   
-  b = PushButton (c, "Configure", EditDiscrepancyConfigBtn);
+  b = PushButton (c, "Configure", GetReportEditButtonProc (report_type));
   SetObjectExtra (b, drfp, NULL);
   
   PushButton (c, "Dismiss", StdCancelButtonProc);
 
-  AlignObjects (ALIGN_CENTER, (HANDLE) drfp->clickable_list_dlg, (HANDLE) c, NULL);
+  AlignObjects (ALIGN_CENTER, (HANDLE) drfp->clickable_list_dlg, (HANDLE) c1, (HANDLE) c, NULL);
 
   RealizeWindow (w);
   
   /* populate discrepancy lists */
   RecheckDiscrepancyProc (drfp->recheck_btn);
   Show (w);
-  discrepancyReportWindow = w;
+  SetWindowForReportType (w, report_type);
 }
+
 
 typedef struct sucform 
 {
@@ -13631,7 +17488,7 @@ static void FixCDStRNAOverlaps (ValNodePtr overlap_list)
       gene->location = TruncateLocation (gene->location, SeqLocLen (gene->location) - p->overlap_len);
     }
 
-    AddTranslExcept (p->cds, "TAA stop codon is completed by the addition of 3' A residues to the mRNA", FALSE, FALSE);
+    AddTranslExcept (p->cds, "TAA stop codon is completed by the addition of 3' A residues to the mRNA", FALSE, FALSE, FALSE);
   }
 }  
 

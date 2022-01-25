@@ -1,4 +1,4 @@
-/*  $Id: test_ncbi_file_connector.c,v 6.6 2005/04/20 18:23:11 lavr Exp $
+/* $Id: test_ncbi_file_connector.c,v 6.7 2008/10/20 16:55:43 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -38,18 +38,15 @@
 /* This header must go last */
 #include "test_assert.h"
 
-
 #define OUT_FILE "test_ncbi_file_connector.out"
 
-static const char* s_ProgramName;
 
-static void Usage(const char* message)
+static void Usage(const char* progname, const char* message)
 {
     fprintf(stderr,
             "\nUsage: %s <input_file>\n"
             "  (copy <input_file> to \"" OUT_FILE "\")\n"
-            "\nERROR:  %s!\n",
-            s_ProgramName, message);
+            "\nERROR:  %s!\n", progname, message);
     abort();
 }
 
@@ -62,9 +59,8 @@ int main(int argc, const char* argv[])
     const char* inp_file;
 
     /* cmd.-line args */
-    s_ProgramName = argv[0];
     if (argc != 2) {
-        Usage("Must specify the input file name");
+        Usage(argv[0], "Must specify the input file name");
     }
     inp_file = argv[1];
 
@@ -80,7 +76,7 @@ int main(int argc, const char* argv[])
     /* create connector, and bind it to the connection */
     connector = FILE_CreateConnector(inp_file, OUT_FILE);
     if ( !connector ) {
-        Usage("Failed to create FILE connector");
+        Usage(argv[0], "Failed to create FILE connector");
     }
 
     verify(CONN_Create(connector, &conn) == eIO_Success);
@@ -116,28 +112,3 @@ int main(int argc, const char* argv[])
     CORE_SetLOG(0);
     return 0;
 }
-
-
-/*
- * --------------------------------------------------------------------------
- * $Log: test_ncbi_file_connector.c,v $
- * Revision 6.6  2005/04/20 18:23:11  lavr
- * +"../ncbi_assert.h"
- *
- * Revision 6.5  2004/02/23 15:23:43  lavr
- * New (last) parameter "how" added in CONN_Write() API call
- *
- * Revision 6.4  2002/08/07 16:38:08  lavr
- * EIO_ReadMethod enums changed accordingly; log moved to end
- *
- * Revision 6.3  2002/03/22 19:47:09  lavr
- * Test_assert.h made last among the include files
- *
- * Revision 6.2  2002/01/16 21:23:15  vakatov
- * Utilize header "test_assert.h" to switch on ASSERTs in the Release mode too
- *
- * Revision 6.1  2000/04/12 15:22:43  vakatov
- * Initial revision
- *
- * ==========================================================================
- */

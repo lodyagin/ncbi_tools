@@ -1,4 +1,4 @@
-/*  $Id: hspstream_collector.c,v 1.22 2008/02/14 15:55:42 kazimird Exp $
+/*  $Id: hspstream_collector.c,v 1.24 2008/08/21 19:55:43 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,7 +34,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: hspstream_collector.c,v 1.22 2008/02/14 15:55:42 kazimird Exp $";
+    "$Id: hspstream_collector.c,v 1.24 2008/08/21 19:55:43 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 
@@ -311,7 +311,7 @@ s_BlastHSPListCollectorMerge(SSplitQueryBlk *squery_blk,
    BlastHSPResults *results2 = stream2->results;
    Int4 contexts_per_query = BLAST_GetNumberOfContexts(stream2->program);
 #ifdef _DEBUG
-   size_t num_queries = 0, num_ctx = 0, num_ctx_offsets = 0;
+   Int4 num_queries = 0, num_ctx = 0, num_ctx_offsets = 0;
    Int4 max_ctx;
 #endif
 
@@ -560,7 +560,7 @@ Blast_HSPListCollectorInitMT(EBlastProgramType program,
     if ((Blast_QueryIsProtein(program) || Blast_QueryIsPssm(program)) &&
         extn_opts->compositionBasedStats != 0) {
         stream_data->sort_by_score = 
-            (SSortByScoreStruct*)calloc(0, sizeof(SSortByScoreStruct));
+            (SSortByScoreStruct*)calloc(1, sizeof(SSortByScoreStruct));
         stream_data->sort_by_score->sort_on_read = sort_on_read;
         stream_data->sort_by_score->first_query_index = 0;
     } else {

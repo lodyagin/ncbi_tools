@@ -30,7 +30,7 @@
  */
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] =
-    "$Id: composition_adjustment.c,v 1.23 2006/09/18 18:16:41 gertz Exp $";
+    "$Id: composition_adjustment.c,v 1.25 2008/08/21 19:55:43 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <limits.h>
@@ -945,7 +945,7 @@ s_GetPssmScoreProbs(double ** scoreProb, int * obs_min, int * obs_max,
 
 /* Documented in composition_adjustment.h. */
 void
-Blast_Int4MatrixFromFreq(Int4 **matrix, int alphsize, 
+Blast_Int4MatrixFromFreq(int **matrix, int alphsize, 
                          double ** freq, double Lambda)
 {
     /* A row of the matrix in double precision */
@@ -1258,7 +1258,7 @@ Blast_CompositionWorkspaceFree(Blast_CompositionWorkspace ** pNRrecord)
 
 
 /* Documented in composition_adjustment.h. */
-Blast_CompositionWorkspace * Blast_CompositionWorkspaceNew()
+Blast_CompositionWorkspace * Blast_CompositionWorkspaceNew(void)
 {
     Blast_CompositionWorkspace * NRrecord;        /* record to allocate
                                                     and return */
@@ -1441,7 +1441,7 @@ Blast_CompositionMatrixAdj(int ** matrix,
 
 /* Documented in composition_adjustment.h. */
 int
-Blast_AdjustScores(Int4 ** matrix,
+Blast_AdjustScores(int ** matrix,
                    const Blast_AminoAcidComposition * query_composition,
                    int queryLength,
                    const Blast_AminoAcidComposition * subject_composition,

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/1/91
 *
-* $Revision: 6.44 $
+* $Revision: 6.45 $
 *
 * File Description: 
 *       Vibrant drawing functions.
@@ -511,12 +511,14 @@ static Nlm_Boolean Nlm_NotAStockBrush (HBRUSH brush)
                         brush != hWhiteBrush);
 }
 
+/*
 static Nlm_Boolean Nlm_NotAStockFont (HFONT font)
 {
   return (Nlm_Boolean) (font != hAnsiFixedFont && font != hAnsiVarFont &&
                         font != hDeviceDefaultFont && font != hOemFixedFont &&
                         font != hSystemFont && font != hSystemFixedFont);
 }
+*/
 #endif
 
 
@@ -3795,7 +3797,7 @@ extern void Nlm_DrawText (Nlm_RectPtr r, Nlm_CharPtr text,
 #endif
 #ifdef WIN_MSWIN
   Nlm_Int2      format;
-  Nlm_Int4      oldcolor;
+  Nlm_Int4      oldcolor = 0;
   Nlm_RectTool  rtool;
   Nlm_FontData  fdata;
   SIZE          tsize;
@@ -4598,7 +4600,7 @@ extern void Nlm_InvertRect (Nlm_RectPtr r)
 
 #ifdef WIN_MAC
 #ifdef WIN_MAC_QUARTZ
-  /* ASSERT(false); /* Can't invert rectangles in Quartz */
+  /* ASSERT(false); */ /* Can't invert rectangles in Quartz */
 #else
   Local__RecTToRectTool (r, &rtool);
   InvertRect (&rtool);

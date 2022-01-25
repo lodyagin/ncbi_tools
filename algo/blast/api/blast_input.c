@@ -1,5 +1,5 @@
 #ifndef SKIP_DOXYGEN_PROCESSING
-static char const rcsid[] = "$Id: blast_input.c,v 1.31 2008/01/10 15:43:35 madden Exp $";
+static char const rcsid[] = "$Id: blast_input.c,v 1.32 2008/06/09 17:28:41 madden Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 /* ===========================================================================
 *
@@ -123,9 +123,8 @@ BLAST_GetQuerySeqLoc(FILE *infp, Boolean query_is_na, Uint1 strand,
       }
 
       if (query_bsp->length <= 0) {
-         ErrPostEx(SEV_FATAL, 0, 0, "Sequence number %ld had length %ld", (long) query_count-1, (long) query_bsp->length);
+         ErrPostEx(SEV_WARNING, 0, 0, "Sequence number %ld had length %ld", (long) query_count-1, (long) query_bsp->length);
          *ctr += query_index;
-         return -1;
       }
 
 

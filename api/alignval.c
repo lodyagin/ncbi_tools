@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/3/99
 *
-* $Revision: 6.65 $
+* $Revision: 6.67 $
 *
 * File Description:  To validate sequence alignment.
 *
@@ -167,7 +167,7 @@ static BioseqPtr AlignValBioseqLockById (SeqIdPtr sid)
   if (useLockByID) {
     old_sev = ErrSetMessageLevel (SEV_WARNING);
     bsp = BioseqLockById (sid);
-    ErrSetMessageLevel (old_sev);
+    ErrSetMessageLevel ((ErrSev) old_sev);
   } else {
     bsp = BioseqFindCore (sid);
   }
@@ -2574,16 +2574,16 @@ static Uint2 AlignmentPercentIdentityEx (SeqAlignPtr salp, Boolean internal_gaps
   Int4       num_match;
   Uint2      pcnt;
   Boolean    row_match;
-  Int4       aln_pos, seq_pos, k;
+  Int4       aln_pos, seq_pos, tmp;
   Uint1          seq_ch, row_ch, amb_match;
   SeqEntryPtr    oldscope;
   SeqIdPtr PNTR  sip_list;
   BioseqPtr PNTR bsp_list;
   Uint1Ptr       strand_list;
-  BoolPtr        start_gap, end_gap;
   Int4Ptr        start_list;
   Uint1Ptr       seqbuf_list;
   Int4           sample_len = 50;
+  Int4Ptr        starts, stops;
   
   if (salp == NULL) return 0;
  
@@ -2599,8 +2599,8 @@ static Uint2 AlignmentPercentIdentityEx (SeqAlignPtr salp, Boolean internal_gaps
   bsp_list = (BioseqPtr PNTR) MemNew (num_rows * sizeof (BioseqPtr));
   sip_list = (SeqIdPtr PNTR) MemNew (num_rows * sizeof(SeqIdPtr));
   strand_list = (Uint1Ptr) MemNew (num_rows * sizeof(Uint1));
-  start_gap = (BoolPtr) MemNew (num_rows * sizeof(Boolean));
-  end_gap = (BoolPtr) MemNew (num_rows * sizeof(Boolean));
+  starts = (Int4Ptr) MemNew (num_rows * sizeof (Int4));
+  stops = (Int4Ptr) MemNew (num_rows * sizeof (Int4));
   for (row = 1; row <= num_rows; row++) {
     sip_list[row - 1] = AlnMgr2GetNthSeqIdPtr(salp, row);
     strand_list[row - 1] = AlnMgr2GetNthStrand(salp, row);
@@ -2613,23 +2613,31 @@ static Uint2 AlignmentPercentIdentityEx (SeqAlignPtr salp, Boolean internal_gaps
         break;
       }
     }
-    start_gap[row - 1] = TRUE;
-    end_gap[row - 1] = FALSE;
+    /* get endpoints for each row */
+    AlnMgr2GetNthSeqRangeInSA(salp, row, starts + row - 1, stops + row - 1);
+    starts[row - 1] = AlnMgr2MapBioseqToSeqAlign (salp, starts[row - 1], row);
+    stops[row - 1] = AlnMgr2MapBioseqToSeqAlign (salp, stops[row - 1], row);
+    if (starts[row - 1] > stops[row - 1]) {
+      tmp = starts[row - 1];
+      starts[row - 1] = stops[row - 1];
+      stops[row - 1] = tmp;
+    }
+
   }
   
   if (row <= num_rows) {
     if (! internal_validation) {
       Message (MSG_POSTERR, "Unable to locate Bioseq in alignment");
     }
-    while (row >= 0) {
-      sip_list[row] = SeqIdFree(sip_list[row]);
-      BioseqUnlock(bsp_list[row]);
+    while (row > 0) {
+      sip_list[row - 1] = SeqIdFree(sip_list[row - 1]);
+      BioseqUnlock(bsp_list[row - 1]);
       row--;
     }
     sip_list = MemFree (sip_list);
     bsp_list = MemFree (bsp_list);
-    start_gap = MemFree (start_gap);
-    end_gap = MemFree (end_gap);
+    starts = MemFree (starts);
+    stops = MemFree (stops);
     return 0;
   }
   
@@ -2647,32 +2655,15 @@ static Uint2 AlignmentPercentIdentityEx (SeqAlignPtr salp, Boolean internal_gaps
     row_match = TRUE;
     seq_ch = 0;
     for (row = 1; row <= num_rows; row++) {
-      if (end_gap[row - 1]) {
+      if (aln_pos < starts[row - 1] || aln_pos > stops[row - 1]) {
         continue;
       }
       seq_pos = AlnMgr2MapSeqAlignToBioseq(salp, aln_pos, row);
       if (seq_pos < 0) {
-        if (start_gap[row - 1] || end_gap[row - 1]) {
-          /* beginning/end gap - never counts against percent identity */
-        } else {
-          k = aln_pos + 1;
-          while (k < aln_len && seq_pos < 0) {
-            seq_pos = AlnMgr2MapSeqAlignToBioseq(salp, k, row);
-            k++;
-          }
-          if (seq_pos < 0) {
-            /* now in end_gap for this sequence */
-            end_gap[row - 1] = TRUE;
-          } else {
-            /* internal gaps count against percent identity when specified */
-            if (internal_gaps) {
-              row_match = FALSE;
-            }
-          }
+        if (internal_gaps) {
+          row_match = FALSE;
         }
-      } else {
-        start_gap[row - 1] = FALSE;
-        
+      } else {        
         row_ch = ReadFromAlignmentSample(seqbuf_list, start_list, 
                                          sample_len, bsp_list, strand_list,
                                          row - 1, seq_pos);
@@ -2702,8 +2693,8 @@ static Uint2 AlignmentPercentIdentityEx (SeqAlignPtr salp, Boolean internal_gaps
   }
   sip_list = MemFree (sip_list);
   bsp_list = MemFree (bsp_list);
-  start_gap = MemFree (start_gap);
-  end_gap = MemFree (end_gap);
+  starts = MemFree (starts);
+  stops = MemFree (stops);
   start_list = MemFree (start_list);
   seqbuf_list = MemFree (seqbuf_list);
       

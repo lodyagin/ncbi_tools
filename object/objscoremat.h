@@ -17,7 +17,7 @@ extern "C" { /* } */
 /**************************************************
 *
 *    Generated objects for Module NCBI-ScoreMat
-*    Generated using ASNCODE Revision: 6.15 at Oct 7, 2004  2:31 PM
+*    Generated using ASNCODE Revision: 6.16 at Jun 2, 2008 11:45 AM
 *
 **************************************************/
 
@@ -32,7 +32,7 @@ objscorematAsnLoad PROTO((void));
 **************************************************/
 typedef struct struct_Pssm {
    Uint1   isProtein;
-   ObjectIdPtr identifier;
+   ObjectIdPtr   identifier;
    Int4   numRows;
    Int4   numColumns;
    ValNodePtr   rowLabels;
@@ -59,6 +59,11 @@ typedef struct struct_PssmIntermediateData {
    ValNodePtr   resFreqsPerPos;
    ValNodePtr   weightedResFreqsPerPos;
    ValNodePtr   freqRatios;
+   ValNodePtr   informationContent;
+   ValNodePtr   gaplessColumnWeights;
+   ValNodePtr   sigma;
+   ValNodePtr   intervalSizes;
+   ValNodePtr   numMatchingSeqs;
 } PssmIntermediateData, PNTR PssmIntermediateDataPtr;
 
 
@@ -80,6 +85,9 @@ typedef struct struct_PssmFinalData {
    FloatHi   kappa;
    FloatHi   h;
    Int4   scalingFactor;
+   FloatHi   lambdaUngapped;
+   FloatHi   kappaUngapped;
+   FloatHi   hUngapped;
 } PssmFinalData, PNTR PssmFinalDataPtr;
 
 

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   12/30/03
 *
-* $Revision: 1.85 $
+* $Revision: 1.98 $
 *
 * File Description:  New GenBank flatfile generator, internal header
 *
@@ -65,6 +65,7 @@ extern "C" {
 #define TILDE_TO_SPACES  1
 #define TILDE_EXPAND     2
 #define TILDE_OLD_EXPAND 3
+#define TILDE_SEMICOLON  4
 
 
 /* flags set by mode to customize behavior */
@@ -98,6 +99,7 @@ typedef struct asn2gbflags {
   Boolean             pyrrolysineToNote;
   Boolean             extraProductsToNote;
   Boolean             codonRecognizedToNote;
+  Boolean             hideSpecificGeneMaps;
   Boolean             forGbRelease;
 } Asn2gbFlags, PNTR Asn2gbFlagsPtr;
 
@@ -165,19 +167,22 @@ typedef struct int_asn2gb_job {
 /* should be allocated to MAX (ASN2GNBK_TOTAL_SOURCE, ASN2GNBK_TOTAL_FEATUR) */
 
 typedef union qualval {
-  CharPtr        str;
-  Boolean        ble;
-  Int4           num;
-  ValNodePtr     vnp;
-  GBQualPtr      gbq;
-  OrgModPtr      omp;
-  SubSourcePtr   ssp;
-  CodeBreakPtr   cbp;
-  SeqLocPtr      slp;
-  SeqIdPtr       sip;
-  tRNAPtr        trp;
-  UserObjectPtr  uop;
-  UserFieldPtr   ufp;
+  CharPtr              str;
+  Boolean              ble;
+  Int4                 num;
+  ValNodePtr           vnp;
+  GBQualPtr            gbq;
+  OrgModPtr            omp;
+  SubSourcePtr         ssp;
+  CodeBreakPtr         cbp;
+  SeqLocPtr            slp;
+  SeqIdPtr             sip;
+  tRNAPtr              trp;
+  UserObjectPtr        uop;
+  UserFieldPtr         ufp;
+  RNAGenPtr            rgp;
+  GeneNomenclaturePtr  gnp;
+  PCRReactionSetPtr    prp;
 } QualVal, PNTR QualValPtr;
 
 /* structure passed to individual paragraph format functions */
@@ -460,13 +465,17 @@ typedef enum {
   Qual_class_model_ev,
   Qual_class_gene_syn,
   Qual_class_locus_tag,
+  Qual_class_map,
   Qual_class_go,
   Qual_class_nomenclature,
+  Qual_class_gene_nomen,
   Qual_class_pcr,
+  Qual_class_pcr_react,
   Qual_class_mol_wt,
   Qual_class_voucher,
   Qual_class_lat_lon,
-  Qual_class_mobile_element
+  Qual_class_mobile_element,
+  Qual_class_tag_peptide
 }  QualType;
 
 /* source 'feature' */
@@ -516,6 +525,7 @@ typedef enum {
   SCQUAL_genotype,
   SCQUAL_germline,
   SCQUAL_group,
+  SCQUAL_haplogroup,
   SCQUAL_haplotype,
   SCQUAL_identified_by,
   SCQUAL_ins_seq_name,
@@ -524,8 +534,10 @@ typedef enum {
   SCQUAL_lab_host,
   SCQUAL_label,
   SCQUAL_lat_lon,
+  SCQUAL_linkage_group,
   SCQUAL_macronuclear,
   SCQUAL_map,
+  SCQUAL_mating_type,
   SCQUAL_metagenome_note,
   SCQUAL_metagenome_source,
   SCQUAL_metagenomic,
@@ -539,6 +551,7 @@ typedef enum {
   SCQUAL_pathovar,
   SCQUAL_PCR_primers,
   SCQUAL_PCR_primer_note,
+  SCQUAL_PCR_reaction,
   SCQUAL_plasmid_name,
   SCQUAL_plastid_name,
   SCQUAL_pop_variant,
@@ -577,7 +590,7 @@ typedef enum {
   ASN2GNBK_TOTAL_SOURCE
 }  SourceType;
 
-NLM_EXTERN SourceType orgModToSourceIdx [42];
+NLM_EXTERN SourceType orgModToSourceIdx [41];
 
 typedef enum {
   FTQUAL_allele = 1,
@@ -613,6 +626,9 @@ typedef enum {
   FTQUAL_gene_desc,
   FTQUAL_gene_allele,
   FTQUAL_gene_map,
+  FTQUAL_gene_cyt_map,
+  FTQUAL_gene_gen_map,
+  FTQUAL_gene_rad_map,
   FTQUAL_gene_syn,
   FTQUAL_gene_syn_refseq,
   FTQUAL_gene_note,
@@ -639,6 +655,7 @@ typedef enum {
   FTQUAL_ncRNA_note,
   FTQUAL_ncRNA_other,
   FTQUAL_nomenclature,
+  FTQUAL_gene_nomen,
   FTQUAL_note,
   FTQUAL_number,
   FTQUAL_old_locus_tag,
@@ -674,6 +691,7 @@ typedef enum {
   FTQUAL_rpt_unit_range,
   FTQUAL_rpt_unit_seq,
   FTQUAL_rrna_its,
+  FTQUAL_satellite,
   FTQUAL_sec_str_type,
   FTQUAL_selenocysteine,
   FTQUAL_selenocysteine_note,
@@ -683,6 +701,7 @@ typedef enum {
   FTQUAL_site_type,
   FTQUAL_standard_name,
   FTQUAL_tag_peptide,
+  FTQUAL_tag_peptide_str,
   FTQUAL_transcription,
   FTQUAL_transcript_id,
   FTQUAL_transcript_id_note,
@@ -742,7 +761,7 @@ typedef struct sourcequal {
 
 NLM_EXTERN SourceQual asn2gnbk_source_quals [ASN2GNBK_TOTAL_SOURCE];
 
-NLM_EXTERN SourceType subSourceToSourceIdx [39];
+NLM_EXTERN SourceType subSourceToSourceIdx [42];
 
 NLM_EXTERN void DoOneSection (
   BioseqPtr target,
@@ -788,6 +807,7 @@ NLM_EXTERN void FFAddNChar (
   Boolean convertQuotes
 );
 NLM_EXTERN void FFExpandTildes (StringItemPtr sip, CharPtr PNTR cpp);
+NLM_EXTERN void FFSemicolonSeparateTildes (StringItemPtr sip, CharPtr PNTR cpp);
 NLM_EXTERN void FFReplaceTildesWithSpaces (StringItemPtr ffstring, CharPtr PNTR cpp);
 NLM_EXTERN void FFOldExpand (StringItemPtr sip, CharPtr PNTR cpp);
 NLM_EXTERN void AddCommentStringWithTildes (StringItemPtr ffstring, CharPtr string);
@@ -979,7 +999,8 @@ NLM_EXTERN void FFAddString_NoRedund (
   StringItemPtr unique,
   CharPtr prefix,
   CharPtr string,
-  CharPtr suffix
+  CharPtr suffix,
+  Boolean convertQuotes
 );
 NLM_EXTERN void s_AddPeriodToEnd (CharPtr someString);
 NLM_EXTERN Boolean s_RemovePeriodFromEnd (CharPtr someString);

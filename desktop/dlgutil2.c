@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.186 $
+* $Revision: 6.201 $
 *
 * File Description: 
 *
@@ -58,10 +58,16 @@
 #ifdef WIN_MOTIF
 #include <netscape.h>
 #endif
+#define NLM_GENERATED_CODE_PROTO
+#include <objmacro.h>
+#include <macroapi.h>
 
 typedef struct datepage {
   DIALOG_MESSAGE_BLOCK
   TexT          year;
+  PopuP         year_popup;
+  Int4          start_year;
+  Int4          num_years;
   PopuP         month;
   TexT          day;
 } DatePage, PNTR DatePagePtr;
@@ -156,11 +162,55 @@ static void DatePtrToDatePage (DialoG d, Pointer data)
 {
   DatePtr      dp;
   DatePagePtr  dpp;
+  Int2         day;
+  Char         str [32];
+  Int2         year, val;
+
 
   dpp = (DatePagePtr) GetObjectExtra (d);
   dp = (DatePtr) data;
   if (dpp != NULL) {
-    DatePtrToVibrant (dp, dpp->month, dpp->day, dpp->year);
+    if (dp == NULL || dp->data[0] != 1) {
+      SafeSetValue (dpp->month, 1);
+      SafeSetTitle (dpp->day, "");
+      SafeSetTitle (dpp->year, "");
+      SafeSetValue (dpp->year_popup, 1);
+    } else {
+      /* set month */
+      SetEnumPopup (dpp->month, months_alist, (UIEnum) dp->data [2]);
+      /* set day */
+      day = (Int2) dp->data [3];
+      if (day > 0 && day <= 31) {
+        sprintf (str, "%d", (int) day);
+        SafeSetTitle (dpp->day, str);
+      } else {
+        SafeSetTitle (dpp->day, "");
+      }
+      /* set year */
+      year = (Int2) dp->data [1];
+      if (year > 0) {
+        if (dpp->year_popup == NULL) {
+          sprintf (str, "%d", (int) (year + 1900));
+          SafeSetTitle (dpp->year, str);
+        } else {
+          val = year + 1900 - dpp->start_year + 1;
+          if (val < 1 || val >= dpp->num_years) {
+            sprintf (str, "%d", (int) (year + 1900));
+            SafeSetTitle (dpp->year, str);
+            dpp->year_popup = NULL;
+            Show (dpp->year);
+          } else {
+            SetValue (dpp->year_popup, val);
+          }
+        }
+      } else {
+        if (dpp->year_popup == NULL) {
+          SafeSetTitle (dpp->year, "");
+        } else {
+          SetValue (dpp->year_popup, 1);
+        }
+      }
+    }
   }
 }
 
@@ -169,16 +219,55 @@ static Pointer DatePageToDatePtr (DialoG d)
 {
   DatePtr      dp;
   DatePagePtr  dpp;
+  Int2         day;
+  UIEnum       month;
+  Char         str [32];
+  Int2         year = 0;
 
   dp = NULL;
   dpp = (DatePagePtr) GetObjectExtra (d);
   if (dpp != NULL) {
-    dp = VibrantToDatePtr (dpp->month, dpp->day, dpp->year);
+    dp = DateNew ();
+    if (dp != NULL) {
+      dp->data [0] = 1;
+      /* get year value */
+      if (dpp->year_popup != NULL) {
+        year = GetValue (dpp->year_popup);
+        if (year > 0) {
+          year += dpp->start_year - 1;
+        } else {
+          dp = DateFree (dp);
+          return NULL;
+        }
+      } else {
+        GetTitle (dpp->year, str, sizeof (str));
+        if (! StringHasNoText (str)) {
+          StrToInt (str, &year);
+        }
+      }
+      if (year >= 1900) {
+        dp->data [1] = (Uint1) (year - 1900);
+      } else {
+        dp = DateFree (dp);
+        return dp;
+      }
+      /* get month value */
+      if (GetEnumPopup (dpp->month, months_alist, &month)) {
+        dp->data [2] = (Uint1) month;
+      } else {
+        dp = DateFree (dp);
+        return dp;
+      }
+      /* get day value */
+      GetTitle (dpp->day, str, sizeof (str));
+      StrToInt (str, &day);
+      dp->data [3] = (Uint1) day;
+    }
   }
   return (Pointer) dp;
 }
 
-extern DialoG CreateDateDialog (GrouP prnt, CharPtr title)
+extern DialoG CreateDateDialogEx (GrouP prnt, CharPtr title, Int4 start_year, Int4 num_years)
 
 {
   DatePagePtr  dpp;
@@ -186,6 +275,9 @@ extern DialoG CreateDateDialog (GrouP prnt, CharPtr title)
   GrouP        m;
   GrouP        p;
   GrouP        s;
+  GrouP        year_grp;
+  Char         year_buf[15];
+  Int4         i;
 
   p = HiddenGroup (prnt, 1, 0, NULL);
   SetGroupSpacing (p, 10, 10);
@@ -198,6 +290,9 @@ extern DialoG CreateDateDialog (GrouP prnt, CharPtr title)
     dpp->todialog = DatePtrToDatePage;
     dpp->fromdialog = DatePageToDatePtr;
     dpp->testdialog = NULL;
+
+    dpp->start_year = start_year;
+    dpp->num_years = num_years;
 
     if (title != NULL && title [0] != '\0') {
       s = NormalGroup (p, 0, -2, title, systemFont, NULL);
@@ -217,11 +312,31 @@ extern DialoG CreateDateDialog (GrouP prnt, CharPtr title)
     StaticPrompt (f, "Day", 0, dialogTextHeight, programFont, 'l');
     dpp->day = DialogText (f, "", 4, NULL);
     StaticPrompt (f, "Year", 0, dialogTextHeight, programFont, 'l');
-    dpp->year = DialogText (f, "", 6, NULL);
+    year_grp = HiddenGroup (f, 0, 0, NULL);
+    if (start_year > 0 && num_years > -1) {
+      dpp->year_popup = PopupList (year_grp, TRUE, NULL);
+      for (i = 0; i < num_years; i++) {
+        sprintf (year_buf, "%d", start_year + i);
+        PopupItem (dpp->year_popup, year_buf);
+      }
+    }
+    dpp->year = DialogText (year_grp, "", 6, NULL);
+    if (dpp->year_popup != NULL) {
+      SafeHide (dpp->year);
+    }
+    AlignObjects (ALIGN_CENTER, (HANDLE)dpp->year, (HANDLE)dpp->year_popup, NULL);
   }
 
   return (DialoG) p;
 }
+
+
+extern DialoG CreateDateDialog (GrouP prnt, CharPtr title)
+
+{
+  return CreateDateDialogEx (prnt, title, -1, 0);
+}
+
 
 typedef struct featcit {
   DIALOG_MESSAGE_BLOCK
@@ -1092,6 +1207,7 @@ static Boolean ShouldBeAGBQual (Uint1 subtype, Int2 qual, Boolean allowProductGB
       qual == GBQUAL_evidence ||
       qual == GBQUAL_exception ||
       qual == GBQUAL_gene ||
+      qual == GBQUAL_gene_synonym ||
       qual == GBQUAL_insertion_seq ||
       qual == GBQUAL_label ||
       qual == GBQUAL_locus_tag ||
@@ -1602,7 +1718,6 @@ static CharPtr  commonNoCitFormTabs [] = {
   "General", "Comment", "Cross-Refs", "Evidence", "Identifiers", NULL, NULL
 };
 
-static DialoG CreateInferenceDialog (GrouP h, Uint2 rows, Int2 spacing, Int2 width);
 static DialoG NewCreateInferenceDialog (GrouP prnt);
 extern void Nlm_LaunchGeneFeatEd (ButtoN b);
 
@@ -1791,6 +1906,7 @@ extern GrouP CreateCommonFeatureGroupEx (GrouP h, FeatureFormPtr ffp,
     ffp->geneAllele = NULL;
     ffp->geneDesc = NULL;
     ffp->locusTag = NULL;
+    ffp->geneSynonym = NULL;
     for (page = 0; page < 8; page++) {
       ffp->commonSubGrp [page] = NULL;
     }
@@ -1830,6 +1946,8 @@ extern GrouP CreateCommonFeatureGroupEx (GrouP h, FeatureFormPtr ffp,
       ffp->geneDesc = DialogText (ffp->newGeneGrp, "", 20, NULL);
       StaticPrompt (ffp->newGeneGrp, "Locus Tag", 0, dialogTextHeight, programFont, 'l');
       ffp->locusTag = DialogText (ffp->newGeneGrp, "", 20, NULL);
+      StaticPrompt (ffp->newGeneGrp, "Synonym", 0, dialogTextHeight, programFont, 'l');
+      ffp->geneSynonym = DialogText (ffp->newGeneGrp, "", 20, NULL);
       Hide (ffp->newGeneGrp);
       ffp->editGeneBtn = PushButton (y, "Edit Gene Feature", Nlm_LaunchGeneFeatEd);
       SetObjectExtra (ffp->editGeneBtn, ffp, NULL);
@@ -2344,7 +2462,7 @@ static void FindInGeneralText (ButtoN b)
   Int2             offset = 0;
   Char             path [PATH_MAX];
   CharPtr          ptr;
-  Int2             state;
+  Int4             state;
   CharPtr          str;
   TextFsaPtr       tbl;
   TextViewFormPtr  tfp;
@@ -2560,6 +2678,15 @@ LaunchGeneralTextViewerEx
     FormCommandItem (m, COPY_MENU_ITEM, (BaseFormPtr) tfp, VIB_MSG_COPY);
     FormCommandItem (m, PASTE_MENU_ITEM, (BaseFormPtr) tfp, VIB_MSG_PASTE);
     FormCommandItem (m, CLEAR_MENU_ITEM, (BaseFormPtr) tfp, VIB_MSG_DELETE);
+  }
+#endif
+
+#ifdef WIN_MAC
+  if (useScrollText) {
+    if (FileLength (path) > 32767) {
+      /* text edit window has maximum length on Mac */
+      useScrollText = FALSE;
+    }
   }
 #endif
 
@@ -4477,7 +4604,7 @@ static ValNodePtr TestSelectionDialog (DialoG d)
 /* All is automatically included as a choice if allow_multi is true. */
 /* The ValNodeList returned is a list of integers indicating the position of the item
  * in the list - 1 is the first item, 2 is the second item, etc. */
-extern DialoG SelectionDialogEx 
+extern DialoG SelectionDialogExEx 
 (GrouP h,
  Nlm_ChangeNotifyProc     change_notify,
  Pointer                  change_userdata,
@@ -4485,14 +4612,16 @@ extern DialoG SelectionDialogEx
  CharPtr                  err_msg,
  ValNodePtr               choice_list,
  Int2                     list_height,
- Boolean                  force_list)
+ Boolean                  force_list,
+ Boolean                  force_popup)
 
 {
   SelectionDialogPtr  dlg;
   GrouP               p;
   ValNodePtr          vnp;
   Int4                num_choices;
-  
+  Int4                list_width = 8, item_width;
+
   if (choice_list == NULL)
   {
     return NULL;
@@ -4526,7 +4655,7 @@ extern DialoG SelectionDialogEx
   }
   else
   {
-    if ((num_choices < 20 && ! force_list) || list_height == 1)
+    if (force_popup || (num_choices < 20 && ! force_list) || list_height == 1)
     {
       dlg->popup_ctrl = PopupList (p, TRUE, SelectionDialogPopupChanged);
       SetObjectExtra (dlg->popup_ctrl, dlg, NULL);
@@ -4536,7 +4665,15 @@ extern DialoG SelectionDialogEx
     }
     else
     {
-      dlg->list_ctrl = SingleList (p, 8, list_height, SelectionDialogChanged);
+      SelectFont (systemFont);
+      for (vnp = choice_list; vnp != NULL; vnp = vnp->next) {
+        item_width = StringWidth (vnp->data.ptrvalue);
+        list_width = MAX (list_width, item_width);
+      }
+      /* add padding */
+      list_width += StringWidth ("W");
+      list_width = list_width / Nlm_stdCharWidth;
+      dlg->list_ctrl = SingleList (p, list_width, list_height, SelectionDialogChanged);
       SetObjectExtra (dlg->list_ctrl, dlg, NULL);
       for (vnp = choice_list; vnp != NULL; vnp = vnp->next) {
         ListItem (dlg->list_ctrl, vnp->data.ptrvalue);
@@ -4547,6 +4684,22 @@ extern DialoG SelectionDialogEx
   
   return (DialoG) p;
 }
+
+
+extern DialoG SelectionDialogEx 
+(GrouP h,
+ Nlm_ChangeNotifyProc     change_notify,
+ Pointer                  change_userdata,
+ Boolean                  allow_multi,
+ CharPtr                  err_msg,
+ ValNodePtr               choice_list,
+ Int2                     list_height,
+ Boolean                  force_list)
+
+{
+  return SelectionDialogExEx (h, change_notify, change_userdata, allow_multi, err_msg, choice_list, list_height, force_list, FALSE);
+}
+
 
 extern DialoG SelectionDialog 
 (GrouP h,
@@ -4724,7 +4877,7 @@ static ValNodePtr TestValNodeSelectionDialog (DialoG d)
   return head;
 }
 
-extern DialoG ValNodeSelectionDialogEx
+extern DialoG ValNodeSelectionDialogExEx
 (GrouP h,
  ValNodePtr               choice_list,
  Int2                     list_height,
@@ -4737,6 +4890,7 @@ extern DialoG ValNodeSelectionDialogEx
  Pointer                  change_userdata,
  Boolean                  allow_multi,
  Boolean                  force_list,
+ Boolean                  force_popup,
  RemapValNodeProc         remap_vn_proc)
 {
   ValNodeSelectionPtr  dlg;
@@ -4775,13 +4929,35 @@ extern DialoG ValNodeSelectionDialogEx
     ValNodeAddPointer (&choice_name_list, 0, (name_proc) (vnp));
   }
 
-  dlg->list_dlg = SelectionDialogEx (p, change_notify, change_userdata,
+  dlg->list_dlg = SelectionDialogExEx (p, change_notify, change_userdata,
                                    allow_multi, err_name, choice_name_list, 
-                                   list_height, force_list);
+                                   list_height, force_list, force_popup);
   ValNodeFreeData (choice_name_list);  
   
   return (DialoG) p;
 }
+
+
+extern DialoG ValNodeSelectionDialogEx
+(GrouP h,
+ ValNodePtr               choice_list,
+ Int2                     list_height,
+ NameFromValNodeProc      name_proc,
+ FreeValNodeProc          free_vn_proc,
+ CopyValNodeDataProc      copy_vn_proc,
+ MatchValNodeProc         match_vn_proc,
+ CharPtr                  err_name,
+ Nlm_ChangeNotifyProc     change_notify,
+ Pointer                  change_userdata,
+ Boolean                  allow_multi,
+ Boolean                  force_list,
+ RemapValNodeProc         remap_vn_proc)
+{
+  return ValNodeSelectionDialogExEx (h, choice_list, list_height, name_proc, free_vn_proc, copy_vn_proc,
+                                     match_vn_proc, err_name, change_notify, change_userdata, allow_multi,
+                                     force_list, FALSE, remap_vn_proc);
+}
+
 
 extern DialoG ValNodeSelectionDialog
 (GrouP h,
@@ -6553,6 +6729,8 @@ extern void GBQualsToInferenceDialog (DialoG d, SeqFeatPtr sfp)
         if (StringNICmp (rest, "(same species)", 14) == 0) {
           iep->species = TRUE;
           rest += 14;
+        } else {
+          iep->species = FALSE;
         }
         ch = *rest;
         while (IS_WHITESP (ch) || ch == ':') {
@@ -6705,6 +6883,7 @@ extern void InferenceDialogToGBQuals (DialoG d, SeqFeatPtr sfp, Boolean convertB
         prefix = inferencePrefix [(int) val];
       }
     }
+    speciesies = NULL;
     if (StringNICmp (iep->prefix, "similar to ", 11) == 0) {
       if (iep->species) {
         speciesies = " (same species)";
@@ -8222,11 +8401,215 @@ extern DialoG CreateInferenceEditDialog
 
 /* This section of code is for handling ClickableLists */
 
+typedef struct clickableitemlist
+{
+  DIALOG_MESSAGE_BLOCK
+  DoC doc;
+
+  Nlm_ParData par_fmt;
+  Nlm_ColData col_fmt [4];
+
+  ClickableCallback single_click_callback;
+  ClickableCallback double_click_callback;
+  Pointer           click_callback_data;
+  GetClickableItemText get_item_text;
+  ValNodePtr           item_list;
+  Int2                 selected;
+} ClickableItemListDlgData, PNTR ClickableItemListDlgPtr;
+
+static void PointerToClickableItemListDlg (DialoG d, Pointer data)
+{
+  ClickableItemListDlgPtr dlg;
+  ValNodePtr              vnp;
+  CharPtr                 row_text;
+  Int2                 numItems;
+  RecT                 r;
+
+  dlg = (ClickableItemListDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) return;
+
+  Reset (dlg->doc);
+  
+  if (dlg->get_item_text == NULL)
+  {
+    return;
+  }
+
+  ObjectRect (dlg->doc, &r);
+  InsetRect (&r, 4, 4);
+  
+  dlg->col_fmt[0].pixWidth = 5 * stdCharWidth;
+  dlg->col_fmt[1].pixWidth = (r.right - r.left - dlg->col_fmt[0].pixWidth) / 3;
+  dlg->col_fmt[2].pixWidth = (r.right - r.left - dlg->col_fmt[0].pixWidth) / 3;
+  dlg->col_fmt[3].pixWidth = (r.right - r.left - dlg->col_fmt[0].pixWidth) / 3;
+
+  dlg->item_list = ValNodeFree (dlg->item_list);
+  dlg->item_list = (ValNodePtr) data; 
+ 
+  if (dlg->item_list == NULL)
+  {
+    AppendText (dlg->doc, "No items listed", NULL, NULL, programFont);
+  } else {
+    for (vnp = dlg->item_list; vnp != NULL; vnp = vnp->next) {
+      row_text = dlg->get_item_text (vnp);
+      if (row_text != NULL)
+      {
+        if (vnp->choice == OBJ_SEQFEAT)
+        {
+          AppendText (dlg->doc, row_text, &(dlg->par_fmt), dlg->col_fmt, programFont);
+        }
+        else
+        {
+          AppendText (dlg->doc, row_text, &(dlg->par_fmt), NULL, programFont);
+        }
+        row_text = MemFree (row_text);
+      }
+    }
+  }
+  
+  GetDocParams (dlg->doc, &numItems, NULL);
+  UpdateDocument (dlg->doc, 0, numItems);  
+}
+
+
+static void ClickClickableItemList (DoC d, PoinT pt)
+
+{
+  Int2             item, last_selected, numItems;
+  Int2             row, i;
+  ClickableItemListDlgPtr dlg;
+  ValNodePtr       vnp;
+
+  dlg = GetObjectExtra (d);
+  if (dlg != NULL) {
+    MapDocPoint (d, pt, &item, &row, NULL, NULL);
+    if (item > 0 && row > 0) {  
+      i = 1;
+      vnp = dlg->item_list;
+      while (i < item && vnp != NULL) {
+        i++;
+        vnp = vnp->next;
+      }
+      if (vnp != NULL) {
+        last_selected = dlg->selected;
+        dlg->selected = item;
+        
+        if (item != last_selected)
+        {
+          GetDocParams (d, &numItems, NULL);
+          UpdateDocument (d, 0, numItems);
+        }
+    
+        if (dblClick)
+        {
+          if (dlg->double_click_callback != NULL) {
+            (dlg->double_click_callback) (vnp, dlg->click_callback_data);
+          }
+        } else {
+          if (dlg->single_click_callback != NULL) {
+            (dlg->single_click_callback) (vnp, dlg->click_callback_data);
+          }
+        }          
+      }
+    }
+  }
+}
+
+
+static void DrawClickableItemList (DoC d, RectPtr r, Int2 item, Int2 firstLine)
+
+{
+  ClickableItemListDlgPtr dlg;
+  RecT             rct;
+
+  dlg = (ClickableItemListDlgPtr) GetObjectExtra (d);
+  if (dlg != NULL && r != NULL && item > 0 && firstLine == 0) {
+    rct = *r;
+  
+    /* draw selection */
+    if (item == dlg->selected) {
+      rct = *r;
+      rct.right = rct.left + 4;
+      PaintRect (&rct);
+    }
+  }
+}
+
+
+static void CleanupClickableItemListDlg (GraphiC g, VoidPtr data)
+{
+  ClickableItemListDlgPtr dlg;
+
+  dlg = (ClickableItemListDlgPtr) data;
+  if (dlg != NULL) {
+    dlg->item_list = ValNodeFree (dlg->item_list);
+  } 
+  StdCleanupExtraProc (g, data);
+}
+
+static DialoG 
+ClickableItemListDialog 
+(GrouP h,
+ Int4 width,
+ GetClickableItemText get_item_text,
+ ClickableCallback single_click_callback,
+ ClickableCallback double_click_callback,
+ Pointer click_callback_data)
+{
+  ClickableItemListDlgPtr dlg;
+  GrouP                p;
+  Int4 i;
+
+  dlg = (ClickableItemListDlgPtr) MemNew (sizeof (ClickableItemListDlgData));
+  p = HiddenGroup (h, -1, 0, NULL);
+  SetObjectExtra (p, dlg, CleanupClickableItemListDlg);
+  dlg->dialog = (DialoG) p;
+  dlg->todialog = PointerToClickableItemListDlg;
+
+  dlg->get_item_text = get_item_text;
+  dlg->single_click_callback = single_click_callback;
+  dlg->double_click_callback = double_click_callback;
+  dlg->click_callback_data = click_callback_data;
+  /* initialize paragraph format */
+  dlg->par_fmt.openSpace = FALSE;
+  dlg->par_fmt.keepWithNext = FALSE;
+  dlg->par_fmt.keepTogether = FALSE;
+  dlg->par_fmt.newPage = FALSE;
+  dlg->par_fmt.tabStops = FALSE;
+  dlg->par_fmt.minLines = 0;
+  dlg->par_fmt.minHeight = 0;
+
+  /* initialize column format */
+  for (i = 0; i < 4; i++) {
+    dlg->col_fmt[i].pixWidth = 0;
+    dlg->col_fmt[i].pixInset = 0;
+    dlg->col_fmt[i].charWidth = 10;
+    dlg->col_fmt[i].charInset = 0;
+    dlg->col_fmt[i].font = NULL;
+    dlg->col_fmt[i].just = 'l';
+    dlg->col_fmt[i].wrap = 1;
+    dlg->col_fmt[i].bar = 0;
+    dlg->col_fmt[i].underline = 0;
+    dlg->col_fmt[i].left = 0;
+    dlg->col_fmt[i].last = FALSE;
+  }
+  dlg->col_fmt[0].pixInset = 5;
+  dlg->col_fmt[3].last = TRUE;
+  
+  dlg->doc = DocumentPanel (p, width, stdLineHeight * 20);
+  SetObjectExtra (dlg->doc, dlg, NULL);
+  SetDocAutoAdjust (dlg->doc, FALSE);
+  SetDocProcs (dlg->doc, ClickClickableItemList, NULL, NULL, NULL);
+  SetDocShade (dlg->doc, DrawClickableItemList, NULL, NULL, NULL);
+
+  return (DialoG) p;
+}
+
 typedef struct clickablelist
 {
   DIALOG_MESSAGE_BLOCK
   DoC  doc;
-  DoC  clickable_item_list;
+  DialoG clickable_item_list;
   PrompT title1;
   PrompT title2;
   PrompT help1;
@@ -8255,19 +8638,13 @@ typedef struct clickablelist
   Int2            text_select_row_anchor;
   Int2            text_select_char_anchor;
 
+  Boolean         display_chosen;
 } ClickableListData, PNTR ClickableListPtr;
 
 
 static Nlm_ParData clickableParFmt = {FALSE, FALSE, FALSE, FALSE, FALSE, 0, 0};
 static Nlm_ColData clickableColFmt[2] = {{16, 0, 0, 0, NULL, 'l', 0,0,0,0, FALSE},
                                     {1000, 0, 0, 0, NULL, 'l', 1,0,0,0, TRUE}};
-
-static Nlm_ParData clickableItemParFmt = {FALSE, FALSE, FALSE, FALSE, FALSE, 0, 0};
-static Nlm_ColData clickableItemColFmt [4] = {{0, 5, 10, 0, NULL, 'l', 1,0,0,0, FALSE},
-                                         {0, 0, 10, 0, NULL, 'l', 1,0,0,0, FALSE},
-                                         {0, 0, 10, 0, NULL, 'l', 1,0,0,0, FALSE},
-                                         {0, 0, 10, 0, NULL, 'l', 1,0,0,0, TRUE}};
-
 
 
 static Nlm_ColPtr PNTR FreeColumnFormatArrays (Nlm_ColPtr PNTR col_fmt_array_array, Int4 num_levels)
@@ -8538,6 +8915,37 @@ static Int2 GetTextSelectCharOffset (PoinT pt, ClickableListPtr dlg, Int2 item, 
 }
 
 
+static void ValNodeLinkCopy (ValNodePtr PNTR list1, ValNodePtr list2)
+{
+  if (list1 == NULL) return;
+  while (list2 != NULL)
+  {
+    ValNodeAddPointer (list1, list2->choice, list2->data.ptrvalue);
+    list2 = list2->next;
+  }
+}
+
+
+static ValNodePtr GetChosenItemsList (ValNodePtr clickable_list)
+{
+  ValNodePtr item_list = NULL;
+  ClickableItemPtr cip;
+
+  while (clickable_list != NULL) {
+    cip = (ClickableItemPtr) clickable_list->data.ptrvalue;
+    if (cip != NULL) {
+      if (cip->chosen) {
+        ValNodeLinkCopy (&item_list, cip->item_list);
+      } else {
+        ValNodeLink (&item_list, GetChosenItemsList (cip->subcategories));
+      }
+    }
+    clickable_list = clickable_list->next;
+  }
+  return item_list;
+}
+
+
 static void ClickList (DoC d, PoinT pt)
 
 {
@@ -8573,6 +8981,10 @@ static void ClickList (DoC d, PoinT pt)
           cip->chosen = !cip->chosen;
           GetDocParams (d, &numItems, NULL);
           UpdateDocument (d, 0, numItems);
+          if (dlg->display_chosen) 
+          {
+            PointerToDialog (dlg->clickable_item_list, GetChosenItemsList (dlg->list_list));
+          }
         }
         else if (col == cip->level + 2)
         {
@@ -8720,59 +9132,19 @@ static void ActOnClickableList (ValNodePtr list_list, Int2 item)
 }
 
 
-static void PopulateClickableItemList (DoC doc, ClickableItemPtr cip, GetClickableItemText get_item_text)
+static void PopulateClickableItemList (DialoG d, ClickableItemPtr cip)
 {
-  ValNodePtr        vnp;
-  Int2              numItems;
-  CharPtr           row_text;
-  RecT              r;
+  ValNodePtr        list = NULL;
   
-  if (doc == NULL || get_item_text == NULL)
+  if (d == NULL) return;
+  if (cip != NULL)
   {
-    return;
+    ValNodeLinkCopy (&list, cip->item_list);
   }
-  Reset (doc);
-  
-  if (cip == NULL)
-  {
-    return;
-  }
-  
-  if (cip->item_list == NULL)
-  {
-    AppendText (doc, "No items listed", NULL, NULL, programFont);
-  }
-  
-  ObjectRect (doc, &r);
-  InsetRect (&r, 4, 4);
-  
-  clickableItemColFmt[0].pixWidth = 5 * stdCharWidth;
-  clickableItemColFmt[1].pixWidth = (r.right - r.left - clickableItemColFmt[0].pixWidth) / 3;
-  clickableItemColFmt[2].pixWidth = (r.right - r.left - clickableItemColFmt[0].pixWidth) / 3;
-  clickableItemColFmt[3].pixWidth = (r.right - r.left - clickableItemColFmt[0].pixWidth) / 3;
-  
-  vnp = cip->item_list;
-  
-  while (vnp != NULL)
-  {
-    row_text = get_item_text (vnp);
-    if (row_text != NULL)
-    {
-      if (vnp->choice == OBJ_SEQFEAT)
-      {
-        AppendText (doc, row_text, &clickableItemParFmt, clickableItemColFmt, programFont);
-      }
-      else
-      {
-        AppendText (doc, row_text, &clickableItemParFmt, NULL, programFont);
-      }
-      row_text = MemFree (row_text);
-    }
-    vnp = vnp->next;
-  }
-  GetDocParams (doc, &numItems, NULL);
-  UpdateDocument (doc, 0, numItems);  
+  PointerToDialog (d, list);
+
 }
+
 
 static void ReleaseClickableList (DoC d, PoinT pt)
 
@@ -8819,11 +9191,11 @@ static void ReleaseClickableList (DoC d, PoinT pt)
     else if (dlg->selected > 0)
     {
       dlg->item_selected = 0;
-      PopulateClickableItemList (dlg->clickable_item_list, 
-                                 GetSelectedClickableList (dlg->list_list,
-                                                           dlg->selected),
-                                 dlg->get_item_text);
-      
+      if (!dlg->display_chosen) {
+        PopulateClickableItemList (dlg->clickable_item_list, 
+                                  GetSelectedClickableList (dlg->list_list,
+                                                            dlg->selected));
+      }
     }
   }
 }
@@ -9035,12 +9407,15 @@ static void ClickableListToDialog (DialoG d, Pointer userdata)
   if (dlg->list_list != NULL) {
     dlg->selected = 1;
     dlg->item_selected = 0;
-    PopulateClickableItemList (dlg->clickable_item_list, 
-                               GetSelectedClickableList (dlg->list_list,
-                                                         dlg->selected),
-                               dlg->get_item_text);
+    if (dlg->display_chosen)  {
+      PointerToDialog (dlg->clickable_item_list, GetChosenItemsList (dlg->list_list));
+    } else {
+      PopulateClickableItemList (dlg->clickable_item_list, 
+                                GetSelectedClickableList (dlg->list_list,
+                                                          dlg->selected));
+    }
   } else {
-    Reset (dlg->clickable_item_list);
+    PointerToDialog (dlg->clickable_item_list, NULL);
   }
 }
 
@@ -9171,7 +9546,7 @@ static void ClickableListOnKey (SlatE s, Char ch)
 
 
 extern DialoG 
-CreateClickableListDialogEx 
+CreateClickableListDialogExEx 
 (GrouP h, 
  CharPtr label1, 
  CharPtr label2,
@@ -9184,7 +9559,8 @@ CreateClickableListDialogEx
  Int4            left_width,
  Int4            right_width,
  Boolean         horizontal,
- Boolean         show_find)
+ Boolean         show_find,
+ Boolean         display_chosen)
 {
   GrouP p, pnl_grp, find_grp = NULL;
   ClickableListPtr dlg;
@@ -9211,6 +9587,8 @@ CreateClickableListDialogEx
   dlg->item_click_callback_data = item_click_callback_data;
   
   dlg->get_item_text = get_item_text;
+
+  dlg->display_chosen = display_chosen;
   
   if (horizontal) {
     pnl_grp = HiddenGroup (p, 2, 0, NULL);
@@ -9220,7 +9598,11 @@ CreateClickableListDialogEx
       dlg->title2 = StaticPrompt (pnl_grp, label2, right_width, popupMenuHeight, programFont, 'c');
     }
     dlg->doc = DocumentPanel (pnl_grp, left_width, stdLineHeight * 20);
-    dlg->clickable_item_list = DocumentPanel (pnl_grp, right_width, stdLineHeight * 20);
+    dlg->clickable_item_list = ClickableItemListDialog (pnl_grp, right_width, 
+                                                        get_item_text,
+                                                        item_single_click_callback,
+                                                        item_double_click_callback, 
+                                                        item_click_callback_data);
     if (help1 || help2) {
       dlg->help1 = StaticPrompt (pnl_grp, help1, left_width, popupMenuHeight, programFont, 'c');
       dlg->help2 = StaticPrompt (pnl_grp, help2, right_width, popupMenuHeight, programFont, 'c');
@@ -9233,7 +9615,11 @@ CreateClickableListDialogEx
       dlg->help1 = StaticPrompt (pnl_grp, help1, left_width, popupMenuHeight, programFont, 'c');
     }
     dlg->title2 = StaticPrompt (pnl_grp, label2, right_width, popupMenuHeight, programFont, 'c');
-    dlg->clickable_item_list = DocumentPanel (pnl_grp, right_width, stdLineHeight * 20);
+    dlg->clickable_item_list = ClickableItemListDialog (pnl_grp, right_width, 
+                                                        get_item_text,
+                                                        item_single_click_callback,
+                                                        item_double_click_callback, 
+                                                        item_click_callback_data);
     if (help1 || help2) {
       dlg->help2 = StaticPrompt (pnl_grp, help2, right_width, popupMenuHeight, programFont, 'c');
     }
@@ -9247,11 +9633,6 @@ CreateClickableListDialogEx
   SetDocShade (dlg->doc, DrawClickableList, NULL, NULL, NULL);
   
   SetSlateChar ((SlatE) dlg->doc, ClickableListOnKey);
-
-  SetObjectExtra (dlg->clickable_item_list, dlg, NULL);
-  SetDocAutoAdjust (dlg->clickable_item_list, FALSE);
-  SetDocProcs (dlg->clickable_item_list, ClickClickableListItem, NULL, NULL, NULL);
-  SetDocShade (dlg->clickable_item_list, DrawClickableListItem, NULL, NULL, NULL);
   
   /* adjust column width for discrepancy list */
   ObjectRect (dlg->doc, &r);
@@ -9273,6 +9654,35 @@ CreateClickableListDialogEx
   return (DialoG) p;
 }
 
+
+extern DialoG 
+CreateClickableListDialogEx 
+(GrouP h, 
+ CharPtr label1, 
+ CharPtr label2,
+ CharPtr help1,
+ CharPtr help2,
+ ClickableCallback item_single_click_callback,
+ ClickableCallback item_double_click_callback,
+ Pointer         item_click_callback_data,
+ GetClickableItemText get_item_text,
+ Int4            left_width,
+ Int4            right_width,
+ Boolean         horizontal,
+ Boolean         show_find)
+{
+  return CreateClickableListDialogExEx (h, label1, label2, help1, help2, 
+                                        item_single_click_callback, item_double_click_callback,
+                                        item_click_callback_data,
+                                        get_item_text,
+                                        left_width,
+                                        right_width,
+                                        horizontal,
+                                        show_find,
+                                        FALSE);
+}
+
+
 extern void SetClickableListDialogTitles (DialoG d, CharPtr title1, CharPtr title2, CharPtr help1, CharPtr help2)
 {
   ClickableListPtr dlg;
@@ -9287,6 +9697,26 @@ extern void SetClickableListDialogTitles (DialoG d, CharPtr title1, CharPtr titl
   SafeSetTitle (dlg->help1, help1);
   SafeSetTitle (dlg->help2, help2);
 }
+
+
+extern void SetClickableListDisplayChosen (DialoG d, Boolean set)
+{
+  ClickableListPtr dlg;
+
+  dlg = (ClickableListPtr) GetObjectExtra (d);
+  if (dlg == NULL)
+  {
+    return;
+  }
+  dlg->display_chosen = set;
+  if (dlg->display_chosen)  {
+    PointerToDialog (dlg->clickable_item_list, GetChosenItemsList (dlg->list_list));
+  } else {
+    PopulateClickableItemList (dlg->clickable_item_list, 
+                              GetSelectedClickableList (dlg->list_list,
+                                                        dlg->selected));
+  }
+}  
 
 
 extern DialoG 
@@ -9405,8 +9835,7 @@ extern void ScrollToNextClickableTextDescription (CharPtr txt, DialoG d)
   dlg->item_selected = 0;
   PopulateClickableItemList (dlg->clickable_item_list, 
                              GetSelectedClickableList (dlg->list_list,
-                                                       dlg->selected),
-                                                       dlg->get_item_text);
+                                                       dlg->selected));
  
   GetItemParams4 (dlg->doc, row_offset, &startsAt, &numRows,
                   &numCols, &lineHeight, NULL);
@@ -9458,8 +9887,7 @@ extern void ScrollToPreviousClickableTextDescription (CharPtr txt, DialoG d)
   dlg->item_selected = 0;
   PopulateClickableItemList (dlg->clickable_item_list, 
                              GetSelectedClickableList (dlg->list_list,
-                                                       dlg->selected),
-                                                       dlg->get_item_text);
+                                                       dlg->selected));
  
   GetItemParams4 (dlg->doc, row_offset, &startsAt, &numRows,
                   &numCols, &lineHeight, NULL);
@@ -9851,541 +10279,6 @@ static void ChangeGBQualEditorText (TexT t)
 }
 
 
-/* collection_date has a controlled format.  
- * It is YYYY or Mmm-YYYY or DD-Mmm-YYYY where Mmm = Jan, Feb, Mar, Apr, May, 
- *                                                   Jun, Jul, Aug, Sep, Oct, 
- *                                                   Nov, Dec
- * This function will convert other formats  to this format.
- * For instance, September 12, 2004 should be converted to 12-Sep-2004
- * 12/15/2003 should be converted to 15-Dec-2003.  
- * 
- * If the date supplied is ambiguous (01/03/05), can you allow the indexer to choose which field goes in Mmm and which in DD.
- */
-
-static Int4 ReadNumberFromToken (CharPtr token, Int4 token_len)
-{
-  Int4 val = 0;
-  
-  if (token == NULL || !isdigit (*token))
-  {
-    return val;
-  }
-  while (token_len > 0)
-  {
-    val *= 10;
-    val += *token - '0';
-    token++;
-    token_len--;
-  }
-  
-  return val;
-}
-
-static Int4 GetYearFromNumber(Int4 year)
-{
-	Nlm_DayTime dt;
-
-  if (year < 1000)
-  {
-    GetDayTime (&dt);
-    if (year + 2000 > dt.tm_year + 1901)
-    {
-      year += 1900;
-    }
-    else
-    {
-      year += 2000;
-    }
-  }
-  return year;
-}
-
-static Int4 GetYearFromToken (CharPtr token, Int4 token_len)
-{
-  Int4        year = 0;
-  
-  if (token == NULL || token_len == 0 || token_len > 4)
-  {
-    return 0;
-  }
-  
-  year = GetYearFromNumber(ReadNumberFromToken (token, token_len));
-  
-  return year;
-}
-
-static CharPtr month_abbrevs [12] =
-{
-  "Jan", "Feb", "Mar", "Apr", "May", "Jun", 
-  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
-};
-
-static Int4 days_in_month [12] =
-{
-  31, 29, 31, 30, 31, 30,
-  31, 31, 30, 31, 30, 31
-};
-
-static Int4 GetMonthNumFromAbbrev (CharPtr month_abbrev) 
-{
-  Int4 i;
-
-  for (i = 0; i < 12; i++) {
-    if (StringICmp (month_abbrev, month_abbrevs[i]) == 0) {
-      return i;
-    }
-  }
-  return -1;
-}
-
-static Int4 GetDaysInMonth (CharPtr month)
-{
-  Int4 month_num;
-  
-  for (month_num = 0; month_num < 12; month_num++)
-  {
-    if (StringCmp (month, month_abbrevs [month_num]) == 0)
-    {
-      return days_in_month [month_num];
-    }
-  }
-  return 0;
-}
-
-static CharPtr GetMonthFromToken (CharPtr token, Int4 token_len)
-{
-  Int4    month_num;
-  
-  if (token == NULL || token_len == 0)
-  {
-    return NULL;
-  }
-  
-  if (isdigit (*token)) 
-  {
-    if (token_len > 2)
-    {
-      return NULL;
-    }
-    else
-    {
-      month_num = ReadNumberFromToken (token, token_len);
-      if (month_num == 0 || month_num > 12)
-      {
-        return NULL;
-      }
-      else
-      {
-        return month_abbrevs [month_num - 1];
-      }
-    }
-  }
-  else
-  {
-    for (month_num = 0; month_num < 12; month_num++)
-    {
-      if (StringNICmp (token, month_abbrevs[month_num], 3) == 0)
-      {
-        return month_abbrevs[month_num];
-      }
-    }
-    return NULL;
-  }
-}
-
-static Boolean
-ChooseDayAndYear 
-(Int4    num_1,
- Int4    num_2,
- CharPtr month,
- Boolean year_first,
- Int4Ptr day,
- Int4Ptr year)
-{  
-  if (day == NULL || year == NULL)
-  {
-    return FALSE;
-  }
-  
-  if (num_1 == 0 && num_2 == 0)
-  {
-    return FALSE;
-  }
-  else if (num_1 == 0)
-  {
-    *year = 2000;
-    *day = num_2;
-  }
-  else if (num_2 == 0)
-  {
-    *year = 2000;
-    *day = num_1;
-  }
-  else if (num_1 > GetDaysInMonth (month))
-  {
-    *year = num_1;
-    *day = num_2;
-  }
-  else if (num_2 > GetDaysInMonth (month))
-  {
-    *year = num_2;
-    *day = num_1;
-  }
-  else if (year_first)
-  {
-    *year = num_1;
-    *day = num_2;
-  }
-  else
-  {
-    *year = num_2;
-    *day = num_1;
-  }
-  
-  return TRUE;
-}
-
-static Boolean 
-ChooseMonthAndYear
-(Int4    num_1,
- Int4    num_2,
- Boolean month_first,
- CharPtr PNTR month,
- Int4Ptr year,
- BoolPtr month_ambiguous)
-{
-  if (year == NULL || month == NULL 
-      || (num_1 == 0 && num_2 == 0)
-      || (num_1 > 12 && num_2 > 12)
-      || (num_1 == 0 && num_2 > 12)
-      || (num_2 == 0 && num_1 > 12))
-  {
-    return FALSE;
-  }
-  
-  if (num_1 == 0)
-  {
-    *year = 2000;
-    *month = month_abbrevs[num_2 - 1];
-  }
-  else if (num_2 == 0)
-  {
-    *year = 2000;
-    *month = month_abbrevs[num_1 - 1];
-  }
-  else if (num_1 > 12)
-  {
-    *year = GetYearFromNumber(num_1);
-    *month = month_abbrevs [num_2 - 1];
-  }
-  else if (num_2 > 12)
-  {
-    *year = GetYearFromNumber(num_2);
-    *month = month_abbrevs [num_1 - 1];
-  }
-  else if (month_first)
-  {
-    if (month_ambiguous != NULL) 
-    {
-      *month_ambiguous = TRUE;
-    }
-    *year = GetYearFromNumber(num_2);
-    *month = month_abbrevs [num_1 - 1];
-  }
-  else
-  {
-    if (month_ambiguous != NULL) 
-    {
-      *month_ambiguous = TRUE;
-    }
-    *year = GetYearFromNumber(num_1);
-    *month = month_abbrevs [num_2 - 1];
-  }
-  return TRUE;
-}
-
-
-static Boolean ChooseMonthAndDay 
-(Int4    num_1,
- Int4    num_2,
- Boolean month_first,
- CharPtr PNTR month,
- Int4Ptr day,
- BoolPtr month_ambiguous)
-{
-  if (day == NULL || month == NULL || num_1 == 0 || num_2 == 0
-      || (num_1 > 12 && num_2 > 12))
-  {
-    return FALSE;
-  }
-  
-  if (num_1 > 12)
-  {
-    *day = num_1;
-    *month = month_abbrevs [num_2 - 1];
-  }
-  else if (num_2 > 12)
-  {
-    *day = num_2;
-    *month = month_abbrevs [num_1 - 1];
-  }
-  else if (month_first)
-  {
-    if (month_ambiguous != NULL) 
-    {
-      *month_ambiguous = TRUE;
-    }
-    *day = num_2;
-    *month = month_abbrevs [num_1 - 1];
-  }
-  else
-  {
-    if (month_ambiguous != NULL) 
-    {
-      *month_ambiguous = TRUE;
-    }
-    *day = num_1;
-    *month = month_abbrevs [num_2 - 1];
-  }
-  return TRUE;
-}
-
-extern CharPtr ReformatDateStringEx (CharPtr orig_date, Boolean month_first, BoolPtr month_ambiguous)
-{
-  CharPtr reformatted_date = NULL, cp;
-  Int4    year = 0, day = 0;
-  CharPtr month = NULL;
-  CharPtr token_list[3];
-  Int4    token_lens[3];
-  CharPtr numbers = "0123456789";
-  CharPtr letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
-  Int4    num_tokens = 0;
-  Int4    token_len;
-  Int4    month_token = -1;
-  Boolean is_num;
-  Int4    num_1, num_2, num_3;
-  
-  if (StringHasNoText (orig_date))
-  {
-    return NULL;
-  }
-  
-  /* divide our original date into tokens */
-  /* skip over any leading spaces */
-  cp = orig_date;
-  while (*cp != 0 && num_tokens < 3)
-  {
-    is_num = FALSE;
-    token_len = StringSpn (cp, numbers);  
-    if (token_len == 0)
-    {
-      token_len = StringSpn (cp, letters);
-    }
-    else
-    {
-      is_num = TRUE;
-    }
-    if (token_len == 0)
-    {
-      cp++;
-    }
-    else
-    {
-      if (!is_num)
-      {
-        if (month_token == -1)
-        {
-          month_token = num_tokens;
-        }
-        else
-        {
-          /* already found a month string */
-          return NULL;
-        }
-      }
-      token_list [num_tokens] = cp;
-      token_lens [num_tokens] = token_len;
-      num_tokens ++;
-      cp += token_len;
-    }
-  }
- 
-  if (num_tokens == 0 || *cp != 0)
-  {
-    return NULL;
-  }
-
-  if (num_tokens == 1)
-  {
-    if (month_token == 0)
-    {
-      return NULL;
-    }
-    year = GetYearFromToken (token_list [0], token_lens [0]);
-  }
-  else if (num_tokens == 2)
-  {
-    if (month_token == 0)
-    {
-      month = GetMonthFromToken (token_list [0], token_lens [0]);
-      year = GetYearFromToken (token_list [1], token_lens [1]);
-    }
-    else if (month_token == 1)
-    {
-      month = GetMonthFromToken (token_list [1], token_lens [1]);
-      year = GetYearFromToken (token_list [0], token_lens [0]);
-    }
-    else
-    {
-      num_1 = ReadNumberFromToken (token_list [0], token_lens [0]);
-      num_2 = ReadNumberFromToken (token_list [1], token_lens [1]);
-      if (! ChooseMonthAndYear (num_1, num_2, month_first, &month, &year, month_ambiguous))
-      {
-        return NULL;
-      }
-    }
-  }
-  else if (num_tokens == 3)
-  {
-    if (month_token == 0)
-    {
-      month = GetMonthFromToken (token_list [0], token_lens [0]);
-      num_1 = ReadNumberFromToken (token_list [1], token_lens [1]);
-      num_2 = ReadNumberFromToken (token_list [2], token_lens [2]);
-      if (!ChooseDayAndYear (num_1, num_2, month, FALSE, &day, &year))
-      {
-        return NULL;
-      }
-    }
-    else if (month_token == 1)
-    {
-      month = GetMonthFromToken (token_list [1], token_lens [1]);
-      num_1 = ReadNumberFromToken (token_list [0], token_lens [0]);
-      num_2 = ReadNumberFromToken (token_list [2], token_lens [2]);
-      if (!ChooseDayAndYear (num_1, num_2, month, FALSE, &day, &year))
-      {
-        return NULL;
-      }
-    }
-    else if (month_token == 2)
-    {
-      month = GetMonthFromToken (token_list [2], token_lens [2]);
-      num_1 = ReadNumberFromToken (token_list [0], token_lens [0]);
-      num_2 = ReadNumberFromToken (token_list [1], token_lens [1]);
-      if (!ChooseDayAndYear (num_1, num_2, month, FALSE, &day, &year))
-      {
-        return NULL;
-      }
-    }
-    else
-    {
-      num_1 = ReadNumberFromToken (token_list [0], token_lens [0]);
-      num_2 = ReadNumberFromToken (token_list [1], token_lens [1]);
-      num_3 = ReadNumberFromToken (token_list [2], token_lens [2]);
-      
-      if (num_1 > 31 || num_1 == 0)
-      {
-        year = num_1;
-        if (! ChooseMonthAndDay (num_2, num_3, month_first, &month, &day, month_ambiguous))
-        {
-          return NULL;
-        }
-      }
-      else if (num_2 > 31 || num_2 == 0)
-      {
-        year = num_2;
-        if (! ChooseMonthAndDay (num_1, num_3, month_first, &month, &day, month_ambiguous))
-        {
-          return NULL;
-        }
-      }
-      else if (num_3 > 31 || num_3 == 0)
-      {
-        year = num_3;
-        if (! ChooseMonthAndDay (num_1, num_2, month_first, &month, &day, month_ambiguous))
-        {
-          return NULL;
-        }
-      }
-      else if (num_1 > 0 && num_1 < 13 && num_2 > days_in_month [num_1] && num_3 <= days_in_month [num_1])
-      {
-        month = month_abbrevs [num_1 - 1];
-        year = num_2;
-        day = num_3;
-      }
-      else if (num_1 > 0 && num_1 < 13 && num_3 > days_in_month [num_1] && num_2 <= days_in_month [num_1])
-      {
-        month = month_abbrevs [num_1 - 1];
-        year = num_3;
-        day = num_2;
-      }
-      else if (num_2 > 0 && num_2 < 13 && num_1 > days_in_month [num_2] && num_3 <= days_in_month [num_1])
-      {
-        month = month_abbrevs [num_2 - 1];
-        year = num_1;
-        day = num_3;
-      }
-      else if (num_2 > 0 && num_2 < 13 && num_3 > days_in_month [num_2] && num_1 <= days_in_month [num_1])
-      {
-        month = month_abbrevs [num_2 - 1];
-        year = num_3;
-        day = num_1;
-      }
-      else if (num_3 > 0 && num_3 < 13 && num_1 > days_in_month [num_3] && num_2 <= days_in_month [num_1])
-      {
-        month = month_abbrevs [num_3 - 1];
-        year = num_1;
-        day = num_2;
-      }
-      else if (num_3 > 0 && num_3 < 13 && num_2 > days_in_month [num_3] && num_1 <= days_in_month [num_1])
-      {
-        month = month_abbrevs [num_3 - 1];
-        year = num_2;
-        day = num_1;
-      }
-      else
-      {
-        year = num_3;
-        if (! ChooseMonthAndDay (num_1, num_2, month_first, &month, &day, month_ambiguous))
-        {
-          year = num_1;
-          if (!ChooseMonthAndDay (num_2, num_3, month_first, &month, &day, month_ambiguous))
-          {
-            return NULL;
-          }
-        }
-      }
-                
-    }
-    year = GetYearFromNumber(year);
-  }
-  
-  if (month == NULL && day > 0)
-  {
-    return NULL;
-  }
-  
-  reformatted_date = (CharPtr) MemNew (sizeof (Char) * 12);
-  if (reformatted_date == NULL)
-  {
-    return NULL;
-  }
-   
-  if (month == NULL)
-  {
-    sprintf (reformatted_date, "%d", year);
-  }
-  else if (day == 0)
-  {
-    sprintf (reformatted_date, "%s-%d", month, year);
-  }
-  else
-  {
-    sprintf (reformatted_date, "%02d-%s-%d", day, month, year);
-  }
-  return reformatted_date;
-}
-
 typedef struct collectiondatedlg {
   DIALOG_MESSAGE_BLOCK
   TaglistCallback tlp_callback; 
@@ -10488,9 +10381,9 @@ static Pointer CollectionDateDialogToPointer (DialoG d)
       } else {
         day = GetValue (dlg->day);
         if (day < 2) {
-          sprintf (date_str, mon_year_fmt, month_abbrevs[month - 2], year);
+          sprintf (date_str, mon_year_fmt, GetMonthAbbrev (month - 1), year);
         } else {
-          sprintf (date_str, day_mon_year_fmt, day - 1, month_abbrevs[month - 2], year);
+          sprintf (date_str, day_mon_year_fmt, day - 1, GetMonthAbbrev (month - 1), year);
         }
       }
     }
@@ -10508,7 +10401,7 @@ static void PopulateDayPopup (PopuP p, Int4 month)
   PopupItem (p, "");
 
   if (month > 1) {
-    for (i = 1; i <= days_in_month [month - 2]; i++) {
+    for (i = 1; i <= GetDaysInMonth(month - 1); i++) {
       sprintf (day, "%d", i);
       PopupItem (p, day);
     }
@@ -10521,7 +10414,7 @@ static void PopulateMonthPopup (PopuP p)
 
   PopupItem (p, "");
   for (i = 0; i < 12; i++) {
-    PopupItem (p, month_abbrevs[i]);
+    PopupItem (p, GetMonthAbbrev(i + 1));
   }
 }
 
@@ -10770,13 +10663,170 @@ static Boolean ParseRptUnitRangeOk (CharPtr txt)
 }
 
 
-typedef struct mobileelementdlg {
+typedef struct controlplusfreedlg {
   DIALOG_MESSAGE_BLOCK
   TaglistCallback tlp_callback; 
   Pointer callback_data;
   PopuP element_type;
   TexT  description;
-} MobileElementDlgData, PNTR MobileElementDlgPtr;
+
+  CharPtr PNTR control_words;
+} ControlPlusFreeDlgData, PNTR ControlPlusFreeDlgPtr;
+
+
+static Int2 GetControlNum (CharPtr txt, CharPtr PNTR control_words, CharPtr PNTR desc_start)
+{
+  CharPtr cp;
+  Int2    i;
+  Int4    keyword_len;
+
+  if (desc_start != NULL) {
+    *desc_start = NULL;
+  }
+  if (StringHasNoText (txt) || control_words == NULL) {
+    return 0;
+  }
+  /* skip over any leading spaces */
+  while (isspace (*txt)) {
+    txt++;
+  }
+  cp = StringChr (txt, ':');
+  if (cp == NULL) {
+    for (i = 1; control_words[i] != NULL; i++) {
+      if (StringICmp (txt, control_words[i]) == 0) {
+        return i;
+      }
+    }
+    return -1;
+  } else {
+    keyword_len = cp - txt;
+    while (keyword_len > 0 && isspace (txt[keyword_len - 1])) {
+      keyword_len--;
+    }
+    if (keyword_len == 0) {
+      return 0;
+    }
+    for (i = 1; control_words[i] != NULL; i++) {
+      if (StringNICmp (txt, control_words[i], keyword_len) == 0) {
+        if (desc_start != NULL && !StringHasNoText (cp + 1)) {
+          *desc_start = cp + 1;
+          while (isspace(**desc_start)) {
+            (*desc_start)++;
+          }
+        }
+        return i;
+      }
+    }
+  }
+  return -1;
+}
+
+static void ChangeControlPlusFreeType (PopuP p)
+{
+  ControlPlusFreeDlgPtr dlg;
+
+  dlg = (ControlPlusFreeDlgPtr) GetObjectExtra (p);
+  if (dlg == NULL) return;
+
+  if (GetValue (dlg->element_type) <= 1) {
+    Disable (dlg->description);
+  } else {
+    Enable (dlg->description);
+  }
+  ChangeGBQualEditorPopup (p);
+}
+
+static void StringToControlPlusFreeDialog (DialoG d, Pointer data)
+{
+  ControlPlusFreeDlgPtr dlg;
+  CharPtr             val;
+  CharPtr             desc_start = NULL;
+  Int2                num;
+
+  dlg = (ControlPlusFreeDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) return;
+
+  val = (CharPtr) data;
+
+  num = GetControlNum (val, dlg->control_words, &desc_start);
+
+  if (num >= 0) {
+    SetValue (dlg->element_type, num + 1);
+    SetTitle (dlg->description, desc_start == NULL ? "" : desc_start);
+  }
+}
+
+static Pointer ControlPlusFreeDialogToString (DialoG d)
+{
+  ControlPlusFreeDlgPtr dlg;
+  CharPtr             val = NULL;
+  CharPtr             desc_start = NULL;
+  Int2                num;
+
+  dlg = (ControlPlusFreeDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) return NULL;
+
+  num = GetValue (dlg->element_type);
+
+  if (num >= 1) {
+    desc_start = SaveStringFromText (dlg->description);
+    if (StringHasNoText (desc_start)) {
+      val = StringSave (dlg->control_words[num - 1]);
+    } else {
+      val = (CharPtr) MemNew (sizeof (Char) * (StringLen (dlg->control_words[num - 1]) + StringLen (desc_start) + 2));
+      sprintf (val, "%s:%s", dlg->control_words[num - 1], desc_start);
+    }
+  }
+  return (Pointer) val;
+}
+
+
+static DialoG CreateControlPlusFreeDialog (GrouP h, SeqEntryPtr sep, CharPtr name,
+                                           TaglistCallback tlp_callback,
+                                           Pointer callback_data,
+                                           CharPtr PNTR control_words)
+{
+  ControlPlusFreeDlgPtr dlg;
+  GrouP           p;
+  Int2            i;
+
+  p = HiddenGroup (h, 3, 0, NULL);
+  dlg = (ControlPlusFreeDlgPtr) MemNew (sizeof(ControlPlusFreeDlgData));
+
+  SetObjectExtra (p, dlg, StdCleanupExtraProc);
+  dlg->dialog = (DialoG) p;
+  dlg->todialog = StringToControlPlusFreeDialog;
+  dlg->fromdialog = ControlPlusFreeDialogToString;
+  dlg->testdialog = NULL;
+
+  dlg->tlp_callback = tlp_callback;
+  dlg->callback_data = callback_data;
+
+  dlg->control_words = control_words;
+  dlg->element_type = PopupList (p, TRUE, ChangeControlPlusFreeType);
+  for (i = 0; dlg->control_words[i] != NULL; i++) {
+    PopupItem (dlg->element_type, dlg->control_words[i]);
+  }
+  SetValue (dlg->element_type, 1);
+  SetObjectExtra (dlg->element_type, dlg, NULL);
+
+  dlg->description = DialogText (p, "", 15, ChangeGBQualEditorText);
+  SetObjectExtra (dlg->description, dlg, NULL);
+
+  return (DialoG) p;
+}
+
+static void CopyTextToControlPlusFreeDialog (DialoG d, CharPtr txt)
+{
+  ControlPlusFreeDlgPtr dlg;
+
+  dlg = (ControlPlusFreeDlgPtr) GetObjectExtra (d);
+
+  if (dlg == NULL || StringHasNoText (txt)) return;
+
+  SetTitle (dlg->description, txt);
+}
+
 
 CharPtr mobile_element_keywords[] = 
 { " ",
@@ -10791,165 +10841,48 @@ CharPtr mobile_element_keywords[] =
   "other",
   NULL};
 
-static Int2 GetMobileElementNum (CharPtr txt, CharPtr PNTR desc_start)
-{
-  CharPtr cp;
-  Int2    i;
-  Int4    keyword_len;
 
-  if (desc_start != NULL) {
-    *desc_start = NULL;
-  }
-  if (StringHasNoText (txt)) {
-    return 0;
-  }
-  /* skip over any leading spaces */
-  while (isspace (*txt)) {
-    txt++;
-  }
-  cp = StringChr (txt, ':');
-  if (cp == NULL) {
-    for (i = 1; mobile_element_keywords[i] != NULL; i++) {
-      if (StringICmp (txt, mobile_element_keywords[i]) == 0) {
-        return i;
-      }
-    }
-    return -1;
-  } else {
-    keyword_len = cp - txt;
-    while (keyword_len > 0 && isspace (txt[keyword_len - 1])) {
-      keyword_len--;
-    }
-    if (keyword_len == 0) {
-      return 0;
-    }
-    for (i = 1; mobile_element_keywords[i] != NULL; i++) {
-      if (StringNICmp (txt, mobile_element_keywords[i], keyword_len) == 0) {
-        if (desc_start != NULL && !StringHasNoText (cp + 1)) {
-          *desc_start = cp + 1;
-          while (isspace(**desc_start)) {
-            (*desc_start)++;
-          }
-        }
-        return i;
-      }
-    }
-  }
-  return -1;
+static DialoG CreateMobileElementDialog (GrouP h, SeqEntryPtr sep, CharPtr name,
+                                         TaglistCallback tlp_callback,
+                                         Pointer callback_data)
+{
+  return CreateControlPlusFreeDialog (h, sep, name, tlp_callback, callback_data, mobile_element_keywords);
 }
 
 static Boolean ParseMobileElementOk (CharPtr txt)
 {
 
-  if (GetMobileElementNum(txt, NULL) > -1) {
+  if (GetControlNum (txt, mobile_element_keywords, NULL) > -1) {
     return TRUE;
   } else {
     return FALSE;
   }
 }
 
-static void ChangeMobileElementType (PopuP p)
-{
-  MobileElementDlgPtr dlg;
 
-  dlg = (MobileElementDlgPtr) GetObjectExtra (p);
-  if (dlg == NULL) return;
-
-  if (GetValue (dlg->element_type) <= 1) {
-    Disable (dlg->description);
-  } else {
-    Enable (dlg->description);
-  }
-  ChangeGBQualEditorPopup (p);
-}
-
-static void StringToMobileElementDialog (DialoG d, Pointer data)
-{
-  MobileElementDlgPtr dlg;
-  CharPtr             val;
-  CharPtr             desc_start = NULL;
-  Int2                num;
-
-  dlg = (MobileElementDlgPtr) GetObjectExtra (d);
-  if (dlg == NULL) return;
-
-  val = (CharPtr) data;
-
-  num = GetMobileElementNum (val, &desc_start);
-
-  if (num >= 0) {
-    SetValue (dlg->element_type, num + 1);
-    SetTitle (dlg->description, desc_start == NULL ? "" : desc_start);
-  }
-}
-
-static Pointer MobileElementDialogToString (DialoG d)
-{
-  MobileElementDlgPtr dlg;
-  CharPtr             val = NULL;
-  CharPtr             desc_start = NULL;
-  Int2                num;
-
-  dlg = (MobileElementDlgPtr) GetObjectExtra (d);
-  if (dlg == NULL) return NULL;
-
-  num = GetValue (dlg->element_type);
-
-  if (num >= 1) {
-    desc_start = SaveStringFromText (dlg->description);
-    if (StringHasNoText (desc_start)) {
-      val = StringSave (mobile_element_keywords[num - 1]);
-    } else {
-      val = (CharPtr) MemNew (sizeof (Char) * (StringLen (mobile_element_keywords[num - 1]) + StringLen (desc_start) + 2));
-      sprintf (val, "%s:%s", mobile_element_keywords[num - 1], desc_start);
-    }
-  }
-  return (Pointer) val;
-}
+CharPtr satellite_keywords[] = 
+{ " ",
+  "satellite",
+  "microsatellite",
+  "minisatellite",
+  NULL};
 
 
-static DialoG CreateMobileElementDialog (GrouP h, SeqEntryPtr sep, CharPtr name,
+static DialoG CreateSatelliteDialog (GrouP h, SeqEntryPtr sep, CharPtr name,
                                          TaglistCallback tlp_callback,
                                          Pointer callback_data)
 {
-  MobileElementDlgPtr dlg;
-  GrouP           p;
-  Int2            i;
-
-  p = HiddenGroup (h, 3, 0, NULL);
-  dlg = (MobileElementDlgPtr) MemNew (sizeof(MobileElementDlgData));
-
-  SetObjectExtra (p, dlg, StdCleanupExtraProc);
-  dlg->dialog = (DialoG) p;
-  dlg->todialog = StringToMobileElementDialog;
-  dlg->fromdialog = MobileElementDialogToString;
-  dlg->testdialog = NULL;
-
-  dlg->tlp_callback = tlp_callback;
-  dlg->callback_data = callback_data;
-
-  dlg->element_type = PopupList (p, TRUE, ChangeMobileElementType);
-  for (i = 0; mobile_element_keywords[i] != NULL; i++) {
-    PopupItem (dlg->element_type, mobile_element_keywords[i]);
-  }
-  SetValue (dlg->element_type, 1);
-  SetObjectExtra (dlg->element_type, dlg, NULL);
-
-  dlg->description = DialogText (p, "", 15, ChangeGBQualEditorText);
-  SetObjectExtra (dlg->description, dlg, NULL);
-
-  return (DialoG) p;
+  return CreateControlPlusFreeDialog (h, sep, name, tlp_callback, callback_data, satellite_keywords);
 }
 
-static void CopyTextToMobileElementDialog (DialoG d, CharPtr txt)
+static Boolean ParseSatelliteOk (CharPtr txt)
 {
-  MobileElementDlgPtr dlg;
 
-  dlg = (MobileElementDlgPtr) GetObjectExtra (d);
-
-  if (dlg == NULL || StringHasNoText (txt)) return;
-
-  SetTitle (dlg->description, txt);
+  if (GetControlNum (txt, satellite_keywords, NULL) > -1) {
+    return TRUE;
+  } else {
+    return FALSE;
+  }
 }
 
 
@@ -11453,7 +11386,7 @@ GBQualEditListData gbqual_edit_list[] = {
   {"kinetoplast",          TrueFalseDialog,           ParseTrueFalseOk,      NULL },
   {"macronuclear",         TrueFalseDialog,           ParseTrueFalseOk,      NULL },
   {"mitochondrion",        TrueFalseDialog,           ParseTrueFalseOk,      NULL },
-  {"mobile_element",       CreateMobileElementDialog, ParseMobileElementOk,  CopyTextToMobileElementDialog },
+  {"mobile_element",       CreateMobileElementDialog, ParseMobileElementOk,  CopyTextToControlPlusFreeDialog },
   {"mol_type",             MolTypeQualDialog,         ParseMolTypeOk,        NULL },
   {"organelle",            OrganelleQualDialog,       ParseOrganelleOk,      NULL },
   {"partial",              TrueFalseDialog,           ParseTrueFalseOk,      NULL },
@@ -11462,6 +11395,7 @@ GBQualEditListData gbqual_edit_list[] = {
   {"rearranged",           TrueFalseDialog,           ParseTrueFalseOk,      NULL },
   {"rpt_type",             RptTypeQualDialog,         ParseRptTypeOk,        NULL },
   {"rpt_unit_range",       CreateRptUnitRangeDialog,  ParseRptUnitRangeOk,   NULL } ,
+  {"satellite",            CreateSatelliteDialog,     ParseSatelliteOk,      CopyTextToControlPlusFreeDialog },
   {"virion",               TrueFalseDialog,           ParseTrueFalseOk,      NULL },
   {"focus",                TrueFalseDialog,           ParseTrueFalseOk,      NULL },
   {"transgenic",           TrueFalseDialog,           ParseTrueFalseOk,      NULL },
@@ -12301,6 +12235,1248 @@ NLM_EXTERN Boolean FixSpecialCharactersForObject (Uint2 datatype, Pointer objdat
   find_list = FreeContextList (find_list);
   return rval;
 }
+
+
+
+
+typedef struct featurereplace {
+  SeqFeatPtr sfp;
+  Boolean    chosen;
+  ValNodePtr replace_list;
+} FeatureReplaceData, PNTR FeatureReplacePtr;
+
+
+static FeatureReplacePtr FeatureReplaceNew (SeqFeatPtr sfp)
+{
+  FeatureReplacePtr f;
+
+  f = (FeatureReplacePtr) MemNew (sizeof (FeatureReplaceData));
+  f->sfp = AsnIoMemCopy (sfp, (AsnReadFunc) SeqFeatAsnRead, (AsnWriteFunc) SeqFeatAsnWrite);
+  f->chosen = TRUE;
+  f->replace_list = NULL;
+  return f;
+}
+
+
+static FeatureReplacePtr FeatureReplaceCopy (FeatureReplacePtr orig)
+{
+  FeatureReplacePtr f = NULL;
+  
+
+  if (orig != NULL) {
+    f = FeatureReplaceNew (orig->sfp);
+    f->chosen = orig->chosen;
+    f->replace_list = ValNodeCopyPtr (orig->replace_list);
+  }
+  return f;
+}
+
+
+static FeatureReplacePtr FeatureReplaceFree (FeatureReplacePtr f)
+{
+  if (f != NULL) {
+    f->sfp = SeqFeatFree (f->sfp);
+    f->replace_list = ValNodeFree (f->replace_list);
+    f = MemFree (f);
+  }
+  return f;
+}
+
+
+NLM_EXTERN ValNodePtr FeatureReplaceListFree (ValNodePtr vnp)
+{
+  ValNodePtr vnp_next;
+
+  while (vnp != NULL) {
+    vnp_next = vnp->next;
+    vnp->next = NULL;
+    vnp->data.ptrvalue = FeatureReplaceFree (vnp->data.ptrvalue);
+    vnp = ValNodeFree (vnp);
+    vnp = vnp_next;
+  }
+  return vnp;
+}
+
+
+static ValNodePtr FeatureReplaceListCopy (ValNodePtr orig)
+{
+  ValNodePtr list = NULL;
+
+  while (orig != NULL) {
+    ValNodeAddPointer (&list, orig->choice, FeatureReplaceCopy (orig->data.ptrvalue));
+    orig = orig->next;
+  }
+  return list;
+}
+
+
+NLM_EXTERN ValNodePtr FeatureReplaceListFromSeqAnnot (SeqAnnotPtr sap)
+{
+  SeqFeatPtr sfp;
+  ValNodePtr list = NULL;
+
+  if (sap == NULL || sap->type != 1) {
+    return NULL;
+  }
+
+  sfp = sap->data;
+  while (sfp != NULL) {
+    ValNodeAddPointer (&list, 0, FeatureReplaceNew (sfp));
+    sfp = sfp->next;
+  }
+  return list;
+}
+
+
+static Boolean DoFeaturesAutomatchForUpdate (SeqFeatPtr sfp1, SeqFeatPtr sfp2)
+{
+  GeneRefPtr grp1, grp2;
+  Boolean    rval = FALSE;
+  GBQualPtr  gbq;
+  SeqIdPtr   sip;
+  BioseqPtr  pbsp;
+
+  if (sfp1 == NULL || sfp2 == NULL) {
+    rval = FALSE;
+  } else if (sfp1->data.choice != sfp2->data.choice) {
+    rval = FALSE;
+  } else if (sfp1->data.choice == SEQFEAT_GENE) {
+    grp1 = sfp1->data.value.ptrvalue;
+    grp2 = sfp2->data.value.ptrvalue;
+    if (StringCmp (grp1->locus_tag, grp2->locus_tag) == 0) {
+      rval = TRUE;
+    }
+  } else if (sfp1->data.choice == SEQFEAT_CDREGION) {
+    /* match protein IDs */
+    gbq = sfp1->qual;
+    while (gbq != NULL && StringCmp (gbq->qual, "protein_id") != 0) {
+      gbq = gbq->next;
+    }
+    if (gbq != NULL) {
+      sip = MakeSeqID (gbq->val);
+      /* look for protein ID on comparison feature */
+      pbsp = BioseqFindFromSeqLoc (sfp2->product);
+      if (pbsp != NULL && sip != NULL && SeqIdIn (sip, pbsp->id)) {
+        rval = TRUE;
+      }
+      sip = SeqIdFree (sip);
+    }
+  }
+  return rval;
+}
+
+
+static Boolean EntityIDAlreadyInList (Uint2 entityID, ValNodePtr entityIDList)
+{
+  while (entityIDList != NULL) {
+    if ((Uint2)(entityIDList->data.intvalue) == entityID) {
+      return TRUE;
+    }
+  }
+  return FALSE;
+}
+
+
+NLM_EXTERN void ActOnFeatureReplaceList (ValNodePtr list)
+{
+  ValNodePtr vnp, vnp2;
+  FeatureReplacePtr fr;
+  BioseqPtr         bsp, product_bsp;
+  SeqAnnotPtr       sap;
+  SeqFeatPtr        sfp;
+  ValNodePtr        entityIDList = NULL;
+  SeqEntryPtr       sep;
+  Int2              genCode;
+  OMProcControl     ompc;
+
+  for (vnp = list; vnp != NULL; vnp = vnp->next) {
+    fr = (FeatureReplacePtr) vnp->data.ptrvalue;
+    if (fr != NULL && fr->chosen && fr->sfp != NULL) {
+      bsp = BioseqFindFromSeqLoc (fr->sfp->location);
+      if (bsp != NULL) {
+        sap = SeqAnnotNew ();
+        sap->type = 1;        
+        sap->data = AsnIoMemCopy (fr->sfp, (AsnReadFunc) SeqFeatAsnRead, (AsnWriteFunc) SeqFeatAsnWrite);
+        MemSet ((Pointer) &ompc, 0, sizeof (OMProcControl));
+        ompc.input_entityID = bsp->idx.entityID;
+        ompc.input_itemID = GetItemIDGivenPointer (bsp->idx.entityID, OBJ_BIOSEQ, (Pointer) bsp);
+        ompc.input_itemtype = OBJ_BIOSEQ;
+        ompc.output_itemtype = OBJ_SEQANNOT;
+        ompc.output_data = (Pointer) sap;
+        if (! AttachDataForProc (&ompc, FALSE)) {
+          Message (MSG_POSTERR, "Error attaching SeqAnnot");
+        } else {
+          for (vnp2 = fr->replace_list; vnp2 != NULL; vnp2 = vnp2->next) {
+            sfp = vnp2->data.ptrvalue;
+            if (sfp != NULL) {
+              sfp->idx.deleteme = TRUE;
+              if (sfp->product != NULL) {
+                product_bsp = BioseqFindFromSeqLoc (sfp->product);
+                if (product_bsp != NULL) {
+                  product_bsp->idx.deleteme = TRUE;
+                }
+              }
+            }
+          }
+          if (!EntityIDAlreadyInList (bsp->idx.entityID, entityIDList)) {
+            ValNodeAddInt (&entityIDList, 0, bsp->idx.entityID);
+          }
+          sep = GetBestTopParentForData (bsp->idx.entityID, bsp);
+          genCode = SeqEntryToGeneticCode (sep, NULL, NULL, 0);
+          SetEmptyGeneticCodes (sap, genCode);
+          PromoteXrefs (sap->data, bsp, bsp->idx.entityID);
+        }
+      }
+    }
+  }
+  for (vnp = entityIDList; vnp != NULL; vnp = vnp->next) {
+    DeleteMarkedObjects (vnp->data.intvalue, 0, NULL);
+  }
+}
+
+
+typedef struct featurereplacelistdlg {
+  DIALOG_MESSAGE_BLOCK
+  DoC doc;
+  ValNodePtr list;
+  Int2       selected;
+  Int2       clicked;
+  Boolean    dblClick;
+
+  Nlm_ParData ParFmt;
+  Nlm_ColData NewFeatColFmt[2];
+  Nlm_ColData OldFeatColFmt[2];
+
+  Nlm_ChangeNotifyProc change_notify;
+  Pointer              change_userdata;
+} FeatureReplaceListDlgData, PNTR FeatureReplaceListDlgPtr;
+
+
+static void InitColAndParForFeatureReplaceList (DialoG d)
+{
+  FeatureReplaceListDlgPtr dlg;
+  RecT r;
+  Int4 doc_width;
+
+  dlg = (FeatureReplaceListDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) {
+    return;
+  }
+
+  dlg->ParFmt.openSpace = FALSE;
+  dlg->ParFmt.keepWithNext = FALSE;
+  dlg->ParFmt.keepTogether = FALSE;
+  dlg->ParFmt.newPage = FALSE;
+  dlg->ParFmt.tabStops = FALSE;
+  dlg->ParFmt.minLines = 0;
+  dlg->ParFmt.minHeight = 0;
+
+  ObjectRect (dlg->doc, &r);
+  InsetRect (&r, 4, 4);
+  doc_width = r.right - r.left;
+
+  dlg->NewFeatColFmt[0].pixWidth = 16;
+  dlg->NewFeatColFmt[0].pixInset = 0;
+  dlg->NewFeatColFmt[0].charWidth = 0;
+  dlg->NewFeatColFmt[0].charInset = 0;
+  dlg->NewFeatColFmt[0].font = programFont;
+  dlg->NewFeatColFmt[0].just = 'l';
+  dlg->NewFeatColFmt[0].wrap = 0;
+  dlg->NewFeatColFmt[0].bar = 0;
+  dlg->NewFeatColFmt[0].underline = 0;
+  dlg->NewFeatColFmt[0].left = 0;
+  dlg->NewFeatColFmt[0].last = 0;
+
+  dlg->NewFeatColFmt[1].pixWidth = doc_width - 16;
+  dlg->NewFeatColFmt[1].pixInset = 0;
+  dlg->NewFeatColFmt[1].charWidth = 0;
+  dlg->NewFeatColFmt[1].charInset = 0;
+  dlg->NewFeatColFmt[1].font = programFont;
+  dlg->NewFeatColFmt[1].just = 'l';
+  dlg->NewFeatColFmt[1].wrap = 1;
+  dlg->NewFeatColFmt[1].bar = 0;
+  dlg->NewFeatColFmt[1].underline = 0;
+  dlg->NewFeatColFmt[1].left = 0;
+  dlg->NewFeatColFmt[1].last = 1;
+
+  
+  dlg->OldFeatColFmt[0].pixWidth = 32;
+  dlg->OldFeatColFmt[0].pixInset = 0;
+  dlg->OldFeatColFmt[0].charWidth = 0;
+  dlg->OldFeatColFmt[0].charInset = 0;
+  dlg->OldFeatColFmt[0].font = programFont;
+  dlg->OldFeatColFmt[0].just = 'l';
+  dlg->OldFeatColFmt[0].wrap = 0;
+  dlg->OldFeatColFmt[0].bar = 0;
+  dlg->OldFeatColFmt[0].underline = 0;
+  dlg->OldFeatColFmt[0].left = 0;
+  dlg->OldFeatColFmt[0].last = 0;
+
+  dlg->OldFeatColFmt[1].pixWidth = doc_width - 32;
+  dlg->OldFeatColFmt[1].pixInset = 0;
+  dlg->OldFeatColFmt[1].charWidth = 0;
+  dlg->OldFeatColFmt[1].charInset = 0;
+  dlg->OldFeatColFmt[1].font = programFont;
+  dlg->OldFeatColFmt[1].just = 'l';
+  dlg->OldFeatColFmt[1].wrap = 1;
+  dlg->OldFeatColFmt[1].bar = 0;
+  dlg->OldFeatColFmt[1].underline = 0;
+  dlg->OldFeatColFmt[1].left = 0;
+  dlg->OldFeatColFmt[1].last = 1;
+}
+
+
+/* calculates position of feature replace item and feature within replace item */
+static Int2 GetListPosFromItem (ValNodePtr list, Int2 item, Int2Ptr feature_pos)
+{
+  Int2 num = 1, pos = 1, nextval;
+  FeatureReplacePtr fr;
+  ValNodePtr vnp;
+
+  if (feature_pos != NULL) {
+    *feature_pos = 0;
+  }
+  if (list == NULL || item < 1) {
+    return -1;
+  }
+
+  vnp = list;
+
+  while (num < item && vnp != NULL) {
+    fr = (FeatureReplacePtr) vnp->data.ptrvalue;
+    nextval = num + ValNodeLen (fr->replace_list) + 1;
+    if (nextval < item ) {
+      pos++;
+      num = nextval;
+    } else if (nextval == item) {
+      pos++;
+      if (feature_pos != NULL) {
+        *feature_pos = 0;
+      }
+      return pos;
+    } else {
+      if (feature_pos != NULL) {
+        *feature_pos = nextval - item;
+      }
+      return pos;
+    }
+    vnp = vnp->next;
+  }
+  return pos; 
+}
+
+
+static void DrawFeatureReplaceList (DoC d, RectPtr r, Int2 item, Int2 firstLine)
+
+{
+  FeatureReplaceListDlgPtr dlg;
+  RecT                     rct;
+  FeatureReplacePtr        fr;
+  ValNodePtr               vnp;
+  Int2                     pos, num, feature_pos = 0;
+
+  dlg = (FeatureReplaceListDlgPtr) GetObjectExtra (d);
+  if (dlg != NULL && r != NULL && item > 0 && firstLine == 0) {
+    rct = *r;
+  
+    vnp = dlg->list;
+    pos = GetListPosFromItem (dlg->list, item, &feature_pos);
+    if (pos < 1) {
+      /* do nothing */
+    } else if (feature_pos > 0) {
+      /* do nothing */
+    } else {
+      /* draw box for selecting feature to be imported */
+      num = 1;
+      while (num < pos) {
+        vnp = vnp->next;
+        num++;
+      }
+      if (vnp != NULL && vnp->data.ptrvalue != NULL) {
+        fr = (FeatureReplacePtr) vnp->data.ptrvalue;
+
+        /* draw selection */
+        if (item == dlg->selected) {
+          rct.right = rct.left + 4;
+          PaintRect (&rct);
+        }
+
+        /* draw chosen checkboxes */
+        rct.left += 5;
+        rct.right = rct.left + 10;
+        rct.bottom = rct.top + (rct.right - rct.left);
+        FrameRect (&rct);
+      
+        if (fr->chosen) {
+          MoveTo (rct.left, rct.top);
+          LineTo (rct.right - 1, rct.bottom - 1);
+          MoveTo (rct.left, rct.bottom - 1);
+          LineTo (rct.right - 1, rct.top);
+        }
+      }
+    }
+  }
+}
+
+
+static Boolean HighlightFeatureReplaceTarget (DoC doc, Int2 item, Int2 row, Int2 col)
+{
+  FeatureReplaceListDlgPtr dlg;
+  
+  dlg = (FeatureReplaceListDlgPtr) GetObjectExtra (doc);
+  if (dlg == NULL) return FALSE;
+    
+  if (dlg->selected == item) 
+  {
+    return TRUE;
+  } 
+  else 
+  {
+    return FALSE;
+  }
+}
+
+static CharPtr GetNewItemDescription (SeqFeatPtr sfp)
+{
+  CharPtr location, label, row_text;
+  Char buf[129];
+  
+  if (sfp == NULL) {
+    return StringSave ("Misc Features to Delete");
+  }
+  location = SeqLocPrintUseBestID (sfp->location);
+  label = (CharPtr) FeatDefTypeLabel(sfp);
+
+  FeatDefLabel (sfp, buf, sizeof (buf) - 1, OM_LABEL_CONTENT);
+
+  row_text = (CharPtr) MemNew (sizeof (Char) * 
+                              (StringLen (label) 
+                              + StringLen (buf) 
+                              + StringLen (location) 
+                              + 6));
+  sprintf (row_text, "%s:%s:%s\n", label, buf, location);
+  location = MemFree (location);
+  return row_text;
+}
+
+
+static void AddFeatureReplace (FeatureReplaceListDlgPtr dlg, FeatureReplacePtr fr)
+{
+  CharPtr            desc, item_text, desc_fmt = "\t%s", repl_fmt = "\tReplaces %s";
+  ValNodePtr         vnp;
+
+  if (dlg == NULL || fr == NULL)
+  {
+    return;
+  }
+  desc = GetNewItemDescription (fr->sfp);
+  item_text = (CharPtr) MemNew (sizeof (Char) * (StringLen (desc_fmt) + StringLen (desc)));
+  sprintf (item_text, desc_fmt, desc);
+  desc = MemFree (desc);
+  AppendText (dlg->doc, item_text, &dlg->ParFmt, dlg->NewFeatColFmt, programFont);
+  MemFree (item_text);
+  for (vnp = fr->replace_list; vnp != NULL; vnp = vnp->next) {
+    desc = GetNewItemDescription (vnp->data.ptrvalue);
+    item_text = (CharPtr) MemNew (sizeof (Char) * (StringLen (repl_fmt) + StringLen (desc)));
+    sprintf (item_text, repl_fmt, desc);
+    desc = MemFree (desc);
+    AppendText (dlg->doc, item_text, &dlg->ParFmt, dlg->OldFeatColFmt, programFont);
+    MemFree (item_text);
+  }
+}
+
+
+static void ClickFeatureReplaceList (DoC d, PoinT pt)
+
+{
+  Int2             item, numItems, pos, feature_pos;
+  Int2             row;
+  Int2             col;
+  FeatureReplaceListDlgPtr dlg;
+  Int4             offset;
+  Int2             first_shown;
+  RecT             r;
+  BaR              vbar;
+  Int4             scroll_pos;
+
+  dlg = GetObjectExtra (d);
+  if (dlg != NULL) {
+    MapDocPoint (d, pt, &item, &row, &col, NULL);
+    if (item > 0 && row > 0 && dlg->clicked == item) {
+      dlg->dblClick = dblClick;
+    } else {
+      dlg->dblClick = FALSE;
+    }
+    dlg->clicked = 0;
+    if (item > 0 && row > 0) {
+      dlg->clicked = item;
+    }
+    if (item > 0 && row > 0 && !dblClick)
+    {
+      vbar = GetSlateVScrollBar ((SlatE) dlg->doc);
+      scroll_pos = GetBarValue (vbar);
+
+      pos = GetListPosFromItem (dlg->list, item, &feature_pos);
+      if (pos >= 1 && col == 2 && feature_pos == 0) {
+        dlg->selected = item;
+      }
+      GetDocParams (d, &numItems, NULL);
+      UpdateDocument (d, 0, numItems);
+      GetItemParams4 (dlg->doc, first_shown, &offset, NULL, NULL, NULL, NULL);
+      SetScrlParams4 (dlg->doc, offset);
+      ObjectRect (dlg->doc, &r);
+      InsetRect (&r, -1, -1);
+      InvalRect (&r);    
+      SetBarValue (vbar, scroll_pos);
+      if (dlg->change_notify != NULL) {
+        (dlg->change_notify) (dlg->change_userdata);
+      }
+    }
+  }
+}
+
+
+static void PopulateFeatureReplaceList (FeatureReplaceListDlgPtr dlg, ValNodePtr list)
+{
+  Int2               numItems;
+  
+  if (dlg == NULL || dlg->doc == NULL) 
+  {
+    return;
+  }
+  
+  Reset (dlg->doc);
+  
+  
+  while (list != NULL)
+  {
+    AddFeatureReplace (dlg, list->data.ptrvalue);
+    list = list->next;
+  }
+  GetDocParams (dlg->doc, &numItems, NULL);
+  UpdateDocument (dlg->doc, 0, numItems);
+
+}
+
+
+static void FeatureReplaceListToDialog (DialoG d, Pointer data)
+{
+  FeatureReplaceListDlgPtr dlg;
+
+  dlg = (FeatureReplaceListDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) {
+    return;
+  }
+  dlg->list = FeatureReplaceListFree (dlg->list);
+  dlg->list = FeatureReplaceListCopy((ValNodePtr) data);
+  PopulateFeatureReplaceList (dlg, dlg->list);
+}
+
+
+static Pointer FeatureReplaceListFromDialog (DialoG d)
+{
+  FeatureReplaceListDlgPtr dlg;
+
+  dlg = (FeatureReplaceListDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) {
+    return NULL;
+  }
+  return FeatureReplaceListCopy(dlg->list);
+}
+
+
+static void CleanupFeatureReplaceListDialog (GraphiC g, VoidPtr data)
+
+{
+  FeatureReplaceListDlgPtr dlg;
+
+  dlg = (FeatureReplaceListDlgPtr) data;
+  if (dlg != NULL) {
+    dlg->list = FeatureReplaceListFree (dlg->list);
+  }
+  StdCleanupExtraProc (g, data);
+}
+
+
+NLM_EXTERN DialoG 
+FeatureReplaceListDialog 
+(GrouP h, 
+ Int4 width,
+ Nlm_ChangeNotifyProc change_notify,
+ Pointer change_userdata)
+{
+  FeatureReplaceListDlgPtr dlg;
+  GrouP                    p;
+
+  dlg = (FeatureReplaceListDlgPtr) MemNew (sizeof (FeatureReplaceListDlgData));
+
+  p = HiddenGroup (h, -1, 0, NULL);
+  SetObjectExtra (p, dlg, CleanupFeatureReplaceListDialog);
+
+  dlg->dialog = (DialoG) p;
+  dlg->fromdialog = FeatureReplaceListFromDialog;
+  dlg->todialog = FeatureReplaceListToDialog;
+  dlg->change_notify = change_notify;
+  dlg->change_userdata = change_userdata;
+
+  dlg->doc = DocumentPanel (p, width, stdLineHeight * 20);
+  SetObjectExtra (dlg->doc, dlg, NULL);
+  SetDocAutoAdjust (dlg->doc, FALSE);
+  SetDocProcs (dlg->doc, ClickFeatureReplaceList, NULL, NULL, NULL);
+  SetDocShade (dlg->doc, DrawFeatureReplaceList, NULL, HighlightFeatureReplaceTarget, NULL);
+
+  InitColAndParForFeatureReplaceList (dlg->dialog);
+
+  return (DialoG) p;
+}
+
+
+NLM_EXTERN Boolean AddFeaturesToReplaceList (DialoG d, ValNodePtr feature_list)
+{
+  FeatureReplaceListDlgPtr dlg;
+  Int2                     num, pos;
+  ValNodePtr               vnp = NULL;
+  FeatureReplacePtr        fr;
+  Boolean                  rval = FALSE;
+  BaR                      vbar;
+  Int4                     scroll_pos;
+
+  dlg = (FeatureReplaceListDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL || feature_list == NULL) {
+    return FALSE;
+  }
+
+  vbar = GetSlateVScrollBar ((SlatE) dlg->doc);
+  scroll_pos = GetBarValue (vbar);
+
+  if (dlg->selected >= 1) {
+    pos = GetListPosFromItem (dlg->list, dlg->selected, NULL);
+    num = 1;
+    vnp = dlg->list;
+    while (num < pos && vnp != NULL) {
+      num++;
+      vnp = vnp->next;
+    }
+  }
+  if (vnp != NULL) {
+    fr = (FeatureReplacePtr) vnp->data.ptrvalue;
+    if (fr != NULL) {
+      ValNodeLink (&fr->replace_list, feature_list);
+      PopulateFeatureReplaceList (dlg, dlg->list);
+      rval = TRUE;
+    }
+  }
+  if (!rval) {
+    /* find misc item */
+    vnp = dlg->list;
+    while (vnp != NULL && ((fr = (FeatureReplacePtr) vnp->data.ptrvalue) == NULL
+                           || fr->sfp != NULL)) {
+      vnp = vnp->next;
+    }
+    if (vnp == NULL) {
+      fr = FeatureReplaceNew (NULL);
+      ValNodeAddPointer (&dlg->list, 0, fr);
+    }
+    ValNodeLink (&(fr->replace_list), feature_list);
+    PopulateFeatureReplaceList (dlg, dlg->list);
+    rval = TRUE;
+  }
+
+  SetBarValue (vbar, scroll_pos);
+
+  return rval;
+}
+
+
+NLM_EXTERN SeqFeatPtr GetSelectedNewFeature (DialoG d)
+{
+  FeatureReplaceListDlgPtr dlg;
+  FeatureReplacePtr fr;
+  SeqFeatPtr sfp = NULL;
+  ValNodePtr vnp;
+  Int2       num, pos;
+
+  dlg = (FeatureReplaceListDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) {
+    return NULL;
+  }
+
+  if (dlg->selected >= 1) {
+    pos = GetListPosFromItem (dlg->list, dlg->selected, NULL);
+    num = 1;
+    vnp = dlg->list;
+    while (num < pos && vnp != NULL) {
+      num++;
+      vnp = vnp->next;
+    }
+    if (vnp != NULL) {
+      fr = (FeatureReplacePtr) vnp->data.ptrvalue;
+      if (fr != NULL) {
+        sfp = fr->sfp;
+      }
+    }
+  }
+  return sfp;
+}
+
+
+NLM_EXTERN ValNodePtr RemoveFeaturesFromReplaceList (DialoG d)
+{
+  FeatureReplaceListDlgPtr dlg;
+  Int2                     num;
+  ValNodePtr               vnp, list = NULL, prev = NULL;
+  FeatureReplacePtr        fr;
+  BaR                      vbar;
+  Int4                     scroll_pos;
+
+  dlg = (FeatureReplaceListDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL || dlg->list == NULL || dlg->selected < 1) {
+    return NULL;
+  }
+
+  num = 1;
+  vnp = dlg->list;
+  while (num < dlg->selected && vnp != NULL) {
+    num++;
+    prev = vnp;
+    vnp = vnp->next;
+  }
+  if (vnp != NULL) {
+    fr = (FeatureReplacePtr) vnp->data.ptrvalue;
+    if (fr != NULL) {
+      list = fr->replace_list;
+      fr->replace_list = NULL;
+      /* if we have removed features from a placeholder empty category, remove the category */
+      if (fr->sfp == NULL) {
+        if (prev == NULL) {
+          dlg->list->next = vnp->next;
+        } else {
+          prev->next = vnp->next;
+        }
+        vnp->next = NULL;
+        vnp = FeatureReplaceListFree (vnp);
+      }
+      vbar = GetSlateVScrollBar ((SlatE) dlg->doc);
+      scroll_pos = GetBarValue (vbar);
+
+      PopulateFeatureReplaceList (dlg, dlg->list);
+      SetBarValue (vbar, scroll_pos);
+    }
+  }
+  return list;
+}
+
+
+NLM_EXTERN Boolean AutomatchFeatures (DialoG d, ValNodePtr PNTR existing_features)
+{
+  FeatureReplaceListDlgPtr dlg;
+  ValNodePtr               vnp, vnp_f, vnp_next, list = NULL, prev = NULL;
+  FeatureReplacePtr        fr;
+  Boolean                  found = FALSE;
+
+  dlg = (FeatureReplaceListDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL || dlg->list == NULL || existing_features == NULL || *existing_features == NULL) {
+    return FALSE;
+  }
+
+  for (vnp = dlg->list; vnp != NULL; vnp = vnp->next) {
+    fr = (FeatureReplacePtr) vnp->data.ptrvalue;
+    prev = NULL;
+    for (vnp_f = *existing_features; vnp_f != NULL; vnp_f = vnp_next) {
+      vnp_next = vnp_f->next;
+      if (DoFeaturesAutomatchForUpdate (fr->sfp, vnp_f->data.ptrvalue)) {
+        if (prev == NULL) {
+          *existing_features = vnp_f->next;
+        } else {
+          prev->next = vnp_f->next;
+        }
+        vnp_f->next = NULL;
+        ValNodeLink (&(fr->replace_list), vnp_f);
+        found = TRUE;
+      } else {
+        prev = vnp_f;
+      }
+    }
+  }
+
+  PopulateFeatureReplaceList (dlg, dlg->list);
+
+  return found;
+}
+
+
+
+typedef struct featureselectlistdlg {
+  DIALOG_MESSAGE_BLOCK
+  DoC doc;
+  ValNodePtr list;
+  Int2       selected;
+  Int2       clicked;
+  Boolean    dblClick;
+
+  Nlm_ParData ParFmt;
+  Nlm_ColData ColFmt[2];
+} FeatureSelectListDlgData, PNTR FeatureSelectListDlgPtr;
+
+
+static void ClickFeatureSelectList (DoC d, PoinT pt)
+
+{
+  Int2             item, numItems;
+  Int2             first_shown;
+  Int2             row;
+  Int2             col;
+  Int4             offset;
+  FeatureSelectListDlgPtr dlg;
+  RecT             r;
+  BaR                     vbar;
+  Int4                    scroll_pos;
+  
+
+  dlg = GetObjectExtra (d);
+  if (dlg != NULL) {
+    MapDocPoint (d, pt, &item, &row, &col, NULL);
+    if (item > 0 && row > 0 && dlg->clicked == item) {
+      dlg->dblClick = dblClick;
+    } else {
+      dlg->dblClick = FALSE;
+    }
+    dlg->clicked = 0;
+    if (item > 0 && row > 0) {
+      dlg->clicked = item;
+      dlg->selected = item;
+    }
+    vbar = GetSlateVScrollBar ((SlatE) dlg->doc);
+    scroll_pos = GetBarValue (vbar);
+
+    GetDocParams (d, &numItems, NULL);
+    UpdateDocument (d, 0, numItems);
+    GetItemParams4 (dlg->doc, first_shown, &offset, NULL, NULL, NULL, NULL);
+    SetScrlParams4 (dlg->doc, offset);
+    ObjectRect (dlg->doc, &r);
+    InsetRect (&r, -1, -1);
+    InvalRect (&r);
+    SetBarValue (vbar, scroll_pos);
+  }
+}
+
+
+static Boolean HighlightFeatureSelectTarget (DoC doc, Int2 item, Int2 row, Int2 col)
+{
+  FeatureSelectListDlgPtr dlg;
+  
+  dlg = (FeatureSelectListDlgPtr) GetObjectExtra (doc);
+  if (dlg == NULL) return FALSE;
+    
+  if (dlg->selected == item) 
+  {
+    return TRUE;
+  } 
+  else 
+  {
+    return FALSE;
+  }
+}
+
+
+
+static void PopulateFeatureSelectList (FeatureSelectListDlgPtr dlg, ValNodePtr list)
+{
+  ValNodePtr              vnp;
+  CharPtr                 desc;
+  Int2                    numItems;
+  
+  Reset (dlg->doc);
+  for (vnp = list; vnp != NULL; vnp = vnp->next) {
+    desc = GetNewItemDescription (vnp->data.ptrvalue);
+    AppendText (dlg->doc, desc, &dlg->ParFmt, dlg->ColFmt, programFont);
+    desc = MemFree (desc);
+  }
+
+  GetDocParams (dlg->doc, &numItems, NULL);
+  UpdateDocument (dlg->doc, 0, numItems);   
+}
+
+
+static void FeatureSelectListToDialog (DialoG d, Pointer data)
+{
+  FeatureSelectListDlgPtr dlg;
+
+  dlg = (FeatureSelectListDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) {
+    return;
+  }
+
+  dlg->list = (ValNodePtr) data;
+  PopulateFeatureSelectList (dlg, dlg->list);
+}
+
+
+static Pointer FeatureSelectListFromDialog (DialoG d)
+{
+  FeatureSelectListDlgPtr dlg;
+
+  dlg = (FeatureSelectListDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) {
+    return NULL;
+  }
+
+  return (Pointer) dlg->list;
+}
+
+
+NLM_EXTERN DialoG FeatureSelectListDialog (GrouP h, Int4 width)
+{
+  FeatureSelectListDlgPtr dlg;
+  GrouP                   p;
+  RecT                    r;
+  Int4                    doc_width;
+
+  dlg = (FeatureSelectListDlgPtr) MemNew (sizeof (FeatureSelectListDlgData));
+
+  p = HiddenGroup (h, -1, 0, NULL);
+  SetObjectExtra (p, dlg, StdCleanupExtraProc);
+
+  dlg->dialog = (DialoG) p;
+  dlg->todialog = FeatureSelectListToDialog;
+  dlg->fromdialog = FeatureSelectListFromDialog;
+
+  dlg->doc = DocumentPanel (p, width, stdLineHeight * 20);
+  SetObjectExtra (dlg->doc, dlg, NULL);
+  SetDocAutoAdjust (dlg->doc, FALSE);
+  SetDocShade (dlg->doc, NULL, NULL, HighlightFeatureSelectTarget, NULL);
+  SetDocProcs (dlg->doc, ClickFeatureSelectList, NULL, NULL, NULL);
+
+  dlg->ParFmt.openSpace = FALSE;
+  dlg->ParFmt.keepWithNext = FALSE;
+  dlg->ParFmt.keepTogether = FALSE;
+  dlg->ParFmt.newPage = FALSE;
+  dlg->ParFmt.tabStops = FALSE;
+  dlg->ParFmt.minLines = 0;
+  dlg->ParFmt.minHeight = 0;
+
+  ObjectRect (dlg->doc, &r);
+  InsetRect (&r, 4, 4);
+  doc_width = r.right - r.left;
+
+  dlg->ColFmt[0].pixWidth = doc_width;
+  dlg->ColFmt[0].pixInset = 0;
+  dlg->ColFmt[0].charWidth = 0;
+  dlg->ColFmt[0].charInset = 0;
+  dlg->ColFmt[0].font = programFont;
+  dlg->ColFmt[0].just = 'l';
+  dlg->ColFmt[0].wrap = 0;
+  dlg->ColFmt[0].bar = 0;
+  dlg->ColFmt[0].underline = 0;
+  dlg->ColFmt[0].left = 0;
+  dlg->ColFmt[0].last = 1;
+
+
+  return (DialoG) p;
+}
+
+
+NLM_EXTERN ValNodePtr RemoveSelectedFeaturesFromList (DialoG d)
+{
+  FeatureSelectListDlgPtr dlg;
+  ValNodePtr              vnp, prev = NULL;
+  Int2                    num;
+  BaR                     vbar;
+  Int4                    scroll_pos;
+
+  dlg = (FeatureSelectListDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL || dlg->selected == 0) {
+    return NULL;
+  }
+
+  vbar = GetSlateVScrollBar ((SlatE) dlg->doc);
+  scroll_pos = GetBarValue (vbar);
+
+  num = 1;
+  vnp = dlg->list;
+  while (num < dlg->selected && vnp != NULL) {
+    prev = vnp;
+    vnp = vnp->next;
+    num++;
+  }
+
+  if (vnp != NULL) {
+    if (prev == NULL) {
+      dlg->list = vnp->next;
+    } else {
+      prev->next = vnp->next;
+    }
+    vnp->next = NULL;
+  }
+  PopulateFeatureSelectList (dlg, dlg->list);
+  SetBarValue (vbar, scroll_pos);
+  return vnp;
+}
+
+
+NLM_EXTERN void ScrollToMatchingFeatures (DialoG d, SeqFeatPtr sfp)
+{
+  FeatureSelectListDlgPtr dlg;
+  ValNodePtr              vnp;
+  BaR                     vbar;
+  Int4                    scroll_pos;
+  Int4                    start, stop, startitem;
+  Int4                    range_start = -1, pos;
+  RecT                    r;
+
+  dlg = (FeatureSelectListDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL || sfp == NULL) {
+    return;
+  }
+
+  dlg->selected = 0;
+  start = SeqLocStart (sfp->location);
+  stop = SeqLocStop (sfp->location);
+
+  for (vnp = dlg->list, pos = 0; vnp != NULL; vnp = vnp->next, pos++) {
+    startitem = SeqLocStart (((SeqFeatPtr)vnp->data.ptrvalue)->location);
+    if (startitem >= start && range_start == -1) {
+      range_start = pos;
+    }
+    if (DoFeaturesAutomatchForUpdate (sfp, vnp->data.ptrvalue)) {
+      range_start = pos;
+      dlg->selected = pos + 1;
+      break;
+    }
+    if (startitem > stop) {
+      break;
+    }
+  }
+
+  /* scroll to position */
+  if (range_start > -1) {
+    vbar = GetSlateVScrollBar ((SlatE) dlg->doc);
+    scroll_pos = GetBarMax (vbar);
+    if (scroll_pos > range_start) {
+      scroll_pos = range_start;
+    }
+    SetBarValue (vbar, scroll_pos);
+  }
+  ObjectRect (dlg->doc, &r);
+  InsetRect (&r, -1, -1);
+  InvalRect (&r);
+  Update ();
+
+}
+
+
+typedef struct featsort {
+  SeqFeatPtr sfp;
+  Int4       start;
+  Int4       stop;
+} FeatSortData, PNTR FeatSortPtr;
+
+
+static FeatSortPtr FeatSortNew (SeqFeatPtr sfp)
+{
+  FeatSortPtr f;
+
+  if (sfp == NULL) {
+    return NULL;
+  }
+
+  f = (FeatSortPtr) MemNew (sizeof (FeatSortData));
+  f->sfp = sfp;
+  f->start = SeqLocStart (sfp->location);
+  f->stop = SeqLocStop (sfp->location);
+  return f;
+}
+
+
+static FeatSortPtr FeatSortFree (FeatSortPtr f)
+{
+  if (f != NULL) {
+    f = MemFree (f);
+  }
+  return f;
+}
+
+
+static ValNodePtr FeatSortListFree (ValNodePtr vnp)
+{
+  ValNodePtr vnp_next;
+
+  while (vnp != NULL) {
+    vnp_next = vnp->next;
+    vnp->next = NULL;
+    vnp->data.ptrvalue = FeatSortFree (vnp->data.ptrvalue);
+    vnp = ValNodeFree (vnp);
+    vnp = vnp_next;
+  }
+  return vnp;
+}
+
+
+static ValNodePtr FeatSortListFromSeqAnnot (SeqAnnotPtr sap)
+{
+  ValNodePtr list = NULL, prev = NULL, vnp;
+  SeqFeatPtr sfp;
+  FeatSortPtr f;
+
+  if (sap == NULL || sap->type != 1) {
+    return NULL;
+  }
+
+  for (sfp = sap->data; sfp != NULL; sfp = sfp->next) {
+    f = FeatSortNew (sfp);
+    vnp = ValNodeNew (NULL);
+    vnp->data.ptrvalue = f;
+    if (prev == NULL) {
+      list = vnp;
+    } else {
+      prev->next = vnp;
+    }
+    prev = vnp;
+  }
+  return list;
+}
+
+
+static SeqFeatPtr SeqFeatListFromFeatSortList (ValNodePtr list)
+{
+  SeqFeatPtr first = NULL, last = NULL;
+  FeatSortPtr f;
+
+  while (list != NULL) {
+    f = (FeatSortPtr) list->data.ptrvalue;
+    if (f != NULL) {
+      if (first == NULL) {
+        first = f->sfp;
+      } else {
+        last->next = f->sfp;
+      }
+      last = f->sfp;
+      last->next = NULL;
+    }
+    list = list->next;
+  }
+  return first;
+}
+
+
+static ValNodePtr FeatSortListFromFeatValNodeList (ValNodePtr orig)
+{
+  ValNodePtr list = NULL, prev = NULL, vnp, vnp_orig;
+  FeatSortPtr f;
+  
+  for (vnp_orig = orig; vnp_orig != NULL; vnp_orig = vnp_orig->next) {
+    f = FeatSortNew ((SeqFeatPtr) vnp_orig->data.ptrvalue);
+    vnp = ValNodeNew (NULL);
+    vnp->data.ptrvalue = f;
+    if (prev == NULL) {
+      list = vnp;
+    } else {
+      prev->next = vnp;
+    }
+    prev = vnp;
+  }
+  return list;
+}
+
+
+static ValNodePtr FeatValNodeListFromFeatSortList (ValNodePtr orig)
+{
+  ValNodePtr list = NULL, prev = NULL, vnp, vnp_orig;
+  FeatSortPtr f;
+  
+  for (vnp_orig = orig; vnp_orig != NULL; vnp_orig = vnp_orig->next) {
+    f = (FeatSortPtr) vnp_orig->data.ptrvalue;
+    vnp = ValNodeNew (NULL);
+    vnp->data.ptrvalue = f->sfp;
+    if (prev == NULL) {
+      list = vnp;
+    } else {
+      prev->next = vnp;
+    }
+    prev = vnp;
+  }
+  return list;
+}
+
+static int LIBCALLBACK SortVnpByFeatSort (VoidPtr ptr1, VoidPtr ptr2)
+
+{
+  ValNodePtr  vnp1;
+  ValNodePtr  vnp2;
+  FeatSortPtr f1, f2;
+
+  if (ptr1 != NULL && ptr2 != NULL) {
+    vnp1 = *((ValNodePtr PNTR) ptr1);
+    vnp2 = *((ValNodePtr PNTR) ptr2);
+    if (vnp1 != NULL && vnp2 != NULL) {
+      f1 = (FeatSortPtr) vnp1->data.ptrvalue;
+      f2 = (FeatSortPtr) vnp2->data.ptrvalue;
+      if (f1 != NULL && f2 != NULL) {
+        if (f1->start < f2->start) {
+          return -1;
+        } else if (f1->start > f2->start) {
+          return 1;
+        } else if (f1->stop > f2->stop) {
+          return -1;
+        } else if (f1->stop < f2->stop) {
+          return 1;
+        } else if (f1->sfp->data.choice < f2->sfp->data.choice) {
+          return -1;
+        } else if (f1->sfp->data.choice > f2->sfp->data.choice) {
+          return 1;
+        } else {
+          return 0;
+        }
+      }
+    }
+  }
+  return 0;
+}
+
+
+
+NLM_EXTERN void SortSeqFeatInAnnot (SeqAnnotPtr sap)
+{
+  ValNodePtr list;
+
+  list = FeatSortListFromSeqAnnot (sap);
+  list = ValNodeSort (list, SortVnpByFeatSort);
+  if (list != NULL) {
+    sap->data = SeqFeatListFromFeatSortList (list);
+    list = FeatSortListFree (list);
+  }
+}
+
+
+
+
+NLM_EXTERN void AddFeaturesToList (DialoG d, ValNodePtr features)
+{
+  FeatureSelectListDlgPtr dlg;
+  BaR                     vbar;
+  Int4                    scroll_pos;
+  ValNodePtr              tmp;
+
+  dlg = (FeatureSelectListDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL || features == NULL) {
+    return;
+  }
+
+  ValNodeLink (&dlg->list, features);
+  tmp = FeatSortListFromFeatValNodeList (dlg->list);
+  tmp = ValNodeSort (tmp, SortVnpByFeatSort);
+  dlg->list = ValNodeFree (dlg->list);
+  dlg->list = FeatValNodeListFromFeatSortList (tmp);
+  tmp = FeatSortListFree (tmp);
+
+  vbar = GetSlateVScrollBar ((SlatE) dlg->doc);
+  scroll_pos = GetBarValue (vbar);
+  PopulateFeatureSelectList (dlg, dlg->list);
+  SetBarValue (vbar, scroll_pos);
+}
+
+
+
 
 
 

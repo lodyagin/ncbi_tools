@@ -614,7 +614,7 @@ Pub-set ::= CHOICE {
 
 END
 
---$Revision: 6.2 $
+--$Revision: 6.4 $
 --**********************************************************************
 --
 --  NCBI Sequence location and identifier elements
@@ -638,25 +638,26 @@ IMPORTS Object-id, Int-fuzz, Dbtag, Date FROM NCBI-General
 --*
 
 Seq-id ::= CHOICE {
-    local Object-id ,        -- local use
-    gibbsq INTEGER ,         -- Geninfo backbone seqid
-    gibbmt INTEGER ,         -- Geninfo backbone moltype
-    giim Giimport-id ,       -- Geninfo import id
+    local Object-id ,            -- local use
+    gibbsq INTEGER ,             -- Geninfo backbone seqid
+    gibbmt INTEGER ,             -- Geninfo backbone moltype
+    giim Giimport-id ,           -- Geninfo import id
     genbank Textseq-id ,
     embl Textseq-id ,
     pir Textseq-id ,
     swissprot Textseq-id ,
     patent Patent-seq-id ,
-    other Textseq-id ,       -- catch all
-    general Dbtag ,          -- for other databases
-    gi INTEGER ,             -- GenInfo Integrated Database
-    ddbj Textseq-id ,        -- DDBJ
-    prf Textseq-id ,         -- PRF SEQDB
-    pdb PDB-seq-id ,         -- PDB sequence
-    tpg Textseq-id ,         -- Third Party Annot/Seq Genbank
-    tpe Textseq-id ,         -- Third Party Annot/Seq EMBL
-    tpd Textseq-id ,         -- Third Party Annot/Seq DDBJ
-    gpipe Textseq-id         -- Internal NCBI genome pipeline processing ID
+    other Textseq-id ,           -- for historical reasons, 'other' = 'refseq'
+    general Dbtag ,              -- for other databases
+    gi INTEGER ,                 -- GenInfo Integrated Database
+    ddbj Textseq-id ,            -- DDBJ
+    prf Textseq-id ,             -- PRF SEQDB
+    pdb PDB-seq-id ,             -- PDB sequence
+    tpg Textseq-id ,             -- Third Party Annot/Seq Genbank
+    tpe Textseq-id ,             -- Third Party Annot/Seq EMBL
+    tpd Textseq-id ,             -- Third Party Annot/Seq DDBJ
+    gpipe Textseq-id ,           -- Internal NCBI genome pipeline processing ID
+    named-annot-track Textseq-id -- Internal named annotation tracking ID
 }
 
 
@@ -740,7 +741,7 @@ Seq-loc-equiv ::= SET OF Seq-loc      -- for a set of equivalent locations
 END
     
 
---$Revision: 6.19 $
+--$Revision: 6.20 $
 --**********************************************************************
 --
 --  NCBI Sequence elements
@@ -1136,10 +1137,23 @@ NCBIstdaa ::= OCTET STRING    -- codes 0-25, 1 per byte
 --*** Sequence Annotation *************************************
 --*
 
+-- This is a replica of Textseq-id
+-- This is specific for annotations, and exists to maintain a semantic
+-- difference between IDs assigned to annotations and IDs assigned to
+-- sequences
+Textannot-id ::= SEQUENCE {
+    name	  VisibleString OPTIONAL ,
+    accession VisibleString OPTIONAL ,
+    release   VisibleString OPTIONAL ,
+    version   INTEGER       OPTIONAL
+}
+
 Annot-id ::= CHOICE {
     local Object-id ,
     ncbi INTEGER ,
-    general Dbtag }
+    general Dbtag,
+    other Textannot-id
+}
     
 Annot-descr ::= SET OF Annotdesc
 
@@ -1187,7 +1201,7 @@ Seq-annot ::= SEQUENCE {
 END
 
 
---$Revision: 6.2 $
+--$Revision: 6.3 $
 --**********************************************************************
 --
 --  NCBI Sequence Collections
@@ -1230,8 +1244,10 @@ Bioseq-set ::= SEQUENCE {      -- just a collection
         pop-set (14) ,              -- population study
         phy-set (15) ,              -- phylogenetic study
         eco-set (16) ,              -- ecological sample study
-        gen-prod-set (17) ,         -- genomic products, chrom+mRNa+protein
+        gen-prod-set (17) ,         -- genomic products, chrom+mRNA+protein
         wgs-set (18) ,              -- whole genome shotgun project
+        named-annot (19) ,          -- named annotation set
+        named-annot-prod (20) ,     -- with instantiated mRNA+protein
         other (255) } DEFAULT not-set ,
     release VisibleString OPTIONAL ,
     date Date OPTIONAL ,
@@ -1543,7 +1559,7 @@ PDB-replace ::= SEQUENCE {
 
 END
 
---$Revision: 6.19 $
+--$Revision: 6.26 $
 --**********************************************************************
 --
 --  NCBI Sequence Feature elements
@@ -1601,8 +1617,7 @@ Seq-feat ::= SEQUENCE {
     pseudo BOOLEAN OPTIONAL ,     -- annotated on pseudogene?
     except-text VisibleString OPTIONAL , -- explain if except=TRUE
     ids SET OF Feat-id OPTIONAL ,       -- set of Ids; will replace 'id' field
-    exts SET OF User-object OPTIONAL    -- set of extensions; will replace 'ext' field
-}
+    exts SET OF User-object OPTIONAL }  -- set of extensions; will replace 'ext' field
 
 SeqFeatData ::= CHOICE {
     gene Gene-ref ,
@@ -1764,7 +1779,7 @@ END
 NCBI-RNA DEFINITIONS ::=
 BEGIN
 
-EXPORTS RNA-ref, Trna-ext;
+EXPORTS RNA-ref, Trna-ext, RNA-gen, RNA-qual, RNA-qual-set;
 
 IMPORTS Seq-loc FROM NCBI-Seqloc;
 
@@ -1780,14 +1795,19 @@ RNA-ref ::= SEQUENCE {
         mRNA (2) ,
         tRNA (3) ,
         rRNA (4) ,
-        snRNA (5) ,
-        scRNA (6) ,
-        snoRNA (7) ,
+        snRNA (5) ,              -- will become ncRNA, with RNA-gen.class = snRNA
+        scRNA (6) ,              -- will become ncRNA, with RNA-gen.class = scRNA
+        snoRNA (7) ,             -- will become ncRNA, with RNA-gen.class = snoRNA
+        ncRNA (8) ,              -- non-coding RNA; subsumes snRNA, scRNA, snoRNA
+        tmRNA (9) ,
+        miscRNA (10) ,
         other (255) } ,
-    pseudo BOOLEAN OPTIONAL ,  
+    pseudo BOOLEAN OPTIONAL ,
     ext CHOICE {
         name VisibleString ,        -- for naming "other" type
-        tRNA Trna-ext } OPTIONAL }  -- for tRNAs
+        tRNA Trna-ext ,             -- for tRNAs
+        gen RNA-gen } OPTIONAL      -- generic fields for ncRNA, tmRNA, miscRNA
+    }
 
 Trna-ext ::= SEQUENCE {                 -- tRNA feature extensions
     aa CHOICE {                         -- aa this carries
@@ -1797,6 +1817,19 @@ Trna-ext ::= SEQUENCE {                 -- tRNA feature extensions
         ncbistdaa INTEGER } OPTIONAL ,
     codon SET OF INTEGER OPTIONAL ,     -- codon(s) as in Genetic-code
     anticodon Seq-loc OPTIONAL }        -- location of anticodon
+
+RNA-gen ::= SEQUENCE {
+    class VisibleString OPTIONAL ,      -- for ncRNAs, the class of non-coding RNA:
+                                        -- examples: antisense_RNA, guide_RNA, snRNA
+    product VisibleString OPTIONAL ,
+    quals RNA-qual-set OPTIONAL         -- e.g., tag_peptide qualifier for tmRNAs
+}
+
+RNA-qual ::= SEQUENCE {                 -- Additional data values for RNA-gen,
+    qual VisibleString ,                -- in a tag (qual), value (val) format
+    val VisibleString }
+
+RNA-qual-set ::= SEQUENCE OF RNA-qual
 
 END
 
@@ -1811,7 +1844,7 @@ END
 NCBI-Gene DEFINITIONS ::=
 BEGIN
 
-EXPORTS Gene-ref;
+EXPORTS Gene-ref, Gene-nomenclature;
 
 IMPORTS Dbtag FROM NCBI-General;
 
@@ -1828,7 +1861,20 @@ Gene-ref ::= SEQUENCE {
     pseudo BOOLEAN DEFAULT FALSE ,        -- pseudogene
     db SET OF Dbtag OPTIONAL ,            -- ids in other dbases
     syn SET OF VisibleString OPTIONAL ,   -- synonyms for locus
-    locus-tag VisibleString OPTIONAL }    -- systematic gene name (e.g., MI0001, ORF0069)
+    locus-tag VisibleString OPTIONAL ,    -- systematic gene name (e.g., MI0001, ORF0069)
+    formal-name Gene-nomenclature OPTIONAL
+}
+
+Gene-nomenclature ::= SEQUENCE {
+    status ENUMERATED {
+        unknown (0) ,
+        official (1) ,
+        interim (2) 
+    } ,
+    symbol VisibleString OPTIONAL ,
+    name VisibleString OPTIONAL ,
+    source Dbtag OPTIONAL
+}
 
 END
 
@@ -1999,10 +2045,28 @@ BioSource ::= SEQUENCE {
       mut (3) ,                        -- artificially mutagenized
       artificial (4) ,                 -- artificially engineered
       synthetic (5) ,                  -- purely synthetic
-      other (255) } DEFAULT unknown , 
+      other (255)
+    } DEFAULT unknown , 
     org Org-ref ,
     subtype SEQUENCE OF SubSource OPTIONAL ,
-    is-focus NULL OPTIONAL }   -- to distinguish biological focus
+    is-focus NULL OPTIONAL ,           -- to distinguish biological focus
+    pcr-primers PCRReactionSet OPTIONAL }
+
+PCRReactionSet ::= SET OF PCRReaction
+
+PCRReaction ::= SEQUENCE {
+    forward PCRPrimerSet OPTIONAL ,
+    reverse PCRPrimerSet OPTIONAL }
+
+PCRPrimerSet ::= SET OF PCRPrimer
+
+PCRPrimer ::= SEQUENCE {
+    seq PCRPrimerSeq OPTIONAL ,
+    name PCRPrimerName OPTIONAL }
+
+PCRPrimerSeq ::= VisibleString
+
+PCRPrimerName ::= VisibleString
 
 SubSource ::= SEQUENCE {
     subtype INTEGER {
@@ -2043,6 +2107,9 @@ SubSource ::= SEQUENCE {
         fwd-primer-name (35) ,
         rev-primer-name (36) ,
         metagenomic (37) ,
+        mating-type (38) ,
+        linkage-group (39) ,
+        haplogroup (40) ,
         other (255) } ,
     name VisibleString ,
     attrib VisibleString OPTIONAL }    -- attribution/source of this name
@@ -2392,7 +2459,7 @@ Seq-table ::= SEQUENCE {
 
 
 END
---$Revision: 6.3 $
+--$Revision: 6.4 $
 --**********************************************************************
 --
 --  NCBI Sequence Alignment elements
@@ -2564,8 +2631,8 @@ Spliced-exon ::= SEQUENCE {
     scores Score-set OPTIONAL ,
 
     -- splice sites
-    splice-5-prime Splice-site OPTIONAL,
-    splice-3-prime Splice-site OPTIONAL,
+    acceptor-before-exon Splice-site OPTIONAL,
+    donor-after-exon Splice-site OPTIONAL,
     
     -- flag: is this exon complete or partial?
     partial BOOLEAN OPTIONAL,
@@ -3768,7 +3835,7 @@ TSeqSet ::= SEQUENCE OF TSeq    -- a bunch of them
 
 END
 
---$Id: scoremat.asn,v 1.10 2004/10/12 14:05:52 camacho Exp $
+--$Id: scoremat.asn,v 1.12 2008/04/15 15:55:45 kazimird Exp $
 -- ===========================================================================
 --
 --                            PUBLIC DOMAIN NOTICE
@@ -3797,37 +3864,6 @@ END
 --
 -- File Description:
 --      ASN.1 definitions for scoring matrix
---
--- ===========================================================================
--- $Log: scoremat.asn,v $
--- Revision 1.10  2004/10/12 14:05:52  camacho
--- Reorganization and documentation of score matrix specification.
---
--- Revision 1.9  2004/08/05 17:29:47  camacho
--- Changes to Score-matrix specification:
--- 1. is_protein has a default value of TRUE
--- 2. identifier becomes optional
--- 3. unassigned and other members of freq-Ratios are removed.
---
--- Revision 1.8  2004/07/19 17:34:54  papadopo
--- change weights and position frequencies to type REAL, remove their 
--- associated scaling factors
---
--- Revision 1.7  2004/02/23 15:42:24  camacho
--- 1. Gave default value to Score-matrix::byrow field
--- 2. Updated documentation
---
--- Revision 1.6  2003/08/25 19:03:28  bauer
--- added raw frequencies and weights as optional score-matrix components
---
--- Revision 1.5  2003/06/16 12:19:56  madden
--- Do not use Blast4-ka-block, other changes worked out with structure group
---
--- Revision 1.2  2002/12/03 14:01:45  camacho
--- Data type changes
---
--- Revision 1.1  2002/12/02 22:15:27  camacho
--- Initial revision
 --
 -- ===========================================================================
 
@@ -3947,8 +3983,16 @@ PssmFinalData ::= SEQUENCE {
     -- scaled-up PSSMs, it will ensure that all PSSMs used to build the 
     -- RPS-BLAST database are scaled by the same factor (otherwise, RPS-BLAST 
     -- will silently produce incorrect results).
-    scalingFactor       INTEGER DEFAULT 1
+    scalingFactor       INTEGER DEFAULT 1,
 
+    -- Karlin & Altschul parameter produced during the PSSM's calculation
+    lambdaUngapped      REAL OPTIONAL,
+
+    -- Karlin & Altschul parameter produced during the PSSM's calculation
+	kappaUngapped       REAL OPTIONAL,
+
+    -- Karlin & Altschul parameter produced during the PSSM's calculation
+    hUngapped           REAL OPTIONAL
 }
 
 -- Contains the PSSM's intermediate data used to create the PSSM's scores 
@@ -3965,11 +4009,38 @@ PssmIntermediateData ::= SEQUENCE {
     -- (N.B.: each position's weights should add up to 1.0).
     -- This field corresponds to f_i (f sub i) in equation 2 of 
     -- Nucleic Acids Res. 2001 Jul 15;29(14):2994-3005.
+    -- NOTE: this is needed for diagnostics information only (i.e.:
+    -- -out_ascii_pssm option in psiblast)
     weightedResFreqsPerPos      SEQUENCE OF REAL OPTIONAL,
 
     -- PSSM's frequency ratios
-    freqRatios                  SEQUENCE OF REAL
+    freqRatios                  SEQUENCE OF REAL,
 
+    -- Information content per position of the PSSM
+    -- NOTE: this is needed for diagnostics information only (i.e.:
+    -- -out_ascii_pssm option in psiblast)
+    informationContent          SEQUENCE OF REAL OPTIONAL,
+
+    -- Weights for columns of the PSSM without gaps
+    -- NOTE: this is needed for diagnostics information only (i.e.:
+    -- -out_ascii_pssm option in psiblast)
+    gaplessColumnWeights        SEQUENCE OF REAL OPTIONAL,
+
+    -- Used in sequence weights computation
+    -- NOTE: this is needed for diagnostics information only (i.e.:
+    -- -out_ascii_pssm option in psiblast)
+    sigma                       SEQUENCE OF REAL OPTIONAL,
+
+    -- Length of the aligned regions per position of the query sequence
+    -- NOTE: this is needed for diagnostics information only (i.e.:
+    -- -out_ascii_pssm option in psiblast)
+    intervalSizes               SEQUENCE OF INTEGER OPTIONAL,
+
+    -- Number of matching sequences per position of the PSSM (including the
+    -- query)
+    -- NOTE: this is needed for diagnostics information only (i.e.:
+    -- -out_ascii_pssm option in psiblast)
+    numMatchingSeqs             SEQUENCE OF INTEGER OPTIONAL
 }
 
 -- Position-specific scoring matrix
@@ -4087,7 +4158,7 @@ PssmWithParameters ::= SEQUENCE {
 }
 
 END
---$Revision: 1.13 $
+--$Revision: 1.44 $
 --**********************************************************************
 --
 --  NCBI ASN.1 macro editing language specifications
@@ -4127,9 +4198,16 @@ Seqtype-constraint ::= ENUMERATED {
     nuc (1) ,
     prot (2) }
 
+Partial-constraint ::= ENUMERATED {
+    either (0) ,
+    partial (1) ,
+    complete (2) }
+
 Location-constraint ::= SEQUENCE {
     strand Strand-constraint DEFAULT any ,
-    seq-type Seqtype-constraint DEFAULT any }
+    seq-type Seqtype-constraint DEFAULT any ,
+    partial5 Partial-constraint DEFAULT either ,
+    partial3 Partial-constraint DEFAULT either }
 
 Object-type-constraint ::= ENUMERATED {
     any (0) ,
@@ -4191,51 +4269,49 @@ Feature-type ::= ENUMERATED {
     protein-bind (48) ,
     rbs (49) ,
     repeat-region (50) ,
-    repeat-unit (51) ,
-    rep-origin (52) ,
-    s-region (53) ,
-    satellite (54) ,
-    sig-peptide (55) ,
-    source (56) ,
-    stem-loop (57) ,
-    sts (58) ,
-    tata-signal (59) ,
-    terminator (60) ,
-    transit-peptide (61) ,
-    unsure (62) ,
-    v-region (63) ,
-    v-segment (64) ,
-    variation (65) ,
-    virion (66) ,
-    n3clip (67) ,
-    n3UTR (68) ,
-    n5clip (69) ,
-    n5UTR (70) ,
-    n10-signal (71) ,
-    n35-signal (72) ,
-    site-ref (73) ,
-    region (74) ,
-    comment (75) ,
-    bond (76) ,
-    site (77) ,
-    rsite (78) ,
-    user (79) ,
-    txinit (80) ,
-    num (81) ,
-    psec-str (82) ,
-    non-std-residue (83) ,
-    het (84) ,
-    biosrc (85) ,
-    preprotein (86) ,
-    mat-peptide-aa (87) ,
-    sig-peptide-aa (88) ,
-    transit-peptide-aa (89) ,
-    snoRNA (90) ,
-    gap (91) ,
-    operon (92) ,
-    oriT (93) ,
-    ncRNA (94) ,
-    tmRNA (95) }
+    rep-origin (51) ,
+    s-region (52) ,
+    sig-peptide (53) ,
+    source (54) ,
+    stem-loop (55) ,
+    sts (56) ,
+    tata-signal (57) ,
+    terminator (58) ,
+    transit-peptide (59) ,
+    unsure (60) ,
+    v-region (61) ,
+    v-segment (62) ,
+    variation (63) ,
+    virion (64) ,
+    n3clip (65) ,
+    n3UTR (66) ,
+    n5clip (67) ,
+    n5UTR (68) ,
+    n10-signal (69) ,
+    n35-signal (70) ,
+    site-ref (71) ,
+    region (72) ,
+    comment (73) ,
+    bond (74) ,
+    site (75) ,
+    rsite (76) ,
+    user (77) ,
+    txinit (78) ,
+    num (79) ,
+    psec-str (80) ,
+    non-std-residue (81) ,
+    het (82) ,
+    biosrc (83) ,
+    preprotein (84) ,
+    mat-peptide-aa (85) ,
+    sig-peptide-aa (86) ,
+    transit-peptide-aa (87) ,
+    snoRNA (88) ,
+    gap (89) ,
+    operon (90) ,
+    oriT (91) ,
+    ncRNA (92) ,
+    tmRNA (93) }
 
 Feat-qual-legal ::= ENUMERATED {
     allele (1) ,
@@ -4298,7 +4374,13 @@ Feat-qual-legal ::= ENUMERATED {
     translation (58) ,
     transl-except (59) ,
     transl-table (60) ,
-    usedin (61) }
+    usedin (61),
+    mobile-element-type (62),
+    mobile-element-name (63),
+    gene-comment (64) ,
+    satellite (65) ,
+    satellite-type (66) ,
+    satellite-name (67) }
 
 Feat-qual-legal-val ::= SEQUENCE {
     qual Feat-qual-legal ,
@@ -4325,6 +4407,39 @@ Feature-field-pair ::= SEQUENCE {
     type Feature-type ,
     field-from Feat-qual-choice ,
     field-to Feat-qual-choice }
+
+Rna-feat-type ::= CHOICE {
+    preRNA NULL ,
+    mRNA NULL ,
+    tRNA NULL ,
+    rRNA NULL ,
+    ncRNA VisibleString ,
+    tmRNA NULL,
+    miscRNA NULL }
+
+Rna-field ::= ENUMERATED {
+    product (1) ,
+    comment (2) ,
+    codons-recognized (3) ,
+    ncrna-class (4) ,
+    anticodon (5) ,
+    transcript-id (6) ,
+    gene-locus (7) ,
+    gene-description (8) ,
+    gene-maploc (9) ,
+    gene-locus-tag (10) ,
+    gene-synonym (11) ,
+    gene-comment (12) }
+    
+
+Rna-qual ::= SEQUENCE {
+    type Rna-feat-type ,
+    field Rna-field }    
+
+Rna-qual-pair ::= SEQUENCE {
+    type Rna-feat-type ,
+    field-from Rna-field ,
+    field-to Rna-field }
 
 Source-qual ::= ENUMERATED {
     acronym (1) ,
@@ -4407,7 +4522,22 @@ Source-qual ::= ENUMERATED {
     transgenic (78) ,
     transposon-name (79) ,
     type (80) ,
-    variety (81) }
+    variety (81) ,
+    specimen-voucher-INST (82) ,
+    specimen-voucher-COLL (83) ,
+    specimen-voucher-SpecID (84) ,
+    culture-collection-INST (85) ,
+    culture-collection-COLL (86) ,
+    culture-collection-SpecID (87) ,
+    bio-material-INST (88) ,
+    bio-material-COLL (89) ,
+    bio-material-SpecID (90),
+    all-notes (91),
+    mating-type (92),
+    linkage-group (93) ,
+    haplogroup (94),
+    all-quals (95)
+}
 
 Source-qual-pair ::= SEQUENCE {
     field-from Source-qual ,
@@ -4474,7 +4604,10 @@ CDSGeneProt-field ::= ENUMERATED {
     mat-peptide-description (18) ,
     mat-peptide-ec-number (19) ,
     mat-peptide-activity (20) ,
-    mat-peptide-comment (21) }
+    mat-peptide-comment (21) ,
+    cds-inference (22) ,
+    gene-inference (23) ,
+    codon-start (24) }
 
 CDSGeneProt-field-pair ::= SEQUENCE {
     field-from CDSGeneProt-field ,
@@ -4487,15 +4620,12 @@ Molecule-type ::= ENUMERATED {
   mRNA (3) ,
   rRNA (4) ,
   tRNA (5) ,
-  snRNA (6) ,
-  scRNA (7) ,
-  genomic-mRNA (8) ,
-  cRNA (9) ,
-  snoRNA (10) ,
-  transcribed-RNA (11) ,
-  ncRNA (12) ,
-  transfer-messenger-RNA (13) ,
-  other (14) }
+  genomic-mRNA (6) ,
+  cRNA (7) ,
+  transcribed-RNA (8) ,
+  ncRNA (9) ,
+  transfer-messenger-RNA (10) ,
+  other (11) }
 
 Technique-type ::= ENUMERATED {
   unknown (0) , 
@@ -4597,9 +4727,69 @@ Molinfo-field-pair ::= CHOICE {
     mol-class Molinfo-mol-class-pair ,
     topology Molinfo-topology-pair ,
     strand Molinfo-strand-pair }
-   
-    
+
+Molinfo-field-list ::= SET OF Molinfo-field
+
+-- publication fields --
+
+Publication-field ::=  ENUMERATED {
+    cit (1) ,
+    authors (2) ,
+    journal (3) ,
+    volume (4) ,
+    issue (5) ,
+    pages (6) ,
+    date (7) ,
+    serial-number (8) ,
+    title (9) ,
+    affiliation (10) ,
+    affil-div (11) ,
+    affil-city (12) ,
+    affil-sub (13) ,
+    affil-country (14) ,
+    affil-street (15) ,
+    affil-email (16) ,
+    affil-fax (17) ,
+    affil-phone (18) ,
+    affil-zipcode (19),
+    authors-initials (20)
+    }
+  
+-- structured comment fields --
+
+Structured-comment-field ::= CHOICE {
+  database NULL ,
+  named VisibleString ,
+  field-name NULL
+  }
+
+Structured-comment-field-pair ::= SEQUENCE {
+  from Structured-comment-field ,
+  to Structured-comment-field
+  }
+  
+-- misc fields --
+-- these would not appear in pairs --
+Misc-field ::= ENUMERATED {
+    genome-project-id (1)
+    }
+     
 -- complex constraints --
+
+Pub-type ::= ENUMERATED {
+  any (0) ,
+  published (1) ,
+  unpublished (2) ,
+  in-press (3) ,
+  submitter-block (4) }
+
+Pub-field-constraint ::= SEQUENCE {
+  field Publication-field ,
+  constraint String-constraint }
+  
+Publication-constraint ::= SEQUENCE {
+  type Pub-type ,
+  field Pub-field-constraint OPTIONAL }
 
 Source-constraint ::= SEQUENCE {
   field1 Source-qual-choice OPTIONAL ,
@@ -4626,7 +4816,11 @@ CDSGeneProt-qual-constraint ::= SEQUENCE {
   field1 CDSGeneProt-constraint-field OPTIONAL ,
   field2 CDSGeneProt-constraint-field OPTIONAL ,
   constraint String-constraint OPTIONAL }
-  
+
+Field-constraint ::= SEQUENCE {
+  field Field-type ,
+  string-constraint String-constraint }
+
 Sequence-constraint-rnamol ::= ENUMERATED {
   any (0) ,
   genomic (1) ,
@@ -4634,14 +4828,11 @@ Sequence-constraint-rnamol ::= ENUMERATED {
   mRNA (3) ,
   rRNA (4) ,
   tRNA (5) ,
-  snRNA (6) ,
-  scRNA (7) ,
-  genomic-mRNA (8) ,
-  cRNA (9) ,
-  snoRNA (10) ,
-  transcribed-RNA (11) ,
-  ncRNA (12) ,
-  transfer-messenger-RNA (13) }
+  genomic-mRNA (6) ,
+  cRNA (7) ,
+  transcribed-RNA (8) ,
+  ncRNA (9) ,
+  transfer-messenger-RNA (10) }
 
 Sequence-constraint-mol-type-constraint ::= CHOICE {
   any NULL ,
@@ -4658,10 +4849,12 @@ Sequence-constraint ::= SEQUENCE {
 Constraint-choice ::= CHOICE {
     string String-constraint ,
     location Location-constraint ,
-    source Source-constraint,
+    field  Field-constraint ,
+    source Source-constraint ,
     cdsgeneprot-qual CDSGeneProt-qual-constraint ,
     cdsgeneprot-pseudo CDSGeneProt-pseudo-constraint ,
-    sequence Sequence-constraint }
+    sequence Sequence-constraint ,
+    pub Publication-constraint }
 
 Constraint-choice-set ::= SET OF Constraint-choice
 
@@ -4687,14 +4880,20 @@ Field-edit ::= SEQUENCE {
 Field-type ::= CHOICE {
     source-qual Source-qual-choice ,
     feature-field Feature-field ,
+    rna-field Rna-qual ,
     cds-gene-prot CDSGeneProt-field ,
-    molinfo-field Molinfo-field }
+    molinfo-field Molinfo-field ,
+    pub Publication-field ,
+    struc-comment-field Structured-comment-field ,
+    misc Misc-field }
 
 Field-pair-type ::= CHOICE {
     source-qual Source-qual-pair ,
     feature-field Feature-field-pair ,
+    rna-field Rna-qual-pair ,
     cds-gene-prot CDSGeneProt-field-pair ,
-    molinfo-field Molinfo-field-pair } 
+    molinfo-field Molinfo-field-pair ,
+    struc-comment-field Structured-comment-field-pair } 
 
 ExistingTextOption ::= ENUMERATED {
   replace-old (1) ,
@@ -4706,7 +4905,8 @@ ExistingTextOption ::= ENUMERATED {
   prefix-space (7) ,
   prefix-colon (8) ,
   prefix-none (9) ,
-  leave-old (10) }
+  leave-old (10) ,
+  add-qual (11) }
 
 
 Apply-action ::= SEQUENCE {
@@ -4720,6 +4920,8 @@ Edit-action ::= SEQUENCE {
 
 Convert-action ::= SEQUENCE {
     fields Field-pair-type ,
+    strip-name BOOLEAN DEFAULT FALSE ,
+    keep-original BOOLEAN DEFAULT FALSE ,
     existing-text ExistingTextOption }
 
 Copy-action ::= SEQUENCE {
@@ -4734,6 +4936,8 @@ AECRParse-action ::= SEQUENCE {
     portion Text-portion ,
     fields Field-pair-type ,
     remove-from-parsed BOOLEAN DEFAULT FALSE ,
+    remove-left BOOLEAN DEFAULT FALSE ,
+    remove-right BOOLEAN DEFAULT FALSE ,
     existing-text ExistingTextOption }
 
 Remove-action ::= SEQUENCE {
@@ -4750,6 +4954,7 @@ Action-choice ::= CHOICE {
 
 AECR-action ::= SEQUENCE {
     action Action-choice ,
+    also-change-mrna BOOLEAN DEFAULT FALSE ,
     constraint Constraint-choice-set OPTIONAL }
 
 Cap-change ::= ENUMERATED {
@@ -4825,6 +5030,72 @@ Remove-feature-action ::= SEQUENCE {
     type Feature-type ,
     constraint Constraint-choice-set OPTIONAL }
 
+-- for convert features --
+Convert-from-CDS-options ::= SEQUENCE {
+  remove-mRNA BOOLEAN ,
+  remove-gene BOOLEAN ,
+  remove-transcript-id BOOLEAN }
+
+Convert-feature-src-options ::= CHOICE { 
+  cds Convert-from-CDS-options }
+
+Bond-type ::= ENUMERATED {
+  disulfide (1) ,
+  thioester (2) ,
+  crosslink (3) ,
+  thioether (4) ,
+  other (5) }
+
+
+Site-type ::= ENUMERATED {
+  active (1) ,
+  binding (2) ,
+  cleavage (3) ,
+  inhibit (4) ,
+  modified (5) ,
+  glycosylation (6) ,
+  myristoylation (7) ,
+  mutagenized (8) ,
+  metal-binding (9) ,
+  phosphorylation (10) ,
+  acetylation (11) ,
+  amidation (12) ,
+  methylation (13) ,
+  hydroxylation (14) ,
+  sulfatation (15) ,
+  oxidative-deamination (16) ,
+  pyrrolidone-carboxylic-acid (17) ,
+  gamma-carboxyglutamic-acid (18) ,
+  blocked (19) ,
+  lipid-binding (20) ,
+  np-binding (21) ,
+  dna-binding (22) ,
+  signal-peptide (23) ,
+  transit-peptide (24) ,
+  transmembrane-region (25) ,
+  nitrosylation (26) ,
+  other (27) }
+
+-- other choice is to create protein sequences, skipping bad --
+Region-type ::= SEQUENCE {
+  create-nucleotide BOOLEAN } 
+
+Convert-feature-dst-options ::= CHOICE {
+  bond Bond-type ,
+  site Site-type ,
+  region Region-type ,
+  ncrna-class VisibleString }
+
+
+Convert-feature-action ::= SEQUENCE {
+  type-from Feature-type ,
+  type-to Feature-type ,
+  src-options Convert-feature-src-options OPTIONAL ,
+  dst-options Convert-feature-dst-options OPTIONAL ,
+  leave-original BOOLEAN ,
+  src-feat-constraint Constraint-choice-set OPTIONAL } 
+
+
 Feature-location-strand-from ::= ENUMERATED {
   any (0) ,
   plus (1) ,
@@ -4890,11 +5161,17 @@ Edit-feature-location-action ::= SEQUENCE {
   action Location-edit-type ,
   constraint Constraint-choice-set OPTIONAL }
 
+Molinfo-block ::= SEQUENCE {
+    to-list Molinfo-field-list  ,
+    from-list Molinfo-field-list OPTIONAL ,
+    constraint Constraint-choice-set OPTIONAL }
+
 Macro-action-choice ::= CHOICE {
   aecr AECR-action ,
   parse Parse-action ,
   add-feature Apply-feature-action ,
   remove-feature Remove-feature-action ,
+  convert-feature Convert-feature-action ,
   edit-location Edit-feature-location-action }
 
 

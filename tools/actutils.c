@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: actutils.c,v 6.49 2006/01/04 18:52:34 bollin Exp $";
+static char const rcsid[] = "$Id: actutils.c,v 6.56 2008/10/22 17:19:22 bollin Exp $";
 
 /* ===========================================================================
 *
@@ -30,13 +30,41 @@ static char const rcsid[] = "$Id: actutils.c,v 6.49 2006/01/04 18:52:34 bollin E
 *
 * Version Creation Date:   2/00
 *
-* $Revision: 6.49 $
+* $Revision: 6.56 $
 *
 * File Description: utility functions for alignments
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: actutils.c,v $
+* Revision 6.56  2008/10/22 17:19:22  bollin
+* Bug fix for truncating alignments when removing inconsistent alignments from
+* a set.
+*
+* Revision 6.55  2008/05/31 18:07:15  kans
+* TextFsa uses Int4 states
+*
+* Revision 6.54  2008/05/08 20:10:53  bollin
+* Use Post instead of Message to communicate error for not finding alignment
+* on reverse strand.
+*
+* Revision 6.53  2008/05/06 19:13:42  bollin
+* When cleaning up alignments before converting a list to a global, if one
+* is removed, the next one needs to be compared to the previous alignment,
+* so the index in the loop needs to be reduced.
+*
+* Revision 6.52  2008/05/02 18:47:50  bollin
+* Commented out diagnostic function
+*
+* Revision 6.51  2008/05/02 18:02:39  bollin
+* Fixed bug in ACT_CleanUpAlignments - if an alignment span is completely
+* contained in another alignment, remove the contained alignment.
+* Also added a flag to Sqn_GlobalAlign2SeqEx for whether or not the alignment
+* should be expanded to the ends of the sequence.
+*
+* Revision 6.50  2008/04/16 18:46:22  bollin
+* Corrected bug in functions for creating global alignment from local alignments.
+*
 * Revision 6.49  2006/01/04 18:52:34  bollin
 * changes to ACT_FindPiece to avoid memory leak
 * changes to ACT_RemoveInconsistentAlnsFromSet to avoid global alignments that
@@ -207,7 +235,7 @@ static char const rcsid[] = "$Id: actutils.c,v 6.49 2006/01/04 18:52:34 bollin E
 #include <alignmgr.h>
 #include <salptool.h>
 
-static void StateTableSearch (TextFsaPtr tbl, CharPtr txt, Int2Ptr state, Int4 pos, ACT_sitelistPtr PNTR asp_prev, ACT_sitelistPtr PNTR asp_head);
+static void StateTableSearch (TextFsaPtr tbl, CharPtr txt, Int4Ptr state, Int4 pos, ACT_sitelistPtr PNTR asp_prev, ACT_sitelistPtr PNTR asp_head);
 static Boolean am_isa_gap(Int4 start, Int4 prevstop, Uint1 strand);
 static void am_fix_strand(SeqAlignPtr sap, Uint1 strand1, Uint1 strand2);
 
@@ -452,9 +480,9 @@ NLM_EXTERN ACT_CGInfoPtr ACT_FindCpG(BioseqPtr bsp)
    Uint1            res2;
    Uint1            residue;
    Int4             start;
-   Int2             state;
+   Int4             state;
    Int4             state_r;
-   Int2             state_test;
+   Int4             state_test;
    TextFsaPtr       tbl;
    Int4             x;
    FloatHi          y;
@@ -718,7 +746,7 @@ NLM_EXTERN Uint1 ACT_GetResidue(Int4 pos, Uint1Ptr buf, Int4Ptr offset, BioseqPt
    return (buf[pos-(*offset)]);
 }
 
-static void StateTableSearch (TextFsaPtr tbl, CharPtr txt, Int2Ptr state, Int4 pos, ACT_sitelistPtr PNTR asp_prev, ACT_sitelistPtr PNTR asp_head)
+static void StateTableSearch (TextFsaPtr tbl, CharPtr txt, Int4Ptr state, Int4 pos, ACT_sitelistPtr PNTR asp_prev, ACT_sitelistPtr PNTR asp_head)
 {
    ACT_sitelistPtr  asp;
    Char             ch;
@@ -1463,6 +1491,7 @@ ResolveSpinConflict
    Int4    aln_len;
    Int4    strand;
    Boolean resolved = FALSE;
+   SeqAlignPtr salp_next;
     
    if (spin1 == NULL || spin2 == NULL || salp == NULL)
    {
@@ -1593,7 +1622,12 @@ ResolveSpinConflict
         right_aln_overlap = MAX (right_aln_overlap, AlnMgr2MapBioseqToSeqAlign (salp, spin1_row2_stop, 1));
       }
    }   
-    
+   
+   /* NOTE - we only want to truncate/reindex the current alignment, not any that follow it in the chain.
+    * For one thing, we might have already deleted the ones that come next.
+    */
+   salp_next = salp->next;
+   salp->next = NULL;
    if (left_aln_overlap > 0 && right_aln_overlap == 0)
    {
       if (TruncateAlignment (salp, left_aln_overlap, TRUE))
@@ -1610,8 +1644,102 @@ ResolveSpinConflict
          resolved = TRUE;
       }
    }
+   /* restore chain */
+   salp->next = salp_next;
    
    return resolved;   
+}
+
+
+static Boolean SpinsConflict (SQN_nPtr spin1, SQN_nPtr spin2, Int4 fuzz, Int4 strand)
+{
+  Boolean conflict = FALSE;
+
+  if (spin1 == NULL || spin2 == NULL) return FALSE;
+
+  /* check first for conflict on first row */               
+  /* right of i greater than left of curr */
+  if (spin1->n2 + spin1->n3 - 1 > spin2->n2 + fuzz)
+  {
+    /* left of i less than left of curr */
+    if (spin1->n2 < spin2->n2) {
+        /* i overlaps curr on the left */
+        /* curr:     [-----------) */
+        /* i:    (------]          */
+        conflict = TRUE;
+    }
+  }
+  /* left of i less than right of curr - fuzz */
+  if (spin1->n2 < spin2->n2 + spin2->n3 - 1 - fuzz)
+  {
+    /* right of i greater than right of curr */
+    if (spin1->n2 + spin1->n3 - 1 > spin2->n2 + spin2->n3 - 1) {
+        /* i overlaps curr on the right */
+        /* curr: (-----------]      */
+        /* i:            [------)   */
+        conflict = TRUE;
+    }
+  }
+  /* left of i greater than or equal to left of curr */
+  if (spin1->n2 >= spin2->n2)
+  {
+    /* right of i less than or equal to right of curr */
+    if (spin1->n2 + spin1->n3 - 1 <= spin2->n2 + spin2->n3 - 1) {
+        /* i is contained in curr */
+        conflict = TRUE;
+    }
+  }
+  /* then check for conflict and consistency on second row */
+  /* right of i less than left of curr + fuzz */
+  if (spin1->n2 + spin1->n3 - 1 < spin2->n2 + fuzz)
+  {
+    if (strand == 1)
+    {
+        /* right of i on row 2 greater than left of curr on row 2 */
+        if (spin1->n4 + spin1->n3 - 1 > spin2->n4 + fuzz) {
+          /* i:     (-------] */
+          /* curr:     [------) */
+          conflict = TRUE;
+        }
+    } else if (strand == -1)
+    {
+        if (spin2->n4 + spin2->n3 - 1 - fuzz > spin1->n4)
+          conflict = TRUE;
+    }
+  }
+  /* right of i greater than or equal to left of curr + fuzz */ 
+  else
+  {
+    if (strand == 1)
+    {
+        /* left of i on row 2 less than right of curr - fuzz on row 2 */
+        if (spin1->n4 < spin2->n4 + spin2->n3 - fuzz)
+          conflict = TRUE;
+    } else if (strand == -1)
+    {
+        if (spin1->n4 + spin1->n3 - 1 - fuzz > spin2->n4)
+          conflict = TRUE;
+    }
+  }
+  
+  /* make sure we aren't taking pieces out of order */
+  if (strand == 1)
+  {
+    if ((spin1->n2 > spin2->n2 && spin1->n4 < spin2->n4)
+        || (spin1->n2 < spin2->n2 && spin1->n4 > spin2->n4))
+    {
+      conflict = TRUE;
+    }
+  }
+  else
+  {
+    if ((spin1->n2 > spin2->n2 && spin1->n4 > spin2->n4)
+        || (spin1->n2 < spin2->n2 && spin1->n4 < spin2->n4))
+    {
+      conflict = TRUE;
+    }
+  }
+  return conflict;
 }
 
 
@@ -1622,6 +1750,7 @@ extern void ACT_RemoveInconsistentAlnsFromSet (SeqAlignPtr sap, Int4 fuzz, Int4 
    Int4             curr;
    Int4             i;
    Int4             indextype;
+   Int4             k;
    SeqAlignPtr      salp;
    SeqAlignPtr      salp_head;
    SeqAlignPtr      salp_prev;
@@ -1662,11 +1791,27 @@ extern void ACT_RemoveInconsistentAlnsFromSet (SeqAlignPtr sap, Int4 fuzz, Int4 
    {
       if (spin[i]->n5 != strand)
       {
-         salp = amaip->saps[spin[i]->n1];
+         k = spin[i]->n1;
+         salp = amaip->saps[k];
          salp->next = NULL;
          SeqAlignFree(salp);
-         amaip->saps[spin[i]->n1] = NULL;
+         amaip->saps[k] = NULL;
          spin[i]->n1 = -1;
+         /* fix links for previous alignments */
+         while (k > 0 && amaip->saps[k - 1] == NULL) {
+           k--;
+         }
+         if (k > 0)
+         {
+            if (k < amaip->numsaps - 1)
+            {
+              amaip->saps[k - 1]->next = amaip->saps[k + 1];
+            }
+            else
+            {
+              amaip->saps[k - 1]->next = NULL;
+            }
+         }
       }
    }
    for (curr=0; curr<amaip->numsaps; curr++)
@@ -1678,38 +1823,63 @@ extern void ACT_RemoveInconsistentAlnsFromSet (SeqAlignPtr sap, Int4 fuzz, Int4 
             if (spin[i]->n1 != -1)
             {
                conflict = FALSE;
-            /* check first for conflict on first row */
+
+               /* check first for conflict on first row */               
+               /* right of i greater than left of curr */
                if (spin[i]->n2 + spin[i]->n3 - 1 > spin[curr]->n2 + fuzz)
                {
-                  if (spin[i]->n2 < spin[curr]->n2)
+                  /* left of i less than left of curr */
+                  if (spin[i]->n2 < spin[curr]->n2) {
+                     /* i overlaps curr on the left */
+                     /* curr:     [-----------) */
+                     /* i:    (------]          */
                      conflict = TRUE;
+                  }
                }
+               /* left of i less than right of curr - fuzz */
                if (spin[i]->n2 < spin[curr]->n2 + spin[curr]->n3 - 1 - fuzz)
                {
-                  if (spin[i]->n2 + spin[i]->n3 - 1 > spin[curr]->n2 + spin[curr]->n3 - 1)
+                  /* right of i greater than right of curr */
+                  if (spin[i]->n2 + spin[i]->n3 - 1 > spin[curr]->n2 + spin[curr]->n3 - 1) {
+                     /* i overlaps curr on the right */
+                     /* curr: (-----------]      */
+                     /* i:            [------)   */
                      conflict = TRUE;
+                  }
                }
+               /* left of i greater than or equal to left of curr */
                if (spin[i]->n2 >= spin[curr]->n2)
                {
-                  if (spin[i]->n2 + spin[i]->n3 - 1 <= spin[curr]->n2 + spin[curr]->n3 - 1)
+                  /* right of i less than or equal to right of curr */
+                  if (spin[i]->n2 + spin[i]->n3 - 1 <= spin[curr]->n2 + spin[curr]->n3 - 1) {
+                     /* i is contained in curr */
                      conflict = TRUE;
+                  }
                }
-            /* then check for conflict and consistency on second row */
+               /* then check for conflict and consistency on second row */
+               /* right of i less than left of curr + fuzz */
                if (spin[i]->n2 + spin[i]->n3 - 1 < spin[curr]->n2 + fuzz)
                {
                   if (strand == 1)
                   {
-                     if (spin[i]->n4 + spin[i]->n3 - 1 > spin[curr]->n4 + fuzz)
+                     /* right of i on row 2 greater than left of curr on row 2 */
+                     if (spin[i]->n4 + spin[i]->n3 - 1 > spin[curr]->n4 + fuzz) {
+                        /* i:     (-------] */
+                        /* curr:     [------) */
                         conflict = TRUE;
+                     }
                   } else if (strand == -1)
                   {
                      if (spin[curr]->n4 + spin[curr]->n3 - 1 - fuzz > spin[i]->n4)
                         conflict = TRUE;
                   }
-               } else
+               }
+               /* right of i greater than or equal to left of curr + fuzz */ 
+               else
                {
                   if (strand == 1)
                   {
+                     /* left of i on row 2 less than right of curr - fuzz on row 2 */
                      if (spin[i]->n4 < spin[curr]->n4 + spin[curr]->n3 - fuzz)
                         conflict = TRUE;
                   } else if (strand == -1)
@@ -2218,6 +2388,22 @@ static SeqAlignPtr ACT_CreateContinuousAln(SeqAlignPtr PNTR saps, Int4 numsaps)
    return salp;
 }
 
+
+static void DeleteAmaipSapI (AMAlignIndex2Ptr  amaip, Int4 i)
+{
+  Int4 j;
+  if (amaip == NULL || i >= amaip->numsaps) {
+    return;
+  }
+
+  amaip->saps[i] = SeqAlignFree (amaip->saps[i]);
+  for (j = i + 1; j < amaip->numsaps; j++) {
+    amaip->saps[j - 1] = amaip->saps[j];
+  }
+  amaip->numsaps --;
+}
+
+
 NLM_EXTERN SeqAlignPtr ACT_CleanUpAlignments(SeqAlignPtr sap, Int4 len1, Int4 len2)
 {
    AMAlignIndex2Ptr  amaip;
@@ -2258,14 +2444,32 @@ NLM_EXTERN SeqAlignPtr ACT_CleanUpAlignments(SeqAlignPtr sap, Int4 len1, Int4 le
       {
          AlnMgr2GetNthSeqRangeInSA(amaip->saps[i], 2, NULL, &start2);
          AlnMgr2GetNthSeqRangeInSA(amaip->saps[i+1], 2, &stop2, &tmp);
-         if (stop2 < start2+1)
-            AlnMgr2TruncateSAP(amaip->saps[i+1], start2+1, tmp, 2);
+         if (stop2 < start2+1) {
+            if (tmp <= start2) {
+               /* alignment is contained in parent, remove completely */
+               DeleteAmaipSapI (amaip, i + 1);
+               /* need to compare this with the one after it */
+               i--;
+               continue;
+            } else {
+              AlnMgr2TruncateSAP(amaip->saps[i+1], start2+1, tmp, 2);
+            }
+         }
       } else
       {
          AlnMgr2GetNthSeqRangeInSA(amaip->saps[i], 2, &stop2, &tmp);
          AlnMgr2GetNthSeqRangeInSA(amaip->saps[i+1], 2, NULL, &start2);
-         if (stop2 < start2 + 1)
-            AlnMgr2TruncateSAP(amaip->saps[i], start2+1, tmp, 2);
+         if (stop2 < start2 + 1) {
+            if (tmp <= start2) {
+               /* alignment is contained in parent, remove completely */
+               DeleteAmaipSapI (amaip, i);
+               /* need to compare this with the one after it */
+               i--;
+               continue;
+            } else {
+               AlnMgr2TruncateSAP(amaip->saps[i], start2+1, tmp, 2);
+            }
+         }
       }
       AlnMgr2GetNthSeqRangeInSA(amaip->saps[i], 1, NULL, &start1);
       AlnMgr2GetNthSeqRangeInSA(amaip->saps[i+1], 1, &stop1, &tmp);
@@ -2925,7 +3129,27 @@ static SeqAlignPtr LIBCALLBACK GetOldBlastAlignmentPiece (SeqLocPtr slp1, SeqLoc
    return sap;
 }
 
-NLM_EXTERN SeqAlignPtr Sqn_GlobalAlign2SeqEx (BioseqPtr bsp1, BioseqPtr bsp2, BoolPtr revcomp, GetAlignmentFunc aln_func, GetAlignmentPieceFunc aln_piece_func)
+static void DumpAlignments (SeqAlignPtr salp)
+{
+  AsnIoPtr aip;
+
+  aip = AsnIoOpen("tmp.txt", "w");
+  while (salp != NULL) {
+    SeqAlignAsnWrite (salp, aip, NULL);
+    salp = salp->next;
+  }
+  AsnIoClose (aip);
+}
+
+
+NLM_EXTERN SeqAlignPtr 
+Sqn_GlobalAlign2SeqEx 
+(BioseqPtr bsp1,
+ BioseqPtr bsp2,
+ BoolPtr revcomp,
+ GetAlignmentFunc aln_func,
+ GetAlignmentPieceFunc aln_piece_func,
+ Boolean extend_ends)
 {
    AMAlignIndex2Ptr     amaip;
    Int4                 i;
@@ -2940,6 +3164,7 @@ NLM_EXTERN SeqAlignPtr Sqn_GlobalAlign2SeqEx (BioseqPtr bsp1, BioseqPtr bsp2, Bo
    Int4                 stop2;
    Uint1                strand;
    Int4                 extnd = 20;
+   Int4                 spin_fuzz = 20;
 
    if (bsp1 == NULL || bsp2 == NULL)
       return NULL;
@@ -2950,8 +3175,10 @@ NLM_EXTERN SeqAlignPtr Sqn_GlobalAlign2SeqEx (BioseqPtr bsp1, BioseqPtr bsp2, Bo
       ErrPostEx (SEV_ERROR, 0, 0, "BLAST finds no sequence similarity");
       return NULL;
    }
+/*   DumpAlignments(sap);  */
+
    AlnMgr2IndexLite(sap);
-   ACT_RemoveInconsistentAlnsFromSet(sap, 20, 1);
+   ACT_RemoveInconsistentAlnsFromSet(sap, spin_fuzz, 1);
    amaip = (AMAlignIndex2Ptr)(sap->saip);
    AlnMgr2SortAlnSetByNthRowPos(sap, 1);
    ACT_GetNthSeqRangeInSASet(sap, 1, &start1, &stop1);
@@ -2971,11 +3198,11 @@ NLM_EXTERN SeqAlignPtr Sqn_GlobalAlign2SeqEx (BioseqPtr bsp1, BioseqPtr bsp2, Bo
      sap = aln_func (bsp1, bsp2);
      if (sap == NULL)
      {
-        Message(MSG_OK,"BLAST finds no sequence similarity in reverse complement");
+        ErrPostEx (SEV_ERROR, 0, 0, "BLAST finds no sequence similarity in reverse complement");
         return NULL;
      }
      AlnMgr2IndexLite(sap);
-     ACT_RemoveInconsistentAlnsFromSet(sap, 20, 1);
+     ACT_RemoveInconsistentAlnsFromSet(sap, spin_fuzz, 1);
      amaip = (AMAlignIndex2Ptr)(sap->saip);
      AlnMgr2SortAlnSetByNthRowPos(sap, 1);
      ACT_GetNthSeqRangeInSASet(sap, 1, &start1, &stop1);
@@ -2983,90 +3210,98 @@ NLM_EXTERN SeqAlignPtr Sqn_GlobalAlign2SeqEx (BioseqPtr bsp1, BioseqPtr bsp2, Bo
      strand = AlnMgr2GetNthStrand(amaip->saps[0], 2);
    }
 
-   /* done with any reverse complementing and reblasting, now extend frayed ends */
+   if (extend_ends) {
+      /* done with any reverse complementing and reblasting, now extend frayed ends */
 
-   sap_head = NULL;
+      sap_head = NULL;
 
-   if (start1 > 6 && start1 < extnd)
-      sap_head = sap_prev = ACT_FindPiece(bsp1, bsp2, MAX(start1-SQN_WINDOW, 0), start1, MAX(start1-SQN_WINDOW, 0), start2, strand, SQN_LEFT, aln_piece_func);
-   else if (start1 > 0 && start1 < extnd)
-      SQN_ExtendAlnAlg(amaip->saps[0], start1, SQN_LEFT, Seq_strand_plus);
-   ACT_GetNthSeqRangeInSASet(sap, 1, &start1, &stop1);
-   ACT_GetNthSeqRangeInSASet(sap, 2, &start2, &stop2);
-   if (start2 > 6 && start2 < extnd)
-   {
-      sap_new = ACT_FindPiece(bsp2, bsp1, MAX(start2-SQN_WINDOW, 0), start2, MAX(start1-SQN_WINDOW, 0), start1, strand, SQN_LEFT, aln_piece_func);
-      if (sap_new != NULL)
-         SPI_flip_sa_list(sap_new);
-      if (sap_head != NULL)
+      if (start1 > 6 && start1 < extnd)
+          sap_head = sap_prev = ACT_FindPiece(bsp1, bsp2, MAX(start1-SQN_WINDOW, 0), start1, MAX(start1-SQN_WINDOW, 0), start2, strand, SQN_LEFT, aln_piece_func);
+      else if (start1 > 0 && start1 < extnd)
+          SQN_ExtendAlnAlg(amaip->saps[0], start1, SQN_LEFT, Seq_strand_plus);
+      ACT_GetNthSeqRangeInSASet(sap, 1, &start1, &stop1);
+      ACT_GetNthSeqRangeInSASet(sap, 2, &start2, &stop2);
+      if (start2 > 6 && start2 < extnd)
       {
-         sap_prev->next = sap_new;
-         sap_prev = sap_new;
-      } else
-         sap_head = sap_prev = sap_new;
-   } else if (start2 > 0 && start2 < extnd)
-      SQN_ExtendAlnAlg(amaip->saps[0], start2, SQN_LEFT, Seq_strand_plus);
-   for (i=0; i<amaip->numsaps-1; i++)
-   {
-      AlnMgr2GetNthSeqRangeInSA(amaip->saps[i], 1, NULL, &start1);
-      AlnMgr2GetNthSeqRangeInSA(amaip->saps[i+1], 1, &stop1, NULL);
-      if (strand != Seq_strand_minus)
-      {
-         AlnMgr2GetNthSeqRangeInSA(amaip->saps[i], 2, NULL, &start2);
-         AlnMgr2GetNthSeqRangeInSA(amaip->saps[i+1], 2, &stop2, NULL);
-      } else
-      {
-         AlnMgr2GetNthSeqRangeInSA(amaip->saps[i], 2, &stop2, NULL);
-         AlnMgr2GetNthSeqRangeInSA(amaip->saps[i+1], 2, NULL, &start2);
-      }
-      sap_new = ACT_FindPiece(bsp1, bsp2, start1, stop1, start2, stop2, strand, SQN_MIDDLE, aln_piece_func);
-      if (sap_head)
-      {
-         sap_prev->next = sap_new;
-         if (sap_new != NULL)
-            sap_prev = sap_new;
-      } else
-         sap_head = sap_prev = sap_new;
-   }
-   ACT_GetNthSeqRangeInSASet(sap, 1, &start1, &stop1);
-   ACT_GetNthSeqRangeInSASet(sap, 2, &start2, &stop2);
-   if (bsp1->length-stop1 > 6 && bsp1->length-stop1 < extnd)
-   {
-      sap_new = ACT_FindPiece(bsp1, bsp2, stop1, MIN(bsp1->length-1, stop1 + SQN_WINDOW), stop2, MIN(bsp2->length-1, stop2+SQN_WINDOW), strand, SQN_RIGHT, aln_piece_func);
-      if (sap_new != NULL)
-      {
-         if (sap_head != NULL)
-         {
+          sap_new = ACT_FindPiece(bsp2, bsp1, MAX(start2-SQN_WINDOW, 0), start2, MAX(start1-SQN_WINDOW, 0), start1, strand, SQN_LEFT, aln_piece_func);
+          if (sap_new != NULL)
+            SPI_flip_sa_list(sap_new);
+          if (sap_head != NULL)
+          {
             sap_prev->next = sap_new;
             sap_prev = sap_new;
-         } else
-           sap_head = sap_prev = sap_new;
-      }
-   } else if (bsp1->length-stop1 > 0 && bsp1->length-stop1 < extnd)
-      SQN_ExtendAlnAlg(amaip->saps[amaip->numsaps-1], bsp1->length-stop1, SQN_RIGHT, Seq_strand_plus);
-   ACT_GetNthSeqRangeInSASet(sap, 1, &start1, &stop1);
-   ACT_GetNthSeqRangeInSASet(sap, 2, &start2, &stop2);
-   if (bsp2->length-stop2 > 6 && bsp2->length-stop2 < extnd)
-   {
-      sap_new = ACT_FindPiece(bsp2, bsp1, stop2, MIN(bsp2->length-1, stop2 + SQN_WINDOW), stop1, MIN(bsp1->length-1, stop1+SQN_WINDOW), strand, SQN_RIGHT, aln_piece_func);
-      if (sap_new != NULL)
+          } else
+            sap_head = sap_prev = sap_new;
+      } else if (start2 > 0 && start2 < extnd)
+          SQN_ExtendAlnAlg(amaip->saps[0], start2, SQN_LEFT, Seq_strand_plus);
+      for (i=0; i<amaip->numsaps-1; i++)
       {
-         SPI_flip_sa_list(sap_new);
-         if (sap_head != NULL)
-         {
+          AlnMgr2GetNthSeqRangeInSA(amaip->saps[i], 1, NULL, &start1);
+          AlnMgr2GetNthSeqRangeInSA(amaip->saps[i+1], 1, &stop1, NULL);
+          if (strand != Seq_strand_minus)
+          {
+            AlnMgr2GetNthSeqRangeInSA(amaip->saps[i], 2, NULL, &start2);
+            AlnMgr2GetNthSeqRangeInSA(amaip->saps[i+1], 2, &stop2, NULL);
+          } else
+          {
+            AlnMgr2GetNthSeqRangeInSA(amaip->saps[i], 2, &stop2, NULL);
+            AlnMgr2GetNthSeqRangeInSA(amaip->saps[i+1], 2, NULL, &start2);
+          }
+          sap_new = ACT_FindPiece(bsp1, bsp2, start1, stop1, start2, stop2, strand, SQN_MIDDLE, aln_piece_func);
+          if (sap_head)
+          {
             sap_prev->next = sap_new;
-            sap_prev = sap_new;
-         } else
-           sap_head = sap_prev = sap_new;
+            if (sap_new != NULL)
+                sap_prev = sap_new;
+          } else
+            sap_head = sap_prev = sap_new;
       }
-   } else if (bsp2->length-stop2 > 0 && bsp2->length-stop2 < extnd)
-      SQN_ExtendAlnAlg(amaip->saps[amaip->numsaps-1], bsp2->length-stop2, SQN_RIGHT, Seq_strand_plus);
-   sap_new = (SeqAlignPtr)(sap->segs);
-   while (sap_new->next != NULL)
-   {
-      sap_new = sap_new->next;
+      ACT_GetNthSeqRangeInSASet(sap, 1, &start1, &stop1);
+      ACT_GetNthSeqRangeInSASet(sap, 2, &start2, &stop2);
+      if (bsp1->length-stop1 > 6 && bsp1->length-stop1 < extnd)
+      {
+          sap_new = ACT_FindPiece(bsp1, bsp2, stop1, MIN(bsp1->length-1, stop1 + SQN_WINDOW), stop2, MIN(bsp2->length-1, stop2+SQN_WINDOW), strand, SQN_RIGHT, aln_piece_func);
+          if (sap_new != NULL)
+          {
+            if (sap_head != NULL)
+            {
+                sap_prev->next = sap_new;
+                sap_prev = sap_new;
+            } else
+              sap_head = sap_prev = sap_new;
+          }
+      } else if (bsp1->length-stop1 > 0 && bsp1->length-stop1 < extnd)
+          SQN_ExtendAlnAlg(amaip->saps[amaip->numsaps-1], bsp1->length-stop1, SQN_RIGHT, Seq_strand_plus);
+      ACT_GetNthSeqRangeInSASet(sap, 1, &start1, &stop1);
+      ACT_GetNthSeqRangeInSASet(sap, 2, &start2, &stop2);
+      if (bsp2->length-stop2 > 6 && bsp2->length-stop2 < extnd)
+      {
+          sap_new = ACT_FindPiece(bsp2, bsp1, stop2, MIN(bsp2->length-1, stop2 + SQN_WINDOW), stop1, MIN(bsp1->length-1, stop1+SQN_WINDOW), strand, SQN_RIGHT, aln_piece_func);
+          if (sap_new != NULL)
+          {
+            SPI_flip_sa_list(sap_new);
+            if (sap_head != NULL)
+            {
+                sap_prev->next = sap_new;
+                sap_prev = sap_new;
+            } else
+              sap_head = sap_prev = sap_new;
+          }
+      } else if (bsp2->length-stop2 > 0 && bsp2->length-stop2 < extnd)
+          SQN_ExtendAlnAlg(amaip->saps[amaip->numsaps-1], bsp2->length-stop2, SQN_RIGHT, Seq_strand_plus);
+      sap_new = (SeqAlignPtr)(sap->segs);
+      while (sap_new->next != NULL)
+      {
+          sap_new = sap_new->next;
+      }
+      sap_new->next = sap_head;  /* put the new alignments in the original set */
    }
-   sap_new->next = sap_head;  /* put the new alignments in the original set */
+
+   AMAlignIndexFreeEitherIndex (sap);
+   AlnMgr2IndexLite(sap);
+   ACT_RemoveInconsistentAlnsFromSet(sap, spin_fuzz, 1);
+   amaip = (AMAlignIndex2Ptr)(sap->saip);
+
    AMAlignIndex2Free2(amaip);
    sap->saip = NULL;
    AlnMgr2IndexLite(sap);  /* reindex the alignments */
@@ -3077,8 +3312,9 @@ NLM_EXTERN SeqAlignPtr Sqn_GlobalAlign2SeqEx (BioseqPtr bsp1, BioseqPtr bsp2, Bo
 
 NLM_EXTERN SeqAlignPtr Sqn_GlobalAlign2Seq (BioseqPtr bsp1, BioseqPtr bsp2, BoolPtr revcomp)
 {
-  return Sqn_GlobalAlign2SeqEx (bsp1, bsp2, revcomp, GetOldBlastAlignment, GetOldBlastAlignmentPiece);
+  return Sqn_GlobalAlign2SeqEx (bsp1, bsp2, revcomp, GetOldBlastAlignment, GetOldBlastAlignmentPiece, TRUE);
 }
+
 
 
 /***************************************************************************

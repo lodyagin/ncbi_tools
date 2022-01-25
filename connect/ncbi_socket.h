@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_SOCKET__H
 #define CONNECT___NCBI_SOCKET__H
 
-/*  $Id: ncbi_socket.h,v 6.68 2007/11/05 15:25:52 kazimird Exp $
+/* $Id: ncbi_socket.h,v 6.70 2008/10/31 11:25:51 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -26,8 +26,9 @@
  *
  * ===========================================================================
  *
- * Author:  Denis Vakatov
+ * Author:  Denis Vakatov, Anton Lavrentiev
  *
+ * @file
  * File Description:
  *   Plain portable TCP/IP socket API for:  UNIX, MS-Win, MacOS
  *   Platform-specific library requirements:
@@ -126,6 +127,10 @@
  *  SOCK_StringToHostPort
  *  SOCK_HostPortToString
  *
+ *  Secure:
+ *
+ *  SOCK_SetupSSL
+ *
  */
 
 #if defined(NCBISOCK__H)
@@ -209,7 +214,7 @@ typedef struct TRIGGER_tag* TRIGGER;
  *  To start logging the data, call this func with "log" == eOn.
  *  To stop  logging the data, call this func with "log" == eOff.
  * @return
- *  Prior setting.
+ *  Prior setting
  * @sa
  *  SOCK_SetDataLogging
  */
@@ -226,7 +231,7 @@ extern NCBI_XCONNECT_EXPORT ESwitch SOCK_SetDataLoggingAPI
  *  To reset to the global default behavior (as set by SOCK_SetDataLoggingAPI),
  *  call this function with "log" == eDefault.
  * @return
- *  Prior setting.
+ *  Prior setting
  * @sa
  *  SOCK_SetDataLoggingAPI, SOCK_Create, DSOCK_Create
  */
@@ -369,7 +374,7 @@ extern NCBI_XCONNECT_EXPORT EIO_Status SOCK_ShutdownAPI(void);
 
 /** Create an event trigger.
  * @param trigger
- *  [in|out]  a pointer to a location where to store a handle of the trigger
+ *  [in|out]  a pointer to a location where to store handle of the new trigger
  * @return
  *  eIO_Success on success; other status on error
  * @sa
@@ -398,7 +403,7 @@ extern NCBI_XCONNECT_EXPORT EIO_Status TRIGGER_Close
  * @param trigger
  *  [in]  a handle returned by TRIGGER_Create
  * @return
- *   eIO_Success on success; other status on error.
+ *   eIO_Success on success; other status on error
  * @sa
  *  TRIGGER_Create, TRIGGER_IsSet
  */
@@ -414,7 +419,7 @@ extern NCBI_XCONNECT_EXPORT EIO_Status TRIGGER_Set
  * @return
  *  eIO_Success if the trigger has been set;
  *  eIO_Closed  if the trigger has not yet been set;
- *  other status on error.
+ *  other status on error
  * @sa
  *  TRIGGER_Create, TRIGGER_Set, TRIGGER_Reset
  */
@@ -427,7 +432,7 @@ extern NCBI_XCONNECT_EXPORT EIO_Status TRIGGER_IsSet
  * @param trigger
  *  [in]  a handle returned by TRIGGER_Create
  * @return
- *  eIO_Success if the trigger has been set; other status on error.
+ *  eIO_Success if the trigger has been set; other status on error
  * @sa
  *  TRIGGER_Create, TRIGGER_Set
  */
@@ -438,18 +443,38 @@ extern NCBI_XCONNECT_EXPORT EIO_Status TRIGGER_Reset
 
 
 /******************************************************************************
- *  LISTENING SOCKET [SERVER-side]
+ *  SOCKET FLAGS
  */
 
 typedef enum {
-    fLSCE_LogOff      = eOff,    /** logging is inherited in Accept()ed SOCKs*/
-    fLSCE_LogOn       = eOn,     /**                    -"-                  */
-    fLSCE_LogDefault  = eDefault,/**                    -"-                  */
-    fLSCE_BindAny     = 0,       /** bind to 0.0.0.0 (i.e. any), default     */
-    fLSCE_BindLocal   = 0x10,    /** bind to 127.0.0.1 only                  */
-    fLSCE_CloseOnExec = 0x20
-} FLSCE_Flags;
-typedef unsigned int TLSCE_Flags;
+    fSOCK_LogOff       = eOff,   /** logging is inherited in Accept()ed SOCKs*/
+    fSOCK_LogOn        = eOn,
+    fSOCK_LogDefault   = eDefault,
+    fSOCK_BindAny      = 0,      /** bind to 0.0.0.0 (i.e. any), default     */
+    fSOCK_BindLocal    = 0x10,   /** bind to 127.0.0.1 only                  */
+    fSOCK_KeepOnExec   = 0x20,   /** can be applied to most sockets          */
+    fSOCK_CloseOnExec  = 0,      /** can be applied to most sockets          */
+    fSOCK_Secure       = 0x40,   /** subsumes CloseOnExec regardless of Keep */
+    fSOCK_KeepOnClose  = 0x80,   /** do not close OS handle on SOCK_Close    */
+    fSOCK_CloseOnClose = 0,      /** do     close OS handle on SOCK_Close    */
+    fSOCK_ReadOnWrite       = 0x100,
+    fSOCK_InterruptOnSignal = 0x200
+} ESOCK_Flags;
+typedef unsigned int TSOCK_Flags;
+
+
+/******************************************************************************
+ *  LISTENING SOCKET [SERVER-side]
+ */
+
+typedef enum { /* DEPRECATED -- DON'T USE! */
+    fLSCE_LogOff      = fSOCK_LogOff,
+    fLSCE_LogOn       = fSOCK_LogOn,
+    fLSCE_LogDefault  = fSOCK_LogDefault,
+    fLSCE_BindAny     = fSOCK_BindAny,
+    fLSCE_BindLocal   = fSOCK_BindLocal,
+    fLSCE_CloseOnExec = fSOCK_CloseOnExec
+} ELSCE_Flags;
 
 /** [SERVER-side]  Create and initialize the server-side(listening) socket
  * (socket() + bind() + listen())
@@ -470,12 +495,13 @@ extern NCBI_XCONNECT_EXPORT EIO_Status LSOCK_CreateEx
 (unsigned short port,    
  unsigned short backlog, 
  LSOCK*         lsock,   
- TLSCE_Flags    flags    
+ TSOCK_Flags    flags    
  );
 
 
 /** [SERVER-side]  Create and initialize the server-side(listening) socket
- * Same as LSOCK_CreateEx called with the last argument provided as 0.
+ * Same as LSOCK_CreateEx called with the last argument provided as
+ * fSOCK_LogDefault.
  * @param port
  *  [in]  the port to listen at
  * @param backlog
@@ -549,7 +575,39 @@ extern NCBI_XCONNECT_EXPORT EIO_Status LSOCK_GetOSHandle
 
 /** [CLIENT-side]  Connect client to another(server-side, listening) socket
  * (socket() + connect() [+ select()])
- * Equivalent to SOCK_CreateEx(host, port, timeout, sock, 0, 0, eDefault).
+ *
+ * @param host
+ *  [in]  host to connect to 
+ * @param port
+ *  [in]  port to connect to 
+ * @param timeout
+ *  [in]  the connect timeout (infinite if NULL)
+ * @param sock
+ *  [out] handle of the created socket
+ * @param init_data
+ *  [in]  initial output data segment (may be NULL)
+ * @param init_size
+ *  [in]  size of initial data segment (may be 0) 
+ * @param flags
+ *  [in]  additional socket requirements
+ * @sa
+ *  SOCK_Create, SOCK_Reconnect, SOCK_Close
+ */
+extern NCBI_XCONNECT_EXPORT EIO_Status SOCK_CreateEx
+(const char*     host,    
+ unsigned short  port,    
+ const STimeout* timeout,  
+ SOCK*           sock,     
+ const void*     init_data,
+ size_t          init_size,
+ TSOCK_Flags     flags
+ );
+
+
+/** [CLIENT-side]  Connect client to another(server-side, listening) socket
+ * (socket() + connect() [+ select()])
+ * Equivalent to
+ * SOCK_CreateEx(host, port, timeout, sock, 0, 0, fSOCK_LogDefault).
  *
  * @param host
  *  [in]  host to connect to 
@@ -570,65 +628,14 @@ extern NCBI_XCONNECT_EXPORT EIO_Status SOCK_Create
  );
 
 
-/** [CLIENT-side]  Connect client to another(server-side, listening) socket
- * (socket() + connect() [+ select()])
- *
- * @param host
- *  [in]  host to connect to 
- * @param port
- *  [in]  port to connect to 
- * @param timeout
- *  [in]  the connect timeout (infinite if NULL)
- * @param sock
- *  [out] handle of the created socket
- * @param init_data
- *  [in]  initial output data segment (may be NULL)
- * @param init_size
- *  [in]  size of initial data segment (may be 0) 
- * @param log
- *  [in]  whether to do logging on this socket
- * @sa
- *  SOCK_Create, SOCK_Reconnect, SOCK_Close
- */
-extern NCBI_XCONNECT_EXPORT EIO_Status SOCK_CreateEx
-(const char*     host,    
- unsigned short  port,    
- const STimeout* timeout,  
- SOCK*           sock,     
- const void*     init_data,
- size_t          init_size,
- ESwitch         log       
- );
-
-
 /** SOCK_Close behavior for SOCKs created on top of OS handles.
  * @sa
  *  SOCK_Close, SOCK_CreateOnTop, SOCK_CreateOnTopEx
  */
-typedef enum {
-    eSCOT_KeepOnClose,    /** Do not close "handle" on SOCK_Close */
-    eSCOT_CloseOnClose    /** Do close "handle" on SOCK_Close     */
+typedef enum { /* DEPRECATED -- DON'T USE */
+    eSCOT_KeepOnClose  = fSOCK_KeepOnClose,
+    eSCOT_CloseOnClose = fSOCK_CloseOnClose
 } ESCOT_OnClose;
-
-
-/** [SERVER-side]  Create a socket on top of OS-dependent "handle".
- * Equivalent to SOCK_CreateOnTopEx(handle, handle_size, sock,
- *                                  0, 0, eDefault, eSCOT_CloseOnClose).
- * @param handle
- *  [in]  OS-dependent "handle" to be converted
- * @param handle_size
- *  [in]  "handle" size
- * @param sock
- *  [out] SOCK built on top of OS "handle"
- * @sa
- *  SOCK_CreateOnTopEx
- */
-extern NCBI_XCONNECT_EXPORT EIO_Status SOCK_CreateOnTop
-(const void*   handle,      
- size_t        handle_size,                       
- SOCK*         sock         
- );
-
 
 /** [SERVER-side]  Create a socket on top of OS-dependent "handle"
  * (file descriptor on Unix, SOCKET on MS-Windows).  Returned socket
@@ -647,25 +654,41 @@ extern NCBI_XCONNECT_EXPORT EIO_Status SOCK_CreateOnTop
  *  [in]  initial output data segment (may be NULL)
  * @param init_size
  *  [in]  size of the initial data segment (may be 0)
- * @param log
- *  [in]  data logging for the resulting SOCK 
- * @param on_close
- *  [in]  if to keep "handle" in SOCK_Close
+ * @param flags
+ *  [in]  additional socket requirements
  * @return 
  *  Return eIO_Success on success;  otherwise: eIO_Closed if the "handle"
  *  does not refer to an open socket [but e.g. to a normal file or a pipe];
- *  other error codes in case of other errors.
+ *  other error codes in case of other errors
  * @sa
  *  SOCK_CreateOnTop, SOCK_Reconnect, SOCK_Close
  */
 extern NCBI_XCONNECT_EXPORT EIO_Status SOCK_CreateOnTopEx
-(const void*   handle,      
- size_t        handle_size, 
- SOCK*         sock,       
- const void*   init_data,   
- size_t        init_size,   
- ESwitch       log,         
- ESCOT_OnClose on_close     
+(const void*   handle,
+ size_t        handle_size,
+ SOCK*         sock,
+ const void*   init_data,
+ size_t        init_size,
+ TSOCK_Flags   flags
+ );
+
+
+/** [SERVER-side]  Create a socket on top of OS-dependent "handle".
+ * Equivalent to SOCK_CreateOnTopEx(handle, handle_size, sock,
+ *                                  0, 0, fSOCK_LogDefault|fSOCK_CloseOnClose).
+ * @param handle
+ *  [in]  OS-dependent "handle" to be converted
+ * @param handle_size
+ *  [in]  "handle" size
+ * @param sock
+ *  [out] SOCK built on top of OS "handle"
+ * @sa
+ *  SOCK_CreateOnTopEx
+ */
+extern NCBI_XCONNECT_EXPORT EIO_Status SOCK_CreateOnTop
+(const void*   handle,
+ size_t        handle_size,
+ SOCK*         sock
  );
 
 
@@ -683,13 +706,13 @@ extern NCBI_XCONNECT_EXPORT EIO_Status SOCK_CreateOnTopEx
  * @li <b>NOTE 4:</b> UNIX sockets can only be reconnected to the same file thus both
  *        host and port have to be passed as 0s.
  * @param sock
- *  [in] handle of the socket to reconnect
+ *  [in]  handle of the socket to reconnect
  * @param host
- *  [in] host to connect to  (can be NULL)
+ *  [in]  host to connect to  (can be NULL)
  * @param port
- *  [in] port to connect to  (can be 0)
+ *  [in]  port to connect to  (can be 0)
  * @param timeout
- *  [in] the connect timeout (infinite if NULL)
+ *  [in]  the connect timeout (infinite if NULL)
  */
 extern NCBI_XCONNECT_EXPORT EIO_Status SOCK_Reconnect
 (SOCK            sock,   
@@ -703,12 +726,14 @@ extern NCBI_XCONNECT_EXPORT EIO_Status SOCK_Reconnect
  * Later attempts to I/O (or to wait) in the shutdown direction will
  * do nothing, and immediately return with "eIO_Closed" status.
  * Pending data output can cause data transfer to the remote end (subject
- * for eIO_Close timeout as previously set by SOCK_SetTimeout()).
+ * for eIO_Close timeout as previously set by SOCK_SetTimeout).
  * Cannot be applied to datagram sockets (eIO_InvalidArg results).
  * @param sock
- *  [in] handle of the socket to shutdown  
+ *  [in]  handle of the socket to shutdown  
  * @param how
- *  [in] one of:  eIO_Read, eIO_Write, eIO_ReadWrite
+ *  [in]  one of:  eIO_Read, eIO_Write, eIO_ReadWrite
+ * @sa
+ *  SOCK_SetTimeout
  */
 extern NCBI_XCONNECT_EXPORT EIO_Status SOCK_Shutdown
 (SOCK      sock, 
@@ -718,27 +743,29 @@ extern NCBI_XCONNECT_EXPORT EIO_Status SOCK_Shutdown
 
 /** Close the connection, destroy relevant internal data.
  * The "sock" handle goes invalid after this function call, regardless
- * of whether the call was successful or not.
- * @li <b>NOTE 1:</b>  if eIO_Close timeout was specified (or NULL) then it blocks until
- *         either all unsent data are sent, error flagged, or the timeout
- *         expires.
- * @li <b>NOTE 2:</b>  if there is output pending, that output will be flushed.
+ * of whether the call was successful or not.  If eIO_Close timeout was
+ * specified (or NULL) then it blocks until either all unsent data are sent,
+ * error flagged, or the timeout expires;  if there is any output pending,
+ * that output will be flushed.
  * @param sock
- *  [in] Socket
+ *  [in] socket handle to close
+ * @sa
+ *  SOCK_Create, SOCK_CreateOnTop, DSOCK_Create, SOCK_SetTimeout
  */
 extern NCBI_XCONNECT_EXPORT EIO_Status SOCK_Close(SOCK sock);
 
 
 /** Close the connection, and conditionally destroy relevant internal data.
- * @li <b>NOTE 1:</b>  if eIO_Close timeout was specified (or NULL) then it blocks until
- *         either all unsent data are sent, error flagged, or the timeout
- *         expires.
- * @li <b>NOTE 2:</b>  if there is output pending, that output will be flushed.
- * @li <b>NOTE 3:</b>  SOCK_CloseEx(sock, 1) is equivalent to SOCK_Close(sock);
+ * If eIO_Close timeout was specified (or NULL) then it blocks until
+ * either all unsent data are sent, error flagged, or the timeout expires;
+ * if there is any output pending, that output will be flushed.
+ * @li <b>NOTE</b>  SOCK_CloseEx(sock, 1) is equivalent to SOCK_Close(sock);
  * @param sock
- *  [in] handle of the socket to close
+ *  [in]  handle of the socket to close
  * @param destroy 
- *  [in] =1 to destroy handle; =0 to keep handle
+ *  [in]  =1 to destroy handle; =0 to keep handle
+ * @sa
+ *  SOCK_Close, SOCK_Create, SOCK_CreateOnTop, DSOCK_Create, SOCK_SetTimeout
  */
 extern NCBI_XCONNECT_EXPORT EIO_Status SOCK_CloseEx
 (SOCK         sock,    
@@ -746,18 +773,34 @@ extern NCBI_XCONNECT_EXPORT EIO_Status SOCK_CloseEx
  );
 
 
-/** Block on the socket until either read/write (dep. on the "event" arg) is
- * available or timeout expires (if "timeout" is NULL then assume it infinite).
- * For a datagram socket, eIO_Closed is returned if the internally latched
- * message was entirely read out, and eIO_Read was requested as the "event".
- * Both eIO_Write and eIO_ReadWrite events always immediately succeed for
- * the datagram socket.
+/** Block on the socket until either the specified "event" is available or
+ * "timeout" expires (if "timeout" is NULL then assume it infinite).
+ * eIO_Open (as "event") can be used to check whether the socket has been
+ * connected.  When eIO_Read is requested as an "event" for a datagram socket,
+ * then eIO_Closed results if the internally latched message has been entirely
+ * read out.  Either of eIO_Open, eIO_Write and eIO_ReadWrite always succeed
+ * immediately for the datagram socket.
  * @param sock
- *  [in] socket handle 
+ *  [in]  socket handle 
  * @param event
- *  [in] one of:  eIO_Read, eIO_Write, eIO_ReadWrite 
+ *  [in]  one of:  eIO_Open, eIO_Read, eIO_Write, eIO_ReadWrite 
  * @param timeout
- *  [in] maximum time to wait for an event
+ *  [in]  maximal time to wait for the event to occur
+ * @return
+ *  eIO_Closed     -- if the socket has been closed (in the specified
+ *                    direction when a read/write "event" requested);
+ *  eIO_Success    -- if the socket is ready;
+ *  eIO_Unknown    -- if partially closed with eIO_Open requested,
+ *                    or an I/O error occurred;
+ *  eIO_Timeout    -- if socket is not ready for the "event" and the allotted
+ *                    timeout has expired (for eIO_Open means the socket is
+ *                    still connecting);
+ *  eIO_Interrupt  -- if the call had been interrupted by a signal before
+ *                    any other verifiable status was available;
+ *  eIO_InvalidArg -- if the "event" is not one of those mentioned above.
+ * @li <b>NOTE:</b>  It is allowed to use a non-NULL zeroed STimeout to poll
+ *                   on the socket for the immediately available event and
+ *                   return it (or eIO_Timeout, otherwise) without blocking.
  */
 extern NCBI_XCONNECT_EXPORT EIO_Status SOCK_Wait
 (SOCK            sock,
@@ -779,8 +822,8 @@ typedef struct {
 /** Block until at least one of the sockets enlisted in "polls" array
  * (of size "n") becomes available for requested operation (event),
  * or until timeout expires (wait indefinitely if timeout is passed NULL).
- * Return eIO_Success if at least one socket was found ready; eIO_Timeout
- * if timeout expired; eIO_Unknown if underlying system call(s) failed.
+ * Return eIO_Success if at least one socket was found ready;  eIO_Timeout
+ * if timeout expired;  eIO_Unknown if underlying system call(s) failed.
  * @li <b>NOTE 1:</b> For a socket found not ready for an operation, eIO_Open is returned
  *        in its "revent"; for a failing socket, eIO_Close is returned;
  * @li <b>NOTE 2:</b> This call may return eIO_InvalidArg if
@@ -798,11 +841,11 @@ typedef struct {
  * @li <b>NOTE 6:</b> This call can cause some socket I/O in those sockets marked for
  *        read-on-write and those with pending connection or output data.
  * @param n
- *  [in] # of SSOCK_Poll elems in "polls"  
+ *  [in]  # of SSOCK_Poll elems in "polls"  
  * @param polls[]
  *  [in|out] array of query/result structures   
  * @param timeout
- *  [in] max time to wait (infinite if NULL)
+ *  [in]  max time to wait (infinite if NULL)
  * @param n_ready
  *  [out] # of ready sockets  (may be NULL) 
  */
@@ -862,9 +905,9 @@ extern NCBI_XCONNECT_EXPORT TRIGGER  POLLABLE_ToTRIGGER(POLLABLE);
  * @param sock
  *  [in]  socket handle 
  * @param event
- *  [in] one of:  eIO_[Read/Write/ReadWrite/Close]
+ *  [in]  one of:  eIO_[Read/Write/ReadWrite/Close]
  * @param timeout
- *  [in] new timeout value to set  
+ *  [in]  new timeout value to set  
  */
 extern NCBI_XCONNECT_EXPORT EIO_Status SOCK_SetTimeout
 (SOCK            sock,
@@ -940,7 +983,7 @@ extern NCBI_XCONNECT_EXPORT const STimeout* SOCK_GetTimeout
  * @param n_read
  *  [out] # of bytes read  (can be NULL)
  * @param how
- *  [in] how to read the data 
+ *  [in]  how to read the data 
  */
 extern NCBI_XCONNECT_EXPORT EIO_Status SOCK_Read
 (SOCK           sock,
@@ -989,9 +1032,9 @@ extern NCBI_XCONNECT_EXPORT EIO_Status SOCK_ReadLine
  * @param sock
  *  [in]  socket handle 
  * @param buf
- *  [in] data to push back to the socket's local buffer 
+ *  [in]  data to push back to the socket's local buffer 
  * @param size
- *  [in] # of bytes (starting at "buf") to push back 
+ *  [in]  # of bytes (starting at "buf") to push back 
  */
 extern NCBI_XCONNECT_EXPORT EIO_Status SOCK_PushBack
 (SOCK        sock,
@@ -1000,26 +1043,31 @@ extern NCBI_XCONNECT_EXPORT EIO_Status SOCK_PushBack
  );
 
 
-/**
+/** Return low-level socket I/O status of *last* socket operation.
+ * This call does not perform any I/O or socket related system calls.
  * @param sock
  *  [in]  socket handle 
  * @param direction
- *  [in] one of:  eIO_Open, eIO_Read, eIO_Write
+ *  [in]  one of:  eIO_Open, eIO_Read, eIO_Write
  * @return
- *  Return (for the specified "direction" [eIO_Open to check for closed sock]):
- *   eIO_Closed     -- if the connection was shutdown by SOCK_Shutdown(), or
- *                     (for "eIO_Read" only) if EOF was detected
- *                     if "direction"==eIO_Open, this code means socket closed
- *   eIO_Unknown    -- if an error was detected during the last I/O
- *   eIO_InvalidArg -- if "direction" is not one of:  Open, Read, Write
- *   eIO_Timeout    -- if the socket is not yet actually connected
- *   eIO_Success    -- otherwise (incl. eIO_Timeout on last I/O)
+ *   eIO_Closed     -- if connection has either been shut down / closed
+ *                     (in corresponding direction for eIO_Read or eIO_Write),
+ *                     or not yet been attempted (for eIO_Open);
+ *   eIO_Timeout    -- if connection request has been submitted but not
+ *                     completed (i.e. it was still pending during last I/O);
+ *   eIO_Interrupt  -- if last data I/O was interrupted by a signal
+ *                     (applicable only to eIO_Read or eIO_Write);
+ *   eIO_Unknown    -- if an error has been detected during last data I/O
+ *                     (applicable only to eIO_Read or eIO_Write);
+ *   eIO_InvalidArg -- if "direction" is not one of the allowed above;
+ *   eIO_Success    -- otherwise (also covers eIO_Timeout in last data I/O).
  *
- * @li <b>NOTE:</b>  The SOCK_Read() and SOCK_Wait(eIO_Read) will not return any error
- *        as long as there is any unread (buffered) data left.
- *        Thus, when you are "peeking" data instead of actually reading it,
- *        then this is the only "non-destructive" way to check whether EOF
- *        or an error has actually occurred on read.
+ * @li <b>NOTE:</b>  SOCK_Read(eIO_ReadPeek) and SOCK_Wait(eIO_Read) will not
+ *                   return any error as long as there is unread buffered
+ *                   data left.  Thus, when you are "peeking" data (instead of
+ *                   reading it out), then the only "non-destructive" way to
+ *                   check whether an EOF or an error has actually occurred,
+ *                   it is to use this call.
  */
 extern NCBI_XCONNECT_EXPORT EIO_Status SOCK_Status
 (SOCK      sock,
@@ -1258,12 +1306,12 @@ extern NCBI_XCONNECT_EXPORT EIO_Status DSOCK_Create
 /**
  * @param sock
  *  [out] socket created
- * @param log
- *  [in] whether to log data activity
+ * @param flags
+ *  [in]  additional socket properties
  */
 extern NCBI_XCONNECT_EXPORT EIO_Status DSOCK_CreateEx
 (SOCK*           sock,               
- ESwitch         log                 
+ TSOCK_Flags     flags
  );
 
 /**
@@ -1411,10 +1459,20 @@ extern NCBI_XCONNECT_EXPORT int/**bool*/ SOCK_IsServerSide(SOCK sock);
  * @param sock
  *  [in]  socket handle 
  * @return
- *  Non-zero value if socket "sock" was created by LSOCK_Accept().
+ *  Non-zero value if socket "sock" is a UNIX family named socket
  *  Return zero otherwise.
  */
 extern NCBI_XCONNECT_EXPORT int/**bool*/ SOCK_IsUNIX(SOCK sock);
+
+
+/**
+ * @param sock
+ *  [in]  socket handle 
+ * @return
+ *  Non-zero value if socket "sock" is using Secure Socket Layer (SSL).
+ *  Return zero otherwise.
+ */
+extern NCBI_XCONNECT_EXPORT int/**bool*/ SOCK_IsSecure(SOCK sock);
 
 
 
@@ -1613,6 +1671,23 @@ extern NCBI_XCONNECT_EXPORT size_t SOCK_HostPortToString
  unsigned short port,
  char*          buf,
  size_t         buflen
+ );
+
+
+/******************************************************************************
+ *  Secure Socket Layer support
+ */
+
+/*fwdecl*/
+struct SOCKSSL_struct;
+typedef const struct SOCKSSL_struct* SOCKSSL;
+
+
+typedef SOCKSSL (*FSSLSetup)(void);
+
+
+extern NCBI_XCONNECT_EXPORT void SOCK_SetupSSL
+(FSSLSetup setup
  );
 
 

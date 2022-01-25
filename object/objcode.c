@@ -29,18 +29,21 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.13 $
+* $Revision: 6.14 $
 *
 * File Description:  Object manager for module NCBI-SeqCode
 *
 * Modifications:  
 * --------------------------------------------------------------------------
-* Date	   Name        Description of modification
+* Date       Name        Description of modification
 * -------  ----------  -----------------------------------------------------
 * 05-13-93 Schuler     All public functions are now declared LIBCALL.
 *
 *
 * $Log: objcode.c,v $
+* Revision 6.14  2008/05/22 20:57:44  kans
+* environment variables to allow reading from data/*.val, replaced tabs in source code with spaces
+*
 * Revision 6.13  2006/09/19 15:26:37  kans
 * restored O and J to ncbistdaa now that BLAST is fixed
 *
@@ -96,7 +99,7 @@
 *
 * ==========================================================================
 */
-#include <objcode.h>		   /* the pub interface */
+#include <objcode.h>           /* the pub interface */
 #include <asncode.h>        /* the AsnTool header */
 
 static Boolean loaded = FALSE;
@@ -143,36 +146,36 @@ NLM_EXTERN SeqMapTablePtr LIBCALL SeqMapTableFree (SeqMapTablePtr smtp)
     if (smtp == NULL)
         return smtp;
     MemFree(smtp->table);
-	return (SeqMapTablePtr)MemFree(smtp);
+    return (SeqMapTablePtr)MemFree(smtp);
 }
 /*****************************************************************************
 *
 *   SeqMapTableAsnWrite(smtp, aip, atp)
-*   	atp is the current type (if identifier of a parent struct)
+*       atp is the current type (if identifier of a parent struct)
 *       if atp == NULL, then assumes it stands alone (SeqMapTable ::=)
 *
 *****************************************************************************/
 NLM_EXTERN Boolean LIBCALL SeqMapTableAsnWrite (SeqMapTablePtr smtp, AsnIoPtr aip, AsnTypePtr orig)
 {
-	DataVal av;
-	AsnTypePtr atp;
+    DataVal av;
+    AsnTypePtr atp;
     Uint1 i, num;
     Uint1Ptr ipnt;
     Boolean retval = FALSE;
 
-	if (! loaded)
-	{
-		if (! SeqCodeAsnLoad())
-			return FALSE;
-	}
+    if (! loaded)
+    {
+        if (! SeqCodeAsnLoad())
+            return FALSE;
+    }
 
-	if (aip == NULL)
-		return FALSE;
+    if (aip == NULL)
+        return FALSE;
 
-	atp = AsnLinkType(orig, SEQ_MAP_TABLE);   /* link local tree */
+    atp = AsnLinkType(orig, SEQ_MAP_TABLE);   /* link local tree */
     if (atp == NULL) return FALSE;
 
-	if (smtp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+    if (smtp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
 
     if (! AsnOpenStruct(aip, atp, (Pointer)smtp)) goto erret;
     
@@ -201,14 +204,14 @@ NLM_EXTERN Boolean LIBCALL SeqMapTableAsnWrite (SeqMapTablePtr smtp, AsnIoPtr ai
     if (! AsnCloseStruct(aip, atp, (Pointer)smtp)) goto erret;
     retval = TRUE;
 erret:
-	AsnUnlinkType(orig);       /* unlink local tree */
-	return retval;
+    AsnUnlinkType(orig);       /* unlink local tree */
+    return retval;
 }
 
 /*****************************************************************************
 *
 *   SeqMapTableAsnRead(aip, atp)
-*   	atp is the current type (if identifier of a parent struct)
+*       atp is the current type (if identifier of a parent struct)
 *            assumption is readIdent has occurred
 *       if atp == NULL, then assumes it stands alone and read ident
 *            has not occurred.
@@ -216,25 +219,25 @@ erret:
 *****************************************************************************/
 NLM_EXTERN SeqMapTablePtr LIBCALL SeqMapTableAsnRead (AsnIoPtr aip, AsnTypePtr orig)
 {
-	DataVal av;
-	AsnTypePtr atp;
+    DataVal av;
+    AsnTypePtr atp;
     SeqMapTablePtr smtp=NULL;
     Uint1 i, num;
     Uint1Ptr ipnt;
 
-	if (! loaded)
-	{
-		if (! SeqCodeAsnLoad())
-			return smtp;
-	}
+    if (! loaded)
+    {
+        if (! SeqCodeAsnLoad())
+            return smtp;
+    }
 
-	if (aip == NULL)
-		return smtp;
+    if (aip == NULL)
+        return smtp;
 
-	if (orig == NULL)           /* SeqMapTable ::= (self contained) */
-		atp = AsnReadId(aip, amp, SEQ_MAP_TABLE);
-	else
-		atp = AsnLinkType(orig, SEQ_MAP_TABLE);    /* link in local tree */
+    if (orig == NULL)           /* SeqMapTable ::= (self contained) */
+        atp = AsnReadId(aip, amp, SEQ_MAP_TABLE);
+    else
+        atp = AsnLinkType(orig, SEQ_MAP_TABLE);    /* link in local tree */
     if (atp == NULL) return smtp;
 
     smtp = SeqMapTableNew();
@@ -273,26 +276,26 @@ NLM_EXTERN SeqMapTablePtr LIBCALL SeqMapTableAsnRead (AsnIoPtr aip, AsnTypePtr o
         if (i < num)
             *ipnt = (Uint1)av.intvalue;
         else
-		{
+        {
             ErrPost(CTX_NCBIOBJ, 1, "Too many codes in Seq-map-table. line %ld",
                 aip->linenumber);
-			goto erret;
-		}
+            goto erret;
+        }
         ipnt++; i++;
     }
     if (AsnReadVal(aip, atp, &av) <= 0) goto erret;   /* end SEQUENCE OF */
     if (i != num)
-	{
+    {
         ErrPost(CTX_NCBIOBJ, 1, "Too few codes in Seq-map-table. line %ld",
             aip->linenumber);
-		goto erret;
-	}
+        goto erret;
+    }
 
     atp = AsnReadId(aip, amp, atp); if (atp == NULL) goto erret;   /* end struct */
     if (AsnReadVal(aip, atp, &av) <= 0) goto erret;
 ret:
-	AsnUnlinkType(orig);       /* unlink local tree */
-	return smtp;
+    AsnUnlinkType(orig);       /* unlink local tree */
+    return smtp;
 erret:
     smtp = SeqMapTableFree(smtp);
     goto ret;
@@ -365,37 +368,37 @@ NLM_EXTERN SeqCodeTablePtr LIBCALL SeqCodeTableFree (SeqCodeTablePtr sctp)
     }
     if (sctp->comps != NULL)
         MemFree(sctp->comps);
-	return (SeqCodeTablePtr)MemFree(sctp);
+    return (SeqCodeTablePtr)MemFree(sctp);
 }
 
 /*****************************************************************************
 *
 *   SeqCodeTableAsnWrite(sctp, aip, atp)
-*   	atp is the current type (if identifier of a parent struct)
+*       atp is the current type (if identifier of a parent struct)
 *       if atp == NULL, then assumes it stands alone (SeqCodeTable ::=)
 *
 *****************************************************************************/
 NLM_EXTERN Boolean LIBCALL SeqCodeTableAsnWrite (SeqCodeTablePtr sctp, AsnIoPtr aip, AsnTypePtr orig)
 {
-	DataVal av;
-	AsnTypePtr atp;
+    DataVal av;
+    AsnTypePtr atp;
     Uint1 i, num;
     Char tbuf[2];
     Boolean retval = FALSE;
 
-	if (! loaded)
-	{
-		if (! SeqCodeAsnLoad())
-			return FALSE;
-	}
+    if (! loaded)
+    {
+        if (! SeqCodeAsnLoad())
+            return FALSE;
+    }
 
-	if (aip == NULL)
-		return FALSE;
+    if (aip == NULL)
+        return FALSE;
 
-	atp = AsnLinkType(orig, SEQ_CODE_TABLE);   /* link local tree */
+    atp = AsnLinkType(orig, SEQ_CODE_TABLE);   /* link local tree */
     if (atp == NULL) return FALSE;
 
-	if (sctp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+    if (sctp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
 
     if (! AsnOpenStruct(aip, atp, (Pointer)sctp)) goto erret;
     
@@ -446,14 +449,14 @@ NLM_EXTERN Boolean LIBCALL SeqCodeTableAsnWrite (SeqCodeTablePtr sctp, AsnIoPtr 
     if (! AsnCloseStruct(aip, atp, (Pointer)sctp)) goto erret;
     retval = TRUE;
 erret:
-	AsnUnlinkType(orig);       /* unlink local tree */
-	return retval;
+    AsnUnlinkType(orig);       /* unlink local tree */
+    return retval;
 }
 
 /*****************************************************************************
 *
 *   SeqCodeTableAsnRead(aip, atp)
-*   	atp is the current type (if identifier of a parent struct)
+*       atp is the current type (if identifier of a parent struct)
 *            assumption is readIdent has occurred
 *       if atp == NULL, then assumes it stands alone and read ident
 *            has not occurred.
@@ -461,24 +464,24 @@ erret:
 *****************************************************************************/
 NLM_EXTERN SeqCodeTablePtr LIBCALL SeqCodeTableAsnRead (AsnIoPtr aip, AsnTypePtr orig)
 {
-	DataVal av;
-	AsnTypePtr atp;
+    DataVal av;
+    AsnTypePtr atp;
     SeqCodeTablePtr sctp=NULL;
     Uint1 i, num;
 
-	if (! loaded)
-	{
-		if (! SeqCodeAsnLoad())
-			return sctp;
-	}
+    if (! loaded)
+    {
+        if (! SeqCodeAsnLoad())
+            return sctp;
+    }
 
-	if (aip == NULL)
-		return sctp;
+    if (aip == NULL)
+        return sctp;
 
-	if (orig == NULL)           /* SeqCodeTable ::= (self contained) */
-		atp = AsnReadId(aip, amp, SEQ_CODE_TABLE);
-	else
-		atp = AsnLinkType(orig, SEQ_CODE_TABLE);    /* link in local tree */
+    if (orig == NULL)           /* SeqCodeTable ::= (self contained) */
+        atp = AsnReadId(aip, amp, SEQ_CODE_TABLE);
+    else
+        atp = AsnLinkType(orig, SEQ_CODE_TABLE);    /* link in local tree */
     if (atp == NULL) return sctp;
 
     sctp = SeqCodeTableNew();
@@ -509,7 +512,7 @@ NLM_EXTERN SeqCodeTablePtr LIBCALL SeqCodeTableAsnRead (AsnIoPtr aip, AsnTypePtr
         sctp->symbols = (CharPtr PNTR)MemNew((num * sizeof(CharPtr)));
         if (sctp->symbols == NULL) goto erret;
     }
-	sctp->names = (CharPtr PNTR)MemNew((num * sizeof(CharPtr)));
+    sctp->names = (CharPtr PNTR)MemNew((num * sizeof(CharPtr)));
     if (sctp->names == NULL) goto erret;
 
     atp = AsnReadId(aip, amp, atp); if (atp == NULL) goto erret;    /* start SEQUENCE OF */
@@ -524,11 +527,11 @@ NLM_EXTERN SeqCodeTablePtr LIBCALL SeqCodeTableAsnRead (AsnIoPtr aip, AsnTypePtr
     while ((atp = AsnReadId(aip, amp, atp)) == SEQ_CODE_TABLE_table_E)
     {
         if (i >= num)
-		{
+        {
             ErrPost(CTX_NCBIOBJ, 1, "Too many codes in Seq-code-table %s. line %ld",
                 sctp->code, aip->linenumber);
-			goto erret;
-		}
+            goto erret;
+        }
         if (AsnReadVal(aip, atp, &av) <= 0) goto erret;   /* start struct */
         atp = AsnReadId(aip, amp, atp); if (atp == NULL) goto erret;
         if (AsnReadVal(aip, atp, &av) <= 0) goto erret;   /* symbol */
@@ -549,11 +552,11 @@ NLM_EXTERN SeqCodeTablePtr LIBCALL SeqCodeTableAsnRead (AsnIoPtr aip, AsnTypePtr
     if (atp == NULL) goto erret;
     if (AsnReadVal(aip, atp, &av) <= 0) goto erret;   /* end SEQUENCE OF */
     if (i != num)
-	{
+    {
         ErrPost(CTX_NCBIOBJ, 1, "Too few codes in Seq-code-table %s. line %ld",
             sctp->code, aip->linenumber);
-		goto erret;
-	}
+        goto erret;
+    }
 
     atp = AsnReadId(aip, amp, atp); if (atp == NULL) goto erret;
     if (atp == SEQ_CODE_TABLE_comps)   /* comps present */
@@ -565,28 +568,28 @@ NLM_EXTERN SeqCodeTablePtr LIBCALL SeqCodeTableAsnRead (AsnIoPtr aip, AsnTypePtr
         while ((atp = AsnReadId(aip, amp, atp)) == SEQ_CODE_TABLE_comps_E)
         {
             if (i == num)
-			{
+            {
                 ErrPost(CTX_NCBIOBJ, 1, "Too many comps in Seq-code-table. line %ld",
                     aip->linenumber);
-				goto erret;
-			}
+                goto erret;
+            }
             if (AsnReadVal(aip, atp, &av) <= 0) goto erret;
             sctp->comps[i] = (Uint1)av.intvalue;
             i++;
         }
         if (i != num)
-		{
+        {
             ErrPost(CTX_NCBIOBJ, 1, "Too few comps in Seq-code-table. line %ld",
                 aip->linenumber);
-			goto erret;
-		}
+            goto erret;
+        }
         if (AsnReadVal(aip, atp, &av) <= 0) goto erret;   /* end sequence of */
         atp = AsnReadId(aip, amp, atp); if (atp == NULL) goto erret;
     }
     if (AsnReadVal(aip, atp, &av) <= 0) goto erret;
 ret:
-	AsnUnlinkType(orig);       /* unlink local tree */
-	return sctp;
+    AsnUnlinkType(orig);       /* unlink local tree */
+    return sctp;
 erret:
     sctp = SeqCodeTableFree(sctp);
     goto ret;
@@ -652,36 +655,36 @@ NLM_EXTERN SeqCodeSetPtr LIBCALL SeqCodeSetFree (SeqCodeSetPtr scsp)
         SeqMapTableFree(smtp);
         smtp = smtpnext;
     }
-	return (SeqCodeSetPtr)MemFree(scsp);
+    return (SeqCodeSetPtr)MemFree(scsp);
 }
 
 /*****************************************************************************
 *
 *   SeqCodeSetAsnWrite(scsp, aip, atp)
-*   	atp is the current type (if identifier of a parent struct)
+*       atp is the current type (if identifier of a parent struct)
 *       if atp == NULL, then assumes it stands alone (SeqCodeSet ::=)
 *
 *****************************************************************************/
 NLM_EXTERN Boolean LIBCALL SeqCodeSetAsnWrite (SeqCodeSetPtr scsp, AsnIoPtr aip, AsnTypePtr orig)
 {
-	AsnTypePtr atp;
+    AsnTypePtr atp;
     SeqMapTablePtr smtp;
     SeqCodeTablePtr sctp;
     Boolean retval = FALSE;
 
-	if (! loaded)
-	{
-		if (! SeqCodeAsnLoad())
-			return FALSE;
-	}
+    if (! loaded)
+    {
+        if (! SeqCodeAsnLoad())
+            return FALSE;
+    }
 
-	if (aip == NULL)
-		return FALSE;
+    if (aip == NULL)
+        return FALSE;
 
-	atp = AsnLinkType(orig, SEQ_CODE_SET);   /* link local tree */
+    atp = AsnLinkType(orig, SEQ_CODE_SET);   /* link local tree */
     if (atp == NULL) return FALSE;
 
-	if (scsp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+    if (scsp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
 
     if (! AsnOpenStruct(aip, atp, (Pointer)scsp)) goto erret;
 
@@ -712,14 +715,14 @@ NLM_EXTERN Boolean LIBCALL SeqCodeSetAsnWrite (SeqCodeSetPtr scsp, AsnIoPtr aip,
     if (! AsnCloseStruct(aip, atp, (Pointer)scsp)) goto erret;
     retval = TRUE;
 erret:
-	AsnUnlinkType(orig);       /* unlink local tree */
-	return retval;
+    AsnUnlinkType(orig);       /* unlink local tree */
+    return retval;
 }
 
 /*****************************************************************************
 *
 *   SeqCodeSetAsnRead(aip, atp)
-*   	atp is the current type (if identifier of a parent struct)
+*       atp is the current type (if identifier of a parent struct)
 *            assumption is readIdent has occurred
 *       if atp == NULL, then assumes it stands alone and read ident
 *            has not occurred.
@@ -727,40 +730,40 @@ erret:
 *****************************************************************************/
 NLM_EXTERN SeqCodeSetPtr LIBCALL SeqCodeSetAsnRead (AsnIoPtr aip, AsnTypePtr orig)
 {
-	DataVal av;
-	AsnTypePtr atp, oldatp;
+    DataVal av;
+    AsnTypePtr atp, oldatp;
     SeqCodeSetPtr scsp=NULL;
     SeqMapTablePtr map, currmap = NULL;
     SeqCodeTablePtr code, currcode = NULL;
 
-	if (! loaded)
-	{
-		if (! SeqCodeAsnLoad())
-			return scsp;
-	}
+    if (! loaded)
+    {
+        if (! SeqCodeAsnLoad())
+            return scsp;
+    }
 
-	if (aip == NULL)
-		return scsp;
+    if (aip == NULL)
+        return scsp;
 
-	if (orig == NULL)           /* SeqCodeSet ::= (self contained) */
-		atp = AsnReadId(aip, amp, SEQ_CODE_SET);
-	else
-		atp = AsnLinkType(orig, SEQ_CODE_SET);    /* link in local tree */
+    if (orig == NULL)           /* SeqCodeSet ::= (self contained) */
+        atp = AsnReadId(aip, amp, SEQ_CODE_SET);
+    else
+        atp = AsnLinkType(orig, SEQ_CODE_SET);    /* link in local tree */
     oldatp = atp;
-	if (atp == NULL) return scsp;
+    if (atp == NULL) return scsp;
 
     scsp = SeqCodeSetNew();
-	if (scsp == NULL) goto erret;
+    if (scsp == NULL) goto erret;
     
     if (AsnReadVal(aip, atp, &av) <= 0) goto erret;   /* read the start struct */
     
     while((atp = AsnReadId(aip, amp, atp)) != oldatp)
     {
-		if (atp == NULL) goto erret;
+        if (atp == NULL) goto erret;
         if (atp == SEQ_CODE_SET_codes_E)
         {
             code = SeqCodeTableAsnRead(aip, atp);
-			if (code == NULL) goto erret;
+            if (code == NULL) goto erret;
             if (scsp->codes == NULL)
                 scsp->codes = code;
             else
@@ -770,7 +773,7 @@ NLM_EXTERN SeqCodeSetPtr LIBCALL SeqCodeSetAsnRead (AsnIoPtr aip, AsnTypePtr ori
         else if (atp == SEQ_CODE_SET_maps_E)
         {
             map = SeqMapTableAsnRead(aip, atp);
-			if (map == NULL) goto erret;
+            if (map == NULL) goto erret;
             if (scsp->maps == NULL)
                 scsp->maps = map;
             else
@@ -778,17 +781,17 @@ NLM_EXTERN SeqCodeSetPtr LIBCALL SeqCodeSetAsnRead (AsnIoPtr aip, AsnTypePtr ori
             currmap = map;
         }
         else                 /* the other struct ends */
-		{
+        {
             if (AsnReadVal(aip, atp, &av) <= 0) goto erret;
-		}
+        }
     }
     if (AsnReadVal(aip, atp, &av) <= 0) goto erret;  /* end struct */
 ret:
-	AsnUnlinkType(orig);       /* unlink local tree */
-	return scsp;
+    AsnUnlinkType(orig);       /* unlink local tree */
+    return scsp;
 erret:
-	scsp = SeqCodeSetFree(scsp);
-	goto ret;
+    scsp = SeqCodeSetFree(scsp);
+    goto ret;
 }
 
 /*****************************************************************************
@@ -1041,31 +1044,45 @@ NLM_EXTERN SeqCodeSetPtr LIBCALL SeqCodeSetLoad (void)
     Char buf[PATH_MAX];
     AsnIoPtr aip;
 
-	if (scspl != NULL)
-		return scspl;
+    if (scspl != NULL)
+        return scspl;
+
+    if (! loaded)
+    {
+        if (! SeqCodeAsnLoad())
+            return (SeqCodeSetPtr)NULL;
+    }
+
+#ifdef OS_UNIX
+    if (getenv ("USE_SEQCODE_FILE") == NULL) {
+          if (LoadSeqCodeFromLocalString ()) {
+              return scspl;
+          }
+    }
+#endif
 
     if (! FindPath("ncbi", "ncbi", "data", buf, sizeof (buf)))
-	{
+    {
 
-		if (LoadSeqCodeFromLocalString ()) {
-			return scspl;
-		}
+        if (LoadSeqCodeFromLocalString ()) {
+            return scspl;
+        }
 
-		ErrPost(CTX_NCBIOBJ, 1, "FindPath failed in SeqCodeSetLoad - ncbi configuration file missing or incorrect");
+        ErrPost(CTX_NCBIOBJ, 1, "FindPath failed in SeqCodeSetLoad - ncbi configuration file missing or incorrect");
         return scspl;
-	}
+    }
 
     StringCat(buf, "seqcode.val");
     if ((aip = AsnIoOpen(buf, "rb")) == NULL)
-	{
+    {
 
-		if (LoadSeqCodeFromLocalString ()) {
-			return scspl;
-		}
+        if (LoadSeqCodeFromLocalString ()) {
+            return scspl;
+        }
 
-		ErrPost(CTX_NCBIOBJ, 1, "Couldn't open [%s]", buf);
+        ErrPost(CTX_NCBIOBJ, 1, "Couldn't open [%s]", buf);
         return scspl;
-	}
+    }
 
     scspl = SeqCodeSetAsnRead(aip, NULL);
 

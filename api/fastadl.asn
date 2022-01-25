@@ -1,4 +1,4 @@
---$Id: fastadl.asn,v 6.4 2001/11/02 21:44:54 camacho Exp $
+--$Id: fastadl.asn,v 6.6 2008/04/28 15:55:43 kazimird Exp $
 --
 -- Notes:
 --
@@ -21,28 +21,13 @@
 -- indicate a link that could be established based upon the gi of the 
 -- database sequence.
 --
--- $Revision: 6.4 $
---
--- $Log: fastadl.asn,v $
--- Revision 6.4  2001/11/02 21:44:54  camacho
--- Make title and taxid optional fields
---
--- Revision 6.3  2001/04/02 15:08:53  madden
--- Add other-info SEQUENCE OF INTEGER for future use
---
--- Revision 6.2  2001/03/29 19:03:40  madden
--- Minor change for consistency
---
--- Revision 6.1  2000/09/14 20:05:00  shavirin
--- Initial revision.
---
---
+
 NCBI-BlastDL DEFINITIONS ::=
 BEGIN
 
 EXPORTS Blast-def-line-set, Blast-def-line;
         
-IMPORTS Seq-id FROM NCBI-Seqloc;
+IMPORTS Seq-id, Seq-loc FROM NCBI-Seqloc;
 
 Blast-def-line-set ::= SEQUENCE OF Blast-def-line  -- all deflines for an entry
 
@@ -55,4 +40,29 @@ Blast-def-line ::= SEQUENCE {
 	other-info SEQUENCE OF INTEGER OPTIONAL   -- for future use (probably genomic sequences)
 }
 
+-- This defines the possible sequence filtering algorithms to be used in a
+-- BLAST database
+Blast-filter-program ::= INTEGER {
+    not-set             (0),
+    dust                (10),
+    seg                 (20),
+    windowmasker        (30),
+    repeat              (40),
+    other               (100),
+    max                 (255)
+}
+
+Blast-mask-list ::= SEQUENCE {
+    masks SEQUENCE OF Seq-loc,
+    more BOOLEAN
+}
+
+Blast-db-mask-info ::= SEQUENCE {
+    algo-id      INTEGER,
+    algo-program Blast-filter-program,
+    algo-options VisibleString,
+    masks        Blast-mask-list
+}
+
 END
+

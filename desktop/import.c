@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/18/95
 *
-* $Revision: 6.68 $
+* $Revision: 6.70 $
 *
 * File Description: 
 *
@@ -112,7 +112,9 @@ extern EnumFieldAssocPtr import_featdef_alist (Boolean notJustImpFeats, Boolean 
               subtype != FEATDEF_allele &&
               subtype != FEATDEF_site_ref &&
               subtype != FEATDEF_gap &&
-              subtype != FEATDEF_misc_RNA) {
+              subtype != FEATDEF_misc_RNA &&
+              subtype != FEATDEF_satellite &&
+              subtype != FEATDEF_repeat_unit) {
             if (allowPeptideFeats ||
                 (subtype != FEATDEF_mat_peptide &&
                  subtype != FEATDEF_sig_peptide &&
@@ -2763,6 +2765,7 @@ typedef struct gbblockpage {
   ButtoN        htgsCancelled;
   ButtoN        tpaExperimental;
   ButtoN        tpaInferential;
+  ButtoN        tpaReassembly;
   DialoG        kywds;
   DialoG        xaccns;
   DialoG        entryDate;
@@ -2787,6 +2790,7 @@ static void GBBlockPtrToGenBankPage (DialoG d, Pointer data)
   Boolean         isFulltop = FALSE;
   Boolean         isExperimental = FALSE;
   Boolean         isInferential = FALSE;
+  Boolean         isReassembly = FALSE;
   CharPtr         str;
   ValNodePtr      vnp;
 
@@ -2805,7 +2809,8 @@ static void GBBlockPtrToGenBankPage (DialoG d, Pointer data)
           StringICmp (str, "HTGS_ACTIVEFIN") != 0 &&
           StringICmp (str, "HTGS_CANCELLED") != 0 &&
           StringICmp (str, "TPA:EXPERIMENTAL") != 0 &&
-          StringICmp (str, "TPA:INFERENTIAL") != 0) {
+          StringICmp (str, "TPA:INFERENTIAL") != 0 &&
+          StringICmp (str, "TPA:REASSEMBLY") != 0) {
         ValNodeCopyStr (&head, 0, str);
       }
     }
@@ -2829,6 +2834,9 @@ static void GBBlockPtrToGenBankPage (DialoG d, Pointer data)
       } else if (StringICmp ((CharPtr) vnp->data.ptrvalue, "TPA:INFERENTIAL") == 0 ||
                  StringICmp ((CharPtr) vnp->data.ptrvalue, "TPA_INFERENTIAL") == 0) {
         isInferential = TRUE;
+      } else if (StringICmp ((CharPtr) vnp->data.ptrvalue, "TPA:REASSEMBLY") == 0 ||
+                 StringICmp ((CharPtr) vnp->data.ptrvalue, "TPA_REASSEMBLY") == 0) {
+        isReassembly = TRUE;
       }
     }
     SafeSetStatus (gpp->htgsDraft, isDraft);
@@ -2837,6 +2845,7 @@ static void GBBlockPtrToGenBankPage (DialoG d, Pointer data)
     SafeSetStatus (gpp->htgsCancelled, isCancelled);
     SafeSetStatus (gpp->tpaExperimental, isExperimental);
     SafeSetStatus (gpp->tpaInferential, isInferential);
+    SafeSetStatus (gpp->tpaReassembly, isReassembly);
   }
 }
 
@@ -2851,6 +2860,7 @@ static Pointer GenBankPageToGBBlockPtr (DialoG d)
   Boolean         noFulltop;
   Boolean         noExperimental;
   Boolean         noInferential;
+  Boolean         noReassembly;
   ValNodePtr      vnp;
 
   gbp = NULL;
@@ -2918,7 +2928,7 @@ static Pointer GenBankPageToGBBlockPtr (DialoG d)
           }
         }
         if (noExperimental) {
-          ValNodeCopyStr (&(gbp->keywords), 0, "TPA:EXPERIMENTAL");
+          ValNodeCopyStr (&(gbp->keywords), 0, "TPA:experimental");
         }
       }
       if (GetStatus (gpp->tpaInferential)) {
@@ -2929,7 +2939,18 @@ static Pointer GenBankPageToGBBlockPtr (DialoG d)
           }
         }
         if (noInferential) {
-          ValNodeCopyStr (&(gbp->keywords), 0, "TPA:INFERENTIAL");
+          ValNodeCopyStr (&(gbp->keywords), 0, "TPA:inferential");
+        }
+      }
+      if (GetStatus (gpp->tpaReassembly)) {
+        noReassembly = TRUE;
+        for (vnp = gbp->keywords; vnp != NULL; vnp = vnp->next) {
+          if (StringICmp ((CharPtr) vnp->data.ptrvalue, "TPA:REASSEMBLY") == 0) {
+            noReassembly = FALSE;
+          }
+        }
+        if (noReassembly) {
+          ValNodeCopyStr (&(gbp->keywords), 0, "TPA:reassembly");
         }
       }
 
@@ -2953,6 +2974,7 @@ static void DeleteKeywordProc (ButtoN b)
     SafeSetStatus (gpp->htgsCancelled, FALSE);
     SafeSetStatus (gpp->tpaExperimental, FALSE);
     SafeSetStatus (gpp->tpaInferential, FALSE);
+    SafeSetStatus (gpp->tpaReassembly, FALSE);
   }
 }
 
@@ -3053,7 +3075,8 @@ static DialoG CreateGenBankDialog (GrouP h, CharPtr title, ValNodePtr sdp, GenBa
           StringICmp ((CharPtr) vnp->data.ptrvalue, "HTGS_ACTIVEFIN") != 0 ||
           StringICmp ((CharPtr) vnp->data.ptrvalue, "HTGS_CANCELLED") != 0 ||
           StringICmp ((CharPtr) vnp->data.ptrvalue, "TPA:EXPERIMENTAL") != 0 ||
-          StringICmp ((CharPtr) vnp->data.ptrvalue, "TPA:INFERENTIAL") != 0) {
+          StringICmp ((CharPtr) vnp->data.ptrvalue, "TPA:INFERENTIAL") != 0 ||
+          StringICmp ((CharPtr) vnp->data.ptrvalue, "TPA:REASSEMBLY") != 0) {
         showKeywords = TRUE;
       }
     }
@@ -3069,6 +3092,7 @@ static DialoG CreateGenBankDialog (GrouP h, CharPtr title, ValNodePtr sdp, GenBa
       gpp->htgsCancelled = CheckBox (f5, "HTGS_CANCELLED", NULL);
       gpp->tpaExperimental = CheckBox (f5, "TPA:EXPERIMENTAL", NULL);
       gpp->tpaInferential = CheckBox (f5, "TPA:INFERENTIAL", NULL);
+      gpp->tpaReassembly = CheckBox (f5, "TPA:REASSEMBLY", NULL);
     }
     if (internal) {
       b = PushButton (m, "Delete All Keywords", DeleteKeywordProc);

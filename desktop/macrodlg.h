@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11/23/2007
 *
-* $Revision: 1.7 $
+* $Revision: 1.11 $
 *
 * File Description: 
 *
@@ -55,9 +55,14 @@ NLM_EXTERN DialoG TabColumnConfigDialog
  Nlm_ChangeNotifyProc     change_notify,
  Pointer                  change_userdata);
 NLM_EXTERN DialoG TabColumnConfigListDialog (GrouP h, ValNodePtr first_values, ValNodePtr blank_list, Nlm_ChangeNotifyProc change_notify, Pointer change_userdata);
+NLM_EXTERN DialoG MatchTypeDialog (GrouP g, Nlm_ChangeNotifyProc change_notify, Pointer change_userdata);
 
 NLM_EXTERN DialoG FeatureTypeDialog (GrouP h, Nlm_ChangeNotifyProc change_notify, Pointer change_userdata);
 NLM_EXTERN DialoG StringConstraintDialog (GrouP h, CharPtr label, Boolean clear_btn, Nlm_ChangeNotifyProc change_notify, Pointer change_userdata);
+NLM_EXTERN DialoG ComplexConstraintDialog (GrouP h, Nlm_ChangeNotifyProc change_notify, Pointer change_userdata);
+NLM_EXTERN DialoG MolInfoBlockDialog (GrouP h, Boolean edit, Nlm_ChangeNotifyProc change_notify, Pointer change_userdata);
+NLM_EXTERN void SingleAECRMacroAction (Uint2 entityID, Boolean indexer_version, Uint1 AECR_action_type, Uint1 AECR_qual_type);
 
+NLM_EXTERN Uint2 TwoStepExistingText (Int4 num_found, Boolean non_text, Boolean allow_multi);
 
 #endif

@@ -1,4 +1,4 @@
-/* $Id: posit.h,v 6.31 2007/01/22 19:20:55 camacho Exp $
+/* $Id: posit.h,v 6.32 2008/03/31 13:36:10 madden Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,11 +32,15 @@ Author: Alejandro Schaffer
 
 Contents: header file for position-based BLAST.
 
-$Revision: 6.31 $
+$Revision: 6.32 $
 
 *****************************************************************************/
 /*
 * $Log: posit.h,v $
+* Revision 6.32  2008/03/31 13:36:10  madden
+* Implemented a new method to compute effective observations.
+* Implemented a new entropy-based method to compute column-specific pseudocounts.
+*
 * Revision 6.31  2007/01/22 19:20:55  camacho
 * From Alejandro Schaffer:
 * In posPurgeMatches, when in command-line mode, added a warning for the
@@ -276,6 +280,9 @@ typedef struct posSearchItems {
                   each query position, default value is 1 to
                   include query*/
   Int4 **posC; /*position-sepcific occurrence counts*/
+  Int4 **posDistinctDistrib; /*For position i, how many positions in its block
+                               have j distinct letters*/
+  Int4 *posNumParticipating; /*number of sequences at each position*/
   Nlm_FloatHi **posMatchWeights;
   BLAST_Score **posMatrix;
   BLAST_Score **posPrivateMatrix;
@@ -313,6 +320,13 @@ typedef struct compactSearchItems {
     BLAST_KarlinBlkPtr *kbp_std, *kbp_psi, *kbp_gap_std, *kbp_gap_psi;
     Nlm_FloatHi	lambda_ideal, K_ideal;
     Boolean use_best_align;
+    Int4 currentPass;
+    Int4 maximumPass; 
+    Nlm_FloatHi standardProbWeight; /*weight of standard probs for
+				      column-specific pseudocounts*/
+    Nlm_FloatHi HmethodNumerator;
+    Nlm_FloatHi HmethodDenominator;
+    Char queryFileName[100];
 } compactSearchItems;
   
 

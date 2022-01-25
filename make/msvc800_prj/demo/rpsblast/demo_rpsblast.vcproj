@@ -3,7 +3,7 @@
 	ProjectType="Visual C++"
 	Version="8.00"
 	Name="demo_rpsblast"
-	ProjectGUID="{84BE55F0-B6BE-4DFA-B387-4D09C24B4875}"
+	ProjectGUID="{BFAA28A2-B0D3-414F-B1A4-3B64E79CD06A}"
 	>
 	<Platforms>
 		<Platform

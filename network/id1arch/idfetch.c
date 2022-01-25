@@ -25,6 +25,12 @@
  * Author Karl Sirotkin
  *
  $Log: idfetch.c,v $
+ Revision 1.42  2008/03/08 03:44:04  ucko
+ Comment out one more extraneous explicit CONN_STATELESS setting.
+
+ Revision 1.41  2008/03/07 22:12:24  lavr
+ #if 0 and comment out explicit STATENESS requirement on service
+
  Revision 1.40  2007/03/27 13:30:10  kans
  moved sqnutils.h early to avoid collision with grp1 define
 
@@ -458,6 +464,7 @@ Int2 Main()
     exit (1);
 
 
+#if 0
 	if(   fp_in 
 	   || myargs[entrezqueryarg].strvalue
            || myargs[entrezqueryfilearg].strvalue
@@ -465,11 +472,13 @@ Int2 Main()
            || myargs[outtypearg].intvalue == 4
            || myargs[outtypearg].intvalue == 5
               ) { /*** Statefull mode ***/
-		putenv("CONN_STATELESS=FALSE"); 
+		/* putenv("CONN_STATELESS=FALSE"); */
 	}
 	else { /*** Stateless mode ***/
-		putenv("CONN_STATELESS=TRUE"); 
+        /* putenv("CONN_STATELESS=TRUE");  */
 	}
+#endif
+
 
   if(!ID1BioseqFetchEnable("idfetch",TRUE))
   {
@@ -1080,7 +1089,7 @@ static Boolean IdFetch_func(Int4 gi,CharPtr db, Int4 ent,Int2 maxplex)
   }
   else
   {
-    putenv("CONN_STATELESS=FALSE");  /*** some formats may ask a lot of information ***/
+    /* putenv("CONN_STATELESS=FALSE"); */ /*** some formats may ask a lot of information ***/
     switch(myargs[outtypearg].intvalue)
     {
     case 1:

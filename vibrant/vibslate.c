@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.45 $
+* $Revision: 6.46 $
 *
 * File Description:
 *       Vibrant slate (universal drawing environment) functions
@@ -167,7 +167,9 @@ static Nlm_SlatE        recentSlate = NULL;
 static Nlm_SlateData    recentSlateData;
 
 static Nlm_SlatE        recentlyClickedSlate = NULL;
+#ifndef WIN_MSWIN
 static Nlm_Int4         lastClickTime = 0;
+#endif
 
 static Nlm_PaneL        recentlyClickedPanel = NULL;
 
@@ -932,7 +934,7 @@ static void Nlm_SlateVertScrollAction (Nlm_BaR sb, Nlm_SlatE s,
   Nlm_Int2         height;
   Nlm_Int2         i;
   Nlm_Int2         last;
-  Nlm_Int2         limit;
+  Nlm_Int2         limit = 0;
   Nlm_Int2         numRows;
   Nlm_Int2         oldPgDn;
   Nlm_OfsPtr       optr;
@@ -1649,7 +1651,7 @@ static void Nlm_SetSlatePosition(Nlm_GraphiC s, Nlm_RectPtr r,
   Nlm_PaneL      p;
   Nlm_RecT       pr;
   Nlm_RecT       sr;
-  Nlm_WindoW     tempPort;
+  Nlm_WindoW     tempPort = NULL;
   Nlm_BaR        vsb;
   Nlm_Boolean    is_realized;
 
@@ -3953,8 +3955,7 @@ static void MyCls_OnLButtonDown(HWND hwnd, BOOL fDoubleClick,
 
           n = Nlm_GetPanelPrev( p );
           Nlm_GetPanelData(p, &pdata);
-          if (!pdata.click  &&  !pdata.drag  &&
-              !pdata.hold   &&  !pdata.release ||
+          if ((!pdata.click  &&  !pdata.drag  &&  !pdata.hold   &&  !pdata.release) ||
               !Nlm_GetEnabled( gp )  ||  !Nlm_GetVisible( gp ))
             continue;
 

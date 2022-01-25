@@ -3,7 +3,7 @@
 	ProjectType="Visual C++"
 	Version="8.00"
 	Name="demo_blastpgp"
-	ProjectGUID="{9DC94AC5-FEA4-40B1-9F01-B08B899DE64E}"
+	ProjectGUID="{90E79A5F-AC4E-4D7A-BB2F-9FD80E9E789A}"
 	>
 	<Platforms>
 		<Platform

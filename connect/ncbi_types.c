@@ -1,4 +1,4 @@
-/*  $Id: ncbi_types.c,v 1.2 2007/08/06 16:25:34 kazimird Exp $
+/*  $Id: ncbi_types.c,v 1.3 2008/05/31 11:25:47 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -49,7 +49,7 @@ extern STimeout* NcbiMsToTimeout(STimeout* timeout, unsigned long ms)
 {
     if (ms == (unsigned long)(-1L))
         return 0;
-    timeout->sec  = ms / 1000;
-    timeout->usec = ms % 1000;
+    timeout->sec  =  ms / 1000;
+    timeout->usec = (ms % 1000) * 1000;
     return timeout;
 }

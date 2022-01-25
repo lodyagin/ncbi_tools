@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/23/07
 *
-* $Revision: 1.20 $
+* $Revision: 1.24 $
 *
 * File Description:
 *
@@ -80,10 +80,10 @@ typedef struct drflags {
   CharPtr  output_dir;
   FILE     *outfp;
   Int4     numrecords;
-  DiscReportOutputConfigData ocd;
-  DiscrepancyConfigData dcd;
   ValNodePtr            sep_list;
   ValNodePtr            bsplist;
+
+  GlobalDiscrepReportPtr global_report;
 } DRFlagData, PNTR DRFlagPtr;
 
 #ifdef INTERNAL_NCBI_ASNDISC
@@ -493,67 +493,17 @@ static ValNodePtr DoLockFarComponents (
   return rsult;
 }
 
-static void ProcessSeqEntryList (DRFlagPtr drfp, CharPtr filename)
+
+static void ReleaseDiscrepancyReportSeqEntries (DRFlagPtr drfp)
 {
-  ValNodePtr  discrepancy_list, vnp;
-  ObjMgrPtr   omp;
+  ValNodePtr vnp;
   SeqEntryPtr sep;
-  FILE        *ofp = NULL;
-  Boolean     need_ofp_close = FALSE;
-  Char        path [PATH_MAX];
-  CharPtr     ptr;
+  ObjMgrPtr   omp;
 
-  if (drfp == NULL || drfp->sep_list == NULL) return;
-
-  if (drfp->outfp == NULL) {
-    if (StringDoesHaveText (drfp->output_dir)) {
-      if (StringLen (drfp->output_dir) > PATH_MAX) {
-        Message (MSG_ERROR, "Unable to generate output file - path name is too long");
-        return;
-      }
-      StringCpy (path, drfp->output_dir);
-#ifdef OS_WINNT
-      ptr = StringRChr (filename, '\\');
-      if (path[StringLen(path) - 1] != '\\') {
-        StringCat (path, "\\");
-      }
-#else
-      ptr = StringRChr (filename, '/');
-      if (path[StringLen(path) - 1] != '/') {
-        StringCat (path, "/");
-      }
-#endif;
-      if (ptr == NULL) {
-        StringNCat (path, filename, PATH_MAX - StringLen(path) - 1);
-      } else {
-        StringNCat (path, ptr + 1, PATH_MAX - StringLen(path) - 1);
-      }
-    } else {
-      StringNCpy_0 (path, filename, sizeof (path));
-    }
-    ptr = StringRChr (path, '.');
-    if (ptr != NULL) {
-      *ptr = '\0';
-    }
-    if (StringDoesHaveText (drfp->output_suffix)) {
-      StringNCat (path, drfp->output_suffix, PATH_MAX - StringLen(path) - 1);
-      path[PATH_MAX - 1] = 0;
-    } else {
-      StringCat (path, ".dr");
-    }
-    if (drfp->outfp == NULL) {
-      ofp = FileOpen (path, "w");
-      need_ofp_close = TRUE;
-    } else {
-      ofp = drfp->outfp;
-    }
-  } else {
-    ofp = drfp->outfp;
+  if (drfp == NULL) {
+    return;
   }
 
-  discrepancy_list = CollectDiscrepancies (&(drfp->dcd), drfp->sep_list, taxlookup);
-  WriteAsnDiscReport (discrepancy_list, ofp, &(drfp->ocd), TRUE);
-  discrepancy_list = FreeClickableList (discrepancy_list);
   for (vnp = drfp->sep_list; vnp != NULL; vnp = vnp->next) {
     sep = vnp->data.ptrvalue;
     SeqEntryFree (sep);
@@ -566,13 +516,61 @@ static void ProcessSeqEntryList (DRFlagPtr drfp, CharPtr filename)
   SeqEntrySetScope (NULL);
   drfp->sep_list = ValNodeFree (drfp->sep_list);
   
-  drfp->ocd.filename_list = FreeFilenameList (drfp->ocd.filename_list);
-
   drfp->bsplist = UnlockFarComponents (drfp->bsplist);
+}
 
-  if (ofp != NULL && need_ofp_close) {
-    FileClose (ofp);
+
+static void ProcessSeqEntryList (DRFlagPtr drfp, CharPtr filename)
+{
+  ValNodePtr  discrepancy_list;
+  FILE        *ofp = NULL;
+  Char        path [PATH_MAX];
+  CharPtr     ptr;
+
+  if (drfp == NULL || drfp->sep_list == NULL) return;
+
+  if (StringDoesHaveText (drfp->output_dir)) {
+    if (StringLen (drfp->output_dir) > PATH_MAX) {
+      Message (MSG_ERROR, "Unable to generate output file - path name is too long");
+      return;
+    }
+    StringCpy (path, drfp->output_dir);
+#ifdef OS_WINNT
+    ptr = StringRChr (filename, '\\');
+    if (path[StringLen(path) - 1] != '\\') {
+      StringCat (path, "\\");
+    }
+#else
+    ptr = StringRChr (filename, '/');
+    if (path[StringLen(path) - 1] != '/') {
+      StringCat (path, "/");
+    }
+#endif;
+    if (ptr == NULL) {
+      StringNCat (path, filename, PATH_MAX - StringLen(path) - 1);
+    } else {
+      StringNCat (path, ptr + 1, PATH_MAX - StringLen(path) - 1);
+    }
+  } else {
+    StringNCpy_0 (path, filename, sizeof (path));
   }
+  ptr = StringRChr (path, '.');
+  if (ptr != NULL) {
+    *ptr = '\0';
+  }
+  if (StringDoesHaveText (drfp->output_suffix)) {
+    StringNCat (path, drfp->output_suffix, PATH_MAX - StringLen(path) - 1);
+    path[PATH_MAX - 1] = 0;
+  } else {
+    StringCat (path, ".dr");
+  }
+  ofp = FileOpen (path, "w");
+
+  discrepancy_list = CollectDiscrepancies (drfp->global_report->test_config, drfp->sep_list, taxlookup);
+  WriteAsnDiscReport (discrepancy_list, ofp, drfp->global_report->output_config, TRUE);
+  discrepancy_list = FreeClickableList (discrepancy_list);
+
+  FileClose (ofp);
 }
 
 
@@ -681,8 +679,6 @@ static void ProcessSingleRecord (
 
     if (sep != NULL) {
       ValNodeAddPointer (&(drfp->sep_list), 0, sep);
-      ValNodeAddInt (&(drfp->ocd.filename_list), FILENAME_LIST_ENTITY_ID_ITEM, (Int4) entityID);
-      ValNodeAddPointer (&(drfp->ocd.filename_list), FILENAME_LIST_FILENAME_ITEM, StringSave (filename));
 
       if (drfp->lock) {
         bsplist_next = DoLockFarComponents (sep, drfp);
@@ -883,11 +879,23 @@ static void ProcessMultipleRecord (
 
 }
 
-static void ProcessOneRecord (
-  CharPtr filename,
-  Pointer userdata
-)
 
+static void ProcessSeqEntryListWithCollation (GlobalDiscrepReportPtr g, ValNodePtr sep_list, CharPtr filename)
+{
+  ValNodePtr  vnp;
+  SeqEntryPtr sep;
+
+  if (g == NULL || sep_list == NULL) return;
+
+  for (vnp = sep_list; vnp != NULL; vnp = vnp->next) {
+    sep = vnp->data.ptrvalue;
+    AddSeqEntryToGlobalDiscrepReport (sep, g, filename);
+  }
+
+}
+
+
+static void ProcessOneRecord (CharPtr filename, Pointer userdata)
 {
   DRFlagPtr  drfp;
 
@@ -899,10 +907,15 @@ static void ProcessOneRecord (
   } else {
     ProcessSingleRecord (filename, drfp);
   }
+
   if (drfp->outfp == NULL) {
     ProcessSeqEntryList (drfp, filename);
+  } else {
+    ProcessSeqEntryListWithCollation (drfp->global_report, drfp->sep_list, filename);
   }
+  ReleaseDiscrepancyReportSeqEntries (drfp);
 }
+
 
 /* Args structure contains command-line arguments */
 
@@ -928,6 +941,7 @@ typedef enum {
   T_argThreads,
   X_argExpandCategories,
   S_argSummaryReport,
+  B_argBigSequenceReport,
   C_argMaxCount
 } DRFlagNum;
 
@@ -989,6 +1003,8 @@ Args myargs [] = {
     TRUE, 'X', ARG_STRING, 0.0, 0, NULL},
   {"Summary Report", "F", NULL, NULL,
     TRUE, 'S', ARG_BOOLEAN, 0.0, 0, NULL},
+  {"Big Sequence Report", "F", NULL, NULL,
+  TRUE, 'B', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Max Count", "0", NULL, NULL,
     TRUE, 'C', ARG_INT, 0.0, 0, NULL},
 };
@@ -1016,6 +1032,7 @@ static CharPtr GetTestNameList (CharPtr intro)
   return text;
 }
 
+
 Int2 Main (void)
 
 {
@@ -1024,8 +1041,9 @@ Int2 Main (void)
   CharPtr      enabled_list, disabled_list, err_msg;
   Boolean      batch, binary, compressed, dorecurse,
                indexed, local, lock, remote, usethreads;
-  Int2         type = 0, k;
+  Int2         type = 0;
   DRFlagData   dfd;
+  Boolean      big_sequence_report;
 
   /* standard setup */
 
@@ -1099,36 +1117,50 @@ Int2 Main (void)
   lock = (Boolean) myargs [l_argLockFar].intvalue;
   usethreads = (Boolean) myargs [T_argThreads].intvalue;
   dfd.farFetchCDSproducts = (Boolean) myargs [Z_argRemoteCDS].intvalue;
-  ExpandDiscrepancyReportTestsFromString ((CharPtr) myargs [X_argExpandCategories].strvalue, TRUE, &dfd.ocd);
-  dfd.ocd.summary_report = (Boolean) myargs [S_argSummaryReport].intvalue;
 
   /* set up Discrepancy Report Configuration */
+  dfd.global_report = GlobalDiscrepReportNew ();
+  dfd.global_report->test_config = DiscrepancyConfigNew();
+
+  ExpandDiscrepancyReportTestsFromString ((CharPtr) myargs [X_argExpandCategories].strvalue, TRUE, dfd.global_report->output_config);
+  dfd.global_report->output_config->summary_report = (Boolean) myargs [S_argSummaryReport].intvalue;
+
+  big_sequence_report = (Boolean) myargs [B_argBigSequenceReport].intvalue;
+
   enabled_list = (CharPtr) myargs [e_argEnableTests].strvalue;
   disabled_list = (CharPtr) myargs [d_argDisableTests].strvalue;
 
+
+#ifdef INTERNAL_NCBI_ASNDISC
+  dfd.global_report->taxlookup = CheckTaxNamesAgainstTaxDatabase;
+#endif
+  
   err_msg = NULL;
   if (StringDoesHaveText (enabled_list) && StringDoesHaveText (disabled_list)) {
     err_msg = StringSave ("Cannot specify both -e and -d.  Choose -e to enable only a few tests and disable the rest, choose -d to disable only a few tests and enable the rest.");
   } else if (StringDoesHaveText (disabled_list)) {
-    for (k = 0; k < MAX_DISC_TYPE; k++) {
-      dfd.dcd.conf_list[k] = TRUE;
+    if (big_sequence_report) {
+      ConfigureForBigSequence (dfd.global_report->test_config);
+    } else {
+      ConfigureForGenomes (dfd.global_report->test_config);
     }
-    DisableTRNATests (&(dfd.dcd));
 
     /* now disable tests from string */
-    err_msg = SetDiscrepancyReportTestsFromString (disabled_list, FALSE, &(dfd.dcd));
+    err_msg = SetDiscrepancyReportTestsFromString (disabled_list, FALSE, dfd.global_report->test_config);
   } else if (StringDoesHaveText (enabled_list)) {
-    for (k = 0; k < MAX_DISC_TYPE; k++) {
-      dfd.dcd.conf_list[k] = FALSE;
+    if (big_sequence_report) {
+      ConfigureForBigSequence (dfd.global_report->test_config);
+    } else {
+      ConfigureForGenomes (dfd.global_report->test_config);
     }
     /* now enable tests from string */
-    err_msg = SetDiscrepancyReportTestsFromString (enabled_list, TRUE, &(dfd.dcd));
+    err_msg = SetDiscrepancyReportTestsFromString (enabled_list, TRUE, dfd.global_report->test_config);
   } else {
-    /* enable all tests by default */
-    for (k = 0; k < MAX_DISC_TYPE; k++) {
-      dfd.dcd.conf_list[k] = TRUE;
+    if (big_sequence_report) {
+      ConfigureForBigSequence (dfd.global_report->test_config);
+    } else {
+      ConfigureForGenomes (dfd.global_report->test_config);
     }
-    DisableTRNATests (&(dfd.dcd));
   }
   if (err_msg != NULL) {
     Message (MSG_FATAL, err_msg);
@@ -1137,8 +1169,8 @@ Int2 Main (void)
   }
 
   if ((Boolean) myargs[f_argUseFT].intvalue) {
-    dfd.dcd.use_feature_table_format = TRUE;
-    dfd.ocd.use_feature_table_format = TRUE;
+    dfd.global_report->test_config->use_feature_table_format = TRUE;
+    dfd.global_report->output_config->use_feature_table_format = TRUE;
   }
 
   dfd.maxcount = (Int4) myargs [C_argMaxCount].intvalue;
@@ -1226,26 +1258,20 @@ Int2 Main (void)
     AsnIndexedLibFetchEnable (asnidx, TRUE);
   }
 
-  /* recurse through all files within source directory or subdirectories */
-
   if (StringDoesHaveText (directory)) {
-
     DirExplore (directory, NULL, suffix, dorecurse, ProcessOneRecord, (Pointer) &dfd);
-    if (dfd.outfp != NULL) {
-      ProcessSeqEntryList (&dfd, NULL);
-    }
 
   } else if (StringDoesHaveText (infile)) {
 
     ProcessOneRecord (infile, (Pointer) &dfd);
-    if (dfd.outfp != NULL) {
-      ProcessSeqEntryList (&dfd, NULL);
-    }
+  }
+  if (dfd.outfp != NULL) {
+    WriteGlobalDiscrepancyReport (dfd.global_report, dfd.outfp);
+    FileClose (dfd.outfp);
+    dfd.outfp = NULL;
   }
 
-  if (dfd.outfp != NULL) {
-    FileClose (dfd.outfp);
-  }
+  dfd.global_report = GlobalDiscrepReportFree (dfd.global_report);
 
   /* close fetch functions */
 

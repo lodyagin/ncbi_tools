@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/9/93
 *
-* $Revision: 6.2 $
+* $Revision: 6.3 $
 *
 * File Description: 
 *       Vibrant miscellaneous extensions
@@ -41,6 +41,9 @@
 *
 *
 * $Log: vibextra.c,v $
+* Revision 6.3  2008/04/25 15:54:01  kans
+* trivial changes for compatibility with MinGW cross-compiler - allows building Windows executable on Macintosh
+*
 * Revision 6.2  2001/03/19 19:15:17  juran
 * Change "for (...);" to "for (...) ;" (added space before semicolon) to silence trying-to-be-helpful compiler warning.
 *
@@ -88,7 +91,9 @@
 
 #ifdef WIN_MSWIN
 #include<commdlg.h>
+/*
 #include<colordlg.h>
+*/
 #endif
 
 #ifdef VAR_ARGS

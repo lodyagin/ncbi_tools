@@ -1,4 +1,4 @@
-/* $Id: blast_kappa.c,v 1.94 2008/02/14 15:55:42 kazimird Exp $
+/* $Id: blast_kappa.c,v 1.96 2008/07/17 17:55:44 kazimird Exp $
  * ==========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,7 +34,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] =
-"$Id: blast_kappa.c,v 1.94 2008/02/14 15:55:42 kazimird Exp $";
+"$Id: blast_kappa.c,v 1.96 2008/07/17 17:55:44 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <float.h>
@@ -859,14 +859,12 @@ s_MatchingSequenceRelease(BlastCompo_MatchingSequence * self)
     if (self != NULL) {
         BlastKappa_SequenceInfo * local_data = self->local_data;
         BlastSeqSrcReleaseSequence(local_data->seq_src,
-                                   (void*)&local_data->seq_arg);
+                                   &local_data->seq_arg);
         BlastSequenceBlkFree(local_data->seq_arg.seq);
         free(self->local_data);
         self->local_data = NULL;
     }
 }
-
-#define MINUMUM_FRACTION_NEAR_IDENTICAL 0.98
 
 /**
  * Test whether the aligned parts of two sequences that
@@ -874,6 +872,7 @@ s_MatchingSequenceRelease(BlastCompo_MatchingSequence * self)
  *
  * @param seqData           subject sequence
  * @param queryData         query sequence
+ * @param queryOffset       offset for align if there are multiple queries
  * @param align             information about the alignment
  * @param rangeOffset       offset for subject sequence (used for tblastn)
  *
@@ -890,6 +889,7 @@ s_TestNearIdentical(const BlastCompo_SequenceData *seqData,
   double fractionIdentical;
   int qPos, sPos; /*positions in query and subject;*/
   int qEnd; /*end of query*/
+  const double kMinFractionNearIdentical = 0.98; /* cutoff for this check. */
 
   qPos = align->queryStart - queryOffset;
   qEnd = align->queryEnd - queryOffset;
@@ -902,7 +902,7 @@ s_TestNearIdentical(const BlastCompo_SequenceData *seqData,
   }
   fractionIdentical = ((double) numIdentical/
   (double) (align->queryEnd - align->queryStart));
-  if (fractionIdentical >= MINUMUM_FRACTION_NEAR_IDENTICAL)
+  if (fractionIdentical >= kMinFractionNearIdentical)
     return(TRUE);
   else
     return(FALSE);
@@ -950,7 +950,7 @@ s_MatchingSequenceInitialize(BlastCompo_MatchingSequence * self,
         } else {
             seq_info->seq_arg.encoding = eBlastEncodingProtein;
         }
-        if (BlastSeqSrcGetSequence(seqSrc, (void*) &seq_info->seq_arg) >= 0) {
+        if (BlastSeqSrcGetSequence(seqSrc, &seq_info->seq_arg) >= 0) {
             self->length =
                 BlastSeqSrcGetSeqLen(seqSrc, (void*) &seq_info->seq_arg);
 

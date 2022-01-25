@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_CONNUTIL__H
 #define CONNECT___NCBI_CONNUTIL__H
 
-/*  $Id: ncbi_connutil.h,v 6.62 2007/12/05 19:26:19 kazimird Exp $
+/* $Id: ncbi_connutil.h,v 6.66 2008/11/10 17:09:45 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -55,12 +55,11 @@
  *       #define DEF_CONN_***
  *
  *    2.Make a connection to an URL:
- *       URL_Connect()
+ *       URL_Connect[Ex]()
  *       
  *    3.Perform URL encoding/decoding of data:
  *       URL_Encode()
- *       URL_Decode()
- *       URL_DecodeEx()
+ *       URL_Decode[Ex]()
  *
  *    5.Compose or parse NCBI-specific Content-Type's:
  *       EMIME_Type
@@ -154,11 +153,20 @@ typedef struct {
  */
 #define DEF_CONN_REG_SECTION      "CONN"
 
+#define REG_CONN_SCHEME           "SCHEME"
+#define DEF_CONN_SCHEME           0
+
+#define REG_CONN_USER             "USER"
+#define DEF_CONN_USER             ""
+
+#define REG_CONN_PASS             "PASS"
+#define DEF_CONN_PASS             ""
+
 #define REG_CONN_HOST             "HOST"
 #define DEF_CONN_HOST             "www.ncbi.nlm.nih.gov"
 
 #define REG_CONN_PORT             "PORT"
-#define DEF_CONN_PORT             80
+#define DEF_CONN_PORT             0
 
 #define REG_CONN_PATH             "PATH"
 #define DEF_CONN_PATH             "/Service/dispd.cgi"
@@ -179,7 +187,7 @@ typedef struct {
 #define DEF_CONN_HTTP_PROXY_HOST  ""
 
 #define REG_CONN_HTTP_PROXY_PORT  "HTTP_PROXY_PORT"
-#define DEF_CONN_HTTP_PROXY_PORT  80
+#define DEF_CONN_HTTP_PROXY_PORT  ""
 
 #define REG_CONN_PROXY_HOST       "PROXY_HOST"
 #define DEF_CONN_PROXY_HOST       ""
@@ -197,12 +205,12 @@ typedef struct {
 #define DEF_CONN_LB_DISABLE       ""
 
 #define REG_CONN_HTTP_USER_HEADER "HTTP_USER_HEADER"
-#define DEF_CONN_HTTP_USER_HEADER 0
+#define DEF_CONN_HTTP_USER_HEADER ""
 
 #define REG_CONN_HTTP_REFERER     "HTTP_REFERER"
 #define DEF_CONN_HTTP_REFERER     0
 
-/* Environment/registry keys that are not kept in SConnNetInfo */
+/* Environment/registry keys that are *not* kept in SConnNetInfo */
 #define REG_CONN_SERVICE_NAME     "SERVICE_NAME"
 #define REG_CONN_LOCAL_ENABLE     "LOCAL_ENABLE"
 #define REG_CONN_LBSMD_DISABLE    "LBSMD_DISABLE"
@@ -245,11 +253,11 @@ extern NCBI_XCONNECT_EXPORT const char* ConnNetInfo_GetValue
  *  http_user_header  HTTP_USER_HEADER  "\r\n" if missing is appended
  *  http_referer      HTTP_REFERER      may be assigned automatically
  *
- * A value of the field NAME is first looked for in the environment variable
- * of the form service_CONN_NAME; then in the current corelib registry,
- * in the section 'service' by using key CONN_NAME; then in the environment
- * variable again, but using the name CONN_NAME; and finally in the default
- * registry section (DEF_CONN_REG_SECTION), using just NAME. If service
+ * A value of the field NAME is first looked up in the environment variable
+ * of the form service_CONN_<NAME>; then in the current corelib registry,
+ * in the section 'service' by using key CONN_<NAME>; then in the environment
+ * variable again, but using the name CONN_<NAME>; and finally in the default
+ * registry section (DEF_CONN_REG_SECTION), using just <NAME>. If service
  * is NULL or empty then the first 2 steps in the above lookup are skipped.
  *
  * For default values see right above, in macros DEF_CONN_<NAME>.
@@ -260,11 +268,11 @@ extern NCBI_XCONNECT_EXPORT SConnNetInfo* ConnNetInfo_Create
 
 
 /* Adjust the "host:port" to "proxy_host:proxy_port", and
- * "path" to "http://host:port/path" to connect through a HTTP proxy.
- * Return FALSE if already adjusted(see the NOTE), or if cannot adjust
- * (e.g. if "host" + "path" are too long).
+ * "path" to "http://host:port/path" to connect through an HTTP proxy.
+ * Return FALSE if cannot adjust (e.g. if "host" + "path" are too long).
  * NOTE:  it does nothing if applied more than once to the same "info"
- *        (or its clone), or when "http_proxy_host" is NULL.
+ *        (or its clone), or when "http_proxy_host" is empty, but
+ *        returns TRUE.
  */
 extern NCBI_XCONNECT_EXPORT int/*bool*/ ConnNetInfo_AdjustForHttpProxy
 (SConnNetInfo* info
@@ -416,23 +424,40 @@ extern NCBI_XCONNECT_EXPORT void ConnNetInfo_Destroy(SConnNetInfo* info);
 
 
 
-/* Hit URL "http://host:port/path?args" with:
- *    {POST|GET} <path>?<args> HTTP/1.0\r\n
- *    <user_header\r\n>
- *    Content-Length: <content_length>\r\n\r\n
- * If "encode_args" is TRUE then URL-encode the "args".
- * "args" can be NULL/empty -- then the '?' symbol does not get added.
+/* Hit URL "http[s]://host[:port]/path?args" with the following
+ * request (argument substitution enclosed in angle brackets, with
+ * optional parts in square brackets):
+ *
+ *    {POST|GET} <path>[?<args>] HTTP/1.0\r\n
+ *    Host: <host>[:port]
+ *    [<user_header>]
+ *    Content-Length: <content_length>\r\n
+ *
+ * Request method eReqMethod_Any selects appropriate method depending on
+ * the passed value of "content_length":  GET when no content is expected
+ * (content_length==0), and POST when "content_length" provided non-zero. 
+ *
+ * If "port" is not specified (0) it will be assigned automatically
+ * to a well-known value depending on the setting of fSOCK_Secure in
+ * the passed "flags" parameter.
+ *
  * The "content_length" is mandatory, and it specifies an exact(!) amount of
  * data that you are planning to send to the resultant socket (0 if none).
- * If string "user_header" is not NULL/empty, then it must be terminated by a
- * single '\r\n'.
  *
- * On success, return non-NULL handle of a socket.
+ * If string "user_header" is not NULL/empty, then it *must* be terminated
+ * by a single '\r\n'.
+ *
+ * If "encode_args" is TRUE then URL-encode the "args".
+ * "args" can be NULL/empty -- then the '?' symbol does not get added.
+ *
+ * On success, return eIO_Success and non-NULL handle of a socket via last
+ * parameter.
  * ATTENTION:  due to the very essence of the HTTP connection, you may
  *             perform only one { WRITE, ..., WRITE, READ, ..., READ } cycle.
  * Returned socket must be closed exipicitly by "ncbi_socket.h:SOCK_Close()"
  * when no longer needed.
- * On error, return NULL.
+ * On error, return specific code (last parameter may not be updated),
+ * no socket gets created.
  *
  * NOTE: Returned socket may not be immediately readable/writeable if open
  *       and/or read/write timeouts were passed as {0,0}, meaning that both
@@ -441,20 +466,36 @@ extern NCBI_XCONNECT_EXPORT void ConnNetInfo_Destroy(SConnNetInfo* info);
  *       analyze the actual socket state in this case (see "ncbi_socket.h").
  */
 
-extern NCBI_XCONNECT_EXPORT SOCK URL_Connect
-(const char*     host,
- unsigned short  port,
- const char*     path,
- const char*     args,
- EReqMethod      req_method,
+extern NCBI_XCONNECT_EXPORT EIO_Status URL_ConnectEx
+(const char*     host,            /* must be provided                        */
+ unsigned short  port,            /* may be 0, defaulted to either 80 or 443 */
+ const char*     path,            /* must be provided                        */
+ const char*     args,            /* may be NULL or empty                    */
+ EReqMethod      req_method,      /* ANY selects method by "content_length"  */
  size_t          content_length,
- const STimeout* c_timeout,       /* timeout for the CONNECT stage          */
- const STimeout* rw_timeout,      /* timeout for READ and WRITE             */
+ const STimeout* c_timeout,       /* timeout for the CONNECT stage           */
+ const STimeout* rw_timeout,      /* timeout for READ and WRITE              */
  const char*     user_header,
- int/*bool*/     encode_args,     /* URL-encode the "args", if any          */
- ESwitch         data_logging     /* sock.data log.; eDefault in most cases */
+ int/*bool*/     encode_args,     /* URL-encode the "args", if any           */
+ TSOCK_Flags     flags,           /* additional socket requirements          */
+ SOCK*           sock             /* returned socket (on eIO_Success only)   */
  );
 
+/* Equivalent to the above except that it returns non-NULL socket handle
+ * on success, and NULL on error without providing a reason for the failure. */
+extern NCBI_XCONNECT_EXPORT SOCK URL_Connect
+(const char*     host,            /* must be provided                        */
+ unsigned short  port,            /* may be 0, defaulted to either 80 or 443 */
+ const char*     path,            /* must be provided                        */
+ const char*     args,            /* may be NULL or empty                    */
+ EReqMethod      req_method,      /* ANY selects method by "content_length"  */
+ size_t          content_length,
+ const STimeout* c_timeout,       /* timeout for the CONNECT stage           */
+ const STimeout* rw_timeout,      /* timeout for READ and WRITE              */
+ const char*     user_header,
+ int/*bool*/     encode_args,     /* URL-encode the "args", if any           */
+ TSOCK_Flags     flags            /* additional socket requirements          */
+ );
 
 
 /* Discard all input data before(and including) the first occurrence of
@@ -569,6 +610,7 @@ extern NCBI_XCONNECT_EXPORT int/*bool*/ URL_DecodeEx
 /* Type
  */
 typedef enum {
+    eMIME_T_Undefined = -1,
     eMIME_T_NcbiData = 0,  /* "x-ncbi-data"  (NCBI specific data) */
     eMIME_T_Text,          /* "text"                              */
     eMIME_T_Application,   /* "application"                       */
@@ -580,6 +622,7 @@ typedef enum {
 /* SubType
  */
 typedef enum {
+    eMIME_Undefined = -1,
     eMIME_Dispatch = 0,  /* "x-dispatch"    (dispatcher info)          */
     eMIME_AsnText,       /* "x-asn-text"    (text ASN.1 data)          */
     eMIME_AsnBinary,     /* "x-asn-binary"  (binary ASN.1 data)        */
@@ -618,16 +661,6 @@ extern NCBI_XCONNECT_EXPORT char* MIME_ComposeContentTypeEx
  size_t         buflen    /* must be at least MAX_CONTENT_TYPE_LEN */
  );
 
-/* Exactly equivalent to MIME_ComposeContentTypeEx(eMIME_T_NcbiData, ...)
- */
-extern NCBI_XCONNECT_EXPORT char* MIME_ComposeContentType
-(EMIME_SubType  subtype,
- EMIME_Encoding encoding,
- char*          buf,
- size_t         buflen
- );
-
-
 /* Parse the NCBI-specific content-type; the (case-insensitive) "str"
  * can be in the following two formats:
  *   Content-Type: <type>/x-<subtype>-<encoding>
@@ -643,7 +676,7 @@ extern NCBI_XCONNECT_EXPORT char* MIME_ComposeContentType
  * return TRUE, eMIME_T_Unknown, eMIME_Unknown or eENCOD_None, respectively.
  * If the passed "str" has an invalid (non-HTTP ContentType) format
  * (or if it is NULL/empty), then
- * return FALSE, eMIME_T_Unknown, eMIME_Unknown, and eENCOD_Unknown
+ * return FALSE, eMIME_T_Undefined, eMIME_Undefined, and eENCOD_None
  */
 extern NCBI_XCONNECT_EXPORT int/*bool*/ MIME_ParseContentTypeEx
 (const char*     str,      /* the HTTP "Content-Type:" header to parse */
@@ -652,29 +685,33 @@ extern NCBI_XCONNECT_EXPORT int/*bool*/ MIME_ParseContentTypeEx
  EMIME_Encoding* encoding  /* can be NULL */
  );
 
-/* Requires the MIME type be "x-ncbi-data"
- */
-extern NCBI_XCONNECT_EXPORT int/*bool*/ MIME_ParseContentType
-(const char*     str,      /* the HTTP "Content-Type:" header to parse */
- EMIME_SubType*  subtype,  /* can be NULL */
- EMIME_Encoding* encoding  /* can be NULL */
- );
 
-
-/* Deprecated:  Use SOCK_StringHostToPort() and SOCK_HostPortToString() instead
- */
 #ifndef NCBI_DEPRECATED
 #  define NCBI_CONNUTIL_DEPRECATED
 #else
 #  define NCBI_CONNUTIL_DEPRECATED NCBI_DEPRECATED
 #endif
-extern NCBI_XCONNECT_EXPORT NCBI_CONNUTIL_DEPRECATED
-const char* StringToHostPort
-(const char*, unsigned int*, unsigned short*);
 
+/* Exactly equivalent to MIME_ComposeContentTypeEx(eMIME_T_NcbiData, ...)
+ * Use more explicit Ex variant instead.
+ */
 extern NCBI_XCONNECT_EXPORT NCBI_CONNUTIL_DEPRECATED
-size_t HostPortToString
-(unsigned int, unsigned short, char*, size_t);
+char* MIME_ComposeContentType
+(EMIME_SubType  subtype,
+ EMIME_Encoding encoding,
+ char*          buf,
+ size_t         buflen
+ );
+
+/* Requires the MIME type be "x-ncbi-data".
+ * Use more explicit Ex variant instead.
+ */
+extern NCBI_XCONNECT_EXPORT NCBI_CONNUTIL_DEPRECATED
+int/*bool*/ MIME_ParseContentType
+(const char*     str,      /* the HTTP "Content-Type:" header to parse */
+ EMIME_SubType*  subtype,  /* can be NULL */
+ EMIME_Encoding* encoding  /* can be NULL */
+ );
 
 
 #ifdef __cplusplus

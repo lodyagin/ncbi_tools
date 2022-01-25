@@ -1655,11 +1655,13 @@ regex_compile (const char *pattern, int size, reg_syntax_t syntax,
             case ')':
               if (syntax & RE_NO_BK_PARENS) goto normal_backslash;
 
-              if (COMPILE_STACK_EMPTY)
-                if (syntax & RE_UNMATCHED_RIGHT_PAREN_ORD)
+              if (COMPILE_STACK_EMPTY) {
+                if (syntax & RE_UNMATCHED_RIGHT_PAREN_ORD) {
                   goto normal_backslash;
-                else
+                } else {
                   return REG_ERPAREN;
+                }
+              }
 
             handle_close:
               if (fixup_alt_jump)
@@ -1675,11 +1677,13 @@ regex_compile (const char *pattern, int size, reg_syntax_t syntax,
                 }
 
               /* See similar code for backslashed left paren above.  */
-              if (COMPILE_STACK_EMPTY)
-                if (syntax & RE_UNMATCHED_RIGHT_PAREN_ORD)
+              if (COMPILE_STACK_EMPTY) {
+                if (syntax & RE_UNMATCHED_RIGHT_PAREN_ORD) {
                   goto normal_char;
-                else
+                } else {
                   return REG_ERPAREN;
+                }
+              }
 
               /* Since we just checked for an empty stack above, this
                  ``can't happen''.  */
@@ -3211,14 +3215,14 @@ NLM_EXTERN int re_match_2 (struct re_pattern_buffer *bufp,
      matching and the regnum-th regend points to right after where we
      stopped matching the regnum-th subexpression.  (The zeroth register
      keeps track of what the whole pattern matches.)  */
-  const char **regstart, **regend;
+  const char **regstart = NULL, **regend = NULL;
 
   /* If a group that's operated upon by a repetition operator fails to
      match anything, then the register for its start will need to be
      restored because it will have been set to wherever in the string we
      are when we last see its open-group operator.  Similarly for a
      register's end.  */
-  const char **old_regstart, **old_regend;
+  const char **old_regstart = NULL, **old_regend = NULL;
 
   /* The is_active field of reg_info helps us keep track of which (possibly
      nested) subexpressions we are currently in. The matched_something
@@ -3226,14 +3230,14 @@ NLM_EXTERN int re_match_2 (struct re_pattern_buffer *bufp,
      matched any of the pattern so far this time through the reg_num-th
      subexpression.  These two fields get reset each time through any
      loop their register is in.  */
-  register_info_type *reg_info; 
+  register_info_type *reg_info = NULL; 
 
   /* The following record the register info as found in the above
      variables when we find a match better than any we've seen before. 
      This happens as we backtrack through the failure points, which in
      turn happens only if we have not yet matched the entire string. */
   unsigned best_regs_set = false;
-  const char **best_regstart, **best_regend;
+  const char **best_regstart = NULL, **best_regend = NULL;
   
   /* Logically, this is `best_regend[0]'.  But we don't want to have to
      allocate space for that if we're not allocating space for anything
@@ -3246,8 +3250,8 @@ NLM_EXTERN int re_match_2 (struct re_pattern_buffer *bufp,
   const char *match_end = NULL;
 
   /* Used when we pop values we don't care about.  */
-  const char **reg_dummy;
-  register_info_type *reg_info_dummy;
+  const char **reg_dummy = NULL;
+  register_info_type *reg_info_dummy = NULL;
 
 #ifdef DEBUG
   /* Counts the total number of registers pushed.  */
@@ -4583,7 +4587,7 @@ bcmp_translate (const char *s1, const char *s2, int len, char *translate)
   register const char *p1 = s1, *p2 = s2;
   while (len)
     {
-      if (translate[*p1++] != translate[*p2++]) return 1;
+      if (translate[(int)(*p1++)] != translate[(int)(*p2++)]) return 1;
       len--;
     }
   return 0;

@@ -1,6 +1,6 @@
 #	makefile for demo programs
 #
-#	$Id: makedemo.unx,v 6.88 2008/01/25 19:56:25 ucko Exp $
+#	$Id: makedemo.unx,v 6.94 2008/07/29 19:42:43 ucko Exp $
 #
 #	Sun with unbundled ANSI compiler [ make CC=acc ]
 #	Sun with Gnu C [ make CC=gcc ]
@@ -97,11 +97,11 @@ EXE1 = testcore makeset \
     getmesh indexpub getpub testobj seqtest \
 	dosimple asn2ff checksub asndhuff \
 	entrcmd errhdr cdscan findspl \
-	ncbisort fa2htgs fastacmd formatdb formatrpsdb blast \
-	blastall .WAIT blastall_old blastpgp testval seedtop \
+	ncbisort fa2htgs fastacmd formatdb formatrpsdb \
+	blastall .WAIT blastpgp testval seedtop \
 	makemat copymat impala \
 	megablast vecscreen gil2bin blastclust rpsblast \
-	asn2xml debruijn asn2idx sortbyquote \
+	asn2xml debruijn asn2idx sortbyquote subfuse \
 	test_regexp demo_regexp demo_regexp_grep
 
 SRC1 = testcore.c makeset.c \
@@ -112,7 +112,7 @@ SRC1 = testcore.c makeset.c \
     blast_driver.c blastall.c blastpgp.c testval.c seedtop.c \
     makemat.c copymat.c profiles.c \
 	megablast.c vecscreen.c gil2bin.c blastclust.c rpsblast.c \
-	asn2xml.c debruijn.c asn2idx.c sortbyquote.c  \
+	asn2xml.c debruijn.c asn2idx.c sortbyquote.c subfuse.c \
 	pcretest.c pcredemo.c pcregrep.c
 
 INTERNAL = testgen
@@ -275,27 +275,13 @@ formatrpsdb : formatrpsdb.c
 	$(CC) -o formatrpsdb $(LDFLAGS) formatrpsdb.c $(LIB61) $(LIB23) \
 		$(LIBCOMPADJ) $(LIB60) $(LIB2) $(LIB1) $(OTHERLIBS)
 
-# blast (reincarnation of blastall from algo/blast sources)
-
-blast : blast_driver.c
-	$(CC) -o blast $(LDFLAGS) blast_driver.c $(THREAD_OBJ) $(LIB61) \
-		$(LIB60) $(LIB23) $(LIBCOMPADJ) $(LIB2) $(LIB1) $(OTHERLIBS) \
-		$(THREAD_OTHERLIBS)
-
 debruijn : debruijn.c
-	$(CC) -o debruijn $(LDFLAGS) debruijn.c $(LIB60) $(LIB1) $(OTHERLIBS)
+	$(CC) -o debruijn $(LDFLAGS) debruijn.c $(LIB60) $(LIBCOMPADJ) $(LIB1) $(OTHERLIBS)
 # blastall
 
 blastall : blastall.c $(THREAD_OBJ)
 	$(CC) -o blastall $(LDFLAGS) blastall.c $(THREAD_OBJ) $(LIB61) \
 		$(LIB60) $(LIB23) $(LIBCOMPADJ) $(LIB2) $(LIB1) \
-		$(OTHERLIBS) $(THREAD_OTHERLIBS)
-
-# blastall_old  (version of blastall that does not link in new algo/blast libs).
-
-blastall_old : blastall.c $(THREAD_OBJ)
-	$(CC) -o blastall_old $(LDFLAGS) -DBLASTALL_TOOLS_ONLY blastall.c \
-		$(THREAD_OBJ) $(LIB23) $(LIBCOMPADJ) $(LIB2) $(LIB1) \
 		$(OTHERLIBS) $(THREAD_OTHERLIBS)
 
 # blastpgp
@@ -372,6 +358,11 @@ asn2idx : asn2idx.c
 
 sortbyquote : sortbyquote.c 
 	$(CC) -o sortbyquote $(LDFLAGS) sortbyquote.c $(LIB2) $(LIB1) $(OTHERLIBS) 
+
+# subfuse
+
+subfuse : subfuse.c 
+	$(CC) -o subfuse $(LDFLAGS) subfuse.c $(LIB2) $(LIB1) $(OTHERLIBS) 
 
 # blastclust
 

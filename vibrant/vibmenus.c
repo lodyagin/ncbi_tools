@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.26 $
+* $Revision: 6.27 $
 *
 * File Description: 
 *       Vibrant menu functions
@@ -4250,6 +4250,7 @@ static void Nlm_AppendPopList (Nlm_ChoicE c, Nlm_CharPtr title, Nlm_Boolean save
 }
 
 
+#ifndef WIN_MSWIN
 static Nlm_ItemTool Nlm_AppendOnePopListItem (Nlm_MenU m, Nlm_IteM i,
 					      Nlm_CharPtr itemNames)
 
@@ -4277,12 +4278,14 @@ static Nlm_ItemTool Nlm_AppendOnePopListItem (Nlm_MenU m, Nlm_IteM i,
     CFRelease(cfTitle);
   }}
 #endif
+/*
 #ifdef WIN_MSWIN
     AppendMenu (h, MF_ENABLED, nextMenuNum, itemNames);
     if (nextMenuNum < 32767) {
       nextMenuNum++;
     }
 #endif
+*/
 #ifdef WIN_MOTIF
     label = XmStringCreateSimple (temp);
     n = 0;
@@ -4298,8 +4301,10 @@ static Nlm_ItemTool Nlm_AppendOnePopListItem (Nlm_MenU m, Nlm_IteM i,
   }
   return rsult;
 }
+#endif
 
 
+#ifndef WIN_MSWIN
 static Nlm_IteM Nlm_AppendOnePopListChoice (Nlm_ChoicE c, Nlm_CharPtr title)
 
 {
@@ -4336,6 +4341,7 @@ static Nlm_IteM Nlm_AppendOnePopListChoice (Nlm_ChoicE c, Nlm_CharPtr title)
 
   return i;
 }
+#endif
 
 
 static void Nlm_MultiAppendPopList (Nlm_ChoicE c, Nlm_CharPtr PNTR titles, Nlm_Boolean savePort)
@@ -4537,7 +4543,7 @@ static void Nlm_SetPopListPosition (Nlm_GraphiC m, Nlm_RectPtr r,
 {
   Nlm_ChoicE     c;
   Nlm_RecT       oldRect;
-  Nlm_WindoW     tempPort;
+  Nlm_WindoW     tempPort = NULL;
 #ifdef WIN_MSWIN
   Nlm_Int2       num;
   Nlm_PopupTool  u;

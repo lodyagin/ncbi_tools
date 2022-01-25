@@ -1,4 +1,4 @@
-/* $Id: blast_nascan.h,v 1.4 2007/02/15 22:25:50 kazimird Exp $
+/* $Id: blast_nascan.h,v 1.5 2008/07/23 16:55:47 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -51,6 +51,7 @@ typedef Int4 (*TNaScanSubjectFunction)(const LookupTableWrap* lookup_wrap,
  * nucleotide subject sequences
  * @param lookup_wrap Structure containing lookup table [in][out]
  */
+NCBI_XBLAST_EXPORT
 void BlastChooseNucleotideScanSubject(LookupTableWrap *lookup_wrap);
 
 #ifdef __cplusplus

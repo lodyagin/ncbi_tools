@@ -3,7 +3,7 @@
 	ProjectType="Visual C++"
 	Version="8.00"
 	Name="regexp"
-	ProjectGUID="{C0B91754-0757-42BD-8F53-C05964FFFB66}"
+	ProjectGUID="{FD3DC2D5-8E27-44F4-8923-14359F7359BE}"
 	>
 	<Platforms>
 		<Platform

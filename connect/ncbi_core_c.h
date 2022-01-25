@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_CORE_C__H
 #define CONNECT___NCBI_CORE_C__H
 
-/*  $Id: ncbi_core_c.h,v 6.4 2002/06/12 19:23:28 lavr Exp $
+/* $Id: ncbi_core_c.h,v 6.5 2008/10/16 19:12:55 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -60,6 +60,9 @@ extern void   CONNECT_Init(const char* conf_file);
 /*
  * ---------------------------------------------------------------------------
  * $Log: ncbi_core_c.h,v $
+ * Revision 6.5  2008/10/16 19:12:55  lavr
+ * Id left justified
+ *
  * Revision 6.4  2002/06/12 19:23:28  lavr
  * API functions enclosed in extern "C" for C++ compiler
  *

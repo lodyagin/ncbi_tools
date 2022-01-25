@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 11/3/93
 *
-* $Revision: 6.72 $
+* $Revision: 6.73 $
 *
 * File Description: Utilities for creating ASN.1 submissions
 *
@@ -4297,6 +4297,50 @@ NLM_EXTERN void AddCuratorToRefGeneTrackUserObject (UserObjectPtr uop, CharPtr c
   curr->data.ptrvalue = MemFree (curr->data.ptrvalue);
 
   curr->data.ptrvalue = (Pointer) StringSave (collaborator);
+}
+
+NLM_EXTERN void AddCuratorURLToRefGeneTrackUserObject (UserObjectPtr uop, CharPtr url)
+
+{
+  UserFieldPtr  curr;
+  ObjectIdPtr   oip;
+  UserFieldPtr  prev = NULL;
+
+  if (uop == NULL || url == NULL) return;
+  oip = uop->type;
+  if (oip == NULL || StringICmp (oip->str, "RefGeneTracking") != 0) return;
+
+  for (curr = uop->data; curr != NULL; curr = curr->next) {
+    oip = curr->label;
+    if (oip != NULL && StringICmp (oip->str, "CollaboratorURL") == 0) {
+      break;
+    }
+    prev = curr;
+  }
+
+  if (curr == NULL) {
+    curr = UserFieldNew ();
+    oip = ObjectIdNew ();
+    oip->str = StringSave ("CollaboratorURL");
+    curr->label = oip;
+    curr->choice = 1; /* visible string */
+
+    /* link curator URL at end of list */
+
+    if (prev != NULL) {
+      prev->next = curr;
+    } else {
+      uop->data = curr;
+    }
+  }
+
+  if (curr == NULL || curr->choice != 1) return;
+
+  /* replace any existing collaborator indication */
+
+  curr->data.ptrvalue = MemFree (curr->data.ptrvalue);
+
+  curr->data.ptrvalue = (Pointer) StringSave (url);
 }
 
 NLM_EXTERN void AddSourceToRefGeneTrackUserObject (UserObjectPtr uop, CharPtr genomicSource)

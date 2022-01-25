@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.80 $
+* $Revision: 6.84 $
 *
 * File Description:
 *       Vibrant main, event loop, and window functions
@@ -283,9 +283,11 @@ static Nlm_WindoW      theActiveWindow;
 static Nlm_WindoW      dyingWindow;
 static Nlm_RecT        screenBitBounds;
 
+/*
 #ifndef WIN_MOTIF
 static Nlm_Boolean     inNotice;
 #endif
+*/
 
 static Nlm_VoidProc    timerAction = NULL;
 static Nlm_KeyProc     keyAction = NULL;
@@ -2139,7 +2141,11 @@ static void Nlm_NewWindow (Nlm_WindoW w, Nlm_Int2 type, Nlm_Int2 procID,
   CCTabPtr        colorPtr;
   Nlm_RectTool    rtool;
   WindowClass     winClass = 0;
+#if TARGET_API_MAC_CARBON
+  WindowAttributes winAttrs = kWindowStandardHandlerAttribute;
+#else
   WindowAttributes winAttrs = kWindowCompositingAttribute; /* kWindowStandardHandlerAttribute; */
+#endif
   OSStatus        osErr;
 #endif
 #ifdef WIN_MOTIF
@@ -6214,6 +6220,7 @@ static Nlm_Boolean Nlm_SetupWindows (void)
 #endif  /* WIN_MOTIF */
 
 
+/*
 #ifndef WIN_MOTIF
 static void Nlm_WindowGo (Nlm_WindoW w)
 {
@@ -6281,7 +6288,8 @@ static void Nlm_GetSet (void)
     Nlm_ProcessAnEvent ();
   }
 }
-#endif  /* !WIN_MOTIF */
+#endif
+*/
 
 #ifdef WIN_MSWIN
 static void ParseSetupArguments(HINSTANCE hInstance, Nlm_CharPtr lpszCmdLine)
@@ -6428,12 +6436,14 @@ static void Nlm_CleanUpWindows (void)
 
 #ifdef WIN_MSWIN
 #ifdef WIN32
+#ifndef __MINGW32__
 static int Nlm_HandleException (DWORD code)
 
 {
   Nlm_Message (MSG_OK, "WIN32 exception %ld", (long)code);
   return EXCEPTION_CONTINUE_SEARCH;
 }
+#endif
 #endif
 #endif
 
@@ -6630,7 +6640,9 @@ extern int CALLBACK Nlm_VibMainPrelude (
   Nlm_Char  str [32];
 
 #ifdef WIN32
+#ifndef __MINGW32__
   __try {
+#endif
 #endif
 
   Nlm_currentHInst = hInstance;
@@ -6670,8 +6682,10 @@ extern int CALLBACK Nlm_VibMainPrelude (
   CONNECT_Init(0);
 
 #ifdef WIN32
+#ifndef __MINGW32__
   }
   __except ( Nlm_HandleException( GetExceptionCode() ) )  { }
+#endif
 #endif
 
   return TRUE;
@@ -6689,7 +6703,9 @@ extern int CALLBACK Nlm_VibMainFinale (
   WNDCLASS  wc;
 
 #ifdef WIN32
+#ifndef __MINGW32__
   __try {
+#endif
 #endif
 
   Nlm_CleanUpWindows ();
@@ -6719,8 +6735,10 @@ extern int CALLBACK Nlm_VibMainFinale (
   Nlm_MemFree( Nlm_GetArgv() );
 
 #ifdef WIN32
+#ifndef __MINGW32__
   }
   __except ( Nlm_HandleException( GetExceptionCode() ) )  { }
+#endif
 #endif
 
   return TRUE;
@@ -7288,6 +7306,50 @@ extern void Nlm_ProcessEventOrIdle (void)
 #endif
 }
 
+#if 1
+extern void Nlm_ProcessExternalEvent (void)
+
+{
+#ifdef WIN_MAC
+  if (WaitNextEvent (everyEvent, &Nlm_currentEvent, 10, (Nlm_RgnTool) macMouseRgn)) {
+    Nlm_HandleEvent ();
+  }
+#endif
+#ifdef WIN_MSWIN
+  /* Yield to other processes and threads */
+  MsgWaitForMultipleObjectsEx(0, NULL, 10, QS_ALLEVENTS, MWMO_INPUTAVAILABLE);
+
+  if (Nlm_processUpdatesFirstVal &&
+      PeekMessage (&Nlm_currentMssg, NULL, WM_PAINT, WM_PAINT, PM_NOREMOVE)) {
+    if (GetMessage (&Nlm_currentMssg, NULL, WM_PAINT, WM_PAINT)) {
+      TranslateMessage (&Nlm_currentMssg);
+      DispatchMessage (&Nlm_currentMssg);
+    }
+  } else if (PeekMessage (&Nlm_currentMssg, NULL, 0, 0, PM_NOREMOVE)) {
+    if (GetMessage (&Nlm_currentMssg, NULL, 0, 0)) {
+      TranslateMessage (&Nlm_currentMssg);
+      Nlm_ProcessKeyPress (&Nlm_currentMssg);
+      Nlm_ProcessVibrantCallback(&Nlm_currentMssg);
+      DispatchMessage (&Nlm_currentMssg);
+    }
+  }
+#endif
+#ifdef WIN_MOTIF
+  XEvent  event;
+
+  if (XtAppPending (Nlm_appContext) & XtIMXEvent) {
+    if (Nlm_processUpdatesFirstVal && 
+        Nlm_XCheckUpdateEvent(&event)) {
+      XtDispatchEvent (&event);
+    } else {
+      XtAppNextEvent (Nlm_appContext, &event);
+      Nlm_ProcessKeyPress (&event);
+      XtDispatchEvent (&event);
+    }
+  }
+#endif
+}
+#else
 extern void Nlm_ProcessExternalEvent (void)
 
 {
@@ -7327,6 +7389,7 @@ extern void Nlm_ProcessExternalEvent (void)
   }
 #endif
 }
+#endif
 
 extern void Nlm_ProcessEvents (void)
 

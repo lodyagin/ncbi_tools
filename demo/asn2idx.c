@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/2/04
 *
-* $Revision: 1.4 $
+* $Revision: 1.5 $
 *
 * File Description:
 *
@@ -181,7 +181,7 @@ Args myargs [] = {
     TRUE, 'd', ARG_STRING, 0.0, 0, NULL},
   {"File Selection Substring", ".aso", NULL, NULL,
     TRUE, 'x', ARG_STRING, 0.0, 0, NULL},
-  {"Filter", "gbcon,gbest,gbgss,gbsts", NULL, NULL,
+  {"Filter", "gbcon,gbest,gbgss,gbhtg,gbsts", NULL, NULL,
     FALSE, 'f', ARG_STRING, 0.0, 0, NULL},
   {"Bioseq-sets are Binary", "F", NULL, NULL,
     TRUE, 'b', ARG_BOOLEAN, 0.0, 0, NULL},

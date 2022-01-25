@@ -3,7 +3,7 @@
 	ProjectType="Visual C++"
 	Version="8.00"
 	Name="demo_dosimple"
-	ProjectGUID="{C6348B36-F5C4-43A9-8577-4F6646B3D78D}"
+	ProjectGUID="{8316F855-2435-4649-99E2-87906F54DAF1}"
 	>
 	<Platforms>
 		<Platform

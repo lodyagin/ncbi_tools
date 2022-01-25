@@ -59,6 +59,14 @@ SOURCE=..\..\..\cdromlib\acccn3ds.c
 # End Source File
 # Begin Source File
 
+SOURCE=..\..\..\api\acerdapi.c
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\api\aceread.c
+# End Source File
+# Begin Source File
+
 SOURCE=..\..\..\api\alignmgr.c
 # End Source File
 # Begin Source File
@@ -520,6 +528,14 @@ SOURCE=..\..\..\api\a2ferrdf.h
 # Begin Source File
 
 SOURCE=..\..\..\cdromlib\accentr.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\api\acerdapi.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\api\aceread.h
 # End Source File
 # Begin Source File
 

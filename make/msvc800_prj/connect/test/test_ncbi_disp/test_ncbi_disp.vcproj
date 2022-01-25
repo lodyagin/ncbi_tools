@@ -3,7 +3,7 @@
 	ProjectType="Visual C++"
 	Version="8.00"
 	Name="test_ncbi_disp"
-	ProjectGUID="{087A2516-3C90-4D46-AEA9-670592894CB4}"
+	ProjectGUID="{DF90E7E5-1D5B-40CA-A6E2-00EA965C7745}"
 	>
 	<Platforms>
 		<Platform
@@ -72,7 +72,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="odbc32.lib odbccp32.lib wsock32.lib"
+				AdditionalDependencies="odbc32.lib odbccp32.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/test_ncbi_disp.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
@@ -162,7 +162,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="odbc32.lib odbccp32.lib wsock32.lib"
+				AdditionalDependencies="odbc32.lib odbccp32.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/test_ncbi_disp.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
@@ -251,7 +251,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="odbc32.lib odbccp32.lib wsock32.lib"
+				AdditionalDependencies="odbc32.lib odbccp32.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/test_ncbi_disp.exe"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"
@@ -341,7 +341,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="odbc32.lib odbccp32.lib wsock32.lib"
+				AdditionalDependencies="odbc32.lib odbccp32.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/test_ncbi_disp.exe"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"
@@ -433,7 +433,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="odbc32.lib odbccp32.lib wsock32.lib"
+				AdditionalDependencies="odbc32.lib odbccp32.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/test_ncbi_disp.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
@@ -524,7 +524,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="odbc32.lib odbccp32.lib wsock32.lib"
+				AdditionalDependencies="odbc32.lib odbccp32.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/test_ncbi_disp.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
@@ -614,7 +614,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="odbc32.lib odbccp32.lib wsock32.lib"
+				AdditionalDependencies="odbc32.lib odbccp32.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/test_ncbi_disp.exe"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"
@@ -705,7 +705,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="odbc32.lib odbccp32.lib wsock32.lib"
+				AdditionalDependencies="odbc32.lib odbccp32.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/test_ncbi_disp.exe"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"

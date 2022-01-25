@@ -84,13 +84,19 @@ Batch processing of Bioseq-set ASN.1 release files is also supported. The
 gb*.aso.gz compressed binary files from the NCBI public ftp site can also
 be uncompressed on-the-fly on UNIX platforms.
 
-  -a  ASN.1 Type (a Any, e Seq-entry, b Bioseq, s Bioseq-set, m Seq-submit,
-                  t Batch Report)
+  -a  ASN.1 Type
+      Single Record: a Any, e Seq-entry, b Bioseq, s Bioseq-set, m Seq-submit
+      Release File: t Batch Bioseq-set, u Batch Seq-submit
   -b  Bioseq-set is Binary [T/F]
   -c  Bioseq-set is Compressed [T/F]
   -p  Propagate Top Descriptors [T/F]
 
   -l  Log file
+
+(Release files package many independent Seq-entry objects in a Bioseq-set.
+Using -a t causes asn2gb to read one component at a time, processing it and
+freeing it from memory before reading the next one.  Otherwise it would try
+to process the entire file at once, almost certainly running out of memory.)
 
 Remote fetching allows accession lookups and fetching of far components
 from the NCBI network server. An indicated accession can also be fetched

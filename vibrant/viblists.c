@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.9 $
+* $Revision: 6.10 $
 *
 * File Description: 
 *       Vibrant list functions
@@ -41,6 +41,9 @@
 *
 *
 * $Log: viblists.c,v $
+* Revision 6.10  2008/04/29 13:43:50  kans
+* fixes for warnings caught by mingw cross-compiler
+*
 * Revision 6.9  2007/04/11 20:06:33  bollin
 * When showing and hiding Lists, call XtManageChild and XtUnmanageChild respectivelly
 * for both the parent of the list control (XtParent(c)) as well as for the control itself.
@@ -267,6 +270,7 @@ static Nlm_BaR Nlm_GetListScrollBar (Nlm_LisT l)
 }
 
 
+#ifndef WIN_MSWIN
 static Nlm_Int2 Nlm_GetListVisLines (Nlm_LisT l)
 
 {
@@ -275,6 +279,7 @@ static Nlm_Int2 Nlm_GetListVisLines (Nlm_LisT l)
   Nlm_GetListData (l, &ldata);
   return ldata.visLines;
 }
+#endif
 
 static void Nlm_SetListNumItems (Nlm_LisT l, Nlm_Int2 num)
 

@@ -3,7 +3,7 @@
 	ProjectType="Visual C++"
 	Version="8.00"
 	Name="test_ncbi_sendmail"
-	ProjectGUID="{E459338E-39A8-49C9-9DFC-612E47863CE3}"
+	ProjectGUID="{C53FB7F4-DC14-4A3E-8654-63C9C63C5DF7}"
 	>
 	<Platforms>
 		<Platform
@@ -72,7 +72,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="odbc32.lib odbccp32.lib wsock32.lib"
+				AdditionalDependencies="odbc32.lib odbccp32.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/test_ncbi_sendmail.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
@@ -161,7 +161,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="odbc32.lib odbccp32.lib wsock32.lib"
+				AdditionalDependencies="odbc32.lib odbccp32.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/test_ncbi_sendmail.exe"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"
@@ -251,7 +251,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="odbc32.lib odbccp32.lib wsock32.lib"
+				AdditionalDependencies="odbc32.lib odbccp32.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/test_ncbi_sendmail.exe"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"
@@ -342,7 +342,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="odbc32.lib odbccp32.lib wsock32.lib"
+				AdditionalDependencies="odbc32.lib odbccp32.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/test_ncbi_sendmail.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
@@ -433,7 +433,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="odbc32.lib odbccp32.lib wsock32.lib"
+				AdditionalDependencies="odbc32.lib odbccp32.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/test_ncbi_sendmail.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
@@ -523,7 +523,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="odbc32.lib odbccp32.lib wsock32.lib"
+				AdditionalDependencies="odbc32.lib odbccp32.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/test_ncbi_sendmail.exe"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"
@@ -614,7 +614,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="odbc32.lib odbccp32.lib wsock32.lib"
+				AdditionalDependencies="odbc32.lib odbccp32.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/test_ncbi_sendmail.exe"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"
@@ -706,7 +706,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="odbc32.lib odbccp32.lib wsock32.lib"
+				AdditionalDependencies="odbc32.lib odbccp32.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/test_ncbi_sendmail.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"

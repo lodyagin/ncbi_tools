@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   06/16/00
 *
-* $Revision: 6.28 $
+* $Revision: 6.29 $
 *
 * File Description: 
 *
@@ -61,7 +61,7 @@
 
 #include <entrez2.h>
 
-#define ENTREZ_APP_VERSION "9.5"
+#define ENTREZ_APP_VERSION "9.6"
 
 #define MAX_QUERY_FORMS 256
 

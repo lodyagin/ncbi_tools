@@ -170,7 +170,7 @@ static CharPtr SearchForString (
     if (ptr > str) {
       tmp = ptr - 1;
       ch = *tmp;
-      if (! IS_WHITESP (ch)) {
+      if ((! IS_WHITESP (ch)) && (! ispunct (ch))) {
         keep_looking = TRUE;
       }
     }
@@ -311,7 +311,7 @@ static void FSAFindStrings (
   FindStructPtr  fsp;
   CharPtr        ptr;
   CharPtr        searchString;
-  Int2           state;
+  Int4           state;
   ValNodePtr     matches;
 
   if (strp == NULL || userdata == NULL) return;
@@ -1100,6 +1100,7 @@ static void FindReplSeqId (
     case SEQID_TPE :
     case SEQID_TPD :
     case SEQID_GPIPE :
+    case SEQID_NAMED_ANNOT_TRACK :
       FindReplTextSeqId((TextSeqIdPtr) sip->data.ptrvalue, fsp);
       break;
     case SEQID_PATENT :

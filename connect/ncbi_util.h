@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_UTIL__H
 #define CONNECT___NCBI_UTIL__H
 
-/*  $Id: ncbi_util.h,v 6.33 2008/02/29 00:25:42 kazimird Exp $
+/* $Id: ncbi_util.h,v 6.35 2008/10/22 15:25:33 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -38,11 +38,13 @@
  *    macros:     LOG_Write(), LOG_Data(),
  *                LOG_WRITE(), LOG_DATA(),
  *                THIS_FILE, THIS_MODULE,
- *                LOG_WRITE_ERRNO_EX(), LOG_WRITE_ERRNO()
+ *                LOG_WRITE_ERRNO()
  *    flags:      TLOG_FormatFlags, ELOG_FormatFlags
- *    methods:    LOG_ComposeMessage(), LOG_ToFILE(), MessagePlusErrno(),
+ *    methods:    LOG_ComposeMessage(), LOG_ToFILE(), NcbiMessagePlusError(),
  *                CORE_SetLOCK(), CORE_GetLOCK(),
- *                CORE_SetLOG(),  CORE_GetLOG(),   CORE_SetLOGFILE()
+ *                CORE_SetLOG(),  CORE_GetLOG(),
+ *                CORE_SetLOGFILE[_Ex](), CORE_SetLOGFILE_NAME[_Ex]()
+ *                LOG_ToFILE[_Ex]()
  *
  * 2. Auxiliary API:
  *       CORE_GetPlatform()
@@ -106,23 +108,20 @@ extern NCBI_XCONNECT_EXPORT MT_LOCK CORE_GetLOCK(void);
  * @sa
  *  LOG_WriteInternal
  */
-#define LOG_Write(lg,code,subcode,level,module,file,line,message) \
-  (void) (((lg)  ||  (level) == eLOG_Fatal) ?                     \
-  (LOG_WriteInternal(lg,level,module,file,line,message,0,0,       \
-                     code,subcode), 0) : 1)
+#define LOG_Write(lg,code,subcode,level,module,file,line,message)       \
+  LOG_WriteInternal(lg,level,module,file,line,message,0,0,code,subcode)
+
 #define LOG_Data(lg,code,subcode,level,module,file,line,data,size,message) \
-  (void) (((lg)  ||  (level) == eLOG_Fatal) ?                              \
-  (LOG_WriteInternal(lg,level,module,file,line,message,data,size,          \
-                     code,subcode), 0) : 1)
+  LOG_WriteInternal(lg,level,module,file,line,message,data,size,code,subcode)
 
 
 /** Auxiliary plain macros to write message (maybe, with raw data) to the log.
  * @sa
  *   LOG_Write, LOG_Data
  */
-#define  LOG_WRITE(lg, code, subcode, level, message)   \
-  LOG_Write(lg, code, subcode, level,                   \
-            THIS_MODULE, THIS_FILE, __LINE__, message)
+#define  LOG_WRITE(lg, code, subcode, level, message)                   \
+  LOG_Write(lg, code, subcode, level, THIS_MODULE, THIS_FILE, __LINE__, \
+            message)
 
 #ifdef   LOG_DATA
 /* AIX's <pthread.h> defines LOG_DATA to be an integer constant;
@@ -299,14 +298,14 @@ extern NCBI_XCONNECT_EXPORT void LOG_ToFILE
  );
 
 
-/** Add current "errno" (and maybe its description) to the message:
- * <message>[ {errno=[<errno>][,][<descr>]}]
+/** Add current "error" (and maybe its description) to the message:
+ * <message>[ {error=[<error>][,][<descr>]}]
  * @param message
  *  [in]  message text (can be NULL)
- * @param x_errno
+ * @param error
  *  [in]  error code (if it is zero, then use "descr" only)
  * @param descr
- *  [in]  error description (if NULL, then use "strerror(x_errno)")
+ *  [in]  error description (if NULL, then use "strerror(error)" if error!=0)
  * @param buf
  *  [out] buffer to put the composed message to
  * @param buf_size
@@ -316,9 +315,9 @@ extern NCBI_XCONNECT_EXPORT void LOG_ToFILE
  * @sa
  *  LOG_ComposeMessage
  */
-extern NCBI_XCONNECT_EXPORT const char* MessagePlusErrno
+extern NCBI_XCONNECT_EXPORT const char* NcbiMessagePlusError
 (const char*  message,
- int          x_errno,
+ int          error,
  const char*  descr,
  char*        buf,
  size_t       buf_size
@@ -327,27 +326,19 @@ extern NCBI_XCONNECT_EXPORT const char* MessagePlusErrno
 
 /** Special log writing macro that makes use of a specified error number,
  * and an optional description thereof.
- * @sa
- *  LOG_WRITE_ERRNO
+ * NOTE: Pass descr as NULL to get the standard errno description that
+ * corresponds to the passed error value.
  */
-#define LOG_WRITE_ERRNO_EX(lg, code, subcode, level, message,            \
-                           x_errno, x_descr)                             \
-do {                                                                     \
-    if ((lg)  ||  (level) == eLOG_Fatal) {                               \
-        char _buf[1024];                                                 \
-        LOG_WRITE(lg, code, subcode, level,                              \
-                  MessagePlusErrno(message, x_errno, x_descr,            \
-                                   _buf, sizeof(_buf)));                 \
-    }                                                                    \
+#define LOG_WRITE_ERRNO(lg, code, subcode, level, message,              \
+                        error, descr)                                   \
+do {                                                                    \
+    if ((lg)  ||  (level) == eLOG_Fatal) {                              \
+        char _buf[1024];                                                \
+        LOG_WRITE(lg, code, subcode, level,                             \
+                  NcbiMessagePlusError(message, error, descr,           \
+                                       _buf, sizeof(_buf)));            \
+    }                                                                   \
 } while (0)
-
-
-/** Variant of LOG_WRITE_ERRNO_EX that uses current errno.
- * @sa
- *   LOG_WRITE_ERRNO_EX
- */
-#define LOG_WRITE_ERRNO(lg, code, subcode, level, message)               \
-     LOG_WRITE_ERRNO_EX(lg, code, subcode, level, message, errno, 0)
 
 
 /* Several defines brought here from ncbidiag.hpp. Names of macros slightly

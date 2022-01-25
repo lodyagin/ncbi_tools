@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/30/07
 *
-* $Revision: 1.14 $
+* $Revision: 1.15 $
 *
 * File Description: 
 *
@@ -732,7 +732,12 @@ static EjourData mla2_ejour_list [] = {
  {"Pharmacologyonline",                                            0 },
  {"Plant Methods",                                                 0 },
  {"PLoS Biol.",                                                 2006 },
+ {"PLoS Comput. Biol.",                                            0 },
+ {"PLoS Genet.",                                                   0 },
+ {"PLoS Med.",                                                     0 },
+ {"PLoS Negl Trop Dis",                                            0 },
  {"PLoS ONE",                                                      0 },
+ {"PLoS Pathog.",                                                  0 },
  {"Redox Rep.",                                                 2004 },
  {"Reprod. Biol. Endocrinol.",                                     0 },
  {"Retrovirology",                                                 0 },

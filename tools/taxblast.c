@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: taxblast.c,v 6.28 2007/05/01 14:45:15 jianye Exp $";
+static char const rcsid[] = "$Id: taxblast.c,v 6.30 2008/07/18 19:26:35 madden Exp $";
 
-/* $Id: taxblast.c,v 6.28 2007/05/01 14:45:15 jianye Exp $
+/* $Id: taxblast.c,v 6.30 2008/07/18 19:26:35 madden Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -31,12 +31,18 @@ static char const rcsid[] = "$Id: taxblast.c,v 6.28 2007/05/01 14:45:15 jianye E
 *
 * Initial Version Creation Date: 04/04/2000
 *
-* $Revision: 6.28 $
+* $Revision: 6.30 $
 *
 * File Description:
 *        Utilities and functions for Tax-Blast program
 *
 * $Log: taxblast.c,v $
+* Revision 6.30  2008/07/18 19:26:35  madden
+* Fix for access errors, JIRA WB-86
+*
+* Revision 6.29  2008/06/23 15:36:55  camacho
+* Fix off-by-one error in RDTaxLookupInit and invalid assignment in RDTaxLookupClose
+*
 * Revision 6.28  2007/05/01 14:45:15  jianye
 * restore redundant sequences in taxonomy report
 *
@@ -515,10 +521,14 @@ static SeqAlignPtr GetNewRedundantAlign(SeqAlignPtr sap, CharPtr database,
 
             while (readdb_get_header(rdfp, oid, &index, &tmp_sip, NULL)) {
                 if (SeqIdComp(tmp_sip, subject_sip) != SIC_YES) {
+                    SeqIdPtr salp_seqid = NULL;
                     /*redundant id, duplicate seqalign using the redundant id*/
                     SeqAlignPtr salp_dup = SeqAlignDup(salp_temp);
-                    SeqIdFree(SeqIdPtrFromSeqAlign(salp_dup)->next);
-                    SeqIdPtrFromSeqAlign(salp_dup)->next = tmp_sip;
+                    salp_seqid = SeqIdPtrFromSeqAlign(salp_dup);
+                    if (salp_seqid && salp_seqid->next)
+                       salp_seqid->next = SeqIdFree(salp_seqid->next);
+                    /* SeqIdFree(SeqIdPtrFromSeqAlign(salp_dup)->next); */
+                    salp_seqid->next = tmp_sip;
                     /*only take the first id*/
                     SeqIdSetFree(tmp_sip->next);
                     tmp_sip->next = NULL;
@@ -562,7 +572,6 @@ static HitObjPtr GetAlignData (SeqAlignPtr sap, CharPtr database,
     Int4Ptr gis, taxoffs, scores;
     FloatHiPtr e_values, bit_scores;
     HitObjPtr hitobj;
-    CharPtr accession;
     SeqAlignPtr salp_with_redundant_set = NULL;
 
     salp_with_redundant_set = GetNewRedundantAlign(sap, database, db_is_na);
@@ -587,6 +596,7 @@ static HitObjPtr GetAlignData (SeqAlignPtr sap, CharPtr database,
     hitobj->accs = (CharPtr PNTR)  MemNew (numhits*sizeof(CharPtr));
     
     while (sap) {
+        CharPtr accession = NULL;
         for(score = (ScorePtr) sap->score; score != NULL; 
             score = score->next) {
             if (strcmp("score", score->id->str)==0) {
@@ -1940,7 +1950,7 @@ RDBTaxLookupPtr RDTaxLookupInit(void)
     
     tax_lookup = MemNew(sizeof(RDBTaxLookup));
     /*tax_lookup->all_taxid_count = getTotalTaxIdCount(NULL);*/
-    tax_lookup->all_taxid_count = tax1e_maxTaxId();
+    tax_lookup->all_taxid_count = tax1e_maxTaxId()+1;
     
     tax_lookup->tax_array = MemNew(sizeof(RDBTaxNamesPtr)*tax_lookup->all_taxid_count);
 
@@ -1976,7 +1986,7 @@ RDBTaxLookupPtr RDTaxLookupReset(RDBTaxLookupPtr tax_lookup)
 
 void RDTaxLookupClose(RDBTaxLookupPtr tax_lookup)
 {
-	tax_lookup = RDTaxLookupReset(tax_lookup);
+	RDTaxLookupReset(tax_lookup);
 
     MemFree(tax_lookup->tax_data);
     MemFree(tax_lookup->tax_array);

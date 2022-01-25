@@ -79,6 +79,10 @@ SOURCE=..\..\..\connect\ncbi_connector.c
 # End Source File
 # Begin Source File
 
+SOURCE=..\..\..\connect\ncbi_connssl.h
+# End Source File
+# Begin Source File
+
 SOURCE=..\..\..\connect\ncbi_connutil.c
 # End Source File
 # Begin Source File
@@ -184,6 +188,10 @@ SOURCE=..\..\..\connect\ncbi_servicep.h
 # Begin Source File
 
 SOURCE=..\..\..\connect\ncbi_socket.c
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\connect\ncbi_socketp.h
 # End Source File
 # Begin Source File
 

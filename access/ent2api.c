@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/29/99
 *
-* $Revision: 1.104 $
+* $Revision: 1.105 $
 *
 * File Description: 
 *
@@ -1337,6 +1337,7 @@ NLM_EXTERN Boolean ValidateEntrez2InfoPtrEx (
             } else if (StringICmp (last, "COG") == 0 && StringICmp (str, "COG group") == 0) {
             } else if (StringICmp (last, "Locus Tag") == 0 && StringICmp (str, "Locus Tag Prefix") == 0) {
             } else if (StringICmp (last, "Attribute") == 0 && StringICmp (str, "Attributes") == 0) {
+            } else if (StringICmp (last, "Genotype") == 0 && StringICmp (str, "Genotype Platform") == 0) {
             } else {
               sprintf (buf, "Menu names %s [%s] and %s [%s] may be unintended variants", last, dbnames [lastvnp->choice], str, dbnames [vnp->choice]);
               ValNodeCopyStr (head, 0, buf);

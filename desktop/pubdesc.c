@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/28/95
 *
-* $Revision: 6.66 $
+* $Revision: 6.69 $
 *
 * File Description:
 *
@@ -147,10 +147,14 @@ typedef struct pubdescpage {
   PopuP         pubstatus;
 
   GrouP         medium;
-  TexT          comment;
   PopuP         retractType;
   GrouP         retractGrp;
   TexT          retractExp;
+
+  TexT          comment;
+  /*
+  TexT          doi;
+  */
 
 /* year/month - date of issue; cpryear/cprmonth - date of application */
   TexT          pat_country;
@@ -710,7 +714,9 @@ static Pointer PubdescPageToPubdescPtr (DialoG d)
   CitSubPtr             csp;
   AuthListPtr           alp;
   ImprintPtr            imp;
-
+  /*
+  ArticleIdPtr          doi;
+  */
   Char                  str[256];
   Int2                  serial;
   Int2                  val;
@@ -819,6 +825,17 @@ static Pointer PubdescPageToPubdescPtr (DialoG d)
               }
             }
           }
+          /*
+          if (! TextHasNoText (ppp->doi)) {
+            doi = ArticleIdNew ();
+            if (doi != NULL) {
+              doi->choice = ARTICLEID_DOI;
+              doi->data.ptrvalue = SaveStringFromText (ppp->doi);
+              doi->next = cap->ids;
+              cap->ids = doi;
+            }
+          }
+          */
         }
         break;
 /* note: for Cit-book's there is cbp->otherdata which could be ValNodes */
@@ -1202,6 +1219,10 @@ static void PubdescPtrToPubdescPage (DialoG d, Pointer data)
   CitJourPtr        cjp;
   CitPatPtr         cpp;
   CitSubPtr         csp;
+  /*
+  CharPtr           doi;
+  ArticleIdPtr      ids;
+  */
   PubStatusDatePtr  history;
   ImprintPtr        imp;
   Uint1             pubstatus;
@@ -1438,6 +1459,14 @@ static void PubdescPtrToPubdescPage (DialoG d, Pointer data)
                 default:
                   break;
               }
+              /*
+              for (ids = cap->ids; ids != NULL; ids = ids->next) {
+                if (ids->choice != ARTICLEID_DOI) continue;
+                doi = (CharPtr) ids->data.ptrvalue;
+                if (StringHasNoText (doi)) continue;
+                SetTitle (ppp->doi, doi);
+              }
+              */
             }
             break;
           case PUB_Book:
@@ -2626,9 +2655,16 @@ static DialoG CreatePubdescDialog (GrouP h, CharPtr title, GrouP PNTR pages,
     pages[Remarknumber] = HiddenGroup (m, -1, 0, NULL);
 
     g10 = HiddenGroup (pages[Remarknumber], -1, 0, NULL);
+    SetGroupSpacing (g10, 10, 10);
     StaticPrompt (g10, "Remark", (Int2) (25 * stdCharWidth), 0,
                   programFont, 'c');
     ppp->comment = ScrollText (g10, 25, 5, programFont, TRUE, NULL);
+    /*
+    g24 = HiddenGroup (g10, 2, 0, NULL);
+    StaticPrompt (g24, "D.O.I.", 0, dialogTextHeight, programFont, 'l');
+    ppp->doi = DialogText (g24, "", 12, NULL);
+    AlignObjects (ALIGN_CENTER, (HANDLE) ppp->comment, (HANDLE) g24, NULL);
+    */
 
     g11 = HiddenGroup (g10, -6, 0, NULL);
     if (pub_choice == PUB_UNPUB || pub_choice == PUB_ONLINE || pub_choice == PUB_SUB)

@@ -1,4 +1,4 @@
-/*  $Id: blast_stat.h,v 1.87 2007/05/22 20:55:36 kazimird Exp $
+/*  $Id: blast_stat.h,v 1.88 2008/11/03 20:59:44 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -545,6 +545,15 @@ Int2 BLAST_GetNucleotideGapExistenceExtendParams(Int4 reward,
                                        Int4 penalty,
                                        Int4* gap_existence,
                                        Int4* gap_extension);
+
+/** Check the validity of the reward and penalty scores.
+ * Only to be used with blastn searches.
+ * @param reward match score [in]
+ * @param penalty mismatch score [in]
+ * @return TRUE on success 
+ */
+NCBI_XBLAST_EXPORT
+Boolean BLAST_CheckRewardPenaltyScores(Int4 reward, Int4 penalty);
 
 /** Extract the alpha and beta settings for this matrixName, and these
  *  gap open and gap extension costs

@@ -1,4 +1,4 @@
-/* $Id: lookup_wrap.c,v 1.31 2008/01/31 23:55:42 kazimird Exp $
+/* $Id: lookup_wrap.c,v 1.32 2008/11/03 20:59:44 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -37,7 +37,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: lookup_wrap.c,v 1.31 2008/01/31 23:55:42 kazimird Exp $";
+    "$Id: lookup_wrap.c,v 1.32 2008/11/03 20:59:44 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/lookup_wrap.h>
@@ -58,6 +58,7 @@ Int2 LookupTableWrapInit(BLAST_SequenceBlk* query,
 {
    Int2 status = 0;
    LookupTableWrap* lookup_wrap;
+   EBoneType bone_type;
 
    if (error_msg)
       *error_msg = NULL;
@@ -83,7 +84,9 @@ Int2 LookupTableWrapInit(BLAST_SequenceBlk* query,
        ((BlastAaLookupTable*)lookup_wrap->lut)->use_pssm = has_pssm;
        BlastAaLookupIndexQuery( (BlastAaLookupTable*) lookup_wrap->lut, matrix, 
                                  query, lookup_segments, 0);
-       BlastAaLookupFinalize((BlastAaLookupTable*) lookup_wrap->lut);
+       /* if query length less than 64k, we can save cache by using small bone */
+       bone_type = ( query->length >= INT2_MAX*2) ? eBackbone: eSmallbone;      
+       BlastAaLookupFinalize((BlastAaLookupTable*) lookup_wrap->lut, bone_type);
        }
       break;
 

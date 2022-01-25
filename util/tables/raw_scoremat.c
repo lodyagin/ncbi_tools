@@ -1,4 +1,4 @@
-/*  $Id: raw_scoremat.c,v 1.6 2006/09/26 12:12:24 madden Exp $
+/*  $Id: raw_scoremat.c,v 1.7 2008/08/22 14:55:41 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -111,27 +111,44 @@ void NCBISM_Unpack(const SNCBIPackedScoreMatrix* psm,
     }
 }
 
+static
+int /* bool */ s_NCBISM_StartsWith(const char* str, const char* pfx)
+{
+    for ( ;  *pfx;  ++str, ++pfx) {
+        if (tolower((unsigned char)*str) != *pfx) {
+            return 0;
+        }
+    }
+    return 1;
+}
 
-/*
- * ===========================================================================
- * $Log: raw_scoremat.c,v $
- * Revision 1.6  2006/09/26 12:12:24  madden
- * Add OJ to kNCBIstdaa
- *
- * Revision 1.5  2006/09/25 19:29:34  madden
- * Added the BLOSUM50 and BLOSUM90 matrices. [from Mike Gertz]
- *
- * Revision 1.4  2005/06/03 17:04:16  lavr
- * Explicit (unsigned char) casts in ctype routines
- *
- * Revision 1.3  2003/12/29 21:25:50  ucko
- * +PAM250
- *
- * Revision 1.2  2003/10/02 15:37:34  ivanov
- * Get rid of compilation warnings
- *
- * Revision 1.1  2003/08/21 19:48:20  ucko
- * Add tables library (shared with C) for raw score matrices, etc.
- *
- * ===========================================================================
- */
+const SNCBIPackedScoreMatrix* NCBISM_GetStandardMatrix(const char* name)
+{
+    switch (name[0]) {
+    case 'B': case 'b':
+        if ( !s_NCBISM_StartsWith(name, "blosum") ) {
+            return NULL;
+        }
+        switch (name[6]) {
+        case '4': return strcmp(name + 6, "45") ? NULL : &NCBISM_Blosum45;
+        case '5': return strcmp(name + 6, "50") ? NULL : &NCBISM_Blosum50;
+        case '6': return strcmp(name + 6, "62") ? NULL : &NCBISM_Blosum62;
+        case '8': return strcmp(name + 6, "80") ? NULL : &NCBISM_Blosum80;
+        case '9': return strcmp(name + 6, "90") ? NULL : &NCBISM_Blosum90;
+        default:  return NULL;
+        }
+
+    case 'P': case 'p':
+        if ( !s_NCBISM_StartsWith(name, "pam") ) {
+            return NULL;
+        }
+        switch (name[3]) {
+        case '2': return strcmp(name + 3, "250") ? NULL : &NCBISM_Pam250;
+        case '3': return strcmp(name + 3, "30")  ? NULL : &NCBISM_Pam30;
+        case '7': return strcmp(name + 3, "70")  ? NULL : &NCBISM_Pam70;
+        }
+
+    default:
+        return NULL;
+    }
+}

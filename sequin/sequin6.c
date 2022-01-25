@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11/12/97
 *
-* $Revision: 6.326 $
+* $Revision: 6.342 $
 *
 * File Description: 
 *
@@ -58,6 +58,7 @@
 #include <biosrc.h>
 #include <vsm.h>
 #include <actutils.h>
+#include <findrepl.h>
 
 #define NUMBER_OF_SUFFIXES    7
 
@@ -259,7 +260,8 @@ typedef enum {
   eFieldTypeCommentDescriptor,
   eFieldTypeFeatureNote,
   eFieldTypePublication,
-  eNumFieldType};
+  eNumFieldType
+} FieldType;
 
 static CharPtr field_type_names[] = {
   "Gene",
@@ -2876,13 +2878,10 @@ static ENUM_ALIST(molinfo_biomol_alist)
   {"mRNA [cDNA]",            3},
   {"Ribosomal RNA",          4},
   {"Transfer RNA",           5},
-  {"Small nuclear RNA",      6},
-  {"Small cytoplasmic RNA",  7},
   {"Peptide",                8},
   {"Other-Genetic",          9},
   {"Genomic-mRNA",          10},
   {"cRNA",                  11},
-  {"Small nucleolar RNA",   12},
   {"Transcribed RNA",       13},
   {"Other",                255},
 END_ENUM_ALIST
@@ -5718,7 +5717,6 @@ AdjustOneCodingRegionWithTerminalGapsOnBioseq
  SeqMgrFeatContext context)
 {
   SeqLocPtr         adjusted_loc;
-  Int4              seq_offset = 0;
   Int4              loc_len, adjusted_len;
   Boolean           partial5, partial3;
   BioseqPtr         protbsp;
@@ -6590,12 +6588,17 @@ static void ApplyBioFeatToAll (Uint2        entityID,
 
   if (IS_Bioseq_set (sep)) {
     bssp = (BioseqSetPtr) sep->data.ptrvalue;
-    if (bssp != NULL && (bssp->_class == 7 ||
-                         (IsPopPhyEtcSet (bssp->_class)))) {
-      for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
-        ApplyBioFeatToAll (entityID, sep, afp);
+    if (bssp != NULL) {
+      if (bssp->_class == BioseqseqSet_class_genbank || IsPopPhyEtcSet (bssp->_class)) {
+        for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
+          ApplyBioFeatToAll (entityID, sep, afp);
+        }
+        return;
+      } else if (bssp->_class == BioseqseqSet_class_gen_prod_set) {
+        /* just the first item */
+        ApplyBioFeatToAll (entityID, bssp->seq_set, afp);
+        return;
       }
-      return;
     }
   }
 
@@ -7463,7 +7466,12 @@ static Pointer SubmitFormToSequinBlockPtr (ForM f)
             affil = AffilFree (affil);
           }
         }
-        ap->affil = affil;
+        if (affil != NULL) {
+          if (ap == NULL) {
+            ap = AuthorNew();
+          }
+          ap->affil = affil;
+        }
       }
       sbp->contactperson = ap;
       sbp->citsubauthors = (AuthListPtr) DialogToPointer (sbfp->authors);
@@ -8661,6 +8669,7 @@ extern ForM CreateInitSubmitterForm (Int2 left, Int2 top, CharPtr title,
   GrouP              z;
   GrouP              g1, g2;
   GrouP              p;
+  DatePtr            dp;
 
   w = NULL;
   sbfp = MemNew (sizeof (SubmitForm));
@@ -8713,7 +8722,13 @@ extern ForM CreateInitSubmitterForm (Int2 left, Int2 top, CharPtr title,
     SetValue (sbfp->hup, 1);
     sbfp->dateGrp = HiddenGroup (m, -1, 0, NULL);
     /* StaticPrompt (sbfp->dateGrp, "Release Date: ", 0, popupMenuHeight, programFont, 'l'); */
-    sbfp->reldate = CreateDateDialog (sbfp->dateGrp, NULL);
+
+    dp = DateCurr ();
+    if (dp != NULL && dp->data[0] == 1) {
+      sbfp->reldate = CreateDateDialogEx (sbfp->dateGrp, NULL, dp->data[1] + 1900, 10);
+    } else {
+      sbfp->reldate = CreateDateDialog (sbfp->dateGrp, NULL);
+    }
     p = MultiLinePrompt (sbfp->dateGrp, 
                          "NOTE: Sequences must be released when the accession number or any portion of the sequence is published.",
                          25 * stdCharWidth, programFont);
@@ -9691,6 +9706,7 @@ typedef struct addmodinfo {
   Boolean only_sp;
   Boolean only_cf;
   Boolean only_aff;
+  Boolean no_taxid;
   CharPtr abbreviation;
   Boolean use_abbreviation;
 } AddModInfo, PNTR AddModInfoPtr;
@@ -9704,8 +9720,10 @@ typedef struct addmodlistitem {
 
 static AddModListItem mods_list[] = {
 { TRUE, ORGMOD_authority, "Authority", NULL },
+{ TRUE, ORGMOD_bio_material, "Bio-material", NULL },
 { TRUE, ORGMOD_biovar, "Biovar", "bv." },
 { FALSE, SUBSRC_clone, "Clone", NULL },
+{ TRUE, ORGMOD_culture_collection, "Culture-collection", NULL },
 { TRUE, ORGMOD_forma, "Forma", "f." },
 { TRUE, ORGMOD_forma_specialis, "Forma-specialis", "f. sp." },
 { FALSE, SUBSRC_genotype, "Genotype", NULL },
@@ -9719,6 +9737,27 @@ static AddModListItem mods_list[] = {
 { TRUE, ORGMOD_sub_species, "Sub-species", "subsp." },
 { TRUE, ORGMOD_variety, "Variety", "var." }
 };
+
+
+static Boolean HasTaxonomyID (BioSourcePtr biop)
+{
+  ValNodePtr  db;
+  DbtagPtr    dbt;
+  Boolean     rval = FALSE;
+
+  if (biop == NULL || biop->org == NULL) {
+    return FALSE;
+  }
+  for (db = biop->org->db; db != NULL && !rval; db = db->next) {
+    dbt = (DbtagPtr) db->data.ptrvalue;
+    if (dbt != NULL && dbt->db != NULL &&
+      StringICmp (dbt->db, "taxon") == 0) {
+      rval = TRUE;
+    }
+  }
+  return rval;
+}
+
 
 static void AddModToOrgProc (BioSourcePtr biop, Pointer userdata)
 {
@@ -9757,6 +9796,11 @@ static void AddModToOrgProc (BioSourcePtr biop, Pointer userdata)
   {
     ok_to_add = TRUE;
   }
+
+  if (ami->no_taxid && HasTaxonomyID (biop)) {
+    ok_to_add = FALSE;
+  }
+
   if (!ok_to_add)
   {
     return;
@@ -9776,7 +9820,7 @@ static void AddModToOrgProc (BioSourcePtr biop, Pointer userdata)
     str_to_add = NULL;
     while (mod != NULL) {
       if (mod->subtype == ami->subtype) {
-        str_to_add = mod->subname;
+        str_to_add = StringSave (mod->subname);
       }
       mod = mod->next;
     }
@@ -9785,7 +9829,7 @@ static void AddModToOrgProc (BioSourcePtr biop, Pointer userdata)
       ssp = biop->subtype;
       while (ssp != NULL) {
         if (ssp->subtype == ami->subtype) {
-          str_to_add = ssp->name;
+          str_to_add = StringSave (ssp->name);
         }
         ssp = ssp->next;
       }
@@ -9801,6 +9845,15 @@ static void AddModToOrgProc (BioSourcePtr biop, Pointer userdata)
         *ptr = '\0';
       }
     }
+
+    /* strip colons for structured modifiers */
+    if (ami->isOrgMod
+        && (ami->subtype == ORGMOD_bio_material
+            || ami->subtype == ORGMOD_culture_collection
+            || ami->subtype == ORGMOD_specimen_voucher)) {
+      FindReplaceString (&str_to_add, ":", " ", FALSE, FALSE);
+    }
+
     influenza = FALSE;
     if (StringICmp (orp->taxname, "Influenza A virus") == 0 ||
         StringICmp (orp->taxname, "Influenza B virus") == 0) {
@@ -9845,6 +9898,7 @@ static void AddModToOrgProc (BioSourcePtr biop, Pointer userdata)
       SetTaxNameAndRemoveTaxRef (biop->org, str);
       RemoveOldName (biop->org);
     }
+    str_to_add = MemFree (str_to_add);
   }
 }
 
@@ -9882,6 +9936,7 @@ typedef struct addmodformptr {
   ButtoN only_sp;
   ButtoN only_cf;
   ButtoN only_aff;
+  ButtoN no_taxid;
   ButtoN use_abbreviation;
   DialoG constraint;
 
@@ -9914,6 +9969,7 @@ static void DoAddModToOrg (ButtoN b)
   ami->only_sp = GetStatus (amfp->only_sp);
   ami->only_cf = GetStatus (amfp->only_cf);
   ami->only_aff = GetStatus (amfp->only_aff);
+  ami->no_taxid = GetStatus (amfp->no_taxid);
   ami->use_abbreviation = GetStatus (amfp->use_abbreviation);
   /* always use abbreviation for serovar */
   if (ami->isOrgMod && ami->subtype == ORGMOD_serovar)
@@ -10010,6 +10066,7 @@ extern void AddModToOrg (IteM i)
   amfp->only_sp = CheckBox (h, "Only append to sp. organisms", NULL);
   amfp->only_cf = CheckBox (h, "Only append to cf. organisms", NULL);
   amfp->only_aff = CheckBox (h, "Only append to aff. organisms", NULL);
+  amfp->no_taxid = CheckBox (h, "Only to organisms with no taxonomy ID", NULL);
   amfp->use_abbreviation = CheckBox (h, "Use abbreviation (for example, pv., subsp., etc.)", NULL);
   SetStatus (amfp->use_abbreviation, TRUE);
   Disable (amfp->use_abbreviation);
@@ -10298,7 +10355,6 @@ static void CreateNewDescProc (ButtoN b)
   OMProcControl  ompc;
   ObjMgrProcPtr  ompp;
   Int2           retval;
-  ValNodePtr     id_list = NULL;
 
   dfp = (DescFormPtr) GetObjectExtra (b);
   if (dfp != NULL) {
@@ -10649,6 +10705,20 @@ static VoidPtr LinkNewObjectLists (NewObjectPtr list1, NewObjectPtr list2)
   return list1;
 }
 
+
+extern Boolean IsUnwantedFeatureType (Uint1 key)
+{
+#if 1
+  return FALSE;
+#else
+  if (key == FEATDEF_satellite || key == FEATDEF_repeat_unit) {
+    return TRUE;
+  } else {
+    return FALSE;
+  }
+#endif
+}
+
 extern void SetupNewFeaturesMenu (MenU m, BaseFormPtr bfp)
 
 {
@@ -10721,7 +10791,7 @@ extern void SetupNewFeaturesMenu (MenU m, BaseFormPtr bfp)
             fdp = NULL;
             label = NULL;
             while ((fdp = FeatDefFindNext (fdp, &key, &label, 0, FALSE)) != NULL) {
-              if (key != FEATDEF_BAD) {
+              if (key != FEATDEF_BAD && !IsUnwantedFeatureType(key)) {
                 ompp = NULL;
                 while ((ompp = ObjMgrProcFindNext (omp, OMPROC_EDIT,
 				                                           omtp->datatype, 0, ompp)) != NULL) {
@@ -12133,7 +12203,6 @@ static ValNodePtr ExpandAccessionRanges (CharPtr list_str, SeqEntryPtr sep)
   CharPtr    cp;
   Char       ch;
   SeqIdPtr   sip;
-  Int4       last_number = 0, this_number = 0;
   CharPtr    last_prefix = NULL, this_prefix = NULL, tmpstr;
   Int4       num_len = 0, num_len2;
   Int4       range_start, range_end, sw;
@@ -13049,4 +13118,276 @@ extern void AbbreviateCitSubAffilStates (IteM i)
   ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
   ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
 }
+
+
+static void CreateRefSeqProteinIDForCodingRegion (SeqFeatPtr sfp, SeqIdPtr master) 
+{
+  BioseqPtr prot_bsp;
+  SeqIdPtr  sip, sip_new;
+  ObjectIdPtr oip;
+  Int4        start, stop;
+  CharPtr     new_id_txt;
+  CharPtr     id_fmt = "%s:%d-%d";
+  Char        id_buf[255];
+
+  if (sfp == NULL || master == NULL) return;
+
+  start = SeqLocStart (sfp->location);
+  stop = SeqLocStop (sfp->location);
+
+  SeqIdWrite (master, id_buf, PRINTID_TEXTID_ACC_ONLY, sizeof (id_buf) - 1);
+  new_id_txt = (CharPtr) MemNew (sizeof (Char) * (StringLen (id_fmt) + StringLen (id_buf) + 30));
+  sprintf (new_id_txt, id_fmt, id_buf, start + 1, stop + 1);
+
+  prot_bsp = BioseqFindFromSeqLoc (sfp->product);
+  if (prot_bsp == NULL) return;
+
+  /* find local ID */
+  sip = prot_bsp->id;
+  while (sip != NULL && sip->choice != SEQID_LOCAL) {
+    sip = sip->next;
+  }
+  if (sip == NULL || sip->data.ptrvalue == NULL) return;
+
+  oip = (ObjectIdPtr) sip->data.ptrvalue;
+  if (StringCmp (oip->str, new_id_txt) != 0) {
+    sip_new = ValNodeNew (NULL);
+    sip_new->choice = SEQID_LOCAL;
+    oip = ObjectIdNew ();
+    oip->str = new_id_txt;
+    new_id_txt = NULL;
+    sip_new->data.ptrvalue = oip;
+    BioseqReplaceID (prot_bsp, sip_new);
+    sfp->product = SeqLocFree (sfp->product);
+    sfp->product = ValNodeNew (NULL);
+    sfp->product->choice = SEQLOC_WHOLE;
+    sfp->product->data.ptrvalue = (Pointer) sip_new;
+  } 
+  new_id_txt = MemFree (new_id_txt);
+}
+
+
+static void CreateRefSeqProteinIDsForBioseq (BioseqPtr bsp, Pointer data)
+{
+  SeqFeatPtr sfp;
+  SeqMgrFeatContext context;
+  SeqIdPtr sip;
+
+  if (bsp == NULL || ISA_aa (bsp->mol)) {
+    return;
+  }
+
+  sip = SeqIdFindBest (bsp->id, SEQID_OTHER);
+  if (sip == NULL || sip->choice != SEQID_OTHER) return;
+
+  sfp = SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_CDREGION, 0, &context);
+  while (sfp != NULL) {
+    CreateRefSeqProteinIDForCodingRegion (sfp, sip);
+    sfp = SeqMgrGetNextFeature (bsp, sfp, SEQFEAT_CDREGION, 0, &context);
+  }
+}
+
+
+NLM_EXTERN void CreateRefSeqProteinIDs (IteM i)
+{
+  BaseFormPtr        bfp;
+  SeqEntryPtr        sep;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL)
+    return;
+
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL)
+    return;
+
+  VisitBioseqsInSep (sep, NULL, CreateRefSeqProteinIDsForBioseq);
+
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);  
+}
+
+
+typedef struct flucommentlist {
+  BioseqPtr bsp;
+  BioSourcePtr biop;
+} FluCommentListData, PNTR FluCommentListPtr;
+
+
+static FluCommentListPtr FluCommentListNew (BioseqPtr bsp, BioSourcePtr biop)
+{
+  FluCommentListPtr f;
+
+  f = (FluCommentListPtr) MemNew (sizeof (FluCommentListData));
+  f->bsp = bsp;
+  f->biop = biop;
+  return f;
+}
+
+
+static int LIBCALLBACK SortFluCommentList (VoidPtr ptr1, VoidPtr ptr2)
+
+{
+  ValNodePtr    vnp1, vnp2;
+  FluCommentListPtr f1, f2;
+  Int4              rval = 0;
+  
+  if (ptr1 != NULL && ptr2 != NULL) {
+    vnp1 = *((ValNodePtr PNTR) ptr1);
+    vnp2 = *((ValNodePtr PNTR) ptr2);
+    if (vnp1 != NULL && vnp2 != NULL) {
+      f1 = (FluCommentListPtr) vnp1->data.ptrvalue;
+      f2 = (FluCommentListPtr) vnp2->data.ptrvalue;
+      if (f1 != NULL && f2 != NULL) {
+        if (f1->biop == NULL && f2->biop == NULL) {
+          rval = 0;
+        } else if (f1->biop == NULL) {
+          rval = -1;
+        } else if (f2->biop == NULL) {
+          rval = 1;
+        } else if (f1->biop->org == NULL && f2->biop->org == NULL) {
+          rval = 0;
+        } else if (f1->biop->org == NULL) {
+          rval = -1;
+        } else if (f2->biop->org == NULL) {
+          rval = 1;
+        } else {
+          rval = StringCmp (f1->biop->org->taxname, f2->biop->org->taxname);
+        }
+      }
+    }
+  }
+  return rval;
+}
+
+static void GetBioSourceAndSeqIdPairs (BioseqPtr bsp, Pointer data)
+{
+  SeqDescrPtr sdp;
+  SeqMgrDescContext context;
+
+  if (bsp == NULL || ISA_aa (bsp->mol) || data == NULL) {
+    return;
+  }
+
+  sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_source, &context);
+  if (sdp != NULL) {
+    ValNodeAddPointer ((ValNodePtr PNTR) data, 0, FluCommentListNew (bsp, sdp->data.ptrvalue));
+  }
+}
+
+
+static void AddCommentsToList (ValNodePtr vnp_start, ValNodePtr vnp_end, CharPtr last_taxname)
+{
+  Char               id_buf[255];
+  CharPtr            id_list_txt;
+  CharPtr            comment_fmt = "GenBank Accession Numbers %s represent sequences from the 8 segments of %s";
+  CharPtr            comment;
+  Int4               comment_len;
+  SeqDescrPtr        sdp;
+  FluCommentListPtr  f;
+  ValNodePtr         vnp_a;
+
+  if (vnp_start == NULL || StringHasNoText (last_taxname)) {
+    return;
+  } else if (vnp_start->next == vnp_end) {
+    /* only one in the group, don't bother with comment */
+  } else {
+    /* get lengths of IDs */
+    comment_len = 0;
+    for (vnp_a = vnp_start; vnp_a != vnp_end; vnp_a = vnp_a->next) {
+      f = (FluCommentListPtr) vnp_a->data.ptrvalue;
+      if (f != NULL && f->bsp != NULL) {
+        SeqIdWrite (SeqIdFindBest (f->bsp->id, SEQID_GENBANK), id_buf, PRINTID_REPORT, sizeof (id_buf) - 1);
+        comment_len += StringLen (id_buf) + 2;
+      }
+    }
+    /* make list */
+    id_list_txt = (CharPtr) MemNew (sizeof (Char) * (comment_len));
+    id_list_txt[0] = 0;
+    for (vnp_a = vnp_start; vnp_a != vnp_end; vnp_a = vnp_a->next) {
+      f = (FluCommentListPtr) vnp_a->data.ptrvalue;
+      if (f != NULL && f->bsp != NULL) {
+        SeqIdWrite (SeqIdFindBest (f->bsp->id, SEQID_GENBANK), id_buf, PRINTID_REPORT, sizeof (id_buf) - 1);
+        StringCat (id_list_txt, id_buf);
+        if (vnp_a->next != vnp_end) {
+          StringCat (id_list_txt, ", ");
+        }
+      }
+    }
+    /* make comment */
+    comment = (CharPtr) MemNew (sizeof (Char) * (StringLen (comment_fmt) + comment_len + StringLen (last_taxname) ));
+    sprintf (comment, comment_fmt, id_list_txt, last_taxname);
+    id_list_txt = MemFree (id_list_txt);
+    /* add comments */
+    for (vnp_a = vnp_start; vnp_a != vnp_end; vnp_a = vnp_a->next) {
+      f = (FluCommentListPtr) vnp_a->data.ptrvalue;
+      if (f != NULL && f->bsp != NULL) {
+        sdp = CreateNewDescriptorOnBioseq (f->bsp, Seq_descr_comment);
+        sdp->data.ptrvalue = StringSave (comment);
+      }
+    }
+    comment = MemFree (comment);
+  }
+}
+
+
+NLM_EXTERN void AddFluComments (IteM i)
+{
+  BaseFormPtr        bfp;
+  SeqEntryPtr        sep;
+  ValNodePtr         list = NULL, vnp, vnp_start;
+  CharPtr            last_taxname = NULL;
+  FluCommentListPtr  f;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL)
+    return;
+
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL)
+    return;
+
+  /* get list of biosources and sequence IDs */
+  VisitBioseqsInSep (sep, &list, GetBioSourceAndSeqIdPairs);
+  /* sort so that identical organisms are together */
+  list = ValNodeSort (list, SortFluCommentList);
+  /* create comments for all sequences with the same organism name */
+  vnp_start = NULL;
+  vnp = list;
+  while (vnp != NULL) {
+    f = (FluCommentListPtr) vnp->data.ptrvalue;
+    
+    if (f == NULL || f->biop == NULL || f->biop->org == NULL) {
+      /* skip this one */
+    } else if (last_taxname == NULL) {
+      last_taxname = f->biop->org->taxname;
+      vnp_start = vnp;
+    } else if (StringCmp (last_taxname, f->biop->org->taxname) != 0) {      
+      if (vnp_start->next == vnp) {
+        /* only one in the group, don't bother with comment */
+      } else {
+        AddCommentsToList (vnp_start, vnp, last_taxname);
+      }
+      vnp_start = vnp;
+      f = (FluCommentListPtr) vnp->data.ptrvalue;       
+      last_taxname = f->biop->org->taxname;
+    }
+    vnp = vnp->next;
+  }
+  AddCommentsToList (vnp_start, NULL, last_taxname);
+
+  list = ValNodeFreeData (list);
+
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);  
+}
+
 

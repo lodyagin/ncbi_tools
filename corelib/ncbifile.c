@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/4/91
 *
-* $Revision: 6.40 $
+* $Revision: 6.41 $
 *
 * File Description: 
 *     portable file routines
@@ -38,173 +38,6 @@
 * --------------------------------------------------------------------------
 * Date     Name        Description of modification
 * -------  ----------  -----------------------------------------------------
-* 04-15-93 Schuler     Changed _cdecl to LIBCALL
-* 12-20-93 Schuler     Converted ErrPost to ErrPostEx
-* 11-27-94 Ostell      moved includes to ncbiwin.h to avoid conflict MSC
-*
-* $Log: ncbifile.c,v $
-* Revision 6.40  2007/08/16 17:09:22  kans
-* moved DirExplore from sqnutils
-*
-* Revision 6.39  2006/07/13 17:10:36  bollin
-* use Uint4 instead of Uint2 for itemID values
-*
-* Revision 6.38  2005/04/20 20:14:31  lavr
-* +<assert.h>
-*
-* Revision 6.37  2004/07/21 18:08:30  kans
-* FileCacheSetup calls _setmode (_fileno (fp), _O_BINARY) if OS_MSWIN
-*
-* Revision 6.36  2004/07/20 19:37:30  kans
-* FileCacheSeek always initializes fields, calls fseek to keep file pointer in sync
-*
-* Revision 6.35  2004/05/07 15:57:14  kans
-* added FileCache functions for buffered read, graceful handing of Unix, Mac, and DOS line endings
-*
-* Revision 6.34  2004/01/23 20:07:16  kans
-* fix to FileGets under Darwin, was losing last character if buffer was shorter than line being read
-*
-* Revision 6.33  2003/11/17 17:17:57  kans
-* changed C++ comments to C comments
-*
-* Revision 6.32  2003/05/05 11:53:37  rsmith
-* Codewarrior compiling for Win32 does not know about setmode or tempnam.
-*
-* Revision 6.31  2003/03/11 14:26:42  rsmith
-* previous change to Nlm_DirCatalog made for only OS_UNIX_DARWIN, not all OS_UNIX
-*
-* Revision 6.30  2003/03/10 15:55:49  rsmith
-* for OS_UNIX change implementation of DirCatalog from using popen with a ls command to using the opendir and readdir library calls.
-*
-* Revision 6.29  2003/02/25 15:31:03  rsmith
-* OS_UNIX_DARWIN (Mach on Macs) uses tempnam for temporary files, not tmpnam.
-*
-* Revision 6.28  2002/11/06 21:23:04  ucko
-* Don't assume MIPS is IRIX; allow Linux too.
-*
-* Revision 6.27  2002/10/03 17:22:29  kans
-* for OS_MAC or OS_UNIX_DARWIN, Nlm_FileGets does fgetc loop, stopping at the first \n or \r character, and leaving a \n as the last character before the null byte
-*
-* Revision 6.26  2002/10/02 14:34:17  kans
-* Nlm_GetOSType and Nlm_FileCreate have ifdef OS_MAC, not WIN_MAC
-*
-* Revision 6.25  2002/06/13 16:14:07  kans
-* fix includes for OS_UNIX_DARWIN with WIN_MAC (EN)
-*
-* Revision 6.24  2002/04/05 19:02:47  ivanov
-* Changed L_tmpnam to PATH_MAX in Nlm_TmpNam()
-*
-* Revision 6.23  2001/08/29 17:33:15  juran
-* Cleanup.
-*
-* Revision 6.22  2001/04/26 16:47:40  juran
-* Refactored CreateDir to quash warnings.
-*
-* Revision 6.21  2001/04/06 20:09:00  juran
-* Disabled #include of FullPath.h.
-#if'ed out MacFSSpec2FullPathname(), which uses FullPath,
-but which we're not using.
-Disabled includes of other MoreFiles headers from MoreFilesExtras.c.
-We should be entirely free of MoreFiles now.
-Removed disabled CD routines.
-*
-* Revision 6.20  2001/04/05 22:30:27  juran
-* Inserted five functions from MoreFileExtras.c.
-*
-* Revision 6.19  2001/04/05 21:59:13  juran
-* Added back #include of MoreFilesExtras.h.
-*
-* Revision 6.18  2001/04/05 21:36:08  juran
-* Mac changes:
-* Added support for converting between an FSSpec an an arbitrarily long C 
-* string containing a pathname.
-* Added a wrapper for DirCreate() that takes a pathname and uses said 
-* support.  Changed Nlm_CreateDir() to use it.
-* Disabled CD routines.
-*
-* Revision 6.17  2000/10/16 17:54:46  kans
-* null out param block for FileLengthEx on Mac
-*
-* Revision 6.16  2000/03/08 17:55:47  vakatov
-* Use Int8 for the file size.
-* Also, get rid of the WIN16 code, do other cleanup.
-*
-* Revision 6.15  1999/12/30 16:36:38  kans
-* additional cleanup (Churchill)
-*
-* Revision 6.14  1999/12/27 22:21:01  shavirin
-* Fixed FileWrite() function for size == 0
-*
-* Revision 6.13  1999/12/21 17:52:39  kans
-* removed MPW/THINKC conditional code, starting upgrade to Carbon compatibility - Churchill
-*
-* Revision 6.12  1998/06/26 20:39:41  vakatov
-* Added FilePathFind() -- complimentary to FileNameFind()
-*
-* Revision 6.11  1998/06/26 14:11:56  madden
-* tempnam called with NULLs rather than empty strings
-*
-* Revision 6.10  1998/06/25 19:39:17  vakatov
-* Added "FileLengthEx()" -- it returns -1(not 0!) if the file does not exist
-*
-* Revision 6.9  1998/05/28 15:59:55  vakatov
-* [WIN16-BORLAND]  Nlm_DirCatalog:  "_find_t" -> "find_t"(Borland-specific)
-*
-* Revision 6.8  1998/05/28 14:21:53  vakatov
-* [WIN16,WIN32] Nlm_DirCatalog -- tested, fixed
-*
-* Revision 6.7  1998/05/27 18:50:04  kans
-* DirCat UNIX version redirects stderr to /dev/null to avoid printing unwanted error message when no directory exists
-*
-* Revision 6.6  1998/05/27 11:43:24  kans
-* implemented DirCatalog for WIN16
-*
-* Revision 6.5  1998/05/26 20:28:17  kans
-* stripped newline at end of DirCat strings in UNIX
-*
-* Revision 6.4  1998/05/26 17:42:45  vakatov
-* [WIN32] Nlm_DirCatalog -- implemented, but not tested yet
-*
-* Revision 6.3  1998/05/26 15:17:14  kans
-* implemented DirCatalog for OS_UNIX
-*
-* Revision 6.2  1998/05/24 19:20:56  kans
-* added Nlm_DirCatalog (Mac implementation only so far)
-*
-* Revision 6.1  1998/03/31 20:31:33  vakatov
-* FileRead()/FileWrite(): get rid of the redundant type cast that caused
-* Int4 overflow under Solaris 2.6
-*
-* Revision 6.0  1997/08/25 18:15:30  madden
-* Revision changed to 6.0
-*
-* Revision 5.3  1997/07/22 19:11:26  vakatov
-* Separated Main() from GetArg[svc]() functions;  [WIN_MSWIN] converged
-* console and GUI libraries; [for WIN32-DLL] encapsulated global variables
-*
-* Revision 5.2  1997/01/14 21:57:14  vakatov
-* Fixed inaccurate string copying -- <mostly potential> 1-byte exceeding of
-* the string size by StringNCat;  missing terminating '\0' by StringNCpy.
-*
- * Revision 5.1  1996/12/03  21:48:33  vakatov
- * Adopted for 32-bit MS-Windows DLLs
- *
- * Revision 5.0  1996/05/28  13:18:57  ostell
- * Set to revision 5.0
- *
- * Revision 4.2  1996/02/29  14:40:29  kans
- * added USE_MPW_FILE_OPEN symbol to simplify ifdefs in FileOpen
- *
- * Revision 4.1  1996/02/28  21:55:54  kans
- * "MPW" file open also used for CodeWarrior, possible path limit otherwise
- *
- * Revision 4.0  1995/07/26  13:46:50  ostell
- * force revision to 4.0
- *
- * Revision 2.41  1995/05/15  18:45:58  ostell
- * added Log line
- *
-*
 *
 * ==========================================================================
 */
@@ -1294,7 +1127,7 @@ NLM_EXTERN Nlm_Int4 Nlm_DirExplore (
   ValNodePtr   head, vnp;
 
   if (proc == NULL) return 0;
-  if (Nlm_StringHasNoText (directory) || Nlm_StringHasNoText (suffix)) return 0;
+  if (Nlm_StringHasNoText (directory) /* || Nlm_StringHasNoText (suffix) */ ) return 0;
 
   /* get list of all files in source directory */
 

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/23/07
 *
-* $Revision: 1.3 $
+* $Revision: 1.5 $
 *
 * File Description:
 *
@@ -81,7 +81,6 @@ typedef struct brflags {
   Int4     numrecords;
   ValNodePtr            sep_list;
   ValNodePtr            bsplist;
-  ValNodePtr            filename_list;
   BarcodeTestConfigData bcd;
 } BRFlagData, PNTR BRFlagPtr;
 
@@ -568,8 +567,6 @@ static void ProcessSeqEntryList (BRFlagPtr drfp, CharPtr filename)
   SeqEntrySetScope (NULL);
   drfp->sep_list = ValNodeFree (drfp->sep_list);
   
-  drfp->filename_list = FreeFilenameList (drfp->filename_list);
-
   drfp->bsplist = UnlockFarComponents (drfp->bsplist);
 
   if (ofp != NULL && need_ofp_close) {
@@ -682,8 +679,6 @@ static void ProcessSingleRecord (
 
     if (sep != NULL) {
       ValNodeAddPointer (&(drfp->sep_list), 0, sep);
-      ValNodeAddInt (&(drfp->filename_list), FILENAME_LIST_ENTITY_ID_ITEM, (Int4) entityID);
-      ValNodeAddPointer (&(drfp->filename_list), FILENAME_LIST_FILENAME_ITEM, StringSave (filename));
 
     }
   } else {
@@ -1114,6 +1109,9 @@ Int2 Main (void)
 
   /* minimum length */
   dfd.bcd.min_length = myargs[l_argMinLength].intvalue;
+
+  /* require keyword to be present */
+  dfd.bcd.require_keyword = TRUE;
 
   /* set up Barcode Report Configuration */
   enabled_list = (CharPtr) myargs [e_argEnableTests].strvalue;

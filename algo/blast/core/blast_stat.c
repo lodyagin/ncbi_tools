@@ -1,4 +1,4 @@
-/* $Id: blast_stat.c,v 1.158 2007/09/24 14:55:29 kazimird Exp $
+/* $Id: blast_stat.c,v 1.163 2008/11/03 20:59:44 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -50,7 +50,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_stat.c,v 1.158 2007/09/24 14:55:29 kazimird Exp $";
+    "$Id: blast_stat.c,v 1.163 2008/11/03 20:59:44 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_stat.h>
@@ -993,7 +993,7 @@ Int2 BlastScoreBlkNuclMatrixCreate(BlastScoreBlk* sbp)
                 /* round up for positive scores, down for negatives. */
                 matrix[index1][index2] = 
                     BLAST_Nint( (double) ((degeneracy[index2]-1)*penalty + 
-                                          reward))/degeneracy[index2];
+                                          reward)/ (double) degeneracy[index2]);
                 if (index1 != index2)
                 {
                       matrix[index2][index1] = matrix[index1][index2];
@@ -1207,35 +1207,6 @@ BlastScoreBlkMaxScoreSet(BlastScoreBlk* sbp)
     return 0;
 }
 
-NCBI_XBLAST_EXPORT SNCBIPackedScoreMatrix*
-BlastScoreBlkGetCompiledInMatrix(const char* name)
-{
-    SNCBIPackedScoreMatrix* psm = NULL; 
-
-    if (name == NULL)
-        return NULL;
-
-    if (strcasecmp(name, "BLOSUM62") == 0) {
-        psm = (SNCBIPackedScoreMatrix*) &NCBISM_Blosum62;
-    } else if (strcasecmp(name, "BLOSUM45") == 0) {
-        psm = (SNCBIPackedScoreMatrix*) &NCBISM_Blosum45;
-    } else if (strcasecmp(name, "BLOSUM50") == 0) {
-        psm = (SNCBIPackedScoreMatrix*) &NCBISM_Blosum50;
-    } else if (strcasecmp(name, "BLOSUM80") == 0) {
-        psm = (SNCBIPackedScoreMatrix*) &NCBISM_Blosum80;
-    } else if (strcasecmp(name, "BLOSUM90") == 0) {
-        psm = (SNCBIPackedScoreMatrix*) &NCBISM_Blosum90;
-    } else if (strcasecmp(name, "PAM30") == 0) {
-        psm = (SNCBIPackedScoreMatrix*) &NCBISM_Pam30;
-    } else if (strcasecmp(name, "PAM70") == 0) {
-        psm = (SNCBIPackedScoreMatrix*) &NCBISM_Pam70;
-    } else if (strcasecmp(name, "PAM250") == 0) {
-        psm = (SNCBIPackedScoreMatrix*) &NCBISM_Pam250;
-    }
- 
-    return psm;
-}
-
 /** Sets sbp->matrix->data field using sbp->name field using
  * the matrices in the toolkit (util/tables/raw_scoremat.h).
  * @param sbp the object containing matrix and name [in|out]
@@ -1245,20 +1216,20 @@ static Int2
 BlastScoreBlkProteinMatrixLoad(BlastScoreBlk* sbp)
 {
     Int2 status = 0;
-    SNCBIPackedScoreMatrix* psm;
     Int4** matrix = NULL;
     int i, j;   /* loop indices */
     int x_index, u_index, o_index;
+    const SNCBIPackedScoreMatrix* psm;
 
     ASSERT(sbp);
+    psm = NCBISM_GetStandardMatrix(sbp->name); 
+    if (psm == NULL)
+       return 1;
+
     ASSERT(sbp->alphabet_size == BLASTAA_SIZE);
     ASSERT(sbp->matrix);
     ASSERT(sbp->matrix->ncols == BLASTAA_SIZE);
     ASSERT(sbp->matrix->nrows == BLASTAA_SIZE);
-
-    psm = BlastScoreBlkGetCompiledInMatrix(sbp->name); 
-    if (psm == NULL)
-       return 1;
 
     matrix = sbp->matrix->data;
 
@@ -3122,6 +3093,24 @@ Int2 BLAST_GetNucleotideGapExistenceExtendParams(Int4 reward,
    sfree(normal);
    sfree(non_affine);
    return status;
+}
+
+Boolean BLAST_CheckRewardPenaltyScores(Int4 reward, Int4 penalty)
+{
+    int array_size = 0; /* dummy parameter. */
+    array_of_8* normal = NULL; /* dummy parameter */
+    array_of_8* non_affine = NULL; /* dummy parameter */
+    Boolean round_down = FALSE;
+    int gap_existence_max = 0;
+    int gap_extension_max = 0;
+    Int2 status = s_GetNuclValuesArray(reward, penalty, &array_size, &normal,
+                                       &non_affine, &gap_existence_max,
+                                       &gap_extension_max, &round_down, NULL);
+
+    sfree(normal);
+    sfree(non_affine);
+
+    return status == 0;
 }
 
 /** Fills in error_return with strings describing the allowed values.

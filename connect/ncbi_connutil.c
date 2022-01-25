@@ -1,4 +1,4 @@
-/*  $Id: ncbi_connutil.c,v 6.119 2008/02/13 20:25:42 kazimird Exp $
+/* $Id: ncbi_connutil.c,v 6.127 2008/11/13 05:49:43 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -103,6 +103,19 @@ extern const char* ConnNetInfo_GetValue(const char* service, const char* param,
 }
 
 
+static EURLScheme s_ParseScheme(const char* str, size_t len)
+{
+    if (len == 5  &&  strncasecmp(str, "https", len) == 0)
+        return eURL_Https;
+    if (len == 4  &&  strncasecmp(str, "http",  len) == 0)
+        return eURL_Http;
+    if (len == 4  &&  strncasecmp(str, "file",  len) == 0)
+        return eURL_File;
+    if (len == 3  &&  strncasecmp(str, "ftp",   len) == 0)
+        return eURL_Ftp;
+    return eURL_Unspec;
+}
+
 
 /****************************************************************************
  * ConnNetInfo API
@@ -117,11 +130,12 @@ extern SConnNetInfo* ConnNetInfo_Create(const char* service)
     SConnNetInfo* info = (SConnNetInfo*) malloc(sizeof(*info) +
                                                 (service  &&  *service
                                                  ? strlen(service) + 1 : 0));
+    size_t len;
     /* aux. storage for the string-to-int conversions, etc. */
     char   str[1024];
     int    val;
     double dbl;
-    char*  s;
+    char*  e;
 
     if (!info)
         return 0/*failure*/;
@@ -129,23 +143,32 @@ extern SConnNetInfo* ConnNetInfo_Create(const char* service)
     /* client host: default */
     info->client_host[0] = '\0';
 
-    /* Future extensions, clear up for now */
-    info->scheme  = eURL_Unspec;
-    info->user[0] = '\0';
-    info->pass[0] = '\0';
+    /* scheme */
+    REG_VALUE(REG_CONN_SCHEME, str, DEF_CONN_SCHEME);
+    info->scheme = s_ParseScheme(str, strlen(str));
 
-    /* dispatcher host name */
+    /* username */
+    REG_VALUE(REG_CONN_USER, info->user, DEF_CONN_USER);
+
+    /* password */
+    REG_VALUE(REG_CONN_PASS, info->pass, DEF_CONN_PASS);
+
+    /* hostname */
     REG_VALUE(REG_CONN_HOST, info->host, DEF_CONN_HOST);
 
-    /* dispatcher port number */
-    REG_VALUE(REG_CONN_PORT, str, 0);
-    val = atoi(str);
-    info->port = (unsigned short)(val > 0 ? val : DEF_CONN_PORT);
+    /* port # */
+    REG_VALUE(REG_CONN_PORT, str, DEF_CONN_PORT);
+    errno = 0;
+    if (*str  &&  (val = strtoul(str, &e, 10)) > 0  &&  !errno
+        &&  !*e  &&  val < (1 << 16)) {
+        info->port = val;
+    } else
+        info->port = 0/*default*/;
 
-    /* service path */
+    /* path */
     REG_VALUE(REG_CONN_PATH, info->path, DEF_CONN_PATH);
 
-    /* service args */
+    /* args */
     REG_VALUE(REG_CONN_ARGS, info->args, DEF_CONN_ARGS);
 
     /* request method */
@@ -159,11 +182,12 @@ extern SConnNetInfo* ConnNetInfo_Create(const char* service)
 
     /* connection timeout */
     REG_VALUE(REG_CONN_TIMEOUT, str, 0);
-    if (strlen(str) > 2  &&  strncasecmp(str, "infinite", strlen(str)) == 0) {
+    len = strlen(str);
+    if (len > 2  &&  len < 9  &&  strncasecmp(str, "infinite", len) == 0) {
         info->timeout = 0;
     } else {
         info->timeout = &info->tmo;
-        if (!*str || (dbl = atof(str)) < 0.0)
+        if (!*str  ||  (dbl = atof(str)) < 0.0)
             dbl = DEF_CONN_TIMEOUT;
         info->timeout->sec  = (unsigned int) dbl;
         info->timeout->usec = (unsigned int)
@@ -180,55 +204,53 @@ extern SConnNetInfo* ConnNetInfo_Create(const char* service)
               DEF_CONN_HTTP_PROXY_HOST);
     if (*info->http_proxy_host) {
         /* yes, use the specified HTTP proxy server */
-        REG_VALUE(REG_CONN_HTTP_PROXY_PORT, str, 0);
-        val = atoi(str);
-        info->http_proxy_port = (unsigned short)
-            (val > 0 ? val : DEF_CONN_HTTP_PROXY_PORT);
+        REG_VALUE(REG_CONN_HTTP_PROXY_PORT, str, DEF_CONN_HTTP_PROXY_PORT);
+        errno = 0;
+        if (*str  &&  (val = strtoul(str, &e, 10)) > 0
+            &&  !errno  &&  !*e  &&  val < (1 << 16)) {
+            info->http_proxy_port = val;
+        } else
+            info->http_proxy_port = 0/*default*/;
     } else
-        info->http_proxy_port = DEF_CONN_HTTP_PROXY_PORT;
+        info->http_proxy_port = 0;
 
     /* non-transparent CERN-like firewall proxy server? */
     REG_VALUE(REG_CONN_PROXY_HOST, info->proxy_host, DEF_CONN_PROXY_HOST);
 
     /* turn on debug printout? */
     REG_VALUE(REG_CONN_DEBUG_PRINTOUT, str, DEF_CONN_DEBUG_PRINTOUT);
-    if (*str  &&
-        (strcmp(str, "1") == 0  ||
-         strcasecmp(str, "true") == 0  ||
-         strcasecmp(str, "yes" ) == 0  ||
-         strcasecmp(str, "on"  ) == 0  ||
-         strcasecmp(str, "some") == 0)) {
+    if (*str  &&  (strcmp    (str, "1")    == 0  ||
+                   strcasecmp(str, "true") == 0  ||
+                   strcasecmp(str, "yes" ) == 0  ||
+                   strcasecmp(str, "on"  ) == 0  ||
+                   strcasecmp(str, "some") == 0)) {
         info->debug_printout = eDebugPrintout_Some;
-    } else if (*str  &&
-               (strcasecmp(str, "data") == 0  ||
-                strcasecmp(str, "all" ) == 0)) {
+    } else if (*str  &&  (strcasecmp(str, "data") == 0  ||
+                          strcasecmp(str, "all" ) == 0)) {
         info->debug_printout = eDebugPrintout_Data;
     } else
         info->debug_printout = eDebugPrintout_None;
 
     /* stateless client? */
     REG_VALUE(REG_CONN_STATELESS, str, DEF_CONN_STATELESS);
-    info->stateless = (*str  &&
-                       (strcmp(str, "1") == 0  ||
-                        strcasecmp(str, "true") == 0  ||
-                        strcasecmp(str, "yes" ) == 0  ||
-                        strcasecmp(str, "on"  ) == 0));
+    info->stateless = (*str  &&  (strcmp    (str, "1")    == 0  ||
+                                  strcasecmp(str, "true") == 0  ||
+                                  strcasecmp(str, "yes" ) == 0  ||
+                                  strcasecmp(str, "on"  ) == 0));
 
     /* firewall mode? */
     REG_VALUE(REG_CONN_FIREWALL, str, DEF_CONN_FIREWALL);
-    info->firewall = (*str  &&
-                      (strcmp(str, "1") == 0  ||
-                       strcasecmp(str, "true") == 0  ||
-                       strcasecmp(str, "yes" ) == 0  ||
-                       strcasecmp(str, "on"  ) == 0));
+    info->firewall = (*str  &&  (strcmp    (str, "1")    == 0  ||
+                                 strcasecmp(str, "true") == 0  ||
+                                 strcasecmp(str, "yes" ) == 0  ||
+                                 strcasecmp(str, "on"  ) == 0));
 
     /* prohibit the use of local load balancer? */
     REG_VALUE(REG_CONN_LB_DISABLE, str, DEF_CONN_LB_DISABLE);
-    info->lb_disable = (*str  &&
-                        (strcmp(str, "1") == 0  ||
-                         strcasecmp(str, "true") == 0  ||
-                         strcasecmp(str, "yes" ) == 0  ||
-                         strcasecmp(str, "on"  ) == 0));
+    info->lb_disable = (*str  &&  (strcmp    (str, "1")    == 0  ||
+                                   strcasecmp(str, "true") == 0  ||
+                                   strcasecmp(str, "yes" ) == 0  ||
+                                   strcasecmp(str, "on"  ) == 0));
 
     /* user header (with optional '\r\n' added automagically) */
     REG_VALUE(REG_CONN_HTTP_USER_HEADER, str, DEF_CONN_HTTP_USER_HEADER);
@@ -250,13 +272,10 @@ extern SConnNetInfo* ConnNetInfo_Create(const char* service)
 
     /* not adjusted yet... */
     info->http_proxy_adjusted = 0/*false*/;
-    /* store service name for which this structure has been created */
-    if (service  &&  *service) {
-        s = (char*) info + sizeof(*info);
-        strcpy(s, service);
-    } else
-        s = 0;
-    info->service = s;
+    /* store the service name for which this structure has been created */
+    info->service = (service  &&  *service
+                     ? strcpy((char*) info + sizeof(*info), service)
+                     : 0);
 
     /* done */
     return info;
@@ -266,7 +285,13 @@ extern SConnNetInfo* ConnNetInfo_Create(const char* service)
 
 extern int/*bool*/ ConnNetInfo_AdjustForHttpProxy(SConnNetInfo* info)
 {
-    if (!info  ||  info->http_proxy_adjusted  ||  !*info->http_proxy_host)
+    if (!info)
+        return 0/*false*/;
+
+    if (!*info->http_proxy_host  ||  info->http_proxy_adjusted)
+        return 1/*true*/;
+
+    if (info->scheme != eURL_Unspec  &&  info->scheme != eURL_Http)
         return 0/*false*/;
 
     if (strlen(info->host) + 16 + strlen(info->path) >= sizeof(info->path)) {
@@ -278,8 +303,12 @@ extern int/*bool*/ ConnNetInfo_AdjustForHttpProxy(SConnNetInfo* info)
 
     {{
         char x_path[sizeof(info->host) + 16 + sizeof(info->path)];
-        sprintf(x_path, "http://%s:%hu%s%s", info->host, info->port,
-                *info->path == '/' ? "" : "/", info->path);
+        int n = sprintf(x_path, "http://%s", info->host);
+        if (info->port)
+            n += sprintf(x_path + n, ":%hu", info->port);
+        if (*info->path != '/')
+            x_path[n++]  = '/';
+        strcpy(x_path + n, info->path);
         assert(strlen(x_path) < sizeof(x_path));
         strncpy0(info->path, x_path, sizeof(info->path) - 1);
     }}
@@ -295,6 +324,7 @@ extern int/*bool*/ ConnNetInfo_AdjustForHttpProxy(SConnNetInfo* info)
 extern int/*bool*/ ConnNetInfo_ParseURL(SConnNetInfo* info, const char* url)
 {
     const char *s, *a;
+    size_t len;
     char* p;
 
     if (info->http_proxy_adjusted) {
@@ -311,29 +341,64 @@ extern int/*bool*/ ConnNetInfo_ParseURL(SConnNetInfo* info, const char* url)
         info->http_proxy_adjusted = 0/*false*/;
     }
 
-    /* host & port first [both optional] */
+    /* "user:pass@host:port" first [any optional] */
     if ((s = strstr(url, "://")) != 0) {
         const char* h = s + 3; /* host starts here */
 
-        if (strncasecmp(url, "http://", 7) != 0)
+        len = (size_t)(s - url);
+        if ((info->scheme = s_ParseScheme(url, len)) == eURL_Unspec)
             return 0/*failure*/;
+
+        /* username:password */
+        if (!(a = strchr(h, '@'))) {
+            info->user[0] = '\0';
+            info->pass[0] = '\0';
+        } else {
+            len = (size_t)(a - h);
+            s = (const char*) memchr(h, ':', len);
+            if (s)
+                len = (size_t)(s - h);
+            if (len < sizeof(info->user)) {
+                memcpy(info->user, h, len);
+                info->user[len] = '\0';
+            } else {
+                memcpy(info->user, h, sizeof(info->user) - 1);
+                info->user[sizeof(info->user) - 1] = '\0';
+            }
+            if (s  &&  len) { /* take pass only if user non-empty */
+                len = (size_t)(a - ++s);
+                if (len < sizeof(info->pass)) {
+                    memcpy(info->pass, s, len);
+                    info->pass[len] = '\0';
+                } else {
+                    memcpy(info->pass, s, sizeof(info->pass) - 1);
+                    info->pass[sizeof(info->pass) - 1] = '\0';
+                }
+            } else
+                info->pass[0] = '\0';
+            h = ++a;
+        }
+
         if (!(s = strchr(h, '/')))
             s = h + strlen(h);
-        /* host ends at "a" */
-        if ((a = strchr(h, ':')) != 0 && a < s) {
+
+        /* host ends at "s" here */
+        len = (size_t)(s - h);
+        if (!(a = (const char*) memchr(h, ':', len))) {
+            a = s;
+            info->port = 0/*default*/;
+        } else {
             unsigned short port;
             int n;
-
-            if (sscanf(a, ":%hu%n", &port, &n) < 1 || a + n != s)
+            if (sscanf(a, ":%hu%n", &port, &n) < 1  ||  a + n != s  ||  !port)
                 return 0/*failure*/;
             info->port = port;
-        } else {
-            a = s;
-            info->port = DEF_CONN_PORT;
         }
-        if ((size_t)(a - h) < sizeof(info->host)) {
-            memcpy(info->host, h, (size_t)(a - h));
-            info->host[(size_t)(a - h)] = '\0';
+        /* host ends at "a" here */
+        len = (size_t)(a - h);
+        if (len < sizeof(info->host)) {
+            memcpy(info->host, h, len);
+            info->host[len] = '\0';
         } else {
             memcpy(info->host, h, sizeof(info->host) - 1);
             info->host[sizeof(info->host) - 1] = '\0';
@@ -342,24 +407,25 @@ extern int/*bool*/ ConnNetInfo_ParseURL(SConnNetInfo* info, const char* url)
         s = url;
 
     /* arguments */
-    if ((a = strchr(s, '?')) != 0)
+    if ((a = strchr(s, '?')) != 0) {
         strncpy0(info->args, a + 1, sizeof(info->args) - 1);
-    else
-        a = s + strlen(s);
+        len = (size_t)(a - s);
+    } else
+        len = strlen(s);
 
-    /* path (NB: can be relative) */
-    if (s != url || *s == '/' || !(p = strrchr(info->path, '/'))) {
+    /* path (NB: can be relative); "len" holds the path len */
+    if (s != url  ||  *s == '/'  ||  !(p = strrchr(info->path, '/'))) {
         /* absolute path */
         p = info->path;
         if (!*s) {
             s = "/";   /* in case of an empty path we take the root '/' */
-            a = s + 1;
+            len = 1;
         }
     } else
         p++;
-    if ((size_t)(a - s) < sizeof(info->path) - (size_t)(p - info->path)) {
-        memcpy(p, s, (size_t)(a - s));
-        p[(size_t)(a - s)] = '\0';
+    if (len < sizeof(info->path) - (size_t)(p - info->path)) {
+        memcpy(p, s, len);
+        p[len] = '\0';
     } else {
         memcpy(p, s, sizeof(info->path) - (size_t)(p - info->path) - 1);
         info->path[sizeof(info->path) - 1] = '\0';
@@ -646,7 +712,7 @@ extern void ConnNetInfo_DeleteArg(SConnNetInfo* info,
         if (*a == '&')
             a++;
         arglen = strcspn(a, "&");
-        if (arglen < argnamelen || strncasecmp(a, arg, argnamelen) != 0 ||
+        if (arglen < argnamelen  ||  strncasecmp(a, arg, argnamelen) != 0  ||
             (a[argnamelen] && a[argnamelen] != '=' && a[argnamelen] != '&'))
             continue;
         if (a[arglen]) {
@@ -813,19 +879,63 @@ extern SConnNetInfo* ConnNetInfo_Clone(const SConnNetInfo* info)
 }
 
 
-static void s_SaveString(char* s, const char* name, const char* str) {
-    sprintf(s + strlen(s), "%-16.16s: %s%s%s\n", name,
-            str ? "\"" : "", str ? str : "NULL", str ? "\"" : "");
+static const char* s_SchemeStr(EURLScheme scheme, char buf[])
+{
+    switch (scheme) {
+    case eURL_Ftp:
+        return "ftp";
+    case eURL_File:
+        return "file";
+    case eURL_Http:
+        return "http";
+    case eURL_Https:
+        return "https";
+    case eURL_Unspec:
+        break;
+    default:
+        sprintf(buf, "?#0x%08X", (int) scheme);
+        return buf;
+    }
+    return 0;
 }
-static void s_SaveULong(char* s, const char* name, unsigned long lll) {
+
+static const char* s_PortStr(unsigned short port, char buf[])
+{
+    if (port) {
+        sprintf(buf, "%hu", port);
+        return buf;
+    }
+    return 0;
+}
+
+static void s_SaveStringQuot(char* s, const char* name,
+                             const char* str, int/*bool*/ quote)
+{
+    sprintf(s + strlen(s), "%-16.16s: %s%s%s\n", name,
+            str && quote ? "\"" : "",
+            str          ? str  : "NULL",
+            str && quote ? "\"" : "");
+}
+
+static void s_SaveString(char* s, const char* name, const char* str)
+{
+    s_SaveStringQuot(s, name, str, 1);
+}
+
+static void s_SaveULong(char* s, const char* name, unsigned long lll)
+{
     sprintf(s + strlen(s), "%-16.16s: %lu\n", name, lll);
 }
-static void s_SaveBool(char* s, const char* name, int/*bool*/ bbb) {
+
+static void s_SaveBool(char* s, const char* name, int/*bool*/ bbb)
+{
     sprintf(s + strlen(s), "%-16.16s: %s\n", name, bbb ? "TRUE" : "FALSE");
 }
 
 extern void ConnNetInfo_Log(const SConnNetInfo* info, LOG lg)
 {
+    char scheme[32];
+    char port[16];
     char* s;
 
     if (!lg)
@@ -851,21 +961,24 @@ extern void ConnNetInfo_Log(const SConnNetInfo* info, LOG lg)
     strcpy(s, "ConnNetInfo_Log\n"
            "#################### [BEGIN] SConnNetInfo:\n");
     s_SaveString    (s, "service",         info->service);
-    s_SaveString    (s, "client_host",     (*info->client_host
+    s_SaveStringQuot(s, "client_host",     (*info->client_host
                                             ? info->client_host
-                                            : "<default>"));
+                                            : "<default>"), 0);
+    s_SaveString    (s, "scheme",          s_SchemeStr(info->scheme, scheme));
+    s_SaveString    (s, "user",            info->user);
+    s_SaveString    (s, "pass",            info->pass);
     s_SaveString    (s, "host",            info->host);
-    s_SaveULong     (s, "port",            info->port);
+    s_SaveStringQuot(s, "port",            s_PortStr(info->port, port), 0);
     s_SaveString    (s, "path",            info->path);
     s_SaveString    (s, "args",            info->args);
-    s_SaveString    (s, "req_method",     (info->req_method == eReqMethod_Any
+    s_SaveStringQuot(s, "req_method",     (info->req_method == eReqMethod_Any
                                            ? "ANY"
                                            : (info->req_method
                                               == eReqMethod_Get
                                               ? "GET"
                                               : (info->req_method
                                                  == eReqMethod_Post
-                                                 ? "POST" : "Unknown"))));
+                                                 ? "POST" : "<unknown>"))), 0);
     if (info->timeout) {
         s_SaveULong (s, "timeout(sec)",    info->timeout->sec);
         s_SaveULong (s, "timeout(usec)",   info->timeout->usec);
@@ -873,9 +986,10 @@ extern void ConnNetInfo_Log(const SConnNetInfo* info, LOG lg)
         s_SaveString(s, "timeout",         "infinite");
     s_SaveULong     (s, "max_try",         info->max_try);
     s_SaveString    (s, "http_proxy_host", info->http_proxy_host);
-    s_SaveULong     (s, "http_proxy_port", info->http_proxy_port);
+    s_SaveStringQuot(s, "http_proxy_port", s_PortStr(info->http_proxy_port,
+                                                     port), 0);
     s_SaveString    (s, "proxy_host",      info->proxy_host);
-    s_SaveString    (s, "debug_printout", (info->debug_printout
+    s_SaveStringQuot(s, "debug_printout", (info->debug_printout
                                            == eDebugPrintout_None
                                            ? "NONE"
                                            : (info->debug_printout
@@ -883,7 +997,7 @@ extern void ConnNetInfo_Log(const SConnNetInfo* info, LOG lg)
                                               ? "SOME"
                                               : (info->debug_printout
                                                  == eDebugPrintout_Data
-                                                 ? "DATA" : "Unknown"))));
+                                                 ? "DATA" : "<unknown>"))), 0);
     s_SaveBool      (s, "stateless",       info->stateless);
     s_SaveBool      (s, "firewall",        info->firewall);
     s_SaveBool      (s, "lb_disable",      info->lb_disable);
@@ -916,7 +1030,7 @@ extern void ConnNetInfo_Destroy(SConnNetInfo* info)
  */
 
 
-extern SOCK URL_Connect
+extern EIO_Status URL_ConnectEx
 (const char*     host,
  unsigned short  port,
  const char*     path,
@@ -927,7 +1041,8 @@ extern SOCK URL_Connect
  const STimeout* rw_timeout,
  const char*     user_hdr,
  int/*bool*/     encode_args,
- ESwitch         log)
+ TSOCK_Flags     flags,
+ SOCK*           sock)
 {
     static const char X_REQ_Q[] = "?";
     static const char X_REQ_E[] = " HTTP/1.0\r\n";
@@ -935,20 +1050,19 @@ extern SOCK URL_Connect
 
     EIO_Status  st;
     BUF         buf;
-    SOCK        sock;
     char*       header;
-    char        buffer[80];
-    size_t      headersize;
+    size_t      hdrsize;
+    char        strbuf[80];
     const char* x_args = 0;
     size_t      user_hdr_len = user_hdr  &&  *user_hdr ? strlen(user_hdr) : 0;
     const char* x_req_r; /* "POST "/"GET " */
 
     /* check the args */
-    if (!host  ||  !*host  ||  !port  ||
+    if (!sock  ||  !host  ||  !*host  ||
         (user_hdr  &&  *user_hdr  &&  user_hdr[user_hdr_len - 1] != '\n')) {
         CORE_LOG_X(2, eLOG_Error, "[URL_Connect]  Bad arguments");
         assert(0);
-        return 0/*error*/;
+        return eIO_InvalidArg;
     }
 
     /* select request method and its verbal representation */
@@ -968,10 +1082,10 @@ extern SOCK URL_Connect
         break;
     default:
         CORE_LOGF_X(4, eLOG_Error,
-                    ("[URL_Connect]  Unrecognized request method (%d)",
-                     (int) req_method));
+                    ("[URL_Connect]  Unrecognized request method (#%u)",
+                     (unsigned int) req_method));
         assert(0);
-        return 0/*error*/;
+        return eIO_InvalidArg;
     }
 
     /* URL-encode "args", if any specified */
@@ -981,8 +1095,12 @@ extern SOCK URL_Connect
             size_t dst_size = 3 * src_size;
             size_t src_read, dst_written;
             char* xx_args = (char*) malloc(dst_size + 1);
-            if (!xx_args)
-                return 0/*failure: no memory*/;
+            if (!xx_args) {
+                CORE_LOGF_ERRNO_X(8, eLOG_Error, errno,
+                                  ("[URL_Connect]  Out of memory (%lu)",
+                                   (unsigned long)(dst_size + 1)));
+                return eIO_Unknown;
+            }
             URL_Encode(args,    src_size, &src_read,
                        xx_args, dst_size, &dst_written);
             xx_args[dst_written] = '\0';
@@ -994,6 +1112,12 @@ extern SOCK URL_Connect
 
     buf = 0;
     errno = 0;
+    if (!port) {
+        *strbuf = '\0';
+        port = flags & fSOCK_Secure ? 443 : 80;
+    } else
+        sprintf(strbuf, ":%hu", port);
+
     /* compose HTTP header */
     if (/* {POST|GET} <path>?<args> HTTP/1.0\r\n */
         !BUF_Write(&buf, x_req_r, strlen(x_req_r))            ||
@@ -1003,9 +1127,10 @@ extern SOCK URL_Connect
               !BUF_Write(&buf, x_args,  strlen(x_args))))     ||
         !BUF_Write(&buf,       X_REQ_E, sizeof(X_REQ_E) - 1)  ||
 
-        /* Host: host\r\n */
+        /* Host: host[:port]\r\n */
         !BUF_Write(&buf, X_HOST, sizeof(X_HOST) - 1)          ||
         !BUF_Write(&buf, host,   strlen(host))                ||
+        !BUF_Write(&buf, strbuf, strlen(strbuf))              ||
         !BUF_Write(&buf, "\r\n", 2)                           ||
 
         /* <user_header> */
@@ -1014,55 +1139,69 @@ extern SOCK URL_Connect
 
         /* Content-Length: <content_length>\r\n\r\n */
         (req_method != eReqMethod_Get
-         &&  (sprintf(buffer, "Content-Length: %lu\r\n",
+         &&  (sprintf(strbuf, "Content-Length: %lu\r\n",
                       (unsigned long) content_length) <= 0    ||
-              !BUF_Write(&buf, buffer, strlen(buffer))))      ||
+              !BUF_Write(&buf, strbuf, strlen(strbuf))))      ||
 
         !BUF_Write(&buf, "\r\n", 2)) {
-        CORE_LOGF_X(5, eLOG_Error,
-                    ("[URL_Connect]  Error composing HTTP header for"
-                     " %s:%hu%s%s", host, port, errno ? ": " : "",
-                     errno ? strerror(errno) : ""));
+        int x_errno = errno;
+        CORE_LOGF_ERRNO_X(5, eLOG_Error, x_errno,
+                          ("[URL_Connect]  Error building HTTP header for"
+                           " %s:%hu", host, port));
         BUF_Destroy(buf);
         if (x_args  &&  x_args != args)
             free((void*) x_args);
-        return 0/*error*/;
+        return eIO_Unknown;
     }
     if (x_args  &&  x_args != args)
         free((void*) x_args);
 
-    if (!(header = (char*) malloc(headersize = BUF_Size(buf))) ||
-        BUF_Read(buf, header, headersize) != headersize) {
-        CORE_LOGF_X(6, eLOG_Error,
-                    ("[URL_Connect]  Error storing HTTP header for"
-                     " %s:%hu: %s", host, port,
-                     errno ? strerror(errno) : "Unknown error"));
+    if (!(header = (char*) malloc(hdrsize = BUF_Size(buf)))
+        ||  BUF_Read(buf, header, hdrsize) != hdrsize) {
+        int x_errno = errno;
+        CORE_LOGF_ERRNO_X(6, eLOG_Error, x_errno,
+                          ("[URL_Connect]  Error storing HTTP header for"
+                           " %s:%hu", host, port));
         if (header)
             free(header);
         BUF_Destroy(buf);
-        return 0/*error*/;
+        return eIO_Unknown;
     }
     BUF_Destroy(buf);
 
     /* connect to HTTPD */
-    st = SOCK_CreateEx(host, port, c_timeout, &sock, header, headersize, log);
+    st = SOCK_CreateEx(host, port, c_timeout, sock, header, hdrsize, flags);
     free(header);
     if (st != eIO_Success) {
+        assert(!*sock);
         CORE_LOGF_X(7, eLOG_Error,
                     ("[URL_Connect]  Socket connect to %s:%hu failed: %s",
                      host, port, IO_StatusStr(st)));
-        return 0/*error*/;
-    }
+    } else
+        verify(SOCK_SetTimeout(*sock, eIO_ReadWrite, rw_timeout)==eIO_Success);
+    return st;
+}
 
-    /* setup I/O timeout for the connection */
-    if (SOCK_SetTimeout(sock, eIO_ReadWrite, rw_timeout) != eIO_Success) {
-        CORE_LOG_X(8, eLOG_Error, "[URL_Connect]  Cannot set connection timeout");
-        SOCK_Close(sock);
-        return 0/*error*/;
-    }
 
-    /* success */
-    return sock;
+extern SOCK URL_Connect
+(const char*     host,
+ unsigned short  port,
+ const char*     path,
+ const char*     args,
+ EReqMethod      req_method,
+ size_t          content_length,
+ const STimeout* c_timeout,
+ const STimeout* rw_timeout,
+ const char*     user_hdr,
+ int/*bool*/     encode_args,
+ TSOCK_Flags     flags)
+{
+    SOCK sock;
+    EIO_Status st = URL_ConnectEx(host, port, path, args,
+                                  req_method, content_length,
+                                  c_timeout, rw_timeout,
+                                  user_hdr, encode_args, flags, &sock);
+    return st == eIO_Success ? sock : 0;
 }
 
 
@@ -1291,7 +1430,7 @@ static int s_HexChar(char ch)
 
 /* The URL-encoding table
  */
-static const char s_Encode[256][4] = {
+static const char s_EncodeTable[256][4] = {
     "%00", "%01", "%02", "%03", "%04", "%05", "%06", "%07",
     "%08", "%09", "%0A", "%0B", "%0C", "%0D", "%0E", "%0F",
     "%10", "%11", "%12", "%13", "%14", "%15", "%16", "%17",
@@ -1326,7 +1465,7 @@ static const char s_Encode[256][4] = {
     "%F8", "%F9", "%FA", "%FB", "%FC", "%FD", "%FE", "%FF"
 };
 
-#define VALID_URL_SYMBOL(ch)  (s_Encode[(unsigned char)ch][0] != '%')
+#define VALID_URL_SYMBOL(ch)  (s_EncodeTable[(unsigned char)ch][0] != '%')
 
 
 extern int/*bool*/ URL_DecodeEx
@@ -1415,7 +1554,7 @@ extern void URL_Encode
 
     for ( ;  *src_read != src_size  &&  *dst_written != dst_size;
           (*src_read)++, (*dst_written)++, src++, dst++) {
-        const char* subst = s_Encode[*src];
+        const char* subst = s_EncodeTable[*src];
         if (*subst != '%') {
             *dst = *subst;
         } else if (*dst_written < dst_size - 2) {
@@ -1472,22 +1611,36 @@ extern char* MIME_ComposeContentTypeEx
  size_t         buflen)
 {
     static const char s_ContentType[] = "Content-Type: ";
-    const char*       x_Type          = s_MIME_Type    [(int) type];
-    const char*       x_SubType       = s_MIME_SubType [(int) subtype];
-    const char*       x_Encoding      = s_MIME_Encoding[(int) encoding];
-    char              x_buf[MAX_CONTENT_TYPE_LEN];
+    const char* x_type;
+    const char* x_subtype;
+    const char* x_encoding;
+    char        x_buf[MAX_CONTENT_TYPE_LEN];
 
-    if ( *x_Encoding ) {
-        assert(sizeof(s_ContentType) + strlen(x_Type) + strlen(x_SubType)
-               + strlen(x_Encoding) + 4 < MAX_CONTENT_TYPE_LEN);
+    assert(buf  &&  buflen);
+
+    if (type == eMIME_T_Undefined  ||  subtype == eMIME_Undefined)
+        return 0;
+    if (type >= eMIME_T_Unknown)
+        type  = eMIME_T_Unknown;
+    if (subtype >= eMIME_Unknown)
+        subtype  = eMIME_Unknown;
+    if (encoding >= eENCOD_Unknown)
+        encoding  = eENCOD_Unknown;
+
+    x_type     = s_MIME_Type    [type];
+    x_subtype  = s_MIME_SubType [subtype];
+    x_encoding = s_MIME_Encoding[encoding];
+
+    if ( *x_encoding ) {
+        assert(sizeof(s_ContentType) + strlen(x_type) + strlen(x_subtype)
+               + strlen(x_encoding) + 4 < MAX_CONTENT_TYPE_LEN);
         sprintf(x_buf, "%s%s/%s-%s\r\n",
-                s_ContentType, x_Type, x_SubType, x_Encoding);
+                s_ContentType, x_type, x_subtype, x_encoding);
     } else {
-        assert(sizeof(s_ContentType) + strlen(x_Type) + strlen(x_SubType)
+        assert(sizeof(s_ContentType) + strlen(x_type) + strlen(x_subtype)
                + 3 < MAX_CONTENT_TYPE_LEN);
-        sprintf(x_buf, "%s%s/%s\r\n", s_ContentType, x_Type, x_SubType);
+        sprintf(x_buf, "%s%s/%s\r\n", s_ContentType, x_type, x_subtype);
     }
-
     assert(strlen(x_buf) < sizeof(x_buf));
     assert(strlen(x_buf) < buflen);
     strncpy0(buf, x_buf, buflen - 1);
@@ -1495,6 +1648,82 @@ extern char* MIME_ComposeContentTypeEx
 }
 
 
+extern int/*bool*/ MIME_ParseContentTypeEx
+(const char*     str,
+ EMIME_Type*     type,
+ EMIME_SubType*  subtype,
+ EMIME_Encoding* encoding)
+{
+    char*  x_buf;
+    size_t x_size;
+    char*  x_type;
+    char*  x_subtype;
+    int    i;
+
+    if ( type )
+        *type = eMIME_T_Undefined;
+    if ( subtype )
+        *subtype = eMIME_Undefined;
+    if ( encoding )
+        *encoding = eENCOD_None;
+
+    x_size = str  &&  *str ? strlen(str) + 1 : 0;
+    if (!x_size)
+        return 0/*false*/;
+
+    if (!(x_buf = (char*) malloc(x_size << 1)))
+        return 0/*false*/;
+    x_type = x_buf + x_size;
+
+    strlwr(strcpy(x_buf, str));
+
+    if ((sscanf(x_buf, " content-type: %s ", x_type) != 1  &&
+         sscanf(x_buf, " %s ", x_type) != 1)  ||
+        (x_subtype = strchr(x_type, '/')) == 0) {
+        free(x_buf);
+        return 0/*false*/;
+    }
+    *x_subtype++ = '\0';
+    x_size = strlen(x_subtype);
+
+    if ( type ) {
+        for (i = 0;  i < (int) eMIME_T_Unknown;  i++) {
+            if (strcmp(x_type, s_MIME_Type[i]) == 0)
+                break;
+        }
+        *type = (EMIME_Type) i;
+    }
+
+    for (i = 1;  i <= (int) eENCOD_Unknown;  i++) {
+        size_t len = strlen(s_MIME_Encoding[i]);
+        if (len < x_size) {
+            char* x_encoding = x_subtype + x_size - len;
+            if (x_encoding[-1] == '-'
+                &&  strcmp(x_encoding, s_MIME_Encoding[i]) == 0) {
+                if ( encoding ) {
+                    *encoding = (i == (int) eENCOD_Unknown
+                                 ? eENCOD_None : (EMIME_Encoding) i);
+                }
+                x_encoding[-1] = '\0';
+                break;
+            }
+        }
+    }
+
+    if ( subtype ) {
+        for (i = 0;  i < (int) eMIME_Unknown;  i++) {
+            if (strcmp(x_subtype, s_MIME_SubType[i]) == 0)
+                break;
+        }
+        *subtype = (EMIME_SubType) i;
+    }
+
+    free(x_buf);
+    return 1/*true*/;
+}
+
+
+/* DEPRECATED and scheduled for removal */
 extern char* MIME_ComposeContentType
 (EMIME_SubType  subtype,
  EMIME_Encoding encoding,
@@ -1506,82 +1735,7 @@ extern char* MIME_ComposeContentType
 }
 
 
-extern int/*bool*/ MIME_ParseContentTypeEx
-(const char*     str,
- EMIME_Type*     type,
- EMIME_SubType*  subtype,
- EMIME_Encoding* encoding)
-{
-    char* x_buf;
-    char* x_type;
-    char* x_subtype;
-    int   i;
-
-    if ( type )
-        *type = eMIME_T_Unknown;
-    if ( subtype )
-        *subtype = eMIME_Unknown;
-    if ( encoding )
-        *encoding = eENCOD_Unknown;
-
-    if (!str  ||  !*str)
-        return 0/*false*/;
-
-    {{
-        size_t x_size = strlen(str) + 1;
-        x_buf  = (char*) malloc(2 * x_size);
-        x_type = x_buf  + x_size;
-    }}
-
-    strcpy(x_buf, str);
-    strlwr(x_buf);
-
-    if ((sscanf(x_buf, " content-type: %s ", x_type) != 1  &&
-         sscanf(x_buf, " %s ", x_type) != 1)  ||
-        (x_subtype = strchr(x_type, '/')) == 0) {
-        free(x_buf);
-        return 0/*false*/;
-    }
-    *x_subtype++ = '\0';
-
-    if ( type ) {
-        for (i = 0;  i < (int) eMIME_T_Unknown;  i++) {
-            if ( !strcmp(x_type, s_MIME_Type[i]) ) {
-                *type = (EMIME_Type) i;
-                break;
-            }
-        }
-    }
-
-    for (i = 0;  i < (int) eENCOD_Unknown;  i++) {
-        char* x_encoding = strstr(x_subtype, s_MIME_Encoding[i]);
-        if (x_encoding  &&  *x_encoding  &&
-            x_encoding != x_subtype  &&  *(x_encoding - 1) == '-'  &&
-            strcmp(x_encoding, s_MIME_Encoding[i]) == 0) {
-            if ( encoding ) {
-                *encoding = (EMIME_Encoding) i;
-            }
-            *(x_encoding - 1) = '\0';
-            break;
-        }
-    }
-    if (encoding  &&  *encoding == eENCOD_Unknown)
-        *encoding = eENCOD_None;
-
-    if ( subtype ) {
-        for (i = 0;  i < (int) eMIME_Unknown;  i++) {
-            if ( !strcmp(x_subtype, s_MIME_SubType[i]) ) {
-                *subtype = (EMIME_SubType) i;
-                break;
-            }
-        }
-    }
-
-    free(x_buf);
-    return 1/*true*/;
-}
-
-
+/* DEPRECATED and scheduled for removal */
 extern int/*bool*/ MIME_ParseContentType
 (const char*     str,
  EMIME_SubType*  subtype,
@@ -1600,25 +1754,4 @@ extern int/*bool*/ MIME_ParseContentType
     }
 
     return 1/*true*/;
-}
-
-
-
-/****************************************************************************
- * Reading and writing [host][:port] addresses:  Deprecated here, use upcalls.
- */
-
-extern const char* StringToHostPort(const char*     str,
-                                    unsigned int*   host,
-                                    unsigned short* port)
-{
-    return SOCK_StringToHostPort(str, host, port);
-}
-
-extern size_t HostPortToString(unsigned int   host,
-                               unsigned short port,
-                               char*          buf,
-                               size_t         buflen)
-{
-    return SOCK_HostPortToString(host, port, buf, buflen);
 }

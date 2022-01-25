@@ -3,7 +3,7 @@
 	ProjectType="Visual C++"
 	Version="8.00"
 	Name="exe_asntool"
-	ProjectGUID="{95BF266E-0195-4BEB-B306-B99489EE3991}"
+	ProjectGUID="{FEF96FCD-8263-44B8-B8A3-817BA86CDC2A}"
 	>
 	<Platforms>
 		<Platform

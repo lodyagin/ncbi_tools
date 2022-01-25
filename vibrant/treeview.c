@@ -31,6 +31,9 @@
 *
 *
 * $Log: treeview.c,v $
+* Revision 1.14  2008/04/29 13:43:50  kans
+* fixes for warnings caught by mingw cross-compiler
+*
 * Revision 1.13  2001/03/28 14:05:47  beloslyu
 * fix the comments to C style
 *
@@ -1805,6 +1808,9 @@ static void spy_proc(TreePtr tree, Int2 spy_id, TreeEvent event,
 	    
     case TREE_CURSOR_MOVED:
         break;  /* do nothing */
+	    
+    case TREE_SHUTDOWN:
+        break;
     }
     
 

@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: pseed3.c,v 6.53 2008/01/10 16:30:51 bollin Exp $";
+static char const rcsid[] = "$Id: pseed3.c,v 6.54 2008/10/31 18:51:07 madden Exp $";
 
-/* $Id: pseed3.c,v 6.53 2008/01/10 16:30:51 bollin Exp $ */
+/* $Id: pseed3.c,v 6.54 2008/10/31 18:51:07 madden Exp $ */
 /**************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -35,9 +35,12 @@ Maintainer: Alejandro Schaffer
  
 Contents: high-level routines for PHI-BLAST and pseed3
 
-$Revision: 6.53 $
+$Revision: 6.54 $
 
 $Log: pseed3.c,v $
+Revision 6.54  2008/10/31 18:51:07  madden
+Fix for SB-109
+
 Revision 6.53  2008/01/10 16:30:51  bollin
 Moved variable declaration to top of code block
 
@@ -1604,8 +1607,14 @@ void LIBCALL search_pat(ReadDBFILEPtr rdpt, Char *patternFileName, Boolean is_dn
     Int4  i; /*loop index over matches*/
     Int4  numMatches; /*number of matches to current sequence*/
     Int4  seqno; /*index over all sequences*/
+    Int4  seqindex; /*index over sequences to handle case where rdpt has
+                      a gilist*/
+    Int4  seqLoopBound; /*upperbound on sequences*/
+    Int4  start=0; /*used to track gi_list*/
     SeqIdPtr sip; /*Description of the sequence from the database*/
     Char buffer[512];
+    Int4 thisgi = -1;
+    Uint1* visited_oids = NULL;  /* Keeps track of which OIDS have been searched; this may be an issue with limits by gilist. */
 
     /*FIXED bug here on amount allocated*/
     hitArray = (Int4 *) ckalloc(sizeof(Int4)*MAX_HIT*2);
@@ -1614,9 +1623,27 @@ void LIBCALL search_pat(ReadDBFILEPtr rdpt, Char *patternFileName, Boolean is_dn
     pname = ckalloc(PATTERN_NAME_SIZE);
     while (get_pat(fp, pat, pname)) {
       if (init_pattern((Uint1 *) pat, is_dna, patternSearch, seedSearch, error_return)>=0) {  
-	for (seqno = 0; seqno < rdpt->num_seqs; seqno++) {
-          /*if (30 == seqno)
-            printf("\n stopping at 30\n"); */
+        if (rdpt->gilist) {
+          seqLoopBound = rdpt->gilist->count;
+          visited_oids = (Uint1*) Calloc(readdb_get_num_entries_total(rdpt), sizeof(Uint1));
+        }
+        else {
+          seqLoopBound = readdb_get_num_entries_total(rdpt);
+        }
+        for (seqindex = 0; seqindex < seqLoopBound; seqindex++) {
+          if (rdpt->gilist) {
+            thisgi = rdpt->gilist->i[seqindex];
+            seqno =  readdb_gi2seq(rdpt, thisgi, &start);
+            if (visited_oids[seqno] == 0) /* Not yet visited. */
+              visited_oids[seqno] = 1;
+            else
+              continue;  /* Already visited. */
+          }
+          else {
+            seqno = seqindex;
+          }
+          if (readdb_check_oid(rdpt, seqno) == FALSE)
+             continue;
 	  len = readdb_get_sequence(rdpt, seqno, &seq);
 	  numMatches = find_hits(hitArray, seq, len, is_dna, patternSearch);
 	  if (numMatches >0) {
@@ -1639,6 +1666,11 @@ void LIBCALL search_pat(ReadDBFILEPtr rdpt, Char *patternFileName, Boolean is_dn
               }
 	  }
 	}
+      }
+      if (visited_oids)
+      {
+      	MemFree(visited_oids);      
+      	visited_oids = NULL;
       }
     }
     MemFree(hitArray);

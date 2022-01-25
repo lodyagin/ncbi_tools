@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/23/91
 *
-* $Revision: 6.32 $
+* $Revision: 6.36 $
 *
 * File Description: 
 *   	miscellaneous functions
@@ -43,6 +43,18 @@
 * 02-16-94 Epstein     Retired Gestalt functions and definitions
 *
 * $Log: ncbimisc.c,v $
+* Revision 6.36  2008/09/11 20:30:37  bollin
+* Added ValNodePurge function.
+*
+* Revision 6.35  2008/07/21 20:15:22  bollin
+* Added ValNodeCompare function.
+*
+* Revision 6.34  2008/04/29 13:40:53  kans
+* fixes for warnings caught by mingw cross-compiler
+*
+* Revision 6.33  2008/04/04 13:15:48  bollin
+* Added ValNodeUnique function
+*
 * Revision 6.32  2006/11/09 17:47:16  kans
 * added ValNodeMergeStrs
 *
@@ -938,6 +950,94 @@ NLM_EXTERN ValNodePtr LIBCALL ValNodeSort (ValNodePtr list, int (LIBCALLBACK *co
 	return list;
 }
 
+
+NLM_EXTERN void LIBCALL
+ValNodeUnique 
+(ValNodePtr PNTR list,
+ int (LIBCALLBACK *compar )PROTO ((Nlm_VoidPtr, Nlm_VoidPtr )),
+ ValNodePtr (LIBCALLBACK *valnodefree ) PROTO ((ValNodePtr)))
+{
+  ValNodePtr vnp, tmp;
+
+  if (list == NULL || *list == NULL || compar == NULL || valnodefree == NULL) return;
+
+  vnp = *list;
+  while (vnp->next != NULL) {
+    if (compar (&vnp, &(vnp->next)) == 0) {
+      tmp = vnp->next;
+      vnp->next = tmp->next;
+      tmp->next = NULL;
+      tmp = valnodefree (tmp);
+    } else {
+      vnp = vnp->next;
+    }
+  }
+}
+
+
+NLM_EXTERN void LIBCALL
+ValNodePurge
+(ValNodePtr PNTR list,
+ Nlm_Boolean (LIBCALLBACK *do_remove ) PROTO ((ValNodePtr)),
+ ValNodePtr (LIBCALLBACK *valnodefree ) PROTO ((ValNodePtr)))
+{
+  ValNodePtr vnp_prev = NULL, vnp, vnp_next;
+
+  if (list == NULL || do_remove == NULL) {
+    return;
+  }
+  for (vnp = *list; vnp != NULL; vnp = vnp_next) {
+    vnp_next = vnp->next;
+    if (do_remove (vnp)) {
+      if (vnp_prev == NULL) {
+        *list = vnp_next;
+      } else {
+        vnp_prev->next = vnp_next;
+      }
+      vnp->next = NULL;
+      if (valnodefree == NULL) {
+        vnp = ValNodeFree (vnp);
+      } else {
+        vnp = valnodefree (vnp);
+      }
+    } else {
+      vnp_prev = vnp;
+    }
+  }
+}
+
+
+NLM_EXTERN int LIBCALL ValNodeCompare PROTO ((ValNodePtr vnp1, ValNodePtr vnp2, int (LIBCALLBACK *compar) (Nlm_VoidPtr, Nlm_VoidPtr)))
+{
+  int rval = 0;
+  if (compar == NULL) {
+    return 0;
+  }
+  while (vnp1 != NULL && vnp2 != NULL && rval == 0) 
+  {
+    rval = compar (&vnp1, &vnp2);
+    vnp1 = vnp1->next;
+    vnp2 = vnp2->next;
+  }
+  if (rval == 0)
+  {
+    if (vnp1 == NULL && vnp2 == NULL) 
+    {
+      rval = 0;
+    }
+    else if (vnp1 == NULL) 
+    {
+      rval = -1;
+    }
+    else 
+    {
+      rval = 1;
+    }
+  }
+  return rval;
+}
+
+
 /*****************************************************************************
 *
 *   ValNodeMergeStrs(list)
@@ -1809,6 +1909,7 @@ NLM_EXTERN const Nlm_Char* Nlm_PlatformName(void)
 /*
  * Note: this code is harmless on little-endian machines.
  */
+#ifdef IS_BIG_ENDIAN
 static
 void
 byteReverse(Nlm_UcharPtr buf, Nlm_Uint4 longs)
@@ -1821,6 +1922,7 @@ byteReverse(Nlm_UcharPtr buf, Nlm_Uint4 longs)
 	buf += 4;
     } while (--longs);
 }
+#endif
 
 /*
  * Start MD5 accumulation.  Set bit count to 0 and buffer to mysterious

@@ -1,4 +1,4 @@
-/*  $Id: test_ncbi_disp.c,v 6.31 2007/04/20 01:55:30 kazimird Exp $
+/*  $Id: test_ncbi_disp.c,v 6.33 2008/04/30 14:55:44 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -94,15 +94,26 @@ int main(int argc, const char* argv[])
             CORE_LOGF(eLOG_Note, ("Server #%d `%s' = %s", ++n_found,
                                   SERV_CurrentName(iter), info_str));
             if (hinfo) {
-                double array[2];
+                double array[5];
                 const char* e = HINFO_Environment(hinfo);
                 const char* a = HINFO_AffinityArgument(hinfo);
                 const char* v = HINFO_AffinityArgvalue(hinfo);
                 CORE_LOG(eLOG_Note, "  Host info available:");
                 CORE_LOGF(eLOG_Note, ("    Number of CPUs: %d",
                                       HINFO_CpuCount(hinfo)));
+                CORE_LOGF(eLOG_Note, ("    Number of CPU units: %d @ %.0fMHz",
+                                      HINFO_CpuUnits(hinfo),
+                                      HINFO_CpuClock(hinfo)));
                 CORE_LOGF(eLOG_Note, ("    Number of tasks: %d",
                                       HINFO_TaskCount(hinfo)));
+                if (HINFO_Memusage(hinfo, array)) {
+                    CORE_LOGF(eLOG_Note, ("    Total RAM:  %.2fMB", array[0]));
+                    CORE_LOGF(eLOG_Note, ("    Cache RAM:  %.2fMB", array[1]));
+                    CORE_LOGF(eLOG_Note, ("    Free  RAM:  %.2fMB", array[2]));
+                    CORE_LOGF(eLOG_Note, ("    Total Swap: %.2fMB", array[3]));
+                    CORE_LOGF(eLOG_Note, ("    Free  Swap: %.2fMB", array[4]));
+                } else
+                    CORE_LOG (eLOG_Note,  "    Memory usage: unavailable");
                 if (HINFO_LoadAverage(hinfo, array)) {
                     CORE_LOGF(eLOG_Note, ("    Load averages: %f, %f (BLAST)",
                                           array[0], array[1]));

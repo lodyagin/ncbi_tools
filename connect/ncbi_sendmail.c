@@ -1,4 +1,4 @@
-/*  $Id: ncbi_sendmail.c,v 6.35 2008/02/14 17:25:50 kazimird Exp $
+/*  $Id: ncbi_sendmail.c,v 6.41 2008/05/25 01:25:38 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,7 +34,6 @@
 #include "ncbi_priv.h"
 #include <connect/ncbi_sendmail.h>
 #include <connect/ncbi_socket.h>
-#include <connect/ncbi_util.h>
 #include <ctype.h>
 #include <errno.h>
 #include <stdlib.h>
@@ -236,30 +235,33 @@ extern const char* CORE_SendMail(const char* to,
 
 
 /* In two macros below the smartest (or, weak-minded?) Sun
- * C compiler warned about unreachable end-of-loop condition
- * (well, it thinks "a condition" is there, dumb!), if we
- * used 'return' right before the end of 'while' statement.
- * So we now added "check" and "conditional" exit, which makes
- * the Sun compiler much happier, and less wordy :-)
+ * C compiler warns about unreachable end-of-loop condition
+ * (well, it thinks "a condition" is there, dumb!).
  */
 
-#define SENDMAIL_RETURN(subcode, reason)                                   \
-    do {                                                                   \
-        if (sock)                                                          \
-            SOCK_Close(sock);                                              \
-        CORE_LOGF_X(subcode, eLOG_Error, ("[SendMail]  %s", reason));      \
-        if (reason/*always true, though, to trick "smart" compiler*/)      \
-            return reason;                                                 \
+#define SENDMAIL_RETURN(subcode, reason)                                \
+    do {                                                                \
+        if (sock) {                                                     \
+            SOCK_Close(sock);                                           \
+            sock = 0;                                                   \
+        }                                                               \
+        CORE_LOGF_X(subcode, eLOG_Error, ("[SendMail]  %s", reason));   \
+        if (!sock)                                                      \
+            return reason;                                              \
+        /*NOTREACHED*/                                                  \
     } while (0)
 
-#define SENDMAIL_RETURN2(subcode, reason, explanation)                     \
-    do {                                                                   \
-       if (sock)                                                           \
-           SOCK_Close(sock);                                               \
-       CORE_LOGF_X( subcode, eLOG_Error,                                   \
-                    ("[SendMail]  %s: %s", reason, explanation) );         \
-       if (reason/*always true, though, to trick "smart" compiler*/)       \
-           return reason;                                                  \
+#define SENDMAIL_RETURN2(subcode, reason, explanation)                  \
+    do {                                                                \
+        if (sock) {                                                     \
+            SOCK_Close(sock);                                           \
+            sock = 0;                                                   \
+        }                                                               \
+        CORE_LOGF_X(subcode, eLOG_Error,                                \
+                    ("[SendMail]  %s: %s", reason, explanation));       \
+        if (!sock)                                                      \
+            return reason;                                              \
+        /*NOTREACHED*/                                                  \
     } while (0)
 
 
@@ -292,12 +294,12 @@ static const char* s_SendRcpt(SOCK sock, const char* to,
             }
         }
         if (k >= buf_size)
-            SENDMAIL_RETURN(3, "Recepient address is too long");
+            SENDMAIL_RETURN(3, "Recipient address is too long");
         buf[k] = '\0'/*just in case*/;
         if (quote) {
             CORE_LOGF_X(1, eLOG_Warning,
                         ("[SendMail]  Unbalanced delimiters in "
-                         "recepient %s for %s: \"%c\" expected",
+                         "recipient %s for %s: \"%c\" expected",
                          buf, what, quote));
         }
         if (!s_SockWrite(sock, "RCPT TO: <", 0)  ||

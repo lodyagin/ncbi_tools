@@ -1,4 +1,4 @@
-/*  $Id: ncbi_core_c.c,v 6.19 2007/10/18 15:29:26 ivanovp Exp $
+/* $Id: ncbi_core_c.c,v 6.21 2008/10/17 15:59:05 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -52,7 +52,7 @@
 extern "C" {
 #endif
     static void s_REG_Get    (void*, const char*, const char*, char*, size_t);
-    static void s_REG_Set    (void*, const char*, const char*,
+    static int  s_REG_Set    (void*, const char*, const char*,
                               const char*, EREG_Storage);
     static void s_REG_Cleanup(void*);
 #ifdef __cplusplus
@@ -71,15 +71,15 @@ static void s_REG_Get(void* user_data,
 }
 
 
-static void s_REG_Set(void* user_data,
-                      const char* section, const char* name,
-                      const char* value, EREG_Storage storage)
+static int s_REG_Set(void* user_data,
+                     const char* section, const char* name,
+                     const char* value, EREG_Storage storage)
 {
     const char* conf_file = (const char*) user_data;
     Nlm_Boolean result = storage == eREG_Persistent
         ? Nlm_SetAppParam(conf_file, section, name, value)
         : Nlm_TransientSetAppParam(conf_file, section, name, value);
-    verify(result);
+    return result;
 }
 
 
@@ -240,6 +240,12 @@ extern void CONNECT_Init(const char* conf_file)
 /*
  * ---------------------------------------------------------------------------
  * $Log: ncbi_core_c.c,v $
+ * Revision 6.21  2008/10/17 15:59:05  lavr
+ * REG_Set() made to return a value
+ *
+ * Revision 6.20  2008/10/16 19:12:55  lavr
+ * Id left justified
+ *
  * Revision 6.19  2007/10/18 15:29:26  ivanovp
  * Connect and ctools libraries are changed to use new error and log posting system with error codes and subcodes. JIRA: CXX-3
  *

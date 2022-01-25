@@ -1,4 +1,4 @@
-/* $Id: lookup_util.h,v 1.15 2006/12/01 16:48:07 papadopo Exp $
+/* $Id: lookup_util.h,v 1.16 2008/11/04 19:59:32 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -46,6 +46,7 @@ extern "C" {
  * @return x to the n-th power
  */
 
+NCBI_XBLAST_EXPORT
 Int4 iexp(Int4 x, Int4 n);
 
 /**
@@ -55,6 +56,7 @@ Int4 iexp(Int4 x, Int4 n);
  * @return lg(x)
  */
 
+NCBI_XBLAST_EXPORT
 Int4 ilog2(Int4 x);
 
 /**
@@ -71,6 +73,7 @@ Int4 ilog2(Int4 x);
  * @param alphabet optional translation alphabet
  */
 
+NCBI_XBLAST_EXPORT 
 void debruijn(Int4 n, Int4 k, Uint1* output, Uint1* alphabet);
 
 /** Given a list of query locations, estimate the number of words
@@ -82,6 +85,8 @@ void debruijn(Int4 n, Int4 k, Uint1* output, Uint1* alphabet);
  *               to be indexed [out]
  * @return The approximate number of lookup table entries
  */
+
+NCBI_XBLAST_EXPORT
 Int4 EstimateNumTableEntries(BlastSeqLoc* location, Int4 *max_off);
 
 #ifdef __cplusplus

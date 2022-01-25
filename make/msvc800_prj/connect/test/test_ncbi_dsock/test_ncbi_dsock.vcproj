@@ -3,7 +3,7 @@
 	ProjectType="Visual C++"
 	Version="8.00"
 	Name="test_ncbi_dsock"
-	ProjectGUID="{3B976840-4F3F-46A9-832D-4AB79417F712}"
+	ProjectGUID="{140FACD6-60CF-4DDC-AF26-6260EDE0E075}"
 	>
 	<Platforms>
 		<Platform
@@ -71,7 +71,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="oldnames.lib wsock32.lib"
+				AdditionalDependencies="oldnames.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/test_ncbi_dsock.exe"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"
@@ -162,7 +162,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="oldnames.lib wsock32.lib"
+				AdditionalDependencies="oldnames.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/test_ncbi_dsock.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
@@ -251,7 +251,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="oldnames.lib wsock32.lib"
+				AdditionalDependencies="oldnames.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/test_ncbi_dsock.exe"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"
@@ -342,7 +342,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="oldnames.lib wsock32.lib"
+				AdditionalDependencies="oldnames.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/test_ncbi_dsock.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
@@ -432,7 +432,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="oldnames.lib wsock32.lib"
+				AdditionalDependencies="oldnames.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/test_ncbi_dsock.exe"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"
@@ -524,7 +524,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="oldnames.lib wsock32.lib"
+				AdditionalDependencies="oldnames.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/test_ncbi_dsock.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
@@ -614,7 +614,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="oldnames.lib wsock32.lib"
+				AdditionalDependencies="oldnames.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/test_ncbi_dsock.exe"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"
@@ -706,7 +706,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="oldnames.lib wsock32.lib"
+				AdditionalDependencies="oldnames.lib ws2_32.lib wsock32.lib"
 				OutputFile="$(OutDir)/test_ncbi_dsock.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"

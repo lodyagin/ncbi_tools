@@ -1,4 +1,4 @@
-/* $Id: nlm_linear_algebra.h,v 1.7 2005/12/19 15:38:01 gertz Exp $
+/* $Id: nlm_linear_algebra.h,v 1.8 2008/08/21 19:55:43 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -80,7 +80,7 @@ void Nlm_DenseMatrixFree(double *** mat);
  * @param ncols     the number of columns for the new matrix.
  */
 NCBI_XBLAST_EXPORT
-Int4 ** Nlm_Int4MatrixNew(int nrows, int ncols);
+int ** Nlm_Int4MatrixNew(int nrows, int ncols);
 
 
 /**
@@ -91,7 +91,7 @@ Int4 ** Nlm_Int4MatrixNew(int nrows, int ncols);
  * @return          always NULL
  */
 NCBI_XBLAST_EXPORT
-void Nlm_Int4MatrixFree(Int4 *** mat);
+void Nlm_Int4MatrixFree(int *** mat);
 
 
 /**

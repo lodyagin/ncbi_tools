@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.11 $
+* $Revision: 6.12 $
 *
 * File Description: 
 *
@@ -122,6 +122,8 @@ extern ModTextFixPtr ModTextFixNew (void);
 extern void RemoveTextFromTextFreeSubSourceModifiers (BioSourcePtr biop, Pointer userdata);
 extern EnumFieldAssocPtr GetSubSourceAndOrgModEnum (Boolean get_discouraged, Boolean get_discontinued);
 extern EnumFieldAssocPtr GetModifiersEnum (Boolean get_subsource, Boolean get_orgmod, Boolean get_discouraged, Boolean get_discontinued);
+
+NLM_EXTERN ValNodePtr GetLocListForBioSource (BioSourcePtr biop);
 
 #ifdef __cplusplus
 }

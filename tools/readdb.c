@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: readdb.c,v 6.535 2008/02/26 18:34:20 kans Exp $";
+static char const rcsid[] = "$Id: readdb.c,v 6.538 2008/10/31 18:50:52 madden Exp $";
 
-/* $Id: readdb.c,v 6.535 2008/02/26 18:34:20 kans Exp $ */
+/* $Id: readdb.c,v 6.538 2008/10/31 18:50:52 madden Exp $ */
 /*
 * ===========================================================================
 *
@@ -50,7 +50,7 @@ Detailed Contents:
 *
 * Version Creation Date:   3/22/95
 *
-* $Revision: 6.535 $
+* $Revision: 6.538 $
 *
 * File Description: 
 *       Functions to rapidly read databases from files produced by formatdb.
@@ -65,6 +65,15 @@ Detailed Contents:
 *
 * RCS Modification History:
 * $Log: readdb.c,v $
+* Revision 6.538  2008/10/31 18:50:52  madden
+* Add readdb_check_oid to be used with pseed (SB-109)
+*
+* Revision 6.537  2008/06/25 18:32:37  merezhuk
+* use portable Nlm_StringTokMT.
+*
+* Revision 6.536  2008/06/25 14:28:55  merezhuk
+* support for multiple BLAST DB locations as in CSeqDB
+*
 * Revision 6.535  2008/02/26 18:34:20  kans
 * use SeqDescrAddPointer instead of ValNodeAddPointer/Str
 *
@@ -2580,8 +2589,8 @@ function readdb_MakeGiFileBinary.
 
 #define	LINE_LEN	1024
 
-Int4ListPtr LIBCALL
-Int4ListReadFromFile PROTO((CharPtr fname))
+static Int4ListPtr
+Int4ListReadFromFileEx (CharPtr lookup_dir,CharPtr fname)
 {
     Int4ListPtr listp = NULL;
     FILE		*fp = NULL;
@@ -2606,13 +2615,13 @@ Int4ListReadFromFile PROTO((CharPtr fname))
        }
        MemFree(path);
     } else {
-        Nlm_GetAppParam("NCBI", "BLAST", "BLASTDB", getenv("BLASTDB"), blast_dir, PATH_MAX);
+	if( !lookup_dir) return NULL;
+	StringCpy(blast_dir,lookup_dir);
     }
     sprintf(file_name, "%s%s%s", blast_dir, DIRDELIMSTR, FileNameFind(fname));
 
     mfp = NlmOpenMFILE(file_name);
     if (mfp == NULL) {
-        ErrPostEx(SEV_ERROR, 0, 0, "Unable to open file %s", file_name);
         return NULL;
     }
     
@@ -2660,7 +2669,6 @@ Int4ListReadFromFile PROTO((CharPtr fname))
         /*** Text gi list ***/
         mfp = NlmCloseMFILE(mfp);
         if (!(fp = FileOpen(file_name, "r"))) {
-            ErrPostEx(SEV_ERROR, 0, 0, "Unable to open file %s", file_name);
             return NULL;
         }
 	
@@ -2683,6 +2691,36 @@ Int4ListReadFromFile PROTO((CharPtr fname))
     return listp;
 }
 
+Int4ListPtr LIBCALL
+Int4ListReadFromFile PROTO((CharPtr fname))
+{
+    Int4ListPtr listp = NULL;
+    Char wrk_buf[PATH_MAX],  blast_dir[PATH_MAX];
+    Char *one_blast_dir ;
+    Char path_delim[2];
+    CharPtr envp = NULL;
+
+    /* read configuration... */
+    memset(blast_dir,0,sizeof(blast_dir));
+    if ((envp = getenv("BLASTDB")) == NULL) {
+      Nlm_GetAppParam ("NCBI", "BLAST", "BLASTDB", NULL, blast_dir, PATH_MAX);
+    }
+    else {
+      StringCpy(blast_dir, envp);
+    }
+    /* parse pathes and check files*/
+    StringCpy(path_delim,":");
+    memset(wrk_buf,0,sizeof(wrk_buf));
+    for( one_blast_dir = Nlm_StringTokMT(blast_dir,(char*)path_delim, (char **)&wrk_buf);
+	 one_blast_dir != NULL;
+	 one_blast_dir = Nlm_StringTokMT (NULL,(char*)path_delim, (char **)&wrk_buf) )
+    {
+	listp = Int4ListReadFromFileEx(one_blast_dir,fname);
+	if( listp ) return listp;
+    }
+    ErrPostEx(SEV_ERROR, 0, 0, "Unable to open file %s", fname);
+    return NULL;
+}
 Int4ListPtr LIBCALL
 Int4ListMakeUnique PROTO((Int4ListPtr list))
 {
@@ -3386,7 +3424,7 @@ static    Int2    IndexFileExists(CharPtr full_filename, ReadDBFILEPtr PNTR rdfp
         return -1;
 }
 
-CharPtr    FindBlastDBFile (CharPtr filename)
+static CharPtr    FindBlastDBFileEx (CharPtr lookup_dir, CharPtr filename)
 {
 
     CharPtr    buffer, buffer1, envp = NULL;
@@ -3408,10 +3446,8 @@ CharPtr    FindBlastDBFile (CharPtr filename)
     buffer  = MemNew(PATH_MAX);
     buffer1 = MemNew(PATH_MAX);
 
-    if ((envp = getenv("BLASTDB")) == NULL)
-        Nlm_GetAppParam ("NCBI", "BLAST", "BLASTDB", NULL, buffer, PATH_MAX);
-    else
-        StringCpy(buffer, envp);
+    if( !lookup_dir) return NULL;
+    StringCpy(buffer,lookup_dir);
 
     sprintf(buffer1, "%s%s%s", buffer, DIRDELIMSTR, filename);
 
@@ -3430,6 +3466,33 @@ CharPtr    FindBlastDBFile (CharPtr filename)
 return NULL;
 }
 
+CharPtr    FindBlastDBFile (CharPtr filename)
+{
+    Char wrk_buf[PATH_MAX],  blast_dir[PATH_MAX];
+    Char *one_blast_dir ;
+    Char path_delim[2];
+    CharPtr envp = NULL, found_name = NULL;
+
+    /* read configuration and find file in all places */
+    memset(blast_dir,0,sizeof(blast_dir));
+    if ((envp = getenv("BLASTDB")) == NULL) {
+      Nlm_GetAppParam ("NCBI", "BLAST", "BLASTDB", NULL, blast_dir, PATH_MAX);
+    }
+    else {
+      StringCpy(blast_dir, envp);
+    }
+    /* parse pathes and lookup filename */
+    StringCpy(path_delim,":");
+    memset(wrk_buf,0,sizeof(wrk_buf));
+    for( one_blast_dir = Nlm_StringTokMT (blast_dir,(char*)path_delim, (char **)&wrk_buf);
+	 one_blast_dir != NULL;
+	 one_blast_dir = Nlm_StringTokMT (NULL,(char*)path_delim, (char **)&wrk_buf) )
+    {
+	found_name = FindBlastDBFileEx(one_blast_dir,filename);
+	if( found_name  ) return found_name;
+    }
+    return NULL;
+}
 /* 
     filename: name of the file to be openend.
     is_prot: three choices: protein, nucleotide, or either one.
@@ -3440,12 +3503,12 @@ return NULL;
 */
 
 static ReadDBFILEPtr
-readdb_new_internal(CharPtr filename, Uint1 is_prot, Uint1 init_state, CommonIndexHeadPtr cih)
+readdb_new_internalEx(CharPtr lookup_dir, CharPtr filename, Uint1 is_prot, Uint1 init_state, CommonIndexHeadPtr cih)
 {
     ReadDBFILEPtr rdfp=NULL;
     Char buffer[PATH_MAX], buffer1[PATH_MAX];
     Char commonindex_full_filename[PATH_MAX];
-    Char    database_dir[PATH_MAX] = "";
+    Char    database_dir[PATH_MAX] = ""; 
     Uint4 seq_type, formatdb_ver, date_length, title_length, value;
     Int2 status;
     Int4 length, num_seqs;
@@ -3487,27 +3550,24 @@ readdb_new_internal(CharPtr filename, Uint1 is_prot, Uint1 init_state, CommonInd
         localdb = TRUE;
         rdfp = readdb_destruct(rdfp);
     } else  {
-        /* Try to read this from environment. If not found, try
-         * the .ncbirc file */
-        
-        if ((envp = getenv("BLASTDB")) == NULL)
-            Nlm_GetAppParam ("NCBI", "BLAST", "BLASTDB", NULL, 
-                        buffer, PATH_MAX);
-        else
-            StringCpy(buffer, envp);
+	/* set passed directory location */
+	if( !lookup_dir ) return NULL;
+        StringCpy(buffer, lookup_dir);
         
         sprintf(buffer1, "%s%s%s", buffer, DIRDELIMSTR, filename);
-        
         if ((status=IndexFileExists(buffer1, &rdfp, &is_prot, 
                                     init_state)) >= 0) {
-            if (status > 0)
+            if (status > 0){
                 return rdfp;
+	    }
             /* database file is in directory 'buffer' */
             StringCpy(database_dir, buffer);
             rdfp = readdb_destruct(rdfp);
         }
     }
-    
+  
+    /* ATTENTION: at this point database_dir contains file directory name */
+
     rdfp = readdb_destruct(rdfp);
     rdfp = ReadDBFILENew();
 
@@ -3784,6 +3844,49 @@ readdb_new_internal(CharPtr filename, Uint1 is_prot, Uint1 init_state, CommonInd
     }
     
     return rdfp;
+}
+
+/* 
+    filename: name of the file to be openend.
+    is_prot: three choices: protein, nucleotide, or either one.
+    init_state: how much should be initialized.
+        READDB_NEW_DO_ALL : initialize everything possible
+        READDB_NEW_DO_REPORT : init enough for a report on db size etc.
+    cih: common index
+*/
+static ReadDBFILEPtr
+readdb_new_internal(CharPtr filename, Uint1 is_prot, Uint1 init_state, CommonIndexHeadPtr cih)
+{
+    ReadDBFILEPtr ret_rdfp = NULL;
+    Char wrk_buf[PATH_MAX],  blast_dir[PATH_MAX];
+    Char *one_blast_dir ;
+    Char path_delim[2];
+    CharPtr envp = NULL;
+    if( (ret_rdfp = readdb_new_internalEx(NULL,filename,is_prot,init_state,cih)) ){
+	return ret_rdfp;
+    }
+
+    /* read configuration and check file in all places */
+    memset(blast_dir,0,sizeof(blast_dir));
+    if ((envp = getenv("BLASTDB")) == NULL) {
+      Nlm_GetAppParam ("NCBI", "BLAST", "BLASTDB", NULL, blast_dir, PATH_MAX);
+    }
+    else {
+      StringCpy(blast_dir, envp);
+    }
+    /* put all passes to ValNode list */
+    StringCpy(path_delim,":");
+    memset(wrk_buf,0,sizeof(wrk_buf));
+
+    for( one_blast_dir = Nlm_StringTokMT (blast_dir,(char*)path_delim, (char **)&wrk_buf);
+	 one_blast_dir != NULL;
+	 one_blast_dir = Nlm_StringTokMT (NULL,(char*)path_delim, (char **)&wrk_buf) )
+    {
+	ret_rdfp = readdb_new_internalEx( one_blast_dir,filename,is_prot,init_state,cih);
+	if( ret_rdfp )  return ret_rdfp;
+
+    }
+    return NULL;
 }
 
 OIDListPtr OIDListFree (OIDListPtr oidlist)
@@ -4741,6 +4844,25 @@ s_SearchOidInLocalOidList(const OIDListPtr oidlist, Uint4 oid)
         return -1;
 
     return 0;
+}
+
+Boolean 
+readdb_check_oid(ReadDBFILEPtr rdfp_head, Int4 oid)
+{
+	ReadDBFILEPtr rdfp_var = rdfp_head;
+
+	while (rdfp_var && rdfp_var->start < oid)
+        {
+		if (rdfp_var->oidlist) {
+			if (s_SearchOidInLocalOidList(rdfp_var->oidlist, oid-rdfp_var->start) == 0) 
+                  		return TRUE;
+                } else {
+                	if (rdfp_var->start <= oid <= rdfp_var->stop)
+                                return TRUE;	 
+                }
+                rdfp_var = rdfp_var->next;
+        }
+        return FALSE;
 }
 
 /* This function verifies if a given ordinal id (or gi) belongs

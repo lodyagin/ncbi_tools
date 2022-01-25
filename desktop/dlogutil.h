@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.91 $
+* $Revision: 6.101 $
 *
 * File Description: 
 *
@@ -107,6 +107,7 @@ extern ValNodePtr AddStringToValNodeChain (ValNodePtr head, CharPtr str, Uint1 c
   TexT            geneAllele;       \
   TexT            geneDesc;         \
   TexT            locusTag;         \
+  TexT            geneSynonym;      \
   ButtoN          editGeneBtn;      \
   TexT            protXrefName;     \
   TexT            protXrefDesc;     \
@@ -169,6 +170,7 @@ extern Boolean TestInference (FeatureFormPtr ffp, CharPtr badInfQual, size_t len
 
 extern DialoG CreateAuthorDialog (GrouP prnt, Uint2 rows, Int2 spacing);
 
+extern DialoG CreateDateDialogEx (GrouP prnt, CharPtr title, Int4 start_year, Int4 num_years);
 extern DialoG CreateDateDialog (GrouP prnt, CharPtr title);
 
 extern DialoG CreateAffilDialog (GrouP prnt, CharPtr title);
@@ -385,7 +387,6 @@ extern ValNodePtr CopyTableDisplayRowList (ValNodePtr row_list);
 extern CharPtr GetRowListCellText (ValNodePtr row_list, Int4 row, Int4 column);
 extern FonT GetTableDisplayDefaultFont (void);
 
-typedef  void  (*Nlm_ChangeNotifyProc) PROTO ((Pointer));
 
 #define TALL_SELECTION_LIST 8
 #define SHORT_SELECTION_LIST 4
@@ -413,6 +414,18 @@ extern DialoG SelectionDialogEx
  Int2                     list_height,
  Boolean                  force_list);
 
+extern DialoG SelectionDialogExEx 
+(GrouP h,
+ Nlm_ChangeNotifyProc     change_notify,
+ Pointer                  change_userdata,
+ Boolean                  allow_multi,
+ CharPtr                  err_msg,
+ ValNodePtr               choice_list,
+ Int2                     list_height,
+ Boolean                  force_list,
+ Boolean                  force_popup);
+
+
 /* This function should free just the data associated with the ValNode */
 typedef void (*FreeValNodeProc) PROTO ((ValNodePtr));
 /* This function should copy just this ValNode, not the chain */
@@ -421,6 +434,21 @@ typedef ValNodePtr (*RemapValNodeProc) PROTO ((ValNodePtr));
 typedef Boolean (*MatchValNodeProc) PROTO ((ValNodePtr, ValNodePtr));
 typedef CharPtr (*NameFromValNodeProc) PROTO ((ValNodePtr));
 
+extern DialoG ValNodeSelectionDialogExEx
+(GrouP h,
+ ValNodePtr               choice_list,
+ Int2                     list_height,
+ NameFromValNodeProc      name_proc,
+ FreeValNodeProc          free_vn_proc,
+ CopyValNodeDataProc      copy_vn_proc,
+ MatchValNodeProc         match_vn_proc,
+ CharPtr                  err_name,
+ Nlm_ChangeNotifyProc     change_notify,
+ Pointer                  change_userdata,
+ Boolean                  allow_multi,
+ Boolean                  force_list,
+ Boolean                  force_popup,
+ RemapValNodeProc         remap_vn_proc);
 extern DialoG ValNodeSelectionDialogEx
 (GrouP h,
  ValNodePtr               choice_list,
@@ -529,14 +557,30 @@ CreateClickableListDialogEx
  Boolean         horizontal,
  Boolean         show_find);
 
+extern DialoG 
+CreateClickableListDialogExEx 
+(GrouP h, 
+ CharPtr label1, 
+ CharPtr label2,
+ CharPtr help1,
+ CharPtr help2,
+ ClickableCallback item_single_click_callback,
+ ClickableCallback item_double_click_callback,
+ Pointer         item_click_callback_data,
+ GetClickableItemText get_item_text,
+ Int4            left_width,
+ Int4            right_width,
+ Boolean         horizontal,
+ Boolean         show_find,
+ Boolean         display_chosen);
+
 extern void SetClickableListDialogTitles (DialoG d, CharPtr title1, CharPtr title2, CharPtr help1, CharPtr help2);
+extern void SetClickableListDisplayChosen (DialoG d, Boolean set);
 
 extern void ScrollToNextClickableTextDescription (CharPtr txt, DialoG d);
 extern void ScrollToPreviousClickableTextDescription (CharPtr txt, DialoG d);
 
 extern CharPtr GetSelectedClickableListText (DialoG d);
-
-extern CharPtr ReformatDateStringEx (CharPtr orig_date, Boolean month_first, BoolPtr month_ambiguous);
 
 extern void GetAlignmentsInSeqEntryCallback (SeqAnnotPtr sap, Pointer userdata);
 extern void CreateSeqAlignLabel (SeqAlignPtr salp, CharPtr buf, Int4 buf_size);
@@ -731,6 +775,24 @@ NLM_EXTERN Int2 GetTextSelectCharOffsetEx (PoinT pt, DoC doc, FonT font, Int2 it
 NLM_EXTERN CharPtr GetSelectedDocText (DoC doc, Int2 item_start, Int2 row_start, Int2 col_start, Int2 char_start,
                                        Int2 item_stop, Int2 row_stop, Int2 col_stop, Int2 char_stop,
                                        Int2Ptr only_these_columns, Int2 num_col);
+
+
+/* for feature replace */
+NLM_EXTERN ValNodePtr FeatureReplaceListFree (ValNodePtr vnp);
+NLM_EXTERN void ActOnFeatureReplaceList (ValNodePtr list);
+NLM_EXTERN DialoG FeatureReplaceListDialog (GrouP h, Int4 width, Nlm_ChangeNotifyProc change_notify, Pointer change_userdata);
+NLM_EXTERN Boolean AddFeaturesToReplaceList (DialoG d, ValNodePtr feature_list);
+NLM_EXTERN ValNodePtr RemoveFeaturesFromReplaceList (DialoG d);
+NLM_EXTERN ValNodePtr FeatureReplaceListFromSeqAnnot (SeqAnnotPtr sap);
+NLM_EXTERN DialoG FeatureSelectListDialog (GrouP h, Int4 width);
+NLM_EXTERN ValNodePtr RemoveSelectedFeaturesFromList (DialoG d);
+NLM_EXTERN void AddFeaturesToList (DialoG d, ValNodePtr features);
+NLM_EXTERN void SortSeqFeatInAnnot (SeqAnnotPtr sap);
+NLM_EXTERN SeqFeatPtr GetSelectedNewFeature (DialoG d);
+NLM_EXTERN void ScrollToMatchingFeatures (DialoG d, SeqFeatPtr sfp);
+NLM_EXTERN Boolean AutomatchFeatures (DialoG d, ValNodePtr PNTR existing_features);
+
+
 
 #ifdef __cplusplus
 }

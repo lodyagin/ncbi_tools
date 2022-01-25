@@ -1,4 +1,4 @@
-/* $Id: blast_sw.c,v 1.4 2006/11/29 17:25:50 bealer Exp $
+/* $Id: blast_sw.c,v 1.5 2008/07/17 17:55:44 kazimird Exp $
  * ===========================================================================
  *
  *                     PUBLIC DOMAIN NOTICE
@@ -34,7 +34,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] =
-   "$Id: blast_sw.c,v 1.4 2006/11/29 17:25:50 bealer Exp $";
+   "$Id: blast_sw.c,v 1.5 2008/07/17 17:55:44 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_sw.h>
@@ -663,7 +663,7 @@ Int2 BLAST_SmithWatermanGetGappedScore (EBlastProgramType program_number,
       rpsblast_pssms = gap_align->sbp->psi_matrix->pssm->data;
       if (program_number == eBlastTypeRpsTblastn) {
          rps_context = rps_context * NUM_FRAMES +
-                      BLAST_FrameToContext(program_number, subject->frame);
+                      BLAST_FrameToContext(subject->frame, program_number);
       }
       /* only one cutoff applies to an RPS search */
       cutoff_score = hit_params->cutoffs[rps_context].cutoff_score;

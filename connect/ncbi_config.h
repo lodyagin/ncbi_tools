@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_CONFIG__H
 #define CONNECT___NCBI_CONFIG__H
 
-/*  $Id: ncbi_config.h,v 6.14 2007/10/12 14:18:31 ucko Exp $
+/* $Id: ncbi_config.h,v 6.15 2008/10/16 19:12:55 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE

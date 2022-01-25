@@ -1,4 +1,4 @@
-/* $Id: seqpanel.c,v 6.219 2008/02/28 20:24:30 bollin Exp $
+/* $Id: seqpanel.c,v 6.225 2008/07/07 18:52:31 bollin Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -47,6 +47,7 @@
 #include <algo/blast/api/blast_seqalign.h>
 #include <alignval.h>
 #include <salptool.h>
+#include <sqnutils.h>
 #include <vsm.h>
 
 enum ESeqNum   { eNumNone=1, eNumSide=2, eNumTop=3 };
@@ -8934,53 +8935,6 @@ static void RemoveSequencesFromAlignment (IteM i)
   }
 }
 
-/* nth is the sequence in the alignment to reverse (1 is first, 2 is second) */
-extern void ReverseAlignmentStrand (SeqAlignPtr salp, Int4 nth)
-{
-  DenseSegPtr dsp;
-  SeqIdPtr    sip;
-  BioseqPtr   bsp;
-  Int4        i, j;
-  
-  if (salp == NULL || salp->segtype != SAS_DENSEG || salp->segs == NULL)
-  {
-    return;
-  }
-  
-  dsp = (DenseSegPtr) salp->segs;
-
-  if (dsp->strands == NULL) {
-    dsp->strands = (Uint1Ptr) MemNew (dsp->numseg * dsp->dim * sizeof (Uint1));
-    MemSet (dsp->strands, Seq_strand_plus, dsp->numseg * dsp->dim * sizeof (Uint1));
-  }
-  
-  sip = AlnMgr2GetNthSeqIdPtr (salp, nth);
-  bsp = BioseqFind (sip);
-  if (bsp == NULL)
-  {
-    return;
-  }
-  for (i = 0; i < dsp->numseg; i++)
-  {
-    j = (i * dsp->dim) + nth - 1;
-    
-    if (dsp->starts[j] > -1)
-    {
-      dsp->starts[j] = bsp->length - dsp->starts[j] - dsp->lens[i];
-    }
-    if (dsp->strands [j] == Seq_strand_minus)
-    {
-      dsp->strands [j] = Seq_strand_plus;
-    }
-    else
-    {
-      dsp->strands [j] = Seq_strand_minus;
-    }
-  }
-  
-}
-
-
 static void ReverseSequenceStrandsInAlignment (IteM i)
 {
   SeqEdFormPtr  sefp;
@@ -9907,7 +9861,7 @@ static Boolean UnplayJournal (SeqEdJournalPtr PNTR last, Int4 num_steps, SeqEdFo
 }
 
 
-static SeqAlignPtr LIBCALLBACK GetSeqAlign (BioseqPtr bsp1, BioseqPtr bsp2)
+static SeqAlignPtr LIBCALLBACK GetSeqAlignEx (BioseqPtr bsp1, BioseqPtr bsp2, Boolean no_extend)
 {
    BLAST_SummaryOptions *options = NULL;
    SeqAlignPtr           salp = NULL;
@@ -9915,11 +9869,15 @@ static SeqAlignPtr LIBCALLBACK GetSeqAlign (BioseqPtr bsp1, BioseqPtr bsp2)
    if (bsp1 == NULL || bsp2 == NULL) return NULL;
 
    BLAST_SummaryOptionsInit(&options);
-   if (bsp1->length > 10000 || bsp2->length > 10000)
+   if (bsp1->length > 10000 || bsp2->length > 10000 || no_extend)
    {
       options->filter_string = StringSave ("m L");
-      options->word_size = 20;
-      options->cutoff_evalue = act_get_eval (60);
+      if (no_extend) {
+        options->word_size = 28;
+      } else {
+        options->word_size = 20;
+        options->cutoff_evalue = act_get_eval (60);
+      }
       options->hint = eNone;
    }
    else
@@ -9939,6 +9897,13 @@ static SeqAlignPtr LIBCALLBACK GetSeqAlign (BioseqPtr bsp1, BioseqPtr bsp2)
    BLAST_SummaryOptionsFree(options);
    return salp;
 }
+
+
+static SeqAlignPtr LIBCALLBACK GetSeqAlign (BioseqPtr bsp1, BioseqPtr bsp2)
+{
+  return GetSeqAlignEx (bsp1, bsp2, FALSE);
+}
+
 
 static SeqAlignPtr LIBCALLBACK GetSeqAlignPiece (SeqLocPtr slp1, SeqLocPtr slp2)
 {
@@ -9990,8 +9955,9 @@ static SeqAlignPtr LIBCALLBACK GetSeqAlignPiece (SeqLocPtr slp1, SeqLocPtr slp2)
 
 NLM_EXTERN SeqAlignPtr Sequin_GlobalAlign2Seq (BioseqPtr bsp1, BioseqPtr bsp2, BoolPtr revcomp)
 {
-   return Sqn_GlobalAlign2SeqEx (bsp1, bsp2, revcomp, GetSeqAlign, GetSeqAlignPiece);
+   return Sqn_GlobalAlign2SeqEx (bsp1, bsp2, revcomp, GetSeqAlign, GetSeqAlignPiece, TRUE);
 }
+
 
 /* This function produces a text representation of the alignment salp starting one nucleotide
  * before the feature and ending one nucleotide after the feature.

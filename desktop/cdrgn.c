@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.114 $
+* $Revision: 6.117 $
 *
 * File Description: 
 *
@@ -1650,7 +1650,6 @@ static DialoG CreateRNATranscriptIDDialog (GrouP h, Uint2 entityID, Boolean allo
 {
   GrouP                  p;
   RnaTranscriptIdDlgPtr  dlg;
-  ValNodePtr             bsp_list = NULL;
 
   p = HiddenGroup (h, 3, 0, NULL);
   SetGroupSpacing (p, 10, 10);
@@ -3724,15 +3723,10 @@ static Boolean SeeIfProtTitleNeedsFixing (BioseqPtr bsp, Uint2 entityID)
   BioseqSetPtr       bssp;
   CharPtr            buf;
   size_t             buflen = 1001;
-  SeqMgrDescContext  dcontext;
-  ItemInfo           ii;
   Boolean            indexerVersion;
   Boolean            is_refseq = FALSE;
-  MolInfoPtr         mip;
   Boolean            rsult = FALSE;
-  SeqDescrPtr        sdp;
   SeqEntryPtr        sep;
-  Uint1              tech;
   CharPtr            title;
   ValNodePtr         vnp;
 
@@ -3750,17 +3744,8 @@ static Boolean SeeIfProtTitleNeedsFixing (BioseqPtr bsp, Uint2 entityID)
     }
     if (bssp != NULL && bssp->_class == BioseqseqSet_class_nuc_prot) {
       title = (CharPtr) vnp->data.ptrvalue;
-      tech = 0;
-      sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_molinfo, &dcontext);
-      if (sdp != NULL) {
-        mip = (MolInfoPtr) sdp->data.ptrvalue;
-        if (mip != NULL) {
-          tech = mip->tech;
-        }
-      }
       buf = MemNew (sizeof (Char) * (buflen + 1));
-      MemSet ((Pointer) (&ii), 0, sizeof (ItemInfo));
-      if (buf != NULL && CreateDefLineEx (&ii, bsp, buf, buflen, tech, NULL, NULL, TRUE)) {
+      if (buf != NULL && NewCreateDefLineBuf (NULL, bsp, buf, buflen, TRUE, FALSE)) {
         if (StringICmp (buf, title) != 0) {
           indexerVersion = (Boolean) (GetAppProperty ("InternalNcbiSequin") != NULL);
           if (! indexerVersion) {
@@ -6591,7 +6576,7 @@ extern void ConvertProductQualToRnaRefName (SeqFeatPtr sfp)
 static void ConvertRnaRefNameToProductQual (SeqFeatPtr sfp)
 {
   RnaRefPtr rrp;
-  GBQualPtr gbq, gbq_prev = NULL;
+  GBQualPtr gbq;
 
   if (sfp == NULL || sfp->data.choice != SEQFEAT_RNA || sfp->data.value.ptrvalue == NULL) return;
   rrp = (RnaRefPtr) sfp->data.value.ptrvalue;
@@ -6888,7 +6873,6 @@ static void SetRnaType (RnaPagePtr rpp, Uint2 subtype)
 
 {
   RnaFormPtr  rfp;
-  RnaRefPtr   rrp = NULL;
 
   if (rpp != NULL && rpp->rfp != NULL) {
     rfp = rpp->rfp;
@@ -7950,7 +7934,11 @@ static void PointerToNcrnaClassDialog (DialoG d, Pointer data)
   
   SetValue (dlg->ncrnaclass, pos);
   if (pos == NcrnaOTHER) {
-    SetTitle (dlg->otherclass, (CharPtr) data);
+    if (StringCmp ((CharPtr) data, "other") == 0) {
+      SetTitle (dlg->otherclass, "");
+    } else {
+      SetTitle (dlg->otherclass, (CharPtr) data);
+    }
     Show (dlg->otherclass);
   } else {
     Hide (dlg->otherclass);
@@ -7962,17 +7950,21 @@ static Pointer NcrnaClassDialogToPointer (DialoG d)
 {
   NcrnaClassDlgPtr dlg;
   Int4             pos;
+  CharPtr          rval = NULL;
 
   dlg = (NcrnaClassDlgPtr) GetObjectExtra (d);
   if (dlg == NULL) return NULL;
   pos = GetValue (dlg->ncrnaclass);
   if (pos > 0 && pos < NcrnaOTHER) {
-    return StringSave (ncrnaClassList[pos - 1]);
-  } else if (pos == NcrnaOTHER && !TextHasNoText (dlg->otherclass)) {
-    return SaveStringFromText (dlg->otherclass);
-  } else {
-    return NULL;
+    rval = StringSave (ncrnaClassList[pos - 1]);
+  } else if (pos == NcrnaOTHER) {
+    if (TextHasNoText (dlg->otherclass)) {
+      rval = StringSave ("other");
+    } else {
+      rval = SaveStringFromText (dlg->otherclass);
+    }
   }  
+  return rval;
 }
 
 
@@ -7989,10 +7981,6 @@ static ValNodePtr TestNcrnaClassDialog (DialoG d)
 
   if (pos < 1 && !dlg->is_constraint) {
     ValNodeAddPointer (&err_list, 0, "No ncRNA class");
-  } else if (pos == NcrnaOTHER) {
-    if (TextHasNoText (dlg->otherclass)) {
-      ValNodeAddPointer (&err_list, 0, "No ncRNA class");
-    }
   } else if (!dlg->is_constraint && pos > NcrnaOTHER) {
     ValNodeAddPointer (&err_list, 0, "No ncRNA class");
   }

@@ -937,6 +937,10 @@
 				</FileConfiguration>
 			</File>
 			<File
+				RelativePath="..\..\..\connect\ncbi_connssl.h"
+				>
+			</File>
+			<File
 				RelativePath="..\..\..\connect\ncbi_connutil.c"
 				>
 				<FileConfiguration
@@ -2411,6 +2415,10 @@
 						PreprocessorDefinitions=""
 					/>
 				</FileConfiguration>
+			</File>
+			<File
+				RelativePath="..\..\..\connect\ncbi_socketp.h"
+				>
 			</File>
 			<File
 				RelativePath="..\..\..\connect\ncbi_socket_connector.c"

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/4/04
 *
-* $Revision: 1.40 $
+* $Revision: 1.46 $
 *
 * File Description:
 *
@@ -61,7 +61,7 @@
 #include <accpubseq.h>
 #endif
 
-#define ASN2FSA_APP_VER "2.2"
+#define ASN2FSA_APP_VER "2.7"
 
 CharPtr ASN2FSA_APPLICATION = ASN2FSA_APP_VER;
 
@@ -578,7 +578,7 @@ static void ProcessSingleRecord (
       return;
     }
 
-    dataptr = ReadAsnFastaOrFlatFile (fp, &datatype, NULL, FALSE, FALSE, FALSE, FALSE);
+    dataptr = ReadAsnFastaOrFlatFile (fp, &datatype, NULL, FALSE, FALSE, TRUE, FALSE);
 
     FileClose (fp);
 
@@ -715,7 +715,7 @@ static void ProcessMultipleRecord (
   AsnTypePtr     atp, atp_bss, atp_desc, atp_se;
   BioseqPtr      bsp;
   ValNodePtr     bsplist;
-  Char           buf [64], cmmd [256], file [FILENAME_MAX], path [PATH_MAX], longest [64];
+  Char           buf [64], file [FILENAME_MAX], path [PATH_MAX], longest [64];
   StreamFlgType  flags = STREAM_CORRECT_INVAL;
   FILE           *fp;
   Int4           numrecords = 0;
@@ -723,6 +723,7 @@ static void ProcessMultipleRecord (
   ObjMgrPtr      omp;
   time_t         starttime, stoptime, worsttime;
 #ifdef OS_UNIX
+  Char           cmmd [256];
   CharPtr        gzcatprog;
   int            ret;
   Boolean        usedPopen = FALSE;
