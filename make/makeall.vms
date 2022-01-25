@@ -1,0 +1,393 @@
+$!  MAKEALL.VMS (OpenVMS AXP and OpenVMS VAX, combined)
+$!
+$!   Usage: @makeall.vms
+$!
+$!   Builds the NCBI Toolkit libraries
+$!
+$!   Builds "AsnTool" as the command line or Motif version depending on
+$!      availablity of Motif programming environment.
+$!
+$!   William A. Gilbert
+$!   Dept of Biochemistry and Molecular Biology
+$!   College of Life Sciences and Agriculture
+$!   University of New Hampshire
+$!   Durham, NH 03824
+$!
+$!   Will.Gilbert@unh.edu
+$!
+$!--------------------------------------------------------------------------
+$ save_verify = f$verify("yes")
+$!--------------------------------------------------------------------------
+$! Compiler settings
+$!
+$!
+$ CC = "cc/decc/nolist/nowarnings"
+$ define DECC$SYSTEM_INCLUDE [],[-.include],DECC$LIBRARY_INCLUDE
+$!------------------------------------------------------------------------
+$ if f$search("[-.include]*.*") .nes. "" then $ delete [-.include]*.*;*
+$!
+$ copy [-.corelib]*.h          [-.include]
+$ if f$getsyi("NODE_HWTYPE") .eqs. "ALPH"
+$ then
+$      copy [-.corelib]ncbilcl.aov  [-.include]ncbilcl.h
+$ else
+$      copy [-.corelib]ncbilcl.vms  [-.include]ncbilcl.h
+$ endif
+$ copy [-.asnlib]*.h           [-.include]
+$ copy [-.object]*.h           [-.include]
+$ copy [-.asnstat]*.h          [-.include]
+$ copy [-.api]*.h              [-.include]
+$ copy [-.cdromlib]*.h         [-.include]
+$ copy [-.vibrant]*.h          [-.include]
+$ copy [-.desktop]*.h          [-.include]
+$ copy [-.biostruc]*.h         [-.include]
+$ copy [-.tools]*.h            [-.include]
+$!--------------------------------------
+$!
+$! Make the Portable/ASN.1 library, libncbi.olb
+$!
+$ if f$search("*.obj") .nes. "" then $ delete *.obj;*
+$!
+$ CC [-.corelib]ncbibs.c
+$ CC [-.corelib]wwwutils.c
+$ CC [-.corelib]ncbienv.c
+$ CC [-.corelib]ncbierr.c
+$ CC [-.corelib]ncbifile.c
+$ CC [-.corelib]ncbimain.c
+$ CC [-.corelib]ncbimath.c
+$ CC [-.corelib]ncbimem.c
+$ CC [-.corelib]ncbimisc.c
+$ CC [-.corelib]ncbiprop.c
+$ CC [-.corelib]ncbisgml.c
+$ CC [-.corelib]ncbimsg.c
+$ CC [-.corelib]ncbistr.c
+$ CC [-.corelib]ncbitime.c
+$ CC [-.corelib]ncbilang.c
+$ CC [-.corelib]gifgen.c
+$ CC [-.corelib]togif.c
+$ CC [-.corelib]ncbithr.c
+$ CC [-.corelib]tsprintf.c
+$ CC [-.corelib]ncbiargs.c
+$ CC /define=(HAVE_STRING_H,REGEX_MALLOC) [-.corelib]regex
+$!
+$ CC [-.asnlib]asnbufo.c
+$ CC [-.asnlib]asndebin.c
+$ CC [-.asnlib]asnenbin.c
+$ CC [-.asnlib]asngen.c
+$ CC [-.asnlib]asngenob.c
+$ CC [-.asnlib]asnio.c
+$ CC [-.asnlib]asnlex.c
+$ CC [-.asnlib]asnlext.c
+$ CC [-.asnlib]asnout.c
+$ CC [-.asnlib]asnprint.c
+$ CC [-.asnlib]asntypes.c
+$!
+$ librarian/object/create [-.lib]libncbi.olb *.obj
+$!--------------------------------------------------------------------
+$!
+$! Make the Object loader library,  libncbiobj.olb
+$!
+$ if f$search("*.obj") .nes. "" then $ delete *.obj;*
+$!
+$ CC [-.object]objacces.c
+$ CC [-.object]objalign.c
+$ CC [-.object]objall.c
+$ CC [-.object]objbibli.c
+$ CC [-.object]objblock.c
+$ CC [-.object]objcode.c
+$ CC [-.object]objfeat.c
+$ CC [-.object]objgen.c
+$ CC [-.object]objloc.c
+$ CC [-.object]objmedli.c
+$ CC [-.object]objpub.c
+$ CC [-.object]objres.c
+$ CC [-.object]objseq.c
+$ CC [-.object]objsset.c
+$ CC [-.object]objsub.c
+$ CC [-.object]objprt.c
+$ CC [-.object]objfdef.c
+$ CC [-.object]objmime.c
+$ CC [-.object]objmdrs.c
+$ CC [-.object]objpubme.c
+$ CC [-.object]objproj.c
+
+$!
+$ CC [-.api]seqport.c
+$ CC [-.api]sequtil.c
+$ CC [-.api]prtutil.c
+$ CC [-.api]simple.c
+$ CC [-.api]tofasta.c
+$ CC [-.api]tofile.c
+$ CC [-.api]tomedlin.c
+$ CC [-.api]valid.c
+$ CC [-.api]sqnutils.c
+$ CC [-.api]subutil.c
+$ CC [-.api]edutil.c
+$ CC [-.api]asn2ff1.c
+$ CC [-.api]asn2ff2.c
+$ CC [-.api]asn2ff3.c
+$ CC [-.api]asn2ff4.c
+$ CC [-.api]asn2ff5.c
+$ CC [-.api]asn2ff6.c
+$ CC [-.api]ffprint.c
+$ CC [-.api]ftusrstr.c
+$ CC [-.api]gbfeat.c
+$ CC [-.api]gbftglob.c
+$ CC [-.api]gbparint.c
+$ CC [-.api]utilpars.c
+$ CC [-.api]utilpub.c
+$ CC [-.api]wprint.c
+$ CC [-.api]satutil.c
+$ CC [-.api]seqmgr.c
+$ CC [-.api]objmgr.c
+$ CC [-.api]gather.c
+$ CC [-.api]lsqfetch.c
+$ CC [-.api]findrepl.c
+$ CC [-.api]maputil
+$ CC [-.api]mconsist
+$ CC [-.api]codon
+$ CC [-.api]txalign
+$ CC [-.api]jzcoll
+$ CC [-.api]jzmisc
+$ CC [-.cdromlib]accmmdbs.c
+$ CC [-.cdromlib]acccn3ds.c
+$ librarian/object/create [-.lib]libncbiobj.olb *.obj
+$!----------------------------------------------------------------------
+$!
+$! Make the Entrez CD Access library, libncbicdr.olb
+$!
+if f$search("*.obj") .nes. "" then $ delete *.obj;*
+$!
+$ CC [-.cdromlib]cdentrez.c
+$ CC [-.cdromlib]cdromlib.c
+$ CC [-.cdromlib]cdnewlib.c
+$ CC [-.cdromlib]cdconfig.c
+$ CC [-.cdromlib]casn.c
+$ CC [-.cdromlib]objentr.c
+$!
+$ librarian/object/create [-.lib]libncbicdr.olb *.obj
+$!------------------------------------------------------------------------
+$!
+$! Make the default (non-network) high level Entrez access modules
+$!
+$ CC [-.cdromlib]accentr.c
+$ CC [-.cdromlib]accutils.c
+$!
+$ librarian/object/create [-.lib]libncbiacc.olb *.obj
+$!----------------------------------------------------------------------
+$!
+$! Make MMDB library, libncbimmdb.olb
+$!
+if f$search("*.obj") .nes. "" then $ delete *.obj;*
+$!
+$ CC [-.biostruc]corematx.c
+$ CC [-.biostruc]dvncode.c
+$ CC [-.biostruc]objmmdb1.c
+$ CC [-.biostruc]objmmdb2.c
+$ CC [-.biostruc]objmmdb3.c
+$ CC [-.biostruc]mmdbapi.c
+$ CC [-.biostruc]mmdbapi1.c
+$ CC [-.biostruc]mmdbapi2.c
+$ CC [-.biostruc]mmdbapi3.c
+$ CC [-.biostruc]mmdbapi4.c
+$ CC [-.biostruc]mmdbentr.c
+$!
+$ librarian/object/create [-.lib]libncbimmdb.olb *.obj
+$!------------------------------------------------------------------------
+$!
+$! Make Tools library, libncbitool.olb
+$!
+if f$search("*.obj") .nes. "" then $ delete *.obj;*
+$!
+$ CC [-.tools]csim.c
+$ CC [-.tools]db_slist.c
+$ CC [-.tools]dust.c
+$ CC [-.tools]falign.c
+$ CC [-.tools]g_any.c
+$ CC [-.tools]sim2.c
+$ CC [-.tools]sim3.c
+$ CC [-.tools]sim4.c
+$ CC [-.tools]simutil.c
+$ CC [-.tools]slist.c
+$ CC [-.tools]sec.c
+$ CC [-.tools]tfuns.c
+$ CC [-.tools]toasn3.c
+$ CC [-.tools]toporg.c
+$ CC [-.tools]pobutil.c
+$ CC [-.tools]stsutil.c
+$ CC [-.tools]blast.c
+$ CC [-.tools]blastutl.c
+$ CC [-.tools]blastool.c
+$ CC [-.tools]gapxdrop.c
+$ CC [-.tools]bandalg0.c
+$ CC [-.tools]bandalg1.c
+$ CC [-.tools]bandalg2.c
+$ CC [-.tools]bandalg3.c
+$ CC [-.tools]bandalg4.c
+$ CC [-.tools]bandalg5.c
+$ CC [-.tools]bandalgn.c
+$ CC [-.tools]blastkar.c
+$ CC [-.tools]posit.c
+$ CC [-.tools]lookup.c
+$ CC [-.tools]readdb.c
+$ CC [-.tools]suggadj.c
+$ CC [-.tools]suggest.c
+$ CC [-.tools]suggslp.c
+$ CC [-.tools]ncbisam.c
+$ CC [-.tools]ncbisort.c
+$ CC [-.tools]salsap.c
+$ CC [-.tools]salstruc.c
+$ CC [-.tools]salutil.c
+$ CC [-.tools]urkutil.c
+$ CC [-.tools]urkpcc.c
+$ CC [-.tools]urkptpf.c
+$ CC [-.tools]urkepi.c
+$ CC [-.tools]urkfltr.c
+$ CC [-.tools]urkdust.c
+$ CC [-.tools]urksigu.c
+$ CC [-.tools]urkbias.c
+$ CC [-.tools]urkcnsrt.c
+$ CC [-.tools]urktree.c
+$!
+$ librarian/object/create [-.lib]libncbitool.olb *.obj
+$!------------------------------------------------------------------------
+$! If this OpenVMS system does not have Motif Development include files
+$! skip building the VIBRANT interface library.
+$!
+$  if f$search("decw$include:Xm.h") .eqs. "" then Goto BuildASNTool
+$!------------------------------------------------------------------------
+$!
+$! Make the portable GUI library,  libvibrant.olb
+$!
+$ define/nolog sys DECC$LIBRARY_INCLUDE      ! <sys/*.h>
+$ define/nolog X11 DECW$INCLUDE              ! <x11/xLIB.H>
+$ define/nolog Xm  DECW$INCLUDE              ! <Xm/*.h>
+$!
+$ if f$search("*.obj") .nes. "" then $ delete *.obj;*
+$!
+$ CC/DEFINE=WIN_MOTIF [-.vibrant]vibbutns.c
+$ CC/DEFINE=WIN_MOTIF [-.vibrant]vibextra.c
+$ CC/DEFINE=WIN_MOTIF [-.vibrant]vibfiles.c
+$ CC/DEFINE=WIN_MOTIF [-.vibrant]vibforms.c
+$ CC/DEFINE=WIN_MOTIF [-.vibrant]vibgroup.c
+$ CC/DEFINE=WIN_MOTIF [-.vibrant]viblists.c
+$ CC/DEFINE=WIN_MOTIF [-.vibrant]vibmenus.c
+$ CC/DEFINE=WIN_MOTIF [-.vibrant]vibprmpt.c
+$ CC/DEFINE=WIN_MOTIF [-.vibrant]vibsbars.c
+$ CC/DEFINE=WIN_MOTIF [-.vibrant]vibslate.c
+$ CC/DEFINE=WIN_MOTIF [-.vibrant]vibtexts.c
+$ CC/DEFINE=WIN_MOTIF [-.vibrant]vibutils.c
+$ CC/DEFINE=WIN_MOTIF [-.vibrant]vibwndws.c
+$ CC/DEFINE=WIN_MOTIF [-.vibrant]ncbidraw.c
+$ CC/DEFINE=WIN_MOTIF [-.vibrant]drawing.c
+$ CC/DEFINE=WIN_MOTIF [-.vibrant]mapping.c
+$ CC/DEFINE=WIN_MOTIF [-.vibrant]picture.c
+$ CC/DEFINE=WIN_MOTIF [-.vibrant]viewer.c
+$ CC/DEFINE=WIN_MOTIF [-.vibrant]document.c
+$ CC/DEFINE=WIN_MOTIF [-.vibrant]palette.c
+$ CC/DEFINE=WIN_MOTIF [-.vibrant]table.c
+$ CC/DEFINE=WIN_MOTIF [-.vibrant]diagnost.c
+$ CC/DEFINE=WIN_MOTIF [-.vibrant]image.c
+$ CC/DEFINE=WIN_MOTIF [-.vibrant]pictur3d.c
+$ CC/DEFINE=WIN_MOTIF [-.vibrant]prim3d1.c
+$ CC/DEFINE=WIN_MOTIF [-.vibrant]prim3d2.c
+$ CC/DEFINE=WIN_MOTIF [-.vibrant]prim3d3.c
+$ CC/DEFINE=WIN_MOTIF [-.vibrant]prim3d4.c
+$ CC/DEFINE=WIN_MOTIF [-.vibrant]prim3d5.c
+$ CC/DEFINE=WIN_MOTIF [-.vibrant]viewer3d.c
+$ CC/DEFINE=WIN_MOTIF [-.vibrant]vibmouse.c
+$ CC/DEFINE=WIN_MOTIF [-.vibrant]matrix.c
+$!
+$ librarian/object/create [-.lib]libvibrant.olb *.obj
+$ delete *.obj;*
+$!
+$!------ NCBI desktop library ----------------------------
+$!
+$ CC/DEFINE=WIN_MOTIF [-.desktop]apparam
+$ CC/DEFINE=WIN_MOTIF [-.desktop]dlgutil1
+$ CC/DEFINE=WIN_MOTIF [-.desktop]dlgutil2
+$ CC/DEFINE=WIN_MOTIF [-.desktop]drawseq
+$ CC/DEFINE=WIN_MOTIF [-.desktop]fstyle
+$ CC/DEFINE=WIN_MOTIF [-.desktop]smdlg1
+$ CC/DEFINE=WIN_MOTIF [-.desktop]smdlg2
+$ CC/DEFINE=WIN_MOTIF [-.desktop]smdlg3
+$ CC/DEFINE=WIN_MOTIF [-.desktop]smtools
+$ CC/DEFINE=WIN_MOTIF [-.desktop]styleman
+$ CC/DEFINE=WIN_MOTIF [-.desktop]stylemui
+$ CC/DEFINE=WIN_MOTIF [-.desktop]glbpic
+$ CC/DEFINE=WIN_MOTIF [-.desktop]layout
+$ CC/DEFINE=WIN_MOTIF [-.desktop]mapgene
+$ CC/DEFINE=WIN_MOTIF [-.desktop]prtgene
+$ CC/DEFINE=WIN_MOTIF [-.desktop]saldist
+$ CC/DEFINE=WIN_MOTIF [-.desktop]saled
+$ CC/DEFINE=WIN_MOTIF [-.desktop]salfiles
+$ CC/DEFINE=WIN_MOTIF [-.desktop]salpanel
+$ CC/DEFINE=WIN_MOTIF [-.desktop]salparam
+$ CC/DEFINE=WIN_MOTIF [-.desktop]salsa
+$ CC/DEFINE=WIN_MOTIF [-.desktop]dotmatrx
+$ CC/DEFINE=WIN_MOTIF [-.desktop]seqfltr
+$ CC/DEFINE=WIN_MOTIF [-.desktop]seqgraph
+$ CC/DEFINE=WIN_MOTIF [-.desktop]seqgrphx
+$ CC/DEFINE=WIN_MOTIF [-.desktop]seqmtrx
+$ CC/DEFINE=WIN_MOTIF [-.desktop]seqpcc
+$ CC/DEFINE=WIN_MOTIF [-.desktop]seqanal
+$ CC/DEFINE=WIN_MOTIF [-.desktop]aacomp
+$ CC/DEFINE=WIN_MOTIF [-.desktop]seqscrl
+$ CC/DEFINE=WIN_MOTIF [-.desktop]vsm
+$ CC/DEFINE=WIN_MOTIF [-.desktop]vsmfile
+$ CC/DEFINE=WIN_MOTIF [-.desktop]vsmutil
+$ CC/DEFINE=WIN_MOTIF [-.desktop]medview
+$ CC/DEFINE=WIN_MOTIF [-.desktop]bspview
+$ CC/DEFINE=WIN_MOTIF [-.desktop]gbfview
+$ CC/DEFINE=WIN_MOTIF [-.desktop]gphview
+$ CC/DEFINE=WIN_MOTIF [-.desktop]gphdraw
+$ CC/DEFINE=WIN_MOTIF [-.desktop]gxydraw
+$ CC/DEFINE=WIN_MOTIF [-.desktop]gtrdraw
+$ CC/DEFINE=WIN_MOTIF [-.desktop]biosrc
+$ CC/DEFINE=WIN_MOTIF [-.desktop]cdrgn
+$ CC/DEFINE=WIN_MOTIF [-.desktop]import
+$ CC/DEFINE=WIN_MOTIF [-.desktop]pubdesc
+$ CC/DEFINE=WIN_MOTIF [-.desktop]seqsub
+$!
+$ librarian/object/create [-.lib]libdesktop.olb *.obj
+$ delete *.obj;*
+$!
+$ deassign sys
+$ deassign X11
+$ deassign Xm
+$!-------------------------------------------------------------------------
+$!
+$! Make asntool
+$!
+$ BuildASNTool:
+$!
+$ CC [-.asnlib]asntool.c
+$ CC [-.asnlib]asncode.c
+$!
+$! Do we have the Vibrant library?
+$!
+$ if f$search("[-.lib]libvibrant.olb") .nes. ""
+$ then
+$ link asntool.obj,asncode.obj,sys$input/option
+[-.lib]libvibrant.olb/library
+[-.lib]libncbi.olb/library
+sys$library:vaxcrtl.olb/library
+sys$share:decw$mrmlibshr12.exe/share
+sys$share:decw$dxmlibshr12.exe/share
+sys$share:decw$xmlibshr12.exe/share
+sys$share:decw$xtlibshrr5.exe/share
+sys$share:decw$xlibshr.exe/share
+sys$share:decc$shr.exe/shareable
+$ else
+$!
+$! Doesn't have Vibrant library
+$!
+$ link asntool,obj,asncode,obj,sys$input/option
+[-.lib]libncbi.olb/library
+sys$library:vaxcrtl.olb/library
+sys$share:decc$shr.exe/shareable 
+$ endif
+$!
+$ deassign DECC$SYSTEM_INCLUDE
+$ exit
+

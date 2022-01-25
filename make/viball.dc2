@@ -1,0 +1,371 @@
+$!  this one is derived from makeall.unx
+$!  merged into viball.com
+$!  for DEC C 4.0, DECwindows/Motif 1.2
+$!  
+$!
+$ if("''P1'" .nes. "")then set def 'P1'
+$mycc := cc
+$!myargs = "/standard=vaxc/nolist/include=([],[-.INCLUDE])/define=DECC"
+$!mywinargs = myargs - "DECC" + "(DECC,WIN_MOTIF)"
+$myargs = "/standard=ANSI89/nolist/noop/prefix=all"
+$myargs = myargs + "/include=([],[-.INCLUDE])"
+$mywinargs = myargs + "/define=(DCC4DW12,MULTINET,WIN_MOTIF,SYSV_STRINGS)"
+$myargs = myargs + "/define=(DCC4DW12,MULTINET)"
+$set ver
+$!   Bugs:
+$!
+$!   ncbienv.c included <unixlib.h> explicitly after including ncbi.h
+$!     which also included it.  ifdef'd out the second include
+$!
+$!   objfdef.c was not compiled before being included in libncbiobj.olb
+$!
+$!   files cdml,cdseq,objasn are supposed to be compiled and put into the
+$!   CDROM stuff,  but it doesn't exist.  Comment it out
+$!
+$!   accml,accseq called for, but don't exist, comment them out
+$!
+$!
+$ !
+$ ! Simple makefile for NCBI tool libraries with Vibrant
+$ ! Also makes AsnTool
+$ !
+$ copy [-.corelib]*.h [-.include]
+$ copy [-.corelib]ncbilcl.vms [-.include]ncbilcl.h
+$ copy [-.corelib]*.c []
+$ copy [-.corelib]ncbimain.vms ncbimain.c
+$ copy [-.asnlib]*.h [-.include]
+$ copy [-.asnlib]*.c []
+$ copy [-.object]*.h [-.include]
+$ copy [-.object]*.c []
+$ copy [-.asnstat]*.h [-.include]
+$ copy [-.api]*.h [-.include]
+$ copy [-.api]*.c []
+$ copy [-.cdromlib]*.h [-.include]
+$ copy [-.cdromlib]*.c []
+$ copy [-.vibrant]*.h [-.include]
+$ copy [-.vibrant]*.c []
+$ copy [-.desktop]*.h [-.include]
+$ copy [-.desktop]*.c []
+$ copy [-.biostruc]*.h [-.include]
+$ copy [-.biostruc]*.c []
+$ copy [-.tools]*.h [-.include]
+$ copy [-.tools]*.c []
+$ !
+$ ! Make libncbi.olb
+$ !
+$ mycc 'myargs' ncbibs
+$ mycc 'myargs' ncbicoll
+$ mycc 'myargs' ncbierr
+$ mycc 'myargs' ncbienv
+$ mycc 'myargs' ncbifile
+$ mycc 'myargs' ncbiprop
+$ mycc 'myargs' ncbimain
+$ mycc 'myargs' ncbimath
+$ mycc 'myargs' ncbimem
+$ mycc 'myargs' ncbimisc
+$ mycc 'myargs' ncbimsg
+$ mycc 'myargs' ncbistr
+$ mycc 'myargs' ncbitime
+$ mycc 'myargs' ncbilang
+$ mycc 'myargs' ncbisgml
+$ mycc 'myargs' gifgen
+$ mycc 'myargs' togif
+$ mycc 'myargs' ncbithr
+$ mycc 'myargs' asnbufo
+$ mycc 'myargs' asndebin
+$ mycc 'myargs' asnenbin
+$ mycc 'myargs' asngen
+$ mycc 'myargs' asnio
+$ mycc 'myargs' asnlex
+$ mycc 'myargs' asnlext
+$ mycc 'myargs' asnout
+$ mycc 'myargs' asnprint
+$ mycc 'myargs' asntypes
+$ mycc 'myargs' asngenob
+$!
+$! need to keep ncbimain handy because it must be the first file
+$! linked in for all applications.  Doesn't hurt to put it in the library too
+$!
+$ copy ncbimain.obj [-.lib]
+$ libr/obj/create libncbi.olb -
+   ncbibs, ncbicoll, ncbierr, ncbienv, ncbifile, ncbiprop, ncbimain, -
+   ncbimath, ncbimem, ncbimisc, ncbimsg, ncbistr, ncbitime, ncbisgml, -
+   ncbilang, asnbufo, asndebin, asnenbin, asngen, asnio, asnlex, asnlext, -
+   asnout, asnprint, asntypes, asngenob, gifgen, togif, ncbithr
+$ delete *.obj.*
+$ rename libncbi.olb [-.lib]
+$ !
+$ ! Make libncbiobj.olb
+$ !
+$ mycc 'myargs' objacces
+$ mycc 'myargs' objalign
+$ mycc 'myargs' objall
+$ mycc 'myargs' objbibli
+$ mycc 'myargs' objfeat
+$ mycc 'myargs' objgen
+$ mycc 'myargs' objloc
+$ mycc 'myargs' objmedli
+$ mycc 'myargs' objpub
+$ mycc 'myargs' objres
+$ mycc 'myargs' objseq
+$ mycc 'myargs' objblock
+$ mycc 'myargs' objcode
+$ mycc 'myargs' objsset
+$ mycc 'myargs' objsub
+$ mycc 'myargs' objprt
+$ mycc 'myargs' objfdef
+$ mycc 'myargs' objmime
+$ mycc 'myargs' objmdrs
+$ mycc 'myargs' objpubme
+$ mycc 'myargs' objproj
+$ mycc 'myargs' seqport
+$ mycc 'myargs' sequtil
+$ mycc 'myargs' prtutil
+$ mycc 'myargs' simple
+$ mycc 'myargs' tofasta
+$ mycc 'myargs' tofile
+$ mycc 'myargs' tomedlin
+$ mycc 'myargs' valid
+$ mycc 'myargs' sqnutils
+$ mycc 'myargs' subutil
+$ mycc 'myargs' edutil
+$ mycc 'myargs' asn2ff1
+$ mycc 'myargs' asn2ff2
+$ mycc 'myargs' asn2ff3
+$ mycc 'myargs' asn2ff4
+$ mycc 'myargs' asn2ff5
+$ mycc 'myargs' asn2ff6
+$ mycc 'myargs' ffprint
+$ mycc 'myargs' ftusrstr
+$ mycc 'myargs' gbfeat
+$ mycc 'myargs' gbftglob
+$ mycc 'myargs' gbparint
+$ mycc 'myargs' utilpars
+$ mycc 'myargs' wprint
+$ mycc 'myargs' satutil
+$ mycc 'myargs' seqmgr
+$ mycc 'myargs' objmgr
+$ mycc 'myargs' gather
+$ mycc 'myargs' accmmdbs
+$ mycc 'myargs' acccn3ds
+$ mycc 'myargs' codon
+$ mycc 'myargs' txalign
+$ mycc 'myargs' jzcoll
+$ mycc 'myargs' jzmisc
+$ mycc 'myargs' maputil
+$ mycc 'myargs' mconsist
+$ libr/obj/create libncbiobj.olb -
+   objacces, objalign, objall, objbibli, objfeat, objgen, objloc, -
+   objmedli, objpub, objres, objseq, objblock, objcode, objsset, -
+   objsub, objprt, objfdef, objmime, objmdrs, objpubme, objproj, seqport, sequtil, -
+   prtutil, simple, tofasta, tofile, tomedlin, valid, squntils, subutil, -
+   edutil, asn2ff1, asn2ff2, asn2ff3, asn2ff4, asn2ff5, asn2ff6, ftusrstr, -
+   gbfeat, gbftglob, gbparint, utilpars, ffprint, wprint, -
+   satutil, seqmgr, objmgr, gather, accmmdbs, acccn3ds, -
+   codon, txalign, jzcoll, jzmisc, maputil, mconsist
+$ delete *.obj.*
+$ rename libncbiobj.olb [-.lib]
+$ !
+$ ! Make libncbicdr.olb
+$ !
+$ mycc 'myargs' cdentrez
+$ mycc 'myargs' cdromlib
+$ mycc 'myargs' cdnewlib
+$ mycc 'myargs' casn
+$ mycc 'myargs' cdconfig
+$ mycc 'myargs' objentr
+$ libr/obj/create libncbicdr.olb -
+   cdentrez, cdromlib, cdnewlib, casn, cdconfig, objentr
+$ delete *.obj.*
+$ rename libncbicdr.olb [-.lib]
+$ !
+$ ! Make libncbimmdb.olb
+$ !
+$ mycc 'myargs' corematx
+$ mycc 'myargs' dvncode
+$ mycc 'myargs' objmmdb1
+$ mycc 'myargs' objmmdb2
+$ mycc 'myargs' objmmdb3
+$ mycc 'myargs' mmdbapi
+$ mycc 'myargs' mmdbapi1
+$ mycc 'myargs' mmdbapi2
+$ mycc 'myargs' mmdbapi3
+$ mycc 'myargs' mmdbapi4
+$ mycc 'myargs' mmdbentr
+$ libr/obj/create libncbimmdb.olb -
+   corematx, dvncode, objmmdb1, objmmdb2, objmmdb3, -
+   mmdbapi, mmdbapi1, mmdbapi2, mmdbapi3, mmdbapi4, mmdbentr
+$ delete *.obj.*
+$ rename libncbimmdb.olb [-.lib]
+$ !
+$ ! Make libncbitool.olb
+$ !
+$ mycc 'myargs' csim
+$ mycc 'myargs' db_slist
+$ mycc 'myargs' dust
+$ mycc 'myargs' falign
+$ mycc 'myargs' g_any
+$ mycc 'myargs' sim2
+$ mycc 'myargs' sim3
+$ mycc 'myargs' sim4
+$ mycc 'myargs' simutil
+$ mycc 'myargs' slist
+$ mycc 'myargs' sec
+$ mycc 'myargs' tfuns
+$ mycc 'myargs' toasn3
+$ mycc 'myargs' toporg
+$ mycc 'myargs' salsap
+$ mycc 'myargs' salstruc
+$ mycc 'myargs' salutil
+$ mycc 'myargs' urkutil
+$ mycc 'myargs' urkpcc
+$ mycc 'myargs' urkptpf
+$ mycc 'myargs' urkepi
+$ mycc 'myargs' urkfltr
+$ mycc 'myargs' urkdust
+$ mycc 'myargs' urksigu
+$ mycc 'myargs' urkbias
+$ mycc 'myargs' urkcnsrt
+$ mycc 'myargs' urktree
+$ libr/obj/create libncbitool.olb -
+   csim, db_slist, dust, falign, g_any, sim2, sim3, sim4, simutil, -
+   slist, sec, tfuns, toasn3, toporg, salsap, salstruc, salutil, -
+   urkutil, urkpcc, urkptpf, urkepi, urkfltr, urkdust, urksigu, -
+   urkbias, urkcnsrt, urktree
+$ delete *.obj.*
+$ rename libncbitool.olb [-.lib]
+$ !
+$ ! Make libncbiacc.olb
+$ !
+$ mycc 'myargs' accentr
+$ mycc 'myargs' accutils
+$ libr/obj/create libncbiacc.olb accentr, accutils
+$ delete *.obj.*
+$ rename libncbiacc.olb [-.lib]
+$ !
+$ ! Make libvibrant.olb
+$ !
+$ define/nolog X11 decw$include     ! WAG   <X11/Xlib.h>
+$ define/nolog Xm  decw$include     ! WAG   <Xm/*.h>
+$ define/nolog sys sys$library      ! WAG   <sys/*.h>
+$ !
+$ mycc 'mywinargs' vibbutns
+$ mycc 'mywinargs' vibextra
+$ mycc 'mywinargs' vibfiles
+$ mycc 'mywinargs' vibforms
+$ mycc 'mywinargs' vibgroup
+$ mycc 'mywinargs' viblists
+$ mycc 'mywinargs' vibmenus
+$ mycc 'mywinargs' vibprmpt
+$ mycc 'mywinargs' vibsbars
+$ mycc 'mywinargs' vibslate
+$ mycc 'mywinargs' vibtexts
+$ mycc 'mywinargs' vibutils
+$ mycc 'mywinargs' vibwndws
+$ mycc 'mywinargs' ncbidraw
+$ mycc 'mywinargs' drawing
+$ mycc 'mywinargs' mapping
+$ mycc 'mywinargs' picture
+$ mycc 'mywinargs' viewer
+$ mycc 'mywinargs' document
+$ mycc 'mywinargs' palette
+$ mycc 'mywinargs' table
+$ mycc 'mywinargs' diagnost
+$ mycc 'mywinargs' image
+$ mycc 'mywinargs' pictur3d
+$ mycc 'mywinargs' prim3d1
+$ mycc 'mywinargs' prim3d2
+$ mycc 'mywinargs' prim3d3
+$ mycc 'mywinargs' prim3d4
+$ mycc 'mywinargs' prim3d5
+$ mycc 'mywinargs' viewer3d
+$ libr/obj/create libvibrant.olb -
+    vibbutns, vibextra, vibfiles, vibforms, vibgroup, viblists, -
+    vibmenus, vibprmpt, vibsbars, vibslate, vibtexts, vibutils, -
+    vibwndws, ncbidraw, drawing, mapping, picture, viewer, -
+    document, palette, table, diagnost, image, pictur3d, prim3d1, -
+    prim3d2, prim3d3, prim3d4, prim3d5, viewer3d
+$ delete *.obj.*
+$ rename libvibrant.olb [-.lib]
+$!
+$ ! Make libncbidesk.olb
+$ !
+$ define/nolog X11 decw$include     ! WAG   <X11/Xlib.h>
+$ define/nolog Xm  decw$include     ! WAG   <Xm/*.h>
+$ define/nolog sys sys$library      ! WAG   <sys/*.h>
+$ !
+$ mycc 'mywinargs' vsm
+$ mycc 'mywinargs' vsmfile
+$ mycc 'mywinargs' vsmutil
+$ mycc 'mywinargs' apparam
+$ mycc 'mywinargs' dlgutil1
+$ mycc 'mywinargs' dlgutil2
+$ mycc 'mywinargs' fstyle
+$ mycc 'mywinargs' smdlg1
+$ mycc 'mywinargs' smdlg2
+$ mycc 'mywinargs' smdlg3
+$ mycc 'mywinargs' smtools
+$ mycc 'mywinargs' styleman
+$ mycc 'mywinargs' stylemui
+$ mycc 'mywinargs' drawseq
+$ mycc 'mywinargs' glbpic
+$ mycc 'mywinargs' layout
+$ mycc 'mywinargs' mapgene
+$ mycc 'mywinargs' prtgene
+$ mycc 'mywinargs' sdisplay
+$ mycc 'mywinargs' saldist
+$ mycc 'mywinargs' saled
+$ mycc 'mywinargs' salfiles
+$ mycc 'mywinargs' salpanel
+$ mycc 'mywinargs' salparam
+$ mycc 'mywinargs' salsa
+$ mycc 'mywinargs' dotmatrx
+$ mycc 'mywinargs' seqfltr
+$ mycc 'mywinargs' seqgraph
+$ mycc 'mywinargs' seqgrphx
+$ mycc 'mywinargs' seqmtrx
+$ mycc 'mywinargs' seqpcc
+$ mycc 'mywinargs' seqptrn
+$ mycc 'mywinargs' seqptrnx
+$ mycc 'mywinargs' seqanal
+$ mycc 'mywinargs' aacomp
+$ mycc 'mywinargs' seqscrl
+$ mycc 'mywinargs' medview
+$ libr/obj/create libncbidesk.olb -
+    vsm, vsmfile, vsmutil, apparam, fstyle, smdlg1, smdlg2, -
+    smdlg3, smtools, styleman, stylemui, drawseq, dotmatrx, glbpic, -
+    layout, mapgene, prtgene, sdisplay, saldist, saled, -
+    salfiles, salpanel, salparam, salsa, -
+    seqfltr, seqgraph, seqgrphx, seqmtrx, -
+    seqpcc, seqptrn, seqptrnx, seqanal, aacomp, seqscrl, -
+    dlgutil1, dlgutil2, -
+    medview
+$ delete *.obj.*
+$ rename libncbidesk.olb [-.lib]
+$ !
+$ ! compile asntool
+$ !
+$ mycc 'myargs'  asntool
+$ !
+$ !
+$ ! link asntool
+$ !
+$ link/nomap/exe=[-.bin]asntool sys$input/option
+[-.lib]vibwndws
+[]asntool
+[-.lib]libvibrant/lib
+[-.lib]libncbi/lib
+sys$share:DECC$SHR.EXE/share
+sys$share:decw$xlibshr/share
+sys$share:decw$dxmlibshr12/shareable
+sys$share:decw$xmlibshr12/shareable
+sys$share:decw$xtlibshrr5/shareable
+$! the preceding are for DECwindows/Motif 1.2
+$! the following are for DECwindows/Motif 1.1
+$!sys$share:decw$xlibshr/share
+$!sys$share:decw$dxmlibshr/shareable
+$!sys$share:decw$xmlibshr/shareable
+$!sys$share:decw$xtshr/shareable
+$ delete asntool.obj.
+$ exit
+

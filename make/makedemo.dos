@@ -1,0 +1,304 @@
+#####
+###  Makefile for non-network-based applications
+#####
+
+
+##################################################
+# Include common flags and definitions;
+# look there for the make HELP as well:
+
+!include "make_gen.dos"
+
+
+##################################################
+# The things to make
+
+TESTCORE_EXE = testcore.___
+GETMESH_EXE  = getmesh.___
+INDEXPUB_EXE = indexpub.___
+GETPUB_EXE   = getpub.___
+TESTOBJ_EXE  = testobj.___
+SEQTEST_EXE  = seqtest.___
+DOSIMPLE_EXE = dosimple.___
+GETSEQ_EXE   = getseq.___
+CDSCAN_EXE   = cdscan.___
+GETFEAT_EXE  = getfeat.___
+CHECKSUB_EXE = checksub.___
+ASN2FF_EXE   = asn2ff.___
+ASNDHUFF_EXE = asndhuff.___
+FA2HTGS_EXE  = fa2htgs.___
+FORMATDB_EXE  = formatdb.___
+BLASTALL_EXE  = blastall.___
+BLASTPGP_EXE  = blastpgp.___
+SEEDTOP_EXE  = seedtop.___
+
+# exclusions
+!ifndef WIN32
+!undef BLASTALL_EXE
+!undef BLASTPGP_EXE
+!undef SEEDTOP_EXE
+!undef FORMATDB_EXE
+!endif
+
+!ifdef B16
+!ifdef DBUG
+!undef CDSCAN_EXE
+!undef ASN2FF_EXE
+!undef SEQTEST_EXE
+!undef FA2HTGS_EXE
+!endif
+!endif
+
+nocopy: \
+$(TESTCORE_EXE) \
+$(ENTREZ_EXE)   \
+$(ENTREZCF_EXE) \
+$(GETMESH_EXE)  \
+$(INDEXPUB_EXE) \
+$(GETPUB_EXE)   \
+$(TESTOBJ_EXE)  \
+$(SEQTEST_EXE)  \
+$(DOSIMPLE_EXE) \
+$(GETSEQ_EXE)   \
+$(CDSCAN_EXE)   \
+$(GETFEAT_EXE)  \
+$(CHECKSUB_EXE) \
+$(ASN2FF_EXE)   \
+$(ASNDHUFF_EXE) \
+$(FA2HTGS_EXE)	\
+$(FORMATDB_EXE)	\
+$(BLASTALL_EXE)	\
+$(BLASTPGP_EXE) \
+$(SEEDTOP_EXE)
+
+
+##################################################
+# Deploy source files
+copy :
+!ifdef NC
+	echo "NO COPY"
+!else
+	copy ..\demo\*.* .
+!endif
+
+
+
+##################################################
+# Make demo applications
+##################################################
+!ifdef TESTCORE_EXE
+$(TESTCORE_EXE):
+	$(MAKE) -f <<
+$(INCLUDE_GEN)
+TEST_NAME = testcore
+TEST_OBJ = testcore.obj
+TEST_LIB = $(LIB4) $(LIB1)
+RES = 1
+$(INCLUDE_EXE)
+<<
+!endif
+##################################################
+!ifdef GETMESH_EXE
+$(GETMESH_EXE):
+	$(MAKE) -f <<
+$(INCLUDE_GEN)
+TEST_NAME = getmesh
+TEST_OBJ = getmesh.obj
+TEST_LIB = $(LIB4) $(LIB1)
+RES = 1
+$(INCLUDE_EXE)
+<<
+!endif
+##################################################
+!ifdef INDEXPUB_EXE
+$(INDEXPUB_EXE):
+	$(MAKE) -f <<
+$(INCLUDE_GEN)
+TEST_NAME = indexpub
+TEST_OBJ = indexpub.obj
+TEST_LIB = $(LIB4) $(LIB1)
+RES = 1
+$(INCLUDE_EXE)
+<<
+!endif
+##################################################
+!ifdef GETPUB_EXE
+$(GETPUB_EXE):
+	$(MAKE) -f <<
+$(INCLUDE_GEN)
+TEST_NAME = getpub
+TEST_OBJ = getpub.obj
+TEST_LIB = $(LIB4) $(LIB1)
+RES = 1
+$(INCLUDE_EXE)
+<<
+!endif
+##################################################
+!ifdef DOSIMPLE_EXE
+$(DOSIMPLE_EXE):
+	$(MAKE) -f <<
+$(INCLUDE_GEN)
+TEST_NAME = dosimple 
+TEST_OBJ = dosimple.obj
+TEST_LIB = $(LIB4) $(LIB2) $(LIB1)
+RES = 1
+$(INCLUDE_EXE)
+<<
+!endif
+##################################################
+!ifdef TESTOBJ_EXE
+$(TESTOBJ_EXE):
+	$(MAKE) -f <<
+$(INCLUDE_GEN)
+TEST_NAME = testobj 
+TEST_OBJ = testobj.obj
+TEST_LIB = $(LIB4) $(LIB2) $(LIB1)
+RES = 1
+$(INCLUDE_EXE)
+<<
+!endif
+##################################################
+!ifdef SEQTEST_EXE
+$(SEQTEST_EXE):
+	$(MAKE) -f <<
+$(INCLUDE_GEN)
+TEST_NAME = seqtest 
+TEST_OBJ = seqtest.obj
+TEST_LIB = $(LIB4) $(LIB2) $(LIB1)
+RES = 1
+$(INCLUDE_EXE)
+<<
+!endif
+##################################################
+!ifdef ASN2FF_EXE
+$(ASN2FF_EXE):
+	$(MAKE) -f <<
+$(INCLUDE_GEN)
+TEST_NAME = asn2ff 
+TEST_OBJ = asn2ff.obj
+TEST_LIB = $(LIB4) $(LIB2) $(LIB1)
+RES = 1
+$(INCLUDE_EXE)
+<<
+!endif
+##################################################
+!ifdef GETSEQ_EXE
+$(GETSEQ_EXE):
+	$(MAKE) -f <<
+$(INCLUDE_GEN)
+TEST_NAME = getseq
+TEST_OBJ = getseq.obj
+TEST_LIB = $(LIB5) $(LIB4) $(LIB3) $(LIB2) $(LIB1)
+RES = 1
+$(INCLUDE_EXE)
+<<
+!endif
+##################################################
+!ifdef CDSCAN_EXE
+$(CDSCAN_EXE):
+	$(MAKE) -f <<
+$(INCLUDE_GEN)
+TEST_NAME = cdscan
+TEST_OBJ = cdscan.obj
+TEST_LIB = $(LIB5) $(LIB4) $(LIB3) $(LIB2) $(LIB1)
+RES = 1
+$(INCLUDE_EXE)
+<<
+!endif
+##################################################
+!ifdef GETFEAT_EXE
+$(GETFEAT_EXE):
+	$(MAKE) -f <<
+$(INCLUDE_GEN)
+TEST_NAME = getfeat
+TEST_OBJ = getfeat.obj
+TEST_LIB = $(LIB5) $(LIB4) $(LIB3) $(LIB2) $(LIB1)
+RES = 1
+$(INCLUDE_EXE)
+<<
+!endif
+##################################################
+!ifdef CHECKSUB_EXE
+$(CHECKSUB_EXE):
+	$(MAKE) -f <<
+$(INCLUDE_GEN)
+TEST_NAME = checksub
+TEST_OBJ = checksub.obj
+TEST_LIB = $(LIB4) $(LIB2) $(LIB1)
+RES = 1
+$(INCLUDE_EXE)
+<<
+!endif
+##########################################################
+!ifdef ASNDHUFF_EXE
+$(ASNDHUFF_EXE):
+	$(MAKE) -f <<
+$(INCLUDE_GEN)
+TEST_NAME = asndhuff 
+TEST_OBJ = asndhuff.obj
+TEST_LIB = $(LIB5) $(LIB4) $(LIB3) $(LIB2) $(LIB1)
+RES = 1
+$(INCLUDE_EXE)
+<<
+!endif
+##########################################################
+!ifdef FA2HTGS_EXE
+$(FA2HTGS_EXE):
+	$(MAKE) -f <<
+$(INCLUDE_GEN)
+TEST_NAME = fa2htgs
+TEST_OBJ = fa2htgs.obj
+TEST_LIB = $(LIB4) $(LIB2) $(LIB1)
+RES = 1
+$(INCLUDE_EXE)
+<<
+!endif
+##########################################################
+!ifdef FORMATDB_EXE
+$(FORMATDB_EXE):
+	$(MAKE) -f <<
+$(INCLUDE_GEN)
+TEST_NAME = formatdb
+TEST_OBJ = formatdb.obj
+TEST_LIB = $(LIB23) $(LIB4) $(LIB2) $(LIB1)
+RES = 1
+$(INCLUDE_EXE)
+<<
+!endif
+##################################################
+!ifdef BLASTALL_EXE
+$(BLASTALL_EXE):
+	$(MAKE) -f <<
+$(INCLUDE_GEN)
+TEST_NAME = blastall
+TEST_OBJ = blastall.obj
+TEST_LIB = $(LIB23) $(LIB4) $(LIB2) $(LIB1)
+RES = 1
+$(INCLUDE_EXE)
+<<
+!endif
+##################################################
+!ifdef BLASTPGP_EXE
+$(BLASTPGP_EXE):
+	$(MAKE) -f <<
+$(INCLUDE_GEN)
+TEST_NAME = blastpgp
+TEST_OBJ = blastpgp.obj
+TEST_LIB = $(LIB23) $(LIB4) $(LIB2) $(LIB1)
+RES = 1
+$(INCLUDE_EXE)
+<<
+!endif
+##################################################
+!ifdef SEEDTOP_EXE
+$(SEEDTOP_EXE):
+	$(MAKE) -f <<
+$(INCLUDE_GEN)
+TEST_NAME = seedtop
+TEST_OBJ = seedtop.obj
+TEST_LIB = $(LIB23) $(LIB4) $(LIB2) $(LIB1)
+RES = 1
+$(INCLUDE_EXE)
+<<
+!endif
+##################################################

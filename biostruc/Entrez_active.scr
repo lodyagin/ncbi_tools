@@ -1,0 +1,116 @@
+/*
+ * $Id: Entrez_active.scr,v 6.1 1998/07/14 20:24:44 kimelman Exp $
+ * 
+ * This file contains the additions to PubStruct Database on Public 
+ * Entrez Servers
+ *
+ * $Log: Entrez_active.scr,v $
+ * Revision 6.1  1998/07/14 20:24:44  kimelman
+ * FT schema & smart load
+ *
+ * Log: PubStruct_proc.scr,v
+ * Revision 6.7  1998/06/12 17:45:00  kimelman
+ * timestamps history fixed, vacuum cleaning debugged
+ *
+ * Revision 6.6  1998/06/05 18:19:23  kimelman
+ * atextract styled
+ *
+ * Revision 6.5  1998/06/05 17:59:18  kimelman
+ * structure takeover bug fixed
+ */
+/************************************************************************/
+PRINT '/***** SELECT DATABASE PubStruct                             *****/'
+/************************************************************************/
+go
+USE PubStruct
+go
+
+IF EXISTS (SELECT * FROM sysobjects
+    WHERE name = 'at_insert'
+    AND   uid = user_id('dbo')
+    AND   type = 'TR')
+BEGIN
+    DROP trigger dbo.at_insert
+END
+go
+
+/************************************************************************/
+PRINT '/*****           TRIGGER  at_insert                         *****/'
+/************************************************************************/
+go
+
+create trigger
+at_insert on Struct for update as
+begin
+  insert EntrezControl..SatKeyInfo
+  select 10, si.acc,  0, 0, 0, 0, si.date, null, null
+  from  inserted si
+  where si.state = 0 and si.suppressed <=1 and
+        not exists (select * from EntrezControl..SatKeyInfo i where i.sat_key = si.acc and i.sat = 10 )
+end
+go
+  
+IF EXISTS (SELECT * FROM sysobjects
+    WHERE name = 'at_delete'
+    AND   uid = user_id('dbo')
+    AND   type = 'TR')
+BEGIN
+    DROP trigger dbo.at_delete
+END
+go
+
+/************************************************************************/
+PRINT '/*****           TRIGGER  at_delete                          *****/'
+/************************************************************************/
+go
+
+create trigger
+at_delete on Struct for delete as
+begin
+  delete EntrezControl..SatKeyInfo
+  from EntrezControl..SatKeyInfo i(1), deleted d 
+  where i.sat_key = d.acc and i.sat = 10
+end
+go
+
+IF EXISTS (SELECT * FROM sysobjects
+    WHERE name = 'fill_satinfo'
+    AND   uid = user_id('dbo')
+    AND   type = 'P')
+BEGIN
+    DROP PROCEDURE dbo.fill_satinfo
+END
+go
+/************************************************************************/
+PRINT '/*****           PROCEDURE    fill_satinfo                  *****/'
+/************************************************************************/
+go
+create proc
+fill_satinfo
+as
+begin
+  delete from    EntrezControl..SatKeyInfo
+  where sat = 10
+  
+  insert EntrezControl..SatKeyInfo
+  select 10, acc,  0, 0, 0, 0, date, date, null
+  from Struct where state = 0
+  
+  update EntrezControl..SatKeyInfo
+  set dumped4entrez = 1
+  from Struct s, EntrezControl..SatKeyInfo i
+  where s.state = 0 and i.sat_key = s.acc and i.sat = 10 and s.suppressed = 0 
+end
+go
+
+/************************************************************************/
+PRINT '/*****           FILLING SatKeyInfo                         *****/'
+/************************************************************************/
+go
+/*  fill_satinfo */
+go
+
+/************************************************************************/
+PRINT '/*****           DONE!!!!                                   *****/'
+/************************************************************************/
+go

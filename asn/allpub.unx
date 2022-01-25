@@ -1,0 +1,2 @@
+rm -f asnpub.all
+cat general.asn pub.asn biblio.asn medline.asn > asnpub.all

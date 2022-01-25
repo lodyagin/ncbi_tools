@@ -1,0 +1,219 @@
+#! /bin/sh
+#
+# $Id: mmdbsrv.wrapper,v 6.8 1998/06/09 19:16:07 kimelman Exp $
+#
+# this is CGI handler wrapper. It works as a membrane between httpd and actual
+# cgi program and allow to run new technological version of such program in 
+# parallel to old one and compare results in "real life" condition. 
+#
+# $Log: mmdbsrv.wrapper,v $
+# Revision 6.8  1998/06/09 19:16:07  kimelman
+# extra bracket removed.
+#
+# Revision 6.7  1998/06/09 18:50:35  kimelman
+# permissions problems workaround added to wrapper
+#
+#
+
+MMDBSRVs_to_try="./mmdbsrv.old ./mmdbsrv.f new/mmdbsrv.db"
+
+progname=$0
+progdir=`dirname $progname`
+options="$*"
+
+TMPdir=/tmp/mmdbsrv.wrapper/$$
+[ -d /tmp/mmdbsrv.wrapper ] || mkdir -p /tmp/mmdbsrv.wrapper
+[ -d $TMPdir ] || mkdir -p $TMPdir 
+# just to make sure
+chmod a+rw /tmp/mmdbsrv.wrapper
+chmod a+rw $TMPdir
+
+. ./st_configure.sh
+
+MMDBSRVs=
+for fexec in $MMDBSRVs_to_try ; do
+    [ ! -x $fexec ] || MMDBSRVs="$MMDBSRVs $fexec"
+done
+
+if [ "x$MMDBSRVs" = x ]; then
+     mail $THEvictim <<EOF
+Subject mmdbsrv.wrapper : can find binaries to run
+
+`ls -al`
+
+EOF
+    exit 1
+fi
+
+res_name() {
+  res_fname=${TMPdir}/`echo "$1" | tr '/.' '__'`
+  dir=`dirname $res_fname`
+  [ -d  $dir ] || mkdir -p $dir
+}
+
+run_cgi() {
+  res_name $1
+  case $1 in 
+  /* ) 
+      prg="$1"
+      ;;
+  *) 
+      prg="$progdir/$1"
+      ;;
+  esac
+  (
+   cd `dirname $prg`
+   /usr/bin/time -p ./`basename $prg` $options <$input_file >$res_fname 2>$res_fname.2
+  )  &
+  waitedID="$waitedID $!"
+}
+
+#-------------------------------------------------------------------
+#-------------------------------------------------------------------
+#  MAIN program 
+#-------------------------------------------------------------------
+
+# create tmp directory
+[ -d $TMPdir ] || mkdir -p $TMPdir
+# store input stream
+res_name input
+input_file=$res_fname
+cat >$input_file
+
+#
+# run all cgi programs in parallel
+#
+
+for texec in $MMDBSRVs ; do
+  run_cgi $texec
+done
+
+
+#
+# compare results now
+#
+stats=./stats
+awk_prg=$TMPdir/awkp
+cat >$awk_prg <<EOF
+BEGIN   { real=0 ; user=0 ; sys=0 }
+/real/  { real=\$2 }
+/user/  { user=\$2 }
+/sys/   { sys=\$2  }
+        { if ( \$1 == fn ) { real+=\$2 ;  user+=\$3 ; sys +=\$4 } }
+END     { print fn, real, user, sys }
+EOF
+
+lock_problem() {
+     mail $THEvictim <<EOF
+Subject mmdbsrv.wrapper locking problem
+
+dd="$dd"
+$stats.lock="`cat $stats.lock`"
+
+`ls -al`
+
+`ps -ef`
+
+`set`
+
+EOF
+     exit 1
+}
+
+timing() {
+  dd=$$
+  while [ -f $stats.lock ] ; do sleep 1 ; done
+  echo $dd >$stats.lock
+  [ -f $stats ] || echo '! Stats file' >$stats
+  if [ -w $stats ] ; then
+    if [ -f $stats.lock -a "$dd" != "`cat $stats.lock`" ] ; then
+      lock_problem
+    fi
+    grep -v "^$fn " $stats > $res_fname.3
+    grep "^$fn " $stats | cat $res_fname.2 -  >$res_fname.4
+    nawk -v fn=$fn -f $awk_prg $res_fname.4 >>$res_fname.3
+    cat $res_fname.3 >$stats
+    rm $res_fname.3
+    [ ! -f ${stats}.lock ] || rm ${stats}.lock
+  fi
+}
+
+proc_res() {
+  res_name $1
+  fn=`basename $res_fname`
+  # echo "proc_res: $1 --> $fn"
+  timing
+}
+
+#
+# wait for termination of all of them
+#
+main_result=
+
+for execname in $MMDBSRVs ; do
+  set -- $waitedID
+  wid=$1 ; shift ; waitedID="$*"
+  wait $wid
+  rcode=$?
+  proc_res $execname
+  if [ $rcode -ne 0 ] ; then
+    mail $THEvictim <<EOF
+Subject: $execname failed with status $rcode
+
+====================================================================
+Log:
+`cat $res_fname`
+
+Log.2:
+`cat $res_fname.2`
+
+====================================================================
+Input file:
+`cat $input_file`
+
+====================================================================
+----------- Environment:----------------
+
+`env`
+
+EOF
+    continue
+  fi 
+  if [ x$main_result = x ] ; then
+    main_result=$res_fname
+    cat $main_result  ## /test
+    continue
+  fi
+  diff -c $main_result $res_fname >$res_fname.diff
+  if [ $? -gt 0 ]
+  then
+    mail $THEvictim <<EOF
+Subject: $execname failed
+
+====================================================================
+Log:
+`cat $res_fname.diff`
+
+====================================================================
+Input file:
+`cat $input_file`
+
+====================================================================
+----------- Environment:----------------
+
+`env`
+
+----------- Settings:   ----------------
+`set`
+
+EOF
+  fi
+
+done
+
+rm -rf $TMPdir
+
+#
+# The end
+#
+exit 0

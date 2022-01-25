@@ -1,0 +1,616 @@
+(* ================================================================================
+	makedemo.met
+
+	An AppleScript to compile Entrez and Sequin with Metrowerks CodeWarrior.
+
+	Revision History:
+	----------------
+
+	11/16/95	Harmon		Created
+	  3/1/96	Kans		Consolidated
+	
+	Before running this file, run the copyhdrs.met AppleScript, and build the libraries
+	with makeall.met and makenet.met.
+
+	In order to compile for 68K, change the MASTER property.
+
+	================================================================================ *)
+
+(* ==== Uncomment one of the MASTER symbols ==== *)
+
+property MASTER : "PPC"
+-- property MASTER : "68K"
+
+property MAKEAPPS : "TRUE"
+
+(* ==== These symbols will be derived ==== *)
+
+global PREFIX
+global SUFFIX
+
+global HARDDISK
+global METRO
+global METROWERKSCW
+
+global NCBISOURCE
+global ENCRYPTSOURCE
+
+global INCLUDEFILES
+global LIBRARIES
+global BUILDHERE
+
+global DOENCRYPT
+
+(* ==== The following steps populate and build the programs ==== *)
+
+with timeout of 60000 seconds
+	
+	DoSetGlobals()
+	
+	CreateNENTREZ()
+	CreateNETENTCF()
+	
+	CreateSEQUIN()
+	CreateCn3D()
+	
+	CreatePOWBLAST()
+	CreateBLASTCL3()
+	
+	if MAKEAPPS = "TRUE" then
+		CompilePrograms()
+	end if
+	
+end timeout
+
+(* ==== These subroutines set paths and other preferences during population ==== *)
+
+on DoSetGlobals()
+	if MASTER = "PPC" then
+		set PREFIX to "PPC "
+		set SUFFIX to "ppc"
+	else if MASTER = "68K" then
+		set PREFIX to "68K "
+		set SUFFIX to "68k"
+	end if
+	
+	tell application "Finder"
+		
+		set HARDDISK to startup disk as string
+		set METRO to HARDDISK & "Metrowerks:" as string
+		set METROWERKSCW to METRO & "Metrowerks CodeWarrior:" as string
+		
+		set NCBISOURCE to METRO & "ncbi:" as string
+		set ENCRYPTSOURCE to NCBISOURCE & "network:encrypt:rsaref:" as string
+		
+		set INCLUDEFILES to NCBISOURCE & "include:" as string
+		set LIBRARIES to NCBISOURCE & "lib:" as string
+		set BUILDHERE to NCBISOURCE & "build:" as string
+		
+		if (exists (folder ENCRYPTSOURCE)) then
+			set DOENCRYPT to "TRUE"
+		else
+			set DOENCRYPT to "FALSE"
+		end if
+		
+	end tell
+end DoSetGlobals
+
+on SetDefaultPreferences()
+	tell application "CodeWarrior IDE 3.0"
+		
+		(* ===== Panel Target ===== *)
+		if MASTER = "PPC" then
+			Set Preferences of panel "Target Settings" to {Linker:"MacOS PPC Linker"}
+		else if MASTER = "68K" then
+			Set Preferences of panel "Target Settings" to {Linker:"MacOS 68K Linker"}
+		end if
+		
+		(* ===== Panel PowerPC Project =====  *)
+		Set Preferences of panel "PPC Project" to {Project Type:standard application}
+		
+		(* ===== Panel C/C++ Language =====  *)
+		Set Preferences of panel "C/C++ Compiler" to Â
+			{Activate CPlusPlus:false Â
+				, ARM Conformance:false Â
+				, Exception Handling:true Â
+				, Inlining:inline_none Â
+				, RTTI:false Â
+				, Pool Strings:false Â
+				, Dont Reuse Strings:false Â
+				, Require Function Prototypes:true Â
+				, ANSI Strict:false Â
+				, ANSI Keywords Only:false Â
+				, Expand Trigraph Sequences:false Â
+				, MPW Newlines:false Â
+				, MPW Pointer Type Rules:false Â
+				, Enums Always Ints:false Â
+				, Prefix File:""}
+		
+		(* ===== Panel C/C++ Warnings ===== *)
+		Set Preferences of panel "C/C++ Warnings" to Â
+			{Treat Warnings As Errors:false Â
+				, Illegal Pragmas:true Â
+				, Empty Declarations:true Â
+				, Possible Errors:true Â
+				, Unused Variables:true Â
+				, Unused Arguments:false Â
+				, Extra Commas:true Â
+				, Extended Error Checking:true}
+		
+		(* ===== Panel PPC Processor =====  *)
+		Set Preferences of panel "PPC CodeGen" to Â
+			{Struct Alignment:PowerPC Â
+				, Make Strings ReadOnly:false Â
+				, Store Data in TOC:false Â
+				, Use FMADD Instructions:false Â
+				, Use Profiler:false Â
+				, Traceback Tables:false Â
+				, Instruction Scheduling:off Â
+				, Optimize For Size:false Â
+				, Peephole Optimizer:false Â
+				, Global Optimization:false Â
+				, Optimization Level:1}
+		
+		(* ===== Panel PPC Linker ===== *)
+		Set Preferences of panel "PPC Linker" to Â
+			{Generate SYM File:true Â
+				, Full Path In Sym Files:true Â
+				, Generate Link Map:false Â
+				, Suppress Warnings:false Â
+				, Link Mode:fast Â
+				, Initialization Name:Â
+				"", Main Name:Â
+				"__start", Termination Name:""}
+		
+		(* ===== Panel PPC PEF =====  *)
+		Set Preferences of panel "PPC PEF" to Â
+			{Export Symbols:none Â
+				, Old Definition:0 Â
+				, Old Implementation:0 Â
+				, Current Version:0 Â
+				, Code Sorting:nosort Â
+				, Share Data Section:false Â
+				, Expand Uninitialized Data:false Â
+				, Fragment Name:""}
+		
+		(* ===== Panel 68K Project =====  *)
+		Set Preferences of panel "68K Project" to {Project Type:standard application}
+		
+		(* ===== Panel 68K Processor =====  *)
+		Set Preferences of panel "68K CodeGen" to Â
+			{Code Model:large Â
+				, Struct Alignment:mc68k Â
+				, MC68020 CodeGen:false Â
+				, Floating Point CodeGen:SANE Â
+				, Peephole Optimizer:false Â
+				, Enable Global Optimizations:false Â
+				, Optimize For Size:false Â
+				, PC Relative Strings:false Â
+				, Use Profiler:false Â
+				, Four Bytes Ints:true Â
+				, Eight Byte Double:true Â
+				, Far Data:true Â
+				, Far Method Tables:true Â
+				, Far String Constants:true Â
+				, MPW Calling Conventions:false}
+		
+		(* ===== Panel 68K Linker ===== *)
+		Set Preferences of panel "68K Linker" to Â
+			{MacsBug Symbols:newsymbols Â
+				, Generate SYM File:true Â
+				, Full Path In Sym Files:true Â
+				, Generate Link Map:false Â
+				, Generate A6 Stack Frames:true Â
+				, Link Single Segment:false Â
+				, Suppress Warnings:false Â
+				, Fast Link:true Â
+				, Merge Compiler Glue:false}
+		
+		my SetDefaultPaths1()
+		
+	end tell
+end SetDefaultPreferences
+
+on SetDefaultPaths1()
+	tell application "CodeWarrior IDE 3.0"
+		
+		(* ===== Panel Access Paths ===== *)
+		-- We need to be able to move the default system compiler folder to the end of the list
+		-- because certain files like "all.h" and "all" are defined by both Metrowerks and NCBI.
+		-- We want to find the NCBI "all.h" first.
+		Set Preferences of panel "Access Paths" to {System Paths:{}} -- This removes the compiler default folder
+		
+		Set Preferences of panel "Access Paths" to {User Paths:{{name:INCLUDEFILES, recursive:false, origin:absolute}}}
+		Set Preferences of panel "Access Paths" to {System Paths:{{name:INCLUDEFILES, recursive:false, origin:absolute}}} -- Added for speed
+		
+	end tell
+end SetDefaultPaths1
+
+on SetDefaultPaths2()
+	tell application "CodeWarrior IDE 3.0"
+		
+		-- After we have added all paths, reinsert compiler default at end of list
+		Set Preferences of panel "Access Paths" to {System Paths:{{name:":MacOS Support:Headers:", recursive:true, origin:shell relative}}}
+		Set Preferences of panel "Access Paths" to {System Paths:{{name:":MacOS Support:Libraries:", recursive:true, origin:shell relative}}}
+		Set Preferences of panel "Access Paths" to {System Paths:{{name:":Metrowerks Standard Library:MSL C:", recursive:true, origin:shell relative}}}
+	end tell
+end SetDefaultPaths2
+
+on AddLibraries()
+	tell application "CodeWarrior IDE 3.0"
+		
+		if MASTER = "PPC" then
+			Add Files {METROWERKSCW & "Metrowerks Standard Library:MSL C:Bin:MSL C.PPC.Lib"} To Segment 1
+			Add Files {METROWERKSCW & "Metrowerks Standard Library:MSL C:Bin:MSL SIOUX.PPC.Lib"} To Segment 1
+			Add Files {METROWERKSCW & "MacOS Support:Libraries:MacOS Common:InterfaceLib"} To Segment 1
+			Add Files {METROWERKSCW & "MacOS Support:Libraries:MacOS Common:MathLib"} To Segment 1
+			Add Files {METROWERKSCW & "MacOS Support:Libraries:Runtime:Runtime PPC:MSL RuntimePPC.Lib"} To Segment 1
+		else if MASTER = "68K" then
+			Add Files {METROWERKSCW & "MacOS Support:Libraries:Runtime:Runtime 68K:MSL Runtime68k.Lib"} To Segment 1
+			Add Files {METROWERKSCW & "Metrowerks Standard Library:MSL C:Bin:MSL C.68K Fa(4i_8d).Lib"} To Segment 1
+			Add Files {METROWERKSCW & "Metrowerks Standard Library:MSL C:Bin:MSL SIOUX.68K.Lib"} To Segment 1
+			Add Files {METROWERKSCW & "MacOS Support:Libraries:MacOS 68K:MacOS.lib"} To Segment 1
+			Add Files {METROWERKSCW & "MacOS Support:Libraries:MacOS 68K:MathLib68K:MathLib68K (Model Far):MathLib68K Fa(4i_8d).Lib"} To Segment 1
+		end if
+	end tell
+end AddLibraries
+
+on CompilePrograms()
+	tell application "CodeWarrior IDE 3.0"
+		
+		open (BUILDHERE & "nentrez" & SUFFIX & ".µ")
+		Make Project
+		Close Project
+		
+		open (BUILDHERE & "netentcf" & SUFFIX & ".µ")
+		Make Project
+		Close Project
+		
+		open (BUILDHERE & "sequin" & SUFFIX & ".µ")
+		Make Project
+		Close Project
+		
+		open (BUILDHERE & "powblast" & SUFFIX & ".µ")
+		Make Project
+		Close Project
+		
+		open (BUILDHERE & "blastcl3" & SUFFIX & ".µ")
+		Make Project
+		Close Project
+		
+	end tell
+end CompilePrograms
+
+(* ==== This section populates the programs ==== *)
+
+on CreateNENTREZ()
+	tell application "CodeWarrior IDE 3.0"
+		
+		Create Project {BUILDHERE & "nentrez" & SUFFIX & ".µ"}
+		
+		my SetDefaultPreferences()
+		Set Preferences of panel "C/C++ Compiler" to {Prefix File:"net.pfx"}
+		
+		if MASTER = "PPC" then
+			Set Preferences of panel "PPC Project" to {Project Type:standard application, File Name:"nentrez"}
+			Set Preferences of panel "PPC Project" to {SIZE Flags:22720, File Creator:"ENTZ", File Type:"APPL"}
+			Set Preferences of panel "PPC Project" to {Preferred Size:8000, Minimum Size:5000, Stack Size:64}
+		else if MASTER = "68K" then
+			Set Preferences of panel "68K Project" to {Project Type:standard application, File Name:"nentrez"}
+			Set Preferences of panel "68K Project" to {SIZE Flags:22720, File Creator:"ENTZ", File Type:"APPL"}
+			Set Preferences of panel "68K Project" to {Preferred Size:8000, Minimum Size:5000, Stack Size:64}
+		end if
+		
+		Set Preferences of panel "Access Paths" to {System Paths:{{name:LIBRARIES, origin:absolute}}}
+		Set Preferences of panel "Access Paths" to {System Paths:{{name:NCBISOURCE & "cdromlib:", origin:absolute}}}
+		Set Preferences of panel "Access Paths" to {System Paths:{{name:NCBISOURCE & "demo:", origin:absolute}}}
+		my SetDefaultPaths2()
+		
+		set segmentCounter to 1
+		
+		my AddLibraries()
+		
+		set segmentCounter to segmentCounter + 1
+		
+		Add Files (LIBRARIES & "ncbi" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "ncbiobj" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "ncbicdr" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "vibrant" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "ncbidesk" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "ncbimmdb" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "ncbicn3d" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "ncbitool" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "ncsasock" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "netcli" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "netentr" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "vibnet" & SUFFIX) To Segment segmentCounter
+		
+		set segmentCounter to segmentCounter + 1
+		
+		Add Files {NCBISOURCE & "cdromlib:accentr.c"} To Segment segmentCounter
+		Add Files {NCBISOURCE & "cdromlib:accutils.c"} To Segment segmentCounter
+		
+		set segmentCounter to segmentCounter + 1
+		
+		Add Files (NCBISOURCE & "demo:entrez.c") To Segment segmentCounter
+		
+		Reset File Paths
+		Close Project
+		
+	end tell
+end CreateNENTREZ
+
+on CreateNETENTCF()
+	tell application "CodeWarrior IDE 3.0"
+		
+		Create Project {BUILDHERE & "netentcf" & SUFFIX & ".µ"}
+		
+		my SetDefaultPreferences()
+		Set Preferences of panel "C/C++ Compiler" to {Prefix File:"net.pfx"}
+		
+		if MASTER = "PPC" then
+			Set Preferences of panel "PPC Project" to {Project Type:standard application, File Name:"netentcf"}
+			Set Preferences of panel "PPC Project" to {SIZE Flags:22720, File Creator:"NCBI", File Type:"APPL"}
+			Set Preferences of panel "PPC Project" to {Preferred Size:5000, Minimum Size:5000, Stack Size:64}
+		else if MASTER = "68K" then
+			Set Preferences of panel "68K Project" to {Project Type:standard application, File Name:"netentcf"}
+			Set Preferences of panel "68K Project" to {SIZE Flags:22720, File Creator:"NCBI", File Type:"APPL"}
+			Set Preferences of panel "68K Project" to {Preferred Size:5000, Minimum Size:5000, Stack Size:64}
+		end if
+		
+		Set Preferences of panel "Access Paths" to {System Paths:{{name:LIBRARIES, origin:absolute}}}
+		Set Preferences of panel "Access Paths" to {System Paths:{{name:NCBISOURCE & "demo:", origin:absolute}}}
+		my SetDefaultPaths2()
+		
+		set segmentCounter to 1
+		
+		my AddLibraries()
+		
+		set segmentCounter to segmentCounter + 1
+		
+		Add Files (LIBRARIES & "ncbi" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "ncbiobj" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "ncbicdr" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "vibrant" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "ncbidesk" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "ncsasock" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "netcli" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "netentr" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "vibnet" & SUFFIX) To Segment segmentCounter
+		
+		set segmentCounter to segmentCounter + 1
+		
+		Add Files (LIBRARIES & "ncbiNacc" & SUFFIX) To Segment segmentCounter
+		
+		set segmentCounter to segmentCounter + 1
+		
+		Add Files (NCBISOURCE & "demo:netentcf.c") To Segment segmentCounter
+		
+		Reset File Paths
+		Close Project
+		
+	end tell
+end CreateNETENTCF
+
+on CreateSEQUIN()
+	tell application "CodeWarrior IDE 3.0"
+		
+		Create Project {BUILDHERE & "sequin" & SUFFIX & ".µ"}
+		
+		my SetDefaultPreferences()
+		Set Preferences of panel "C/C++ Compiler" to {Prefix File:"net.pfx"}
+		
+		if MASTER = "PPC" then
+			Set Preferences of panel "PPC Project" to {Project Type:standard application, File Name:"sequin"}
+			Set Preferences of panel "PPC Project" to {SIZE Flags:22720, File Creator:"SEQN", File Type:"APPL"}
+			Set Preferences of panel "PPC Project" to {Preferred Size:8000, Minimum Size:5000, Stack Size:64}
+		else if MASTER = "68K" then
+			Set Preferences of panel "68K Project" to {Project Type:standard application, File Name:"sequin"}
+			Set Preferences of panel "68K Project" to {SIZE Flags:22720, File Creator:"SEQN", File Type:"APPL"}
+			Set Preferences of panel "68K Project" to {Preferred Size:8000, Minimum Size:5000, Stack Size:64}
+		end if
+		
+		Set Preferences of panel "Access Paths" to {System Paths:{{name:LIBRARIES, origin:absolute}}}
+		Set Preferences of panel "Access Paths" to {System Paths:{{name:NCBISOURCE & "cdromlib:", origin:absolute}}}
+		Set Preferences of panel "Access Paths" to {System Paths:{{name:NCBISOURCE & "sequin:", origin:absolute}}}
+		my SetDefaultPaths2()
+		
+		set segmentCounter to 1
+		
+		my AddLibraries()
+		
+		set segmentCounter to segmentCounter + 1
+		
+		Add Files (LIBRARIES & "ncbi" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "ncbiobj" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "ncbicdr" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "vibrant" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "ncbidesk" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "ncbimmdb" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "ncbicn3d" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "ncbitool" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "ncsasock" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "netcli" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "netentr" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "ncbibls2" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "ncbimla" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "ncbitxc2" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "vibnet" & SUFFIX) To Segment segmentCounter
+		
+		set segmentCounter to segmentCounter + 1
+		
+		Add Files {NCBISOURCE & "cdromlib:accentr.c"} To Segment segmentCounter
+		Add Files {NCBISOURCE & "cdromlib:accutils.c"} To Segment segmentCounter
+		
+		set segmentCounter to segmentCounter + 1
+		
+		Add Files (NCBISOURCE & "sequin:sequin1.c") To Segment segmentCounter
+		Add Files (NCBISOURCE & "sequin:sequin2.c") To Segment segmentCounter
+		Add Files (NCBISOURCE & "sequin:sequin3.c") To Segment segmentCounter
+		Add Files (NCBISOURCE & "sequin:sequin4.c") To Segment segmentCounter
+		Add Files (NCBISOURCE & "sequin:sequin5.c") To Segment segmentCounter
+		Add Files (NCBISOURCE & "sequin:sequin6.c") To Segment segmentCounter
+		Add Files (NCBISOURCE & "sequin:sequin7.c") To Segment segmentCounter
+		Add Files (NCBISOURCE & "sequin:sequin8.c") To Segment segmentCounter
+		Add Files (NCBISOURCE & "sequin:sequinx.c") To Segment segmentCounter
+		
+		Reset File Paths
+		Close Project
+		
+	end tell
+end CreateSEQUIN
+
+on CreateCn3D()
+	tell application "CodeWarrior IDE 3.0"
+		
+		Create Project {BUILDHERE & "cn3d" & SUFFIX & ".µ"}
+		
+		my SetDefaultPreferences()
+		Set Preferences of panel "C/C++ Compiler" to {Prefix File:"net.pfx"}
+		
+		if MASTER = "PPC" then
+			Set Preferences of panel "PPC Project" to {Project Type:standard application, File Name:"cn3d"}
+			Set Preferences of panel "PPC Project" to {SIZE Flags:22720, File Creator:"Cn3D", File Type:"APPL"}
+			Set Preferences of panel "PPC Project" to {Preferred Size:12000, Minimum Size:5000, Stack Size:64}
+		else if MASTER = "68K" then
+			Set Preferences of panel "68K Project" to {Project Type:standard application, File Name:"cn3d"}
+			Set Preferences of panel "68K Project" to {SIZE Flags:22720, File Creator:"Cn3D", File Type:"APPL"}
+			Set Preferences of panel "68K Project" to {Preferred Size:12000, Minimum Size:5000, Stack Size:64}
+		end if
+		
+		Set Preferences of panel "Access Paths" to {System Paths:{{name:LIBRARIES, origin:absolute}}}
+		Set Preferences of panel "Access Paths" to {System Paths:{{name:NCBISOURCE & "cdromlib:", origin:absolute}}}
+		Set Preferences of panel "Access Paths" to {System Paths:{{name:NCBISOURCE & "cn3d:", origin:absolute}}}
+		my SetDefaultPaths2()
+		
+		set segmentCounter to 1
+		
+		my AddLibraries()
+		
+		set segmentCounter to segmentCounter + 1
+		
+		Add Files (LIBRARIES & "ncbi" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "ncbiobj" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "ncbicdr" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "vibrant" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "ncbidesk" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "ncbimmdb" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "ncbicn3d" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "ncbitool" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "ncsasock" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "netcli" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "netentr" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "vibnet" & SUFFIX) To Segment segmentCounter
+		
+		set segmentCounter to segmentCounter + 1
+		
+		Add Files {NCBISOURCE & "cdromlib:accentr.c"} To Segment segmentCounter
+		Add Files {NCBISOURCE & "cdromlib:accutils.c"} To Segment segmentCounter
+		
+		set segmentCounter to segmentCounter + 1
+		
+		Add Files (NCBISOURCE & "cn3d:cn3dmain.c") To Segment segmentCounter
+		
+		Reset File Paths
+		Close Project
+		
+	end tell
+end CreateCn3D
+
+on CreatePOWBLAST()
+	tell application "CodeWarrior IDE 3.0"
+		
+		Create Project {BUILDHERE & "powblast" & SUFFIX & ".µ"}
+		
+		my SetDefaultPreferences()
+		Set Preferences of panel "C/C++ Compiler" to {Prefix File:""}
+		
+		if MASTER = "PPC" then
+			Set Preferences of panel "PPC Project" to {Project Type:standard application, File Name:"powblast"}
+			Set Preferences of panel "PPC Project" to {SIZE Flags:22720, File Creator:"NCBI", File Type:"APPL"}
+			Set Preferences of panel "PPC Project" to {Preferred Size:8000, Minimum Size:5000, Stack Size:64}
+		else if MASTER = "68K" then
+			Set Preferences of panel "68K Project" to {Project Type:standard application, File Name:"powblast"}
+			Set Preferences of panel "68K Project" to {SIZE Flags:22720, File Creator:"NCBI", File Type:"APPL"}
+			Set Preferences of panel "68K Project" to {Preferred Size:8000, Minimum Size:5000, Stack Size:64}
+		end if
+		
+		Set Preferences of panel "Access Paths" to {System Paths:{{name:LIBRARIES, origin:absolute}}}
+		Set Preferences of panel "Access Paths" to {System Paths:{{name:NCBISOURCE & "demo:", origin:absolute}}}
+		my SetDefaultPaths2()
+		
+		set segmentCounter to 1
+		
+		my AddLibraries()
+		
+		set segmentCounter to segmentCounter + 1
+		
+		Add Files (LIBRARIES & "ncbi" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "ncbiobj" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "ncbicdr" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "vibrant" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "ncbidesk" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "ncbitool" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "ncbiNacc" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "ncsasock" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "netcli" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "netentr" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "ncbibls2" & SUFFIX) To Segment segmentCounter
+		
+		set segmentCounter to segmentCounter + 1
+		
+		Add Files (NCBISOURCE & "demo:powblast.c") To Segment segmentCounter
+		Add Files (NCBISOURCE & "demo:pblproc.c") To Segment segmentCounter
+		
+		Reset File Paths
+		Close Project
+		
+	end tell
+end CreatePOWBLAST
+
+on CreateBLASTCL3()
+	tell application "CodeWarrior IDE 3.0"
+		
+		Create Project {BUILDHERE & "blastcl3" & SUFFIX & ".µ"}
+		
+		my SetDefaultPreferences()
+		Set Preferences of panel "C/C++ Compiler" to {Prefix File:""}
+		
+		if MASTER = "PPC" then
+			Set Preferences of panel "PPC Project" to {Project Type:standard application, File Name:"blastcl3"}
+			Set Preferences of panel "PPC Project" to {SIZE Flags:22720, File Creator:"NCBI", File Type:"APPL"}
+			Set Preferences of panel "PPC Project" to {Preferred Size:8000, Minimum Size:5000, Stack Size:64}
+		else if MASTER = "68K" then
+			Set Preferences of panel "68K Project" to {Project Type:standard application, File Name:"blastcl3"}
+			Set Preferences of panel "68K Project" to {SIZE Flags:22720, File Creator:"NCBI", File Type:"APPL"}
+			Set Preferences of panel "68K Project" to {Preferred Size:8000, Minimum Size:5000, Stack Size:64}
+		end if
+		
+		Set Preferences of panel "Access Paths" to {System Paths:{{name:LIBRARIES, origin:absolute}}}
+		Set Preferences of panel "Access Paths" to {System Paths:{{name:NCBISOURCE & "network:blast3:client:", origin:absolute}}}
+		my SetDefaultPaths2()
+		
+		set segmentCounter to 1
+		
+		my AddLibraries()
+		
+		set segmentCounter to segmentCounter + 1
+		
+		Add Files (LIBRARIES & "ncbi" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "ncbiobj" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "vibrant" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "ncbitool" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "ncsasock" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "netcli" & SUFFIX) To Segment segmentCounter
+		Add Files (LIBRARIES & "ncbibls3" & SUFFIX) To Segment segmentCounter
+		
+		set segmentCounter to segmentCounter + 1
+		
+		Add Files (NCBISOURCE & "network:blast3:client:blastcl3.c") To Segment segmentCounter
+		
+		Reset File Paths
+		Close Project
+		
+	end tell
+end CreateBLASTCL3
+

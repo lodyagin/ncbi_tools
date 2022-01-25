@@ -1,0 +1,136 @@
+$! AXP version
+$ if("''P1'" .nes. "")then set def 'P1'
+$mycc := cc
+$myargs = "/standard=ANSI89/nolist/noop/prefix=all"
+$myargs = myargs + "/include=([],[-.INCLUDE])"
+$myargs = myargs + "/define=(DCC4DW12)"
+$set ver
+$ !
+$ ! Simple makefile for NCBI demo programs without Vibrant
+$ !
+$ copy [-.demo]*.* []
+$ !
+$ ! Make testcore
+$ !
+$ mycc 'myargs' testcore
+$ link/nomap/exe=testcore sys$input/option
+[-.lib]ncbimain
+[]testcore
+[-.lib]libncbi/lib
+$ !
+$ ! Make getmesh
+$ !
+$ mycc 'myargs' getmesh
+$ link/nomap/exe=getmesh sys$input/option
+[-.lib]ncbimain
+[]getmesh
+[-.lib]libncbi/lib
+$ !
+$ ! Make indexpub
+$ !
+$ mycc 'myargs' indexpub
+$ link/nomap/exe=indexpub sys$input/option
+[-.lib]ncbimain
+[]indexpub
+[-.lib]libncbi/lib
+$ !
+$ ! Make getpub
+$ !
+$ mycc 'myargs' getpub
+$ link/nomap/exe=getpub sys$input/option
+[-.lib]ncbimain
+[]getpub
+[-.lib]libncbi/lib
+$ !
+$ ! Make dosimple
+$ !
+$ mycc 'myargs' dosimple
+$ link/nomap/exe=dosimple sys$input/option
+[-.lib]ncbimain
+[]dosimple
+[-.lib]libncbiobj/lib
+[-.lib]libncbi/lib
+$ !
+$ ! Make testobj
+$ !
+$ mycc 'myargs' testobj
+$ link/nomap/exe=testobj sys$input/option
+[-.lib]ncbimain
+[]testobj
+[-.lib]libncbiobj/lib
+[-.lib]libncbi/lib
+$exit
+$ !
+$ ! Make seqtest
+$ !
+$ mycc 'myargs' seqtest
+$ link/nomap/exe=seqtest sys$input/option
+[-.lib]ncbimain
+[]seqtest
+[-.lib]libncbiobj/lib
+[-.lib]libncbi/lib
+$ !
+$ ! Make getfeat
+$ !
+$ mycc 'myargs' getfeat
+$ link/nomap/exe=getfeat sys$input/option
+[-.lib]ncbimain
+[]getfeat
+[-.lib]libncbiacc/lib
+[-.lib]libncbicdr/lib
+[-.lib]libncbiobj/lib
+[-.lib]libncbi/lib
+$ !
+$ ! Make getseq
+$ !
+$ mycc 'myargs' getseq
+$ link/nomap/exe=getseq sys$input/option
+[-.lib]ncbimain
+[]getseq
+[-.lib]libncbiacc/lib
+[-.lib]libncbicdr/lib
+[-.lib]libncbiobj/lib
+[-.lib]libncbi/lib
+$ !
+$ ! Make asndhuff
+$ !
+$ mycc 'myargs' asndhuff
+$ link/nomap/exe=asndhuff sys$input/option
+[-.lib]ncbimain
+[]asndhuff
+[-.lib]libncbiacc/lib
+[-.lib]libncbicdr/lib
+[-.lib]libncbiobj/lib
+[-.lib]libncbi/lib
+$ !
+$ ! Make formatdb
+$ !
+$ mycc 'myargs' formatdb
+$ link/nomap/exe=formatdb sys$input/option
+[-.lib]ncbimain
+[]formatdb
+[-.lib]libncbitool/lib
+[-.lib]libncbiobj/lib
+[-.lib]libncbi/lib
+$ !
+$ ! Make blastall
+$ !
+$ mycc 'myargs' blastall
+$ link/nomap/exe=blastall sys$input/option
+[-.lib]ncbimain
+[]blastall
+[-.lib]libncbitool/lib
+[-.lib]libncbiobj/lib
+[-.lib]libncbi/lib
+$ !
+$ ! Make blastpgp
+$ !
+$ mycc 'myargs' blastpgp
+$ link/nomap/exe=blastpgp sys$input/option
+[-.lib]ncbimain
+[]blastpgp
+[-.lib]libncbitool/lib
+[-.lib]libncbiobj/lib
+[-.lib]libncbi/lib
+$ exit
+

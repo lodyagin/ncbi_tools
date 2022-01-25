@@ -1,0 +1,319 @@
+$ !
+$ ! Simple makefile for NCBI tool libraries with Vibrant
+$ ! Also makes AsnTool
+$ !
+$ copy [-.corelib]*.h [-.include]
+$ copy [-.corelib]ncbilcl.vms [-.include]ncbilcl.h
+$ copy [-.corelib]*.c []
+$ copy [-.corelib]ncbimain.vms ncbimain.c
+$ copy [-.asnlib]*.h [-.include]
+$ copy [-.asnlib]*.c []
+$ copy [-.object]*.h [-.include]
+$ copy [-.object]*.c []
+$ copy [-.asnstat]*.h [-.include]
+$ copy [-.api]*.h [-.include]
+$ copy [-.api]*.c []
+$ copy [-.cdromlib]*.h [-.include]
+$ copy [-.cdromlib]*.c []
+$ copy [-.vibrant]*.h [-.include]
+$ copy [-.vibrant]*.c []
+$ copy [-.desktop]*.h [-.include]
+$ copy [-.desktop]*.c []
+$ copy [-.biostruc]*.h [-.include]
+$ copy [-.tools]*.h [-.include]
+$ copy [-.tools]*.c []
+$ !
+$ ! Make libncbi.olb
+$ !
+$ cc/nolist/include=([],[-.include]) ncbibs
+$ cc/nolist/include=([],[-.include]) ncbicoll
+$ cc/nolist/include=([],[-.include]) ncbienv
+$ cc/nolist/include=([],[-.include]) ncbierr
+$ cc/nolist/include=([],[-.include]) ncbifile
+$ cc/nolist/include=([],[-.include]) ncbimain
+$ cc/nolist/include=([],[-.include]) ncbimath
+$ cc/nolist/include=([],[-.include]) ncbimem
+$ cc/nolist/include=([],[-.include]) ncbimisc
+$ cc/nolist/include=([],[-.include]) ncbimsg
+$ cc/nolist/include=([],[-.include]) ncbistr
+$ cc/nolist/include=([],[-.include]) ncbitime
+$ cc/nolist/include=([],[-.include]) ncbilang
+$ cc/nolist/include=([],[-.include]) gifgen
+$ cc/nolist/include=([],[-.include]) togif
+$ cc/nolist/include=([],[-.include]) ncbithr
+$ cc/nolist/include=([],[-.include]) asnbufo
+$ cc/nolist/include=([],[-.include]) asndebin
+$ cc/nolist/include=([],[-.include]) asnenbin
+$ cc/nolist/include=([],[-.include]) asngen
+$ cc/nolist/include=([],[-.include]) asngenob
+$ cc/nolist/include=([],[-.include]) asnio
+$ cc/nolist/include=([],[-.include]) asnlex
+$ cc/nolist/include=([],[-.include]) asnlext
+$ cc/nolist/include=([],[-.include]) asnout
+$ cc/nolist/include=([],[-.include]) asnprint
+$ cc/nolist/include=([],[-.include]) asntypes
+$ libr/obj/create libncbi.olb -
+    ncbibs.obj, ncbicoll.obj, ncbierr.obj, ncbienv.obj, ncbifile.obj,-
+    ncbimain.obj, ncbimath.obj, ncbimem.obj, ncbimisc.obj, ncbimsg.obj,-
+    ncbistr.obj,ncbitime.obj, ncbilang.obj, asnbufo.obj, asndebin.obj, asnenbin.obj,-
+    asngen.obj,asngenob.obj, asnio.obj, asnlex.obj, asnlext.obj,-
+    asnout.obj,asnprint.obj, asntypes.obj, gifgen.obj, togif.obj, ncbithr.obj
+$ rename libncbi.olb [-.lib]
+$ !
+$ ! Make libncbiobj.olb
+$ !
+$ cc/nolist/include=([],[-.include]) objacces
+$ cc/nolist/include=([],[-.include]) objalign
+$ cc/nolist/include=([],[-.include]) objall
+$ cc/nolist/include=([],[-.include]) objbibli
+$ cc/nolist/include=([],[-.include]) objblock   ! WAG
+$ cc/nolist/include=([],[-.include]) objcode    ! WAG
+$ cc/nolist/include=([],[-.include]) objfeat
+$ cc/nolist/include=([],[-.include]) objgen
+$ cc/nolist/include=([],[-.include]) objloc
+$ cc/nolist/include=([],[-.include]) objmedli
+$ cc/nolist/include=([],[-.include]) objpub
+$ cc/nolist/include=([],[-.include]) objmime
+$ cc/nolist/include=([],[-.include]) objmdrs
+$ cc/nolist/include=([],[-.include]) objpubme
+$ cc/nolist/include=([],[-.include]) objproj
+$ cc/nolist/include=([],[-.include]) objres
+$ cc/nolist/include=([],[-.include]) objseq
+$ cc/nolist/include=([],[-.include]) objsset
+$ cc/nolist/include=([],[-.include]) seqport
+$ cc/nolist/include=([],[-.include]) sequtil
+$ cc/nolist/include=([],[-.include]) simple
+$ cc/nolist/include=([],[-.include]) tofasta
+$ cc/nolist/include=([],[-.include]) tofile
+$ cc/nolist/include=([],[-.include]) tomedlin
+$ cc/nolist/include=([],[-.include]) valid
+$ cc/nolist/include=([],[-.include]) sqnutils
+$ cc/nolist/include=([],[-.include]) subutil
+$ cc/nolist/include=([],[-.include]) edutil
+$ cc/nolist/include=([],[-.include]) asn2ff1
+$ cc/nolist/include=([],[-.include]) asn2ff2
+$ cc/nolist/include=([],[-.include]) asn2ff3
+$ cc/nolist/include=([],[-.include]) asn2ff4
+$ cc/nolist/include=([],[-.include]) asn2ff5
+$ cc/nolist/include=([],[-.include]) asn2ff6
+$ cc/nolist/include=([],[-.include]) ffprint
+$ cc/nolist/include=([],[-.include]) ftusrstr
+$ cc/nolist/include=([],[-.include]) gbfeat
+$ cc/nolist/include=([],[-.include]) gbftglob
+$ cc/nolist/include=([],[-.include]) gbparint
+$ cc/nolist/include=([],[-.include]) utilpars
+$ cc/nolist/include=([],[-.include]) wprint
+$ cc/nolist/include=([],[-.include]) satutil
+$ cc/nolist/include=([],[-.include]) seqmgr
+$ cc/nolist/include=([],[-.include]) objmgr
+$ cc/nolist/include=([],[-.include]) gather
+$ cc/nolist/include=([],[-.include]) accmmdbs
+$ cc/nolist/include=([],[-.include]) acccn3ds
+$ cc/nolist/include=([],[-.include]) codon
+$ cc/nolist/include=([],[-.include]) txalign
+$ cc/nolist/include=([],[-.include]) jzcoll
+$ cc/nolist/include=([],[-.include]) jzmisc
+$ cc/nolist/include=([],[-.include]) maputil
+$ cc/nolist/include=([],[-.include]) mconsist
+$ libr/obj/create libncbiobj.olb -
+    objacces.obj, objalign.obj, objall.obj, objblock, objcode,-   ! WAG
+    objbibli.obj, objfeat.obj, objgen.obj, objloc.obj, objmedli.obj,-
+    objpub.obj, objres.obj, objseq.obj, objsset.obj, objfdef.obj, objmime.obj,-
+    objmdrs.obj, objpubme.obj, objproj.obj, seqport.obj, sequtil.obj, simple.obj,-
+    tofasta.obj, tofile.obj, tomedlin.obj,- 
+    valid.obj, sqnutils.obj, subutil.obj, edutil.obj, asn2ff1.obj, asn2ff2.obj,-
+    asn2ff3.obj, asn2ff4.obj, asn2ff5.obj, asn2ff6.obj, ftusrstr.obj,-
+    gbfeat.obj, gbftglob.obj, gbparint.obj, utilpars.obj, ffprint.obj,-
+    wprint.obj, satutil.obj, seqmgr.obj, objmgr.obj, gather.obj,-
+    accmmdbs.obj, acccn3ds.obj,-
+    codon.obj, txalign.obj, jzcoll.obj, jzmisc.obj, maputil.obj, mconsist.obj
+$ rename libncbiobj.olb [-.lib]
+$ !
+$ ! Make libncbicdr.olb
+$ !
+$ cc/nolist/include=([],[-.include]) cdentrez
+$ cc/nolist/include=([],[-.include]) cdml
+$ cc/nolist/include=([],[-.include]) cdromlib
+$ cc/nolist/include=([],[-.include]) cdseq
+$ cc/nolist/include=([],[-.include]) cdconfig
+$ cc/nolist/include=([],[-.include]) casn
+$ cc/nolist/include=([],[-.include]) objentr
+$ libr/obj/create libncbicdr.olb -
+    cdentrez.obj, cdml.obj, cdromlib.obj, cdseq.obj,-
+    cdconfig.obj, casn.obj, objentr.obj
+$ rename libncbicdr.olb [-.lib]
+$ !
+$ ! Make libncbiacc.olb
+$ !
+$ cc/nolist/include=([],[-.include]) accentr
+$ cc/nolist/include=([],[-.include]) accutils
+$ libr/obj/create libncbiacc.olb -
+    accentr.obj, accutils.obj
+$ rename libncbiacc.olb [-.lib]
+$ !
+$ ! Make libncbimmdb.olb
+$ !
+$ cc/nolist/include=([],[-.include]) corematx
+$ cc/nolist/include=([],[-.include]) dvncode
+$ cc/nolist/include=([],[-.include]) objmmdb1
+$ cc/nolist/include=([],[-.include]) objmmdb2
+$ cc/nolist/include=([],[-.include]) objmmdb3
+$ cc/nolist/include=([],[-.include]) mmdbapi
+$ cc/nolist/include=([],[-.include]) mmdbapi1
+$ cc/nolist/include=([],[-.include]) mmdbapi2
+$ cc/nolist/include=([],[-.include]) mmdbapi3
+$ cc/nolist/include=([],[-.include]) mmdbapi4
+$ cc/nolist/include=([],[-.include]) mmdbentr
+$ libr/obj/create libncbimmdb.olb -
+    corematx.obj, dvncode.obj, objmmdb1.obj, objmmdb2.obj, objmmdb3.obj,-
+    mmdbapi.obj, mmdbapi1.obj, mmdbapi2.obj, mmdbapi3.obj, mmdbapi4.obj,-
+    mmdbentr.obj
+$ rename libncbimmdb.olb [-.lib]
+$ !
+$ ! Make libncbitool.olb
+$ !
+$ cc/nolist/include=([],[-.include]) csim
+$ cc/nolist/include=([],[-.include]) db_slist
+$ cc/nolist/include=([],[-.include]) dust
+$ cc/nolist/include=([],[-.include]) falign
+$ cc/nolist/include=([],[-.include]) g_any
+$ cc/nolist/include=([],[-.include]) sim2
+$ cc/nolist/include=([],[-.include]) sim3
+$ cc/nolist/include=([],[-.include]) sim4
+$ cc/nolist/include=([],[-.include]) simutil
+$ cc/nolist/include=([],[-.include]) slist
+$ cc/nolist/include=([],[-.include]) sec
+$ cc/nolist/include=([],[-.include]) tfuns
+$ cc/nolist/include=([],[-.include]) toasn3
+$ cc/nolist/include=([],[-.include]) toporg
+$ cc/nolist/include=([],[-.include]) salsap
+$ cc/nolist/include=([],[-.include]) salstruc
+$ cc/nolist/include=([],[-.include]) salutil
+$ cc/nolist/include=([],[-.include]) urkutil
+$ cc/nolist/include=([],[-.include]) urkpcc
+$ cc/nolist/include=([],[-.include]) urkptpf
+$ cc/nolist/include=([],[-.include]) urkepi
+$ cc/nolist/include=([],[-.include]) urkfltr
+$ cc/nolist/include=([],[-.include]) urkdust
+$ cc/nolist/include=([],[-.include]) urksigu
+$ cc/nolist/include=([],[-.include]) urkbias
+$ cc/nolist/include=([],[-.include]) urkcnsrt
+$ cc/nolist/include=([],[-.include]) urktree
+$ libr/obj/create libncbitool.olb -
+    csim.obj, db_slist.obj, dust.obj, falign.obj, g_any.obj, sim2.obj,-
+    sim3.obj, sim4.obj, simutil.obj, slist.obj, sec.obj, tfuns.obj,-
+    toasn3.obj, toporg.obj,  salsap.obj, salstruc.obj, salutil.obj,-
+    urkutil.obj, urkpcc.obj, urkptpf.obj, urkepi.obj, urkfltr.obj,-
+    urkdust.obj, urksigu.obj, urkbias.obj, urkcnsrt.obj, urktree.obj
+$ rename libncbitool.olb [-.lib]
+$ !
+$ ! Make libvibrant.olb
+$ !
+$ define/nolog X11 decw$include     ! WAG   <X11/Xlib.h>
+$ define/nolog Xm  decw$include     ! WAG   <Xm/*.h>
+$ define/nolog sys sys$library      ! WAG   <sys/*.h>
+$ !
+$ cc/nolist/include=([],[-.include])/DEFINE=WIN_MOTIF vibbutns
+$ cc/nolist/include=([],[-.include])/DEFINE=WIN_MOTIF vibextra
+$ cc/nolist/include=([],[-.include])/DEFINE=WIN_MOTIF vibfiles
+$ cc/nolist/include=([],[-.include])/DEFINE=WIN_MOTIF vibforms
+$ cc/nolist/include=([],[-.include])/DEFINE=WIN_MOTIF vibgroup
+$ cc/nolist/include=([],[-.include])/DEFINE=WIN_MOTIF viblists
+$ cc/nolist/include=([],[-.include])/DEFINE=WIN_MOTIF vibmenus
+$ cc/nolist/include=([],[-.include])/DEFINE=WIN_MOTIF vibprmpt
+$ cc/nolist/include=([],[-.include])/DEFINE=WIN_MOTIF vibsbars
+$ cc/nolist/include=([],[-.include])/DEFINE=WIN_MOTIF vibslate
+$ cc/nolist/include=([],[-.include])/DEFINE=WIN_MOTIF vibtexts
+$ cc/nolist/include=([],[-.include])/DEFINE=WIN_MOTIF vibutils
+$ cc/nolist/include=([],[-.include])/DEFINE=WIN_MOTIF vibwndws
+$ cc/nolist/include=([],[-.include])/DEFINE=WIN_MOTIF ncbidraw
+$ cc/nolist/include=([],[-.include])/DEFINE=WIN_MOTIF drawing
+$ cc/nolist/include=([],[-.include])/DEFINE=WIN_MOTIF mapping
+$ cc/nolist/include=([],[-.include])/DEFINE=WIN_MOTIF picture
+$ cc/nolist/include=([],[-.include])/DEFINE=WIN_MOTIF viewer
+$ cc/nolist/include=([],[-.include])/DEFINE=WIN_MOTIF document
+$ cc/nolist/include=([],[-.include])/DEFINE=WIN_MOTIF palette
+$ cc/nolist/include=([],[-.include])/DEFINE=WIN_MOTIF table
+$ cc/nolist/include=([],[-.include])/DEFINE=WIN_MOTIF diagnost
+$ cc/nolist/include=([],[-.include])/DEFINE=WIN_MOTIF image
+$ cc/nolist/include=([],[-.include])/DEFINE=WIN_MOTIF pictur3d
+$ cc/nolist/include=([],[-.include])/DEFINE=WIN_MOTIF prim3d1
+$ cc/nolist/include=([],[-.include])/DEFINE=WIN_MOTIF prim3d2
+$ cc/nolist/include=([],[-.include])/DEFINE=WIN_MOTIF prim3d3
+$ cc/nolist/include=([],[-.include])/DEFINE=WIN_MOTIF prim3d4
+$ cc/nolist/include=([],[-.include])/DEFINE=WIN_MOTIF prim3d5
+$ cc/nolist/include=([],[-.include])/DEFINE=WIN_MOTIF viewer3d
+$ libr/obj/create libvibrant.olb -
+    vibbutns.obj, vibextra.obj, vibfiles.obj, vibforms.obj,-
+    vibgroup.obj, viblists.obj, vibmenus.obj, vibprmpt.obj,-
+    vibsbars.obj, vibslate.obj, vibtexts.obj, vibutils.obj,-
+    vibwndws.obj, ncbidraw.obj, drawing.obj, mapping.obj,-
+    picture.obj, viewer.obj, document.obj, table.obj, palette.obj,-
+    diagnost.obj, image.obj, pictur3d.obj, prim3d1.obj, prim3d2.obj,-
+    prim3d3.obj, prim3d4.obj, prim3d5.obj, viewer3d.obj
+$ rename libvibrant.olb [-.lib]
+$ !
+$ ! Make libncbidesk.olb
+$ !
+$ cc/nolist/include=([],[-.include]) apparam
+$ cc/nolist/include=([],[-.include]) dlgutil1
+$ cc/nolist/include=([],[-.include]) dlgutil2
+$ cc/nolist/include=([],[-.include]) fstyle
+$ cc/nolist/include=([],[-.include]) smdlg1
+$ cc/nolist/include=([],[-.include]) smdlg2
+$ cc/nolist/include=([],[-.include]) smdlg3
+$ cc/nolist/include=([],[-.include]) smtools
+$ cc/nolist/include=([],[-.include]) styleman
+$ cc/nolist/include=([],[-.include]) stylemui
+$ cc/nolist/include=([],[-.include]) drawseq
+$ cc/nolist/include=([],[-.include]) glbpic
+$ cc/nolist/include=([],[-.include]) layout
+$ cc/nolist/include=([],[-.include]) mapgene
+$ cc/nolist/include=([],[-.include]) prtgene
+$ cc/nolist/include=([],[-.include]) sdisplay
+$ cc/nolist/include=([],[-.include]) saldist
+$ cc/nolist/include=([],[-.include]) saled
+$ cc/nolist/include=([],[-.include]) salfiles
+$ cc/nolist/include=([],[-.include]) salpanel
+$ cc/nolist/include=([],[-.include]) salparam
+$ cc/nolist/include=([],[-.include]) salsa
+$ cc/nolist/include=([],[-.include]) dotmatrx
+$ cc/nolist/include=([],[-.include]) seqfltr
+$ cc/nolist/include=([],[-.include]) seqgraph
+$ cc/nolist/include=([],[-.include]) seqgrphx
+$ cc/nolist/include=([],[-.include]) seqmtrx
+$ cc/nolist/include=([],[-.include]) seqpcc
+$ cc/nolist/include=([],[-.include]) seqptrn
+$ cc/nolist/include=([],[-.include]) seqptrnx
+$ cc/nolist/include=([],[-.include]) seqanal
+$ cc/nolist/include=([],[-.include]) aacomp
+$ cc/nolist/include=([],[-.include]) seqscrl
+$ cc/nolist/include=([],[-.include]) medview
+$ cc/nolist/include=([],[-.include]) vsm
+$ cc/nolist/include=([],[-.include]) vsmfile
+$ cc/nolist/include=([],[-.include]) vsmutil
+$ libr/obj/create libncbidesk.olb -
+    apparam.obj, dlgutil1.obj, dlgutil2.obj,-
+    fstyle.obj, smdlg1.obj, smdlg2.obj,-
+    smdlg3.obj, smtools.obj, styleman.obj, stylemui.obj, drawseq.obj,-
+    dotmatrx.obj, glbpic.obj, layout.obj, mapgene.obj, prtgene.obj,-
+    sdisplay.obj, saled.obj, salfiles.obj, salpanel.obj, salparam.obj,-
+    saldist.obj, salsa.obj,-
+    seqfltr.obj, seqgraph.obj, seqgrphx.obj, seqmtrx.obj,-
+    seqpcc.obj, seqptrn.obj, seqptrnx.obj,-
+    seqanal.obj, aacomp.obj, seqscrl,-
+    viewform.obj, vsm.obj, vsmfile.obj, vsmutil.obj
+$ rename libncbidesk.olb [-.lib]
+$ !
+$ ! Make asntool
+$ !
+$ cc/nolist/include=([],[-.include]) asntool
+$ link/exe=asntool sys$input/option
+asntool
+[-.lib]libvibrant/lib
+[-.lib]libncbi/lib
+sys$share:decw$xlibshr/share
+sys$share:decw$dxmlibshr/shareable
+sys$share:decw$xmlibshr/shareable
+sys$share:decw$xtshr/shareable
+$ exit

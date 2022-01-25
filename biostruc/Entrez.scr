@@ -1,0 +1,400 @@
+/*
+ * $Id: Entrez.scr,v 6.3 1998/07/27 19:35:57 kimelman Exp $
+ * 
+ * This file contains the additions to PubStruct Database on Public 
+ * Entrez Servers
+ *
+ * $Log: Entrez.scr,v $
+ * Revision 6.3  1998/07/27 19:35:57  kimelman
+ * fresh & full lists 2 index reordered in according to 'entrez' modification dates
+ *
+ * Revision 6.2  1998/07/22 22:06:09  kimelman
+ * Enterez removed list : satkey sat date ==> mmdb
+ *
+ * Revision 6.1  1998/07/14 20:24:42  kimelman
+ * FT schema & smart load
+ *
+ * Log: PubStruct_proc.scr,v
+ * Revision 6.7  1998/06/12 17:45:00  kimelman
+ * timestamps history fixed, vacuum cleaning debugged
+ *
+ * Revision 6.6  1998/06/05 18:19:23  kimelman
+ * atextract styled
+ *
+ * Revision 6.5  1998/06/05 17:59:18  kimelman
+ * structure takeover bug fixed
+ */
+/************************************************************************/
+PRINT '/***** SELECT DATABASE PubStruct                             *****/'
+/************************************************************************/
+go
+USE PubStruct
+go
+
+IF EXISTS (SELECT * FROM sysobjects
+    WHERE name = 'id_find_gi'
+    AND   uid = user_id('dbo')
+    AND   type = 'P')
+BEGIN
+    DROP PROCEDURE dbo.id_find_gi
+END
+go
+/************************************************************************/
+PRINT '/*****           PROCEDURE    id_find_gi                     *****/'
+/************************************************************************/
+go
+
+create proc
+id_find_gi(
+          @gi  int,  /* mmdb */
+          @state tinyint  = 0
+          )
+as
+  declare @acc int
+
+  select @acc=acc
+  from Struct
+  where mmdb_id = @gi and state = @state and suppressed = 0
+
+  if @@rowcount = 0 /* looks to be removed */
+    select @acc = -1
+  
+  if @state = 0
+     begin
+       declare @acc1 int
+       
+       select @acc=acc
+       from Struct s, EntrezControl..SatKeyInfo i(1)
+       where s.mmdb_id = @gi and s.state = 0 and s.acc = i.sat_key and i.sat = 10 and i. dumped4entrez = 1
+   
+       if @@rowcount = 0 /* looks to be removed */
+         select @acc = -1
+  end
+  select sat=convert(smallint,10),sat_key=acc,gi_state=convert(tinyint,0)
+  from Struct
+  where acc = @acc
+go
+/*****        Grant and Revoke permissions id_find_gi               *****/
+GRANT EXECUTE ON id_find_gi  TO public
+go
+IF EXISTS (SELECT * FROM sysobjects
+    WHERE name = 'id_get_asnprop'
+    AND   uid = user_id('dbo')
+    AND   type = 'P')
+BEGIN
+    DROP PROCEDURE dbo.id_get_asnprop
+END
+go
+/************************************************************************/
+PRINT '/*****           PROCEDURE    id_get_asnprop                 *****/'
+/************************************************************************/
+go
+
+create proc
+id_get_asnprop ( @sat_key int)
+as
+  select  state=100,confidential, suppress=convert(tinyint,0), override=convert(tinyint,0), length=datalength(blob)
+    from  Struct
+   where  acc = @sat_key
+ 
+go
+/*****        Grant and Revoke permissions id_get_asnprop           *****/
+go
+GRANT EXECUTE ON id_get_asnprop  TO public
+go
+IF EXISTS (SELECT * FROM sysobjects
+    WHERE name = 'id_get_asnblob'
+    AND   uid = user_id('dbo')
+    AND   type = 'P')
+BEGIN
+    DROP PROCEDURE dbo.id_get_asnblob
+END
+go
+/************************************************************************/
+PRINT '/*****           PROCEDURE    id_get_asnblob                 *****/'
+/************************************************************************/
+go
+
+create proc
+id_get_asnblob ( @sat_key int)
+as
+  select asn=blob
+    from Struct
+   where @sat_key = acc
+ 
+go
+/*****        Grant and Revoke permissions id_get_asnblob           *****/
+go
+GRANT EXECUTE ON id_get_asnblob  TO public
+go
+IF EXISTS (SELECT * FROM sysobjects
+    WHERE name = 'id_get_gi_content'
+    AND   uid = user_id('dbo')
+    AND   type = 'P')
+BEGIN
+    DROP PROCEDURE dbo.id_get_gi_content
+END
+go
+/************************************************************************/
+PRINT '/*****           PROCEDURE    id_get_gi_content              *****/'
+/************************************************************************/
+go
+
+create proc
+id_get_gi_content(
+     @sat_key        int,
+     @sat            smallint=10
+     )
+as
+   declare @mod_date       datetime
+   declare @date_entrez    datetime
+   declare @create_date    datetime
+   declare @gi             int
+   declare @pdb_id         char(4)
+   declare @mmdb_id        int
+
+   if(@sat != 10)
+     return 100
+
+   
+   select @mmdb_id= mmdb_id
+   from   Struct
+   where  acc = @sat_key
+   
+   select @pdb_id=pdb_id
+   from   pdb
+   where  mmdb_id = @mmdb_id
+   
+   select @mod_date=min(i.date_entrez)
+   from   Struct s, EntrezControl..SatKeyInfo i(1)
+   where  s.mmdb_id = @mmdb_id and s.acc = i.sat_key and i.sat = 10 
+
+   select @mod_date=isnull(min(i.date_entrez),@mod_date)
+   from   Struct s, EntrezControl..SatKeyInfo i(1)
+   where  s.mmdb_id = @mmdb_id and s.state = 0 and s.acc = i.sat_key and i.sat = 10 
+
+   select @date_entrez=min(i.date_entrez)
+   from   Struct s, EntrezControl..SatKeyInfo i(1)
+   where  s.mmdb_id = @mmdb_id and s.state = 0 and s.acc = i.sat_key and i.sat = 10 
+          and i.date_entrez is not null 
+
+   select @create_date=min(date)
+   from   Struct 
+   where  mmdb_id in (select mmdb_id from pdb where pdb_id = @pdb_id)
+   
+   select @create_date=isnull(min(i.date_entrez),@create_date)
+   from   Struct s, EntrezControl..SatKeyInfo i(1)
+   where  s.state = 0 and s.acc = i.sat_key and i.sat = 10 and i.date_entrez is not null and
+          s.mmdb_id in (select mmdb_id from pdb where pdb_id = @pdb_id)
+   
+   select gi         =@mmdb_id,
+          create_date=@create_date,
+          mod_date   =@mod_date,
+          entrez_date=@date_entrez
+
+  return 0
+ 
+go
+/*****        Grant and Revoke permissions id_get_gi_content        *****/
+go
+GRANT EXECUTE ON id_get_gi_content  TO public
+go
+IF EXISTS (SELECT * FROM sysobjects
+    WHERE name = 'id_get_asn'
+    AND   uid = user_id('dbo')
+    AND   type = 'P')
+BEGIN
+    DROP PROCEDURE dbo.id_get_asn
+END
+go
+/************************************************************************/
+PRINT '/*****           PROCEDURE    id_get_asn                     *****/'
+/************************************************************************/
+go
+
+create proc
+id_get_asn(
+     @gi             int=0,
+     @sat_key        int=0,
+     @sat            smallint=0,
+     @maxplex        int=0,
+     @outfmt         int=0
+     )
+as
+
+  if(@sat != 10)
+     return 100
+
+  if(@outfmt !=100 and @outfmt != 0)
+     return 100
+  
+  if(@sat_key=0)
+    begin
+      select @sat_key = acc
+      from Struct s, EntrezControl..SatKeyInfo i(1)
+      where mmdb_id = @gi and state = 0 and s.acc = i.sat_key and i.sat = 10 and i.dumped4entrez =1
+      if(@@rowcount = 0)
+        return 100
+    end
+
+  exec id_get_asnprop @sat_key
+  exec id_get_asnblob @sat_key
+        
+  if(@outfmt=100)
+    exec id_get_gi_content @sat_key,@sat
+  
+  return 0
+ 
+go
+/*****        Grant and Revoke permissions id_get_asn               *****/
+go
+GRANT EXECUTE ON id_get_asn  TO public
+go
+
+IF EXISTS (SELECT * FROM sysobjects
+    WHERE name = 'post_index'
+    AND   uid = user_id('dbo')
+    AND   type = 'P')
+BEGIN
+    DROP PROCEDURE dbo.post_index
+END
+go
+
+/************************************************************************/
+PRINT '/*****           PROCEDURE    post_index                     *****/'
+/************************************************************************/
+go
+
+create proc
+post_index(@index_key int, @minutes int = null)
+as
+  declare @acc int
+  declare @date datetime
+  
+  if ( @minutes is null )
+    select @date = getdate()
+  else
+    select @date = dateadd(minute,@minutes,'Jan 1 1900')
+
+  update EntrezControl..SatKeyInfo
+  set dumped4entrez = 0
+  from EntrezControl..SatKeyInfo i, Struct a, Struct b
+  where i.sat = 10 and i.dumped4entrez != 1 and i.sat_key = a.acc
+    and a.mmdb_id=b.mmdb_id and b.acc = @index_key
+                                 
+  update EntrezControl..SatKeyInfo
+  set dumped4entrez = 1, date_entrez = isnull(date_entrez,@date)
+  where sat = 10 and sat_key = @index_key
+go
+/*****        Grant and Revoke permissions post_index               *****/
+go
+GRANT EXECUTE ON post_index  TO anyone
+go
+IF EXISTS (SELECT * FROM sysobjects
+    WHERE name = 'post_remove'
+    AND   uid = user_id('dbo')
+    AND   type = 'P')
+BEGIN
+    DROP PROCEDURE dbo.post_remove
+END
+go
+/************************************************************************/
+PRINT '/*****           PROCEDURE    post_remove                    *****/'
+/************************************************************************/
+go
+
+create proc
+post_remove(@index_key int) as
+  declare @acc  int
+  declare @date datetime
+
+  update EntrezControl..SatKeyInfo
+  set dumped4entrez = 0
+  from EntrezControl..SatKeyInfo i(1), Struct a, Struct b
+  where i.sat = 10 and i.dumped4entrez = 1 and i.sat_key = a.acc
+    and a.mmdb_id= @index_key
+go
+/*****        Grant and Revoke permissions post_remove              *****/
+go
+GRANT EXECUTE ON post_remove  TO anyone
+go
+
+IF EXISTS (SELECT * FROM sysobjects
+    WHERE name = 'list2index'
+    AND   uid = user_id('dbo')
+    AND   type = 'P')
+BEGIN
+    DROP PROCEDURE dbo.list2index
+END
+go
+/************************************************************************/
+PRINT '/*****           PROCEDURE    list2index                    *****/'
+/************************************************************************/
+go
+
+create proc
+list2index(@full int = 0)
+as
+begin
+  if (@full = 1)
+     begin
+      select 'fresh '  , s.acc, '10', mod_date=datediff(minute,'Jan 1 1900', isnull(min(i.date_entrez),min(s1.date)))
+      from Struct s, Struct s1, EntrezControl..SatKeyInfo i(1), EntrezControl..SatKeyInfo i1(1)
+      where s.state = 0 and s.suppressed = 0 and i1.sat_key = s.acc and i1.sat=10 and  i1.date_entrez is null
+            and s1.state = 0 and s.mmdb_id = s1.mmdb_id and i.sat_key = s1.acc and i.sat=10
+      group by s.acc
+      order by mod_date,s.acc
+    end
+  else if(@full = -1)
+    begin
+      select 'removed ', mmdb_id
+      from Struct s, EntrezControl..SatKeyInfo i(1)
+      where state = 0 and suppressed > 0 and i.sat_key = s.acc and i.sat=10 and i.dumped4entrez = 1
+        and not exists ( select * from Struct b where b.mmdb_id = s.mmdb_id and b.state = 0 and b.suppressed = 0 )
+      order by mmdb_id
+    end
+  else if(@full = 0)
+    begin
+      select 'data '   , s.acc, '10', mod_date=datediff(minute,'Jan 1 1900', isnull(min(i.date_entrez),min(s1.date)))
+      from Struct s, Struct s1, EntrezControl..SatKeyInfo i(1)
+      where s1.state = 0 and s.mmdb_id = s1.mmdb_id and s.state = 0 and s.suppressed = 0 and
+            i.sat_key = s1.acc and i.sat=10
+      group by s.acc
+      order by mod_date,s.acc
+  end
+end
+go
+GRANT EXECUTE ON list2index TO anyone
+go
+
+IF EXISTS (SELECT * FROM sysobjects
+    WHERE name = 'vacuum_entrez'
+    AND   uid = user_id('dbo')
+    AND   type = 'P')
+BEGIN
+    DROP PROCEDURE dbo.vacuum_entrez
+END
+go
+/************************************************************************/
+PRINT '/*****           PROCEDURE    vacuum_entrez                  *****/'
+/************************************************************************/
+go
+
+create proc
+vacuum_entrez(@days int = 0)
+as
+  declare @acc int
+  declare @obv_date datetime
+  declare @stamp datetime
+
+  /* set the obvilion date */
+  select @obv_date = dateadd(day,-@days,getdate())
+  select @stamp = getdate()
+
+  select acc
+  from Struct s, EntrezControl..SatKeyInfo i(1)
+  where s.state = 0 and i.sat_key = s.acc and i.sat = 10 and s.suppressed >0
+       and date < @obv_date and datalength(blob) > 0 and i.dumped4entrez = 0
+go
+GRANT EXECUTE ON vacuum_entrez TO anyone
+go

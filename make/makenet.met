@@ -1,0 +1,549 @@
+(* ================================================================================
+	makenet.met
+
+	An AppleScript to compile the NCBI Toolkit network libraries with
+	Metrowerks CodeWarrior.
+
+	Revision History:
+	----------------
+
+	??/??/??	Kans		Created
+	10/11/95	Corarito	Modified for CW7
+	11/22/95	Harmon		CopyHdrs script must be run first
+	 2/18/96	Kans		Consolidated all 68K/PPC scripts
+
+	Before running this file, run the copyhdrs.met and makeall.met AppleScripts.
+
+	In order to compile for 68K, change the MASTER property.
+
+	================================================================================ *)
+
+(* ==== Uncomment one of the MASTER symbols ==== *)
+
+property MASTER : "PPC"
+-- property MASTER : "68K"
+
+property MAKELIBS : "TRUE"
+
+(* ==== These symbols will be derived ==== *)
+
+global PREFIX
+global SUFFIX
+
+global HARDDISK
+global METRO
+global METROWERKSCW
+
+global NCBISOURCE
+global ENCRYPTSOURCE
+
+global INCLUDEFILES
+global LIBRARIES
+global BUILD
+
+global DOENCRYPT
+
+(* ==== These subroutines set paths and other preferences during population ==== *)
+
+on DoSetGlobals()
+	if MASTER = "PPC" then
+		set PREFIX to "PPC "
+		set SUFFIX to "ppc"
+	else if MASTER = "68K" then
+		set PREFIX to "68K "
+		set SUFFIX to "68k"
+	end if
+	
+	tell application "Finder"
+		
+		set HARDDISK to startup disk as string
+		set METRO to HARDDISK & "Metrowerks:" as string
+		set METROWERKSCW to METRO & "Metrowerks CodeWarrior:" as string
+		
+		set NCBISOURCE to METRO & "ncbi:" as string
+		set ENCRYPTSOURCE to NCBISOURCE & "network:encrypt:rsaref:" as string
+		
+		set INCLUDEFILES to NCBISOURCE & "include:" as string
+		set LIBRARIES to NCBISOURCE & "lib:" as string
+		set BUILD to NCBISOURCE & "build:" as string
+		
+		if (exists (folder ENCRYPTSOURCE)) then
+			set DOENCRYPT to "TRUE"
+		else
+			set DOENCRYPT to "FALSE"
+		end if
+		
+	end tell
+end DoSetGlobals
+
+on DoSetPreferences()
+	tell application "CodeWarrior IDE 3.0"
+		
+		(* ===== Panel Target ===== *)
+		if MASTER = "PPC" then
+			Set Preferences of panel "Target Settings" to {Linker:"MacOS PPC Linker"}
+		else if MASTER = "68K" then
+			Set Preferences of panel "Target Settings" to {Linker:"MacOS 68K Linker"}
+		end if
+		
+		(* ===== Panel C/C++ Language =====  *)
+		Set Preferences of panel "C/C++ Compiler" to Â
+			{Activate CPlusPlus:false Â
+				, ARM Conformance:false Â
+				, Exception Handling:true Â
+				, Inlining:inline_none Â
+				, RTTI:false Â
+				, Pool Strings:false Â
+				, Dont Reuse Strings:false Â
+				, Require Function Prototypes:true Â
+				, ANSI Strict:false Â
+				, ANSI Keywords Only:false Â
+				, Expand Trigraph Sequences:false Â
+				, MPW Newlines:false Â
+				, MPW Pointer Type Rules:false Â
+				, Enums Always Ints:false Â
+				, Prefix File:""}
+		
+		(* ===== Panel C/C++ Warnings ===== *)
+		Set Preferences of panel "C/C++ Warnings" to Â
+			{Treat Warnings As Errors:false Â
+				, Illegal Pragmas:true Â
+				, Empty Declarations:true Â
+				, Possible Errors:true Â
+				, Unused Variables:true Â
+				, Unused Arguments:false Â
+				, Extra Commas:true Â
+				, Extended Error Checking:true}
+		
+		(* ===== Panel PowerPC Project =====  *)
+		Set Preferences of panel "PPC Project" to {Project Type:library}
+		
+		(* ===== Panel PPC Processor =====  *)
+		Set Preferences of panel "PPC CodeGen" to Â
+			{Struct Alignment:PowerPC Â
+				, Make Strings ReadOnly:false Â
+				, Store Data in TOC:false Â
+				, Use FMADD Instructions:false Â
+				, Use Profiler:false Â
+				, Traceback Tables:false Â
+				, Instruction Scheduling:off Â
+				, Optimize For Size:false Â
+				, Peephole Optimizer:false Â
+				, Global Optimization:false Â
+				, Optimization Level:1}
+		
+		(* ===== Panel PPC Linker ===== *)
+		Set Preferences of panel "PPC Linker" to Â
+			{Generate SYM File:true Â
+				, Full Path In Sym Files:true Â
+				, Generate Link Map:false Â
+				, Suppress Warnings:false Â
+				, Link Mode:fast Â
+				, Initialization Name:Â
+				"", Main Name:Â
+				"__start", Termination Name:""}
+		
+		(* ===== Panel PPC PEF =====  *)
+		Set Preferences of panel "PPC PEF" to Â
+			{Export Symbols:none Â
+				, Old Definition:0 Â
+				, Old Implementation:0 Â
+				, Current Version:0 Â
+				, Code Sorting:nosort Â
+				, Share Data Section:false Â
+				, Expand Uninitialized Data:false Â
+				, Fragment Name:""}
+		
+		(* ===== Panel 68K Project =====  *)
+		Set Preferences of panel "68K Project" to {Project Type:library}
+		
+		(* ===== Panel 68K Processor =====  *)
+		Set Preferences of panel "68K CodeGen" to Â
+			{Code Model:large Â
+				, Struct Alignment:mc68k Â
+				, MC68020 CodeGen:false Â
+				, Floating Point CodeGen:SANE Â
+				, Peephole Optimizer:false Â
+				, Enable Global Optimizations:false Â
+				, Optimize For Size:false Â
+				, PC Relative Strings:false Â
+				, Use Profiler:false Â
+				, Four Bytes Ints:true Â
+				, Eight Byte Double:true Â
+				, Far Data:true Â
+				, Far Method Tables:true Â
+				, Far String Constants:true Â
+				, MPW Calling Conventions:false}
+		
+		(* ===== Panel 68K Linker ===== *)
+		Set Preferences of panel "68K Linker" to Â
+			{MacsBug Symbols:newsymbols Â
+				, Generate SYM File:true Â
+				, Full Path In Sym Files:true Â
+				, Generate Link Map:false Â
+				, Generate A6 Stack Frames:true Â
+				, Link Single Segment:false Â
+				, Suppress Warnings:false Â
+				, Fast Link:true Â
+				, Merge Compiler Glue:false}
+		
+		my DoSetPaths1()
+		
+	end tell
+end DoSetPreferences
+
+on DoSetPaths1()
+	tell application "CodeWarrior IDE 3.0"
+		
+		(* ===== Panel Access Paths ===== *)
+		-- We need to be able to move the default system compiler folder to the end of the list
+		-- because certain files like "all.h" and "all" are defined by both Metrowerks and NCBI.
+		-- We want to find the NCBI "all.h" first.
+		Set Preferences of panel "Access Paths" to {System Paths:{}} -- This removes the compiler default folder
+		
+		Set Preferences of panel "Access Paths" to {User Paths:{{name:INCLUDEFILES, recursive:false, origin:absolute}}}
+		Set Preferences of panel "Access Paths" to {System Paths:{{name:INCLUDEFILES, recursive:false, origin:absolute}}} -- Added for speed
+		
+	end tell
+end DoSetPaths1
+
+on DoSetPaths2()
+	tell application "CodeWarrior IDE 3.0"
+		
+		-- After we have added all paths, reinsert compiler default at end of list
+		Set Preferences of panel "Access Paths" to {System Paths:{{name:":MacOS Support:Headers:", recursive:true, origin:shell relative}}}
+		Set Preferences of panel "Access Paths" to {System Paths:{{name:":MacOS Support:Libraries:", recursive:true, origin:shell relative}}}
+		Set Preferences of panel "Access Paths" to {System Paths:{{name:":Metrowerks Standard Library:MSL C:", recursive:true, origin:shell relative}}}
+		
+	end tell
+end DoSetPaths2
+
+on DoCompileLibraries()
+	tell application "CodeWarrior IDE 3.0"
+		
+		open (LIBRARIES & "ncbiNacc" & SUFFIX & ".µ")
+		Make Project
+		Close Project
+		
+		open (LIBRARIES & "netentr" & SUFFIX & ".µ")
+		Make Project
+		Close Project
+		
+		open (LIBRARIES & "netcli" & SUFFIX & ".µ")
+		Make Project
+		Close Project
+		
+		open (LIBRARIES & "ncsasock" & SUFFIX & ".µ")
+		Make Project
+		Close Project
+		
+		open (LIBRARIES & "ncbibls2" & SUFFIX & ".µ")
+		Make Project
+		Close Project
+		
+		open (LIBRARIES & "ncbibls3" & SUFFIX & ".µ")
+		Make Project
+		Close Project
+		
+		open (LIBRARIES & "ncbiid1" & SUFFIX & ".µ")
+		Make Project
+		Close Project
+		
+		open (LIBRARIES & "ncbimla" & SUFFIX & ".µ")
+		Make Project
+		Close Project
+		
+		open (LIBRARIES & "ncbitxc2" & SUFFIX & ".µ")
+		Make Project
+		Close Project
+		
+		open (LIBRARIES & "vibnet" & SUFFIX & ".µ")
+		Make Project
+		Close Project
+		
+		if DOENCRYPT = "TRUE" then
+			open (LIBRARIES & "netcliE" & SUFFIX & ".µ")
+			Make Project
+			Close Project
+		end if
+		
+	end tell
+end DoCompileLibraries
+
+(* ==== This section populates and builds the libraries ==== *)
+
+with timeout of 60000 seconds
+	my DoSetGlobals()
+	
+	tell application "CodeWarrior IDE 3.0"
+		
+		activate
+		
+		(* ==== This subsection populates all the libraries with the appropriate source files ==== *)
+		
+		(* ================================================================================ *)
+		Create Project {LIBRARIES & "ncbiNacc" & SUFFIX & ".µ"}
+		
+		my DoSetPreferences()
+		Set Preferences of panel "PPC Project" to {File Name:"ncbiNaccppc"}
+		Set Preferences of panel "68K Project" to {File Name:"ncbiNacc68k"}
+		Set Preferences of panel "C/C++ Compiler" to {Prefix File:"net.pfx"}
+		Set Preferences of panel "C/C++ Compiler" to {Require Function Prototypes:false}
+		Set Preferences of panel "Access Paths" to {User Paths:{{name:NCBISOURCE & "cdromlib:", origin:absolute}}}
+		my DoSetPaths2()
+		
+		Add Files {NCBISOURCE & "cdromlib:accentr.c"} To Segment 1
+		Add Files {NCBISOURCE & "cdromlib:accutils.c"} To Segment 1
+		Add Files {NCBISOURCE & "cdromlib:accmmdbs.c"} To Segment 1
+		Add Files {NCBISOURCE & "cdromlib:acccn3ds.c"} To Segment 1
+		
+		Reset File Paths
+		Close Project
+		
+		
+		(* ================================================================================ *)
+		Create Project {LIBRARIES & "netentr" & SUFFIX & ".µ"}
+		
+		my DoSetPreferences()
+		Set Preferences of panel "PPC Project" to {File Name:"netentrppc"}
+		Set Preferences of panel "68K Project" to {File Name:"netentr68k"}
+		Set Preferences of panel "C/C++ Compiler" to {Prefix File:"net.pfx"}
+		Set Preferences of panel "C/C++ Compiler" to {Require Function Prototypes:false}
+		Set Preferences of panel "Access Paths" to {User Paths:{{name:NCBISOURCE & "network:entrez:client:", origin:absolute}}}
+		my DoSetPaths2()
+		
+		Add Files {NCBISOURCE & "network:entrez:client:netentr.c"} To Segment 1
+		Add Files {NCBISOURCE & "network:entrez:client:netlib.c"} To Segment 1
+		Add Files {NCBISOURCE & "network:entrez:client:objneten.c"} To Segment 1
+		
+		Reset File Paths
+		Close Project
+		
+		
+		(* ================================================================================ *)
+		Create Project {LIBRARIES & "netcli" & SUFFIX & ".µ"}
+		
+		my DoSetPreferences()
+		Set Preferences of panel "PPC Project" to {File Name:"netclippc"}
+		Set Preferences of panel "68K Project" to {File Name:"netcli68k"}
+		Set Preferences of panel "C/C++ Compiler" to {Prefix File:"net.pfx"}
+		Set Preferences of panel "C/C++ Compiler" to {Require Function Prototypes:false}
+		Set Preferences of panel "Access Paths" to {User Paths:{{name:NCBISOURCE & "network:nsclilib:", origin:absolute}}}
+		my DoSetPaths2()
+		
+		Add Files {NCBISOURCE & "network:nsclilib:ncbicli.c"} To Segment 1
+		Add Files {NCBISOURCE & "network:nsclilib:ncbisock.c"} To Segment 1
+		Add Files {NCBISOURCE & "network:nsclilib:ncbiurl.c"} To Segment 1
+		Add Files {NCBISOURCE & "network:nsclilib:ncbibuf.c"} To Segment 1
+		Add Files {NCBISOURCE & "network:nsclilib:ni_disp.c"} To Segment 1
+		Add Files {NCBISOURCE & "network:nsclilib:ni_encrs.c"} To Segment 1
+		Add Files {NCBISOURCE & "network:nsclilib:ni_error.c"} To Segment 1
+		Add Files {NCBISOURCE & "network:nsclilib:ni_lib_.c"} To Segment 1
+		Add Files {NCBISOURCE & "network:nsclilib:ni_macdv.c"} To Segment 1
+		Add Files {NCBISOURCE & "network:nsclilib:ni_msg.c"} To Segment 1
+		Add Files {NCBISOURCE & "network:nsclilib:ni_www.c"} To Segment 1
+		Add Files {NCBISOURCE & "network:nsclilib:ni_debug.c"} To Segment 1
+		
+		Reset File Paths
+		Close Project
+		
+		
+		(* ================================================================================ *)
+		Create Project {LIBRARIES & "ncsasock" & SUFFIX & ".µ"}
+		
+		my DoSetPreferences()
+		Set Preferences of panel "PPC Project" to {File Name:"ncsasockppc"}
+		Set Preferences of panel "68K Project" to {File Name:"ncsasock68k"}
+		Set Preferences of panel "PPC CodeGen" to {Struct Alignment:mc68k}
+		Set Preferences of panel "68K CodeGen" to {Four Bytes Ints:true}
+		Set Preferences of panel "C/C++ Compiler" to {Prefix File:"net.pfx"}
+		Set Preferences of panel "C/C++ Compiler" to {Require Function Prototypes:false}
+		Set Preferences of panel "Access Paths" to {User Paths:{{name:NCBISOURCE & "network:ncsasock:", origin:absolute}}}
+		my DoSetPaths2()
+		
+		Add Files {NCBISOURCE & "network:ncsasock:dprintf.c"} To Segment 1
+		Add Files {NCBISOURCE & "network:ncsasock:netdb.c"} To Segment 1
+		Add Files {NCBISOURCE & "network:ncsasock:rexec.c"} To Segment 1
+		Add Files {NCBISOURCE & "network:ncsasock:socket.c"} To Segment 1
+		Add Files {NCBISOURCE & "network:ncsasock:sock_std.c"} To Segment 1
+		Add Files {NCBISOURCE & "network:ncsasock:sock_tcp.c"} To Segment 1
+		Add Files {NCBISOURCE & "network:ncsasock:sock_udp.c"} To Segment 1
+		Add Files {NCBISOURCE & "network:ncsasock:sock_utl.c"} To Segment 1
+		Add Files {NCBISOURCE & "network:ncsasock:syslog.c"} To Segment 1
+		Add Files {NCBISOURCE & "network:ncsasock:tcpglue.c"} To Segment 1
+		Add Files {NCBISOURCE & "network:ncsasock:unixlib.c"} To Segment 1
+		Add Files {METROWERKSCW & "MacOS Support:Headers:System Extras Headers:MacTCP Headers:dnr.c"} To Segment 1
+		
+		Reset File Paths
+		Close Project
+		
+		
+		(* ================================================================================ *)
+		Create Project {LIBRARIES & "ncbibls2" & SUFFIX & ".µ"}
+		
+		my DoSetPreferences()
+		Set Preferences of panel "PPC Project" to {File Name:"ncbibls2ppc"}
+		Set Preferences of panel "68K Project" to {File Name:"ncbibls268k"}
+		Set Preferences of panel "C/C++ Compiler" to {Prefix File:"blast.pfx"}
+		Set Preferences of panel "Access Paths" to {User Paths:{{name:NCBISOURCE & "network:blast2:client:", origin:absolute}}}
+		my DoSetPaths2()
+		
+		Add Files {NCBISOURCE & "network:blast2:client:blast2.c"} To Segment 1
+		Add Files {NCBISOURCE & "network:blast2:client:blstout2.c"} To Segment 1
+		Add Files {NCBISOURCE & "network:blast2:client:netblap2.c"} To Segment 1
+		Add Files {NCBISOURCE & "network:blast2:client:objblst2.c"} To Segment 1
+		Add Files {NCBISOURCE & "network:blast2:client:blastasn.c"} To Segment 1
+		
+		Reset File Paths
+		Close Project
+		
+		
+		(* ================================================================================ *)
+		Create Project {LIBRARIES & "ncbibls3" & SUFFIX & ".µ"}
+		
+		my DoSetPreferences()
+		Set Preferences of panel "PPC Project" to {File Name:"ncbibls3ppc"}
+		Set Preferences of panel "68K Project" to {File Name:"ncbibls368k"}
+		Set Preferences of panel "C/C++ Compiler" to {Prefix File:"blast.pfx"}
+		Set Preferences of panel "Access Paths" to {User Paths:{{name:NCBISOURCE & "network:blast3:client:", origin:absolute}}}
+		my DoSetPaths2()
+		
+		Add Files {NCBISOURCE & "network:blast3:client:netblap3.c"} To Segment 1
+		Add Files {NCBISOURCE & "network:blast3:client:objblst3.c"} To Segment 1
+		
+		Reset File Paths
+		Close Project
+		
+		
+		(* ================================================================================ *)
+		Create Project {LIBRARIES & "ncbiid1" & SUFFIX & ".µ"}
+		
+		my DoSetPreferences()
+		Set Preferences of panel "PPC Project" to {File Name:"ncbiid1ppc"}
+		Set Preferences of panel "68K Project" to {File Name:"ncbiid168k"}
+		Set Preferences of panel "C/C++ Compiler" to {Prefix File:"net.pfx"}
+		Set Preferences of panel "Access Paths" to {User Paths:{{name:NCBISOURCE & "network:id1arch:", origin:absolute}}}
+		my DoSetPaths2()
+		
+		Add Files {NCBISOURCE & "network:id1arch:id1gen.c"} To Segment 1
+		Add Files {NCBISOURCE & "network:id1arch:id1arch.c"} To Segment 1
+		Add Files {NCBISOURCE & "network:id1arch:accid1.c"} To Segment 1
+		
+		Reset File Paths
+		Close Project
+		
+		
+		(* ================================================================================ *)
+		Create Project {LIBRARIES & "ncbimla" & SUFFIX & ".µ"}
+		
+		my DoSetPreferences()
+		Set Preferences of panel "PPC Project" to {File Name:"ncbimlappc"}
+		Set Preferences of panel "68K Project" to {File Name:"ncbimla68k"}
+		Set Preferences of panel "C/C++ Compiler" to {Prefix File:"medarch.pfx"}
+		Set Preferences of panel "Access Paths" to {User Paths:{{name:NCBISOURCE & "network:medarch:client:", origin:absolute}}}
+		my DoSetPaths2()
+		
+		Add Files {NCBISOURCE & "network:medarch:client:medarch.c"} To Segment 1
+		Add Files {NCBISOURCE & "network:medarch:client:medutil.c"} To Segment 1
+		Add Files {NCBISOURCE & "network:medarch:client:objmla.c"} To Segment 1
+		
+		Reset File Paths
+		Close Project
+		
+		
+		(* ================================================================================ *)
+		Create Project {LIBRARIES & "ncbitxc2" & SUFFIX & ".µ"}
+		
+		my DoSetPreferences()
+		Set Preferences of panel "PPC Project" to {File Name:"ncbitxc2ppc"}
+		Set Preferences of panel "68K Project" to {File Name:"ncbitxc268k"}
+		Set Preferences of panel "C/C++ Compiler" to {Prefix File:"tax2.pfx"}
+		Set Preferences of panel "Access Paths" to {User Paths:{{name:NCBISOURCE & "network:taxon1:client:", origin:absolute}}}
+		Set Preferences of panel "Access Paths" to {User Paths:{{name:NCBISOURCE & "network:taxon1:common:", origin:absolute}}}
+		Set Preferences of panel "Access Paths" to {User Paths:{{name:NCBISOURCE & "network:taxon1:taxon2:", origin:absolute}}}
+		my DoSetPaths2()
+		
+		Add Files {NCBISOURCE & "network:taxon1:taxon2:parttree.c"} To Segment 1
+		Add Files {NCBISOURCE & "network:taxon1:taxon2:taxcs.c"} To Segment 1
+		Add Files {NCBISOURCE & "network:taxon1:taxon2:tc2proc.c"} To Segment 1
+		Add Files {NCBISOURCE & "network:taxon1:taxon2:txcdproc.c"} To Segment 1
+		Add Files {NCBISOURCE & "network:taxon1:common:objtax1.c"} To Segment 1
+		Add Files {NCBISOURCE & "network:taxon1:common:taxutil.c"} To Segment 1
+		
+		Reset File Paths
+		Close Project
+		
+		
+		(* ================================================================================ *)
+		Create Project {LIBRARIES & "vibnet" & SUFFIX & ".µ"}
+		
+		my DoSetPreferences()
+		Set Preferences of panel "PPC Project" to {File Name:"vibnetppc"}
+		Set Preferences of panel "68K Project" to {File Name:"vibnet68k"}
+		Set Preferences of panel "C/C++ Compiler" to {Prefix File:"net.pfx"}
+		Set Preferences of panel "Access Paths" to {User Paths:{{name:NCBISOURCE & "network:vibnet:", origin:absolute}}}
+		my DoSetPaths2()
+		
+		Add Files {NCBISOURCE & "network:vibnet:netcnfg.c"} To Segment 1
+		Add Files {NCBISOURCE & "network:vibnet:trmlst.c"} To Segment 1
+		Add Files {NCBISOURCE & "network:vibnet:docsum.c"} To Segment 1
+		
+		Reset File Paths
+		Close Project
+		
+		
+		(* ================================================================================ *)
+		if DOENCRYPT = "TRUE" then
+			Create Project {LIBRARIES & "netcliE" & SUFFIX & ".µ"}
+			
+			my DoSetPreferences()
+			Set Preferences of panel "PPC Project" to {File Name:"netcliEppc"}
+			Set Preferences of panel "68K Project" to {File Name:"netcliE68k"}
+			Set Preferences of panel "C/C++ Compiler" to {Prefix File:"net.pfx"}
+			Set Preferences of panel "C/C++ Compiler" to {Require Function Prototypes:false}
+			Set Preferences of panel "Access Paths" to {User Paths:{{name:NCBISOURCE & "network:nsclilib:", origin:absolute}}}
+			Set Preferences of panel "Access Paths" to {User Paths:{{name:ENCRYPTSOURCE & "source:", origin:absolute}}}
+			my DoSetPaths2()
+			
+			Add Files {NCBISOURCE & "network:nsclilib:ncbicli.c"} To Segment 1
+			Add Files {NCBISOURCE & "network:nsclilib:ncbisock.c"} To Segment 1
+			Add Files {NCBISOURCE & "network:nsclilib:ncbiurl.c"} To Segment 1
+			Add Files {NCBISOURCE & "network:nsclilib:ncbibuf.c"} To Segment 1
+			Add Files {NCBISOURCE & "network:nsclilib:ni_disp.c"} To Segment 1
+			Add Files {NCBISOURCE & "network:nsclilib:ni_encrs.c"} To Segment 1
+			Add Files {NCBISOURCE & "network:nsclilib:ni_error.c"} To Segment 1
+			Add Files {NCBISOURCE & "network:nsclilib:ni_lib_.c"} To Segment 1
+			Add Files {NCBISOURCE & "network:nsclilib:ni_macdv.c"} To Segment 1
+			Add Files {NCBISOURCE & "network:nsclilib:ni_msg.c"} To Segment 1
+			Add Files {NCBISOURCE & "network:nsclilib:ni_www.c"} To Segment 1
+			Add Files {NCBISOURCE & "network:nsclilib:ni_debug.c"} To Segment 1
+
+			Add Files {ENCRYPTSOURCE & "source:desc.c"} To Segment 2
+			Add Files {ENCRYPTSOURCE & "source:digit.c"} To Segment 2
+			Add Files {ENCRYPTSOURCE & "source:digitas.c"} To Segment 2
+			Add Files {ENCRYPTSOURCE & "source:md2c.c"} To Segment 2
+			Add Files {ENCRYPTSOURCE & "source:md5c.c"} To Segment 2
+			Add Files {ENCRYPTSOURCE & "source:nn.c"} To Segment 2
+			Add Files {ENCRYPTSOURCE & "source:prime.c"} To Segment 2
+			Add Files {ENCRYPTSOURCE & "source:rsa.c"} To Segment 2
+			Add Files {ENCRYPTSOURCE & "source:r_encode.c"} To Segment 2
+			Add Files {ENCRYPTSOURCE & "source:r_enhanc.c"} To Segment 2
+			Add Files {ENCRYPTSOURCE & "source:r_keygen.c"} To Segment 2
+			Add Files {ENCRYPTSOURCE & "source:r_random.c"} To Segment 2
+			Add Files {ENCRYPTSOURCE & "source:r_stdlib.c"} To Segment 2
+			
+			Reset File Paths
+			Close Project
+		end if
+		
+		(* ==== This subsection compiles the newly-populated libraries ==== *)
+		
+		if MAKELIBS = "TRUE" then
+			my DoCompileLibraries()
+		end if
+		
+		quit
+		
+	end tell
+end timeout
+

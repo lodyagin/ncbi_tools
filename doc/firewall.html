@@ -1,0 +1,47 @@
+<HTML>
+<HEAD>
+<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=windows-1252">
+<META NAME="Generator" CONTENT="Microsoft Word 97">
+<TITLE>firewall</TITLE>
+<META NAME="Template" CONTENT="D:\Program Files\Microsoft Office\Office\html.dot">
+</HEAD>
+<BODY LINK="#0000ff" VLINK="#800080">
+
+<B><FONT FACE="Arial" SIZE=4><P>NCBI Toolkit and Firewalls</P>
+</B></FONT><FONT FACE="Courier New"><P>NCBI is in the process of switching the method of accessing our databases from a custom protocol to standard http [hyper text transfer protocol]. If you access our databases from behind a security firewall or proxy, you should change your configuration to avoid problems with this release of the toolkit. If you do not know if you are behind a security firewall or proxy, please consult your network administrator. If you are not behind a firewall or proxy, or exclusively use a web browser to access the NCBI databases, you do not need to change your configuration to take advantage of these changes. </P>
+<P>&nbsp;</P>
+</FONT><B><I><FONT FACE="Arial"><P>If you are behind a firewall or proxy:</P>
+</B></I></FONT><FONT FACE="Courier New"><P>To avoid performance problems and other issues, edit your NCBI configuration file (e.g. .ncbirc for unix and ncbi.ini on windows) to include the line "SRV_CONN_MODE=DISPATCHER" underneath the "[NET_SERV]" entry:</P>
+<P>[NET_SERV]</P>
+<P>SRV_CONN_MODE=DISPATCHER</P>
+<P>&nbsp;</P>
+</FONT><B><I><FONT FACE="Arial"><P>What does this do?</P>
+</B></I></FONT><FONT FACE="Courier New"><P>When you first access NCBI databases, the connection is received by a server called a dispatcher. The purpose of the dispatcher is to connect your software to the appropriate database server. For example, if you are looking for article abstracts using Sequin, the dispatcher will connect Sequin to the PubMed server. This dispatcher has been rewritten to use http instead of a custom communications protocol. Because of unresolved issues, it is best at the present time to use the old dispatcher when behind a firewall or proxy, which is done by setting SRV_CONN_MODE=DISPATCHER. There is no need to use the old libraries with this setting, as the new libraries support both the old and new dispatchers.</P>
+<P>&nbsp;</P>
+</FONT><B><I><FONT FACE="Arial"><P>Detailed description of configuration settings:</P>
+</B></I></FONT><FONT FACE="Courier New"><P>SRV_CONN_MODE -- specifies whether to use the old or new dispatcher and if the connection should be persistent or stateless. A stateless connection keeps no record of previous connections. While this is the standard way of using http, it is inefficient. Persistent http is more efficient, but creates problems as it is an uncommon way to use http. We hope to resolve these problems in a future version of the toolkit.</P>
+<P>Values:</P>
+<P>DISPATCHER –- use the old dispatcher</P>
+<P>WWW -- use the new dispatcher via persistent http</P>
+<P>STATELESS -- use the new dispatcher via stateless http</P>
+<P>&nbsp;</P>
+<P>SRV_ENGINE_HOST –- the name of the dispatcher.</P>
+<P>Value:</P>
+<P>www.ncbi.nlm.nih.gov -- default (new dispatcher)</P>
+<P>&nbsp;</P>
+<P>SRV_ENGINE_PORT –- which port on the dispatcher to use.</P>
+<P>Value:</P>
+<P>80 -- default</P>
+<P>&nbsp;</P>
+<P>SRV_ENGINE_URL –- the url used to access the dispatcher, minus the server name.</P>
+<P>Value:</P>
+<P>/Service/nph-dispd.cgi -- default</P>
+<P>&nbsp;</P>
+<P>SRV_PROXY_HOST -- If you are using the new http dispatcher through a proxy or firewall, set this to the name of the proxy or firewall. This will only work with a CERN-type proxy. If you do not know if you have a CERN-type proxy or firewall, please contact your network administrator.</P>
+<P>Value:</P>
+<P>not set –- default</P>
+<P>&nbsp;</P>
+<P>SRV_PROXY_PORT: The port to use on the proxy or firewall</P>
+<P>Value:</P>
+<P>80 -- default</P></FONT></BODY>
+</HTML>

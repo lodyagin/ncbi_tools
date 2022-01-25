@@ -1,0 +1,75 @@
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+DIRECTIONS for building the toolkit on UNIX platforms
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Building the NCBI toolkit
+-----------------------------
+
+1) Get the platform specific tar from the ftp site.  After extraction, at the upper level, find
+   the file ncbi.mk.  It will have the platform specific rules, used as shown below.
+
+   (Note that this tar will have binaries that you might be able to use without even
+    compiling.)
+
+   This file is in the platform specific area so we can be sure they actually worked
+   on those platform at the time the platform specific binaries were compiled by us.
+
+   (This documentation does not state exactly how to do this, so they can be moved
+    without obsoleting this readme.  Email to sd@ncbi.nlm.nih.gov, if you need
+    help finding these files.)
+
+2) The NCBI environmental variable needs to point to the directory which contains this
+   file (ncbi.mk).  So if you are in that directory,
+
+   setenv NCBI `pwd`
+
+   would work for a csh.  It is assumed that this shell will continue to be used in the following.
+
+3) untar the toolkit directory into a directory called 'ncbi'
+   (Alternatively, you may provide the path to the tar file instead of using the
+    '-', in 4 (ii) below.)
+
+4) you will see files in ncbi/make:
+
+   (i) showmake.csh
+  
+       This file should show you what make would do, without actually doing the make.
+
+   (ii) makedis.csh
+
+       This file should actually do the make.
+       Normally, its output is trapped  as 
+ 
+            makedis.csh - |& tee out.makedis.csh
+
+       If there are problems with the make, this is the file which should be
+       sent to toolbox@ncbi.nlm.nih.gov
+
+       in addition, the output of 
+
+         uname -a
+
+       should also be sent.
+
+5) Errors relating to the 'internal/' directory can be ignored.  It is normal
+   for outside users to see these messages.  (We use the same makefiles, internally,
+   for the price of external users seeing these ignored errors, we have only one
+   set of makefiles to maintain for inside and outside of NCBI.)
+
+Karl Sirotkin Fri Jul 24 16:50:19 EDT 1998
+
+
+6) GNU compilers [Denis Vakatov, Wed Aug 19 14:21:54 EDT 1998]
+For some platforms there is a possibility to use GNU compiler "gcc"
+instead of the native one(usually "cc"). If you want to use "gcc"
+just make the following fixes in your "$NCBI/ncbi.mk":
+
+SunOS:
+	NCBI_DEFAULT_LCL = gcc
+	NCBI_CC = gcc
+
+Solaris:
+	NCBI_DEFAULT_LCL = sol
+	NCBI_CC = gcc
+
