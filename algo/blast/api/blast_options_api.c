@@ -1,4 +1,4 @@
-/* $Id: blast_options_api.c,v 1.9 2005/08/08 15:48:22 dondosha Exp $
+/* $Id: blast_options_api.c,v 1.15 2005/10/31 14:14:29 madden Exp $
 ***************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -145,6 +145,52 @@ Int2 SBlastOptionsSetWordSize(SBlastOptions* options, Int4 word_size)
         return -1;
 }
 
+Int2 SBlastOptionsSetThreshold(SBlastOptions* options, Int4 threshold)
+{
+
+    if (!options || !options->lookup_options || !options->score_options)
+        return -1;
+
+    if (threshold < 0)
+       return -2;
+
+    if (Blast_QueryIsNucleotide(options->program) == TRUE && Blast_QueryIsTranslated(options->program) == FALSE)
+        return 0;
+
+   if (threshold == 0)
+   {
+     Int2 status=0;
+     if ((status=BLAST_GetSuggestedThreshold(options->program, options->score_options->matrix, &threshold)) != 0)
+         return status;
+   }
+
+   options->lookup_options->threshold = threshold;
+
+   return 0;
+}
+
+Int2 SBlastOptionsSetWindowSize(SBlastOptions* options, Int4 window_size)
+{
+
+   if (!options || !options->score_options || !options->word_options)
+       return -1;
+
+   if (window_size < 0)
+       return -2;
+
+   if (Blast_QueryIsNucleotide(options->program) == TRUE && Blast_QueryIsTranslated(options->program) == FALSE)
+        return 0;
+
+   if (window_size == 0)
+   {
+     Int2 status=0;
+     if ((status=BLAST_GetSuggestedWindowSize(options->program, options->score_options->matrix, &window_size)) != 0)
+         return status;
+   }
+
+   options->word_options->window_size = window_size;
+}
+
 Int2 SBlastOptionsSetDiscMbParams(SBlastOptions* options, Int4 template_length,
                                  Int4 template_type)
 {
@@ -167,8 +213,58 @@ Int2 SBlastOptionsSetMatrixAndGapCosts(SBlastOptions* options,
     if (!matrix_name || !options || !options->score_options)
         return -1;
     
+    /* Reward penalty do not apply to blastn. */
+    if (options->program == eBlastTypeBlastn)
+        return 0;
+    
     status = 
         BlastScoringOptionsSetMatrix(options->score_options, matrix_name);
+
+    if (status != 0)
+         return status;
+
+    if (gap_open < 0 || gap_extend < 0)
+    {
+        Int4 gap_open_priv = 0;
+        Int4 gap_extend_priv = 0;
+
+        BLAST_GetProteinGapExistenceExtendParams(matrix_name, &gap_open_priv, &gap_extend_priv);
+        if (gap_open < 0)
+            gap_open = gap_open_priv;
+        if (gap_extend < 0)
+            gap_extend = gap_extend_priv;
+    }
+
+    options->score_options->gap_open = gap_open;
+    options->score_options->gap_extend = gap_extend;
+
+    return status;
+}
+
+Int2 SBlastOptionsSetRewardPenaltyAndGapCosts(SBlastOptions* options, 
+                                       Int4 reward, Int4 penalty,
+                                       Int4 gap_open, Int4 gap_extend)
+{
+    Int2 status = 0;
+
+    if (reward <= 0 || penalty >= 0 || !options || !options->score_options)
+        return -1;
+
+    /* Reward penalty only apply to blastn. */
+    if (options->program != eBlastTypeBlastn)
+        return 0;
+    
+    if (gap_open < 0 || gap_extend < 0)
+    {
+        Int4 gap_open_priv = BLAST_GAP_OPEN_NUCL;
+        Int4 gap_extend_priv = BLAST_GAP_EXTN_NUCL;
+
+        BLAST_GetNucleotideGapExistenceExtendParams(reward, penalty, &gap_open_priv, &gap_extend_priv);
+        if (gap_open < 0)
+            gap_open = gap_open_priv;
+        if (gap_extend < 0)
+            gap_extend = gap_extend_priv;
+    }
 
     options->score_options->gap_open = gap_open;
     options->score_options->gap_extend = gap_extend;
@@ -214,6 +310,14 @@ Int2 SBlastOptionsSetDbGeneticCode(SBlastOptions* options, Int4 gc)
 
     return status;
     
+}
+
+Boolean SBlastOptionsGetMaskAtHash(const SBlastOptions* options)
+{
+    ASSERT(options && options->query_options &&
+           options->query_options->filtering_options);
+
+    return options->query_options->filtering_options->mask_at_hash;
 }
 
 /* @} */

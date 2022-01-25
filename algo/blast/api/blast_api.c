@@ -1,4 +1,4 @@
-/* $Id: blast_api.c,v 1.18 2005/08/22 19:24:02 madden Exp $
+/* $Id: blast_api.c,v 1.20 2005/09/19 15:40:03 camacho Exp $
 ***************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -429,7 +429,6 @@ Blast_RunSearch(SeqLoc* query_seqloc,
                  BlastTabularFormatData* tf_data,
                  BlastHSPResults **results,
                  SeqLoc** filter_out,
-                 Boolean* mask_at_hash,
                  Blast_SummaryReturn* extra_returns)
 {
     Int2 status = 0;
@@ -439,6 +438,7 @@ Blast_RunSearch(SeqLoc* query_seqloc,
     BlastSeqLoc* lookup_segments = NULL;
     BlastScoreBlk* sbp = NULL;
     LookupTableWrap* lookup_wrap = NULL;
+    BlastMaskLoc* mask_loc = NULL;
     BlastHSPStream* hsp_stream = NULL;
     const EBlastProgramType kProgram = options->program;
     const Boolean kRpsBlast = 
@@ -447,7 +447,6 @@ Blast_RunSearch(SeqLoc* query_seqloc,
     BlastRPSInfo* rps_info = NULL;
     Nlm_MemMapPtr rps_mmap = NULL;
     Nlm_MemMapPtr rps_pssm_mmap = NULL;
-    BlastMaskInformation mask_info;
     const QuerySetUpOptions* query_options = options->query_options;
     const LookupTableOptions* lookup_options = options->lookup_options;
     const BlastScoringOptions* score_options = options->score_options;
@@ -468,12 +467,9 @@ Blast_RunSearch(SeqLoc* query_seqloc,
     if (options->program == eBlastTypeBlastn)
     {
          SeqLoc* dust_mask = NULL; /* Dust mask locations */
-
          Blast_FindDustSeqLoc(query_seqloc, options, &dust_mask);
-
          /* Combine dust mask with lower case mask */
-         if (dust_mask)
-            masking_locs = ValNodeLink(&masking_locs, dust_mask);
+         ValNodeLink(&masking_locs, dust_mask);
     }
 
     if (kRpsBlast) {
@@ -495,22 +491,17 @@ Blast_RunSearch(SeqLoc* query_seqloc,
     }
 
     status = 
-        BLAST_MainSetUp(kProgram, query_options, score_options, 
-                        hit_options, query, query_info, scale_factor, 
-                        &lookup_segments, &mask_info, &sbp, 
-                        &extra_returns->error);
-
-    if (mask_at_hash)
-        *mask_at_hash = mask_info.mask_at_hash;
+        BLAST_MainSetUp(kProgram, query_options, score_options, query, 
+                        query_info, scale_factor, &lookup_segments, &mask_loc,
+                        &sbp, &extra_returns->error);
 
     if (filter_out) {
         *filter_out = 
-            BlastMaskLocToSeqLoc(kProgram, mask_info.filter_slp, 
-                                 query_seqloc);
+            BlastMaskLocToSeqLoc(kProgram, mask_loc, query_seqloc);
     }
     
     /* Mask locations in BlastMaskLoc form are no longer needed. */
-    BlastMaskLocFree(mask_info.filter_slp);
+    BlastMaskLocFree(mask_loc);
     
     if (status)
         return status;
@@ -559,7 +550,6 @@ Blast_DatabaseSearch(SeqLoc* query_seqloc, char* db_name,
                      BlastTabularFormatData* tf_data,
                      SeqAlign **seqalign_out,
                      SeqLoc** filter_out,
-                     Boolean* mask_at_hash,
                      Blast_SummaryReturn* extra_returns)
 {
     BlastSeqSrc *seq_src = NULL;
@@ -597,7 +587,7 @@ Blast_DatabaseSearch(SeqLoc* query_seqloc, char* db_name,
 
     status = 
         Blast_RunSearch(query_seqloc, seq_src, masking_locs, options, tf_data,
-                         &results, filter_out, mask_at_hash, extra_returns);
+                         &results, filter_out, extra_returns);
 
     /* The ReadDBFILE structure will not be destroyed here, because the 
        initialising function used readdb_attach */
@@ -709,7 +699,7 @@ PHIBlastRunSearch(SeqLoc* query_seqloc, char* db_name, SeqLoc* masking_locs,
        PHI BLAST, so pass NULL in corresponding arguments. */
     status =
         Blast_RunSearch(query_seqloc, seq_src, masking_locs, options, NULL,
-                        &results, filter_out, NULL, extra_returns);
+                        &results, filter_out, extra_returns);
 
     /* The ReadDBFILE structure will not be destroyed here, because the
        initialising function used readdb_attach */
@@ -738,7 +728,6 @@ Blast_TwoSeqLocSetsAdvanced(SeqLoc* query_seqloc,
                             BlastTabularFormatData* tf_data,
                             SeqAlign **seqalign_out,
                             SeqLoc** filter_out,
-                            Boolean* mask_at_hash,
                             Blast_SummaryReturn* extra_returns)
 {
     BlastSeqSrc *seq_src = NULL;
@@ -766,7 +755,7 @@ Blast_TwoSeqLocSetsAdvanced(SeqLoc* query_seqloc,
 
     status = 
         Blast_RunSearch(query_seqloc, seq_src, masking_locs, options, tf_data, 
-                         &results, filter_out, mask_at_hash, extra_returns);
+                         &results, filter_out, extra_returns);
 
     /* The ReadDBFILE structure will not be destroyed here, because the 
        initialising function used readdb_attach */

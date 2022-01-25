@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: blastconcat.c,v 1.10 2005/01/10 18:52:29 coulouri Exp $";
+static char const rcsid[] = "$Id: blastconcat.c,v 1.12 2005/10/06 12:52:23 madden Exp $";
 
 /* ===========================================================================
 *
@@ -33,8 +33,14 @@ Contents: implementation of functions needed for query multiplexing
           functionality.
 
 ******************************************************************************/
-/* $Revision: 1.10 $ 
+/* $Revision: 1.12 $ 
 *  $Log: blastconcat.c,v $
+*  Revision 1.12  2005/10/06 12:52:23  madden
+*  Changes to support correct gapped stats for blastn
+*
+*  Revision 1.11  2005/09/26 15:02:58  morgulis
+*  Fixing some memort leaks when using query concatenation in blastn and tblastn.
+*
 *  Revision 1.10  2005/01/10 18:52:29  coulouri
 *  fixes from morgulis to allow concatenation of >255 queries in [t]blastn
 *
@@ -225,6 +231,8 @@ Uint4 LIBCALL GetNumSpacers PROTO(( BLAST_OptionsBlkPtr options, Boolean believe
 
   if( StringCmp( options->program_name, "blastn" ) == 0 )
   {
+    BlastKarlinBlkNuclGappedCalc(sbp->kbp_gap_std[first_context], options->gap_open, options->gap_extend, options->reward, options->penalty, sbp->kbp_std[first_context], &(sbp->round_down), &error_return);
+
     if( first_context == 0 )
       BlastScoreBlkFill( sbp, (CharPtr)query_seq_start, query_length, 0 );
 
@@ -296,6 +304,7 @@ Uint4 LIBCALL GetNumSpacers PROTO(( BLAST_OptionsBlkPtr options, Boolean believe
   BLAST_ScoreBlkDestruct( sbp );
   SeqLocFree( query_slp );
   SeqMgrDeleteFromBioseqIndex( fake_bsp );
+  MemFree(query_seq_start);
   return (Uint4)ceil( ((Nlm_FloatHi)max_dropoff*1.5)/X_score );
 }
 
@@ -538,16 +547,16 @@ SeqAlignPtrArray LIBCALL DivideSeqAligns PROTO(( BLAST_OptionsBlkPtr options,
 	  for( ; i < (dsp->dim)*(dsp->numseg); i += dsp->dim )
 	  {
             start = dsp->starts[i];
-	    query = mult_queries->WhichQuery[start + 1] - 1;
 	    
 	    if( start != -1 )
-	      start = start - mult_queries->QueryStarts[query];
+	      start = start - mult_queries->QueryStarts[count];
 
             dsp->starts[i] = start;
 	  }
 
-	  tmpid = SeqIdDup( mult_queries->FakeBsps[query]->id );
+	  tmpid = SeqIdDup( mult_queries->FakeBsps[count]->id );
 	  tmpid->next = dsp->ids->next;
+          SeqIdFree( dsp->ids );
 	  dsp->ids = tmpid;
         }
         else
@@ -555,22 +564,8 @@ SeqAlignPtrArray LIBCALL DivideSeqAligns PROTO(( BLAST_OptionsBlkPtr options,
 	  Uint4 end = 0, len;
 	  SeqLocPtr loc, newloc = NULL;
 	  StdSegPtr ssp = (StdSegPtr)(sap->segs);
-	  StdSegPtr tmpssp = ssp;
 	  SeqIdPtr newid = NULL;
-
-	  while( tmpssp )
-	  {
-	    if( ssp->loc->choice != SEQLOC_EMPTY )
-	    {
-	      loc = ssp->loc;
-	      start = SeqLocStart( loc );
-	      query = mult_queries->WhichQuery[start + 1] - 1;
-	      tmpid = SeqIdDup( mult_queries->FakeBsps[query]->id );
-	      break;
-	    }
-
-	    tmpssp = tmpssp->next;
-	  }
+	  tmpid = mult_queries->FakeBsps[count]->id;
 
 	  while( ssp )
 	  {
@@ -581,7 +576,7 @@ SeqAlignPtrArray LIBCALL DivideSeqAligns PROTO(( BLAST_OptionsBlkPtr options,
 	    {
 	      end = SeqLocStop( loc );
 	      len = end - start;
-	      start = start - mult_queries->QueryStarts[query];
+	      start = start - mult_queries->QueryStarts[count];
 	      end = start + len;
 	      newloc = SeqLocIntNew( start, end, SeqLocStrand( loc ), tmpid );
 	    }
@@ -594,6 +589,7 @@ SeqAlignPtrArray LIBCALL DivideSeqAligns PROTO(( BLAST_OptionsBlkPtr options,
 
 	    newid = SeqIdDup( tmpid );
 	    newid->next = ssp->ids->next;
+            SeqIdFree( ssp->ids );
 	    ssp->ids = newid; 
 	    newloc->next = loc->next;
 	    ssp->loc = newloc;
@@ -774,6 +770,7 @@ BlastMakeFakeBspConcat PROTO((BspArray bsp_arr, Uint4 num_bsps, Boolean is_na, U
 	    if( bsp_iter ) StrCat( (CharPtr) concat_seq, (CharPtr) spacer_seq_prot );
 
 	    StrCat( (CharPtr) concat_seq, (CharPtr) indiv_seq );
+            indiv_seq = MemFree(indiv_seq);
 	  }
 	}  
 
@@ -783,6 +780,7 @@ BlastMakeFakeBspConcat PROTO((BspArray bsp_arr, Uint4 num_bsps, Boolean is_na, U
 	tot->seq_data = byte_store;
 	tot->length = tot_len;	
 	
+        MemFree(concat_seq);
         MemFree( (void *)spacer_seq_nuc );
 	return (tot);
 }
@@ -822,6 +820,40 @@ QueriesPtr LIBCALL BlastDuplicateMultQueries PROTO(( QueriesPtr source ))
   result->lambda_array = source->lambda_array;
   result->sap_array_data = source->sap_array_data;
   return result;
+}
+
+QueriesPtr LIBCALL BlastMultQueriesDestruct PROTO(( QueriesPtr queries ))
+{ 
+    Int4 i;
+
+    if( queries ) {
+        for( i = 0; i < queries->NumQueries; ++i ) {
+            MemFree( queries->result_info[i].results );
+
+            if( queries->HitListArray )
+                BlastHitListDestruct( queries->HitListArray[i] );
+        }
+
+        if( queries->sap_array_data )
+            MemFree( queries->sap_array_data->sap_array );
+
+        MemFree( queries->WhichPos );
+        MemFree( queries->WhichQuery );
+        MemFree( queries->sap_array_data );
+        MemFree( queries->dropoff_2nd_pass_array );
+        MemFree( queries->lambda_array );
+        MemFree( queries->result_info );
+        MemFree( queries->EffLengths );
+        MemFree( queries->Adjustments );
+        MemFree( queries->DbLenEff );
+        MemFree( queries->SearchSpEff );
+        MemFree( queries->QueryEnds );
+        MemFree( queries->QueryStarts );
+        MemFree( queries->FakeBsps );
+        MemFree( queries->HitListArray );
+    }
+
+    return MemFree( queries ); 
 }
 
 /* BlastMakeMultQueries

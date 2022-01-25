@@ -9,8 +9,8 @@
 #include <asn.h>
 #endif
 
-static char * asnfilename = "cn3d.h14";
-static AsnValxNode avnx[38] = {
+static char * asnfilename = "cn3d.h15";
+static AsnValxNode avnx[39] = {
     {20,"off" ,1,0.0,&avnx[1] } ,
     {20,"trace" ,2,0.0,&avnx[2] } ,
     {20,"partial" ,3,0.0,&avnx[3] } ,
@@ -27,27 +27,28 @@ static AsnValxNode avnx[38] = {
     {20,"object" ,2,0.0,&avnx[14] } ,
     {20,"molecule" ,3,0.0,&avnx[15] } ,
     {20,"domain" ,4,0.0,&avnx[16] } ,
-    {20,"secondary-structure" ,5,0.0,&avnx[17] } ,
-    {20,"user-select" ,6,0.0,&avnx[18] } ,
-    {20,"aligned" ,7,0.0,&avnx[19] } ,
-    {20,"identity" ,8,0.0,&avnx[20] } ,
-    {20,"variety" ,9,0.0,&avnx[21] } ,
-    {20,"weighted-variety" ,10,0.0,&avnx[22] } ,
-    {20,"information-content" ,11,0.0,&avnx[23] } ,
-    {20,"fit" ,12,0.0,&avnx[24] } ,
-    {20,"block-fit" ,17,0.0,&avnx[25] } ,
-    {20,"block-z-fit" ,18,0.0,&avnx[26] } ,
-    {20,"block-row-fit" ,19,0.0,&avnx[27] } ,
-    {20,"temperature" ,13,0.0,&avnx[28] } ,
-    {20,"hydrophobicity" ,14,0.0,&avnx[29] } ,
-    {20,"charge" ,15,0.0,&avnx[30] } ,
+    {20,"residue" ,20,0.0,&avnx[17] } ,
+    {20,"secondary-structure" ,5,0.0,&avnx[18] } ,
+    {20,"user-select" ,6,0.0,&avnx[19] } ,
+    {20,"aligned" ,7,0.0,&avnx[20] } ,
+    {20,"identity" ,8,0.0,&avnx[21] } ,
+    {20,"variety" ,9,0.0,&avnx[22] } ,
+    {20,"weighted-variety" ,10,0.0,&avnx[23] } ,
+    {20,"information-content" ,11,0.0,&avnx[24] } ,
+    {20,"fit" ,12,0.0,&avnx[25] } ,
+    {20,"block-fit" ,17,0.0,&avnx[26] } ,
+    {20,"block-z-fit" ,18,0.0,&avnx[27] } ,
+    {20,"block-row-fit" ,19,0.0,&avnx[28] } ,
+    {20,"temperature" ,13,0.0,&avnx[29] } ,
+    {20,"hydrophobicity" ,14,0.0,&avnx[30] } ,
+    {20,"charge" ,15,0.0,&avnx[31] } ,
     {20,"rainbow" ,16,0.0,NULL } ,
     {3,NULL,255,0.0,NULL } ,
     {3,NULL,255,0.0,NULL } ,
-    {20,"one-letter" ,1,0.0,&avnx[34] } ,
+    {20,"one-letter" ,1,0.0,&avnx[35] } ,
     {20,"three-letter" ,2,0.0,NULL } ,
-    {20,"none" ,0,0.0,&avnx[36] } ,
-    {20,"sequential" ,1,0.0,&avnx[37] } ,
+    {20,"none" ,0,0.0,&avnx[37] } ,
+    {20,"sequential" ,1,0.0,&avnx[38] } ,
     {20,"pdb" ,2,0.0,NULL } };
 
 static AsnType atx[125] = {
@@ -67,12 +68,12 @@ static AsnType atx[125] = {
   {408, "Cn3d-color-scheme" ,1,0,0,0,0,0,0,0,NULL,&atx[9],&avnx[12],0,&atx[15]} ,
   {0, "user-color" ,128,3,0,0,0,0,0,0,NULL,&atx[15],NULL,0,NULL} ,
   {409, "Cn3d-color" ,1,0,0,0,0,0,0,0,NULL,&atx[22],&atx[16],0,&atx[6]} ,
-  {0, "scale-factor" ,128,0,0,0,1,0,0,0,&avnx[31],&atx[17],NULL,0,&atx[18]} ,
+  {0, "scale-factor" ,128,0,0,0,1,0,0,0,&avnx[32],&atx[17],NULL,0,&atx[18]} ,
   {302, "INTEGER" ,0,2,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} ,
   {0, "red" ,128,1,0,0,0,0,0,0,NULL,&atx[17],NULL,0,&atx[19]} ,
   {0, "green" ,128,2,0,0,0,0,0,0,NULL,&atx[17],NULL,0,&atx[20]} ,
   {0, "blue" ,128,3,0,0,0,0,0,0,NULL,&atx[17],NULL,0,&atx[21]} ,
-  {0, "alpha" ,128,4,0,0,1,0,0,0,&avnx[32],&atx[17],NULL,0,NULL} ,
+  {0, "alpha" ,128,4,0,0,1,0,0,0,&avnx[33],&atx[17],NULL,0,NULL} ,
   {311, "SEQUENCE" ,0,16,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} ,
   {0, "nucleotide-backbone" ,128,2,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[24]} ,
   {0, "protein-sidechains" ,128,3,0,0,0,0,0,0,NULL,&atx[25],NULL,0,&atx[31]} ,
@@ -104,8 +105,8 @@ static AsnType atx[125] = {
   {0, "protein-labels" ,128,23,0,1,0,0,0,0,NULL,&atx[51],NULL,0,&atx[57]} ,
   {412, "Cn3d-backbone-label-style" ,1,0,0,0,0,0,0,0,NULL,&atx[22],&atx[52],0,&atx[2]} ,
   {0, "spacing" ,128,0,0,0,0,0,0,0,NULL,&atx[17],NULL,0,&atx[53]} ,
-  {0, "type" ,128,1,0,0,0,0,0,0,NULL,&atx[9],&avnx[33],0,&atx[54]} ,
-  {0, "number" ,128,2,0,0,0,0,0,0,NULL,&atx[9],&avnx[35],0,&atx[55]} ,
+  {0, "type" ,128,1,0,0,0,0,0,0,NULL,&atx[9],&avnx[34],0,&atx[54]} ,
+  {0, "number" ,128,2,0,0,0,0,0,0,NULL,&atx[9],&avnx[36],0,&atx[55]} ,
   {0, "termini" ,128,3,0,0,0,0,0,0,NULL,&atx[27],NULL,0,&atx[56]} ,
   {0, "white" ,128,4,0,0,0,0,0,0,NULL,&atx[27],NULL,0,NULL} ,
   {0, "nucleotide-labels" ,128,24,0,1,0,0,0,0,NULL,&atx[51],NULL,0,&atx[58]} ,
@@ -178,7 +179,7 @@ static AsnType atx[125] = {
   {314, "SET OF" ,0,17,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} };
 
 static AsnModule ampx[1] = {
-  { "NCBI-Cn3d" , "cn3d.h14",&atx[0],NULL,NULL,0,0} };
+  { "NCBI-Cn3d" , "cn3d.h15",&atx[0],NULL,NULL,0,0} };
 
 static AsnValxNodePtr avn = avnx;
 static AsnTypePtr at = atx;

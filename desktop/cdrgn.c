@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.78 $
+* $Revision: 6.80 $
 *
 * File Description: 
 *
@@ -136,6 +136,7 @@ typedef struct rnaform {
   DialoG        foldertabs;
   Int2          currentPage;
   TexT          prodSeqIdTxt;
+  Boolean       empty_feat;
 } RnaForm, PNTR RnaFormPtr;
 
 typedef struct rnapage {
@@ -5342,7 +5343,7 @@ static void RnaRefPtrToRnaPage (DialoG d, Pointer data)
   rpp = (RnaPagePtr) GetObjectExtra (d);
   rrp = (RnaRefPtr) data;
 
-  if (rpp != NULL) {
+  if (rrp != NULL) {
     SetEnumPopup (rpp->type, rna_type_alist,
                   (UIEnum) check_rna_type (rrp->type));
     SafeSetStatus (rpp->pseudo, rrp->pseudo);
@@ -6210,6 +6211,23 @@ static void RnaRefPtrToForm (ForM f, Pointer data)
   }
 }
 
+
+static void RnaFormClearButtonProc (ButtoN b)
+{
+  RnaFormPtr         rfp;
+
+  rfp = (RnaFormPtr) GetObjectExtra (b);
+  if (rfp != NULL)
+  {
+    PointerToDialog (rfp->data, NULL);
+    SendMessageToDialog (rfp->data, VIB_MSG_INIT);
+    SendMessageToDialog (rfp->location, NUM_VIB_MSG + 1);
+
+    SeqFeatPtrToCommon ((FeatureFormPtr) rfp, NULL);
+    
+  }
+}
+
 extern ForM CreateRnaForm (Int2 left, Int2 top, CharPtr title,
                            SeqFeatPtr sfp, SeqEntryPtr sep,
                            Uint2 subtype, FormActnFunc actproc)
@@ -6219,10 +6237,12 @@ extern ForM CreateRnaForm (Int2 left, Int2 top, CharPtr title,
   GrouP              c;
   GrouP              g;
   GrouP              h;
+  GrouP              k;
   RnaFormPtr         rfp;
   GrouP              s;
   StdEditorProcsPtr  sepp;
   WindoW             w;
+  Boolean            indexerVersion;
 
   w = NULL;
   rfp = (RnaFormPtr) MemNew (sizeof (RnaForm));
@@ -6237,6 +6257,15 @@ extern ForM CreateRnaForm (Int2 left, Int2 top, CharPtr title,
     rfp->testform = NULL;
     rfp->importform = ImportRnaForm;
     rfp->exportform = ExportRnaForm;
+    
+    if (sfp == NULL)
+    {
+      rfp->empty_feat = TRUE;
+    }
+    else
+    {
+      rfp->empty_feat = FALSE;
+    }
 
 #ifndef WIN_MAC
     CreateStdEditorFormMenus (w);
@@ -6292,11 +6321,27 @@ extern ForM CreateRnaForm (Int2 left, Int2 top, CharPtr title,
                   NULL);
     AlignObjects (ALIGN_CENTER, (HANDLE) rfp->foldertabs, (HANDLE) h, NULL);
 
+    indexerVersion = (Boolean) (GetAppProperty ("InternalNcbiSequin") != NULL);
+    if (rfp->empty_feat && indexerVersion)
+    {
+      k = HiddenGroup (w, 2, 0, NULL);
+      SetGroupSpacing (k, 10, 10);
+      b = PushButton (k, "Clear", RnaFormClearButtonProc);
+      SetObjectExtra (b, rfp, NULL);
+      rfp->leave_dlg_up = CheckBox (k, "Leave Dialog Up", NULL);
+    }
+    else
+    {
+      k = NULL;
+      rfp->leave_dlg_up = NULL;
+    }
+
     c = HiddenGroup (w, 2, 0, NULL);
     b = PushButton (c, "Accept", StdFeatFormAcceptButtonProc);
     SetObjectExtra (b, rfp, NULL);
     PushButton (c, "Cancel", StdCancelButtonProc);
-    AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) c, NULL);
+    
+    AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) c, (HANDLE) k, NULL);
     RealizeWindow (w);
 
     SendMessageToDialog (rfp->data, VIB_MSG_INIT);

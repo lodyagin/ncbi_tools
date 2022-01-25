@@ -32,8 +32,11 @@ Contents: definitions and prototypes used by blastkar.c to calculate BLAST
 
 ******************************************************************************/
 
-/* $Revision: 6.40 $ 
+/* $Revision: 6.41 $ 
 * $Log: blastkar.h,v $
+* Revision 6.41  2005/10/06 12:49:39  madden
+* Add prototypes for BlastKarlinGetNuclAlphaBeta and BlastKarlinBlkNuclGappedCalc
+*
 * Revision 6.40  2005/07/27 17:48:57  coulouri
 * remove hardcoded paths
 *
@@ -437,6 +440,7 @@ protein alphabet (e.g., ncbistdaa etc.), FALSE for nt. alphabets. */
 	Int4	effective_query_length; /* shortened query length. */
 	Int8	effective_db_length;	/* trimmed db length */
 	Int8	effective_search_sp;	/* product of above two */
+        Boolean round_down; /* round down to next even score if the score is odd. */
 	} BLAST_ScoreBlk, PNTR BLAST_ScoreBlkPtr;
 
 /* Used for communicating between BLAST and other applications. */
@@ -634,6 +638,17 @@ Int2 LIBCALL BlastKarlinGetDefaultMatrixValues PROTO((CharPtr matrix, Int4Ptr op
 
 Int4Ptr PNTR LIBCALL BlastMatrixToTxMatrix PROTO((BLAST_MatrixPtr matrix));
 Int4Ptr PNTR LIBCALL TxMatrixDestruct PROTO((Int4Ptr PNTR txmatrix)); 
+
+Int2 BlastKarlinGetNuclAlphaBeta PROTO((Int4 reward, Int4 penalty, Int4 gap_open,
+                            Int4 gap_extend, BLAST_KarlinBlkPtr kbp,
+                            Boolean gapped_calculation,
+                            double *alpha, double *beta));
+
+Int2 BlastKarlinBlkNuclGappedCalc PROTO((BLAST_KarlinBlk* kbp, Int4 gap_open,
+                              Int4 gap_extend, Int4 reward, Int4 penalty,
+                              BLAST_KarlinBlk* kbp_ungap,
+                              Boolean* round_down,
+                              ValNodePtr* error_return));
 
 Int4
 BlastComputeLengthAdjustment(Nlm_FloatHi K,

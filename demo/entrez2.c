@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   06/16/00
 *
-* $Revision: 6.26 $
+* $Revision: 6.28 $
 *
 * File Description: 
 *
@@ -61,7 +61,7 @@
 
 #include <entrez2.h>
 
-#define ENTREZ_APP_VERSION "9.35"
+#define ENTREZ_APP_VERSION "9.5"
 
 #define MAX_QUERY_FORMS 256
 
@@ -1025,7 +1025,7 @@ Int2 Main (void)
   } else if (useTestServ) {
     EntrezSetService ("Entrez2Test");
   } else if (useURL) {
-    EntrezSetServer (server, port, path);
+    /* EntrezSetServer (server, port, path); */
   }
 
   /*---------------------------------------*/

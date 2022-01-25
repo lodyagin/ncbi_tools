@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: dust_filter.c,v 1.4 2005/08/17 16:24:44 dondosha Exp $";
+static char const rcsid[] = "$Id: dust_filter.c,v 1.5 2005/09/20 00:04:27 camacho Exp $";
 
 /*
  * ===========================================================================
@@ -57,6 +57,7 @@ s_GetFilteringLocations(BLAST_SequenceBlk* query_blk, BlastQueryInfo* query_info
     const Boolean kIsNucl = TRUE;
     Boolean no_forward_strand = (query_info->first_context > 0);  /* filtering needed on reverse strand. */
     SeqLoc* slp_var = query_seqloc;
+Int4 qindex = 0;
 
     ASSERT(query_info && query_blk && filter_maskloc && query_seqloc);
 
@@ -82,7 +83,7 @@ s_GetFilteringLocations(BLAST_SequenceBlk* query_blk, BlastQueryInfo* query_info
         if (!reverse || no_forward_strand)
         {
             BlastSeqLoc *filter_slp = NULL;   /* Used to hold combined SeqLoc's */
-            Int4 filter_index = BlastGetMaskLocIndexFromContext(kIsNucl, context);
+            Int4 filter_index = context;
             Int4 context_offset = query_info->contexts[context].query_offset;
             Uint1* buffer = &query_blk->sequence[context_offset];
             SDustOptions* dust_options = filter_options->dustOptions;

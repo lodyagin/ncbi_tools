@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: blastutl.c,v 6.462 2005/07/28 14:57:09 coulouri Exp $";
+static char const rcsid[] = "$Id: blastutl.c,v 6.464 2005/12/01 15:10:23 madden Exp $";
 
 /* ===========================================================================
 *
@@ -32,12 +32,18 @@ Author: Tom Madden
 
 Contents: Utilities for BLAST
 
-$Revision: 6.462 $
+$Revision: 6.464 $
 
 ******************************************************************************/
 /*
  *
 * $Log: blastutl.c,v $
+* Revision 6.464  2005/12/01 15:10:23  madden
+* Gave BLASTCheckHSPInclusion external linkage (i.e. removed the static specifier).
+*
+* Revision 6.463  2005/10/13 15:59:06  camacho
+* Add code to fix cutoff scores in PSI-BLAST.
+*
 * Revision 6.462  2005/07/28 14:57:09  coulouri
 * remove dead code
 *
@@ -1812,7 +1818,6 @@ $Revision: 6.462 $
 #include <rpsutil.h>
 #include <simutil.h>
 #include <blfmtutl.h>
-
 
 typedef struct _pgp_blast_options {
     BLAST_OptionsBlkPtr options;
@@ -4480,6 +4485,30 @@ static int LIBCALLBACK ResultHspWithIdIndexCmp(VoidPtr v1, VoidPtr v2)
 #define CLUSTER_OVERLAP_THRESH 0.9
 #define CLUSTER_SCORE_THRESH 1.6
 
+Nlm_FloatHi s_ComputeAverageLength(const BlastSearchBlk* search)
+{
+    Nlm_FloatHi retval = 0.0;
+
+	if (StringCmp(search->prog_name, "blastn") != 0) {
+		retval = BLAST_AA_AVGLEN;
+	} else {
+		retval = BLAST_NT_AVGLEN;
+	}
+
+    if (search->rdfp) {
+		Int4 total_number = 0;
+		Int8 total_length = 0;
+
+		readdb_get_totals(search->rdfp, &total_length, &total_number);
+		if (total_number > 0)
+			retval = total_length/total_number;
+    } else if (search->dblen > 0 && search->dbseq_num == 1) {
+        retval = search->dblen;
+    }
+
+    return retval;
+}
+
 SeqAlignPtr LIBCALL
 BioseqBlastEngineCore(BlastSearchBlkPtr search, BLAST_OptionsBlkPtr options,
                         Int4Ptr *pos_matrix)
@@ -4503,7 +4532,6 @@ BioseqBlastEngineCore(BlastSearchBlkPtr search, BLAST_OptionsBlkPtr options,
 
 	if (search == NULL || search->query_invalid)
 		return NULL;
-
 
 	/* If pos_matrix is not NULL, then psi-blast iterations are being 
 	performed.  The first psi-blast iteration should be with normal
@@ -4529,6 +4557,7 @@ BioseqBlastEngineCore(BlastSearchBlkPtr search, BLAST_OptionsBlkPtr options,
 		       search->wfp_second = BLAST_WordFinderNew(search->sbp->alphabet_size,options->wordsize,1, FALSE);
 		}
 
+
 		/* Only find words once if thresholds are the same. */
                  search->wfp = search->wfp_first;
 		 if (search->whole_query == TRUE)
@@ -4537,6 +4566,20 @@ BioseqBlastEngineCore(BlastSearchBlkPtr search, BLAST_OptionsBlkPtr options,
                  	BlastNewFindWords(search, search->required_start, search->required_end, search->pbp->threshold_second, (Uint1) 0);
                  lookup_position_aux_destruct(search->wfp->lookup);
                  search->wfp_second = search->wfp_first;
+
+#if 0
+            /* recalculate the cutoff scores with the newly calculated
+               Karlin-Altschul parameters. */
+            blast_set_parameters(search, 
+                                 options->dropoff_1st_pass,
+                                 options->dropoff_2nd_pass,
+                                 s_ComputeAverageLength(search),
+                                 search->searchsp_eff,
+                                 options->window_size);
+              /* ... and make sure that the appropriate cutoff is used in the
+               * word finder */
+            search->pbp->cutoff_s2_set = TRUE;
+#endif
 	}
 
 	/* Starting awake thread if multithreaded. */
@@ -8822,8 +8865,8 @@ static void rpsFilterSequenceByMask(ValNodePtr mask, Uint1Ptr sequence, Int4 len
     return;
 }
 
-static void BLASTCheckHSPInclusion(BLAST_HSPPtr *hsp_array, Int4 hspcnt, 
-                                   Boolean is_ooframe)
+void BLASTCheckHSPInclusion(BLAST_HSPPtr *hsp_array, Int4 hspcnt, 
+                            Boolean is_ooframe)
 {
     Int4 index, index1;
     BLAST_HSPPtr hsp, hsp1;

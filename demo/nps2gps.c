@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   5/12/05
 *
-* $Revision: 1.6 $
+* $Revision: 1.7 $
 *
 * File Description:
 *
@@ -50,7 +50,7 @@
 #include <toasn3.h>
 #include <pmfapi.h>
 
-#define NPS2GPSAPP_VER "1.4"
+#define NPS2GPSAPP_VER "1.5"
 
 CharPtr NPS2GPSAPPLICATION = NPS2GPSAPP_VER;
 
@@ -546,7 +546,7 @@ static void LoopThroughCDSs (BioseqPtr bsp, Int2Ptr ctrp, N2GPtr ngp)
   }
 }
 
-static void NPStoGPS (Uint2 entityID, CharPtr filename, N2GPtr ngp)
+static void NPStoGPS (Uint2 entityID, CharPtr filename, N2GPtr ngp, SeqDescrPtr descr)
 
 {
   BioSourcePtr       biop;
@@ -691,7 +691,7 @@ static void NPStoGPS (Uint2 entityID, CharPtr filename, N2GPtr ngp)
   SeqMgrIndexFeatures (bssp->idx.entityID, NULL);
 
   organism = NULL;
-  for (sdp = bssp->descr; sdp != NULL; sdp = sdp->next) {
+  for (sdp = descr; sdp != NULL; sdp = sdp->next) {
     if (sdp->choice != Seq_descr_source) continue;
     biop = (BioSourcePtr) sdp->data.ptrvalue;
     if (biop == NULL) continue;
@@ -816,7 +816,7 @@ static void ProcessOneRecord (
 
       /* convert from nuc-prot set to genomic-product set */
 
-      NPStoGPS (entityID, file, ngp);
+      NPStoGPS (entityID, file, ngp, descr1);
 
       /* put pubs and biosources onto genomic-product set */
 

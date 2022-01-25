@@ -1,4 +1,4 @@
-/* $Id: blast_setup.c,v 1.123 2005/08/15 16:11:43 dondosha Exp $
+/* $Id: blast_setup.c,v 1.127 2005/10/03 12:57:03 madden Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,7 +34,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] =
-    "$Id: blast_setup.c,v 1.123 2005/08/15 16:11:43 dondosha Exp $";
+    "$Id: blast_setup.c,v 1.127 2005/10/03 12:57:03 madden Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_setup.h>
@@ -69,7 +69,7 @@ Blast_ScoreBlkKbpGappedCalc(BlastScoreBlk * sbp,
                 Blast_KarlinBlkNuclGappedCalc(sbp->kbp_gap_std[index],
                     scoring_options->gap_open, scoring_options->gap_extend, 
                     scoring_options->reward, scoring_options->penalty, 
-                    sbp->kbp_std[index], error_return);
+                    sbp->kbp_std[index], &(sbp->round_down), error_return);
         } else {
             retval = 
                 Blast_KarlinBlkGappedCalc(sbp->kbp_gap_std[index],
@@ -385,57 +385,62 @@ BlastSetup_ScoreBlkInit(BLAST_SequenceBlk* query_blk,
 Int2 BLAST_MainSetUp(EBlastProgramType program_number,
     const QuerySetUpOptions *qsup_options,
     const BlastScoringOptions *scoring_options,
-    const BlastHitSavingOptions *hit_options,
     BLAST_SequenceBlk *query_blk,
     const BlastQueryInfo *query_info,
     double scale_factor,
     BlastSeqLoc **lookup_segments, 
-    BlastMaskInformation* maskInfo,
+    BlastMaskLoc **mask,
     BlastScoreBlk **sbpp, 
     Blast_Message **blast_message)
 {
     Boolean mask_at_hash = FALSE; /* mask only for making lookup table? */
     Int2 status = 0;            /* return value */
     BlastMaskLoc *filter_maskloc = NULL;   /* Local variable for mask locs. */
-    SBlastFilterOptions* filter_options = NULL;
+
+    SBlastFilterOptions* filter_options = qsup_options->filtering_options;
+    Boolean filter_options_allocated = FALSE;
 
 
-    if (maskInfo)
+    if (mask)
+        *mask = NULL;
+
+    if (filter_options == NULL && qsup_options->filter_string)
     {
-       maskInfo->filter_slp = NULL;
-       maskInfo->mask_at_hash = FALSE;
-    }
-
-    if (qsup_options->filtering_options == NULL && qsup_options->filter_string)
-    {
-         status = BlastFilteringOptionsFromString(program_number, qsup_options->filter_string, &filter_options, blast_message);
-         if (status)
+         status = BlastFilteringOptionsFromString(program_number, 
+                                                  qsup_options->filter_string, 
+                                                  &filter_options, 
+                                                  blast_message);
+         if (status) {
+            filter_options = SBlastFilterOptionsFree(filter_options);
             return status;
+         }
+         filter_options_allocated = TRUE;
     }
+    ASSERT(filter_options);
 
     status = BlastSetUp_GetFilteringLocations(query_blk, 
                                               query_info, 
                                               program_number, 
-                                              filter_options ? filter_options : qsup_options->filtering_options, 
+                                              filter_options,
                                               & filter_maskloc, 
                                               blast_message);
 
-
     if (status) {
+        if (filter_options_allocated)
+            filter_options = SBlastFilterOptionsFree(filter_options);
         return status;
     } 
 
-    mask_at_hash = SBlastFilterOptionsMaskAtHash(filter_options ? filter_options : qsup_options->filtering_options);
+    mask_at_hash = SBlastFilterOptionsMaskAtHash(filter_options);
 
-    filter_options = SBlastFilterOptionsFree(filter_options);
+    if (filter_options_allocated) {
+        filter_options = SBlastFilterOptionsFree(filter_options);
+    }
 
-    if (!mask_at_hash)
-    {
-        status = BlastSetUp_MaskQuery(query_blk, query_info, filter_maskloc, 
-                                      program_number);
-        if (status != 0) {
-            return status;
-        }
+
+    if (!mask_at_hash) {
+        BlastSetUp_MaskQuery(query_blk, query_info, filter_maskloc, 
+                             program_number);
     }
 
     if (program_number == eBlastTypeBlastx && scoring_options->is_ooframe) {
@@ -451,17 +456,14 @@ Int2 BLAST_MainSetUp(EBlastProgramType program_number,
                                       filter_maskloc, lookup_segments);
     }
 
-    if (maskInfo)
+    if (mask)
     {
-        if (program_number == eBlastTypeBlastx || 
-            program_number == eBlastTypeTblastx ||
-            program_number == eBlastTypeRpsTblastn) {
+        if (Blast_QueryIsTranslated(program_number)) {
             /* Filter locations so far are in protein coordinates; 
                convert them back to nucleotide here. */
             BlastMaskLocProteinToDNA(filter_maskloc, query_info);
         }
-        maskInfo->filter_slp = filter_maskloc;
-        maskInfo->mask_at_hash = mask_at_hash;
+        *mask = filter_maskloc;
         filter_maskloc = NULL;
     }
     else 
@@ -470,11 +472,8 @@ Int2 BLAST_MainSetUp(EBlastProgramType program_number,
     status = BlastSetup_ScoreBlkInit(query_blk, query_info, scoring_options, 
                                      program_number, sbpp, scale_factor, 
                                      blast_message);
-    if (status > 0) {
-        return status;
-    }
 
-    return 0;
+    return status;
 }
 
 
@@ -688,8 +687,7 @@ BlastSeqLoc_RestrictToInterval(BlastSeqLoc* *mask, Int4 from, Int4 to)
          /* Shift the pointer to the next link in chain and free this link. */
          if (last_loc)
             last_loc->next = seqloc->next;
-         sfree(seqloc->ssr);
-         sfree(seqloc);
+         seqloc = BlastSeqLocNodeFree(seqloc);
       } else if (!head_loc) {
          /* First time a mask was found within the range. */
          head_loc = last_loc = seqloc;

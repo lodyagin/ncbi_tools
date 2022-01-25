@@ -1,4 +1,4 @@
-/* $Id: blast_util.c,v 1.100 2005/08/17 16:21:31 dondosha Exp $
+/* $Id: blast_util.c,v 1.105 2005/11/16 14:27:04 madden Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -6,7 +6,7 @@
  *
  *  This software/database is a "United States Government Work" under the
  *  terms of the United States Copyright Act.  It was written as part of
- *  the author's offical duties as a United States Government employee and
+ *  the author's official duties as a United States Government employee and
  *  thus cannot be copyrighted.  This software/database is freely available
  *  to the public for use. The National Library of Medicine and the U.S.
  *  Government have not placed any restriction on its use or reproduction.
@@ -34,7 +34,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_util.c,v 1.100 2005/08/17 16:21:31 dondosha Exp $";
+    "$Id: blast_util.c,v 1.105 2005/11/16 14:27:04 madden Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_util.h>
@@ -185,6 +185,8 @@ Int2 BlastProgram2Number(const char *program, EBlastProgramType *number)
 		*number = eBlastTypeRpsTblastn;
     else if (strcasecmp("psiblast", program) == 0)
         *number = eBlastTypePsiBlast;
+    else if (strcasecmp("psitblastn", program) == 0)
+        *number = eBlastTypePsiTblastn;
     else if (strcasecmp("phiblastn", program) == 0)
         *number = eBlastTypePhiBlastn;
     else if (strcasecmp("phiblastp", program) == 0)
@@ -200,10 +202,10 @@ Int2 BlastNumber2Program(EBlastProgramType number, char* *program)
 		return 1;
     
 	switch (number) {
-		case eBlastTypeBlastn: case eBlastTypePhiBlastn:
+		case eBlastTypeBlastn: 
 			*program = strdup("blastn");
 			break;
-		case eBlastTypeBlastp: case eBlastTypePhiBlastp:
+		case eBlastTypeBlastp: 
 			*program = strdup("blastp");
 			break;
 		case eBlastTypeBlastx:
@@ -224,6 +226,15 @@ Int2 BlastNumber2Program(EBlastProgramType number, char* *program)
         case eBlastTypePsiBlast:
             *program = strdup("psiblast");
             break;
+        case eBlastTypePsiTblastn:
+            *program = strdup("psitblastn");
+            break;
+        case eBlastTypePhiBlastp:
+			*program = strdup("phiblastp");
+			break;
+        case eBlastTypePhiBlastn:
+			*program = strdup("phiblastn");
+			break;
         default:
 			*program = strdup("unknown");
 			break;
@@ -644,7 +655,7 @@ Int2 GetReverseNuclSequence(const Uint1* sequence, Int4 length,
 
 Int1 BLAST_ContextToFrame(EBlastProgramType prog_number, Uint4 context_number)
 {
-   Int1 frame = 127;	/* 127 is used to indicate error */
+   Int1 frame = INT1_MAX;	/* INT1_MAX is used to indicate error */
 
    if (prog_number == eBlastTypeBlastn) {
       if (context_number % NUM_STRANDS == 0)
@@ -653,8 +664,8 @@ Int1 BLAST_ContextToFrame(EBlastProgramType prog_number, Uint4 context_number)
          frame = -1;
    } else if (prog_number == eBlastTypeBlastp   ||
               prog_number == eBlastTypeRpsBlast ||
-              prog_number == eBlastTypePsiBlast ||
               prog_number == eBlastTypeTblastn  ||
+              Blast_ProgramIsPsiBlast(prog_number) ||
               Blast_ProgramIsPhiBlast(prog_number)) {
       /* Query and subject are protein, no frame. */
       frame = 0;
@@ -728,6 +739,57 @@ BlastQueryInfo* BlastQueryInfoDup(BlastQueryInfo* query_info)
    }
 
    return retval;
+}
+
+/** Calculates length of the DNA query from the BlastQueryInfo structure that 
+ * contains context information for translated frames for a set of queries.
+ * @param query_info Query information containing data for all contexts [in]
+ * @param query_index Which query to find DNA length for?
+ * @return DNA length of the query, calculated as sum of 3 protein frame lengths, 
+ *         plus 2, because 2 last nucleotide residues do not have a 
+ *         corresponding codon.
+ */
+static Int4 
+s_GetTranslatedQueryDNALength(const BlastQueryInfo* query_info, Int4 query_index)
+{
+    Int4 start_context = NUM_FRAMES*query_index;
+    Int4 dna_length = 2;
+    Int4 index;
+ 
+    /* Make sure that query index is within appropriate range, and that this is
+       really a translated search */
+    ASSERT(query_index < query_info->num_queries);
+    ASSERT(start_context < query_info->last_context);
+
+    /* If only reverse strand is searched, then forward strand contexts don't 
+       have lengths information */
+    if (query_info->contexts[start_context].query_length == 0)
+        start_context += 3;
+
+    for (index = start_context; index < start_context + 3; ++index)
+        dna_length += query_info->contexts[index].query_length;
+ 
+    return dna_length;
+}
+
+Int4 BlastQueryInfoGetQueryLength(const BlastQueryInfo* qinfo,
+                                  EBlastProgramType program,
+                                  Int4 query_index)
+{
+    const Uint4 kNumContexts = BLAST_GetNumberOfContexts(program);
+    ASSERT(query_index < qinfo->num_queries);
+
+    if (Blast_QueryIsTranslated(program)) {
+        return s_GetTranslatedQueryDNALength(qinfo, query_index);
+    } else if (program == eBlastTypeBlastn) {
+        Int4 retval = qinfo->contexts[query_index*kNumContexts].query_length;
+        if (retval <= 0) {
+            retval = qinfo->contexts[query_index*kNumContexts+1].query_length;
+        }
+        return retval;
+    } else {
+        return qinfo->contexts[query_index*kNumContexts].query_length;
+    }
 }
 
 Int2 BLAST_PackDNA(const Uint1* buffer, Int4 length, EBlastEncoding encoding, 
@@ -1320,3 +1382,32 @@ char* BLAST_StrToUpper(const char* string)
     return retval;
 }
 
+unsigned int
+BLAST_GetNumberOfContexts(EBlastProgramType p)
+{
+    unsigned int retval = 0;
+
+    switch (p) {
+    case eBlastTypeBlastn:
+    case eBlastTypePhiBlastn:
+        retval = NUM_STRANDS;
+        break;
+    case eBlastTypeBlastp:
+    case eBlastTypeRpsBlast:
+    case eBlastTypeTblastn: 
+    case eBlastTypePsiBlast:
+    case eBlastTypePsiTblastn:
+    case eBlastTypePhiBlastp:
+        retval = 1;
+        break;
+    case eBlastTypeBlastx:
+    case eBlastTypeTblastx:
+    case eBlastTypeRpsTblastn: 
+        retval = NUM_FRAMES;
+        break;
+    default:
+        break;
+    }
+
+    return retval;
+}

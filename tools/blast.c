@@ -1,7 +1,7 @@
 
-static char const rcsid[] = "$Id: blast.c,v 6.441 2005/07/28 14:57:09 coulouri Exp $";
+static char const rcsid[] = "$Id: blast.c,v 6.445 2005/10/06 12:52:23 madden Exp $";
 
-/* $Id: blast.c,v 6.441 2005/07/28 14:57:09 coulouri Exp $
+/* $Id: blast.c,v 6.445 2005/10/06 12:52:23 madden Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -50,9 +50,34 @@ Detailed Contents:
 	further manipulation.
 
 ******************************************************************************
- * $Revision: 6.441 $
+ * $Revision: 6.445 $
  *
  * $Log: blast.c,v $
+ * Revision 6.445  2005/10/06 12:52:23  madden
+ * Changes to support correct gapped stats for blastn
+ *
+ * Revision 6.444  2005/09/29 17:40:08  coulouri
+ * from mike gertz:
+ *     In the do_gapped_blast_search routine, in the case where query
+ *     concatenation is used, call BlastLinkHsps only when
+ *     search->pbp->do_sum_stats is true.
+ *
+ * Revision 6.443  2005/09/26 15:02:58  morgulis
+ * Fixing some memort leaks when using query concatenation in blastn and tblastn.
+ *
+ * Revision 6.442  2005/08/31 20:32:31  coulouri
+ * From Mike Gertz:
+ *    - Added the function BlastSingleQueryResultSize to implement the
+ *      policy for adjusting the hitlist size for preliminary alignments
+ *      to a single query.
+ *    - In BLASTSetUpSearchWithReadDbInternalMult replaced existing code
+ *      for adjusting the hitlist size for a single query by a call to
+ *      BlastSingleQueryResultSize.
+ *    - In BLASTSetUpSearchEx, replaced existing code for adjusting the
+ *      hitlist size by a call to BlastSingleQueryResultSize.  This
+ *      changes the behavior of the routine slightly, in that the hitlist
+ *      size is (correctly) no longer increased for ungapped alignments.
+ *
  * Revision 6.441  2005/07/28 14:57:09  coulouri
  * remove dead code
  *
@@ -2844,6 +2869,29 @@ being checked for. */
 }
 
 /*
+Rounds down score to next even value if appropriate.
+*/
+
+static Int2
+s_RoundDownOddScores(BLAST_ScoreBlkPtr sbp, BLAST_HitListPtr hitlist)
+{
+	BLAST_HSPPtr PNTR hsp_array;
+	Int4 hsp_cnt;
+	Int4 index;
+
+	if (sbp->round_down == FALSE || hitlist->hspcnt == 0)
+		return 0;
+
+	hsp_cnt = hitlist->hspcnt;
+	hsp_array = hitlist->hsp_array;
+	for (index=0; index<hsp_cnt; index++)
+	{
+                hsp_array[index]->score -= (hsp_array[index]->score &1);
+	}
+	return 0;
+}
+
+/*
 	This function reevaluates the HSP's from a blast run, checking that
 	ambiguity characters, ignored until now, don't change the score or
 	extent of the HSP's.
@@ -3069,6 +3117,7 @@ BlastReevaluateWithAmbiguities (BlastSearchBlkPtr search, Int4 sequence_number)
 	current_hitlist->hspcnt = index1;	
 	current_hitlist->hspcnt_max = index1;	
 
+        s_RoundDownOddScores(search->sbp, search->current_hitlist);
 	/* Relink the HSP's, ReReap the Hits. */
 	if (!search->pbp->mb_params && search->pbp->do_sum_stats == TRUE) {
            status = BlastLinkHsps(search);
@@ -3276,22 +3325,19 @@ do_gapped_blast_search(VoidPtr ptr)
 		  search->mult_queries->use_mq = TRUE;
 		  search->mult_queries->delete_current_hitlist = FALSE;
 
-          for( i = 0; i < search->mult_queries->NumQueries; ++i )
-		  {
-		    search->mult_queries->current_query = i;
+                  for (i = 0;  i < search->mult_queries->NumQueries;  ++i) {
+                      search->mult_queries->current_query = i;
 
-                    if( search->prog_number == blast_type_blastx 
-                        || search->prog_number == blast_type_tblastn 
-                        || search->prog_number == blast_type_psitblastn )
-                      status = BlastLinkHsps( search );
+                      if (search->pbp->do_sum_stats) {
+                          status = BlastLinkHsps(search);
+                      }
+                      status = BlastReapHitlistByEvalue(search);
 
-                    status = BlastReapHitlistByEvalue( search );
-
-              if( search->handle_results )
-                  search->handle_results( (VoidPtr)search );
-              else
-                  BlastSaveCurrentHitlist( search );
-          }
+                      if (search->handle_results)
+                          search->handle_results( (VoidPtr)search );
+                      else
+                          BlastSaveCurrentHitlist(search);
+                  }
 
 		  if( search->mult_queries->delete_current_hitlist )
 		  {
@@ -3346,6 +3392,7 @@ do_blast_search(VoidPtr ptr)
                 if ((status = BLASTPerformSearchWithReadDb(search, index1))
                     != 0)
                    break;
+                s_RoundDownOddScores(search->sbp, search->current_hitlist);
                 if (!search->pbp->mb_params) {
                    if (search->pbp->do_sum_stats == TRUE)
                       status = BlastLinkHsps(search);
@@ -3379,6 +3426,7 @@ do_blast_search(VoidPtr ptr)
                 if ((status = BLASTPerformSearchWithReadDb(search, index))
                     != 0)
                    break;
+                s_RoundDownOddScores(search->sbp, search->current_hitlist);
                 if (!search->pbp->mb_params) {
                    if (search->pbp->do_sum_stats == TRUE)
                       status = BlastLinkHsps(search);
@@ -3457,6 +3505,7 @@ do_the_blast_run(BlastSearchBlkPtr search)
     int num_entries_total_real;
     int start_seq;
     int end_seq;
+    Int4 i; /* AM: query concatenation */
     
     if (search == NULL)
         return;
@@ -3544,6 +3593,15 @@ do_the_blast_run(BlastSearchBlkPtr search)
             search->prelim_gap_attempts += array[index]->prelim_gap_attempts;
             search->real_gap_number_of_hsps += array[index]->real_gap_number_of_hsps;
 #endif
+
+            if( array[index]->mult_queries ) { /* AM: query concatenation: free resources */
+                if( array[index]->mult_queries->HitListArray )
+                    for( i = 0; i < array[index]->mult_queries->NumQueries; ++i )
+                        BlastHitListDestruct( array[index]->mult_queries->HitListArray[i] );
+
+                MemFree( array[index]->mult_queries->HitListArray );
+                MemFree( array[index]->mult_queries );
+            }
             /* Not copied at thread start. */
             array[index] = BlastSearchBlkDestruct(array[index]);	
         }
@@ -4028,11 +4086,15 @@ FloatHi LIBCALL BLASTCalculateSearchSpace(BLAST_OptionsBlkPtr options,
     BlastKarlinBlkGappedCalcEx(kbp, options->gap_open, options->gap_extend,
             options->decline_align, options->matrix, NULL);
 
-    if (StringCmp(options->program_name, "blastn") != 0 && 
-        options->gapped_calculation ) {
+    if (options->gapped_calculation ) {
         Nlm_FloatHi alpha, beta; /*alpha and beta for new scoring system */
-        getAlphaBeta(options->matrix,&alpha,&beta,options->gapped_calculation,
+        if (StringCmp(options->program_name, "blastn") != 0)
+            getAlphaBeta(options->matrix,&alpha,&beta,options->gapped_calculation,
                      options->gap_open, options->gap_extend);
+        else
+            BlastKarlinGetNuclAlphaBeta(options->reward, options->penalty, options->gap_open, 
+                     options->gap_extend, kbp, options->gapped_calculation, &alpha, &beta);
+
         BlastComputeLengthAdjustment(kbp->K,
                                      kbp->logK, alpha/kbp->Lambda, beta, 
                                      qlen,
@@ -4086,6 +4148,7 @@ Int2 LIBCALL BLASTSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr 
 	IntArray length_adj_tmp=NULL;
 	Int4 le_iter, length_tmp;
 	Int4 i;
+        BLAST_ScoreBlkPtr sbptmp = NULL; /* AM: query concatenation */
 
 	/* AM: To support individual masking in the case of query multiplexing. */
 	SeqLocPtr *concat_filter_slp=NULL, *concat_private_slp=NULL, *concat_private_slp_rev=NULL,
@@ -4381,6 +4444,20 @@ Int2 LIBCALL BLASTSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr 
             }
         }
 
+        if( mult_queries ) { /* AM: query concatenation: free resources */
+            for( i = 0; i < mult_queries->NumQueries; ++i ) {
+                SeqLocFree( indiv_private_slp_rev[i] );
+                SeqLocFree( indiv_private_slp[i] );
+                SeqLocFree( concat_private_slp_rev[i] );
+                SeqLocFree( concat_private_slp[i] );
+            }
+
+            MemFree( indiv_private_slp_rev );
+            MemFree( indiv_private_slp );
+            MemFree( concat_private_slp_rev );
+            MemFree( concat_private_slp );
+        }
+
 	/* 
            Dusting of query sequence. Only needed for blastn, optional
         */
@@ -4440,6 +4517,10 @@ Int2 LIBCALL BLASTSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr 
                 retval = 1;
 		goto BlastSetUpReturn;
 	}
+
+        /* AM: query concatenation: free resources */
+        MemFree( indiv_mask_at_hash );
+        MemFree( indiv_filter_slp );
 
 	if (spp)
 	{
@@ -4683,6 +4764,13 @@ Int2 LIBCALL BLASTSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr 
 	   }
 	}
 
+        if( mult_queries ) { /* AM: query concatenation: free resources */
+            for( i = 0; i < mult_queries->NumQueries; ++i )
+                SeqLocFree( concat_filter_slp[i] );
+
+            MemFree( concat_filter_slp );
+        }
+
 	if (mask_at_hash)
 	{ /* No longer needed. */
 /*
@@ -4793,8 +4881,21 @@ Int2 LIBCALL BLASTSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr 
              {
 	       for( i = 0; i < search->mult_queries->NumQueries; ++i )
 	       {
+                   sbptmp = BLAST_ScoreBlkNew( 
+                           Seq_code_ncbistdaa, search->last_context + 1 );
+                   sbptmp->read_in_matrix = TRUE;
+		   BlastScoreSetAmbigRes( sbptmp, 'X' );
+	           sbptmp->penalty = options->penalty;
+	           sbptmp->reward = options->reward;
+                   sbptmp->query_length = query_length;
+
+	           if (options->matrix != NULL)
+		           status = BlastScoreBlkMatFill(sbptmp, options->matrix);
+	           else 
+		           status = BlastScoreBlkMatFill(sbptmp, "BLOSUM62");
+
 	         status = BlastScoreBlkFill( 
-		   search->sbp, 
+                         sbptmp,
 		   ((CharPtr)search->context[index].query->sequence)
 		     + search->mult_queries->QueryStarts[i],
                    search->mult_queries->QueryEnds[i]
@@ -4804,39 +4905,41 @@ Int2 LIBCALL BLASTSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr 
                  if( status ) break;
 
                  search->mult_queries->lambda_array[i]
-		   = search->sbp->kbp_std[search->first_context]->Lambda;
+		   = sbptmp->kbp_std[search->first_context]->Lambda;
 
 		 if( i )
 		 {
 		   if( search->mult_queries->LambdaMin
-		       > search->sbp->kbp_std[search->first_context]->Lambda )
+		       > sbptmp->kbp_std[search->first_context]->Lambda )
                      search->mult_queries->LambdaMin
-		       = search->sbp->kbp_std[search->first_context]->Lambda;
+		       = sbptmp->kbp_std[search->first_context]->Lambda;
 
 		   if( search->mult_queries->LambdaMax
-		       < search->sbp->kbp_std[search->first_context]->Lambda )
+		       < sbptmp->kbp_std[search->first_context]->Lambda )
                      search->mult_queries->LambdaMax
-		       = search->sbp->kbp_std[search->first_context]->Lambda;
+		       = sbptmp->kbp_std[search->first_context]->Lambda;
 
 		   if( search->mult_queries->LogKMin
-		       > search->sbp->kbp_std[search->first_context]->logK )
+		       > sbptmp->kbp_std[search->first_context]->logK )
                      search->mult_queries->LogKMin
-		       = search->sbp->kbp_std[search->first_context]->logK;
+		       = sbptmp->kbp_std[search->first_context]->logK;
 
 		   if( search->mult_queries->LogKMax
-		       < search->sbp->kbp_std[search->first_context]->logK )
+		       < sbptmp->kbp_std[search->first_context]->logK )
                      search->mult_queries->LogKMax
-		       = search->sbp->kbp_std[search->first_context]->logK;
+		       = sbptmp->kbp_std[search->first_context]->logK;
 		 }
 		 else
 		 {
 		   search->mult_queries->LambdaMin
 		     = search->mult_queries->LambdaMax
-		     = search->sbp->kbp_std[search->first_context]->Lambda;
+		     = sbptmp->kbp_std[search->first_context]->Lambda;
                    search->mult_queries->LogKMin 
 		     = search->mult_queries->LogKMax
-		     = search->sbp->kbp_std[search->first_context]->logK;
+		     = sbptmp->kbp_std[search->first_context]->logK;
 		 }
+
+                 sbptmp = BLAST_ScoreBlkDestruct( sbptmp );
 	       }
              }
 
@@ -4861,9 +4964,10 @@ Int2 LIBCALL BLASTSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr 
 			BlastConstructErrorMessage("BLASTSetUpSearch", buffer, 2, &(search->error_return));
 			retval = 1;
 		}
-		if (search->pbp->gapped_calculation &&
-				StringCmp(search->prog_name, "blastn") != 0)
-		{
+		if (search->pbp->gapped_calculation)
+                {
+                    if (StringCmp(search->prog_name, "blastn") != 0)
+		    {
 			search->sbp->kbp_gap_std[index] = BlastKarlinBlkCreate();
                 	status = BlastKarlinBlkGappedCalcEx(search->sbp->kbp_gap_std[index], options->gap_open, options->gap_extend, options->decline_align, search->sbp->name, &(search->error_return));
 			if (status != 0)
@@ -4876,7 +4980,15 @@ Int2 LIBCALL BLASTSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr 
 			{
 				retval = 1;
 			}
-		}
+		   }
+                   else
+                   {
+			search->sbp->kbp_gap_std[index] = BlastKarlinBlkCreate();
+                        status = BlastKarlinBlkNuclGappedCalc(search->sbp->kbp_gap_std[index], options->gap_open, options->gap_extend, options->reward, options->penalty, search->sbp->kbp_std[index], &(search->sbp->round_down), &(search->error_return));
+                        if (status != 0)
+                              retval = 1;
+                   }
+               }
 	}
 
 	search->sbp->kbp_gap = search->sbp->kbp_gap_std;
@@ -4917,14 +5029,17 @@ Int2 LIBCALL BLASTSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr 
 	if (retval)
            goto BlastSetUpReturn;
 
-	if (options->gapped_calculation &&
-        StringCmp(options->program_name, "blastn") != 0) {
+	if (options->gapped_calculation) {
         
         BLAST_KarlinBlkPtr kbp_gap =
           search->sbp->kbp_gap_std[search->first_context];
         Nlm_FloatHi alpha, beta; /*alpha and beta for the scoring system */
-        getAlphaBeta(options->matrix,&alpha,&beta,options->gapped_calculation,
+        if (StringCmp(options->program_name, "blastn") != 0)
+            getAlphaBeta(options->matrix,&alpha,&beta,options->gapped_calculation,
                      options->gap_open, options->gap_extend);
+        else
+            BlastKarlinGetNuclAlphaBeta(options->reward, options->penalty, options->gap_open, 
+                     options->gap_extend, kbp_gap, options->gapped_calculation, &alpha, &beta);
 
         BlastComputeLengthAdjustment(kbp_gap->K,
                                      kbp_gap->logK,
@@ -4978,7 +5093,7 @@ Int2 LIBCALL BLASTSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr 
 		  }
 		}
     }
-	else /* this is an ungapped alignment or the program is blastn */
+	else /* this is an ungapped alignment */
 	{
         BLAST_KarlinBlkPtr kbp = search->sbp->kbp[search->first_context];
 
@@ -5050,9 +5165,11 @@ Int2 LIBCALL BLASTSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr 
 		          search->dblen 
 			  - search->dbseq_num*length_adj_tmp[le_iter] );
 	     }
+
+             MemFree( length_adj_tmp );
 	   }
         }
-	
+
 	for (index=search->first_context; index<=search->last_context; index++)
 	{
 		search->context[index].query->effective_length = effective_query_length;
@@ -5094,6 +5211,9 @@ Int2 LIBCALL BLASTSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr 
 		search->pbp->cutoff_s = options->cutoff_s;
 		search->pbp->cutoff_s_set = TRUE;
 	}
+
+        MemFree( lengths_eff ); /* AM: query concatenation: free resources */
+
 /* For now e2 is set to 0.5 and cutoff_e2_set is FALSE.  This is then
 changed to the proper values in blast_set_parameters.  In the final version
 of this program (where more blast programs and command-line options are
@@ -5237,30 +5357,6 @@ available) this needs to be set higher up. */
         {
                 avglen = search->dblen;
         }
-
-        /* EMG - For blastn, copy the ungapped Karlin blocks 
-           to the gapped ones. */
-	if( search->prog_number == blast_type_blastn ) {
-		int tmp_index;
-		for (tmp_index = search->first_context;
-		     tmp_index <= search->last_context;
-		     tmp_index++ ) {
-			BLAST_KarlinBlk *kbp_gap;
-			BLAST_KarlinBlk *kbp;
-
-			search->sbp->kbp_gap_std[tmp_index] = 
-                        		BlastKarlinBlkCreate();
-			kbp_gap = search->sbp->kbp_gap_std[tmp_index];
-			kbp     = search->sbp->kbp_std[tmp_index];
-			
-			kbp_gap->Lambda = kbp->Lambda;
-			kbp_gap->K      = kbp->K;
-			kbp_gap->logK   = kbp->logK;
-			kbp_gap->H      = kbp->H;
-			kbp_gap->paramC = kbp->paramC;
-		}
-		search->sbp->kbp_gap = search->sbp->kbp_gap_std;
-	}
 
 	if (blast_set_parameters(search, options->dropoff_1st_pass, options->dropoff_2nd_pass, avglen, search->searchsp_eff, options->window_size) != 0) {
            retval = 1;
@@ -5524,6 +5620,35 @@ BLASTSetUpSearchWithReadDbInternal (SeqLocPtr query_slp, BioseqPtr query_bsp, Ch
 }
 
 
+/**
+ * Calculate the hitlist size for preliminary alignments with a single
+ * query, i.e. all but the final alignment with traceback.  This size
+ * is generally somewhat larger than the final hitlist size because:
+ * - the final alignment is the most sensitive, and may improve the
+ *   score of alignments that would not otherwise be reported; and
+ * - when composition-based statitics is used, many hits may be
+ *   dropped in the final phase
+ */
+Int4
+BlastSingleQueryResultSize(BLAST_OptionsBlkPtr options)
+{
+    Int4 result_size = /* size to be returned */
+        options->hitlist_size;
+
+    if (options->tweak_parameters) {
+        /* Composition based statistics are being used. */
+        result_size *= 2;
+    }
+    if ((options->is_megablast_search && options->no_traceback) ||
+        (!options->is_megablast_search && options->gapped_calculation)) {
+        /* This search uses preliminary alignments before the final
+         * gapped calculation with traceback; increase the results
+         * size. */
+        result_size = MIN(2*result_size, result_size + 50);
+    }
+    return result_size;
+}
+
 
 BlastSearchBlkPtr
 BLASTSetUpSearchWithReadDbInternalMult (SeqLocPtr query_slp, BioseqPtr query_bsp, CharPtr prog_name, Int4 qlen, CharPtr dbname, BLAST_OptionsBlkPtr options, int (LIBCALLBACK *callback)PROTO((Int4 done, Int4 positives)), SeqIdPtr seqid_list, BlastDoubleInt4Ptr gi_list, Int4 gi_list_total, ReadDBFILEPtr rdfp, QueriesPtr mult_queries)
@@ -5559,12 +5684,8 @@ BLASTSetUpSearchWithReadDbInternalMult (SeqLocPtr query_slp, BioseqPtr query_bsp
         query_length = SeqLocLen(query_slp);
     else
         query_length = query_bsp->length;
-    
-    /* Increase the hitlist size for the preliminary gapped alignment */
-    if (options->gapped_calculation)
-       hitlist_size = MIN(2*options->hitlist_size, options->hitlist_size + 50);
-    else 
-       hitlist_size = options->hitlist_size;
+
+    hitlist_size = BlastSingleQueryResultSize(options);
 
     /* AM: Query multiplexing */
     if( mult_queries )
@@ -5728,10 +5849,9 @@ BLASTSetUpSearchEx (SeqLocPtr query_slp, BioseqPtr query_bsp, CharPtr prog_name,
 
 	BlastGetFirstAndLastContext(prog_name, query_slp, &first_context, &last_context, options->strand_option);
 
-/* On the first call query length is used for the subject length. */
-        hitlist_size = MIN(2*options->hitlist_size, 
-                           options->hitlist_size + 50);
+        hitlist_size = BlastSingleQueryResultSize(options);
 
+        /* On the first call query length is used for the subject length. */
 	search = BlastSearchBlkNew(options->wordsize, actual_query_length, NULL, multiple_hits, 0, options->threshold_second, hitlist_size, prog_name, all_words, first_context, last_context, options->window_size);
 
 	if (search)
@@ -10817,6 +10937,7 @@ new_link_hsps_setup(BlastSearchBlkPtr search,
       BlastGapDecayDivisor(search->pbp->gap_decay_rate, 1);
 
    /* Find e-values for single HSPs */
+   s_RoundDownOddScores(search->sbp, search->current_hitlist);
    BlastGetNonSumStatsEvalue(search);
 
    for (index=0; index<hspcnt; index++) {

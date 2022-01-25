@@ -1,4 +1,4 @@
-/*  $Id: ncbi_service.c,v 6.66 2005/07/11 18:49:11 lavr Exp $
+/*  $Id: ncbi_service.c,v 6.68 2005/08/31 19:25:16 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -491,7 +491,7 @@ char* SERV_Print(SERV_ITER iter, const SConnNetInfo* referrer)
             if (!BUF_Write(&buf, referrer_header, sizeof(referrer_header)-1) ||
                 !BUF_Write(&buf, "lbsm://", 7)                               ||
                 !BUF_Write(&buf, host, strlen(host))                         ||
-                !BUF_Write(&buf, "/dispatch?service=", 18)                   ||
+                !BUF_Write(&buf, "/lbsmd?service=", 15)                      ||
                 !BUF_Write(&buf, name, strlen(name))                         ||
                 !BUF_Write(&buf, "\r\n", 2)) {
                 BUF_Destroy(buf);
@@ -523,7 +523,7 @@ char* SERV_Print(SERV_ITER iter, const SConnNetInfo* referrer)
                 return 0;
             }
         }
-        /* how many for the dispatcher to send to us */
+        /* how many server-infos for the dispatcher to send to us */
         if (iter->pref) {
             if (!BUF_Write(&buf, server_count, sizeof(server_count) - 1)) {
                 BUF_Destroy(buf);
@@ -593,6 +593,12 @@ double SERV_Preference(double pref, double gap, unsigned int n)
 /*
  * --------------------------------------------------------------------------
  * $Log: ncbi_service.c,v $
+ * Revision 6.68  2005/08/31 19:25:16  lavr
+ * Fix number of bytes written in new referer
+ *
+ * Revision 6.67  2005/08/31 19:02:17  lavr
+ * Change LBSMD referer HTTP tag
+ *
  * Revision 6.66  2005/07/11 18:49:11  lavr
  * Hashed preference generation algorithm retired (proven to fail often)
  *

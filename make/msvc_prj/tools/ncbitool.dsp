@@ -38,7 +38,7 @@ RSC=rc.exe
 # PROP Target_Dir ""
 # ADD BASE CPP /nologo /MDd /W3 /GX /Z7 /Od /D "WIN32" /D "_DEBUG" /D "_MBCS" /D "_LIB" /YX /FD /GZ /c
 # SUBTRACT BASE CPP /Fr
-# ADD CPP /nologo /MDd /W3 /GR /Z7 /Od /I "..\..\.." /I "..\..\..\corelib" /I "..\..\..\access" /I "..\..\..\asnstat" /I "..\..\..\asnlib" /I "..\..\..\tools" /I "..\..\..\object" /I "..\..\..\api" /I "..\..\..\ddv" /I "..\..\..\cdromlib" /I "..\..\..\biostruc" /I "..\..\..\vibrant" /I "..\..\..\desktop" /I "..\..\..\network\taxon1\common" /I "..\..\..\network\taxon1\taxon2" /I "..\..\..\network\blast3\client" /D "WIN32" /D "_DEBUG" /YX /FD /GZ /c
+# ADD CPP /nologo /MDd /W3 /GR /Z7 /Od /I "..\..\.." /I "..\..\..\corelib" /I "..\..\..\access" /I "..\..\..\asnstat" /I "..\..\..\asnlib" /I "..\..\..\tools" /I "..\..\..\object" /I "..\..\..\api" /I "..\..\..\ddv" /I "..\..\..\cdromlib" /I "..\..\..\biostruc" /I "..\..\..\vibrant" /I "..\..\..\desktop" /I "..\..\..\network\taxon1\common" /I "..\..\..\network\taxon1\taxon2" /I "..\..\..\network\blast3\client" /I "..\..\..\algo\blast\composition_adjustment" /D "WIN32" /D "_DEBUG" /YX /FD /GZ /c
 # ADD BASE RSC /l 0x409 /d "_DEBUG"
 # ADD RSC /l 0x409 /d "_DEBUG"
 BSC32=bscmake.exe
@@ -163,10 +163,6 @@ SOURCE=..\..\..\tools\mblast.c
 # End Source File
 # Begin Source File
 
-SOURCE=..\..\..\tools\Mode_condition.c
-# End Source File
-# Begin Source File
-
 SOURCE=..\..\..\tools\motif.c
 # End Source File
 # Begin Source File
@@ -176,14 +172,6 @@ SOURCE=..\..\..\tools\ncbisam.c
 # Begin Source File
 
 SOURCE=..\..\..\tools\ncbisort.c
-# End Source File
-# Begin Source File
-
-SOURCE=..\..\..\tools\Newton_procedures.c
-# End Source File
-# Begin Source File
-
-SOURCE=..\..\..\tools\nlm_numerics.c
 # End Source File
 # Begin Source File
 
@@ -212,14 +200,6 @@ SOURCE=..\..\..\tools\pseed3.c
 # Begin Source File
 
 SOURCE=..\..\..\tools\readdb.c
-# End Source File
-# Begin Source File
-
-SOURCE=..\..\..\tools\RE_interface_ds.c
-# End Source File
-# Begin Source File
-
-SOURCE=..\..\..\tools\re_newton.c
 # End Source File
 # Begin Source File
 
@@ -439,11 +419,11 @@ SOURCE=..\..\..\tools\mblast.h
 # End Source File
 # Begin Source File
 
-SOURCE=..\..\..\tools\motif.h
+SOURCE=..\..\..\tools\Mode_condition.h
 # End Source File
 # Begin Source File
 
-SOURCE=..\..\..\tools\Mode_condition.h
+SOURCE=..\..\..\tools\motif.h
 # End Source File
 # Begin Source File
 
@@ -487,11 +467,11 @@ SOURCE=..\..\..\tools\profiles.h
 # End Source File
 # Begin Source File
 
-SOURCE=..\..\..\tools\readdb.h
+SOURCE=..\..\..\tools\re_newton.h
 # End Source File
 # Begin Source File
 
-SOURCE=..\..\..\tools\re_newton.h
+SOURCE=..\..\..\tools\readdb.h
 # End Source File
 # Begin Source File
 

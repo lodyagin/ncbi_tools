@@ -1,4 +1,4 @@
-/* $Id: qbatch.c,v 6.11 2004/08/13 02:01:21 beloslyu Exp $
+/* $Id: qbatch.c,v 6.12 2005/10/13 13:53:51 kans Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,15 @@
 *
 * Version Creation Date: 05/04/2000
 *
-* $Revision: 6.11 $
+* $Revision: 6.12 $
 *
 * File Description:
 *         WWW and Command-line Batch Entrez using Entre2 and ID1
 *
 * $Log: qbatch.c,v $
+* Revision 6.12  2005/10/13 13:53:51  kans
+* commented out depracated EntrezSetServer function call
+*
 * Revision 6.11  2004/08/13 02:01:21  beloslyu
 * Changes for FreeBSD
 *
@@ -583,8 +586,8 @@ static Int4 BEGetUidsFromQuery(CharPtr query, Uint4Ptr PNTR uids,
     *uids = NULL;
     
     EntrezSetProgramName ("BLAST API");
-    EntrezSetServer ("www.ncbi.nlm.nih.gov", 80, 
-                     "/entrez/utils/entrez2server.fcgi");
+    /* EntrezSetServer ("www.ncbi.nlm.nih.gov", 80, 
+                     "/entrez/utils/entrez2server.fcgi"); */
     
     e2rq = EntrezCreateBooleanRequest (!count_only, FALSE, 
                                        is_na? "Nucleotide" : "Protein", 

@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 2/4/94
 *
-* $Revision: 6.49 $
+* $Revision: 6.52 $
 *
 * File Description:  Sequence editing utilities
 *
@@ -39,6 +39,18 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: edutil.c,v $
+* Revision 6.52  2005/09/22 19:21:34  bollin
+* In the sequence editor, if the user inserts Ns into a gap of known length,
+* the gap length will be increased instead of creating two gaps on either side
+* with N sequence characters in the middle.
+*
+* Revision 6.51  2005/09/13 15:21:57  bollin
+* fixed bug when inserting characters inside a gap that was incorrectly setting
+* the lengths of the split gap
+*
+* Revision 6.50  2005/09/13 14:14:31  bollin
+* fixed bug that was preventing the removal of gaps of length 1
+*
 * Revision 6.49  2005/07/15 19:01:37  kans
 * minor fixes for Xcode warnings
 *
@@ -5144,6 +5156,25 @@ SeqEdInsertIntoDeltaGap
   return rval;
 }
 
+static Boolean IsInsertAllNs (SeqEdJournalPtr sejp)
+{
+  Int4 k;
+  
+  if (sejp == NULL || sejp->char_data == NULL || sejp->num_chars < 1)
+  {
+    return FALSE;
+  }
+  
+  for (k = 0; k < sejp->num_chars; k++)
+  {
+    if (TO_LOWER (sejp->char_data [k]) != 'n')
+    {
+      return FALSE;
+    } 
+  }
+  return TRUE;
+}
+
 static Boolean SeqEdInsertDelta (SeqEdJournalPtr sejp, Int4 insert_point)
 {
   DeltaSeqPtr  dsp;
@@ -5172,7 +5203,15 @@ static Boolean SeqEdInsertDelta (SeqEdJournalPtr sejp, Int4 insert_point)
 
   if (IsDeltaSeqGap (dsp))
   {
-    rval = SeqEdInsertIntoDeltaGap (dsp, sejp, insert_point);    
+    if (slip->fuzz == NULL && IsInsertAllNs (sejp))
+    {
+      slip->length += sejp->num_chars;
+      rval = TRUE;
+    }
+    else
+    {
+      rval = SeqEdInsertIntoDeltaGap (dsp, sejp, insert_point);    
+    }
   }
   else
   {
@@ -5188,11 +5227,14 @@ static Boolean SeqEdInsertDelta (SeqEdJournalPtr sejp, Int4 insert_point)
     rval = SeqEdInsertByteStore (slip->seq_data, insert_point, 
                                  sejp->char_data, sejp->num_chars,
                                  sejp->moltype);
+    if (rval)
+    {
+      slip->length += sejp->num_chars;
+    }
   }
 
   if (rval)
   {
-    slip->length += sejp->num_chars;
     sejp->bsp->length += sejp->num_chars;
   }
   return rval;
@@ -5597,7 +5639,7 @@ static Boolean SeqEdDeleteFromDeltaBsp (BioseqPtr bsp, Int4 from, Int4 to)
     
   prev_dsp = NULL;  
   dsp = (DeltaSeqPtr) bsp->seq_ext;
-  while (dsp != NULL && curr_pos < to)
+  while (dsp != NULL && curr_pos <= to)
   {
     dsp_next = dsp->next;
     piece_len = 0;

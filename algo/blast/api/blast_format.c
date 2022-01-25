@@ -1,4 +1,4 @@
-/* $Id: blast_format.c,v 1.95 2005/08/08 15:50:20 dondosha Exp $
+/* $Id: blast_format.c,v 1.96 2005/11/22 13:31:05 madden Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -31,7 +31,7 @@
  * Formatting of BLAST results (SeqAlign)
  */
 
-static char const rcsid[] = "$Id: blast_format.c,v 1.95 2005/08/08 15:50:20 dondosha Exp $";
+static char const rcsid[] = "$Id: blast_format.c,v 1.96 2005/11/22 13:31:05 madden Exp $";
 
 #include <algo/blast/api/blast_format.h>
 #include <algo/blast/api/blast_seq.h>
@@ -1182,7 +1182,7 @@ Blast_SeqIdGetDefLine(SeqId* sip, char** buffer_ptr, Boolean ncbi_gi,
                       Boolean accession_only)
 {
    char* seqid_buffer = NULL;
-   Int4 gi;
+   Int4 gi = 0;
    Boolean numeric_id_type = FALSE;
 
    *buffer_ptr = NULL;

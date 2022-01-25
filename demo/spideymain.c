@@ -28,13 +28,19 @@
 *
 * Version Creation Date:   5/01
 *
-* $Revision: 6.10 $
+* $Revision: 6.12 $
 *
 * File Description: main functions for running Spidey as a standalone 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: spideymain.c,v $
+* Revision 6.12  2005/11/17 17:13:07  kskatz
+* Fixed initializations and removed non-used functions to get rid of warnings
+*
+* Revision 6.11  2005/11/17 16:41:54  kskatz
+* Fixed the code the uses user-supplied matrices:  SPI_GetSpliceInfoclear(); also commented out  ErrSetMessageLevel(SEV_MAX) (line 418) so that warnings could be posted
+*
 * Revision 6.10  2004/03/25 21:20:03  kskatz
 * All SPI_is_acceptor_* functions have been corrected: 'N' no longer contributes to nor subtracts from the score, log odds are calculated and the scores added; they are however all antilogged because there are too many places in the code where the score is expected to be between 0 and 1.  Also, corrected sequence frequency determination in SPI_is_acceptor_user and SPI_is_donor_user, as well as correcting for 'N'. Finally, and this all began with, I added matrices for Dictyostelium - command line -r -m
 *
@@ -178,7 +184,7 @@ Int2 Main()
    SPI_bsinfoPtr      spim_head;
    SPI_bsinfoPtr      spim_prev;
    SPI_OptionsPtr     spot;
-   SPI_RegionInfoPtr  srip;
+   SPI_RegionInfoPtr  srip = NULL;
    SPI_RegionInfoPtr  srip_head;
    SPI_RegionInfoPtr  srip_prev;
    CharPtr            str;
@@ -415,7 +421,7 @@ Int2 Main()
       }
    } else
       ofp2 = NULL;
-   ErrSetMessageLevel(SEV_MAX);
+   /** ErrSetMessageLevel(SEV_MAX); **/
    spot->firstpasseval = myargs[MYARG1STEVAL].floatvalue;
    spot->secpasseval = myargs[MYARG2NDEVAL].floatvalue;
    spot->thirdpasseval = myargs[MYARG3RDEVAL].floatvalue;
@@ -700,101 +706,94 @@ static void SPI_ReadFeatureTable(FILE *ifp, SPI_bsinfoPtr spim_head)
 static void SPI_GetSpliceInfo(SPI_OptionsPtr spot, FILE *sfp, Boolean donor)
 {
    Char               line[1000];
-   CharPtr            ptr;
-   SPI_SpliceInfoPtr  ssp;
-   SPI_SpliceInfoPtr  ssp_head;
-   SPI_SpliceInfoPtr  ssp_prev;
-   CharPtr            str;
+   CharPtr            ptr = NULL;
+   SPI_SpliceInfoPtr  ssp = NULL;
+   SPI_SpliceInfoPtr  ssp_head = NULL;
+   SPI_SpliceInfoPtr  ssp_prev = NULL;
+   CharPtr            str = NULL;
+   enum { _a = 0, _c = 1, _g = 2, _t = 3};
+   int base = 0;
 
-   if (sfp == NULL)
-   {
-      printf("Matrix file not found\n");
-      return;
+   if (sfp == NULL){
+       printf("Matrix file not found\n");
+       return;
    }
+   /* read the first line which is the column dividing donor / acceptor
+      sequencs ('GT', 'AG') should just be a single number */   
    str = ReadALine(line, sizeof(line), sfp);
-   /* should just be a single number */
-   if (donor)
-      spot->dsplicejunc = atoi(str);
-   else
-      spot->asplicejunc = atoi(str);
-   /* A */
-   str = ReadALine(line, sizeof(line), sfp);
-   ptr = strtok(str, "\t");
-   ssp_prev = NULL;
-   while (ptr != NULL)
-   {
-      ssp = (SPI_SpliceInfoPtr)MemNew(sizeof(SPI_SpliceInfo));
-      ssp->a = atof(ptr);
-      if (ssp_prev != NULL)
-      {
-         ssp_prev->next = ssp;
-         ssp_prev = ssp;
-      } else
-         ssp_head = ssp_prev = ssp;
-      ptr = strtok(NULL, "\t");
+   if (donor){
+       spot->dsplicejunc = atoi(str);
    }
-   if (donor)
-      spot->dssp_head = ssp_head;
-   else
-      spot->assp_head = ssp_head;
-   /* C */
-   str = ReadALine(line, sizeof(line), sfp);
-   ptr = strtok(str, "\t");
-   ssp = ssp_head;
-   while (ptr != NULL)
-   {
-      if (ssp == NULL)  /* error */
-      {
-         printf("error reading splice matrix -- not all lines are same length");
-         return;
-      }
-      ssp->c = atof(ptr);
-      ptr = strtok(NULL, "\t");
-      ssp = ssp->next;
+   else {
+       spot->asplicejunc = atoi(str);
    }
-   if (ssp != NULL)  /* error */
-   {
-      printf("error reading splice matrix -- not all lines are same length");
-      return;
-   }
-   /* G */
-   str = ReadALine(line, sizeof(line), sfp);
-   ptr = strtok(str, "\t");
-   ssp = ssp_head;
-   while (ptr != NULL)
-   {
-      if (ssp == NULL)  /* error */
-      {
-         printf("error reading splice matrix -- not all lines are same length");
-         return;
-      }
-      ssp->g = atof(ptr);
-      ptr = strtok(NULL, "\t");
-      ssp = ssp->next;
-   }
-   if (ssp != NULL)  /* error */
-   {
-      printf("error reading splice matrix -- not all lines are same length");
-      return;
-   }
-   /* T */
-   str = ReadALine(line, sizeof(line), sfp);
-   ptr = strtok(str, "\t");
-   ssp = ssp_head;
-   while (ptr != NULL)
-   {
-      if (ssp == NULL)  /* error */
-      {
-         printf("error reading splice matrix -- not all lines are same length");
-         return;
-      }
-      ssp->t = atof(ptr);
-      ptr = strtok(NULL, "\t");
-      ssp = ssp->next;
-   }
-   if (ssp != NULL)  /* error */
-   {
-      printf("error reading splice matrix -- not all lines are same length");
-      return;
+   
+   for (base = 0; base < (_t + 1); ++base){       
+       str = ReadALine(line, sizeof(line), sfp);
+       switch (base){
+       case _a:
+           for (ptr = strtok(str, "\t"); ptr != NULL; 
+                ptr = strtok(NULL, "\t")){
+               ssp = (SPI_SpliceInfoPtr)MemNew(sizeof(SPI_SpliceInfo));
+               ssp->a = atof(ptr);
+               if (ssp_prev != NULL){
+                   ssp_prev->next = ssp;
+                   ssp_prev = ssp;
+               }
+               else {
+                   ssp_head = ssp_prev = ssp;
+                   if (donor){
+                       spot->dssp_head = ssp_head;
+                   }
+                   else {
+                       spot->assp_head = ssp_head; 
+                   }
+               }
+           };
+           break;
+       case _c:
+       case _t:
+       case _g:
+           for (ssp = ssp_head, ptr = strtok(str, "\t"); ptr != NULL && ssp != NULL;
+                ptr = strtok(NULL, "\t"), ssp = ssp->next){
+               switch (base){
+               case _c:
+                   ssp->c = atof(ptr);
+                   break;
+               case _g:
+                   ssp->g = atof(ptr);
+                   break;
+               case _t:
+                   ssp->t = atof(ptr);
+                   break;
+               }
+           }
+           if ((ptr != NULL && ssp == NULL) || 
+               (ssp != NULL && ptr == NULL)){
+               switch (base){
+               case _c:
+                   donor 
+                       ? ErrPostEx(SEV_ERROR, 0, 0,
+                                   "Donor atrix file error -- C matrix column number is different than preceding.")
+                       : ErrPostEx(SEV_ERROR, 0, 0,
+                                   "Acceptor matrix file error -- C matrix column number is different than preceding.");
+                       break;
+               case _g:
+                   donor 
+                       ? ErrPostEx(SEV_ERROR, 0, 0,
+                                   "Donor matrix file error -- G matrix column number is different than preceding.")
+                       : ErrPostEx(SEV_ERROR, 0, 0,
+                                   "Acceptor matrix file error -- G matrix column number is different than preceding.");
+                       break;
+               case _t:
+                   donor
+                       ? ErrPostEx(SEV_ERROR, 0, 0,
+                                   "Donor matrix file error -- T matrix column number is different than preceding.")
+                       : ErrPostEx(SEV_ERROR, 0, 0,
+                                   "Acceptor matrix file error -- T matrix column number is different than preceding.");
+                       break;
+               }
+           }
+       }
    }
 }

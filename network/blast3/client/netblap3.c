@@ -34,6 +34,12 @@
 *
 * RCS Modification History:
 * $Log: netblap3.c,v $
+* Revision 1.109  2005/10/12 19:49:46  kans
+* EntrezSetServer was removed, so commented out here
+*
+* Revision 1.108  2005/09/13 18:03:57  madden
+* Fix so that tweak_parameters cna be in other_options
+*
 * Revision 1.107  2005/08/04 15:54:41  kans
 * local variable defined before ASSERT in s_addTweakToOtherOptions for strict C compliance (CodeWarrior Carbon complained)
 *
@@ -755,7 +761,7 @@ s_addTweakToOtherOptions(Uint1 tweak_parameters, BlastParametersPtr parameters)
              {
                  other_options = MemNew((kBuffSize)*sizeof(char));
              }
-             sprintf(other_options+len, "t=%ld", (long) tweak_parameters);
+             sprintf(other_options+len, "-t%ld", (long) tweak_parameters);
              parameters->other_options = other_options;
         }
            
@@ -2883,8 +2889,8 @@ NLM_EXTERN Int4 BLASTGetUidsFromQuery(CharPtr       query,
         *uids = NULL;
     
     EntrezSetProgramName ("BLAST API");
-    EntrezSetServer ("www.ncbi.nlm.nih.gov", 80, 
-                     "/entrez/utils/entrez2server.fcgi");
+    /* EntrezSetServer ("www.ncbi.nlm.nih.gov", 80, 
+                     "/entrez/utils/entrez2server.fcgi"); */
     
     e2rq = EntrezCreateBooleanRequest (!count_only, FALSE, 
                                        is_na? "Nucleotide" : "Protein", 

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.29 $
+* $Revision: 6.30 $
 *
 * File Description: 
 *       Vibrant procedure definitions
@@ -37,6 +37,9 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: vibprocs.h,v $
+* Revision 6.30  2005/09/23 20:30:10  kans
+* added NLM_BACK for backspace key, which is separate from delete, even though the label may be the same on a keyboard
+*
 * Revision 6.29  2005/01/24 15:01:25  kans
 * prototype UsePrimaryMonitor
 *
@@ -1015,6 +1018,7 @@ void CDECL   Nlm_AlignObjects VPROTO((int align, ...));
 
 #define NLM_DEL    127
 #define NLM_INS      5
+#define NLM_BACK     8
 #define NLM_ESC     27
 
 #define NLM_LEFT    28

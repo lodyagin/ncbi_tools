@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: readdb.c,v 6.484 2005/08/16 17:51:14 dondosha Exp $";
+static char const rcsid[] = "$Id: readdb.c,v 6.493 2005/12/02 14:04:07 camacho Exp $";
 
-/* $Id: readdb.c,v 6.484 2005/08/16 17:51:14 dondosha Exp $ */
+/* $Id: readdb.c,v 6.493 2005/12/02 14:04:07 camacho Exp $ */
 /*
 * ===========================================================================
 *
@@ -50,7 +50,7 @@ Detailed Contents:
 *
 * Version Creation Date:   3/22/95
 *
-* $Revision: 6.484 $
+* $Revision: 6.493 $
 *
 * File Description: 
 *       Functions to rapidly read databases from files produced by formatdb.
@@ -65,6 +65,34 @@ Detailed Contents:
 *
 * RCS Modification History:
 * $Log: readdb.c,v $
+* Revision 6.493  2005/12/02 14:04:07  camacho
+* Minor fix in ScanDIFile
+*
+* Revision 6.492  2005/11/22 21:23:05  madden
+* Fix in FDLCreateAsnDF for multiple volumes if input FASTA not parsed
+*
+* Revision 6.491  2005/10/04 20:40:42  madden
+* Make PrintDbInformationBasicEx public, minor optimization to PrintDbInfoWithRID
+*
+* Revision 6.490  2005/10/04 16:40:25  madden
+* Fix nit found by C++ compiler
+*
+* Revision 6.489  2005/10/04 15:44:54  madden
+* Workaround to time-out problem of PrintDbInformationWithRID
+*
+* Revision 6.488  2005/09/30 14:54:32  camacho
+* Enable recognition of the formatdb configuration file to allow users to set the
+* membership and link bits in the ASN.1 deflines.
+*
+* Revision 6.487  2005/09/20 14:08:29  camacho
+* Add error message when trying to dump subset database with gi file
+*
+* Revision 6.486  2005/09/08 13:19:11  camacho
+* Remove unneeded assertion
+*
+* Revision 6.485  2005/09/02 21:52:13  camacho
+* Correct buffer overflow on sparc
+*
 * Revision 6.484  2005/08/16 17:51:14  dondosha
 * Decrement thread count in shared_info only if sequence/header files are open for this instance of readdb
 *
@@ -6979,8 +7007,8 @@ ReadDBGetDbId (ReadDBFILEPtr list, ReadDBFILEPtr target)
 /*
     Formatting functions for databases formatted by formatdb.
 */
-static Boolean LIBCALL
-PrintDbInformationBasicEx (CharPtr database, Boolean is_aa, Int4 line_length,
+Boolean LIBCALL
+PrintDbInformationBasicEx (Boolean is_aa, Int4 line_length,
                            CharPtr definition, Int4 number_seqs, 
                            Int8 total_length, FILE *outfp, Boolean html, 
                            Boolean with_links)
@@ -7016,7 +7044,7 @@ PrintDbInformationBasic (CharPtr database, Boolean is_aa, Int4 line_length,
                          CharPtr definition, Int4 number_seqs, Int8
                          total_length, FILE *outfp, Boolean html)
 {
-   return PrintDbInformationBasicEx(database, is_aa, line_length, definition,
+   return PrintDbInformationBasicEx(is_aa, line_length, definition,
                                     number_seqs, total_length, outfp, html,
                                     FALSE);
 }
@@ -7027,7 +7055,7 @@ PrintDbInformationBasic (CharPtr database, Boolean is_aa, Int4 line_length,
 
 Boolean LIBCALL
 PrintDbInformationWithRID(CharPtr database, Boolean is_aa, Int4 line_length,
-                          FILE *outfp, Boolean html, CharPtr rid)
+                          FILE *outfp, Boolean html, CharPtr rid, Boolean query_is_aa)
 {
     CharPtr        definition, ptr, chptr;
     Int8        total_length;
@@ -7051,14 +7079,7 @@ PrintDbInformationWithRID(CharPtr database, Boolean is_aa, Int4 line_length,
     if (rdfp == FALSE)
         return FALSE;
 
-    rdfp_var = rdfp;
-    length = 0;
-    while (rdfp_var)
-    {
-        length += StringLen(readdb_get_title(rdfp_var));
-        length += 3;
-        rdfp_var = rdfp_var->next;
-    }
+    length = 4096;  /* Initial length, may be increased. */
     definition = MemNew(length*sizeof(Char));
     ptr = definition;
     rdfp_var = rdfp;
@@ -7075,7 +7096,7 @@ PrintDbInformationWithRID(CharPtr database, Boolean is_aa, Int4 line_length,
         }
             
         if (rid && html && rdfp_var->aliasfilename && atoi(rdfp_var->aliasfilename) != 0) {
-           if (!StrNCmp(chptr, "Completed", 9)) {
+           if (query_is_aa && !StrNCmp(chptr, "Completed", 9)) {
               sprintf(next_title, 
                    "<a href=http://www.ncbi.nlm.nih.gov/sutils/genomeRID.cgi?"
                    "taxid=%s&RID=%s>%s</a>; \n",
@@ -7107,6 +7128,9 @@ PrintDbInformationWithRID(CharPtr database, Boolean is_aa, Int4 line_length,
               }
            }
            real_length += StrLen(next_title) + 4;
+           /* We print these as keep-alive messages for this specific use. */
+           fprintf(outfp, "%s", " ");
+           fflush(outfp);
         } else {
            real_length += StrLen(chptr) + 3;
            sprintf(next_title, "%s", chptr);
@@ -7150,8 +7174,13 @@ PrintDbInformationWithRID(CharPtr database, Boolean is_aa, Int4 line_length,
     readdb_get_totals_ex(rdfp, &(total_length), &(number_seqs), TRUE);
 
     rdfp = readdb_destruct(rdfp);
+    if (rid && html)
+    {
+         fprintf(outfp, "%s", "\n");
+         fflush(outfp);
+    }
 
-    PrintDbInformationBasicEx (database, is_aa, line_length, definition,
+    PrintDbInformationBasicEx (is_aa, line_length, definition,
                                  number_seqs, total_length, outfp, 
                                  html, with_links);
 
@@ -7164,7 +7193,7 @@ Boolean LIBCALL
 PrintDbInformation(CharPtr database, Boolean is_aa, Int4 line_length, FILE *outfp, Boolean html)
 {
    return PrintDbInformationWithRID(database, is_aa, line_length, 
-                                    outfp, html, NULL);
+                                    outfp, html, NULL, FALSE);
 }
 
 /** Common Index Stuff **/
@@ -7710,8 +7739,9 @@ ValNodePtr FDBLoadMembershipsTable(void)
     /* For each bit, load the appropriate criteria function */
     for (bit = 1; bit <= nbits; bit++) {
         const char* fn_name = NULL;
-        Boolean (*fn_ptr)(VoidPtr direc) = NULL;
 
+        memset((void*) &buffer, 0, sizeof(buffer));
+        memset((void*) &numstr, 0, sizeof(numstr));
         Int8ToString((Int8)bit,numstr,sizeof(numstr));
         GetAppParam("formatdb","MembershipBitNumbers",numstr,"",buffer,
                 sizeof(buffer)-1);
@@ -7722,19 +7752,19 @@ ValNodePtr FDBLoadMembershipsTable(void)
         mip->bit_number = bit;
 
         if (!StringICmp("swissprot",buffer)) {
-            mip->criteria = fn_ptr = is_SWISSPROT;
+            mip->criteria = is_SWISSPROT;
             fn_name = "is_SWISSPROT";
         } else if (!StringICmp("pdb",buffer)) {
-            mip->criteria = fn_ptr = is_PDB;
+            mip->criteria = is_PDB;
             fn_name = "is_PDB";
         } else if (!StringICmp("refseq_genomic",buffer)) {
-            mip->criteria = fn_ptr = is_REFSEQ;
+            mip->criteria = is_REFSEQ;
             fn_name = "is_REFSEQ";
         } else if (!StringICmp("refseq_rna",buffer)) {
-            mip->criteria = fn_ptr = is_REFSEQ;
+            mip->criteria = is_REFSEQ;
             fn_name = "is_REFSEQ";
         } else if (!StringICmp("refseq_protein",buffer)) {
-            mip->criteria = fn_ptr = is_REFSEQ;
+            mip->criteria = is_REFSEQ;
             fn_name = "is_REFSEQ";
         }
 
@@ -7742,8 +7772,8 @@ ValNodePtr FDBLoadMembershipsTable(void)
         if (mip->criteria != NULL) {
             ValNodeAddPointer(&retval,0,mip);
             mip = NULL;
-            ErrLogPrintf("Membership bit %d: criteria for %s determined by %s"
-                         " (%p)\n", bit, buffer, fn_name, fn_ptr);
+            ErrLogPrintf("Membership bit %d: criteria for '%s' determined "
+                         "by function '%s'\n", bit, buffer, fn_name);
         }
     }
     if (mip && mip->criteria == NULL)
@@ -8589,7 +8619,7 @@ BlastDefLinePtr FDLCreateAsnDF(FormatDBPtr fdbp, CharPtr seq_id,
 
             sip->choice = SEQID_GENERAL;
             sip->data.ptrvalue = dbtagptr;
-            dbtagptr->tag->id = fdbp->options->total_num_of_seqs;
+            dbtagptr->tag->id = fdbp->num_of_seqs;
             dbtagptr->db = StringSave("BL_ORD_ID");
         }
 
@@ -11021,6 +11051,7 @@ Boolean    ScanDIFile(CharPtr difilename, GMSubsetDataPtr gmsubsetdp,
     FILE        *fdi;
     DI_Record    direc;
     Char        skipstr1[128], skipstr2[128];
+    long        skipdate = 0;
     int            readstat, total=0, progress_count=0;
     int         prev_oid = -1;      /* helps to keep track of sequences which
                                        have been merged in a non-redundant
@@ -11045,7 +11076,7 @@ Boolean    ScanDIFile(CharPtr difilename, GMSubsetDataPtr gmsubsetdp,
     /* each line in index file looks like: */
     /* 2933800 5769963 9606 8 EST 427 -2021038615 38990825 M61958 */
     
-    while ((readstat = fscanf(fdi, "%ld %ld %ld %ld %s %ld %ld %ld %s", (long *) &direc.oid, (long *) &direc.gi, (long *) &direc.taxid, (long *) &direc.owner, skipstr1, (long *) &direc.len, (long *) &direc.hash, (long *) &direc.div, skipstr2)) > 0) {
+    while ((readstat = fscanf(fdi, "%ld %ld %ld %ld %s %ld %ld %ld %s", (long *) &direc.oid, (long *) &direc.gi, (long *) &direc.taxid, (long *) &direc.owner, skipstr1, (long *) &direc.len, (long *) &direc.hash, (long *) &skipdate, skipstr2)) > 0) {
         
         direc.acc = StringSave(skipstr2);
         /*direc.oid += *curr_oid;*/
@@ -11287,7 +11318,7 @@ Fastacmd_PrintDbFullInformation(ReadDBFILEPtr rdfp, CharPtr databases,
     Int4 path_len;
 
     is_prot = (rdfp->parameters & READDB_IS_PROT) ? TRUE : FALSE;
-    PrintDbInformationWithRID(databases, is_prot, linelen, out, FALSE, NULL);
+    PrintDbInformationWithRID(databases, is_prot, linelen, out, FALSE, NULL, FALSE);
 
     asn2ff_set_output(out, NULL);
     ff_StartPrint(0, 0, linelen, NULL);
@@ -11559,6 +11590,21 @@ Int2 Fastacmd_Search_ex (CharPtr searchstr, CharPtr database, Uint1 is_prot,
     return retval;
 } 
 
+static Boolean s_HasGiList(const ReadDBFILEPtr rdfp_list) 
+{
+    ReadDBFILEPtr rdfp = (ReadDBFILEPtr) rdfp_list;
+    if ( !rdfp_list ) {
+        return FALSE;
+    }
+
+    for (; rdfp; rdfp = rdfp->next) {
+        if (rdfp->gilist || rdfp->gifile) {
+            return TRUE;
+        }
+    }
+    return FALSE;
+}
+
 /* #define SHOW_PROGRESS */
 
 Int2 DumpBlastDB(const ReadDBFILEPtr rdfp, FILE *fp, Int4 linelen, 
@@ -11592,6 +11638,11 @@ Int2 DumpBlastDB(const ReadDBFILEPtr rdfp, FILE *fp, Int4 linelen,
                 return -1;
             }
         }
+    }
+    if (s_HasGiList(rdfp)) {
+        ErrPostEx(SEV_ERROR, 0, 0,
+        "Feature not available - Cannot dump databases with gi files");
+        return -1;
     }
     rdfp_tmp = rdfp;
 
@@ -12742,7 +12793,7 @@ s_FDBTaxidDeflineTableNew_Seqid(const Char* filename)
 
         StringCat(format, "%");
         StringCat(format, Nlm_Int8tostr((Int8)ID_MAX_SIZE, 1));
-        StringCat(format, "s %ld");
+        StringCat(format, "s %d");
 
         while ( (nread = fscanf(fp, format, &seqid_buf, &taxid)) != EOF) {
             if (nread != 2) {
@@ -12909,7 +12960,6 @@ Int4 LIBCALL
 FDBTaxidDeflineTableSearchGi PROTO((const FDBTaxidDeflineTablePtr taxid_tbl,
                                     Int4 gi))
 {
-    ASSERT(taxid_tbl->type == eTaxidDefline_Gi);
     return s_FDBTaxidDeflineTableSearch(taxid_tbl, gi, kNoSeqid);
 }
 
@@ -12917,7 +12967,6 @@ Int4 LIBCALL
 FDBTaxidDeflineTableSearchSeqid PROTO((const FDBTaxidDeflineTablePtr taxid_tbl,
                                        const Char* seqid))
 {
-    ASSERT(taxid_tbl->type == eTaxidDefline_Seqid);
     return s_FDBTaxidDeflineTableSearch(taxid_tbl, kNoGi, seqid);
 }
 

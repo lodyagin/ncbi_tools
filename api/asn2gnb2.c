@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.45 $
+* $Revision: 1.61 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -360,7 +360,11 @@ static Boolean LocusHasBadChars (
 }
 
 NLM_EXTERN void AddLocusBlock (
-  Asn2gbWorkPtr awp
+  Asn2gbWorkPtr awp,
+  Boolean willshowwgs,
+  Boolean willshowgenome,
+  Boolean willshowcontig,
+  Boolean willshowsequence
 )
 
 {
@@ -372,7 +376,9 @@ NLM_EXTERN void AddLocusBlock (
   BioSourcePtr       biop;
   Int2               bmol = 0;
   BioseqPtr          bsp;
+  Char               buf [512];
   SeqFeatPtr         cds;
+  Int4               currGi;
   Char               date [40];
   SeqMgrDescContext  dcontext;
   Char               div [10];
@@ -381,13 +387,16 @@ NLM_EXTERN void AddLocusBlock (
   CharPtr            ebmol;
   EMBLBlockPtr       ebp;
   SeqMgrFeatContext  fcontext;
+  StringItemPtr      ffstring;
   GBBlockPtr         gbp;
   Char               gene [32];
   Boolean            genome_view;
   GBSeqPtr           gbseq;
   Int4               gi = 0;
+  ValNodePtr         gilistpos;
   Char               gi_buf [16];
   SeqIdPtr           gpp = NULL;
+  Boolean            hasComment;
   Char               id [41];
   Int2               imol = 0;
   IndxPtr            index;
@@ -404,23 +413,28 @@ NLM_EXTERN void AddLocusBlock (
   Char               locus [41];
   MolInfoPtr         mip;
   Char               mol [30];
+  Int4               nextGi;
   BioseqPtr          nm = NULL;
+  ObjectIdPtr        oip;
   OrgNamePtr         onp;
   Uint1              origin;
   OrgRefPtr          orp;
   BioseqPtr          parent;
   CharPtr            prefix = NULL;
+  Int4               prevGi;
   SeqDescrPtr        sdp;
+  Char               sect [128];
   SeqFeatPtr         sfp;
+  SeqHistPtr         hist;
   SeqIdPtr           sip;
   SubSourcePtr       ssp;
-  CharPtr            str;
   CharPtr            suffix = NULL;
   Uint1              tech;
   Uint1              topology;
   TextSeqIdPtr       tsip;
+  UserObjectPtr      uop;
+  ValNodePtr         vnp;
   Boolean            wgsmaster = FALSE;
-  StringItemPtr      ffstring;
 
   if (awp == NULL) return;
   ajp = awp->ajp;
@@ -445,6 +459,7 @@ NLM_EXTERN void AddLocusBlock (
   genome_view = FALSE;
   if (bsp->repr == Seq_repr_seg && (! SegHasParts (bsp))) {
     genome_view = TRUE;
+    
   }
   if (bsp->repr == Seq_repr_delta && (! DeltaLitOnly (bsp))) {
     genome_view = TRUE;
@@ -1031,6 +1046,8 @@ NLM_EXTERN void AddLocusBlock (
   suffix = FFEndPrint(ajp, ffstring, awp->format, 12, 0, 5, 0, "ID");
   FFRecycleString(ajp, ffstring);
 
+  bbp->string = suffix;
+
   if (awp->contig && (! awp->showconfeats) && awp->smartconfeats && GetWWW (ajp) &&
       (awp->format == GENBANK_FMT || awp->format == GENPEPT_FMT)) {
     is_aa = ISA_aa (bsp->mol);
@@ -1063,20 +1080,145 @@ NLM_EXTERN void AddLocusBlock (
       prefix = FFEndPrint(ajp, ffstring, awp->format, 12, 12, 5, 5, "??");
 
       FFRecycleString(ajp, ffstring);
+
+      if (awp->afp != NULL) {
+        DoQuickLinkFormat (awp->afp, prefix);
+      }
+      MemFree (prefix);
     }
   }
 
-  if (StringDoesHaveText (prefix)) {
-    loclen = StringLen (prefix) + StringLen (suffix);
-    str = (CharPtr) MemNew (loclen + 10);
-    if (str != NULL) {
-      StringCpy (str, prefix);
-      StringCat (str, "\n\n");
-      StringCat (str, suffix);
+  if (GetWWW (ajp) && awp->mode == ENTREZ_MODE && awp->afp != NULL &&
+      (awp->format == GENBANK_FMT || awp->format == GENPEPT_FMT)) {
+
+    sprintf (buf, "<a name=\"locus_%ld\"></a>", (long) awp->currGi);
+    DoQuickLinkFormat (awp->afp, buf);
+
+    buf [0] = '\0';
+    prefix = NULL;
+    hasComment = (Boolean) (SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_comment, &dcontext) != NULL);
+    if (! hasComment) {
+      hasComment = (Boolean) (SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_region, &dcontext) != NULL);
     }
-    bbp->string = str;
-  } else {
-    bbp->string = suffix;
+    if (! hasComment) {
+      hasComment = (Boolean) (SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_maploc, &dcontext) != NULL);
+    }
+    if (! hasComment) {
+      sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_user, &dcontext);
+      while (sdp != NULL) {
+        uop = (UserObjectPtr) sdp->data.ptrvalue;
+        if (uop != NULL) {
+          oip = uop->type;
+          if (oip != NULL) {
+            if (StringCmp (oip->str, "RefGeneTracking") == 0) {
+              hasComment = TRUE;
+            } else if (StringCmp (oip->str, "GenomeBuild") == 0) {
+              hasComment = TRUE;
+            } else if (StringCmp (oip->str, "ENCODE") == 0) {
+              hasComment = TRUE;
+            }
+          }
+        }
+        sdp = SeqMgrGetNextDescriptor (bsp, sdp, Seq_descr_user, &dcontext);
+      }
+    }
+    if (! hasComment) {
+      hist = bsp->hist;
+      if (hist != NULL) {
+        if (hist->replaced_by_ids != NULL && hist->replaced_by_date != NULL) {
+          hasComment = TRUE;
+        } else if (hist->replace_ids != NULL && hist->replace_date != NULL) {
+          hasComment = TRUE;
+        }
+      }
+    }
+
+    buf [0] = '\0';
+    StringCpy (buf, "<div class=\"localnav\"><ul class=\"locallinks\">");
+
+    if (hasComment) {
+      sprintf (sect, "<li><a href=\"#comment_%ld\">Comment</a></li>", (long) awp->currGi);
+      StringCat (buf, prefix);
+      prefix = "   ";
+      StringCat (buf, sect);
+    }
+    sprintf (sect, "<li><a href=\"#feature_%ld\">Features</a></li>", (long) awp->currGi);
+    StringCat (buf, prefix);
+    prefix = "   ";
+    StringCat (buf, sect);
+    if (willshowwgs) {
+      sprintf (sect, "<li><a href=\"#wgs_%ld\">WGS</a></li>", (long) awp->currGi);
+      StringCat (buf, prefix);
+      prefix = "   ";
+      StringCat (buf, sect);
+    }
+    if (willshowgenome) {
+      sprintf (sect, "<li><a href=\"#genome_%ld\">Genome</a></li>", (long) awp->currGi);
+      StringCat (buf, prefix);
+      prefix = "   ";
+      StringCat (buf, sect);
+    }
+    if (willshowcontig) {
+      sprintf (sect, "<li><a href=\"#contig_%ld\">Contig</a></li>", (long) awp->currGi);
+      StringCat (buf, prefix);
+      prefix = "   ";
+      StringCat (buf, sect);
+    }
+    if (willshowsequence) {
+      sprintf (sect, "<li><a href=\"#sequence_%ld\">Sequence</a></li>", (long) awp->currGi);
+      StringCat (buf, prefix);
+      prefix = "   ";
+      StringCat (buf, sect);
+    }
+
+    prevGi = 0;
+    currGi = 0;
+    nextGi = 0;
+    gilistpos = awp->gilistpos;
+    if (gilistpos == NULL) {
+      gilistpos = ajp->gihead;
+    }
+    do {
+      vnp = gilistpos;
+      if (vnp != NULL) {
+        prevGi = vnp->data.intvalue;
+        vnp = vnp->next;
+        gilistpos = vnp;
+        if (vnp != NULL) {
+          currGi = vnp->data.intvalue;
+          vnp = vnp->next;
+          if (vnp != NULL) {
+            nextGi = vnp->data.intvalue;
+          }
+        }
+      }
+    } while (gilistpos != NULL && currGi != awp->currGi);
+
+
+    if (currGi == awp->currGi && nextGi > 0 && awp->sectionCount < awp->sectionMax) {
+      sprintf (sect, "<li class=\"localnext\"><a href=\"#locus_%ld\">Next</a></li>", (long) nextGi);
+      StringCat (buf, prefix);
+      prefix = "   ";
+      StringCat (buf, sect);
+    } else if (awp->nextGi > 0) {
+      sprintf (sect, "<li class=\"localnext\"><a href=\"#locus_%ld\">Next</a></li>", (long) awp->nextGi);
+      StringCat (buf, prefix);
+      prefix = "   ";
+      StringCat (buf, sect);
+    }
+    if (currGi == awp->currGi && prevGi > 0 && awp->sectionCount > 1) {
+      sprintf (sect, "<li class=\"localprev\"><a href=\"#locus_%ld\">Previous</a></li>", (long) prevGi);
+      StringCat (buf, prefix);
+      prefix = "   ";
+      StringCat (buf, sect);
+    } else if (awp->prevGi > 0) {
+      sprintf (sect, "<li class=\"localprev\"><a href=\"#locus_%ld\">Previous</a></li>", (long) awp->prevGi);
+      StringCat (buf, prefix);
+      prefix = "   ";
+      StringCat (buf, sect);
+    }
+    StringCat (buf, "</ul></div>\n");
+    DoQuickLinkFormat (awp->afp, buf);
   }
 
   if (awp->afp != NULL) {
@@ -1780,6 +1922,13 @@ NLM_EXTERN void AddVersionBlock (
   }
 }
 
+NLM_EXTERN void AddProjectBlock (
+  Asn2gbWorkPtr awp
+)
+
+{
+}
+
 /* only displaying PID in GenPept format */
 
 /*
@@ -2234,6 +2383,8 @@ static void AddSPBlock (
         str += 3;
       } else if (StringNCmp (str, "MGI:", 4) == 0) {
         str += 4;
+      } else if (StringNCmp (str, "HGNC:", 5) == 0) {
+        str += 5;
       }
     } else if ( oip->id > 0 ) {
       sprintf(numbuf, "%d", oip->id);
@@ -2241,6 +2392,7 @@ static void AddSPBlock (
     }
 
     if ( !StringHasNoText(str) ) {
+      FFAddOneString (ffstring, ":", FALSE, FALSE, TILDE_IGNORE);
       if ( GetWWW(ajp) && has_link) {
         FFAddOneChar (ffstring, ' ', FALSE);
         FFAddTextToString(ffstring, "<a href=", link_omim, str, FALSE, FALSE, TILDE_IGNORE);
@@ -4009,11 +4161,13 @@ static Boolean LIBCALLBACK GetRefsOnCDS (
   Boolean         okay;
   PubdescPtr      pdp;
   RefBlockPtr     rbp;
+  BioseqPtr       target;
 
   if (sfp == NULL || context == NULL) return TRUE;
   cpp = (CdsPubsPtr) context->userdata;
   awp = cpp->awp;
   if (awp == NULL) return TRUE;
+  target = cpp->target;
 
   okay = TRUE;
   pdp = (PubdescPtr) sfp->data.value.ptrvalue;
@@ -4033,6 +4187,10 @@ static Boolean LIBCALLBACK GetRefsOnCDS (
 
       irp = (IntRefBlockPtr) rbp;
       irp->loc = SeqLocMerge (cpp->target, cpp->vnp, NULL, FALSE, TRUE, FALSE);
+      if (target != NULL) {
+        irp->left = 0;
+        irp->right = target->length - 1;
+      }
       alp = GetAuthListPtr (pdp, NULL);
       if (alp != NULL) {
         irp->authstr = GetAuthorsPlusConsortium (awp->format, alp);
@@ -4143,6 +4301,8 @@ static void GetRefsOnBioseq (
 
         irp = (IntRefBlockPtr) rbp;
         irp->loc = SeqLocMerge (target, &vn, NULL, FALSE, TRUE, FALSE);
+        irp->left = 0;
+        irp->right = target->length - 1;
         alp = GetAuthListPtr (pdp, NULL);
         if (alp != NULL) {
           irp->authstr = GetAuthorsPlusConsortium (awp->format, alp);
@@ -4180,6 +4340,8 @@ static void GetRefsOnBioseq (
 
         irp = (IntRefBlockPtr) rbp;
         irp->loc = SeqLocMerge (target, &vn, NULL, FALSE, TRUE, FALSE);
+        irp->left = 0;
+        irp->right = target->length - 1;
         alp = GetAuthListPtr (pdp, NULL);
         if (alp != NULL) {
           irp->authstr = GetAuthorsPlusConsortium (awp->format, alp);
@@ -4241,6 +4403,8 @@ static void GetRefsOnBioseq (
 
           irp = (IntRefBlockPtr) rbp;
           irp->loc = SeqLocMerge (target, sfp->location, NULL, FALSE, TRUE, FALSE);
+          irp->left = fcontext.left;
+          irp->right = fcontext.right;
           if (ajp->ajp.slp != NULL) {
             sip = SeqIdParse ("lcl|dummy");
             left = GetOffsetInBioseq (ajp->ajp.slp, bsp, SEQLOC_LEFT_END);
@@ -4471,7 +4635,7 @@ NLM_EXTERN Boolean AddReferenceBlock (
     head = SortValNode (head, SortReferencesA);
   }
 
-  if (awp->ssp != NULL) {
+  if (awp->ssp != NULL && (! awp->onlyGeneRIFs) && (! awp->onlyReviewPubs)) {
 
     /* add seq-submit citation */
 
@@ -4543,11 +4707,15 @@ NLM_EXTERN Boolean AddReferenceBlock (
         irp = (IntRefBlockPtr) rbp;
         if (lastrbp->pmid != 0 && rbp->pmid != 0) {
           if (lastrbp->pmid == rbp->pmid) {
-            excise = TRUE;
+            if (lastirp->right + 1 >= irp->left) {
+              excise = TRUE;
+            }
           }
         } else if (lastrbp->muid != 0 && rbp->muid != 0) {
           if (lastrbp->muid == rbp->muid) {
-            excise = TRUE;
+            if (lastirp->right + 1 >= irp->left) {
+              excise = TRUE;
+            }
           }
         } else if (lastrbp->uniquestr != NULL && rbp->uniquestr != NULL) {
           if (StringICmp (lastrbp->uniquestr, rbp->uniquestr) == 0) {
@@ -4555,7 +4723,9 @@ NLM_EXTERN Boolean AddReferenceBlock (
               if (StringICmp (irp->authstr, lastirp->authstr) == 0) {
 
                 /* L76496.1 - removing duplicate submission pubs */
-                excise = TRUE;
+                if (lastirp->right + 1 >= irp->left) {
+                  excise = TRUE;
+                }
               }
             }
           }
@@ -4789,6 +4959,12 @@ NLM_EXTERN void AddWGSBlock (
 
   if (awp->format == EMBL_FMT || awp->format == EMBLPEPT_FMT) return;
 
+  if (GetWWW (ajp) && awp->mode == ENTREZ_MODE && awp->afp != NULL &&
+      (awp->format == GENBANK_FMT || awp->format == GENPEPT_FMT)) {
+    sprintf (buf, "<a name=\"wgs_%ld\"></a>", (long) awp->currGi);
+    DoQuickLinkFormat (awp->afp, buf);
+  }
+
   sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_user, &dcontext);
   while (sdp != NULL) {
     uop = (UserObjectPtr) sdp->data.ptrvalue;
@@ -4882,6 +5058,7 @@ NLM_EXTERN void AddGenomeBlock (
   IntAsn2gbJobPtr    ajp;
   BaseBlockPtr       bbp;
   BioseqPtr          bsp;
+  Char               buf [128];
   SeqMgrDescContext  dcontext;
   Boolean            first = TRUE;
   CharPtr            moltype;
@@ -4899,6 +5076,12 @@ NLM_EXTERN void AddGenomeBlock (
   if (bsp == NULL) return;
 
   if (awp->format == EMBL_FMT || awp->format == EMBLPEPT_FMT) return;
+
+  if (GetWWW (ajp) && awp->mode == ENTREZ_MODE && awp->afp != NULL &&
+      (awp->format == GENBANK_FMT || awp->format == GENPEPT_FMT)) {
+    sprintf (buf, "<a name=\"genome_%ld\"></a>", (long) awp->currGi);
+    DoQuickLinkFormat (awp->afp, buf);
+  }
 
   bbp = Asn2gbAddBlock (awp, GENOME_BLOCK, sizeof (BaseBlock));
   if (bbp == NULL) return;
@@ -5044,6 +5227,7 @@ NLM_EXTERN void AddSequenceBlock (
 {
   IntAsn2gbJobPtr  ajp;
   BioseqPtr        bsp;
+  Char             buf [128];
   Int4             extend;
   Int4             len;
   SeqBlockPtr      sbp;
@@ -5055,6 +5239,12 @@ NLM_EXTERN void AddSequenceBlock (
   if (ajp == NULL) return;
   bsp = awp->bsp;
   if (bsp == NULL) return;
+
+  if (GetWWW (ajp) && awp->mode == ENTREZ_MODE && awp->afp != NULL &&
+      (awp->format == GENBANK_FMT || awp->format == GENPEPT_FMT)) {
+    sprintf (buf, "<a name=\"sequence_%ld\"></a>", (long) awp->currGi);
+    DoQuickLinkFormat (awp->afp, buf);
+  }
 
   if (awp->slp != NULL) {
     len = SeqLocLen (awp->slp);
@@ -5116,10 +5306,19 @@ NLM_EXTERN void AddContigBlock (
 )
 
 {
-  BaseBlockPtr  bbp;
+  IntAsn2gbJobPtr  ajp;
+  BaseBlockPtr     bbp;
+  Char             buf [128];
 
   if (awp == NULL) return;
+  ajp = awp->ajp;
+  if ( ajp == NULL ) return;
 
+  if (GetWWW (ajp) && awp->mode == ENTREZ_MODE && awp->afp != NULL &&
+      (awp->format == GENBANK_FMT || awp->format == GENPEPT_FMT)) {
+    sprintf (buf, "<a name=\"contig_%ld\"></a>", (long) awp->currGi);
+    DoQuickLinkFormat (awp->afp, buf);
+  }
   bbp = Asn2gbAddBlock (awp, CONTIG_BLOCK, sizeof (BaseBlock));
 
   if (awp->afp != NULL) {
@@ -5132,18 +5331,36 @@ NLM_EXTERN void AddSlashBlock (
 )
 
 {
-  BaseBlockPtr  bbp;
-  CharPtr str;
+  IntAsn2gbJobPtr  ajp;
+  BaseBlockPtr     bbp;
+  Char             buf [128];
+  CharPtr          str;
 
   if (awp == NULL) return;
+  ajp = awp->ajp;
+  if (ajp == NULL) return;
+
+  /*
+  if (GetWWW (ajp) && awp->mode == ENTREZ_MODE && awp->afp != NULL &&
+      (awp->format == GENBANK_FMT || awp->format == GENPEPT_FMT)) {
+    sprintf (buf, "<a name=\"slash_%ld\"></a>", (long) awp->currGi);
+    DoQuickLinkFormat (awp->afp, buf);
+  }
+  */
 
   bbp = Asn2gbAddBlock (awp, SLASH_BLOCK, sizeof (BaseBlock));
   if (bbp == NULL) return;
 
   bbp->entityID = awp->entityID;
 
-  str = MemNew(sizeof(Char) * 4);
-  StringNCpy(str, "//\n", 4);
+  if (GetWWW (ajp) && awp->mode == ENTREZ_MODE && awp->afp != NULL &&
+      (awp->format == GENBANK_FMT || awp->format == GENPEPT_FMT)) {
+    sprintf (buf, "//\n<a name=\"slash_%ld\"></a>", (long) awp->currGi);
+    str = StringSave (buf);
+  } else {
+    str = MemNew(sizeof(Char) * 4);
+    StringNCpy(str, "//\n", 4);
+  }
 
   bbp->string = str;
 

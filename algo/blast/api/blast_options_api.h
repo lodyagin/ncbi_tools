@@ -1,4 +1,4 @@
-/* $Id: blast_options_api.h,v 1.3 2005/04/06 23:27:53 dondosha Exp $
+/* $Id: blast_options_api.h,v 1.7 2005/10/31 14:14:29 madden Exp $
 ***************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -105,14 +105,49 @@ Int2 SBlastOptionsSetDiscMbParams(SBlastOptions* options, Int4 template_length,
                                  Int4 template_type);
 
 /** Reset matrix name and gap costs to new values.
+ * 
  * @param options Options structure to update. [in] [out]
  * @param matrix_name New matrix name [in]
- * @param gap_open New gap opening cost [in]
- * @param gap_extend New gap extension cost [in]
+ * @param gap_open New gap existence cost.  If zero default for matrix is used. [in]
+ * @param gap_extend New gap extension cost.  If zero default for matrix is used. [in]
  */
 Int2 SBlastOptionsSetMatrixAndGapCosts(SBlastOptions* options, 
                                        const char* matrix_name, 
+                                       Int4 gap_open, 
+                                       Int4 gap_extend);
+
+
+/** Reset rewared, penalty and gap costs to new values.
+ *  Will suggest and use conservative values if gap_open and gap_extend are zero
+ *  and suggest is TRUE.
+ * 
+ * @param options Options structure to update. [in] [out]
+ * @param reward match score [in]
+ * @param penalty mismatch score [in]
+ * @param gap_open New gap existence cost.  If zero default for reward/penalty is used. [in]
+ * @param gap_extend New gap extension cost.  If zero default for reward/penalty is used. [in]
+ */
+Int2 SBlastOptionsSetRewardPenaltyAndGapCosts(SBlastOptions* options, 
+                                       Int4 reward, Int4 penalty,
                                        Int4 gap_open, Int4 gap_extend);
+
+/** Set threshold value.
+ * @param options options Options structure to update. [in] [out]
+ * @param threshold New value to set, if zero default value for matrix
+ *    will be used. [in]
+ * @param zero unless error (e.g., threshold is < zero)
+ */
+Int2 SBlastOptionsSetThreshold(SBlastOptions* options, 
+                               Int4 threshold);
+
+/** Set window size for two hit extension.
+ * @param options options Options structure to update. [in] [out]
+ * @param window_size New value to set, if zero default value for matrix
+ *    will be used. [in]
+ * @param zero unless error (e.g., window_size is < zero)
+ */
+Int2 SBlastOptionsSetWindowSize(SBlastOptions* options, 
+                               Int4 window_size);
 
 /** Reset database (subject) genetic code option to a new value. 
  * @param options Options structure to update. [in] [out]
@@ -127,6 +162,12 @@ Int2 SBlastOptionsSetDbGeneticCode(SBlastOptions* options, Int4 gc);
  * @return Status.
  */
 Int2 SBlastOptionsSetFilterString(SBlastOptions* options, const char* str);
+
+/** Returns the mask-at-hash option value.
+ * @param options The options structure [in]
+ * @return Boolean value of the masking at hash option.
+ */
+Boolean SBlastOptionsGetMaskAtHash(const SBlastOptions* options);
 
 /* @} */
 

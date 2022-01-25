@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/3/2003
 *
-* $Revision: 1.287 $
+* $Revision: 1.299 $
 *
 * File Description: 
 *
@@ -306,6 +306,7 @@ typedef struct organismdescriptionmodifiers {
   Int2     max_mods;
   Boolean  keep_paren;
   Boolean  exclude_sp;
+  Boolean  include_country_extra;
   Int4     clone_isolate_HIV_rule_num;
   Boolean  use_modifiers;
 } OrganismDescriptionModifiers, PNTR OrganismDescriptionModifiersPtr;
@@ -461,21 +462,6 @@ typedef enum {
 
 #define NumDefLineModifiers (sizeof (DefLineModifiers) / sizeof (ModifierItemGlobalData))
 
-static Boolean IsNonTextModifierIndex (Int4 mod_index)
-{
-  if (mod_index == DEFLINE_POS_Environmental_sample
-      || mod_index == DEFLINE_POS_Germline
-      || mod_index == DEFLINE_POS_Transgenic
-      || mod_index == DEFLINE_POS_Rearranged)
-  {
-    return TRUE;
-  }
-  else
-  {
-    return FALSE;
-  }
-}
-
 extern ValNodePtr GetSourceQualDescList (Boolean get_subsrc, Boolean get_orgmod, Boolean get_discontinued)
 {
   Int4              index;
@@ -488,7 +474,8 @@ extern ValNodePtr GetSourceQualDescList (Boolean get_subsrc, Boolean get_orgmod,
         (index == DEFLINE_POS_Insertion_seq_name
          || index == DEFLINE_POS_Transposon_name
          || index == DEFLINE_POS_Old_lineage
-         || index == DEFLINE_POS_Old_name))
+         || index == DEFLINE_POS_Old_name
+		 || index == DEFLINE_POS_Dosage))
     {
       continue;    
     }
@@ -1248,7 +1235,11 @@ static Boolean OkToTryAddingQual (
   if (feature_index == DEFLINE_POS_Old_name
     || feature_index == DEFLINE_POS_Old_lineage
     || feature_index == DEFLINE_POS_Dosage
-    || feature_index == DEFLINE_POS_Map)
+    || feature_index == DEFLINE_POS_Map
+	|| feature_index == DEFLINE_POS_Fwd_primer_name
+    || feature_index == DEFLINE_POS_Fwd_primer_seq
+    || feature_index == DEFLINE_POS_Rev_primer_name
+    || feature_index == DEFLINE_POS_Rev_primer_seq)
   {
     return FALSE;
   }
@@ -1871,7 +1862,6 @@ AddTypeStrainModifierIndices
  BioSourcePtr    biop)
 {
   ValNodePtr vnp;
-  Boolean    found_strain_in_list = FALSE;
   
   if (modifier_indices == NULL || biop == NULL || ! HasTypeStrainComment (biop))
   {
@@ -2230,7 +2220,14 @@ static CharPtr GetOrganismDescription (
       }
       if (ssp != NULL)
       {
-        no_semicolon_len = StringCSpn (ssp->name, ";");
+        if (odmp->include_country_extra)
+        {
+          no_semicolon_len = StringLen (ssp->name);
+        }
+        else
+        {
+          no_semicolon_len = StringCSpn (ssp->name, ";");
+        }
         AddModifierLabel (odmp->use_labels, feature_index, modifier_text);
         if (ssp->subtype == SUBSRC_transgenic)
         {
@@ -2245,8 +2242,11 @@ static CharPtr GetOrganismDescription (
           }
           StringNCpy (modifier_text + 5, ssp->name, no_semicolon_len);
           modifier_text[5 + no_semicolon_len] = 0;
-          cp = StringChr (modifier_text, ':');
-          if (cp != NULL) *cp = 0;
+          if (!odmp->include_country_extra)
+          {
+            cp = StringChr (modifier_text, ':');
+            if (cp != NULL) *cp = 0;
+          }
         }
         else if (ssp->name != NULL && ssp->name[0] != 0
           && (ssp->subtype != SUBSRC_plasmid_name
@@ -5398,6 +5398,15 @@ static ValNodePtr Remove3UTRFromEndOfFeatList (ValNodePtr PNTR featlist)
   return vnp;
 }
 
+static Uint1 GetMoleculeType (BioseqPtr bsp, Uint2     entityID);
+static void ConsolidateClauses (
+  ValNodePtr PNTR list,
+  BioseqPtr  bsp,
+  Uint1      biomol,
+  Boolean    delete_now,
+  Boolean    suppress_locus_tag);
+
+
 /* This function calculates the "interval" for a clause in the definition
  * line.  The interval could be an empty string, it could indicate whether
  * the location of the feature is partial or complete and whether or not
@@ -5411,15 +5420,16 @@ static CharPtr GetGenericInterval
   BioseqPtr        bsp,
   Boolean          suppress_locus_tag)
 {
-  CharPtr interval;
-  Boolean partial5, partial3;
+  CharPtr    interval;
+  Boolean    partial5, partial3;
   SeqFeatPtr sfp;
-  ValNodePtr featlist, strings;
-  CharPtr subfeatlist;
-  Int4 len;
-  Boolean suppress_final_and;
+  ValNodePtr featlist, strings, prev_feat;
+  CharPtr    subfeatlist;
+  Int4       len;
+  Boolean    suppress_final_and;
   ValNodePtr utr3vnp = NULL;
   ValNodePtr last_feat;
+  Uint2      molecule_type;
 
   if ( fcp == NULL || fcp->featlist == NULL) return NULL;
   if (fcp->is_unknown) return NULL;
@@ -5437,8 +5447,10 @@ static CharPtr GetGenericInterval
   CheckSeqLocForPartial (sfp->location, &partial5, &partial3);
 
   strings = NULL;
+  prev_feat = NULL;
   while (featlist != NULL && featlist->choice != DEFLINE_CLAUSEPLUS)
   {
+    prev_feat = featlist;
     featlist = featlist->next;
   }
   if (IsCDS (sfp))
@@ -5454,6 +5466,22 @@ static CharPtr GetGenericInterval
       suppress_final_and = TRUE;
     }
     LabelClauses (featlist, biomol, bsp, suppress_locus_tag);
+    
+    molecule_type = GetMoleculeType (bsp, bsp->idx.entityID);
+    /* consolidate genes/proteins with the same names (usually hypothetical proteins) */
+    ConsolidateClauses (&featlist, bsp, molecule_type, TRUE,
+                        suppress_locus_tag);
+
+    /* make sure featlist is still intact - may have consolidated it */
+    if (prev_feat == NULL)
+    {
+      fcp->featlist = featlist;
+    }
+    else
+    {
+      prev_feat->next = featlist;
+    }
+
     ListClauses (featlist, &strings, FALSE, suppress_final_and);
     subfeatlist = MergeValNodeStrings (strings, FALSE);
 	  ValNodeFreeData (strings);
@@ -5550,7 +5578,7 @@ static CharPtr GetGenericInterval
   }
   
   if (subfeatlist != NULL) MemFree (subfeatlist);    
-
+  
   return interval;
 } 
 
@@ -7719,6 +7747,7 @@ typedef struct deflinefeaturerequestlist {
   DefLineType            feature_list_type;
   Int4                   misc_feat_parse_rule;
   Boolean                suppress_locus_tags;
+  ValNodePtr             suppressed_feature_list;
 } DeflineFeatureRequestList, PNTR DeflineFeatureRequestListPtr;
 
 static void InitFeatureRequests (
@@ -7736,6 +7765,7 @@ static void InitFeatureRequests (
   feature_requests->feature_list_type = DEFLINE_USE_FEATURES;
   feature_requests->misc_feat_parse_rule = 2;
   feature_requests->suppress_locus_tags = FALSE;
+  feature_requests->suppressed_feature_list = NULL;
 }
 
 static Boolean RemoveCondition (
@@ -7921,6 +7951,89 @@ static void RemoveUnwantedFeatures (
     }
   }
   DeleteFeatureClauses (list);
+}
+
+static Boolean IsFeatureInSelectionList (SeqFeatPtr sfp, ValNodePtr feat_list)
+{
+  ValNodePtr       vnp;
+
+  if (sfp == NULL || feat_list == NULL)
+  {
+    return FALSE;
+  }
+  
+  for (vnp = feat_list; vnp != NULL && sfp->idx.subtype != vnp->choice; vnp = vnp->next)
+  {
+  }
+  if (vnp == NULL)
+  {
+    return FALSE;
+  }
+  else
+  {
+    return TRUE;
+  }
+}
+
+static void MarkSuppressedFeatureClauseForRemoval (
+  ValNodePtr clause,
+  ValNodePtr suppressed_feature_list
+)
+{
+  FeatureClausePtr fcp;
+  ValNodePtr       featlist;
+  ValNodePtr       firstfeat;
+  SeqFeatPtr       sfp;
+
+  if (clause == NULL
+    || clause->choice != DEFLINE_CLAUSEPLUS
+    || clause->data.ptrvalue == NULL)
+  {
+    return;
+  }
+
+  fcp = clause->data.ptrvalue;
+  firstfeat = fcp->featlist;
+    
+  featlist = firstfeat;
+  while (featlist != NULL)
+  {  
+    if (featlist->choice == DEFLINE_FEATLIST
+      && featlist->data.ptrvalue != NULL)
+    {
+      sfp = (SeqFeatPtr) featlist->data.ptrvalue;
+      if (IsFeatureInSelectionList (sfp, suppressed_feature_list))
+      {
+        fcp->delete_me = TRUE;
+      }
+    }
+    else if (featlist->choice == DEFLINE_CLAUSEPLUS 
+      && featlist->data.ptrvalue != NULL)
+    {
+      MarkSuppressedFeatureClauseForRemoval (featlist, suppressed_feature_list);
+    }
+    featlist = featlist->next;
+  }
+}
+  
+static void RemoveSuppressedFeatures (ValNodePtr PNTR list,
+                                      ValNodePtr suppressed_feature_list)
+{
+  ValNodePtr vnp;
+  
+  if (list == NULL || *list == NULL || suppressed_feature_list == NULL)
+  {
+    return;
+  }
+  
+  for (vnp = *list; vnp != NULL; vnp = vnp->next)
+  {
+    if (vnp->choice == DEFLINE_CLAUSEPLUS)
+    {
+      MarkSuppressedFeatureClauseForRemoval (vnp, suppressed_feature_list);
+    }
+  }
+  DeleteFeatureClauses (list);  
 }
 
 static Boolean LIBCALLBACK IsMasterClause (
@@ -9103,6 +9216,11 @@ static CharPtr BuildFeatureClauses (
   if (feature_requests->feature_list_type == DEFLINE_USE_FEATURES
       && (! isSegment || (seg_feature_list != NULL && *seg_feature_list != NULL)))
   {
+    /* remove features that indexer has chosen to suppress before they are grouped
+     * with other features or used to determine loneliness etc.
+     */
+    RemoveSuppressedFeatures (feature_list, feature_requests->suppressed_feature_list);
+  
     GroupmRNAs (feature_list, bsp, feature_requests->suppress_locus_tags);
 
     /* genes are added to other clauses */
@@ -9435,6 +9553,7 @@ typedef struct deflineformdata {
   ButtoN    use_labels;
   ButtoN    keep_paren;
   ButtoN    exclude_sp;
+  ButtoN    include_country_extra;
   GrouP     clone_isolate_HIV_rule_num;
   PopuP     modLimit;
   PopuP     organelle_popup;
@@ -9448,6 +9567,7 @@ typedef struct deflineformdata {
   ButtoN    alternate_splice_flag;
   ButtoN    suppress_locus_tags;
   ButtoN    gene_cluster_opp_strand;
+  DialoG    suppressed_feature_list;
 } DefLineFormData, PNTR DefLineFormPtr;
 
 static void DefLineFormMessageProc (ForM f, Int2 mssg)
@@ -9587,6 +9707,7 @@ static void DoAutoDefLine (ButtoN b)
   odmp.use_labels = GetStatus (dlfp->use_labels);
   odmp.keep_paren = GetStatus (dlfp->keep_paren);
   odmp.exclude_sp = GetStatus (dlfp->exclude_sp);
+  odmp.include_country_extra = GetStatus (dlfp->include_country_extra);
   odmp.use_modifiers = TRUE;
 
   if (dlfp->clone_isolate_HIV_rule_num == NULL)
@@ -9658,6 +9779,8 @@ static void DoAutoDefLine (ButtoN b)
 
   dlfp->feature_requests.misc_feat_parse_rule = 
                  GetValue (dlfp->misc_feat_parse_rule);
+                 
+  dlfp->feature_requests.suppressed_feature_list = DialogToPointer (dlfp->suppressed_feature_list);                 
 
   odmp.max_mods = GetValue (dlfp->modLimit);
   if (odmp.max_mods > 1)
@@ -9692,6 +9815,8 @@ static void DoAutoDefLine (ButtoN b)
                               product_flag, alternate_splice_flag,
                               gene_cluster_opp_strand,
                               &defline_clauses);
+                              
+  dlfp->feature_requests.suppressed_feature_list = ValNodeFree (dlfp->feature_requests.suppressed_feature_list);                              
 
   BuildDefinitionLinesFromFeatureClauseLists (defline_clauses, dlfp->modList,
                                                 m, odmp);
@@ -9858,6 +9983,7 @@ static GrouP CreateDefLineFormModifierClassGroup (
   GrouP p, q;
   Int2    item_index, num_label_columns, num_item_rows;
   Int2    num_item_columns;
+  Char    ch;
 
   p = HiddenGroup (h, -1, 0, NULL);
   SetGroupSpacing (p, 10, 10);
@@ -9915,9 +10041,22 @@ static GrouP CreateDefLineFormModifierClassGroup (
                       0, popupMenuHeight, programFont, 'l');
         if (num_label_columns > 2)
         {
+		  if (StringLen (dlfp->modList[item_index].first_value_seen) > 50)
+		  {
+		    ch = dlfp->modList[item_index].first_value_seen [50];
+            dlfp->modList[item_index].first_value_seen [50] = 0;
+		  }
+		  else
+		  {
+		    ch = 0;
+		  }
           StaticPrompt (dlfp->sourceListGrp,
                         dlfp->modList[item_index].first_value_seen,
                         0, popupMenuHeight, programFont, 'l');
+	      if (ch != 0)
+		  {
+		    dlfp->modList[item_index].first_value_seen [50] = ch;
+		  }
         }
       }
     }
@@ -9999,7 +10138,7 @@ static GrouP CreateDefLineFormFeatureOptionsGroup (
   DefLineFormPtr dlfp
 )
 {
-  GrouP p, q, g, r;
+  GrouP p, q, g, g2, r;
   Int4  i;
 
   p = HiddenGroup (h, -1, 0, NULL);
@@ -10043,6 +10182,7 @@ static GrouP CreateDefLineFormFeatureOptionsGroup (
       SetStatus (dlfp->feature_requests.items[i].keep_request, FALSE);
     }
   }
+  
   r = HiddenGroup (p, 2, 0, NULL);
   StaticPrompt (r, "Misc Feat Parse Rule", 0, dialogTextHeight, programFont, 'l');
   dlfp->misc_feat_parse_rule = PopupList (r, TRUE, NULL);
@@ -10051,8 +10191,6 @@ static GrouP CreateDefLineFormFeatureOptionsGroup (
   SetValue (dlfp->misc_feat_parse_rule, 2);
   Disable (dlfp->misc_feat_parse_rule);
 
-  AlignObjects (ALIGN_CENTER, (HANDLE) q,
-                 (HANDLE) dlfp->featureOptsGrp, NULL); 
   AlignObjects (ALIGN_CENTER, (HANDLE) dlfp->organelle_popup,
                  (HANDLE) dlfp->alternate_splice_flag,
                  (HANDLE) dlfp->suppress_alt_splice_phrase,
@@ -10063,6 +10201,14 @@ static GrouP CreateDefLineFormFeatureOptionsGroup (
                  (HANDLE) r,
                  NULL);
 
+
+  g2 = NormalGroup (p, -1, 0,
+                    "Features to Suppress", programFont, NULL);
+  dlfp->suppressed_feature_list = FeatureSelectionDialog (g2, TRUE, NULL, NULL);
+/*  AlignObjects (ALIGN_CENTER, (HANDLE) g2, NULL); */
+
+  AlignObjects (ALIGN_CENTER, (HANDLE) q,
+                 (HANDLE) dlfp->featureOptsGrp, (HANDLE) g2, NULL); 
   return p;
 }
 
@@ -10122,6 +10268,9 @@ static void CreateDefLineForm (
   dlfp->exclude_sp = CheckBox (h, "Do not apply modifier to 'sp.' organisms",
          NULL);
   SetStatus (dlfp->exclude_sp, TRUE);
+  
+  dlfp->include_country_extra = CheckBox (h, "Include text after colon in country", NULL);
+  SetStatus (dlfp->include_country_extra, FALSE);
 
   feat_opts = CreateDefLineFormFeatureOptionsGroup (h, dlfp);
 
@@ -10147,6 +10296,7 @@ static void CreateDefLineForm (
                   (HANDLE) q,
                   (HANDLE) dlfp->keep_paren,
                   (HANDLE) dlfp->exclude_sp,
+                  (HANDLE) dlfp->include_country_extra,
                   (HANDLE) feat_opts,
                   (HANDLE) dlfp->modify_only_target,
                   (HANDLE) c, NULL);
@@ -10157,6 +10307,7 @@ static void CreateDefLineForm (
                   (HANDLE) q,
                   (HANDLE) dlfp->keep_paren,
                   (HANDLE) dlfp->exclude_sp,
+                  (HANDLE) dlfp->include_country_extra,
                   (HANDLE) feat_opts,
                   (HANDLE) dlfp->modify_only_target,
                   (HANDLE) c, NULL);
@@ -10243,6 +10394,7 @@ extern void AutoDefBaseFormCommon (
     odmp.max_mods = -99;
     odmp.keep_paren = TRUE;
     odmp.exclude_sp = TRUE;
+    odmp.include_country_extra = FALSE;
     odmp.clone_isolate_HIV_rule_num = clone_isolate_HIV_rule_want_both;
     odmp.use_modifiers = use_modifiers;
     ClearProteinTitlesInNucProts (bfp->input_entityID, NULL);
@@ -10434,6 +10586,17 @@ typedef struct orgmodloadformdata {
   ExistingTextPtr   etp;
 } OrgModLoadFormData, PNTR OrgModLoadFormPtr;
 
+enum orgmodmatchtype 
+{
+  eMatchAccession = 1,
+  eMatchLocalID,
+  eMatchTaxName,
+  eMatchTMSMART,
+  eMatchBankIt,
+  eMatchGeneral,
+  eMatchNone
+};
+
 static void SetFormModsAccept (Pointer userdata)
 {
   OrgModLoadFormPtr form_data;
@@ -10473,7 +10636,7 @@ static void SetFormModsAccept (Pointer userdata)
     }
     else if (GetValue (form_data->line_forms [column_index].action_choice) == 1
       && GetValue (form_data->line_forms [column_index].match_choice) > 0
-      && GetValue (form_data->line_forms [column_index].match_choice) < 6)
+      && GetValue (form_data->line_forms [column_index].match_choice) < eMatchNone)
     {
       have_action = TRUE;
     }
@@ -10524,8 +10687,6 @@ extern Int4 GetNumDeflineModifiers (void)
   return NumDefLineModifiers;
 }
 
-
-
 static void BuildOrgModLineForm (
   CharPtr           value_string,
   Int4              column_number,
@@ -10559,8 +10720,9 @@ static void BuildOrgModLineForm (
   PopupItem (omlfp->match_choice, "Organism Taxonomy Name");
   PopupItem (omlfp->match_choice, "TMSMART ID");
   PopupItem (omlfp->match_choice, "BankIt ID");
+  PopupItem (omlfp->match_choice, "General ID");
   PopupItem (omlfp->match_choice, "None");
-  SetValue (omlfp->match_choice, 6);
+  SetValue (omlfp->match_choice, eMatchNone);
 
   /* list of organism modifiers */
   for (index = 0; index < NumDefLineModifiers; index++)
@@ -10820,7 +10982,7 @@ static void ApplyTableModsByTaxName (BioSourcePtr biop, Pointer userdata)
        column_index ++)
   {
     if (GetValue (form_data->line_forms[column_index].action_choice) == 1
-      && GetValue (form_data->line_forms[column_index].match_choice) == 3)
+      && GetValue (form_data->line_forms[column_index].match_choice) == eMatchTaxName)
     {
       for (line = form_data->line_list; line != NULL; line = line->next)
       {
@@ -10905,14 +11067,30 @@ static Boolean IDListHasValue (
   CharPtr id,
   SeqIdPtr list,
   Boolean only_local,
-  Boolean look_for_tmsmart)
+  Boolean look_for_tmsmart,
+  Boolean look_for_general)
 {
   SeqIdPtr sip;
   Char     acc_str [256];
-  Int4     match_len, match_len2;
+  Int4     match_len, match_len2, db_len;
+  DbtagPtr gnl_tag; 
 
   for (sip = list; sip != NULL; sip = sip->next)
   {
+    if (sip->choice == SEQID_GENERAL 
+        && look_for_general 
+        && StringNICmp (id, "gnl|", 3) == 0
+        && (db_len = StringCSpn (id + 4, "|")) > 0)
+    {
+      gnl_tag = (DbtagPtr) sip->data.ptrvalue;
+      if (gnl_tag != NULL
+          && StringNCmp (id + 4, gnl_tag->db, db_len) == 0
+          && ((gnl_tag->tag->id > 0 && atoi (id + 5 + db_len) == gnl_tag->tag->id)
+             || StringCmp (gnl_tag->tag->str, id + 5 + db_len) == 0))
+      {
+        return TRUE;
+      }
+    }
     if ((! only_local && sip->choice != SEQID_LOCAL)
       || (only_local && sip->choice == SEQID_LOCAL))
     {
@@ -10950,6 +11128,7 @@ static Boolean IDListHasValue (
   return FALSE;
 }
 
+
 static void ApplyTableModsByAccessionNumber (BioseqPtr bsp, Pointer userdata)
 {
   OrgModLoadFormPtr form_data;
@@ -10961,6 +11140,7 @@ static void ApplyTableModsByAccessionNumber (BioseqPtr bsp, Pointer userdata)
   TableLinePtr      tlp;
   Boolean           use_local_id;
   Boolean           look_for_tmsmart;
+  Boolean           look_for_general;
   Int4              match_choice;
   
   form_data = (OrgModLoadFormPtr) userdata;
@@ -10982,17 +11162,31 @@ static void ApplyTableModsByAccessionNumber (BioseqPtr bsp, Pointer userdata)
   {
     match_choice = GetValue (form_data->line_forms[column_index].match_choice);
     if (GetValue (form_data->line_forms[column_index].action_choice) == 1
-      && (match_choice == 1 || match_choice == 2 || match_choice == 4))
+      && (match_choice == eMatchAccession 
+          || match_choice == eMatchLocalID 
+          || match_choice == eMatchTMSMART
+          || match_choice == eMatchGeneral))
     {
-      if (match_choice == 1 || match_choice == 4) {
+      if (match_choice == eMatchAccession 
+          || match_choice == eMatchTMSMART
+          || match_choice == eMatchGeneral) {
         use_local_id = FALSE;
       } else {
         use_local_id = TRUE;
       }
-      if (match_choice == 4) {
+      if (match_choice == eMatchTMSMART) {
         look_for_tmsmart = TRUE;
       } else {
         look_for_tmsmart = FALSE;
+      }
+
+      if (match_choice == eMatchGeneral)
+      {
+        look_for_general = TRUE;
+      }
+      else
+      {
+        look_for_general = FALSE;
       }
 
       for (line = form_data->line_list; line != NULL; line = line->next)
@@ -11008,7 +11202,7 @@ static void ApplyTableModsByAccessionNumber (BioseqPtr bsp, Pointer userdata)
         }
         if (part != NULL
           && ( IDListHasValue ( part->data.ptrvalue,
-                                bsp->id, use_local_id, look_for_tmsmart)
+                                bsp->id, use_local_id, look_for_tmsmart, look_for_general)
             || (! use_local_id && 
                 HasExtraAccession ( part->data.ptrvalue, gbp))))
         {
@@ -11017,6 +11211,24 @@ static void ApplyTableModsByAccessionNumber (BioseqPtr bsp, Pointer userdata)
       }
     }
   }
+}
+
+
+static CharPtr FindBankitNumberInTableString (CharPtr table_string)
+{
+  CharPtr bankit_start;
+  
+  if (StringHasNoText (table_string))
+  {
+    return table_string;
+  }
+  bankit_start = table_string + StringSpn (table_string, " ");
+  if (StringNICmp (bankit_start, "bankit", 6) == 0)
+  {
+    bankit_start += 6;
+    bankit_start += StringSpn (bankit_start, " ");
+  }
+  return bankit_start;
 }
 
 static void ApplyTableModsByBankitID (BioseqPtr bsp, Pointer userdata)
@@ -11044,7 +11256,7 @@ static void ApplyTableModsByBankitID (BioseqPtr bsp, Pointer userdata)
       dp = (DbtagPtr) sip->data.ptrvalue;
       if(StringICmp(dp->db, "BankIt") == 0) {
         oip = dp->tag;
-        sprintf (match_str, "bankit%d", oip->id);
+        sprintf (match_str, "%d", oip->id);
         break;
       }
     }
@@ -11056,7 +11268,7 @@ static void ApplyTableModsByBankitID (BioseqPtr bsp, Pointer userdata)
        column_index ++)
   {
     match_choice = GetValue (form_data->line_forms[column_index].match_choice);
-    if (GetValue (form_data->line_forms[column_index].action_choice) == 1 && match_choice == 5) {
+    if (GetValue (form_data->line_forms[column_index].action_choice) == 1 && match_choice == eMatchBankIt) {
       for (line = form_data->line_list; line != NULL; line = line->next) {
         tlp = line->data.ptrvalue;
         if (tlp == NULL) continue;
@@ -11064,7 +11276,9 @@ static void ApplyTableModsByBankitID (BioseqPtr bsp, Pointer userdata)
         for (part_index = 0; part_index < column_index && part != NULL; part_index ++) {
           part = part->next;
         }
-        if (part != NULL && StringCmp (part->data.ptrvalue, match_str) == 0) {
+        if (part != NULL 
+            && StringCmp (FindBankitNumberInTableString(part->data.ptrvalue), 
+                          match_str) == 0) {
           ApplyQualsToOrg (biop, tlp->parts, form_data);
         }
       }
@@ -11201,6 +11415,7 @@ static void FindQualsOnOrg
   }
 }
 
+
 static void FindTableModsByTaxName (BioSourcePtr biop, Pointer userdata)
 {
   OrgModLoadFormPtr form_data;
@@ -11220,7 +11435,7 @@ static void FindTableModsByTaxName (BioSourcePtr biop, Pointer userdata)
        column_index ++)
   {
     if (GetValue (form_data->line_forms[column_index].action_choice) == 1
-      && GetValue (form_data->line_forms[column_index].match_choice) == 3)
+      && GetValue (form_data->line_forms[column_index].match_choice) == eMatchTaxName)
     {
       for (line = form_data->line_list; line != NULL; line = line->next)
       {
@@ -11244,6 +11459,7 @@ static void FindTableModsByTaxName (BioSourcePtr biop, Pointer userdata)
   }
 }
 
+
 static void FindTableModsByAccessionNumber (BioseqPtr bsp, Pointer userdata)
 {
   OrgModLoadFormPtr form_data;
@@ -11254,7 +11470,7 @@ static void FindTableModsByAccessionNumber (BioseqPtr bsp, Pointer userdata)
   ValNodePtr        line, part;
   TableLinePtr      tlp;
   Boolean           use_local_id;
-  Boolean           look_for_tmsmart;
+  Boolean           look_for_tmsmart, look_for_general;
   Int4              match_choice;
   
   form_data = (OrgModLoadFormPtr) userdata;
@@ -11276,17 +11492,24 @@ static void FindTableModsByAccessionNumber (BioseqPtr bsp, Pointer userdata)
   {
     match_choice = GetValue (form_data->line_forms[column_index].match_choice);
     if (GetValue (form_data->line_forms[column_index].action_choice) == 1
-      && (match_choice == 1 || match_choice == 2 || match_choice == 4))
+      && (match_choice == eMatchAccession 
+          || match_choice == eMatchLocalID 
+          || match_choice == eMatchTMSMART))
     {
-      if (match_choice == 1 || match_choice == 4) {
+      if (match_choice == eMatchAccession || match_choice == eMatchTMSMART) {
         use_local_id = FALSE;
       } else {
         use_local_id = TRUE;
       }
-      if (match_choice == 4) {
+      if (match_choice == eMatchTMSMART) {
         look_for_tmsmart = TRUE;
       } else {
         look_for_tmsmart = FALSE;
+      }
+      if (match_choice == eMatchGeneral) {
+        look_for_general = TRUE;
+      } else {
+        look_for_general = FALSE;
       }
 
       for (line = form_data->line_list; line != NULL; line = line->next)
@@ -11302,7 +11525,7 @@ static void FindTableModsByAccessionNumber (BioseqPtr bsp, Pointer userdata)
         }
         if (part != NULL
           && ( IDListHasValue ( part->data.ptrvalue,
-                                bsp->id, use_local_id, look_for_tmsmart)
+                                bsp->id, use_local_id, look_for_tmsmart, look_for_general)
             || (! use_local_id && 
                 HasExtraAccession ( part->data.ptrvalue, gbp))))
         {
@@ -11312,6 +11535,7 @@ static void FindTableModsByAccessionNumber (BioseqPtr bsp, Pointer userdata)
     }
   }
 }
+
 
 static void FindTableModsByBankitID (BioseqPtr bsp, Pointer userdata)
 {
@@ -11350,7 +11574,7 @@ static void FindTableModsByBankitID (BioseqPtr bsp, Pointer userdata)
        column_index ++)
   {
     match_choice = GetValue (form_data->line_forms[column_index].match_choice);
-    if (GetValue (form_data->line_forms[column_index].action_choice) == 1 && match_choice == 5) {
+    if (GetValue (form_data->line_forms[column_index].action_choice) == 1 && match_choice == eMatchBankIt) {
       for (line = form_data->line_list; line != NULL; line = line->next) {
         tlp = line->data.ptrvalue;
         if (tlp == NULL) continue;
@@ -11402,7 +11626,6 @@ static void DoAcceptFormMods (ButtoN b)
 static ValNodePtr ReadTableData (void)
 {
   Char          path [PATH_MAX];
-  size_t        len = 8192;
   Int4          max_columns;
   ValNodePtr    header_line;
   ValNodePtr    line_list;
@@ -11617,80 +11840,6 @@ extern Boolean ReplaceImportModifierName (CharPtr PNTR orig_name, Int4 col_num)
   }
 }
 
-static ValNodePtr CreateHeaderLine (void)
-{
-  ModalAcceptCancelData acd;
-  WindoW                w;
-  PopuP                 p;
-  GrouP                 g, c;
-  ButtoN                b;
-  Int4                  index;
-  TableLinePtr          tlp;
-  ValNodePtr            header_line = NULL;
-  
-  acd.accepted = FALSE;
-  acd.cancelled = FALSE;
-  
-  w = MovableModalWindow(-20, -13, -10, -10, 
-                         "Choose import modifier for values in second column",
-                         NULL);
-  g = HiddenGroup (w, -1, 0, NULL);
-    
-  p = PopupList (g, TRUE, NULL);
-  for (index = 0; index < NumDefLineModifiers; index++)
-  {
-    PopupItem (p, DefLineModifiers[index].name);
-  }
-  PopupItem (p, "organism");
-  SetValue (p, 1);
-  c = HiddenGroup (g, 2, 0, NULL);
-  b = PushButton (c, "Accept", ModalAcceptButton);
-  SetObjectExtra (b, &acd, NULL);
-  b = PushButton (c, "Cancel", ModalCancelButton);
-  SetObjectExtra (b, &acd, NULL);
-  AlignObjects (ALIGN_CENTER, (HANDLE) p, (HANDLE) c, NULL);
-  Show (w);
-  Select (w);
-  acd.accepted = FALSE;
-  acd.cancelled = FALSE;
-  while (!acd.accepted && ! acd.cancelled)
-  {
-    ProcessExternalEvent ();
-    Update ();
-  }
-  ProcessAnEvent ();
-  index = GetValue (p);
-  Remove (w);
-  if (acd.cancelled)
-  {
-    return NULL;
-  }
-  
-  tlp = (TableLinePtr) MemNew (sizeof (TableLineData));
-  if (tlp != NULL)
-  {
-    tlp->num_parts = 2;
-    tlp->parts = ValNodeNew (NULL);
-    tlp->parts->data.ptrvalue = StringSave ("local_id");
-    if (index == NumDefLineModifiers + 1)
-    {
-      ValNodeAddPointer (&(tlp->parts), 0, StringSave ("organism"));
-    }
-    else
-    {
-      ValNodeAddPointer (&(tlp->parts), 0, 
-                         StringSave (DefLineModifiers[index - 1].name));
-    }
-    header_line = ValNodeNew (NULL);
-    if (header_line != NULL)
-    {
-      header_line->data.ptrvalue = tlp;
-      header_line->next = NULL;
-    }
-  }
-  return header_line;
-}
-
 
 static ValNodePtr FreeTableData (ValNodePtr lines)
 {
@@ -11718,8 +11867,19 @@ typedef struct exportorgtable
 {
   ModifierItemLocalPtr modList;
   BioseqPtr            bsp;
+  Boolean              list_tax_name;
+  Boolean              list_accession;
+  Boolean              list_local;
+  Boolean              list_general;
+
+  ValNodePtr           organism_id_profile;
   FILE *fp;  
 } ExportOrgTableData, PNTR ExportOrgTablePtr;
+
+#define ORGANISM_ID_PROFILE_HAS_ACCESSION 1
+#define ORGANISM_ID_PROFILE_HAS_LOCAL     2
+#define ORGANISM_ID_PROFILE_HAS_GENERAL   4
+#define ORGANISM_ID_PROFILE_HAS_TAX_NAME  8
 
 static void ExportOneOrganism (BioSourcePtr biop, Pointer userdata)
 {
@@ -11754,56 +11914,68 @@ static void ExportOneOrganism (BioSourcePtr biop, Pointer userdata)
     }
   }
 
-  /* get accession number and print to column */
-  if (acc_sip == NULL)
+  if (eotp->list_accession)
   {
-    fprintf (eotp->fp, " \t");
+    /* get accession number and print to column */
+    if (acc_sip == NULL)
+    {
+      fprintf (eotp->fp, " \t");
+    }
+    else
+    {
+      sip = acc_sip->next;
+      acc_sip->next = NULL;
+      SeqIdWrite (acc_sip, acc_str, PRINTID_TEXTID_ACC_VER, sizeof (acc_str));
+      acc_sip->next = sip;
+      fprintf (eotp->fp, "%s\t", acc_str);
+    }
   }
-  else
-  {
-    sip = acc_sip->next;
-    acc_sip->next = NULL;
-    SeqIdWrite (acc_sip, acc_str, PRINTID_TEXTID_ACC_VER, sizeof (acc_str));
-    acc_sip->next = sip;
-    fprintf (eotp->fp, "%s\t", acc_str);
-  }    
   
-  /* get local ID and print to column */
-  if (local_sip == NULL)
+  if (eotp->list_local)
   {
-    fprintf (eotp->fp, " \t");
+    /* get local ID and print to column */
+    if (local_sip == NULL)
+    {
+      fprintf (eotp->fp, " \t");
+    }
+    else
+    {
+      sip = local_sip->next;
+      local_sip->next = NULL;
+      SeqIdWrite (local_sip, acc_str, PRINTID_TEXTID_ACCESSION, sizeof (acc_str));
+      local_sip->next = sip;
+      fprintf (eotp->fp, "%s\t", acc_str);
+    }
   }
-  else
-  {
-    sip = local_sip->next;
-    local_sip->next = NULL;
-    SeqIdWrite (local_sip, acc_str, PRINTID_TEXTID_ACCESSION, sizeof (acc_str));
-    local_sip->next = sip;
-    fprintf (eotp->fp, "%s\t", acc_str);
-  }    
   
-  /* get general ID and print to column */
-  if (gen_sip == NULL)
+  if (eotp->list_general)
   {
-    fprintf (eotp->fp, " \t");
+    /* get general ID and print to column */
+    if (gen_sip == NULL)
+    {
+      fprintf (eotp->fp, " \t");
+    }
+    else
+    {
+      sip = gen_sip->next;
+      gen_sip->next = NULL;
+      SeqIdWrite (gen_sip, acc_str, PRINTID_TEXTID_ACCESSION, sizeof (acc_str));
+      gen_sip->next = sip;
+      fprintf (eotp->fp, "%s\t", acc_str);
+    }
   }
-  else
-  {
-    sip = gen_sip->next;
-    gen_sip->next = NULL;
-    SeqIdWrite (gen_sip, acc_str, PRINTID_TEXTID_ACCESSION, sizeof (acc_str));
-    gen_sip->next = sip;
-    fprintf (eotp->fp, "%s\t", acc_str);
-  }    
   
-  /* get tax name and print to column */
-  if (biop->org != NULL && ! StringHasNoText (biop->org->taxname))
+  if (eotp->list_tax_name)
   {
-    fprintf (eotp->fp, "%s", biop->org->taxname);
-  }
-  else
-  {
-    fprintf (eotp->fp, " ");
+    /* get tax name and print to column */
+    if (biop->org != NULL && ! StringHasNoText (biop->org->taxname))
+    {
+      fprintf (eotp->fp, "%s", biop->org->taxname);
+    }
+    else
+    {
+      fprintf (eotp->fp, " ");
+    }
   }
   
   /* print modifiers for each available column */
@@ -11833,7 +12005,18 @@ static void ExportOneOrganism (BioSourcePtr biop, Pointer userdata)
           ssp = ssp->next;
         }
       }
-      if (mod != NULL && !StringHasNoText (mod->subname))
+	  if (IsNonTextModifier (DefLineModifiers[i].name))
+	  {
+	    if (mod == NULL && ssp == NULL)
+	    {
+	      fprintf (eotp->fp, "\tFALSE");
+		}
+		else
+		{
+		  fprintf (eotp->fp, "\tTRUE");
+		}
+	  }
+      else if (mod != NULL && !StringHasNoText (mod->subname))
       {
         fprintf (eotp->fp, "\t%s", mod->subname);
       }
@@ -11884,6 +12067,343 @@ static void ExportOrganisms (SeqEntryPtr sep, ExportOrgTablePtr eotp)
   }
 }
 
+static void GetOneOrganismIdProfile (BioSourcePtr biop, Pointer userdata)
+{
+  ExportOrgTablePtr eotp;
+  SeqIdPtr          sip;
+  Int4              profile_value = 0;
+
+  if (biop == NULL || userdata == NULL) return;
+  eotp = (ExportOrgTablePtr) userdata;
+  
+  if (eotp->bsp == NULL) return;
+
+  for (sip = eotp->bsp->id;
+       sip != NULL;
+       sip = sip->next)
+  {
+    if (sip->choice == SEQID_GENBANK)
+    {
+	  profile_value |= ORGANISM_ID_PROFILE_HAS_ACCESSION;
+    }
+    else if (sip->choice == SEQID_LOCAL)
+    {
+      profile_value |= ORGANISM_ID_PROFILE_HAS_LOCAL;
+    }
+    else if (sip->choice == SEQID_GENERAL)
+    {
+      profile_value |= ORGANISM_ID_PROFILE_HAS_GENERAL;
+    }
+  }
+  
+  if (biop->org != NULL && ! StringHasNoText (biop->org->taxname))
+  {
+    profile_value |= ORGANISM_ID_PROFILE_HAS_TAX_NAME;
+  }
+
+  ValNodeAddInt (&(eotp->organism_id_profile), 0, profile_value);
+}
+
+static void GetOrganismIDProfile (SeqEntryPtr sep, ExportOrgTablePtr eotp)
+{
+  BioseqSetPtr bssp;
+  SeqEntryPtr  nsep;
+  
+  if (sep == NULL || eotp == NULL || sep->data.ptrvalue == NULL) return;
+  
+  if (IS_Bioseq (sep))
+  {
+    eotp->bsp = (BioseqPtr) sep->data.ptrvalue;
+    VisitBioSourcesOnBsp (eotp->bsp, eotp, GetOneOrganismIdProfile);  
+  }
+  else if (IS_Bioseq_set (sep))
+  {
+    bssp = (BioseqSetPtr) sep->data.ptrvalue;
+    if (bssp->_class == BioseqseqSet_class_nuc_prot)
+    {
+      nsep = FindNucSeqEntry (sep);
+      if (nsep != NULL)
+      {
+        eotp->bsp = (BioseqPtr) nsep->data.ptrvalue;
+        VisitBioSourcesOnSep (sep, eotp, GetOneOrganismIdProfile);
+      }
+    }
+    else
+    {
+      for (sep = bssp->seq_set; sep != NULL; sep = sep->next)
+      {
+        GetOrganismIDProfile (sep, eotp);
+      }
+    }
+  }
+}
+
+static void GetOrganismIDProfileSummary (ValNodePtr organism_id_profile, Int4Ptr available, Int4Ptr recommended)
+{
+  ValNodePtr vnp;
+  Int4       has_vals = 0, recommended_vals = 0, missing_vals = 0;
+
+  if (available != NULL)
+  {
+    *available = 0;
+  }
+  if (recommended != NULL)
+  {
+    *recommended = 0;
+  }
+
+  for (vnp = organism_id_profile;
+	   vnp != NULL;
+	   vnp = vnp->next)
+  {
+    has_vals |= vnp->data.intvalue;
+	missing_vals |= !(vnp->data.intvalue);
+	if (vnp->data.intvalue & ORGANISM_ID_PROFILE_HAS_ACCESSION)
+	{
+	  recommended_vals |= ORGANISM_ID_PROFILE_HAS_ACCESSION;
+	}
+    else if (vnp->data.intvalue & ORGANISM_ID_PROFILE_HAS_LOCAL)
+	{
+	  recommended_vals |= ORGANISM_ID_PROFILE_HAS_LOCAL;
+	}
+	else if (vnp->data.intvalue & ORGANISM_ID_PROFILE_HAS_GENERAL)
+	{
+	  recommended_vals |= ORGANISM_ID_PROFILE_HAS_GENERAL;
+	}
+	else if (vnp->data.intvalue & ORGANISM_ID_PROFILE_HAS_TAX_NAME)
+	{
+	  recommended_vals |= ORGANISM_ID_PROFILE_HAS_TAX_NAME;
+	}
+  }
+
+  if (recommended_vals & ORGANISM_ID_PROFILE_HAS_TAX_NAME)
+  {
+    if (!(missing_vals & ORGANISM_ID_PROFILE_HAS_TAX_NAME))
+	{
+	  recommended_vals = ORGANISM_ID_PROFILE_HAS_TAX_NAME;
+	}
+  }
+  else if (recommended_vals & ORGANISM_ID_PROFILE_HAS_GENERAL)
+  {
+    if (!(missing_vals & ORGANISM_ID_PROFILE_HAS_GENERAL))
+	{
+	  recommended_vals = ORGANISM_ID_PROFILE_HAS_GENERAL;
+	}
+  }
+  else if (recommended_vals & ORGANISM_ID_PROFILE_HAS_LOCAL)
+  {
+    if (!(missing_vals & ORGANISM_ID_PROFILE_HAS_LOCAL))
+	{
+	  recommended_vals = ORGANISM_ID_PROFILE_HAS_LOCAL;
+	}
+  }
+  
+  if (available != NULL)
+  {
+    *available = has_vals;
+  }
+
+  if (recommended != NULL)
+  {
+    *recommended = recommended_vals;
+  }
+}
+
+typedef struct exportmodform
+{
+  FEATURE_FORM_BLOCK
+
+  DialoG selected_mods;
+  ButtoN list_tax_name;
+  ButtoN list_accession;
+  ButtoN list_local;
+  ButtoN list_general;
+  ButtoN accept_btn;
+} ExportModFormData, PNTR ExportModFormPtr;
+
+static void SetExportFormModsAccept (Pointer userdata)
+{
+  ExportModFormPtr form_data;
+  ValNodePtr       selected_mods;
+
+  form_data = (ExportModFormPtr) userdata;
+  if (form_data == NULL) return;
+ 
+  selected_mods = (ValNodePtr) DialogToPointer (form_data->selected_mods);
+  if (selected_mods == NULL)
+  {
+    Disable (form_data->accept_btn);
+  }
+  else
+  {
+	selected_mods = ValNodeFreeData (selected_mods);
+
+	if (!GetStatus (form_data->list_tax_name) && ! GetStatus (form_data->list_accession)
+		&& !GetStatus (form_data->list_local) && ! GetStatus (form_data->list_general))
+	{
+      Disable (form_data->accept_btn);
+	}
+	else
+	{
+	  Enable (form_data->accept_btn);
+	}
+  }
+}
+
+static void SetExportFormModsAcceptBtn (ButtoN b)
+{
+  SetExportFormModsAccept (GetObjectExtra (b));
+}
+
+static Boolean SelectModifiersForExport (ExportOrgTablePtr eotp)
+{
+  Int4                  idx;
+  ValNodePtr            available_mods_list = NULL, vnp;
+  ModalAcceptCancelData acd;
+  ExportModFormPtr      form_data;
+  WindoW                w;
+  GrouP                 h, g, c;
+  ButtoN                b;
+  ValNodePtr            selected_mods = NULL;
+  Boolean               found_mod;
+  Int4                  has_vals = 0, recommended_vals = 0;
+
+  if (eotp == NULL)
+  {
+    return FALSE;
+  }
+
+  for (idx = 0; idx < NumDefLineModifiers; idx++)
+  {
+    if (eotp->modList[idx].any_present)
+    {
+      ValNodeAddPointer (&available_mods_list, idx, StringSave (DefLineModifiers [idx].name));
+    }
+  }
+
+  GetOrganismIDProfileSummary (eotp->organism_id_profile, &has_vals, &recommended_vals);
+
+  form_data = (ExportModFormPtr) MemNew (sizeof (ExportModFormData));
+
+  w = FixedWindow (-50, -33, -10, -10, "Choose Modifiers for Export", StdCloseWindowProc);
+  SetObjectExtra (w, form_data, StdCleanupFormProc);
+  form_data->form = (ForM) w;
+
+  h = HiddenGroup (w, -1, 0, NULL);
+  SetGroupSpacing (h, 10, 10);
+
+  form_data->selected_mods = ValNodeSelectionDialog (h, available_mods_list, TALL_SELECTION_LIST,
+                                ValNodeStringName,
+                                ValNodeSimpleDataFree, 
+                                ValNodeStringCopy,
+                                ValNodeStringMatch,
+                                "qualifiers", 
+                                SetExportFormModsAccept, form_data,
+                                TRUE);
+
+  /* initialize dialog to "All" */
+  SendMessageToDialog (form_data->selected_mods, NUM_VIB_MSG + 1);
+
+  g = HiddenGroup (h, 0, 4, NULL);
+  form_data->list_tax_name = CheckBox (g, "Tax Name", SetExportFormModsAcceptBtn);
+  SetObjectExtra (form_data->list_tax_name, form_data, NULL);
+  if (!(has_vals & ORGANISM_ID_PROFILE_HAS_TAX_NAME))
+  {
+    Disable (form_data->list_tax_name);
+  }
+  else if (recommended_vals & ORGANISM_ID_PROFILE_HAS_TAX_NAME)
+  {
+    SetStatus (form_data->list_tax_name, TRUE);
+  }
+  form_data->list_accession = CheckBox (g, "Accession", SetExportFormModsAcceptBtn);
+  SetObjectExtra (form_data->list_accession, form_data, NULL);
+  if (!(has_vals & ORGANISM_ID_PROFILE_HAS_ACCESSION))
+  {
+    Disable (form_data->list_accession);
+  }
+  else if (recommended_vals & ORGANISM_ID_PROFILE_HAS_ACCESSION)
+  {
+    SetStatus (form_data->list_accession, TRUE);
+  }
+  form_data->list_local = CheckBox (g, "Local ID", SetExportFormModsAcceptBtn);
+  SetObjectExtra (form_data->list_local, form_data, NULL);
+  if (!(has_vals & ORGANISM_ID_PROFILE_HAS_LOCAL))
+  {
+    Disable (form_data->list_local);
+  }
+  else if (recommended_vals & ORGANISM_ID_PROFILE_HAS_LOCAL)
+  {
+    SetStatus (form_data->list_local, TRUE);
+  }
+  form_data->list_general = CheckBox (g, "General ID", SetExportFormModsAcceptBtn);
+  SetObjectExtra (form_data->list_general, form_data, NULL);
+  if (!(has_vals & ORGANISM_ID_PROFILE_HAS_GENERAL))
+  {
+    Disable (form_data->list_general);
+  }
+  else if (recommended_vals & ORGANISM_ID_PROFILE_HAS_GENERAL)
+  {
+    SetStatus (form_data->list_general, TRUE);
+  }
+
+  c = HiddenGroup (h, 2, 0, NULL);
+  form_data->accept_btn = PushButton (c, "Accept", ModalAcceptButton);
+  SetObjectExtra (form_data->accept_btn, &acd, NULL);
+  b = PushButton (c, "Cancel", ModalCancelButton);
+  SetObjectExtra (b, &acd, NULL);
+  AlignObjects (ALIGN_CENTER, (HANDLE) form_data->selected_mods, (HANDLE) g, (HANDLE) c, NULL);
+
+  SetExportFormModsAccept (form_data);
+
+  Show (w);
+  Select (w);
+  acd.accepted = FALSE;
+  acd.cancelled = FALSE;
+  while (!acd.accepted && ! acd.cancelled)
+  {
+    ProcessExternalEvent ();
+    Update ();
+  }
+  ProcessAnEvent ();
+  
+  Remove (w);
+  if (acd.cancelled)
+  {
+    return FALSE;
+  }
+  else
+  {
+    selected_mods = (ValNodePtr) DialogToPointer (form_data->selected_mods);
+
+    for (idx = 0; idx < NumDefLineModifiers; idx++)
+    {
+      if (eotp->modList[idx].any_present)
+      {
+	    found_mod = FALSE;
+   	    for (vnp = selected_mods; vnp != NULL && ! found_mod; vnp = vnp->next)
+	    {
+          if (StringCmp (vnp->data.ptrvalue, DefLineModifiers [idx].name) == 0)
+		  {
+		    found_mod = TRUE;
+		  }
+		}
+		if (!found_mod)
+		{
+		  eotp->modList[idx].any_present = FALSE;
+		}
+	  }
+    }
+	selected_mods = ValNodeFreeData (selected_mods);
+
+	eotp->list_tax_name = GetStatus (form_data->list_tax_name);
+	eotp->list_accession = GetStatus (form_data->list_accession);
+	eotp->list_local = GetStatus (form_data->list_local);
+	eotp->list_general = GetStatus (form_data->list_general);
+
+    return TRUE;
+  }  
+}
+
 extern void ExportOrganismTable (IteM i)
 {
   BaseFormPtr        bfp;
@@ -11891,6 +12411,7 @@ extern void ExportOrganismTable (IteM i)
   ExportOrgTableData eotd;
   Char               path [PATH_MAX];
   Int4               idx;
+  Char               lead_str[2];
 
 #ifdef WIN_MAC
   bfp = currentFormDataPtr;
@@ -11902,34 +12423,70 @@ extern void ExportOrganismTable (IteM i)
   sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
   if (sep == NULL) return;
 
-  if (! GetOutputFileName (path, sizeof (path), NULL)) return;
-  eotd.fp = FileOpen (path, "w");
-  if (eotd.fp == NULL) return;
-
   eotd.modList = MemNew (NumDefLineModifiers * sizeof (ModifierItemLocalData));
-  if (eotd.modList != NULL) 
+  if (eotd.modList == NULL) return;
+
+  CountModifiers (eotd.modList, sep);
+
+  eotd.organism_id_profile = NULL;
+  GetOrganismIDProfile (sep, &eotd);
+
+  if (SelectModifiersForExport (&eotd))
   {
-    CountModifiers (eotd.modList, sep);
-    /* print a header line */
-    fprintf (eotd.fp, "Accession Number\tLocal ID\tGeneral ID\tTax Name");
-    for (idx = 0; idx < NumDefLineModifiers; idx++)
-    {
-      if (eotd.modList[idx].any_present)
-      {
-        fprintf (eotd.fp, "\t%s", DefLineModifiers [idx].name);
-      }
-    }
-    fprintf (eotd.fp, "\n");
+    if (GetOutputFileName (path, sizeof (path), NULL))
+	{
+      eotd.fp = FileOpen (path, "w");
+      if (eotd.fp == NULL) 
+	  {
+	    Message (MSG_ERROR, "Unable to open %s", path);
+	  }
+	  else
+	  {
+	    lead_str [0] = 0;
+		lead_str [1] = 0;
+        /* print a header line */
+	    if (eotd.list_accession)
+		{
+		  fprintf (eotd.fp, "Accession Number");
+		  lead_str [0] = '\t';
+		}
+		if (eotd.list_local)
+		{
+  	      fprintf (eotd.fp, "%sLocal ID", lead_str);
+		  lead_str [0] = '\t';
+		}
+        if (eotd.list_general)
+		{
+		  fprintf (eotd.fp, "%sGeneral ID", lead_str);
+		  lead_str [0] = '\t';
+		}
+		if (eotd.list_tax_name)
+		{
+		  fprintf (eotd.fp, "%sTax Name", lead_str);
+		  lead_str [0] = '\t';
+		}
+
+        for (idx = 0; idx < NumDefLineModifiers; idx++)
+        {
+          if (eotd.modList[idx].any_present)
+          {
+            fprintf (eotd.fp, "%s%s", lead_str, DefLineModifiers [idx].name);
+            lead_str [0] = '\t';
+          }
+        }
+        fprintf (eotd.fp, "\n");
         
-    ExportOrganisms  (sep, &eotd);
+        ExportOrganisms  (sep, &eotd);
+        FileClose (eotd.fp);
+	  }
+	}
   }
-  FileClose (eotd.fp);
   for (idx=0; idx < NumDefLineModifiers; idx++)
   {
     ValNodeFree (eotd.modList[idx].values_seen);
   }
-  MemFree (eotd.modList);
-
+  eotd.modList = MemFree (eotd.modList);
+  eotd.organism_id_profile = ValNodeFree (eotd.organism_id_profile);
 }
 
 
@@ -12776,7 +13333,7 @@ static void ApplyTableQuals (BioseqPtr bsp, Pointer userdata)
       idval = GetDataForColumnOffset (tlp->parts, column_index);
       if (idval != NULL
         && ( IDListHasValue ( idval,
-                              bsp->id, use_local_id, FALSE)
+                              bsp->id, use_local_id, FALSE, FALSE)
           || (! use_local_id && 
               HasExtraAccession ( idval, gbp))))
       {

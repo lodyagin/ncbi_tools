@@ -1,6 +1,6 @@
 #   makefile for network demo programs and network entrez
 #
-#	$Id: makenet.unx,v 6.207 2005/07/26 15:43:29 lavr Exp $
+#	$Id: makenet.unx,v 6.210 2005/09/14 00:05:18 ucko Exp $
 #   test, ignore
 #
 #   Sun with unbundled ANSI compiler [ make CC=acc RAN=ranlib ]
@@ -86,6 +86,7 @@ BLIB13 = libncbiid0.a
 #BLIB14 = libncbibls0.a
 BLIB19 = libncbispel.a
 BLIB23 = libncbitool.a
+BLIBCOMPADJ = libblastcompadj.a
 BLIB24 = libncbisugg.a
 BLIB25 = libncbiwww.a
 BLIB27 = libncbimsc1.a
@@ -171,6 +172,7 @@ LIB19 = -lncbispel
 LIB20 = -lncbidesk
 LIB22 = -lncbimmdb
 LIB23 = -lncbitool
+LIBCOMPADJ = -lblastcompadj
 LIB24 = -lncbisugg
 LIB25 = -lncbiwww
 LIB27 = -lncbimsc1
@@ -901,26 +903,30 @@ idload_lib.o : idload_lib.c
 
 
 netentcf : netentcf.c $(ULIB31)
-	$(CC) -o netentcf $(LDFLAGS) netentcf.c $(LIB31) $(LIB22) $(LIB4) $(LIB23) $(LIB3) $(LIB8) $(LIB7) $(NETCLILIB) $(LIB2) $(LIB1) $(VIBLIBS) $(OTHERLIBS)
+	$(CC) -o netentcf $(LDFLAGS) netentcf.c $(LIB31) $(LIB22) $(LIB4) \
+		$(LIB23) $(LIBCOMPADJ) $(LIB3) $(LIB8) $(LIB7) $(NETCLILIB) \
+		$(LIB2) $(LIB1) $(VIBLIBS) $(OTHERLIBS)
 
 ddv    : $(OBJDDV)
 	$(CC) -o ddv $(LDFLAGS) $(OBJDDV) $(LIB41) $(LIB31) $(LIB20) $(LIB61) $(LIB60) $(LIB22) $(LIB45) \
-	$(LIB8) $(LIB7) $(NETCLILIB) $(LIB3) $(LIB4) $(LIB23) $(LIB2) $(LIB1) \
+	$(LIB8) $(LIB7) $(NETCLILIB) $(LIB3) $(LIB4) $(LIB23) \
+	$(LIBCOMPADJ) $(LIB2) $(LIB1) \
 	$(VIBLIBS) $(OTHERLIBS)
 
 udv    : $(OBJUDV)
 	$(CC) -o udv $(LDFLAGS) $(OBJUDV) $(LIB41) $(LIB31) $(LIB20) $(LIB61) $(LIB60) $(LIB22) $(LIB45) \
-    $(LIB8) $(LIB7) $(NETCLILIB) $(LIB3) $(LIB4) $(LIB23) $(LIB2) \
+    $(LIB8) $(LIB7) $(NETCLILIB) $(LIB3) $(LIB4) \
+	$(LIB23) $(LIBCOMPADJ) $(LIB2) \
 	$(LIB1) $(VIBLIBS) $(OTHERLIBS)
 
 Nentrez : entrez.c $(ULIB31) netentcf
 	$(CC) -o Nentrez $(LDFLAGS) entrez.c $(LIB41) $(LIB31) $(LIB30) $(LIB20) $(LIB61) $(LIB60) $(LIB22) $(LIB45) \
-    $(LIB36) $(LIB23) $(LIB8) $(LIB7) $(NETCLILIB) $(LIB5) $(LIB4) $(LIB3) $(LIB2) $(LIB1) $(VIBLIBS) $(OTHERLIBS)
+    $(LIB36) $(LIB23) $(LIBCOMPADJ) $(LIB8) $(LIB7) $(NETCLILIB) $(LIB5) $(LIB4) $(LIB3) $(LIB2) $(LIB1) $(VIBLIBS) $(OTHERLIBS)
 
 # left this in (Tentrez) for script backwards compatibility
 Tentrez : entrez.c $(ULIB31) netentcf
 	$(CC) -o Tentrez $(LDFLAGS) entrez.c $(LIB41) $(LIB31) $(LIB30) $(LIB20) $(LIB61) $(LIB60) $(LIB22) $(LIB45) \
-    $(LIB36) $(LIB23) $(LIB8) $(LIB7) $(NETCLILIB) $(LIB5) $(LIB4) $(LIB3) $(LIB2) $(LIB1) $(VIBLIBS) $(OTHERLIBS)
+    $(LIB36) $(LIB23) $(LIBCOMPADJ) $(LIB8) $(LIB7) $(NETCLILIB) $(LIB5) $(LIB4) $(LIB3) $(LIB2) $(LIB1) $(VIBLIBS) $(OTHERLIBS)
 
 
 # demo program (network version of "seqget")
@@ -951,30 +957,39 @@ rasn2ff :	asn2ff.c
 
 # asn2gb program (asn2gb)
 asn2gb :	asn2gb.c
-	$(CC) -g -o asn2gb $(LDFLAGS) asn2gb.c $(LIB41) $(NETCLILIB) $(LIB23) $(LIB2) $(LIB1) $(OTHERLIBS)
+	$(CC) -g -o asn2gb $(LDFLAGS) asn2gb.c $(LIB41) $(NETCLILIB) \
+		$(LIB23) $(LIBCOMPADJ) $(LIB2) $(LIB1) $(OTHERLIBS)
 
 # asn2gb_psf, uses PUBSEQBioseqFetchEnable instead of PubSeqFetchEnable
 # should be used only internally within NCBI.
 asn2gb_psf :	asn2gb.c
-	$(CC) -DINTERNAL_NCBI_ASN2GB -g -o asn2gb_psf $(LDFLAGS) asn2gb.c $(LIB_PS) $(LIB23) $(LIB2) $(LIB1) $(NCBI_SYBLIBS_CT) $(OTHERLIBS)
+	$(CC) -DINTERNAL_NCBI_ASN2GB -g -o asn2gb_psf $(LDFLAGS) asn2gb.c \
+		$(LIB_PS) $(LIB23) $(LIBCOMPADJ) $(LIB2) $(LIB1) \
+		$(NCBI_SYBLIBS_CT) $(OTHERLIBS)
 
 # asn2fsa program (asn2fsa)
 asn2fsa :	asn2fsa.c
-	$(CC) -g -o asn2fsa $(LDFLAGS) asn2fsa.c $(THREAD_OBJ) $(LIB41) $(NETCLILIB) $(LIB23) $(LIB2) $(LIB1) $(OTHERLIBS) $(THREAD_OTHERLIBS)
+	$(CC) -g -o asn2fsa $(LDFLAGS) asn2fsa.c $(THREAD_OBJ) $(LIB41) \
+		$(NETCLILIB) $(LIB23) $(LIBCOMPADJ) $(LIB2) $(LIB1) \
+		$(OTHERLIBS) $(THREAD_OTHERLIBS)
 
 # asn2fsa_psf, uses PUBSEQBioseqFetchEnable instead of PubSeqFetchEnable
 # should be used only internally within NCBI.
 asn2fsa_psf :	asn2fsa.c
 	$(CC) -DINTERNAL_NCBI_ASN2FSA -g -o asn2fsa_psf $(LDFLAGS) asn2fsa.c $(THREAD_OBJ) $(LIB_PS) \
-	$(LIB23) $(LIB2) $(LIB1) $(NCBI_SYBLIBS_CT_r) $(OTHERLIBS) $(THREAD_OTHERLIBS)
+	$(LIB23) $(LIBCOMPADJ) $(LIB2) $(LIB1) $(NCBI_SYBLIBS_CT_r) \
+	$(OTHERLIBS) $(THREAD_OTHERLIBS)
 
 # asn2all program (asn2all)
 asn2all :	asn2all.c
-	$(CC) -g -o asn2all $(LDFLAGS) asn2all.c $(THREAD_OBJ) $(LIB41) $(NETCLILIB) $(LIB23) $(LIB2) $(LIB1) $(OTHERLIBS) $(THREAD_OTHERLIBS)
+	$(CC) -g -o asn2all $(LDFLAGS) asn2all.c $(THREAD_OBJ) $(LIB41) \
+		$(NETCLILIB) $(LIB23) $(LIBCOMPADJ) $(LIB2) $(LIB1) \
+		$(OTHERLIBS) $(THREAD_OTHERLIBS)
 
 # tbl2asn
 tbl2asn : tbl2asn.c 
-	$(CC) -o tbl2asn $(LDFLAGS) tbl2asn.c $(LIB23) $(LIB2) $(NETCLILIB) $(LIB1) $(OTHERLIBS) 
+	$(CC) -o tbl2asn $(LDFLAGS) tbl2asn.c $(LIB23) $(LIBCOMPADJ) \
+		$(LIB2) $(NETCLILIB) $(LIB1) $(OTHERLIBS) 
 
 # gene2xml program (gene2xml)
 gene2xml :	gene2xml.c
@@ -982,63 +997,82 @@ gene2xml :	gene2xml.c
 
 # asnval program (asnval)
 asnval :	asnval.c
-	$(CC) -g -o asnval $(LDFLAGS) asnval.c $(THREAD_OBJ) $(LIB41) $(NETCLILIB) $(LIB23) $(LIB2) $(LIB1) $(OTHERLIBS) $(THREAD_OTHERLIBS)
+	$(CC) -g -o asnval $(LDFLAGS) asnval.c $(THREAD_OBJ) $(LIB41) \
+		$(NETCLILIB) $(LIB23) $(LIBCOMPADJ) $(LIB2) $(LIB1) \
+		$(OTHERLIBS) $(THREAD_OTHERLIBS)
 
 # asnval_psf, uses PUBSEQBioseqFetchEnable instead of PubSeqFetchEnable
 # should be used only internally within NCBI.
 asnval_psf :	asnval.c
 	$(CC) -INTERNAL_NCBI_ASN2VAL -g -o asnval_psf $(LDFLAGS) asnval.c $(THREAD_OBJ) $(LIB_PS) \
-	$(LIB23) $(LIB2) $(LIB1) $(NCBI_SYBLIBS_CT_r) $(OTHERLIBS) $(THREAD_OTHERLIBS)
+	$(LIB23) $(LIBCOMPADJ) $(LIB2) $(LIB1) $(NCBI_SYBLIBS_CT_r) \
+	$(OTHERLIBS) $(THREAD_OTHERLIBS)
 
 # flint program (flint)
 flint :	flint.c
-	$(CC) -g -o flint $(LDFLAGS) flint.c $(LIB41) $(NETCLILIB) $(LIB23) $(LIB2) $(LIB1) $(OTHERLIBS)
+	$(CC) -g -o flint $(LDFLAGS) flint.c $(LIB41) $(NETCLILIB) \
+		$(LIB23) $(LIBCOMPADJ) $(LIB2) $(LIB1) $(OTHERLIBS)
 
 # gbseqget program (gbseqget)
 gbseqget :	gbseqget.c
-	$(CC) -g -o gbseqget $(LDFLAGS) gbseqget.c $(LIB41) $(NETCLILIB) $(LIB23) $(LIB2) $(LIB1) $(OTHERLIBS)
+	$(CC) -g -o gbseqget $(LDFLAGS) gbseqget.c $(LIB41) $(NETCLILIB) \
+		$(LIB23) $(LIBCOMPADJ) $(LIB2) $(LIB1) $(OTHERLIBS)
 
 # insdseqget program (insdseqget)
 insdseqget :	insdseqget.c
-	$(CC) -g -o insdseqget $(LDFLAGS) insdseqget.c $(LIB41) $(NETCLILIB) $(LIB23) $(LIB2) $(LIB1) $(OTHERLIBS)
+	$(CC) -g -o insdseqget $(LDFLAGS) insdseqget.c $(LIB41) $(NETCLILIB) \
+		$(LIB23) $(LIBCOMPADJ) $(LIB2) $(LIB1) $(OTHERLIBS)
 
 # nps2gps program (nps2gps)
 nps2gps :	nps2gps.c
-	$(CC) -g -o nps2gps $(LDFLAGS) nps2gps.c $(LIB23) $(LIB2) $(LIB1) $(OTHERLIBS)
+	$(CC) -g -o nps2gps $(LDFLAGS) nps2gps.c $(LIB23) $(LIBCOMPADJ) \
+		$(LIB2) $(LIB1) $(OTHERLIBS)
 
 # trna2sap program (trna2sap)
 trna2sap :	trna2sap.c
-	$(CC) -g -o trna2sap $(LDFLAGS) trna2sap.c $(LIB23) $(LIB2) $(LIB1) $(OTHERLIBS)
+	$(CC) -g -o trna2sap $(LDFLAGS) trna2sap.c $(LIB23) $(LIBCOMPADJ) \
+		$(LIB2) $(LIB1) $(OTHERLIBS)
 
 # trna2tbl program (trna2tbl)
 trna2tbl :	trna2tbl.c
-	$(CC) -g -o trna2tbl $(LDFLAGS) trna2tbl.c $(LIB23) $(LIB2) $(LIB1) $(OTHERLIBS)
+	$(CC) -g -o trna2tbl $(LDFLAGS) trna2tbl.c $(LIB23) $(LIBCOMPADJ) \
+		$(LIB2) $(LIB1) $(OTHERLIBS)
 
 # Entrez2 service test program (testent2)
 testent2 :	testent2.c
-	$(CC) -g -o testent2 $(LDFLAGS) testent2.c $(LIB23) $(LIB22) $(LIB20) $(LIB61) $(LIB60) $(LIB2) $(LIB1) $(OTHERLIBS)
+	$(CC) -g -o testent2 $(LDFLAGS) testent2.c $(LIB23) $(LIBCOMPADJ) \
+		$(LIB22) $(LIB20) $(LIB61) $(LIB60) $(LIB2) $(LIB1) \
+		$(OTHERLIBS)
 
 # network Entrez2 application (entrez2)
 entrez2 :	entrez2.c
-	$(CC) -g -o entrez2 $(LDFLAGS) entrez2.c $(LIB41) $(LIB6) $(LIB20) $(LIB61) $(LIB60) $(LIB22) $(LIB23) $(LIB2) $(LIB4) $(LIB1) $(VIBLIBS) $(OTHERLIBS)
+	$(CC) -g -o entrez2 $(LDFLAGS) entrez2.c $(LIB41) $(LIB6) $(LIB20) \
+		$(LIB61) $(LIB60) $(LIB22) $(LIB23) $(LIBCOMPADJ) \
+		$(LIB2) $(LIB4) $(LIB1) $(VIBLIBS) $(OTHERLIBS)
 	$(VIB_POST_LINK) entrez2
 
 # demo program (spidey)
 spidey :	spideymain.c
-	$(CC) -o spidey $(LDFLAGS) spideymain.c $(LIB41) $(LIB23) $(LIB6) $(LIB2) $(LIB1) $(OTHERLIBS)
+	$(CC) -o spidey $(LDFLAGS) spideymain.c $(LIB41) $(LIB23) \
+		$(LIBCOMPADJ) $(LIB6) $(LIB2) $(LIB1) $(OTHERLIBS)
 
 # demo program dotmatrix
 dotmatrix :	dotmain.c
-	$(CC) -o dotmatrix $(LDFLAGS) dotmain.c $(LIB41) $(LIB6) $(LIB20) $(LIB61) $(LIB60) $(LIB23) $(LIB2) $(LIB4) $(LIB1) $(VIBLIBS) $(OTHERLIBS)
+	$(CC) -o dotmatrix $(LDFLAGS) dotmain.c $(LIB41) $(LIB6) \
+		$(LIB20) $(LIB61) $(LIB60) $(LIB23) $(LIBCOMPADJ) $(LIB2) \
+		$(LIB4) $(LIB1) $(VIBLIBS) $(OTHERLIBS)
 
 # demo program ingenue
 ingenue :	ingenmain.c
-	$(CC) -o ingenue $(LDFLAGS) ingenmain.c $(LIB41) $(LIB6) $(LIB20) $(LIB61) $(LIB60) $(LIB23) $(LIB2) $(LIB4) $(LIB1) $(VIBLIBS) $(OTHERLIBS)
+	$(CC) -o ingenue $(LDFLAGS) ingenmain.c $(LIB41) $(LIB6) $(LIB20) \
+		$(LIB61) $(LIB60) $(LIB23) $(LIBCOMPADJ) $(LIB2) $(LIB4) \
+		$(LIB1) $(VIBLIBS) $(OTHERLIBS)
 
 # demo program (electronic PCR)
 
 elecpcr : elecpcr.c
-	$(CC) -o elecpcr $(LDFLAGS) elecpcr.c $(LIB23) $(ENTREZLIBS) $(LIB2) $(LIB1) $(OTHERLIBS)
+	$(CC) -o elecpcr $(LDFLAGS) elecpcr.c $(LIB23) $(LIBCOMPADJ) \
+		$(ENTREZLIBS) $(LIB2) $(LIB1) $(OTHERLIBS)
 
 # demo program (asn2fast)
 
@@ -1071,12 +1105,16 @@ idfetch: idfetch.c $(BNETCLILIB) $(BLIB41)
 # blastcl3 now has the same source code as blastall but should be compiled
 # with -DBLAST_CS_API flag
 blastcl3: blastall.c $(BNETCLILIB) $(BLIB36)
-	$(CC) -g -o blastcl3 $(LDFLAGS) -DBLAST_CS_API blastall.c $(LIB36) $(LIB23) $(NETCLILIB) $(LIB2) $(LIB1) $(OTHERLIBS)
+	$(CC) -g -o blastcl3 $(LDFLAGS) -DBLAST_CS_API blastall.c \
+		$(LIB61) $(LIB60) $(LIB36) $(LIB23) $(LIBCOMPADJ) \
+		$(NETCLILIB) $(LIB2) $(LIB1) $(OTHERLIBS)
 
 # BLAST 2 sequences
 # Uses network libraries to access Entrez for retrieving sequences by gi/accession
 bl2seq : bl2seq.c
-	$(CC) -o bl2seq $(LDFLAGS) bl2seq.c $(LIB61) $(LIB60) $(LIB23) $(LIB41) $(NETCLILIB) $(LIB2) $(LIB1) $(OTHERLIBS)
+	$(CC) -o bl2seq $(LDFLAGS) bl2seq.c $(LIB61) $(LIB60) $(LIB23) \
+		$(LIBCOMPADJ) $(LIB41) $(NETCLILIB) $(LIB2) $(LIB1) \
+		$(OTHERLIBS)
 
 # test client for the suggest network service
 suggcli: suggcli.c $(BNETCLILIB) $(BLIB24)
@@ -1098,7 +1136,8 @@ Nquery : query.c sumutils.c $(BLIB27) $(BLIB25) $(BLIB22) $(BENTREZLIBS)
 # srchnt - pattern match REN search
 
 srchnt : srchnt.c
-	$(CC) -o srchnt $(LDFLAGS) srchnt.c $(LIB23) $(ENTREZLIBS) $(LIB2) $(LIB1) $(OTHERLIBS)
+	$(CC) -o srchnt $(LDFLAGS) srchnt.c $(LIB23) $(LIBCOMPADJ) \
+		$(ENTREZLIBS) $(LIB2) $(LIB1) $(OTHERLIBS)
 
 # srchaa - pattern match Prosite search or endopeptidase fragment report
 
@@ -1106,80 +1145,103 @@ srchaa.o : srchaa.c
 	$(CC) $(CFLAGS) -DNO_TAX_NET srchaa.c
 
 srchaa : srchaa.o
-	$(CC) -o srchaa $(LDFLAGS) srchaa.o $(LIB23) $(ENTREZLIBS) $(LIB2) $(LIB1) $(OTHERLIBS)
+	$(CC) -o srchaa $(LDFLAGS) srchaa.o $(LIB23) $(LIBCOMPADJ) \
+		$(ENTREZLIBS) $(LIB2) $(LIB1) $(OTHERLIBS)
 
 #srchaa : srchaa.c
-#	$(CC) -o srchaa $(LDFLAGS) srchaa.c $(LIB40) $(LIB23) $(ENTREZLIBS) $(LIB2) $(LIB1) $(OTHERLIBS)
+#	$(CC) -o srchaa $(LDFLAGS) srchaa.c $(LIB40) $(LIB23) $(LIBCOMPADJ) \
+		$(ENTREZLIBS) $(LIB2) $(LIB1) $(OTHERLIBS)
 
 # searchv - patterns - Vibrant version
 
 searchv : searchv.c
-	$(CC) -o searchv $(LDFLAGS) searchv.c $(LIB20) $(LIB61) $(LIB60) $(LIB23) $(ENTREZLIBS) $(LIB4) $(LIB2) $(LIB1) $(VIBLIBS) $(OTHERLIBS)
+	$(CC) -o searchv $(LDFLAGS) searchv.c $(LIB20) $(LIB61) $(LIB60) \
+		$(LIB23) $(LIBCOMPADJ) $(ENTREZLIBS) $(LIB4) $(LIB2) \
+		 $(LIB1) $(VIBLIBS) $(OTHERLIBS)
 
 # mts - profile search
 
 mts : mts.c
-	$(CC) -o mts $(LDFLAGS) mts.c $(LIB23) $(ENTREZLIBS) $(LIB2) $(LIB1) $(OTHERLIBS)
+	$(CC) -o mts $(LDFLAGS) mts.c $(LIB23) $(LIBCOMPADJ) $(ENTREZLIBS) \
+		$(LIB2) $(LIB1) $(OTHERLIBS)
 
 # sigme - signal peptides and transmembrane regions
 
 sigme : sigme.c
-	$(CC) -o sigme $(LDFLAGS) sigme.c $(LIB23) $(ENTREZLIBS) $(LIB2) $(LIB1) $(OTHERLIBS)
+	$(CC) -o sigme $(LDFLAGS) sigme.c $(LIB23) $(LIBCOMPADJ) \
+		$(ENTREZLIBS) $(LIB2) $(LIB1) $(OTHERLIBS)
 
 # sigmev - signal peptides and transmembrane regions - Vibrant version
 
 sigmev : sigmev.c
-	$(CC) -o sigmev $(LDFLAGS) sigmev.c $(LIB20) $(LIB61) $(LIB60) $(LIB23) $(ENTREZLIBS) $(LIB4) $(LIB2) $(LIB1) $(VIBLIBS) $(OTHERLIBS)
+	$(CC) -o sigmev $(LDFLAGS) sigmev.c $(LIB20) $(LIB61) $(LIB60) \
+		$(LIB23) $(LIBCOMPADJ) $(ENTREZLIBS) $(LIB4) $(LIB2) $(LIB1) \
+		$(VIBLIBS) $(OTHERLIBS)
 
 # dst - low complexity nucleic acids
 
 dst : dst.c
-	$(CC) -o dst $(LDFLAGS) dst.c $(LIB23) $(ENTREZLIBS) $(LIB2) $(LIB1) $(OTHERLIBS)
+	$(CC) -o dst $(LDFLAGS) dst.c $(LIB23) $(LIBCOMPADJ) $(ENTREZLIBS) \
+		$(LIB2) $(LIB1) $(OTHERLIBS)
 
 # dustv - low complexity nucleic acids - Vibrant version
 
 dustv : dustv.c
-	$(CC) -o dustv $(LDFLAGS) dustv.c $(LIB20) $(LIB61) $(LIB60) $(LIB23) $(ENTREZLIBS) $(LIB4) $(LIB2) $(LIB1) $(VIBLIBS) $(OTHERLIBS)
+	$(CC) -o dustv $(LDFLAGS) dustv.c $(LIB20) $(LIB61) $(LIB60) $(LIB23) \
+		$(LIBCOMPADJ) $(ENTREZLIBS) $(LIB4) $(LIB2) $(LIB1) \
+		$(VIBLIBS) $(OTHERLIBS)
 
 # coiled coil prediction
 
 ccp : ccp.c
-	$(CC) -o ccp $(LDFLAGS) ccp.c $(LIB23) $(ENTREZLIBS) $(LIB2) $(LIB1) $(OTHERLIBS)
+	$(CC) -o ccp $(LDFLAGS) ccp.c $(LIB23) $(LIBCOMPADJ) $(ENTREZLIBS) \
+		$(LIB2) $(LIB1) $(OTHERLIBS)
 
 # coiled coil prediction - Vibrant version
 
 ccpv : ccpv.c
-	$(CC) -o ccpv $(LDFLAGS) ccpv.c $(LIB20) $(LIB61) $(LIB60) $(LIB23) $(ENTREZLIBS) $(LIB4) $(LIB2) $(LIB1) $(VIBLIBS) $(OTHERLIBS)
+	$(CC) -o ccpv $(LDFLAGS) ccpv.c $(LIB20) $(LIB61) $(LIB60) $(LIB23) \
+		$(LIBCOMPADJ) $(ENTREZLIBS) $(LIB4) $(LIB2) $(LIB1) \
+		$(VIBLIBS) $(OTHERLIBS)
 
 # low complexity
 
 epi : epi.c
-	$(CC) -o epi $(LDFLAGS) epi.c $(LIB23) $(ENTREZLIBS) $(LIB2) $(LIB1) $(OTHERLIBS)
+	$(CC) -o epi $(LDFLAGS) epi.c $(LIB23) $(LIBCOMPADJ) \
+		$(ENTREZLIBS) $(LIB2) $(LIB1) $(OTHERLIBS)
 
 # epiv - low complexity - Vibrant version
 
 epiv : epiv.c
-	$(CC) -o epiv $(LDFLAGS) epiv.c $(LIB20) $(LIB61) $(LIB60) $(LIB23) $(ENTREZLIBS) $(LIB4) $(LIB2) $(LIB1) $(VIBLIBS) $(OTHERLIBS)
+	$(CC) -o epiv $(LDFLAGS) epiv.c $(LIB20) $(LIB61) $(LIB60) $(LIB23) \
+		$(LIBCOMPADJ) $(ENTREZLIBS) $(LIB4) $(LIB2) $(LIB1) \
+		$(VIBLIBS) $(OTHERLIBS)
 
 # twop - identity in longest blast hit
 
 twop : twop.c
-	$(CC) -o twop $(LDFLAGS) twop.c $(LIB23) $(ENTREZLIBS) $(LIB2) $(LIB1) $(OTHERLIBS)
+	$(CC) -o twop $(LDFLAGS) twop.c $(LIB23) $(LIBCOMPADJ) \
+		$(ENTREZLIBS) $(LIB2) $(LIB1) $(OTHERLIBS)
 
 # twopv - identity in longest blast hit - Vibrant version
 
 twopv : twopv.c
-	$(CC) -o twopv $(LDFLAGS) twopv.c $(LIB20) $(LIB61) $(LIB60) $(LIB23) $(ENTREZLIBS) $(LIB4) $(LIB2) $(LIB1) $(VIBLIBS) $(OTHERLIBS)
+	$(CC) -o twopv $(LDFLAGS) twopv.c $(LIB20) $(LIB61) $(LIB60) \
+		$(LIB23) $(LIBCOMPADJ) $(ENTREZLIBS) $(LIB4) $(LIB2) \
+		$(LIB1) $(VIBLIBS) $(OTHERLIBS)
 
 # cnsrt - codon usage relationship
 
 cnsrt : cnsrt.c
-	$(CC) -o cnsrt $(LDFLAGS) cnsrt.c $(LIB23) $(ENTREZLIBS) $(LIB2) $(LIB1) $(OTHERLIBS)
+	$(CC) -o cnsrt $(LDFLAGS) cnsrt.c $(LIB23) $(LIBCOMPADJ) \
+		$(ENTREZLIBS) $(LIB2) $(LIB1) $(OTHERLIBS)
 
 # cnsrtv - codon usage tree - Vibrant version
 
 cnsrtv : cnsrtv.c
-	$(CC) -o cnsrtv $(LDFLAGS) cnsrtv.c $(LIB20) $(LIB61) $(LIB60) $(LIB23) $(ENTREZLIBS) $(LIB4) $(LIB2) $(LIB1) $(VIBLIBS) $(OTHERLIBS)
+	$(CC) -o cnsrtv $(LDFLAGS) cnsrtv.c $(LIB20) $(LIB61) $(LIB60) \
+		$(LIB23) $(LIBCOMPADJ) $(ENTREZLIBS) $(LIB4) $(LIB2) $(LIB1) \
+		 $(VIBLIBS) $(OTHERLIBS)
 
 # cnsgn - orf selection by codon bias
 
@@ -1187,55 +1249,66 @@ cnsgn.o : cnsgn.c
 	$(CC) $(CFLAGS) -DNO_BLS_NET cnsgn.c
 
 cnsgn : cnsgn.o
-	$(CC) -o cnsgn $(LDFLAGS) cnsgn.o $(LIB23) $(ENTREZLIBS) $(LIB2) $(LIB1) $(OTHERLIBS)
+	$(CC) -o cnsgn $(LDFLAGS) cnsgn.o $(LIB23) $(LIBCOMPADJ) \
+		$(ENTREZLIBS) $(LIB2) $(LIB1) $(OTHERLIBS)
 
 #cnsgn : cnsgn.c
-#	$(CC) -o cnsgn $(LDFLAGS) cnsgn.c $(LIB36) $(LIB23) $(ENTREZLIBS) $(LIB2) $(LIB1) $(OTHERLIBS)
+#	$(CC) -o cnsgn $(LDFLAGS) cnsgn.c $(LIB36) $(LIB23) $(LIBCOMPADJ) \
+		$(ENTREZLIBS) $(LIB2) $(LIB1) $(OTHERLIBS)
 
 # cnsgnv - orf selection by codon bias - Vibrant version
 
 cnsgnv : cnsgnv.c
-	$(CC) -o cnsgnv $(LDFLAGS) cnsgnv.c $(LIB20) $(LIB61) $(LIB60) $(LIB23) $(ENTREZLIBS) $(LIB4) $(LIB2) $(LIB1) $(VIBLIBS) $(OTHERLIBS)
+	$(CC) -o cnsgnv $(LDFLAGS) cnsgnv.c $(LIB20) $(LIB61) $(LIB60) \
+		$(LIB23) $(LIBCOMPADJ) $(ENTREZLIBS) $(LIB4) $(LIB2) \
+		$(LIB1) $(VIBLIBS) $(OTHERLIBS)
 
 
 # 'sequin' direct submission tool
-sequin : $(SRCSEQUIN) $(BENTREZLIBS) $(BLIB61) $(BLIB60) $(BLIB23) $(BLIB30) $(BLIB20) \
+sequin : $(SRCSEQUIN) $(BENTREZLIBS) $(BLIB61) $(BLIB60) $(BLIB23) \
+	$(BLIBCOMPADJ) $(BLIB30) $(BLIB20) \
 	$(BLIB22) $(BLIB19) $(BLIB40) $(BLIB41) $(BLIB36) $(BLIB45) \
 	$(BLIB11) $(BLIB8) $(BLIB7) $(NETCLIBLIB) $(BLIB5) $(BLIB4) $(BLIB3) \
 	$(BLIB2) $(BLIB1) $(ULIB31)
 	$(CC) -o sequin $(SEQUIN_OPTS) -I. $(LDFLAGS) $(SRCSEQUIN) \
 	$(LIB31) $(LIB30) $(LIB20) $(LIB61) $(LIB60) $(LIB22) $(LIB45) $(LIB19) $(LIB40) $(LIB41) \
-	$(LIB36) $(LIB23) $(LIB11) $(ENTREZLIBS) $(LIB4) \
+	$(LIB36) $(LIB23) $(LIBCOMPADJ) $(LIB11) $(ENTREZLIBS) $(LIB4) \
 	$(LIB2) $(LIB1) $(VIBLIBS) $(OTHERLIBS)
 	$(VIB_POST_LINK) sequin
 
 # 'sequin' direct submission tool with interprocess communication capability
-Ssequin : $(SRCSEQUIN) $(BENTREZLIBS) $(BLIB61) $(BLIB60) $(BLIB23) $(BLIB30) $(BLIB20) \
+Ssequin : $(SRCSEQUIN) $(BENTREZLIBS) $(BLIB61) $(BLIB60) $(BLIB23) \
+	$(BLIBCOMPADJ) $(BLIB30) $(BLIB20) \
 	$(BLIB22) $(BLIB19) $(BLIB40) $(BLIB41) $(BLIB36) $(BLIB45) \
 	$(BLIB11) $(BLIB8) $(BLIB7) $(NETCLIBLIB) $(BLIB5) $(BLIB4) $(BLIB3) \
 	$(BLIB2) $(BLIB1) $(ULIB31) $(ULIB33) $(THREAD_OBJ)
 	$(CC) -o Ssequin $(SEQUIN_OPTS) -DUSE_SMARTNET -I. $(LDFLAGS) $(SRCSEQUIN) \
 	$(THREAD_OBJ) $(LIB33) $(LIB30) $(LIB45) $(LIB31) $(LIB20) $(LIB61) $(LIB60) $(LIB22) $(LIB19) $(LIB40) \
-	$(LIB41) $(LIB36) $(LIB23) $(LIB11) $(ENTREZLIBS) $(LIB4) \
+	$(LIB41) $(LIB36) $(LIB23) $(LIBCOMPADJ) \
+	$(LIB11) $(ENTREZLIBS) $(LIB4) \
 	$(LIB2) $(LIB1) $(VIBLIBS) $(OTHERLIBS) $(THREAD_OTHERLIBS)
 
 # 'Psequin' ("Public Network Sequin") direct submission tool
-Psequin : $(SRCSEQUIN) $(BENTREZLIBS) $(BLIB61) $(BLIB60) $(BLIB23) $(BLIB45) $(BLIB30) $(BLIB20) \
+Psequin : $(SRCSEQUIN) $(BENTREZLIBS) $(BLIB61) $(BLIB60) $(BLIB23) \
+	$(BLIBCOMPADJ) $(BLIB45) $(BLIB30) $(BLIB20) \
 	$(BLIB22) $(BLIB40) $(BLIB41) $(BLIB36) \
 	$(BLIB11) $(BLIB8) $(BLIB7) $(NETCLIBLIB) $(BLIB5) $(BLIB4) $(BLIB3) \
 	$(BLIB2) $(BLIB1) $(ULIB31)
 	$(CC) -o Psequin -I. $(LDFLAGS) -UINTERNAL_NCBI_SEQUIN $(SRCSEQUIN) \
-	$(LIB30) $(LIB45) $(LIB31) $(LIB20) $(LIB61) $(LIB60) $(LIB22) $(LIB40) $(LIB41) $(LIB36) $(LIB23) $(LIB11) \
+	$(LIB30) $(LIB45) $(LIB31) $(LIB20) $(LIB61) $(LIB60) $(LIB22) \
+	$(LIB40) $(LIB41) $(LIB36) $(LIB23) $(LIBCOMPADJ) $(LIB11) \
 	$(ENTREZLIBS) $(LIB4) $(LIB2) $(LIB1) $(VIBLIBS) $(OTHERLIBS)
 	$(VIB_POST_LINK) Psequin
 
 # 'sbtedit' Submission Template Editor
-sbtedit : $(SRCSBTEDIT) $(BENTREZLIBS) $(BLIB61) $(BLIB60) $(BLIB23) $(BLIB45) $(BLIB30) $(BLIB20) \
+sbtedit : $(SRCSBTEDIT) $(BENTREZLIBS) $(BLIB61) $(BLIB60) $(BLIB23) \
+	$(BLIBCOMPADJ) $(BLIB45) $(BLIB30) $(BLIB20) \
 	$(BLIB22) $(BLIB40) $(BLIB41) $(BLIB36) \
 	$(BLIB11) $(BLIB8) $(BLIB7) $(NETCLIBLIB) $(BLIB5) $(BLIB4) $(BLIB3) \
 	$(BLIB2) $(BLIB1) $(ULIB31)
 	$(CC) -o sbtedit -I. $(LDFLAGS) -UINTERNAL_NCBI_SEQUIN $(SRCSBTEDIT) \
-	$(LIB30) $(LIB45) $(LIB31) $(LIB20) $(LIB61) $(LIB60) $(LIB22) $(LIB40) $(LIB41) $(LIB36) $(LIB23) $(LIB11) \
+	$(LIB30) $(LIB45) $(LIB31) $(LIB20) $(LIB61) $(LIB60) $(LIB22) \
+	$(LIB40) $(LIB41) $(LIB36) $(LIB23) $(LIBCOMPADJ) $(LIB11) \
 	$(ENTREZLIBS) $(LIB4) $(LIB2) $(LIB1) $(VIBLIBS) $(OTHERLIBS)
 	$(VIB_POST_LINK) sbtedit
 
@@ -1267,20 +1340,24 @@ debug_server : debug_server.c
 
 psiblast.REAL : psiblast.c wwwbutl.c
 	$(CC) -o psiblast.REAL $(LDFLAGS) psiblast.c wwwbutl.c $(THREAD_OBJ) \
-	$(LIB20) $(LIB61) $(LIB60) $(LIB23) -lvibgif $(LIB2) $(LIB1) $(OTHERLIBS) $(THREAD_OTHERLIBS)
+	$(LIB20) $(LIB61) $(LIB60) $(LIB23) $(LIBCOMPADJ) \
+	-lvibgif $(LIB2) $(LIB1) $(OTHERLIBS) $(THREAD_OTHERLIBS)
 
 psiblast_cs.REAL : psiblast.c wwwbutl.c
 	$(CC) -o psiblast_cs.REAL $(LDFLAGS) -DNCBI_ENTREZ_CLIENT psiblast.c wwwbutl.c \
-	$(THREAD_OBJ) $(LIB40) $(LIB41) $(LIB36) $(LIB6) $(LIB20) $(LIB61) $(LIB60) $(LIB23) -lvibgif \
+	$(THREAD_OBJ) $(LIB40) $(LIB41) $(LIB36) $(LIB6) $(LIB20) $(LIB61) \
+	$(LIB60) $(LIB23) $(LIBCOMPADJ) -lvibgif \
 	$(LIB2) $(LIB1) $(OTHERLIBS) 	$(THREAD_OTHERLIBS)
 
 blast.REAL : wwwblast.c wwwbutl.c
 	$(CC) -o blast.REAL $(LDFLAGS) wwwblast.c wwwbutl.c $(THREAD_OBJ) \
-	$(LIB20) $(LIB61) $(LIB60) $(LIB23) -lvibgif $(LIB2) $(LIB1) $(OTHERLIBS) $(THREAD_OTHERLIBS)
+	$(LIB20) $(LIB61) $(LIB60) $(LIB23) $(LIBCOMPADJ) -lvibgif $(LIB2) \
+	$(LIB1) $(OTHERLIBS) $(THREAD_OTHERLIBS)
 
 blast_cs.REAL : wwwblast.c wwwbutl.c
 	$(CC) -o blast_cs.REAL $(LDFLAGS) -DNCBI_ENTREZ_CLIENT wwwblast.c wwwbutl.c \
-	$(THREAD_OBJ) $(LIB40) $(LIB41) $(LIB36) $(LIB6) $(LIB20) $(LIB61) $(LIB60) $(LIB23) -lvibgif \
+	$(THREAD_OBJ) $(LIB40) $(LIB41) $(LIB36) $(LIB6) $(LIB20) $(LIB61) \
+	$(LIB60) $(LIB23) $(LIBCOMPADJ) -lvibgif \
 	$(LIB2) $(LIB1) $(OTHERLIBS) $(THREAD_OTHERLIBS)
 
 nph-viewgif.cgi : viewgif.c
@@ -1288,12 +1365,13 @@ nph-viewgif.cgi : viewgif.c
 
 wblast2.REAL : wblast2.c
 	$(CC) -o wblast2.REAL $(LDFLAGS) -DBL2SEQ_STANDALONE wblast2.c \
-	$(LIB61) $(LIB23) $(LIB2) $(LIB60) $(LIB1) $(OTHERLIBS)
+	$(LIB61) $(LIB23) $(LIBCOMPADJ) $(LIB2) $(LIB60) $(LIB1) $(OTHERLIBS)
 
 
 wblast2_cs.REAL : wblast2.c
 	$(CC) -o wblast2_cs.REAL $(LDFLAGS) -DNCBI_ENTREZ_CLIENT -DBL2SEQ_STANDALONE \
-	wblast2.c $(LIB41) $(LIB6) $(LIB61) $(LIB23) $(LIB2) $(LIB60) $(LIB1) \
+	wblast2.c $(LIB41) $(LIB6) $(LIB61) $(LIB23) $(LIBCOMPADJ) \
+	$(LIB2) $(LIB60) $(LIB1) \
 	$(OTHERLIBS)
 
 bl2bag.cgi : bl2bag.c

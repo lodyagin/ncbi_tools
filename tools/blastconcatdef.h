@@ -31,8 +31,11 @@ Contents: type definitions and function prototypes for query
           multiplexing code.
 
 ******************************************************************************/
-/* $Revision: 1.4 $ 
+/* $Revision: 1.5 $ 
 *  $Log: blastconcatdef.h,v $
+*  Revision 1.5  2005/09/26 15:02:58  morgulis
+*  Fixing some memort leaks when using query concatenation in blastn and tblastn.
+*
 *  Revision 1.4  2005/01/10 18:52:29  coulouri
 *  fixes from morgulis to allow concatenation of >255 queries in [t]blastn
 *
@@ -162,6 +165,7 @@ Int4 LIBCALL ResultIndex PROTO(( Nlm_FloatHi target_e, Int4 target_score, Int4 s
 				 Int4 num_elements ));
 void LIBCALL MQ_UpdateResultLists PROTO(( QueriesPtr mult_queries ));
 SeqLocPtr LIBCALL ConcatSeqLoc PROTO(( QueriesPtr mult_queries, SeqLocPtr loc, SeqIdPtr id, Uint4 qnum ));
+QueriesPtr LIBCALL BlastMultQueriesDestruct PROTO(( QueriesPtr queries ));
 
 #endif
 

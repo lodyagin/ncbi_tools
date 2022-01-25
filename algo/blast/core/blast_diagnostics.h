@@ -1,4 +1,4 @@
-/* $Id: blast_diagnostics.h,v 1.8 2005/01/24 14:23:05 camacho Exp $
+/* $Id: blast_diagnostics.h,v 1.9 2005/11/16 14:31:36 madden Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -6,7 +6,7 @@
  *
  *  This software/database is a "United States Government Work" under the
  *  terms of the United States Copyright Act.  It was written as part of
- *  the author's offical duties as a United States Government employee and
+ *  the author's official duties as a United States Government employee and
  *  thus cannot be copyrighted.  This software/database is freely available
  *  to the public for use. The National Library of Medicine and the U.S.
  *  Government have not placed any restriction on its use or reproduction.
@@ -23,7 +23,6 @@
  *
  * ===========================================================================
  * 
- * Author: Ilya Dondoshansky
  *
  */
 

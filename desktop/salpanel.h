@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.11 $
+* $Revision: 6.12 $
 *
 * File Description: 
 *
@@ -122,6 +122,7 @@ typedef struct batchapplyfeaturedetails
 {
   CharPtr defline;
   CharPtr geneName;
+  CharPtr geneDesc;
   CharPtr protName;
   CharPtr protDesc;
   CharPtr rnaName;

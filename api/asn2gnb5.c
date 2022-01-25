@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.40 $
+* $Revision: 1.48 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -105,7 +105,7 @@ static Char link_ff [MAX_WWWBUF];
 #define DEF_LINK_FF  "/cgi-bin/Entrez/getfeat?"
 
 NLM_EXTERN Char link_muid [MAX_WWWBUF];
-#define DEF_LINK_MUID  "/entrez/utils/qmap.cgi?"
+#define DEF_LINK_MUID  "http://www.ncbi.nlm.nih.gov/entrez/query.fcgi?cmd=Retrieve&db=pubmed&dopt=Abstract&query_hl=1&list_uids="
 
 static Char link_ace [MAX_WWWBUF];
 #define DEF_LINK_ACE  "http://www.ncbi.nlm.nih.gov/IEB/Research/Acembly/av.cgi?db=worm&c=gene&q="
@@ -121,6 +121,9 @@ static Char link_fly_fban [MAX_WWWBUF];
 
 static Char link_fly_fbgn [MAX_WWWBUF];
 #define DEF_LINK_FBGN "http://flybase.bio.indiana.edu/.bin/fbidq.html?"
+
+static Char link_fly_fbst [MAX_WWWBUF];
+#define DEF_LINK_FBST "http://flybase.bio.indiana.edu/.bin/fbidq.html?"
 
 static Char link_cog [MAX_WWWBUF];
 #define DEF_LINK_COG "http://www.ncbi.nlm.nih.gov/COG/new/release/cow.cgi?cog="
@@ -141,7 +144,7 @@ NLM_EXTERN Char link_sp [MAX_WWWBUF];
 #define DEF_LINK_SP "http://www.uniprot.org/entry/"
 
 static Char link_pdb [MAX_WWWBUF];
-#define DEF_LINK_PDB "http://www.expasy.org/cgi-bin/get-pdb-entry%3f"
+#define DEF_LINK_PDB "http://www.rcsb.org/pdb/cgi/explore.cgi?pdbId="
 
 static Char link_UniSTS [MAX_WWWBUF];
 #define DEF_LINK_UniSTS "http://www.ncbi.nlm.nih.gov/genome/sts/sts.cgi?uid="
@@ -263,11 +266,17 @@ static Char link_ecocyc [MAX_WWWBUF];
 static Char link_hssp [MAX_WWWBUF];
 #define DEF_LINK_HSSP "http://www.sander.ebi.ac.uk/hssp"
 
-static Char link_genew [MAX_WWWBUF];
-#define DEF_LINK_GENEW "http://www.gene.ucl.ac.uk/cgi-bin/nomenclature/searchgenes.pl"
+static Char link_hgnc [MAX_WWWBUF];
+#define DEF_LINK_HGNC "http://www.gene.ucl.ac.uk/nomenclature/data/get_data.php?hgnc_id="
 
 static Char link_bold [MAX_WWWBUF];
 #define DEF_LINK_BOLD "http://www.barcodinglife.com"
+
+static Char link_hprd [MAX_WWWBUF];
+#define DEF_LINK_HPRD "http://www.hprd.org/protein/"
+
+static Char link_uspto [MAX_WWWBUF];
+#define DEF_LINK_USPTO "http://patft.uspto.gov/netacgi/nph-Parser?patentnumber="
 
 
 /* www utility functions */
@@ -321,6 +330,7 @@ NLM_EXTERN void InitWWW (IntAsn2gbJobPtr ajp)
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_MGD", DEF_LINK_MGD, link_mgd, MAX_WWWBUF);
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_FBGN", DEF_LINK_FBGN, link_fly_fbgn, MAX_WWWBUF);
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_FBAN", DEF_LINK_FBAN, link_fly_fban, MAX_WWWBUF);
+  GetAppParam ("NCBI", "WWWENTREZ", "LINK_FBST", DEF_LINK_FBST, link_fly_fbst, MAX_WWWBUF);
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_CDD", DEF_LINK_CDD, link_cdd, MAX_WWWBUF);
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_NIAEST", DEF_LINK_NIAEST, link_niaest, MAX_WWWBUF);
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_WORM_BASE", DEF_LINK_WORM_BASE, link_worm_base, MAX_WWWBUF);
@@ -353,8 +363,10 @@ NLM_EXTERN void InitWWW (IntAsn2gbJobPtr ajp)
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_CCDS", DEF_LINK_CCDS, link_ccds, MAX_WWWBUF);
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_ECOCYC", DEF_LINK_ECOCYC, link_ecocyc, MAX_WWWBUF);
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_HSSP", DEF_LINK_HSSP, link_hssp, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_GENEW", DEF_LINK_GENEW, link_genew, MAX_WWWBUF);
+  GetAppParam ("NCBI", "WWWENTREZ", "LINK_HGNC", DEF_LINK_HGNC, link_hgnc, MAX_WWWBUF);
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_BOLD", DEF_LINK_BOLD, link_bold, MAX_WWWBUF);
+  GetAppParam ("NCBI", "WWWENTREZ", "LINK_HPRD", DEF_LINK_HPRD, link_hprd, MAX_WWWBUF);
+  GetAppParam ("NCBI", "WWWENTREZ", "LINK_USPTO", DEF_LINK_USPTO, link_uspto, MAX_WWWBUF);
 }
 
 
@@ -411,6 +423,9 @@ static void FF_www_db_xref_fly (
   }
   if ( StringStr(identifier, "FBg") != NULL ) {
     link = link_fly_fbgn;
+  }
+  if ( StringStr(identifier, "FBs") != NULL ) {
+    link = link_fly_fbst;
   }
 
   FF_www_db_xref_std(ffstring, db, identifier, link);
@@ -637,6 +652,20 @@ static void FF_www_db_xref_tax (
   FF_www_db_xref_std(ffstring, db, identifier, link);
 }
 
+static void FF_www_db_xref_hprd (
+  StringItemPtr ffstring,
+  CharPtr db, 
+  CharPtr identifier,
+  CharPtr link
+)
+{
+  if (StringNICmp (identifier, "HPRD_", 5) == 0) {
+    identifier += 5;
+  }
+
+  FF_www_db_xref_std (ffstring, db, identifier, link);
+}
+
 static void FF_www_db_xref_null (
   StringItemPtr ffstring,
   CharPtr db,
@@ -660,7 +689,7 @@ static void Do_www_db_xref(
 {
   if ( ffstring == NULL || db == NULL || identifier == NULL ) return;
 
-  if ( StringCmp(db, "FLYBASE") == 0) {
+  if ( StringCmp(db, "FLYBASE") == 0 || StringCmp(db, "FlyBase") == 0) {
     FF_www_db_xref_fly(ffstring, db, identifier);
   } else if ( StringCmp(db , "COG") == 0) {
     FF_www_db_xref_std(ffstring, db, identifier, link_cog);
@@ -733,10 +762,14 @@ static void Do_www_db_xref(
   } else if ( StringCmp(db , "REBASE") == 0) {
     FF_www_db_xref_rebase(ffstring, db, identifier);
   } else if ( StringCmp(db , "UniProt") == 0 ||
+              /*
               StringCmp(db , "Swiss-Prot") == 0 ||
               StringCmp(db , "TrEMBL") == 0 ||
               StringCmp(db , "UniProt/Swiss-Prot") == 0 ||
-              StringCmp(db , "UniProt/TrEMBL") == 0) {
+              StringCmp(db , "UniProt/TrEMBL") == 0 ||
+              */
+              StringCmp(db , "UniProtKB/Swiss-Prot") == 0 ||
+              StringCmp(db , "UniProtKB/TrEMBL") == 0) {
     FF_www_db_xref_std(ffstring, db, identifier, link_sp);
   /*
   } else if ( StringCmp(db , "ENCODE") == 0) {
@@ -744,6 +777,8 @@ static void Do_www_db_xref(
   */
   } else if ( StringCmp(db , "PGN") == 0) {
     FF_www_db_xref_std(ffstring, db, identifier, link_pgn);
+  } else if ( StringCmp(db , "PDB") == 0) {
+    FF_www_db_xref_std(ffstring, db, identifier, link_pdb);
   } else if ( StringCmp(db , "SubtiList") == 0) {
     FF_www_db_xref_std(ffstring, db, identifier, link_subtilist);
   } else if ( StringCmp(db , "GO") == 0) {
@@ -768,10 +803,12 @@ static void Do_www_db_xref(
     FF_www_db_xref_tax(ffstring, db, identifier);
   } else if ( StringCmp(db , "HSSP") == 0) {
     FF_www_db_xref_null(ffstring, db, identifier, link_hssp);
-  } else if ( StringCmp(db , "Genew") == 0) {
-    FF_www_db_xref_null(ffstring, db, identifier, link_genew);
+  } else if ( StringCmp(db , "HGNC") == 0) {
+    FF_www_db_xref_std(ffstring, db, identifier, link_hgnc);
   } else if ( StringCmp(db , "BoLD") == 0) {
     FF_www_db_xref_null(ffstring, db, identifier, link_bold);
+  } else if ( StringCmp(db , "HPRD") == 0) {
+    FF_www_db_xref_hprd(ffstring, db, identifier, link_hprd);
 
   } else {  
     /* default: no link just the text */
@@ -2469,7 +2506,8 @@ static CharPtr FormatCitArt (
 static CharPtr FormatCitPat (
   FmtType   format,
   CitPatPtr cpp,
-  SeqIdPtr  seqidp
+  SeqIdPtr  seqidp,
+  IntAsn2gbJobPtr ajp
 )
 
 {
@@ -2501,7 +2539,16 @@ static CharPtr FormatCitPat (
   }
 
   if (! StringHasNoText (cpp->number)) {
-    ValNodeCopyStr (&head, 0, cpp->number);
+    if (ajp != NULL && GetWWW (ajp) && StringCmp (cpp->country, "US") == 0) {
+      ValNodeCopyStr (&head, 0, "<a href=");
+      ValNodeCopyStr (&head, 0, link_uspto);
+      ValNodeCopyStr (&head, 0, cpp->number);
+      ValNodeCopyStr (&head, 0, ">");
+      ValNodeCopyStr (&head, 0, cpp->number);
+      ValNodeCopyStr (&head, 0, "</a>");
+    } else {
+      ValNodeCopyStr (&head, 0, cpp->number);
+    }
   } else if (! StringHasNoText (cpp->app_number)) {
     AddValNodeString (&head, "(", cpp->app_number, ")");
   }
@@ -2881,7 +2928,8 @@ static CharPtr GetPubJournal (
   PubdescPtr pdp,
   CitSubPtr csp,
   SeqIdPtr  seqidp,
-  IndxPtr index
+  IndxPtr index,
+  IntAsn2gbJobPtr ajp
 )
 
 {
@@ -2948,7 +2996,7 @@ static CharPtr GetPubJournal (
       case PUB_Patent :
         cpp = (CitPatPtr) vnp->data.ptrvalue;
         if (cpp != NULL) {
-          journal = FormatCitPat (format, cpp, seqidp);
+          journal = FormatCitPat (format, cpp, seqidp, ajp);
         }
         break;
       default :
@@ -3247,7 +3295,7 @@ static void  FF_www_muid(
   if ( GetWWW(ajp) ) {
     FFAddTextToString(ffstring, "<a href=", link_muid, NULL, FALSE, FALSE, TILDE_IGNORE);
     sprintf(numbuf, "%ld", (long)muid);
-    FFAddTextToString(ffstring, "uid=", numbuf, "&form=6&db=m&Dopt=r>", FALSE, FALSE, TILDE_IGNORE);
+    FFAddTextToString(ffstring, NULL, numbuf, ">", FALSE, FALSE, TILDE_IGNORE);
     FFAddOneString(ffstring, numbuf, FALSE, FALSE, TILDE_IGNORE);
     FFAddOneString(ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
   } else {
@@ -3684,7 +3732,7 @@ NLM_EXTERN CharPtr FormatReferenceBlock (
 
   str = GetPubJournal (afp->format, ajp->flags.dropBadCitGens,
                        ajp->flags.noAffilOnUnpub, citArtIsoJta,
-                       pdp, csp, bsp->id, index);
+                       pdp, csp, bsp->id, index, ajp);
   if (str == NULL) {
     str = StringSave ("Unpublished");
   }

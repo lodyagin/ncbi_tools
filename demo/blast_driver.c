@@ -1,4 +1,4 @@
-/* $Id: blast_driver.c,v 1.100 2005/08/11 21:14:43 dondosha Exp $
+/* $Id: blast_driver.c,v 1.102 2005/10/21 19:32:45 papadopo Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,10 +32,10 @@ Author: Ilya Dondoshansky
 Contents: Main function for running BLAST
 
 ******************************************************************************
- * $Revision: 1.100 $
+ * $Revision: 1.102 $
  * */
 
-static char const rcsid[] = "$Id: blast_driver.c,v 1.100 2005/08/11 21:14:43 dondosha Exp $";
+static char const rcsid[] = "$Id: blast_driver.c,v 1.102 2005/10/21 19:32:45 papadopo Exp $";
 
 #include <ncbi.h>
 #include <sqnutils.h>
@@ -162,10 +162,10 @@ static Args myargs[] = {
    { "Use greedy algorithm for gapped extensions:\n      0 no, 1 one-step, "
      "2 two-step, 3 two-step with ungapped", /* ARG_GREEDY */
      "0", NULL, NULL, FALSE, 'g', ARG_INT, 0.0, 0, NULL},
-   { "Gap open penalty (default: non-affine if greedy; 5 if dyn. prog.)", 
-     "0", NULL, NULL, FALSE, 'G', ARG_INT, 0.0, 0, NULL}, /* ARG_GAPOPEN */
-   { "Gap extension penalty (default: non-affine if greedy; 2 otherwise)",
-     "0", NULL, NULL, FALSE, 'E', ARG_INT, 0.0, 0, NULL}, /* ARG_GAPEXT */
+   { "Gap open penalty (-1 means default: non-affine if greedy; 5 if dyn. prog.)", 
+     "-1", NULL, NULL, FALSE, 'G', ARG_INT, 0.0, 0, NULL}, /* ARG_GAPOPEN */
+   { "Gap extension penalty (-1 means default: non-affine if greedy; 2 otherwise)",
+     "-1", NULL, NULL, FALSE, 'E', ARG_INT, 0.0, 0, NULL}, /* ARG_GAPEXT */
    { "Frame shift penalty for out-of-frame gapping (blastx, tblastn only)",
      "0", NULL, NULL, FALSE, 'h', ARG_INT, 0.0, 0, NULL}, /* ARG_FRAMESHIFT */
    { "X dropoff value for gapped alignment (in bits) (zero invokes default "
@@ -523,7 +523,6 @@ Int2 Nlm_Main(void)
    while (1) {
        SeqAlign* seqalign = NULL;
        SeqLoc* filter_loc=NULL;	/* All masking locations */
-       Boolean mask_at_hash = FALSE;
        SeqLoc* repeat_mask = NULL; /* Repeat mask locations */
        Int4 letters_read;
 
@@ -589,13 +588,12 @@ Int2 Nlm_Main(void)
            status = 
                Blast_DatabaseSearch(query_slp, dbname, lcase_mask, options, 
                                     tf_data, &seqalign, &filter_loc, 
-                                    &mask_at_hash, sum_returns);
+                                    sum_returns);
        } else {
            status = 
                Blast_TwoSeqLocSetsAdvanced(query_slp, subject_slp, lcase_mask, 
                                            options, tf_data, &seqalign, 
-                                           &filter_loc, &mask_at_hash, 
-                                           sum_returns);
+                                           &filter_loc, sum_returns);
        }
 
        /* Deallocate the data structure used for tabular formatting. */
@@ -606,7 +604,7 @@ Int2 Nlm_Main(void)
 
        /* If masking was done for lookup table only, free the masking locations,
           because they will not be used for formatting. */
-       if (mask_at_hash)
+       if (SBlastOptionsGetMaskAtHash(options))
            filter_loc = Blast_ValNodeMaskListFree(filter_loc);
 
        /* Post warning or error messages, no matter what the search status was. */

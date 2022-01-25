@@ -1,6 +1,6 @@
 #	makefile for demo programs
 #
-#	$Id: makedemo.unx,v 6.82 2004/12/17 17:45:30 ucko Exp $
+#	$Id: makedemo.unx,v 6.85 2005/10/19 20:45:14 ucko Exp $
 #
 #	Sun with unbundled ANSI compiler [ make CC=acc ]
 #	Sun with Gnu C [ make CC=gcc ]
@@ -72,6 +72,7 @@ LIB20 = -lncbidesk
 LIB20 =
 LIB22 = -lncbimmdb
 LIB23 = -lncbitool
+LIBCOMPADJ = -lblastcompadj
 LIB50 = -lregexp
 LIB60 = -lblast
 LIB61 = -lblastapi
@@ -97,7 +98,8 @@ EXE1 = testcore makeset \
 	dosimple asn2ff getseq getfeat checksub asndhuff \
 	entrcmd errhdr cdscan findspl \
 	ncbisort fa2htgs fastacmd formatdb formatrpsdb blast \
-	blastall blastpgp testval seedtop makemat copymat impala \
+	blastall .WAIT blastall_old blastpgp testval seedtop \
+	makemat copymat impala \
 	megablast vecscreen gil2bin blastclust rpsblast \
 	asn2xml debruijn asn2idx sortbyquote \
 	test_regexp demo_regexp demo_regexp_grep
@@ -255,7 +257,8 @@ entrcmd : entrcmd.c
 # ncbisort
 
 ncbisort : sortcmd.c
-	$(CC) -o ncbisort $(LDFLAGS) sortcmd.c $(LIB23) $(LIB1) $(OTHERLIBS)
+	$(CC) -o ncbisort $(LDFLAGS) sortcmd.c $(LIB23) $(LIBCOMPADJ) \
+		$(LIB1) $(OTHERLIBS)
 
 # testval
 
@@ -265,54 +268,73 @@ testval : testval.c
 # fastacmd
 
 fastacmd : fastacmd.c
-	$(CC) -o fastacmd $(LDFLAGS) fastacmd.c $(LIB23) $(LIB2) $(LIB1) $(OTHERLIBS)
+	$(CC) -o fastacmd $(LDFLAGS) fastacmd.c $(LIB23) $(LIBCOMPADJ) \
+		$(LIB2) $(LIB1) $(OTHERLIBS)
 
 # formatdb
 
 formatdb : formatdb.c
-	$(CC) -o formatdb $(LDFLAGS) formatdb.c $(LIB23) $(LIB2) $(LIB1) $(OTHERLIBS)
+	$(CC) -o formatdb $(LDFLAGS) formatdb.c $(LIB23) $(LIBCOMPADJ) \
+		$(LIB2) $(LIB1) $(OTHERLIBS)
 
 # formatrpsdb
 
 formatrpsdb : formatrpsdb.c
-	$(CC) -o formatrpsdb $(LDFLAGS) formatrpsdb.c $(LIB61) $(LIB23) $(LIB60) $(LIB2) $(LIB1) $(OTHERLIBS)
+	$(CC) -o formatrpsdb $(LDFLAGS) formatrpsdb.c $(LIB61) $(LIB23) \
+		$(LIBCOMPADJ) $(LIB60) $(LIB2) $(LIB1) $(OTHERLIBS)
 
 # blast (reincarnation of blastall from algo/blast sources)
 
 blast : blast_driver.c
-	$(CC) -o blast $(LDFLAGS) blast_driver.c $(THREAD_OBJ) $(LIB61) $(LIB60) $(LIB23) $(LIB2) $(LIB1) $(OTHERLIBS) $(THREAD_OTHERLIBS)
+	$(CC) -o blast $(LDFLAGS) blast_driver.c $(THREAD_OBJ) $(LIB61) \
+		$(LIB60) $(LIB23) $(LIBCOMPADJ) $(LIB2) $(LIB1) $(OTHERLIBS) \
+		$(THREAD_OTHERLIBS)
 
 debruijn : debruijn.c
 	$(CC) -o debruijn $(LDFLAGS) debruijn.c $(LIB60) $(LIB1) $(OTHERLIBS)
 # blastall
 
 blastall : blastall.c $(THREAD_OBJ)
-	$(CC) -o blastall $(LDFLAGS) blastall.c $(THREAD_OBJ) $(LIB23) $(LIB2) $(LIB1) $(OTHERLIBS) $(THREAD_OTHERLIBS)
+	$(CC) -o blastall $(LDFLAGS) blastall.c $(THREAD_OBJ) $(LIB61) \
+		$(LIB60) $(LIB23) $(LIBCOMPADJ) $(LIB2) $(LIB1) \
+		$(OTHERLIBS) $(THREAD_OTHERLIBS)
+
+# blastall_old  (version of blastall that does not link in new algo/blast libs).
+
+blastall_old : blastall.c $(THREAD_OBJ)
+	$(CC) -o blastall_old $(LDFLAGS) -DBLASTALL_TOOLS_ONLY blastall.c \
+		$(THREAD_OBJ) $(LIB23) $(LIBCOMPADJ) $(LIB2) $(LIB1) \
+		$(OTHERLIBS) $(THREAD_OTHERLIBS)
 
 # blastpgp
 
 blastpgp : blastpgp.c $(THREAD_OBJ)
-	$(CC) -o blastpgp $(LDFLAGS) blastpgp.c $(THREAD_OBJ) $(LIB23) $(LIB2) $(LIB1) $(OTHERLIBS) $(THREAD_OTHERLIBS)
+	$(CC) -o blastpgp $(LDFLAGS) blastpgp.c $(THREAD_OBJ) $(LIB23) \
+		$(LIBCOMPADJ) $(LIB2) $(LIB1) $(OTHERLIBS) $(THREAD_OTHERLIBS)
 
 # seedtop
 
 seedtop : seedtop.c $(THREAD_OBJ)
-	$(CC) -o seedtop $(LDFLAGS) seedtop.c $(THREAD_OBJ) $(LIB23) $(LIB2) $(LIB1) $(OTHERLIBS) $(THREAD_OTHERLIBS)
+	$(CC) -o seedtop $(LDFLAGS) seedtop.c $(THREAD_OBJ) $(LIB23) \
+		$(LIBCOMPADJ) $(LIB2) $(LIB1) $(OTHERLIBS) $(THREAD_OTHERLIBS)
 
 # makemat
 
 makemat : makemat.c $(THREAD_OBJ)
-	$(CC) -o makemat $(LDFLAGS) makemat.c $(THREAD_OBJ) $(LIB23) $(LIB2) $(LIB1) $(OTHERLIBS) $(THREAD_OTHERLIBS)
+	$(CC) -o makemat $(LDFLAGS) makemat.c $(THREAD_OBJ) $(LIB23) \
+		$(LIBCOMPADJ) $(LIB2) $(LIB1) $(OTHERLIBS) $(THREAD_OTHERLIBS)
 
 # copymat
 
 copymat : copymat.c $(THREAD_OBJ)
-	$(CC) -o copymat $(LDFLAGS) copymat.c $(THREAD_OBJ) $(LIB60) $(LIB23) $(LIB2) $(LIB1) $(OTHERLIBS) $(THREAD_OTHERLIBS)
+	$(CC) -o copymat $(LDFLAGS) copymat.c $(THREAD_OBJ) $(LIB60) $(LIB23) \
+		$(LIBCOMPADJ) $(LIB2) $(LIB1) $(OTHERLIBS) $(THREAD_OTHERLIBS)
 
 # impala
 
 impala : profiles.c $(THREAD_OBJ)
-	$(CC) -o impala $(LDFLAGS) profiles.c $(THREAD_OBJ) $(LIB23) $(LIB2) $(LIB1) $(OTHERLIBS) $(THREAD_OTHERLIBS)
+	$(CC) -o impala $(LDFLAGS) profiles.c $(THREAD_OBJ) $(LIB23) \
+		$(LIBCOMPADJ) $(LIB2) $(LIB1) $(OTHERLIBS) $(THREAD_OTHERLIBS)
 
 # testgen
 
@@ -332,22 +354,27 @@ packfilt : packfilt.c
 # megablast
 
 megablast : megablast.c $(THREAD_OBJ)
-	$(CC) -o megablast $(LDFLAGS) megablast.c $(THREAD_OBJ) $(LIB61) $(LIB60) $(LIB23) $(LIB2) $(LIB1) $(OTHERLIBS) $(THREAD_OTHERLIBS)
+	$(CC) -o megablast $(LDFLAGS) megablast.c $(THREAD_OBJ) $(LIB61) \
+		$(LIB60) $(LIB23) $(LIBCOMPADJ) $(LIB2) $(LIB1) $(OTHERLIBS) \
+		$(THREAD_OTHERLIBS)
 
 # vecscreen
 
 vecscreen : vecscreen.c $(THREAD_OBJ)
-	$(CC) -o vecscreen $(LDFLAGS) vecscreen.c $(THREAD_OBJ) $(LIB23) $(LIB2) $(LIB1) $(OTHERLIBS) $(THREAD_OTHERLIBS)
+	$(CC) -o vecscreen $(LDFLAGS) vecscreen.c $(THREAD_OBJ) $(LIB23) \
+		$(LIBCOMPADJ) $(LIB2) $(LIB1) $(OTHERLIBS) $(THREAD_OTHERLIBS)
 
 # gil2bin
 
 gil2bin : gil2bin.c 
-	$(CC) -o gil2bin $(LDFLAGS) gil2bin.c $(LIB23) $(LIB2) $(LIB1) $(OTHERLIBS) 
+	$(CC) -o gil2bin $(LDFLAGS) gil2bin.c $(LIB23) $(LIBCOMPADJ) \
+		$(LIB2) $(LIB1) $(OTHERLIBS) 
 
 # asn2idx
 
 asn2idx : asn2idx.c 
-	$(CC) -o asn2idx $(LDFLAGS) asn2idx.c $(LIB23) $(LIB2) $(LIB1) $(OTHERLIBS) 
+	$(CC) -o asn2idx $(LDFLAGS) asn2idx.c $(LIB23) $(LIBCOMPADJ) $(LIB2) \
+		$(LIB1) $(OTHERLIBS) 
 
 # sortbyquote
 
@@ -357,12 +384,15 @@ sortbyquote : sortbyquote.c
 # blastclust
 
 blastclust : blastclust.c $(THREAD_OBJ)
-	$(CC) -o blastclust $(LDFLAGS) blastclust.c $(THREAD_OBJ) $(LIB23) $(LIB2) $(LIB1) $(OTHERLIBS) $(THREAD_OTHERLIBS)
+	$(CC) -o blastclust $(LDFLAGS) blastclust.c $(THREAD_OBJ) $(LIB23) \
+		$(LIBCOMPADJ) $(LIB2) $(LIB1) $(OTHERLIBS) $(THREAD_OTHERLIBS)
 
 # rpsblast
 
 rpsblast : rpsblast.c $(THREAD_OBJ)
-	$(CC) -o rpsblast $(LDFLAGS) rpsblast.c $(THREAD_OBJ) $(LIB61) $(LIB60) $(LIB23) $(LIB2) $(LIB1) $(OTHERLIBS) $(THREAD_OTHERLIBS)
+	$(CC) -o rpsblast $(LDFLAGS) rpsblast.c $(THREAD_OBJ) $(LIB61) \
+		$(LIB60) $(LIB23) $(LIBCOMPADJ) $(LIB2) $(LIB1) $(OTHERLIBS) \
+		$(THREAD_OTHERLIBS)
 
 
 # asn2xml

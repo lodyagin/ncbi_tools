@@ -28,7 +28,7 @@
 *
 * Version Creation Date:   11/8/01
 *
-* $Revision: 6.127 $
+* $Revision: 6.128 $
 *
 * File Description:
 *
@@ -3679,8 +3679,10 @@ static Boolean mRNAmatchesCDS (
 {
   /* the mRNA must be the larger feature */
   if (CDS->Left < mRNA->Left || CDS->Right > mRNA->Right) return FALSE;
-  /* check strands */
-  if (CDS->featstrand != mRNA->featstrand) return FALSE;
+  /* check strands (anything not equal to strand minus is equal to each other) */
+  if (CDS->featstrand != mRNA->featstrand && 
+      (CDS->featstrand == Seq_strand_minus || mRNA->featstrand == Seq_strand_minus)) 
+    return FALSE;
   /* trivial case */
   if (CDS->numivals == 1 && mRNA->numivals == 1) return TRUE;
   /* . . . and the intervals must line up */

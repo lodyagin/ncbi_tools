@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: actutils.c,v 6.45 2005/04/20 19:17:38 lavr Exp $";
+static char const rcsid[] = "$Id: actutils.c,v 6.46 2005/09/15 13:54:56 bollin Exp $";
 
 /* ===========================================================================
 *
@@ -30,13 +30,16 @@ static char const rcsid[] = "$Id: actutils.c,v 6.45 2005/04/20 19:17:38 lavr Exp
 *
 * Version Creation Date:   2/00
 *
-* $Revision: 6.45 $
+* $Revision: 6.46 $
 *
 * File Description: utility functions for alignments
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: actutils.c,v $
+* Revision 6.46  2005/09/15 13:54:56  bollin
+* don't create new entityID if bioseq already has one
+*
 * Revision 6.45  2005/04/20 19:17:38  lavr
 * +<assert.h>
 *
@@ -2573,7 +2576,11 @@ NLM_EXTERN void ReverseBioseqFeatureStrands (BioseqPtr bsp)
 	
    if (bsp == NULL) return;
    
-   entityID = ObjMgrGetEntityIDForPointer (bsp);
+   entityID = bsp->idx.entityID;
+   if (entityID == 0)
+   {
+     entityID = ObjMgrGetEntityIDForPointer (bsp);
+   }
    if (! SeqMgrFeaturesAreIndexed (entityID)) {
      SeqMgrIndexFeatures (entityID, NULL);
    }

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/2/97
 *
-* $Revision: 6.234 $
+* $Revision: 6.240 $
 *
 * File Description: 
 *
@@ -3553,7 +3553,7 @@ static Boolean PreCheckSeqForProteinType (FileCachePtr fcp, Boolean PNTR non_pro
   return isProt;
 }
 
-static Int4 ReportFlatFileDNABadChars (Int4Ptr bad_chars, CharPtr origline)
+static Int4 ReportFlatFileDNABadChars (Int4Ptr bad_chars, CharPtr origline, CharPtr id_str)
 {
   Int4    num_bad_chars = 0;
   Int4    i;
@@ -3565,6 +3565,12 @@ static Int4 ReportFlatFileDNABadChars (Int4Ptr bad_chars, CharPtr origline)
   
   for (i = 0; i < 255; i++)
   {
+    if (isdigit (i))
+    {
+      /* don't report numbers as bad characters */
+      bad_chars [i] = 0;
+    }
+  
   	if (bad_chars [i] > 0)
   	{
   	  num_bad_chars ++;
@@ -3607,16 +3613,16 @@ static Int4 ReportFlatFileDNABadChars (Int4Ptr bad_chars, CharPtr origline)
   	  *msg_ptr = 0;
   	}
   }
-  Message (MSG_ERROR, "%s", msg);
-  if (bad_chars ['?'] > 0)
-  {
-  	Message (MSG_ERROR, "Warning - question marks have been converted to 'N's.");
-  }
+  Message (MSG_POSTERR, "%s", msg);
 
   StringCpy (origline + 60, "...");
   origline [63] = '\0';
-  Message (MSG_ERROR, "Offending line started at: %s", origline);
-  return num_bad_chars;
+  Message (MSG_POSTERR, "Offending line started at: %s", origline);
+  if (!StringHasNoText (id_str))
+  {
+    Message (MSG_POSTERR, "Sequence %s:", id_str);
+  }
+  return num_bad_chars;  
 }
 
 static Boolean IsNonSeqChar (Char ch, Boolean is_prot)
@@ -3631,7 +3637,7 @@ static Boolean IsNonSeqChar (Char ch, Boolean is_prot)
   {
     return FALSE;
   }
-  else if (is_prot && StringChr ("efilpqz", ch) != NULL)
+  else if (is_prot && StringChr ("efilpqxz", ch) != NULL)
   {
     return FALSE;
   }
@@ -3648,7 +3654,8 @@ printing character, it completes the read but returns NULL. */
 
 static ByteStorePtr ReadFlatFileDNA (FileCachePtr fcp, BoolPtr protPtr, Boolean forceNuc,
                                      Boolean forceProt, Boolean fastaAsSimpleSeq,
-                                     Boolean strictCheck, BoolPtr perr)
+                                     Boolean strictCheck, BoolPtr perr,
+                                     CharPtr id_str)
 
 {
   Char           ch;
@@ -3717,14 +3724,14 @@ static ByteStorePtr ReadFlatFileDNA (FileCachePtr fcp, BoolPtr protPtr, Boolean 
           StringNCmp (line, "ID ", 3) == 0 ||
           StringStr (line, "::=") != NULL) {
         FileCacheSeek (fcp, pos);
-        num_bad = ReportFlatFileDNABadChars (bad_char, origline);
+        num_bad = ReportFlatFileDNABadChars (bad_char, origline, id_str);
         if (perr != NULL && num_bad > 0)
         {
           *perr = TRUE;
         }
         return bs;
       } else if (StringNCmp (line, "//", 2) == 0) {
-        num_bad = ReportFlatFileDNABadChars (bad_char, origline);
+        num_bad = ReportFlatFileDNABadChars (bad_char, origline, id_str);
         if (perr != NULL && num_bad > 0)
         {
           *perr = TRUE;
@@ -3757,13 +3764,14 @@ static ByteStorePtr ReadFlatFileDNA (FileCachePtr fcp, BoolPtr protPtr, Boolean 
           	  noErrors = FALSE;
           	}
           }
+/*        Do not convert question marks to Ns  
           else if (ch == '?')
           {
           	bad_char [(int) ch] ++;
           	*q = 'N';
           	q++;
           	noErrors = FALSE;
-          }
+          } */
           else
           {
           	bad_char [(int) ch] ++;
@@ -3812,7 +3820,7 @@ static ByteStorePtr ReadFlatFileDNA (FileCachePtr fcp, BoolPtr protPtr, Boolean 
   if (bs != NULL && BSLen (bs) < 1) {
     bs = BSFree (bs);
   }
-  num_bad = ReportFlatFileDNABadChars (bad_char, origline);
+  num_bad = ReportFlatFileDNABadChars (bad_char, origline, id_str);
   if (perr != NULL && num_bad > 0)
   {
     *perr = TRUE;
@@ -4873,6 +4881,41 @@ static Boolean ParseQualIntoGeneOntologyUserObject (SeqFeatPtr sfp, CharPtr qual
   return FALSE;
 }
 
+static CharPtr okayInferencePrefixes [] = {
+  "",
+  "similar to sequence",
+  "similar to AA sequence",
+  "similar to DNA sequence",
+  "similar to RNA sequence",
+  "similar to RNA sequence, mRNA",
+  "similar to RNA sequence, EST",
+  "similar to RNA sequence, other RNA",
+  "profile",
+  "nucleotide motif",
+  "protein motif",
+  "ab initio prediction",
+  NULL
+};
+
+static Boolean InvalidInference (CharPtr str)
+
+{
+  Int2    best, j;
+  size_t  len;
+
+  if (StringHasNoText (str)) return TRUE;
+
+  best = -1;
+  for (j = 0; okayInferencePrefixes [j] != NULL; j++) {
+    len = StringLen (okayInferencePrefixes [j]);
+    if (StringNICmp (str, okayInferencePrefixes [j], len) != 0) continue;
+    best = j;
+  }
+  if (best >= 0 && okayInferencePrefixes [best] != NULL) return FALSE;
+
+  return TRUE;
+}
+
 static void AddQualifierToFeatureEx (SeqFeatPtr sfp, CharPtr qual, CharPtr val, Int4 offset)
 
 {
@@ -5125,48 +5168,57 @@ static void AddQualifierToFeatureEx (SeqFeatPtr sfp, CharPtr qual, CharPtr val, 
     return;
   }
 
-  if (qnum == GBQUAL_old_locus_tag) {
+  if (qnum == GBQUAL_old_locus_tag || qnum == GBQUAL_experiment) {
 
     /* fall through to add as gbqual */
 
+  } else if (qnum == GBQUAL_inference) {
+
+    if (InvalidInference (val)) {
+      ErrPostEx (SEV_ERROR, ERR_SEQ_FEAT_InvalidQualifierValue, "Invalid inference value %s", val);
+      return;
+    }
+
   } else if (sfp->data.choice == SEQFEAT_GENE) {
-    if (qnum == GBQUAL_gene) {
-      grp = (GeneRefPtr) sfp->data.value.ptrvalue;
-      if (grp != NULL) {
-        if (isGeneSyn) {
-          ValNodeCopyStr (&(grp->syn), 0, val);
-        } else if (isGeneDesc) {
-          grp->desc = StringSave (val);
-        } else if (isLocusTag) {
+    if (qnum == GBQUAL_gene || qnum == GBQUAL_pseudo || qnum == GBQUAL_allele || qnum == GBQUAL_map || qnum == GBQUAL_locus_tag) {
+      if (qnum == GBQUAL_gene) {
+        grp = (GeneRefPtr) sfp->data.value.ptrvalue;
+        if (grp != NULL) {
+          if (isGeneSyn) {
+            ValNodeCopyStr (&(grp->syn), 0, val);
+          } else if (isGeneDesc) {
+            grp->desc = StringSave (val);
+          } else if (isLocusTag) {
+            grp->locus_tag = StringSave (val);
+          } else if (grp->locus == NULL) {
+            grp->locus = StringSave (val);
+          } else {
+            ValNodeCopyStr (&(grp->syn), 0, val);
+          }
+        }
+      } else if (qnum == GBQUAL_pseudo) {
+        grp = (GeneRefPtr) sfp->data.value.ptrvalue;
+        if (grp != NULL) {
+          grp->pseudo = TRUE;
+        }
+      } else if (qnum == GBQUAL_allele) {
+        grp = (GeneRefPtr) sfp->data.value.ptrvalue;
+        if (grp != NULL) {
+          grp->allele = StringSave (val);
+        }
+      } else if (qnum == GBQUAL_map) {
+        grp = (GeneRefPtr) sfp->data.value.ptrvalue;
+        if (grp != NULL) {
+          grp->maploc = StringSave (val);
+        }
+      } else if (qnum == GBQUAL_locus_tag) {
+        grp = (GeneRefPtr) sfp->data.value.ptrvalue;
+        if (grp != NULL) {
           grp->locus_tag = StringSave (val);
-        } else if (grp->locus == NULL) {
-          grp->locus = StringSave (val);
-        } else {
-          ValNodeCopyStr (&(grp->syn), 0, val);
         }
       }
-    } else if (qnum == GBQUAL_pseudo) {
-      grp = (GeneRefPtr) sfp->data.value.ptrvalue;
-      if (grp != NULL) {
-        grp->pseudo = TRUE;
-      }
-    } else if (qnum == GBQUAL_allele) {
-      grp = (GeneRefPtr) sfp->data.value.ptrvalue;
-      if (grp != NULL) {
-        grp->allele = StringSave (val);
-      }
-    } else if (qnum == GBQUAL_map) {
-      grp = (GeneRefPtr) sfp->data.value.ptrvalue;
-      if (grp != NULL) {
-        grp->maploc = StringSave (val);
-      }
-    } else if (qnum == GBQUAL_locus_tag) {
-      grp = (GeneRefPtr) sfp->data.value.ptrvalue;
-      if (grp != NULL) {
-        grp->locus_tag = StringSave (val);
-      }
+      return;
     }
-    return;
   } else if (sfp->data.choice == SEQFEAT_CDREGION) {
     if (qnum == GBQUAL_function || qnum == GBQUAL_EC_number || qnum == GBQUAL_product) {
       xref = sfp->xref;
@@ -5204,6 +5256,7 @@ static void AddQualifierToFeatureEx (SeqFeatPtr sfp, CharPtr qual, CharPtr val, 
           crp->frame = (Uint1) num;
         }
       }
+      return;
     } else if (qnum == GBQUAL_pseudo) {
       sfp->pseudo = TRUE;
     }
@@ -5283,6 +5336,7 @@ static void AddQualifierToFeatureEx (SeqFeatPtr sfp, CharPtr qual, CharPtr val, 
       if (ParseAnticodon (sfp, val, offset)) return;
     } else if (qnum == GBQUAL_pseudo) {
       sfp->pseudo = TRUE;
+      return;
     }
   } else if (sfp->data.choice == SEQFEAT_BIOSRC) {
     if (ParseQualIntoBioSource (sfp, qual, val)) return;
@@ -6314,14 +6368,15 @@ static ByteStorePtr ReadUidList (FileCachePtr fcp, Boolean nucdb, Boolean lastRe
   return bs;
 }
 
-/* ReadAsnFastaOrFlatFile reads lines, looking for starts of ASN.1, FASTA, GenBank, EMBL,
+/* ReadAsnFastaOrFlatFileEx reads lines, looking for starts of ASN.1, FASTA, GenBank, EMBL,
 or GenPept files.  It then calls the appropriate read function, which is responsible for
 reading the sequence (or object) and restoring the file pointer to the beginning of the
 next record. */
 
-NLM_EXTERN Pointer ReadAsnFastaOrFlatFile (FILE *fp, Uint2Ptr datatypeptr, Uint2Ptr entityIDptr,
+NLM_EXTERN Pointer ReadAsnFastaOrFlatFileEx (FILE *fp, Uint2Ptr datatypeptr, Uint2Ptr entityIDptr,
                                            Boolean forceNuc, Boolean forceProt,
-                                           Boolean parseFastaSeqId, Boolean fastaAsSimpleSeq)
+                                           Boolean parseFastaSeqId, Boolean fastaAsSimpleSeq,
+                                           BoolPtr chars_stripped)
 
 {
   AsnIoPtr       aip;
@@ -6867,11 +6922,11 @@ NLM_EXTERN Pointer ReadAsnFastaOrFlatFile (FILE *fp, Uint2Ptr datatypeptr, Uint2
                 }
               }
               bs = ReadFlatFileDNA (&fc, protPtr, forceNuc, forceProt, fastaAsSimpleSeq,
-                                    FALSE, NULL);
+                                    FALSE, chars_stripped, seqid);
             }
           } else {
             bs = ReadFlatFileDNA (&fc, protPtr, forceNuc, forceProt, fastaAsSimpleSeq,
-                                  FALSE, NULL);
+                                  FALSE, chars_stripped, NULL);
           }
           if (bs == NULL && title != NULL) {
             title = MemFree (title);
@@ -6897,7 +6952,7 @@ NLM_EXTERN Pointer ReadAsnFastaOrFlatFile (FILE *fp, Uint2Ptr datatypeptr, Uint2
         mayBeAccessionList = FALSE;
         if (! HasNoText (seqid)) {
           bs = ReadFlatFileDNA (&fc, protPtr, forceNuc, forceProt, fastaAsSimpleSeq,
-                                FALSE, NULL);
+                                FALSE, chars_stripped, seqid);
         }
 
       } else if (line [0] == '[' || line [0] == ']') {
@@ -7039,7 +7094,7 @@ NLM_EXTERN Pointer ReadAsnFastaOrFlatFile (FILE *fp, Uint2Ptr datatypeptr, Uint2
     fseek (fp, begin, SEEK_SET);
     if (fastaAsSimpleSeq) {
       bs = ReadFlatFileDNA (&fc, NULL, (Boolean) (! isProt), (Boolean) (isProt), 
-                            fastaAsSimpleSeq, FALSE, NULL);
+                            fastaAsSimpleSeq, FALSE, chars_stripped, NULL);
       if (bs != NULL) {
         ssp = ByteStoreToSimpleSeq (bs, NULL, NULL);
         if (ssp != NULL) {
@@ -7077,7 +7132,7 @@ NLM_EXTERN Pointer ReadAsnFastaOrFlatFile (FILE *fp, Uint2Ptr datatypeptr, Uint2
     */
 
     bs = ReadFlatFileDNA (&fc, NULL, (Boolean) (! isProt), (Boolean) (isProt),
-                          FALSE, FALSE, NULL);
+                          FALSE, FALSE, chars_stripped, NULL);
     if (bs != NULL) {
 
       sep = SeqEntryNew ();
@@ -7172,10 +7227,234 @@ NLM_EXTERN Pointer ReadAsnFastaOrFlatFile (FILE *fp, Uint2Ptr datatypeptr, Uint2
   return NULL;
 }
 
-/* ReadDeltaFasta reads a FASTA file, combining raw sequence and >?unk100 lines into
-a delta Bioseq.  The file pointer stops at the next FASTA with a real SeqID. */
+NLM_EXTERN Pointer ReadAsnFastaOrFlatFile (FILE *fp, Uint2Ptr datatypeptr, Uint2Ptr entityIDptr,
+                                           Boolean forceNuc, Boolean forceProt,
+                                           Boolean parseFastaSeqId, Boolean fastaAsSimpleSeq)
+{
+  return ReadAsnFastaOrFlatFileEx (fp, datatypeptr, entityIDptr,
+                                  forceNuc, forceProt, 
+                                  parseFastaSeqId, fastaAsSimpleSeq,
+                                  NULL);
+}
 
-static ValNodePtr ReadDeltaLits (FileCachePtr fcp, BoolPtr perr)
+extern BioseqPtr ReadFastaOnly (FILE *fp, 
+                              Boolean forceNuc, Boolean forceProt,
+                              BoolPtr chars_stripped)
+
+{
+  Int4           begin;
+  ByteStorePtr   bs = NULL;
+  BioseqPtr      bsp = NULL;
+  Char           ch;
+  Uint1          choice = 0;
+  Int2           db = -1;
+  FileCache      fc;
+  Boolean        isProt = FALSE;
+  Char           line [4096];
+  Boolean        mayBeAccessionList = TRUE;
+  Boolean        mayBePlainFasta = TRUE;
+  ObjMgrTypePtr  omtp = NULL;
+  Int4           pos;
+  ProjectPtr     proj = NULL;
+  BoolPtr        protPtr;
+  Pointer        ptr = NULL;
+  SeqAnnotPtr    sap = NULL;
+  SeqEntryPtr    sep;
+  Char           seqid [2048];
+  CharPtr        str;
+  CharPtr        title = NULL;
+  CharPtr        tmp;
+  ValNodePtr     vnp;
+
+  if (fp == NULL) return NULL;
+
+  if (forceNuc) {
+    isProt = FALSE;
+    protPtr = NULL;
+  } else if (forceProt) {
+    isProt = TRUE;
+    protPtr = NULL;
+  } else {
+    protPtr = &isProt;
+  }
+
+  seqid [0] = '\0';
+
+  FileCacheSetup (&fc, fp);
+
+  pos = FileCacheTell (&fc);
+  begin = pos;
+  str = FileCacheReadLine (&fc, line, sizeof (line), NULL);
+
+  if (str == NULL) return NULL; /* already at end of file */
+
+  while (str != NULL) {
+
+    if (! StringHasNoText (line)) {
+
+      if (StringStr (line, "::=") != NULL) {
+        FileCacheSetup (&fc, fp);
+        FileCacheSeek (&fc, pos);
+        fseek (fp, pos, SEEK_SET);
+        return NULL;
+      } else if (line [0] == '>') {
+        title = NULL;
+        tmp = line + 1;
+        ch = *tmp;
+        while (IS_WHITESP (ch)) {
+          tmp++;
+          ch = *tmp;
+        }
+        title = StringSaveNoNull (tmp);
+
+        bs = ReadFlatFileDNA (&fc, protPtr, forceNuc, forceProt, FALSE,
+                              FALSE, chars_stripped, NULL);
+        if (bs == NULL && title != NULL) {
+          title = MemFree (title);
+        }
+
+      } else if (StringNCmp (line, "LOCUS ", 6) == 0 
+                 || StringNCmp (line, "ID ", 3) == 0
+                 || StringNCmp (line, "ACCESSION ", 10) == 0
+                 || StringNCmp (line, "ORIGIN", 6) == 0 
+                 || StringNCmp (line, "SQ ", 3) == 0
+                 || line [0] == '[' || line [0] == ']'
+                 ) {
+        FileCacheSetup (&fc, fp);
+        FileCacheSeek (&fc, pos);
+        fseek (fp, pos, SEEK_SET);
+        return NULL;
+      } else {
+        tmp = line;
+        ch = *tmp;
+        while (ch != '\0') {
+          if (IS_WHITESP (ch)) {
+          } else if (! (IS_ALPHA (ch) || IS_DIGIT (ch) || ch == '*' || ch == '-')) {
+            FileCacheSetup (&fc, fp);
+            FileCacheSeek (&fc, pos);
+            fseek (fp, pos, SEEK_SET);
+            return NULL;
+          } else if (protPtr != NULL) {
+            ch = TO_UPPER (ch);
+            if (StringChr ("EFILPQZ", ch) != NULL) {
+              isProt = TRUE;
+            }
+          }
+          tmp++;
+          ch = *tmp;
+        }
+      }
+
+      if (bs != NULL) {
+        sep = SeqEntryNew ();
+        if (sep != NULL) {
+          bsp = BioseqNew ();
+          if (bsp != NULL) {
+            sep->choice = 1;
+            sep->data.ptrvalue = (Pointer) bsp;
+            SeqMgrSeqEntry (SM_BIOSEQ, (Pointer) bsp, sep);
+
+            if (isProt) {
+              bsp->mol = Seq_mol_aa;
+              bsp->seq_data_type = Seq_code_ncbieaa;
+            } else {
+              bsp->mol = Seq_mol_na;
+              bsp->seq_data_type = Seq_code_iupacna;
+            }
+
+            bsp->repr = Seq_repr_raw;
+            bsp->length = 0;
+            bsp->id = MakeNewProteinSeqId (NULL, NULL);
+            SeqMgrAddToBioseqIndex (bsp);
+
+            bsp->seq_data = bs;
+            bsp->length = BSLen (bs);
+
+            BioseqPack (bsp);
+
+            if (title != NULL) {
+              vnp = CreateNewDescriptor (sep, Seq_descr_title);
+              if (vnp != NULL) {
+                vnp->data.ptrvalue = (Pointer) title;
+                title = NULL;
+              }
+              bsp->descr = vnp;
+            }
+          }
+        }
+
+        pos = FileCacheTell (&fc);
+        FileCacheSetup (&fc, fp);
+        FileCacheSeek (&fc, pos);
+        fseek (fp, pos, SEEK_SET);
+
+        return bsp;
+      }
+
+    }
+
+    pos = FileCacheTell (&fc);
+    str = FileCacheReadLine (&fc, line, sizeof (line), NULL);
+  }
+
+  if (mayBePlainFasta) {
+
+    FileCacheSetup (&fc, fp);
+    FileCacheSeek (&fc, begin);
+    fseek (fp, begin, SEEK_SET);
+
+    bs = ReadFlatFileDNA (&fc, NULL, (Boolean) (! isProt), (Boolean) (isProt),
+                          FALSE, FALSE, chars_stripped, NULL);
+    if (bs != NULL) {
+
+      sep = SeqEntryNew ();
+      if (sep != NULL) {
+        bsp = BioseqNew ();
+        if (bsp != NULL) {
+          sep->choice = 1;
+          sep->data.ptrvalue = (Pointer) bsp;
+          SeqMgrSeqEntry (SM_BIOSEQ, (Pointer) bsp, sep);
+
+          if (isProt) {
+            bsp->mol = Seq_mol_aa;
+            bsp->seq_data_type = Seq_code_ncbieaa;
+          } else {
+            bsp->mol = Seq_mol_na;
+            bsp->seq_data_type = Seq_code_iupacna;
+          }
+
+          bsp->repr = Seq_repr_raw;
+          bsp->length = 0;
+          bsp->id = MakeUniqueSeqID (NULL);
+          SeqMgrAddToBioseqIndex (bsp);
+
+          bsp->seq_data = bs;
+          bsp->length = BSLen (bs);
+
+          BioseqPack (bsp);
+        }
+      }
+
+      pos = FileCacheTell (&fc);
+      FileCacheSetup (&fc, fp);
+      FileCacheSeek (&fc, pos);
+      fseek (fp, pos, SEEK_SET);
+
+      return bsp;
+    }
+  }
+
+  return NULL;
+}
+
+
+/* ReadDeltaFasta reads a FASTA file, combining raw sequence and >?unk100 lines into
+ * a delta Bioseq.  The file pointer stops at the next FASTA with a real SeqID. 
+ * The contents of perr are set to TRUE if characters were stripped from the
+ * FASTA other than numbers.
+ */
+
+static ValNodePtr ReadDeltaLits (FileCachePtr fcp, BoolPtr perr, CharPtr idstr)
 
 {
   ByteStorePtr  bs = NULL;
@@ -7233,7 +7512,7 @@ static ValNodePtr ReadDeltaLits (FileCachePtr fcp, BoolPtr perr)
       } else {
         FileCacheSeek (fcp, pos);
         error_flag = FALSE;
-        bs = ReadFlatFileDNA (fcp, NULL, TRUE, FALSE, TRUE, TRUE, &error_flag);
+        bs = ReadFlatFileDNA (fcp, NULL, TRUE, FALSE, TRUE, TRUE, &error_flag, idstr);
         if (perr != NULL)
         {
           *perr |= error_flag;
@@ -7252,8 +7531,10 @@ static ValNodePtr ReadDeltaLits (FileCachePtr fcp, BoolPtr perr)
   return head;
 }
 
-
-static BioseqPtr ReadDeltaSet (FileCachePtr fcp, BoolPtr perrors)
+/* perrors is set to TRUE if characters other than digits had to be stripped
+ * from the FASTA sequence characters.
+ */
+static BioseqPtr ReadDeltaSet (FileCachePtr fcp, BoolPtr perrors, CharPtr idstr)
 
 {
   ByteStorePtr  bs;
@@ -7265,7 +7546,7 @@ static BioseqPtr ReadDeltaSet (FileCachePtr fcp, BoolPtr perrors)
 
   if (fcp == NULL) return NULL;
 
-  head = ReadDeltaLits (fcp, perrors);
+  head = ReadDeltaLits (fcp, perrors, idstr);
   if (head == NULL) return NULL;
 
   if (head->next == NULL && head->choice == 1) {
@@ -7332,7 +7613,7 @@ static BioseqPtr ReadDeltaSet (FileCachePtr fcp, BoolPtr perrors)
   return bsp;
 }
 
-NLM_EXTERN BioseqPtr ReadDeltaFasta (FILE *fp, Uint2Ptr entityIDptr)
+NLM_EXTERN BioseqPtr ReadDeltaFastaEx (FILE *fp, Uint2Ptr entityIDptr, BoolPtr chars_stripped)
 
 {
   Int4         begin, pos;
@@ -7341,9 +7622,13 @@ NLM_EXTERN BioseqPtr ReadDeltaFasta (FILE *fp, Uint2Ptr entityIDptr)
   Char         line [4096], seqid [2048];
   CharPtr      msg = NULL, str, title = NULL, tmp;
   SeqEntryPtr  sep;
-  Boolean      errors = FALSE;
 
   if (fp == NULL) return NULL;
+  
+  if (chars_stripped != NULL)
+  {
+    *chars_stripped = FALSE;
+  }
 
   if (entityIDptr != NULL) *entityIDptr = 0;
 
@@ -7423,7 +7708,7 @@ NLM_EXTERN BioseqPtr ReadDeltaFasta (FILE *fp, Uint2Ptr entityIDptr)
             title = StringSaveNoNull (tmp);
           }
 
-          bsp = ReadDeltaSet (&fc, &errors);
+          bsp = ReadDeltaSet (&fc, chars_stripped, seqid);
 
           if (bsp != NULL) {
         
@@ -7469,7 +7754,15 @@ NLM_EXTERN BioseqPtr ReadDeltaFasta (FILE *fp, Uint2Ptr entityIDptr)
   return NULL;
 }
 
-NLM_EXTERN BioseqPtr ReadDeltaFastaWithEmptyDefline (FILE *fp, Uint2Ptr entityIDptr)
+NLM_EXTERN BioseqPtr ReadDeltaFasta (FILE *fp, Uint2Ptr entityIDptr)
+
+{
+  Boolean chars_stripped = FALSE;
+  
+  return ReadDeltaFastaEx (fp, entityIDptr, &chars_stripped);
+}
+
+NLM_EXTERN BioseqPtr ReadDeltaFastaWithEmptyDefline (FILE *fp, Uint2Ptr entityIDptr, BoolPtr chars_stripped)
 
 {
   Int4         begin, pos;
@@ -7478,9 +7771,13 @@ NLM_EXTERN BioseqPtr ReadDeltaFastaWithEmptyDefline (FILE *fp, Uint2Ptr entityID
   Char         line [4096], seqid [2048];
   SeqEntryPtr  sep;
   CharPtr      str;
-  Boolean      errors = FALSE;
 
   if (fp == NULL) return NULL;
+  
+  if (chars_stripped != NULL)
+  {
+    *chars_stripped = FALSE;
+  }
 
   if (entityIDptr != NULL) *entityIDptr = 0;
 
@@ -7496,7 +7793,7 @@ NLM_EXTERN BioseqPtr ReadDeltaFastaWithEmptyDefline (FILE *fp, Uint2Ptr entityID
     TrimSpacesAroundString (line);
     if (line [0] == '>' && line [1] == 0)
     {
-      bsp = ReadDeltaSet (&fc, &errors);
+      bsp = ReadDeltaSet (&fc, chars_stripped, NULL);
 
       if (bsp != NULL) {
       

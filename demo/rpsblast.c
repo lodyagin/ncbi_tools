@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: rpsblast.c,v 6.74 2005/08/09 21:36:54 dondosha Exp $";
+static char const rcsid[] = "$Id: rpsblast.c,v 6.75 2005/08/29 14:45:34 camacho Exp $";
 
-/* $Id: rpsblast.c,v 6.74 2005/08/09 21:36:54 dondosha Exp $
+/* $Id: rpsblast.c,v 6.75 2005/08/29 14:45:34 camacho Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -31,12 +31,17 @@ static char const rcsid[] = "$Id: rpsblast.c,v 6.74 2005/08/09 21:36:54 dondosha
 *
 * Initial Version Creation Date: 12/14/1999
 *
-* $Revision: 6.74 $
+* $Revision: 6.75 $
 *
 * File Description:
 *         Main file for RPS BLAST program
 *
 * $Log: rpsblast.c,v $
+* Revision 6.75  2005/08/29 14:45:34  camacho
+* From Ilya Dondoshansky:
+* Retrieve mask_at_hash option from the SBlastOptions structure instead of
+* passing as argument in search API calls
+*
 * Revision 6.74  2005/08/09 21:36:54  dondosha
 * Added extra argument in calls to BLAST_GetQuerySeqLoc
 *
@@ -524,7 +529,6 @@ Int2 Main_New(void)
    Int4 num_queries = 0;
    SeqLoc* lcase_mask = NULL;
    SeqLoc* filter_loc = NULL;
-   Boolean mask_at_hash;
    const int kMaxConcatLength = 40000;
    Blast_SummaryReturn* full_sum_returns = NULL;
 
@@ -618,15 +622,14 @@ Int2 Main_New(void)
         */
        status = 
            Blast_DatabaseSearch(query_slp, dbname, lcase_mask, options, NULL, 
-                                &seqalign, &filter_loc, &mask_at_hash, 
-                                sum_returns);
+                                &seqalign, &filter_loc, sum_returns);
 
        /* Free the lower case mask in SeqLoc form. */
        lcase_mask = Blast_ValNodeMaskListFree(lcase_mask);
        
        /* If masking was done for lookup table only, free the masking locations,
           because they will not be used for formatting. */
-       if (mask_at_hash)
+       if (SBlastOptionsGetMaskAtHash(options))
            filter_loc = Blast_ValNodeMaskListFree(filter_loc);
        
        /* Post warning or error messages, no matter what the search status 

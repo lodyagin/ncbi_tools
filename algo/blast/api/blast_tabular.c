@@ -1,4 +1,4 @@
-/* $Id: blast_tabular.c,v 1.29 2005/08/05 22:29:50 dondosha Exp $
+/* $Id: blast_tabular.c,v 1.30 2005/11/22 13:30:34 madden Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -28,7 +28,7 @@
  * On-the-fly tabular formatting of BLAST results
  */
 
-static char const rcsid[] = "$Id: blast_tabular.c,v 1.29 2005/08/05 22:29:50 dondosha Exp $";
+static char const rcsid[] = "$Id: blast_tabular.c,v 1.30 2005/11/22 13:30:34 madden Exp $";
 
 #include <algo/blast/api/blast_tabular.h>
 #include <algo/blast/core/blast_util.h>
@@ -308,8 +308,10 @@ void* Blast_TabularFormatThread(void* data)
    query_lengths = (Int4*) malloc(num_queries*sizeof(Int4));
 
    for (index = 0, slp = tf_data->query_slp; slp; ++index, slp = slp->next) {
-      query_id_array[index] = SeqLocId(slp);
-      query_lengths[index] = SeqLocLen(slp);
+      BioseqPtr bsp = BioseqLockById(SeqLocId(slp));
+      query_id_array[index] = SeqIdSetDup(bsp->id);
+      query_lengths[index] = BioseqGetLen(bsp);
+      BioseqUnlockById(SeqLocId(slp));
    }
 
    one_seq_update_params = (BlastSeqSrcGetTotLen(seq_src) == 0);
@@ -482,6 +484,11 @@ void* Blast_TabularFormatThread(void* data)
 
    BlastSequenceBlkFree(seq_arg.seq);
 
+   for (index = 0; index<num_queries; ++index)
+   {
+        SeqIdSetFree(query_id_array[index]);
+        query_id_array[index] = NULL;
+   }
    sfree(query_lengths);
    sfree(query_id_array);
 

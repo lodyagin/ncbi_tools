@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: mblast.c,v 6.213 2005/03/07 16:30:57 dondosha Exp $";
+static char const rcsid[] = "$Id: mblast.c,v 6.214 2005/08/31 20:33:18 coulouri Exp $";
 
 /* ===========================================================================
 *
@@ -40,9 +40,14 @@ Detailed Contents:
 	- Functions specific to Mega BLAST
 
 ******************************************************************************
- * $Revision: 6.213 $
+ * $Revision: 6.214 $
  *
  * $Log: mblast.c,v $
+ * Revision 6.214  2005/08/31 20:33:18  coulouri
+ * From Mike Gertz:
+ *     In MegaBlastSetUpSearchWithReadDbInternal, replaced existing code
+ *     for adjusting the hitlist size by a call to BlastSingleQueryResultSize.
+ *
  * Revision 6.213  2005/03/07 16:30:57  dondosha
  * In reevaluation with ambiguities, if HSP start changed, update starting offsets in edit block
  *
@@ -1007,18 +1012,10 @@ MegaBlastSetUpSearchWithReadDbInternal (SeqLocPtr query_slp, BioseqPtr
 		options = BLASTOptionNew(prog_name, FALSE);
 		options_alloc = TRUE;
 	}
+        hitlist_size = BlastSingleQueryResultSize(options);
 
-        /* Increase the hitlist size for the preliminary gapped alignment,
-           if traceback is delayed */
-        if (options->no_traceback) {
-           hitlist_size = 
-              MIN(2*options->hitlist_size, options->hitlist_size + 50);
-        } else {
-           hitlist_size = options->hitlist_size;
-        }
-     
-	/* last context is the total number of contexts in concatenated 
-	   queries */
+        /* last context is the total number of contexts in concatenated 
+           queries */
 
 	if (query_slp) {
 	   query_length = SeqLocTotalLen(prog_name, query_slp);

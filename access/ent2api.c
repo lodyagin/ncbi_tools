@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/29/99
 *
-* $Revision: 1.79 $
+* $Revision: 1.83 $
 *
 * File Description: 
 *
@@ -91,39 +91,8 @@ static CharPtr EntrezGetProgramName (
   return ptr;
 }
 
-/* override URL paths or service name */
-#if 0
-static CharPtr  e2_host_machine = NULL;
-static Uint2    e2_host_port = 0;
-static CharPtr  e2_host_path = NULL;
-#endif
+/* override service name */
 static CharPtr  e2_service = NULL;
-
-/* to be phased out, currently overrides ncbi named service, goes directly to URL */
-
-NLM_EXTERN void EntrezSetServer (
-  CharPtr host_machine,
-  Uint2 host_port,
-  CharPtr host_path
-)
-
-{
-#if 0
-  if (! StringHasNoText (host_machine)) {
-    e2_host_machine = MemFree (e2_host_machine);
-    e2_host_machine = StringSaveNoNull (host_machine);
-  }
-  if (host_port != 0) {
-    e2_host_port = host_port;
-  }
-  if (! StringHasNoText (host_path)) {
-    e2_host_path = MemFree (e2_host_path);
-    e2_host_path = StringSaveNoNull (host_path);
-  }
-#else
-  /* define as NOP for now */
-#endif
-}
 
 /* use EntrezTest to override default Entrez ncbi named service */
 
@@ -145,77 +114,8 @@ NLM_EXTERN CONN EntrezOpenConnection (
 )
 
 {
-#if 0
-  CharPtr  host_machine = e2_host_machine;
-  Uint2    host_port = e2_host_port;
-  CharPtr  host_path = e2_host_path;
-#endif
-  CharPtr  host_service = e2_service;
-#if 0
-#ifdef OS_UNIX
-  CharPtr  env_machine = NULL;
-  CharPtr  env_path = NULL;
-  CharPtr  env_port = NULL;
-  CharPtr  env_service = NULL;
-  int      val = 0;
-#endif
-
-#ifdef OS_UNIX
-  env_machine = (CharPtr) getenv ("NCBI_ENTREZ2_HOST_MACHINE");
-  if (! StringHasNoText (env_machine)) {
-    host_machine = env_machine;
-  }
-#endif
-  if (StringHasNoText (host_machine)) {
-    host_machine = "www.ncbi.nlm.nih.gov";
-  }
-
-#ifdef OS_UNIX
-  env_port = (CharPtr) getenv ("NCBI_ENTREZ2_HOST_PORT");
-  if (! StringHasNoText (env_port)) {
-    if (sscanf (env_port, "%d", &val) == 1) {
-      host_port = (Uint2) val;
-    }
-  }
-#endif
-  if (host_port == 0) {
-    host_port = 80;
-  }
-
-#ifdef OS_UNIX
-  env_path = (CharPtr) getenv ("NCBI_ENTREZ2_HOST_PATH");
-  if (! StringHasNoText (env_path)) {
-    host_path = env_path;
-  }
-#endif
-  if (StringHasNoText (host_path)) {
-    host_path = "/entrez/eutils/entrez2server.fcgi";
-  }
-
-#ifdef OS_UNIX
-  env_service = (CharPtr) getenv ("NCBI_ENTREZ2_HOST_SERVICE");
-  if (! StringHasNoText (env_service)) {
-    host_service = env_service;
-  }
-#endif
-#endif
-  if (StringHasNoText (host_service)) {
-    host_service = "Entrez2";
-  }
-#if 0
-  /* temporarily for direct access to URL, to be phased out */
-
-  if (e2_host_machine != NULL || e2_host_port != 0 || e2_host_path != NULL) {
-    return QUERY_OpenUrlQuery (host_machine, host_port, host_path,
-                               NULL, EntrezGetProgramName (),
-                               30, eMIME_T_NcbiData, eMIME_AsnBinary,
-                               eENCOD_None, 0);
-  }
-#endif
-
-  /* use new named service, Entrez or EntrezTest */
-
-  return QUERY_OpenServiceQuery (host_service, NULL, 30);
+  return QUERY_OpenServiceQuery
+    (StringHasNoText (e2_service) ? "Entrez2" : e2_service, NULL, 30);
 }
 
 #ifdef OS_MAC
@@ -1096,7 +996,10 @@ NLM_EXTERN Boolean ValidateEntrez2InfoPtrEx (
       if (StringICmp (db, "books") != 0 &&
           StringICmp (db, "gensat") != 0 &&
           StringICmp (db, "mesh") != 0 &&
-          StringICmp (db, "nlmcatalog") != 0) {
+          StringICmp (db, "nlmcatalog") != 0 &&
+          StringICmp (db, "nuccore") != 0 &&
+          StringICmp (db, "nucgss") != 0 &&
+          StringICmp (db, "nucest") != 0) {
         sprintf (buf, "Database %s has no links", db);
         ValNodeCopyStr (head, 0, buf);
         rsult = FALSE;
@@ -1335,6 +1238,8 @@ NLM_EXTERN Boolean ValidateEntrez2InfoPtrEx (
             } else if (StringICmp (last, "InactiveAid") == 0 && StringICmp (str, "InactiveAidCount") == 0) {
             } else if (StringICmp (last, "Phenotype") == 0 && StringICmp (str, "Phenotype Ontology ID") == 0) {
             } else if (StringICmp (last, "Title") == 0 && StringICmp (str, "Title Abbreviation") == 0) {
+            } else if (StringICmp (last, "Library") == 0 && StringICmp (str, "Library Class") == 0) {
+            } else if (StringICmp (last, "Sequence") == 0 && StringICmp (str, "Sequence Count") == 0) {
             } else {
               sprintf (buf, "Menu names %s [%s] and %s [%s] may be unintended variants", last, dbnames [lastvnp->choice], str, dbnames [vnp->choice]);
               ValNodeCopyStr (head, 0, buf);

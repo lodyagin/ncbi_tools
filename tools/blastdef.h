@@ -30,8 +30,17 @@ Author: Tom Madden
 Contents: #defines and definitions for structures used by BLAST.
 
 ******************************************************************************/
-/* $Revision: 6.164 $ 
+/* $Revision: 6.165 $ 
 * $Log: blastdef.h,v $
+* Revision 6.165  2005/08/31 20:32:47  coulouri
+* From Mike Gertz:
+*    - Added the kappa_expect_value field to the
+*      BLAST_OptionsBlk datatype.  This new field holds the cutoff value
+*      used by RedoAlignmentCore; it should equal expect_value if
+*      RedoAlignmentCore will not be called.
+*    - removed the now unused original_expect_value field of the
+*      BLAST_OptionsBlk datatype.
+*
 * Revision 6.164  2005/07/27 15:51:54  coulouri
 * remove unused queue_callback
 *
@@ -1139,8 +1148,12 @@ typedef struct _blast_optionsblk {
         SeqLocPtr       query_lcase_mask; /* Masking of input DNA regions */
         Boolean         sort_gi_list;     /* Should the gi list be sorted? */
         Boolean         is_neighboring;   /* Is this a neighboring task? */
-	Nlm_FloatHi original_expect_value;/* Used to change the E-value threshold for 
-			part of a BLAST-KAPPA run and to restore it to the original threshold for the final output. */
+        Nlm_FloatHi kappa_expect_value;   /* E-value threshold for
+                                             hits to be saved when
+                                             RedoAlignmentCore is used
+                                             to compute final alignments;
+                                             should equal expect_value for
+                                             other types of alignment. */
 	Boolean		explode_seqids;	/* make one SeqAlign for every gi on a
 					   redundant sequence. */
         Boolean         megablast_full_deflines; /* Print full deflines in

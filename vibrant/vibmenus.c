@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.20 $
+* $Revision: 6.21 $
 *
 * File Description: 
 *       Vibrant menu functions
@@ -37,6 +37,9 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: vibmenus.c,v $
+* Revision 6.21  2005/11/30 20:19:27  rsmith
+* Update Mac API to fix hier-menus.
+*
 * Revision 6.20  2005/07/18 15:15:18  kans
 * fixed minor xcode compiler warnings
 *
@@ -269,7 +272,7 @@
 # if !defined(OS_UNIX_DARWIN)
 #  include "MoreCarbonAccessors.h"
 # endif
-#define Nlm_MenuTool   MenuHandle
+#define Nlm_MenuTool   MenuRef
 #define Nlm_PopupTool  Nlm_Handle
 #define Nlm_ItemTool   Nlm_Handle
 #endif
@@ -396,8 +399,8 @@ extern Nlm_Boolean Nlm_HasAquaMenuLayout (void)
 }
 
 static void Nlm_LoadMenuData (Nlm_MenU m, Nlm_MenuTool hdl,
-			      Nlm_PrompT ppt, Nlm_Int2 tag,
-			      Nlm_PopupTool pup)
+          Nlm_PrompT ppt, Nlm_Int2 tag,
+          Nlm_PopupTool pup)
 
 {
   Nlm_MenuData  PNTR mdptr;
@@ -873,12 +876,12 @@ static void Nlm_ActivateInnerMenus (Nlm_MenU m)
     s = Nlm_GetSubMenu (i);
     if (s != NULL) {
       if (Nlm_GetEnabled ((Nlm_GraphiC) s)) {
-	Nlm_DoEnable ((Nlm_GraphiC) i, FALSE, FALSE);
-#ifdef WIN_MAC
-	h = Nlm_GetMenuHandle (s);
-	InsertMenu (h, -1);
+        Nlm_DoEnable ((Nlm_GraphiC) i, FALSE, FALSE);
+ #ifdef WIN_MAC
+        h = Nlm_GetMenuHandle (s);
+        InsertMenu (h, -1);
 #endif
-	Nlm_ActivateInnerMenus (s);
+        Nlm_ActivateInnerMenus (s);
       }
     }
     i = (Nlm_IteM) Nlm_GetNext ((Nlm_GraphiC) i);
@@ -3846,8 +3849,28 @@ static void Nlm_MenuCallback (Widget w, XtPointer client_data, XtPointer call_da
 }
 #endif
 
+#ifdef WIN_MAC
+static Nlm_Boolean Nlm_TitleGetAccel(Nlm_CharPtr  title,
+                                     Nlm_CharPtr  accel)
+{
+  Nlm_Uint4 slash_pos;
 
-#ifndef WIN_MAC
+  if ( !Nlm_StrngPos(title, "/", 0, FALSE, &slash_pos)  ||
+       ! IS_ALPHANUM(title[slash_pos+1]) )
+    return FALSE;
+
+  if ( accel ) {
+    if ( IS_ALPHANUM( title[slash_pos+1]) ) {
+      *accel = title[slash_pos+1] ;
+    } else {
+      *accel =  '\0';
+    }
+  }
+  
+  return TRUE;
+}
+
+#else
 static Nlm_Boolean Nlm_TitleGetAccel(Nlm_CharPtr  title,
                                      Nlm_CharPtr  accel,
                                      Nlm_CharPtr  mnemo,
@@ -3887,8 +3910,7 @@ static Nlm_Boolean Nlm_TitleGetAccel(Nlm_CharPtr  title,
 
   return TRUE;
 }
-#endif /* !WIN_MAC */
-
+#endif
 
 static void Nlm_StripTitleAccel(Nlm_CharPtr title)
 {
@@ -4061,49 +4083,49 @@ static void Nlm_PrepareTitleMsWin(Nlm_CharPtr temp, Nlm_CharPtr title,
         accel = '\0';
 
     if(paccel != NULL)
-	*paccel = accel;
+      *paccel = accel;
 
     for(src_pos = 0, dest_pos = 0;
-	title[src_pos] != '\0' && dest_pos+1 < siztemp;
-	++src_pos)
+      title[src_pos] != '\0' && dest_pos+1 < siztemp;
+      ++src_pos)
     {
-	if(mnemo && src_pos == mnemo_pos)
-	{
-	    if(dest_pos + 2 < siztemp)
-	    {
-		temp[dest_pos++] = '&';
-		temp[dest_pos++] = title[src_pos];
-	    }
-	    else
-		break;
-	}
-	else
-	if(title[src_pos] == '&')
-	{
-	    if(dest_pos + 2 < siztemp)
-	    {
-		temp[dest_pos++] = '&';
-		temp[dest_pos++] = title[src_pos];
-	    }
-	    else
-		break;
-	}
-	else
-	if(title[src_pos] == '/')
-	    break;
-	else
-	    temp[dest_pos++] = title[src_pos];
+      if(mnemo && src_pos == mnemo_pos)
+      {
+        if(dest_pos + 2 < siztemp)
+        {
+          temp[dest_pos++] = '&';
+          temp[dest_pos++] = title[src_pos];
+        }
+        else
+          break;
+      }
+      else
+      if(title[src_pos] == '&')
+      {
+        if(dest_pos + 2 < siztemp)
+        {
+          temp[dest_pos++] = '&';
+          temp[dest_pos++] = title[src_pos];
+        }
+        else
+          break;
+      }
+      else
+      if(title[src_pos] == '/')
+          break;
+      else
+          temp[dest_pos++] = title[src_pos];
     }
 
     temp[dest_pos] = '\0';
 
     if(accel != '\0' && dest_pos + 7 < siztemp)
     {
-	Nlm_StrCpy(temp+dest_pos, "\tCtrl- ");
-	if(IS_ALPHA(accel))
-	    temp[dest_pos+6] = TO_UPPER(accel);
-        else
-	    temp[dest_pos+6] = accel;
+      Nlm_StrCpy(temp+dest_pos, "\tCtrl- ");
+      if(IS_ALPHA(accel))
+          temp[dest_pos+6] = TO_UPPER(accel);
+      else
+          temp[dest_pos+6] = accel;
     }
 }
 #endif /* WIN_MSWIN */
@@ -4115,15 +4137,13 @@ static void Nlm_PrepareTitle(Nlm_CharPtr temp, Nlm_CharPtr title,
   Nlm_StringNCpy_0(temp, title, siztemp);
 
 #ifdef WIN_MAC
-  {{
-    if ( isMenu  ) {
-      Nlm_StripTitleAccel( temp );
-    } else {
-      Nlm_Uint4 pos;
-      if ( Nlm_StrngPos(temp, "/ ", 0, FALSE, &pos) )
-        temp[pos] = '\0';
-    }
-  }}
+  if ( isMenu  ) {
+    Nlm_StripTitleAccel( temp );
+  } else {
+    Nlm_Uint4 pos;
+    if ( Nlm_StrngPos(temp, "/ ", 0, FALSE, &pos) )
+      temp[pos] = '\0';
+  }
 #endif
 }
 
@@ -4142,22 +4162,32 @@ static Nlm_ItemTool Nlm_AppendItems(Nlm_MenU m, Nlm_IteM i,
   Nlm_ItemTool  item = NULL;
   Nlm_Char      temp[256];
   Nlm_WindoW    tempPort;
+  Nlm_Char      accel;
 #ifdef WIN_MOTIF
   Cardinal      n;
   Arg           wargs[10];
 #endif
+#ifdef WIN_MAC
+  CFStringRef cfTitle;
+#endif
 
-  Nlm_PrepareTitle(temp, itemNames, sizeof(temp), FALSE);
+  Nlm_PrepareTitle(temp, itemNames, sizeof(temp), TRUE);
   if (temp[0] == '\0')
     return NULL;
 
   tempPort = Nlm_SavePortIfNeeded((Nlm_GraphiC)m, savePort);
   h = Nlm_GetMenuHandle( (Nlm_MenU)m );
 
-
 #ifdef WIN_MAC
-  Nlm_CtoPstr( temp );
-  AppendMenu(h, (StringPtr)temp);
+  cfTitle = CFStringCreateWithBytes(kCFAllocatorDefault, (unsigned char *)temp,
+    strlen(temp), kCFStringEncodingASCII, false);
+
+  AppendMenuItemTextWithCFString(h, cfTitle, 0, 0, NULL);
+  CFRelease(cfTitle);
+  
+  if (Nlm_TitleGetAccel(itemNames, &accel)  &&  accel) {
+    SetMenuItemCommandKey(h, CountMenuItems(h), FALSE, accel);
+  }
 #endif
 
 #ifdef WIN_MSWIN
@@ -4456,8 +4486,14 @@ static Nlm_ItemTool Nlm_AppendOnePopListItem (Nlm_MenU m, Nlm_IteM i,
   Nlm_StringNCpy_0(temp, itemNames, sizeof(temp));
   if (temp [0] != '\0') {
 #ifdef WIN_MAC
-    Nlm_CtoPstr (temp);
-    AppendMenu (h, (StringPtr) temp);
+  {{
+    CFStringRef cfTitle;
+    cfTitle = CFStringCreateWithBytes(kCFAllocatorDefault, (unsigned char *) temp,
+      strlen(temp), kCFStringEncodingASCII, false);
+
+    AppendMenuItemTextWithCFString(h, cfTitle, 0, 0, NULL);
+    CFRelease(cfTitle);
+  }}
 #endif
 #ifdef WIN_MSWIN
     AppendMenu (h, MF_ENABLED, nextMenuNum, itemNames);
@@ -4930,14 +4966,24 @@ static void Nlm_NewMenuBar (Nlm_MenuBaR mb)
 static void Nlm_NewDesktopMenu (Nlm_MenU m, Nlm_CharPtr title)
 
 {
+  OSErr         err;
   Nlm_MenuTool  h;
   Nlm_Char      temp [256];
+  CFStringRef   cfTitle;
 
+  err = CreateNewMenu(nextMenuNum, 0, &h);
+  if (err != noErr)
+    return;
 /* M.I */
   Nlm_PrepareTitle (temp, title, sizeof (temp), TRUE);
 /* M.I */
-  Nlm_CtoPstr (temp);
-  h = NewMenu (nextMenuNum, (StringPtr) temp);
+  cfTitle = CFStringCreateWithBytes(kCFAllocatorDefault, (unsigned char *) temp,
+    strlen(temp), kCFStringEncodingASCII, false);
+  if (cfTitle) {
+    SetMenuTitleWithCFString(h, cfTitle);
+    CFRelease(cfTitle);
+  }
+  
   Nlm_LoadMenuData (m, h, NULL, nextMenuNum, NULL);
   if (nextMenuNum < 32767) {
     nextMenuNum++;
@@ -4989,7 +5035,7 @@ static void Nlm_NewPopup (Nlm_MenU m, Nlm_CharPtr title, Nlm_RectPtr r)
 /* M.I */
 
 #ifdef WIN_MAC
-  h = NewMenu (nextMenuNum, (StringPtr) "");
+  CreateNewMenu(nextMenuNum, 0, &h);
   p = Nlm_DependentPrompt ((Nlm_GraphiC) m, r, temp, Nlm_systemFont, 'c');
 #endif
 
@@ -5059,7 +5105,7 @@ static void Nlm_NewFloatingPopup (Nlm_MenU m, Nlm_CharPtr title, Nlm_RectPtr mr)
 /* M.I */
   Nlm_PrepareTitle (temp, title, sizeof (temp), TRUE);
 /* M.I */
-  h = NewMenu (nextMenuNum, (StringPtr) "");
+  CreateNewMenu(nextMenuNum, 0, &h);
   p = Nlm_DependentPrompt ((Nlm_GraphiC) m, mr, temp, Nlm_systemFont, 'c');
   Nlm_LoadMenuData (m, h, p, nextMenuNum, NULL);
   if (nextMenuNum < 32767) {
@@ -5190,7 +5236,7 @@ static void Nlm_NewPopListMenu (Nlm_MenU m)
 #endif
 
 #ifdef WIN_MAC
-  h = NewMenu (nextMenuNum, (StringPtr) "");
+  CreateNewMenu(nextMenuNum, 0, &h);
   c = NULL;
   Nlm_LoadMenuData (m, h, NULL, nextMenuNum, c);
 #endif
@@ -5231,9 +5277,10 @@ static void Nlm_NewPopListMenu (Nlm_MenU m)
 static void Nlm_NewSubMenu (Nlm_MenU m)
 
 {
+  OSErr err;
   Nlm_MenuTool  h;
 
-  h = NewMenu (nextMenuNum, (StringPtr) "");
+  err = CreateNewMenu(nextMenuNum, 0, &h);
   Nlm_LoadMenuData (m, h, NULL, nextMenuNum, NULL);
   if (nextMenuNum < 32767) {
     nextMenuNum++;
@@ -5244,6 +5291,7 @@ static void Nlm_NewSubmenuItem (Nlm_IteM i, Nlm_MenU sub, Nlm_CharPtr title)
 
 {
   Nlm_MenuTool  h;
+  Nlm_MenuTool  mt;
   Nlm_Int2      index;
   Nlm_MenU      m;
 
@@ -5253,6 +5301,8 @@ static void Nlm_NewSubmenuItem (Nlm_IteM i, Nlm_MenU sub, Nlm_CharPtr title)
   Nlm_LoadItemData (i, sub, index, NULL);
   h = Nlm_GetMenuHandle (sub);
   InsertMenu (h, -1);
+  mt = Nlm_GetMenuHandle(m);
+  SetMenuItemHierarchicalMenu(mt, index, h);
 }
 #endif
 
@@ -5649,10 +5699,8 @@ extern Nlm_MenU Nlm_SubMenu (Nlm_MenU m, Nlm_CharPtr title)
   Nlm_MenU     sub = NULL;
   Nlm_Char     temp [256];
 #ifdef WIN_MAC
-  Nlm_Int2     len;
   Nlm_MenuBaR  mb;
   Nlm_WindoW   w;
-  Nlm_Int2     tag;
 #endif
 
   if (!m  || !title)
@@ -5672,6 +5720,7 @@ extern Nlm_MenU Nlm_SubMenu (Nlm_MenU m, Nlm_CharPtr title)
   Nlm_NewSubMenu (sub);
   Nlm_SetVisible ((Nlm_GraphiC) sub, TRUE);
   Nlm_PrepareTitle (temp, title, sizeof (temp), TRUE);
+/*
   len = (Nlm_Int2) Nlm_StringLen (temp);
   tag = Nlm_GetMenuTag (sub);
   if (len < 250) {
@@ -5681,6 +5730,7 @@ extern Nlm_MenU Nlm_SubMenu (Nlm_MenU m, Nlm_CharPtr title)
     temp [len + 3] = (Nlm_Char) tag;
     temp [len + 4] = '\0';
   }
+*/
   i = (Nlm_IteM) Nlm_CreateLink ((Nlm_GraphiC) m, &r, sizeof (Nlm_ItemRec), subItemProcs);
   if (i != NULL) {
     Nlm_NewSubmenuItem (i, sub, temp);
@@ -5759,9 +5809,6 @@ extern void Nlm_SeparatorItem (Nlm_MenU m)
 
 {
   Nlm_MenuTool  h;
-#ifdef WIN_MAC
-  Nlm_Char      temp [256];
-#endif
 #ifdef WIN_MSWIN
   Nlm_IteM      i;
   Nlm_RecT      r;
@@ -5775,9 +5822,7 @@ extern void Nlm_SeparatorItem (Nlm_MenU m)
   if (m != NULL) {
     h = Nlm_GetMenuHandle (m);
 #ifdef WIN_MAC
-    Nlm_StringNCpy_0(temp, "(-", sizeof(temp));
-    Nlm_CtoPstr (temp);
-    AppendMenu (h, (StringPtr) temp);
+    AppendMenuItemTextWithCFString(h, CFSTR("-"), kMenuItemAttrSeparator, 0, NULL);
 #endif
 #ifdef WIN_MSWIN
     Nlm_LoadRect (&r, 0, 0, 0, 0);

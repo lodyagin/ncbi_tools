@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.27 $
+* $Revision: 6.28 $
 *
 * File Description:  Object manager for module NCBI-SeqFeat
 *
@@ -1887,10 +1887,10 @@ static CharPtr genCodeTblMemStr = "Genetic-code-table ::= {\n" \
 "{ name \"Trematode Mitochondrial\" , id 21 ,\n" \
 "ncbieaa  \"FFLLSSSSYY**CCWWLLLLPPPPHHQQRRRRIIMMTTTTNNNKSSSSVVVVAAAADDEEGGGG\",\n" \
 "sncbieaa \"-----------------------------------M---------------M------------\" } ,\n" \
-"{ name \"Scenedesmus obliquus mitochondrial\" , id 22 ,\n" \
+"{ name \"Scenedesmus obliquus Mitochondrial\" , id 22 ,\n" \
 "ncbieaa  \"FFLLSS*SYY*LCC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG\",\n" \
 "sncbieaa \"-----------------------------------M----------------------------\" } ,\n" \
-"{ name \"Thraustochytrium mitochondrial code\" , id 23 ,\n" \
+"{ name \"Thraustochytrium Mitochondrial\" , id 23 ,\n" \
 "ncbieaa  \"FF*LSSSSYY**CC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG\",\n" \
 "sncbieaa \"--------------------------------M--M---------------M------------\" } };\n";
 #endif

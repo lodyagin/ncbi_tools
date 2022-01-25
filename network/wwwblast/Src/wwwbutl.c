@@ -1,4 +1,4 @@
-/* $Id: wwwbutl.c,v 1.21 2004/01/16 17:35:20 dondosha Exp $
+/* $Id: wwwbutl.c,v 1.22 2005/08/31 20:35:22 coulouri Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,24 @@
 *
 * Initial Version Creation Date: 04/21/2000
 *
-* $Revision: 1.21 $
+* $Revision: 1.22 $
 *
 * File Description:
 *         WWW BLAST/PSI/PHI utilities
 *
 * $Log: wwwbutl.c,v $
+* Revision 1.22  2005/08/31 20:35:22  coulouri
+* From Mike Gertz:
+* in WWWCreateSearchOptions:
+*   - Replaced outmoded adjustment of options->expect_value when
+*     compostion-based statistics is used with the newer behavior
+*     implemented in blastpgp - increase the expect_value only when
+*     mode > 1 composition-based statistics is being used.
+*   - By taking no action to modify the hitlist size, implicitly use the
+*     default action defined in the BlastSingleQueryResultSize routine;
+*     previously it was a bug to not modify the hitlist size in
+*     WWWCreateSearchOptions.
+*
 * Revision 1.21  2004/01/16 17:35:20  dondosha
 * Fixed mouseover problems
 *
@@ -200,6 +212,10 @@
 */
 
 #include <wwwblast.h>
+
+/* Multiplier by which to increase the evalue when mode > 1 composition-based
+ * statistics is being used. */
+#define EVALUE_EXPAND 10
 
 void WWWBlastInfoFree(WWWBlastInfoPtr theInfo)
 {
@@ -1486,16 +1502,14 @@ Boolean WWWCreateSearchOptions(WWWBlastInfoPtr theInfo)
         options->tweak_parameters = TRUE;
 
     /* Adjustment of expect value and hitlist size */
-    if (options->tweak_parameters) {
-        options->hitlist_size *= 2; /*allows for extra matches*/
-        options->original_expect_value = 
-            options->expect_value;
-        if (options->expect_value < 0.1) {
-            options->expect_value = 
-                MIN(0.1, 10 * options->expect_value);
-        }
+    options->kappa_expect_value = options->expect_value;
+    if (options->tweak_parameters > 1) {
+        /* relax the cutoff evalue so that we don't loose too many
+         * hits for which compositional adjustment improves the
+         * evalue. */
+        options->expect_value *= EVALUE_EXPAND;
     }
-    
+
     /* SMITH_WATERMAN */
     
     if (WWWGetValueByName(theInfo->info, "SMITH_WATERMAN") != NULL)

@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 11/3/93
 *
-* $Revision: 6.56 $
+* $Revision: 6.57 $
 *
 * File Description: Utilities for creating ASN.1 submissions
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: subutil.c,v $
+* Revision 6.57  2005/10/26 21:30:46  kans
+* bug fix in AddSecondaryAccnToEntry provided by Joe Carlson
+*
 * Revision 6.56  2005/03/30 21:13:49  bollin
 * added function AddIntToSeqLoc
 *
@@ -2253,6 +2256,12 @@ NCBISubPtr submission,
 	}
 	if (vnp == NULL) return FALSE;
 	gbp = (GBBlockPtr) vnp->data.ptrvalue;
+	/* jwc added */
+    if (gbp == NULL) { 
+      vnp->data.ptrvalue = (Pointer) GBBlockNew (); 
+      gbp = vnp->data.ptrvalue; 
+    } 
+	/* end of jwc added */
 	if (gbp == NULL) return FALSE;
 
 	shp = bsp->hist; 

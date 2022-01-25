@@ -1,5 +1,5 @@
 #! /bin/sh
-# $Id: install.sh,v 1.40 2005/01/26 18:41:55 ivanov Exp $
+# $Id: install.sh,v 1.42 2005/09/13 13:33:12 ivanov Exp $
 # Authors:  Denis Vakatov    (vakatov@ncbi.nlm.nih.gov)
 #           Vladimir Ivanov  (ivanov@ncbi.nlm.nih.gov)
 #           Anton Lavrentiev (lavr@ncbi.nlm.nih.gov)
@@ -45,9 +45,6 @@ errdir="$target"/errmsg
 srcdir_a="$target"/altsrc
 dbgdir_a="$target"/dbglib
 libdir_a="$target"/lib
-datdir_a="$target"/../../c/data
-errdir_a="$target"/../../c/errmsg
-
 
 # Check
 test -d "$builddir"  ||  error "Absent build dir \"$builddir\""
@@ -65,6 +62,7 @@ makedir "$incdir"/algo
 makedir "$incdir"/algo/blast
 makedir "$incdir"/algo/blast/api
 makedir "$incdir"/algo/blast/core
+makedir "$incdir"/algo/blast/composition_adjustment
 makedir "$incdir"/connect
 makedir "$incdir"/ctools
 makedir "$srcdir" -p
@@ -109,8 +107,6 @@ makedir "$errdir"   -p
 makedir "$srcdir_a" -p
 makedir "$dbgdir_a" -p
 makedir "$libdir_a" -p
-makedir "$datdir_a" -p
-makedir "$errdir_a" -p
 
 
 # Copy files
@@ -128,6 +124,8 @@ cp -p "$builddir"/algo/blast/api/*.c            "$srcdir"/algo/blast/api
 cp -p "$builddir"/algo/blast/api/*.h            "$incdir"/algo/blast/api
 cp -p "$builddir"/algo/blast/core/*.c           "$srcdir"/algo/blast/core
 cp -p "$builddir"/algo/blast/core/*.h           "$incdir"/algo/blast/core
+cp -p "$builddir"/algo/blast/composition_adjustment/*.c "$srcdir"/algo/blast/composition_adjustment
+cp -p "$builddir"/algo/blast/composition_adjustment/*.h "$incdir"/algo/blast/composition_adjustment
 cp -p "$builddir"/asnlib/*.h                    "$srcdir"/asnlib
 mv "$srcdir"/asnlib/asn.h                       "$incdir"
 cp -p "$builddir"/asnlib/*.c                    "$srcdir"/asnlib
@@ -232,9 +230,7 @@ done
 
 # Data
 cp -pr "$builddir"/data/* "$datdir"
-cp -pr "$builddir"/data/* "$datdir_a"
 cp -pr "$builddir"/errmsg/* "$errdir"
-cp -pr "$builddir"/errmsg/* "$errdir_a"
 
 
 # Fill alt source tree

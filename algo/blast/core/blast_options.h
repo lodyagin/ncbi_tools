@@ -1,4 +1,4 @@
-/* $Id: blast_options.h,v 1.121 2005/06/02 16:18:05 camacho Exp $
+/* $Id: blast_options.h,v 1.125 2005/11/29 17:27:40 camacho Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -6,7 +6,7 @@
  *
  *  This software/database is a "United States Government Work" under the
  *  terms of the United States Copyright Act.  It was written as part of
- *  the author's offical duties as a United States Government employee and
+ *  the author's official duties as a United States Government employee and
  *  thus cannot be copyrighted.  This software/database is freely available
  *  to the public for use. The National Library of Medicine and the U.S.
  *  Government have not placed any restriction on its use or reproduction.
@@ -316,11 +316,6 @@ typedef struct BlastHitSavingOptions {
    Int4 culling_limit; /**< If the query range of an HSP is contained in
                             at least this many higher-scoring HSPs, throw
                             away the HSP as redundant (turned off if zero) */
-   /* PSI-BLAST Hit saving options */
-   Int4 required_start;  /**< Start of the region required to be part of the
-                            alignment */
-   Int4 required_end;    /**< End of the region required to be part of the
-                            alignment */
 
    /********************************************************************/
    /* Merge all these in a structure for clarity? */
@@ -870,6 +865,30 @@ Int2 BLAST_ValidateOptions(EBlastProgramType program_number,
                            Blast_Message* *blast_msg);
 
 
+
+/** Get thresholds for word-finding suggested by Stephen Altschul.
+ *
+ * @param program_number Type of blast program: blastn, blastp, blastx, 
+ *                      tblastn, tblastx) [in]
+ * @param matrixName matrix, e.g., BLOSUM62 [in]
+ * @param threshold returns suggested value [in|out]
+ * @return zero on success
+ */
+Int2 BLAST_GetSuggestedThreshold(EBlastProgramType program_number, 
+                                 const char* matrixName, 
+                                 Int4* threshold);
+
+/** Get window sizes for two hit algorithm suggested by Stephen Altschul.
+ *
+ * @param program_number Type of blast program: blastn, blastp, blastx, 
+ *                      tblastn, tblastx) [in]
+ * @param matrixName matrix, e.g., BLOSUM62 [in]
+ * @param window_size returns suggested value [in|out]
+ * @return zero on success
+ */
+Int2 BLAST_GetSuggestedWindowSize(EBlastProgramType program_number, 
+                                 const char* matrixName, 
+                                 Int4* window_size);
 #ifdef __cplusplus
 }
 #endif

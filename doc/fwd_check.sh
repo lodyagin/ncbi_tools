@@ -1,5 +1,5 @@
 #! /bin/sh
-# $Id: fwd_check.sh,v 1.23 2005/01/06 23:25:56 lavr Exp $
+# $Id: fwd_check.sh,v 1.25 2005/09/16 15:56:26 lavr Exp $
 # Author:   Denis Vakatov (vakatov@ncbi,nlm.nih.gov)
 # Modified: Anton Lavrentiev (lavr@ncbi.nlm.nih.gov)
 #
@@ -31,14 +31,16 @@ cat <<EOF
 130.14.29.112	5865	OK
 130.14.29.112	5866	OK
 130.14.29.112	5867	OK
-130.14.29.112	5868	RESERVED
-130.14.29.112	5869	RESERVED
+130.14.29.112	5868	OK
+130.14.29.112	5869	OK
 130.14.29.112	5870	RESERVED
 EOF
 } |
 while read x_host x_port x_status ; do
     test "`echo $x_host | grep -c '^[;]'`" != "0"  &&  continue
-    if [ "$x_status" = "RETIRED" -o "$x_status" = "RESERVED" ]; then
+    if [ "$x_status" = "RETIRED"  -o \
+         "$x_status" = "RESERVED" -o \
+         "$x_status" = "READYING" ]; then
         echo "${x_host}:${x_port}	$x_status"
         continue
     fi

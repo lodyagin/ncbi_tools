@@ -1,4 +1,4 @@
-/* $Id: ncbi_std.h,v 1.34 2004/12/14 17:11:24 ucko Exp $
+/* $Id: ncbi_std.h,v 1.37 2005/11/16 14:31:37 madden Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -6,7 +6,7 @@
  *
  *  This software/database is a "United States Government Work" under the
  *  terms of the United States Copyright Act.  It was written as part of
- *  the author's offical duties as a United States Government employee and
+ *  the author's official duties as a United States Government employee and
  *  thus cannot be copyrighted.  This software/database is freely available
  *  to the public for use. The National Library of Medicine and the U.S.
  *  Government have not placed any restriction on its use or reproduction.
@@ -23,7 +23,6 @@
  *
  * ===========================================================================
  *
- * Author: Ilya Dondoshansky
  *
  */
 
@@ -127,26 +126,55 @@ typedef Uint1 Boolean;
 
 #ifndef _NCBISTD_ /* if we're not in the C toolkit ... */
 
+#ifndef UINT4_MAX
 /** largest number represented by unsigned int. */
 #define UINT4_MAX     4294967295U
+#endif
+
+#ifndef INT4_MAX
 /** largest nubmer represented by signed int */
 #define INT4_MAX    2147483647
+#endif 
+
+#ifndef INT4_MIN
 /** Smallest (most negative) number represented by signed int */
 #define INT4_MIN    (-2147483647-1)
+#endif
+
+#ifndef NCBIMATH_LN2
 /** natural log of 2. */
 #define NCBIMATH_LN2      0.69314718055994530941723212145818
+#endif
+
+#ifndef INT2_MAX
 /** largest number represented by signed (two byte) short */
 #define INT2_MAX    32767
+#endif
+
+#ifndef INT2_MIN
 /** smallest (most negative) number represented by signed (two byte) short */
 #define INT2_MIN    (-32768)
+#endif
+
+#ifndef INT1_MAX
+/** largest number represented by signed short (one byte) */
+#define INT1_MAX    127
+#endif
+
+#ifndef INT1_MIN
+/** smallest (most negative) number represented by signed short (one byte) */
+#define INT1_MIN    (-128)
+#endif
 
 #ifndef DIM
 /** dimension of an array. */
 #define DIM(A) (sizeof(A)/sizeof((A)[0]))
 #endif
 
+#ifndef NULLB
 /** terminating byte of a char* string. */
 #define NULLB '\0'
+#endif
 
 #endif /* _NCBISTD_ */
 

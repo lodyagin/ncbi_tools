@@ -29,13 +29,16 @@
 *
 * Version Creation Date:   4/16/98
 *
-* $Revision: 6.32 $
+* $Revision: 6.33 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: urlquery.c,v $
+* Revision 6.33  2005/12/01 18:47:49  lavr
+* Code formatting
+*
 * Revision 6.32  2004/09/16 19:16:45  lavr
 * QUERY_OpenUrlQuery() to set port only if provided as non-zero
 *
@@ -185,7 +188,7 @@ NLM_EXTERN CONN QUERY_OpenUrlQuery (
   contentType [0] = '\0';
   if (type < eMIME_T_Unknown) {
     VERIFY( MIME_ComposeContentTypeEx(type, subtype, encoding,
-                                  contentType, sizeof(contentType)) );
+                                      contentType, sizeof(contentType)) );
   }
 
   /* set HTML header with program name as user agent */
@@ -196,19 +199,19 @@ NLM_EXTERN CONN QUERY_OpenUrlQuery (
   ASSERT( info );
 
   if ( host_machine ) {
-      StringNCpy_0(info->host, host_machine, sizeof(info->host));
+    StringNCpy_0(info->host, host_machine, sizeof(info->host));
   }
   if ( host_port ) {
-      info->port = host_port;
+    info->port = host_port;
   }
   if ( !StringHasNoText(arguments) ) {
-      StringNCpy_0(info->args, arguments, sizeof(info->args));
+    StringNCpy_0(info->args, arguments, sizeof(info->args));
   }
   StringNCpy_0(info->path, host_path, sizeof(info->path));
 
   if ( info->timeout ) {
-      info->timeout->sec  = timeoutsec;
-      info->timeout->usec = 0;
+    info->timeout->sec  = timeoutsec;
+    info->timeout->usec = 0;
   }
 
   connector = HTTP_CreateConnector(info, user_header, flags);
@@ -247,11 +250,11 @@ NLM_EXTERN CONN QUERY_OpenServiceQuery (
   ASSERT( info );
 
   if (timeoutsec == (Nlm_Uint4)(-1)) {
-      info->timeout = 0;
+    info->timeout = 0;
   } else if ( timeoutsec ) {
-      info->tmo.sec  = timeoutsec;
-      info->tmo.usec = 0;
-      info->timeout  = &info->tmo;
+    info->tmo.sec  = timeoutsec;
+    info->tmo.usec = 0;
+    info->timeout  = &info->tmo;
   }
 
   connector = SERVICE_CreateConnectorEx (service, fSERV_Any, info, 0);
@@ -266,14 +269,14 @@ NLM_EXTERN CONN QUERY_OpenServiceQuery (
     ErrPostEx (SEV_ERROR, 0, 0, "QUERY_OpenServiceQuery failed in CONN_Create");
     ASSERT( !conn );
   } else if ( !StringHasNoText (arguments) ) {
-      args_len = StringLen (arguments);
-      status = CONN_Write (conn, arguments, args_len,
-                           &n_written, eIO_WritePersist);
-      if (status != eIO_Success) {
-          ErrPostEx (SEV_ERROR, 0, 0, "QUERY_OpenServiceQuery failed to write arguments in CONN_Write");
-          CONN_Close (conn);
-          conn = 0;
-      }
+    args_len = StringLen (arguments);
+    status = CONN_Write (conn, arguments, args_len,
+                         &n_written, eIO_WritePersist);
+    if (status != eIO_Success) {
+      ErrPostEx (SEV_ERROR, 0, 0, "QUERY_OpenServiceQuery failed to write arguments in CONN_Write");
+      CONN_Close (conn);
+      conn = 0;
+    }
   }
 
   /* cleanup & return */
@@ -337,10 +340,10 @@ NLM_EXTERN void QUERY_CopyResultsToFile (
 
   buffer = (Nlm_CharPtr) MemNew(URL_QUERY_BUFLEN + 1);
   if (buffer != NULL) {
-      while ((status = CONN_Read (conn, buffer, URL_QUERY_BUFLEN, &n_read,
-                                  eIO_ReadPlain)) == eIO_Success) {
-          FileWrite (buffer, 1, n_read, fp);
-      }
+    while ((status = CONN_Read (conn, buffer, URL_QUERY_BUFLEN, &n_read,
+                                eIO_ReadPlain)) == eIO_Success) {
+      FileWrite (buffer, 1, n_read, fp);
+    }
   }
   MemFree (buffer);
 }
@@ -352,14 +355,14 @@ static Nlm_Int2 LIBCALL AsnIoConnWrite (
 )
 
 {
-	size_t        bytes;
-	AsnIoConnPtr  aicp;
+  size_t        bytes;
+  AsnIoConnPtr  aicp;
 
-	aicp = (AsnIoConnPtr) ptr;
-	if (aicp == NULL || aicp->conn == NULL) return 0;
-	CONN_Write (aicp->conn, (const void *) buf, (size_t) count,
-               &bytes, eIO_WritePersist);
-	return (Nlm_Int2) bytes;
+  aicp = (AsnIoConnPtr) ptr;
+  if (aicp == NULL || aicp->conn == NULL) return 0;
+  CONN_Write (aicp->conn, (const void *) buf, (size_t) count,
+              &bytes, eIO_WritePersist);
+  return (Nlm_Int2) bytes;
 }
 
 static Nlm_Int2 LIBCALL AsnIoConnRead (
@@ -369,13 +372,13 @@ static Nlm_Int2 LIBCALL AsnIoConnRead (
 )
 
 {
-	size_t        bytes;
-	AsnIoConnPtr  aicp;
+  size_t        bytes;
+  AsnIoConnPtr  aicp;
 
-	aicp = (AsnIoConnPtr) ptr;
-	if (aicp == NULL || aicp->conn == NULL) return 0;
-	CONN_Read (aicp->conn, (Pointer) buf, (Int4) count, &bytes, eIO_ReadPlain);
-	return (Nlm_Int2) bytes;
+  aicp = (AsnIoConnPtr) ptr;
+  if (aicp == NULL || aicp->conn == NULL) return 0;
+  CONN_Read (aicp->conn, (Pointer) buf, (Int4) count, &bytes, eIO_ReadPlain);
+  return (Nlm_Int2) bytes;
 }
 
 NLM_EXTERN AsnIoConnPtr QUERY_AsnIoConnOpen (

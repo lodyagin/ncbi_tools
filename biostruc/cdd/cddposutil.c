@@ -1,4 +1,4 @@
-/* $Id: cddposutil.c,v 1.18 2004/03/31 17:58:51 papadopo Exp $
+/* $Id: cddposutil.c,v 1.20 2005/10/22 02:04:53 thiessen Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 12/21/1999
 *
-* $Revision: 1.18 $
+* $Revision: 1.20 $
 *
 * File Description: CDD utilities involving position-specific scoring 
 *                   matrices (PSSMs)
@@ -37,6 +37,18 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cddposutil.c,v $
+* Revision 1.20  2005/10/22 02:04:53  thiessen
+* plug memory leak
+*
+* Revision 1.19  2005/08/31 20:34:47  coulouri
+* From Mike Gertz:
+* in CddSetUpSearchWithReadDb:
+*   Call BlastSingleQueryResultSize to get the hitlist size for
+*   preliminary alignments as is done for other modes of blast; this
+*   will increase the hitlist size for either modes with a final
+*   traceback computation or modes that use composition-based
+*   statistics.
+*
 * Revision 1.18  2004/03/31 17:58:51  papadopo
 * Mike Gertz' changes for length adjustment calculations
 *
@@ -281,6 +293,8 @@ void LIBCALL CddposFreeMemory(posSearchItems * posSearch) {
   MemFree(posSearch->posInformation);
   MemFree(posSearch->posUseSequences);
   MemFree(posSearch->posGaplessColumnWeights);
+
+  PSIMatrixFrequencyRatiosFree(posSearch->stdFreqRatios);
 }
 
 
@@ -1981,7 +1995,8 @@ BlastSearchBlkPtr LIBCALL CddSetUpSearchWithReadDb(SeqLocPtr query_slp,
 	Int4		          mask_index, virtual_mask_index;
 	Uint4		          oid_bit, virtual_oid_bit;
 	ReadDBFILEPtr	    tmprdfp;
-        
+        Int4                hitlist_size;
+
 	if (options == NULL) {
 		options = BLASTOptionNew(prog_name, FALSE);	options_alloc = TRUE;
 	}
@@ -1993,9 +2008,15 @@ BlastSearchBlkPtr LIBCALL CddSetUpSearchWithReadDb(SeqLocPtr query_slp,
 
 	if (query_slp) query_length = SeqLocLen(query_slp);
 	else query_length = query_bsp->length;
-		
-/* On the first call query length is used for the subject length. */
-	search = BlastSearchBlkNewExtra(options->wordsize, query_length, dbname, multiple_hits, options->threshold_first, options->threshold_second, options->hitlist_size, prog_name, NULL, first_context, last_context, rdfp, options->window_size);
+
+        hitlist_size = BlastSingleQueryResultSize(options);
+        /* On the first call query length is used for the subject length. */
+        search =
+            BlastSearchBlkNewExtra(options->wordsize, query_length, dbname,
+                                   multiple_hits, options->threshold_first,
+                                   options->threshold_second, hitlist_size,
+                                   prog_name, NULL, first_context,
+                                   last_context, rdfp, options->window_size);
 
 	if (search) {
 		readdb_get_totals(search->rdfp, &(dblen), &(search->dbseq_num));

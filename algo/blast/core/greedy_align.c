@@ -1,4 +1,4 @@
-/* $Id: greedy_align.c,v 1.35 2005/04/07 20:09:28 madden Exp $
+/* $Id: greedy_align.c,v 1.38 2005/11/18 14:43:58 madden Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -36,7 +36,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: greedy_align.c,v 1.35 2005/04/07 20:09:28 madden Exp $";
+    "$Id: greedy_align.c,v 1.38 2005/11/18 14:43:58 madden Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/greedy_align.h>
@@ -308,7 +308,8 @@ Int4 BLAST_GreedyAlign(const Uint1* seq1, Int4 len1,
        very similar, the average running time will be sig-
        nificantly better than this */
 
-    max_dist = len2 / GREEDY_MAX_COST_FRACTION + 1;
+    max_dist = MIN(GREEDY_MAX_COST,
+                   len2 / GREEDY_MAX_COST_FRACTION + 1);
 
     /* the main loop assumes that the index of all diagonals is
        biased to lie in the middle of allocated bookkeeping 
@@ -382,7 +383,7 @@ Int4 BLAST_GreedyAlign(const Uint1* seq1, Int4 len1,
     if (index == len1 || index == len2) {
         if (edit_block != NULL)
             GapPrelimEditBlockAdd(edit_block, eGapAlignSub, index);
-        return best_dist;
+        return 0; /* This function returns number of differences, here it is zero. */
     }
 
     /* set up the memory pool */
@@ -549,7 +550,9 @@ Int4 BLAST_GreedyAlign(const Uint1* seq1, Int4 len1,
             }
 
             /* clamp the bounds on diagonals to avoid walking off
-               either sequence */
+               either sequence. Because the bounds increase by at
+               most one for each distance, diag_lower and diag_upper
+               can each be of size at most max_diags+2 */
 
             if (seq2_index == len2) {
                 diag_lower = k + 1; 
@@ -586,7 +589,10 @@ Int4 BLAST_GreedyAlign(const Uint1* seq1, Int4 len1,
         if (diag_lower > diag_upper)
             break;
 
-        /* set up for the next distance to examine */
+        /* set up for the next distance to examine. Because the 
+           bounds increase by at most one for each distance, 
+           diag_lower and diag_upper can each be of size at 
+           most max_diags+2 */
 
         if (!end2_reached)
             diag_lower--; 
@@ -776,7 +782,8 @@ Int4 BLAST_AffineGreedyAlign (const Uint1* seq1, Int4 len1,
     /* set the number of distinct distances the algorithm will
        examine in the search for an optimal alignment */
 
-    max_dist = len2 / GREEDY_MAX_COST_FRACTION + 1;
+    max_dist = MIN(GREEDY_MAX_COST,
+                   len2 / GREEDY_MAX_COST_FRACTION + 1);
     scaled_max_dist = max_dist * gap_extend;
     
     /* the main loop assumes that the index of all diagonals is
@@ -853,7 +860,7 @@ Int4 BLAST_AffineGreedyAlign (const Uint1* seq1, Int4 len1,
     if (index == len1 || index == len2) {
         if (edit_block != NULL)
             GapPrelimEditBlockAdd(edit_block, eGapAlignSub, index);
-        return best_dist;
+       return (index*match_score);
     }
 
     /* set up the memory pool */
@@ -1147,7 +1154,9 @@ Int4 BLAST_AffineGreedyAlign (const Uint1* seq1, Int4 len1,
         
         /* compute the range of diagonals to test for the next
            value of d. These must be conservative, in that any
-           diagonal that could possibly contribute must be allowed */
+           diagonal that could possibly contribute must be allowed.
+           curr_diag_lower and curr_diag_upper can each be of size at 
+           most scaled_max_diags+2 */
 
         d++;
         curr_diag_lower = MIN(diag_lower[d - gap_open_extend], 

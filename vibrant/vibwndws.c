@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.69 $
+* $Revision: 6.70 $
 *
 * File Description:
 *       Vibrant main, event loop, and window functions
@@ -37,6 +37,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: vibwndws.c,v $
+* Revision 6.70  2005/11/16 19:50:37  kans
+* Nlm_showGetArgTag always TRUE, do not get shift key for old Vibrant about box
+*
 * Revision 6.69  2005/07/18 15:15:18  kans
 * fixed minor xcode compiler warnings
 *
@@ -857,7 +860,7 @@ static       char Nlm_AppName[PATH_MAX+1]  = "vibrant";
 Nlm_WindowTool  Nlm_currentWindowTool;
 Nlm_Boolean     Nlm_processUpdatesFirstVal = TRUE;
 
-static Nlm_Boolean     Nlm_showGetArgTag = FALSE;
+static Nlm_Boolean     Nlm_showGetArgTag = TRUE;
 
 static Nlm_GphPrcsPtr  gphprcsptr = NULL;
 
@@ -6644,24 +6647,6 @@ static void ParseSetupArguments(HINSTANCE hInstance, Nlm_CharPtr lpszCmdLine)
 
 static void Nlm_GetReady (void)
 {
-/* p_churchill removed conditional compilation for Think C and MPW 12/99
- */
-/* #ifdef OS_MAC */
-#ifdef WIN_MAC
-  KeyMap  keys;
-
-  GetKeys (keys);
-  if ((keys [1] & 1) != 0) {
-    Nlm_showGetArgTag = TRUE;
-    Nlm_GetSet ();
-  }
-#endif
-#ifdef WIN_MSWIN
-  if (GetAsyncKeyState(VK_SHIFT) & 0x8000) {
-    Nlm_showGetArgTag = TRUE;
-    Nlm_GetSet();
-  }
-#endif
   Nlm_VibrantSetGUI();
   Nlm_InitCursorShapes();
   Nlm_textScrapFull = FALSE;

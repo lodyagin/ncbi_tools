@@ -1,4 +1,4 @@
-/* $Id: blast_engine.c,v 1.198 2005/08/15 16:11:20 dondosha Exp $
+/* $Id: blast_engine.c,v 1.203 2005/11/22 13:44:13 coulouri Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -6,7 +6,7 @@
  *
  *  This software/database is a "United States Government Work" under the
  *  terms of the United States Copyright Act.  It was written as part of
- *  the author's offical duties as a United States Government employee and
+ *  the author's official duties as a United States Government employee and
  *  thus cannot be copyrighted.  This software/database is freely available
  *  to the public for use. The National Library of Medicine and the U.S.
  *  Government have not placed any restriction on its use or reproduction.
@@ -22,8 +22,6 @@
  *  Please cite the author in any work or product based on this material.
  *
  * ===========================================================================
- *
- * Author: Ilya Dondoshansky
  *
  */
 
@@ -57,7 +55,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_engine.c,v 1.198 2005/08/15 16:11:20 dondosha Exp $";
+    "$Id: blast_engine.c,v 1.203 2005/11/22 13:44:13 coulouri Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_engine.h>
@@ -75,8 +73,8 @@ static char const rcsid[] =
 
 NCBI_XBLAST_EXPORT const int   kBlastMajorVersion = 2;
 NCBI_XBLAST_EXPORT const int   kBlastMinorVersion = 2;
-NCBI_XBLAST_EXPORT const int   kBlastPatchVersion = 12;
-NCBI_XBLAST_EXPORT const char* kBlastReleaseDate = "Aug-07-2005";
+NCBI_XBLAST_EXPORT const int   kBlastPatchVersion = 13;
+NCBI_XBLAST_EXPORT const char* kBlastReleaseDate = "Nov-27-2005";
 
 /** Structure to be passed to s_BlastSearchEngineCore, containing pointers 
     to various preallocated structures and arrays. */
@@ -385,10 +383,7 @@ s_BlastSearchEngineCore(EBlastProgramType program_number, BLAST_SequenceBlk* que
 
              /* For nucleotide search, if match score is = 2, the odd scores
                 are rounded down to the nearest even number. */
-             if (program_number == eBlastTypeBlastn && 
-                 score_params->options->reward == 2) {
-                 Blast_HSPListAdjustOddBlastnScores(hsp_list);
-             }
+             Blast_HSPListAdjustOddBlastnScores(hsp_list, score_options->gapped_calculation, gap_align->sbp);
 
              Blast_HSPListSortByScore(hsp_list);
 
@@ -804,7 +799,6 @@ BLAST_PreliminarySearchEngine(EBlastProgramType program_number,
             seq_arg.seq, lookup_wrap, gap_align, score_params, word_params, 
             ext_params, hit_params, db_options, diagnostics, aux_struct, 
             &hsp_list);
- 
       if (status)
          break;
 
@@ -844,7 +838,9 @@ BLAST_PreliminarySearchEngine(EBlastProgramType program_number,
          } 
          
          /* Save the results. */
-         BlastHSPStreamWrite(hsp_stream, &hsp_list);
+         status = BlastHSPStreamWrite(hsp_stream, &hsp_list);
+         if (status != 0)
+            break;
       }
       
       BlastSeqSrcReleaseSequence(seq_src, (void*) &seq_arg);
@@ -866,15 +862,20 @@ BLAST_PreliminarySearchEngine(EBlastProgramType program_number,
 
 Int2 
 Blast_RunPreliminarySearch(EBlastProgramType program, 
-   BLAST_SequenceBlk* query, BlastQueryInfo* query_info, 
-   const BlastSeqSrc* seq_src, const BlastScoringOptions* score_options,
-   BlastScoreBlk* sbp, LookupTableWrap* lookup_wrap,
+   BLAST_SequenceBlk* query, 
+   BlastQueryInfo* query_info, 
+   const BlastSeqSrc* seq_src, 
+   const BlastScoringOptions* score_options,
+   BlastScoreBlk* sbp, 
+   LookupTableWrap* lookup_wrap,
    const BlastInitialWordOptions* word_options, 
    const BlastExtensionOptions* ext_options,
    const BlastHitSavingOptions* hit_options,
    const BlastEffectiveLengthsOptions* eff_len_options,
-   const PSIBlastOptions* psi_options, const BlastDatabaseOptions* db_options, 
-   BlastHSPStream* hsp_stream, BlastDiagnostics* diagnostics)
+   const PSIBlastOptions* psi_options, 
+   const BlastDatabaseOptions* db_options, 
+   BlastHSPStream* hsp_stream, 
+   BlastDiagnostics* diagnostics)
 {
    Int2 status = 0;
    BlastScoringParameters* score_params = NULL;/**< Scoring parameters */

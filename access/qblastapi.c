@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/28/00
 *
-* $Revision: 1.30 $
+* $Revision: 1.32 $
 *
 * File Description: 
 *
@@ -37,6 +37,12 @@
 * --------------------------------------------------------------------------
 *
 * $Log: qblastapi.c,v $
+* Revision 1.32  2005/11/28 17:49:55  coulouri
+* correction to previous commit; define snprintf for windows
+*
+* Revision 1.31  2005/11/28 15:32:11  coulouri
+* do not overflow string buffer if BioseqGetTitle() returns NULL
+*
 * Revision 1.30  2004/02/23 15:30:02  lavr
 * New (last) parameter "how" added in CONN_Write() API call
 *
@@ -116,6 +122,12 @@
 
 #ifdef OS_MAC
 #include <Events.h>
+#endif
+
+#ifdef _MSC_VER
+#define strcasecmp _stricmp
+#define strdup _strdup
+#define snprintf _snprintf
 #endif
 
 static CharPtr ReadALine (CharPtr str, size_t size, FILE *fp)
@@ -895,7 +907,7 @@ NLM_EXTERN Nlm_Boolean BLASTGetQuerySummary(CharPtr RID, Int4 query_number,
        id_length = StringLen(tmp);
        title_length += id_length + 3;
        *defline = (CharPtr) MemNew(title_length*sizeof(Char));
-       sprintf(*defline, "%s %s", tmp, BioseqGetTitle(bsp));
+       snprintf(*defline, title_length, "%s %s", tmp, BioseqGetTitle(bsp));
     }
     *query_length = BioseqGetLen(bsp);
     BioseqFree(bsp);

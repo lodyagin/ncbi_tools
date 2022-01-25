@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/2/97
 *
-* $Revision: 6.345 $
+* $Revision: 6.361 $
 *
 * File Description: 
 *
@@ -1883,7 +1883,9 @@ NLM_EXTERN void PromoteXrefsExEx (SeqFeatPtr sfp, BioseqPtr bsp, Uint2 entityID,
     GetSeqEntryParent (target, &parentptr, &parenttype);
     sfp = first;
     while (sfp != NULL) {
-      if (sfp->data.choice == SEQFEAT_RNA && sfp->product == NULL && (! sfp->pseudo)) {
+      if (sfp->data.choice == SEQFEAT_RNA &&
+          sfp->idx.subtype != FEATDEF_tRNA &&
+          sfp->product == NULL && (! sfp->pseudo)) {
         gbq = sfp->qual;
         prevqual = (GBQualPtr PNTR) &(sfp->qual);
         id [0] = '\0';
@@ -3594,6 +3596,11 @@ static Boolean HandledGBQualOnProt (SeqFeatPtr sfp, GBQualPtr gbq)
 	  return FALSE;
   }
 
+  if (StringICmp (gbq->qual, "experiment") == 0 ||
+      StringICmp (gbq->qual, "inference") == 0) {
+    return FALSE;
+  }
+
   return TRUE; /* all other gbquals not appropriate on protein features */
 }
 
@@ -3622,69 +3629,6 @@ static Boolean HandledGBQualOnImp (SeqFeatPtr sfp, GBQualPtr gbq)
     /* return TRUE; */
   }
   return FALSE;
-}
-
-static CharPtr TrimParenthesesAndCommasAroundString (CharPtr str)
-
-{
-  Uchar    ch;	/* to use 8bit characters in multibyte languages */
-  CharPtr  dst;
-  CharPtr  ptr;
-
-  if (str != NULL && str [0] != '\0') {
-    dst = str;
-    ptr = str;
-    ch = *ptr;
-    while (ch != '\0' && (ch < ' ' || ch == '(' || ch == ',')) {
-      ptr++;
-      ch = *ptr;
-    }
-    while (ch != '\0') {
-      *dst = ch;
-      dst++;
-      ptr++;
-      ch = *ptr;
-    }
-    *dst = '\0';
-    dst = NULL;
-    ptr = str;
-    ch = *ptr;
-    while (ch != '\0') {
-      if (ch != ')' && ch != ',') {
-        dst = NULL;
-      } else if (dst == NULL) {
-        dst = ptr;
-      }
-      ptr++;
-      ch = *ptr;
-    }
-    if (dst != NULL) {
-      *dst = '\0';
-    }
-  }
-  return str;
-}
-
-static CharPtr CombineSplitQual (CharPtr origval, CharPtr newval)
-
-{
-  size_t   len;
-  CharPtr  str = NULL;
-
-  if (StringStr (origval, newval) != NULL) return origval;
-  len = StringLen (origval) + StringLen (newval) + 5;
-  str = MemNew (sizeof (Char) * len);
-  if (str == NULL) return origval;
-  TrimParenthesesAndCommasAroundString (origval);
-  TrimParenthesesAndCommasAroundString (newval);
-  StringCpy (str, "(");
-  StringCat (str, origval);
-  StringCat (str, ",");
-  StringCat (str, newval);
-  StringCat (str, ")");
-  /* free original string, knowing return value will replace it */
-  MemFree (origval);
-  return str;
 }
 
 static void CleanupRptUnit (GBQualPtr gbq)
@@ -3776,6 +3720,68 @@ static void CleanupRptUnit (GBQualPtr gbq)
   }
 }
 
+static void CleanupRptUnitSeq (GBQualPtr gbq)
+
+{
+  Char     ch;
+  CharPtr  ptr;
+
+  if (gbq == NULL) return;
+  if (StringHasNoText (gbq->val)) return;
+  ptr = gbq->val;
+  ch = *ptr;
+  while (ch != '\0') {
+    if (StringChr ("ACGTUacgtu", ch) == NULL) return;
+    ptr++;
+    ch = *ptr;
+  }
+  /* lower case, and convert U to T */
+  ptr = gbq->val;
+  ch = *ptr;
+  while (ch != '\0') {
+    if (IS_UPPER (ch)) {
+      ch = TO_LOWER (ch);
+      if (ch == 'u') {
+        ch = 't';
+      }
+      *ptr = ch;
+    }
+    ptr++;
+    ch = *ptr;
+  }
+}
+
+static void CleanupReplace (GBQualPtr gbq)
+
+{
+  Char     ch;
+  CharPtr  ptr;
+
+  if (gbq == NULL) return;
+  if (StringHasNoText (gbq->val)) return;
+  ptr = gbq->val;
+  ch = *ptr;
+  while (ch != '\0') {
+    if (StringChr ("ACGTUacgtu", ch) == NULL) return;
+    ptr++;
+    ch = *ptr;
+  }
+  /* lower case, and convert U to T */
+  ptr = gbq->val;
+  ch = *ptr;
+  while (ch != '\0') {
+    if (IS_UPPER (ch)) {
+      ch = TO_LOWER (ch);
+      if (ch == 'u') {
+        ch = 't';
+      }
+      *ptr = ch;
+    }
+    ptr++;
+    ch = *ptr;
+  }
+}
+
 static Boolean StringIsJustQuotes (CharPtr str)
 
 {
@@ -3816,6 +3822,124 @@ static void CleanupConsSplice (GBQualPtr gbq)
   gbq->val = str;
 }
 
+static void ExpandParenGroup (GBQualPtr headgbq)
+
+{
+  GBQualPtr  lastgbq;
+  GBQualPtr  newgbq;
+  GBQualPtr  nextqual;
+  CharPtr    ptr;
+  CharPtr    str;
+  CharPtr    tmp;
+
+  nextqual = headgbq->next;
+  lastgbq = headgbq;
+  tmp = StringSave (headgbq->val);
+  str = tmp + 1;
+  while (! StringHasNoText (str)) {
+    ptr = StringChr (str, ',');
+    if (ptr == NULL) {
+      ptr = StringChr (str, ')');
+    }
+    if (ptr != NULL) {
+      *ptr = '\0';
+      ptr++;
+    }
+    TrimSpacesAroundString (str);
+    newgbq = GBQualNew ();
+    if (newgbq != NULL) {
+      newgbq->qual = StringSave (headgbq->qual);
+      newgbq->val = StringSave (str);
+      newgbq->next = nextqual;
+      lastgbq->next = newgbq;
+      lastgbq = newgbq;
+    }
+    str = ptr;
+  }
+  MemFree (tmp);
+}
+
+static Boolean IsBaseRange (CharPtr str)
+
+{
+  CharPtr   ptr;
+  Char      tmp [32];
+  long int  val;
+
+  if (StringLen (str) > 25) return FALSE;
+  StringNCpy_0 (tmp, str, sizeof (tmp));
+  ptr = StringStr (tmp, "..");
+  if (ptr == NULL) return FALSE;
+  *ptr = '\0';
+  if (StringHasNoText (tmp)) return FALSE;
+  if (sscanf (tmp, "%ld", &val) != 1 || val < 1) return FALSE;
+  ptr += 2;
+  if (StringHasNoText (ptr)) return FALSE;
+  if (sscanf (ptr, "%ld", &val) != 1 || val < 1) return FALSE;
+  return TRUE;
+}
+
+static void ModernizeFeatureGBQuals (SeqFeatPtr sfp)
+
+{
+  GBQualPtr       gbq;
+  size_t          len;
+  GBQualPtr       nextqual;
+  GBQualPtr PNTR  prevqual;
+  CharPtr         str;
+  Boolean         unlink;
+
+  if (sfp == NULL) return;
+  gbq = sfp->qual;
+  prevqual = (GBQualPtr PNTR) &(sfp->qual);
+  while (gbq != NULL) {
+    CleanVisString (&(gbq->qual));
+    CleanVisString (&(gbq->val));
+    if (gbq->qual == NULL) {
+      gbq->qual = StringSave ("");
+    }
+    if (StringIsJustQuotes (gbq->val)) {
+      gbq->val = MemFree (gbq->val);
+    }
+    if (gbq->val == NULL) {
+      gbq->val = StringSave ("");
+    }
+    nextqual = gbq->next;
+    unlink = TRUE;
+    if (StringICmp (gbq->qual, "rpt_type") == 0 ||
+        StringICmp (gbq->qual, "rpt_unit") == 0 ||
+        StringICmp (gbq->qual, "rpt_unit_range") == 0 ||
+        StringICmp (gbq->qual, "rpt_unit_seq") == 0 ||
+        StringICmp (gbq->qual, "replace") == 0 ||
+        StringICmp (gbq->qual, "compare") == 0 ||
+        StringICmp (gbq->qual, "old_locus_tag") == 0 ||
+        StringICmp (gbq->qual, "usedin") == 0) {
+      str = gbq->val;
+      len = StringLen (str);
+      if (len > 1 && *str == '(' && str [len - 1] == ')' && StringChr (str + 1, '(') == NULL) {
+        ExpandParenGroup (gbq);
+        nextqual = gbq->next;
+        /* individual parsed out (xxx,xxx) qualifiers will be processed next, now get rid of original */
+        unlink = TRUE;
+      } else {
+        unlink = FALSE;
+      }
+    } else {
+      unlink = FALSE;
+    }
+    if (unlink) {
+      *(prevqual) = gbq->next;
+      gbq->next = NULL;
+      gbq->qual = MemFree (gbq->qual);
+      gbq->val = MemFree (gbq->val);
+      GBQualFree (gbq);
+    } else {
+      prevqual = (GBQualPtr PNTR) &(gbq->next);
+    }
+    gbq = nextqual;
+  }
+}
+
 static void CleanupFeatureGBQuals (SeqFeatPtr sfp, Boolean isEmblOrDdbj)
 
 {
@@ -3833,7 +3957,8 @@ static void CleanupFeatureGBQuals (SeqFeatPtr sfp, Boolean isEmblOrDdbj)
   GBQualPtr PNTR  prevqual;
   CharPtr         ptr;
   GBQualPtr       rpt_type = NULL;
-  GBQualPtr       rpt_unit = NULL;
+  GBQualPtr       rpt_unit_range = NULL;
+  GBQualPtr       rpt_unit_seq = NULL;
   CharPtr         str;
   CharPtr         tag;
   Boolean         unlink;
@@ -3894,7 +4019,8 @@ static void CleanupFeatureGBQuals (SeqFeatPtr sfp, Boolean isEmblOrDdbj)
         }
       }
     } else if (StringICmp (gbq->qual, "note") == 0 ||
-               StringICmp (gbq->qual, "notes") == 0) {
+               StringICmp (gbq->qual, "notes") == 0 ||
+               StringICmp (gbq->qual, "comment") == 0) {
       if (sfp->comment == NULL) {
         sfp->comment = gbq->val;
         gbq->val = NULL;
@@ -3946,45 +4072,26 @@ static void CleanupFeatureGBQuals (SeqFeatPtr sfp, Boolean isEmblOrDdbj)
     } else if (StringICmp (gbq->qual, "cons_splice") == 0) {
       CleanupConsSplice (gbq);
       unlink = FALSE;
+    } else if (StringICmp (gbq->qual, "replace") == 0) {
+      CleanupReplace (gbq);
+      unlink = FALSE;
+    } else if (StringICmp (gbq->qual, "rpt_unit_seq") == 0) {
+      CleanupRptUnitSeq (gbq);
+      unlink = FALSE;
     } else if (sfp->data.choice == SEQFEAT_GENE && HandledGBQualOnGene (sfp, gbq)) {
     } else if (sfp->data.choice == SEQFEAT_CDREGION && HandledGBQualOnCDS (sfp, gbq, &afterMe)) {
     } else if (sfp->data.choice == SEQFEAT_RNA && HandledGBQualOnRNA (sfp, gbq, isEmblOrDdbj)) {
     } else if (sfp->data.choice == SEQFEAT_PROT && HandledGBQualOnProt (sfp, gbq)) {
     } else if (sfp->data.choice == SEQFEAT_IMP && HandledGBQualOnImp (sfp, gbq)) {
-    } else if (StringICmp (gbq->qual, "rpt_type") == 0) {
-      if (rpt_type == NULL) {
-        rpt_type = gbq;
-        unlink = FALSE;
-      } else {
-        rpt_type->val = CombineSplitQual (rpt_type->val, gbq->val);
-      }
     } else if (StringICmp (gbq->qual, "rpt_unit") == 0) {
-      if (rpt_unit == NULL) {
-        rpt_unit = gbq;
+      if (IsBaseRange (gbq->val)) {
+        gbq->qual = MemFree (gbq->qual);
+        gbq->qual = StringSave ("rpt_unit_range");
         unlink = FALSE;
       } else {
-        rpt_unit->val = CombineSplitQual (rpt_unit->val, gbq->val);
-      }
-    } else if (StringICmp (gbq->qual, "usedin") == 0) {
-      if (usedin == NULL) {
-        usedin = gbq;
+        gbq->qual = MemFree (gbq->qual);
+        gbq->qual = StringSave ("rpt_unit_seq");
         unlink = FALSE;
-      } else {
-        usedin->val = CombineSplitQual (usedin->val, gbq->val);
-      }
-    } else if (StringICmp (gbq->qual, "old_locus_tag") == 0) {
-      if (old_locus_tag == NULL) {
-        old_locus_tag = gbq;
-        unlink = FALSE;
-      } else {
-        old_locus_tag->val = CombineSplitQual (old_locus_tag->val, gbq->val);
-      }
-    } else if (StringICmp (gbq->qual, "compare") == 0) {
-      if (compare == NULL) {
-        compare = gbq;
-        unlink = FALSE;
-      } else {
-        compare->val = CombineSplitQual (compare->val, gbq->val);
       }
     } else if (StringICmp (gbq->qual, "pseudo") == 0) {
       sfp->pseudo = TRUE;
@@ -3999,11 +4106,20 @@ static void CleanupFeatureGBQuals (SeqFeatPtr sfp, Boolean isEmblOrDdbj)
       sfp->xref = xref;
     } else if (sfp->data.choice != SEQFEAT_CDREGION && StringICmp (gbq->qual, "codon_start") == 0) {
       /* not legal on anything but CDS, so remove it */
+    } else if (StringICmp (gbq->qual, "experiment") == 0 &&
+               StringICmp (gbq->val, "experimental evidence, no additional details recorded") == 0) {
+      /* remove default experiment string if instantiated */
+    } else if (StringICmp (gbq->qual, "inference") == 0 &&
+               StringICmp (gbq->val, "non-experimental evidence, no additional details recorded") == 0) {
+      /* remove default inference string if instantiated */
     } else {
       unlink = FALSE;
     }
-    if (rpt_unit != NULL) {
-      CleanupRptUnit (rpt_unit);
+    if (rpt_unit_seq != NULL) {
+      CleanupRptUnit (rpt_unit_seq);
+    }
+    if (rpt_unit_range != NULL) {
+      CleanupRptUnit (rpt_unit_range);
     }
     if (unlink) {
       *(prevqual) = gbq->next;
@@ -4018,9 +4134,10 @@ static void CleanupFeatureGBQuals (SeqFeatPtr sfp, Boolean isEmblOrDdbj)
   }
 }
 
-static int LIBCALLBACK SortByGBQualKey (VoidPtr ptr1, VoidPtr ptr2)
+static int LIBCALLBACK SortByGBQualKeyAndVal (VoidPtr ptr1, VoidPtr ptr2)
 
 {
+  int        compare;
   GBQualPtr  gbq1;
   GBQualPtr  gbq2;
   CharPtr    str1;
@@ -4033,12 +4150,19 @@ static int LIBCALLBACK SortByGBQualKey (VoidPtr ptr1, VoidPtr ptr2)
   str1 = (CharPtr) gbq1->qual;
   str2 = (CharPtr) gbq2->qual;
   if (str1 == NULL || str2 == NULL) return 0;
-  return StringICmp (str1, str2);
+  compare = StringICmp (str1, str2);
+  if (compare != 0) return compare;
+  str1 = (CharPtr) gbq1->val;
+  str2 = (CharPtr) gbq2->val;
+  if (str1 == NULL || str2 == NULL) return 0;
+  compare = StringICmp (str1, str2);
+  return compare;
 }
 
 static Boolean GBQualsAlreadyInOrder (GBQualPtr list)
 
 {
+  int        compare;
   GBQualPtr  curr;
   GBQualPtr  next;
 
@@ -4046,7 +4170,12 @@ static Boolean GBQualsAlreadyInOrder (GBQualPtr list)
   curr = list;
   next = curr->next;
   while (next != NULL) {
-    if (StringICmp (curr->qual, next->qual) > 0) return FALSE;
+    compare = StringICmp (curr->qual, next->qual);
+    if (compare > 0) return FALSE;
+    if (compare == 0) {
+      compare = StringICmp (curr->val, next->val);
+      if (compare > 0) return FALSE;
+    }
     curr = next;
     next = curr->next;
   }
@@ -4070,7 +4199,7 @@ static GBQualPtr SortFeatureGBQuals (GBQualPtr list)
     gbq = gbq->next;
   }
 
-  HeapSort (head, count, sizeof (GBQualPtr), SortByGBQualKey);
+  HeapSort (head, count, sizeof (GBQualPtr), SortByGBQualKeyAndVal);
 
   for (i = 0; i < count; i++) {
     gbq = head [i];
@@ -4398,9 +4527,11 @@ static SubSourcePtr SortSubSourceList (SubSourcePtr list)
 static void CleanSubSourceList (SubSourcePtr PNTR sspp)
 
 {
+  Char               ch;
   SubSourcePtr       last = NULL;
   SubSourcePtr       next;
   SubSourcePtr PNTR  prev;
+  CharPtr            ptr;
   SubSourcePtr       ssp;
   Boolean            unlink;
 
@@ -4415,6 +4546,20 @@ static void CleanSubSourceList (SubSourcePtr PNTR sspp)
         ssp->subtype != SUBSRC_transgenic &&
         ssp->subtype != SUBSRC_environmental_sample) {
       CleanVisString (&(ssp->name));
+    }
+    if (ssp->subtype == SUBSRC_fwd_primer_seq ||
+        ssp->subtype == SUBSRC_rev_primer_seq) {
+      if (ssp->name != NULL) {
+        ptr = ssp->name;
+        ch = *ptr;
+        while (ch != '\0') {
+          if (IS_UPPER (ch)) {
+            *ptr = TO_LOWER (ch);
+          }
+          ptr++;
+          ch = *ptr;
+        }
+      }
     }
     CleanVisString (&(ssp->attrib));
     if (last != NULL) {
@@ -4835,6 +4980,17 @@ static void FixOldDbxrefs (ValNodePtr vnp)
       } else if (StringICmp (dbt->db, "MaizeDB") == 0) {
         dbt->db = MemFree (dbt->db);
         dbt->db = StringSave ("MaizeGDB");
+      }
+      if (StringICmp (dbt->db, "UniProt/Swiss-Prot") == 0) {
+        dbt->db = MemFree (dbt->db);
+        dbt->db = StringSave ("UniProtKB/Swiss-Prot");
+      } else if (StringICmp (dbt->db, "UniProt/TrEMBL") == 0) {
+        dbt->db = MemFree (dbt->db);
+        dbt->db = StringSave ("UniProtKB/TrEMBL");
+      }
+      if (StringICmp (dbt->db, "Genew") == 0) {
+        dbt->db = MemFree (dbt->db);
+        dbt->db = StringSave ("HGNC");
       }
     }
     vnp = vnp->next;
@@ -7358,6 +7514,7 @@ NLM_EXTERN void CleanUpSeqFeat (
   if (crp != NULL && crp->frame == 0 && (! sfp->pseudo)) {
 	crp->frame = GetFrameFromLoc (sfp->location);
   }
+  ModernizeFeatureGBQuals (sfp);
   sfp->qual = SortFeatureGBQuals (sfp->qual);
   CleanupDuplicateGBQuals (&(sfp->qual));
   CleanupFeatureGBQuals (sfp, isEmblOrDdbj);

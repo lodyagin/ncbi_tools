@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.73 $
+* $Revision: 6.79 $
 *
 * File Description: 
 *
@@ -3005,6 +3005,7 @@ static SeqLocPtr MapSubLoc
   IvalInfoPtr ival_head, ival;
   SeqPntPtr   spp;
   Uint1       strand;
+  BioseqPtr   prop_bsp;
    
   if (master_subloc == NULL || salp == NULL || master_row < 1 || prop_row < 1)
   {
@@ -3013,6 +3014,12 @@ static SeqLocPtr MapSubLoc
   
   prop_sip = AlnMgr2GetNthSeqIdPtr (salp, prop_row);
   if (prop_sip == NULL) return NULL;
+  prop_bsp = BioseqFind (prop_sip);
+  if (prop_bsp != NULL)
+  {
+    prop_sip = SeqIdFindBest (prop_bsp->id, SEQID_GENBANK);
+    prop_sip = SeqIdDup (prop_sip);
+  }
   
   switch (master_subloc->choice) {
     case SEQLOC_INT :
@@ -3031,7 +3038,8 @@ static SeqLocPtr MapSubLoc
               sinp->from = ival->start2;
               sinp->to = ival->stop2;
               sinp->strand = strand;
-              sinp->id = SeqIdDup (prop_sip);
+              sinp->id = prop_sip;
+              prop_sip = NULL;
               ValNodeAddPointer (&prop_loc, SEQLOC_INT, (Pointer) sinp);
             }
           } else {
@@ -3040,7 +3048,8 @@ static SeqLocPtr MapSubLoc
             for (ival = ival_head; ival->next != NULL; ival = ival->next) continue;
             sinp->to = ival->stop2;
             sinp->strand = strand;
-            sinp->id = SeqIdDup (prop_sip);
+            sinp->id = prop_sip;
+            prop_sip = NULL;
             ValNodeAddPointer (&prop_loc, SEQLOC_INT, (Pointer) sinp);
           }
 
@@ -3058,7 +3067,8 @@ static SeqLocPtr MapSubLoc
           spp = SeqPntNew ();
           spp->point = ival_head->start2;
           spp->strand = strand;
-          spp->id = SeqIdDup (prop_sip);
+          spp->id = prop_sip;
+          prop_sip = NULL;
           ValNodeAddPointer (&prop_loc, SEQLOC_PNT, (Pointer) spp);
 
         }
@@ -3071,10 +3081,8 @@ static SeqLocPtr MapSubLoc
     default :
       break;
   }
-  if (prop_loc == NULL)
-  {
-    prop_sip = SeqIdFree (prop_sip);
-  }
+  prop_sip = SeqIdFree (prop_sip);
+  
   return prop_loc;
 }
 
@@ -3385,7 +3393,7 @@ static SeqIdPtr GetSegIdList (BioseqPtr master_seg)
   }
   if (master_seg->repr != Seq_repr_seg)
   {
-    sip_list = SeqIdDup (master_seg->id);
+    sip_list = SeqIdDupList (master_seg->id);
   }
   else
   {    
@@ -3935,6 +3943,10 @@ PropagateOneFeat
     SeqLocFree (dup->location);
     dup->location = newloc;
     SetSeqLocPartial (dup->location, partial5, partial3);
+    
+    /* do not propagate feature IDs or links */
+    ClearFeatIDs (dup);
+    ClearFeatIDXrefs (dup);
 
     /* clean up product before we look for (and maybe don't find) the newbsp */
     if (dup->product != NULL)
@@ -4248,6 +4260,18 @@ static void AcceptFeatProp (
   }
   
   seq_for_prop = DialogToPointer (fdp->sequence_list_dlg);
+  if (seq_for_prop != NULL && seq_for_prop->next == NULL)
+  {
+    for (sip = bsp->id; sip != NULL; sip = sip->next)
+    {
+      if (SeqIdIn (sip, (SeqIdPtr) seq_for_prop->data.ptrvalue))
+      {
+        Message (MSG_ERROR, "Can't propagate from a sequence to itself!");
+        SafeShow (fdp->form);
+        return;
+      }
+    }
+  }
 
   SeqEntrySetScope (NULL);
 
@@ -4506,6 +4530,7 @@ typedef struct batchapplyfeaturedetailsdlg
   
   TexT           defline;
   TexT           geneName;
+  TexT           geneDesc;
   TexT           protName;
   TexT           protDesc;
   TexT           rnaName;
@@ -4525,6 +4550,7 @@ BatchApplyFeatureDetailsFree
   {
     bafdp->defline = MemFree (bafdp->defline);
     bafdp->geneName = MemFree (bafdp->geneName);
+	bafdp->geneDesc = MemFree (bafdp->geneDesc);
     bafdp->protName = MemFree (bafdp->protName);
     bafdp->protDesc = MemFree (bafdp->protDesc);
     bafdp->rnaName = MemFree (bafdp->rnaName);
@@ -4544,6 +4570,7 @@ extern BatchApplyFeatureDetailsPtr BatchApplyFeatureDetailsNew (void)
   {
     bafdp->defline = NULL;
     bafdp->geneName = NULL;
+	bafdp->geneDesc = NULL;
     bafdp->protName = NULL;
     bafdp->protDesc = NULL;
     bafdp->rnaName = NULL;
@@ -4589,6 +4616,7 @@ static void BatchApplyFeatureDetailsToDialog (DialoG d, Pointer data)
   {
     SafeSetTitle (dlg->defline, "");
     SafeSetTitle (dlg->geneName, "");
+	SafeSetTitle (dlg->geneDesc, "");
     SafeSetTitle (dlg->protName, "");
     SafeSetTitle (dlg->protDesc, "");
     SafeSetTitle (dlg->rnaName, "");
@@ -4706,7 +4734,16 @@ static Pointer BatchApplyFeatureDetailsDialogToData (DialoG d)
     bafdp->geneName = SaveStringFromText (dlg->geneName);
   }
   
-  if (dlg->protName == NULL || TextHasNoText (dlg->protName))
+  if (dlg->geneDesc == NULL || TextHasNoText (dlg->geneDesc))
+  {
+    bafdp->geneDesc = NULL;
+  }
+  else
+  {
+    bafdp->geneDesc = SaveStringFromText (dlg->geneDesc);
+  }
+  
+ if (dlg->protName == NULL || TextHasNoText (dlg->protName))
   {
     bafdp->protName = NULL;
   }
@@ -5002,11 +5039,17 @@ BatchApplyFeatureDetailsDialog (GrouP parent, Int4 feattype)
   ButtoN                         comment_btn;
   Nlm_EnumFieldAssocPtr          ap;
   Int4                           j;
+  Boolean                        is_indexer = FALSE;
   
   dlg = (BatchApplyFeatureDetailsDlgPtr) MemNew (sizeof (BatchApplyFeatureDetailsDlgData));
   if (dlg == NULL)
   {
     return NULL;
+  }
+
+  if (GetAppProperty ("InternalNcbiSequin") != NULL)
+  {
+    is_indexer = TRUE;
   }
 
   p = HiddenGroup (parent, -1, 0, NULL);
@@ -5051,6 +5094,12 @@ BatchApplyFeatureDetailsDialog (GrouP parent, Int4 feattype)
     if (dlg->feattype == ADD_CDS) {
       StaticPrompt (text_group, "Gene Symbol", 0, dialogTextHeight, programFont, 'l');
       dlg->geneName = DialogText (text_group, "", 20, NULL);
+	  if (is_indexer)
+	  {
+		StaticPrompt (text_group, "Gene Description", 0, dialogTextHeight, programFont, 'l');
+        dlg->geneDesc = DialogText (text_group, "", 20, NULL);
+	  }
+
       StaticPrompt (text_group, "Protein Name", 0, dialogTextHeight, programFont, 'l');
       dlg->protName = DialogText (text_group, "", 20, NULL);
       StaticPrompt (text_group, "Protein Description", 0, dialogTextHeight, programFont, 'l');
@@ -5060,6 +5109,11 @@ BatchApplyFeatureDetailsDialog (GrouP parent, Int4 feattype)
       dlg->rnaName = DialogText (text_group, "", 20, NULL);
       StaticPrompt (text_group, "Gene Symbol", 0, dialogTextHeight, programFont, 'l');
       dlg->geneName = DialogText (text_group, "", 20, NULL);
+	  if (is_indexer)
+	  {
+		StaticPrompt (text_group, "Gene Description", 0, dialogTextHeight, programFont, 'l');
+        dlg->geneDesc = DialogText (text_group, "", 20, NULL);
+	  }
     } else if (dlg->feattype == ADD_IMP) {
       StaticPrompt (text_group, "Type", 0, 6 * Nlm_stdLineHeight, programFont, 'l');
       ap = import_featdef_alist (FALSE, FALSE, FALSE);
@@ -5080,13 +5134,18 @@ BatchApplyFeatureDetailsDialog (GrouP parent, Int4 feattype)
 
       StaticPrompt (text_group, "Gene Symbol", 0, dialogTextHeight, programFont, 'l');
       dlg->geneName = DialogText (text_group, "", 20, NULL);
+	  if (is_indexer)
+	  {
+		StaticPrompt (text_group, "Gene Description", 0, dialogTextHeight, programFont, 'l');
+        dlg->geneDesc = DialogText (text_group, "", 20, NULL);
+	  }
     }
     StaticPrompt (text_group, "Comment", 0, 4 * Nlm_stdLineHeight, programFont, 'l');
     dlg->featcomment = ScrollText (text_group, 20, 4, programFont, TRUE, NULL);
     
   }
   
-  if (dlg->feattype == ADD_RRNA && GetAppProperty ("InternalNcbiSequin") != NULL)
+  if (dlg->feattype == ADD_RRNA && is_indexer)
   {
     comment_btns_grp = HiddenGroup (p, 2, 0, NULL);
     comment_btn = PushButton (comment_btns_grp, "Add '18S-ITS-5.8S-ITS-28S' to comment", Add18SITS28SToComment);
@@ -5224,7 +5283,8 @@ static SeqFeatPtr ApplyGene
   SeqLocPtr         overlap_loc;
   Boolean           partial5, partial3;
 
-  if (StringHasNoText (gene_name) || feature_details_data == NULL || gene_sep == NULL || slp == NULL) return NULL;
+  if (feature_details_data == NULL || gene_sep == NULL || slp == NULL 
+	  || (StringHasNoText (gene_name) && StringHasNoText (feature_details_data->geneDesc))) return NULL;
 
   CheckSeqLocForPartial (slp, &partial5, &partial3);
 
@@ -5286,7 +5346,7 @@ static SeqFeatPtr ApplyGene
     DeleteMarkedObjects (0, OBJ_SEQENTRY, gene_sep);
   }
   
-  grp = CreateNewGeneRef (gene_name, NULL, NULL, FALSE);
+  grp = CreateNewGeneRef (gene_name, NULL, feature_details_data->geneDesc, FALSE);
   if (NULL == grp)
     return NULL;
 
@@ -5964,7 +6024,7 @@ static void DoApplyFeatureToAlignment (ButtoN b)
         || (aafdp->feattype == ADD_IMP
             && feature_details_data->featdef_choice == FEATDEF_GENE))
     {
-      if (! StringHasNoText (feature_details_data->geneName)) 
+      if (! StringHasNoText (feature_details_data->geneName) || ! StringHasNoText (feature_details_data->geneDesc)) 
       {
         /* Create a Gene ref feature on the nuc seq or segment */
         /* we can only create a feature where the sep->choice is 1 */

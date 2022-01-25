@@ -212,7 +212,7 @@ Genetic-code-table ::= {
   -- Base3  TCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAG
  } ,
  {
-  name "Scenedesmus obliquus mitochondrial" ,
+  name "Scenedesmus obliquus Mitochondrial" ,
   id 22 ,
   ncbieaa  "FFLLSS*SYY*LCC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG",
   sncbieaa "-----------------------------------M----------------------------"
@@ -221,7 +221,7 @@ Genetic-code-table ::= {
   -- Base3  TCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAG
  } ,
  {
-  name "Thraustochytrium mitochondrial code" ,
+  name "Thraustochytrium Mitochondrial" ,
   id 23 ,
   ncbieaa  "FF*LSSSSYY**CC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG",
   sncbieaa "--------------------------------M--M---------------M------------"

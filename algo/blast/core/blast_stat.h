@@ -1,4 +1,4 @@
-/*  $Id: blast_stat.h,v 1.70 2005/08/15 16:10:41 dondosha Exp $
+/*  $Id: blast_stat.h,v 1.74 2005/09/27 14:43:16 madden Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -160,6 +160,7 @@ protein alphabet (e.g., ncbistdaa etc.), FALSE for nt. alphabets. */
    Uint1*   ambiguous_res; /**< Array of ambiguous res. (e.g, 'X', 'N')*/
    Int2     ambig_size, /**< size of array above. FIXME: not needed here? */
          ambig_occupy;  /**< How many occupied? */
+   Boolean  round_down; /**< Score must be rounded down to nearest even score if odd. */
 } BlastScoreBlk;
 
 /** 
@@ -264,12 +265,15 @@ Int2 Blast_KarlinBlkGappedCalc (Blast_KarlinBlk* kbp, Int4 gap_open,
  * @param reward Match reward score [in]
  * @param penalty Mismatch penalty score [in]
  * @param kbp_ungap Karlin block with ungapped Karlin-Altschul parameters [in]
+ * @param round_down specifies that the score should be rounded down to nearest even
+ *      score in some cases [in|out]
  * @param error_return Pointer to error message. [in] [out]
  */
 Int2
 Blast_KarlinBlkNuclGappedCalc(Blast_KarlinBlk* kbp, Int4 gap_open, 
                               Int4 gap_extend, Int4 reward, Int4 penalty,
                               Blast_KarlinBlk* kbp_ungap,
+                              Boolean* round_down,
                               Blast_Message** error_return);
 
 
@@ -417,6 +421,30 @@ double BLAST_UnevenGapSumE (Int4 query_start_points, Int4 subject_start_points,
 double BLAST_LargeGapSumE (Int2 num,  double xsum,
                            Int4 query_length, Int4 subject_length,
                            Int8 searchsp_eff, double weight_divisor );
+
+/** Extract the recommended gap existence and extension values.
+ * Only to be used with protein matrices. 
+ * @param  matrixName name of the matrix [in]
+ * @param gap_existence returns recommended existence cost [in|out]
+ * @param gap_extension returns recommended extension cost [in|out]
+ * @return zero on success 
+ */
+Int2 BLAST_GetProteinGapExistenceExtendParams(const char* matrixName,
+                                       Int4* gap_existence,
+                                       Int4* gap_extension);
+
+/** Extract the recommended gap existence and extension values.
+ * Only to be used with blastn searches.
+ * @param reward match score [in]
+ * @param penalty mismatch score [in]
+ * @param gap_existence returns recommended existence cost [in|out]
+ * @param gap_extension returns recommended extension cost [in|out]
+ * @return zero on success 
+ */
+Int2 BLAST_GetNucleotideGapExistenceExtendParams(Int4 reward,
+                                       Int4 penalty,
+                                       Int4* gap_existence,
+                                       Int4* gap_extension);
 
 /** Extract the alpha and beta settings for this matrixName, and these
  *  gap open and gap extension costs

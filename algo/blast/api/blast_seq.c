@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: blast_seq.c,v 1.70 2005/07/27 12:38:18 madden Exp $";
+static char const rcsid[] = "$Id: blast_seq.c,v 1.73 2005/11/09 14:49:49 camacho Exp $";
 /*
 * ===========================================================================
 *
@@ -44,23 +44,23 @@ static char const rcsid[] = "$Id: blast_seq.c,v 1.70 2005/07/27 12:38:18 madden 
  */
 
 /** Converts a SeqLocPtr to a BlastSeqLoc, used for formatting.
- * @param mask_slp SeqLocPtr to be converted [in]
+ * @param slp SeqLocPtr to be converted [in]
  * @param head_loc BlastSeqLoc returned from last call [in]
  * @return pointer to BlastSeqLoc
  */
 static BlastSeqLoc* 
-s_BlastSeqLocFromSeqLoc(SeqLocPtr mask_slp, BlastSeqLoc* head_loc)
+s_BlastSeqLocFromSeqLoc(SeqLocPtr slp, BlastSeqLoc* head_loc)
 {
    BlastSeqLoc* last_loc = head_loc;
 
-   if (mask_slp == NULL)
+   if (slp == NULL)
       return NULL;
 
-   if (mask_slp->choice == SEQLOC_PACKED_INT)
-      mask_slp = (SeqLocPtr) mask_slp->data.ptrvalue;
+   if (slp->choice == SEQLOC_PACKED_INT)
+      slp = (SeqLocPtr) slp->data.ptrvalue;
 
-   for ( ; mask_slp; mask_slp = mask_slp->next) {
-      SeqIntPtr si = (SeqIntPtr) mask_slp->data.ptrvalue;
+   for ( ; slp; slp = slp->next) {
+      SeqIntPtr si = (SeqIntPtr) slp->data.ptrvalue;
       if (!head_loc) {
          last_loc = head_loc = BlastSeqLocNew(&last_loc, si->from, si->to);
       } else {
@@ -71,43 +71,70 @@ s_BlastSeqLocFromSeqLoc(SeqLocPtr mask_slp, BlastSeqLoc* head_loc)
 }
 
 BlastMaskLoc* 
-BlastMaskLocFromSeqLoc(SeqLoc* mask_locs, SeqLoc* query_locs)
+BlastMaskLocFromSeqLoc(SeqLoc* mask_seqlocs, SeqLoc* query_seqlocs, 
+                       EBlastProgramType program_number)
 {
-    const Int4 kNumSeqs = ValNodeLen(query_locs);
-    BlastMaskLoc* blast_mask;
-    Int4 tmp_index=0;
-    SeqLocPtr current_query_loc;
+    const Int4 kNumSeqs = ValNodeLen(query_seqlocs);
+    BlastMaskLoc* retval = NULL;
+    Int4 query_index = 0;
+    const unsigned int kNumContexts = BLAST_GetNumberOfContexts(program_number);
+    SeqLocPtr current_query_loc = NULL;
 
-    if (!mask_locs)
+    if (!mask_seqlocs)
         return NULL;
 
-    blast_mask = BlastMaskLocNew(kNumSeqs);
+    retval = BlastMaskLocNew(kNumSeqs*kNumContexts);
 
-    for (current_query_loc = query_locs; current_query_loc; 
-         current_query_loc = current_query_loc->next) {
-        SeqLocPtr mask_var;
-        for (mask_var = mask_locs; mask_var; mask_var = mask_var->next)
+    for (current_query_loc = query_seqlocs, query_index = 0; 
+         current_query_loc; 
+         current_query_loc = current_query_loc->next, query_index++) {
+
+        const int kCtxIndex = kNumContexts * query_index; /* context index */
+        SeqLocPtr mask_slp = NULL;
+
+        for (mask_slp = mask_seqlocs; mask_slp; mask_slp = mask_slp->next)
         {
-           SeqLocPtr current_mask = (SeqLocPtr) mask_var->data.ptrvalue;
+           SeqLocPtr current_mask = (SeqLocPtr) mask_slp->data.ptrvalue;
            /* If mask is empty, advance to the next link in the mask chain.
               If mask Seq-id does not match sequence Seq-id, stay with this mask
               for the next link in the sequence Seq-loc chain. */
            if (current_mask && 
-                           SeqIdMatch(SeqLocId(current_mask), SeqLocId(current_query_loc))) {
-               blast_mask->seqloc_array[tmp_index] = 
-                     s_BlastSeqLocFromSeqLoc(current_mask, blast_mask->seqloc_array[tmp_index]);
+               SeqIdMatch(SeqLocId(current_mask), SeqLocId(current_query_loc))) 
+           {
+               retval->seqloc_array[kCtxIndex] = 
+                     s_BlastSeqLocFromSeqLoc(current_mask,
+                                             retval->seqloc_array[kCtxIndex]);
            }
         }
          
-        if (blast_mask->seqloc_array[tmp_index])
+        if (retval->seqloc_array[kCtxIndex])
         {
-              BlastSeqLoc_RestrictToInterval(&blast_mask->seqloc_array[tmp_index], 
-                             SeqLocStart(current_query_loc), SeqLocStop(current_query_loc));
+            const Boolean kIsNa = Blast_QueryIsNucleotide(program_number) &&
+                !Blast_QueryIsTranslated(program_number) &&
+                !Blast_ProgramIsPhiBlast(program_number);
+            BlastSeqLoc_RestrictToInterval(&retval->seqloc_array[kCtxIndex], 
+                                           SeqLocStart(current_query_loc), 
+                                           SeqLocStop(current_query_loc));
+            if (kIsNa) {
+                /* N.B.: Unlike in the C++ APIs, this logic is only applied to
+                 * non-translated nucleotide queries. See comment for
+                 * BlastMaskLocDNAToProtein */
+                Uint1 strand = SeqLocStrand(current_query_loc);
+                if (strand == Seq_strand_minus) {
+                    retval->seqloc_array[kCtxIndex+1] = 
+                        retval->seqloc_array[kCtxIndex];
+                    retval->seqloc_array[kCtxIndex] = NULL;
+                } else if (strand == Seq_strand_plus) {
+                    retval->seqloc_array[kCtxIndex+1] = NULL;
+                } else {
+                    retval->seqloc_array[kCtxIndex+1] = 
+                        BlastSeqLocListDup(retval->seqloc_array[kCtxIndex]);
+                }
+            }
         }
-        tmp_index++;
     }
     
-    return blast_mask;
+    return retval;
 }
 
 SeqLoc*
@@ -124,12 +151,10 @@ SeqLocPtr BlastMaskLocToSeqLoc(EBlastProgramType program_number,
                                const BlastMaskLoc* mask_loc, 
                                SeqLoc* query_loc)
 {
-   SeqLocPtr mask_head = NULL, last_mask = NULL;
+   SeqLocPtr retval = NULL, retval_tail = NULL;
    Int4 index;
-   const Boolean k_translate = (program_number == eBlastTypeBlastx || 
-                                program_number == eBlastTypeTblastx ||
-                                program_number == eBlastTypeRpsTblastn);
-   const Uint1 k_num_frames = (k_translate ? NUM_FRAMES : 1);
+   const Boolean k_translate = Blast_QueryIsTranslated(program_number);
+   const Uint1 k_num_frames = BLAST_GetNumberOfContexts(program_number);
    SeqLoc* slp;
 
    if (mask_loc == NULL || mask_loc->seqloc_array == NULL)
@@ -137,27 +162,25 @@ SeqLocPtr BlastMaskLocToSeqLoc(EBlastProgramType program_number,
 
    for (index=0, slp = query_loc; slp; ++index, slp = slp->next)
    {
-      Int4 frame_index = index*k_num_frames;
+      const int kCtxIndex = k_num_frames * index; /* context index */
       Int4 tmp_index;
       Int4 slp_from = SeqLocStart(slp);
       SeqIdPtr seqid = SeqLocId(slp);
-      for (tmp_index=frame_index; tmp_index<(frame_index+k_num_frames); tmp_index++)
+      for (tmp_index=kCtxIndex; tmp_index<(kCtxIndex+k_num_frames); tmp_index++)
       {
          BlastSeqLoc* loc = NULL;
-         SeqLocPtr mask_slp_head = NULL, mask_slp_last = NULL;
+         SeqLocPtr mask_slp_head = NULL, mask_slp_tail = NULL;
          for (loc = mask_loc->seqloc_array[tmp_index]; loc; loc = loc->next)
          {
-            SSeqRange* di = loc->ssr;
             SeqIntPtr si = SeqIntNew();
-            si->from = di->left + slp_from;
-            si->to = di->right + slp_from;
+            si->from = loc->ssr->left + slp_from;
+            si->to = loc->ssr->right + slp_from;
             si->id = SeqIdDup(seqid);
-            if (!mask_slp_last)
-               mask_slp_last = 
-                  ValNodeAddPointer(&mask_slp_head, SEQLOC_INT, si);
-            else 
-               mask_slp_last = 
-                  ValNodeAddPointer(&mask_slp_last, SEQLOC_INT, si);
+            /* Append the pointer, but also keep track of the tail of the list
+             * so that appending to the list is a constant operation */
+            mask_slp_tail = ValNodeAddPointer
+                ( (mask_slp_tail ? &mask_slp_tail : &mask_slp_head), 
+                  SEQLOC_INT, si);
          }
 
          if (mask_slp_head) {
@@ -172,15 +195,15 @@ SeqLocPtr BlastMaskLocToSeqLoc(EBlastProgramType program_number,
             else
                 tmp_choice = 0;
 
-            if (!last_mask) {
-               last_mask = ValNodeAddPointer(&mask_head, tmp_choice, new_mask_slp);
-            } else {
-               last_mask = ValNodeAddPointer(&last_mask, tmp_choice, new_mask_slp);
-            }
+            /* Append the pointer, but also keep track of the tail of the list
+             * so that appending to the list is a constant operation */
+            retval_tail = ValNodeAddPointer
+                ( (retval_tail ? &retval_tail : &retval), 
+                  tmp_choice, new_mask_slp);
         }
       }
    }
-   return mask_head;
+   return retval;
 }
 
 /** Set field values for one element of the context array of a
@@ -465,7 +488,7 @@ Int2 BLAST_GeneticCodeFind(Int4 gc, Uint1** genetic_code)
  * @param query_info The query information structure, pre-initialized,
  *                   but filled here [in]
  * @param query_options Query setup options, containing the genetic code for
- *                      translation [in]
+ *                      translation. N.B.: its strand_option field is ignored [in]
  * @param num_frames How many frames to get for this sequence? [in]
  * @param encoding In what encoding to retrieve the sequence? [in]
  * @param buffer_out Buffer to hold plus strand or protein [out]
@@ -620,10 +643,10 @@ Int2 BLAST_SetUpQuery(EBlastProgramType program_number,
       return status;
 
    if (masking_locs) {
-       BlastMaskLoc* lcase_mask = BlastMaskLocFromSeqLoc(masking_locs, query_slp);
-       if (program_number == eBlastTypeBlastx || 
-           program_number == eBlastTypeTblastx ||
-           program_number == eBlastTypeRpsTblastn)
+       BlastMaskLoc* lcase_mask = BlastMaskLocFromSeqLoc(masking_locs, 
+                                                         query_slp,
+                                                         program_number);
+       if (Blast_QueryIsTranslated(program_number))
            BlastMaskLocDNAToProtein(lcase_mask, *query_info);
        (*query_blk)->lcase_mask = lcase_mask;
        (*query_blk)->lcase_mask_allocated = TRUE;

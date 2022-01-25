@@ -1,7 +1,7 @@
 #ifndef _NCBIOPT_
 #define _NCBIOPT_
 
-/*  $Id: ncbiopt.h,v 6.15 2004/07/15 15:11:45 ucko Exp $
+/*  $Id: ncbiopt.h,v 6.16 2005/11/16 16:36:11 kans Exp $
 * ==========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -34,6 +34,9 @@
 *
 * --------------------------------------------------------------------------
 * $Log: ncbiopt.h,v $
+* Revision 6.16  2005/11/16 16:36:11  kans
+* support for PowerPC and Intel chips for Macintosh
+*
 * Revision 6.15  2004/07/15 15:11:45  ucko
 * Disable workaround for Linux distributions (RH7?) that misdefine LONG_BIT.
 *
@@ -165,6 +168,9 @@ by including it first.
 
 #  elif defined(OS_MAC) 
 #    if defined(PROC_PPC)
+#      define Int8  long long
+#      define Uint8 unsigned long long
+#    elif defined(PROC_I80X86)
 #      define Int8  long long
 #      define Uint8 unsigned long long
 #    elif defined(PROC_MC680X0)

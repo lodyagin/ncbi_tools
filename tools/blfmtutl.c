@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: blfmtutl.c,v 1.10 2005/08/05 12:10:48 coulouri Exp $";
+static char const rcsid[] = "$Id: blfmtutl.c,v 1.12 2005/11/22 13:44:24 coulouri Exp $";
 
 /* ===========================================================================
 *
@@ -36,6 +36,12 @@ Contents: Utilities for BLAST formatting
 /*
 * $Revision: 
 * $Log: blfmtutl.c,v $
+* Revision 1.12  2005/11/22 13:44:24  coulouri
+* bump version
+*
+* Revision 1.11  2005/10/17 12:47:30  camacho
+* From Alejandro Schaffer: Updated reference for compositional adjustment
+*
 * Revision 1.10  2005/08/05 12:10:48  coulouri
 * bump version
 *
@@ -80,8 +86,8 @@ Contents: Utilities for BLAST formatting
 
 
 /* the version of BLAST. */
-#define BLAST_ENGINE_VERSION "2.2.12"
-#define BLAST_RELEASE_DATE "Aug-07-2005"
+#define BLAST_ENGINE_VERSION "2.2.13"
+#define BLAST_RELEASE_DATE "Nov-27-2005"
 
 #define BUFFER_LENGTH 255
 
@@ -546,15 +552,18 @@ CAdjustmentGetReference(Boolean html)
 	ret_buffer = NULL;
 	ret_buffer_length = 0;
 
-	
-	add_string_to_bufferEx("Reference for compositional score matrix adjustment: Altschul, Stephen F., ", &ret_buffer, &ret_buffer_length, TRUE);
-	add_string_to_bufferEx("John C. Wootton, E. Michael Gertz, Richa Agarwala, Aleksandr Morgulis, ", &ret_buffer, &ret_buffer_length, TRUE);
-        if (html)
-	  add_string_to_bufferEx("Alejandro A. Sch&auml;ffer, and Yi-Kuo Yu \"Protein database searches using ", &ret_buffer, &ret_buffer_length, TRUE);
-	else
-	  add_string_to_bufferEx("Alejandro A. Schaffer, and Yi-Kuo Yu \"Protein database searches using ", &ret_buffer, &ret_buffer_length, TRUE);
-
-	add_string_to_bufferEx("compositionally adjusted substitution matrices\", FEBS J., in press.", &ret_buffer, &ret_buffer_length, TRUE);	
+	if (html) {
+	  add_string_to_bufferEx("<b><a href=\"http://www.ncbi.nlm.nih.gov/entrez/query.fcgi?db=PubMed&cmd=Retrieve&list_uids=16218944&dopt=Citation\">Reference for compositional score matrix adjustment</a>:</b>", &ret_buffer, &ret_buffer_length, TRUE);
+	  add_string_to_bufferEx("Altschul, Stephen F., John C. Wootton, E. Michael Gertz, Richa Agarwala,", &ret_buffer, &ret_buffer_length, TRUE);
+	  add_string_to_bufferEx("Aleksandr Morgulis, Alejandro A. Sch&auml;ffer, and Yi-Kuo Yu (2005) \"Protein database", &ret_buffer, &ret_buffer_length, TRUE);
+	  add_string_to_bufferEx("searches using compositionally adjusted substitution matrices\", FEBS J. 272:5101-5109.", &ret_buffer, &ret_buffer_length, TRUE);	
+	}
+	else {
+	  add_string_to_bufferEx("Reference for compositional score matrix adjustment: Altschul, Stephen F., ", &ret_buffer, &ret_buffer_length, TRUE);
+	  add_string_to_bufferEx("John C. Wootton, E. Michael Gertz, Richa Agarwala, Aleksandr Morgulis,", &ret_buffer, &ret_buffer_length, TRUE);
+	  add_string_to_bufferEx("Alejandro A. Schaffer, and Yi-Kuo Yu (2005) \"Protein database searches", &ret_buffer, &ret_buffer_length, TRUE);
+	  add_string_to_bufferEx("using compositionally adjusted substitution matrices\", FEBS J. 272:5101-5109.", &ret_buffer, &ret_buffer_length, TRUE);	
+	}
 	return ret_buffer;
 }
 

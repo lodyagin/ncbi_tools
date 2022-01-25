@@ -209,13 +209,16 @@ on SetProjectData()
 			"ncbi_service_connector", "ncbi_dispd", "ncbi_lbsmd_stub", Â
 			"ncbi_socket_connector", "ncbi_ftp_connector", "ncbi_sendmail"})
 	
-	AddSimpleProject("netcli", {}, "network:nsclilib")
+	AddSimpleProjectExceptFiles("netcli", {}, "network:nsclilib", {"ni_encr.c", "ni_list.c", "ni_lib.c", "ni_disp.c", "ni_encr.c"})
+	
 	
 	AddSimpleProject("ncbispell", {}, "network:spell:client")
 	
 	AddSimpleProject("ncbiblast", {}, "algo:blast:core")
 	
 	AddSimpleProject("ncbiblastapi", {}, "algo:blast:api")
+	
+	AddSimpleProject("blastcompadj", {}, "algo:blast:composition_adjustment")
 	
 end SetProjectData
 
@@ -504,18 +507,16 @@ on SetupTarget(proj, targetIndex)
 		-- Set the appropriate prefix file.
 		set prefixFile to prefixFile of projSettings
 		if targetAPI is "Win32" and projFeatures contains "winprefix" then
-			set prefixFile to "Win32Headers.pch"
+			my AppendPrefixFile("Win32Headers.pch")
 		else
 			if prefixFile is "" then
 				set prefixFile to "CarbonPrefix.h"
 			else
 				set prefixFile to "Carbon-" & prefixFile
 			end if
-		end if
-		if prefixFile is not "" then
 			my AppendPrefixFile(prefixFile)
+			my AppendPrefixFile("MW-BSD-limits-fix.h")
 		end if
-		
 	end tell
 	
 	-- Add source files.

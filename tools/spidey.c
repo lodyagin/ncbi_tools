@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: spidey.c,v 6.71 2005/04/26 21:34:39 kans Exp $";
+static char const rcsid[] = "$Id: spidey.c,v 6.72 2005/11/17 17:12:50 kskatz Exp $";
 
 /* ===========================================================================
 *
@@ -30,15 +30,15 @@ static char const rcsid[] = "$Id: spidey.c,v 6.71 2005/04/26 21:34:39 kans Exp $
 *
 * Version Creation Date:   5/01
 *
-* $Revision: 6.71 $
+* $Revision: 6.72 $
 *
 * File Description: mrna-to-genomic alignment algorithms and functions
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: spidey.c,v $
-* Revision 6.71  2005/04/26 21:34:39  kans
-* added SEQID_GPIPE
+* Revision 6.72  2005/11/17 17:12:50  kskatz
+* Fixed initializations and removed non-used functions to get rid of warnings
 *
 * Revision 6.70  2005/02/22 17:41:59  kskatz
 * fixed potential dividing by zero in SPI_is_acceptor* and SPI_is_donor* probability calculations
@@ -261,8 +261,6 @@ static Boolean spi_overlaps(SeqAlignPtr sap, SPI_BlockPtr sbp);
 static void SPI_BeautifySMP(SPI_RegionInfoPtr srip);
 static void SPI_RemoveOutsideBounds(SeqAlignPtr sap, SPI_OptionsPtr spot);
 static void SPI_PadRegions(SPI_RegionInfoPtr srip, Int4 bsplen);
-static void SPI_TossRegions(SPI_RegionInfoPtr PNTR srip, SPI_OptionsPtr spot);
-static int LIBCALLBACK SPI_CompareInitialRegions(VoidPtr ptr1, VoidPtr ptr2);
 static int LIBCALLBACK SPI_compare_aln_score(VoidPtr ptr1, VoidPtr ptr2);
 static void SPI_SortRegionsByScore(SPI_RegionInfoPtr PNTR srip, SPI_OptionsPtr spot);
 static int LIBCALLBACK SPI_CompareRegions(VoidPtr ptr1, VoidPtr ptr2);
@@ -296,7 +294,6 @@ static SPI_mRNAPtr SPI_AdjustForSplice(SeqAlignPtr sap, SPI_OptionsPtr spot, SPI
 static Int4 SPI_GetExonInfo(SPI_mRNAPtr smp, Int4 n, Int4Ptr start, Int4Ptr stop, Int4Ptr mis, SPI_OptionsPtr spot);
 static void SPI_AdjustOverlaps(SeqAlignPtr sap1, SeqAlignPtr sap2, Int4 n, SPI_mRNAPtr smp, SPI_OptionsPtr spot);
 static void SPI_RemoveTeenyAlns(SeqAlignPtr sap, Int4 len);
-static void SPI_ExtendAlnAlg(SeqAlignPtr sap, Int4 ovl, Int4 which_side, Uint1 strand);
 static void SPI_ExtendAlnAlgDumb(SeqAlignPtr sap, Int4 ovl, Int4 which_side, Uint1 strand);
 static void SPI_GetAcceptorScore(BioseqPtr bsp, Int4 pos1, Int4 pos2, Uint1 strand, FloatHiPtr score, Int4 spllen, SPI_OptionsPtr spot);
 static Int4 spi_get_overlap (SeqAlignPtr sap1, SeqAlignPtr sap2);
@@ -333,14 +330,12 @@ static void SPI_AdjustEndsOfPieces(SPI_FragPtr sfp1, SPI_FragPtr sfp2, BioseqPtr
 static SeqAlignPtr SPI_GetNthSAByRow(SeqAlignPtr sap, Int4 row, Int4 n);
 static SPI_FragSplPtr SPI_GetPossibleSites(SeqAlignPtr sap, BioseqPtr bsp_genomic, SPI_OptionsPtr spot, Boolean donor, Int4 ovl);
 static void SPI_FragSplFree(SPI_FragSplPtr fsp);
-static SeqLocPtr SPI_SeqLocListDup(SeqLocPtr slp);
 static int LIBCALLBACK SPI_CompareSpins(VoidPtr ptr1, VoidPtr ptr2);
 static void SPI_OrderInternally(SPI_FragHerdPtr sfhp);
 static int LIBCALLBACK SPI_CompareAlnPos(VoidPtr ptr1, VoidPtr ptr2);
 static SPI_RegionInfoPtr SPI_GetResultsForCDS(SPI_RegionInfoPtr srip_mrna, BioseqPtr bsp_mrna, SPI_OptionsPtr spot);
 static void SPI_FillInUTRInfo(SPI_RegionInfoPtr srip_cds, SPI_RegionInfoPtr srip_mrna, Int4 len, Int4 exonstart, Int4 exonstop);
 static Boolean LIBCALLBACK SPI_GetCDS(SeqFeatPtr sfp, SeqMgrFeatContextPtr context);
-static void SPI_ShiftAlignment(SeqAlignPtr sap, Int4 offset, Int4 row);
 static Boolean LIBCALLBACK SPI_GetCDSFeat(SeqFeatPtr sfp, SeqMgrFeatContextPtr context);
 static Int4 SPI_FindLongestProt(CharPtr seq, Int4Ptr pos);
 static Boolean SPI_GetAccessionFromSeqId(SeqIdPtr sip, Int4Ptr gi, CharPtr PNTR id);
@@ -349,7 +344,6 @@ static ACTProfilePtr SPI_ProfileNew(Boolean nuc);
 static ACTProfilePtr SPI_ProfileFree(ACTProfilePtr app);
 static ACTProfilePtr SPI_ProfileSetFree(ACTProfilePtr app);
 static void SPI_BuildProfile(SeqLocPtr slp, ACTProfilePtr PNTR app, Int4Ptr count, Int4 length);
-static FloatHi SPI_ScoreProfile(BioseqPtr bsp, Int4 pos, Uint1 strand, ACTProfilePtr app);
 static ACTProfilePtr SPI_MakeProfileFromSA(SeqAlignPtr sap);
 static int SPI_Choose2LooseMrnaOvLap (const SeqAlignPtr sap1, const SeqAlignPtr sap2, const SPI_mRNAPtr smp, const int ptr1offset);     
 static void SPI_CheckMrnaOrder(SPI_IvalPtr PNTR spi_pp, const int num);
@@ -608,7 +602,6 @@ NLM_EXTERN SPI_RegionInfoPtr SPI_AlnSinglemRNAToGen(SPI_bsinfoPtr spig, SPI_bsin
    SPI_RemoveOutsideBounds(sap, spot);
    BLASTOptionDelete(options);
    srip = SPI_FindWindows(sap, spot);
-   /*SPI_TossRegions(&srip, spot);*/
    SPI_PadRegions(srip, spig->bsp->length);
    /* once the windows are found, throw out the original alignment */
    /* and carefully align in each window                           */
@@ -884,7 +877,7 @@ NLM_EXTERN void SPI_MakeMultipleAlignment(SPI_RegionInfoPtr srip_head)
    SeqAlignPtr        sap_prev;
    SeqAlignPtr        sap_tmp;
    SeqAlignPtr        PNTR saparray;
-   SPI_BlockPtr       sbp;
+   SPI_BlockPtr       sbp = NULL;
    SPI_BlockPtr       sbp_head;
    SPI_BlockPtr       sbp_prev;
    SPI_MultPtr        smu;
@@ -1507,92 +1500,8 @@ static void SPI_PadRegions(SPI_RegionInfoPtr srip, Int4 bsplen)
    }
 }
 
-/***************************************************************************
-*
-*  SPI_TossRegions sorts the regions returned by SPI_FindWindows, and 
-*  removes all but the n best regions, where n is the number of regions
-*  requested by the user. The regions are sorted by alignment score, then
-*  by sequence coverage.
-*
-***************************************************************************/
-static void SPI_TossRegions(SPI_RegionInfoPtr PNTR srip, SPI_OptionsPtr spot)
-{
-   Boolean            done;
-   Int4               i;
-   Int4               j;
-   Int4               n;
-   SPI_RegionInfoPtr  PNTR sriparray;
-   SPI_RegionInfoPtr  srip_tmp;
 
-   if (srip == NULL || spot == NULL || *srip == NULL)
-      return;
-   i = 0;
-   srip_tmp = *srip;
-   while (srip_tmp != NULL)
-   {
-      srip_tmp = srip_tmp->next;
-      i++;
-   }
-   sriparray = (SPI_RegionInfoPtr PNTR)MemNew(i*sizeof(SPI_RegionInfoPtr));
-   srip_tmp = *srip;
-   for (j=0; j<i; j++)
-   {
-      sriparray[j] = srip_tmp;
-      srip_tmp = srip_tmp->next;
-   }
-   HeapSort(sriparray, i, sizeof(SPI_RegionInfoPtr), SPI_CompareInitialRegions);
-   if (spot->numreturns > 0)
-      n = spot->numreturns;
-   else
-      n = 1;
-   done = FALSE;
-   sriparray[0]->next = NULL;
-   for (j=1; j<n && j<i && !done; j++)
-   {
-      sriparray[j-1]->next = sriparray[j];
-      if (sriparray[j] != NULL)
-         sriparray[j]->next = NULL;
-      else
-         done = TRUE;
-   }
-   for (j=n; j<i; j++)
-   {
-      MemFree(sriparray[j]);
-   }
-   *srip = sriparray[0];
-   MemFree(sriparray);
-}
 
-/***************************************************************************
-*
-*  SPI_CompareInitialRegions is the HeapSort callback for SPI_TossRegions.
-*  It compares the regions first by score (this is the sum of the 
-*  alignment scores), and second by sequence coverage.
-*
-***************************************************************************/
-static int LIBCALLBACK SPI_CompareInitialRegions(VoidPtr ptr1, VoidPtr ptr2)
-{
-   SPI_RegionInfo  srip1;
-   SPI_RegionInfo  srip2;
-
-   if (ptr1 != NULL && ptr2 != NULL)
-   {
-      srip1 = **((SPI_RegionInfoPtr PNTR)ptr1);
-      srip2 = **((SPI_RegionInfoPtr PNTR)ptr2);
-      if (srip1.coverage > srip2.coverage)
-         return -1;
-      else if (srip1.coverage < srip2.coverage)
-         return 1;
-      else
-      {
-         if (srip1.score > srip2.score)
-            return -1;
-         else if (srip1.score < srip2.score)
-            return 1;
-      }
-   }
-   return 0;
-}
 
 /***************************************************************************
 *
@@ -1843,7 +1752,7 @@ static void SPI_PrintResult(FILE *ofp, FILE *ofp2, SPI_RegionInfoPtr srip, Biose
    Char             textid1[42];
    Char             textid2[42];
    Int4             tmp;
-   CharPtr          tmpstring;
+   CharPtr          tmpstring = NULL;
 
    if (bsp_genomic == NULL || bsp_mrna == NULL)
       return;
@@ -2347,7 +2256,7 @@ static void SPI_PrintHerdResult(FILE *ofp, FILE *ofp2, SPI_mRNAToHerdPtr herd, S
    Boolean          done;
    Boolean          end;
    Int4             endctr;
-   CharPtr          endstr;
+   CharPtr          endstr = NULL;
    SPI_ExonProfPtr  epp_curr;
    Int4             gstart;
    Int4             i;
@@ -3952,250 +3861,6 @@ static void SPI_AlignInWindows(SPI_RegionInfoPtr PNTR head_srip, BioseqPtr bsp_g
    *head_srip = srip_head;
 }
 
-static void SPI_CheckAlnEnds(SeqAlignPtr sap, Int4Ptr left, Int4Ptr right)
-{
-   AMFreqPtr  afp;
-   Boolean    found;
-   Int4       i;
-   Int4       j;
-   Int4       len;
-   Int4       length;
-   Int4       mismatch;
-  
-   if (sap == NULL || sap->saip == NULL)
-      return;
-   len = AlnMgr2GetAlnLength(sap, FALSE);
-   afp = AlnMgr2ComputeFreqMatrix(sap, 0, MIN(len, SPI_MAXBADEXON), 0);
-   mismatch = 0;
-   *left = *right = 0;
-   for (i=0; i<SPI_MINBADEXON/2; i++)
-   {
-      found = FALSE;
-      for (j=0; !found && j<afp->size; j++)
-      {
-         if (afp->freq[j][i] == 1 && afp->freq[5][i] != 1)
-            found = TRUE;
-      }
-      if (found)
-         mismatch++;
-   }
-   if (mismatch > 0)
-      *left = i+1;
-   while (i<MIN(afp->len, SPI_MAXBADEXON) && mismatch*100/i >= SPI_BADEXONTHRESH)
-   {
-      found = FALSE;
-      for (j=0; !found && j<afp->size; j++)
-      {
-         if (afp->freq[j][i] == 1 && afp->freq[5][i] != 1)
-            found = TRUE;
-      }
-      if (found)
-         *left = MIN(i+1, len);
-      i++;
-   }
-   afp = AlnMgr2ComputeFreqMatrix(sap, MAX(0, len-1-SPI_MAXBADEXON), len-1, 0);
-   length = len-1-(MAX(0, len-1-SPI_MAXBADEXON))+1;
-   mismatch = 0;
-   for (i=0; i<SPI_MINBADEXON/2; i++)
-   {
-      found = FALSE;
-      for (j=0; !found && j<afp->size; j++)
-      {
-         if (afp->freq[j][length-1-i] == 1 && afp->freq[5][length-1-i] != 1)
-            found = TRUE;
-      }
-      if (found)
-         mismatch++;
-   }
-   if (mismatch > 0)
-      *right = i+1;
-   while (i<MIN(length, SPI_MAXBADEXON) && mismatch*100/i >= SPI_BADEXONTHRESH)
-   {
-      found = FALSE;
-      for (j=0; !found && j<afp->size; j++)
-      {
-         if (afp->freq[j][length-1-i] == 1 && afp->freq[5][length-1-i] != 1)
-            found = TRUE;
-      }
-      if (found)
-         *right = MIN(i+1, len);
-      i++;
-   }
-}
-
-static Int4 BufStrStr(Uint1Ptr buf1, Int4 buf1len, Uint1Ptr buf2, Int4 buf2len)
-{
-   Boolean  found;
-   Int4     i;
-   Int4     j;
-   Int4     mismatch;
-
-   if (buf1 == NULL || buf2 == NULL)
-      return -1;
-   found = FALSE;
-   mismatch = 0;
-   for (i=0; i<buf1len-buf2len && !found; i++)
-   {
-      found = TRUE;
-      for (j=0; found && j<buf2len; j++)
-      {
-         if (buf1[i] != buf2[j])
-            mismatch++;
-         if (j>2 && mismatch*100/(j+1) > SPI_BADEXONTHRESH)
-            found = FALSE;
-      }
-   }
-   if (!found)
-      return -1;
-   else
-      return i;
-}
-
-/***************************************************************************
-*
-*  SPI_PlaceLittleExons looks for small, badly aligned regions on the ends
-*  of aligned exons, and tries to align those by themselves as extra-small
-*  (teeny) exons.
-*
-***************************************************************************/
-static Boolean SPI_PlaceLittleExons(SeqAlignPtr sap)
-{
-   AMAlignIndex2Ptr  amaip;
-   BioseqPtr         bsp1;
-   BioseqPtr         bsp2;
-   Uint1             buf1[SPI_MAXSEQPORT];
-   Uint1             buf2[SPI_MAXBADEXON];
-   DenseSegPtr       dsp;
-   Boolean           found;
-   Int4              i;
-   Int4              j;
-   Int4              l;
-   Int4              lastleft;
-   Int4              lastright;
-   Int4              left;
-   Int4              pos;
-   Int4              right;
-   SeqAlignPtr       sap_new;
-   SeqAlignPtr       sap_new_head;
-   SeqAlignPtr       sap_new_prev;
-   SeqIdPtr          sip1;
-   SeqIdPtr          sip2;
-   SeqPortPtr        spp1;
-   SeqPortPtr        spp2;
-   Int4              start1;
-   Int4              start2;
-   Int4              stop1;
-   Int4              stop2;
-   Uint1             strand1;
-   Uint2             strand2;
-
-   if (sap == NULL)
-      return FALSE;
-   sap_new_head = NULL;
-   amaip = (AMAlignIndex2Ptr)(sap->saip);
-   strand1 = AlnMgr2GetNthStrand(amaip->saps[0], 1);
-   strand2 = AlnMgr2GetNthStrand(amaip->saps[0], 2);
-   lastright = lastleft = 0;
-   for (i=0; i<amaip->numsaps; i++)
-   {
-      SPI_CheckAlnEnds(amaip->saps[i], &right, &left);
-      if (strand2 == Seq_strand_minus)
-      {
-         AlnMgr2GetNthSeqRangeInSA(amaip->saps[i], 2, NULL, &start2);
-         start2 -= right;
-      } else
-      {
-         AlnMgr2GetNthSeqRangeInSA(amaip->saps[i], 2, &stop2, NULL);
-         stop2 += left;
-      }
-      start1 = stop1 = -1;
-      AlnMgr2GetNthSeqRangeInSA(amaip->saps[i], 1, &stop1, NULL);
-      stop1 += left;
-      if ((strand2 == Seq_strand_plus && left + lastright >= SPI_TEENYEXON && left+lastright <= SPI_MAXBADEXON) || (strand2 == Seq_strand_minus && right+lastleft >= SPI_TEENYEXON && right+lastleft <= SPI_MAXBADEXON))
-      {
-         if (i > 0)
-         {
-            if (strand2 == Seq_strand_minus)
-            {
-               AlnMgr2GetNthSeqRangeInSA(amaip->saps[i-1], 2, &stop2, NULL);
-               stop2 += lastleft;
-            } else
-            {
-               AlnMgr2GetNthSeqRangeInSA(amaip->saps[i-1], 2, NULL, &start2);
-               start2 -= lastright;
-            }
-            AlnMgr2GetNthSeqRangeInSA(amaip->saps[i-1], 1, NULL, &start1);
-            start1 -= lastright;
-         } else
-         {
-            if (strand2 == Seq_strand_minus)
-               stop2 = 0;
-            else
-               start2 = 0;
-            start1 = 0;
-         }
-         sip1 = AlnMgr2GetNthSeqIdPtr(amaip->saps[i], 1);
-         sip2 = AlnMgr2GetNthSeqIdPtr(amaip->saps[i], 2);
-         bsp1 = BioseqLockById(sip1);
-         bsp2 = BioseqLockById(sip2);
-         spp2 = SeqPortNew(bsp2, start2, stop2, Seq_strand_plus, Seq_code_ncbi4na);
-         SeqPortRead(spp2, buf2, stop2-start2+1);
-         found = FALSE;
-         for (l=0; l<stop1-start1+1 && !found; l+=SPI_MAXSEQPORT)
-         {
-            spp1 = SeqPortNew(bsp1, start1+l, MIN(stop1, start1+1+SPI_MAXSEQPORT), strand1, Seq_code_ncbi4na);
-            SeqPortRead(spp1, buf1, MIN(stop1, start1+1+SPI_MAXSEQPORT) - start1 - 1);
-            j = BufStrStr(buf1, MIN(stop1, start1+1+SPI_MAXSEQPORT) - start1 - 1, buf2, stop2-start2+1);
-            if (j>0)
-               found = TRUE;
-         }
-         if (found)
-            pos = j+l+start1;
-         BioseqUnlock(bsp1);
-         BioseqUnlock(bsp2);
-         if (found)
-         {
-            dsp = DenseSegNew();
-            dsp->dim = 2;
-            dsp->numseg = 1;
-            dsp->ids = sip1;
-            dsp->ids->next = sip2;
-            dsp->starts = (Int4Ptr)MemNew(2*sizeof(Int4));
-            dsp->starts[0] = pos;
-            dsp->starts[1] = start2;
-            dsp->lens = (Int4Ptr)MemNew(sizeof(Int4));
-            dsp->lens[1] = stop2-start2+1;
-            dsp->strands = (Uint1Ptr)MemNew(2*sizeof(Uint1));
-            dsp->strands[0] = strand1;
-            dsp->strands[1] = Seq_strand_plus;
-            sap_new = SeqAlignNew();
-            sap_new->segtype = SAS_DENSEG;
-            sap_new->segs = (Pointer)dsp;
-            if (sap_new_head != NULL)
-            {
-               sap_new_prev->next = sap_new;
-               sap_new_prev = sap_new;
-            } else
-               sap_new_head = sap_new_prev = sap_new;
-         }
-      }
-      lastright = right;
-      lastleft = left;
-   }
-   /* if there are any new saps, put them in with the others in the right order */
-   if (sap_new_head == NULL)
-      return FALSE;
-   for (i=0; i<amaip->numsaps-1; i++)
-   {
-      amaip->saps[i]->next = amaip->saps[i+1];
-   }
-   amaip->saps[amaip->numsaps-1]->next = sap_new_head;
-   sap->segs = (Pointer)(amaip->saps[0]);
-   AMAlignIndexFreeEitherIndex(sap);
-   AlnMgr2IndexLite(sap);
-   AlnMgr2SortAlnSetByNthRowPos(sap, 1);
-   return TRUE; /* alert that saps have changed */
-}
 
 /***************************************************************************
 *
@@ -4297,8 +3962,6 @@ static void SPI_DoAln(SPI_RegionInfoPtr srip, BioseqPtr bsp_genomic, BioseqPtr b
          return;
    }
    srip->smp = SPI_AdjustForSplice(sap, spot, srip);
-   /*if (SPI_PlaceLittleExons(sap))
-      srip->smp = SPI_AdjustForSplice(sap, spot, srip);*/
 }
 
 /***************************************************************************
@@ -5334,9 +4997,9 @@ static SPI_mRNAPtr SPI_AdjustForSplice(SeqAlignPtr sap, SPI_OptionsPtr spot, SPI
    Int4             len;
    Int4             len1;
    Int4             len2;
-   Int4             min;
+   Int4             min = 0;
    Int4             mis;
-   Int4             max;
+   Int4             max = 0;
    Int4             mstart1;
    Int4             mstart2;
    Int4             mstop1;
@@ -5670,7 +5333,10 @@ static Int4 SPI_GetExonInfo(SPI_mRNAPtr smp, Int4 n, Int4Ptr start, Int4Ptr stop
       app = app->next;
    }
    SPI_ProfileSetFree(app_head);
-   smp->exonid[n] = (FloatHi)(100) - ((FloatHi)(100*mismatch))/(FloatHi)(*stop - *start + 1);
+  
+       
+   smp->exonid[n] = ( *stop - *start +1 > 0 
+                      ?  (FloatHi)(100) - ((FloatHi)(100*mismatch))/(FloatHi)(*stop - *start + 1) : 0 );
    if (mismatch > 0 && smp->exonid[n] > 99.9)
       smp->exonid[n] = 99.9;
    *mis += mismatch;
@@ -5781,7 +5447,7 @@ static void SPI_AdjustOverlaps(SeqAlignPtr sap1, SeqAlignPtr sap2, Int4 n, SPI_m
    Int4        fluff;
    Int4        gstart;
    Int4        i;
-   FloatHi     maxsc;
+   FloatHi     maxsc = 0;
    Int4        offset;
    Int4        ovl;
    Int4        pos;
@@ -6254,178 +5920,6 @@ static void SPI_ExtendAlnAlgDumb(SeqAlignPtr sap, Int4 ovl, Int4 which_side, Uin
    AlnMgr2IndexSingleChildSeqAlign(sap);
 }
 
-/***************************************************************************
-*
-*  SPI_ExtendAlnAlg 'intelligently' extends an alignment by the given
-*  amount, by figuring out where the newly added bit should align to on
-*  the genomic sequence. The 'alignment' is only a string search, so no
-*  gaps are allowed.
-*
-***************************************************************************/
-static void SPI_ExtendAlnAlg(SeqAlignPtr sap, Int4 ovl, Int4 which_side, Uint1 strand)
-{
-   BioseqPtr    bsp1;
-   BioseqPtr    bsp2;
-   Uint1        buf1[20];
-   Uint1        buf2[20];
-   DenseSegPtr  dsp;
-   DenseSegPtr  dsp_new;
-   Int4         gap;
-   Int4         i;
-   Int4         j;
-   Boolean      mismatch;
-   SeqIdPtr     sip1;
-   SeqIdPtr     sip2;
-   SeqPortPtr   spp;
-   Int4         start1;
-   Int4         start2;
-   Int4         stop1;
-   Int4         stop2;
-
-   if (sap == NULL || ovl == 0 || ovl >= 20-SPI_MAXGAP)
-      return;
-   AlnMgr2GetNthSeqRangeInSA(sap, 1, &start1, &stop1);
-   AlnMgr2GetNthSeqRangeInSA(sap, 2, &start2, &stop2);
-   sip1 = AlnMgr2GetNthSeqIdPtr(sap, 1);
-   sip2 = AlnMgr2GetNthSeqIdPtr(sap, 2);
-   bsp1 = BioseqLockById(sip1);
-   bsp2 = BioseqLockById(sip2);
-   if (which_side == SPI_LEFT)
-   {
-      spp = SeqPortNew(bsp1, start1-(SPI_MAXGAP+ovl), start1-1, Seq_strand_plus, Seq_code_ncbi4na);
-      SeqPortRead(spp, buf1, 20);
-      SeqPortFree(spp);
-      if (strand == Seq_strand_minus)
-      {
-         spp = SeqPortNew(bsp2, stop2+1, stop2 + 1 + ovl, strand, Seq_code_ncbi4na);
-         SeqPortRead(spp, buf2, 20);
-         SeqPortFree(spp); 
-      } else
-      {
-         spp = SeqPortNew(bsp2, start2-1-ovl, start2-1, strand, Seq_code_ncbi4na);
-         SeqPortRead(spp, buf2, 20);
-         SeqPortFree(spp);
-      }
-      gap = -1;
-      for (i=0; i<SPI_MAXGAP; i++)
-      {
-         mismatch = FALSE;
-         for (j=0; j<ovl; j++)
-         {
-            if (buf2[j] != buf1[i+j])
-               mismatch = TRUE;
-         }
-         if (mismatch == FALSE)
-            gap = SPI_MAXGAP-i;
-      }
-      if (gap > 0)
-      {
-         dsp = (DenseSegPtr)(sap->segs);
-         dsp_new = DenseSegNew();
-         dsp_new->dim = 2;
-         dsp_new->numseg = dsp->numseg+2;
-         dsp_new->ids = dsp->ids;
-         dsp->ids = NULL;
-         dsp_new->starts = (Int4Ptr)MemNew((dsp_new->numseg)*2*sizeof(Int4));
-         dsp_new->lens = (Int4Ptr)MemNew((dsp_new->numseg)*sizeof(Int4));
-         dsp_new->strands = (Uint1Ptr)MemNew((dsp_new->numseg)*2*sizeof(Uint1));
-         for (i=2; i<dsp_new->numseg; i++)
-         {
-            dsp_new->starts[i*2] = dsp->starts[(i-2)*2];
-            dsp_new->starts[i*2+1] = dsp->starts[(i-2)*2+1];
-            dsp_new->strands[i+2] = dsp->strands[(i-2)*2];
-            dsp_new->strands[i*2+1] = dsp->strands[(i-2)*2+1];
-            dsp_new->lens[i] = dsp->lens[i-2];
-         }
-         dsp_new->starts[0] = dsp->starts[0] - gap - ovl;
-         dsp_new->starts[2] = dsp_new->starts[0] + ovl;
-         dsp_new->starts[3] = -1;
-         dsp_new->strands[0] = dsp_new->strands[2] = dsp->strands[0];
-         dsp_new->strands[1] = dsp_new->strands[2] = dsp->strands[1];
-         dsp_new->lens[0] = ovl;
-         dsp_new->lens[1] = gap;
-         if (strand == Seq_strand_minus)
-            dsp_new->starts[1] = stop2 + 1;
-         else
-            dsp_new->starts[1] = start2 - ovl;
-         sap->segs = (Pointer)dsp_new;
-         DenseSegFree(dsp);
-         SAIndex2Free2(sap->saip);
-         sap->saip = NULL;
-         AlnMgr2IndexSingleChildSeqAlign(sap);
-      } else
-         SPI_AddToAln(sap, ovl, SPI_LEFT, strand);
-   } else if (which_side == SPI_RIGHT)
-   {
-      spp = SeqPortNew(bsp1, stop1, stop1+SPI_MAXGAP, Seq_strand_plus, Seq_code_ncbi4na);
-      SeqPortRead(spp, buf1, 20);
-      SeqPortFree(spp);
-      if (strand == Seq_strand_minus)
-      {
-         spp = SeqPortNew(bsp2, start2-ovl, start2-1-ovl, strand, Seq_code_ncbi4na);
-         SeqPortRead(spp, buf2, 20);
-         SeqPortFree(spp);
-      } else
-      {
-         spp = SeqPortNew(bsp2, stop2+1, stop2+1+ovl, strand, Seq_code_ncbi4na);
-         SeqPortRead(spp, buf2, 20);
-         SeqPortFree(spp);
-      }
-      gap = -1;
-      for (i=0; i<SPI_MAXGAP; i++)
-      {
-         mismatch = FALSE;
-         for (j=0; j<ovl; j++)
-         {
-            if (buf1[i+j] != buf2[j])
-               mismatch = TRUE;
-         }
-         if (mismatch == FALSE && gap == -1)
-            gap = i;
-      }
-      if (gap > 0)
-      {
-         dsp = (DenseSegPtr)(sap->segs);
-         dsp_new = DenseSegNew();
-         dsp_new->dim = 2;
-         dsp_new->numseg = dsp->numseg+2;
-         dsp_new->ids = dsp->ids;
-         dsp->ids = NULL;
-         dsp_new->starts = (Int4Ptr)MemNew((dsp_new->numseg)*2*sizeof(Int4));
-         dsp_new->lens = (Int4Ptr)MemNew((dsp_new->numseg)*sizeof(Int4));
-         dsp_new->strands = (Uint1Ptr)MemNew((dsp_new->numseg)*2*sizeof(Uint1));
-         for (i=0; i<dsp->numseg; i++)
-         {
-            dsp_new->starts[i*2] = dsp->starts[i*2];
-            dsp_new->starts[i*2+1] = dsp->starts[i*2+1];
-            dsp_new->strands[i+2] = dsp->strands[i*2];
-            dsp_new->strands[i*2+1] = dsp->strands[i*2+1];
-            dsp_new->lens[i] = dsp->lens[i];
-         }
-         dsp_new->strands[2*dsp->numseg] = dsp_new->strands[2*dsp->numseg+2] = dsp->strands[0];
-         dsp_new->strands[2*dsp->numseg+1] = dsp_new->strands[2*dsp->numseg+3] = dsp->strands[1];
-         dsp_new->lens[dsp->numseg] = gap;
-         dsp_new->lens[dsp->numseg+1] = ovl;
-         dsp_new->starts[2*dsp->numseg] = dsp_new->starts[2*(dsp->numseg-1)]+dsp_new->lens[dsp->numseg-1];
-         dsp_new->starts[2*dsp->numseg+2] = dsp_new->starts[2*dsp->numseg] + gap;
-         if (strand == Seq_strand_minus)
-            dsp_new->starts[2*dsp->numseg+3] = start2 - ovl;
-         else
-            dsp_new->starts[2*dsp->numseg+3] = stop2 + 1;
-         dsp_new->starts[2*dsp->numseg+1] = -1;
-         sap->segs = (Pointer)dsp_new;
-         DenseSegFree(dsp);
-         SAIndex2Free2(sap->saip);
-         sap->saip = NULL;
-         AlnMgr2IndexSingleChildSeqAlign(sap);
-      } else
-         SPI_AddToAln(sap, ovl, SPI_RIGHT, strand);
-   }
-   SeqIdFree(sip1);
-   SeqIdFree(sip2);
-   BioseqUnlock(bsp1);
-   BioseqUnlock(bsp2);
-}
 
 /***************************************************************************
 *
@@ -7237,6 +6731,8 @@ static void SPI_GetDonorSpliceInfo (Int4 org, Int4Ptr spllen, Int4Ptr boundary, 
          ssp = ssp->next;
       }
       *spllen = i;
+      /** file should supply column position of last 
+          base of preceding exon **/
       *boundary = *spllen-spot->dsplicejunc+1;
       return;
    }
@@ -7329,19 +6825,19 @@ static void SPI_is_donor_user(Uint1Ptr sequence, Int4 seqlen, FloatHiPtr score, 
    for (j=0; j<seqlen; j++){
        if (sequence[j] == 0 && ssp->a > 0){
            prob_seqgsite += 
-               log10((ssp->a/((FloatHi)acgt[sequence[j]])/seqlen));
+               log10(ssp->a/((FloatHi)acgt[sequence[j]]/seqlen));
        }
        else if (sequence[j] == 1 && ssp->c > 0){
            prob_seqgsite +=
-               log10((ssp->c/((FloatHi)acgt[sequence[j]])/seqlen));
+               log10(ssp->c/((FloatHi)acgt[sequence[j]]/seqlen));
        }
        else if (sequence[j] == 2 && ssp->g > 0){
            prob_seqgsite += 
-               log10((ssp->g/((FloatHi)acgt[sequence[j]])/seqlen));
+               log10(ssp->g/((FloatHi)acgt[sequence[j]]/seqlen));
        }
        else if (sequence[j] == 3 && ssp->t > 0){
            prob_seqgsite +=
-               log10((ssp->t/((FloatHi)acgt[sequence[j]])/seqlen));
+               log10(ssp->t/((FloatHi)acgt[sequence[j]]/seqlen));
        }
        ssp = ssp->next;
    }
@@ -7621,7 +7117,9 @@ static void SPI_GetAcceptorSpliceInfo (Int4 org, Int4Ptr spllen, Int4Ptr boundar
          ssp = ssp->next;
       }
       *spllen = i;
-      *boundary = spot->asplicejunc+1;
+      /*** file should supply first exon column 
+          which needs to be zero-base adjusted ***/
+      *boundary = spot->asplicejunc - 1;
       return;
    }
    if (org == SPI_VERTEBRATE)
@@ -7707,19 +7205,19 @@ static void SPI_is_acceptor_user(Uint1Ptr sequence, Int4 seqlen, FloatHiPtr scor
    for (j=0; j<seqlen; j++){
        if (sequence[j] == 0 && ssp->a > 0){
            prob_seqgsite += 
-               log10((ssp->a/((FloatHi)acgt[sequence[j]])/seqlen));
+               log10(ssp->a/((FloatHi)acgt[sequence[j]]/seqlen));
        }
        else if (sequence[j] == 1 && ssp->c > 0){
            prob_seqgsite +=
-               log10((ssp->c/((FloatHi)acgt[sequence[j]])/seqlen));
+               log10(ssp->c/((FloatHi)acgt[sequence[j]]/seqlen));
        }
        else if (sequence[j] == 2 && ssp->g > 0){
            prob_seqgsite += 
-               log10((ssp->g/((FloatHi)acgt[sequence[j]])/seqlen));
+               log10(ssp->g/((FloatHi)acgt[sequence[j]]/seqlen));
        }
        else if (sequence[j] == 3 && ssp->t > 0){
            prob_seqgsite +=
-               log10((ssp->t/((FloatHi)acgt[sequence[j]])/seqlen));
+               log10(ssp->t/((FloatHi)acgt[sequence[j]]/seqlen));
        }
        ssp = ssp->next;
    }
@@ -8274,7 +7772,7 @@ static Boolean SPI_ConnectAlnPieces(SPI_FragHerdPtr sfhp, BioseqPtr bsp_contig, 
    Boolean              found;
    Int4                 gapsize;
    Int4                 i;
-   Int4                 j;
+   Int4                 j = 0;
    Boolean              minus;
    Int4                 n;
    BLAST_OptionsBlkPtr  options;
@@ -9298,7 +8796,7 @@ static SPI_FragSplPtr SPI_GetPossibleSites(SeqAlignPtr sap, BioseqPtr bsp_genomi
    Int4            f;
    SPI_FragSplPtr  fsp;
    Int4            i;
-   FloatHi         maxsc;
+   FloatHi         maxsc = 0;
    Uint1           res;
    FloatHi         score;
    SPI_SplicePtr   splarray;
@@ -9392,15 +8890,6 @@ static void SPI_FragSplFree(SPI_FragSplPtr fsp)
    MemFree(fsp);
 }
 
-static SeqLocPtr SPI_SeqLocListDup(SeqLocPtr slp)
-{
-   SeqLocPtr slp_new;
-
-   if (slp == NULL)
-      return NULL;
-   slp_new = (SeqLocPtr)AsnIoMemCopy((Pointer)slp, (AsnReadFunc)SeqLocAsnRead, (AsnWriteFunc)SeqLocAsnWrite);
-   return slp_new;
-}
 
 /***************************************************************************
 *
@@ -9875,7 +9364,6 @@ static SPI_RegionInfoPtr SPI_GetResultsForCDS(SPI_RegionInfoPtr srip_mrna, Biose
          len += SPI_GetExonInfo(smp, i, &b, &c, &mis, spot);
          SAIndex2Free2(smp->saps[i]->saip);
          smp->saps[i]->saip = NULL;
-      /*   SPI_ShiftAlignment(smp->saps[i], -offset, 2);*/
          AlnMgr2IndexSingleChildSeqAlign(smp->saps[i]);
       }
       MemFree(smp->mstarts);
@@ -10008,7 +9496,6 @@ static SPI_RegionInfoPtr SPI_GetResultsForCDS(SPI_RegionInfoPtr srip_mrna, Biose
          len += SPI_GetExonInfo(smp, i, &b, &c, &mis, spot);
          SAIndex2Free2(smp->saps[i]->saip);
          smp->saps[i]->saip = NULL;
-   /*      SPI_ShiftAlignment(smp->saps[i], -offset, 2);*/
          AlnMgr2IndexSingleChildSeqAlign(smp->saps[i]);
       }
       MemFree(smp->mstarts);
@@ -10210,31 +9697,6 @@ static Boolean LIBCALLBACK SPI_GetCDS(SeqFeatPtr sfp, SeqMgrFeatContextPtr conte
    return TRUE;
 }
 
-/***************************************************************************
-*
-*  SPI_ShiftAlignment was originally used by SPI_GetResultsForCDS to shift
-*  the CDS-genomic alignment to CDS coordinates. Now, that alignment is left
-*  in mRNA coordinates so that it will still be a valid alignment. If
-*  necessary, this function may be used to create a valid alignment for a
-*  CDS bioseq, so it stays here for now.
-*
-***************************************************************************/
-static void SPI_ShiftAlignment(SeqAlignPtr sap, Int4 offset, Int4 row)
-{
-   DenseSegPtr  dsp;
-   Int4         i;
-
-   dsp = (DenseSegPtr)(sap->segs);
-   if (row > dsp->dim)
-      return;
-   for (i=0; i<dsp->numseg; i++)
-   {
-      if (dsp->starts[(dsp->dim*i)+row-1] != -1)
-      {
-         dsp->starts[(dsp->dim*i)+row-1] += offset;
-      }
-   }
-}
 
 /***************************************************************************
 *
@@ -10421,7 +9883,7 @@ static Boolean SPI_GetAccessionFromSeqId(SeqIdPtr sip, Int4Ptr gi, CharPtr PNTR 
       break;
    case SEQID_GENBANK: case SEQID_EMBL: case SEQID_PIR: case SEQID_TPG: case SEQID_TPE: case SEQID_TPD:
    case SEQID_SWISSPROT: case SEQID_DDBJ: case SEQID_PRF:
-   case SEQID_OTHER: case SEQID_GPIPE:
+   case SEQID_OTHER:
       textsip = (TextSeqIdPtr)sip->data.ptrvalue;
       id_len = StringLen(textsip->accession);
       *id = (CharPtr) MemNew(id_len+1);
@@ -10700,69 +10162,14 @@ static void SPI_BuildProfile(SeqLocPtr slp, ACTProfilePtr PNTR app, Int4Ptr coun
    return;
 }
 
-static FloatHi SPI_ScoreProfile(BioseqPtr bsp, Int4 pos, Uint1 strand, ACTProfilePtr app)
-{
-   Int4        i;
-   Uint1       res;
-   FloatHi     retval;
-   SeqPortPtr  spp;
-
-   retval = 0;
-   if (bsp == NULL || app == NULL || pos < 0)
-      return retval;
-   if (pos + app->len-1 >= bsp->length)
-      return retval;
-   if (ISA_na(bsp->mol))
-   {
-      spp = SeqPortNew(bsp, pos, pos+app->len-1, strand, Seq_code_ncbi4na);
-      if (spp == NULL)
-         return retval;
-      i = 0;
-      while ((res = SeqPortGetResidue(spp)) != SEQPORT_EOF && i<app->len)
-      {
-         if (res == 1)
-         {
-            retval += app->freq[0][i];
-         } else if (res == 2)
-         {
-            retval += app->freq[1][i];
-         } else if (res == 4)
-         {
-            retval += app->freq[2][i];
-         } else if (res == 8)
-         {
-            retval += app->freq[3][i];
-         } else
-         {
-            retval += app->freq[4][i];
-         }
-         i++;
-      }
-      retval = retval / app->len;
-      return retval;
-   } else
-   {
-      spp = SeqPortNew(bsp, pos, pos+app->len-1, strand, Seq_code_ncbistdaa);
-      if (spp == NULL)
-         return retval;
-      i = 0;
-      while ((res = SeqPortGetResidue(spp)) != SEQPORT_EOF && i<app->len)
-      {
-         retval += app->freq[res][i];
-         i++;
-      }
-      retval = retval / app->len;
-      return retval;
-   }
-}
 
 static ACTProfilePtr SPI_MakeProfileFromSA(SeqAlignPtr sap)
 {
    AMAlignIndex2Ptr  amaip;
    AlnMsg2Ptr       amp;
-   ACTProfilePtr    app;
-   ACTProfilePtr    app_head;
-   ACTProfilePtr    app_prev;
+   ACTProfilePtr    app = NULL;
+   ACTProfilePtr    app_head = NULL;
+   ACTProfilePtr    app_prev = NULL;
    BioseqPtr        bsp;
    Int4             count;
    Int4             i;

@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.40 $
+* $Revision: 1.48 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -230,87 +230,6 @@ static void AddHTGSCommentString (
 
   MemFree (str);
   ValNodeFreeData (head);
-}
-
-typedef struct barcodedata {
-  CharPtr  orgmods [40];
-  CharPtr  subsources [40];
-  CharPtr  taxname;
-} BarCodeData, PNTR BarCodePtr;
-
-static Boolean AddBarCodeCommentString (
-  BioSourcePtr biop,
-  BarCodePtr bcp
-)
-
-{
-  OrgModPtr     omp;
-  OrgNamePtr    onp;
-  OrgRefPtr     orp;
-  SubSourcePtr  ssp;
-  Uint1         subtype;
-
-  if (biop == NULL || bcp == NULL) return FALSE;
-  orp = biop->org;
-  if (orp == NULL) return FALSE;
-
-  MemSet ((Pointer) bcp, 0, sizeof (BarCodeData));
-
-  bcp->taxname = orp->taxname;
-  for (ssp = biop->subtype; ssp != NULL; ssp = ssp->next) {
-    subtype = ssp->subtype;
-    if (subtype == 255) {
-      subtype = 37;
-    }
-    if (subtype < 38) {
-      bcp->subsources [subtype] = ssp->name;
-    }
-  }
-
-  onp = orp->orgname;
-  if (onp != NULL) {
-    for (omp = onp->mod; omp != NULL; omp = omp->next) {
-      subtype = omp->subtype;
-      if (subtype == 253) {
-        subtype = 35;
-      } else if (subtype == 254) {
-        subtype = 36;
-      } else if (subtype == 255) {
-        subtype = 37;
-      }
-      if (subtype < 38) {
-        bcp->orgmods [subtype] = omp->subname;
-      }
-    }
-  }
-
-  return TRUE;
-}
-
-static void PrintOneBarCodeElement (
-  StringItemPtr ffstring,
-  StringItemPtr temp,
-  FmtType format,
-  CharPtr label,
-  CharPtr spaces,
-  CharPtr value
-)
-
-{
-  FFStartPrint (temp, format, 16, 35, NULL, 12, 9, 28, "CC", FALSE);
-
-  FFAddOneString (temp, label, FALSE, FALSE, TILDE_EXPAND);
-  if (StringDoesHaveText (value)) {
-    FFAddOneString (temp,  spaces, FALSE, FALSE, TILDE_EXPAND);
-     FFAddOneString (temp, value, FALSE, FALSE, TILDE_EXPAND);
-  }
-  FFAddNewLine (temp);
-
-  if (format == GENBANK_FMT || format == GENPEPT_FMT) {
-    FFLineWrap(ffstring, temp, 16, 35, ASN2FF_GB_MAX, NULL);
-  } else {
-    FFLineWrap(ffstring, temp, 9, 28, ASN2FF_EMBL_MAX, "CC");
-  }
 }
 
 static void AddWGSMasterCommentString (
@@ -1038,6 +957,98 @@ static Boolean IsTpa (
   return FALSE;
 }
 
+static CharPtr GetPrimaryStrForDelta (
+  BioseqPtr bsp
+)
+
+{
+  Boolean      accn;
+  Char         buf [64], tmp [80];
+  Int4         curr_start = 0, len, start0, start1;
+  DbtagPtr     dbt;
+  DeltaSeqPtr  deltasp;
+  Int4         gi;
+  ValNodePtr   head = NULL;
+  SeqIdPtr     id, sip;
+  SeqIntPtr    intp;
+  SeqLitPtr    litp;
+  SeqLocPtr    slp;
+  CharPtr      str;
+  Uint1        strand;
+
+  if (bsp == NULL || bsp->repr != Seq_repr_delta || bsp->seq_ext_type != 4) return NULL;
+
+  for (deltasp = (DeltaSeqPtr) bsp->seq_ext; deltasp != NULL; deltasp = deltasp->next) {
+    if (deltasp->choice == 1) {
+      slp = (SeqLocPtr) deltasp->data.ptrvalue;
+      if (slp != NULL && slp->choice == SEQLOC_INT) {
+        intp = (SeqIntPtr) slp->data.ptrvalue;
+        start0 = curr_start;
+        start1 = intp->from;
+        len = intp->to - intp->from + 1;
+        curr_start += len;
+        strand = intp->strand;
+        sip = intp->id;
+        if (sip == NULL) continue;
+        id = NULL;
+        accn = FALSE;
+        if (sip->choice == SEQID_GI) {
+          gi = (Int4) sip->data.intvalue;
+          if (GetAccnVerFromServer (gi, buf)) {
+            accn = TRUE;
+          } else {
+            id = GetSeqIdForGI (gi);
+          }
+        } else {
+          id = SeqIdDup (sip);
+        }
+        if (id != NULL || accn) {
+          if (head == NULL) {
+            ValNodeCopyStr (&head, 0, "CONTIG_SPAN         PRIMARY_IDENTIFIER PRIMARY_SPAN        COMP");
+          }
+          if (id != NULL) {
+            SeqIdWrite (id, buf, PRINTID_TEXTID_ACC_VER, sizeof (buf) - 1);
+            if (id->choice == SEQID_GENERAL) {
+              dbt = (DbtagPtr) id->data.ptrvalue;
+              if (dbt != NULL && StringICmp (dbt->db, "ti") == 0) {
+                StringCpy (buf, "TI");
+                SeqIdWrite (id, buf + 2, PRINTID_TEXTID_ACC_VER, sizeof (buf) - 3);
+              }
+            }
+          }
+          sprintf (tmp, "~%ld-%ld                                        ",
+                   (long) (start0 + 1), (long) (start0 + len));
+          tmp [21] = '\0';
+          StringCat (buf, "                                        ");
+          buf [18] = '\0';
+          StringCat (tmp, buf);
+          sprintf (buf, " %ld-%ld                                        ",
+                   (long) (start1 + 1), (long) (start1 + len));
+          buf [21] = '\0';
+          StringCat (tmp, buf);
+          if (strand == Seq_strand_minus) {
+            StringCat (tmp, "c");
+          }
+          ValNodeCopyStr (&head, 0, tmp);
+        }
+        SeqIdFree (id);
+      }
+    } else if (deltasp->choice == 2) {
+      litp = (SeqLitPtr) deltasp->data.ptrvalue;
+      if (litp != NULL) {
+        curr_start += litp->length;
+      }
+    }
+  }
+
+  if (head == NULL) return NULL;
+
+  str = MergeFFValNodeStrs (head);
+  ValNodeFreeData (head);
+
+  return str;
+}
+
 static CharPtr GetStrForTpaOrRefSeqHist (
   BioseqPtr bsp
 )
@@ -1250,6 +1261,64 @@ static CharPtr GetStrForGenome (
   return NULL;
 }
 
+static void AddAltPrimaryBlock (
+  Asn2gbWorkPtr awp
+)
+
+{
+  IntAsn2gbJobPtr  ajp;
+  Asn2gbSectPtr    asp;
+  BaseBlockPtr     bbp = NULL;
+  BioseqPtr        bsp;
+  GBSeqPtr         gbseq;
+  CharPtr          str;
+  StringItemPtr    ffstring;
+
+  if (awp == NULL) return;
+  ajp = awp->ajp;
+  if (ajp == NULL) return;
+  bsp = awp->bsp;
+  if (bsp == NULL) return;
+  asp = awp->asp;
+  if (asp == NULL) return;
+
+  ffstring = FFGetString(ajp);
+  if ( ffstring == NULL ) return;
+
+  str = GetPrimaryStrForDelta (bsp);
+  if (str != NULL) {
+
+    bbp = (BaseBlockPtr) Asn2gbAddBlock (awp, PRIMARY_BLOCK, sizeof (BaseBlock));
+    if (bbp != NULL) {
+
+      FFStartPrint (ffstring, awp->format, 0, 12, "PRIMARY", 12, 5, 5, "PR", TRUE);
+
+      FFAddOneString (ffstring, str, FALSE, FALSE, TILDE_EXPAND);
+
+      bbp->string = FFEndPrint(ajp, ffstring, awp->format, 12, 12, 5, 5, "PR");
+
+      /* optionally populate gbseq for XML-ized GenBank format */
+
+      if (ajp->gbseq) {
+        gbseq = &asp->gbseq;
+      } else {
+        gbseq = NULL;
+      }
+
+      if (gbseq != NULL) {
+        gbseq->primary = StringSave (str);
+      }
+
+      if (awp->afp != NULL) {
+        DoImmediateFormat (awp->afp, (BaseBlockPtr) bbp);
+      }
+    }
+    MemFree (str);
+  }
+
+  FFRecycleString(ajp, ffstring);
+}
+
 NLM_EXTERN void AddPrimaryBlock (
   Asn2gbWorkPtr awp
 )
@@ -1296,9 +1365,16 @@ NLM_EXTERN void AddPrimaryBlock (
     }
   }
 
-  if (! IsTpa (bsp, has_tpa_assembly, &isRefSeq)) return;
   hist = bsp->hist;
-  if (hist == NULL || hist->assembly == NULL) return;
+  if ((! IsTpa (bsp, has_tpa_assembly, &isRefSeq)) ||
+      hist == NULL || hist->assembly == NULL) {
+    if (awp->contig) {
+      /*
+      AddAltPrimaryBlock (awp);
+      */
+    }
+    return;
+  }
 
   ffstring = FFGetString(ajp);
   if ( ffstring == NULL ) return;
@@ -1423,11 +1499,11 @@ NLM_EXTERN void AddCommentBlock (
 
 {
   size_t             acclen;
+  /*
   SeqMgrAndContext   acontext;
   AnnotDescPtr       adp;
+  */
   IntAsn2gbJobPtr    ajp;
-  BarCodeData        bcd;
-  BioSourcePtr       biop;
   BioseqPtr          bsp;
   Char               buf [1024];
   CommentBlockPtr    cbp;
@@ -1482,6 +1558,12 @@ NLM_EXTERN void AddCommentBlock (
   if (ajp == NULL) return;
   bsp = awp->bsp;
   if (bsp == NULL) return;
+
+  if (GetWWW (ajp) && awp->mode == ENTREZ_MODE && awp->afp != NULL &&
+      (awp->format == GENBANK_FMT || awp->format == GENPEPT_FMT)) {
+    sprintf (buf, "<a name=\"comment_%ld\"></a>", (long) awp->currGi);
+    DoQuickLinkFormat (awp->afp, buf);
+  }
 
   ffstring = FFGetString(ajp);
   if ( ffstring ==  NULL ) return;
@@ -2305,139 +2387,6 @@ NLM_EXTERN void AddCommentBlock (
     }
   }
 
-  sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_molinfo, &dcontext);
-  if (sdp != NULL) {
-
-    mip = (MolInfoPtr) sdp->data.ptrvalue;
-    if (mip != NULL) {
-      if (mip->tech == MI_TECH_barcode) {
-
-        sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_source, &dcontext);
-        if (sdp != NULL) {
-          biop = (BioSourcePtr) sdp->data.ptrvalue;
-
-          if (AddBarCodeCommentString (biop, &bcd)) {
-
-            temp = FFGetString(ajp);
-            if ( temp != NULL ) {
-
-              cbp = (CommentBlockPtr) Asn2gbAddBlock (awp, COMMENT_BLOCK, sizeof (CommentBlock));
-              if (cbp != NULL) {
-
-                cbp->entityID = dcontext.entityID;
-                cbp->itemID = dcontext.itemID;
-                cbp->itemtype = OBJ_SEQDESC;
-                cbp->entityID = awp->entityID;
-                cbp->first = first;
-                first = FALSE;
-
-                if (cbp->first) {
-                  FFStartPrint (temp, awp->format, 0, 12, "COMMENT", 12, 5, 5, "CC", TRUE);
-                } else {
-                  FFStartPrint (temp, awp->format, 0, 12, NULL, 12, 5, 5, "CC", FALSE);
-                }
-
-                FFAddOneString (temp, "Barcode Consortium: Standard Data Elements", FALSE, FALSE, TILDE_EXPAND);
-                FFAddNewLine (temp);
-                FFAddNewLine (temp);
-
-                if (awp->format == GENBANK_FMT || awp->format == GENPEPT_FMT) {
-                  FFLineWrap(ffstring, temp, 12, 12, ASN2FF_GB_MAX, NULL);
-                } else {
-                  FFLineWrap(ffstring, temp, 5, 5, ASN2FF_EMBL_MAX, "CC");
-                }
-
-                FFRecycleString (ajp, temp);
-                temp = FFGetString (ajp);
-
-                PrintOneBarCodeElement (ffstring, temp, awp->format, "Organism:", "          ", bcd.taxname);
-
-                FFRecycleString (ajp, temp);
-                temp = FFGetString (ajp);
-
-                PrintOneBarCodeElement (ffstring, temp, awp->format, "Collected By:", "      ", bcd.subsources [SUBSRC_collected_by]);
-
-                FFRecycleString (ajp, temp);
-                temp = FFGetString (ajp);
-
-                PrintOneBarCodeElement (ffstring, temp, awp->format, "Collection Date:", "   ", bcd.subsources [SUBSRC_collection_date]);
-
-                FFRecycleString (ajp, temp);
-                temp = FFGetString (ajp);
-
-                PrintOneBarCodeElement (ffstring, temp, awp->format, "Country:", "           ", bcd.subsources [SUBSRC_country]);
-
-                FFRecycleString (ajp, temp);
-                temp = FFGetString (ajp);
-
-                PrintOneBarCodeElement (ffstring, temp, awp->format, "Identified By:", "     ", bcd.subsources [SUBSRC_identified_by]);
-
-                FFRecycleString (ajp, temp);
-                temp = FFGetString (ajp);
-
-                PrintOneBarCodeElement (ffstring, temp, awp->format, "Isolate:", "           ", bcd.orgmods [ORGMOD_isolate]);
-
-                FFRecycleString (ajp, temp);
-                temp = FFGetString (ajp);
-
-                PrintOneBarCodeElement (ffstring, temp, awp->format, "Lat-Lon:", "           ", bcd.subsources [SUBSRC_lat_lon]);
-
-                FFRecycleString (ajp, temp);
-                temp = FFGetString (ajp);
-
-                PrintOneBarCodeElement (ffstring, temp, awp->format, "Specimen Voucher:", "  ", bcd.orgmods [ORGMOD_specimen_voucher]);
-
-                FFRecycleString (ajp, temp);
-                temp = FFGetString (ajp);
-
-                PrintOneBarCodeElement (ffstring, temp, awp->format, "Forward Primer:", "    ", bcd.subsources [SUBSRC_fwd_primer_seq]);
-
-                FFRecycleString (ajp, temp);
-                temp = FFGetString (ajp);
-
-                PrintOneBarCodeElement (ffstring, temp, awp->format, "Reverse Primer:", "    ", bcd.subsources [SUBSRC_rev_primer_seq]);
-
-                FFRecycleString (ajp, temp);
-                temp = FFGetString (ajp);
-
-                PrintOneBarCodeElement (ffstring, temp, awp->format, "Fwd Primer Name:", "   ", bcd.subsources [SUBSRC_fwd_primer_name]);
-
-                FFRecycleString (ajp, temp);
-                temp = FFGetString (ajp);
-
-                PrintOneBarCodeElement (ffstring, temp, awp->format, "Rev Primer Name:", "   ", bcd.subsources [SUBSRC_rev_primer_name]);
-
-                FFRecycleString (ajp, temp);
-                temp = FFGetString (ajp);
-
-                if (awp->format == GENBANK_FMT || awp->format == GENPEPT_FMT) {
-                  /*
-                  do not do extra blank line for EMBL format,
-                  since it would be followed by blank XX line,
-                  and we do not expect subsequent comments in
-                  barcode records
-                  */
-                  FFStartPrint (temp, awp->format, 0, 12, NULL, 12, 5, 5, "CC", FALSE);
-                  FFAddNewLine (temp);
-                  FFLineWrap(ffstring, temp, 12, 12, ASN2FF_GB_MAX, NULL);
-                }
-
-               cbp->string = FFToCharPtr(ffstring);
-                FFRecycleString(ajp, ffstring);
-                ffstring = FFGetString(ajp);
-
-                if (awp->afp != NULL) {
-                  DoImmediateFormat (awp->afp, (BaseBlockPtr) cbp);
-                }
-              }
-              FFRecycleString(ajp, temp);
-            }
-          }
-        }
-      }
-    }
-  }
-
   sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_comment, &dcontext);
   while (sdp != NULL) {
     if (StringDoesHaveText ((CharPtr)sdp->data.ptrvalue)) {
@@ -2633,6 +2582,7 @@ NLM_EXTERN void AddCommentBlock (
 
   /* look for Seq-annot.desc.comment on annots packaged on current bioseq */
 
+  /*
   adp = SeqMgrGetNextAnnotDesc (bsp, NULL, Annot_descr_comment, &acontext);
   while (adp != NULL) {
     str = (CharPtr) adp->data.ptrvalue;
@@ -2663,6 +2613,7 @@ NLM_EXTERN void AddCommentBlock (
     }
     adp = SeqMgrGetNextAnnotDesc (bsp, adp, Annot_descr_comment, &acontext);
   }
+  */
 
   FFRecycleString(ajp, ffstring);
 }
@@ -2674,7 +2625,9 @@ NLM_EXTERN void AddFeatHeaderBlock (
 {
   IntAsn2gbJobPtr ajp;
   BaseBlockPtr    bbp;
+  Char            buf [128];
   StringItemPtr   ffstring;
+  CharPtr         suffix = NULL;
 
   if (awp == NULL) return;
   ajp = awp->ajp;
@@ -2684,6 +2637,12 @@ NLM_EXTERN void AddFeatHeaderBlock (
   if (bbp == NULL) return;
 
   bbp->entityID = awp->entityID;
+
+  if (GetWWW (ajp) && awp->mode == ENTREZ_MODE && awp->afp != NULL &&
+      (awp->format == GENBANK_FMT || awp->format == GENPEPT_FMT)) {
+    sprintf (buf, "<a name=\"feature_%ld\"></a>", (long) awp->currGi);
+    DoQuickLinkFormat (awp->afp, buf);
+  }
 
   if (awp->format != FTABLE_FMT) {
     ffstring = FFGetString(ajp);
@@ -2703,9 +2662,11 @@ NLM_EXTERN void AddFeatHeaderBlock (
       FFAddNewLine(ffstring);
     }
 
-    bbp->string = FFEndPrint(ajp, ffstring, awp->format, 12, 21, 5, 0, "FH");
+    suffix = FFEndPrint(ajp, ffstring, awp->format, 12, 21, 5, 0, "FH");
     FFRecycleString(ajp, ffstring);
   }
+
+  bbp->string = suffix;
 
   if (awp->afp != NULL) {
     DoImmediateFormat (awp->afp, bbp);
@@ -2898,6 +2859,23 @@ static int LIBCALLBACK SortSourcesByHash (
     return -1;
   } else if (isp2->is_descriptor && (! isp1->is_descriptor)) {
     return 1;
+  }
+
+  /* now sort identical sources by position, to only fuse abutting ones */
+  /* feature with smallest left extreme is first */
+
+  if (isp1->left > isp2->left) {
+    return 1;
+  } else if (isp1->left < isp2->left) {
+    return -1;
+  }
+
+  /* if same left extreme, shortest source feature is first just for flatfile */
+
+  if (isp1->right > isp2->right) {
+    return 1;
+  } else if (isp1->right < isp2->right) {
+    return -1;
   }
 
   return 0;
@@ -3251,6 +3229,7 @@ static Boolean LIBCALLBACK GetSourcesOnSeg (
 /*                        sources hashed the same -- it's a double-  */
 /*                        check since two non-identical things will  */
 /*                        occassionally hash to the same value.      */
+/*                        Now checks for adjacent or overlapping.    */
 
 static Boolean isIdenticalSource (IntSrcBlockPtr isp1, IntSrcBlockPtr isp2)
 {
@@ -3354,6 +3333,10 @@ static Boolean isIdenticalSource (IntSrcBlockPtr isp1, IntSrcBlockPtr isp2)
 
   if (vnp1 != NULL || vnp2 != NULL)
     return FALSE;
+
+  /* now check for not adjacent or overlapping */
+
+  if (isp2->right + 1 < isp1->left) return FALSE;
 
   /* If it passed all checks, then they */
   /* are the same, so return true.      */
@@ -4126,6 +4109,8 @@ static Boolean LIBCALLBACK GetFeatsOnBioseq (
   IntCdsBlockPtr     icp;
   Int2               idx;
   IntFeatBlockPtr    ifp;
+  IntPrtBlockPtr     ipp;
+  Boolean            is_whole;
   Int4Ptr            ivals;
   Int2               j;
   SeqAnnotPtr        lastsap;
@@ -4140,8 +4125,10 @@ static Boolean LIBCALLBACK GetFeatsOnBioseq (
   Boolean            partial3;
   ValNodePtr         ppr;
   BioseqPtr          prod;
+  ProtRefPtr         prp;
   Boolean            pseudo = FALSE;
   SeqEntryPtr        sep;
+  SeqIntPtr          sintp;
   SeqIdPtr           sip;
   SeqLocPtr          slp;
   Int4               start;
@@ -4540,6 +4527,8 @@ static Boolean LIBCALLBACK GetFeatsOnBioseq (
 
   if (fcontext->seqfeattype == SEQFEAT_CDREGION) {
     fbp = (FeatBlockPtr) Asn2gbAddBlock (awp, FEATURE_BLOCK, sizeof (IntCdsBlock));
+  } else if (fcontext->seqfeattype == SEQFEAT_PROT) {
+    fbp = (FeatBlockPtr) Asn2gbAddBlock (awp, FEATURE_BLOCK, sizeof (IntPrtBlock));
   } else {
     fbp = (FeatBlockPtr) Asn2gbAddBlock (awp, FEATURE_BLOCK, sizeof (IntFeatBlock));
   }
@@ -4560,6 +4549,44 @@ static Boolean LIBCALLBACK GetFeatsOnBioseq (
   awp->featseen = TRUE;
   awp->featjustseen = TRUE;
 
+  if (fcontext->seqfeattype == SEQFEAT_PROT) {
+
+    /* set calculated molecular weight flags for proteins */
+
+    ifp->isPrt = TRUE;
+    ipp = (IntPrtBlockPtr) fbp;
+    prp = (ProtRefPtr) sfp->data.value.ptrvalue;
+    if (prp != NULL) {
+      if (prp->processed < 2) {
+        is_whole = FALSE;
+        slp = sfp->location;
+        if (slp != NULL) {
+          if (slp->choice == SEQLOC_WHOLE) {
+            is_whole = TRUE;
+          } else if (slp->choice == SEQLOC_INT) {
+            sintp = (SeqIntPtr) slp->data.ptrvalue;
+            if (sintp != NULL &&
+                sintp->from == 0 &&
+                sintp->to == bsp->length - 1) {
+              is_whole = TRUE;
+            }
+          }
+        }
+        if (is_whole) {
+          ipp->is_whole_loc = TRUE;
+          if (awp->has_sig_peptide) {
+            if (awp->has_mat_peptide) {
+              ipp->suppress_mol_wt = TRUE;
+            } else if (awp->sig_pept_trim_len > 0) {
+              ipp->sig_pept_trim_len = awp->sig_pept_trim_len;
+            }
+          } else {
+            ipp->trim_initial_met = TRUE;
+          }
+        }
+      }
+    }
+  }
 
   if (awp->afp != NULL) {
     DoImmediateFormat (awp->afp, (BaseBlockPtr) fbp);
@@ -4853,6 +4880,29 @@ NLM_EXTERN void AddFeatureBlock (
   awp->lastsap = NULL;
   awp->lastleft = 0;
   awp->lastright = 0;
+
+  /* for protein molecular weight calculation, need sig_peptide, etc. */
+
+  awp->has_mat_peptide = FALSE;
+  awp->has_sig_peptide = FALSE;
+  awp->sig_pept_trim_len = 0;
+
+  if (awp->format == GENPEPT_FMT && ISA_aa (bsp->mol)) {
+    prot = SeqMgrGetNextFeature (bsp, NULL, 0, 0, &fcontext);
+    while (prot != NULL) {
+      if (fcontext.featdeftype == FEATDEF_sig_peptide_aa ||
+          fcontext.featdeftype == FEATDEF_transit_peptide_aa) {
+        awp->has_sig_peptide = TRUE;
+        if (fcontext.left == 0 && fcontext.right < bsp->length - 1) {
+          awp->sig_pept_trim_len = fcontext.right + 1;
+        }
+      } else if (fcontext.featdeftype == FEATDEF_mat_peptide_aa) {
+        awp->has_mat_peptide = TRUE;
+      }
+
+      prot = SeqMgrGetNextFeature (bsp, prot, 0, 0, &fcontext);
+    }
+  }
 
   /* optionally map gene from genomic onto cDNA */
 

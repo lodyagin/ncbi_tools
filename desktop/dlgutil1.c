@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.73 $
+* $Revision: 6.87 $
 *
 * File Description: 
 *
@@ -356,6 +356,7 @@ typedef struct genegatherlist {
   Uint2           geneItemtype;
   Boolean         geneFound;
   SeqLocPtr       old_feature_location;
+  ValNodePtr      lastgene;
 } GeneGatherList, PNTR GeneGatherPtr;
 
 static Boolean GeneFindFunc (GatherContextPtr gcp)
@@ -593,29 +594,23 @@ static Boolean GeneGatherFunc (GatherContextPtr gcp)
       }
       if (thislabel [0] != '\0') {
         ffp = (FeatureFormPtr) ggp->ffp;
-        /*
-        PopupItem (ffp->gene, thislabel);
-        */
-        vnp = ValNodeNew (ffp->geneNames);
-        if (ffp->geneNames == NULL) {
-          ffp->geneNames = vnp;
-        }
-        if (vnp != NULL) {
-          vnp->data.ptrvalue = StringSave (thislabel);
-          grp = (GeneRefPtr) sfp->data.value.ptrvalue;
-          if (grp != NULL) {
+        grp = (GeneRefPtr) sfp->data.value.ptrvalue;
+        if (grp != NULL 
+            && (grp->locus != NULL || grp->locus_tag != NULL || grp->desc != NULL))
+        {
+          vnp = ValNodeNew (ggp->lastgene);
+          if (ffp->geneNames == NULL) {
+            ffp->geneNames = vnp;
+          }
+          ggp->lastgene = vnp;
+          if (vnp != NULL) {
+            vnp->data.ptrvalue = StringSave (thislabel);
             if (grp->locus != NULL) {
               vnp->choice = 1;
             } else if (grp->desc != NULL) {
               vnp->choice = 2;
             } else if (grp->locus_tag != NULL) {
               vnp->choice = 3;
-            } else if (grp->syn != NULL) {
-              vnp->choice = 4;
-            } else if (grp->db != NULL) {
-              vnp->choice = 5;
-            } else if (grp->maploc != NULL) {
-              vnp->choice = 6;
             }
           }
         }
@@ -645,6 +640,7 @@ extern void PopulateGenePopup (FeatureFormPtr ffp)
     ggl.idx = 0;
     ggl.val = 0;
     ggl.min = 0;
+    ggl.lastgene = NULL;
     MemSet ((Pointer) (&gs), 0, sizeof (GatherScope));
     gs.seglevels = 1;
     gs.get_feats_location = TRUE;
@@ -728,6 +724,14 @@ static Boolean GeneMatchFunc (GatherContextPtr gcp)
             }
           } else if (! StringHasNoText (genexref->locus_tag)) {
             if (StringICmp (genexref->locus_tag, grp->locus_tag) == 0) {
+              ggp->val = ggp->idx;
+              ggp->xrefmatch = TRUE;
+              if (ffp != NULL) {
+                SetValue (ffp->useGeneXref, 2);
+              }
+            }
+          } else if (! StringHasNoText (genexref->desc)) {
+            if (StringICmp (genexref->desc, grp->desc) == 0) {
               ggp->val = ggp->idx;
               ggp->xrefmatch = TRUE;
               if (ffp != NULL) {
@@ -919,7 +923,57 @@ static void TextToFeatXref (TexT t, SeqFeatPtr sfp)
   }
 }
 
+static void GbqualsToVisStringDialog (SeqFeatPtr sfp, DialoG d, CharPtr qual)
+
+{
+  GBQualPtr   gbq;
+  ValNodePtr  head = NULL;
+
+  if (sfp == NULL || StringHasNoText (qual)) {
+    PointerToDialog (d, NULL);
+    return;
+  }
+  for (gbq = sfp->qual; gbq != NULL; gbq = gbq->next) {
+    if (StringICmp (gbq->qual, qual) != 0) continue;
+    ValNodeCopyStr (&head, 0, gbq->val);
+  }
+  PointerToDialog (d, head);
+  ValNodeFreeData (head);
+}
+
+extern void VisStringDialogToGbquals (SeqFeatPtr sfp, DialoG d, CharPtr qual);
+extern void VisStringDialogToGbquals (SeqFeatPtr sfp, DialoG d, CharPtr qual)
+
+{
+  GBQualPtr   gbq, gbqlast = NULL;
+  ValNodePtr  head = NULL, vnp;
+  CharPtr     str;
+
+  if (sfp == NULL || StringHasNoText (qual)) return;
+  head = DialogToPointer (d);
+  for (gbq = sfp->qual; gbq != NULL; gbq = gbq->next) {
+    gbqlast = gbq;
+  }
+  for (vnp = head; vnp != NULL; vnp = vnp->next) {
+    str = (CharPtr) vnp->data.ptrvalue;
+    if (StringHasNoText (str)) continue;
+    gbq = GBQualNew ();
+    if (gbq == NULL) continue;
+    gbq->qual = StringSave (qual);
+    gbq->val = StringSave (str);
+    if (gbqlast == NULL) {
+      sfp->qual = gbq;
+    } else {
+      gbqlast->next = gbq;
+    }
+    gbqlast = gbq;
+  }
+  ValNodeFreeData (head);
+}
+
 extern void SeqFeatPtrToFieldPage (DialoG d, SeqFeatPtr sfp);
+extern void GBQualsToInferenceDialog (DialoG d, SeqFeatPtr sfp);
+extern void InferenceDialogToGBQuals (DialoG d, SeqFeatPtr sfp);
 
 extern void SeqFeatPtrToCommon (FeatureFormPtr ffp, SeqFeatPtr sfp)
 
@@ -959,6 +1013,11 @@ extern void SeqFeatPtrToCommon (FeatureFormPtr ffp, SeqFeatPtr sfp)
       SetTitle (ffp->comment, str);
       SetTitle (ffp->title, sfp->title);
       SetValue (ffp->evidence, sfp->exp_ev + 1);
+      if (GetAppProperty ("InternalNcbiSequin") == NULL) {
+        if (sfp->exp_ev == 0) {
+          SafeDisable (ffp->evidence);
+        }
+      }
       SetStatus (ffp->partial, sfp->partial);
       SetStatus (ffp->exception, sfp->excpt);
       SetStatus (ffp->pseudo, sfp->pseudo);
@@ -1055,6 +1114,8 @@ extern void SeqFeatPtrToCommon (FeatureFormPtr ffp, SeqFeatPtr sfp)
       PointerToDialog (ffp->dbxrefs, sfp->dbxref);
       PointerToDialog (ffp->gbquals, sfp->qual);
       SeqFeatPtrToFieldPage (ffp->gbquals, sfp);
+      GbqualsToVisStringDialog (sfp, ffp->experiment, "experiment");
+      GBQualsToInferenceDialog (ffp->inference, sfp);
       PointerToDialog (ffp->usrobjext, sfp->ext);
       VisitUserObjectsInUop (sfp->ext, (Pointer) ffp, SaveGoTermsInSfp);
       FeatIDtoText (ffp->featid, &(sfp->id));
@@ -1062,11 +1123,16 @@ extern void SeqFeatPtrToCommon (FeatureFormPtr ffp, SeqFeatPtr sfp)
     } else {
       SetTitle (ffp->comment, "");
       SetValue (ffp->evidence, 1);
+      if (GetAppProperty ("InternalNcbiSequin") == NULL) {
+        SafeDisable (ffp->evidence);
+      }
       SetStatus (ffp->partial, FALSE);
       SetStatus (ffp->exception, FALSE);
       SetStatus (ffp->pseudo, FALSE);
       SetTitle (ffp->exceptText, "");
       SetValue (ffp->gene, 1);
+      SafeHide (ffp->newGeneGrp);
+      SafeHide (ffp->editGeneBtn);      
       SetValue (ffp->useGeneXref, 1);
       SetTitle (ffp->geneSymbol, "");
       SetTitle (ffp->geneAllele, "");
@@ -1075,11 +1141,40 @@ extern void SeqFeatPtrToCommon (FeatureFormPtr ffp, SeqFeatPtr sfp)
       PointerToDialog (ffp->featcits, NULL);
       PointerToDialog (ffp->dbxrefs, NULL);
       PointerToDialog (ffp->gbquals, NULL);
+      PointerToDialog (ffp->experiment, NULL);
+      GBQualsToInferenceDialog (ffp->inference, NULL);
       PointerToDialog (ffp->usrobjext, NULL);
       ffp->goTermUserObj = NULL;
       FeatIDtoText (ffp->featid, NULL);
       FeatXreftoText (ffp->fidxref, NULL);
     }
+  }
+}
+
+extern void CleanupEvidenceGBQuals (GBQualPtr PNTR prevgbq);
+extern void CleanupEvidenceGBQuals (GBQualPtr PNTR prevgbq)
+
+{
+  GBQualPtr  gbq;
+  GBQualPtr  next;
+  Boolean    unlink;
+
+  if (prevgbq == NULL) return;
+  gbq = *prevgbq;
+  while (gbq != NULL) {
+    next = gbq->next;
+    unlink = FALSE;
+    if (StringICmp (gbq->qual, "experiment") == 0 || StringICmp (gbq->qual, "inference") == 0) {
+      unlink = TRUE;
+    }
+    if (unlink) {
+      *prevgbq = gbq->next;
+      gbq->next = NULL;
+      GBQualFree (gbq);
+    } else {
+      prevgbq = (GBQualPtr PNTR) &(gbq->next);
+    }
+    gbq = next;
   }
 }
 
@@ -1111,6 +1206,9 @@ static Boolean ReplaceFeatureExtras (GatherContextPtr gcp)
         sfp->qual = old->qual;
         old->qual = NULL;
       }
+      CleanupEvidenceGBQuals (&(sfp->qual));
+      VisStringDialogToGbquals (sfp, ffp->experiment, "experiment");
+      InferenceDialogToGBQuals (ffp->inference, sfp);
       if (ffp->usrobjext != NULL) {
         sfp->ext = DialogToPointer (ffp->usrobjext);
       } else if (sfp->ext == NULL) {
@@ -1468,7 +1566,12 @@ extern Boolean FeatFormReplaceWithoutUpdateProc (ForM f)
                     }
                   }
                 }
-              } else if (vnp->choice == 3) {
+              } else if (vnp->choice == 2) {
+                 grp = GeneRefNew ();
+                if (grp != NULL) {
+                  grp->desc = StringSave ((CharPtr) vnp->data.ptrvalue);
+                }
+             } else if (vnp->choice == 3) {
                 grp = GeneRefNew ();
                 if (grp != NULL) {
                   grp->locus_tag = StringSave ((CharPtr) vnp->data.ptrvalue);
@@ -1500,6 +1603,8 @@ extern Boolean FeatFormReplaceWithoutUpdateProc (ForM f)
       ompc.output_data = (Pointer) sfp;
       if (ompc.input_entityID == 0) {
         sfp->qual = DialogToPointer (ffp->gbquals);
+        VisStringDialogToGbquals (sfp, ffp->experiment, "experiment");
+        InferenceDialogToGBQuals (ffp->inference, sfp);
         sfp->ext = DialogToPointer (ffp->usrobjext);
         if (ffp->goTermUserObj != NULL) {
           sfp->ext = CombineUserObjects (sfp->ext, ffp->goTermUserObj);
@@ -1522,6 +1627,8 @@ extern Boolean FeatFormReplaceWithoutUpdateProc (ForM f)
         return TRUE;
       } else if (ompc.input_itemtype != OBJ_SEQFEAT) {
         sfp->qual = DialogToPointer (ffp->gbquals);
+        VisStringDialogToGbquals (sfp, ffp->experiment, "experiment");
+        InferenceDialogToGBQuals (ffp->inference, sfp);
         sfp->ext = DialogToPointer (ffp->usrobjext);
         if (ffp->goTermUserObj != NULL) {
           sfp->ext = CombineUserObjects (sfp->ext, ffp->goTermUserObj);
@@ -1772,7 +1879,17 @@ extern void StdFeatFormAcceptButtonProc (ButtoN b)
       SeqEntrySetScope (oldscope);
     }
     Update ();
-    Remove (w);
+    if (ffp->leave_dlg_up == NULL || ! GetStatus (ffp->leave_dlg_up))
+    {
+      Remove (w);
+    }
+    else
+    {
+      /* set strand and sequence ID, but clear other location information */
+      SendMessageToDialog (ffp->location, NUM_VIB_MSG + 1);
+      SendMessageToDialog (ffp->location, NUM_VIB_MSG + 2);
+      Show (w);
+    }
   }
 }
 
@@ -2592,6 +2709,15 @@ static DialoG CreateAnAffilDialog (GrouP prnt, CharPtr title,
   GrouP           p;
   GrouP           q;
   GrouP           s;
+#ifdef WIN_MAC
+  Int2            wid = 20;
+  Int2            zipw = 6;
+  Int2            ewid = 8;
+#else
+  Int2            wid = 30;
+  Int2            zipw = 10;
+  Int2            ewid = 20;
+#endif
 
   p = HiddenGroup (prnt, 0, 0, NULL);
 
@@ -2647,13 +2773,13 @@ static DialoG CreateAnAffilDialog (GrouP prnt, CharPtr title,
     }
     j = HiddenGroup (q, 0, 20, NULL);
     g = HiddenGroup (j, 0, 20, NULL);
-    adp->affil = DialogText (g, "", 30, NULL);
+    adp->affil = DialogText (g, "", wid, NULL);
     adp->div = NULL;
     if (! publisher && ! proceedings) {
-      adp->div = DialogText (g, "", 30, NULL);
+      adp->div = DialogText (g, "", wid, NULL);
     }
-    adp->address = DialogText (g, "", 30, NULL);
-    adp->city = DialogText (g, "", 30, NULL);
+    adp->address = DialogText (g, "", wid, NULL);
+    adp->city = DialogText (g, "", wid, NULL);
     g = HiddenGroup (j, 3, 0, NULL);
     SetGroupSpacing (g, 20, 2);
     adp->state = DialogText (g, "", 10, NULL);
@@ -2661,10 +2787,10 @@ static DialoG CreateAnAffilDialog (GrouP prnt, CharPtr title,
       /* StaticPrompt (g, "Zip/Postal Code", 7 * stdCharWidth,
                     dialogTextHeight, programFont, 'l'); */
       StaticPrompt (g, "Zip/Postal Code", 0, dialogTextHeight, programFont, 'l');
-      adp->zip = DialogText (g, "", 10, NULL);
+      adp->zip = DialogText (g, "", zipw, NULL);
     }
     g = HiddenGroup (j, 0, 20, NULL);
-    adp->country = DialogText (g, "", 30, NULL);
+    adp->country = DialogText (g, "", wid, NULL);
     if (split) {
       if (! proceedings) {
         q = HiddenGroup (m, 2, 0, NULL);
@@ -2693,15 +2819,15 @@ static DialoG CreateAnAffilDialog (GrouP prnt, CharPtr title,
         StaticPrompt (g, "Fax", 0,
                       dialogTextHeight, programFont, 'l');
       } else {
-        StaticPrompt (g, "Fax", 7 * stdCharWidth,
+        StaticPrompt (g, "Fax", /* 7 * stdCharWidth */ 0,
                       dialogTextHeight, programFont, 'l');
       }
       adp->fax = DialogText (g, "", 10, NULL);
       g = HiddenGroup (j, 0, 20, NULL);
       if (split) {
-        adp->email = DialogText (g, "", 20, NULL);
+        adp->email = DialogText (g, "", ewid, NULL);
       } else {
-        adp->email = DialogText (g, "", 30, NULL);
+        adp->email = DialogText (g, "", ewid, NULL);
       }
     }
 
@@ -3085,17 +3211,33 @@ typedef struct intervalpage {
 #define NUM_IVAL_ROWS  7
 #define EXTRA_HEIGHT   2
 
-static void AddToSipList (IntervalPagePtr ipp, SeqIdPtr sip)
+static void ClearBspScratch (BioseqPtr bsp, Pointer userdata)
 
 {
-  Int2  j;
+  if (bsp == NULL) return;
+  bsp->idx.scratch = NULL;
+}
 
-  if (ipp == NULL || sip == NULL) return;
+static void AddToSipList (IntervalPagePtr ipp, BioseqPtr bsp)
+
+{
+  /*
+  Int2      j;
+  */
+  SeqIdPtr  sip;
+
+  if (ipp == NULL || bsp == NULL) return;
+  if (bsp->idx.scratch != NULL) return;
+  sip = SeqIdFindBest (bsp->id, 0);
+  if (sip == NULL) return;
+  /*
   for (j = 1; j <= ipp->count; j++) {
-    if (SeqIdComp (sip, ipp->sip_list [j]) == SIC_YES) return; /* already exists in list */
+    if (SeqIdComp (sip, ipp->sip_list [j]) == SIC_YES) return;
   }
+  */
   ipp->count++;
   ipp->sip_list [ipp->count] = SeqIdDup (sip);
+  bsp->idx.scratch = (Pointer) bsp;
 }
 
 static void FillInProducts (SeqEntryPtr sep, Pointer mydata,
@@ -3114,7 +3256,7 @@ static void FillInProducts (SeqEntryPtr sep, Pointer mydata,
     if (bsp != NULL) {
       if ((ipp->nucsOK && ISA_na (bsp->mol)) ||
           (ipp->protsOK && ISA_aa (bsp->mol))) {
-        AddToSipList (ipp, SeqIdFindBest (bsp->id, 0));
+        AddToSipList (ipp, bsp);
       }
       if (bsp->repr == Seq_repr_seg && bsp->seq_ext != NULL) {
         vn.choice = SEQLOC_MIX;
@@ -3126,11 +3268,11 @@ static void FillInProducts (SeqEntryPtr sep, Pointer mydata,
           if (sip != NULL) {
             bsp = BioseqFindCore (sip);
             if (bsp != NULL) {
-              AddToSipList (ipp, SeqIdFindBest (bsp->id, 0));
+              AddToSipList (ipp, bsp);
             } else {
               bsp = BioseqLockById (sip);
               if (bsp != NULL) {
-                AddToSipList (ipp, SeqIdFindBest (bsp->id, 0));
+                AddToSipList (ipp, bsp);
               }
               BioseqUnlockById (sip);
             }
@@ -3568,7 +3710,7 @@ static void SeqLocPtrToIntervalPage (DialoG d, Pointer data)
             strand = 0;
           }
           seq = 0;
-          if (ipp->sip_list != NULL) {
+          if (ipp->sip_list != NULL && bsp != NULL) {
             for (j = 1; j <= ipp->count && seq == 0; j++) {
               if (SeqIdComp (SeqIdFindBest (bsp->id, 0), ipp->sip_list[j]) == SIC_YES) {
                 seq = j;
@@ -5073,6 +5215,19 @@ static void SetOnlySequenceAndStrand (IntervalPagePtr ipp)
   SendMessageToDialog (tlp->dialog, VIB_MSG_REDRAW);  
 }
 
+static void ClearLocationPartialCheckboxes (IntervalPagePtr ipp)
+{
+  if (ipp != NULL)
+  {
+    SetStatus (ipp->partial5, FALSE);
+    SetStatus (ipp->partial3, FALSE); 
+    SetStatus (ipp->nullsBetween, FALSE); 
+    if (ipp->proc != NULL) {
+      ipp->proc (ipp->ffp, FALSE, FALSE, FALSE);
+    }
+  }
+}
+
 static void IntervalEditorMessage (DialoG d, Int2 mssg)
 
 {
@@ -5089,6 +5244,10 @@ static void IntervalEditorMessage (DialoG d, Int2 mssg)
     else if (mssg == NUM_VIB_MSG + 1)
     {
       SetOnlySequenceAndStrand (ipp);
+    }
+    else if (mssg == NUM_VIB_MSG + 2)
+    {
+      ClearLocationPartialCheckboxes (ipp);
     }
   }
 }
@@ -5307,7 +5466,9 @@ extern DialoG CreateIntervalEditorDialogExEx (GrouP h, CharPtr title, Uint2 rows
       ipp->count = 0;
 
       if (ipp->sip_list != NULL && ipp->alist != NULL && ipp->lengths != NULL) {
+        VisitBioseqsInSep (sep, NULL, ClearBspScratch);
         SeqEntryExplore (sep, (Pointer) ipp, FillInProducts);
+        VisitBioseqsInSep (sep, NULL, ClearBspScratch);
         j = 0;
         ipp->alist [j].name = StringSave ("     ");
         ipp->alist [j].value = (UIEnum) 0;

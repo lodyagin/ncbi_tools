@@ -28,7 +28,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.166 $
+* $Revision: 6.167 $
 *
 * File Description: 
 *
@@ -4911,7 +4911,7 @@ static void OpenNewAlignmentEditor (SeqAlignPtr salp, Uint2 input_entityID)
 #endif
   
   
-  f = CreateAlnEditorWindow (33, top, "New Alignment Editor", salp, 
+  f = CreateAlnEditorWindow (33, top, "Alignment Assistant", salp, 
                              input_entityID);
 
   if (f != NULL)

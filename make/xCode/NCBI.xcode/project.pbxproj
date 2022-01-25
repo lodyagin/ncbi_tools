@@ -29,81 +29,6 @@
 			refType = 2;
 			sourceTree = SOURCE_ROOT;
 		};
-		379A2C0808390659003079E4 = {
-			fileEncoding = 30;
-			isa = PBXFileReference;
-			lastKnownFileType = sourcecode.c.c;
-			name = Mode_condition.c;
-			path = ../../tools/Mode_condition.c;
-			refType = 2;
-			sourceTree = SOURCE_ROOT;
-		};
-		379A2C0908390659003079E4 = {
-			fileRef = 379A2C0808390659003079E4;
-			isa = PBXBuildFile;
-			settings = {
-			};
-		};
-		37E5B03308390707004A4B0E = {
-			fileEncoding = 30;
-			isa = PBXFileReference;
-			lastKnownFileType = sourcecode.c.c;
-			name = Newton_procedures.c;
-			path = ../../tools/Newton_procedures.c;
-			refType = 2;
-			sourceTree = SOURCE_ROOT;
-		};
-		37E5B03408390707004A4B0E = {
-			fileEncoding = 30;
-			isa = PBXFileReference;
-			lastKnownFileType = sourcecode.c.c;
-			name = nlm_numerics.c;
-			path = ../../tools/nlm_numerics.c;
-			refType = 2;
-			sourceTree = SOURCE_ROOT;
-		};
-		37E5B03508390707004A4B0E = {
-			fileRef = 37E5B03308390707004A4B0E;
-			isa = PBXBuildFile;
-			settings = {
-			};
-		};
-		37E5B03608390707004A4B0E = {
-			fileRef = 37E5B03408390707004A4B0E;
-			isa = PBXBuildFile;
-			settings = {
-			};
-		};
-		37E5B0390839071B004A4B0E = {
-			fileEncoding = 30;
-			isa = PBXFileReference;
-			lastKnownFileType = sourcecode.c.c;
-			name = RE_interface_ds.c;
-			path = ../../tools/RE_interface_ds.c;
-			refType = 2;
-			sourceTree = SOURCE_ROOT;
-		};
-		37E5B03A0839071B004A4B0E = {
-			fileEncoding = 30;
-			isa = PBXFileReference;
-			lastKnownFileType = sourcecode.c.c;
-			name = re_newton.c;
-			path = ../../tools/re_newton.c;
-			refType = 2;
-			sourceTree = SOURCE_ROOT;
-		};
-		37E5B03B0839071B004A4B0E = {
-			fileRef = 37E5B0390839071B004A4B0E;
-			isa = PBXBuildFile;
-			settings = {
-			};
-		};
-		37E5B03C0839071B004A4B0E = {
-			fileRef = 37E5B03A0839071B004A4B0E;
-			isa = PBXBuildFile;
-			settings = {
-			};
-		};
 //370
 //371
 //372
@@ -181,7 +106,7 @@
 			buildSettings = {
 				INSTALL_PATH = /usr/local/bin;
 				OTHER_CFLAGS = "";
-				OTHER_LDFLAGS = "-lncbidesk -lncbiblastapi -lncbiblast -lncbitool -lnetwork -lncbiobj -lncbimmdb -lncbi -framework Carbon";
+				OTHER_LDFLAGS = "-lncbidesk -lncbiblastapi -lncbiblast -lncbitool -lnetwork -lncbiobj -lncbimmdb -lblastcompadj -lncbi -framework Carbon";
 				OTHER_REZFLAGS = "";
 				PRODUCT_NAME = megablast;
 				SECTORDER_FLAGS = "";
@@ -241,7 +166,7 @@
 			buildSettings = {
 				INSTALL_PATH = /usr/local/bin;
 				OTHER_CFLAGS = "";
-				OTHER_LDFLAGS = "-lncbidesk -lncbitool -lnetwork -lncbiobj -lncbimmdb -lncbi -framework Carbon";
+				OTHER_LDFLAGS = "-lncbidesk -lncbitool -lnetwork -lncbiobj -lncbimmdb -lblastcompadj -lncbi -framework Carbon";
 				OTHER_REZFLAGS = "";
 				PRODUCT_NAME = spidey;
 				SECTORDER_FLAGS = "";
@@ -289,7 +214,7 @@
 			buildSettings = {
 				INSTALL_PATH = /usr/local/bin;
 				OTHER_CFLAGS = "";
-				OTHER_LDFLAGS = "-lncbidesk -lncbitool -lnetwork -lncbiobj -lncbiblastapi -lncbiblast -lncbimmdb -lncbi -framework Carbon";
+				OTHER_LDFLAGS = "-lncbidesk -lncbitool -lnetwork -lncbiobj -lncbiblastapi -lncbiblast -lncbimmdb -lblastcompadj -lncbi -framework Carbon";
 				OTHER_REZFLAGS = "";
 				PRODUCT_NAME = copymat;
 				SECTORDER_FLAGS = "";
@@ -337,7 +262,7 @@
 			buildSettings = {
 				INSTALL_PATH = /usr/local/bin;
 				OTHER_CFLAGS = "";
-				OTHER_LDFLAGS = "-lncbidesk -lncbiblastapi -lncbiblast -lncbitool -lnetwork -lncbiobj -lncbimmdb -lncbi -framework Carbon";
+				OTHER_LDFLAGS = "-lncbidesk -lncbiblastapi -lncbiblast -lncbitool -lnetwork -lncbiobj -lncbimmdb -lblastcompadj -lncbi -framework Carbon";
 				OTHER_REZFLAGS = "";
 				PRODUCT_NAME = bl2seq;
 				SECTORDER_FLAGS = "";
@@ -385,7 +310,7 @@
 			buildSettings = {
 				INSTALL_PATH = /usr/local/bin;
 				OTHER_CFLAGS = "-DBLAST_CS_API";
-				OTHER_LDFLAGS = "-lncbidesk -lncbitool -lnetwork -lncbiobj -lncbimmdb -lncbi -framework Carbon";
+				OTHER_LDFLAGS = "-lncbiblastapi -lncbiblast -lncbidesk -lncbitool -lnetwork -lncbiobj -lncbimmdb -lblastcompadj -lncbi  -framework Carbon";
 				OTHER_REZFLAGS = "";
 				PRODUCT_NAME = blastCL3;
 				SECTORDER_FLAGS = "";
@@ -643,7 +568,7 @@
 				GCC_WARN_UNKNOWN_PRAGMAS = NO;
 				INSTALL_PATH = /usr/local/bin;
 				OTHER_CFLAGS = "";
-				OTHER_LDFLAGS = "-lncbitool -lncbiobj -lncbimmdb -lncbi -framework Carbon";
+				OTHER_LDFLAGS = "-lncbitool -lncbiobj -lncbimmdb -lblastcompadj -lncbi -framework Carbon";
 				OTHER_REZFLAGS = "";
 				PRODUCT_NAME = formatdb;
 				SECTORDER_FLAGS = "";
@@ -693,7 +618,7 @@
 				GCC_WARN_UNKNOWN_PRAGMAS = NO;
 				INSTALL_PATH = /usr/local/bin;
 				OTHER_CFLAGS = "";
-				OTHER_LDFLAGS = "-lncbitool -lncbiobj -lncbimmdb -lncbi -framework Carbon";
+				OTHER_LDFLAGS = "-lncbitool -lncbiobj -lncbimmdb -lblastcompadj -lncbi -framework Carbon";
 				OTHER_REZFLAGS = "";
 				PRODUCT_NAME = fastacmd;
 				SECTORDER_FLAGS = "";
@@ -793,7 +718,7 @@
 				GCC_WARN_UNKNOWN_PRAGMAS = NO;
 				INSTALL_PATH = /usr/local/bin;
 				OTHER_CFLAGS = "";
-				OTHER_LDFLAGS = "-lncbitool -lncbiobj -lncbimmdb -lncbi -framework Carbon";
+				OTHER_LDFLAGS = "-lncbitool -lncbiobj -lncbimmdb -lblastcompadj -lncbi -framework Carbon";
 				OTHER_REZFLAGS = "";
 				PRODUCT_NAME = gil2bin;
 				SECTORDER_FLAGS = "";
@@ -2477,6 +2402,268 @@
 			settings = {
 			};
 		};
+		F01DC32F08D6FF2C002D34C9 = {
+			children = (
+				F01DC33008D6FFCF002D34C9,
+				F01DC33108D6FFCF002D34C9,
+				F01DC33208D6FFCF002D34C9,
+				F01DC33408D6FFCF002D34C9,
+				F01DC33418D6FFCF002D34C9,
+				F01DC33428D6FFCF002D34C9,
+				F01DC33438D6FFCF002D34C9,
+				F01DC33448D6FFCF002D34C9,
+				F01DC33458D6FFCF002D34C9,
+				F01DC33468D6FFCF002D34C9,
+				F01DC33478D6FFCF002D34C9,
+			);
+			isa = PBXGroup;
+			name = "NCBI Blast Composition Adjustment";
+			refType = 4;
+			sourceTree = "<group>";
+		};
+		F01DC33008D6FFCF002D34C9 = {
+			fileEncoding = 30;
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.c;
+			name = nlm_linear_algebra.c;
+			path = ../../algo/blast/composition_adjustment/nlm_linear_algebra.c;
+			refType = 2;
+			sourceTree = SOURCE_ROOT;
+		};
+		F01DC33108D6FFCF002D34C9 = {
+			fileEncoding = 30;
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.c;
+			name = composition_adjustment.c;
+			path = ../../algo/blast/composition_adjustment/composition_adjustment.c;
+			refType = 2;
+			sourceTree = SOURCE_ROOT;
+		};
+		F01DC33208D6FFCF002D34C9 = {
+			fileEncoding = 30;
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.c;
+			name = compo_mode_condition.c;
+			path = ../../algo/blast/composition_adjustment/compo_mode_condition.c;
+			refType = 2;
+			sourceTree = SOURCE_ROOT;
+		};
+		F01DC33408D6FFCF002D34C9 = {
+			fileEncoding = 30;
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.c;
+			name = optimize_target_freq.c;
+			path = ../../algo/blast/composition_adjustment/optimize_target_freq.c;
+			refType = 2;
+			sourceTree = SOURCE_ROOT;
+		};
+		F01DC33418D6FFCF002D34C9 = {
+			fileEncoding = 30;
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.c;
+			name = compo_heap.c;
+			path = ../../algo/blast/composition_adjustment/compo_heap.c;
+			refType = 2;
+			sourceTree = SOURCE_ROOT;
+		};
+		F01DC33428D6FFCF002D34C9 = {
+			fileEncoding = 30;
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.c;
+			name = compo_mode_condition.c;
+			path = ../../algo/blast/composition_adjustment/compo_mode_condition.c;
+			refType = 2;
+			sourceTree = SOURCE_ROOT;
+		};
+		F01DC33438D6FFCF002D34C9 = {
+			fileEncoding = 30;
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.c;
+			name = composition_adjustment.c;
+			path = ../../algo/blast/composition_adjustment/composition_adjustment.c;
+			refType = 2;
+			sourceTree = SOURCE_ROOT;
+		};
+		F01DC33448D6FFCF002D34C9 = {
+			fileEncoding = 30;
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.c;
+			name = matrix_frequency_data.c;
+			path = ../../algo/blast/composition_adjustment/matrix_frequency_data.c;
+			refType = 2;
+			sourceTree = SOURCE_ROOT;
+		};
+		F01DC33458D6FFCF002D34C9 = {
+			fileEncoding = 30;
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.c;
+			name = nlm_linear_algebra.c;
+			path = ../../algo/blast/composition_adjustment/nlm_linear_algebra.c;
+			refType = 2;
+			sourceTree = SOURCE_ROOT;
+		};
+		F01DC33468D6FFCF002D34C9 = {
+			fileEncoding = 30;
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.c;
+			name = redo_alignment.c;
+			path = ../../algo/blast/composition_adjustment/redo_alignment.c;
+			refType = 2;
+			sourceTree = SOURCE_ROOT;
+		};
+		F01DC33478D6FFCF002D34C9 = {
+			fileEncoding = 30;
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.c;
+			name = smith_waterman.c;
+			path = ../../algo/blast/composition_adjustment/smith_waterman.c;
+			refType = 2;
+			sourceTree = SOURCE_ROOT;
+		};		
+		F01DC33508D6FFF0002D34C9 = {
+			buildActionMask = 2147483647;
+			files = (
+			);
+			isa = PBXHeadersBuildPhase;
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F01DC33608D6FFF0002D34C9 = {
+			buildActionMask = 2147483647;
+			files = (
+				F01DC33A08D70036002D34C9,
+				F01DC33B08D70037002D34C9,
+				F01DC33C08D70037002D34C9,
+				F01DC33D08D70038002D34C9,
+				F01DC33F08D70038002D34C9,
+				F01DC33G08D70038002D34C9,
+				F01DC33H08D70038002D34C9,
+				F01DC33I08D70038002D34C9,
+				F01DC33J08D70038002D34C9,
+				F01DC33K08D70038002D34C9,
+				F01DC33L08D70038002D34C9,
+			);
+			isa = PBXSourcesBuildPhase;
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F01DC33708D6FFF0002D34C9 = {
+			buildActionMask = 2147483647;
+			files = (
+			);
+			isa = PBXFrameworksBuildPhase;
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F01DC33808D6FFF0002D34C9 = {
+			buildPhases = (
+				F01DC33508D6FFF0002D34C9,
+				F01DC33608D6FFF0002D34C9,
+				F01DC33708D6FFF0002D34C9,
+			);
+			buildRules = (
+			);
+			buildSettings = {
+				INSTALL_PATH = /usr/local/lib;
+				LIBRARY_STYLE = STATIC;
+				OTHER_CFLAGS = "";
+				OTHER_LDFLAGS = "";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = blastcompadj;
+				SECTORDER_FLAGS = "";
+				WARNING_CFLAGS = "-Wmost";
+			};
+			dependencies = (
+			);
+			isa = PBXNativeTarget;
+			name = libblastcompadj;
+			productName = ncbicompadj;
+			productReference = F01DC33908D6FFF0002D34C9;
+			productType = "com.apple.product-type.library.static";
+		};
+		F01DC33908D6FFF0002D34C9 = {
+			explicitFileType = archive.ar;
+			includeInIndex = 0;
+			isa = PBXFileReference;
+			path = libblastcompadj.a;
+			refType = 3;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		F01DC33A08D70036002D34C9 = {
+			fileRef = F01DC33408D6FFCF002D34C9;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		F01DC33B08D70037002D34C9 = {
+			fileRef = F01DC33008D6FFCF002D34C9;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		F01DC33C08D70037002D34C9 = {
+			fileRef = F01DC33108D6FFCF002D34C9;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		F01DC33D08D70038002D34C9 = {
+			fileRef = F01DC33208D6FFCF002D34C9;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		F01DC33F08D70038002D34C9 = {
+			fileRef = F01DC33418D6FFCF002D34C9;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		F01DC33G08D70038002D34C9 = {
+			fileRef = F01DC33428D6FFCF002D34C9;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		F01DC33H08D70038002D34C9 = {
+			fileRef = F01DC33438D6FFCF002D34C9;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		F01DC33I08D70038002D34C9 = {
+			fileRef = F01DC33448D6FFCF002D34C9;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		F01DC33J08D70038002D34C9 = {
+			fileRef = F01DC33458D6FFCF002D34C9;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		F01DC33K08D70038002D34C9 = {
+			fileRef = F01DC33468D6FFCF002D34C9;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		F01DC33L08D70038002D34C9 = {
+			fileRef = F01DC33478D6FFCF002D34C9;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		F01DC34208D7008D002D34C9 = {
+			containerPortal = F0E3B02206A5513900F473CA;
+			isa = PBXContainerItemProxy;
+			proxyType = 1;
+			remoteGlobalIDString = F01DC33808D6FFF0002D34C9;
+			remoteInfo = ncbicompadj;
+		};
+		F01DC34308D7008D002D34C9 = {
+			isa = PBXTargetDependency;
+			target = F01DC33808D6FFF0002D34C9;
+			targetProxy = F01DC34208D7008D002D34C9;
+		};
 		F030B6FA06AD648900F0C214 = {
 			buildPhases = (
 			);
@@ -2783,7 +2970,7 @@
 			buildSettings = {
 				INSTALL_PATH = /usr/local/bin;
 				OTHER_CFLAGS = "";
-				OTHER_LDFLAGS = "-lncbidesk -lncbitool -lnetwork -lncbiobj -lncbimmdb -lncbi -framework Carbon";
+				OTHER_LDFLAGS = "-lncbidesk -lncbitool -lnetwork -lncbiobj -lncbimmdb -lblastcompadj -lncbi -framework Carbon";
 				OTHER_REZFLAGS = "";
 				PRODUCT_NAME = blastclust;
 				SECTORDER_FLAGS = "";
@@ -2831,7 +3018,7 @@
 			buildSettings = {
 				INSTALL_PATH = /usr/local/bin;
 				OTHER_CFLAGS = "";
-				OTHER_LDFLAGS = "-lncbidesk -lncbitool -lnetwork -lncbiobj -lncbiblastapi -lncbiblast -lncbimmdb -lncbi -framework Carbon";
+				OTHER_LDFLAGS = "-lncbidesk -lncbitool -lnetwork -lncbiobj -lncbiblastapi -lncbiblast -lncbimmdb -lblastcompadj -lncbi -framework Carbon";
 				OTHER_REZFLAGS = "";
 				PRODUCT_NAME = blastpgp;
 				SECTORDER_FLAGS = "";
@@ -2879,7 +3066,7 @@
 			buildSettings = {
 				INSTALL_PATH = /usr/local/bin;
 				OTHER_CFLAGS = "";
-				OTHER_LDFLAGS = "-lncbidesk  -lncbiblastapi -lncbiblast -lncbitool -lnetwork -lncbiobj -lncbimmdb -lncbi -framework Carbon";
+				OTHER_LDFLAGS = "-lncbidesk  -lncbiblastapi -lncbiblast -lncbitool -lnetwork -lncbiobj -lncbimmdb -lblastcompadj -lncbi -framework Carbon";
 				OTHER_REZFLAGS = "";
 				PRODUCT_NAME = rpsblast;
 				SECTORDER_FLAGS = "";
@@ -2927,7 +3114,7 @@
 			buildSettings = {
 				INSTALL_PATH = /usr/local/bin;
 				OTHER_CFLAGS = "";
-				OTHER_LDFLAGS = "-lncbidesk -lncbitool -lnetwork -lncbiobj -lncbimmdb -lncbi -framework Carbon";
+				OTHER_LDFLAGS = "-lncbidesk -lncbitool -lnetwork -lncbiobj -lncbimmdb -lblastcompadj -lncbi -framework Carbon";
 				OTHER_REZFLAGS = "";
 				PRODUCT_NAME = seedtop;
 				SECTORDER_FLAGS = "";
@@ -5789,7 +5976,7 @@
 				INFOPLIST_FILE = "";
 				INSTALL_PATH = "$(USER_APPS_DIR)";
 				OTHER_CFLAGS = "";
-				OTHER_LDFLAGS = "-lvibrant -lncbidesk -lncbiblastapi -lncbiblast -lncbitool -lnetwork -lncbiobj -lncbimmdb -lncbinacc -lncbi -framework Carbon";
+				OTHER_LDFLAGS = "-lvibrant -lncbidesk -lncbiblastapi -lncbiblast -lncbitool -lnetwork -lncbiobj -lncbimmdb -lncbinacc -lblastcompadj -lncbi -framework Carbon";
 				OTHER_REZFLAGS = "";
 				PRODUCT_NAME = Sequin;
 				REZ_EXECUTABLE = NO;
@@ -6965,6 +7152,7 @@
 				F0B2E4FE06AC248D0054E175,
 				F095C4FC06AE8E5F00C0C74D,
 				F095C58606AE8FA700C0C74D,
+				F01DC32F08D6FF2C002D34C9,
 				F0BC2D9E06AC2D6F00EC2330,
 			);
 			isa = PBXGroup;
@@ -7444,7 +7632,7 @@
 			buildSettings = {
 				INSTALL_PATH = /usr/local/bin;
 				OTHER_CFLAGS = "";
-				OTHER_LDFLAGS = "-lncbidesk -lncbitool -lnetwork -lncbiobj -lncbimmdb -lncbi -framework Carbon";
+				OTHER_LDFLAGS = "-lncbidesk -lncbitool -lnetwork -lncbiobj -lncbimmdb -lblastcompadj -lncbi -framework Carbon";
 				OTHER_REZFLAGS = "";
 				PRODUCT_NAME = impala;
 				SECTORDER_FLAGS = "";
@@ -7534,7 +7722,7 @@
 			buildSettings = {
 				INSTALL_PATH = /usr/local/bin;
 				OTHER_CFLAGS = "";
-				OTHER_LDFLAGS = "-lncbitool -lncbiobj -lncbiblastapi -lncbiblast -lncbimmdb -lncbi -framework Carbon";
+				OTHER_LDFLAGS = "-lncbitool -lncbiobj -lncbiblastapi -lncbiblast -lncbimmdb -lblastcompadj -lncbi -framework Carbon";
 				OTHER_REZFLAGS = "";
 				PRODUCT_NAME = formatrpsdb;
 				SECTORDER_FLAGS = "";
@@ -7606,7 +7794,7 @@
 			buildSettings = {
 				INSTALL_PATH = /usr/local/bin;
 				OTHER_CFLAGS = "";
-				OTHER_LDFLAGS = "-lncbidesk -lncbitool -lnetwork -lncbiobj -lncbimmdb -lncbi -framework Carbon";
+				OTHER_LDFLAGS = "-lncbiblastapi -lncbiblast -lncbidesk -lncbitool -lnetwork -lncbiobj -lncbimmdb -lblastcompadj -lncbi -framework Carbon";
 				OTHER_REZFLAGS = "";
 				PRODUCT_NAME = blastall;
 				SECTORDER_FLAGS = "";
@@ -8778,11 +8966,6 @@
 			children = (
 				F0B2E50E06AC25650054E175,
 				F0B2E50F06AC25650054E175,
-				379A2C0808390659003079E4,
-				37E5B0390839071B004A4B0E,
-				37E5B03A0839071B004A4B0E,
-				37E5B03308390707004A4B0E,
-				37E5B03408390707004A4B0E,
 				F0B2E51006AC25650054E175,
 				F0B2E51106AC25650054E175,
 				F0B2E51206AC25650054E175,
@@ -8937,11 +9120,6 @@
 				F0B2E59706AC25650054E175,
 				F0B2E59806AC25650054E175,
 				F0B2E59906AC25650054E175,
-				379A2C0908390659003079E4,
-				37E5B03508390707004A4B0E,
-				37E5B03608390707004A4B0E,
-				37E5B03B0839071B004A4B0E,
-				37E5B03C0839071B004A4B0E,
 			);
 			isa = PBXSourcesBuildPhase;
 			runOnlyForDeploymentPostprocessing = 0;
@@ -10197,7 +10375,7 @@
 				INFOPLIST_FILE = "";
 				INSTALL_PATH = "$(USER_APPS_DIR)";
 				OTHER_CFLAGS = "";
-				OTHER_LDFLAGS = "-lncbidesk -lncbimmdb -lncbiblastapi -lncbitool -lnetwork -lncbiblast -lvibrant -lncbiobj -lncbi -framework Carbon";
+				OTHER_LDFLAGS = "-lncbidesk -lncbimmdb -lncbiblastapi -lncbitool -lnetwork -lncbiblast -lvibrant -lncbiobj -lblastcompadj -lncbi -framework Carbon";
 				OTHER_REZFLAGS = "";
 				PRODUCT_NAME = Entrez2;
 				REZ_EXECUTABLE = NO;
@@ -11768,6 +11946,7 @@
 				F0BC2E0B06AC3D2500EC2330,
 				F095C60F06AE90FF00C0C74D,
 				F095C61106AE90FF00C0C74D,
+				F01DC34308D7008D002D34C9,
 				F0BC2E0D06AC3D2500EC2330,
 			);
 			isa = PBXAggregateTarget;
@@ -11946,6 +12125,7 @@
 				F0BC2DA106AC2D8600EC2330,
 				F095C50306AE8EB800C0C74D,
 				F095C59006AE8FDE00C0C74D,
+				F01DC33808D6FFF0002D34C9,
 				F095C4A906AE8A3E00C0C74D,
 				F0B6D5DE06AEBF8C002EF6DC,
 				F0FEF6BD06AC4515005DD516,
@@ -11970,13 +12150,13 @@
 				F0B6D7AA06AEDFD5002EF6DC,
 				F00209F707523F0100252E7D,
 				F04A3936075DFA150078AB2A,
+				F04A393C075DFA200078AB2A,
 				F0020A2607524C2200252E7D,
 				F0B6D78E06AEDF06002EF6DC,
 				F00AEE2206AFD5C6003C8FEB,
 				F00AEE3A06AFD603003C8FEB,
 				F0B6D7D106AEE06C002EF6DC,
 				F0FEF69F06AC42E3005DD516,
-				F04A393C075DFA200078AB2A,
 			);
 		};
 		F0E3B02906A551A100F473CA = {
@@ -12066,7 +12246,6 @@
 				F012D92B06A5559200741D48,
 				F012D92F06A555D900741D48,
 				F012D94306A5568500741D48,
-				F012D94406A5568500741D48,
 				F012D94506A5568500741D48,
 				F012D94606A5568500741D48,
 				F012D94706A5568500741D48,
@@ -12089,6 +12268,7 @@
 				F012D96106A557C100741D48,
 				F012D96706A557E600741D48,
 				F012D96D06A557E900741D48,
+				F012D94406A5568500741D48,
 				F012D97406A557EC00741D48,
 				F012D97606A557F200741D48,
 				F012D97806A557F300741D48,
@@ -12192,6 +12372,7 @@
 				F0A82BB8075E02A4008AE9A4,
 				F03C269908881692006BFF22,
 				F03C26B4088817C4006BFF22,
+				F01DC33908D6FFF0002D34C9,
 			);
 			isa = PBXGroup;
 			name = Products;
@@ -12274,7 +12455,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "if test ! -d $BUILD_ROOT/$CONFIGURATION/$EXECUTABLE_FOLDER_PATH/data; then\n    cd ../..\n    echo $BUILD_ROOT/$CONFIGURATION/$EXECUTABLE_FOLDER_PATH/data\n    ln -s $(pwd)/data $BUILD_ROOT/$CONFIGURATION/$EXECUTABLE_FOLDER_PATH/data\nfi";
+			shellScript = "if test ! -d $BUILD_ROOT/data; then\n    cd ../..\n    echo $BUILD_ROOT/data\n    ln -s $(pwd)/data $BUILD_ROOT/data\nfi";
 		};
 		F0E8272206AD774E00B8A983 = {
 			buildActionMask = 2147483647;
@@ -12287,7 +12468,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "if test ! -d ../../include ; then mkdir ../../include ; fi\nif test ! -e ../../include/ncbilcl.h ; then cp ../../corelib/ncbilcl.met ../../include/ncbilcl.h ; fi";
+			shellScript = "if test ! -d ../../include ; then mkdir ../../include ; fi\nif test ! -e ../../include/ncbilcl.h ; then cp ../../corelib/ncbilcl.dwn ../../include/ncbilcl.h ; fi";
 		};
 		F0FEB6FD06B5429300975471 = {
 			fileEncoding = 30;
@@ -12326,7 +12507,7 @@
 				GCC_WARN_UNKNOWN_PRAGMAS = NO;
 				INSTALL_PATH = /usr/local/bin;
 				OTHER_CFLAGS = "";
-				OTHER_LDFLAGS = "-lncbitool -lncbiobj -lncbimmdb -lncbi -framework Carbon";
+				OTHER_LDFLAGS = "-lncbitool -lncbiobj -lncbimmdb -lncbi -lblastcompadj -framework Carbon";
 				OTHER_REZFLAGS = "";
 				PRODUCT_NAME = asn2fsa;
 				SECTORDER_FLAGS = "";

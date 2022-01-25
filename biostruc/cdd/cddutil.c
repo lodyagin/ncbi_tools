@@ -1,4 +1,4 @@
-/* $Id: cddutil.c,v 1.93 2004/11/05 15:36:28 coulouri Exp $
+/* $Id: cddutil.c,v 1.94 2005/08/31 20:34:30 coulouri Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,21 @@
 *
 * Initial Version Creation Date: 10/18/1999
 *
-* $Revision: 1.93 $
+* $Revision: 1.94 $
 *
 * File Description: CDD utility routines
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cddutil.c,v $
+* Revision 1.94  2005/08/31 20:34:30  coulouri
+* From Mike Gertz:
+* cddutil.c in CddReadBlastOptions:
+*   - Removed manipulation of hitlist_size as it is no longer correct to
+*     manipulate the hitlist_size that way.
+*   - Increase options->expect_value for composition-based statistics,
+*     mode > 1 (although the routine does not yet understand mode > 1).
+*
 * Revision 1.93  2004/11/05 15:36:28  coulouri
 * remove explicit stdio.h include; it causes LONG_BIT to be defined incorrectly on amd64
 *
@@ -345,6 +353,10 @@
 #include <thrddecl.h>
 #include <profiles.h>
 #include <salpacc.h>
+
+/* Multiplier by which to increase the evalue when mode > 1 composition-based
+ * statistics is being used. */
+#define EVALUE_EXPAND 10
 
 static void CddCposCompPart1(SeqAlignPtr listOfSeqAligns, BioseqPtr bsp,
                              compactSearchItems* compactSearch, ValNodePtr* LetterHead,
@@ -4544,6 +4556,7 @@ static PGPBlastOptionsPtr CddReadBlastOptions(BioseqPtr bsp, Int4 iPseudo, CharP
     options->window_size = 40;
     options->dropoff_2nd_pass  = 7.0;
     options->expect_value  = 10.0;
+    options->kappa_expect_value = options->expect_value;
     options->hitlist_size = 500;
     options->two_pass_method  = FALSE;
     options->multiple_hits_only  = TRUE;
@@ -4565,11 +4578,11 @@ static PGPBlastOptionsPtr CddReadBlastOptions(BioseqPtr bsp, Int4 iPseudo, CharP
     options->block_width  = 20; /* Default value - previously '-L' parameter */
     options->tweak_parameters = TRUE;
     options->smith_waterman = FALSE;
-    if (bop->options->tweak_parameters) {
-      /*allows for extra matches in first pass of screening,
-        hitlist_size */
-      bop->options->original_expect_value = bop->options->expect_value;
-      bop->options->hitlist_size *= 2; 
+    if (options->tweak_parameters > 1) {
+        /* relax the cutoff evalue so that we don't loose too many
+         * hits for which compositional adjustment improves the
+         * evalue. */
+        options->expect_value *= EVALUE_EXPAND;
     }
 
     options = BLASTOptionValidate(options, "blastp");

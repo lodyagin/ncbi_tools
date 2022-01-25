@@ -28,7 +28,7 @@ ALL_LIBS = -lncbidesk -lvibgif $(BLAST_LIBS) $(THREAD_LIBS)
 ALL_LIBS_CS = -lncbitxc2 -lncbiid1 -lnetblast -lnetcli $(ALL_LIBS)
 BL2_LIBS = $(BLAST_LIBS)
 # For Blast 2 sequences client/server
-BL2_LIBS_CS = -lncbiid1 -lnetcli $(BLAST_LIBS)
+BL2_LIBS_CS = -lncbiid1 -lnetcli $(BLAST_LIBS) -lblastcompadj
 
 BL2_DEFINE = -DBL2SEQ_STANDALONE
 

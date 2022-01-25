@@ -1,4 +1,4 @@
-/* $Id: blast_stat.c,v 1.123 2005/08/19 17:56:18 dondosha Exp $
+/* $Id: blast_stat.c,v 1.136 2005/11/14 15:55:42 madden Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -50,7 +50,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_stat.c,v 1.123 2005/08/19 17:56:18 dondosha Exp $";
+    "$Id: blast_stat.c,v 1.136 2005/11/14 15:55:42 madden Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_stat.h>
@@ -295,6 +295,7 @@ static Int4 blosum80_prefs[BLOSUM80_VALUES_MAX] = {
     BLAST_MATRIX_NOMINAL,
     BLAST_MATRIX_NOMINAL,
     BLAST_MATRIX_NOMINAL,
+    BLAST_MATRIX_NOMINAL,
     BLAST_MATRIX_BEST,
     BLAST_MATRIX_NOMINAL
 };  /**< Quality values for BLOSUM80 matrix, each element corresponds to same element number in array blosum80_values */
@@ -351,8 +352,8 @@ BLAST_MATRIX_NOMINAL,
 BLAST_MATRIX_NOMINAL,
 BLAST_MATRIX_NOMINAL,
 BLAST_MATRIX_NOMINAL,
-BLAST_MATRIX_BEST,
 BLAST_MATRIX_NOMINAL,
+BLAST_MATRIX_BEST,
 BLAST_MATRIX_NOMINAL,
 BLAST_MATRIX_NOMINAL,
 BLAST_MATRIX_NOMINAL,
@@ -562,6 +563,12 @@ BLAST_MATRIX_NOMINAL
  * 8. Theta
  */
 
+/** Karlin-Altschul parameter values for substitution scores 1 and -5. */
+static const array_of_8 blastn_values_1_5[] = {
+    { 0, 0, 1.39, 0.747, 1.38, 1.00,  0, 100 },
+    { 3, 3, 1.39, 0.747, 1.38, 1.00,  0, 100 }
+};
+
 /** Karlin-Altschul parameter values for substitution scores 1 and -4. */
 static const array_of_8 blastn_values_1_4[] = {
     { 0, 0, 1.383, 0.738, 1.36, 1.02,  0, 100 },
@@ -632,6 +639,16 @@ static const array_of_8 blastn_values_2_3[] = {
     { 2, 2, 0.515, 0.14, 0.33, 1.55, -9, 81 }
 };
 
+/** Karlin-Altschul parameter values for substitution scores 3 and -4. */
+static const array_of_8 blastn_values_3_4[] = {
+    { 6, 3, 0.389, 0.25, 0.56, 0.7, -5, 95},
+    { 5, 3, 0.375, 0.21, 0.47, 0.8, -6, 92},
+    { 4, 3, 0.351, 0.14, 0.35, 1.0, -9, 86},
+    { 6, 2, 0.362, 0.16, 0.45, 0.8, -4, 88},
+    { 5, 2, 0.330, 0.092, 0.28, 1.2, -13, 81},
+    { 4, 2, 0.281, 0.046, 0.16, 1.8, -23, 69}
+};
+
 /** Karlin-Altschul parameter values for substitution scores 4 and -5. */
 static const array_of_8 blastn_values_4_5[] = {
     { 0, 0, 0.22, 0.061, 0.22, 1.0, -15, 74 },
@@ -650,6 +667,11 @@ static const array_of_8 blastn_values_1_1[] = {
     { 4,  1, 1.08,  0.28, 0.54, 2.0,  -2, 98 }, 
     { 3,  1, 1.06,  0.25, 0.46, 2.3,  -4, 96 }, 
     { 2,  1, 0.99,  0.17, 0.30, 3.3, -10, 90 }
+};
+
+/** Karlin-Altschul parameter values for substitution scores 3 and -2. */
+static const array_of_8 blastn_values_3_2[] = {
+    {  5,  5, 0.208, 0.030, 0.072, 2.9, -47, 77}
 };
 
 /** Karlin-Altschul parameter values for substitution scores 5 and -4. */
@@ -2697,6 +2719,306 @@ void BLAST_GetAlphaBeta(const char* matrixName, double *alpha,
    sfree(beta_arr);
 }
 
+static Int2
+s_SplitArrayOf8(const array_of_8* input, const array_of_8** normal, const array_of_8** non_affine, Boolean *split)
+{
+
+    if (input == NULL || normal == NULL || non_affine == NULL)
+            return -1;
+
+    *normal = NULL;
+    *non_affine = NULL;
+
+    if (input[0][0] == 0 && input[0][1] == 0)
+    {
+            *normal = input+1;
+            *non_affine = input;
+            *split = TRUE;
+    }
+    else
+    {
+            *normal = input;
+            *split = FALSE;
+    }
+    return 0;
+
+}
+
+/** Adjust Lambda and H if reward and penalty have a non-1 gcd.
+ * the two arrays (normal and linear) should be filled in with values already.
+ * @param normal the values for normal (e.g, "affine") gap costs [in|out]
+ * @param linear specialized values used for megablast [in|out]
+ * @param size Number of supported combinations for this match/mismatch pair [out]
+ * @param gap_existence_max start of infinite regime for gap existence [in|out]
+ * @param gap_extend_max start of infinite regime for gap extension [in|out]
+ * @param divisor divisor for gap costs [out]
+*/
+static Int2
+s_AdjustGapParametersByGcd(array_of_8* normal, array_of_8* linear, int size, Int4* gap_existence_max, Int4* gap_extend_max, int divisor)
+{
+    if (divisor == 1)
+       return 0;
+
+    if (size <=0)
+       return 1;
+
+    (*gap_existence_max) *= divisor;
+    (*gap_extend_max) *= divisor;
+
+    if (normal)
+    {
+         int i;
+   
+         for (i=0; i<size; i++)
+         {  /* divide lambda and alpha by divisor. */
+            /* multiply gap existence and extension by divisor. */
+                normal[i][0] *= divisor;
+                normal[i][1] *= divisor;
+                normal[i][2] /= divisor;
+                normal[i][5] /= divisor;
+         }
+    }
+    if (linear)
+    {  /* divide lambda and alpha by divisor. */
+       linear[0][0] *= divisor;
+       linear[0][1] *= divisor;
+       linear[0][2] /= divisor;
+       linear[0][5] /= divisor;
+    }
+
+    return 0;
+}
+
+/** Returns the array of values corresponding to the given match/mismatch
+ * scores, the number of supported gap cost combinations and thresholds for 
+ * the gap costs, beyond which the ungapped statistics can be applied.
+ * @param reward Match reward score [in]
+ * @param penalty Mismatch penalty score [in]
+ * @param array_size Number of supported combinations for this match/mismatch
+ *                   pair [out]
+ * @param normal the values for normal (e.g, "affine") gap costs [out]
+ * @param non_affine specialized values used for megablast [out]
+ * @param gap_open_max Gap opening cost threshold for infinite gap costs [out]
+ * @param gap_extend_max Gap extension cost threshold for infinite gap costs [out]
+ * @param round_down if set to TRUE only even scores should be used for calculation
+ *    of expect value or bit scores [out]
+ * @param error_return Pointer to error message [out]
+ * @return zero on success, other values if error
+ */
+static Int2
+s_GetNuclValuesArray(Int4 reward, Int4 penalty, Int4* array_size,
+                     array_of_8** normal, array_of_8** non_affine,
+                     Int4* gap_open_max, Int4* gap_extend_max, Boolean* round_down,
+                     Blast_Message** error_return)
+{
+    Int2 status = 0;
+    const array_of_8 * kValues = NULL;
+    const array_of_8 * kValues_non_affine = NULL;
+    Boolean split = FALSE;
+    int divisor = BLAST_Gcd(reward, penalty);
+
+    *round_down = FALSE;
+
+    *array_size = 0;
+    *normal = NULL;
+    *non_affine = NULL;
+
+    if (divisor != 1)
+    {
+       reward /= divisor;
+       penalty /= divisor;
+    }
+
+    if (reward == 1 && penalty == -5) {
+        if ((status=s_SplitArrayOf8(blastn_values_1_5, &kValues, &kValues_non_affine, &split)))
+           return status;
+        
+        *array_size = sizeof(blastn_values_1_5)/sizeof(array_of_8);
+        *gap_open_max = 3;
+        *gap_extend_max = 3;
+    } else if (reward == 1 && penalty == -4) {
+        if ((status=s_SplitArrayOf8(blastn_values_1_4, &kValues, &kValues_non_affine, &split)))
+           return status;
+        
+        *array_size = sizeof(blastn_values_1_4)/sizeof(array_of_8);
+        *gap_open_max = 2;
+        *gap_extend_max = 2;
+    } else if (reward == 2 && penalty == -7) {
+        if ((status=s_SplitArrayOf8(blastn_values_2_7, &kValues, &kValues_non_affine, &split)))
+           return status;
+        
+        *round_down = TRUE;
+        *array_size = sizeof(blastn_values_2_7)/sizeof(array_of_8);
+        *gap_open_max = 4;
+        *gap_extend_max = 4;
+    } else if (reward == 1 && penalty == -3) { 
+        if ((status=s_SplitArrayOf8(blastn_values_1_3, &kValues, &kValues_non_affine, &split)))
+           return status;
+        
+        *array_size = sizeof(blastn_values_1_3)/sizeof(array_of_8);
+        *gap_open_max = 2;
+        *gap_extend_max = 2;
+    } else if (reward == 2 && penalty == -5) {
+        if ((status=s_SplitArrayOf8(blastn_values_2_5, &kValues, &kValues_non_affine, &split)))
+           return status;
+        
+        *round_down = TRUE;
+        *array_size = sizeof(blastn_values_2_5)/sizeof(array_of_8);
+        *gap_open_max = 4;
+        *gap_extend_max = 4;
+    } else if (reward == 1 && penalty == -2) {
+        if ((status=s_SplitArrayOf8(blastn_values_1_2, &kValues, &kValues_non_affine, &split)))
+           return status;
+        
+        *array_size = sizeof(blastn_values_1_2)/sizeof(array_of_8);
+        *gap_open_max = 2;
+        *gap_extend_max = 2;
+    } else if (reward == 2 && penalty == -3) {
+        if ((status=s_SplitArrayOf8(blastn_values_2_3, &kValues, &kValues_non_affine, &split)))
+           return status;
+        
+        *round_down = TRUE;
+        *array_size = sizeof(blastn_values_2_3)/sizeof(array_of_8);
+        *gap_open_max = 6;
+        *gap_extend_max = 4;
+    } else if (reward == 3 && penalty == -4) {
+        if ((status=s_SplitArrayOf8(blastn_values_3_4, &kValues, &kValues_non_affine, &split)))
+           return status;
+        
+        *round_down = TRUE;
+        *array_size = sizeof(blastn_values_3_4)/sizeof(array_of_8);
+        *gap_open_max = 6;
+        *gap_extend_max = 3;
+    } else if (reward == 1 && penalty == -1) {
+        if ((status=s_SplitArrayOf8(blastn_values_1_1, &kValues, &kValues_non_affine, &split)))
+           return status;
+        
+        *array_size = sizeof(blastn_values_1_1)/sizeof(array_of_8);
+        *gap_open_max = 4;
+        *gap_extend_max = 2;
+    } else if (reward == 3 && penalty == -2) {
+        if ((status=s_SplitArrayOf8(blastn_values_3_2, &kValues, &kValues_non_affine, &split)))
+           return status;
+        
+        *array_size = sizeof(blastn_values_3_2)/sizeof(array_of_8);
+        *gap_open_max = 5;
+        *gap_extend_max = 5;
+    } else if (reward == 4 && penalty == -5) {
+        if ((status=s_SplitArrayOf8(blastn_values_4_5, &kValues, &kValues_non_affine, &split)))
+           return status;
+        
+        *array_size = sizeof(blastn_values_4_5)/sizeof(array_of_8);
+        *gap_open_max = 12;
+        *gap_extend_max = 8;
+    } else if (reward == 5 && penalty == -4) {
+        if ((status=s_SplitArrayOf8(blastn_values_5_4, &kValues, &kValues_non_affine, &split)))
+           return status;
+        
+        *array_size = sizeof(blastn_values_5_4)/sizeof(array_of_8);
+        *gap_open_max = 25;
+        *gap_extend_max = 10;
+    } else  { /* Unsupported reward-penalty */
+        status = -1;
+        if (error_return) {
+            char buffer[256];
+            sprintf(buffer, "Substitution scores %d and %d are not supported", 
+                reward, penalty);
+            Blast_MessageWrite(error_return, eBlastSevError, 0, 0, buffer);
+        }
+    }
+    if (split)
+        (*array_size)--;
+
+    if (status == 0)
+    {
+        if (*array_size > 0)
+            *normal = BlastMemDup(kValues, (*array_size)*sizeof(array_of_8));
+        if (kValues_non_affine)
+            *non_affine = BlastMemDup(kValues_non_affine, sizeof(array_of_8));
+
+        status = s_AdjustGapParametersByGcd(*normal, *non_affine, *array_size, gap_open_max, gap_extend_max, divisor);
+    }
+
+    return status;
+}
+
+Int2 BLAST_GetProteinGapExistenceExtendParams(const char* matrixName, 
+                                       Int4* gap_existence, 
+                                       Int4* gap_extension)
+{
+     Int4* gapOpen_arr,* gapExtend_arr,* pref_flags;
+     Int4 i; /*loop index*/
+     Int2 num_values = Blast_GetMatrixValues(matrixName, &gapOpen_arr, 
+       &gapExtend_arr, NULL, NULL, NULL, NULL,  NULL, NULL, &pref_flags);
+
+     if (num_values <= 0)
+         return -1;
+   
+     for(i = 1; i < num_values; i++) {
+         if(pref_flags[i]==BLAST_MATRIX_BEST) {
+             (*gap_existence) = gapOpen_arr[i];
+             (*gap_extension) = gapExtend_arr[i];
+             break;
+         }
+     }
+   
+     sfree(gapOpen_arr);
+     sfree(gapExtend_arr);
+     sfree(pref_flags);
+
+     return 0;
+}
+
+
+Int2 BLAST_GetNucleotideGapExistenceExtendParams(Int4 reward,
+                                       Int4 penalty,
+                                       Int4* gap_existence,
+                                       Int4* gap_extension)
+{
+   int array_size = 0; /* dummy parameter. */
+   array_of_8* normal=NULL; /* dummy parameter */
+   array_of_8* non_affine=NULL; /* dummy parameter */
+   Boolean round_down = FALSE;
+   int gap_existence_max=0;
+   int gap_extension_max=0;
+   Int2 status = s_GetNuclValuesArray(reward, penalty, &array_size, &normal, &non_affine,
+            &gap_existence_max, &gap_extension_max, &round_down, NULL);
+
+   if (status)
+   {
+       sfree(normal);
+       sfree(non_affine);
+       return status;
+   }
+
+   if (*gap_existence == 0 && *gap_extension == 0 && non_affine)
+       status = 0;   /* these values are supported. */
+   else
+   {
+         int index=0;
+         Boolean found=FALSE;
+         while (index < array_size)
+         {
+               if (*gap_existence == normal[index][0] && *gap_extension == normal[index][1])
+               {
+                      found = TRUE;
+                      break; /* these values are supported. */
+               }
+               index++;
+         }
+
+         if (!found)
+         {
+             *gap_existence = gap_existence_max;
+             *gap_extension = gap_extension_max;
+         }
+         status = 0;
+   }
+   sfree(normal);
+   sfree(non_affine);
+   return status;
+}
+
 /** Fills in error_return with strings describing the allowed values.
  * @param matrix_name name of the matrix [in]
  * @param error_return object to be filled in [in|out]
@@ -2956,85 +3278,11 @@ BLAST_PrintAllowedValues(const char *matrix_name, Int4 gap_open, Int4 gap_extend
    return buffer;
 }
 
-/** Returns the array of values corresponding to the given match/mismatch
- * scores, the number of supported gap cost combinations and thresholds for 
- * the gap costs, beyond which the ungapped statistics can be applied.
- * @param reward Match reward score [in]
- * @param penalty Mismatch penalty score [in]
- * @param array_size Number of supported combinations for this match/mismatch
- *                   pair [out]
- * @param gap_open_max Gap opening cost threshold for infinite gap costs [in]
- * @param gap_extend_max Gap extension cost threshold for infinite gap costs [in]
- * @param error_return Pointer to error message [in] [out]
- * @return Corresponding array of values.
- */
-static const array_of_8 *
-s_GetNuclValuesArray(Int4 reward, Int4 penalty, Int4* array_size,
-                     Int4* gap_open_max, Int4* gap_extend_max,
-                     Blast_Message** error_return)
-{
-    const array_of_8 * kValues = NULL;
-
-    if (reward == 1 && penalty == -4) {
-        kValues = blastn_values_1_4;
-        *array_size = sizeof(blastn_values_1_4)/sizeof(array_of_8);
-        *gap_open_max = 2;
-        *gap_extend_max = 2;
-    } else if (reward == 2 && penalty == -7) {
-        kValues = blastn_values_2_7;
-        *array_size = sizeof(blastn_values_2_7)/sizeof(array_of_8);
-        *gap_open_max = 4;
-        *gap_extend_max = 4;
-    } else if (reward == 1 && penalty == -3) { 
-        kValues = blastn_values_1_3;
-        *array_size = sizeof(blastn_values_1_3)/sizeof(array_of_8);
-        *gap_open_max = 2;
-        *gap_extend_max = 2;
-    } else if (reward == 2 && penalty == -5) {
-        kValues = blastn_values_2_5;
-        *array_size = sizeof(blastn_values_2_5)/sizeof(array_of_8);
-        *gap_open_max = 4;
-        *gap_extend_max = 4;
-    } else if (reward == 1 && penalty == -2) {
-        kValues = blastn_values_1_2;
-        *array_size = sizeof(blastn_values_1_2)/sizeof(array_of_8);
-        *gap_open_max = 2;
-        *gap_extend_max = 2;
-    } else if (reward == 2 && penalty == -3) {
-        kValues = blastn_values_2_3;
-        *array_size = sizeof(blastn_values_2_3)/sizeof(array_of_8);
-        *gap_open_max = 6;
-        *gap_extend_max = 4;
-    } else if (reward == 1 && penalty == -1) {
-        kValues = blastn_values_1_1;
-        *array_size = sizeof(blastn_values_1_1)/sizeof(array_of_8);
-        *gap_open_max = 4;
-        *gap_extend_max = 2;
-    } else if (reward == 4 && penalty == -5) {
-        kValues = blastn_values_4_5;
-        *array_size = sizeof(blastn_values_4_5)/sizeof(array_of_8);
-        *gap_open_max = 12;
-        *gap_extend_max = 8;
-    } else if (reward == 5 && penalty == -4) {
-        kValues = blastn_values_5_4;
-        *array_size = sizeof(blastn_values_5_4)/sizeof(array_of_8);
-        *gap_open_max = 25;
-        *gap_extend_max = 10;
-    } else if (error_return) {
-        char buffer[256];
-        /* Unsupported reward-penalty */
-        sprintf(buffer, "Substitution scores %d and %d are not supported", 
-                reward, penalty);
-        Blast_MessageWrite(error_return, eBlastSevError, 0, 0, buffer);
-    }
-
-    return kValues;
-}
-   
 Int2
 Blast_KarlinBlkNuclGappedCalc(Blast_KarlinBlk* kbp, Int4 gap_open, 
                               Int4 gap_extend, Int4 reward, Int4 penalty,
                               Blast_KarlinBlk* kbp_ungap,
+                              Boolean* round_down,
                               Blast_Message** error_return)
 {
     const int kGapOpenIndex = 0;
@@ -3043,53 +3291,88 @@ Blast_KarlinBlkNuclGappedCalc(Blast_KarlinBlk* kbp, Int4 gap_open,
     const int kKIndex = 3;
     const int kHIndex = 4;
     int num_combinations = 0;
-    int index;
     int gap_open_max, gap_extend_max;
+    array_of_8* normal=NULL;
+    array_of_8* linear=NULL; 
+    Int2 status = s_GetNuclValuesArray(reward,
+                                       penalty,
+                                       &num_combinations,
+                                       &normal,
+                                       &linear,
+                                       &gap_open_max,
+                                       &gap_extend_max,
+                                       round_down,
+                                       error_return);
 
-    const array_of_8 *kValues = 
-        s_GetNuclValuesArray(reward, penalty, &num_combinations, 
-                             &gap_open_max, &gap_extend_max, error_return);
+    if (status)
+    {
+       sfree(normal);
+       sfree(linear);
+       return status;
+    }
 
     ASSERT(kbp && kbp_ungap);
 
-#ifndef NEW_BLASTN_STAT
-    Blast_KarlinBlkCopy(kbp, kbp_ungap);
-    return 0;
-#endif
-
-    if (!kValues)
-        return 1;
 
     /* Try to find the table entry corresponding to input gap costs. */
-    for (index = 0; index < num_combinations; ++index) {
-        if (kValues[index][kGapOpenIndex] == gap_open &&
-            kValues[index][kGapExtIndex] == gap_extend) {
-            kbp->Lambda = kValues[index][kLambdaIndex];
-            kbp->K = kValues[index][kKIndex];
-            kbp->logK = log(kbp->K);
-            kbp->H = kValues[index][kHIndex];
-            break;
-        }
+    if (gap_open == 0 && gap_extend == 0 && linear)
+    {
+        kbp->Lambda = linear[0][kLambdaIndex];
+        kbp->K = linear[0][kKIndex];
+        kbp->logK = log(kbp->K);
+        kbp->H = linear[0][kHIndex];
     }
+    else
+    {
+        int index=0;
+        for (index = 0; index < num_combinations; ++index) {
+            if (normal[index][kGapOpenIndex] == gap_open &&
+                normal[index][kGapExtIndex] == gap_extend) {
+                kbp->Lambda = normal[index][kLambdaIndex];
+                kbp->K = normal[index][kKIndex];
+                kbp->logK = log(kbp->K);
+                kbp->H = normal[index][kHIndex];
+                break;
+            }
+        }
     
-    /* If gap costs are not found in the table, check if they belong to the
-       infinite domain, where ungapped values of the parameters can be used. */
-    if (index == num_combinations) {
+        /* If gap costs are not found in the table, check if they belong to the
+        infinite domain, where ungapped values of the parameters can be used. */
+        if (index == num_combinations) {
         /* If gap costs are larger than maximal provided in tables, copy
            the values from the ungapped Karlin block. */
-        if (gap_open >= gap_open_max && gap_extend >= gap_extend_max) {
-            Blast_KarlinBlkCopy(kbp, kbp_ungap);
-        } else if (error_return) {
-            char buffer[256];
-            /* Unsupported gap costs combination. */
-            sprintf(buffer, "Gap existence and extension values %d and %d "
-                    "are not supported for substitution scores %d and %d", 
-                    gap_open, gap_extend, reward, penalty);
-            Blast_MessageWrite(error_return, eBlastSevError, 0, 0, buffer);
-            return 1;
+            if (gap_open >= gap_open_max && gap_extend >= gap_extend_max) {
+                Blast_KarlinBlkCopy(kbp, kbp_ungap);
+            } else if (error_return) {
+                char buffer[8192];
+                int i=0;
+                int len=0;
+                /* Unsupported gap costs combination. */
+                sprintf(buffer, "Gap existence and extension values %ld and %ld "
+                        "are not supported for substitution scores %ld and %ld\n", 
+                        (long) gap_open, (long) gap_extend, (long) reward, (long) penalty);
+                for (i = 0; i < num_combinations; ++i)
+                {
+                     len = strlen(buffer);
+                     sprintf(buffer+len, "%ld and %ld are supported existence and extension values\n", 
+                        (long) normal[i][kGapOpenIndex],  (long) normal[i][kGapExtIndex]);
+                }
+                len = strlen(buffer);
+                sprintf(buffer+len, "%ld and %ld are supported existence and extension values\n", 
+                     (long) gap_open_max, (long) gap_extend_max);
+                len = strlen(buffer);
+                sprintf(buffer+len, "Any values more stringent than %ld and %ld are supported\n", 
+                     (long) gap_open_max, (long) gap_extend_max);
+                Blast_MessageWrite(error_return, eBlastSevError, 0, 0, buffer);
+                sfree(normal);
+                sfree(linear);
+                return 1;
+            }
         }
     }
 
+    sfree(normal);
+    sfree(linear);
     return 0;
 }
 
@@ -3121,35 +3404,59 @@ Int2 Blast_GetNuclAlphaBeta(Int4 reward, Int4 penalty, Int4 gap_open,
     Int4 num_combinations = 0;
     Int4 gap_open_max = 0, gap_extend_max = 0;
     Int4 index = 0;
-    const array_of_8 *kValues = 
-        s_GetNuclValuesArray(reward, penalty, &num_combinations, 
-                             &gap_open_max, &gap_extend_max, NULL);;
+    array_of_8* normal=NULL;
+    array_of_8* linear=NULL; 
+    Boolean round_down = FALSE;
+    Boolean found = FALSE;
+    Int2 status = s_GetNuclValuesArray(reward,
+                                       penalty,
+                                       &num_combinations, 
+                                       &normal,
+                                       &linear,
+                                       &gap_open_max,
+                                       &gap_extend_max,
+                                       &round_down,
+                                       NULL);
     
+    if (status)
+       return status;
+
     ASSERT(alpha && beta && kbp);
 
-#ifndef NEW_BLASTN_STAT    
-    *alpha = kbp->Lambda/kbp->H;
-    *beta = 0;
-    return 0;
-#endif
-
     /* For ungapped search return ungapped values of alpha and beta. */
-    if (gapped_calculation && kValues) {
-        for (index = 0; index < num_combinations; ++index) {
-            if (kValues[index][kGapOpenIndex] == gap_open && 
-                kValues[index][kGapExtIndex] == gap_extend) {
-                *alpha = kValues[index][kAlphaIndex];
-                *beta = kValues[index][kBetaIndex];
-                return 0;
+    if (gapped_calculation && normal) {
+        if (gap_open == 0 && gap_extend == 0 && linear)
+        {
+            *alpha = linear[0][kAlphaIndex];
+            *beta = linear[0][kBetaIndex];
+            found = TRUE;
+        }
+        else
+        {
+      
+            for (index = 0; index < num_combinations; ++index) {
+                if (normal[index][kGapOpenIndex] == gap_open && 
+                    normal[index][kGapExtIndex] == gap_extend) {
+                    *alpha = normal[index][kAlphaIndex];
+                    *beta = normal[index][kBetaIndex];
+                    found = TRUE;
+                    break;
+                }
             }
         }
+        
     }
 
     /* If input values not found in tables, or if this is an ungapped search,
        return the ungapped values of alpha and beta. */
-    *alpha = kbp->Lambda/kbp->H;
-    *beta = s_GetUngappedBeta(reward, penalty);
+    if (!found)
+    {
+        *alpha = kbp->Lambda/kbp->H;
+        *beta = s_GetUngappedBeta(reward, penalty);
+    }
 
+    sfree(linear);
+    sfree(normal);
     return 0;
 }
 
@@ -3997,6 +4304,51 @@ BLAST_ComputeLengthAdjustment(double K,
  * ===========================================================================
  *
  * $Log: blast_stat.c,v $
+ * Revision 1.136  2005/11/14 15:55:42  madden
+ * Correct comment
+ *
+ * Revision 1.135  2005/11/04 13:48:09  madden
+ * Doxygen fixes
+ *
+ * Revision 1.134  2005/11/01 18:49:01  madden
+ * Changes to s_GetNuclValuesArray and calling functions to support (for blastn) reward and penalty values that are multiples of already supported values
+ *
+ * Revision 1.133  2005/10/31 14:05:24  madden
+ * 1.) add support for blastn reward/penalty values of 1/-5, 3/-4, and 3/-2.
+ * 2.) BLAST_GetNucleotideGapExistenceExtendParams now validates value as well as suggesting a
+ * reasonable value.
+ *
+ * Revision 1.132  2005/10/14 17:29:22  madden
+ * Add preliminary support for vecscreen parameters
+ *
+ * Revision 1.131  2005/10/12 19:15:47  madden
+ * Fix bug in s_GetNuclValuesArray
+ *
+ * Revision 1.130  2005/09/27 14:43:56  madden
+ * Centralize round_down decision in s_GetNuclValuesArray
+ *
+ * Revision 1.129  2005/09/16 14:01:45  madden
+ * 1.) BLAST_GetGapExistenceExtendParams renamed to BLAST_GetProteinGapExistenceExtendParams
+ * 2.) Added BLAST_GetNucleotideGapExistenceExtendParams
+ * 3.) Added informative error message to s_GetNuclValuesArray
+ *
+ * Revision 1.128  2005/09/12 19:16:38  coulouri
+ * Enable precomputed statistical parameters for blastn
+ *
+ * Revision 1.127  2005/09/08 14:48:11  ucko
+ * Tweak Blast_KarlinBlkNuclGappedCalc and Blast_GetNuclAlphaBeta to
+ * declare kValues unconditionally, to fix compilation errors when
+ * NEW_BLASTN_STAT is undefined.
+ *
+ * Revision 1.126  2005/09/08 13:40:34  coulouri
+ * Call s_GetNuclValuesArray iff NEW_BLASTN_STAT
+ *
+ * Revision 1.125  2005/08/30 15:42:58  madden
+ * BLAST_GetGapExistenceExtendParams now takes program_number as an argument so it can properly identify blastn queries
+ *
+ * Revision 1.124  2005/08/29 13:52:05  madden
+ * Add BLAST_GetGapExistenceExtendParams
+ *
  * Revision 1.123  2005/08/19 17:56:18  dondosha
  * Removed unnecessary redefinition of HUGE_VAL
  *

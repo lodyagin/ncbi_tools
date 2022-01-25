@@ -187,6 +187,15 @@ A gap symbols was found at the start of this protein Bioseq.
 $^   TerminalGap, 52
 The Bioseq has a gap at the end.
 
+$^   OverlappingDeltaRange, 53
+The Bioseq has a gap at the end.
+
+$^   LeadingX, 54
+The protein sequence starts with one or more X (unknown) amino acids.
+
+$^   InternalNsInSeqRaw, 55
+There are runs of many Ns inside a raw sequence.
+
 $$ SEQ_DESCR, 2
 
 $^   BioSourceMissing, 1
@@ -324,6 +333,9 @@ Comments, regions, and other text descriptors need a descriptive text string.
 The string provided with this descriptor is empty. If no text is desired, then
 the descriptor should be removed.
 
+$^   BadCollectionDate, 35
+The collection date is not in the required format.
+
 $$ GENERIC, 3
 
 $^   NonAsciiAsn, 1
@@ -353,6 +365,9 @@ should be used instead.
 
 $^   BadDate, 8
 There are bad values for month, day, or year in a date.
+
+$^   StructuredCitGenCit, 9
+The publication has title or journal embedded in the unstructured citgen.cit field.
 
 $$ SEQ_PKG, 4
 
@@ -829,6 +844,28 @@ This feature has a seqfeat xref, but it has nothing in the id or data field.
 $^ ProductFetchFailure, 104
 Unable to fetch the Bioseq product of this feature.  Remote fetching was requested,
 so this is likely due to a failure in a network sequence retrieval service.
+
+$^ SuspiciousGeneXref, 105
+This feature has a gene xref that is not expected for this organism.
+
+$^ MissingTrnaAA, 106
+The tRNA encoded amino acid is not set.
+
+$^ CollidingFeatureIDs, 107
+Multiple features have the same featureID.  Feature ID must be unique within
+a record.
+
+$^ ExceptionProblem, 108
+There is a problem with /exception text.
+
+$^   PolyAsignalNotRange, 109
+A polyA_signal should be at nucleotide range position, not a single point.
+
+$^   OldLocusTagMismtach, 110
+The old_locus_tag qualifier on a feature does not match that on the overlapping gene.
+
+$^   DuplicateGeneOntologyTerm, 111
+A feature has multiple identical Gene Ontology (GO) term specifications.
 
 $$ SEQ_ALIGN, 6
 

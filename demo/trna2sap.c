@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/21/05
 *
-* $Revision: 1.4 $
+* $Revision: 1.5 $
 *
 * File Description:
 *
@@ -45,7 +45,7 @@
 #include <objfdef.h>
 #include <sqnutils.h>
 
-#define TRNA2SAPAPP_VER "1.1"
+#define TRNA2SAPAPP_VER "1.2"
 
 CharPtr TRNA2SAPAPPLICATION = TRNA2SAPAPP_VER;
 
@@ -56,9 +56,11 @@ typedef struct t2sdata {
   Boolean  allowPseudo;
   Boolean  allowUndet;
   Boolean  justFtable;
+  Boolean  addCitation;
   CharPtr  name;
   CharPtr  title;
   CharPtr  comment;
+  CharPtr  remark;
   Char     temp [PATH_MAX];
 } T2SData, PNTR T2SPtr;
 
@@ -234,6 +236,47 @@ static void PrepareOutputFile (
   }
 }
 
+static CharPtr tsePubStr = "Pubdesc ::= { \n" \
+"pub { \n" \
+"article { \n" \
+"title { \n" \
+"name \"tRNAscan-SE: a program for improved detection of transfer RNA \n" \
+"genes in genomic sequence.\" } , \n" \
+"authors { \n" \
+"names \n" \
+"std { \n" \
+"{ \n" \
+"name \n" \
+"name { \n" \
+"last \"Lowe\" , \n" \
+"first \"T\" , \n" \
+"initials \"T.M.\" } } , \n" \
+"{ \n" \
+"name \n" \
+"name { \n" \
+"last \"Eddy\" , \n" \
+"first \"S\" , \n" \
+"initials \"S.R.\" } } } , \n" \
+"affil \n" \
+"str \"Department of Genetics, Washington University School of \n" \
+"Medicine, 660 South Euclid, Box 8232, St Louis, MO 63110, USA.\" } , \n" \
+"from \n" \
+"journal { \n" \
+"title { \n" \
+"iso-jta \"Nucleic Acids Res.\" } , \n" \
+"imp { \n" \
+"date \n" \
+"std { \n" \
+"year 1997 , \n" \
+"month 3 , \n" \
+"day 1 } , \n" \
+"volume \"25\" , \n" \
+"issue \"5\" , \n" \
+"pages \"955-964\" , \n" \
+"pubstatus ppublish } } } , \n" \
+"pmid 9023104 } , \n" \
+"reftype feats }";
+
 static void ProcessOneRecord (
   CharPtr filename,
   Pointer userdata
@@ -241,10 +284,12 @@ static void ProcessOneRecord (
 
 {
   AnnotDescrPtr  adp;
+  AsnIoMemPtr    aimp;
   AsnIoPtr       aip = NULL;
   Pointer        dataptr = NULL;
   Uint2          datatype, entityID = 0;
   Char           path [PATH_MAX];
+  PubdescPtr     pdp;
   FILE           *ifp, *ofp = NULL;
   SeqAnnotPtr    sap;
   T2SPtr         tsp;
@@ -327,6 +372,23 @@ static void ProcessOneRecord (
       adp->data.ptrvalue = StringSave (tsp->comment);
     }
   }
+  if (tsp->addCitation) {
+    aimp = AsnIoMemOpen ("r", (BytePtr) tsePubStr, (Int4) StringLen (tsePubStr));
+    if (aimp != NULL && aimp->aip != NULL) {
+      pdp = PubdescAsnRead (aimp->aip, NULL);
+      AsnIoMemClose (aimp);
+      if (pdp != NULL) {
+        adp = AnnotDescrNew (sap->desc);
+        if (adp != NULL) {
+          adp->choice = Annot_descr_pub;
+          adp->data.ptrvalue = pdp;
+          if (StringDoesHaveText (tsp->remark)) {
+            pdp->comment = StringSave (tsp->remark);
+          }
+        }
+      }
+    }
+  }
 
   PrepareOutputFile (tsp, filename, path);
   aip = AsnIoOpen (path, "w");
@@ -350,9 +412,11 @@ static void ProcessOneRecord (
 #define s_argIgnorePseudo  6
 #define u_argIgnoreUndet   7
 #define j_argJustFtable    8
-#define n_argName          9
-#define t_argTitle        10
-#define c_argComment      11
+#define a_argAddCitation   9
+#define n_argName         10
+#define t_argTitle        11
+#define c_argComment      12
+#define m_argRemark       13
 
 
 Args myargs [] = {
@@ -374,12 +438,16 @@ Args myargs [] = {
     TRUE, 'u', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Just Make Ftable", "F", NULL, NULL,
     TRUE, 'j', ARG_BOOLEAN, 0.0, 0, NULL},
+  {"Add tRNAscan-SE Citation", "F", NULL, NULL,
+    TRUE, 'a', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Name", "tRNA", NULL, NULL,
     TRUE, 'n', ARG_STRING, 0.0, 0, NULL},
   {"Title", "tRNAscan-SE", NULL, NULL,
     TRUE, 't', ARG_STRING, 0.0, 0, NULL},
-  {"Comment", "Calculated by tRNAscan-SE", NULL, NULL,
+  {"Comment", NULL, NULL, NULL,
     TRUE, 'c', ARG_STRING, 0.0, 0, NULL},
+  {"Remark", NULL, NULL, NULL,
+    TRUE, 'm', ARG_STRING, 0.0, 0, NULL},
 };
 
 Int2 Main (void)
@@ -435,9 +503,11 @@ Int2 Main (void)
   ignoreUndet = (Boolean) myargs [u_argIgnoreUndet].intvalue;
   tsd.allowUndet = (Boolean) (! ignoreUndet);
   tsd.justFtable = (Boolean) myargs [j_argJustFtable].intvalue;
+  tsd.addCitation = (Boolean) myargs [a_argAddCitation].intvalue;
   tsd.name = (CharPtr) myargs [n_argName].strvalue;
   tsd.title = (CharPtr) myargs [t_argTitle].strvalue;
   tsd.comment = (CharPtr) myargs [c_argComment].strvalue;
+  tsd.remark = (CharPtr) myargs [m_argRemark].strvalue;
 
   directory = (CharPtr) myargs [p_argInputPath].strvalue;
   results = (CharPtr) myargs [r_argOutputPath].strvalue;

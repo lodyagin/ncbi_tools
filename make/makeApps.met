@@ -53,10 +53,29 @@ on SimpleProjectData(projName, features)
 	set myFeatures to features
 	return {name:projName, features:myFeatures, rsrcs:{"ncbilogo.r", "Info.plc"}, settings:Â
 		{prefixFile:"", ppcProject:{}}, projLibs:Â
-		{"ncbi", "ncbiconn", "ncbiobj", "vibrant", "ncbimmdb", "ncbiblast", "ncbiblastapi", "ncbitool"}, fileData:{{projPath:"demo:", fileList:{projName & ".c"}}}} Â
+		{"ncbi", "ncbiconn", "ncbiobj", "vibrant", "ncbimmdb", "ncbitool"}, fileData:{{projPath:"demo:", fileList:{projName & ".c"}}}} Â
 		
 	
 end SimpleProjectData
+
+on BlastProjectData(projName, features)
+	
+	if (count characters of projName) > 25 then
+		set projName to characters 1 through 25 of projName as string
+	end if
+	
+	if features does not contain "C" and features does not contain "C++" then
+		--error "Project " & projName & "'s default language (a feature) must be C or C++."
+		copy "C" to end of features
+	end if
+	set myFeatures to features
+	return {name:projName, features:myFeatures, rsrcs:{"ncbilogo.r", "Info.plc"}, settings:Â
+		{prefixFile:"", ppcProject:{}}, projLibs:Â
+		{"ncbi", "ncbiconn", "ncbiobj", "vibrant", "ncbimmdb", "ncbiblast", "ncbiblastapi", Â
+			"blastcompadj", "ncbitool"}, fileData:{{projPath:"demo:", fileList:{projName & ".c"}}}} Â
+		
+	
+end BlastProjectData
 
 on AddProject(projData)
 	copy projData to end of gProjectData
@@ -65,6 +84,10 @@ end AddProject
 on AddSimpleProject(projName, features)
 	AddProject(SimpleProjectData(projName, features))
 end AddSimpleProject
+
+on AddBlastProject(projName, features)
+	AddProject(BlastProjectData(projName, features))
+end AddBlastProject
 
 on SetProjectData()
 	tell application "CodeWarrior IDE"
@@ -77,7 +100,7 @@ on SetProjectData()
 				
 		set myRsrcs to {"sequin.r", "InfoSequin.plc"}
 		set myLibs to {"ncbi", "ncbiconn", "ncbiobj", "ncbicdr", "vibrant", "ncbiblast", "ncbiblastapi", Â
-			"ncbidesk", "ncbimmdb", "ncbitool", "netcli", "netentr", "ncbibls3", "ncbimla", Â
+			"blastcompadj", "ncbidesk", "ncbimmdb", "ncbitool", "netcli", "netentr", "ncbibls3", "ncbimla", Â
 			"ncbitxc2", "ncbiid1", "ncbispell", "vibnet"}
 		set myFiles to Â
 			{{projPath:"cdromlib:", fileList:{"accentr.c", "accutils.c"}}, Â
@@ -93,7 +116,7 @@ on SetProjectData()
 		set mySettings to {prefixFile:"", creator:"ENTZ", ppcProject:{}}
 		set myRsrcs to {"entrez.r", "Info.plc"}
 		set myLibs to {"ncbi", "ncbiconn", "ncbiobj", "ncbicdr", "vibrant", "ncbiblast", "ncbiblastapi", Â
-			"ncbidesk", "ncbimmdb", "ncbitool", "netcli", "netentr", "ncbibls3", "ncbiid1", "vibnet"}
+			"blastcompadj", "ncbidesk", "ncbimmdb", "ncbitool", "netcli", "netentr", "ncbibls3", "ncbiid1", "vibnet"}
 		set myFiles to Â
 			{{projPath:"cdromlib:", fileList:{"accentr.c", "accutils.c"}}, Â
 				{projPath:"demo:", fileList:{"entrez.c"}}}
@@ -106,8 +129,8 @@ on SetProjectData()
 		set myFeatures to {"sockets"}
 		set mySettings to {prefixFile:"", creator:"ENTZ", ppcProject:{}}
 		set myRsrcs to {"entrez.r", "Info.plc"}
-		set myLibs to {"ncbi", "ncbiconn", "ncbiobj", "ncbimmdb", "ncbiblast", "ncbiblastapi", "ncbitool", Â
-			"vibrant", "ncbidesk"}
+		set myLibs to {"ncbi", "ncbiconn", "ncbiobj", "ncbimmdb", "ncbiblast", "ncbiblastapi", Â
+			"blastcompadj", "ncbitool", "vibrant", "ncbidesk"}
 		set myFiles to Â
 			{{projPath:"demo:", fileList:{"entrez2.c"}}}
 		set entrez2Data to Â
@@ -119,7 +142,8 @@ on SetProjectData()
 		set myFeatures to {"sockets"}
 		set mySettings to {prefixFile:"blastcl3.pfx", ppcProject:{}}
 		set myRsrcs to {"ncbilogo.r", "Info.plc"}
-		set myLibs to {"ncbi", "ncbiconn", "ncbiobj", "vibrant", "ncbitool", "netcli", "ncbibls3"}
+		set myLibs to {"ncbi", "ncbiconn", "ncbiobj", "vibrant", "ncbitool", "netcli", "ncbibls3", Â
+			"ncbiblast", "ncbiblastapi", "blastcompadj"}
 		set myFiles to Â
 			{{projPath:"demo:", fileList:{"blastall.c"}}}
 		set blastcl3Data to Â
@@ -131,7 +155,8 @@ on SetProjectData()
 		set myFeatures to {"sockets"}
 		set mySettings to {prefixFile:"", ppcProject:{}}
 		set myRsrcs to {"ncbilogo.r", "Info.plc"}
-		set myLibs to {"ncbi", "ncbiconn", "ncbiobj", "vibrant", "ncbitool", "netcli", "ncbibls3", "ncbiid1"}
+		set myLibs to {"ncbi", "ncbiconn", "ncbiobj", "vibrant", "ncbitool", "netcli", "ncbibls3", Â
+			"ncbiid1", "ncbiblast", "ncbiblastapi", "blastcompadj"}
 		set myFiles to Â
 			{{projPath:"demo:", fileList:{"bl2seq.c"}}}
 		set bl2seqData to Â
@@ -143,7 +168,7 @@ on SetProjectData()
 		set myFeatures to {"sockets"}
 		set mySettings to {prefixFile:"", ppcProject:{}}
 		set myRsrcs to {"ncbilogo.r", "Info.plc"}
-		set myLibs to {"ncbi", "ncbiconn", "ncbiobj", "vibrant", "ncbiblast", "ncbiblastapi", "ncbitool"}
+		set myLibs to {"ncbi", "ncbiconn", "ncbiobj", "vibrant", "ncbiblast", "ncbiblastapi", "blastcompadj", "ncbitool"}
 		set myFiles to Â
 			{{projPath:"demo:", fileList:{"megablast.c"}}}
 		set megablastData to Â
@@ -155,7 +180,7 @@ on SetProjectData()
 		set myFeatures to {"sockets"}
 		set mySettings to {prefixFile:"", ppcProject:{}}
 		set myRsrcs to {"ncbilogo.r", "Info.plc"}
-		set myLibs to {"ncbi", "ncbiconn", "ncbiobj", "vibrant", "ncbiblast", "ncbiblastapi", "ncbitool"}
+		set myLibs to {"ncbi", "ncbiconn", "ncbiobj", "vibrant", "ncbiblast", "ncbiblastapi", "blastcompadj", "ncbitool"}
 		set myFiles to Â
 			{{projPath:"demo:", fileList:{"copymat.c"}}}
 		set copymatData to Â
@@ -163,7 +188,7 @@ on SetProjectData()
 				myLibs, fileData:myFiles}
 		
 		-- Impala
-		set impalaData to my SimpleProjectData("impala", {})
+		set impalaData to my BlastProjectData("impala", {"sockets"})
 		set item 1 of fileList of item 1 of fileData of impalaData to "profiles.c"
 		
 		-- asn2fsa
@@ -196,7 +221,7 @@ on SetProjectData()
 		set mySettings to {prefixFile:"", ppcProject:{}}
 		set myRsrcs to {"ncbilogo.r", "Info.plc"}
 		set myLibs to {"ncbi", "ncbiconn", "ncbiobj", "vibrant", "ncbiblast", "ncbiblastapi", Â
-			"ncbitool", "netcli", "ncbiid1"}
+			"blastcompadj", "ncbitool", "netcli", "ncbiid1"}
 		set myFiles to Â
 			{{projPath:"demo:", fileList:{"spideymain.c"}}}
 		set spideyData to Â
@@ -217,21 +242,21 @@ on SetProjectData()
 	-- AddProject(entrezData)
 	
 	if pCreateBlastTargets then
-		AddSimpleProject("formatdb", {})
-		AddSimpleProject("fastacmd", {})
+		AddBlastProject("formatdb", {"sockets"})
+		AddBlastProject("fastacmd", {"sockets"})
 		
 		AddProject(bl2seqData)
 		
-		AddSimpleProject("blastall", {})
-		AddSimpleProject("blastpgp", {})
+		AddBlastProject("blastall", {"sockets"})
+		AddBlastProject("blastpgp", {"sockets"})
 		
 		AddProject(blastcl3Data)
 		AddProject(megablastData)
-		AddSimpleProject("blastclust", {})
-		AddSimpleProject("rpsblast", {})
-		AddSimpleProject("seedtop", {})
+		AddBlastProject("blastclust", {"sockets"})
+		AddBlastProject("rpsblast", {"sockets"})
+		AddBlastProject("seedtop", {"sockets"})
 		AddProject(copymatData)
-		AddSimpleProject("makemat", {})
+		AddBlastProject("makemat", {"sockets"})
 		
 		AddProject(impalaData)
 	end if

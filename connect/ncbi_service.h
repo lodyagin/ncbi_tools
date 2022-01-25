@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_SERVICE__H
 #define CONNECT___NCBI_SERVICE__H
 
-/*  $Id: ncbi_service.h,v 6.39 2005/07/06 18:54:44 lavr Exp $
+/*  $Id: ncbi_service.h,v 6.41 2005/10/03 15:55:22 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -37,9 +37,9 @@
 #include <connect/ncbi_host_info.h>
 
 
-/* Revision 6.101 */
+/* Revision 6.200 */
 #define SERV_CLIENT_REVISION_MAJOR  6
-#define SERV_CLIENT_REVISION_MINOR  101
+#define SERV_CLIENT_REVISION_MINOR  200
 
 
 /** @addtogroup ServiceSupport
@@ -90,10 +90,10 @@ extern NCBI_XCONNECT_EXPORT SERV_ITER SERV_OpenSimple
 
 /* Special "type" bit values that may be combined with server types */
 typedef enum {
-    /* Allows to get even dead services (not off ones!) */
-    fSERV_Promiscuous = 0x80000000,
     /* Do reverse DNS translation of the resulting info */
-    fSERV_ReverseDns  = 0x40000000
+    fSERV_ReverseDns  = 0x40000000,
+    /* Allows to get even dead services (not off ones!) */
+    fSERV_Promiscuous = 0x20000000
 } ESERV_SpecialType;
 
 
@@ -207,6 +207,12 @@ extern NCBI_XCONNECT_EXPORT void SERV_Close
 /*
  * --------------------------------------------------------------------------
  * $Log: ncbi_service.h,v $
+ * Revision 6.41  2005/10/03 15:55:22  lavr
+ * Change ESERV_SpecialType::fSERV_Promiscuous to fit "signed int"
+ *
+ * Revision 6.40  2005/09/02 14:28:18  lavr
+ * Bump client revision number to 6.200 for use with patched PubFetch
+ *
  * Revision 6.39  2005/07/06 18:54:44  lavr
  * +enum ESERV_SpecialType to hold special server type bits (instead of macros)
  *

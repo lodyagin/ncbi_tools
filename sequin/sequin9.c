@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/20/99
 *
-* $Revision: 6.362 $
+* $Revision: 6.423 $
 *
 * File Description: 
 *
@@ -49,6 +49,7 @@
 #include <entrez.h>
 #include <accentr.h>
 #include <urlquery.h>
+#include <vecscrn.h>
 #include <vecscnapi.h>
 #include <qblastapi.h>
 #include <edutil.h>
@@ -505,6 +506,7 @@ static VQUEUE  vsquerylist = NULL;
 
 static Int2 vsquerynum = 0;
 
+/*
 static void LIBCALLBACK AnnounceCallback (CharPtr requestID, CharPtr seqID, Int2 estimatedSeconds)
 
 {
@@ -537,7 +539,6 @@ static Boolean LIBCALLBACK VecScreenCallback (
   }
   if (success) {
     if (! SequinHandleNetResults (filename)) {
-      /* LaunchGeneralTextViewer (path, "QueueFastaQueryToURL failed"); */
     }
   } else {
     Message (MSG_POST, "Failure of rID '%s', seqID %s", requestID, seqID);
@@ -585,14 +586,230 @@ static void SimpleVecScreenCommon (IteM i, CharPtr service)
     VisitBioseqsInSep (sep, (Pointer) service, DoVecScreens);
   }
 }
+*/
 
-static void SimpleUniVecScreenProc (IteM i)
+typedef struct vsdata {
+  CharPtr     date;
+  CharPtr     path;
+  CharPtr     database;
+  Boolean     changed;
+  Int4        count;
+  MonitorPtr  mon;
+} VsData, PNTR VsDataPtr;
+
+static CharPtr vectorStrengths [6] = {
+  NULL,
+  "Strong match",
+  "Moderate match",
+  "Weak match",
+  "Suspect origin",
+  "Unknown vector match"
+};
+
+static void CountVecScreens (BioseqPtr bsp, Pointer userdata)
+
+{
+  Int4Ptr  maxp;
+
+  if (bsp == NULL || ISA_aa (bsp->mol)) return;
+  maxp = (Int4Ptr) userdata;
+  (*maxp)++;
+}
+
+static void DoVecScreens (BioseqPtr bsp, Pointer userdata)
+
+{
+  AnnotDescrPtr   desc;
+  GeneRefPtr      grp;
+  Int2            hits;
+  ImpFeatPtr      ifp;
+  ValNodePtr      locs = NULL;
+  Char            note [128];
+  SeqAnnotPtr     prevsap;
+  SeqFeatPtr      prevsfp;
+  SeqAnnotPtr     sap = NULL;
+  SeqFeatPtr      sfp = NULL;
+  SeqIdPtr        sip;
+  SeqLocPtr       slp;
+  Int4            start;
+  Int4            stop;
+  Uint1           strength;
+  SeqLocPtr       tmp;
+  VsDataPtr       vsp;
+  ValNodePtr      vnp;
+  SeqFeatXrefPtr  xref;
+
+  if (bsp == NULL || ISA_aa (bsp->mol)) return;
+  vsp = (VsDataPtr) userdata;
+  if (vsp == NULL) return;
+  sip = SeqIdFindBest (bsp->id, 0);
+  if (sip == NULL) return;
+
+  if (vsp->mon != NULL) {
+    MonitorIntValue (vsp->mon, vsp->count);
+  }
+  (vsp->count)++;
+
+  hits = VSScreenSequence (bsp, NULL, vsp->path, NULL, &locs, NULL, NULL);
+  for (vnp = locs; vnp != NULL; vnp = vnp->next) {
+    strength = vnp->choice;
+    if (strength < 1 || strength > 4) {
+      strength = 5;
+    }
+    slp = (SeqLocPtr) vnp->data.ptrvalue;
+    if (slp == NULL) continue;
+    if (slp->choice == SEQLOC_PACKED_INT) {
+      for (tmp = (SeqLocPtr) slp->data.ptrvalue; tmp != NULL; tmp = tmp->next) {
+        start = SeqLocStart (tmp);
+        stop = SeqLocStop (tmp);
+        if (start < 0 || stop < 0) continue;
+        vsp->changed = TRUE;
+
+        if (sap == NULL) {
+          sap = SeqAnnotNew ();
+          if (sap != NULL) {
+            sap->type = 1;
+            desc = AnnotDescrNew (NULL);
+            if (desc != NULL) {
+              desc->choice = Annot_descr_name;
+              desc->data.ptrvalue = StringSave ("VecScreen");
+              sap->desc = desc;
+            }
+          }
+        }
+
+        sfp = SeqFeatNew ();
+        if (sfp != NULL) {
+
+          /* make misc_feature for now */
+
+          sfp->data.choice = SEQFEAT_IMP;
+          ifp = ImpFeatNew ();
+          if (ifp != NULL) {
+            ifp->key = StringSave ("misc_feature");
+          }
+          AddQualifierToFeature (sfp, "standard_name", "Vector Contamination");
+          AddQualifierToFeature (sfp, "phenotype", vectorStrengths [(int) strength]);
+
+          sprintf (note, "Screened against %s using VecScreen on %s", vsp->database, vsp->date);
+          sfp->comment = StringSave (note);
+
+          /* suppress /gene */
+
+          grp = GeneRefNew ();
+          if (grp != NULL) {
+            xref = SeqFeatXrefNew ();
+            sfp->xref = xref;
+            if (xref != NULL) {
+              xref->data.choice = SEQFEAT_GENE;
+              xref->data.value.ptrvalue = (Pointer) grp;
+            }
+          }
+
+          sfp->data.value.ptrvalue = (Pointer) ifp;
+
+          if (sap != NULL) {
+            if (sap->data != NULL) {
+              prevsfp = sap->data;
+              while (prevsfp->next != NULL) {
+                prevsfp = prevsfp->next;
+              }
+              prevsfp->next = sfp;
+            } else {
+              sap->data = (Pointer) sfp;
+            }
+          }
+
+          sfp->location = AddIntervalToLocation (NULL, sip, (Int4) start, (Int4) stop, FALSE, FALSE);
+        }
+      }
+    }
+    SeqLocFree (slp);
+  }
+  locs = ValNodeFree (locs);
+
+  if (sap != NULL) {
+    if (bsp->annot != NULL) {
+      prevsap = bsp->annot;
+      while (prevsap->next != NULL) {
+        prevsap = prevsap->next;
+      }
+      prevsap->next = sap;
+    } else {
+      bsp->annot = sap;
+    }
+  }
+}
+
+static void SimpleVecScreenCommon (IteM i, CharPtr database)
+
+{
+  BaseFormPtr   bfp;
+  BioseqPtr     bsp;
+  Char          date [32];
+  DatePtr       dp;
+  Int4          max;
+  Char          path [PATH_MAX];
+  SeqEntryPtr   sep;
+  VsData        vsd;
+
+#ifdef WIN_MAC
+  bfp = (BaseFormPtr) currentFormDataPtr;
+#else
+  bfp = (BaseFormPtr) GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+
+  path [0] = '\0';
+  GetAppParam ("NCBI", "NCBI", "DATA", "", path, sizeof (path));
+  FileBuildPath (path, NULL, database);
+
+  date [0] = '\0';
+  dp = DateCurr ();
+  DatePrint (dp, date);
+  DateFree (dp);
+
+  vsd.date = date;
+  vsd.path = path;
+  vsd.database = database;
+  vsd.changed = FALSE;
+  vsd.count = 0;
+  vsd.mon = NULL;
+
+  bsp =  GetBioseqGivenIDs (bfp->input_entityID, bfp->input_itemID, bfp->input_itemtype);
+  if (bsp != NULL) {
+    DoVecScreens (bsp, (Pointer) &vsd);
+  } else {
+    sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+    if (sep == NULL) return;
+    max = 0;
+    VisitBioseqsInSep (sep, (Pointer) &max, CountVecScreens);
+    if (max > 2) {
+      vsd.mon = MonitorIntNewEx ("VecScreen Progress", 0, max - 1, FALSE);
+    }
+    VisitBioseqsInSep (sep, (Pointer) &vsd, DoVecScreens);
+    if (vsd.mon != NULL) {
+      vsd.mon = MonitorFree (vsd.mon);
+      Update ();
+    }
+  }
+
+  if (vsd.changed) {
+    ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+    ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+    Update ();
+  } else {
+    Message (MSG_POST, "No vector contamination found");
+  }
+}
+
+extern void SimpleUniVecScreenProc (IteM i)
 
 {
   SimpleVecScreenCommon (i, "UniVec");
 }
 
-static void SimpleUniVecCoreScreenProc (IteM i)
+extern void SimpleUniVecCoreScreenProc (IteM i)
 
 {
   SimpleVecScreenCommon (i, "UniVec_Core");
@@ -2455,16 +2672,6 @@ extern MenU CreateAnalysisMenu (WindoW w, BaseFormPtr bfp, Boolean bspviewOK, Bo
                      NULL, 0, NULL, NULL, 0, 0, FALSE, NULL, NULL, NULL, NULL,
                      "Restriction Search", "Search",
                      SimpleRsiteProc, &first);
-    if (useEntrez) {
-      AddAnalysisItem (m, bfp, bspviewOK, FALSE, TRUE, FALSE, TRUE,
-                       NULL, 0, NULL, NULL, 0, 0, FALSE, NULL, NULL, NULL, NULL,
-                       "Vector Screen - UniVec", "Search",
-                       SimpleUniVecScreenProc, &first);
-      AddAnalysisItem (m, bfp, bspviewOK, FALSE, TRUE, FALSE, TRUE,
-                       NULL, 0, NULL, NULL, 0, 0, FALSE, NULL, NULL, NULL, NULL,
-                       "Vector Screen - UniVec Core", "Search",
-                       SimpleUniVecCoreScreenProc, &first);
-    }
     if (indexerVersion) {
       AddAnalysisItem (m, bfp, bspviewOK, FALSE, TRUE, FALSE, TRUE,
                        NULL, 0, NULL, NULL, 0, 0, FALSE, NULL, NULL, NULL, NULL,
@@ -5016,7 +5223,7 @@ static Int4 FindNewCDSStop (SeqLocPtr slp, BioseqPtr bsp, Int4 prot_len)
       }
       else
       {
-        return curr_start + prot_len - tot_len;
+        return curr_start + prot_len - tot_len - 1;
       }
     }
     tot_len += loc_len;
@@ -5142,7 +5349,7 @@ static SeqLocPtr ShiftStopForLengthChange
   return slp;
 }
 
-static SeqLocPtr 
+extern SeqLocPtr 
 ExpandSeqLoc 
 (Int4 start,
  Int4 stop,
@@ -5423,7 +5630,7 @@ static CharPtr ExtendProtein5
 }
 
 
-static CharPtr ExtendProtein3 
+extern CharPtr ExtendProtein3 
 (SeqFeatPtr sfp,
  Uint2      input_entityID,
  Boolean    force_partial)
@@ -10744,6 +10951,17 @@ typedef struct updateoptions
   IndexerOptionsPtr         indexer_opts;
 } UpdateOptionsData, PNTR UpdateOptionsPtr;
 
+static UpdateOptionsPtr UpdateOptionsFree (UpdateOptionsPtr uop)
+{
+  if (uop != NULL)
+  {
+  	uop->submitter_opts = MemFree (uop->submitter_opts);
+  	uop->indexer_opts = MemFree (uop->indexer_opts);
+  	uop = MemFree (uop);
+  }
+  return uop;
+}
+
 /* These functions remove features from portions of the updated sequence:
  * RemoveFeatsInAlignedRegion
  * RemoveFeatsNotInAlignedRegion
@@ -10956,6 +11174,191 @@ static Int4 ReadLongDataToString (SeqPortPtr spp, Int4 how_much, CharPtr str)
   return ctr;
 }
 
+static SeqLitPtr SeqLitFromBioseq (BioseqPtr bsp, Int4 start, Int4 stop)
+{
+  CharPtr    str;
+  SeqLitPtr  slip;
+  Uint1      seqcode;
+  SeqPortPtr spp;
+  Int4       ctr;
+  
+  if (bsp == NULL || bsp->length < 1 || start < 0 || stop >= bsp->length)
+  {
+    return NULL;
+  }
+  
+  str = (CharPtr) MemNew (sizeof (Char) * (size_t) (stop - start + 5));
+  if (str == NULL)
+    return NULL;
+  
+  if (ISA_na (bsp->mol))
+  {
+    seqcode = Seq_code_iupacna;
+  }
+  else
+  {
+    seqcode = Seq_code_iupacaa;
+  }  
+    
+  slip = SeqLitNew ();
+
+	slip->seq_data_type = seqcode;
+  slip->length = stop - start + 1;
+	slip->seq_data = BSNew (slip->length);
+
+  /* copy in the data */
+  spp = SeqPortNew(bsp, start, stop, Seq_strand_plus, seqcode);
+  ctr = ReadLongDataToString (spp, stop - start + 1, str);
+  spp = SeqPortFree (spp);
+  str[ctr] = '\0';
+       
+  BSWrite (slip->seq_data, (VoidPtr) str, stop - start + 1);
+  return slip;  
+}
+
+static DeltaSeqPtr DeltaSeqListFree (DeltaSeqPtr list)
+{
+  DeltaSeqPtr dsp;
+  SeqLitPtr   slip;
+  
+  dsp = list;
+  while (dsp != NULL)
+  {
+    slip = (SeqLitPtr) (dsp->data.ptrvalue);
+    SeqLitFree (slip);
+    dsp = dsp->next;
+  }
+  ValNodeFree (list);
+  return NULL;  
+}
+
+static Boolean 
+UpdateSequenceExtendDelta5Prime 
+(UpdatePairPtr             upp,
+ UpdateAlignmentLengthsPtr ualp)
+
+{
+  Int4        currold_pos;
+  SeqLitPtr   slip, slip_new;
+  DeltaSeqPtr dspold, dspnew, dspold_prev;
+  Int4        seqstart;
+  DeltaSeqPtr new_list = NULL;
+  
+  if (upp == NULL 
+      || upp->orig_bsp == NULL 
+      || upp->update_bsp == NULL
+      || (upp->orig_bsp->repr != Seq_repr_delta && upp->update_bsp->repr != Seq_repr_delta)
+      || (upp->orig_bsp->repr == Seq_repr_delta && upp->orig_bsp->seq_ext_type != 4)
+      || (upp->update_bsp->repr == Seq_repr_delta && upp->update_bsp->seq_ext_type != 4))
+  {
+    return FALSE;
+  }
+
+  /* copy in entire new sequence */
+  if (upp->update_bsp->repr == Seq_repr_delta)
+  {
+    dspnew = (DeltaSeqPtr) upp->update_bsp->seq_ext;
+    while (dspnew != NULL)
+    {
+      if (dspnew->data.ptrvalue == NULL || dspnew->choice != 2)
+      {
+        return FALSE;
+      }
+	    slip = (SeqLitPtr) (dspnew->data.ptrvalue);
+		  slip_new = (SeqLitPtr) AsnIoMemCopy (slip, (AsnReadFunc) SeqLitAsnRead,
+		                                       (AsnWriteFunc) SeqLitAsnWrite);
+    		                                     
+      ValNodeAddPointer (&new_list, 2, slip_new);
+	    dspnew = dspnew->next;
+    }
+  } 
+  else
+  {
+    slip = SeqLitFromBioseq (upp->update_bsp, 0, upp->update_bsp->length - 1);
+    if (slip == NULL)
+    {
+      return FALSE;
+    }
+    ValNodeAddPointer (&new_list, 2, slip);
+  }
+  
+  /* now copy in old sequence, all if no alignment, after alignment if present */
+  if (upp->orig_bsp->repr == Seq_repr_delta)
+  {
+    if (upp->salp == NULL)
+    {
+      ValNodeLink (&new_list, upp->orig_bsp->seq_ext);
+      upp->orig_bsp->seq_ext = new_list;
+      upp->orig_bsp->length += upp->update_bsp->length;
+    }
+    else
+    {
+      /* skip over old 5 and aligned area */
+      dspold = (DeltaSeqPtr) upp->orig_bsp->seq_ext;
+      currold_pos = 0;
+      dspold_prev = NULL;
+      while (dspold != NULL && currold_pos < ualp->old5 + ualp->olda)
+      {
+        seqstart = currold_pos;
+        if (dspold->data.ptrvalue == NULL || dspold->choice != 2)
+        {
+          return FALSE;
+        }
+        slip = (SeqLitPtr) (dspold->data.ptrvalue);
+	      currold_pos += slip->length;
+		    if (currold_pos > ualp->old5 + ualp->olda)
+  		  {
+          SplitDeltaSeq (dspold, ualp->old5 + ualp->olda - seqstart);
+          slip = (SeqLitPtr) (dspold->data.ptrvalue);
+          currold_pos = ualp->old5 + ualp->olda;		  
+        }
+  		  dspold_prev = dspold;
+    	  dspold = dspold->next;
+      }
+      if (dspold_prev == NULL)
+      {
+        ValNodeLink (&new_list, upp->orig_bsp->seq_ext);
+      }
+      else
+      {
+        /* attach remainder of list to new list */
+        ValNodeLink (&new_list, dspold);
+        dspold_prev->next = NULL;
+        
+        /* free dsps in old sequence that are being replaced */
+        upp->orig_bsp->seq_ext = DeltaSeqListFree (upp->orig_bsp->seq_ext);
+      
+        /* put new list in place */
+        upp->orig_bsp->seq_ext = new_list;
+      }
+      upp->orig_bsp->length = ualp->new5 + ualp->newa + ualp->old3;
+    }
+  }
+  else
+  {
+    if (upp->salp == NULL)
+    {
+      slip = SeqLitFromBioseq (upp->orig_bsp, 0, upp->orig_bsp->length - 1);
+    }
+    else
+    {
+      slip = SeqLitFromBioseq (upp->orig_bsp, ualp->old5 + ualp->olda, upp->orig_bsp->length - 1);
+    }
+    if (slip == NULL)
+    {
+      return FALSE;
+    }
+    ValNodeAddPointer (&new_list, 2, slip);
+    upp->orig_bsp->seq_data = BSFree (upp->orig_bsp->seq_data);
+    upp->orig_bsp->seq_ext = new_list;
+    upp->orig_bsp->repr = Seq_repr_delta;
+    
+    upp->orig_bsp->length = ualp->new5 + ualp->newa + ualp->old3;
+  }
+    
+  return TRUE;  
+}
+
 static Boolean 
 UpdateSequenceExtend5Prime 
 (UpdatePairPtr             upp,
@@ -10974,6 +11377,12 @@ UpdateSequenceExtend5Prime
   if (upp == NULL || upp->orig_bsp == NULL || upp->update_bsp == NULL || ualp == NULL)
   {
     return FALSE;
+  }
+  
+  if (upp->orig_bsp->repr == Seq_repr_delta
+      || upp->update_bsp->repr == Seq_repr_delta)
+  {
+    return UpdateSequenceExtendDelta5Prime (upp, ualp);
   }
 
   if (upp->salp == NULL)
@@ -11020,9 +11429,12 @@ UpdateSequenceExtend5Prime
     ctr = ReadLongDataToString (spp, ualp->new5 + ualp->newa, str);
     spp = SeqPortFree (spp);
     /* take old 3' end */
-    spp = SeqPortNew(upp->orig_bsp, ualp->old5 + ualp->olda, upp->orig_bsp->length - 1, Seq_strand_plus, seqcode);
-    ctr += ReadLongDataToString (spp, ualp->old3, str + ctr);
-    spp = SeqPortFree (spp);
+    if (ualp->old3 > 0)
+    {
+      spp = SeqPortNew(upp->orig_bsp, ualp->old5 + ualp->olda, upp->orig_bsp->length - 1, Seq_strand_plus, seqcode);
+      ctr += ReadLongDataToString (spp, ualp->old3, str + ctr);
+      spp = SeqPortFree (spp);
+    }
   }
   
   str[ctr] = '\0';
@@ -11063,6 +11475,158 @@ UpdateSequenceExtend5Prime
 }
 
 static Boolean 
+UpdateSequenceExtendDelta3Prime 
+(UpdatePairPtr             upp,
+ UpdateAlignmentLengthsPtr ualp)
+
+{
+  Int4        currnew_pos = 0, currold_pos;
+  SeqLitPtr   slip, slip_new;
+  DeltaSeqPtr dspold, dspnew, dspold_prev;
+  Int4        seqstart;
+  DeltaSeqPtr new_list = NULL;
+  
+  if (upp == NULL 
+      || upp->orig_bsp == NULL 
+      || upp->update_bsp == NULL
+      || (upp->orig_bsp->repr != Seq_repr_delta && upp->update_bsp->repr != Seq_repr_delta)
+      || (upp->orig_bsp->repr == Seq_repr_delta && upp->orig_bsp->seq_ext_type != 4)
+      || (upp->update_bsp->repr == Seq_repr_delta && upp->update_bsp->seq_ext_type != 4))
+  {
+    return FALSE;
+  }
+
+  /* retain 5' end of original sequence */
+  if (upp->orig_bsp->repr == Seq_repr_delta)
+  {
+    if (upp->salp == NULL)
+    {
+      /* do nothing, keep the entire sequence */
+    }
+    else
+    {
+      /* discard the portion after the old 5' */
+      dspold_prev = NULL;
+      dspold = (DeltaSeqPtr) upp->orig_bsp->seq_ext;
+      currold_pos = 0;
+      while (dspold != NULL && currold_pos < ualp->old5)
+      {
+        seqstart = currold_pos;
+        if (dspold->data.ptrvalue == NULL || dspold->choice != 2)
+        {
+          return FALSE;
+        }
+        slip = (SeqLitPtr) (dspold->data.ptrvalue);
+	      currold_pos += slip->length;
+		    if (currold_pos > ualp->old5)
+  		  {
+          SplitDeltaSeq (dspold, ualp->old5 - seqstart);
+          slip = (SeqLitPtr) (dspold->data.ptrvalue);
+          currold_pos = ualp->old5;		  
+        }
+  		  dspold_prev = dspold;
+    	  dspold = dspold->next;
+      }
+      
+      if (dspold_prev == NULL)
+      {
+        /* discard the entire sequence */
+        upp->orig_bsp->seq_ext = DeltaSeqListFree (upp->orig_bsp->seq_ext); 
+      }
+      else
+      {
+        dspold_prev->next = DeltaSeqListFree (dspold_prev->next);
+      }
+    }
+  }
+  else
+  {
+    if (upp->salp == NULL)
+    {
+      slip = SeqLitFromBioseq (upp->orig_bsp, 0, upp->orig_bsp->length - 1);      
+    }
+    else
+    {
+      slip = SeqLitFromBioseq (upp->orig_bsp, 0, ualp->old5);
+    }
+    upp->orig_bsp->seq_data = BSFree (upp->orig_bsp->seq_data);
+    new_list = upp->orig_bsp->seq_ext;
+    ValNodeAddPointer (&new_list, 2, slip);
+    upp->orig_bsp->seq_ext = new_list;
+    upp->orig_bsp->repr = Seq_repr_delta;
+  }
+  
+  
+  /* now add in new sequence */
+  if (upp->update_bsp->repr == Seq_repr_delta)
+  {
+    /* skip over new5 */
+    dspnew = (DeltaSeqPtr) upp->update_bsp->seq_ext;
+    currnew_pos = 0;
+    if (upp->salp != NULL)
+    {
+      while (dspnew != NULL && currnew_pos < ualp->new5)
+      {
+        seqstart = currnew_pos;
+        if (dspnew->data.ptrvalue == NULL || dspnew->choice != 2)
+        {
+          return FALSE;
+        }
+        slip = (SeqLitPtr) (dspnew->data.ptrvalue);
+	      currnew_pos += slip->length;
+		    if (currnew_pos > ualp->new5)
+  		  {
+          SplitDeltaSeq (dspnew, ualp->old5 - seqstart);
+          slip = (SeqLitPtr) (dspnew->data.ptrvalue);
+          currnew_pos = ualp->new5;		  
+        }
+    	  dspnew = dspnew->next;
+      }
+    }
+    
+    while (dspnew != NULL)
+    {
+      if (dspnew->data.ptrvalue == NULL || dspnew->choice != 2)
+      {
+        return FALSE;
+      }
+      slip = (SeqLitPtr) (dspnew->data.ptrvalue);
+		  slip_new = (SeqLitPtr) AsnIoMemCopy (slip, (AsnReadFunc) SeqLitAsnRead,
+		                                       (AsnWriteFunc) SeqLitAsnWrite);
+      new_list = upp->orig_bsp->seq_ext;  		                                     
+      ValNodeAddPointer (&new_list, 2, slip_new);
+      upp->orig_bsp->seq_ext = new_list;
+      dspnew = dspnew->next;
+    }
+  }
+  else
+  {
+    if (upp->salp == NULL)
+    {
+      slip = SeqLitFromBioseq (upp->update_bsp, 0, upp->update_bsp->length - 1);      
+    }
+    else
+    {
+      slip = SeqLitFromBioseq (upp->orig_bsp, ualp->new5, upp->update_bsp->length - 1);
+    }
+    new_list = upp->orig_bsp->seq_ext;
+    ValNodeAddPointer (&new_list, 2, slip);    
+    upp->orig_bsp->seq_ext = new_list;
+  }
+  
+  if (upp->salp == NULL)
+  {
+    upp->orig_bsp->length = upp->orig_bsp->length + upp->update_bsp->length;
+  }
+  else
+  {
+    upp->orig_bsp->length = ualp->old5 + ualp->newa + ualp->new3;
+  }
+    
+  return TRUE;  
+}
+
+static Boolean 
 UpdateSequenceExtend3Prime 
 (UpdatePairPtr             upp,
  UpdateAlignmentLengthsPtr ualp)
@@ -11078,6 +11642,12 @@ UpdateSequenceExtend3Prime
   if (upp == NULL || upp->orig_bsp == NULL || upp->update_bsp == NULL || ualp == NULL)
   {
     return FALSE;
+  }
+  
+  if (upp->orig_bsp->repr == Seq_repr_delta
+      || upp->update_bsp->repr == Seq_repr_delta)
+  {
+    return UpdateSequenceExtendDelta3Prime (upp, ualp);
   }
 
   /* construct replacement sequence by recombining between old and overlap */
@@ -11858,7 +12428,6 @@ static Boolean AreSequenceResiduesIdentical (BioseqPtr bsp1, BioseqPtr bsp2)
   Int4          buf_len = 255;
   Char          buf1[255], buf2[255];
   Int4          ctr1, ctr2, offset;
-  Boolean       found_mismatch = FALSE;
   Boolean       rval;
   
   if (bsp1 == NULL && bsp2 == NULL)
@@ -12149,7 +12718,14 @@ IsSequenceUpdateChoiceAllowed
   }
   else if (action == eSequenceUpdateNoChange)
   {
-    return TRUE;
+    if (ignore_alignment)
+    {
+      return FALSE;
+    }
+    else
+    {
+      return TRUE;
+    }
   }
   else if (action != eSequenceUpdateNoChange 
            && !is_indexer
@@ -12173,11 +12749,13 @@ IsSequenceUpdateChoiceAllowed
   {
     return FALSE;
   }
-  else if (action == eSequenceUpdateExtend3 && ualp->new3 < ualp->old3)
+  else if (action == eSequenceUpdateExtend3 
+           && (ualp->new3 < ualp->old3 || ualp->new3 == 0))
   {
     return FALSE;
   }
-  else if (action == eSequenceUpdateExtend5 && ualp->new5 < ualp->old5)
+  else if (action == eSequenceUpdateExtend5 
+           && (ualp->new5 < ualp->old5 || ualp->new5 == 0))
   {
     return FALSE;
   }
@@ -12204,7 +12782,8 @@ ReportBadUpdateType
     return;
   }
   
-  SeqIdWrite (upp->orig_bsp->id, id_txt, PRINTID_REPORT, sizeof (id_txt) - 1);
+  SeqIdWrite (SeqIdFindBest (upp->orig_bsp->id, SEQID_GENBANK), id_txt, 
+              PRINTID_REPORT, sizeof (id_txt) - 1);
   
   switch (action)
   {
@@ -12251,7 +12830,9 @@ UpdateOrExtendOneSequence
   Boolean      rval = FALSE;
   Int4         feature_update_offset;
   SeqAnnotPtr  newfeat_sap = NULL;
+  Int4         orig_seq_len;
   Uint2        update_entityID;
+  Char         id_txt [128];
 
   if (upp == NULL || upp->orig_bsp == NULL || upp->update_bsp == NULL
       || uop == NULL || uop->submitter_opts == NULL)
@@ -12259,6 +12840,8 @@ UpdateOrExtendOneSequence
     return FALSE;
   }
   
+  update_entityID = upp->update_bsp->idx.entityID; 
+
   if (!IsSequenceUpdateChoiceAllowed (uop->submitter_opts->sequence_update_type,
                                       upp, ualp, indexerVersion,
                                       uop->submitter_opts->ignore_alignment))
@@ -12268,17 +12851,36 @@ UpdateOrExtendOneSequence
     return FALSE;
   }
   
+  if (uop->submitter_opts->sequence_update_type == eSequenceUpdateReplace
+      && upp->salp == NULL)
+  {
+    SeqIdWrite (SeqIdFindBest (upp->orig_bsp->id, SEQID_GENBANK), id_txt,
+                PRINTID_REPORT, sizeof (id_txt) - 1);
+    
+    if (ANS_NO == Message (MSG_YN, 
+                           "There is no alignment for %s.  Are you sure that you want to replace this sequence?",
+                           id_txt))
+    {
+      return FALSE;
+    }        
+  }
+  
   /* remove features */
   switch (uop->submitter_opts->feature_remove_type)
   {
     case eFeatureRemoveAll:
       RemoveOldFeats (upp->orig_bsp);
+      DeleteMarkedObjects (entityID, 0, NULL);
       break;
     case eFeatureRemoveAligned:
       RemoveFeatsInAlignedRegion (upp->orig_bsp, ualp);
+      DeleteMarkedObjects (entityID, 0, NULL);
       break;
     case eFeatureRemoveNotAligned:
       RemoveFeatsNotInAlignedRegion (upp->orig_bsp, ualp);
+      DeleteMarkedObjects (entityID, 0, NULL);
+      break;
+    default:
       break;
   }
   
@@ -12287,6 +12889,9 @@ UpdateOrExtendOneSequence
     prot_feat_list = FindProductProtRefs (upp->orig_bsp);
     transl_except_list = FindTranslExceptCDSs (upp->orig_bsp);
   }
+
+  /* get length of original sequence before updating */
+  orig_seq_len = upp->orig_bsp->length;
 
   /* update sequence */  
   switch (uop->submitter_opts->sequence_update_type)
@@ -12308,9 +12913,18 @@ UpdateOrExtendOneSequence
       sequence_update_successful = UpdateSequenceExtend3Prime (upp, ualp);    
       rval = sequence_update_successful;
       break;
+    case eSequenceUpdateNoChange:
+      rval = TRUE;
+      break;    
   }
-  
-  update_entityID = upp->update_bsp->idx.entityID;
+
+  if (log_fp != NULL && data_in_log != NULL && upp->revcomp)
+  {
+     SeqIdWrite (SeqIdFindBest (upp->orig_bsp->id, SEQID_GENBANK), id_txt,
+                 PRINTID_REPORT, sizeof (id_txt) - 1);
+     fprintf (log_fp, "Reverse complemented %s\n", id_txt);
+     *data_in_log = TRUE;
+  }
   
   /* update features */
   if (uop->submitter_opts->feature_update_type != eFeatureUpdateNoChange)
@@ -12324,25 +12938,34 @@ UpdateOrExtendOneSequence
       if (uop->submitter_opts->sequence_update_type == eSequenceUpdateExtend3
           || uop->submitter_opts->sequence_update_type == eSequenceUpdatePatch)
       {
-        feature_update_offset = ualp->old5 - ualp->new5;
+        if (upp->salp == NULL)
+        {
+          feature_update_offset = orig_seq_len;
+        }
+        else
+        {
+          feature_update_offset = ualp->old5 - ualp->new5;
+        }
       }
       feature_update_successful = ImportFeaturesWithOffset (upp, uop, ualp,
                                                             feature_update_offset,
                                                             &newfeat_sap);
       rval &= feature_update_successful;
-      if (uop->submitter_opts->sequence_update_type == eSequenceUpdateReplace
-          && upp->revcomp 
-          && (sequence_update_successful || feature_update_successful))
-      {
-        ReverseComplementBioseqAndFeats (upp->orig_bsp, entityID);
-      }
     }
     else
     {
       feature_update_successful = ImportFeaturesViaAlignment (upp, uop, ualp, &newfeat_sap);
     }
   }
-  
+
+  if (uop->submitter_opts->sequence_update_type == eSequenceUpdateReplace
+      && upp->revcomp 
+      && sequence_update_successful)
+  {
+    ReverseComplementBioseqAndFeats (upp->orig_bsp, entityID);
+  }
+
+
   if (uop->indexer_opts != NULL && uop->indexer_opts->add_cit_subs
       && (feature_update_successful
           || (sequence_update_successful 
@@ -12388,10 +13011,12 @@ UpdateOrExtendOneSequence
     DeleteMarkedObjects (entityID, 0, NULL);
     SeqMgrClearFeatureIndexes (entityID, NULL);
   }
-  
-  upp->update_bsp->idx.deleteme = TRUE;
-  DeleteMarkedObjects (update_entityID, 0, NULL);
-  
+
+  /* Note - we do not remove the update sequence here - that will happen when
+   * the UpdateSequence form is removed.
+   */
+  upp->update_bsp = NULL;
+
   return rval;
 }
 
@@ -12502,6 +13127,44 @@ static SegmenT MakeAlignmentOverviewPicture (UpdateAlignmentLengthsPtr ualp)
   return pict;
 }
 
+/* This function shows how the new sequence will be created when the sequence is
+ * extended and the alignment is ignored.
+ */
+static SegmenT MakeExtensionPicture (Int4 len_old, Int4 len_new, Boolean extend5)
+
+{
+  SegmenT   pict;
+  Char      str [96];
+  Int4      top, bottom, label_loc;
+
+  pict = CreatePicture ();
+  
+  top = 0;
+  bottom = top - 10;
+  
+  label_loc = -(top + bottom) / 2;
+
+  if (extend5)
+  {
+    sprintf (str, "New (%ld)", (long) len_new);
+    AddLabel (pict, -len_new / 2, label_loc, str, SMALL_TEXT, 5, MIDDLE_LEFT, 0);
+    AddRectangle (pict, -len_new, top, 0, bottom, NO_ARROW, FALSE, 0);
+    sprintf (str, "Old (%ld)", (long) len_old);
+    AddLabel (pict, len_old / 2, label_loc - 30, str, SMALL_TEXT, 5, MIDDLE_RIGHT, 0);
+    AddRectangle (pict,  0, top, len_old, bottom, NO_ARROW, FALSE, 0);
+  }
+  else
+  {
+    sprintf (str, "Old (%ld)", (long) len_old);
+    AddLabel (pict, -len_old / 2, label_loc - 30, str, SMALL_TEXT, 5, MIDDLE_LEFT, 0);
+    AddRectangle (pict, -len_old, top, 0, bottom, NO_ARROW, FALSE, 0);
+    sprintf (str, "New (%ld)", (long) len_new);
+    AddLabel (pict, len_new / 2, label_loc, str, SMALL_TEXT, 5, MIDDLE_RIGHT, 0);
+    AddRectangle (pict,  0, top, len_new, bottom, NO_ARROW, FALSE, 0);
+  }
+
+  return pict;  
+}
 
 static void DrawUpdateAlignmentBits (
   SegmenT         pict,
@@ -12832,6 +13495,35 @@ typedef struct alignmentletterspanel
   Boolean            revcomp;
 } AlignmentLettersPanelData, PNTR AlignmentLettersPanelPtr;
 
+static void 
+PaintAlignmentString 
+(CharPtr aln_str,
+ Int4    char_offset,
+ Int4    char_width,
+ Int4    left_pos,
+ Int4    top_pos,
+ Int4    right_pos,
+ Int4    maxchars,
+ Int4    aln_length)
+{
+  Int2 i;
+  Int4 j;
+  Int4 pos_offset;
+  
+  if (aln_str != NULL)
+  {
+    MoveTo (left_pos, top_pos);
+    pos_offset = left_pos;
+    for (i = 0, j = char_offset, pos_offset = left_pos; 
+         i < maxchars && j < aln_length && pos_offset + char_width <= right_pos;
+         i++, j++, pos_offset += char_width) {
+      PaintChar (aln_str [j]);
+    }
+  }
+  
+}
+
+
 static void UpdateAlignmentLettersPanelOnDraw (PaneL pnl)
 
 {
@@ -12857,23 +13549,19 @@ static void UpdateAlignmentLettersPanelOnDraw (PaneL pnl)
 
   /* draw top (new) letters */
 
-  if (dlg->aln2 != NULL)
-  {
-    MoveTo (r.left, r.top + 8 + 3 * dlg->lineheight);
-    for (i = 0, j = offset; i < dlg->maxchars && j < dlg->uald.aln_length; i++, j++) {
-      PaintChar (dlg->aln2 [j]);
-    }
-  }
+  PaintAlignmentString (dlg->aln2, offset, dlg->charwidth,
+                        r.left, r.top + 8 + 3 * dlg->lineheight,
+                        r.right,
+                        dlg->maxchars,
+                        dlg->uald.aln_length);
 
   /* draw bottom (old) letters */
 
-  if (dlg->aln1 != NULL) 
-  {
-    MoveTo (r.left, r.top + 8 + 5 * dlg->lineheight);
-    for (i = 0, j = offset; i < dlg->maxchars && j < dlg->uald.aln_length; i++, j++) {
-      PaintChar (dlg->aln1 [j]);
-    }
-  }
+  PaintAlignmentString (dlg->aln1, offset, dlg->charwidth,
+                        r.left, r.top + 8 + 5 * dlg->lineheight,
+                        r.right,
+                        dlg->maxchars,
+                        dlg->uald.aln_length);
 
   /* draw recombination arrows */
 
@@ -12935,7 +13623,7 @@ static void UpdateAlignmentLettersPanelOnDraw (PaneL pnl)
       }
       if (((realpos + 1) % 10) == 0) {
         left = r.left + i * dlg->charwidth + dlg->charwidth / 2 - 1;
-        if (i < dlg->maxchars) {
+        if (i < dlg->maxchars && left <= r.right - dlg->charwidth) {
           MoveTo (left, top);
           LineTo (left, bottom);
         }
@@ -12951,16 +13639,17 @@ static void UpdateAlignmentLettersPanelOnDraw (PaneL pnl)
           if (q < len) {
             left = r.left + k * dlg->charwidth;
             MoveTo (left, r.top + 8 + dlg->lineheight);
-            while (k < dlg->maxchars && q < len) {
+            while (k < dlg->maxchars && q < len && left <= r.right - dlg->charwidth) {
               PaintChar (str [q]);
               k++;
               q++;
+              left += dlg->charwidth;
             }
           }
         }
       } else if (((realpos + 1) % 5) == 0) {
         left = r.left + i * dlg->charwidth + dlg->charwidth / 2 - 1;
-        if (i < dlg->maxchars) {
+        if (i < dlg->maxchars && left <= r.right - dlg->charwidth) {
           MoveTo (left, top + 3);
           LineTo (left, bottom);
         }
@@ -12986,7 +13675,7 @@ static void UpdateAlignmentLettersPanelOnDraw (PaneL pnl)
     if (ch1 != '-') {
       if (((pos + 1) % 10) == 0) {
         left = r.left + i * dlg->charwidth + dlg->charwidth / 2 - 1;
-        if (i < dlg->maxchars) {
+        if (i < dlg->maxchars && left <= r.right - dlg->charwidth) {
           MoveTo (left, top);
           LineTo (left, bottom);
         }
@@ -13002,16 +13691,17 @@ static void UpdateAlignmentLettersPanelOnDraw (PaneL pnl)
           if (q < len) {
             left = r.left + k * dlg->charwidth;
             MoveTo (left, r.top + 8 + 7 * dlg->lineheight);
-            while (k < dlg->maxchars && q < len) {
+            while (k < dlg->maxchars && q < len && left <= r.right - dlg->charwidth) {
               PaintChar (str [q]);
               k++;
               q++;
+              left += dlg->charwidth;
             }
           }
         }
       } else if (((pos + 1) % 5) == 0) {
         left = r.left + i * dlg->charwidth + dlg->charwidth / 2 - 1;
-        if (i < dlg->maxchars) {
+        if (i < dlg->maxchars && left <= r.right - dlg->charwidth) {
           MoveTo (left, top);
           LineTo (left, bottom - 3);
         }
@@ -13032,6 +13722,7 @@ static void UpdateAlignmentLettersPanelOnScroll (
 {
   RecT                    r;
   AlignmentLettersPanelPtr  dlg;
+  Int4                      scroll_distance;
 
   dlg = (AlignmentLettersPanelPtr) GetObjectExtra (slt);
   if (dlg == NULL) return;
@@ -13040,7 +13731,19 @@ static void UpdateAlignmentLettersPanelOnScroll (
   InsetRect (&r, 4, 4);
   Select (dlg->letters);
   if (ABS (oldval - newval) < dlg->maxchars) {
-    ScrollRect (&r, (oldval - newval) * dlg->charwidth, 0);
+    scroll_distance = (oldval - newval) * dlg->charwidth;
+    ScrollRect (&r, scroll_distance, 0);
+    if (scroll_distance > 0)
+    {
+      r.left += scroll_distance;
+      r.right = r.left + dlg->charwidth;
+    }
+    else
+    {
+      r.right += scroll_distance;
+      r.left = r.right - dlg->charwidth;
+    }
+    InvalRect (&r);
   } else {
     InsetRect (&r, -2, -2);
     InvalRect (&r);
@@ -13160,7 +13863,7 @@ static Int4 GetAlignmentLettersScrollPosition (DialoG d)
   dlg = (AlignmentLettersPanelPtr) GetObjectExtra (d);
   if (dlg == NULL)
   {
-    return;
+    return 0;
   }
 
   sb = GetSlateHScrollBar ((SlatE) dlg->letters);
@@ -13184,18 +13887,230 @@ static void ScrollAlignmentLettersPanel (DialoG d, Int4 pos)
   SetBarValue (sb, pos);  
 }
 
-typedef struct updatepreviewdialog
+typedef struct updatetitlesdialog
 {
   DIALOG_MESSAGE_BLOCK
   
-  PrompT  new_sequence_ppt; /* indicate which sequence is being used for the update */
-  PrompT  old_sequence_ppt; /* indicates which sequence is being updated */
+  PrompT  new_sequence_id_ppt; /* indicate which sequence is being used for the update */
+  PrompT  new_sequence_length_ppt;
+  PrompT  old_sequence_id_ppt; /* indicates which sequence is being updated */
+  PrompT  old_sequence_length_ppt;
+                                    
+  BioseqPtr          orig_bsp;   /* original bioseq */
+  BioseqPtr          update_bsp; /* update bioseq */
+  Uint2              entityID_orig;
+  Uint2              entityID_update;
+  Boolean            is_indexer;
+  Boolean            is_update;
+} UpdateTitlesDialogData, PNTR UpdateTitlesDialogPtr;
+
+static Pointer UpdatePairFromUpdateTitlesDialog (DialoG d)
+{
+  UpdateTitlesDialogPtr dlg;
+  UpdatePairPtr          upp;
+
+  dlg = (UpdateTitlesDialogPtr) GetObjectExtra (d);
+  if (dlg == NULL)
+  {
+    return NULL;
+  }
   
+  upp = (UpdatePairPtr) MemNew (sizeof (UpdatePairData));
+  if (upp != NULL)
+  {
+    upp->orig_bsp = dlg->orig_bsp;
+    upp->update_bsp = dlg->update_bsp;
+    upp->revcomp = FALSE;
+    upp->salp = NULL;
+  }
+  
+  return upp;
+}
+
+static void UpdatePairToUpdateTitlesDialog (DialoG d, Pointer data)
+{
+  UpdateTitlesDialogPtr dlg;
+  UpdatePairPtr         upp;
+  Char                  ppt_txt [500];
+  Char                  id_txt [MAX_ID_LEN];
+  
+  dlg = (UpdateTitlesDialogPtr) GetObjectExtra (d);
+  if (dlg == NULL)
+  {
+    return;
+  }
+  
+  dlg->orig_bsp = NULL;
+  dlg->update_bsp = NULL;
+  
+  upp = (UpdatePairPtr) data;
+  
+  if (upp == NULL)
+  {
+    SafeHide (dlg->new_sequence_id_ppt);
+    SafeHide (dlg->new_sequence_length_ppt);
+    SafeHide (dlg->old_sequence_id_ppt);    
+    SafeHide (dlg->old_sequence_length_ppt);    
+    return;
+  }
+  
+  dlg->orig_bsp = upp->orig_bsp;
+  dlg->update_bsp = upp->update_bsp;
+  
+  if (upp->orig_bsp == NULL)
+  {
+    SafeHide (dlg->new_sequence_id_ppt);
+    SafeHide (dlg->new_sequence_length_ppt);
+    SafeHide (dlg->old_sequence_id_ppt);    
+    SafeHide (dlg->old_sequence_length_ppt);    
+  }  
+  /* show no update message */
+  else if (upp->update_bsp == NULL)
+  {
+    SeqIdWrite (SeqIdFindBest (upp->orig_bsp->id, SEQID_GENBANK), id_txt, 
+                PRINTID_REPORT, sizeof (id_txt) - 50);
+    if (dlg->is_indexer)
+    {
+      sprintf (ppt_txt, "No update sequence for %s", id_txt);
+      SetTitle (dlg->new_sequence_id_ppt, ppt_txt);
+      sprintf (ppt_txt, "Length %ld", upp->orig_bsp->length);
+      SetTitle (dlg->new_sequence_length_ppt, ppt_txt);
+    }
+    else
+    {
+      sprintf (ppt_txt, "No update sequence for %s (length %ld)", 
+               id_txt, upp->orig_bsp->length);
+      SetTitle (dlg->new_sequence_id_ppt, ppt_txt);
+    }
+    SafeHide (dlg->old_sequence_id_ppt);    
+    SafeHide (dlg->old_sequence_length_ppt);    
+  }  
+  /* show no alignment message */
+  else if (upp->salp == NULL && dlg->is_update)
+  {
+    SeqIdWrite (SeqIdFindBest (upp->orig_bsp->id, SEQID_GENBANK), id_txt, 
+                PRINTID_REPORT, sizeof (id_txt) - 50);
+    if (dlg->is_indexer)
+    {
+      sprintf (ppt_txt, "No alignment for %s", id_txt);
+      SetTitle (dlg->new_sequence_id_ppt, ppt_txt);
+      sprintf (ppt_txt, "Length: %ld", dlg->orig_bsp->length);
+      SetTitle (dlg->new_sequence_length_ppt, ppt_txt);
+    }
+    else
+    {
+      sprintf (ppt_txt, "No alignment for %s Length: %ld", id_txt, dlg->orig_bsp->length);
+      SetTitle (dlg->new_sequence_id_ppt, ppt_txt);
+    }
+    SafeHide (dlg->old_sequence_id_ppt);    
+    SafeHide (dlg->old_sequence_length_ppt);    
+  }
+  else
+  {
+    /* update sequence title prompts */ 
+    SeqIdWrite (SeqIdFindBest (dlg->update_bsp->id, SEQID_GENBANK), id_txt, 
+                               PRINTID_REPORT, sizeof (id_txt) - 50);
+    if (dlg->is_indexer)
+    {
+      sprintf (ppt_txt, "New sequence: %s", id_txt);
+      SetTitle (dlg->new_sequence_id_ppt, ppt_txt);
+      sprintf (ppt_txt, "Length: %ld", dlg->update_bsp->length);
+      SetTitle (dlg->new_sequence_length_ppt, ppt_txt);
+    }
+    else
+    {
+      sprintf (ppt_txt, "New sequence: %s Length: %ld", id_txt, dlg->update_bsp->length);
+      SetTitle (dlg->new_sequence_id_ppt, ppt_txt);
+    }
+  
+    SeqIdWrite (SeqIdFindBest (dlg->orig_bsp->id, SEQID_GENBANK), id_txt, 
+                               PRINTID_REPORT, sizeof (id_txt) - 50);
+    if (dlg->is_indexer)
+    {
+      sprintf (ppt_txt, "Old sequence: %s", id_txt);
+      SetTitle (dlg->old_sequence_id_ppt, ppt_txt);
+      sprintf (ppt_txt, "Length: %ld", dlg->orig_bsp->length);
+      SetTitle (dlg->old_sequence_length_ppt, ppt_txt);
+    }
+    else
+    {
+      sprintf (ppt_txt, "Old sequence: %s Length: %ld", id_txt, dlg->orig_bsp->length);
+      SetTitle (dlg->old_sequence_id_ppt, ppt_txt);
+    }
+  
+    SafeShow (dlg->new_sequence_id_ppt);
+    SafeShow (dlg->new_sequence_length_ppt);
+    SafeShow (dlg->old_sequence_id_ppt);  
+    SafeShow (dlg->old_sequence_length_ppt);  
+  }
+}
+
+static DialoG UpdateTitlesDialog (GrouP parent, Boolean is_indexer, Boolean is_update)
+{
+  UpdateTitlesDialogPtr dlg;
+  GrouP                 p;
+  Int4                  prompt_width = 450;
+  
+  dlg = (UpdateTitlesDialogPtr) MemNew (sizeof (UpdateTitlesDialogData));
+  if (dlg == NULL)
+  {
+    return NULL;
+  }
+  
+  p = HiddenGroup (parent, -1, 0, NULL);
+  SetObjectExtra (p, dlg, StdCleanupExtraProc);
+  SetGroupSpacing (p, 2, 2);
+  
+  dlg->dialog = (DialoG) p;
+  
+  dlg->todialog = UpdatePairToUpdateTitlesDialog;
+  dlg->fromdialog = UpdatePairFromUpdateTitlesDialog;
+  
+  dlg->is_indexer = is_indexer;
+  dlg->is_update = is_update;
+  
+  if (is_indexer)
+  {
+    prompt_width = 400;
+  }
+  else
+  {
+    prompt_width = 550;
+  }
+  
+  dlg->new_sequence_id_ppt = StaticPrompt (p, "", prompt_width, 
+                                           dialogTextHeight, programFont, 'l');
+  if (is_indexer)
+  {
+    dlg->new_sequence_length_ppt = StaticPrompt (p, "", prompt_width, 
+                                                 dialogTextHeight, programFont, 'l');
+  }
+  else
+  {
+    dlg->new_sequence_length_ppt = NULL;
+  }
+  
+  dlg->old_sequence_id_ppt = StaticPrompt (p, "", prompt_width, dialogTextHeight, programFont, 'l');
+  if (is_indexer)
+  {
+    dlg->old_sequence_length_ppt = StaticPrompt (p, "", prompt_width, 
+                                                 dialogTextHeight, programFont, 'l');
+  }
+  
+  return (DialoG) p;
+}
+
+typedef struct updatepreviewdialog
+{
+  DIALOG_MESSAGE_BLOCK
+
   GrouP   viewer_grp;       /* group that contains viewers and prompts
                              * this group is hidden when there is no alignment
                              */
   VieweR  overview;       /* shows sequence lengths/overlap */
+  GrouP   details_grp;
   VieweR  details;        /* shows individual mismatches/deletions/insertions */
+  GrouP   letters_grp;
   DialoG  letters_dlg;      /* shows sequence and gap characters and coordinates */
 
   SegmenT overview_picture; /* picture of sequence lengths/overlap */
@@ -13221,7 +14136,10 @@ typedef struct updatepreviewdialog
   BioseqPtr          update_bsp; /* update bioseq */
   Uint2              entityID_orig;
   Uint2              entityID_update;
-  Boolean            revcomp;                                     
+  Boolean            revcomp;              
+  
+  Boolean            ignore_alignment;
+  Boolean            extend5;                       
 } UpdatePreviewDialogData, PNTR UpdatePreviewDialogPtr;
 
 /* if the user clicks on the details picture, scroll to the appropriate position
@@ -13307,13 +14225,117 @@ static Pointer UpdatePairFromUpdatePreviewDialog (DialoG d)
   return upp;
 }
 
+static void RedrawAlignmentPreview (DialoG d)
+{
+  UpdatePreviewDialogPtr dlg;
+  UpdatePairData         upd;
+  Int4                   scaleX;
+
+  dlg = (UpdatePreviewDialogPtr) GetObjectExtra (d);
+  if (dlg == NULL)
+  {
+    return;
+  }
+  
+  upd.orig_bsp = dlg->orig_bsp;
+  upd.update_bsp = dlg->update_bsp;
+  upd.salp = dlg->salp;
+  upd.revcomp = dlg->revcomp;
+
+  /* reverse the sequence for drawing purposes */
+  if (upd.revcomp)
+  {
+    BioseqRevComp (upd.update_bsp);
+    ReverseBioseqFeatureStrands (upd.update_bsp);
+    SeqMgrReplaceInBioseqIndex (upd.update_bsp);
+  }
+
+  if (dlg->salp == NULL 
+      || dlg->orig_bsp == NULL
+      || dlg->update_bsp == NULL)
+  {
+    dlg->overview_picture = CreatePicture ();
+    AttachPicture (dlg->overview, dlg->overview_picture, 0, 0, UPPER_LEFT,
+		               1, 1, FrameVwr);
+    dlg->details_picture = CreatePicture ();
+    AttachPicture (dlg->details, dlg->details_picture, 0, 0, UPPER_LEFT,
+		               1, 1, FrameVwr);
+    MemSet (&(dlg->uald), 0, sizeof (UpdateAlignmentLengthsData));
+
+    PointerToDialog (dlg->letters_dlg, NULL);
+    
+    Hide (dlg->viewer_grp);
+    /* reverse the sequence for drawing purposes */
+    if (upd.revcomp)
+    {
+      BioseqRevComp (upd.update_bsp);
+      ReverseBioseqFeatureStrands (upd.update_bsp);
+      SeqMgrReplaceInBioseqIndex (upd.update_bsp);
+    }
+
+    return;
+  }
+    
+  CalculateUpdateAlignmentLengths (dlg->salp, dlg->orig_bsp, dlg->update_bsp, &(dlg->uald));
+
+  if (dlg->ignore_alignment)
+  {
+    dlg->overview_picture = MakeExtensionPicture (dlg->orig_bsp->length, dlg->update_bsp->length, dlg->extend5);
+  }
+  else
+  {
+    dlg->overview_picture = MakeAlignmentOverviewPicture (&(dlg->uald));
+  }
+
+  scaleX = CalculateBestUpdateAlignmentViewerScale (dlg->overview, dlg->overview_picture);
+  AttachPicture (dlg->overview, dlg->overview_picture, 0, 0, UPPER_LEFT,
+		             scaleX, 1, FrameVwr);
+
+  dlg->indels = ValNodeFree (dlg->indels);
+  dlg->details_picture = MakeAlignmentDetailsPicture (dlg->salp, 
+                                                      dlg->orig_bsp,
+                                                      dlg->update_bsp,
+                                                      &(dlg->indels),
+                                                      &(dlg->mismatches),
+                                                      &(dlg->uald), dlg->revcomp);
+  dlg->details_scaleX = CalculateBestUpdateAlignmentViewerScale (dlg->details, dlg->details_picture);
+  AttachPicture (dlg->details, dlg->details_picture, 0, 0, UPPER_LEFT,
+		             dlg->details_scaleX, 1, FrameVwr);
+  SetViewerData (dlg->details, (Pointer) dlg, NULL);
+  SetViewerProcs (dlg->details, UpdateAlignmentDetailsOnClick, NULL, NULL, NULL);
+
+  /* sort the insertions and deletions so they will be in order */
+  dlg->indels = ValNodeSort (dlg->indels, SortVnpByInt);
+  /* sort the matches so that they will be in order */
+  dlg->mismatches = ValNodeSort (dlg->mismatches, SortVnpByInt);
+
+  PointerToDialog (dlg->letters_dlg, &upd);
+  Show (dlg->viewer_grp);
+  if (dlg->ignore_alignment)
+  {
+    Hide (dlg->details_grp);
+    Hide (dlg->letters_grp);
+  }
+  else
+  {
+    Show (dlg->details_grp);
+    Show (dlg->letters_grp);
+  }
+
+  /* unreverse the sequence if it was reversed */
+  if (upd.revcomp)
+  {
+    BioseqRevComp (upd.update_bsp);
+    ReverseBioseqFeatureStrands (upd.update_bsp);
+    SeqMgrReplaceInBioseqIndex (upd.update_bsp);
+  }  
+  
+}
+
 static void AlignmentToUpdatePreviewDialog (DialoG d, Pointer data)
 {
   UpdatePreviewDialogPtr dlg;
   UpdatePairPtr          upp;
-  Int4                   scaleX;
-  Char                   ppt_txt [500];
-  Char                   id_txt [MAX_ID_LEN];
   
   dlg = (UpdatePreviewDialogPtr) GetObjectExtra (d);
   if (dlg == NULL)
@@ -13330,82 +14352,34 @@ static void AlignmentToUpdatePreviewDialog (DialoG d, Pointer data)
   dlg->salp = SeqAlignFree (dlg->salp);
   
   upp = (UpdatePairPtr) data;
-  if (upp == NULL || upp->salp == NULL 
-      || upp->orig_bsp == NULL
-      || upp->update_bsp == NULL)
+  
+  if (upp != NULL)
   {
-    dlg->overview_picture = CreatePicture ();
-    AttachPicture (dlg->overview, dlg->overview_picture, 0, 0, UPPER_LEFT,
-		               1, 1, FrameVwr);
-    dlg->details_picture = CreatePicture ();
-    AttachPicture (dlg->details, dlg->details_picture, 0, 0, UPPER_LEFT,
-		               1, 1, FrameVwr);
-    MemSet (&(dlg->uald), 0, sizeof (UpdateAlignmentLengthsData));
-
-    PointerToDialog (dlg->letters_dlg, NULL);
-    
-    Hide (dlg->viewer_grp);
-    if (upp->salp == NULL && upp->orig_bsp != NULL && upp->update_bsp != NULL)
+    dlg->salp = upp->salp;
+    dlg->revcomp = upp->revcomp;
+    dlg->orig_bsp = upp->orig_bsp;
+    dlg->update_bsp = upp->update_bsp;
+    if (BioseqFind (dlg->update_bsp->id) != dlg->update_bsp)
     {
-      SeqIdWrite (upp->orig_bsp->id, id_txt, PRINTID_REPORT, sizeof (id_txt) - 1);
-      sprintf (ppt_txt, "No alignment for %s", id_txt);
-      SetTitle (dlg->new_sequence_ppt, ppt_txt);
+      SeqMgrReplaceInBioseqIndex (dlg->update_bsp);
     }
-    else if (upp->orig_bsp != NULL && upp->update_bsp == NULL)
-    {
-      SeqIdWrite (upp->orig_bsp->id, id_txt, PRINTID_REPORT, sizeof (id_txt) - 1);
-      sprintf (ppt_txt, "No update sequence for %s", id_txt);
-      SetTitle (dlg->new_sequence_ppt, ppt_txt);
-    }
-    else
-    {
-      Hide (dlg->new_sequence_ppt);
-    }
-    Hide (dlg->old_sequence_ppt);
-    return;
   }
   
-  dlg->salp = upp->salp;
-  dlg->revcomp = upp->revcomp;
-  dlg->orig_bsp = upp->orig_bsp;
-  dlg->update_bsp = upp->update_bsp;
+  RedrawAlignmentPreview (d);
+}
 
-  /* update sequence title prompts */  
-  SeqIdWrite (dlg->update_bsp->id, id_txt, PRINTID_REPORT, sizeof (id_txt) - 1);
-  sprintf (ppt_txt, "New sequence: %s - Length: %ld", id_txt, dlg->update_bsp->length);
-  SetTitle (dlg->new_sequence_ppt, ppt_txt);
-  SeqIdWrite (dlg->orig_bsp->id, id_txt, PRINTID_REPORT, sizeof (id_txt) - 1);
-  sprintf (ppt_txt, "Old Sequence: %s - Length: %ld", id_txt, dlg->orig_bsp->length);
-  SetTitle (dlg->old_sequence_ppt, ppt_txt);
+static void SetIgnoreAndExtendForPreviewPictures (DialoG d, Boolean ignore_alignment, Boolean extend5)
+{
+  UpdatePreviewDialogPtr dlg;
   
-  CalculateUpdateAlignmentLengths (upp->salp, dlg->orig_bsp, dlg->update_bsp, &(dlg->uald));
-  dlg->overview_picture = MakeAlignmentOverviewPicture (&(dlg->uald));
-  scaleX = CalculateBestUpdateAlignmentViewerScale (dlg->overview, dlg->overview_picture);
-  AttachPicture (dlg->overview, dlg->overview_picture, 0, 0, UPPER_LEFT,
-		             scaleX, 1, FrameVwr);
-
-  dlg->indels = ValNodeFree (dlg->indels);
-  dlg->details_picture = MakeAlignmentDetailsPicture (upp->salp, 
-                                                      dlg->orig_bsp,
-                                                      dlg->update_bsp,
-                                                      &(dlg->indels),
-                                                      &(dlg->mismatches),
-                                                      &(dlg->uald), upp->revcomp);
-  dlg->details_scaleX = CalculateBestUpdateAlignmentViewerScale (dlg->details, dlg->details_picture);
-  AttachPicture (dlg->details, dlg->details_picture, 0, 0, UPPER_LEFT,
-		             dlg->details_scaleX, 1, FrameVwr);
-  SetViewerData (dlg->details, (Pointer) dlg, NULL);
-  SetViewerProcs (dlg->details, UpdateAlignmentDetailsOnClick, NULL, NULL, NULL);
-
-  /* sort the insertions and deletions so they will be in order */
-  dlg->indels = ValNodeSort (dlg->indels, SortVnpByInt);
-  /* sort the matches so that they will be in order */
-  dlg->mismatches = ValNodeSort (dlg->mismatches, SortVnpByInt);
-
-  PointerToDialog (dlg->letters_dlg, upp);
-  Show (dlg->viewer_grp);
-  Show (dlg->new_sequence_ppt);
-  Show (dlg->old_sequence_ppt);  
+  dlg = (UpdatePreviewDialogPtr) GetObjectExtra (d);
+  if (dlg == NULL)
+  {
+    return;
+  }
+  dlg->ignore_alignment = ignore_alignment;
+  dlg->extend5 = extend5;
+  RedrawAlignmentPreview (d);
 }
 
 static void CleanupPreviewDialog (GraphiC g, Pointer data)
@@ -13422,7 +14396,7 @@ static void CleanupPreviewDialog (GraphiC g, Pointer data)
   StdCleanupExtraProc (g, data);
 }
 
-static DialoG UpdatePreviewDialog (GrouP parent)
+static DialoG UpdatePreviewDialog (GrouP parent, Boolean is_indexer)
 {
   UpdatePreviewDialogPtr dlg;
   GrouP                  p;
@@ -13443,21 +14417,23 @@ static DialoG UpdatePreviewDialog (GrouP parent)
   
   dlg->todialog = AlignmentToUpdatePreviewDialog;
   dlg->fromdialog = UpdatePairFromUpdatePreviewDialog;
-  
-  dlg->new_sequence_ppt = StaticPrompt (p, "", prompt_width, dialogTextHeight, programFont, 'l');
-  dlg->old_sequence_ppt = StaticPrompt (p, "", prompt_width, dialogTextHeight, programFont, 'l');
-    
+
   dlg->viewer_grp = HiddenGroup (p, -1, 0, NULL);
   SetGroupSpacing (dlg->viewer_grp, 2, 2);
   ppt1 = MultiLinePrompt (dlg->viewer_grp, txt1, prompt_width, programFont);
   dlg->overview = CreateViewer (dlg->viewer_grp, prompt_width + Nlm_vScrollBarWidth, 100,
 				FALSE, FALSE);
   
-  ppt2 = MultiLinePrompt (dlg->viewer_grp, txt2, prompt_width, programFont);
-  dlg->details = CreateViewer (dlg->viewer_grp, prompt_width + Nlm_vScrollBarWidth, 80,
+  dlg->details_grp = HiddenGroup (dlg->viewer_grp, -1, 0, NULL);
+  SetGroupSpacing (dlg->details_grp, 2, 2);
+  ppt2 = MultiLinePrompt (dlg->details_grp, txt2, prompt_width, programFont);
+  dlg->details = CreateViewer (dlg->details_grp, prompt_width + Nlm_vScrollBarWidth, 80,
 			       FALSE, FALSE);
+  AlignObjects (ALIGN_CENTER, (HANDLE) ppt2, (HANDLE) dlg->details, NULL);
   
-  ppt3 = MultiLinePrompt (dlg->viewer_grp, txt3, prompt_width, programFont);
+  dlg->letters_grp = HiddenGroup (dlg->viewer_grp, -1, 0, NULL);
+  SetGroupSpacing (dlg->letters_grp, 2, 2);
+  ppt3 = MultiLinePrompt (dlg->letters_grp, txt3, prompt_width, programFont);
     
 #ifdef WIN_MAC
   hgt = 90;
@@ -13465,7 +14441,8 @@ static DialoG UpdatePreviewDialog (GrouP parent)
   hgt = 110;
 #endif
 
-  dlg->letters_dlg = AlignmentLettersPanel (dlg->viewer_grp, prompt_width, hgt);
+  dlg->letters_dlg = AlignmentLettersPanel (dlg->letters_grp, prompt_width, hgt);
+  AlignObjects (ALIGN_CENTER, (HANDLE) ppt3, (HANDLE) dlg->letters_dlg, NULL);
    
   dlg->overview_picture = NULL;
   dlg->details_picture = NULL;
@@ -13475,14 +14452,10 @@ static DialoG UpdatePreviewDialog (GrouP parent)
   
   
 
-  AlignObjects (ALIGN_CENTER, (HANDLE) dlg->new_sequence_ppt,
-                              (HANDLE) dlg->old_sequence_ppt,
-                              (HANDLE) dlg->overview,
-                              (HANDLE) dlg->details, 
-                              (HANDLE) dlg->letters_dlg,
+  AlignObjects (ALIGN_CENTER, (HANDLE) dlg->overview,
+                              (HANDLE) dlg->details_grp, 
+                              (HANDLE) dlg->letters_grp,
                               (HANDLE) ppt1, 
-                              (HANDLE) ppt2,
-                              (HANDLE) ppt3, 
                               NULL);
   
   return (DialoG) p;
@@ -13498,6 +14471,8 @@ typedef struct submitterupdateoptionsdialog
   ButtoN               sequence_update_btns [eSequenceUpdateExtend3];
   
   ButtoN               ignore_alignment;
+  
+  Boolean              do_update;
   
   Nlm_ChangeNotifyProc change_notify;
   Pointer              change_userdata;
@@ -13516,19 +14491,45 @@ static void SubmitterUpdateOptionsToDialog (DialoG d, Pointer data)
   }
   
   suop = (SubmitterUpdateOptionsPtr) data;
-  if (suop == NULL)
+  if (dlg->do_update)
   {
-    SetValue (dlg->sequence_update_type, eSequenceUpdateNoChange);
-    SetValue (dlg->feature_update_type, eFeatureUpdateNoChange);
-    SetValue (dlg->feature_remove_type, eFeatureRemoveNone);
-    SetStatus (dlg->ignore_alignment, FALSE);
+    if (suop == NULL)
+    {
+      SetValue (dlg->sequence_update_type, eSequenceUpdateNoChange);
+      SetValue (dlg->feature_update_type, eFeatureUpdateNoChange);
+      SetValue (dlg->feature_remove_type, eFeatureRemoveNone);
+      SetStatus (dlg->ignore_alignment, FALSE);
+    }
+    else
+    {
+      SetValue (dlg->sequence_update_type, suop->sequence_update_type);
+      SetValue (dlg->feature_update_type, suop->feature_update_type);
+      SetValue (dlg->feature_remove_type, suop->feature_remove_type);
+      SetStatus (dlg->ignore_alignment, suop->ignore_alignment);
+    }
   }
   else
   {
-    SetValue (dlg->sequence_update_type, suop->sequence_update_type);
-    SetValue (dlg->feature_update_type, suop->feature_update_type);
-    SetValue (dlg->feature_remove_type, suop->feature_remove_type);
-    SetStatus (dlg->ignore_alignment, suop->ignore_alignment);
+  	if (suop == NULL)
+  	{
+  	  SetValue (dlg->sequence_update_type, 1);
+      SetValue (dlg->feature_update_type, eFeatureUpdateNoChange);
+      SetValue (dlg->feature_remove_type, eFeatureRemoveNone);  	  
+  	}
+  	else
+  	{
+  	  if (suop->sequence_update_type == eSequenceUpdateExtend3)
+  	  {
+        SetValue (dlg->sequence_update_type, 2);
+  	  }
+  	  else
+  	  {
+        SetValue (dlg->sequence_update_type, 1);
+  	  }
+  	  
+      SetValue (dlg->feature_update_type, suop->feature_update_type);
+      SetValue (dlg->feature_remove_type, suop->feature_remove_type);
+  	}
   }
   
   if (dlg->change_notify != NULL)
@@ -13546,29 +14547,52 @@ static Pointer SubmitterUpdateOptionsFromDialog (DialoG d)
   dlg = (SubmitterUpdateOptionsDialogPtr) GetObjectExtra (d);
   if (dlg == NULL)
   {
-    return;
+    return NULL;
   }
   
   suop = (SubmitterUpdateOptionsPtr) MemNew (sizeof (SubmitterUpdateOptionsData));
   if (suop != NULL)
   {
-    suop->sequence_update_type = (ESequenceUpdateType) GetValue (dlg->sequence_update_type);
-    if (suop->sequence_update_type > eSequenceUpdateNoChange
-        && ! Enabled (dlg->sequence_update_btns [suop->sequence_update_type - 1]))
+    if (dlg->do_update)
     {
-      suop->sequence_update_type = eSequenceUpdateNoChange;
-    }
-    suop->feature_update_type = (EFeatureUpdateType) GetValue (dlg->feature_update_type);
-    suop->feature_remove_type = (EFeatureRemoveType) GetValue (dlg->feature_remove_type);
-    if (Enabled (dlg->ignore_alignment)
-        && (suop->sequence_update_type == eSequenceUpdateExtend5
-            || suop->sequence_update_type == eSequenceUpdateExtend3))
-    {
-      suop->ignore_alignment = GetStatus (dlg->ignore_alignment);
+      suop->sequence_update_type = (ESequenceUpdateType) GetValue (dlg->sequence_update_type);
+      if (suop->sequence_update_type > eSequenceUpdateNoChange
+          && ! Enabled (dlg->sequence_update_btns [suop->sequence_update_type - 1]))
+      {
+        suop->sequence_update_type = eSequenceUpdateNoChange;
+      }
     }
     else
     {
-      suop->ignore_alignment = FALSE;
+      if (GetValue (dlg->sequence_update_type) == 2)
+      {
+      	suop->sequence_update_type = eSequenceUpdateExtend3;
+      }
+      else
+      {
+      	suop->sequence_update_type = eSequenceUpdateExtend5;
+      }
+    }
+    
+    suop->feature_update_type = (EFeatureUpdateType) GetValue (dlg->feature_update_type);
+    suop->feature_remove_type = (EFeatureRemoveType) GetValue (dlg->feature_remove_type);
+    
+    if (dlg->do_update)
+    {
+      if (Enabled (dlg->ignore_alignment)
+          && (suop->sequence_update_type == eSequenceUpdateExtend5
+              || suop->sequence_update_type == eSequenceUpdateExtend3))
+      {
+        suop->ignore_alignment = GetStatus (dlg->ignore_alignment);
+      }
+      else
+      {
+        suop->ignore_alignment = FALSE;
+      }
+    }
+    else
+    {
+      suop->ignore_alignment = TRUE;
     }
   }
   return suop;
@@ -13600,6 +14624,32 @@ static void EnableSubmitterImportFeatureOptions (DialoG d)
   Enable (dlg->feature_update_type);
 }
 
+static void DisableSubmitterRemoveFeatureOptions (DialoG d)
+{
+  SubmitterUpdateOptionsDialogPtr dlg;
+  
+  dlg = (SubmitterUpdateOptionsDialogPtr) GetObjectExtra (d);
+  if (dlg == NULL)
+  {
+    return;
+  }
+  
+  Disable (dlg->feature_remove_type);
+}
+
+static void EnableSubmitterRemoveFeatureOptions (DialoG d)
+{
+  SubmitterUpdateOptionsDialogPtr dlg;
+  
+  dlg = (SubmitterUpdateOptionsDialogPtr) GetObjectExtra (d);
+  if (dlg == NULL)
+  {
+    return;
+  }
+  
+  Enable (dlg->feature_remove_type);
+}
+
 static void AdjustSequenceUpdateOptionsEnabled
 (DialoG                    d, 
  UpdatePairPtr             upp,
@@ -13609,6 +14659,7 @@ static void AdjustSequenceUpdateOptionsEnabled
   SubmitterUpdateOptionsDialogPtr dlg;
   ESequenceUpdateType             action;
   Boolean                         ignore_alignment;
+  SubmitterUpdateOptionsPtr       suop;
   
   dlg = (SubmitterUpdateOptionsDialogPtr) GetObjectExtra (d);
   if (dlg == NULL)
@@ -13616,14 +14667,30 @@ static void AdjustSequenceUpdateOptionsEnabled
     return;
   }
   
-  if (upp->salp == NULL)
+  if (!dlg->do_update)
+  {
+  	Enable (dlg->sequence_update_btns [0]);
+  	Enable (dlg->sequence_update_btns [1]);
+  	return;
+  }
+  
+  suop = DialogToPointer (d);
+  
+  if (upp == NULL || upp->salp == NULL) 
   {
     Disable (dlg->ignore_alignment);
-    SetStatus (dlg->ignore_alignment, FALSE);
     ignore_alignment = TRUE;
+  }
+  else if (suop != NULL 
+          && (suop->sequence_update_type == eSequenceUpdateNoChange
+              || suop->sequence_update_type == eSequenceUpdatePatch))
+  {
+    Disable (dlg->ignore_alignment);
+    ignore_alignment = FALSE;
   }
   else
   {
+  
     Enable (dlg->ignore_alignment);
     ignore_alignment = GetStatus (dlg->ignore_alignment);
   }
@@ -13656,9 +14723,22 @@ static void IgnoreAlignmentBtn (ButtoN b)
   }
 }
 
+static void UpdateTypeGroup (GrouP g)
+{
+  SubmitterUpdateOptionsDialogPtr dlg;
+
+  dlg = (SubmitterUpdateOptionsDialogPtr) GetObjectExtra (g);
+  if (dlg != NULL && dlg->change_notify != NULL)
+  {
+    (dlg->change_notify) (dlg->change_userdata);
+  }
+}
+
 static DialoG 
 SubmitterUpdateOptionsDialog 
 (GrouP                parent,
+ Boolean              is_indexer,
+ Boolean              do_update,
  Nlm_ChangeNotifyProc change_notify,
  Pointer              change_userdata)
 {
@@ -13671,7 +14751,14 @@ SubmitterUpdateOptionsDialog
     return NULL;
   }
   
-  p = HiddenGroup (parent, -1, 0, NULL);
+  if (is_indexer)
+  {
+    p = HiddenGroup (parent, -1, 0, NULL);
+  }
+  else
+  {
+    p = HiddenGroup (parent, 1, 0, NULL);
+  }
   SetObjectExtra (p, dlg, StdCleanupExtraProc);
   SetGroupSpacing (p, 10, 10);
   
@@ -13681,25 +14768,77 @@ SubmitterUpdateOptionsDialog
   
   dlg->change_notify = change_notify;
   dlg->change_userdata = change_userdata;
-
   
-  j = NormalGroup (p, -1, 0, "Sequence Update", programFont, NULL);
-  dlg->sequence_update_type = HiddenGroup (j, 0, 1, NULL);
-  dlg->sequence_update_btns [0] = RadioButton (dlg->sequence_update_type, "No change");
-  dlg->sequence_update_btns [1] = RadioButton (dlg->sequence_update_type, "Replace");
-  dlg->sequence_update_btns [2] = RadioButton (dlg->sequence_update_type, "Patch");
-  dlg->sequence_update_btns [3] = RadioButton (dlg->sequence_update_type, "Extend 5'");
-  dlg->sequence_update_btns [4] = RadioButton (dlg->sequence_update_type, "Extend 3'");
-  SetValue (dlg->sequence_update_type, eSequenceUpdateNoChange);
-  dlg->ignore_alignment = CheckBox (j, "Ignore alignment (replacement and extension only)", IgnoreAlignmentBtn);
-  SetObjectExtra (dlg->ignore_alignment, dlg, NULL);
-  AlignObjects (ALIGN_CENTER, (HANDLE) dlg->sequence_update_type,
-                              (HANDLE) dlg->ignore_alignment,
-                              NULL);
-
-  k = HiddenGroup (p, 2, 0, NULL);
+  dlg->do_update = do_update;
   
-  dlg->feature_update_type = NormalGroup (k, 0, 6, "Import Features", programFont, NULL);
+  if (dlg->do_update)
+  {
+    j = NormalGroup (p, -1, 0, "Sequence Update", programFont, NULL);
+    if (is_indexer)
+    {
+      dlg->sequence_update_type = HiddenGroup (j, 0, 1, UpdateTypeGroup);
+    }
+    else
+    {
+      SetGroupSpacing (j, 3, 10);
+      dlg->sequence_update_type = HiddenGroup (j, 1, 0, UpdateTypeGroup);
+      SetGroupSpacing (dlg->sequence_update_type, 3, 2);
+    }
+    SetObjectExtra (dlg->sequence_update_type, dlg, NULL);
+    dlg->sequence_update_btns [0] = RadioButton (dlg->sequence_update_type, "No change");
+    dlg->sequence_update_btns [1] = RadioButton (dlg->sequence_update_type, "Replace");
+    dlg->sequence_update_btns [2] = RadioButton (dlg->sequence_update_type, "Patch");
+    dlg->sequence_update_btns [3] = RadioButton (dlg->sequence_update_type, "Extend 5'");
+    dlg->sequence_update_btns [4] = RadioButton (dlg->sequence_update_type, "Extend 3'");
+    SetValue (dlg->sequence_update_type, eSequenceUpdateNoChange);
+    dlg->ignore_alignment = CheckBox (j, "Ignore alignment", IgnoreAlignmentBtn);
+    SetObjectExtra (dlg->ignore_alignment, dlg, NULL);
+    if (is_indexer)
+    {
+      AlignObjects (ALIGN_CENTER, (HANDLE) dlg->sequence_update_type,
+                                  (HANDLE) dlg->ignore_alignment,
+                                  NULL);
+    }
+    else
+    {
+      AlignObjects (ALIGN_LEFT, (HANDLE) dlg->sequence_update_type,
+                                (HANDLE) dlg->ignore_alignment,
+                                NULL);
+    }
+  }
+  else
+  {
+  	j = NormalGroup (p, -1, 0, "Extend Sequence", programFont, NULL);
+    dlg->sequence_update_type = HiddenGroup (j, 0, 1, NULL);
+    dlg->sequence_update_btns [0] = RadioButton (dlg->sequence_update_type, "Extend 5'");
+    dlg->sequence_update_btns [1] = RadioButton (dlg->sequence_update_type, "Extend 3'");
+    dlg->sequence_update_btns [2] = NULL;
+    dlg->sequence_update_btns [3] = NULL;
+    dlg->sequence_update_btns [4] = NULL;
+    
+    SetValue (dlg->sequence_update_type, 1);
+    dlg->ignore_alignment = NULL;  	
+  }
+
+  if (is_indexer)
+  {
+    k = HiddenGroup (p, 2, 0, NULL);
+  }
+  else
+  {
+    k = p;
+  }
+  
+  g = NormalGroup (k, 1, 0, "Existing Features", programFont, NULL);
+  dlg->feature_remove_type = HiddenGroup (g, 0, 6, NULL);
+  RadioButton (dlg->feature_remove_type, "Do not remove");
+  RadioButton (dlg->feature_remove_type, "Remove in aligned area");
+  RadioButton (dlg->feature_remove_type, "Remove outside aligned area");
+  RadioButton (dlg->feature_remove_type, "Remove all");
+  SetValue (dlg->feature_remove_type, eFeatureRemoveNone);
+    
+  g = NormalGroup (k, 1, 0, "Import Features", programFont, NULL);
+  dlg->feature_update_type = HiddenGroup (g, 0, 6, NULL);
   RadioButton (dlg->feature_update_type, "Do not import features");
   RadioButton (dlg->feature_update_type, "Import all except duplicates");
   RadioButton (dlg->feature_update_type, "Import all, merge duplicates");
@@ -13707,17 +14846,12 @@ SubmitterUpdateOptionsDialog
   RadioButton (dlg->feature_update_type, "Import all, including duplicates");
   SetValue (dlg->feature_update_type, eFeatureUpdateNoChange);
   
-  g = HiddenGroup (k, 0, 2, NULL);
-  dlg->feature_remove_type = NormalGroup (g, 0, 6, "Existing Features", programFont, NULL);
-  RadioButton (dlg->feature_remove_type, "Do not remove");
-  RadioButton (dlg->feature_remove_type, "Remove in aligned area");
-  RadioButton (dlg->feature_remove_type, "Remove outside aligned area");
-  RadioButton (dlg->feature_remove_type, "Remove all");
-  SetValue (dlg->feature_remove_type, eFeatureRemoveNone);
-    
-  AlignObjects (ALIGN_CENTER, (HANDLE) j,
-                              (HANDLE) k,
-                              NULL);
+  if (is_indexer)
+  {
+    AlignObjects (ALIGN_CENTER, (HANDLE) j,
+                                (HANDLE) k,
+                                NULL);
+  }
   
   return (DialoG) p;
 }
@@ -13813,7 +14947,7 @@ static Pointer IndexerOptionsFromDialog (DialoG d)
   dlg = (IndexerOptionsDialogPtr) GetObjectExtra (d);
   if (dlg == NULL)
   {
-    return;
+    return NULL;
   }
   
   iop = (IndexerOptionsPtr) MemNew (sizeof (IndexerOptionsData));
@@ -14003,6 +15137,30 @@ static void EnableImportFeatureOptions (DialoG d)
   EnableIndexerImportFeatureOptions (dlg->indexer_opts);
 }
 
+static void DisableRemoveFeatureOptions (DialoG d)
+{
+  UpdateOptionsDialogPtr dlg;
+
+  dlg = (UpdateOptionsDialogPtr) GetObjectExtra (d);
+  if (dlg == NULL)
+  {
+    return;
+  }
+  DisableSubmitterRemoveFeatureOptions (dlg->submitter_opts);
+}
+
+static void EnableRemoveFeatureOptions (DialoG d)
+{
+  UpdateOptionsDialogPtr dlg;
+
+  dlg = (UpdateOptionsDialogPtr) GetObjectExtra (d);
+  if (dlg == NULL)
+  {
+    return;
+  }
+  EnableSubmitterRemoveFeatureOptions (dlg->submitter_opts);
+}
+
 static void 
 AdjustUpdateOptionsEnabled 
 (DialoG                    d, 
@@ -14026,6 +15184,7 @@ UpdateOptionsDialog
 (GrouP                parent,
  Boolean              is_nuc, 
  Boolean              indexer,
+ Boolean              do_update,
  Nlm_ChangeNotifyProc change_notify,
  Pointer              change_userdata)
 {
@@ -14045,7 +15204,7 @@ UpdateOptionsDialog
   dlg->todialog = UpdateOptionsToDialog;
   dlg->fromdialog = UpdateOptionsFromDialog;
   
-  dlg->submitter_opts = SubmitterUpdateOptionsDialog (p, change_notify, change_userdata);
+  dlg->submitter_opts = SubmitterUpdateOptionsDialog (p, indexer, do_update, change_notify, change_userdata);
   if (indexer)
   {
     dlg->indexer_opts = IndexerUpdateOptionsDialog (p, is_nuc);
@@ -14149,6 +15308,41 @@ ListBioseqsInSeqEntry
   ListBioseqsInSeqEntry (sep->next, is_na, seq_num, bioseq_list);
 }
 
+/* This function compares the text from a local ID against the 
+ * report string from non-local IDs in sip_list, useful when
+ * comparing values from a file in which the user did not specify
+ * the version or the gb| in the sequence ID.
+ */
+static Boolean RelaxedSeqIdIn (SeqIdPtr sip, SeqIdPtr sip_list)
+{
+  SeqIdPtr sip_next;
+  Char     id_txt1 [128], id_txt2 [128];
+  
+  if (sip == NULL || sip_list == NULL || sip->choice != SEQID_LOCAL)
+  {
+    return FALSE;
+  }
+  
+  SeqIdWrite (sip, id_txt1, PRINTID_REPORT, sizeof (id_txt1) - 1);
+  
+  while (sip_list != NULL)
+  {
+    if (sip_list->choice != SEQID_LOCAL)
+    {
+      sip_next = sip_list->next;
+      sip_list->next = NULL;
+      SeqIdWrite (sip_list, id_txt2, PRINTID_REPORT, sizeof (id_txt1) - 1);
+      sip_list->next = sip_next;
+      if (StringCmp (id_txt1, id_txt2) == 0)
+      {
+        return TRUE;
+      }
+    }
+    sip_list = sip_list->next;
+  }
+  return FALSE;
+}
+
 static BioseqPtr FindBioseqInList (ValNodePtr bioseq_list, SeqIdPtr sip, Int4Ptr position)
 {
   ValNodePtr vnp;
@@ -14169,7 +15363,7 @@ static BioseqPtr FindBioseqInList (ValNodePtr bioseq_list, SeqIdPtr sip, Int4Ptr
        vnp = vnp->next, vnp_pos++)
   {
     bsp = (BioseqPtr) vnp->data.ptrvalue;
-    if (SeqIdIn (sip, bsp->id))
+    if (SeqIdIn (sip, bsp->id) || RelaxedSeqIdIn (sip, bsp->id))
     {
       if (position != NULL)
       {
@@ -14227,6 +15421,9 @@ static void SelectionToPreviewSequenceSelectionDialog (DialoG d, Pointer userdat
     dlg->sequence_row = match_num;
   }
   InvalDocRows (dlg->doc, 0, 0, 0);
+  
+  UpdateDocument(dlg->doc, 0, 0);
+  
   if (dlg->change_notify != NULL)
   {
     (dlg->change_notify) (dlg->change_userdata);
@@ -14397,11 +15594,11 @@ PreviewSequenceSelectionDialog
   dlg->change_userdata = change_userdata;
   dlg->sequence_list = NULL;
   
-  dlg->doc = DocumentPanel (p, stdCharWidth * 10, stdLineHeight * 15);
+  dlg->doc = DocumentPanel (p, stdCharWidth * 10, stdLineHeight * 5);
   SetObjectExtra (dlg->doc, dlg, NULL);
   SetDocProcs (dlg->doc, SelectPreviewSequence, NULL, NULL, NULL);
   SetDocShade (dlg->doc, NULL, NULL, PreviewSequenceHighlight, NULL);
-
+  
   /* initialize document paragraph format */
   dlg->ParFmt.openSpace = FALSE;
   dlg->ParFmt.keepWithNext = FALSE;
@@ -14436,6 +15633,7 @@ typedef struct unmatchedsequencedialog
   DoC      doc;
   ParData  ParFmt;
   ColData  ColFmt;
+  Int4     dlg_height;
 } UnmatchedSequenceDialogData, PNTR UnmatchedSequenceDialogPtr;
 
 static void ListToUnmatchedSequenceDialog (DialoG d, Pointer userdata)
@@ -14465,7 +15663,7 @@ static void ListToUnmatchedSequenceDialog (DialoG d, Pointer userdata)
     if (bsp != NULL)
     {
       /* add to sequence_selector doc */
-      SeqIdWrite (bsp->id, id_txt, PRINTID_REPORT, sizeof (id_txt) - 1);
+      SeqIdWrite (SeqIdFindBest (bsp->id, SEQID_GENBANK), id_txt, PRINTID_REPORT, sizeof (id_txt) - 1);
   	  AppendText (dlg->doc, id_txt, &(dlg->ParFmt), &(dlg->ColFmt), programFont);  	  
     }
     bioseq_list = bioseq_list->next;
@@ -14483,8 +15681,8 @@ UnmatchedSequenceDialog
   UnmatchedSequenceDialogPtr dlg;
   GrouP                      p;
   RecT                       r;
-  PrompT                     ppt;
-  ButtoN                     b;
+  PrompT                     ppt = NULL;
+  ButtoN                     b = NULL;
   
   dlg = (UnmatchedSequenceDialogPtr) MemNew (sizeof (UnmatchedSequenceDialogData));
   if (dlg == NULL)
@@ -14498,7 +15696,14 @@ UnmatchedSequenceDialog
   dlg->dialog = (DialoG) p;
   dlg->todialog = ListToUnmatchedSequenceDialog;
   
-  ppt = StaticPrompt (p, "Unmatched Sequences", 0, 0, programFont, 'l');
+  if (map_btn_proc == NULL)
+  {
+  	ppt = StaticPrompt (p, "No Updates", 0, 0, programFont, 'l');
+  }
+  else
+  {
+    ppt = StaticPrompt (p, "Unmatched Sequences", 0, 0, programFont, 'l');
+  }
   dlg->doc = DocumentPanel (p, stdCharWidth * 10, stdLineHeight * 5);
 
   /* initialize document paragraph format */
@@ -14512,6 +15717,7 @@ UnmatchedSequenceDialog
   
   /* initialize document column format */
   ObjectRect (dlg->doc, &r);
+  dlg->dlg_height = r.bottom - r.top;
   InsetRect (&r, 4, 4);
   dlg->ColFmt.pixWidth = r.right - r.left;
   dlg->ColFmt.pixInset = 0;
@@ -14525,9 +15731,15 @@ UnmatchedSequenceDialog
   dlg->ColFmt.left = FALSE;
   dlg->ColFmt.last = TRUE;
 
-  /* add button for loading map */
-  b = PushButton (p, "Load Map", map_btn_proc);
-  SetObjectExtra (b, change_userdata, NULL);
+
+  if (map_btn_proc != NULL)
+  {
+    /* add button for loading map */
+    b = PushButton (p, "Load Map", map_btn_proc);
+    SetObjectExtra (b, change_userdata, NULL);
+    ObjectRect (b, &r);
+    dlg->dlg_height += 10 + r.bottom - r.top;
+  }
   
   AlignObjects (ALIGN_CENTER, (HANDLE) ppt, (HANDLE) dlg->doc, (HANDLE) b, NULL);
   
@@ -14538,59 +15750,114 @@ static void
 ChangePreviewSequenceSelectionDialogHeights 
 (DialoG orig_sel,
  DialoG unmatched,
+ DialoG no_updates,
+ ButtoN remove_identical_btn,
+ Boolean has_identical,
  WindoW match_win,
- Boolean show_unmatched)
+ Boolean show_unmatched,
+ Boolean show_no_updates)
 {
   PreviewSequenceSelectionDialogPtr orig_sel_dlg;
-  UnmatchedSequenceDialogPtr        unmatched_dlg;
+  UnmatchedSequenceDialogPtr        unmatched_dlg, no_updates_dlg;
   RecT                              pictures_r, unmatched_r, list_r;
-  Int4                              unmatched_height;
+  RecT                              no_updates_r, rem_ident_r;
+  Int4                              no_updates_height;
   BaR                               sb;
+  Int4                              updates_list_bottom;
+  Int4                              spacing = 0, rem_ident_height = 0;
 
   orig_sel_dlg = (PreviewSequenceSelectionDialogPtr) GetObjectExtra (orig_sel);
   unmatched_dlg = (UnmatchedSequenceDialogPtr) GetObjectExtra (unmatched);
-  if (orig_sel_dlg == NULL || unmatched_dlg == NULL || match_win == NULL)
+  no_updates_dlg = (UnmatchedSequenceDialogPtr) GetObjectExtra (no_updates);
+  if (orig_sel_dlg == NULL || unmatched_dlg == NULL 
+      || no_updates_dlg == NULL)
   {
     return;
   }
 
-  ObjectRect (match_win, &pictures_r);
   ObjectRect (orig_sel_dlg->doc, &list_r);
   ObjectRect (unmatched_dlg->doc, &unmatched_r);
-  
-  /* align unmatched list with bottom of preview pictures */
-  unmatched_height = unmatched_r.bottom - unmatched_r.top;
-  unmatched_r.bottom = pictures_r.bottom;
-  unmatched_r.top = unmatched_r.bottom - unmatched_height;
-  
-  sb = GetSlateVScrollBar( (SlatE) unmatched_dlg->doc);
-  if (sb != NULL)
+  ObjectRect (no_updates_dlg->doc, &no_updates_r);
+  if (match_win == NULL)
   {
-    /* because the doc has a vertical scroll bar and the set position subtracts the
-     * width of the scroll bar before positioning the list, must add the width of
-     * the scroll bar to the rightt.
-     */
-    unmatched_r.right += Nlm_vScrollBarWidth;
+    pictures_r.top = list_r.top;
+    pictures_r.left = list_r.right;
+    pictures_r.right = list_r.right;
+    pictures_r.bottom = no_updates_r.bottom;
   }
-  SetPosition (unmatched, &unmatched_r);
+  else
+  {
+    ObjectRect (match_win, &pictures_r);
+  }
+  
+  if (remove_identical_btn != NULL && has_identical)
+  {
+    ObjectRect (remove_identical_btn, &rem_ident_r);  
+    rem_ident_height = rem_ident_r.bottom - rem_ident_r.top;
+    spacing = 5;
+  }
+  
+  /* updates list is on top, 
+   * followed by remove_identical_btn,
+   * followed by unmatched list, 
+   * followed by no updates list */
+  updates_list_bottom = pictures_r.bottom;
+
+  if (show_no_updates)
+  {
+    /* align no updates list with bottom of preview pictures */
+    no_updates_height = no_updates_r.bottom - no_updates_r.top;
+    no_updates_r.bottom = updates_list_bottom;
+    no_updates_r.top = no_updates_r.bottom - no_updates_height;
+    sb = GetSlateVScrollBar( (SlatE) no_updates_dlg->doc);
+    if (sb != NULL)
+    {
+      /* because the doc has a vertical scroll bar and the set position subtracts the
+       * width of the scroll bar before positioning the list, must add the width of
+       * the scroll bar to the rightt.
+       */
+      no_updates_r.right += Nlm_vScrollBarWidth;
+    }
+    SetPosition (no_updates, &no_updates_r);
+    updates_list_bottom -= (no_updates_dlg->dlg_height + 10);
+    Show (no_updates);
+  }
+  else
+  {
+  	Hide (no_updates);
+  }
+
+  if (show_unmatched)
+  {
+    /* align unmatched list with bottom of updates list or preview pictures */
+    unmatched_r.bottom = updates_list_bottom ;
+    unmatched_r.top = unmatched_r.bottom - unmatched_dlg->dlg_height;
+  
+    sb = GetSlateVScrollBar( (SlatE) unmatched_dlg->doc);
+    if (sb != NULL)
+    {
+      /* because the doc has a vertical scroll bar and the set position subtracts the
+       * width of the scroll bar before positioning the list, must add the width of
+       * the scroll bar to the rightt.
+       */
+      unmatched_r.right += Nlm_vScrollBarWidth;
+    }
+    SetPosition (unmatched, &unmatched_r);
+    updates_list_bottom -= (unmatched_dlg->dlg_height + 10);
+    Show (unmatched);
+  }
+  else
+  {
+  	Hide (unmatched);
+  }
   
   /* set position of sequence list - align top with pictures,
    * align bottom with top of unmatched (if shown) or
    * bottom of pictures
    */
   list_r.top = pictures_r.top;
-  
-  if (show_unmatched)
-  {
-    Show (unmatched);
-    list_r.bottom = unmatched_r.top - 10;
-  }
-  else
-  {
-    Hide (unmatched);
-    list_r.bottom = pictures_r.bottom;
-  }
-  
+  list_r.bottom = updates_list_bottom - spacing - rem_ident_height;
+    
   sb = GetSlateVScrollBar( (SlatE) orig_sel_dlg->doc);
   if (sb != NULL)
   {
@@ -14601,6 +15868,22 @@ ChangePreviewSequenceSelectionDialogHeights
     list_r.right += Nlm_vScrollBarWidth;
   }
   SetPosition (orig_sel_dlg->doc, &list_r); 
+
+  if (remove_identical_btn != NULL)
+  {
+    if (has_identical)
+    {
+      /* set position of remove identical btn */
+      rem_ident_r.top = updates_list_bottom - rem_ident_height;
+      rem_ident_r.bottom = rem_ident_r.top + rem_ident_height;
+      SetPosition (remove_identical_btn, &rem_ident_r);
+    }
+    else
+    {
+      /* hide button */
+      SafeHide (remove_identical_btn);
+    }
+  }
 }
 
 typedef struct multisequenceupdatepreviewdialog
@@ -14610,6 +15893,10 @@ typedef struct multisequenceupdatepreviewdialog
   DialoG               update_list_dlg;
   DialoG               preview_dlg;
   DialoG               unmatched_list_dlg;
+  DialoG               no_updates_list_dlg;
+  DialoG               extend_preview_dlg;
+  ButtoN               remove_identical_btn;
+  WindoW               match_win;
   ValNodePtr           orig_bioseq_list;
   ValNodePtr           update_bioseq_list;
   Boolean              is_na;
@@ -14623,6 +15910,7 @@ typedef struct multisequenceupdate
   ValNodePtr  orig_bioseq_list;
   ValNodePtr  update_bioseq_list;
   ValNodePtr  unmatched_updates_list;
+  ValNodePtr  no_updates_list;
 } MultiSequenceUpdateData, PNTR MultiSequenceUpdatePtr;
 
 static void SelectSequenceForUpdatePreview (Pointer userdata)
@@ -14638,7 +15926,7 @@ static void SelectSequenceForUpdatePreview (Pointer userdata)
   {
     return;
   }
-  
+
   sip = (SeqIdPtr) DialogToPointer (dlg->dialog);
   
   upd.orig_bsp = FindBioseqInList (dlg->orig_bioseq_list, sip, &orig_pos);
@@ -14653,10 +15941,21 @@ static void SelectSequenceForUpdatePreview (Pointer userdata)
     upd.update_bsp = NULL;
   }                                         
 
+  SeqMgrReplaceInBioseqIndex (upd.orig_bsp);
+
   upd.revcomp = FALSE;
   upd.salp = Sequin_GlobalAlign2Seq (upd.orig_bsp, upd.update_bsp, &(upd.revcomp));
-
+  if (upd.revcomp)
+  {
+    BioseqRevComp (upd.update_bsp);
+    ReverseBioseqFeatureStrands (upd.update_bsp);
+    SeqMgrReplaceInBioseqIndex (upd.update_bsp);
+  }
+    
   PointerToDialog (dlg->preview_dlg, &upd);  
+  PointerToDialog (dlg->extend_preview_dlg, &upd);
+
+  SeqMgrReplaceInBioseqIndex (upd.orig_bsp);
   
   if (dlg->change_notify != NULL)
   {
@@ -14687,12 +15986,38 @@ static ValNodePtr SeqIdListFromBioseqList (ValNodePtr bioseq_list)
   return sip_list;
 }
 
+static Boolean HasIdenticalUpdates 
+(ValNodePtr orig_list,
+ ValNodePtr update_list)
+{
+  BioseqPtr  orig_bsp, update_bsp;
+  
+  while (orig_list != NULL && update_list != NULL)
+  {
+    orig_bsp = orig_list->data.ptrvalue;
+    update_bsp = update_list->data.ptrvalue;
+    
+    if (orig_bsp != NULL && update_bsp != NULL 
+        && AreSequenceResiduesIdentical (orig_bsp, update_bsp))
+    {
+      return TRUE;
+    }
+    
+    orig_list = orig_list->next;
+    update_list = update_list->next;
+  }
+  
+  return FALSE;
+}
+
 static void DataToMultiSequenceUpdatePreview (DialoG d, Pointer data)
 {
   MultiSequenceUpdatePreviewDialogPtr dlg;
   MultiSequenceUpdatePtr              msup;
   BioseqPtr                           first_bsp;
-  ValNodePtr                          unmatched_updates_list = NULL;  
+  ValNodePtr                          unmatched_updates_list = NULL; 
+  ValNodePtr                          no_updates_list = NULL; 
+  Boolean                             has_identical = FALSE;
   
   dlg = (MultiSequenceUpdatePreviewDialogPtr) GetObjectExtra (d);
   if (dlg == NULL)
@@ -14711,21 +16036,34 @@ static void DataToMultiSequenceUpdatePreview (DialoG d, Pointer data)
     dlg->orig_bioseq_list = msup->orig_bioseq_list;
     dlg->update_bioseq_list = msup->update_bioseq_list;
     unmatched_updates_list = msup->unmatched_updates_list;
+    no_updates_list = msup->no_updates_list;
   }
+
   ResetSequenceList (dlg->update_list_dlg, SeqIdListFromBioseqList(dlg->orig_bioseq_list));
-  PointerToDialog (dlg->unmatched_list_dlg, msup->unmatched_updates_list);
+  PointerToDialog (dlg->unmatched_list_dlg, unmatched_updates_list);
+  PointerToDialog (dlg->no_updates_list_dlg, no_updates_list);
+  
+  if (dlg->remove_identical_btn != NULL)
+  {
+    has_identical = HasIdenticalUpdates (msup->orig_bioseq_list, msup->update_bioseq_list);
+  }
  
   ChangePreviewSequenceSelectionDialogHeights (dlg->update_list_dlg, 
                                                dlg->unmatched_list_dlg,
-                                               (WindoW)dlg->preview_dlg,
-                                               (msup->unmatched_updates_list != NULL));
+                                               dlg->no_updates_list_dlg,
+                                               dlg->remove_identical_btn,
+                                               has_identical,
+                                               dlg->match_win,
+                                               (msup->unmatched_updates_list != NULL),
+                                               (msup->no_updates_list != NULL));
 
   /* select first sequence */  
   if (dlg->orig_bioseq_list != NULL && dlg->orig_bioseq_list->data.ptrvalue != NULL)
   {
     first_bsp = (BioseqPtr) dlg->orig_bioseq_list->data.ptrvalue;
+
     PointerToDialog (dlg->update_list_dlg, first_bsp->id);
-    SelectSequenceForUpdatePreview (dlg);
+    SelectSequenceForUpdatePreview (dlg); 
   }
   else
   {
@@ -14797,10 +16135,46 @@ static UpdatePairPtr GetCurrentUpdatePair (DialoG d)
   return (UpdatePairPtr) DialogToPointer (dlg->preview_dlg);
 }
 
+static void AddExtendDialogToMultiSequenceUpdatePreview (DialoG msup, DialoG ext)
+{
+  MultiSequenceUpdatePreviewDialogPtr dlg; 
+
+  dlg = (MultiSequenceUpdatePreviewDialogPtr) GetObjectExtra (msup);
+  if (dlg != NULL)
+  {
+    dlg->extend_preview_dlg = ext;
+  }
+}
+
+static void RemoveIdenticalUpdates (ButtoN b);
+
+static void SetMultiSequenceUpdatePreviewMatchWindow (DialoG d, WindoW w)
+{
+  MultiSequenceUpdatePreviewDialogPtr dlg; 
+
+  dlg = (MultiSequenceUpdatePreviewDialogPtr) GetObjectExtra (d);
+  if (dlg != NULL)
+  {
+    dlg->match_win = w;
+  }
+}
+
+static void SetIgnoreAndExtendForMultiSequencePreview (DialoG d, Boolean ignore_alignment, Boolean extend5)
+{
+  MultiSequenceUpdatePreviewDialogPtr dlg; 
+
+  dlg = (MultiSequenceUpdatePreviewDialogPtr) GetObjectExtra (d);
+  if (dlg != NULL)
+  {
+    SetIgnoreAndExtendForPreviewPictures (dlg->preview_dlg, ignore_alignment, extend5);
+  }
+}
+
 static DialoG 
 MultiSequenceUpdatePreview 
 (GrouP                parent, 
  Boolean              is_na,
+ Boolean              do_update,
  Nlm_ChangeNotifyProc change_notify,
  Pointer              change_userdata,
  Nlm_BtnActnProc      map_btn_proc,
@@ -14815,7 +16189,14 @@ MultiSequenceUpdatePreview
     return NULL;
   }
 
-  p = HiddenGroup (parent, 0, 1, NULL);
+  if (do_update)
+  {
+    p = HiddenGroup (parent, 0, 1, NULL);
+  }
+  else
+  {
+    p = HiddenGroup (parent, -1, 0, NULL);
+  }
   SetObjectExtra (p, dlg, StdCleanupExtraProc);
   SetGroupSpacing (p, 10, 10);
   
@@ -14830,16 +16211,33 @@ MultiSequenceUpdatePreview
 
   if (is_indexer)
   {
-    k = HiddenGroup (p, 0, 2, NULL);
+    k = HiddenGroup (p, 0, 4, NULL);
     /* note - the ValNodeSelectionDialog will free the seq_id list when done */  
     dlg->update_list_dlg = PreviewSequenceSelectionDialog (k, SelectSequenceForUpdatePreview,
                                                            dlg);
+    if (do_update && is_indexer)
+    {
+      dlg->remove_identical_btn = PushButton (k, "Remove Identical Updates", RemoveIdenticalUpdates);
+      SetObjectExtra (dlg->remove_identical_btn, change_userdata, NULL);      
+    }
+
     dlg->unmatched_list_dlg = UnmatchedSequenceDialog (k, map_btn_proc, change_userdata);
+    
+    dlg->no_updates_list_dlg = UnmatchedSequenceDialog (k, NULL, NULL);
   }
   
-  dlg->preview_dlg = UpdatePreviewDialog (p);
+  dlg->extend_preview_dlg = NULL;
+  if (do_update)
+  {
+    dlg->preview_dlg = UpdatePreviewDialog (p, is_indexer);
+    dlg->match_win = (WindoW) dlg->preview_dlg;
+  }
+  else
+  {
+    dlg->preview_dlg = NULL;
+    dlg->match_win = NULL;
+  }
   
-
   return (DialoG) p;
 }
 
@@ -14973,6 +16371,72 @@ static ValNodePtr ShuffleUpdateBioseqList (ValNodePtr PNTR update_bioseq_list, V
   return unmatched_list;
 }
 
+static ValNodePtr ExtractSequencesWithoutUpdates (ValNodePtr PNTR orig_bioseq_list, ValNodePtr PNTR update_bioseq_list)
+{
+  ValNodePtr orig_prev = NULL, update_prev = NULL;
+  ValNodePtr orig_next = NULL, update_next = NULL;
+  ValNodePtr orig_vnp, update_vnp;
+  ValNodePtr no_update_list = NULL;
+  Int4       seq_num;
+  
+  if (orig_bioseq_list == NULL || update_bioseq_list == NULL
+      || *orig_bioseq_list == NULL || *update_bioseq_list == NULL)
+  {
+    return NULL;
+  }
+  
+  orig_vnp = *orig_bioseq_list;
+  update_vnp = *update_bioseq_list;
+  
+  while (orig_vnp != NULL && update_vnp != NULL)
+  {
+    orig_next = orig_vnp->next;
+    update_next = update_vnp->next;
+    if (orig_vnp->data.ptrvalue == NULL || update_vnp->data.ptrvalue == NULL)
+    {
+      if (orig_prev == NULL || update_prev == NULL)
+      {
+        *orig_bioseq_list = orig_vnp->next;
+        *update_bioseq_list = update_vnp->next;
+      }
+      else
+      {
+        orig_prev->next = orig_vnp->next;
+        update_prev->next = update_vnp->next;
+      }
+      orig_vnp->next = NULL;
+      update_vnp->next = NULL;
+      if (orig_vnp->data.ptrvalue == NULL)
+      {
+        ValNodeFree (orig_vnp);
+      }
+      else
+      {
+      	ValNodeLink (&no_update_list, orig_vnp);
+      }
+
+      ValNodeFree (update_vnp);
+    }
+    else
+    {
+      orig_prev = orig_vnp;
+      update_prev = update_vnp;
+    }
+    
+    orig_vnp = orig_next;
+    update_vnp = update_next;
+  }
+  
+  for (orig_vnp = *orig_bioseq_list, update_vnp = *update_bioseq_list, seq_num = 0;
+       orig_vnp != NULL && update_vnp != NULL;
+       orig_vnp = orig_vnp->next, update_vnp = update_vnp->next, seq_num++)
+  {
+    orig_vnp->choice = seq_num;
+    update_vnp->choice = seq_num;
+  }
+  return no_update_list;
+}
+
 static void RemoveSequencesWithoutUpdates (ValNodePtr PNTR orig_bioseq_list, ValNodePtr PNTR update_bioseq_list)
 {
   ValNodePtr orig_prev = NULL, update_prev = NULL;
@@ -15029,12 +16493,16 @@ static void RemoveSequencesWithoutUpdates (ValNodePtr PNTR orig_bioseq_list, Val
   }
 }
 
+/* This function should find all update Bioseqs that have colliding sequence IDs and
+ * replace the colliding IDs with new sequence IDs.
+ */
 static void ReplaceCollidingUpdateIDs (ValNodePtr update_bioseq_list, ValNodePtr orig_bioseq_list)
 {
-  ValNodePtr vnp;
-  SeqIdPtr   sip;
+  ValNodePtr vnp, orig_vnp;
+  SeqIdPtr   replace_sip, sip;
   BioseqPtr  bsp;
   Char       id_txt [128];
+  Int4       orig_pos;
   
   if (update_bioseq_list == NULL || orig_bioseq_list == NULL)
   {
@@ -15046,19 +16514,29 @@ static void ReplaceCollidingUpdateIDs (ValNodePtr update_bioseq_list, ValNodePtr
     bsp = (BioseqPtr) vnp->data.ptrvalue;
     if (bsp != NULL)
     {
-      if (FindBioseqInList (orig_bioseq_list, bsp->id, NULL))
+      if (FindBioseqInList (orig_bioseq_list, bsp->id, &orig_pos))
       {
-        SeqIdWrite (bsp->id, id_txt, PRINTID_REPORT, sizeof (id_txt) - 1);
-        StringCat (id_txt, "_update");
-        sip = MakeUniqueSeqID (id_txt);
-        BioseqReplaceID (bsp, sip);
-        sip = SeqIdFree (sip);      
+        orig_vnp = GetNthValNode (orig_bioseq_list, orig_pos);
+        if (orig_vnp != NULL && orig_vnp->data.ptrvalue != NULL)
+        {
+          replace_sip = SeqIdFindBest (bsp->id, SEQID_GENBANK);
+          SeqIdWrite (replace_sip, id_txt, PRINTID_REPORT, sizeof (id_txt) - 1);
+          StringCat (id_txt, "_update");
+          sip = MakeUniqueSeqID (id_txt);
+          SeqMgrDeleteFromBioseqIndex (bsp);
+          BioseqReplaceID (bsp, sip);
+          sip = SeqIdFree (sip);   
+        
+          SeqMgrReplaceInBioseqIndex (orig_vnp->data.ptrvalue);
+          SeqMgrReplaceInBioseqIndex (bsp);
+        }
       }
     }
   }
+  
 }
 
-static SeqEntryPtr ReadASNUpdateSequences (FILE *fp)
+static SeqEntryPtr ReadASNUpdateSequences (FILE *fp, BoolPtr chars_stripped)
 {
   Pointer      dataptr;
   Uint2        datatype;
@@ -15066,8 +16544,8 @@ static SeqEntryPtr ReadASNUpdateSequences (FILE *fp)
   SeqSubmitPtr ssp;
   
   /* Read in one sequence from the file */
-  dataptr = ReadAsnFastaOrFlatFile (fp, &datatype, NULL, FALSE, FALSE,
-		                   	                  TRUE, FALSE);      
+  dataptr = ReadAsnFastaOrFlatFileEx (fp, &datatype, NULL, FALSE, FALSE,
+		                   	                  TRUE, FALSE, chars_stripped);      
 
   if (NULL == dataptr) 
   {
@@ -15100,6 +16578,7 @@ static SeqEntryPtr ReadUpdateSequences (Boolean is_na)
   BioseqSetPtr  top_bssp;
   BioseqPtr     bsp;
   Uint2         entityID;
+  Boolean       chars_stripped = FALSE;
   
   if (! GetInputFileName (path, sizeof (path),"","TEXT"))
     return NULL;
@@ -15109,7 +16588,7 @@ static SeqEntryPtr ReadUpdateSequences (Boolean is_na)
     Message (MSG_ERROR, "Unable to open %s", path);
     return NULL;
   }
-  sep_list = ImportSequencesFromFile (fp, NULL, is_na, TRUE, &err_msg_list);
+  sep_list = ImportSequencesFromFile (fp, NULL, is_na, TRUE, NULL, &err_msg_list, &chars_stripped);
   ValNodeFreeData (err_msg_list);
   AddUniqueUpdateSequenceIDs (sep_list);
   FileClose (fp);
@@ -15117,8 +16596,22 @@ static SeqEntryPtr ReadUpdateSequences (Boolean is_na)
   if (sep_list == NULL)
   {
     fp = FileOpen (path, "r");
-    sep_list = ReadASNUpdateSequences (fp);
+    sep_list = ReadASNUpdateSequences (fp, &chars_stripped);
     FileClose (fp);
+    
+    if (sep_list == NULL)
+    {
+      return NULL;
+    }
+    else if (chars_stripped)
+    {
+      if (ANS_CANCEL == Message (MSG_OKC, "Illegal characters will be stripped from your sequence data.  Do you want to continue?"))
+      {
+        sep_list = SeqEntryFree (sep_list);
+        return NULL;
+      }
+    }
+    
     if (sep_list->choice == 1)
     {
       bsp = (BioseqPtr) sep_list->data.ptrvalue;
@@ -15129,9 +16622,18 @@ static SeqEntryPtr ReadUpdateSequences (Boolean is_na)
       top_bssp = (BioseqSetPtr) sep_list->data.ptrvalue;
       entityID = ObjMgrGetEntityIDForPointer (top_bssp);
     }
+    AddUniqueUpdateSequenceIDs (sep_list);
   }
   else if (sep_list != NULL)
   {
+    if (chars_stripped)
+    {
+      if (ANS_CANCEL == Message (MSG_OKC, "Illegal characters will be stripped from your sequence data.  Do you want to continue?"))
+      {
+        sep_list = SeqEntryFree (sep_list);
+        return NULL;
+      }
+    }  
     top_bssp = BioseqSetNew ();
     top_bssp->_class = BioseqseqSet_class_genbank;
     top_bssp->seq_set = sep_list;
@@ -15142,26 +16644,29 @@ static SeqEntryPtr ReadUpdateSequences (Boolean is_na)
   }
   
   AssignIDsInEntityEx (entityID, 0, NULL, NULL);
+  SeqMgrIndexFeatures (entityID, NULL);
 
-  
   return sep_list;
 }
 
 typedef struct updatemultisequenceform
 {
   FORM_MESSAGE_BLOCK
-  DialoG update_preview;
-  DialoG options_dialog;
+  DialoG     update_preview;
+  DialoG     options_dialog;
+  DialoG     titles_dlg;
   ButtoN     update_this;
   ButtoN     skip_this;
   ValNodePtr orig_bioseq_list;
   ValNodePtr update_bioseq_list;
   ValNodePtr unmatched_updates_list;
+  ValNodePtr no_updates_list;
   Boolean    is_na;
   LogInfoPtr lip;
   Int4       num_successful;
   Int4       num_failed;
   Int4       num_skipped;
+  Char       undo_file [PATH_MAX];
 } UpdateMultiSequenceFormData, PNTR UpdateMultiSequenceFormPtr;
 
 static void DoTestUpdateOneSequence (ButtoN b)
@@ -15176,6 +16681,7 @@ static void DoTestUpdateOneSequence (ButtoN b)
   UpdateAlignmentLengthsData uald;
   UpdateOptionsPtr           uop;
   UpdatePairData             upd;
+  Uint2                      update_entityID = 0;
   
   usfp = (UpdateMultiSequenceFormPtr) GetObjectExtra (b);
   if (usfp == NULL)
@@ -15190,8 +16696,6 @@ static void DoTestUpdateOneSequence (ButtoN b)
     return;
   }
   
-  Message (MSG_OK, "Warning!  This function is still under development.  It has not been thoroughly tested!");  
-  
   uop = DialogToPointer (usfp->options_dialog);   
   if (uop == NULL || uop->submitter_opts == NULL
       || (uop->submitter_opts->sequence_update_type == eSequenceUpdateNoChange
@@ -15199,7 +16703,7 @@ static void DoTestUpdateOneSequence (ButtoN b)
           && uop->submitter_opts->feature_remove_type == eFeatureRemoveNone))
   {
     Message (MSG_ERROR, "Invalid options selected!");
-    uop = MemFree (uop);
+    uop = UpdateOptionsFree (uop);
     return;
   }
 
@@ -15217,6 +16721,7 @@ static void DoTestUpdateOneSequence (ButtoN b)
     if (update_vnp != NULL)
     {
       upd.update_bsp = update_vnp->data.ptrvalue;
+	    update_entityID = upd.update_bsp->idx.entityID;
     }
     
     /* if we are going to ignore the alignment, don't calculate it */
@@ -15236,10 +16741,10 @@ static void DoTestUpdateOneSequence (ButtoN b)
                                                    usfp->input_entityID,
                                                    usfp->lip == NULL ? NULL : usfp->lip->fp,
                                                    usfp->lip == NULL ? NULL : &(usfp->lip->data_in_log));
-    upd.salp = SeqAlignFree (upd.salp);
+	  upd.salp = SeqAlignFree (upd.salp);
   }
-  uop = MemFree (uop);
-  
+  uop = UpdateOptionsFree (uop);
+ 
   if (update_successful)
   {
     /* remove sequence and its pair from list */
@@ -15247,6 +16752,7 @@ static void DoTestUpdateOneSequence (ButtoN b)
     orig_vnp = ValNodeFree (orig_vnp);
     update_vnp = ExtractNthValNode (&(usfp->update_bioseq_list), orig_pos);
     update_vnp = ValNodeFree (update_vnp);
+
     /* renumber valnode lists */
     for (orig_vnp = usfp->orig_bioseq_list; orig_vnp != NULL; orig_vnp = orig_vnp->next)
     {
@@ -15262,23 +16768,32 @@ static void DoTestUpdateOneSequence (ButtoN b)
         update_vnp->choice --;
       }
     }
-    msud.orig_bioseq_list = usfp->orig_bioseq_list;
-    msud.update_bioseq_list = usfp->update_bioseq_list;  
-    msud.unmatched_updates_list = usfp->unmatched_updates_list;                                             
-    PointerToDialog (usfp->update_preview, &msud);    
-    /* maintain list position */
-    if (orig_pos >= ValNodeLen (msud.orig_bioseq_list))
+    
+    /* only update the preview if we have any sequences left to update
+     * otherwise we get a flash of a strange result
+     */
+    if (usfp->orig_bioseq_list != NULL)
     {
-      orig_pos--;
+      msud.orig_bioseq_list = usfp->orig_bioseq_list;
+      msud.update_bioseq_list = usfp->update_bioseq_list;  
+      msud.unmatched_updates_list = usfp->unmatched_updates_list;
+      msud.no_updates_list = usfp->no_updates_list;  
+      PointerToDialog (usfp->update_preview, &msud);    
+
+      /* maintain list position */
+      if (orig_pos >= ValNodeLen (msud.orig_bioseq_list))
+      {
+        orig_pos--;
+      }
+      SelectUpdatePreviewSequenceByPosition (usfp->update_preview, orig_pos);
     }
-    SelectUpdatePreviewSequenceByPosition (usfp->update_preview, orig_pos);
     usfp->num_successful ++;                                           
   }
   
   SeqMgrClearFeatureIndexes (usfp->input_entityID, NULL);
   ObjMgrSetDirtyFlag (usfp->input_entityID, TRUE);
   ObjMgrSendMsg (OM_MSG_UPDATE, usfp->input_entityID, 0, 0);  
-  
+ 
   /* close window after updating the last sequence */
   if (usfp->orig_bioseq_list == NULL)
   {
@@ -15294,8 +16809,8 @@ static void DoNotTestUpdateOneSequence (ButtoN b)
   SeqIdPtr              sip;
   Char                  id_txt [MAX_ID_LEN];
   BioseqPtr                bsp, update_bsp;
-  Int4                  orig_pos;
-  ValNodePtr            orig_vnp, update_vnp;
+  Int4                     orig_pos;
+  ValNodePtr               orig_vnp, update_vnp;
   MultiSequenceUpdateData  msud;
   Uint2                    update_entityID;
   
@@ -15355,7 +16870,8 @@ static void DoNotTestUpdateOneSequence (ButtoN b)
     }
     msud.orig_bioseq_list = usfp->orig_bioseq_list;
     msud.update_bioseq_list = usfp->update_bioseq_list;   
-    msud.unmatched_updates_list = usfp->unmatched_updates_list;                                            
+    msud.unmatched_updates_list = usfp->unmatched_updates_list; 
+    msud.no_updates_list = usfp->no_updates_list;                                           
     PointerToDialog (usfp->update_preview, &msud);
     /* maintain list position */
     if (orig_pos >= ValNodeLen (msud.orig_bioseq_list))
@@ -15387,8 +16903,6 @@ static void UpdateAllSequences (ButtoN b)
   {
     return;
   }
-
-  Message (MSG_OK, "Warning!  This function is still under development.  It has not been thoroughly tested!");  
 
   WatchCursor ();
   Update ();
@@ -15423,7 +16937,7 @@ static void UpdateAllSequences (ButtoN b)
                                                    usfp->lip == NULL ? NULL : usfp->lip->fp,
                                                    usfp->lip == NULL ? NULL : &(usfp->lip->data_in_log));
     upd.salp = SeqAlignFree (upd.salp);
-    uop = MemFree (uop);
+    uop = UpdateOptionsFree (uop);
     
     SeqIdWrite (upd.orig_bsp->id, id_txt, PRINTID_REPORT, sizeof (id_txt) - 1);
     if (usfp->lip != NULL && usfp->lip->fp != NULL && ! update_successful)
@@ -15434,25 +16948,28 @@ static void UpdateAllSequences (ButtoN b)
     if (update_successful)
     {
       usfp->num_successful++;
+      /* remove update sequence from list */
+      update_vnp->data.ptrvalue = NULL;
     }
     else
     {
       usfp->num_failed++;
     }
-    /* remove update sequence from list */
-    update_vnp->data.ptrvalue = NULL;
+    
   }
   
   
-  /* launch log viewer */
-  CloseLog (usfp->lip);
-
   SeqMgrClearFeatureIndexes (usfp->input_entityID, NULL);
   ObjMgrSetDirtyFlag (usfp->input_entityID, TRUE);
   ObjMgrSendMsg (OM_MSG_UPDATE, usfp->input_entityID, 0, 0);  
     
   /* close window */
-  Remove (usfp->form);
+  if (usfp->num_failed == 0)
+  {
+    /* launch log viewer */
+    CloseLog (usfp->lip);
+    Remove (usfp->form);
+  }
   ArrowCursor ();
   Update ();
 }
@@ -15467,6 +16984,7 @@ static void UpdateSequenceSelectionChange (Pointer userdata)
   UpdatePairPtr              upp;
   UpdateAlignmentLengthsData uald;
   Boolean                    is_indexer = indexerVersion;
+  UpdateOptionsPtr           uop;
 
   usfp = (UpdateMultiSequenceFormPtr) userdata;
   if (usfp == NULL)
@@ -15479,6 +16997,7 @@ static void UpdateSequenceSelectionChange (Pointer userdata)
   {
     Disable (usfp->update_this);
     Disable (usfp->skip_this);
+    upp = NULL;
   }
   else
   {
@@ -15502,9 +17021,9 @@ static void UpdateSequenceSelectionChange (Pointer userdata)
         Enable (usfp->skip_this);
       }
     }
+    upp = GetCurrentUpdatePair (usfp->update_preview);
   }
   
-  upp = GetCurrentUpdatePair (usfp->update_preview);
   if (upp != NULL)
   CalculateUpdateAlignmentLengths (upp->salp,
                                    upp->orig_bsp, 
@@ -15512,6 +17031,36 @@ static void UpdateSequenceSelectionChange (Pointer userdata)
                                    &uald); 
   AdjustUpdateOptionsEnabled (usfp->options_dialog, upp, &uald, is_indexer);
   
+  PointerToDialog (usfp->titles_dlg, upp);
+
+  uop = (UpdateOptionsPtr) DialogToPointer (usfp->options_dialog);
+  if (uop != NULL && uop->submitter_opts != NULL)
+  {
+    if (uop->submitter_opts->ignore_alignment)
+    {
+      if (uop->submitter_opts->sequence_update_type == eSequenceUpdateExtend5)
+      {
+        SetIgnoreAndExtendForMultiSequencePreview (usfp->update_preview, TRUE, TRUE);
+      }
+      else if (uop->submitter_opts->sequence_update_type == eSequenceUpdateExtend3)
+      {
+        SetIgnoreAndExtendForMultiSequencePreview (usfp->update_preview, TRUE, FALSE);
+      }
+      else
+      {
+        SetIgnoreAndExtendForMultiSequencePreview (usfp->update_preview, FALSE, FALSE);        
+      }
+    }
+    else
+    {
+      SetIgnoreAndExtendForMultiSequencePreview (usfp->update_preview, FALSE, FALSE);
+    }
+  }  
+  else
+  {
+    SetIgnoreAndExtendForMultiSequencePreview (usfp->update_preview, FALSE, FALSE);
+  }
+  uop = UpdateOptionsFree (uop);
 }
 
 static Boolean BioseqHasFeatures (BioseqPtr bsp)
@@ -15566,6 +17115,7 @@ static void CleanupUpdateMultiSequence (GraphiC g, Pointer data)
   ValNodePtr                 vnp;
   BioseqPtr                  update_bsp;
   Uint2                      update_entityID;
+  ObjMgrPtr  omp;
   
   usfp = (UpdateMultiSequenceFormPtr) data;
   if (usfp != NULL)
@@ -15656,7 +17206,13 @@ static void CleanupUpdateMultiSequence (GraphiC g, Pointer data)
     CloseLog (usfp->lip);
     usfp->lip = FreeLog (usfp->lip);
     
+    FileRemove (usfp->undo_file);
     
+    /* clear indexes */
+    omp = ObjMgrGet ();
+    ObjMgrReapOne (omp);
+    ObjMgrFreeCache (0);
+    FreeSeqIdGiCache ();
   }
   
   StdCleanupExtraProc (g, data);
@@ -15692,35 +17248,28 @@ static void LoadUpdateSequenceMapFile (UpdateMultiSequenceFormPtr usfp)
   line = AbstractReadFunction (&rbd);
   while (line != NULL)
   {
-    ptr = StringChr (line, '\t');
-    if (ptr != NULL) 
+    ptr = line;
+    /* skip over initial white space if any*/
+    ptr += StringSpn (ptr, " \t");
+    /* skip over first sequence ID */ 
+    ptr += StringCSpn (ptr, "\t ");
+    if (*ptr != 0 && ptr != line)
     {
       *ptr = '\0';
       /* original ID first on line, followed by tab, followed by update ID */
       sip_orig = MakeSeqID (line);
       sip_update = MakeSeqID (ptr + 1);
       
-      bsp_orig = FindBioseqInList (usfp->orig_bioseq_list, sip_orig, &orig_position);
+      bsp_orig = FindBioseqInList (usfp->no_updates_list, sip_orig, &orig_position);
       bsp_update = FindBioseqInList (usfp->unmatched_updates_list, sip_update, &update_position);
       if (bsp_orig != NULL && bsp_update != NULL)
       {
-        update_vnp = GetNthValNode (usfp->update_bioseq_list, orig_position);
-        if (update_vnp != NULL)
-        {
-          /* original now linked to this Bioseq */
-          update_vnp->data.ptrvalue = bsp_update;
-          /* remove bioseq from unmatched list */
-          update_vnp = ExtractNthValNode (&(usfp->unmatched_updates_list), update_position);
-          update_vnp = ValNodeFree (update_vnp);
-          /* renumber unmatched_list */
-          for (update_vnp = usfp->unmatched_updates_list; update_vnp != NULL; update_vnp = update_vnp->next)
-          {
-            if (update_vnp->choice > update_position)
-            {
-              update_vnp->choice --;
-            }
-          }
-        }
+        /* remove Bioseq from no update list and add to list of originals */
+        update_vnp = ExtractNthValNode (&(usfp->no_updates_list), orig_position);
+        ValNodeLink (&(usfp->orig_bioseq_list), update_vnp);
+        /* remove Bioseq from unmatched list and add to list of updates */
+        update_vnp = ExtractNthValNode (&(usfp->unmatched_updates_list), update_position);
+        ValNodeLink (&(usfp->update_bioseq_list), update_vnp);
       }
       sip_orig = SeqIdFree (sip_orig);
       sip_update = SeqIdFree (sip_update);      
@@ -15732,8 +17281,173 @@ static void LoadUpdateSequenceMapFile (UpdateMultiSequenceFormPtr usfp)
   
   msud.orig_bioseq_list = usfp->orig_bioseq_list;
   msud.update_bioseq_list = usfp->update_bioseq_list;     
-  msud.unmatched_updates_list = usfp->unmatched_updates_list;                                          
+  msud.unmatched_updates_list = usfp->unmatched_updates_list;
+  msud.no_updates_list = usfp->no_updates_list;                                          
   PointerToDialog (usfp->update_preview, &msud);                                                 
+}
+
+static void 
+ReportIdenticalUpdateSequences 
+(ValNodePtr orig_list,
+ ValNodePtr update_list)
+{
+  Char       id_str [128];
+  BioseqPtr  orig_bsp, update_bsp;
+  LogInfoPtr lip;
+  Int4       num_identical = 0, num_total = 0;
+  
+  lip = OpenLog ("Sequences Identical to Updates");
+  if (lip == NULL)
+  {
+    return;
+  }
+  WatchCursor ();
+  Update ();
+  while (orig_list != NULL && update_list != NULL)
+  {
+    orig_bsp = orig_list->data.ptrvalue;
+    update_bsp = update_list->data.ptrvalue;
+    
+    if (orig_bsp != NULL)
+    {
+      num_total++;
+    }
+    
+    if (orig_bsp != NULL && update_bsp != NULL 
+        && AreSequenceResiduesIdentical (orig_bsp, update_bsp))
+    {
+      SeqIdWrite (SeqIdFindBest (orig_bsp->id, SEQID_GENBANK), id_str, PRINTID_REPORT, sizeof (id_str) - 1);
+      fprintf (lip->fp, "%s\n", id_str);
+      lip->data_in_log = TRUE;
+      num_identical++;
+    }
+    
+    orig_list = orig_list->next;
+    update_list = update_list->next;
+  }
+  
+  if (num_identical == 1)
+  {
+    Message (MSG_OK, "One sequence out of %d is identical to its update sequence.", num_total);
+  } 
+  else if (num_identical > 1)
+  {
+    Message (MSG_OK, "%d sequences out of %d are identical to their update sequences.", num_identical, num_total);
+  }
+  CloseLog (lip);
+  lip = FreeLog (lip);  
+  ArrowCursor ();
+  Update ();
+}
+
+static void RemoveIdenticalUpdates (ButtoN b)
+{
+  UpdateMultiSequenceFormPtr usfp;
+  SeqIdPtr                   sip;
+  Int4                       orig_pos = 0, rem_pos = 0;
+  ValNodePtr                 orig_list, update_list;
+  ValNodePtr                 prev_orig_list = NULL, prev_update_list = NULL;
+  ValNodePtr                 next_orig_list = NULL, next_update_list = NULL;
+  Uint2                      update_entityID = 0;
+  MultiSequenceUpdateData    msud;
+  BioseqPtr                  orig_bsp, update_bsp;
+    
+  usfp = (UpdateMultiSequenceFormPtr) GetObjectExtra (b);
+  if (usfp == NULL)
+  {
+    return;
+  }
+  
+  sip = (SeqIdPtr) DialogToPointer (usfp->update_preview);
+  
+  FindBioseqInList (usfp->orig_bioseq_list, sip, &orig_pos);
+
+  
+  orig_list = usfp->orig_bioseq_list;
+  update_list = usfp->update_bioseq_list;
+
+  while (orig_list != NULL && update_list != NULL)
+  {
+    next_orig_list = orig_list->next;
+    next_update_list = update_list->next;
+    orig_bsp = orig_list->data.ptrvalue;
+    update_bsp = update_list->data.ptrvalue;
+    
+    if (orig_bsp != NULL && update_bsp != NULL 
+        && AreSequenceResiduesIdentical (orig_bsp, update_bsp))
+    {
+      /* remove update Bioseq from desktop */
+      if (update_entityID == 0)
+      {
+        update_entityID = update_bsp->idx.entityID;
+      }
+      update_bsp->idx.deleteme = TRUE;
+      
+      /* remove pair from list */
+      if (prev_orig_list == NULL)
+      {
+        usfp->orig_bioseq_list = orig_list->next;
+      }
+      else
+      {
+        prev_orig_list->next = orig_list->next;
+      }
+      if (prev_update_list == NULL)
+      {
+        usfp->update_bioseq_list = update_list->next;
+      }
+      else
+      {
+        prev_update_list->next = update_list->next;
+      }
+      
+      orig_list->next = NULL;
+      orig_list = ValNodeFree (orig_list);
+      update_list->next = NULL;
+      update_list = ValNodeFree (update_list);
+      if (rem_pos < orig_pos)
+      {
+        orig_pos --;
+      }
+    }
+    else
+    {
+      prev_orig_list = orig_list;
+      prev_update_list = update_list;
+      rem_pos++;
+    }
+    
+    orig_list = next_orig_list;
+    update_list = next_update_list;
+  }
+  
+  DeleteMarkedObjects (update_entityID, 0, NULL);
+  
+  ObjMgrSetDirtyFlag (update_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, update_entityID, 0, 0);
+  
+  msud.orig_bioseq_list = usfp->orig_bioseq_list;
+  msud.update_bioseq_list = usfp->update_bioseq_list;   
+  msud.unmatched_updates_list = usfp->unmatched_updates_list; 
+  msud.no_updates_list = usfp->no_updates_list;                                           
+  PointerToDialog (usfp->update_preview, &msud);
+  
+  /* maintain list position */
+  if (orig_pos >= ValNodeLen (msud.orig_bioseq_list))
+  {
+    orig_pos--;
+  }
+  SelectUpdatePreviewSequenceByPosition (usfp->update_preview, orig_pos);
+    
+  /* close window after skipping the last sequence */
+  if (usfp->orig_bioseq_list == NULL)
+  {
+    Message (MSG_OK, "All sequences were identical!");
+    Remove (usfp->form);
+  }                                                   
+  
+  
+  Update ();    
 }
 
 static void LoadUpdateSequenceMapFileBtn (ButtoN b)
@@ -15741,31 +17455,74 @@ static void LoadUpdateSequenceMapFileBtn (ButtoN b)
   UpdateMultiSequenceFormPtr usfp;
   
   usfp = (UpdateMultiSequenceFormPtr) GetObjectExtra (b);
+  if (usfp == NULL) {
+    return;
+  }
+  LoadUpdateSequenceMapFile (usfp); 
+  ReportIdenticalUpdateSequences (usfp->orig_bioseq_list, usfp->update_bioseq_list);
+  if (BioseqListHasFeatures (usfp->update_bioseq_list)) {
+    EnableImportFeatureOptions(usfp->options_dialog);
+  } else {
+    DisableImportFeatureOptions (usfp->options_dialog);        
+  }  
+  if (BioseqListHasFeatures (usfp->orig_bioseq_list)) {
+    EnableRemoveFeatureOptions (usfp->options_dialog);
+  } else {
+    DisableRemoveFeatureOptions (usfp->options_dialog);
+  }
+}
+
+extern SeqEntryPtr RestoreFromFile (CharPtr path);
+
+static void UndoUpdates (ButtoN b)
+{
+  UpdateMultiSequenceFormPtr usfp;
+  SeqEntryPtr                oldsep, currsep;
+  
+  usfp = (UpdateMultiSequenceFormPtr) GetObjectExtra (b);
   if (usfp == NULL)
   {
     return;
   }
-  LoadUpdateSequenceMapFile (usfp);  
+  WatchCursor ();
+  Update ();
+
+  SeqEntrySetScope (NULL);
+  oldsep = RestoreFromFile (usfp->undo_file);
+  currsep = GetTopSeqEntryForEntityID (usfp->input_entityID);
+  ReplaceSeqEntryWithSeqEntry (currsep, oldsep, TRUE);
+  SeqEntrySetScope (NULL);
+  usfp->input_entityID = ObjMgrGetEntityIDForChoice (currsep);
+  ObjMgrSetDirtyFlag (usfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, usfp->input_entityID, 0, 0);
+
+  usfp->num_successful = 0;
+  usfp->num_failed = 0;
+  usfp->num_skipped = 0;
+  usfp->lip = FreeLog (usfp->lip);
+
+  Remove (usfp->form);
+  ArrowCursor ();
+  Update ();  
 }
 
-
-static void TestUpdateSequenceSet (IteM i, Boolean is_indexer)
+static void TestUpdateSequenceSet (IteM i, Boolean is_indexer, Boolean do_update)
 {
-  BaseFormPtr        bfp;
-  WindoW             w;
-  Boolean            do_update = TRUE;
-  CharPtr            title;
-  GrouP              h, k;
-  BioseqPtr          orig_bsp, update_bsp = NULL;
-  SeqEntryPtr        sep;
-  SeqEntryPtr        update_list;
-  GrouP              c;
-  ButtoN             b;
-  Boolean            is_na;
-  Int4               num_orig = 0, num_update = 0;
+  BaseFormPtr                bfp;
+  WindoW                     w;
+  CharPtr                    title;
+  GrouP                      h, k, ext_grp;
+  BioseqPtr                  orig_bsp;
+  SeqEntryPtr                sep;
+  SeqEntryPtr                update_list;
+  GrouP                      c;
+  ButtoN                     b;
+  Boolean                    is_na;
+  Int4                       num_orig = 0, num_update = 0;
   UpdateMultiSequenceFormPtr usfp;
-  MultiSequenceUpdateData  msud;
-
+  MultiSequenceUpdateData    msud;
+  UpdateOptionsPtr           uop;
+  DialoG                     ext_dlg;
 
 #ifdef WIN_MAC
   bfp = currentFormDataPtr;
@@ -15778,12 +17535,17 @@ static void TestUpdateSequenceSet (IteM i, Boolean is_indexer)
   sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
   if (sep == NULL)
     return;
+  
   orig_bsp = GetBioseqGivenIDs (bfp->input_entityID, bfp->input_itemID,
 			   bfp->input_itemtype);
   if (orig_bsp == NULL)
-    return;
-  
-  is_na = ISA_na (orig_bsp->mol);
+  {
+    is_na = TRUE;
+  }
+  else
+  {
+    is_na = ISA_na (orig_bsp->mol);
+  }
 
   /* Read in the update data from a file */
   /* for now, just handling FASTA */
@@ -15808,13 +17570,18 @@ static void TestUpdateSequenceSet (IteM i, Boolean is_indexer)
   usfp->num_skipped = 0;
   
   usfp->lip = OpenLog ("Update Sequence Log");
+  
+  /* save the current SeqEntry to a file, so we can restore it if we need to */
+  TmpNam (usfp->undo_file);
+  write_out_put(sep, usfp->undo_file, FALSE);
     
   ListBioseqsInSeqEntry (sep, usfp->is_na, &num_orig, &usfp->orig_bioseq_list);
   ListBioseqsInSeqEntry (update_list, usfp->is_na, &num_update, &usfp->update_bioseq_list);
 
   usfp->unmatched_updates_list = ShuffleUpdateBioseqList (&usfp->update_bioseq_list, 
                                                           usfp->orig_bioseq_list);
-  
+
+  usfp->no_updates_list = ExtractSequencesWithoutUpdates (&usfp->orig_bioseq_list, &usfp->update_bioseq_list);  
   if (!is_indexer)
   {
     if (usfp->unmatched_updates_list != NULL)
@@ -15825,7 +17592,9 @@ static void TestUpdateSequenceSet (IteM i, Boolean is_indexer)
       }
     }
     RemoveSequencesWithoutUpdates (&usfp->orig_bioseq_list, &usfp->update_bioseq_list);
+    usfp->no_updates_list = ValNodeFree (usfp->no_updates_list);
   }
+  
   ReplaceCollidingUpdateIDs (usfp->update_bioseq_list, usfp->orig_bioseq_list);
   
   /* Create window */
@@ -15835,7 +17604,7 @@ static void TestUpdateSequenceSet (IteM i, Boolean is_indexer)
   } else {
     title = "Extend Sequence";
   }
-  w = FixedWindow (-50, -33, -10, -10, title, NULL);
+  w = MovableModalWindow (-50, -33, -10, -10, title, NULL);
 
   if (w == NULL)
     return;
@@ -15846,45 +17615,57 @@ static void TestUpdateSequenceSet (IteM i, Boolean is_indexer)
   h = HiddenGroup (w, -1, 0, NULL);
   SetGroupSpacing (h, 10, 10);
   
-  if (is_indexer)
-  {
-    k = HiddenGroup (h, 2, 0, NULL);
-  }
-  else
-  {
-    k = HiddenGroup (h, -1, 0, NULL);
-  }
+  usfp->titles_dlg = UpdateTitlesDialog (h, is_indexer, do_update);
+  
+  k = HiddenGroup (h, 2, 0, NULL);
   SetGroupSpacing (k, 10, 10);
-  usfp->update_preview = MultiSequenceUpdatePreview (k, usfp->is_na,
+  
+  usfp->update_preview = MultiSequenceUpdatePreview (k, usfp->is_na, do_update,
                                                      UpdateSequenceSelectionChange,
                                                      usfp,
                                                      LoadUpdateSequenceMapFileBtn,
                                                      is_indexer);
 
-  usfp->options_dialog = UpdateOptionsDialog (k, usfp->is_na, is_indexer,
-                                              UpdateSequenceSelectionChange, usfp);
-  if (!is_indexer)
+  if (! do_update)
   {
-    AlignObjects (ALIGN_CENTER, (HANDLE) usfp->update_preview,
-                                (HANDLE) usfp->options_dialog,
-                                NULL);
+    ext_grp = HiddenGroup (k, -1, 0, NULL);
+    
+    ext_dlg = UpdateTitlesDialog (ext_grp, is_indexer, FALSE);
+    AddExtendDialogToMultiSequenceUpdatePreview (usfp->update_preview, ext_dlg);
+                                                 ;
+    
+    usfp->options_dialog = UpdateOptionsDialog (ext_grp, usfp->is_na, is_indexer, do_update,
+                                                UpdateSequenceSelectionChange, usfp);
+    AlignObjects (ALIGN_CENTER, (HANDLE) ext_dlg, (HANDLE) usfp->options_dialog, NULL);
+    SetMultiSequenceUpdatePreviewMatchWindow (usfp->update_preview, (WindoW) ext_grp);
+  }
+  else
+  {
+    usfp->options_dialog = UpdateOptionsDialog (k, usfp->is_na, is_indexer, do_update,
+                                                UpdateSequenceSelectionChange, usfp);
   }
 
-  c = HiddenGroup (h, 4, 0, NULL);
+
+  c = HiddenGroup (h, 6, 0, NULL);
   SetGroupSpacing (c, 10, 10);
   usfp->update_this = PushButton (c, "Update This Sequence", DoTestUpdateOneSequence);
   SetObjectExtra (usfp->update_this, usfp, NULL);
-  usfp->skip_this = PushButton (c, "Do Not Update This Sequence", DoNotTestUpdateOneSequence);
+  usfp->skip_this = PushButton (c, "Skip This Sequence", DoNotTestUpdateOneSequence);
   SetObjectExtra (usfp->skip_this, usfp, NULL);
   b = PushButton (c, "Update All Sequences", UpdateAllSequences);
   SetObjectExtra (b, usfp, NULL);
-  b = PushButton (c, "Cancel", StdCancelButtonProc);
   
-  AlignObjects (ALIGN_CENTER, (HANDLE) k, (HANDLE) c, NULL);
-
+  b = PushButton (c, "Stop Updating", StdCancelButtonProc);
+  
+  b = PushButton (c, "Cancel", UndoUpdates);
+  SetObjectExtra (b, usfp, NULL);
+  
+  AlignObjects (ALIGN_CENTER, (HANDLE) usfp->titles_dlg, (HANDLE) k, (HANDLE) c, NULL);
+ 
   msud.orig_bioseq_list = usfp->orig_bioseq_list;
   msud.update_bioseq_list = usfp->update_bioseq_list;     
-  msud.unmatched_updates_list = usfp->unmatched_updates_list;                                          
+  msud.unmatched_updates_list = usfp->unmatched_updates_list; 
+  msud.no_updates_list = usfp->no_updates_list;                                         
   PointerToDialog (usfp->update_preview, &msud);                                               
 
   if (!BioseqListHasFeatures (usfp->update_bioseq_list))
@@ -15892,18 +17673,40 @@ static void TestUpdateSequenceSet (IteM i, Boolean is_indexer)
     DisableImportFeatureOptions (usfp->options_dialog);        
   }
 
+  if (BioseqListHasFeatures (usfp->orig_bioseq_list)) {
+    EnableRemoveFeatureOptions (usfp->options_dialog);
+  } else {
+    DisableRemoveFeatureOptions (usfp->options_dialog);
+  }
+
+  uop = DialogToPointer (usfp->options_dialog);
+  uop->submitter_opts->sequence_update_type = eSequenceUpdateReplace;
+  PointerToDialog (usfp->options_dialog, uop);
+  uop = UpdateOptionsFree (uop);
+
   Show (w);
   Update ();
+  ReportIdenticalUpdateSequences (usfp->orig_bioseq_list, usfp->update_bioseq_list);
 }
 
 extern void TestUpdateSequenceSetSubmitter (IteM i)
 {
-  TestUpdateSequenceSet (i, FALSE);
+  TestUpdateSequenceSet (i, FALSE, TRUE);
+}
+
+extern void TestExtendSequenceSetSubmitter (IteM i)
+{
+  TestUpdateSequenceSet (i, FALSE, FALSE);
 }
 
 extern void TestUpdateSequenceSetIndexer (IteM i)
 {
-  TestUpdateSequenceSet (i, TRUE);
+  TestUpdateSequenceSet (i, TRUE, TRUE);
+}
+
+extern void TestExtendSequenceSetIndexer (IteM i)
+{
+  TestUpdateSequenceSet (i, TRUE, FALSE);
 }
 
 typedef struct singlesequenceupdateform
@@ -15911,10 +17714,42 @@ typedef struct singlesequenceupdateform
   FORM_MESSAGE_BLOCK
   DialoG     preview_dlg;
   DialoG     options_dlg;
+  DialoG     titles_dlg;
   Boolean    is_na;
   LogInfoPtr lip;
   UpdatePairData update_pair;
+  SeqEntryPtr    update_list;
+  Uint2          update_entity_ID;
 } SingleSequenceUpdateFormData, PNTR SingleSequenceUpdateFormPtr;
+
+static void MarkUpdateListForDeletion (SeqEntryPtr sep)
+{
+  BioseqPtr    bsp;
+  BioseqSetPtr bssp;
+  
+  if (sep == NULL)
+  {
+    return;
+  }
+  MarkUpdateListForDeletion (sep->next);
+  if (IS_Bioseq (sep))
+  {
+    bsp = (BioseqPtr) sep->data.ptrvalue;
+    if (bsp != NULL)
+    {
+      bsp->idx.deleteme = TRUE;
+    }
+  }
+  else if (IS_Bioseq_set (sep))
+  {
+    bssp = (BioseqSetPtr) sep->data.ptrvalue;
+    if (bssp != NULL)
+    {
+      bssp->idx.deleteme = TRUE;
+      MarkUpdateListForDeletion (bssp->seq_set);
+    }
+  }
+}
 
 static void CleanupSingleSequenceUpdateForm (GraphiC g, Pointer data)
 {
@@ -15925,6 +17760,13 @@ static void CleanupSingleSequenceUpdateForm (GraphiC g, Pointer data)
   {
     CloseLog (ssufp->lip);
     ssufp->lip = FreeLog (ssufp->lip);
+    
+    if (ssufp->update_pair.update_bsp != NULL)
+    {
+      ssufp->update_pair.update_bsp->idx.deleteme = TRUE;
+    }
+    MarkUpdateListForDeletion (ssufp->update_list);
+    DeleteMarkedObjects (ssufp->update_entity_ID, 0, NULL);
   }
   StdCleanupExtraProc (g, data);
 }
@@ -15939,8 +17781,6 @@ static void DoUpdateSingleSequence (ButtoN b)
 
   ssufp = (SingleSequenceUpdateFormPtr) GetObjectExtra (b);
 
-  Message (MSG_OK, "Warning!  This function is still under development.  It has not been thoroughly tested!");  
-  
   WatchCursor ();
   Update ();
   
@@ -15956,7 +17796,7 @@ static void DoUpdateSingleSequence (ButtoN b)
           && uop->submitter_opts->feature_remove_type == eFeatureRemoveNone))
   {
     Message (MSG_ERROR, "Invalid options selected!");
-    uop = MemFree (uop);
+    uop = UpdateOptionsFree (uop);
     return;
   }
             
@@ -15966,7 +17806,17 @@ static void DoUpdateSingleSequence (ButtoN b)
     ssufp->update_pair.salp = NULL;
     ssufp->update_pair.revcomp = FALSE;
   }
-  
+  else
+  {
+    /* reverse the sequence prior to the update if necessary */
+    if (ssufp->update_pair.revcomp)
+    {
+      BioseqRevComp (ssufp->update_pair.update_bsp);
+      ReverseBioseqFeatureStrands (ssufp->update_pair.update_bsp);
+      SeqMgrReplaceInBioseqIndex (ssufp->update_pair.update_bsp);
+    }
+  }
+ 
   CalculateUpdateAlignmentLengths (ssufp->update_pair.salp,
                                    ssufp->update_pair.orig_bsp, 
                                    ssufp->update_pair.update_bsp, 
@@ -15984,7 +17834,7 @@ static void DoUpdateSingleSequence (ButtoN b)
     fprintf (ssufp->lip->fp, "Failed to update %s\n", id_txt);
     ssufp->lip->data_in_log = TRUE;
   }
-  uop = MemFree (uop);
+  uop = UpdateOptionsFree (uop);
   
     
   SeqMgrClearFeatureIndexes (ssufp->input_entityID, NULL);
@@ -15999,8 +17849,9 @@ static void DoUpdateSingleSequence (ButtoN b)
 static void UpdateSingleSequenceOptions (Pointer userdata)
 {
   SingleSequenceUpdateFormPtr ssufp;
-  UpdateAlignmentLengthsData uald;
-  Boolean                    is_indexer = indexerVersion;
+  UpdateAlignmentLengthsData  uald;
+  Boolean                     is_indexer = indexerVersion;
+  UpdateOptionsPtr            uop;
 
   ssufp = (SingleSequenceUpdateFormPtr) userdata;
   if (ssufp == NULL)
@@ -16014,7 +17865,34 @@ static void UpdateSingleSequenceOptions (Pointer userdata)
                                    &uald); 
   
   AdjustUpdateOptionsEnabled (ssufp->options_dlg, &(ssufp->update_pair), &uald, is_indexer);
-  
+  uop = (UpdateOptionsPtr) DialogToPointer (ssufp->options_dlg);
+  if (uop != NULL && uop->submitter_opts != NULL)
+  {
+    if (uop->submitter_opts->ignore_alignment)
+    {
+      if (uop->submitter_opts->sequence_update_type == eSequenceUpdateExtend5)
+      {
+        SetIgnoreAndExtendForPreviewPictures (ssufp->preview_dlg, TRUE, TRUE);
+      }
+      else if (uop->submitter_opts->sequence_update_type == eSequenceUpdateExtend3)
+      {
+        SetIgnoreAndExtendForPreviewPictures (ssufp->preview_dlg, TRUE, FALSE);
+      }
+      else
+      {
+        SetIgnoreAndExtendForPreviewPictures (ssufp->preview_dlg, FALSE, FALSE);        
+      }
+    }
+    else
+    {
+      SetIgnoreAndExtendForPreviewPictures (ssufp->preview_dlg, FALSE, FALSE);
+    }
+  }  
+  else
+  {
+    SetIgnoreAndExtendForPreviewPictures (ssufp->preview_dlg, FALSE, FALSE);
+  }
+  uop = UpdateOptionsFree (uop);  
 }
 
 static void 
@@ -16022,20 +17900,20 @@ UpdateSingleSequence
 (BioseqPtr   orig_bsp,
  SeqEntryPtr update_list,
  Boolean     is_indexer,
+ Boolean     do_update,
  Uint2       entityID)
 {
   WindoW             w;
-  Boolean            do_update = TRUE;
   CharPtr            title;
   GrouP              h, k;
-  BioseqPtr          update_bsp = NULL;
   GrouP              c;
   ButtoN             b;
   Boolean            is_na;
-  Int4               num_orig = 0, num_update = 0;
+  Int4               num_update = 0;
   SingleSequenceUpdateFormPtr ssufp;
   ValNodePtr                  orig_bioseq_list = NULL, update_bioseq_list = NULL;
   UpdateAlignmentLengthsData  uald;
+  UpdateOptionsPtr            uop;
 
   if (orig_bsp == NULL || update_list == NULL)
   {
@@ -16055,6 +17933,7 @@ UpdateSingleSequence
   
   ssufp->update_pair.orig_bsp = orig_bsp;
   
+  ssufp->update_list = update_list;
   
   ValNodeAddPointer (&orig_bioseq_list, 0, orig_bsp);
   ListBioseqsInSeqEntry (update_list, ssufp->is_na, &num_update, &update_bioseq_list);
@@ -16063,6 +17942,17 @@ UpdateSingleSequence
   
   ssufp->update_pair.update_bsp = update_bioseq_list->data.ptrvalue;
   update_bioseq_list = ValNodeFree (update_bioseq_list);
+
+  if (ssufp->update_pair.update_bsp != NULL)
+  {
+    ssufp->update_entity_ID = ssufp->update_pair.update_bsp->idx.entityID;    
+  }
+  
+  if (AreSequenceResiduesIdentical (ssufp->update_pair.orig_bsp,
+                                    ssufp->update_pair.update_bsp))
+  {
+    Message (MSG_OK, "Sequence is identical to update sequence!");
+  }
   
   /* Create window */
 
@@ -16083,31 +17973,31 @@ UpdateSingleSequence
   h = HiddenGroup (w, -1, 0, NULL);
   SetGroupSpacing (h, 10, 10);
   
-  if (is_indexer)
-  {
-    k = HiddenGroup (h, 2, 0, NULL);
-  }
-  else
-  {
-    k = HiddenGroup (h, -1, 0, NULL);
-  }
+  ssufp->titles_dlg = UpdateTitlesDialog (h, is_indexer, do_update);
+  
+  k = HiddenGroup (h, 2, 0, NULL);
+  
   SetGroupSpacing (k, 10, 10);
-  ssufp->preview_dlg = UpdatePreviewDialog (k);
+  if (do_update)
+  {
+    ssufp->preview_dlg = UpdatePreviewDialog (k, is_indexer);
+  }
   
   ssufp->update_pair.revcomp = FALSE;
   ssufp->update_pair.salp = Sequin_GlobalAlign2Seq (ssufp->update_pair.orig_bsp,
                                                     ssufp->update_pair.update_bsp, 
                                                     &(ssufp->update_pair.revcomp));
-
-  ssufp->options_dlg = UpdateOptionsDialog (k, ssufp->is_na, is_indexer,
-                                            UpdateSingleSequenceOptions, ssufp);
-
-  if (!is_indexer)
+  if (ssufp->update_pair.revcomp)
   {
-    AlignObjects (ALIGN_CENTER, (HANDLE) ssufp->preview_dlg, (HANDLE) ssufp->options_dlg, NULL);
+    BioseqRevComp (ssufp->update_pair.update_bsp);
+    ReverseBioseqFeatureStrands (ssufp->update_pair.update_bsp);
+    SeqMgrReplaceInBioseqIndex (ssufp->update_pair.update_bsp);
   }
-
+  
+  ssufp->options_dlg = UpdateOptionsDialog (k, ssufp->is_na, is_indexer, do_update,
+                                            UpdateSingleSequenceOptions, ssufp);
   PointerToDialog (ssufp->preview_dlg, &(ssufp->update_pair));  
+  PointerToDialog (ssufp->titles_dlg, &(ssufp->update_pair));
   
   c = HiddenGroup (h, 4, 0, NULL);
   SetGroupSpacing (c, 10, 10);
@@ -16115,11 +18005,27 @@ UpdateSingleSequence
   SetObjectExtra (b, ssufp, NULL);
   b = PushButton (c, "Cancel", StdCancelButtonProc);
   
-  AlignObjects (ALIGN_CENTER, (HANDLE) k, (HANDLE) c, NULL);
+  AlignObjects (ALIGN_CENTER, (HANDLE) ssufp->titles_dlg, (HANDLE) k, (HANDLE) c, NULL);
   
-  if (!BioseqHasFeatures (ssufp->update_pair.orig_bsp))
-  {
+  if (BioseqHasFeatures (ssufp->update_pair.update_bsp)) {
+    EnableImportFeatureOptions(ssufp->options_dlg);
+    uop = DialogToPointer (ssufp->options_dlg);
+    /* for public version only, if there are features, default to
+     * import all except duplicates
+     */
+    if (!is_indexer) {
+      uop->submitter_opts->feature_update_type = eFeatureUpdateAllExceptDups;
+      PointerToDialog (ssufp->options_dlg, uop);
+      uop = UpdateOptionsFree (uop);
+    }
+  } else {
     DisableImportFeatureOptions (ssufp->options_dlg);            
+  }
+
+  if (BioseqHasFeatures (ssufp->update_pair.orig_bsp)) {
+    EnableRemoveFeatureOptions (ssufp->options_dlg);
+  } else {
+    DisableRemoveFeatureOptions (ssufp->options_dlg);
   }
   
   CalculateUpdateAlignmentLengths (ssufp->update_pair.salp,
@@ -16128,12 +18034,43 @@ UpdateSingleSequence
                                    &uald); 
   AdjustUpdateOptionsEnabled (ssufp->options_dlg, &(ssufp->update_pair), &uald, is_indexer);
 
+  uop = DialogToPointer (ssufp->options_dlg);
+  if (is_indexer)
+  {
+    uop->submitter_opts->sequence_update_type = eSequenceUpdateReplace;
+  }
+  else
+  {
+    if (ssufp->update_pair.salp == NULL) 
+    {
+      /* no alignment - default is to replace */
+      uop->submitter_opts->sequence_update_type = eSequenceUpdateReplace;
+    }
+    else if (uald.new5 > uald.old5 && uald.new3 < uald.old3) 
+    {
+      /* new 5' end is bigger, new 3' end is smaller,
+       * default is extend 5' */
+      uop->submitter_opts->sequence_update_type = eSequenceUpdateExtend5;
+    }
+    else if (uald.new5 < uald.old5 && uald.new3 > uald.old3)
+    {
+      /* new 3' end is bigger, new 5' end is smaller,
+       * default is extend 3' */
+      uop->submitter_opts->sequence_update_type = eSequenceUpdateExtend3;
+    }
+    else
+    {
+      uop->submitter_opts->sequence_update_type = eSequenceUpdateReplace;
+    }
+  }
+  PointerToDialog (ssufp->options_dlg, uop);
+  uop = UpdateOptionsFree (uop);
   
   Show (w);
   Update ();  
 }
 
-static void TestUpdateSequence (IteM i, Boolean is_indexer)
+static void TestUpdateSequence (IteM i, Boolean is_indexer, Boolean do_update)
 {
   BaseFormPtr        bfp;
   BioseqPtr          orig_bsp;
@@ -16167,17 +18104,27 @@ static void TestUpdateSequence (IteM i, Boolean is_indexer)
     return;
   }
   
-  UpdateSingleSequence (orig_bsp, update_list, is_indexer, bfp->input_entityID);
+  UpdateSingleSequence (orig_bsp, update_list, is_indexer, do_update, bfp->input_entityID);
 }
 
 extern void TestUpdateSequenceIndexer (IteM i)
 {
-  TestUpdateSequence (i, TRUE);
+  TestUpdateSequence (i, TRUE, TRUE);
+}
+
+extern void TestExtendSequenceIndexer (IteM i)
+{
+  TestUpdateSequence (i, TRUE, FALSE);
 }
 
 extern void TestUpdateSequenceSubmitter (IteM i)
 {
-  TestUpdateSequence (i, FALSE);
+  TestUpdateSequence (i, FALSE, TRUE);
+}
+
+extern void TestExtendSequenceSubmitter (IteM i)
+{
+  TestUpdateSequence (i, FALSE, FALSE);
 }
 
 typedef struct seqentrydownload
@@ -16235,6 +18182,9 @@ static SeqEntryPtr DownloadUpdateSequence (void)
   Char                  str [32];
   Int4                  uid;  
   SeqIdPtr              sip;
+  Uint2                 entityID;
+  BioseqPtr             bsp;
+  BioseqSetPtr          bssp;
   
   w = MovableModalWindow (-50, -33, -10, -10, "Download From Entrez", NULL);
   SetObjectExtra (w, &sedd, NULL);
@@ -16312,13 +18262,28 @@ static SeqEntryPtr DownloadUpdateSequence (void)
       {
         Message (MSG_OK, "Unable to find this record in the database.");
       }
+      else
+      {
+        if (IS_Bioseq (fetched_sep))
+        {
+          bsp = (BioseqPtr) fetched_sep->data.ptrvalue;
+          entityID = ObjMgrGetEntityIDForPointer (bsp);
+        }
+        else
+        {
+          bssp = (BioseqSetPtr) fetched_sep->data.ptrvalue;
+          entityID = ObjMgrGetEntityIDForPointer (bssp);
+        }
+        AssignIDsInEntityEx (entityID, 0, NULL, NULL);
+      }
     }
   }
   Remove (w);
   return fetched_sep;
 }
 
-extern void TestUpdateSequenceViaDownload (IteM i)
+
+static void UpdateSequenceViaDownload (IteM i, Boolean is_indexer)
 {
   BaseFormPtr bfp;
   SeqEntryPtr sep;
@@ -16350,7 +18315,16 @@ extern void TestUpdateSequenceViaDownload (IteM i)
     return;
   }
  
-  UpdateSingleSequence (orig_bsp, update_sep, TRUE, bfp->input_entityID);
+  UpdateSingleSequence (orig_bsp, update_sep, is_indexer, TRUE, bfp->input_entityID);
 }
 
+extern void UpdateSequenceViaDownloadIndexer (IteM i)
+{
+  UpdateSequenceViaDownload (i, TRUE);
+}
+
+extern void UpdateSequenceViaDownloadSubmitter (IteM i)
+{
+  UpdateSequenceViaDownload (i, FALSE);
+}
 

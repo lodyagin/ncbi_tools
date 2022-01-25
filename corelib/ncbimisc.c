@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/23/91
 *
-* $Revision: 6.29 $
+* $Revision: 6.30 $
 *
 * File Description: 
 *   	miscellaneous functions
@@ -43,6 +43,9 @@
 * 02-16-94 Epstein     Retired Gestalt functions and definitions
 *
 * $Log: ncbimisc.c,v $
+* Revision 6.30  2005/11/16 16:36:11  kans
+* support for PowerPC and Intel chips for Macintosh
+*
 * Revision 6.29  2005/04/13 21:36:18  kans
 * restored mac ifdefs around Nlm_P2Cstr and Nlm_C2Pstr functions
 *
@@ -1677,7 +1680,9 @@ NLM_EXTERN const Nlm_Char* Nlm_PlatformName(void)
 /* Mac */
 #if defined(OS_MAC)
 #  if defined(PROC_PPC)
-  return "PowerPC";
+  return "MacOS_PPC";
+#  elif defined(PROC_I80X86)
+  return "MacOS_386";
 #  elif defined(PROC_MC680X0)
   return "MacOS_68K";
 #  else

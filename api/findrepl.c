@@ -44,6 +44,11 @@
 * RCS Modification History:
 * -------------------------
 * $Log: findrepl.c,v $
+* Revision 6.14  2005/09/21 14:39:09  bollin
+* fixed bug in FindReplace where if the whole-word flag was specified but
+* the substring was found in a not-whole-word context earlier in the string
+* the search terminated early with a null result
+*
 * Revision 6.13  2005/04/26 21:33:52  kans
 * added SEQID_GPIPE
 *
@@ -237,6 +242,7 @@ static CharPtr SearchForString (
   CharPtr  ptr = NULL;
   size_t   strLen;
   CharPtr  tmp;
+  Boolean  keep_looking = TRUE;
 
   if (str == NULL || *str == '\0') return NULL;
   strLen = StringLen (str);
@@ -246,12 +252,29 @@ static CharPtr SearchForString (
   if (ptr == NULL) return NULL;
 
   if (whole_word) {
-    if (ptr > str) {
-      tmp = ptr - 1;
-      if (! IS_WHITESP (*tmp)) return NULL;
+    while (keep_looking && ptr != NULL)
+    {
+      keep_looking = FALSE;
+      if (ptr > str) {
+        tmp = ptr - 1;
+        if (! IS_WHITESP (*tmp))
+        {
+          keep_looking = TRUE;
+        }
+      }
+      if (!keep_looking)
+      {
+        tmp = ptr + StringLen (sub);
+        if (*tmp != '\0' && (! IS_WHITESP (*tmp)))
+        {
+          keep_looking = TRUE;
+        }
+      }
+      if (keep_looking)
+      {
+        ptr = FindSubString (ptr + subLen, sub, case_counts, strLen, subLen, d);
+      }
     }
-    tmp = ptr + StringLen (sub);
-    if (*tmp != '\0' && (! IS_WHITESP (*tmp))) return NULL;
   }
 
   return ptr;

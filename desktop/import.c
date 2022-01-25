@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/18/95
 *
-* $Revision: 6.50 $
+* $Revision: 6.52 $
 *
 * File Description: 
 *
@@ -217,6 +217,10 @@ static void CleanupImportPage (GraphiC g, VoidPtr data)
   MemFree (data);
 }
 
+extern void CleanupEvidenceGBQuals (GBQualPtr PNTR prevgbq);
+extern void InferenceDialogToGBQuals (DialoG d, SeqFeatPtr sfp);
+extern void VisStringDialogToGbquals (SeqFeatPtr sfp, DialoG d, CharPtr qual);
+
 static void ChangeKey (Handle obj)
 
 {
@@ -267,6 +271,9 @@ static void ChangeKey (Handle obj)
       sfp->cit = DialogToPointer (ifp->featcits);
       sfp->dbxref = DialogToPointer (ifp->dbxrefs);
       sfp->qual = DialogToPointer (ifp->gbquals);
+      CleanupEvidenceGBQuals (&(sfp->qual));
+      VisStringDialogToGbquals (sfp, ifp->experiment, "experiment");
+      InferenceDialogToGBQuals (ifp->inference, sfp);
       geneval = GetValue (ifp->gene);
       sep = GetTopSeqEntryForEntityID (ifp->input_entityID);
       StringCpy (title, "Feature");
@@ -2682,6 +2689,8 @@ typedef struct gbblockpage {
   ButtoN        htgsFulltop;
   ButtoN        htgsActivefin;
   ButtoN        htgsCancelled;
+  ButtoN        tpaExperimental;
+  ButtoN        tpaInferential;
   DialoG        kywds;
   DialoG        xaccns;
   DialoG        entryDate;
@@ -2704,6 +2713,8 @@ static void GBBlockPtrToGenBankPage (DialoG d, Pointer data)
   Boolean         isCancelled = FALSE;
   Boolean         isDraft = FALSE;
   Boolean         isFulltop = FALSE;
+  Boolean         isExperimental = FALSE;
+  Boolean         isInferential = FALSE;
   CharPtr         str;
   ValNodePtr      vnp;
 
@@ -2720,7 +2731,9 @@ static void GBBlockPtrToGenBankPage (DialoG d, Pointer data)
       if (StringICmp (str, "HTGS_DRAFT") != 0 &&
           StringICmp (str, "HTGS_FULLTOP") != 0 &&
           StringICmp (str, "HTGS_ACTIVEFIN") != 0 &&
-          StringICmp (str, "HTGS_CANCELLED") != 0) {
+          StringICmp (str, "HTGS_CANCELLED") != 0 &&
+          StringICmp (str, "TPA:EXPERIMENTAL") != 0 &&
+          StringICmp (str, "TPA:INFERENTIAL") != 0) {
         ValNodeCopyStr (&head, 0, str);
       }
     }
@@ -2738,12 +2751,20 @@ static void GBBlockPtrToGenBankPage (DialoG d, Pointer data)
         isActivefin = TRUE;
       } else if (StringICmp ((CharPtr) vnp->data.ptrvalue, "HTGS_CANCELLED") == 0) {
         isCancelled = TRUE;
+      } else if (StringICmp ((CharPtr) vnp->data.ptrvalue, "TPA:EXPERIMENTAL") == 0 ||
+                 StringICmp ((CharPtr) vnp->data.ptrvalue, "TPA_EXPERIMENTAL") == 0) {
+        isExperimental = TRUE;
+      } else if (StringICmp ((CharPtr) vnp->data.ptrvalue, "TPA:INFERENTIAL") == 0 ||
+                 StringICmp ((CharPtr) vnp->data.ptrvalue, "TPA_INFERENTIAL") == 0) {
+        isInferential = TRUE;
       }
     }
     SafeSetStatus (gpp->htgsDraft, isDraft);
     SafeSetStatus (gpp->htgsFulltop, isFulltop);
     SafeSetStatus (gpp->htgsActivefin, isActivefin);
     SafeSetStatus (gpp->htgsCancelled, isCancelled);
+    SafeSetStatus (gpp->tpaExperimental, isExperimental);
+    SafeSetStatus (gpp->tpaInferential, isInferential);
   }
 }
 
@@ -2756,6 +2777,8 @@ static Pointer GenBankPageToGBBlockPtr (DialoG d)
   Boolean         noCancelled;
   Boolean         noDraft;
   Boolean         noFulltop;
+  Boolean         noExperimental;
+  Boolean         noInferential;
   ValNodePtr      vnp;
 
   gbp = NULL;
@@ -2815,6 +2838,30 @@ static Pointer GenBankPageToGBBlockPtr (DialoG d)
           ValNodeCopyStr (&(gbp->keywords), 0, "HTGS_CANCELLED");
         }
       }
+      if (GetStatus (gpp->tpaExperimental)) {
+        noExperimental = TRUE;
+        for (vnp = gbp->keywords; vnp != NULL; vnp = vnp->next) {
+          if (StringICmp ((CharPtr) vnp->data.ptrvalue, "TPA:EXPERIMENTAL") == 0) {
+            noExperimental = FALSE;
+          }
+        }
+        if (noExperimental) {
+          ValNodeCopyStr (&(gbp->keywords), 0, "TPA:EXPERIMENTAL");
+        }
+      }
+      if (GetStatus (gpp->tpaInferential)) {
+        noInferential = TRUE;
+        for (vnp = gbp->keywords; vnp != NULL; vnp = vnp->next) {
+          if (StringICmp ((CharPtr) vnp->data.ptrvalue, "TPA:INFERENTIAL") == 0) {
+            noInferential = FALSE;
+          }
+        }
+        if (noInferential) {
+          ValNodeCopyStr (&(gbp->keywords), 0, "TPA:INFERENTIAL");
+        }
+      }
+
+
     }
   }
   return (Pointer) gbp;
@@ -2832,6 +2879,8 @@ static void DeleteKeywordProc (ButtoN b)
     SafeSetStatus (gpp->htgsFulltop, FALSE);
     SafeSetStatus (gpp->htgsActivefin, FALSE);
     SafeSetStatus (gpp->htgsCancelled, FALSE);
+    SafeSetStatus (gpp->tpaExperimental, FALSE);
+    SafeSetStatus (gpp->tpaInferential, FALSE);
   }
 }
 
@@ -2929,7 +2978,10 @@ static DialoG CreateGenBankDialog (GrouP h, CharPtr title, ValNodePtr sdp, GenBa
       if (vnp->next != NULL ||
           StringICmp ((CharPtr) vnp->data.ptrvalue, "HTGS_DRAFT") != 0 ||
           StringICmp ((CharPtr) vnp->data.ptrvalue, "HTGS_FULLTOP") != 0 ||
-          StringICmp ((CharPtr) vnp->data.ptrvalue, "HTGS_ACTIVEFIN") != 0) {
+          StringICmp ((CharPtr) vnp->data.ptrvalue, "HTGS_ACTIVEFIN") != 0 ||
+          StringICmp ((CharPtr) vnp->data.ptrvalue, "HTGS_CANCELLED") != 0 ||
+          StringICmp ((CharPtr) vnp->data.ptrvalue, "TPA:EXPERIMENTAL") != 0 ||
+          StringICmp ((CharPtr) vnp->data.ptrvalue, "TPA:INFERENTIAL") != 0) {
         showKeywords = TRUE;
       }
     }
@@ -2943,6 +2995,8 @@ static DialoG CreateGenBankDialog (GrouP h, CharPtr title, ValNodePtr sdp, GenBa
       gpp->htgsFulltop = CheckBox (f5, "HTGS_FULLTOP", NULL);
       gpp->htgsActivefin = CheckBox (f5, "HTGS_ACTIVEFIN", NULL);
       gpp->htgsCancelled = CheckBox (f5, "HTGS_CANCELLED", NULL);
+      gpp->tpaExperimental = CheckBox (f5, "TPA:EXPERIMENTAL", NULL);
+      gpp->tpaInferential = CheckBox (f5, "TPA:INFERENTIAL", NULL);
     }
     if (internal) {
       b = PushButton (m, "Delete All Keywords", DeleteKeywordProc);

@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.54 $
+* $Revision: 1.63 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -121,6 +121,18 @@ static SourceType source_qual_order [] = {
 
   SCQUAL_focus,
 
+  SCQUAL_lat_lon,
+  SCQUAL_collection_date,
+  SCQUAL_collected_by,
+  SCQUAL_identified_by,
+  /*
+  SCQUAL_fwd_primer_seq,
+  SCQUAL_rev_primer_seq,
+  SCQUAL_fwd_primer_name,
+  SCQUAL_rev_primer_name,
+  */
+  SCQUAL_PCR_primers,
+
   SCQUAL_note,
 
   SCQUAL_sequenced_mol,
@@ -156,24 +168,14 @@ static SourceType source_desc_note_order [] = {
   SCQUAL_teleomorph,
   SCQUAL_breed,
 
-  SCQUAL_lat_lon,
-  SCQUAL_collection_date,
-  SCQUAL_collected_by,
-  SCQUAL_identified_by,
-  /*
-  SCQUAL_fwd_primer_seq,
-  SCQUAL_rev_primer_seq,
-  SCQUAL_fwd_primer_name,
-  SCQUAL_rev_primer_name,
-  */
-  SCQUAL_PCR_primers,
-
   SCQUAL_genotype,
   SCQUAL_plastid_name,
 
   SCQUAL_endogenous_virus_name,
 
   SCQUAL_common_name,
+
+  SCQUAL_PCR_primer_note,
 
   SCQUAL_zero_orgmod,
   SCQUAL_one_orgmod,
@@ -209,18 +211,6 @@ static SourceType source_feat_note_order [] = {
   SCQUAL_teleomorph,
   SCQUAL_breed,
 
-  SCQUAL_lat_lon,
-  SCQUAL_collection_date,
-  SCQUAL_collected_by,
-  SCQUAL_identified_by,
-  /*
-  SCQUAL_fwd_primer_seq,
-  SCQUAL_rev_primer_seq,
-  SCQUAL_fwd_primer_name,
-  SCQUAL_rev_primer_name,
-  */
-  SCQUAL_PCR_primers,
-
   SCQUAL_genotype,
   SCQUAL_plastid_name,
 
@@ -231,6 +221,8 @@ static SourceType source_feat_note_order [] = {
   SCQUAL_subsource_note,
 
   SCQUAL_common_name,
+
+  SCQUAL_PCR_primer_note,
 
   SCQUAL_zero_orgmod,
   SCQUAL_one_orgmod,
@@ -302,6 +294,7 @@ NLM_EXTERN SourceQual asn2gnbk_source_quals [ASN2GNBK_TOTAL_SOURCE] = {
   { "orgmod_note",          Qual_class_orgmod    },
   { "pathovar",             Qual_class_orgmod    },
   { "PCR_primers",          Qual_class_pcr       },
+  { "PCR_primers",          Qual_class_pcr       },
   { "plasmid",              Qual_class_subsource },
   { "plastid",              Qual_class_subsource },
   { "pop_variant",          Qual_class_subsource },
@@ -316,7 +309,7 @@ NLM_EXTERN SourceQual asn2gnbk_source_quals [ASN2GNBK_TOTAL_SOURCE] = {
   { "serovar",              Qual_class_orgmod    },
   { "sex",                  Qual_class_subsource },
   { "specific_host",        Qual_class_orgmod    },
-  { "specimen_voucher",     Qual_class_orgmod    },
+  { "specimen_voucher",     Qual_class_voucher   },
   { "strain",               Qual_class_orgmod    },
   { "sub_clone",            Qual_class_subsource },
   { "subgroup",             Qual_class_orgmod    },
@@ -415,11 +408,11 @@ NLM_EXTERN CharPtr legalDbXrefs [] = {
   "GDB",
   "GeneDB",
   "GeneID",
-  "Genew",
   "GI",
   "GO",
   "GOA",
   "H-InvDB",
+  "HGNC",
   "HSSP",
   "IFO",
   "IMGT/GENE-DB",
@@ -436,6 +429,7 @@ NLM_EXTERN CharPtr legalDbXrefs [] = {
   "MIM",
   "NextDB",
   "niaEST",
+  "PDB",
   "PGN",
   "PIR",
   "PSEUDO",
@@ -448,8 +442,8 @@ NLM_EXTERN CharPtr legalDbXrefs [] = {
   "SubtiList",
   "taxon",
   "UniGene",
-  "UniProt/Swiss-Prot",
-  "UniProt/TrEMBL",
+  "UniProtKB/Swiss-Prot",
+  "UniProtKB/TrEMBL",
   "UniSTS",
   "VBASE2",
   "WorfDB",
@@ -2423,70 +2417,340 @@ NLM_EXTERN CharPtr GetMolTypeQual (
   return NULL;
 }
 
-static CharPtr GetPCRPrimersString (
-  QualValPtr qvp
+typedef struct pcrstrs {
+  ValNodePtr  fwd_name_list;
+  ValNodePtr  fwd_seq_list;
+  ValNodePtr  rev_name_list;
+  ValNodePtr  rev_seq_list;
+  ValNodePtr  curr_fwd_name;
+  ValNodePtr  curr_fwd_seq;
+  ValNodePtr  curr_rev_name;
+  ValNodePtr  curr_rev_seq;
+  CharPtr     fwd_name;
+  CharPtr     fwd_seq;
+  CharPtr     rev_name;
+  CharPtr     rev_seq;
+} PcrStrs, PNTR PcrStrsPtr;
+
+static ValNodePtr ParseParenString (
+  CharPtr strs
 )
 
 {
-  CharPtr       fwd_name = NULL, fwd_seq = NULL,
-                rev_name = NULL, rev_seq = NULL,
-                prefix = NULL, str;
-  size_t        len;
+  ValNodePtr  head = NULL;
+  size_t      len;
+  CharPtr     ptr, str, tmp;
+
+  if (StringHasNoText (strs)) return NULL;
+
+  tmp = StringSave (strs);
+  str = tmp;
+  len = StringLen (str);
+  if (len > 1 && *str == '(' && str [len - 1] == ')' && StringChr (str + 1, '(') == NULL) {
+    str++;
+    while (StringDoesHaveText (str)) {
+      ptr = StringChr (str, ',');
+      if (ptr == NULL) {
+        ptr = StringChr (str, ')');
+      }
+      if (ptr != NULL) {
+        *ptr = '\0';
+        ptr++;
+      }
+      TrimSpacesAroundString (str);
+      /*
+      if (StringDoesHaveText (str)) {
+        ValNodeCopyStr (&head, 0, str);
+      }
+      */
+      ValNodeCopyStr (&head, 0, str);
+      str = ptr;
+    }
+  } else {
+    ValNodeCopyStr (&head, 0, str);
+  }
+
+  MemFree (tmp);
+  return head;
+}
+
+static void ParsePCRPrimerString (
+  QualValPtr qvp,
+  PcrStrsPtr psp
+)
+
+{
   SubSourcePtr  ssp;
 
-  if (qvp == NULL) return NULL;
+  if (qvp == NULL || psp == NULL) return;
+  MemSet ((Pointer) psp, 0, sizeof (PcrStrs));
 
   ssp = qvp [SCQUAL_fwd_primer_name].ssp;
   if (ssp != NULL) {
-    fwd_name = ssp->name;
+    psp->fwd_name_list = ParseParenString (ssp->name);
   }
   ssp = qvp [SCQUAL_fwd_primer_seq].ssp;
   if (ssp != NULL) {
-    fwd_seq = ssp->name;
+    psp->fwd_seq_list = ParseParenString (ssp->name);
   }
   ssp = qvp [SCQUAL_rev_primer_name].ssp;
   if (ssp != NULL) {
-    rev_name = ssp->name;
+    psp->rev_name_list = ParseParenString (ssp->name);
   }
   ssp = qvp [SCQUAL_rev_primer_seq].ssp;
   if (ssp != NULL) {
-    rev_seq = ssp->name;
+    psp->rev_seq_list = ParseParenString (ssp->name);
   }
 
-  len = StringLen (fwd_name) + StringLen (fwd_seq) +
-        StringLen (rev_name) + StringLen (rev_seq) + 80;
-  str = (CharPtr) MemNew (sizeof (Char) * len);
+  psp->curr_fwd_name = psp->fwd_name_list;
+  psp->curr_fwd_seq = psp->fwd_seq_list;
+  psp->curr_rev_name = psp->rev_name_list;
+  psp->curr_rev_seq = psp->rev_seq_list;
+}
+
+static CharPtr NextPCRPrimerString (
+  PcrStrsPtr psp,
+  Boolean isInNote
+)
+
+{
+  CharPtr     prefix = NULL, str;
+  size_t      len;
+  Boolean     okay = FALSE;
+  ValNodePtr  vnp;
+
+  if (psp == NULL) return NULL;
+
+  psp->fwd_name = NULL;
+  psp->fwd_seq = NULL;
+  psp->rev_name = NULL;
+  psp->rev_seq = NULL;
+
+  vnp = psp->curr_fwd_name;
+  if (vnp != NULL) {
+    psp->fwd_name = (CharPtr) vnp->data.ptrvalue;
+    psp->curr_fwd_name = vnp->next;
+    okay = TRUE;
+  }
+
+  vnp = psp->curr_fwd_seq;
+  if (vnp != NULL) {
+    psp->fwd_seq = (CharPtr) vnp->data.ptrvalue;
+    psp->curr_fwd_seq = vnp->next;
+    okay = TRUE;
+  }
+
+  vnp = psp->curr_rev_name;
+  if (vnp != NULL) {
+    psp->rev_name = (CharPtr) vnp->data.ptrvalue;
+    psp->curr_rev_name = vnp->next;
+    okay = TRUE;
+  }
+
+  vnp = psp->curr_rev_seq;
+  if (vnp != NULL) {
+    psp->rev_seq = (CharPtr) vnp->data.ptrvalue;
+    psp->curr_rev_seq = vnp->next;
+    okay = TRUE;
+  }
+
+  if (! okay) return NULL;
+
+  if (StringHasNoText (psp->fwd_seq) || StringHasNoText (psp->rev_seq)) {
+    if (! isInNote) return StringSave ("");
+    prefix = "PCR_primers=";
+  } else {
+    if (isInNote) return StringSave ("");
+  }
+
+  len = StringLen (psp->fwd_name) + StringLen (psp->fwd_seq) +
+        StringLen (psp->rev_name) + StringLen (psp->rev_seq);
+  if (len == 0) return StringSave ("");
+  str = (CharPtr) MemNew (sizeof (Char) * len + 80);
   if (str == NULL) return NULL;
 
-  if (StringDoesHaveText (fwd_name)) {
+  if (StringDoesHaveText (psp->fwd_name)) {
     StringCat (str, prefix);
     StringCat (str, "fwd_name: ");
-    StringCat (str, fwd_name);
+    StringCat (str, psp->fwd_name);
     prefix = ", ";
   }
 
-  if (StringDoesHaveText (fwd_seq)) {
+  if (StringDoesHaveText (psp->fwd_seq)) {
     StringCat (str, prefix);
     StringCat (str, "fwd_seq: ");
-    StringCat (str, fwd_seq);
+    StringCat (str, psp->fwd_seq);
     prefix = ", ";
   }
 
-  if (StringDoesHaveText (rev_name)) {
+  if (StringDoesHaveText (psp->rev_name)) {
     StringCat (str, prefix);
     StringCat (str, "rev_name: ");
-    StringCat (str, rev_name);
+    StringCat (str, psp->rev_name);
     prefix = ", ";
   }
 
-  if (StringDoesHaveText (rev_seq)) {
+  if (StringDoesHaveText (psp->rev_seq)) {
     StringCat (str, prefix);
     StringCat (str, "rev_seq: ");
-    StringCat (str, rev_seq);
+    StringCat (str, psp->rev_seq);
     prefix = ", ";
   }
 
   return str;
+}
+
+static void ClearPCRPrimerString (
+  PcrStrsPtr psp
+)
+
+{
+  if (psp == NULL) return;
+
+  ValNodeFreeData (psp->fwd_name_list);
+  ValNodeFreeData (psp->fwd_seq_list);
+  ValNodeFreeData (psp->rev_name_list);
+  ValNodeFreeData (psp->rev_seq_list);
+
+  MemSet ((Pointer) psp, 0, sizeof (PcrStrs));
+}
+
+static CharPtr  Nlm_spec_voucher_sites [] = {
+  "MVZ",
+  NULL
+};
+
+static CharPtr  Nlm_spec_voucher_links [] = {
+  "http://elib.cs.berkeley.edu/cgi-bin/mvz_query?counts=all&where-mvz_dump.Cat_Num=", /* MVZ */
+  NULL
+};
+
+static Int2 VoucherNameIsValid (
+  CharPtr name
+)
+
+{
+  Int2     L, R, mid;
+  CharPtr  ptr;
+  Char     str [256];
+
+  if (StringHasNoText (name)) return -1;
+  StringNCpy_0 (str, name, sizeof (str));
+  ptr = StringChr (str, ' ');
+  if (ptr != NULL) {
+    *ptr = '\0';
+  }
+
+  L = 0;
+  R = sizeof (Nlm_spec_voucher_sites) / sizeof (Nlm_spec_voucher_sites[0]) - 1; /* -1 because now NULL terminated */
+
+  while (L < R) {
+    mid = (L + R) / 2;
+    if (StringICmp (Nlm_spec_voucher_sites[mid], str) < 0) {
+      L = mid + 1;
+    } else {
+      R = mid;
+    }
+  }
+
+  if (StringICmp (Nlm_spec_voucher_sites[R], str) == 0) {
+    return R;
+  }
+
+  return -1;
+}
+
+/* works on subname copy that it can change */
+
+static Boolean ParseSecVoucher (
+  CharPtr subname,
+  CharPtr PNTR inst,
+  CharPtr PNTR id,
+  CharPtr PNTR rem
+)
+
+{
+  CharPtr  ptr;
+
+  if (StringHasNoText (subname)) return FALSE;
+  if (StringLen (subname) < 5) return FALSE;
+  TrimSpacesAroundString (subname);
+
+  if (*subname != '[') return FALSE;
+  *inst = subname + 1;
+  ptr = StringChr (subname + 1, ' ');
+  if (ptr == NULL) return FALSE;
+  *ptr = '\0';
+  ptr++;
+  TrimSpacesAroundString (ptr);
+  *id = ptr;
+  ptr = StringChr (ptr, ']');
+  if (ptr == NULL) return FALSE;
+  *ptr = '\0';
+  ptr++;
+  TrimSpacesAroundString (ptr);
+  *rem = ptr;
+
+  if (StringHasNoText (*inst) || StringHasNoText (*id)) return FALSE;
+
+  return TRUE;
+}
+
+static void Do_www_specimen_voucher (
+  StringItemPtr ffstring,
+  CharPtr inst,
+  CharPtr id,
+  CharPtr rem,
+  CharPtr link
+)
+
+{
+  if ( ffstring == NULL || inst == NULL || id == NULL || link == NULL ) return;
+
+  FFAddOneString(ffstring, "[", FALSE, FALSE, TILDE_IGNORE);
+  FFAddOneString(ffstring, inst, FALSE, FALSE, TILDE_IGNORE);
+  FFAddOneString(ffstring, " ", FALSE, FALSE, TILDE_IGNORE);
+  FFAddTextToString(ffstring, "<a href=", link, id, FALSE, FALSE, TILDE_IGNORE);
+  FFAddTextToString(ffstring, ">", id, "</a>", FALSE, FALSE, TILDE_IGNORE);
+  FFAddOneString(ffstring, "]", FALSE, FALSE, TILDE_IGNORE);
+  if (StringDoesHaveText (rem)) {
+    FFAddOneString(ffstring, " ", FALSE, FALSE, TILDE_IGNORE);
+    FFAddOneString(ffstring, rem, FALSE, FALSE, TILDE_IGNORE);
+  }
+}
+
+static void FF_www_specimen_voucher (
+  IntAsn2gbJobPtr ajp,
+  StringItemPtr ffstring,
+  CharPtr subname
+)
+
+{
+  Char     buf [128];
+  CharPtr  inst = NULL, id = NULL, rem = NULL, link = NULL;
+  Int2     R;
+
+  if ( ffstring == NULL || subname == NULL ) return;
+  if (! GetWWW (ajp)) { /* not in www mode */
+    FFAddTextToString(ffstring, NULL, subname, NULL, FALSE, TRUE, TILDE_TO_SPACES);
+    return;
+  }
+  StringNCpy_0 (buf, subname, sizeof (buf));
+  if (! ParseSecVoucher (buf, &inst, &id, &rem)) {
+    FFAddTextToString(ffstring, NULL, subname, NULL, FALSE, TRUE, TILDE_TO_SPACES);
+    return;
+  }
+  R = VoucherNameIsValid (inst);
+  if (R < 0) {
+    FFAddTextToString(ffstring, NULL, subname, NULL, FALSE, TRUE, TILDE_TO_SPACES);
+    return;
+  }
+  link = Nlm_spec_voucher_links [R];
+  if (link == NULL) {
+    FFAddTextToString(ffstring, NULL, subname, NULL, FALSE, TRUE, TILDE_TO_SPACES);
+    return;
+  }
+  Do_www_specimen_voucher (ffstring, inst, id, rem, link);
 }
 
 NLM_EXTERN CharPtr FormatSourceFeatBlock (
@@ -2524,6 +2788,7 @@ NLM_EXTERN CharPtr FormatSourceFeatBlock (
   OrgNamePtr         onp = NULL;
   OrgRefPtr          orp = NULL;
   CharPtr            prefix;
+  PcrStrs            ps;
   SourceType PNTR    qualtbl = NULL;
   QualValPtr         qvp;
   SeqDescrPtr        sdp;
@@ -2717,6 +2982,7 @@ NLM_EXTERN CharPtr FormatSourceFeatBlock (
       qvp [SCQUAL_rev_primer_name].ssp != NULL ||
       qvp [SCQUAL_rev_primer_seq].ssp != NULL) {
     qvp [SCQUAL_PCR_primers].ble = TRUE;
+    qvp [SCQUAL_PCR_primer_note].ble = TRUE;
   }
 
   /* now print qualifiers from table */
@@ -2783,6 +3049,25 @@ NLM_EXTERN CharPtr FormatSourceFeatBlock (
         }
         break;
 
+      case Qual_class_voucher :
+        omp = qvp [idx].omp;
+        if (lastomptype == 0 && omp != NULL) {
+          lastomptype = omp->subtype;
+        }
+        while (omp != NULL && omp->subtype == lastomptype) {
+          if (StringIsJustQuotes (omp->subname)) {
+            FFAddTextToString(ffstring, "/", asn2gnbk_source_quals [idx].name, "=\"\"\n",
+                              FALSE, TRUE, TILDE_IGNORE);
+          } else if (! StringHasNoText (omp->subname)) {
+            FFAddTextToString(ffstring, "/", asn2gnbk_source_quals [idx].name, "=\"",
+                              FALSE, TRUE, TILDE_IGNORE);
+            FF_www_specimen_voucher(ajp, ffstring, omp->subname);
+            FFAddOneString(ffstring, "\"\n", FALSE, FALSE, TILDE_IGNORE);
+          }
+          omp = omp->next;
+        }
+        break;
+
       case Qual_class_subsource :
         ssp = qvp [idx].ssp;
         if (lastssptype == 0 && ssp != NULL) {
@@ -2805,6 +3090,25 @@ NLM_EXTERN CharPtr FormatSourceFeatBlock (
                               FALSE, TRUE, TILDE_TO_SPACES);
           }
           ssp = ssp->next;
+        }
+        break;
+
+      case Qual_class_pcr :
+        if (qvp [idx].ble) {
+          lastssptype = 0;
+          ParsePCRPrimerString (qvp, &ps);
+          str = NextPCRPrimerString (&ps, FALSE);
+          while (str != NULL) {
+            if (! StringHasNoText (str)) {
+              FFAddTextToString(ffstring, "/", asn2gnbk_source_quals [idx].name, "=",
+                                FALSE, TRUE, TILDE_IGNORE);
+              FFAddTextToString(ffstring, "\"", str, "\"\n",
+                                FALSE, TRUE, TILDE_TO_SPACES);
+            }
+            MemFree (str);
+            str = NextPCRPrimerString (&ps, FALSE);
+          }
+          ClearPCRPrimerString (&ps);
         }
         break;
 
@@ -2913,24 +3217,6 @@ NLM_EXTERN CharPtr FormatSourceFeatBlock (
                 }
                 break;
 
-              case Qual_class_pcr :
-                if (qvp [jdx].ble) {
-                  lastssptype = 0;
-                  str = GetPCRPrimersString (qvp);
-                  if (StringIsJustQuotes (str)) {
-                    FFAddTextToString(ffstring, "/", asn2gnbk_source_quals [jdx].name, "=\"\"\n",
-                                      FALSE, TRUE, TILDE_IGNORE);
-
-                  } else if (! StringHasNoText (str)) {
-                    FFAddTextToString(ffstring, "/", asn2gnbk_source_quals [jdx].name, "=",
-                                      FALSE, TRUE, TILDE_IGNORE);
-                    FFAddTextToString(ffstring, "\"", str, "\"\n",
-                                      FALSE, TRUE, TILDE_TO_SPACES);
-                  }
-                  MemFree (str);
-                }
-                break;
-
               default :
                 break;
             }
@@ -3035,16 +3321,20 @@ NLM_EXTERN CharPtr FormatSourceFeatBlock (
               break;
 
             case Qual_class_pcr :
-              if (! ajp->flags.srcQualsToNote) break;
               if (qvp [jdx].ble) {
                 lastssptype = 0;
-                str = GetPCRPrimersString (qvp);
-                if (StringDoesHaveText (str)) {
-                  sprintf (buf, "%s%s: ", prefix, asn2gnbk_source_quals [jdx].name);
-                  add_period = s_RemovePeriodFromEnd (str);
-                  FFAddString_NoRedund (unique, buf, str, NULL);
+                ParsePCRPrimerString (qvp, &ps);
+                str = NextPCRPrimerString (&ps, TRUE);
+                while (str != NULL) {
+                  if (! StringHasNoText (str)) {
+                    FFAddString_NoRedund (unique, prefix, str, NULL);
+                    add_period = FALSE;
+                    prefix = "; ";
+                  }
+                  MemFree (str);
+                  str = NextPCRPrimerString (&ps, TRUE);
                 }
-                MemFree (str);
+                ClearPCRPrimerString (&ps);
               }
               break;
 
@@ -3749,18 +4039,25 @@ static void ExpandSeqLine (
 }
 
 static Int2 ProcessGapSpecialFormat (
+  Asn2gbFormatPtr afp,
   IntAsn2gbJobPtr ajp,
+  BioseqPtr bsp,
   StringItemPtr ffstring,
   CharPtr buf,
-  CharPtr nextchars,
-  Boolean is_na
+  CharPtr nextchars
 )
 
 {
-  Char  gapbuf [80];
-  Char  pad;
-  Int2  startgapgap = 0, endgap = 0;
+  Char      fmt_buf [32];
+  Char      gapbuf [80];
+  Int4      gi;
+  Char      gi_buf [16];
+  Boolean   is_na;
+  Char      pad;
+  SeqIdPtr  sip;
+  Int2      startgapgap = 0, endgap = 0;
 
+  is_na = ISA_na (bsp->mol);
   if (is_na) {
     pad = 'n';
   } else {
@@ -3782,6 +4079,26 @@ static Int2 ProcessGapSpecialFormat (
       sprintf (gapbuf, "          [gap %ld aa]", (long) ajp->seqGapCurrLen);
     }
     FFAddOneString (ffstring, gapbuf, FALSE, FALSE, TILDE_TO_SPACES);
+    if (GetWWW (ajp) && ajp->mode == ENTREZ_MODE && afp != NULL &&
+      (ajp->format == GENBANK_FMT || ajp->format == GENPEPT_FMT)) {
+      gi = 0;
+      for (sip = bsp->id; sip != NULL; sip = sip->next) {
+        if (sip->choice == SEQID_GI) {
+          gi = (Int4) sip->data.intvalue;
+        }
+      }
+      if (gi > 0) {
+        sprintf(gi_buf, "%ld", (long) gi);
+        sprintf(fmt_buf, "&fmt_mask=%ld", (long) EXPANDED_GAP_DISPLAY);
+        FFAddOneString (ffstring, "    <a href=", FALSE, FALSE, TILDE_IGNORE);
+        FFAddOneString (ffstring, link_featc, FALSE, FALSE, TILDE_IGNORE);
+        FFAddOneString (ffstring, "val=", FALSE, FALSE, TILDE_IGNORE);
+        FFAddOneString (ffstring, gi_buf, FALSE, FALSE, TILDE_IGNORE);
+        FFAddOneString (ffstring, fmt_buf, FALSE, FALSE, TILDE_IGNORE);
+        FFAddOneString (ffstring, ">Expand Ns", FALSE, FALSE, TILDE_IGNORE);
+        FFAddOneString (ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
+      }
+    }
     FFAddOneChar (ffstring, '\n', FALSE);
     ajp->seqGapCurrLen = 0;
     FixGapAtStart (buf, ' ');
@@ -3958,7 +4275,7 @@ NLM_EXTERN CharPtr FormatSequenceBlock (
       buf [count] = '\0';
       startgapgap = 0;
       if (ajp->specialGapFormat) {
-        startgapgap = ProcessGapSpecialFormat (ajp, ffstring, buf, ptr, ISA_na (bsp->mol));
+        startgapgap = ProcessGapSpecialFormat (afp, ajp, bsp, ffstring, buf, ptr);
       }
       if (StringDoesHaveText (buf)) {
         ExpandSeqLine (buf);
@@ -3975,7 +4292,7 @@ NLM_EXTERN CharPtr FormatSequenceBlock (
   if (count > 0) {
     startgapgap = 0;
     if (ajp->specialGapFormat) {
-      startgapgap = ProcessGapSpecialFormat (ajp, ffstring, buf, ptr, ISA_na (bsp->mol));
+      startgapgap = ProcessGapSpecialFormat (afp, ajp, bsp, ffstring, buf, ptr);
     }
     if (StringDoesHaveText (buf)) {
       ExpandSeqLine (buf);

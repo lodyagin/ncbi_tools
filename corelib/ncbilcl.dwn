@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/1/94
 *
-* $Revision: 6.6 $
+* $Revision: 6.7 $
 *
 * File Description:
 *		system dependent header
@@ -41,6 +41,9 @@
 * -------  ----------    ---------------------------------------------------
 *
 * $Log: ncbilcl.dwn,v $
+* Revision 6.7  2005/11/16 16:22:32  kans
+* support for PowerPC and Intel chips in PROC_ and _ENDIAN flags
+*
 * Revision 6.6  2003/09/05 21:22:58  beloslyu
 * add DARWIN def
 *
@@ -82,7 +85,23 @@
 #define OS_UNIX
 #define DARWIN
 #define OS_UNIX_DARWIN
+
+/* Mac may be PowerPC or Intel chip */
+#ifdef PER_ARCH_CFLAGS_ppc
 #define PROC_PPC
+#endif
+#ifdef PER_ARCH_CFLAGS_i386
+#define PROC_I80X86
+#define PROC_I80_386
+#endif
+
+/* for backward compatibility */
+#ifndef PROC_I80X86 
+#ifndef PROC_PPC 
+#define PROC_PPC 
+#endif 
+#endif 
+
 #define WIN_DUMB
 
 /*----------------------------------------------------------------------*/
@@ -150,7 +169,21 @@
 #define KBYTE           (1024)
 #define MBYTE           (1048576)
 
-#define IS_BIG_ENDIAN
+/* Mac may be PowerPC or Intel chip */
+#ifdef __BIG_ENDIAN__ 
+#define IS_BIG_ENDIAN 
+#endif 
+#ifdef __LITTLE_ENDIAN__ 
+#define IS_LITTLE_ENDIAN 
+#endif 
+
+/* for backward compatibility */
+#ifndef IS_LITTLE_ENDIAN 
+#ifndef IS_BIG_ENDIAN 
+#define IS_BIG_ENDIAN 
+#endif 
+#endif 
+
 #define TEMPNAM_AVAIL
 
 /*----------------------------------------------------------------------*/

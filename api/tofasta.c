@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/12/91
 *
-* $Revision: 6.147 $
+* $Revision: 6.148 $
 *
 * File Description:  various sequence objects to fasta output
 *
@@ -39,6 +39,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: tofasta.c,v $
+* Revision 6.148  2005/09/12 17:44:21  kans
+* in complete chromosome title, use virus instead of virion
+*
 * Revision 6.147  2005/07/15 19:01:37  kans
 * minor fixes for Xcode warnings
 *
@@ -3974,7 +3977,7 @@ static CharPtr organelleByItself [] = {
   NULL,
   "cyanelle",
   "provirus",
-  "virion",
+  "virus",
   "nucleomorph",
   "apicoplast",
   "leucoplast",
@@ -3996,7 +3999,7 @@ static CharPtr organelleWithPlasmid [] = {
   NULL,
   "cyanelle",
   "proviral",
-  "virion",
+  "virus",
   "nucleomorph",
   "apicoplast",
   "leucoplast",

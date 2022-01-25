@@ -1,4 +1,4 @@
-/* $Id: blast_util.h,v 1.68 2005/08/09 19:25:30 dondosha Exp $
+/* $Id: blast_util.h,v 1.72 2005/11/16 14:31:36 madden Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -6,7 +6,7 @@
  *
  *  This software/database is a "United States Government Work" under the
  *  terms of the United States Copyright Act.  It was written as part of
- *  the author's offical duties as a United States Government employee and
+ *  the author's official duties as a United States Government employee and
  *  thus cannot be copyrighted.  This software/database is freely available
  *  to the public for use. The National Library of Medicine and the U.S.
  *  Government have not placed any restriction on its use or reproduction.
@@ -23,7 +23,6 @@
  *
  * ===========================================================================
  *
- * Author: Ilya Dondoshansky
  *
  */
 
@@ -194,7 +193,7 @@ Int2 GetReverseNuclSequence(const Uint1* sequence, Int4 length,
  * @param prog_number Integer corresponding to the BLAST program
  * @param context_number Context number 
  * @return Sequence frame: -1,1 for nucleotides, -3,-2,-1,1,2,3 for 
- * translations, 0 for proteins and 127 in case of unsupported program
+ * translations, 0 for proteins and INT1_MAX in case of unsupported program
 */
 NCBI_XBLAST_EXPORT
 Int1 BLAST_ContextToFrame(EBlastProgramType prog_number, Uint4 context_number);
@@ -214,6 +213,18 @@ BlastQueryInfo* BlastQueryInfoFree(BlastQueryInfo* query_info);
 /** Duplicates the query information structure */
 NCBI_XBLAST_EXPORT
 BlastQueryInfo* BlastQueryInfoDup(BlastQueryInfo* query_info);
+
+/** Obtains the sequence length for a given query in the query, without taking
+ * into consideration any applicable translations 
+ * @param qinfo BlastQueryInfo structure [in]
+ * @param program CORE program type [in]
+ * @param query_index number of the query 
+ * (query_index < BlastQueryInfo::num_queries) [in]
+ * @return the length of the query sequence requested
+ */
+Int4 BlastQueryInfoGetQueryLength(const BlastQueryInfo* qinfo,
+                                  EBlastProgramType program,
+                                  Int4 query_index);
 
 /** Create auxiliary query structures with all data corresponding
  * to a single query sequence within a concatenated set. Allocates the 
@@ -399,6 +410,13 @@ Blast_SetUpSubjectTranslation(BLAST_SequenceBlk* subject_blk,
                               Uint1** translation_buffer, 
                               Int4** frame_offsets,
                               Boolean* partial_translation);
+
+/** Get the number of contexts for a given program. This corresponds to the
+ * number of translation frames or strands whenever applicable. 
+ * @return 0 on unsupported program, non-zero otherwise
+ */
+NCBI_XBLAST_EXPORT
+unsigned int BLAST_GetNumberOfContexts(EBlastProgramType program);
 
 #ifdef __cplusplus
 }

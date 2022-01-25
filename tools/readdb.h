@@ -41,7 +41,7 @@ Contents: defines and prototypes used by readdb.c and formatdb.c.
 *
 * Version Creation Date:   3/21/95
 *
-* $Revision: 6.162 $
+* $Revision: 6.164 $
 *
 * File Description: 
 *       Functions to rapidly read databases from files produced by formatdb.
@@ -56,6 +56,12 @@ Contents: defines and prototypes used by readdb.c and formatdb.c.
 *
 * RCS Modification History:
 * $Log: readdb.h,v $
+* Revision 6.164  2005/10/04 20:40:50  madden
+* Make PrintDbInformationBasicEx public
+*
+* Revision 6.163  2005/10/04 15:44:54  madden
+* Workaround to time-out problem of PrintDbInformationWithRID
+*
 * Revision 6.162  2005/07/28 14:57:10  coulouri
 * remove dead code
 *
@@ -1738,7 +1744,11 @@ NLM_EXTERN Boolean BLASTFileFunc (BioseqPtr bsp, Int2 key, CharPtr buf,
 Print a summary of the database used.
 */
 Boolean LIBCALL PrintDbInformation PROTO((CharPtr database, Boolean is_aa, Int4 line_length, FILE *outfp, Boolean html));
-Boolean LIBCALL PrintDbInformationWithRID PROTO((CharPtr database, Boolean is_aa, Int4 line_length, FILE *outfp, Boolean html, CharPtr rid));
+Boolean LIBCALL PrintDbInformationWithRID PROTO((CharPtr database, Boolean is_aa, Int4 line_length, FILE *outfp, Boolean html, CharPtr rid, Boolean query_is_aa));
+Boolean LIBCALL PrintDbInformationBasicEx PROTO((Boolean is_aa, Int4 line_length,
+                           CharPtr definition, Int4 number_seqs,
+                           Int8 total_length, FILE *outfp, Boolean html,
+                           Boolean with_links));
 
 Boolean LIBCALL PrintDbInformationBasic PROTO((CharPtr database, Boolean is_aa, Int4 line_length, CharPtr definition, Int4 number_seqs, Int8 total_length, FILE *outfp, Boolean html));
 

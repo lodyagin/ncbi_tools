@@ -1,4 +1,4 @@
-/* $Id: blast_options.c,v 1.171 2005/06/24 12:15:40 madden Exp $
+/* $Id: blast_options.c,v 1.175 2005/11/16 14:27:03 madden Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -6,7 +6,7 @@
  *
  *  This software/database is a "United States Government Work" under the
  *  terms of the United States Copyright Act.  It was written as part of
- *  the author's offical duties as a United States Government employee and
+ *  the author's official duties as a United States Government employee and
  *  thus cannot be copyrighted.  This software/database is freely available
  *  to the public for use. The National Library of Medicine and the U.S.
  *  Government have not placed any restriction on its use or reproduction.
@@ -34,7 +34,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_options.c,v 1.171 2005/06/24 12:15:40 madden Exp $";
+    "$Id: blast_options.c,v 1.175 2005/11/16 14:27:03 madden Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_options.h>
@@ -552,9 +552,9 @@ BLAST_FillScoringOptions(BlastScoringOptions* options,
          options->gap_extend = BLAST_GAP_EXTN_NUCL;
       }
    }
-   if (gap_open)
+   if (gap_open >= 0)
       options->gap_open = gap_open;
-   if (gap_extend)
+   if (gap_extend >= 0)
       options->gap_extend = gap_extend;
 
    return 0;
@@ -589,7 +589,7 @@ BlastScoringOptionsValidate(EBlastProgramType program_number,
                             "BLASTN penalty must be negative");
 			return (Int2) code;
 		}
-                if (options->gap_open > 0 && options->gap_extend == 0) 
+                if (options->gapped_calculation && options->gap_open > 0 && options->gap_extend == 0) 
                 {
                         Int4 code=2;
                         Int4 subcode=1;
@@ -601,12 +601,13 @@ BlastScoringOptionsValidate(EBlastProgramType program_number,
 	}
 	else
 	{
-		Int2 status=0;
-
-		if ((status=Blast_KarlinBlkGappedLoadFromTables(NULL, options->gap_open, 
-                     options->gap_extend, options->decline_align, 
+                if (options->gapped_calculation && !Blast_ProgramIsRpsBlast(program_number))
+                {
+                    Int2 status=0;
+                    if ((status=Blast_KarlinBlkGappedLoadFromTables(NULL, options->gap_open,
+                     options->gap_extend, options->decline_align,
                      options->matrix)) != 0)
-		{
+                     {
 			if (status == 1)
 			{
 				char* buffer;
@@ -634,8 +635,8 @@ BlastScoringOptionsValidate(EBlastProgramType program_number,
 				sfree(buffer);
 				return (Int2) code;
 			}
-		}
-		
+                    }
+	       }
 	}
 
 	if (program_number != eBlastTypeBlastx && 
@@ -830,6 +831,66 @@ BLAST_FillLookupTableOptions(LookupTableOptions* options,
       options->variable_wordsize = variable_wordsize;
    }
    return 0;
+}
+
+Int2 BLAST_GetSuggestedThreshold(EBlastProgramType program_number, const char* matrixName, Int4* threshold)
+{
+
+    const Int4 kB62_threshold = 11;
+
+    if (program_number == eBlastTypeBlastn)
+      return 0;
+
+    if (matrixName == NULL)
+      return -1;
+
+    if(strcasecmp(matrixName, "BLOSUM62") == 0)
+        *threshold = kB62_threshold;
+    else if(strcasecmp(matrixName, "BLOSUM45") == 0)
+        *threshold = 14;
+    else if(strcasecmp(matrixName, "BLOSUM62_20") == 0)
+        *threshold = 100;
+    else if(strcasecmp(matrixName, "BLOSUM80") == 0)
+        *threshold = 12;
+    else if(strcasecmp(matrixName, "PAM30") == 0)
+        *threshold = 16;
+    else if(strcasecmp(matrixName, "PAM70") == 0)
+        *threshold = 14;
+    else
+        *threshold = kB62_threshold;
+
+    if (Blast_SubjectIsTranslated(program_number) == TRUE)
+        *threshold += 2;  /* Covers tblastn, tblastx, psi-tblastn rpstblastn. */
+    else if (Blast_QueryIsTranslated(program_number) == TRUE)
+        *threshold += 1;
+
+    return 0;
+}
+
+Int2 BLAST_GetSuggestedWindowSize(EBlastProgramType program_number, const char* matrixName, Int4* window_size)
+{
+    const Int4 kB62_windowsize = 40;
+
+    if (program_number == eBlastTypeBlastn)
+      return 0;
+
+    if (matrixName == NULL)
+      return -1;
+
+    if(strcasecmp(matrixName, "BLOSUM62") == 0)
+        *window_size = kB62_windowsize;
+    else if(strcasecmp(matrixName, "BLOSUM45") == 0)
+        *window_size = 60;
+    else if(strcasecmp(matrixName, "BLOSUM80") == 0)
+        *window_size = 25;
+    else if(strcasecmp(matrixName, "PAM30") == 0)
+        *window_size = 15;
+    else if(strcasecmp(matrixName, "PAM70") == 0)
+        *window_size = 20;
+    else
+        *window_size = kB62_windowsize;
+
+    return 0;
 }
 
 /** Validate options for the discontiguous word megablast
@@ -1204,6 +1265,18 @@ Int2 BLAST_ValidateOptions(EBlastProgramType program_number,
  * ===========================================================================
  *
  * $Log: blast_options.c,v $
+ * Revision 1.175  2005/11/16 14:27:03  madden
+ * Fix spelling in CRN
+ *
+ * Revision 1.174  2005/10/18 15:19:04  madden
+ * Exclude rpsblast from validation of gap parameters
+ *
+ * Revision 1.173  2005/10/17 14:03:34  madden
+ * Change convention for unset gap parameters from zero to negative number
+ *
+ * Revision 1.172  2005/08/29 13:51:44  madden
+ * Add functions BLAST_GetSuggestedThreshold and BLAST_GetSuggestedWindowSize
+ *
  * Revision 1.171  2005/06/24 12:15:40  madden
  * Add protection against NULL pointers in options free functons
  *

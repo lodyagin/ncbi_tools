@@ -1,6 +1,6 @@
 #!/bin/csh -f
 #
-# $Id: makedis.csh,v 1.111 2005/06/09 15:11:47 bollin Exp $
+# $Id: makedis.csh,v 1.112 2005/09/01 19:17:24 madden Exp $
 #
 ##                            PUBLIC DOMAIN NOTICE                          
 #               National Center for Biotechnology Information
@@ -437,7 +437,7 @@ set demo_stat = $status
 #  Might repeat what is done above on some platforms.
 #
 
-set mtapps = "blast blastall blastpgp seedtop megablast rpsblast blastclust"
+set mtapps = "blast blastall blastall_old blastpgp seedtop megablast rpsblast blastclust"
 
 rm -f $mtapps
 
@@ -492,7 +492,7 @@ else
    echo "may be found in the appropriate documentation files in ./ncbi/doc/" >> ../VERSION
    echo "uname -a ouput is: `uname -a`" >> ../VERSION
    foreach i ( Nentrez Psequin sbtedit asn2ff asn2xml asn2gb asn2idx asndhuff asntool bl2seq \
-	blastall blastcl3 blastclust blastpgp cdscan checksub \
+	blastall blastall_old blastcl3 blastclust blastpgp cdscan checksub \
 	copymat ddv demo_regexp demo_regexp_grep dosimple entrcmd entrez \
 	errhdr fa2htgs fastacmd findspl fmerge formatdb formatrpsdb getfeat \
         getmesh getpub getseq gil2bin idfetch impala indexpub makemat makeset \

@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: blastpgp.c,v 6.132 2005/07/28 16:16:46 coulouri Exp $";
+static char const rcsid[] = "$Id: blastpgp.c,v 6.133 2005/08/31 20:34:02 coulouri Exp $";
 
-/* $Id: blastpgp.c,v 6.132 2005/07/28 16:16:46 coulouri Exp $ */
+/* $Id: blastpgp.c,v 6.133 2005/08/31 20:34:02 coulouri Exp $ */
 /**************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -26,8 +26,23 @@ static char const rcsid[] = "$Id: blastpgp.c,v 6.132 2005/07/28 16:16:46 coulour
 * appreciated.                                                            *
 *                                                                         *
 **************************************************************************
- * $Revision: 6.132 $ 
+ * $Revision: 6.133 $ 
  * $Log: blastpgp.c,v $
+ * Revision 6.133  2005/08/31 20:34:02  coulouri
+ *     In PGPReadBlastOptions:
+ *       - set the value of options->kappa_expect_value.
+ *       - changed the wording of the warnings that
+ *         composition-based statistics mode > 1 are experimental.
+ *       - set mode for composition-based statistics to 1 if restarting
+ *         from a checkpoint.
+ *      In Main:
+ *       - Remove outdated code for setting options->hitlist_size and
+ *         options->expect_value
+ *       - Set the value of kappa_expect_value for composition-based
+ *         statistics, modes > 1.
+ *       - Correctly set the evalue for preliminary alignments when more
+ *         than one query is in the file.
+ *
  * Revision 6.132  2005/07/28 16:16:46  coulouri
  * remove dead code
  *
@@ -960,6 +975,7 @@ PGPBlastOptionsPtr PGPReadBlastOptions(void)
     
     options->dropoff_2nd_pass  = myargs[ARG_XDROP_UNGAPPED].floatvalue;
     options->expect_value  = (Nlm_FloatHi) myargs[ARG_EVALUE].floatvalue;
+    options->kappa_expect_value = options->expect_value;
     options->hitlist_size = MAX(bop->number_of_descriptions, 
                                 bop->number_of_alignments);
     
@@ -1054,13 +1070,13 @@ PGPBlastOptionsPtr PGPReadBlastOptions(void)
         options->tweak_parameters = COMP_BASED_STATISTICS;
         break;
     case '2':
-        ErrPostEx(SEV_WARNING, 1, 0, "this argument for composition-"
-                  "based statistics is currently experimental\n");
+        ErrPostEx(SEV_WARNING, 1, 0, "the -t 2 argument "
+                  "is currently experimental\n");
         options->tweak_parameters = COMP_MATRIX_ADJUSTMENT;
         break;
     case '3':
-        ErrPostEx(SEV_WARNING, 1, 0, "this argument for composition-"
-                  "based statistics is currently experimental\n");
+        ErrPostEx(SEV_WARNING, 1, 0, "the -t 3 argument "
+                  "is currently experimental\n");
         options->tweak_parameters = COMP_BASED_STATISTICS |
                                     COMP_MATRIX_ADJUSTMENT;
         break;
@@ -1069,26 +1085,17 @@ PGPBlastOptionsPtr PGPReadBlastOptions(void)
                   "based statistics; see -t options\n");
         break;
     }
+    if ((options->tweak_parameters > 1) &&
+        ((NULL != myargs[ARG_CHECKPOINT_INPUT].strvalue) ||
+         (NULL != myargs[ARG_ALIGNMENT_IN].strvalue))) {
+        ErrPostEx(SEV_WARNING, 1, 0,
+                  "-t larger than 1 not supported when restarting "
+                  "from a checkpoint; setting -t to 1\n");
+        options->tweak_parameters = 1;
+    }
     options->smith_waterman = (Boolean) myargs[ARG_SMITHWATERMAN].intvalue;
 
-    if (bop->options->tweak_parameters) {
-      /*allows for extra matches in first pass of screening,
-        hitlist_size */
-      bop->options->original_expect_value = bop->options->expect_value;
-      bop->options->hitlist_size *= 2; 
-      if (bop->options->tweak_parameters > 1) {
-        if ((NULL == myargs[ARG_CHECKPOINT_INPUT].strvalue) && (NULL == myargs[ARG_ALIGNMENT_IN].strvalue)) {
-	  /*round 1 and not recovering from checkpoint*/
-	  bop->options->expect_value = EVALUE_EXPAND * bop->options->expect_value;
-	}
-	else
-	  bop->options->tweak_parameters = 1;
-      }
-    }
-
-
     /* Seting list of gis to restrict search */
-    
     if (myargs[ARG_GILIST].strvalue) {
         options->gifile = StringSave(myargs[ARG_GILIST].strvalue);
     }
@@ -1767,16 +1774,21 @@ Int2 Main (void)
                                      &seed_seqloc,
                                      &lastSeqAligns, &numLastSeqAligns);
             } else {
-                if ((bop->options->tweak_parameters) && (thisPassNum > 1)) {
-                    /*allows for extra matches in first pass of screening,
-                      hitlist_size will be restored in
-                      BioseqBlastEngineCore for the second pass. */
-                    bop->options->original_expect_value = 
-                        bop->options->expect_value;
-		    search->pbp->cutoff_e =  bop->options->expect_value;
-                    bop->options->hitlist_size *= 2; 
+                if ((bop->options->tweak_parameters > 1) &&
+                    (1 == thisPassNum && (!recoverCheckpoint))) {
+                    /* round 1 and not recovering from checkpoint;
+                     * relax the cutoff evalue so that we don't loose
+                     * too many hits for which compositional adjustment
+                     * improves the evalue. */
+                    bop->options->expect_value = 
+                        bop->options->kappa_expect_value * EVALUE_EXPAND;
+                    search->pbp->cutoff_e = bop->options->expect_value;
+                } else {
+                    /* For pass > 1, set all expect_values equal */
+                    search->pbp->cutoff_e =
+                        bop->options->expect_value =
+                        bop->options->kappa_expect_value;
                 }
-                
                 if ((1 == thisPassNum) && (!recoverCheckpoint))
                     head = BioseqBlastEngineCore(search, bop->options, NULL);
                 else
@@ -1945,12 +1957,8 @@ Int2 Main (void)
         /* Here we will print out footer of BLAST output */
 
         /*need to temporarily adjust cutoff_e for printing*/
-	if(!bop->is_xml_output && !tabular_output) {
-	  if ((bop->options->tweak_parameters > 1) && (1 == thisPassNum)) 
-	    search->pbp->cutoff_e = EVALUE_EXPAND * bop->options->expect_value;
-	  PGPFormatFooter(bop, search);
-	  if ((bop->options->tweak_parameters > 1) && (1 == thisPassNum)) 
-	    search->pbp->cutoff_e = bop->options->original_expect_value;
+        if(!bop->is_xml_output && !tabular_output) {
+            PGPFormatFooter(bop, search);
         }
 
         /* PGPOneQueryCleanup */
@@ -1975,8 +1983,6 @@ Int2 Main (void)
         
         next_query = FALSE;
         next_query = PGPReadNextQuerySequence(bop);
-        if (bop->options->tweak_parameters)
-           bop->options->hitlist_size *= 2;   
 
         if (psixp) {
            PSIXmlReset(psixp);

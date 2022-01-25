@@ -29,13 +29,16 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.182 $
+* $Revision: 6.183 $
 *
 * File Description:  Sequence Utilities for objseq and objsset
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: sequtil.c,v $
+* Revision 6.183  2005/09/20 21:11:34  kans
+* added DV as NCBI EST
+*
 * Revision 6.182  2005/08/09 20:04:17  kans
 * added NW_ with 6 or 9 digits to WHICH_db_accession
 *
@@ -9079,7 +9082,8 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
 	      (StringICmp(temp,"CX") == 0) || 
 	      (StringICmp(temp,"DN") == 0) || 
 	      (StringICmp(temp,"DR") == 0) || 
-	      (StringICmp(temp,"DT") == 0) ) {                /* NCBI EST */
+	      (StringICmp(temp,"DT") == 0) || 
+	      (StringICmp(temp,"DV") == 0) ) {                /* NCBI EST */
               retcode = ACCN_NCBI_EST;
           } else if ((StringICmp(temp,"BV") == 0)) {      /* NCBI STS */
               retcode = ACCN_NCBI_STS;

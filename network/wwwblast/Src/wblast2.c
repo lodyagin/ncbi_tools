@@ -1,4 +1,4 @@
-/* $Id: wblast2.c,v 1.25 2005/08/19 15:53:50 coulouri Exp $
+/* $Id: wblast2.c,v 1.30 2005/12/05 16:14:48 coulouri Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -27,12 +27,27 @@
 *
 * Initial Creation Date: 10/23/2000
 *
-* $Revision: 1.25 $
+* $Revision: 1.30 $
 *
 * File Description:
 *        BLAST 2 Sequences CGI program
 *
 * $Log: wblast2.c,v $
+* Revision 1.30  2005/12/05 16:14:48  coulouri
+* c99 variable declaration breaks irix and solaris compilers
+*
+* Revision 1.29  2005/10/21 14:12:37  zaretska
+* Added code to treat NCBI_SEQID seq type the same way as  ACCESSION_GI to fix bug for Blast2Seq when called from 'Search trace archive...'
+*
+* Revision 1.28  2005/10/19 15:27:16  zaretska
+* Fixed disappearing version number in accession. Strip carriage return from accession/gi enetred in GUI.
+*
+* Revision 1.27  2005/10/04 15:55:21  coulouri
+* correct broken urls
+*
+* Revision 1.26  2005/09/07 14:21:41  coulouri
+* correct broken link
+*
 * Revision 1.25  2005/08/19 15:53:50  coulouri
 * correct grammar
 *
@@ -606,9 +621,9 @@ static void	Blast2SeqMainPage(CharPtr warning, CharPtr seq1, CharPtr seq2, CharP
            printf("<TD><B><I>\n");
            printf("<A HREF=http://www.ncbi.nlm.nih.gov/Entrez><font color=#ffffff>Entrez</font></A>\n");
            printf("</I></B></TD>\n");
-           printf("<TD><B><I><A HREF=bl2.html><font color=#ffffff>BLAST 2 sequences</font></A></I></B></TD>\n");
+           printf("<TD><B><I><A HREF=wblast2.cgi><font color=#ffffff>BLAST 2 sequences</font></A></I></B></TD>\n");
            printf("<TD><B><I><A HREF=http://www.ncbi.nlm.nih.gov/blast><font color=#ffffff>BLAST</font></A></I></B></TD>\n");
-           printf("<TD><B><I><A HREF=bl2_seg.html><font color=#ffffff>Example</font></A></I></B></TD>\n");
+           printf("<TD><B><I><A HREF=example.html><font color=#ffffff>Example</font></A></I></B></TD>\n");
            printf("<TD><B><I>\n");
            printf("<A HREF=http://www.ncbi.nlm.nih.gov/blast/blast_help.html><font color=#ffffff>Help</font></A>\n");
            printf("</I></B></TD></TR></TABLE></CENTER>\n");
@@ -649,7 +664,7 @@ static void	Blast2SeqMainPage(CharPtr warning, CharPtr seq1, CharPtr seq2, CharP
         if (!options) {
            printf("This tool produces the alignment of two given sequences using "
 #ifndef BL2SEQ_STANDALONE
-"<A HREF=http://www.ncbi.nlm.nih.gov/blast/newblast.html TARGET=one>BLAST</A> engine for local alignment. <BR>The stand-alone executable for blasting two sequences (bl2seq) can be retrieved from <A HREF=ftp://ncbi.nlm.nih.gov/blast/executables> NCBI ftp site</A><br><b><A HREF=http://www.ncbi.nlm.nih.gov/entrez/query.fcgi?cmd=Retrieve&db=PubMed&list_uids=10339815&dopt=Abstract>Reference:</A></b> Tatiana A. Tatusova, Thomas L. Madden (1999), \"Blast 2 sequences - a new tool for comparing protein and nucleotide sequences\", FEMS Microbiol Lett. 174:247-250 \
+"<A HREF=\"http://www.ncbi.nlm.nih.gov/entrez/query.fcgi?db=PubMed&cmd=Retrieve&list_uids=9254694&dopt=Citation\" TARGET=one>BLAST</A> engine for local alignment. <BR>The stand-alone executable for blasting two sequences (bl2seq) can be retrieved from <A HREF=ftp://ftp.ncbi.nlm.nih.gov/blast/executables> NCBI ftp site</A><br><b><A HREF=http://www.ncbi.nlm.nih.gov/entrez/query.fcgi?cmd=Retrieve&db=PubMed&list_uids=10339815&dopt=Abstract>Reference:</A></b> Tatiana A. Tatusova, Thomas L. Madden (1999), \"Blast 2 sequences - a new tool for comparing protein and nucleotide sequences\", FEMS Microbiol Lett. 174:247-250 \
 <br><BR>"
 #else
 "BLAST<BR>engine for local alignment.<P>\n"
@@ -1368,9 +1383,10 @@ static void DrawRectAlign(PrymPtr PNTR rect, Int2 k, Int2 color, Int2 height, In
 }
 
 #define LOCAL_BUFLEN 255
+
 static BioseqPtr 
 
-FindSeqByAccession(CharPtr accver, Int2 id_num)
+FindSeqByAccession(CharPtr accessionOrGi, Int2 id_num)
 {
    BioseqPtr bsp = NULL;
 
@@ -1386,18 +1402,22 @@ FindSeqByAccession(CharPtr accver, Int2 id_num)
    ByteStorePtr old_seq_data = NULL;
 
    ID1BioseqFetchEnable ("wblast2", TRUE);
-      
-   if ((gi = atoi(accver)) == 0) {
-      accession = StringTokMT(accver, ".", &accver);
-      
-      if (accver)
-         version = atoi(accver);
+   
+   if ((gi = atoi(accessionOrGi)) == 0) {
+      Char accver[LOCAL_BUFLEN];
+      CharPtr ptrVersion = NULL;
 
       if((sip = ValNodeNew (NULL)) == NULL)
          return NULL;
       if((tsip = TextSeqIdNew ()) == NULL)
          return NULL;
+
+      StringCpy(accver, accessionOrGi);
+      accession = StringTokMT(accver, ".", &ptrVersion);
       
+      if (ptrVersion)
+         version = atoi(ptrVersion);
+
       tsip->accession = StringSave(accession);
       tsip->version = version;
       /* GenBank, EMBL, and DDBJ. */
@@ -1777,6 +1797,7 @@ typedef enum {
     ACCESSION_GI
 } BlastQuerySequenceType;
 
+
 #define MAX_ALLOWED_ID_LEN 20
 #define IS_NEWLINE(a) ((a)=='\0' || (a)=='\n' || (a)=='\r')
 static int get_sequence_type(char *querystr)
@@ -1886,6 +1907,8 @@ static char * GetAndFormatEnteredSequence(WWWBlastInfoPtr theInfo,int seqNbr,int
 
     if(c) {
         *seq_type = get_sequence_type(c);
+        //Treat NCBI_SEQID seq type the same way as  ACCESSION_GI
+        *seq_type = (*seq_type == NCBI_SEQID) ? ACCESSION_GI : *seq_type;
         //Check here if sequence is enetered with subjetc line !!!
         if(*seq_type != ACCESSION_GI && *seq_type != FASTA_WITH_DEFLINE) {        
         // if (c1 && *c1 != '>') {
@@ -1895,7 +1918,10 @@ static char * GetAndFormatEnteredSequence(WWWBlastInfoPtr theInfo,int seqNbr,int
             MemFree(c);
             c = seq;
             MemFree(sbuf);
-        }        
+        }
+        if(*seq_type == ACCESSION_GI) {
+            StringTok(c, "\n\r\t");
+        }
     }
     return c;
 }

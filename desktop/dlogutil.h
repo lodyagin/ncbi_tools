@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.45 $
+* $Revision: 6.49 $
 *
 * File Description: 
 *
@@ -90,6 +90,8 @@ extern ValNodePtr AddStringToValNodeChain (ValNodePtr head, CharPtr str, Uint1 c
   ButtoN          partial;          \
   ButtoN          exception;        \
   ButtoN          pseudo;           \
+  DialoG          experiment;       \
+  DialoG          inference;        \
   TexT            comment;          \
   TexT            title;            \
   TexT            exceptText;       \
@@ -114,6 +116,7 @@ extern ValNodePtr AddStringToValNodeChain (ValNodePtr head, CharPtr str, Uint1 c
   DialoG          usrobjext;        \
   TexT            featid;           \
   TexT            fidxref;          \
+  ButtoN          leave_dlg_up;     \
   UserObjectPtr   goTermUserObj;
 
 typedef struct descform {
@@ -364,6 +367,7 @@ extern ValNodePtr FreeTableDisplayRowList (ValNodePtr row_list);
 extern void PrintTableDisplayRowListToFile (ValNodePtr row_list, FILE *fp);
 extern ValNodePtr CopyTableDisplayRowList (ValNodePtr row_list);
 extern CharPtr GetRowListCellText (ValNodePtr row_list, Int4 row, Int4 column);
+extern FonT GetTableDisplayDefaultFont (void);
 
 typedef  void  (*Nlm_ChangeNotifyProc) PROTO ((Pointer));
 
@@ -440,6 +444,7 @@ extern CharPtr ValNodeStringName (ValNodePtr vnp);
 extern void ValNodeSimpleDataFree (ValNodePtr vnp);
 extern ValNodePtr ValNodeStringCopy (ValNodePtr vnp);
 extern Boolean ValNodeChoiceMatch (ValNodePtr vnp1, ValNodePtr vnp2);
+extern Boolean ValNodeStringMatch (ValNodePtr vnp1, ValNodePtr vnp2);
 
 extern DialoG SequenceSelectionDialog 
 (GrouP h,

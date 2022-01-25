@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.72 $
+* $Revision: 6.74 $
 *
 * File Description: 
 *
@@ -60,7 +60,6 @@ ENUM_ALIST(orgmod_subtype_alist)
   {"Chemovar",         12},
   {"Common",           18},
   {"Cultivar",         10},
-  {"Dosage",           20},
   {"Ecotype",          27},
   {"Forma",            25},
   {"Forma-specialis",  26},
@@ -490,7 +489,7 @@ extern ValNodePtr GetGeneticCodeValNodeList (void)
   ValNodePtr gencodelist = NULL;
   Int4       index;
   
-  for (index = 0; index < numGeneticCodes; index++)
+  for (index = 0; index <= numGeneticCodes; index++)
   {
     if (StringHasNoText (gcNames[index]))
     {

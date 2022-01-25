@@ -1,4 +1,4 @@
-/* $Id: seqpanel.c,v 6.164 2005/08/05 17:12:32 bollin Exp $
+/* $Id: seqpanel.c,v 6.169 2005/11/08 19:39:30 bollin Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -155,7 +155,11 @@ typedef struct seqedformdata
   WindoW            find_window;            /* This is the window used for finding text
                                              * in the sequence.  It must be removed if the
                                              * SequenceEditor window is closed.
-                                             */                                          
+                                             */  
+                                             
+  MenU              aln_target_menu;        /* This is used by the alignment editor to
+                                             * change the target.
+                                             */                                                                                     
   
 } SeqEdFormData, PNTR SeqEdFormPtr;
 
@@ -321,7 +325,6 @@ static void SelectSeqView (BioseqViewPtr bvp, Uint2 selentityID, Uint2 selitemID
             Uint2 selitemtype, SeqLocPtr region, Boolean select, Boolean scrollto)
 {
   RecT r_redraw;
-  Boolean found = FALSE;
 
   if (selitemtype != OBJ_SEQFEAT) return;
 
@@ -3914,10 +3917,11 @@ static void PrintFeature(CharPtr feature_line, Int4 line, Int4 row, Int2 itemID,
   SeqFeatPtr        sfp;
   BioseqPtr         bsp_prot;
   CharPtr           str_prot;
-  Int4              bsStart, bsFinish, ffStart, ffFinish, i;
-  Int4              fLeft, fRight;
+  Int4              bsStart, bsFinish, i;
+  Int4              fLeft, fRight, swap;
   CharPtr           no_prot_msg = "Protein sequence is not available";
   Int4              aln_row = -1;
+  Uint2             interval_strand;
     
   if (bvp->seqAlignMode) {
     SeqIdPtr  sip_tmp = AlnMgr2GetNthSeqIdPtr(bvp->salp, row);
@@ -3942,8 +3946,6 @@ static void PrintFeature(CharPtr feature_line, Int4 line, Int4 row, Int2 itemID,
   
   fLeft    = x_FeatLeft (bvp, fcontext.left, aln_row);
   fRight   = x_FeatRight(bvp, fcontext.right, aln_row);
-  ffStart  = GetFeatureX(x_Coord(bvp, fLeft,  row), bsStart, bsFinish, TRUE ) - bsStart;
-  ffFinish = GetFeatureX(x_Coord(bvp, fRight, row), bsStart, bsFinish, FALSE) - bsStart;
 
   if (fcontext.label != NULL) 
   {
@@ -3963,8 +3965,49 @@ static void PrintFeature(CharPtr feature_line, Int4 line, Int4 row, Int2 itemID,
   for (i = 0; i != fcontext.numivals; i++) {
     Int4 interval_left = fcontext.strand==Seq_strand_minus ? fcontext.ivals[i*2+1] : fcontext.ivals[i*2];
     Int4 interval_right = fcontext.strand==Seq_strand_minus ? fcontext.ivals[i*2] : fcontext.ivals[i*2+1];
-    Int4 draw_left = MAX (interval_left, bsStart);
-    Int4 draw_right = MIN (interval_right, bsFinish - 1); 
+	Int4 aln_interval_left, aln_interval_right;
+    Int4 draw_left;
+    Int4 draw_right; 
+
+	interval_strand = fcontext.strand;
+    if (bvp->seqAlignMode) 
+    {
+      aln_interval_left = GetFeatureX(x_Coord(bvp, interval_left,  row), bsStart, bsFinish, TRUE );
+	  while (aln_interval_left == -1 && interval_left < interval_right)
+	  {
+	    interval_left ++;
+		aln_interval_left = GetFeatureX(x_Coord(bvp, interval_left,  row), bsStart, bsFinish, TRUE );
+	  }
+	  if (aln_interval_left == -1)
+	  {
+	    continue;
+	  }
+      aln_interval_right = GetFeatureX(x_Coord(bvp, interval_right, row), bsStart, bsFinish, FALSE);
+	  while (aln_interval_right == -1 && interval_left < interval_right)
+	  {
+	    interval_right --;
+        aln_interval_right = GetFeatureX(x_Coord(bvp, interval_right, row), bsStart, bsFinish, FALSE);
+	  }
+	  interval_left = aln_interval_left;
+	  interval_right = aln_interval_right;
+	  if (interval_left > interval_right)
+	  {
+		swap = interval_left;
+		interval_left = interval_right;
+		interval_right = swap;
+        if (interval_strand == Seq_strand_minus)
+		{
+	      interval_strand = Seq_strand_plus;
+		}
+		else
+		{
+		  interval_strand = Seq_strand_minus;
+		}
+	  }
+    }
+    draw_left = MAX (interval_left, bsStart);
+    draw_right = MIN (interval_right, bsFinish - 1); 
+    
  
     if (interval_left < bsStart && interval_right < bsStart) continue;
     if (interval_left > bsFinish - 1 && interval_right > bsFinish -1) continue;
@@ -3994,8 +4037,7 @@ static void PrintFeature(CharPtr feature_line, Int4 line, Int4 row, Int2 itemID,
     } /* protein product */
     else 
     {  /* draw ASCII feature line */
-
-      if (fcontext.strand == Seq_strand_minus)
+      if (interval_strand == Seq_strand_minus)
       {
       	if (interval_left >= draw_left)
       	{
@@ -4017,7 +4059,7 @@ static void PrintFeature(CharPtr feature_line, Int4 line, Int4 row, Int2 itemID,
       {
       	MemSet (feature_line + SEQ_ED_PRINT_SEQ_OFFSET + draw_left - bsStart,
       	        '-', draw_right - draw_left + 1);
-      }      
+      }
     }  /* feature or product */
   }  /* for */
 }
@@ -4167,6 +4209,77 @@ static void PrintFrame (CharPtr file_line, Int4 frame, Int4 seq_pos, Int4 seq_en
   	  file_line [i + SEQ_ED_PRINT_SEQ_OFFSET] = '|';
   	}
   }
+}
+
+
+static void PrintAligmentDivider (CharPtr file_line, Int4 chars_at_line, Int4 blocks_at_line)
+{
+  Int2 block, offset = SEQ_ED_PRINT_SEQ_OFFSET;
+
+  if (file_line == NULL)
+  {
+    return;
+  }
+
+  MemSet (file_line, ' ', chars_at_line + SEQ_ED_PRINT_SEQ_OFFSET);
+  
+  for (block = 0;  block != blocks_at_line;  block++) {
+    MemSet (file_line + offset, '~', SEQ_GROUP_SIZE);
+    offset += SEQ_GROUP_SIZE;
+  }
+}
+
+static void PrintAlignment
+(CharPtr file_line,
+ Int4 line, Int4 row, Uint1Ptr seqbuf,
+ Uint1Ptr alnbuf, BioseqViewPtr bvp, Int4 aln_idx)
+{
+  Int2        block;
+  SeqIdPtr    sip;
+  BioseqPtr   bsp;
+  Int4        start   = line * bvp->CharsAtLine;
+  Int4        stop    = start + bvp->BlocksAtLine * SEQ_GROUP_SIZE;
+  Int4        alnbuf_len;
+  SeqIdPtr    best_id;
+  SeqAlignPtr tmp_salp;
+  Int4        i;
+  Int4        offset = SEQ_ED_PRINT_SEQ_OFFSET;
+  
+  if (bvp == NULL)
+  {
+    return;
+  }
+  
+  MemSet (file_line, ' ', bvp->CharsAtLine + SEQ_ED_PRINT_SEQ_OFFSET);
+  
+  for (i=0, tmp_salp = bvp->salp; i < aln_idx && tmp_salp != NULL; i++, tmp_salp = tmp_salp->next)
+  {  	
+  }
+  if (tmp_salp == NULL) return;
+  sip = AlnMgr2GetNthSeqIdPtr(tmp_salp, row);
+  bsp = BioseqLockById(sip);
+
+  AlignmentIntervalToString (tmp_salp, row, start, stop, bvp->TargetRow,
+                             bvp->viewWholeEntity, seqbuf, alnbuf, &alnbuf_len,
+                             bvp->showAlnSubstitutions);
+  
+  /* Get label           */
+  best_id = SeqIdFindBestAccession (bsp->id);
+  SeqIdWrite (best_id, file_line, PRINTID_TEXTID_ACCESSION, SEQ_ED_PRINT_SEQ_OFFSET - 1); 
+  file_line [StringLen (file_line)] = ' ';       
+  /* print alignment blocks */
+  block = 0;
+  for (block = 0;  block != bvp->BlocksAtLine;  block++) {
+    Int4 len  = SEQ_GROUP_SIZE;
+    Int4 from = block * SEQ_GROUP_SIZE;
+    
+    if (from >= alnbuf_len) break;
+    if (from + SEQ_GROUP_SIZE > alnbuf_len) len = alnbuf_len - from;
+    
+    MemCpy(file_line + offset, alnbuf + from, len);
+    offset += SEQ_GROUP_SIZE;
+  }
+  BioseqUnlock (bsp);
 }
 
 
@@ -6187,11 +6300,6 @@ static void SeqEdDeleteDeltaSeq (SeqEdFormPtr sefp, Boolean save_clip)
   sefp->edit_pos_end = sefp->edit_pos_start;
 }
 
-static void SeqEdCutDeltaSeq (SeqEdFormPtr sefp)
-{
-  SeqEdDeleteDeltaSeq (sefp, TRUE);
-}
-
 static void SeqEdDelete (SeqEdFormPtr sefp, Boolean save_clip)
 {  
   if (sefp == NULL || sefp->edit_pos_start == sefp->edit_pos_end) return;
@@ -6647,7 +6755,7 @@ static void SeqEdOnKey (SlatE s, Char ch)
           Select (sefp->bfp->bvd.seqView);
 	        inval_panel (pnl, -1, -1);
           break;
-        case '\b':
+        case NLM_BACK:
     	    /* handle backspace */
     	    if (sefp->edit_pos_start == sefp->edit_pos_end)
     	    {
@@ -8574,6 +8682,73 @@ static void SeqAlnExportContiguous (IteM i)
   SeqAlnExportAlnMenuItem (i, FALSE);
 }
 
+static void SeqAlnExportText (IteM m)
+{
+  SeqEdFormPtr  sefp;
+  FILE          *fp;
+  Char          path[PATH_MAX];
+  BioseqViewPtr bvp;
+  SeqPanLinePtr splp;
+  Uint1Ptr      file_line;
+  Int4          line;
+  Int4          aln_idx;
+  Uint1Ptr      seqbuf = NULL, alnbuf = NULL;
+  Int4          prev_line;
+  
+  sefp = (SeqEdFormPtr) GetObjectExtra (m);
+  if (sefp == NULL) return;
+  
+  if (! GetOutputFileName (path, sizeof (path), "")) return;
+  fp = FileOpen (path, "w");
+  if (fp == NULL) 
+  {
+    Message (MSG_ERROR, "Unable to open %s", path);
+    return;
+  }
+
+  bvp = &(sefp->bfp->bvd);
+  if (bvp == NULL || bvp->bsp == NULL) return;
+
+  seqbuf = MemNew ((bvp->BlocksAtLine * SEQ_GROUP_SIZE + 3) * sizeof (Uint1));
+  alnbuf = MemNew ((bvp->BlocksAtLine * SEQ_GROUP_SIZE + 3) * sizeof (Uint1));
+
+  file_line = MemNew (SEQ_ED_PRINT_SEQ_OFFSET + bvp->CharsAtLine + 1);
+  if (file_line == NULL) return;
+  file_line [bvp->CharsAtLine + 13] = 0;
+     
+  aln_idx = 0;
+  prev_line = 0;
+  for (line = 0; line < bvp->TotalLines; line++) {
+    splp = bvp->SeqPanLines[line];
+    switch ( splp->lineType ) {
+      case eTypeAlignSequence:
+        if (splp->bioSeqLine != prev_line)
+        {
+          prev_line = splp->bioSeqLine;
+          fprintf (fp, "\n");
+        }
+        PrintAlignment ((CharPtr)file_line, splp->bioSeqLine, splp->row, seqbuf, alnbuf, bvp, aln_idx);
+        fprintf (fp, "%s\n", file_line);
+        break;
+    	case eTypeAlignDivider:
+        PrintAligmentDivider ((CharPtr)file_line, bvp->CharsAtLine, bvp->BlocksAtLine);
+        aln_idx++;
+      	break;
+      case eTypeFeature:
+        PrintFeature((CharPtr)file_line, splp->bioSeqLine, splp->row, splp->idx,
+                     splp->protProduct, bvp->bsp, bvp);
+        fprintf (fp, "%s\n", file_line);
+        break;
+    }
+  }
+
+  seqbuf = MemFree (seqbuf);
+  alnbuf = MemFree (alnbuf);
+  MemFree (file_line);
+  FileClose (fp);
+
+}
+
 static void SeqAlnShowSubstitutionsMenuItem (IteM i)
 {
   SeqEdFormPtr  sefp;
@@ -8591,6 +8766,8 @@ static void SeqAlnShowSubstitutionsMenuItem (IteM i)
   }
 }
 
+static void UpdateTargetMenu (SeqEdFormPtr sefp);
+
 static void RemoveSequencesFromAlignment (IteM i)
 {
   SeqEdFormPtr  sefp;
@@ -8599,6 +8776,7 @@ static void RemoveSequencesFromAlignment (IteM i)
   BioseqPtr     bsp;
   SeqEntryPtr   sep;
   ValNodePtr    sip_list = NULL, vnp;
+  Int4          num_to_remove;
   
   sefp = (SeqEdFormPtr) GetObjectExtra (i);
   
@@ -8625,6 +8803,22 @@ static void RemoveSequencesFromAlignment (IteM i)
 	      }
       }
     }
+    if (sip_list == NULL)
+    {
+      Message (MSG_ERROR, "You must select a sequence to remove!");
+      return;
+    }
+    
+    num_to_remove = ValNodeLen (sip_list);
+    if (ANS_CANCEL == Message (MSG_OKC, 
+                               "You are about to remove %d sequence%s from the alignment.  Are you sure?",
+                               num_to_remove,
+                               num_to_remove == 1 ? "" : "s"))
+    {
+      sip_list = ValNodeFree (sip_list);
+      return;
+    }
+    
     
     for (vnp = sip_list; vnp != NULL; vnp = vnp->next)
     {
@@ -8639,6 +8833,10 @@ static void RemoveSequencesFromAlignment (IteM i)
     SAIndex2Free2(sefp->bfp->bvd.salp->saip);
     sefp->bfp->bvd.salp->saip = NULL;
     AlnMgr2IndexSeqAlign(sefp->bfp->bvd.salp);
+    
+    /* update target selector */
+    UpdateTargetMenu (sefp);
+    
     /* update alignment editor window */
     ResizeSeqEditorWindow ((WindoW)sefp->form);
   }
@@ -8879,6 +9077,41 @@ static Boolean IsAlignmentOnSet (SeqAlignPtr salp)
   return rval;  
 }
 
+static void UpdateTargetMenu (SeqEdFormPtr sefp)
+{
+  Int4            n;
+  SetAlnTargetPtr satp;
+  IteM            localItem;
+  SeqIdPtr        sip;
+  BioseqPtr       bsp;
+  Char            label [128];
+
+  if (sefp == NULL)
+  {
+    return;
+  }
+  Reset (sefp->aln_target_menu);
+  for (n = 1; n <= sefp->bfp->bvd.salp->dim; n++)
+  {
+    sip = AlnMgr2GetNthSeqIdPtr(sefp->bfp->bvd.salp, n);
+    bsp = BioseqFind (sip);
+    if (bsp != NULL)
+    {
+      sip = SeqIdFindBestAccession (bsp->id);
+    }
+    SeqIdWrite (sip, label, PRINTID_REPORT, sizeof (label) - 1);
+    localItem = CommandItem (sefp->aln_target_menu, label, SeqAlnSetTarget);
+    satp = (SetAlnTargetPtr) MemNew (sizeof (SetAlnTargetData));
+    if (satp != NULL)
+    {
+      satp->sefp = sefp;
+      satp->target = n;
+    }
+    SetObjectExtra (localItem, satp, StdCleanupExtraProc);
+  }
+  
+}
+
 static void CreateAlnMenus (WindoW w, Boolean enable_feat_prop)
 
 {
@@ -8886,11 +9119,6 @@ static void CreateAlnMenus (WindoW w, Boolean enable_feat_prop)
   IteM            localItem;
   MenU            sub;
   SeqEdFormPtr    sefp;
-  Int4            n;
-  SetAlnTargetPtr satp;
-  Char            label [128];
-  SeqIdPtr        sip;
-  BioseqPtr       bsp;
   
   if (w == NULL) return;
   sefp = (SeqEdFormPtr) GetObjectExtra (w);
@@ -8902,6 +9130,8 @@ static void CreateAlnMenus (WindoW w, Boolean enable_feat_prop)
   localItem = CommandItem (sub, "Interleave", SeqAlnExportInterleave);
   SetObjectExtra (localItem, sefp, NULL);
   localItem = CommandItem (sub, "Contiguous", SeqAlnExportContiguous);
+  SetObjectExtra (localItem, sefp, NULL);
+  localItem = CommandItem (sub, "Text Representation", SeqAlnExportText);
   SetObjectExtra (localItem, sefp, NULL);
   
   localItem = CommandItem (edit_menu, "Close", SeqAlnCloseMenuItem);
@@ -8924,25 +9154,8 @@ static void CreateAlnMenus (WindoW w, Boolean enable_feat_prop)
 
   /* View menu */
   edit_menu = PulldownMenu (w, "View");
-  sub = SubMenu (edit_menu, "Target");
-  for (n = 1; n <= sefp->bfp->bvd.salp->dim; n++)
-  {
-    sip = AlnMgr2GetNthSeqIdPtr(sefp->bfp->bvd.salp, n);
-    bsp = BioseqFind (sip);
-    if (bsp != NULL)
-    {
-      sip = SeqIdFindBestAccession (bsp->id);
-    }
-    SeqIdWrite (sip, label, PRINTID_REPORT, sizeof (label) - 1);
-    localItem = CommandItem (sub, label, SeqAlnSetTarget);
-    satp = (SetAlnTargetPtr) MemNew (sizeof (SetAlnTargetData));
-    if (satp != NULL)
-    {
-      satp->sefp = sefp;
-      satp->target = n;
-    }
-    SetObjectExtra (localItem, satp, StdCleanupExtraProc);
-  }
+  sefp->aln_target_menu = SubMenu (edit_menu, "Target");
+  UpdateTargetMenu (sefp);
   localItem = StatusItem (edit_menu, "Show Substitutions", SeqAlnShowSubstitutionsMenuItem);
   SetObjectExtra (localItem, sefp, NULL);
   
@@ -9207,28 +9420,6 @@ NLM_EXTERN void SeqEdRemapLocation (SeqAlignPtr salp, SeqLocPtr slp, Int4 seq_le
     default :
       break;
   }
-}
-
-
-static Boolean LocationMatchesEntireSequence (SeqLocPtr slp, BioseqPtr bsp)
-{
-  SeqIntPtr sip;
-  
-  if (slp == NULL || bsp == NULL) return FALSE;
-  
-  if (slp->choice == SEQLOC_WHOLE && SeqIdIn (slp->data.ptrvalue, bsp->id))
-  {
-  	return TRUE;
-  }
-  else if (slp->choice == SEQLOC_INT)
-  {
-    sip = (SeqIntPtr) slp->data.ptrvalue;
-    if (sip != NULL && sip->from == 0 && sip->to == bsp->length - 1)
-    {
-      return TRUE;
-    }
-  }
-  return FALSE;
 }
 
 static void MakeLocationMatchEntireSequence (SeqLocPtr slp, BioseqPtr bsp)

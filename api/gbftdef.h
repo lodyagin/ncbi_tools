@@ -3,6 +3,18 @@
 *   -- GenBank Feature table define file
 *
 * $Log: gbftdef.h,v $
+* Revision 6.25  2005/10/19 16:56:17  kans
+* added new source qualifiers, expanded array of optional qualifiers
+*
+* Revision 6.24  2005/09/22 20:50:07  kans
+* changed /experimental to /experiment - typo
+*
+* Revision 6.23  2005/09/19 17:17:31  kans
+* removed /hydrogenosome as a separate qualifier - it is really /organelle=hydrogenosome
+*
+* Revision 6.22  2005/09/16 19:56:37  kans
+* added hydrogenosome
+*
 * Revision 6.21  2005/06/15 13:47:21  kans
 * corrected optional qualifier numbers, added Validate_ParFlat_GBFeat function
 *
@@ -203,14 +215,19 @@
 #define GBQUAL_operon            86
 #define GBQUAL_old_locus_tag     87
 #define GBQUAL_compare           88
-#define GBQUAL_experimental      89
+#define GBQUAL_experiment        89
 #define GBQUAL_inference         90
 #define GBQUAL_rpt_unit_seq      91
 #define GBQUAL_rpt_unit_range    92
 #define GBQUAL_ribosomal_slippage 93
 #define GBQUAL_trans_splicing    94
+#define GBQUAL_collected_by      95
+#define GBQUAL_collection_date   96
+#define GBQUAL_identified_by     97
+#define GBQUAL_lat_lon           98
+#define GBQUAL_PCR_primers       99
 
-#define ParFlat_TOTAL_GBQUAL     95
+#define ParFlat_TOTAL_GBQUAL    100
 #define ParFlat_TOTAL_IntOr       3
 #define ParFlat_TOTAL_LRB         3
 #define ParFlat_TOTAL_Exp         2
@@ -248,7 +265,7 @@ typedef struct sematic_gbfeature {
     Int2     mand_num;
     Int2     mand_qual[5];
     Int2     opt_num;
-    Int2     opt_qual[55];
+    Int2     opt_qual[65];
 } SematicFeat, PNTR SematicFeatPtr;
 
 typedef struct gbfeat_name {

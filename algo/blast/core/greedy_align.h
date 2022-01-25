@@ -1,4 +1,4 @@
-/* $Id: greedy_align.h,v 1.21 2005/04/07 20:09:54 madden Exp $
+/* $Id: greedy_align.h,v 1.23 2005/11/16 14:31:37 madden Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -6,7 +6,7 @@
  *
  *  This software/database is a "United States Government Work" under the
  *  terms of the United States Copyright Act.  It was written as part of
- *  the author's offical duties as a United States Government employee and
+ *  the author's official duties as a United States Government employee and
  *  thus cannot be copyrighted.  This software/database is freely available
  *  to the public for use. The National Library of Medicine and the U.S.
  *  Government have not placed any restriction on its use or reproduction.
@@ -45,6 +45,9 @@ extern "C" {
     alignment code will work to find the optimal alignment; in fact
     this gives a worst case bound on the number of loop iterations */
 #define GREEDY_MAX_COST_FRACTION 2
+
+/** The largest distance to be examined for an optimal alignment */
+#define GREEDY_MAX_COST 1000
 
 /* ----- pool allocator ----- */
 

@@ -592,23 +592,14 @@ static void TestE2 (Boolean dohuge, Boolean showuids, Boolean showinfo)
 /* Args structure contains command-line arguments */
 
 #define v_argService  0
-#define s_argServer   1
-#define r_argPort     2
-#define p_argPath     3
-#define h_argHuge     4
-#define u_argUids     5
-#define g_argInfo     6
-#define n_argNewTests 7
+#define h_argHuge     1
+#define u_argUids     2
+#define g_argInfo     3
+#define n_argNewTests 4
 
 Args myargs [] = {
   {"Service", NULL, NULL, NULL,
     TRUE, 'v', ARG_STRING, 0.0, 0, NULL},
-  {"Server", "www.ncbi.nlm.nih.gov", NULL, NULL,
-    TRUE, 's', ARG_STRING, 0.0, 0, NULL},
-  {"Port", "80", "0", "7777",
-    TRUE, 'r', ARG_INT, 0.0, 0, NULL},
-  {"Path", "/entrez/utils/entrez2server.fcgi", NULL, NULL,
-    TRUE, 'p', ARG_STRING, 0.0, 0, NULL},
   {"Do Huge Boolean Query", "F", NULL, NULL,
     TRUE, 'h', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Show UID List", "F", NULL, NULL,
@@ -623,8 +614,7 @@ Int2 Main (void)
 
 {
   Boolean  dohuge, newtests, showinfo, showuids;
-  CharPtr  server, service, path;
-  Uint2    port;
+  CharPtr  service;
 
   /* standard setup */
 
@@ -661,9 +651,6 @@ Int2 Main (void)
   }
 
   service = myargs [v_argService].strvalue;
-  server = myargs [s_argServer].strvalue;
-  port = (Uint2) myargs [r_argPort].intvalue;
-  path = myargs [p_argPath].strvalue;
   dohuge = (Boolean) myargs [h_argHuge].intvalue;
   showuids = (Boolean) myargs [u_argUids].intvalue;
   showinfo = (Boolean) myargs [g_argInfo].intvalue;
@@ -672,9 +659,6 @@ Int2 Main (void)
   if (! StringHasNoText (service)) {
     EntrezSetService (service);
     printf ("testent2 %s\n", service);
-  } else {
-    EntrezSetServer (server, port, path);
-    printf ("testent2 %s:%d%s\n", server, (int) port, path);
   }
 
   if (newtests) {

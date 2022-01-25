@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.325 $
+* $Revision: 6.349 $
 *
 * File Description: 
 *
@@ -200,7 +200,7 @@ extern ForM CreateInitSubmitterForm (Int2 left, Int2 top, CharPtr title,
                                      WndActnProc activateForm);
 
 extern DialoG CreateFastaDialog (GrouP h, CharPtr title, Boolean is_na, Boolean is_mrna,
-                                 CharPtr text, Boolean parseSeqId, Boolean single, Int2Ptr seqPackagePtr);
+                                 CharPtr text, Boolean single, Int2Ptr seqPackagePtr);
 
 extern ForM CreateInitOrgNucProtForm (Int2 left, Int2 top, CharPtr title,
                                       FormatBlockPtr format,
@@ -255,6 +255,8 @@ extern ForM CreateHelpForm (Int2 left, Int2 top, CharPtr title,
                             WndActnProc activateForm);
 
 extern void SendHelpScrollMessage (ForM f, CharPtr heading, CharPtr section);
+
+extern void ApplyCDSFrame (IteM i);
 
 /* The next pointer in NewObject is not used in freeing the list.  Each
 block is attached individually as extra data to the appropriate menu item.
@@ -363,6 +365,17 @@ NLM_EXTERN SeqEntryPtr SequinFastaToSeqEntryEx
   (
     FILE *fp, Boolean is_na, CharPtr PNTR errormsg,
     Boolean parseSeqId, CharPtr special_symbol
+  );
+
+NLM_EXTERN SeqEntryPtr SequinFastaToSeqEntryExEx
+  (
+    FILE *fp,               /* file to get sequence from */ 
+    Boolean is_na,          /* type of sequence */
+    CharPtr PNTR errormsg,  /* error message for debugginq */
+    Boolean parseSeqId,     /* Parse SeqID from def line */
+    CharPtr special_symbol, /* Returns special symbol if no SeqEntry */
+    BoolPtr chars_stripped  /* set to TRUE if characters other than digits
+                             * were stripped from the FASTA sequence data */
   );
 
 /* Many miscellaneous extern functions within sequin source files */
@@ -538,6 +551,9 @@ extern void FindGeneProc (IteM i);
 extern void FindProtProc (IteM i);
 extern void FindPosProc (IteM i);
 
+extern void SimpleUniVecScreenProc (IteM i);
+extern void SimpleUniVecCoreScreenProc (IteM i);
+
 extern Boolean MeetsStringConstraint (SeqFeatPtr sfp, CharPtr str, Boolean case_insensitive);
 
 extern Boolean SaveSeqSubmitProc (BaseFormPtr bfp, Boolean saveAs);
@@ -616,10 +632,6 @@ typedef struct sequencesform {
 
   Uint1           dnamolfrommolinfo;
   EnumFieldAssoc  PNTR moltypeAlist;
-  ButtoN          partial5;
-  ButtoN          partial3;
-  GrouP           singleIdGrp;
-  TexT            singleSeqID;
   ButtoN          makeAlign;
   DialoG          dnaseq;
 
@@ -665,8 +677,7 @@ typedef struct sequencesform {
   ButtoN          specify_mgcode_btn;
   ButtoN          clear_mods_btn;
   DoC             org_doc;
-  PrompT          ident_org_ppt;
-  ButtoN          ident_org_btn;
+  GrouP           ident_org_grp;
   DialoG          summary_dlg;
   
   /* These allow the user to specify topology and molecule */
@@ -713,14 +724,6 @@ extern void InitValNodePopup (ValNodePtr list, PopuP p);
 extern Int2 GetValNodePopup (PopuP p, ValNodePtr list);
 extern void SetValNodePopupValue (ValNodePtr list, PopuP p, CharPtr val);
 
-typedef struct listpair
-{
-  ValNodePtr selected_names_list;
-  ValNodePtr selected_values_list;
-} ListPairData, PNTR ListPairPtr;
-
-extern DialoG CreateModifierTagList (GrouP g, ListPairPtr lpp);
-extern ListPairPtr GetModifierList (DialoG d);
 extern Uint1 FindTypeForModNameText (CharPtr cp);
 
 typedef struct featureswithtextdata 
@@ -807,6 +810,8 @@ extern void FeatureExceptionEditor (IteM i);
 extern void FeaturePartialEditor (IteM i);
 extern void FeatureStrandEditor (IteM i);
 extern void FeatureCitationEditor (IteM i);
+extern void FeatureExperimentEditor (IteM i);
+extern void FeatureInferenceEditor (IteM i);
 extern void ApplySourceQual (IteM i);
 extern void PublicApplySourceQual (IteM i);
 extern void EditSourceQual (IteM i);
@@ -1234,6 +1239,10 @@ typedef struct getsample
 {
   GetFeatureFieldString    fieldstring_func;
   GetDescriptorFieldString descrstring_func;
+  
+  ValNodePtr               feat_dest_list;
+  ValNodePtr               descr_dest_list;
+  
   ValNodePtr               requested_field;
   FreeValNodeProc          free_vn_proc;
   CopyValNodeDataProc      copy_vn_proc;
@@ -1273,13 +1282,20 @@ ImportSequencesFromFile
  SeqEntryPtr     sep_list,
  Boolean         is_na, 
  Boolean         parse_id,
- ValNodePtr PNTR err_msg_list);
+ CharPtr         supplied_id_txt,
+ ValNodePtr PNTR err_msg_list,
+ BoolPtr         chars_stripped);
 
 extern void TestUpdateSequenceIndexer (IteM i);
 extern void TestUpdateSequenceSubmitter (IteM i);
+extern void TestExtendSequenceIndexer (IteM i);
+extern void TestExtendSequenceSubmitter (IteM i);
 extern void TestUpdateSequenceSetIndexer (IteM i);
 extern void TestUpdateSequenceSetSubmitter (IteM i);
-extern void TestUpdateSequenceViaDownload (IteM i);
+extern void TestExtendSequenceSetIndexer (IteM i);
+extern void TestExtendSequenceSetSubmitter (IteM i);
+extern void UpdateSequenceViaDownloadIndexer (IteM i);
+extern void UpdateSequenceViaDownloadSubmitter (IteM i);
 
 extern void 
 ListBioseqsInSeqEntry 
@@ -1294,6 +1310,50 @@ extern void RecomputeSuggestedIntervalsForCDS
  Int4Ptr        count,
  MonitorPtr     mon,
  SeqFeatPtr     sfp);
+ 
+extern CharPtr ExtendProtein3 
+(SeqFeatPtr sfp,
+ Uint2      input_entityID,
+ Boolean    force_partial);
+
+extern SeqLocPtr 
+ExpandSeqLoc 
+(Int4 start,
+ Int4 stop,
+ Uint1 strand,
+ BioseqPtr bsp,
+ SeqLocPtr slp);
+
+extern void SetSeqLocStrand (SeqLocPtr location, Uint2 strand);
+extern void SetPrimerBindPairStrands (IteM i);
+extern Boolean IsBioseqInAnyAlignment (BioseqPtr bsp, Uint2 input_entityID);
+
+extern void ConvertSelectedGapFeaturesToKnown (IteM i);
+extern void ConvertSelectedGapFeaturesToUnknown (IteM i);
+extern void ConvertAdjacentKnownGapsToSingleGaps (IteM i);
+
+extern void MarkGenesWithPseudoFeaturesPseudo (IteM i);
+extern void ConvertPseudoProteinNamesToProteinDescriptions (IteM i);
+
+typedef struct gaplocinfo 
+{
+  Int4    start_pos;
+  Boolean is_known;
+  Int4    length;
+  Boolean replace;
+} GapLocInfoData, PNTR GapLocInfoPtr;
+
+extern void 
+PrepareCodingRegionLocationsForDeltaConversionCallback
+(BioseqPtr bsp, Pointer userdata);
+
+extern void RemoveNomenclature (IteM i);
+
+extern void ParseCollectionDateMonthFirst (IteM i);
+extern void ParseCollectionDateDayFirst (IteM i);
+extern void RemoveUnpublishedPublications (IteM i);
+extern void RemoveUnindexedFeatures (IteM i);
+extern void CopyLocusToLocusTag (IteM i);
 
 #ifdef __cplusplus
 }

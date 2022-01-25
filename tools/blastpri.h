@@ -32,8 +32,20 @@ Contents: prototypes for "private" BLAST functions, these should not be called
 
 ******************************************************************************/
 
-/* $Revision: 6.117 $ 
+/* $Revision: 6.120 $ 
 * $Log: blastpri.h,v $
+* Revision 6.120  2005/12/01 15:10:23  madden
+* Gave BLASTCheckHSPInclusion external linkage (i.e. removed the static specifier).
+*
+* Revision 6.119  2005/09/29 17:39:46  coulouri
+* from mike gertz:
+*    To handle concatenated queries properly, changed prototype of
+*    RedoAlignmentCore to return and array of lists to SeqAligns.
+*
+* Revision 6.118  2005/08/31 20:33:08  coulouri
+* From Mike Gertz:
+*     Added a prototype for the new BlastSingleQueryResultSize routine.
+*
 * Revision 6.117  2005/07/28 14:57:09  coulouri
 * remove dead code
 *
@@ -723,6 +735,8 @@ BlastSearchBlkPtr LIBCALL BlastSearchBlkNewExtra PROTO((Int2 wordsize, Int4 qlen
 
 BlastSearchBlkPtr LIBCALL BlastSearchBlkDestruct PROTO((BlastSearchBlkPtr search));
 
+Int4 BlastSingleQueryResultSize PROTO((BLAST_OptionsBlkPtr options));
+
 BlastSearchBlkPtr BLASTSetUpSearchWithReadDbInternal PROTO((SeqLocPtr query_slp, BioseqPtr query_bsp, CharPtr prog_name, Int4 qlen, CharPtr dbname, BLAST_OptionsBlkPtr options, int (LIBCALLBACK *callback)PROTO((Int4 done, Int4 positives)), SeqIdPtr seqid_list, BlastDoubleInt4Ptr gi_list, Int4 gi_list_total, ReadDBFILEPtr rdfp));
 
 BlastSearchBlkPtr BLASTSetUpSearchWithReadDbInternalMult PROTO((SeqLocPtr query_slp, BioseqPtr query_bsp, CharPtr prog_name, Int4 qlen, CharPtr dbname, BLAST_OptionsBlkPtr options, int (LIBCALLBACK *callback)PROTO((Int4 done, Int4 positives)), SeqIdPtr seqid_list, BlastDoubleInt4Ptr gi_list, Int4 gi_list_total, ReadDBFILEPtr rdfp, QueriesPtr mult_queries));
@@ -1014,9 +1028,14 @@ BlastGiListPtr BlastCreateVirtualOIDList PROTO((BlastGiListPtr bglp,
 Boolean FastaCheckDna PROTO((CharPtr seq));
 BLASTHSPSegmentPtr BLASTHSPSegmentFromSeqAlign PROTO((SeqAlignPtr sap));
 SeqAlignPtr BlastClusterHitsFromSeqAlign PROTO((SeqAlignPtr seqalign, CharPtr prog_name, CharPtr database, BLAST_OptionsBlkPtr options, FloatHi length_thresh, FloatHi score_thresh, FloatHi overlap_thresh, Boolean two_sided));
-SeqAlignPtr RedoAlignmentCore PROTO((BlastSearchBlkPtr search,   
-  BLAST_OptionsBlkPtr options, Int4 hitlist_count, Int4 adjustParameters,
-  Boolean SmithWaterman));
+
+SeqAlignPtr PNTR
+RedoAlignmentCore PROTO((BlastSearchBlkPtr search,
+                         BLAST_OptionsBlkPtr options,
+                         Int4 hitlist_count,
+                         Int4 adjustParameters,
+                         Boolean SmithWaterman));
+
 BLAST_HSPPtr BLAST_HSPFree PROTO((BLAST_HSPPtr hsp));
 void BLASTResultFreeHsp PROTO((BLASTResultHitlistPtr result));
 void BLASTPostSearchLogic PROTO((BlastSearchBlkPtr search, BLAST_OptionsBlkPtr
@@ -1058,6 +1077,9 @@ Boolean
 BlastGetFirstAndLastContext PROTO((CharPtr prog_name, SeqLocPtr query_slp, Int2Ptr first_context, Int2Ptr last_context, Uint1 strand_options));
 
 void ConfigureDbChunkSize(BlastSearchBlkPtr search, Int4 num_seq);
+
+void BLASTCheckHSPInclusion(BLAST_HSPPtr *hsp_array, Int4 hspcnt, 
+                            Boolean is_ooframe);
 
 #ifdef __cplusplus
 }

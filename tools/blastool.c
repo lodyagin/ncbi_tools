@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: blastool.c,v 6.282 2005/07/25 19:01:00 coulouri Exp $";
+static char const rcsid[] = "$Id: blastool.c,v 6.286 2005/11/18 14:19:25 madden Exp $";
 
 /* ===========================================================================
 *
@@ -34,8 +34,25 @@ Contents: Utilities for BLAST
 
 ******************************************************************************/
 /*
-* $Revision: 6.282 $
+* $Revision: 6.286 $
 * $Log: blastool.c,v $
+* Revision 6.286  2005/11/18 14:19:25  madden
+* Check pointer before dereferencing
+*
+* Revision 6.285  2005/10/06 12:52:23  madden
+* Changes to support correct gapped stats for blastn
+*
+* Revision 6.284  2005/09/29 17:39:58  coulouri
+* from mike gertz:
+*    Refactored BLASTPostSearchLogic so that RedoAlignmentCore may be
+*    called when concatenated queries are being used.
+*
+* Revision 6.283  2005/08/31 20:32:58  coulouri
+* From Mike Gertz:
+*     Removed manipulation of options->hitlist_size,
+*     options->expect_value and search->pbp->cutoff_e; these should no
+*     longer be manipulated by this routine.
+*
 * Revision 6.282  2005/07/25 19:01:00  coulouri
 * correction to previous commit
 *
@@ -1182,15 +1199,21 @@ BlastErrorMsgPtr BlastDestroyErrorMessage(BlastErrorMsgPtr error_msg)
 ValNodePtr BlastConstructErrorMessage(CharPtr function, CharPtr message, Uint1 level, ValNodePtr PNTR vnpp)
 
 {
-	Char buffer[BUFFER_LENGTH];
+	CharPtr buffer;
 	CharPtr ptr;
 	BlastErrorMsgPtr error_msg;
+        int length = 10;
 
 	if (vnpp == NULL)
 		return NULL;
 
-	buffer[0] = NULLB;
-	ptr = buffer;
+        if (function != NULL)
+		length += StringLen(function);
+
+        if (message != NULL)
+                length += StringLen(message);
+
+        ptr = buffer = (Char*) MemNew(length*sizeof(char));
 	if (function != NULL)
 	{
 		sprintf(buffer, "%s: ", function);
@@ -1203,7 +1226,7 @@ ValNodePtr BlastConstructErrorMessage(CharPtr function, CharPtr message, Uint1 l
 	}
 
 	error_msg = (BlastErrorMsgPtr) MemNew(sizeof(BlastErrorMsg));
-	error_msg->msg = StringSave(buffer);
+	error_msg->msg = buffer;
 	error_msg->level = level;
 
 	ValNodeAddPointer(vnpp, 0, error_msg);
@@ -1718,6 +1741,20 @@ BLASTOptionValidateEx (BLAST_OptionsBlkPtr options, CharPtr progname, ValNodePtr
 			BlastConstructErrorMessage("BLASTOptionValidateEx", "invalid strand specified", 1, error_return);
 			return 1;
 		}
+
+                if (options->gapped_calculation == TRUE)
+                {
+                      BLAST_KarlinBlk* kbp = BlastKarlinBlkCreate();
+                      BLAST_KarlinBlk* kbp_ungap = BlastKarlinBlkCreate();
+                      Boolean round_down;
+                      /* We call this function to find out if these are supported parameters. */
+                      status = BlastKarlinBlkNuclGappedCalc(kbp, options->gap_open, options->gap_extend, options->reward,
+                          options->penalty, kbp_ungap, &round_down, error_return);
+                      kbp = BlastKarlinBlkDestruct(kbp);
+                      kbp_ungap = BlastKarlinBlkDestruct(kbp_ungap);
+                      if (!status) 
+                          return status;
+                }
 
 /*
 		if (options->multiple_hits_only == TRUE)
@@ -6308,88 +6345,95 @@ BLASTPostSearchLogic(BlastSearchBlkPtr search, BLAST_OptionsBlkPtr options,
                sprintf(buffer, "Only alignments to %ld best database sequences returned", (long) index+1);
                BlastConstructErrorMessage("EngineCore", buffer, 1, &(search->error_return));
                break;
-            }	
+            }
          }
-         
-         HeapSort(result_struct->results, hitlist_count, sizeof(BLASTResultHitlistPtr), evalue_compare_hits);
-      }
-      
-      /* 
-         The next loop organizes the SeqAligns (and the alignments in the
-         BLAST report) in the same order as the deflines.
-      */
+         HeapSort(result_struct->results, hitlist_count,
+                  sizeof(BLASTResultHitlistPtr), evalue_compare_hits);
 
-      if (options && options->tweak_parameters) {
-         /*restore settings of number of matches and E-value threshold
-           to what user requested*/
-         options->hitlist_size = options->hitlist_size/2;
-         options->expect_value = search->pbp->cutoff_e = options->original_expect_value;
-      }
-      
-      if (options && 
-          ((options->tweak_parameters) || (options->smith_waterman))) {
-         head = RedoAlignmentCore(search, options, hitlist_count, 
-                   options->tweak_parameters, options->smith_waterman);
-      }
-
-      for (index=0; index<hitlist_count; index++)
-      {
-         BLASTResultFreeHsp(result_struct->results[index]);
-      }
-      
-      index = 0;
-      if (!options || 
-          (!(options->tweak_parameters) && !(options->smith_waterman))) {
-
+         for (index=0;  index<hitlist_count;  index++) {
+             BLASTResultFreeHsp(result_struct->results[index]);
+         }
+         index = 0;
          /* AM: Support for query multiplexing. */
-	 if( search->mult_queries )
-	 {
-           subjects = (MQ_DivideResultsInfoPtr)MemNew( sizeof( MQ_DivideResultsInfo )*hitlist_count );
-	   nhlists = hitlist_count;
+         if (search->mult_queries) {
+             subjects = (MQ_DivideResultsInfoPtr) 
+                 MemNew(sizeof(MQ_DivideResultsInfo) * hitlist_count);
+             nhlists = hitlist_count;
+         } else {
+             nhlists = MIN(hitlist_count, options->hitlist_size);
          }
-	 else nhlists = MIN(hitlist_count, options->hitlist_size);
-
          /* Only save alignments up to the original hitlist size */
-         for ( index2 = 0; index<nhlists; index++) {
-            seqalign = result_struct->results[index]->seqalign;
-
-            /* AM: Support for query multiplexing. */
-	    if( search->mult_queries )
-	    {
-	      subjects[index2].evalue
-	        = result_struct->results[index]->best_evalue;
-	      subjects[index2++].subject_id 
-	        = result_struct->results[index]->subject_id;
-            }
-
-            if (seqalign) {
-               if (head == NULL) {
-                  head = seqalign;
-               } else {
-                  for ( ; tail->next; tail = tail->next);
-                  tail->next = seqalign;
-               }
-               tail = seqalign;
-            }
+         for (index2 = 0;  index < nhlists;  index++) {
+             seqalign = result_struct->results[index]->seqalign;
+             /* AM: Support for query multiplexing. */
+             if (search->mult_queries) {
+                 subjects[index2].evalue
+                     = result_struct->results[index]->best_evalue;
+                 subjects[index2++].subject_id 
+                     = result_struct->results[index]->subject_id;
+             }
+             if (seqalign) {
+                 if (head == NULL) {
+                     head = seqalign;
+                 } else {
+                     for ( ;  tail->next;  tail = tail->next) ;
+                     tail->next = seqalign;
+                 }
+                 tail = seqalign;
+             }
          }
-
          /* AM: Support for query multiplexing. */
-	 if( search->mult_queries )
-	 {
-	   search->mult_queries->sap_array_data->sap_array
-	     = DivideSeqAligns( options, head, 
-	                        search->mult_queries, subjects );
-	   subjects = MemFree( subjects );
+         if (search->mult_queries) {
+             search->mult_queries->sap_array_data->sap_array
+                 = DivideSeqAligns(options, head, 
+                                   search->mult_queries, subjects);
+             subjects = MemFree(subjects);
          }
-      } 
-      
+      } else {
+          SeqAlignPtr * sap =
+              RedoAlignmentCore(search, options, hitlist_count, 
+                                   options->tweak_parameters,
+                                   options->smith_waterman);
+          if (search->mult_queries) {
+              int query_index;
+              search->mult_queries->sap_array_data->sap_array = sap;
+              /* Set head to the first non-null list of seqAligns; or 
+               * NULL if none exists -- a nonnil value of head
+               * indicates that results were found, even if head
+               * doesn't contain all results. */
+              head = NULL;
+              for (query_index = 0;
+                   query_index < search->mult_queries->NumQueries;
+                   query_index++) {
+                  if (sap[query_index] != NULL) {
+                      head = sap[query_index];
+                      break;
+                  }
+              }
+          } else {
+              if (sap)
+              {
+                 head = sap[0];
+                 MemFree(sap);
+              }
+          }  
+          for (index=0;  index<hitlist_count;  index++) {
+              BLASTResultFreeHsp(result_struct->results[index]);
+          }
+          /* Set index = 0 to free any seqaligns remaining in the
+           * results_struct; RedoAlignmentCore doesn't add seqaligns
+           * to results_struct, so if there are any they are the
+           * result of an early phase of blast. */
+          index = 0;
+      }
       /* Free the unused seqaligns (all in case of PSI BLAST, 
          extra ones otherwise */
       for ( ; index<hitlist_count; index++) {
          result_struct->results[index]->seqalign = 
             SeqAlignSetFree(result_struct->results[index]->seqalign);
       }
-      search->number_of_seqs_better_E = MIN(hitlist_count, options->hitlist_size);
+      search->number_of_seqs_better_E =
+          MIN(hitlist_count, options->hitlist_size);
    } else {
       /* Ungapped psi-blast. */
       if (StringCmp("blastp", search->prog_name) == 0 && search->positionBased == TRUE)

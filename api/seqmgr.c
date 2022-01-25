@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.251 $
+* $Revision: 6.252 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
@@ -39,6 +39,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: seqmgr.c,v $
+* Revision 6.252  2005/09/21 19:20:45  kans
+* SeqMgrGetNextAnnotDesc sets context->index properly
+*
 * Revision 6.251  2005/08/23 21:31:44  kans
 * fixed SeqMgrGetFeatureByFeatID string comparison test, added xref parameter
 *
@@ -9892,7 +9895,7 @@ NLM_EXTERN AnnotDescPtr LIBCALL SeqMgrGetNextAnnotDesc (
         context->annotdesctype = annotdesctype;
         context->userdata = NULL;
         context->omdp = (Pointer) omdp;
-        (context->index)++;
+        context->index = i;
         return item;
       }
     }

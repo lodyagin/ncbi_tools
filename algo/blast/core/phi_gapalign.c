@@ -1,4 +1,4 @@
-/* $Id: phi_gapalign.c,v 1.7 2005/08/17 16:21:31 dondosha Exp $
+/* $Id: phi_gapalign.c,v 1.9 2005/11/30 18:25:32 papadopo Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -6,7 +6,7 @@
  *
  *  This software/database is a "United States Government Work" under the
  *  terms of the United States Copyright Act.  It was written as part of
- *  the author's offical duties as a United States Government employee and
+ *  the author's official duties as a United States Government employee and
  *  thus cannot be copyrighted.  This software/database is freely available
  *  to the public for use. The National Library of Medicine and the U.S.
  *  Government have not placed any restriction on its use or reproduction.
@@ -58,13 +58,14 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: phi_gapalign.c,v 1.7 2005/08/17 16:21:31 dondosha Exp $";
+    "$Id: phi_gapalign.c,v 1.9 2005/11/30 18:25:32 papadopo Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_options.h>
 #include <algo/blast/core/blast_def.h>
 #include <algo/blast/core/phi_gapalign.h>
 #include <algo/blast/core/blast_encoding.h>
+#include <algo/blast/core/blast_gapalign.h>
 #include "blast_gapalign_priv.h"
 #include "pattern_priv.h"
 
@@ -101,7 +102,7 @@ s_Align(Uint1 * seq1, Uint1 * seq2, Int4 end1, Int4 end2, Int4 lowDiag,
                  inclusive*/
     Int4 diagIndex; /*loop index over diagonals*/
 	Int4 leftd, rightd;	/* diagonal indices for CC, DD, CP and DP */
-    BlastGapSmallDP* score_array; /*array for dynamic program information*/
+    BlastGapDP* score_array; /*array for dynamic program information*/
 	Int4 curd;	/* current index for CC, DD CP and DP */
     Int4 i;  /*loop index*/
     Int4 index1; /*index on seq1*/
@@ -109,7 +110,7 @@ s_Align(Uint1 * seq1, Uint1 * seq2, Int4 end1, Int4 end2, Int4 lowDiag,
 	Int4 temp_indel_score = 0; /*placeholder for an indel score */
 	Int4 tempHorScore; /*dual of temp_indel_score for the case where a
                               horizontal edge (insertion) is the last step*/
-	BlastGapSmallDP* score_row = NULL; /*points to a row of CD*/
+	BlastGapDP* score_row = NULL; /*points to a row of CD*/
 	Int4 stateDecoder; /*used to decode the edge information in a state*/
     Int4 initialScore; /*score to initialize dynamic program entries*/
     Int4 *matrixRow; /*row of score matrix*/
@@ -129,7 +130,7 @@ s_Align(Uint1 * seq1, Uint1 * seq2, Int4 end1, Int4 end2, Int4 lowDiag,
 	band = highDiag-lowDiag+1;
 
     /* Allocate array of scores. */
-	score_array = (BlastGapSmallDP*) calloc(band+2, sizeof(BlastGapSmallDP));
+	score_array = (BlastGapDP*) calloc(band+2, sizeof(BlastGapDP));
 
 	state = (Int1 **) malloc(sizeof(Int1 *)*(end1+1));
 	state[0] = (Int1 *) malloc((end1+1)*(band+2));

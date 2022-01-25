@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/2/97
 *
-* $Revision: 6.125 $
+* $Revision: 6.128 $
 *
 * File Description: 
 *
@@ -231,6 +231,8 @@ NLM_EXTERN void LinkCDSmRNAbyOverlap (SeqEntryPtr sep);
 
 NLM_EXTERN void LinkCDSmRNAbyProduct (SeqEntryPtr sep);
 
+NLM_EXTERN void StripFeatIDXrefAsnFilter (AsnIoPtr aip, AsnIoPtr aop);
+
 /* functions to parse [org=Drosophila melanogaster] and [gene=lacZ] from titles */
 /* for example, passing "gene" to SqnTagFind returns "lacZ" */
 
@@ -412,6 +414,10 @@ NLM_EXTERN SeqEntryPtr ReadContigListEx (FILE *fp, Boolean coordinatesOnMaster, 
 Feature table, Restriction table, Contig table, Message response, or saved UID list, with the
 option of saving FASTA results as OBJ_FASTA (SimpleSeq) to avoid ID collisions */
 
+NLM_EXTERN Pointer ReadAsnFastaOrFlatFileEx (FILE *fp, Uint2Ptr datatypeptr, Uint2Ptr entityIDptr,
+                                           Boolean forceNuc, Boolean forceProt,
+                                           Boolean parseFastaSeqId, Boolean fastaAsSimpleSeq,
+                                           BoolPtr chars_stripped);
 NLM_EXTERN Pointer ReadAsnFastaOrFlatFile (FILE *fp, Uint2Ptr datatypeptr, Uint2Ptr entityIDptr,
                                            Boolean forceNuc, Boolean forceProt,
                                            Boolean parseFastaSeqId, Boolean fastaAsSimpleSeq);
@@ -421,13 +427,19 @@ a delta Bioseq.  The file pointer stops at the next FASTA with a real SeqID. */
 
 NLM_EXTERN BioseqPtr ReadDeltaFasta (FILE *fp, Uint2Ptr entityIDptr);
 
+/* This function is identical to ReadDeltaFasta, except that the contents of 
+ * chars_stripped will be set to TRUE if characters other than digits were stripped from
+ * the sequence, or FALSE if not.
+ */
+NLM_EXTERN BioseqPtr ReadDeltaFastaEx (FILE *fp, Uint2Ptr entityIDptr, BoolPtr chars_stripped);
+
 /* ReadDeltaFastaWithEmptyDefline reads just one delta sequence with an empty
  * definition line.
  * Calling function should make sure that fp is set to the start of the line 
  * with the empty definition line and that there is a "gap sequence ID"
  * present as the next definition line in the file.
  */
-NLM_EXTERN BioseqPtr ReadDeltaFastaWithEmptyDefline (FILE *fp, Uint2Ptr entityIDptr);
+NLM_EXTERN BioseqPtr ReadDeltaFastaWithEmptyDefline (FILE *fp, Uint2Ptr entityIDptr, BoolPtr chars_stripped);
 
 /* PromoteXrefs expands generef or protref feature cross-references (made by reading a
 feature table with ReadAsnFastaOrFlatFile) to stand-alone gene features or protein features
@@ -669,6 +681,9 @@ extern SeqAlignPtr FindAlignmentsForBioseq (BioseqPtr bsp);
 extern ValNodePtr FindAlignSeqAnnotsForBioseq (BioseqPtr bsp);
 extern Boolean IsSequenceFirstInPairwise (SeqEntryPtr sep, SeqIdPtr sip);
 extern Boolean RemoveSequenceFromAlignments (SeqEntryPtr sep, SeqIdPtr sip);
+extern BioseqPtr ReadFastaOnly (FILE *fp,
+                              Boolean forceNuc, Boolean forceProt,
+                              BoolPtr chars_stripped);
 
 #ifdef __cplusplus
 }

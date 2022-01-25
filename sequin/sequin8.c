@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/3/98
 *
-* $Revision: 6.298 $
+* $Revision: 6.308 $
 *
 * File Description: 
 *
@@ -612,7 +612,7 @@ static void RecomputeIntervalsForOneCDS (SeqFeatPtr sfp, RecompDataPtr rdp)
 static Boolean RecomputeSuggCallback (GatherContextPtr gcp)
 {
   RecompDataPtr  rdp;
-  SeqFeatPtr     sfp, gene_to_update = NULL;
+  SeqFeatPtr     sfp;
 
   if (gcp == NULL) return TRUE;
   if (gcp->thistype != OBJ_SEQFEAT) return TRUE;
@@ -7530,12 +7530,10 @@ ReplaceRepeatRegionLocusTagWithDbxrefCallback
  Pointer userdata)
 {
   GBQualPtr       gbqual, prev_qual = NULL, next_qual;
-  Boolean         had_locus_tag = FALSE;
   ValNodePtr      vnp;
   Boolean         has_dbxref = FALSE;
   DbtagPtr        tag;
   CharPtr         new_string = NULL;
-  Int4            comment_len = 0;
   CharPtr         new_comment;
 	SeqFeatXrefPtr 	xrp, prev_xrp = NULL, next_xrp;
 	GeneRefPtr      grp;
@@ -7667,3 +7665,745 @@ extern void ReplaceRepeatRegionLocusTagWithDbxref (IteM i)
   ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
   Update (); 
 }
+
+static void SetPrimerBindPairStrandsCallback (BioseqPtr bsp, Pointer userdata)
+{
+  SeqFeatPtr        primer_1 = NULL, primer_2 = NULL, sfp;
+  SeqMgrFeatContext context;
+  Uint1             first_strand, second_strand;
+  
+  if (bsp == NULL)
+  {
+    return;
+  }
+  
+  /* must have exactly two primer_bind features */
+  primer_1 = SeqMgrGetNextFeature (bsp, NULL, 0, FEATDEF_primer_bind, &context);
+  if (primer_1 == NULL)
+  {
+    return;
+  }
+  primer_2 = SeqMgrGetNextFeature (bsp, primer_1, 0, FEATDEF_primer_bind, &context);
+  if (primer_2 == NULL)
+  {
+    return;
+  }
+  
+  /* if there are three, must abandon */
+  sfp = SeqMgrGetNextFeature (bsp, primer_1, 0, FEATDEF_primer_bind, &context);
+  if (sfp != NULL)
+  {
+    return;
+  }
+  
+  first_strand = SeqLocStrand (primer_1->location);
+  second_strand = SeqLocStrand (primer_2->location);
+  
+  if (first_strand == Seq_strand_minus)
+  {
+    if (second_strand == Seq_strand_minus)
+    {
+      SetSeqLocStrand (primer_2->location, Seq_strand_plus);
+    }
+  }
+  else
+  {
+    if (second_strand != Seq_strand_minus)
+    {
+      SetSeqLocStrand (primer_2->location, Seq_strand_minus);
+    }
+  }
+}
+
+extern void SetPrimerBindPairStrands (IteM i)
+{
+  BaseFormPtr       bfp;
+  SeqEntryPtr       sep;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL) return;
+
+  VisitBioseqsInSep (sep, NULL, SetPrimerBindPairStrandsCallback);
+    
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+  Update (); 
+}
+
+/* This function returns the length change, so that the start
+ * position for subsequent features can be adjusted.
+ */
+static Int4 
+FindAndConvertGapFeat 
+(BioseqPtr  bsp,
+ Int4       start,
+ Boolean    make_known)
+{
+  ValNodePtr vnp;
+  SeqLocPtr  slp;
+  SeqLitPtr  litp;
+  Int4       currpos = 0, len_diff;
+  
+  if (bsp == NULL || bsp->repr != Seq_repr_delta
+      || start < 0)
+  {
+    return 0;
+  }
+  for (vnp = (ValNodePtr)(bsp->seq_ext); 
+       vnp != NULL && currpos < start; 
+       vnp = vnp->next) 
+  {
+    if (vnp->choice == 1) 
+    {
+      slp = (SeqLocPtr) vnp->data.ptrvalue;
+      if (slp == NULL) continue;
+      currpos += SeqLocLen (slp);
+    }
+    else if (vnp->choice == 2) 
+    {
+      litp = (SeqLitPtr) vnp->data.ptrvalue;
+      if (litp == NULL) continue;
+      currpos += litp->length;
+    }
+  }
+  
+  if (currpos < start || vnp == NULL || vnp->choice != 2)
+  {
+    return 0;
+  }
+  
+  litp = (SeqLitPtr) vnp->data.ptrvalue;
+  if (litp == NULL)
+  {
+    return 0;
+  }
+  
+  if (make_known)
+  {
+    litp->fuzz = IntFuzzFree (litp->fuzz);
+    len_diff = 0;
+  }
+  else if (litp->fuzz == NULL)
+  {
+    litp->fuzz = IntFuzzNew ();
+    litp->fuzz->choice = 4;
+    len_diff = litp->length - 100;
+    litp->length = 100;
+    bsp->length -= len_diff;
+  }
+  return len_diff;
+}
+
+typedef struct gapadjust 
+{
+  Int4 adjust_start;
+  Int4 adjust_len;
+} GapAdjustData, PNTR GapAdjustPtr;
+
+static Int4 GetAdjustedGapStart (Int4 feat_left, ValNodePtr prev_adjust)
+{
+  GapAdjustPtr p;
+  Int4         new_feat_left;
+  
+  new_feat_left = feat_left;
+  while (prev_adjust != NULL)
+  {
+    p = (GapAdjustPtr) prev_adjust->data.ptrvalue;
+    if (p != NULL && feat_left > p->adjust_start)
+    {
+      new_feat_left -= p->adjust_len;
+    }
+    prev_adjust = prev_adjust->next;
+  }
+  return new_feat_left;
+}
+
+static void ConvertSelectedGapFeatures (IteM i, Boolean to_known)
+{
+  BaseFormPtr       bfp;
+  SelStructPtr      sel;
+  SeqMgrFeatContext fcontext;
+  BioseqPtr         bsp;
+  SeqFeatPtr        sfp;
+  Int4              adjusted_start, len_diff;
+  ValNodePtr        adjustment_list = NULL;
+  GapAdjustPtr      p;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+
+  sel = ObjMgrGetSelected ();
+  if (sel == NULL)
+  {
+    Message (MSG_ERROR, "Must select gap features to convert!");
+    return;
+  }
+  WatchCursor ();
+  Update ();
+  while (sel != NULL)
+  {
+    if (sel->entityID == bfp->input_entityID
+        && sel->itemtype == OBJ_SEQFEAT)
+    {
+      sfp = SeqMgrGetDesiredFeature (bfp->input_entityID, NULL, sel->itemID, 0, NULL, &fcontext);
+      if (sfp != NULL && sfp->idx.subtype == FEATDEF_gap)
+      {
+        bsp = BioseqFindFromSeqLoc (sfp->location);
+        if (bsp != NULL && bsp->repr == Seq_repr_delta)
+        {
+          adjusted_start = GetAdjustedGapStart (fcontext.left, adjustment_list);
+          len_diff = FindAndConvertGapFeat (bsp, adjusted_start, to_known);
+          if (len_diff != 0)
+          {
+            p = (GapAdjustPtr) MemNew (sizeof (GapAdjustData));
+            if (p != NULL)
+            {
+              p->adjust_start = fcontext.left;
+              p->adjust_len = len_diff;
+              ValNodeAddPointer (&adjustment_list, 0, p);
+            }
+          }
+        }
+      }
+    }
+    sel = sel->next;
+  }
+  
+  adjustment_list = ValNodeFreeData (adjustment_list);
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+  ArrowCursor ();
+  Update (); 
+}
+
+extern void ConvertSelectedGapFeaturesToKnown (IteM i)
+{
+  ConvertSelectedGapFeatures (i, TRUE);  
+}
+
+extern void ConvertSelectedGapFeaturesToUnknown (IteM i)
+{
+  ConvertSelectedGapFeatures (i, FALSE);
+}
+
+static void CombineAdjacentKnownGaps (BioseqPtr bsp, Pointer userdata)
+{
+  ValNodePtr vnp, prev_vnp = NULL, next_vnp;
+  SeqLitPtr  litp, prev_litp = NULL;
+  
+  if (bsp == NULL || bsp->repr != Seq_repr_delta)
+  {
+    return;
+  }
+  
+  for (vnp = (ValNodePtr)(bsp->seq_ext); 
+       vnp != NULL; 
+       vnp = next_vnp) 
+  {
+    next_vnp = vnp->next;
+    if (vnp->choice == 1) 
+    {
+      prev_vnp = NULL;
+      prev_litp = NULL;
+    }
+    else if (vnp->choice == 2) 
+    {
+      litp = (SeqLitPtr) vnp->data.ptrvalue;
+      if (litp == NULL || litp->fuzz != NULL || litp->seq_data != NULL)
+      {
+        prev_vnp = NULL;
+        prev_litp = NULL;
+      }
+      else if (prev_vnp != NULL && prev_litp != NULL)
+      {
+        /* combine two adjacent known-length gaps */
+        prev_litp->length += litp->length;
+        prev_vnp->next = vnp->next;
+        vnp->next = NULL;
+        litp = SeqLitFree (litp);
+        vnp = ValNodeFree (vnp);
+      }
+      else
+      {
+        prev_vnp = vnp;
+        prev_litp = litp;
+      }
+    }
+  }  
+}
+
+extern void ConvertAdjacentKnownGapsToSingleGaps (IteM i)
+{
+  BaseFormPtr       bfp;
+  SeqEntryPtr       sep;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  
+  WatchCursor ();
+  Update ();
+  VisitBioseqsInSep (sep, NULL, CombineAdjacentKnownGaps);
+  
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+  ArrowCursor ();
+  Update (); 
+}
+
+static void MarkPseudoGenesCallback (SeqFeatPtr sfp, Pointer userdata)
+{
+  SeqFeatPtr gene;
+  
+  if (sfp == NULL || ! sfp->pseudo 
+      || sfp->data.choice == SEQFEAT_GENE
+      || SeqMgrGetGeneXref (sfp) != NULL)
+  {
+    return;
+  }
+  
+  gene = SeqMgrGetOverlappingGene (sfp->location, NULL);
+  if (gene != NULL) 
+  {
+    gene->pseudo = TRUE;
+  }
+}
+
+extern void MarkGenesWithPseudoFeaturesPseudo (IteM i)
+{
+  BaseFormPtr       bfp;
+  SeqEntryPtr       sep;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  
+  WatchCursor ();
+  Update ();
+  VisitFeaturesInSep (sep, NULL, MarkPseudoGenesCallback);
+  
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+  ArrowCursor ();
+  Update (); 
+  
+}
+
+static ProtRefPtr GetProtRefForCDSFeature (SeqFeatPtr sfp)
+{
+  SeqFeatXrefPtr    xref;           
+  ProtRefPtr        prp = NULL;
+  BioseqPtr         prot_bsp;
+  SeqFeatPtr        prot_sfp;
+  SeqMgrFeatContext context;
+  
+  if (sfp == NULL || sfp->data.choice != SEQFEAT_CDREGION)
+  {
+    return NULL;
+  }
+  
+  xref = sfp->xref;
+  while (xref != NULL 
+         && (xref->data.choice != SEQFEAT_PROT 
+             || xref->data.value.ptrvalue == NULL)) 
+  {
+    xref = xref->next;
+  }
+  if (xref != NULL)
+  {
+    prp = (ProtRefPtr) xref->data.value.ptrvalue;
+  }
+  else
+  {
+    prot_bsp = BioseqFindFromSeqLoc (sfp->product);
+    if (prot_bsp == NULL)
+    {
+      return NULL;
+    }
+  
+    prot_sfp = SeqMgrGetNextFeature (prot_bsp, NULL, SEQFEAT_PROT, FEATDEF_PROT, &context);
+    if (prot_sfp == NULL || prot_sfp->data.value.ptrvalue == NULL)
+    {
+      return NULL;
+    }
+  
+    prp = (ProtRefPtr) prot_sfp->data.value.ptrvalue;
+  }
+  return prp;
+}
+
+static void GetPseudoProteinDescSample (SeqFeatPtr sfp, Pointer userdata)
+{
+  GetSamplePtr      gsp;
+  ProtRefPtr        prp = NULL;
+  Boolean           is_pseudo = FALSE;
+  GeneRefPtr        grp;
+  SeqFeatPtr        gene_sfp;
+  
+  if (sfp == NULL 
+      || sfp->data.choice != SEQFEAT_CDREGION 
+      || userdata == NULL)
+  {
+    return;
+  }
+  
+  /* check to see if this is a pseudo-CDS */
+  is_pseudo = sfp->pseudo;
+  if (!is_pseudo)
+  {
+    grp = SeqMgrGetGeneXref (sfp);
+    if (grp == NULL)
+    {
+      gene_sfp = SeqMgrGetOverlappingGene (sfp->location, NULL);
+      if (gene_sfp->pseudo)
+      {
+        is_pseudo = TRUE;
+      }
+      else 
+      {
+        grp = (GeneRefPtr) gene_sfp->data.value.ptrvalue;
+        if (grp != NULL && grp->pseudo)
+        {
+          is_pseudo = TRUE;
+        }
+      }
+    }
+    else if (grp->pseudo)
+    {
+      is_pseudo = TRUE;
+    }
+  }
+  if (!is_pseudo)
+  {
+    return;
+  }
+  
+  gsp = (GetSamplePtr) userdata;
+  
+  /* find ProtRefPtr with protein name and description */
+  prp = GetProtRefForCDSFeature (sfp);
+  if (prp == NULL)
+  {
+    return;
+  }
+  
+  if (prp->name != NULL && !StringHasNoText (prp->name->data.ptrvalue))
+  {
+    ValNodeAddPointer (&gsp->feat_dest_list, 1, sfp);
+    
+    if (!StringHasNoText (prp->desc))
+    {
+      if (StringHasNoText (gsp->sample_text))
+      {
+        gsp->sample_text = MemFree (gsp->sample_text);
+        gsp->sample_text = StringSave (prp->desc);
+      }
+      else if (StringCmp (gsp->sample_text, prp->desc) != 0)
+      {
+        gsp->all_same = FALSE;
+      }
+      gsp->num_found ++;  
+    }  
+  }
+}
+
+extern void ConvertPseudoProteinNamesToProteinDescriptions (IteM i)
+{
+  BaseFormPtr       bfp;
+  SeqEntryPtr       sep;
+  GetSampleData     gsd;
+  ExistingTextPtr   etp = NULL;
+  ValNodePtr        vnp;
+  SeqFeatPtr        sfp;
+  ProtRefPtr        prp;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  
+  WatchCursor ();
+  Update ();
+  
+  gsd.sample_text = NULL;
+  gsd.all_same = TRUE;
+  gsd.num_found = 0;
+  gsd.feat_dest_list = NULL;
+  VisitFeaturesInSep (sep, &gsd, GetPseudoProteinDescSample);
+  
+  etp = GetExistingTextHandlerInfo (&gsd, FALSE);
+  
+  for (vnp = gsd.feat_dest_list; vnp != NULL; vnp = vnp->next)
+  {
+    sfp = (SeqFeatPtr) vnp->data.ptrvalue;    
+    prp = GetProtRefForCDSFeature (sfp);
+    if (prp != NULL)
+    {
+      prp->desc = HandleExistingText (prp->desc, prp->name->data.ptrvalue, etp);
+      prp->name->data.ptrvalue = NULL;
+      prp->name = ValNodeFreeData (prp->name);
+    }
+  }
+  
+  gsd.feat_dest_list = ValNodeFree (gsd.feat_dest_list);
+  gsd.sample_text = MemFree (gsd.sample_text);
+  
+  etp = MemFree (etp);
+  
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+  ArrowCursor ();
+  Update (); 
+  
+}
+
+static void RemoveOneNomenclature (UserObjectPtr PNTR puop)
+{
+  UserObjectPtr  uop, obj, prev_obj, next_obj;
+  UserFieldPtr   prev_ufp, next_ufp, ufp;
+  ObjectIdPtr    oip;
+
+  if (puop == NULL || *puop == NULL) return;
+  uop = *puop;
+  
+  for (ufp = uop->data, prev_ufp = NULL; 
+       ufp != NULL; 
+       ufp = next_ufp) {
+    next_ufp = ufp->next;
+    if (ufp->choice == 6) {
+      obj = (UserObjectPtr) ufp->data.ptrvalue;
+      RemoveOneNomenclature (&obj);
+      ufp->data.ptrvalue = obj;
+    } else if (ufp->choice == 12) {
+      for (obj = (UserObjectPtr) ufp->data.ptrvalue, prev_obj = NULL;
+           obj != NULL;
+           obj = next_obj) {
+        next_obj = obj->next;
+        RemoveOneNomenclature (&obj);
+        if (obj == NULL)
+        {
+          if (prev_obj == NULL)
+          {
+            ufp->data.ptrvalue = next_obj;
+          }
+          else
+          {
+            prev_obj->next = next_obj;
+          }
+          obj = UserObjectFree (obj);
+        }
+        else
+        {
+          prev_obj = obj;
+        }
+      }
+    }
+    if ((ufp->choice == 6 || ufp->choice == 12) && ufp->data.ptrvalue == NULL)
+    {
+      if (prev_ufp == NULL)
+      {
+        uop->data = ufp->next;
+      }
+      else
+      {
+        prev_ufp->next = ufp->next;
+      }
+      ufp = UserFieldFree (ufp);
+    }
+    else
+    {
+      prev_ufp = ufp;
+    }
+  }
+  
+  oip = uop->type;
+  if (oip != NULL && StringCmp (oip->str, "OfficialNomenclature") == 0)
+  {
+    uop = UserObjectFree (uop);
+    *puop = uop;
+  }
+}
+
+static void RemoveNomenclatureCallback (SeqFeatPtr sfp, Pointer userdata)
+{
+  UserObjectPtr uop;
+  
+  if (sfp != NULL)
+  {
+    uop = sfp->ext;
+    RemoveOneNomenclature (&uop);
+    sfp->ext = uop;
+  }
+}
+
+extern void RemoveNomenclature (IteM i)
+{
+  BaseFormPtr       bfp;
+  SeqEntryPtr       sep;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  
+  WatchCursor ();
+  Update ();
+  
+  VisitFeaturesInSep (sep, NULL, RemoveNomenclatureCallback);
+  
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+  ArrowCursor ();
+  Update (); 
+}
+
+
+static void RemoveUnindexedFeaturesInSeqEntry (SeqEntryPtr sep, Uint2 entityID)
+{
+  BioseqPtr         bsp;
+  BioseqSetPtr      bssp;
+  SeqAnnotPtr       sap = NULL;
+  SeqFeatPtr        sfp;
+  SeqMgrFeatContext context;
+
+  if (sep == NULL || sep->data.ptrvalue == NULL)
+  {
+	return;
+  }
+
+  if (IS_Bioseq(sep))
+  {
+	bsp = (BioseqPtr) sep->data.ptrvalue;
+    sap = bsp->annot;
+  }
+  else if (IS_Bioseq_set (sep))
+  {
+    bssp = (BioseqSetPtr) sep->data.ptrvalue;
+
+	sep = bssp->seq_set;
+	while (sep != NULL)
+	{
+      RemoveUnindexedFeaturesInSeqEntry (sep, entityID);
+	  sep = sep->next;
+	}
+    sap = bssp->annot;
+  }
+
+  while (sap != NULL)
+  {
+    if (sap->type == 1)
+	{
+      sfp = (SeqFeatPtr) sap->data;
+	  while (sfp != NULL)
+	  {
+	    if (SeqMgrGetDesiredFeature (entityID, NULL, 0, 0, sfp, &context) == NULL)
+		{
+		  sfp->idx.deleteme = TRUE;
+		}
+		sfp = sfp->next;
+	  }
+	}
+	sap = sap->next;
+  }
+}
+
+
+extern void RemoveUnindexedFeatures (IteM i)
+{
+  BaseFormPtr       bfp;
+  SeqEntryPtr       sep;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  
+  WatchCursor ();
+  Update ();
+  
+  RemoveUnindexedFeaturesInSeqEntry (sep, bfp->input_entityID);
+
+  DeleteMarkedObjects (bfp->input_entityID, 0, NULL);
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+  ArrowCursor ();
+  Update (); 
+}
+
+
+static void CopyLocusToLocusTagCallback (SeqFeatPtr sfp, Pointer userdata)
+{
+  GeneRefPtr grp;
+  
+  if (sfp == NULL || sfp->data.choice != SEQFEAT_GENE || sfp->data.value.ptrvalue == NULL)
+  {
+    return;
+  }
+  
+  grp = (GeneRefPtr) sfp->data.value.ptrvalue;
+  if (!StringHasNoText (grp->locus) && StringHasNoText (grp->locus_tag))
+  {
+    grp->locus_tag = MemFree (grp->locus_tag);
+    grp->locus_tag = StringSave (grp->locus);
+  }
+}
+
+extern void CopyLocusToLocusTag (IteM i)
+{
+  BaseFormPtr       bfp;
+  SeqEntryPtr       sep;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  
+  WatchCursor ();
+  Update ();
+  
+  VisitFeaturesInSep (sep, NULL, CopyLocusToLocusTagCallback);
+
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+  ArrowCursor ();
+  Update (); 
+}
+
+

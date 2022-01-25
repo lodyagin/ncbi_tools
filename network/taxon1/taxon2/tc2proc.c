@@ -1,5 +1,5 @@
 /*----------------*/
-/* $Id: tc2proc.c,v 1.38 2005/07/25 18:07:44 lavr Exp $           */
+/* $Id: tc2proc.c,v 1.39 2005/10/25 17:47:26 soussov Exp $           */
 /*----------------*/
 
 #include <stdlib.h>
@@ -1570,6 +1570,9 @@ static OrgModPtr copyOrgMod(OrgModPtr src)
 static int subtypeConflict(Int2 t1, Int2 t2)
 {
     if(t1 == t2) return 1;
+#if 1
+    if(t2 == 255) return 1;
+#else
     switch(t2) {
     case 2:
     case 6:
@@ -1582,6 +1585,7 @@ static int subtypeConflict(Int2 t1, Int2 t2)
     default:
         break;
     }
+#endif
     return 0;
 }
 

@@ -1,6 +1,6 @@
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] =
-    "$Id: blast_psi_priv.c,v 1.53 2005/04/21 20:26:57 camacho Exp $";
+    "$Id: blast_psi_priv.c,v 1.57 2005/11/18 20:09:45 camacho Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 /* ===========================================================================
  *
@@ -454,7 +454,7 @@ _PSISequenceWeightsFree(_PSISequenceWeights* seq_weights)
 }
 
 #ifdef _DEBUG
-static char getRes(char input)
+char GetResidue(char input)
 {
     switch (input) {
     case 0: return ('-');
@@ -502,7 +502,7 @@ __printMsa(const char* filename, const _PSIMsa* msa)
         /*fprintf(fp, "%3d\t", i);*/
         for (j = 0; j < msa->dimensions->query_length; j++) {
             if (msa->cell[i][j].is_aligned) {
-                fprintf(fp, "%c", getRes(msa->cell[i][j].letter));
+                fprintf(fp, "%c", GetResidue(msa->cell[i][j].letter));
             } else {
                 fprintf(fp, ".");
             }
@@ -1637,6 +1637,15 @@ _PSISpreadGapWeights(const _PSIMsa* msa,
     }
 }
 
+/** The following define enables/disables the _PSICheckSequenceWeights
+ * function's abort statement in the case when the sequence weights are not
+ * being checked. When this is enabled, abort() will be invoked if none of the
+ * sequence weights are checked to be in the proper range. The C toolkit code
+ * silently ignores this situation, so it's implemented that way here for
+ * backwards compatibility.
+ */
+#define SEQUENCE_WEIGHTS_CHECK__ABORT_ON_FAILURE 0
+
 /* Verifies that each column of the match_weights field in the seq_weights
  * structure adds up to 1. */
 static int
@@ -1646,8 +1655,11 @@ _PSICheckSequenceWeights(const _PSIMsa* msa,
 {
     const Uint1 kXResidue = AMINOACID_TO_NCBISTDAA['X'];
     Uint4 pos = 0;   /* residue position (ie: column number) */
-    Boolean check_performed = FALSE;  /* were there any sequences checked? */
     const Uint4 kExpectedNumMatchingSeqs = nsg_compatibility_mode ? 0 : 1;
+
+#if SEQUENCE_WEIGHTS_CHECK__ABORT_ON_FAILURE
+    Boolean check_performed = FALSE;  /* were there any sequences checked? */
+#endif
 
     ASSERT(msa);
     ASSERT(seq_weights);
@@ -1659,6 +1671,9 @@ _PSICheckSequenceWeights(const _PSIMsa* msa,
 
         if (msa->num_matching_seqs[pos] <= kExpectedNumMatchingSeqs ||
             msa->cell[kQueryIndex][pos].letter == kXResidue) {
+            /* N.B.: the following statement allows for the sequence weights to
+             * go unchecked. To allow more strict checking, enable the
+             * SEQUENCE_WEIGHTS_CHECK__ABORT_ON_FAILURE #define above */
             continue;
         }
 
@@ -1669,15 +1684,19 @@ _PSICheckSequenceWeights(const _PSIMsa* msa,
         if (running_total < 0.99 || running_total > 1.01) {
             return PSIERR_BADSEQWEIGHTS;
         }
+#if SEQUENCE_WEIGHTS_CHECK__ABORT_ON_FAILURE
         check_performed = TRUE;
+#endif
     }
 
+#if SEQUENCE_WEIGHTS_CHECK__ABORT_ON_FAILURE
     /* This condition should never happen because it means that no sequences
      * were selected to calculate the sequence weights! */
     if ( !check_performed &&
          !nsg_compatibility_mode ) {    /* old code didn't check for this... */
         assert(!"Did not perform sequence weights check");
     }
+#endif
 
     return PSI_SUCCESS;
 }
@@ -1923,7 +1942,7 @@ _PSIConvertFreqRatiosToPSSM(_PSIInternalPssmData* internal_pssm,
 
                 internal_pssm->pssm[i][j] = sbp->matrix->data[kResidue][j];
 
-                if (sbp->matrix->data[kResidue][j] != BLAST_SCORE_MIN) {
+                if (freq_ratios->data[kResidue][j] != 0.0) {
                     double tmp = 
                         kPSIScaleFactor * freq_ratios->bit_scale_factor *
                         log(freq_ratios->data[kResidue][j])/NCBIMATH_LN2;
@@ -1959,8 +1978,8 @@ _PSIScaleMatrix(const Uint1* query,
     int** scaled_pssm = NULL;
     int** pssm = NULL;
     double factor;
-    double factor_low = 0.0;
-    double factor_high = 0.0;
+    double factor_low = 1.0;
+    double factor_high = 1.0;
     double ideal_lambda = 0.0;      /* ideal value of ungapped lambda for
                                        underlying scoring matrix */
     double new_lambda = 0.0;        /* Karlin-Altschul parameter calculated 
@@ -2004,6 +2023,7 @@ _PSIScaleMatrix(const Uint1* query,
             if (first_time) {
                 factor_high = 1.0 + kPositScalingPercent;
                 factor = factor_high;
+                factor_low = 1.0;
                 too_high = TRUE;
                 first_time = FALSE;
             } else {
@@ -2188,7 +2208,7 @@ _PSIComputeScoreProbabilities(const int** pssm,                     /* [in] */
     }
 
     ASSERT(score_freqs->score_avg == 0.0);
-    for (s = min_score; s < max_score; s++) {
+    for (s = min_score; s <= max_score; s++) {
         score_freqs->score_avg += (s * score_freqs->sprob[s]);
     }
 
@@ -2358,6 +2378,19 @@ _PSISaveDiagnostics(const _PSIMsa* msa,
 /*
  * ===========================================================================
  * $Log: blast_psi_priv.c,v $
+ * Revision 1.57  2005/11/18 20:09:45  camacho
+ * Fixes for backwards compatibility with C toolkit PSSM engine for certain corner
+ * cases.
+ *
+ * Revision 1.56  2005/10/17 18:34:54  camacho
+ * Remove abort() call when sequence weights are not checked
+ *
+ * Revision 1.55  2005/10/05 14:09:30  camacho
+ * Port change in revision 6.76 of posit.c
+ *
+ * Revision 1.54  2005/10/03 20:42:41  camacho
+ * Minor
+ *
  * Revision 1.53  2005/04/21 20:26:57  camacho
  * Relax validation in s_PSIValidateAlignedColumns so that query sequence can be
  * the only aligned sequence for a given column of the multiple sequence

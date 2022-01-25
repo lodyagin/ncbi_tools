@@ -1,4 +1,4 @@
-/* $Id: blast_traceback.c,v 1.175 2005/08/15 16:11:20 dondosha Exp $
+/* $Id: blast_traceback.c,v 1.179 2005/12/01 14:47:48 madden Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -6,7 +6,7 @@
  *
  *  This software/database is a "United States Government Work" under the
  *  terms of the United States Copyright Act.  It was written as part of
- *  the author's offical duties as a United States Government employee and
+ *  the author's official duties as a United States Government employee and
  *  thus cannot be copyrighted.  This software/database is freely available
  *  to the public for use. The National Library of Medicine and the U.S.
  *  Government have not placed any restriction on its use or reproduction.
@@ -23,7 +23,6 @@
  *
  * ===========================================================================
  *
- * Author: Ilya Dondoshansky
  *
  */
 
@@ -39,7 +38,7 @@
  *                    for ( all HSP lists )
  *                        Blast_TracebackFromHSPList
  *            else if ( composition based statistics )
- *                Kappa_RedoAlignmentCore
+ *                Blast_RedoAlignmentCore
  *            else
  *                for ( all HSP lists )
  *                    if ( PHI BLAST) 
@@ -51,7 +50,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_traceback.c,v 1.175 2005/08/15 16:11:20 dondosha Exp $";
+    "$Id: blast_traceback.c,v 1.179 2005/12/01 14:47:48 madden Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_traceback.h>
@@ -269,10 +268,7 @@ s_HSPListPostTracebackUpdate(EBlastProgramType program_number,
 
       /* For nucleotide search, if match score is = 2, the odd scores
          are rounded down to the nearest even number. */
-      if (program_number == eBlastTypeBlastn && 
-          score_params->options->reward == 2) {
-          Blast_HSPListAdjustOddBlastnScores(hsp_list);
-      }
+      Blast_HSPListAdjustOddBlastnScores(hsp_list, kGapped, sbp);
 
       Blast_HSPListGetEvalues(query_info, hsp_list, kGapped, sbp, 0,
                               scale_factor);
@@ -387,7 +383,7 @@ Blast_TracebackFromHSPList(EBlastProgramType program_number,
       hsp = hsp_array[index];
       if (program_number == eBlastTypeBlastx && kIsOutOfFrame) {
           Int4 context = hsp->context - hsp->context % 3;
-          Int4 context_offset = query_info->contexts[hsp->context].query_offset;
+          Int4 context_offset = query_info->contexts[context].query_offset;
          
           query = query_blk->oof_sequence + CODON_LENGTH + context_offset;
           query_length = query_info->contexts[context+2].query_offset +
@@ -1015,7 +1011,7 @@ BLAST_ComputeTraceback(EBlastProgramType program_number,
               (ext_params->options->compositionBasedStats == TRUE || 
                ext_params->options->eTbackExt == eSmithWatermanTbck)) {
       status = 
-          Kappa_RedoAlignmentCore(program_number, query, query_info, sbp, 
+          Blast_RedoAlignmentCore(program_number, query, query_info, sbp, 
                                   hsp_stream, seq_src, gen_code_string,
                                   score_params, ext_params, hit_params, 
                                   psi_options, results); 

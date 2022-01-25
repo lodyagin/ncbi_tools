@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/5/97
 *
-* $Revision: 6.86 $
+* $Revision: 6.87 $
 *
 * File Description: 
 *
@@ -1017,6 +1017,9 @@ static void PopulateFlatFile (BioseqViewPtr bvp, FmtType format, FlgType flags)
       case 6 :
         custom |= ONLY_REVIEW_PUBS;
         break;
+      case 7 :
+        custom |= HIDE_ALL_PUBS;
+        break;
       default :
         break;
     }
@@ -1683,6 +1686,9 @@ static void PopulateAsnOrXML (BioseqViewPtr bvp, CharPtr outmode, Boolean doGbse
           break;
         case 6 :
           custom |= ONLY_REVIEW_PUBS;
+          break;
+        case 7 :
+          custom |= HIDE_ALL_PUBS;
           break;
         default :
           break;

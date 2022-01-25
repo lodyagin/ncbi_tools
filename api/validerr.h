@@ -54,6 +54,9 @@
 #define ERR_SEQ_INST_GapInProtein  1,50
 #define ERR_SEQ_INST_BadProteinStart  1,51
 #define ERR_SEQ_INST_TerminalGap  1,52
+#define ERR_SEQ_INST_OverlappingDeltaRange  1,53
+#define ERR_SEQ_INST_LeadingX  1,54
+#define ERR_SEQ_INST_InternalNsInSeqRaw  1,55
 #define ERR_SEQ_DESCR  2,0
 #define ERR_SEQ_DESCR_BioSourceMissing  2,1
 #define ERR_SEQ_DESCR_InvalidForType  2,2
@@ -89,6 +92,7 @@
 #define ERR_SEQ_DESCR_BioSourceInconsistency  2,32
 #define ERR_SEQ_DESCR_FastaBracketTitle  2,33
 #define ERR_SEQ_DESCR_MissingText  2,34
+#define ERR_SEQ_DESCR_BadCollectionDate  2,35
 #define ERR_GENERIC  3,0
 #define ERR_GENERIC_NonAsciiAsn  3,1
 #define ERR_GENERIC_Spell  3,2
@@ -98,6 +102,7 @@
 #define ERR_GENERIC_BadPageNumbering  3,6
 #define ERR_GENERIC_MedlineEntryPub  3,7
 #define ERR_GENERIC_BadDate  3,8
+#define ERR_GENERIC_StructuredCitGenCit  3,9
 #define ERR_SEQ_PKG  4,0
 #define ERR_SEQ_PKG_NoCdRegionPtr  4,1
 #define ERR_SEQ_PKG_NucProtProblem  4,2
@@ -219,6 +224,13 @@
 #define ERR_SEQ_FEAT_GeneXrefWithoutGene  5,102
 #define ERR_SEQ_FEAT_SeqFeatXrefProblem  5,103
 #define ERR_SEQ_FEAT_ProductFetchFailure  5,104
+#define ERR_SEQ_FEAT_SuspiciousGeneXref  5,105
+#define ERR_SEQ_FEAT_MissingTrnaAA  5,106
+#define ERR_SEQ_FEAT_CollidingFeatureIDs  5,107
+#define ERR_SEQ_FEAT_ExceptionProblem  5,108
+#define ERR_SEQ_FEAT_PolyAsignalNotRange  5,109
+#define ERR_SEQ_FEAT_OldLocusTagMismtach  5,110
+#define ERR_SEQ_FEAT_DuplicateGeneOntologyTerm  5,111
 #define ERR_SEQ_ALIGN  6,0
 #define ERR_SEQ_ALIGN_SeqIdProblem  6,1
 #define ERR_SEQ_ALIGN_StrandRev  6,2

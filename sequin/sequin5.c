@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/26/97
 *
-* $Revision: 6.422 $
+* $Revision: 6.434 $
 *
 * File Description:
 *
@@ -2966,7 +2966,8 @@ extern EnumFieldAssoc  enum_site_alist [];
 
 
 static GbFeatName EditQualifierList[] = {
- {"allele", Class_text}, {"anticodon", Class_pos_aa},
+ {"allele", Class_text}, 
+ {"anticodon", Class_pos_aa},
  {"bound_moiety", Class_text},
  {"chromosome", Class_text},
  {"citation", Class_bracket_int},
@@ -2975,10 +2976,15 @@ static GbFeatName EditQualifierList[] = {
  {"compare", Class_text },
  {"cons_splice", Class_site},
  {"db_xref", Class_text},
- {"direction", Class_L_R_B}, {"EC_number", Class_ecnum},
- {"evidence", Class_exper}, {"exception", Class_text},
- {"frequency", Class_text}, {"function", Class_text},
- {"gene", Class_text}, {"gdb_xref", Class_text},
+ {"direction", Class_L_R_B}, 
+ {"EC_number", Class_ecnum},
+ {"evidence", Class_exper}, 
+ {"exception", Class_text},
+ {"experiment", Class_text},
+ {"frequency", Class_text}, 
+ {"function", Class_text},
+ {"gene", Class_text}, 
+ {"gdb_xref", Class_text},
  {"insertion_seq", Class_text},
  {"label", Class_token},
  {"map", Class_text},
@@ -3009,11 +3015,7 @@ static GbFeatName EditQualifierList[] = {
 };
 
 const Int4 NumEditQualifiers = sizeof (EditQualifierList) / sizeof (GbFeatName);
-
-/* Note that any changes to this alist should also be made to */
-/* the subsource_and_orgmod_subtype_remove_alistX and         */
-/* subsource_and_orgmod_subtype_fasta_ alistX lists which     */
-/* follow.                                                   */
+#define QUAL_EXPERIMENT 15
 
 static ENUM_ALIST(subsource_and_orgmod_subtype_alistX)
   {" ",                       0},
@@ -3085,149 +3087,6 @@ static ENUM_ALIST(subsource_and_orgmod_subtype_alistX)
   {"Tissue-type",           110},
   {"Transgenic",            126},
   {"Transposon-name",       120},
-  {"Type",                    4},
-  {"Variety",                 6},
-END_ENUM_ALIST
-
-static ENUM_ALIST(subsource_and_orgmod_subtype_remove_alistX)
-  {" ",                       0},
-  {"Acronym",                19},
-  {"All Notes",             999},
-  {"Anamorph",               29},
-  {"Authority",              24},
-  {"Biotype",                14},
-  {"Biovar",                 13},
-  {"Breed",                  31},
-  {"Cell-line",             108},
-  {"Cell-type",             109},
-  {"Chemovar",               12},
-  {"Chromosome",            101},
-  {"Clone",                 103},
-  {"Clone-lib",             111},
-  {"Collected-by",          131},
-  {"Collection-date",       130},
-  {"Common",                 18},
-  {"Country",               123},
-  {"Cultivar",               10},
-  {"Dev-stage",             112},
-  {"Dosage",                 20},
-  {"Ecotype",                27},
-  {"Endogenous-virus-name", 125},
-  {"Environmental-sample",  127},
-  {"Forma",                  25},
-  {"Forma-specialis",        26},
-  {"Frequency",             113},
-  {"Fwd-primer-name",       135},
-  {"Fwd-primer-seq",        133},
-  {"Genotype",              106},
-  {"Germline",              114},
-  {"Group",                  15},
-  {"Haplotype",             105},
-  {"Identified_by",         132},
-  {"Ins-seq-name",          121},
-  {"Isolate",                17},
-  {"Isolation-source",      128},
-  {"Lab-host",              116},
-  {"Lat-lon",               129},
-  {"Map",                   102},
-  {"Note - OrgMod",          55},
-  {"Note - SubSource",      155},
-  {"Old Lineage",            53}, /* 253 */
-  {"Old Name",               54}, /* 254 */
-  {"Pathovar",               11},
-  {"Plasmid-name",          119},
-  {"Plastid-name",          122},
-  {"Pop-variant",           117},
-  {"Rearranged",            115},
-  {"Rev-primer-name",       136},
-  {"Rev-primer-seq",        134},
-  {"Segment",               124},
-  {"Serogroup",               8},
-  {"Serotype",                7},
-  {"Serovar",                 9},
-  {"Sex",                   107},
-  {"Specific-host",          21},
-  {"Specimen-voucher",       23},
-  {"Strain",                  2},
-  {"Sub-species",            22},
-  {"Subclone",              104},
-  {"Subgroup",               16},
-  {"Substrain",               3},
-  {"Subtype",                 5},
-  {"Synonym",                28},
-  {"Teleomorph",             30},
-  {"Tissue-lib",            118},
-  {"Tissue-type",           110},
-  {"Transgenic",            126},
-  {"Transposon-name",       120},
-  {"Type",                    4},
-  {"Variety",                 6},
-END_ENUM_ALIST
-
-static ENUM_ALIST(subsource_and_orgmod_subtype_fasta_alistX)
-  {" ",                       0},
-  {"Acronym",                19},
-  {"Anamorph",               29},
-  {"Authority",              24},
-  {"Biotype",                14},
-  {"Biovar",                 13},
-  {"Breed",                  31},
-  {"Cell-line",             108},
-  {"Cell-type",             109},
-  {"Chemovar",               12},
-  {"Chromosome",            101},
-  {"Clone",                 103},
-  {"Clone-lib",             111},
-  {"Collected-by",          131},
-  {"Collection-date",       130},
-  {"Common",                 18},
-  {"Country",               123},
-  {"Cultivar",               10},
-  {"Dev-stage",             112},
-  {"Dosage",                 20},
-  {"Ecotype",                27},
-  {"Endogenous-virus-name", 125},
-  {"Forma",                  25},
-  {"Forma-specialis",        26},
-  {"Frequency",             113},
-  {"Fwd-primer-name",       135},
-  {"Fwd-primer-seq",        133},
-  {"Genotype",              106},
-  {"Group",                  15},
-  {"Haplotype",             105},
-  {"Identified_by",         132},
-  {"Isolate",                17},
-  {"Isolation-source",      128},
-  {"Lab-host",              116},
-  {"Lat-lon",               129},
-  {"Map",                   102},
-  {"Note - OrgMod",          55},
-  {"Note - SubSource",      155},
-  {"Old Lineage",            53}, /* 253 */
-  {"Old Name",               54}, /* 254 */
-  {"Pathovar",               11},
-  {"Plasmid-name",          119},
-  {"Plastid-name",          122},
-  {"Pop-variant",           117},
-  {"Rev-primer-name",       136},
-  {"Rev-primer-seq",        134},
-  {"Segment",               124},
-  {"Serogroup",               8},
-  {"Serotype",                7},
-  {"Serovar",                 9},
-  {"Sex",                   107},
-  {"Specific-host",          21},
-  {"Specimen-voucher",       23},
-  {"Strain",                  2},
-  {"Sub-species",            22},
-  {"Subclone",              104},
-  {"Subgroup",               16},
-  {"Substrain",               3},
-  {"Subtype",                 5},
-  {"Synonym",                28},
-  {"Teleomorph",             30},
-  {"Tissue-lib",            118},
-  {"Tissue-type",           110},
   {"Type",                    4},
   {"Variety",                 6},
 END_ENUM_ALIST
@@ -3320,86 +3179,77 @@ Uint2 mod_types [] = {
   TAGLIST_POPUP, TAGLIST_TEXT
 };
 
+static CharPtr FindNextModNameToken (CharPtr modname)
+{
+  CharPtr token, other_token;
+
+  if (StringHasNoText (modname))
+  {
+    return NULL;
+  }
+
+  token = StringChr (modname, '-');
+  other_token = StringChr (modname, '_');
+  if (token == NULL || (other_token != NULL && token > other_token))
+  {
+    token = other_token;
+  }
+  other_token = StringChr (modname, ' ');
+  if (token == NULL || (other_token != NULL && token > other_token))
+  {
+    token = other_token;
+  }
+  return token;
+}
+
+static Boolean DoModNamesMatch (CharPtr name1, CharPtr name2)
+{
+  CharPtr name1_token, name2_token;
+  if (StringHasNoText (name1) && StringHasNoText (name2))
+  {
+    return TRUE;
+  }
+  else if (StringHasNoText (name1) || StringHasNoText (name2))
+  {
+    return FALSE;
+  }
+  else if (StringICmp (name1, name2) == 0)
+  {
+    return TRUE;
+  }
+  
+  name1_token = FindNextModNameToken (name1);
+  name2_token = FindNextModNameToken (name2);
+  if (name1_token == NULL || name2_token == NULL)
+  {
+    return FALSE;
+  }
+  else if (name1_token - name1 != name2_token - name2)
+  {
+    return FALSE;
+  }
+  else if (StringNICmp (name1, name2, name1_token - name1) == 0)
+  {
+    return DoModNamesMatch (name1_token + 1, name2_token + 1);
+  }
+  else
+  {
+    return FALSE;
+  }
+}
+
 extern Uint1 FindTypeForModNameText (CharPtr cp)
 {
   EnumFieldAssocPtr  ap;
   
   for (ap = subsource_and_orgmod_subtype_alistX; ap->name != NULL; ap++) 
   {
-    if (StringICmp (ap->name, cp) == 0)
+    if (DoModNamesMatch (ap->name, cp))
     {
       return ap->value;
     }
   }
   return 255;
-}
-
-static void ModListToModDialog (DialoG d, Pointer data)
-
-{
-  ValNodePtr  head;
-  Int2        j;
-  size_t      len;
-  ListPairPtr lpp;
-  CharPtr     str;
-  TagListPtr  tlp;
-  ValNodePtr  name_vnp;
-  ValNodePtr  value_vnp;
-  ValNodePtr  vnp;
-
-  tlp = (TagListPtr) GetObjectExtra (d);
-  lpp = (ListPairPtr) data;
-  head = NULL;
-  if (tlp != NULL) {
-    name_vnp = lpp->selected_names_list;
-    value_vnp = lpp->selected_values_list;
-    while (name_vnp != NULL) {
-      if (!StringHasNoText (name_vnp->data.ptrvalue)
-        && name_vnp->choice != 114 /* germline */
-        && name_vnp->choice != 126 /* transgenic */
-        && name_vnp->choice != 115 /* rearranged */
-        && name_vnp->choice != 127 /* environmental sample */)
-      {
-        vnp = ValNodeNew (head);
-        if (head == NULL) {
-          head = vnp;
-        }
-        len = StringLen (name_vnp->data.ptrvalue) + 4;
-        if (value_vnp != NULL)
-        {
-          len += StringLen (value_vnp->data.ptrvalue);
-        }
-        str = MemNew (len);
-        if (str != NULL)
-        {
-          if (value_vnp != NULL && ! StringHasNoText (value_vnp->data.ptrvalue))
-          {
-        	sprintf (str, "%d\t%s\n", 
-        	         name_vnp->choice,
-        	         (CharPtr)value_vnp->data.ptrvalue);
-          }
-          else
-          {
-          	sprintf (str, "%d\t\n", name_vnp->choice);
-          }
-        }
-        vnp->data.ptrvalue = str;
-      }
-      name_vnp = name_vnp->next;
-      if (value_vnp != NULL)
-      {
-      	value_vnp = value_vnp->next;
-      }
-    }
-    SendMessageToDialog (tlp->dialog, VIB_MSG_RESET);
-    tlp->vnp = head;
-    SendMessageToDialog (tlp->dialog, VIB_MSG_REDRAW);
-    for (j = 0, vnp = tlp->vnp; vnp != NULL; j++, vnp = vnp->next) {
-    }
-    tlp->max = MAX ((Int2) 0, (Int2) (j - tlp->rows + 1));
-    CorrectBarMax (tlp->bar, tlp->max);
-    CorrectBarPage (tlp->bar, tlp->rows - 1, tlp->rows - 1);
-  }
 }
 
 static CharPtr GetValueNameFromEnum (Int4 val, EnumFieldAssocPtr list)
@@ -3414,101 +3264,6 @@ static CharPtr GetValueNameFromEnum (Int4 val, EnumFieldAssocPtr list)
   	}
   }
   return NULL;
-}
-
-static Pointer ModDialogToModList (DialoG d)
-
-{
-  Char        ch;
-  OrgModPtr   head;
-  Int2        j;
-  Int2        len;
-  Boolean     okay;
-  CharPtr     str;
-  TagListPtr  tlp;
-  CharPtr     mod_name;
-  CharPtr     mod_value;
-  ValNodePtr  vnp, name_vnp, value_vnp;
-  ListPairPtr lpp;
-  CharPtr     tmp;
-  int         val;
-
-  head = NULL;
-  tlp = (TagListPtr) GetObjectExtra (d);
-
-  lpp = (ListPairPtr) MemNew (sizeof (ListPairData));
-  if (lpp == NULL) return NULL;
-  lpp->selected_names_list = NULL;
-  lpp->selected_values_list = NULL;
-
-  if (tlp != NULL && tlp->vnp != NULL) {
-    for (vnp = tlp->vnp; vnp != NULL; vnp = vnp->next) {
-      str = (CharPtr) vnp->data.ptrvalue;
-      okay = FALSE;
-      len = StringLen (str);
-      for (j = 0; j < len; j++) {
-        ch = str [j];
-        if (ch != ' ' && ch != '\t' && ch != '\n') {
-          okay = TRUE;
-        }
-      }
-      if (okay) {
-        tmp = ExtractTagListColumn ((CharPtr) vnp->data.ptrvalue, 0);
-        if (tmp != NULL && sscanf (tmp, "%d", &val) == 1 && val != 0) {
-          mod_name = GetValueNameFromEnum (val, subsource_and_orgmod_subtype_fasta_alistX);
-          if (mod_name != NULL && ! StringHasNoText (mod_name)) {
-            mod_value = ExtractTagListColumn ((CharPtr) vnp->data.ptrvalue, 1);
-            name_vnp = ValNodeNew (lpp->selected_names_list);
-            value_vnp = ValNodeNew (lpp->selected_values_list);
-            if (lpp->selected_names_list == NULL)
-            {
-              lpp->selected_names_list = name_vnp;
-            }
-            if (lpp->selected_values_list == NULL)
-            {
-          	  lpp->selected_values_list = value_vnp;
-            }
-            if (name_vnp != NULL)
-            {
-              name_vnp->choice = val;
-              name_vnp->data.ptrvalue = mod_name;
-            }
-            if (value_vnp != NULL)
-            {
-          	  value_vnp->data.ptrvalue = mod_value;
-            }
-            
-          }
-        } 
-        MemFree (tmp);
-      }
-    }
-  }
-  return (Pointer) lpp;
-}
-
-static EnumFieldAssocPtr mod_lists[] = 
-  { subsource_and_orgmod_subtype_fasta_alistX, NULL };
-
-extern DialoG CreateModifierTagList (GrouP g, ListPairPtr lpp)
-{ 
-  DialoG d;
-  
-  if (lpp == NULL) return NULL;
-  d = CreateTagListDialog (g, 4, 2, STD_TAG_SPACING, mod_types,
-                           mod_widths, mod_lists,
-                           ModListToModDialog,
-                           ModDialogToModList);
-  PointerToDialog (d, lpp);
-  return d;
-}
-
-extern ListPairPtr GetModifierList (DialoG d)
-{
-  ListPairPtr lpp;
-  
-  lpp = DialogToPointer (d);
-  return lpp;
 }
 
 extern void AppendOrReplaceString (
@@ -5516,16 +5271,68 @@ static void RemoveSourceQualFromSourceDescriptor (SeqDescrPtr sdp, Pointer userd
   RemoveSourceQualFromBioSource (sdp->data.ptrvalue, userdata, fsp);
 }
 
-static DialoG SourceLocationSelectionDialog 
+static DialoG SourceLocationSelectionDialogEx 
 (GrouP h,
  Boolean                  allow_multi,
+ Boolean                  allow_discontinued,
  Nlm_ChangeNotifyProc     change_notify,
  Pointer                  change_userdata)
 
 {
-  return EnumAssocSelectionDialog (h, biosource_genome_alistX, "Location",
-                                   allow_multi, change_notify, change_userdata);
+  DialoG     dlg;
+  ValNodePtr choice_list = NULL;
+  Nlm_EnumFieldAssocPtr eap = biosource_genome_alistX;
+  
+  if (eap == NULL)
+  {
+    return NULL;
+  }
+
+  while (eap->name != NULL)
+  {
+    if (!StringHasNoText (eap->name) 
+        && (allow_discontinued ||
+            (StringCmp (eap->name, "Insertion Sequence") != 0
+             && StringCmp (eap->name, "Transposon") != 0)))
+    {
+      ValNodeAddPointer (&choice_list, eap->value, StringSave (eap->name));
+    }
+    eap++;
+  }
+  
+  /* note - the ValNodeSelectionDialog will free the qual_choice_list
+   * when done */                                            
+  dlg = ValNodeSelectionDialog (h, choice_list, TALL_SELECTION_LIST,
+                                ValNodeStringName,
+                                ValNodeSimpleDataFree, ValNodeStringCopy,
+                                ValNodeChoiceMatch, "Location",
+                                change_notify, change_userdata, allow_multi);
+
+  return dlg;
 }
+
+
+static DialoG SourceLocationSelectionDialog
+(GrouP h,
+ Boolean                  allow_multi,
+ Nlm_ChangeNotifyProc     change_notify,
+ Pointer                  change_userdata)
+{
+  return SourceLocationSelectionDialogEx (h, allow_multi, FALSE,
+                                          change_notify, change_userdata);
+}
+
+
+static DialoG SourceLocationDiscSelectionDialog
+(GrouP h,
+ Boolean                  allow_multi,
+ Nlm_ChangeNotifyProc     change_notify,
+ Pointer                  change_userdata)
+{
+  return SourceLocationSelectionDialogEx (h, allow_multi, TRUE,
+                                          change_notify, change_userdata);
+}
+
 
 static DialoG SourceOriginSelectionDialog
 (GrouP h,
@@ -6070,6 +5877,42 @@ static void SetGBQualString (SeqFeatPtr sfp, Pointer userdata, FilterSetPtr fsp)
         gbqual_last->next = gbqual;
       }
     }
+  }
+}
+
+static void RemoveInference (SeqFeatPtr sfp, Pointer userdata, FilterSetPtr fsp)
+{
+  GBQualPtr     gbqual, gbqual_last = NULL, gbqual_next;
+  ApplyValuePtr avp;
+  
+  if (sfp == NULL || userdata == NULL)
+  {
+    return;
+  }
+  avp = (ApplyValuePtr) userdata;
+
+  gbqual = sfp->qual;
+  while (gbqual != NULL)
+  {
+    gbqual_next = gbqual->next;
+    if (StringCmp (gbqual->qual, "inference") == 0)
+    {
+      if (gbqual_last == NULL)
+      {
+        sfp->qual = gbqual->next;
+      }
+      else
+      {
+        gbqual_last->next = gbqual->next;
+      }
+      gbqual->next = NULL;
+      GBQualFree (gbqual);
+    }
+    else
+    {
+      gbqual_last = gbqual;
+    }
+    gbqual = gbqual_next;
   }
 }
 
@@ -15337,11 +15180,18 @@ extern void ParseLocalIDToSourceQual (ButtoN b)
 
 #define NUM_FEAT_ED_PAGES 2
 
-#define FEAT_ED_EVIDENCE  1
-#define FEAT_ED_EXCEPTION 2
-#define FEAT_ED_PARTIAL   3
-#define FEAT_ED_STRAND    4
-#define FEAT_ED_CITATION  5
+enum feature_editor_actions
+{
+  FEAT_ED_EVIDENCE = 1,
+  FEAT_ED_EXCEPTION,
+  FEAT_ED_PARTIAL,
+  FEAT_ED_STRAND,
+  FEAT_ED_CITATION,
+  FEAT_ED_EXPERIMENT,
+  FEAT_ED_INFERENCE
+};
+
+#define NUM_FEAT_ED_ACTIONS 7
 
 typedef struct mockupfeated
 {
@@ -15381,8 +15231,8 @@ typedef struct mockupfeated
   Boolean from_strand_val;
   Boolean to_strand_val;
 
-  GrouP  action_grps [5];
-  ButtoN action_btns [5];
+  GrouP  action_grps [NUM_FEAT_ED_ACTIONS];
+  ButtoN action_btns [NUM_FEAT_ED_ACTIONS];
   GrouP  action_choice_grp;
   
   /* for citations */
@@ -15393,6 +15243,10 @@ typedef struct mockupfeated
   Boolean    use_explanation_constraint;
   Int4       explanation_constraint_choice_val;
   Boolean    use_product_match;
+
+  /* for experiment */
+  GrouP      experiment_action;
+  TexT       experiment_text;
   
 } MockupFeatEdData, PNTR MockupFeatEdPtr;
 
@@ -15428,18 +15282,6 @@ static void MockupFeatEdChangeNotify (Pointer userdata)
     }
   }
   
-  if (mp->action_btns[0] != NULL)
-  {
-    if (! GetStatus (mp->action_btns[0])
-        && ! GetStatus (mp->action_btns[1])
-        && ! GetStatus (mp->action_btns[2])
-        && ! GetStatus (mp->action_btns[3]))
-    {
-      DisableAcceptCancelDialogAccept (mp->accept_cancel);
-      return;
-    }
-  }
-
   err_list = TestDialog (mp->feature_select);
   
   if (err_list == NULL)
@@ -15515,6 +15357,13 @@ static void MockupFeatEdClear (Pointer data)
   {
     SetValue (mp->to_strand, 1);
   }
+
+  /* for experiment */
+  if (mp->experiment_text != NULL)
+  {
+    SetTitle (mp->experiment_text, "");
+  }
+
   MockupFeatEdChangeNotify (mp);
 }
 
@@ -15532,10 +15381,18 @@ static void MockupFeatEdClearText (Pointer data)
   PointerToDialog (mp->constraints, fsp);
   FilterSetFree (fsp);
   
+  /* for explanation */
   if (mp->other_explanation != NULL)
   {
     SetTitle (mp->other_explanation, "");
   }
+
+  /* for experiment */
+  if (mp->experiment_text != NULL)
+  {
+    SetTitle (mp->experiment_text, "");
+  }
+
   MockupFeatEdChangeNotify (mp);
 }
 
@@ -15801,31 +15658,48 @@ static GrouP FeatureEditorStrandGroup (GrouP h, MockupFeatEdPtr mp)
   return g;
 }
 
-static void ChangeFeatureEditorActionButton (ButtoN b)
+
+static void ChangeExperimentAction (GrouP g)
 {
   MockupFeatEdPtr mp;
-  Int4            i;
-  
-  mp = (MockupFeatEdPtr) GetObjectExtra (b);
+  mp = (MockupFeatEdPtr) GetObjectExtra (g);
+  if (mp != NULL)
+  {
+    if (GetValue (mp->experiment_action) == 1)
+	{
+	  Enable (mp->experiment_text);
+	}
+	else
+	{
+	  Disable (mp->experiment_text);
+	}
+  }
+}
+
+static GrouP FeatureEditorExperimentGroup (GrouP h, MockupFeatEdPtr mp)
+{
   if (mp == NULL)
   {
-    return;
+    return NULL;
   }
-  
-  for (i = 0; i < 4; i++)
-  {
-    if (GetStatus (mp->action_btns[i]))
-    {
-      Enable (mp->action_grps[i]);
-    }
-    else
-    {
-      Disable (mp->action_grps[i]);
-    }
-  }
+  mp->experiment_action = HiddenGroup (h, 2, 0, ChangeExperimentAction);
+  SetObjectExtra (mp->experiment_action, mp, NULL);
+  SetGroupSpacing (mp->experiment_action, 10, 10);
+  RadioButton (mp->experiment_action, "Set Experiment");
+  mp->experiment_text = DialogText (mp->experiment_action, "", 20, NULL);
+  RadioButton (mp->experiment_action, "Remove Experiment");
+  SetValue (mp->experiment_action, 1);
+  return mp->experiment_action;
+}
 
-  MockupFeatEdChangeNotify (mp);
-  
+static GrouP FeatureEditorInferenceGroup (GrouP h, MockupFeatEdPtr mp)
+{
+  GrouP g;
+
+  g = HiddenGroup (h, 1, 0, NULL);
+  SetGroupSpacing (g, 10, 10);
+  StaticPrompt (g, "Hit Accept to remove all inferences", 0, dialogTextHeight, systemFont, 'l');
+  return g;
 }
 
 static void ChangeFeatureEditorActionGroup (GrouP g)
@@ -15839,13 +15713,13 @@ static void ChangeFeatureEditorActionGroup (GrouP g)
     return;
   }
   
-  for (i = 0; i < 5; i++)
+  for (i = 0; i < NUM_FEAT_ED_ACTIONS; i++)
   {
     Hide (mp->action_grps[i]);
   }
   
   i = GetValue (mp->action_choice_grp);
-  if (i > 0 && i < 6)
+  if (i > 0 && i < NUM_FEAT_ED_ACTIONS + 1)
   {
     Show (mp->action_grps [i-1]);
   }
@@ -15869,14 +15743,16 @@ static GrouP FeatureEditorActionGroup (GrouP h, MockupFeatEdPtr mp, Int4 first_a
   mp->feature_select = FeatureSelectionDialog (g, TRUE, MockupFeatEdChangeNotify, mp);
   
   k = HiddenGroup (g, -1, 0, NULL);
-  mp->action_choice_grp = HiddenGroup (g, 5, 0, ChangeFeatureEditorActionGroup);
+  mp->action_choice_grp = HiddenGroup (g, NUM_FEAT_ED_ACTIONS, 0, ChangeFeatureEditorActionGroup);
   SetObjectExtra (mp->action_choice_grp, mp, NULL);
   RadioButton (mp->action_choice_grp, "Evidence");
   RadioButton (mp->action_choice_grp, "Exceptions");
   RadioButton (mp->action_choice_grp, "Partials");
   RadioButton (mp->action_choice_grp, "Strands");
   RadioButton (mp->action_choice_grp, "Citations");
-  if (first_action >= FEAT_ED_EVIDENCE && first_action <= FEAT_ED_CITATION)
+  RadioButton (mp->action_choice_grp, "Experiment");
+  RadioButton (mp->action_choice_grp, "Inference");
+  if (first_action >= 1 && first_action <= NUM_FEAT_ED_ACTIONS)
   {
     SetValue (mp->action_choice_grp, first_action);
   }
@@ -15891,11 +15767,16 @@ static GrouP FeatureEditorActionGroup (GrouP h, MockupFeatEdPtr mp, Int4 first_a
   mp->action_grps[2] = FeatureEditorPartialGroup (n, mp);
   mp->action_grps[3] = FeatureEditorStrandGroup (n, mp);
   mp->action_grps[4] = FeatureEditorCitationGroup (n, mp);
+  mp->action_grps[5] = FeatureEditorExperimentGroup (n, mp);
+  mp->action_grps[6] = FeatureEditorInferenceGroup (n, mp);
   AlignObjects (ALIGN_CENTER, (HANDLE) mp->action_grps [0],
                               (HANDLE) mp->action_grps [1],
                               (HANDLE) mp->action_grps [2],
                               (HANDLE) mp->action_grps [3],
-                              (HANDLE) mp->action_grps [4], NULL);
+                              (HANDLE) mp->action_grps [4], 
+							  (HANDLE) mp->action_grps [5],
+							  (HANDLE) mp->action_grps [6],
+							  NULL);
   AlignObjects (ALIGN_CENTER, (HANDLE) mp->action_choice_grp, (HANDLE) n, NULL);
   
   AlignObjects (ALIGN_CENTER, (HANDLE) p1,
@@ -16466,6 +16347,13 @@ static void DoCitationFeatureProc (SeqFeatPtr sfp, Pointer userdata, FilterSetPt
   
 }
 
+static GetSamplePtr 
+GetGBQualExistingText 
+(SeqEntryPtr  sep,
+ ValNodePtr   feature_type_list,
+ ValNodePtr   requested_field,
+ FilterSetPtr fsp);
+
 static void 
 FeatureEditorDoOneAction 
 (SeqEntryPtr     sep, 
@@ -16474,9 +16362,43 @@ FeatureEditorDoOneAction
  MockupFeatEdPtr mp,
  Int4            action_choice)
 {
-  Int4       exception_choice;
-  ValNodePtr vnp;
-  Uint2      feat_def_choice;
+  Int4            exception_choice;
+  ValNodePtr      vnp;
+  Uint2           feat_def_choice;
+  ApplyValueData  avd;
+  GetSamplePtr    gsp;
+
+  avd.etp = NULL;
+  avd.field_list = NULL;
+  avd.text_to_replace = NULL;
+  avd.new_text = NULL;
+
+  if (action_choice == FEAT_ED_EXPERIMENT)
+  {
+    avd.field_list = ValNodeNew (NULL);
+	avd.field_list->data.intvalue = QUAL_EXPERIMENT;
+    avd.new_text = SaveStringFromText (mp->experiment_text);
+	if (StringHasNoText (avd.new_text) || GetValue (mp->experiment_action) != 1)
+	{
+	  avd.new_text = MemFree (avd.new_text);
+	}
+	else
+	{
+      /* get handling for existing text */
+      gsp = GetGBQualExistingText (sep, feature_type_list,
+                                   avd.field_list,
+                                   fsp);
+      avd.etp = GetExistingTextHandlerInfo (gsp, FALSE);
+      gsp = GetSampleFree (gsp);
+      if (avd.etp != NULL 
+          && avd.etp->existing_text_choice == EXISTING_TEXT_CHOICE_CANCEL)
+      {
+        avd.etp = MemFree (avd.etp);
+	    avd.field_list = ValNodeFree (avd.field_list);
+        return;
+      }
+	}
+  }
   
   for (vnp = feature_type_list; vnp != NULL; vnp = vnp->next)
   {
@@ -16541,8 +16463,29 @@ FeatureEditorDoOneAction
                                              DoCitationFeatureProc,
                                              NULL, 0, feat_def_choice, 0, mp);
         break;
+	  case FEAT_ED_EXPERIMENT:
+		if (avd.new_text == NULL)
+		{
+           OperateOnSeqEntryConstrainedObjects (sep, fsp, RemoveGBQualField,
+                                               NULL, 0, feat_def_choice, 0, &avd);
+		}
+		else
+		{
+          OperateOnSeqEntryConstrainedObjects (sep, fsp, SetGBQualString,
+                                               NULL, 0, feat_def_choice, 0, &avd);  
+		}
+ 
+		break;
+	  case FEAT_ED_INFERENCE:
+        OperateOnSeqEntryConstrainedObjects (sep, fsp, RemoveInference,
+                                               NULL, 0, feat_def_choice, 0, &avd);
+		break;
     }
   }
+  avd.field_list = ValNodeFree (avd.field_list);
+  avd.etp = MemFree (avd.etp);
+  avd.text_to_replace = MemFree (avd.text_to_replace);
+  avd.new_text = MemFree (avd.new_text);
 }
 
 static Boolean FeatureEditorAction (Pointer userdata)
@@ -16552,7 +16495,6 @@ static Boolean FeatureEditorAction (Pointer userdata)
   SeqEntryPtr     sep;
   ValNodePtr      feature_type_list;
   FilterSetPtr    fsp;
-  Int4            i;
 
   mp = (MockupFeatEdPtr) userdata;
   if (mp == NULL)
@@ -16578,21 +16520,8 @@ static Boolean FeatureEditorAction (Pointer userdata)
   
   fsp = (FilterSetPtr) DialogToPointer (mp->constraints);
   
-  if (mp->action_choice_grp != NULL)
-  {
-    action_choice = GetValue (mp->action_choice_grp);
-    FeatureEditorDoOneAction (sep, feature_type_list, fsp, mp, action_choice);
-  }
-  else
-  {
-    for (i = FEAT_ED_EVIDENCE; i <= FEAT_ED_STRAND; i++)
-    {
-      if (GetStatus (mp->action_btns[i - 1]))
-      {
-        FeatureEditorDoOneAction (sep, feature_type_list, fsp, mp, i);
-      }
-    }
-  }
+  action_choice = GetValue (mp->action_choice_grp);
+  FeatureEditorDoOneAction (sep, feature_type_list, fsp, mp, action_choice);
   ValNodeFreeData (feature_type_list);
   FilterSetFree (fsp);
   ArrowCursor ();
@@ -16619,7 +16548,7 @@ static void FeatureEditor (IteM i, Int4 first_action)
   mp = (MockupFeatEdPtr) MemNew (sizeof (MockupFeatEdData));
   if (mp == NULL) return;
   
-  w = FixedWindow (-50, -33, -10, -10, "Mockup Feature Editor", StdCloseWindowProc);
+  w = FixedWindow (-50, -33, -10, -10, "Feature Editor", StdCloseWindowProc);
   SetObjectExtra (w, mp, StdCleanupFormProc);
   mp->form = (ForM) w;
   mp->input_entityID = bfp->input_entityID;
@@ -16665,6 +16594,16 @@ extern void FeatureStrandEditor (IteM i)
 extern void FeatureCitationEditor (IteM i)
 {
   FeatureEditor(i, FEAT_ED_CITATION);
+}
+
+extern void FeatureExperimentEditor (IteM i)
+{
+  FeatureEditor(i, FEAT_ED_EXPERIMENT);
+}
+
+extern void FeatureInferenceEditor (IteM i)
+{
+  FeatureEditor(i, FEAT_ED_INFERENCE);
 }
 
 typedef struct cdset 
@@ -16831,6 +16770,7 @@ static void BuildCDSSetCallback (SeqFeatPtr sfp, Pointer userdata)
   BuildCDSetPtr        bp;
   CDSetPtr             cdsp = NULL;
   SeqFeatPtr           gene = NULL, mrna = NULL, cds = NULL, prot = NULL;
+  SeqFeatPtr           mrna_gene;
   ValNodePtr           vnp;
   BioseqPtr            protbsp = NULL;
   SeqMgrFeatContext    fcontext;
@@ -16852,6 +16792,9 @@ static void BuildCDSSetCallback (SeqFeatPtr sfp, Pointer userdata)
   {
     return;
   }
+
+  /* diagnostic */
+  SeqMgrGetDesiredFeature (sfp->idx.entityID, NULL, 0, 0, sfp, &fcontext);
   
   if (sfp->data.choice == SEQFEAT_GENE)
   {
@@ -16882,14 +16825,21 @@ static void BuildCDSSetCallback (SeqFeatPtr sfp, Pointer userdata)
     {
       cds = sfp;
       mrna = SeqMgrGetOverlappingmRNA (sfp->location, &fcontext);
-      vnp = AlreadyInCDSList (bp->cdset_list, mrna);
-      if (vnp != NULL && vnp->data.ptrvalue != NULL)
-      {
-        cdsp = (CDSetPtr) vnp->data.ptrvalue;
-        mrna = NULL;
-        if (AlreadyInList (cdsp->gene_list, gene))
-        {
-          gene = NULL;
+	  if (mrna != NULL)
+	  {
+        mrna_gene = SeqMgrGetOverlappingGene (mrna->location, &fcontext);
+		if (mrna_gene == gene)
+		{
+          vnp = AlreadyInCDSList (bp->cdset_list, mrna);
+          if (vnp != NULL && vnp->data.ptrvalue != NULL)
+          {
+            cdsp = (CDSetPtr) vnp->data.ptrvalue;
+            mrna = NULL;
+            if (AlreadyInList (cdsp->gene_list, gene))
+            {
+              gene = NULL;
+			}
+		  }
         }
       }
     }
@@ -19477,6 +19427,59 @@ static DialoG ConvertSourceQualDialog
   return (DialoG) p;
 }
 
+
+static DialoG ConvertSourceLocationDialog
+(GrouP                    h,
+ Nlm_ChangeNotifyProc     change_notify,
+ Pointer                  change_userdata,
+ Uint2                    entityID)
+{
+  SimpleAECRDlgPtr dlg;
+  GrouP            p, g1;
+  
+  dlg = (SimpleAECRDlgPtr) MemNew (sizeof (SimpleAECRDlgData));
+  if (dlg == NULL)
+  {
+    return NULL;
+  }
+
+  p = HiddenGroup (h, -1, 0, NULL);
+  SetObjectExtra (p, dlg, StdCleanupExtraProc);
+  SetGroupSpacing (p, 10, 10);
+  
+  dlg->dialog = (DialoG) p;
+  dlg->todialog = SimpleAECRToDialog;
+  dlg->fromdialog = DialogToSimpleAECR;
+  dlg->dialogmessage = SimpleAECRMessage;
+  dlg->testdialog = TestSimpleAECR;
+  dlg->action_choice = AECR_CONVERT;
+  dlg->free_field_vn_proc = ValNodeSimpleDataFree;
+  dlg->free_subtype_vn_proc = NULL;
+  dlg->change_notify = change_notify;
+  dlg->change_userdata = change_userdata;
+  dlg->get_autopopulate_text = NULL;
+  dlg->entityID = entityID;
+  
+  dlg->subtype_list = NULL;
+  
+  g1 = HiddenGroup (p, 2, 0, NULL);
+  StaticPrompt (g1, "From", 0, dialogTextHeight, systemFont, 'l');
+  StaticPrompt (g1, "To", 0, dialogTextHeight, systemFont, 'l');
+    
+  dlg->field_list = SourceLocationDiscSelectionDialog (g1, FALSE, 
+                                          change_notify, 
+                                          change_userdata);
+  dlg->field_list_to = SourceLocationSelectionDialog (g1, FALSE, 
+                                             change_notify, 
+                                             change_userdata);
+  dlg->leave_on_original = CheckBox (p, "Leave on original", NULL);
+  
+  dlg->edit_apply = NULL;
+
+  AlignObjects (ALIGN_CENTER, (HANDLE) g1, (HANDLE) dlg->leave_on_original, NULL);
+  return (DialoG) p;
+}
+
 static DialoG SourceQualAECRDialog 
 (GrouP                    h,
  Int4                     action_choice, 
@@ -19560,10 +19563,31 @@ static DialoG SourceQualAECRDialog
   if (action_choice != AECR_EDIT && action_choice != AECR_SWAP)
   {
     /* Location Dialog */
-    dlg->location = SimpleAECRDialog (g1, action_choice, change_notify, change_userdata,
-                           ValNodeSimpleDataFree, NULL,
-                           SourceLocationSelectionDialog, NULL, NULL,
-                           "Location", NULL, FALSE, entityID);
+    if (action_choice == AECR_APPLY)
+    {
+      dlg->location = SimpleAECRDialog (g1, action_choice,
+                                        change_notify, change_userdata,
+                                        ValNodeSimpleDataFree, NULL,
+                                        SourceLocationSelectionDialog, NULL,
+                                        NULL, "Location", NULL, FALSE, entityID);
+    }
+    else if (action_choice == AECR_CONVERT)
+    {
+      dlg->location = ConvertSourceLocationDialog (g1,
+                                                    change_notify,
+                                                    change_userdata, 
+                                                    entityID);
+    }
+    else
+    {
+      dlg->location = SimpleAECRDialog (g1, action_choice,
+                                        change_notify, change_userdata,
+                                        ValNodeSimpleDataFree, NULL,
+                                        SourceLocationDiscSelectionDialog, 
+                                        NULL, NULL, "Location", NULL, FALSE,
+                                        entityID);
+    }
+
     /* Origin Dialog */
     dlg->origin = SimpleAECRDialog (g1, action_choice, change_notify, change_userdata,
                            ValNodeSimpleDataFree, NULL,
@@ -21411,6 +21435,7 @@ extern LogInfoPtr FreeLog (LogInfoPtr lip)
     {
       FileClose (lip->fp);
       lip->fp = NULL;
+	  FileRemove (lip->path);
     }
     lip = MemFree (lip);
   }
@@ -21471,7 +21496,7 @@ static void ExportLastLineageCallback (BioseqPtr bsp, Pointer userdata)
   CharPtr           last_lineage;
   Boolean           found_text = FALSE;
   
-  if (bsp == NULL || userdata == NULL)
+  if (bsp == NULL || userdata == NULL || ISA_aa (bsp->mol))
   {
     return;
   }

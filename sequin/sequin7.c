@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/3/98
 *
-* $Revision: 6.219 $
+* $Revision: 6.231 $
 *
 * File Description: 
 *
@@ -89,13 +89,15 @@ NLM_EXTERN SeqEntryPtr FastaToSeqEntryInternal
  CharPtr special_symbol     /* Returns special symbol if no SeqEntry */
  );
 
-NLM_EXTERN SeqEntryPtr SequinFastaToSeqEntryEx 
+NLM_EXTERN SeqEntryPtr SequinFastaToSeqEntryExEx
   (
     FILE *fp,               /* file to get sequence from */ 
     Boolean is_na,          /* type of sequence */
     CharPtr PNTR errormsg,  /* error message for debugginq */
     Boolean parseSeqId,     /* Parse SeqID from def line */
-    CharPtr special_symbol  /* Returns special symbol if no SeqEntry */
+    CharPtr special_symbol, /* Returns special symbol if no SeqEntry */
+    BoolPtr chars_stripped  /* set to TRUE if characters other than digits
+                             * were stripped from the FASTA sequence data */
   )
 {
   BioseqPtr    bsp;
@@ -120,7 +122,7 @@ NLM_EXTERN SeqEntryPtr SequinFastaToSeqEntryEx
   } else {
     forceProt = TRUE;
   }
-  dataptr = ReadAsnFastaOrFlatFile (fp, &datatype, NULL, forceNuc, forceProt, parseSeqId, FALSE);
+  dataptr = ReadAsnFastaOrFlatFileEx (fp, &datatype, NULL, forceNuc, forceProt, parseSeqId, FALSE, chars_stripped);
   if (dataptr != NULL) {
     if (datatype == OBJ_BIOSEQ) {
       bsp = (BioseqPtr) dataptr;
@@ -151,6 +153,18 @@ NLM_EXTERN SeqEntryPtr SequinFastaToSeqEntryEx
   }
   /* return FastaToSeqEntryInternal((void *)fp, 2, NULL,is_na, errormsg, parseSeqId, special_symbol); */
   return sep;
+}
+
+NLM_EXTERN SeqEntryPtr SequinFastaToSeqEntryEx 
+  (
+    FILE *fp,               /* file to get sequence from */ 
+    Boolean is_na,          /* type of sequence */
+    CharPtr PNTR errormsg,  /* error message for debugginq */
+    Boolean parseSeqId,     /* Parse SeqID from def line */
+    CharPtr special_symbol  /* Returns special symbol if no SeqEntry */
+  )
+{
+  return SequinFastaToSeqEntryExEx (fp, is_na, errormsg, parseSeqId, special_symbol, NULL);    
 }
 
 static FonT  titleFont = NULL;
@@ -797,17 +811,17 @@ extern ForM CreateFormatForm (Int2 left, Int2 top, CharPtr title,
     ppt = StaticPrompt (g1, "Submission type", 0, 0, programFont, 'l');
     ffp->package = HiddenGroup (g1, 2, 0, EnableOrDisableFormats);
     SetObjectExtra (ffp->package, ffp, NULL);
-    RadioButton (ffp->package, "Single sequence");
-    RadioButton (ffp->package, "Segmented sequence");
-    RadioButton (ffp->package, "Gapped sequence");
+    RadioButton (ffp->package, "Single Sequence");
+    RadioButton (ffp->package, "Segmented Sequence");
+    RadioButton (ffp->package, "Gapped Sequence");
     if (allowGenomicPlusCDNA) {
       RadioButton (ffp->package, "Genomic + Transcripts");
     }
-    RadioButton (ffp->package, "Population study");
-    RadioButton (ffp->package, "Phylogenetic study");
-    RadioButton (ffp->package, "Mutation study");
-    RadioButton (ffp->package, "Environmental samples");
-    RadioButton (ffp->package, "Batch submission");
+    RadioButton (ffp->package, "Population Study");
+    RadioButton (ffp->package, "Phylogenetic Study");
+    RadioButton (ffp->package, "Mutation Study");
+    RadioButton (ffp->package, "Environmental Samples");
+    RadioButton (ffp->package, "Batch Submission");
     SetValue (ffp->package, SEQ_PKG_SINGLE);
     AlignObjects (ALIGN_MIDDLE, (HANDLE) ppt, (HANDLE) ffp->package, NULL);
 
@@ -817,7 +831,7 @@ extern ForM CreateFormatForm (Int2 left, Int2 top, CharPtr title,
     ffp->format = HiddenGroup (g2, -1, 0, NULL);
     SetObjectExtra (ffp->format, ffp, NULL);
     RadioButton (ffp->format, "FASTA (no alignment)");
-    ffp->alignmentButton = RadioButton (ffp->format, "Alignment (FASTA+GAP, NEXUS, Phylip, etc.)");
+    ffp->alignmentButton = RadioButton (ffp->format, "Alignment (FASTA+GAP, NEXUS, PHYLIP, etc.)");
     Disable (ffp->alignmentButton);
     SetValue (ffp->format, SEQ_FMT_FASTA);
     ffp->restoreFormatTo = SEQ_FMT_FASTA;
@@ -1003,7 +1017,6 @@ static void CreateGeneAndProtFeats (SeqEntryPtr nsep, SeqEntryPtr psep,
                                     CharPtr best, size_t maxsize, CharPtr PNTR ttl)
 
 {
-  CharPtr     allele = NULL;
   BioseqPtr   nbsp;
   BioseqPtr   pbsp;
   ProtRefPtr  prp;
@@ -7057,82 +7070,111 @@ static SeqLocPtr
 CreateProteinLoc 
 (SeqLocPtr  nuc_loc,
  SeqFeatPtr top_cds,
- Int4       offset, 
+ Int4       offset,
+ Int4       cds_frame, 
  BioseqPtr  prot_bsp,
  LogInfoPtr lip)
 {
   SeqLocPtr    prot_loc = NULL;
-  SeqIntPtr    sintp_nuc, sintp_prot;
+  SeqIntPtr    sintp_nuc, sintp_prot, sintp_top;
   Boolean      partial5, partial3;
   ByteStorePtr bs;
   CharPtr      prot_str;
   Boolean      ends_with_stop = FALSE;
   Int4         prot_len = 0;
   Char         ch;
+  Int4         from_remainder = 0, to_remainder = 0;
   
-  if (nuc_loc == NULL || top_cds == NULL || prot_bsp == NULL)
+  if (nuc_loc == NULL || top_cds == NULL || prot_bsp == NULL
+      || top_cds->location == NULL
+      || top_cds->location->choice != SEQLOC_INT
+      || top_cds->location->data.ptrvalue == NULL)
   {
     return NULL;
   }
-  if (nuc_loc->choice != SEQLOC_INT)
+  if (nuc_loc->choice != SEQLOC_INT || nuc_loc->data.ptrvalue == NULL)
   {
     Message (MSG_ERROR, "Unable to translate locations that are not simple intervals");
   }
   else
   {
+    sintp_top = (SeqIntPtr) (top_cds->location->data.ptrvalue);
     sintp_nuc = (SeqIntPtr)(nuc_loc->data.ptrvalue);
-    if (sintp_nuc != NULL)
+    
+    if (sintp_nuc->from < sintp_top->from)
     {
-      if (sintp_nuc->from < offset || (sintp_nuc->from - offset) % 3 != 0
-          || sintp_nuc->to < offset || (sintp_nuc->to + 1 - offset) % 3 != 0)
+      from_remainder = -1;
+    }
+    else if (cds_frame == 1)
+    {
+      from_remainder = (sintp_nuc->from - offset) % 3;
+    }
+    else if (cds_frame == 2)
+    {
+      from_remainder = (sintp_nuc->from - offset + 1) % 3;
+    }
+    else if (cds_frame == 3)
+    {
+      from_remainder = (sintp_nuc->from - offset + 2) % 3;
+    }
+    
+    if (sintp_nuc->to > sintp_top->to)
+    {
+      to_remainder = -1;
+    }
+    else if (sintp_nuc->to < sintp_top->to)
+    {
+      to_remainder = (sintp_nuc->to + 1 - offset) % 3;
+    }
+
+    if (from_remainder != 0 || to_remainder != 0)    
+    {
+      if (lip != NULL && lip->fp != NULL)
       {
-        if (lip != NULL && lip->fp != NULL)
-        {
-          fprintf (lip->fp, "Invalid coordinates for mat_peptide conversion");
-          lip->data_in_log = TRUE;
-        }
-        else
-        {
-          Message (MSG_ERROR, "Invalid coordinates for mat_peptide conversion");
-        }
+        fprintf (lip->fp, "Invalid coordinates for mat_peptide conversion\n");
+        lip->data_in_log = TRUE;
       }
       else
-      {  
-        bs = ProteinFromCdRegionEx (top_cds, TRUE, FALSE);
-        if (bs != NULL)
+      {
+        Message (MSG_ERROR, "Invalid coordinates for mat_peptide conversion");
+      }
+    }
+    else
+    {  
+      bs = ProteinFromCdRegionEx (top_cds, TRUE, FALSE);
+      if (bs != NULL)
+      {
+        prot_str = BSMerge (bs, NULL);
+        prot_len = StringLen (prot_str);
+        ch = prot_str [prot_len - 1];
+        if (ch == '*')
         {
-          prot_str = BSMerge (bs, NULL);
-          prot_len = StringLen (prot_str);
-          ch = prot_str [prot_len - 1];
-          if (ch == '*')
-          {
-            ends_with_stop = TRUE;
-          }
-          MemFree (prot_str);
-          bs = BSFree (bs);
+          ends_with_stop = TRUE;
         }
+        MemFree (prot_str);
+        bs = BSFree (bs);
+      }
 
-        sintp_prot = SeqIntNew ();
-        if (sintp_prot != NULL)
+      sintp_prot = SeqIntNew ();
+      if (sintp_prot != NULL)
+      {
+        CheckSeqLocForPartial (nuc_loc, &partial5, &partial3);
+        sintp_prot->id = SeqIdDup (SeqIdFindBest(prot_bsp->id, 0));
+        sintp_prot->from = (sintp_nuc->from - offset) / 3;
+        sintp_prot->to = (sintp_nuc->to - offset) / 3;
+        if (sintp_prot->to == prot_len - 1)
         {
-          CheckSeqLocForPartial (nuc_loc, &partial5, &partial3);
-          sintp_prot->id = SeqIdDup (SeqIdFindBest(prot_bsp->id, 0));
-          sintp_prot->from = (sintp_nuc->from - offset) / 3;
-          sintp_prot->to = (sintp_nuc->to - offset) / 3;
-          if (sintp_prot->to == prot_len - 1)
+          if (ends_with_stop)
           {
-            if (ends_with_stop)
-            {
-              sintp_prot->to --;
-            }
-            else
-            {
-              partial3 = TRUE;
-            }
+            sintp_prot->to --;
           }
-          ValNodeAddPointer (&prot_loc, SEQLOC_INT, sintp_prot);
-          SetSeqLocPartial (prot_loc, partial5, partial3);
+          else
+          {
+            partial3 = TRUE;
+          }
         }
+        ValNodeAddPointer (&prot_loc, SEQLOC_INT, sintp_prot);
+        SetSeqLocPartial (prot_loc, partial5, partial3);
       }
     }
   }
@@ -7168,12 +7210,13 @@ extern void ConvertInnerCDSsToMatPeptidesCallback (BioseqPtr bsp, Pointer userda
 {
   SeqFeatPtr        sfp = NULL;
   ValNodePtr        top_level_cds_list = NULL;
+  ValNodePtr        top_level_cds_offset_list = NULL;
   SeqMgrFeatContext context, gene_context;
-  ValNodePtr        vnp;
+  ValNodePtr        vnp, offset_vnp;
   SeqFeatPtr        top_cds;
   BioseqPtr         prot_bsp;
   SeqLocPtr         prot_loc;
-  Int4              offset;
+  Int4              offset = 0, mat_cds_frame;
   SeqFeatPtr        new_sfp;
   ProtRefPtr        prp;
   SeqFeatPtr        gene;
@@ -7188,14 +7231,16 @@ extern void ConvertInnerCDSsToMatPeptidesCallback (BioseqPtr bsp, Pointer userda
   {
     top_cds = NULL;
     offset = 0;
-    for (vnp = top_level_cds_list; vnp != NULL && top_cds == NULL; vnp = vnp->next)
+    for (vnp = top_level_cds_list, offset_vnp = top_level_cds_offset_list;
+         vnp != NULL && offset_vnp != NULL && top_cds == NULL; 
+         vnp = vnp->next, offset_vnp = offset_vnp->next)
     {
       top_cds = (SeqFeatPtr) vnp->data.ptrvalue;
       if (top_cds != NULL)
       {
         if (SeqLocCompare (top_cds->location, sfp->location) == SLC_B_IN_A)
         {
-          offset = vnp->choice;
+          offset = offset_vnp->data.intvalue;
         }
         else
         {
@@ -7222,7 +7267,8 @@ extern void ConvertInnerCDSsToMatPeptidesCallback (BioseqPtr bsp, Pointer userda
         {
           offset += 2;
         }
-        ValNodeAddPointer (&top_level_cds_list, offset, sfp);
+        ValNodeAddPointer (&top_level_cds_list, 0, sfp);
+        ValNodeAddInt (&top_level_cds_offset_list, 0, offset);
       }
     }
     else
@@ -7233,7 +7279,21 @@ extern void ConvertInnerCDSsToMatPeptidesCallback (BioseqPtr bsp, Pointer userda
         /* convert location by subtracting top_cds start from sfp locations and
          * divide all locations by 3
          */
-        prot_loc = CreateProteinLoc (sfp->location, top_cds, offset, prot_bsp, lip);
+        crp = (CdRegionPtr) sfp->data.value.ptrvalue;
+        mat_cds_frame = 1;
+        if (crp->frame == 2)
+        {
+          mat_cds_frame = 2;
+        }
+        else if (crp->frame == 3)
+        {
+          mat_cds_frame = 3;
+        }
+         
+        prot_loc = CreateProteinLoc (sfp->location, top_cds, 
+                                     offset,
+                                     mat_cds_frame, 
+                                     prot_bsp, lip);
         if (prot_loc != NULL)
         {
           /* Create new feature on prot_bsp */
@@ -7566,6 +7626,7 @@ typedef enum
 {
   RNAstrand_PLUS = 1,
   RNAstrand_MINUS,
+  RNAstrand_MIXED,
   RNAstrand_NO_HITS,
   RNAstrand_UNEXPECTED,
   RNAstrand_PARSE_ERROR,
@@ -7573,27 +7634,145 @@ typedef enum
 } ERNAstrand_return_val;
 
 static CharPtr RNAstrand_strings[] = 
-{ "Plus", "Minus", "No Hits", "Unexpected", "Parse Error", "In Progress" };
+{ "Plus", "Minus", "Mixed", "No Hits", "Unexpected", "Parse Error", "In Progress" };
 
-static ValNodePtr GetListForRNAStrandCorrection (SeqEntryPtr sep)
+
+/* Looks at a portion of the list of sequences for strand correction.
+ * Returns the number of sequences examined.
+ */
+static Int4 
+GetSubListForRNAStrandCorrection 
+(ValNodePtr start_list,
+ Int4       num_seqs,
+ CharPtr    RNAstrandcmd)
 {
-  CharPtr                 cmmd;
-  CharPtr                 args, cp, cp2;
-  FILE*                   fp;
-  Char                    path [PATH_MAX];
+  Int4                    seq_num, cmd_len = 0, k;
+  ValNodePtr              vnp;
+  FILE *                  fp;
+  CharPtr                 args = NULL, cp, cp2, cmmd;
   Char                    tmp_id [256];
+  Char                    path [PATH_MAX];
   Char                    file_line [256];
-  ValNodePtr              sequence_list = NULL, vnp;
-  Int4                    num_sequences = 0; 
-  Int4                    cmd_len = 0;
+  Boolean                 found_id;
 #ifdef OS_UNIX
   CharPtr                 cmd_format = "%s -a \'%s\' > %s";
 #endif
 #ifdef OS_MSWIN
   CharPtr                 cmd_format = "%s -a \"%s\" > %s";
 #endif
-  Boolean                 found_id;
-  Int4                    k;
+
+  if (start_list == NULL || num_seqs < 1 || StringHasNoText (RNAstrandcmd))
+  {
+    return 0;
+  }
+
+  TmpNam (path);
+  
+  /* calculate length of string needed for command */
+  for (vnp = start_list, seq_num = 0; 
+	   vnp != NULL && seq_num < num_seqs; 
+	   vnp = vnp->next, seq_num++)
+  {
+    SeqIdWrite (vnp->data.ptrvalue, tmp_id, PRINTID_TEXTID_ACC_ONLY, sizeof (tmp_id) - 1);
+    cmd_len += StringLen (tmp_id) + 2;
+  }
+  
+  args = (CharPtr) MemNew (cmd_len * sizeof (Char));
+  if (args == NULL)
+  {
+	Message (MSG_ERROR, "Unable to allocate memory for strand script argument list");
+    return 0;
+  }
+  
+  cp = args;
+  for (vnp = start_list, seq_num = 0; 
+	   vnp != NULL && seq_num < num_seqs; 
+	   vnp = vnp->next, seq_num++)
+  {
+    SeqIdWrite (vnp->data.ptrvalue, cp, PRINTID_TEXTID_ACC_ONLY, cmd_len - (cp - args) - 1);
+    cp += StringLen (cp);
+    if (vnp->next != NULL && seq_num < num_seqs - 1)
+    {
+#ifdef OS_UNIX
+      StringCat (cp, ",");
+      cp ++;
+#else
+      StringCat (cp, ", ");
+      cp += 2;
+#endif
+    }
+  }
+  
+  cmd_len += 3 + StringLen (cmd_format) + StringLen (RNAstrandcmd) + StringLen (path);
+  cmmd = (CharPtr) MemNew (cmd_len * sizeof (Char));
+  if (cmmd == NULL)
+  {
+    args = MemFree (args);
+	Message (MSG_ERROR, "Unable to allocate memory for RNA strand script command");
+    return 0;
+  }
+  
+  sprintf (cmmd, cmd_format, RNAstrandcmd, args, path);
+  system (cmmd);
+  
+  args = MemFree (args);
+  cmmd = MemFree (cmmd);
+  
+  fp = FileOpen (path, "r");
+  if (fp == NULL) {
+    FileRemove (path);
+    return 0;
+  }
+  
+
+  while (fgets (file_line, sizeof (file_line) - 1, fp) != NULL)
+  {
+    /* find SeqId that matches file line */
+    cp = StringChr (file_line, '\t');
+    if (cp == NULL)
+    {
+      continue;
+    }
+    *cp = 0;
+    cp++;
+    cp2 = StringChr (cp, '\n');
+    if (cp2 != NULL)
+    {
+      *cp2 = 0;
+    }
+    found_id = FALSE;
+    for (vnp = start_list, seq_num = 0; 
+	     vnp != NULL && seq_num < num_seqs; 
+	     vnp = vnp->next, seq_num++)
+	{
+      SeqIdWrite (vnp->data.ptrvalue, tmp_id, PRINTID_TEXTID_ACC_ONLY, sizeof (tmp_id) - 1);
+      if (StringCmp (tmp_id, file_line) == 0)
+      {
+        for (k = 1; k <= RNAstrand_IN_PROGRESS; k++)
+        {
+          if (StringCmp (cp, RNAstrand_strings [k - 1]) == 0
+              || (k == RNAstrand_MIXED 
+                  && StringNCmp (cp, RNAstrand_strings [k - 1], 
+                                 StringLen (RNAstrand_strings[k - 1])) == 0))
+          {
+            vnp->choice = k;
+          }
+        }
+      }
+    }
+  }
+  
+  FileClose (fp);
+
+  FileRemove (path);
+  return seq_num;
+}
+
+static ValNodePtr GetListForRNAStrandCorrection (SeqEntryPtr sep)
+{
+  Char                    file_line [256];
+  ValNodePtr              sequence_list = NULL, vnp;
+  Int4                    num_sequences = 0, num_inspected; 
 
   if (sep == NULL) return NULL;
 
@@ -7617,97 +7796,17 @@ static ValNodePtr GetListForRNAStrandCorrection (SeqEntryPtr sep)
     return NULL;
   }
   
-  TmpNam (path);
-  
-  /* calculate length of string needed for command */
-  for (vnp = sequence_list; vnp != NULL; vnp = vnp->next)
+  vnp = sequence_list;
+  while ((num_inspected = GetSubListForRNAStrandCorrection (vnp, 150, RNAstrandcmd)) != 0)
   {
-    SeqIdWrite (vnp->data.ptrvalue, tmp_id, PRINTID_TEXTID_ACC_ONLY, sizeof (tmp_id) - 1);
-    cmd_len += StringLen (tmp_id) + 2;
-    /* also count the number of sequences we are checking */
-    num_sequences ++;
+    num_sequences += num_inspected;
+	while (num_inspected > 0 && vnp != NULL)
+	{
+	  vnp = vnp->next;
+	  num_inspected --;
+	}
   }
-  
-  args = (CharPtr) MemNew (cmd_len * sizeof (Char));
-  if (args == NULL)
-  {
-    sequence_list = ValNodeFree (sequence_list);
-    return NULL;
-  }
-  
-  cp = args;
-  for (vnp = sequence_list; vnp != NULL; vnp = vnp->next)
-  {
-    SeqIdWrite (vnp->data.ptrvalue, cp, PRINTID_TEXTID_ACC_ONLY, cmd_len - (cp - args) - 1);
-    cp += StringLen (cp);
-    if (vnp->next != NULL)
-    {
-#ifdef OS_UNIX
-      StringCat (cp, ",");
-      cp ++;
-#else
-      StringCat (cp, ", ");
-      cp += 2;
-#endif
-    }
-  }
-  
-  cmd_len += 3 + StringLen (cmd_format) + StringLen (RNAstrandcmd) + StringLen (path);
-  cmmd = (CharPtr) MemNew (cmd_len * sizeof (Char));
-  if (cmmd == NULL)
-  {
-    args = MemFree (args);
-    ValNodeFree (sequence_list);
-    return NULL;
-  }
-  
-  sprintf (cmmd, cmd_format, RNAstrandcmd, args, path);
-  system (cmmd);
-  
-  args = MemFree (args);
-  cmmd = MemFree (cmmd);
-  
-  fp = FileOpen (path, "r");
-  if (fp == NULL) {
-    FileRemove (path);
-    return NULL;
-  }
-  
 
-  while (fgets (file_line, sizeof (file_line) - 1, fp) != NULL)
-  {
-    /* find SeqId that matches file line */
-    cp = StringChr (file_line, '\t');
-    if (cp == NULL)
-    {
-      continue;
-    }
-    *cp = 0;
-    cp++;
-    cp2 = StringChr (cp, '\n');
-    if (cp2 != NULL)
-    {
-      *cp2 = 0;
-    }
-    found_id = FALSE;
-    for (vnp = sequence_list; vnp != NULL && !found_id; vnp = vnp->next)
-    {
-      SeqIdWrite (vnp->data.ptrvalue, tmp_id, PRINTID_TEXTID_ACC_ONLY, sizeof (tmp_id) - 1);
-      if (StringCmp (tmp_id, file_line) == 0)
-      {
-        for (k = 1; k <= RNAstrand_IN_PROGRESS; k++)
-        {
-          if (StringCmp (cp, RNAstrand_strings [k - 1]) == 0)
-          {
-            vnp->choice = k;
-          }
-        }
-      }
-    }
-  }
-  
-  FileClose (fp);
-  FileRemove (path);
   return sequence_list;  
 }
 
@@ -7803,7 +7902,26 @@ static Int4 GetSeqNumFromListPos (Int4 list_pos, ValNodePtr sequence_list)
     return seq_num;
   }
   
-  /* is it part of the error strands, which are listed after the minus
+  /* is it part of the mixed strands, which are listed after the minus
+   * but before the error and plus? */
+  vnp = sequence_list;
+  seq_num = -1;
+  while (vnp != NULL && list_offset != list_pos)
+  {
+    if (vnp->choice == RNAstrand_MIXED)
+    {
+      list_offset ++;
+    }
+    seq_num++;
+    vnp = vnp->next;
+  }
+  
+  if (list_offset == list_pos)
+  {
+    return seq_num;
+  }
+  
+  /* is it part of the error strands, which are listed after the minus and mixed
    * but before the plus?
    */
    
@@ -7811,7 +7929,9 @@ static Int4 GetSeqNumFromListPos (Int4 list_pos, ValNodePtr sequence_list)
   seq_num = -1;
   while (vnp != NULL && list_offset != list_pos)
   {
-    if (vnp->choice != RNAstrand_MINUS && vnp->choice != RNAstrand_PLUS)
+    if (vnp->choice != RNAstrand_MINUS 
+        && vnp->choice != RNAstrand_MIXED 
+        && vnp->choice != RNAstrand_PLUS)
     {
       list_offset ++;
     }
@@ -8003,7 +8123,6 @@ extern Int2 LIBCALLBACK CorrectRNAStrandedness (Pointer data)
   OMProcControlPtr        ompcp;
   SeqEntryPtr             sep;
   ValNodePtr              sequence_list = NULL;
-  Int4                    num_sequences = 0; 
   RNAStrandPtr            strand_info;
   WindoW                  w;
   GrouP                   h, c;
@@ -8019,7 +8138,7 @@ extern Int2 LIBCALLBACK CorrectRNAStrandedness (Pointer data)
   }
 
   sep = GetTopSeqEntryForEntityID (ompcp->input_entityID);
-  if (sep == NULL) return;
+  if (sep == NULL) return OM_MSG_RET_ERROR;
 
   sequence_list = GetListForRNAStrandCorrection (sep);
   
@@ -8127,4 +8246,645 @@ extern Int2 LIBCALLBACK CorrectRNAStrandedness (Pointer data)
 }
 
 #endif
+
+/* collection_date has a controlled format.  
+ * It is YYYY or Mmm-YYYY or DD-Mmm-YYYY where Mmm = Jan, Feb, Mar, Apr, May, 
+ *                                                   Jun, Jul, Aug, Sep, Oct, 
+ *                                                   Nov, Dec
+ * This function will convert other formats  to this format.
+ * For instance, September 12, 2004 should be converted to 12-Sep-2004
+ * 12/15/2003 should be converted to 15-Dec-2003.  
+ * 
+ * If the date supplied is ambiguous (01/03/05), can you allow the indexer to choose which field goes in Mmm and which in DD.
+ */
+
+static Int4 ReadNumberFromToken (CharPtr token, Int4 token_len)
+{
+  Int4 val = 0;
+  
+  if (token == NULL || !isdigit (*token))
+  {
+    return val;
+  }
+  while (token_len > 0)
+  {
+    val *= 10;
+    val += *token - '0';
+    token++;
+    token_len--;
+  }
+  
+  return val;
+}
+
+static Int4 GetYearFromToken (CharPtr token, Int4 token_len)
+{
+  Int4     year = 0;
+  
+  if (token == NULL || token_len == 0 || token_len > 4)
+  {
+    return 0;
+  }
+  
+  year = ReadNumberFromToken (token, token_len);
+  if (year < 1000)
+  {
+    year += 2000;
+  }
+  
+  return year;
+}
+
+static CharPtr months [12] = 
+{ 
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December"
+};
+
+static CharPtr month_abbrevs [12] =
+{
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun", 
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+};
+
+static Int4 days_in_month [12] =
+{
+  31, 29, 31, 30, 31, 30,
+  31, 31, 30, 31, 30, 31
+};
+
+static Int4 GetDaysInMonth (CharPtr month)
+{
+  Int4 month_num;
+  
+  for (month_num = 0; month_num < 12; month_num++)
+  {
+    if (StringCmp (month, month_abbrevs [month_num]) == 0)
+    {
+      return days_in_month [month_num];
+    }
+  }
+  return 0;
+}
+
+static CharPtr GetMonthFromToken (CharPtr token, Int4 token_len)
+{
+  Int4    month_num;
+  
+  if (token == NULL || token_len == 0)
+  {
+    return NULL;
+  }
+  
+  if (isdigit (*token)) 
+  {
+    if (token_len > 2)
+    {
+      return NULL;
+    }
+    else
+    {
+      month_num = ReadNumberFromToken (token, token_len);
+      if (month_num == 0 || month_num > 12)
+      {
+        return NULL;
+      }
+      else
+      {
+        return month_abbrevs [month_num - 1];
+      }
+    }
+  }
+  else
+  {
+    for (month_num = 0; month_num < 12; month_num++)
+    {
+      if (StringNICmp (token, month_abbrevs[month_num], 3) == 0)
+      {
+        return month_abbrevs[month_num];
+      }
+    }
+    return NULL;
+  }
+}
+
+static Boolean
+ChooseDayAndYear 
+(Int4    num_1,
+ Int4    num_2,
+ CharPtr month,
+ Boolean year_first,
+ Int4Ptr day,
+ Int4Ptr year)
+{  
+  if (day == NULL || year == NULL)
+  {
+    return FALSE;
+  }
+  
+  if (num_1 == 0 && num_2 == 0)
+  {
+    return FALSE;
+  }
+  else if (num_1 == 0)
+  {
+    *year = 2000;
+    *day = num_2;
+  }
+  else if (num_2 == 0)
+  {
+    *year = 2000;
+    *day = num_1;
+  }
+  else if (num_1 > GetDaysInMonth (month))
+  {
+    *year = num_1;
+    *day = num_2;
+  }
+  else if (num_2 > GetDaysInMonth (month))
+  {
+    *year = num_2;
+    *day = num_1;
+  }
+  else if (year_first)
+  {
+    *year = num_1;
+    *day = num_2;
+  }
+  else
+  {
+    *year = num_2;
+    *day = num_1;
+  }
+  
+  return TRUE;
+}
+
+static Boolean 
+ChooseMonthAndYear
+(Int4    num_1,
+ Int4    num_2,
+ Boolean month_first,
+ CharPtr PNTR month,
+ Int4Ptr year)
+{
+  if (year == NULL || month == NULL 
+      || (num_1 == 0 && num_2 == 0)
+      || (num_1 > 12 && num_2 > 12)
+      || (num_1 == 0 && num_2 > 12)
+      || (num_2 == 0 && num_1 > 12))
+  {
+    return FALSE;
+  }
+  
+  if (num_1 == 0)
+  {
+    *year = 2000;
+    *month = month_abbrevs[num_2 - 1];
+  }
+  else if (num_2 == 0)
+  {
+    *year = 2000;
+    *month = month_abbrevs[num_1 - 1];
+  }
+  else if (num_1 > 12)
+  {
+    *year = num_1;
+    if (*year < 1000)
+    {
+      *year += 2000;
+    }
+    *month = month_abbrevs [num_2 - 1];
+  }
+  else if (num_2 > 12)
+  {
+    *year = num_2;
+    if (*year < 1000)
+    {
+      *year += 2000;
+    }
+    *month = month_abbrevs [num_1 - 1];
+  }
+  else if (month_first)
+  {
+    *year = num_2;
+    if (*year < 1000)
+    {
+      *year += 2000;
+    }
+    *month = month_abbrevs [num_1 - 1];
+  }
+  else
+  {
+    *year = num_1;
+    if (*year < 1000)
+    {
+      *year += 2000;
+    }
+    *month = month_abbrevs [num_2 - 1];
+  }
+  return TRUE;
+}
+
+
+static Boolean ChooseMonthAndDay 
+(Int4    num_1,
+ Int4    num_2,
+ Boolean month_first,
+ CharPtr PNTR month,
+ Int4Ptr day)
+{
+  if (day == NULL || month == NULL || num_1 == 0 || num_2 == 0
+      || (num_1 > 12 && num_2 > 12))
+  {
+    return FALSE;
+  }
+  
+  if (num_1 > 12)
+  {
+    *day = num_1;
+    *month = month_abbrevs [num_2 - 1];
+  }
+  else if (num_2 > 12)
+  {
+    *day = num_2;
+    *month = month_abbrevs [num_1 - 1];
+  }
+  else if (month_first)
+  {
+    *day = num_2;
+    *month = month_abbrevs [num_1 - 1];
+  }
+  else
+  {
+    *day = num_1;
+    *month = month_abbrevs [num_2 - 1];
+  }
+  return TRUE;
+}
+
+static CharPtr ReformatDateString (CharPtr orig_date, Boolean month_first)
+{
+  CharPtr reformatted_date = NULL, cp;
+  Int4    year = 0, day = 0;
+  CharPtr month = NULL;
+  CharPtr token_list[3];
+  Int4    token_lens[3];
+  CharPtr delimiters = " \t,-/";
+  CharPtr numbers = "0123456789";
+  CharPtr letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+  Int4    num_tokens = 0;
+  Int4    token_len;
+  Int4    month_token = -1;
+  Boolean is_num;
+  Int4    num_1, num_2, num_3;
+  
+  if (StringHasNoText (orig_date))
+  {
+    return NULL;
+  }
+  
+  /* divide our original date into tokens */
+  /* skip over any leading spaces */
+  cp = orig_date;
+  while (*cp != 0 && num_tokens < 3)
+  {
+    is_num = FALSE;
+    token_len = StringSpn (cp, numbers);  
+    if (token_len == 0)
+    {
+      token_len = StringSpn (cp, letters);
+    }
+    else
+    {
+      is_num = TRUE;
+    }
+    if (token_len == 0)
+    {
+      cp++;
+    }
+    else
+    {
+      if (!is_num)
+      {
+        if (month_token == -1)
+        {
+          month_token = num_tokens;
+        }
+        else
+        {
+          /* already found a month string */
+          return NULL;
+        }
+      }
+      token_list [num_tokens] = cp;
+      token_lens [num_tokens] = token_len;
+      num_tokens ++;
+      cp += token_len;
+    }
+  }
+ 
+  if (num_tokens == 0 || *cp != 0)
+  {
+    return NULL;
+  }
+
+  if (num_tokens == 1)
+  {
+    if (month_token == 0)
+    {
+      return NULL;
+    }
+    year = GetYearFromToken (token_list [0], token_lens [0]);
+  }
+  else if (num_tokens == 2)
+  {
+    if (month_token == 0)
+    {
+      month = GetMonthFromToken (token_list [0], token_lens [0]);
+      year = GetYearFromToken (token_list [1], token_lens [1]);
+    }
+    else if (month_token == 1)
+    {
+      month = GetMonthFromToken (token_list [1], token_lens [1]);
+      year = GetYearFromToken (token_list [0], token_lens [0]);
+    }
+    else
+    {
+      num_1 = ReadNumberFromToken (token_list [0], token_lens [0]);
+      num_2 = ReadNumberFromToken (token_list [1], token_lens [1]);
+      if (! ChooseMonthAndYear (num_1, num_2, month_first, &month, &year))
+      {
+        return NULL;
+      }
+    }
+  }
+  else if (num_tokens == 3)
+  {
+    if (month_token == 0)
+    {
+      month = GetMonthFromToken (token_list [0], token_lens [0]);
+      num_1 = ReadNumberFromToken (token_list [1], token_lens [1]);
+      num_2 = ReadNumberFromToken (token_list [2], token_lens [2]);
+      if (!ChooseDayAndYear (num_1, num_2, month, FALSE, &day, &year))
+      {
+        return NULL;
+      }
+    }
+    else if (month_token == 1)
+    {
+      month = GetMonthFromToken (token_list [1], token_lens [1]);
+      num_1 = ReadNumberFromToken (token_list [0], token_lens [0]);
+      num_2 = ReadNumberFromToken (token_list [2], token_lens [2]);
+      if (!ChooseDayAndYear (num_1, num_2, month, FALSE, &day, &year))
+      {
+        return NULL;
+      }
+    }
+    else if (month_token == 2)
+    {
+      month = GetMonthFromToken (token_list [2], token_lens [2]);
+      num_1 = ReadNumberFromToken (token_list [0], token_lens [0]);
+      num_2 = ReadNumberFromToken (token_list [1], token_lens [1]);
+      if (!ChooseDayAndYear (num_1, num_2, month, FALSE, &day, &year))
+      {
+        return NULL;
+      }
+    }
+    else
+    {
+      num_1 = ReadNumberFromToken (token_list [0], token_lens [0]);
+      num_2 = ReadNumberFromToken (token_list [1], token_lens [1]);
+      num_3 = ReadNumberFromToken (token_list [2], token_lens [2]);
+      
+      if (num_1 > 31 || num_1 == 0)
+      {
+        year = num_1;
+        if (! ChooseMonthAndDay (num_2, num_3, month_first, &month, &day))
+        {
+          return NULL;
+        }
+      }
+      else if (num_2 > 31 || num_2 == 0)
+      {
+        year = num_2;
+        if (! ChooseMonthAndDay (num_1, num_3, month_first, &month, &day))
+        {
+          return NULL;
+        }
+      }
+      else if (num_3 > 31 || num_3 == 0)
+      {
+        year = num_3;
+        if (! ChooseMonthAndDay (num_1, num_2, month_first, &month, &day))
+        {
+          return NULL;
+        }
+      }
+      else if (num_1 > 0 && num_1 < 13 && num_2 > days_in_month [num_1] && num_3 <= days_in_month [num_1])
+      {
+        month = month_abbrevs [num_1 - 1];
+        year = num_2;
+        day = num_3;
+      }
+      else if (num_1 > 0 && num_1 < 13 && num_3 > days_in_month [num_1] && num_2 <= days_in_month [num_1])
+      {
+        month = month_abbrevs [num_1 - 1];
+        year = num_3;
+        day = num_2;
+      }
+      else if (num_2 > 0 && num_2 < 13 && num_1 > days_in_month [num_2] && num_3 <= days_in_month [num_1])
+      {
+        month = month_abbrevs [num_2 - 1];
+        year = num_1;
+        day = num_3;
+      }
+      else if (num_2 > 0 && num_2 < 13 && num_3 > days_in_month [num_2] && num_1 <= days_in_month [num_1])
+      {
+        month = month_abbrevs [num_2 - 1];
+        year = num_3;
+        day = num_1;
+      }
+      else if (num_3 > 0 && num_3 < 13 && num_1 > days_in_month [num_3] && num_2 <= days_in_month [num_1])
+      {
+        month = month_abbrevs [num_3 - 1];
+        year = num_1;
+        day = num_2;
+      }
+      else if (num_3 > 0 && num_3 < 13 && num_2 > days_in_month [num_3] && num_1 <= days_in_month [num_1])
+      {
+        month = month_abbrevs [num_3 - 1];
+        year = num_2;
+        day = num_1;
+      }
+      else
+      {
+        year = num_3;
+        if (! ChooseMonthAndDay (num_1, num_2, month_first, &month, &day))
+        {
+          year = num_1;
+          if (!ChooseMonthAndDay (num_2, num_3, month_first, &month, &day))
+          {
+            return NULL;
+          }
+        }
+      }
+                
+    }
+    if (year < 1000)
+    {
+      year += 2000;
+    }
+  }
+  
+  if (month == NULL && day > 0)
+  {
+    return NULL;
+  }
+  
+  reformatted_date = (CharPtr) MemNew (sizeof (Char) * 12);
+  if (reformatted_date == NULL)
+  {
+    return NULL;
+  }
+   
+  if (month == NULL)
+  {
+    sprintf (reformatted_date, "%d", year);
+  }
+  else if (day == 0)
+  {
+    sprintf (reformatted_date, "%s-%d", month, year);
+  }
+  else
+  {
+    sprintf (reformatted_date, "%d-%s-%d", day, month, year);
+  }
+  return reformatted_date;
+}
+
+typedef struct parsecollectiondate
+{
+  Int4    num_successful;
+  Int4    num_unsuccessful;
+  Boolean month_first;
+} ParseCollectionDateData, PNTR ParseCollectionDatePtr;
+
+static void ParseCollectionDateCallback (BioSourcePtr biop, Pointer userdata)
+{
+  SubSourcePtr           ssp;
+  CharPtr                reformatted_date = NULL;
+  ParseCollectionDatePtr pcdp;
+  
+  if (biop == NULL || biop->subtype == NULL || userdata == NULL)
+  {
+    return;
+  }
+  
+  pcdp = (ParseCollectionDatePtr) userdata;
+  
+  ssp = biop->subtype;
+  while (ssp != NULL)
+  {
+    if (ssp->subtype == SUBSRC_collection_date)
+    {
+      reformatted_date = ReformatDateString (ssp->name, pcdp->month_first);
+      if (reformatted_date == NULL)
+      {
+        pcdp->num_unsuccessful ++;
+      }
+      else
+      {
+        ssp->name = MemFree (ssp->name);
+        ssp->name = reformatted_date;
+        pcdp->num_successful ++;
+      }
+    }
+    ssp = ssp->next;
+  }
+}
+
+static void CountParseCollectionDateCallback (BioSourcePtr biop, Pointer userdata)
+{
+  SubSourcePtr           ssp;
+  CharPtr                reformatted_date = NULL;
+  ParseCollectionDatePtr pcdp;
+  
+  if (biop == NULL || biop->subtype == NULL || userdata == NULL)
+  {
+    return;
+  }
+  
+  pcdp = (ParseCollectionDatePtr) userdata;
+  
+  ssp = biop->subtype;
+  while (ssp != NULL)
+  {
+    if (ssp->subtype == SUBSRC_collection_date)
+    {
+      reformatted_date = ReformatDateString (ssp->name, pcdp->month_first);
+      if (reformatted_date == NULL)
+      {
+        pcdp->num_unsuccessful++;
+      }
+      else
+      {
+        MemFree (reformatted_date);
+        pcdp->num_successful ++;
+      }
+    }
+    ssp = ssp->next;
+  }
+}
+
+static void ParseCollectionDate (IteM i, Boolean month_first)
+{
+  BaseFormPtr             bfp;
+  SeqEntryPtr             sep;
+  ParseCollectionDateData pcdd;
+  
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+  
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  WatchCursor ();
+  Update ();
+
+  pcdd.num_successful = 0;
+  pcdd.num_unsuccessful = 0;
+  pcdd.month_first = month_first;
+  
+  VisitBioSourcesInSep (sep, &pcdd, CountParseCollectionDateCallback);
+  if (pcdd.num_unsuccessful > 0 
+      && ANS_NO == Message (MSG_YN, 
+                            "Sequin will be unable to reformat %d dates - do you want to continue?", pcdd.num_unsuccessful))
+  {
+    ArrowCursor ();
+    Update ();   
+    return;
+  }
+
+  pcdd.num_successful = 0;
+  pcdd.num_unsuccessful = 0;  
+  VisitBioSourcesInSep (sep, &pcdd, ParseCollectionDateCallback);
+
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+  ArrowCursor ();
+  Update ();   
+}
+
+extern void ParseCollectionDateMonthFirst (IteM i)
+{
+  ParseCollectionDate (i, TRUE);
+}
+
+extern void ParseCollectionDateDayFirst (IteM i)
+{
+  ParseCollectionDate (i, FALSE);
+}
 

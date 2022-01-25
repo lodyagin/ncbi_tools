@@ -1,4 +1,4 @@
-/* $Id: twoseq_api.c,v 1.48 2005/06/06 15:40:17 papadopo Exp $
+/* $Id: twoseq_api.c,v 1.51 2005/10/20 20:58:58 madden Exp $
 ***************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -71,6 +71,8 @@ Int2 BLAST_SummaryOptionsInit(BLAST_SummaryOptions **options)
     new_options->nucleotide_mismatch = -3;
     new_options->longest_intron = 0;
     new_options->init_seed_method = eDefaultSeedType;
+    new_options->gap_open = -1;
+    new_options->gap_extend = -1;
 
     *options = new_options;
     return 0;
@@ -106,7 +108,6 @@ s_TwoSeqBasicFillOptions(const BLAST_SummaryOptions* basic_options,
     BlastEffectiveLengthsOptions* eff_len_options = options->eff_len_options;
     BlastDatabaseOptions* db_options = options->db_options; 
     Boolean do_megablast = FALSE;
-    Boolean do_ag_blast = FALSE;
     Boolean do_discontig = FALSE;
     Int4 greedy_align = 0;
     Int2 word_size = basic_options->word_size;
@@ -138,13 +139,6 @@ s_TwoSeqBasicFillOptions(const BLAST_SummaryOptions* basic_options,
                 greedy_align = 1;       /* one-pass, no ungapped */
         }
 
-        /* For a megablast search or a blastn search with
-           a non-default word size, turn on striding. Note that
-           striding is beneficial even if the wordsize is
-           smaller than the default */
-
-        if (word_size != 0 || do_megablast)
-            do_ag_blast = TRUE;
 
         /* If megablast was turned on but the input indicates a sensitive search
            is desired, or if word size is <=12, which is not used in contiguous
@@ -157,8 +151,10 @@ s_TwoSeqBasicFillOptions(const BLAST_SummaryOptions* basic_options,
             if (word_size == 0 || word_size > 12)
                 word_size = 11;
             do_discontig = TRUE;
-            do_ag_blast = FALSE;
         }
+
+        if (do_megablast && !do_discontig)
+            greedy_align = 1;
     }
     
 
@@ -384,8 +380,11 @@ BLAST_TwoSeqLocSets(const BLAST_SummaryOptions *basic_options,
         status = 
             Blast_TwoSeqLocSetsAdvanced(query_seqloc, subject_seqloc, 
                 masking_locs, options, NULL, seqalign_out, filter_out, 
-                mask_at_hash, extra_returns);
+                extra_returns);
     }
+
+    if (mask_at_hash)
+        *mask_at_hash = SBlastOptionsGetMaskAtHash(options);
 
     options = SBlastOptionsFree(options);
 

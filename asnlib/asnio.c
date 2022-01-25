@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 3/4/91
 *
-* $Revision: 6.11 $
+* $Revision: 6.12 $
 *
 * File Description:
 *   Routines for AsnIo objects.  This code has some machine dependencies.
@@ -45,6 +45,9 @@
 * 01-31-94 Schuler     Changed ErrGetOpts/ErrSetOpts to ErrSaveOptions/ErrRestoreOptions
 *
 * $Log: asnio.c,v $
+* Revision 6.12  2005/12/01 20:00:13  lavr
+* AsnIoErrorMsg(): Don't insert extra LFs if there was no typestack dumped
+*
 * Revision 6.11  2002/05/20 23:13:39  ivanov
 * Fixed overburn memory AsnIo buf in the AsnPrint*() -- increased
 * buffers reserved room
@@ -1054,11 +1057,11 @@ NLM_EXTERN void CDECL AsnIoErrorMsg(AsnIoPtr aip, int errcode, ...)
         aip_fname_str = aip->fname;
 
       if (aip->type & ASNIO_IN)
-        aip_type_str = "Input\n";
+        aip_type_str = "Input ";
       else
         {
           AsnIoFlush( aip );
-          aip_type_str = "Output\n";
+          aip_type_str = "Output ";
         }
     }
   length += StringLen(aip_fname_str) + StringLen(aip_type_str);
@@ -1075,7 +1078,6 @@ NLM_EXTERN void CDECL AsnIoErrorMsg(AsnIoPtr aip, int errcode, ...)
   }}
   length += StringLen(arg_str);
 
-
   buf = (CharPtr) Malloc(length + 1);  *buf = '\0';
   StringCat(buf, aip_fname_str);
   StringCat(buf, aip_type_str);
@@ -1083,16 +1085,21 @@ NLM_EXTERN void CDECL AsnIoErrorMsg(AsnIoPtr aip, int errcode, ...)
 
   if (aip != NULL)
     {
-      AsnTypeDumpStack(ptr, aip);          /* put in the type stack */
-      while (*ptr != '\0')
-        ptr++;
-      *ptr = '\n';
-      ptr++;
-      *ptr = '\0';
+      ASSERT (! *ptr);
+      AsnTypeDumpStack(ptr, aip);       /* put in the type stack */
+      if (ptr[0] && (ptr[0] != ' ' || ptr[1]))
+        {
+          ASSERT (ptr[-1] == ' ');
+          *--ptr = '\n';
+          while ( *ptr )
+            ptr++;
+          *ptr++ = '\n';
+          *ptr   = '\0';
+        }
     }
 
-  ASSERT ( StringLen(buf) + StringLen(arg_str) <=  length );
-  StringCat(ptr, arg_str);
+  ASSERT ( StringLen(buf) + StringLen(arg_str) <= length );
+  StringCpy(ptr, arg_str);
   MemFree( arg_str );
 
   if (aip != NULL  &&  aip->error_ret != NULL)

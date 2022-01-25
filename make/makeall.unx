@@ -1,6 +1,6 @@
 #	makefile for asntool and ncbi core routines,
 #
-#	$Id: makeall.unx,v 6.266 2005/07/26 14:40:11 lavr Exp $
+#	$Id: makeall.unx,v 6.268 2005/12/01 15:12:11 madden Exp $
 #
 #	cdromlib data access functions, vibrant, and entrez
 #	SunOS with unbundled ANSI compiler [ make LCL=acc RAN=ranlib CC=acc ]
@@ -98,6 +98,7 @@ LIB45 = $(ULIB45)
 LIB45 = 
 LIB22 = libncbimmdb.a
 LIB23 = libncbitool.a
+LIBCOMPADJ = libblastcompadj.a
 ULIB28 = libvibgif.a
 LIB28 = $(ULIB28)
 LIB28 =
@@ -248,14 +249,17 @@ SRC23 = csim.c db_slist.c dust.c falign.c g_any.c sim2.c sim3.c sim4.c \
 	pobutil.c stsutil.c suggadj.c suggest.c suggslp.c \
 	blast.c blastutl.c blastool.c blastconcat.c splutil.c gapxdrop.c bandalg0.c bandalg1.c \
 	bandalg2.c bandalg3.c bandalg4.c bandalg5.c bandalgn.c blastkar.c \
-        Mode_condition.c Newton_procedures.c RE_interface_ds.c \
-        nlm_numerics.c re_newton.c \
 	actutils.c posit.c lookup.c readdb.c ncbisam.c ncbisort.c \
 	salign.c salptool.c urkutil.c urkpcc.c urkptpf.c urkepi.c \
 	urkfltr.c urkdust.c urksigu.c seg.c urkbias.c urkcnsrt.c urktree.c \
 	pseed3.c pattern1.c impatool.c posit2.c mbalign.c \
 	vecscrn.c mblast.c rpsutil.c kappa.c xmlblast.c bxmlobj.c objscoremat.c \
 	dotseq.c spidey.c motif.c blfmtutl.c
+
+SRCCOMPADJ = matrix_frequency_data.c compo_mode_condition.c \
+	     composition_adjustment.c nlm_linear_algebra.c \
+             optimize_target_freq.c compo_heap.c smith_waterman.c \
+             redo_alignment.c
 
 SRC28 = gdfontg.c gdfontmb.c gdfontt.c pictogif.c \
 	gdfontl.c gdfonts.c ncbidrwg.c drawing.c mapping.c picture.c ncbimain.c
@@ -394,14 +398,17 @@ OBJ23 = csim.o db_slist.o dust.o falign.o g_any.o sim2.o sim3.o sim4.o \
 	blast.o blastutl.o blastool.o blastconcat.o splutil.o \
 	gapxdrop.o bandalg0.o bandalg1.o \
 	bandalg2.o bandalg3.o bandalg4.o bandalg5.o bandalgn.o blastkar.o \
-        Mode_condition.o Newton_procedures.o RE_interface_ds.o \
-        nlm_numerics.o re_newton.o \
 	actutils.o posit.o lookup.o readdb.o ncbisam.o ncbisort.o \
 	salign.o salptool.o urkutil.o urkpcc.o urkptpf.o urkepi.o \
 	urkfltr.o urkdust.o urksigu.o seg.o urkbias.o urkcnsrt.o urktree.o \
 	pseed3.o pattern1.o impatool.o posit2.o mbalign.o \
 	vecscrn.o mblast.o rpsutil.o kappa.o xmlblast.o bxmlobj.o objscoremat.o \
 	dotseq.o spidey.o motif.o blfmtutl.o
+
+OBJCOMPADJ = matrix_frequency_data.o compo_mode_condition.o \
+	     composition_adjustment.o nlm_linear_algebra.o \
+             optimize_target_freq.o compo_heap.o smith_waterman.o \
+             redo_alignment.o
 
 OBJ28 = gdfontg.o gdfontmb.o gdfontt.o pictogif.o \
 	gdfontl.o gdfonts.o ncbidrwg.o drawing.o mapping.o picture.o ncbimain.o
@@ -463,11 +470,12 @@ ln-if-absent:	../make/ln-if-absent
 	ln -s ../make/ln-if-absent .
 
 nocopy : sources $(THR_OBJ) $(LIB1) $(LIB2) $(LIB3) $(DLIB4) $(DLIB400) \
-	$(LIB5) $(DLIB20) $(DLIB45) $(LIB22) $(LIB23) $(DLIB28) $(DLIB30) $(DLIB3000) \
+	$(LIB5) $(DLIB20) $(DLIB45) $(LIB22) $(LIB23) $(LIBCOMPADJ) \
+	$(DLIB28) $(DLIB30) $(DLIB3000) \
 	$(DLIB34) $(DLIB37) $(DLIB38) $(LIB50) $(LIB60) $(LIB61) $(NCBI_SHLIBS)
 
 sources : $(THR_SRC) $(SRC1) $(SRC2) $(SRC3) $(SRC4) $(SRC5) $(SRC20) $(SRC22) \
-    $(SRC23) $(SRC28) $(SRC30) $(SRC50) $(SRC60) $(SRC61)
+    $(SRC23) $(SRC28) $(SRC30) $(SRC50) $(SRC60) $(SRC61) $(SRCCOMPADJ)
 
 ## To clean out the directory without removing make
 ##
@@ -750,6 +758,11 @@ copy :
 	$(SRCCOPY) ../algo/blast/core/*.c .
 	$(SRCCOPY) ../algo/blast/core/*.h .
 	cp -fp ../algo/blast/core/*.h ../include/algo/blast/core
+	- mkdir -p ../include/algo/blast/composition_adjustment
+	$(SRCCOPY) ../algo/blast/composition_adjustment/*.c .
+	$(SRCCOPY) ../algo/blast/composition_adjustment/*.h ../include
+	cp -fp ../algo/blast/composition_adjustment/*.h \
+		../include/algo/blast/composition_adjustment
 	- mkdir -p ../include/algo/blast/api
 	$(SRCCOPY) ../algo/blast/api/*.c .
 	cp -fp ../algo/blast/api/*.h ../include/algo/blast/api
@@ -910,6 +923,12 @@ $(LIB23) : $(OBJ23)
 	$(AR) cru $(LIB23) $(OBJ23)
 	$(LIBCOPY) $(LIB23) $(NCBI_LIBDIR)
 	$(RAN) $(NCBI_LIBDIR)/$(LIB23)
+
+$(LIBCOMPADJ) : $(OBJCOMPADJ)
+	- $(RM_LIB) $(LIBCOMPADJ)
+	$(AR) cru $(LIBCOMPADJ) $(OBJCOMPADJ)
+	$(LIBCOPY) $(LIBCOMPADJ) $(NCBI_LIBDIR)
+	$(RAN) $(NCBI_LIBDIR)/$(LIBCOMPADJ)
 
 $(LIB50) : $(OBJ50)
 	- $(RM_LIB) $(LIB50)

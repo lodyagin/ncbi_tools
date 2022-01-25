@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_TYPES__H
 #define CONNECT___NCBI_TYPES__H
 
-/*  $Id: ncbi_types.h,v 6.9 2003/08/28 19:28:47 ucko Exp $
+/*  $Id: ncbi_types.h,v 6.10 2005/11/22 20:52:38 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -47,11 +47,7 @@
  *
  */
 
-/* In the C++ Toolkit, this includes ncbiconf.h and lets us know
- * whether we need to hack around WorkShop's stupidity.
- */
 #include <connect/connect_export.h>
-
 #include <stddef.h>
 
 
@@ -108,6 +104,9 @@ typedef unsigned int TNCBI_Time;
 /*
  * ---------------------------------------------------------------------------
  * $Log: ncbi_types.h,v $
+ * Revision 6.10  2005/11/22 20:52:38  lavr
+ * Removed a note about ncbiconf.h -- irrelevant
+ *
  * Revision 6.9  2003/08/28 19:28:47  ucko
  * Use macros for kXxxTimeout on all platforms (safer, inasmuch as the C
  * include directory may be first).

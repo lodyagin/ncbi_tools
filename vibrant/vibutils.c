@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.66 $
+* $Revision: 6.69 $
 *
 * File Description:
 *       Vibrant miscellaneous functions
@@ -37,6 +37,19 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: vibutils.c,v $
+* Revision 6.69  2005/11/08 19:38:55  bollin
+* don't translate the keypress for a backspace key into the NLM_BACK character -
+* windows will also send a WM_CHAR message with the NLM_BACK character in it.
+* Nlm_KeydownToChar should only be used for keypresses that don't issue WM_CHAR
+* messages, otherwise the keyproc function will be called twice for a single
+* keypress
+*
+* Revision 6.68  2005/09/23 20:30:10  kans
+* added NLM_BACK for backspace key, which is separate from delete, even though the label may be the same on a keyboard
+*
+* Revision 6.67  2005/09/14 18:34:22  kans
+* protect against VibMessageHook memory buffer allocation failure
+*
 * Revision 6.66  2005/07/18 15:15:18  kans
 * fixed minor xcode compiler warnings
 *
@@ -1018,17 +1031,21 @@ static MsgAnswer LIBCALLBACK Nlm_VibMessageHook (MsgKey key, ErrSev severity,
     Nlm_WindoW tempPort = Nlm_CurrentWindow();
 
     /* Prepare the message text (concat with the previous text, if any) */
-    char* x_text;
+    char* x_text = NULL;
     const char* add_mess = message ? message : "<no message posted>";
     if ( postText ) {
       size_t curr_len = Nlm_TextLength(postText);
       size_t add_len  = Nlm_StringLen( message );
-      char*  buf    = (char*) Nlm_MemNew(add_len+1 + curr_len + 1);
-      Nlm_MemCpy(buf, add_mess, add_len);
-      buf[add_len++] = '\n';
-      Nlm_GetTitle(postText, buf+add_len, curr_len+1);
-      x_text = Nlm_StrngPrintable(buf);
-      Nlm_MemFree(buf);
+      if (curr_len < 1000000 && add_len < 1000000) {
+        char*  buf    = (char*) Nlm_MemNew(add_len+1 + curr_len + 1);
+        Nlm_MemCpy(buf, add_mess, add_len);
+        buf[add_len++] = '\n';
+        Nlm_GetTitle(postText, buf+add_len, curr_len+1);
+        x_text = Nlm_StrngPrintable(buf);
+        Nlm_MemFree(buf);
+      } else {
+        x_text = Nlm_StrngPrintable ("VibMessageHook allocation failure\n");
+      }
     } else {
       x_text = Nlm_StrngPrintable(add_mess);
     }

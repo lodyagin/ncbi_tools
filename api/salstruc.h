@@ -29,13 +29,16 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.4 $
+* $Revision: 6.5 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: salstruc.h,v $
+* Revision 6.5  2005/11/22 21:56:23  bollin
+* made function for deleting locations from alignments extern
+*
 * Revision 6.4  1999/11/24 21:24:29  vakatov
 * Fixed for the C++ and/or MSVC DLL compilation
 *
@@ -83,6 +86,11 @@ NLM_EXTERN Boolean      read_buffer_fromalignnode (EditAlignDataPtr adp, ValNode
 ***
 ***********************************/
 NLM_EXTERN Boolean BioseqTrimN (BioseqPtr bsp, SeqEntryPtr sep);
+
+
+/* Function removes location from alignment */
+NLM_EXTERN void SeqAlignDeleteByLocCallback (SeqEntryPtr sep, Pointer mydata,
+                                          Int4 index, Int2 indent);
 
 /*******************************************************************
 *** AddFeatFunc

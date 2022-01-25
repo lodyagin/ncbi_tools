@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/28/95
 *
-* $Revision: 6.48 $
+* $Revision: 6.49 $
 *
 * File Description:
 *
@@ -39,6 +39,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: pubdesc.c,v $
+* Revision 6.49  2005/10/18 19:09:40  kans
+* shorten locale dialog box
+*
 * Revision 6.48  2005/08/18 14:41:30  kans
 * include toasn3.h for ExtendGeneFeatIfOnMRNA prototype
 *
@@ -1829,7 +1832,7 @@ static GrouP CreateLocalePage (GrouP m, PubdescPagePtr ppp, Uint1 pchoice,
       g2 = HiddenGroup (g1, -6, 0, NULL);
       StaticPrompt (g2, "Proceedings Number (ie. 4th Ann or IV )",
                     0, dialogTextHeight, programFont, 'l');
-      ppp->xa_info = (Pointer) DialogText (g2, "", 16, NULL);
+      ppp->xa_info = (Pointer) DialogText (g2, "", 8, NULL);
 
       n = NormalGroup (g1, -1, 0, "Date of Meeting",
                        programFont, NULL);

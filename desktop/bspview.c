@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/30/95
 *
-* $Revision: 6.130 $
+* $Revision: 6.132 $
 *
 * File Description: 
 *
@@ -2972,12 +2972,13 @@ static ForM LIBCALL CreateNewSeqEntryViewFormEx (Int2 left, Int2 top, CharPtr ti
       StaticPrompt (bfp->bvd.extraControlGrp, "Publications", 0, popupMenuHeight, programFont, 'l');
       bfp->bvd.ffRifCtrl = PopupList (bfp->bvd.extraControlGrp, TRUE, ChangeBioseqSequenceRIF);
       SetObjectExtra (bfp->bvd.ffRifCtrl, bfp, NULL);
-      PopupItem (bfp->bvd.ffRifCtrl, "All");
+      PopupItem (bfp->bvd.ffRifCtrl, "Show All");
       PopupItem (bfp->bvd.ffRifCtrl, "No GeneRIFs");
       PopupItem (bfp->bvd.ffRifCtrl, "Only GeneRIFs");
       PopupItem (bfp->bvd.ffRifCtrl, "Newest 5");
       PopupItem (bfp->bvd.ffRifCtrl, "Oldest 5");
       PopupItem (bfp->bvd.ffRifCtrl, "Only Reviews");
+      PopupItem (bfp->bvd.ffRifCtrl, "Hide All");
       SetValue (bfp->bvd.ffRifCtrl, 1);
     }
     Hide (bfp->bvd.baseCtgControlGrp);
@@ -3192,11 +3193,15 @@ static ForM LIBCALL CreateNewSeqEntryViewFormEx (Int2 left, Int2 top, CharPtr ti
     bfp->bvd.showAlnSubstitutions = TRUE;
 
     /* move PubMed button farther over */
+    GetPosition (bfp->bvd.newGphScale, &r1);
     GetPosition (bfp->bvd.ffStyleCtrl, &r2);
+    if (r1.right > r2.right) {
+      GetPosition (bfp->bvd.newGphScale, &r2);
+    }
     GetPosition (bfp->pubseq, &r1);
     delta = r2.right - r1.left + (r2.right - r2.left)/2;
     if (delta > 0) {
-      OffsetRect (&r1, delta, 0);
+      OffsetRect (&r1, delta + 5, 0);
       SetPosition (bfp->pubseq, &r1);
       AdjustPrnt (bfp->pubseq, &r1, FALSE);
     }

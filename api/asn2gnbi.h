@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   12/30/03
 *
-* $Revision: 1.41 $
+* $Revision: 1.55 $
 *
 * File Description:  New GenBank flatfile generator, internal header
 *
@@ -149,7 +149,10 @@ typedef struct int_asn2gb_job {
   StringItemPtr   pool;
   Boolean         www;
   Boolean         specialGapFormat;
+  Boolean         hideGoTerms;
   Int4            seqGapCurrLen;
+  ValNodePtr      gihead;
+  ValNodePtr      gitail;
 } IntAsn2gbJob, PNTR IntAsn2gbJobPtr;
 
 /* array for assigning biosource and feature data fields to qualifiers */
@@ -236,6 +239,14 @@ typedef struct asn2gbwork {
   Int4             partcount;
   Int4             from;
   Int4             to;
+
+  Int2             sectionCount;
+  Int2             sectionMax;
+  Int4             currGi;
+  Int4             prevGi;
+  Int4             nextGi;
+  ValNodePtr       gilistpos;
+
   Boolean          showAllFeats;
 
   Boolean          contig;
@@ -266,8 +277,9 @@ typedef struct asn2gbwork {
   Boolean          onlyReviewPubs;
   Boolean          newestPubs;
   Boolean          oldestPubs;
+  Boolean          hidePubs;
 
-  Boolean          showRefs;
+  Boolean          showFtableRefs;
   Boolean          hideGaps;
   Boolean          hideSources;
   Boolean          hideSequence;
@@ -289,6 +301,10 @@ typedef struct asn2gbwork {
   Boolean          featseen;
   Boolean          featjustseen;
   ValNodePtr       wgsaccnlist;
+
+  Boolean          has_mat_peptide;
+  Boolean          has_sig_peptide;
+  Int2             sig_pept_trim_len;
 
   Boolean          farFeatTimeLimit;
   time_t           farFeatStartTime;
@@ -321,6 +337,8 @@ typedef struct int_ref_block {
   CharPtr    fig;      /* figure string from equivalent gibb pub */
   CharPtr    maploc;   /* maploc string from equivalent gibb pub */
   Boolean    poly_a;   /* poly_a field from equivalent gibb pub */
+  Int4       left;
+  Int4       right;
 } IntRefBlock, PNTR IntRefBlockPtr;
 
 /* internal source block has fields on top of BaseBlock fields */
@@ -355,6 +373,7 @@ typedef struct int_feat_block {
   Boolean     mapToMrna;
   Boolean     mapToPep;
   Boolean     isCDS;     /* set if using IntCdsBlock */
+  Boolean     isPrt;     /* set if using IntPrtBlock */
   Boolean     firstfeat;
 } IntFeatBlock, PNTR IntFeatBlockPtr;
 
@@ -365,6 +384,16 @@ typedef struct int_cds_block {
   CharPtr       fig;    /* figure string from pub */
   CharPtr       maploc; /* maploc string from pub */
 } IntCdsBlock, PNTR IntCdsBlockPtr;
+
+/* internal protein block has fields on top of IntFeatBlock fields */
+
+typedef struct int_prt_block {
+  IntFeatBlock  ifb;
+  Boolean       is_whole_loc;
+  Boolean       suppress_mol_wt;
+  Boolean       trim_initial_met;
+  Int2          sig_pept_trim_len;
+} IntPrtBlock, PNTR IntPrtBlockPtr;
 
 
 /* enumerated qualifier category definitions */
@@ -424,8 +453,8 @@ typedef enum {
   Qual_class_go,
   Qual_class_nomenclature,
   Qual_class_pcr,
-  Qual_class_mol_wt_cds,
-  Qual_class_mol_wt_prt
+  Qual_class_mol_wt,
+  Qual_class_voucher
 }  QualType;
 
 /* source 'feature' */
@@ -492,6 +521,7 @@ typedef enum {
   SCQUAL_orgmod_note,
   SCQUAL_pathovar,
   SCQUAL_PCR_primers,
+  SCQUAL_PCR_primer_note,
   SCQUAL_plasmid_name,
   SCQUAL_plastid_name,
   SCQUAL_pop_variant,
@@ -555,7 +585,8 @@ typedef enum {
   FTQUAL_evidence,
   FTQUAL_exception,
   FTQUAL_exception_note,
-  FTQUAL_experimental,
+  FTQUAL_experiment,
+  FTQUAL_experiment_string,
   FTQUAL_extra_products,
   FTQUAL_figure,
   FTQUAL_frequency,
@@ -574,6 +605,9 @@ typedef enum {
   FTQUAL_heterogen,
   FTQUAL_illegal_qual,
   FTQUAL_inference,
+  FTQUAL_inference_string,
+  FTQUAL_inference_good,
+  FTQUAL_inference_bad,
   FTQUAL_insertion_seq,
   FTQUAL_label,
   FTQUAL_locus_tag,
@@ -581,8 +615,7 @@ typedef enum {
   FTQUAL_maploc,
   FTQUAL_mod_base,
   FTQUAL_modelev,
-  FTQUAL_mol_wt_cds,
-  FTQUAL_mol_wt_prt,
+  FTQUAL_mol_wt,
   FTQUAL_nomenclature,
   FTQUAL_note,
   FTQUAL_number,
@@ -751,7 +784,11 @@ NLM_EXTERN void FFCatenateSubString (
 );
 NLM_EXTERN CharPtr FFToCharPtr (StringItemPtr sip);
 NLM_EXTERN void FFSkipLink (StringItemPtr PNTR iterp, Int4Ptr ip);
-NLM_EXTERN Boolean FFIsStartOfLink (StringItemPtr iter, Int4 pos);
+
+NLM_EXTERN Boolean FFIsStartOfLink (
+    StringItemPtr iter,
+    Int4 pos );
+
 NLM_EXTERN void FFSavePosition(StringItemPtr ffstring, StringItemPtr PNTR bufptr, Int4 PNTR posptr);
 NLM_EXTERN void FFTrim (
     StringItemPtr ffstring,
@@ -816,6 +853,70 @@ NLM_EXTERN Int4 FFStringSearch (
   const CharPtr pattern,
   Uint4 position
 );
+
+/*
+ * Scans the given buffer from a given scan position, for the next occurrence of 
+ * the indicated character. The search breaks when the character is found, or the
+ * supplied break position is reached.
+ * On exit, the scan position will either be on the character found, or at the 
+ * given break position.
+ */
+NLM_EXTERN Boolean FFFindSingleChar(
+  StringItemPtr* p_line_sip,
+  Int4* p_line_pos,
+  StringItemPtr break_sip,
+  Int4 break_pos,
+  char c 
+);
+
+ /*
+ * Returns the number of bytes remaining in the buffer chain, starting from the 
+ * given buffer and a read mark inside it.
+ */
+NLM_EXTERN Int4 FFRemainingLength(
+  StringItemPtr sip,
+  Int4 cur_pos
+);
+
+ /*
+ * Scans the given line for the next opening tag of an HTML hyperlink. Ajusts 
+ * the line position to immediately after the opening tag (if such a tag is 
+ * found) or the the end of the line (if no such tag is found).
+ * If a character buffer is supplied, this function will copy any opening tag
+ * it finds into that buffer.
+ */
+NLM_EXTERN Boolean FFExtractNextOpenLink(
+  StringItemPtr* p_line_sip,
+  Int4* p_line_pos,
+  StringItemPtr break_sip,
+  Int4 break_pos,
+  char* buf_open_link 
+);
+
+ /*
+ * Scans the given line for the next closing tag of an HTML hyperlink. Ajusts 
+ * the line position to immediately after the closing tag (if such a tag is 
+ * found) or the the end of the line (if no such tag is found).
+ */
+NLM_EXTERN Boolean FFExtractNextCloseLink(
+  StringItemPtr* p_line_sip,
+  Int4* p_line_pos,
+  StringItemPtr break_sip,
+  Int4 break_pos 
+);
+
+/*
+ * Tests whether the line ends between the opening and closing tag of an HTML 
+ * hyper link.
+ */
+NLM_EXTERN Boolean FFLineBreakSplitsHtmlLink( 
+  StringItemPtr start_sip, 
+  Int4 start_pos, 
+  StringItemPtr break_sip, 
+  Int4 break_pos,
+  char* buf_link_open 
+); 
+
 NLM_EXTERN Boolean IsWholeWordSubstr (
   StringItemPtr searchStr,
   Uint4 foundPos,
@@ -950,12 +1051,19 @@ NLM_EXTERN void AddFeatureBlock (
   Asn2gbWorkPtr awp
 );
 NLM_EXTERN void AddLocusBlock (
-  Asn2gbWorkPtr awp
+  Asn2gbWorkPtr awp,
+  Boolean willshowwgs,
+  Boolean willshowgenome,
+  Boolean willshowcontig,
+  Boolean willshowsequence
 );
 NLM_EXTERN void AddAccessionBlock (
   Asn2gbWorkPtr awp
 );
 NLM_EXTERN void AddVersionBlock (
+  Asn2gbWorkPtr awp
+);
+NLM_EXTERN void AddProjectBlock (
   Asn2gbWorkPtr awp
 );
 NLM_EXTERN void AddDbsourceBlock (
@@ -1090,6 +1198,11 @@ NLM_EXTERN void DoImmediateRemoteFeatureFormat (
 NLM_EXTERN void DoImmediateFormat (
   Asn2gbFormatPtr afp,
   BaseBlockPtr bbp
+);
+
+NLM_EXTERN void DoQuickLinkFormat (
+  Asn2gbFormatPtr afp,
+  CharPtr str
 );
 
 NLM_EXTERN Boolean DeltaLitOnly (

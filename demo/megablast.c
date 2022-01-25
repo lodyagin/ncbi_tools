@@ -1,5 +1,5 @@
-static char const rcsid[] = "$Id: megablast.c,v 6.170 2005/08/22 19:22:56 madden Exp $";
-/* $Id: megablast.c,v 6.170 2005/08/22 19:22:56 madden Exp $
+static char const rcsid[] = "$Id: megablast.c,v 6.174 2005/10/31 14:15:10 madden Exp $";
+/* $Id: megablast.c,v 6.174 2005/10/31 14:15:10 madden Exp $
 **************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -26,6 +26,20 @@ static char const rcsid[] = "$Id: megablast.c,v 6.170 2005/08/22 19:22:56 madden
 *                                                                         *
 ************************************************************************** 
  * $Log: megablast.c,v $
+ * Revision 6.174  2005/10/31 14:15:10  madden
+ * Call SBlastOptionsSetRewardPenaltyAndGapCosts
+ *
+ * Revision 6.173  2005/10/17 14:07:13  madden
+ * Use -1 rather than zero for unset gap parameters
+ *
+ * Revision 6.172  2005/09/16 14:09:45  madden
+ * Print out more informative message when Blast_DatabaseSearch has non-zero return if available
+ *
+ * Revision 6.171  2005/08/29 14:45:34  camacho
+ * From Ilya Dondoshansky:
+ * Retrieve mask_at_hash option from the SBlastOptions structure instead of
+ * passing as argument in search API calls
+ *
  * Revision 6.170  2005/08/22 19:22:56  madden
  * Check return value of Blast_DatabaseSearch, call ErrPostEx if non-zero
  *
@@ -1104,10 +1118,10 @@ static Args myargs [] = {
         "F", NULL, NULL, FALSE, 'T', ARG_BOOLEAN, 0.0, 0, NULL},   /* ARG_HTML */
   { "Restrict search of database to list of GI's",
 	NULL, NULL, NULL, TRUE, 'l', ARG_STRING, 0.0, 0, NULL},    /* ARG_GILIST */
-  { "Cost to open a gap (zero invokes default behavior)",          /* ARG_GAPOPEN */
-        "0", NULL, NULL, FALSE, 'G', ARG_INT, 0.0, 0, NULL},
-  { "Cost to extend a gap (zero invokes default behavior)",        /* ARG_GAPEXT */
-        "0", NULL, NULL, FALSE, 'E', ARG_INT, 0.0, 0, NULL},
+  { "Cost to open a gap (-1 invokes default behavior)",          /* ARG_GAPOPEN */
+        "-1", NULL, NULL, FALSE, 'G', ARG_INT, 0.0, 0, NULL},
+  { "Cost to extend a gap (-1 invokes default behavior)",        /* ARG_GAPEXT */
+        "-1", NULL, NULL, FALSE, 'E', ARG_INT, 0.0, 0, NULL},
   { "Minimal hit score to report (0 for default behavior)",        /* ARG_MINSCORE */
         "0", NULL, NULL, FALSE, 's', ARG_INT, 0.0, 0, NULL},
   { "Masked query output, must be used in conjunction with -D 2 option", 
@@ -1256,8 +1270,10 @@ static Int2 Main_old (void)
 	show_gi = (Boolean) myargs[ARG_SHOWGIS].intvalue;
 	options->penalty = myargs[ARG_MISMATCH].intvalue;
 	options->reward = myargs[ARG_MATCH].intvalue;
-	options->gap_open = myargs[ARG_GAPOPEN].intvalue;
-	options->gap_extend = myargs[ARG_GAPEXT].intvalue;
+        if (myargs[ARG_GAPOPEN].intvalue >= 0)
+	    options->gap_open = myargs[ARG_GAPOPEN].intvalue;
+        if (myargs[ARG_GAPEXT].intvalue >= 0)
+	    options->gap_extend = myargs[ARG_GAPEXT].intvalue;
 
 	if (options->gap_open == 0 && options->reward % 2 == 0 && 
 	    options->gap_extend == options->reward / 2 - options->penalty)
@@ -1806,6 +1822,12 @@ BLAST_FillOptions(SBlastOptions* options, Blast_SummaryReturn* sum_returns)
                 greedy, myargs[ARG_MISMATCH].intvalue, myargs[ARG_MATCH].intvalue,
                 NULL, myargs[ARG_GAPOPEN].intvalue, myargs[ARG_GAPEXT].intvalue);
 
+   SBlastOptionsSetRewardPenaltyAndGapCosts(options,
+        myargs[ARG_MATCH].intvalue,
+        myargs[ARG_MISMATCH].intvalue,
+        MAX(0, myargs[ARG_GAPOPEN].intvalue),
+        MAX(0, myargs[ARG_GAPEXT].intvalue));
+
    /* Use to "unscale" x-dropoff since they were never properly scaled in the old code but are in the new
       code, so we wish to keep megablast running like the old code without adding this "bug" back to the main 
       engine. The returned Lambda is also increased by 2% to make sure the Xdrop value we use is at least as
@@ -1983,7 +2005,6 @@ static Int2 Main_new(void)
    while (1) {
        SeqAlign* seqalign = NULL;
        SeqLoc* filter_loc=NULL;	/* All masking locations */
-       Boolean mask_at_hash;
        SeqLoc* repeat_mask = NULL; /* Repeat mask locations */
        Int4 num_queries; /* Number of queries read this time. */
        Int4  letters_read;  /* number of letters (bases/residues) read. */
@@ -2031,10 +2052,12 @@ static Int2 Main_new(void)
       
        /* The main search is here. */
       if((status = Blast_DatabaseSearch(query_slp, dbname, lcase_mask, options, tf_data,
-                               &seqalign, &filter_loc, &mask_at_hash, 
-                               sum_returns)) != 0)
+                               &seqalign, &filter_loc, sum_returns)) != 0)
       {
-	   ErrPostEx(SEV_FATAL, 1, 0, "Non-zero return from Blast_DatabaseSearch\n");
+           if (sum_returns && sum_returns->error)
+               ErrPostEx(SEV_ERROR, 1, 0, sum_returns->error->message);
+           else
+               ErrPostEx(SEV_ERROR, 1, 0, "Non-zero return from Blast_DatabaseSearch\n");
            return status;
       }
 
@@ -2046,7 +2069,7 @@ static Int2 Main_new(void)
       
       /* If masking was done for lookup table only, free the masking locations,
          because they will not be used for formatting. */
-      if (mask_at_hash)
+      if (SBlastOptionsGetMaskAtHash(options))
           filter_loc = Blast_ValNodeMaskListFree(filter_loc);
 
       /* Post warning or error messages, no matter what the search status was. */

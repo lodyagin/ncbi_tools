@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: posit.c,v 6.75 2005/08/05 12:05:13 coulouri Exp $";
+static char const rcsid[] = "$Id: posit.c,v 6.76 2005/08/30 18:21:02 coulouri Exp $";
 
-/* $Id: posit.c,v 6.75 2005/08/05 12:05:13 coulouri Exp $
+/* $Id: posit.c,v 6.76 2005/08/30 18:21:02 coulouri Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,10 +32,17 @@ static char const rcsid[] = "$Id: posit.c,v 6.75 2005/08/05 12:05:13 coulouri Ex
 
   Contents: utilities for position-based BLAST.
 
-  $Revision: 6.75 $ 
+  $Revision: 6.76 $ 
  *****************************************************************************
 
  * $Log: posit.c,v $
+ * Revision 6.76  2005/08/30 18:21:02  coulouri
+ * From Mike Gertz:
+ *    In posFreqsToMatrix while setting posSearch->posPrivateMatrix, check
+ *    whether the frequency ratio is zero before taking the log.  If it is
+ *    zero, set the score to BLAST_SCORE_MIN.  Do not test whether the
+ *    original matrix has a score of BLAST_SCORE_MIN.
+ *
  * Revision 6.75  2005/08/05 12:05:13  coulouri
  * From Mike Gertz:
  * - Changed the freq ratio of a (*,-) or (-,*) match for all matrices to
@@ -1429,17 +1436,17 @@ void LIBCALL posFreqsToMatrix(posSearchItems *posSearch,
          return;
        }
 
-	 for(a = 0; a < alphabetSize; a++) {
-	   posSearch->posMatrix[c][a] = compactSearch->matrix[q[c]][a];
-	   if (compactSearch->matrix[q[c]][a] == BLAST_SCORE_MIN)
-	     posSearch->posPrivateMatrix[c][a] = BLAST_SCORE_MIN;
-	   else {
-	     intermediateValue = POSIT_SCALE_FACTOR * 
-             posSearch->stdFreqRatios->bit_scale_factor * 
+       for(a = 0; a < alphabetSize; a++) {
+         posSearch->posMatrix[c][a] = compactSearch->matrix[q[c]][a];
+         if (posSearch->stdFreqRatios->data[q[c]][a] == 0.0) {
+           posSearch->posPrivateMatrix[c][a] = BLAST_SCORE_MIN;
+         } else {
+           intermediateValue = POSIT_SCALE_FACTOR *
+             posSearch->stdFreqRatios->bit_scale_factor *
              log(posSearch->stdFreqRatios->data[q[c]][a])/NCBIMATH_LN2;
-	     posSearch->posPrivateMatrix[c][a] = Nlm_Nint(intermediateValue);
-	   }
-	 }
+           posSearch->posPrivateMatrix[c][a] = Nlm_Nint(intermediateValue);
+         }
+       }
      }
    }
    for(a = 0; a < alphabetSize; a++) {

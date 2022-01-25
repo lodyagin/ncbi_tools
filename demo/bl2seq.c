@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: bl2seq.c,v 6.78 2005/06/08 20:32:48 dondosha Exp $";
+static char const rcsid[] = "$Id: bl2seq.c,v 6.80 2005/10/17 14:06:44 madden Exp $";
 
 /**************************************************************************
 *                                                                         *
@@ -27,6 +27,14 @@ static char const rcsid[] = "$Id: bl2seq.c,v 6.78 2005/06/08 20:32:48 dondosha E
 ***************************************************************************
 *
 * $Log: bl2seq.c,v $
+* Revision 6.80  2005/10/17 14:06:44  madden
+* Change message on gap parameter arg
+*
+* Revision 6.79  2005/08/29 14:45:34  camacho
+* From Ilya Dondoshansky:
+* Retrieve mask_at_hash option from the SBlastOptions structure instead of
+* passing as argument in search API calls
+*
 * Revision 6.78  2005/06/08 20:32:48  dondosha
 * Fixed masking locations memory leak and added comment
 *
@@ -519,9 +527,9 @@ static Args myargs [] = {
 	"0", NULL, NULL, FALSE, 'd', ARG_FLOAT, 0.0, 0, NULL}, /* ARG_DBSIZE */
   { "SeqAnnot output file",
 	NULL, NULL, NULL, TRUE, 'a', ARG_FILE_OUT, 0.0, 0, NULL}, /* ARG_ASNOUT */
-  { "Cost to open a gap (-1 invokes default behavior; non-default values can result in unreliable statistics)",
+  { "Cost to open a gap (-1 invokes default behavior)",
         "-1", NULL, NULL, FALSE, 'G', ARG_INT, 0.0, 0, NULL}, /* ARG_GAPOPEN */
-  { "Cost to extend a gap (-1 invokes default behavior; non-default values can result in unreliable statistics)",
+  { "Cost to extend a gap (-1 invokes default behavior)",
         "-1", NULL, NULL, FALSE, 'E', ARG_INT, 0.0, 0, NULL}, /* ARG_GAPEXT */
   { "X dropoff value for gapped alignment (in bits) (zero invokes default "
     "behavior)\n      blastn 30, megablast 20, tblastx 0, all others 15",
@@ -927,8 +935,8 @@ Int2 Main_new(void)
 
         /* Pass NULL for the database name, since there is no database. */
         BlastFormattingInfoNewBasic(align_view, options, slp1, 
-                                    myargs[ARG_OUT].strvalue, 
-                                    &search_options, &format_info);
+                                    myargs[ARG_OUT].strvalue, &search_options,
+                                    &format_info);
         
         /* Always show gis in the output, hence pass TRUE for respective 
            argument. */
@@ -940,7 +948,7 @@ Int2 Main_new(void)
         /* If masking was at hash only, free the masking locations,
          * to prevent them from being used for formatting.
          */
-        if (mask_at_hash)
+        if (SBlastOptionsGetMaskAtHash(search_options))
             filter_loc = Blast_ValNodeMaskListFree(filter_loc);
 
         /* Format the results */

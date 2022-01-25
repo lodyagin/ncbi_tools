@@ -28,11 +28,11 @@
 * Author:  Karl Sirotkin, Tom Madden, Tatiana Tatusov, Jonathan Kans,
 *          Mati Shomrat
 *
-* $Id: asn2gnb1.c,v 1.73 2005/08/10 22:09:42 shomrat Exp $
+* $Id: asn2gnb1.c,v 1.85 2005/12/01 20:09:32 kans Exp $
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.73 $
+* $Revision: 1.85 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -774,7 +774,7 @@ NLM_EXTERN void FFCatenateSubString (
 
 
 NLM_EXTERN CharPtr FFToCharPtr (StringItemPtr sip) {
-  Int4 size = 0, i;
+  Int4 size = 0;
   StringItemPtr iter;
   CharPtr result, temp;
 
@@ -786,16 +786,15 @@ NLM_EXTERN CharPtr FFToCharPtr (StringItemPtr sip) {
   temp = result;
 
   for ( iter = sip; iter != NULL; iter = iter->next ) {
-    for ( i = 0; i < iter->pos; ++i ) {
-      *temp = iter->buf[i];
-      ++temp;
-    }
+    MemCpy( temp, iter->buf, iter->pos );
+    temp += iter->pos;
   }
 
   *temp = '\0';
 
   return result;
 }
+
 
 
 /* word wrap functions */
@@ -1053,6 +1052,221 @@ NLM_EXTERN void FFCalculateLineBreak (
   }
 }
 
+/*
+ * Scans the given buffer froma given scan position, for the next occurrence of 
+ * the indicated character. The search breaks when the character is found, or the
+ * supplied break position is reached.
+ * On exit, the scan position will either be on the character found, or at the 
+ * given break position.
+ *
+ *  *p_line_sip:    in: points to the buffer where scan should start
+ *                  out: points to the buffer where the scan ended
+ *  *p_line_pos:    in: points to the position in *p_line_sip where the scan should
+ *                    start
+ *                  out: points to the position in *p_line_sip where the scan ended.
+ *  break_sip:      points to buffer where the scan should stop
+ *  break_pos:      position in *break_sip where the scan should stop
+ *  c:              the character we are looking for
+ */
+NLM_EXTERN Boolean FFFindSingleChar(
+  StringItemPtr* p_line_sip,
+  Int4* p_line_pos,
+  StringItemPtr break_sip,
+  Int4 break_pos,
+  char c )
+{
+  while( *p_line_pos >= (*p_line_sip)->pos) {
+    *p_line_pos -= (*p_line_sip)->pos;
+    (*p_line_sip) = (*p_line_sip)->next;
+    if ( *p_line_sip == NULL ) {
+      return FALSE;
+    }
+  }
+  while (*p_line_sip != break_sip){
+    while (*p_line_pos <(*p_line_sip)->pos) {
+      if ((*p_line_sip)->buf[ *p_line_pos ] == c)
+        return TRUE;
+      else
+        ++(*p_line_pos);
+    }
+    *p_line_pos = 0;
+    *p_line_sip = (*p_line_sip)->next;
+  }
+  while (*p_line_pos < break_pos){
+    if ( (*p_line_sip)->buf[ *p_line_pos ] == c )
+      return TRUE;
+    else
+      ++(*p_line_pos);
+  }
+  return FALSE;
+}
+
+/*
+ * Returns the number of bytes remaining in the buffer chain, starting from the 
+ * given buffer and a read mark inside it.
+ *
+ *  sip:            points to the buffer where the string starts,
+ *  cur_pos:        read mark in the buffer
+ */
+NLM_EXTERN Int4 FFRemainingLength(
+  StringItemPtr sip,
+  Int4 cur_pos )
+{
+  return FFLength(sip)-cur_pos;
+}
+
+/*
+ * Scans the given line for the next opening tag of an HTML hyperlink. Ajusts 
+ * the line position to immediately after the opening tag (if such a tag is 
+ * found) or the the end of the line (if no such tag is found).
+ * If a character buffer is supplied, this function will copy any opening tag
+ * it finds into that buffer.
+ *
+ *  *p_line_sip:    in: points to the string buffer where the scan should start
+ *                  out: points to the string buffer where the scan ended
+ *  *p_line_pos:    in: position in **p_start_sip where the scan should start
+ *                  out: position in **p_start_sip where the scan ended
+ *  break_sip:      buffer that contain the line break
+ *  break_pos:      position in break_sip that represents the line break
+ *  buf_open_link:  character buffer to hold a copy of the opening link found
+ *                  (or =0 if this information is not required).
+ */
+NLM_EXTERN Boolean FFExtractNextOpenLink(
+  StringItemPtr* p_line_sip,
+  Int4* p_line_pos,
+  StringItemPtr break_sip,
+  Int4 break_pos,
+  char* buf_open_link )
+{
+  int i;
+
+  const char* buf_markup_open = "<A HREF";
+  const int markup_size = strlen(buf_markup_open);
+
+   while ((*p_line_sip != break_sip) || (*p_line_pos < break_pos)) {
+
+    if (FFFindSingleChar(p_line_sip, p_line_pos, break_sip, break_pos, '<' )) {
+      
+      if (FFRemainingLength(*p_line_sip, *p_line_pos) < markup_size) {
+        *p_line_sip = break_sip;
+        *p_line_pos = break_pos;
+        return FALSE;
+      }
+      for ( i=0; i < markup_size; ++i ) {
+        if (buf_markup_open[i] != toupper( FFCharAt( *p_line_sip, (*p_line_pos)+i )))
+          break;
+      }
+      if ( i == markup_size ) {
+        if (buf_open_link != 0) {
+          char ch = FFCharAt( *p_line_sip, *p_line_pos );
+          for (i=0; '>' != (buf_open_link[i] = FFCharAt( *p_line_sip, *p_line_pos )); ++i)
+            ++(*p_line_pos);
+          buf_open_link[i+1] = 0;
+        } else {
+          *p_line_pos += markup_size;
+        }
+
+        return TRUE;
+      } else {
+        ++(*p_line_pos);
+      }
+    }
+  }      
+  return FALSE;
+}
+
+/*
+ * Scans the given line for the next closing tag of an HTML hyperlink. Ajusts 
+ * the line position to immediately after the closing tag (if such a tag is 
+ * found) or the the end of the line (if no such tag is found).
+ *
+ *  *p_line_sip:    in: points to the string buffer where the scan should start
+ *                  out: points to the string buffer where the scan ended
+ *  *p_line_pos:    in: position in **p_start_sip where the scan should start
+ *                  out: position in **p_start_sip where the scan ended
+ *  break_sip:      buffer that contain the line break
+ *  break_pos:      position in break_sip that represents the line break
+ */
+NLM_EXTERN Boolean FFExtractNextCloseLink(
+  StringItemPtr* p_line_sip,
+  Int4* p_line_pos,
+  StringItemPtr break_sip,
+  Int4 break_pos )
+{
+  int i;
+
+  const char* buf_close_link = "</A>";
+  const int markup_close_size = strlen(buf_close_link);
+
+   while ((*p_line_sip != break_sip) || (*p_line_pos < break_pos)) {
+
+    if (FFFindSingleChar(p_line_sip, p_line_pos, break_sip, break_pos, '<' )) {
+      if (FFRemainingLength(*p_line_sip, *p_line_pos) < markup_close_size) {
+        *p_line_sip = break_sip;
+        *p_line_pos = break_pos;
+        return FALSE;
+      }
+      for ( i=0; i < markup_close_size; ++i ) {
+        if (buf_close_link[i] != toupper(FFCharAt( *p_line_sip, (*p_line_pos)+i)))
+          break;
+      }
+      if (i == markup_close_size) {
+          (*p_line_pos) += markup_close_size;
+        return TRUE;
+      } else {
+        ++(*p_line_pos);
+      }
+    }
+  }      
+  return FALSE;
+}
+
+/*  
+ * Checks a given line whether its end falls between the opening and the closing
+ * tag of an HTML link.
+ *
+ *  start_sip:      string buffer where the given line starts,
+ *  start_pos:      position in start_sip where the given line starts,
+ *  break_sip:      string buffer where the given line ends,
+ *  break_pos:      position in break_pos where the given line ends,
+ *  buf_link_open:  optional buffer where the open tag of the split link will be
+ *                  written to. Leave =0 if you don't need this.
+ */
+NLM_EXTERN Boolean FFLineBreakSplitsHtmlLink( 
+  StringItemPtr start_sip, 
+  Int4 start_pos, 
+  StringItemPtr break_sip, 
+  Int4 break_pos,
+  char* buf_link_open ) 
+{
+  int open_count = 0;
+
+  StringItemPtr cur_iter=0;
+  int cur_pos=0;
+
+  if ( ! GetWWW((IntAsn2gbJobPtr)start_sip->iajp) )
+      return FALSE;
+  
+  cur_iter = start_sip;
+  cur_pos = start_pos;
+
+  while ((cur_iter != break_sip) || (cur_pos < break_pos)) {
+    switch(open_count) {
+    case 0:
+      if (FFExtractNextOpenLink(&cur_iter, &cur_pos, break_sip, break_pos, buf_link_open ))
+        ++open_count;
+      break;
+    case 1:
+      if (FFExtractNextCloseLink(&cur_iter, &cur_pos, break_sip, break_pos ))
+        --open_count;
+      break;
+    default:
+      break;
+    }
+  }
+  return (open_count);
+} /*FFLineBreakSplitsHtmlLink*/
+
 NLM_EXTERN void FFLineWrap (
   StringItemPtr dest, 
   StringItemPtr src, 
@@ -1062,7 +1276,7 @@ NLM_EXTERN void FFLineWrap (
   CharPtr eb_line_prefix
 )
 {
-  /* line break candidate is a pair <StringItepPtr, position> */
+  /* line break candidate is a pair <StringItemPtr, position> */
   StringItemPtr break_sip = src;
   Int4          break_pos = 0;
   StringItemPtr line_start = NULL;
@@ -1075,12 +1289,26 @@ NLM_EXTERN void FFLineWrap (
 
   for ( iter = src; iter != NULL; iter = iter->next ) {
     for ( i = 0; i < iter->pos; ) {
+
+      Boolean linebreak_splits_link = FALSE;
+      char buf_split_link_open[ 1024 ];
+      const char* buf_split_link_close = "</a>";
+      MemSet( (void*)buf_split_link_open, 0, sizeof(buf_split_link_open) );
+
       break_pos = i;
       break_sip = iter;
 
-      FFCalculateLineBreak(&break_sip, &break_pos, init_indent, line_max - line_prefix_len + 1);
+      FFCalculateLineBreak(
+        &break_sip, &break_pos, init_indent, line_max - line_prefix_len + 1);
+      linebreak_splits_link = 
+        FFLineBreakSplitsHtmlLink(iter, i, break_sip, break_pos, 
+          buf_split_link_open);
       FFCatenateSubString(dest, iter, i, break_sip, break_pos);
       FFTrim(dest, line_start, line_pos, cont_indent);
+      if ( linebreak_splits_link ) {
+        FFAddOneString( dest, 
+          (char*)buf_split_link_close, FALSE, FALSE, TILDE_IGNORE );
+      }
       FFAddOneChar(dest, '\n', FALSE);
       
       FFSavePosition(dest, &line_start, &line_pos);
@@ -1118,6 +1346,9 @@ NLM_EXTERN void FFLineWrap (
           FFAddOneString(dest, eb_line_prefix, FALSE, FALSE, TILDE_IGNORE);
         }
         FFAddNChar(dest, ' ', cont_indent - StringLen(eb_line_prefix), FALSE);
+        if ( linebreak_splits_link ) {
+          FFAddOneString( dest, buf_split_link_open, FALSE, FALSE, TILDE_IGNORE );
+        }
         init_indent = 0;
         line_prefix_len = cont_indent;
         /*FFSkipGarbage(&iter, &i);*/
@@ -1175,7 +1406,6 @@ NLM_EXTERN void FFAddTextToString (
   }
 }
    
-
 NLM_EXTERN CharPtr FFEndPrint (
   IntAsn2gbJobPtr ajp,
   StringItemPtr ffstring,
@@ -1197,7 +1427,6 @@ NLM_EXTERN CharPtr FFEndPrint (
   } else {
     FFLineWrap(temp, ffstring, eb_init_indent, eb_cont_indent, ASN2FF_EMBL_MAX, eb_line_prefix);
   }
-
   result = FFToCharPtr(temp);
   FFRecycleString(ajp, temp);
   return result;
@@ -1216,7 +1445,8 @@ NLM_EXTERN Uint4 FFLength(StringItemPtr ffstring) {
 
 
 NLM_EXTERN Char FFCharAt(StringItemPtr ffstring, Uint4 pos) {
-  Uint4 count = 0, inbufpos;
+  Uint4 inbufpos = pos % STRING_BUF_LEN;
+  Uint4 count = 0;
   StringItemPtr current = NULL;
 
   inbufpos = pos % STRING_BUF_LEN;
@@ -1713,6 +1943,10 @@ NLM_EXTERN void DoOneSection (
   ValNodePtr           vnp;
   Boolean              wgsmaster = FALSE;
   Boolean              wgstech = FALSE;
+  Boolean              willshowwgs = FALSE;
+  Boolean              willshowgenome = FALSE;
+  Boolean              willshowcontig = FALSE;
+  Boolean              willshowsequence = FALSE;
 
   if (target == NULL || parent == NULL || bsp == NULL || awp == NULL) return;
   ajp = awp->ajp;
@@ -1757,6 +1991,8 @@ NLM_EXTERN void DoOneSection (
   awp->bsp = bsp;
   awp->refs = refs;
   awp->slp = slp;
+  (awp->sectionCount)++;
+  awp->currGi = 0;
   awp->seg = seg;
   awp->numsegs = numsegs;
   awp->from = from;
@@ -1841,6 +2077,8 @@ NLM_EXTERN void DoOneSection (
   for (sip = bsp->id; sip != NULL; sip = sip->next) {
     if (sip->choice == SEQID_OTHER) {
       isRefSeq = TRUE;
+    } else if (sip->choice == SEQID_GI) {
+      awp->currGi = (Int4) sip->data.intvalue;
     }
   }
 
@@ -1848,7 +2086,7 @@ NLM_EXTERN void DoOneSection (
 
   if (awp->format == FTABLE_FMT) {
     AddFeatHeaderBlock (awp);
-    if (awp->showRefs) {
+    if (awp->showFtableRefs) {
       AddReferenceBlock (awp, isRefSeq);
     }
     if (! awp->hideSources) {
@@ -1858,7 +2096,31 @@ NLM_EXTERN void DoOneSection (
 
   } else {
 
-    AddLocusBlock (awp);
+    if (wgsmaster && wgstech) {
+      willshowwgs = TRUE;
+    } else if (nsgenome) {
+      willshowgenome = TRUE;
+    } else if (contig) {
+      willshowcontig = TRUE;
+      if (awp->showContigAndSeq) {
+        if (! awp->hideSequence) {
+          willshowsequence = TRUE;
+        }
+      }
+    } else {
+      if (awp->showContigAndSeq) {
+        if (bsp->repr == Seq_repr_seg && (! SegHasParts (bsp))) {
+          willshowcontig = TRUE;
+        } else if (bsp->repr == Seq_repr_delta && (! DeltaLitOnly (bsp))) {
+          willshowcontig = TRUE;
+        }
+      }
+      if (! awp->hideSequence) {
+        willshowsequence = TRUE;
+      }
+    }
+
+    AddLocusBlock (awp, willshowwgs, willshowgenome, willshowcontig, willshowsequence);
 
     if (awp->format == GENBANK_FMT || awp->format == GENPEPT_FMT) {
 
@@ -1872,6 +2134,10 @@ NLM_EXTERN void DoOneSection (
       }
 
       AddVersionBlock (awp);
+
+      if (ISA_na (bsp->mol)) {
+        AddProjectBlock (awp);
+      }
 
       if (ISA_aa (bsp->mol)) {
         AddDbsourceBlock (awp);
@@ -1904,17 +2170,21 @@ NLM_EXTERN void DoOneSection (
     AddSourceBlock (awp);
     AddOrganismBlock (awp);
 
-    /* !!! RELEASE_MODE should check return value of AddReferenceBlock !!! */
+    if (! awp->hidePubs) {
 
-    hasRefs = AddReferenceBlock (awp, isRefSeq);
-    if (! hasRefs) {
-      if (ajp->flags.needAtLeastOneRef) {
-        /* RefSeq does not require a publication */
-        if (! isRefSeq) {
-          awp->failed = TRUE;
+      /* !!! RELEASE_MODE should check return value of AddReferenceBlock !!! */
+
+      hasRefs = AddReferenceBlock (awp, isRefSeq);
+      if (! hasRefs) {
+        if (ajp->flags.needAtLeastOneRef) {
+          /* RefSeq does not require a publication */
+          if (! isRefSeq) {
+            awp->failed = TRUE;
+          }
         }
       }
     }
+
     AddCommentBlock (awp);
     AddPrimaryBlock (awp);
 
@@ -1954,7 +2224,7 @@ NLM_EXTERN void DoOneSection (
       }
 
     } else {
- 
+
       AddFeatureBlock (awp);
 
       if (awp->showContigAndSeq) {
@@ -2375,8 +2645,295 @@ static void DoOneBioseqSet (
   VisitSequencesInSep (sep, (Pointer) awp, VISIT_MAINS, DoOneBioseq);
 }
 
+/* ********************************************************************** */
+
+static void RecordOneSection (
+  Asn2gbWorkPtr awp,
+  BioseqPtr bsp,
+  SeqIdPtr sip
+)
+
+{
+  IntAsn2gbJobPtr  ajp;
+  ValNodePtr       vnp;
+
+  if (awp == NULL) return;
+  ajp = awp->ajp;
+  if (ajp == NULL) return;
+
+  if (bsp != NULL) {
+    for (sip = bsp->id; sip != NULL; sip = sip->next) {
+      if (sip->choice == SEQID_GI) break;
+    }
+  }
+
+  if (sip == NULL) return;
+
+  if (sip->choice == SEQID_GI) {
+    vnp = ValNodeAddInt (&(ajp->gitail), 0, (Int4) sip->data.intvalue);
+    if (ajp->gihead == NULL) {
+      ajp->gihead = vnp;
+    }
+    ajp->gitail = vnp;
+  }
+
+  (awp->sectionMax)++;
+}
+
+static void CountOneSection (
+  BioseqPtr target,
+  BioseqPtr parent,
+  BioseqPtr bsp,
+  BioseqPtr refs,
+  SeqLocPtr slp,
+  Uint2 seg,
+  Int4 from,
+  Int4 to,
+  Boolean contig,
+  Boolean onePartOfSeg,
+  Asn2gbWorkPtr awp
+)
+
+{
+  IntAsn2gbJobPtr  ajp;
+  SeqIdPtr         sip;
+
+  if (target == NULL || parent == NULL || bsp == NULL || awp == NULL) return;
+  ajp = awp->ajp;
+  if (ajp == NULL) return;
+
+  if (awp->mode == RELEASE_MODE && awp->style == CONTIG_STYLE) {
+    if (bsp->repr == Seq_repr_seg) {
+    } else if (bsp->repr == Seq_repr_delta && (! DeltaLitOnly (bsp))) {
+    } else return;
+  }
+
+  if (ajp->flags.suppressLocalID) {
+    sip = SeqIdSelect (bsp->id, fasta_order, NUM_SEQID);
+    if (sip == NULL || sip->choice == SEQID_LOCAL) return;
+  }
+
+  RecordOneSection (awp, bsp, NULL);
+}
 
 
+static Boolean LIBCALLBACK Count2Seg (
+  SeqLocPtr slp,
+  SeqMgrSegmentContextPtr context
+)
+
+{
+  Asn2gbWorkPtr  awp;
+  BioseqPtr      bsp = NULL;
+  Int4           from;
+  SeqLocPtr      loc;
+  BioseqPtr      parent;
+  SeqIdPtr       sip;
+  Int4           to;
+
+  if (slp == NULL || context == NULL) return FALSE;
+  awp = (Asn2gbWorkPtr) context->userdata;
+
+  parent = context->parent;
+
+  from = context->cumOffset;
+  to = from + context->to - context->from;
+
+  sip = SeqLocId (slp);
+  if (sip == NULL) {
+    loc = SeqLocFindNext (slp, NULL);
+    if (loc != NULL) {
+      sip = SeqLocId (loc);
+    }
+  }
+  if (sip == NULL) return TRUE;
+
+  bsp = BioseqFindCore (sip);
+  if (bsp != NULL && bsp->repr == Seq_repr_virtual) return TRUE;
+
+  RecordOneSection (awp, NULL, sip);
+
+  return TRUE;
+}
+
+static void CountOneBioseq (
+  BioseqPtr bsp,
+  Pointer userdata
+)
+
+{
+  IntAsn2gbJobPtr       ajp;
+  Asn2gbWorkPtr         awp;
+  BioseqSetPtr          bssp;
+  SeqMgrSegmentContext  context;
+  Boolean               contig = FALSE;
+  Int4                  from;
+  BioseqPtr             parent;
+  Boolean               segmented = FALSE;
+  Int4                  to;
+
+  if (bsp == NULL) return;
+  awp = (Asn2gbWorkPtr) userdata;
+  if (awp == NULL) return;
+  ajp = awp->ajp;
+  if (ajp == NULL) return;
+
+  if (ISA_na (bsp->mol)) {
+    if (ajp->format == GENPEPT_FMT || ajp->format == EMBLPEPT_FMT) return;
+
+    if (ajp->format == FTABLE_FMT && ajp->skipMrnas) {
+      if (bsp->idx.parenttype == OBJ_BIOSEQSET) {
+        bssp = (BioseqSetPtr) bsp->idx.parentptr;
+        if (bssp != NULL && bssp->_class == BioseqseqSet_class_nuc_prot) {
+          if (bsp->idx.parenttype == OBJ_BIOSEQSET) {
+            bssp = (BioseqSetPtr) bsp->idx.parentptr;
+            if (bssp != NULL && bssp->_class == BioseqseqSet_class_gen_prod_set) {
+              return;
+            }
+          }
+        }
+      }
+    }
+
+  } else if (ISA_aa (bsp->mol)) {
+    if (ajp->format == GENBANK_FMT || ajp->format == EMBL_FMT) return;
+
+    if (ajp->format == FTABLE_FMT && ajp->skipProts) return;
+  }
+
+  if (awp->style == SEGMENT_STYLE) {
+    segmented = TRUE;
+  }
+  if (awp->style == CONTIG_STYLE) {
+    contig = TRUE;
+  }
+  if (awp->format == FTABLE_FMT) {
+      segmented = FALSE;
+      contig = FALSE;
+  }
+
+  if (bsp->repr == Seq_repr_seg && awp->style == NORMAL_STYLE) {
+
+    if (SegHasParts (bsp)) {
+      segmented = TRUE;
+      contig = FALSE;
+    } else {
+      segmented = FALSE;
+      contig = TRUE;
+    }
+  }
+  if (bsp->repr == Seq_repr_delta && awp->style == NORMAL_STYLE) {
+    if (! DeltaLitOnly (bsp)) {
+      contig = TRUE;
+    }
+  }
+
+  if (bsp->repr == Seq_repr_seg) {
+
+    if (segmented) {
+
+      SeqMgrExploreSegments (bsp, (Pointer) awp, Count2Seg);
+
+    } else {
+
+      parent = bsp;
+      from = 0;
+      to = bsp->length - 1;
+
+      CountOneSection (parent, parent, bsp, parent, ajp->ajp.slp, 0, from, to, contig, FALSE, awp);
+    }
+
+  } else if (bsp->repr == Seq_repr_raw ||
+             bsp->repr == Seq_repr_const ||
+             bsp->repr == Seq_repr_delta ||
+             bsp->repr == Seq_repr_virtual) {
+
+    parent = SeqMgrGetParentOfPart (bsp, &context);
+    if (parent != NULL) {
+
+      from = context.cumOffset;
+      to = from + context.to - context.from;
+
+      CountOneSection (bsp, parent, bsp, parent, ajp->ajp.slp, 0, from, to, contig, TRUE, awp);
+
+    } else {
+
+      parent = bsp;
+      from = 0;
+      to = bsp->length - 1;
+
+      CountOneSection (bsp, parent, bsp, parent, ajp->ajp.slp, 0, from, to, contig, FALSE, awp);
+    }
+  }
+}
+
+
+
+static void CountBioseqSetList (
+  SeqEntryPtr seq_set,
+  Asn2gbWorkPtr awp
+)
+
+{
+  BioseqSetPtr  bssp;
+  SeqEntryPtr   sep;
+
+  if (seq_set == NULL || awp == NULL) return;
+
+  for (sep = seq_set; sep != NULL; sep = sep->next) {
+
+    if (IS_Bioseq_set (sep)) {
+      bssp = (BioseqSetPtr) sep->data.ptrvalue;
+      if (bssp == NULL) continue;
+
+      if (bssp->_class == BioseqseqSet_class_genbank ||
+          bssp->_class == BioseqseqSet_class_mut_set ||
+          bssp->_class == BioseqseqSet_class_pop_set ||
+          bssp->_class == BioseqseqSet_class_phy_set ||
+          bssp->_class == BioseqseqSet_class_eco_set ||
+          bssp->_class == BioseqseqSet_class_wgs_set ||
+          bssp->_class == BioseqseqSet_class_gen_prod_set) {
+
+        CountBioseqSetList (bssp->seq_set, awp);
+
+        continue;
+      }
+    }
+
+    VisitSequencesInSep (sep, (Pointer) awp, VISIT_MAINS, CountOneBioseq);
+  }
+}
+
+static void CountOneBioseqSet (
+  SeqEntryPtr sep,
+  Asn2gbWorkPtr awp
+)
+
+{
+  BioseqSetPtr  bssp;
+
+  if (sep == NULL || awp == NULL) return;
+
+  if (IS_Bioseq_set (sep)) {
+    bssp = (BioseqSetPtr) sep->data.ptrvalue;
+    if (bssp == NULL) return;
+
+    if (bssp->_class == BioseqseqSet_class_genbank ||
+        bssp->_class == BioseqseqSet_class_mut_set ||
+        bssp->_class == BioseqseqSet_class_pop_set ||
+        bssp->_class == BioseqseqSet_class_phy_set ||
+        bssp->_class == BioseqseqSet_class_eco_set ||
+        bssp->_class == BioseqseqSet_class_wgs_set ||
+        bssp->_class == BioseqseqSet_class_gen_prod_set) {
+
+      CountBioseqSetList (bssp->seq_set, awp);
+
+      return;
+    }
+  }
+
+  VisitSequencesInSep (sep, (Pointer) awp, VISIT_MAINS, CountOneBioseq);
+}
 
 /* ********************************************************************** */
 
@@ -2546,6 +3103,7 @@ static void SetFlagsFromMode (
     if (IsSepRefseq (sep)) {
 
       ajp->flags.srcQualsToNote = FALSE;
+      ajp->flags.goQualsToNote = FALSE;
       ajp->flags.refSeqQualsToNote = FALSE;
 
       /* selenocysteine always a separate qualifier for RefSeq */
@@ -2576,6 +3134,8 @@ static void SetFlagsFromMode (
 
   if (ajp->refseqConventions) {
     ajp->flags.srcQualsToNote = FALSE;
+    ajp->flags.goQualsToNote = FALSE;
+    ajp->flags.refSeqQualsToNote = FALSE;
   }
 }
 
@@ -2621,6 +3181,7 @@ typedef struct lookforids {
   Boolean isNTorNW;
   Boolean isNC;
   Boolean isRefSeq;
+  Boolean isGeneral;
   Boolean isTPA;
   Boolean isTPG;
   Boolean isNuc;
@@ -2680,6 +3241,7 @@ static void LookForSeqIDs (BioseqPtr bsp, Pointer userdata)
         dbt = (DbtagPtr) sip->data.ptrvalue;
         if (dbt != NULL) {
           if (StringICmp (dbt->db, "TMSMART") != 0 && StringICmp (dbt->db, "BankIt") != 0) {
+            lfip->isGeneral = TRUE;
             lfip->isNonLocal = TRUE;
           }
         }
@@ -2701,6 +3263,7 @@ static void LookForGEDetc (
   BoolPtr isNTorNW,
   BoolPtr isNC,
   BoolPtr isRefSeq,
+  BoolPtr isGeneral,
   BoolPtr isTPA,
   BoolPtr isTPG,
   BoolPtr isNuc,
@@ -2718,6 +3281,7 @@ static void LookForGEDetc (
   *isNTorNW = lfi.isNTorNW;
   *isNC = lfi.isNC;
   *isRefSeq = lfi.isRefSeq;
+  *isGeneral = lfi.isGeneral;
   *isTPA = lfi.isTPA;
   *isTPG = lfi.isTPG;
   *isNuc = lfi.isNuc;
@@ -2816,7 +3380,7 @@ static CharPtr defTail = "\
 #define FAR_TRANS_MASK (SHOW_FAR_TRANSLATION | TRANSLATE_IF_NO_PRODUCT | ALWAYS_TRANSLATE_CDS)
 #define FEAT_FETCH_MASK (ONLY_NEAR_FEATURES | FAR_FEATURES_SUPPRESS | NEAR_FEATURES_SUPPRESS)
 #define HTML_XML_ASN_MASK (CREATE_HTML_FLATFILE | CREATE_XML_GBSEQ_FILE | CREATE_ASN_GBSEQ_FILE)
-#define PUBLICATION_MASK (HIDE_GENE_RIFS | ONLY_GENE_RIFS | ONLY_REVIEW_PUBS | NEWEST_PUBS | OLDEST_PUBS)
+#define PUBLICATION_MASK (HIDE_GENE_RIFS | ONLY_GENE_RIFS | ONLY_REVIEW_PUBS | NEWEST_PUBS | OLDEST_PUBS | HIDE_ALL_PUBS)
 
 static Asn2gbJobPtr asn2gnbk_setup_ex (
   BioseqPtr bsp,
@@ -2853,6 +3417,7 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
   IndxPtr          index = NULL;
   Boolean          isG;
   Boolean          isGED;
+  Boolean          isGeneral;
   Boolean          isNTorNW;
   Boolean          isNC;
   Boolean          isNuc;
@@ -2873,6 +3438,7 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
   Boolean          lookupFarOthers;
   Boolean          lookupFarProd;
   Boolean          missingVersion;
+  Int4             nextGi = 0;
   Boolean          noLeft;
   Boolean          noRight;
   Int4             numBlocks;
@@ -2883,6 +3449,7 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
   BaseBlockPtr     PNTR paragraphArray;
   BaseBlockPtr     PNTR paragraphByIDs;
   BioseqPtr        parent = NULL;
+  Int4             prevGi = 0;
   Pointer          remotedata = NULL;
   Asn2gbFreeFunc   remotefree = NULL;
   Asn2gbLockFunc   remotelock = NULL;
@@ -2920,6 +3487,8 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
     remotelock = extra->remotelock;
     remotefree = extra->remotefree;
     remotedata = extra->remotedata;
+    prevGi = extra->prevGi;
+    nextGi = extra->nextGi;
   }
 
   if (slp != NULL) {
@@ -2997,7 +3566,7 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
   sep = GetTopSeqEntryForEntityID (entityID);
 
   LookForGEDetc (sep, &isG, &isGED, &isNTorNW, &isNC, &isRefSeq,
-                 &isTPA, &isTPG, &isNuc, &isProt, &isOnlyLocal);
+                 &isGeneral, &isTPA, &isTPG, &isNuc, &isProt, &isOnlyLocal);
 
   if (mode == RELEASE_MODE) {
     missingVersion = FALSE;
@@ -3010,7 +3579,7 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
 
   gapvnp = NULL;
   if (format != FTABLE_FMT) {
-    if (isG || isTPG || isOnlyLocal || isRefSeq) {
+    if (isG || isTPG || isOnlyLocal || isRefSeq || (isGeneral && (! isGED))) {
       if ((Boolean) ((custom & HIDE_GAP_FEATS) == 0)) {
         VisitBioseqsInSep (sep, (Pointer) &gapvnp, MakeGapFeats);
       }
@@ -3127,10 +3696,21 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
 
   if (stream && (format == GENBANK_FMT || format == GENPEPT_FMT)) {
     ajp->specialGapFormat = (Boolean) ((flags & SPECIAL_GAP_DISPLAY) != 0);
+    if (is_html && mode == ENTREZ_MODE) {
+      ajp->specialGapFormat = TRUE;
+    }
+    if ((custom & EXPANDED_GAP_DISPLAY) != 0) {
+      ajp->specialGapFormat = FALSE;
+    }
   } else {
     ajp->specialGapFormat = FALSE;
   }
   ajp->seqGapCurrLen = 0;
+
+  ajp->gihead = NULL;
+  ajp->gitail = NULL;
+
+  ajp->hideGoTerms = (Boolean) ((custom & HIDE_GO_TERMS) != 0);
 
   if (format == GENBANK_FMT || format == GENPEPT_FMT) {
     ajp->newSourceOrg = TRUE;
@@ -3156,6 +3736,16 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
   aw.format = format;
   aw.mode = mode;
   aw.style = style;
+
+  /* sectionCount used for hyperlinks */
+
+  aw.sectionCount = 0;
+  aw.sectionMax = 0;
+  aw.gilistpos = NULL;
+
+  aw.currGi = 0;
+  aw.prevGi = prevGi;
+  aw.nextGi = nextGi;
 
   /* internal format pointer if writing at time of creation */
 
@@ -3234,8 +3824,9 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
   aw.onlyReviewPubs = (Boolean) ((custom & PUBLICATION_MASK) == ONLY_REVIEW_PUBS);
   aw.newestPubs = (Boolean) ((custom & PUBLICATION_MASK) == NEWEST_PUBS);
   aw.oldestPubs = (Boolean) ((custom & PUBLICATION_MASK) == OLDEST_PUBS);
+  aw.hidePubs = (Boolean) ((custom & PUBLICATION_MASK) == HIDE_ALL_PUBS);
 
-  aw.showRefs = (Boolean) ((custom & SHOW_FTABLE_REFS) != 0);
+  aw.showFtableRefs = (Boolean) ((custom & SHOW_FTABLE_REFS) != 0);
   aw.hideSources = (Boolean) ((custom & HIDE_SOURCE_FEATS) != 0);
   aw.hideGaps = (Boolean) ((custom & HIDE_GAP_FEATS) != 0);
   aw.hideSequence = (Boolean) ((custom & HIDE_SEQUENCE) != 0);
@@ -3304,6 +3895,20 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
     }
     if (ffwrite != NULL) {
       ffwrite (ffhead, userdata, HEAD_BLOCK);
+    }
+  }
+
+  /* if Web Entrez, set awp->sectionMax to decide when Next hyperlink is needed */
+
+  if (is_html && mode == ENTREZ_MODE && stream &&
+      (format == GENBANK_FMT || format == GENPEPT_FMT)) {
+     /* add dummy node as prev id for first section */
+     ajp->gihead = ValNodeAddInt (&(ajp->gitail), 0, (Int4) 0);
+     ajp->gitail = ajp->gihead;
+    if (bssp != NULL) {
+      CountOneBioseqSet (SeqMgrGetSeqEntryForData (bssp), &aw);
+    } else {
+      CountOneBioseq (bsp, &aw);
     }
   }
 
@@ -3451,16 +4056,34 @@ NLM_EXTERN CharPtr DefaultFormatBlock (
 
 typedef CharPtr (*FormatProc) (Asn2gbFormatPtr afp, BaseBlockPtr bbp);
 
-static FormatProc asn2gnbk_fmt_functions [27] = {
-  NULL, NULL,
-  DefaultFormatBlock, DefaultFormatBlock, DefaultFormatBlock,
-  DefaultFormatBlock, DefaultFormatBlock, DefaultFormatBlock,
-  DefaultFormatBlock, DefaultFormatBlock, DefaultFormatBlock,
-  FormatSourceBlock, FormatOrganismBlock, FormatReferenceBlock,
-  DefaultFormatBlock, FormatCommentBlock, FormatFeatHeaderBlock,
-  FormatSourceFeatBlock, FormatFeatureBlock, FormatBasecountBlock,
-  DefaultFormatBlock, FormatSequenceBlock, FormatContigBlock,
-  DefaultFormatBlock, DefaultFormatBlock, FormatSlashBlock,
+static FormatProc asn2gnbk_fmt_functions [28] = {
+  NULL,
+  NULL,
+  DefaultFormatBlock,
+  DefaultFormatBlock,
+  DefaultFormatBlock,
+  DefaultFormatBlock,
+  DefaultFormatBlock,
+  DefaultFormatBlock,
+  DefaultFormatBlock,
+  DefaultFormatBlock,
+  DefaultFormatBlock,
+  DefaultFormatBlock,
+  FormatSourceBlock,
+  FormatOrganismBlock,
+  FormatReferenceBlock,
+  DefaultFormatBlock,
+  FormatCommentBlock,
+  FormatFeatHeaderBlock,
+  FormatSourceFeatBlock,
+  FormatFeatureBlock,
+  FormatBasecountBlock,
+  DefaultFormatBlock,
+  FormatSequenceBlock,
+  FormatContigBlock,
+  DefaultFormatBlock,
+  DefaultFormatBlock,
+  FormatSlashBlock,
   NULL
 };
 
@@ -4695,6 +5318,24 @@ NLM_EXTERN void DoImmediateFormat (
   MemFree (qv);
 }
 
+NLM_EXTERN void DoQuickLinkFormat (
+  Asn2gbFormatPtr afp,
+  CharPtr str
+)
+
+{
+  if (afp == NULL || StringHasNoText (str)) return;
+
+  if (str != NULL) {
+    if (afp->fp != NULL) {
+      fprintf (afp->fp, "%s", str);
+    }
+    if (afp->ffwrite != NULL) {
+      afp->ffwrite (str, afp->userdata, (BlockType) 0);
+    }
+  }
+}
+
 NLM_EXTERN CharPtr asn2gnbk_format (
   Asn2gbJobPtr ajp,
   Int4 paragraph
@@ -4915,6 +5556,8 @@ NLM_EXTERN Asn2gbJobPtr asn2gnbk_cleanup (
       ValNodeFree (remotevnp);
     }
   }
+
+  ValNodeFree (iajp->gihead);
 
   free_buff ();
   FiniWWW (iajp);

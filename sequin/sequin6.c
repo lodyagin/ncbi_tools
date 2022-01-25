@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11/12/97
 *
-* $Revision: 6.226 $
+* $Revision: 6.234 $
 *
 * File Description: 
 *
@@ -5243,15 +5243,31 @@ static void RemOutTxt_AcceptCallback (ButtoN acceptButton)
     else
       cfp->subtype = (Int2) val;
   }
+  else
+  {
+    cfp->subtype = 0;
+  }
 
   if (cfp->type == IMPORT_FEAT_TYPE) {
     cfp->impfeat_type = GetValue (cfp->impfeat_select);
   }
+  else
+  {
+    cfp->impfeat_type = 0;
+  }
 
   /* Get the before (left) and after (right) strings */
 
-  cfp->leftstr = SaveStringFromTextNoStripSpaces (cfp->atleft);
-  cfp->rightstr = SaveStringFromTextNoStripSpaces (cfp->atright);
+  cfp->leftstr = MemFree (cfp->leftstr);
+  if (GetStatus (cfp->removeBefore))
+  {
+    cfp->leftstr = SaveStringFromTextNoStripSpaces (cfp->atleft);
+  }
+  cfp->rightstr = MemFree (cfp->rightstr);
+  if (GetStatus (cfp->removeAfter))
+  {
+    cfp->rightstr = SaveStringFromTextNoStripSpaces (cfp->atright);
+  }
 
   TrimOffEndQuotes (cfp->leftstr, TRIM_LEFT_END);
   TrimOffEndQuotes (cfp->rightstr, TRIM_RIGHT_END);
@@ -5259,7 +5275,7 @@ static void RemOutTxt_AcceptCallback (ButtoN acceptButton)
   /* Do actual work of removing text */
 
   SeqMgrExploreBioseqs (cfp->input_entityID, NULL, cfp,
-			RemOutTxt_DoBioseq, TRUE, TRUE, TRUE);
+			                  RemOutTxt_DoBioseq, TRUE, TRUE, TRUE);
 
   /* Clean up and exit */
 
@@ -6120,8 +6136,20 @@ static SeqFeatPtr ApplyGene (CharPtr str, ApplyFormPtr afp, SeqEntryPtr gene_sep
   Boolean           added_xrefs = FALSE;
   SeqFeatPtr        misc_feat = NULL;
   SeqLocPtr         overlap_loc;
+  CharPtr           gene_desc = NULL;
 
-  if (StringHasNoText (str) || afp == NULL || gene_sep == NULL) return NULL;
+  if (afp == NULL || gene_sep == NULL 
+	  || (StringHasNoText (str) 
+	      && (afp->feature_details_data == NULL 
+		      || StringHasNoText (afp->feature_details_data->geneDesc))))
+  {
+    return NULL;
+  }
+
+  if (afp != NULL && afp->feature_details_data != NULL)
+  {
+    gene_desc = afp->feature_details_data->geneDesc;
+  }
 
   /* we need a location to use when we're checking for feature-stealing genes */
   if (sfp != NULL)
@@ -6181,7 +6209,7 @@ static SeqFeatPtr ApplyGene (CharPtr str, ApplyFormPtr afp, SeqEntryPtr gene_sep
     DeleteMarkedObjects (0, OBJ_SEQENTRY, gene_sep);
   }
   
-  grp = CreateNewGeneRef (str, NULL, NULL, FALSE);
+  grp = CreateNewGeneRef (str, NULL, gene_desc, FALSE);
   if (NULL == grp)
     return NULL;
 
@@ -6308,7 +6336,6 @@ static Boolean GapInLocation (Int4 seq_offset, Int4 length, SeqLocPtr loc)
   return gap_in_location;
 }
 
-
 static SeqLocPtr RemoveGapsFromDeltaLocation (SeqLocPtr slp, BioseqPtr bsp)
 {
   DeltaSeqPtr dsp;
@@ -6316,7 +6343,7 @@ static SeqLocPtr RemoveGapsFromDeltaLocation (SeqLocPtr slp, BioseqPtr bsp)
   SeqLitPtr   slip;
   SeqLocPtr   far_loc;
   SeqLocPtr   loc_list = NULL, prev_loc = NULL;
-  SeqIdPtr    sip;
+  SeqIdPtr    sip, before_sip, after_sip;
   Boolean     changed, partial5, partial3;
   SeqLocPtr   before = NULL, after = NULL;
 
@@ -6361,13 +6388,32 @@ static SeqLocPtr RemoveGapsFromDeltaLocation (SeqLocPtr slp, BioseqPtr bsp)
           && slip->fuzz != NULL 
           && GapInLocation (seq_offset, slip->length, before))
       {
+        /* we make a copy of the original location */
         after = SeqLocCopy (before);
-        after = SeqLocDeleteEx (after, SeqLocId (after),
+        
+        /* note - we need to use duplicates of the SeqID returned by
+         * SeqLocId, just in case the first location in a mixed location 
+         * is deleted, which would free the result from SeqLocId 
+         */
+        after_sip = SeqIdDup (SeqLocId (after));
+        before_sip = SeqIdDup (SeqLocId (before));
+        /* in the "after" location, we free everything before the 
+         * end of the gap.
+         */
+        after = SeqLocDeleteEx (after, after_sip,
                           0, seq_offset + slip->length - 1,
                           FALSE, &changed, &partial5, &partial3);
-        before = SeqLocDeleteEx (before, SeqLocId (before), 
+        /* in the "before" location, we free everything after the
+         * beginning of the gap.
+         */
+        before = SeqLocDeleteEx (before, before_sip, 
                           seq_offset, bsp->length,
                           FALSE, &changed, &partial5, &partial3);
+        
+        /* we're done with these IDs now */                  
+        after_sip = SeqIdFree (after_sip);
+        before_sip = SeqIdFree (before_sip);                          
+                          
         if (before == NULL)
         {
           if (prev_loc == NULL)
@@ -6437,7 +6483,6 @@ static void AdjustFrame (SeqFeatPtr sfp, BioseqPtr oldprot)
   CdRegionPtr  crp;
   CharPtr      oldprot_str, newprot_str;
   Uint1        orig_frame, best_frame = 0;
-  Int4         best_len = 0;
   
   if (sfp == NULL || sfp->data.choice != SEQFEAT_CDREGION
       || sfp->data.value.ptrvalue == NULL
@@ -6704,6 +6749,338 @@ extern void AdjustCDSLocationsForGaps (IteM i)
   SeqEntrySetScope (oldscope);
 }
 
+static ValNodePtr GapLocationsFromNs (BioseqPtr bsp, Int4Ptr gap_sizes)
+
+{
+  CharPtr     bases, str, txt;
+  Char        ch;
+  Int4        len;
+  ValNodePtr  seq_ext;
+  Boolean     unknown_greater_than_or_equal = FALSE;
+  Boolean     known_greater_than_or_equal = FALSE;
+  Int4        unknown_gap_size = 0;
+  Int4        known_gap_size = 0;
+  Int4        gap_len;
+  Boolean     make_unknown_size;
+  GapLocInfoPtr glip;
+  ValNodePtr  result_list = NULL;
+  Int4        start_pos = 0;
+  
+
+  if (bsp == NULL || bsp->repr != Seq_repr_raw || ISA_aa (bsp->mol)) 
+  {
+    return NULL;
+  }
+  
+  if (gap_sizes == NULL)
+  {
+    known_greater_than_or_equal = TRUE;
+  }
+  else
+  {
+    unknown_gap_size = gap_sizes[0];
+    known_gap_size = gap_sizes[1];
+    if (unknown_gap_size < 0)
+    {
+      unknown_greater_than_or_equal = TRUE;
+      unknown_gap_size = 0 - unknown_gap_size;
+    }
+    if (known_gap_size < 0)
+    {
+      known_greater_than_or_equal = TRUE;
+      known_gap_size = 0 - known_gap_size;
+    }
+  }
+
+  bases = GetSequenceByBsp (bsp);
+  if (bases == NULL) return NULL;
+
+  for (txt = bases, ch = *txt; ch != '\0'; txt++, ch = *txt) {
+    if (ch == 'N') break;
+  }
+  if (ch != 'N') {
+    MemFree (bases);
+    return NULL;
+  }
+
+  seq_ext = NULL;
+  len = 0;
+
+  txt = bases;
+  ch = *txt;
+
+  while (ch != '\0') {
+
+    str = txt;
+    gap_len = 0;
+    while (ch != 'N' && ch != '\0') {
+      txt++;
+      start_pos++;
+      ch = *txt;
+      if (ch == 'N')
+      {
+        gap_len = StringSpn (txt, "N");
+        if (gap_len == unknown_gap_size
+          || (gap_len > unknown_gap_size && unknown_greater_than_or_equal)
+          || gap_len == known_gap_size
+          || (gap_len > known_gap_size && known_greater_than_or_equal))
+        {
+          make_unknown_size = FALSE;
+          if (gap_len == 0)
+          {
+            make_unknown_size = FALSE;
+          }
+          else if (gap_len == unknown_gap_size)
+          {
+            make_unknown_size = TRUE;
+          }
+          else if (gap_len == known_gap_size)
+          {
+            make_unknown_size = FALSE;
+          }
+          else if (gap_len > unknown_gap_size && unknown_greater_than_or_equal)
+          {
+            if (!known_greater_than_or_equal)
+            {
+            	make_unknown_size = TRUE;
+            }
+            else if (unknown_gap_size > known_gap_size)
+            {
+            	make_unknown_size = TRUE;
+            }
+            else if (gap_len < known_gap_size)
+            {
+            	make_unknown_size = TRUE;
+            }
+          }
+        
+          /* Add Location to List */
+          glip = (GapLocInfoPtr) MemNew (sizeof (GapLocInfoData));
+          if (glip != NULL)
+          {
+            glip->start_pos = start_pos;
+            glip->is_known = ! make_unknown_size;
+            glip->length = gap_len;
+            glip->replace = TRUE;
+            ValNodeAddPointer (&result_list, 0, glip);
+          }
+        }
+        txt += gap_len;
+        start_pos += gap_len;
+        ch = *txt;
+        gap_len = 0;
+      }
+    }    
+  }
+  
+  MemFree (bases);
+  return result_list;
+}
+
+static SeqLocPtr 
+RemoveGapLocationsFromSeqLoc 
+(SeqLocPtr slp, 
+ ValNodePtr gap_locs, 
+ BioseqPtr bsp)
+{
+  ValNodePtr    gap_vnp;
+  GapLocInfoPtr glip;
+  SeqLocPtr   loc_list = NULL, prev_loc = NULL;
+  SeqIdPtr    sip, before_sip, after_sip;
+  Boolean     changed, partial5, partial3;
+  SeqLocPtr   before = NULL, after = NULL;
+
+  if (slp == NULL || gap_locs == NULL || bsp == NULL)
+  {
+    return slp;
+  }
+  
+  sip = SeqLocId (slp);
+  if (sip == NULL)
+  {
+    return slp;
+  }
+  
+  CheckSeqLocForPartial (slp, &partial5, &partial3);
+  
+  before = SeqLocCopy (slp);
+  loc_list = before;
+  
+  for (gap_vnp = gap_locs;
+       gap_vnp != NULL;
+       gap_vnp = gap_vnp->next)
+  {
+    glip = (GapLocInfoPtr) gap_vnp->data.ptrvalue;
+    if (glip == NULL || glip->is_known)
+    {
+      continue;
+    }
+    if (GapInLocation (glip->start_pos, glip->length, before))
+    {
+      /* we make a copy of the original location */
+      after = SeqLocCopy (before);
+      
+      /* note - we need to use duplicates of the SeqID returned by
+       * SeqLocId, just in case the first location in a mixed location 
+       * is deleted, which would free the result from SeqLocId 
+       */
+      after_sip = SeqIdDup (SeqLocId (after));
+      before_sip = SeqIdDup (SeqLocId (before));
+      /* in the "after" location, we free everything before the 
+       * end of the gap.
+       */
+      after = SeqLocDeleteEx (after, after_sip,
+                              0, glip->start_pos + glip->length - 1,
+                              FALSE, &changed, &partial5, &partial3);
+                              
+      /* in the "before" location, we free everything after the
+       * beginning of the gap.
+       */
+      before = SeqLocDeleteEx (before, before_sip, 
+                               glip->start_pos, bsp->length,
+                               FALSE, &changed, &partial5, &partial3);
+        
+      /* we're done with these IDs now */                  
+      after_sip = SeqIdFree (after_sip);
+      before_sip = SeqIdFree (before_sip);                          
+                          
+      if (before == NULL)
+      {
+        if (prev_loc == NULL)
+        {
+          loc_list = after;
+        }
+        else
+        {
+          prev_loc->next = after;
+        }
+      }
+      else
+      {
+        before->next = after;
+        prev_loc = before;
+      }        
+      before = after;
+    }
+  }
+
+  slp = SeqLocFree (slp);
+  return loc_list;  
+}
+
+static void AdjustCodingRegionLocationsForGapLocations (BioseqPtr bsp, ValNodePtr gap_list)
+{
+  SeqFeatPtr        sfp;
+  SeqMgrFeatContext fcontext;
+  BioseqPtr         protbsp = NULL, new_protbsp;
+  SeqFeatPtr        new_sfp;
+  CdRegionPtr       crp;
+  Boolean           partial5, partial3;
+  Uint2             entityID;
+  
+  if (bsp == NULL || gap_list == NULL)
+  {
+    return;
+  }
+  
+  entityID = bsp->idx.entityID;
+  
+  for (sfp = SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_CDREGION, 0, &fcontext);
+       sfp != NULL;
+       sfp = SeqMgrGetNextFeature (bsp, sfp, SEQFEAT_CDREGION, 0, &fcontext))
+  {
+    CheckSeqLocForPartial (sfp->location, &partial5, &partial3);
+    sfp->location = RemoveGapLocationsFromSeqLoc (sfp->location, gap_list, bsp);
+   
+    while (sfp->location->next != NULL)
+    {
+      new_sfp = CreateNewFeatureOnBioseq (bsp, SEQFEAT_CDREGION, NULL);
+		  if (new_sfp != NULL)
+		  {
+		    /* create copy of coding region data */
+		    crp = (CdRegionPtr) AsnIoMemCopy ((CdRegionPtr) sfp->data.value.ptrvalue,
+		                                       (AsnReadFunc) CdRegionAsnRead,
+		                                       (AsnWriteFunc) CdRegionAsnWrite);
+        new_sfp->data.value.ptrvalue = crp;
+        new_sfp->location = sfp->location->next;
+
+        protbsp = BioseqFindFromSeqLoc (sfp->product);        
+        if (protbsp != NULL)
+        {
+          new_protbsp = AddProteinSequenceCopy (protbsp, bsp, new_sfp, entityID);                                                  
+        }
+        
+        /* still to do:
+         * adjust frame to match prior protein
+         */
+      
+        sfp->location->next = NULL;
+        
+        /* fix partials */
+        SetSeqLocPartial (sfp->location, partial5, TRUE);
+        sfp->partial = TRUE;
+        
+        /* adjust frame */
+        AdjustFrame (sfp, protbsp);
+
+        /* retranslate coding region */
+        SeqEdTranslateOneCDS (sfp, bsp, entityID);
+        
+        /* set partials on product */
+        if (protbsp == NULL)
+        {
+          protbsp = BioseqFindFromSeqLoc (sfp->product);
+        }
+        SetProductSequencePartials (protbsp, partial5, partial3);
+
+        partial5 = TRUE;
+        sfp = new_sfp;
+        protbsp = new_protbsp;
+		  }
+		  else
+		  {
+		    return; /* bail */
+		  }
+    }
+    /* fix partials for last feature */
+    SetSeqLocPartial (sfp->location, partial5, partial3);
+    sfp->partial = partial5 || partial3;
+    
+    /* adjust frame */
+    AdjustFrame (sfp, protbsp);
+
+    /* retranslate coding region */
+    SeqEdTranslateOneCDS (sfp, bsp, entityID);
+    /* set partials on product */
+    if (protbsp == NULL)
+    {
+      protbsp = BioseqFindFromSeqLoc (sfp->product);
+    }
+    SetProductSequencePartials (protbsp, partial5, partial3);
+  }
+}
+
+extern void 
+PrepareCodingRegionLocationsForDeltaConversionCallback
+(BioseqPtr bsp, Pointer userdata)
+{
+  Int4Ptr gap_sizes;
+  ValNodePtr gap_locations;
+  
+  if (bsp == NULL)
+  {
+    return;
+  }
+  
+  gap_sizes = (Int4Ptr) userdata;
+  
+  gap_locations = GapLocationsFromNs (bsp, gap_sizes);
+  
+  AdjustCodingRegionLocationsForGapLocations (bsp, gap_locations);
+  
+  gap_locations = ValNodeFreeData (gap_locations);
+}
+
 /*---------------------------------------------------------------------*/
 /*                                                                     */
 /* Apply_AddCDS () --                                                  */
@@ -6776,8 +7153,6 @@ static void Apply_AddCDS (Uint2        entityID,
   /* adjust the location of the new feature */
   SetApplyFeatureLocation (sfp, afp);
   
-  sfp->location = RemoveGapsFromLocation (sfp->location);
-
   /* Fill in the fields of the new CDS feature */
   if (afp->feature_details_data->reading_frame < 1 
       || afp->feature_details_data->reading_frame > 3)
@@ -6930,6 +7305,10 @@ static void Apply_AddCDS (Uint2        entityID,
       prot_sfp->partial = (afp->noLeft || afp->noRight);
     }
   }
+  
+  /* after the feature has been created, then adjust it for gaps */
+  /* Note - this step may result in multiple coding regions being created. */
+  AdjustCDSLocationsForGapsCallback (sfp, NULL);
 
   /* Create a Gene ref feature on the nuc seq or segment */
   /* we can only create a feature where the sep->choice is 1 */
@@ -7207,7 +7586,8 @@ static void RealApplyBioFeatToAll (Uint2        entityID,
         }
       }
     }
-    if (! StringHasNoText (afp->feature_details_data->geneName)) 
+    if (! StringHasNoText (afp->feature_details_data->geneName) 
+		|| ! StringHasNoText (afp->feature_details_data->geneDesc)) 
     {
       if (entityID > 0 
           && suppressDups
@@ -11590,6 +11970,7 @@ static Boolean ParseHelpFile (HelpFormPtr hfp, Boolean printPath)
 {
   Char          ch;
   Uint1         choice;
+  FileCache     fc;
   FILE          *fp;
   Boolean       goOn;
   Char          heading [64];
@@ -11601,7 +11982,7 @@ static Boolean ParseHelpFile (HelpFormPtr hfp, Boolean printPath)
   Char          path [PATH_MAX];
   CharPtr       ptr;
   Char          section [64];
-  Char          str [256];
+  Char          str [512];
   ValNodePtr    vnp;
 
   if (hfp == NULL || hfp->doc == NULL) return FALSE;
@@ -11640,7 +12021,8 @@ static Boolean ParseHelpFile (HelpFormPtr hfp, Boolean printPath)
     heading [0] = '\0';
     section [0] = '\0';
     inTable = FALSE;
-    goOn = (FileGets (str, sizeof (str), fp) != NULL);
+    if (! FileCacheSetup (&fc, fp)) return FALSE;
+    goOn = (FileCacheGetString (&fc, str, sizeof (str)) != NULL);
     while (goOn) {
       ptr = str;
       ch = *ptr;
@@ -11748,7 +12130,7 @@ static Boolean ParseHelpFile (HelpFormPtr hfp, Boolean printPath)
           }
         }
       }
-      goOn = (Boolean) (goOn && (FileGets (str, sizeof (str), fp) != NULL));
+      goOn = (Boolean) (goOn && (FileCacheGetString (&fc, str, sizeof (str)) != NULL));
     }
     if (list != NULL) {
       ptr = MergeValNodeStrings (list, inTable);
@@ -12331,5 +12713,162 @@ extern void SendHelpScrollMessage (ForM f, CharPtr heading, CharPtr section)
       vnp = vnp->next;
     }
   }
+}
+
+typedef struct applycdsframe 
+{
+  FEATURE_FORM_BLOCK
+  DialoG constraint;
+  PopuP  current_frame_popup;
+  PopuP  new_frame_popup;
+  ButtoN retranslate_btn;
+  
+  Int4 current_frame_flag;
+  Int4 new_frame;
+  Boolean retranslate_flag;
+  
+} ApplyCDSFrameData, PNTR ApplyCDSFramePtr;
+
+static void ApplyCDSFrameProc (SeqFeatPtr sfp, Pointer userdata, FilterSetPtr fsp)
+{
+  CdRegionPtr       crp;
+  ApplyCDSFramePtr acfp;
+  
+  if (sfp == NULL || sfp->data.choice != SEQFEAT_CDREGION || userdata == NULL)
+  {
+    return;
+  }
+  
+  acfp = (ApplyCDSFramePtr) userdata;
+  
+  crp = (CdRegionPtr) sfp->data.value.ptrvalue;
+  if (crp == NULL)
+  {
+    crp = CdRegionNew ();
+    sfp->data.value.ptrvalue = crp;
+  }
+  
+  if (acfp->current_frame_flag == 4 || crp->frame == acfp->current_frame_flag)
+  {
+    crp->frame = acfp->new_frame;
+    if (acfp->retranslate_flag)
+    {
+      RetranslateOneCDS (sfp, acfp->input_entityID, TRUE, FALSE);
+    }
+  }
+}
+
+static void DoApplyCDSFrame (ButtoN b)
+{
+  ApplyCDSFramePtr acfp;
+  FilterSetPtr     fsp;
+  SeqEntryPtr      sep;
+  
+  acfp = (ApplyCDSFramePtr) GetObjectExtra (b);
+  if (acfp == NULL)
+  {
+    return;
+  }
+  
+  sep = GetTopSeqEntryForEntityID (acfp->input_entityID);
+  if (sep == NULL)
+  {
+    return;
+  }
+  
+  WatchCursor ();
+  Update ();
+  
+  fsp = (FilterSetPtr) DialogToPointer (acfp->constraint);
+  
+  acfp->current_frame_flag = GetValue (acfp->current_frame_popup);
+  acfp->new_frame = GetValue (acfp->new_frame_popup);
+  acfp->retranslate_flag = GetStatus (acfp->retranslate_btn);
+  
+  OperateOnSeqEntryConstrainedObjects (sep, fsp, ApplyCDSFrameProc, NULL,
+                                       SEQFEAT_CDREGION, 0, 0, acfp);
+
+
+  fsp = FilterSetFree (fsp);
+
+  ArrowCursor ();
+  Update ();
+  ObjMgrSetDirtyFlag (acfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, acfp->input_entityID, 0, 0);  
+  Remove (acfp->form);
+}
+
+extern void ApplyCDSFrame (IteM i)
+{
+  BaseFormPtr        bfp;
+  GrouP              g, h, c;
+  ApplyCDSFramePtr   acfp;
+  WindoW             w;
+  ButtoN             b;
+
+  /* Get current sequence */
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL)
+    return;
+  
+  acfp = (ApplyCDSFramePtr) MemNew (sizeof (ApplyCDSFrameData));
+  if (acfp == NULL)
+  {
+    return;
+  }
+
+  w = FixedWindow (-50, -33, -20, -10, "Apply CDS Frame",	StdCloseWindowProc);
+  SetObjectExtra (w, acfp, StdCleanupFormProc);
+  acfp->form = (ForM) w;
+
+  acfp->input_entityID = bfp->input_entityID;
+  acfp->input_itemID = bfp->input_itemID;
+
+  g = HiddenGroup (w, -1, 0, NULL);
+  SetGroupSpacing (g, 10, 10);
+
+  h = HiddenGroup (g, 2, 0, NULL);
+  SetGroupSpacing (h, 10, 10);
+  StaticPrompt (h, "Set Coding Region frame to:", 0, dialogTextHeight,
+                programFont, 'l');
+  acfp->new_frame_popup = PopupList (h, TRUE, NULL);
+  PopupItem (acfp->new_frame_popup, "1");
+  PopupItem (acfp->new_frame_popup, "2");
+  PopupItem (acfp->new_frame_popup, "3");
+  SetValue (acfp->new_frame_popup, 1);
+
+  StaticPrompt (h, "Where Coding Region frame is:", 0, dialogTextHeight,
+                programFont, 'l');
+  acfp->current_frame_popup = PopupList (h, TRUE, NULL);
+  PopupItem (acfp->current_frame_popup, "1");
+  PopupItem (acfp->current_frame_popup, "2");
+  PopupItem (acfp->current_frame_popup, "3");
+  PopupItem (acfp->current_frame_popup, "Any frame");
+  
+  SetValue (acfp->current_frame_popup, 4);
+  
+  acfp->constraint = FilterGroup (g, TRUE, FALSE, FALSE, FALSE, "Where coding region");
+
+  acfp->retranslate_btn = CheckBox (g, "Retranslate adjusted coding regions", NULL);
+  SetStatus (acfp->retranslate_btn, TRUE);
+  
+  c = HiddenGroup (g, 2, 0, NULL);
+  b = DefaultButton(c, "Accept", DoApplyCDSFrame);
+  SetObjectExtra(b, acfp, NULL);
+  PushButton (c, "Cancel", StdCancelButtonProc);
+
+  AlignObjects (ALIGN_CENTER, (HANDLE) h, 
+                              (HANDLE) acfp->constraint,
+                              (HANDLE) acfp->retranslate_btn,
+                              (HANDLE) c, NULL);
+  RealizeWindow(w);
+  Show(w);
+  Update();
+  
 }
 

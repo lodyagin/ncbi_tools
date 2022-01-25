@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/7/91
 *
-* $Revision: 6.38 $
+* $Revision: 6.43 $
 *
 * File Description:
 *       portable environment functions, companions for ncbimain.c
@@ -37,6 +37,21 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ncbienv.c,v $
+* Revision 6.43  2005/12/02 13:40:00  rsmith
+* In ProgramPath on Mac use case-insensitive compare to check the file extension.
+*
+* Revision 6.42  2005/12/01 19:52:19  rsmith
+* Change impl of Mac's Nlm_ProgramPath_ST to only use CoreFoundation calls.
+*
+* Revision 6.41  2005/11/28 21:04:25  rsmith
+* Don't need to call GetProcess in Mac's ProgramPath
+*
+* Revision 6.40  2005/11/22 20:53:19  rsmith
+* Nlm_ProgramPath on Mac always return path to the .app bundle.
+*
+* Revision 6.39  2005/11/16 16:36:11  kans
+* support for PowerPC and Intel chips for Macintosh
+*
 * Revision 6.38  2004/10/27 20:00:44  kans
 * Ncbienv_FileOpen suppresses missing file error post
 *
@@ -1935,24 +1950,37 @@ static Nlm_Boolean Nlm_SetupArguments_ST_Mac(void)
 }
 
 #if defined(OS_UNIX_DARWIN)
-#ifndef __GNUC__
-/* At least in 10.1, this seems to introduce an unwanted dep. on Carbon. */
+/* this requires the CoreFoundation framework, but nothing more. */
 static void Nlm_ProgramPath_ST(Nlm_Char* appPath, size_t pathSize)
 {
-    OSErr               err;
-    ProcessSerialNumber psn;
-    
-    if (appPath != NULL) {
-        FSRef       fsRef;
-        appPath[0] = '\0';
-        GetCurrentProcess (&psn);
-        err = GetProcessBundleLocation (&psn, &fsRef);
-        if (err == noErr) {
-            FSRefMakePath (&fsRef, (UInt8 *) appPath, pathSize);
-        }
-    }
+  CFBundleRef thisBundle;
+  CFURLRef    thisURL;
+  int        pathsuffix_pos;
+  static const char* appsuffix = ".app";
+  
+  thisBundle = CFBundleGetMainBundle();
+  if (thisBundle == NULL) 
+    return;
+
+  thisURL = CFBundleCopyBundleURL(thisBundle);
+  if (thisURL == NULL) return;
+  if (!CFURLGetFileSystemRepresentation( thisURL, true, (UInt8 *) appPath, pathSize)) {
+        return;
+  }
+  /* Does this path end with the .app suffix? */
+  pathsuffix_pos = strlen(appPath) - strlen(appsuffix);
+  if (pathsuffix_pos > 0  &&  
+      0 == Nlm_StrICmp(appPath + pathsuffix_pos, appsuffix) ) {        
+      /* this is a bundled app. */
+      return;
+  }
+
+  /* this is not a bundled app. The above got me my directory. */
+  thisURL = CFBundleCopyExecutableURL(thisBundle);
+  if (thisURL == NULL) 
+    return;
+  CFURLGetFileSystemRepresentation( thisURL, true, (UInt8 *) appPath, pathSize);
 }
-#endif
 
 /*
   is the application at filePath actually a application bundle/package?
@@ -2026,7 +2054,7 @@ static void Nlm_ProgramPath_ST(Nlm_Char* buf, size_t maxsize)
 #endif  /* OS_MSWIN || OS_VMS */
 
 
-#if defined(OS_UNIX)  &&  (defined(__GNUC__)  ||  !defined(OS_UNIX_DARWIN))
+#if defined(OS_UNIX)  &&  !defined(OS_UNIX_DARWIN)
 static void Nlm_ProgramPath_ST(Nlm_Char* buf, size_t maxsize)
 {
   Nlm_Char     path [PATH_MAX];
@@ -2391,9 +2419,19 @@ NLM_EXTERN Nlm_CharPtr Nlm_GetOpSysString (void)
 #ifdef OS_UNIX
   /* initial nonspecific UNIX string */
   str = "UNIX";
+
 #ifdef OS_UNIX_DARWIN
+#ifdef PROC_PPC
+  str = "MAC PPC on OS X";
+#else
+#ifdef PROC_I80X86
+  str = "MAC 386 on OS X";
+#else
   str = "MAC UNIX on OS X";
 #endif
+#endif
+#endif
+
 #ifdef OS_UNIX_SYSV
   str = "SYSV UNIX";
 #endif

@@ -29,6 +29,12 @@
 * Version Creation Date:   1/27/96
 *
 * $Log: salstruc.c,v $
+* Revision 6.15  2005/11/22 21:56:23  bollin
+* made function for deleting locations from alignments extern
+*
+* Revision 6.14  2005/09/16 17:12:13  bollin
+* if adjusting an alignment by removing portions, need to reindex the alignment.
+*
 * Revision 6.13  2005/06/10 20:37:26  kans
 * hydrogenosome uses mitochondrial genetic code
 *
@@ -373,7 +379,7 @@
 #include <gather.h>
 #include <satutil.h>
 #include <sqnutils.h>
-
+#include <alignmgr2.h>
 
 
 NLM_EXTERN SelStructPtr BufferFree (SelStructPtr ssp)
@@ -1969,7 +1975,7 @@ NLM_EXTERN Boolean read_buffer_fromalignnode (EditAlignDataPtr adp, ValNodePtr *
 ***   providing TopSeqEntry sep allows to modify the SeqAlign if any
 ***
 ***********************************/
-static void SeqAlignDeleteByLocCallback (SeqEntryPtr sep, Pointer mydata,
+NLM_EXTERN void SeqAlignDeleteByLocCallback (SeqEntryPtr sep, Pointer mydata,
                                           Int4 index, Int2 indent)
 {
   BioseqPtr          bsp;
@@ -1986,7 +1992,14 @@ static void SeqAlignDeleteByLocCallback (SeqEntryPtr sep, Pointer mydata,
            salp = is_salp_in_sap (bsp->annot, 2);
            if (salp!=NULL) {
               for (salptmp=salp; salptmp!=NULL; salptmp=salptmp->next)
+              {
                  salptmp = SeqAlignDeleteByLoc  (slp, salptmp);
+                 if (salptmp != NULL)
+                 {
+                     salptmp->saip = SeqAlignIndexFree (salptmp->saip);
+                     AlnMgr2IndexSeqAlign (salptmp);
+                 }
+              }
            }
         }
      }
@@ -1996,7 +2009,14 @@ static void SeqAlignDeleteByLocCallback (SeqEntryPtr sep, Pointer mydata,
            salp = is_salp_in_sap (bssp->annot, 2);
            if (salp!=NULL) {
               for (salptmp=salp; salptmp!=NULL; salptmp=salptmp->next)
+              {
                  salptmp = SeqAlignDeleteByLoc  (slp, salptmp);
+                 if (salptmp != NULL)
+                 {
+                     salptmp->saip = SeqAlignIndexFree (salptmp->saip);
+                     AlnMgr2IndexSeqAlign (salptmp);
+                 }
+              }
            }
         }
      }

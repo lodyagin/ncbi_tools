@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.514 $
+* $Revision: 6.535 $
 *
 * File Description: 
 *
@@ -126,7 +126,7 @@ static char *time_of_compilation = "now";
 #include <Gestalt.h>
 #endif
 
-#define SEQ_APP_VER "5.53"
+#define SEQ_APP_VER "6.10"
 
 #ifndef CODECENTER
 static char* sequin_version_binary = "Sequin Indexer Services Version " SEQ_APP_VER " " __DATE__ " " __TIME__;
@@ -164,6 +164,7 @@ Char            globalPath [PATH_MAX];
 static SequinBlockPtr  globalsbp = NULL;
 
 static Boolean useOldGraphicView = FALSE;
+static Boolean useOldAlignmentView = FALSE;
 static Boolean useOldSequenceView = FALSE;
 /* static Boolean useUdv = FALSE; */
 
@@ -209,6 +210,7 @@ static IteM  findProtItem = NULL;
 static IteM  findPosItem = NULL;
 static IteM  validateItem = NULL;
 static MenU  validateMenu = NULL;
+static MenU  vecscreenMenu = NULL;
 static IteM  spellItem = NULL;
 static IteM  vectorScreenItem = NULL;
 static IteM  cddBlastItem = NULL;
@@ -219,11 +221,13 @@ static IteM  editseqalignitem = NULL;
 static IteM  editseqsubitem = NULL;
 static IteM  edithistoryitem = NULL;
 static MenU  updateSeqMenu = NULL;
+static MenU  updateSeqMenuIndexer = NULL;
 static MenU  extendSeqMenu = NULL;
 static MenU  addSeqMenu = NULL;
 static IteM  featPropItem = NULL;
 static IteM  parseFileItem = NULL;
 static IteM  updalignitem = NULL;
+static IteM  updalignidxitem = NULL;
 
 static IteM  docsumfontItem = NULL;
 static IteM  displayfontItem = NULL;
@@ -1393,6 +1397,49 @@ static void SubtoolDoneProc (IteM i)
 }
 #endif
 
+static Boolean ReviewErrorsForValidationFailure (void)
+{
+  WindoW w;
+  GrouP  h, c;
+  PrompT p;
+  ButtoN b;
+  ModalAcceptCancelData acd;
+  
+  acd.accepted = FALSE;
+  acd.cancelled = FALSE;
+  
+  w = ModalWindow(-20, -13, -10, -10, NULL);
+  h = HiddenGroup (w, -1, 0, NULL);
+  SetGroupSpacing (h, 10, 10);
+  
+  p = StaticPrompt (h, "Submission has validation errors.", 0, 0, programFont, 'l');
+  c = HiddenGroup (h, 3, 0, NULL);
+  SetGroupSpacing (c, 10, 10);
+  b = PushButton (c, "Review Errors", ModalAcceptButton);
+  SetObjectExtra (b, &acd, NULL);
+  b = PushButton (c, "Continue", ModalCancelButton);
+  SetObjectExtra (b, &acd, NULL);
+  AlignObjects (ALIGN_CENTER, (HANDLE) p, (HANDLE) c, NULL);
+  
+  Show(w); 
+  Select (w);
+  while (!acd.accepted && ! acd.cancelled)
+  {
+    ProcessExternalEvent ();
+    Update ();
+  }
+  ProcessAnEvent ();
+  Remove (w);
+  if (acd.accepted)
+  {
+    return TRUE;
+  }
+  else
+  {
+    return FALSE;
+  }
+}
+
 static void ProcessDoneButton (ForM f)
 
 {
@@ -1452,8 +1499,7 @@ static void ProcessDoneButton (ForM f)
     if (errors > 0) {
       ArrowCursor ();
       Update ();
-      if (Message (MSG_YN,
-        "Submission failed validation test.  Do you wish to see the errors?") == ANS_YES) {
+      if (ReviewErrorsForValidationFailure ()) {
         WatchCursor ();
         Update ();
         vsp = ValidStructNew ();
@@ -3272,6 +3318,10 @@ static void FinishAlignmentRead (Handle obj, SeqEntryPtr sep, CharPtr path) {
   bfp = GetObjectExtra (obj);
 #endif
 
+  if (sep == NULL)
+  {
+    return;
+  }
   VisitBioseqsInSep (sep, NULL, SQACT_FixBioseqs);
   if (IS_Bioseq (sep)) {
     datatype = OBJ_BIOSEQ;
@@ -3851,7 +3901,7 @@ static BioseqSetPtr GetAlignmentSetForBioseq (BioseqPtr bsp, Uint2 entityID)
   
   if (bsp == NULL)
   {
-    return;
+    return NULL;
   }
   
   sep_top = GetTopSeqEntryForEntityID (entityID);
@@ -3881,13 +3931,9 @@ static void EnableEditAlignItem (BaseFormPtr bfp)
   IteM          editalign;
   IteM          editdup;
   IteM          editfeatprop;
-  IteM          editupwthaln;
-  IteM          editextendwthaln;
   Int2          mssgalign;
   Int2          mssgdup;
   Int2          mssgfeatprop;
-  Int2          mssgupwthaln;
-  Int2          mssgextendwthaln;
   Int4          num;
   SeqEntryPtr   sep;
   SelStructPtr  sel;
@@ -3896,13 +3942,9 @@ static void EnableEditAlignItem (BaseFormPtr bfp)
   mssgalign = RegisterFormMenuItemName ("SequinEditAlignmentItem");
   mssgdup = RegisterFormMenuItemName ("SequinDuplicateItem");
   mssgfeatprop = RegisterFormMenuItemName ("SequinFeaturePropagate");
-  mssgupwthaln = RegisterFormMenuItemName ("SequinUpdateWithAlignment");
-  mssgextendwthaln = RegisterFormMenuItemName ("SequinExtendWithAlignment");
   editalign = FindFormMenuItem (bfp, mssgalign);
   editdup = FindFormMenuItem (bfp, mssgdup);
   editfeatprop = FindFormMenuItem (bfp, mssgfeatprop);
-  editupwthaln = FindFormMenuItem (bfp, mssgupwthaln);
-  editextendwthaln = FindFormMenuItem (bfp, mssgextendwthaln);
   sel = ObjMgrGetSelected ();
   sep = NULL;
   /*
@@ -3919,21 +3961,18 @@ static void EnableEditAlignItem (BaseFormPtr bfp)
     if (sel != NULL && sel->entityID == bfp->input_entityID &&
         (sel->itemtype == OBJ_SEQALIGN || sel->itemtype == OBJ_SEQHIST_ALIGN)) {
       Enable (editalign);
-      Enable (editupwthaln);
     } else /* if (sel == NULL) */ {
       if (FindSeqAlignInSeqEntry (sep, OBJ_SEQALIGN) != NULL) {
         Enable (editalign);
       } else {
         Disable (editalign);
       }
-      Disable (editupwthaln);
     } /* else {
       Disable (editalign);
       Disable (editupwthaln);
     } */
   } else {
     Disable (editalign);
-    Disable (editupwthaln);
   }
   if (sel != NULL &&
       (sel->itemtype == OBJ_SEQDESC || sel->itemtype == OBJ_SEQFEAT)) {
@@ -3968,12 +4007,14 @@ static void EnableEditSeqAlignAndSubItems (BaseFormPtr bfp)
   IteM           editseq;
   IteM           editsub;
   MenU           editupd;
+  MenU           editupd_idx;
   MenU           editext;
   MenU           editadd;
   Int2           mssgadd;
   Int2           mssgseq;
   Int2           mssgsub;
   Int2           mssgupd;
+  Int2           mssgupd_idx;
   Int2           mssgext;
   ObjMgrDataPtr  omdp;
   SeqEntryPtr    sep;
@@ -3982,17 +4023,26 @@ static void EnableEditSeqAlignAndSubItems (BaseFormPtr bfp)
   mssgseq = RegisterFormMenuItemName ("SequinEditSequenceItem");
   mssgsub = RegisterFormMenuItemName ("SequinEditSubmitterItem");
   mssgupd = RegisterFormMenuItemName ("SequinUpdateSeqSubmenu");
+  if (indexerVersion) {
+    mssgupd_idx = RegisterFormMenuItemName ("SequinUpdateSeqSubmenuIndexer");
+  }
   mssgext = RegisterFormMenuItemName ("SequinExtendSeqSubmenu");
   mssgadd = RegisterFormMenuItemName ("SequinAddSeqSubmenu");
   editseq = FindFormMenuItem (bfp, mssgseq);
   editsub = FindFormMenuItem (bfp, mssgsub);
   editupd = (MenU) FindFormMenuItem (bfp, mssgupd);
+  if (indexerVersion) {
+    editupd_idx = (MenU) FindFormMenuItem (bfp, mssgupd_idx);
+  }
   editext = (MenU) FindFormMenuItem (bfp, mssgext);
   editadd = (MenU) FindFormMenuItem (bfp, mssgadd);
   bsp = GetBioseqGivenIDs (bfp->input_entityID, bfp->input_itemID, bfp->input_itemtype);
   if (bsp != NULL) {
     Enable (editseq);
     Enable (editupd);
+    if (indexerVersion) {
+      Enable (editupd_idx);
+    }
     Enable (editext);
     sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
     if (sep != NULL && IS_Bioseq_set (sep)) {
@@ -4011,6 +4061,9 @@ static void EnableEditSeqAlignAndSubItems (BaseFormPtr bfp)
   } else {
     Disable (editseq);
     Disable (editupd);
+    if (indexerVersion) {
+      Disable (editupd_idx);
+    }
     Disable (editext);
     Disable (editadd);
 #ifdef WIN_MAC
@@ -4086,6 +4139,7 @@ static void BioseqViewFormActivated (WindoW w)
                    NULL);
   Enable (validateItem);
   Enable (validateMenu);
+  Enable (vecscreenMenu);
   Enable (aluItem);
   Enable (submitItem);
   Enable (specialMenu);
@@ -4367,9 +4421,11 @@ static void MacDeactProc (WindoW w)
                    (HANDLE) addSeqMenu,
                    (HANDLE) featPropItem,
                    (HANDLE) updalignitem,
+                   (HANDLE) updalignidxitem,
                    NULL);
   Disable (validateItem);
   Disable (validateMenu);
+  Disable (vecscreenMenu);
   Disable (aluItem);
   Disable (submitItem);
   Disable (vectorScreenItem);
@@ -4391,6 +4447,9 @@ static void MacDeactProc (WindoW w)
   Disable (analysisMenu);
   Disable (loadUidItem);
   Disable (saveUidItem);
+  if (indexerVersion) {
+    Disable (updateSeqMenuIndexer);
+  }
 }
 #endif
 
@@ -4926,7 +4985,8 @@ static void DuplicateViewProc (IteM i)
   }
 }
 
-static SeqEntryPtr RestoreFromFile (CharPtr path)
+extern SeqEntryPtr RestoreFromFile (CharPtr path);
+extern SeqEntryPtr RestoreFromFile (CharPtr path)
 
 {
   BioseqPtr     bsp;
@@ -5088,6 +5148,15 @@ static void AcceptChangeTargetProc (ButtoN b)
   if (cfp == NULL) return;
   GetTitle (cfp->seqid, str, sizeof (str));
   SetBioseqViewTarget (cfp->base, str);
+}
+
+static void ClearTargetBtn (ButtoN b)
+
+{
+  ChangeTargetFormPtr  cfp;
+
+  cfp = (ChangeTargetFormPtr) GetObjectExtra (b);
+  if (cfp == NULL) return;
   SetTitle (cfp->seqid, "");
 }
 
@@ -5134,8 +5203,11 @@ static void DoChangeTarget (IteM i)
 
   cfp->seqid = DialogText (g, "", 12, NULL);
   cfp->base = bfp;
-  c = HiddenGroup (g, 2, 0, NULL);
+  c = HiddenGroup (g, 3, 0, NULL);
+  SetGroupSpacing (c, 10, 10);
   b = DefaultButton (c, "Accept", AcceptChangeTargetProc);
+  SetObjectExtra (b, cfp, NULL);
+  b = PushButton (c, "Clear", ClearTargetBtn);
   SetObjectExtra (b, cfp, NULL);
   PushButton (c, "Cancel", StdCancelButtonProc);
 
@@ -5347,18 +5419,6 @@ extern void SqnReadAlignView (BaseFormPtr bfp, BioseqPtr target_bsp, SeqEntryPtr
 extern void NewFeaturePropagate (
   IteM i
 );
-
-static void UpdateSeqWithFASTA (IteM i)
-
-{
-  NewUpdateSequence (i);
-}
-
-static void UpdateSeqWithRec (IteM i)
-
-{
-  NewUpdateSequence (i);
-}
 
 static void ExtendSeqWithFASTA (IteM i)
 
@@ -5636,27 +5696,6 @@ static void AddSeqWithRec (IteM i)
 /*#ifdef ALLOW_DOWNLOAD*/
 BioseqPtr  updateTargetBspKludge = NULL;
 
-static void UpdateSeqWithAcc (IteM i)
-
-{
-  BaseFormPtr  bfp;
-  BioseqPtr    bsp;
-  SeqEntryPtr  sep;
-
-#ifdef WIN_MAC
-  bfp = currentFormDataPtr;
-#else
-  bfp = GetObjectExtra (i);
-#endif
-  if (bfp == NULL) return;
-  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
-  if (sep == NULL) return;
-  bsp = GetBioseqGivenIDs (bfp->input_entityID, bfp->input_itemID, bfp->input_itemtype);
-  if (bsp == NULL) return;
-  updateTargetBspKludge = bsp;
-  CommonFetchFromNet (DownloadAndUpdateProc, StdCancelButtonProc);
-}
-
 static void ExtendSeqWithAcc (IteM i)
 
 {
@@ -5725,9 +5764,8 @@ static void BioseqViewFormMenus (WindoW w)
   Int2           mssgfeatprop;
   Int2           mssgseq;
   Int2           mssgsub;
-  Int2           mssgupd;
+  Int2           mssgupd, mssgupd_idx;
   Int2           mssgext;
-  Int2           mssgupwthaln;
   ObjMgrDataPtr  omdp;
   MenU           sub;
 
@@ -5860,11 +5898,15 @@ static void BioseqViewFormMenus (WindoW w)
     mssgalign = RegisterFormMenuItemName ("SequinEditAlignmentItem");
     mssgsub = RegisterFormMenuItemName ("SequinEditSubmitterItem");
     mssgupd = RegisterFormMenuItemName ("SequinUpdateSeqSubmenu");
+    if (indexerVersion)
+    {
+      mssgupd_idx = RegisterFormMenuItemName ("SequinUpdateSeqSubmenuIndexer");
+    }
     mssgext = RegisterFormMenuItemName ("SequinExtendSeqSubmenu");
     mssgfeatprop = RegisterFormMenuItemName ("SequinFeaturePropagate");
     mssgadd = RegisterFormMenuItemName ("SequinAddSeqSubmenu");
     FormCommandItem (m, "Edit Sequence...", bfp, mssgseq);
-    FormCommandItem (m, "Edit Alignment...", bfp, mssgalign);
+    FormCommandItem (m, "Alignment Assistant...", bfp, mssgalign);
     FormCommandItem (m, "Edit Submitter Info...", bfp, mssgsub);
     if (indexerVersion) {
       SeparatorItem (m);
@@ -5872,21 +5914,48 @@ static void BioseqViewFormMenus (WindoW w)
       SetObjectExtra (i, bfp, NULL);
     }
     SeparatorItem (m);
-    sub = SubMenu (m, "Update Sequence");
-    SetFormMenuItem (bfp, mssgupd, (IteM) sub);
-    i = CommandItem (sub, "Read FASTA File...", UpdateSeqWithFASTA);
-    SetObjectExtra (i, bfp, NULL);
-    i = CommandItem (sub, "Read Sequence Record...", UpdateSeqWithRec);
-    SetObjectExtra (i, bfp, NULL);
-    if (useEntrez) {
-      i = CommandItem (sub, "Download Accession...", UpdateSeqWithAcc);
+    
+    if (indexerVersion)
+    {
+      /* indexer version */
+      sub = SubMenu (m, "Indexer Update Sequence");
+      SetFormMenuItem (bfp, mssgupd_idx, (IteM) sub);
+      i = CommandItem (sub, "Single Sequence", TestUpdateSequenceIndexer);
       SetObjectExtra (i, bfp, NULL);
-      mssgupwthaln = RegisterFormMenuItemName ("SequinUpdateWithAlignment");
-      FormCommandItem (sub, "Selected Alignment...", bfp, mssgupwthaln);
+      if (useEntrez) {
+        i = CommandItem (sub, "Download Accession", UpdateSequenceViaDownloadIndexer);
+        SetObjectExtra (i, bfp, NULL);    
+      }
+      i = CommandItem (sub, "Multiple Sequences", TestUpdateSequenceSetIndexer);
+      SetObjectExtra (i, bfp, NULL);
+      
+      /* public version */
+      sub = SubMenu (m, "Public Update Sequence");
+      i = CommandItem (sub, "Single Sequence", TestUpdateSequenceSubmitter);
+      SetObjectExtra (i, bfp, NULL);
+      if (useEntrez) {
+        i = CommandItem (sub, "Download Accession", UpdateSequenceViaDownloadSubmitter);
+        SetObjectExtra (i, bfp, NULL);    
+      }
+      i = CommandItem (sub, "Multiple Sequences", TestUpdateSequenceSetSubmitter);
+      SetObjectExtra (i, bfp, NULL);
+      
+      SeparatorItem (m);
     }
-    SeparatorItem (sub);
-    i = CommandItem (sub, "FASTA or ASN.1 Set", UpdateFastaSet);
-    SetObjectExtra (i, bfp, NULL);
+    else
+    {
+      sub = SubMenu (m, "Update Sequence");
+      SetFormMenuItem (bfp, mssgupd, (IteM) sub);
+      i = CommandItem (sub, "Single Sequence", TestUpdateSequenceSubmitter);
+      SetObjectExtra (i, bfp, NULL);
+      if (useEntrez) {
+        i = CommandItem (sub, "Download Accession", UpdateSequenceViaDownloadSubmitter);
+        SetObjectExtra (i, bfp, NULL);    
+      }
+      i = CommandItem (sub, "Multiple Sequences", TestUpdateSequenceSetSubmitter);
+      SetObjectExtra (i, bfp, NULL);
+    }
+    
     sub = SubMenu (m, "Extend Sequence");
     SetFormMenuItem (bfp, mssgext, (IteM) sub);
     i = CommandItem (sub, "Read FASTA File...", ExtendSeqWithFASTA);
@@ -5899,6 +5968,7 @@ static void BioseqViewFormMenus (WindoW w)
       i = CommandItem (sub, "Download Accession...", ExtendSeqWithAcc);
       SetObjectExtra (i, bfp, NULL);
     }
+            
     SeparatorItem (m);
     i = CommandItem (m, "Feature Propagate...", NewFeaturePropagate);
     SetObjectExtra (i, bfp, NULL);
@@ -5978,6 +6048,12 @@ static void BioseqViewFormMenus (WindoW w)
       }
     }
 /*#endif*/
+    SeparatorItem (m);
+    sub = SubMenu (m, "Vector Screen");
+    i = CommandItem (sub, "UniVec", SimpleUniVecScreenProc);
+    SetObjectExtra (i, bfp, NULL);
+    i = CommandItem (sub, "UniVec Core", SimpleUniVecCoreScreenProc);
+    SetObjectExtra (i, bfp, NULL);
     SeparatorItem (m);
     i = CommandItem (m, "ORF Finder...", FindOrf);
     SetObjectExtra (i, bfp, NULL);
@@ -6577,107 +6653,6 @@ static void SequinMedlineFormMessage (ForM f, Int2 mssg)
   }
 }
 
-static Boolean UpdateOrExtendWithAln (GatherContextPtr gcp, Boolean do_update)
-
-{
-  SeqAlignPtr   align;
-  BaseFormPtr   bfp;
-  BioseqPtr     bsp;
-  DenseDiagPtr  ddp;
-  DenseSegPtr   dsp;
-  Uint2         entityID;
-  Uint2         itemID;
-  SeqEntryPtr   sep;
-  SeqIdPtr      sip;
-  SeqLocPtr     slp;
-  StdSegPtr     ssp;
-/* SeqLocPtr     tloc; */
-  ValNode       vn;
-
-  if (gcp == NULL || gcp->thisitem == NULL) {
-    Beep ();
-    return FALSE;
-  }
-  bfp = (BaseFormPtr) gcp->userdata;
-  if (bfp == NULL) return FALSE;
-  bsp =  GetBioseqGivenIDs (bfp->input_entityID, bfp->input_itemID, bfp->input_itemtype);
-  if (bsp == NULL) return FALSE;
-  updateTargetBspKludge = bsp;
-  vn.choice = SEQLOC_WHOLE;
-  vn.data.ptrvalue = (Pointer) bsp->id;
-  slp = &vn;
-  switch (gcp->thistype) {
-    case OBJ_SEQALIGN :
-    case OBJ_SEQHIST_ALIGN :
-      align = (SeqAlignPtr) gcp->thisitem;
-      sip = NULL;
-      if (align->segtype == 1) {
-        ddp = (DenseDiagPtr) align->segs;
-        if (ddp != NULL) {
-          for (sip = ddp->id; sip != NULL; sip = sip->next) {
-            if (! SeqIdForSameBioseq (sip, SeqLocId (slp)))
-              break;
-          }
-        }
-      } else if (align->segtype == 2) {
-        dsp = (DenseSegPtr) align->segs;
-        if (dsp != NULL) {
-          if (dsp->ids != NULL) {
-            sip = dsp->ids->next;
-          }
-          /*
-          for (sip = dsp->ids; sip != NULL; sip = sip->next) {
-            if (! SeqIdForSameBioseq (sip, SeqLocId (slp)))
-              break;
-          }
-          */
-        }
-      } else if (align->segtype == 3) {
-        ssp = (StdSegPtr) align->segs;
-        if (ssp != NULL && ssp->loc != NULL) {
-          if (ssp->loc->next != NULL) {
-            sip = SeqLocId (ssp->loc->next);
-          }
-          /*
-          for (tloc = ssp->loc; tloc != NULL; tloc = tloc->next) {
-            if (! SeqIdForSameBioseq (SeqLocId (tloc), SeqLocId (slp))) {
-              sip = SeqLocId (tloc);
-              break;
-            }
-          }
-          */
-        }
-      }
-      if (sip != NULL) {
-        bsp = BioseqLockById (sip);
-        if (bsp != NULL) {
-          entityID = BioseqFindEntity (sip, &itemID);
-          sep = GetBestTopParentForData (entityID, bsp);
-          if (sep != NULL) {
-            SqnReadAlignView (bfp, updateTargetBspKludge, sep, do_update);
-          }
-          BioseqUnlockById (sip);
-        }
-      }
-      return TRUE;
-    default :
-      break;
-  }
-  return FALSE;
-}
-
-static Boolean UpdateWithAln (GatherContextPtr gcp)
-
-{
-  return UpdateOrExtendWithAln (gcp, TRUE);
-}
-
-static Boolean ExtendWithAln (GatherContextPtr gcp)
-
-{
-  return UpdateOrExtendWithAln (gcp, TRUE);
-}
-
 typedef struct seltbl {
   size_t             count;
   SelStructPtr PNTR  selarray;
@@ -6858,8 +6833,6 @@ static void SequinSeqViewFormMessage (ForM f, Int2 mssg)
   Int2          mssgdup;
   Int2          mssgseq;
   Int2          mssgsub;
-  Int2          mssgupwthaln;
-  Int2          mssgextendwthaln;
   SeqEntryPtr   oldsep;
   OMProcControl  ompc;
 /******** COLOMBE
@@ -7003,8 +6976,6 @@ static void SequinSeqViewFormMessage (ForM f, Int2 mssg)
         mssgalign = RegisterFormMenuItemName ("SequinEditAlignmentItem");
         mssgsub = RegisterFormMenuItemName ("SequinEditSubmitterItem");
         mssgdup = RegisterFormMenuItemName ("SequinDuplicateItem");
-        mssgupwthaln = RegisterFormMenuItemName ("SequinUpdateWithAlignment");
-        mssgextendwthaln = RegisterFormMenuItemName ("SequinExtendWithAlignment");
         if (mssg == mssgseq) {
           bsp =  GetBioseqGivenIDs (bfp->input_entityID, bfp->input_itemID, bfp->input_itemtype);
           if (bsp != NULL) {
@@ -7071,20 +7042,6 @@ COLOMBE END *******************/
             ArrowCursor ();
             Update ();
             stdedprocs.duplicateExisting = FALSE;
-          }
-        } else if (mssg == mssgupwthaln) {
-          sel = ObjMgrGetSelected ();
-          if (sel != NULL &&
-              (sel->itemtype == OBJ_SEQALIGN || sel->itemtype == OBJ_SEQHIST_ALIGN)) {
-            SeqEntrySetScope (NULL);
-            GatherItem (sel->entityID, sel->itemID, sel->itemtype, (Pointer) bfp, UpdateWithAln);
-          }
-        } else if (mssg == mssgextendwthaln) {
-          sel = ObjMgrGetSelected ();
-          if (sel != NULL &&
-              (sel->itemtype == OBJ_SEQALIGN || sel->itemtype == OBJ_SEQHIST_ALIGN)) {
-            SeqEntrySetScope (NULL);
-            GatherItem (sel->entityID, sel->itemID, sel->itemtype, (Pointer) bfp, ExtendWithAln);
           }
         }
         break;
@@ -7601,7 +7558,9 @@ extern void SetupBioseqPageList (void)
   if (useOldGraphicView) {
     AddBioseqPageToList (&(seqviewprocs.pageSpecs), &gphPageData);
   }
-  AddBioseqPageToList (&(seqviewprocs.pageSpecs), &alnPageData);
+  if (useOldAlignmentView) {
+    AddBioseqPageToList (&(seqviewprocs.pageSpecs), &alnPageData);
+  }
   /*
   if (useUdv) {
     AddBioseqPageToList (&(seqviewprocs.pageSpecs), &udvPageData);
@@ -7646,9 +7605,7 @@ extern void SetupBioseqPageList (void)
   AddBioseqPageToList (&(seqviewprocs.pageSpecs), &xmlPageData);
   AddBioseqPageToList (&(seqviewprocs.pageSpecs), &gbseqPageData);
 
-  if (extraServices || useDesktop) {
-    AddBioseqPageToList (&(seqviewprocs.pageSpecs), &dskPageData);
-  }
+  AddBioseqPageToList (&(seqviewprocs.pageSpecs), &dskPageData);
 }
 
 static Boolean DeltaLitOnly (BioseqPtr bsp)
@@ -8566,9 +8523,8 @@ static void SetupMacMenus (void)
   Int2  mssgfeatprop;
   Int2  mssgseq;
   Int2  mssgsub;
-  Int2  mssgupd;
+  Int2  mssgupd, mssgupd_idx;
   Int2  mssgext;
-  Int2  mssgupwthaln;
   MenU  sub;
 
   m = AppleMenu (NULL);
@@ -8625,28 +8581,55 @@ static void SetupMacMenus (void)
   mssgalign = RegisterFormMenuItemName ("SequinEditAlignmentItem");
   mssgsub = RegisterFormMenuItemName ("SequinEditSubmitterItem");
   mssgupd = RegisterFormMenuItemName ("SequinUpdateSeqSubmenu");
+  if (indexerVersion)
+  {
+    mssgupd_idx = RegisterFormMenuItemName ("SequinUpdateSeqSubmenuIndexer");
+  }
   mssgext = RegisterFormMenuItemName ("SequinExtendSeqSubmenu");
   mssgfeatprop = RegisterFormMenuItemName ("SequinFeaturePropagate");
   mssgadd = RegisterFormMenuItemName ("SequinAddSeqSubmenu");
   editsequenceitem = FormCommandItem (m, "Edit Sequence...", NULL, mssgseq);
-  editseqalignitem = FormCommandItem (m, "Edit Alignment...", NULL, mssgalign);
+  editseqalignitem = FormCommandItem (m, "Alignment Assistant...", NULL, mssgalign);
+  editseqalignitem = FormCommandItem (m, "Alignment Assistant...", NULL, mssgalign);
   editseqsubitem = FormCommandItem (m, "Edit Submitter Info...", NULL, mssgsub);
   if (indexerVersion) {
     SeparatorItem (m);
     edithistoryitem = CommandItem (m, "Edit History....", EditSequenceHistory);
   }
   SeparatorItem (m);
-  updateSeqMenu = SubMenu (m, "Update Sequence");
-  SetFormMenuItem (NULL, mssgupd, (IteM) updateSeqMenu);
-  CommandItem (updateSeqMenu, "Read FASTA File...", UpdateSeqWithFASTA);
-  CommandItem (updateSeqMenu, "Read Sequence Record...", UpdateSeqWithRec);
-  if (useEntrez) {
-    CommandItem (updateSeqMenu, "Download Accession...", UpdateSeqWithAcc);
-    mssgupwthaln = RegisterFormMenuItemName ("SequinUpdateWithAlignment");
-    updalignitem = FormCommandItem (updateSeqMenu, "Selected Alignment...", NULL, mssgupwthaln);
+  
+  if (indexerVersion) {
+    updateSeqMenuIndexer = SubMenu (m, "Indexer Update Sequence");
+    SetFormMenuItem (NULL, mssgupd_idx, (IteM) updateSeqMenuIndexer);
+    CommandItem (updateSeqMenuIndexer, "Single Sequence", TestUpdateSequenceIndexer);
+    if (useEntrez) {
+      CommandItem (updateSeqMenuIndexer, "Download Accession...", UpdateSequenceViaDownloadIndexer);
+    }
+    SeparatorItem (updateSeqMenuIndexer);
+    CommandItem (updateSeqMenuIndexer, "Multiple Sequences", TestUpdateSequenceSetIndexer);
+    
+    updateSeqMenu = SubMenu (m, "Public Update Sequence");
+    SetFormMenuItem (NULL, mssgupd, (IteM) updateSeqMenu);
+    CommandItem (updateSeqMenu, "Single Sequence", TestUpdateSequenceSubmitter);
+    if (useEntrez) {
+      CommandItem (updateSeqMenu, "Download Accession...", UpdateSequenceViaDownloadSubmitter);
+    }
+    SeparatorItem (updateSeqMenu);
+    CommandItem (updateSeqMenu, "Multiple Sequences", TestUpdateSequenceSetSubmitter);
   }
-  SeparatorItem (updateSeqMenu);
-  CommandItem (updateSeqMenu, "FASTA or ASN.1 Set", UpdateFastaSet);
+  else
+  {
+    updateSeqMenu = SubMenu (m, "Update Sequence");
+    SetFormMenuItem (NULL, mssgupd, (IteM) updateSeqMenu);
+    SetFormMenuItem (NULL, mssgupd, (IteM) updateSeqMenu);
+    CommandItem (updateSeqMenu, "Single Sequence", TestUpdateSequenceSubmitter);
+    if (useEntrez) {
+      CommandItem (updateSeqMenu, "Download Accession...", UpdateSequenceViaDownloadSubmitter);
+    }
+    SeparatorItem (updateSeqMenu);
+    CommandItem (updateSeqMenu, "Multiple Sequences", TestUpdateSequenceSetSubmitter);
+  }
+  
   extendSeqMenu = SubMenu (m, "Extend Sequence");
   SetFormMenuItem (NULL, mssgext, (IteM) extendSeqMenu);
   CommandItem (extendSeqMenu, "Read FASTA File...", ExtendSeqWithFASTA);
@@ -8654,7 +8637,6 @@ static void SetupMacMenus (void)
   CommandItem (extendSeqMenu, "Read FASTA or ASN.1 Set...", ExtendFastaSet);
   if (useEntrez) {
     CommandItem (extendSeqMenu, "Download Accession...", ExtendSeqWithAcc);
-    mssgupwthaln = RegisterFormMenuItemName ("SequinUpdateWithAlignment");
   }
   SeparatorItem (m);
   featPropItem = CommandItem (m, "Feature Propagate...", NewFeaturePropagate);
@@ -8711,6 +8693,10 @@ static void SetupMacMenus (void)
     }
   }
 /*#endif*/
+  SeparatorItem (m);
+  vecscreenMenu = SubMenu (m, "Vector Screen");
+  CommandItem (vecscreenMenu, "UniVec", SimpleUniVecScreenProc);
+  CommandItem (vecscreenMenu, "UniVec Core", SimpleUniVecCoreScreenProc);
   SeparatorItem (m);
   orfItem = CommandItem (m, "ORF Finder...", FindOrf);
   /*
@@ -8966,7 +8952,7 @@ static void PutItTogether (ButtoN b)
       ans = Message (MSG_OKC, "You have not entered proteins.  Is this correct?");
       if (ans == ANS_CANCEL) return;
     }
-    else
+    else if (prot_list != NULL)
     {
       nuc_list = GetSequencesFormNucleotideList (bfp->form);
       sqfp = (SequencesFormPtr) GetObjectExtra (bfp->form);
@@ -9031,7 +9017,11 @@ static void FinishOrgAndSeq (void)
   if (w != NULL) {
     Show (w);
     Select (w);
-    SendHelpScrollMessage (helpForm, "Organism and Sequences Form", NULL);
+    if (globalFormatBlock.seqFormat == SEQ_FMT_ALIGNMENT) {
+      SendHelpScrollMessage (helpForm, "Nucleotide Page", "Nucleotide Page for Aligned Data Formats");
+    } else {
+      SendHelpScrollMessage (helpForm, "Nucleotide Page", "Nucleotide Page for FASTA Data Format");
+    }
   } else {
     Message (MSG_FATAL, "Unable to create window.");
   }
@@ -9554,6 +9544,12 @@ static void ReadSettings (void)
   if (GetSequinAppParam ("SETTINGS", "USEOLDGRAPHICAL", NULL, str, sizeof (str))) {
     if (StringICmp (str, "TRUE") == 0) {
       useOldGraphicView = TRUE;
+    }
+  }
+
+  if (GetSequinAppParam ("SETTINGS", "USEOLDALIGNMENT", NULL, str, sizeof (str))) {
+    if (StringICmp (str, "TRUE") == 0) {
+      useOldAlignmentView = TRUE;
     }
   }
 
@@ -10561,6 +10557,8 @@ Int2 Main (void)
         */
         else if (StringCmp (argv[i], "-oldgph") == 0)
           useOldGraphicView = TRUE;
+        else if (StringCmp (argv[i], "-oldaln") == 0)
+          useOldAlignmentView = TRUE;
         else if (StringCmp (argv[i], "-oldseq") == 0)
           useOldSequenceView = TRUE;
         else if (StringCmp (argv[i], "-gc") == 0) {

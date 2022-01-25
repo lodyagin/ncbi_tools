@@ -1,4 +1,4 @@
-/* $Id: blast_seq.h,v 1.26 2005/07/27 12:34:46 madden Exp $
+/* $Id: blast_seq.h,v 1.27 2005/09/20 00:04:02 camacho Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -62,12 +62,14 @@ BlastMaskLocToSeqLoc(EBlastProgramType program_number,
 /** Convert a list of mask locations in a form of SeqLoc into a BlastMaskLoc
  * structure. In case of multiple queries, it is not required to create a mask 
  * SeqLoc for every query.
+ * @param program_number identifies blastn, blastp, etc. [in]
  * @param mask_locs Masking locations [in]
  * @param seq_locs Sequence locations [in]
  * @return Allocated and populated BlastMaskLoc structure.
  */
 BlastMaskLoc* 
-BlastMaskLocFromSeqLoc(SeqLoc* mask_locs, SeqLoc* seq_locs);
+BlastMaskLocFromSeqLoc(SeqLoc* mask_locs, SeqLoc* seq_locs,
+                       EBlastProgramType program_number);
 
 /** Frees a special type of SeqLoc list, used in BLAST for masking locations.
  * @param mask_loc Input list of mask SeqLocs [in]

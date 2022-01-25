@@ -1,18 +1,18 @@
 #
-# $Id: linux_icc.ncbi.mk,v 1.5 2003/09/04 17:30:40 beloslyu Exp $
+# $Id: linux_icc.ncbi.mk,v 1.6 2005/09/02 17:15:07 ucko Exp $
 #
-# ICC 6.0 with optimization options for Pentium 4 processor
+# ICC 9.0 with optimization options for Pentium 4 processor
 
 NCBI_DEFAULT_LCL = lnx
 NCBI_MAKE_SHELL = /bin/sh
 NCBI_AR=ar
 NCBI_CC = icc -D_FILE_OFFSET_BITS=64 -D_LARGEFILE64_SOURCE
 NCBI_CFLAGS1 = -c
-NCBI_LDFLAGS1 = -static-libcxa -O3 -unroll -tpp7
+NCBI_LDFLAGS1 = -i-static -O3 -unroll -tpp7
 NCBI_OPTFLAG = -O3 -unroll -tpp7
 #
 #for Pentium4 you can try:
-#NCBI_LDFLAGS1 = -static-libcxa -O3 -tpp7 -mcpu=pentium4 -xW -march=pentium4
+#NCBI_LDFLAGS1 = -i-static -O3 -tpp7 -mcpu=pentium4 -xW -march=pentium4
 #NCBI_OPTFLAG = -O3 -tpp7 -mcpu=pentium4 -xW -march=pentium4
 #
 NCBI_BIN_MASTER = /home/coremake/ncbi/bin

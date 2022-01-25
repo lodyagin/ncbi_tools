@@ -1,4 +1,4 @@
-/* $Id: mb_lookup.c,v 1.56 2005/08/17 16:21:31 dondosha Exp $
+/* $Id: mb_lookup.c,v 1.57 2005/11/16 14:27:04 madden Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -6,7 +6,7 @@
  *
  *  This software/database is a "United States Government Work" under the
  *  terms of the United States Copyright Act.  It was written as part of
- *  the author's offical duties as a United States Government employee and
+ *  the author's official duties as a United States Government employee and
  *  thus cannot be copyrighted.  This software/database is freely available
  *  to the public for use. The National Library of Medicine and the U.S.
  *  Government have not placed any restriction on its use or reproduction.
@@ -34,7 +34,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: mb_lookup.c,v 1.56 2005/08/17 16:21:31 dondosha Exp $";
+    "$Id: mb_lookup.c,v 1.57 2005/11/16 14:27:04 madden Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_options.h>

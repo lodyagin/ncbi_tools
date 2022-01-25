@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/29/99
 *
-* $Revision: 1.26 $
+* $Revision: 1.28 $
 *
 * File Description: 
 *
@@ -68,14 +68,6 @@ extern "C" {
 
 NLM_EXTERN void EntrezSetProgramName (
   CharPtr progname
-);
-
-/* to be phased out, currently overrides ncbi named service, goes directly to URL */
-
-NLM_EXTERN void EntrezSetServer (
-  CharPtr host_machine,
-  Uint2 host_port,
-  CharPtr host_path
 );
 
 /* use Entrez2Test to override default Entrez2 ncbi named service */
@@ -191,6 +183,7 @@ NLM_EXTERN void EntrezAddToBooleanRequest (
   Boolean do_not_translate
 );
 
+#define EntrezCreateDocsumRequest EntrezCreateDocSumRequest
 NLM_EXTERN Entrez2RequestPtr EntrezCreateDocSumRequest (
   CharPtr db,
   Int4 uid,
@@ -199,6 +192,7 @@ NLM_EXTERN Entrez2RequestPtr EntrezCreateDocSumRequest (
   ByteStorePtr bs
 );
 
+#define EntrezCreateGetTermPosRequest EntrezCreateGetTermPositionRequest
 NLM_EXTERN Entrez2RequestPtr EntrezCreateGetTermPositionRequest (
   CharPtr db,
   CharPtr field,

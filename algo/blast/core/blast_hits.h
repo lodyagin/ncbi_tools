@@ -1,4 +1,4 @@
-/* $Id: blast_hits.h,v 1.83 2005/08/15 16:09:58 dondosha Exp $
+/* $Id: blast_hits.h,v 1.84 2005/09/27 14:42:20 madden Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -521,10 +521,12 @@ void Blast_HSPListAdjustOffsets(BlastHSPList* hsp_list, Int4 offset);
  * random alignments are dominated by runs of exact matches, which all have even
  * scores. This makes it impossible to estimate statistical parameters correctly
  * for odd scores. Hence the raw score formula is adjusted - all scores are
- * rounded down to the nearest even value.
+ * rounded down to the nearest even value in order to provide a conservative estimate.
  * @param hsp_list HSP list structure to adjust scores for. [in] [out]
+ * @param gapped_calculation not an ungapped alignment [in]
+ * @param sbp used for round_down Boolean
  */
-void Blast_HSPListAdjustOddBlastnScores(BlastHSPList* hsp_list);
+void Blast_HSPListAdjustOddBlastnScores(BlastHSPList* hsp_list, Boolean gapped_calculation, BlastScoreBlk* sbp);
 
 /** Check if HSP list is sorted by score.
  * @param hsp_list The list to check [in]

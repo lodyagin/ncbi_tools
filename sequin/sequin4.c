@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/28/96
 *
-* $Revision: 6.311 $
+* $Revision: 6.321 $
 *
 * File Description: 
 *
@@ -77,8 +77,11 @@
 #include <valid.h>
 #include <sqnutils.h>
 #include <seqpanel.h>
+#include <findrepl.h>
 
 static Int2 LIBCALLBACK CreateSegSet (Pointer data);
+static Int2 LIBCALLBACK ConvertToDeltaSequence (Pointer data);
+static Int2 LIBCALLBACK FeatToDeltaSeq (Pointer data);
 
 #define REGISTER_CREATESEGSET ObjMgrProcLoadEx (OMPROC_FILTER,"Create Segmented Set", "CreateSegSet", 0,0,0,0,NULL,CreateSegSet, PROC_PRIORITY_DEFAULT, "Indexer")
 #define REGISTER_UPDATESEGSET ObjMgrProcLoadEx (OMPROC_FILTER,"Update Segmented Set","UpdateSegSet",0,0,0,0,NULL,UpdateSegSet,PROC_PRIORITY_DEFAULT, "Indexer")
@@ -210,6 +213,10 @@ static Int2 LIBCALLBACK SeparateMrnaFromNrProc (Pointer data);
 extern Int2 LIBCALLBACK RefGeneUserGenFunc (Pointer data);
 
 #define REGISTER_TPAASSEMBLYUSER_DESC_EDIT ObjMgrProcLoad(OMPROC_EDIT,"Edit Assembly User Desc","TPA Assembly",OBJ_SEQDESC,Seq_descr_user,OBJ_SEQDESC,Seq_descr_user,NULL,AssemblyUserGenFunc,PROC_PRIORITY_DEFAULT)
+
+#define REGISTER_CONVERT_TO_DELTA ObjMgrProcLoadEx (OMPROC_FILTER, "Convert to Delta Sequence", "ConvertToDelta", 0,0,0,0,NULL, ConvertToDeltaSequence, PROC_PRIORITY_DEFAULT, "Indexer")
+
+#define REGISTER_FEAT_INTERVALS_TO_DELTA ObjMgrProcLoadEx (OMPROC_FILTER, "Feature Intervals to Delta Sequence", "FeatToDelta", 0,0,0,0,NULL, FeatToDeltaSeq, PROC_PRIORITY_DEFAULT, "Indexer")
 
 #if defined(OS_UNIX) || defined(OS_MSWIN) 
 #define REGISTER_CORRECTRNASTRAND ObjMgrProcLoadEx (OMPROC_FILTER, "Correct RNA Strand","CorrectRNAStrand",0,0,0,0,NULL,CorrectRNAStrandedness,PROC_PRIORITY_DEFAULT, "Analysis")
@@ -717,12 +724,10 @@ static void ConvertOneSetToSegSet (SeqEntryPtr sep, Boolean intersperse_nulls)
 {
   BioseqSetPtr bssp, this_bssp;
   BioseqPtr    seg;
-  Boolean      need_nuc_prot_set = FALSE;
   SeqEntryPtr  this_sep, next_sep;
   SeqEntryPtr  segment_list;
   SeqEntryPtr  nuc_list = NULL, last_nuc = NULL;
   SeqEntryPtr  prot_list = NULL, last_prot = NULL;
-  Int4         count = 0;
   SeqEntryPtr  nps_next, nuc_seg;
   SeqEntryPtr  nuc_sep, parts_sep, seg_sep;
   BioseqSetPtr seg_bssp, parts;
@@ -1231,34 +1236,6 @@ static Int2 LIBCALLBACK AdjustSegSeqLength (Pointer data)
   return OM_MSG_RET_DONE;
 }
 
-#if 0
-static SeqLocPtr FixLonelySeqLocIntervals (SeqLocPtr slp)
-{
-  SeqLocPtr loc;
-
-  if (slp == NULL || (slp->choice != SEQLOC_MIX && slp->choice != SEQLOC_PACKED_INT)) {
-    return slp;
-  }
-
-  loc = SeqLocFindNext (slp, NULL);
-  if (loc == NULL) {
-    SeqLocFree (slp);
-    return NULL;
-  } else if (loc->next == NULL) {
-    slp->data.ptrvalue = NULL;
-    SeqLocFree (slp);
-    return loc;
-  } else {
-    return slp;
-  }
-}
-#endif
-
-static SeqLocPtr SeqLocDup (SeqLocPtr orig)
-{
-  return (SeqLocPtr) AsnIoMemCopy (orig, (AsnReadFunc) SeqLocAsnRead,
-                                          (AsnWriteFunc) SeqLocAsnWrite);
-}
 
 static SeqLocPtr ReduceLocationToSingleBioseq (SeqLocPtr slp, BioseqPtr bsp)
 {
@@ -1614,7 +1591,7 @@ static void SplitSegmentedFeatsOnOneSet (BioseqSetPtr set)
               len_modulo = (product_offset + SeqLocLen (new_sfp->location)) % 3;
             }
             crp = (CdRegionPtr) sfp->data.value.ptrvalue;
-            if (crp != NULL && crp->frame == 2 || crp->frame == 3)
+            if (crp != NULL && (crp->frame == 2 || crp->frame == 3))
             {
               protein_offset --; 
             }
@@ -4236,6 +4213,291 @@ static void ReverseAlignmentStrand (SeqAlignPtr salp, Int4 nth)
   
 }
 
+/* This function finds the zero-based index of the single sequence in an alignment
+ * that extends past the left side of an alignment (like a sore thumb).
+ */
+static Int4 FindAlignmentLeftThumb (SeqAlignPtr salp)
+{
+  DenseSegPtr dsp;
+  Int4        k;
+  Int4        sore_thumb = -1; /* because the sequence in question sticks out... */
+  BioseqPtr   bsp;
+  SeqIdPtr    sip;
+  
+  if (salp == NULL || salp->segtype != SAS_DENSEG || salp->segs == NULL)
+  {
+    return -1;
+  }
+  
+  /* we need to examine the alignment, to see if there is a single sequence 
+   * that extends before the beginning of the alignment or past the end of
+   * the alignment, so that we can insert additional segments with gaps for
+   * all other sequences.
+   */
+  
+  dsp = (DenseSegPtr) salp->segs;
+  
+  /* check left end of alignment */
+  for (k = 0, sip = dsp->ids; k < dsp->dim; k++, sip = sip->next)
+  {
+    if (dsp->strands [k] == Seq_strand_minus)
+    {
+      bsp = BioseqFind (sip);
+      if (bsp != NULL 
+          && dsp->starts [k] + dsp->lens [0] < bsp->length 
+          && dsp->starts [k] > -1)
+      {
+        if (sore_thumb != -1)
+        {
+          /* can only do this when only one sequence extends past the end */
+          return -1;
+        }
+        else
+        {
+          sore_thumb = k;
+        }
+      }
+    }
+    else if (dsp->starts [k] > 0)
+    {
+      if (sore_thumb != -1)
+      {
+        /* can only do this when only one sequence extends past the end */
+        return -1;
+      }
+      else
+      {
+        sore_thumb = k;
+      }
+    }
+  }
+  
+  return sore_thumb;
+}
+
+/* This function finds the zero-based index of the single sequence in an alignment
+ * that extends past the right side of an alignment (like a sore thumb).
+ */
+static Int4 FindAlignmentRightThumb (SeqAlignPtr salp)
+{
+  DenseSegPtr dsp;
+  Int4        k, start_index;
+  Int4        sore_thumb = -1; /* because the sequence in question sticks out... */
+  BioseqPtr   bsp;
+  SeqIdPtr    sip;
+  
+  if (salp == NULL || salp->segtype != SAS_DENSEG || salp->segs == NULL)
+  {
+    return -1;
+  }
+  
+  /* we need to examine the alignment, to see if there is a single sequence 
+   * that extends before the beginning of the alignment or past the end of
+   * the alignment, so that we can insert additional segments with gaps for
+   * all other sequences.
+   */
+  
+  dsp = (DenseSegPtr) salp->segs;
+  
+  /* check right end of alignment */
+  for (k = 0, sip = dsp->ids; k < dsp->dim; k++, sip = sip->next)
+  {
+    start_index = (dsp->dim * (dsp->numseg - 1)) + k ;
+    if (dsp->strands [start_index] == Seq_strand_minus)
+    {
+      if (dsp->starts [start_index] > 0)
+      {
+        if (sore_thumb != -1)
+        {
+          /* can only do this when only one sequence extends past the end */
+          return -1;
+        }
+        else
+        {
+          sore_thumb = k;
+        }
+      }
+    }
+    else
+    {
+      bsp = BioseqFind (sip);
+      if (bsp != NULL 
+          && dsp->starts [start_index] > -1
+          && dsp->starts [start_index] + dsp->lens [dsp->numseg - 1] < bsp->length)
+      {
+        if (sore_thumb != -1)
+        {
+          /* can only do this when only one sequence extends past the end */
+          return -1;
+        }
+        else
+        {
+          sore_thumb = k;
+        }
+      }
+    }
+  }
+  
+  return sore_thumb;
+}
+
+/* This function looks for a single sequence extending past the left side of the 
+ * alignment and/or a single sequence extending past the right side of the alignment
+ * and extends the alignment to cover these sequences, with gaps in the alignment for
+ * all of the other sequences.
+ * The function is unable to extend the alignment if more than one sequence extends
+ * past the end of the alignment on that side.
+ */
+static void FixAlignmentEndStubs (SeqAlignPtr salp)
+{
+  DenseSegPtr dsp, dsp_new;
+  Int4        k;
+  Int4        left_thumb, right_thumb; /* because the sequence in question sticks out... */
+  BioseqPtr   bsp;
+  Int4        extra_segs = 0, seg_offset = 0;
+  SeqIdPtr    sip;
+  Int4        new_index, old_index;
+  Int4        thumb_len;
+  
+  if (salp == NULL || salp->segtype != SAS_DENSEG || salp->segs == NULL)
+  {
+    return;
+  }
+  
+  /* we need to examine the alignment, to see if there is a single sequence 
+   * that extends before the beginning of the alignment or past the end of
+   * the alignment, so that we can insert additional segments with gaps for
+   * all other sequences.
+   */
+  
+  dsp = (DenseSegPtr) salp->segs;
+ 
+  left_thumb = FindAlignmentLeftThumb (salp);
+  right_thumb = FindAlignmentRightThumb (salp);
+  
+  if (left_thumb == -1 && right_thumb == 1)
+  {
+    return;
+  }
+  
+  if (left_thumb != -1)
+  {
+    extra_segs ++;
+  }
+  if (right_thumb != -1)
+  {
+    extra_segs ++;
+  }
+  
+  /* insert sequence for the thumb and gap for all of the other sequences at the
+   * beginning of the alignment or end of the alignment.
+   */
+ 
+  dsp_new = DenseSegNew();
+  dsp_new->dim = dsp->dim;
+  dsp_new->numseg = dsp->numseg + extra_segs;
+  dsp_new->starts = (Int4Ptr) MemNew(dsp_new->dim * dsp_new->numseg * sizeof(Int4));
+  dsp_new->lens = (Int4Ptr) MemNew(dsp_new->numseg * sizeof(Int4));
+  dsp_new->strands = (Uint1Ptr) MemNew (dsp_new->dim * dsp_new->numseg * sizeof(Int4));
+  dsp_new->ids = dsp->ids;
+  dsp->ids = NULL;
+  
+  if (left_thumb != -1)
+  {
+    for (k = 0, sip = dsp_new->ids; k < dsp_new->dim; k++, sip = sip->next)
+    {
+      if (k == left_thumb)
+      {
+        if (dsp->strands [k] == Seq_strand_minus)
+        {
+          bsp = BioseqFind (sip);
+          if (bsp == NULL)
+          {
+            dsp->ids = dsp_new->ids;
+            dsp_new->ids = NULL;
+            DenseSegFree (dsp_new);
+            return;
+          }
+          thumb_len = bsp->length - dsp->starts [k] - dsp->lens [0];
+          dsp_new->starts [k] = bsp->length - thumb_len;
+          dsp_new->lens [0] = thumb_len;
+          dsp_new->strands [k] = Seq_strand_minus;
+        }
+        else
+        {
+          dsp_new->starts [k] = 0;
+          dsp_new->lens [0] = dsp->starts [k];
+          dsp_new->strands [k] = Seq_strand_plus;
+        }
+      }
+      else
+      {
+        dsp_new->starts [k] = -1;
+        /* keep strand consistent with first segment */
+        dsp_new->strands [k] = dsp->strands [k];
+      }
+    }
+    seg_offset ++;
+  }
+  
+  /* copy middle alignment starts and strands */
+  for (k = 0; k < dsp->dim * dsp->numseg; k++)
+  {
+    dsp_new->starts [k + (dsp->dim * seg_offset)] = dsp->starts [k];
+    dsp_new->strands [k + (dsp->dim * seg_offset)] = dsp->strands [k];
+  }
+  /* copy middle alignment lens */
+  for (k = 0; k < dsp->numseg; k++)
+  {
+    dsp_new->lens [k + seg_offset] = dsp->lens [k];
+  }
+  
+  /* add final segment */
+  if (right_thumb != -1)
+  {
+    for (k = 0, sip = dsp_new->ids; k < dsp->dim; k++, sip = sip->next)
+    {
+      new_index = dsp_new->dim * (dsp_new->numseg - 1) + k;
+      old_index = dsp->dim * (dsp->numseg - 1) + k;
+      
+      if (k == right_thumb)
+      {
+        if (dsp->strands [old_index] == Seq_strand_minus)
+        {
+          dsp_new->starts [new_index] = 0;
+          dsp_new->strands [new_index] = Seq_strand_minus;
+          dsp_new->lens [dsp_new->numseg - 1] = dsp->starts [old_index];
+        }
+        else
+        {
+          bsp = BioseqFind (sip);
+          thumb_len = bsp->length - dsp->starts [old_index] - dsp->lens [dsp->numseg - 1];
+          dsp_new->starts [new_index] = bsp->length - thumb_len;
+          dsp_new->lens [dsp_new->numseg - 1] = thumb_len;
+          dsp_new->strands [new_index] = Seq_strand_plus;
+        }
+      }
+      else
+      {
+        dsp_new->starts [new_index] = -1;
+        /* keep strands consistent */
+        dsp_new->strands [new_index] = dsp->strands [old_index];
+      }
+    }
+  }
+  
+  /* free the old alignment */
+  dsp = DenseSegFree(dsp);
+  
+  /* replace it with the new alignment */
+  salp->segs = (Pointer)(dsp_new);
+  
+  /* reindex the alignment */
+  SAIndex2Free2(salp->saip);
+  salp->saip = NULL;
+  AlnMgr2IndexSingleChildSeqAlign(salp);
+}
+
 static Int2 CreateOneAlignment 
 (SQNBspPtr sbp, 
  Uint2     entityID,
@@ -4418,6 +4680,9 @@ static Int2 CreateOneAlignment
     salp_mult = AlnMgr2GetSubAlign(salp_head, 0, -1, 0, TRUE);
     salp_mult->dim = AlnMgr2GetNumRows(salp_head);
     salp_mult->type = SAT_PARTIAL;
+    
+    FixAlignmentEndStubs (salp_mult);
+
     ValidateSeqAlign (salp_mult, entityID, TRUE, FALSE, TRUE, FALSE, FALSE, &dirty);
     SeqAlignSetFree(salp_head);
     sap = SeqAnnotForSeqAlign(salp_mult);
@@ -4709,6 +4974,7 @@ static Int2 LIBCALLBACK GenerateSeqAlignFromSeqEntryProt (Pointer data)
     salp_mult = AlnMgr2GetSubAlign(salp_head, 0, -1, 0, TRUE);
     salp_mult->dim = AlnMgr2GetNumRows(salp_head);
     salp_mult->type = SAT_PARTIAL;
+    FixAlignmentEndStubs (salp_mult);
     SeqAlignSetFree(salp_head);
     sap = SeqAnnotForSeqAlign(salp_mult);
   } else
@@ -9612,6 +9878,10 @@ extern void SetupSequinFilters (void)
   }
 
   if (indexerVersion) {
+    /*
+    REGISTER_FEAT_INTERVALS_TO_DELTA;
+    */
+    REGISTER_CONVERT_TO_DELTA;
     REGISTER_DELETE_BY_TEXT;
     REGISTER_SEGREGATE_BY_MOLECULE_TYPE;
     REGISTER_SEGREGATE_BY_FEATURE;
@@ -10673,7 +10943,7 @@ static CharPtr FindBestStringMatch (CharPtr PNTR list, CharPtr find_str)
   for (ptr = list; ptr != NULL && *ptr != NULL; ptr++)
   {
     len_match = StringLen (*ptr);
-    if (len_match < best_len) continue;
+    if (len_match < best_len && StringCmp (*ptr, "USA") != 0) continue;
     cp = StringStr (find_str, *ptr);
     /* if no match at all, continue */
     if (cp == NULL) continue;
@@ -10693,27 +10963,175 @@ static CharPtr FindBestStringMatch (CharPtr PNTR list, CharPtr find_str)
   return best_match;
 }
 
-static void CountryLookupProc (BioSourcePtr biop, Pointer userdata)
+static CharPtr state_list[] = 
 {
-  CharPtr PNTR  list;
-  SubSourcePtr  ssp;
-  CharPtr       best_match;
+  "Alabama",
+  "Alaska",
+  "Arizona",
+  "Arkansas",
+  "California",
+  "Colorado",
+  "Connecticut",
+  "Delaware",
+  "Florida",
+  "Georgia",
+  "Hawaii",
+  "Idaho",
+  "Illinois",
+  "Indiana",
+  "Iowa",
+  "Kansas",
+  "Kentucky",
+  "Louisiana",
+  "Maine",
+  "Maryland",
+  "Massachusetts",
+  "Michigan",
+  "Minnesota",
+  "Mississippi",
+  "Missouri",
+  "Montana",
+  "Nebraska",
+  "Nevada",
+  "New Hampshire",
+  "New Jersey",
+  "New Mexico",
+  "New York",
+  "North Carolina",
+  "North Dakota",
+  "Ohio",
+  "Oklahoma",
+  "Oregon",
+  "Pennsylvania",
+  "Rhode Island",
+  "South Carolina",
+  "South Dakota",
+  "Tennessee",
+  "Texas",
+  "Utah",
+  "Vermont",
+  "Virginia",
+  "Washington", 
+  "West Virginia",
+  "Wisconsin",
+  "Wyoming",
+  "England",
+  "Scotland",
+  NULL
+};
+
+static void 
+FixQualForStateName 
+(SubSourcePtr ssp, 
+ CharPtr state_name, 
+ CharPtr country_name)
+{
+  CharPtr cp;
+  Int4    len_state, len_country, len_qual, len_name, len_after;
+  CharPtr before, newname;
+  
+  if (ssp == NULL || ssp->subtype != SUBSRC_country 
+      || StringHasNoText (ssp->name)
+      || StringHasNoText (state_name)
+      || StringHasNoText (country_name))
+  {
+    return;
+  }
+  
+  cp = StringStr (ssp->name, state_name);
+  if (cp == NULL)
+  {
+    return;
+  }
+  len_state = StringLen (state_name);
+  if (isalpha ((Int4)(cp [len_state])))
+  {
+    return;
+  }
+  
+  len_country = StringLen (country_name);
+  
+  len_qual = StringLen (ssp->name);
+ 	if (cp == ssp->name)
+  {
+    len_after = len_qual - len_state;
+    newname = (CharPtr) MemNew ((3 + len_country + len_state + len_after) * sizeof (Char));
+    sprintf (newname, "%s: %s", country_name, state_name);
+    if (len_after > 0)
+    {
+      StringCat (newname, ssp->name + len_state);
+    }
+    ssp->name = MemFree (ssp->name);
+    ssp->name = newname;
+  }
+  else
+  {
+    newname = (CharPtr) MemNew (len_qual + 4 + len_country);
+    *(cp - 1) = 0;
+    before = StringSave (ssp->name);
+    sprintf (newname, "%s: %s ", country_name, state_name);
+    StringNCpy (newname + 3 + len_country + len_state, before, StringLen (before));
+    StringCpy (newname + 3 + len_country + len_state + StringLen (before), cp + len_state);
+    len_name = StringLen (newname);
+    while (isspace ((Int4)(newname[len_name - 1])) || ispunct ((Int4)(newname [len_name - 1])))
+    {
+    	newname [len_name - 1] = 0;
+   	  len_name --;
+    }
+    before = MemFree (before);
+    MemFree (ssp->name);
+    ssp->name = newname;
+  }
+}
+
+static void FixCountryNames (SubSourcePtr ssp)
+{
+  if (ssp == NULL || ssp->subtype != SUBSRC_country || StringHasNoText (ssp->name))
+  {
+    return;
+  }
+  
+  FindReplaceString (&(ssp->name), "Vietnam", "Viet Nam", FALSE, TRUE);
+  FindReplaceString (&(ssp->name), "Ivory Coast", "Cote d'Ivoire", FALSE, TRUE);
+  FindReplaceString (&(ssp->name), "UK", "United Kingdom", FALSE, TRUE);
+}
+
+static void FindCountryName (SubSourcePtr ssp, CharPtr PNTR country_list)
+{
+  CharPtr       best_match, state_match;
   CharPtr       cp, before, newname;
   Int4          len_cntry, len_qual, len_name;
 
-  if (biop == NULL || (list = (CharPtr PNTR)userdata) == NULL)
+  if (ssp == NULL || ssp->subtype != SUBSRC_country || StringHasNoText (ssp->name))
   {
-  	return;
+    return;
   }
-
-  for (ssp = biop->subtype; ssp != NULL; ssp = ssp->next) 
+  
+  state_match = FindBestStringMatch ((CharPtr PNTR)state_list, ssp->name);
+  best_match = FindBestStringMatch (country_list, ssp->name);
+  if (StringCmp (state_match, "Georgia") == 0 && StringCmp (best_match, "USA") != 0)
   {
-  	if (ssp->subtype != SUBSRC_country || ssp->name == NULL) continue;
-  	
-  	best_match = FindBestStringMatch (list, ssp->name);
-  	
-  	if (best_match == NULL) continue;
-  	
+    state_match = NULL;
+  }
+  else if (StringStr (state_match, best_match) != NULL)
+  {
+    best_match = NULL;
+  }
+  
+  if (best_match == NULL && state_match != NULL)
+  {
+    if (StringCmp (state_match, "England") == 0
+        || StringCmp (state_match, "Scotland") == 0)
+    {
+      FixQualForStateName (ssp, state_match, "United Kingdom");
+    }
+    else
+    {
+      FixQualForStateName (ssp, state_match, "USA");    
+    }
+  }
+  else if (best_match != NULL)
+  { 	
   	cp = StringStr (ssp->name, best_match);
   	len_cntry = StringLen (best_match);
   	
@@ -10751,6 +11169,25 @@ static void CountryLookupProc (BioSourcePtr biop, Pointer userdata)
    	  	ssp->name = newname;
       }
   	}
+  }    
+}
+
+static void CountryLookupProc (BioSourcePtr biop, Pointer userdata)
+{
+  CharPtr PNTR  list;
+  SubSourcePtr  ssp;
+
+  if (biop == NULL || (list = (CharPtr PNTR)userdata) == NULL)
+  {
+  	return;
+  }
+
+  for (ssp = biop->subtype; ssp != NULL; ssp = ssp->next) 
+  {
+  	if (ssp->subtype != SUBSRC_country || ssp->name == NULL) continue;
+    FixCountryNames (ssp);  	
+  	FindCountryName (ssp, list);
+
   }  
 }
 
@@ -11081,7 +11518,7 @@ IsParseableInfluenzaAVirusBioSource
   }
   
   first_paren = StringChr (biop->org->taxname + desired_len, '(');
-  if (first_paren == NULL) return;
+  if (first_paren == NULL) return FALSE;
   cp = first_paren + 1;
   while (*cp != ')' && *cp != '(' && *cp != 0)
   {
@@ -11930,7 +12367,6 @@ static AuthListPtr PNTR GetAuthListForPub (PubPtr the_pub)
 
 static Boolean SetPubAuthorList (PubPtr the_pub, AuthListPtr alp)
 {
-  Boolean    rval = FALSE;
   AffilPtr   old_affil = NULL;
   AuthListPtr PNTR old_auth;
 
@@ -12885,7 +13321,7 @@ static Boolean SetFieldByConstraint
       if (! SetPubAuthorList (pdp, alp))
       {
         MemFree (alp);
-        return;
+        return FALSE;
       }
     }
     if ((p->field_for_find == PUB_FIELD_TITLE && DoesPubTitleMatchConstraint (pdp, p))
@@ -12930,7 +13366,7 @@ static Boolean SetFieldByConstraint
       if (! SetPubAuthorList (pdp, alp))
       {
         MemFree (alp);
-        return;
+        return FALSE;
       }
     }
     if (DoesPubMatchConstraint (pdp, p))
@@ -12944,7 +13380,7 @@ static Boolean SetFieldByConstraint
 
 static Boolean LIBCALLBACK EditPubSingleField (PubPtr pub, EditPubFormPtr epfp)
 {
-  if (pub == NULL || epfp == NULL) return;
+  if (pub == NULL || epfp == NULL) return FALSE;
 
   return SetFieldByConstraint (pub, epfp->pcp, epfp->field_to_set, epfp->repl_string,
                         &(epfp->affected_pubs));
@@ -13917,7 +14353,7 @@ static Pointer DoubleListDialogToListPair (DialoG d)
   dlp = (DoubleListPtr) GetObjectExtra (d);
   if (dlp == NULL)
   {
-    return;
+    return NULL;
   }
   
   ValNodeAddPointer (&list_pair, 0, dlp->list1);
@@ -14064,7 +14500,7 @@ AdjustListPair
   ValNodePtr            list_pair = NULL;
   Boolean               rval = FALSE;
   
-  if (list1 == NULL || list2 == NULL) return;
+  if (list1 == NULL || list2 == NULL) return FALSE;
   
   w = ModalWindow (-50, -33, -10, -10, NULL);
   h = HiddenGroup (w, -1, 0, NULL);
@@ -15106,3 +15542,370 @@ static Int2 LIBCALLBACK CreateSegSet (Pointer data)
   Update ();
   return OM_MSG_RET_DONE;
 }
+
+static void ConvertOneBioseqToDelta (BioseqPtr bsp)
+{
+  CharPtr       bases;
+  ValNodePtr    seq_ext;
+  SeqLitPtr     slp;
+
+  if (bsp == NULL || bsp->repr != Seq_repr_raw || ISA_aa (bsp->mol)) 
+  {
+    return;
+  }
+
+  bases = GetSequenceByBsp (bsp);
+  if (bases == NULL) return;
+
+  seq_ext = NULL;
+
+  /* add remaining data after last gap to end */
+  slp = (SeqLitPtr) MemNew (sizeof (SeqLit));
+  if (slp != NULL) 
+  {
+    slp->length = bsp->length;
+    ValNodeAddPointer (&(seq_ext), (Int2) 2, (Pointer) slp);
+    slp->seq_data = BSNew (slp->length);
+    slp->seq_data_type = Seq_code_iupacna;
+    AddBasesToByteStore (slp->seq_data, bases);
+  }
+  
+  MemFree (bases);
+
+  bsp->seq_data = BSFree (bsp->seq_data);
+  bsp->seq_data_type = 0;
+  bsp->repr = Seq_repr_delta;
+  bsp->seq_ext_type = 4;
+  bsp->seq_ext = seq_ext;
+
+  BioseqPack (bsp);
+}
+
+static void ListBioseqSetRawSequences (BioseqSetPtr bssp, ValNodePtr PNTR vnpp)
+{
+  SeqEntryPtr sep;
+  BioseqPtr   bsp;
+  Char        id_str [128];
+  
+  if (bssp == NULL || bssp->_class == BioseqseqSet_class_parts || vnpp == NULL)
+  {
+    return;
+  }
+  
+  for (sep = bssp->seq_set; sep != NULL; sep = sep->next)
+  {
+    if (IS_Bioseq_set (sep))
+    {
+      ListBioseqSetRawSequences (sep->data.ptrvalue, vnpp);
+    }
+    else if (IS_Bioseq (sep))
+    {
+      bsp = (BioseqPtr) (sep->data.ptrvalue);
+      if (bsp != NULL)
+      {
+        SeqIdWrite (SeqIdFindBest (bsp->id, SEQID_GENBANK), id_str, PRINTID_REPORT, sizeof (id_str) - 1);
+        ValNodeAddPointer (vnpp, 0, StringSave (id_str));
+      }
+    }
+  }
+}
+
+static Boolean ListRawSequencesInAlignments (GatherContextPtr gcp)
+
+{
+  BioseqPtr        bsp;
+  BioseqSetPtr     bssp;
+  ValNodePtr PNTR  vnpp;
+  Char             id_str [128];
+
+  if (gcp == NULL || gcp->thisitem == NULL || gcp->userdata == NULL)
+  {
+    return TRUE;
+  }
+  
+  /* don't process parts of a segmented set */
+  if (gcp->parenttype == OBJ_BIOSEQSET
+      && (bssp = (BioseqSetPtr) gcp->parentitem) != NULL
+      && bssp->_class == BioseqseqSet_class_parts)
+  {
+    return TRUE;
+  }
+
+  vnpp = (ValNodePtr PNTR) gcp->userdata;
+  if (vnpp == NULL) return TRUE;
+  bsp = NULL;
+  if (gcp->thistype == OBJ_BIOSEQ) {
+    bsp = (BioseqPtr) gcp->thisitem;
+    if (bsp->repr == Seq_repr_raw && IsBioseqInAnyAlignment (bsp, gcp->entityID))
+    {
+      SeqIdWrite (SeqIdFindBest (bsp->id, SEQID_GENBANK), id_str, PRINTID_REPORT, sizeof (id_str) - 1);
+      ValNodeAddPointer (vnpp, 0, StringSave (id_str));
+    }
+  } else if (gcp->thistype == OBJ_BIOSEQSET) {
+    bssp = (BioseqSetPtr) gcp->thisitem;
+    ListBioseqSetRawSequences (bssp, vnpp);
+  } else return TRUE;
+  
+  return TRUE;
+}
+
+static void ConvertBioseqSetContentsToDelta (BioseqSetPtr bssp)
+{
+  SeqEntryPtr sep;
+  
+  if (bssp == NULL || bssp->_class == BioseqseqSet_class_parts)
+  {
+    return;
+  }
+  
+  for (sep = bssp->seq_set; sep != NULL; sep = sep->next)
+  {
+    if (IS_Bioseq_set (sep))
+    {
+      ConvertBioseqSetContentsToDelta (sep->data.ptrvalue);
+    }
+    else if (IS_Bioseq (sep))
+    {
+      ConvertOneBioseqToDelta (sep->data.ptrvalue);
+    }
+  }
+}
+
+static Boolean ConvertBioseqOrBioseqSetContentsToDelta (GatherContextPtr gcp)
+
+{
+  BioseqPtr        bsp;
+  BioseqSetPtr     bssp;
+  ValNodePtr PNTR  vnpp;
+  ValNodePtr       entity_vnp;
+
+  if (gcp == NULL || gcp->thisitem == NULL || gcp->userdata == NULL)
+  {
+    return TRUE;
+  }
+  
+  /* don't process parts of a segmented set */
+  if (gcp->parenttype == OBJ_BIOSEQSET
+      && (bssp = (BioseqSetPtr) gcp->parentitem) != NULL
+      && bssp->_class == BioseqseqSet_class_parts)
+  {
+    return TRUE;
+  }
+
+  vnpp = (ValNodePtr PNTR) gcp->userdata;
+  if (vnpp == NULL) return TRUE;
+  bsp = NULL;
+  if (gcp->thistype == OBJ_BIOSEQ) {
+    bsp = (BioseqPtr) gcp->thisitem;
+    ConvertOneBioseqToDelta (bsp);
+  } else if (gcp->thistype == OBJ_BIOSEQSET) {
+    bssp = (BioseqSetPtr) gcp->thisitem;
+    ConvertBioseqSetContentsToDelta (bssp);
+  } else return TRUE;
+  
+  for (entity_vnp = *vnpp;
+       entity_vnp != NULL && entity_vnp->data.intvalue != gcp->entityID;
+       entity_vnp = entity_vnp->next)
+  {
+  }
+  if (entity_vnp == NULL)
+  {
+    ValNodeAddInt (vnpp, 0, gcp->entityID);
+  }
+  return TRUE;
+}
+
+static Int2 LIBCALLBACK ConvertToDeltaSequence (Pointer data)
+
+{
+  OMProcControlPtr  ompcp;
+  SelStructPtr      sel;
+  ValNodePtr        entityID_list = NULL, entity_vnp, raw_in_aln = NULL;
+  CharPtr           msg = NULL;
+  MsgAnswer         ans;
+
+  ompcp = (OMProcControlPtr) data;
+  if (ompcp == NULL) return OM_MSG_RET_ERROR;
+  
+  for (sel = ObjMgrGetSelected (); sel != NULL; sel = sel->next) {
+    GatherItem (sel->entityID, sel->itemID, sel->itemtype,
+                (Pointer) &raw_in_aln, ListRawSequencesInAlignments);
+  }
+  if (raw_in_aln != NULL)
+  {
+  	msg = CreateListMessage ("Sequence", 
+  	                         raw_in_aln->next == NULL 
+  	                              ? " is in an alignment.  Do you want to continue?" 
+  	                              : " are in alignments.  Do you want to continue?",
+  	                              raw_in_aln);
+  	raw_in_aln = ValNodeFreeData (raw_in_aln);
+    ans = Message (MSG_YN, msg);
+    msg = MemFree (msg);
+    if (ans == ANS_NO)
+    {
+      return OM_MSG_RET_DONE;
+    }
+  }
+
+  
+  for (sel = ObjMgrGetSelected (); sel != NULL; sel = sel->next) {
+    GatherItem (sel->entityID, sel->itemID, sel->itemtype,
+                (Pointer) &entityID_list, ConvertBioseqOrBioseqSetContentsToDelta);
+  }
+  if (entityID_list == NULL) return OM_MSG_RET_DONE;
+  
+  for (entity_vnp = entityID_list;
+       entity_vnp != NULL;
+       entity_vnp = entity_vnp->next)
+  {
+    ObjMgrSetDirtyFlag (entity_vnp->data.intvalue, TRUE);
+    ObjMgrSendMsg (OM_MSG_UPDATE, entity_vnp->data.intvalue, 0, 0);
+  }
+  Update ();
+  return OM_MSG_RET_DONE;
+}
+
+static Int2 LIBCALLBACK FeatToDeltaSeq (Pointer data)
+
+{
+  BioseqPtr          bsp;
+  SeqMgrFeatContext  context;
+  Int4               diff;
+  FILE               *fp;
+  Int2               i;
+  Int4Ptr            ivals;
+  Int4               last;
+  OMProcControlPtr   ompcp;
+  Char               path [PATH_MAX];
+  SeqFeatPtr         sfp;
+  SeqInt             sint;
+  SeqIdPtr           sip;
+  Int4               start;
+  Int4               stop;
+  ValNode            vn;
+
+  ompcp = (OMProcControlPtr) data;
+  if (ompcp == NULL) return OM_MSG_RET_ERROR;
+
+  switch (ompcp->input_itemtype) {
+    case OBJ_SEQFEAT:
+      sfp = (SeqFeatPtr) ompcp->input_data;
+      break;
+    default:
+      return OM_MSG_RET_ERROR;
+  }
+
+  if (SeqMgrGetDesiredFeature (ompcp->input_entityID, NULL, 0, 0, sfp, &context) != sfp) return OM_MSG_RET_ERROR;
+  bsp = BioseqFindFromSeqLoc (sfp->location);
+  if (bsp == NULL) return OM_MSG_RET_ERROR;
+  sip = SeqIdFindBest (bsp->id, 0);
+  if (sip == NULL) return OM_MSG_RET_ERROR;
+
+  if (! GetOutputFileName (path, sizeof (path), NULL)) return OM_MSG_RET_ERROR;
+  fp = FileOpen (path, "w");
+  if (fp == NULL) return OM_MSG_RET_ERROR;
+
+  MemSet ((Pointer) &sint, 0, sizeof (SeqInt));
+  MemSet ((Pointer) &vn, 0, sizeof (ValNode));
+
+  fprintf (fp, ">\n");
+  ivals = context.ivals;
+  start = *ivals;
+  ivals++;
+  stop = *ivals;
+  ivals++;
+  sint.from = MIN (start, stop);
+  sint.to = MAX (start, stop);
+  sint.strand = context.strand;
+  sint.id = sip;
+  vn.choice = SEQLOC_INT;
+  vn.data.ptrvalue = (Pointer) &sint;
+  SeqLocFastaStream (&vn, fp, 0, 60, 0, 0);
+  last = stop;
+  for (i = 1; i < context.numivals; i++) {
+    start = *ivals;
+    ivals++;
+    stop = *ivals;
+    ivals++;
+    diff = start - last;
+    if (diff < 0) {
+      diff = -diff;
+    }
+    if (diff > 1) {
+      fprintf (fp, ">?%ld\n", (long) diff - 1);
+    }
+    sint.from = MIN (start, stop);
+    sint.to = MAX (start, stop);
+    sint.strand = context.strand;
+    sint.id = sip;
+    vn.choice = SEQLOC_INT;
+    vn.data.ptrvalue = (Pointer) &sint;
+    SeqLocFastaStream (&vn, fp, 0, 60, 0, 0);
+    last = stop;
+  }
+
+  FileClose (fp);
+  return OM_MSG_RET_ERROR;
+}
+
+
+static void RemoveUnpublishedPubFeatCallback (SeqFeatPtr sfp, Pointer userdata)
+{
+  PubdescPtr pdp;
+
+  if (sfp == NULL || sfp->data.choice != SEQFEAT_PUB || sfp->data.value.ptrvalue == NULL)
+  {
+    return;
+  }
+  pdp = (PubdescPtr) sfp->data.value.ptrvalue;
+  if (GetPubStatus (pdp->pub) == PUB_STAT_UNPUBLISHED)
+  {
+    sfp->idx.deleteme = TRUE;
+  }
+}
+
+static void RemoveUnpublishedPubDescCallback (SeqDescPtr sdp, Pointer userdata)
+{
+  PubdescPtr    pdp;
+  ObjValNodePtr ovp;
+
+  if (sdp == NULL || sdp->choice != Seq_descr_pub || sdp->data.ptrvalue == NULL)
+  {
+    return;
+  }
+
+  pdp = (PubdescPtr) sdp->data.ptrvalue;
+  if (GetPubStatus (pdp->pub) == PUB_STAT_UNPUBLISHED)
+  {
+    ovp = (ObjValNodePtr) sdp;
+    ovp->idx.deleteme = TRUE;	
+  }
+}
+
+extern void RemoveUnpublishedPublications (IteM i)
+{
+  BaseFormPtr       bfp;
+  SeqEntryPtr       sep;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  
+  WatchCursor ();
+  Update ();
+  
+  VisitDescriptorsInSep (sep, NULL, RemoveUnpublishedPubDescCallback);
+  VisitFeaturesInSep (sep, NULL, RemoveUnpublishedPubFeatCallback);
+  
+  DeleteMarkedObjects (bfp->input_entityID, 0, NULL);
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+  ArrowCursor ();
+  Update (); 
+}
+

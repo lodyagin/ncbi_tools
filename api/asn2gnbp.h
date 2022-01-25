@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 6.35 $
+* $Revision: 6.37 $
 *
 * File Description:  New GenBank flatfile generator, private header
 *
@@ -64,6 +64,7 @@ typedef enum {
   DEFLINE_BLOCK,
   ACCESSION_BLOCK,
   VERSION_BLOCK,
+  PROJECT_BLOCK,
   PID_BLOCK,
   DBSOURCE_BLOCK,
   DATE_BLOCK,
@@ -236,6 +237,8 @@ typedef struct XtraData {
   Asn2gbLockFunc   remotelock;
   Asn2gbFreeFunc   remotefree;
   Pointer          remotedata;
+  Int4             prevGi;
+  Int4             nextGi;
 } XtraBlock;
 
 

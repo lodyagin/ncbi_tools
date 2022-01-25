@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: repeats_filter.c,v 1.7 2005/04/21 15:00:36 dondosha Exp $";
+static char const rcsid[] = "$Id: repeats_filter.c,v 1.12 2005/09/20 18:27:50 kans Exp $";
 
 /*
  * ===========================================================================
@@ -39,6 +39,7 @@ static char const rcsid[] = "$Id: repeats_filter.c,v 1.7 2005/04/21 15:00:36 don
 #include <algo/blast/api/repeats_filter.h>
 #include <algo/blast/api/blast_api.h>
 #include <algo/blast/core/blast_filter.h>
+#include <algo/blast/core/blast_util.h>
 #include <algo/blast/api/blast_seq.h>
 #include <algo/blast/api/seqsrc_readdb.h>
 
@@ -93,6 +94,8 @@ s_FillMaskLocFromBlastHSPResults(SeqLoc* query_seqloc, BlastHSPResults* results,
     Int4 query_index;
     SeqLoc* slp;
     BlastMaskLoc* mask;
+    const EBlastProgramType kProgram = eBlastTypeBlastn;
+    const Uint4 kNumContexts = BLAST_GetNumberOfContexts(eBlastTypeBlastn);
 
     if (!query_seqloc || !mask_seqloc)
         return -1;
@@ -104,14 +107,13 @@ s_FillMaskLocFromBlastHSPResults(SeqLoc* query_seqloc, BlastHSPResults* results,
     }
 
     num_seqs = ValNodeLen(query_seqloc);
-    mask = BlastMaskLocNew(num_seqs);
+    mask = BlastMaskLocNew(num_seqs*kNumContexts);
 
     for (query_index = 0, slp = query_seqloc; slp;
          ++query_index, slp = slp->next) {
         Int4 query_length, query_start;
         Int4 hit_index;
         BlastSeqLoc* loc_list = NULL, *ordered_loc_list = NULL;
-        BlastSeqLoc* last_loc = NULL; 
         BlastHitList* hit_list = results->hitlist_array[query_index];
        
         if (!hit_list) {
@@ -142,25 +144,19 @@ s_FillMaskLocFromBlastHSPResults(SeqLoc* query_seqloc, BlastHSPResults* results,
                    sequence. */
                 left += query_start;
                 right += query_start;
-                /* If this is the first mask for this query, create a new 
-                   BlastSeqLoc, otherwise append to the end of the list. */
-                if (!last_loc)
-                    loc_list = last_loc = BlastSeqLocNew(NULL, left, right);
-                else
-                    last_loc = BlastSeqLocNew(&last_loc, left, right);
+                BlastSeqLocNew(&loc_list, left, right);
             }
         }
         /* Make the intervals unique */
-        CombineMaskLocations(loc_list, &ordered_loc_list, 
-                             REPEAT_MASK_LINK_VALUE);
+        ordered_loc_list = BlastSeqLocCombine(loc_list, REPEAT_MASK_LINK_VALUE);
 
         /* Free the list of locations that's no longer needed. */
         loc_list = BlastSeqLocFree(loc_list);
 
-        mask->seqloc_array[query_index] = ordered_loc_list;
+        mask->seqloc_array[query_index*kNumContexts] = ordered_loc_list;
     }
 
-    *mask_seqloc = BlastMaskLocToSeqLoc(eBlastTypeBlastn, mask, query_seqloc);
+    *mask_seqloc = BlastMaskLocToSeqLoc(kProgram, mask, query_seqloc);
 
     mask = BlastMaskLocFree(mask);
 
@@ -179,7 +175,6 @@ Blast_FindRepeatFilterSeqLoc(SeqLoc* query_seqloc,
     BlastSeqSrc* seq_src = NULL;
     SeqLoc* filter_loc = NULL; /* Dummy variable, since search will be performed 
                                   without filtering. */
-    Boolean mask_at_hash = FALSE; /* Dummy variable. */
     BlastHSPResults* results = NULL;
     SBlastFilterOptions* filtering_options = NULL;
 
@@ -227,7 +222,7 @@ Blast_FindRepeatFilterSeqLoc(SeqLoc* query_seqloc,
 
     status = 
         Blast_RunSearch(query_seqloc, seq_src, NULL, options, NULL,
-                        &results, &filter_loc, &mask_at_hash, sum_returns);
+                        &results, &filter_loc, sum_returns);
 
     /* The ReadDBFILE structure will not be destroyed here, because the 
        initialising function used readdb_attach */

@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: formatdb.c,v 6.96 2005/07/28 14:52:22 coulouri Exp $";
+static char const rcsid[] = "$Id: formatdb.c,v 6.97 2005/09/30 14:54:32 camacho Exp $";
 
 /*****************************************************************************
 
@@ -32,11 +32,15 @@ static char const rcsid[] = "$Id: formatdb.c,v 6.96 2005/07/28 14:52:22 coulouri
    
    Version Creation Date: 10/01/96
 
-   $Revision: 6.96 $
+   $Revision: 6.97 $
 
    File Description:  formats FASTA databases for use by BLAST
 
    $Log: formatdb.c,v $
+   Revision 6.97  2005/09/30 14:54:32  camacho
+   Enable recognition of the formatdb configuration file to allow users to set the
+   membership and link bits in the ASN.1 deflines.
+
    Revision 6.96  2005/07/28 14:52:22  coulouri
    remove dead code
 
@@ -777,14 +781,12 @@ Int2 Main(void)
     if ((fdbp = FormatDBInit(options)) == NULL)
         return 2;        
     
-#ifdef SET_ASN1_DEFLINE_BITS
     /* Allow users to set their own membership and link bits using a
      * .formatdbrc file. Useful for formatting purposes */
     if (options->version >= FORMATDB_VER) {
         options->linkbit_listp = FDBLoadLinksTable();
         options->memb_tblp = FDBLoadMembershipsTable();
     }
-#endif
 
     /* Process the optional seqid/taxid pair input file */
     seqid_taxid_file = dump_args[seqid_taxid_file_arg].strvalue;
@@ -1025,12 +1027,10 @@ Int2 Main(void)
 
     taxid_tbl = FDBTaxidDeflineTableFree(taxid_tbl);
 
-#ifdef SET_ASN1_DEFLINE_BITS
     if (options->version >= FORMATDB_VER) {
         options->linkbit_listp = FDBDestroyLinksTable(options->linkbit_listp);
         options->memb_tblp = FDBDestroyMembershipsTable(options->memb_tblp);
     }
-#endif
     FDBOptionsFree(options);
 
     return 0;

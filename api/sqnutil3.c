@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/7/00
 *
-* $Revision: 6.60 $
+* $Revision: 6.63 $
 *
 * File Description: 
 *
@@ -372,12 +372,253 @@ NLM_EXTERN void LinkCDSmRNAbyOverlap (
   VisitBioseqsInSep (sep, NULL, BspLinkCDSmRNAbyOverlap);
 }
 
+typedef struct ovpdata {
+  SeqFeatPtr  sfp;
+  Char        revstr [42];
+} OvpData, PNTR OvpDataPtr;
+
+static int LIBCALLBACK SortOvpByString (VoidPtr ptr1, VoidPtr ptr2)
+
+{
+  OvpDataPtr  odp1;
+  OvpDataPtr  odp2;
+  CharPtr     str1;
+  CharPtr     str2;
+
+  if (ptr1 == NULL || ptr2 == NULL) return 0;
+  odp1 = *((OvpDataPtr PNTR) ptr1);
+  odp2 = *((OvpDataPtr PNTR) ptr2);
+  if (odp1 == NULL || odp2 == NULL) return 0;
+  str1 = odp1->revstr;
+  str2 = odp2->revstr;
+  if (str1 == NULL || str2 == NULL) return 0;
+  return StringICmp (str1, str2);
+}
+
+static void FindProtBsp (BioseqPtr bsp, Pointer userdata)
+
+{
+  BioseqPtr PNTR  protP;
+
+  if (bsp == NULL || ! (ISA_aa (bsp->mol))) return;
+  protP = (BioseqPtr PNTR) userdata;
+  *protP = bsp;
+}
+
 static void BspLinkCDSmRNAbyProduct (
   BioseqPtr bsp,
   Pointer userdata
 )
 
 {
+  BioseqSetPtr       bssp;
+  Char               buf [42];
+  BioseqPtr          cdna, prot;
+  SeqFeatPtr         cds, mrna, sfp;
+  OvpDataPtr         PNTR cdsarray = NULL, PNTR mrnaarray = NULL;
+  ValNodePtr         cdshead = NULL, mrnahead = NULL, vnp;
+  int                compare;
+  Uint2              entityID;
+  SeqMgrFeatContext  fcontext;
+  Int2               i, numcds, nummrna, L, R, mid;
+  Int4               id;
+  OvpDataPtr         odp;
+  ObjectIdPtr        oip;
+  SeqEntryPtr        sep;
+  SeqIdPtr           sip;
+  SeqFeatXrefPtr     xref;
+
+  if (bsp == NULL || ISA_aa (bsp->mol)) return;
+
+  numcds = 0;
+  nummrna = 0;
+
+  /* count CDS and mRNA features, make revstr from product SeqId */
+
+  sfp = SeqMgrGetNextFeature (bsp, NULL, 0, 0, &fcontext);
+  while (sfp != NULL) {
+    switch (sfp->idx.subtype) {
+      case FEATDEF_CDS :
+        if (sfp->product != NULL) {
+          numcds++;
+          sip = SeqLocId (sfp->product);
+          if (sip == NULL) break;
+          MakeReversedSeqIdString (sip, buf, sizeof (buf) - 1);
+          if (StringHasNoText (buf)) break;
+          odp = (OvpDataPtr) MemNew (sizeof (OvpData));
+          if (odp == NULL) break;
+          odp->sfp = sfp;
+          StringCpy (odp->revstr, buf);
+          vnp = ValNodeAddPointer (NULL, 0, (Pointer) odp);
+          if (vnp == NULL) break;
+          vnp->next = cdshead;
+          cdshead = vnp;
+        }
+        break;
+      case FEATDEF_mRNA :
+        if (sfp->product != NULL) {
+          nummrna++;
+          sip = SeqLocId (sfp->product);
+          if (sip == NULL) break;
+          MakeReversedSeqIdString (sip, buf, sizeof (buf) - 1);
+          if (StringHasNoText (buf)) break;
+          odp = (OvpDataPtr) MemNew (sizeof (OvpData));
+          if (odp == NULL) break;
+          odp->sfp = sfp;
+          StringCpy (odp->revstr, buf);
+          vnp = ValNodeAddPointer (NULL, 0, (Pointer) odp);
+          if (vnp == NULL) break;
+          vnp->next = mrnahead;
+          mrnahead = vnp;
+        }
+        break;
+      default :
+        break;
+    }
+    sfp = SeqMgrGetNextFeature (bsp, sfp, 0, 0, &fcontext);
+  }
+
+  if (numcds > 0 && nummrna > 0) {
+    cdsarray = (OvpDataPtr PNTR) MemNew (sizeof (OvpDataPtr) * (numcds + 1));
+    mrnaarray = (OvpDataPtr PNTR) MemNew (sizeof (OvpDataPtr) * (nummrna + 1));
+
+    /* populate and sort arrays to search for feature by product SeqId */
+
+    if (cdsarray != NULL && mrnaarray != NULL) {
+      for (vnp = cdshead, i = 0; vnp != NULL; vnp = vnp->next, i++) {
+        cdsarray [i] = (OvpDataPtr) vnp->data.ptrvalue;
+      }
+      for (vnp = mrnahead, i = 0; vnp != NULL; vnp = vnp->next, i++) {
+        mrnaarray [i] = (OvpDataPtr) vnp->data.ptrvalue;
+      }
+
+      HeapSort (cdsarray, (size_t) numcds, sizeof (OvpDataPtr), SortOvpByString);
+      HeapSort (mrnaarray, (size_t) nummrna, sizeof (OvpDataPtr), SortOvpByString);
+
+      for (i = 0; i < nummrna; i++) {
+        odp = (OvpDataPtr) mrnaarray [i];
+        if (odp == NULL) continue;
+        mrna = odp->sfp;
+        if (mrna == NULL || mrna->product == NULL) continue;
+        sip = SeqLocId (mrna->product);
+        if (sip == NULL) continue;
+
+        cdna = BioseqLockById (sip);
+        if (cdna == NULL) continue;
+        entityID = ObjMgrGetEntityIDForPointer (cdna);
+        if (entityID < 1) continue;
+        if (SeqMgrFeaturesAreIndexed (entityID) == 0) {
+          sep = GetTopSeqEntryForEntityID (entityID);
+          if (sep == NULL) continue;
+          AssignIDsInEntity (entityID, 0, NULL);
+        }
+        if (cdna->idx.parenttype == OBJ_BIOSEQSET) {
+          bssp = (BioseqSetPtr) cdna->idx.parentptr;
+          if (bssp == NULL) continue;
+          if (bssp->_class != BioseqseqSet_class_nuc_prot) continue;
+          prot = NULL;
+          if (VisitBioseqsInSet (bssp, (Pointer) &prot, FindProtBsp) != 2) continue;
+          for (sip = prot->id; sip != NULL; sip = sip->next) {
+            MakeReversedSeqIdString (sip, buf, sizeof (buf) - 1);
+
+            /* binary search */
+
+            L = 0;
+            R = numcds - 1;
+            while (L < R) {
+              mid = (L + R) / 2;
+              odp = cdsarray [mid];
+              compare = StringCmp (odp->revstr, buf);
+              if (compare < 0) {
+                L = mid + 1;
+              } else {
+                R = mid;
+              }
+            }
+            odp = cdsarray [R];
+            if (odp != NULL && StringCmp (odp->revstr, buf) == 0) {
+              cds = odp->sfp;
+              if (cds == NULL) continue;
+
+              /* make reciprocal feature ID xrefs */
+
+              if (cds->id.choice == 3) {
+                oip = (ObjectIdPtr) cds->id.value.ptrvalue;
+                if (oip != NULL && oip->str == NULL) {
+                  id = oip->id;
+                  if (id > 0) {
+                    for (xref = mrna->xref; xref != NULL && xref->id.choice != 3; xref = xref->next) continue;
+                    if (xref != NULL) {
+                      oip = (ObjectIdPtr) xref->id.value.ptrvalue;
+                      if (oip != NULL) {
+                        if (oip->str != NULL) {
+                          oip->str = MemFree (oip->str);
+                        }
+                        oip->id = id;
+                      }
+                    } else {
+                      xref = SeqFeatXrefNew ();
+                      if (xref != NULL) {
+                        oip = ObjectIdNew ();
+                        if (oip != NULL) {
+                          oip->id = id;
+                          xref->id.choice = 3;
+                          xref->id.value.ptrvalue = (Pointer) oip;
+                          xref->next = mrna->xref;
+                          mrna->xref = xref;
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+
+              if (mrna->id.choice == 3) {
+                oip = (ObjectIdPtr) mrna->id.value.ptrvalue;
+                if (oip != NULL && oip->str == NULL) {
+                  id = oip->id;
+                  if (id > 0) {
+                    for (xref = cds->xref; xref != NULL && xref->id.choice != 3; xref = xref->next) continue;
+                    if (xref != NULL) {
+                      oip = (ObjectIdPtr) xref->id.value.ptrvalue;
+                      if (oip != NULL) {
+                        if (oip->str != NULL) {
+                          oip->str = MemFree (oip->str);
+                        }
+                        oip->id = id;
+                      }
+                    } else {
+                      xref = SeqFeatXrefNew ();
+                      if (xref != NULL) {
+                        oip = ObjectIdNew ();
+                        if (oip != NULL) {
+                          oip->id = id;
+                          xref->id.choice = 3;
+                          xref->id.value.ptrvalue = (Pointer) oip;
+                          xref->next = cds->xref;
+                          cds->xref = xref;
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    /* clean up */
+
+    MemFree (cdsarray);
+    MemFree (mrnaarray);
+  }
+
+  /* more cleanup */
+
+  ValNodeFreeData (cdshead);
+  ValNodeFreeData (mrnahead);
 }
 
 NLM_EXTERN void LinkCDSmRNAbyProduct (
@@ -387,6 +628,57 @@ NLM_EXTERN void LinkCDSmRNAbyProduct (
 {
   AssignCDSmRNAfeatureIDs (sep);
   VisitBioseqsInSep (sep, NULL, BspLinkCDSmRNAbyProduct);
+}
+
+NLM_EXTERN void StripFeatIDXrefAsnFilter (
+  AsnIoPtr aip,
+  AsnIoPtr aop
+)
+
+{
+  AsnModulePtr    amp;
+  AsnTypePtr      atp, atp_se, atp_sfx, atp_sfxe;
+  DataVal         dv;
+  Boolean         inxrefs;
+  SeqFeatXrefPtr  xref;
+
+  if (aip == NULL || aop == NULL) return;
+
+  amp = AsnAllModPtr ();
+  if (amp == NULL) return;
+  atp_se = AsnFind ("Seq-entry");
+  atp_sfx = AsnFind ("Seq-feat.xref");
+  atp_sfxe = AsnFind ("Seq-feat.xref.E");
+  if (atp_se == NULL || atp_sfx == NULL || atp_sfxe == NULL) return;
+
+  inxrefs = FALSE;
+  atp = atp_se;
+
+  while ((atp = AsnReadId (aip, amp, atp)) != NULL) {
+    if (atp == atp_sfxe) {
+      xref = SeqFeatXrefAsnRead (aip, atp);
+      if (xref->data.choice != 0) {
+        if (! inxrefs) {
+          inxrefs = TRUE;
+          AsnOpenStruct (aop, atp_sfx, (Pointer) NULL);
+        }
+        SeqFeatXrefAsnWrite (xref, aop, atp);
+      }
+      SeqFeatXrefFree (xref);
+    } else if (atp == atp_sfx) {
+      AsnReadVal (aip, atp, &dv);
+      /* only send struct as open and close item */
+      AsnKillValue (atp, &dv);
+    } else {
+      if (inxrefs) {
+        AsnCloseStruct (aop, atp_sfx, (Pointer) NULL);
+        inxrefs = FALSE;
+      }
+      AsnReadVal (aip, atp, &dv);
+      AsnWrite (aop, atp, &dv);
+      AsnKillValue (atp, &dv);
+    }
+  }
 }
 
 /* general file recursion function */
@@ -3262,6 +3554,25 @@ static SeqIdPtr GetFarPointerID (CharPtr id_str)
   return sip;
 }
 
+static void ReplacePipesWithUnderscores (CharPtr seqid_str)
+{
+  CharPtr cp;
+  
+  if (seqid_str == NULL)
+  {
+    return;
+  }
+  
+  cp = seqid_str;
+  while (*cp != 0)
+  {
+    if (*cp == '|')
+    {
+      *cp = '_';
+    }
+    cp++;
+  }
+}
 
 extern SeqEntryPtr MakeSequinDataFromAlignmentEx (TAlignmentFilePtr afp, Uint1 moltype, Boolean check_ids) 
 {
@@ -3325,6 +3636,11 @@ extern SeqEntryPtr MakeSequinDataFromAlignmentEx (TAlignmentFilePtr afp, Uint1 m
     else
     {
       sip = MakeSeqID (afp->ids [index]);
+      if (sip == NULL && StringChr (afp->ids [index], '|') != NULL)
+      {
+        ReplacePipesWithUnderscores (afp->ids [index]);
+        sip = MakeSeqID (afp->ids [index]);
+      }
       if (sip != NULL)
       {
         sip->next = SeqIdFree (sip->next);

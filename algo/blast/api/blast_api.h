@@ -1,4 +1,4 @@
-/* $Id: blast_api.h,v 1.4 2005/04/27 19:59:26 dondosha Exp $
+/* $Id: blast_api.h,v 1.5 2005/08/29 14:44:19 camacho Exp $
 ***************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -61,8 +61,6 @@ extern "C" {
  * @param tf_data Structure to use for on-the-fly tabular formatting [in]
  * @param seqalign_out All results in Seq-align form. [out]
  * @param filter_out Filtering locations [out]
- * @param mask_at_hash Was filtering performed only for lookup table, but not
- *                     for extension? [out]
  * @param extra_returns Additional information about the search [out]
  */
 Int2 
@@ -72,7 +70,6 @@ Blast_DatabaseSearch(SeqLoc* query_seqloc, char* db_name,
                      BlastTabularFormatData* tf_data,
                      SeqAlign **seqalign_out,
                      SeqLoc** filter_out,
-                     Boolean* mask_at_hash,
                      Blast_SummaryReturn* extra_returns);
 
 /** Compares a list of SeqLoc's against another list of SeqLoc's,
@@ -84,8 +81,6 @@ Blast_DatabaseSearch(SeqLoc* query_seqloc, char* db_name,
  * @param tf_data Structure to use for on-the-fly tabular formatting [in]
  * @param seqalign_out All results in Seq-align form. [out]
  * @param filter_out Filtering locations [out]
- * @param mask_at_hash Was filtering performed only for lookup table, but not
- *                     for extension? [out]
  * @param extra_returns Additional information about the search [out]
  */
 Int2 
@@ -96,7 +91,6 @@ Blast_TwoSeqLocSetsAdvanced(SeqLoc* query_seqloc,
                             BlastTabularFormatData* tf_data,
                             SeqAlign **seqalign_out,
                             SeqLoc** filter_out,
-                            Boolean* mask_at_hash,
                             Blast_SummaryReturn* extra_returns);
 
 /** Compare a list of query SeqLoc's against a source of subject sequences. 
@@ -108,7 +102,6 @@ Blast_TwoSeqLocSetsAdvanced(SeqLoc* query_seqloc,
  * @param results Search results [out]
  * @param filter_out Query locations that were masked (filtered) during the 
  *                   search [out]
- * @param mask_at_hash Was masking performed only for in the lookup table? [out]
  * @param extra_returns Additional search statistits [out]
  * @return 0 on success, -1 on failure.
  */
@@ -120,7 +113,6 @@ Blast_RunSearch(SeqLoc* query_seqloc,
                 BlastTabularFormatData* tf_data,
                 BlastHSPResults **results,
                 SeqLoc** filter_out,
-                Boolean* mask_at_hash,
                 Blast_SummaryReturn* extra_returns);
 
 /** Run a PHI BLAST search for a query SeqLoc against a database. Return results
@@ -135,8 +127,6 @@ Blast_RunSearch(SeqLoc* query_seqloc,
  *                ValNode data points to a Seq-align. [out]
  * @param filter_out Query locations that were masked (filtered) during the 
  *                   search. [out]
- *                   NB: masking at hash is not applicable to PHI BLAST,
- *                   so there is no mask_at_hash output argument.
  * @param extra_returns Additional search statistits [out]
  * @return 0 on success, -1 on failure.
  */

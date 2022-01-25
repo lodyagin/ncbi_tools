@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   5/5/00
 *
-* $Revision: 6.134 $
+* $Revision: 6.141 $
 *
 * File Description: 
 *
@@ -64,7 +64,7 @@
 #include <pmfapi.h>
 #include <tax3api.h>
 
-#define TBL2ASN_APP_VER "4.7"
+#define TBL2ASN_APP_VER "5.3"
 
 CharPtr TBL2ASN_APPLICATION = TBL2ASN_APP_VER;
 
@@ -1730,6 +1730,9 @@ static Uint2 ProcessGappedSet (
     entityID = ObjMgrRegister (OBJ_BIOSEQSET, (Pointer) bssp);
   } else {
     bsp = ReadDeltaFasta (fp, NULL);
+    if (bsp != NULL) {
+      entityID = ObjMgrRegister (OBJ_BIOSEQ, (Pointer) bsp);
+    }
   }
   if (bsp == NULL) return 0;
 

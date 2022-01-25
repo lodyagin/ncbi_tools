@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/2/04
 *
-* $Revision: 1.2 $
+* $Revision: 1.3 $
 *
 * File Description: 
 *
@@ -111,9 +111,32 @@ static int LIBCALLBACK SortStringByQuoted (
   return QuotedStringCmp (str1, str2);
 }
 
+static int LIBCALLBACK RevSortStringByQuoted (
+  VoidPtr ptr1,
+  VoidPtr ptr2
+)
+
+{
+  int         compare;
+  CharPtr     str1, str2;
+  ValNodePtr  vnp1, vnp2;
+
+  if (ptr1 == NULL || ptr2 == NULL) return 0;
+  vnp1 = *((ValNodePtr PNTR) ptr1);
+  vnp2 = *((ValNodePtr PNTR) ptr2);
+  if (vnp1 == NULL || vnp2 == NULL) return 0;
+  str1 = (CharPtr) vnp1->data.ptrvalue;
+  str2 = (CharPtr) vnp2->data.ptrvalue;
+  if (str1 == NULL || str2 == NULL) return 0;
+
+  compare = QuotedStringCmp (str1, str2);
+  return -compare;
+}
+
 static void ProcessFileToSort (
   FILE *ifp,
-  FILE *ofp
+  FILE *ofp,
+  Boolean reverse
 )
 
 
@@ -139,7 +162,11 @@ static void ProcessFileToSort (
   }
   if (head == NULL) return;
 
-  head = ValNodeSort (head, SortStringByQuoted);
+  if (reverse) {
+    head = ValNodeSort (head, RevSortStringByQuoted);
+  } else {
+    head = ValNodeSort (head, SortStringByQuoted);
+  }
 
   for (vnp = head; vnp != NULL; vnp = vnp->next) {
     str = (CharPtr) vnp->data.ptrvalue;
@@ -154,12 +181,15 @@ static void ProcessFileToSort (
 
 #define i_argInputFile   0
 #define o_argOutputFile  1
+#define r_argReverse     2
 
 Args myargs [] = {
   {"Input File Name", "stdin", NULL, NULL,
     FALSE, 'i', ARG_FILE_IN, 0.0, 0, NULL},
   {"Output File Name", "stdout", NULL, NULL,
     FALSE, 'o', ARG_FILE_OUT, 0.0, 0, NULL},
+  {"Reverse Order", "F", NULL, NULL,
+    TRUE, 'r', ARG_BOOLEAN, 0.0, 0, NULL},
 };
 
 Int2 Main (void)
@@ -167,6 +197,7 @@ Int2 Main (void)
 {
   FILE     *ifp, *ofp;
   CharPtr  infile, outfile;
+  Boolean  reverse;
 
   ErrSetFatalLevel (SEV_MAX);
   ErrClearOptFlags (EO_SHOW_USERSTR);
@@ -180,6 +211,7 @@ Int2 Main (void)
 
   infile = (CharPtr) myargs [i_argInputFile].strvalue;
   outfile = (CharPtr) myargs [o_argOutputFile].strvalue;
+  reverse = (Boolean ) myargs [r_argReverse].intvalue;
 
   if (StringHasNoText (infile)) {
     Message (MSG_FATAL, "No input file");
@@ -204,7 +236,7 @@ Int2 Main (void)
     return 1;
   }
 
-  ProcessFileToSort (ifp, ofp);
+  ProcessFileToSort (ifp, ofp, reverse);
 
   FileClose (ofp);
   FileClose (ifp);
