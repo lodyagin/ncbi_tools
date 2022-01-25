@@ -26,7 +26,7 @@
 
 /*****************************************************************************
 
-File name: copymatrices.c
+File name: copymat.c
 
 Author: Alejandro Schaffer
 
@@ -163,26 +163,38 @@ static void readNextMatrix(FILE * thisMatrixFile,
                         &(bigMatrix[r][24]),
                         &(bigMatrix[r][25]));
   }
-  MemFree(sequence);
   *endPos = r;
 }
 
 /*read each matrix in turn and store its scores in combinedMatrix*/
-static void readAllMatrices(FILE * matrixnamefp, FILE *sequencenamefp, ScoreRow * combinedMatrix,
-        Int4 numProfiles)
+static void readAllMatrices(FILE * matrixnamefp, ScoreRow * combinedMatrix, Int4 numProfiles, Char * directoryPrefix)
 {
   Int4 i; /*loop index*/
   Char oneMatrixFileName[MAXLINELEN]; /*name of matrix file to read*/
-  Char oneSequenceFileName[MAXLINELEN]; /*name of sequence file to read*/
   FILE *thisMatrixFile; /*descriptor for one matrix file*/
-  FILE *thisSequenceFile; /*descriptor for one sequence file*/
   Int4 startPos; /*starting row in big matrix for next small matrix*/
   Int4 endPos; /*ending row + 1 in big matrix for this small matrix*/
+  Int4 prefixLength; /*length of directoryPrefix*/
+  Int4 c1,c2; /*loop indices over characters*/
+  Char relativeMatrixFileName[MAXLINELEN];
 
   startPos = 0;
   endPos = 0;
+  if ('\0' != directoryPrefix[0]) {
+    strcpy(oneMatrixFileName, directoryPrefix);
+    prefixLength = strlen(directoryPrefix);
+  }     
   for (i = 0; i < numProfiles; i++) {
-    fscanf(matrixnamefp,"%s", oneMatrixFileName);
+    if ('\0' == directoryPrefix[0])
+      fscanf(matrixnamefp,"%s", oneMatrixFileName);
+    else {
+      fscanf(matrixnamefp,"%s", relativeMatrixFileName); 
+       for(c1 = prefixLength, c2 = 0; relativeMatrixFileName[c2] != '\0';
+          c1++, c2++)
+         oneMatrixFileName[c1] = relativeMatrixFileName[c2];
+       oneMatrixFileName[c1] = '\0';
+     }
+
     if ((thisMatrixFile = FileOpen(oneMatrixFileName, "r")) == NULL)  {
       ErrPostEx(SEV_FATAL, 0, 0, "profiles: Unable to open matrix file %s\n", oneMatrixFileName);
       return;
@@ -228,11 +240,13 @@ static Int4 findTotalLength(FILE *matrixAuxiliaryFile, Int4 numProfiles)
    return(totalLength);
 }
 
-#define NUMARG 1
+#define NUMARG 2
 
 static Args myargs [NUMARG] = {
   { "Database for matrix profiles", 
-	NULL, NULL, NULL, FALSE, 'P', ARG_FILE_IN, 0.0, 0, NULL}
+	"stdin", NULL, NULL, FALSE, 'P', ARG_FILE_IN, 0.0, 0, NULL},
+  { "Print help; overrides all other arguments",
+        "F", NULL, NULL, FALSE, 'H', ARG_BOOLEAN, 0.0, 0, NULL}
 }; 
 
 Int2  Main(void)
@@ -240,10 +254,10 @@ Int2  Main(void)
 {
 
    Char *profilesFileName; /*file name for list of profile file names*/
-   Char *sequencesFileName; /*file anme for list of sequence file names*/
-   Char *matrixFileName; /*file name for list of matrix file names*/
-   Char *auxFileName; /*file name for file containing auxiliary information*/
-   Char *bigFileName; /*file name to store byte-encoded coalesced matrix*/
+   Char sequencesFileName[MAX_NAME_LENGTH]; /*file anme for list of sequence file names*/
+   Char matrixFileName[MAX_NAME_LENGTH]; /*file name for list of matrix file names*/
+   Char auxFileName[MAX_NAME_LENGTH]; /*file name for file containing auxiliary information*/
+   Char bigFileName[MAX_NAME_LENGTH]; /*file name to store byte-encoded coalesced matrix*/
    FILE *auxiliaryfp; /*file descriptor for matrix auxiliary file*/
    FILE *sequencesfp; /*files descriptor for file containing list of sequences*/
    FILE *matrixnamefp; /*file descriptor for file containing matrix names*/
@@ -253,18 +267,25 @@ Int2  Main(void)
    Int4 numProfiles; /*number of profiles*/
    Int4 totalProfileLength; /*total length of all profiles*/
    ScoreRow *combinedMatrix; /*combined matrix for all profiles*/
+   Char *directoryPrefix; /*directory where profile library is kept, used
+                            to reach other directories indirectly*/
    
    if (! GetArgs ("copymatrices", NUMARG, myargs))
      {
         return (1);
      }
 
+   if ((Boolean) myargs[1].intvalue) {
+     IMPALAPrintHelp(FALSE, 80, "copymat", stdout);
+       return(1);
+   }
    profilesFileName = myargs[0].strvalue;
+   directoryPrefix = (Char *) MemNew(MAX_NAME_LENGTH *sizeof(char));
+   strcpy(directoryPrefix,profilesFileName);
 
-   sequencesFileName = addSuffixToName(profilesFileName, ".sn");
-   matrixFileName = addSuffixToName(profilesFileName, ".mn");
-   auxFileName = addSuffixToName(profilesFileName, ".aux");
-   bigFileName = addSuffixToName(profilesFileName, ".mat");
+   impalaMakeFileNames(profilesFileName, auxFileName, bigFileName,
+                      sequencesFileName, matrixFileName, NULL, 
+                      directoryPrefix);
 
    if ((matrixnamefp = FileOpen(matrixFileName, "r")) == NULL)
      {
@@ -298,7 +319,8 @@ Int2  Main(void)
        return (1);
 
    }
-   readAllMatrices(matrixnamefp, sequencesfp, combinedMatrix, numProfiles);
+   readAllMatrices(matrixnamefp, combinedMatrix, numProfiles,
+         directoryPrefix);
    /*  write(bigmatrixfile, (void *) &(combinedMatrix[0]), sizeof(ScoreRow) * totalProfileLength);*/
    FileWrite((void *) &(combinedMatrix[0]), sizeof(ScoreRow) , (size_t) totalProfileLength, bigmatrixfile);
    freeMatrix(combinedMatrix); 

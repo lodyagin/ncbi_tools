@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/3/95
 *
-* $Revision: 6.7 $
+* $Revision: 6.14 $
 *
 * File Description: 
 *
@@ -387,7 +387,7 @@ static CharPtr CharPrtProc (DoC d, Int2 item, Pointer ptr)
   if (vep != NULL) {
     if (ptr != NULL) {
       str = StringSave (ptr);
-      if (GetValue (vep->verbose) == 2) {
+      if (GetValue (vep->verbose) == 3) {
         tabcount = 0;
         tmp = str;
         ch = *tmp;
@@ -639,6 +639,41 @@ static void RevalidateProc (ButtoN b)
   }
 }
 
+static Boolean doSuppressContext = TRUE;
+
+extern Boolean ShouldSetSuppressContext (void)
+
+{
+  return doSuppressContext;
+}
+
+static void SetVerbosityAndRevalidate (PopuP p)
+
+{
+  BaseFormPtr    bfp;
+  int            i;
+  ValidExtraPtr  vep;
+
+  vep = GetObjectExtra (p);
+  if (vep != NULL) {
+    if (GetValue (vep->verbose) > 1) {
+      doSuppressContext = TRUE;
+    } else {
+      doSuppressContext = FALSE;
+    }
+    for (i = SEV_NONE; i <= SEV_MAX; i++) {
+      vep->counts [i] = 0;
+    }
+    vep->clicked = 0;
+    vep->selected = 0;
+    vep->dblClick = FALSE;
+    bfp = vep->bfp;
+    if (bfp != NULL && vep->revalProc != NULL) {
+      vep->revalProc (bfp->form);
+    }
+  }
+}
+
 static void CleanupValidProc (GraphiC g, VoidPtr data)
 
 {
@@ -760,6 +795,16 @@ extern void CreateStdValidatorFormMenus (WindoW w)
 }
 #endif
 
+static CharPtr canStillSubmitText =
+"Please review and correct the following errors. If you are unable to resolve " \
+"an error, submit your sequences, and our annotation staff may contact you " \
+"to help resolve the remaining errors when your sequences are processed.";
+
+static CharPtr howToClickText =
+"Click on an error item to select and scroll to that feature. " \
+"Shift click to choose target sequence and feature if in a set of multiple sequences. " \
+"Double click on an error item to launch the appropriate feature editor.";
+
 /* CreateValidateWindowEx is hidden, allowing a revalidate button */
 extern void CreateValidateWindowEx (ErrNotifyProc notify, CharPtr title,
                                     FonT font, ErrSev sev, Boolean verbose,
@@ -773,9 +818,10 @@ extern void CreateValidateWindowEx (ErrNotifyProc notify, CharPtr title,
   GrouP              g;
   GrouP              h;
   int                i;
+  GrouP              ppt;
   GrouP              q;
   StdEditorProcsPtr  sepp;
-  PrompT             t;
+  GrouP              t;
   ValidExtraPtr      vep;
   WindoW             w;
 
@@ -807,6 +853,8 @@ extern void CreateValidateWindowEx (ErrNotifyProc notify, CharPtr title,
       if (w != NULL) {
         vep->notify = notify;
 
+        ppt = MultiLinePrompt (w, canStillSubmitText, stdCharWidth * 30, systemFont);
+
         c = HiddenGroup (w, 8, 0, NULL);
         SetGroupSpacing (c, 10, 2);
         /*
@@ -814,22 +862,28 @@ extern void CreateValidateWindowEx (ErrNotifyProc notify, CharPtr title,
         Disable (vep->remove);
         */
         StaticPrompt (c, "Message", 0, popupMenuHeight, programFont, 'l');
-        vep->verbose = PopupList (c, FALSE, RepopVal);
+        vep->verbose = PopupList (c, FALSE, SetVerbosityAndRevalidate);
         SetObjectExtra (vep->verbose, vep, NULL);
         PopupItem (vep->verbose, "Verbose");
+        PopupItem (vep->verbose, "Normal");
         PopupItem (vep->verbose, "Terse");
-        if (verbose) {
+        if (GetAppProperty ("InternalNcbiSequin") != NULL) {
           SetValue (vep->verbose, 1);
-        } else {
+          doSuppressContext = FALSE;
+        } else if (verbose) {
           SetValue (vep->verbose, 2);
+          doSuppressContext = TRUE;
+        } else {
+          SetValue (vep->verbose, 3);
+          doSuppressContext = TRUE;
         }
         StaticPrompt (c, "Severity", 0, popupMenuHeight, programFont, 'l');
-        vep->minlevel = PopupList (c, FALSE, RepopVal);
+        vep->minlevel = PopupList (c, FALSE, SetVerbosityAndRevalidate);
         SetObjectExtra (vep->minlevel, vep, NULL);
         PopupItem (vep->minlevel, "INFO");
         PopupItem (vep->minlevel, "WARN");
         PopupItem (vep->minlevel, "ERROR");
-        PopupItem (vep->minlevel, "FATAL");
+        PopupItem (vep->minlevel, "REJECT");
         if (sev >= 1 && sev <= 4) {
           SetValue (vep->minlevel, (Int2) sev);
         } else {
@@ -868,8 +922,7 @@ extern void CreateValidateWindowEx (ErrNotifyProc notify, CharPtr title,
         StaticPrompt (h, "Subcode", stdCharWidth * 9, 0, programFont, 'l');
         StaticPrompt (h, "Message", stdCharWidth * 20, 0, programFont, 'l');
         */
-        t = StaticPrompt (g, "Double click on an error item to launch the appropriate editor.",
-                          0, 0, programFont, 'c');
+        t = MultiLinePrompt (g, howToClickText, stdCharWidth * 30, systemFont);
         vep->doc = DocumentPanel (g, stdCharWidth * 30, stdLineHeight * 20);
         SetObjectExtra (vep->doc, vep, NULL);
         SetDocAutoAdjust (vep->doc, FALSE);
@@ -903,7 +956,7 @@ extern void CreateValidateWindowEx (ErrNotifyProc notify, CharPtr title,
         b = PushButton (w, "Dismiss", CloseValidButton);
 #endif
 
-        AlignObjects (ALIGN_CENTER, (HANDLE) vep->doc, (HANDLE) t,
+        AlignObjects (ALIGN_CENTER, (HANDLE) ppt, (HANDLE) vep->doc, (HANDLE) t,
                       (HANDLE) vep->summary, (HANDLE) b, NULL);
 
         RealizeWindow (w);
@@ -986,7 +1039,7 @@ static CharPtr StringMoveAndConvertTabs (CharPtr dst, CharPtr src, CharPtr suffi
 }
 
 static CharPtr severityLabel [] = {
-  "NONE", "INFO", "WARN", "ERROR", "FATAL", "MAX", NULL
+  "NONE", "INFO", "WARN", "ERROR", "REJECT", "FATAL", "MAX", NULL
 };
 
 static void FillValidBuffer (CharPtr buf, CharPtr text1, CharPtr text2,
@@ -1209,7 +1262,7 @@ extern void AppendValidMessage (CharPtr text1, CharPtr text2, CharPtr text3,
         sev = SEV_MAX;
       }
       (vep->counts [sev])++;
-      sprintf (str, "INFO: %d      WARNING: %d      ERROR: %d      FATAL: %d",
+      sprintf (str, "INFO: %d      WARNING: %d      ERROR: %d      REJECT: %d",
                (int) vep->counts [SEV_INFO], (int) vep->counts [SEV_WARNING],
                (int) vep->counts [SEV_ERROR], (int) vep->counts [SEV_FATAL]);
       SetTitle (vep->summary, str);
@@ -1230,7 +1283,7 @@ extern void AppendValidMessage (CharPtr text1, CharPtr text2, CharPtr text3,
         vnp = vnp->next;
       }
       /*
-      if (GetValue (vep->verbose) == 2) {
+      if (GetValue (vep->verbose) == 3) {
         expanded = NULL;
       }
       */

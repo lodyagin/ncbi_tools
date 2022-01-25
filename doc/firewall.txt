@@ -10,7 +10,7 @@ NCBI dispatcher through a firewall.
 ===============================================
 Connecting to Network Entrez through a firewall
 ===============================================
-[Instructions were last modified in December, 1998]
+[Instructions were last modified in June, 1999]
 
 NCBI databases are accessed via the hyper text transfer 
 protocol (http).  Because of this, most users who are not 
@@ -44,20 +44,15 @@ December 1998).
 
 Configuring older clients
 -------------------------
-These include blastcl3 and earlier, versions of Cn3D 
-earlier than 2.0, Oxford Molecular's MacVector 6.5 and 
-earlier, versions of Sequin earlier than 2.70, and Nentrez 
-versions earlier than 6.4.
-
-We recommend updating blastcl3, Cn3D, Sequin, and Nentrez 
-to newer versions, although all of these programs, except 
-blastcl3, can be used with the old network configuration, 
-which is detailed at the end of the document.  blastcl3 
-MUST be updated, a new version will be soon available from 
-our anonymous ftp server ftp://ncbi.nlm.nih.gov/.  
-MacVector should be used with the old network 
-configuration, please see the old network configuration at 
-the end of the document or contact your manufacturer for 
+These include versions of Cn3D earlier than 2.0, Oxford 
+Molecular's MacVector 6.5 and earlier, versions of Sequin 
+earlier than 2.70, and Nentrez versions earlier than 6.4.
+We recommend updating Cn3D, Sequin, and Nentrez to newer 
+versions, although all of these programs can be used 
+with the old network configuration, which is detailed at 
+the end of the document.  MacVector should be used with the 
+old network configuration, please see the old network configuration 
+at the end of the document or contact your manufacturer for 
 instructions.
 
 
@@ -114,11 +109,11 @@ configuration information at the end of the document.
 Configuring newer clients
 -------------------------
 
-These clients will be released in the near future.  All of 
-these clients include easy-to-use configuration dialogs 
-that allow you to set firewall operation from the programs 
-themselves.  They also deal with correctly with non-
-transparent firewalls.
+All of these clients (except blastcl3) include easy-to-use 
+configuration dialogs that allow you to set firewall operation 
+from the programs themselves.  These clients also deal with correctly 
+with non-transparent firewalls.  Blastcl3 can be configured by installing
+Sequin or Entrez, or by editing the configuration file directly.
 
 If you wish to edit your configuration file directly, use 
 the same instructions for intermediate clients behind 

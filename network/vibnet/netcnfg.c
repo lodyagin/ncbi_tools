@@ -23,7 +23,7 @@
  *
  * ===========================================================================
  *
- * RCS $Id: netcnfg.c,v 6.10 1998/12/15 22:42:22 kans Exp $
+ * RCS $Id: netcnfg.c,v 6.14 1999/08/31 22:25:23 kans Exp $
  *
  * Author:  Kans, Epstein
  *
@@ -49,11 +49,11 @@ typedef struct netconfigdata {
 
   TexT            proxyHost;
   TexT            proxyPort;
-  ButtoN          transparentProxy;
+  TexT            firewallProxy;
 
   Char            proxyValue [256];
   Char            portValue [16];
-  Boolean         transValue;
+  Char            firewallValue [256];
 
   ButtoN          dnsAvailable;
   PopuP           timeOut;
@@ -151,31 +151,31 @@ static void AcceptNetConfigForm (ButtoN b)
     SetAppParam ("NCBI", "NET_SERV", "SRV_CONN_MODE", "FIREWALL");
     GetTitle (ncp->proxyHost, str, sizeof (str));
     if (! StringHasNoText (str)) {
-      SetAppParam ("NCBI", "NET_SERV", "SRV_PROXY_HOST", str);
+      SetAppParam ("NCBI", "NET_SERV", "SRV_HTTP_PROXY_HOST", str);
       GetTitle (ncp->proxyPort, str, sizeof (str));
       if (StringICmp (str, "80") == 0) {
         str [0] = '\0';
       }
       if (! StringHasNoText (str)) {
-        SetAppParam ("NCBI", "NET_SERV", "SRV_PROXY_PORT", str);
+        SetAppParam ("NCBI", "NET_SERV", "SRV_HTTP_PROXY_PORT", str);
       } else {
-        SetAppParam ("NCBI", "NET_SERV", "SRV_PROXY_PORT", NULL);
-      }
-      if (GetStatus (ncp->transparentProxy)) {
-        SetAppParam ("NCBI", "NET_SERV", "SRV_PROXY_TRANSPARENT", "TRUE");
-      } else {
-        SetAppParam ("NCBI", "NET_SERV", "SRV_PROXY_TRANSPARENT", NULL);
+        SetAppParam ("NCBI", "NET_SERV", "SRV_HTTP_PROXY_PORT", NULL);
       }
     } else {
+      SetAppParam ("NCBI", "NET_SERV", "SRV_HTTP_PROXY_HOST", NULL);
+      SetAppParam ("NCBI", "NET_SERV", "SRV_HTTP_PROXY_PORT", NULL);
+    }
+    GetTitle (ncp->firewallProxy, str, sizeof (str));
+    if (! StringHasNoText (str)) {
+      SetAppParam ("NCBI", "NET_SERV", "SRV_PROXY_HOST", str);
+    } else {
       SetAppParam ("NCBI", "NET_SERV", "SRV_PROXY_HOST", NULL);
-      SetAppParam ("NCBI", "NET_SERV", "SRV_PROXY_PORT", NULL);
-      SetAppParam ("NCBI", "NET_SERV", "SRV_PROXY_TRANSPARENT", NULL);
     }
   } else {
     SetAppParam ("NCBI", "NET_SERV", "SRV_CONN_MODE", NULL);
+    SetAppParam ("NCBI", "NET_SERV", "SRV_HTTP_PROXY_HOST", NULL);
+    SetAppParam ("NCBI", "NET_SERV", "SRV_HTTP_PROXY_PORT", NULL);
     SetAppParam ("NCBI", "NET_SERV", "SRV_PROXY_HOST", NULL);
-    SetAppParam ("NCBI", "NET_SERV", "SRV_PROXY_PORT", NULL);
-    SetAppParam ("NCBI", "NET_SERV", "SRV_PROXY_TRANSPARENT", NULL);
   }
 
   if (GetStatus (ncp->dnsAvailable)) {
@@ -216,9 +216,9 @@ static void AcceptNetConfigForm (ButtoN b)
       NoEntryExists ("SRV_ENGINE_HOST") &&
       NoEntryExists ("SRV_ENGINE_PORT") &&
       NoEntryExists ("SRV_ENGINE_URL") &&
-      NoEntryExists ("SRV_PROXY_HOST") &&
-      NoEntryExists ("SRV_PROXY_PORT") &&
-      NoEntryExists ("SRV_PROXY_TRANSPARENT")) {
+      NoEntryExists ("SRV_HTTP_PROXY_HOST") &&
+      NoEntryExists ("SRV_HTTP_PROXY_PORT") &&
+      NoEntryExists ("SRV_PROXY_HOST")) {
     SetAppParam ("NCBI", "NET_SERV", NULL, NULL);
   }
 
@@ -246,12 +246,21 @@ static void ChangeConfigControls (NetConfigPtr ncp)
       SafeSetTitle (ncp->proxyHost, ncp->proxyValue);
     }
     Enable (ncp->proxyHost);
+    if (! Enabled (ncp->firewallProxy)) {
+      SafeSetTitle (ncp->firewallProxy, ncp->firewallValue);
+    }
+    Enable (ncp->firewallProxy);
   } else {
     if (Enabled (ncp->proxyHost)) {
       GetTitle (ncp->proxyHost, ncp->proxyValue, sizeof (ncp->proxyValue));
       SafeSetTitle (ncp->proxyHost, NULL);
     }
     Disable (ncp->proxyHost);
+    if (Enabled (ncp->firewallProxy)) {
+      GetTitle (ncp->firewallProxy, ncp->firewallValue, sizeof (ncp->firewallValue));
+      SafeSetTitle (ncp->firewallProxy, NULL);
+    }
+    Disable (ncp->firewallProxy);
   }
   hasProxy = (Boolean) (! TextHasNoText (ncp->proxyHost));
   if (hasProxy) {
@@ -263,21 +272,12 @@ static void ChangeConfigControls (NetConfigPtr ncp)
       SafeSetTitle (ncp->proxyPort, ncp->portValue);
     }
     Enable (ncp->proxyPort);
-    if (! Enabled (ncp->transparentProxy)) {
-      SafeSetStatus (ncp->transparentProxy, ncp->transValue);
-    }
-    Enable (ncp->transparentProxy);
   } else {
     if (Enabled (ncp->proxyPort)) {
       GetTitle (ncp->proxyPort, ncp->portValue, sizeof (ncp->portValue));
       SafeSetTitle (ncp->proxyPort, NULL);
     }
     Disable (ncp->proxyPort);
-    if (Enabled (ncp->transparentProxy)) {
-      ncp->transValue = GetStatus (ncp->transparentProxy);
-      SafeSetStatus (ncp->transparentProxy, FALSE);
-    }
-    Disable (ncp->transparentProxy);
   }
   if (val != 1) {
     SafeShow (ncp->netGroup);
@@ -311,11 +311,13 @@ extern void ShowNetConfigForm (WndActnProc activate, FormMessageFunc messages,
   GrouP         g;
   GrouP         h;
   GrouP         j;
+  Int2          len;
   NetConfigPtr  ncp;
   PrompT        ppt0, ppt1;
   ButtoN        rb;
   Char          str [256];
   WindoW        w;
+  GrouP         x;
   GrouP         z;
 
   w = NULL;
@@ -356,18 +358,29 @@ extern void ShowNetConfigForm (WndActnProc activate, FormMessageFunc messages,
     ncp->netGroup = HiddenGroup (h, -1, 0, NULL);
     SetGroupSpacing (ncp->netGroup, 5, 10);
   
-    z = HiddenGroup (ncp->netGroup, -4, 0, NULL);
-    StaticPrompt (z, "Proxy", 0, dialogTextHeight, programFont, 'l');
-    ncp->proxyHost = DialogText (z, "", 15, ChangeProxy);
+    SelectFont (programFont);
+    len = StringWidth ("HTTP Proxy Server ") + 2;
+    SelectFont (systemFont);
+
+    z = HiddenGroup (ncp->netGroup, -2, 0, NULL);
+    StaticPrompt (z, "HTTP Proxy Server", len, dialogTextHeight, programFont, 'l');
+    ncp->proxyHost = DialogText (z, "", 12, ChangeProxy);
     SetObjectExtra (ncp->proxyHost, ncp, NULL);
+    /*
     StaticPrompt (z, "", 0, 0, programFont, 'l');
     StaticPrompt (z, "", 0, 0, programFont, 'l');
-    ppt0 = StaticPrompt (z, "Port ", 0, dialogTextHeight, programFont, 'l');
+    */
+    ppt0 = StaticPrompt (z, "HTTP Proxy Port ", len, dialogTextHeight, programFont, 'l');
     ncp->proxyPort = DialogText (z, "", 3, NULL);
-    StaticPrompt (z, " ", 0, 0, programFont, 'l');
-    ncp->transparentProxy = CheckBox (z, "Transparent Proxy", NULL);
+    x = MultiLinePrompt (z, "Non-transparent Proxy Server", len, programFont);
+    ncp->firewallProxy = DialogText (z, "", 12, NULL);
+    AlignObjects (ALIGN_MIDDLE, (HANDLE) x, (HANDLE) ncp->firewallProxy, NULL);
+    /*
     AlignObjects (ALIGN_MIDDLE, (HANDLE) ppt0, (HANDLE) ncp->proxyPort,
-                  (HANDLE) ncp->transparentProxy, NULL);
+                  (HANDLE) ncp->firewallProxy, NULL);
+    */
+    AlignObjects (ALIGN_RIGHT, (HANDLE) ncp->proxyHost, (HANDLE) ncp->firewallProxy, NULL);
+    AlignObjects (ALIGN_LEFT, (HANDLE) ncp->proxyHost, (HANDLE) ncp->firewallProxy, NULL);
 
     g = HiddenGroup (ncp->netGroup, 5, 0, NULL);
     /*
@@ -394,7 +407,10 @@ extern void ShowNetConfigForm (WndActnProc activate, FormMessageFunc messages,
     b = PushButton (c, "Cancel", StdSendCancelButtonMessageProc);
     SetObjectExtra (b, ncp, NULL);
 
+    /*
     AlignObjects (ALIGN_CENTER, (HANDLE) h, (HANDLE) c, NULL);
+    */
+    AlignObjects (ALIGN_CENTER, (HANDLE) j, (HANDLE) z, (HANDLE) g, (HANDLE) c, NULL);
 
     RealizeWindow (w);
 
@@ -406,7 +422,7 @@ extern void ShowNetConfigForm (WndActnProc activate, FormMessageFunc messages,
         SafeSetValue (ncp->srvConnMode, 3);
       }
     }
-    if (GetAppParam ("NCBI", "NET_SERV", "SRV_PROXY_HOST", NULL, str, sizeof (str))) {
+    if (GetAppParam ("NCBI", "NET_SERV", "SRV_HTTP_PROXY_HOST", NULL, str, sizeof (str))) {
       if (! StringHasNoText (str)) {
         SafeSetTitle (ncp->proxyHost, str);
         if (GetValue (ncp->srvConnMode) == 2) {
@@ -414,16 +430,14 @@ extern void ShowNetConfigForm (WndActnProc activate, FormMessageFunc messages,
         }
       }
     }
-    if (GetAppParam ("NCBI", "NET_SERV", "SRV_PROXY_PORT", NULL, str, sizeof (str))) {
+    if (GetAppParam ("NCBI", "NET_SERV", "SRV_HTTP_PROXY_PORT", NULL, str, sizeof (str))) {
       if (! StringHasNoText (str)) {
         SafeSetTitle (ncp->proxyPort, str);
       }
     }
-    if (GetAppParam ("NCBI", "NET_SERV", "SRV_PROXY_TRANSPARENT", NULL, str, sizeof (str))) {
-      if (StringICmp (str, "1") == 0 ||
-          StringICmp (str, "YES") == 0 ||
-          StringICmp (str, "TRUE") == 0) {
-        SafeSetStatus (ncp->transparentProxy, TRUE);
+    if (GetAppParam ("NCBI", "NET_SERV", "SRV_PROXY_HOST", NULL, str, sizeof (str))) {
+      if (! StringHasNoText (str)) {
+        SafeSetTitle (ncp->firewallProxy, str);
       }
     }
     if (GetAppParam ("NCBI", "NET_SERV", "SRV_ENGINE_HOST", NULL, str, sizeof (str))) {

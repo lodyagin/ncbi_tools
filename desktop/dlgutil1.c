@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.13 $
+* $Revision: 6.14 $
 *
 * File Description: 
 *
@@ -1081,11 +1081,15 @@ extern void StdSeqFeatPtrToFeatFormProc (ForM f, Pointer data)
 
 {
   FeatureFormPtr  ffp;
+  SeqEntryPtr     oldsep;
+  SeqEntryPtr     sep;
   SeqFeatPtr      sfp;
   Int4            val;
 
   ffp = (FeatureFormPtr) GetObjectExtra (f);
   if (ffp != NULL) {
+    sep = GetTopSeqEntryForEntityID (ffp->input_entityID);
+    oldsep = SeqEntrySetScope (sep);
     sfp = (SeqFeatPtr) data;
     if (sfp != NULL) {
       switch (sfp->data.choice) {
@@ -1104,6 +1108,7 @@ extern void StdSeqFeatPtrToFeatFormProc (ForM f, Pointer data)
       SeqFeatPtrToCommon (ffp, sfp);
       PointerToDialog (ffp->location, sfp->location);
     }
+    SeqEntrySetScope (oldsep);
   }
 }
 

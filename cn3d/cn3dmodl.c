@@ -28,6 +28,46 @@
 * Version Creation Date: 18/9/1998
 *
 * $Log: cn3dmodl.c,v $
+* Revision 6.63  1999/09/10 13:49:38  lewisg
+* eliminate spaces before preprocessor directives
+*
+* Revision 6.62  1999/07/27 14:19:09  ywang
+* fix previous in another way so that not to break any existant code
+*
+* Revision 6.61  1999/07/26 21:42:47  vakatov
+* Fixed a multiple ValNode list deallocation in
+* ClearSpecialFeature/SpecialFeatureFree
+*
+* Revision 6.60  1999/07/15 15:59:41  ywang
+* improve feature control, call Cn3D_DeHighlightAll after ObjMgrDeSelectAll
+*
+* Revision 6.59  1999/07/12 14:15:37  ywang
+* initialize ButtoN b for internal call Cn3D_ListDomainProc & Cn3D_ListStrucProc
+*
+* Revision 6.58  1999/07/07 20:45:35  ywang
+* clear domaindata, mediadata, special feature before reading in new data in cn3d
+*
+* Revision 6.57  1999/07/01 16:01:08  ywang
+* improve display control panel
+*
+* Revision 6.56  1999/06/16 15:13:29  ywang
+* for feature editing: direct return for 'Cancel' 'Delete' 'Edit' 'Save' if no residues or no feature name selected
+*
+* Revision 6.55  1999/06/07 21:25:14  ywang
+* add iUserDefinedFeatureOld, FeatureOnOld to protect saved features being overwritten by temporary feature
+*
+* Revision 6.54  1999/06/07 20:26:11  ywang
+* change prompt for featue editing
+*
+* Revision 6.53  1999/06/07 19:39:50  ywang
+* remove obsolete user defined features, an obsolete feature means a feature whose region has been completely overwirtten by a later defined feature
+*
+* Revision 6.52  1999/06/03 20:29:24  ywang
+* fix bug in aligned domain display when they are from same structure
+*
+* Revision 6.51  1999/05/27 16:11:22  ywang
+* initilize all local variables at defined
+*
 * Revision 6.50  1999/05/03 16:54:23  ywang
 * fix bug for recording and matching mol-id for user defined features
 *
@@ -173,9 +213,9 @@
 
 #include <ncbi.h>
 #ifdef _OPENGL
-    #include <shim3d.h>
+#include <shim3d.h>
 #else
-    #include <viewer3d.h>
+#include <viewer3d.h>
 #endif
 #include <cn3dmain.h>
 #include <math.h>
@@ -276,6 +316,8 @@ Byte iAddedFeature = 0, iEditedFeature = 0;
 Boolean Cn3D_DisplayHighlight = FALSE;
 Boolean Cn3D_NoSingleHL = FALSE;
 Boolean HLStatus = FALSE;
+Boolean JustHLStatus = FALSE;
+Boolean FeatureOverwritten = FALSE;
 /*-----------------------------------------------*/
 void LIBCALLBACK Cn3DCheckNoSingleHighlight(PFB pfbThis,Int4 iModel, Int4 iIndex, Pointer ptr)
 {
@@ -386,11 +428,11 @@ static void Cn3D_ListOthersProc(void)
   sfpThis = sfp;
   while(sfpThis){
      sfipThis = sfpThis->data.ptrvalue;
-     if(sfipThis->title) ListItem(Cn3D_lFeature3, (CharPtr) sfipThis->title);
+     ListItem(Cn3D_lFeature3, (CharPtr) sfipThis->title);
      SetItemStatus(Cn3D_lFeature3, iCount, sfipThis->On);
+     iCount++;
     
      sfpThis = sfpThis->next;
-     iCount++;
   }
 
 }
@@ -404,7 +446,6 @@ static void Cn3D_ListDomainProc(ButtoN b)
 {
   Char  MolName[20];
   Int4 iCount = 0, iCountActive = 0;
-  Int4 i;
 
   SetStatus(Cn3D_bDisplayOthers, FALSE);
   SetStatus(Cn3D_bDisplaySS, FALSE);
@@ -441,7 +482,6 @@ static void Cn3D_ListDomainProc(ButtoN b)
 static void Cn3D_ListAlignedDomainProc(ButtoN b)
 {
   ButtoN b1 = NULL;
-  Int4 iCount;
 
   Cn3D_ListDomainProc(b1);
 }
@@ -501,8 +541,8 @@ static void Cn3D_ReSetModVisibleStatus( PVNMO pvnmoThis, Byte bVisible)
 static void Cn3D_ReSetMmVisibleStatus(PDNMM pdnmmHead, Byte bVisible)
 {
   PMMD  pmmdThis = NULL;
-  PDNMG pdnmg;
-  PMGD  pmgd;
+  PDNMG pdnmg = NULL;
+  PMGD  pmgd = NULL;
 
   while(pdnmmHead){
       pmmdThis = pdnmmHead->data.ptrvalue;
@@ -522,12 +562,12 @@ static void Cn3D_ReSetMmVisibleStatus(PDNMM pdnmmHead, Byte bVisible)
 /*---------------------------------------------------------*/
 static void Cn3D_ReSetVisibleStatus(void)
 {
-  PDNMS pdnmsMaster, pdnmsSlave;
-  PMSD pmsdMaster, pmsdSlave;
+  PDNMS pdnmsMaster = NULL, pdnmsSlave = NULL;
+  PMSD pmsdMaster = NULL, pmsdSlave = NULL;
   PDNMM pdnmmHead = NULL;
   PMMD  pmmdThis = NULL;
-  PDNMG pdnmg;
-  PMGD  pmgd;
+  PDNMG pdnmg = NULL;
+  PMGD  pmgd = NULL;
 
   PVNMO pvnmoThis = NULL;
 
@@ -589,9 +629,9 @@ static void ReSetSalsaDisplay(void)
 static void Cn3D_ListStrucProc(ButtoN b)
 {
   PDNMS pdnmsMaster = NULL, pdnmsSlave = NULL;
-  PMSD pmsdMaster, pmsdSlave;
+  PMSD pmsdMaster = NULL, pmsdSlave = NULL;
 
-  Int4 iCount;
+  Int4 iCount = 0;
 
   Reset(Cn3D_lStruc);
 
@@ -954,7 +994,7 @@ void SynchronizeModVisibleStatus(PFB pfbThis)
 {
    PMSD pmsdThis = NULL;
    PMMD pmmdThis = NULL;
-   PDNMG pdnmg;
+   PDNMG pdnmg = NULL;
    PMGD pmgdThis = NULL;
 
    PVNMO pvnmoThis = NULL;
@@ -1010,7 +1050,7 @@ static void SetDomainDataItemStatus(LisT l)
   return; 
 }
 /*---------------------------------------------------------*/
-Int4 iCountItemGet(PMSD pmsdThis, PMMD pmmdThis, PMGD pmgdThis)
+Int4 iCountItemGet(PMSD pmsdThis, PMMD pmmdThis, PMGD pmgdThis, Int4 iCountStruc)
 {
   Int4 iCount = 0, iCountLive = 0;
   Int2 iDomain = 0;
@@ -1021,7 +1061,7 @@ Int4 iCountItemGet(PMSD pmsdThis, PMMD pmmdThis, PMGD pmgdThis)
   for(iCount = 0; iCount < iDomainCount; iCount++){
      if(!domaindata[iCount]->bVisibleParent) continue;
      if(StringCmp(pmsdThis->pcPDBName, domaindata[iCount]->pcPDBName) == 0 && StringCmp(pmmdThis->pcMolName, domaindata[iCount]->pcMolName) ==0 && iDomain ==
-domaindata[iCount]->iDomain) return (iCountLive + 1) ;
+domaindata[iCount]->iDomain && iCountStruc == domaindata[iCount]->iStrucIndex) return (iCountLive + 1) ;
      iCountLive++;
     
   }
@@ -1033,14 +1073,14 @@ static void fnAlignList(LisT l)
 /* set the values of the alignment pane */
 {
   Int4 iCount = 0;
-  PDNMS pdnmsMaster, pdnmsSlave;
-  PMSD pmsdMaster, pmsdSlave;
-  BiostrucFeaturePtr pbsfThis;
+  PDNMS pdnmsMaster = NULL, pdnmsSlave = NULL;
+  PMSD pmsdMaster = NULL, pmsdSlave = NULL;
+  BiostrucFeaturePtr pbsfThis = NULL;
   PDNMM pdnmmHead = NULL;
   PMMD  pmmdThis = NULL;
-  Byte bVisible;
-  SeqIdPtr sipThis;
-  Uint2 entityID, itemID, itemtype;         
+  Byte bVisible = 0;
+  SeqIdPtr sipThis = NULL;
+  Uint2 entityID = 0, itemID = 0, itemtype = 0;         
 
 #ifndef _OPENGL
   Cn3D_SaveActiveCam();
@@ -1164,19 +1204,19 @@ static void Cn3D_DisplayProc(ButtoN b )
   Int4 iCountItem = 0, iCountStruc = 0;
   Int4 idom = 0;
 
-  SpecialFeaturePtr sfpThis;
+  SpecialFeaturePtr sfpThis = NULL;
   SpecialFeatureInfoPtr sfipThis = NULL;
 
-  PDNMS pdnmsMaster, pdnmsSlave;
-  PMSD pmsdMaster, pmsdSlave;
+  PDNMS pdnmsMaster = NULL, pdnmsSlave = NULL;
+  PMSD pmsdMaster = NULL, pmsdSlave = NULL;
   PDNMM pdnmmHead = NULL;
   PMMD  pmmdThis = NULL;
-  PDNMG pdnmg;
-  PMGD  pmgd;
-  PVNMO pvnmoThis;
+  PDNMG pdnmg = NULL;
+  PMGD  pmgd = NULL;
+  PVNMO pvnmoThis = NULL;
 
-  SeqIdPtr sipThis;
-  Uint2 entityID, itemID, itemtype;
+  SeqIdPtr sipThis = NULL;
+  Uint2 entityID = 0, itemID = 0, itemtype = 0;
 
   Boolean bDomainVisible = FALSE;
   Boolean FirstMG = FALSE;
@@ -1184,11 +1224,17 @@ static void Cn3D_DisplayProc(ButtoN b )
 
   LisT l = NULL;
 
-  Byte bVisible;
+  Byte bVisible = 0;
 
   GetAlignStatus();
 
   fnAlignList(l);
+
+  if(Cn3D_DisplayHighlight) Cn3DCheckHighlighted();
+  if(Cn3D_NoSingleHL) {
+     Cn3D_DisplayHighlight = FALSE;
+     Cn3D_bDisplayHighlightStatusSet(FALSE);
+  }
 
         SetDomainDataItemStatus(l);        
         pdnmsMaster = GetSelectedModelstruc();
@@ -1205,7 +1251,7 @@ AM_RNA && pmmdThis->bWhat != (Byte) AM_DNA) goto setoutB1;
                 
                  for(pdnmg = pmmdThis->pdnmgHead; pdnmg != NULL; pdnmg = pdnmg->next){
                     pmgd = (PMGD) pdnmg->data.ptrvalue;
-                    iCountItem = iCountItemGet(pmsdMaster, pmmdThis, pmgd);
+                    iCountItem = iCountItemGet(pmsdMaster, pmmdThis, pmgd, iCountStruc);
                     pmgd->bVisible = GetItemStatus(Cn3D_lFeature, iCountItem);
                     if (pmgd->bReserved && (pmgd->bReserved == pmsdMaster->bAligned) && !Cn3D_fAlignOn) pmgd->bVisible = 0;
                     if ((!(pmgd->bReserved) || (pmgd->bReserved != pmsdMaster->bAligned)) && !Cn3D_fUnalignOn) pmgd->bVisible = 0;
@@ -1220,6 +1266,7 @@ AM_RNA && pmmdThis->bWhat != (Byte) AM_DNA) goto setoutB1;
            }
 
            pdnmsSlave = pmsdMaster->pdnmsSlaves;
+           iCountStruc++;
            while(pdnmsSlave) {
               pmsdSlave = (PMSD)pdnmsSlave->data.ptrvalue;
 
@@ -1233,7 +1280,7 @@ AM_RNA && pmmdThis->bWhat != (Byte) AM_DNA) goto setoutB1;
 
                     for(pdnmg = pmmdThis->pdnmgHead; pdnmg != NULL; pdnmg = pdnmg->next){
                        pmgd = (PMGD) pdnmg->data.ptrvalue;
-                       iCountItem = iCountItemGet(pmsdSlave, pmmdThis, pmgd);
+                       iCountItem = iCountItemGet(pmsdSlave, pmmdThis, pmgd, iCountStruc);
                        pmgd->bVisible = GetItemStatus(Cn3D_lFeature, iCountItem);
                        if (pmgd->bReserved){
                           if ( (*(pmgd->pbMasterReserved) == *(pmsdSlave->pbAligned)) && !Cn3D_fAlignOn) pmgd->bVisible = 0;
@@ -1250,6 +1297,7 @@ AM_RNA && pmmdThis->bWhat != (Byte) AM_DNA) goto setoutB1;
               }
 
               pdnmsSlave = pdnmsSlave->next;
+              iCountStruc++;
            }
         }
 
@@ -1375,7 +1423,7 @@ GrouP LIBCALL DisplayControls ( Nlm_GrouP prnt)
 void LIBCALL ResetDisplayCtrls(void)
 /* set the values of the alignment pane */
 {
-  ButtoN b;
+  ButtoN b = NULL;
 
   Reset(Cn3D_lStruc);      
 
@@ -1453,9 +1501,10 @@ void UpdateFeatureList2()
   sfpThis = sfp;
   while(sfpThis){
      sfipThis = sfpThis->data.ptrvalue;
-     if(sfipThis->title) ListItem(Cn3D_lFeature2, (CharPtr) sfipThis->title);   
+     ListItem(Cn3D_lFeature2, (CharPtr) sfipThis->title);   
      sfpThis = sfpThis->next;
   }
+  SetValue(Cn3D_lFeature2, 0);
 
 }
 /*---------------------------------------------------------*/
@@ -1466,8 +1515,11 @@ void  LIBCALLBACK DoCleanSpecialFeatureWithMGD(PFB pfbThis,Int4 iModel, Int4 iIn
 
   pmgdThis = (PMGD) pfbThis;
   if(pmgdThis && pmgdThis->iUserDefinedFeature == iAddedFeature){
-     pmgdThis->iUserDefinedFeature = 0;
-     pmgdThis->FeatureOn = 0;
+     pmgdThis->iUserDefinedFeature = pmgdThis->iUserDefinedFeatureOld;
+     pmgdThis->FeatureOn = pmgdThis->iUserDefinedFeatureOld;
+
+     pmgdThis->iUserDefinedFeatureOld = 0;
+     pmgdThis->iUserDefinedFeatureOld = 0;
   }
 
 }
@@ -1545,6 +1597,62 @@ void Cn3D_CheckHLStatus(void)
      }
      pdnmsSlave = pdnmsSlave->next;
   }      
+
+}
+/*---------------------------------------------------------*/
+void Cn3D_CheckJustHLStatus(void)
+{
+  PDNMS pdnmsThis = NULL, pdnmsSlave = NULL;
+  PMSD  pmsdMaster = NULL, pmsdSlave = NULL;
+  PDNMM pdnmmHead = NULL;
+  PMMD  pmmdThis = NULL;
+  PDNMG pdnmgThis = NULL;
+  PMGD  pmgdThis = NULL;
+
+  JustHLStatus = FALSE;
+
+  pdnmsThis = GetSelectedModelstruc();
+  if(pdnmsThis) pmsdMaster = (PMSD) pdnmsThis->data.ptrvalue;
+  else return;
+
+  pdnmmHead = pmsdMaster->pdnmmHead;
+  while(pdnmmHead){
+     pmmdThis = pdnmmHead->data.ptrvalue;
+     if(pmmdThis){
+        pdnmgThis = pmmdThis->pdnmgHead;
+        while(pdnmgThis){
+           pmgdThis = pdnmgThis->data.ptrvalue;
+           if(pmgdThis && pmgdThis->bJustHighlighted == 1){
+              JustHLStatus = TRUE;
+              return;
+           }
+           pdnmgThis = pdnmgThis->next;
+        }
+     }
+     pdnmmHead = pdnmmHead->next;
+  }
+
+  pdnmsSlave = pmsdMaster->pdnmsSlaves;
+  while(pdnmsSlave){
+     pmsdSlave = (PMSD)pdnmsSlave->data.ptrvalue;
+     pdnmmHead = pmsdSlave->pdnmmHead;
+      while(pdnmmHead){
+         pmmdThis = pdnmmHead->data.ptrvalue;
+         if(pmmdThis){
+            pdnmgThis = pmmdThis->pdnmgHead;
+            while(pdnmgThis){
+               pmgdThis = pdnmgThis->data.ptrvalue;
+               if(pmgdThis && pmgdThis->bJustHighlighted == 1){
+                  JustHLStatus = TRUE;
+                  return;
+               }
+               pdnmgThis = pdnmgThis->next;
+            }
+         }
+         pdnmmHead = pdnmmHead->next;
+     }
+     pdnmsSlave = pdnmsSlave->next;
+  }     
 
 }
 /*---------------------------------------------------------*/
@@ -1674,21 +1782,70 @@ void  UnLinkSpecialFeatureWithMGD(void)
   }
 
 }
+/*---------------------------------------*/
+SpecialFeatureInfoPtr GetThisSpecialAlgorRenderSet(Int2 id)
+{
+ SpecialFeaturePtr sfpThis = NULL;
+ SpecialFeatureInfoPtr sfipThis = NULL;
+
+ sfpThis = sfp;
+ while(sfpThis){
+    if(sfpThis->choice == id){
+       return sfpThis->data.ptrvalue;
+    }
+    sfpThis = sfpThis->next;
+ }
+
+ return NULL;
+
+}
 /*---------------------------------------------------------*/
 void LIBCALLBACK DoLinkSpecialFeatureWithMGD(PFB pfbThis,Int4 iModel, Int4 iIndex, Pointer ptr)
 {
   PDNMG pdnmgThis = NULL;
   PMGD  pmgdThis = NULL;
 
+  SpecialFeatureInfoPtr sfipThis = NULL;
+
   pmgdThis = (PMGD) pfbThis;
   if(pmgdThis && pmgdThis->bHighlighted == 1){
+     if(pmgdThis->iUserDefinedFeature != 0) {
+        if(GetStatus(bFeatureAdd)){
+           sfipThis = GetThisSpecialAlgorRenderSet(pmgdThis->iUserDefinedFeature);
+           if(sfipThis != NULL) sfipThis->iRes--;
+           FeatureOverwritten = TRUE;
+           pmgdThis->iUserDefinedFeatureOld = 0;
+           pmgdThis->FeatureOnOld = 0;
+        }
+        else {
+           pmgdThis->iUserDefinedFeatureOld = pmgdThis->iUserDefinedFeature; 
+           pmgdThis->FeatureOnOld = pmgdThis->FeatureOn;
+        }
+     }
      pmgdThis->iUserDefinedFeature = iAddedFeature;
      pmgdThis->FeatureOn = 1;
      pmgdThis->bJustHighlighted = 1;
+     sfipThis = GetThisSpecialAlgorRenderSet(pmgdThis->iUserDefinedFeature);
+     if(sfipThis != NULL) sfipThis->iRes++;
   }
   else if(pmgdThis && pmgdThis->bJustHighlighted == 1){
+     if(pmgdThis->iUserDefinedFeature != 0) {
+        if(GetStatus(bFeatureAdd)){
+           sfipThis = GetThisSpecialAlgorRenderSet(pmgdThis->iUserDefinedFeature);
+           if(sfipThis != NULL) sfipThis->iRes--;
+           FeatureOverwritten = TRUE;
+           pmgdThis->iUserDefinedFeatureOld = 0;
+           pmgdThis->FeatureOnOld = 0;
+        }
+        else {
+           pmgdThis->iUserDefinedFeatureOld = pmgdThis->iUserDefinedFeature; 
+           pmgdThis->FeatureOnOld = pmgdThis->FeatureOn;
+        }
+     }
      pmgdThis->iUserDefinedFeature = iAddedFeature;
      pmgdThis->FeatureOn = 1;
+     sfipThis = GetThisSpecialAlgorRenderSet(pmgdThis->iUserDefinedFeature);
+     if(sfipThis != NULL) sfipThis->iRes++;
   }
 
 }
@@ -1734,10 +1891,15 @@ SpecialFeaturePtr LIBCALL SpecialFeatureFree(SpecialFeaturePtr sfpThis)
   if(sfpThis == NULL) return NULL;
   sfipThis = sfpThis->data.ptrvalue;
   if(sfipThis)sfipThis = SpecialFeatureInfoFree(sfipThis);
-
-  sfpThis = ValNodeFree(sfpThis);
  
+  sfpThis->data.ptrvalue = NULL;
+  sfpThis = ValNodeFree(sfpThis);
+       /* or should be sfpThis = MemFree(sfpThis)-here sfpThis->next is */
+       /* already set to know or is NULL by design */
+       /* done this way so no redundant code needed */
+
   return(sfpThis);
+
 }
 /*---------------------------------------------------------*/
 SpecialFeatureInfoPtr LIBCALL SpecialFeatureInfoNew()
@@ -1846,7 +2008,7 @@ PARS LIBCALL GetSpecialAlgorRenderSet(void)
 /*---------------------------------------------------------*/
 void FeatureTitleProc(TexT b)
 {
-  ResetModelCtrls;
+  ResetModelCtrls();
 }
 /*---------------------------------------------------------*/
 void ResetFeatureTitleProc(ButtoN b)
@@ -1856,7 +2018,7 @@ void ResetFeatureTitleProc(ButtoN b)
 /*---------------------------------------------------------*/
 static void ChangeSpecialRenderProc (void)
 {
-  Int2 i, j, k;
+  Int2 i = 0, j = 0, k = 0;
   PARS pars = NULL;
   UIEnum val;
 
@@ -2047,9 +2209,9 @@ static PopuP ModelColorStyle (GrouP h, Int2 i)
 /*---------------------------------------------------------*/
 static void ChangeSpecialLabelsProc (void)
 {
-  Int2 i, k, nameval;
+  Int2 i = 0, k = 0, nameval = 0;
   Uint1 codeval;
-  Boolean NumOn, NameOn, PDBOn, WhiteOn, TopOn;
+  Boolean NumOn = FALSE, NameOn = FALSE, PDBOn = FALSE, WhiteOn = FALSE, TopOn = FALSE;
   PARS pars = NULL;
 
   pars = GetSpecialAlgorRenderSet();
@@ -2223,7 +2385,7 @@ static void ModelSetRenderCtrls(PARS pars)
 /*---------------------------------------------------------*/
 static void  ModelSetLabelCtrls(PARS pars)
 {
-  Int2 i, val, style, size;
+  Int2 i = 0, val = 0, style = 0, size = 0;
   PMSD pmsdThis = NULL;
   PDNMS pdnmsThis = NULL;
 
@@ -2305,6 +2467,8 @@ void bFeatureDeleteAction(ButtoN b)
 void lFeature2Action(LisT l){
   SpecialFeatureInfoPtr sfip = NULL;
   PARS parsThis = NULL;
+ 
+  Int4 val = 0;
 
   if(GetStatus(bFeatureEdit) || GetStatus(bFeatureDelete)){
      sfip = GetEditedSpecialFeatureInfo();
@@ -2326,6 +2490,7 @@ static void bFeatureCancelAction(ButtoN b)
      SetStatus(bFeatureDelete, FALSE);
      SetStatus(bFeatureEdit, FALSE);
   }
+  SetValue(Cn3D_lFeature2, 0);
 
 }
 /*---------------------------------------------------------*/
@@ -2443,6 +2608,30 @@ void  Cn3D_GetlFeature3InfoProc(void)
 
 }
 /*---------------------------------------------------------*/
+void RemoveInvalideUserDefinedFeatures(void)
+{
+  SpecialFeatureInfoPtr sfipThis = NULL;
+  SpecialFeaturePtr sfpThis = NULL, sfp_curr = NULL;
+
+  if(sfp->next == NULL){
+     sfipThis = sfp->data.ptrvalue;
+     if(sfipThis->iRes == 0) sfp = SpecialFeatureFree(sfp);
+  }
+  else {
+     sfpThis = sfp;
+     while(sfpThis){
+        sfp_curr = sfpThis;
+        sfpThis = sfpThis->next;
+
+        sfipThis = sfp_curr->data.ptrvalue;
+        if(sfipThis->iRes == 0) {
+           sfp_curr = ValNodeExtract(&sfp, sfp_curr->choice);
+           sfp_curr = SpecialFeatureFree(sfp_curr);
+        }
+     }
+  }
+}
+/*---------------------------------------------------------*/
 void Cn3D_ModelRedrawWrapper(ButtoN b)
 {
   SpecialFeatureInfoPtr sfip = NULL;
@@ -2455,61 +2644,78 @@ void Cn3D_ModelRedrawWrapper(ButtoN b)
   Int2 j, k, choice = 0;
   Int4 iFeature = 0, iCount = 0;
 
-/*if(!GetStatus(bFeatureDelete)){
-     pars = GetSpecialAlgorRenderSet();
-     if (!pars) return;
-
-     ChangeSpecialRenderProc();
-     ChangeSpecialLabelsProc();
-  }
-  else { 
-     if(sfp->next == NULL) {
-        iEditedFeature = sfp->choice;
-        sfp = SpecialFeatureFree(sfp);
-     }
-     else {
-        sfip = GetEditedSpecialFeatureInfo();
-        sfpThis = ValNodeExtract(&sfp, iEditedFeature);
-        sfpThis = SpecialFeatureFree(sfpThis);
-     }
-     UnLinkSpecialFeatureWithMGD();
-  }  */
-
   if(GetStatus(bFeatureCancel)){
 
-     Cn3D_CleanJustHLStatus();
-     ObjMgrDeSelectAll();
-/*   Cn3D_DeHighlightAll();  */
-
-     Cn3D_ReColor = TRUE;
-     Cn3D_RedrawProc(FALSE);
-     Cn3D_ReColor = FALSE;
-
+     SetValue(Cn3D_lFeature2, 0);
      SetStatus(bFeatureCancel, FALSE);    
 
-     return;
-  }
+     Cn3D_CheckHLStatus();
+     Cn3D_CheckJustHLStatus();
+     if(!HLStatus && !JustHLStatus) return;
+     else {
+        Cn3D_CleanJustHLStatus();
+        ObjMgrDeSelectAll();
+        Cn3D_DeHighlightAll();      
 
+        Cn3D_ReColor = TRUE;
+        Cn3D_RedrawProc(FALSE);
+        Cn3D_ReColor = FALSE;
+
+        return;
+     }
+  }
+  
+  if(GetStatus(bFeatureAdd)){
+     Cn3D_CheckHLStatus();
+     Cn3D_CheckJustHLStatus();
+     if(!JustHLStatus && !HLStatus) {
+        SetStatus(bFeatureAdd, FALSE);
+        return;
+     }
+  } 
 
   Cn3D_GetlFeature3InfoProc();     
 
   pars = GetSpecialAlgorRenderSet();
-  if (!pars) return;
+  if (!pars) {
+     if(GetStatus(bFeatureEdit)) {
+        SetStatus(bFeatureEdit, FALSE);
+     }
+     return;
+  }
 
   ChangeSpecialRenderProc();
   ChangeSpecialLabelsProc();
 
   if(GetStatus(bFeatureDelete)) {
-     if(sfp->next == NULL) {
+     SetStatus(bFeatureDelete, FALSE);
+     if(sfp == NULL) {
+        return;
+     }
+     else if(sfp->next == NULL) {
+        sfip = GetEditedSpecialFeatureInfo();
+        if(sfip == NULL) return;
+
         iEditedFeature = sfp->choice;
         sfp = SpecialFeatureFree(sfp);
      }
      else {
         sfip = GetEditedSpecialFeatureInfo();
+        if(sfip == NULL) return;
+      
         sfpThis = ValNodeExtract(&sfp, iEditedFeature);
         sfpThis = SpecialFeatureFree(sfpThis);
      }
      UnLinkSpecialFeatureWithMGD();
+
+     UpdateFeatureList2();
+     Cn3D_ListOthersProc();
+
+     Cn3D_ReColor = TRUE;
+     Cn3D_RedrawProc(FALSE);
+     Cn3D_ReColor = FALSE;
+
+     return;
   }
 
   if(GetStatus(bFeatureEdit)){
@@ -2536,26 +2742,24 @@ void Cn3D_ModelRedrawWrapper(ButtoN b)
   Cn3D_RedrawProc(FALSE);
   Cn3D_ReColor = FALSE;
 
-  if(HLStatus && GetStatus(bFeatureAdd)) ObjMgrDeSelectAll();
-         /* to prevent mistake on second apply push on user's side */
-
-  if(GetStatus(bFeatureDelete)){
-     SetStatus(bFeatureDelete, FALSE);
-     UpdateFeatureList2();
-  }
-
   if(GetStatus(bFeatureAdd) || GetStatus(bFeatureEdit)){
      GetTitle(FeatureTitle, str, sizeof(str));
      sfip->title = StringSave(str);
      GetTitle(FeatureDescription, str, sizeof(str));
      sfip->description = StringSave(str);    
 
+     if(GetStatus(bFeatureAdd)) {
+        if(HLStatus) {
+           ObjMgrDeSelectAll();
+           Cn3D_DeHighlightAll();
+        }
+          /* to prevent mistake on second apply push on user's side */
+        Cn3D_CleanJustHLStatus();
+        SetStatus(bFeatureAdd, FALSE);
+     }
+     else if (GetStatus(bFeatureEdit)) SetStatus(bFeatureEdit, FALSE);
+
      parsSpecial = NULL;
-     if(GetStatus(bFeatureAdd)) Cn3D_CleanJustHLStatus();
-
-     if(GetStatus(bFeatureAdd)) SetStatus(bFeatureAdd, FALSE);
-     else if(GetStatus(bFeatureEdit)) SetStatus(bFeatureEdit, FALSE);
-
      SetTitle(FeatureTitle, "name?");
      SetTitle(FeatureDescription, "");
      UpdateFeatureList2();
@@ -2578,19 +2782,24 @@ void Cn3D_ModelRedrawWrapper(ButtoN b)
       iAddedFeature--;
   }    
 
+  if(FeatureOverwritten) RemoveInvalideUserDefinedFeatures();
+  FeatureOverwritten = FALSE;
+
+  UpdateFeatureList2();
   Cn3D_ListOthersProc();
+  
 }
 /*---------------------------------------------------------*/
 GrouP LIBCALL ModelControls ( Nlm_GrouP prnt)
 {
   GrouP g, h1, h2, h3, h4;
   GrouP h5, h6, h7;
-  Int2  k;
+  Int2  k = 0;
   PrompT ppt [10], ppt0[10];
   PrompT ppt1, ppt2, ppt3, ppt4, ppt5, ppt6, ppt7, ppt8, ppt9, ppt10, ppt11;
   PrompT ppt12, ppt13, ppt14;
   RecT pptPos, btnPos;
-  Int2 delta;
+  Int2 delta = 0;
 
   g = HiddenGroup ( prnt, -1, 0, NULL );
   if (!g) return NULL;
@@ -2784,7 +2993,7 @@ GrouP LIBCALL ModelControls ( Nlm_GrouP prnt)
   StaticPrompt(g, "",0,0,Nlm_systemFont,'l');    
 
   h7 = HiddenGroup (g, 0, -2, NULL);
-  ppt13 = StaticPrompt (h7, "Edit Defined Features:", 0, stdLineHeight + 5, systemFont, 'c');
+  ppt13 = StaticPrompt (h7, "Edit Features:", 0, stdLineHeight + 5, systemFont, 'c');
 
   h6 = HiddenGroup (h7, 0, -2, NULL);
   StaticPrompt(h6, "   ",0,0,Nlm_systemFont,'l');
@@ -2801,7 +3010,7 @@ GrouP LIBCALL ModelControls ( Nlm_GrouP prnt)
 
 /*AlignObjects (ALIGN_LEFT, (HANDLE)bFeatureAdd, (HANDLE)bFeatureDelete, (HANDLE)bFeatureEdit, NULL); */
 
-  ppt14 = StaticPrompt (h7, "            Show/Off Defined Features:", 0, stdLineHeight + 5, systemFont, 'c');
+  ppt14 = StaticPrompt (h7, " Display Features:", 0, stdLineHeight + 5, systemFont, 'c');
   Cn3D_lFeature3 = MultiList(h7, 5, 3, NULL);
   AlignObjects (ALIGN_CENTER, (HANDLE)g, (HANDLE)ppt14, (HANDLE)Cn3D_lFeature3, NULL);
 
@@ -2820,7 +3029,7 @@ GrouP LIBCALL ModelControls ( Nlm_GrouP prnt)
 void LIBCALL ResetModelCtrls(void)
 {
                                 /* this function may not be neccessary */
-  Int2 k;
+  Int2 k = 0;
   PARS pars = NULL;;
 
   pars = GetSpecialAlgorRenderSet();
@@ -3014,8 +3223,8 @@ UserObjectPtr GetUserObjectForUserDefinedFeature(PARS pars)
   FillUserObjectField(head_ufp, oip);
 
   if(pars->PVirtualBBOn) head_ufp->data.ptrvalue = StringSave("Alpha C Trace");
-  else if(pars->PRealBBOn) head_ufp->data.ptrvalue = StringSave("all atoms");
-  else if(pars->PExtraBBOn) head_ufp->data.ptrvalue = StringSave("partial atom");
+  else if(pars->PRealBBOn) head_ufp->data.ptrvalue = StringSave("partial atom");
+  else if(pars->PExtraBBOn) head_ufp->data.ptrvalue = StringSave("all atoms");
   else head_ufp->data.ptrvalue = StringSave("none");
 
   curr_ufp = head_ufp;
@@ -3124,8 +3333,8 @@ UserObjectPtr GetUserObjectForUserDefinedFeature(PARS pars)
   FillUserObjectField(tail_ufp, oip);
 
   if(pars->NTVirtualBBOn) tail_ufp->data.ptrvalue = StringSave("Alpha C Trace");
-  else if(pars->NTRealBBOn) tail_ufp->data.ptrvalue = StringSave("all atoms");
-  else if(pars->NTExtraBBOn) tail_ufp->data.ptrvalue = StringSave("partial atom");
+  else if(pars->NTRealBBOn) tail_ufp->data.ptrvalue = StringSave("partial atom");
+  else if(pars->NTExtraBBOn) tail_ufp->data.ptrvalue = StringSave("all atoms");
   else tail_ufp->data.ptrvalue = StringSave("none");
 
   curr_ufp->next = tail_ufp;
@@ -3325,6 +3534,23 @@ PDNMS Cn3DAddUserDefinedFeature(PDNMS pdnmsThis)
   return pdnmsThis;
 
 }
+/*---------------------------------------*/
+SpecialFeatureInfoPtr AdditionalUserDefinedFeature(Int2 id)
+{
+ SpecialFeaturePtr sfpThis = NULL;
+ SpecialFeatureInfoPtr sfipThis = NULL;
+
+ sfpThis = sfpThis_head;
+ while(sfpThis){
+    if(sfpThis->choice == id){
+       return sfpThis->data.ptrvalue;
+    }
+    sfpThis = sfpThis->next;
+ }
+
+ return NULL;
+
+}
 /*-------------------------------------*/
 void Cn3DIndexUserDefinedFeatureForMGD(PMSD pmsdThis, ValNodePtr llp, Int2 iFeature, Boolean FeatureOn)
 {
@@ -3337,6 +3563,9 @@ void Cn3DIndexUserDefinedFeatureForMGD(PMSD pmsdThis, ValNodePtr llp, Int2 iFeat
   ValNodePtr rsp = NULL;  /* ResiduePntrsPtr */
   ResidueIntervalPntrPtr rsip = NULL;
 
+  SpecialFeatureInfoPtr sfipThis = NULL;
+
+  sfipThis = AdditionalUserDefinedFeature(iFeature);
 
   pcgpThis = llp->data.ptrvalue;
   rsp = pcgpThis->data.ptrvalue;
@@ -3352,6 +3581,7 @@ void Cn3DIndexUserDefinedFeatureForMGD(PMSD pmsdThis, ValNodePtr llp, Int2 iFeat
                  pmgdThis = (PMGD) pdnmgThis->data.ptrvalue;
                  pmgdThis->iUserDefinedFeature = iFeature;
                  pmgdThis->FeatureOn = FeatureOn;
+                 if(sfipThis) sfipThis->iRes++;
               }
            }
         }
@@ -3368,7 +3598,7 @@ void Cn3DIndexUserDefinedFeatureForMGD(PMSD pmsdThis, ValNodePtr llp, Int2 iFeat
 /*----------------------------------------------*/
 Int2 GetCn3d_PaletteRGBIndex(Uint1Ptr rgb)
 {
-  ResidueColorCellPtr prgb;
+  ResidueColorCellPtr prgb = NULL;
   Int2 iCount = 0, iColor = 0;
 
   prgb = Cn3d_PaletteRGB;
@@ -3402,9 +3632,21 @@ PARS GetSpecialParsForUserDefinedFeature(UserObjectPtr ubp)
   while(ufp){
      oip = ufp->label;
      if(StringCmp(oip->str, "Protein Backbone Representative") == 0){
-        if(StringCmp(ufp->data.ptrvalue, "Alpha C Trace") == 0) pars->PVirtualBBOn = TRUE;
-        else if (StringCmp(ufp->data.ptrvalue, "all atoms") == 0) pars->PRealBBOn = TRUE;
-        else if (StringCmp(ufp->data.ptrvalue, "partial atom") == 0) pars->PExtraBBOn = TRUE;
+        if(StringCmp(ufp->data.ptrvalue, "Alpha C Trace") == 0) {
+           pars->PVirtualBBOn = TRUE;
+           pars->PRealBBOn = FALSE;
+           pars->PExtraBBOn = FALSE;
+        }
+        else if (StringCmp(ufp->data.ptrvalue, "all atoms") == 0) {
+           pars->PRealBBOn = FALSE;
+           pars->PVirtualBBOn = FALSE;
+           pars->PExtraBBOn = TRUE;
+        }
+        else if (StringCmp(ufp->data.ptrvalue, "partial atom") == 0) {
+           pars->PExtraBBOn = FALSE;
+           pars->PVirtualBBOn = FALSE;
+           pars->PRealBBOn = TRUE;
+        }
      }
      else if(StringCmp(oip->str, "Protein Backbone Render") == 0){
         if(StringCmp(ufp->data.ptrvalue, "Wire Frame") == 0) pars->PBBRender = R_WIRE;
@@ -3453,9 +3695,21 @@ R_STICK;
         pars->PBBLabelStyle = (Uint1) num;
      } 
     if(StringCmp(oip->str, "Nucleic Acid Backbone Representative") == 0){
-        if(StringCmp(ufp->data.ptrvalue, "Alpha C Trace") == 0) pars->NTVirtualBBOn = TRUE;
-        else if (StringCmp(ufp->data.ptrvalue, "all atoms") == 0) pars->NTRealBBOn = TRUE;
-        else if (StringCmp(ufp->data.ptrvalue, "partial atom") == 0) pars->NTExtraBBOn = TRUE;
+        if(StringCmp(ufp->data.ptrvalue, "Alpha C Trace") == 0) {
+           pars->NTVirtualBBOn = TRUE;
+           pars->NTRealBBOn = FALSE;
+           pars->NTExtraBBOn = FALSE;
+        }
+        else if (StringCmp(ufp->data.ptrvalue, "all atoms") == 0) {
+           pars->NTRealBBOn = FALSE;
+           pars->NTVirtualBBOn = FALSE;
+           pars->NTExtraBBOn = TRUE;
+        }
+        else if (StringCmp(ufp->data.ptrvalue, "partial atom") == 0) {
+           pars->NTExtraBBOn = FALSE;
+           pars->NTVirtualBBOn = FALSE;
+           pars->NTRealBBOn = TRUE;
+        }
      }
      else if(StringCmp(oip->str, "Nucleic Acid Backbone Render") == 0){
         if(StringCmp(ufp->data.ptrvalue, "Wire Frame") == 0) pars->NTBBRender = R_WIRE;
@@ -3510,23 +3764,6 @@ R_STICK;
   }
 
   return pars;
-}
-/*---------------------------------------*/
-SpecialFeatureInfoPtr AdditionalUserDefinedFeature(Int2 id)
-{
- SpecialFeaturePtr sfpThis = NULL;
- SpecialFeatureInfoPtr sfipThis = NULL;
-
- sfpThis = sfpThis_head;
- while(sfpThis){
-    if(sfpThis->choice == id){
-       return sfpThis->data.ptrvalue;
-    }
-    sfpThis = sfpThis->next;
- }
-
- return NULL;
-
 }
 /*-------------------------------------*/
 void Cn3DIndexUserDefinedFeatureForMSD(PDNMS pdnmsThis)
@@ -3585,7 +3822,6 @@ void Cn3DIndexUserDefinedFeatureForMSD(PDNMS pdnmsThis)
      if(UserDefinedFeatureFound){
         bsfp = bsfsp->features;
         llp = bsfp->Location_location;
-        Cn3DIndexUserDefinedFeatureForMGD(pmsdThis, llp, bsfsp->id, sfipThis->On);
 
         if(NewUserDefinedFeature){
            sfipThis->title = StringSave(bsfp->name);
@@ -3605,6 +3841,8 @@ void Cn3DIndexUserDefinedFeatureForMSD(PDNMS pdnmsThis)
               sfpThis_tail = sfpThis;
            }        
         }
+
+        Cn3DIndexUserDefinedFeatureForMGD(pmsdThis, llp, bsfsp->id, sfipThis->On);
      }
     
      bsfsp = bsfsp->next;
@@ -3661,3 +3899,55 @@ void Cn3DIndexUserDefinedFeature()
   UpdateFeatureList2();
 
 }    
+/*-------------------------------------------*/
+void ClearSpecialFeature(void)
+{
+  SpecialFeaturePtr sfpThis = NULL, next = NULL;
+
+  sfpThis = sfp;
+  while(sfpThis){
+     next = sfpThis->next;
+     sfpThis->next = NULL;
+     sfpThis = SpecialFeatureFree(sfpThis);
+     sfpThis = next;
+  }
+
+/*ValNodeFree(sfp); */
+
+  sfp = NULL; sfpThis_head = NULL; sfpThis_tail = NULL;
+  parsSpecial = NULL;
+  iAddedFeature = 0; 
+  iEditedFeature = 0;
+
+}
+/*-------------------------------------------*/
+void ClearDomainData(void)
+{
+  Int4 iCount = 0;
+
+  for(iCount = 0; iCount < iDomainCount; iCount++){
+     MemFree(domaindata[iCount]);
+  }
+
+  MemFree(domaindata);
+
+  domaindata = NULL;
+  iDomainCount = 0;
+
+  return;
+}
+/*-------------------------------------------*/
+void ClearRest(void)
+{
+
+  if(sfp != NULL) ClearSpecialFeature();
+
+  if(iDomainCount > 0) ClearDomainData();
+
+  Cn3D_DisplayHighlight = FALSE;
+  Cn3D_NoSingleHL = FALSE;
+  HLStatus = FALSE;
+  JustHLStatus = FALSE;
+  FeatureOverwritten = FALSE;
+
+}

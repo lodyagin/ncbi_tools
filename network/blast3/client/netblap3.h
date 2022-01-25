@@ -34,6 +34,12 @@
 *
 * RCS Modification History:
 * $Log: netblap3.h,v $
+* Revision 1.19  1999/08/19 19:40:01  shavirin
+* Returned to previous version.
+*
+* Revision 1.16  1999/08/17 18:59:47  shavirin
+* Added definition of the function SeedBioseqNetCore.
+*
 * Revision 1.15  1999/04/21 20:54:47  madden
 * Make BlastBioseq non-private
 *
@@ -185,6 +191,8 @@ SeqAlignPtr LIBCALL BlastSeqLocNet PROTO((BlastNet3Hptr bl3hp, SeqLocPtr slp, Ch
 SeqAlignPtr LIBCALL BlastBioseqNetCore PROTO((BlastNet3Hptr bl3hp, BioseqPtr bsp, CharPtr program, CharPtr database, BLAST_OptionsBlkPtr options, ValNodePtr *other_returns, ValNodePtr *error_returns, NetProgressCallback callback, BLAST_MatrixPtr blast_matrix, Boolean PNTR status));
 
 SeqAlignPtr LIBCALL BlastSeqLocNetCore PROTO((BlastNet3Hptr bl3hp, SeqLocPtr slp, CharPtr program, CharPtr database, BLAST_OptionsBlkPtr options, ValNodePtr *other_returns, ValNodePtr *error_returns, NetProgressCallback callback, BLAST_MatrixPtr blast_matrix, Boolean PNTR status));
+
+BlastPhialignPtr LIBCALL SeedBioseqNetCore(BlastNet3Hptr bl3hp, BioseqPtr bsp, CharPtr program, CharPtr database, BLAST_OptionsBlkPtr options, ValNodePtr *other_returns, ValNodePtr *error_returns, NetProgressCallback callback, BLAST_MatrixPtr blast_matrix, Boolean PNTR ret_status, ValNodePtr PNTR vnp);
 
 BLAST_MatrixPtr LIBCALL BlastNetMatrixToBlastMatrix PROTO((BlastMatrixPtr net_matrix));
 

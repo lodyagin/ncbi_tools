@@ -29,14 +29,37 @@
 *
 * Version Creation Date:   5/3/99
 *
-* $Revision: 6.3 $
+* $Revision: 6.14 $
 *
 * File Description: 
 *
-* Modifications:  
+* Modifications:
 * --------------------------------------------------------------------------
-* Date     Name        Description of modification
-* -------  ----------  -----------------------------------------------------
+* $Log: udvgraph.c,v $
+* Revision 6.14  1999/09/13 20:37:17  durand
+* update UDV_Draw_scale for DDV
+*
+* Revision 6.13  1999/09/07 23:03:10  durand
+* update UDV_Draw_scale to deal with discontinuous SEqAlign
+*
+* Revision 6.12  1999/07/30 20:08:57  durand
+* updates for the new Entrez graphical viewer
+*
+* Revision 6.11  1999/07/19 20:35:35  durand
+* switch ScalePositionfrom from Boolean to Uint1 in UDV_Draw_scale
+*
+* Revision 6.10  1999/06/29 14:59:52  durand
+* update udv_draw_scale for DDV
+*
+* Revision 6.9  1999/06/16 13:07:00  durand
+* update UDV functions to be used by DDV
+*
+* Revision 6.8  1999/06/08 13:52:35  durand
+* update UDV data structures for the MSA editor
+*
+* Revision 6.7  1999/06/07 15:39:43  durand
+* add LOG line to keep track of the history
+*
 *
 *
 * ==========================================================================
@@ -123,10 +146,7 @@ Return value: none
 *****************************************************************************/
 NLM_EXTERN void  UDV_FontDim(Int2Ptr cxChar,Int2Ptr cyChar)
 {
-Int2 i;
-
-	i=MaxCharWidth();
-	*cxChar=i;
+	*cxChar=MaxCharWidth();
 	*cyChar=LineHeight();
 }
 
@@ -198,6 +218,37 @@ Int2 cx, cxWin,i,LB;
 	*nBlockByLine=i;
 }
 
+/*****************************************************************************
+
+Function: UDV_Init_GraphData()
+
+Purpose: Init Graphical values for the UnDViewer. Called one times at the
+		start of the soft.
+
+Return value: none (results are in GrDataPtr)
+
+*****************************************************************************/
+NLM_EXTERN void  UDV_Init_ScaleData(UnDViewerGraphDataPtr GrDataPtr)
+{
+	/*display options*/
+	GrDataPtr->udv_panel.ShowFeatures=TRUE;
+	GrDataPtr->udv_panel.ShowScale=TRUE;
+	GrDataPtr->DisplayOptions=DDV_DISP_VERT;
+
+	/*scale option*/
+	GrDataPtr->udv_scale.ScalePosition=(Int2)SCALE_POS_BOTH;
+	GrDataPtr->udv_scale.ShowMajorTick=TRUE;
+	GrDataPtr->udv_scale.ShowMMinorTick=TRUE;
+	GrDataPtr->udv_scale.MajorTickEvery=(Int2)SCALE_MAJOR_TICK_EVERY;
+	GrDataPtr->udv_scale.MinorTickEvery=(Int2)SCALE_MINOR_TICK_EVERY;
+	GrDataPtr->udv_scale.ScaleColor=(Uint4)SCALE_LETTER_COLOR;
+	GrDataPtr->udv_scale.TickMajColor=(Uint4)SCALE_MAJTICK_COLOR;
+	GrDataPtr->udv_scale.TickMinColor=(Uint4)SCALE_MINTICK_COLOR;
+	GrDataPtr->udv_scale.cxLeftScale=(Int2)SCALE_WIDTH_IF_LEFT*
+					GrDataPtr->udv_font.cxChar;
+
+
+}
 
 /*****************************************************************************
 
@@ -213,22 +264,7 @@ NLM_EXTERN void  UDV_Init_GraphData(PaneL p,UnDViewerGraphDataPtr GrDataPtr)
 {
 RecT rc;	
 	
-	/*display options*/
-	GrDataPtr->udv_panel.ShowFeatures=TRUE;
-	GrDataPtr->udv_panel.ShowScale=TRUE;
-
-	/*scale option*/
-	GrDataPtr->udv_scale.ScalePosition=(Int2)SCALE_POS_BOTH;
-	GrDataPtr->udv_scale.ShowMajorTick=TRUE;
-	GrDataPtr->udv_scale.ShowMMinorTick=TRUE;
-	GrDataPtr->udv_scale.MajorTickEvery=(Int2)SCALE_MAJOR_TICK_EVERY;
-	GrDataPtr->udv_scale.MinorTickEvery=(Int2)SCALE_MINOR_TICK_EVERY;
-	GrDataPtr->udv_scale.ScaleColor=(Uint4)SCALE_LETTER_COLOR;
-	GrDataPtr->udv_scale.TickMajColor=(Uint4)SCALE_MAJTICK_COLOR;
-	GrDataPtr->udv_scale.TickMinColor=(Uint4)SCALE_MINTICK_COLOR;
-	GrDataPtr->udv_scale.cxLeftScale=(Int2)SCALE_WIDTH_IF_LEFT*
-					GrDataPtr->udv_font.cxChar;
-
+	UDV_Init_ScaleData(GrDataPtr);
 	/*Panel Size & Lines to display*/
 	if (p!=NULL){/*Vibrant viewer*/
 		ObjectRect(p,&rc);
@@ -500,7 +536,8 @@ Boolean bFound=FALSE;		/*TRUE if feature found*/
 				for(j=0,vnp2=pgp->pFeatList;j<pgp->nFeat;j++,vnp2=vnp2->next){
 					if (vnp2 == NULL) break;
 
-					UDV_DecodeIdxFeat ((Uint4)vnp2->data.intvalue, &iID,&idx);
+					UDV_BigDecodeIdxFeat ((Uint8)vnp2->data.bigintvalue, &iID,&idx,
+							NULL,NULL);
 					if (iID==itemID){
 						if (!SeqMgrGetDesiredFeature(entityID,
 							bsp,iID,idx,NULL,&context)) {
@@ -591,7 +628,7 @@ Boolean IsTransNeeded=FALSE;
 		if (vnp == NULL) break;
 		i=1;
 		/*get desired feature given iID and idx*/
-		UDV_DecodeIdxFeat ((Uint4)vnp->data.intvalue, &iID,&idx);
+		UDV_BigDecodeIdxFeat ((Uint8)vnp->data.bigintvalue, &iID,&idx,NULL,NULL);
 		if (!SeqMgrGetDesiredFeature(bsp_i.bsp_entityID,bsp_i.bsp,
             iID,idx,NULL,&context)) {
 			break;
@@ -1218,7 +1255,6 @@ WindoW 				temport;
 			vdp->UDV_ms.newPos);
 		vdp->UDV_ms.oldPos=vdp->UDV_ms.newPos;
 	}
-	RestorePort(temport);
 	Update();
 }
 
@@ -1485,10 +1521,11 @@ PoinT box[4];
   Return value : none
 
 *******************************************************************************/
-static void  draw_logo(RecT rcP,FonT f1,FonT f2,FonT f3)
+static void  draw_logo(RecT rcP,FonT f1,FonT f2,FonT f3,CharPtr szTxt0,
+	CharPtr szTxt4)
 {
-Char szTxt0[]="UnD-Viewer";
-Char szTxt4[]=", a sequence viewer for GenBank";
+/*Char szTxt0[]="UnD-Viewer";
+Char szTxt4[]=", a sequence viewer for GenBank";*/
 Char szTxt1[]="01101011";
 Char szTxt2[]="National Center for";
 Char szTxt3[]="Biotechnology Information";
@@ -2174,7 +2211,7 @@ PoinT arrow[3];
 	if (start_nat==FEATURE_START_BOX){
 		x2=start_x;
 		rcBox.left=x2-2;	
-		rcBox.top=y2-l3;	
+  		rcBox.top=y2-l3;	
 		rcBox.right=x2+2;	
 		rcBox.bottom=y2+l3;
 		start_x=rcBox.right;	
@@ -2305,10 +2342,11 @@ Int2 y,ybase;				/*text position*/
 Int2 xMargin;				/*initial margins*/
 Int2 nTicks=0,nLet=0;		/*y decal*/
 ValNodePtr vnp;				/*Features list of itemID and index values*/
-Uint2 iID,idx;				/*used to retrieve a desired Feature*/
-Uint4 index_g;				/*merged value containing itemID and index*/
-SeqMgrFeatContext context;	/*used to retrieve feature data*/
-Int4 start,stop,OccupyTo;	/*limit of the feature to draw*/
+Uint2 iID,idx,lineID;		/*used to retrieve a desired Feature*/
+/*Uint8 index_g;			merged value containing itemID, index and lineID*/
+SeqMgrFeatContextPtr context;	/*used to retrieve feature data*/
+SeqMgrFeatContext context2;	/*used to retrieve feature data*/
+Int4 start,stop/*,OccupyTo*/;	/*limit of the feature to draw*/
 Int2 start_x,stop_x,		/*id. but in pixels*/
 	start_nat,stop_nat;		/*ends of the feature : box, arrow*/
 Int2 i,numivals2,i_decal,j;	/*counters*/
@@ -2316,6 +2354,8 @@ Uint4	clr;				/*color used to draw feature*/
 Boolean b_draw_line,bCDS,b_connect_left,b_connect_right,
 		b_end_left,b_end_right;
 Int2 idx1,idx2,idx3,idx4,idx5,idx6,nLines=0;
+BioseqPtr parent;
+SeqMgrSegmentContext contextPart;
 
 	if (!pgp->pFeatList) return;
 	
@@ -2326,18 +2366,30 @@ Int2 idx1,idx2,idx3,idx4,idx5,idx6,nLines=0;
 	
 	xMargin=rc->left+GrData->udv_font.cxChar;
 	ybase=rc->top+(nTicks+nLet+1/*2*/)*GrData->udv_font.LineHeight;
-	OccupyTo=pgp->StopLetter;
+	/*OccupyTo=pgp->StopLetter;*/
+
+	/*the current bsp is just a segment ?*/
+	parent=SeqMgrGetParentOfPart(bsp_i->bsp,&contextPart);
+	context=NULL;
 
 	/*draw : loop on all features in a ParaG*/
 	for(j=0,vnp=pgp->pFeatList;j<pgp->nFeat;j++,vnp=vnp->next){
 		if (vnp == NULL) break;
-		index_g=(Uint4)vnp->data.intvalue;
-		UDV_DecodeIdxFeat (index_g, &iID,&idx);
+		/*index_g=(Uint8)vnp->data.bigintvalue;*/
+		UDV_BigDecodeIdxFeat ((Uint8)vnp->data.bigintvalue, &iID,&idx,&lineID,NULL);
 		/*get desired feature given iID and idx*/
-		if (!SeqMgrGetDesiredFeature(bsp_i->bsp_entityID,bsp_i->bsp,
-                                iID,idx,NULL,&context)) continue;
+		if (!SeqMgrGetDesiredFeature(bsp_i->bsp_entityID,
+				(parent!=NULL ? parent : bsp_i->bsp),
+                iID,idx,NULL,&context2)) continue;
 
 
+		if (context) {
+			MemFree(context->ivals);
+			context=MemFree(context);
+		}
+		context=UDV_ConvertFeatContext(&context2,contextPart.cumOffset,
+			bsp_i->bsp->length);
+		if (!context) continue;
 		/*depending on the strand, various things are possible :*/
 			/*PLUS/MINUS : if region (start!=stop)-> draw big box, with arrow*/
 
@@ -2347,32 +2399,33 @@ Int2 idx1,idx2,idx3,idx4,idx5,idx6,nLines=0;
 			vertical arrow*/
 		
 		/*HET feature correction for the ends*/
-		if(context.featdeftype== FEATDEF_HET){
-			context.right=context.ivals[2*context.numivals-1];
+		if(context->featdeftype== FEATDEF_HET){
+			context->right=context->ivals[2*context->numivals-1];
 		}
 
 		/*temporary situation; will be modified in the future*/
-		if (context.strand>Seq_strand_minus ||
-			context.strand==Seq_strand_unknown) context.strand=Seq_strand_plus;
+		if (context->strand>Seq_strand_minus ||
+			context->strand==Seq_strand_unknown) context->strand=Seq_strand_plus;
 
 		/*strand PLUS*/
-		if (context.strand==Seq_strand_plus){
-			numivals2=context.numivals*2;
+		if (context->strand==Seq_strand_plus){
+			numivals2=context->numivals*2;
 			i=0;
 			i_decal=2;
 		}
 		
 		/*strand MINUS*/
-		if (context.strand==Seq_strand_minus){
-			numivals2=2*context.numivals-2;
+		if (context->strand==Seq_strand_minus){
+			numivals2=2*context->numivals-2;
 			i=numivals2;
 			i_decal=-2;
 		}		
 
 		bCDS=FALSE;
-		if (_max_(context.ivals[i],pgp->StartLetter)<=OccupyTo){
+		/*if (_max_(context->ivals[i],pgp->StartLetter)<=OccupyTo){
 			nLines++;
-		}
+		}*/
+		nLines=lineID;
 		while (TRUE){
 			b_connect_left=FALSE;
 			b_connect_right=FALSE;
@@ -2381,27 +2434,27 @@ Int2 idx1,idx2,idx3,idx4,idx5,idx6,nLines=0;
 			b_draw_line=FALSE;
 
 			/*if ivals.stop > end ParaG -> end of drawing*/
-			if (context.ivals[i]>pgp->StopLetter) break;
+			if (context->ivals[i]>pgp->StopLetter) break;
 			/*if ivals.stop<= start ParaG : not yet in the current ParaG*/
 			
-			if (context.ivals[i+1]<pgp->StartLetter) {
-				if (context.strand==Seq_strand_plus || 
-						context.strand==Seq_strand_unknown){
+			if (context->ivals[i+1]<pgp->StartLetter) {
+				if (context->strand==Seq_strand_plus || 
+						context->strand==Seq_strand_unknown){
 					if (numivals2>2 && i+2<numivals2){
 					/*stop ParaG < start next ivals -> inter-region: fill 
 					the ParaG with a thin line; this is the case
 					for coding region: draw thin line to delineate the introns*/		
-						if (context.ivals[i+2]>pgp->StopLetter){
+						if (context->ivals[i+2]>pgp->StopLetter){
 							b_draw_line=TRUE;
 						}
 					}
 				}
-				if (context.strand==Seq_strand_minus){
+				if (context->strand==Seq_strand_minus){
 					if (numivals2>2 && i-2>-1){
 					/*stop ParaG < start next ivals -> inter-region: fill 
 					the ParaG with a thin line; this is the case
 					for coding region: draw thin line to delineate the introns*/		
-						if (context.ivals[i-2]>pgp->StopLetter){
+						if (context->ivals[i-2]>pgp->StopLetter){
 							b_draw_line=TRUE;
 						}
 					}
@@ -2416,15 +2469,15 @@ Int2 idx1,idx2,idx3,idx4,idx5,idx6,nLines=0;
 					y=ybase+nLines*GrData->udv_font.LineHeight;
 					UDV_draw_thin_line(start_x,stop_x,y,
 							GrData->udv_font.LineHeight);
-					OccupyTo=pgp->StopLetter;
+					/*OccupyTo=pgp->StopLetter;*/
 				}
-				if (context.strand==Seq_strand_plus || 
-						context.strand==Seq_strand_unknown){
+				if (context->strand==Seq_strand_plus || 
+						context->strand==Seq_strand_unknown){
 					i=i+i_decal;
 					if (i>numivals2-2) break;
 					else continue;
 				}					
-				if (context.strand==Seq_strand_minus){
+				if (context->strand==Seq_strand_minus){
 					i=i+i_decal;
 					if (i<0) break;
 					else continue;
@@ -2432,13 +2485,13 @@ Int2 idx1,idx2,idx3,idx4,idx5,idx6,nLines=0;
 			}
 						
 			/*compute the limits of the feature within ParaG*/
-			start=_max_(context.ivals[i],pgp->StartLetter);
-			stop=_min_(context.ivals[i+1],pgp->StopLetter);
+			start=_max_(context->ivals[i],pgp->StartLetter);
+			stop=_min_(context->ivals[i+1],pgp->StopLetter);
 
 			/*are there connections; exons/introns for example*/
 				/*on the left*/
-			if (context.strand==Seq_strand_plus || 
-						context.strand==Seq_strand_unknown){
+			if (context->strand==Seq_strand_plus || 
+						context->strand==Seq_strand_unknown){
 				if (numivals2>2 && i>0){
 					if (start>pgp->StartLetter){
 						idx1=i-1;
@@ -2452,7 +2505,7 @@ Int2 idx1,idx2,idx3,idx4,idx5,idx6,nLines=0;
 					}
 				}
 			}
-			if (context.strand==Seq_strand_minus){
+			if (context->strand==Seq_strand_minus){
 				if (numivals2>2 && i<numivals2-1){
 					if (start>pgp->StartLetter){
 						idx1=i+3;
@@ -2467,8 +2520,8 @@ Int2 idx1,idx2,idx3,idx4,idx5,idx6,nLines=0;
 				}
 			}
 				/*on the right*/
-			if (context.strand==Seq_strand_plus || 
-						context.strand==Seq_strand_unknown){
+			if (context->strand==Seq_strand_plus || 
+						context->strand==Seq_strand_unknown){
 				if (numivals2>2 && i+2<numivals2){
 					if (stop<pgp->StopLetter){
 						idx4=i+2;
@@ -2482,7 +2535,7 @@ Int2 idx1,idx2,idx3,idx4,idx5,idx6,nLines=0;
 					}
 				}
 			}
-			if (context.strand==Seq_strand_minus){
+			if (context->strand==Seq_strand_minus){
 				if (numivals2>2 && i>0){
 					if (stop<pgp->StopLetter){
 						idx4=i-2;
@@ -2498,10 +2551,10 @@ Int2 idx1,idx2,idx3,idx4,idx5,idx6,nLines=0;
 			}
 			/*compute the 'nature' of start & stop: box, arrow or nothing*/
 			/*I use only Seq_strand_minus or Seq_strand_plus !!!!*/
-			if (context.strand==Seq_strand_plus || 
-				context.strand==Seq_strand_minus){
-				if (context.ivals[i]==start){
-					if (context.strand==Seq_strand_plus){ 
+			if (context->strand==Seq_strand_plus || 
+				context->strand==Seq_strand_minus){
+				if (context->ivals[i]==start){
+					if (context->strand==Seq_strand_plus){ 
 						if (b_end_left) start_nat=FEATURE_START_NOTHING;
 						else start_nat=FEATURE_START_BOX;
 					}
@@ -2514,8 +2567,8 @@ Int2 idx1,idx2,idx3,idx4,idx5,idx6,nLines=0;
 					start_nat=FEATURE_START_NOTHING;
 				}
 
-				if (context.ivals[i+1]==stop){
-					if (context.strand==Seq_strand_minus){ 
+				if (context->ivals[i+1]==stop){
+					if (context->strand==Seq_strand_minus){ 
 						if (b_end_right) stop_nat=FEATURE_START_NOTHING;
 						else stop_nat=FEATURE_START_BOX;
 					}
@@ -2543,15 +2596,15 @@ Int2 idx1,idx2,idx3,idx4,idx5,idx6,nLines=0;
 
 			/*colour*/
 			if (pClr){
-				clr=pClr[context.featdeftype];
+				clr=pClr[context->featdeftype];
 			}
 			else clr=(Uint4)-1;
 			
 			y=ybase+nLines*GrData->udv_font.LineHeight;
 			/*draw feature*/
-			if (start!=stop || (start==stop && context.left!=context.right) 
-				/*|| context.strand!=Seq_strand_unknown*/){
-				switch(context.featdeftype){
+			if (start!=stop || (start==stop && context->left!=context->right) 
+				/*|| context->strand!=Seq_strand_unknown*/){
+				switch(context->featdeftype){
 					case FEATDEF_HET:
 						if (clr!=(Uint4)-1) SetColor(clr);
 						MoveTo(start_x-GrData->udv_font.cxChar/2,y);
@@ -2564,15 +2617,15 @@ Int2 idx1,idx2,idx3,idx4,idx5,idx6,nLines=0;
 					case FEATDEF_BOND:
 						UDV_draw_thin_line(start_x,stop_x,y,
 							GrData->udv_font.LineHeight);
-						if (pgp->StartLetter<=context.left && 
-							pgp->StopLetter>=context.left){
+						if (pgp->StartLetter<=context->left && 
+							pgp->StopLetter>=context->left){
 							UDV_draw_big_arrow_bond(start_x,y,
 								GrData->udv_font.cxChar,
 								GrData->udv_font.cyChar,
 								clr,BOND_LEFT);
 						}
-						if (pgp->StartLetter<=context.right && 
-							pgp->StopLetter>=context.right){
+						if (pgp->StartLetter<=context->right && 
+							pgp->StopLetter>=context->right){
 							UDV_draw_big_arrow_bond(stop_x,y,
 								GrData->udv_font.cxChar,
 								GrData->udv_font.cyChar,
@@ -2580,13 +2633,13 @@ Int2 idx1,idx2,idx3,idx4,idx5,idx6,nLines=0;
 						}
 						break;
 					case FEATDEF_PSEC_STR:
-						if (context.sfp){
+						if (context->sfp){
 							Boolean ContinueLeft=FALSE;
 							Boolean ContinueRight=FALSE;
 							
-							if (context.sfp->data.value.intvalue==1){/*helix*/
-								if (start!=context.left) ContinueLeft=TRUE;
-								if (stop!=context.right)ContinueRight=TRUE;
+							if (context->sfp->data.value.intvalue==1){/*helix*/
+								if (start!=context->left) ContinueLeft=TRUE;
+								if (stop!=context->right)ContinueRight=TRUE;
 								UDV_draw_struc_helix( start, stop,
 									pgp->StartLetter,
 									y,GrData->udv_font.cxChar,
@@ -2594,9 +2647,9 @@ Int2 idx1,idx2,idx3,idx4,idx5,idx6,nLines=0;
 									GrData->udv_font.LineHeight,xMargin,clr,
 									ContinueLeft,ContinueRight);
 							}
-							if (context.sfp->data.value.intvalue==2){/*sheet*/
-								if (start!=context.left) ContinueLeft=TRUE;
-								if (stop!=context.right)ContinueRight=TRUE;
+							if (context->sfp->data.value.intvalue==2){/*sheet*/
+								if (start!=context->left) ContinueLeft=TRUE;
+								if (stop!=context->right)ContinueRight=TRUE;
 								UDV_draw_struc_strand( start, stop,
 									pgp->StartLetter,
 									y,GrData->udv_font.cxChar,
@@ -2608,12 +2661,12 @@ Int2 idx1,idx2,idx3,idx4,idx5,idx6,nLines=0;
 						break;
 					case FEATDEF_CDS:
 						bCDS=TRUE;
-						if (context.strand==Seq_strand_plus)
-							UDV_draw_CDS_plus(&context,start,stop,
+						if (context->strand==Seq_strand_plus)
+							UDV_draw_CDS_plus(context,start,stop,
 								pgp->StartLetter,
 								GrData,y,i,xMargin, UseDefClr, DefClr);						
-						if (context.strand==Seq_strand_minus)
-							UDV_draw_CDS_minus(&context,start,stop,
+						if (context->strand==Seq_strand_minus)
+							UDV_draw_CDS_minus(context,start,stop,
 								pgp->StartLetter,
 								GrData,y,i,xMargin, UseDefClr, DefClr);
 						nLines++;
@@ -2632,7 +2685,7 @@ Int2 idx1,idx2,idx3,idx4,idx5,idx6,nLines=0;
 				UDV_draw_big_arrow_feat(start_x,y,GrData->udv_font.cxChar,
 					GrData->udv_font.cyChar,clr);
 			}
-			OccupyTo=stop;
+			/*OccupyTo=stop;*/
 			/*select feature, if needed*/
 			if (old_is.eIDsel!=-1){
 				if (old_is.iIDsel==iID){
@@ -2667,7 +2720,7 @@ Int2 idx1,idx2,idx3,idx4,idx5,idx6,nLines=0;
 			if (b_connect_left){
 				Int4 start2,stop2;
 				stop2=start;
-				start2=_max_(pgp->StartLetter,context.ivals[idx1]);
+				start2=_max_(pgp->StartLetter,context->ivals[idx1]);
 				start_x=(start2-pgp->StartLetter+
 					((start2-pgp->StartLetter)/LETTER_BLOCK_WIDTH))*
 					GrData->udv_font.cxChar+xMargin;
@@ -2681,7 +2734,7 @@ Int2 idx1,idx2,idx3,idx4,idx5,idx6,nLines=0;
 			if (b_connect_right){
 				Int4 start2,stop2;
 				start2=stop;
-				stop2=_min_(pgp->StopLetter,context.ivals[idx4]);
+				stop2=_min_(pgp->StopLetter,context->ivals[idx4]);
 				start_x=(start2-pgp->StartLetter+
 					((start2-pgp->StartLetter)/LETTER_BLOCK_WIDTH))*
 					GrData->udv_font.cxChar+xMargin;
@@ -2690,18 +2743,18 @@ Int2 idx1,idx2,idx3,idx4,idx5,idx6,nLines=0;
 					LETTER_BLOCK_WIDTH))*GrData->udv_font.cxChar+xMargin;
 				UDV_draw_thin_line((Int2)(start_x+idx5),(Int2)(stop_x+idx6),y,
 					GrData->udv_font.LineHeight);
-				OccupyTo=stop2;
+				/*OccupyTo=stop2;*/
 			}
 
-			/*if (context.sfp && context.sfp->data.choice==SEQFEAT_CDREGION)
+			/*if (context->sfp && context->sfp->data.choice==SEQFEAT_CDREGION)
 					y+=GrData->udv_font.LineHeight;		*/
 
-			if (context.strand==Seq_strand_plus || 
-						context.strand==Seq_strand_unknown){
+			if (context->strand==Seq_strand_plus || 
+						context->strand==Seq_strand_unknown){
 				i=i+i_decal;
 				if (i>numivals2-2) break;
 			}
-			if (context.strand==Seq_strand_minus){
+			if (context->strand==Seq_strand_minus){
 				i=i+i_decal;
 				if (i<0) break;
 			}
@@ -2739,7 +2792,7 @@ Int2 nTicks=0,nLet=0;		/*y decal*/
 Char szBuf[51]={""};		/*name to draw*/
 ValNodePtr vnp;				/*Features list of itemID and index values*/
 Uint2 iID,idx;				/*used to retrieve a desired Feature*/
-Uint4 index_g;				/*merged value containing itemID and index*/
+/*Uint4 index_g;			merged value containing itemID and index*/
 SeqMgrFeatContext context;	/*used to retrieve feature data*/
 Uint2 j;					/*counter*/
 
@@ -2756,8 +2809,8 @@ Uint2 j;					/*counter*/
 	/*draw : loop on all features in a ParaG*/
 	for(j=0,vnp=pgp->pFeatList;j<pgp->nFeat;j++,vnp=vnp->next){
 		if (vnp == NULL) break;
-		index_g=(Uint4)vnp->data.intvalue;
-		UDV_DecodeIdxFeat (index_g, &iID,&idx);
+		
+		UDV_BigDecodeIdxFeat ((Uint8)vnp->data.bigintvalue, &iID,&idx,NULL,NULL);
 
 		/*get desired feature given iID and idx*/
 		if (!SeqMgrGetDesiredFeature(bsp_i->bsp_entityID,bsp_i->bsp,
@@ -2965,11 +3018,14 @@ Uint4 blackColor = GetColorRGB(0,0,0),newColor,curColor;
 			else curColor=blackColor;
 			/*new colour?*/
 			if (curColor!=newColor){
+				newColor=curColor;
 				if (szBuf[0]!='\0'){/*something to draw ?*/
 					szBuf[nCompt2]='\0';/*CLOSE THE STRING*/
 					MoveTo(x,y);
+					SetColor(newColor);
 					PaintString(szBuf);
 				}
+				x+=(nCompt2*GrData->udv_font.cxChar);
 				nCompt2=0;
 				szBuf[nCompt2]='\0';
 			}
@@ -2981,12 +3037,12 @@ Uint4 blackColor = GetColorRGB(0,0,0),newColor,curColor;
 				szBuf[nCompt2]=' ';
 				nCompt2++;
 			}
-			x+=GrData->udv_font.cxChar;
 			pos++;		
 		}
 		if (szBuf[0]!='\0'){/*something to draw ?*/
 			szBuf[nCompt2]='\0';/*CLOSE THE STRING*/
 			MoveTo(x,y);
+			SetColor(newColor);
 			PaintString(szBuf);
 		}
 	}
@@ -3001,139 +3057,152 @@ Uint4 blackColor = GetColorRGB(0,0,0),newColor,curColor;
   Purpose : draw the numerical scale of a ParaG
   
   Parameters : 	GrData; graphical data (font size, etc)
-				pgp; data of the ParaG
+				ShowMajorTick;TRUE = show major ticks ( | )
+				ShowMMinorTick;TRUE = show minor ticks ( . )
+				ScalePosition; left, top, ...
+				StartLetter; start scale at...
+				StopLetter; ...and stop at
 				rc; rectangle containing this ParaG
-				bspLength;  sequence length
+				LeftDecal;adjust position on the left, if needed
+				ScaleMaxVal;  scale length
+				UseBlockDisp; use the 10 by 10 letters block display
 				
   Return value : none
 
 *******************************************************************************/
-static void  UDV_Draw_scale(UnDViewerGraphDataPtr GrData,
-					ParaGPtr pgp,RecT PNTR rc,Int4 bspLength)
+NLM_EXTERN void UDV_Draw_scale(UnDViewerGraphDataPtr GrData,
+		Boolean ShowMajorTick,Boolean ShowMMinorTick,Uint1 ScalePosition,
+		Int4 StartLetter,Int4 StopLetter,RecT PNTR rc,Int2 LeftDecal,
+		Int4 ScaleMaxVal,Int4 AlignPos,Boolean UseBlockDisp,Int2 ColWidth)
 {
-Int4 pos;				/*scale start at...(used to draw text)*/
+Int4 pos,AliPos;				/*scale start at...(used to draw text)*/
 Int2 x,y,y2,y3,y4,xDecal;	/*text position*/
 Int2 xMargin,yMargin;	/*initial margins*/
 Char szBuf[15]={""};	/*scale value*/
 Int2 nTicks=0,nLet=0;	/*y decal*/
 Int2 cxChar_2,cyChar_4;
 
-	if (GrData->udv_scale.ShowMajorTick) nTicks++;
-	if (GrData->udv_scale.ScalePosition==SCALE_POS_TOP || 
-					GrData->udv_scale.ScalePosition==SCALE_POS_BOTH) nLet++;
+	if (ShowMajorTick) nTicks++;
+	if (ScalePosition==SCALE_POS_TOP || 
+					ScalePosition==SCALE_POS_BOTH) nLet++;
 	
-	pos=pgp->StartLetter+1;	/*remember : StartLetter is zero based*/
-	xMargin=rc->left+GrData->udv_font.cxChar;
+	pos=StartLetter+1;	/*remember : StartLetter is zero based*/
+	xMargin=rc->left+LeftDecal;
 	yMargin=rc->top;
 	y=yMargin;
 	xDecal=xMargin;
 	cxChar_2=GrData->udv_font.cxChar/2;
 	cyChar_4=GrData->udv_font.cyChar/4;
 	y2=(Int2)(y+GrData->udv_font.LineHeight);
-	
+	AliPos=AlignPos+1;/*switch to 1-based value*/
+	ScaleMaxVal++;
 	/*scale on top ?*/
-	if ((GrData->udv_scale.ScalePosition==SCALE_POS_TOP || 
-					GrData->udv_scale.ScalePosition==SCALE_POS_BOTH)){
-		while(pos<pgp->StopLetter+2){
+	if ((ScalePosition==SCALE_POS_TOP || 
+					ScalePosition==SCALE_POS_BOTH)){
+		while(pos<StopLetter+1){
 
-			if ((pos==pgp->StartLetter+1) || !(pos % LETTER_BLOCK_WIDTH)
-					&& pos!=bspLength){
-				sprintf(szBuf,"%d",pos);
+			if (/*(pos==StartLetter+1) ||*/ !(AliPos % LETTER_BLOCK_WIDTH)
+					&& AliPos!=ScaleMaxVal){
+				sprintf(szBuf,"%d",AliPos);
 				SetColor(GrData->udv_scale.ScaleColor);
 				/*scale on top or both*/
-				if(GrData->udv_scale.ShowMajorTick){/*center text on the tick*/
+				if(ShowMajorTick){/*center text on the tick*/
 					x=xDecal-(StringWidth(szBuf))/2;
 				}
 				else{/*align text right on pos*/
 					x=xDecal-StringWidth(szBuf)+cxChar_2;
 				}
-				if (GrData->udv_scale.ScalePosition==SCALE_POS_TOP || 
-							pos!=pgp->StartLetter+1){
+				if (ScalePosition==SCALE_POS_TOP || 
+							pos!=StartLetter+1){
 					MoveTo(x,y2);
 					PaintString (szBuf);
 				}
 			}
 
-			if (pos==bspLength){/*end sequence only*/
-				if (GrData->udv_scale.ScalePosition==SCALE_POS_TOP || 
-						GrData->udv_scale.ScalePosition==SCALE_POS_BOTH){
+			if (AliPos==ScaleMaxVal){/*end sequence only*/
+				if (ScalePosition==SCALE_POS_TOP || 
+						ScalePosition==SCALE_POS_BOTH){
 					/*scale on top or both*/
-					if(GrData->udv_scale.ShowMajorTick){
+					if(ShowMajorTick){
 						/*center text on the tick*/
+						sprintf(szBuf,"%d",AliPos);
 						x=xDecal-(StringWidth(szBuf))/2;
+						MoveTo(x,(Int2)(y2+GrData->udv_font.cyChar));
+						SetColor(GrData->udv_scale.ScaleColor);
+						PaintString (szBuf);
 					}
-					else x=xDecal-StringWidth(szBuf);
-					sprintf(szBuf,"%d",pos);
-					MoveTo(x,(Int2)(y2+GrData->udv_font.cyChar));
-					SetColor(GrData->udv_scale.ScaleColor);
-					PaintString (szBuf);
+					/*else {
+						x=xDecal-StringWidth(szBuf)+GrData->udv_font.cxChar;
+						MoveTo(x,y2);
+					}*/
 				}
 			}
 
-			xDecal+=GrData->udv_font.cxChar;
+			xDecal+=ColWidth;
 
 			/*each LETTER_BLOCK_WIDTH, add a blank column*/
-			if (!(pos % LETTER_BLOCK_WIDTH)) xDecal+=GrData->udv_font.cxChar;
-			pos++;
+			if (!(AliPos % LETTER_BLOCK_WIDTH)&&UseBlockDisp) xDecal+=ColWidth;
+			pos++;AliPos++;
 		}
 	}
 
 	/*scale on left only*/
-	pos=pgp->StartLetter+1;	/*remember : StartLetter is zero based*/
+	pos=StartLetter+1;	/*remember : StartLetter is zero based*/
 	y=yMargin;
 	xDecal=xMargin;
 	y2=(Int2)(y+(nTicks+nLet+1)*GrData->udv_font.LineHeight);
-	if ((GrData->udv_scale.ScalePosition==SCALE_POS_LEFT || 
-		GrData->udv_scale.ScalePosition==SCALE_POS_BOTH)){
+	AliPos=AlignPos+1;/*switch to 1-based value*/
+	if ((ScalePosition==SCALE_POS_LEFT || 
+		ScalePosition==SCALE_POS_BOTH)){
 		/*scale on the left; must be located on the BioSeq line*/
 		SetColor(GrData->udv_scale.ScaleColor);
-		sprintf(szBuf,"%d",pos);
+		sprintf(szBuf,"%d",AliPos);
 		x=rc->left-GrData->udv_font.cxChar-StringWidth(szBuf);
 		MoveTo(x,y2);
 		PaintString (szBuf);
 	}
 
 	/*Major ticks*/
-	pos=pgp->StartLetter+1;	/*remember : StartLetter is zero based*/
+	pos=StartLetter+1;	/*remember : StartLetter is zero based*/
 	y=yMargin;
 	xDecal=xMargin;
 	y2=(Int2)(y+((nLet+1)*GrData->udv_font.LineHeight)-cyChar_4);
 	y3=(Int2)(y+(nLet*GrData->udv_font.LineHeight)+cyChar_4);
 	y4=(Int2)(y+(nLet*GrData->udv_font.LineHeight)+GrData->udv_font.cyChar);
-	if ((GrData->udv_scale.ScalePosition==SCALE_POS_TOP || 
-		GrData->udv_scale.ScalePosition==SCALE_POS_BOTH) && 
-		GrData->udv_scale.ShowMajorTick){
+	if ((ScalePosition==SCALE_POS_TOP || 
+		ScalePosition==SCALE_POS_BOTH) && 
+		ShowMajorTick){
 		
-		while(pos<pgp->StopLetter+2){
-			if (pos!=pgp->StartLetter+1 && pos!=bspLength && 
-				!(pos % LETTER_BLOCK_WIDTH)){
+		while(pos<StopLetter+1){
+			if (/*pos!=StartLetter+1 && */AliPos!=ScaleMaxVal && 
+				!(AliPos % LETTER_BLOCK_WIDTH)){
 				SetColor(GrData->udv_scale.TickMajColor);
 				x=xDecal;
 				MoveTo(x,y3);
 				LineTo(x,y2);
 			}
-			else if(GrData->udv_scale.ScalePosition==SCALE_POS_TOP &&
-					pos==pgp->StartLetter+1){
+			/*else if(ScalePosition==SCALE_POS_TOP &&
+					pos==StartLetter+1){
 				SetColor(GrData->udv_scale.TickMajColor);
 				x=xDecal;
 				MoveTo(x,y3);
 				LineTo(x,y2);
-			}
+			}*/
 			/*Minor ticks; only shown if Major present*/
-			if (GrData->udv_scale.ShowMMinorTick && 
-				!(pos % (LETTER_BLOCK_WIDTH/2)) && 
-					(pos % LETTER_BLOCK_WIDTH)){
+			if (ShowMMinorTick && 
+				!(AliPos % (LETTER_BLOCK_WIDTH/2)) && 
+					(AliPos % LETTER_BLOCK_WIDTH)){
 				SetColor(GrData->udv_scale.TickMinColor);
 				x=xDecal;
-				MoveTo(x,y4);
-				LineTo(x,y2);
+				MoveTo(x,y4-2);
+				LineTo(x,y2-2);
 			}
 
-			xDecal+=GrData->udv_font.cxChar;
+			xDecal+=ColWidth;
 
 			/*each LETTER_BLOCK_WIDTH, add a blank column*/
-			if (!(pos % LETTER_BLOCK_WIDTH)) xDecal+=GrData->udv_font.cxChar;
-			pos++;
+			if (!(AliPos % LETTER_BLOCK_WIDTH)&&UseBlockDisp) xDecal+=ColWidth;
+			AliPos++;pos++;
 		}
 	}
 	Black();
@@ -3268,7 +3337,7 @@ static void  UDV_draw_empty_panel(RecT rc,UnDViewerGraphDataPtr GrData,
 static void UDV_draw_panel(PaneL p,ViewerDialogDataPtr vdp)	
 {
 WindoW 				temport;
-Int4 				stop,decal_haut=0;
+Int4 				stop,decal_haut,from_row,to_row,nTotRow,nLinesDraw;
 ValNodePtr 			vnp,vnp2;
 ParaGPtr 			pgp;
 RecT 				rc,rcP,rcP_old;
@@ -3304,11 +3373,47 @@ MediaInfoPtr        MIPtr=NULL;
 		return;
 	}
 
-	decal_haut=UDV_calc_decalRC(vdp->ParaG,vdp->udv_graph.udv_vscrl.ScrollPos,
+	/*decal_haut=UDV_calc_decalRC(vdp->ParaG,vdp->udv_graph.udv_vscrl.ScrollPos,
 		vdp->udv_graph.udv_vscrl.ScrollMax,vdp->udv_graph.udv_vscrl.ScrollPage,
 		vdp->udv_graph.udv_panel.nTotLines,vdp->udv_graph.udv_font.LineHeight,
-		&vnp,&stop);
-		
+		&vnp,&stop);*/
+	
+	decal_haut=vdp->udv_graph.udv_vscrl.ScrollPos*vdp->udv_graph.udv_font.LineHeight-
+			VIEWER_VERT_MARGIN;	
+
+/*printf("%d..%d\n",rcP.top,rcP.bottom);*/
+	if (vdp->udv_graph.bFirst){
+		from_row=0;
+		to_row=(rcP.bottom-rcP.top)/vdp->udv_graph.udv_font.LineHeight+1;
+		vdp->udv_graph.bFirst=FALSE;
+	}
+	else{
+		from_row=(updateRect.top-rcP.top)/vdp->udv_graph.udv_font.LineHeight-1;
+		to_row=(updateRect.bottom-rcP.top)/vdp->udv_graph.udv_font.LineHeight+1;
+	}
+	if (from_row<0 && to_row<0) return;		
+	if (from_row<0) from_row=0;
+	if (to_row<0) to_row=0;
+	from_row+=vdp->udv_graph.udv_vscrl.ScrollPos;
+	to_row+=vdp->udv_graph.udv_vscrl.ScrollPos;
+	if (from_row>vdp->udv_graph.udv_panel.nTotLines) 
+		from_row=vdp->udv_graph.udv_panel.nTotLines;
+	if (to_row>vdp->udv_graph.udv_panel.nTotLines) 
+		to_row=vdp->udv_graph.udv_panel.nTotLines;
+	nTotRow=to_row-from_row;
+
+	/*find the ParaG where ScrollPos is Located*/
+	vnp=vdp->ParaG;
+	while(vnp){
+		if (vnp->data.ptrvalue){
+			pgp=(ParaGPtr)vnp->data.ptrvalue;
+			if ((pgp->StartLine<=to_row)&&((pgp->StartLine+pgp->nLines)>=from_row)){
+					break;
+			}
+		}
+		vnp=vnp->next;
+	}	
+
 	/*retrieve the colours table for the bsp*/
 	svpp = (SeqEditViewProcsPtr) GetAppProperty ("SeqEditDisplayForm");
 	if (svpp) {
@@ -3346,7 +3451,7 @@ MediaInfoPtr        MIPtr=NULL;
 
 	decal_gauche=vdp->udv_graph.udv_panel.cxName+rcP_old.left+
 			vdp->udv_graph.udv_scale.cxLeftScale;
-			
+	nLinesDraw=0;		
 	for(vnp2=vnp ; vnp2 != NULL ; vnp2=vnp2->next){
 		if (vnp2->data.ptrvalue){
 			pgp=(ParaGPtr)vnp2->data.ptrvalue;
@@ -3356,7 +3461,15 @@ MediaInfoPtr        MIPtr=NULL;
 
 		/*Numerical scale*/
 			if (vdp->udv_graph.udv_panel.ShowScale)
-				UDV_Draw_scale(&vdp->udv_graph,pgp,&rc,vdp->bsp_i.bspLength);
+				UDV_Draw_scale(&vdp->udv_graph,
+					vdp->udv_graph.udv_scale.ShowMajorTick,
+					vdp->udv_graph.udv_scale.ShowMMinorTick,
+					vdp->udv_graph.udv_scale.ScalePosition,
+					pgp->StartLetter,pgp->StopLetter,&rc,
+					vdp->udv_graph.udv_font.cxChar,
+					vdp->bsp_i.bspLength,pgp->StartLetter,
+					TRUE,
+					vdp->udv_graph.udv_font.cxChar);
 		/*Sequence*/
 			if (vdp->bsp_i.SeqBuf)
 				UDV_Draw_sequence(&vdp->udv_graph,vnp_color,
@@ -3378,8 +3491,9 @@ MediaInfoPtr        MIPtr=NULL;
 						vdp->udv_graph.pClr,vdp->Item_select,
 						vdp->Old_Item_select);*/
 			}
-			
-			if (pgp->StartLine > stop) break;
+			nLinesDraw+=pgp->nLines;
+			if (nLinesDraw>nTotRow) break;
+			/*if (pgp->StartLine > stop) break;*/
 		}		
 	}	
 
@@ -3433,16 +3547,18 @@ NLM_EXTERN void UDV_Logo_onDraw (PaneL p)
 {
 WindoW 				w,temport;
 RecT 				/*rc,*/rcP;
-ViewerMainPtr		vmp;
+/*ViewerMainPtr		vmp;*/
+UDVLogoDataPtr		ldp;
 
 	/*get the parent Window of the Panel*/
 	w=ParentWindow(p);
 	if (w==NULL) return;
 	
 	/*get some usefull data...*/
-	vmp = (ViewerMainPtr) GetObjectExtra (w);
+	/*vmp = (ViewerMainPtr) GetObjectExtra (w);*/
+	ldp = (UDVLogoDataPtr) GetAppProperty ("UDVLogoData");
 
-	if (vmp==NULL) return;
+	if (ldp==NULL) return;
 	
 	temport=SavePort(ParentWindow(p));
 	Select (p);
@@ -3453,7 +3569,8 @@ ViewerMainPtr		vmp;
 
 	White();
 	PaintRect(&rcP);
-	if (vmp->f1 && vmp->f2 && vmp->f3) draw_logo(rcP,vmp->f1,vmp->f2,vmp->f3);
+	if (ldp->f1 && ldp->f2 && ldp->f3) draw_logo(rcP,ldp->f1,ldp->f2,ldp->f3,
+			ldp->szTitle,ldp->szDesc);
 	ResetClip();	
 
 	/*3D border*/

@@ -29,13 +29,25 @@
 *
 * Version Creation Date:   8/5/96
 *
-* $Revision: 6.22 $
+* $Revision: 6.26 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: entrez.c,v $
+* Revision 6.26  1999/08/27 15:59:09  kans
+* removed obsolete load and save uid list commands
+*
+* Revision 6.25  1999/08/24 18:05:58  kans
+* has target control, use delayed neighbor policy
+*
+* Revision 6.24  1999/05/27 16:39:24  kans
+* preferences to options menu
+*
+* Revision 6.23  1999/05/12 17:41:48  kans
+* raised version number for public release
+*
 * Revision 6.22  1999/01/14 19:07:51  kans
 * new parameters to Cn3DWin_Entrez
 *
@@ -169,7 +181,7 @@
 
 #include <entrez.h>
 
-#define ENTREZ_APP_VERSION "6.60"
+#define ENTREZ_APP_VERSION "7.00"
 
 static ForM  termListForm = NULL;
 static ForM  docSumForm = NULL;
@@ -204,7 +216,6 @@ static Boolean  docSumUp = FALSE;
 
 static Boolean  macLike = FALSE;
 static Boolean  showAsnPage = FALSE;
-static Boolean  loadSaveUidListOK = FALSE;
 
 static FonT  titleFont = NULL;
 
@@ -807,17 +818,6 @@ static void Cn3DWinShowProc (IteM i)
 #endif
 
 
-static CharPtr obsoletemsg =
-"Please use Import and Export items to load and save Uid lists.\n\
-The Load and Save Uid List items are obsolete, and will disappear\n\
-in the next release.";
-
-static void ObsoleteUidListProc (IteM i)
-
-{
-  Message (MSG_OK, "%s", obsoletemsg);
-}
-
 #ifndef WIN_MAC
 static void MedlineViewFormMenus (WindoW w)
 
@@ -899,16 +899,9 @@ static void TermListFormMenus (WindoW w)
     AddAboutAndHelpMenuItems (m);
     FormCommandItem (m, "Close", bfp, VIB_MSG_CLOSE);
     SeparatorItem (m);
-    if (loadSaveUidListOK) {
-      FormCommandItem (m, "Import Uid List...", bfp, VIB_MSG_IMPORT);
-      FormCommandItem (m, "Export Uid List...", bfp, VIB_MSG_EXPORT);
-      SeparatorItem (m);
-      i = CommandItem (m, "Load Uid List...", ObsoleteUidListProc);
-      SetObjectExtra (i, bfp, NULL);
-      i = CommandItem (m, "Save Uid List...", ObsoleteUidListProc);
-      SetObjectExtra (i, bfp, NULL);
-      SeparatorItem (m);
-    }
+    FormCommandItem (m, "Import Uid List...", bfp, VIB_MSG_IMPORT);
+    FormCommandItem (m, "Export Uid List...", bfp, VIB_MSG_EXPORT);
+    SeparatorItem (m);
     FormCommandItem (m, "Quit/Q", bfp, VIB_MSG_QUIT);
 
     m = PulldownMenu (w, "Edit");
@@ -918,13 +911,13 @@ static void TermListFormMenus (WindoW w)
     FormCommandItem (m, CLEAR_MENU_ITEM, bfp, VIB_MSG_DELETE);
 
     m = PulldownMenu (w, "Options");
+    CommandItem (m, "Preferences...", PreferencesProc);
+    SeparatorItem (m);
     sub = SubMenu (m, "Query Style");
     CreateQueryTypeChoice (sub, bfp);
     CreateClearUnusedItem (m, bfp);
 
     m = PulldownMenu (w, "Misc");
-    CommandItem (m, "Preferences...", PreferencesProc);
-    SeparatorItem (m);
     VSMAddToMenu (m, VSM_DESKTOP);
     SeparatorItem (m);
     CommandItem (m, "Style Manager...", StyleManagerProc);
@@ -939,6 +932,7 @@ static void DocSumFormMenus (WindoW w)
 
 {
   BaseFormPtr  bfp;
+  ChoicE       c;
   IteM         i;
   MenU         m;
   MenU         sub;
@@ -956,28 +950,22 @@ static void DocSumFormMenus (WindoW w)
     FormCommandItem (m, "Save As...", bfp, VIB_MSG_SAVE_AS);
     SeparatorItem (m);
     */
-    if (loadSaveUidListOK) {
-      i = CommandItem (m, "Load Uid List...", ObsoleteUidListProc);
-      SetObjectExtra (i, bfp, NULL);
-      i = CommandItem (m, "Save Uid List...", ObsoleteUidListProc);
-      SetObjectExtra (i, bfp, NULL);
-      SeparatorItem (m);
-    }
     FormCommandItem (m, "Print...", bfp, VIB_MSG_PRINT);
 
     m = PulldownMenu (w, "Edit");
     FormCommandItem (m, COPY_MENU_ITEM, bfp, VIB_MSG_COPY);
 
     m = PulldownMenu (w, "Options");
+    CommandItem (m, "Preferences...", PreferencesProc);
+    SeparatorItem (m);
     sub = SubMenu (m, "Neighbor Policy");
-    CreateNeighborDelayChoice (sub, bfp);
+    c = CreateNeighborDelayChoice (sub, bfp);
+    SetValue (c, 2); /* UseDelayedNeighbor */
     SeparatorItem (m);
     LoadDocsumOptionsMenu (m);
     seqviewprocs.alignWithChecked = entrezglobals.alignWithChecked;
 
     m = PulldownMenu (w, "Misc");
-    CommandItem (m, "Preferences...", PreferencesProc);
-    SeparatorItem (m);
     sub = SubMenu (m, "Font Selection");
     i = CommandItem (sub, "DocSum Font...", DocSumFontChangeProc);
     SetObjectExtra (i, bfp, NULL);
@@ -1119,17 +1107,10 @@ static void SetupAppProperties (void)
   Char     str [32];
   Int2     val;
 
-  showAsnPage = FALSE;
+  showAsnPage = TRUE;
   if (GetEntrezAppParam ("PREFERENCES", "SHOWASNPAGE", "", str, sizeof (str) - 1)) {
-    if (StringICmp (str, "TRUE") == 0) {
-      showAsnPage = TRUE;
-    }
-  }
-
-  loadSaveUidListOK = TRUE;
-  if (GetEntrezAppParam ("PREFERENCES", "LOADSAVEUIDLIST", "", str, sizeof (str) - 1)) {
     if (StringICmp (str, "FALSE") == 0) {
-      loadSaveUidListOK = FALSE;
+      showAsnPage = FALSE;
     }
   }
 
@@ -1137,7 +1118,7 @@ static void SetupAppProperties (void)
   medviewprocs.cleanupObjectPtr = FALSE;
   medviewprocs.activateForm = MedlineViewFormActivated;
   medviewprocs.closeForm = NULL;
-  medviewprocs.useFolderTabs = CHANGE_VIEW_RADIOBUTTONS;
+  medviewprocs.useFolderTabs = CHANGE_VIEW_POPUP;
   /*
   medviewprocs.initPage = CITATION_PAGE;
   */
@@ -1151,9 +1132,9 @@ static void SetupAppProperties (void)
   SetAppProperty ("MedlineDisplayForm", &medviewprocs);
 
   MemSet ((Pointer) (&seqviewprocs), 0, sizeof (SeqViewProcs));
-  seqviewprocs.hasTargetControl = FALSE;
+  seqviewprocs.hasTargetControl = TRUE;
   seqviewprocs.hasDoneButton = FALSE;
-  seqviewprocs.hasDuplicateButton = TRUE;
+  seqviewprocs.hasDuplicateButton = FALSE;
   seqviewprocs.launchEditors = FALSE;
   seqviewprocs.launchSubviewers = TRUE;
   seqviewprocs.sendSelectMessages = TRUE;
@@ -1161,7 +1142,7 @@ static void SetupAppProperties (void)
   seqviewprocs.cleanupObjectPtr = FALSE;
   seqviewprocs.activateForm = BioseqViewFormActivated;
   seqviewprocs.closeForm = NULL;
-  seqviewprocs.useFolderTabs = CHANGE_VIEW_RADIOBUTTONS;
+  seqviewprocs.useFolderTabs = CHANGE_VIEW_POPUP;
   /*
   seqviewprocs.initNucPage = NUCASN2FF_PAGE_1;
   seqviewprocs.initProtPage = PROTGENPEPT_PAGE;
@@ -1186,6 +1167,7 @@ static void SetupAppProperties (void)
   AddBioseqPageToList (&(seqviewprocs.pageSpecs), &fstaPageData);
   if (showAsnPage) {
     AddBioseqPageToList (&(seqviewprocs.pageSpecs), &asnPageData);
+    AddBioseqPageToList (&(seqviewprocs.pageSpecs), &dskPageData);
   }
 
   SetAppProperty ("SeqDisplayForm", &seqviewprocs);
@@ -1425,11 +1407,6 @@ static void SetupMacMenus (void)
   saveAsItem = FormCommandItem (m, "Save As...", NULL, VIB_MSG_SAVE_AS);
   SeparatorItem (m);
   */
-  if (loadSaveUidListOK) {
-    loadUidItem = CommandItem (m, "Load Uid List...", ObsoleteUidListProc);
-    saveUidItem = CommandItem (m, "Save Uid List...", ObsoleteUidListProc);
-    SeparatorItem (m);
-  }
   printItem = FormCommandItem (m, "Print...", NULL, VIB_MSG_PRINT);
   SeparatorItem (m);
   FormCommandItem (m, "Quit/Q", NULL, VIB_MSG_QUIT);
@@ -1446,6 +1423,8 @@ static void SetupMacMenus (void)
   deleteItem = FormCommandItem (m, CLEAR_MENU_ITEM, NULL, VIB_MSG_DELETE);
 
   m = PulldownMenu (NULL, "Options");
+  preferencesItem = CommandItem (m, "Preferences...", PreferencesProc);
+  SeparatorItem (m);
   sub = SubMenu (m, "Query Style");
   queryChoice = CreateQueryTypeChoice (sub, NULL);
   clearUnusedItem = CreateClearUnusedItem (m, NULL);
@@ -1457,7 +1436,6 @@ static void SetupMacMenus (void)
   seqviewprocs.alignWithChecked = entrezglobals.alignWithChecked;
 
   m = PulldownMenu (NULL, "Misc");
-  preferencesItem = CommandItem (m, "Preferences...", PreferencesProc);
   sub = SubMenu (m, "Font Selection");
   docsumfontItem = CommandItem (sub, "DocSum Font...", DocSumFontChangeProc);
   displayfontItem = CommandItem (sub, "Display Font...", DisplayFontChangeProc);
@@ -1739,6 +1717,7 @@ Int2 Main (void)
     docSumForm = CreateDocSumForm (-10, -90, "Document",
                                    DocumentSummaryActivateProc,
                                    DocumentSummaryFormMessage);
+    UseDelayedNeighbor (docSumForm, TRUE);
     if (docSumForm != NULL) {
       ProcessEvents ();
     } else {

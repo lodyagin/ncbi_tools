@@ -1,4 +1,4 @@
-# $Id: makeall.dos,v 6.55 1999/05/07 20:05:57 kans Exp $
+# $Id: makeall.dos,v 6.71 1999/08/27 19:30:03 kans Exp $
 ##################################################
 ###  Makefile for non-network-based libraries + asntool
 #####
@@ -21,21 +21,23 @@ OBJ1  = +ncbibs.obj +wwwutils.obj +ncbierr.obj +ncbienv.obj +ncbifile.obj \
 	+asnio.obj +asnlex.obj +asnlext.obj +asnout.obj +asnprint.obj \
 	+asntypes.obj +gifgen.obj +togif.obj +tsprintf.obj +ncbiargs.obj \
 	+ncbithrs.obj +regex.obj +tree.obj +ncbisock.obj +matrix.obj \
-	+ncbibuf.obj +connectn.obj +connutil.obj +con_url.obj +con_sock.obj \
-	+urlquery.obj
+	+ncbibuf.obj +ncbi_buffer.obj +connectn.obj +connutil.obj \
+   +con_url.obj +con_sock.obj +urlquery.obj +con_stateless.obj
 OBJ2 = +objacces.obj +objalign.obj +objall.obj +objbibli.obj \
 	+objfeat.obj +objgen.obj +objloc.obj +objmedli.obj +objpub.obj \
 	+objres.obj +objseq.obj +objcode.obj +objblock.obj +objsset.obj \
 	+objsub.obj +objprt.obj +objfdef.obj +objmime.obj +objpubme.obj \
-	+objmdrs.obj +objproj.obj +seqport.obj +sequtil.obj +prtutil.obj \
-	+simple.obj +tofasta.obj +tofile.obj +tomedlin.obj +valid.obj \
-	+subutil.obj +edutil.obj +asn2ff1.obj +asn2ff2.obj +asn2ff3.obj \
+	+objmdrs.obj +objproj.obj + objent2.obj +seqport.obj +sequtil.obj +prtutil.obj \
+	+simple.obj +tofasta.obj +tofile.obj +tomedlin.obj +valid.obj +alignmgr.obj \
+	+alignval.obj +subutil.obj +edutil.obj +asn2ff1.obj +asn2ff2.obj +asn2ff3.obj \
 	+asn2ff4.obj +asn2ff5.obj +asn2ff6.obj +ftusrstr.obj +gbfeat.obj \
 	+gbftglob.obj +gbparint.obj +utilpars.obj +utilpub.obj +ffprint.obj \
 	+wprint.obj +satutil.obj +seqmgr.obj +gather.obj +objmgr.obj \
 	+accmmdbs.obj +acccn3ds.obj +lsqfetch.obj +findrepl.obj \
 	+jzcoll.obj +jzmisc.obj +maputil.obj +mconsist.obj +codon.obj \
-	+txalign.obj +sqnutil1.obj +sqnutil2.obj +salpacc.obj +udvseq.obj
+	+txalign.obj +sqnutil1.obj +sqnutil2.obj +salpacc.obj +salprop.obj +udvseq.obj \
+	+salsap.obj +salstruc.obj +salutil.obj +salpedit.obj +salpstat.obj \
+	+blocks.obj +pgppop.obj
 OBJ3  = +cdentrez.obj +cdromlib.obj +cdnewlib.obj +casn.obj +cdconfig.obj \
 	+objentr.obj
 
@@ -77,16 +79,17 @@ OBJ22 = +corematx.obj +dvncode.obj +objmmdb1.obj +objmmdb2.obj +objmmdb3.obj \
 OBJ23 = +csim.obj +db_slist.obj +dust.obj +falign.obj +g_any.obj \
 	+sim2.obj +sim3.obj +sim4.obj +simutil.obj +slist.obj +sec.obj +tfuns.obj \
 	+toasn3.obj +toporg.obj +pobutil.obj +stsutil.obj +suggadj.obj \
-	+suggest.obj +suggslp.obj +blast.obj +blastutl.obj +blastool.obj +blastasn.obj \
-	+blastkar.obj +splutil.obj +gapxdrop.obj +lookup.obj +readdb.obj \
+	+suggest.obj +suggslp.obj +blast.obj +blastutl.obj \
+	+blastool.obj +blastasn.obj +blastkar.obj \
+	+splutil.obj +gapxdrop.obj +lookup.obj +readdb.obj \
 	+posit.obj +ncbisam.obj \
 	+bandalg0.obj +bandalg1.obj +bandalg2.obj +bandalg3.obj \
 	+bandalg4.obj +bandalg5.obj +bandalgn.obj +ncbisort.obj \
-	+salpedit.obj +salpstat.obj +salsap.obj +salstruc.obj +salutil.obj \
+	+salptool.obj +salign.obj \
 	+urkutil.obj +urkpcc.obj +urkptpf.obj \
 	+urkepi.obj +urkfltr.obj +urkdust.obj +urksigu.obj +seg.obj \
 	+urkbias.obj +urkcnsrt.obj +urktree.obj +pseed3.obj +pattern1.obj \
-	+impatool.obj +posit2.obj +newkar.obj 
+	+impatool.obj +posit2.obj +newkar.obj +ddvcolor.obj
 OBJ28 = +ncbidrwg.obj +pictogif.obj \
         +gdfontg.obj +gdfontmb.obj +gdfontt.obj +gdfontl.obj +gdfonts.obj
 OBJ30 = +algorend.obj +cn3dmsel.obj +cn3dopen.obj +cn3dsave.obj \
@@ -144,6 +147,8 @@ copy :
 	copy ..\connect\*.h $(INCPATH)
 	copy ..\object\*.c .
 	copy ..\object\*.h $(INCPATH)
+	copy ..\access\*.c .
+	copy ..\access\*.h $(INCPATH)
 	copy ..\$(ASNDIR)\*.h $(INCPATH)
 	copy ..\api\*.h $(INCPATH)
 	copy ..\api\*.c .

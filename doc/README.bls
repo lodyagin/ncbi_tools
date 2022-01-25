@@ -1,6 +1,6 @@
 	
 			README for stand-alone BLAST
-			   (last updated 5/4/99)
+			   (last updated 7/30/99)
 
 
 
@@ -343,6 +343,23 @@ formatdb   arguments:
 	This can be used in situations where the original FASTA file is not required
 	other than by formatdb.  This can help in a situation where disk-space is tight.
 
+  -v  Number of sequence bases to be created in the volume [Integer]  Optional
+    default = 0
+	This option breaks up large FASTA files into 'volumes' (each with a maximum 
+	size of 2 billion letters).  As part of the creation of a volume formatdb 
+	writes a new type of BLAST database file, called an alias file, with the 
+	extension 'nal' or 'pal', is written.
+
+  -s  Create indexes limited only to accessions - sparse [T/F]  Optional
+    default = F
+
+	This option limits the indices for the string identifiers (used by formatdb) 
+	to accessions (i.e., no locus names).  This is especially useful for sequences sets 
+	like the EST's where the accession and locus names are identical.  Formatdb runs 
+	faster and produces smaller temporary files if this option is used.  It is strongly 
+	recommended for EST's, STS's, GSS's, and HTGS's.
+
+
 
 
 FORMATDB NOTES:
@@ -492,6 +509,52 @@ iterative searches in psi-blast and phi-blast mode. See the PSI-Blast and
 PHI-BLAST sections (below) for a description of this binary. The options may be
 obtained by executing 'blastpgp -'.
 
+  -T  Produce HTML output [T/F]
+    default = F
+
+  -Q  Output File for PSI-BLAST Matrix in ASCII [File Out]  Optional
+
+Bl2seq
+------
+
+Bl2seq performs a comparison between two sequences using either the blastn or
+blastp algorithm.  Both sequences must be either nucleotides or proteins.
+The options may be obtained by executing 'bl2seq -'.
+
+  -i  First sequence [File In]
+  -j  Second sequence [File In]
+  -p  blastp? (blastn otherwise) [T/F]
+    default = T
+  -g  Gapped [T/F]
+    default = T
+  -o  alignment output file [File Out]
+    default = stdout
+  -d  theor. db size (zero is real size) [Integer]
+    default = 0
+  -a  SeqAnnot output file [File Out]  Optional
+  -G  Cost to open a gap (zero invokes default behavior) [Integer]
+    default = 0
+  -E  Cost to extend a gap (zero invokes default behavior) [Integer]
+    default = 0
+  -X  X dropoff value for gapped alignment (in bits) (zero invokes default behavior) [Integer]
+    default = 0
+  -W  Wordsize (zero invokes default behavior) [Integer]
+    default = 0
+  -M  Matrix [String]
+    default = BLOSUM62
+  -q  Penalty for a nucleotide mismatch (blastn only) [Integer]
+    default = -3
+  -r  Reward for a nucleotide match (blastn only) [Integer]
+    default = 1
+  -F  Filter query sequence (DUST with blastn, SEG with others) [String]
+    default = T
+  -e  Expectation value (E) [Real]
+    default = 10.0
+  -S  Query strands to search against database (blastn only).  3 is both, 1 is top, 2 is bottom [Integer]
+    default = 3
+  -T  Produce HTML output [T/F]
+    default = F
+
 
 Fastacmd
 --------
@@ -567,6 +630,114 @@ a way that PSI-BLAST can read the files in later.
 The checkpoint structure is general in the sense that it can handle
 any position-specific matrix that fits in the Karlin-Altschul
 statistical framework for BLAST scoring.
+
+The -B flag provides a way to jump start PSI-BLAST from a master-slave
+multiple alignment computed outside PSI-BLAST.  The multiple alignment
+must include the query sequence as one of the sequences, but it need
+not be the first sequence.  The multiple alignment must be specified
+in a format that is derived from Clustal, but without some headers and
+trailers.  See example below. The rules are also described by the
+following words.  Suppose the multiple alignments has N sequences.  It
+may be presented in 1 or more blocks, where each block presents a
+range of columns from the multiple alignment.  E.g., the first block
+might have columns 1-60, the second block might have columns 61-95,
+the third block might have columns 96-128. Each block should have N
+rows, 1 row per sequence.  The sequences should be in the same order
+in every block.  Blocks are separated by 1 or more blank lines.
+Within a block there are no blank lines, and each line consists of 1
+sequence identifier followed by some white space followed by
+characters (and gaps) for that sequence in the multiple alignment.  In
+each column, all letters must be in upper case, or all letters must be
+in lower case.  Upper case means that this column is to be given
+position-specific scores. Lower-case means to use the underlying
+matrix (specified by -M) for this column; e.g., if the query sequence
+has an 'l' residue in the column, then the standard scores for
+matching an L are used in the column.
+
+A sample usage would be:
+
+  blastpgp -i seq1 -B align1 -j 2 -d nr
+
+where seq1 is the query
+      align1 is the alignment file
+      -j 2 indicates to do 2 rounds
+      -d nr indicates to use the nr database
+
+The example files
+    seq1
+    align1
+copied below were kindly supplied by L. Aravind from a paper
+he and Chris Ponting published in Protein Science:
+
+Aravind L, Ponting CP, Homologues of 26S proteasome subunits 
+are regulators of transcription and translation, Protein Science 
+7(1998) 1250-1254.
+
+L. Aravind (aravind@ncbi.nlm.nih.gov) was the first user
+and helped define how -B should work. Y. Wolf (wolf@ncbi.nlm.nih.gov)
+helped design a more flexible input format for the alignments.
+If you like how -B works, let them know.
+If you do not like how -B works, complain to 
+A. Schaffer(schaffer@helix.nih.gov) who did the implementation.
+
+seq1
+----
+> 26SPS9_Hs 
+IHAAEEKDWKTAYSYFYEAFEGYDSIDSPKAITSLKYMLLCKIMLNTPEDVQALVSGKLALRYAGRQTEA
+LKCVAQASKNRSLADFEKALTDYRAELRDDPIISTHLAKLYDNLLEQNLIRVIEPFSRVQIEHISSLIKL
+SKADVERKLSQMILDKKFHGILDQGEGVLIIFDEPP
+
+
+align1
+------
+26SPS9_Hs     IHAAEEKDWKTAYSYFYEAFEGYdsidspkaitslkymllckimlntpedvqalvsgklalryagrqtealkcvaqasknr
+F57B9_Ce      LHAADEKDFKTAFSYFYEAFEGYdsvdekvsaltalkymllckvmldlpdevnsllsaklalkyngsdldamkaiaaaaqk
+YDL097c_Sc    ILHCEDKDYKTAFSYFFESFESYhnltthnsyekacqvlkymllskimlnliddvknilnakytketyqsrgidamkavae
+YMJ5_Ce       LYSAEERDYKTSFSYFYEAFEGFasigdkinatsalkymilckimlneteqlagllaakeivayqkspriiairsmadafr
+FUS6_ARATH    KNYIRTRDYCTTTKHIIHMCMNAilvsiemgqfthvtsyvnkaeqnpetlepmvnaklrcasglahlelkkyklaarkfld
+COS41.8_Ci    SLDYKLKTYLTIARLYLEDEDPVqaemyinrasllqnetadeqlqihykvcyarvldyrrkfleaaqrynelsyksaihet
+644879        KCYSRARDYCTSAKHVINMCLNVikvsvylqnwshvlsyvskaestpeiaeqrgerdsqtqailtklkcaaglaelaarky
+YPR108w_Sc    IHCLAVRNFKEAAKLLVDSLATFtsieltsyesiatyasvtglftlertdlkskvidspellslisttaalqsissltisl
+eif-3p110_Hs  SKAMKMGDWKTCHSFIINEKMNGkvw-------------------------------------------------------
+T23D8.4_Ce    SKAMLNGDWKKCQDYIVNDKMNQkvw-------------------------------------------------------
+YD95_Sp       IYLMSIRNFSGAADLLLDCMSTFsstellpyydvvryavisgaisldrvdvktkivdspevlavlpqnesmssleacinsl
+KIAA0107_Hs   LYCVAIRDFKQAAELFLDTVSTFtsyelmdyktfvtytvyvsmialerpdlrekvikgaeilevlhslpavrqylfslyec
+F49C12.8_Hs   LYRMSVRDFAGAADLFLEAVPTFgsyelmtyenlilytvitttfaldrpdlrtkvircnevqeqltggglngtlipvreyl
+Int-6_Mm      KFQYECGNYSGAAEYLYFFRVLVpatdrnalsslwgklaseilmqnwdaamedltrlketidnnsvssplqslqqrtwlih
+
+26SPS9_Hs     sladfekaltdy-----------------------------------------------------------------------------------
+F57B9_Ce      rslkdfqvafgsf----------------------------------------------------------------------------------
+YDL097c_Sc    aynnrslldfntalkqy------------------------------------------------------------------------------
+YMJ5_Ce       krslkdfvkalaeh---------------------------------------------------------------------------------
+FUS6_ARATH    vnpelgnsyneviapqdiatygglcalasfdrselkqkvidninfrnflelvpdvrelindfyssryascleylasl------------------
+COS41.8_Ci    eqtkalekalncailapagqqrsrmlatlfkdercqllpsfgilekmfldriiksdemeefar--------------------------------
+644879        kqaakclllasfdhcdfpellspsnvaiygglcalatfdrqelqrnvissssfklflelepqvrdiifkfyeskyasclkmldem----------
+YPR108w_Sc    yasdyasyfpyllety-------------------------------------------------------------------------------
+eif-3p110_Hs  -----------------------------------------------------------------------------------------------
+T23D8.4_Ce    -----------------------------------------------------------------------------------------------
+YD95_Sp       ylcdysgffrtladve-------------------------------------------------------------------------------
+KIAA0107_Hs   rysvffqslavv-----------------------------------------------------------------------------------
+F49C12.8_Hs   esyydchydrffiqlaale----------------------------------------------------------------------------
+Int-6_Mm      wslfvffnhpkgrdniidlflyqpqylnaiqtmcphilrylttavitnkdvrkrrqvlkdlvkviqqesytykdpitefveclyvnfdfdgaqkk
+
+26SPS9_Hs     ----RAELRDDPIISTHLAKLYDNLLEQNLIRVIEPFSRVQIEHISSLIKLSKADVERKLSQMILDKKFHGILDQGEGVLIIFDEPP
+F57B9_Ce      ----PQELQMDPVVRKHFHSLSERMLEKDLCRIIEPYSFVQIEHVAQQIGIDRSKVEKKLSQMILDQKLSGSLDQGEGMLIVFEIAV
+YDL097c_Sc    ----EKELMGDELTRSHFNALYDTLLESNLCKIIEPFECVEISHISKIIGLDTQQVEGKLSQMILDKIFYGVLDQGNGWLYVYETPN
+YMJ5_Ce       ----KIELVEDKVVAVHSQNLERNMLEKEISRVIEPYSEIELSYIARVIGMTVPPVERAIARMILDKKLMGSIDQHGDTVVVYPKAD
+FUS6_ARATH    ----KSNLLLDIHLHDHVDTLYDQIRKKALIQYTLPFVSVDLSRMADAFKTSVSGLEKELEALITDNQIQARIDSHNKILYARHADQ
+COS41.8_Ci    ----QLMPHQKAITADGSNILHRAVTEHNLLSASKLYNNIRFTELGALLEIPHQMAEKVASQMICESRMKGHIDQIDGIVFFERRET
+644879        ----KDNLLLDMYLAPHVRTLYTQIRNRALIQYFSPYVSADMHRMAAAFNTTVAALEDELTQLILEGLISARVDSHSKILYARDVDQ
+YPR108w_Sc    ----ANVLIPCKYLNRHADFFVREMRRKVYAQLLESYKTLSLKSMASAFGVSVAFLDNDLGKFIPNKQLNCVIDRVNGIVETNRPDN
+eif-3p110_Hs  ----DLFPEADKVRTMLVRKIQEESLRTYLFTYSSVYDSISMETLSDMFELDLPTVHSIISKMIINEELMASLDQPTQTVVMHRTEP
+T23D8.4_Ce    ----NLFHNAETVKGMVVRRIQEESLRTYLLTYSTVYATVSLKKLADLFELSKKDVHSIISKMIIQEELSATLDEPTDCLIMHRVEP
+YD95_Sp       ----VNHLKCDQFLVAHYRYYVREMRRRAYAQLLESYRALSIDSMAASFGVSVDYIDRDLASFIPDNKLNCVIDRVNGVVFTNRPDE
+KIAA0107_Hs   ----EQEMKKDWLFAPHYRYYVREMRIHAYSQLLESYRSLTLGYMAEAFGVGVEFIDQELSRFIAAGRLHCKIDKVNEIVETNRPDS
+F49C12.8_Hs   ----SERFKFDRYLSPHFNYYSRGMRHRAYEQFLTPYKTVRIDMMAKDFGVSRAFIDRELHRLIATGQLQCRIDAVNGVIEVNHRDS
+Int-6_Mm      lrecESVLVNDFFLVACLEDFIENARLFIFETFCRIHQCISINMLADKLNMTPEEAERWIVNLIRNARLDAKIDSKLGHVVMGNNAV
+
+
+
+
 
 PHI-Blast
 ---------
@@ -868,18 +1039,65 @@ References
 
 Release History
 ---------------
+Notes for 2.0.10 release:
+
+Enhancements:
+
+1.) Bl2seq, a utility to compare two sequences using the blastn or blastp approach,
+is included in the archive.  See the full description in the README.bls for details.
+
+2.) A 'sparse' option ('-s') has been added to formatdb.  This option limits the indices
+for the string identifiers (used by formatdb) to accessions (i.e., no locus names).
+This is especially useful for sequences sets like the EST's where the accession and locus
+names are identical.  Formatdb runs faster and produces smaller temporary files if this
+option is used.  It is strongly recommended for EST's, STS's, GSS's, and HTGS's.
+
+3.) A volume option ('-v') has been added to formatdb.  This option breaks up large
+FASTA files into 'volumes' (each with a maximum size of 2 billion letters).
+As part of the creation of a volume formatdb writes a new type of BLAST database file,
+called an alias file, with the extension 'nal' or 'pal', is written.  This option
+should be used if one wishes to formatdb large databases (e.g., over 2 billion 
+base pairs).
+
+4.) It is is now possible to jump start the command line version of PSI-BLAST (blastpgp) 
+from a multiple alignment that includes the query sequence using the -B option. Details 
+are in README.bls.
+
+5.) The maximum wordsize limit for BLASTN has been removed.
+
+Bug fixes:
+
+1.) A problem if the database length, set by the '-z' option was greater than
+2 billion, was fixed.
+
+2.) A core-dump that resulted from the use of the coil-coil masking
+('-F C') was fixed by including a file needed for the data directory.
+
+3.) A bug was fixed that caused some very short alignments to be assigned incorrect 
+expect values. 
+
+4.) A bug was fixed that caused formatdb to produce incorrect BLAST databases if
+the input was ASN.1.
+
+5.) A serious performance problem with BLASTN and longer words (greater than 16)
+was fixed.
+
 Notes for 2.0.9 release:
 
 Enhancements:
 
 1.) two new options have been added to blastall: to produce output in HTML and 
 to search a subset of the database based upon a list of GI's.  Please see 
-the options section for full information.  blastpgp has the ability to output HTML.
+the options section for full information.  
 
-2.) formatdb has a new option to allow specification of a 'base' name.  see the options
+2.) two new options have been added to blastpgp: to produce HTML output and to
+produce an ASCII version of the PSI-BLAST Matrix.  Please see the options section
+for more information.
+
+3.) formatdb has a new option to allow specification of a 'base' name.  see the options
 section for full details.
 
-3.) masking is possible only during the phase when the lookup table is being built, 
+4.) it is possible to mask only during the phase when the lookup table is being built, 
 but not during the extensions.  See the options section for full details.
 
 Bug fixes:

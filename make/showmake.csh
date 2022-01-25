@@ -1,6 +1,6 @@
 #!/bin/csh -f
 #
-# $Id: showmake.csh,v 1.3 1999/02/02 20:27:17 beloslyu Exp $
+# $Id: showmake.csh,v 1.4 1999/06/07 18:13:48 beloslyu Exp $
 #
 #
 # Show how to make the NCBI toolkit 
@@ -42,6 +42,9 @@ case OSF1:
 	breaksw
 case Linux:
 	set platform=linux
+	breaksw
+case NetBSD:
+	set platform=netbsd
 	breaksw
 default:
 	echo Platform not found : `uname -a`

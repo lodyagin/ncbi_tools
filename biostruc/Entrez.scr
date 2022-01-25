@@ -1,10 +1,29 @@
 /*
- * $Id: Entrez.scr,v 6.8 1999/05/03 14:47:26 kimelman Exp $
+ * $Id: Entrez.scr,v 6.14 1999/07/01 21:40:20 kimelman Exp $
  * 
  * This file contains the additions to PubStruct Database on Public 
  * Entrez Servers
  *
  * $Log: Entrez.scr,v $
+ * Revision 6.14  1999/07/01 21:40:20  kimelman
+ * qa_checks extended
+ *
+ * Revision 6.13  1999/06/15 20:37:48  kimelman
+ * id_get_asn_prop: synced to OS
+ *
+ * Revision 6.12  1999/06/09 02:01:51  kimelman
+ * typo
+ *
+ * Revision 6.11  1999/06/09 01:59:31  kimelman
+ * e2index input order fixed
+ *
+ * Revision 6.10  1999/06/08 03:54:20  kimelman
+ * entrez indexes ordering fixed
+ *
+ * Revision 6.9  1999/05/11 21:41:23  kimelman
+ * 1. qa_check proc added
+ * 2. this script now removes all procs not required on public/retrieval site
+ *
  * Revision 6.8  1999/05/03 14:47:26  kimelman
  * spaces
  *
@@ -110,7 +129,7 @@ create proc
 id_get_asnprop ( @sat_key int)
 as
   select  state=100,confidential, suppress=convert(tinyint,0), override=convert(tinyint,0), 
-          length=datalength(blob), owner=convert(smallint,0),"unknown"
+          length=datalength(blob), owner=convert(smallint,0),"unknown","N/A"
     from  Struct
    where  acc = @sat_key
  
@@ -272,32 +291,6 @@ go
 GRANT EXECUTE ON id_get_asn  TO public
 go
 
-/************************************************************************/
-PRINT '/*****           PROCEDURE    post_index                     *****/'
-/************************************************************************/
-go
-IF EXISTS (SELECT * FROM sysobjects
-    WHERE name = 'post_index'
-    AND   uid = user_id('dbo')
-    AND   type = 'P')
-BEGIN
-    DROP PROCEDURE dbo.post_index
-END
-go
-
-/************************************************************************/
-PRINT '/*****           PROCEDURE    post_remove                    *****/'
-/************************************************************************/
-go
-IF EXISTS (SELECT * FROM sysobjects
-    WHERE name = 'post_remove'
-    AND   uid = user_id('dbo')
-    AND   type = 'P')
-BEGIN
-    DROP PROCEDURE dbo.post_remove
-END
-go
-
 IF EXISTS (SELECT * FROM sysobjects
     WHERE name = 'list2index'
     AND   uid = user_id('dbo')
@@ -323,18 +316,20 @@ begin
        where s.state = 0 and s.suppressed = 0 and i.sat_key = s.acc and i.sat=10 and  i.date_entrez is null
          and s.mmdb_id = s1.mmdb_id
          and s1.state = 0 and i1.sat_key = s1.acc and i1.sat=10
-       group by s.acc
-       order by mod_date,s.acc
+         and s.mmdb_id > 0
+       group by s.acc,s.mmdb_id
+       order by mod_date,s.mmdb_id
     end
   else if(@full = 2) /* enforced reindex cases */
     begin
-     select 'fresh '  , s.acc, '10',
+     select 'update '  , s.acc, '10',
             mod_date=datediff(minute,'Jan 1 1900', isnull(min(i1.date_entrez),min(s1.date)))
        from Struct s, Struct s1, EntrezControl..SatKeyFlags i1
       where s.state = 0 and s.suppressed = 0 
         and s.mmdb_id = s1.mmdb_id
         and s1.state = 0  and i1.sat_key = s1.acc and i1.sat=10
         and s.mmdb_id = @mmdb_id
+        and s.mmdb_id > 0
       group by s.acc
     end
   else if(@full = -1)
@@ -353,12 +348,13 @@ begin
       from Struct s, Struct s1, EntrezControl..SatKeyFlags i
       where s1.state = 0 and s.mmdb_id = s1.mmdb_id and s.state = 0 and s.suppressed = 0 and
             i.sat_key = s1.acc and i.sat=10
-      group by s.acc
-      order by mod_date,s.acc
+        and s.mmdb_id > 0
+      group by s.acc,s.mmdb_id
+      order by mod_date,s.mmdb_id
   end
 end
 go
-GRANT EXECUTE ON list2index TO anyone
+GRANT EXECUTE ON list2index TO public
 go
 
 IF EXISTS (SELECT * FROM sysobjects
@@ -391,6 +387,82 @@ as
        and date < @obv_date and datalength(blob) > 0 and i.dumped4entrez = 0
 go
 GRANT EXECUTE ON vacuum_entrez TO anyone
+go
+
+IF EXISTS (SELECT * FROM sysobjects
+    WHERE name = 'qa_checks'
+    AND   uid = user_id('dbo')
+    AND   type = 'P')
+BEGIN
+    DROP PROCEDURE dbo.qa_checks
+END
+go
+/************************************************************************/
+PRINT '/*****           PROCEDURE    qa_checks                     *****/'
+/************************************************************************/
+go
+
+create proc
+qa_checks
+as
+  select mmdb_id,state from Struct
+  where suppressed = 0 
+  group by mmdb_id,state
+  having count(*) > 1
+
+  select acc,state from Struct
+  where mmdb_id <=0
+  
+  select mmdb_id from Struct s
+  where not exists ( select * from pdb p where p.mmdb_id = s.mmdb_id )
+  
+  select mmdb_id,state from Struct s, EntrezControl..SatKeyFlags e
+  where sat = 10 and sat_key = acc 
+  and dumped4entrez = 1 
+  group by mmdb_id,state
+  having count(*) > 1
+  
+  select acc from Struct s
+  where not exists (select * from EntrezControl..SatKeyFlags e 
+                    where sat = 10 and sat_key = s.acc )
+
+  select sat_key from EntrezControl..SatKeyFlags
+  where sat=10 and dumped4entrez=1 and date_entrez is null
+
+go
+GRANT EXECUTE ON qa_checks TO anyone
+go
+/************************************************************************/
+PRINT '/*****           DO QA checks                                *****/'
+/************************************************************************/
+go
+execute qa_checks
+go
+
+/************************************************************************/
+PRINT '/*****           PROCEDURE    post_index                     *****/'
+/************************************************************************/
+go
+IF EXISTS (SELECT * FROM sysobjects
+    WHERE name = 'post_index'
+    AND   uid = user_id('dbo')
+    AND   type = 'P')
+BEGIN
+    DROP PROCEDURE dbo.post_index
+END
+go
+
+/************************************************************************/
+PRINT '/*****           PROCEDURE    post_remove                    *****/'
+/************************************************************************/
+go
+IF EXISTS (SELECT * FROM sysobjects
+    WHERE name = 'post_remove'
+    AND   uid = user_id('dbo')
+    AND   type = 'P')
+BEGIN
+    DROP PROCEDURE dbo.post_remove
+END
 go
 
 /************************************************************************/
@@ -427,10 +499,114 @@ PRINT '/*****           PROCEDURE    fill_satinfo                  *****/'
 go
 
 IF EXISTS (SELECT * FROM sysobjects
-    WHERE name = 'fill_satinfo'
-    AND   uid = user_id('dbo')
-    AND   type = 'P')
+    WHERE uid = user_id('dbo')
+    AND   type = 'P'
+    AND   name = 'fill_satinfo')
 BEGIN
     DROP PROCEDURE dbo.fill_satinfo
+END
+go
+
+/************************************************************************/
+PRINT '/*****           PROCEDURE    rm_struct                  *****/'
+/************************************************************************/
+go
+
+IF EXISTS (SELECT * FROM sysobjects
+    WHERE uid = user_id('dbo')
+    AND   type = 'P'
+    AND   name = 'rm_struct')
+BEGIN
+    DROP PROCEDURE dbo.rm_struct
+END
+go
+
+
+/************************************************************************/
+PRINT '/*****           PROCEDURE    push_struct                  *****/'
+/************************************************************************/
+go
+
+IF EXISTS (SELECT * FROM sysobjects
+    WHERE uid = user_id('dbo')
+    AND   type = 'P'
+    AND   name = 'push_struct')
+BEGIN
+    DROP PROCEDURE dbo.push_struct
+END
+go
+
+
+/************************************************************************/
+PRINT '/*****           PROCEDURE    new_entry                  *****/'
+/************************************************************************/
+go
+
+IF EXISTS (SELECT * FROM sysobjects
+    WHERE uid = user_id('dbo')
+    AND   type = 'P'
+    AND   name = 'new_entry')
+BEGIN
+    DROP PROCEDURE dbo.new_entry
+END
+go
+
+
+/************************************************************************/
+PRINT '/*****           PROCEDURE    new_struct                  *****/'
+/************************************************************************/
+go
+
+IF EXISTS (SELECT * FROM sysobjects
+    WHERE uid = user_id('dbo')
+    AND   type = 'P'
+    AND   name = 'new_struct')
+BEGIN
+    DROP PROCEDURE dbo.new_struct
+END
+go
+
+
+/************************************************************************/
+PRINT '/*****           PROCEDURE    new_struct1                  *****/'
+/************************************************************************/
+go
+
+IF EXISTS (SELECT * FROM sysobjects
+    WHERE uid = user_id('dbo')
+    AND   type = 'P'
+    AND   name = 'new_struct1')
+BEGIN
+    DROP PROCEDURE dbo.new_struct1
+END
+go
+
+
+/************************************************************************/
+PRINT '/*****           PROCEDURE    get_props                  *****/'
+/************************************************************************/
+go
+
+IF EXISTS (SELECT * FROM sysobjects
+    WHERE uid = user_id('dbo')
+    AND   type = 'P'
+    AND   name = 'get_props')
+BEGIN
+    DROP PROCEDURE dbo.get_props
+END
+go
+
+
+/************************************************************************/
+PRINT '/*****           PROCEDURE    vacuum_cleaning                *****/'
+/************************************************************************/
+go
+
+IF EXISTS (SELECT * FROM sysobjects
+    WHERE uid = user_id('dbo')
+    AND   type = 'P'
+    AND   name = 'vacuum_cleaning')
+BEGIN
+    DROP PROCEDURE dbo.vacuum_cleaning
 END
 go

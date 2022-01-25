@@ -26,7 +26,7 @@
 
 /*****************************************************************************
 
-File name: makematrices.c
+File name: makemat.c
 
 Author: Alejandro Schaffer
 
@@ -80,21 +80,22 @@ static Char *makeMatrixName(Char *profileName)
 {
   int length; /*length of a name*/
   Char *returnName; /*string to treturn*/
-  int c; /*loop index*/
+  int c, lastc; /*loop indices*/
    
   length = strlen(profileName);
   returnName = (Char *) MemNew((length + 5) * sizeof(Char));
 
   for(c = 0; c < length; c++) {
     returnName[c] = profileName[c];
-    if(('.' == profileName[c]) && ('c' == profileName[c+1]))
-      break;
+    if(('.' == profileName[c]) && ('c' == profileName[c+1])
+      && ('h' == profileName[c+2]))
+      lastc = c;
   }
-  returnName[c] = '.';
-  returnName[c+1] = 'm';
-  returnName[c+2] = 't';
-  returnName[c+3] = 'x';
-  returnName[c+4] = '\0';
+  returnName[lastc] = '.';
+  returnName[lastc+1] = 'm';
+  returnName[lastc+2] = 't';
+  returnName[lastc+3] = 'x';
+  returnName[lastc+4] = '\0';
   return(returnName);
 }
 
@@ -171,6 +172,8 @@ static Boolean takeMatrixCheckpoint(compactSearchItems * compactSearch,
   for(i = 0; i < length; i++) {
     localChar = getRes(compactSearch->query[i]);
     fprintf(checkFile,"%c",localChar);
+    posSearch->posMatrix[i][Xchar] = Xscore;
+    posSearch->posPrivateMatrix[i][Xchar] = Xscore * scalingFactor;
   }  
   fprintf(checkFile,"\n");
   putMatrixKbp(checkFile, compactSearch->kbp_gap_std[0], scaleScores, 1/scalingFactor);
@@ -203,13 +206,17 @@ scalingFactor indicates by how much scores are scaled, if at all*/
 
 static Int4 convertToMatrices(FILE *profilesFile, FILE *sequencesFile, FILE *matricesFile, FILE *auxiliaryFile, Int4 count, Int4 gap_open, Int4 gap_extend,
 Int4 effectiveSize, Char *underlyingMatrixName, Boolean scaleScores,
-Nlm_FloatHi scalingFactor)
+Nlm_FloatHi scalingFactor, Char *directoryPrefix)
 {
    int i; /*loop index over profiles*/
-   FILE *thisProfileFile, *thisSequenceFile, *thisMatrixFile; /*file 
+   FILE *thisProfileFile, *thisSequenceFile; /*file 
                 descriptors for a single profile*/
-   Char *profileFileName, *sequenceFileName; /*file names for profiles*/
-   Char *matrixFileName;  /*file name for corresponding matrix file*/
+   Char profileFileName[MAX_NAME_LENGTH], sequenceFileName[MAX_NAME_LENGTH]; 
+                       /*file names for profiles*/
+   Char * matrixFileName, *relativeMatrixFileName;  /*file name for corresponding matrix file*/
+   Char relativeProfileFileName[MAX_NAME_LENGTH], relativeSequenceFileName[MAX_NAME_LENGTH];
+   Int4 prefixLength; /*length of directoryPrefix*/
+   Int4 c1,c2; /*indices over characters in names*/
    posSearchItems *posSearch; /*used to store matrix*/
    Uint1Ptr query =NULL;  /*query sequence read in*/
    Int4  queryLength;  /*length of query sequence*/
@@ -231,10 +238,9 @@ Nlm_FloatHi scalingFactor)
    Int4 *lengthArray; /*array of sequence lengths*/
    Nlm_FloatHi *KArray;  /*array of K values, one per sequence*/
    Int4 maxLength; /*maximum length of a sequence*/
+   Int4 KarlinReturn; /*return value from calls to set up matrix parameters*/
    
    error_return = NULL;
-   profileFileName = (Char *) MemNew(MAX_NAME_LENGTH * sizeof(Char));
-   sequenceFileName = (Char *) MemNew(MAX_NAME_LENGTH * sizeof(Char));
    posSearch = (posSearchItems *) MemNew (1 * sizeof(posSearchItems));
    compactSearch = (compactSearchItems *) MemNew (1 * sizeof(compactSearchItems));
    sctp = SeqCodeTableFindObj(Seq_code_ncbistdaa);
@@ -248,13 +254,35 @@ Nlm_FloatHi scalingFactor)
    KArray = (Nlm_FloatHi *) MemNew(count * sizeof(Nlm_FloatHi));
    maxLength = 0;
 
+   if ('\0' != directoryPrefix[0]) {
+     strcpy(profileFileName, directoryPrefix);
+     strcpy(sequenceFileName, directoryPrefix);
+     prefixLength = strlen(directoryPrefix);
+   }     
+
    for(i = 0; i < count; i++) {
-     fscanf(profilesFile,"%s", profileFileName);
+     if ('\0' == directoryPrefix[0])
+       fscanf(profilesFile,"%s", profileFileName); 
+     else {
+       fscanf(profilesFile,"%s", relativeProfileFileName); 
+       for(c1 = prefixLength, c2 = 0; relativeProfileFileName[c2] != '\0';
+          c1++, c2++)
+         profileFileName[c1] = relativeProfileFileName[c2];
+       profileFileName[c1] = '\0';
+     }
      if ((thisProfileFile = FileOpen(profileFileName, "r")) == NULL) {
 	ErrPostEx(SEV_FATAL, 0, 0, "Unable to open file %s\n", profileFileName);
 	return (1);
      }
-     fscanf(sequencesFile,"%s", sequenceFileName);
+     if ('\0' == directoryPrefix[0])
+       fscanf(sequencesFile,"%s", sequenceFileName); 
+     else {
+       fscanf(sequencesFile,"%s", relativeSequenceFileName); 
+       for(c1 = prefixLength, c2 = 0; relativeSequenceFileName[c2] != '\0';
+          c1++, c2++)
+         sequenceFileName[c1] = relativeSequenceFileName[c2];
+       sequenceFileName[c1] = '\0';
+     }
      if ((thisSequenceFile = FileOpen(sequenceFileName, "r")) == NULL) {
 	ErrPostEx(SEV_FATAL, 0, 0, "Unable to open file %s\n", sequenceFileName);
 	return (1);
@@ -294,11 +322,19 @@ Nlm_FloatHi scalingFactor)
      }
 
      sbp->kbp_gap_std[0] = BlastKarlinBlkCreate();
-     BlastKarlinBlkGappedCalc(sbp->kbp_gap_std[0], gap_open, gap_extend, 
+     KarlinReturn = BlastKarlinBlkGappedCalc(sbp->kbp_gap_std[0], gap_open, gap_extend, 
         sbp->name, &error_return);
+     if (1 == KarlinReturn) {
+       BlastErrorPrint(error_return);
+       return(-1);
+     }
      sbp->kbp_gap_psi[0] = BlastKarlinBlkCreate();
-     BlastKarlinBlkGappedCalc(sbp->kbp_gap_psi[0], gap_open, gap_extend, 
+     KarlinReturn = BlastKarlinBlkGappedCalc(sbp->kbp_gap_psi[0], gap_open, gap_extend, 
         sbp->name, &error_return);
+     if (1 == KarlinReturn) {
+       BlastErrorPrint(error_return);
+       return(-1);
+     }
 
      array_size = BlastKarlinGetMatrixValues(sbp->name, &open, &extend, &lambda, &K, &H, NULL);
      if (array_size > 0) {
@@ -343,8 +379,15 @@ Nlm_FloatHi scalingFactor)
        return(1);
      }
      /*conversion to matrix and scaling is done in impalaReadCheckpopint*/
-     matrixFileName = makeMatrixName(profileFileName);
-     fprintf(matricesFile,"%s\n",matrixFileName);
+     if ('\0' == directoryPrefix[0]) {
+       matrixFileName = makeMatrixName(profileFileName);
+       fprintf(matricesFile,"%s\n",matrixFileName);
+     }
+     else {
+       matrixFileName = makeMatrixName(profileFileName);
+       relativeMatrixFileName = makeMatrixName(relativeProfileFileName);
+       fprintf(matricesFile,"%s\n",relativeMatrixFileName);
+     }
 
      success = takeMatrixCheckpoint(compactSearch, posSearch, sbp, matrixFileName, &error_return, scaleScores, scalingFactor);
      if (!success) {
@@ -358,11 +401,15 @@ Nlm_FloatHi scalingFactor)
      posCheckpointFreeMemory(posSearch, queryLength);
      FileClose(thisProfileFile);
      FileClose(thisSequenceFile);
-     FileClose(thisMatrixFile);
      MemFree(query);
      SeqEntryFree(sep);
      BLAST_ScoreBlkDestruct(sbp);
      MemFree(compactSearch->standardProb);
+     if (success) {
+       MemFree(matrixFileName);
+       if ('\0' == directoryPrefix[0]) 
+         MemFree(relativeMatrixFileName);
+     }
    }
    fprintf(auxiliaryFile, "%ld\n", (long) maxLength);
    fprintf(auxiliaryFile, "%ld\n", (long) effectiveSize);
@@ -378,14 +425,12 @@ Nlm_FloatHi scalingFactor)
    FileClose(matricesFile);
    FileClose(auxiliaryFile);
    compactSearchDestruct(compactSearch);
-   MemFree(profileFileName);
-   MemFree(sequenceFileName);
    MemFree(posSearch);
    BLAST_ScoreBlkDestruct(sbp);
    return(0);
 }
 
-#define NUMARG 7
+#define NUMARG 8
 
 static Args myargs [NUMARG] = {
   { "Database name for profile database", 
@@ -401,8 +446,9 @@ static Args myargs [NUMARG] = {
   { "Effective length of the profile database (0 for length of -d option)",
         "0", NULL, NULL, FALSE, 'z', ARG_INT, 0.0, 0, NULL},
   { "Scaling factor for  matrix outputs to avoid round-off problems",
-        "100.0", NULL, NULL, FALSE, 'S', ARG_FLOAT, 0.0, 0, NULL}
-
+        "100.0", NULL, NULL, FALSE, 'S', ARG_FLOAT, 0.0, 0, NULL},
+  { "Print help; overrides all other arguments",
+        "F", NULL, NULL, FALSE, 'H', ARG_BOOLEAN, 0.0, 0, NULL}
 };  
 
 
@@ -411,14 +457,19 @@ static Args myargs [NUMARG] = {
 Int2 Main(void)
 
 {
-     Char *profilesDatabase, *profilesFileName, 
-          *sequencesFileName, *matricesFileName,
-          *auxiliaryFileName;
+     Char *profilesDatabase;
+     Char profilesFileName[MAX_NAME_LENGTH];
+     Char sequencesFileName[MAX_NAME_LENGTH]; 
+     Char matricesFileName[MAX_NAME_LENGTH];
+     Char auxiliaryFileName[MAX_NAME_LENGTH];
+     Char mmapFileName[MAX_NAME_LENGTH];
      FILE *profilesFile, *sequencesFile, *matricesFile, *auxiliaryFile;
      Int4 count; /*how many profiles*/
      Int4 effSize; /*effective database size to use*/
      ReadDBFILEPtr rdpt=NULL;  /*holds result of attempt to read database*/
      Boolean scaling; /*are score matrix values going to be scaled*/
+     Char *directoryPrefix; /*directory where profile library is kept, used
+                            to reach other directories indirectly*/
 
      if (! GetArgs ("makematrices", NUMARG, myargs))
        {
@@ -428,25 +479,32 @@ Int2 Main(void)
      if (! SeqEntryLoad())
        return (1);
 
+     if ((Boolean) myargs[7].intvalue) {
+       IMPALAPrintHelp(FALSE, 80, "makemat", stdout);
+       return(1);
+     }
      profilesDatabase = myargs[0].strvalue;
+     directoryPrefix = (Char *) MemNew(MAX_NAME_LENGTH *sizeof(char));
+     strcpy(directoryPrefix,profilesDatabase);
+     impalaMakeFileNames(profilesDatabase,auxiliaryFileName,
+			 mmapFileName,sequencesFileName,matricesFileName, 
+			 profilesFileName,  directoryPrefix);
 
-     profilesFileName = addSuffixToName(profilesDatabase,".pn");
      if ((profilesFile = FileOpen(profilesFileName, "r")) == NULL) {
 	ErrPostEx(SEV_FATAL, 0, 0, "Unable to open profiles file %s\n", profilesFileName);
 	return (1);
      }
 
-     sequencesFileName = addSuffixToName(profilesDatabase, ".sn");
      if ((sequencesFile = FileOpen(sequencesFileName, "r")) == NULL) {
 	ErrPostEx(SEV_FATAL, 0, 0, "Unable to open sequences file %s\n", sequencesFileName);
 	return (1);
      }
-     matricesFileName = addSuffixToName(profilesDatabase, ".mn");
+
      if ((matricesFile = FileOpen(matricesFileName, "w")) == NULL) {
 	ErrPostEx(SEV_FATAL, 0, 0, "Unable to open matrices file %s\n", matricesFileName);
 	return (1);
      }
-     auxiliaryFileName = addSuffixToName(profilesDatabase, ".aux");
+
      if ((auxiliaryFile = FileOpen(auxiliaryFileName, "w")) == NULL) {
 	ErrPostEx(SEV_FATAL, 0, 0, "Unable to open auxiliary file %s\n", auxiliaryFileName);
 	return (1);
@@ -465,7 +523,7 @@ Int2 Main(void)
      return(convertToMatrices(profilesFile, sequencesFile, matricesFile, 
 			      auxiliaryFile, count,  myargs[1].intvalue, 
 			      myargs[2].intvalue, effSize, myargs[3].strvalue,
-                              scaling,  myargs[6].floatvalue));
+                              scaling,  myargs[6].floatvalue, directoryPrefix));
 }
 
 

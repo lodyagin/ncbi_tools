@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/13/91
 *
-* $Revision: 6.8 $
+* $Revision: 6.10 $
 *
 * File Description:  Ports onto Bioseqs
 *
@@ -40,6 +40,12 @@
 *
 *
 * $Log: seqport.h,v $
+* Revision 6.10  1999/08/06 20:22:19  kans
+* TransTable simplified to eliminate single and double letter states
+*
+* Revision 6.9  1999/08/06 02:20:16  kans
+* finite state machine for 6-frame translation and orf search enhanced to handle nucleotide ambiguity characters
+*
 * Revision 6.8  1999/02/12 20:48:24  kans
 * made fast byte expansion functions public
 *
@@ -490,30 +496,37 @@ NLM_EXTERN Boolean SPRebuildDNA(SPCompressPtr spc);
 
 /*****************************************************************************
 *
-*   TransTableInit (TransTable PNTR tbl, Int2 genCode);
+*   TransTableNew (Int2 genCode);
 *       Initializes TransTable finite state machine for 6-frame translation
-*       and open reading frame search
+*       and open reading frame search, allowing nucleotide ambiguity characters
 *
 *****************************************************************************/
 
 typedef struct fsatranstable {
-  Uint1    nextBase [156];
-  Char     aminoAcid [156] [2];
-  Boolean  orfStart [156] [2];
-  Char     basesToIdx [256];
+  Uint2    nextBase [3376];
+  Char     aminoAcid [3376] [2];
+  Char     orfStart [3376] [2];
+  Uint1    basesToIdx [256];
 } TransTable, PNTR TransTablePtr;
 
-#define TOP_STRAND  0
-#define BOT_STRAND  1
+/* allocate 6-frame finite state translation table and initialize with indicated genetic code */
+NLM_EXTERN TransTablePtr TransTableNew (Int2 genCode);
+NLM_EXTERN TransTablePtr TransTableFree (TransTablePtr tbl);
 
-#define NextCodonState(tbl,cur,ch) (tbl->nextBase [(int) cur] + tbl->basesToIdx [(int) ch])
-#define GetCodonResidue(tbl,cur,stnd) (tbl->aminoAcid [(int) cur] [stnd])
-#define IsOrfStart(tbl,cur,stnd) (tbl->orfStart [(int) cur] [stnd])
-#define IsATGStart(tbl,cur,stnd) ((Boolean) (IsOrfStart(tbl,cur,stnd) && (stnd ? (cur == 59) : (cur == 48))))
-#define IsAltStart(tbl,cur,stnd) ((Boolean) (IsOrfStart(tbl,cur,stnd) && (stnd ? (cur != 59) : (cur != 48))))
+#define TTBL_TOP_STRAND  0
+#define TTBL_BOT_STRAND  1
+
+#define TTBL_ATG_STATE  48
+#define TTBL_CAT_STATE 229
+
+/* macros for using finite state machine for 6-frame translation */
+#define NextCodonState(tbl,cur,ch) (tbl->nextBase [(int) (Uint2) cur] + tbl->basesToIdx [(int) (Uint1) ch])
+#define GetCodonResidue(tbl,cur,stnd) (tbl->aminoAcid [(int) (Uint2) cur] [stnd])
+#define GetStartResidue(tbl,cur,stnd) (tbl->orfStart [(int) (Uint2) cur] [stnd])
+#define IsOrfStart(tbl,cur,stnd) ((Boolean) (GetStartResidue(tbl,cur,stnd) != '-'))
 #define IsOrfStop(tbl,cur,stnd) ((Boolean) (GetCodonResidue(tbl,cur,stnd) == '*'))
-
-NLM_EXTERN Boolean TransTableInit (TransTable PNTR tbl, Int2 genCode);
+#define IsATGStart(tbl,cur,stnd) ((Boolean) (IsOrfStart(tbl,cur,stnd) && (stnd ? (cur == TTBL_CAT_STATE) : (cur == TTBL_ATG_STATE))))
+#define IsAltStart(tbl,cur,stnd) ((Boolean) (IsOrfStart(tbl,cur,stnd) && (stnd ? (cur != TTBL_CAT_STATE) : (cur != TTBL_ATG_STATE))))
 
 
 #ifdef __cplusplus

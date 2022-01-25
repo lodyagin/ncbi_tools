@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.9 $
+* $Revision: 6.10 $
 *
 * File Description: 
 *
@@ -215,7 +215,7 @@ typedef struct textviewprocs {
 
 extern void LaunchGeneralTextViewer (CharPtr path, CharPtr title);
 
-extern void FileToScrollText (TexT t, CharPtr path);
+extern Boolean FileToScrollText (TexT t, CharPtr path);
 extern void ScrollTextToFile (TexT t, CharPtr path);
 
 extern void FileToClipboard (CharPtr path);

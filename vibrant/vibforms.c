@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.2 $
+* $Revision: 6.7 $
 *
 * File Description: 
 *
@@ -40,6 +40,21 @@
 *
 *
 * $Log: vibforms.c,v $
+* Revision 6.7  1999/08/20 15:57:07  kans
+* CreateEnumListDialog calculates width if passed in 0
+*
+* Revision 6.6  1999/06/17 18:05:14  kans
+* fixed EnumPopupDialogToUIEnumPtr
+*
+* Revision 6.5  1999/06/16 20:55:02  kans
+* added CreateEnumListDialog using SingleList
+*
+* Revision 6.4  1999/06/16 19:03:25  kans
+* added CreateEnumPopupDialog
+*
+* Revision 6.3  1999/06/16 17:44:53  kans
+* added DuplicateEnumFieldAlist
+*
 * Revision 6.2  1999/03/11 16:10:25  kans
 * StringHasNoText and TrimSpacesAroundString moved to ncbistr
 *
@@ -222,7 +237,7 @@ CharPtr GetEnumName (UIEnum val, EnumFieldAssocPtr al)
 {
   for (; al->name != NULL; al++)
      if (al->value == val) return al->name;
-  Message(MSG_ERROR, "GetEnumName: %ld", (long)val);
+  Message(MSG_POSTERR, "GetEnumName: %ld", (long)val);
   return NULL;
 }
 
@@ -233,7 +248,7 @@ Boolean InitEnumPopup (PopuP lst, EnumFieldAssocPtr al, UIEnumPtr pdef)
   EnumFieldAssocPtr efap;
   CharPtr PNTR titles;
   if (al == NULL) {
-    Message(MSG_ERROR, "in InitEnumPopup");
+    Message(MSG_POSTERR, "in InitEnumPopup");
     return FALSE;
   }
   /*
@@ -281,7 +296,7 @@ void SetEnumPopup (PopuP lst, EnumFieldAssocPtr al, UIEnum val)
   Int2 i;
   for (i = 1; al->name != NULL; i++, al++)
      if (al->value == val) { SetValue (lst, i); return; }
-  Message(MSG_ERROR, "SetEnumPopup: %ld", (long)val);
+  Message(MSG_POSTERR, "SetEnumPopup: %ld", (long)val);
 } 
 
 CharPtr GetEnumPopupByName (PopuP lst, EnumFieldAssocPtr al)
@@ -298,7 +313,7 @@ void SetEnumPopupByName (PopuP lst, EnumFieldAssocPtr al, CharPtr name)
   Int2 i;
   for (i = 1; al->name != NULL; i++, al++)
      if (StringICmp (al->name, name) == 0) { SetValue (lst, i); return; }
-  Message(MSG_ERROR, "SetEnumPopupByName: %s", name);
+  Message(MSG_POSTERR, "SetEnumPopupByName: %s", name);
 }
 
 Boolean WhereInEnumPopup (EnumFieldAssocPtr al, CharPtr name, UIEnumPtr pval)
@@ -344,6 +359,35 @@ void SortEnumFieldAlist (EnumFieldAssocPtr alist)
   HeapSort (alist, count, sizeof (EnumFieldAssoc), CompareAlists);
 }
 
+EnumFieldAssocPtr DuplicateEnumFieldAlist (EnumFieldAssocPtr alist)
+
+{
+  EnumFieldAssocPtr  ap1, ap2;
+  size_t             count;
+  EnumFieldAssocPtr  newap;
+
+  if (alist == NULL) return NULL;
+  ap1 = alist;
+  count = 0;
+  while (ap1->name != NULL) {
+    ap1++;
+    count++;
+  }
+  if (count < 1) return NULL;
+  newap = MemNew (sizeof (EnumFieldAssoc) * (count + 1));
+  if (newap == NULL) return NULL;
+  ap1 = alist;
+  ap2 = newap;
+  while (ap1->name != NULL) {
+    ap2->name = StringSaveNoNull (ap1->name);
+    ap2->value = ap1->value;
+    ap1++;
+    ap2++;
+  }
+  ap2->name = NULL;
+  return newap;
+}
+
 EnumFieldAssocPtr FreeEnumFieldAlist (EnumFieldAssocPtr alist)
 
 {
@@ -381,6 +425,129 @@ PopuP CreateEnumPopupListInitName (GrouP prnt, Boolean macLike, PupActnProc actn
   SetObjectExtra (p, data, NULL);
   InitEnumPopup (p, al, NULL);
   SetEnumPopupByName (p, al, name);
+  return p;
+}
+
+/* popup list autonomous dialog - copies alist, frees on cleanup */
+
+typedef struct alistdialogdata {
+  DIALOG_MESSAGE_BLOCK
+  PopuP                pop;
+  EnumFieldAssoc PNTR  alist;
+} AlistDialogData, PNTR AlistDialogPtr;
+
+static void UIEnumPtrToEnumPopupDialog (DialoG d, Pointer data)
+
+{
+  AlistDialogPtr  adp;
+  Int4Ptr         intptr;
+  Int4            val;
+
+  adp = (AlistDialogPtr) GetObjectExtra (d);
+  intptr = (Int4Ptr) data;
+  if (adp != NULL && intptr != NULL) {
+    val = *intptr;
+    SetEnumPopup (adp->pop, adp->alist, (UIEnum) val);
+  }
+}
+
+static Pointer EnumPopupDialogToUIEnumPtr (DialoG d)
+
+{
+  AlistDialogPtr  adp;
+  Int4Ptr         intptr;
+  UIEnum          val;
+
+  intptr = NULL;
+  adp = (AlistDialogPtr) GetObjectExtra (d);
+  if (adp != NULL) {
+    if (GetEnumPopup (adp->pop, adp->alist, &val)) {
+      adp->intvalue = (Int4) val;
+      intptr = (&adp->intvalue);
+    }
+  }
+  return (Pointer) intptr;
+}
+
+static void ClearEnumPopupDialog (GraphiC g, VoidPtr data)
+
+{
+  AlistDialogPtr  adp;
+
+  adp = (AlistDialogPtr) data;
+  if (adp != NULL) {
+    FreeEnumFieldAlist (adp->alist);
+  }
+  MemFree (data);
+}
+
+PopuP CreateEnumPopupDialog (GrouP prnt, Boolean macLike, PupActnProc actn,
+                             EnumFieldAssocPtr al)
+
+{
+  AlistDialogPtr  adp;
+  PopuP           p;
+
+  if (prnt == NULL || al == NULL) return NULL;
+  adp = (AlistDialogPtr) MemNew (sizeof (AlistDialogData));
+  if (adp == NULL) return NULL;
+  p = PopupList (prnt, macLike, actn);
+  if (p == NULL) {
+    MemFree (adp);
+    return NULL;
+  }
+  SetObjectExtra (p, adp, ClearEnumPopupDialog);
+  adp->dialog = (DialoG) p;
+  adp->todialog = UIEnumPtrToEnumPopupDialog;
+  adp->fromdialog = EnumPopupDialogToUIEnumPtr;
+  adp->pop = p;
+  adp->alist = DuplicateEnumFieldAlist (al);
+  InitEnumPopup (p, adp->alist, NULL);
+  /*
+  SetEnumPopup (p, adp->alist, val);
+  */
+  return p;
+}
+
+LisT CreateEnumListDialog (GrouP prnt, Int2 width, Int2 height, LstActnProc actn,
+                           EnumFieldAssocPtr al)
+
+{
+  AlistDialogPtr     adp;
+  EnumFieldAssocPtr  ap;
+  Int2               i;
+  Int2               len;
+  LisT               p;
+
+  if (prnt == NULL || al == NULL) return NULL;
+  adp = (AlistDialogPtr) MemNew (sizeof (AlistDialogData));
+  if (adp == NULL) return NULL;
+  if (width == 0) {
+    SelectFont (systemFont);
+    for (ap = al, i = 1; ap->name != NULL; i++, ap++) {
+      len = StringWidth (ap->name);
+      if (len > width) {
+        width = len;
+      }
+    }
+    width += stdCharWidth - 1;
+    width /= stdCharWidth;
+    width += 1;
+  }
+  p = SingleList (prnt, width, height, actn);
+  if (p == NULL) {
+    MemFree (adp);
+    return NULL;
+  }
+  SetObjectExtra (p, adp, ClearEnumPopupDialog);
+  adp->dialog = (DialoG) p;
+  adp->todialog = UIEnumPtrToEnumPopupDialog;
+  adp->fromdialog = EnumPopupDialogToUIEnumPtr;
+  adp->pop = (PopuP) p;
+  adp->alist = DuplicateEnumFieldAlist (al);
+  for (ap = adp->alist; ap->name != NULL; ap++) {
+    ListItem (p, ap->name);
+  }
   return p;
 }
 
@@ -1764,7 +1931,7 @@ extern DialoG CreateTagListDialogEx (GrouP h, Uint2 rows, Uint2 cols,
               SetObjectExtra (GetTagListControl (tlp, i, j), tlp, NULL);
               al = alists [j];
               if (al == NULL) {
-                Message(MSG_ERROR, "in InitEnumList");
+                Message(MSG_POSTERR, "in InitEnumList");
               } else {
                 lst = (LisT) GetTagListControl (tlp, i, j);
                 for (k = 1; al->name != NULL; k++, al++) {

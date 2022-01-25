@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/13/91
 *
-* $Revision: 6.5 $
+* $Revision: 6.7 $
 *
 * File Description:
 *   	user alert and error messages
@@ -54,6 +54,13 @@
 *                      input will be read properly.
 *
 * $Log: ncbimsg.c,v $
+* Revision 6.7  1999/08/31 21:36:25  vakatov
+* Nlm_Message(), Nlm_MsgAlert() -- pre-save the temporary "scratch_str"
+* buffer to avoid its overriding on calling the "ncbierr.c"-related code
+*
+* Revision 6.6  1999/08/23 19:16:08  vakatov
+* Nlm_Message():  handle MSG_FATAL as SEV_MAX (was SEV_FATAL)
+*
 * Revision 6.5  1998/08/24 17:42:01  kans
 * fixed old style function definition warnings
 *
@@ -266,7 +273,7 @@ NLM_EXTERN MsgAnswer CDECL Nlm_Message (Nlm_Int2 sevkey, const char *fmt, ...)
           break;
         case MSG_FATAL :
           Nlm_Beep();
-          sev = SEV_FATAL;
+          sev = SEV_MAX;
           break;
         case MSG_POSTERR :
           Nlm_Beep();
@@ -281,8 +288,11 @@ NLM_EXTERN MsgAnswer CDECL Nlm_Message (Nlm_Int2 sevkey, const char *fmt, ...)
 
   {{
     const Nlm_Char PNTR scratch_str = NULL;
+    Nlm_Char PNTR message;
     TSPRINTF(scratch_str, fmt);
-    ans = scratch_str ? MsgAlertStr(key, sev, caption, scratch_str) : ANS_NONE;
+    message = Nlm_StringSave(scratch_str);
+    ans = message ? MsgAlertStr(key, sev, caption, message) : ANS_NONE;
+    Nlm_MemFree(message);
   }}
 
   if (sevkey == MSG_FATAL)
@@ -307,12 +317,14 @@ NLM_EXTERN MsgAnswer CDECL Nlm_MsgAlert (key, sev, caption, fmt, va_alist)
 NLM_EXTERN MsgAnswer CDECL Nlm_MsgAlert (MsgKey key, ErrSev sev, const char *caption, const char *fmt, ...)
 #endif
 {
+  MsgAnswer ans;
   const Nlm_Char PNTR scratch_str = NULL;
+  Nlm_Char PNTR message;
   TSPRINTF(scratch_str, fmt);
-  if (scratch_str != NULL)
-    return MsgAlertStr(key, sev, caption, scratch_str);
-  else
-    return ANS_NONE;
+  message = Nlm_StringSave(scratch_str);
+  ans = message ? MsgAlertStr(key, sev, caption, message) : ANS_NONE;
+  Nlm_MemFree(message);
+  return ans;
 }
 
 
@@ -344,12 +356,13 @@ MsgAnswer PASCAL _DefMessageHook (MsgKey key, ErrSev sev,
 #ifdef OS_MSWIN
   if ( !Nlm_HasConsole )
     {
-      static UINT _sev_code[] = { 
+      static UINT _sev_code[SEV_MAX+1] = { 
         /* SEV_NONE */    MB_OK,
         /* SEV_INFO */    MB_ICONINFORMATION,
         /* SEV_WARNING */ MB_ICONASTERISK, /* same as MB_ICONINFORMATION */
         /* SEV_ERROR */   MB_ICONEXCLAMATION,
-        /* SEV_FATAL */   MB_ICONHAND
+        /* SEV_FATAL */   MB_ICONHAND,
+        /* SEV_MAX */     MB_ICONHAND
       };
 
       UINT flags = MB_TASKMODAL | _sev_code[(int)sev];

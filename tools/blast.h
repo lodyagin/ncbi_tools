@@ -32,8 +32,11 @@ Contents: prototypes for "public" BLAST functions (ones that other utilitiles
 
 ******************************************************************************/
 
-/* $Revision: 6.18 $ 
+/* $Revision: 6.19 $ 
 * $Log: blast.h,v $
+* Revision 6.19  1999/07/01 13:03:24  sicotte
+* Updated for DenseDiag and Moved seqalign_reverse_strand from blastutl.c(blast.h) to SeqAlignListReverseStrand in salpedit.ch and fixed call in salutil.c
+*
 * Revision 6.18  1999/03/18 16:43:31  shavirin
 * Added definition of the function Boolean HeyIAmInMemory(Int4 program)
 *
@@ -389,7 +392,6 @@ CharPtr LIBCALL BlastGetReleaseDate PROTO((void));
 
 Uint1 LIBCALL BlastGetProgramNumber PROTO((CharPtr blast_program));
 
-SeqAlignPtr LIBCALL seqalign_reverse_strand PROTO((SeqAlignPtr salp));
 
 BlastHitRangePtr LIBCALL BlastHitRangeDestruct PROTO((BlastHitRangePtr old));
 BlastHitRangePtr LIBCALL BlastHitRangeNew PROTO((Int4 total));

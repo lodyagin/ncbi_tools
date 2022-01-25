@@ -1,4 +1,4 @@
-/*  $RCSfile: ni_www.c,v $  $Revision: 4.19 $  $Date: 1999/02/18 18:46:48 $
+/*  $RCSfile: ni_www.c,v $  $Revision: 4.22 $  $Date: 1999/07/21 22:10:36 $
 * ==========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -31,6 +31,15 @@
 *
 * --------------------------------------------------------------------------
 * $Log: ni_www.c,v $
+* Revision 4.22  1999/07/21 22:10:36  vakatov
+* [LB_DIRECT]  Do not #include <lbapi.h> at all if #LB_DIRECT is not #def'd
+*
+* Revision 4.21  1999/07/08 20:40:58  vakatov
+* s_Connect():  pop peer hostname to the dispatcher struct(NI_HandPtr) level
+*
+* Revision 4.20  1999/06/24 17:59:36  vakatov
+* Untie the HTTP and regular proxy servers: SRV_HTTP_PROXY_***, SRV_PROXY_HOST
+*
 * Revision 4.19  1999/02/18 18:46:48  shavirin
 * Added few new functions, those do not interfere with existing API.
 *
@@ -87,7 +96,10 @@
 #include <ncbi.h>
 #include <ncbinet.h>
 #include <ncbicli.h>
-#include <lbapi.h>
+
+#ifdef LB_DIRECT
+#  include <lbapi.h>
+#endif
 
 
 /*********************************
@@ -102,11 +114,11 @@
 #define ENV_PROXY_HOST      "SRV_PROXY_HOST"
 #define DEF_PROXY_HOST      ""
 
-#define ENV_PROXY_PORT      "SRV_PROXY_PORT"
-#define DEF_PROXY_PORT      80
+#define ENV_HTTP_PROXY_HOST "SRV_HTTP_PROXY_HOST"
+#define DEF_HTTP_PROXY_HOST ""
 
-#define ENV_PROXY_TRANSPARENT  "SRV_PROXY_TRANSPARENT"
-#define DEF_PROXY_TRANSPARENT  ""
+#define ENV_HTTP_PROXY_PORT "SRV_HTTP_PROXY_PORT"
+#define DEF_HTTP_PROXY_PORT 80
 
 #define ENV_ENGINE_HOST     "SRV_ENGINE_HOST"
 #define DEF_ENGINE_HOST     "www.ncbi.nlm.nih.gov"
@@ -137,6 +149,7 @@
 
 typedef struct {
   Char       client_host[64];  /* effective client hostname */
+  Char       proxy_host[64];   /* CERN-like proxy server(can be NULL/empty) */
   Char       service[256];     /* requested service */
   Char       disp_host[64];    /* dispatcher:  host */
   Char       disp_path[256];   /* dispatcher:  path(to CGI script) */
@@ -146,8 +159,10 @@ typedef struct {
   Uint4      conn_try;         /* max. number of attempts to establish conn. */
   ENIC_Agent agent;
   Uint4      flags;            /* to be passed to NIC_GetService() */
-  Boolean    no_lb_direct;     /* prohibit the use of local "nsdaemon" */
   AsnIoBSPtr aibsp;
+#ifdef LB_DIRECT
+  Boolean    no_lb_direct;     /* prohibit the use of local "nsdaemon" */
+#endif
 } ServiceInfo;
 
 
@@ -175,7 +190,7 @@ static unsigned s_AlternateDispatcher(ServiceInfo *sinfo,
 }
 #endif
 
-static Boolean s_Connect(ServiceInfo *sinfo)
+static Boolean s_Connect(ServiceInfo *sinfo, Char** hostname)
 {
   Uint4 conn_try;
 #ifdef LB_DIRECT
@@ -193,50 +208,31 @@ static Boolean s_Connect(ServiceInfo *sinfo)
     sinfo->nic = NIC_GetService
       (sinfo->service,
        sinfo->disp_host, sinfo->disp_port, sinfo->disp_path,
-       &sinfo->timeout, sinfo->agent, sinfo->client_host,
+       &sinfo->timeout, sinfo->agent, sinfo->client_host, sinfo->proxy_host,
        sinfo->aibsp->bsp, sinfo->flags);
   }
 
-  return (Boolean)(sinfo->nic != 0);
-}
+  if ( !sinfo->nic )
+      return FALSE;
 
-Boolean NET_Connect(VoidPtr handle)
-{
-    Uint4 conn_try;
-    ServiceInfo *sinfo;
-        
-#ifdef LB_DIRECT
-    unsigned skip_ip[MAX_NUM_HOSTS];
-    MemSet(skip_ip, '\0', sizeof(skip_ip));
-#endif
-
-    sinfo = (ServiceInfo *) handle;
-    
-    if(sinfo->nic != NULL) {
-        NIC_CloseService(sinfo->nic);
-        sinfo->nic = NULL;
-    }
-
-    for (conn_try = 0;  !sinfo->nic  &&  conn_try < sinfo->conn_try;
-         conn_try++) {
-#ifdef LB_DIRECT
-        skip_ip[conn_try] = s_AlternateDispatcher(sinfo, skip_ip,
-                                                  conn_try%MAX_NUM_HOSTS);
-#endif
-        sinfo->nic = NIC_GetService
-            (sinfo->service,
-             sinfo->disp_host, sinfo->disp_port, sinfo->disp_path,
-             &sinfo->timeout, sinfo->agent, sinfo->client_host,
-             NULL, sinfo->flags);
-    }
-    
-    return (Boolean)(sinfo->nic != 0);
+  /* success */
+  if ( hostname ) {
+      /* store the peer host name */
+      Uint4 x_hostaddr;
+      Char  x_hostname[64];
+      SOCK_Address(NIC_GetSOCK(sinfo->nic), &x_hostaddr, 0, TRUE);
+      VERIFY( Uint4toInaddr(x_hostaddr, x_hostname, sizeof(x_hostname)) );
+      MemFree(*hostname);
+      *hostname = StringSave(x_hostname);
+  }
+  return TRUE;
 }
 
 
 static Int2 LIBCALLBACK s_AsnRead(Pointer p, CharPtr buff, Uint2 len)
 {
-  ServiceInfo *sinfo = (ServiceInfo *)p;
+  NI_HandPtr   handle = (NI_HandPtr)p;
+  ServiceInfo* sinfo  = (ServiceInfo*) handle->extra_proc_info;
     
   if (BSLen(sinfo->aibsp->bsp) > 0) {
     /* connect, if needed;  flush the content of output BSP, if any */
@@ -244,7 +240,8 @@ static Int2 LIBCALLBACK s_AsnRead(Pointer p, CharPtr buff, Uint2 len)
       if (sinfo->agent == eNIC_WWWDirect) {
         NIC_CloseService(sinfo->nic);
         sinfo->nic = 0;
-        if ( !s_Connect(sinfo) ) /* it also flushes the content of out. BSP */
+        /* it also flushes the content of out. BSP */
+        if ( !s_Connect(sinfo, &handle->hostname) )
           return 0;
       } else { /* flush the content of output BSP */
         Nlm_BSUnitPtr bsup;
@@ -260,7 +257,8 @@ static Int2 LIBCALLBACK s_AsnRead(Pointer p, CharPtr buff, Uint2 len)
         }
       }
     } else {
-      if ( !s_Connect(sinfo) ) /* it also flushes the content of output BSP */
+        /* it also flushes the content of output BSP */
+      if ( !s_Connect(sinfo, &handle->hostname) )
         return 0;
     }
 
@@ -269,7 +267,7 @@ static Int2 LIBCALLBACK s_AsnRead(Pointer p, CharPtr buff, Uint2 len)
     BSDelete(sinfo->aibsp->bsp, BSLen(sinfo->aibsp->bsp));
   }
   else { /* no data to (pre-)write;  just connect if necessary */
-    if (!sinfo->nic  &&  !s_Connect(sinfo))
+    if (!sinfo->nic  &&  !s_Connect(sinfo, &handle->hostname))
       return 0;
   }
 
@@ -394,38 +392,35 @@ static NI_HandPtr s_GenericGetService
   NI_GetEnvParam(configFile, SRV_SECTION, ENV_ENGINE_URL,
                  sinfo->disp_path, sizeof(sinfo->disp_path), DEF_ENGINE_URL);
 
-  {{ /* CERN-like firewall proxy server? */
-    Char proxy_host[sizeof(sinfo->disp_host)];
-    /* get the PROXY server name, if specified */
-    NI_GetEnvParam(configFile, SRV_SECTION, ENV_PROXY_HOST,
-                   proxy_host, sizeof(proxy_host), DEF_PROXY_HOST);
+  {{ /* HTTP proxy server? */
+    Char http_proxy_host[sizeof(sinfo->disp_host)];
+    NI_GetEnvParam(configFile, SRV_SECTION, ENV_HTTP_PROXY_HOST,
+                   http_proxy_host, sizeof(http_proxy_host),
+                   DEF_HTTP_PROXY_HOST);
 
-    if ( *proxy_host ) { /* use PROXY server */
-      Char str[32 + sizeof(sinfo->disp_host) + sizeof(sinfo->disp_path)];
-      int  val;
-      Uint2 proxy_port;
-      NI_GetEnvParam(configFile, SRV_SECTION, ENV_PROXY_PORT,
+    if ( *http_proxy_host ) {
+      /* yes, use the specified HTTP proxy server */
+      Char  str[32 + sizeof(sinfo->disp_host) + sizeof(sinfo->disp_path)];
+      int   val;
+      Uint2 http_proxy_port;
+
+      NI_GetEnvParam(configFile, SRV_SECTION, ENV_HTTP_PROXY_PORT,
                      str, sizeof(str), "");
       val = atoi(str);
-      proxy_port = (Uint2)(val > 0 ? val : DEF_PROXY_PORT);
+      http_proxy_port = (Uint2)(val > 0 ? val : DEF_HTTP_PROXY_PORT);
       sprintf(str, "http://%s:%u%s",
               sinfo->disp_host, (unsigned)sinfo->disp_port, sinfo->disp_path);
-      StringNCpy_0(sinfo->disp_host, proxy_host, sizeof(sinfo->disp_host));
-      sinfo->disp_port = proxy_port;
+      StringNCpy_0(sinfo->disp_host, http_proxy_host,
+                   sizeof(sinfo->disp_host));
+      sinfo->disp_port = http_proxy_port;
       StringNCpy_0(sinfo->disp_path, str, sizeof(sinfo->disp_path));
-
-      /* non-transparent proxy? */
-      NI_GetEnvParam(configFile, SRV_SECTION, ENV_PROXY_TRANSPARENT,
-                     str, sizeof(str), DEF_PROXY_TRANSPARENT);
-      if (!*str  ||  (StringICmp(str, "1"   )  &&
-                      StringICmp(str, "true")  &&
-                      StringICmp(str, "yes" )))
-        sinfo->flags |= NIC_CERN_PROXY;
-
-      /* auto-set to FIREWALL mode */
-      sinfo->flags |= NIC_FIREWALL;
     }
   }}
+
+  /* non-transparent CERN-like firewall proxy server? */
+  NI_GetEnvParam(configFile, SRV_SECTION, ENV_PROXY_HOST,
+                 sinfo->proxy_host, sizeof(sinfo->proxy_host),
+                 DEF_PROXY_HOST);
 
   {{ /* alternate the connection timeout */
     Char   str[32];
@@ -474,7 +469,7 @@ static NI_HandPtr s_GenericGetService
   sinfo->aibsp = AsnIoBSOpen("wb", BSNew(1024));
   result->waip = sinfo->aibsp->aip;
   result->raip = AsnIoNew((ASNIO_BIN | ASNIO_IN), (FILE *)0,
-                          (void *)sinfo, s_AsnRead, (IoFuncType)0);
+                          (void *)result, s_AsnRead, (IoFuncType)0);
 
   AsnIoSetErrorMsg(result->raip, s_AsnErrorFunc);
   AsnIoSetErrorMsg(result->waip, s_AsnErrorFunc);
@@ -498,7 +493,106 @@ static NI_HandPtr s_GenericGetService
   return result;
 }
 
+
+static Int2 s_EndServices(NI_DispatcherPtr disp)
+{
+    ASSERT ( disp->referenceCount > 0 );
+    if (--disp->referenceCount == 0) {
+        MemFree(disp->adminInfo);
+        MemFree(disp->motd);
+        MemFree(disp);
+    }
+    return 0;
+}
+
+
+static Int2 s_ServiceDisconnect(NI_HandPtr mhp)
+{
+  ServiceInfo *sinfo = (ServiceInfo *)mhp->extra_proc_info;
+  ByteStorePtr bsp   = sinfo->aibsp->bsp;
+
+  s_EndServices(mhp->disp);
+  if ( sinfo->nic )
+    NIC_CloseService(sinfo->nic);
+  AsnIoBSClose(sinfo->aibsp);
+  BSFree(bsp);
+  MemFree(sinfo);
+  AsnIoClose(mhp->raip);
+  MemFree(mhp->hostname);
+  MemFree(mhp);
+  return 0;
+} 
+
+
+/* Exported table of interface functions
+ */
+static const NIInterface s_NII_WWW = {
+  s_GenericInitWWW,
+  s_SetDispatcherWWW,
+  s_GenericGetService,
+  s_ServiceDisconnect,
+  s_EndServices
+};
+const NIInterface *g_NII_WWW = &s_NII_WWW;
+
+static const NIInterface s_NII_WWWFirewall = {
+  s_GenericInitWWWFirewall,
+  s_SetDispatcherWWWFirewall,
+  s_GenericGetService,
+  s_ServiceDisconnect,
+  s_EndServices
+};
+const NIInterface *g_NII_WWWFirewall = &s_NII_WWWFirewall;
+
+static const NIInterface s_NII_WWWDirect = {
+  s_GenericInitWWWDirect,
+  s_SetDispatcherWWWDirect,
+  s_GenericGetService,
+  s_ServiceDisconnect,
+  s_EndServices
+};
+const NIInterface *g_NII_WWWDirect = &s_NII_WWWDirect;
+
+
+
+
+#ifdef SERGEI_SHAVIRIN_CUT_AND_PASTE
+
 /*  ---- Here are set of temporary functions to be deleted */
+
+Boolean NET_Connect(VoidPtr handle)
+{
+    Uint4 conn_try;
+    ServiceInfo *sinfo;
+        
+#ifdef LB_DIRECT
+    unsigned skip_ip[MAX_NUM_HOSTS];
+    MemSet(skip_ip, '\0', sizeof(skip_ip));
+#endif
+
+    sinfo = (ServiceInfo *) handle;
+    
+    if(sinfo->nic != NULL) {
+        NIC_CloseService(sinfo->nic);
+        sinfo->nic = NULL;
+    }
+
+    for (conn_try = 0;  !sinfo->nic  &&  conn_try < sinfo->conn_try;
+         conn_try++) {
+#ifdef LB_DIRECT
+        skip_ip[conn_try] = s_AlternateDispatcher(sinfo, skip_ip,
+                                                  conn_try%MAX_NUM_HOSTS);
+#endif
+        sinfo->nic = NIC_GetService
+            (sinfo->service,
+             sinfo->disp_host, sinfo->disp_port, sinfo->disp_path,
+             &sinfo->timeout, sinfo->agent, sinfo->client_host,
+             NULL, sinfo->flags);
+    }
+    
+    return (Boolean)(sinfo->nic != 0);
+}
+
 
 VoidPtr NET_GenericGetService (CharPtr defService, 
                                CharPtr configSection, 
@@ -625,17 +719,6 @@ VoidPtr NET_GenericGetService (CharPtr defService,
     return (VoidPtr) sinfo;
 }
 
-static Int2 s_EndServices(NI_DispatcherPtr disp)
-{
-    ASSERT ( disp->referenceCount > 0 );
-    if (--disp->referenceCount == 0) {
-        MemFree(disp->adminInfo);
-        MemFree(disp->motd);
-        MemFree(disp);
-    }
-    return 0;
-}
-
 SOCK NET_GetSOCK(VoidPtr handle)
 {
     ServiceInfo *sinfo = (ServiceInfo *) handle;
@@ -655,52 +738,7 @@ Int2 NET_ServiceDisconnect(VoidPtr handle)
     return 0;
 }
 
-static Int2 s_ServiceDisconnect(NI_HandPtr mhp)
-{
-  ServiceInfo *sinfo = (ServiceInfo *)mhp->extra_proc_info;
-  ByteStorePtr bsp   = sinfo->aibsp->bsp;
-
-  s_EndServices(mhp->disp);
-  if ( sinfo->nic )
-    NIC_CloseService(sinfo->nic);
-  AsnIoBSClose(sinfo->aibsp);
-  BSFree(bsp);
-  MemFree(sinfo);
-  AsnIoClose(mhp->raip);
-  MemFree(mhp->hostname);
-  MemFree(mhp);
-  return 0;
-} 
-
-
-/* Exported table of interface functions
- */
-static const NIInterface s_NII_WWW = {
-  s_GenericInitWWW,
-  s_SetDispatcherWWW,
-  s_GenericGetService,
-  s_ServiceDisconnect,
-  s_EndServices
-};
-const NIInterface *g_NII_WWW = &s_NII_WWW;
-
-static const NIInterface s_NII_WWWFirewall = {
-  s_GenericInitWWWFirewall,
-  s_SetDispatcherWWWFirewall,
-  s_GenericGetService,
-  s_ServiceDisconnect,
-  s_EndServices
-};
-const NIInterface *g_NII_WWWFirewall = &s_NII_WWWFirewall;
-
-static const NIInterface s_NII_WWWDirect = {
-  s_GenericInitWWWDirect,
-  s_SetDispatcherWWWDirect,
-  s_GenericGetService,
-  s_ServiceDisconnect,
-  s_EndServices
-};
-const NIInterface *g_NII_WWWDirect = &s_NII_WWWDirect;
+#endif  /* SERGEI_SHAVIRIN_CUT_AND_PASTE */
 
 
 /* EOF */

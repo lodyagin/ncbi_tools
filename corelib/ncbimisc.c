@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/23/91
 *
-* $Revision: 6.14 $
+* $Revision: 6.16 $
 *
 * File Description: 
 *   	miscellaneous functions
@@ -43,6 +43,12 @@
 * 02-16-94 Epstein     Retired Gestalt functions and definitions
 *
 * $Log: ncbimisc.c,v $
+* Revision 6.16  1999/07/29 15:58:48  kans
+* added bigintvalue, ValNodeAddBigInt (PD)
+*
+* Revision 6.15  1999/06/07 18:22:20  beloslyu
+* NetBSD port
+*
 * Revision 6.14  1999/04/23 18:00:15  beloslyu
 * change Uint4 to Nlm_Uint4 and CharPtr to Nlm_CharPtr
 *
@@ -594,6 +600,28 @@ NLM_EXTERN ValNodePtr LIBCALL ValNodeAddInt (ValNodePtr PNTR head, Nlm_Int2 choi
 	{
 		newnode->choice = (Nlm_Uint1)choice;
 		newnode->data.intvalue = value;
+	}
+
+	return newnode;
+}
+
+/*****************************************************************************
+*
+*   ValNodeAddBigInt (head, choice, value)
+*      adds like ValNodeAdd()
+*      sets newnode->choice = choice (if choice does not matter, use 0)
+*      sets newnode->data.bigintvalue = value
+*   
+*****************************************************************************/
+NLM_EXTERN ValNodePtr LIBCALL ValNodeAddBigInt (ValNodePtr PNTR head, Nlm_Int2 choice, Nlm_Int8 value)
+{
+	ValNodePtr newnode;
+
+	newnode = ValNodeAdd(head);
+	if (newnode != NULL)
+	{
+		newnode->choice = (Nlm_Uint1)choice;
+		newnode->data.bigintvalue = value;
 	}
 
 	return newnode;
@@ -1655,6 +1683,8 @@ NLM_EXTERN const Nlm_Char* Nlm_PlatformName(void)
 #    else
   return "LINUX";
 #    endif
+#  elif defined(OS_UNIX_NETBSD)
+  return "NetBSD";
 #  else
   return "UNIX";
 #  endif

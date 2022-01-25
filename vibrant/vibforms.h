@@ -29,13 +29,22 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.2 $
+* $Revision: 6.5 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: vibforms.h,v $
+* Revision 6.5  1999/06/16 20:55:02  kans
+* added CreateEnumListDialog using SingleList
+*
+* Revision 6.4  1999/06/16 19:03:25  kans
+* added CreateEnumPopupDialog
+*
+* Revision 6.3  1999/06/16 17:44:54  kans
+* added DuplicateEnumFieldAlist
+*
 * Revision 6.2  1999/05/06 21:23:44  vakatov
 * Get rid of the erroneous 'extern "C"' around the #include's
 *
@@ -161,6 +170,7 @@ extern void Nlm_SetEnumPopupByName (Nlm_PopuP lst, Nlm_EnumFieldAssocPtr al, Nlm
 
 extern Nlm_Boolean Nlm_WhereInEnumPopup (Nlm_EnumFieldAssocPtr al, Nlm_CharPtr name, Nlm_UIEnumPtr pval);
 extern void Nlm_SortEnumFieldAlist (Nlm_EnumFieldAssocPtr alist);
+extern Nlm_EnumFieldAssocPtr Nlm_DuplicateEnumFieldAlist (Nlm_EnumFieldAssocPtr alist);
 extern Nlm_EnumFieldAssocPtr Nlm_FreeEnumFieldAlist (Nlm_EnumFieldAssocPtr alist);
 
 /* convenience functions that create the popup, set extra object data, init the popup, and set the value */
@@ -237,6 +247,13 @@ extern void Nlm_SendMessageToDialog (Nlm_DialoG d, Nlm_Int2 mssg);
 extern Nlm_Boolean Nlm_ImportDialog (Nlm_DialoG d, Nlm_CharPtr filename);
 extern Nlm_Boolean Nlm_ExportDialog (Nlm_DialoG d, Nlm_CharPtr filename);
 
+/* convenience function that creates enumerated popup as a dialog, copies alist, cleans up on freeing */
+extern Nlm_PopuP Nlm_CreateEnumPopupDialog (Nlm_GrouP prnt, Nlm_Boolean macLike, Nlm_PupActnProc actn,
+                                            Nlm_EnumFieldAssocPtr al);
+
+/* convenience function that creates enumerated single list as a dialog, copies alist, cleans up on freeing */
+extern Nlm_LisT Nlm_CreateEnumListDialog (Nlm_GrouP prnt, Nlm_Int2 width, Nlm_Int2 height, Nlm_LstActnProc actn,
+                                          Nlm_EnumFieldAssocPtr al);
 /*****************************************************************************
 *
 *   A form is a general collection of associated Vibrant objects.
@@ -458,6 +475,7 @@ extern Nlm_CharPtr Nlm_ExtractTagListColumn (Nlm_CharPtr source, Nlm_Int2 col);
 #define SetEnumPopupByName Nlm_SetEnumPopupByName
 #define WhereInEnumPopup Nlm_WhereInEnumPopup
 #define SortEnumFieldAlist Nlm_SortEnumFieldAlist
+#define DuplicateEnumFieldAlist Nlm_DuplicateEnumFieldAlist
 #define FreeEnumFieldAlist Nlm_FreeEnumFieldAlist
 #define CreateEnumPopupListInitVal Nlm_CreateEnumPopupListInitVal
 #define CreateEnumPopupListInitName Nlm_CreateEnumPopupListInitName
@@ -495,6 +513,8 @@ extern Nlm_CharPtr Nlm_ExtractTagListColumn (Nlm_CharPtr source, Nlm_Int2 col);
 #define SendMessageToDialog Nlm_SendMessageToDialog
 #define ImportDialog Nlm_ImportDialog
 #define ExportDialog Nlm_ExportDialog
+#define CreateEnumPopupDialog Nlm_CreateEnumPopupDialog
+#define CreateEnumListDialog Nlm_CreateEnumListDialog
 #define ForM Nlm_ForM
 #define ToFormFunc Nlm_ToFormFunc
 #define FromFormFunc Nlm_FromFormFunc

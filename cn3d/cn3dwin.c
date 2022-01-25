@@ -1,4 +1,4 @@
-/*  $Id: cn3dwin.c,v 6.86 1999/05/04 23:12:47 ywang Exp $
+/*  $Id: cn3dwin.c,v 6.94 1999/09/16 17:16:21 ywang Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -23,15 +23,39 @@
 *
 * ===========================================================================
 *
-* Author:  Christopher Hogue
+* Author:  Christopher Hogue, Yanli Wang, Lewis Geer, Jonathan Kans
 *
-* Version Creation Date:   1/31/96
+* First Version Creation Date:   1/31/96
 *
 * File Description:  Cn3D GUI API
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cn3dwin.c,v $
+* Revision 6.94  1999/09/16 17:16:21  ywang
+* open multiple salsa window for data with multiple seq-annot data
+*
+* Revision 6.93  1999/09/15 14:22:13  ywang
+* modify Cn3D_AlignEdit to open multiple salsa window for alignment
+*
+* Revision 6.92  1999/07/09 20:50:56  ywang
+* set highlight color for salsa in Cn3dObjRegiste
+*
+* Revision 6.91  1999/07/01 21:44:49  ywang
+* *** empty log message ***
+*
+* Revision 6.90  1999/07/01 14:07:25  ywang
+* cn3dwin.c
+*
+* Revision 6.89  1999/06/30 16:51:08  ywang
+* comment out 'Salsa_BioseqUpdate = TRUE' in AlignEdit
+*
+* Revision 6.88  1999/06/15 18:18:16  ywang
+* loop over all the existed models for highligt
+*
+* Revision 6.87  1999/05/27 16:12:22  ywang
+* synchronize highlight color change in the cn3d viewer
+*
 * Revision 6.86  1999/05/04 23:12:47  ywang
 * fix selection retaining problem on show/hide
 *
@@ -679,9 +703,24 @@ static void Cn3D_BgColor(IteM i)
 
 }
 
+void Cn3DSetHLColorForSalsa(void)
+{
+   SeqEditViewProcsPtr svpp = NULL;
+
+   if(Cn3D_v3d != NULL){
+      svpp = (SeqEditViewProcsPtr) GetAppProperty ("SeqEditDisplayForm");
+      if(svpp != NULL){
+         svpp->colorR_HL = Cn3D_v3d->colorHLR;
+         svpp->colorG_HL = Cn3D_v3d->colorHLG;
+         svpp->colorB_HL = Cn3D_v3d->colorHLB;
+      }
+      if(Num_Bioseq > 0) Cn3DSendColorMsgForBioseq(0);
+   }
+}
+
 static void Cn3D_Default_HLColor(IteM i)
 {
-    SeqEditViewProcsPtr svpp;
+    SeqEditViewProcsPtr svpp = NULL;
 
     Uint1 colorR, colorG, colorB;
 
@@ -690,12 +729,13 @@ static void Cn3D_Default_HLColor(IteM i)
     Cn3D_ConstructColor(&(Cn3D_ColorData.Highlight), colorR, colorG, colorB);
 #else
     SetHLColor3D(Cn3D_v3d, colorR, colorG, colorB);
+    RedrawViewer3D(Cn3D_v3d);   
 #endif
 
     svpp = (SeqEditViewProcsPtr) GetAppProperty ("SeqEditDisplayForm");
     if(svpp != NULL){
        svpp->colorR_HL = colorR; svpp->colorG_HL = colorG; svpp->colorB_HL = colorB;
-    if(Num_Bioseq > 0) Cn3DSendColorMsgForBioseq(0);
+       if(Num_Bioseq > 0) Cn3DSendColorMsgForBioseq(0);
     }
 }
 
@@ -710,11 +750,12 @@ static void Cn3D_HLColor(IteM i)
     Cn3D_ConstructColor(&(Cn3D_ColorData.Highlight), colorR, colorG, colorB);
 #else
     SetHLColor3D(Cn3D_v3d, colorR, colorG, colorB);
+    RedrawViewer3D(Cn3D_v3d);   
 #endif
     svpp = (SeqEditViewProcsPtr) GetAppProperty ("SeqEditDisplayForm");
     if(svpp != NULL){
        svpp->colorR_HL = colorR; svpp->colorG_HL = colorG; svpp->colorB_HL = colorB;
-    if(Num_Bioseq > 0) Cn3DSendColorMsgForBioseq(0);
+       if(Num_Bioseq > 0) Cn3DSendColorMsgForBioseq(0);
     }
 }
 
@@ -1244,6 +1285,7 @@ void fnCHLresidue(PDNMG pdnmgThis,
   PMAD pmadThis = NULL;
   PVNAL pvnalThis = NULL;
   PALD paldThis = NULL;
+  PVNAL pvnalLinkThis = NULL;
 #ifdef _OPENGL
   Nlm_VoidPtr vvv = NULL;
 #endif
@@ -1259,7 +1301,11 @@ void fnCHLresidue(PDNMG pdnmgThis,
          if(pvnalThis == NULL) goto setout;
          paldThis = pvnalThis->data.ptrvalue;
          if(paldThis == NULL) goto setout;
-         DoCHighlightSeg((PFB)pmadThis, (Int4)paldThis->pvnalLink->choice, 0, vvv, highlight);
+         pvnalLinkThis = paldThis->pvnalLink;
+         while(pvnalLinkThis){
+            DoCHighlightSeg((PFB)pmadThis, (Int4)pvnalLinkThis->choice, 0, vvv, highlight);
+            pvnalLinkThis = pvnalLinkThis->next;
+         }
          setout:
          pvnmaThis = pvnmaThis->next;
   }
@@ -1875,7 +1921,9 @@ static void Cn3D_AlignEdit(IteM i)
                  entityID = BioseqFindEntity(pmmdThis->pSeqId, &itemID);
                  itemtype = OBJ_BIOSEQ; 
                  ObjMgrSendMsg(OM_MSG_HIDE, entityID, itemID, itemtype);
-                 Salsa_BioseqUpdate = TRUE;
+/*               Salsa_BioseqUpdate = TRUE; */
+                     /* Salsa_BioseqUpdate this variable becomes useless */
+                     /* should be deleted in next version, 6/30 99 yanli */
               }
            }
            pdnmmHead = pdnmmHead->next;
@@ -1889,6 +1937,17 @@ static void Cn3D_AlignEdit(IteM i)
     Cn3D_Redraw(FALSE);     /* cause problem?  */
     Cn3D_ReColor = FALSE;
     Cn3dObjMgrGetSelected();
+
+      /* loop over list of seq-annot to launch multiple salsa window */
+        /* yanli, Sept. 16, 1999 */
+    psaAlign = psaAlign->next;
+    while(psaAlign){
+       if(psaAlign->data != NULL){
+          salp = psaAlign->data;
+          LaunchSalsa(salp);
+       }
+       psaAlign = psaAlign->next;
+    }
   }    
 
   return;

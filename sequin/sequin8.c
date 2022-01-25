@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/3/98
 *
-* $Revision: 6.93 $
+* $Revision: 6.104 $
 *
 * File Description: 
 *
@@ -1175,210 +1175,124 @@ static void TakeTop10Alignments (SeqAnnotPtr sap)
   }
 }
 
-static void SetEmptyGeneticCodes (SeqAnnotPtr sap, Int2 genCode)
+static void DoOnePub (PubdescPtr pdp)
 
 {
-  CdRegionPtr     crp;
-  GeneticCodePtr  gc;
-  SeqFeatPtr      sfp;
-  ValNodePtr      vnp;
+  Int4          muid = 0;
+  Int4          pmid = 0;
+  ValNodePtr    tmp = NULL;
+  ValNodePtr    vnp;
 
-  if (sap == NULL || sap->type != 1) return;
-  for (sfp = (SeqFeatPtr) sap->data; sfp != NULL; sfp = sfp->next) {
-    if (sfp->data.choice == SEQFEAT_CDREGION) {
-      crp = (CdRegionPtr) sfp->data.value.ptrvalue;
-      if (crp != NULL) {
-        gc = crp->genetic_code;
-        if (gc != NULL) {
-          vnp = gc->data.ptrvalue;
-          if (vnp != NULL && vnp->choice == 2) {
-            if (vnp->data.intvalue == 0) {
-              vnp->data.intvalue = (Int4) genCode;
-            }
-          }
-        }
+  if (pdp != NULL) {
+    for (vnp = pdp->pub; vnp != NULL; vnp = vnp->next) {
+      if (vnp->choice == PUB_Muid) {
+        muid = vnp->data.intvalue;
+      } else if (vnp->choice == PUB_PMid) {
+        pmid = vnp->data.intvalue;
       }
+    }
+    if (pmid != 0) {
+      tmp = MedArchGetPubPmId (pmid);
+      muid = MedArchPm2Mu (pmid);
+    } else if (muid != 0) {
+      tmp = MedArchGetPub (muid);
+      pmid = MedArchMu2Pm (muid);
+    }
+    if (tmp != NULL) {
+      if (pmid != 0) {
+        ValNodeAddInt (&tmp, PUB_PMid, pmid);
+      }
+      if (muid != 0) {
+        ValNodeAddInt (&tmp, PUB_Muid, muid);
+      }
+      pdp->pub = PubEquivFree (pdp->pub);
+      pdp->pub = tmp;
     }
   }
 }
 
-static void PromoteXrefs (SeqFeatPtr sfp, BioseqPtr bsp, Uint2 entityID)
+static void DoLookupPub (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent)
 
 {
-  ByteStorePtr         bs;
-  Char                 ch;
-  CdRegionPtr          crp;
-  Int2                 ctr = 1;
-  ValNodePtr           descr;
-  SeqFeatPtr           gene;
-  GeneRefPtr           grp;
-  Int2                 i;
-  SeqEntryPtr          last = NULL;
-  MolInfoPtr           mip;
-  SeqFeatXrefPtr       next;
-  SeqEntryPtr          old;
-  ObjMgrDataPtr        omdptop;
-  ObjMgrData           omdata;
-  Uint2                parenttype;
-  Pointer              parentptr;
-  Boolean              partial5;
-  Boolean              partial3;
-  BioseqPtr            pbsp;
-  SeqFeatXrefPtr PNTR  prev;
-  SeqFeatPtr           prot;
-  CharPtr              protseq;
-  ProtRefPtr           prp;
-  SeqEntryPtr          psep;
-  CharPtr              ptr;
-  SeqEntryPtr          sep;
-  SeqEntryPtr          target = NULL;
-  ValNodePtr           vnp;
-  SeqFeatXrefPtr       xref;
+  BioseqPtr     bsp;
+  BioseqSetPtr  bssp;
+  PubdescPtr    pdp;
+  SeqAnnotPtr   sap;
+  ValNodePtr    sdp;
+  SeqFeatPtr    sfp;
 
-  if (sfp == NULL || bsp == NULL) return;
-  while (sfp != NULL) {
-    prev = &(sfp->xref);
-    xref = sfp->xref;
-    while (xref != NULL) {
-      next = xref->next;
-      if (xref->data.choice == SEQFEAT_GENE && sfp->data.choice != SEQFEAT_GENE) {
-        grp = (GeneRefPtr) xref->data.value.ptrvalue;
-        if (grp != NULL && SeqMgrGeneIsSuppressed (grp)) {
-        } else {
-          xref->data.value.ptrvalue = NULL;
-          if (grp != NULL) {
-            sep = SeqMgrGetSeqEntryForData (bsp);
-            if (ExtendGene (grp, sep, sfp->location)) {
-              GeneRefFree (grp);
-            } else {
-              gene = CreateNewFeature (sep, NULL, SEQFEAT_GENE, NULL);
-              if (gene != NULL) {
-                gene->data.value.ptrvalue = (Pointer) grp;
-                gene->location = SeqLocFree (gene->location);
-                gene->location = AsnIoMemCopy (sfp->location,
-                                               (AsnReadFunc) SeqLocAsnRead,
-                                               (AsnWriteFunc) SeqLocAsnWrite);
-              }
-            }
-          }
-          *(prev) = next;
-          xref->next = NULL;
-          xref->data.choice = 0;
-          SeqFeatXrefFree (xref);
+  if (IS_Bioseq (sep)) {
+    bsp = (BioseqPtr) sep->data.ptrvalue;
+    sap = bsp->annot;
+    sdp = bsp->descr;
+  } else if (IS_Bioseq_set (sep)) {
+    bssp = (BioseqSetPtr) sep->data.ptrvalue;
+    sap = bssp->annot;
+    sdp = bssp->descr;
+  } else return;
+  while (sap != NULL) {
+    if (sap->type == 1) {
+      for (sfp = (SeqFeatPtr) sap->data; sfp != NULL; sfp = sfp->next) {
+        if (sfp->data.choice == SEQFEAT_PUB) {
+          pdp = (PubdescPtr) sfp->data.value.ptrvalue;
+          DoOnePub (pdp);
         }
-      } else if (xref->data.choice == SEQFEAT_PROT && sfp->data.choice == SEQFEAT_CDREGION) {
-        prp = (ProtRefPtr) xref->data.value.ptrvalue;
-        xref->data.value.ptrvalue = NULL;
-        if (prp != NULL) {
-          crp = (CdRegionPtr) sfp->data.value.ptrvalue;
-          if (crp != NULL) {
-            crp->frame = 0;
-            bs = ProteinFromCdRegionEx (sfp, TRUE, FALSE);
-            if (bs != NULL) {
-              protseq = BSMerge (bs, NULL);
-              bs = BSFree (bs);
-              if (protseq != NULL) {
-                ptr = protseq;
-                ch = *ptr;
-                while (ch != '\0') {
-                  *ptr = TO_UPPER (ch);
-                  ptr++;
-                  ch = *ptr;
-                }
-                i = (Int2) StringLen (protseq);
-                if (i > 0 && protseq [i - 1] == '*') {
-                  protseq [i - 1] = '\0';
-                }
-                bs = BSNew (1000);
-                if (bs != NULL) {
-                  ptr = protseq;
-                  /*
-                  if (protseq [0] == '-') {
-                    ptr++;
-                  }
-                  */
-                  BSWrite (bs, (VoidPtr) ptr, (Int4) StringLen (ptr));
-                }
-              }
-              pbsp = BioseqNew ();
-              if (pbsp != NULL) {
-                pbsp->repr = Seq_repr_raw;
-                pbsp->mol = Seq_mol_aa;
-                pbsp->seq_data_type = Seq_code_ncbieaa;
-                pbsp->seq_data = bs;
-                pbsp->length = BSLen (bs);
-                bs = NULL;
-                sep = GetBestTopParentForData (entityID, bsp);
-                old = SeqEntrySetScope (sep);
-                pbsp->id = MakeNewProteinSeqIdEx (sfp->location, NULL, &ctr);
-                CheckSeqLocForPartial (sfp->location, &partial5, &partial3);
-                SeqMgrAddToBioseqIndex (pbsp);
-                SeqEntrySetScope (old);
-                psep = SeqEntryNew ();
-                if (psep != NULL) {
-                  psep->choice = 1;
-                  psep->data.ptrvalue = (Pointer) pbsp;
-                  SeqMgrSeqEntry (SM_BIOSEQ, (Pointer) pbsp, psep);
-                  mip = MolInfoNew ();
-                  if (mip != NULL) {
-                    mip->biomol = 8;
-                    mip->tech = 8;
-                    if (partial5 && partial3) {
-                      mip->completeness = 5;
-                    } else if (partial5) {
-                      mip->completeness = 3;
-                    } else if (partial3) {
-                      mip->completeness = 4;
-                    }
-                    vnp = CreateNewDescriptor (psep, Seq_descr_molinfo);
-                    if (vnp != NULL) {
-                      vnp->data.ptrvalue = (Pointer) mip;
-                    }
-                  }
-                  if (last == NULL) {
-
-                    /* the first protein may change the set/seq structure,
-                    so goes through AddSeqEntryToSeqEntry */
-
-                    descr = ExtractBioSourceAndPubs (sep);
-                    AddSeqEntryToSeqEntry (sep, psep, TRUE);
-                    ReplaceBioSourceAndPubs (sep, descr);
-                    target = sep;
-                    SaveSeqEntryObjMgrData (target, &omdptop, &omdata);
-                    GetSeqEntryParent (target, &parentptr, &parenttype);
-                  } else {
-                    last->next = psep;
-                    last = psep;
-                  }
-                  SetSeqFeatProduct (sfp, pbsp);
-                  psep = SeqMgrGetSeqEntryForData (pbsp);
-                  if (psep != NULL) {
-                    last = psep;
-                    prot = CreateNewFeature (psep, NULL, SEQFEAT_PROT, NULL);
-                    if (prot != NULL) {
-                      prot->data.value.ptrvalue = (Pointer) prp;
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-        *(prev) = next;
-        xref->next = NULL;
-        xref->data.choice = 0;
-        SeqFeatXrefFree (xref);
-      } else {
-        prev = &(xref->next);
       }
-      xref = next;
     }
-    sfp = sfp->next;
+    sap = sap->next;
   }
-  if (target != NULL) {
-    SeqMgrLinkSeqEntry (target, parenttype, parentptr);
-    RestoreSeqEntryObjMgrData (target, omdptop, &omdata);
+  while (sdp != NULL) {
+    if (sdp->choice == Seq_descr_pub) {
+      pdp = (PubdescPtr) sdp->data.ptrvalue;
+      DoOnePub (pdp);
+    }
+    sdp = sdp->next;
   }
+}
+
+extern void LookupAllPubs (IteM i);
+extern void LookupAllPubs (IteM i)
+
+{
+  BaseFormPtr  bfp;
+  MonitorPtr   mon = NULL;
+  SeqEntryPtr  sep;
+  ErrSev       sev;
+
+
+  if (! useMedarch) return;
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL) return;
+  sev = ErrSetMessageLevel (SEV_FATAL);
+  WatchCursor ();
+  mon = MonitorStrNewEx ("Processing Publications", 40, FALSE);
+  MonitorStrValue (mon, "Connecting to MedArch");
+  Update ();
+  if (! MedArchInit ()) {
+    MonitorFree (mon);
+    ArrowCursor ();
+    Update ();
+    Message (MSG_POST, "Unable to connect to MedArch");
+    return;
+  }
+  SeqEntryExplore (sep, NULL, DoLookupPub);
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+  MonitorStrValue (mon, "Closing MedArch");
+  Update ();
+  MedArchFini ();
+  MonitorFree (mon);
+  ArrowCursor ();
+  Update ();
+  ErrSetMessageLevel (sev);
+  ErrClear ();
+  ErrShow ();
 }
 
 static void LookupPublications (SeqAnnotPtr sap)
@@ -2664,19 +2578,18 @@ static void UserObjectPtrToRefGeneDialog (DialoG d, Pointer data)
 static Pointer RefGeneDialogToUserObjectPtr (DialoG d)
 
 {
-  Boolean               annotChange = FALSE;
+  Boolean               annotChange;
   Char                  ch;
-  Boolean               gotOne = FALSE;
   Int2                  i;
   Int2                  j;
   size_t                len;
-  Int4                  num [4];
+  Int4                  num [5];
   Boolean               okay;
   RefgeneUserDialogPtr  rdp;
-  Boolean               seqChange = FALSE;
+  Boolean               seqChange;
   CharPtr               str;
   TagListPtr            tlp;
-  CharPtr               txt [4];
+  CharPtr               txt [5];
   UserObjectPtr         uop;
   long int              val;
   ValNodePtr            vnp;
@@ -2712,6 +2625,8 @@ static Pointer RefGeneDialogToUserObjectPtr (DialoG d)
             }
           }
         }
+        annotChange = FALSE;
+        seqChange = FALSE;
         if (num [3] >= 2) {
           annotChange = TRUE;
           (num [3]) -= 2;
@@ -2725,7 +2640,6 @@ static Pointer RefGeneDialogToUserObjectPtr (DialoG d)
             AddAccessionToRefGeneTrackUserObject (uop, refgene_labels [i],
                                                   txt [0], num [1],
                                                   seqChange, annotChange, txt [2]);
-            gotOne = TRUE;
           }
           for (j = 0; j < 4; j++) {
             txt [j] = MemFree (txt [j]);
@@ -2976,6 +2890,7 @@ typedef struct historyformdata {
   BioseqPtr      bsp;
   DialoG         replace_date;
   DialoG         replace_ids;
+  ButtoN         secondary_on_part;
   DialoG         replaced_by_date;
   DialoG         replaced_by_ids;
   ButtoN         deleted;
@@ -3079,15 +2994,10 @@ static ValNodePtr GetStringsForSeqIDs (SeqIdPtr sip)
   return head;
 }
 
-static void DoChangeHistory (ButtoN b)
+static void AddGenBankBlockToBioseq (BioseqPtr bsp, ValNodePtr head1, ValNodePtr head2)
 
 {
-  MsgAnswer        ans;
-  BioseqPtr        bsp;
   GBBlockPtr       gbp = NULL;
-  ValNodePtr       head1 = NULL, head2 = NULL;
-  HistoryFormPtr   hfp;
-  SeqHistPtr       hist;
   CharPtr          last = NULL;
   ValNodePtr       next;
   ValNodePtr PNTR  prev;
@@ -3095,6 +3005,78 @@ static void DoChangeHistory (ButtoN b)
   SeqEntryPtr      sep;
   CharPtr          str1, str2;
   ValNodePtr       vnp, vnp1, vnp2;
+
+  sdp = BioseqGetSeqDescr (bsp, Seq_descr_genbank, NULL);
+  if (sdp != NULL) {
+    gbp = (GBBlockPtr) sdp->data.ptrvalue;
+    if (gbp != NULL) {
+      for (vnp1 = head1; vnp1 != NULL; vnp1 = vnp1->next) {
+        str1 = (CharPtr) vnp1->data.ptrvalue;
+        if (str1 != NULL) {
+          for (vnp2 = gbp->extra_accessions; vnp2 != NULL; vnp2 = vnp2->next) {
+            str2 = (CharPtr) vnp2->data.ptrvalue;
+            if (StringICmp (str1, str2) == 0) {
+              vnp2->data.ptrvalue = MemFree (vnp2->data.ptrvalue);
+            }
+          }
+        }
+      }
+    }
+  }
+  if (sdp == NULL) {
+    sep = SeqMgrGetSeqEntryForData (bsp);
+    sdp = CreateNewDescriptor (sep, Seq_descr_genbank);
+    if (sdp != NULL) {
+      sdp->data.ptrvalue = GBBlockNew ();
+    }
+  }
+  if (sdp != NULL) {
+    gbp = (GBBlockPtr) sdp->data.ptrvalue;
+    if (gbp != NULL) {
+      while (head2 != NULL) {
+        ValNodeCopyStr (&(gbp->extra_accessions), 0, (CharPtr) head2->data.ptrvalue);
+        head2 = head2->next;
+      }
+      /*
+      ValNodeLink (&(gbp->extra_accessions), head2);
+      head2 = NULL;
+      */
+      gbp->extra_accessions = SortValNode (gbp->extra_accessions, SortByName);
+      prev = &(gbp->extra_accessions);
+      vnp = gbp->extra_accessions;
+      last = NULL;
+      while (vnp != NULL) {
+        next = vnp->next;
+        str2 = (CharPtr) vnp->data.ptrvalue;
+        if (str2 == NULL || StringHasNoText (str2) || StringICmp (last, str2) == 0) {
+          *prev = next;
+          vnp->next = NULL;
+          MemFree (vnp);
+          vnp = next;
+        } else {
+          last = str2;
+          prev = &(vnp->next);
+          vnp = next;
+        }
+      }
+    }
+  }
+
+}
+
+static void DoChangeHistory (ButtoN b)
+
+{
+  MsgAnswer       ans;
+  BioseqPtr       bsp;
+  ValNodePtr      head1 = NULL, head2 = NULL;
+  HistoryFormPtr  hfp;
+  SeqHistPtr      hist;
+  BioseqPtr       pbsp;
+  SeqEntryPtr     sep;
+  SeqLocPtr       slp;
+  CharPtr         str1, str2;
+  ValNodePtr      vnp1, vnp2;
 
   hfp = (HistoryFormPtr) GetObjectExtra (b);
   if (hfp == NULL) return;
@@ -3148,51 +3130,14 @@ static void DoChangeHistory (ButtoN b)
     }
   }
 
-  sdp = BioseqGetSeqDescr (bsp, Seq_descr_genbank, NULL);
-  if (sdp != NULL) {
-    gbp = (GBBlockPtr) sdp->data.ptrvalue;
-    if (gbp != NULL) {
-      for (vnp1 = head1; vnp1 != NULL; vnp1 = vnp1->next) {
-        str1 = (CharPtr) vnp1->data.ptrvalue;
-        if (str1 != NULL) {
-          for (vnp2 = gbp->extra_accessions; vnp2 != NULL; vnp2 = vnp2->next) {
-            str2 = (CharPtr) vnp2->data.ptrvalue;
-            if (StringICmp (str1, str2) == 0) {
-              vnp2->data.ptrvalue = MemFree (vnp2->data.ptrvalue);
-            }
-          }
-        }
-      }
-    }
-  }
-  if (sdp == NULL) {
-    sep = SeqMgrGetSeqEntryForData (bsp);
-    sdp = CreateNewDescriptor (sep, Seq_descr_genbank);
-    if (sdp != NULL) {
-      sdp->data.ptrvalue = GBBlockNew ();
-    }
-  }
-  if (sdp != NULL) {
-    gbp = (GBBlockPtr) sdp->data.ptrvalue;
-    if (gbp != NULL) {
-      ValNodeLink (&(gbp->extra_accessions), head2);
-      head2 = NULL;
-      gbp->extra_accessions = SortValNode (gbp->extra_accessions, SortByName);
-      prev = &(gbp->extra_accessions);
-      vnp = gbp->extra_accessions;
-      last = NULL;
-      while (vnp != NULL) {
-        next = vnp->next;
-        str2 = (CharPtr) vnp->data.ptrvalue;
-        if (str2 == NULL || StringHasNoText (str2) || StringICmp (last, str2) == 0) {
-          *prev = next;
-          vnp->next = NULL;
-          MemFree (vnp);
-          vnp = next;
-        } else {
-          last = str2;
-          prev = &(vnp->next);
-          vnp = next;
+  AddGenBankBlockToBioseq (bsp, head1, head2);
+
+  if (GetStatus (hfp->secondary_on_part)) {
+    if (bsp->repr == Seq_repr_seg) {
+      for (slp = (SeqLocPtr) bsp->seq_ext; slp != NULL; slp = slp->next) {
+        pbsp = BioseqFind (SeqLocId (slp));
+        if (pbsp != NULL) {
+          AddGenBankBlockToBioseq (pbsp, head1, head2);
         }
       }
     }
@@ -3302,8 +3247,9 @@ extern void EditSequenceHistory (IteM i)
 
   g = HiddenGroup (h, -1, 0, NULL);
   hfp->replace_ids = CreateVisibleStringDialog (g, 4, -1, 10);
+  hfp->secondary_on_part = CheckBox (g, "Secondary on Parts", NULL);
   hfp->replace_date = CreateDateDialog (g, NULL);
-  AlignObjects (ALIGN_CENTER, (HANDLE) hfp->replace_ids, (HANDLE) hfp->replace_date, NULL);
+  AlignObjects (ALIGN_CENTER, (HANDLE) hfp->replace_ids, (HANDLE) hfp->secondary_on_part, (HANDLE) hfp->replace_date, NULL);
 
   ppt2 = StaticPrompt (h, "Replaced By", 0, 0, systemFont, 'c');
 
@@ -3327,6 +3273,12 @@ extern void EditSequenceHistory (IteM i)
   AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) j, (HANDLE) k, (HANDLE) c,
                 (HANDLE) ppt1, (HANDLE) ppt2, (HANDLE) ppt3, NULL);
   RealizeWindow (w);
+
+  if (bsp->repr != Seq_repr_seg) {
+    Disable (hfp->secondary_on_part);
+  } else {
+    SetStatus (hfp->secondary_on_part, TRUE);
+  }
 
   if (hist != NULL) {
     PointerToDialog (hfp->replace_date, hist->replace_date);
@@ -3623,6 +3575,78 @@ static QUEUE  urlquerylist = NULL;
 
 static Int4 pendingqueries = 0;
 
+static Boolean LIBCALLBACK SubmitToNCBIResultProc (CONN conn, VoidPtr userdata, EConnStatus status)
+
+{
+  AsnIoPtr     aop;
+  FILE         *fp;
+  Char         path [PATH_MAX];
+  SeqEntryPtr  sep;
+
+  TmpNam (path);
+  fp = FileOpen (path, "wb");
+  QUERY_CopyResultsToFile (conn, fp);
+  FileClose (fp);
+  aop = AsnIoOpen (path, "rb");
+  sep = SeqEntryAsnRead (aop, NULL);
+  AsnIoClose (aop);
+  aop = AsnIoOpen (path, "w");
+  SeqEntryAsnWrite (sep, aop, NULL);
+  AsnIoFlush (aop);
+  AsnIoClose (aop);
+  LaunchGeneralTextViewer (path, "Echo binary transformation of Seq-entry");
+  FileRemove (path);
+  return TRUE;
+}
+
+extern void SubmitToNCBI (IteM i);
+extern void SubmitToNCBI (IteM i)
+
+{
+  AsnIoPtr     aop;
+  BaseFormPtr  bfp;
+  CONN         conn;
+  FILE         *fp;
+  Char         path [PATH_MAX];
+  Char         progname [64];
+  SeqEntryPtr  sep;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL) return;
+
+  sprintf (progname, "Sequin/%s", SEQUIN_APPLICATION);
+
+  TmpNam (path);
+
+  aop = AsnIoOpen (path, "wb");
+  SeqEntryAsnWrite (sep, aop, NULL);
+  AsnIoFlush (aop);
+  AsnIoClose (aop);
+
+  conn = QUERY_OpenUrlQuery ("cruncher.nlm.nih.gov", 80,
+                             "/cgi-bin/Sequin/testcgi.cgi", "request=echo",
+                             progname, 30, eMIME_AsnBinary,
+                             URLC_SURE_FLUSH | URLC_URL_DECODE_INP | URLC_URL_ENCODE_OUT);
+
+  fp = FileOpen (path, "rb");
+  QUERY_CopyFileToQuery (conn, fp);
+  FileClose (fp);
+
+  QUERY_SendQuery (conn);
+
+  QUERY_AddToQueue (&urlquerylist, conn, SubmitToNCBIResultProc, NULL);
+
+  pendingqueries++;
+
+  FileRemove (path);
+}
+
 extern void SequinCheckSocketsProc (void)
 
 {
@@ -3674,19 +3698,28 @@ static void FinishURLProc (NewObjectPtr nop, CharPtr arguments, CharPtr path)
   FILE             *fp;
   Char             progname [64];
   QueryResultProc  resultproc;
+  EMIME_SubType    subtype;
 
-  sprintf (progname, "Sequin/%s", SEQUIN_APP_VERSION);
+  sprintf (progname, "Sequin/%s", SEQUIN_APPLICATION);
 
   if (nop->demomode) {
     resultproc = DemoModeResultProc;
   } else {
     resultproc = nop->resultproc;
   }
+  if (nop->format == 1) {
+    subtype = eMIME_Fasta;
+  } else if (nop->format == 2) {
+    subtype = eMIME_AsnText;
+  } else {
+    subtype = eMIME_Unknown;
+  }
 
   conn = QUERY_OpenUrlQuery (nop->host_machine, nop->host_port,
                              nop->host_path, arguments,
                              progname, nop->timeoutsec,
-                             wwwencoded, URLC_SURE_FLUSH);
+                             subtype,
+                             URLC_SURE_FLUSH | URLC_URL_DECODE_INP | URLC_URL_ENCODE_OUT);
   if (conn == NULL) return;
 
   fp = FileOpen (path, "r");
@@ -5220,5 +5253,168 @@ extern MenU CreateAnalysisMenu (WindoW w, BaseFormPtr bfp, Boolean bspviewOK, Bo
   ValNodeFreeData (head1);
   ValNodeFreeData (head2);
   return m;
+}
+
+/***********************/
+
+/* most of the following code will be extern and go in access/entrez2.[ch] */
+
+#include <objent2.h>
+
+static Entrez2RequestPtr CreateRequest (CharPtr tool)
+
+{
+  Entrez2RequestPtr  e2rp;
+
+  e2rp = Entrez2RequestNew ();
+  if (e2rp == NULL) return NULL;
+  e2rp->version = 1;
+  e2rp->tool = StringSaveNoNull (tool);
+
+  return e2rp;
+}
+
+static Entrez2RequestPtr EntrezCreateGetInfoRequest (CharPtr tool)
+
+{
+  Entrez2RequestPtr  e2rp;
+  ValNodePtr         vnp;
+
+  e2rp = CreateRequest (tool);
+  if (e2rp == NULL) return NULL;
+
+  vnp = ValNodeNew (NULL);
+  if (vnp == NULL) return NULL;
+  vnp->choice = E2Request_get_info;
+  vnp->data.ptrvalue = NULL;
+  vnp->next = NULL;
+
+  e2rp->request = vnp;
+
+  return e2rp;
+}
+
+static Entrez2RequestPtr EntrezCreateDocSumRequest (CharPtr tool,
+                                                    CharPtr db,
+                                                    Int4 uid)
+
+{
+  ByteStorePtr       bs;
+  Entrez2IdListPtr   e2id;
+  Entrez2RequestPtr  e2rp;
+  ValNodePtr         vnp;
+
+  e2rp = CreateRequest (tool);
+  if (e2rp == NULL) return NULL;
+
+  vnp = ValNodeNew (NULL);
+  if (vnp == NULL) return NULL;
+  vnp->choice = E2Request_get_docsum;
+
+  e2id = Entrez2IdListNew ();
+  if (e2id == NULL) return NULL;
+  e2id->db = StringSaveNoNull (db);
+  e2id->num = 1;
+
+  bs = BSNew (4);
+  if (bs == NULL) return NULL;
+  e2id->uids = (Pointer) bs;
+
+  Nlm_BSPutUint4 (bs, (Uint4) uid);
+
+  vnp->data.ptrvalue = (Pointer) e2id;
+  vnp->next = NULL;
+
+  e2rp->request = vnp;
+
+  return e2rp;
+}
+
+static Boolean LIBCALLBACK TestEntrezQueryResultProc (CONN conn, VoidPtr userdata, EConnStatus status)
+
+{
+  AsnIoConnPtr     aicp;
+  AsnIoPtr         aop;
+  /*
+  AsnModulePtr     amp;
+  AsnTypePtr       atp;
+  */
+  Entrez2ReplyPtr  e2rp;
+  Char             path [PATH_MAX];
+
+  /*
+  amp = AsnAllModPtr ();
+  atp = AsnTypeFind (amp, "Entrez2-reply");
+  */
+  aicp = QUERY_AsnIoConnOpen ("rb", conn);
+  e2rp = Entrez2ReplyAsnRead (aicp->aip, NULL);
+  QUERY_AsnIoConnClose (aicp);
+  TmpNam (path);
+  aop = AsnIoOpen (path, "w");
+  Entrez2ReplyAsnWrite (e2rp, aop, NULL);
+  AsnIoFlush (aop);
+  AsnIoClose (aop);
+  LaunchGeneralTextViewer (path, "Entrez2ReplyAsnRead");
+  FileRemove (path);
+  return TRUE;
+}
+
+static CharPtr e2rMemStr = "Entrez2-request ::= {\n" \
+"  request\n" \
+"    get-info NULL ,\n" \
+"  version 1 ,\n" \
+"  tool \"Sequin/2.90\" }\n";
+
+/* For testing purposes, this generates the following ASN.1 message:
+Entrez2-request ::= {
+  request
+    get-info NULL ,
+  version 1 ,
+  tool "Sequin/2.90" }
+*/
+
+extern void TestEntrezQuery (IteM i);
+extern void TestEntrezQuery (IteM i)
+
+{
+  AsnIoConnPtr       aicp;
+  AsnIoMemPtr        aimp;
+  CONN               conn;
+  Entrez2RequestPtr  e2rp;
+  Char               progname [64];
+
+  sprintf (progname, "Sequin/%s", SEQUIN_APPLICATION);
+
+  /*
+  e2rp = EntrezCreateDocSumRequest (progname, "Medline", 89197757);
+  */
+  /*
+  e2rp = EntrezCreateGetInfoRequest (progname);
+  */
+
+  /* hard code test query here for now */
+  aimp = AsnIoMemOpen ("r", (BytePtr) e2rMemStr, (Int4) StringLen (e2rMemStr));
+  if (aimp == NULL || aimp->aip == NULL) return;
+  e2rp = Entrez2RequestAsnRead (aimp->aip, NULL);
+  AsnIoMemClose (aimp);
+
+  if (e2rp == NULL) return;
+
+  conn = QUERY_OpenUrlQuery ("pluto.nlm.nih.gov", 5701,
+                             /* "/fcgi-bin/olegh/entrez2server", */
+                             "/cgi-bin/entrez2server",
+                             NULL, progname, 30, eMIME_AsnBinary,
+                             URLC_SURE_FLUSH /* | URLC_URL_DECODE_INP | URLC_URL_ENCODE_OUT */);
+
+  aicp = QUERY_AsnIoConnOpen ("wb", conn);
+  Entrez2RequestAsnWrite (e2rp, aicp->aip, NULL);
+  AsnIoFlush (aicp->aip);
+  QUERY_AsnIoConnClose (aicp);
+
+  QUERY_SendQuery (conn);
+
+  QUERY_AddToQueue (&urlquerylist, conn, TestEntrezQueryResultProc, NULL);
+
+  pendingqueries++;
 }
 

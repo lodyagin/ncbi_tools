@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 7/8/93
 *
-* $Revision: 6.6 $
+* $Revision: 6.8 $
 *
 * File Description:
 *   Automatically generate C code from ASN.1 specifications
@@ -47,6 +47,12 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: asncode.c,v $
+* Revision 6.8  1999/08/02 14:18:55  sirotkin
+* some compiler nits.
+*
+* Revision 6.7  1999/07/30 17:23:30  sirotkin
+* removed.an.unused
+*
 * Revision 6.6  1999/03/08 15:20:22  kans
 * changed single ampersand to double ampersand
 *
@@ -109,7 +115,7 @@
 
 static Boolean AsnCodeIsEnumType PROTO ((AsnTypePtr atp));
 
-static char     RCS_Rev [] = "$Revision: 6.6 $";
+static char     RCS_Rev [] = "$Revision: 6.8 $";
 
 /*******************
  * Interator structure
@@ -686,7 +692,6 @@ AsnCode_RightChoiceNode (AsnIterPtr iter, AsnCodeNodePtr start_node, Boolean PNT
 {
    AsnCodeNodePtr  retval = start_node;
    AsnTypePtr      atp;
-   Boolean         found_choice = FALSE;
 
    if ((iter -> acip->debug_level) > 3) {
       AsnCodeShowStack (iter);
@@ -776,7 +781,7 @@ AsnCodeGenEnumDefines (struct struct_asniter PNTR iter)
 	    sprintf (iter->buf, "%s_", AsnCodeCleanName(iter->stack->outer->atp->name, lclbuf, CLEAN_FOR_SLOT, iter -> acip -> maxDefineLength));
             AsnIterTakeBuf (iter);
 	 }
-	 sprintf (iter->buf, "%s_", AsnCodeCleanName (iter->atp->name, lclbuf, CLEAN_FOR_SLOT, iter -> acip -> maxDefineLength));
+	 sprintf (iter->buf, "%s_", AsnCodeCleanName (iter->atp->name, lclbuf, CLEAN_FOR_SLOT, (int) (iter -> acip -> maxDefineLength) ));
          AsnIterTakeBuf (iter);
 	 sprintf (iter->buf, "%s %d\n", AsnCodeCleanName (avtp->name, lclbuf,
 		  CLEAN_FOR_SLOT, iter -> acip -> maxDefineLength), avtp->intvalue);
@@ -2999,7 +3004,7 @@ AsnCodeFinalType (struct struct_asniter PNTR iter, AsnTypePtr atp, AsnTypePtr PN
       fprintf ((iter->acip -> bug_fp), "In AsnCodeFinalType:atp name%s-%d\n",
 	       TESTNIL (atp->name), (int) atp->isa);
    }
-   if (atp != NULL)
+   if (atp != NULL){
       if (atp->imported) {
 	 if (atp->type != NULL) {
 	    retval = AsnCodeFinalType (iter, atp->type, base_atpPt);
@@ -3065,6 +3070,7 @@ AsnCodeFinalType (struct struct_asniter PNTR iter, AsnTypePtr atp, AsnTypePtr PN
 	    }
 	 }
       }
+   }
    if ((iter->acip->debug_level) > 3) {
       if (base_atpPt) {
 	 fprintf ((iter->acip -> bug_fp), " returning atp name %s-%d, retval %d\n",
@@ -3087,83 +3093,85 @@ AsnCodeLookupType (AsnTypePtr atp)
    CharPtr         retval = "Pointer";
 
 
-   if (atp != NULL)
-      if (atp->type != NULL)
-	if (AsnCodeIsEnumType(atp)){
-	   retval = "Uint2";
-	}else{
-	 switch (atp->type->isa) {
-	 case BOOLEAN_TYPE:
-	    retval = "Uint1";
-	    break;
-	 case BITS_TYPE:
-	    retval = "Uint1";
-	    break;
-	 case INTEGER_TYPE:
-	    retval = "Int4";
-	    break;
-	 case OCTETS_TYPE:
-	    retval = "Pointer";
-	    break;
-	 case NULL_TYPE:
-	    retval = "Uint1";
-	    break;
-	 case OBID_TYPE:
-	    retval = "Pointer";
-	    break;
-	 case OBDES_TYPE:
-	    retval = "Pointer";
-	    break;
-	 case REAL_TYPE:
-	    retval = "FloatHi";
-	    break;
-	 case ENUM_TYPE:
-	    retval = "Uint2";
-	    break;
-	 case ANY_TYPE:
-	    retval = "Pointer";
-	    break;
-	 case NUMERICSTRING_TYPE:
-	    retval = "CharPtr";
-	    break;
-	 case PRINTABLESTRING_TYPE:
-	    retval = "CharPtr";
-	    break;
-	 case TELETEXSTRING_TYPE:
-	    retval = "CharLenPtr";
-	    break;
-	 case VIDEOTEXSTRING_TYPE:
-	    retval = "CharLenPtr";
-	    break;
-	 case IA5STRING_TYPE:
-	    retval = "CharLenPtr";
-	    break;
-	 case GRAPHICSTRING_TYPE:
-	    retval = "CharLenPtr";
-	    break;
-	 case VISIBLESTRING_TYPE:
-	    retval = "CharPtr";
-	    break;
-	 case CHOICE_TYPE:
-	    retval = "ValNodePtr";
-	    break;
-	 case GENERALSTRING_TYPE:
-	    retval = "CharLenPtr";
-	    break;
-	 case CHARACTERSTRING_TYPE:
-	    retval = "CharLenPtr";
-	    break;
-	 case GENTIME_TYPE:
-	    retval = "Pointer";	/* Time types */
-	    break;
-	 case UTCTIME_TYPE:
-	    retval = "CharLenPtr";
-	    break;
-	 case STRSTORE_TYPE:
-	    retval = "StringStorePtr";
-	    break;
-	 }
-	}
+   if (atp != NULL){
+      if (atp->type != NULL){
+      	if (AsnCodeIsEnumType(atp)){
+      	   retval = "Uint2";
+      	}else{
+      	 switch (atp->type->isa) {
+      	 case BOOLEAN_TYPE:
+      	    retval = "Uint1";
+      	    break;
+      	 case BITS_TYPE:
+      	    retval = "Uint1";
+      	    break;
+      	 case INTEGER_TYPE:
+      	    retval = "Int4";
+      	    break;
+      	 case OCTETS_TYPE:
+      	    retval = "Pointer";
+      	    break;
+      	 case NULL_TYPE:
+      	    retval = "Uint1";
+      	    break;
+      	 case OBID_TYPE:
+      	    retval = "Pointer";
+      	    break;
+      	 case OBDES_TYPE:
+      	    retval = "Pointer";
+      	    break;
+      	 case REAL_TYPE:
+      	    retval = "FloatHi";
+      	    break;
+      	 case ENUM_TYPE:
+      	    retval = "Uint2";
+      	    break;
+      	 case ANY_TYPE:
+      	    retval = "Pointer";
+      	    break;
+      	 case NUMERICSTRING_TYPE:
+      	    retval = "CharPtr";
+      	    break;
+      	 case PRINTABLESTRING_TYPE:
+      	    retval = "CharPtr";
+      	    break;
+      	 case TELETEXSTRING_TYPE:
+      	    retval = "CharLenPtr";
+      	    break;
+      	 case VIDEOTEXSTRING_TYPE:
+      	    retval = "CharLenPtr";
+      	    break;
+      	 case IA5STRING_TYPE:
+      	    retval = "CharLenPtr";
+      	    break;
+      	 case GRAPHICSTRING_TYPE:
+      	    retval = "CharLenPtr";
+      	    break;
+      	 case VISIBLESTRING_TYPE:
+      	    retval = "CharPtr";
+      	    break;
+      	 case CHOICE_TYPE:
+      	    retval = "ValNodePtr";
+      	    break;
+      	 case GENERALSTRING_TYPE:
+      	    retval = "CharLenPtr";
+      	    break;
+      	 case CHARACTERSTRING_TYPE:
+      	    retval = "CharLenPtr";
+      	    break;
+      	 case GENTIME_TYPE:
+      	    retval = "Pointer";	/* Time types */
+      	    break;
+      	 case UTCTIME_TYPE:
+      	    retval = "CharLenPtr";
+      	    break;
+      	 case STRSTORE_TYPE:
+      	    retval = "StringStorePtr";
+      	    break;
+      	 }
+      	}
+   }
+}
 
    return retval;
 }

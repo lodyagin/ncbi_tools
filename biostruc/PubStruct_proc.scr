@@ -1,7 +1,10 @@
 /*
- * $Id: PubStruct_proc.scr,v 6.15 1999/05/03 14:44:35 kimelman Exp $
+ * $Id: PubStruct_proc.scr,v 6.16 1999/06/15 20:37:48 kimelman Exp $
  *
  * $Log: PubStruct_proc.scr,v $
+ * Revision 6.16  1999/06/15 20:37:48  kimelman
+ * id_get_asn_prop: synced to OS
+ *
  * Revision 6.15  1999/05/03 14:44:35  kimelman
  * spaces
  *
@@ -135,7 +138,7 @@ create proc
 id_get_asnprop ( @sat_key int)
 as
    select  state=100,confidential, suppress=suppressed, override=convert(tinyint,0),
-           length=datalength(blob), owner=convert(smallint,0), "unknown"
+           length=datalength(blob), owner=convert(smallint,0), "unknown","N/A"
    from    Struct
    where   acc = @sat_key
  

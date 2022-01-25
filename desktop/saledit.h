@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/19/97
 *
-* $Revision: 6.22 $
+* $Revision: 6.25 $
 *
 * File Description: 
 *
@@ -77,6 +77,8 @@ typedef struct seqeditview {
   ButtoN           closebt;
   ButtoN           svclosebt;
   ButtoN           gap_choicebn;
+  ButtoN           keep_protid1,
+                   keep_protid2;
 
   MenU             menu_align;
   IteM             editmodeitem,
@@ -183,6 +185,7 @@ typedef struct seqeditviewprocs {
 
 #define REGISTER_NEW_SEQALIGN_VIEW ObjMgrProcLoad(OMPROC_VIEW, "New View SeqAlign","CCSeqAlignViewer",OBJ_SEQALIGN,0,OBJ_SEQALIGN,0,NULL,AlgViewFunc,PROC_PRIORITY_DEFAULT)
 
+
 extern EditAlignDataPtr EditAlignDataRepopulateFromSeqAlign (PaneL pnl, EditAlignDataPtr adp, SeqAlignPtr salp);
 
 extern void     SalsaPanelHasResized (PaneL pnl);
@@ -204,6 +207,8 @@ extern Int2 LIBCALLBACK LaunchAlignEditorFromDesktop (Pointer data);
 extern Int2 LIBCALLBACK LaunchAlignEditorFromDesktop2 (Pointer data);
 extern Int2 LIBCALLBACK LaunchAlignEditorFromDesktop3 (Pointer data);
 extern Int2 LIBCALLBACK LaunchAlignEditorFromDesktop4 (Pointer data);
+
+extern Int2 LIBCALLBACK UpdateSeqAlign (Pointer data);
 
 #endif
 

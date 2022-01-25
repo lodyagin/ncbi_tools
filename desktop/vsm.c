@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11-29-94
 *
-* $Revision: 6.5 $
+* $Revision: 6.7 $
 *
 * File Description: 
 *
@@ -590,7 +590,9 @@ Boolean LIBCALL VSMAddMenu (WindoW w, Int2 menutype)
 	SbstrucPtr sbp;
 	Uint2 subtype;
 
+#ifndef WIN_MAC
 	if (w == NULL) return FALSE;
+#endif
 	switch (menutype)
 	{
 		case VSM_FILTER_MENU:
@@ -2095,6 +2097,8 @@ static Boolean VSMGatherPictProc (GatherContextPtr gcp)
 	SeqIdPtr sip;
 	UserFieldPtr ufp;
 	UserObjectPtr uop;
+	SeqEntryPtr sep;
+	SeqEntryPtr oldsep;
 
 	vsmgp = (VSMGatherProcSTPtr)(gcp->userdata);
 	vsmp = vsmgp->vsmp;
@@ -2106,6 +2110,9 @@ static Boolean VSMGatherPictProc (GatherContextPtr gcp)
 
 	SelectFont(vsmp->font);
 	omtp = ObjMgrTypeFind(vsmp->omp, gcp->thistype, NULL, NULL);
+
+	sep = GetTopSeqEntryForEntityID (gcp->entityID);
+	oldsep = SeqEntrySetScope (sep);
 
 	switch (gcp->thistype)
 	{
@@ -2377,6 +2384,9 @@ static Boolean VSMGatherPictProc (GatherContextPtr gcp)
 			break;
 
 	}
+
+	SeqEntrySetScope (oldsep);
+
 	return TRUE;
 }
 

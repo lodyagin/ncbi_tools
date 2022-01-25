@@ -22,7 +22,7 @@
  *  Please cite the author in any work or product based on this material.
  *
  * ===========================================================================
- * $Id: salpacc.h,v 6.8 1999/04/12 16:38:34 beloslyu Exp $
+ * $Id: salpacc.h,v 6.13 1999/07/30 11:58:22 sicotte Exp $
  Collection of SeqAlign Accession utilities.
  Maintainer: Hugues Sicotte
  Authors of the original routines: Hugues Sicotte, Colombe Chappey, Tom Madden, Jinghui Zhang
@@ -31,6 +31,7 @@
 #define _NCBI_salpacc_
 #include <ncbi.h>
 #include <objalign.h>
+#include <objsset.h>
 
 
 
@@ -139,6 +140,16 @@ NLM_EXTERN Boolean LIBCALL SeqAlignStartStop(Int4Ptr a_start, Int4Ptr a_stop, In
  */
 NLM_EXTERN void LIBCALL SeqAlignListStartStop(Int4Ptr qstart,Int4Ptr qstop,Int4Ptr sstart,Int4Ptr sstop,SeqAlignPtr salp, BioseqPtr query,BioseqPtr subject);
 
+NLM_EXTERN Boolean SeqAlignStartStopById(SeqAlignPtr align, SeqIdPtr id, Int4Ptr start, Int4Ptr stop, Uint1Ptr strand);
+
+/* Count the number of segments in the SeqAlign */
+NLM_EXTERN Uint4 LIBCALL SeqAlignCountSegs(SeqAlignPtr salp);
+
+/* Add SeqAlign in a SeqEntry */
+extern void SeqAlignAddInSeqEntry (SeqEntryPtr sep, SeqAnnotPtr sap);
+NLM_EXTERN SeqAlignPtr SeqAlignExtractByIds(SeqAlignPtr PNTR align, SeqIdPtr sip_1, SeqIdPtr sip_2);
+
+NLM_EXTERN Int4 SeqAlignCount(SeqAlignPtr align);
 
 #endif
 

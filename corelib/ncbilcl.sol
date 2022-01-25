@@ -25,19 +25,26 @@
 *
 * File Name:  ncbilcl.h
 *
-* Author:  Gish, Kans, Ostell, Schuler, Epstein
+* Author:  Gish, Kans, Ostell, Schuler, Epstein, Vakatov
 *
 * Version Creation Date:   3/16/93
 *
-* $Revision: 6.5 $
+* $Revision: 6.7 $
 *
 * File Description:
 *		system dependent header
-*		for Solaris 2.2 on a SPARCstation
+*		for Solaris 2.7 on SPARC
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ncbilcl.sol,v $
+* Revision 6.7  1999/08/24 18:04:02  vakatov
+* Switched the default thread lib from "Solaris native"(-lthread) to
+* "POSIX"(-lpthread)
+*
+* Revision 6.6  1999/07/28 22:05:36  vakatov
+* [non-32-bit only!]  Do not pre-define "Int4" to "long";  let it be "int"
+*
 * Revision 6.5  1999/04/20 18:59:43  vakatov
 * [__cplusplus && NCBI_USE_NEW_HEADERS]  Use new standard C++ system headers
 *
@@ -88,14 +95,13 @@
 
 #ifdef MPROC_AVAIL
 /* For Solaris, _REENTRANT must be defined when compiling all modules or none*/
-#ifndef _REENTRANT
-#define _REENTRANT
-#endif
-#ifndef POSIX_THREADS_AVAIL
-#ifndef SOLARIS_THREADS_AVAIL
-#define SOLARIS_THREADS_AVAIL
-#endif
-#endif
+#  ifndef _REENTRANT
+#    define _REENTRANT
+#  endif
+/* Use POSIX thread library by default */
+#  if !defined(POSIX_THREADS_AVAIL)  &&  !defined(SOLARIS_THREADS_AVAIL)
+#    define POSIX_THREADS_AVAIL
+#  endif
 #endif
 
 /*----------------------------------------------------------------------*/
@@ -143,6 +149,7 @@
 /*----------------------------------------------------------------------*/
 /*      Aliased Logicals, Datatypes                                     */
 /*----------------------------------------------------------------------*/
+#if LONG_BIT==32
 typedef signed   long  Nlm_Int4,  *Nlm_Int4Ptr;
 typedef unsigned long  Nlm_Uint4, *Nlm_Uint4Ptr;
 #define Int4           Nlm_Int4
@@ -152,6 +159,8 @@ typedef unsigned long  Nlm_Uint4, *Nlm_Uint4Ptr;
 #define INT4_MIN       (-2147483647-1)
 #define INT4_MAX       2147483647
 #define UINT4_MAX      4294967295U
+#endif
+
 
 /*----------------------------------------------------------------------*/
 /*      Misc Macros                                                     */
@@ -195,4 +204,4 @@ typedef unsigned long  Nlm_Uint4, *Nlm_Uint4Ptr;
 /*----------------------------------------------------------------------*/
 #define MAXALLOC	0x40000000 /* Largest permissible memory request */
 
-#endif
+#endif /* _NCBILCL_ */

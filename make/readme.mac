@@ -9,15 +9,18 @@ Directions for building the NCBI toolkit on Macintosh computers
 3)  Un-BinHex ncbi.hqx into ncbi.sea, and double click on the ncbi.sea file
     to extract the ncbi folder.  Your own file transfer program may do these
     steps automatically.
-4)  Drag the resulting ncbi folder inside the CodeWarrior Pro 4 folder.  The
+4)  Drag the resulting ncbi folder inside the CodeWarrior Pro 5 folder.  The
     make files expect this configuration, and will not work if the ncbi folder
     is put anywhere else.
 5)  Inside the ncbi:make subfolder are four files with .met extensions.  Run
     copyhdrs.met by double clicking on it and then pressing the Run button in
     the Script Editor window.  This will copy .h files from various folders
     into the ncbi:include folder.  This may take 15 minutes on slow machines.
-6)  Double click on CodeWarrior IDE 3.2, then run makeall.met.  The libraries
+6)  Double click on CodeWarrior IDE 4.0, then run makeall.met.  The libraries
     are built in the ncbi:lib folder.  When this is done, run makenet.met.  You
     may need to restart CodeWarrior before running the make script.
 7)  After the libraries are built, run makedemo.met.  This builds application
     programs such as Entrez, Sequin, and Cn3D.
+8)  In order to run on MacOS versions earlier than 8.5, open the PowerPC
+    projects, click on AppearanceLib, choose Window->Project Inspector, check
+    Import Weak, and click the Save button.  Do the same for NavigationLib.

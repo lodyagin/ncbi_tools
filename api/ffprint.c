@@ -29,13 +29,16 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.3 $
+* $Revision: 6.4 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
  * $Log: ffprint.c,v $
+ * Revision 6.4  1999/08/31 14:36:06  tatiana
+ * ff_print_string_mem() added
+ *
  * Revision 6.3  1999/04/09 21:17:18  bazhin
  * Added functions "FFBSPrint()" and "BSAppend()" to parse ASN.1
  * data to ByteStore.
@@ -393,6 +396,55 @@ NLM_EXTERN void LIBCALL ff_print_string (FILE *fp, CharPtr string, CharPtr line_
 	}
 	fwrite(s, 1, StringLen(s), fp);
 	BuffFree();
+}
+
+static CharPtr ff_print_insert(CharPtr str, CharPtr ins)
+{
+	CharPtr buff;
+	
+	buff = (CharPtr) MemNew(StringLen(str) + StringLen(ins) + 1);
+	StringCpy(buff, ins);
+	StringCat(buff, str);
+	MemFree(str);
+	return buff;
+}
+
+NLM_EXTERN CharPtr LIBCALL ff_print_string_mem (CharPtr string)
+
+{
+	CharPtr s, buff, bu;
+	Int2	i, l, ll;
+	BuffStructPtr bfp;
+
+	bfp = GetBuffStruct();
+
+	if (! string) {
+		ErrPostEx(SEV_WARNING, 1, 1, 
+			"CAUTION: NULL String in ff_print_string\n\n");
+		return NULL;
+	}
+	ll = StringLen(string);
+	for (i = 0, s = string; i < bfp->n_links; i++) {
+		ll += StringLen(bfp->links[i]);
+	}
+	buff = (CharPtr) MemNew(ll+1);
+	bu = buff;
+	for (i = 0, s = string; i < bfp->n_links; i++) {
+		l = string - s + bfp->pos_links[i];
+		if (s[l-1] == '\n') {
+			for (; IS_WHITESP(s[l]); l++) ;
+		}
+		MemCpy(bu, s, l);
+		s += l;
+		bu += l;
+		StringCpy(bu, bfp->links[i]);
+		bu += StringLen(bfp->links[i]);
+		MemFree(bfp->links[i]);
+	}
+	StringCpy(bu, s);
+	BuffFree();
+	MemFree(string);
+	return buff;
 }
 
 NLM_EXTERN Int2 LIBCALL ff_StartPrint (Int2 init_indent, Int2 cont_indent, Int2 line_max, CharPtr line_prefix)

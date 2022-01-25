@@ -1,6 +1,7 @@
 #   makefile for network demo programs and network entrez
 #
-#	$Id: makenet.unx,v 6.66 1999/04/23 19:10:58 beloslyu Exp $
+#	$Id: makenet.unx,v 6.76 1999/08/20 16:18:44 beloslyu Exp $
+#   test, ignore
 #
 #   Sun with unbundled ANSI compiler [ make CC=acc RAN=ranlib ]
 #   Sun with Gnu C [ make CC=gcc RAN=ranlib ]
@@ -126,6 +127,10 @@ ULIB43 = libosutils.a
 BLIB43 = $(ULIB43)
 BLIB43 =
 
+ULIB44 = libidload.a
+BLIB44 = $(ULIB44)
+BLIB44 =
+
 #
 # Pseudo-dummy targets when Vibrant is not used
 #
@@ -150,6 +155,8 @@ TLIB42 = D42$(ULIB42)
 DLIB42 = D42$(BLIB42)
 TLIB43 = D43$(ULIB43)
 DLIB43 = D43$(BLIB43)
+TLIB44 = D44$(ULIB44)
+DLIB44 = D44$(BLIB44)
 
 
 LIB1 = -lncbi
@@ -192,6 +199,7 @@ LIB40 = -lncbitxc2
 LIB41 = -lncbiid1
 LIB42 = -lctutils
 LIB43 = -losutils
+LIB44 = -lidload
 
 ##
 ## encryption of network services
@@ -254,8 +262,8 @@ NCBI_SHLIBS = shlib
 NCBI_SHLIBS =
 MAKESHLIB = ../make/makeshlb.unx
 
-CFLAGS = $(CFLAGS1) -I$(NCBI_INCDIR) $(VIBFLAG)
-LDFLAGS = -I$(NCBI_INCDIR) $(NCBI_OTHERLINKOPTIONS) -L$(NCBI_LINKINGLIBDIR) $(VIBFLAG)
+CFLAGS = $(CFLAGS1) -I$(NCBI_INCDIR) $(VIBFLAG) -DNETENTREZVERSION="\"$(NETENTREZVERSION) \""
+LDFLAGS = $(LDFLAGS1) -I$(NCBI_INCDIR) $(NCBI_OTHERLINKOPTIONS) -L$(NCBI_LINKINGLIBDIR) $(VIBFLAG)
 
 
 ##
@@ -264,7 +272,7 @@ LDFLAGS = -I$(NCBI_INCDIR) $(NCBI_OTHERLINKOPTIONS) -L$(NCBI_LINKINGLIBDIR) $(VI
 
 ## sources for libraries
 
-SRC6  = ni_lib_.c ni_www.c ni_debug.c ncbicli.c ncbiurl.c lbapi.c \
+SRC6  = ni_lib_.c ni_www.c ni_debug.c ncbicli.c ncbiurl.c \
         ni_disp.c ni_msg.c ni_error.c ni_encrs.c
 SRC6_ = ni_lib.c ni_msg.c ni_error.c ni_encrs.c
 
@@ -325,11 +333,13 @@ SRC42 = accpubseq.c ctliberr.c ctlibutils.c password.c
 
 SRC43 = os_mtutils.c already_running.c
 
+SRC44 = idload_lib.c
+
 NET_LIBS_SRC = $(SRC6) $(SRC6_) $(SRC7) $(SRC8) $(SRC9)
 
 # objects for libraries
 
-OBJ6  = ni_lib_.o ncbicli.o ncbiurl.o ni_www.o ni_debug.o lbapi.o \
+OBJ6  = ni_lib_.o ncbicli.o ncbiurl.o ni_www.o ni_debug.o \
         ni_disp.o ni_msg.o ni_error.o ni_encrs.o
 OBJ6_ = ni_lib.o ni_msg.o ni_error.o ni_encrs.o
 
@@ -396,6 +406,8 @@ OBJ41 = id1gen.o id1arch.o accid1.o
 OBJ42 = accpubseq.o ctliberr.o ctlibutils.o password.o
 
 OBJ43 = os_mtutils.o already_running.o
+
+OBJ44 = idload_lib.o
 
 # objects & sources needed for versions of network demo programs
 
@@ -491,7 +503,7 @@ all : copy .WAIT nocopy
 nocopy : sources $(BLIB6) $(BLIB6_) $(NCBI_ENCR) $(NCBI_SOCKS) \
    $(NCBI_ENCR)$(NCBI_SOCKS) $(BLIB7) \
    $(BLIB8) $(BLIB9) $(DLIB31) $(DLIB33) $(NCBI_SHLIBS) $(CLIENTS) $(VIB) \
-	  $(DLIB42) $(DLIB43)
+	  $(DLIB42) $(DLIB43) $(DLIB44)
 
 sources : $(NET_LIBS_SRC) $(CLI_SRC)
 
@@ -501,7 +513,7 @@ utilities : $(EXEUTIL)
 
 vibutilities : $(EXEUTILVIB)
 
-.NO_PARALLEL:	copy nocopy Tentrez sequin Psequin Ssequin elecpcr Nbatch Nentrcmd genget seqget idfetch blastcl2 pblcmd session
+.NO_PARALLEL:	copy nocopy Tentrez sequin Psequin Ssequin elecpcr Nbatch Nbatch2 Nentrcmd genget seqget idfetch blastcl2 pblcmd session
 
 .WAIT:
 	echo Waiting...go
@@ -519,7 +531,7 @@ S : $(BLIB16)
 ES : $(BLIB17)
 
 
-others : $(BLIB11) $(BLIB12) $(BLIB13) $(BLIB19) $(BLIB21) $(BLIB25) $(BLIB26) $(BLIB27) $(BLIB29) $(BLIB35) $(BLIB36) $(BLIB38) $(BLIB40) $(NCBI_SHLIBS).alt $(BLIB41) $(BLIB42) $(BLIB43)
+others : $(BLIB11) $(BLIB12) $(BLIB13) $(BLIB19) $(BLIB21) $(BLIB25) $(BLIB26) $(BLIB27) $(BLIB29) $(BLIB35) $(BLIB36) $(BLIB38) $(BLIB40) $(NCBI_SHLIBS).alt $(BLIB41) $(BLIB42) $(BLIB43) $(BLIB44)
 
 
 ## To clean out the directory without removing make
@@ -623,6 +635,8 @@ copy :
 	-$(SRCCOPY) ../network/sybutils/ctlib/*.h ../include
 	-$(SRCCOPY) ../network/sybutils/oslib/*.c .
 	-$(SRCCOPY) ../network/sybutils/oslib/*.h ../include
+	-$(SRCCOPY) ../network/sybutils/idloadlib/*.c .
+	-$(SRCCOPY) ../network/sybutils/idloadlib/*.h ../include
 	$(SRCCOPY) ../network/nsclilib/*.h ../include
 	$(SRCCOPY) ../network/nsclilib/*.c .
 	$(SRCCOPY) ../network/vibnet/*.c .
@@ -636,6 +650,7 @@ copy :
 	$(SRCCOPY) ../demo/seqget.c .
 	$(SRCCOPY) ../demo/entrcmd.c .
 	$(SRCCOPY) ../demo/batch.c .
+	$(SRCCOPY) ../demo/nbatch.c .
 	$(SRCCOPY) ../demo/elecpcr.c .
 	$(SRCCOPY) ../demo/fetchent.c .
 	$(SRCCOPY) ../demo/genget.c .
@@ -699,8 +714,6 @@ ni_encr.o : ni_encr.c
 ##
 ni_www.o : ni_www.c
 	$(CC) $(CFLAGS) $(IN_HOUSE_CFLAGS) ni_www.c
-lbapi.o : lbapi.c
-	$(CC) $(CFLAGS) $(IN_HOUSE_CFLAGS) lbapi.c
 ni_lib_.o : ni_lib_.c
 	$(CC) $(CFLAGS) $(IN_HOUSE_CFLAGS) ni_lib_.c
 
@@ -830,7 +843,6 @@ ftanet.o : ftanet.c
 	$(CC) $(CFLAGS) ftanet.c
 already_running.o : already_running.c
 	$(CC) $(CFLAGS) already_running.c
-
 ## get all the source files
 ##
 
@@ -1035,7 +1047,17 @@ $(ULIB43) : $(OBJ43)
 	$(LIBCOPY) $(BLIB43) $(NCBI_LIBDIR)
 	$(RAN) $(NCBI_LIBDIR)/$(BLIB43)
 
-#   below applies to both 42 (ctlib) and 43 (oslib)
+D44:
+
+$(TLIB44) : $(ULIB44)
+
+$(ULIB44) : $(OBJ44)
+	- rm -f $(BLIB44)
+	$(AR) cru $(BLIB44) $(OBJ44)
+	$(LIBCOPY) $(BLIB44) $(NCBI_LIBDIR)
+	$(RAN) $(NCBI_LIBDIR)/$(BLIB44)
+
+#   below applies to both 42 (ctlib) and 43 (oslib) and 44 (idloadlib)
 # Since Sybase needs special include, and becuase of the TLIB/DLIB trick
 #  this will not be invoked unless BLIB42 defined on the make line, we
 #  can safely have an NCBI-only rule here
@@ -1055,6 +1077,10 @@ password.o : password.c
 
 os_mtutils.o : os_mtutils.c
 	$(CC) $(CFLAGS) $(IN_HOUSE_CFLAGS) -c os_mtutils.c
+
+idload_lib.o : idload_lib.c
+	$(CC) $(CFLAGS) $(IN_HOUSE_CFLAGS) -c idload_lib.c
+
 
 ## make applications
 ##
@@ -1129,6 +1155,9 @@ Nentrcmd : entrcmd.c
 Nbatch : batch.c
 	$(CC) -o Nbatch $(LDFLAGS) batch.c $(ENTREZLIBS) $(LIB2) $(LIB1) $(OTHERLIBS)
 
+Nbatch2 : nbatch.c
+	$(CC) -o Nbatch2 $(LDFLAGS) nbatch.c $(ENTREZLIBS) $(LIB2) $(LIB1) $(OTHERLIBS)
+
 # demo program (electronic PCR)
 
 elecpcr : elecpcr.c
@@ -1164,7 +1193,7 @@ blastcl3: blastcl3.c $(BNETCLILIB) $(BLIB36)
 	$(CC) -g -o blastcl3 $(LDFLAGS) blastcl3.c $(LIB36) $(LIB23) $(NETCLILIB) $(LIB2) $(LIB1) $(OTHERLIBS)
 
 pblcmd: pblcmd.c $(BNETCLILIB) $(BLIB21)
-	$(CC) -g -o pblcmd $(LDFLAGS) pblcmd.c pblproc.c $(LIB8) $(LIB7) $(LIB20) $(LIB23) $(LIB21) $(NETCLILIB) $(LIB3) $(LIB2) $(LIB1) $(OTHERLIBS)
+	$(CC) -g -o pblcmd $(LDFLAGS) pblcmd.c pblproc.c $(LIB8) $(LIB7) $(LIB23) $(LIB21) $(NETCLILIB) $(LIB3) $(LIB2) $(LIB1) $(OTHERLIBS)
 
 .NO_PARALLEL:	powblast
 
@@ -1292,29 +1321,29 @@ cnsgnv : cnsgnv.c
 
 
 # 'sequin' direct submission tool
-sequin : $(SRCSEQUIN) $(BENTREZLIBS) $(BLIB23) $(BLIB30) $(BLIB20) $(BLIB22) $(BLIB19) $(BLIB40) $(BLIB41) $(BLIB21) \
+sequin : $(SRCSEQUIN) $(BENTREZLIBS) $(BLIB23) $(BLIB30) $(BLIB20) $(BLIB22) $(BLIB19) $(BLIB40) $(BLIB41) $(BLIB36) \
 	$(BLIB11) $(BLIB8) $(BLIB7) $(NETCLIBLIB) $(BLIB5) $(BLIB4) $(BLIB3) \
 	$(BLIB2) $(BLIB1) $(ULIB31)
 	$(CC) -o sequin $(SEQUIN_OPTS) -I. $(LDFLAGS) $(SRCSEQUIN) \
-	$(LIB23) $(LIB30) $(LIB20) $(LIB22) $(LIB23) $(LIB19) $(LIB40) $(LIB41) $(LIB21) $(LIB11) \
+	$(LIB23) $(LIB30) $(LIB20) $(LIB22) $(LIB23) $(LIB19) $(LIB40) $(LIB41) $(LIB36) $(LIB11) \
 	$(LIB31) $(ENTREZLIBS) $(LIB4) $(LIB2) $(LIB1) $(VIBLIBS) \
 	$(OTHERLIBS)
 
 # 'sequin' direct submission tool with interprocess communication capability
-Ssequin : $(SRCSEQUIN) $(BENTREZLIBS) $(BLIB23) $(BLIB30) $(BLIB20) $(BLIB22) $(BLIB19) $(BLIB40) $(BLIB41) $(BLIB21) \
+Ssequin : $(SRCSEQUIN) $(BENTREZLIBS) $(BLIB23) $(BLIB30) $(BLIB20) $(BLIB22) $(BLIB19) $(BLIB40) $(BLIB41) $(BLIB36) \
 	$(BLIB11) $(BLIB8) $(BLIB7) $(NETCLIBLIB) $(BLIB5) $(BLIB4) $(BLIB3) \
 	$(BLIB2) $(BLIB1) $(ULIB31) $(ULIB33) $(THREAD_OBJ)
 	$(CC) -o Ssequin $(SEQUIN_OPTS) -DUSE_SMARTNET -I. $(LDFLAGS) $(SRCSEQUIN) \
-	$(THREAD_OBJ) $(LIB33) $(LIB23) $(LIB30) $(LIB20) $(LIB22) $(LIB23) $(LIB19) $(LIB40) $(LIB41) $(LIB21) $(LIB11) \
+	$(THREAD_OBJ) $(LIB33) $(LIB23) $(LIB30) $(LIB20) $(LIB22) $(LIB23) $(LIB19) $(LIB40) $(LIB41) $(LIB36) $(LIB11) \
 	$(LIB31) $(ENTREZLIBS) $(LIB4) $(LIB2) $(LIB1) $(VIBLIBS) \
 	$(OTHERLIBS) $(THREAD_OTHERLIBS)
 
 # 'Psequin' ("Public Network Sequin") direct submission tool
-Psequin : $(SRCSEQUIN) $(BENTREZLIBS) $(BLIB23) $(BLIB30) $(BLIB20) $(BLIB22) $(BLIB40) $(BLIB41) $(BLIB21) \
+Psequin : $(SRCSEQUIN) $(BENTREZLIBS) $(BLIB23) $(BLIB30) $(BLIB20) $(BLIB22) $(BLIB40) $(BLIB41) $(BLIB36) \
 	$(BLIB11) $(BLIB8) $(BLIB7) $(NETCLIBLIB) $(BLIB5) $(BLIB4) $(BLIB3) \
 	$(BLIB2) $(BLIB1) $(ULIB31)
 	$(CC) -o Psequin -I. $(LDFLAGS) -UINTERNAL_NCBI_SEQUIN $(SRCSEQUIN) \
-	$(LIB23) $(LIB30) $(LIB20) $(LIB22) $(LIB23) $(LIB40) $(LIB41) $(LIB21) $(LIB11) $(ENTREZLIBS) \
+	$(LIB23) $(LIB30) $(LIB20) $(LIB22) $(LIB23) $(LIB40) $(LIB41) $(LIB36) $(LIB11) $(ENTREZLIBS) \
 	$(LIB31) $(LIB4) $(LIB2) $(LIB1) $(VIBLIBS) $(OTHERLIBS)
 
 session : $(SRCSESSION) $(BSRVNETCLILIB)

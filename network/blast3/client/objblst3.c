@@ -32,7 +32,7 @@ objblst3AsnLoad(void)
 
 /**************************************************
 *    Generated object loaders for Module NCBI-Blast
-*    Generated using ASNCODE Revision: 6.0 at Apr 13, 1999  9:19 AM
+*    Generated using ASNCODE Revision: 6.8 at Aug 11, 1999  4:42 PM
 *
 **************************************************/
 
@@ -592,6 +592,9 @@ BlastResponseFree(ValNodePtr anp)
    case BlastResponse_done:
       BlastProgressFree(anp -> data.ptrvalue);
       break;
+   case BlastResponse_phialign:
+      BlastPhialignFree(anp -> data.ptrvalue);
+      break;
    }
    return MemFree(anp);
 }
@@ -741,6 +744,10 @@ BlastResponseAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       }
       anp->data.boolvalue = av.boolvalue;
    }
+   else if (atp == BLAST_RESPONSE_phialign) {
+      choice = BlastResponse_phialign;
+      func = (AsnReadFunc) BlastPhialignAsnRead;
+   }
    anp->choice = choice;
    if (func != NULL)
    {
@@ -871,6 +878,10 @@ BlastResponseAsnWrite(BlastResponsePtr anp, AsnIoPtr aip, AsnTypePtr orig)
       av.boolvalue = anp->data.boolvalue;
       retval = AsnWrite(aip, BLAST_RESPONSE_fini, &av);
       break;
+   case BlastResponse_phialign:
+      writetype = BLAST_RESPONSE_phialign;
+      func = (AsnWriteFunc) BlastPhialignAsnWrite;
+      break;
    }
    if (writetype != NULL) {
       retval = (* func)(pnt, aip, writetype);   /* write it out */
@@ -923,6 +934,7 @@ BlastParametersFree(BlastParametersPtr ptr)
    MemFree(ptr -> matrix);
    MemFree(ptr -> filter_string);
    MemFree(ptr -> entrez_query);
+   MemFree(ptr -> phi_pattern);
    return MemFree(ptr);
 }
 
@@ -1216,6 +1228,13 @@ BlastParametersAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       ptr -> strand_option = av.intvalue;
       atp = AsnReadId(aip,amp, atp);
    }
+   if (atp == BLAST_PARAMETERS_phi_pattern) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> phi_pattern = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
 
    if (AsnReadVal(aip, atp, &av) <= 0) {
       goto erret;
@@ -1431,6 +1450,10 @@ BlastParametersAsnWrite(BlastParametersPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    retval = AsnWrite(aip, BLAST_PARAMETERS_perform_culling,  &av);
    av.intvalue = ptr -> strand_option;
    retval = AsnWrite(aip, BLAST_PARAMETERS_strand_option,  &av);
+   if (ptr -> phi_pattern != NULL) {
+      av.ptrvalue = ptr -> phi_pattern;
+      retval = AsnWrite(aip, BLAST_PARAMETERS_phi_pattern,  &av);
+   }
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
    }
@@ -1677,6 +1700,215 @@ Cutoff_cutoffFree(ValNodePtr anp)
    }
    return MemFree(anp);
 }
+
+
+/**************************************************
+*
+*    BlastMatrixNew()
+*
+**************************************************/
+NLM_EXTERN 
+BlastMatrixPtr LIBCALL
+BlastMatrixNew(void)
+{
+   BlastMatrixPtr ptr = MemNew((size_t) sizeof(BlastMatrix));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    BlastMatrixFree()
+*
+**************************************************/
+NLM_EXTERN 
+BlastMatrixPtr LIBCALL
+BlastMatrixFree(BlastMatrixPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   MemFree(ptr -> name);
+   AsnGenericBaseSeqOfFree(ptr -> comments ,ASNCODE_PTRVAL_SLOT);
+   AsnGenericBaseSeqOfFree(ptr -> scores ,ASNCODE_INTVAL_SLOT);
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    BlastMatrixAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+BlastMatrixPtr LIBCALL
+BlastMatrixAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   BlastMatrixPtr ptr;
+
+   if (! loaded)
+   {
+      if (! objblst3AsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* BlastMatrix ::= (self contained) */
+      atp = AsnReadId(aip, amp, BLAST_MATRIX);
+   } else {
+      atp = AsnLinkType(orig, BLAST_MATRIX);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = BlastMatrixNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == BLAST_MATRIX_is_protein) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> is_protein = av.boolvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == BLAST_MATRIX_name) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> name = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == BLAST_MATRIX_comments) {
+      ptr -> comments = AsnGenericBaseSeqOfAsnRead(aip, amp, atp, ASNCODE_PTRVAL_SLOT, &isError);
+      if (isError && ptr -> comments == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == BLAST_MATRIX_row_length) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> row_length = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == BLAST_MATRIX_column_length) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> column_length = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == BLAST_MATRIX_scores) {
+      ptr -> scores = AsnGenericBaseSeqOfAsnRead(aip, amp, atp, ASNCODE_INTVAL_SLOT, &isError);
+      if (isError && ptr -> scores == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == BLAST_MATRIX_karlinK) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> karlinK = av.realvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = BlastMatrixFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    BlastMatrixAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+BlastMatrixAsnWrite(BlastMatrixPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! objblst3AsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, BLAST_MATRIX);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   av.boolvalue = ptr -> is_protein;
+   retval = AsnWrite(aip, BLAST_MATRIX_is_protein,  &av);
+   if (ptr -> name != NULL) {
+      av.ptrvalue = ptr -> name;
+      retval = AsnWrite(aip, BLAST_MATRIX_name,  &av);
+   }
+   retval = AsnGenericBaseSeqOfAsnWrite(ptr -> comments ,ASNCODE_PTRVAL_SLOT, aip, BLAST_MATRIX_comments, BLAST_MATRIX_comments_E);
+   av.intvalue = ptr -> row_length;
+   retval = AsnWrite(aip, BLAST_MATRIX_row_length,  &av);
+   av.intvalue = ptr -> column_length;
+   retval = AsnWrite(aip, BLAST_MATRIX_column_length,  &av);
+   retval = AsnGenericBaseSeqOfAsnWrite(ptr -> scores ,ASNCODE_INTVAL_SLOT, aip, BLAST_MATRIX_scores, BLAST_MATRIX_scores_E);
+   av.realvalue = ptr -> karlinK;
+   retval = AsnWrite(aip, BLAST_MATRIX_karlinK,  &av);
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
 
 
 /**************************************************
@@ -2227,6 +2459,170 @@ erret:
 
 /**************************************************
 *
+*    BlastErrorNew()
+*
+**************************************************/
+NLM_EXTERN 
+BlastErrorPtr LIBCALL
+BlastErrorNew(void)
+{
+   BlastErrorPtr ptr = MemNew((size_t) sizeof(BlastError));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    BlastErrorFree()
+*
+**************************************************/
+NLM_EXTERN 
+BlastErrorPtr LIBCALL
+BlastErrorFree(BlastErrorPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   MemFree(ptr -> msg);
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    BlastErrorAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+BlastErrorPtr LIBCALL
+BlastErrorAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   BlastErrorPtr ptr;
+
+   if (! loaded)
+   {
+      if (! objblst3AsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* BlastError ::= (self contained) */
+      atp = AsnReadId(aip, amp, BLAST_ERROR);
+   } else {
+      atp = AsnLinkType(orig, BLAST_ERROR);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = BlastErrorNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == BLAST_ERROR_level) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> level = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == BLAST_ERROR_msg) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> msg = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = BlastErrorFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    BlastErrorAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+BlastErrorAsnWrite(BlastErrorPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! objblst3AsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, BLAST_ERROR);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   av.intvalue = ptr -> level;
+   retval = AsnWrite(aip, BLAST_ERROR_level,  &av);
+   if (ptr -> msg != NULL) {
+      av.ptrvalue = ptr -> msg;
+      retval = AsnWrite(aip, BLAST_ERROR_msg,  &av);
+   }
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
 *    BlastDbinfoGetNew()
 *
 **************************************************/
@@ -2554,215 +2950,6 @@ BlastSeqIdAsnWrite(BlastSeqIdPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
          goto erret;
       }
    }
-   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
-      goto erret;
-   }
-   retval = TRUE;
-
-erret:
-   AsnUnlinkType(orig);       /* unlink local tree */
-   return retval;
-}
-
-
-
-/**************************************************
-*
-*    BlastMatrixNew()
-*
-**************************************************/
-NLM_EXTERN 
-BlastMatrixPtr LIBCALL
-BlastMatrixNew(void)
-{
-   BlastMatrixPtr ptr = MemNew((size_t) sizeof(BlastMatrix));
-
-   return ptr;
-
-}
-
-
-/**************************************************
-*
-*    BlastMatrixFree()
-*
-**************************************************/
-NLM_EXTERN 
-BlastMatrixPtr LIBCALL
-BlastMatrixFree(BlastMatrixPtr ptr)
-{
-
-   if(ptr == NULL) {
-      return NULL;
-   }
-   MemFree(ptr -> name);
-   AsnGenericBaseSeqOfFree(ptr -> comments ,ASNCODE_PTRVAL_SLOT);
-   AsnGenericBaseSeqOfFree(ptr -> scores ,ASNCODE_INTVAL_SLOT);
-   return MemFree(ptr);
-}
-
-
-/**************************************************
-*
-*    BlastMatrixAsnRead()
-*
-**************************************************/
-NLM_EXTERN 
-BlastMatrixPtr LIBCALL
-BlastMatrixAsnRead(AsnIoPtr aip, AsnTypePtr orig)
-{
-   DataVal av;
-   AsnTypePtr atp;
-   Boolean isError = FALSE;
-   AsnReadFunc func;
-   BlastMatrixPtr ptr;
-
-   if (! loaded)
-   {
-      if (! objblst3AsnLoad()) {
-         return NULL;
-      }
-   }
-
-   if (aip == NULL) {
-      return NULL;
-   }
-
-   if (orig == NULL) {         /* BlastMatrix ::= (self contained) */
-      atp = AsnReadId(aip, amp, BLAST_MATRIX);
-   } else {
-      atp = AsnLinkType(orig, BLAST_MATRIX);
-   }
-   /* link in local tree */
-   if (atp == NULL) {
-      return NULL;
-   }
-
-   ptr = BlastMatrixNew();
-   if (ptr == NULL) {
-      goto erret;
-   }
-   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
-      goto erret;
-   }
-
-   atp = AsnReadId(aip,amp, atp);
-   func = NULL;
-
-   if (atp == BLAST_MATRIX_is_protein) {
-      if ( AsnReadVal(aip, atp, &av) <= 0) {
-         goto erret;
-      }
-      ptr -> is_protein = av.boolvalue;
-      atp = AsnReadId(aip,amp, atp);
-   }
-   if (atp == BLAST_MATRIX_name) {
-      if ( AsnReadVal(aip, atp, &av) <= 0) {
-         goto erret;
-      }
-      ptr -> name = av.ptrvalue;
-      atp = AsnReadId(aip,amp, atp);
-   }
-   if (atp == BLAST_MATRIX_comments) {
-      ptr -> comments = AsnGenericBaseSeqOfAsnRead(aip, amp, atp, ASNCODE_PTRVAL_SLOT, &isError);
-      if (isError && ptr -> comments == NULL) {
-         goto erret;
-      }
-      atp = AsnReadId(aip,amp, atp);
-   }
-   if (atp == BLAST_MATRIX_row_length) {
-      if ( AsnReadVal(aip, atp, &av) <= 0) {
-         goto erret;
-      }
-      ptr -> row_length = av.intvalue;
-      atp = AsnReadId(aip,amp, atp);
-   }
-   if (atp == BLAST_MATRIX_column_length) {
-      if ( AsnReadVal(aip, atp, &av) <= 0) {
-         goto erret;
-      }
-      ptr -> column_length = av.intvalue;
-      atp = AsnReadId(aip,amp, atp);
-   }
-   if (atp == BLAST_MATRIX_scores) {
-      ptr -> scores = AsnGenericBaseSeqOfAsnRead(aip, amp, atp, ASNCODE_INTVAL_SLOT, &isError);
-      if (isError && ptr -> scores == NULL) {
-         goto erret;
-      }
-      atp = AsnReadId(aip,amp, atp);
-   }
-   if (atp == BLAST_MATRIX_karlinK) {
-      if ( AsnReadVal(aip, atp, &av) <= 0) {
-         goto erret;
-      }
-      ptr -> karlinK = av.realvalue;
-      atp = AsnReadId(aip,amp, atp);
-   }
-
-   if (AsnReadVal(aip, atp, &av) <= 0) {
-      goto erret;
-   }
-   /* end struct */
-
-ret:
-   AsnUnlinkType(orig);       /* unlink local tree */
-   return ptr;
-
-erret:
-   aip -> io_failure = TRUE;
-   ptr = BlastMatrixFree(ptr);
-   goto ret;
-}
-
-
-
-/**************************************************
-*
-*    BlastMatrixAsnWrite()
-*
-**************************************************/
-NLM_EXTERN Boolean LIBCALL 
-BlastMatrixAsnWrite(BlastMatrixPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
-{
-   DataVal av;
-   AsnTypePtr atp;
-   Boolean retval = FALSE;
-
-   if (! loaded)
-   {
-      if (! objblst3AsnLoad()) {
-         return FALSE;
-      }
-   }
-
-   if (aip == NULL) {
-      return FALSE;
-   }
-
-   atp = AsnLinkType(orig, BLAST_MATRIX);   /* link local tree */
-   if (atp == NULL) {
-      return FALSE;
-   }
-
-   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
-   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
-      goto erret;
-   }
-
-   av.boolvalue = ptr -> is_protein;
-   retval = AsnWrite(aip, BLAST_MATRIX_is_protein,  &av);
-   if (ptr -> name != NULL) {
-      av.ptrvalue = ptr -> name;
-      retval = AsnWrite(aip, BLAST_MATRIX_name,  &av);
-   }
-   retval = AsnGenericBaseSeqOfAsnWrite(ptr -> comments ,ASNCODE_PTRVAL_SLOT, aip, BLAST_MATRIX_comments, BLAST_MATRIX_comments_E);
-   av.intvalue = ptr -> row_length;
-   retval = AsnWrite(aip, BLAST_MATRIX_row_length,  &av);
-   av.intvalue = ptr -> column_length;
-   retval = AsnWrite(aip, BLAST_MATRIX_column_length,  &av);
-   retval = AsnGenericBaseSeqOfAsnWrite(ptr -> scores ,ASNCODE_INTVAL_SLOT, aip, BLAST_MATRIX_scores, BLAST_MATRIX_scores_E);
-   av.realvalue = ptr -> karlinK;
-   retval = AsnWrite(aip, BLAST_MATRIX_karlinK,  &av);
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
    }
@@ -3416,14 +3603,14 @@ erret:
 
 /**************************************************
 *
-*    BlastErrorNew()
+*    BlastPhialignNew()
 *
 **************************************************/
 NLM_EXTERN 
-BlastErrorPtr LIBCALL
-BlastErrorNew(void)
+BlastPhialignPtr LIBCALL
+BlastPhialignNew(void)
 {
-   BlastErrorPtr ptr = MemNew((size_t) sizeof(BlastError));
+   BlastPhialignPtr ptr = MemNew((size_t) sizeof(BlastPhialign));
 
    return ptr;
 
@@ -3432,36 +3619,36 @@ BlastErrorNew(void)
 
 /**************************************************
 *
-*    BlastErrorFree()
+*    BlastPhialignFree()
 *
 **************************************************/
 NLM_EXTERN 
-BlastErrorPtr LIBCALL
-BlastErrorFree(BlastErrorPtr ptr)
+BlastPhialignPtr LIBCALL
+BlastPhialignFree(BlastPhialignPtr ptr)
 {
 
    if(ptr == NULL) {
       return NULL;
    }
-   MemFree(ptr -> msg);
+   AsnGenericChoiceSeqOfFree(ptr -> seqloc, (AsnOptFreeFunc) SeqLocFree);
    return MemFree(ptr);
 }
 
 
 /**************************************************
 *
-*    BlastErrorAsnRead()
+*    BlastPhialignAsnRead()
 *
 **************************************************/
 NLM_EXTERN 
-BlastErrorPtr LIBCALL
-BlastErrorAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+BlastPhialignPtr LIBCALL
+BlastPhialignAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;
    AsnTypePtr atp;
    Boolean isError = FALSE;
    AsnReadFunc func;
-   BlastErrorPtr ptr;
+   BlastPhialignPtr ptr;
 
    if (! loaded)
    {
@@ -3474,17 +3661,17 @@ BlastErrorAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       return NULL;
    }
 
-   if (orig == NULL) {         /* BlastError ::= (self contained) */
-      atp = AsnReadId(aip, amp, BLAST_ERROR);
+   if (orig == NULL) {         /* BlastPhialign ::= (self contained) */
+      atp = AsnReadId(aip, amp, BLAST_PHIALIGN);
    } else {
-      atp = AsnLinkType(orig, BLAST_ERROR);
+      atp = AsnLinkType(orig, BLAST_PHIALIGN);
    }
    /* link in local tree */
    if (atp == NULL) {
       return NULL;
    }
 
-   ptr = BlastErrorNew();
+   ptr = BlastPhialignNew();
    if (ptr == NULL) {
       goto erret;
    }
@@ -3495,18 +3682,18 @@ BlastErrorAsnRead(AsnIoPtr aip, AsnTypePtr orig)
    atp = AsnReadId(aip,amp, atp);
    func = NULL;
 
-   if (atp == BLAST_ERROR_level) {
+   if (atp == BLAST_PHIALIGN_numaligns) {
       if ( AsnReadVal(aip, atp, &av) <= 0) {
          goto erret;
       }
-      ptr -> level = av.intvalue;
+      ptr -> numaligns = av.intvalue;
       atp = AsnReadId(aip,amp, atp);
    }
-   if (atp == BLAST_ERROR_msg) {
-      if ( AsnReadVal(aip, atp, &av) <= 0) {
+   if (atp == BLAST_PHIALIGN_seqloc) {
+      ptr -> seqloc = AsnGenericChoiceSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) SeqLocAsnRead, (AsnOptFreeFunc) SeqLocFree);
+      if (isError && ptr -> seqloc == NULL) {
          goto erret;
       }
-      ptr -> msg = av.ptrvalue;
       atp = AsnReadId(aip,amp, atp);
    }
 
@@ -3521,7 +3708,7 @@ ret:
 
 erret:
    aip -> io_failure = TRUE;
-   ptr = BlastErrorFree(ptr);
+   ptr = BlastPhialignFree(ptr);
    goto ret;
 }
 
@@ -3529,11 +3716,11 @@ erret:
 
 /**************************************************
 *
-*    BlastErrorAsnWrite()
+*    BlastPhialignAsnWrite()
 *
 **************************************************/
 NLM_EXTERN Boolean LIBCALL 
-BlastErrorAsnWrite(BlastErrorPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+BlastPhialignAsnWrite(BlastPhialignPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;
    AsnTypePtr atp;
@@ -3550,7 +3737,7 @@ BlastErrorAsnWrite(BlastErrorPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
       return FALSE;
    }
 
-   atp = AsnLinkType(orig, BLAST_ERROR);   /* link local tree */
+   atp = AsnLinkType(orig, BLAST_PHIALIGN);   /* link local tree */
    if (atp == NULL) {
       return FALSE;
    }
@@ -3560,12 +3747,9 @@ BlastErrorAsnWrite(BlastErrorPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
       goto erret;
    }
 
-   av.intvalue = ptr -> level;
-   retval = AsnWrite(aip, BLAST_ERROR_level,  &av);
-   if (ptr -> msg != NULL) {
-      av.ptrvalue = ptr -> msg;
-      retval = AsnWrite(aip, BLAST_ERROR_msg,  &av);
-   }
+   av.intvalue = ptr -> numaligns;
+   retval = AsnWrite(aip, BLAST_PHIALIGN_numaligns,  &av);
+   AsnGenericChoiceSeqOfAsnWrite(ptr -> seqloc, (AsnWriteFunc) SeqLocAsnWrite, aip, BLAST_PHIALIGN_seqloc, BLAST_PHIALIGN_seqloc_E);
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
    }

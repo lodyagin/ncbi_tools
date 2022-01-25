@@ -1,8 +1,0 @@
-NAME           Nentrez
-DESCRIPTION    'Network Entrez GenInfo Retrieval Program'
-EXETYPE        WINDOWS
-STUB           'WINSTUB.EXE'
-CODE           MOVEABLE DISCARDABLE
-DATA           MOVEABLE MULTIPLE
-HEAPSIZE       4096
-STACKSIZE      20480

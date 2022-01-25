@@ -1,4 +1,4 @@
-/*   $Id: PubStructAsn.c,v 6.19 1999/04/28 18:23:42 kimelman Exp $
+/*   $Id: PubStructAsn.c,v 6.27 1999/08/02 21:53:12 kimelman Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -30,6 +30,30 @@
  * Modifications:  
  * --------------------------------------------------------------------------
  * $Log: PubStructAsn.c,v $
+ * Revision 6.27  1999/08/02 21:53:12  kimelman
+ * on fail postprocessing
+ *
+ * Revision 6.26  1999/08/02 19:50:50  kimelman
+ * keep connection alive foor mmdbsrv & vastsrv sessions
+ *
+ * Revision 6.25  1999/06/29 19:03:41  kimelman
+ * cleanup - prending results cancellation
+ *
+ * Revision 6.24  1999/06/15 01:32:16  kimelman
+ * bugfix: Int4 casting : 2nd pass :)
+ *
+ * Revision 6.23  1999/06/14 18:16:39  kimelman
+ * Int4 to CS_INT castings
+ *
+ * Revision 6.22  1999/06/11 21:56:36  kimelman
+ * get rid of one more stupid message
+ *
+ * Revision 6.21  1999/06/11 17:56:31  kimelman
+ * fixed conneciton close. no cancel if no idle command
+ *
+ * Revision 6.20  1999/05/25 16:20:40  kimelman
+ * brakets misplacing fixed
+ *
  * Revision 6.19  1999/04/28 18:23:42  kimelman
  * bugfix: reinit dbserver in case of connection failure & retry
  *
@@ -132,19 +156,20 @@ struct ps_chunk {
   char               *data;
 };
 
-typedef struct {
+typedef struct pubstruct_t {
   CTLibUtils       clu;
   CS_IODESC        iodesc;
   struct ps_chunk *top;
   struct ps_chunk *bottom;
   ps_action_t      action;
+  int              close_disabled;
   char            *srv;
   int              acc;
   int              eos;
+  int              pending;
   int              cache_size;
   int              open_server;
 } DB_stream_t ;
-
 
 /****************************************************************************/
 
@@ -188,7 +213,7 @@ pubstruct_db_close(DB_stream_t *db)
   
   if (!db)
     return; /*???? kind of assert */
-  if (db->clu.ctcmd && db->action == PS_READ)
+  if (db->clu.ctcmd && db->action == PS_READ && db->pending)
     {
       do
         {
@@ -198,6 +223,8 @@ pubstruct_db_close(DB_stream_t *db)
         }
       while ( retcode == CS_SUCCEED );
     }
+  if(db->close_disabled)
+    return;
  errexit:
   db->clu.context = NULL; /* avoid cleaning context */
   CTLibDrop(&db->clu);
@@ -238,6 +265,7 @@ pubstruct_db_open(char *server,ps_action_t action)
   db->top = db->bottom = NULL;
   if (server == NULL)
     server = DEF_SRV;
+  db->pending=0;
   db->srv = MemNew(strlen(server)+1);
   {
     char *os = strstr(server,"_OS");
@@ -482,6 +510,7 @@ pubstruct_openblob (DB_stream_t *db, int mmdb_id)
   CTRUN ( ct_send(cmd) );
   CTRUN ( ct_results(cmd,&restype));
   CTlib_TYPERES(restype);
+  db->pending=1;
 
   /* skip 'exec' status line */
   if (db->action == PS_READ)
@@ -689,10 +718,10 @@ pubstruct_closeasn(Pointer ptr,int commit)
               goto errexit;
           }
         break;
-      default:
-        ErrPostEx(SEV_FATAL, 0, 0,"Internal error at %s:%d: action = %d",
-                  __FILE__,__LINE__,db->action);
       }
+    default:
+      ErrPostEx(SEV_FATAL, 0, 0,"Internal error at %s:%d: action = %d",
+                __FILE__,__LINE__,db->action);
     }
   pubstruct_db_close(db);
   return 1;
@@ -733,7 +762,7 @@ pubstruct_openasnio(DB_stream_t *db)
  ****************************************************************************/
 
 static AsnIoPtr
-pubstruct_openasn (DB_stream_t *db, CS_INT *accp,int mmdb_id)
+pubstruct_openasn (DB_stream_t *db, Int4 *accp,int mmdb_id)
 {
   db->acc = 0;
   if (accp)
@@ -780,12 +809,14 @@ pubstruct_newasn (DB_stream_t *db, int state, Int4 *accp)
 
   CTLibSimpleSQL_Ex(cmd,"begin transaction");
   
-  if (!accp)
-    accp = &acc;
   sprintf(buffer,"exec new_struct %d",state);
   
-  if (!CTlibSingleValueSelect(cmd,buffer,accp,sizeof(Int4)))
+  if (!CTlibSingleValueSelect(cmd,buffer,&acc,sizeof(acc)))
     goto FATAL;
+  if (!accp)
+    accp = (Int4*)&acc;
+  else
+    *accp = (Int4)acc;
   /* unlock parallel processing */
   CTLibSimpleSQL_Ex(cmd,"commit transaction");
   
@@ -804,8 +835,11 @@ FATAL:
 AsnIoPtr LIBCALL
 PubStruct_newasn (char *server,int state, Int4 *accp)
 {
-  DB_stream_t     *db = pubstruct_db_open(server,PS_NEW);
-  return (db?pubstruct_newasn (db,state,accp):NULL);
+  DB_stream_t     *db;
+  db = pubstruct_db_open(server,PS_NEW);
+  if(!db)
+    return NULL;
+  return pubstruct_newasn (db,state,accp);
 }
 
 /**
@@ -813,12 +847,22 @@ PubStruct_newasn (char *server,int state, Int4 *accp)
  */
 
 AsnIoPtr LIBCALL
+PubStruct_readasn1   (ps_handle_t db,Int4 acc)
+{
+  db->action=PS_READ; db->pending=0;
+#ifdef DEBUG_MODE
+  ErrPostEx(SEV_INFO,  ERR_SYBASE, 0,"view(acc=%d)",acc);
+#endif
+  return pubstruct_openasn (db, &acc,0);
+}
+
+AsnIoPtr LIBCALL
 PubStruct_readasn    (char *server,Int4 acc)
 {
   DB_stream_t     *db = pubstruct_db_open(server,PS_READ);
-  if (db)
-    return pubstruct_openasn (db, &acc,0);
-  return NULL;
+  if (!db)
+    return NULL;
+  return pubstruct_openasn (db, &acc,0);
 }
 
 /**
@@ -826,12 +870,22 @@ PubStruct_readasn    (char *server,Int4 acc)
  */
 
 AsnIoPtr LIBCALL
+PubStruct_viewasn1   (ps_handle_t db,Int4 mmdbid)
+{
+  db->action=PS_READ; db->pending=0;
+#ifdef DEBUG_MODE
+  ErrPostEx(SEV_INFO,  ERR_SYBASE, 0,"view(mmdb=%d)",mmdbid);
+#endif
+  return pubstruct_openasn (db, NULL,mmdbid);
+}
+
+AsnIoPtr LIBCALL
 PubStruct_viewasn    (char *server,Int4 mmdbid)
 {
   DB_stream_t     *db = pubstruct_db_open(server,PS_READ);
-  if (db)
-    return pubstruct_openasn (db, NULL,mmdbid);
-  return NULL;
+  if (!db)
+    return NULL;
+  return pubstruct_openasn (db, NULL,mmdbid);
 }
 
 /**
@@ -1048,9 +1102,8 @@ PubStruct_download(char *server, Int4 acc, Int4 mmdb, FILE *outfile)
  * state < 0 : request for Struct.state <= abs('state')
  */
 NLM_EXTERN Int4     LIBCALL
-PubStruct_lookup(char *server,Int4 mmdb,int state)
+PubStruct_lookup1(ps_handle_t db,Int4 mmdb,int state)
 {
-  DB_stream_t     *db;
   CS_COMMAND PNTR cmd;
   CS_INT          count,restype;
   CS_RETCODE      retcode;
@@ -1058,11 +1111,10 @@ PubStruct_lookup(char *server,Int4 mmdb,int state)
   char buf[1024];
   CS_INT acc;
   
-  db = pubstruct_db_open(server,PS_READ);
-  if(!db)
-    return 0;
+  db->action=PS_READ; db->pending=0;
   cmd = db->clu.ctcmd;
   sprintf(buf,"exec id_find_gi %d,%d",(int)mmdb,(int)state);
+  db->pending=1;
   
   ErrPostEx(SEV_INFO, 0, 0,buf);
 #ifdef DEBUG_MODE
@@ -1088,21 +1140,34 @@ PubStruct_lookup(char *server,Int4 mmdb,int state)
   acc = 0;
   if (count==1)
     {    
-      retcode = ct_get_data(cmd,1,buf,(CS_INT)sizeof(buf),NULL);
-      retcode = ct_get_data(cmd,2,&acc,(CS_INT)sizeof(acc),NULL);
-      if(!CTRUN_TYPECODE (retcode,0))
-        goto errexit;
+      CTRUN1(ct_get_data(cmd,1,buf,(CS_INT)sizeof(buf),NULL),3);
+      CTRUN1(ct_get_data(cmd,2,&acc,(CS_INT)sizeof(acc),NULL),3);
     }
-  pubstruct_db_close(db);
   return acc;  /* SUCCESSFULL exit */
 
 errexit:
   /* FAILURE exit */
   ErrPostEx(SEV_FATAL, 0, 0,"PubStruct lookup unsuccessfull");
   CTLibSimpleSQL_Ex(cmd,"roolback transaction");
-  pubstruct_db_close(db);
   ErrShow();
-  return NULL;
+  if(db->close_disabled)
+    {
+      pubstruct_db_close(db);
+    }
+  return 0;
+}
+
+NLM_EXTERN Int4     LIBCALL
+PubStruct_lookup(char *server,Int4 mmdb,int state)
+{
+  DB_stream_t     *db;
+  Int4             acc=0;
+  db = pubstruct_db_open(server,PS_READ);
+  if(!db)
+    return 0;
+  acc = PubStruct_lookup1(db,mmdb,state);
+  pubstruct_db_close(db);
+  return acc;
 }
 
 /**
@@ -1110,21 +1175,59 @@ errexit:
  */
 
 Int4     LIBCALL
+PubStruct_pdb2mmdb1(ps_handle_t db,CharPtr pdb)
+{
+  char   buf[1024];
+  CS_INT mmdb_id = 0  ;
+
+  db->action=PS_READ; db->pending=0;
+  sprintf(buf,"exec pdb2mmdb '%s'",pdb);
+#ifdef DEBUG_MODE
+  ErrPostEx(SEV_INFO,  ERR_SYBASE, 0,"execute(%s)",buf);
+#endif
+  if (!CTlibSingleValueSelect(db->clu.ctcmd,buf,&mmdb_id,sizeof(mmdb_id)))
+    {
+      mmdb_id = 0;
+      if(db->close_disabled)
+        {
+          db->pending=1;
+          pubstruct_db_close(db);
+          db->pending=0;
+        }
+    }
+  return mmdb_id;
+}
+
+Int4     LIBCALL
 PubStruct_pdb2mmdb(char *server,CharPtr pdb)
 {
-  char buf[1024];
   DB_stream_t     *db;
-  CS_INT          mmdb_id = 0  ;
+  CS_INT           mmdb_id;
   
   db = pubstruct_db_open(server,PS_READ);
-  if(!db)
-    return 0;
-  sprintf(buf,"exec pdb2mmdb '%s'",pdb);
-  if (!CTlibSingleValueSelect(db->clu.ctcmd,buf,&mmdb_id,sizeof(mmdb_id)))
-    mmdb_id = 0;
-  
+  if(!db) return 0;
+  mmdb_id = PubStruct_pdb2mmdb1(db,pdb);
   pubstruct_db_close(db);
   return mmdb_id;
 }
 
 /**********************************************************************/
+ps_handle_t
+PubStruct_connect   (char *server)
+{
+  ps_handle_t db ;
+  db = pubstruct_db_open(server,PS_READ);
+  if(db)
+    db->close_disabled = 1 ;
+  return db;
+}
+
+NLM_EXTERN void
+PubStruct_disconnect(ps_handle_t db)
+{
+  if(db)
+    db->close_disabled=0;
+  pubstruct_db_close(db);
+}
+
+

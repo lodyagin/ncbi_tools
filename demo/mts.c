@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 98-01-01
 *
-* $Revision: 6.10 $
+* $Revision: 6.11 $
 *
 * File Description: profile search
 *
@@ -38,6 +38,9 @@
 * Date       Name        Description of modification
 * --------------------------------------------------------------------------
 * $Log: mts.c,v $
+* Revision 6.11  1999/07/13 13:07:33  sicotte
+* prefix functions SeqAlignSort* with URK to resolve toolkit conflicts
+*
 * Revision 6.10  1998/12/18 16:24:55  kuzio
 * big GIs
 *
@@ -331,7 +334,7 @@ Int2 Main (void)
       if (sap != NULL)
         fprintf (fout, "%s\n", title);
       MemFree (title);
-      SeqAlignSortByStart (&sap);
+      URK_SeqAlignSortByStart (&sap);
 
       while (sap != NULL)
       {

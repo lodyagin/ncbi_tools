@@ -1,4 +1,5 @@
 #include <jzcoll.h>
+#include <txalign.h>
 
 
 
@@ -1161,8 +1162,10 @@ static Boolean coll_align_data(SeqAlignPtr align, Uint1 index, AlignDataPtr adp,
 	SeqIdPtr best_id;
 	SeqEntryPtr sep;
 
-  
-
+#ifdef NONO
+        if(align->segtype == 5) /* Discontinuous aligment not collected */
+            return TRUE;
+#endif
 	label_size = MIN(caop->label_size, 100);
 	feat = caop->show_feature;
 	if(align->segtype == 3)	/*for std-seg, no feature or mismatch*/
@@ -1199,6 +1202,7 @@ static Boolean coll_align_data(SeqAlignPtr align, Uint1 index, AlignDataPtr adp,
 		anp->chain = adp->chain;
 		anp->seq_has_align = FALSE;
 		anp->index = index;
+		anp->keep_label = FALSE;
 		MemCopy(&(anp->extremes), &(adp->extremes), sizeof(GatherRange));
 
 		if(adp->seqends.strand == Seq_strand_minus)
@@ -1311,8 +1315,17 @@ static Boolean coll_align_data(SeqAlignPtr align, Uint1 index, AlignDataPtr adp,
 			LoadIndexLabelBlock(anp);
 		else if(label_size > 0)
 		{
-			if(MuskSeqIdWrite (anp->sip, label, label_size, caop->slabel_format, TRUE, TRUE))
+			if(MuskSeqIdWrite (anp->sip, label, label_size, caop->slabel_format, TRUE, TRUE)) {
+			    SeqIdPtr	gilist = GetUseThisGi(align);
+			    if (gilist) {
+				Char	buf[1024];
+				sprintf(buf, "%d", gilist->data.intvalue);
+				anp->label = StringSave(buf);
+				anp->keep_label = TRUE;
+			    } else {
 				anp->label = StringSave(label);
+			    }
+			}
 		}
 
 		link_data_for_collect (anp_list, prev, (Pointer)anp, (Uint1)itemType);
@@ -1323,45 +1336,54 @@ static Boolean coll_align_data(SeqAlignPtr align, Uint1 index, AlignDataPtr adp,
 	
 static Boolean does_annot_match_target (SeqLocPtr target, SeqAnnotPtr annot)
 {
-	SeqAlignPtr sap;
-	SeqIdPtr sip;
-	DenseDiagPtr ddp;
-	DenseSegPtr dsp;
-	StdSegPtr ssp;
-	SeqIdPtr target_id;
-	SeqLocPtr slp;
+    SeqAlignPtr sap, sap_tmp;
+    SeqIdPtr sip;
+    DenseDiagPtr ddp;
+    DenseSegPtr dsp;
+    StdSegPtr ssp;
+    SeqIdPtr target_id;
+    SeqLocPtr slp;
+    Boolean result;
 
-	if(target == NULL || annot == NULL || annot->type != 2)
-		return FALSE;
-	target_id = SeqLocId(target);
-	sap = annot->data;
-	if(sap == NULL)
-		return FALSE;
-	switch(sap->segtype)
-	{
-		case 1:
-			ddp = sap->segs;
-			for(sip = ddp->id; sip != NULL; sip = sip->next)
-				if(SeqIdForSameBioseq(sip, target_id))
-					return TRUE;
-			break;
-		case 2:
-			dsp = sap->segs;
-			for(sip = dsp->ids; sip != NULL; sip = sip->next)
-				if(SeqIdForSameBioseq(sip, target_id))
-					return TRUE;
-			break;
-		case 3:
-			ssp = sap->segs;
-			for(slp = ssp->loc; slp != NULL; slp = slp->next)
-				if(SeqIdForSameBioseq(SeqLocId(slp), target_id))
-					return TRUE;
-			break;
-		default:
-			break;
-	}
+    if(target == NULL || annot == NULL || annot->type != 2)
+        return FALSE;
+    target_id = SeqLocId(target);
+    sap = annot->data;
 
-	return FALSE;
+    if(sap == NULL)
+        return FALSE;
+
+    switch(sap->segtype) {
+    case 1:
+        ddp = sap->segs;
+        for(sip = ddp->id; sip != NULL; sip = sip->next)
+            if(SeqIdForSameBioseq(sip, target_id))
+                return TRUE;
+        break;
+    case 2:
+        dsp = sap->segs;
+        for(sip = dsp->ids; sip != NULL; sip = sip->next)
+            if(SeqIdForSameBioseq(sip, target_id))
+                return TRUE;
+        break;
+    case 3:
+        ssp = sap->segs;
+        for(slp = ssp->loc; slp != NULL; slp = slp->next)
+            if(SeqIdForSameBioseq(SeqLocId(slp), target_id))
+                return TRUE;
+        break;
+    case 5:
+
+        annot->data = (SeqAlignPtr) sap->segs;
+        result =  does_annot_match_target (target, annot);
+        annot->data = sap;
+        return result;
+
+    default:
+        break;
+    }
+    
+    return FALSE;
 }
 			
 static Boolean collalignfunc(GatherContextPtr gcp)

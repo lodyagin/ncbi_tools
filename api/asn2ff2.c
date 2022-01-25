@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.13 $
+* $Revision: 6.14 $
 *
 * File Description: 
 *
@@ -425,8 +425,8 @@ static CharPtr GetStrForUserObject(UserObjectPtr uop)
     ObjectIdPtr		oip;
 	UserFieldPtr	ufp, tmp, u;
 	CharPtr			ptr=NULL;
-	Int2			i=0;
-	static Char		p[13];
+	Int2			i=0, acclen;
+	CharPtr			p;
 	
 	if ((oip = uop->type) == NULL) return NULL;
 	if (StringCmp(oip->str, "RefGeneTracking") != 0) return NULL;
@@ -438,8 +438,9 @@ static CharPtr GetStrForUserObject(UserObjectPtr uop)
 	}
 	if (ufp && ufp->choice == 11) {
 		for (tmp=ufp->data.ptrvalue; tmp; tmp=tmp->next, i++) ;
-		ptr = MemNew(StringLen("REFSEQ: This reference sequence was derived from ")
-																 + 10*i + 1);
+			ptr = (CharPtr) MemNew(
+			StringLen("REFSEQ: This reference sequence was derived from ")
+																 + 18*i + 1);
 		sprintf(ptr, "REFSEQ: This reference sequence was derived from ");
 		for (tmp=ufp->data.ptrvalue; tmp; tmp=tmp->next) {
 			for (u = tmp->data.ptrvalue; u; u=u->next) {
@@ -448,12 +449,19 @@ static CharPtr GetStrForUserObject(UserObjectPtr uop)
 					break;
 				}
 			}
-			if (u && tmp->next) {
-				sprintf(p, "%s, ", u->data.ptrvalue);
-			} else {
-				sprintf(p, "%s.~~", u->data.ptrvalue);
+			if (u) {
+				if ((acclen = StringLen(u->data.ptrvalue)) > 15) {
+					continue;
+				}
+				p = (CharPtr) MemNew(acclen + 4);
+				if (tmp->next) {
+					sprintf(p, "%s, ", (CharPtr) u->data.ptrvalue);
+				} else {
+					sprintf(p, "%s.~~", (CharPtr) u->data.ptrvalue);
+				}
 			}
 			StringCat(ptr, p);
+			MemFree(p);
 		}
 	}
 	return ptr;
@@ -579,7 +587,7 @@ static void GetCommentByChoice(Asn2ffJobPtr ajp, GBEntryPtr gbp, Uint1 choice)
 					if (mfp->tech == MI_TECH_htgs_0) {
 						if (num_s > 0) {
 							sprintf(buffer, 
-							"* NOTE: his record contains %ld individual~* sequencing reads that have not been assembled into~* contigs. Runs of N are used to separate the reads~* and the order in which they appear is completely~* arbitrary. Low-pass sequence sampling is useful for~* identifying clones that may be gene-rich and allows~* overlap relationships among clones to be deduced.~* However, it should not be assumed that this clone~* will be sequenced to completion. In the event that~* the record is updated, the accession number will~* be preserved.", (long) (num_s-num_g));
+							"* NOTE: This record contains %ld individual~* sequencing reads that have not been assembled into~* contigs. Runs of N are used to separate the reads~* and the order in which they appear is completely~* arbitrary. Low-pass sequence sampling is useful for~* identifying clones that may be gene-rich and allows~* overlap relationships among clones to be deduced.~* However, it should not be assumed that this clone~* will be sequenced to completion. In the event that~* the record is updated, the accession number will~* be preserved.", (long) (num_s-num_g));
 						}
 						csp->string = Cat2Strings(buffer, buf, "~", 0);
 					} else if (mfp->tech == MI_TECH_htgs_1) {

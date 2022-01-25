@@ -29,34 +29,19 @@
 *
 * Version Creation Date: 1/1/91
 *
-* $Revision: 6.0 $
+* $Revision: 6.1 $
 *
 * File Description:
 *   Typedefs and prototypes used internally by asnio.c
 *
 * Modifications:
 * --------------------------------------------------------------------------
-* Date     Name        Description of modification
-* -------  ----------  -----------------------------------------------------
-*
-*
 * $Log: asnio.h,v $
-* Revision 6.0  1997/08/25 18:10:02  madden
-* Revision changed to 6.0
+* Revision 6.1  1999/07/28 21:01:48  vakatov
+* [__cplusplus]  Added `extern "C"'
 *
 * Revision 5.1  1996/12/03 21:43:48  vakatov
 * Adopted for 32-bit MS-Windows DLLs
-*
- * Revision 5.0  1996/05/28  14:00:29  ostell
- * Set to revision 5.0
- *
- * Revision 4.0  1995/07/26  13:47:38  ostell
- * force revision to 4.0
- *
- * Revision 2.3  1995/05/15  18:38:28  ostell
- * added Log line
- *
-*
 * ==========================================================================
 */
 
@@ -68,6 +53,10 @@
 #define NLM_EXTERN NLM_IMPORT
 #else
 #define NLM_EXTERN extern
+#endif
+
+#ifdef __cplusplus
+extern "C" {
 #endif
 
 
@@ -83,6 +72,10 @@ NLM_EXTERN Int2 AsnIoReadBlock PROTO((AsnIoPtr aip));
 NLM_EXTERN Int2 AsnIoWriteBlock PROTO((AsnIoPtr aip));
 NLM_EXTERN void CDECL AsnIoErrorMsg VPROTO((AsnIoPtr aip, int errcode, ...));
 
+
+#ifdef __cplusplus
+}
+#endif
 
 #undef NLM_EXTERN
 #ifdef NLM_EXPORT

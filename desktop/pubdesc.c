@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/28/95
 *
-* $Revision: 6.14 $
+* $Revision: 6.15 $
 *
 * File Description:
 *
@@ -39,6 +39,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: pubdesc.c,v $
+* Revision 6.15  1999/05/10 23:13:26  kans
+* separate lookup by muid and pmid in case both are present
+*
 * Revision 6.14  1999/05/06 19:00:58  kans
 * enable lookup by pmid button
 *
@@ -1883,17 +1886,31 @@ static ValNodePtr LookupAnArticle (PubEquivLookupProc lookup, ValNodePtr oldpep,
   return pub;
 }
 
-static void LookupCommonProc (ButtoN b, Boolean byMuid)
+static void LookupCommonProc (ButtoN b, Boolean byMuid, Boolean byPmid)
 
 {
   PubdescPtr      pdp;
   ValNodePtr      pep;
   PubdescPagePtr  ppp;
+  ValNodePtr      vnp;
 
   ppp = (PubdescPagePtr) GetObjectExtra (b);
   if (ppp != NULL && ppp->lookupArticle != NULL) {
     pdp = DialogToPointer (ppp->dialog);
     if (pdp != NULL) {
+      if (byMuid) {
+        if (byPmid) {
+          vnp = ValNodeFindNext (pdp->pub, NULL, PUB_Muid);
+          if (vnp != NULL && ValNodeFindNext (pdp->pub, NULL, PUB_PMid) != NULL) {
+            ValNodeExtract (&(pdp->pub), PUB_Muid);
+          }
+        } else {
+          vnp = ValNodeFindNext (pdp->pub, NULL, PUB_PMid);
+          if (vnp != NULL && ValNodeFindNext (pdp->pub, NULL, PUB_Muid) != NULL) {
+            ValNodeExtract (&(pdp->pub), PUB_PMid);
+          }
+        }
+      }
       pep = LookupAnArticle (ppp->lookupArticle, pdp->pub, byMuid);
       if (pep != NULL) {
         pdp->pub = PubEquivFree (pdp->pub);
@@ -1910,13 +1927,19 @@ static void LookupCommonProc (ButtoN b, Boolean byMuid)
 static void LookupArticleProc (ButtoN b)
 
 {
-  LookupCommonProc (b, FALSE);
+  LookupCommonProc (b, FALSE, FALSE);
 }
 
 static void LookupByMuidProc (ButtoN b)
 
 {
-  LookupCommonProc (b, TRUE);
+  LookupCommonProc (b, TRUE, FALSE);
+}
+
+static void LookupByPmidProc (ButtoN b)
+
+{
+  LookupCommonProc (b, TRUE, TRUE);
 }
 
 static void LookupISOJournalProc (ButtoN b)
@@ -2276,9 +2299,7 @@ static DialoG CreatePubdescDialog (GrouP h, CharPtr title, GrouP PNTR pages,
           SetObjectExtra (b, ppp, NULL);
           b = PushButton (c, "Lookup By muid", LookupByMuidProc);
           SetObjectExtra (b, ppp, NULL);
-/* NOTE: cheap cheat; following line needs lookup proceedure */
-/*          b = PushButton (c, "Lookup By pmid", LookupByPmidProc); */
-          b = PushButton (c, "Lookup By pmid", LookupByMuidProc);
+          b = PushButton (c, "Lookup By pmid", LookupByPmidProc);
           SetObjectExtra (b, ppp, NULL);
           /* Disable (b); */
         }

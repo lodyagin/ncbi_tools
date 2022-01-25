@@ -1,4 +1,4 @@
-# $Id: makenet.dos,v 6.37 1999/04/20 13:59:15 kans Exp $
+# $Id: makenet.dos,v 6.41 1999/08/06 16:35:27 beloslyu Exp $
 ########################################################################
 ###  Makefile for network-based libraries and applications
 #####
@@ -56,16 +56,15 @@ SRCHNT_EXE   = srchnt.___
 TWOP_EXE     = twop.___
 CNSRT_EXE    = cnsrt.___
 CNSGN_EXE    = cnsgn.___
+
+BLASTCL3_EXE = blastcl3.___
 !endif
 
 !ifdef MSWINDOWS
-ENTREZ_EXE   = entrez.___
 ENTREZCF_EXE = entrezcf.___
 BLASTCLI_EXE = blastcli.___
-BLASTCL3_EXE = blastcl3.___
 NETENTCF_EXE = netentcf.___
 NENTREZ_EXE  = nentrez.___
-CENTREZ_EXE  = centrez.___
 SEQUIN_EXE   = sequin.___
 VCLIENT_EXE  = vclient.___
 POWBLAST_EXE = powblast.___
@@ -77,10 +76,8 @@ CN3D_EXE     = cn3d.__
 !undef SEQUIN_EXE
 
 !ifdef B16
-!undef ENTREZ_EXE
 !undef ENTREZCF_EXE
 !undef NENTREZ_EXE
-!undef CENTREZ_EXE
 !undef BLASTCLI_EXE
 !undef BLASTCL3_EXE
 !undef POWBLAST_EXE
@@ -102,9 +99,9 @@ DO_OBJ =
 DO_LIB = $(XLIB21) $(XNETCLILIB) $(XLIB7) \
          $(XLIB8) $(XLIB9) $(XLIB11) $(XLIB31) $(XLIB36) $(XLIB40) \
          $(XLIB41)
-DO_EXE = $(ENTREZ_EXE) $(ENTREZCF_EXE) \
+DO_EXE = $(ENTREZCF_EXE) \
          $(BLASTCLI_EXE) $(BLASTCL3_EXE) \
-         $(NETENTCF_EXE) $(NENTREZ_EXE) $(CENTREZ_EXE) \
+         $(NETENTCF_EXE) $(NENTREZ_EXE)  \
          $(VCLIENT_EXE) $(POWBLAST_EXE) $(SEQUIN_EXE) $(CN3D_EXE) \
          $(CCPV_EXE) $(CCP_EXE) $(DUSTV_EXE) $(DUST_EXE) \
          $(EPIV_EXE) $(EPI_EXE) $(SIGMEV_EXE) $(SIGME_EXE) \
@@ -323,18 +320,6 @@ $(INCLUDE_LIB)
 ## Make APPLICATIONS
 ##
 ##########################################################
-!ifdef ENTREZ_EXE
-$(ENTREZ_EXE):
-	$(MAKE) -f <<
-$(INCLUDE_GEN)
-TEST_NAME = entrez
-TEST_OBJ = entrez.obj
-TEST_LIB = $(NETCLILIB) $(LIB31) $(LIB23) $(LIB20) $(LIB5) $(LIB4) $(LIB3) $(LIB2) $(LIB1)
-RES = 1
-$(INCLUDE_EXE)
-<<
-!endif
-##################################################
 !ifdef ENTREZCF_EXE
 $(ENTREZCF_EXE):
 	$(MAKE) -f <<
@@ -395,18 +380,6 @@ $(INCLUDE_EXE)
 <<
 !endif
 ##########################################################
-!ifdef CENTREZ_EXE
-$(CENTREZ_EXE):
-	$(MAKE) -f <<
-$(INCLUDE_GEN)
-TEST_NAME = centrez
-TEST_OBJ = entrez.obj
-TEST_LIB = $(LIB23) $(LIB31) $(LIB20) $(LIB22) $(LIB9) $(LIB3) $(LIB7) $(LIB2) $(NETCLILIB) $(LIB4) $(LIB1)
-RES = 1
-$(INCLUDE_EXE)
-<<
-!endif
-##########################################################
 !ifdef POWBLAST_EXE
 $(POWBLAST_EXE):
 	$(MAKE) -f <<
@@ -437,7 +410,7 @@ $(SEQUIN_EXE):
 $(INCLUDE_GEN)
 TEST_NAME = sequin
 TEST_OBJ = sequin1.obj sequin2.obj sequin3.obj sequin4.obj sequin5.obj sequin6.obj sequin7.obj sequin8.obj sequin9.obj sequinx.obj
-TEST_LIB = $(LIB31) $(LIB30) $(LIB21) $(LIB23) $(LIB22) $(LIB20) $(LIB40) $(LIB41) $(LIB11) $(ENTREZLIBS) $(LIB4) $(LIB2) $(LIB1)
+TEST_LIB = $(LIB31) $(LIB30) $(LIB36) $(LIB23) $(LIB22) $(LIB20) $(LIB40) $(LIB41) $(LIB11) $(ENTREZLIBS) $(LIB4) $(LIB2) $(LIB1)
 RES = 1
 $(INCLUDE_EXE)
 <<

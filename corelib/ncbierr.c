@@ -23,9 +23,9 @@
 *
 * ===========================================================================
 *
-* $Id: ncbierr.c,v 6.13 1998/12/29 06:16:21 vakatov Exp $
+* $Id: ncbierr.c,v 6.14 1999/08/23 19:14:34 vakatov Exp $
 *
-* $Revision: 6.13 $
+* $Revision: 6.14 $
 *
 * Authors:  Schuler, Sirotkin (UserErr stuff)
 *
@@ -71,6 +71,9 @@
 * 03-06-95 Schuler     Fixed problem with ErrMsgRoot_fopen
 *
 * $Log: ncbierr.c,v $
+* Revision 6.14  1999/08/23 19:14:34  vakatov
+* Let SEV_MAX not be an exception among the "SEV_*"
+*
 * Revision 6.13  1998/12/29 06:16:21  vakatov
 * Nlm_ErrPostStr() -- Check for the severity code validity
 *
@@ -224,8 +227,13 @@ typedef struct AppErrInfo *AppErrInfoPtr;
 
 
 static char * _szPropKey = "_AppErrInfo";
-static char * _szSevKey [] = { "", "SEV_INFO", "SEV_WARNING", "SEV_ERROR", "SEV_FATAL" };
-static char * _szSevDef [] = { "", "NOTE:", "WARNING:", "ERROR:", "FATAL ERROR:" };
+
+static char * _szSevKey [SEV_MAX + 1] = {
+  "", "SEV_INFO", "SEV_WARNING", "SEV_ERROR", "SEV_FATAL", "SEV_MAX"};
+
+static char * _szSevDef [SEV_MAX + 1] = {
+  "", "NOTE:", "WARNING:", "ERROR:", "FATAL ERROR:", "FATAL ERROR:" };
+
 static char * _szSeverity[SEV_MAX + 1];
 
 static AppErrInfoPtr GetAppErrInfo PROTO((void));
@@ -917,7 +925,7 @@ static ErrSev atosev (const char *sevstr)
 	int i;
 	if (sevstr)
 	{
-		for (i=SEV_MIN; i<SEV_MAX; ++i)
+		for (i=SEV_MIN;  i <= SEV_MAX;  ++i)
 		{
 			if (strcmp(sevstr,_szSevKey[i]) == 0)
 				return (ErrSev)i;
@@ -1979,7 +1987,7 @@ static struct AppErrInfo * GetAppErrInfo(void)
 
       if ( severity_init )
         {
-          for (i = SEV_MIN;  i < SEV_MAX;  i++)
+          for (i = SEV_MIN;  i <= SEV_MAX;  i++)
             {
               GetAppParam(_file, _section, _szSevKey[i], _szSevDef[i],
                           buffer,sizeof buffer);

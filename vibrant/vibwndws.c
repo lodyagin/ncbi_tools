@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.26 $
+* $Revision: 6.29 $
 *
 * File Description:
 *       Vibrant main, event loop, and window functions
@@ -37,6 +37,15 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: vibwndws.c,v $
+* Revision 6.29  1999/07/21 17:57:42  vakatov
+* GetArgs_ST():  fixed array boundary read
+*
+* Revision 6.28  1999/07/08 14:49:26  kans
+* MultiLinePrompt copies string to avoid modifying read-only string passed in from GetArgs when Mac virtual memory is on
+*
+* Revision 6.27  1999/06/22 15:14:53  lewisg
+* fix image library so that works on linux with > 8 bits
+*
 * Revision 6.26  1999/04/22 15:19:01  vakatov
 * Call XtUnrealizeWidget() before XtDestroyWidget() to make sure no
 * "post-mortem" callbacks(registered by XtAddEventHandler()) get
@@ -1263,6 +1272,62 @@ extern void Nlm_SetDeactivate (Nlm_WindoW w, Nlm_WndActnProc deact)
   }
 }
 
+/*
+ * Test X windows to see what kind of color buffer is available.
+ * Necessary because Linux supports only the type available
+ * from the hardware.  Returns TRUE if match and visinfo.
+ */
+
+#ifdef WIN_MOTIF
+
+typedef struct _TNlm_MatchListX {
+    int class;
+    unsigned int depth;
+} TNlm_MatchListX;
+
+#define XMATCHLENGTH 6
+
+/* list of display classes and depths to match, in order.
+ * we prefer 8 bit for Cn3D for speed. 
+ */
+static const TNlm_MatchListX Nlm_MatchListX[] = { 
+    { PseudoColor, 8  },
+    { GrayScale, 8 },
+    { PseudoColor, 16 },
+    { TrueColor, 24 },
+    { GrayScale, 16 },
+    { TrueColor, 16 } };
+    
+extern Nlm_Boolean Nlm_CheckX(XVisualInfo * visinfo)
+{
+    int visualsmatched, i, j, defaultdepth;
+    XVisualInfo *VisualList, VisualTemplate;
+    
+    /* check display modes in order of preference */
+    
+    VisualTemplate.screen = DefaultScreen(Nlm_currentXDisplay);
+    
+    /* enforce vibrant convention of using default depth for windows */
+    defaultdepth = DefaultDepth(Nlm_currentXDisplay, VisualTemplate.screen);
+    
+    VisualList = XGetVisualInfo(Nlm_currentXDisplay, VisualScreenMask,
+            &VisualTemplate, &visualsmatched);
+    
+    for(j = 0; j < XMATCHLENGTH; j++) {
+        for(i = 0; i < visualsmatched; i++) {
+         if (VisualList[i].depth == Nlm_MatchListX[j].depth 
+                 && VisualList[i].class == Nlm_MatchListX[j].class
+                 && VisualList[i].depth == defaultdepth) {
+                MemCpy(visinfo, &VisualList[i], sizeof(XVisualInfo));
+                XFree(VisualList);
+                return TRUE;
+            }
+        }
+    }
+    return FALSE;
+}
+#endif /* WIN_MOTIF */
+
 extern void Nlm_SetResize (Nlm_WindoW w, Nlm_WndActnProc resiz)
 
 {
@@ -1397,13 +1462,26 @@ extern void Nlm_SetColorMap (Nlm_WindoW w, Nlm_Uint2 totalColors,
         XVisualInfo    visinfo;
         unsigned long  plane_m[1];
         unsigned long  pixels[256];
+        int defaultdepth;
+        Boolean testvisual;
 
-        if (!XMatchVisualInfo(Nlm_currentXDisplay, Nlm_currentXScreen,
-                              8, PseudoColor, &visinfo)  &&
-            !XMatchVisualInfo(Nlm_currentXDisplay, Nlm_currentXScreen,
-                              8, GrayScale,   &visinfo))
-          break;  /* no matching visuals found */
-
+        defaultdepth = DefaultDepth(Nlm_currentXDisplay,
+                  DefaultScreen(Nlm_currentXDisplay));
+#ifdef OS_UNIX_LINUX
+        if(!Nlm_CheckX(&visinfo))
+#else /* OS_UNIX_LINUX */
+        if( !(XMatchVisualInfo(Nlm_currentXDisplay,
+                         DefaultScreen(Nlm_currentXDisplay),
+                         8,PseudoColor,&visinfo) ||
+            XMatchVisualInfo(Nlm_currentXDisplay,
+                         DefaultScreen(Nlm_currentXDisplay),
+                         8,GrayScale,&visinfo)) )
+#endif /* else OS_UNIX_LINUX */      
+        break;  /* no matching visuals found */
+          
+#ifdef OS_UNIX_LINUX
+        if(visinfo.class > PseudoColor) break;  /* no palette needed */  
+#endif
         wdata.cMap = XCreateColormap(Nlm_currentXDisplay,
                                      RootWindow(Nlm_currentXDisplay,
                                                 Nlm_currentXScreen),
@@ -7075,7 +7153,7 @@ static void Nlm_MultiLinePrompt (Nlm_GrouP prnt, Nlm_CharPtr str, Nlm_Int2 width
     pg = Nlm_HiddenGroup (prnt, 0, 10, NULL);
     Nlm_SetGroupMargins (pg, 1, 1);
     Nlm_SetGroupSpacing (pg, 1, 1);
-    buf = str;
+    buf = StringSave (str);
     k = 0;
     while (Nlm_StringLen (buf + k) > 0) {
       l = 0;
@@ -7097,6 +7175,7 @@ static void Nlm_MultiLinePrompt (Nlm_GrouP prnt, Nlm_CharPtr str, Nlm_Int2 width
         k += l;
       }
     }
+    MemFree (buf);
   }
 }
 
@@ -7232,8 +7311,8 @@ static Nlm_Boolean GetArgs_ST(Nlm_CharPtr progname,
                               Nlm_Int2 numargs, Nlm_ArgPtr ap,
                               Nlm_Boolean silent)
 {
-  static char *TypeStrings[] =
-  {
+  const static char* s_TypeStrings[] = {
+    "",
     "",
     "Integer: ",
     "Float: ",
@@ -7242,6 +7321,18 @@ static Nlm_Boolean GetArgs_ST(Nlm_CharPtr progname,
     "File Out: ",
     "Data In: ",
     "Data Out: "
+  };
+
+  const static char* s_ValueStrings[] = {
+    "",
+    "T/F",
+    "Integer",
+    "Float",
+    "String",
+    "Input-File",
+    "Output-File",
+    "Input-Data",
+    "Output-Data"
   };
 
   Nlm_Int2       i, j;
@@ -7313,7 +7404,7 @@ static Nlm_Boolean GetArgs_ST(Nlm_CharPtr progname,
       for (i = 0, j = 0;  i < numargs;  i++, j++, curarg++)
         {
           printf("  -%c  %s [%s]",
-                 curarg->tag, curarg->prompt, TypeStrings[curarg->type]);
+                 curarg->tag, curarg->prompt, s_ValueStrings[curarg->type]);
           if (curarg->optional )
             printf( "  Optional" );
           printf("\n");
@@ -7417,7 +7508,8 @@ static Nlm_Boolean GetArgs_ST(Nlm_CharPtr progname,
       Nlm_Advance (w);
       g = Nlm_HiddenGroup (w, 4, 0, NULL);
     }
-    Nlm_StaticPrompt (g, TypeStrings[curarg->type - 1], 0, Nlm_dialogTextHeight, Nlm_systemFont, 'l');
+    Nlm_StaticPrompt(g, (char*)s_TypeStrings[curarg->type], 0,
+                     Nlm_dialogTextHeight, Nlm_systemFont, 'l');
 
     /* Populate the Arg-Query Dialog Box's input controls and
        initialize these by default values */

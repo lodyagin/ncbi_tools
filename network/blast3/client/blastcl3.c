@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   05/16/95
 *
-* $Revision: 1.14 $
+* $Revision: 1.15 $
 *
 * File Description: 
 *       Simulates "traditional" BLAST output
@@ -44,6 +44,9 @@
 *
 * RCS Modification History:
 * $Log: blastcl3.c,v $
+* Revision 1.15  1999/08/20 16:37:15  shavirin
+* Added protection against invalid program type.
+*
 * Revision 1.14  1999/04/20 14:51:59  madden
 * Error message if TraditionalReport returns FALSE
 *
@@ -371,6 +374,10 @@ Int2 Main (void)
 	align_view = (Int1) myargs[4].intvalue;
 
 	align_type = BlastGetTypes(blast_program, &query_is_na, &db_is_na);
+
+        if(align_type == blast_type_undefined)
+            return 1;
+
 	if (StringICmp("blastx", blast_program) == 0)
 	{
 		if (align_view != 0)

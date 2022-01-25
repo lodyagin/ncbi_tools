@@ -154,6 +154,14 @@ Int2 tax1_getAllNames(Int4 tax_id, CharPtr **names, Boolean unique);
  */
 Int4 tax1_getTaxId4Str(CharPtr search_str, CharPtr* orgname, Int4Ptr *Ids_out);
 
+/*---------------------------------------------
+ * Find out is taxonomy lookup system alive or not
+ * Returns: TRUE - alive
+ *          FALSE - dead
+ */
+
+Boolean tax1_isAlive(void);
+
 #ifdef __cplusplus
 /* { */ }
 #endif

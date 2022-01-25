@@ -17,7 +17,7 @@ else
   echo "FAILED (${MMDB}${FN}* has not been found)  \c"
   exit
 fi
-if diff $SUB/${FN} $TMPF >$$ 2>/dev/null
+if cmp $SUB/${FN} $TMPF >$$ 2>/dev/null
 then
   rm -f $SUB/${FN} $TMPF
   echo "ok \c"

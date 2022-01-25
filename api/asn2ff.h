@@ -29,13 +29,16 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.10 $
+* $Revision: 6.11 $
 *
 * File Description:  Header file for asn2gb files.
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: asn2ff.h,v $
+* Revision 6.11  1999/08/31 14:28:39  tatiana
+* SeqEntryToStrArrayEx() added which returns a link list of strings
+*
 * Revision 6.10  1999/04/09 21:22:10  bazhin
 * Added function "ByteStorePtr AjpToByteStore()".
 *
@@ -152,6 +155,7 @@ NLM_EXTERN Asn2ffJobPtr Asn2ffJobCreate PROTO ((SeqEntryPtr sep, SeqSubmitPtr ss
 
 NLM_EXTERN CharPtr PNTR SeqEntryToStrArray PROTO ((SeqEntryPtr sep, Uint1 format, Uint1 mode));
 
+NLM_EXTERN LinkStrPtr SeqEntryToStrArrayEx PROTO ((SeqEntryPtr sep, Uint1 format, Int4 gi, Boolean is_html));
 NLM_EXTERN Boolean SeqEntryToFlatAjp PROTO ((Asn2ffJobPtr ajp, SeqEntryPtr sep, FILE *fp, Uint1 format, Uint1 mode));
 NLM_EXTERN Boolean SeqEntryToFlat PROTO ((SeqEntryPtr sep, FILE *fp, Uint1 format, Uint1 mode));
 NLM_EXTERN Boolean SeqEntryToFlatEx PROTO ((SeqEntryPtr sep, FILE *fp, Uint1 format, Uint1 mode, SeqIdPtr seqid, Uint1 type));

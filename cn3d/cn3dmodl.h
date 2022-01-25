@@ -22,6 +22,12 @@
 *  purpose.
 *
 * $Log: cn3dmodl.h,v $
+* Revision 6.19  1999/07/07 20:45:36  ywang
+* clear domaindata, mediadata, special feature before reading in new data in cn3d
+*
+* Revision 6.18  1999/06/07 19:39:51  ywang
+* remove obsolete user defined features, an obsolete feature means a feature whose region has been completely overwirtten by a later defined feature
+*
 * Revision 6.17  1999/03/22 23:44:22  kans
 * added Cn3DAddUserDefinedFeature to header
 *
@@ -90,6 +96,7 @@ PARS parsSpecial;
 /* PRK  prkSpecial;      */
 Boolean On;
 CharPtr title, description;
+Int4 iRes;
 } SpecialFeatureInfo, PNTR SpecialFeatureInfoPtr;
 
 typedef ValNodePtr SpecialFeaturePtr;
@@ -115,6 +122,7 @@ extern void Cn3DCheckHighlighted(void);
 extern void LIBCALLBACK Cn3DCheckNoSingleHighlight(PFB pfbThis,Int4 iModel, Int4 iIndex, Pointer ptr);
 extern PDNMS Cn3DAddUserDefinedFeature(PDNMS pdnmsThis);
 extern void Cn3DIndexUserDefinedFeature(void);
+extern void ClearRest(void);
 #ifdef __cplusplus
 }
 #endif

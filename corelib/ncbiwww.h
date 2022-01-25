@@ -1,4 +1,4 @@
-/* $Id: ncbiwww.h,v 6.1 1999/01/26 19:43:27 vakatov Exp $
+/* $Id: ncbiwww.h,v 6.2 1999/08/18 18:48:40 shavirin Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE                          
@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 11/03/1996
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description:
 *   This file contains main definitions to read and process HTTP 
@@ -37,6 +37,9 @@
 *   Currently it works for all ncbi supported platforms.
 *
 * $Log: ncbiwww.h,v $
+* Revision 6.2  1999/08/18 18:48:40  shavirin
+* Increased number of MAX_WWW_ENTRIES to 4096.
+*
 * Revision 6.1  1999/01/26 19:43:27  vakatov
 * Adopted for 32-bit MS-Windows DLLs
 *
@@ -93,7 +96,7 @@ o
 /* DEFINES */
 /****************************************************************************/
 
-#define MAX_WWW_ENTRIES 2048 /* maximum number of html tags in input */
+#define MAX_WWW_ENTRIES  4096 /* maximum number of html tags in input */
 #define WWW_MAX_NAME_LEN 512 /* Limit for Name in HTML tag */
 
 #define MISC_BROWSER     0   /* Any Browser Netscape Ver. 1 included */

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.53 $
+* $Revision: 6.56 $
 *
 * File Description: 
 *
@@ -127,7 +127,9 @@ typedef struct sqnblk {
   Boolean      holduntilpublished;
 } SequinBlock, PNTR SequinBlockPtr;
 
-extern CharPtr SEQUIN_APP_VERSION;
+extern CharPtr SEQUIN_APPLICATION;
+extern CharPtr SEQUIN_SERVICES;
+extern CharPtr SEQUIN_VERSION;
 
 extern ForM  helpForm;
 
@@ -165,6 +167,7 @@ extern ForM CreateStartupForm (Int2 left, Int2 top, CharPtr title,
 
 extern void DrawAbout (PaneL p);
 extern Int2 AboutBoxWidth (void);
+extern Int2 AboutBoxHeight (void);
 
 extern ForM CreateFormatForm (Int2 left, Int2 top, CharPtr title,
                               BtnActnProc goToNext,
@@ -315,7 +318,6 @@ NLM_EXTERN SeqEntryPtr SequinFastaToSeqEntryEx
 /* Many miscellaneous extern functions within sequin source files */
 
 extern Boolean PropagateFromGenBankBioseqSet (SeqEntryPtr sep, Boolean ask);
-extern void ValidateSeqAlignInSeqEntry (SeqEntryPtr sep, Boolean nomessage, Boolean delete);
 
 extern Uint2 SmartAttachSeqAnnotToSeqEntry (Uint2 entityID, SeqAnnotPtr sap);
 extern void HandleProjectAsn (ProjectPtr proj, Uint2 entityID);

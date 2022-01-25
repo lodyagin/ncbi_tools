@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 1/1/94
 *
-* $Revision: 6.57 $
+* $Revision: 6.76 $
 *
 * File Description:  Sequence editing utilities
 *
@@ -39,6 +39,63 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: valid.c,v $
+* Revision 6.76  1999/09/06 21:36:03  kans
+* ValidateSeqEntry sets scope
+*
+* Revision 6.75  1999/08/24 17:44:01  kans
+* removed Wagad from country list
+*
+* Revision 6.74  1999/08/24 15:22:17  kans
+* added Galapagos Islands and Wagad to the country list
+*
+* Revision 6.73  1999/08/18 20:24:49  kans
+* self-recursive call of CheckForInconsistentBiosources was not using tmp, but original sep, resulting in stack overflow in complex records
+*
+* Revision 6.72  1999/08/17 19:46:12  kans
+* ValidatePopSet posts ERR_SEQ_DESCR_InconsistentBioSources
+*
+* Revision 6.71  1999/08/03 00:13:02  kans
+* vsp->suppressContext now causes simplified locations to be written, seqidworst fastashort no locus
+*
+* Revision 6.70  1999/07/29 15:41:48  kans
+* changed Serbia and Montenegro to Yugoslavia
+*
+* Revision 6.69  1999/07/22 22:04:35  kans
+* added suppressContext flag
+*
+* Revision 6.68  1999/07/15 22:37:32  kans
+* ValidateBioSource called once per biosource, not once per bioseq
+*
+* Revision 6.67  1999/07/15 20:39:22  kans
+* suppress no pub warning if seq-submit, which has a cit-sub
+*
+* Revision 6.66  1999/06/24 19:33:24  kans
+* corrected country list
+*
+* Revision 6.65  1999/06/22 17:15:49  kans
+* added ERR_SEQ_DESCR_NoTaxonID
+*
+* Revision 6.64  1999/06/18 20:57:46  kans
+* using collab approved country list
+*
+* Revision 6.63  1999/06/18 20:21:04  kans
+* implemented ERR_SEQ_DESCR_BadCountryCode, indexed descr callback sets proper itemtype, itemID for click responsiveness
+*
+* Revision 6.62  1999/06/15 20:04:03  kans
+* no org or pub anywhere on record now reports context of first bioseq for batch processing
+*
+* Revision 6.61  1999/06/15 19:45:42  kans
+* changed SequenceTooLong to SequenceExceeds350kbp
+*
+* Revision 6.60  1999/06/14 16:14:20  kans
+* added ERR_SEQ_FEAT_TrnaCodonWrong check
+*
+* Revision 6.59  1999/06/11 18:31:16  kans
+* added ERR_SEQ_FEAT_TranslExceptPhase
+*
+* Revision 6.58  1999/06/09 21:34:29  kans
+* stop in protein message gives gene and protein name for reading report later
+*
 * Revision 6.57  1999/05/07 15:31:20  kans
 * added ERR_SEQ_FEAT_UnnecessaryGeneXref
 *
@@ -410,6 +467,7 @@ NLM_EXTERN void SpellCheckSeqFeat(GatherContextPtr gcp);
 NLM_EXTERN void SpellCheckString (ValidStructPtr vsp, CharPtr str);
 NLM_EXTERN void SpliceCheck(ValidStructPtr vsp, SeqFeatPtr sfp);
 static void SpliceCheckEx(ValidStructPtr vsp, SeqFeatPtr sfp, Boolean checkAll);
+static void ValidateBioSource (ValidStructPtr vsp, GatherContextPtr gcp, BioSourcePtr biop);
 
 /*****************************************************************************
 *
@@ -427,6 +485,7 @@ NLM_EXTERN void ValidStructClear (ValidStructPtr vsp)  /* 0 out a ValidStruct */
 	Boolean onlyspell;
 	Boolean justwarnonspell;
 	Boolean useSeqMgrIndexes;
+	Boolean suppressContext;
 
 	if (vsp == NULL) return;
 
@@ -438,6 +497,7 @@ NLM_EXTERN void ValidStructClear (ValidStructPtr vsp)  /* 0 out a ValidStruct */
 	onlyspell = vsp->onlyspell;
 	justwarnonspell = vsp->justwarnonspell;
 	useSeqMgrIndexes = vsp->useSeqMgrIndexes;
+	suppressContext = vsp->suppressContext;
 	MemSet((VoidPtr)vsp, 0, sizeof(ValidStruct));
 	vsp->errbuf = errbuf;
 	vsp->cutoff = cutoff;
@@ -447,6 +507,7 @@ NLM_EXTERN void ValidStructClear (ValidStructPtr vsp)  /* 0 out a ValidStruct */
 	vsp->onlyspell = onlyspell;
 	vsp->justwarnonspell = justwarnonspell;
 	vsp->useSeqMgrIndexes = useSeqMgrIndexes;
+	vsp->suppressContext = suppressContext;
 	return;
 }
 
@@ -472,6 +533,177 @@ NLM_EXTERN ValidStructPtr ValidStructFree (ValidStructPtr vsp)
 *
 *****************************************************************************/
 
+static void ChangeSeqIdToBestID (SeqIdPtr sip)
+
+{
+  BioseqPtr  bsp;
+  SeqIdPtr   id;
+  Pointer    pnt;
+
+  if (sip == NULL) return;
+  bsp = BioseqFindCore (sip);
+  if (bsp == NULL) return;
+  id = SeqIdDup (SeqIdFindWorst (bsp->id));
+  if (id == NULL) return;
+  /* now remove SeqId contents to reuse SeqId valnode */
+  pnt = sip->data.ptrvalue;
+  switch (sip->choice) {
+        case SEQID_LOCAL:      /* local */
+            ObjectIdFree((ObjectIdPtr)pnt);
+            break;
+        case SEQID_GIBBSQ:      /* gibbseq */
+        case SEQID_GIBBMT:      /* gibbmt */
+            break;
+        case SEQID_GIIM:      /* giimid */
+            GiimFree((GiimPtr)pnt);
+            break;
+        case SEQID_GENBANK:      /* genbank */
+        case SEQID_EMBL:      /* embl */
+        case SEQID_PIR:      /* pir   */
+        case SEQID_SWISSPROT:      /* swissprot */
+        case SEQID_OTHER:     /* other */
+        case SEQID_DDBJ:
+		case SEQID_PRF:
+            TextSeqIdFree((TextSeqIdPtr)pnt);
+            break;
+        case SEQID_PATENT:      /* patent seq id */
+            PatentSeqIdFree((PatentSeqIdPtr)pnt);
+            break;
+        case SEQID_GENERAL:     /* general */
+            DbtagFree((DbtagPtr)pnt);
+            break;
+        case SEQID_GI:     /* gi */
+            break;
+		case SEQID_PDB:
+			PDBSeqIdFree((PDBSeqIdPtr)pnt);
+			break;
+  }
+  sip->choice = id->choice;
+  sip->data.ptrvalue = id->data.ptrvalue;
+  SeqIdStripLocus (sip);
+}
+
+static void ChangeSeqLocToBestID (SeqLocPtr slp)
+
+{
+  SeqLocPtr      loc;
+  PackSeqPntPtr  psp;
+  SeqBondPtr     sbp;
+  SeqIntPtr      sinp;
+  SeqIdPtr       sip;
+  SeqPntPtr      spp;
+
+  while (slp != NULL) {
+    switch (slp->choice) {
+      case SEQLOC_NULL :
+        break;
+      case SEQLOC_EMPTY :
+      case SEQLOC_WHOLE :
+        sip = (SeqIdPtr) slp->data.ptrvalue;
+        ChangeSeqIdToBestID (sip);
+        break;
+      case SEQLOC_INT :
+        sinp = (SeqIntPtr) slp->data.ptrvalue;
+        if (sinp != NULL) {
+          sip = sinp->id;
+          ChangeSeqIdToBestID (sip);
+        }
+        break;
+      case SEQLOC_PNT :
+        spp = (SeqPntPtr) slp->data.ptrvalue;
+        if (spp != NULL) {
+          sip = spp->id;
+          ChangeSeqIdToBestID (sip);
+        }
+        break;
+      case SEQLOC_PACKED_PNT :
+        psp = (PackSeqPntPtr) slp->data.ptrvalue;
+        if (psp != NULL) {
+          sip = psp->id;
+          ChangeSeqIdToBestID (sip);
+        }
+        break;
+      case SEQLOC_PACKED_INT :
+      case SEQLOC_MIX :
+      case SEQLOC_EQUIV :
+        loc = (SeqLocPtr) slp->data.ptrvalue;
+        while (loc != NULL) {
+          ChangeSeqLocToBestID (loc);
+          loc = loc->next;
+        }
+        break;
+      case SEQLOC_BOND :
+        sbp = (SeqBondPtr) slp->data.ptrvalue;
+        if (sbp != NULL) {
+          spp = (SeqPntPtr) sbp->a;
+          if (spp != NULL) {
+            sip = spp->id;
+            ChangeSeqIdToBestID (sip);
+          }
+          spp = (SeqPntPtr) sbp->b;
+          if (spp != NULL) {
+            sip = spp->id;
+            ChangeSeqIdToBestID (sip);
+          }
+        }
+        break;
+      case SEQLOC_FEAT :
+        break;
+      default :
+        break;
+    }
+    slp = slp->next;
+  }
+}
+
+static Int2 WorstBioseqLabel (BioseqPtr bsp, CharPtr buffer, Int2 buflen, Uint1 content)
+{
+	CharPtr tmp;
+	Char label[40];
+	Int2 diff, len;
+	SeqIdPtr sip;
+	AsnModulePtr amp;
+	AsnTypePtr ratp, matp;
+
+	if ((bsp == NULL) || (buflen < 1))
+		return 0;
+
+	len = buflen;
+	label[0] = '\0';
+
+	if (content != OM_LABEL_TYPE)
+	{
+		sip = SeqIdStripLocus (SeqIdDup (SeqIdFindWorst (bsp->id)));
+		SeqIdWrite (sip, label, PRINTID_FASTA_SHORT, 39);
+		SeqIdFree (sip);
+		if (content == OM_LABEL_CONTENT)
+			return LabelCopy(buffer, label, buflen);
+
+		diff = LabelCopyExtra(buffer, label, buflen, NULL, ": ");
+		buflen -= diff;
+		buffer += diff;
+	}
+
+	amp = AsnAllModPtr ();
+	ratp = AsnTypeFind (amp, "Seq-inst.repr");
+	matp = AsnTypeFind (amp, "Seq-inst.mol");
+
+	label[0] = '\0';
+	tmp = label;
+	tmp = StringMove(tmp, AsnEnumTypeStr(ratp, (Int2)(bsp->repr)));
+	tmp = StringMove(tmp, ", ");
+	tmp = StringMove(tmp, AsnEnumTypeStr(matp, (Int2)(bsp->mol)));
+	sprintf(tmp, " len= %ld", (long)(bsp->length));
+	diff = LabelCopy(buffer, label, buflen);
+	buflen -= diff;
+	buffer += diff;
+
+	if (content != OM_LABEL_SUMMARY)
+		return (len - buflen);
+	
+	return (len - buflen);     /* SUMMARY not done yet */
+}
+
 #ifdef VAR_ARGS
 NLM_EXTERN void CDECL  ValidErr (vsp, severity, code1, code2, fmt, va_alist)
   ValidStructPtr vsp;
@@ -490,6 +722,7 @@ NLM_EXTERN void CDECL  ValidErr (ValidStructPtr vsp, int severity, int code1, in
 	Int2 buflen, diff;
 	BioseqPtr bsp;
 	SeqIdPtr sip;
+	SeqLocPtr loc = NULL;
 
 	if (vsp == NULL || severity < vsp->cutoff) return;
 
@@ -530,7 +763,16 @@ NLM_EXTERN void CDECL  ValidErr (ValidStructPtr vsp, int severity, int code1, in
 		buflen -= diff;
 		tmp += diff;
 
-		ctmp = SeqLocPrint(vsp->sfp->location);
+		if (vsp->suppressContext) {
+			loc = AsnIoMemCopy(vsp->sfp->location,
+								(AsnReadFunc) SeqLocAsnRead,
+								(AsnWriteFunc) SeqLocAsnWrite);
+			ChangeSeqLocToBestID (loc);
+			ctmp = SeqLocPrint(loc);
+			SeqLocFree (loc);
+		} else {
+			ctmp = SeqLocPrint(vsp->sfp->location);
+		}
 		if (ctmp != NULL)
 		{
 			diff = LabelCopyExtra(tmp, ctmp, buflen, " [", "]");
@@ -539,27 +781,38 @@ NLM_EXTERN void CDECL  ValidErr (ValidStructPtr vsp, int severity, int code1, in
 			MemFree(ctmp);
 		}
 
-		sip = SeqLocId(vsp->sfp->location);
-		if (sip != NULL)
-		{
-			bsp = BioseqFind(sip);
-			if (bsp != NULL)
+		if (! vsp->suppressContext) {
+			sip = SeqLocId(vsp->sfp->location);
+			if (sip != NULL)
 			{
-				diff = LabelCopy(tmp, " [", buflen);
-				buflen -= diff;
-				tmp += diff;
+				bsp = BioseqFind(sip);
+				if (bsp != NULL)
+				{
+					diff = LabelCopy(tmp, " [", buflen);
+					buflen -= diff;
+					tmp += diff;
 
-				diff = BioseqLabel(bsp, tmp, buflen, OM_LABEL_BOTH);
-				buflen -= diff;
-				tmp += diff;
+					diff = BioseqLabel(bsp, tmp, buflen, OM_LABEL_BOTH);
+					buflen -= diff;
+					tmp += diff;
 
-				diff = LabelCopy(tmp, "]", buflen);
-				buflen -= diff;
-				tmp += diff;
+					diff = LabelCopy(tmp, "]", buflen);
+					buflen -= diff;
+					tmp += diff;
+				}
 			}
 		}
 		if (vsp->sfp->product != NULL) {
-			ctmp = SeqLocPrint(vsp->sfp->product);
+			if (vsp->suppressContext) {
+				loc = AsnIoMemCopy(vsp->sfp->product,
+									(AsnReadFunc) SeqLocAsnRead,
+									(AsnWriteFunc) SeqLocAsnWrite);
+				ChangeSeqLocToBestID (loc);
+				ctmp = SeqLocPrint(loc);
+				SeqLocFree (loc);
+			} else {
+				ctmp = SeqLocPrint(vsp->sfp->product);
+			}
 			if (ctmp != NULL)
 			{
 				diff = LabelCopyExtra(tmp, ctmp, buflen, " -> [", "]");
@@ -580,7 +833,11 @@ NLM_EXTERN void CDECL  ValidErr (ValidStructPtr vsp, int severity, int code1, in
 		tmp += diff;
 	}
 
-	if (vsp->sfp == NULL)    /* sfp adds its own context */
+	/*
+	if (vsp->suppressContext)
+	{
+	}
+	else */ if (vsp->sfp == NULL)    /* sfp adds its own context */
 	{
 		if (vsp->bsp != NULL)
 		{
@@ -588,7 +845,11 @@ NLM_EXTERN void CDECL  ValidErr (ValidStructPtr vsp, int severity, int code1, in
 			buflen -= diff;
 			tmp += diff;
 
-			diff = BioseqLabel(vsp->bsp, tmp, buflen, OM_LABEL_BOTH);
+			if (vsp->suppressContext) {
+				diff = WorstBioseqLabel(vsp->bsp, tmp, buflen, OM_LABEL_CONTENT);
+			} else {
+				diff = BioseqLabel(vsp->bsp, tmp, buflen, OM_LABEL_BOTH);
+			}
 			buflen -= diff;
 			tmp += diff;
 		}
@@ -598,7 +859,11 @@ NLM_EXTERN void CDECL  ValidErr (ValidStructPtr vsp, int severity, int code1, in
 			buflen -= diff;
 			tmp += diff;
 		
-			diff = BioseqSetLabel(vsp->bssp, tmp, buflen, OM_LABEL_BOTH);
+			if (vsp->suppressContext) {
+				diff = BioseqSetLabel(vsp->bssp, tmp, buflen, OM_LABEL_CONTENT);
+			} else {
+				diff = BioseqSetLabel(vsp->bssp, tmp, buflen, OM_LABEL_BOTH);
+			}
 			buflen -= diff;
 			tmp += diff;
 		}
@@ -620,6 +885,9 @@ NLM_EXTERN void CDECL  ValidErr (ValidStructPtr vsp, int severity, int code1, in
 static Boolean Valid1GatherProc (GatherContextPtr gcp)
 {
 	ValidStructPtr vsp;
+	SeqFeatPtr sfp;
+	ValNodePtr sdp;
+	BioSourcePtr biop;
 
 	vsp = (ValidStructPtr)(gcp->userdata);
 	vsp->gcp = gcp;     /* needed for ValidErr */
@@ -640,6 +908,11 @@ static Boolean Valid1GatherProc (GatherContextPtr gcp)
 		case OBJ_SEQFEAT:
 			if (! vsp->onlyspell) {
 				ValidateSeqFeat (gcp);
+				sfp = (SeqFeatPtr)(gcp->thisitem);
+				if (sfp != NULL && sfp->data.choice == SEQFEAT_BIOSRC) {
+					biop = (BioSourcePtr) sfp->data.value.ptrvalue;
+					ValidateBioSource (vsp, gcp, biop);
+				}
 			}
 			SpellCheckSeqFeat(gcp);
 			break;
@@ -648,6 +921,11 @@ static Boolean Valid1GatherProc (GatherContextPtr gcp)
 			/**
 			ValidateSeqDescr (gcp);
 		    **/
+		    sdp = (ValNodePtr)(gcp->thisitem);
+		    if (sdp != NULL && sdp->choice == Seq_descr_source) {
+		    	biop = (BioSourcePtr) sdp->data.ptrvalue;
+		    	ValidateBioSource (vsp, gcp, biop);
+		    }
 			break;
 		default:
 			break;
@@ -716,6 +994,11 @@ NLM_EXTERN Boolean ValidateSeqEntry(SeqEntryPtr sep, ValidStructPtr vsp)
 	Boolean suppress_no_biosrc = TRUE;
 	GatherContextPtr gcp = NULL;
 	GatherContext gc;
+	SeqEntryPtr fsep;
+	BioseqPtr fbsp = NULL;
+	ObjMgrDataPtr omdp;
+	SeqEntryPtr  oldsep;
+	SeqEntryPtr  topsep;
 
 	for (i =0; i < 6; i++)  /* keep errors between clears */
 		errors[i] = 0;
@@ -770,19 +1053,34 @@ NLM_EXTERN Boolean ValidateSeqEntry(SeqEntryPtr sep, ValidStructPtr vsp)
 		if (vsp->useSeqMgrIndexes) {
 			entityID = ObjMgrGetEntityIDForChoice (sep);
 
-			/* do not trust SeqMgrFeaturesAreIndexed time, always reindex */
-
-			SeqMgrIndexFeatures (entityID, NULL);
+			if (SeqMgrFeaturesAreIndexed (entityID) == 0) {
+				SeqMgrIndexFeatures (entityID, NULL);
+			}
 		}
 
+		fsep = FindNthBioseq (sep, 1);
+		if (fsep != NULL && IS_Bioseq (fsep)) {
+		  fbsp = (BioseqPtr) fsep->data.ptrvalue;
+		  /* report context as first bioseq */
+		  vsp->bsp = fbsp;
+		}
       	if (suppress_no_pubs) {
-			ValidErr(vsp, SEV_ERROR, ERR_SEQ_DESCR_NoPubFound, "No publications anywhere on this entire record.");
+      		omdp = ObjMgrGetData (gc.entityID);
+      		if (omdp == NULL || omdp->datatype != OBJ_SEQSUB) {
+				ValidErr(vsp, SEV_ERROR, ERR_SEQ_DESCR_NoPubFound, "No publications anywhere on this entire record.");
+      		}
       	}
       	if (suppress_no_biosrc) {
 			ValidErr(vsp, SEV_ERROR, ERR_SEQ_DESCR_NoOrgFound, "No organism name anywhere on this entire record.");
       	}
+      	vsp->bsp = NULL;
+
+		topsep = GetTopSeqEntryForEntityID (gc.entityID);
+		oldsep = SeqEntrySetScope (topsep);
 
       	GatherSeqEntry(sep, (Pointer)vsp, Valid1GatherProc, &gs);
+
+		SeqEntrySetScope (oldsep);
 
 		if (do_many)
 		{
@@ -975,6 +1273,107 @@ static void ValidatePartsSet(BioseqSetPtr bssp, ValidStructPtr vsp)
     }
 }
 
+static Boolean CheckForInconsistentBiosources (SeqEntryPtr sep, ValidStructPtr vsp, OrgRefPtr PNTR orpp)
+
+{
+	BioseqPtr bsp;
+	BioseqSetPtr bssp;
+	SeqEntryPtr tmp;
+	ValNodePtr sdp;
+	SeqFeatPtr sfp;
+	SeqMgrDescContext dcontext;
+	SeqMgrFeatContext fcontext;
+	BioSourcePtr biop;
+	OrgRefPtr orp;
+	OrgRefPtr firstorp;
+	GatherContextPtr gcp;
+	Uint2 entityID, oldEntityID;
+	Uint2 itemID, oldItemID;
+	Uint2 itemtype, oldItemtype;
+
+	if (sep == NULL || vsp == NULL || orpp == NULL) return FALSE;
+	gcp = vsp->gcp;
+
+	if (IS_Bioseq_set (sep)) {
+		bssp = (BioseqSetPtr) sep->data.ptrvalue;
+		if (bssp == NULL) return FALSE;
+		for (tmp = bssp->seq_set; tmp != NULL; tmp = tmp->next) {
+			if (CheckForInconsistentBiosources (tmp, vsp, orpp)) return TRUE;
+		}
+		return FALSE;
+	}
+
+	if (! IS_Bioseq (sep)) return FALSE;
+	bsp = (BioseqPtr) sep->data.ptrvalue;
+	if (bsp == NULL) return FALSE;
+
+	biop = NULL;
+	sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_source, &dcontext);
+	if (sdp != NULL) {
+		biop = (BioSourcePtr) sdp->data.ptrvalue;
+		entityID = dcontext.entityID;
+		itemID = dcontext.itemID;
+		itemtype = OBJ_SEQDESC;
+	} else {
+		sfp = SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_BIOSRC, 0, &fcontext);
+		if (sfp != NULL) {
+			biop = (BioSourcePtr) sfp->data.value.ptrvalue;
+			entityID = fcontext.entityID;
+			itemID = fcontext.itemID;
+			itemtype = OBJ_SEQFEAT;
+		}
+	}
+	if (biop == NULL) return FALSE;
+	orp = biop->org;
+	if (orp == NULL) return FALSE;
+
+	firstorp = *orpp;
+	if (firstorp == NULL) {
+	  *orpp = orp;
+	  return FALSE;
+	}
+
+	if (StringNICmp (orp->taxname, "Influenza virus ", 16) == 0 &&
+		StringNICmp (firstorp->taxname, "Influenza virus ", 16) == 0 &&
+		StringNICmp (orp->taxname, firstorp->taxname, 17) == 0) {
+		return FALSE;
+	}
+
+	if (StringICmp (orp->taxname, firstorp->taxname) == 0) return FALSE;
+
+	oldEntityID = gcp->entityID;
+	oldItemID = gcp->itemID;
+	oldItemtype = gcp->thistype;
+
+	gcp->entityID = entityID;
+	gcp->itemID = itemID;
+	gcp->thistype = itemtype;
+
+	/* only report the first one that doesn't match */
+
+	ValidErr (vsp, SEV_ERROR, ERR_SEQ_DESCR_InconsistentBioSources,
+				"Population set contains inconsistent organisms.");
+
+	gcp->entityID = oldEntityID;
+	gcp->itemID = oldItemID;
+	gcp->thistype = oldItemtype;
+
+	return TRUE;
+}
+
+static void ValidatePopSet(BioseqSetPtr bssp, ValidStructPtr vsp)
+
+{
+	OrgRefPtr orp = NULL;
+	SeqEntryPtr sep;
+
+    if (bssp->_class != BioseqseqSet_class_pop_set) return;
+
+    for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
+    	if (CheckForInconsistentBiosources (sep, vsp, &orp)) return;
+    }
+}
+
 static void ValidateBioseqSet (GatherContextPtr gcp)
 {
 	BioseqSetPtr bssp;
@@ -1015,8 +1414,13 @@ static void ValidateBioseqSet (GatherContextPtr gcp)
 			if (vsp->segcnt == 0)
 				ValidErr(vsp, SEV_ERROR, ERR_SEQ_PKG_SegSetProblem, "No segmented Bioseq in segset");
 			ValidateSegmentedSet(bssp, vsp);
+			break;
 		case 4:     /* seg set */
 			ValidatePartsSet(bssp, vsp);
+			break;
+		case BioseqseqSet_class_pop_set: /* population set */
+			ValidatePopSet(bssp, vsp);
+			break;
 		default:
 			if (! ((vsp->nuccnt) || (vsp->protcnt)))
 				ValidErr(vsp, SEV_WARNING, ERR_SEQ_PKG_EmptySet, "No Bioseqs in this set");
@@ -1056,6 +1460,14 @@ static void ValidateBioseqInst (GatherContextPtr gcp)
 	MolInfoPtr mip;
 	Boolean litHasData;
 	SeqMgrDescContext context;
+	SeqFeatPtr cds;
+	GeneRefPtr grp;
+	SeqFeatPtr gene;
+	SeqMgrFeatContext genectxt;
+	CharPtr genelbl;
+	SeqFeatPtr prot;
+	SeqMgrFeatContext protctxt;
+	CharPtr protlbl;
 
 							/* set up data structures */
 
@@ -1325,7 +1737,32 @@ static void ValidateBioseqInst (GatherContextPtr gcp)
 			SeqPortFree(spp);
 			if (terminations)
 			{
-				ValidErr(vsp, SEV_ERROR, ERR_SEQ_INST_StopInProtein,"[%d] termination symbols in protein sequence", terminations);
+				cds = SeqMgrGetCDSgivenProduct (bsp, NULL);
+				grp = SeqMgrGetGeneXref (cds);
+				genelbl = NULL;
+				if (grp == NULL && cds != NULL) {
+				  gene = SeqMgrGetOverlappingGene (cds->location, &genectxt);
+				  if (gene != NULL) {
+				    grp = (GeneRefPtr) gene->data.value.ptrvalue;
+				  }
+				}
+				if (grp != NULL && (! SeqMgrGeneIsSuppressed (grp))) {
+					if (grp->locus != NULL)
+						genelbl = (grp->locus);
+					else if (grp->desc != NULL)
+						genelbl = (grp->desc);
+					else if (grp->syn != NULL)
+						genelbl = (CharPtr)(grp->syn->data.ptrvalue);
+				}
+				prot = SeqMgrGetBestProteinFeature (bsp, &protctxt);
+				protlbl = protctxt.label;
+				if (StringHasNoText (genelbl)) {
+					genelbl = "gene?";
+				}
+				if (StringHasNoText (protlbl)) {
+					protlbl = "prot?";
+				}
+				ValidErr(vsp, SEV_ERROR, ERR_SEQ_INST_StopInProtein,"[%d] termination symbols in protein sequence (%s - %s)", terminations, genelbl, protlbl);
 				if (! i)
 					return;
 			}
@@ -1536,7 +1973,7 @@ static void ValidateBioseqInst (GatherContextPtr gcp)
 				if (mip->tech == MI_TECH_htgs_0 || mip->tech == MI_TECH_htgs_1 || mip->tech == MI_TECH_htgs_2) {
 					ValidErr(vsp, SEV_WARNING, ERR_SEQ_INST_LongHtgsSequence,"Phase 0, 1 or 2 HTGS sequence exceeds 350kbp limit");
 				} else if (mip->tech == MI_TECH_htgs_3) {
-					ValidErr(vsp, SEV_FATAL, ERR_SEQ_INST_SequenceTooLong,"Phase 3 HTGS sequence exceeds 350kbp limit");
+					ValidErr(vsp, SEV_WARNING, ERR_SEQ_INST_SequenceExceeds350kbp,"Phase 3 HTGS sequence exceeds 350kbp limit");
 				} else {
 					len = 0;
 					litHasData = FALSE;
@@ -1572,12 +2009,12 @@ static void ValidateBioseqInst (GatherContextPtr gcp)
 				if (mip->tech == MI_TECH_htgs_0 || mip->tech == MI_TECH_htgs_1 || mip->tech == MI_TECH_htgs_2) {
 					ValidErr(vsp, SEV_WARNING, ERR_SEQ_INST_LongHtgsSequence,"Phase 0, 1 or 2 HTGS sequence exceeds 350kbp limit");
 				} else if (mip->tech == MI_TECH_htgs_3) {
-					ValidErr(vsp, SEV_FATAL, ERR_SEQ_INST_SequenceTooLong,"Phase 3 HTGS sequence exceeds 350kbp limit");
+					ValidErr(vsp, SEV_WARNING, ERR_SEQ_INST_SequenceExceeds350kbp,"Phase 3 HTGS sequence exceeds 350kbp limit");
 				} else {
-					ValidErr(vsp, SEV_FATAL, ERR_SEQ_INST_SequenceTooLong,"Length of sequence exceeds 350kbp limit");
+					ValidErr(vsp, SEV_WARNING, ERR_SEQ_INST_SequenceExceeds350kbp,"Length of sequence exceeds 350kbp limit");
 				}
 			} else {
-				ValidErr(vsp, SEV_FATAL, ERR_SEQ_INST_SequenceTooLong,"Length of sequence exceeds 350kbp limit");
+				ValidErr(vsp, SEV_WARNING, ERR_SEQ_INST_SequenceExceeds350kbp,"Length of sequence exceeds 350kbp limit");
 			}
 		} else {
 			/* Could be a segset header bioseq that is > 350kbp */
@@ -1865,11 +2302,350 @@ static void ValidateSeqFeatContext (GatherContextPtr gcp)
 
 /*****************************************************************************
 *
+*   CountryIsValid(name)
+*      Validates subsource country against official country names
+*
+*****************************************************************************/
+
+static CharPtr countrycodes [] = {
+  "Afghanistan",
+  "Albania",
+  "Algeria",
+  "American Samoa",
+  "Andorra",
+  "Angola",
+  "Anguilla",
+  "Antarctica",
+  "Antigua and Barbuda",
+  "Argentina",
+  "Armenia",
+  "Aruba",
+  "Ashmore and Cartier Islands",
+  "Australia",
+  "Austria",
+  "Azerbaijan",
+  "Bahamas",
+  "Bahrain",
+  "Baker Island",
+  "Bangladesh",
+  "Barbados",
+  "Bassas da India",
+  "Belarus",
+  "Belgium",
+  "Belize",
+  "Benin",
+  "Bermuda",
+  "Bhutan",
+  "Bolivia",
+  "Bosnia and Herzegovina",
+  "Botswana",
+  "Bouvet Island",
+  "Brazil",
+  "British Virgin Islands",
+  "Brunei",
+  "Bulgaria",
+  "Burkina Faso",
+  "Burma",
+  "Burundi",
+  "Cambodia",
+  "Cameroon",
+  "Canada",
+  "Cape Verde",
+  "Cayman Islands",
+  "Central African Republic",
+  "Chad",
+  "Chile",
+  "China",
+  "Christmas Island",
+  "Clipperton Island",
+  "Cocos Islands",
+  "Colombia",
+  "Comoros",
+  "Cook Islands",
+  "Coral Sea Islands",
+  "Costa Rica",
+  "Cote d' Ivoire",
+  "Croatia",
+  "Cuba",
+  "Cyprus",
+  "Czech Republic",
+  "Democratic Republic of the Congo",
+  "Denmark",
+  "Djibouti",
+  "Dominica",
+  "Dominican Republic",
+  "Ecuador",
+  "Egypt",
+  "El Salvador",
+  "Equatorial Guinea",
+  "Eritrea",
+  "Estonia",
+  "Ethiopia",
+  "Europa Island",
+  "Falkland Islands (Islas Malvinas)",
+  "Faroe Islands",
+  "Fiji",
+  "Finland",
+  "France",
+  "French Guiana",
+  "French Polynesia",
+  "French Southern and Antarctic Lands",
+  "Gabon",
+  "Galapagos Islands",
+  "Gambia",
+  "Gaza Strip",
+  "Georgia",
+  "Germany",
+  "Ghana",
+  "Gibraltar",
+  "Glorioso Islands",
+  "Greece",
+  "Greenland",
+  "Grenada",
+  "Guadeloupe",
+  "Guam",
+  "Guatemala",
+  "Guernsey",
+  "Guinea",
+  "Guinea-Bissau",
+  "Guyana",
+  "Haiti",
+  "Heard Island and McDonald Islands",
+  "Honduras",
+  "Hong Kong",
+  "Howland Island",
+  "Hungary",
+  "Iceland",
+  "India",
+  "Indonesia",
+  "Iran",
+  "Iraq",
+  "Ireland",
+  "Isle of Man",
+  "Israel",
+  "Italy",
+  "Jamaica",
+  "Jan Mayen",
+  "Japan",
+  "Jarvis Island",
+  "Jersey",
+  "Johnston Atoll",
+  "Jordan",
+  "Juan de Nova Island",
+  "Kazakhstan",
+  "Kenya",
+  "Kingman Reef",
+  "Kiribati",
+  "Kuwait",
+  "Kyrgyzstan",
+  "Laos",
+  "Latvia",
+  "Lebanon",
+  "Lesotho",
+  "Liberia",
+  "Libya",
+  "Liechtenstein",
+  "Lithuania",
+  "Luxembourg",
+  "Macau",
+  "Macedonia",
+  "Madagascar",
+  "Malawi",
+  "Malaysia",
+  "Maldives",
+  "Mali",
+  "Malta",
+  "Marshall Islands",
+  "Martinique",
+  "Mauritania",
+  "Mauritius",
+  "Mayotte",
+  "Mexico",
+  "Micronesia",
+  "Midway Islands",
+  "Moldova",
+  "Monaco",
+  "Mongolia",
+  "Montserrat",
+  "Morocco",
+  "Mozambique",
+  "Namibia",
+  "Nauru",
+  "Navassa Island",
+  "Nepal",
+  "Netherlands",
+  "Netherlands Antilles",
+  "New Caledonia",
+  "New Zealand",
+  "Nicaragua",
+  "Niger",
+  "Nigeria",
+  "Niue",
+  "Norfolk Island",
+  "North Korea",
+  "Northern Mariana Islands",
+  "Norway",
+  "Oman",
+  "Pakistan",
+  "Palau",
+  "Palmyra Atoll",
+  "Panama",
+  "Papua New Guinea",
+  "Paracel Islands",
+  "Paraguay",
+  "Peru",
+  "Philippines",
+  "Pitcairn Islands",
+  "Poland",
+  "Portugal",
+  "Puerto Rico",
+  "Qatar",
+  "Republic of the Congo",
+  "Reunion",
+  "Romania",
+  "Russia",
+  "Rwanda",
+  "Saint Helena",
+  "Saint Kitts and Nevis",
+  "Saint Lucia",
+  "Saint Pierre and Miquelon",
+  "Saint Vincent and the Grenadines",
+  "Samoa",
+  "San Marino",
+  "Sao Tome and Principe",
+  "Saudi Arabia",
+  "Senegal",
+  "Seychelles",
+  "Sierra Leone",
+  "Singapore",
+  "Slovakia",
+  "Slovenia",
+  "Solomon Islands",
+  "Somalia",
+  "South Africa",
+  "South Georgia and the South Sandwich Islands",
+  "South Korea",
+  "Spain",
+  "Spratly Islands",
+  "Sri Lanka",
+  "Sudan",
+  "Suriname",
+  "Svalbard",
+  "Swaziland",
+  "Sweden",
+  "Switzerland",
+  "Syria",
+  "Taiwan",
+  "Tajikistan",
+  "Tanzania",
+  "Thailand",
+  "Togo",
+  "Tokelau",
+  "Tonga",
+  "Trinidad and Tobago",
+  "Tromelin Island",
+  "Tunisia",
+  "Turkey",
+  "Turkmenistan",
+  "Turks and Caicos Islands",
+  "Tuvalu",
+  "Uganda",
+  "Ukraine",
+  "United Arab Emirates",
+  "United Kingdom",
+  "Uruguay",
+  "USA",
+  "Uzbekistan",
+  "Vanuatu",
+  "Venezuela",
+  "Viet Nam",
+  "Virgin Islands",
+  "Wake Island",
+  "Wallis and Futuna",
+  "West Bank",
+  "Western Sahara",
+  "Yemen",
+  "Yugoslavia",
+  "Zambia",
+  "Zimbabwe"
+};
+
+static Boolean CountryIsValid (CharPtr name)
+
+{
+  Int2     L, R, mid;
+  CharPtr  ptr;
+  Char     str [256];
+
+  if (StringHasNoText (name)) return FALSE;
+  StringNCpy_0 (str, name, sizeof (str));
+  ptr = StringChr (str, ':');
+  if (ptr != NULL) {
+    *ptr = '\0';
+  }
+
+  L = 0;
+  R = sizeof (countrycodes) / sizeof (countrycodes [0]);
+
+  while (L < R) {
+    mid = (L + R) / 2;
+    if (StringICmp (countrycodes [mid], str) < 0) {
+      L = mid + 1;
+    } else {
+      R = mid;
+    }
+  }
+
+  if (StringICmp (countrycodes [R], str) == 0) {
+    return TRUE;
+  }
+
+  return FALSE;
+}
+
+/*****************************************************************************
+*
 *   ValidateSeqDescrContext(gcp)
 *      Gather callback helper function for validating context on a Bioseq
 *
 *****************************************************************************/
-static Boolean ValidateSeqDescrCommon (ValNodePtr sdp, BioseqValidStrPtr bvsp, ValidStructPtr vsp)
+static void ValidateBioSource (ValidStructPtr vsp, GatherContextPtr gcp, BioSourcePtr biop)
+
+{
+	CharPtr countryname;
+	ValNodePtr db;
+	DbtagPtr dbt;
+	OrgRefPtr orp;
+	SubSourcePtr ssp;
+
+	if (biop == NULL) return;
+	ssp = biop->subtype;
+	while (ssp != NULL) {
+		if (ssp->subtype == SUBSRC_country) {
+			if (! CountryIsValid (ssp->name)) {
+				countryname = ssp->name;
+				if (StringHasNoText (countryname)) {
+					countryname = "?";
+				}
+				ValidErr(vsp, SEV_WARNING, ERR_SEQ_DESCR_BadCountryCode, "Bad country name [%s]",
+					countryname);
+			}
+		}
+		ssp = ssp->next;
+	}
+	orp = biop->org;
+	if (orp == NULL) return;
+	if (GetAppProperty ("InternalNcbiSequin") == NULL) return;
+	for (db = orp->db; db != NULL; db = db->next) {
+		dbt = (DbtagPtr) db->data.ptrvalue;
+		if (dbt != NULL) {
+			if (StringICmp (dbt->db, "taxon") == 0) return;
+		}
+	}
+	ValidErr(vsp, SEV_WARNING, ERR_SEQ_DESCR_NoTaxonID, "BioSource is missing taxon ID");
+}
+
+static Boolean ValidateSeqDescrCommon (ValNodePtr sdp, BioseqValidStrPtr bvsp, ValidStructPtr vsp, Uint2 descitemid)
 {
 	ValNodePtr vnp, vnp2;
 	OrgRefPtr this_org=NULL, that_org=NULL;
@@ -1877,11 +2653,25 @@ static Boolean ValidateSeqDescrCommon (ValNodePtr sdp, BioseqValidStrPtr bvsp, V
 	Char buf1[20], buf2[20];
 	PubdescPtr pdp;
 	MolInfoPtr mip;
+	Uint2 olditemtype;
+	Uint2 olditemid;
+	BioSourcePtr biop;
+	GatherContextPtr gcp = NULL;
 	static char * badmod = "Inconsistent GIBB-mod [%d] and [%d]";
 
 	vsp->sfp = NULL;
 	vnp = sdp;
 	vsp->descr = vnp;
+
+	if (descitemid > 0) {
+		gcp = vsp->gcp;
+		if (gcp != NULL) {
+			olditemid = gcp->itemID;
+			olditemtype = gcp->thistype;
+			gcp->itemID = descitemid;
+			gcp->thistype = OBJ_SEQDESC;
+		}
+	}
 
 	switch (vnp->choice)
 	{
@@ -2082,7 +2872,10 @@ static Boolean ValidateSeqDescrCommon (ValNodePtr sdp, BioseqValidStrPtr bvsp, V
 				bvsp->last_update = vnp;
 			break;
 		case Seq_descr_source:
-			this_org = ((BioSourcePtr)(vnp->data.ptrvalue))->org;
+			biop = (BioSourcePtr) vnp->data.ptrvalue;
+			/* ValidateBioSource (vsp, gcp, biop); */
+			this_org = biop->org;
+			/* fall into Seq_descr_org */
 		case Seq_descr_org:
 			if (this_org == NULL)
 				this_org = (OrgRefPtr)(vnp->data.ptrvalue);
@@ -2188,6 +2981,11 @@ static Boolean ValidateSeqDescrCommon (ValNodePtr sdp, BioseqValidStrPtr bvsp, V
 	}
 
 
+	if (gcp != NULL) {
+		gcp->itemID = olditemid;
+		gcp->thistype = olditemtype;
+	}
+
 	return TRUE;
 }
 
@@ -2200,7 +2998,7 @@ static Boolean LIBCALLBACK ValidateSeqDescrIndexed (ValNodePtr sdp, SeqMgrDescCo
 	bvsp = (BioseqValidStrPtr) context->userdata;
 	vsp = bvsp->vsp;
 
-	return ValidateSeqDescrCommon (sdp, bvsp, vsp);
+	return ValidateSeqDescrCommon (sdp, bvsp, vsp, context->itemID);
 }
 
 static void ValidateSeqDescrContext (GatherContextPtr gcp)
@@ -2214,7 +3012,7 @@ static void ValidateSeqDescrContext (GatherContextPtr gcp)
 	vsp = bvsp->vsp;
 	sdp = (ValNodePtr)(gcp->thisitem);
 
-	ValidateSeqDescrCommon (sdp, bvsp, vsp);
+	ValidateSeqDescrCommon (sdp, bvsp, vsp, 0);
 }
 
 /*****************************************************************************
@@ -2424,6 +3222,7 @@ static void ValidateBioseqContext (GatherContextPtr gcp)
 	MolInfoPtr mip = NULL;
 	SeqMgrDescContext context;
 	BioseqContextPtr bcp;
+	ObjMgrDataPtr omdp;
 
 	vsp = (ValidStructPtr)(gcp->userdata);
 	bsp = (BioseqPtr)(gcp->thisitem);
@@ -2513,8 +3312,15 @@ static void ValidateBioseqContext (GatherContextPtr gcp)
 	vsp->descr = NULL;
 	vsp->sfp = NULL;
 
-	if ((! bvs.got_a_pub) && (! vsp->suppress_no_pubs))
-		ValidErr(vsp, SEV_ERROR, ERR_SEQ_DESCR_NoPubFound, "No publications refer to this Bioseq.");
+	if ((! bvs.got_a_pub) && (! vsp->suppress_no_pubs)) {
+		omdp = NULL;
+		if (gcp != NULL) {
+			omdp = ObjMgrGetData (gcp->entityID);
+		}
+		if (omdp == NULL || omdp->datatype != OBJ_SEQSUB) {
+			ValidErr(vsp, SEV_ERROR, ERR_SEQ_DESCR_NoPubFound, "No publications refer to this Bioseq.");
+		}
+	}
 
 	if ((! bvs.last_org) && (! vsp->suppress_no_biosrc))
 		ValidErr(vsp, SEV_ERROR, ERR_SEQ_DESCR_NoOrgFound, "No organism name has been applied to this Bioseq.");
@@ -2717,6 +3523,79 @@ static Boolean PartialAtSpliceSite (SeqLocPtr head, Uint2 slpTag)
 
   spp = SeqPortFree (spp);
   return rsult;
+}
+
+static void CheckTrnaCodons (ValidStructPtr vsp, GatherContextPtr gcp, SeqFeatPtr sfp, tRNAPtr trp)
+
+{
+  Uint1           aa;
+  BioseqPtr       bsp;
+  Int2            code;
+  CharPtr         codes = NULL;
+  Uint1           from;
+  GeneticCodePtr  gncp;
+  Int2            j;
+  SeqEntryPtr     sep;
+  SeqMapTablePtr  smtp;
+  Uint1           taa;
+  ValNodePtr      vnp;
+
+  if (vsp == NULL || gcp == NULL || sfp == NULL || trp == NULL) return;
+  for (j = 0; j < 6; j++) {
+    if (trp->codon [j] < 64) {
+      if (codes == NULL) {
+        bsp = GetBioseqGivenSeqLoc (sfp->location, gcp->entityID);
+        sep = GetBestTopParentForData (gcp->entityID, bsp);
+        code = SeqEntryToGeneticCode (sep, NULL, NULL, 0);
+        gncp = GeneticCodeFind (code, NULL);
+        if (gncp == NULL) {
+          gncp = GeneticCodeFind (1, NULL);
+        }
+        if (gncp == NULL) return;
+        for (vnp = (ValNodePtr) gncp->data.ptrvalue; vnp != NULL; vnp = vnp->next) {
+          if (vnp->choice == 3) {
+            codes = (CharPtr) vnp->data.ptrvalue;
+          }
+        }
+      }
+      if (codes == NULL) return;
+      taa = codes [trp->codon [j]];
+      aa = 0;
+      if (trp->aatype == 2) {
+        aa = trp->aa;
+      } else {
+        from = 0;
+        switch (trp->aatype) {
+          case 0 :
+            from = 0;
+            break;
+          case 1 :
+            from = Seq_code_iupacaa;
+            break;
+          case 2 :
+            from = Seq_code_ncbieaa;
+            break;
+          case 3 :
+            from = Seq_code_ncbi8aa;
+            break;
+          case 4 :
+            from = Seq_code_ncbistdaa;
+            break;
+          default:
+            break;
+        }
+        smtp = SeqMapTableFind (Seq_code_ncbieaa, from);
+        if (smtp != NULL) {
+          aa = SeqMapTableConvert (smtp, trp->aa);
+        }
+      }
+      if (aa > 0 && aa != 255) {
+        if (taa != aa) {
+          ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_TrnaCodonWrong, "tRNA codon does not match genetic code");
+        }
+      }
+    }
+  }
 }
 
 NLM_EXTERN void ValidateSeqFeat( GatherContextPtr gcp)
@@ -3018,6 +3897,7 @@ NLM_EXTERN void ValidateSeqFeat( GatherContextPtr gcp)
 					if ((i != SLC_A_IN_B) && (i != SLC_A_EQ_B))
 						ValidErr(vsp, SEV_ERROR, ERR_SEQ_FEAT_Range, "Anticodon location not in tRNA");
 				}
+				CheckTrnaCodons (vsp, gcp, sfp, trp);
 			}
 			if (rrp->type == 0) {
 				ValidErr(vsp, SEV_WARNING, ERR_SEQ_FEAT_RNAtype0, "RNA type 0 (unknown) not supported");
@@ -3064,6 +3944,10 @@ NLM_EXTERN void ValidateSeqFeat( GatherContextPtr gcp)
 		case 19:        /* Heterogen*/
 			break;
 		case 20:        /* BioSource*/
+			/*
+			biop = (BioSourcePtr) sfp->data.value.ptrvalue;
+			ValidateBioSource (vsp, gcp, biop);
+			*/
 			break;
 		default:
 			ValidErr(vsp, SEV_ERROR, ERR_SEQ_FEAT_InvalidType, "Invalid SeqFeat type [%d]",
@@ -3263,6 +4147,44 @@ SEQLOC_STOP);
 		}
 		}
 	}
+
+		/* check for code break not on a codon */
+		len = SeqLocLen(sfp->location);
+		cbp = crp->code_break;
+		while (cbp != NULL)
+		{
+			pos1 = INT4_MAX;
+			pos2 = -10;
+			tmp = NULL;
+			while ((tmp = SeqLocFindNext(cbp->loc, tmp)) != NULL)
+			{
+				pos = GetOffsetInLoc(tmp, sfp->location, 
+SEQLOC_START);
+				if (pos < pos1)
+					pos1 = pos;
+				pos = GetOffsetInLoc(tmp, sfp->location, 
+SEQLOC_STOP);
+				if (pos > pos2)
+					pos2 = pos;
+			}
+			pos = pos2 - pos1; /* codon length */
+			/* check for code break not on a codon */
+			if (pos == 2 || (pos >= 0 && pos <= 1 && pos2 == len - 1)) {
+				if (crp->frame == 2)
+					pos = 1;
+				else if (crp->frame == 3)
+					pos = 2;
+				else
+					pos = 0;
+				if ((pos1 % 3) != pos) {
+					ValidErr(vsp,SEV_WARNING, ERR_SEQ_FEAT_TranslExceptPhase, "transl_except qual out of frame.");
+				}
+			}
+
+
+			cbp = cbp->next;
+		}
+		
 	if (crp->frame > 1) {
 		if (! (part_loc & SLP_START)) {
 			ValidErr(vsp, SEV_WARNING, ERR_SEQ_FEAT_PartialProblem, "Suspicious CDS location - frame > 1 but not 5' partial");
@@ -3585,7 +4507,11 @@ static void SpliceCheckEx(ValidStructPtr vsp, SeqFeatPtr sfp, Boolean checkAll)
 				{
 				if ((residue1 & 4) && (residue2 & 2)) { /* GC minor splice site */
 					tbuf[39] = '\0';
-					BioseqLabel(bsp, tbuf, 39, OM_LABEL_CONTENT);
+					if (vsp->suppressContext) {
+						WorstBioseqLabel(bsp, tbuf, 39, OM_LABEL_CONTENT);
+					} else {
+						BioseqLabel(bsp, tbuf, 39, OM_LABEL_CONTENT);
+					}
 					ValidErr(vsp, SEV_WARNING, ERR_SEQ_FEAT_NotSpliceConsensus,
 						"Rare splice donor consensus (GC) found instead of (GT) after exon ending at position %ld of %s",
 				    	  (long)(donor+1), tbuf);
@@ -3598,7 +4524,11 @@ static void SpliceCheckEx(ValidStructPtr vsp, SeqFeatPtr sfp, Boolean checkAll)
 					  severity = SEV_WARNING;
 					}
 					tbuf[39] = '\0';
-					BioseqLabel(bsp, tbuf, 39, OM_LABEL_CONTENT);
+					if (vsp->suppressContext) {
+						WorstBioseqLabel(bsp, tbuf, 39, OM_LABEL_CONTENT);
+					} else {
+						BioseqLabel(bsp, tbuf, 39, OM_LABEL_CONTENT);
+					}
 					ValidErr(vsp, severity, ERR_SEQ_FEAT_NotSpliceConsensus,
 						"Splice donor consensus (GT) not found after exon ending at position %ld of %s",
 				     	 (long)(donor+1), tbuf);
@@ -3625,7 +4555,11 @@ static void SpliceCheckEx(ValidStructPtr vsp, SeqFeatPtr sfp, Boolean checkAll)
 					  severity = SEV_WARNING;
 					}
 					tbuf[39] = '\0';
-					BioseqLabel(bsp, tbuf, 39, OM_LABEL_CONTENT);
+					if (vsp->suppressContext) {
+						WorstBioseqLabel(bsp, tbuf, 39, OM_LABEL_CONTENT);
+					} else {
+						BioseqLabel(bsp, tbuf, 39, OM_LABEL_CONTENT);
+					}
 					ValidErr(vsp, severity, ERR_SEQ_FEAT_NotSpliceConsensus,
 					"Splice acceptor consensus (AG) not found before exon starting at position %ld of %s",
 				      (long)(acceptor+1), tbuf);

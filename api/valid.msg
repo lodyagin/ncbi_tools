@@ -84,8 +84,8 @@ HTGS-1 or HTGS-2 sequences must be < 350 KB in length.
 $^   LongLiteralSequence, 22
 Delta literals must be < 350 KB in length.
 
-$^   SequenceTooLong, 23
-Individual sequences must be < 350 KB in length.
+$^   SequenceExceeds350kbp, 23
+Individual sequences must be < 350 KB in length, unless they represent a single gene.
 
 $^   ConflictingIdsOnBioseq, 24
 Two SeqIds of the same class was found on this Bioseq. This is probably a software error.
@@ -129,6 +129,17 @@ BioSource descriptor.
 $^   NoMolInfoFound, 8
 This sequence does not have a Mol-info descriptor applying to it.  This indicates
 genomic vs. message, sequencing technique, and whether the sequence is incomplete.
+
+$^   BadCountryCode, 9
+The country code (up to the first colon) is not on the approved list of countries.
+
+$^   NoTaxonID, 10
+The BioSource is missing a taxonID database identifier.  This will be inserted by
+the automated taxonomy lookup called by Clean Up Record.
+
+$^   InconsistentBioSources, 11
+This population study has BioSource descriptors with different taxonomic names.
+All members of a population study should be from the same organism.
 
 $$ GENERIC, 3
 
@@ -307,4 +318,11 @@ suppresses duplicate features, so use of Graphic view is recommended.
 $^ UnnecessaryGeneXref, 31
 This feature has a gene xref that is identical to the overlapping gene.  This is
 redundant, and probably should be removed.
+
+$^   TranslExceptPhase, 32
+A \transl_except qualifier was not on a codon boundary.
+
+$^   TrnaCodonWrong, 33
+The tRNA codon recognized does not code for the indicated amino acid using the
+specified genetic code.
 

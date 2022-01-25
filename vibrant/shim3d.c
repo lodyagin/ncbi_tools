@@ -29,62 +29,78 @@
 *
 * Version Creation Date:   1/26/99
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description: Shim functions to replace Viewer3D with OpenGL
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: shim3d.c,v $
+* Revision 6.2  1999/06/14 23:15:11  lewisg
+* moved useful helper functions out of the ifdef
+*
 * Revision 6.1  1999/04/06 14:23:28  lewisg
 * add opengl replacement for viewer3d
 *
 *
 */
 
-
-#ifdef _OPENGL
-
-/*
-*  Include the GL dependencies.  GL has its own typedef's for basic types, just like the toolkit.
-*  If you get warnings about type mismatch, this should be investigated.  The GL typedef's can't
-*  be included in general toolkit code because of the windows.h dependency for WIN32 which
-*  causes all sorts of name collisions.
-*/
-
-#ifdef WIN32  /* braindead windows dependency */
-#include <windows.h>
-#endif
-#include <GL/gl.h>
-#include <GL/glu.h>
-
-/* 
-*  the following 2 includes are a subset of vibrant.h, since vibdefns.h
-*  and vibforms.h confict with windows.h 
-*/
-
-#include <vibtypes.h>
-#include <vibprocs.h>
-
 #include <math.h>
 #include <shim3d.h>
+#include <stdio.h>
 
 
-#define OGL_SQR(oglx) ((oglx)*(oglx))
+/* VRML functions */
 
-typedef struct _TOGL_Layers
-/* this struct contains the information used to manage the different layers of the display */
+void VRML_ColorToString(Char *pString, TOGL_ColorCell *pColor)
 {
-    GLuint FirstLayer;
-    GLuint LastLayer;
-    GLuint SelectedLayer;
-    Nlm_Boolean IsOn[OGLMAXLAYERS];
-} TOGL_Layers;
+sprintf(pString,"%f %f %f", pColor->rgb[0]/255.0, pColor->rgb[1]/255.0,
+         pColor->rgb[2]/255.0);
+}
+
+void VRML_AddSphere3D(TOGL_ColorCell *pColor, FloatHi x, FloatHi y,
+FloatHi z, FloatHi radius)
+{
+Char szColor[256];
+
+printf("Transform {\ntranslation %f %f %f\nchildren [\nShape{\n", x, y, z);
+printf("appearance Appearance {\nmaterial Material {\n");
+VRML_ColorToString(szColor, pColor);
+printf("diffuseColor %s\n}\n}\n", szColor);
+printf("geometry Sphere {\n radius %f\n}\n", radius);
+printf("}\n]\n}\n");
+}
+
+void VRML_AddCylinder3D (TOGL_ColorCell *pColor,
+                        Nlm_FloatHi x1, Nlm_FloatHi y1, Nlm_FloatHi z1,
+                        Nlm_FloatHi x2, Nlm_FloatHi y2, Nlm_FloatHi z2,
+                        Nlm_FloatHi radius)
+{
+Char szColor[256];
+FloatHi Rotate[16], Translate[3], length, *Cross;
+FloatHi z[3] = { 0.0, 0.0, 1.0 };
+
+OGL_CreateCTransform(x1, y1, z1, x2, y2, z2, Rotate, Translate, &length);
+
+Cross = OGL_CrossProduct(&Rotate[8], z);
+if(Cross == NULL) return;
+
+printf("Transform {\nrotation %f %f %f %f", Cross[0], Cross[1], Cross[2],
+        acos(Rotate[10]));
+printf("\ntranslation %f %f %f\nchildren [\nShape{\n",
+        Translate[0], Translate[1], Translate[2]);
+printf("appearance Appearance {\nmaterial Material {\n");
+VRML_ColorToString(szColor, pColor);
+printf("diffuseColor %s\n}\n}\n", szColor);
+printf("geometry Cylinder {\n radius %f\nheight %f\ntop FALSE\n}\n", radius,
+        length);
+printf("}\n]\n}\n");   
+
+MemFree(Cross);
+}
 
 
-/*
-*   Various helper functions used in drawing 
-*/
+/* function in common with vrml and opengl */
 
 FloatHi * OGL_CrossProduct( Nlm_FloatHi * v1, Nlm_FloatHi * v2)
 {
@@ -100,6 +116,80 @@ FloatHi * OGL_CrossProduct( Nlm_FloatHi * v1, Nlm_FloatHi * v2)
     
     return RetVal;
 }
+
+void OGL_CreateCTransform(Nlm_FloatHi x1, Nlm_FloatHi y1, Nlm_FloatHi z1,
+                        Nlm_FloatHi x2, Nlm_FloatHi y2, Nlm_FloatHi z2,
+                        Nlm_FloatHi *Rotate, Nlm_FloatHi *Translate,
+                        Nlm_FloatHi *length)
+{
+    FloatHi a, b, c;  /* the normal z */
+    FloatHi yy2, yy3;  /* the normal y */
+    FloatHi xx1, xx2, xx3;  /* the normal x */
+    Int4 iCount;
+    
+    if(Rotate == NULL || Translate == NULL || length == NULL) return;
+    
+    Translate[0] = (x1+x2)/2;
+    Translate[1] = (y1+y2)/2;
+    Translate[2] = (z1+z2)/2;
+    
+    *length = sqrt(OGL_SQR(x1-x2)+OGL_SQR(y1-y2)+OGL_SQR(z1-z2))/2.0;
+
+    for (iCount=0; iCount<16; iCount++) Rotate[iCount]= 0.0;
+    Rotate[15] = 1;  /* identity */
+    
+    /* create the normal z */
+    a = (x1-Translate[0])/(*length);
+    b = (y1-Translate[1])/(*length);
+    c = (z1-Translate[2])/(*length);
+    
+    /* create the normal y */
+    
+    yy2 = sqrt(1.0/(1.0+OGL_SQR(b)/OGL_SQR(c)));
+    yy3 = -(b/c)*yy2;
+    
+    /* create the normal x */
+    
+    xx2 = sqrt(1.0/(pow(c,4.0)/(OGL_SQR(a)*OGL_SQR(b))+2.0*OGL_SQR(c)/OGL_SQR(a)
+        + OGL_SQR(b)/OGL_SQR(a) + 1 + OGL_SQR(c)/OGL_SQR(b)));
+    xx3 = xx2*c/b;
+    xx1 = (-OGL_SQR(c)/(a*b) - b/a) * xx2;
+    
+    
+    /* now use the normals to make the rotation matrix */
+    
+    Rotate[0] = xx1;
+    Rotate[1] = xx2;
+    Rotate[2] = xx3;
+    
+    Rotate[4] = 0.0;
+    Rotate[5] = yy2;
+    Rotate[6] = yy3;
+    
+    Rotate[8] = a;
+    Rotate[9] = b;
+    Rotate[10] = c;
+}
+
+
+
+#ifdef _OPENGL
+
+
+typedef struct _TOGL_Layers
+/* this struct contains the information used to manage the different layers of the display */
+{
+    GLuint FirstLayer;
+    GLuint LastLayer;
+    GLuint SelectedLayer;
+    Nlm_Boolean IsOn[OGLMAXLAYERS];
+} TOGL_Layers;
+
+
+/*
+*   Various helper functions used in drawing 
+*/
+
 
 
 void OGL_Normalize( Nlm_FloatHi * v)
@@ -189,6 +279,7 @@ void OGL_AddQuad3D(TOGL_Data * OGL_Data, TOGL_ColorCell * color,
     glEnd();
 
     glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_FALSE);
+    if(Normal != NULL) MemFree(Normal);
 }
 
 
@@ -204,54 +295,13 @@ void OGL_AddCylinder3D (TOGL_Data * OGL_Data, TOGL_ColorCell * color,
     GLdouble Rotate[16];
     GLdouble Translate[3];
     Nlm_Int4 iCount;
-    GLdouble length;
     GLUquadricObj * qobj;
-    GLdouble a, b, c;  /* the normal z */
-    GLdouble yy2, yy3;  /* the normal y */
-    GLdouble xx1, xx2, xx3;  /* the normal x */
     Nlm_Int4 slices;
+    GLdouble length;
     
     if(OGL_Data == NULL || color == NULL) return;
-    for (iCount=0; iCount<16; iCount++) Rotate[iCount]= 0.0;
-    Rotate[15] = 1;  /* identity */
-    
-    Translate[0] = (x1+x2)/2;
-    Translate[1] = (y1+y2)/2;
-    Translate[2] = (z1+z2)/2;
-    
-    length = sqrt(OGL_SQR(x1-x2)+OGL_SQR(y1-y2)+OGL_SQR(z1-z2))/2.0;
-    
-    /* create the normal z */
-    a = (x1-Translate[0])/length;
-    b = (y1-Translate[1])/length;
-    c = (z1-Translate[2])/length;
-    
-    /* create the normal y */
-    
-    yy2 = sqrt(1.0/(1.0+OGL_SQR(b)/OGL_SQR(c)));
-    yy3 = -(b/c)*yy2;
-    
-    /* create the normal x */
-    
-    xx2 = sqrt(1.0/(pow(c,4.0)/(OGL_SQR(a)*OGL_SQR(b))+2.0*OGL_SQR(c)/OGL_SQR(a)
-        + OGL_SQR(b)/OGL_SQR(a) + 1 + OGL_SQR(c)/OGL_SQR(b)));
-    xx3 = xx2*c/b;
-    xx1 = (-OGL_SQR(c)/(a*b) - b/a) * xx2;
-    
-    
-    /* now use the normals to make the rotation matrix */
-    
-    Rotate[0] = xx1;
-    Rotate[1] = xx2;
-    Rotate[2] = xx3;
-    
-    Rotate[4] = 0.0;
-    Rotate[5] = yy2;
-    Rotate[6] = yy3;
-    
-    Rotate[8] = a;
-    Rotate[9] = b;
-    Rotate[10] = c;
+        
+    OGL_CreateCTransform(x1, y1, z1, x2, y2, z2, Rotate, Translate, &length);
         
     if(OGL_Data->IndexMode) {
         PaletteIndex = OGL_SearchPaletteIndex (OGL_Data->PaletteIndex, color);

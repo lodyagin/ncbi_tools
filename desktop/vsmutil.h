@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/3/95
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description: 
 *
@@ -78,6 +78,7 @@ extern void AppendValidMessage (CharPtr text1, CharPtr text2, CharPtr text3,
                                 Uint2 entityID, Uint2 itemID, Uint2 itemtype,
                                 CharPtr message, CharPtr expanded, ValNodePtr context);
 extern int LIBCALLBACK ValidErrHook PROTO((const ErrDesc *err));
+extern Boolean ShouldSetSuppressContext (void);
 
 /*****************************************************************************
 *

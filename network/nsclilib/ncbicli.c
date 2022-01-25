@@ -1,4 +1,4 @@
-/*  $RCSfile: ncbicli.c,v $  $Revision: 4.17 $  $Date: 1999/03/12 22:38:23 $
+/*  $RCSfile: ncbicli.c,v $  $Revision: 4.18 $  $Date: 1999/06/24 17:59:35 $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -31,6 +31,9 @@
 *
 * --------------------------------------------------------------------------
 * $Log: ncbicli.c,v $
+* Revision 4.18  1999/06/24 17:59:35  vakatov
+* Untie the HTTP and regular proxy servers: SRV_HTTP_PROXY_***, SRV_PROXY_HOST
+*
 * Revision 4.17  1999/03/12 22:38:23  vakatov
 * More detailed debug printout in "s_ProcessReply_WWWClient()"
 *
@@ -205,8 +208,8 @@ static Uint4 s_NIC_SockSkip(SOCK sock, Uint4 n_skip)
 /* Get and process reply from dispatcher(WWW Special-Client agent)
  */
 static Boolean s_ProcessReply_WWWClient(NIC nic, const STimeout *timeout,
-                                        Boolean debug_printout,
-                                        Boolean cern_nontransparent_proxy)
+                                        const Char *proxy_host,
+                                        Boolean debug_printout)
 {
   Uint4         buf_read;
   Char          buffer[1024];
@@ -250,15 +253,12 @@ static Boolean s_ProcessReply_WWWClient(NIC nic, const STimeout *timeout,
 
       /* the dispatcher's reply has been parsed successfully */
       nic->server_host = server_host;
-      if ( cern_nontransparent_proxy ) { /* substitute server host */
-        SOCK_Address(nic->sock, &nic->server_host, 0, FALSE);
-      }
       nic->server_port = (Uint2)server_port;
       nic->ticket      = Nlm_htonl((Uint4)ticket);
       break;
     }
 
-    /* avoid the read-buffer overflow */
+    /* avoid overflow in the read buffer */
 #define SHIFT_SIZE (sizeof(buffer) / 2)
     if (buf_read > SHIFT_SIZE + sizeof(X_TAG)) {
       buf_read -= SHIFT_SIZE;
@@ -274,8 +274,13 @@ static Boolean s_ProcessReply_WWWClient(NIC nic, const STimeout *timeout,
     return FALSE; /* i.e. the reply is bad or missing */
 
   {{ /* Connect to the "real" server and send back the ticket */
-    VERIFY( Uint4toInaddr(Nlm_htonl(nic->server_host),
-                          buffer, sizeof(buffer)) );
+    if (proxy_host  &&  *proxy_host) {
+      StringNCpy_0(buffer, proxy_host, sizeof(buffer));
+    } else {
+      VERIFY( Uint4toInaddr(Nlm_htonl(nic->server_host),
+                            buffer, sizeof(buffer)) );
+    }
+
     if (SOCK_Create(buffer, nic->server_port, timeout, &nic->sock)
         != eSOCK_ESuccess) {
       ErrPostEx(SEV_ERROR, NIC_ERROR, 7,
@@ -288,6 +293,9 @@ static Boolean s_ProcessReply_WWWClient(NIC nic, const STimeout *timeout,
               "[WWW Special Client] Connected to server \"%s\", port %u\n",
               buffer, (unsigned int)nic->server_port);
     }
+
+    /* store the server host */
+    SOCK_Address(nic->sock, &nic->server_host, 0, FALSE);
 
 
     VERIFY( SOCK_SetTimeout(nic->sock, eSOCK_OnReadWrite, timeout, 0, 0)
@@ -363,6 +371,7 @@ static Boolean s_ProcessReply_WWWDirect(NIC nic, Boolean debug_printout)
  *  EXTERNAL
  ***********************************************************************/
 
+
 NLM_EXTERN NIC NIC_GetService
 (const Char      *service_name,
  const Char      *disp_host,
@@ -371,8 +380,9 @@ NLM_EXTERN NIC NIC_GetService
  const STimeout  *timeout,
  ENIC_Agent       client_agent,
  const Char      *client_host,
+ const Char      *proxy_host,
  const ByteStore *service_query,
- Uint4            flags)
+ TNIC_Flags       flags)
 {
   NIC  nic = (NIC)MemNew(sizeof(Nlm_NICstruct));
 
@@ -424,9 +434,8 @@ NLM_EXTERN NIC NIC_GetService
 
       /* process reply from the dispatcher */
       if ( !s_ProcessReply_WWWClient
-           (nic, timeout,
-            (Boolean)(flags & NIC_DEBUG_PRINTOUT),
-            (Boolean)(flags & NIC_CERN_PROXY)) )
+           (nic, timeout, proxy_host,
+            (Boolean)(flags & NIC_DEBUG_PRINTOUT)) )
         break;
     } else { /* i.e. eNIC_WWWDirect */
       /* send HTTP header(along with the bytestore content, if any) */
@@ -465,7 +474,7 @@ NLM_EXTERN NIC NIC_GetService
   /* error */
   ErrPostEx(SEV_ERROR, NIC_ERROR, 10,
             "[NIC_GetService]  Failed to establish connection to dispatcher "
-            " %s:%d/%s, for service\"%s\"",
+            " %s:%d/%s, for service \"%s\"",
             disp_host, (int)disp_port, disp_path, service_name);
   NIC_CloseService(nic);
   return 0;
@@ -523,7 +532,7 @@ static Nlm_Int2 TEST__ncbicli_1(SOCK sock)
 
 static Nlm_Int2 TEST__ncbicli(ENIC_Agent agent)
 {
-  static Char *service_name  = "Entrez";
+  static Char service_name[]  = "Entrez";
   Char        *service_query = service_name;
 
   NIC          nic;
@@ -539,7 +548,7 @@ static Nlm_Int2 TEST__ncbicli(ENIC_Agent agent)
   BSWrite(service_query_bsp, service_query, StrLen(service_query)+1);
   nic = NIC_GetService(service_name,
                        TEST_ENGINE_HOST, TEST_ENGINE_PORT, TEST_ENGINE_URL,
-                       &timeout, agent, 0, service_query_bsp,
+                       &timeout, agent, 0, 0, service_query_bsp,
                        NIC_DEBUG_PRINTOUT);
   ASS_RET(nic, 1);
   BSFree(service_query_bsp);

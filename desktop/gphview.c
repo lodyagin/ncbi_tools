@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/5/97
 *
-* $Revision: 6.40 $
+* $Revision: 6.41 $
 *
 * File Description:
 *
@@ -3221,12 +3221,16 @@ static void PrintGraphical (BioseqViewPtr bvp)
   MsgAnswer  ans;
 
   if (bvp == NULL || bvp->vwr == NULL) return;
+#ifdef WIN_MOTIF
+  Message (MSG_OK, "Printing of graphics under MOTIF is not supported at this time.");
+#else
   ans = Message (MSG_YN, "Do you want to print just the visible area?");
   if (ans == ANS_YES) {
     PrintViewer (bvp->vwr);
   } else {
     PrintAllViewer (bvp->vwr);
   }
+#endif
 }
 
 typedef struct expboundstruc {

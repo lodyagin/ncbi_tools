@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/5/97
 *
-* $Revision: 6.18 $
+* $Revision: 6.22 $
 *
 * File Description: 
 *
@@ -551,6 +551,7 @@ static Boolean PopulateFF (DoC d, SeqEntryPtr sep, BioseqPtr bsp, Uint1 format, 
       ajp->sep = sep;
       ajp->mode = mode;
       ajp->format = format;
+      ajp->show_version = TRUE;
       ajp->gb_style = TRUE;
       ajp->show_seq = TRUE;
       ajp->show_gi = TRUE;
@@ -591,11 +592,14 @@ static void PopulateFlatFile (BioseqViewPtr bvp, Uint1 format, Boolean show_gene
   FILE         *fp;
   Int2         into;
   Int2         item;
+  ErrSev       level;
   Uint1        mode;
+  SeqEntryPtr  oldsep;
   Char         path [PATH_MAX];
   BaR          sb = NULL;
   SeqEntryPtr  sep;
   Int4         startsAt;
+  SeqEntryPtr  topsep;
   TexT         txt;
 
   if (bvp == NULL) return;
@@ -637,21 +641,22 @@ static void PopulateFlatFile (BioseqViewPtr bvp, Uint1 format, Boolean show_gene
     }
   }
   sep = SeqMgrGetSeqEntryForData (bsp);
+  entityID = ObjMgrGetEntityIDForChoice (sep);
   if (bvp->hasTargetControl) {
     if (bvp->viewWholeEntity) {
-      entityID = ObjMgrGetEntityIDForChoice (sep);
       sep = GetTopSeqEntryForEntityID (entityID);
     } else if (ISA_na (bsp->mol) && bsp->repr == Seq_repr_seg) {
-      entityID = ObjMgrGetEntityIDForChoice (sep);
       sep = GetBestTopParentForData (entityID, bsp);
     }
   } else {
     if (ISA_na (bsp->mol) || bsp->repr == Seq_repr_seg) {
-      entityID = ObjMgrGetEntityIDForChoice (sep);
       sep = GetBestTopParentForData (entityID, bsp);
     }
   }
   if (sep == NULL) return;
+
+  topsep = GetTopSeqEntryForEntityID (entityID);
+  oldsep = SeqEntrySetScope (topsep);
 
   WatchCursor ();
   ffColFmt.pixWidth = screenRect.right - screenRect.left;
@@ -660,12 +665,16 @@ static void PopulateFlatFile (BioseqViewPtr bvp, Uint1 format, Boolean show_gene
     TmpNam (path);
     fp = FileOpen (path, "w");
     if (fp != NULL) {
+      level = ErrSetMessageLevel (SEV_MAX);
       if (SeqEntryToFlat (sep, fp, format, mode)) {
         FileClose (fp);
-        FileToScrollText (txt, path);
+        if (! FileToScrollText (txt, path)) {
+          SetTitle (txt, "(Text is too large to be displayed in this control.)");
+        }
       } else {
         FileClose (fp);
       }
+      ErrSetMessageLevel (level);
     }
     FileRemove (path);
   } else {
@@ -681,6 +690,9 @@ static void PopulateFlatFile (BioseqViewPtr bvp, Uint1 format, Boolean show_gene
     CorrectBarValue (sb, startsAt + into);
     UpdateDocument (doc, 0, 0);
   }
+
+  SeqEntrySetScope (oldsep);
+
   ArrowCursor ();
   Update ();
 }
@@ -811,7 +823,9 @@ static void PopulateFasta (BioseqViewPtr bvp)
     if (fastaOK) {
       FileClose (fp);
       if (bvp->useScrollText) {
-        FileToScrollText (txt, path);
+        if (! FileToScrollText (txt, path)) {
+          SetTitle (txt, "(Text is too large to be displayed in this control.)");
+        }
       } else {
         DisplayFancy (doc, path, &ffParFmt, &ffColFmt, fnt, 4);
         SetDocCache (doc, StdPutDocCache, StdGetDocCache, StdResetDocCache);
@@ -898,7 +912,9 @@ static void PopulateAsn (BioseqViewPtr bvp)
       if (SeqEntryAsnWrite (sep, aipout, NULL)) {
         AsnIoClose (aipout);
         if (bvp->useScrollText) {
-          FileToScrollText (txt, path);
+          if (! FileToScrollText (txt, path)) {
+            SetTitle (txt, "(Text is too large to be displayed in this control.)");
+          }
         } else {
           DisplayFancy (doc, path, &ffParFmt, &ffColFmt, fnt, 4);
           SetDocCache (doc, StdPutDocCache, StdGetDocCache, StdResetDocCache);

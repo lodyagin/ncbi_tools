@@ -32,20 +32,17 @@ SRV_ENGINE_PORT:  [default = 80]
 SRV_ENGINE_URL:   [default = /Service/nph-dispd.cgi]
 
 
-SRV_PROXY_****:  to connect via a CERN-like proxy server
-[default = n/a]
+SRV_HTTP_PROXY_HOST:    [default = n/a]
+SRV_HTTP_PROXY_PORT:    [default = 80]
+Value:
+   Address of an HTTP proxy server (host:port)
+Note:
+   SRV_HTTP_PROXY_PORT is ignored if SRV_PROXY_HOST is not specified
+
 
 SRV_PROXY_HOST:         [default = n/a]
-SRV_PROXY_PORT:         [default = 80]
-
-SRV_PROXY_TRANSPARENT:  [default = "no"]
 Value:
-   "1", "yes", "true" (case-insensitive) -- transparent CERN-like proxy
-   otherwise -- non-transparent [default]
-
-Notes:
- 1) SRV_PROXY_PORT has no sense if SRV_PROXY_HOST is not specified
- 2) If SRV_PROXY_HOST is set in WWW mode then auto-switch to FIREWALL mode
+   Host name of a non-transparent CERN-like firewall proxy server
 
 
 SRV_DEBUG_PRINTOUT:  to printout messages sent by dispatcher when
@@ -129,7 +126,7 @@ NOTES
 ~~~~~
 
 1. STATELESS connection mode is usually not available for the distributed
-applications. It is hardcoded to be unavailable unless "ni_lib_.c"
+applications. It is hardcoded to be unavailable unless the "ni_lib_.c"
 module is compiled with the "-DALLOW_STATELESS" flag.
 
 2. The local LOAD-BALANCING is *never* available for the distributed
@@ -139,4 +136,4 @@ Solaris or IRIX. Then, the client must run on the host that:
 a) belongs to one of NCBI subnets and
 b) has "lbdaemon"(load-balance daemon) application running on it.
 
-$Date: 1998/12/15 17:40:51 $
+$Date: 1999/06/24 17:59:37 $

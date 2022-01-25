@@ -29,7 +29,7 @@
 *
 * Version Creation Date:  14 January 97  
 *
-* $Id: mmdblocl.c,v 6.4 1998/06/09 18:42:11 kimelman Exp $
+* $Id: mmdblocl.c,v 6.5 1999/05/11 23:28:25 kimelman Exp $
 *
 * File Description: Used to provide Biostruc data to MMDB-API when
 *  MMDB files are on a local filesystem in standard MMDB ftp-site format.
@@ -37,6 +37,10 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: mmdblocl.c,v $
+* Revision 6.5  1999/05/11 23:28:25  kimelman
+* 1. no pubstruct by default
+* 2. define 'extern' info
+*
 * Revision 6.4  1998/06/09 18:42:11  kimelman
 * accepted __NO_DB__ flag to compile without DB access library
 *
@@ -101,10 +105,6 @@
  * Database = PUBSEQ_OS:PubStruct=anyone:allowed
  * 
  */
-
-#ifndef __NO_DB__
-#define MMDB_PUBSTRUCT
-#endif
 
 #include <ncbi.h>
 #include <mmdbapi1.h>
@@ -335,6 +335,8 @@ MMDBBiostrucGet (DocUid uid, Int4 mdlLvl, Int4 maxModels)
   Int4        acc;
 
 #ifdef MMDB_PUBSTRUCT
+  extern WWWInfoPtr 		info;
+  
   if(!file_db)
     {
       Int4 state     = 0;

@@ -1,7 +1,7 @@
 #ifndef _NCBIOPT_
 #define _NCBIOPT_
 
-/*  $RCSfile: ncbiopt.h,v $  $Revision: 6.1 $  $Date: 1998/08/11 22:09:08 $
+/*  $RCSfile: ncbiopt.h,v $  $Revision: 6.2 $  $Date: 1999/08/25 18:21:36 $
 * ==========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -34,6 +34,9 @@
 *
 * --------------------------------------------------------------------------
 * $Log: ncbiopt.h,v $
+* Revision 6.2  1999/08/25 18:21:36  vakatov
+* Int8 for OS_UNIX_AIX
+*
 * Revision 6.1  1998/08/11 22:09:08  vakatov
 * Initial revision
 *
@@ -108,17 +111,13 @@
      /* (signed) */
 #    if defined(OS_UNIX_LINUX) || defined(OS_UNIX_SOL) || defined(OS_UNIX_IRIX)
 #      define Int8 long long
-#    elif defined(PROC_ALPHA)
+#    elif defined(PROC_ALPHA) || defined(OS_UNIX_AIX)
 #      define Int8 long
 #    endif
 
      /* (unsigned) */
-#    if defined(OS_UNIX_LINUX) || defined(OS_UNIX_SOL) || defined(OS_UNIX_IRIX)
-#      define Uint8 unsigned long long
-#    elif defined(Int8) 
+#    if defined(Int8) 
 #      define Uint8 unsigned Int8
-#    elif defined(PROC_ALPHA)
-#      define Uint8 long
 #    endif
 
 #  elif defined(OS_MAC) 

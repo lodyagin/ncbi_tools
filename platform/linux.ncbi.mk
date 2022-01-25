@@ -1,12 +1,12 @@
 #
-# $Id: linux.ncbi.mk,v 1.4 1999/04/02 17:21:19 beloslyu Exp $
+# $Id: linux.ncbi.mk,v 1.6 1999/08/12 18:32:41 beloslyu Exp $
 #
 NCBI_DEFAULT_LCL = lnx
 NCBI_MAKE_SHELL = /bin/sh
 NCBI_CC = gcc -pipe
 NCBI_CFLAGS1 = -c
-NCBI_LDFLAGS1 = 
-NCBI_OPTFLAG = -O
+NCBI_LDFLAGS1 = -O2
+NCBI_OPTFLAG = -O2
 NCBI_BIN_MASTER = /home/coremake/ncbi/bin
 NCBI_BIN_COPY = /home/coremake/ncbi/bin
 NCBI_INCDIR = /home/coremake/ncbi/include
@@ -21,3 +21,4 @@ NCBI_RANLIB = ranlib
 # Used by makedis.csh
 NCBI_MT_OTHERLIBS = -lpthread
 NCBI_THREAD_OBJ = ncbithr.o
+NETENTREZVERSION = 2.02c2ASN1SPEC6 

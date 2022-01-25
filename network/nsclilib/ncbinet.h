@@ -29,7 +29,7 @@
 *
 * Version Creation Date:        1/1/92
 *
-* $Revision: 6.3 $
+* $Revision: 6.4 $
 *
 * File Description: 
 *
@@ -37,6 +37,9 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: ncbinet.h,v $
+* Revision 6.4  1999/07/30 19:11:05  vakatov
+* Use "strerror()" instead of "sys_errlist[]"
+*
 * Revision 6.3  1998/08/05 20:22:11  vakatov
 * [OS_UNIX] Dont declare "errno" as extern if it's #define'd(e.g. on
 * the MT platforms it can be #define'd to a function)
@@ -96,16 +99,10 @@ extern void bzero PROTO((CharPtr target, long numbytes));
 
 /* GLOBAL VARIABLES */
 
-#if defined(OS_UNIX) || defined(NETP_INET_MACTCP)
-#if !defined (OS_UNIX_LINUX) || !defined(PROC_ALPHA)
-extern CharPtr  sys_errlist[];
-#endif
+#ifdef NETP_INET_MACTCP
 #ifndef errno
 extern int      errno;
 #endif
-#endif
-
-#ifdef NETP_INET_MACTCP
 extern long     errno_long;
 #endif
 

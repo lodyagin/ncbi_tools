@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 6.3 $
+* $Revision: 6.9 $
 *
 * File Description:  New GenBank flatfile generator
 *
@@ -56,48 +56,61 @@
 extern "C" {
 #endif
 
-#define GENBANK_FMT   ((Uint1) 0)
-#define EMBL_FMT      ((Uint1) 1)
-#define GENPEPT_FMT   ((Uint1) 2)
-#define EMBLPEPT_FMT  ((Uint1) 5)
+/* choices of format, mode, and style */
 
-#define RELEASE_MODE  ((Uint1)  6)
-#define SEQUIN_MODE   ((Uint1)  7)
-#define DUMP_MODE     ((Uint1)  8)
+typedef enum {
+  GENBANK_FMT = 1,
+  EMBL_FMT,
+  DDBJ_FMT,
+  GENPEPT_FMT,
+  EMBLPEPT_FMT,
+  DDBJPEPT_FMT,
+  FTABLE_FMT
+} FmtType;
 
-#define SEGMENTED_STYLE   ((Uint1) 10)
-#define MASTER_STYLE      ((Uint1) 11)
+typedef enum {
+  RELEASE_MODE = 1,
+  SEQUIN_MODE,
+  DUMP_MODE
+} ModType;
 
-#define SEQUENCE_STYLE     ((Uint1) 15)
-#define CONTIG_STYLE       ((Uint1) 16)
+typedef enum {
+  NORMAL_STYLE = 1,
+  MASTER_STYLE,
+  CONTIG_STYLE
+} StlType;
 
-#define LOCUS_BLOCK       ((Uint1)  1)
-#define DEFLINE_BLOCK     ((Uint1)  2)
-#define ACCESSION_BLOCK   ((Uint1)  3)
-#define VERSION_BLOCK     ((Uint1)  4)
-#define PID_BLOCK         ((Uint1)  5)
-#define DBSOURCE_BLOCK    ((Uint1)  6)
-#define DATE_BLOCK        ((Uint1)  7)
-#define KEYWORDS_BLOCK    ((Uint1)  8)
-#define SEGMENT_BLOCK     ((Uint1)  9)
-#define ORGANISM_BLOCK    ((Uint1) 10)
-#define REFERENCE_BLOCK   ((Uint1) 11)
-#define COMMENT_BLOCK     ((Uint1) 12)
-#define FEATHEADER_BLOCK  ((Uint1) 13)
-#define SOURCE_BLOCK      ((Uint1) 14)
-#define FEATURE_BLOCK     ((Uint1) 15)
-#define BASECOUNT_BLOCK   ((Uint1) 16)
-#define ORIGIN_BLOCK      ((Uint1) 17)
-#define SEQUENCE_BLOCK    ((Uint1) 18)
-#define CONTIG_BLOCK      ((Uint1) 19)
-#define SLASH_BLOCK       ((Uint1) 20)
+/* internal block type identifiers */
+
+typedef enum {
+  LOCUS_BLOCK = 1,
+  DEFLINE_BLOCK,
+  ACCESSION_BLOCK,
+  VERSION_BLOCK,
+  PID_BLOCK,
+  DBSOURCE_BLOCK,
+  DATE_BLOCK,
+  KEYWORDS_BLOCK,
+  SEGMENT_BLOCK,
+  ORGANISM_BLOCK,
+  REFERENCE_BLOCK,
+  COMMENT_BLOCK,
+  FEATHEADER_BLOCK,
+  SOURCE_BLOCK,
+  FEATURE_BLOCK,
+  BASECOUNT_BLOCK,
+  ORIGIN_BLOCK,
+  SEQUENCE_BLOCK,
+  CONTIG_BLOCK,
+  SLASH_BLOCK
+} BlockType;
 
 #define ASN2GB_BASE_BLOCK \
   Uint2             entityID;  \
   Uint2             itemID;    \
   Uint2             itemtype;  \
   Int2              section;   \
-  Int2              blocktype; \
+  BlockType         blocktype; \
   CharPtr           string;    \
 
 /* base block structure for most paragraph types */
@@ -112,10 +125,12 @@ typedef struct asn2gb_base_block {
 
 /* references are grouped by published, unpublished, sites, and cit-subs */
 
-#define REF_CAT_PUB 1
-#define REF_CAT_UNP 2
-#define REF_CAT_SIT 3
-#define REF_CAT_SUB 4
+typedef enum {
+  REF_CAT_PUB = 1,
+  REF_CAT_UNP,
+  REF_CAT_SIT,
+  REF_CAT_SUB
+} RefType;
 
 typedef struct reference_block {
   ASN2GB_BASE_BLOCK
@@ -123,8 +138,15 @@ typedef struct reference_block {
   Int4              muid;
   CharPtr           uniquestr;
   Int2              serial;
-  Int2              category;
+  RefType           category;
 } ReferenceBlock, PNTR ReferenceBlockPtr;
+
+/* featdeftype allows specific feature classes to be identified */
+
+typedef struct feature_block {
+  ASN2GB_BASE_BLOCK
+  Uint1             featdeftype;
+} FeatureBlock, PNTR FeatureBlockPtr;
 
 /* sequences are broken up into paragraphs and use the section's SeqPort */
 
@@ -141,7 +163,7 @@ typedef struct asn2gbsection {
 
   /* data identifiers for individual accession report */
 
-  BioseqPtr          parent;
+  BioseqPtr          target;
   BioseqPtr          bsp;
   SeqLocPtr          slp;
   Uint2              seg;
@@ -179,8 +201,11 @@ typedef struct asn2gb_job {
 
   /* flags for customizing type of report */
 
-  Int2                format;
-  Int2                mode;
+  FmtType             format;
+  ModType             mode;
+  StlType             style;
+
+  Boolean             keepSeqPortOpen;
 
   /* each accession report from LOCUS to // is a single section */
 
@@ -211,8 +236,8 @@ typedef struct asn2gb_job {
 */
 
 NLM_EXTERN Asn2gbJobPtr asn2gnbk_setup (BioseqPtr bsp, BioseqSetPtr bssp,
-                                        SeqLocPtr slp, Uint1 format, Uint1 mode,
-                                        Uint1 segstyle, Uint1 seqstyle);
+                                        SeqLocPtr slp, FmtType format,
+                                        ModType mode, StlType style);
 
 NLM_EXTERN CharPtr asn2gnbk_format (Asn2gbJobPtr ajp, Int2 paragraph);
 
@@ -222,8 +247,8 @@ NLM_EXTERN Asn2gbJobPtr asn2gnbk_cleanup (Asn2gbJobPtr ajp);
    SeqEntryToGnbk calls asn2gnbk_setup, _format, and _cleanup internally.
 */
 
-NLM_EXTERN Boolean SeqEntryToGnbk (SeqEntryPtr sep, Uint1 format, Uint1 mode,
-                                   Uint1 segstyle, Uint1 seqstyle, FILE *fp);
+NLM_EXTERN Boolean SeqEntryToGnbk (SeqEntryPtr sep, FmtType format,
+                                   ModType mode, StlType style, FILE *fp);
 
 
 #ifdef __cplusplus

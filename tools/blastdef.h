@@ -31,8 +31,29 @@ Contents: #defines and definitions for structures used by BLAST.
 
 ******************************************************************************/
 
-/* $Revision: 6.54 $ 
+/* $Revision: 6.61 $ 
 * $Log: blastdef.h,v $
+* Revision 6.61  1999/08/31 13:42:23  madden
+* Moved SWResults to blastdef.h from profiles.h
+*
+* Revision 6.60  1999/08/27 18:07:33  shavirin
+* Passed parameter decline_align from top to the engine.
+*
+* Revision 6.59  1999/08/26 14:56:49  madden
+* Raise version and date
+*
+* Revision 6.58  1999/08/26 14:55:16  madden
+* Fixed Int8 problem
+*
+* Revision 6.57  1999/08/20 19:47:41  madden
+* removed version element
+*
+* Revision 6.56  1999/08/17 18:37:12  shavirin
+* Added phi_pattern element into options block.
+*
+* Revision 6.55  1999/08/17 14:02:34  madden
+* add smith_waterman and tweak_parameters fields to Options
+*
 * Revision 6.54  1999/05/10 18:47:52  madden
 * Changed version to 2.0.9
 *
@@ -561,8 +582,8 @@ extern "C" {
 #include <gapxdrop.h>
 
 /* the version of BLAST. */
-#define BLAST_ENGINE_VERSION "2.0.9"
-#define BLAST_RELEASE_DATE "May-07-1999"
+#define BLAST_ENGINE_VERSION "2.0.10"
+#define BLAST_RELEASE_DATE "Aug-26-1999"
 
 /* Defines for program numbers. (Translated in BlastGetProgramNumber). */
 #define blast_type_undefined 0
@@ -700,6 +721,7 @@ typedef struct _blast_optionsblk {
 			gap_extend,	/* Cost to extend a gap one letter. */
 			gap_x_dropoff,	/* X-dropoff (in bits) used by Gapped align routine. */
 			gap_x_dropoff_final;	/* X-dropoff (in bits) used by Gapped align routine for FINAL alignment. */
+        Int4            decline_align;  /* Cost for declining alignment */
 	Nlm_FloatHi	gap_trigger; /* Score (in bits) to gap, if an HSP gaps well. */
 
 	Boolean		discontinuous;	/* Should the SeqAlign be discontinuous.*/
@@ -707,7 +729,7 @@ typedef struct _blast_optionsblk {
 	zero and end is -1 (the entire query), then these are not checked. */
 	Int4		required_start,
 			required_end;
-	Int4		db_length;	/* database size used for stat. calcul. */
+	Int8		db_length;	/* database size used for stat. calcul. */
 	Int4		dbseq_num;	/* number of database sequences used for stat. calcul. */
 	Nlm_FloatHi	searchsp_eff;	/* Effective search space to be used. */
 			
@@ -733,6 +755,9 @@ typedef struct _blast_optionsblk {
 	CharPtr		org_name;	/* user specified name of organizm;  corresponding .gil file will be used */
 	Uint1		strand_option;	/* BLAST_TOP_STRAND, BLAST_BOTTOM_STRAND, or BLAST_BOTH_STRAND.  used by blast[nx] and tblastx */
 	Int4		hsp_num_max;	/* maximum number of HSP's allowed.  Zero indicates no limit. */
+	Boolean		tweak_parameters, /* For impala related stuff. */
+			smith_waterman;
+        CharPtr         phi_pattern;    /* Pattern for PHI-Blast search */
 	} BLAST_OptionsBlk, PNTR BLAST_OptionsBlkPtr;
 
 /****************************************************************************
@@ -790,6 +815,8 @@ typedef struct _blast_parameterblk {
 			gap_extend,	/* Cost to extend a gap one letter. */
 			gap_x_dropoff,	/* X-dropoff used by Gapped align routine. */
 			gap_x_dropoff_final;	/* X-dropoff (in bits) used by Gapped align routine for FINAL alignment. */
+        Int4            decline_align;  /* Cost for declining alignment */
+
 	Nlm_FloatHi	gap_trigger; /* Score (in bits) to gap, if an HSP gaps well.*/
 
 	/* Options for postion based blast. */
@@ -821,7 +848,6 @@ typedef struct _blast_extend_word {
 		Int4Ptr	_buffer, /* The "real" buffer for diag_level, version,
 				and last_hit arrays. */
 			diag_level, /* How far the "diagonal" has been traversed. */
-			version, /* "version" of the diagonal. */
 			last_hit;/* keeps track of last hit for Multiple hits. */
 		Int4	actual_window; /* The actual window used if the multiple
 				hits method was used and a hit was found. */	
@@ -1084,6 +1110,23 @@ typedef struct _blast_context_structure {
 	ValNodePtr location;    /* Where to start/stop masking. */
 		} BLASTContextStruct, PNTR BLASTContextStructPtr;
 
+/* Structure used for full Smith-Waterman results. */
+
+typedef struct SWResults {
+  Uint1Ptr seq;
+  Int4 seqStart;
+  Int4 seqEnd;
+  Int4 queryStart;
+  Int4 queryEnd;
+  Int4 *reverseAlignScript;
+  BLAST_Score score;
+  Nlm_FloatHi eValue;
+  Nlm_FloatHi eValueThisAlign;
+  Nlm_FloatHi Lambda;
+  Nlm_FloatHi logK;
+  SeqIdPtr subject_id;  /*used to display the sequence in alignment*/
+  struct SWResults *next;
+} SWResults;
 
 /*
 	Structure used for matrix rescaling. 

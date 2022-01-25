@@ -29,7 +29,7 @@
 *
 * Version Creation Date:        1/1/92
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description: 
 *
@@ -37,6 +37,9 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: ni_error.c,v $
+* Revision 6.2  1999/06/07 18:28:26  beloslyu
+* NetBSD port
+*
 * Revision 6.1  1997/11/18 21:14:30  epstein
 * identify Linux Alpha client
 *
@@ -168,7 +171,8 @@ static Char *STATIC__ni_platform[NI_N_PLATFORMS] =
   "VMS (WPW)",         /* NI_PLATFORM_VMS_WPW */
   "AIX",               /* NI_PLATFORM_AIX */
   "LINUX",             /* NI_PLATFORM_LINUX */
-  "LINUX on ALPHA"     /* NI_PLATFORM_LINUX_ALPHA */
+  "LINUX on ALPHA",    /* NI_PLATFORM_LINUX_ALPHA */
+  "NetBSD"             /* NI_PLATFORM_NETBSD */
 };
 static Char       **STATIC__ni_platform_ptr = &STATIC__ni_platform[0];
 NLM_EXTERN Char  ***x_ni_platform(void)   { return &STATIC__ni_platform_ptr; }

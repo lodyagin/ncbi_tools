@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/1/91
 *
-* $Revision: 6.0 $
+* $Revision: 6.1 $
 *
 * File Description:
 *		system dependent header
@@ -42,6 +42,9 @@
 * 06-11-93 Schuler     Added INLINE macro.
 *
 * $Log: ncbilcl.gcc,v $
+* Revision 6.1  1999/06/01 15:41:28  beloslyu
+* changes to work on Solaris 2.6 (SunOS is not supported any more)
+*
 * Revision 6.0  1997/08/25 18:15:57  madden
 * Revision changed to 6.0
 *
@@ -61,11 +64,12 @@ added Log line
 #ifndef _NCBILCL_
 #define _NCBILCL_
 
-/* PLATFORM DEFINITION FOR GNU UNDER SunOS Unix */
+/* PLATFORM DEFINITION FOR GNU UNDER Solaris 2.6 Unix */
 
 #define COMP_GNU
 #define OS_UNIX
-#define OS_UNIX_SUN
+#define OS_UNIX_SYSV
+#define OS_UNIX_SOL
 #define PROC_SPARC
 #define WIN_DUMB
 

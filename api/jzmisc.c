@@ -1330,42 +1330,45 @@ NLM_EXTERN SeqAlignPtr get_sep_align(SeqEntryPtr sep)
 ****/
 NLM_EXTERN SeqIdPtr get_align_id(SeqAlignPtr sap_p, Int2 order)
 {
-  DenseSegPtr dsp;
-  StdSegPtr   ssp;
-  DenseDiagPtr ddp;
+    DenseSegPtr  dsp;
+    StdSegPtr    ssp;
+    DenseDiagPtr ddp;
+    SeqAlignPtr  sap;
+    Int2         i;
+    SeqIdPtr     sip;
+    SeqLocPtr    loc;
+    
+    i =0;
+    switch(sap_p->segtype) {
+    case 1:		/*Dense Diag*/
+        ddp = sap_p->segs;
+        sip = ddp->id;
+        for(; sip!=NULL; sip = sip->next, ++i)
+            if(order == i)
+                return sip;
+        return NULL;
+    case 2:		/*Dense Seg*/
+        dsp = sap_p->segs;
+        sip = dsp->ids;
+        for(; sip!=NULL; sip = sip->next, ++i)
+            if(order == i)
+                return sip;
+        return NULL;
+    case 3:
+        ssp = sap_p->segs;
+        loc = ssp->loc;
+        for(; loc != NULL; loc = loc->next, ++i)
+            if(order == i)
+                return SeqLocId(loc);
+        return NULL;
+    case 5: /* Discontinuous alignment */
+        sap = (SeqAlignPtr) sap_p->segs;
+        sip = get_align_id(sap, order);
+        return  sip;
 
-  Int2 i;
-  SeqIdPtr sip;
-  SeqLocPtr loc;
-
-	i =0;
-	switch(sap_p->segtype)
-	{
-		case 1:		/*Dense Diag*/
-			ddp = sap_p->segs;
-			sip = ddp->id;
-			for(; sip!=NULL; sip = sip->next, ++i)
-				if(order == i)
-					return sip;
-			return NULL;
-		case 2:		/*Dense Seg*/
-			dsp = sap_p->segs;
-			sip = dsp->ids;
-			for(; sip!=NULL; sip = sip->next, ++i)
-				if(order == i)
-					return sip;
-			return NULL;
-		case 3:
-			ssp = sap_p->segs;
-			loc = ssp->loc;
-			for(; loc != NULL; loc = loc->next, ++i)
-				if(order == i)
-					return SeqLocId(loc);
-			return NULL;
-		default:
-			return NULL;
-	}
-
+    default:
+        return NULL;
+    }
 }
 			
 
@@ -1377,37 +1380,41 @@ NLM_EXTERN SeqIdPtr get_align_id(SeqAlignPtr sap_p, Int2 order)
 ***/
 NLM_EXTERN Uint1 get_align_strand(SeqAlignPtr sap_p, Int2 order)
 {
-  DenseSegPtr dsp;
-  StdSegPtr   ssp;
-  DenseDiagPtr ddp;
-  SeqLocPtr loc;
-  Int2 i;
+    DenseSegPtr dsp;
+    StdSegPtr   ssp;
+    DenseDiagPtr ddp;
+    SeqLocPtr loc;
+    Int2 i;
+    SeqAlignPtr sap;
 
-	switch(sap_p->segtype)
-	{
-		case 1:		/*Dense Diag*/
-			ddp = sap_p->segs;
-			order = order%(ddp->dim);
-			if(ddp->strands)
-				return ddp->strands[order];
-			return 0;
-		case 2:		/*Dense Seg*/
-			dsp = sap_p->segs;
-			order = order%(dsp->dim);
-			if(dsp->strands)
-				return dsp->strands[order];
-			return 0;
-		case 3:
-			ssp = sap_p->segs;
-			loc = ssp->loc;
-			for(i = 0; loc != NULL; loc = loc->next, ++i)
-				if(order == i)
-					return SeqLocStrand(loc);
-			return 0;
-		default:
-			return 0;
-	}
+    switch(sap_p->segtype) {
+    case 1:		/*Dense Diag*/
+        ddp = sap_p->segs;
+        order = order%(ddp->dim);
+        if(ddp->strands)
+            return ddp->strands[order];
+        return 0;
+    case 2:		/*Dense Seg*/
+        dsp = sap_p->segs;
+        order = order%(dsp->dim);
+        if(dsp->strands)
+            return dsp->strands[order];
+        return 0;
+    case 3:
+        ssp = sap_p->segs;
+        loc = ssp->loc;
+        for(i = 0; loc != NULL; loc = loc->next, ++i)
+            if(order == i)
+                return SeqLocStrand(loc);
+        return 0;
+    case 5: /* Discontinuous alignment */
+        
+        sap = (SeqAlignPtr) sap_p->segs;
+        return get_align_strand(sap, order);
 
+    default:
+        return 0;
+    }
 }
 			
 /************************************************************************
@@ -1418,42 +1425,46 @@ NLM_EXTERN Uint1 get_align_strand(SeqAlignPtr sap_p, Int2 order)
 ****/
 NLM_EXTERN Int2 m_id_match(SeqAlignPtr sap_p, SeqIdPtr match_id)
 {
-  DenseSegPtr dsp;
-  StdSegPtr   ssp;
-  DenseDiagPtr ddp;
+    DenseSegPtr dsp;
+    StdSegPtr   ssp;
+    DenseDiagPtr ddp;
+    
+    Int2 i;
+    SeqIdPtr sip;
+    SeqLocPtr loc;
+    SeqAlignPtr sap;
 
-  Int2 i;
-  SeqIdPtr sip;
-  SeqLocPtr loc;
+    i =0;
+    switch(sap_p->segtype) {
+    case 1:		/*Dense Diag*/
+        ddp = sap_p->segs;
+        sip = ddp->id;
+        for(; sip!=NULL; sip = sip->next, ++i)
+            if(SeqIdForSameBioseq(sip, match_id))
+                return i;
+        return -1;
+    case 2:		/*Dense Seg*/
+        dsp = sap_p->segs;
+        sip = dsp->ids;
+        for(; sip!=NULL; sip = sip->next, ++i)
+            if(SeqIdForSameBioseq(sip, match_id))
+                return i;
+        return -1;
+    case 3:
+        ssp = sap_p->segs;
+        loc = ssp->loc;
+        for(; loc != NULL; loc = loc->next, ++i)
+            if(SeqIdForSameBioseq(SeqLocId(loc), match_id))
+                return i;
+        return -1;
+    case 5: /* Discontinuous alignment */
 
-	i =0;
-	switch(sap_p->segtype)
-	{
-		case 1:		/*Dense Diag*/
-			ddp = sap_p->segs;
-			sip = ddp->id;
-			for(; sip!=NULL; sip = sip->next, ++i)
-				if(SeqIdForSameBioseq(sip, match_id))
-					return i;
-			return -1;
-		case 2:		/*Dense Seg*/
-			dsp = sap_p->segs;
-			sip = dsp->ids;
-			for(; sip!=NULL; sip = sip->next, ++i)
-				if(SeqIdForSameBioseq(sip, match_id))
-					return i;
-			return -1;
-		case 3:
-			ssp = sap_p->segs;
-			loc = ssp->loc;
-			for(; loc != NULL; loc = loc->next, ++i)
-				if(SeqIdForSameBioseq(SeqLocId(loc), match_id))
-					return i;
-			return -1;
-		default:
-			return -1;
-	}
-
+        sap = (SeqAlignPtr) sap_p->segs;
+        return m_id_match(sap, match_id);
+        
+    default:
+        return -1;
+    }   
 }
 
 
@@ -2143,51 +2154,54 @@ static SeqIdPtr find_max(ValNodePtr vnp)
 *******************************************************************/
 NLM_EXTERN SeqIdPtr make_master( SeqAlignPtr sap_p)
 {
-	ValNodePtr vnp= NULL;   /*record the frequency of Seq-ids in alignment**/
-	SeqIdPtr sip;
-	DenseSegPtr dsp;
-	DenseDiagPtr ddp;
-	StdSegPtr ssp;
-	SeqLocPtr slp;
-	
+    ValNodePtr vnp= NULL;   /*record the frequency of Seq-ids in alignment**/
+    SeqIdPtr sip;
+    DenseSegPtr dsp;
+    DenseDiagPtr ddp;
+    StdSegPtr ssp;
+    SeqLocPtr slp;
+    SeqAlignPtr sap;
     
-	while(sap_p !=NULL)
-	{
-	   switch(sap_p->segtype)
-	   {
-		case 1:
-			ddp = (DenseDiagPtr)(sap_p->segs);
-			while(ddp)
-			{
-				for(sip = ddp->id; sip!=NULL; sip = sip->next)
-					vnp = find_repeat(vnp, sip);
-				ddp = ddp->next;
-			}
-			break;
-
-		case 2:
-			dsp = (DenseSegPtr)(sap_p->segs);
-			for(sip = dsp->ids; sip!=NULL; sip = sip->next)
-				vnp = find_repeat(vnp, sip);
-			break;
-		
-		case 3:
-			ssp = (StdSegPtr)(sap_p->segs);
-			for(slp = ssp->loc; slp != NULL; slp = slp->next)
-			{
-				sip = SeqLocId(slp);
-				vnp = find_repeat(vnp, sip);
-			}
-			break;
-		default:
-			break;
-	   }
-	   sap_p = sap_p->next;
-	}
-
-	sip = find_max(vnp);
-	ValNodeFreeData(vnp);
-	return sip;
+    while(sap_p !=NULL) {
+        switch(sap_p->segtype) {
+        case 1:
+            ddp = (DenseDiagPtr)(sap_p->segs);
+            while(ddp) {
+                for(sip = ddp->id; sip!=NULL; sip = sip->next)
+                    vnp = find_repeat(vnp, sip);
+                ddp = ddp->next;
+            }
+            break;
+            
+        case 2:
+            dsp = (DenseSegPtr)(sap_p->segs);
+            for(sip = dsp->ids; sip!=NULL; sip = sip->next)
+                vnp = find_repeat(vnp, sip);
+            break;
+            
+        case 3:
+            ssp = (StdSegPtr)(sap_p->segs);
+            for(slp = ssp->loc; slp != NULL; slp = slp->next) {
+                sip = SeqLocId(slp);
+                vnp = find_repeat(vnp, sip);
+            }
+            break;
+        case 5:
+            for(sap = sap_p->segs; sap != NULL; sap = sap->next) {
+                sip = make_master(sap);
+                vnp = find_repeat(vnp, sip);
+            }
+            break;
+            
+        default:
+            break;
+        }
+        sap_p = sap_p->next;
+    }
+    
+    sip = find_max(vnp);
+    ValNodeFreeData(vnp);
+    return sip;
 }
 
 NLM_EXTERN Boolean use_multiple_dimension(SeqAlignPtr align)

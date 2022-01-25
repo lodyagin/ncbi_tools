@@ -1,6 +1,6 @@
 #	makefile for asntool and ncbi core routines,
 #
-#	$Id: makeall.unx,v 6.72 1999/05/07 20:05:58 kans Exp $
+#	$Id: makeall.unx,v 6.89 1999/08/27 19:30:04 kans Exp $
 #
 #	cdromlib data access functions, vibrant, and entrez
 #	SunOS with unbundled ANSI compiler [ make LCL=acc RAN=ranlib CC=acc ]
@@ -147,21 +147,23 @@ SRC1 =	ncbibs.c wwwutils.c ncbierr.c ncbienv.c ncbifile.c \
 	asnbufo.c asndebin.c asnenbin.c asngen.c asnio.c asnlex.c \
 	asnlext.c asnout.c asnprint.c asntypes.c asngenob.c \
 	gifgen.c togif.c ncbithr.c regex.c tsprintf.c ncbiargs.c tree.c \
-	ncbisock.c matrix.c  ncbibuf.c connectn.c connutil.c con_url.c con_sock.c \
-	urlquery.c
+	ncbisock.c matrix.c ncbibuf.c ncbi_buffer.c \
+   connectn.c connutil.c con_url.c con_sock.c \
+	urlquery.c lbapi.c con_stateless.c
 
 SRC2 =	objacces.c objalign.c objall.c objbibli.c \
 	objfeat.c objgen.c objloc.c objmedli.c objpub.c \
 	objres.c objseq.c objblock.c objcode.c objsset.c \
-	objsub.c objprt.c objfdef.c objmime.c objpubme.c objmdrs.c objproj.c \
+	objsub.c objprt.c objfdef.c objmime.c objpubme.c objmdrs.c objproj.c objent2.c \
 	seqport.c sequtil.c prtutil.c \
 	simple.c tofasta.c tofile.c tomedlin.c \
-	valid.c sqnutil1.c sqnutil2.c subutil.c edutil.c asn2ff1.c asn2ff2.c \
-	asn2ff3.c asn2ff4.c asn2ff5.c asn2ff6.c ftusrstr.c gbfeat.c gbftglob.c \
+	valid.c alignmgr.c alignval.c sqnutil1.c sqnutil2.c subutil.c edutil.c asn2ff1.c \
+	asn2ff2.c asn2ff3.c asn2ff4.c asn2ff5.c asn2ff6.c ftusrstr.c gbfeat.c gbftglob.c \
 	gbparint.c utilpars.c utilpub.c ffprint.c wprint.c satutil.c \
 	seqmgr.c objmgr.c gather.c accmmdbs.c acccn3ds.c lsqfetch.c findrepl.c \
 	apparam.c codon.c jzcoll.c jzmisc.c maputil.c mconsist.c txalign.c \
-	salpacc.c udvseq.c
+	salpedit.c salpstat.c salpacc.c salprop.c salsap.c salstruc.c salutil.c \
+	udvseq.c blocks.c pgppop.c
 
 SRC3 =	cdentrez.c cdromlib.c cdnewlib.c casn.c cdconfig.c objentr.c
 
@@ -206,10 +208,9 @@ SRC23 = csim.c db_slist.c dust.c falign.c g_any.c sim2.c sim3.c sim4.c \
 	blast.c blastutl.c blastool.c splutil.c gapxdrop.c bandalg0.c bandalg1.c \
 	bandalg2.c bandalg3.c bandalg4.c bandalg5.c bandalgn.c blastkar.c \
 	posit.c lookup.c readdb.c ncbisam.c ncbisort.c \
-	salpedit.c salpstat.c salsap.c salstruc.c salutil.c \
-	urkutil.c urkpcc.c urkptpf.c urkepi.c \
+	salign.c salptool.c urkutil.c urkpcc.c urkptpf.c urkepi.c \
 	urkfltr.c urkdust.c urksigu.c seg.c urkbias.c urkcnsrt.c urktree.c \
-	pseed3.c pattern1.c impatool.c posit2.c newkar.c
+	pseed3.c pattern1.c impatool.c posit2.c newkar.c ddvcolor.c
 
 SRC28 = gdfontg.c gdfontmb.c gdfontt.c pictogif.c \
 	gdfontl.c gdfonts.c ncbidrwg.c ncbimain.c
@@ -235,21 +236,23 @@ OBJ1 =	ncbibs.o wwwutils.o ncbierr.o ncbienv.o ncbifile.o \
 	asnbufo.o asndebin.o asnenbin.o asngen.o asnio.o asnlex.o \
 	asnlext.o asnout.o asnprint.o asntypes.o asngenob.o \
 	gifgen.o togif.o ncbithrs.o regex.o tsprintf.o ncbiargs.o tree.o \
-	ncbisock.o matrix.o ncbibuf.o connectn.o connutil.o con_url.o con_sock.o \
-	urlquery.o
+	ncbisock.o matrix.o ncbibuf.o ncbi_buffer.o \
+   connectn.o connutil.o con_url.o con_sock.o \
+	urlquery.o lbapi.o con_stateless.o
 
 OBJ2 =	objacces.o objalign.o objall.o objbibli.o objfeat.o \
 	objgen.o objloc.o objmedli.o objpub.o objres.o objseq.o \
 	objblock.o objcode.o objsset.o objsub.o objprt.o objfdef.o \
-	objmime.o objpubme.o objmdrs.o objproj.o \
+	objmime.o objpubme.o objmdrs.o objproj.o objent2.o \
 	seqport.o sequtil.o prtutil.o simple.o tofasta.o \
 	tofile.o tomedlin.o \
-	valid.o sqnutil1.o sqnutil2.o subutil.o edutil.o asn2ff1.o asn2ff2.o \
-	asn2ff3.o asn2ff4.o asn2ff5.o asn2ff6.o ftusrstr.o gbfeat.o gbftglob.o \
+	valid.o alignmgr.o alignval.o sqnutil1.o sqnutil2.o subutil.o edutil.o asn2ff1.o \
+	asn2ff2.o asn2ff3.o asn2ff4.o asn2ff5.o asn2ff6.o ftusrstr.o gbfeat.o gbftglob.o \
 	gbparint.o utilpars.o utilpub.o ffprint.o wprint.o satutil.o \
 	seqmgr.o objmgr.o gather.o accmmdbs.o acccn3ds.o lsqfetch.o findrepl.o \
 	apparam.o codon.o jzcoll.o jzmisc.o maputil.o mconsist.o txalign.o \
-	salpacc.o udvseq.o
+	salpedit.o salpstat.o salpacc.o salsap.o salstruc.o salutil.o salprop.o \
+	udvseq.o blocks.o pgppop.o
 
 OBJ3 =  cdentrez.o cdromlib.o cdnewlib.o casn.o cdconfig.o objentr.o
 
@@ -294,10 +297,9 @@ OBJ23 = csim.o db_slist.o dust.o falign.o g_any.o sim2.o sim3.o sim4.o \
 	blast.o blastutl.o blastool.o splutil.o gapxdrop.o bandalg0.o bandalg1.o \
 	bandalg2.o bandalg3.o bandalg4.o bandalg5.o bandalgn.o blastkar.o \
 	posit.o lookup.o readdb.o ncbisam.o ncbisort.o \
-	salpedit.o salpstat.o salsap.o salstruc.o salutil.o \
-	urkutil.o urkpcc.o urkptpf.o urkepi.o \
+	salign.o salptool.o urkutil.o urkpcc.o urkptpf.o urkepi.o \
 	urkfltr.o urkdust.o urksigu.o seg.o urkbias.o urkcnsrt.o urktree.o \
-	pseed3.o pattern1.o impatool.o posit2.o newkar.o
+	pseed3.o pattern1.o impatool.o posit2.o newkar.o ddvcolor.o
 
 OBJ28 = gdfontg.o gdfontmb.o gdfontt.o pictogif.o \
 	gdfontl.o gdfonts.o ncbidrwg.o ncbimain.o
@@ -341,6 +343,10 @@ clean :
 ## Special case
 ##
 
+con_stateless.o : con_stateless.c
+	$(CC) $(CFLAGS) $(IN_HOUSE_CFLAGS) con_stateless.c
+lbapi.o : lbapi.c
+	$(CC) $(CFLAGS) $(IN_HOUSE_CFLAGS) lbapi.c
 ncbithrs.o: ncbithrs.c
 	$(CC) -DNCBI_NOTHREADS_AVAIL $(CFLAGS) ncbithrs.c
 ncbidrwg.o: ncbidrwg.c
@@ -467,8 +473,12 @@ copy :
 	$(SRCCOPY) ../asnlib/*.c .
 	$(SRCCOPY) ../connect/*.c .
 	$(SRCCOPY) ../connect/*.h ../include
+	$(SRCCOPY) ../connect/lbapi/*.c .
+	$(SRCCOPY) ../connect/lbapi/*.h ../include
 	$(SRCCOPY) ../object/*.c .
 	$(SRCCOPY) ../object/*.h ../include
+	$(SRCCOPY) ../access/*.c .
+	$(SRCCOPY) ../access/*.h ../include
 	$(SRCCOPY) ../$(ASNDIR)/*.h ../include
 	$(SRCCOPY) ../api/*.h ../include
 	$(SRCCOPY) ../api/*.c .

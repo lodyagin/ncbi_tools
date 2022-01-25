@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.9 $
+* $Revision: 6.10 $
 *
 * File Description: 
 *       Vibrant slate (universal drawing environment) functions
@@ -37,6 +37,9 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: vibslate.c,v $
+* Revision 6.10  1999/07/06 14:51:42  kans
+* resize scroll bar was one pixel too small
+*
 * Revision 6.9  1999/04/22 15:18:59  vakatov
 * Call XtUnrealizeWidget() before XtDestroyWidget() to make sure no
 * "post-mortem" callbacks(registered by XtAddEventHandler()) get
@@ -1788,14 +1791,14 @@ static void Nlm_SetSlatePosition(Nlm_GraphiC s, Nlm_RectPtr r,
 
   if (vsb != NULL) {
     Nlm_GetRect (s, &sr);
-    sr.left = sr.right + 1;
+    sr.left = sr.right /* + 1 */ ;
     sr.right += Nlm_vScrollBarWidth;
     Nlm_DoSetPosition ((Nlm_GraphiC) vsb, &sr, FALSE, force);
   }
 
   if (hsb != NULL) {
     Nlm_GetRect (s, &sr);
-    sr.top = sr.bottom + 1;
+    sr.top = sr.bottom /* + 1 */ ;
     sr.bottom += Nlm_hScrollBarHeight;
     Nlm_DoSetPosition ((Nlm_GraphiC) hsb, &sr, FALSE, force);
   }
@@ -2550,7 +2553,7 @@ static void Nlm_NewSlate (Nlm_SlatE s, Nlm_Boolean border,
 
   if (vScroll) {
     Nlm_GetRect ((Nlm_GraphiC) s, &r);
-    r.left = r.right + 1;
+    r.left = r.right /* + 1 */ ;
     r.right += Nlm_vScrollBarWidth;
     if (vscrl4 != NULL) {
       vsb = Nlm_VertScrollBar4((Nlm_GraphiC) s, &r, (Nlm_BarScrlProc4)vscrl4);
@@ -2564,7 +2567,7 @@ static void Nlm_NewSlate (Nlm_SlatE s, Nlm_Boolean border,
 
   if (hScroll) {
     Nlm_GetRect ((Nlm_GraphiC) s, &r);
-    r.top = r.bottom + 1;
+    r.top = r.bottom /* + 1 */ ;
     r.bottom += Nlm_hScrollBarHeight;
     if (hscrl4 != NULL) {
       hsb = Nlm_HorizScrollBar4 ((Nlm_GraphiC) s, &r, (Nlm_BarScrlProc4) hscrl4);
@@ -2899,7 +2902,7 @@ static void Nlm_New3DSlate (Nlm_SlatE s, Nlm_Boolean border,
 
   if (vScroll) {
     Nlm_GetRect ((Nlm_GraphiC) s, &r);
-    r.left = r.right + 1;
+    r.left = r.right /* + 1 */ 
     r.right += Nlm_vScrollBarWidth;
     if (vscrl4 != NULL) {
       vsb = Nlm_VertScrollBar4((Nlm_GraphiC) s, &r, (Nlm_BarScrlProc4)vscrl4);
@@ -2913,7 +2916,7 @@ static void Nlm_New3DSlate (Nlm_SlatE s, Nlm_Boolean border,
 
   if (hScroll) {
     Nlm_GetRect ((Nlm_GraphiC) s, &r);
-    r.top = r.bottom + 1;
+    r.top = r.bottom /* + 1 */ 
     r.bottom += Nlm_hScrollBarHeight;
     if (hscrl4 != NULL) {
       hsb = Nlm_HorizScrollBar4 ((Nlm_GraphiC) s, &r, (Nlm_BarScrlProc4) hscrl4);

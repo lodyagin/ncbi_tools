@@ -25,11 +25,11 @@
 *
 * File Name:  cn3dsave.c
 *
-* Author:  Christopher Hogue
+* Author:  Christopher Hogue, Yanli Wang, Lewis Geer
 *
-* Version Creation Date:   1/31/96
+* First Version Creation Date:   1/31/96
 *
-* $Revision: 6.5 $
+* $Revision: 6.11 $
 *
 * File Description: Cn3d file saving routines 
 *                   
@@ -39,6 +39,24 @@
 * Date     Name        Description of modification
 * -------  ----------  -----------------------------------------------------
 * $Log: cn3dsave.c,v $
+* Revision 6.11  1999/08/04 21:18:01  lewisg
+* modularized open operations to allow sequin to launch cn3d
+*
+* Revision 6.10  1999/07/01 22:14:47  ywang
+* back to previous version to use EntrezSeqEntryGet to get sequences for additional loading, before this free existant sequences
+*
+* Revision 6.9  1999/07/01 21:44:31  ywang
+* work around EntrezSeqEntryGet core dump on redunant sequence loading and free existant sequences before additional loading
+*
+* Revision 6.8  1999/07/01 14:09:05  ywang
+* *** empty log message ***
+*
+* Revision 6.7  1999/07/01 14:07:25  ywang
+* cn3dwin.c
+*
+* Revision 6.6  1999/06/03 21:31:48  ywang
+* fix bug for saving structures--get MS coordinates back for the current run after creating ASN.1 for saving
+*
 * Revision 6.5  1999/03/19 19:20:11  kans
 * prototype needed for Cn3DAddUserDefinedFeature
 *
@@ -81,8 +99,10 @@
 #include <cn3dmodl.h>
 #include <cn3dsave.h>
 #include <cn3dmsel.h>
+#include <cn3dmsg.h>
 #include <asnmime.h>
 #include <objmime.h>
+#include <cn3dopen.h>
 
 static Boolean  Cn3D_Save_InUse = FALSE;
  
@@ -93,6 +113,7 @@ static ButtoN   Cn3D_bAsnOk;
 static GrouP	Cn3D_gBinAscii;
 static ButtoN   Cn3D_bFeatOn;
 
+extern Int4 Num_Bioseq;
 /*  put into cn3dsave.c  */
 
 
@@ -232,12 +253,21 @@ static void Cn3D_ExportAsnNow(ButtoN b)
 			  TraverseSolids( pdnmsSlave, pdnmlThis->choice, 0, pdnTransform, DoReverseTransform);
 			  pdnmlThis = pdnmlThis->next;
 		      }
-		  FreeDNTRN(pdnTransform);
 		  pbsfThis = pbsfThis->next;
 
 		  /* end reverse transform */
 
 		  iTest = WriteAsnModelList(pdnmsSlave, iCount, i2Vec, path, bSave, iCn3d);
+          pdnmlThis = pmsdSlave->pdnmlModels;
+          while (pdnmlThis)
+              {
+              TraverseAtoms( pdnmsSlave, pdnmlThis->choice, 0, pdnTransform, DoApplyTransform);
+              TraverseSolids( pdnmsSlave, pdnmlThis->choice, 0, pdnTransform, DoApplyTransform);
+              pdnmlThis = pdnmlThis->next;
+              }
+          /* after creating ASN.1, get the coordinates back for this run, yanli */
+		  FreeDNTRN(pdnTransform);
+
 		  if(!iTest)
 		      {
 			  ErrClear();
@@ -276,7 +306,7 @@ static void Cn3D_ExportAsnNow(ButtoN b)
          FreeRedundantAsn(pdnmsSlave);
          pdnmsSlave = pdnmsSlave->next;
       }
- 
+
       if (i2Vec) I2VectorFree(i2Vec, 0);
       Remove(Cn3D_wAsnSave);
       Cn3D_EnableFileOps();

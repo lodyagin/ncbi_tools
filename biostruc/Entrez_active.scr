@@ -1,10 +1,17 @@
 /*
- * $Id: Entrez_active.scr,v 6.4 1999/05/03 14:47:47 kimelman Exp $
+ * $Id: Entrez_active.scr,v 6.6 1999/07/01 21:41:36 kimelman Exp $
  * 
  * This file contains the additions to PubStruct Database on Public 
  * Entrez Servers
  *
  * $Log: Entrez_active.scr,v $
+ * Revision 6.6  1999/07/01 21:41:36  kimelman
+ * post_index fixed to trust user data
+ * at_insert fixed to keep entry in SatKeyFlags for every row in Struct
+ *
+ * Revision 6.5  1999/05/11 21:38:41  kimelman
+ * bugfix in post_index
+ *
  * Revision 6.4  1999/05/03 14:47:47  kimelman
  * spaces
  *
@@ -53,7 +60,8 @@ post_index ( @index_key int, @minutes int = null, @enforce int = 0 )
 as
   declare @acc int
   declare @date datetime
-  declare @mod_date datetime
+  declare @mod_date  datetime
+  declare @emod_date datetime
   declare @mmdb_id        int
 
   if ( @minutes is null )
@@ -73,28 +81,28 @@ as
             from   Struct s
             where  s.state = 0 and s.mmdb_id = @mmdb_id 
             
-            select @mod_date=isnull(min(i.date_entrez),@mod_date)
+            select @emod_date=min(i.date_entrez)
             from   Struct s, EntrezControl..SatKeyFlags i
             where  s.state = 0 and s.mmdb_id = @mmdb_id 
             and s.acc = i.sat_key and i.sat = 10
 
+            select @mod_date=isnull(@emod_date,@mod_date)
             /* round time to minutes */
             select @minutes = datediff(minute,'Jan 1 1900',@mod_date)
             select @mod_date = dateadd(minute,@minutes,'Jan 1 1900')
 
-            if ( @mod_date is not null and @mod_date != @date )
+            if ( @emod_date is not null and @mod_date != @date )
               begin
                 print "Post_index: error: modification dates incosistence for %1! : db=%2!, entrez=%3! ", @index_key, @mod_date, @date
                 return 100
               end
-            select @date = getdate()
           end
     end
 
   update EntrezControl..SatKeyFlags
   set dumped4entrez = 0
   from EntrezControl..SatKeyFlags i, Struct a, Struct b
-  where i.sat = 10 and i.dumped4entrez != 1 and i.sat_key = a.acc
+  where i.sat = 10 and i.dumped4entrez = 1 and i.sat_key = a.acc
     and a.mmdb_id=b.mmdb_id and b.acc = @index_key
                                  
   update EntrezControl..SatKeyFlags
@@ -106,6 +114,13 @@ go
 go
 GRANT EXECUTE ON post_index  TO anyone
 go
+
+
+/************************************************************************/
+PRINT '/*****           PROCEDURE    post_remove                    *****/'
+/************************************************************************/
+go
+
 IF EXISTS (SELECT * FROM sysobjects
     WHERE name = 'post_remove'
     AND   uid = user_id('dbo')
@@ -114,11 +129,6 @@ BEGIN
     DROP PROCEDURE dbo.post_remove
 END
 go
-/************************************************************************/
-PRINT '/*****           PROCEDURE    post_remove                    *****/'
-/************************************************************************/
-go
-
 create proc
 post_remove(@index_key int) as
   declare @acc  int
@@ -135,6 +145,10 @@ go
 GRANT EXECUTE ON post_remove  TO anyone
 go
 
+/************************************************************************/
+PRINT '/*****           TRIGGER  at_insert                         *****/'
+/************************************************************************/
+go
 IF EXISTS (SELECT * FROM sysobjects
     WHERE name = 'at_insert'
     AND   uid = user_id('dbo')
@@ -144,23 +158,22 @@ BEGIN
 END
 go
 
-/************************************************************************/
-PRINT '/*****           TRIGGER  at_insert                         *****/'
-/************************************************************************/
-go
-
 create trigger
 at_insert on Struct for update,insert as
 begin
   insert EntrezControl..SatKeyFlags
   select 10, si.acc,  0, 0, null, 0
   from  inserted si
-  where si.state = 0 and si.suppressed <=1 and
-        not exists (select * from EntrezControl..SatKeyFlags i
-                     where i.sat_key = si.acc and i.sat = 10 )
+  where not exists (select * from EntrezControl..SatKeyFlags i
+                    where i.sat_key = si.acc and i.sat = 10 )
 end
 go
   
+/************************************************************************/
+PRINT '/*****           TRIGGER  at_delete                          *****/'
+/************************************************************************/
+go
+
 IF EXISTS (SELECT * FROM sysobjects
     WHERE name = 'at_delete'
     AND   uid = user_id('dbo')
@@ -168,11 +181,6 @@ IF EXISTS (SELECT * FROM sysobjects
 BEGIN
     DROP trigger dbo.at_delete
 END
-go
-
-/************************************************************************/
-PRINT '/*****           TRIGGER  at_delete                          *****/'
-/************************************************************************/
 go
 
 create trigger
@@ -184,6 +192,10 @@ begin
 end
 go
 
+/************************************************************************/
+PRINT '/*****           PROCEDURE    fill_satinfo                   *****/'
+/************************************************************************/
+go
 IF EXISTS (SELECT * FROM sysobjects
     WHERE name = 'fill_satinfo'
     AND   uid = user_id('dbo')
@@ -191,10 +203,6 @@ IF EXISTS (SELECT * FROM sysobjects
 BEGIN
     DROP PROCEDURE dbo.fill_satinfo
 END
-go
-/************************************************************************/
-PRINT '/*****           PROCEDURE    fill_satinfo                  *****/'
-/************************************************************************/
 go
 create proc
 fill_satinfo

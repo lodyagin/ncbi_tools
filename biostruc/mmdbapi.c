@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   08/19/95
 *
-* $Revision: 6.11 $
+* $Revision: 6.12 $
 *
 * File Description: MMDBAPI wrappers. 
 *
@@ -41,6 +41,9 @@
 *
 *
 * $Log: mmdbapi.c,v $
+* Revision 6.12  1999/08/04 21:21:25  lewisg
+* made ClearStructure turn off neighbor mode in non-cn3d mode
+*
 * Revision 6.11  1999/03/05 22:43:59  vakatov
 * Made ClearStructures() function be NLM_EXTERN -- for the DLL build on PC
 *
@@ -333,8 +336,8 @@ NLM_EXTERN void LIBCALL ClearStructures(void)
        {
         pmmdbapi->pdnmsMain = NULL;
         pmmdbapi->pdnmsMaster = NULL;
-        pmmdbapi->Neighbor = 0;
        }
+       pmmdbapi->Neighbor = 0;
        pmmdbapi->pdnmsSlave  = NULL;
        pmmdbapi->pdnmsHolder = NULL;
        pmmdbapi->pdnmsSelected = NULL;

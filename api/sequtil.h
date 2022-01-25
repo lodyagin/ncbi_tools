@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.15 $
+* $Revision: 6.17 $
 *
 * File Description:  Sequence Utilities for objseq and objsset
 *
@@ -40,6 +40,12 @@
 *
 *
 * $Log: sequtil.h,v $
+* Revision 6.17  1999/08/03 20:00:35  sicotte
+* Add SeqIdFindBestAccession
+*
+* Revision 6.16  1999/07/30 09:28:18  sicotte
+* Transfered fns from salutil.c(chappey) AddSeqId,SeqIdDupList,SeqIdDupBestList,SeqIdListfromSeqLoc
+*
 * Revision 6.15  1999/04/08 14:12:03  sicotte
 * Add SeqIdOrderInBioseqIdList (consider synomymous SeqIds)
 *
@@ -578,6 +584,7 @@ NLM_EXTERN SeqIdPtr SeqIdSelect PROTO((SeqIdPtr sip, Uint1Ptr order, Int2 num));
 
 NLM_EXTERN Int2 SeqIdBestRank PROTO((Uint1Ptr buf, Int2 num));
 NLM_EXTERN SeqIdPtr SeqIdFindBest PROTO(( SeqIdPtr sip, Uint1 target));
+NLM_EXTERN SeqIdPtr SeqIdFindBestAccession (SeqIdPtr sip);
 NLM_EXTERN CharPtr SeqIdPrint PROTO((SeqIdPtr sip, CharPtr buf, Uint1 format));
 NLM_EXTERN CharPtr SeqIdWrite PROTO((SeqIdPtr sip, CharPtr buf, Uint1 format, Int2 buflen));
 NLM_EXTERN SeqIdPtr SeqIdParse PROTO((CharPtr buf));
@@ -1062,6 +1069,11 @@ NLM_EXTERN Boolean LIBCALL IS_protdb_accession (CharPtr s);
  */
 
 NLM_EXTERN Boolean LIBCALL SeqIdInSeqLocList(SeqIdPtr sip, ValNodePtr list);
+
+NLM_EXTERN SeqIdPtr     AddSeqId (SeqIdPtr *sip_head, SeqIdPtr sip);
+NLM_EXTERN SeqIdPtr     SeqIdDupList (SeqIdPtr id_list);
+NLM_EXTERN SeqIdPtr     SeqIdDupBestList (SeqIdPtr id_list);
+NLM_EXTERN SeqIdPtr     SeqIdListfromSeqLoc (ValNodePtr vnpslp);
 
 
 #ifdef __cplusplus

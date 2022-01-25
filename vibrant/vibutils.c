@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.22 $
+* $Revision: 6.25 $
 *
 * File Description:
 *       Vibrant miscellaneous functions
@@ -37,6 +37,16 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: vibutils.c,v $
+* Revision 6.25  1999/08/23 19:36:39  vakatov
+* Nlm_VibMessageHook():  the error posting window should not disappear
+* momentarily on FATAL ERROR -- as we want user to see error message(s)
+*
+* Revision 6.24  1999/08/19 19:05:43  vakatov
+* Nlm_VibMessageHook():  always show the "caption" as a title
+*
+* Revision 6.23  1999/07/04 00:21:13  kans
+* Mac Navigation.h changes
+*
 * Revision 6.22  1999/03/21 18:44:05  kans
 * needed ampsersand before creatorType in MemSet
 *
@@ -800,11 +810,23 @@ static void Nlm_MssgIgnoreProc (Nlm_ButtoN b)
 #endif /* ndef WIN_MSWIN */
 
 
-static void Nlm_ClosePostProc (Nlm_WindoW w)
+static void s_CloseAWindow(Nlm_WindoW w)
 {
-  Nlm_Reset( (Nlm_TexT)Nlm_GetObjectExtra( w ) );
-  Nlm_Hide( w );
+  Nlm_Reset((Nlm_TexT) Nlm_GetObjectExtra(w));
+  Nlm_Hide(w);
 }
+
+
+static Nlm_Boolean s_FatalModalWindowUp;
+static void s_CloseFatalModalWindow_W(Nlm_WindoW w)
+{
+  s_FatalModalWindowUp = FALSE;
+}
+static void s_CloseFatalModalWindow_B(Nlm_ButtoN b)
+{
+  s_CloseFatalModalWindow_W( Nlm_Parent(b) );
+}
+
 
 static MsgAnswer LIBCALLBACK Nlm_VibMessageHook (MsgKey key, ErrSev severity,
                                                  const char * caption,
@@ -834,45 +856,77 @@ static MsgAnswer LIBCALLBACK Nlm_VibMessageHook (MsgKey key, ErrSev severity,
   Nlm_Int2     wtype;
 #endif
 
-  if (key == KEY_NONE)
-    {
-      static Nlm_WindoW postWindow = NULL;
-      static Nlm_TexT   postText   = NULL;
-      Nlm_WindoW tempPort = Nlm_CurrentWindow();
+  const char* x_caption = caption ? caption : "Message";
 
+  /* Use a window (or a modal dialog) to accumulate & post the message */
+  if (key == KEY_NONE  ||  severity >= ErrGetFatalLevel()) {
+    static Nlm_WindoW postWindow = 0;
+    static Nlm_TexT   postText   = 0;
+    Nlm_WindoW tempPort = Nlm_CurrentWindow();
 
-      if ( !postWindow )
-        {
-          postWindow = Nlm_DocumentWindow(-50, -90, -20, -20,
-                                          "Message", Nlm_ClosePostProc, NULL);
-          postText = Nlm_ScrollText(postWindow,  (Nlm_Int2)32, (Nlm_Int2)4,
-                                    Nlm_systemFont, TRUE, NULL);
-          Nlm_SetObjectExtra(postWindow, postText, NULL);
-          if ( postText )
-            Nlm_SetTextEditable(postText, FALSE);
-        }
-
-      if ( postText )
-        {
-          size_t curr_len = Nlm_TextLength( postText );
-          const char *add_mess = message ? message : "<no message posted>";
-          size_t  add_len = Nlm_StringLen( message );
-          Nlm_CharPtr buf = (Nlm_CharPtr)Nlm_MemNew(add_len+1 + curr_len + 1);
-          Nlm_MemCpy(buf, add_mess, add_len);
-          buf[add_len++] = '\n';
-          Nlm_GetTitle(postText, buf+add_len, curr_len+1);
-          {{
-            Nlm_CharPtr x_buf = Nlm_StrngPrintable( buf );
-            Nlm_MemFree( buf );
-            Nlm_SetTitle(postText, x_buf);
-            Nlm_MemFree( x_buf );
-          }}
-          Nlm_PopupParentWindow( postWindow );
-        }
-
-      Nlm_RestorePort( tempPort );
-      return (MsgAnswer)ANS_NONE;
+    /* Prepare the message text (concat with the previous text, if any) */
+    char* x_text;
+    const char* add_mess = message ? message : "<no message posted>";
+    if ( postText ) {
+      size_t curr_len = Nlm_TextLength(postText);
+      size_t add_len  = Nlm_StringLen( message );
+      char*  buf    = (char*) Nlm_MemNew(add_len+1 + curr_len + 1);
+      Nlm_MemCpy(buf, add_mess, add_len);
+      buf[add_len++] = '\n';
+      Nlm_GetTitle(postText, buf+add_len, curr_len+1);
+      x_text = Nlm_StrngPrintable(buf);
+      Nlm_MemFree(buf);
+    } else {
+      x_text = Nlm_StrngPrintable(add_mess);
     }
+
+    /* Fatal or non-fatal error severity (modal or non-modal dialog) */
+    if (severity >= ErrGetFatalLevel()) {
+      /* Fatal error -- use modal dialog window */
+      Nlm_WindoW modalWindow = Nlm_ModalWindow(-50, -90, -20, -20,
+                                               s_CloseFatalModalWindow_W);
+      Nlm_TexT   modalText = Nlm_ScrollText(modalWindow, 64, 16,
+                                            Nlm_systemFont, TRUE, NULL);
+      Nlm_ButtoN modalButton = Nlm_DefaultButton(modalWindow, "Close",
+                                                 s_CloseFatalModalWindow_B);
+      Nlm_SetObjectExtra(modalWindow, modalText, NULL);
+      Nlm_SetTextEditable(modalText, FALSE);
+      Nlm_SetTitle(modalText, x_text);      
+
+      /* hide the regular message posting window */
+      if (postWindow  &&  Nlm_Visible(postWindow))
+        Nlm_Hide(postWindow);
+
+      /* show the modal dialog */
+      Nlm_Show(modalWindow);
+      Nlm_PopupParentWindow(modalWindow);
+      s_FatalModalWindowUp = TRUE;
+      Nlm_WaitForCondition(s_FatalModalWindowUp);
+      Nlm_ProcessAnEvent();
+      Nlm_Remove(modalWindow);
+    } else {
+      /* Non-Fatal error -- use normal window */
+      if ( !postWindow ) {
+        /* create normal message posting window */
+        postWindow = Nlm_FixedWindow(-50, -90, -20, -20, (char*)x_caption,
+                                     s_CloseAWindow);
+        postText = Nlm_ScrollText(postWindow,  (Nlm_Int2)32, (Nlm_Int2)5,
+                                  Nlm_systemFont, TRUE, NULL);
+        Nlm_SetObjectExtra(postWindow, postText, NULL);
+        if ( postText )
+          Nlm_SetTextEditable(postText, FALSE);
+      }
+
+      /* set the message text and popup the window */
+      if ( postText )
+          Nlm_SetTitle(postText, x_text);
+      Nlm_PopupParentWindow( postWindow );
+    }
+
+    Nlm_MemFree(x_text);
+    Nlm_RestorePort( tempPort );
+    return (MsgAnswer)ANS_NONE;
+  }
 
 #ifdef WIN_MSWIN
   wtype = MB_OK;
@@ -908,7 +962,7 @@ static MsgAnswer LIBCALLBACK Nlm_VibMessageHook (MsgKey key, ErrSev severity,
       break;
   }
 
-  answer = MessageBox(NULL, message, caption, wtype | MB_TASKMODAL);
+  answer = MessageBox(NULL, message, x_caption, wtype | MB_TASKMODAL);
   switch (answer) {
     case IDNO:
       rsult = ANS_NO;
@@ -951,7 +1005,7 @@ static MsgAnswer LIBCALLBACK Nlm_VibMessageHook (MsgKey key, ErrSev severity,
                       (Nlm_screenRect.right - Nlm_screenRect.left) / 100 - 40);
   maxWidth = MAX (maxWidth, 100);
 
-  w = Nlm_ModalWindow (-50, -20, -20, -20, NULL);
+  w = Nlm_MovableModalWindow (-50, -20, -20, -20, (char*)x_caption, NULL);
   g = Nlm_HiddenGroup (w, 0, 10, NULL);
   Nlm_GetNextPosition (g, &npt);
   npt.x += 6;
@@ -4231,13 +4285,13 @@ static pascal void MyNavEventProc (NavEventCallbackMessage callBackSelector,
                                    NavCallBackUserData callBackUD)
 
 {
-  WindowPtr window = (WindowPtr) callBackParms->eventData.event->message;
+  WindowPtr window = (WindowPtr) callBackParms->eventData.eventDataParms.event->message;
   switch (callBackSelector) {
     case kNavCBEvent:
-      switch (callBackParms->eventData.event->what) {
+      switch (callBackParms->eventData.eventDataParms.event->what) {
         case updateEvt:
           /*
-          MyHandleUpdateEvent (window, (EventRecord*) callBackParms->eventData.event);
+          MyHandleUpdateEvent (window, (EventRecord*) callBackParms->eventData.eventDataParms.event);
           */
           break;
       }

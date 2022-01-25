@@ -25,6 +25,15 @@
 **************************************************************************/
 /* $Revision 1.0$ */ 
 /* $Log: blastpgp.c,v $
+/* Revision 6.48  1999/08/27 18:17:42  shavirin
+/* Added new parameter to command line - decline_align.
+/*
+/* Revision 6.47  1999/08/26 14:58:06  madden
+/* Use float for db length
+/*
+/* Revision 6.46  1999/08/04 13:26:49  madden
+/* Added -B option
+/*
 /* Revision 6.45  1999/03/31 16:58:04  madden
 /* Removed static FindProt and FindNuc
 /*
@@ -281,7 +290,8 @@ star_callback(Int4 sequence_number, Int4 number_of_positive_hits)
 
 
 
-#define NUMARG 39
+/* #define NUMARG 41 */
+#define NUMARG 40
 
 static Args myargs [NUMARG] = {
   { "Database", 
@@ -361,7 +371,12 @@ static Args myargs [NUMARG] = {
   { "Produce HTML output",
         "F", NULL, NULL, FALSE, 'T', ARG_BOOLEAN, 0.0, 0, NULL},
   { "Output File for PSI-BLAST Matrix in ASCII", 
-	NULL, NULL, NULL, TRUE, 'Q', ARG_FILE_OUT, 0.0, 0, NULL}
+	NULL, NULL, NULL, TRUE, 'Q', ARG_FILE_OUT, 0.0, 0, NULL},
+  { "Input Alignment File for PSI-BLAST Restart", 
+	NULL, NULL, NULL, TRUE, 'B', ARG_FILE_IN, 0.0, 0, NULL}
+
+  /*  { "Cost to decline alignment",
+        "2", NULL, NULL, FALSE, 'D', ARG_INT, 0.0, 0, NULL} */
 }; 
 
 Int2 Main (void)
@@ -394,6 +409,8 @@ Int2 Main (void)
 	compactSearchItems *compactSearch;
 	Boolean  recoverCheckpoint = FALSE;
         Boolean  alreadyRecovered = FALSE;
+	Boolean  freqCheckpoint = FALSE;
+        Boolean  alignCheckpoint = FALSE;
         Boolean  checkReturn = FALSE;
 
 
@@ -558,6 +575,8 @@ Int2 Main (void)
 			}
 			options->gap_open = myargs[10].intvalue;
 			options->gap_extend = myargs[11].intvalue;
+                        options->decline_align = INT2_MAX;
+                        /* options->decline_align = myargs[40].intvalue; */
 			options->gap_x_dropoff = myargs[12].intvalue;
 			options->gap_x_dropoff_final = myargs[23].intvalue;
 			options->gap_trigger = myargs[13].floatvalue;
@@ -583,8 +602,8 @@ Int2 Main (void)
                   options->ethresh = 0.0;
 		if (myargs[30].intvalue)
 			options->wordsize = myargs[30].intvalue;
-		if (myargs[31].intvalue)
-			options->db_length = myargs[31].intvalue;
+		if (myargs[31].floatvalue)
+			options->db_length = (Int8) myargs[31].floatvalue;
 
 		options->hsp_range_max  = myargs[32].intvalue;
                 if (options->hsp_range_max != 0)
@@ -642,9 +661,18 @@ Int2 Main (void)
 		if (search == NULL)
 			return 1;
 
-                /*AAS*/ 
-		if (NULL != myargs[29].strvalue)
+                /*AAS*/
+ 		if ((NULL != myargs[29].strvalue) || (NULL != myargs[39].strvalue)) {
 		  recoverCheckpoint = TRUE;
+                  if (NULL != myargs[29].strvalue) {
+		    freqCheckpoint = TRUE;
+		    alignCheckpoint = FALSE;
+		  }
+		  else {
+		    freqCheckpoint = FALSE;
+		    alignCheckpoint = TRUE;
+		  }
+		}
                 if (recoverCheckpoint)
 		  search->positionBased = TRUE;
 		else
@@ -678,14 +706,23 @@ Int2 Main (void)
                   compactSearch = compactSearchNew(compactSearch);
                   copySearchItems(compactSearch, search);
                   posInitializeInformation(posSearch,search);
-                  checkReturn = posReadCheckpoint(posSearch, compactSearch, myargs[29].strvalue, &(search->error_return));
+		  /*AAS*/
+		  if (freqCheckpoint) {
+		    checkReturn = posReadCheckpoint(posSearch, compactSearch, myargs[29].strvalue, &(search->error_return));
+		    search->sbp->posMatrix = posSearch->posMatrix;
+		  }
+		  else {
+		    search->sbp->posMatrix = BposComputation(posSearch, search, compactSearch, myargs[39].strvalue, myargs[28].strvalue, &(search->error_return)); 
+                    if (NULL == search->sbp->posMatrix)
+		      checkReturn = FALSE;
+		    else
+                      checkReturn = TRUE;
+		  }
 		  BlastErrorPrint(search->error_return);
                   if (!checkReturn) {
 		    ErrPostEx(SEV_FATAL, 0, 0, "blast: Error recovering from checkpoint");
 		    return 1;
 		  }
-                  else 
-                    search->sbp->posMatrix = posSearch->posMatrix;
 		  if (myargs[38].strvalue != NULL) {
 		    if ((matrixfp = FileOpen(myargs[38].strvalue, "w")) == NULL)
 		      {
@@ -709,9 +746,10 @@ Int2 Main (void)
 		  fprintf(global_fp, "%s", "Searching");
 		  fflush(global_fp);
 #endif
-
                   if (ALL_ROUNDS && 1 == thisPassNum && (!recoverCheckpoint)) 
                     posSearch = (posSearchItems *) MemNew(1 * sizeof(posSearchItems));
+
+
                   posSearch->threshSequences = NULL;
 		  if (options->isPatternSearch) {
                     search->gap_align = GapAlignBlkNew(1,1);
@@ -777,6 +815,7 @@ Int2 Main (void)
                     recoverCheckpoint = FALSE;
                     alreadyRecovered = TRUE;
                   }
+
 
                   compactSearch = compactSearchNew(compactSearch);
                   copySearchItems(compactSearch, search);
@@ -1026,7 +1065,7 @@ Int2 Main (void)
 		  FileClose(patfp);
 		}
 
-	}
+        }
 	if (ALL_ROUNDS)
 	  posSearch = MemFree(posSearch);
         compactSearchDestruct(compactSearch);

@@ -24,7 +24,7 @@
 #define ERR_SEQ_INST_BadDeltaSeq  1,20
 #define ERR_SEQ_INST_LongHtgsSequence  1,21
 #define ERR_SEQ_INST_LongLiteralSequence  1,22
-#define ERR_SEQ_INST_SequenceTooLong  1,23
+#define ERR_SEQ_INST_SequenceExceeds350kbp  1,23
 #define ERR_SEQ_INST_ConflictingIdsOnBioseq  1,24
 #define ERR_SEQ_DESCR  2,0
 #define ERR_SEQ_DESCR_BioSourceMissing  2,1
@@ -35,6 +35,9 @@
 #define ERR_SEQ_DESCR_NoOrgFound  2,6
 #define ERR_SEQ_DESCR_MultipleBioSources  2,7
 #define ERR_SEQ_DESCR_NoMolInfoFound  2,8
+#define ERR_SEQ_DESCR_BadCountryCode  2,9
+#define ERR_SEQ_DESCR_NoTaxonID  2,10
+#define ERR_SEQ_DESCR_InconsistentBioSources  2,11
 #define ERR_GENERIC  3,0
 #define ERR_GENERIC_NonAsciiAsn  3,1
 #define ERR_GENERIC_Spell  3,2
@@ -82,5 +85,7 @@
 #define ERR_SEQ_FEAT_FarLocation  5,29
 #define ERR_SEQ_FEAT_DuplicateFeat  5,30
 #define ERR_SEQ_FEAT_UnnecessaryGeneXref  5,31
+#define ERR_SEQ_FEAT_TranslExceptPhase  5,32
+#define ERR_SEQ_FEAT_TrnaCodonWrong  5,33
 
 #endif

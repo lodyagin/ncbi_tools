@@ -29,21 +29,26 @@
 *
 * Version Creation Date:   4/16/98
 *
-* $Revision: 6.1 $
+* $Revision: 6.4 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
-* Date     Name        Description of modification
-* -------  ----------  -----------------------------------------------------
-*
+* $Log: urlquery.h,v $
+* Revision 6.4  1999/07/28 21:05:23  vakatov
+* Moved all #include's from inside the NLM_EXTERN & `extern "C"' block
 *
 * ==========================================================================
 */
 
 #ifndef _URLQUERY_
 #define _URLQUERY_
+
+#include <ncbi.h>
+#include <con_url.h>
+#include <asn.h>
+
 
 #undef NLM_EXTERN
 #ifdef NLM_IMPORT
@@ -52,21 +57,13 @@
 #define NLM_EXTERN extern
 #endif
 
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#include <ncbi.h>
-#include <con_url.h>
-
 
 /* URL QUERY CONVENIENCE FUNCTIONS */
-
-/* Content-type flag. */
-typedef enum {
-  wwwencoded = 1,
-  multipart
-}  UrlContentType;
 
 /*
   Initializes a POST connector based on URL query parameters.  For example:
@@ -75,7 +72,8 @@ typedef enum {
     "cruncher.nlm.nih.gov", 80,
     "/cgi-bin/Sequin/testcgi.cgi",
     "request=seg&window=12&lowcut=2.3&hicut=2.6",
-    "Sequin", 30, wwwencoded, URLC_SURE_FLUSH
+    "Sequin", 30, eMIME_Fasta,
+    URLC_SURE_FLUSH | URLC_URL_DECODE_INP | URLC_URL_ENCODE_OUT
   );
 
   The returned CONN value is then passed data before being sent to the cgi.
@@ -84,7 +82,18 @@ NLM_EXTERN CONN QUERY_OpenUrlQuery (
   Nlm_CharPtr host_machine, Nlm_Uint2 host_port,
   Nlm_CharPtr host_path, Nlm_CharPtr arguments,
   Nlm_CharPtr appName, Nlm_Uint4 timeoutsec,
-  UrlContentType ctype, URLC_Flags flags
+  EMIME_SubType subtype, URLC_Flags flags
+);
+
+/*
+  Calculates length of data written to connection, writes HTML header, calls
+  CONN_Wait with a timeout of 0 to send the query without waiting for response.
+  This should be called after all data are copied to the connection, typically
+  either with CONN_Read, QUERY_CopyFileToQuery, or with QUERY_AsnIoConnOpen
+  followed by a specific AsnWrite function.
+*/
+NLM_EXTERN void QUERY_SendQuery (
+  CONN conn
 );
 
 /*
@@ -94,14 +103,6 @@ NLM_EXTERN CONN QUERY_OpenUrlQuery (
 */
 NLM_EXTERN void QUERY_CopyFileToQuery (
   CONN conn, FILE *fp
-);
-
-/*
-  Calculates length of data written to connection, writes HTML header, and calls
-  CONN_Wait with a timeout of 0 to send the query without waiting for response.
-*/
-NLM_EXTERN void QUERY_SendQuery (
-  CONN conn
 );
 
 /*
@@ -115,13 +116,35 @@ NLM_EXTERN void QUERY_CopyResultsToFile (
   CONN conn, FILE *fp
 );
 
+/* Structure for direct AsnIo-CONN link */
+typedef struct asnioconn {    /* for AsnIo to and from a connection */
+  AsnIoPtr aip;
+  CONN conn;
+} AsnIoConn, PNTR AsnIoConnPtr;
+
+/*
+  Creates structure containing AsnIoPtr attached to CONN.  Pass aicp->aip
+  to AsnRead and AsnWrite functions.
+*/
+NLM_EXTERN AsnIoConnPtr QUERY_AsnIoConnOpen (
+  Nlm_CharPtr mode, CONN conn
+);
+
+/*
+  Frees AsnIoPtr and structure, CONN will be closed later by QUERY_CheckQueue.
+*/
+NLM_EXTERN AsnIoConnPtr QUERY_AsnIoConnClose (
+  AsnIoConnPtr aicp
+);
 
 /* FUNCTIONS FOR MAINTAINING A QUEUE OF PENDING URL QUERIES */
 
 /* Callback type for queued queries */
 typedef Nlm_Boolean (LIBCALLBACK *QueryResultProc) (CONN conn, Nlm_VoidPtr userdata, EConnStatus status);
 
-/* Opaque handle type.  Variable must be kept by application and initialized to NULL. */
+/* Opaque handle type.  Variable must be kept by application and initialized
+ * to NULL.
+ */
 struct SQueueTag;
 typedef struct SQueueTag* QUEUE;  /* queue handle */
 
@@ -133,9 +156,10 @@ NLM_EXTERN void QUERY_AddToQueue (
 );
 
 /*
-  Checks queued connections (with CONN_Wait), calls completion routine, then removes
-  query from queue and closes connection.  Application is responsible for calling
-  QUERY_CheckQueue every once in a while, typically with a timer.
+  Checks queued connections (with CONN_Wait), calls completion routine, then
+  removes query from queue and closes connection.
+  Application is responsible for calling QUERY_CheckQueue() every once in a
+  while, typically with a timer.
 */
 NLM_EXTERN Nlm_Int4 QUERY_CheckQueue (
   QUEUE* queue

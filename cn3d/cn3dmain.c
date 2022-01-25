@@ -34,6 +34,27 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cn3dmain.c,v $
+* Revision 6.40  1999/09/16 17:16:20  ywang
+* open multiple salsa window for data with multiple seq-annot data
+*
+* Revision 6.39  1999/08/04 21:18:01  lewisg
+* modularized open operations to allow sequin to launch cn3d
+*
+* Revision 6.38  1999/07/02 22:11:24  ywang
+* call EntrezInit besides EntrezBioseqFetchEnable
+*
+* Revision 6.37  1999/06/15 19:08:17  kans
+* instantiate Cn3D_useEntrez in library
+*
+* Revision 6.36  1999/06/15 17:57:53  ywang
+* rename useEntrez as Cn3D_useEntrez
+*
+* Revision 6.35  1999/06/14 17:38:43  ywang
+* remove 'static' on Cn3D_useEntrez
+*
+* Revision 6.34  1999/05/10 21:50:30  chappey
+* bug in SeqEdDownload
+*
 * Revision 6.32  1999/04/27 20:47:37  lewisg
 * add cn3d gif batch mode to cn3d
 *
@@ -144,6 +165,7 @@
 #include <cn3dmain.h>
 #include <objmime.h>
 #include <accentr.h>
+#include <accutils.h>
 #include <objalign.h>
 #include <objseq.h>
 #include <objmgr.h>
@@ -158,7 +180,6 @@
 #include <sqnutils.h>
 
 extern Boolean viewalign_only;
-static Boolean useEntrez = FALSE;
 
 static Boolean LIBCALLBACK OpenMimeFile(CharPtr filename)
 {
@@ -206,7 +227,7 @@ static void NetConfigureProc (IteM i)
       netCurrentlyOn = TRUE;
     }
   }
-  if (useEntrez) {
+  if (Cn3D_useEntrez) {
     netCurrentlyOn = TRUE;
   }
   ShowNetConfigForm (NULL, NULL,
@@ -272,6 +293,50 @@ static void Cn3D_PrintImage(Char * str)
 }
 
 
+static SeqEntryPtr LIBCALLBACK SeqEdDownload (CharPtr program, CharPtr accession, Int4 uid, Boolean is_na, BoolPtr is_new)
+
+{
+  BioseqPtr    bsp;
+  LinkSetPtr   lsp;
+  SeqEntryPtr  sep = NULL;
+  Int2         seqtype;
+  SeqId        sid;
+  Char         str [64];
+
+  EntrezInit (program, TRUE, NULL);
+  if (! StringHasNoText (accession)) {
+    if (is_na) {
+      seqtype = TYP_NT;
+    } else {
+      seqtype = TYP_AA;
+    }
+    sprintf (str, "\"%s\" [ACCN]", accession);
+    lsp = EntrezTLEvalString (str, seqtype, -1, NULL, NULL);
+    if (lsp != NULL) {
+      if (lsp->uids)
+         uid = lsp->uids [0];
+    }
+    LinkSetFree (lsp);
+  }
+  if (uid > 0) {
+    sid.choice = SEQID_GI;
+    sid.data.intvalue = uid;
+    sid.next = NULL;
+    bsp = BioseqLockById (&sid);
+    if (bsp != NULL) {
+      sep = SeqMgrGetSeqEntryForData (bsp);
+      BioseqUnlock (bsp);
+    } else {
+      sep = EntrezSeqEntryGet (uid, -2);
+      if (is_new != NULL) {
+        *is_new = TRUE;
+      }
+    }
+  }
+  EntrezFini ();
+  return sep;
+}
+
 Int2 Main(void)
 {
   char buffer [PATH_MAX];
@@ -287,18 +352,23 @@ Int2 Main(void)
   if ( !OpenMMDBAPI(0, NULL) )
     return 1;
 
+  SeqAsnLoad();
+
+
   if (GetAppParam ("CN3D", "SETTINGS", "NETWORKAVAILABLE", NULL, str, sizeof (str))) {
     if (StringICmp (str, "TRUE") == 0) {
-      useEntrez = TRUE;
+      Cn3D_useEntrez = TRUE;
     }
   }
 
-  if (useEntrez) {
+  if (Cn3D_useEntrez) {
     EntrezBioseqFetchEnable ("Cn3D", FALSE);
+    EntrezInit("Cn3D", TRUE, NULL);
   }
 
 /******* SEQUENCE EDITOR *********/
   MemSet ((Pointer) (&seqedprocs), 0, sizeof (SeqEditViewProcs));
+  if(Cn3D_useEntrez)seqedprocs.download = SeqEdDownload;
   SetAppProperty ("SeqEditDisplayForm", &seqedprocs);
 /******** END ************/
   
@@ -307,7 +377,7 @@ Int2 Main(void)
     DeskAccGroup( AppleMenu( NULL ) );
 #endif
 
-  www = Cn3DWin(NULL, NULL, NetConfigureProc, useEntrez);
+  www = Cn3DWin(NULL, NULL, NetConfigureProc, Cn3D_useEntrez);
   if ( www )
     {
       if (GetAppParam("Cn3D","demo","mandatory_file","", buffer, sizeof(buffer)) > 0)
@@ -358,7 +428,8 @@ Int2 Main(void)
 #endif
 	}
 
-      if(!viewalign_only) Show( www );
+/*    if(!viewalign_only) Show( www ); */
+      Show( www );
 /*    if(Mime_ReadIn) LaunchSequenceWindow(); */    /*  yanli */
       ProcessEvents();
   }
@@ -368,7 +439,7 @@ Int2 Main(void)
 
   /* to do: delete OGL global information in viewer3D.  lyg */
 
-  if (useEntrez) {
+  if (Cn3D_useEntrez) {
     EntrezBioseqFetchDisable ();
     if (EntrezIsInited ()) {
       EntrezFini ();

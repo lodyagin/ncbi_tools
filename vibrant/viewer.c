@@ -29,13 +29,20 @@
 *
 * Version Creation Date:   10/25/92
 *
-* $Revision: 6.7 $
+* $Revision: 6.9 $
 *
 * File Description:
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: viewer.c,v $
+* Revision 6.9  1999/08/06 19:28:17  vakatov
+* Restored "NormalizeBox()" as "s_NormalizeBoxUpsideDown()" -- because
+* this particular moduleby some reason assumes that:  top >= bottom
+*
+* Revision 6.8  1999/08/06 18:42:36  vakatov
+* Moved "NormalizeBox()" from "viewer.c" to "mappingp.[ch]" & made it public
+*
 * Revision 6.7  1999/03/02 19:09:50  vakatov
 * PrintAllViewer() -- fixed typos introduced in R6.6
 *
@@ -555,15 +562,16 @@ static void AlignPortToWorld (BoxPtr port, BoxPtr world)
                       &port->bottom, &port->top,    FALSE);
 }
 
+
 /*****************************************************************************
 *
-*   NormalizeBox (box)
+*   s_NormalizeBoxUpsideDown (box)
 *       Ensures that left <= right and bottom <= top in world coordinates
 *
+*   NOTE:  dont confuse it with the "standard" public "NormalizeBox()"!!!
 *****************************************************************************/
 
-static void NormalizeBox (BoxPtr box)
-
+static void s_NormalizeBoxUpsideDown (BoxPtr box)
 {
   Int4  swap;
 
@@ -580,6 +588,7 @@ static void NormalizeBox (BoxPtr box)
     }
   }
 }
+
 
 /*****************************************************************************
 *
@@ -621,7 +630,7 @@ static void CalculateScaling (VieweR viewer, SegmenT picture,
   world.top    = pic->seg.box.top    + 10*scaleY + 1;
   world.right  = pic->seg.box.right  + 10*scaleX + 1;
   world.bottom = pic->seg.box.bottom - 10*scaleY;
-  NormalizeBox( &world );
+  s_NormalizeBoxUpsideDown( &world );
 
   ObjectRect(viewer, &view);
   InsetRect(&view, 4, 4);
@@ -715,7 +724,7 @@ static void CalculateScaling (VieweR viewer, SegmenT picture,
       Message (MSG_ERROR, "AttachPicture align parameter is invalid");
       break;
     }
-  NormalizeBox( &port );
+  s_NormalizeBoxUpsideDown( &port );
   AlignPortToWorld(&port, &world);
 
   scalePtr->world   = world;
@@ -1002,7 +1011,7 @@ Boolean PictureGrew (VieweR viewer)
   world.top    = pic->seg.box.top    + 10*scaleY + 1;
   world.right  = pic->seg.box.right  + 10*scaleX + 1;
   world.bottom = pic->seg.box.bottom - 10*scaleY;
-  NormalizeBox (&(extra.scale.world));
+  s_NormalizeBoxUpsideDown( &extra.scale.world );
 
   if (extra.scale.world.left != world.left ||
       extra.scale.world.top != world.top ||
@@ -1046,7 +1055,7 @@ void PictureHasEnlarged (VieweR viewer)
   extra.scale.world.top    = pic->seg.box.top    + 10*scaleY + 1;
   extra.scale.world.right  = pic->seg.box.right  + 10*scaleX + 1;
   extra.scale.world.bottom = pic->seg.box.bottom - 10*scaleY;
-  NormalizeBox (&(extra.scale.world));
+  s_NormalizeBoxUpsideDown( &extra.scale.world );
 
   SetPanelExtra((PaneL)viewer, &extra);
   if (Visible( viewer )  &&  AllParentsVisible( viewer ))

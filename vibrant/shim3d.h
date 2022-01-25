@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/29/99
 *
-* $Revision: 6.2 $
+* $Revision: 6.3 $
 *
 * File Description: 
 *  header file for shims to replace Viewer3D with OpenGL
@@ -37,6 +37,9 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: shim3d.h,v $
+* Revision 6.3  1999/06/14 23:15:11  lewisg
+* moved useful helper functions out of the ifdef
+*
 * Revision 6.2  1999/04/06 17:17:17  lewisg
 * fix typo
 *
@@ -50,8 +53,6 @@
 #ifndef _SHIM3D_
 #define _SHIM3D_
 
-#ifdef _OPENGL
-
 #include <ncbilcl.h>
 #include <ncbistd.h>
 #include <vibmouse.h>
@@ -59,6 +60,50 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+typedef struct _OGL_ColorCell
+/* contains a color.  duplicates ResidueColorCell, but we don't need the
+ dependency */
+{
+    Nlm_Uint1 rgb[3];
+} TOGL_ColorCell;
+
+void OGL_CreateCTransform(Nlm_FloatHi x1, Nlm_FloatHi y1, Nlm_FloatHi z1,
+                        Nlm_FloatHi x2, Nlm_FloatHi y2, Nlm_FloatHi z2,
+                        Nlm_FloatHi *Rotate, Nlm_FloatHi *Translate,
+                        Nlm_FloatHi *length);
+
+extern Nlm_FloatHi * OGL_CrossProduct( Nlm_FloatHi * v1, Nlm_FloatHi * v2);
+
+#define OGL_SQR(oglx) ((oglx)*(oglx))
+
+
+
+#ifdef _OPENGL
+
+/*
+*  Include the GL dependencies.  GL has its own typedef's for basic types, just like the toolkit.
+*  If you get warnings about type mismatch, this should be investigated.  The GL typedef's can't
+*  be included in general toolkit code because of the windows.h dependency for WIN32 which
+*  causes all sorts of name collisions.
+*/
+
+#ifdef WIN32  /* braindead windows dependency */
+#include <windows.h>
+#endif
+#include <GL/gl.h>
+#include <GL/glu.h>
+
+/* 
+*  the following 2 includes are a subset of vibrant.h, since vibdefns.h
+*  and vibforms.h confict with windows.h 
+*/
+
+#include <vibtypes.h>
+#include <vibprocs.h>
+
+
+/* defines */
 
 #define OGL_DEFAULT_SIZE 5.0
 
@@ -104,11 +149,6 @@ typedef struct _OGL_BoundBox
 	Nlm_Boolean set;
 } TOGL_BoundBox;
 
-typedef struct _OGL_ColorCell
-/* contains a color.  duplicates ResidueColorCell, but we don't need the dependency */
-{
-    Nlm_Uint1 rgb[3];
-} TOGL_ColorCell;
 
 typedef struct _OGL_PaletteIndex
 /* points into the palette created for OpenGL running in Index color mode */
@@ -154,7 +194,6 @@ typedef struct _OGL_Data
 
 
 
-extern Nlm_FloatHi * OGL_CrossProduct( Nlm_FloatHi * v1, Nlm_FloatHi * v2);
 extern void OGL_Normalize( Nlm_FloatHi * v);
 extern Nlm_FloatHi * OGL_MakeNormal (Nlm_FloatHi * origin, Nlm_FloatHi * v1, Nlm_FloatHi * v2);
 extern void OGL_Reset (TOGL_Data * OGL_Data);
@@ -197,11 +236,11 @@ extern void OGL_SetSelectPoint(TOGL_Data * OGL_Data, Nlm_PoinT Point);
 extern void OGL_Redraw(TOGL_Data * OGL_Data);
 
 
+#endif /* _OPENGL */
+
 #ifdef __cplusplus
 }
 #endif
-
-#endif /* _OPENGL */
 
 #endif
 

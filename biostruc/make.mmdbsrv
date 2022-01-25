@@ -1,274 +1,68 @@
 #######################################################################
 #
-# default flags for compiling and loading
+# This makefile is now used to make both the flat file (suffix "FF")
+# and pubstruct (suffix "PS") production versions of mmdbsrv. The
+# previous version (6.24) was used only for building the pubstruct version.
 #
-# $Log: make.mmdbsrv,v $
-# Revision 6.24  1999/04/22 01:53:20  kimelman
-# follow up to wrapper fixes.
-#
-# Revision 6.23  1998/11/06 18:59:07  kimelman
-# PubStruct loading transaction granularity changed
-#
-# Revision 6.22  1998/10/22 17:04:45  kimelman
-# tash cleaned
-# path to default production dirs added
-#
-# Revision 6.21  1998/10/07  21:54:10  kimelman
-# local ctutils dependencies thrown away - linking global ctlibutil now
-#
-# Revision 6.20  1998/10/05 17:49:10  kimelman
-# optimazation flags fixed
-#
-# Revision 6.19  1998/09/30 15:40:42  kimelman
-# no @s
-#
-# Revision 6.18  1998/09/30  15:34:08  kimelman
-# optflags fixed
-#
-# Revision 6.17  1998/08/08 04:48:47  kimelman
-# switch to public ctutils library
-#
-# Revision 6.16  1998/08/05 17:51:03  kimelman
-# --enforce mode & /tmp downpath
-#
-# Revision 6.15  1998/07/16 20:08:51  kimelman
-# loader ==> st_loader
-#
-# Revision 6.14  1998/07/14 20:24:53  kimelman
-# FT schema & smart load
-#
-# Revision 6.13  1998/06/19 17:49:09  kimelman
-# added NCBI_OTHERLIBS to resolve socket dependencies
-#
-# Revision 6.12  1998/06/09 18:50:33  kimelman
-# permissions problems workaround added to wrapper
-#
-# Revision 6.11  1998/06/09 18:39:07  kimelman
-# 1. web installation fixed: we can work now with 1-2-3 simultaneos binaries.
-# 2. added standalone compilation target - makes a system without DB part.
-# 3. MMDBlibs extracted and presented as mactro.
-#
-# Revision 6.10  1998/05/27 17:57:32  kimelman
-# put compressing stuff into production
-#
-# Revision 6.9  1998/05/15 20:20:00  kimelman
-# compr -> nlmzip
-#
-# Revision 6.8  1998/05/14 16:52:26  kimelman
-# ./bin ==> bin
-#
-# Revision 6.7  1998/05/14 16:49:18  kimelman
-# added error report generation for install_local targer directory,
-# added 'clean' entry
-# removed obsolete dependence on compression.c
-#
-# Revision 6.6  1998/05/14 16:11:18  kimelman
-# Compression stuff added in debug mode.
-# few bugs fixed, related to OpenServer/SQL Server switching
-#
-# Revision 6.5  1998/05/08 18:12:39  kimelman
-# minibugs & style
-#
-# Revision 6.4  1998/05/08 03:06:12  kimelman
-# added options dependencies checking.
-# tuned multiplatform compilation
-# installation options added
-#
-# Revision 6.3  1998/04/15 14:54:00  kimelman
-# 1. Make retrieval uniform from open server and sql server.
-# 2. mmdbsrv retrival performance tuning:
-# 	- size of read-in buffers
-# 	- direct pdb2mmdb DB lookup instead of full loading pdb to mmdb translataion
-# 	  table
-# 3. cleaning mmdblocl.* and make.mmdbsrv in order to remove obsolete code
-#
-# Revision 6.2  1998/04/03 21:38:07  kimelman
-# PubStruct libraries and other stuff...
-#
-# Revision 6.1  1997/11/05 19:53:04  madej
-# Remove obsolete library ncbiwww2.
+# Historical comments that are no longer relevant have been removed.
 #
 #######################################################################
+#
+# $Log: make.mmdbsrv,v $
+# Revision 6.26  1999/06/11 19:56:29  zimmerma
+# new makefiles
+#
+# 
+#######################################################################
 
-# SGI options
+# Define sybase libs before ncbi.mk to allow them to be overridden:
 NCBI_SYBLIBS_CT = -L$(NCBI_SYBASE)/lib -lblk -lct -lcs -ltcl -lcomn -lintl
 
 include $(NCBI)/ncbi.mk
-
-SHELL=$(NCBI_MAKE_SHELL)
 CC = $(NCBI_CC)
 CFLAGS1 = -c
-LDFLAGS1 = 
-OPTFLAG=$(NCBI_OPTFLAG)
+OTHERLIBS = -lm
 INCPATH = $(NCBI_INCDIR)
-LIBPATH = $(NCBI_LIBDIR)
-SYBLIBRARY = $(NCBI_SYBLIBS_CT)
-#SYBLIBRARY = $(NCBI_SYBLIBS_CT_r)
 
-webdir=/net/neptune/pubmed/WWW/live/www.server/cgi-bin/Entrez/Structure
-utildir=/net/vaster/usr/people2/bryant/MDB/Pubstruct
+#development mode
+OPTFLAG = -g
+LIBPATH = $(NCBI_ALTLIB)
 
-DEF =
-# SYMBOLS FOR source, executables.
-SRC_nodb= mmdbsrv.c mmdblocl.c 
-SRC= $(SRC_nodb) PubStructAsn.c
-OBJ = $(SRC:.c=.o)
-OBJ_nodb = $(SRC_nodb:.c=.o)
-EXE = mmdbsrv
+#production mode
+#OPTFLAG = $(NCBI_OPTFLAG)
+#LIBPATH = $(NCBI_LIBDIR)
 
-CFLAGS =  -I. $(CFLAGS1) $(OPTFLAG) -I$(INCPATH) $(VIBFLAG) $(DEF) $(NCBI_SYBFLAGS) $(NCBI_SYBFLAG)
-LDFLAGS = $(OPTFLAG) $(LDFLAGS1) -L$(LIBPATH) $(VIBFLAG) $(DEF)
-MTLDFLAGS = $(NCBI_THR_ALTOBJ) $(SYBLIBRARY) -L$(NCBI_ALTLIB)   -lncbiobj -lncbi -lnsl -lthread -ldl -lm
+# SYMBOLS FOR flat file source, executables.
 
-MMDBLIBS= -lncbimmdb -lncbiNacc -lnetentr -lnetcli -lncbicdr -lncbiobj -lncbi $(NCBI_OTHERLIBS) -L$(NCBI_ALTLIB)
-LOADLIBS= -lncbimmdb -lncbiobj -lncbi $(NCBI_OTHERLIBS) -L$(NCBI_ALTLIB)
+SRC_FF = mmdbsrv.c mmdbFF.c
+SRC_PS = mmdbsrv.c mmdb_pubstruct.c PubStructAsn.c
 
-## Implicit actions
-##
-## if need a .o, compile the .c
-##
+CFLAGS = $(CFLAGS1) $(OPTFLAG) -I$(INCPATH) 
+LDFLAGS = -I$(INCPATH) $(OPTFLAG) -L$(LIBPATH)
 
+# The current list of NCBI libraries copied from makenet.unx
+
+LIB1 = -lncbi
+LIB2 = -lncbiobj
+LIB3 = -lncbicdr
+LIB6 = -lnetcli
+LIB7 = -lnetentr
+LIB8 = -lncbiNacc
+LIB22 = -lncbimmdb
+
+# Implicit actions
+
+# if need a .o, compile the .c
 .c.o :
 	$(CC) $(CFLAGS) $<
 
-## Default thing to make will be "all"
-##
-
-all: compile
-
-install: install_util install_web
-# installlation of bin utilities
-install_util: st_loader loader_check.sh index/st_configure.sh PubStruct_control.sh PubStruct.scr PubStruct_proc.scr
-	@[ -d $(utildir) ] || ( \
-          if [ x$(utildir) = xbin ] ; \
-          then mkdir bin ; \
-          else \
-            echo "Error: util tool installation failed - target directory \"$(utildir)\" doesn't exist"; exit 1 ; \
-          fi )
-	cp st_loader $(utildir)
-	cp index/st_configure.sh $(utildir)
-	cp PubStruct_control.sh PubStruct.scr loader_check.sh PubStruct_proc.scr $(utildir)
-	chmod a+x $(utildir)/st_configure.sh $(utildir)/PubStruct_control.sh
-	[ ! -f $(utildir)/.syb_set ] || ( cd $(utildir) ; rm -rf .syb_set )
-	SYBASE=$(NCBI_SYBASE) ; export SYBASE ; cd $(utildir) ; ./st_configure.sh
-# installation of mmdbsrv and playaround stuff
-install_web: $(webdir) mmdbsrv mmdbsrv.wrapper index/st_configure.sh
-	cp mmdbsrv $(webdir)/mmdbsrv.REAL
-	cp index/st_configure.sh $(webdir)
-	cp mmdbsrv.wrapper $(webdir)
-	chmod a+x $(webdir)/st_configure.sh $(webdir)/mmdbsrv.wrapper
-	cd $(webdir) ; [ -r mmdbsrv ] || ln -s mmdbsrv.wrapper mmdbsrv ;
-	[ ! -f $(webdir)/.syb_set ] || ( cd $(webdir) ; rm -rf .syb_set )
-	SYBASE=$(NCBI_SYBASE) ; export SYBASE ; cd $(webdir) ; ./st_configure.sh
-
-compile : prolog $(EXE) st_loader
-
-prolog : checks .recompile
-
-update: 
-	[ -d index   ] || cvs checkout -d index   internal/pubmed/pmentrez/scripts/indexing
-	cvs update
-checks : .options
-	@echo "$(CFLAGS)" >..options
-#	diff ..options .options >/dev/null || cp ..options .options
-	@diff ..options .options >/dev/null || ( echo updating '.options' ; cp ..options .options ; rm .recompile )
-	@rm -f ..options
-
-.recompile: .options make.mmdbsrv
-	@echo updating '.recompile'
-	@-rm -f *.o
-	@date >$@
-
-.options:
-	@echo making '.options'
-	@echo "$(CFLAGS)" >.options
-
-mmdblocl.o : mmdblocl.c PubStructAsn.h
-
-PubStructAsn.o : PubStructAsn.c PubStructAsn.h
-
-loader.o : loader.c PubStructAsn.h
-
 ## make individual applications and components
-##
+##$
 
-$(EXE) : mmdbsrv.$(DEF1)
-	rm -f $@
-	ln $? $@
-st_loader : loader.$(DEF1)
-	rm -f $@
-	ln $? $@
+mmdbsrv.FF : $(SRC_FF)
+	$(CC) -o $@ -I./ $(LDFLAGS) $(SRC_FF) \
+        $(LIB22) $(LIB8) $(LIB7) $(LIB6) $(LIB3) $(LIB2) $(LIB1) $(NCBI_OTHERLIBS) 
 
-#
-# Production mode (default)
-# 
-
-mmdbsrv. : $(OBJ)
-	$(CC) -o $@ -DX11 $(LDFLAGS) $(OBJ) -lnlmzip -lctutils  $(SYBLIBRARY) $(MMDBLIBS)
-
-loader. : loader.o PubStructAsn.o
-	$(CC) -o $@ $(LDFLAGS) loader.o PubStructAsn.o -lnlmzip -lctutils $(SYBLIBRARY) $(LOADLIBS)
-
-#
-# NO DB mode
-#
-
-standalone:
-	$(MAKE) -f make.mmdbsrv PURIFY=$(PURIFY) DEF="-D__NO_DB__" DEF1=nodb
-
-mmdbsrv.nodb : $(OBJ_nodb)
-	$(CC) -o $@ -DX11 $(LDFLAGS) $(OBJ_nodb) $(MMDBLIBS)
-
-loader.nodb : 
-#      just to make 'MAKE' happy :)
-	echo "#! /bin/sh                                      " >$@
-	echo "#                                               ">>$@
-	echo "# `date`                                        ">>$@
-	echo "#                                               ">>$@
-	echo "echo \\$$0 - there is no DB to load anything - it is a standalone version!">>$@
-	chmod a+x $@
-
-#
-# DEBUG mode
-#
-
-MAKEDEBUG=$(MAKE) -f make.mmdbsrv PURIFY=$(PURIFY) DEF="-DDEBUG_MODE" DEF1=test OPTFLAG="-g" \
-                  CFLAGS1="-c -Iinclude" LDFLAGS1=-Llib webdir=../qa utildir=bin
-
-debugc    :
-	$(MAKEDEBUG) compile
-debug_web :
-	$(MAKEDEBUG) compile install test_web
-debug_bin :
-	$(MAKEDEBUG) compile install test_util
-debug     :
-	$(MAKEDEBUG) compile install test_util test_web
-
-test_web  :
-	cd $(webdir) ; echo "1" | ./mmdbsrv
-
-test_util: install_util
-	@echo "1" >.testset
-	$(utildir)/PubStruct_control.sh --DBserver MOZART_SYS10 --load_list .testset --download_list .testset --downpath ./mmdb --enforce --verbose
-	@ls -l mmdb
-	@rm -rf mmdb .testset
-
-mmdbsrv.test : $(OBJ)
-	$(PURIFY) $(CC) -o $@ -g -DX11 $(LDFLAGS) $(OBJ) -lnlmzip -lctutils $(SYBLIBRARY) $(MMDBLIBS)
-
-loader.test : loader.o PubStructAsn.o
-	$(PURIFY) $(CC) -g -o $@ $(LDFLAGS) loader.o  PubStructAsn.o -lnlmzip -lctutils $(SYBLIBRARY) $(LOADLIBS)
-
-#
-# service entries
-#
-
-enforce:
-
-clean:
-	for fn in st_loader loader loader. loader.test  ; do [ ! -f $$fn ] || rm -f $$fn ; done
-	for fn in mmdbsrv mmdbsrv. mmdbsrv.test  mmdbsrv.nodb ; do [ ! -f $$fn ] || rm -f $$fn ; done
-	- rm -f *.o *~ *% \#* *.a 
-purify :
-	$(MAKE) -f make.mmdbsrv PURIFY=purify $(target)
-
+mmdbsrv.PS : $(SRC_PS)
+	$(CC) -o $@ -I./ $(LDFLAGS) $(NCBI_SYBFLAG) $(SRC_PS) -lnlmzip -lctutils $(NCBI_SYBLIBS_CT) \
+        $(LIB22) $(LIB8) $(LIB7) $(LIB6) $(LIB3) $(LIB2) $(LIB1) $(NCBI_OTHERLIBS)

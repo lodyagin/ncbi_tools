@@ -528,7 +528,7 @@ Int2 tax1_getAllNames(Int4 tax_id, CharPtr **out_names, Boolean unique)
     *out_names= names= MemNew(n*sizeof(CharPtr));
     if(names != NULL) {
         for(i= 0; i < n; i++) {
-	    if(unique && (nameList[i].unique_name != NULL)) {
+	    if(unique && (nameList[i].unique_name != NULL) && (nameList[i].unique_name[0] != '\0')) {
 		names[i]= nameList[i].unique_name;
 		nameList[i].unique_name= NULL;
 	    }
@@ -839,7 +839,9 @@ static CharPtr bldLineage(TreeCursorPtr cursor)
 	if((tnp= tree_getNodeData(cursor, &s)) != NULL) {
 	    rank= tnp->flags & 0xFF;
 	    if(rank > SpeciesRank) {
-		if(lineage != NULL) MemFree(lineage);
+		if(lineage != NULL) {
+		  lineage = MemFree(lineage);
+		}
 		continue;
 	    }
 	    if(tnp->tax_id < 2) break;
@@ -1101,6 +1103,15 @@ static OrgModPtr fixModifier(Int4 tax_id, OrgModPtr omp)
 {
     _subspec src_ss;
     _subspecPtr ss= NULL;
+
+    memset(&src_ss, 0, sizeof(_subspec));
+
+    if(omp->subtype < 2) {
+	omp->next= NULL;
+	OrgModFree(omp);
+	return NULL;
+    }
+      
 
     if((omp->subname != NULL) && (omp->subtype != 0)) {
 	src_ss.stype= omp->subtype;
@@ -1684,7 +1695,8 @@ static Int4 OrgModCmp(OrgModPtr omp1, OrgModPtr omp2)
 	    }
 	}
 	if(!found) return 100;
-    }    
+    }
+    return 0;
 }
 
 static Int4 OrgRefCmp(OrgRefPtr orp1, OrgRefPtr orp2)
@@ -1734,4 +1746,8 @@ Int4 tax1e_needUpdate(OrgRefPtr inp_orgRef)
     return OrgRefCmp(inp_orgRef, db_orgRef);
 }
 
+Boolean tax1_isAlive(void)
+{
+    return (tax1_getTaxIdByName("dog") > 1)? TRUE : FALSE;
+}
 

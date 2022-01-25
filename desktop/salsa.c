@@ -28,7 +28,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.103 $
+* $Revision: 6.143 $
 *
 * File Description: 
 *
@@ -47,9 +47,9 @@
 #include <salstruc.h>
 #include <salpanel.h>
 #include <saled.h>
-#include <saldist.h>
 #include <salparam.h>
 #include <salfiles.h>
+#include <salprop.h>
 #include <salmedia.h>
 #include <dlogutil.h>
 #include <sqnutils.h>
@@ -61,6 +61,14 @@
 #include <drawseq.h>
 #include <vsm.h>
 #include <bspview.h>
+#include <alignval.h>
+#include <salpacc.h>
+#include <salpedit.h>
+#include <salptool.h>
+
+/******/
+#include <pgppop.h>
+/****/
 
 #define OBJ_VIRT 254
 #define MARGINLEFT15 16
@@ -70,6 +78,8 @@ static SelEdStructPtr seq_info=NULL;
 
 static EditAlignDataPtr SeqAlignToEditAlignData (EditAlignDataPtr adp, SeqAlignPtr salp, Int4 start, SeqIdPtr mastersip, Uint1 showfeature);
 static void CleanupAlignDataPanel (GraphiC g, VoidPtr data);
+static void CloseWindowProc (PaneL pnl);
+
 
 static Boolean AmIConfiguredForTheNetwork (void)
 
@@ -104,8 +114,7 @@ static Boolean seqentry_write (SeqEntryPtr sep, CharPtr path)
   if ((aip = AsnIoOpen (path,"w")) == NULL) {
     return 0;
   }
-  if ( ! SeqEntryAsnWrite ( sep, aip, atp ) ) {
-  }
+  SeqEntryAsnWrite ( sep, aip, atp ) ; 
   aip = AsnIoClose (aip);
   return 1;
 }
@@ -295,9 +304,6 @@ static EditAlignDataPtr AdpOptionsInit (EditAlignDataPtr adp, Int2 marginleft, U
   adp->margin.bottom= EDIT_MARGIN_BOT;
   SelectFont (systemFont);
 
-if (!BLACKNWHITE) 
-  carColor = GetColorRGB(0,0,0);
-else
   carColor = GetColorRGB(255, 255, 255);
   for (j=0; j<256; j++) adp->colorRefs[j] = carColor;
   adp->colorRefs[COLOR_SCALE] = GetColorRGB(255,0,255);
@@ -345,7 +351,7 @@ else
 
   adp->printid = 0;
   adp->prot_mode = ALLPROTAA;
-  adp->stoptransl = TRUE;
+  adp->stoptransl = 0;
   adp->spliteditmode = FALSE;
   adp->gap_choice = IGNORE_GAP_CHOICE;
 
@@ -358,16 +364,16 @@ else
   return adp;
 }
 
-static EditAlignDataPtr AdpFieldsInit (EditAlignDataPtr adp, SelStructPtr master, Int2 width, Int2 height)
+static EditAlignDataPtr AdpFieldsInit (EditAlignDataPtr adp, Int2 width, Int2 height)
 {
   Int2         x, y;
 
   adp->seqnumber = 0;
   adp->length = 0;
   adp->seg_bioseq = FALSE;
-  adp->master.entityID = 0;   /*master->entityID;*/
-  adp->master.itemID = 0;     /*master->itemID;*/
-  adp->master.itemtype = 0;   /*master->itemtype;*/
+  adp->master.entityID = 0; 
+  adp->master.itemID = 0;  
+  adp->master.itemtype = 0;
   adp->master.region = NULL;
   adp->master.regiontype = 0;
 
@@ -409,7 +415,9 @@ static EditAlignDataPtr AdpFieldsInit (EditAlignDataPtr adp, SelStructPtr master
   adp->curalignline = 0;
   adp->nlines = 0;
   adp->numberalignline = 0;
-  adp->item_id = adp->seqEntity_id = adp->alignline = NULL;
+  adp->item_id = NULL;
+  adp->seqEntity_id = NULL;
+  adp->alignline = NULL;
   adp->itemtype =NULL;
   adp->itemsubtype =NULL;
   
@@ -463,9 +471,9 @@ static EditAlignDataPtr EditAlignDataInit (SelStructPtr master, Int2 width, Int2
   adp = (EditAlignDataPtr) MemNew (sizeof(EditAlignData));
   AdpOptionsInit (adp, marginleft, columnpcell, (FonT)font, display_panel);
   if (size_pixel)
-     adp =AdpFieldsInit(adp, master, width/adp->charw, height/adp->lineheight);
+     adp =AdpFieldsInit(adp, width/adp->charw, height/adp->lineheight);
   else 
-     adp =AdpFieldsInit(adp, master, width, height);
+     adp =AdpFieldsInit(adp, width, height);
   return adp;
 }
 
@@ -500,17 +508,23 @@ static EditAlignDataPtr AdpFieldsFree (EditAlignDataPtr adp)
   adp->firstssp = NULL;
   adp->lastses  = NULL;
   
-  adp->item_id = MemFree (adp->item_id);
-  adp->seqEntity_id = MemFree (adp->seqEntity_id);
-  adp->itemtype = MemFree (adp->itemtype);
-  adp->itemsubtype = MemFree (adp->itemsubtype); 
-  adp->alignline = MemFree (adp->alignline);
+  MemFree (adp->item_id);
+  MemFree (adp->seqEntity_id);
+  MemFree (adp->itemtype);
+  MemFree (adp->itemsubtype); 
+  MemFree (adp->alignline);
+  adp->item_id=NULL;
+  adp->seqEntity_id=NULL;
+  adp->itemtype=NULL;
+  adp->itemsubtype=NULL;
+  adp->alignline=NULL;
 
   adp->buffer = BufferFree (adp->buffer);
   adp->buffertail = NULL;
 
   adp->linebuff = FreeTextAlignList(adp->linebuff);
-  adp->colonne = MemFree (adp->colonne);
+  MemFree (adp->colonne);
+  adp->colonne = NULL;
   adp->newstyle = NULL;
   
   adp->select_block = NULL;
@@ -543,7 +557,8 @@ static EditAlignDataPtr EditAlignDataFree (EditAlignDataPtr adp)
 {
   if (adp!=NULL) {
      adp = AdpFieldsFree (adp);
-     adp = MemFree (adp);
+     MemFree (adp);
+     adp=NULL;
   }
   return NULL;
 }
@@ -721,10 +736,9 @@ static EditAlignDataPtr EditAlignDataChangeLength (EditAlignDataPtr adp, Int4 cu
   DenseSegPtr  dsp;
   SeqAnnotPtr  sap;
   SeqAlignPtr  salp;
-
   SeqEntryPtr  sep;
   UpdateSegStruc  uss;
-
+  Int4         start;
 
   adp->length -= cutlength;
 
@@ -759,8 +773,10 @@ static EditAlignDataPtr EditAlignDataChangeLength (EditAlignDataPtr adp, Int4 cu
   clean_annot_for_anp(&(adp->anp_list));
   OrderFeatProc (adp->anp_list);
  
-  adp->caret_orig = SeqLocStart((SeqLocPtr)adp->caret.region); 
-  adp->feat   =update_featpept (adp, adp->feat, NULL, ssp, (-cutlength), 255);
+  start = SeqLocStart((SeqLocPtr)ssp->region); 
+  setposition_tossp (&(adp->caret), start, start);
+  adp->caret_orig = start; 
+  adp->feat = update_featpept (adp, adp->feat, NULL, ssp, (-cutlength), 255);
   adp->seqfeat=update_featpept (adp, adp->seqfeat,NULL,ssp,(-cutlength), 255);
  
   adp->bufferlength = MIN((Int4)(adp->length),(Int4) adp->minbufferlength);
@@ -777,6 +793,9 @@ static EditAlignDataPtr EditAlignDataChangeLength (EditAlignDataPtr adp, Int4 cu
         DoUpdateSegSet (uss.segseq, uss.parts);
      }
   }
+  if (adp->current_pattern != NULL)
+     MemFree (adp->current_pattern);
+  adp->current_pattern = NULL;
   return adp;
 }
 
@@ -802,8 +821,10 @@ static void update_select_region (SelStructPtr ommsp, PaneL pnl, EditAlignDataPt
   RecT        rp;
   Int4        from, to;
   Int4        froms, tos;
+  Int4        minp, maxp;
   Int2        chklocp, chklocp2;
- 
+  float hratio;
+   
   get_client_rect (pnl, &rp);
   salp = (SeqAlignPtr) adp->sap_align->data;
   slp = (SeqLocPtr) ommsp->region;
@@ -812,19 +833,18 @@ static void update_select_region (SelStructPtr ommsp, PaneL pnl, EditAlignDataPt
   from = SeqCoordToAlignCoord (froms, sip, salp, 0, chklocp);
   chklocp2 = chkloc (sip, SeqLocStop (slp), adp->sqloc_list, &tos);
   to = SeqCoordToAlignCoord (tos, sip, salp, 0, chklocp2);
+
   if(chklocp>-1 && chklocp2>-1) {
      if (to < adp->hoffset || from > adp->hoffset+ adp->visibleLength)  
      {
         adp->voffset = hoffset2voffset(adp, adp->anp_list, adp->visibleWidth, 0, adp->length-1, from);
         ResetClip ();
         data_collect_arrange (adp, TRUE);
-        SeqEdSetCorrectBarMax (pnl, adp->nlines, adp->voffset);
+        hratio = (float)MAX((Int4)(from-50), (Int4)0) / (float)adp->length;
+        SeqEdSetCorrectBarMax (pnl, adp, hratio);
      }
   }
-  if ( adp->caret.regiontype == OM_REGION_SEQLOC ) {
-     inval_selstructpos(adp,adp->caret.entityID, adp->caret.itemID, adp->caret.itemtype, &rp, SeqLocStart (adp->caret.region));
-  }
-  if (update_caret && (from != SeqLocStart(adp->caret.region))) {
+  if (update_caret && (from != SeqLocStart((SeqLocPtr)adp->caret.region))) {
      locate_region (&(adp->caret), from, to, sip, Seq_strand_plus, FALSE);
   }
   if (!adp->display_panel) {
@@ -842,7 +862,9 @@ static void update_select_region (SelStructPtr ommsp, PaneL pnl, EditAlignDataPt
      }
      update_edititem (pnl);
   }
-  inval_selstructloc (adp, ommsp->entityID, ommsp->itemID, ommsp->itemtype, 255, &rp, from, to);
+  minp = MIN (from, to)-2;
+  maxp = MAX (from, to)+2;
+  inval_selstructloc (adp, ommsp->entityID, ommsp->itemID, ommsp->itemtype, 255, &rp, minp, maxp);
   return;
 }
 
@@ -855,9 +877,12 @@ static EditAlignDataPtr update_length (PaneL pnl, EditAlignDataPtr adp, Int4 cut
   ValNodePtr       vnp;
   AlignNodePtr     anp;
   SeqAlignPtr      salp;
-  Int4             from, to;
+  Int4             from, 
+                   to,
+                   select_length;
   Boolean          localssp=FALSE;
-
+  float hratio;
+  
   if (adp!=NULL && cutlength != 0) 
   {
      get_client_rect (pnl, &rp);
@@ -874,6 +899,13 @@ static EditAlignDataPtr update_length (PaneL pnl, EditAlignDataPtr adp, Int4 cut
         }
         ssp = SelStructNew (anp->seq_entityID, anp->bsp_itemID, OBJ_BIOSEQ, from, to, anp->sip, Seq_strand_plus, FALSE);
      }
+     else {
+        select_length = SeqLocStop((SeqLocPtr)ssp->region) - SeqLocStart((SeqLocPtr)ssp->region) +1;
+        if (select_length != cutlength) {
+           ErrPostEx (SEV_ERROR, 0, 0, "Selected region differs from deleted sequence's length");
+           return adp;
+        }
+     }
      adp = EditAlignDataChangeLength (adp, cutlength, ssp);
      if (localssp)
         SelStructDel (ssp);
@@ -881,7 +913,8 @@ static EditAlignDataPtr update_length (PaneL pnl, EditAlignDataPtr adp, Int4 cut
      if (!adp->display_panel)
         to_update_prompt (pnl, &(adp->caret), salp, adp->sqloc_list, FALSE, adp->printid);
      data_collect_arrange (adp, TRUE);
-     SeqEdSetCorrectBarMax (pnl, adp->nlines, adp->voffset);
+     hratio = (float)adp->hoffset / (float)adp->length;
+     SeqEdSetCorrectBarMax (pnl, adp, hratio);
   }
   return adp;
 }
@@ -966,7 +999,7 @@ static SeqAlignPtr create_list_alignedsegs (SeqAlignPtr salp)
   {
      salp2 = SeqAlignNew ();
      salp2->type = 3;
-     salp2->segtype = COMPSEG;
+     salp2->segtype = 1; /*COMPSEG;*/
      salp2->dim = 2; 
      salp2->segs = (Pointer) ddphead;
   }
@@ -981,10 +1014,9 @@ static SeqAlignPtr create_list_alignedsegs (SeqAlignPtr salp)
 static EditAlignDataPtr EditAlignDataReset (EditAlignDataPtr adp, Int2 width, Int2 height, SeqAlignPtr salp)
 {
   SeqAlignPtr  newsalp;
-  Uint2        choice = 1;
   SeqIdPtr     mastersip;
   SeqAlignPtr  blocks = NULL;
-  SeqAnnotPtr  sap;
+  SeqAnnotPtr  sap = NULL;
 
   if (salp != NULL) {
      newsalp = salp;
@@ -995,13 +1027,16 @@ static EditAlignDataPtr EditAlignDataReset (EditAlignDataPtr adp, Int2 width, In
      return adp;
 
   mastersip =SeqIdDup (SeqIdFindBest(SeqLocId((SeqLocPtr)adp->master.region), 0));
-  if (adp->blocks!=NULL) {
+/*if (adp->blocks!=NULL) {  */  /* yanli comment out, 7/19/1999 */
+  if (adp->blocks!=NULL || adp->blocks == NULL) {     
+         /* no matter blocks exists or not previously, yanli, 7/19/1999 */
 /**
-     SeqAlignFree (adp->blocks);
+     SeqAlignSetFree (adp->blocks);
 **/
      adp->blocks=NULL;
      if (adp->sap1_original)
-        blocks=create_list_alignedsegs ((SeqAlignPtr)adp->sap1_original->data);
+        blocks=create_list_alignedsegs ((SeqAlignPtr)adp->sap1_original->data);   
+ 
   }
   if (adp->sap1_original)
   {
@@ -1009,12 +1044,15 @@ static EditAlignDataPtr EditAlignDataReset (EditAlignDataPtr adp, Int2 width, In
      adp->sap1_original=NULL;
   }
   adp = AdpFieldsFree (adp);
-  adp = AdpFieldsInit (adp, NULL, width, height); 
+  adp = AdpFieldsInit (adp, width, height); 
   adp = SeqAlignToEditAlignData (adp, newsalp, adp->hoffset, mastersip, (Uint1)(adp->showfeat));
   if (adp && blocks) {
-     adp->sap1_original=sap;
+/*   adp->sap1_original=sap;  */
+                    /* yanli comment out, 7/19/1999 */
      adp->blocks = blocks;
   }
+  if(adp && sap) adp->sap1_original=sap;  /* yanli added, 7/19/1999 */
+ 
   return adp;
 }
 
@@ -1066,13 +1104,15 @@ static Int2 LIBCALLBACK BioseqEditMsgFunc (OMMsgStructPtr ommsp)
   SeqLocPtr          slp;
   BioseqPtr          bsp;
   SeqIdPtr           sip;
-  Int4               cutlength;
-  Int4               from , to;
+  Int4               cutlength,
+                     from=0, 
+                     to = 0;
   Int2               width;
   Int2               chklocp;
   RecT               rp;
   Boolean            ok;
-
+  float hratio;
+  
   SeqEditViewProcsPtr svpp;
 
   omudp = (OMUserDataPtr)(ommsp->omuserdata);
@@ -1162,7 +1202,8 @@ static Int2 LIBCALLBACK BioseqEditMsgFunc (OMMsgStructPtr ommsp)
           else if (cutlength == 0 && ommsp->itemtype == OBJ_VIRT)
           {
              data_collect_arrange (adp, TRUE);
-             SeqEdSetCorrectBarMax (wdp->pnl, adp->nlines, adp->voffset);
+             hratio = (float)adp->hoffset / (float)adp->length;
+             SeqEdSetCorrectBarMax (wdp->pnl, adp, hratio);
              reset_features (wdp->pnl, adp);
              inval_panel (wdp->pnl, -1, -1);
           }
@@ -1189,9 +1230,14 @@ Sequin send ommsp->itemtype==0 when update features
           if (ommsp->itemtype == OBJ_BIOSEQ)
           {
              if (ommsp->regiontype == OM_REGION_SEQLOC) {
-                sip = SeqLocId ((SeqLocPtr) ommsp->region);
                 if (is_seqvisible(ommsp->entityID, ommsp->itemID, adp->seq_info)) 
                 {
+                   slp = (SeqLocPtr)ommsp->region;
+                   ssptmp = SelStructNew (ommsp->entityID, ommsp->itemID, ommsp->itemtype, SeqLocStart (slp)+1, SeqLocStop (slp), SeqLocId (slp), SeqLocStrand(slp), FALSE);
+                   update_select_region (ssptmp, wdp->pnl, adp, FALSE); 
+                   SelStructDel (ssptmp);
+/************
+                   sip = SeqLocId ((SeqLocPtr) ommsp->region);
                    from = SeqLocStart ((SeqLocPtr) ommsp->region);
                    from = SeqCoordToAlignCoord(from, sip, salp, 0, 0);
                    to = SeqLocStop ((SeqLocPtr) ommsp->region);
@@ -1200,10 +1246,14 @@ Sequin send ommsp->itemtype==0 when update features
                    inval_selstructloc (adp, ommsp->entityID, ommsp->itemID, ommsp->itemtype, 255, &rp, from, to);
                    if ( adp->caret.regiontype == OM_REGION_SEQLOC ) {
                       from = SeqLocStart ((SeqLocPtr)adp->caret.region); 
-                      if (from != SeqLocStop((SeqLocPtr)adp->caret.region))
+                      if (from != SeqLocStop((SeqLocPtr)adp->caret.region)) {
                          setposition_tossp (&(adp->caret), from, from);
-                      if (!adp->display_panel)
-                         to_update_prompt (wdp->pnl, &(adp->caret), (SeqAlignPtr) adp->sap_align->data, adp->sqloc_list, FALSE, adp->printid); 
+                      }
+                   }
+***************/
+                   if (!adp->display_panel)
+                      to_update_prompt (wdp->pnl, &(adp->caret), (SeqAlignPtr) adp->sap_align->data, adp->sqloc_list, FALSE, adp->printid); 
+                   if (adp->caret.entityID!=ommsp->entityID && adp->caret.itemID!=ommsp->itemID) {
                       inval_selstructpos(adp,adp->caret.entityID, adp->caret.itemID, adp->caret.itemtype, &rp, from);
                    }
                 }
@@ -1227,11 +1277,11 @@ Sequin send ommsp->itemtype==0 when update features
           if (ommsp->itemtype == OBJ_BIOSEQ) 
           {
              if (ommsp->regiontype == OM_REGION_SEQLOC) {
-                slp = (SeqLocPtr)ommsp->region;
                 if(is_seqvisible(ommsp->entityID, ommsp->itemID, adp->seq_info)) 
                 {
+                   slp = (SeqLocPtr)ommsp->region;
                    ssptmp = SelStructNew (ommsp->entityID, ommsp->itemID, ommsp->itemtype, SeqLocStart (slp), SeqLocStop (slp), SeqLocId (slp), SeqLocStrand(slp), FALSE);
-                   update_select_region (ssptmp, wdp->pnl, adp, TRUE); 
+                   update_select_region (ssptmp, wdp->pnl, adp, FALSE); 
                    SelStructDel (ssptmp);
                 }
              } 
@@ -1239,9 +1289,9 @@ Sequin send ommsp->itemtype==0 when update features
                 ssptmp=is_selectedbyID (ommsp->entityID, ommsp->itemID, ommsp->itemtype);
                 if ( ssptmp != NULL ) 
                 {
-                   sip = SeqLocId ((SeqLocPtr) ommsp->region);
                    if (is_seqvisible(ommsp->entityID, ommsp->itemID, adp->seq_info)) 
                    {
+                      slp = (SeqLocPtr)ssptmp->region;
                       update_select_region (ssptmp, wdp->pnl, adp, FALSE); 
                    } 
                    else 
@@ -1271,10 +1321,11 @@ Sequin send ommsp->itemtype==0 when update features
 /*
                 if(to < adp->hoffset || from > adp->hoffset+ adp->visibleLength)
                 {
-                   adp->voffset = (Int2)(from/(adp->visibleWidth * adp->vscrollunit));
+                   adp->voffset = (Int2)(from/(adp->visibleWidth));
                    ResetClip ();
                    data_collect_arrange (adp, TRUE);
-                   SeqEdSetCorrectBarMax (wdp->pnl, adp->nlines, adp->voffset);
+                   hratio = (float)adp->hoffset / (float)adp->length;
+                   SeqEdSetCorrectBarMax (wdp->pnl, adp, hratio);
                 }
 */
                 inval_selstructloc_forfeat (adp, ommsp->entityID, ommsp->itemID, ommsp->itemtype, 255, &rp, from, to);
@@ -1326,6 +1377,9 @@ Sequin send ommsp->itemtype==0 when update features
                 }
              }
           }
+          break;
+      case OM_MSG_FLUSH:
+          CloseWindowProc (wdp->pnl);
           break;
       default:
           break;
@@ -1432,11 +1486,6 @@ static void ImportFromFileFunc (WindoW w, Int2 method)
      repopulate_panel (w, adp, salp);
 }
 
-static void ImportFromFileProc (IteM i)
-{
-  ImportFromFileFunc ((WindoW)ParentWindow(i), (Int2)PRG_ANYALIGN);
-}
-
 static void ImportFromFile1Proc (IteM i)
 {
   ImportFromFileFunc ((WindoW)ParentWindow(i), (Int2)PRGALIGNDEFAULT);
@@ -1446,12 +1495,12 @@ static void ImportFromFile2Proc (IteM i)
 {
   ImportFromFileFunc ((WindoW)ParentWindow(i), (Int2)PRGALIGNBANDBL);
 }
-
+/**
 static void ImportFromFile3Proc (IteM i)
 {
   ImportFromFileFunc ((WindoW)ParentWindow(i), (Int2)PRG_FASTA_IMPORT);
 }
-
+**/
 static void ImportFromFile4Proc (IteM i)
 {
   ImportFromFileFunc ((WindoW)ParentWindow(i), (Int2)PRG_BLAST);
@@ -1474,7 +1523,7 @@ static void ImportAlignmentProc (IteM i)
      return;
   
   sep = ReadAnyAlignment (ISA_aa(adp->mol_type), NULL);
-  salp = FindSeqAlignInSeqEntry (sep, (Uint1)OBJ_SEQALIGN);
+  salp = (SeqAlignPtr) FindSeqAlignInSeqEntry (sep, (Uint1)OBJ_SEQALIGN);
   import_sip = SeqAlignId (salp, 0); 
   if (import_sip!=NULL)
   {
@@ -1523,11 +1572,6 @@ static void CCFetchFromNetFunc (WindoW w, Int2 method)
   RestorePort (temport);
 }
 
-static void CCFetchFromNetProc (IteM i)
-{
-  CCFetchFromNetFunc ((WindoW)ParentWindow(i), (Int2)PRG_ANYALIGN);
-}
-
 static void CCFetchFromNet1Proc (IteM i)
 {
   CCFetchFromNetFunc ((WindoW)ParentWindow(i), (Int2)PRGALIGNDEFAULT);
@@ -1537,24 +1581,27 @@ static void CCFetchFromNet2Proc (IteM i)
 {
   CCFetchFromNetFunc ((WindoW)ParentWindow(i), (Int2)PRGALIGNBANDBL);
 }
-
+/**
 static void CCFetchFromNet3Proc (IteM i)
 {
   CCFetchFromNetFunc ((WindoW)ParentWindow(i), (Int2)PRG_FASTA_IMPORT);
 }
-
+**/
 static void CCFetchFromNet4Proc (IteM i)
 {
   CCFetchFromNetFunc ((WindoW)ParentWindow(i), (Int2)PRG_BLAST);
 }
 
+/***********************************************/
 static void ExportTextProc (IteM i)
 {
   EditAlignDataPtr adp;
+
   if ( ( adp = GetAlignEditData ((WindoW)ParentWindow (i)) ) == NULL ) return;
   adp->align_format = SALSA_SHWTXT;
   SalsaExportDialog (i);
 }
+
 static void ExportFastaProc (IteM i)
 {
   EditAlignDataPtr adp;
@@ -1583,26 +1630,6 @@ static void ExportSeqAnnotProc (IteM i)
   adp->align_format = SALSA_ASN1;
   SalsaExportDialog (i);
 }
-static void ExportSeqAnnotButtonProc (ButtoN b)
-{
-  WindoW           wdialog;
-  DialogBoxDataPtr dbdp;
-  EditAlignDataPtr adp;
- 
-  wdialog = ParentWindow (b);
-  Hide (wdialog);
-  Update ();
-  dbdp = (DialogBoxDataPtr) GetObjectExtra (wdialog);
-  if ((adp = GetAlignEditData (dbdp->w)) != NULL ) {
-     if ( adp->seqnumber > 0 ) {
-        adp->align_format = SALSA_ASN1;
-        ExportTextFunc (b);
-     }
-  }
-  Hide (dbdp->w);
-  Remove (wdialog);
-  Remove (dbdp->w);
-}
 
 /***********************************************************
 ***
@@ -1613,67 +1640,6 @@ static void ExportSeqAnnotButtonProc (ButtoN b)
 ***     deletes the temporary file 
 ***
 ************************************************************/
-static void NotReplaceSeqAlignProc (ButtoN b)
-{
-  WindoW           wdialog;
-  DialogBoxDataPtr dbdp;
-
-  wdialog = ParentWindow (b);
-  Hide (wdialog);
-  Update ();
-  dbdp = (DialogBoxDataPtr) GetObjectExtra (wdialog);
-  Hide (dbdp->w);
-  Remove (wdialog);
-  Remove (dbdp->w);
-}
-
-static void ReplaceSeqAlignProc (ButtoN b)
-{
-  WindoW           wdialog;
-  DialogBoxDataPtr dbdp;
-  EditAlignDataPtr adp;
-  SeqAlignPtr      salp;
-
-  wdialog = ParentWindow (b);
-  Hide (wdialog);
-  Update ();
-  dbdp = (DialogBoxDataPtr) GetObjectExtra (wdialog);
-  if ( ( adp = GetAlignEditData (dbdp->w) ) != NULL ) {
-     salp = (SeqAlignPtr)adp->sap_align->data;
-     salp = SeqAlignBoolSegToDenseSeg (salp);
-     if (salp!=NULL && adp->master.entityID > 0) {
-        ReplaceSeqAlignInSeqEntry (adp->master.entityID, adp->master.itemID, salp);
-        ObjMgrSendMsg (OM_MSG_UPDATE, adp->input_entityID, adp->input_itemID, OBJ_SEQALIGN);
-     }
-  }
-  Hide (dbdp->w);
-  Remove (wdialog);
-  Remove (dbdp->w);
-}
-
-static void SaveAlignDlg (WindoW w)
-{
-  WindoW           wdialog;
-  DialogBoxDataPtr dbdp;
-  GrouP            g, c;
-
-  wdialog = FixedWindow (-50, -33, -10, -10, "Save Alignment", StdCloseWindowProc);
-  dbdp = (DialogBoxDataPtr) MemNew (sizeof (DialogBoxData));
-  SetObjectExtra (wdialog, (Pointer) dbdp, StdCleanupExtraProc);
-  dbdp->w = w;
-  g = HiddenGroup (wdialog, 1, 0, NULL);
-  StaticPrompt (g, "Before you exit the window, do you want", 0, dialogTextHeight,systemFont, 'c');
-  StaticPrompt (g, "to replace or export the alignment ?", 0, dialogTextHeight,systemFont, 'c');
-  c = HiddenGroup (wdialog, 3, 0, NULL);
-  PushButton (c, "Replace", ReplaceSeqAlignProc);
-  PushButton (c, "Export", ExportSeqAnnotButtonProc);
-  PushButton (c, "Dismiss", NotReplaceSeqAlignProc);
-  AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) c, NULL);
-  RealizeWindow (wdialog);
-  Show (wdialog);
-  return;
-}
-
 static void CloseWindowProc (PaneL pnl)
 {
   WindoW             w;
@@ -1793,6 +1759,20 @@ static void AcceptCloseWindowButton (ButtoN b)
   else AcceptCloseFunc (w, adp);
 }
 
+static void AcceptCloseWindowItemProc (IteM i)
+{
+  WindoW             w;
+  EditAlignDataPtr   adp;
+
+  w = (WindoW)ParentWindow (i);
+  if ((adp = GetAlignEditData (w)) == NULL ) return;
+  ObjMgrSetDirtyFlag (adp->input_entityID, TRUE);
+  if (adp->feat != NULL) {
+     SaveCDSConfirmDlg (w);
+  }
+  else AcceptCloseFunc (w, adp);
+}
+
 /*********************************************************
 ***
 ***
@@ -1801,7 +1781,6 @@ static void UndoProc (IteM i)
 {
   PaneL              pnl;
   EditAlignDataPtr   adp;
-  SelStructPtr       ssp = NULL;
   SeqEntryPtr        prevsep, currentsep;
   if ( ( pnl= GetPanelFromWindow ((WindoW)ParentWindow (i)) ) == NULL) return;
   if ( ( adp = GetAlignDataPanel (pnl) ) == NULL) return;
@@ -1961,8 +1940,7 @@ static void DeleteProc (IteM i)
            slp=(SeqLocPtr)ssp->region;
            if (slp)
            {
-             if (adp->sap1_original)
-              if ((FindSeqIdinSeqAlign ((SeqAlignPtr)adp->sap1_original->data, SeqLocId(slp))) > 0)
+              if ((adp->sap1_original && (FindSeqIdinSeqAlign ((SeqAlignPtr)adp->sap1_original->data, SeqLocId(slp))) > 0) || (FindSeqIdinSeqAlign ((SeqAlignPtr)sap->data, SeqLocId(slp))) > 0)
               {
 /**
                  ObjMgrSendMsg(OM_MSG_HIDE,ssp->entityID, ssp->itemID, ssp->itemtype);
@@ -1995,26 +1973,6 @@ static void DeleteProc (IteM i)
   }
   return;
 }
-
-static void ShowAllSeq (IteM i)
-{
-  WindoW           temport;
-  PaneL            pnl;
-  EditAlignDataPtr adp;
-
-  if ((pnl= GetPanelFromWindow ((WindoW)ParentWindow (i)) ) == NULL)
-     return;
-  if ((adp = GetAlignDataPanel(pnl))!= NULL) {
-/** ??????? **/
-  }
-  data_collect_arrange (adp, TRUE);
-  temport = SavePort (pnl);
-  Select (pnl);
-  inval_panel (pnl, -1, -1);
-  RestorePort (temport);
-  return;
-}
-
 
 /**********************************************************
 ***
@@ -2143,188 +2101,6 @@ static void SelectMasterProc (IteM i)
   RestorePort (temport);
 }
 
-static void SelectSubsProc2 (IteM i)
-{
-  WindoW           temport;
-  PaneL            pnl;
-  EditAlignDataPtr adp;
-  SeqAlignPtr      salp, salp_temp;
-  ValNodePtr       vnp = NULL;
-  SeqIdPtr         sip,sip2;
-  CharPtr PNTR     bufstr;
-  SeqLocPtr        slp;
-  Int4             from, 
-                   to,
-                   masterlength,
-                   k = 0, k2 = 0,k3 = 0;
-  Int2             seqnumber,
-                   nalgline,
-                   j;
-  Uint2            eID, iID;
-  Boolean          goOn= FALSE,
-                   sel = FALSE,
-                   first=TRUE;
-  Boolean          **select;
-  SeqEditViewProcsPtr svpp=NULL;
-  MediaInfoPtr        MIPtr=NULL;
-  BytePtr             bAligned=NULL;
-  Boolean             bUpper=TRUE;
-  ValNodePtr          vnp_seqinfo;
-  Int4                z=0,iCount=0;
-  SelEdStructPtr     sep=NULL, sep_temp = NULL;
-  BioseqPtr          bsp=NULL;
-  if ( ( pnl= GetPanelFromWindow ((WindoW)ParentWindow (i)) ) == NULL)
-     return;
-  if ( ( adp = GetAlignDataPanel (pnl) ) == NULL ) return;
-  if ( adp->seqnumber == 0 ) return;
-  temport = SavePort((WindoW)ParentWindow (i));
-  Select (pnl);
-
-  masterlength = SeqLocLen((SeqLocPtr)adp->master.region);
-  /*select=(BoolPtr)MemNew((size_t) ((masterlength+5) * sizeof(Boolean)));
-  MemSet ((Pointer)select, 0, (size_t)((masterlength+5)*sizeof(Boolean)));*/
-  salp = (SeqAlignPtr)adp->sap_align->data;
-  from = 0;
-  to = adp->length-1;
-  seqnumber = adp->seqnumber;
-  goOn = read_buffer_fromalignnode (adp, &vnp, from, to, &nalgline);
-
-  svpp = (SeqEditViewProcsPtr) GetAppProperty ("SeqEditDisplayForm");
-  if (svpp) {
-    if (svpp->Cn3D_On) {/*Used only for Cn3D*/
-		vnp_seqinfo = svpp->seqinfo;
-		if(vnp_seqinfo){/*the first node is the Master Seq*/
-			MIPtr=(MediaInfoPtr)vnp_seqinfo->data.ptrvalue;
-            if(MIPtr->bVisible != 1) return;
-			if (MIPtr) bAligned=MIPtr->bAligned;
-		}
-     }
-  }
-  
-  select = (Pointer) MemNew((size_t) (seqnumber * sizeof(Pointer)));
-  
-  if (svpp){
-	  vnp_seqinfo = svpp->seqinfo;
-	  iCount = 0;
-	  while(vnp_seqinfo){
-		 MIPtr=(MediaInfoPtr)vnp_seqinfo->data.ptrvalue;
-    	 if (MIPtr->bVisible){
-			 select[iCount] = (BoolPtr) MemNew(MIPtr->length * sizeof (Boolean));
-			 MemSet(select[iCount],0,MIPtr->length*sizeof(Boolean));
-			 iCount++;
-		 }
-		 vnp_seqinfo = vnp_seqinfo->next;
-	  }
-  }
-
-  if (goOn)
-  {
-     sip = (SeqIdPtr)SeqAlignId (salp, 0);
-     bufstr=buf2array (vnp, 0, seqnumber-1);
-     for (j=1; j<seqnumber; j++) 
-     {
-        z=0;
-		for (k=0; k<to+1; k++)
-        {
-           if (bAligned) {/*Used only for Cn3D; see above*/
-		      if (bufstr[0][k]!='-'){
-			  	if (bAligned[z]) bUpper=TRUE;
-				else bUpper=FALSE;
-				z++;
-			  }
-			  else bUpper=FALSE;
-		   }
-		   else bUpper=TRUE;
-
-		   if (bUpper){
-			   if (bufstr[j][k] !='-' && bufstr[0][k]!='-' && bufstr[j][k] != bufstr[0][k])
-        	   {
-            	  k2 = AlignCoordToSeqCoord(k, sip, salp, adp->sqloc_list,0);
-            	  select[0][k2]=TRUE; 
-        	   }
-		   }
-        }
-     }
-	 
-     for (j=1; j<seqnumber; j++) 
-     {
-	    sip2 = (SeqIdPtr) SeqAlignId(salp, j);
-		
-		for (k=0; k<to+1; k++)
-        {
-		    if (bufstr[0][k]=='-' || bufstr[j][k] =='-') continue;
-			k2 = AlignCoordToSeqCoord(k, sip2, salp, adp->sqloc_list,0);
-			k3 = AlignCoordToSeqCoord(k, sip, salp, adp->sqloc_list,0);
-			
-		    select[j][k2] = select[0][k3];
-        }
-     }
-	 sep=(SelEdStructPtr)adp->seq_info;
-	 j=0;
-     while(sep){
-       if(sep->visible){ 
-    	 eID=sep->entityID;/*adp->master.entityID;*/
-    	 iID=sep->itemID;/*adp->master.itemID;*/
-    	 k2=-1;
-    	 k=0;
-    	 sel=select[j][k];
-    	 if (sel)
-        	k2=k;
-    	 k++;
-		 bsp=GetBioseqGivenIDs (eID, iID, OBJ_BIOSEQ);
-		 if (bsp==NULL) continue;
-		 sip = (SeqIdPtr)SeqAlignId(salp, j);
-    	 for (; k<BioseqGetLen(bsp); k++)
-    	 {
-        	if(select[j][k] && !sel) {
-        	   k2=k;
-        	   sel=TRUE;
-        	}
-        	else if (!select[j][k] && sel) {
-        	   if (k2>-1) {
-            	  slp=SeqLocIntNew (k2, k-1, Seq_strand_plus, sip);
-            	  if (first) {
-                	 ObjMgrSelect(eID, iID, OBJ_BIOSEQ, OM_REGION_SEQLOC,(Pointer)slp);
-                	 first=FALSE;
-            	  } else
-                	 ObjMgrAlsoSelect(eID, iID, OBJ_BIOSEQ, OM_REGION_SEQLOC,(Pointer)slp);
-        	   }
-        	   sel=FALSE;
-        	   k2=-1;
-        	}
-    	 }
-    	 if (k2>-1) {
-        	slp=SeqLocIntNew (k2, k-1, Seq_strand_plus, sip);
-        	if (first) {
-        	   ObjMgrSelect (eID, iID, OBJ_BIOSEQ, OM_REGION_SEQLOC,(Pointer)slp);
-        	   first=FALSE;
-        	} else
-        	   ObjMgrAlsoSelect(eID, iID, OBJ_BIOSEQ, OM_REGION_SEQLOC,(Pointer)slp);
-    	 }
-         j++;
-       }	
-      sep=sep->next;
-	 }
-  }
-  /*memory free*/
-  if (svpp){
-	  vnp_seqinfo = svpp->seqinfo;
-	  iCount = 0;
-	  while(vnp_seqinfo){
-		 MIPtr=(MediaInfoPtr)vnp_seqinfo->data.ptrvalue;
-    	 if (MIPtr->bVisible){
-	    	 MemFree(select[iCount]);
-			 iCount++;
-		 }
-		 vnp_seqinfo = vnp_seqinfo->next;
-	  }
-  }
-  MemFree(select);  
-
-  RestorePort (temport);
-}
-
-
 static void SelectSubsProc (IteM i)
 {
   WindoW           temport;
@@ -2350,13 +2126,6 @@ static void SelectSubsProc (IteM i)
   SeqEditViewProcsPtr svpp=NULL;
   
   svpp = (SeqEditViewProcsPtr) GetAppProperty ("SeqEditDisplayForm");
-  if (svpp) {
-    if (svpp->Cn3D_On) {/*Used only for Cn3D*/
-		SelectSubsProc2(i);
-		return;
-     }
-  }
-
   if ( ( pnl= GetPanelFromWindow ((WindoW)ParentWindow (i)) ) == NULL)
      return;
   if ( ( adp = GetAlignDataPanel (pnl) ) == NULL ) return;
@@ -2471,7 +2240,7 @@ static void RefreshAlignDataButton (ButtoN b)
 ***  SetRf, SetRfFunc:
 ***
 ***********************************************************/
-static void ComplementProc (EditAlignDataPtr adp, Boolean choice)
+static void ComplementProc (EditAlignDataPtr adp)
 {
   SelStructPtr     ssp;
   ValNodePtr       vnp;
@@ -2499,7 +2268,8 @@ static void ComplementItemProc (IteM i)
   WindoW           temport;
   PaneL            pnl;
   EditAlignDataPtr adp;
-
+  float hratio;
+  
   if ( ( pnl= GetPanelFromWindow ((WindoW)ParentWindow (i)) ) == NULL) return;
   if ( ( adp = GetAlignDataPanel (pnl) ) == NULL ) return;
   if (adp->seqnumber == 0 || ISA_aa(adp->mol_type))
@@ -2508,9 +2278,10 @@ static void ComplementItemProc (IteM i)
   temport = SavePort((WindoW)ParentWindow (i));
   Select (pnl);
   inval_panel (pnl, -1, -1);
-  ComplementProc (adp, adp->drawcomplt);
+  ComplementProc (adp);
   data_collect_arrange (adp, TRUE);
-  SeqEdSetCorrectBarMax (pnl, adp->nlines, adp->voffset);
+  hratio = (float)adp->hoffset / (float)adp->length;
+  SeqEdSetCorrectBarMax (pnl, adp, hratio);
   RestorePort (temport);
 }
 
@@ -2556,29 +2327,17 @@ static void changeseqid3 (IteM i) {
 static void changeseqid4 (IteM i) {
   changeseqid ((PaneL)GetPanelFromWindow((WindoW)ParentWindow (i)), (Uint2)PRINTID_TEXTID_ACCESSION);
 }
-static void changeseqid5 (IteM i) {
-  changeseqid ((PaneL)GetPanelFromWindow((WindoW)ParentWindow (i)), (Uint2)PRINTID_REPORT);
-}
 static void changeseqid6 (IteM i) {
   changeseqid ((PaneL)GetPanelFromWindow((WindoW)ParentWindow (i)), (Uint2)6);
 }
 
 /******************************************************************
 ***
-***  MakemRNAProc , MakemRNArProc
+***  MakemRNArProc
 ***  MakeCdRgnProc , MakeCdRgnrProc
-***
-***  SaveFeatureProc
 ***  SaveFeatureButton
 ***
 *******************************************************************/
-static void MakemRNAProc (IteM i) {
-  MakeFeatProc((PaneL)GetPanelFromWindow((WindoW)ParentWindow (i)), SEQFEAT_RNA, Seq_strand_plus);
-}
-
-static void MakemRNArProc (IteM i) {
-  MakeFeatProc((PaneL)GetPanelFromWindow((WindoW)ParentWindow (i)), SEQFEAT_RNA, Seq_strand_minus);
-}
 
 static void MakeCdRgnProc (IteM i) {
   MakeFeatProc((PaneL)GetPanelFromWindow((WindoW)ParentWindow (i)), SEQFEAT_CDREGION, Seq_strand_plus);
@@ -2586,13 +2345,6 @@ static void MakeCdRgnProc (IteM i) {
 
 static void MakeCdRgnrProc (IteM i) {
   MakeFeatProc((PaneL)GetPanelFromWindow((WindoW)ParentWindow (i)), SEQFEAT_CDREGION, Seq_strand_minus);
-}
-
-static void SaveFeatureProc (IteM i)
-{
-  PaneL              pnl;
-  if ( ( pnl= GetPanelFromWindow ((WindoW)ParentWindow (i)) ) == NULL) return;
-  SaveFeatProc (pnl);
 }
 
 static void SaveFeatureButton (ButtoN b)
@@ -2606,26 +2358,8 @@ static void SaveFeatureButton (ButtoN b)
 /******************************************************************
 ***
 ***  TranslateProc , TranslateButton
-***  UntranslateProc
 ***
 *******************************************************************/
-static void TranslateProc (IteM i)
-{
-  PaneL            pnl;
-  EditAlignDataPtr adp;
-
-  if ( ( pnl= GetPanelFromWindow ((WindoW)ParentWindow (i)) ) == NULL) return;
-  if ( ( adp = GetAlignDataPanel (pnl) ) == NULL ) return;
-  if ( adp->seqnumber == 0 ) return;
-  if ( checkOMss_for_itemtype (OBJ_VIRT) != 0 
-     || checkOMss_for_itemtype (OBJ_SEQFEAT) != 0 ) { 
-     CdRgnToProtProc (pnl, adp);
-     if (!adp->display_panel) {
-        update_translateitem (pnl, adp->seqfeat, adp->feat);
-        update_codonstartbt (pnl, adp->seqfeat, adp->feat);
-     }
-  }
-}
 
 static void TranslateButton (ButtoN b)
 {
@@ -2646,104 +2380,6 @@ static void TranslateButton (ButtoN b)
      }
   }
   CaptureSlateFocus ((SlatE) pnl);
-}
-
-static void UntranslateProc (IteM i)
-{
-  PaneL            pnl;
-  EditAlignDataPtr adp;
-
-  if ( ( pnl= GetPanelFromWindow ((WindoW)ParentWindow (i)) ) == NULL) return;
-  if ( ( adp = GetAlignDataPanel (pnl) ) == NULL ) return;
-  if ( adp->seqnumber == 0 ) return;
-  if ( checkOMss_for_itemtype (OBJ_VIRT) == 0 
-    && checkOMss_for_itemtype (OBJ_SEQFEAT) == 0 ) return;
-  UntranslateFunc (pnl, adp);
-  if (!adp->display_panel) {
-     update_translateitem (pnl, adp->seqfeat, adp->feat);
-     update_codonstartbt (pnl, adp->seqfeat, adp->feat);
-  }
-}
-
-/******************************************************************
-***
-***  CodonStartProc
-***  CodonStartButton , CodonStartItem
-***
-***   DO NOT WORK YET
-*******************************************************************/
-static void CodonStartProc (SeqEditViewFormPtr wdp)
-{
-  PaneL              pnl;
-  EditAlignDataPtr   adp;
-  SelEdStructPtr     feat;
-  Char               str[52];
-  RecT               rp;
-  Int2               k;
-
-  pnl = wdp->pnl;
-  if ( ( adp = GetAlignDataPanel (pnl) ) == NULL ) return;
-  k = checkCDSselect_forprotein (adp->seqfeat, adp->feat, TRUE);
-  if (k != 1) 
-     return;
-  feat = getCDSselect (adp->seqfeat, adp->feat);
-  if (feat->codonstart == 1)      feat->codonstart = 2;
-  else if (feat->codonstart == 2) feat->codonstart = 3;
-  else if (feat->codonstart == 3) feat->codonstart = 1;
-  sesp_to_pept (feat, (SeqAlignPtr) adp->sap_align->data, adp->sqloc_list, FALSE);
-  get_client_rect (pnl, &rp);
-  inval_pep (adp, &rp);
-  sprintf (str, "Codon start %d", (int)(feat->codonstart));
-  ResetClip ();
-  SetTitle (wdp->codonstitem, str);
-  CaptureSlateFocus ((SlatE) pnl);
-}
-
-static void CodonStartButton (ButtoN b)
-{
-  SeqEditViewFormPtr wdp;
-
-  wdp = (SeqEditViewFormPtr) GetObjectExtra ((WindoW)ParentWindow (b));
-  CodonStartProc (wdp);
-}
-
-static void CodonStartItem (IteM i)
-{
-  SeqEditViewFormPtr wdp;
-
-  wdp = (SeqEditViewFormPtr) GetObjectExtra ((WindoW)ParentWindow (i));
-  CodonStartProc (wdp);
-}
-
-/***********************************************************
-***  EditModeProc
-************************************************************/
-static void SelectEditMode (PopuP p)
-{
-  WindoW             w, temport;
-  SeqEditViewFormPtr wdp;
-  EditAlignDataPtr   adp;
-  Int2               val;
-
-  w = (WindoW)ParentWindow (p);
-  wdp = (SeqEditViewFormPtr) GetObjectExtra (w);
-  if ( ( adp = GetAlignDataPanel (wdp->pnl) ) == NULL ) return;
-  if (adp->input_format == OBJ_SEQALIGN) {
-     val = GetValue(p); 
-     if (val==1) 
-        adp->edit_mode = ALIGN_EDIT;
-     else if (val==3) 
-        adp->edit_mode = PRETTY_EDIT;
-     else 
-        adp->edit_mode = SEQ_VIEW;
-     if (adp->edit_mode == ALIGN_EDIT) {
-        temport = SavePort(w);
-        Select (wdp->pnl);
-        inval_panel (wdp->pnl, -1, -1);
-        RestorePort (temport);
-     }
-  }
-  CaptureSlateFocus ((SlatE) wdp->pnl);
 }
 
 /***********************************************************
@@ -2862,31 +2498,6 @@ static void ChangeProtModeProc3 (IteM i)
   RestorePort (temport);
 }
 
-/*********************************************************
-***
-**********************************************************/
-static void SeqAlignToHist (IteM i)
-{
-  PaneL       pnl;
-  EditAlignDataPtr adp = NULL;
-  SeqAlignPtr salp;
-  SeqLocPtr    slp;
-  BioseqPtr    bsp;
-  SeqEntryPtr  sep;
- 
-  if ( ( pnl= GetPanelFromWindow ((WindoW)ParentWindow (i)) ) == NULL) return;
-  if ( ( adp = GetAlignDataPanel (pnl) ) == NULL ) return;
-  sep = GetTopSeqEntryForEntityID (adp->input_entityID);
-  salp= (SeqAlignPtr) FindSeqAlignInSeqEntry (sep, OBJ_SEQALIGN);
-  slp = SeqLocFromSeqAlign (salp, NULL);
-  bsp = BioseqLockById (SeqLocId(slp));
-  if (bsp!=NULL) {
-     bsp->hist = SeqHistNew ();
-     bsp->hist->assembly = salp;
-     BioseqUnlock (bsp);
-  }
-}
-
 /*****************************************************************
 ***    SetupMenus
 ***
@@ -2909,8 +2520,10 @@ static void EditorEditMenu (MenU m, SeqEditViewFormPtr wdp)
   SeparatorItem (m);
   wdp->delitem   = CommandItem (m, "Delete Seq", DeleteProc);
   Disable (wdp->delitem);
+/****
   SeparatorItem (m);
   CommandItem (m, "Select Region", SelectRegionDialog);
+****/
 }
   
 static void CommonViewMenu (MenU m, SeqEditViewFormPtr wdp, Boolean isa_aa)
@@ -3142,7 +2755,6 @@ static void SalsaNewFeaturesMenu (MenU m, Boolean is_na)
 ***   wdp->savefeatitem
 *** items not tested 
      CommandItem (m1, "Select", SelectSeqDialog);
-     CommandItem (m1, "Show all", ShowAllSeq);
 ***************************************************************/
 static void SetupMenus (WindoW w, Boolean is_alignment, 
             Boolean isa_aa, Boolean editor_mode,
@@ -3152,7 +2764,7 @@ static void SetupMenus (WindoW w, Boolean is_alignment,
   MenU               mf, m1, m2, m3, m4;
   MenU               sub;
 
-  SeqEditViewProcsPtr svpp;
+  SeqEditViewProcsPtr svpp=NULL;
 
   wdp = (SeqEditViewFormPtr) GetObjectExtra (w);
   if (wdp == NULL) 
@@ -3183,8 +2795,14 @@ static void SetupMenus (WindoW w, Boolean is_alignment,
   wdp->expasnitem=CommandItem (sub, "Asn1 SeqAlign", ExportSeqAnnotProc);
 
   SeparatorItem (mf);
-  CommandItem (mf, "Dismiss", CloseWindowItemProc);
-
+  if (is_alignment) {
+     CommandItem (mf, "Dismiss", CloseWindowItemProc);  
+  }
+  else {
+     if (editor_mode)
+        CommandItem (mf, "Accept Changes", AcceptCloseWindowItemProc);
+     CommandItem (mf, "Cancel", CloseWindowItemProc);
+  }
   m1 = PulldownMenu (w, "Edit");
   EditorEditMenu (m1, wdp);
 
@@ -3193,27 +2811,56 @@ static void SetupMenus (WindoW w, Boolean is_alignment,
   SeparatorItem (m2);
   CommandItem (m2, "Find/F", FindPatternDialog);
 
-  m3= PulldownMenu (w, "Features");    
-  wdp->showfeatitem = CommandItem (m3, "Show Features", ShowFeatureItemProc);
-  wdp->hidefeatitem = CommandItem (m3, "Hide Features", ShowFeatureItemProc);
-  Disable (wdp->hidefeatitem);
-
+  wdp->showfeatitem = NULL;
+  wdp->hidefeatitem = NULL;
+  wdp->propaitem = NULL;
+  wdp->tmpcdspitem=NULL;
+  
   if (editor_mode)
   {
-     SeparatorItem (m3);
-     SalsaNewFeaturesMenu (m3, (! isa_aa));
-     if (is_alignment) 
+     m3= PulldownMenu (w, "Features");    
+     if (!is_alignment) {
+        SalsaNewFeaturesMenu (m3, (! isa_aa));
+     }
+     else
      {
-        SeparatorItem (m3);
         wdp->propaitem = CommandItem (m3, "Propagate", PropagateFeatDialog);
      }
+/****
      if (!isa_aa && !is_alignment)  
      { 
         SeparatorItem (m3);
         wdp->tmpcdspitem=CommandItem(m3, "Temporary CDS +", MakeCdRgnProc);
         wdp->tmpcdsnitem=CommandItem(m3, "Temporary CDS -", MakeCdRgnrProc);
      }
+*****/
   } 
+  else {
+     svpp = (SeqEditViewProcsPtr) GetAppProperty ("SeqEditDisplayForm");
+     if (svpp) {
+        if (svpp->Cn3D_On) {
+           if(!is_alignment) {
+              m3= PulldownMenu (w, "Features");    
+              wdp->showfeatitem = CommandItem (m3, "Show Features", ShowFeatureItemProc);
+              wdp->hidefeatitem = CommandItem (m3, "Hide Features", ShowFeatureItemProc);
+              Disable (wdp->hidefeatitem);
+           }
+        }
+        else {
+           m3= PulldownMenu (w, "Features");    
+           wdp->showfeatitem = CommandItem (m3, "Show Features", ShowFeatureItemProc);
+           wdp->hidefeatitem = CommandItem (m3, "Hide Features", ShowFeatureItemProc);
+           Disable (wdp->hidefeatitem);
+        }
+     }
+     else {
+        m3= PulldownMenu (w, "Features");    
+        wdp->showfeatitem = CommandItem (m3, "Show Features", ShowFeatureItemProc);
+        wdp->hidefeatitem = CommandItem (m3, "Hide Features", ShowFeatureItemProc);
+        Disable (wdp->hidefeatitem);
+     }
+  }
+
   m4 = PulldownMenu (w, "Alignment");
   wdp->selmaster = CommandItem (m4, "Select Reference", SelectMasterProc);
   wdp->selall = CommandItem (m4, "Select All", SelectAllProc);
@@ -3232,10 +2879,18 @@ static void SetupMenus (WindoW w, Boolean is_alignment,
 /* yanli ended */
 
   
-  SeparatorItem (m4);
-  wdp->dotmat = CommandItem (m4, "Dot Matrix (BLAST)", DotPlotItem);
-  wdp->alreport = CommandItem (m4, "Align Report", AlignReportItem);
+  svpp = (SeqEditViewProcsPtr) GetAppProperty ("SeqEditDisplayForm");
+  if (svpp) {
+     if (!svpp->Cn3D_On) {
+        SeparatorItem (m4);
+        wdp->dotmat = CommandItem (m4, "Dot Matrix (BLAST)", DotPlotItem);
+/**
+        wdp->alreport = CommandItem (m4, "Align Report", AlignReportItem);
+**/
+     }
+  }
   wdp->menu_align = m4; 
+/*****
   if (is_alignment && ext_dist_menu)
   {
      SeparatorItem (m4);
@@ -3253,7 +2908,6 @@ static void SetupMenus (WindoW w, Boolean is_alignment,
      CommandItem (m4, "Ks Ka ref wd", NonsyToSynItem4);
      CommandItem (m4, "Ks Ka btw gps", NonsyToSynItem5);
      CommandItem (m4, "Ks Ka btw gps wd", NonsyToSynItem6);
-     CommandItem (m4, "SeqAlign2 Hist", SeqAlignToHist);
   }
 #ifdef SALSA_DEBUG
   if (is_alignment && ext_tree_menu)
@@ -3263,6 +2917,7 @@ static void SetupMenus (WindoW w, Boolean is_alignment,
      CommandItem (m4, "Show tree", TreeViewItem);
   }
 #endif
+*****/
 }
 
 /***************************************************************
@@ -3557,7 +3212,7 @@ static SelEdStructPtr SetSeqInfo (SeqAlignPtr salp, SelEdStructPtr seq_info)
            strand = SeqAlignStrand (salptmp, offset);
            slp = SeqLocIntNew (start, stop, strand, sip);
            if (slp!=NULL) {
-              sesp=new_seledstruct_fromseqloc(0,0,0,0,slp,NULL,NULL,0,0);
+              sesp=new_seledstruct_fromseqloc(0,0,0,0,0,slp,NULL,NULL,0,0);
               seq_info=SelEdStructAdd(seq_info, sesp);
            }
          }
@@ -3599,7 +3254,7 @@ static EditAlignDataPtr BioseqToEditAlignData (EditAlignDataPtr adp, BioseqPtr b
 
   if (adp == NULL)
       return NULL;
-  if (showfeature > 0) {
+  if (showfeature)  {
      adp->showfeat = TRUE;
      getcurrentfeatstyle (adp);
   }  
@@ -3655,7 +3310,7 @@ static EditAlignDataPtr BioseqToEditAlignData (EditAlignDataPtr adp, BioseqPtr b
      MemFree (adp);
      return NULL;
   }
-  if (showfeature > 0) {
+  if (showfeature) {
      for (vnp = adp->anp_list; vnp != NULL; vnp = vnp->next) {
         anp = (AlignNodePtr)vnp->data.ptrvalue;
         if (anp!=NULL && anp_has_feature(anp)) {
@@ -3682,59 +3337,58 @@ static EditAlignDataPtr BioseqToEditAlignData (EditAlignDataPtr adp, BioseqPtr b
 }
 
 /***************************************************************
-*** completebioseq_inseqalign
 *** SeqAlignToEditAlignData
 *** SetupAlignDataSap
 ******************************************************************/
 
-static SeqAlignPtr completebioseq_inseqalign (SeqAlignPtr salp)
+static SeqAlignPtr SeqAlignList2PosStrand (SeqAlignPtr salp)
 {
-  BioseqPtr     bsp;
-  ValNodePtr    vnp1 = NULL;
-  DenseSegPtr   dsp;
-  SeqIdPtr      sip;
-  Int4Ptr       start;
-  Int4Ptr       starttmp;
-  Uint1Ptr      strand;
-  Uint1         strd;
-  Int4Ptr       lenp;
-  Int4          sumlen = 0;
-  Int4          from;
-  Int2          k, nid;
-  SeqLocPtr     slp1, slp2;
- 
-  if (salp!=NULL) {
-     dsp = (DenseSegPtr) salp->segs;
-     start = dsp->starts;
-     strand= dsp->strands;
-     for (sip=dsp->ids, nid=0; sip!=NULL; sip=sip->next, nid++)
-     {
-          bsp = BioseqLockById (sip);
-          if (bsp!= NULL) {
-             slp1 = SeqLocIntNew (0, bsp->length-1, Seq_strand_plus, sip);
-             BioseqUnlock (bsp);
+  SeqAlignPtr salptmp;
+  Int4Ptr     lenp;
+  Int4Ptr     startp;
+  Uint1Ptr    strandp;
+  Int4        numseg;
+  Int2        dim;
+  Int4        j, k, n, tmp;
 
-             from = -1;
-             starttmp = start;
-             starttmp += nid;
-             sumlen = 0;
-             for(k=0, lenp=dsp->lens; k<dsp->numseg; k++, lenp++, starttmp+=dsp->dim) {
-                if ( *starttmp > -1 ) {
-                   if (from == -1) from = *starttmp;
-                   sumlen += *lenp;
-                }
-             }
-             if (strand != NULL)
-                strd = *strand;
-             else strd = Seq_strand_plus;
-             slp2 = SeqLocIntNew (from, from + sumlen - 1, strd, sip);
-             if (slp1!=NULL && slp2!=NULL)
-                if (SeqLocCompare(slp1, slp2) != SLC_A_EQ_B) {
-                }
-          }
+
+for (salptmp=salp; salptmp!=NULL; salptmp=salptmp->next)
+{
+  if ((SeqAlignStrand(salptmp,0) == Seq_strand_minus)
+   && (SeqAlignStrand(salptmp,1) != Seq_strand_minus))
+  {
+     if (salptmp->segtype == 2)
+     {
+         DenseSegPtr dsp;
+        dsp = (DenseSegPtr) salptmp->segs;
+        strandp = dsp->strands;
+        numseg = dsp->numseg;
+        dim = dsp->dim;
+        lenp = dsp->lens;
+        startp = dsp->starts;
+        for (j=0; j < numseg*dim && strandp!=NULL; j++, strandp++)
+            {
+                if (*strandp == Seq_strand_minus)
+                    *strandp = Seq_strand_plus;
+                else if (*strandp != Seq_strand_minus)
+                    *strandp = Seq_strand_minus;
+            }
+        for (j=0, k=numseg-1; j<numseg/2; j++, k--) {
+            tmp=lenp[j];
+            lenp[j]=lenp[k];
+            lenp[k]=tmp;
+        }
+        for (j=0, k=(dim*numseg-dim); j<(dim*numseg-1)/2; j+=dim, k-=dim) {
+            for (n=0; n<dim; n++) {
+                tmp=startp[j+n];
+                startp[j+n]=startp[k+n];
+                startp[k+n]=tmp;
+            }
+        }
      }
   }
-  return salp;
+}
+return salp;
 }
 
 static Boolean SetupAlignDataSap (EditAlignDataPtr adp, SeqAlignPtr salp_original, SeqIdPtr mastersip)
@@ -3781,8 +3435,12 @@ static Boolean SetupAlignDataSap (EditAlignDataPtr adp, SeqAlignPtr salp_origina
          {
             return FALSE;
          }
+         salp = (SeqAlignPtr)sap->data;
 /*       if (is_dim2seqalign(salp)) || (salp->dim==2 && adp->display_panel==1)) 
 */
+{{
+salp = SeqAlignList2PosStrand(salp);
+}}
          if (is_dim2seqalign (salp))
          {
             salp1 = (SeqAlignPtr) sap->data;
@@ -3792,7 +3450,7 @@ static Boolean SetupAlignDataSap (EditAlignDataPtr adp, SeqAlignPtr salp_origina
             salp1 = SortSeqAlign (&salp1);
 */
             sap = multseqalign_from_pairseqalign (salp1);
-            SeqAlignFree (salp1);
+            SeqAlignSetFree (salp1);
             if (sap == NULL) 
             {
                return FALSE;
@@ -3845,12 +3503,6 @@ static Boolean SetupAlignDataSap (EditAlignDataPtr adp, SeqAlignPtr salp_origina
          SeqAnnotFree (sap);
          ObjMgrDelete (OBJ_SEQANNOT, (Pointer)sap);
   }
-  else if (salp->segtype == 3) {
-     ; 
-  }
-  else {
-     ;
-  }
   return TRUE;
 }
 
@@ -3894,7 +3546,7 @@ static EditAlignDataPtr SeqAlignToEditAlignData (EditAlignDataPtr adp, SeqAlignP
   {
      SeqAlignBioseqRegister (salp, &(adp->master.entityID), &(adp->master.itemID));
      adp->master.itemtype = OBJ_BIOSEQ;
-     if (showfeature > 0) 
+     if (showfeature) 
      {
         adp->showfeat = TRUE;
         getcurrentfeatstyle (adp);
@@ -3931,7 +3583,7 @@ static EditAlignDataPtr SeqAlignToEditAlignData (EditAlignDataPtr adp, SeqAlignP
               } 
            }  
         }
-        else if (showfeature > 0) { 
+        else if (showfeature) { 
            for (vnp = adp->anp_list; vnp != NULL; vnp = vnp->next) {
               anp = (AlignNodePtr)vnp->data.ptrvalue; 
               if (anp!=NULL) {
@@ -3993,7 +3645,7 @@ extern Boolean FindIdsInSalsaPanel (PaneL pnl, PoinT pt, Uint2 *entityID, Uint2 
      get_client_rect (pnl, &rp);
      what = locate_point (pt, rp, &iID, &eID, &itype, &isubtype, &pos, &line, adp);
      if (what == SIDLAND || (what == SEQLAND && adp->seqnumber == 1)) {
-        if (eID > 0) {
+        if (eID) {
            *entityID = eID;
            *itemID = iID;
            *itemtype = itype;
@@ -4048,7 +3700,7 @@ static void ResetSalsaTextPanel (PaneL pnl)
 extern PaneL SalsaTextPanel (GrouP g, Int2 wid, Int2 hgt)
 {
   PaneL pnl;
-  pnl = AutonomousPanel (g, wid, hgt, on_draw, VscrlProc, NULL,
+  pnl = AutonomousPanel4 (g, wid, hgt, on_draw, VscrlProc, NULL,
                          sizeof (EditAlignDataPtr), ResetSalsaTextPanel, NULL);
   return pnl;
 }
@@ -4061,6 +3713,7 @@ extern void PopulateSalsaPanel (PaneL pnl, SeqEntryPtr sep, Boolean all_seq, Uin
   RecT             rp;
   Int2             height, width;
   Uint2            entityID, itemID;
+  SeqEditViewProcsPtr  svpp;
 
   if (sep == NULL)
      return;
@@ -4075,12 +3728,22 @@ extern void PopulateSalsaPanel (PaneL pnl, SeqEntryPtr sep, Boolean all_seq, Uin
      bsp = (BioseqPtr) sep->data.ptrvalue;
      if (bsp != NULL) {
         adp = EditAlignDataInit(NULL,width,height,MARGINLEFT15,10,font, TRUE, 1);
+        adp->Cn3D_On = FALSE;
+        svpp = (SeqEditViewProcsPtr) GetAppProperty ("SeqEditDisplayForm");
+        if (svpp) 
+           adp->Cn3D_On =svpp->Cn3D_On;
+
         adp = BioseqToEditAlignData (adp, bsp, show_feat);
      }
   }
   if (salp!=NULL) {
      get_client_rect (pnl, &rp);
      adp =EditAlignDataInit(NULL,width,height, MARGINLEFT15, 10, font, TRUE, 1);
+     adp->Cn3D_On = FALSE;
+     svpp = (SeqEditViewProcsPtr) GetAppProperty ("SeqEditDisplayForm");
+     if (svpp) 
+        adp->Cn3D_On =svpp->Cn3D_On;
+
      if (IS_Bioseq(sep)) {
         bsp = (BioseqPtr) sep->data.ptrvalue;
         adp = SeqAlignToEditAlignData (adp, salp, 0, bsp->id, show_feat);
@@ -4135,23 +3798,18 @@ extern EditAlignDataPtr EditAlignDataRepopulateFromSeqAlign (PaneL pnl, EditAlig
 {
   EditAlignDataPtr adpnew;
   RecT rp;
-  Int4 hoffset;
-  Int2 voffset;
+  float hratio;
 
   get_client_rect (pnl, &rp);
-  voffset = adp->voffset;
-  hoffset = adp->hoffset;
   adpnew = EditAlignDataReset (adp, (rp.right-rp.left), (rp.bottom-rp.top), salp);
   if (adpnew == NULL) {
      return adp;
-  }
+  } 
   adp = adpnew;
-  adp->voffset = voffset;
-  adp->hoffset = hoffset;
-
   do_resize_window  (pnl, adp, TRUE);
   reset_features (pnl, adp);
-  SeqEdSetCorrectBarMax (pnl, adp->nlines, adp->voffset);
+  hratio = (float)adp->hoffset / (float)adp->length;
+  SeqEdSetCorrectBarMax (pnl, adp, hratio);
   adp->dirty = TRUE;
   return adp;
 }
@@ -4285,6 +3943,9 @@ static ForM CC_CreateBioseqViewForm (Int2 left, Int2 top, CharPtr windowname, Bi
         display_panel = ssp->regiontype;
   }
   adp = EditAlignDataInit (NULL, wid, hgt, MARGINLEFT25, 10, font, FALSE, display_panel);
+  adp->Cn3D_On = FALSE;
+  if (svpp) 
+     adp->Cn3D_On =svpp->Cn3D_On;
   adp = BioseqToEditAlignData (adp, bsp, showfeat);
   if (adp==NULL)
      return NULL;
@@ -4334,7 +3995,7 @@ static ForM CC_CreateBioseqViewForm (Int2 left, Int2 top, CharPtr windowname, Bi
   wdp->pos = StaticPrompt (g, "", window_width, dialogTextHeight, programFont, 'l');
   
   g = HiddenGroup (w, 1, 0, NULL);
-  pnl = AutonomousPanel (g, window_width, window_hgt, on_draw, VscrlProc, 
+  pnl = AutonomousPanel4 (g, window_width, window_hgt, on_draw, VscrlProc, 
                             NULL, sizeof (EditAlignDataPtr), NULL, NULL);
   SetPanelExtra (pnl, &adp);
   SetObjectExtra (pnl, (Pointer) adp, CleanupAlignDataPanel);
@@ -4481,6 +4142,9 @@ static ForM CreateSeqAlignEditForm (Int2 left, Int2 top, CharPtr windowname, Seq
         display_panel = ssp->regiontype;
   }
   adp = EditAlignDataInit (NULL, wid, hgt, MARGINLEFT25, 10, font, FALSE, display_panel);
+  adp->Cn3D_On = FALSE;
+  if (svpp) 
+     adp->Cn3D_On =svpp->Cn3D_On;
   if (dummy != NULL) {
      ssp = (SelStructPtr) dummy;    
      adp->input_entityID = ssp->entityID;
@@ -4541,13 +4205,13 @@ static ForM CreateSeqAlignEditForm (Int2 left, Int2 top, CharPtr windowname, Seq
 /************************* HORIZONTAL SCROLLBAR>>*****************
   if (is_prot) 
   {
-     pnl = AutonomousPanel (g, window_width, window_hgt, on_draw, NULL, 
+     pnl = AutonomousPanel4 (g, window_width, window_hgt, on_draw, NULL, 
                             HscrlProc, sizeof (EditAlignDataPtr), NULL, NULL);
      adp->vscrollbar_mode = FALSE;
   }
   else
 ****************************************************************/
-     pnl = AutonomousPanel (g, window_width, window_hgt, on_draw, VscrlProc, 
+     pnl = AutonomousPanel4 (g, window_width, window_hgt, on_draw, VscrlProc, 
                             NULL, sizeof (EditAlignDataPtr), NULL, NULL);
   SetPanelExtra (pnl, &adp);
   SetObjectExtra (pnl, (Pointer) adp, CleanupAlignDataPanel);
@@ -4618,36 +4282,77 @@ static void DoReplaceBtn (ButtoN b)
   WindoW             w;
   SeqEditViewFormPtr wdp;
   EditAlignDataPtr   adp;
-  SeqAlignPtr        salp;
-  SeqAlignPtr        salp2;
+  SeqAnnotPtr        sap_copy;
+  SeqAlignPtr        salp,
+                     salp2;
+  SeqIdPtr           target_id,
+                     source_id;
   CompSegPtr         csp;
+  PropaStructPtr     psp;
+  BioseqPtr          target_bsp,
+                     source_bsp;
+  Uint2              master_entityID,
+                     master_itemID,
+                     master_itemtype;
 
   w = (WindoW)ParentWindow (b);
   wdp = (SeqEditViewFormPtr) GetObjectExtra (w);
   adp = (EditAlignDataPtr) wdp->data; 
   if (adp != NULL) {
+     adp->stoptransl = 0;
      salp = (SeqAlignPtr) adp->sap_align->data;
      if (salp->segtype == COMPSEG) {
         csp = (CompSegPtr) salp->segs;
         if (csp->ids != NULL && csp->ids->next!=NULL) {
+           target_id = SeqIdDup(csp->ids);
+           source_id = SeqIdDup(csp->ids->next);
+           master_entityID = adp->master.entityID;
+           master_itemID = adp->master.itemID;
+           master_itemtype = adp->master.itemtype;
+           sap_copy = (SeqAnnotPtr) AsnIoMemCopy ((Pointer) adp->sap_original, (AsnReadFunc) SeqAnnotAsnRead, (AsnWriteFunc) SeqAnnotAsnWrite); 
            salp2 = SeqAlignBoolSegToDenseSeg (salp);
-           ReplaceBioseq (csp->ids, csp->ids->next, salp2, IGNORE_GAP_CHOICE, adp->stoptransl);
-           SeqAlignFree (salp2);
-           ObjMgrSetDirtyFlag (adp->master.entityID, TRUE);
-           ObjMgrSendMsg (OM_MSG_UPDATE, adp->master.entityID, adp->master.itemID, adp->master.itemtype);
+           psp = CreatePropaStruc (target_id, source_id, salp2);
+
+           if (psp) {
+              psp->gap_choice = IGNORE_GAP_CHOICE;
+              psp->stoptransl = adp->stoptransl;
+              psp->keep_protID = FALSE;
+ 
+              Hide (w); 
+              Update ();
+              Remove (w);
+              Nlm_RemoveDyingWindows ();
+
+              PropagateFeatureByApply (psp);
+              psp->sap->data = NULL;
+              SeqAnnotFree (psp->sap);
+              psp->target_sep = NULL;
+              psp->source_seqfeat = NULL;
+              psp->target_seqfeat = NULL;
+              MemFree(psp);
+
+              target_bsp = BioseqLockById (target_id);
+              source_bsp = BioseqLockById (source_id);
+              if (target_bsp && source_bsp) {
+                 target_bsp->seq_data = BSFree (target_bsp->seq_data);
+                 target_bsp->seq_data = BSDup(source_bsp->seq_data);
+                 target_bsp->seq_data_type = source_bsp->seq_data_type;
+                 target_bsp->length = source_bsp->length;
+                 BioseqRawPack (target_bsp);
+                 BioseqUnlock (target_bsp);
+                 ObjMgrSetDirtyFlag (master_entityID, TRUE);
+                 ObjMgrSendMsg (OM_MSG_UPDATE, master_entityID, master_itemID, master_itemtype);
+              }
+           }
+           SeqAlignSetFree (salp2);
+           SeqIdFree (target_id);
+           SeqIdFree (source_id);
            /**************************** Next Salp ****/
            salp=NULL;
-           if (adp->sap_original) {
-              salp = (SeqAlignPtr)(adp->sap_original->data);
-              salp = salp->next;
+           if (sap_copy) {
+	      salp = (SeqAlignPtr)(sap_copy->data);
+	      salp = salp->next;
            }
-           /****************************DELETE ADP ****/
-           EditAlignDataFree (adp);
-           wdp->data = NULL;
-           Hide (w); 
-           Update ();
-           Remove (w);
-           /**************************** Next Salp ****/
            if (salp)
               LaunchAlignViewer(salp);
         }
@@ -4668,7 +4373,7 @@ static Int2 what_seqalign (SeqAlignPtr salp)
   
   if (salp->segtype == 2)
   {
-     dsp = salp->segs;
+     dsp = (DenseSegPtr)salp->segs;
      startsi = dsp->starts;
      numseg = dsp->numseg;
      dim = dsp->dim;
@@ -4678,7 +4383,7 @@ static Int2 what_seqalign (SeqAlignPtr salp)
      start4=(Boolean)(startsi[(numseg*dim)-1]>-1);
   }
   else if (salp->segtype == COMPSEG) {
-     csp = salp->segs;
+     csp = (CompSegPtr)salp->segs;
      starts = csp->starts;
      numseg = csp->numseg;
      dim = csp->dim;
@@ -4710,11 +4415,11 @@ static Int4 SeqAlignFirstLength (SeqAlignPtr salp)
 
   if (salp->segtype == 2)
   {
-     dsp = salp->segs;
+     dsp = (DenseSegPtr)salp->segs;
      len = (Int4)*(dsp->lens);
   }
   else if (salp->segtype == COMPSEG) {
-     csp = salp->segs;
+     csp = (CompSegPtr)salp->segs;
      len = (Int4)*(csp->lens);
   }
   return len;
@@ -4728,11 +4433,11 @@ static Int4 SeqAlignLastLength (SeqAlignPtr salp)
 
   if (salp->segtype == 2)
   {
-     dsp = salp->segs;
+     dsp = (DenseSegPtr)salp->segs;
      len = (Int4)dsp->lens[dsp->numseg-1];
   }
   else if (salp->segtype == COMPSEG) {
-     csp = salp->segs;
+     csp = (CompSegPtr)salp->segs;
      len = (Int4)csp->lens[csp->numseg-1];
   }
   return len;
@@ -4771,44 +4476,74 @@ static void DoMergeBtn (ButtoN b)
   WindoW             w;
   SeqEditViewFormPtr wdp;
   EditAlignDataPtr   adp;
+  SeqAnnotPtr        sap_copy;
   SeqAlignPtr        salp;
   CompSegPtr         csp;
+  SeqIdPtr           target_id,
+                     source_id,
+                     merge_id;
+  BioseqPtr          merge_bsp;
+  ValNodePtr         sqloc_list=NULL;
   Char               str [32];
   Int4               from, to;
-  Boolean            ok;
+  Uint2              master_entityID,
+                     master_itemID,
+                     master_itemtype;
+  Boolean            keep_protID=TRUE,
+                     spliteditmode,
+                     ok=FALSE;
+
 
   w = (WindoW)ParentWindow (b);
   wdp = (SeqEditViewFormPtr) GetObjectExtra (w);
   adp = (EditAlignDataPtr) wdp->data; 
   if (adp != NULL) {
+     if (wdp->keep_protid1)
+        keep_protID = GetStatus(wdp->keep_protid1);
      salp = (SeqAlignPtr) adp->sap_align->data;
      if (salp->segtype == COMPSEG) {
         csp = (CompSegPtr) salp->segs;
         if (csp->ids != NULL && csp->ids->next!=NULL) {
+           target_id = SeqIdDup(csp->ids);
+           source_id = SeqIdDup(csp->ids->next);
+           master_entityID = adp->master.entityID;
+           master_itemID = adp->master.itemID;
+           master_itemtype = adp->master.itemtype;
+           sap_copy = (SeqAnnotPtr) AsnIoMemCopy ((Pointer) adp->sap_original, (AsnReadFunc) SeqAnnotAsnRead, (AsnWriteFunc) SeqAnnotAsnWrite);
            GetTitle (wdp->fromtxt, str, sizeof (str));
            StrToLong (str, &from);
            from--;
            GetTitle (wdp->totxt, str, sizeof (str));
            StrToLong (str, &to);
            to--;
-           ok=MergeFunc (csp->ids, csp->ids->next, salp, from, to, adp->sqloc_list, adp->spliteditmode);
-           if (ok) {
-              ObjMgrSetDirtyFlag (adp->master.entityID, TRUE);
-              ObjMgrSendMsg (OM_MSG_UPDATE, adp->master.entityID, adp->master.itemID, adp->master.itemtype);
-           }
-           /**************************** Next Salp ****/
-           salp=NULL;
-           if (adp->sap_original) {
-              salp = (SeqAlignPtr)(adp->sap_original->data);
-              salp = salp->next;
-           }
-           /****************************DELETE ADP ****/
-           EditAlignDataFree (adp);
-           wdp->data = NULL;
-           Hide (w); 
+           merge_bsp = BioseqCopy (NULL, source_id, from, to, Seq_strand_plus, TRUE);
+
+           adp->sap_align->data = NULL;
+           sqloc_list = adp->sqloc_list;
+           adp->sqloc_list = NULL;
+           spliteditmode = adp->spliteditmode;
+
+           Hide (w);
            Update ();
+
+           if (merge_bsp) 
+           {
+              merge_id = merge_bsp->id;
+              ok= MergeFunc (target_id, source_id, merge_id, salp, from, to, sqloc_list, spliteditmode, keep_protID);
+              if (ok) {
+                 ObjMgrSetDirtyFlag (master_entityID, TRUE);
+                 ObjMgrSendMsg (OM_MSG_UPDATE, master_entityID, master_itemID, master_itemtype);
+              }
+           }
+           SeqIdFree (target_id);
+           SeqIdFree (source_id);
            Remove (w);
            /**************************** Next Salp ****/
+           salp=NULL;
+           if (sap_copy) {
+              salp = (SeqAlignPtr)(sap_copy->data);
+              salp = salp->next;
+           }
            if (salp)
               LaunchAlignViewer(salp);
         }
@@ -4822,55 +4557,83 @@ static void DoCopyFeatBtn (ButtoN b)
   WindoW             w;
   SeqEditViewFormPtr wdp;
   EditAlignDataPtr   adp;
-  SeqAlignPtr        salp;
-  SeqAlignPtr        salp2;
+  SeqAnnotPtr        sap_copy;
+  SeqAlignPtr        salp,
+                     salp2;
   CompSegPtr         csp;
+  PropaStructPtr     psp;
+  SeqIdPtr           target_id,
+                     source_id;
   Uint2              entityID, itemID;
-  Boolean            gap = FALSE;
-
+  Boolean            val = FALSE;
+  
   w = (WindoW)ParentWindow (b);
   wdp = (SeqEditViewFormPtr) GetObjectExtra (w);
   adp = (EditAlignDataPtr) wdp->data; 
   if (adp != NULL) {
      if (wdp->gap_choicebn) {
-        gap = GetStatus(wdp->gap_choicebn);
-        if (gap)
+        val = GetStatus(wdp->gap_choicebn);
+        if (val)
            adp->gap_choice = TAKE_GAP_CHOICE;
         else
            adp->gap_choice = IGNORE_GAP_CHOICE;
      } 
+     val = FALSE;
+     if (wdp->keep_protid2)
+        val = GetStatus(wdp->keep_protid2);
+     adp->stoptransl = 0;
+     sap_copy = (SeqAnnotPtr) AsnIoMemCopy ((Pointer) adp->sap_original, (AsnReadFunc) SeqAnnotAsnRead, (AsnWriteFunc) SeqAnnotAsnWrite); 
      salp = (SeqAlignPtr) adp->sap_align->data;
      if (salp->segtype == COMPSEG) {
         csp = (CompSegPtr) salp->segs;
         if (csp->ids != NULL && csp->ids->next!=NULL) {
+           target_id = SeqIdDup (csp->ids);
+           source_id = SeqIdDup (csp->ids->next);
+
            salp2 = SeqAlignBoolSegToDenseSeg (salp);
-           CopyFeatFunc (csp->ids, csp->ids->next, salp2, adp->gap_choice, adp->stoptransl);
+           psp = CreatePropaStruc (target_id, source_id, salp2);
 
-  entityID = BioseqFindEntity (csp->ids, &itemID);
+           if (psp) {
+              psp->gap_choice = adp->gap_choice;
+              psp->stoptransl = adp->stoptransl;
+              psp->keep_protID = val;
 
-           SeqAlignFree (salp2);
+              Hide (w); 
+              Update ();
+              Remove (w);
+              Nlm_RemoveDyingWindows ();
+
+              PropagateFeatureByApply (psp);
+              psp->sap->data = NULL;
+              psp->sap = SeqAnnotFree (psp->sap);
+              psp->target_sep = NULL;
+              psp->source_seqfeat = NULL;
+              psp->target_seqfeat = NULL;
+              MemFree(psp);
+           }
+
+           entityID = BioseqFindEntity (target_id, &itemID);
+           SeqAlignSetFree (salp2);
            ObjMgrSetDirtyFlag (entityID, TRUE);
            ObjMgrSendMsg (OM_MSG_UPDATE, entityID, itemID, OBJ_BIOSEQ);
+           SeqIdFree (target_id);
+           SeqIdFree (source_id);
+           
            /**************************** Next Salp ****/
            salp=NULL;
-           if (adp->sap_original) {
-              salp = (SeqAlignPtr)(adp->sap_original->data);
+           if (sap_copy) {
+              salp = (SeqAlignPtr)(sap_copy->data);
               salp = salp->next;
            }
-           /****************************DELETE ADP ****/
-           EditAlignDataFree (adp);
-           wdp->data = NULL;
-           Hide (w); 
-           Update ();
-           Remove (w);
            /**************************** Next Salp ****/
            if (salp)
-              LaunchAlignViewer(salp);
+              LaunchAlignViewer (salp);
         }
      }
   }
   return;
 }
+
 
 static void LaunchAlignEdit (ButtoN b)
 {
@@ -4944,7 +4707,7 @@ static void switch_featOrder (EditAlignDataPtr adp, Uint1 choice)
   Int2  j;
   Int4  groupNum;
 
-  if (choice > 0) {
+  if (choice) {
      oldstyle = GetMuskCurrentSt ();
      SetMuskCurrentSt (GetMuskStyleName (adp->styleNum));
      for(j =0; j<FEATDEF_ANY; j++)
@@ -5054,6 +4817,9 @@ static ForM CreateSeqAlignViewForm (Int2 left, Int2 top, CharPtr windowname, Seq
   wdp->data = NULL;
 
   adp = EditAlignDataInit (NULL, 100, 12, MARGINLEFT25, 10, NULL, FALSE, 3);
+  adp->Cn3D_On = FALSE;
+  if (svpp) 
+     adp->Cn3D_On =svpp->Cn3D_On;
   if (dummy != NULL) {
      ssp = (SelStructPtr) dummy;    
      adp->input_entityID = ssp->entityID;
@@ -5099,7 +4865,7 @@ static ForM CreateSeqAlignViewForm (Int2 left, Int2 top, CharPtr windowname, Seq
   hgt = (Int2)(adp->pnlLine * adp->lineheight + adp->margin.bottom);
   view = CreateViewer(w, wid, hgt, TRUE, TRUE);
   wdp->graph = view;
-  wdp->data = (Pointer) adp;
+  wdp->data = (ValNodePtr) adp;
 
   g = HiddenGroup (w, -1, 0, NULL);                  
   SetGroupSpacing (g, 5, 5);
@@ -5118,7 +4884,7 @@ static ForM CreateSeqAlignViewForm (Int2 left, Int2 top, CharPtr windowname, Seq
   StaticPrompt (wdp->rmcExtra [0], str, 0, 0, programFont, 'l');
   Hide (wdp->rmcExtra [0]);
 
-  wdp->rmcExtra [1] = HiddenGroup (h, 5, 0, NULL);
+  wdp->rmcExtra [1] = HiddenGroup (h, 6, 0, NULL);
   get_bestpos_formerge (salp, &start, &stop);
   StaticPrompt (wdp->rmcExtra [1], "From ", 0, popupMenuHeight, programFont, 'l');
   sprintf (str, "%d", (int) (start+1));
@@ -5135,13 +4901,16 @@ static ForM CreateSeqAlignViewForm (Int2 left, Int2 top, CharPtr windowname, Seq
      Disable (wdp->totxt);
   }
 ******/
+  wdp->keep_protid1 = CheckBox (wdp->rmcExtra [1], "Keep Protein ID", NULL);
+  SetStatus (wdp->keep_protid1, TRUE); 
   Hide (wdp->rmcExtra [1]);
 
-  wdp->rmcExtra [2] = HiddenGroup (h, 5, 0, NULL);
+  wdp->rmcExtra [2] = HiddenGroup (h, 6, 0, NULL);
   sprintf (str, "From '%s' To '%s'", strid2, strid1);
   StaticPrompt (wdp->rmcExtra [2], str, 0, popupMenuHeight, programFont, 'l'); 
   sprintf (str, "'%s' contains exons and introns", strid2);
   wdp->gap_choicebn = CheckBox (wdp->rmcExtra [2], str, NULL);
+  wdp->keep_protid2 = CheckBox (wdp->rmcExtra [2], "Keep Protein ID", NULL);
   Hide (wdp->rmcExtra [2]);
 
   AlignObjects (ALIGN_CENTER, (HANDLE) wdp->replaceMergeCopyGroup,
@@ -5562,7 +5331,7 @@ extern Int2 LIBCALLBACK LaunchAlignEditorFromDesktop (Pointer data)
   sep=ReadLocalAlignment(SALSAA_CONTIGUOUS, NULL);
   if (!sep) 
      return 0;
-  salp = FindSeqAlignInSeqEntry (sep, OBJ_SEQALIGN);
+  salp = (SeqAlignPtr) FindSeqAlignInSeqEntry (sep, OBJ_SEQALIGN);
   if (salp != NULL) { 
      LaunchAlignEditor (salp);
   }
@@ -5579,7 +5348,7 @@ extern Int2 LIBCALLBACK LaunchAlignEditorFromDesktop2 (Pointer data)
   sep=ReadLocalAlignment(SALSAA_INTERLEAVE, NULL);
   if (!sep) 
      return 0;
-  salp = FindSeqAlignInSeqEntry (sep, OBJ_SEQALIGN);
+  salp = (SeqAlignPtr) FindSeqAlignInSeqEntry (sep, OBJ_SEQALIGN);
   if (salp != NULL) { 
      LaunchAlignEditor (salp);
   }
@@ -5589,7 +5358,6 @@ extern Int2 LIBCALLBACK LaunchAlignEditorFromDesktop2 (Pointer data)
 extern Int2 LIBCALLBACK LaunchAlignEditorFromDesktop3 (Pointer data)
 {
   OMProcControlPtr ompcp;
-  SeqEntryPtr      sep; 
   SeqAlignPtr      salp;
   Uint2            entityID;
 
@@ -5619,11 +5387,190 @@ extern Int2 LIBCALLBACK LaunchAlignEditorFromDesktop3 (Pointer data)
 extern Int2 LIBCALLBACK LaunchAlignEditorFromDesktop4 (Pointer data)
 {
   OMProcControlPtr ompcp;
-  SeqEntryPtr      sep; 
-  SeqAlignPtr      salp;
 
   ompcp = (OMProcControlPtr) data;
   return OM_MSG_RET_OK;
 }
+
+
+/**********************************************************/
+
+static void SeqAlignDeleteInSeqEntryCallBack (SeqEntryPtr sep, Pointer mydata,
+                                          Int4 index, Int2 indent)
+{
+  BioseqPtr          bsp;
+  BioseqSetPtr       bssp;
+  SeqAnnotPtr        sap,
+                     pre;
+  BoolPtr            dirtyp;
+  
+  if (sep != NULL && sep->data.ptrvalue && mydata != NULL) {
+     dirtyp = (BoolPtr)mydata;
+     if (IS_Bioseq(sep)) {
+        bsp = (BioseqPtr) sep->data.ptrvalue;
+        if (bsp!=NULL) {
+           sap=bsp->annot;
+           pre=NULL;
+           while (sap) {
+              if (sap->type == 2) {
+                 if (pre==NULL) {
+                    bsp->annot = sap->next;
+                    sap->next=NULL;
+                    SeqAnnotFree (sap);
+                    sap=bsp->annot->next;
+                 }
+                 else {
+                    pre=sap->next;
+                    sap->next=NULL;
+                    SeqAnnotFree (sap);
+                    sap=pre->next;
+                 }
+                 *dirtyp=TRUE;
+              }
+              else {
+                 pre=sap;
+                 sap=sap->next;
+              }
+           }
+        }
+     }
+     else if(IS_Bioseq_set(sep)) {
+        bssp = (BioseqSetPtr)sep->data.ptrvalue;
+        if (bssp!=NULL) {
+           sap=bssp->annot;
+           pre=NULL;
+           while (sap) {
+              if (sap->type == 2) {
+                 if (pre==NULL) {
+                    bssp->annot = sap->next;
+                    sap->next=NULL;
+                    SeqAnnotFree (sap);
+                    sap=bssp->annot->next;
+                 }
+                 else {
+                    pre=sap->next;
+                    sap->next=NULL;
+                    SeqAnnotFree (sap);
+                    sap=pre->next;
+                 }
+                 *dirtyp=TRUE;
+              }
+              else {
+                 pre=sap;
+                 sap=sap->next;
+              }
+           }
+        }
+     }
+  }
+}
+
+static void SeqAlignDeleteInSeqEntry (SeqEntryPtr sep)
+{
+  Uint2            entityID;
+  Boolean          dirty = FALSE;
+  
+  entityID = ObjMgrGetEntityIDForChoice (sep);
+  if (entityID) {
+     SeqEntryExplore (sep, &dirty, SeqAlignDeleteInSeqEntryCallBack);
+     if (dirty) {
+        ObjMgrSetDirtyFlag (entityID, TRUE);
+        ObjMgrSendMsg (OM_MSG_UPDATE, entityID, 0, 0);
+     }
+  }
+  return;
+}
+
+extern Int2 LIBCALLBACK UpdateSeqAlign (Pointer data)
+{
+
+  OMProcControlPtr  ompcp;
+  SeqAlignPtr       salp=NULL,
+                    salpnew;
+  SeqAnnotPtr       sap=NULL,
+                    sapcopy;
+  SeqEntryPtr       sep=NULL,
+                    sepnew=NULL;
+  Uint2             entityID;
+  Boolean           ok;
+  MsgAnswer         ans;
+  SeqSubmitPtr      ssp;
+   
+  ompcp = (OMProcControlPtr) data;
+  if (ompcp == NULL || ompcp->proc == NULL) return OM_MSG_RET_ERROR;
+
+  if (ompcp->input_data == NULL) return OM_MSG_RET_ERROR;
+
+  switch(ompcp->input_itemtype)
+    {
+    case OBJ_BIOSEQ :
+      sep = SeqMgrGetSeqEntryForData (ompcp->input_data);
+      break;
+    case OBJ_BIOSEQSET :
+      sep = SeqMgrGetSeqEntryForData (ompcp->input_data);
+      break;
+    case OBJ_SEQENTRY :
+      sep = ompcp->input_data;
+      break;
+    case OBJ_SEQSUB :
+      ssp = ompcp->input_data;
+      if(ssp->datatype==1)
+         sep = (SeqEntryPtr)ssp->data;
+      break;
+    case 0 :
+      return OM_MSG_RET_ERROR;
+    default :
+      return OM_MSG_RET_ERROR;
+  }
+  if (sep==NULL)
+     return OM_MSG_RET_ERROR;
+  entityID = ObjMgrGetEntityIDForChoice (sep);
+  if (entityID < 1)
+     return OM_MSG_RET_ERROR;
+
+  sepnew = ReadAnyAlignment (FALSE, NULL);
+  if (sepnew) {
+     salpnew = (SeqAlignPtr) FindSeqAlignInSeqEntry (sepnew, OBJ_SEQALIGN);
+     if (salpnew) {
+        ok = ValidateSeqAlignandACCInSeqEntry (sepnew, TRUE, TRUE, TRUE, TRUE, FALSE, FALSE);
+        if (ok) {
+           salp = (SeqAlignPtr) FindSeqAlignInSeqEntry (sep, OBJ_SEQALIGN);
+           if (salp) {
+              ans = Message (MSG_OKC, "Do you wish to replace (OK) or add (Cancel) the alignment in your SeqEntry?");
+              if (ans == ANS_OK)
+              {
+                 SeqAlignDeleteInSeqEntry (sep);
+              }
+              sap=SeqAnnotForSeqAlign(salpnew);
+              sapcopy = (SeqAnnotPtr) AsnIoMemCopy (sap, (AsnReadFunc) SeqAnnotAsnRead, (AsnWriteFunc) SeqAnnotAsnWrite);
+              SeqAlignAddInSeqEntry (sep, sapcopy);
+              sap->data=NULL;
+              MemFree(sap);
+           }
+           else {
+              sap=SeqAnnotForSeqAlign(salpnew);
+              sapcopy = (SeqAnnotPtr) AsnIoMemCopy (sap, (AsnReadFunc) SeqAnnotAsnRead, (AsnWriteFunc) SeqAnnotAsnWrite);
+              SeqAlignAddInSeqEntry (sep, sapcopy);
+              sap->data=NULL;
+              MemFree(sap);
+           }
+           ObjMgrSetDirtyFlag (entityID, TRUE);
+           ObjMgrSendMsg (OM_MSG_UPDATE, entityID, 0, 0);
+        }
+     }
+     ObjMgrFree (OBJ_SEQENTRY, (Pointer)sepnew);
+     sepnew=NULL;
+  }
+  return OM_MSG_RET_OK;
+}
+
+
+
+
+
+
+
+
+
 
 

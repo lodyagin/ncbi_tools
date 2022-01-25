@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.38 $
+* $Revision: 6.49 $
 *
 * File Description: 
 *
@@ -48,22 +48,17 @@
 #include <salsap.h>
 #include <salpanel.h>
 #include <salfiles.h>
-#include <saldist.h>
 #include <saled.h>
+#include <salprop.h>
 #include <dotmatrx.h>
 #include <urkptpf.h>
 #include <dlogutil.h>
 #include <biosrc.h>
+#include <satutil.h>
 
 #define OBJ_VIRT 254
 
 static void DotPlotBtn (ButtoN b);
-
-static void get_client_rect (PaneL p, RectPtr prc)
-{
-  ObjectRect (p, prc);
-  InsetRect (prc, HRZ_BORDER_WIDTH, VER_BORDER_WIDTH);
-}
 
 static void get_client_rectxy (PaneL p, RectPtr prc, Int2 x, Int2 y)
 {
@@ -154,19 +149,6 @@ static void ChangeMarginIndexButton (ButtoN bn)
   return;
 }
 
-static void ChangeMarginIdButton (ButtoN bn)
-{
-  WindoW           wdialog;        
-  DialogBoxDataPtr dbdp;
-  EditAlignDataPtr adp;
-
-  wdialog = ParentWindow (bn);
-  dbdp = (DialogBoxDataPtr) GetObjectExtra (wdialog);
-  if ( ( adp = GetAlignEditData (dbdp->w) ) == NULL ) return;
-  adp->newstyle->marginwithIds = GetStatus (bn);
-  return;
-}
-
 static void ChangeMarginPosButton (ButtoN bn)
 {
   WindoW           wdialog;        
@@ -203,27 +185,6 @@ static void DrawBarScaleButton (ButtoN bn)
   dbdp = (DialogBoxDataPtr) GetObjectExtra (wdialog);
   if ( ( adp = GetAlignEditData (dbdp->w) ) == NULL ) return;
   adp->newstyle->draw_bars = GetStatus (bn);
-  return;
-}
-
-static void RowCellButton (TexT text)
-{
-  WindoW           wdialog;        
-  DialogBoxDataPtr dbdp;
-  EditAlignDataPtr adp;
-  Int2             val;
-  Char             str[16];
-
-  wdialog = ParentWindow (text);
-  dbdp = (DialogBoxDataPtr) GetObjectExtra (wdialog);
-  if ( ( adp = GetAlignEditData (dbdp->w) ) == NULL ) return;
-  GetTitle (text, str, 16);
-  val = (Int2) atoi (str);
-  if (val > 50) {
-         val = 50;
-         SetTitle (text, "40");
-  }
-  adp->newstyle->rowpcell = (Uint1) val;
   return;
 }
 
@@ -273,8 +234,8 @@ static void ChangeMarginPopup (PopuP p)
   WindoW           wdialog;        
   DialogBoxDataPtr dbdp;
   EditAlignDataPtr adp;
-  Int2             val;
   Char             str[8];
+  Int2             val;
 
   wdialog = ParentWindow (p);
   dbdp = (DialogBoxDataPtr) GetObjectExtra (wdialog);
@@ -553,7 +514,8 @@ static void ResetBnStyleProc (ButtoN b)
   adp->newstyle->columnpcell = adp->columnpcell;
   for (j=0; j<256; j++)
          adp->newstyle->colorRefs[j] = adp->colorRefs[j];
-  adp->newstyle = MemFree (adp->newstyle);
+  MemFree (adp->newstyle);
+  adp->newstyle = NULL;
   Remove (wdialog);
   return;
 } 
@@ -628,7 +590,8 @@ static void ApplyBnStyleProc (ButtoN b)
   }
   for (j=0; j<256; j++)
          adp->colorRefs[j] = adp->newstyle->colorRefs[j];
-  adp->newstyle = MemFree (adp->newstyle);
+  MemFree (adp->newstyle);
+  adp->newstyle = NULL;
   do_resize_window (wdp->pnl, adp, TRUE);
   temport = SavePort(w);
   Select (wdp->pnl);
@@ -652,11 +615,13 @@ static void SetRfFunc (PaneL pnl, Uint2 rf)
   ValNodePtr       vnp;
   SeqParamPtr      prm;
   Int2             j;
-
+  float hratio;
+  
   wdp = (SeqEditViewFormPtr) GetObjectExtra ((WindoW)ParentWindow (pnl));
   if ( ( adp = GetAlignDataPanel (pnl) ) == NULL ) return;
   if (adp->seqnumber == 0 || ISA_aa(adp->mol_type))
     return;
+  hratio = (float)adp->hoffset / (float)adp->length;
   temport = SavePort(pnl);
   Select (pnl);
   inval_panel (pnl, -1, -1);
@@ -759,7 +724,7 @@ static void SetRfFunc (PaneL pnl, Uint2 rf)
      }
   }
   data_collect_arrange (adp, TRUE);
-  SeqEdSetCorrectBarMax (pnl, adp->nlines, adp->voffset);
+  SeqEdSetCorrectBarMax (pnl, adp, hratio);
   RestorePort (temport);
 }
 
@@ -1001,7 +966,7 @@ extern void inval_selstructpos (EditAlignDataPtr adp, Uint2 ei, Uint2 ii, Uint2 
 {
   Int2         ptx = rp->left, 
                pty;
-  Int2         column1, line1;
+  Int4         column1, line1;
 
   SeqPosToLineColumn (ii, ei, it, pos, &line1, &column1, adp->hoffset, adp);
   pty = rp->top + line1 * adp->lineheight;
@@ -1015,8 +980,8 @@ extern void inval_selstructpos_tobottom (EditAlignDataPtr adp, Uint2 ei, Uint2 i
 {
   Int2         ptx = rp->left, 
                pty;
-  Int2         column1, line1;
-  Int2         width;
+  Int4         column1, line1;
+  Int4         width;
 
   SeqPosToLineColumn (ii, ei, it, pos, &line1, &column1, adp->hoffset, adp);
   pty = rp->top + line1 * adp->lineheight;
@@ -1039,21 +1004,27 @@ extern void inval_selstructloc (EditAlignDataPtr adp, Uint2 ei, Uint2 ii, Uint2 
   RecT         rid;
   Int2         ptx = rp->left, 
                pty;
-  Int2         column1, column2, line1;
-  Int2         width, j;
-  Int2         aln,
+  Int4         column1, column2, line1;
+  Int4         width, j;
+  Int4         aln,
                alnmax;
   Boolean      bool1, bool2;
 
+if (from>to) {
+   from +=1; to-=1;
+} else {
+   from-=1; to+=1;
+}
   aln = -1;
   alnmax=-1;
+
   for (j=0; j<MAXLineWindow; j++) {
         if (ii == adp->item_id[j] && ei == adp->seqEntity_id[j] && it == adp->itemtype[j] ) {
            if (aln<0)
               aln++;  
-           alnmax++;
         }
   }
+  alnmax = (adp->pnlLine / adp->seqnumber);  
   if (aln<0)
      return;
   if (from < adp->colonne[adp->hoffset - adp->bufferstart]) {     
@@ -1121,9 +1092,9 @@ extern void inval_selstructloc_forfeat (EditAlignDataPtr adp, Uint2 ei, Uint2 ii
   RecT         rid;
   Int2         ptx = rp->left, 
                pty;
-  Int2         column1, column2, line1;
-  Int2         width, j;
-  Uint2        aln;
+  Int4         column1, column2, line1;
+  Int4         width, j;
+  Uint4        aln;
   Boolean      bool1, bool2;
 
   if (from < adp->colonne[adp->hoffset - adp->bufferstart]) {     
@@ -1359,9 +1330,6 @@ static void mergelst (ButtoN b)
      for (j=1; j <= jmax && vnp != NULL; j++, vnp = vnp->next)
      {   
         val = GetItemStatus (lst, j);
-        if (val) {
-/** ???????? **/
-        }
      }
   }
 }
@@ -1369,12 +1337,8 @@ static void mergelst (ButtoN b)
 static void unmergelst (ButtoN b)
 {
   DialogBoxDataPtr dbdp;
-  EditAlignDataPtr adp;
 
   dbdp = (DialogBoxDataPtr) GetObjectExtra (ParentWindow (b));
-  if ( ( adp = GetAlignEditData (dbdp->w) ) != NULL ) {
-/** ??????? **/
-  }
 }
 static void DismissGroupButton (ButtoN b)
 {
@@ -2023,7 +1987,7 @@ extern void ExportTextFunc (ButtoN b)
   WatchCursor ();
   ssphead = NULL;
   if ( checkOMss_for_itemtype (OBJ_BIOSEQ) != 0 ) {
-     ssphead = (Pointer)ObjMgrGetSelected ();
+     ssphead = (SelStructPtr)ObjMgrGetSelected ();
   }
   start1 = adp->int4value - 1;
   stop1 = adp->int4value2 - 1;   
@@ -2105,11 +2069,11 @@ extern void SalsaExportDialog (IteM i)
          if ( (anp = (AlignNodePtr) vnp->data.ptrvalue) != NULL)
          {
             ssp=SelStructNew(anp->seq_entityID, anp->bsp_itemID, OBJ_BIOSEQ, 0, 0, anp->sip, 0, FALSE);
-            ssphead = (Pointer)SelStructAdd(ssphead, ssp);
+            ssphead = (SelStructPtr)SelStructAdd(ssphead, ssp);
          }
      }
   } else {
-     ssphead = (Pointer)ObjMgrGetSelected ();
+     ssphead = (SelStructPtr)ObjMgrGetSelected ();
      selected_seq = checkOMss_for_itemtype (OBJ_BIOSEQ);
   }
   if (ssphead ==NULL) {
@@ -2282,7 +2246,7 @@ static void HighlightSelectionFunc (ButtoN b)
   salp=(SeqAlignPtr) adp->sap_align->data;
   starta= SeqCoordToAlignCoord (start, SeqLocId(slp), salp, 0, 0);
   stopa = SeqCoordToAlignCoord (stop, SeqLocId(slp), salp, 0, 0);
-  for (vnp = adp->anp_list; vnp != NULL; vnp = vnp = vnp->next) {
+  for (vnp = adp->anp_list; vnp != NULL; vnp = vnp->next) {
      anp = (AlignNodePtr) vnp->data.ptrvalue;
      start2 = AlignCoordToSeqCoord (starta, anp->sip, salp, adp->sqloc_list, 0);
      stop2 = AlignCoordToSeqCoord (stopa, anp->sip, salp, adp->sqloc_list, 0); 
@@ -2318,7 +2282,7 @@ extern void SelectSeqDialog (IteM i)
   SeqLocPtr        slp;
   Int4             j;
  
-  ssphead = (Pointer)ObjMgrGetSelected ();
+  ssphead = (SelStructPtr)ObjMgrGetSelected ();
   if (ssphead == NULL)
      return;
   if (ssphead->region == NULL)
@@ -2396,9 +2360,8 @@ static void SelectRegionFunc (ButtoN b)
         salp2 = SeqAlignTrunc (salp1, left, right);
         if (salp2)
            LaunchAlignEditor (salp2);
-/*******????????
-        SeqAlignFree (salp1);
-**************/
+        else 
+           SeqAlignSetFree (salp1);
      }
      Remove (wdialog);
   }
@@ -2490,4 +2453,415 @@ extern void ColorIdentityDialogItem (IteM i)
 {
   ColorIdentityDialog ((WindoW) ParentWindow (i));
 }
+
+
+/**********************************************************
+***
+*** Propagate from list of features
+*** to one or more Bioseqs
+***
+***********************************************************/
+
+static void PropagateFeatureProc (ButtoN b)
+{
+  WindoW           wdialog;
+  PaneL            pnl;
+  DialogBoxDataPtr dbdp;
+  EditAlignDataPtr adp;
+  SeqAnnotPtr      sap;
+  SeqAlignPtr      salp;
+  SelEdStructPtr   feat,
+                   sesp;
+  SeqLocPtr        slp;
+  SeqIdPtr         sip_source;
+  ValNodePtr       vnp,
+                   vnpf,
+                   vnpfeat = NULL;
+  AlignNodePtr     anp;
+  Uint2            eID, iID,
+                   subtype;
+  Int2             j, jmax,
+                   k, kmax;
+  Boolean          val;
+
+  wdialog = ParentWindow (b);
+  Hide (wdialog);
+  Update ();
+  dbdp = (DialogBoxDataPtr) GetObjectExtra (ParentWindow (b));
+  if ( ( pnl = GetPanelFromWindow (dbdp->w) ) != NULL ) 
+  {
+   if ( ( adp = GetAlignEditData (dbdp->w) ) != NULL ) { 
+    adp->stoptransl |= PROPAG_GETSTOP;
+    adp->stoptransl |= PROPAG_SETSTOP;
+    if (adp->seqnumber > 0)  
+    {
+     sap = SeqAnnotBoolSegToDenseSeg (adp->sap_align);
+     salp = (SeqAlignPtr) sap->data;
+     vnpfeat = NULL;
+     vnpf = adp->seqfeat;
+     kmax = CountItems (dbdp->lst3);
+     jmax = CountItems (dbdp->lst2);
+     for (k=1; k<=kmax; k++)
+     {
+        val = GetItemStatus (dbdp->lst3, k);
+        if (val) {
+           vnp = adp->anp_list; 
+           for (j=1; j<=jmax; j++) 
+           {
+              val = GetItemStatus (dbdp->lst2, j);
+              if (val) {
+                    feat  = (SelEdStructPtr) vnpf->data.ptrvalue;
+                    subtype = vnpf->choice;
+                    anp = (AlignNodePtr) vnp->data.ptrvalue;
+                    eID = anp->seq_entityID;
+                    iID = anp->bsp_itemID;
+                    anp = (AlignNodePtr) vnp->data.ptrvalue;
+                    slp = AsnIoMemCopy ((Pointer) feat->region, (AsnReadFunc) SeqLocAsnRead, (AsnWriteFunc) SeqLocAsnWrite);
+                    sip_source = SeqIdDup (anp->sip);
+
+                    sesp = new_seledstruct_fromseqloc (eID, feat->itemID, (Uint2)OBJ_SEQFEAT, subtype, feat->bsp_itemID, slp, feat->label, sip_source, 0, 0);
+                    if (sesp != NULL) {
+                       ValNodeAddPointer(&vnpfeat, 0, (Pointer) sesp);
+                    }
+              }
+              vnp = vnp->next;
+           }
+        }
+        vnpf = vnpf->next;
+     }
+     val = FeatListToProp (adp, vnpfeat);
+     if (val) {    
+        sap = SeqAnnotFree (sap);
+        ObjMgrSendMsg (OM_MSG_UPDATE, adp->master.entityID, adp->master.itemID, OBJ_BIOSEQ); 
+     }
+    }
+   }
+  }
+  Remove (wdialog);
+  return; 
+}
+
+
+static void getchoicegaps (GrouP c)
+{
+  DialogBoxDataPtr dbdp;
+  EditAlignDataPtr adp;
+  Int2             j;
+
+  dbdp = (DialogBoxDataPtr) GetObjectExtra (ParentWindow (c));
+  if ( ( adp = GetAlignEditData (dbdp->w) ) != NULL ) {
+     j = GetValue (c);
+     if (j == 2) 
+        adp->gap_choice = IGNORE_GAP_CHOICE;
+     else
+        adp->gap_choice = DEFAULT_GAP_CHOICE;
+  }
+}
+
+static void select_lst_sseq (LisT lst)
+{
+  DialogBoxDataPtr dbdp;
+  EditAlignDataPtr adp;
+  ValNodePtr       vnp,
+                   vnpf;
+  SelEdStructPtr   feat;
+  SeqIdPtr         sip;
+  SeqLocPtr        slp,
+                   slpseq;
+  Int2             j, k, jmax, kmax;
+  Boolean          val;
+
+  dbdp = (DialogBoxDataPtr) GetObjectExtra (ParentWindow (lst));
+  if ( ( adp = GetAlignEditData (dbdp->w) ) != NULL ) 
+  { 
+     vnp = adp->sqloc_list; 
+     jmax = CountItems (lst);
+     for (j=1; j<=jmax; j++) 
+     {
+        val = GetItemStatus (lst, j);
+        vnpf = adp->seqfeat;
+        kmax = CountItems (dbdp->lst3);
+        for (k=1; k<=kmax; k++)
+        {
+           slpseq = (SeqLocPtr) vnp->data.ptrvalue;
+           feat  = (SelEdStructPtr) vnpf->data.ptrvalue;
+           slp = (SeqLocPtr) feat->region;
+           sip = SeqLocId (slp);
+           if (SeqIdForSameBioseq (SeqLocId(slpseq), sip)) {
+                 SetItemStatus (dbdp->lst3, k, val);
+           }
+           else { 
+              if (val) {
+                 SetItemStatus (dbdp->lst3, k, FALSE);
+              }
+           }
+           vnpf = vnpf->next;
+        }
+        vnp = vnp->next;
+     }
+  }
+}
+
+static void select_lst_feat (LisT lst)
+{
+  DialogBoxDataPtr dbdp;
+  EditAlignDataPtr adp;
+  ValNodePtr       vnp,
+                   vnpf;
+  SelEdStructPtr   feat;
+  SeqLocPtr        slp,
+                   slpseq;
+  SeqIdPtr         sip;
+  Int2             j, k, jmax, kmax;
+  Boolean          val;
+
+  dbdp = (DialogBoxDataPtr) GetObjectExtra (ParentWindow (lst));
+  if ( ( adp = GetAlignEditData (dbdp->w) ) != NULL ) { 
+     vnp = adp->sqloc_list; 
+     jmax = CountItems (dbdp->lst1);
+     for (j=1; j<=jmax; j++) 
+     {
+        vnpf = adp->seqfeat;
+        kmax = CountItems (lst);
+        val = FALSE;
+        for (k=1; k<=kmax; k++)
+        {
+           slpseq = (SeqLocPtr) vnp->data.ptrvalue;
+           feat  = (SelEdStructPtr) vnpf->data.ptrvalue;
+           slp = (SeqLocPtr) feat->region;
+           sip = SeqLocId (slp);
+           if (SeqIdForSameBioseq (SeqLocId(slpseq), sip)) {
+              val = GetItemStatus (lst, k);
+           }
+           if (val) break;
+           vnpf = vnpf->next;
+        }
+        SetItemStatus (dbdp->lst1, j, val);
+        vnp = vnp->next;
+     }
+  }
+}
+
+static void StopTranslateBtn (ButtoN bn)
+{
+  WindoW           wdialog;
+  DialogBoxDataPtr dbdp;
+  EditAlignDataPtr adp;
+
+  wdialog = ParentWindow (bn);
+  dbdp = (DialogBoxDataPtr) GetObjectExtra (wdialog);
+  if ( ( adp = GetAlignEditData (dbdp->w) ) == NULL ) return;
+  if (GetStatus (bn))
+     adp->stoptransl |= PROPAG_SETSTOP; 
+  return;
+}
+
+static void TranslUntilStopBtn (ButtoN bn)
+{
+  WindoW           wdialog;
+  DialogBoxDataPtr dbdp;
+  EditAlignDataPtr adp;
+
+  wdialog = ParentWindow (bn);
+  dbdp = (DialogBoxDataPtr) GetObjectExtra (wdialog);
+  if ( ( adp = GetAlignEditData (dbdp->w) ) == NULL ) return;
+  if (GetStatus (bn))
+     adp->stoptransl |= PROPAG_GETSTOP; 
+  return;
+}
+
+static void selectall (LisT lst)
+{
+  Int2 j, max;
+  max = CountItems (lst);
+  for (j=1; j<=max; j++) {
+     SetItemStatus (lst, j, TRUE);
+  }
+}
+
+static void selectall1 (ButtoN b)
+{
+  DialogBoxDataPtr dbdp;
+  dbdp = (DialogBoxDataPtr) GetObjectExtra (ParentWindow (b));
+  selectall (dbdp->lst1);
+}
+
+static void selectall2 (ButtoN b)
+{
+  DialogBoxDataPtr dbdp;
+  dbdp = (DialogBoxDataPtr) GetObjectExtra (ParentWindow (b));
+  selectall (dbdp->lst2);
+}
+
+static void selectall3 (ButtoN b)
+{
+  DialogBoxDataPtr dbdp;
+  dbdp = (DialogBoxDataPtr) GetObjectExtra (ParentWindow (b));
+  selectall (dbdp->lst3);
+}
+
+static ValNodePtr ShowAllFeatureFunc (EditAlignDataPtr adp)
+{
+  AlignNodePtr     anp;
+  ValNodePtr       vnp,
+                   allseqfeat = NULL;
+  SeqLocPtr        slp;
+
+  for (vnp = adp->anp_list; vnp != NULL; vnp = vnp->next) {
+     anp = (AlignNodePtr) vnp->data.ptrvalue;
+     if ( anp != NULL ) {
+           slp = CollectSeqLocFromAlignNode (anp);
+           CollectFeatureForAlign (slp, anp, adp->featOrder, adp->groupOrder);
+           allseqfeat = CollectFeatureForEditor (slp, allseqfeat, anp->seq_entityID, anp->bsp_itemID, adp->featOrder, TRUE);
+     }
+  }
+  return allseqfeat;
+}
+
+static ValNodePtr AddAllFeatureFunc (EditAlignDataPtr adp, ValNodePtr allseqfeat)
+{
+  AlignNodePtr     anp;
+  ValNodePtr       vnp;
+  SeqLocPtr        slp;
+
+  for (vnp = adp->anp_list; vnp != NULL; vnp = vnp->next) {
+     anp = (AlignNodePtr) vnp->data.ptrvalue;
+     if ( anp != NULL ) {
+           slp = CollectSeqLocFromAlignNode (anp);
+           CollectFeatureForAlign (slp, anp, adp->featOrder, adp->groupOrder);
+           allseqfeat = CollectFeatureForEditor (slp, allseqfeat, anp->seq_entityID, anp->bsp_itemID, adp->featOrder, TRUE);
+     }
+  }
+  return allseqfeat;
+}
+
+NLM_EXTERN void PropagateFeatDialog (IteM i)
+{
+  WindoW           w, wdialog;
+  DialogBoxDataPtr dbdp;
+  EditAlignDataPtr adp;
+  GrouP            g1, g2, g2b, g3, g4, g5,
+                   d, e, c, h;
+  LisT             lst_seq,
+                   lst_sseq,
+                   lst_feat; 
+  Char             str [128];
+  Char             str2 [24];
+  CharPtr          tmp;
+  CharPtr          strp;
+  ValNodePtr       vnp;
+  SelEdStructPtr   feat;
+  SeqLocPtr        slp,
+                   slpseq;
+  Int4             start, stop;
+  Uint1            strand;
+  ButtoN           b;
+  PrompT           p;
+
+  ValNodePtr  allseqfeat = NULL;
+
+  w = ParentWindow (i);
+  if ( ( adp = GetAlignEditData (w) ) == NULL ) 
+     return;
+  adp->seqfeat = AddAllFeatureFunc (adp, adp->seqfeat);
+
+  allseqfeat = adp->seqfeat;
+  wdialog = FixedWindow (-50, -33, -10, -10, "Feature Propagation", StdCloseWindowProc);
+  dbdp = (DialogBoxDataPtr) MemNew (sizeof (DialogBoxData));
+  SetObjectExtra (wdialog, (Pointer) dbdp, StdCleanupExtraProc);
+  dbdp->w = w;
+
+  g1 = HiddenGroup (wdialog, 0, -6, NULL);
+
+  g2 = HiddenGroup (g1, 2, 0, NULL);
+
+  g4 = HiddenGroup (g2, 0, -3, NULL);
+  p = StaticPrompt (g4, "Select source sequences", 0, dialogTextHeight,systemFont, 'c');
+  lst_sseq = ExtendedList (g4, 12, 5, select_lst_sseq);
+  for (vnp = adp->sqloc_list; vnp!=NULL; vnp = vnp->next)
+  {
+     str [0] = '\0';
+     slpseq = (SeqLocPtr) vnp->data.ptrvalue;
+     SeqIdWrite (SeqLocId(slpseq), str, PRINTID_REPORT, sizeof (str));
+     ListItem (lst_sseq, str);
+  }
+  dbdp->lst1 = lst_sseq;
+  b = PushButton (g4, "Select all", selectall1);
+  AlignObjects (ALIGN_CENTER, (HANDLE) lst_sseq, (HANDLE) b, (HANDLE) p, NULL);
+
+  g5 = HiddenGroup (g2, 0, -3, NULL);
+  p = StaticPrompt (g5, "Select target sequences", 0, dialogTextHeight,systemFont, 'c');
+  lst_seq = ExtendedList (g5, 12, 5, NULL);
+  for (vnp = adp->sqloc_list; vnp!=NULL; vnp = vnp->next)
+  {
+     str [0] = '\0';
+     slpseq = (SeqLocPtr) vnp->data.ptrvalue;
+     SeqIdWrite (SeqLocId(slpseq), str, PRINTID_REPORT, sizeof (str));
+     ListItem (lst_seq, str);
+  }
+  dbdp->lst2 = lst_seq;
+  b = PushButton (g5, "Select all", selectall2);
+  AlignObjects (ALIGN_CENTER, (HANDLE) lst_seq, (HANDLE) b, (HANDLE) p, NULL);
+
+  g2b = HiddenGroup (g1, 1, 0, NULL);
+  g3 = HiddenGroup (g2b, -1, 0, NULL);
+  p = StaticPrompt (g3, "Select source Features", 0, dialogTextHeight,systemFont, 'c');
+  lst_feat = ExtendedList (g3, 31, 5, select_lst_feat);
+  for (vnp = allseqfeat; vnp!=NULL; vnp=vnp->next)
+  {
+     str [0] = '\0';
+     tmp = str;
+     feat  = (SelEdStructPtr) vnp->data.ptrvalue;
+     slp = (SeqLocPtr) feat->region;
+     start = SeqLocStart (slp) +1;
+     stop = SeqLocStop (slp) +1;
+     strand = SeqLocStrand (slp);
+     if (vnp->choice == FEATDEF_GENE)
+        tmp = StringMove (tmp, "GENE: ");
+     else  if (vnp->choice == FEATDEF_mRNA)
+        tmp = StringMove (tmp, "mRNA: ");
+     else  if (vnp->choice == FEATDEF_CDS)
+        tmp = StringMove (tmp, "CDS: ");
+     else if (vnp->choice>=first_GBFeat && vnp->choice<number_GBFeat+first_GBFeat) {
+        strp = GBFeat[(vnp->choice-first_GBFeat)];
+        tmp = StringMove (tmp, strp); 
+        tmp = StringMove (tmp, ": ");
+     }
+     if (feat->label != NULL)
+        tmp = StringMove (tmp, feat->label);
+     if (strand == Seq_strand_minus) {
+        sprintf (str2, " (%ld..%ld) minus strand", (long)start, (long)stop);
+     } else
+        sprintf (str2, " (%ld..%ld)", (long)start, (long)stop);
+     tmp = StringMove (tmp, str2);
+     ListItem (lst_feat, str);
+  }
+  dbdp->lst3 = lst_feat;
+  b = PushButton (g3, "Select all", selectall3);
+  AlignObjects (ALIGN_CENTER, (HANDLE) lst_feat, (HANDLE) b, (HANDLE) p, NULL);
+
+  c = HiddenGroup (g1, 2, 0, getchoicegaps);
+  RadioButton (c, "split at gaps");
+  RadioButton (c, "extend over gaps");
+  SetValue (c, (Int2)(adp->gap_choice + 1));
+
+  d = HiddenGroup (g1, 1, 0, NULL);
+  CheckBox (d, "stop CDS translation at internal stop codon", StopTranslateBtn);
+  SetValue (d, (Int2)(1));
+
+  e = HiddenGroup (g1, 1, 0, NULL);
+  CheckBox (e, "translate CDS after partial 3' boundary", TranslUntilStopBtn);
+  SetValue (e, (Int2)(0));
+
+  h = HiddenGroup (g1, 2, 0, NULL);
+  PushButton (h, "Propagate", PropagateFeatureProc);
+  PushButton (h, "Cancel", StdCancelButtonProc);
+
+  AlignObjects (ALIGN_CENTER, (HANDLE) g2, (HANDLE) g3, (HANDLE) c, (HANDLE) d, (HANDLE) e, (HANDLE) h, NULL);
+
+  RealizeWindow (wdialog);
+  Show (wdialog);
+  return;
+}
+
 

@@ -46,9 +46,36 @@ Detailed Contents:
 	further manipulation.
 
 ******************************************************************************
- * $Revision: 6.117 $
+ * $Revision: 6.127 $
  *
  * $Log: blast.c,v $
+ * Revision 6.127  1999/09/16 16:54:23  madden
+ * Changes to BlastNtWordFinder for long words
+ *
+ * Revision 6.126  1999/09/16 14:16:54  madden
+ * Changed call to lookup_find_init
+ *
+ * Revision 6.125  1999/08/27 18:07:32  shavirin
+ * Passed parameter decline_align from top to the engine.
+ *
+ * Revision 6.124  1999/08/26 14:55:15  madden
+ * Fixed Int8 problem
+ *
+ * Revision 6.123  1999/08/25 13:11:16  madden
+ * Roll back to rev 6.121
+ *
+ * Revision 6.121  1999/08/20 19:47:24  madden
+ * Changed call to BlastSearchBlkNew(Extra), removed use of version array
+ *
+ * Revision 6.120  1999/08/06 18:46:13  madden
+ * Fixed spelling of incompatible
+ *
+ * Revision 6.119  1999/06/07 18:28:20  beloslyu
+ * NetBSD port
+ *
+ * Revision 6.118  1999/05/27 17:33:04  madden
+ * Fixed Int2 (should have been Int4) problem
+ *
  * Revision 6.117  1999/04/28 13:30:03  madden
  * Use BlastConstructErrorMessage for error messages
  *
@@ -1529,7 +1556,7 @@ Int4 db_chunk_size;
 #define BLAST_AA_AVGLEN 300
 #define BLAST_NT_AVGLEN 1000
 
-Int2 LIBCALL BlastExtendWordSearch PROTO((BlastSearchBlkPtr search, Boolean multiple_hits));
+static Int4 BlastExtendWordSearch PROTO((BlastSearchBlkPtr search, Boolean multiple_hits));
 
 static Int2 BlastWordExtend PROTO((BlastSearchBlkPtr search, Int4 q_off, Int4 s_off, Int4 word_width, BLAST_Diag diag, BLAST_Diag real_diag, Boolean PNTR succeed_to_right, Int2 context));
 
@@ -1542,10 +1569,10 @@ static Int2 BlastWordExtend_prelim PROTO((BlastSearchBlkPtr search, Int4 q_off, 
 static Int2 BlastNewWordExtend_prelim PROTO((BlastSearchBlkPtr search, Int4 q_off, Int4 s_off, Int4 word_width, BLAST_Diag diag, BLAST_Diag real_diag, Boolean PNTR succeed_to_right, Int2 context));
 
 
-static Int2 BlastWordFinder PROTO((BlastSearchBlkPtr search));
-static Int2 BlastWordFinder_mh PROTO((BlastSearchBlkPtr search));
-static Int2 BlastWordFinder_contig PROTO((BlastSearchBlkPtr search, LookupTablePtr lookup));
-static Int2 BlastWordFinder_mh_contig PROTO((BlastSearchBlkPtr search, LookupTablePtr lookup));
+static Int4 BlastWordFinder PROTO((BlastSearchBlkPtr search));
+static Int4 BlastWordFinder_mh PROTO((BlastSearchBlkPtr search));
+static Int4 BlastWordFinder_contig PROTO((BlastSearchBlkPtr search, LookupTablePtr lookup));
+static Int4 BlastWordFinder_mh_contig PROTO((BlastSearchBlkPtr search, LookupTablePtr lookup));
 
 static BLAST_HSPPtr link_hsps PROTO((BlastSearchBlkPtr search, BLAST_HitListPtr hitlist, BLAST_HSPPtr PNTR hsp_array));
 
@@ -1553,8 +1580,8 @@ static Int2 LIBCALL BlastSequenceAddSequence PROTO((BlastSequenceBlkPtr sequence
 
 static Int2 blast_set_parameters PROTO((BlastSearchBlkPtr search, Int4 dropoff_number_of_bits_1st_pass, Int4 dropoff_number_of_bits_2nd_pass, Nlm_FloatHi avglen, Nlm_FloatHi searchsp, Int4 window));
 
-static Int2 BlastNtWordFinder PROTO((BlastSearchBlkPtr search, LookupTablePtr lookup));
-static Int2 BlastNtWordFinder_mh PROTO((BlastSearchBlkPtr search, LookupTablePtr lookup));
+static Int4 BlastNtWordFinder PROTO((BlastSearchBlkPtr search, LookupTablePtr lookup));
+static Int4 BlastNtWordFinder_mh PROTO((BlastSearchBlkPtr search, LookupTablePtr lookup));
 
 
 static Uint1Ptr GetPrivatTranslationTable PROTO((CharPtr genetic_code, Boolean reverse_complement));
@@ -2246,7 +2273,9 @@ get_db_chunk(BlastSearchBlkPtr search, Int4Ptr start, Int4Ptr stop, Int4Ptr id_l
 static void
 SignalIgnore(int sig_id)
 {
+#ifndef SIG_IGN
 	sigignore(sig_id);
+#endif
 }
 
 /* Called by UNIX signal for timeouts. */
@@ -2255,7 +2284,11 @@ timeout_shutdown(int flag)
 
 {
 	time_out_boolean = TRUE;
+#ifdef SIG_IGN
+	signal(SIGXCPU, SIG_IGN);
+#else
 	signal(SIGXCPU, SignalIgnore);
+#endif
 }
 #endif
 
@@ -2315,7 +2348,7 @@ do_gapped_blast_search(VoidPtr ptr)
 			if (search->handle_results)
 				search->handle_results((VoidPtr) search);
 			else
-				status = BlastSaveCurrentHitlist(search);
+				BlastSaveCurrentHitlist(search);
 			/* Emit a tick if needed and we're not MT. */
 			if (db_mutex == NULL)
 				tick_proc(index1);
@@ -2335,7 +2368,7 @@ do_gapped_blast_search(VoidPtr ptr)
 			if (search->handle_results)
 				search->handle_results((VoidPtr) search);
 			else
-				status = BlastSaveCurrentHitlist(search);
+				BlastSaveCurrentHitlist(search);
 			/* Emit a tick if needed and we're not MT. */
 			if (db_mutex == NULL)
 				tick_proc(index);
@@ -2384,7 +2417,7 @@ do_blast_search(VoidPtr ptr)
 			if (search->handle_results)
 				search->handle_results((VoidPtr) search);
 			else
-				status = BlastSaveCurrentHitlist(search);
+				BlastSaveCurrentHitlist(search);
 			/* Emit a tick if needed and we're not MT. */
 			if (db_mutex == NULL)
 				tick_proc(index1);
@@ -2406,7 +2439,7 @@ do_blast_search(VoidPtr ptr)
 			if (search->handle_results)
 				search->handle_results((VoidPtr) search);
 			else
-				status = BlastSaveCurrentHitlist(search);
+				BlastSaveCurrentHitlist(search);
 			/* Emit a tick if needed and we're not MT. */
 			if (db_mutex == NULL)
 				tick_proc(index);
@@ -2816,7 +2849,7 @@ BLASTSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr query_slp, Bi
 	BlastGetTypes(prog_name, &query_is_na, &db_is_na);
 	if (query_is_na != ISA_na(bsp->mol))
 	{
-	  	ErrPostEx(SEV_WARNING, 0, 0, "Query molecule is incompatiable with %s program", prog_name);
+	  	ErrPostEx(SEV_WARNING, 0, 0, "Query molecule is incompatible with %s program", prog_name);
 		BioseqUnlock(bsp);
 		return 1;
 	}
@@ -3314,6 +3347,8 @@ available) this needs to be set higher up. */
 	search->pbp->multiple_hits_only = options->multiple_hits_only;
 	search->pbp->gap_open = options->gap_open;
 	search->pbp->gap_extend = options->gap_extend;
+        search->pbp->decline_align = options->decline_align;
+
 	search->pbp->hsp_num_max = options->hsp_num_max;
 /* CHANGE HERE??? */
 	if (search->pbp->gapped_calculation && StringCmp(search->prog_name, "blastn"))
@@ -3712,7 +3747,7 @@ BLASTSetUpSearchWithReadDbInternal (SeqLocPtr query_slp, BioseqPtr query_bsp, Ch
 		query_length = query_bsp->length;
 		
 /* On the first call query length is used for the subject length. */
-	search = BlastSearchBlkNewExtra(options->wordsize, query_length, dbname, multiple_hits, options->threshold_first, options->threshold_second, options->hitlist_size, prog_name, NULL, first_context, last_context, rdfp);
+	search = BlastSearchBlkNewExtra(options->wordsize, query_length, dbname, multiple_hits, options->threshold_first, options->threshold_second, options->hitlist_size, prog_name, NULL, first_context, last_context, rdfp, options->window_size);
 
 	if (search)
 	{
@@ -3800,7 +3835,7 @@ BLASTSetUpSearchByLocWithReadDbEx(SeqLocPtr query_slp, CharPtr prog_name, Int4 q
 	return BLASTSetUpSearchWithReadDbInternal (query_slp, NULL, prog_name, qlen, dbname, options, callback, seqid_list, gi_list, gi_list_total, NULL);
 }
 static BlastSearchBlkPtr
-BLASTSetUpSearchEx (SeqLocPtr query_slp, BioseqPtr query_bsp, CharPtr prog_name, Int4 qlen, Int4 dblen, BlastAllWordPtr all_words, BLAST_OptionsBlkPtr options, int (LIBCALLBACK *callback)PROTO((Int4 done, Int4 positives)))
+BLASTSetUpSearchEx (SeqLocPtr query_slp, BioseqPtr query_bsp, CharPtr prog_name, Int4 qlen, Int8 dblen, BlastAllWordPtr all_words, BLAST_OptionsBlkPtr options, int (LIBCALLBACK *callback)PROTO((Int4 done, Int4 positives)))
 
 {
 	BlastSearchBlkPtr search;
@@ -3842,7 +3877,7 @@ BLASTSetUpSearchEx (SeqLocPtr query_slp, BioseqPtr query_bsp, CharPtr prog_name,
 	BlastGetFirstAndLastContext(prog_name, query_slp, &first_context, &last_context, options->strand_option);
 
 /* On the first call query length is used for the subject length. */
-	search = BlastSearchBlkNew(options->wordsize, actual_query_length, NULL, multiple_hits, options->threshold_first, options->threshold_second, options->hitlist_size, prog_name, all_words, first_context, last_context);
+	search = BlastSearchBlkNew(options->wordsize, actual_query_length, NULL, multiple_hits, options->threshold_first, options->threshold_second, options->hitlist_size, prog_name, all_words, first_context, last_context, options->window_size);
 
 	if (search)
 	{
@@ -4282,7 +4317,7 @@ BlastSequenceAddSequence (BlastSequenceBlkPtr sequence_blk, Uint1Ptr sequence, U
 	only those db seqs with hits are further investigated.
 
 */
-Int2 LIBCALL
+static Int4
 BlastExtendWordSearch(BlastSearchBlkPtr search, Boolean multiple_hits)
 {
 	Int2 status=0;
@@ -4301,7 +4336,7 @@ BlastExtendWordSearch(BlastSearchBlkPtr search, Boolean multiple_hits)
 }
 
 /*----------   search a sequence with 1 Context, 1 Letter per byte  ---------*/
-static Int2 
+static Int4 
 BlastWordFinder(BlastSearchBlkPtr search)
 {
 	BLAST_WordFinderPtr	wfp;
@@ -4344,27 +4379,26 @@ BlastWordFinder(BlastSearchBlkPtr search)
 /*
 	Search a sequence with contiguous words.
 */
-static Int2 
+static Int4 
 BlastWordFinder_contig(BlastSearchBlkPtr search, LookupTablePtr lookup)
 {
-	register CharPtr	s, s_end;
+	register Uint1Ptr	s, s_end;
 	register Int4	char_size, lookup_index, mask;
 	register BLAST_Diag	diag, diag_tmp, real_diag;
 	BLAST_ExtendWordPtr     ewp;
 	BLAST_ExtendWordParamsPtr	ewp_params;
 	Boolean			prelim, succeed_to_right;
-	CharPtr			subject0;
-	register Int4  PNTR diag_level, PNTR version_array;
+	Uint1Ptr			subject0;
+	register Int4  PNTR diag_level;
 	Int4	 index=0;
 	register LookupPositionPtr PNTR position;
 	register LookupPositionPtr lookup_pos;
-	Int2		context, last_context, retval;
+	Int2		context, last_context;
 	Int4		q_off, s_off, offset, word_width;
-	register Int4 bits_to_shift, min_diag_length, min_diag_mask, version;
+	register Int4 bits_to_shift, min_diag_length, min_diag_mask;
 	Int4	number_of_hits=0;
 
 	diag_level = NULL;	/* Gets rid of warning. */
-	version_array = NULL;	/* Gets rid of warning. */
 	ewp_params=search->ewp_params;
 	prelim = search->prelim;
 
@@ -4375,7 +4409,7 @@ BlastWordFinder_contig(BlastSearchBlkPtr search, LookupTablePtr lookup)
 	char_size = lookup->char_size;
 	mask = lookup->mask;
 	offset = ewp_params->offset;
-	subject0 = s = (CharPtr) search->subject->sequence;
+	subject0 = s = search->subject->sequence;
 	min_diag_length = ewp_params->min_diag_length;
 	bits_to_shift = ewp_params->bits_to_shift;
 	min_diag_mask = ewp_params->min_diag_mask;
@@ -4399,7 +4433,7 @@ the size of the word. */
 	if (word_width > search->subject->length)
 		return 0;
 
-	s = (CharPtr) lookup_find_init(lookup, &index, (CharPtr) s);
+	s = lookup_find_init(lookup, &index, s);
 	lookup_index = index;
 	position = lookup->position;
 	lookup_pos=NULL;
@@ -4431,20 +4465,13 @@ the size of the word. */
 		    context = lookup_pos->context;
 		    diag = diag_tmp - q_off;
 		    real_diag = diag & min_diag_mask;
-		    version = diag >> bits_to_shift;
 		    if (context != last_context)
 		    {
                                 ewp=search->context[context].ewp;
                                 diag_level = ewp->diag_level;
-                                version_array = ewp->version;
                                 last_context = context;
                     }
-		    if (version != version_array[real_diag])
-		    {
-		    	version_array[real_diag] = version;
-		    	diag_level[real_diag] = 0;
-		    }
-		    else if (diag_level[real_diag] > (q_off+offset))
+		    if (diag_level[real_diag] > (s_off+offset))
 		    {
 			continue;
 		    }
@@ -4463,7 +4490,6 @@ the size of the word. */
 	{
 	   ewp=search->context[search->first_context].ewp;
            diag_level = ewp->diag_level;
-           version_array = ewp->version;
 	   for (;;) 
 	   {
 		do {
@@ -4487,13 +4513,7 @@ the size of the word. */
 		    q_off = lookup_pos->position;
 		    diag = diag_tmp - q_off;
 		    real_diag = diag & min_diag_mask;
-		    version = diag >> bits_to_shift;
-		    if (version != version_array[real_diag])
-		    {
-		    	version_array[real_diag] = version;
-		    	diag_level[real_diag] = 0;
-		    }
-		    else if (diag_level[real_diag] > (q_off+offset))
+		    if (diag_level[real_diag] > (s_off+offset))
 		    {
 			continue;
 		    }
@@ -4515,8 +4535,7 @@ NormalReturn:
 	else
 		search->second_pass_hits += number_of_hits;
 	BlastExtendWordExit(search);
-	retval = (Int2) search->current_hitlist->hspcnt;
-	return retval;
+	return search->current_hitlist->hspcnt;
 
 ErrorReturn:
 	BlastExtendWordExit(search);
@@ -4539,7 +4558,7 @@ ErrorReturn:
 *
 ***************************************************************************/
 /*----------   search a sequence with 1 Context, 1 Letter per byte  ---------*/
-static Int2
+static Int4
 BlastWordFinder_mh(BlastSearchBlkPtr search)
 {
 	BLAST_WordFinderPtr	wfp;
@@ -4610,20 +4629,20 @@ BlastWordFinder_mh(BlastSearchBlkPtr search)
 ******************************************************************************/
 	
 
-static Int2
+static Int4
 BlastWordFinder_mh_contig(BlastSearchBlkPtr search, LookupTablePtr lookup)
 {
-	register CharPtr	s, s_end;
+	register Uint1Ptr	s, s_end;
 	register BLAST_Diag	diag, diag_tmp, real_diag;
 	BLAST_ExtendWordPtr     ewp, ewp_pointer[40];
 	BLAST_ExtendWordParamsPtr     ewp_params;
 	Boolean			prelim, succeed_to_right;
-	CharPtr	subject0;
+	Uint1Ptr	subject0;
 	Int4		q_off, s_off;
-	Int2		context, last_context, retval;
+	Int2		context, last_context;
 	register Int4 diff, offset, s_pos, window;
-	register Int4 version, bits_to_shift, min_diag_length, min_diag_mask;
-	Int4  PNTR diag_level, PNTR last_hit, PNTR last_hit_p, PNTR version_array;
+	register bits_to_shift, min_diag_length, min_diag_mask;
+	Int4  PNTR diag_level, PNTR last_hit, PNTR last_hit_p;
 	register LookupPositionPtr lookup_pos;
 	register LookupPositionPtr PNTR position;
 	register Int4 char_size, lookup_index, mask, wordsize;
@@ -4632,7 +4651,6 @@ BlastWordFinder_mh_contig(BlastSearchBlkPtr search, LookupTablePtr lookup)
 	ewp = NULL;	/* Gets rid of a warning. */
 	diag_level = NULL;	/* Gets rid of a warning. */
 	last_hit = NULL;	/* Gets rid of a warning. */
-	version_array = NULL;	/* Gets rid of a warning. */
 
 	ewp_params=search->ewp_params;
 	prelim = search->prelim;
@@ -4644,7 +4662,7 @@ the length of the word. */
 	wordsize = lookup->wordsize;
 	char_size = lookup->char_size;
 	mask = lookup->mask;
-	subject0 = s = (CharPtr) search->subject->sequence;
+	subject0 = s = search->subject->sequence;
 
 	window = ewp_params->window;
 	offset = ewp_params->offset;
@@ -4667,7 +4685,7 @@ the length of the word. */
 		return 0;
 
 	/* Move along string to appropriate starting point. */
-	s = (CharPtr) lookup_find_init(lookup, &index, (CharPtr) s);
+	s = lookup_find_init(lookup, &index, s);
 	lookup_pos=NULL;
 	position = lookup->position;
 	lookup_index = index;
@@ -4705,22 +4723,13 @@ the length of the word. */
 			context = lookup_pos->context;
 			diag = diag_tmp - q_off;
 		        real_diag = diag & min_diag_mask;
-		        version = diag >> bits_to_shift;
                         if (context != last_context)
                         {
                                 ewp = ewp_pointer[context];
 				last_hit = ewp->last_hit;
-                                version_array = ewp->version;
                                 last_context = context;
                         }
 
-			if (version != version_array[real_diag])
-			{
-				version_array[real_diag] = version;
-				ewp->diag_level[real_diag] = 0;
-				last_hit[real_diag] = s_pos;
-				continue;
-			}
 			last_hit_p = &last_hit[real_diag];
 			diff = s_pos - *last_hit_p;
 
@@ -4732,7 +4741,7 @@ the length of the word. */
 			else if (diff >= wordsize)
 			{
 			    succeed_to_right = TRUE;
-			    if (ewp->diag_level[real_diag] <= (q_off+offset))
+			    if (ewp->diag_level[real_diag] <= (s_off+offset))
 			    {
 				ewp->actual_window = diff;
 				if (!(search->positionBased)) {
@@ -4759,7 +4768,6 @@ the length of the word. */
 	    ewp=search->context[search->first_context].ewp;
             last_hit = ewp->last_hit;
             diag_level = ewp->diag_level;
-            version_array = ewp->version;
 	    for (;;) 
 	    {
 		do {
@@ -4785,15 +4793,7 @@ the length of the word. */
 			q_off = (Int4) lookup_pos->position;
 			diag = diag_tmp - q_off;
 		        real_diag = diag & min_diag_mask;
-		        version = diag >> bits_to_shift;
 
-			if (version != version_array[real_diag])
-			{
-				version_array[real_diag] = version;
-				diag_level[real_diag] = 0;
-				last_hit[real_diag] = s_pos;
-				continue;
-			}
 			diff = s_pos - last_hit[real_diag];
 
 /* diff is always greater than window for the first time in a function. */
@@ -4804,7 +4804,7 @@ the length of the word. */
 			else if (diff >= wordsize)
 			{
 			    succeed_to_right = TRUE;
-			    if (diag_level[real_diag] <= (q_off+offset))
+			    if (diag_level[real_diag] <= (s_off+offset))
 			    {
 				ewp->actual_window = diff;
 				if (!(search->positionBased)) {
@@ -4834,8 +4834,7 @@ NormalReturn:
 	else
 		search->second_pass_hits += number_of_hits;
 	BlastExtendWordExit(search);
-	retval = (Int2) search->current_hitlist->hspcnt;
-	return retval;
+	return search->current_hitlist->hspcnt;
 
 ErrorReturn:
 	BlastExtendWordExit(search);
@@ -4984,7 +4983,7 @@ total new score is zero and the extension can stop. */
 	/* Record how far this diagonal has been traversed,
 	"q_right" was the last position on the query sequence.
 	ewp_params->offset is added to provide the proper "zero-point" */	
-	ewp->diag_level[real_diag] = q_right - query + word_width + search->ewp_params->offset;
+	ewp->diag_level[real_diag] = q_right - query - q_off + word_width + s_off + search->ewp_params->offset;
 
 	if (score >= pbp->cutoff_s2) /* Score is reportable */
 	{
@@ -5146,7 +5145,7 @@ total new score is zero and the extension can stop. */
 	/* Record how far this diagonal has been traversed,
 	"q_right" was the last position on the query sequence.
 	ewp_params->offset is added to provide the proper "zero-point" */	
-	ewp->diag_level[real_diag] = q_right - query + word_width + search->ewp_params->offset;
+	ewp->diag_level[real_diag] = q_right - query - q_off + word_width + s_off + search->ewp_params->offset;
 
 	if (score >= pbp->cutoff_s2) /* Score is reportable */
 	{
@@ -5288,7 +5287,7 @@ total new score is zero and the extension can stop. */
 	/* Record how far this diagonal has been traversed,
 	"q" was the last position on the query sequence.
 	ewp->offset is added to provide the proper "zero-point" */	
-	ewp->diag_level[real_diag] = q - query + word_width + search->ewp_params->offset;
+	ewp->diag_level[real_diag] = q - query - q_off + word_width + s_off + search->ewp_params->offset;
 
 	if (score >= pbp->cutoff_s2) /* Score is reportable */
 	{
@@ -5430,7 +5429,7 @@ total new score is zero and the extension can stop. */
 	/* Record how far this diagonal has been traversed,
 	"q" was the last position on the query sequence.
 	ewp->offset is added to provide the proper "zero-point" */	
-	ewp->diag_level[real_diag] = q - query + word_width + search->ewp_params->offset;
+	ewp->diag_level[real_diag] = q - query -q_off + word_width + s_off + search->ewp_params->offset;
 
 	if (score >= pbp->cutoff_s2) /* Score is reportable */
 	{
@@ -5480,6 +5479,7 @@ BlastNtWordExtend(BlastSearchBlkPtr search, Int4 q_off, Int4 s_off, BLAST_Diag r
         sbp=search->sbp;
         pbp=search->pbp;
 
+	matrix = sbp->matrix;
 	matrix = sbp->matrix;
 	query0 = (Uint1Ptr) search->context[context].query->sequence;
 	subject0 = (Uint1Ptr) search->subject->sequence;
@@ -5673,7 +5673,9 @@ has no remainder. */
 	}
 
 	/* Record how far this diagonal has been traversed */
- 	ewp->diag_level[real_diag] = q_end - query0 + search->ewp_params->offset;
+	/* 	ewp->combo_array[real_diag].diag_level = q_end - query0 + search->ewp_params->offset; */
+	ewp->diag_level[real_diag] = (q_end - query0 - q_off) + s_off*READDB_COMPRESSION_RATIO + search->ewp_params->offset;
+
 
 
 	if (score >= pbp->cutoff_s2) /* Score is reportable */
@@ -5691,7 +5693,7 @@ has no remainder. */
 	search_nt_orig -- an adaptation of the original search_nt() function
 	of BLASTN
 */
-static Int2
+static Int4
 BlastNtWordFinder_mh(BlastSearchBlkPtr search, LookupTablePtr lookup)
 {
 	register Uint1Ptr s, s_end;
@@ -5700,16 +5702,15 @@ BlastNtWordFinder_mh(BlastSearchBlkPtr search, LookupTablePtr lookup)
 	BLAST_ExtendWordPtr     ewp;
 	BLAST_ExtendWordParamsPtr     ewp_params;
 	BLAST_WordFinderPtr	wfp;
-        register Int4  PNTR diag_level, PNTR version_array, PNTR last_hit;
+        register Int4  PNTR diag_level, PNTR last_hit;
         register Int4  diff, window, lookup_index, mask;
         Int4  char_size, index=0, current_count;
         register LookupPositionPtr PNTR position;
         register LookupPositionPtr lookup_pos;
-        Int2            context, last_context, retval;
+        Int2            context, last_context;
         Int4            s_pos, q_off, s_off, offset, virtual_wordsize, wordsize, compressed_wordsize, compression_factor;
-        register Int4 bits_to_shift, min_diag_length, min_diag_mask, version;
+        register Int4 bits_to_shift, min_diag_length, min_diag_mask;
 
-	version_array = NULL;	/* Gets rid of a warning. */
 	diag_level = NULL;	/* Gets rid of a warning. */
 	last_hit = NULL;	/* Gets rid of a warning. */
 
@@ -5742,7 +5743,7 @@ BlastNtWordFinder_mh(BlastSearchBlkPtr search, LookupTablePtr lookup)
 	if (wordsize > search->subject->length)
 		goto NormalReturn;
 
-	s = (Uint1Ptr) lookup_find_init(lookup, &index, (CharPtr) s);
+	s = lookup_find_init(lookup, &index, s);
         lookup_index = index;
         position = lookup->position;
         lookup_pos=NULL;
@@ -5774,22 +5775,13 @@ last_context (if statement below). */
 			context = lookup_pos->context;
 		    	diag = diag_tmp - q_off;
 		    	real_diag = diag & min_diag_mask;
-		    	version = diag >> bits_to_shift;
 		    	if (context != last_context)
 		    	{
                                 ewp=search->context[context].ewp;
                                 last_hit = ewp->last_hit;
                                 diag_level = ewp->diag_level;
-                                version_array = ewp->version;
                                 last_context = context;
                     	}
-		    	if (version != version_array[real_diag])
-		    	{
-		    		version_array[real_diag] = version;
-		    		diag_level[real_diag] = 0;
-				last_hit[real_diag] = s_pos;
-				continue;
-		    	}
 			diff = s_pos - last_hit[real_diag];
 
 			if (diff >= window)
@@ -5819,8 +5811,7 @@ last_context (if statement below). */
 
 NormalReturn:
 	BlastExtendWordExit(search);
-        retval = (Int2) search->current_hitlist->hspcnt;
-        return retval;
+        return search->current_hitlist->hspcnt;
 
 ErrorReturn:
 	BlastExtendWordExit(search);
@@ -5830,27 +5821,26 @@ ErrorReturn:
 	search_nt_orig -- an adaptation of the original search_nt() function
 	of BLASTN
 */
-static Int2
+static Int4
 BlastNtWordFinder(BlastSearchBlkPtr search, LookupTablePtr lookup)
 {
 	BLASTContextStructPtr search_context;
 	register Uint1Ptr s, s_end;
 	Uint1Ptr q, q_end, subject0, query0;
-	Uint1		p;
+	Uint1		p, packed_query;
 	BLAST_Diag	diag, diag_tmp, real_diag;
 	BLAST_ExtendWordPtr     ewp;
 	BLAST_ExtendWordParamsPtr     ewp_params;
 	BLAST_WordFinderPtr	wfp;
-        register Int4  PNTR diag_level, PNTR version_array;
+        register Int4  PNTR diag_level;
         register Int4  lookup_index, mask;
         Int4  char_size, index=0, query_length=0;
         register LookupPositionPtr PNTR position;
         register LookupPositionPtr lookup_pos;
-        Int2            context, last_context, retval, left, right;
-        Int4            q_off, s_off, offset, virtual_wordsize, wordsize, compressed_wordsize, compression_factor;
-        register Int4 bits_to_shift, min_diag_length, min_diag_mask, version;
+        Int2            context, last_context, left, right;
+        Int4            q_off, s_off, offset, virtual_wordsize, wordsize, compressed_wordsize, compression_factor, extra_bytes, extra_bytes_needed, my_index;
+        register Int4 bits_to_shift, min_diag_length, min_diag_mask;
 
-	version_array = NULL;	/* Gets rid of a warning. */
 	diag_level = NULL;	/* Gets rid of a warning. */
 	query0 = NULL;	/* Gets rid of a warning. */
 	p = 255;	/* Gets rid of a warning. */
@@ -5875,21 +5865,22 @@ BlastNtWordFinder(BlastSearchBlkPtr search, LookupTablePtr lookup)
                         BlastHitListPurge(search->current_hitlist);
         }
 
-	compressed_wordsize = lookup->wordsize;
+	compressed_wordsize = lookup->reduced_wordsize;
 	wordsize = wfp->wordsize;
+	extra_bytes = lookup->wordsize - compressed_wordsize;
 
 /* The subject sequence is too short, exit this function now. */
 	if (wordsize > search->subject->length)
 		goto NormalReturn;
 
-	s = (Uint1Ptr) lookup_find_init(lookup, &index, (CharPtr) s);
+	s = lookup_find_init(lookup, &index, s);
         lookup_index = index;
         position = lookup->position;
         lookup_pos=NULL;
 /* Determines when to stop scanning the database; does not include remainder. */
         s_end = subject0 + (search->subject->length)/READDB_COMPRESSION_RATIO;
-	compression_factor = wfp->compression_ratio*compressed_wordsize;
-	virtual_wordsize = wordsize - READDB_COMPRESSION_RATIO*compressed_wordsize;
+	compression_factor = wfp->compression_ratio*lookup->reduced_wordsize;
+	virtual_wordsize = wordsize - READDB_COMPRESSION_RATIO*lookup->wordsize;
 
 /* The last_context is never -1, so that context is not equal to 
 last_context (if statement below). */
@@ -5897,7 +5888,10 @@ last_context (if statement below). */
 	search_context = search->context;
 	/* The length of query is the same for both strands. */
 	query_length = search_context[search->first_context].query->length;
-	for (;;) {
+	extra_bytes_needed = extra_bytes;
+	if (extra_bytes_needed)
+	{
+	    for (;;) {
 	        do {
                         /* lookup a contiguous word. */
                         s++;
@@ -5917,8 +5911,149 @@ last_context (if statement below). */
 		    	diag = diag_tmp - q_off;
 
 			query0 = search_context[context].query->sequence;
-			q = query0 + q_off - compression_factor;
 			q_end = query0 + query_length;
+
+			/* Check for extra bytes if required for longer words. */
+			if (extra_bytes_needed)
+			{
+				/* extend to the right */
+				p = *((Uint1Ptr) search->subject->sequence + s_off);
+				q = query0 + q_off;
+				my_index=0;
+				while (extra_bytes_needed)
+				{
+				/* Note: no check is done that q[0-3] is not an ambiguity code.  Could be done, but might slow things down. */
+					packed_query = (q[0]<<6) + (q[1]<<4) + (q[2]<<2) + q[3]; 
+					if (p != packed_query)
+						break;
+					q += 4;
+					extra_bytes_needed--;
+					my_index++;
+					p = *((Uint1Ptr) search->subject->sequence + s_off + my_index);
+				}
+				if (extra_bytes_needed)
+				{ /* extra_bytes_needed next round. */
+					extra_bytes_needed = extra_bytes;
+					continue; /* not enough bytes found. */
+				}
+				extra_bytes_needed = extra_bytes;
+			}
+
+			q = query0 + q_off - compression_factor;
+			if (s_off > compressed_wordsize)
+				p = *(subject0 + s_off - compressed_wordsize - 1);
+		
+			/* extend to the left */
+			if (s_off == compressed_wordsize || READDB_UNPACK_BASE_4(p) != *--q || q < query0)
+			{
+				left = 0;
+			}
+			else
+			{
+				if (READDB_UNPACK_BASE_3(p) != *--q || q < query0)
+				{
+					left = 1;
+				}
+				else
+				{
+					if (READDB_UNPACK_BASE_2(p) != *--q || q < query0)
+					{
+						left = 2;
+					}
+					else
+					{
+						if (READDB_UNPACK_BASE_1(p) != *--q || q < query0)
+						{
+							left = 3;
+						}
+						else
+						{
+							left = 4;
+						}
+					}
+				}
+			}
+			/* extend to the right */
+			p = *((Uint1Ptr) search->subject->sequence + s_off + extra_bytes_needed);
+			q = query0 + q_off + 4*extra_bytes_needed;
+
+			if (s+extra_bytes_needed >= s_end || READDB_UNPACK_BASE_1(p) != *q++ || q >= q_end)
+			{
+				right = 0;
+			}
+			else
+			{
+				if (READDB_UNPACK_BASE_2(p) != *q++ || q >= q_end)
+				{
+					right = 1;
+				}
+				else
+				{
+					if (READDB_UNPACK_BASE_3(p) != *q++ || q >= q_end)
+					{
+						right = 2;
+					}
+					else
+					{
+						if (READDB_UNPACK_BASE_4(p) != *q++ || q >= q_end)
+						{
+							right = 3;
+						}
+						else
+						{
+							right = 4;
+						}
+					}
+				}
+			}
+
+			if (left + right >= virtual_wordsize)
+			{
+		    		if (context != last_context)
+		    		{
+                               		ewp=search_context[context].ewp;
+                               		last_context = context;
+                    		}
+				/* Check if this diagonal has already been explored. */
+		    		real_diag = diag & min_diag_mask;
+		    		if (ewp->diag_level[real_diag] >= (s_off*READDB_COMPRESSION_RATIO+offset))
+		    		{
+					continue;
+		    		}
+#ifdef BLAST_COLLECT_STATS
+				search->second_pass_hits++;
+#endif
+				if (BlastNtWordExtend(search, q_off, s_off, real_diag, context) != 0)
+					goto ErrorReturn;
+			}
+		} while ((lookup_pos = lookup_pos->next) != NULL);
+	    }
+	}
+	else
+	{
+	    for (;;) {
+	        do {
+                        /* lookup a contiguous word. */
+                        s++;
+                        lookup_index = (((lookup_index) & mask)<<char_size) + *s;
+                        if (s == s_end)
+                                goto NormalReturn;
+                } while (*(position + lookup_index) == NULL);
+
+                lookup_pos = *(position + lookup_index);
+
+		s_off = s-subject0+1;
+		diag_tmp = s_off*READDB_COMPRESSION_RATIO + min_diag_length;
+		/* Extend each hit in the linked list */
+		do {
+		    	q_off = lookup_pos->position;
+			context = lookup_pos->context;
+		    	diag = diag_tmp - q_off;
+
+			query0 = search_context[context].query->sequence;
+			q_end = query0 + query_length;
+
+			q = query0 + q_off - compression_factor;
 			if (s_off > compressed_wordsize)
 				p = *(subject0 + s_off - compressed_wordsize - 1);
 		
@@ -5955,6 +6090,7 @@ last_context (if statement below). */
 			/* extend to the right */
 			p = *((Uint1Ptr) search->subject->sequence + s_off);
 			q = query0 + q_off;
+
 			if (s >= s_end || READDB_UNPACK_BASE_1(p) != *q++ || q >= q_end)
 			{
 				right = 0;
@@ -5994,15 +6130,7 @@ last_context (if statement below). */
                     		}
 				/* Check if this diagonal has already been explored. */
 		    		real_diag = diag & min_diag_mask;
-		    		version = diag >> bits_to_shift;
-                                diag_level = ewp->diag_level;
-                                version_array = ewp->version;
-		    		if (version != version_array[real_diag])
-		    		{
-		    			version_array[real_diag] = version;
-		    			diag_level[real_diag] = 0;
-		    		}
-		    		else if (diag_level[real_diag] >= (q_off+offset))
+		    		if (ewp->diag_level[real_diag] >= (s_off*READDB_COMPRESSION_RATIO+offset))
 		    		{
 					continue;
 		    		}
@@ -6013,12 +6141,12 @@ last_context (if statement below). */
 					goto ErrorReturn;
 			}
 		} while ((lookup_pos = lookup_pos->next) != NULL);
+	    }
 	}
 
 NormalReturn:
 	BlastExtendWordExit(search);
-        retval = (Int2) search->current_hitlist->hspcnt;
-        return retval;
+        return search->current_hitlist->hspcnt;
 
 ErrorReturn:
 	BlastExtendWordExit(search);
@@ -6062,10 +6190,9 @@ BlastPurgeResultList(BLASTResultHitlistPtr PNTR results, Int4 hitlist_count)
 	The number of significant HSP's is returned.
 */
 
-Int2 LIBCALL
+Int4 LIBCALL
 BlastSaveCurrentHitlist(BlastSearchBlkPtr search)
 {
-	Int2 retval;
 	BLASTResultHitlistPtr result_hitlist, PNTR results;
 	BLASTResultsStructPtr result_struct;
 	BLAST_HitListPtr current_hitlist;
@@ -6073,7 +6200,7 @@ BlastSaveCurrentHitlist(BlastSearchBlkPtr search)
 	BLAST_KarlinBlkPtr kbp;
 	BLASTResultHspPtr hsp_array;
 	Int4 hspcnt, index, index1, new_index, old_index, low_index, high_index;
-	Int4 hitlist_count, hitlist_max, hspmax, hspset_cnt, high_score=0;
+	Int4 hitlist_count, hitlist_max, hspmax, hspset_cnt, high_score=0, retval;
 	Nlm_FloatHi current_evalue=DBL_MAX;
 	Int2 deleted;
 
@@ -6087,7 +6214,7 @@ BlastSaveCurrentHitlist(BlastSearchBlkPtr search)
 	}
 
 	current_hitlist = search->current_hitlist;
-	retval = (Int2) current_hitlist->hspcnt;
+	retval = current_hitlist->hspcnt;
 
 	if (search->pbp->gapped_calculation &&
 		search->prog_number != blast_type_blastn)
@@ -6331,8 +6458,6 @@ blast_set_parameters(BlastSearchBlkPtr search,
 			return 1;
 
 	}
-	search->ewp_params->window = window;
-	search->ewp_params->offset = window;
 
 	s = pbp->cutoff_s;
 	e = pbp->cutoff_e;
@@ -6555,7 +6680,8 @@ link_hsps(BlastSearchBlkPtr search, BLAST_HitListPtr hitlist, BLAST_HSPPtr PNTR 
 	BLAST_Score maxscore, cutoff[2];
 	Boolean frame_change, linked_set, ignore_small_gaps;
 	Nlm_FloatHi gap_decay_rate, gap_prob, prob[2];
-	Int2 index, index1, ordering_method, num_links, frame_index, number_of_query_frames;
+	Int2 ordering_method, frame_index, number_of_query_frames;
+	Int4 index, index1, num_links;
 	Int4 hp_frame_number[2];
 	Int4 gap_size, subject_length, number_of_hsps, total_number_of_hsps;
 	VoidPtr link;

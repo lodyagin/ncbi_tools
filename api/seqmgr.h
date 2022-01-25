@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.22 $
+* $Revision: 6.24 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
@@ -40,6 +40,12 @@
 *
 *
 * $Log: seqmgr.h,v $
+* Revision 6.24  1999/08/25 22:08:00  kans
+* made MakeReversedSeqIdString public
+*
+* Revision 6.23  1999/07/21 23:53:56  kans
+* added SeqMgrFindSeqAlignByID
+*
 * Revision 6.22  1999/04/01 20:44:14  kans
 * Int2 lengths to Int4 to allow CountGapsInDeltaSeq with buffer > 32K
 *
@@ -320,6 +326,14 @@ NLM_EXTERN SeqIdPtr LIBCALL GetSeqIdForGI PROTO((Int4 gi));
 *
 *****************************************************************************/
 NLM_EXTERN Int4 LIBCALL GetGIForSeqId PROTO((SeqIdPtr sid));
+
+/*****************************************************************************
+*
+*   MakeReversedSeqIdString(sid, buf, len)
+*     Prints FASTA_SHORT style in upper case reverse order for fast binary searches
+*
+*****************************************************************************/
+NLM_EXTERN Boolean MakeReversedSeqIdString (SeqIdPtr sid, CharPtr buf, size_t len);
 
 /*****************************************************************************
 *
@@ -749,6 +763,8 @@ typedef struct bioseqextra {
   SMFeatBlockPtr      featlisthead;   /* linked list of SMFeatItem chunks, arrays point to elements */
   SMFeatBlockPtr      featlisttail;   /* current block in linked list of SMFeatItem chunks */
 
+  SeqAlignPtr PNTR    alignsByID;     /* array of all alignments (on entity) in original itemID order */
+
   SMFeatItemPtr PNTR  featsByID;      /* array of all features on bioseq in original itemID order */
   SMFeatItemPtr PNTR  featsBySfp;     /* array of all features on bioseq sorted by SeqFeatPtr */
   SMFeatItemPtr PNTR  featsByPos;     /* array of all features on bioseq sorted by location */
@@ -765,6 +781,7 @@ typedef struct bioseqextra {
   SMSeqIdxPtr PNTR    partsByLoc;     /* array of parts on segmented bioseq sorted by location */
   SMSeqIdxPtr PNTR    partsBySeqId;   /* array of parts on segmented bioseq sorted by reverse uppercase seqID */
 
+  Int4                numaligns;      /* number of elements in alignsByID array */
   Int4                numfeats;       /* number of elements in featsByID, featsByPos and featsBySfp arrays */
   Int4                numgenes;       /* number of elements in genesByPos array */
   Int4                nummRNAs;       /* number of elements in mRNAsByPos array */
@@ -816,6 +833,14 @@ NLM_EXTERN SMFeatItemPtr LIBCALL SeqMgrFindSMFeatItemByID PROTO((Uint2 entityID,
 *****************************************************************************/
 
 NLM_EXTERN Int4 LIBCALL SeqMgrMapPartToSegmentedBioseq PROTO((BioseqPtr in, Int4 pos, BioseqPtr bsp, SeqIdPtr sip));
+
+/*****************************************************************************
+*
+*   SeqMgrFindSeqAlignByID uses new index to speed lookup of SeqAlignPtr
+*
+*****************************************************************************/
+
+NLM_EXTERN SeqAlignPtr LIBCALL SeqMgrFindSeqAlignByID PROTO((Uint2 entityID, Uint2 itemID));
 
 
 #ifdef __cplusplus

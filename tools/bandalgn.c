@@ -30,11 +30,17 @@ Author: Gennadiy Savchuk, Jinqhui Zhang, Tom Madden
 Contents: Functions to perform both local and global banded alignments.
 
 ****************************************************************************/
-/* $Revision: 6.12 $ */
+/* $Revision: 6.14 $ */
 /* $Log: bandalgn.c,v $
-/* Revision 6.12  1999/04/06 15:21:00  sicotte
-/* Fixed prototype problems and lint casting and.
+/* Revision 6.14  1999/09/01 21:46:49  chappey
+/* SeqPortFree in load_data
 /*
+* Revision 6.13  1999/07/13 15:39:48  sicotte
+* Fixed casting warnings
+*
+ * Revision 6.12  1999/04/06 15:21:00  sicotte
+ * Fixed prototype problems and lint casting and.
+ *
  * Revision 6.11  1998/08/24 20:20:32  kans
  * fixed -v -fd warnings
  *
@@ -292,7 +298,7 @@ GlobalBandToEditBlock(GlobalBandStructPtr gbsp)
   S = MemFree(S);
 
   gbsp->edit_block = edit_block;
-  gbsp->score = score;
+  gbsp->score = (Int4) score;
   gbsp->alignment_length = Slen;
 
   return TRUE;
@@ -442,7 +448,7 @@ LocalBandToEditBlock(LocalBandStructPtr lbsp)
   S = MemFree(S);
 
   lbsp->edit_block = edit_block;
-  lbsp->score = score;
+  lbsp->score = (Int4)score;
 
   return TRUE;
 }
@@ -842,6 +848,7 @@ static Uint1Ptr load_data (SeqLocPtr slp,Boolean is_prot)
     {
       seq[index] = SeqPortGetResidue(spp);
     }
+  SeqPortFree (spp);
   return seq;
 }
 

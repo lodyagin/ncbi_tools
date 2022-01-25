@@ -28,7 +28,7 @@
 *
 * Version Creation Date:   09/18/95
 *
-* $Revision: 6.2 $
+* $Revision: 6.4 $
 *
 * File Description: Special Header for MMDB-locl fetch operations.
 *
@@ -38,6 +38,12 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: mmdblocl.h,v $
+* Revision 6.4  1999/06/22 23:03:07  kimelman
+* synced to mmdbFF.c
+*
+* Revision 6.3  1999/05/11 21:32:02  kimelman
+* added mmdbFF interface.
+*
 * Revision 6.2  1999/04/22 01:58:03  kimelman
 * decl of MMDB_configuraion added
 *

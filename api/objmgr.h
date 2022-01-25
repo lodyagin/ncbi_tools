@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.11 $
+* $Revision: 6.13 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
@@ -40,9 +40,15 @@
 *
 *
 * $Log: objmgr.h,v $
-* Revision 6.11  1998/09/28 19:54:12  kans
-* made ObjMgrDump debugging function public, no longer conditionally compiled
+* Revision 6.13  1999/08/11 15:17:54  kans
+* added ObjMgrFreeByEntityID
 *
+* Revision 6.12  1999/07/06 17:17:28  ywang
+* add message OM_MSG_FLUSH
+*
+ * Revision 6.11  1998/09/28  19:54:12  kans
+ * made ObjMgrDump debugging function public, no longer conditionally compiled
+ *
 * Revision 6.10  1998/07/01 19:11:51  kans
 * added fromProcID, toProcID, OM_MSG_PROCESS, ObjMgrSendProcMsg, time of indexing, ObjMgrGetProcID, moved protFeat and cdsOrRnaFeat to seqmgr structure
 *
@@ -318,6 +324,7 @@ typedef Int2 (LIBCALLBACK *OMMessageFunc) PROTO((OMMsgStructPtr message));
 #define OM_MSG_HIDE        11     /* hide sequence */
 #define OM_MSG_SHOW        12     /* show sequence */
 #define OM_MSG_PROCESS     13     /* process-specific message */
+#define OM_MSG_FLUSH       14     /* close all existed windows */
 
 
 /*****************************************************************************
@@ -1198,6 +1205,15 @@ NLM_EXTERN Pointer LIBCALL ObjMgrMemCopy PROTO((Uint2 type, Pointer ptr));
 *
 ******************************************************************************/
 NLM_EXTERN Pointer LIBCALL ObjMgrFree PROTO((Uint2 type, Pointer ptr));
+
+/******************************************************************************
+*
+*  ObjMgrFreeByEntityID(entityID)
+*    Obtains type and ptr from ObjMgrDataPtr, then calls ObjMgrFree
+*
+******************************************************************************/
+NLM_EXTERN Pointer LIBCALL ObjMgrFreeByEntityID PROTO((Uint2 entityID));
+
 
 #ifdef __cplusplus
 }

@@ -928,7 +928,7 @@ SeqAlignPtr LIBCALL output_hits(ReadDBFILEPtr rdpt,
                                  position where the hit occurs, used
                                  in reverse form for alignment purposes*/
     Int4 lenPrefix; /*length of dbSeqPrefixReversed*/
-    Uint1  *buffer; /*buffer to hold an unpacked matching
+    Uint1  *buffer = NULL; /*buffer to hold an unpacked matching
                             DNA sequence*/
     Uint1  *reverseSeqFromDb;
     Uint1  *lseq, *sseq,  *rseq; /*three pieces of seq1, left of pattern match

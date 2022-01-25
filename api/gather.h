@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/7/94
 *
-* $Revision: 6.1 $
+* $Revision: 6.3 $
 *
 * File Description: 
 *
@@ -39,6 +39,12 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: gather.h,v $
+* Revision 6.3  1999/09/07 17:59:53  kans
+* AssignIDsInEntity takes datatype and dataptr for when entityID is 0, allowing unlinked components to be updated
+*
+* Revision 6.2  1999/09/07 17:00:43  kans
+* added AssignIDsInEntity
+*
 * Revision 6.1  1999/01/13 23:34:20  kans
 * added GatherSpecificProcLaunch
 *
@@ -532,6 +538,20 @@ NLM_EXTERN Int2 GatherSpecificProcLaunch PROTO((Uint2 procid, CharPtr procname, 
 *        this object
 *******************************************************************/
 NLM_EXTERN Boolean LIBCALL GatherOverWrite PROTO((Pointer oldptr, Pointer newptr, Uint2 type));
+
+
+/*****************************************************************************
+*
+*   AssignIDsInEntity (entityID, datatype, dataptr)
+*   	Assigns entityID/itemID/itemtype, later parent pointer, to SeqAligns,
+*       later most other objects.  If entityID is > 0 it looks up the registered
+*       datatype and dataptr from the object manager.  Otherwise it uses the
+*       remaining parameters, assigning entityID 0 to the unregistered components.
+*
+*****************************************************************************/
+
+NLM_EXTERN Boolean LIBCALL AssignIDsInEntity PROTO((Uint2 entityID, Uint2 datatype, Pointer dataptr));
+
 
 #ifdef __cplusplus
 }

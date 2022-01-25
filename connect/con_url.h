@@ -1,7 +1,7 @@
 #ifndef CON_URL__H
 #define CON_URL__H
 
-/*  $Id: con_url.h,v 6.4 1999/04/09 22:27:25 vakatov Exp $
+/*  $Id: con_url.h,v 6.6 1999/07/26 17:59:58 vakatov Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -36,6 +36,13 @@
 *
 * --------------------------------------------------------------------------
 * $Log: con_url.h,v $
+* Revision 6.6  1999/07/26 17:59:58  vakatov
+* Use "\r\n" rather than just "\n" as the HTTP header line terminator.
+*
+* Revision 6.5  1999/07/16 22:19:42  vakatov
+* + URL_CreateConnectorEx() to switch the peer URL and other parameters
+* "on-the-fly", on every reconnect
+*
 * Revision 6.4  1999/04/09 22:27:25  vakatov
 * Added flag "URLC_URL_ENCODE_ARGS";  thus do not URL-encode CGI args by
 * default
@@ -80,13 +87,15 @@ extern "C" {
  *     the first "Read"(or "Peek", or "Close", or "Wait" on read) is performed.
  *  2) On the first "Read"(or "Peek", or "Close", or "Wait" on read), compose
  *     and send the whole HTTP request as:
- *        POST <info->path>?<info->args> HTTP/1.0\n
- *        <user_header\n>
- *        Content-Length: <accumulated_data_length>\n\n
+ *        POST <info->path>?<info->args> HTTP/1.0\r\n
+ *        <user_header\r\n>
+ *        Content-Length: <accumulated_data_length>\r\n
+ *        \r\n
  *        <accumulated_data>
  *     NOTE:
  *       if <user->header> is not NULL/empty string then:
- *       - it must be terminated by a single '\n';
+ *       - it must NOT contain "empty lines":  '\n\r\n';
+ *       - it must be terminated by a single '\r\n';
  *       - it gets inserted to the HTTP header "as is", without any
  *         automatic checking or encoding.
  *  3) Now you can "Read" the reply data sent to you by the peer CGI program.
@@ -140,6 +149,26 @@ NLM_EXTERN CONNECTOR URL_CreateConnector
 (const SNetConnInfo* info,
  const Nlm_Char*     user_header,
  URLC_Flags          flags
+ );
+
+
+/* "adjust_info" function to be called every time before making a hit;  it will
+ * be passed "info" stored in the connector, and it can change this info
+ * e.g. to alternate the server address/path.
+ * "adjust_cleanup" will be called with "adjust_data" when the connector is
+ * destroyed.
+ * Note:  URL_CreateConnector(...) <==> URL_CreateConnectorEx(..., 0,0,0)
+ */
+typedef void (*FAdjustInfo)(SNetConnInfo* info, void* data, Uint4 conn_try);
+typedef void (*FAdjustCleanup)(void* data);
+
+NLM_EXTERN CONNECTOR URL_CreateConnectorEx
+(const SNetConnInfo* info,
+ const Nlm_Char*     user_header,
+ URLC_Flags          flags,
+ FAdjustInfo         adjust_info,    /* can be NULL */
+ void*               adjust_data,    /* for "adjust_info" & "adjust_cleanup" */
+ FAdjustCleanup      adjust_cleanup  /* can be NULL */
  );
 
 

@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 98-01-01
 *
-* $Revision: 6.31 $
+* $Revision: 6.32 $
 *
 * File Description: patterns and profiles
 *
@@ -38,6 +38,9 @@
 * Date       Name        Description of modification
 * --------------------------------------------------------------------------
 * $Log: urkptpf.c,v $
+* Revision 6.32  1999/07/13 14:08:46  sicotte
+* prefix functions SeqAlignSort* with URK to resolve toolkit conflicts
+*
 * Revision 6.31  1998/12/23 21:34:03  kuzio
 * SeqPortStuff
 *
@@ -1522,7 +1525,7 @@ extern SeqAlignPtr PatternMatchBioseq (BioseqPtr bsp, ComPatPtr cpp,
       sap = PatternMatchX (seq, start, Seq_strand_minus, bsp->id, cppi, 0, 0,
                            mismatch, &misses, bsp->topology, TRUE, TRUE);
       SeqAlignLink (&saphead, sap);
-      SeqAlignSortByStart (&saphead);
+      URK_SeqAlignSortByStart (&saphead);
       ComPatFree (cppi);
     }
     MemFree (seq);
@@ -1560,7 +1563,7 @@ extern SeqAlignPtr PatternMatchBioseq (BioseqPtr bsp, ComPatPtr cpp,
             SeqAlignLink (&saphead, sap);
             ComPatFree (cppi);
           }
-          SeqAlignSortByStart (&saphead);
+          URK_SeqAlignSortByStart (&saphead);
           MemFree (seq);
         }
         MemFree (seqr);
@@ -2560,7 +2563,7 @@ static int LIBCALLBACK SeqAlignStartCompProc (VoidPtr ptr1, VoidPtr ptr2)
   return 0;
 }
 
-extern void SeqAlignSortByStart (SeqAlignPtr PNTR sap)
+extern void URK_SeqAlignSortByStart (SeqAlignPtr PNTR sap)
 {
   SeqAlignPtr sapf, sapt, PNTR saph;
   Int4 num, i;
@@ -2634,7 +2637,7 @@ static int LIBCALLBACK SeqAlignLenCompProc (VoidPtr ptr1, VoidPtr ptr2)
   return 0;
 }
 
-extern void SeqAlignSortByLength (SeqAlignPtr PNTR sap)
+extern void URK_SeqAlignSortByLength (SeqAlignPtr PNTR sap)
 {
   SeqAlignPtr sapt, PNTR saph;
   Int4 num, i;
@@ -2700,7 +2703,7 @@ static int LIBCALLBACK SeqAlignMWCompProc (VoidPtr ptr1, VoidPtr ptr2)
   return 0;
 }
 
-extern void SeqAlignSortByMolWt (SeqAlignPtr PNTR sap)
+extern void URK_SeqAlignSortByMolWt (SeqAlignPtr PNTR sap)
 {
   SeqAlignPtr sapt, PNTR saph;
   Int4 num, i;
@@ -2757,7 +2760,7 @@ static int LIBCALLBACK SeqAlignScoreCompProc (VoidPtr ptr1, VoidPtr ptr2)
   return 0;
 }
 
-extern void SeqAlignSortByScore (SeqAlignPtr PNTR sap)
+extern void URK_SeqAlignSortByScore (SeqAlignPtr PNTR sap)
 {
   SeqAlignPtr sapt, PNTR saph;
   Int4 num, i;

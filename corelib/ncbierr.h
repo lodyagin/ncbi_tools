@@ -23,9 +23,9 @@
 *
 * ===========================================================================
 *
-* $Id: ncbierr.h,v 6.3 1998/10/22 16:52:41 shavirin Exp $
+* $Id: ncbierr.h,v 6.4 1999/05/20 20:07:03 sirotkin Exp $
 *
-* $Revision: 6.3 $
+* $Revision: 6.4 $
 *
 * Authors:  Schuler, Sirotkin (UserErr stuff)
 *
@@ -44,6 +44,9 @@
 *                       of functions from int to ErrSev to eliminate warnings
 *
 * $Log: ncbierr.h,v $
+* Revision 6.4  1999/05/20 20:07:03  sirotkin
+* ErrPostItem bullet proofed as per vakatov
+*
 * Revision 6.3  1998/10/22 16:52:41  shavirin
 * Added function *Nlm_GetErrLongText able to retrieve long error messages
 *
@@ -220,7 +223,10 @@ NLM_EXTERN int LIBCALL Nlm_ErrSetContext PROTO((const char *ctx, const char *fn,
 	Nlm_ErrPostStr
 
 #define ErrPostItem  \
-	(Nlm_ErrSetContext(THIS_MODULE,THIS_FILE,__LINE__,DBFLAG,gcp->entityID,gcp->itemID,gcp->thistype)) ? 0 : \
+	( Nlm_ErrSetContext(THIS_MODULE,THIS_FILE,__LINE__,DBFLAG, \
+gcp ? gcp->entityID : 0, \
+gcp ? gcp->itemID : 0, \
+gcp ? gcp->thistype : 0)) ? 0 : \
 	Nlm_ErrPostEx
 
 #define ErrLogPrintf  Nlm_ErrLogPrintf

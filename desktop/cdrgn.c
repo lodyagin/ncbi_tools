@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.24 $
+* $Revision: 6.31 $
 *
 * File Description: 
 *
@@ -50,6 +50,7 @@
 #include <document.h>
 #include <suggslp.h>
 #include <salutil.h>
+#include <salign.h>
 #include <edutil.h>
 #include <bspview.h>
 #include <toasn3.h>
@@ -80,6 +81,7 @@ typedef struct cdrgnform {
   Uint2         protItemID;
   Uint2         protItemtype;
   Boolean       protFound;
+  PrompT        protlen;
   DialoG        protseq;
   GrouP         protSeqIdGrp;
   TexT          protSeqIdTxt;
@@ -937,12 +939,27 @@ static void SetBestProteinFeature (CdRgnFormPtr cfp, SeqLocPtr product)
   cfp->protFound = pgl.protFound;
 }
 
+static void SetProteinLengthDisplay (PrompT p, Int4 length)
+
+{
+  Char  len [32];
+
+  if (p == NULL) return;
+  if (length > 0) {
+    sprintf (len, "%ld", (long) length);
+    SetTitle (p, len);
+  } else {
+    SetTitle (p, "");
+  }
+}
+
 static void CdRegionPtrToForm (ForM f, Pointer data)
 
 {
   BioseqPtr       bsp;
   CdRgnFormPtr    cfp;
   MolInfoPtr      mip;
+  SeqEntryPtr     oldsep;
   ProtRefPtr      prp;
   ValNodePtr      sdp;
   SeqEntryPtr     sep;
@@ -953,6 +970,8 @@ static void CdRegionPtrToForm (ForM f, Pointer data)
 
   cfp = (CdRgnFormPtr) GetObjectExtra (f);
   if (cfp != NULL) {
+    sep = GetTopSeqEntryForEntityID (cfp->input_entityID);
+    oldsep = SeqEntrySetScope (sep);
     cfp->locvisited = TRUE;  /* even passing NULL will clear this protection */
     sfp = (SeqFeatPtr) data;
     if (sfp != NULL) {
@@ -984,6 +1003,7 @@ static void CdRegionPtrToForm (ForM f, Pointer data)
           bsp = BioseqFind (sip);
           if (bsp != NULL) {
             PointerToDialog (cfp->protseq, bsp);
+            SetProteinLengthDisplay (cfp->protlen, bsp->length);
             SafeEnable (cfp->launchBtn);
             SafeEnable (cfp->edProtBtn);
             SafeEnable (cfp->edSeqBtn);
@@ -995,6 +1015,7 @@ static void CdRegionPtrToForm (ForM f, Pointer data)
             mip = (MolInfoPtr) sdp->data.ptrvalue;
             if (mip == NULL) return;
             SafeSetStatus (cfp->conceptTransA, (Boolean) (mip->tech == 13));
+            SeqEntrySetScope (oldsep);
             return;
           }
         }
@@ -1006,6 +1027,7 @@ static void CdRegionPtrToForm (ForM f, Pointer data)
     SafeDisable (cfp->edProtBtn);
     SafeDisable (cfp->edSeqBtn);
     SafeSetStatus (cfp->conceptTransA, FALSE);
+    SeqEntrySetScope (oldsep);
   }
 }
 
@@ -1018,6 +1040,7 @@ typedef struct productpage {
   Int2          oldval;
   Boolean       nucProducts;
   CdRgnFormPtr  cfp;
+  BaseFormPtr   bfp;
 } ProductPage, PNTR ProductPagePtr;
 
 static void FillInProducts (SeqEntryPtr sep, Pointer mydata,
@@ -1103,10 +1126,12 @@ static void PopulateProductControl (Handle pr, ProductPagePtr ppp)
 static void SeqLocPtrToProduct (DialoG d, Pointer data)
 
 {
+  BaseFormPtr     bfp;
   BioseqPtr       bsp;
   Int2            found;
   Int2            i;
   Boolean         okay;
+  SeqEntryPtr     oldsep;
   ProductPagePtr  ppp;
   Int2            prots;
   SeqEntryPtr     sep;
@@ -1121,7 +1146,15 @@ static void SeqLocPtrToProduct (DialoG d, Pointer data)
     if (slp != NULL) {
       sip = SeqLocId (slp);
       if (sip != NULL) {
+        bfp = ppp->bfp;
+        if (bfp != NULL) {
+          sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+          oldsep = SeqEntrySetScope (sep);
+        }
         theBsp = BioseqFind (sip);
+        if (bfp != NULL) {
+          SeqEntrySetScope (oldsep);
+        }
         if (theBsp != NULL) {
           prots = 0;
           for (i = 0; i < ppp->count; i++) {
@@ -1266,6 +1299,7 @@ static void ChangeProteinView (Handle obj)
       SafeDisable (cfp->edSeqBtn);
       SetBestProteinFeature (cfp, NULL);
       PointerToDialog (cfp->protseq, NULL);
+      SetProteinLengthDisplay (cfp->protlen, 0);
       Update ();
       return;
     }
@@ -1278,6 +1312,7 @@ static void ChangeProteinView (Handle obj)
         bsp = BioseqFind (sip);
         if (bsp != NULL) {
           PointerToDialog (cfp->protseq, bsp);
+          SetProteinLengthDisplay (cfp->protlen, bsp->length);
           SafeEnable (cfp->launchBtn);
           SafeEnable (cfp->edProtBtn);
           SafeEnable (cfp->edSeqBtn);
@@ -1292,7 +1327,8 @@ static void ChangeProteinView (Handle obj)
 
 static DialoG CreateProteinOrMRNAProductDialog (GrouP h, CharPtr title,
                                                 CharPtr label, Boolean nucProducts,
-                                                SeqEntryPtr sep, CdRgnFormPtr cfp)
+                                                SeqEntryPtr sep, CdRgnFormPtr cfp,
+                                                BaseFormPtr bfp)
 
 {
   GrouP           m;
@@ -1330,6 +1366,7 @@ static DialoG CreateProteinOrMRNAProductDialog (GrouP h, CharPtr title,
       BioseqExplore (sep, (Pointer) ppp, FillInProducts);
     }
     ppp->cfp = cfp;
+    ppp->bfp = bfp;
     if (ppp->count < 32) {
       ppp->usePopupForProduct = TRUE;
       ppp->product = (Handle) PopupList (m, TRUE, (PupActnProc) ChangeProteinView);
@@ -1463,6 +1500,7 @@ static void DoTranslateProtein (CdRgnFormPtr cfp)
   CharPtr       prot;
   CharPtr       ptr;
   SeqFeatPtr    sfp;
+  Int4          star_at_end = 0;
 
   if (cfp != NULL) {
     sfp = SeqFeatNew ();
@@ -1480,6 +1518,11 @@ static void DoTranslateProtein (CdRgnFormPtr cfp)
             ch = *ptr;
             while (ch != '\0') {
               *ptr = TO_UPPER (ch);
+              if (ch == '*') {
+                star_at_end = 1;
+              } else {
+                star_at_end = 0;
+              }
               ptr++;
               ch = *ptr;
             }
@@ -1502,6 +1545,7 @@ static void DoTranslateProtein (CdRgnFormPtr cfp)
             bsp->seq_data = bs;
             bsp->length = BSLen (bs);
             PointerToDialog (cfp->protseq, bsp);
+            SetProteinLengthDisplay (cfp->protlen, bsp->length - star_at_end);
             bsp->seq_data = NULL;
             BioseqFree (bsp);
           }
@@ -1825,6 +1869,7 @@ static DialoG CreateCdRgnDialog (GrouP h, CharPtr title, Int2 genCode,
   GrouP         s;
   DialoG        tbs;
   TagListPtr    tlp;
+  GrouP         v;
   GrouP         x;
   GrouP         y;
   GrouP         z;
@@ -1869,16 +1914,19 @@ static DialoG CreateCdRgnDialog (GrouP h, CharPtr title, Int2 genCode,
     cpp->geneticCode = PopupList (y, TRUE, NULL);
     PopulateGeneticCodePopup (cpp->geneticCode);
     SetValue (cpp->geneticCode, gcIdToIndex [genCode]);
-    cpp->frame = PopupList (y, TRUE, NULL);
+    v = HiddenGroup (y, 3, 0, NULL);
+    cpp->frame = PopupList (v, TRUE, NULL);
     PopupItem (cpp->frame, " ");
     PopupItem (cpp->frame, "One");
     PopupItem (cpp->frame, "Two");
     PopupItem (cpp->frame, "Three");
     SetValue (cpp->frame, 1);
+    StaticPrompt (v, " Protein Length ", 0, stdLineHeight, programFont, 'l');
+    cfp->protlen = StaticPrompt (v, "          ", 0, stdLineHeight, systemFont, 'l');
 
     x = HiddenGroup (g, -1, 0, NULL);
     f = HiddenGroup (x, 4, 0, NULL);
-    cfp->product = CreateProteinOrMRNAProductDialog (f, NULL, "Product", FALSE, cfp->sep, cfp);
+    cfp->product = CreateProteinOrMRNAProductDialog (f, NULL, "Product", FALSE, cfp->sep, cfp, (BaseFormPtr) cfp);
     cfp->protSeqIdGrp = HiddenGroup (f, 2, 0, NULL);
     StaticPrompt (cfp->protSeqIdGrp, "SeqID", 0, dialogTextHeight, programFont, 'l');
     cfp->protSeqIdTxt = DialogText (cfp->protSeqIdGrp, "", 6, NULL);
@@ -1926,7 +1974,7 @@ static DialoG CreateCdRgnDialog (GrouP h, CharPtr title, Int2 genCode,
     CreateCodeBreakAlist (cpp);
     codebreak_widths [0] = 5;
     f = HiddenGroup (cpp->cdRgnGrp [2], 4, 0, NULL);
-    StaticPrompt (f, "Position", 5 * stdCharWidth, 0, programFont, 'c');
+    StaticPrompt (f, "AA Position", 5 * stdCharWidth, 0, programFont, 'c');
     p2 = StaticPrompt (f, "Amino Acid", 0, 0, programFont, 'c');
     cpp->cdBrk = CreateTagListDialog (cpp->cdRgnGrp [2],
                                       3, 2, 2, codebreak_types,
@@ -2138,6 +2186,7 @@ static Boolean ImportCdRgnForm (ForM f, CharPtr filename)
             if (sep != NULL && sep->choice == 1 && sep->data.ptrvalue != NULL) {
               bsp = (BioseqPtr) sep->data.ptrvalue;
               PointerToDialog (cfp->protseq, bsp);
+              SetProteinLengthDisplay (cfp->protlen, bsp->length);
               SeqIdWrite (bsp->id, str, PRINTID_REPORT, sizeof (str));
               SafeSetTitle (cfp->protSeqIdTxt, str);
               if (bsp->descr != NULL) {
@@ -2437,14 +2486,10 @@ extern ForM CreateCdRgnForm (Int2 left, Int2 top, CharPtr title,
   ButtoN             b;
   GrouP              c;
   CdRgnFormPtr       cfp;
-  SeqFeatPtr         copysfp;
   CdRgnPagePtr       cpp;
-  CharPtr            except_text;
   GrouP              g;
-  GBQualPtr          gbq;
   Int2               genCode;
   GrouP              h;
-  GBQualPtr          qual;
   GrouP              s;
   StdEditorProcsPtr  sepp;
   WindoW             w;
@@ -2495,57 +2540,7 @@ extern ForM CreateCdRgnForm (Int2 left, Int2 top, CharPtr title,
     Hide (cfp->pages [CODING_REGION_PAGE]);
 
     s = HiddenGroup (h, -1, 0, NULL);
-    copysfp = NULL;
-    except_text = NULL;
-    if (sfp != NULL) {
-      copysfp = AsnIoMemCopy ((Pointer) sfp,
-                              (AsnReadFunc) SeqFeatAsnRead,
-                              (AsnWriteFunc) SeqFeatAsnWrite);
-    } else {
-      copysfp = SeqFeatNew ();
-      if (copysfp != NULL) {
-        copysfp->data.choice = SEQFEAT_CDREGION;
-      }
-    }
-    if (copysfp != NULL) {
-      except_text = copysfp->except_text;
-      if (GetAppProperty ("InternalNcbiSequin") != NULL) {
-        qual = GBQualNew ();
-        if (qual != NULL) {
-          qual->qual = StringSave ("pseudo");
-          qual->val = StringSave ("");
-          gbq = copysfp->qual;
-          if (gbq != NULL) {
-            while (gbq->next != NULL) {
-              gbq = gbq->next;
-            }
-            gbq->next = qual;
-          } else {
-            copysfp->qual = qual;
-          }
-        }
-        qual = GBQualNew ();
-        if (qual != NULL) {
-          qual->qual = StringSave ("exception");
-          if (StringHasNoText (except_text)) {
-            qual->val = StringSave ("");
-          } else {
-            qual->val = StringSave (except_text);
-          }
-          gbq = copysfp->qual;
-          if (gbq != NULL) {
-            while (gbq->next != NULL) {
-              gbq = gbq->next;
-            }
-            gbq->next = qual;
-          } else {
-            copysfp->qual = qual;
-          }
-        }
-      }
-    }
-    CreateCommonFeatureGroup (s, (FeatureFormPtr) cfp, copysfp, TRUE, TRUE);
-    SeqFeatFree (copysfp);
+    CreateCommonFeatureGroup (s, (FeatureFormPtr) cfp, sfp, TRUE, TRUE);
     cfp->pages [COMMON_PAGE] = s;
     Hide (cfp->pages [COMMON_PAGE]);
 
@@ -2983,6 +2978,7 @@ extern Int2 LIBCALLBACK CdRgnGenFunc (Pointer data)
         SetBestProteinFeature (cfp, NULL);
         PointerToDialog (cfp->product, NULL);
         PointerToDialog (cfp->protseq, NULL);
+        SetProteinLengthDisplay (cfp->protlen, 0);
       }
     } else {
       /* restored, but locvisited flag protects against accidental CDS */
@@ -4312,7 +4308,7 @@ static Pointer ProteinToUserObjectPtr (DialoG d)
   return (Pointer) uop;
 }
 
-static DialoG CreateMrnaUserObjectDialog (GrouP h, CharPtr label, SeqEntryPtr sep)
+static DialoG CreateMrnaUserObjectDialog (GrouP h, CharPtr label, SeqEntryPtr sep, BaseFormPtr bfp)
 
 {
   MrnaUserPtr  mup;
@@ -4328,7 +4324,7 @@ static DialoG CreateMrnaUserObjectDialog (GrouP h, CharPtr label, SeqEntryPtr se
     mup->todialog = UserObjectPtrToProtein;
     mup->fromdialog = ProteinToUserObjectPtr;
     mup->testdialog = NULL;
-    mup->protein = CreateProteinOrMRNAProductDialog (p, NULL, label, FALSE, sep, NULL);
+    mup->protein = CreateProteinOrMRNAProductDialog (p, NULL, label, FALSE, sep, NULL, bfp);
   }
 
   return (DialoG) p;
@@ -4817,8 +4813,8 @@ static DialoG CreateRnaDialog (GrouP h, CharPtr title,
     rpp->rrnaPrompt = StaticPrompt (x, "E.g., 16S ribosomal RNA", 0, 0, programFont, 'c');
     rpp->ornaPrompt = StaticPrompt (x, "E.g., internal transcribed spacer 1", 0, 0, programFont, 'c');
     if ((sfp != NULL && (sfp->product != NULL || sfp->ext != NULL)) || indexerVersion) {
-      rfp->product = CreateProteinOrMRNAProductDialog (rpp->nameGrp, NULL, "cDNA Product   ", TRUE, sep, NULL);
-      rfp->usrobjext = CreateMrnaUserObjectDialog (rpp->nameGrp, "Protein Product", sep);
+      rfp->product = CreateProteinOrMRNAProductDialog (rpp->nameGrp, NULL, "cDNA Product   ", TRUE, sep, NULL, (BaseFormPtr) rfp);
+      rfp->usrobjext = CreateMrnaUserObjectDialog (rpp->nameGrp, "Protein Product", sep, (BaseFormPtr) rfp);
     }
     AlignObjects (ALIGN_CENTER, (HANDLE) q, (HANDLE) rpp->rrnaPrompt, (HANDLE) rpp->ornaPrompt, NULL);
     Hide (rpp->nameGrp);
@@ -5100,11 +5096,15 @@ static void RnaRefPtrToForm (ForM f, Pointer data)
 
 {
   FeatureFormPtr  ffp;
+  SeqEntryPtr     oldsep;
+  SeqEntryPtr     sep;
   SeqFeatPtr      sfp;
   Int4            val;
 
   ffp = (FeatureFormPtr) GetObjectExtra (f);
   if (ffp != NULL) {
+    sep = GetTopSeqEntryForEntityID (ffp->input_entityID);
+    oldsep = SeqEntrySetScope (sep);
     sfp = (SeqFeatPtr) data;
     if (sfp != NULL) {
       switch (sfp->data.choice) {
@@ -5124,6 +5124,7 @@ static void RnaRefPtrToForm (ForM f, Pointer data)
       PointerToDialog (ffp->location, sfp->location);
       PointerToDialog (ffp->product, sfp->product);
     }
+    SeqEntrySetScope (oldsep);
   }
 }
 

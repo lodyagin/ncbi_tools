@@ -1,4 +1,4 @@
-/*  $RCSfile: ncbisock.c,v $  $Revision: 4.23 $  $Date: 1999/04/01 21:36:49 $
+/*  $RCSfile: ncbisock.c,v $  $Revision: 4.26 $  $Date: 1999/08/04 21:04:23 $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -30,6 +30,17 @@
 *
 * --------------------------------------------------------------------------
 * $Log: ncbisock.c,v $
+* Revision 4.26  1999/08/04 21:04:23  vakatov
+* + SOCK_PushBack()
+*
+* Revision 4.25  1999/07/09 22:51:57  vakatov
+* Did not catch EOF (see R4.24) in some cases. -- Fixed.
+*
+* Revision 4.24  1999/07/09 15:25:47  vakatov
+* + SOCK_Eof()
+* Also, use the "home-made" PEEK buffering on all platforms and
+* preset the PEEK buffer chunk size to 4096
+*
 * Revision 4.23  1999/04/01 21:36:49  vakatov
 * SOCK_ReadPersist():  pre-init "err_code" to eSOCK_ESuccess.
 * s_Connect(): more accurate error diagnostics.
@@ -84,7 +95,6 @@
 *
 * Revision 4.5  1998/03/30 17:50:11  vakatov
 * Ingrafted to the main NCBI CVS tree
-*
 * ==========================================================================
 */
 
@@ -114,7 +124,7 @@
 #define APPL_SOCK_DEF
 #define SOCK_DEFS_ONLY
 #include <sock_ext.h>
-extern void bzero(CharPtr target, long numbytes);
+extern void bzero(char* target, long numbytes);
 #include <netdb.h>
 #include <s_types.h>
 #include <s_socket.h>
@@ -130,18 +140,13 @@ extern void bzero(CharPtr target, long numbytes);
  * socket */
 #define SOCK_WRITE_SLICED
 #define SLICE_SIZE 2048
-/* MSG_PEEK is not implemented(ignored) on Mac, and we have to implement
- * this feature ourselves */
-#define SOCK_NCBI_PEEK
 
 #endif /* platform-specific #include's (UNIX, MSWIN, MAC) */
 
 
 #include <ncbisock.h>
-
-#ifdef SOCK_NCBI_PEEK
 #include <ncbibuf.h>
-#endif
+
 
 
 /* patch to old SunOS/Solaris proto(cut&paste from Solaris 2.6 "unistd.h") */
@@ -170,13 +175,10 @@ extern int gethostname(char *, int);
 
 #define SOCK_MAX_TIMEOUT 99999999
 
-#ifdef SOCK_NCBI_PEEK
-#define SOCK_RECV(s,b,l,f) s_NCBI_Recv(s, (char *)b, l, f)
-#else
-#define SOCK_RECV(s,b,l,f) recv(s->sock, (char *)b, l, f)
-#endif /* SOCK_NCBI_PEEK */
+#define SOCK_BUF_CHUNK_SIZE 4096
 
-#define SOCK_WRITE(s,b,l)  send(s, (char *)b, l, 0)
+#define SOCK_READ(s,b,l)   recv(s, b, l, 0)
+#define SOCK_WRITE(s,b,l)  send(s, (char*)b, l, 0)
 
 
 #if defined(OS_MSWIN)
@@ -235,7 +237,7 @@ typedef int Nlm_Socket;
 #define SOCK_NFDS(s)     (s + 1)
 #define SOCK_CLOSE(s)    close(s)
 
-extern int gethostname(char *machname, long buflen);
+extern int gethostname(char* machname, long buflen);
 /* but see ni_lib.c line 2508 for gethostname substitute for Mac */
 
 #endif /* !OS_MSWIN!OS_UNIX!OS_MAC */
@@ -257,9 +259,8 @@ typedef struct Nlm_SOCKtag
   struct timeval ww_timeout;
   Nlm_Uint4 host;  /* peer host (in the network byte order) */
   Nlm_Uint2 port;  /* peer port (in the network byte order) */
-#ifdef SOCK_NCBI_PEEK
   BUF buf;
-#endif
+  Nlm_Boolean is_eof;
 } Nlm_SOCKstruct;
 
 
@@ -352,7 +353,7 @@ static Nlm_Boolean s_SetNonblock(Nlm_Socket sock, Nlm_Boolean nonblock)
  */
 static ESOCK_ErrCode s_Select(Nlm_Socket            sock,
                               ESOCK_Mode            mode,
-                              const struct timeval *timeout)
+                              const struct timeval* timeout)
 {
   int n_dfs;
   fd_set fds, *r_fds, *w_fds;
@@ -398,9 +399,9 @@ static ESOCK_ErrCode s_Select(Nlm_Socket            sock,
  *       and connect to the same host;  the same is for zero "port".
  */
 static ESOCK_ErrCode s_Connect(SOCK            sock,
-                               const Nlm_Char *host,
+                               const char*     host,
                                Nlm_Uint2       port,
-                               const STimeout *timeout)
+                               const STimeout* timeout)
 {
   Nlm_Socket x_sock;
   Nlm_Uint4  x_host;
@@ -488,9 +489,10 @@ static ESOCK_ErrCode s_Connect(SOCK            sock,
   }
 
   /* Success */
-  sock->sock = x_sock;
-  sock->host = x_host;
-  sock->port = x_port;
+  sock->sock   = x_sock;
+  sock->host   = x_host;
+  sock->port   = x_port;
+  sock->is_eof = FALSE;
   /* the implementation kludge:  the timeouts must be okay now */
 
   return eSOCK_ESuccess;
@@ -503,6 +505,9 @@ static ESOCK_ErrCode s_Shutdown(SOCK sock)
 {
   int code;
 
+  /* set EOF flag */
+  sock->is_eof = TRUE;
+
   /* Just checking */
   if (sock->sock == SOCK_INVALID) {
     ErrPostEx(SEV_WARNING, SOCK_ERRCODE, 0,
@@ -510,8 +515,7 @@ static ESOCK_ErrCode s_Shutdown(SOCK sock)
     return eSOCK_EUnknown;
   }
 
-#ifdef SOCK_NCBI_PEEK
-  {{ /* Reset auxiliary data buffer */
+  {{ /* Reset the auxiliary data buffer */
     Nlm_Uint4 buf_size = BUF_Size(sock->buf);
     if (BUF_Read(sock->buf, 0, buf_size) != buf_size) {
       ErrPostEx(SEV_ERROR, SOCK_ERRCODE, 0,
@@ -519,7 +523,6 @@ static ESOCK_ErrCode s_Shutdown(SOCK sock)
       return eSOCK_EUnknown;
     }
   }}
-#endif
 
   /* Set the socket back to blocking mode */
   if ( !s_SetNonblock(sock->sock, FALSE) ) {
@@ -533,7 +536,7 @@ static ESOCK_ErrCode s_Shutdown(SOCK sock)
     lgr.l_onoff  = 1;
     lgr.l_linger = sock->w_timeout->tv_sec ? sock->w_timeout->tv_sec : 1;
     if (setsockopt(sock->sock, SOL_SOCKET, SO_LINGER, 
-                   (char *)&lgr, sizeof(lgr)) != 0) {
+                   (char*) &lgr, sizeof(lgr)) != 0) {
       ErrPostEx(SEV_WARNING, SOCK_ERRCODE, 1,
                 "[s_Shutdown] setsockopt():  errno = %d", (int)SOCK_ERRNO);
     }
@@ -558,47 +561,54 @@ static ESOCK_ErrCode s_Shutdown(SOCK sock)
 }
 
 
-#ifdef SOCK_NCBI_PEEK
-/* Emulate "peek" using the NCBI data buffering
+/* Emulate "peek" using the NCBI data buffering.
+ * (MSG_PEEK is not implemented on Mac, and it is poorly implemented
+ * on Win32, so we had to implement this feature by ourselves)
  */
-static int s_NCBI_Recv(SOCK        sock,
-                       Nlm_CharPtr buffer,
-                       Nlm_Uint4   size,
-                       int         flags)
+static int s_NCBI_Recv(SOCK         sock,
+                       void*        buffer,
+                       Nlm_Uint4    size,
+                       Nlm_Boolean  peek,
+                       Nlm_Boolean* read_error)
 {
+  char*     x_buffer = (char*) buffer;
   Nlm_Uint4 n_readbuf;
   int       n_readsock;
 
+  *read_error = FALSE;
+
   /* read(or peek)from the internal buffer */
-  n_readbuf = (flags & MSG_PEEK) ?
-    BUF_Peek(sock->buf, buffer, size) : BUF_Read(sock->buf, buffer, size);
+  n_readbuf = peek ?
+    BUF_Peek(sock->buf, x_buffer, size) : BUF_Read(sock->buf, x_buffer, size);
   if (n_readbuf == size)
     return (int)n_readbuf;
-  buffer += n_readbuf;
-  size   -= n_readbuf;
+  x_buffer += n_readbuf;
+  size     -= n_readbuf;
 
   /* read(dont peek) from the socket */
-  n_readsock = recv(sock->sock, buffer, size, 0);
-  if (n_readsock <= 0)
+  n_readsock = SOCK_READ(sock->sock, x_buffer, size);
+  if (n_readsock <= 0) {
+    *read_error = TRUE;
     return (int)(n_readbuf ? n_readbuf : n_readsock);
+  }
 
   /* if "peek" -- store the new read data in the internal buffer */
-  if (flags & MSG_PEEK)
-    VERIFY ( BUF_Write(&sock->buf, buffer, n_readsock) );
+  if ( peek )
+    VERIFY ( BUF_Write(&sock->buf, x_buffer, n_readsock) );
 
   return (int)(n_readbuf + n_readsock);
 }
-#endif /* SOCK_NCBI_PEEK */
 
 
 /* Read/Peek data from the socket
  */
 static ESOCK_ErrCode s_Recv(SOCK         sock,
-                            Nlm_VoidPtr  buf,
+                            void*        buf,
                             Nlm_Uint4    size,
-                            Nlm_Uint4   *n_read,
+                            Nlm_Uint4*   n_read,
                             Nlm_Boolean  peek)
 {
+  Nlm_Boolean read_error;
   int x_errno;
 
   /* just checking */
@@ -614,11 +624,17 @@ static ESOCK_ErrCode s_Recv(SOCK         sock,
   
   for (;;) {
     /* try to read */
-    int buf_read = SOCK_RECV(sock, buf, (int)size, peek ? MSG_PEEK : 0);
+    int buf_read = s_NCBI_Recv(sock, buf, size, peek, &read_error);
     if (buf_read > 0) {
       ASSERT( buf_read <= (int)size );
       if ( n_read )
         *n_read = buf_read;
+      if ( read_error ) {
+        x_errno = SOCK_ERRNO;
+        if (x_errno != SOCK_EWOULDBLOCK  &&  x_errno != SOCK_EAGAIN  &&
+            x_errno != SOCK_EINTR)
+          sock->is_eof = TRUE;
+      }
       return eSOCK_ESuccess; /* success */
     }
 
@@ -628,6 +644,7 @@ static ESOCK_ErrCode s_Recv(SOCK         sock,
       /* NOTE:  empty message may cause the same effect, and it does */
       /* not (!) get discarded from the input queue; therefore, the  */
       /* subsequent attemts to read will cause just the same effect) */  
+      sock->is_eof = TRUE;
       return eSOCK_EClosed;  /* the connection must have been closed by peer */
     }
 
@@ -645,17 +662,25 @@ static ESOCK_ErrCode s_Recv(SOCK         sock,
       continue;
 
     /* forcibly closed by peer, or shut down */
-    if (x_errno == SOCK_ECONNRESET  ||  x_errno == SOCK_EPIPE)
+    if (x_errno == SOCK_ECONNRESET  ||  x_errno == SOCK_EPIPE) {
+      sock->is_eof = TRUE;
       return eSOCK_EClosed;
+    }
 
 #ifdef OS_MAC
-    if (buf_read == -1)
+    if (buf_read == -1) {
+      sock->is_eof = TRUE;
       return eSOCK_EClosed;
+    }
 #endif
 
-    /* dont want to handle all possible errors... let them be "unknown" */  
+    /* dont want to handle all possible errors... let them be "unknown",
+     * and assume EOF
+     */  
+    sock->is_eof = TRUE;
     break;
   }
+
   return eSOCK_EUnknown;
 }
 
@@ -663,13 +688,13 @@ static ESOCK_ErrCode s_Recv(SOCK         sock,
 /* Write data to the socket "as is"(the whole buffer at once)
  */
 static ESOCK_ErrCode s_WriteWhole(SOCK        sock,
-                                  const void *buf,
+                                  const void* buf,
                                   Nlm_Uint4   size,
-                                  Nlm_Uint4  *n_written)
+                                  Nlm_Uint4*  n_written)
 {
-  const Nlm_Char *x_buf  = (const Nlm_Char *)buf;
-  int             x_size = (int)size;
-  int             x_errno;
+  const char* x_buf  = (const char*) buf;
+  int         x_size = (int)size;
+  int         x_errno;
 
   if ( n_written )
     *n_written = 0;
@@ -720,9 +745,9 @@ static ESOCK_ErrCode s_WriteWhole(SOCK        sock,
  * to the socket
  */
 static ESOCK_ErrCode s_WriteSliced(SOCK        sock,
-                                   const void *buf,
+                                   const void* buf,
                                    Nlm_Uint4   size,
-                                   Nlm_Uint4  *n_written)
+                                   Nlm_Uint4*  n_written)
 {
   ESOCK_ErrCode err_code  = eSOCK_ESuccess;
   Nlm_Uint4     x_written = 0;
@@ -748,9 +773,9 @@ static ESOCK_ErrCode s_WriteSliced(SOCK        sock,
  *  EXTERNAL
  ***********************************************************************/
 
-NLM_EXTERN const Nlm_Char *SOCK_ErrCodeStr(ESOCK_ErrCode err_code)
+NLM_EXTERN const char* SOCK_ErrCodeStr(ESOCK_ErrCode err_code)
 {
-  static const Nlm_Char *s_ErrCodeStr[eSOCK_EUnknown+1] = {
+  static const char* s_ErrCodeStr[eSOCK_EUnknown+1] = {
     "Success",
     "Timeout",
     "Closed",
@@ -811,7 +836,7 @@ NLM_EXTERN ESOCK_ErrCode LSOCK_Create(Nlm_Uint2  port,
      */
     int reuse_addr = 1;
     if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, 
-                   (const char *)&reuse_addr, sizeof(reuse_addr)) != 0) {
+                   (const char*) &reuse_addr, sizeof(reuse_addr)) != 0) {
       ErrPostEx(SEV_ERROR, SOCK_ERRCODE, 2,
                 "[LSOCK_Create]  setsockopt():  errno = %d", (int)SOCK_ERRNO);
       SOCK_CLOSE(sock);
@@ -895,6 +920,7 @@ NLM_EXTERN ESOCK_ErrCode LSOCK_Accept(LSOCK           lsock,
            == eSOCK_ESuccess );
   (*sock)->host = x_host;
   (*sock)->port = x_port;
+  BUF_SetChunkSize(&(*sock)->buf, SOCK_BUF_CHUNK_SIZE);
   return eSOCK_ESuccess;
 }
 
@@ -923,29 +949,31 @@ NLM_EXTERN ESOCK_ErrCode LSOCK_Close(LSOCK lsock)
 }
 
 
-NLM_EXTERN ESOCK_ErrCode SOCK_Create(const Nlm_Char *host,
+NLM_EXTERN ESOCK_ErrCode SOCK_Create(const char*     host,
                                      Nlm_Uint2       port,
-                                     const STimeout *timeout,
-                                     SOCK           *sock)
+                                     const STimeout* timeout,
+                                     SOCK*           sock)
 {
   /* Allocate memory for the internal socket structure */
   SOCK x_sock = (SOCK)Nlm_MemNew(sizeof(Nlm_SOCKstruct));
 
   /* Connect */
   ESOCK_ErrCode err_code = s_Connect(x_sock, host, port, timeout);
-  if (err_code == eSOCK_ESuccess)
-    *sock = x_sock;
-  else
+  if (err_code != eSOCK_ESuccess) {
     Nlm_MemFree(x_sock);
-
-  return err_code;
+    return err_code;
+  }
+      
+  *sock = x_sock;
+  BUF_SetChunkSize(&(*sock)->buf, SOCK_BUF_CHUNK_SIZE);
+  return eSOCK_ESuccess;
 }
 
 
 NLM_EXTERN ESOCK_ErrCode SOCK_Reconnect(SOCK            sock,
-                                        const Nlm_Char *host,
+                                        const char*     host,
                                         Nlm_Uint2       port,
-                                        const STimeout *timeout)
+                                        const STimeout* timeout)
 {
   /* Close the socket, if necessary */
   if (sock->sock != SOCK_INVALID) {
@@ -965,9 +993,7 @@ NLM_EXTERN ESOCK_ErrCode SOCK_Reconnect(SOCK            sock,
 NLM_EXTERN ESOCK_ErrCode SOCK_Close(SOCK sock)
 {
   ESOCK_ErrCode err_code = s_Shutdown(sock);
-#ifdef SOCK_NCBI_PEEK
   BUF_Destroy(sock->buf);
-#endif
   Nlm_MemFree(sock);
   return err_code;
 }
@@ -1036,19 +1062,19 @@ NLM_EXTERN ESOCK_ErrCode SOCK_SetTimeout(SOCK           sock,
 }
 
 
-NLM_EXTERN ESOCK_ErrCode SOCK_Read(SOCK        sock,
-                                   Nlm_VoidPtr buf,
-                                   Nlm_Uint4   size,
-                                   Nlm_Uint4  *n_read)
+NLM_EXTERN ESOCK_ErrCode SOCK_Read(SOCK       sock,
+                                   void*      buf,
+                                   Nlm_Uint4  size,
+                                   Nlm_Uint4* n_read)
 {
   return s_Recv(sock, buf, size, n_read, FALSE);
 }
 
 
-NLM_EXTERN ESOCK_ErrCode SOCK_ReadPersist(SOCK        sock,
-                                          Nlm_VoidPtr buf,
-                                          Nlm_Uint4   size,
-                                          Nlm_Uint4  *n_read)
+NLM_EXTERN ESOCK_ErrCode SOCK_ReadPersist(SOCK       sock,
+                                          void*      buf,
+                                          Nlm_Uint4  size,
+                                          Nlm_Uint4* n_read)
 {
   Nlm_Uint4     buf_read;
   ESOCK_ErrCode err_code = eSOCK_ESuccess;
@@ -1069,19 +1095,33 @@ NLM_EXTERN ESOCK_ErrCode SOCK_ReadPersist(SOCK        sock,
 }
 
 
-NLM_EXTERN ESOCK_ErrCode SOCK_Peek(SOCK        sock,
-                                   Nlm_VoidPtr buf,
-                                   Nlm_Uint4   size,
-                                   Nlm_Uint4  *n_read)
+NLM_EXTERN ESOCK_ErrCode SOCK_Peek(SOCK       sock,
+                                   void*      buf,
+                                   Nlm_Uint4  size,
+                                   Nlm_Uint4* n_read)
 {
   return s_Recv(sock, buf, size, n_read, TRUE);
 }
 
 
+NLM_EXTERN ESOCK_ErrCode SOCK_PushBack(SOCK        sock,
+                                       const void* buf,
+                                       Nlm_Uint4   size)
+{
+  return BUF_PushBack(&sock->buf, buf, size) ? eSOCK_ESuccess : eSOCK_EUnknown;
+}
+
+
+NLM_EXTERN Nlm_Boolean SOCK_Eof(SOCK sock)
+{
+    return sock->is_eof;
+}
+
+
 NLM_EXTERN ESOCK_ErrCode SOCK_Write(SOCK        sock,
-                                    const void *buf,
+                                    const void* buf,
                                     Nlm_Uint4   size,
-                                    Nlm_Uint4  *n_written)
+                                    Nlm_Uint4*  n_written)
 {
   /* just checking */
   if (sock->sock == SOCK_INVALID) {
@@ -1101,8 +1141,8 @@ NLM_EXTERN ESOCK_ErrCode SOCK_Write(SOCK        sock,
 
 
 NLM_EXTERN void SOCK_Address(SOCK         sock,
-                             Nlm_Uint4   *host,
-                             Nlm_Uint2   *port,
+                             Nlm_Uint4*   host,
+                             Nlm_Uint2*   port,
                              Nlm_Boolean  network_byte_order) {
   if ( host )
     *host = network_byte_order ? sock->host : (Nlm_Uint4)ntohl(sock->host);
@@ -1111,8 +1151,7 @@ NLM_EXTERN void SOCK_Address(SOCK         sock,
 }
 
 
-NLM_EXTERN Nlm_Boolean GetHostName(Nlm_Char *name,
-                                   Nlm_Uint4 namelen)
+NLM_EXTERN Nlm_Boolean GetHostName(char* name, Nlm_Uint4 namelen)
 {
   int x_errno;
   ASSERT ( namelen > 0 );
@@ -1131,7 +1170,7 @@ NLM_EXTERN Nlm_Boolean GetHostName(Nlm_Char *name,
 
 
 NLM_EXTERN Nlm_Boolean Uint4toInaddr(Nlm_Uint4 ui4_addr,
-                                     Nlm_CharPtr buf, Nlm_Uint4 buf_len)
+                                     char* buf, Nlm_Uint4 buf_len)
 {
   struct in_addr addr_struct;
   char          *addr_string;
@@ -1174,9 +1213,6 @@ NLM_EXTERN Nlm_Uint4 Nlm_htonl(Nlm_Uint4 value)
  *  TEST
  ***********************************************************************/
 
-/* [WIN16] NOTE: make sure that STACKSIZE in your *.def file is set, and
- * it is big enough(I would recommend 32K; see also N_FIELD * N_FIELD)
- */
 #define TEST_BUFSIZE 8192
 
 /* exit server before sending the data expected by client(Test 1) */
@@ -1197,23 +1233,19 @@ if ( !(expr) ) { ASSERT ( 0 );  return retcode; } else {;}
  *      "TEST__server_1(SOCK sock)"
  */
 
-static const Nlm_Char s_C1[] = "C1";
-static const Nlm_Char s_S1[] = "S1";
+static const char s_C1[] = "C1";
+static const char s_S1[] = "S1";
 
 #define N_SUB_BLOB    10
-#ifndef WIN16
 #define SUB_BLOB_SIZE 7000
-#else
-#define SUB_BLOB_SIZE 4000
-#endif
 #define BIG_BLOB_SIZE (N_SUB_BLOB * SUB_BLOB_SIZE)
 
 
 static Nlm_Int2 TEST__client_1(SOCK sock)
 { /* reserved ret.codes [110-119] */
   ESOCK_ErrCode err_code;
-  Nlm_Uint4 n_io, n_io_done;
-  Nlm_Char  buf[TEST_BUFSIZE];
+  Nlm_Uint4     n_io, n_io_done;
+  char          buf[TEST_BUFSIZE];
 
   ErrPostEx(SEV_INFO, SOCK_ERRCODE, 110, "TC1()");
 
@@ -1230,17 +1262,21 @@ static Nlm_Int2 TEST__client_1(SOCK sock)
   }
   ASS_RET((err_code == eSOCK_ESuccess  &&  n_io == n_io_done), 104);
   ASS_RET((Nlm_StrCmp(buf, s_S1) == 0), 105);
+  ASS_RET(SOCK_PushBack(sock, buf, n_io_done) == eSOCK_ESuccess, 106);
+  Nlm_MemSet(buf, '\xFF', n_io_done);
+  ASS_RET(SOCK_Read(sock, buf, n_io_done, 0) == eSOCK_ESuccess, 107);
+  ASS_RET((Nlm_StrCmp(buf, s_S1) == 0), 108);
 
   /* Send a very big binary blob */
   {{
     size_t i;
-    char* blob = (char*)Nlm_MemNew(BIG_BLOB_SIZE);
+    char* blob = (char*) Nlm_MemNew(BIG_BLOB_SIZE);
     for (i = 0;  i < BIG_BLOB_SIZE;  blob[i] = (char)i, i++)
       continue;
     for (i = 0;  i < 10;  i++) {
       err_code = SOCK_Write(sock, blob + i * SUB_BLOB_SIZE, SUB_BLOB_SIZE,
                             &n_io_done);
-      ASS_RET((err_code == eSOCK_ESuccess  &&  n_io_done==SUB_BLOB_SIZE), 106);
+      ASS_RET((err_code == eSOCK_ESuccess  &&  n_io_done==SUB_BLOB_SIZE), 109);
     }
     Nlm_MemFree(blob);
   }}
@@ -1253,7 +1289,7 @@ static Nlm_Int2 TEST__server_1(SOCK sock)
 { /* reserved ret.codes [210-219] */
   ESOCK_ErrCode err_code;
   Nlm_Uint4     n_io, n_io_done;
-  Nlm_Char      buf[TEST_BUFSIZE];
+  char          buf[TEST_BUFSIZE];
 
   ErrPostEx(SEV_INFO, SOCK_ERRCODE, 210, "TS1()");
 
@@ -1307,7 +1343,7 @@ static Nlm_Int2 TEST__client_2(SOCK sock)
 #define N_RECONNECT 3
   ESOCK_ErrCode err_code;
   Nlm_Uint4     n_io, n_io_done, i;
-  Nlm_Char      buf[W_FIELD * N_FIELD + 1];
+  char          buf[W_FIELD * N_FIELD + 1];
 
   ErrPostEx(SEV_INFO, SOCK_ERRCODE, 110, "TC2()");
 
@@ -1320,11 +1356,11 @@ static Nlm_Int2 TEST__client_2(SOCK sock)
   /* send the buffer to server, then get it back */
   for (i = 0;  i < N_REPEAT;  i++)
     {
-      Nlm_Char    buf1[sizeof(buf)];
+      char        buf1[sizeof(buf)];
       STimeout    w_to, r_to;
       Nlm_Boolean w_timeout_on = (Nlm_Boolean)(i%2); /* if to start from     */
       Nlm_Boolean r_timeout_on = (Nlm_Boolean)(i%3); /* zero or inf. timeout */
-      Nlm_CharPtr x_buf;
+      char*       x_buf;
 
       /* set timeout */
       w_to.sec  = 0;
@@ -1343,6 +1379,7 @@ static Nlm_Int2 TEST__client_2(SOCK sock)
                     "TC2:reconnect: i=%d, err_code=%d",
                     (int)i, (int)err_code);
           ASS_RET((err_code == eSOCK_ESuccess), 117);
+          ASSERT( !SOCK_Eof(sock) );
           /* give a break to let server to reset the listening socket */
 #if defined(OS_UNIX)
           sleep(1);
@@ -1406,7 +1443,7 @@ static Nlm_Int2 TEST__client_2(SOCK sock)
       do {
         if (i%2 == 0)
           { /* peek a little piece twice and compare */
-            Nlm_Char  xx_buf1[128], xx_buf2[128];
+            char      xx_buf1[128], xx_buf2[128];
             Nlm_Uint4 xx_io_done1, xx_io_done2;
             if (SOCK_Peek(sock, xx_buf1, sizeof(xx_buf1), &xx_io_done1)
                 == eSOCK_ESuccess  &&
@@ -1420,6 +1457,7 @@ static Nlm_Int2 TEST__client_2(SOCK sock)
         if (err_code == eSOCK_EClosed) {
           ErrPostEx(SEV_ERROR, SOCK_ERRCODE, 122,
                     "TC2:read: connection closed");
+          ASSERT( SOCK_Eof(sock) );
           return 122;
         }
         ErrPostEx(SEV_INFO, SOCK_ERRCODE, 123,
@@ -1460,7 +1498,7 @@ static Nlm_Int2 TEST__server_2(SOCK sock, LSOCK lsock)
 { /* reserved ret.codes [220-229] */
   ESOCK_ErrCode err_code;
   Nlm_Uint4     n_io, n_io_done;
-  Nlm_Char      buf[TEST_BUFSIZE];
+  char          buf[TEST_BUFSIZE];
   STimeout      r_to, w_to;
   Nlm_Uint4     i;
 
@@ -1479,7 +1517,7 @@ static Nlm_Int2 TEST__server_2(SOCK sock, LSOCK lsock)
   ASS_RET((err_code == eSOCK_ESuccess), 221);
 
   for (i = 0;  ;  i++) {
-    Nlm_CharPtr x_buf;
+    char* x_buf;
 
     /* read data from socket */
     n_io = sizeof(buf);
@@ -1497,6 +1535,7 @@ static Nlm_Int2 TEST__server_2(SOCK sock, LSOCK lsock)
       case eSOCK_EClosed:
         ErrPostEx(SEV_INFO, SOCK_ERRCODE, 223,
                   "TS2:read: connection closed");
+        ASSERT( SOCK_Eof(sock) );
 
         /* reconnect */
         if ( !lsock )
@@ -1506,6 +1545,7 @@ static Nlm_Int2 TEST__server_2(SOCK sock, LSOCK lsock)
         SOCK_Close(sock);
         err_code = LSOCK_Accept(lsock, NULL, &sock);
         ASS_RET((err_code == eSOCK_ESuccess), 229);
+        ASSERT( !SOCK_Eof(sock) );
         /* !!! */ 
         goto l_reconnect;
 
@@ -1518,6 +1558,7 @@ static Nlm_Int2 TEST__server_2(SOCK sock, LSOCK lsock)
         s_DoubleTimeout(&r_to);
         err_code = SOCK_SetTimeout(sock, eSOCK_OnRead, &r_to, 0, 0);
         ASS_RET((err_code == eSOCK_ESuccess), 225);
+        ASSERT( !SOCK_Eof(sock) );
         break;
 
       default:
@@ -1571,9 +1612,9 @@ static Nlm_Int2 TEST__server_2(SOCK sock, LSOCK lsock)
  *   establish and close connection;  call test i/o functions like
  *     TEST__[client|server]_[1|2|...] (...)
  */
-static Nlm_Int2 TEST__client(const Nlm_Char *server_host,
+static Nlm_Int2 TEST__client(const char*     server_host,
                              Nlm_Uint2       server_port,
-                             const STimeout *timeout)
+                             const STimeout* timeout)
 { /* reserved ret.codes [100-109] */
   SOCK          sock;
   ESOCK_ErrCode err_code;
@@ -1672,12 +1713,12 @@ static Nlm_Int2 TEST__server(Nlm_Uint2 port)
 extern Nlm_Int2 Nlm_Main(void)
 {
 #define MIN_PORT 5001
-  Nlm_Int4     argc = Nlm_GetArgc();
-  Nlm_CharPtr *argv = Nlm_GetArgv();
+  Nlm_Int4 argc = Nlm_GetArgc();
+  char**   argv = Nlm_GetArgv();
 
 #ifdef WIN16
   {{ /* a kludge to make sure the "vibwndws.c"(MainProc) get linked */
-    extern void Nlm_Metronome(Nlm_VoidPtr actn);  Nlm_Metronome(0);
+    extern void Nlm_Metronome(void* actn);  Nlm_Metronome(0);
   }}
 #endif
 
@@ -1687,7 +1728,7 @@ extern Nlm_Int2 Nlm_Main(void)
   VERIFY ( Nlm_ErrSetLog("ncbisock.log") );
 
   {{
-    Nlm_Char local_host[64];
+    char local_host[64];
     VERIFY ( GetHostName(local_host, sizeof(local_host)) );
     ErrPostEx(SEV_INFO, SOCK_ERRCODE, 200,
               "\nRunning NCBISOCK test on host \"%s\"", local_host);
@@ -1729,12 +1770,12 @@ extern Nlm_Int2 Nlm_Main(void)
         STimeout* timeout = 0;
         STimeout  x_timeout;
 #ifdef DO_CLIENT
-        Nlm_CharPtr server_host = "peony";
-        short       server_port = 5555;
+        char* server_host = "peony";
+        short server_port = 5555;
         x_timeout.sec = x_timeout.usec = 999999;
 #else
         /* host */
-        Nlm_CharPtr server_host = argv[1];
+        char* server_host = argv[1];
 
         /* port */
         short server_port;

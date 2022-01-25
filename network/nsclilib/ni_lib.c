@@ -29,7 +29,7 @@
 *
 * Version Creation Date:        1/1/92
 *
-* $Revision: 6.10 $
+* $Revision: 6.12 $
 *
 * File Description:
 *   This file is a library of functions to be used by server application
@@ -266,6 +266,12 @@
 *
 * RCS Modification History:
 * $Log: ni_lib.c,v $
+* Revision 6.12  1999/07/30 19:11:08  vakatov
+* Use "strerror()" instead of "sys_errlist[]"
+*
+* Revision 6.11  1999/06/07 18:31:43  beloslyu
+* NetBSD port
+*
 * Revision 6.10  1998/04/10 19:24:45  vakatov
 * NI_SetInterface():  return the overridden(old) interface value; check
 * for the validity of the new interface
@@ -735,7 +741,7 @@ NLM_EXTERN Int2 NI_InitServices(NI_DispatcherPtr disp, CharPtr user, CharPtr gro
 #ifdef NETP_INET_NEWT
                 SOCK_ERRNO = ABS(status);
 #endif
-                StringCpy(ni_errtext, sys_errlist[SOCK_INDEX_ERRNO]);
+                StringCpy(ni_errtext, strerror(SOCK_INDEX_ERRNO));
                 ni_errno = NIE_NOLISTEN;
                 NI_DestroyDispInfo(dispinfo);
                 HaltServices (disp);
@@ -1968,7 +1974,7 @@ NEXTTRY:
 #endif
                         TRACE("Listen failed, errno = %d\n", SOCK_ERRNO);
                         MsgDestroyHandle(sconnhp);
-                        StringCpy(ni_errtext, sys_errlist[SOCK_INDEX_ERRNO]);
+                        StringCpy(ni_errtext, strerror(SOCK_INDEX_ERRNO));
                         ni_errno = NIE_NOLISTEN;
                         ErrPost (CTX_NCBICORE, CORE_UNKNOWN, "NI_ServiceRequest: <%s> <port %d, errno %d>", ni_errlist[ni_errno], (int) disp->clientPort, (int) SOCK_ERRNO);
                         return NULL;
@@ -2073,7 +2079,7 @@ NEXTTRY:
                 SOCK_ERRNO = ABS(sconnhp->sok);
 #endif
                 MsgDestroyHandle(sconnhp);
-                StringCpy(ni_errtext, sys_errlist[SOCK_INDEX_ERRNO]);
+                StringCpy(ni_errtext, strerror(SOCK_INDEX_ERRNO));
                 ni_errno = NIE_NOACCEPT;        /* application accept error */
                 return NULL;
             }
@@ -2787,6 +2793,9 @@ NLM_EXTERN Int2 NI_GetPlatform (void)
     retval = NI_PLATFORM_LINUX;
 #endif
 #endif
+#ifdef OS_UNIX_NETBSD
+	retval = NI_PLATFORM_NETBSD;
+#endif
 #endif /* OS_UNIX */
 
 #ifdef OS_DOS
@@ -3062,7 +3071,7 @@ NLM_EXTERN int NI_ServerACK(void)
         sprintf(temp_buf, PIPE_MSG_FMT, NIE_SERVACK, "OK");
         if ((wstat = writepipe(STDPIPE, temp_buf, strlen(temp_buf))) <= 0) {
             ni_errno = NIE_PIPEIO;
-            strcpy(ni_errtext, (wstat == 0) ? "EWOULDBLOCK" : sys_errlist[errno]);
+            strcpy(ni_errtext, (wstat == 0) ? "EWOULDBLOCK" : strerror(errno));
             return -1;
         }
     } else { /* stand-alone */
@@ -3168,7 +3177,7 @@ NLM_EXTERN int NI_ServerNACK(CharPtr err_text)
     { /* not stand-alone */
         if ((wstat = writepipe(STDPIPE, temp_buf, strlen(temp_buf))) <= 0) {
             ni_errno = NIE_PIPEIO;
-            strcpy(ni_errtext, (wstat == 0) ? "EWOULDBLOCK" : sys_errlist[errno]);
+            strcpy(ni_errtext, (wstat == 0) ? "EWOULDBLOCK" : strerror(errno));
             return -1;
         }
     } else { /* stand-alone */
@@ -3295,7 +3304,7 @@ int sokselectr(int fd)
 
           default:
             ni_errno = NIE_MISC;
-            sprintf(ni_errtext, "%s", sys_errlist[SOCK_INDEX_ERRNO]);
+            sprintf(ni_errtext, "%s", strerror(SOCK_INDEX_ERRNO));
             return -1;
         }
     }
@@ -3352,7 +3361,7 @@ int sokselectw(int fd, int seconds)
 
           default:
             ni_errno = NIE_MISC;
-            sprintf(ni_errtext, "%s", sys_errlist[SOCK_INDEX_ERRNO]);
+            sprintf(ni_errtext, "%s", strerror(SOCK_INDEX_ERRNO));
             return -1;
         }
     }

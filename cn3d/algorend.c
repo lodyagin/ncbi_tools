@@ -34,6 +34,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: algorend.c,v $
+* Revision 6.68  1999/05/11 17:54:17  ywang
+* move Cn3d_AnyPrim out of OpenGL ifdef block in RenderAnAtom
+*
 * Revision 6.67  1999/05/05 21:12:57  ywang
 * fix typing error bug in RenderGraph
 *
@@ -3092,9 +3095,10 @@ void  LIBCALL  RenderAnAtom(PALD paldAtom, ResidueColorCell * iColor,
   
     OGL_AddSphere3D(Cn3D_ColorData.OGL_Data, (TOGL_ColorCell *)iColor, (FloatHi)fXAtom, (FloatHi)fYAtom, (FloatHi)fZAtom,
         (FloatHi)fRadius);
-    Cn3d_AnyPrim = TRUE;  /* this probably can be deleted */
 #else /* _OPENGL */
 
+    Cn3d_AnyPrim = TRUE;  /* this probably can be deleted */
+                    /* yanli moved it out of OpenGL ifdef block */  
       /* scale */
     iXAtom = (Int4) (fXAtom*VIEWSCALE);
     iYAtom = (Int4) (fYAtom*VIEWSCALE);

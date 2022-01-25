@@ -1,4 +1,4 @@
-/* $Id: elecpcr.c,v 6.7 1999/02/24 16:49:23 kans Exp $
+/* $Id: elecpcr.c,v 6.8 1999/07/27 18:43:04 shavirin Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,15 @@
 *
 * Version Creation Date: 12/19/1996
 *
-* $Revision: 6.7 $
+* $Revision: 6.8 $
 *
 * File Description:
 *         Main program for WWW and Command-Line Electronic PCR
 *
 * $Log: elecpcr.c,v $
+* Revision 6.8  1999/07/27 18:43:04  shavirin
+* Fixed problems found on PC NT computer.
+*
 * Revision 6.7  1999/02/24 16:49:23  kans
 * use accutils copy of IS_ntdb_accession and IS_protdb_accession
 *
@@ -821,7 +824,7 @@ static StsParPtr STSReadCommandLine(void)
   if(pcr_args[4].strvalue != NULL) {   /* Quick look ? */
     stsp->sequence = pcr_args[4].strvalue;
   } else {  /* Reading from file by default */
-    if((fd = FileOpen(pcr_args[2].strvalue, "r")) == NULL)
+    if((fd = FileOpen(pcr_args[2].strvalue, "rb")) == NULL)
       return NULL;
     if((stsp->sequence = WWWReadFileInMemory(fd, 0, TRUE)) == NULL)
       return NULL;
@@ -834,8 +837,6 @@ static StsParPtr GetStsSearchParam(void)
 {
 
   WWWInfoPtr info;
-  WWWInfoDataPtr info_data;
-  Int4 i;
   CharPtr chptr;
   StsParPtr stsp;
   FILE *fd;

@@ -1,4 +1,4 @@
-/*   $Id: loader.c,v 6.13 1998/11/20 22:46:00 kimelman Exp $
+/*   $Id: loader.c,v 6.14 1999/05/25 16:21:20 kimelman Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -30,6 +30,9 @@
  * Modifications:  
  * --------------------------------------------------------------------------
  * $Log: loader.c,v $
+ * Revision 6.14  1999/05/25 16:21:20  kimelman
+ * bugfix : --checks & --load / didn't generate error message
+ *
  * Revision 6.13  1998/11/20 22:46:00  kimelman
  * fix loader return code
  *
@@ -78,10 +81,6 @@
 
 #include "PubStructAsn.h"
 #include <assert.h>
-
-#if 0
-#include "mmdbapi.c"
-#endif
 
 #define LOAD_IN_STATE 1
 
@@ -285,7 +284,7 @@ main(int argc, char**argv)
           mode |=2;
         else if (strcmp(argv[i],"--checks")==0|| strcmp(argv[i],"-c")==0)
           {
-            if (mode | 2 )
+            if (mode & 2 )
               mode |= 4;
             else
               goto errexit;
@@ -315,7 +314,7 @@ main(int argc, char**argv)
     strcat(MMDB,"/");
   if (state<0 )
     state = (mode & 1 ? LOAD_IN_STATE :0);
-  if (mode | 2 )
+  if (mode & 2 )
     {
       char shcmd[1024];
       sprintf(shcmd," test -d %s || mkdir %s",outdir,outdir);
@@ -361,9 +360,9 @@ main(int argc, char**argv)
   return (failed?1:0);
 errexit:
   printf("usage: %s [ --load | --remove | --download [ --checks | --pack ] ] \n"
-         "                 [ --path=mmdb_files_dir ] [ --downpath=dump_mmdb_files_dir  ] [ --state=<to_state> ] \n"
-         "                 [ --verbose | -v ] [ --enforce ] \n"
-         "                 [ --dbpath=servername:DBname=username:password ]\n",
+         "          [ --path=mmdb_files_dir ] [ --downpath=dump_mmdb_files_dir  ] \n"
+         "          [ --state=<to_state> ] [ --verbose | -v ] [ --enforce ] \n"
+         "          [ --dbpath=servername:DBname=username:password ]\n",
          argv[0]);
   return 2;
 }

@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 1/1/94
 *
-* $Revision: 6.2 $
+* $Revision: 6.3 $
 *
 * File Description:  Sequence editing utilities
 *
@@ -39,6 +39,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: valid.h,v $
+* Revision 6.3  1999/07/22 22:04:36  kans
+* added suppressContext flag
+*
 * Revision 6.2  1999/05/03 20:06:36  kans
 * if no pubs or no biosource, report only once, not once per bioseq
 *
@@ -133,6 +136,7 @@ typedef struct validstruct {
 	Boolean onlyspell;             /* only do spell check */
 	Boolean justwarnonspell;       /* severity WARNING instead of ERROR on spell */
 	Boolean useSeqMgrIndexes;      /* new style indexing to speed up validation */
+	Boolean suppressContext;       /* suppress context part of message */
 } ValidStruct, PNTR ValidStructPtr;
 
 NLM_EXTERN Boolean ValidateSeqEntry PROTO((SeqEntryPtr sep, ValidStructPtr vsp));

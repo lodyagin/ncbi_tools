@@ -32,8 +32,26 @@ Contents: Utilities for BLAST
 
 ******************************************************************************/
 /*
-* $Revision: 6.51 $
+* $Revision: 6.58 $
 * $Log: blastool.c,v $
+* Revision 6.58  1999/09/16 16:54:43  madden
+* Allow longer wordsizes
+*
+* Revision 6.57  1999/09/14 19:56:39  shavirin
+* Fixed bug in PHI-Blast when number of hits to DB == 0
+*
+* Revision 6.56  1999/09/09 18:00:25  madden
+* formatting problem for effective db length
+*
+* Revision 6.55  1999/08/27 20:22:51  shavirin
+* Added default value for decline_align in the function BLASTOptionNew().
+*
+* Revision 6.53  1999/08/17 14:10:05  madden
+* Validation for smith_waterman and tweak_parameters options
+*
+* Revision 6.52  1999/05/25 13:37:15  madden
+* Call readdb_get_sequence_length only for seqs in db
+*
 * Revision 6.51  1999/04/27 17:22:27  madden
 * Set hsp_num_max for ungapped BLAST
 *
@@ -406,7 +424,7 @@ FormatBlastParameters(BlastSearchBlkPtr search)
 	add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
 	sprintf(buffer, "effective length of query: %ld", (long) search->context[search->first_context].query->effective_length);
 	add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
-	sprintf(buffer, "effective length of database: %ld", (long) search->dblen_eff);
+	sprintf(buffer, "effective length of database: %s", Nlm_Int8tostr ((Int8) search->dblen_eff, 1));
 	add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
 	sprintf(buffer, "effective search space: %8.0f", ((Nlm_FloatHi) search->dblen_eff)*((Nlm_FloatHi) search->context[search->first_context].query->effective_length));
 	add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
@@ -1032,6 +1050,7 @@ BLASTOptionNew(CharPtr progname, Boolean gapped)
 		/* Used in the post-process gapping of the blastn result. */
 		options->gap_open  = 5;
 		options->gap_extend  = 2;
+                options->decline_align = INT2_MAX;
 		options->gap_x_dropoff  = 50;
 		options->gap_x_dropoff_final  = 50;
 		options->gap_trigger  = 25.0;
@@ -1066,6 +1085,7 @@ BLASTOptionNew(CharPtr progname, Boolean gapped)
 
 		options->gap_open  = 11;
 		options->gap_extend  = 1;
+                options->decline_align = INT2_MAX;
 		options->gap_x_dropoff  = 15;
 		options->gap_x_dropoff_final  = 25;
 		options->gap_trigger  = 22.0;
@@ -1194,9 +1214,9 @@ BLASTOptionValidateEx (BLAST_OptionsBlkPtr options, CharPtr progname, ValNodePtr
                        return 1;
                }
 
-		if (options->wordsize < 7 || options->wordsize > 19)
+		if (options->wordsize < 7)
 		{
-			BlastConstructErrorMessage("BLASTOptionValidateEx", "Valid wordsize range is 7 to 19", 1, error_return);
+			BlastConstructErrorMessage("BLASTOptionValidateEx", "Wordsize must be 7 or greater", 1, error_return);
 			return 1;
 		}
 		if (options->threshold_first != 0 || options->threshold_second != 0)
@@ -1269,6 +1289,18 @@ BLASTOptionValidateEx (BLAST_OptionsBlkPtr options, CharPtr progname, ValNodePtr
         if (options->isPatternSearch && (!options->gapped_calculation))
 	    {
 		BlastConstructErrorMessage("BLASTOptionValidateEx", "PHI-BLAST cannot use ungapped alignments", 1, error_return);
+		return 1;
+	    }
+
+        if (options->tweak_parameters && (!options->gapped_calculation))
+	    {
+		BlastConstructErrorMessage("BLASTOptionValidateEx", "parameter adjustment not supported with ungapped alignments", 1, error_return);
+		return 1;
+	    }
+
+        if (options->smith_waterman && (!options->gapped_calculation))
+	    {
+		BlastConstructErrorMessage("BLASTOptionValidateEx", "locally optimal alignments not supported with ungapped alignments", 1, error_return);
 		return 1;
 	    }
 
@@ -1478,10 +1510,11 @@ BlastAdjustDbNumbers (ReadDBFILEPtr rdfp, Int8Ptr db_length, Int4Ptr db_number, 
 			if (gi_list[index].ordinal_id >= 0)
 				continue;
 			gi_list[index].ordinal_id = readdb_gi2seq(rdfp, gi_list[index].gi);
-			db_length_private += readdb_get_sequence_length(rdfp, gi_list[index].ordinal_id);
 			gi_list_pointers[index] = &(gi_list[index]);
-			if (gi_list[index].ordinal_id >= 0)
-				count++;
+			if (gi_list[index].ordinal_id < 0)
+				continue;
+			count++;
+			db_length_private += readdb_get_sequence_length(rdfp, gi_list[index].ordinal_id);
 		}
 	}
 	else if (seqid_list)
@@ -2302,39 +2335,44 @@ ValNodePtr convertSeqAlignListToValNodeList(SeqAlignPtr seqAlignList, SeqAlignPt
 
 /*converts a 2-level list of SeqAligns stored as a ValNodePtr */
  
-SeqAlignPtr convertValNodeListToSeqAlignList(ValNodePtr seqAlignDoubleList, SeqAlignPtr ** lastSeqAligns, Int4 * numLastSeqAligns)
+SeqAlignPtr 
+convertValNodeListToSeqAlignList(ValNodePtr seqAlignDoubleList, 
+                                 SeqAlignPtr ** lastSeqAligns, 
+                                 Int4 * numLastSeqAligns)
 {
     ValNodePtr thisValNodePtr;
     SeqAlignPtr returnSeqAlign, thisSeqAlign;
     Int4 numValNodePtrs, indexValNodePtrs;
-
+    
     thisValNodePtr = seqAlignDoubleList;
     numValNodePtrs = 0;
+
     while (NULL != thisValNodePtr) {
-      numValNodePtrs++;
-      thisValNodePtr = thisValNodePtr->next;
-    }
-    if (NULL == seqAlignDoubleList) {
-      *numLastSeqAligns = 0;
-      *lastSeqAligns = NULL;
-      return(NULL);
-    }
-    else {
-      indexValNodePtrs = 0;
-      *numLastSeqAligns = numValNodePtrs;
-      *lastSeqAligns = (SeqAlignPtr *) MemNew (numValNodePtrs * sizeof(SeqAlignPtr));
-      returnSeqAlign = seqAlignDoubleList->data.ptrvalue;
-      thisValNodePtr = seqAlignDoubleList;
-      while (NULL != thisValNodePtr->next) {
-        thisSeqAlign = thisValNodePtr->data.ptrvalue;
-        while (thisSeqAlign->next != NULL) 
-          thisSeqAlign = thisSeqAlign->next;
-        (*lastSeqAligns)[indexValNodePtrs] = thisSeqAlign;
-        indexValNodePtrs++;
-        thisSeqAlign->next = thisValNodePtr->next->data.ptrvalue;
+        numValNodePtrs++;
         thisValNodePtr = thisValNodePtr->next;
-      }
-      return(returnSeqAlign);
+    }
+
+    if (seqAlignDoubleList == NULL || 
+        seqAlignDoubleList->data.ptrvalue == NULL) {
+        *numLastSeqAligns = 0;
+        *lastSeqAligns = NULL;
+        return NULL;
+    } else {
+        indexValNodePtrs = 0;
+        *numLastSeqAligns = numValNodePtrs;
+        *lastSeqAligns = (SeqAlignPtr *) MemNew (numValNodePtrs * sizeof(SeqAlignPtr));
+        returnSeqAlign = seqAlignDoubleList->data.ptrvalue;
+        thisValNodePtr = seqAlignDoubleList;
+        while (NULL != thisValNodePtr->next) {
+            thisSeqAlign = thisValNodePtr->data.ptrvalue;
+            while (thisSeqAlign->next != NULL) 
+                thisSeqAlign = thisSeqAlign->next;
+            (*lastSeqAligns)[indexValNodePtrs] = thisSeqAlign;
+            indexValNodePtrs++;
+            thisSeqAlign->next = thisValNodePtr->next->data.ptrvalue;
+            thisValNodePtr = thisValNodePtr->next;
+        }
+        return returnSeqAlign;
     }
 }
 

@@ -29,44 +29,44 @@
 *
 * Version Creation Date:   4/16/98
 *
-* $Revision: 6.1 $
+* $Revision: 6.6 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
-* Date     Name        Description of modification
-* -------  ----------  -----------------------------------------------------
-*
+* $Log: urlquery.c,v $
+* Revision 6.6  1999/07/28 21:09:15  vakatov
+* Multiple fixes in QUERY_OpenUrlQuery() to make it work with a generic
+* URL server;  also, pass arguments in the cmd.-line
 *
 * ==========================================================================
 */
 
+#include "asnbuild.h"
 #include <urlquery.h>
+
 
 NLM_EXTERN CONN QUERY_OpenUrlQuery (
   Nlm_CharPtr host_machine, Nlm_Uint2 host_port,
   Nlm_CharPtr host_path, Nlm_CharPtr arguments,
   Nlm_CharPtr appName, Nlm_Uint4 timeoutsec,
-  UrlContentType ctype, URLC_Flags flags
-)
-
+  EMIME_SubType subtype, URLC_Flags flags)
 {
-  CONN           conn = NULL;
-  CONNECTOR      connector;
-  Nlm_CharPtr    contentType = "application/x-www-form-urlencoded";
-  SNetConnInfo*  info;
-  Nlm_Uint4      n_written;
-  Nlm_Char       path [PATH_MAX];
-  EConnStatus    status;
-  Nlm_CharPtr    supp_input = NULL;
-  Nlm_CharPtr    userAgentName = NULL;
-  Nlm_Char       user_header [256];
+  CONN            conn = NULL;
+  CONNECTOR       connector;
+  Nlm_Char        contentType[MAX_CONTENT_TYPE_LEN];
+  EMIME_Encoding  encoding = eENCOD_None;
+  SNetConnInfo*   info;
+  Nlm_Char        path [PATH_MAX];
+  EConnStatus     status;
+  Nlm_CharPtr     userAgentName = NULL;
+  Nlm_Char        user_header[sizeof(contentType) + 256];
 
-  if (StringHasNoText (host_machine) || StringHasNoText (host_path)) return NULL;
+  if (StringHasNoText (host_machine) || StringHasNoText (host_path))
+    return NULL;
 
-  /* allow the user to specify a program name, otherwise get from ProgramPath */
-
+  /* allow the user to specify a prog. name, otherwise get from ProgramPath */
   if (! StringHasNoText (appName)) {
     userAgentName = appName;
   } else {
@@ -80,59 +80,43 @@ NLM_EXTERN CONN QUERY_OpenUrlQuery (
     userAgentName = "?";
   }
 
-  /* set content type from parameter */
-
-  if (ctype == wwwencoded) {
-    contentType = "application/x-www-form-urlencoded";
-  } else if (ctype == multipart) {
-    contentType = "multipart/form-data";
+  /* set content type from parameters */
+  if ((flags & URLC_URL_ENCODE_OUT) != 0) {
+    encoding = eENCOD_Url;
   }
+  VERIFY( MIME_ComposeContentType(subtype, encoding,
+                                  contentType, sizeof(contentType)) );
 
   /* set HTML header with program name as user agent */
+  sprintf (user_header, "%sUser-Agent: %s\r\n", contentType, userAgentName);
 
-  sprintf (user_header, "Content-type: %s\n"
-           "Content-Disposition: form-data; name=supplemental_input\n"
-           "User-Agent: %s\n",
-           contentType, userAgentName);
+  /* fill in connection info fields and create the connection */
+  info = NetConnInfo_Create(0, 0);
+  ASSERT( info );
 
-  /* fill in connection info fields */
-
-  info = NetConnInfo_Create (0, 0);
-  if (info == NULL) return NULL;
-
-  info->host = StringSave (host_machine);
+  if ( host_machine ) {
+    MemFree(info->host);  info->host = StringSave(host_machine);
+  }
   info->port = host_port;
-
-  /* no longer using info->args */
-
-  info->path = MemFree (info->path);
-  info->path = StringSave (host_path);
+  if ( !StringHasNoText(arguments) ) {
+    MemFree(info->args);  info->args = StringSave(arguments);
+  }
+  MemFree(info->path);    info->path = StringSave(host_path);
 
   info->timeout.sec  = timeoutsec;
   info->timeout.usec = 0;
 
-  connector = URL_CreateConnector (info, user_header, flags);
-
-  status = CONN_Create (connector, &conn);
-
-  NetConnInfo_Destroy (&info);
-
+  connector = URL_CreateConnector(info, user_header, flags);
+  status = CONN_Create(connector, &conn);
   if (status != eCONN_Success) {
-    ErrPostEx (SEV_ERROR, 0, 0, "QUERY_OpenUrlQuery failed in CONN_Create");
+    ErrPostEx(SEV_ERROR, 0, 0, "QUERY_OpenUrlQuery failed in CONN_Create");
   }
 
-  /* POST arguments in data buffer followed by supplemental_input=\n, but do not URL encode this */
-
-  if (! StringHasNoText (arguments)) {
-    status = CONN_Write (conn, (const void *) arguments, StringLen (arguments), &n_written);
-    supp_input = "&supplemental_input=\n";
-  } else {
-    supp_input = "supplemental_input=\n";
-  }
-   status = CONN_Write (conn, (const void *) supp_input, StringLen (supp_input), &n_written);
-
+  /* cleanup & return */
+  NetConnInfo_Destroy(&info);
   return conn;
 }
+
 
 NLM_EXTERN void QUERY_SendQuery (
   CONN conn
@@ -164,7 +148,7 @@ NLM_EXTERN void QUERY_CopyFileToQuery (
 
   if (conn == NULL || fp == NULL) return;
 
-  buffer = MemNew (URL_QUERY_BUFLEN + 1);
+  buffer = (Nlm_CharPtr) MemNew(URL_QUERY_BUFLEN + 1);
   if (buffer != NULL) {
     while ((ct = FileRead (buffer, 1, URL_QUERY_BUFLEN, fp)) > 0) {
       status = CONN_Write (conn, (const void *) buffer, ct, &n_written);
@@ -184,13 +168,69 @@ NLM_EXTERN void QUERY_CopyResultsToFile (
 
   if (conn == NULL || fp == NULL) return;
 
-  buffer = MemNew (URL_QUERY_BUFLEN + 1);
+  buffer = (Nlm_CharPtr) MemNew(URL_QUERY_BUFLEN + 1);
   if (buffer != NULL) {
     while ((status = CONN_Read (conn, buffer, URL_QUERY_BUFLEN, &n_read, eCR_Read)) == eCONN_Success) {
       FileWrite (buffer, 1, n_read, fp);
     }
   }
   MemFree (buffer);
+}
+
+static Nlm_Int2 LIBCALL AsnIoConnWrite (Pointer ptr, Nlm_CharPtr buf, Nlm_Uint2 count)
+
+{
+	Nlm_Uint4     bytes;
+	AsnIoConnPtr  aicp;
+
+	aicp = (AsnIoConnPtr) ptr;
+	CONN_Write (aicp->conn, (const void *) buf, (size_t) count, &bytes);
+	return (Nlm_Int2) bytes;
+}
+
+static Nlm_Int2 LIBCALL AsnIoConnRead (Pointer ptr, CharPtr buf, Nlm_Uint2 count)
+
+{
+	Nlm_Uint4     bytes;
+	AsnIoConnPtr  aicp;
+
+	aicp = (AsnIoConnPtr) ptr;
+	CONN_Read (aicp->conn, (Pointer) buf, (Int4) count, &bytes, eCR_Read);
+	return (Nlm_Int2) bytes;
+}
+
+NLM_EXTERN AsnIoConnPtr QUERY_AsnIoConnOpen (Nlm_CharPtr mode, CONN conn)
+
+{
+  Int1          type;
+  AsnIoConnPtr  aicp;
+
+  if (! StringCmp(mode, "r"))
+    type = (ASNIO_IN | ASNIO_TEXT);
+  else if (! StringCmp(mode, "rb"))
+    type = (ASNIO_IN | ASNIO_BIN);
+  else if (! StringCmp(mode, "w"))
+    type = (ASNIO_OUT | ASNIO_TEXT);
+  else if (! StringCmp(mode, "wb"))
+    type = (ASNIO_OUT | ASNIO_BIN);
+  else
+  {
+    AsnIoErrorMsg (NULL, 81, mode);
+    return NULL;
+  }
+
+  aicp = (AsnIoConnPtr) MemNew (sizeof (AsnIoConn));
+  aicp->aip = AsnIoNew (type, NULL, (Pointer) aicp, AsnIoConnRead, AsnIoConnWrite);
+  aicp->conn = conn;
+  return aicp;
+}
+
+NLM_EXTERN AsnIoConnPtr QUERY_AsnIoConnClose (AsnIoConnPtr aicp)
+
+{
+  if (aicp == NULL) return NULL;
+  AsnIoClose (aicp->aip);
+  return (AsnIoConnPtr) MemFree (aicp);
 }
 
 typedef struct SQueueTag {

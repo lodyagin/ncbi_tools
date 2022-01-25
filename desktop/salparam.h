@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.5 $
+* $Revision: 6.6 $
 *
 * File Description: 
 *
@@ -123,5 +123,7 @@ extern void SelectRegionDialog (IteM i);
 
 extern void ColorIdentityDialog (WindoW w);
 extern void ColorIdentityDialogItem (IteM i);
+
+NLM_EXTERN void PropagateFeatDialog (IteM i);
 
 #endif

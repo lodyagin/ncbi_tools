@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   06/16/95
 *
-* $Revision: 1.1 $
+* $Revision: 1.2 $
 *
 * File Description: 
 *       Header file to patch around constructs which the "ASNCODE" generator
@@ -46,6 +46,9 @@
 *
 * RCS Modification History:
 * $Log: blastpat.h,v $
+* Revision 1.2  1999/08/19 17:39:11  shavirin
+* Added typedef for SeqAlign.
+*
 * Revision 1.1  1997/10/08 19:25:38  madden
 * patch header for asncode
 *
@@ -73,6 +76,6 @@
 #define SeqAlignSetAsnWrite SpecialSeqAlignSetAsnWrite
 #define SeqAlignSetAsnRead SpecialSeqAlignSetAsnRead
 
-#define struct_Bioseq bioseq
-
+#define struct_Bioseq    bioseq
+#define struct_Seq_align seqalign
 

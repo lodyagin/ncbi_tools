@@ -1,4 +1,4 @@
-/*  $Id: conntest.c,v 6.1 1999/04/01 21:34:13 vakatov Exp $
+/*  $Id: conntest.c,v 6.3 1999/07/26 17:51:21 vakatov Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -30,6 +30,12 @@
 *
 * --------------------------------------------------------------------------
 * $Log: conntest.c,v $
+* Revision 6.3  1999/07/26 17:51:21  vakatov
+* A tiny cosmetic tweak
+*
+* Revision 6.2  1999/07/19 19:10:57  vakatov
+* s_SingleBouncePrint():  printout BEFORE assert()
+*
 * Revision 6.1  1999/04/01 21:34:13  vakatov
 * s_MultiBouncePrint(): decreased the # of ...SinglePrint() calls from 50 to 5
 *
@@ -84,18 +90,20 @@ static void s_SingleBouncePrint
 
 
   /* READ the "bounced" data from the connection */
-  status = CONN_Read(conn, buf, sizeof(buf), &n_read, eCR_Persist);
+  status = CONN_Read(conn, buf, sizeof(buf)-1, &n_read, eCR_Persist);
   s_ErrPost(status, "[s_SingleBouncePrint] after READ");
-  buf[n_read] = '\0';
-  ASSERT( n_read >= n_written );
-  ASSERT( Nlm_StrStr(buf, write_str) );
 
   /* Printout to LOG file, if any */
-  if ( log_file ) {
+  if (log_file  &&  n_read) {
     fprintf(log_file, "\ns_SingleBouncePrint(BEGIN PRINT)\n");
     ASSERT( Nlm_FileWrite(buf, n_read, 1, log_file) == 1 );
     fprintf(log_file, "\ns_SingleBouncePrint(END PRINT)\n");
   }
+
+  /* Check-up */
+  ASSERT( n_read >= n_written );
+  buf[n_read] = '\0';
+  ASSERT( Nlm_StrStr(buf, write_str) );
 }
 
 

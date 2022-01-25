@@ -25,6 +25,12 @@
 **************************************************************************/
 /* $Revision 1.0$ */ 
 /* $Log: blastall.c,v $
+/* Revision 6.32  1999/08/26 14:58:06  madden
+/* Use float for db length
+/*
+/* Revision 6.31  1999/05/26 13:12:56  madden
+/* Initialized matrix to NULL
+/*
 /* Revision 6.30  1999/03/31 16:58:04  madden
 /* Removed static FindProt and FindNuc
 /*
@@ -244,7 +250,7 @@ static Args myargs [NUMARG] = {
   { "Word size, default if zero", 
         "0", NULL, NULL, FALSE, 'W', ARG_INT, 0.0, 0, NULL},
   { "Effective length of the database (use zero for the real size)", 
-        "0", NULL, NULL, FALSE, 'z', ARG_INT, 0.0, 0, NULL},
+        "0", NULL, NULL, FALSE, 'z', ARG_FLOAT, 0.0, 0, NULL},
   { "Number of best hits from a region to keep",
         "100", NULL, NULL, FALSE, 'K', ARG_INT, 0.0, 0, NULL},
   { "Length of region used to judge hits",
@@ -398,8 +404,8 @@ Int2 Main (void)
 	options->number_of_cpus = myargs[19].intvalue;
 	if (myargs[23].intvalue != 0)
 		options->wordsize = myargs[23].intvalue;
-	if (myargs[24].intvalue != 0)
-		options->db_length = myargs[24].intvalue;
+	if (myargs[24].floatvalue != 0)
+		options->db_length = (Int8) myargs[24].floatvalue;
 
         options->hsp_range_max  = myargs[25].intvalue;
         if (options->hsp_range_max != 0)
@@ -507,6 +513,7 @@ Int2 Main (void)
 		ka_params_gap = NULL;
 		params_buffer = NULL;
 		mask_loc = NULL;
+		matrix = NULL;
 		for (vnp=other_returns; vnp; vnp = vnp->next)
 		{
 			switch (vnp->choice) {

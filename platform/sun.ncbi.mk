@@ -1,11 +1,11 @@
 #
-# $Id: sun.ncbi.mk,v 1.3 1999/02/08 16:22:17 beloslyu Exp $
+# $Id: sun.ncbi.mk,v 1.5 1999/08/12 18:32:41 beloslyu Exp $
 #
 NCBI_MAKE_SHELL = /usr/bin/sh
 NCBI_DEFAULT_LCL = acc
 NCBI_CC = /usr/lang/acc
 NCBI_CFLAGS1 = -c
-NCBI_LDFLAGS1 = 
+NCBI_LDFLAGS1 = -O
 NCBI_OPTFLAG = -O
 NCBI_INCDIR = /usr/ncbi/include/NCBI
 #NCBI_LIBDIR = /usr/ncbi/lib
@@ -20,3 +20,4 @@ NCBI_VIBFLAG = -I/am/Motif/include -L/am/Motif/lib -DWIN_MOTIF -DMISSING_X_SYMBO
 # NULL symbols, so standard make can be thread capable
 NCBI_THREAD_OBJ =
 NCBI_MT_OTHERLIBS =
+NETENTREZVERSION = 2.02c2ASN1SPEC6

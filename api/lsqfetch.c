@@ -37,6 +37,12 @@
 * Date     Name        Description of modification
 *
 * $Log: lsqfetch.c,v $
+* Revision 6.6  1999/07/20 21:18:39  sicotte
+* add static AddSeqId for linker conflicts
+*
+* Revision 6.5  1999/07/20 21:16:49  sicotte
+* add static SeqIdDupList for linker conflicts
+*
 * Revision 6.4  1999/04/01 22:26:13  sicotte
 * Make lsqfetch Attempt to Parse the fasta defline, otherwise use the supplied SeqId
 *
@@ -50,6 +56,12 @@
 * Revision changed to 6.0
 *
 * $Log: lsqfetch.c,v $
+* Revision 6.6  1999/07/20 21:18:39  sicotte
+* add static AddSeqId for linker conflicts
+*
+* Revision 6.5  1999/07/20 21:16:49  sicotte
+* add static SeqIdDupList for linker conflicts
+*
 * Revision 6.4  1999/04/01 22:26:13  sicotte
 * Make lsqfetch Attempt to Parse the fasta defline, otherwise use the supplied SeqId
 *
@@ -102,6 +114,49 @@
 #include <lsqfetch.h>
 #endif
 
+/*********************************************************
+***
+***    AddSeqId  : create a new seqid and add at the end
+***                of the list starting with sip_head
+***
+**********************************************************/
+static SeqIdPtr AddSeqId (SeqIdPtr *sip_head, SeqIdPtr sip)
+{
+  SeqIdPtr sip_tmp, 
+           sip_copy;
+
+  sip_copy = SeqIdDup (sip);
+  sip_tmp = sip_copy->next;
+  sip_copy->next = NULL;
+  if (sip_tmp!=NULL)
+     SeqIdFree (sip_tmp);
+  if ( (sip_tmp = *sip_head) != NULL ) {
+     while (sip_tmp->next != NULL) 
+        sip_tmp = sip_tmp->next; 
+     sip_tmp->next = sip_copy;
+  }  
+  else {
+     *sip_head = sip_copy;
+  }
+  return (*sip_head);
+
+}
+
+/*******************************************************
+***
+***   SeqIdDupList : duplicate a list of SeqIdPtr (static here for linker conflicts *
+***
+*******************************************************/
+static SeqIdPtr SeqIdDupList (SeqIdPtr id_list)
+{
+  SeqIdPtr     sip=NULL;
+  SeqIdPtr     sid;
+
+  for (sid = id_list; sid != NULL; sid = sid->next) {
+         sip = AddSeqId (&sip, sid);  
+  }
+  return sip;
+}
 
 /* #include <accentr.h> */
 
@@ -161,7 +216,7 @@ static SeqEntryPtr Sep_from_ByteStore(ByteStorePtr bsp, Int4 length, Boolean is_
   	SeqEntryPtr sep;
 
 	biosp = BioseqNew();
-	biosp->id = SeqIdDup(sip);
+	biosp->id = SeqIdDupList(sip);
         biosp->seq_data = bsp;
         biosp->repr = Seq_repr_raw;
         biosp->mol = (is_dna) ? Seq_mol_dna : Seq_mol_aa;
@@ -300,8 +355,10 @@ NLM_EXTERN SeqEntryPtr fasta_lib_sep(FILE *fp, CharPtr seq_name, SeqIdPtr sip)
 	Boolean is_dna;
         SeqIdPtr sipnew;
 	if((bsp = make_lib(fp, seq_name, &length, &is_dna,&sipnew)) != NULL) {
-            if(sipnew)
+            if(sipnew) {
+                sipnew=ValNodeLink(&sipnew,sip);
                 sip=sipnew;
+            }
             return Sep_from_ByteStore(bsp, length, is_dna, sip);
 	} else
 		return NULL;

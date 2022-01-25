@@ -41,7 +41,7 @@ Contents: defines and prototypes used by readdb.c and formatdb.c.
 *
 * Version Creation Date:   3/21/95
 *
-* $Revision: 6.28 $
+* $Revision: 6.38 $
 *
 * File Description: 
 *       Functions to rapidly read databases from files produced by formatdb.
@@ -56,6 +56,34 @@ Contents: defines and prototypes used by readdb.c and formatdb.c.
 *
 * RCS Modification History:
 * $Log: readdb.h,v $
+* Revision 6.38  1999/09/13 16:18:40  shavirin
+* Added function readdb_get_bioseq_ex, which has possibility
+* to bypass ObjMgr registration.
+*
+* Revision 6.37  1999/09/10 16:30:18  shavirin
+* Fixed problems with formating proteins by formatdb
+*
+* Revision 6.36  1999/09/09 18:25:05  shavirin
+* Added functions to parse ASN.1 with formatdb
+*
+* Revision 6.35  1999/08/25 20:17:39  shavirin
+* Added option to create and retrieve from sparse indexes.
+*
+* Revision 6.34  1999/08/02 13:33:58  shavirin
+* Rolled back last changes.
+*
+* Revision 6.32  1999/05/27 15:51:29  shavirin
+* Added function readdb_get_defline ()
+*
+* Revision 6.31  1999/05/18 20:35:31  madden
+* Changes to read an alias file for multiple db searches and ordinal ID lists
+*
+* Revision 6.30  1999/05/13 19:31:14  shavirin
+* More changes toward dump from ID.
+*
+* Revision 6.29  1999/05/12 15:48:03  shavirin
+* Changed parameter in function FDBAddSequence().
+*
 * Revision 6.28  1999/05/06 15:25:27  egorov
 * Remove static function declaration
 *
@@ -270,6 +298,7 @@ extern "C" {
 #include <objloc.h>
 #include <sequtil.h>
 #include <ncbisam.h>
+#include <tofasta.h>
 
 /****************************************************************************/
 /* DEFINES */
@@ -424,6 +453,9 @@ if there is no mem-mapping or it failed. */
 	Boolean			handle_common_index; /* TRUE only for a initial thread;  needs for proper freeing of the CommonIndex */
 	CommonIndexHeadPtr	cih;	/* head of the common index */
 	Int2			filebit;/* bit corresponding to the DB file */
+	CharPtr			oidfile; /* file containing a list of ordinal ID's. */
+	Boolean			not_first_time; /* For recursive calls to readdb_new_ex2. */
+	Int4			sparse_idx; /* Sparse indexes indicator */
 } ReadDBFILE, PNTR ReadDBFILEPtr;
 
 /* Function prototypes */
@@ -459,6 +491,10 @@ ReadDBFILEPtr LIBCALL readdb_new PROTO((CharPtr filename, Uint1 is_prot));
 	it can be FALSE.
 */
 ReadDBFILEPtr LIBCALL readdb_new_ex PROTO((CharPtr filename, Uint1 is_prot, Boolean init_indices));
+
+/* allows a list of ordinalid's (or list of list of ordinal id's) to be specified.
+*/
+ReadDBFILEPtr LIBCALL readdb_new_ex2 PROTO((CharPtr filename, Uint1 is_prot, Boolean init_indices, CharPtr oidlist));
 
 
 /* 
@@ -547,6 +583,7 @@ Int4 LIBCALL readdb_acc2fastaEx(ReadDBFILEPtr rdfp, CharPtr string,
 Gets a BioseqPtr containing the sequence in sequence_number.
 */
 BioseqPtr LIBCALL readdb_get_bioseq PROTO((ReadDBFILEPtr rdfp, Int4 sequence_number));
+BioseqPtr LIBCALL readdb_get_bioseq_ex PROTO((ReadDBFILEPtr rdfp, Int4 sequence_number, Boolean use_objmgr));
 
 /*
 Get the length of the sequence.
@@ -558,6 +595,8 @@ Get the ID and definition for the sequence with sequence_number.
 It is the caller's RESPONSIBILITY to DEALLOCATE "id" and "description". 
 */
 Boolean LIBCALL readdb_get_descriptor PROTO((ReadDBFILEPtr rdfp, Int4 sequence_number, SeqIdPtr PNTR id, CharPtr PNTR description));
+Boolean
+readdb_get_defline (ReadDBFILEPtr rdfp, Int4 sequence_number, CharPtr PNTR description);
 
 /*
 Get the ID's and headers for a sequence. 
@@ -676,6 +715,7 @@ typedef struct _FDB_options {
     Int4 is_seqentry;
     CharPtr base_name;
     Int4  dump_info;
+    Int4  sparse_idx;
 } FDB_options, PNTR FDB_optionsPtr;
 
 typedef struct formatdb 
@@ -729,10 +769,11 @@ typedef struct formatdb
 /* Function prototypes for formatdb library*/
 
 FormatDBPtr	FormatDBInit(FDB_optionsPtr options);
-Int2 FDBAddSequence (FormatDBPtr fdbp, Int4 gi, ValNodePtr seq_id,
+Int2 FDBAddSequence (FormatDBPtr fdbp, Int4 gi, CharPtr seq_id,
                      CharPtr title, Int4 tax_id, CharPtr div, 
                      Int4 owner, Uint1 seq_data_type, 
                      ByteStorePtr *seq_data, Int4 SequenceLen, Int4 date);
+Int2 FDBAddBioseq(FormatDBPtr fdbp, BioseqPtr bsp);
 Int2 FormatDBClose(FormatDBPtr fdbp);
 
 
@@ -751,6 +792,7 @@ Boolean LIBCALL PrintDbInformation PROTO((CharPtr database, Boolean is_aa, Int4 
 
 Boolean LIBCALL PrintDbInformationBasic PROTO((CharPtr database, Boolean is_aa, Int4 line_length, CharPtr definition, Int4 number_seqs, Int8 total_length, FILE *outfp, Boolean html));
 
+Boolean FDBAddSeqEntry(FormatDBPtr fdbp, SeqEntryPtr sep);
 
 #ifdef __cplusplus
 }

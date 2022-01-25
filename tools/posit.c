@@ -34,8 +34,14 @@ Contents: utilities for position-based BLAST.
 
 
 *****************************************************************************/
-/* $Revision: 6.25 $ */
+/* $Revision: 6.27 $ */
 /* $Log: posit.c,v $
+/* Revision 6.27  1999/09/03 17:24:38  madden
+/* Eliminated use of posMaxThresh field in posSearchItems.  Recoded findThreshSequences completely and changed CposComputation so as not to use search->result_struct and thereby eliminate the hidden assumption that search->result_struct and listOfSeqAligns have the matches listed in the same order
+/*
+/* Revision 6.26  1999/08/04 13:27:10  madden
+/* Added -B option
+/*
 /* Revision 6.25  1999/04/05 14:45:40  madden
 /* Fixed format mismatches
 /*
@@ -378,42 +384,6 @@ void LIBCALL posCleanup(posSearchItems *posSearch, compactSearchItems * compactS
   posFreeMemory(posSearch, compactSearch->qlength);
 }
 
-/*Find which sequences that match in the i-th pass have an e-value below
-  the specified threshold. These sequences will be used to make the
-  score matrix for the next pass*/
-static void findThreshSequences(posSearchItems *posSearch, BlastSearchBlkPtr search)
-{
-
-   Int4 numseq, seqIndex; /*number of sequences, index for them*/
-   Int4 hspIndex, hspBnd; /*Index for hsps, number of hsps for one sequence*/
-
-
-   numseq = search->result_struct->hitlist_count;
-     /*Allocate boolean array to store values*/
-   posSearch->threshSequences = (Int4 *) MemNew(numseq * sizeof(Int4)); 
-   posSearch->posResultSequences = (Int4 *) MemNew(numseq * sizeof(Int4));
-   posSearch->posResultsCounter = 0;
-   posSearch->posMaxThresh = 0;
-   if (NULL == posSearch->threshSequences)
-     exit(EXIT_FAILURE);
-   for(seqIndex = 0; seqIndex < numseq; seqIndex++)
-    posSearch->threshSequences[seqIndex] = 0;
-   for(seqIndex = 0; seqIndex < numseq; seqIndex++) {
-     hspBnd = search->result_struct->results[seqIndex]->hspcnt;
-      /*e-value for a sequence is the smallest e-value among the
-        hsps matching a region of the sequence to the query*/
-     for(hspIndex = 0; hspIndex < hspBnd; hspIndex++) {
-       if(search->result_struct->results[seqIndex]->hsp_array[hspIndex].e_value < (search->pbp->ethresh)) {
-         posSearch->threshSequences[seqIndex] = 1;
-         posSearch->posMaxThresh = seqIndex + 1;
-         posSearch->posResultSequences[posSearch->posResultsCounter] =
-           search->result_struct->results[seqIndex]->subject_id;
-         posSearch->posResultsCounter++;
-         break;
-       }
-     }
-   }
-}
 
 /*extract the e-value that applies to an entire dense
   diagonal alignment from its ScorePtr, based on similar
@@ -499,6 +469,53 @@ static Int4 countSeqAligns(SeqAlignPtr listOfSeqAligns, Int4 * numSequences, Boo
      curSeqAlign = curSeqAlign->next;
    }
    return(seqAlignCounter);
+}
+
+/*Find which sequences that match in the i-th pass have an e-value below
+  the specified threshold. These sequences will be used to make the
+  score matrix for the next pass*/
+static void findThreshSequences(posSearchItems *posSearch, BlastSearchBlkPtr search, SeqAlignPtr listOfSeqAligns, Int4 numalign, Int4 numseq)
+{
+
+   Int4 seqIndex, alignIndex; /* indices for sequences and alignments*/
+   SeqAlignPtr curSeqAlign, prevSeqAlign; /* pointers into list of seqAligns*/
+   DenseSegPtr curSegs;  /*Item in list of seqAligns*/
+   SeqIdPtr thisId, prevId; /*Ids of target sequences in current and previous
+			   SeqAlign*/  
+   Nlm_FloatHi thisEvalue; /*Best E-value for current sequence*/
+   Int4 ordinalNumber; /*index of sequence within database*/
+
+
+
+   /*Allocate boolean array to store values*/
+   posSearch->threshSequences = (Int4 *) MemNew(numseq * sizeof(Int4)); 
+   posSearch->posResultSequences = (Int4 *) MemNew(numseq * sizeof(Int4));
+   posSearch->posResultsCounter = 0;
+   if (NULL == posSearch->threshSequences)
+     exit(EXIT_FAILURE);
+   for(seqIndex = 0; seqIndex < numseq; seqIndex++)
+     posSearch->threshSequences[seqIndex] = 0;
+   curSeqAlign = listOfSeqAligns;
+   prevSeqAlign = NULL;
+   for(alignIndex = 0; alignIndex < numalign; alignIndex++) {
+    curSegs = (DenseSegPtr) curSeqAlign->segs;
+    thisId = curSegs->ids->next;
+    if ((NULL == prevSeqAlign) ||  (!(SeqIdMatch(thisId, prevId)))) {
+      thisEvalue = minEvalueForSequence(curSeqAlign, curSeqAlign);
+      thisId = curSegs->ids->next;  /*id of target sequence is second*/
+      /*Get ordinal ids of sequences in result*/
+      ordinalNumber = SeqId2OrdinalId(search->rdfp, thisId);
+      if(thisEvalue < (search->pbp->ethresh)) {
+	posSearch->threshSequences[seqIndex] = 1;
+	posSearch->posResultSequences[posSearch->posResultsCounter] =
+           ordinalNumber;
+	posSearch->posResultsCounter++;
+      }
+    }
+    prevSeqAlign = curSeqAlign;
+    prevId = thisId;
+    curSeqAlign = curSeqAlign->next;
+  }
 }
 
 
@@ -1252,13 +1269,17 @@ static void posScaling(posSearchItems *posSearch, compactSearchItems * compactSe
 
 Int4Ptr * LIBCALL CposComputation(posSearchItems *posSearch, BlastSearchBlkPtr search, compactSearchItems * compactSearch, SeqAlignPtr listOfSeqAligns, Char *ckptFileName, Boolean patternSearchStart, ValNodePtr * error_return)
 {
+  Int4 numalign, numseq; /*number of alignments and matches in previous round*/
+
   search->posConverged = FALSE;
   if (patternSearchStart)
     posAllocateMemory(posSearch, compactSearch->alphabetSize, compactSearch->qlength, posSearch->posNumSequences);
-  else
-    posAllocateMemory(posSearch, compactSearch->alphabetSize, compactSearch->qlength, search->result_struct->hitlist_count);
+  else {
+    numalign = countSeqAligns(listOfSeqAligns, &numseq, FALSE, 0.0);
+    posAllocateMemory(posSearch, compactSearch->alphabetSize, compactSearch->qlength, numseq);
+  }
   if (!patternSearchStart)
-    findThreshSequences(posSearch, search);
+    findThreshSequences(posSearch, search, listOfSeqAligns, numalign, numseq);
   posDemographics(posSearch, compactSearch, listOfSeqAligns);
   posPurgeMatches(posSearch, compactSearch);
   posComputeExtents(posSearch, compactSearch);
@@ -1874,3 +1895,386 @@ Boolean LIBCALL  posReadCheckpoint(posSearchItems * posSearch, compactSearchItem
   return(TRUE);
 }
 
+/* Two routines taken from */
+/* "p2c"  Copyright (C) 1989, 1990, 1991 Free Software Foundation.
+ * By Dave Gillespie, daveg@csvax.cs.caltech.edu.  Version --VERSION--.
+ * This file may be copied, modified, etc. in any way.  It is not restricted
+ * by the licence agreement accompanying p2c itself.
+ */
+
+
+/* Check if at end of file, using Pascal "eof" semantics.  End-of-file for
+   stdin is broken; remove the special case for it to be broken in a
+   different way. */
+
+static Int4 P_eof(FILE *f) 
+{
+    register Int4 ch;
+
+    if (feof(f))
+	return 1;
+    if (f == stdin)
+	return 0;    /* not safe to look-ahead on the keyboard! */
+    ch = getc(f);
+    if (ch == EOF)
+	return 1;
+    ungetc(ch, f);
+    return 0;
+}
+
+static Boolean isBlankChar(Char thisChar)
+{
+  return((thisChar == ' ') || (thisChar == '\t') || (thisChar == '\n') ||
+          (thisChar == '\t'));
+}
+
+
+/*preprocess alignment checkpoint file to find number of sequences and
+number of blocks. Return number of blocks as return value
+and number of sequences through a reference parameter*/
+static Int4 posFindAlignmentDimensions(char * fileName, Int4 *numSeqs, ValNodePtr * error_return)
+{
+  FILE *checkFile;  /*checkpoint file*/
+  Char nextLine[ALIGN_LINE_LENGTH];  /*line read in*/
+  Boolean foundBlankLine; /*have we found a blank line yet*/
+  Int4 numBlocks;  /*number of blocks to be returned*/
+  Int4 testCountSeqs; /*counts number of sequences in each block
+                        to ensure that each block has the same
+                        number of sequences*/
+   
+  BlastConstructErrorMessage("posFindAlignmentDimensions", "Attempting to recover data from multiple alignment file\n", 1, error_return);
+  checkFile = FileOpen(fileName, "r");  
+  if (NULL == checkFile) {
+    ErrPostEx(SEV_WARNING, 0, 0, "\nCould not open alignment checkpoint file");
+    BlastConstructErrorMessage("posFindAlignmentDimensions", "Could not open alignment checkpoint file\n", 1, error_return);
+    return(0);
+  }
+  do {
+    fgets(nextLine, ALIGN_LINE_LENGTH,checkFile);
+  } while (isBlankChar(nextLine[0]));
+  foundBlankLine = FALSE;
+  *numSeqs = 1;
+  numBlocks = 0;
+  while (!P_eof(checkFile) && (!foundBlankLine)) {
+    fgets(nextLine, ALIGN_LINE_LENGTH,checkFile);
+    if (!(isBlankChar(nextLine[0])))
+      (*numSeqs)++;
+    else
+      foundBlankLine = TRUE;
+  }
+  numBlocks = 1;
+  while(!P_eof(checkFile)) {
+    do {
+      fgets(nextLine, ALIGN_LINE_LENGTH,checkFile);    
+    } while((!P_eof(checkFile)) && (isBlankChar(nextLine[0])));
+    if (!P_eof(checkFile)) {
+      numBlocks++;
+      testCountSeqs = 0;
+    }    
+    do {
+      fgets(nextLine, ALIGN_LINE_LENGTH,checkFile);    
+      testCountSeqs++;
+    } while((!P_eof(checkFile)) && !(isBlankChar(nextLine[0])));
+    if (!(isBlankChar(nextLine[0])))
+      testCountSeqs++;
+    if (testCountSeqs != (*numSeqs)) {
+      ErrPostEx(SEV_WARNING, 0, 0, "\nInconsistent number of sequences across alignment blocks, first block has %d while block %d has %d sequences",(*numSeqs), numBlocks, testCountSeqs);
+      BlastConstructErrorMessage("posFindAlignmentDimensions", "Could not read alignment due to different number of sequences in different blocks\n", 1, error_return);
+      FileClose(checkFile);
+      return(0);
+    }
+  }
+
+  FileClose(checkFile);
+  return(numBlocks);
+}
+
+/*Is thisChar possibly part of an alignment?*/
+static Boolean isProteinChar(Char thisChar)
+{
+
+  return(((thisChar >= 'A') && (thisChar <= 'Z')) ||
+         ((thisChar >= 'a') && (thisChar <= 'z')) ||
+         ('-' == thisChar));
+}
+
+
+/*preprocess alignment checkpoint file to find the
+start column and end column of each alignment block.
+As a consequece the length of
+the alignment can be computed and it is returned*/
+static Int4 posPreprocessAlignment(char * fileName, Int4 numSeqs, Int4 numBlocks, Int4 * numCols, ValNodePtr * error_return)
+{
+  FILE *checkFile;  /*checkpoint file*/
+  char nextLine[ALIGN_LINE_LENGTH];  /*line read in*/
+  Int4 alignLength; /*number of columns in alignment, to be returned*/
+  Int4 charIndex; /*index over characters in a row*/
+  Int4 blockIndex; /*index for the blocks in the alignment file*/
+  Int4 seqIndex;
+   
+  checkFile = FileOpen(fileName, "r");  
+  if (NULL == checkFile) {
+    ErrPostEx(SEV_WARNING, 0, 0, "\nCould not open alignment checkpoint file");
+    BlastConstructErrorMessage("posPreprocessAlignment", "Could not open alignment checkpoint file\n", 1, error_return);
+    return(0);
+  }
+
+  blockIndex = 0;
+  alignLength= 0;
+  while (!P_eof(checkFile)) {
+    do {
+      fgets(nextLine, ALIGN_LINE_LENGTH,checkFile);
+    } while (isBlankChar(nextLine[0])); /*line belongs to query*/
+    charIndex = 0;
+    while(!(isBlankChar(nextLine[charIndex])))
+      charIndex++;
+    while(isBlankChar(nextLine[charIndex]))
+      charIndex++;
+    numCols[blockIndex] = 0;
+    while (isProteinChar(nextLine[charIndex])){
+      alignLength++;
+      charIndex++;
+      numCols[blockIndex]++;
+    }
+    /*skip over other sequences*/
+    for (seqIndex = 0; seqIndex < numSeqs; seqIndex++) 
+      fgets(nextLine, ALIGN_LINE_LENGTH,checkFile);
+    blockIndex++;
+  }
+  FileClose(checkFile);
+  return(alignLength);
+}
+
+/*Find the index of the sequence in the multiple alignment that
+  matches the query sequence; if non match return -1*/
+static Int4 findQuery(posDesc ** alignArray, compactSearchItems * compactSearch, Int4 numSeqs, Int4 alignLength)
+{
+   Uint1Ptr query; /*query sequence*/
+   Int4 qlength;  /*length of query sequence*/
+   Int4 seqIndex; /*index over sequences*/
+   Int4 i;        /*index within a sequence*/
+   Int4 queryIndex;  /*index within query*/
+   Char thisRes;
+
+   query = compactSearch->query;
+   qlength = compactSearch->qlength;
+   for(seqIndex = 0; seqIndex < numSeqs; seqIndex++) {
+     i = 0;
+     queryIndex = 0;
+     while ((queryIndex < qlength) && (i < alignLength)) {
+       if ('-' == alignArray[seqIndex][i].letter)
+         i++;
+       else {
+         /*Need to keep lower-case letters*/
+         thisRes = getRes(query[queryIndex]);
+         if ((thisRes != (alignArray[seqIndex][i].letter + 'A' - 'a')) &&
+            (thisRes != alignArray[seqIndex][i].letter))
+           /*character mismatch*/
+           break;
+         else {
+           queryIndex++;
+           i++;
+         }
+       }
+     }
+     if (queryIndex == qlength) {
+       while (i < alignLength) {
+         /*chew up gaps at end of alignment sequence*/
+         if ('-' != alignArray[seqIndex][i].letter)
+           break;
+         i++;
+       }
+       /*found a match! */
+       return(seqIndex);
+     }
+     else
+       /*alignment string is prefix of query*/
+       continue;
+   }
+   return (-1);
+
+}
+
+
+static posDesc** posReadAlignment(compactSearchItems *compactSearch, char * fileName, Int4 numSeqs, Int4 numBlocks, Int4 alignLength, Int4 * numCols,
+ValNodePtr * error_return)
+{
+  FILE *checkFile; /*checkpoint file to read*/
+  Char nextline[ALIGN_LINE_LENGTH];
+  Int4 blockIndex;
+  Int4 linePos; /* moving index for a line*/
+  Int4 alignPos; /*placeholder for position alignment*/
+  Int4 base; /*base for this block*/
+  Int4 seqIndex; /*counter for sequences*/
+  posDesc **returnArray; /*array of sequences to retunr*/
+  Int4 i,j; /*loop indices*/
+  Int4 temp; /*temporary character for swapping sequences*/
+  Int4 queryIndex; /*which sequnec in the alignment is the query*/
+
+  checkFile = FileOpen(fileName, "r");  
+  if (NULL == checkFile) {
+    BlastConstructErrorMessage("posReadAlignment", "Could not open alignment checkpoint file\n", 1, error_return);
+    ErrPostEx(SEV_WARNING, 0, 0, "\nCould not open alignment checkpoint file");
+  }
+  returnArray = (posDesc**) MemNew(numSeqs * sizeof(posDesc *));
+  if (NULL == returnArray)
+    exit(EXIT_FAILURE);
+  for (i = 0; i < numSeqs; i++) {
+    returnArray[i] = (posDesc *) MemNew(alignLength * sizeof(posDesc));
+    if (NULL == returnArray[i])
+      exit(EXIT_FAILURE);
+    for(j = 0; j < alignLength; j++) {
+      returnArray[i][j].letter = UNUSED;
+      returnArray[i][j].used = FALSE;
+    }
+  }  
+  alignPos = 0;
+  base = 0;
+  for(blockIndex = 0; blockIndex < numBlocks; blockIndex++){
+    for(i = 0; i < numSeqs; i++) {
+      do {
+	fgets(nextline, ALIGN_LINE_LENGTH,checkFile);    
+      } while(isBlankChar(nextline[0]));
+      linePos = 0;
+      while(!isBlankChar(nextline[linePos]))
+        linePos++;
+      while(isBlankChar(nextline[linePos]))
+        linePos++;
+      alignPos = base;
+      while (alignPos < (base + numCols[blockIndex])) {
+        if (!isProteinChar(nextline[linePos])) {
+          BlastConstructErrorMessage("posReadAlignment", "Invalid character or wrong number of characters in a sequence\n", 1, error_return);
+          ErrPostEx(SEV_WARNING, 0, 0, "\nInvalid character or wrong number of characters in sequence index %d\n", i+1);
+        }
+	returnArray[i][alignPos].letter = nextline[linePos];
+	returnArray[i][alignPos].used = TRUE;
+        alignPos++;
+        linePos++;
+      }
+    }
+    base += numCols[blockIndex];
+  }
+  FileClose(checkFile);
+  queryIndex = findQuery(returnArray, compactSearch, numSeqs, alignLength);
+  if (-1 == queryIndex) {
+    BlastConstructErrorMessage("posReadAlignment", "None of the alignment sequences equals the query sequence\n", 1, error_return);
+    ErrPostEx(SEV_WARNING, 0, 0, "\nNone of the alignment sequences equals the query sequence");
+    BlastConstructErrorMessage("posReadAlignment", "Cannot recover alignment checkpoint\n", 1, error_return);
+    ErrPostEx(SEV_WARNING, 0, 0, "\nCannot recover alignment checkpoint");
+    exit(EXIT_FAILURE);
+  }
+  else {
+    if (queryIndex > 0) {
+      /*swap query with first sequence in alignment*/
+      for (alignPos = 0; alignPos < alignLength; alignPos++) {
+        temp = returnArray[0][alignPos].letter;
+        returnArray[0][alignPos].letter = returnArray[queryIndex][alignPos].letter;
+        returnArray[queryIndex][alignPos].letter = temp;
+      }
+    }
+  }
+  return(returnArray);
+}
+
+static void posProcessAlignment(posSearchItems *posSearch, compactSearchItems *compactSearch, char * fileName, Int4 numSeqs, Int4 numBlocks, Int4 alignLength, Int4 * numCols, ValNodePtr * error_return)
+{
+  Int4 queryPos, alignPos, linePos; /*placeholder for position in query and
+                             alignment*/
+  Int4 *queryDesc; /*position correspondence between alignment and query*/
+  Int4 seqIndex; /*counter for sequences*/
+  posDesc ** alignArray;
+
+  alignArray = posReadAlignment(compactSearch, fileName, numSeqs,  numBlocks, alignLength, numCols, error_return);
+  queryDesc = (Int4 *) MemNew(alignLength * sizeof(Int4));
+  if (NULL == queryDesc)
+    exit(EXIT_FAILURE);
+  for(alignPos = 0; alignPos < alignLength; alignPos++)
+    queryDesc[alignPos] = GAP_HERE;
+  alignPos = 0;
+  queryPos = 0;
+  for(linePos = 0; linePos < alignLength; linePos++) {
+    if (alignArray[0][linePos].letter == '-') 
+      queryDesc[alignPos] = GAP_HERE;
+    else {
+      queryDesc[alignPos] = queryPos;
+      if ((alignArray[0][linePos].letter >= 'A' ) && (alignArray[0][linePos].letter <= 'Z')) {
+	posSearch->posDescMatrix[0][queryPos].letter = ResToInt(alignArray[0][linePos].letter);
+	posSearch->posDescMatrix[0][queryPos].used = TRUE;
+	posSearch->posDescMatrix[0][queryPos].e_value = compactSearch->ethresh/2;
+	posSearch->posDescMatrix[0][queryPos].leftExtent = 0;
+	posSearch->posDescMatrix[0][queryPos].rightExtent = compactSearch->qlength - 1;
+	posSearch->posC[queryPos][ResToInt(alignArray[0][linePos].letter)]++;
+	posSearch->posCount[queryPos]++;
+      }
+      else {
+	posSearch->posDescMatrix[0][queryPos].used = FALSE;
+	posSearch->posDescMatrix[0][queryPos].letter = ResToInt(alignArray[0][linePos].letter + 'A' - 'a');
+      }
+      queryPos++;
+    }
+    alignPos++;
+  }
+  for(seqIndex = 1; seqIndex < numSeqs; seqIndex++) {
+    for(linePos = 0; linePos < alignLength; linePos++) {
+      if (queryDesc[linePos] != GAP_HERE) {
+	if (!(posSearch->posDescMatrix[0][queryDesc[linePos]].used)) {
+	  /*mark column as not participating*/
+	  posSearch->posDescMatrix[seqIndex][queryDesc[linePos]].used = FALSE;
+	}
+	else {
+	  posSearch->posDescMatrix[seqIndex][queryDesc[linePos]].letter = ResToInt(alignArray[seqIndex][linePos].letter);
+	  posSearch->posDescMatrix[seqIndex][queryDesc[linePos]].used = TRUE;
+	  posSearch->posDescMatrix[seqIndex][queryDesc[linePos]].e_value = compactSearch->ethresh/2;
+	  posSearch->posDescMatrix[seqIndex][queryDesc[linePos]].leftExtent = 0;
+	  posSearch->posDescMatrix[seqIndex][queryDesc[linePos]].rightExtent = compactSearch->qlength;
+	}
+      }
+    }
+  }
+  BlastConstructErrorMessage("posProcessAlignment", "Alignment recovered successfully\n", 1, error_return);
+}
+
+
+/* Top-level routine to compute position-specific matrix, when used for
+one round to recover from a multiple alignment checkpoint. */
+Int4Ptr * LIBCALL BposComputation(posSearchItems *posSearch, BlastSearchBlkPtr
+   search, compactSearchItems * compactSearch, Char *ckptFileName, 
+   Char *takeCkptFileName, ValNodePtr * error_return)
+{
+  Int4 numSeqs, numBlocks, alignLength; /*number of sequences, number of pieces
+                        of alignment, total length of the alignment*/
+  Int4 *numCols;  /*number of columns within each block*/
+  Int4 c;  /*Index for query*/
+
+  search->posConverged = FALSE;
+
+  numBlocks = posFindAlignmentDimensions(ckptFileName, &numSeqs, error_return);
+  if (0 == numBlocks) {
+    ErrPostEx(SEV_WARNING, 0, 0, "\nCould not recover block structure from checkpoint");
+    BlastConstructErrorMessage("BposComputation", "Cannot recover alignment checkpoint\n", 1, error_return);
+    return(NULL);
+  }
+  numCols = (Int4 *) MemNew(numBlocks * sizeof(Int4));
+  if (NULL == numCols)
+    exit(EXIT_FAILURE);
+  alignLength = posPreprocessAlignment(ckptFileName,  numSeqs, numBlocks,  numCols, error_return);
+  if (0 == alignLength) {
+    ErrPostEx(SEV_WARNING, 0, 0, "\nCould not recover alignment structure from checkpoint");
+    BlastConstructErrorMessage("BposComputation", "Cannot recover alignment checkpoint\n", 1, error_return);
+    return(NULL);
+  } 
+  posAllocateMemory(posSearch, compactSearch->alphabetSize, compactSearch->qlength, numSeqs);
+  posProcessAlignment(posSearch, compactSearch, ckptFileName, numSeqs,  numBlocks, alignLength, numCols, error_return);
+  MemFree(numCols);
+  posSearch->posNumSequences = numSeqs;
+  posPurgeMatches(posSearch, compactSearch);
+  posComputeExtents(posSearch, compactSearch);
+  posComputeSequenceWeights(posSearch, compactSearch);
+  posCheckWeights(posSearch, compactSearch);
+  posSearch->posFreqs = posComputePseudoFreqs(posSearch, compactSearch, TRUE);
+  if (NULL != takeCkptFileName)
+    posTakeCheckpoint(posSearch, compactSearch, takeCkptFileName, error_return);
+  posFreqsToMatrix(posSearch,compactSearch);
+  posScaling(posSearch, compactSearch);
+  return posSearch->posMatrix;
+}

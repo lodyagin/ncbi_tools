@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   03/14/95
 *
-* $Revision: 6.24 $
+* $Revision: 6.25 $
 *
 * File Description: 
 *
@@ -43,6 +43,9 @@
 *		       Model nodes and Dictionaries altered...
 *
 * $Log: mmdbapi1.h,v $
+* Revision 6.25  1999/06/07 21:23:36  ywang
+* add iUserDefinedFeatureOld, FeatureOnOld to MGD
+*
 * Revision 6.24  1999/05/07 14:11:25  zimmerma
 * - Modified InstallAlignedSlave(), InstallStrucFeature(), BiostrucAddFeature() and
 * Boolean InstBSAnnotSet() for additional args: Boolean Chain, and CharPtr SlaveChain;
@@ -737,7 +740,9 @@ typedef struct Nlm_mgd
      Byte bPDBSecStru;
      PDNMG pdnmgLink;
      Int2 FeatureOn;
+     Int2 FeatureOnOld;
      Int2 iUserDefinedFeature;
+     Int2 iUserDefinedFeatureOld;
      Int2 iDomain;   /* NCBI assigned domain number */
      CharPtr pcGraphName;  /* PDB 3-letter code */
      CharPtr pcGraphNum; /* the PDB numbering string e.g . 38A */

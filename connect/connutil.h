@@ -1,7 +1,7 @@
 #ifndef CONNUTIL__H
 #define CONNUTIL__H
 
-/*  $Id: connutil.h,v 6.3 1999/04/09 22:27:01 vakatov Exp $
+/*  $Id: connutil.h,v 6.11 1999/09/13 15:54:32 vakatov Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -39,6 +39,41 @@
 *
 * --------------------------------------------------------------------------
 * $Log: connutil.h,v $
+* Revision 6.11  1999/09/13 15:54:32  vakatov
+* Added URL_DecodeEx() -- for "relaxed" URL decoding: let the user to
+* allow some of the symbols prohibited by the standard
+*
+* Revision 6.10  1999/07/26 17:58:36  vakatov
+* Use "\r\n" rather than just "\n" as the HTTP header line terminator.
+* Made the hard-coded names and defautl values of config.parameters
+* (#define CFG_CONN_, DEF_CONN_) be public.
+* +eMIME_Fasta.
+*
+* Revision 6.9  1999/07/23 13:16:10  vakatov
+* MIME_ParseContentType() - dont crash if passed NULL string
+*
+* Revision 6.8  1999/07/23 00:37:21  vakatov
+* Final version of NCBI MIME functions
+*
+* Revision 6.7  1999/07/21 21:32:32  vakatov
+* Get rid of the "nph-" prefixes for DISPD/NCBID -- use new DISPD/NCBID
+*
+* Revision 6.6  1999/07/16 21:13:42  vakatov
+* + NetConnInfo_Print()
+* + NCBI MIME-type handling routines and typedefs for a future use (MIME_*)
+*
+* Revision 6.5  1999/07/09 22:53:38  vakatov
+* Added more conf. parameters:  SRV_NCBID_PORT, SRV_NCBID_PATH, SRV_LB_DISABLE
+*
+* Revision 6.4  1999/06/28 16:28:02  vakatov
+* SNetConnInfo:: separated the HTTP and the CERL-like(non-transparent)
+* firewall proxies;  renamed config./env. parameters accordingly:
+*   SRV_HTTP_PROXY_HOST/PORT replaced the former SRV_PROXY_HOST/PORT
+*   SRV_PROXY_HOST now specifies the host name of non-transparent CERN proxy
+*   SRV_PROXY_PORT is obsolete
+*   SRV_PROXY_TRANSPARENT is obsolete
+* Also:  NetConnInfo_AdjustForCernProxy --> ...HttpProxy
+*
 * Revision 6.3  1999/04/09 22:27:01  vakatov
 * Ncbi_ConnectURL():  added "encode_args"
 *
@@ -50,7 +85,6 @@
 *
 * Revision 6.1  1999/04/07 20:43:53  vakatov
 * Added URL_Encode() and URL_Decode()
-*
 * ==========================================================================
 */
 
@@ -81,59 +115,136 @@ typedef struct {
   Nlm_Char*    args;             /* server:  args(e.g. args for CGI script)  */
   Nlm_STimeout timeout;          /* i/o (connection and read/write) timeout  */
   Nlm_Uint4    conn_try;         /* max.number of attempts to establish conn */
-  Nlm_Char*    proxy_host;
-  Nlm_Uint2    proxy_port;
-  Nlm_Boolean  proxy_transparent;
-  Nlm_Boolean  debug_printout;
-  Nlm_Boolean  firewall;
+  Nlm_Char*    http_proxy_host;  /* host name of HTTP proxy (can be NULL) */
+  Nlm_Uint2    http_proxy_port;  /* port #    of HTTP proxy server */
+  Nlm_Char*    proxy_host;       /* host of CERN-like firewall proxy server */
+  Nlm_Boolean  debug_printout;   /* printout some debug info */
+  Nlm_Boolean  firewall;         /* if to work in the firewall mode */
+  Nlm_Uint2    ncbid_port;       /* port of the NCBID CGI script(used by LB) */
+  Nlm_Char*    ncbid_path;       /* path to the NCBID CGI script(used by LB) */
+  Nlm_Boolean  lb_disable;       /* if to disable the local load-balancing */
+
   /* the following field(s) are for the internal use only! */
-  Nlm_Boolean  proxy_adjusted;
+  Nlm_Boolean  http_proxy_adjusted;
 } SNetConnInfo;
 
 
-/* This function to fill out the "*info" structure; it looks for the field
+/* Defaults and conf.parameter names for the SNetConnInfo fields
+ */
+
+#define DEF_CONN_CONF_FILE        "ncbi"
+#define DEF_CONN_CONF_SECTION     "NET_SERV"
+                                  
+#define CFG_CONN_ENGINE_HOST      "SRV_ENGINE_HOST"
+#define DEF_CONN_ENGINE_HOST      "www.ncbi.nlm.nih.gov"
+                                  
+#define CFG_CONN_ENGINE_PORT      "SRV_ENGINE_PORT"
+#define DEF_CONN_ENGINE_PORT      80
+                                  
+#define CFG_CONN_ENGINE_PATH      "SRV_ENGINE_PATH"
+#define DEF_CONN_ENGINE_PATH       "/Service/dispd.cgi"
+                                  
+#define CFG_CONN_ENGINE_ARGS      "SRV_ENGINE_ARGS"
+#define DEF_CONN_ENGINE_ARGS      ""
+                                  
+#define CFG_CONN_TIMEOUT          "SRV_CONN_TIMEOUT"
+#define DEF_CONN_TIMEOUT          30.0
+                                  
+#define CFG_CONN_TRY              "SRV_CONN_TRY"
+#define DEF_CONN_TRY              3
+                                  
+#define CFG_CONN_PROXY_HOST       "SRV_PROXY_HOST"
+#define DEF_CONN_PROXY_HOST       ""
+                                  
+#define CFG_CONN_HTTP_PROXY_HOST  "SRV_HTTP_PROXY_HOST"
+#define DEF_CONN_HTTP_PROXY_HOST  ""
+                                  
+#define CFG_CONN_HTTP_PROXY_PORT  "SRV_HTTP_PROXY_PORT"
+#define DEF_CONN_HTTP_PROXY_PORT  80
+                                  
+#define CFG_CONN_DEBUG_PRINTOUT   "SRV_DEBUG_PRINTOUT"
+#define DEF_CONN_DEBUG_PRINTOUT   ""
+                                  
+#define CFG_CONN_FIREWALL         "SRV_FIREWALL"
+#define DEF_CONN_FIREWALL         ""
+                                  
+#define CFG_CONN_NCBID_PORT       "SRV_NCBID_PORT"
+#define DEF_CONN_NCBID_PORT       80
+                                  
+#define CFG_CONN_NCBID_PATH       "SRV_NCBID_PATH"
+#define DEF_CONN_NCBID_PATH       "/Service/ncbid.cgi"
+                                  
+#define CFG_CONN_LB_DISABLE       "SRV_LB_DISABLE"
+#define DEF_CONN_LB_DISABLE       ""
+
+
+/* Limits for some SNetConnInfo fields
+ */
+#define MAX_CONN_HOST_LEN  64
+#define MAX_CONN_PATH_LEN  1024
+#define MAX_CONN_ARGS_LEN  1024
+
+
+/* This function to fill out the "*info" structure;  it looks for the field
  * values in the application transient parameters(<conf_file>[<conf_section>]),
  * and/or environment variables, and/or configuration
- * file (<conf_file> [<conf_section>]);  for the configurable parameter lookup
- * rules see in "ncbienv.h":Nlm_GetEnvParam[Ex]().
+ * file (<conf_file> [<conf_section>]).
+ * For the configurable parameter lookup rules see in
+ * "ncbienv.h":Nlm_GetEnvParam[Ex]().
  *
  * All fields will be resolved using the following env.var. / app.param.
- * keys and defaults:
+ * keys.
+ * For the field conf.parameter name see CNF_CONN_<KEY> (right above).
+ * For the field default value see DEF_CONN_<KEY> (right above).
  *
- *  -- ARGUMENT ------------ DEFAULT ----------------------- KEY -----
+ *  -- ARGUMENT ----------- KEY --------------- REMARKS/EXAMPLES ---------
  *   client_host          <will be assigned to the local host name>
- *   host                 "www.ncbi.nlm.nih.gov"        SRV_ENGINE_HOST
- *   port                 80                            SRV_ENGINE_PORT
- *   path                 "Service/nph-dispd.cgi"       SRV_ENGINE_PATH
- *   args                 ""                            SRV_ENGINE_ARGS
- *   timeout              30.0                          SRV_CONN_TIMEOUT
- *   conn_try             3                             SRV_CONN_TRY
- *   proxy_host           NULL(means no proxy stuff)    SRV_PROXY_HOST
- *   proxy_port           80                            SRV_PROXY_PORT
- *   proxy_transparent    TRUE                          SRV_PROXY_TRANSPARENT
- *   debug_printout       FALSE                         SRV_DEBUG_PRINTOUT
- *   firewall             FALSE                         SRV_FIREWALL
+ *   host                 ENGINE_HOST
+ *   port                 ENGINE_PORT
+ *   path                 ENGINE_PATH
+ *   args                 ENGINE_ARGS
+ *   timeout              CONN_TIMEOUT        "<sec>.<usec>": "30.0", "0.005"
+ *   conn_try             CONN_TRY  
+ *   http_proxy_host      HTTP_PROXY_HOST     no HTTP proxy if empty/NULL
+ *   http_proxy_port      HTTP_PROXY_PORT
+ *   proxy_host           PROXY_HOST
+ *   debug_printout       DEBUG_PRINTOUT
+ *   firewall             FIREWALL
+ *   ncbid_port           NCBID_PORT
+ *   ncbid_path           NCBID_PATH
+ *   lb_disable           LB_DISABLE
  */
 NLM_EXTERN SNetConnInfo* NetConnInfo_Create
-(const Nlm_Char* conf_file,    /* by default(if NULL/empty) -- "ncbi" */
- const Nlm_Char* conf_section  /* by default(if NULL/empty) -- "NET_SERV" */
+(const Nlm_Char* conf_file,    /* if NULL/empty then DEF_CONN_CONF_FILE    */
+ const Nlm_Char* conf_section  /* if NULL/empty then DEF_CONN_CONF_SECTION */
  );
 
+
 /* Adjust the "host:port" to "proxy_host:proxy_port", and
- * "path" to "http://host:port/path" to connect through a CERN-style proxy.
+ * "path" to "http://host:port/path" to connect through a HTTP proxy.
  * Return FALSE if already adjusted(see the NOTE).
  * NOTE:  it does nothing if applied more then once to the same "info"(or its
- *        clone), or when "proxy_host" is NULL.
+ *        clone), or when "http_proxy_host" is NULL.
  */
-NLM_EXTERN Nlm_Boolean NetConnInfo_AdjustForCernProxy
+NLM_EXTERN Nlm_Boolean NetConnInfo_AdjustForHttpProxy
 (SNetConnInfo* info
  );
+
 
 /* Make an exact and independent copy of "*info".
  */
 NLM_EXTERN SNetConnInfo* NetConnInfo_Clone
 (const SNetConnInfo* info
  );
+
+
+/* Printout the "*info" to file "fp".
+ */
+NLM_EXTERN void NetConnInfo_Print
+(const SNetConnInfo* info,
+ FILE*               fp
+ );
+
 
 /* Destroy "**info" and deallocate "*info" if "*info" is not NULL.
  * Assign "*info" to NULL.
@@ -150,7 +261,10 @@ NLM_EXTERN EConnStatus ESOCK2ECONN
  );
 
 
-/* Hit URL "http://host:port/path?args".
+/* Hit URL "http://host:port/path?args":
+ *    POST <path>?<args> HTTP/1.0\r\n
+ *    <user_header\r\n>
+ *    Content-Length: <content_length>\r\n\r\n
  * If "encode_args" is TRUE then URL-encode the "args".
  * "args" can be NULL/empty -- then the '?' symbol does not get added.
  * Use "c_timeout" to specify timeout for the "CONNECT" stage;
@@ -158,11 +272,13 @@ NLM_EXTERN EConnStatus ESOCK2ECONN
  * (see also "ncbisock.h:SOCK_SetTimeout()" for more info).
  * "content_length" is mandatory, and it specifies an exact(!) amount
  * of data to be sent to the resultant socket.
- * "user_header"(can be NULL) will be written in the header end, and
- * it must be terminated by a single '\n' (if it is not NULL/empty).
+ * String "user_header"(can be NULL) will be written in the header end, and
+ * it must be terminated by a single '\r\n' (if it is not NULL/empty).
  * 
  * On success, return non-NULL handle to a readable&writable
  * "NCBI socket"(see "ncbisock.h:SOCK_[Peek|Read|Write]").
+ * ATTENTION:  due to the very essence of the HTTP connection, you can
+ *             perform only one { WRITE, ..., WRITE, READ, ..., READ } cycle.
  * On error, return NULL.
  *
  * If "encode_args" is TRUE then URL-encode the "args", if any.
@@ -198,7 +314,7 @@ NLM_EXTERN EConnStatus CONN_StripToPattern
  );
 
 NLM_EXTERN EConnStatus SOCK_StripToPattern
-(SOCK        conn,
+(SOCK        sock,
  const void* pattern,
  Nlm_Uint4   pattern_size,
  BUF*        buf,
@@ -211,8 +327,9 @@ NLM_EXTERN EConnStatus SOCK_StripToPattern
  * bytes.
  * Assign "*src_read" to the # of bytes succesfully decoded from "src_buf".
  * Assign "*dst_written" to the # of bytes written to buffer "dst_buf".
- * Return FALSE on unrecoverable URL-encoding error, such as an invalid symbol
- * or a bad "%.." sequence.
+ * Return FALSE only if cannot decode nothing, and an unrecoverable
+ * URL-encoding error (such as an invalid symbol or a bad "%.." sequence)
+ * has occured.
  * NOTE:  the unfinished "%.." sequence is fine -- return TRUE, but dont
  *        "read" it.
  */
@@ -223,6 +340,23 @@ NLM_EXTERN Nlm_Boolean URL_Decode
  void*       dst_buf,    /* [in/out] non-NULL */
  Nlm_Uint4   dst_size,   /* [in]              */
  Nlm_Uint4*  dst_written /* [out]    non-NULL */
+ );
+
+
+/* Act just like URL_Decode (see above) but caller can allow the specified
+ * non-standard URL symbols in the input buffer to be decoded "as is".
+ * The extra allowed symbols are passed in a '\0'-terminated string
+ * "allow_symbols" (it can be NULL or empty -- then it will be an exact
+ * equivalent of URL_Decode).
+ */
+NLM_EXTERN Nlm_Boolean URL_DecodeEx
+(const void* src_buf,      /* [in]     non-NULL  */
+ Nlm_Uint4   src_size,     /* [in]               */
+ Nlm_Uint4*  src_read,     /* [out]    non-NULL  */
+ void*       dst_buf,      /* [in/out] non-NULL  */
+ Nlm_Uint4   dst_size,     /* [in]               */
+ Nlm_Uint4*  dst_written,  /* [out]    non-NULL  */
+ Char*       allow_symbols /* [in]     '\0'-term */
  );
 
 
@@ -239,6 +373,71 @@ NLM_EXTERN void URL_Encode
  void*       dst_buf,    /* [in/out] non-NULL */
  Nlm_Uint4   dst_size,   /* [in]              */
  Nlm_Uint4*  dst_written /* [out]    non-NULL */
+ );
+
+
+/****************************************************************************
+ * NCBI-specific MIME content type and sub-types
+ * (the API to compose and parse them)
+ *    Content-Type: x-ncbi-data/<MIME_ComposeSubType()>\r\n
+ *
+ *    Content-Type: x-ncbi-data/x-<subtype>-<encoding>\r\n
+ *
+ * where  MIME_ComposeSubType(EMIME_SubType subtype, EMIME_Encoding encoding):
+ *   "x-<subtype>-<encoding>":
+ *     "x-<subtype>",   "x-<subtype>-url-encoded",   "x-<subtype>-<encoding>",
+ *     "x-asn-text",    "x-asn-text-url-encoded",    "x-asn-text-<encoding>
+ *     "x-asn-binary",  "x-asn-binary-url-encoded",  "x-asn-binary-<encoding>"
+ *     "x-unknown",     "x-unknown-url-encoded",     "x-unknown-<encoding>"
+ *
+ *  Note:  <subtype> and <encoding> are expected to contain only
+ *         alphanumeric symbols, '-' and '_'. They are case-insensitive.
+ ****************************************************************************/
+
+/* SubType
+ */
+typedef enum {
+  eMIME_AsnText = 0,  /* "x-asn-text"    (text ASN.1 data) */
+  eMIME_AsnBinary,    /* "x-asn-binary"  (binary ASN.1 data) */
+  eMIME_Fasta,        /* "x-fasta"       (data in FASTA format) */
+  /* eMIME_???,          "x-<subtype>"   here go other NCBI subtypes */
+  eMIME_Unknown       /* "x-unknown"     (an arbitrary binary data) */
+} EMIME_SubType;
+
+/* Encoding
+ */
+typedef enum {
+  eENCOD_Url = 0,  /* "-url-encoded"  (the content is URL-encoded) */
+  /* eENCOD_???,      "-<encoding>"   here go other NCBI encodings */
+  eENCOD_None      /* ""              (the content is passed "as is") */
+} EMIME_Encoding;
+
+
+/* Write up to "buflen" bytes to "buf":
+ *   Content-Type: x-ncbi-data/x-<subtype>-<encoding>\r\n
+ * Return pointer to the "buf".
+ */
+#define MAX_CONTENT_TYPE_LEN 64
+NLM_EXTERN char* MIME_ComposeContentType
+(EMIME_SubType  subtype,
+ EMIME_Encoding encoding,
+ char*          buf,
+ size_t         buflen    /* must be at least MAX_CONTENT_TYPE_LEN */
+ );
+
+/* Parse the NCBI-specific content-type; the (case-insensitive) "str"
+ * can be in the following two formats:
+ *   Content-Type: x-ncbi-data/x-<subtype>-<encoding>
+ *   x-ncbi-data/x-<subtype>-<encoding>
+ * If it does not match any of NCBI MIME types then return TRUE,
+ * eMIME_Unknown and eENCOD_None.
+ * If the passed "str" has an invalid(non-HTTP ContentType) format
+ * (or if it is NULL/empty) then return FALSE, eMIME_Unknown and eENCOD_None.
+ */
+NLM_EXTERN Nlm_Boolean MIME_ParseContentType
+(const char*     str,      /* the HTTP "Content-Type:" header to parse */
+ EMIME_SubType*  subtype,  /* can be NULL */
+ EMIME_Encoding* encoding  /* can be NULL */
  );
 
 

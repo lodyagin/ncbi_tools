@@ -29,32 +29,18 @@
 *
 * Version Creation Date:   1/19/93
 *
-* $Revision: 6.0 $
+* $Revision: 6.2 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
-* Date     Name        Description of modification
-* -------  ----------  -----------------------------------------------------
-*
-*
 * $Log: mappingp.h,v $
-* Revision 6.0  1997/08/25 18:55:52  madden
-* Revision changed to 6.0
+* Revision 6.2  1999/08/06 18:51:11  vakatov
+* typo fixed
 *
-* Revision 5.0  1996/05/28 13:45:08  ostell
-* Set to revision 5.0
-*
- * Revision 4.1  1995/12/14  17:29:30  kans
- * moved SearchSegment from viewer.c to picture.c, made extern
- *
- * Revision 4.0  1995/07/26  13:51:04  ostell
- * force revision to 4.0
- *
- * Revision 1.10  1995/05/17  15:15:14  kans
- * added Log line
- *
+* Revision 6.1  1999/08/06 18:42:34  vakatov
+* Moved "NormalizeBox()" from "viewer.c" to "mappingp.[ch]" & made it public
 *
 * ==========================================================================
 */
@@ -78,11 +64,10 @@
 extern "C" {
 #endif
 
+
 /*****************************************************************************
-*
-*   STRUCTURE TYPEDEFS
-*
-*****************************************************************************/
+ *   STRUCTURE TYPEDEFS
+ *****************************************************************************/
 
 typedef struct Nlm_scaleinfo {
   Nlm_BoxInfo  worldWindow;
@@ -112,25 +97,50 @@ typedef struct Nlm_vscaleinfo {
   Nlm_Boolean  force;
 } Nlm_VScaleInfo, PNTR Nlm_VScalePtr;
 
-extern void Nlm_LoadBox PROTO((BoxPtr box, Int4 left, Int4 top, Int4 right, 
-                               Int4 bottom));
-extern void Nlm_OutsetBox PROTO((BoxPtr box, Int4 dX, Int4 dY ));
-extern void Nlm_MapWorldPointToPixel PROTO((Nlm_PointPtr pt, Nlm_PntPtr pnt, 
-                               Nlm_ScalePtr scale));
-extern void Nlm_MapPixelPointToWorld PROTO((Nlm_PntPtr pnt, Nlm_PointPtr pt, 
-                               Nlm_ScalePtr scale));
-extern void Nlm_MapWorldBoxToRect PROTO((Nlm_RectPtr r, Nlm_BoxPtr box, 
-                               Nlm_ScalePtr scale));
-extern void Nlm_MapRectToWorldBox PROTO(( Nlm_BoxPtr box, Nlm_RectPtr r,
-                               Nlm_ScalePtr scale));
-extern Nlm_Boolean Nlm_BoxInViewport PROTO((Nlm_RectPtr rct, Nlm_BoxPtr box, 
-                               Nlm_VScalePtr scale));
-extern Nlm_Boolean Nlm_LineIntoVPort PROTO(( Nlm_Int4Ptr x1, Nlm_Int4Ptr y1, 
-                        Nlm_Int4Ptr x2, Int4Ptr y2, Nlm_BoxPtr worldWindow ));
-extern Nlm_Boolean Nlm_IsLineInVPort PROTO(( Nlm_Int4 x1, Nlm_Int4 y1, 
-                        Nlm_Int4 x2, Nlm_Int4 y2, Nlm_BoxPtr worldWindow ));
-extern Nlm_SegmenT Nlm_SearchSegment PROTO((Nlm_SegmenT segment,
-                        Nlm_ScalePtr scalePtr, Nlm_PrimitivE PNTR prPtr ));
+
+/*****************************************************************************
+ *   FUNCTIONS
+ *****************************************************************************/
+
+extern void Nlm_LoadBox
+(BoxPtr box, Int4 left, Int4 top, Int4 right, Int4 bottom);
+
+extern void Nlm_OutsetBox
+(BoxPtr box, Int4 dX, Int4 dY);
+
+extern void Nlm_NormalizeBox
+(Nlm_BoxInfo* box);
+
+extern void Nlm_MapWorldPointToPixel
+(Nlm_PointPtr pt, Nlm_PntPtr pnt, Nlm_ScalePtr scale);
+
+extern void Nlm_MapPixelPointToWorld
+(Nlm_PntPtr pnt, Nlm_PointPtr pt, Nlm_ScalePtr scale);
+
+extern void Nlm_MapWorldBoxToRect
+(Nlm_RectPtr r, Nlm_BoxPtr box, Nlm_ScalePtr scale);
+
+extern void Nlm_MapRectToWorldBox
+(Nlm_BoxPtr box, Nlm_RectPtr r, Nlm_ScalePtr scale);
+
+extern Nlm_Boolean Nlm_BoxInViewport
+(Nlm_RectPtr rct, Nlm_BoxPtr box, Nlm_VScalePtr scale);
+
+extern Nlm_Boolean Nlm_LineIntoVPort
+(Nlm_Int4Ptr x1, Nlm_Int4Ptr y1, Nlm_Int4Ptr x2, Nlm_Int4Ptr y2,
+ Nlm_BoxPtr worldWindow);
+
+extern Nlm_Boolean Nlm_IsLineInVPort
+(Nlm_Int4 x1, Nlm_Int4 y1, Nlm_Int4 x2, Nlm_Int4 y2,
+ Nlm_BoxPtr worldWindow);
+
+extern Nlm_SegmenT Nlm_SearchSegment
+(Nlm_SegmenT segment, Nlm_ScalePtr scalePtr, Nlm_PrimitivE PNTR prPtr);
+
+
+/*****************************************************************************
+ *   DEFINES
+ *****************************************************************************/
 
 #define ScaleInfo Nlm_ScaleInfo
 #define ScalePtr Nlm_ScalePtr
@@ -140,6 +150,7 @@ extern Nlm_SegmenT Nlm_SearchSegment PROTO((Nlm_SegmenT segment,
 #define VScalePtr Nlm_VScalePtr
 #define LoadBox Nlm_LoadBox
 #define OutsetBox Nlm_OutsetBox
+#define NormalizeBox Nlm_NormalizeBox
 #define MapWorldPointToPixel Nlm_MapWorldPointToPixel
 #define MapPixelPointToWorld Nlm_MapPixelPointToWorld
 #define MapWorldBoxToRect Nlm_MapWorldBoxToRect
@@ -153,4 +164,4 @@ extern Nlm_SegmenT Nlm_SearchSegment PROTO((Nlm_SegmenT segment,
 }
 #endif
 
-#endif
+#endif  /* _MAPPINGP_ */

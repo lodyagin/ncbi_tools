@@ -821,7 +821,7 @@ Pubmed-url ::= SEQUENCE {
 }
 
 END
---$Revision: 6.0 $
+--$Revision: 6.1 $
 --**********************************************************************
 --
 --  NCBI Sequence elements
@@ -834,7 +834,7 @@ NCBI-Sequence DEFINITIONS ::=
 BEGIN
 
 EXPORTS Bioseq, Seq-annot, Pubdesc, Seq-descr, Seqdesc, Numbering, Heterogen,
-        Seq-hist;
+        Seq-hist, GIBB-mol;
 
 IMPORTS Date, Int-fuzz, Dbtag, Object-id, User-object FROM NCBI-General
         Seq-align FROM NCBI-Seqalign
@@ -2426,7 +2426,7 @@ Seq-entry ::= CHOICE {
 
 END
 
---$Revision: 6.0 $
+--$Revision: 6.1 $
 --********************************************************************
 --
 --  Direct Submission of Sequence Data
@@ -2444,7 +2444,7 @@ END
 NCBI-Submit DEFINITIONS ::=
 BEGIN
 
-EXPORTS Seq-submit;
+EXPORTS Seq-submit, Contact-info;
 
 IMPORTS Cit-sub, Author FROM NCBI-Biblio
         Date, Object-id FROM NCBI-General

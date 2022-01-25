@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/3/98
 *
-* $Revision: 6.47 $
+* $Revision: 6.56 $
 *
 * File Description: 
 *
@@ -44,8 +44,10 @@
 
 #ifndef CODECENTER
 static char *date_of_compilation = __DATE__;
+static char *time_of_compilation = __TIME__;
 #else
 static char *date_of_compilation = "today";
+static char *time_of_compilation = "now";
 #endif
 
 #include "sequin.h"
@@ -65,6 +67,7 @@ static char *date_of_compilation = "today";
 #include <taxutil.h>
 #include <utilpub.h>
 #include <salsap.h>
+#include <salptool.h>
 
 NLM_EXTERN SeqEntryPtr FastaToSeqEntryInternal
 (
@@ -187,10 +190,7 @@ static void CenterString (RectPtr rptr, CharPtr text, FonT fnt, Int2 inc)
 extern void DrawAbout (PaneL p)
 
 {
-  RecT     r;
-  CharPtr  ptr;
-  Char     sequinServices [60];
-  Char     sequinVersion [60];
+  RecT  r;
 
 
   if (titleFont == NULL) {
@@ -205,30 +205,13 @@ extern void DrawAbout (PaneL p)
 #endif
   }
 
-  sprintf (sequinVersion, "Sequin Application Version %s", SEQUIN_APP_VERSION);
-  ptr = "Standard Release";
-/*#ifdef USE_ENTREZ*/
-  if (useEntrez || useBlast) {
-    ptr = "Network Aware";
-  }
-/*#endif*/
-/*#ifdef INTERNAL_NCBI_SEQUIN*/
-  if (indexerVersion) {
-    ptr = "Indexer Services";
-  }
-/*#endif*/
-  if (genomeCenter != NULL) {
-    ptr = "Genome Center";
-  }
-  sprintf (sequinServices, "%s [%s]", ptr, date_of_compilation);
-
   ObjectRect (p, &r);
   InsetRect (&r, 4, 4);
-  r.top += 10;
+  r.top += 5;
   Blue ();
   CenterString (&r, "Sequin", titleFont, 5);
-  CenterString (&r, sequinVersion, programFont, 5);
-  CenterString (&r, sequinServices, programFont, 10);
+  CenterString (&r, SEQUIN_VERSION, programFont, 5);
+  CenterString (&r, SEQUIN_SERVICES, programFont, 10);
   CenterString (&r, "National Center for Biotechnology Information", systemFont, 5);
   CenterString (&r, "National Library of Medicine", systemFont, 5);
   CenterString (&r, "National Institutes of Health", systemFont, 10);
@@ -258,7 +241,7 @@ extern Int2 AboutBoxWidth (void)
 #endif
   }
 
-  sprintf (sequinVersion, "Sequin Application Version %s", SEQUIN_APP_VERSION);
+  sprintf (sequinVersion, "Sequin Application Version %s", SEQUIN_APPLICATION);
   ptr = "Standard Release";
 /*#ifdef USE_ENTREZ*/
   if (useEntrez || useBlast) {
@@ -293,6 +276,33 @@ extern Int2 AboutBoxWidth (void)
   }
   max += 2 * stdCharWidth + 2;
   return max;
+}
+
+extern Int2 AboutBoxHeight (void)
+
+{
+  Int2  hgt;
+
+  if (titleFont == NULL) {
+#ifdef WIN_MAC
+    titleFont = GetFont ("Geneva", 18, TRUE, TRUE, FALSE, "");
+#endif
+#ifdef WIN_MSWIN
+    titleFont = GetFont ("Arial", 24, TRUE, TRUE, FALSE, "");
+#endif
+#ifdef WIN_MOTIF
+    titleFont = GetFont ("Courier", 24, TRUE, TRUE, FALSE, "");
+#endif
+  }
+
+  SelectFont (titleFont);
+  hgt = LineHeight () + 5;
+  SelectFont (programFont);
+  hgt += 2 * LineHeight () + 15;
+  SelectFont (systemFont);
+  hgt += 5 * LineHeight () + 25;
+  hgt += 18;
+  return hgt;
 }
 
 extern ForM CreateStartupForm (Int2 left, Int2 top, CharPtr title,
@@ -344,7 +354,7 @@ extern ForM CreateStartupForm (Int2 left, Int2 top, CharPtr title,
     }
 #endif
 
-    p = SimplePanel (w, AboutBoxWidth (), 14 * stdLineHeight, DrawAbout);
+    p = SimplePanel (w, AboutBoxWidth (), AboutBoxHeight (), DrawAbout);
 
     k = HiddenGroup (w, 4, 0, NULL);
     SetGroupSpacing (k, 3, 10);
@@ -637,9 +647,9 @@ extern void ExciseString (CharPtr str, CharPtr from, CharPtr to)
   CharPtr  ptrt;
 
   if (str == NULL || from == NULL || to == NULL) return;
-  ptrf = StringStr (str, from);
+  ptrf = StringISearch (str, from);
   if (ptrf == NULL) return;
-  ptrt = StringStr (ptrf, to);
+  ptrt = StringISearch (ptrf, to);
   if (ptrt == NULL) return;
   ptrt += StringLen (to);
   ch = *ptrt;
@@ -784,7 +794,7 @@ static void CreateGeneAndProtFeats (SeqEntryPtr nsep, SeqEntryPtr psep,
       nbsp = (BioseqPtr) nsep->data.ptrvalue;
       pbsp = (BioseqPtr) psep->data.ptrvalue;
       if (nbsp != NULL && pbsp != NULL) {
-        ptr = StringStr (title, "[gene=");
+        ptr = StringISearch (title, "[gene=");
         if (ptr != NULL) {
           StringNCpy_0 (str, ptr + 6, sizeof (str));
           ptr = StringChr (str, ']');
@@ -844,7 +854,7 @@ static void CreateGeneAndProtFeats (SeqEntryPtr nsep, SeqEntryPtr psep,
         }
         activity [0] = '\0';
         ec [0] = '\0';
-        ptr = StringStr (title, "[function=");
+        ptr = StringISearch (title, "[function=");
         if (ptr != NULL) {
           StringNCpy_0 (activity, ptr + 10, sizeof (str));
           ptr = StringChr (activity, ']');
@@ -852,7 +862,7 @@ static void CreateGeneAndProtFeats (SeqEntryPtr nsep, SeqEntryPtr psep,
             *ptr = '\0';
           }
         }
-        ptr = StringStr (title, "[EC_number=");
+        ptr = StringISearch (title, "[EC_number=");
         if (ptr != NULL) {
           StringNCpy_0 (ec, ptr + 11, sizeof (str));
           ptr = StringChr (ec, ']');
@@ -860,7 +870,7 @@ static void CreateGeneAndProtFeats (SeqEntryPtr nsep, SeqEntryPtr psep,
             *ptr = '\0';
           }
         }
-        ptr = StringStr (title, "[prot=");
+        ptr = StringISearch (title, "[prot=");
         if (ptr != NULL) {
           StringNCpy_0 (str, ptr + 6, sizeof (str));
           ptr = StringChr (str, ']');
@@ -884,11 +894,11 @@ static void CreateGeneAndProtFeats (SeqEntryPtr nsep, SeqEntryPtr psep,
             }
           }
         }
-        ptr = StringStr (title, "[orf]");
+        ptr = StringISearch (title, "[orf]");
         if (ptr != NULL) {
           crp->orf = TRUE;
         }
-        ptr = StringStr (title, "[comment=");
+        ptr = StringISearch (title, "[comment=");
         if (ptr != NULL) {
           StringNCpy_0 (str, ptr + 9, sizeof (str));
           ptr = StringChr (str, ']');
@@ -899,7 +909,7 @@ static void CreateGeneAndProtFeats (SeqEntryPtr nsep, SeqEntryPtr psep,
             }
           }
         }
-        ptr = StringStr (title, "[note=");
+        ptr = StringISearch (title, "[note=");
         if (ptr != NULL) {
           StringNCpy_0 (str, ptr + 6, sizeof (str));
           ptr = StringChr (str, ']');
@@ -1411,7 +1421,7 @@ static void ProcessFa2htgs (Fa2htgsFormPtr ffp, SeqSubmitPtr ssp)
    oldsep = (SeqEntryPtr)(ssp->data);  /* clear out template */
    ssp->data = NULL;
    MemFree(ssp->sub->tool);
-   ssp->sub->tool = StringSave(SEQUIN_APP_VERSION);
+   ssp->sub->tool = StringSave(SEQUIN_APPLICATION);
    nsp = MemNew(sizeof(NCBISub));
    nsp->ssp = ssp;
    nsp->submittor_key = StringSave (genomeCenter);
@@ -5478,7 +5488,7 @@ extern Int4 MySeqEntryToAsn3Ex (SeqEntryPtr sep, Boolean strip, Boolean correct,
     ConvertAccInDefToLocalIdProc (sep); /* if title is accXNNNNN, convert to seqID */
   }
   if (useEntrez) {
-    ValidateSeqAlignInSeqEntry (sep, FALSE, TRUE); /* remove components with seqID accXNNNNN */
+    ValidateSeqAlignandACCInSeqEntry (sep, TRUE, FALSE, FALSE, TRUE, TRUE, FALSE); /* remove components with seqID accXNNNNN */
   }
   SeqEntryExplore (sep, NULL, CheckSeqAlignCallback); /* remove alignments with single dimension */
   if ((! force) && (! NoBiosourceOrTaxonId (sep))) {
@@ -5683,7 +5693,8 @@ static void PartialCallback (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 i
             }
           }
           SetSeqLocPartial (sfp->location, partial5, partial3);
-          sfp->partial = (sfp->partial || partial5 || partial3 || LocationHasNullsBetween (sfp->location));
+          sfp->partial = (/* sfp->partial || */ partial5 || partial3 ||
+                          LocationHasNullsBetween (sfp->location));
         }
         sfp = sfp->next;
       }

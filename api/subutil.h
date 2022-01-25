@@ -31,7 +31,7 @@
 *   
 * Version Creation Date: 11/3/93
 *
-* $Revision: 6.12 $
+* $Revision: 6.13 $
 *
 * File Description: Utilities for creating ASN.1 submissions
 *
@@ -42,6 +42,9 @@
 *
 *
 * $Log: subutil.h,v $
+* Revision 6.13  1999/08/05 20:43:44  kans
+* added CreateSubmissionUserObject (JP)
+*
 * Revision 6.12  1999/03/17 22:49:38  kans
 * changed SUBSOURCE_ to SUBSRC_
 *
@@ -1391,6 +1394,13 @@ NLM_EXTERN void AddAccessionToRefGeneTrackUserObject (UserObjectPtr uop, CharPtr
 
 /* experimental function to associate mRNA with protein product in cases of alt splicing */
 NLM_EXTERN UserObjectPtr CreateMrnaProteinLinkUserObject (BioseqPtr protbsp);
+
+/* vector screen, validator count, general submission comment user object (JP) */
+NLM_EXTERN UserObjectPtr CreateSubmissionUserObject (CharPtr univecComment,
+                                                     CharPtr additionalComment,
+                                                     Int4 validatorErrorCount,
+                                                     Int4 validatorHashCode,
+                                                     Boolean isCloningVector);
 
 #ifdef __cplusplus
 }

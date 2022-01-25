@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/23/91
 *
-* $Revision: 6.11 $
+* $Revision: 6.12 $
 *
 * File Description:
 *   	prototypes of miscellaneous functions
@@ -43,6 +43,9 @@
 * 06-15-93 Schuler     Added macros for Gestalt functins.
 *
 * $Log: ncbimisc.h,v $
+* Revision 6.12  1999/07/29 15:58:48  kans
+* added bigintvalue, ValNodeAddBigInt (PD)
+*
 * Revision 6.11  1999/04/23 16:25:36  shavirin
 * Added definition of the function Nlm_GetChecksum()
 *
@@ -159,6 +162,7 @@ typedef union dataval {
 	Nlm_FloatHi realvalue;
 	Nlm_Boolean boolvalue;
 	Nlm_FnPtr	funcvalue;
+	Nlm_Int8    bigintvalue;
 }	DataVal, PNTR DataValPtr;
 
 typedef struct valnode {
@@ -203,6 +207,11 @@ typedef struct valnode {
 *      adds like ValNodeAdd()
 *      sets newnode->choice = choice (if choice does not matter, use 0)
 *      sets newnode->data.intvalue = value
+*
+*   ValNodeAddBigInt (head, choice, value)
+*      adds like ValNodeAdd()
+*      sets newnode->choice = choice (if choice does not matter, use 0)
+*      sets newnode->data.bigintvalue = value
 *
 *   ValNodeAddBoolean (head, choice, value)
 *      adds like ValNodeAdd()
@@ -261,6 +270,7 @@ NLM_EXTERN ValNodePtr LIBCALL ValNodeLink PROTO((ValNodePtr PNTR head, ValNodePt
 NLM_EXTERN ValNodePtr LIBCALL ValNodeAddStr PROTO((ValNodePtr PNTR head, Nlm_Int2 choice, Nlm_CharPtr str));
 NLM_EXTERN ValNodePtr LIBCALL ValNodeCopyStr PROTO((ValNodePtr PNTR head, Nlm_Int2 choice, Nlm_CharPtr str));
 NLM_EXTERN ValNodePtr LIBCALL ValNodeAddInt PROTO((ValNodePtr PNTR head, Nlm_Int2 choice, Nlm_Int4 value));
+NLM_EXTERN ValNodePtr LIBCALL ValNodeAddBigInt (ValNodePtr PNTR head, Nlm_Int2 choice, Nlm_Int8 value);
 NLM_EXTERN ValNodePtr LIBCALL ValNodeAddBoolean PROTO((ValNodePtr PNTR head, Nlm_Int2 choice, Nlm_Boolean value));
 NLM_EXTERN ValNodePtr LIBCALL ValNodeAddFloat PROTO((ValNodePtr PNTR head, Nlm_Int2 choice, Nlm_FloatHi value));
 NLM_EXTERN ValNodePtr LIBCALL ValNodeAddPointer PROTO((ValNodePtr PNTR head, Nlm_Int2 choice, Nlm_VoidPtr value));

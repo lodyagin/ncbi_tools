@@ -29,7 +29,7 @@
 *
 * Version Creation Date:        1/1/92
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description: 
 *
@@ -46,6 +46,9 @@
 *
 * RCS Modification History:
 * $Log: ni_error.h,v $
+* Revision 6.2  1999/06/07 18:20:16  beloslyu
+* NetBSD port
+*
 * Revision 6.1  1997/11/18 21:14:35  epstein
 * identify Linux Alpha client
 *
@@ -104,6 +107,7 @@ NI_Platform {
   NI_PLATFORM_AIX,
   NI_PLATFORM_LINUX,
   NI_PLATFORM_LINUX_ALPHA,
+  NI_PLATFORM_NETBSD,
 
   NI_N_PLATFORMS
 #define NI_MAX_PLATFORMS (NI_N_PLATFORMS - 1)

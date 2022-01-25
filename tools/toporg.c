@@ -2808,6 +2808,9 @@ extern void SeriousSeqEntryCleanup (SeqEntryPtr sep, SeqEntryFunc taxfun, SeqEnt
   EntryMergeDupBioSources (sep);
   SeqEntryExplore (sep, NULL, GetRidOfEmptyFeatsDescCallback);
   CleanUpPseudoProducts (entityID, sep);
+  RenormalizeNucProtSets (sep, TRUE);
+  StripTitleFromProtsInNucProts (sep);
+  move_cds (sep);
   CdCheck (sep, NULL);
   ErrSetMessageLevel (msev);
   ErrSetLogLevel (lsev);

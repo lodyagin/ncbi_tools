@@ -16,6 +16,8 @@
 #include <seqport.h>    /*GetFrameFromLoc PROTO*/
 #include <asn2ff6.h>    /*AddGBQual PROTO*/
 #include <sqnutils.h>
+#include <explore.h>
+#include <edutil.h>
 
 static char *this_file = "toasn3";
 #ifdef THIS_FILE
@@ -3957,7 +3959,23 @@ static void CdEndCheck(SeqFeatPtr sfp, FILE *fp)
 	Int4 pos1, pos2, pos;
 	SeqLocPtr tmpslp;
 	Int4 len2;
+	SeqFeatPtr gene = NULL;
+	GeneRefPtr grp;
+	BioseqPtr bsp;
+	SeqLocPtr slp;
+  Boolean        hasNulls;
+  Boolean        noLeft;
+  Boolean        noRight;
+  Boolean        noLeftFeat;
+  Boolean        noLeftGene;
+  Boolean        noRightFeat;
+  Boolean        noRightGene;
 
+
+	grp = SeqMgrGetGeneXref (sfp);
+	if (grp == NULL || (! SeqMgrGeneIsSuppressed (grp))) {
+	  gene = SeqMgrGetOverlappingGene (sfp->location, NULL);
+	}
 
 	crp = (CdRegionPtr)(sfp->data.value.ptrvalue);
 	len = SeqLocLen(sfp->location);
@@ -4126,9 +4144,38 @@ SEQLOC_STOP);
 	else
 		SeqIdPrint(tmp, nuc, PRINTID_TEXTID_ACCESSION);
 
-	
 	if (fp != NULL)
 		fprintf(fp, "%s %ld %d\n", nuc, (long)(oldnum+1), (int)remainder);
+
+	if (gene != NULL) {
+		if (SeqLocAinB (sfp->location, gene->location) <= 0) {
+            bsp = BioseqFindFromSeqLoc (gene->location);
+            if (bsp != NULL) {
+              hasNulls = LocationHasNullsBetween (gene->location);
+              slp = SeqLocMerge (bsp, gene->location, sfp->location, TRUE, FALSE, hasNulls);
+              if (slp != NULL) {
+                CheckSeqLocForPartial (gene->location, &noLeftGene, &noRightGene);
+                gene->location = SeqLocFree (gene->location);
+                gene->location = slp;
+                CheckSeqLocForPartial (sfp->location, &noLeftFeat, &noRightFeat);
+                if (bsp->repr == Seq_repr_seg) {
+                  slp = SegLocToPartsEx (bsp, gene->location, TRUE);
+                  gene->location = SeqLocFree (gene->location);
+                  gene->location = slp;
+                  hasNulls = LocationHasNullsBetween (gene->location);
+                  gene->partial = (gene->partial || hasNulls);
+                }
+                FreeAllFuzz (gene->location);
+                noLeft = (noLeftFeat || noLeftGene);
+                noRight = (noRightFeat || noRightGene);
+                SetSeqLocPartial (gene->location, noLeft, noRight);
+                sfp->partial = (gene->partial || noLeft || noRight);
+              }
+            }
+          
+		}
+	}
+
 	return;
 erret:
 	BSFree(newprot);
@@ -5315,6 +5362,9 @@ void GetRidOfEmptyFeatsDescCallback (SeqEntryPtr sep, Pointer mydata, Int4 index
 {
   BioseqPtr     bsp;
   BioseqSetPtr  bssp;
+  SeqAnnotPtr   firstsap;
+  SeqAnnotPtr   nextsap;
+  Pointer PNTR  prevsap;
   SeqAnnotPtr   sap;
   ValNodePtr    sdp;
   SeqFeatPtr    sfp;
@@ -5325,10 +5375,14 @@ void GetRidOfEmptyFeatsDescCallback (SeqEntryPtr sep, Pointer mydata, Int4 index
   if (IS_Bioseq (sep)) {
     bsp = (BioseqPtr) sep->data.ptrvalue;
     sap = bsp->annot;
+    firstsap = bsp->annot;
+    prevsap = (Pointer PNTR) &(bsp->annot);
     sdp = bsp->descr;
   } else if (IS_Bioseq_set (sep)) {
     bssp = (BioseqSetPtr) sep->data.ptrvalue;
     sap = bssp->annot;
+    firstsap = bssp->annot;
+    prevsap = (Pointer PNTR) &(bssp->annot);
     sdp = bssp->descr;
   } else return;
   while (sap != NULL) {
@@ -5344,6 +5398,18 @@ void GetRidOfEmptyFeatsDescCallback (SeqEntryPtr sep, Pointer mydata, Int4 index
   while (sdp != NULL) {
     CleanDescStrings (sdp);
     sdp = sdp->next;
+  }
+  sap = firstsap;
+  while (sap != NULL) {
+    nextsap = sap->next;
+    if (sap->data == NULL) {
+      *(prevsap) = sap->next;
+      sap->next = NULL;
+      SeqAnnotFree (sap);
+    } else {
+      prevsap = (Pointer PNTR) &(sap->next);
+    }
+    sap = nextsap;
   }
 }
 

@@ -33,6 +33,24 @@
 *
 * Modifications:
 * $Log: cn3dmatn.c,v $
+* Revision 6.83  1999/07/07 15:44:00  ywang
+* set Cn3D_ObjMgrOpen FALSE as GatherProcLaunch returns OM_MSG_RET_ERROR or OM_MSG_RET_NOPROC
+*
+* Revision 6.82  1999/05/27 16:11:21  ywang
+* initilize all local variables at defined
+*
+* Revision 6.81  1999/05/25 22:04:58  ywang
+* always check mediadata->length before assigning residue information for mediadata to protect memory from corruption upon weird data
+*
+* Revision 6.80  1999/05/24 16:55:15  ywang
+* work around last letter selection problem
+*
+* Revision 6.79  1999/05/24 15:16:58  ywang
+* work around messaging problem on C-terminal dashes selection
+*
+* Revision 6.78  1999/05/10 20:24:26  ywang
+* initialize iRes Cn3DColorSalsaForStrucSeqs
+*
 * Revision 6.77  1999/05/04 23:12:47  ywang
 * fix selection retaining problem on show/hide
 *
@@ -155,10 +173,10 @@ void SalsaRegister(void)
 /*----------------------------------------------*/
 void Cn3DLaunchAnnotAlignEditor (SeqAnnotPtr sap)
 {
-  Uint2            entityID,
-                   itemID;
-  Int2             handled;
-  Uint2            options;
+  Uint2            entityID = 0,
+                   itemID = 0;
+  Int2             handled = 0;
+  Uint2            options = 0;
 
   if (sap != NULL) {
      entityID = ObjMgrRegister (OBJ_SEQANNOT, (Pointer) sap);
@@ -168,6 +186,10 @@ void Cn3DLaunchAnnotAlignEditor (SeqAnnotPtr sap)
      itemID = GetItemIDGivenPointer (entityID, OBJ_SEQANNOT, (Pointer) sap);
      handled = GatherProcLaunch (OMPROC_EDIT, FALSE, entityID, itemID, OBJ_SEQANNOT, 0, 0, OBJ_SEQANNOT, 0);
 
+     if(handled == OM_MSG_RET_ERROR || handled == OM_MSG_RET_NOPROC) {
+        Cn3D_ObjMgrOpen = FALSE;
+        return;
+     }
      sap_entityID = entityID;
      sap_itemID = itemID;
      Cn3D_SalsaOpen = TRUE;
@@ -176,7 +198,7 @@ void Cn3DLaunchAnnotAlignEditor (SeqAnnotPtr sap)
 /*----------------------------------------------*/
 void LaunchSalsa(SeqAlignPtr salp)
 {
-  SeqAnnotPtr   sap, sap2;
+  SeqAnnotPtr   sap = NULL, sap2 = NULL;
 
     sap = SeqAnnotNew ();
     sap->type = 2;
@@ -198,7 +220,7 @@ PMMD FindMM(SeqIdPtr sip, Int4 iCount){
   Boolean MM_found = FALSE;
   Int4 slaveCount = 0;
 
-  SeqIdPtr tmp_sip;
+  SeqIdPtr tmp_sip = NULL;
 
   Boolean bSingleMS = FALSE, bMaster = FALSE;
 
@@ -317,11 +339,11 @@ void DoMediaHL(PMMD  pmmdThis, Int4 from, Int4 to, Boolean highlight)
 void MediaHL(SelStructPtr sel, Boolean highlight)
 {
                                      /* media action -- highlight... */
-  SeqLocPtr  slp;
-  SeqIntPtr  sintp;
-  SeqIdPtr   sip;
-  Int4 from, to; 
-  Int4 length, iCount = 0;
+  SeqLocPtr  slp = NULL;
+  SeqIntPtr  sintp = NULL;
+  SeqIdPtr   sip = NULL;
+  Int4 from = 0, to = 0; 
+  Int4 length = 0, iCount = 0;
   Boolean MM_found = FALSE;
 
 Char str[100];
@@ -330,6 +352,10 @@ Char str[100];
 
   from = SeqLocStart(sel->region);
   to   = SeqLocStop(sel->region);
+
+  if(from == -2 && to == -2) return;
+  if(from == -2 && to > 0) from = to;
+    /* for salsa dashes at C-terminal of sequence */
 
   from = from + 1; to = to + 1;
     /* residue starts with number 1 in structure, but with number 0 in sequence */
@@ -364,9 +390,9 @@ void MediaObjSelect(PDNMG pdnmgThis, Boolean highlight)
 {
   PMGD pmgdThis = NULL;
   PMMD pmmdThis = NULL;
-  SeqIdPtr  sip;
-  SeqLocPtr  slp;
-  SelStructPtr sel;
+  SeqIdPtr  sip = NULL;
+  SeqLocPtr  slp = NULL;
+  SelStructPtr sel = NULL;
 
   PMSD  pmsdThis = NULL;
   PDNMS pdnmsMaster = NULL;
@@ -374,8 +400,8 @@ void MediaObjSelect(PDNMG pdnmgThis, Boolean highlight)
   PDNMS pdnmsSlaves = NULL;
 
   Int4 Gi = 0, iCount = 0;
-  Uint2 entityID, itemID, itemtype;
-  Int4 from, to;
+  Uint2 entityID = 0, itemID = 0, itemtype = 0;
+  Int4 from = 0, to = 0;
   Boolean bMaster = FALSE, bSlave = FALSE, RegisterThis = FALSE, bSingleMS = FALSE;
   
   Boolean select_success = FALSE;
@@ -480,11 +506,11 @@ void MediaObjSelect(PDNMG pdnmgThis, Boolean highlight)
 /*-----------------------------------------------*/
 void Cn3DSendColorMsgForBioseq(Int4 iCount)
 {
-  SeqIdPtr sip;
-  SelStructPtr  sel;
-  SeqIdPtr      sip_dup;
-  Int4 from, to;
-  Uint1Ptr rgb;
+  SeqIdPtr sip = NULL;
+  SelStructPtr  sel = NULL;
+  SeqIdPtr      sip_dup = NULL;
+  Int4 from = 0, to = 0;
+  Uint1Ptr rgb = NULL;
 
   rgb = (Uint1Ptr) &(Cn3d_PaletteRGB[C_default]); /*GetRGB((Int2) 0);*/
 
@@ -523,8 +549,8 @@ void Cn3DSendColorMsg(void)
 /*-----------------------------------------------*/
 void ColorSalsa_old(Uint2 entityID, Uint2 itemID, SeqIdPtr sip, Int4 from, Int4 to, Uint1Ptr rgb)
 {
-  SelStructPtr  sel;
-  SeqIdPtr      sip_dup;
+  SelStructPtr  sel = NULL ;
+  SeqIdPtr      sip_dup = NULL;
 
   if(Num_Bioseq == 0) return;    /* important */
 
@@ -550,8 +576,8 @@ void ColorSalsa_old(Uint2 entityID, Uint2 itemID, SeqIdPtr sip, Int4 from, Int4 
 void PrepareColorMsg_old(Int4 iCount, Int4 from, Int4 to, Uint1Ptr rgb)
 {
 
-  SeqIdPtr  sip;
-  Uint2 entityID, itemID;
+  SeqIdPtr  sip = 0;
+  Uint2 entityID = 0, itemID = 0;
 
   if(Num_Bioseq == 0) return; /* important */
 
@@ -569,7 +595,7 @@ void Cn3DSetResidueColorForSalsa(Int4 iCount, PMGD pmgdThis, Uint1Ptr rgb)
   ResidueColorCellPtr rgbThis = NULL;
   Int2 iRes = 1;
 
-  ValNodePtr vnp;
+  ValNodePtr vnp = NULL;
 
   pdnmgThis = pmgdThis->pdnmgLink;
 
@@ -588,7 +614,7 @@ void Cn3DSetResidueColorForSalsa(Int4 iCount, PMGD pmgdThis, Uint1Ptr rgb)
 /*-----------------------------------------------*/
 void ColorSalsa_BYMG(PMGD pmgdThis, Uint1Ptr rgb)
 {
-  SelStructPtr  sel;
+  SelStructPtr  sel = NULL;
   Int4  iCount = 0, Gi = 0;
   Int4  from = 0, to = 0;
 
@@ -602,7 +628,7 @@ void ColorSalsa_BYMG(PMGD pmgdThis, Uint1Ptr rgb)
 
   PDNMS pdnmsSlaves = NULL;
  
-  SeqIdPtr sip;
+  SeqIdPtr sip = NULL;
 
   if(!Cn3D_ObjMgrOpen) return;
 
@@ -684,9 +710,9 @@ void ResetSalsaColor(void)
 {
   Int4 from = 0, to = 0;
   Int4 length = 0, iCount = 0;
-  Uint2 entityID, itemID;
-  SeqIdPtr sip;
-  Uint1Ptr rgb;
+  Uint2 entityID = 0, itemID = 0;
+  SeqIdPtr sip = NULL;
+  Uint1Ptr rgb = NULL;
 
   ResidueColorCellPtr rgbThis = NULL;
   ValNodePtr vnp = NULL;
@@ -732,6 +758,7 @@ void Cn3DCheckAlignmentStatusForStrucSeqsForMasterSeq(void)
 
   pdnmgThis = pmmdThis->pdnmgHead;
   while(pdnmgThis){
+   if(pdnmgThis->choice <= mediadata[0]->length){
      pmgdThis = pdnmgThis->data.ptrvalue;
      if(pmgdThis->bReserved && (pmgdThis->bReserved == pmsdThis->bAligned)){
         mediadata[0]->bAligned[pdnmgThis->choice - 1] = 1;
@@ -739,6 +766,10 @@ void Cn3DCheckAlignmentStatusForStrucSeqsForMasterSeq(void)
      else mediadata[0]->bAligned[pdnmgThis->choice - 1] = 0;
      
      pdnmgThis = pdnmgThis->next;
+    }
+   else break;
+                  /* add protection when weird data occurs */
+ /* e.g.,seq-id is the same for biostruc & seqalign, but not for sequences */
   }
 
 }
@@ -801,9 +832,11 @@ void Cn3DCheckAlignmentStatusForStrucSeqs(void)
         if(*starts == -1) { starts++; continue;}
         
         for(nres = from; nres < to; nres++, master_from++){
+         if(master_from <= mediadata[0]->length && nres <= mediadata[iCount]->length){
            if(mediadata[0]->bAligned[master_from] == 1) {
               mediadata[iCount]->bAligned[nres] = 1;
            }
+         }
         }
      
         starts++;
@@ -828,12 +861,13 @@ void Cn3DColorSalsaForStrucSeqs(void)
   Byte bAligned = FALSE;
 
   for(iCount = 1; iCount < Num_Bioseq; iCount++){
+     iRes = 0;
      Cn3D_CopyColorCell(&rgb, &(Cn3d_PaletteRGB[bColorAlignments[(iCount % NUM_SLAVES)]]));
      vnp = mediadata[iCount]->seq_color;
      while(vnp){
         rgbThis = vnp->data.ptrvalue;
 /*      bAligned = Cn3DCheckAlignmentStatusForStrucSeqs(iRes, mediadata[iCount]->sip); */
-        bAligned = mediadata[iCount]->bAligned[iRes];
+        if(iRes <= mediadata[iCount]->length) bAligned = mediadata[iCount]->bAligned[iRes];
         if(bAligned == 0) {
            rgbThis->rgb[0] = rgb.rgb[0]; rgbThis->rgb[1] = rgb.rgb[1]; rgbThis->rgb[2] = rgb.rgb[2];
         }
@@ -934,8 +968,8 @@ ResidueColorCell * GetColorIndexForMG(PMGD pmgdThis)
   PDNMG pdnmgThis = NULL;
   PMMD pmmdThis = NULL;
  
-  ValNodePtr seq_color;
-  ResidueColorCellPtr rgb;
+  ValNodePtr seq_color = NULL;
+  ResidueColorCellPtr rgb = NULL;
 
   Int4 iCount = 0;
 

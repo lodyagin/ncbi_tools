@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 98-01-01
 *
-* $Revision: 6.19 $
+* $Revision: 6.20 $
 *
 * File Description: patterns and profiles header
 *
@@ -38,6 +38,9 @@
 * Date       Name        Description of modification
 * --------------------------------------------------------------------------
 * $Log: urkptpf.h,v $
+* Revision 6.20  1999/07/13 13:07:05  sicotte
+* prefix functions SeqAlignSort* with URK to resolve toolkit conflicts urkptpf.c
+*
 * Revision 6.19  1998/11/16 14:29:54  kuzio
 * flagBoundaryCondition
 *
@@ -155,10 +158,10 @@ extern SeqAlignPtr IntProfileMatchBioseq (BioseqPtr bsp, ComProfPtr ppp,
 extern SeqLocPtr MatchSa2Sl (SeqAlignPtr PNTR saph);
 extern void EmbedFragLengthInfo (SeqAlignPtr saph, Int4 length);
 extern void EmbedMolecularWeightInfo (SeqAlignPtr saph, BioseqPtr bsp);
-extern void SeqAlignSortByStart (SeqAlignPtr PNTR sap);
-extern void SeqAlignSortByLength (SeqAlignPtr PNTR sap);
-extern void SeqAlignSortByMolWt (SeqAlignPtr PNTR sap);
-extern void SeqAlignSortByScore (SeqAlignPtr PNTR sap);
+extern void URK_SeqAlignSortByStart (SeqAlignPtr PNTR sap);
+extern void URK_SeqAlignSortByLength (SeqAlignPtr PNTR sap);
+extern void URK_SeqAlignSortByMolWt (SeqAlignPtr PNTR sap);
+extern void URK_SeqAlignSortByScore (SeqAlignPtr PNTR sap);
 
 #ifdef __cplusplus
 }

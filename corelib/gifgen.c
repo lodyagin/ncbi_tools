@@ -46,6 +46,20 @@
  *       GIF drawing functions
  *
  * $Log: gifgen.c,v $
+ * Revision 6.11  1999/08/13 21:23:08  vakatov
+ * Renamed "gd[Set|Get]ImageColor()" to "gdImage[Set|Get]Color()"
+ *
+ * Revision 6.10  1999/08/13 20:57:40  vakatov
+ * + gdSetImageColor()
+ * + gdImageGetAutoCropRectangle(), gdImageCrop(), gdImageAutoCrop()  <in
+ * a close collab. with S.Resenchuk & R.Tatusov>
+ * + static s_*Rect() to handle "gdRect"
+ *
+ * Revision 6.9  1999/05/20 21:32:45  vakatov
+ * s_DrawEllipse():  "ad hoc" patches for the case of zero radius.
+ * [_DEBUG] s_DrawConic():  just do nothing(and dont crash) if obtained
+ * a wrong octant
+ *
  * Revision 6.8  1998/06/26 19:57:15  vakatov
  * gdImageRoundRectangle():  check and adjust the passed args
  *
@@ -258,6 +272,74 @@ static const int sint[] = {
 /**************************************************************************/
 /* STATIC FUNCTION */
 /**************************************************************************/
+
+
+static void s_NormalizeRect(gdRect* rect)
+{
+  if (rect->lt.x > rect->rb.x) {
+    int x = rect->lt.x;
+    rect->lt.x = rect->rb.x;
+    rect->rb.x = x;
+  }
+
+  if (rect->lt.y > rect->rb.y) {
+    int y = rect->lt.y;
+    rect->lt.y = rect->rb.y;
+    rect->rb.y = y;
+  }
+}
+
+
+static void s_ExpandRect(gdRect* rect, int dX, int dY)
+{
+  s_NormalizeRect(rect);
+  rect->lt.x -= dX;
+  rect->rb.x += dX;
+  rect->lt.y -= dY;
+  rect->rb.y += dY;
+
+  if (rect->lt.x > rect->rb.x)
+    rect->lt.x = rect->rb.x = (rect->lt.x + rect->rb.x) / 2;
+  if (rect->lt.y > rect->rb.y)
+    rect->lt.y = rect->rb.y = (rect->lt.y + rect->rb.y) / 2;
+}
+
+
+static void s_CropRect(gdRect* rect, const gdRect* crop)
+{
+  s_NormalizeRect(rect);
+
+  if (rect->lt.x < crop->lt.x)
+    rect->lt.x = crop->lt.x;
+  if (rect->rb.x > crop->rb.x)
+    rect->rb.x = crop->rb.x;
+
+  if (rect->lt.y < crop->lt.y)
+    rect->lt.y = crop->lt.y;
+  if (rect->rb.y > crop->rb.y)
+    rect->rb.y = crop->rb.y;
+  
+}
+
+
+static void s_GetRectImage(gdRect* rect, const gdImage* im)
+{
+  rect->lt.x = 0;
+  rect->lt.y = 0;
+  rect->rb.x = (im ? im->sx : INT2_MAX) - 1;
+  rect->rb.y = (im ? im->sy : INT2_MAX) - 1;
+}
+
+
+static void s_CropRectImage(gdRect* rect, const gdImage* im)
+{
+  gdRect crop;
+  s_GetRectImage(&crop, im);
+  s_CropRect(rect, &crop);
+}
+
+
+
 static void 
 /*FCN*/gdImageBrushApply(gdImagePtr im, int x, int y)
 {
@@ -334,7 +416,7 @@ static
  * Version 2: 6-Oct-95
  *      Bugfixes from Arne Steinarson <arst@ludd.luth.se>
  *      (ftp://ftp.dai.ed.ac.uk/pub/vision/src/conic-patch1.[ch])
- * Adopted and "beautified" for NCBI toolkit by D.Vakatov, Feb-98;
+ * Adopted and "beautified" for the NCBI toolkit by D.Vakatov, Feb-98;
  * and, s_GetOctant() rewritten to fix at the octant boundary points
  */
 
@@ -356,8 +438,8 @@ static int s_GetOctant(int gx, int gy)
   if (gy < 0)
     gy = -gy;
 
-  ASSERT ( 1 <= OCTANT[Xvs0][Yvs0][A_VS_B(gx, gy)] );
-  ASSERT ( 8 >= OCTANT[Xvs0][Yvs0][A_VS_B(gx, gy)] );
+  /* ASSERT ( 1 <= OCTANT[Xvs0][Yvs0][A_VS_B(gx, gy)] ); */
+  /* ASSERT ( 8 >= OCTANT[Xvs0][Yvs0][A_VS_B(gx, gy)] ); */
   return OCTANT[Xvs0][Yvs0][A_VS_B(gx, gy)];
 }
 
@@ -372,10 +454,10 @@ static void s_DrawConic
  /* call "draw_func" to draw a point */
  Nlm_DrawPoint draw_func, void *draw_data)
 {
-static const int DIAGx[] = {999, 1,  1, -1, -1, -1, -1,  1,  1};
-static const int DIAGy[] = {999, 1,  1,  1,  1, -1, -1, -1, -1};
-static const int SIDEx[] = {999, 1,  0,  0, -1, -1,  0,  0,  1};
-static const int SIDEy[] = {999, 0,  1,  1,  0,  0, -1, -1,  0};
+  static const int DIAGx[] = {999, 1,  1, -1, -1, -1, -1,  1,  1};
+  static const int DIAGy[] = {999, 1,  1,  1,  1, -1, -1, -1, -1};
+  static const int SIDEx[] = {999, 1,  0,  0, -1, -1,  0,  0,  1};
+  static const int SIDEy[] = {999, 0,  1,  1,  0,  0, -1, -1,  0};
 
   int octant;
   int dxS, dyS, dxD, dyD;
@@ -445,13 +527,13 @@ static const int SIDEy[] = {999, 0,  1,  1,  0,  0, -1, -1,  0};
     v = u - E;
     break;
   default:
-    ASSERT ( FALSE );
+    /* ASSERT ( FALSE );  cannot be drawn by this algorithm */
     return;
   }
   
   k1sign = dyS * dyD;
   k1 = 2 * (A + k1sign * (C - A));
-  Bsign = dxD*dyD;
+  Bsign = dxD * dyD;
   k2 = k1 + Bsign * B;
   k3 = 2 * (A + C + Bsign * B);
 
@@ -848,10 +930,10 @@ NLM_EXTERN void
 }
 
 NLM_EXTERN int 
-/*FCN*/gdGetImageColor(gdImagePtr im, int color, int *r, int *g, int *b)
+/*FCN*/gdImageGetColor(gdImagePtr im, int color, int *r, int *g, int *b)
 {
-  ASSERT ( color >= 0 ); 
-  if (color >= im->colorsTotal  ||  im->open[color])
+  ASSERT ( color >= 0 );
+  if (color < 0  ||  color >= im->colorsTotal  ||  im->open[color])
     return FALSE;
 
   if ( r )
@@ -860,6 +942,20 @@ NLM_EXTERN int
     *g = im->green[color];
   if ( b )
     *b = im->blue [color];
+  return TRUE;
+}
+
+
+NLM_EXTERN int 
+/*FCN*/gdImageSetColor(gdImagePtr im, int color, int r, int g, int b)
+{
+  ASSERT ( color >= 0 );
+  if (color < 0  ||  color >= im->colorsTotal  ||  im->open[color])
+    return FALSE;
+
+  im->red  [color] = r;
+  im->green[color] = g;
+  im->blue [color] = b;
   return TRUE;
 }
 
@@ -1243,10 +1339,9 @@ NLM_EXTERN void
     {
       /* filled arc */
       SStorePoint sp_arc;
-
-      sp_arc.xdim = im->sx;
-      sp_arc.ydim = im->sy;
-      sp_arc.n = 0;
+      sp_arc.xdim   = im->sx;
+      sp_arc.ydim   = im->sy;
+      sp_arc.n      = 0;
       sp_arc.points = (SPoint *)Nlm_Malloc(2 * (sp_arc.xdim + sp_arc.ydim));
       s_DrawConic(A, B, C, D, E, F, xs, ys, xe, ye, s_StorePoint, &sp_arc);
       if (!sp_arc.n  &&  (A + B + C + D + E + F > 0))
@@ -1262,6 +1357,31 @@ static void s_DrawEllipse(gdImagePtr im,
   SDrawPointEllipse dpe;
   int A, B, C, D, E, F;
   int xs, ys, xe, ye;
+
+  if (!rx  &&  !ry) {
+    gdImageSetPixel(im, cx, cy, color);  
+    return;
+  }
+
+  if ( !rx ) {
+    ys = (quadrant == 0  ||  quadrant == 3  ||  quadrant == 4) ?
+      cy + ry : cy;
+    ye = (quadrant == 0  ||  quadrant == 1  ||  quadrant == 2) ?
+      cy - ry : cy;
+    gdImageLine(im, cx, ys, cx, ye, color);
+    return;
+  }
+
+  if ( !ry ) {
+    xs = (quadrant == 0  ||  quadrant == 1  ||  quadrant == 4) ?
+      cx + rx : cx;
+    xe = (quadrant == 0  ||  quadrant == 2  ||  quadrant == 3) ?
+      cx - rx : cx;
+    gdImageLine(im, xs, cy, xe, cy, color);
+    return;
+  }
+
+  ASSERT( rx > 0  &&  ry > 0 );
 
   A = ry * ry;
   B = 0;
@@ -1719,6 +1839,105 @@ NLM_EXTERN int gdImageSetClip(gdImagePtr im,
   s_ComposeEffClip(im);
 
   return was_clip;
+}
+
+
+NLM_EXTERN void gdImageGetAutoCropRectangle(gdImagePtr im, gdRect* rect)
+{
+  int width  = im->sx;
+  int height = im->sy;
+  int x, y, xb, yb, ye;
+  Uint1 *base_ptr, *ptr;
+
+  /* find upper colored pixel (CP);  background is zero */
+  for (y = 0, base_ptr = im->pixels;  y < height;  y++, base_ptr += width) {
+    for (x = 0, ptr = base_ptr;  x < width  &&  !*ptr;  x++, ptr++);
+    if (x < width)
+      break;
+  }
+  rect->lt.y = yb = y;
+
+  /* Found no CPs at all? */
+  if (y == height) {
+    rect->lt.x = rect->lt.y = 0;
+    rect->rb.x = MAX(im->sx-1, 0);
+    rect->rb.y = MAX(im->sy-1, 0);
+    return;
+  }
+
+  /* find lower CP */
+  base_ptr = im->pixels + width * (height - 1);
+  for (y = height-1;  y > yb;  y--, base_ptr -= width) {
+    for (x = 0, ptr = base_ptr;  x < width  &&  !*ptr;  x++, ptr++);
+    if (x < width)
+      break;
+  }
+  rect->rb.y = ye = y;
+
+  /* find left CP */
+  base_ptr = im->pixels + width * yb;
+  for (x = 0;  x < width;  x++, base_ptr++) {
+    for (y = yb, ptr = base_ptr;  y <= ye  &&  !*ptr;  y++, ptr += width);
+    if (y <= ye)
+      break;
+  }
+  rect->lt.x = xb = x;
+
+  /* find right CP */
+  base_ptr = im->pixels + width * (ye + 1) - 1;
+  for (x = width-1;  x > xb;  x--, base_ptr--) {
+    for (y = ye, ptr = base_ptr;  y >= yb  &&  !*ptr;  y--, ptr -= width);
+    if (y >= yb)
+      break;
+  }
+  rect->rb.x = x;
+}
+
+
+
+NLM_EXTERN void gdImageCrop(gdImagePtr im, const gdRect* rect)
+{
+  Uint1* base_ptr = im->pixels;
+  gdRect crop     = *rect;
+  int    width    = im->sx;
+
+  int    new_width;
+  int    y;
+  Uint1* ptr;
+   
+  /* adjust crop rectangle to fit image boundaries */
+  s_CropRectImage(&crop, im);
+
+  /* nothing to crop;  or crop without memcpy? */
+  if (crop.lt.x == 0  &&  crop.lt.y == 0  &&  crop.rb.x == im->sx - 1) {
+    im->sy = crop.rb.y + 1;
+    return;
+  }
+
+  /* "crop" -- move the content of crop rectangle to (0, 0) */
+  new_width = crop.rb.x - crop.lt.x + 1;
+  ptr = base_ptr + crop.lt.y * width + crop.lt.x;
+  for (y = crop.lt.y;  y <= crop.rb.y;  y++) {
+    memcpy(base_ptr, ptr, new_width);
+    base_ptr += new_width;
+    ptr  += width;
+  }
+
+  /* alternate image width/height */
+  im->sx = new_width;
+  im->sy = crop.rb.y - crop.lt.y + 1;
+}
+
+
+NLM_EXTERN void gdImageAutoCrop(gdImagePtr im, int border)
+{
+  gdRect crop;
+  if (border < 0)
+    border = -border;
+
+  gdImageGetAutoCropRectangle(im, &crop);
+  s_ExpandRect(&crop, border, border);
+  gdImageCrop(im, &crop);
 }
 
 

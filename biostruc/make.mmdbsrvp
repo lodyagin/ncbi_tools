@@ -1,103 +1,68 @@
 #######################################################################
 #
-#			>>>>> IMPORTANT NOTE <<<<<
+# This makefile is now used to make both the flat file (suffix "FF")
+# and pubstruct (suffix "PS") production versions of mmdbsrv. The
+# previous version (6.24) was used only for building the pubstruct version.
 #
-# To make mmdbsrv on vaster (SGI) use:
-#
-#	make -f make.mmdbsrvp NCBI_OTHERLIBS_MT=
-#
-# This will override the definition of NCBI_OTHERLIBS_MT, which is
-# needed on dorothy (Sun).
-#
-# This makefile is used to make a production version of mmdbsrv.  This
-# omits the usage of various scripts, subdirectories, etc. needed by
-# Pubstruct.
+# Historical comments that are no longer relevant have been removed.
 #
 #######################################################################
 #
 # $Log: make.mmdbsrvp,v $
-# Revision 6.3  1999/05/07 14:21:55  zimmerma
-# - removed local definition of NCBI_OTHERLIBS_MT
-# - changed OTHERLIBS to NCBI_OTHERLIBS on compile line
-# - redefined SRC to include only mmdbsrv.c and mmdblocl.c
+# Revision 6.4  1999/06/11 19:55:38  zimmerma
+# new makefiles
 #
-# Revision 6.2  1999/04/28 18:58:27  lewisg
-# turn off pubstruct define
-#
-# Revision 6.1  1998/06/11 19:15:50  madej
-# Simplified compile (omit Pubstruct).  Allow compile on both SGI and Sun.
-#
-#
+# 
 #######################################################################
+
+# Define sybase libs before ncbi.mk to allow them to be overridden:
+NCBI_SYBLIBS_CT = -L$(NCBI_SYBASE)/lib -lblk -lct -lcs -ltcl -lcomn -lintl
 
 include $(NCBI)/ncbi.mk
 CC = $(NCBI_CC)
 CFLAGS1 = -c
-LDFLAGS1 = 
-OPTFLAG = -g
 OTHERLIBS = -lm
 INCPATH = $(NCBI_INCDIR)
-LIBPATH = $(NCBI_LIBDIR)
-DEF = -D__NO_DB__
-# SYMBOLS FOR source, executables.
-SRC = mmdbsrv.c mmdblocl.c
-EXE = mmdbsrv
 
-CFLAGS = $(CFLAGS1) $(OPTFLAG) -I$(INCPATH) $(VIBFLAG) $(DEF)
-LDFLAGS = -I$(INCPATH) $(OPTFLAG) -L$(LIBPATH) $(VIBFLAG) $(DEF)
+#development mode
+OPTFLAG = -g
+LIBPATH = $(NCBI_ALTLIB)
+
+#production mode
+#OPTFLAG = $(NCBI_OPTFLAG)
+#LIBPATH = $(NCBI_LIBDIR)
+
+# SYMBOLS FOR flat file source, executables.
+
+SRC_FF = mmdbsrv.c mmdbFF.c
+SRC_PS = mmdbsrv.c mmdb_pubstruct.c PubStructAsn.c
+
+CFLAGS = $(CFLAGS1) $(OPTFLAG) -I$(INCPATH) 
+LDFLAGS = -I$(INCPATH) $(OPTFLAG) -L$(LIBPATH)
 
 # The current list of NCBI libraries copied from makenet.unx
 
 LIB1 = -lncbi
 LIB2 = -lncbiobj
 LIB3 = -lncbicdr
-LIB4 = -lvibrant
-LIB5 = -lncbiacc
 LIB6 = -lnetcli
 LIB7 = -lnetentr
 LIB8 = -lncbiNacc
-LIB9 = -lncbiCacc
-# LIB10 is reserved for NCSA socket library
-LIB10 =
-LIB11 = -lncbimla
-LIB12 = -lncbitax
-LIB13 = -lncbiid0
-#LIB14 = -lncbibls0
-LIB15 = -lnetcliE
-LIB16 = -lnetcliS
-LIB17 = -lnetcliES
-LIB19 = -lncbispel
-# LIB20 is for the NCBI desktop utilities
-LIB20 = -lncbidesk
-LIB21 = -lncbibls2
 LIB22 = -lncbimmdb
-LIB23 = -lncbitool
-LIB24 = -lncbisugg
-LIB25 = -lncbiwww
-LIB26 = -lncbitax1
-LIB27 = -lncbimsc1
-LIB29 = -lncbitxc1
-LIB30 = -lncbicn3d
-LIB31 = -lvibnet
 
+# Implicit actions
 
-## Implicit actions
-##
-## if need a .o, compile the .c
-##
-
+# if need a .o, compile the .c
 .c.o :
 	$(CC) $(CFLAGS) $<
-
-
-## Default thing to make will be "all"
-##
-
-all : $(EXE)
 
 ## make individual applications and components
 ##$
 
-$(EXE) : $(SRC)
-	$(CC) -o $(EXE) -DX11 -I./ -I/~/ncbi/build $(LDFLAGS) $(SRC)  \
-         $(LIB22) $(LIB8) $(LIB7) $(LIB6) $(LIB3) $(LIB2) $(LIB1) $(LIB28) $(NCBI_OTHERLIBS) 
+mmdbsrv.FF : $(SRC_FF)
+	$(CC) -o $@ -I./ $(LDFLAGS) $(SRC_FF) \
+        $(LIB22) $(LIB8) $(LIB7) $(LIB6) $(LIB3) $(LIB2) $(LIB1) $(NCBI_OTHERLIBS) 
+
+mmdbsrv.PS : $(SRC_PS)
+	$(CC) -o $@ -I./ $(LDFLAGS) $(NCBI_SYBFLAG) $(SRC_PS) -lnlmzip -lctutils $(NCBI_SYBLIBS_CT) \
+        $(LIB22) $(LIB8) $(LIB7) $(LIB6) $(LIB3) $(LIB2) $(LIB1) $(NCBI_OTHERLIBS)

@@ -35,3 +35,4 @@ asntool -m ../asn/ncbimime.asn -o asnmime.h
 asntool -m ../asn/pubmed.asn -o asnpubme.h
 asntool -m ../asn/medlars.asn -o asnmdrs.h
 asntool -m ../asn/proj.asn -o asnproj.h
+asntool -m ../access/entrez2.asn -o asnent2.h

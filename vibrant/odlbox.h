@@ -29,14 +29,16 @@
 *
 * Version Creation Date:   5/3/99
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description: 
 *
-* Modifications:  
+* Modifications:
 * --------------------------------------------------------------------------
-* Date     Name        Description of modification
-* -------  ----------  -----------------------------------------------------
+* $Log: odlbox.h,v $
+* Revision 6.2  1999/06/07 15:41:31  durand
+* add LOG line to keep track of the history
+*
 *
 *
 * ==========================================================================

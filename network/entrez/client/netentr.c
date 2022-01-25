@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   06/02/92
 *
-* $Revision: 6.4 $
+* $Revision: 6.7 $
 *
 * File Description: 
 *       entrez index access library for Network Entrez
@@ -51,6 +51,15 @@
 *
 * RCS Modification History:
 * $Log: netentr.c,v $
+* Revision 6.7  1999/05/28 15:39:31  kans
+* missing # on else and endif
+*
+* Revision 6.6  1999/05/28 15:28:19  beloslyu
+* set the netEntrezVersion from the defined macro
+*
+* Revision 6.5  1999/05/28 13:42:35  beloslyu
+* Change the version of netentrez
+*
 * Revision 6.4  1998/08/24 21:00:50  kans
 * fixed -v -fd warnings
 *
@@ -188,7 +197,11 @@ static EntrezInfoPtr vi = NULL;
 static CharPtr    infoBuf = NULL;
 static size_t     charCount = 0;
 static ValNodePtr namedTerms = NULL;
-static CharPtr    netEntrezVersion = "2.02c2ASN1SPEC5 ";
+#if defined(NETENTREZVERSION)
+static CharPtr    netEntrezVersion = NETENTREZVERSION;
+#else
+static CharPtr    netEntrezVersion = "2.02c2ASN1SPEC6 ";
+#endif
 static CharPtr    userApplId = NULL;
 static Boolean    userWarnings;
 static EntrezExtraInfoPtr eeip = NULL;

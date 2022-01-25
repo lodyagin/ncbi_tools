@@ -28,10 +28,11 @@ asntool -m ..\biostruc\mmdb1.asn -o mmdb1.h -w100
 asntool -m ..\biostruc\mmdb2.asn -o mmdb2.h -w100
 asntool -m ..\biostruc\mmdb3.asn -o mmdb3.h -w100
 asntool -m ..\network\blast2\client\blast18.asn -o asnbl18.h
-asntool -m ..\network\blast3\client\blstspc.asn -o blstspc.h
+asntool -m ..\network\blast3\client\blstspc.asn -o blstspc.h -w100
 asntool -m ..\network\suggest\client\suggest.asn -o sugmap.h
 asntool -m ..\network\taxon1\common\taxon1.asn -o taxon1.h
 asntool -m ..\asn\ncbimime.asn -o asnmime.h
 asntool -m ..\asn\pubmed.asn -o asnpubme.h
 asntool -m ..\asn\medlars.asn -o asnmdrs.h
 asntool -m ..\asn\proj.asn -o asnproj.h
+asntool -m ..\access\entrez2.asn -o asnent2.h

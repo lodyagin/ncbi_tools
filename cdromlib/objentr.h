@@ -23,7 +23,7 @@
 *
 * ===========================================================================
 *
-* RCS $Id: objentr.h,v 6.2 1998/03/26 23:23:19 yaschenk Exp $
+* RCS $Id: objentr.h,v 6.3 1999/08/17 16:31:27 kans Exp $
 *
 * Author:  Ostell, Schuler
 *
@@ -46,6 +46,9 @@
 *                      time it is checked into the system.
 
 $Log: objentr.h,v $
+Revision 6.3  1999/08/17 16:31:27  kans
+increased field tag size to handle current data
+
 Revision 6.2  1998/03/26 23:23:19  yaschenk
 adding CdRomAsnLoad() as extern function to load Asn tree
 
@@ -172,7 +175,7 @@ EntrezTypeInfo;
 typedef struct EntrezFieldInfo
 {
 	short id;                 /* id number to pass to APIs         */
-	char  tag[6];             /* 4-letter tag (for internal use)   */
+	char  tag[7];             /* 4-letter tag (for internal use)   */
 	char *name;               /* short string to go on menu        */
 	char *descr;              /* longer, descriptive string        */
 	unsigned single_token :1; /* all terms are single-token        */ 

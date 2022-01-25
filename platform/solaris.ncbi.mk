@@ -1,12 +1,12 @@
 #
-# $Id: solaris.ncbi.mk,v 1.3 1999/04/21 13:21:43 beloslyu Exp $
+# $Id: solaris.ncbi.mk,v 1.5 1999/08/12 18:32:41 beloslyu Exp $
 #
 NCBI_DEFAULT_LCL = sol
 NCBI_MAKE_SHELL = /usr/bin/sh
 NCBI_CC = cc -xildoff
 NCBI_CFLAGS1 = -c -Xa
-NCBI_LDFLAGS1 = -Xa
-NCBI_OPTFLAG = -O -fast
+NCBI_LDFLAGS1 = -fast
+NCBI_OPTFLAG = -fast
 # following 2 lines are temporary; J. Epstein, 8/11/97
 NCBI_INCDIR = /netopt/ncbi_tools/ver0.0/ncbi/include
 NCBI_LIBDIR = /netopt/ncbi_tools/ver0.0/ncbi/lib
@@ -67,3 +67,4 @@ NCBI_DBUGEXTRA = -xsb
 #
 #FastCGI library for Sun C compilers ver 4.2 and ver 5.0
 LIBFASTCGI=-lfcgi`sh -c 'CC -V 2>&1'|cut -f4 -d' '`
+NETENTREZVERSION = 2.02c2ASN1SPEC6 

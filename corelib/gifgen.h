@@ -46,6 +46,14 @@
  *       GIF generator header file
  *
  * $Log: gifgen.h,v $
+ * Revision 6.7  1999/08/13 21:23:09  vakatov
+ * Renamed "gd[Set|Get]ImageColor()" to "gdImage[Set|Get]Color()"
+ *
+ * Revision 6.6  1999/08/13 20:55:28  vakatov
+ * + gdSetImageColor()
+ * + gdImageGetAutoCropRectangle(), gdImageCrop(), gdImageAutoCrop()  <in
+ * a close collab. with S.Resenchuk & R.Tatusov>
+ *
  * Revision 6.5  1998/06/15 22:02:54  vakatov
  * Added gdImageSetClip() to allow clipping(rectangular area only)
  *
@@ -105,6 +113,11 @@
 #define NLM_EXTERN NLM_IMPORT
 #else
 #define NLM_EXTERN extern
+#endif
+
+
+#ifdef __cplusplus
+extern "C" {
 #endif
 
 
@@ -179,10 +192,6 @@ typedef struct gdImageStruct {
 } gdImage,  *gdImagePtr;
 
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 /* Functions to manipulate images. */
 NLM_EXTERN gdImagePtr gdImageCreate         (int sx, int sy);
 NLM_EXTERN gdImagePtr gdImageCreateFromGif  (FILE *fd);
@@ -221,8 +230,18 @@ NLM_EXTERN void       gdImageFilledPolygon  (gdImagePtr im,
                                              gdPointPtr p, int n, int c);
 NLM_EXTERN int        gdImageColorAllocate  (gdImagePtr im,
                                              int r, int g, int b);
-NLM_EXTERN int        gdGetImageColor       (gdImagePtr im, int color,
+
+/* Do nothing and return FALSE if the "color" is bad or not allocated
+ */
+#define gdGetImageColor gdImageGetColor
+NLM_EXTERN int        gdImageGetColor       (gdImagePtr im, int color,
                                              int *r, int *g, int *b);
+
+/* Do nothing and return FALSE if the "color" is bad or not allocated
+ */
+NLM_EXTERN int        gdImageSetColor       (gdImagePtr im, int color,
+                                             int r, int g, int b);
+
 NLM_EXTERN int        gdImageColorClosest   (gdImagePtr im,
                                              int r, int g, int b);
 NLM_EXTERN int        gdImageColorExact     (gdImagePtr im,
@@ -261,15 +280,35 @@ NLM_EXTERN void       gdImageCopyResized    (gdImagePtr dst,
                                              int srcX, int srcY,
                                              int dstW, int dstH,
                                              int srcW, int srcH);
-/* return non-zero value if the image was clipped before
+
+/* (return non-zero value if the image was clipped before)
  */
 NLM_EXTERN int        gdImageSetClip        (gdImagePtr im,
                                              const gdRect *clip,
                                              gdRect *old_clip);
 
-#ifdef __cplusplus
-}
-#endif
+
+/* Determine a minimal rectangular area "rect" inside image "im" such that
+ * the area outside the "rect" contains only background pixels.
+ * NOTE: if the whole image contains only background pixels then
+ *       just return the image's boundaries.
+ */
+NLM_EXTERN void gdImageGetAutoCropRectangle(gdImagePtr im, gdRect* rect);
+
+
+/* Inside the image "im", move the rectangular area "rect" to the left
+ * top corner.
+ * NOTE:  "rect" will be automagically normalized and fit the image boundaries.
+ */
+NLM_EXTERN void gdImageCrop(gdImagePtr im, const gdRect* rect);
+
+
+/* Apply gdImageGetAutoCropRectangle(), then add no more than "border" pixels
+ * to each side of the resultant rectangular area, and do gdImageCrop().
+ */
+NLM_EXTERN void gdImageAutoCrop(gdImagePtr im, int border);
+
+
 
 /**************************************************************************/
 /* GLOBAL VARIABLE */
@@ -280,6 +319,11 @@ extern gdFontPtr gdFont9X15b;
 extern gdFontPtr gdFont7X13b;
 extern gdFontPtr gdFont6X12;
 extern gdFontPtr gdFont5X8;
+
+
+#ifdef __cplusplus
+}
+#endif
 
 
 #undef NLM_EXTERN

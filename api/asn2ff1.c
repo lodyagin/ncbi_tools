@@ -29,13 +29,31 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.53 $
+* $Revision: 6.59 $
 *
 * File Description:  files that go with "asn2ff"
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: asn2ff1.c,v $
+* Revision 6.59  1999/08/31 18:36:00  tatiana
+* protection for NULL pointer added in SeqEntryToStringArrayEx()
+*
+* Revision 6.58  1999/08/31 14:27:54  tatiana
+* SeqEntryToStrArrayEx() added which return a link list of strings
+*
+* Revision 6.57  1999/08/30 17:01:55  tatiana
+* print_taxinfo() checks for mgcode
+*
+* Revision 6.56  1999/07/27 15:05:30  tatiana
+* cleaning meemory leaks in SeqEntryToFlatAjp()
+*
+* Revision 6.55  1999/06/16 17:27:22  kans
+* set show_version flag
+*
+* Revision 6.54  1999/05/10 21:38:52  tatiana
+* hot link removed from ACCESSION
+*
 * Revision 6.53  1999/04/23 20:42:30  tatiana
 * a bug for slp view is fixed in CheckSeqPort
 *
@@ -590,7 +608,7 @@ static void GetPapRefPtr (Asn2ffJobPtr ajp, GBEntryPtr gbp, Int4 ext_index, Int4
 	if (vnp == NULL) {
 		return;
 	}
-	psp = vnp->data.ptrvalue;
+	psp = (PubStructPtr)vnp->data.ptrvalue;
 	if (psp == NULL) {
 		return;
 	}
@@ -692,13 +710,13 @@ NLM_EXTERN Boolean asn2ff_print (Asn2ffJobPtr ajp)
 			string = FFPrint (pap, index, pap_size);
 			if (string != NULL && *string != '\0') {
 				ff_print_string (ajp->fp, string, "\n");
-				string = MemFree (string);
+				string = (char *)MemFree (string);
 			} else if (ajp->null_str) {
 				ErrPostStr(SEV_WARNING, ERR_PRINT_NullString, 
 				"CAUTION: NULL String returned\n");
 			}
 			if (pap[index].descr) {
-				pap[index].descr = MemFree(pap[index].descr);
+				pap[index].descr = (DescrStructPtr)MemFree(pap[index].descr);
 			}
 		}
 		tail_www(ajp->fp);
@@ -783,28 +801,23 @@ NLM_EXTERN LinkStrPtr asn2ff_print_to_mem(Asn2ffJobPtr ajp, LinkStrPtr lsp)
 
     pap_size = asn2ff_setup(ajp, &pap);
 
-    if(pap_size > 0)
-    {
-        for(index = 0; index < pap_size; index++)
-        {
+    if(pap_size > 0) {
+        for(index = 0; index < pap_size; index++) {
             asn2ff_set_output(NULL, "\n");
             string = FFPrint(pap, index, pap_size);
-            if(string != NULL && *string != '\0')
-            {
+            if(string != NULL && *string != '\0') {
+            	string = ff_print_string_mem(string);
                 lsp->next = (LinkStrPtr) MemNew(sizeof(LinkStr));
                 lsp = lsp->next;
                 lsp->next = NULL;
                 lsp->line = string;
                 string = NULL;
-            }
-            else if(ajp->null_str != FALSE)
-            {
+            } else if(ajp->null_str != FALSE) {
                 ErrPostStr(SEV_WARNING, ERR_PRINT_NullString,
                            "CAUTION: NULL String returned\n");
             }
-            if(pap[index].descr != NULL)
-            {
-                pap[index].descr = MemFree(pap[index].descr);
+            if(pap[index].descr != NULL) {
+                pap[index].descr = (DescrStructPtr)MemFree(pap[index].descr);
             }
         }
         MemFree(pap);
@@ -876,7 +889,6 @@ static LinkStrPtr SeqEntryToLinkStr(Asn2ffJobPtr ajp, SeqEntryPtr sep,
 
     return(lsp);
 }
-
 /**********************************************************/
 NLM_EXTERN CharPtr PNTR SeqEntryToStrArray(SeqEntryPtr sep, Uint1 format,
                                            Uint1 mode)
@@ -912,6 +924,97 @@ NLM_EXTERN CharPtr PNTR SeqEntryToStrArray(SeqEntryPtr sep, Uint1 format,
     return(res);
 }
 
+/**********************************************************
+*	This function allocates memory for the linked list
+***********************************************************/
+static LinkStrPtr SeqEntryToLinkStrEx(Asn2ffJobPtr ajp, SeqEntryPtr sep, LinkStrPtr lsp, Uint1 format)
+{
+    BioseqSetPtr		bssp;
+		
+    if(sep == NULL || ajp == NULL)
+        return(NULL);
+
+    if(IS_Bioseq_set(sep) != 0) {
+        bssp = (BioseqSetPtr) sep->data.ptrvalue;
+        if(bssp != NULL && (bssp->_class == 7 || bssp->_class == 13 ||
+           bssp->_class == 14 || bssp->_class == 15)) {
+            for(sep = bssp->seq_set; sep != NULL; sep = sep->next) {
+                lsp = SeqEntryToLinkStrEx(ajp, sep, lsp, format);
+            }
+            return(lsp);
+        }
+    }
+
+
+    lsp = asn2ff_print_to_mem(ajp, lsp);
+    return(lsp);
+}
+
+/**********************************************************/
+NLM_EXTERN LinkStrPtr SeqEntryToStrArrayEx(SeqEntryPtr sep, Uint1 format,
+                                           Int4 gi, Boolean is_html)
+{
+    StdPrintOptionsPtr	Spop = NULL;
+    LinkStrPtr   lsp;
+    LinkStrPtr   tlsp;
+    CharPtr PNTR res;
+    CharPtr PNTR tres;
+    Int4         num;
+	Asn2ffJobPtr ajp;
+	ValNodePtr v;
+	BioseqPtr bsp;
+	
+    if (is_html) {
+    	init_www();
+    }
+    if(format == GENPEPT_FMT) {
+        if(Template_load == FALSE) {
+            PrintTemplateSetLoad("asn2ff.prt");
+            Template_load = TRUE;
+        }
+        Spop = StdPrintOptionsNew(NULL);
+        if(Spop != NULL) {
+            Spop->newline = "~";
+            Spop->indent = "";
+        } else {
+            ErrPostStr(SEV_FATAL, 0, 0, "StdPrintOptionsNew failed");
+            return NULL;
+        }
+    }
+	ajp = Asn2ffJobCreate(sep, NULL, NULL, NULL, format, RELEASE_MODE, Spop);
+	if (gi > 0) {
+	ajp->show_version = TRUE;
+		v = ValNodeNew(NULL);
+		v->choice = SEQID_GI;
+		v->data.intvalue = gi;
+		ajp->id_print = v;
+		if (v != NULL) {
+			ajp->gb_style = FALSE;
+			ajp->id_print = v;
+			if ((bsp = BioseqFind(v)) == NULL) {
+				ErrPostEx(SEV_FATAL, 0, 0, "BioseqFind failed for %ld", gi);
+				return NULL;
+			}
+    		if (bsp->repr == Seq_repr_seg) {
+				ajp->gb_style = TRUE;
+				ajp->id_print = NULL;
+			}
+		}
+	}
+    lsp = (LinkStrPtr) MemNew(sizeof(LinkStr));
+    lsp->next = NULL;
+    lsp->line = NULL;
+    SeqEntryToLinkStr(ajp, sep, lsp, format, RELEASE_MODE);
+    tlsp = lsp;
+    lsp = lsp->next;
+    MemFree(tlsp);
+
+	if(Spop != NULL) {
+    	StdPrintOptionsFree(Spop);
+	}
+    return (lsp);
+}
+
 /**********************************************************/
 NLM_EXTERN void asn2ff_print_bs(Asn2ffJobPtr ajp)
 {
@@ -935,7 +1038,7 @@ NLM_EXTERN void asn2ff_print_bs(Asn2ffJobPtr ajp)
             FFBSPrint(pap, index, pap_size);
             if(pap[index].descr)
             {
-                pap[index].descr = MemFree(pap[index].descr);
+                pap[index].descr = (DescrStructPtr)MemFree(pap[index].descr);
             }
         }
         MemFree(pap);
@@ -964,7 +1067,7 @@ NLM_EXTERN ByteStorePtr AjpToByteStore(Asn2ffJobPtr ajp)
 
     if(ajp->ssp != NULL)
     {
-        ajp->sep = ajp->ssp->data;
+        ajp->sep = (SeqEntryPtr)ajp->ssp->data;
         ajp->ssp = NULL;
     }
 
@@ -1101,6 +1204,7 @@ NLM_EXTERN Boolean SeqEntryToFlat (SeqEntryPtr sep, FILE *fp, Uint1 format, Uint
 	if (ajp == NULL) {
 		return FALSE;
 	}
+	ajp->show_version = TRUE;
 	rsult = asn2ff_print(ajp);
 	StdPrintOptionsFree(ajp->Spop);
 	MemFree(ajp);
@@ -1142,27 +1246,38 @@ NLM_EXTERN Boolean SeqEntryToFlatAjp (Asn2ffJobPtr ajp, SeqEntryPtr sep, FILE *f
       		for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
         		rsult = SeqEntryToFlatAjp (ajp, sep, fp, format, mode);
 			}
+			if (format == GENPEPT_FMT && Spop) {
+				Spop = StdPrintOptionsFree(Spop);
+			}
 			return rsult;
 		}
 	}
-	if (sep == NULL) {
+	if (sep == NULL && ajp != NULL) {
 		StdPrintOptionsFree(ajp->Spop);
 		return rsult;
 	}
 	if (ajp == NULL) {
 		if ((ajp = Asn2ffJobCreate(sep, NULL, NULL, fp, format, mode, Spop))
 																	== NULL) {
+			if (format == GENPEPT_FMT && Spop) {
+				Spop = StdPrintOptionsFree(Spop);
+			}
 			return FALSE;
 		}
 	} else {
 		if ((ajp->entityID=ObjMgrGetEntityIDForPointer(sep)) == 0) {
 			ErrPostStr(SEV_WARNING, 0, 0, "Couldn't get entityID");
+			if (format == GENPEPT_FMT && Spop) {
+				Spop = StdPrintOptionsFree(Spop);
+			}
 			return rsult;
 		}
 		ajp->sep = sep;
 	}
 	rsult = asn2ff_print(ajp);
-	StdPrintOptionsFree(ajp->Spop);
+	if (format == GENPEPT_FMT && Spop) {
+		Spop = StdPrintOptionsFree(Spop);
+	}
 	
 	return rsult;
 }
@@ -1495,7 +1610,7 @@ NLM_EXTERN Int4 asn2ff_setup (Asn2ffJobPtr ajp, FFPrintArrayPtr PNTR papp)
 		awp = ajp->asn2ffwep;
 		if (!ajp->only_one && awp->gbp == NULL) {
 			if (awp) {
-				ajp->asn2ffwep = MemFree(awp);
+				ajp->asn2ffwep = (Asn2ffWEPtr)MemFree(awp);
 			}
 			return 0;
 		}
@@ -1725,7 +1840,7 @@ static Boolean check_whole(SeqFeatPtr f, Int4 len)
 		if (slp->choice == SEQLOC_WHOLE) {
 			whole = TRUE;
 		} else if (slp->choice == SEQLOC_INT) {
-			sip = slp->data.ptrvalue;
+			sip = (SeqIntPtr)slp->data.ptrvalue;
 			if (sip->from == 0 && sip->to == len-1) {
 				whole = TRUE;
 			}
@@ -1744,7 +1859,7 @@ Boolean get_pubs (GatherContextPtr gcp)
 	SubmitBlockPtr sbp;
 	CitSubPtr 	the_cit;
 	
-	vnpp = gcp->userdata;
+	vnpp = (ValNodePtr *)gcp->userdata;
 	vnp = *vnpp;
 	switch (gcp->thistype)
 	{
@@ -1777,7 +1892,7 @@ Boolean get_pubs (GatherContextPtr gcp)
 				}
 			} 
 			if (sfp->data.choice == SEQFEAT_IMP) {
-				ifp = sfp->data.value.ptrvalue;
+				ifp = (ImpFeatPtr)sfp->data.value.ptrvalue;
 				if (StringCmp(ifp->key, "Site-ref") == 0) {
 					if (sfp->cit != NULL) {
 						vnp = StorePub(NULL, vnp, NULL, sfp, 3, gcp->entityID,
@@ -1788,7 +1903,7 @@ Boolean get_pubs (GatherContextPtr gcp)
 			break;
 		case OBJ_SUBMIT_BLOCK:
 			sbp = (SubmitBlockPtr) (gcp->thisitem);
-			the_cit = AsnIoMemCopy(sbp->cit, (AsnReadFunc) CitSubAsnRead,
+			the_cit = (CitSubPtr)AsnIoMemCopy(sbp->cit, (AsnReadFunc) CitSubAsnRead,
 			(AsnWriteFunc) CitSubAsnWrite);
 			v = ValNodeNew(NULL);
 			v->choice = PUB_Sub;
@@ -1852,7 +1967,7 @@ static void CheckSourceFeat(Asn2ffJobPtr ajp, GBEntryPtr gbp)
 	}
 	ds = gbp->source_info;
 	if ((vnp=GatherDescrByChoice(ajp, gbp, Seq_descr_source)) != NULL) {
-		biosp = vnp->data.ptrvalue;
+		biosp = (BioSourcePtr)vnp->data.ptrvalue;
 		orp = (OrgRefPtr) biosp->org;	
 		if (orp) {
 			if (ds == NULL) {
@@ -1863,7 +1978,7 @@ static void CheckSourceFeat(Asn2ffJobPtr ajp, GBEntryPtr gbp)
 			ds->entityID = gbp->descr->entityID;
 			ds->itemID = gbp->descr->itemID;
 			ds->itemtype = gbp->descr->itemtype;
-			gbp->descr = MemFree(gbp->descr);
+			gbp->descr = (DescrStructPtr)MemFree(gbp->descr);
 			return;
 		}
 	}
@@ -1881,12 +1996,12 @@ static void CheckSourceFeat(Asn2ffJobPtr ajp, GBEntryPtr gbp)
 			ds->entityID = gbp->descr->entityID;
 			ds->itemID = gbp->descr->itemID;
 			ds->itemtype = gbp->descr->itemtype;
-			gbp->descr = MemFree(gbp->descr);
+			gbp->descr = (DescrStructPtr)MemFree(gbp->descr);
 			return;
 		}
 	}
 	if (gbp && gbp->descr) {
-			gbp->descr = MemFree(gbp->descr);
+			gbp->descr = (DescrStructPtr)MemFree(gbp->descr);
 	}
 	return;
 }
@@ -1958,7 +2073,7 @@ static void GetFeatDefinitionLine(Asn2ffJobPtr ajp, GBEntryPtr gbp)
 	Uint1			tech = 0;
 	SeqFeatPtr		sfp;
 	
-	buf = MemNew(buflen+1);
+	buf = (CharPtr)MemNew(buflen+1);
 	gbp->descr = NULL;
 /*****************  deflines for htg sequences *****************/
 	vnp=GatherDescrByChoice(ajp, gbp, Seq_descr_molinfo);
@@ -1969,13 +2084,13 @@ static void GetFeatDefinitionLine(Asn2ffJobPtr ajp, GBEntryPtr gbp)
 		}
 	}
 	if (gbp && gbp->descr) {
-		gbp->descr = MemFree(gbp->descr);
+		gbp->descr = (DescrStructPtr)MemFree(gbp->descr);
 	}
 	
-	iip = MemNew(sizeof(ItemInfo));
+	iip = (ItemInfoPtr)MemNew(sizeof(ItemInfo));
 	CreateDefLine(iip, gbp->bsp, buf, buflen, tech, NULL, NULL);
 	if (iip != NULL) {
-		dsp = MemNew(sizeof(DescrStruct));
+		dsp = (DescrStructPtr)MemNew(sizeof(DescrStruct));
 		dsp->entityID = iip->entityID;
 		dsp->itemID = iip->itemID;
 		dsp->itemtype = iip->itemtype;
@@ -1996,7 +2111,7 @@ static void GetFeatDefinitionLine(Asn2ffJobPtr ajp, GBEntryPtr gbp)
 	if (sfp)
 		label = (CharPtr) FeatDefTypeLabel(sfp);
 	if (label) {
-		fstr = MemNew(StringLen(label) + StringLen(string_start) + 7);
+		fstr = (CharPtr)MemNew(StringLen(label) + StringLen(string_start) + 7);
 		sprintf(fstr, "%s from: %s", label, string_start);
 	} else {
 		fstr = StringSave(string_start);
@@ -2099,7 +2214,7 @@ Int4 asn2gb_setup(Asn2ffJobPtr ajp, FFPrintArrayPtr PNTR papp)
 		LoadPap(pap, PrintDefinitionLine, ajp, 0, (Uint1)0, (Uint1)0, 
 			line_estimate[1], A2F_OTHER, gbp);
 		if (gbp->descr) {
-			gbp->descr = MemFree(gbp->descr);
+			gbp->descr = (DescrStructPtr)MemFree(gbp->descr);
 			gbp->descr = NULL;
 		}
 		LoadPap(pap, PrintAccessLine, ajp, 0, (Uint1)0, (Uint1)0, 
@@ -3034,11 +3149,11 @@ void CheckSeqPort (Asn2ffJobPtr ajp, GBEntryPtr gbp, Int4 start)
 	} else {
 		if (ajp->slp) {
 			spp = SeqPortNewByLoc(ajp->slp, Seq_code_iupacna);
-			start1 = start - spp->start - SeqLocStart(ajp->slp);
+		/*	start1 = start - spp->start - SeqLocStart(ajp->slp);*/
 		} else {
 			spp = SeqPortNew(bsp, 0, -1, 0, Seq_code_iupacna);
-			start1 = start - spp->start;
 		}
+		start1 = start - spp->start;
 		if (start1 != spp->curpos) 
 			SeqPortSeek(spp, start1, SEEK_SET);
 	}
@@ -3084,7 +3199,7 @@ void GetMolInfo (Asn2ffJobPtr ajp, CharPtr buffer, GBEntryPtr gbp)
 	}
 /*keep both old and new style, get new first*/
 	if ((vnp=GatherDescrByChoice(ajp, gbp, Seq_descr_molinfo)) != NULL) {
-		mfp = vnp->data.ptrvalue;
+		mfp = (MolInfoPtr)vnp->data.ptrvalue;
 		if (mfp->biomol <= 8) {
 			imol = (Int2) (mfp->biomol);
 		}
@@ -3167,7 +3282,7 @@ Boolean CheckXrefLine (Asn2ffJobPtr ajp, GBEntryPtr gbp)
 	tvnp = GatherDescrListByChoice(ajp, gbp, Seq_descr_embl);
 	for (descr=	tvnp;
 				descr; descr=descr->next) {
-		dsp = descr->data.ptrvalue;
+		dsp = (DescrStructPtr)descr->data.ptrvalue;
 		ds_vnp = dsp->vnp;
 		eb = (EMBLBlockPtr) ds_vnp->data.ptrvalue;
 		for (xref=eb->xref; xref; xref=xref->next) {
@@ -3290,7 +3405,8 @@ void PrintAccessLine(Asn2ffJobPtr ajp, GBEntryPtr gbp)
 	if (ajp->ssp && ajp->hup) {
 		ff_AddChar(';');
 	} else {
-		www_accession(gbp->accession);
+	/*	www_accession(gbp->accession);*/
+		ff_AddString(gbp->accession);
 	}
 	if (ajp->slp == NULL) {
 		AddExtraAccessions(ajp, gbp);
@@ -3472,7 +3588,7 @@ static ValNodePtr AddKeyword(ValNodePtr key, CharPtr add)
 	ValNodePtr vnp;
 	
 	for (vnp = key; vnp; vnp = vnp->next) {
-		if (StringCmp(vnp->data.ptrvalue, add) == 0) {
+		if (StringCmp((CharPtr)vnp->data.ptrvalue, add) == 0) {
 			return key;
 		}
 	}
@@ -3585,14 +3701,14 @@ ValNodePtr GetKeywordLine(Asn2ffJobPtr ajp, GBEntryPtr gbp)
 		gbblk = (GBBlockPtr) block->data.ptrvalue;
 		if (gbblk->keywords != NULL) {
 			for (vnp = gbblk->keywords; vnp; vnp = vnp->next) {
-				if (CheckSpecialKeyword(is_est, is_sts, is_gss, vnp->data.ptrvalue) == TRUE) {
-					keyword = AddKeyword(keyword, vnp->data.ptrvalue);
+				if (CheckSpecialKeyword(is_est, is_sts, is_gss, (CharPtr)vnp->data.ptrvalue) == TRUE) {
+					keyword = AddKeyword(keyword, (CharPtr)vnp->data.ptrvalue);
 				}
 			}
 			return keyword;
 		} else {
 			if (gbp->descr) {
-				gbp->descr = MemFree(gbp->descr);
+				gbp->descr = (DescrStructPtr)MemFree(gbp->descr);
 			}
 		}
 	}
@@ -3601,14 +3717,14 @@ ValNodePtr GetKeywordLine(Asn2ffJobPtr ajp, GBEntryPtr gbp)
 		ebp = (EMBLBlockPtr) block->data.ptrvalue;
 		if (ebp->keywords != NULL) {
 			for (vnp = ebp->keywords; vnp; vnp = vnp->next) {
-				if (CheckSpecialKeyword(is_est, is_sts, is_gss, vnp->data.ptrvalue) == TRUE) {
-					keyword = AddKeyword(keyword, vnp->data.ptrvalue);
+				if (CheckSpecialKeyword(is_est, is_sts, is_gss, (CharPtr)vnp->data.ptrvalue) == TRUE) {
+					keyword = AddKeyword(keyword, (CharPtr)vnp->data.ptrvalue);
 				}
 			}
 			return keyword;
 		} else {
 			if (gbp->descr) {
-				gbp->descr = MemFree(gbp->descr);
+				gbp->descr = (DescrStructPtr)MemFree(gbp->descr);
 			}
 		}
 	} 
@@ -3617,12 +3733,12 @@ ValNodePtr GetKeywordLine(Asn2ffJobPtr ajp, GBEntryPtr gbp)
 		pbp = (PirBlockPtr) block->data.ptrvalue;
 		if (pbp->keywords != NULL) {
 			for (vnp = pbp->keywords; vnp; vnp = vnp->next) {
-				keyword = AddKeyword(keyword, vnp->data.ptrvalue);
+				keyword = AddKeyword(keyword, (CharPtr)vnp->data.ptrvalue);
 			}
 			return keyword;
 		} else {
 			if (gbp->descr) {
-				gbp->descr = MemFree(gbp->descr);
+				gbp->descr = (DescrStructPtr)MemFree(gbp->descr);
 			}
 		}
 	}
@@ -3631,12 +3747,12 @@ ValNodePtr GetKeywordLine(Asn2ffJobPtr ajp, GBEntryPtr gbp)
 		prfp = (PrfBlockPtr) block->data.ptrvalue;
 		if (prfp->keywords != NULL) {
 			for (vnp = prfp->keywords; vnp; vnp = vnp->next) {
-				keyword = AddKeyword(keyword, vnp->data.ptrvalue);
+				keyword = AddKeyword(keyword, (CharPtr)vnp->data.ptrvalue);
 			}
 			return keyword;
 		} else {
 			if (gbp->descr) {
-				gbp->descr = MemFree(gbp->descr);
+				gbp->descr = (DescrStructPtr)MemFree(gbp->descr);
 			}
 		}
 	}
@@ -3645,12 +3761,12 @@ ValNodePtr GetKeywordLine(Asn2ffJobPtr ajp, GBEntryPtr gbp)
 		spbp = (SPBlockPtr) block->data.ptrvalue;
 		if (spbp->keywords != NULL) {
 			for (vnp = spbp->keywords; vnp; vnp = vnp->next) {
-				keyword = AddKeyword(keyword, vnp->data.ptrvalue);
+				keyword = AddKeyword(keyword, (CharPtr)vnp->data.ptrvalue);
 			}
 			return keyword;
 		} else {
 			if (gbp->descr) {
-				gbp->descr = MemFree(gbp->descr);
+				gbp->descr = (DescrStructPtr)MemFree(gbp->descr);
 			}
 		}
 	}
@@ -3680,7 +3796,7 @@ void PrintKeywordLine(Asn2ffJobPtr ajp, GBEntryPtr gbp)
 	}
 	if (keyword != NULL) {	/* the next line initializes the length */
 		for (vnp=keyword; vnp != NULL; vnp=vnp->next) {
-			string = vnp->data.ptrvalue;
+			string = (CharPtr)vnp->data.ptrvalue;
 			if (first == TRUE) {
 				first = FALSE;
 			} else {
@@ -3731,7 +3847,7 @@ void GetDefinitionLine(Asn2ffJobPtr ajp, GBEntryPtr gbp)
 	DescrStructPtr dsp = NULL;
 	Uint1 tech = 0;
 	
-	buf = MemNew(buflen+1);
+	buf = (CharPtr)MemNew(buflen+1);
 	gbp->descr = NULL;
 /*  deflines for htg sequences */
 	vnp=GatherDescrByChoice(ajp, gbp, Seq_descr_molinfo);
@@ -3742,13 +3858,13 @@ void GetDefinitionLine(Asn2ffJobPtr ajp, GBEntryPtr gbp)
 		}
 	}
 	if (gbp && gbp->descr) {
-		gbp->descr = MemFree(gbp->descr);
+		gbp->descr = (DescrStructPtr)MemFree(gbp->descr);
 	}
 	
-	iip = MemNew(sizeof(ItemInfo));
+	iip = (ItemInfoPtr)MemNew(sizeof(ItemInfo));
 	CreateDefLine(iip, gbp->bsp, buf, buflen, tech, NULL, NULL);
 	if (iip != NULL) {
-		dsp = MemNew(sizeof(DescrStruct));
+		dsp = (DescrStructPtr)MemNew(sizeof(DescrStruct));
 		dsp->entityID = iip->entityID;
 		dsp->itemID = iip->itemID;
 		dsp->itemtype = iip->itemtype;
@@ -3879,7 +3995,7 @@ void PrintGBSourceLine (Asn2ffJobPtr ajp, GBEntryPtr gbp)
 		return;
 	}
 	if (gbp->descr) {
-		gbp->descr = MemFree(gbp->descr);
+		gbp->descr = (DescrStructPtr)MemFree(gbp->descr);
 	}
 	if ((vnp=GatherDescrByChoice(ajp, gbp, Seq_descr_source)) != NULL) {
 		biosp = (BioSourcePtr) vnp->data.ptrvalue;
@@ -3945,7 +4061,7 @@ static void print_organism(Asn2ffJobPtr ajp, GBEntryPtr gbp, OrgRefPtr orp, Char
 	}
 	ff_EndPrint();
 }
-static void print_taxinfo(Asn2ffJobPtr ajp, GBEntryPtr gbp, OrgRefPtr orp, CharPtr lineage)
+static void print_taxinfo(Asn2ffJobPtr ajp, GBEntryPtr gbp, OrgRefPtr orp, CharPtr lineage, Boolean is_mito)
 {
 	DbtagPtr dbp;
 	Int4	id = -1, gcode=1;
@@ -3971,7 +4087,8 @@ static void print_taxinfo(Asn2ffJobPtr ajp, GBEntryPtr gbp, OrgRefPtr orp, CharP
 			if (StringCmp(dbp->db, "taxon") == 0)
 				id = dbp->tag->id;
 		}
-		ff_AddString("<BR>Taxonomy id: ");
+	/*	ff_AddString("<BR>Taxonomy id: ");*/
+		ff_AddString("<BR>Organism: ");
 		www_taxid(orp->taxname, id);
 	} else {
 		ff_AddString("Unknown.");
@@ -3982,7 +4099,7 @@ static void print_taxinfo(Asn2ffJobPtr ajp, GBEntryPtr gbp, OrgRefPtr orp, CharP
 	if (orp && orp->orgname) {
 		ff_StartPrint(12, 12, ASN2FF_GB_MAX, NULL);
 		ff_AddString("<BR>Genetic Code: ");
-		if (StringCmp(organelle, "Mitochondrion") == 0) {
+		if (StringICmp(organelle, "Mitochondrion") == 0 || is_mito == TRUE) {
 			gcode = orp->orgname->mgcode;
 		} else {
 			gcode = orp->orgname->gcode;
@@ -4072,7 +4189,7 @@ void PrintGBOrganismLine (Asn2ffJobPtr ajp, GBEntryPtr gbp)
 /* BioSource descr*/
 	if ((vnp=GatherDescrByChoice(ajp, gbp, Seq_descr_source)) != NULL) 
 	{
-		biosp = vnp->data.ptrvalue;
+		biosp = (BioSourcePtr)vnp->data.ptrvalue;
 		orp = (OrgRefPtr) biosp->org;
 		if (orp && orp->orgname) {
 			lineage = orp->orgname->lineage;
@@ -4087,7 +4204,7 @@ void PrintGBOrganismLine (Asn2ffJobPtr ajp, GBEntryPtr gbp)
 			if (gb)
 				lineage = gb->taxonomy;
 		}
-		gbp->descr = MemFree(gbp->descr);
+		gbp->descr = (DescrStructPtr)MemFree(gbp->descr);
 		gbp->descr = dsp;  /* keep Seq_descr_source dsp for sequin */
 	}
 	if (orp) {
@@ -4101,7 +4218,7 @@ void PrintGBOrganismLine (Asn2ffJobPtr ajp, GBEntryPtr gbp)
 		return;
 	}
 /* OrgRef feature */
-	gbp->descr = MemFree(gbp->descr);
+	gbp->descr = (DescrStructPtr)MemFree(gbp->descr);
 	if (gbp->feat && gbp->feat->sfpOrgsize != 0) {
 		p = gbp->feat->Orglist;
 		if ((sfp = p->sfp) == NULL) {
@@ -4110,7 +4227,7 @@ void PrintGBOrganismLine (Asn2ffJobPtr ajp, GBEntryPtr gbp)
 		}
 		if (sfp != NULL) {
 			orp = (OrgRefPtr) sfp->data.value.ptrvalue;
-			dsp = MemNew(sizeof(DescrStruct));
+			dsp = (DescrStructPtr)MemNew(sizeof(DescrStruct));
 			gbp->descr = dsp;
 			dsp->entityID = p->entityID;
 			dsp->itemID = p->itemID;
@@ -4137,58 +4254,18 @@ void PrintTaxonomy (Asn2ffJobPtr ajp, GBEntryPtr gbp)
 	SeqFeatPtr 		sfp;
 	SortStructPtr 	p;
 	DescrStructPtr 	dsp;
+	Boolean 		is_mito = FALSE;
 
 	
 	if (gbp == NULL) {
 		return;
 	}
 	gbp->descr = NULL;
-/* Find Biosource with focus 
-	v=GatherDescrListByChoice(ajp, gbp, Seq_descr_source);
-	for (tvnp=v; tvnp; tvnp=tvnp->next) {
-		dsp = (DescrStructPtr) tvnp->data.ptrvalue;
-		vnp = dsp->vnp;
-		biosp = (BioSourcePtr) vnp->data.ptrvalue;
-		if (biosp->is_focus == TRUE) {
-			orp = biosp->org;
-			gbp->descr = dsp; 
-			break;
-		}
-	}
-	ValNodeFreeData(v);
-	if (orp == NULL && gbp->feat && gbp->feat->biosrcsize != 0) { 
-		p = gbp->feat->Biosrclist;
-		for (i = 0; i < gbp->feat->biosrcsize; i++, p++) {
-			if ((sfp = p->sfp) == NULL) {
-				GatherItemWithLock(p->entityID,
-					p->itemID, p->itemtype, &sfp, find_item);
-			}
-			if (sfp != NULL) {
-				biosp = (BioSourcePtr) sfp->data.value.ptrvalue;
-				if (biosp->is_focus == TRUE) {
-					orp = biosp->org;
-					dsp = MemNew(sizeof(DescrStruct));
-					gbp->descr = dsp;
-					dsp->entityID = p->entityID;
-					dsp->itemID = p->itemID;
-					dsp->itemtype = p->itemtype;
-					break;
-				}
-			}
-		}
-	}
-	if (orp != NULL) { 
-		if (orp->orgname) {
-			lineage = orp->orgname->lineage;
-		}
-		print_taxinfo(ajp, gbp, orp, lineage);
-		return;
-	}
-*/
 /* BioSource descr*/
 	if ((vnp=GatherDescrByChoice(ajp, gbp, Seq_descr_source)) != NULL) 
 	{
-		biosp = vnp->data.ptrvalue;
+		biosp = (BioSourcePtr)vnp->data.ptrvalue;
+		if (biosp->genome == 5) is_mito = TRUE;
 		orp = (OrgRefPtr) biosp->org;
 		if (orp && orp->orgname) {
 			lineage = orp->orgname->lineage;
@@ -4203,21 +4280,21 @@ void PrintTaxonomy (Asn2ffJobPtr ajp, GBEntryPtr gbp)
 			if (gb)
 				lineage = gb->taxonomy;
 		}
-		gbp->descr = MemFree(gbp->descr);
+		gbp->descr = (DescrStructPtr)MemFree(gbp->descr);
 		gbp->descr = dsp;  /* keep Seq_descr_source dsp for sequin */
 	}
 	if (orp) {
-		print_taxinfo(ajp, gbp, orp, lineage);
+		print_taxinfo(ajp, gbp, orp, lineage, is_mito);
 		return;
 	}
 /* Organism descr*/
 	if ((vnp=GatherDescrByChoice(ajp, gbp, Seq_descr_org)) != NULL) {
 		orp = (OrgRefPtr) vnp->data.ptrvalue;
-		print_taxinfo(ajp, gbp, orp, lineage);
+		print_taxinfo(ajp, gbp, orp, lineage, is_mito);
 		return;
 	}
 /* OrgRef feature */
-	gbp->descr = MemFree(gbp->descr);
+	gbp->descr = (DescrStructPtr)MemFree(gbp->descr);
 	if (gbp->feat && gbp->feat->sfpOrgsize != 0) {
 		p = gbp->feat->Orglist;
 		if ((sfp = p->sfp) == NULL) {
@@ -4226,14 +4303,14 @@ void PrintTaxonomy (Asn2ffJobPtr ajp, GBEntryPtr gbp)
 		}
 		if (sfp != NULL) {
 			orp = (OrgRefPtr) sfp->data.value.ptrvalue;
-			dsp = MemNew(sizeof(DescrStruct));
+			dsp = (DescrStructPtr)MemNew(sizeof(DescrStruct));
 			gbp->descr = dsp;
 			dsp->entityID = p->entityID;
 			dsp->itemID = p->itemID;
 			dsp->itemtype = p->itemtype;
 		}
 	}
-	print_taxinfo(ajp, gbp, orp, lineage);
+	print_taxinfo(ajp, gbp, orp, lineage, is_mito);
 	return;
 }
 
@@ -4243,9 +4320,6 @@ void PrintTaxonomy (Asn2ffJobPtr ajp, GBEntryPtr gbp)
 *	"PrintOrganismLine" to print the source and organism entries for 
 *	EMBL FlatFiles.
 *
-*Rewrite for better logic???? (11/30/93 & 12/13/93)
-*To take care of pdb, pir cases???? (12/13/93)
-*Note: two organism lines are searched for!!
 ****************************************************************************/
 
 void PrintOrganismLine (Asn2ffJobPtr ajp, GBEntryPtr gbp)
@@ -4394,7 +4468,7 @@ CharPtr GetPDBSourceLine (PdbBlockPtr pdb)
 	if(pdb && pdb->source)
 	{
 		vnp = pdb->source;
-		source = StringSave(vnp->data.ptrvalue);
+		source = StringSave((CharPtr)vnp->data.ptrvalue);
 	}
 
 	return source;
@@ -4406,14 +4480,14 @@ CharPtr GetPDBSourceLine (PdbBlockPtr pdb)
 *       After the last sequence block, the terminator is printed also.
 ***********************************************************************/
  
-void PrintSeqBlk (Asn2ffJobPtr ajp, GBEntryPtr gbp)
+void PrintSeqBlkEx (Asn2ffJobPtr ajp, GBEntryPtr gbp)
  
 {
         Int4 start, stop, index=ajp->pap_index;
         Uint1 last=ajp->pap_last;
 		DescrStructPtr dsp;
 
-		dsp = MemNew(sizeof(DescrStruct));
+		dsp = (DescrStructPtr)MemNew(sizeof(DescrStruct));
 		gbp->descr = dsp;
 		dsp->entityID = gbp->entityID;
 		dsp->itemID = gbp->itemID;
@@ -4453,6 +4527,36 @@ void PrintSeqBlk (Asn2ffJobPtr ajp, GBEntryPtr gbp)
                 PrintTerminator();
 }
 
+void PrintSeqBlk (Asn2ffJobPtr ajp, GBEntryPtr gbp)
+ 
+{
+        Int4 start, stop, index=ajp->pap_index;
+        Uint1 last=ajp->pap_last;
+		DescrStructPtr dsp;
+		dsp = (DescrStructPtr)MemNew(sizeof(DescrStruct));
+		gbp->descr = dsp;
+		dsp->entityID = gbp->entityID;
+		dsp->itemID = gbp->itemID;
+		dsp->itemtype = gbp->itemtype;
+        if (index == 0) {
+				start = 0;
+        } else {
+                start = index*SEQ_BLK_SIZE;
+        }
+        if (last != LAST) {
+                stop = (index+1)*SEQ_BLK_SIZE - 1;
+        } else {
+                stop = -1;
+        }
+        if (ajp->format == EMBLPEPT_FMT) {
+        	PrintEPSequence(ajp, gbp, start, stop);
+        } else {
+        	PrintSequence(ajp, gbp, start, stop);
+        }
+        if (last ==  LAST)
+                PrintTerminator();
+}
+
 void PrintPubsByNumber (Asn2ffJobPtr ajp, GBEntryPtr gbp)
 
 {
@@ -4462,7 +4566,7 @@ void PrintPubsByNumber (Asn2ffJobPtr ajp, GBEntryPtr gbp)
 
 	for (vnp=gbp->Pub, i=0; vnp && i < index; vnp=vnp->next, i++);
 	if (vnp) {
-		psp = vnp->data.ptrvalue;
+		psp = (PubStructPtr)vnp->data.ptrvalue;
 		if (ajp->format == EMBL_FMT || ajp->format == PSEUDOEMBL_FMT ||
 			ajp->format == EMBLPEPT_FMT) {
 			EMBL_PrintPubs(ajp, gbp, psp);
@@ -4554,7 +4658,7 @@ void PrintXrefLine (Asn2ffJobPtr ajp, GBEntryPtr gbp)
 			{
 				id=xref->id;
 			
-				oip = id->data.ptrvalue;
+				oip = (ObjectIdPtr)id->data.ptrvalue;
 				if (oip->str)
 					StringCpy(buffer1, oip->str);
 				else if (oip->id)
@@ -4562,7 +4666,7 @@ void PrintXrefLine (Asn2ffJobPtr ajp, GBEntryPtr gbp)
 				id = id->next;
 				if (id)
 				{
-					oip = id->data.ptrvalue;
+					oip = (ObjectIdPtr)id->data.ptrvalue;
 					if (oip->str)
 						StringCpy(buffer2, oip->str);
 					else if (oip->id)
@@ -4581,7 +4685,7 @@ void PrintXrefLine (Asn2ffJobPtr ajp, GBEntryPtr gbp)
 				ff_AddString("; ");
 				string = CheckEndPunctuation(buffer2, '.');
 				ff_AddString(string);
-				string = MemFree(string);
+				string = (CharPtr)MemFree(string);
 			}
 		}
 	}
@@ -4732,6 +4836,10 @@ void PrintSequence (Asn2ffJobPtr ajp, GBEntryPtr gbp, Int4 start, Int4 stop)
 	if ((loc_start = SeqLocStart(ajp->slp)) == -1) {
 		loc_start = 0;
 	}
+	total = start;
+	if (ajp->slp) {
+		total += SeqLocStart(ajp->slp);
+	}
 	if (ajp->format == GENBANK_FMT || ajp->format == SELECT_FMT)
 	{
 		ff_StartPrint(0, 0, ASN2FF_GB_MAX, NULL);
@@ -4744,6 +4852,9 @@ void PrintSequence (Asn2ffJobPtr ajp, GBEntryPtr gbp, Int4 start, Int4 stop)
 		}
 		if (stop == -1)
 			stop = spp->stop;
+		if (ajp->slp && stop > SeqLocLen(ajp->slp)) {
+			stop = SeqLocLen(ajp->slp);
+		}
 		for (index=start; index<=stop; index += 10) {
 			if (stop < (index+10)) {
 				inner_stop = stop;
@@ -4780,6 +4891,9 @@ void PrintSequence (Asn2ffJobPtr ajp, GBEntryPtr gbp, Int4 start, Int4 stop)
 					ptr = &buffer[0];
 					ff_AddString(ptr);
 					NewContLine();
+			if (ajp->slp) {
+				total += SeqLocStart(ajp->slp);
+			}
 					sprintf(ptr, "%9ld ", (long) (total+1 - loc_start));
 					ptr += StringLen(ptr);
 				}
@@ -5001,7 +5115,7 @@ Boolean find_item (GatherContextPtr gcp)
 	SeqFeatPtr PNTR sfpp;
 
 
-	sfpp = gcp->userdata;
+	sfpp = (SeqFeatPtr PNTR)gcp->userdata;
 	switch (gcp->thistype) {
 		case OBJ_SEQFEAT:
 			sfp = (SeqFeatPtr) (gcp->thisitem);

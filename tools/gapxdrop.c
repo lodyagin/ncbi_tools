@@ -32,8 +32,14 @@ Author: Gennadiy Savchuk, Jinqhui Zhang, Tom Madden
 Contents: Functions to perform a gapped alignment on two sequences.
 
 ****************************************************************************/
-/* $Revision: 6.16 $ 
+/* $Revision: 6.18 $ 
 * $Log: gapxdrop.c,v $
+* Revision 6.18  1999/08/27 18:07:34  shavirin
+* Passed parameter decline_align from top to the engine.
+*
+* Revision 6.17  1999/05/12 18:48:52  madden
+* lift assumption that no deletion follows insertion
+*
 * Revision 6.16  1999/05/03 18:59:33  madden
 * Removed set, but unused, variable count
 *
@@ -417,60 +423,48 @@ ALIGN(Uint1Ptr A, Uint1Ptr B, Int4 M, Int4 N,
     
     for (cb = i = tt, dp = &dyn_prog[i-1]; i < j; i++) {
 	d = (++dp)->DD;
-	if (d < f) { d=f; std=83;} else std=42;
-	if (e < f) {e=f; ste = 83;} else ste = 41;
-	if (c < d || c < e) {
-	    if (d < e) {
-		c = e; st = ste;
-	    } else {
-		c = d; st = std;
-	    }
-	    if (best_score - c > X) {
-		c = dp->CC+wa[B[i+1]]; f = dp->FF;
-		if (tt == i) tt++;
-		else { dp->CC = MININT; }
-	    } else {
-		cb = i;
-		e -= gap_extend; dp->DD = d-gap_extend;
-		d = dp->FF; dp->FF = f-decline_penalty; f = d;
-		d = dp->CC+wa[B[i+1]]; dp->CC = c; c=d;
-	    }
-	    st += 5;
+	st = 0;
+	if (c < f) {c = f; st = 3;}
+	if (f > d) {d = f; std = 60;} 
+	else {
+	  std = 30;
+	  if (c < d) { c= d;st = 2;}
+	}
+	if (f > e) {e = f; ste = 20;} 
+	else {
+	  ste = 10;
+	  if (c < e) {c=e; st=1;}
+	}
+	if (best_score - c > X){
+	  c = dp->CC+wa[B[i+1]]; f= dp->FF;
+	  if (tt == i) tt++;
+	  else { dp->CC = dp->FF =  MININT; }
 	} else {
-	    st = 0;
-	    if (best_score - c > X){
-		c = dp->CC+wa[B[i+1]]; f= dp->FF;
-		if (tt == i) tt++;
-		else { dp->CC =  MININT; }
-	    } else {
-		cb = i;
-		if (c > best_score) {
-		    best_score = c;
-		    *pei = j_r; *pej = i;
-		}
-		if ((c-=m) > (d-=gap_extend)) {
-		    dp->DD = c; 
-		} else {
-		    dp->DD = d;
-		    if (std == 83) st+=60;
-		    else st+=30;
-		} 
-		if (c > (e-=gap_extend)) {
-		    e = c; 
-		}  else {
-		    if (ste> 50) st+=20;
-		    else st +=10;
-		}
-		c+=m; 
-		d = dp->FF;
-		if (f < c-gap_open) { 
-		    dp->FF = c-gap_open-decline_penalty; 
-		} else {
-		    dp->FF = f-decline_penalty; st+= 5; 
-		}
-		f = d;
-		d = dp->CC+wa[B[i+1]]; dp->CC = c; c = d;      
-	    }
+	  cb = i;
+	  if (c > best_score) {
+	    best_score = c;
+	    *pei = j_r; *pej = i;
+	  }
+	  if ((c-=m) > (d-=gap_extend)) {
+	    dp->DD = c; 
+	  } else {
+	    dp->DD = d;
+	    st+=std;
+	  } 
+	  if (c > (e-=gap_extend)) {
+	    e = c; 
+	  }  else {
+	    st+=ste;
+	  }
+	  c+=m; 
+	  d = dp->FF;
+	  if (f < c-gap_open) { 
+	    dp->FF = c-gap_open-decline_penalty; 
+	  } else {
+	    dp->FF = f-decline_penalty; st+= 5; 
+	  }
+	  f = d;
+	  d = dp->CC+wa[B[i+1]]; dp->CC = c; c = d;      
 	}
 	stp[i] = st;
     }
@@ -591,10 +585,18 @@ Int4 SEMI_G_ALIGN(Uint1Ptr A, Uint1Ptr B, Int4 M, Int4 N,
 	      if (best_score - c > X) {
 		  c = dp->CC+wa[B[i+1]]; f = dp->FF;
 		  if (tt == i) tt++;
-		  else { dp->CC = MININT;}
+		  else { dp->CC =dp->FF= MININT;}
 	      } else {
 		  cb = i;
-		  e -= h; dp->DD =  d- h;
+                  if ((c-=m) > (d-=h)) {
+                      dp->DD = c;
+                  } else {
+                      dp->DD = d;
+                  }
+                  if (c > (e-=h)) {
+                      e = c;
+                  }
+                  c+=m;
 		  d = dp->CC+wa[B[i+1]]; dp->CC = c; c=d;
 		  d = dp->FF; dp->FF = f-decline_penalty; f = d;
 	      }
@@ -602,7 +604,7 @@ Int4 SEMI_G_ALIGN(Uint1Ptr A, Uint1Ptr B, Int4 M, Int4 N,
 	      if (best_score - c > X){
 		  c = dp->CC+wa[B[i+1]]; f= dp->FF;
 		  if (tt == i) tt++;
-		  else { dp->CC = MININT;}
+		  else { dp->CC =dp->FF= MININT;}
 	      } else {
 		  cb = i; 
 		  if (c > best_score) {
@@ -836,7 +838,7 @@ GapAlignBlkNew(Int4 state_column_length, Int4 state_row_length)
 	if (gap_align == NULL)
 		return NULL;
 
-	gap_align->decline_align = INT2_MAX;
+	/* gap_align->decline_align = INT2_MAX; */
 	return gap_align;
 }
 

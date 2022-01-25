@@ -29,14 +29,19 @@
 *
 * Version Creation Date:   5/3/99
 *
-* $Revision: 6.2 $
+* $Revision: 6.4 $
 *
 * File Description: 
 *
-* Modifications:  
+* Modifications:
 * --------------------------------------------------------------------------
-* Date     Name        Description of modification
-* -------  ----------  -----------------------------------------------------
+* $Log: udvopen.c,v $
+* Revision 6.4  1999/09/07 15:32:39  durand
+* add BBS and RefSeq to databases list
+*
+* Revision 6.3  1999/06/07 15:39:44  durand
+* add LOG line to keep track of the history
+*
 *
 *
 * ==========================================================================
@@ -77,7 +82,9 @@
 				SEQID_GI,
 				SEQID_DDBJ,
 				SEQID_PRF,
-				SEQID_PDB};
+				SEQID_PDB,
+				SEQID_OTHER,/*RefSeq*/
+				SEQID_GIBBSQ};
 
 
 /*******************************************************************************
@@ -355,7 +362,8 @@ Uint1 		Choice;
 		case SEQID_PIR:
 		case SEQID_DDBJ:
 		case SEQID_PRF:
-		case SEQID_SWISSPROT:{
+		case SEQID_SWISSPROT:
+		case SEQID_OTHER:{
 			TextSeqIdPtr tsip;
 			
 			tsip=TextSeqIdNew();
@@ -378,6 +386,11 @@ Uint1 		Choice;
 			TextSeqIdFree(tsip);
 			break;
 		}
+		case SEQID_GIBBSQ:
+			sip->data.intvalue=(Int4)atoi(string);
+			sip->choice = Choice;
+			uid=GetGIForSeqId(sip);
+			break;
 		case SEQID_GI:
 			if (!StrToLong(string,&uid)) uid=0;
 			break;
@@ -618,6 +631,8 @@ ViewerMainPtr 	vmp;
 	PopupItem(unop->AccessType,"DDBJ");
 	PopupItem(unop->AccessType,"PRF");
 	PopupItem(unop->AccessType,"PDB");
+	PopupItem(unop->AccessType,"RefSeq");
+	PopupItem(unop->AccessType,"BBS");
 	
 	SetValue (unop->AccessType, 6);
 

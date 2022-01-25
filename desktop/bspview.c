@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/30/95
 *
-* $Revision: 6.62 $
+* $Revision: 6.63 $
 *
 * File Description: 
 *
@@ -2953,12 +2953,19 @@ extern Int2 LIBCALLBACK BioseqViewMsgFunc (OMMsgStructPtr ommsp)
   BioseqViewFormPtr  bfp;
   BioseqPagePtr      bpp;
   BioseqPtr          bsp;
+  Int2               count;
   Boolean            do_refresh;
+  Uint2              itemtype;
+  CharPtr            label = NULL;
+  ObjMgrPtr          omp;
   ObjMgrDataPtr      omdp;
+  ObjMgrTypePtr      omtp = NULL;
   OMUserDataPtr      omudp;
+  Boolean            sametype;
   SelStructPtr       sel;
   SeqEntryPtr        sep;
   SeqLocPtr          slp;
+  Char               str [100];
   Int2               val;
 
   omudp = (OMUserDataPtr)(ommsp->omuserdata);
@@ -3067,6 +3074,31 @@ extern Int2 LIBCALLBACK BioseqViewMsgFunc (OMMsgStructPtr ommsp)
     if (sel != NULL && sel->next == NULL &&
         (sel->entityID == bfp->input_entityID || InBioseqViewEntityList (sel->entityID, &(bfp->bvd)))) {
       GatherItem (sel->entityID, sel->itemID, sel->itemtype, (Pointer) bfp, SetClickmeTitle);
+    } else if (sel != NULL && sel->next != NULL) {
+      count = 0;
+      sametype = TRUE;
+      itemtype = sel->itemtype;
+      while (sel != NULL) {
+        if (sel->itemtype != itemtype) {
+          sametype = FALSE;
+        }
+        count++;
+        sel = sel->next;
+      }
+      sprintf (str, "%d items selected", (int) count);
+      if (sametype) {
+        omp = ObjMgrGet ();
+        if (omp != NULL) {
+          omtp = ObjMgrTypeFind (omp, itemtype, NULL, NULL);
+          if (omtp != NULL && omtp->label != NULL) {
+            label = omtp->label;
+            if (label != NULL) {
+              sprintf (str, "%d %s items selected", (int) count, label);
+            }
+          }
+        }
+      }
+      SafeSetTitle (bfp->bvd.clickMe, str);
     } else {
       /* SafeSetTitle (bfp->bvd.clickMe, "Double click on an item to launch the appropriate editor."); */
       SafeSetTitle (bfp->bvd.clickMe, "");

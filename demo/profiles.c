@@ -101,16 +101,21 @@ static void fillResidueProbability(Uint1Ptr sequence, Int4 length, Nlm_FloatHi *
 {
   Int4 frequency[PRO_ALPHABET_SIZE]; /*frequency of each letter*/
   Int4 i; /*index*/
+  Int4 denominator; /*length not including X's*/
 
+  denominator = length;
   for(i = 0; i < PRO_ALPHABET_SIZE; i++)
     frequency[i] = 0;
   for(i = 0; i < length; i++)
-    frequency[sequence[i]]++;
+    if (Xchar != sequence[i])
+      frequency[sequence[i]]++;
+    else
+      denominator--;
   for(i = 0; i < PRO_ALPHABET_SIZE; i++) {
     if (frequency[i] == 0)
       resProb[i] = 0.0;
     else
-      resProb[i] = ((Nlm_FloatHi) (frequency[i])) /((Nlm_FloatHi) length);
+      resProb[i] = ((Nlm_FloatHi) (frequency[i])) /((Nlm_FloatHi) denominator);
   }
 }
 
@@ -139,6 +144,8 @@ static BLAST_ScoreFreqPtr fillSfp(BLAST_Score **matrix, Int4 matrixLength, Nlm_F
 
   for(i = 0; i < matrixLength; i++) {
     for(j = 0 ; j < PRO_ALPHABET_SIZE; j++) {
+      if (Xchar == j)
+        continue;
       if ((matrix[i][j] != BLAST_SCORE_MIN) && (matrix[i][j] < minScore))
 	minScore = matrix[i][j];
       if (matrix[i][j] > maxScore)
@@ -153,6 +160,8 @@ static BLAST_ScoreFreqPtr fillSfp(BLAST_Score **matrix, Int4 matrixLength, Nlm_F
   onePosFrac = 1.0/ ((Nlm_FloatHi) matrixLength);
   for(i = 0; i < matrixLength; i++) {
     for (j = 0; j < PRO_ALPHABET_SIZE; j++) {
+      if (Xchar == j)
+        continue;
       if(matrix[i][j] >= minScore) {
         return_sfp->sprob[matrix[i][j]] += (onePosFrac * queryProbArray[j]);
       }
@@ -191,12 +200,12 @@ static void printDemographics(proDemographicsItems proDemographics, FILE * outfp
 {
    fprintf(outfp,"Underlying Matrix: %s\n",proDemographics.matrixName);
    fprintf(outfp,"Number of sequences tested against query: %ld\n", (long) proDemographics.numSequencesTested);
-   fprintf(outfp,"Number of sequences better than %.1lf: %ld \n", (long) eThresh,proDemographics.numBetterThanEthresh);
+   fprintf(outfp,"Number of sequences better than %.1lf: %ld \n", eThresh, (long) proDemographics.numBetterThanEthresh);
    fprintf(outfp,"Number of calls to ALIGN: %ld \n", (long) proDemographics.numCallsALIGN);
    fprintf(outfp,"Length of query: %ld \n",(long) proDemographics.queryLength);
    fprintf(outfp,"Total length of test sequences: %ld  \n", (long) proDemographics.dbLength);
-   fprintf(outfp,"Effective length of test sequences: %ld\n", (long) proDemographics.effDbLength);
-   fprintf(outfp,"Effective search space size: %ld\n", (long) proDemographics.effSearchSpace); 
+   fprintf(outfp,"Effective length of test sequences: %.1lf\n", proDemographics.effDbLength);
+   fprintf(outfp,"Effective search space size: %.1lf\n",  proDemographics.effSearchSpace); 
    fprintf(outfp,"Initial X dropoff for ALIGN: %.1lf bits\n", proDemographics.XinBits);
 }
 
@@ -243,6 +252,8 @@ static Uint1 *  readSequence(FILE * sequenceFile, Int4 * sequenceLength, SeqIdPt
    if (makeID) {
      descr = (Uint1 *) MemNew(MAXLINELEN * sizeof(Uint1 *)); 
      fgets((CharPtr) descr, MAXLINELEN, sequenceFile);       
+     if (strlen(((CharPtr) descr)) > (MAXLINELEN -2))
+       fscanf(sequenceFile, "%*[^\n]");
      sep = FastaToSeqEntry(sequenceFile, FALSE);
      if (sep != NULL) {
        query_bsp = NULL;
@@ -272,6 +283,8 @@ static Uint1 *  readSequence(FILE * sequenceFile, Int4 * sequenceLength, SeqIdPt
    else {
      query = (Uint1 *) MemNew(MAXLEN * sizeof(Uint1 )); 
      fgets((CharPtr) lineOfQuery, MAXLINELEN, sequenceFile);       
+     if (strlen(((CharPtr) lineOfQuery)) > (MAXLINELEN -2))
+       fscanf(sequenceFile, "%*[^\n]");
      charIndex = 0;
      while (fgets((CharPtr) lineOfQuery, MAXLEN, sequenceFile)) {
        lineIndex = 0;
@@ -405,10 +418,10 @@ static Nlm_FloatHi computeAdjustedQueryLength(Int4 queryLength, Nlm_FloatHi L,
    return(MAX((queryLength - L), 1/minGappedK));
 }
 
-/*compute the true and adjusted database size and a term L used as an
+/*compute  a term L used as an
   intermediate term in the calculation of e-values
   L is the last intermediate term that can be caluclated based
-  on just the matrices and their Karlin-Altschulk parameters
+  on just the matrices and their Karlin-Altschul parameters
   matrixAuxiliaryFile is a file descriptor for a file with
   some Karlin-ALtschul parameters for each matrix
   query is the query sequence
@@ -420,7 +433,7 @@ static Nlm_FloatHi computeAdjustedQueryLength(Int4 queryLength, Nlm_FloatHi L,
   minGappedK holds the minimum gapped K among all the different
     position-specific matrices
     proDemographics keeps some statistical information about this program run*/
-static Nlm_FloatHi computeLandDbLength(FILE *matrixAuxiliaryFile, Uint1Ptr query, Int4 queryLength, Int4 numProfiles, Nlm_FloatHi *adjustedDbLength, Nlm_FloatHi *minGappedK, proDemographicsItems *proDemographics)
+static Nlm_FloatHi computeL(FILE *matrixAuxiliaryFile, Uint1Ptr query, Int4 queryLength, Int4 numProfiles, Nlm_FloatHi *minGappedK, proDemographicsItems *proDemographics)
 {
   Int4 dbLength; /*sum of actual lengths of database sequences*/
   Int4 Nestimate; /*estimate of effective search space size*/
@@ -436,6 +449,8 @@ static Nlm_FloatHi computeLandDbLength(FILE *matrixAuxiliaryFile, Uint1Ptr query
   Int4 tempDbLength;  /*used to estimate total length of all profiles*/
   BLAST_ScoreBlkPtr sbp;
   Int4 maxLength, sequenceDbLength; /*used to read in extra data*/
+  Int4 queryLengthMinusX; /*query length without X characters*/
+  Int4 i; /*loop index*/
 
    /*check that preprocessing and main program are using the same underlying
      matrix*/
@@ -462,6 +477,12 @@ static Nlm_FloatHi computeLandDbLength(FILE *matrixAuxiliaryFile, Uint1Ptr query
    fscanf(matrixAuxiliaryFile, "%d", &sequenceDbLength);
    fscanf(matrixAuxiliaryFile, "%lf", &scalingFactor);
 
+   queryLengthMinusX = queryLength;
+   for(i = 0; i < queryLength; i++)
+     if (Xchar == query[i])
+       queryLengthMinusX--;
+
+
    dbSeqLengths = (Int4 *) MemNew(numProfiles * sizeof(Int4));
    gappedKArray = (Nlm_FloatHi *) MemNew(numProfiles * sizeof(Nlm_FloatHi));
    dbLength = 0;
@@ -473,20 +494,24 @@ static Nlm_FloatHi computeLandDbLength(FILE *matrixAuxiliaryFile, Uint1Ptr query
      if (gappedKArray[profileIndex] < (*minGappedK))
        *minGappedK = gappedKArray[profileIndex];
    }
-   Nestimate = queryLength * dbLength;
+   Nestimate = queryLengthMinusX * dbLength;
    proDemographics->queryLength = queryLength;
    proDemographics->dbLength = dbLength;
    returnL = log(((Nlm_FloatHi) Nestimate) * Kungapped) /Hungapped;
-   tempDbLength = 0;
-   for(profileIndex = 0; profileIndex < numProfiles; profileIndex++) {
+   if (((0 == sequenceDbLength) && (proDemographics->effDbLength <= 0))
+        || (0 == proDemographics->effDbLength)) {
+     tempDbLength = 0;
+     for(profileIndex = 0; profileIndex < numProfiles; profileIndex++) {
      tempDbLength += MAX((dbSeqLengths[profileIndex] - returnL),
                        1/ gappedKArray[profileIndex]);
-   }
-   *adjustedDbLength = tempDbLength;
-   if (0 == proDemographics->effDbLength)
+     }
      proDemographics->effDbLength = tempDbLength;
+   }
+   else
+     if ((-1) == proDemographics->effDbLength)
+       proDemographics->effDbLength = sequenceDbLength;
    proDemographics->effSearchSpace = proDemographics->effDbLength *
-       computeAdjustedQueryLength(queryLength, returnL, *minGappedK);
+       computeAdjustedQueryLength(queryLengthMinusX, returnL, *minGappedK);
    MemFree(dbSeqLengths);
    MemFree(gappedKArray);
    return(returnL);
@@ -1095,8 +1120,8 @@ static void pro_quicksort_hits(Int4 no_of_seq, SWResults **proResultsList)
       qs[i] = sp;
     /*Put sentinel at the end of the array*/
     qs[i] = &sentinel; 
-    sentinel.eValue = 0.0;
-    sentinel.eValueThisAlign = 0.0;
+    sentinel.eValue = -0.1;
+    sentinel.eValueThisAlign = -0.1;
     pro_quicksort(qs, 0, no_of_seq-1);
     /*Copy back to the list starting at seedResults->listOfMatchingSequences*/
     for (i = no_of_seq-1; i > 0; i--)
@@ -1140,13 +1165,17 @@ SeqAlignPtr findMatchingProfiles(FILE *matrixAuxiliaryFile,
       Uint1Ptr querySequence, Int4 queryLength,
       Int4 gapOpen, Int4 gapExtend, Int4 x_dropoff, Nlm_FloatHi ethresh,
       Nlm_FloatHi ethreshfirst, SeqIdPtr query_id, 
-      proDemographicsItems * proDemographics)
+      proDemographicsItems * proDemographics, Char *directoryPrefix)
 {
    SeqAlignPtr results = NULL; /*holds return value accumulated one alignment
                                  at a time*/
    FILE *matricesFile; /*file listing where to find score matrices*/
    Char oneSequenceFileName[MAXLINELEN], oneMatrixFileName[MAXLINELEN];
    /*corresponding file names containing one sequence and one profile*/
+   Char relativeSequenceFileName[MAXLINELEN], relativeMatrixFileName[MAXLINELEN];
+   /*file names as read in, these will be appended to the directoryPrefix*/
+   Int4 c1,c2; /*loop index over characters*/
+   Int4 prefixLength; /*length of directoryPrefix*/
    FILE *thisMatrixFile, *thisSequenceFile; /*files for matrix and sequence*/
    Int4 i; /* Index over sequences/profiles*/
    Uint1 *dbSequence; /*sequence representing a profile*/
@@ -1218,8 +1247,8 @@ SeqAlignPtr findMatchingProfiles(FILE *matrixAuxiliaryFile,
    gap_align->decline_align = (-(BLAST_SCORE_MIN));
    gap_align->matrix = NULL;
    gap_align->positionBased = TRUE;
-   L =  computeLandDbLength(matrixAuxiliaryFile, querySequence, queryLength, 
-        numProfiles, &adjustedDbLength, &minGappedK, proDemographics);
+   L =  computeL(matrixAuxiliaryFile, querySequence, queryLength, 
+        numProfiles, &minGappedK, proDemographics);
 
    lastTick = 0;
    tickInterval = numProfiles / PRO_NUM_TICKS;
@@ -1254,18 +1283,39 @@ SeqAlignPtr findMatchingProfiles(FILE *matrixAuxiliaryFile,
      forbiddenRanges[f][1] = 0;
    }
 
+   if ('\0' != directoryPrefix[0]) {
+     strcpy(oneSequenceFileName, directoryPrefix);
+     strcpy(oneMatrixFileName, directoryPrefix);
+     prefixLength = strlen(directoryPrefix);
+   }     
    for(i = 0; i < numProfiles; i++) {     
      if (i > (lastTick + tickInterval)) {
        lastTick = i;
        tick_callback(i, 0);
      }
      foundMatchForThisMatrix = FALSE;
-     fscanf(sequencesFile,"%s", oneSequenceFileName);
+     if ('\0' == directoryPrefix[0])
+       fscanf(sequencesFile,"%s", oneSequenceFileName); 
+     else {
+       fscanf(sequencesFile,"%s", relativeSequenceFileName); 
+       for(c1 = prefixLength, c2 = 0; relativeSequenceFileName[c2] != '\0';
+          c1++, c2++)
+         oneSequenceFileName[c1] = relativeSequenceFileName[c2];
+       oneSequenceFileName[c1] = '\0';
+     }
      if ((thisSequenceFile = FileOpen(oneSequenceFileName, "r")) == NULL)  {
        ErrPostEx(SEV_FATAL, 0, 0, "profiles: Unable to open sequence file %s\n", oneSequenceFileName);
 	return (NULL);
      }
-     fscanf(matricesFile,"%s", oneMatrixFileName);
+     if ('\0' == directoryPrefix[0])
+       fscanf(matricesFile,"%s", oneMatrixFileName); 
+     else {
+       fscanf(matricesFile,"%s", relativeMatrixFileName); 
+       for(c1 = prefixLength, c2 = 0; relativeMatrixFileName[c2] != '\0';
+          c1++, c2++)
+         oneMatrixFileName[c1] = relativeMatrixFileName[c2];
+       oneMatrixFileName[c1] = '\0';
+     }
      if ((thisMatrixFile = FileOpen(oneMatrixFileName, "r")) == NULL)  {
        ErrPostEx(SEV_FATAL, 0, 0, "profiles: Unable to open matrix file %s\n", oneMatrixFileName);
 	return (NULL);
@@ -1306,8 +1356,8 @@ SeqAlignPtr findMatchingProfiles(FILE *matrixAuxiliaryFile,
 	     (correctUngappedLambda > scaledInitialUngappedLambda)) {
 	   for (p = 0; p < dbSequenceLength; p++) {
 	     for (c = 0; c < PRO_ALPHABET_SIZE; c++) {
-	       if (posMatrix[p][c] == BLAST_SCORE_MIN)
-		 copyMatrix[p][c] == BLAST_SCORE_MIN;
+	       if ((posMatrix[p][c] == BLAST_SCORE_MIN) || (Xchar == c))
+		 copyMatrix[p][c] = posMatrix[p][c];
 	       else {
 		 temp1 = ((Nlm_FloatHi) (posMatrix[p][c]));
 		 temp1 = temp1 * LambdaRatio;
@@ -1359,7 +1409,7 @@ SeqAlignPtr findMatchingProfiles(FILE *matrixAuxiliaryFile,
 	       gap_align->x_parameter *=2;
 	       doublingCount++;
 	       if ((XdropAlignScore < score) && (doublingCount < 3)) 
-		 MemFree(alignScript);
+		 MemFree(reverseAlignScript);
 	     } while ((XdropAlignScore < score) && (doublingCount < 3));
 	     thisSequenceFile = FileOpen(oneSequenceFileName, "r");
 	     dbSequence = readSequence(thisSequenceFile, &dbSequenceLength, 
@@ -1425,6 +1475,13 @@ SeqAlignPtr findMatchingProfiles(FILE *matrixAuxiliaryFile,
 	 thisEvalue = ethresh + 1;
        }
      } while (thisEvalue < ethresh);
+     if (foundMatchForThisMatrix) {
+       for (f = 0; f < maxLength; f++) {
+	 numForbidden[f] = 0;
+	 forbiddenRanges[f][0] = 0;
+	 forbiddenRanges[f][1] = 0;
+       }
+     }
      startPos += dbSequenceLength;
    }
    MemFree(gap_align);
@@ -1433,14 +1490,22 @@ SeqAlignPtr findMatchingProfiles(FILE *matrixAuxiliaryFile,
    FileClose(sequencesFile);
    /*close(matrixFileDesc);*/
    Nlm_MemMapFini(mmapResult);
-   pro_quicksort_hits(numAligns, &SWAligns);
-   results = convertSWalignsToSeqAligns(SWAligns, querySequence, query_id);
+   if (numAligns > 0) {
+     pro_quicksort_hits(numAligns, &SWAligns);
+     results = convertSWalignsToSeqAligns(SWAligns, querySequence, query_id);
+   }
+   else
+     results = NULL;
    MemFree(kbp);
    MemFree(scoreArray);
    for(p = 0; p < maxLength; p++) {
      MemFree(copyMatrix[p]);
    }
    MemFree(copyMatrix);
+   for (f = 0; f < maxLength; f++) 
+     MemFree(forbiddenRanges[f]);
+   MemFree(forbiddenRanges);
+   MemFree(numForbidden);
    return(results);
 }
 
@@ -1453,38 +1518,7 @@ static Boolean PrintVersionInfo(FILE *outfp)
    return(TRUE);
 }
 
-static void  makeFileNames(Char * matrixDbName,
-		    Char * auxiliaryFileName, Char * mmapFileName,
-		    Char * seqFileName, Char *matrixFileName)
-{
-  Int4 commonLength;  /*length of common name prefix*/
-
-  commonLength = strlen(matrixDbName);
-  strcpy(auxiliaryFileName,matrixDbName);
-  strcpy(mmapFileName,matrixDbName);
-  strcpy(seqFileName,matrixDbName);
-  strcpy(matrixFileName,matrixDbName);
-  auxiliaryFileName[commonLength] = '.';
-  auxiliaryFileName[commonLength +1] = 'a';
-  auxiliaryFileName[commonLength + 2] = 'u';
-  auxiliaryFileName[commonLength + 3] = 'x';
-  auxiliaryFileName[commonLength + 4] = '\0';
-  mmapFileName[commonLength] = '.';
-  mmapFileName[commonLength + 1] = 'm';
-  mmapFileName[commonLength + 2] = 'a';
-  mmapFileName[commonLength + 3] = 't';
-  mmapFileName[commonLength + 4] = '\0';
-  seqFileName[commonLength] = '.';
-  seqFileName[commonLength + 1] = 's';
-  seqFileName[commonLength+2] = 'n';
-  seqFileName[commonLength+3] = '\0';
-  matrixFileName[commonLength] = '.';
-  matrixFileName[commonLength + 1] = 'm';
-  matrixFileName[commonLength+2] = 'n';
-  matrixFileName[commonLength+3] = '\0';
-}
-
-#define NUMARG 19
+#define NUMARG 20
 
 static Args myargs [NUMARG] = {
   { "Database", 
@@ -1522,10 +1556,12 @@ static Args myargs [NUMARG] = {
   { "Matrix", 
 	"BLOSUM62", NULL, NULL, FALSE, 'M', ARG_STRING, 0.0, 0, NULL},
   { "Database name for matrix profiles", 
-	NULL, NULL, NULL, FALSE, 'P', ARG_FILE_IN, 0.0, 0, NULL},
-  { "Effective length of the database (use zero for the real size)",
-        "0", NULL, NULL, FALSE, 'z', ARG_INT, 0.0, 0, NULL}
-}; 
+	"stdin", NULL, NULL, FALSE, 'P', ARG_FILE_IN, 0.0, 0, NULL},
+  { "Effective length of the database (default is 0 for actual size, use -1 for size computed in makemat)",
+        "0", NULL, NULL, FALSE, 'z', ARG_INT, 0.0, 0, NULL},
+  { "Print help; overrides all other arguments",
+        "F", NULL, NULL, FALSE, 'H', ARG_BOOLEAN, 0.0, 0, NULL}
+};  
 
 
 Int2  Main(void)
@@ -1590,6 +1626,8 @@ Int2  Main(void)
    Nlm_FloatHi readScaling; /*scaling factor to read in*/
    Char *matrixName; /*underlying score matrix used for profile library*/
    Nlm_FloatHi targetUngappedLambda; /*ungapped Lambda for matrixName*/
+   Char *directoryPrefix; /*directory where profile library is kept, used
+                            to reach other directories indirectly*/
                        
    if (! GetArgs ("impala", NUMARG, myargs))
      {
@@ -1599,6 +1637,11 @@ Int2  Main(void)
    if (! SeqEntryLoad())
      return 1;
 
+
+   if ((Boolean) myargs[7].intvalue) {
+     IMPALAPrintHelp(FALSE, 90, "impala", stdout);
+     return(1);
+   }
    blast_database = myargs [ARG_DB].strvalue;
    blast_inputfile = myargs [ARG_QUERY_FILE].strvalue;
    blast_outputfile = myargs [ARG_OUTPUT_FILE].strvalue;
@@ -1618,8 +1661,11 @@ Int2  Main(void)
 	 }
      }
 
-   makeFileNames(myargs[ARG_MATRICES_DB].strvalue,auxiliaryFileName,
-		 mmapFileName,seqFileName,matrixFileName);
+   directoryPrefix = (Char *) MemNew(MAX_NAME_LENGTH *sizeof(char));
+   strcpy(directoryPrefix,myargs[ARG_MATRICES_DB].strvalue);
+   impalaMakeFileNames(myargs[ARG_MATRICES_DB].strvalue,auxiliaryFileName,
+		 mmapFileName,seqFileName,matrixFileName, NULL, 
+		 directoryPrefix);
 
    if ((auxiliaryfp = FileOpen(auxiliaryFileName, "r")) == NULL)
      {
@@ -1749,6 +1795,9 @@ Int2  Main(void)
 	  AcknowledgeBlastQuery(query_bsp, 70, outfp, believe_query, FALSE);
 	  free_buff();
 
+	  MemSet((Pointer)(groupOrder), 0, (size_t)(FEATDEF_ANY* sizeof(Uint1)));
+	  MemSet((Pointer)(featureOrder), 0, (size_t)(FEATDEF_ANY* sizeof(Uint1)));
+
 	  search->error_return = NULL;
 
           numProfiles = countProfiles(sequencesfp);
@@ -1799,7 +1848,8 @@ Int2  Main(void)
 				      options->gap_x_dropoff_final, 
 				      options->expect_value,
 				      5 * options->expect_value,
-				      search->query_id, &proDemographics);
+				      search->query_id, &proDemographics, 
+                                      directoryPrefix);
 #ifdef OS_UNIX
           fprintf(global_fp, "%s", "done");
 #endif

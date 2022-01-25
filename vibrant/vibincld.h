@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.2 $
+* $Revision: 6.3 $
 *
 * File Description: 
 *       Vibrant inclusion of underlying windowing system toolbox functions,
@@ -43,6 +43,9 @@
 *
 *
 * $Log: vibincld.h,v $
+* Revision 6.3  1999/06/22 15:14:54  lewisg
+* fix image library so that works on linux with > 8 bits
+*
 * Revision 6.2  1999/04/06 14:23:25  lewisg
 * add opengl replacement for viewer3d
 *
@@ -571,6 +574,15 @@ extern Nlm_Boolean Nlm_ProcessKeydown PROTO((Nlm_GraphiC g, WPARAM wParam,
 #ifdef WIN_MOTIF
 #include <Xm/FileSB.h>
 #include <Xm/CutPaste.h>
+
+/*
+ * Test X windows to see what kind of color buffer is available.
+ * Necessary because Linux supports only the type available
+ * from the hardware. Code in vibwndws.c. Returns TRUE if match and visinfo.
+ */
+
+extern Nlm_Boolean Nlm_CheckX(XVisualInfo *visinfo);
+
 #ifdef OS_UNIX
 #include <unistd.h>
 #endif

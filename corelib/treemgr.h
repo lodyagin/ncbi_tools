@@ -31,6 +31,9 @@
 *
 *
 * $Log: treemgr.h,v $
+* Revision 1.6  1999/05/18 21:13:55  soussov
+* TREE_SHUTDOWN event added
+*
 * Revision 1.5  1998/08/24 17:42:05  kans
 * fixed old style function definition warnings
 *
@@ -94,7 +97,8 @@ typedef enum {
     TREE_CHILDREN_MV_DONE,
     TREE_NODE_ADDED,
     TREE_SUBTREE_DELETE,
-    TREE_SUBTREE_DEL_DONE
+    TREE_SUBTREE_DEL_DONE,
+    TREE_SHUTDOWN
 } TreeEvent;
 #endif
 

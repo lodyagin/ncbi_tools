@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/4/94
 *
-* $Revision: 6.3 $
+* $Revision: 6.4 $
 *
 * File Description: 
 *       non-interactive command line interface for Entrez
@@ -40,6 +40,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: entrcmd.c,v $
+* Revision 6.4  1999/08/11 18:58:09  kans
+* changed FindNuc and FindProt to avoid collision with sequtil functions
+*
 * Revision 6.3  1998/08/24 20:43:42  kans
 * fixed -v -fd warnings
 *
@@ -246,7 +249,7 @@ PreOrderTaxTraversal(EntrezHierarchyPtr ehp, Int2 depth, DocType db, DocField fl
     
 
 /* find the last nucleotide bioseq in the bioseqset */
-static void FindNuc(SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
+static void FindANuc(SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
 {
   BioseqPtr PNTR bp;
   BioseqPtr local_bsp;
@@ -261,7 +264,7 @@ static void FindNuc(SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
 }
 
 /* find the last protein bioseq in the bioseqset */
-static void FindProt(SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
+static void FindAProt(SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
 {
   BioseqPtr PNTR bp;
   BioseqPtr local_bsp;
@@ -1922,7 +1925,7 @@ Int2 Main(void)
     EntrezNeighborTextPtr entp; 
     Boolean useWWWEncoding;
 
-    if ( ! GetArgs("Entrez command-line $Revision: 6.3 $", Numarg, myargs))
+    if ( ! GetArgs("Entrez command-line $Revision: 6.4 $", Numarg, myargs))
         return 1;
 
     if (myargs[14].strvalue)
@@ -2207,7 +2210,7 @@ Int2 Main(void)
                 return 8;
             }
             bsp = NULL;
-            SeqEntryExplore(sep, &bsp, isprot? FindProt : FindNuc);
+            SeqEntryExplore(sep, &bsp, isprot? FindAProt : FindANuc);
             if (bsp == NULL)
             {
                 Message (MSG_OK, "Error encountered while parsing sequence data for Bioseq");

@@ -48,11 +48,20 @@ Detailed Contents:
 
 ******************************************************************************/
 
-/* $Revision: 6.29 $ */
+/* $Revision: 6.32 $ */
 /* $Log: blastkar.c,v $
-/* Revision 6.29  1998/12/31 18:17:04  madden
-/* Added strand option
+/* Revision 6.32  1999/08/20 14:42:17  madden
+/* Changed Robinson frequencies per Stephen A. request
 /*
+/* Revision 6.31  1999/08/05 13:13:34  madden
+/* Improved help messages for permitted matrices and gap values
+/*
+/* Revision 6.30  1999/07/30 13:25:51  shavirin
+/* Fixed bug in the function BLAST_MatrixFill which created wrong matrix size.
+/*
+ * Revision 6.29  1998/12/31 18:17:04  madden
+ * Added strand option
+ *
  * Revision 6.28  1998/09/28 12:28:50  madden
  * Protection for a DEC Alpha problem with HUGE_VAL
  *
@@ -881,7 +890,7 @@ BLAST_MatrixFill(BLAST_ScoreBlkPtr sbp, Boolean positionBased)
 
 	if (sbp->posMatrix)
 	{
-		dim1 = sbp->query_length;
+		dim1 = sbp->query_length + 1;
 		dim2 = sbp->alphabet_size;
 		original_matrix = sbp->posMatrix;
 	}
@@ -1707,26 +1716,26 @@ static BLAST_LetterProb Altschul_prob[] = {
 #if STD_AMINO_ACID_FREQS == Robinson_prob
 /* amino acid background frequencies from Robinson and Robinson */
 static BLAST_LetterProb Robinson_prob[] = {
-		{ 'A', 78.00 },
-		{ 'C', 19.00 },
-		{ 'D', 54.00 },
-		{ 'E', 63.00 },
-		{ 'F', 39.00 },
-		{ 'G', 74.00 },
-		{ 'H', 22.00 },
-		{ 'I', 52.00 },
-		{ 'K', 57.00 },
-		{ 'L', 90.00 },
-		{ 'M', 22.00 },
-		{ 'N', 45.00 },
-		{ 'P', 52.00 },
-		{ 'Q', 43.00 },
-		{ 'R', 51.00 },
-		{ 'S', 71.00 },
-		{ 'T', 59.00 },
-		{ 'V', 64.00 },
-		{ 'W', 13.00 },
-		{ 'Y', 32.00 }
+		{ 'A', 78.05 },
+		{ 'C', 19.25 },
+		{ 'D', 53.64 },
+		{ 'E', 62.95 },
+		{ 'F', 38.56 },
+		{ 'G', 73.77 },
+		{ 'H', 21.99 },
+		{ 'I', 51.42 },
+		{ 'K', 57.44 },
+		{ 'L', 90.19 },
+		{ 'M', 22.43 },
+		{ 'N', 44.87 },
+		{ 'P', 52.03 },
+		{ 'Q', 42.64 },
+		{ 'R', 51.29 },
+		{ 'S', 71.20 },
+		{ 'T', 58.41 },
+		{ 'V', 64.41 },
+		{ 'W', 13.30 },
+		{ 'Y', 32.16 }
 	};
 #endif
 
@@ -2210,9 +2219,29 @@ BlastKarlinBlkGappedCalc(BLAST_KarlinBlkPtr kbp, Int4 gap_open, Int4 gap_extend,
 			return 0;
 		}
 	}
+	else
+	{
+		sprintf(buffer, "%s is not a supported matrix", matrix_name);
+		BlastConstructErrorMessage("BlastKarlinBlkGappedCalc", buffer, 2, error_return);
+		vnp = head;
+		while (vnp)
+		{
+			matrix_info = vnp->data.ptrvalue;
+			sprintf(buffer, "%s is a supported matrix", matrix_info->name);
+			BlastConstructErrorMessage("BlastKarlinBlkGappedCalc", buffer, 2, error_return);
+			vnp = vnp->next;
+		}
+		BlastMatrixValuesDestruct(head);
+		return 2;
+	}
 
-	sprintf(buffer, "Gap opening and extension values of %ld and %ld not supported for %s", (long) gap_open, (long) gap_extend, matrix_name);
+	sprintf(buffer, "Gap existence and extension values of %ld and %ld not supported for %s", (long) gap_open, (long) gap_extend, matrix_name);
 	BlastConstructErrorMessage("BlastKarlinBlkGappedCalc", buffer, 2, error_return);
+	for (index=0; index<max_number_values; index++)
+	{
+		sprintf(buffer, "Gap existence and extension values of %ld and %ld are supported", (long) Nint(values[index][0]), (long) Nint(values[index][1]));
+		BlastConstructErrorMessage("BlastKarlinBlkGappedCalc", buffer, 2, error_return);
+	}
 
 	BlastMatrixValuesDestruct(head);
 

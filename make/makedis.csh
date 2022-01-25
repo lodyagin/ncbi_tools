@@ -1,6 +1,6 @@
 #!/bin/csh -f
 #
-# $Id: makedis.csh,v 1.20 1999/03/18 17:33:49 beloslyu Exp $
+# $Id: makedis.csh,v 1.30 1999/08/23 20:29:01 beloslyu Exp $
 #
 ##                            PUBLIC DOMAIN NOTICE                          
 #               National Center for Biotechnology Information
@@ -97,6 +97,9 @@ case OSF1:
 case Linux:
 	set platform=linux
 	breaksw
+case NetBSD:
+	set platform=netbsd
+	breaksw
 default:
 	echo Platform not found : `uname -a`
 	goto BADPLATFORM
@@ -131,20 +134,10 @@ mv makeall.unx makefile
 #    and for the makenet, this symbol
 #  BLIB31=libvibnet.a 
 #
-set make="make"
-if ("$platform" == "solaris" || "$platform" == "solarisintel") then
-	set tmp=`/usr/bin/which dmake|sed -e 's/^\(...\).*/\1/'`
-	if ("$tmp" != "no ") then
-		set make="dmake -j 2"
-	endif
-endif
 
-# it's not working reliably
-#if ("$platform" == "alphaOSF1") then
-#	set make="make -j 2"
-#endif
-
-set CMD='$make $MFLG SHELL=\"$NCBI_MAKE_SHELL\" LCL=\"$NCBI_DEFAULT_LCL\" \
+set CMD='make $MFLG CFLAGS1=\"$NCBI_OPTFLAG $NCBI_CFLAGS1\" \
+   LDFLAGS1=\"$NCBI_LDFLAGS1\" \
+   SHELL=\"$NCBI_MAKE_SHELL\" LCL=\"$NCBI_DEFAULT_LCL\" \
    RAN=\"$NCBI_RANLIB\" CC=\"$NCBI_CC\" VIBLIBS=\"$NCBI_DISTVIBLIBS\" \
    LIB30=libncbicn3d.a LIB28=libvibgif.a LIB4=libvibrant.a \
    LIB20=libncbidesk.a VIBFLAG=\"$NCBI_VIBFLAG\" all'
@@ -153,7 +146,8 @@ eval echo $CMD | sh
 
 set make_stat = $status
 
-set CMD='$make $MFLG -f makedemo.unx SHELL=\"$NCBI_MAKE_SHELL\" \
+set CMD='make $MFLG -f makedemo.unx CFLAGS1=\"$NCBI_OPTFLAG $NCBI_CFLAGS1\" \
+   LDFLAGS1=\"$NCBI_LDFLAGS1\" SHELL=\"$NCBI_MAKE_SHELL\" \
    LCL=\"$NCBI_DEFAULT_LCL\" RAN=\"$NCBI_RANLIB\" CC=\"$NCBI_CC\" \
    VIBLIBS=\"$NCBI_DISTVIBLIBS\" LIB4=-lvibrant VIBFLAG=\"$NCBI_VIBFLAG\"'
 eval echo $CMD
@@ -169,7 +163,8 @@ rm -f blastall blastpgp seedtop
 #  Might repeat what is done above on some platforms.
 #
 
-set CMD='$make $MFLG -f makedemo.unx SHELL=\"$NCBI_MAKE_SHELL\" \
+set CMD='make $MFLG -f makedemo.unx CFLAGS1=\"$NCBI_OPTFLAG $NCBI_CFLAGS1\" \
+   LDFLAGS1=\"$NCBI_LDFLAGS1\" SHELL=\"$NCBI_MAKE_SHELL\" \
    LCL=\"$NCBI_DEFAULT_LCL\" RAN=\"$NCBI_RANLIB\" CC=\"$NCBI_CC\"  \
    VIBLIBS=\"$NCBI_DISTVIBLIBS\" LIB4=-lvibrant \
    THREAD_OBJ=$NCBI_THREAD_OBJ THREAD_OTHERLIBS=$NCBI_MT_OTHERLIBS \
@@ -179,9 +174,10 @@ eval echo $CMD | sh
 
 set threaded_demo_stat = $status
 
-set CMD='$make $MFLG -f makenet.unx SHELL=\"$NCBI_MAKE_SHELL\" \
+set CMD='make $MFLG -f makenet.unx CFLAGS1=\"$NCBI_OPTFLAG $NCBI_CFLAGS1\" \
+   LDFLAGS1=\"$NCBI_LDFLAGS1\" SHELL=\"$NCBI_MAKE_SHELL\" \
    CC=\"$NCBI_CC\" RAN=\"$NCBI_RANLIB\" VIBLIBS=\"$NCBI_DISTVIBLIBS\" \
-   VIBFLAG=\"$NCBI_VIBFLAG\" \
+   VIBFLAG=\"$NCBI_VIBFLAG\" NETENTREZVERSION=\"$NETENTREZVERSION\" \
    VIB=\"Psequin Nentrez Cn3D powblast pblcmd blastcl3\" \
    BLIB31=libvibnet.a OTHERLIBS=\"$NCBI_OTHERLIBS\"'
 eval echo $CMD
@@ -197,6 +193,9 @@ else
    # we are in ncbi/build directory now. Let us make the VERSION file
    echo putting date stamp to the file ../VERSION
    date > ../VERSION
+   echo '*********************************************************'
+   echo '*The new binaries are located in ./ncbi/build/ directory*'
+   echo '*********************************************************'
    exit 0
 endif
 

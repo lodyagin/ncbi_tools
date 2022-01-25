@@ -1,4 +1,4 @@
-/* $Id: txalign.h,v 6.17 1999/04/15 20:57:23 madden Exp $
+/* $Id: txalign.h,v 6.18 1999/06/07 18:43:17 madden Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 03/13/94
 *
-* $Revision: 6.17 $
+* $Revision: 6.18 $
 *
 * File Description:
 *         External include file for various alignments
@@ -38,6 +38,9 @@
 *
 *
 * $Log: txalign.h,v $
+* Revision 6.18  1999/06/07 18:43:17  madden
+* added TXALIGN_NO_DUMPGNL if dumpgnl is not desired
+*
 * Revision 6.17  1999/04/15 20:57:23  madden
 * overview printing for vector stuff
 *
@@ -160,6 +163,7 @@
 #define TXALIGN_CHECK_BOX_CHECKED	((Uint4)524288)	/* make default value for checkboxes ON (HTML only) */
 #define TXALIGN_NEW_GIF		((Uint4)1048576)	/* print new.gif near new alignments (HTML only) */
 #define TXALIGN_NO_ENTREZ	((Uint4)2097152)	/* Use dumpgnl syntax instead of ENTREZ. */
+#define TXALIGN_NO_DUMPGNL	((Uint4)4194304)	/* No dumpgnl output, even if GNL. */
 /*
 	Used by psi-blast to distinguish first from subsequent passes.
 */
@@ -216,6 +220,7 @@ typedef struct align_stat_option { /*options for printing the statistics*/
 	Boolean html_hot_link_relative;		/* Make the HTML link relative. */
 	Boolean show_gi;
 	Boolean no_entrez;			/* Do not use Entrez format for HTML links. */
+	Boolean no_dumpgnl;			/* Do not use dumpgnl format even if GNL. */
 	FILE *fp;
 	CharPtr buf;
 	BioseqPtr bsp;

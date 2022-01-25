@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 5/26/95
 *
-* $Revision: 6.0 $
+* $Revision: 6.1 $
 *
 * File Description:  a utility to find low complexity NA regions
 *
@@ -39,6 +39,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: dust.h,v $
+* Revision 6.1  1999/08/18 17:57:56  sicotte
+* added includes for prototypes
+*
 * Revision 6.0  1997/08/25 18:53:06  madden
 * Revision changed to 6.0
 *
@@ -60,6 +63,9 @@
 *
 * ==========================================================================
 */
+#include <objseq.h>
+#include <seqport.h>
+#include <objloc.h>
 
 extern SeqLocPtr BioseqDust PROTO ((BioseqPtr bsp, Int4 start, Int4 end,
 		      Int2 level, Int2 window, Int2 minwin, Int2 linker));

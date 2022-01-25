@@ -1,5 +1,6 @@
-/* $Id: url_cgi.c,v 6.3 1999/04/09 21:47:07 vakatov Exp $ */
+/* $Id: url_cgi.c,v 6.4 1999/07/19 17:55:37 vakatov Exp $ */
 /* This is a simple CGI script that(mostly) just pumps STDIN to STDOUT */
+/* cc url_cgi.c -o con_url.cgi */
 
 #include <stdio.h>
 
@@ -10,7 +11,10 @@ extern int main(int argc, char** argv)
   size_t r_total = 0;
   size_t w_total = 0;
 
-  fprintf(stdout, "Content-Type: text/url-encoded;  charset=ISO-8859-1\n\n");
+  fprintf(stdout, "SomeThing0: BEFORE ContentType\n");
+  fprintf(stdout, "Content-Type: x-ncbi-data/x-unknown\n");
+  fprintf(stdout, "SomeThing1: AFTER  ContentType\r\n\r\n");
+
   fp = fopen("con_url.log", "wb");
   if ( !fp )
     fprintf(stdout, "NOTE+cannot+open+log+file!+++");

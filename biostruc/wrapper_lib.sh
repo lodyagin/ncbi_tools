@@ -1,6 +1,6 @@
 #! /bin/sh
 #
-# $Id: wrapper_lib.sh,v 6.2 1999/04/29 23:08:31 kimelman Exp $
+# $Id: wrapper_lib.sh,v 6.5 1999/06/11 20:12:47 kimelman Exp $
 #
 # this is CGI handler wrapper library. It works as a membrane between httpd and actual
 # cgi program and allow to run new technological version of such program in
@@ -13,13 +13,9 @@ atexit() {
 
 basic_settings() {
     basename=`basename $progname | sed 's/[.][^.]*//g'`
-    EXECs_to_try="./$basename.REAL ./$basename.NEW ./$basename.OLD"
     TMPtop=/tmp/$basename
-    STATs_to_try="./stats.$basename log/stats.$basename"
-    
     if [ "x$THEvictim" = x ]; then
-        THEvictim="kimelman"
-#        THEvictim="kimelman zimmerma"
+        THEvictim="kimelman zimmerma"
     fi
     while [ -d $TMPtop -a ! -w $TMPtop ]; 
     do
@@ -74,7 +70,6 @@ proc_res() {
 
 prestart_checks() {
   httpdenv_check_and_fix
-  check_executables
   # check sybase settings
   if [ -f ${progdir}/st_configure.sh ] ; then
     if [ x$stats != x ] ; then
@@ -85,6 +80,12 @@ prestart_checks() {
 }
 
 run_all() {
+
+    # stage 0 : store input stream
+    check_executables $*
+
+    prestart_checks
+
     # stage A : store input stream
     res_name input
     input_file=$res_fname
@@ -136,14 +137,14 @@ run_all() {
 #
 
 do_timing() {
-    if [ x$stats = x ] ; then
-        for stats_file in $STATs_to_try ; do
-            if [ -w `dirname $stats_file` ]; then
-                stats=$stats_file
-                break
-            fi
-        done
-    fi
+    STATs_to_try="$*"
+    [ "x$STATs_to_try" != x ] || STATs_to_try="./stats.$basename log/stats.$basename"
+    for stats_file in $STATs_to_try ; do
+       if [ -w `dirname $stats_file` ]; then
+         stats=$stats_file
+         break
+       fi
+    done
 }
 
 create_stats_prog() {
@@ -222,21 +223,16 @@ httpdenv_check_and_fix() { # check environment & fix required but unset env vars
 }
 
 check_executables() { # check & find executable from the list
-    EXECs_given=$EXECs
     EXECs=
-    if [ "x$EXECs_given" != x ] ; then
-        for fexec in $EXECs_given ; do
-            [ ! -x $fexec ] || EXECs="$EXECs $fexec"
-        done
-    else
-        for fexec in $EXECs_to_try ; do
-            [ ! -x $fexec ] || EXECs="$EXECs $fexec"
-        done
-    fi
+    EXECs_given="$*"
+    [ "x$EXECs_given" != x ] || EXECs_given="./$basename.REAL ./$basename.OLD ./$basename.NEW"
+    for fexec in $EXECs_given ; do
+       [ ! -x $fexec ] || EXECs="$EXECs $fexec"
+    done
     if [ "x$EXECs" = x ]; then
         get_victim
         mail $victim <<EOF
-Subject ${progname} : can find binaries to run
+Subject ${progname} : can find binaries to run : $EXECs_given
 
 `ls -al`
 
@@ -302,3 +298,10 @@ Log:
 
 EOF
 }
+
+#
+# run basic settings
+#
+
+basic_settings 
+

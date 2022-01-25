@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 11/3/93
 *
-* $Revision: 6.14 $
+* $Revision: 6.15 $
 *
 * File Description: Utilities for creating ASN.1 submissions
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: subutil.c,v $
+* Revision 6.15  1999/08/05 20:43:44  kans
+* added CreateSubmissionUserObject (JP)
+*
 * Revision 6.14  1998/12/09 20:38:25  kans
 * changed compl to compr to avoid new c++ symbol collision
 *
@@ -4026,6 +4029,82 @@ NLM_EXTERN UserObjectPtr CreateMrnaProteinLinkUserObject (BioseqPtr bsp)
   ufp->data.ptrvalue = (Pointer) StringSave (buf);
 
   uop->data = ufp;
+
+  return uop;
+}
+
+NLM_EXTERN UserObjectPtr CreateSubmissionUserObject (CharPtr univecComment,
+                                                     CharPtr additionalComment,
+                                                     Int4 validatorErrorCount,
+                                                     Int4 validatorHashCode,
+                                                     Boolean isCloningVector)
+
+{
+  UserFieldPtr   last = NULL;
+  ObjectIdPtr    oip;
+  UserFieldPtr   ufp;
+  UserObjectPtr  uop;
+
+  uop = UserObjectNew ();
+  oip = ObjectIdNew ();
+  oip->str = StringSave ("Submission");
+  uop->type = oip;
+
+  ufp = UserFieldNew ();
+  oip = ObjectIdNew ();
+  oip->str = StringSave ("ValidatorErrorCount");
+  ufp->label = oip;
+  ufp->choice = 2; /* integer */
+  ufp->data.intvalue = validatorErrorCount;
+
+  uop->data = ufp; /* always making this ufp first */
+  last = ufp;
+
+  ufp = UserFieldNew ();
+  oip = ObjectIdNew ();
+  oip->str = StringSave ("ValidatorHash");
+  ufp->label = oip;
+  ufp->choice = 2; /* integer */
+  ufp->data.intvalue = validatorHashCode;
+
+  last->next = ufp;
+  last = ufp;
+
+  if (univecComment != NULL && *univecComment != '\0') {
+    ufp = UserFieldNew ();
+    oip = ObjectIdNew ();
+    oip->str = StringSave ("UniVecComment");
+    ufp->label = oip;
+    ufp->choice = 1; /* visible string */
+    ufp->data.ptrvalue = (Pointer) StringSave (univecComment);
+
+    last->next = ufp;
+    last = ufp;
+  }
+
+  if (additionalComment != NULL && *additionalComment != '\0') {
+    ufp = UserFieldNew ();
+    oip = ObjectIdNew ();
+    oip->str = StringSave ("AdditionalComment");
+    ufp->label = oip;
+    ufp->choice = 1; /* visible string */
+    ufp->data.ptrvalue = (Pointer) StringSave (additionalComment);
+
+    last->next = ufp;
+    last = ufp;
+  }
+
+  if (isCloningVector) {
+    ufp = UserFieldNew ();
+    oip = ObjectIdNew ();
+    oip->str = StringSave ("IsCloningVector");
+    ufp->label = oip;
+    ufp->choice = 4; /* boolean */
+    ufp->data.boolvalue = isCloningVector;
+
+    last->next = ufp;
+    last = ufp;
+  }
 
   return uop;
 }

@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 98-01-01
 *
-* $Revision: 6.14 $
+* $Revision: 6.15 $
 *
 * File Description: peptide pattern match
 *
@@ -38,6 +38,9 @@
 * Date       Name        Description of modification
 * --------------------------------------------------------------------------
 * $Log: srchaa.c,v $
+* Revision 6.15  1999/07/13 13:07:32  sicotte
+* prefix functions SeqAlignSort* with URK to resolve toolkit conflicts
+*
 * Revision 6.14  1999/02/26 18:51:54  kuzio
 * mismatch option
 *
@@ -513,7 +516,7 @@ Int2 Main (void)
           {
             EmbedMolecularWeightInfo (sap, gpbsp->bsp);
             if (myargs[ic].intvalue)
-              SeqAlignSortByMolWt (&sap);
+              URK_SeqAlignSortByMolWt (&sap);
             while (sap != NULL)
             {
               ssp = (StdSegPtr) sap->segs;

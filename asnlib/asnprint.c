@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 3/4/91
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description:
 *   Routines for printing ASN.1 value notation (text) messages and
@@ -42,6 +42,9 @@
 * 3/4/91   Kans        Stricter typecasting for GNU C and C++
 *
 * $Log: asnprint.c,v $
+* Revision 6.2  1999/07/15 18:52:52  shavirin
+* Fixed mantissa overflow in the function AsnPrintReal().
+*
 * Revision 6.1  1998/06/12 19:27:53  kans
 * fixed unix compiler warnings
 *
@@ -543,7 +546,12 @@ NLM_EXTERN void AsnPrintReal (FloatHi realvalue, AsnIoPtr aip)
 
 		mantissa = realvalue * Nlm_Powi((double)10., characteristic);
 		ic = -characteristic; /* reverse direction */
-		im = (long) mantissa;
+
+                if(mantissa >= 1.79e+308)
+                    im = INT_MAX;
+                else
+                    im = (long) mantissa;
+                
 
 		/* strip trailing 0 */
 		while ((im % 10L) == 0L)

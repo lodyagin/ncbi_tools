@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.21 $
+* $Revision: 6.24 $
 *
 * File Description: 
 *
@@ -45,6 +45,15 @@
 /*************************************
 *
  * $Log: wprint.c,v $
+ * Revision 6.24  1999/08/31 18:31:24  tatiana
+ * OLDQUERY ifdef added
+ *
+ * Revision 6.23  1999/08/30 17:07:01  tatiana
+ * minor changes for html version printing
+ *
+ * Revision 6.22  1999/05/13 23:00:44  tatiana
+ * hot link added to REFSEQ in COMMENT
+ *
  * Revision 6.21  1999/04/07 22:17:58  tatiana
  * added BR in web GARPHIK_FMT
  *
@@ -269,8 +278,14 @@ static Char link_omim[MAX_WWWBUF];
 static Char link_locus[MAX_WWWBUF];
 
 #define DEF_LINK_FF  "/cgi-bin/Entrez/getfeat?"
+#ifdef OLDQUERY
 #define DEF_LINK_MUID  "/htbin-post/Entrez/query?"
 #define DEF_LINK_SEQ  "/htbin-post/Entrez/query?"
+#else
+#define DEF_LINK_MUID  "/entrez/utils/qmap.cgi?"
+#define DEF_LINK_SEQ  "/entrez/utils/qmap.cgi?"
+#endif
+
 #define DEF_LINK_TAX "/htbin-post/Taxonomy/wgetorg?"
 #define DEF_LINK_CODE "/htbin-post/Taxonomy/wprintgc?"
 #define DEF_LINK_FLY "/cgi-bin/Entrez/referer?http://morgan.harvard.edu/htbin-post/gene.script%3f"
@@ -424,7 +439,7 @@ NLM_EXTERN Boolean LIBCALL www_source(CharPtr orgname, OrgRefPtr orp)
 		l = StringLen(link_tax);
 		lll = StringLen(orgname);
 		ll = StringLen("<a href=%sname=%s>");
-		s = MemNew(l+ ll + lll);
+		s = (CharPtr)MemNew(l+ ll + lll);
 		sprintf(s, "<a href=%sname=%s>", link_tax, 
 					orp->taxname?orp->taxname:orp->common);
 		AddLink(s);
@@ -456,7 +471,7 @@ NLM_EXTERN Boolean LIBCALL www_organism(CharPtr orgname, Int4 id)
 		} else {
 			ll = StringLen("<a href=%sname=%s>");
 		}
-		s = MemNew(l+ ll + lll);
+		s = (CharPtr)MemNew(l+ ll + lll);
 		if (id != -1) {
 			sprintf(s, "<a href=%sid=%d>", link_tax, id);
 		} else {
@@ -492,7 +507,7 @@ NLM_EXTERN Boolean LIBCALL www_taxid(CharPtr orgname, Int4 id)
 		} else {
 			ll = StringLen("<a href=%sname=%s>");
 		}
-		s = MemNew(l+ ll + lll);
+		s = (CharPtr)MemNew(l+ ll + lll);
 		if (id != -1) {
 			sprintf(s, "<a href=%sid=%d>", link_tax, id);
 		} else {
@@ -500,7 +515,8 @@ NLM_EXTERN Boolean LIBCALL www_taxid(CharPtr orgname, Int4 id)
 		}
 		AddLink(s);
 		MemFree(s);
-		ff_AddInteger("%d", id);
+		ff_AddString(orgname);
+	/*	ff_AddInteger(" (%d)", id);*/
 		AddLink("</a>");
 		MemFree(linkname);
 	} else {
@@ -517,7 +533,7 @@ NLM_EXTERN Boolean LIBCALL www_featkey(CharPtr key, Int4 gi, Int2 entityID, Int2
 	if (www) {
 		l = StringLen(link_ff);
 		ll = StringLen("<a href=%sgi=%ld&id=%d&entity=%d>");
-		s = MemNew(l+ ll + 5);
+		s = (CharPtr)MemNew(l+ ll + 5);
 		sprintf(s, "<a href=%sgi=%ld&id=%d&entity=%d>", link_ff, gi, itemID, entityID);
 		AddLink(s);
 		MemFree(s);
@@ -540,7 +556,7 @@ NLM_EXTERN Boolean LIBCALL www_gcode(CharPtr gcode)
 			lll = 2;
 		l = StringLen(link_code);
 			ll = StringLen("<a href=%smode=c#SG%d>");
-		s = MemNew(l+ ll + lll);
+		s = (CharPtr)MemNew(l+ ll + lll);
 			sprintf(s, "<a href=%smode=c#SG%d>", link_code, gc);
 		AddLink(s);
 		MemFree(s);
@@ -560,7 +576,7 @@ NLM_EXTERN Boolean LIBCALL www_muid(Int4 muid)
 	if (www) {
 		l = StringLen(link_muid);
 		ll = StringLen("<a href=%suid=%ld&form=6&db=m&Dopt=r>");
-		s = MemNew(l+ ll + 10);
+		s = (CharPtr)MemNew(l+ ll + 10);
 		sprintf(s, "<a href=%suid=%ld&form=6&db=m&Dopt=r>", link_muid, muid);
 		AddLink(s);
 		MemFree(s);
@@ -581,7 +597,7 @@ NLM_EXTERN Boolean LIBCALL www_extra_acc(CharPtr acc, Boolean ncbi)
 		l = StringLen(link_seq);
 		prefix = "<a href=%suid=gb|%s|&form=6&db=n&Dopt=g>"; 
 		ll = StringLen(prefix); 
-		s = MemNew(l+ ll + 10);
+		s = (CharPtr)MemNew(l+ ll + 10);
 		sprintf(s, prefix, link_seq, acc);
 		AddLink(s);
 		MemFree(s);
@@ -603,7 +619,7 @@ NLM_EXTERN Boolean LIBCALL www_genpept_gi(CharPtr str)
 			l = StringLen(link_seq);
 			prefix = "<a href=%suid=%ld&form=6&db=n&Dopt=g>"; 
 			ll = StringLen(prefix); 
-			s = MemNew(l+ ll + 10);
+			s = (CharPtr)MemNew(l+ ll + 10);
 		if (StringNCmp(str, "gi|", 3) == 0) {
 			str += 3;
 			gi = atoi(str);
@@ -656,7 +672,7 @@ NLM_EXTERN Boolean LIBCALL www_dbsource(CharPtr str, Boolean first, Uint1 choice
 				ff_AddString(", ");
 			}
 			ff_AddString(text);
-			s = MemNew(l+ ll + StringLen(p) + 1);
+			s = (CharPtr)MemNew(l+ ll + StringLen(p) + 1);
 			sprintf(s, prefix, link, p);
 			AddLink(s);
 			MemFree(s);
@@ -694,7 +710,7 @@ NLM_EXTERN Boolean www_coded_by(CharPtr str)
 			text = TextSave(ss, p-ss);
 			l = StringLen(link);
 			ll = StringLen(prefix); 
-			s = MemNew(l+ ll + StringLen(text));
+			s = (CharPtr)MemNew(l+ ll + StringLen(text));
 			sprintf(s, prefix, link, text);
 			AddLink(s);
 			MemFree(s);
@@ -721,7 +737,7 @@ NLM_EXTERN Boolean LIBCALL www_map(CharPtr str)
 			ll = StringLen(prefix); 
 			lll = StringLen(str); 
 			llll = StringLen(DEF_LINK_GDB_SUFFIX); 
-			s = MemNew(l+ ll + lll + llll);
+			s = (CharPtr)MemNew(l+ ll + lll + llll);
 			sprintf(s, prefix, DEF_LINK_GDB_PREFIX, str, DEF_LINK_GDB_SUFFIX);
 			AddLink(s);
 			MemFree(s);
@@ -742,7 +758,7 @@ NLM_EXTERN Boolean LIBCALL www_protein_id(CharPtr str)
 		l = StringLen(link_seq);
 		prefix = "<a href=%suid=%s&form=6&db=p&Dopt=g>"; 
 		ll = StringLen(prefix) + StringLen(str); 
-		s = MemNew(l + ll);
+		s = (CharPtr)MemNew(l + ll);
 		sprintf(s, prefix, link_seq, str);
 		AddLink(s);
 		MemFree(s);
@@ -770,15 +786,15 @@ NLM_EXTERN Boolean LIBCALL www_db_xref(CharPtr str)
 			l = StringLen(link_fly);
 			prefix = "<a href=%s%s>"; 
 			ll = StringLen(prefix); 
-			s = MemNew(l+ ll + 20);
-			ss = MemNew(p-str+1);
+			s = (CharPtr)MemNew(l+ ll + 20);
+			ss = (CharPtr)MemNew(p-str+1);
 			StringNCpy(ss, str, p-str);
 			ff_AddString(ss);
 			MemFree(ss);
 			while (*p == ' ')
 				p++;
 			for (pp = p; *pp != '\0' && *pp != ';'; pp++);
-			ss = MemNew(pp-p+1);
+			ss = (CharPtr)MemNew(pp-p+1);
 			StringNCpy(ss, p, pp-p);
 			sprintf(s, prefix, link_fly, ss);
 			AddLink(s);
@@ -795,9 +811,9 @@ NLM_EXTERN Boolean LIBCALL www_db_xref(CharPtr str)
 			l = StringLen(link_seq);
 			prefix = "<a href=%suid=%ld&form=6&db=p&Dopt=g>"; 
 			ll = StringLen(prefix); 
-			s = MemNew(l+ ll + 10);
+			s = (CharPtr)MemNew(l+ ll + 10);
 			gi = atoi(p);
-			ss = MemNew(p-str+1);
+			ss = (CharPtr)MemNew(p-str+1);
 			StringNCpy(ss, str, p-str);
 			ff_AddString(ss);
 			MemFree(ss);
@@ -814,8 +830,8 @@ NLM_EXTERN Boolean LIBCALL www_db_xref(CharPtr str)
 			l = StringLen(link_seq) + StringLen(p);
 			prefix = "<a href=%suid=%s&form=6&db=p&Dopt=g>"; 
 			ll = StringLen(prefix); 
-			s = MemNew(l + ll);
-			ss = MemNew(p-str+1);
+			s = (CharPtr)MemNew(l + ll);
+			ss = (CharPtr)MemNew(p-str+1);
 			StringNCpy(ss, str, p-str);
 			ff_AddString(ss);
 			MemFree(ss);
@@ -834,8 +850,8 @@ NLM_EXTERN Boolean LIBCALL www_db_xref(CharPtr str)
 			l = StringLen(link_locus) + StringLen(p);
 			prefix = "<a href=%s%s>"; 
 			ll = StringLen(prefix); 
-			s = MemNew(l + ll);
-			ss = MemNew(p-str+1);
+			s = (CharPtr)MemNew(l + ll);
+			ss = (CharPtr)MemNew(p-str+1);
 			StringNCpy(ss, str, p-str);
 			ff_AddString(ss);
 			MemFree(ss);
@@ -853,8 +869,8 @@ NLM_EXTERN Boolean LIBCALL www_db_xref(CharPtr str)
 			l = StringLen(link_omim) + StringLen(p);
 			prefix = "<a href=%s%s>"; 
 			ll = StringLen(prefix); 
-			s = MemNew(l + ll);
-			ss = MemNew(p-str+1);
+			s = (CharPtr)MemNew(l + ll);
+			ss = (CharPtr)MemNew(p-str+1);
 			StringNCpy(ss, str, p-str);
 			ff_AddString(ss);
 			MemFree(ss);
@@ -872,8 +888,8 @@ NLM_EXTERN Boolean LIBCALL www_db_xref(CharPtr str)
 			l = StringLen(link_sgd) + StringLen(p);
 			prefix = "<a href=%s%s>"; 
 			ll = StringLen(prefix); 
-			s = MemNew(l + ll);
-			ss = MemNew(p-str+1);
+			s = (CharPtr)MemNew(l + ll);
+			ss = (CharPtr)MemNew(p-str+1);
 			StringNCpy(ss, str, p-str);
 			ff_AddString(ss);
 			MemFree(ss);
@@ -896,8 +912,8 @@ NLM_EXTERN Boolean LIBCALL www_db_xref(CharPtr str)
 				l = StringLen(link_gdb) + StringLen(p);
 				prefix = "<a href=%s%s>"; 
 				ll = StringLen(prefix); 
-				s = MemNew(l + ll);
-				ss = MemNew(p-str+1);
+				s = (CharPtr)MemNew(l + ll);
+				ss = (CharPtr)MemNew(p-str+1);
 				StringNCpy(ss, str, p-str);
 				ff_AddString(ss);
 				MemFree(ss);
@@ -911,8 +927,8 @@ NLM_EXTERN Boolean LIBCALL www_db_xref(CharPtr str)
 				l = StringLen(link_gdb) + StringLen(p);
 				prefix = "<a href=%s%s>"; 
 				ll = StringLen(prefix); 
-				s = MemNew(l + ll);
-				ss = MemNew(p-str+1);
+				s = (CharPtr)MemNew(l + ll);
+				ss = (CharPtr)MemNew(p-str+1);
 				StringNCpy(ss, str, p-str);
 				ff_AddString(ss);
 				MemFree(ss);
@@ -930,7 +946,7 @@ NLM_EXTERN Boolean LIBCALL www_db_xref(CharPtr str)
 			l = StringLen(link_ck) + StringLen(p);
 			prefix = "<a href=%s%s>"; 
 			ll = StringLen(prefix); 
-			s = MemNew(l + ll);
+			s = (CharPtr)MemNew(l + ll);
 			sprintf(s, prefix, link_ck, p);
 			AddLink(s);
 			MemFree(s);
@@ -943,7 +959,7 @@ NLM_EXTERN Boolean LIBCALL www_db_xref(CharPtr str)
 			l = StringLen(link_rice) + StringLen(p);
 			prefix = "<a href=%s%s>"; 
 			ll = StringLen(prefix); 
-			s = MemNew(l + ll);
+			s = (CharPtr)MemNew(l + ll);
 			sprintf(s, prefix, link_rice, p);
 			AddLink(s);
 			MemFree(s);
@@ -973,15 +989,15 @@ NLM_EXTERN Boolean LIBCALL www_note_gi(CharPtr str)
 			l = StringLen(link_fly);
 			prefix = "<a href=%s%s>"; 
 			ll = StringLen(prefix); 
-			s = MemNew(l+ ll + 20);
-			ss = MemNew(p-str+1);
+			s = (CharPtr)MemNew(l+ ll + 20);
+			ss = (CharPtr)MemNew(p-str+1);
 			StringNCpy(ss, str, p-str);
 			ff_AddString(ss);
 			MemFree(ss);
 			while (*p == ' ')
 				p++;
 			for (pp = p; *pp != '\0' && *pp != ';'; pp++);
-			ss = MemNew(pp-p+1);
+			ss = (CharPtr)MemNew(pp-p+1);
 			StringNCpy(ss, p, pp-p);
 			sprintf(s, prefix, link_fly, ss);
 			AddLink(s);
@@ -998,9 +1014,9 @@ NLM_EXTERN Boolean LIBCALL www_note_gi(CharPtr str)
 			l = StringLen(link_seq);
 			prefix = "<a href=%suid=%ld&form=6&db=p&Dopt=g>"; 
 			ll = StringLen(prefix); 
-			s = MemNew(l+ ll + 10);
+			s = (CharPtr)MemNew(l+ ll + 10);
 			gi = atoi(p);
-			ss = MemNew(p-str+1);
+			ss = (CharPtr)MemNew(p-str+1);
 			StringNCpy(ss, str, p-str);
 			ff_AddString(ss);
 			MemFree(ss);
@@ -1025,7 +1041,7 @@ NLM_EXTERN Boolean LIBCALL www_xref(CharPtr str, Uint1 xref_class)
 	CharPtr	s, link, prefix, ss;
 	
 	if (www) {
-		ss = MemNew(StringLen(str) + 1);
+		ss = (CharPtr)MemNew(StringLen(str) + 1);
 		StringCpy(ss, str);
 		if (xref_class == 5) {
 			link = link_seq;    /*link_sp*/
@@ -1043,7 +1059,7 @@ NLM_EXTERN Boolean LIBCALL www_xref(CharPtr str, Uint1 xref_class)
 		if (link && prefix) {
 			l = StringLen(link);
 			ll = StringLen(prefix); 
-			s = MemNew(l+ ll + 10);
+			s = (CharPtr)MemNew(l+ ll + 10);
 			if (*(ss + StringLen(ss)  - 1) == '.') 
 				*(ss + StringLen(ss)  - 1) = '\0';
 				
@@ -1065,7 +1081,7 @@ NLM_EXTERN Boolean LIBCALL www_xref_button(FILE *fp, CharPtr str, Uint1 xref_cla
 	CharPtr	s, link, prefix, ss;
 	
 	if (www) {
-		ss = MemNew(StringLen(str) + 1);
+		ss = (CharPtr)MemNew(StringLen(str) + 1);
 		StringCpy(ss, str);
 		if (xref_class == 5) {
 			link = link_seq;  /* link_sp */
@@ -1114,10 +1130,10 @@ NLM_EXTERN Boolean LIBCALL www_xref_button(FILE *fp, CharPtr str, Uint1 xref_cla
 			l = StringLen(link);
 			ll = StringLen(prefix); 
 			if (db == SEQID_PIR) {
-				s = MemNew(l+ ll + 20);
+				s = (CharPtr)MemNew(l+ ll + 20);
 				sprintf(s, prefix, link, str, str);
 			} else {
-				s = MemNew(l+ ll + 10);
+				s = (CharPtr)MemNew(l+ ll + 10);
 				if (*(ss + StringLen(ss)  - 1) == '.') {
 					*(ss + StringLen(ss)  - 1) = '\0';
 				}
@@ -1150,7 +1166,7 @@ NLM_EXTERN Boolean LIBCALL PrintSPBlock (Asn2ffJobPtr ajp, GBEntryPtr gbp)
 		dsp = (DescrStructPtr) ds_vnp->data.ptrvalue;
 		vnp = dsp->vnp;
 		gbp->descr = dsp;
-		spb = vnp->data.ptrvalue;
+		spb = (SPBlockPtr)vnp->data.ptrvalue;
 		MemFree(vnp);
 		if (spb->_class == 1) {
 			ff_AddString("class: standard.");
@@ -1162,7 +1178,7 @@ NLM_EXTERN Boolean LIBCALL PrintSPBlock (Asn2ffJobPtr ajp, GBEntryPtr gbp)
 		if (spb->extra_acc) {
 			ff_AddString("extra accessions:");
 			for (v = spb->extra_acc; v; v= v->next) {
-				ff_AddString(v->data.ptrvalue);
+				ff_AddString((CharPtr)v->data.ptrvalue);
 				ff_AddString(",");
 			}
 		}
@@ -1172,7 +1188,7 @@ NLM_EXTERN Boolean LIBCALL PrintSPBlock (Asn2ffJobPtr ajp, GBEntryPtr gbp)
 		if (spb->plasnm) {
 			ff_AddString("plasmid:");
 			for (v = spb->plasnm; v; v= v->next) {
-				ff_AddString(v->data.ptrvalue);
+				ff_AddString((CharPtr)v->data.ptrvalue);
 				ff_AddString(",");
 			}
 		}
@@ -1204,7 +1220,7 @@ NLM_EXTERN Boolean LIBCALL PrintSPBlock (Asn2ffJobPtr ajp, GBEntryPtr gbp)
 					}
 					first = FALSE;
 					ff_AddString("genbank accession ");
-					tid = sid->data.ptrvalue;
+					tid = (TextSeqIdPtr)sid->data.ptrvalue;
 					acc = tid->accession;
 					has_link = TRUE;
 					break; 
@@ -1215,7 +1231,7 @@ NLM_EXTERN Boolean LIBCALL PrintSPBlock (Asn2ffJobPtr ajp, GBEntryPtr gbp)
 					}
 					first = FALSE;
 					ff_AddString("embl accession ");
-					tid = sid->data.ptrvalue;
+					tid = (TextSeqIdPtr)sid->data.ptrvalue;
 					acc = tid->accession;
 					has_link = TRUE;
 					break; 
@@ -1226,7 +1242,7 @@ NLM_EXTERN Boolean LIBCALL PrintSPBlock (Asn2ffJobPtr ajp, GBEntryPtr gbp)
 					}
 					first = FALSE;
 					ff_AddString("pir locus ");
-					tid = sid->data.ptrvalue;
+					tid = (TextSeqIdPtr)sid->data.ptrvalue;
 					acc = tid->name;
 					has_link = FALSE;
 					break; 
@@ -1238,7 +1254,7 @@ NLM_EXTERN Boolean LIBCALL PrintSPBlock (Asn2ffJobPtr ajp, GBEntryPtr gbp)
 					}
 					first = FALSE;
 					ff_AddString("swissprot accession ");
-					tid = sid->data.ptrvalue;
+					tid = (TextSeqIdPtr)sid->data.ptrvalue;
 					acc = tid->accession;
 					has_link = TRUE;
 					break; 
@@ -1249,7 +1265,7 @@ NLM_EXTERN Boolean LIBCALL PrintSPBlock (Asn2ffJobPtr ajp, GBEntryPtr gbp)
 					}
 					first = FALSE;
 					ff_AddString("ddbj accession ");
-					tid = sid->data.ptrvalue;
+					tid = (TextSeqIdPtr)sid->data.ptrvalue;
 					acc = tid->accession;
 					has_link = TRUE;
 					break; 
@@ -1260,7 +1276,7 @@ NLM_EXTERN Boolean LIBCALL PrintSPBlock (Asn2ffJobPtr ajp, GBEntryPtr gbp)
 					first = FALSE;
 					prefix = "<a href=%suid=prf|%s|&form=6&db=p&Dopt=g>";
 					ff_AddString("prf accession ");
-					tid = sid->data.ptrvalue;
+					tid = (TextSeqIdPtr)sid->data.ptrvalue;
 					acc = tid->accession;
 					has_link = TRUE;
 					break; 
@@ -1272,7 +1288,7 @@ NLM_EXTERN Boolean LIBCALL PrintSPBlock (Asn2ffJobPtr ajp, GBEntryPtr gbp)
 					prefix = "<a href=%suid=%ld&form=6&db=s&Dopt=g>"; 
 					ff_AddString("gi: ");
 					has_link = TRUE;
-					acc = MemNew(10);
+					acc = (CharPtr)MemNew(10);
 					sprintf(acc, "%ld", (long) sid->data.intvalue);
 					break; 
 				default:
@@ -1284,13 +1300,13 @@ NLM_EXTERN Boolean LIBCALL PrintSPBlock (Asn2ffJobPtr ajp, GBEntryPtr gbp)
 						l = StringLen(link);
 						ll = StringLen(prefix); 
 						if (sid->choice == SEQID_PIR) {
-							s = MemNew(l+ ll + 40);
+							s = (CharPtr)MemNew(l+ ll + 40);
 							sprintf(s, prefix, link, acc, acc);
 						} else if (sid->choice == SEQID_GI) {
-							s = MemNew(l+ ll + 10);
+							s = (CharPtr)MemNew(l+ ll + 10);
 							sprintf(s, prefix, link, sid->data.intvalue);
 						} else {
-							s = MemNew(l+ ll + 10);
+							s = (CharPtr)MemNew(l+ ll + 10);
 							sprintf(s, prefix, link, acc);
 						}
 					}
@@ -1305,7 +1321,7 @@ NLM_EXTERN Boolean LIBCALL PrintSPBlock (Asn2ffJobPtr ajp, GBEntryPtr gbp)
 		}
 		first = TRUE;
 		for (vnp = spb->dbref; vnp; vnp=vnp->next) {
-			db = vnp->data.ptrvalue;
+			db = (DbtagPtr)vnp->data.ptrvalue;
 			has_link = FALSE;
 			if (first) {
 				NewContLine();
@@ -1319,7 +1335,7 @@ NLM_EXTERN Boolean LIBCALL PrintSPBlock (Asn2ffJobPtr ajp, GBEntryPtr gbp)
 				prefix = "<a href=%s%s>";
 				l = StringLen(link_omim);
 				ll = StringLen(prefix); 
-				s = MemNew(l+ ll + 10);
+				s = (CharPtr)MemNew(l+ ll + 10);
 				has_link = TRUE;
 			} 
 			if (db->tag && db->tag->str) {
@@ -1376,7 +1392,7 @@ NLM_EXTERN CharPtr LIBCALL www_featloc(CharPtr loc)
 	if (k == 0) {
 		return StringSave(loc);
 	}
-	buf = MemNew(n + 1);
+	buf = (CharPtr)MemNew(n + 1);
 	StringCpy(buf, loc);
 	for (i = 0; i < MAX_WWWLOC; i++) {
 		s = buf;
@@ -1506,7 +1522,7 @@ static void LocPrintGenome(Asn2ffJobPtr ajp, GBEntryPtr gbp, SeqLocPtr slp_head)
 								prefix =
 								"<a href=%suid=%d&form=6&db=c&Dopt=z>"; 
 								ll = StringLen(prefix); 
-								s = MemNew(l+ ll + 10);
+								s = (CharPtr)MemNew(l+ ll + 10);
 								sprintf(s, prefix, link_seq, uid);
 								ff_AddString(buf);
 								p1 = StringLen(buf);
@@ -1519,7 +1535,7 @@ static void LocPrintGenome(Asn2ffJobPtr ajp, GBEntryPtr gbp, SeqLocPtr slp_head)
 							prefix = 
 							"<a href=%suid=gb|%s|&form=6&db=n&Dopt=g>";
 							ll = StringLen(prefix); 
-							s = MemNew(l+ ll + 10);
+							s = (CharPtr)MemNew(l+ ll + 10);
 							sprintf(s, prefix, link_seq, buf);
 							ff_AddString(buf);
 							p1 = StringLen(buf);
@@ -1562,7 +1578,7 @@ static void LocPrintGenome(Asn2ffJobPtr ajp, GBEntryPtr gbp, SeqLocPtr slp_head)
 				if (uid != 0) {
 					prefix = "<a href=%suid=%ld&form=6&db=c&Dopt=z>";
 					ll = StringLen(prefix); 
-					s = MemNew(l+ ll + 10);
+					s = (CharPtr)MemNew(l+ ll + 10);
 					sprintf(s, prefix, link_seq, uid);
 					ff_AddString( buf);
 					p1 = StringLen(buf);
@@ -1574,7 +1590,7 @@ static void LocPrintGenome(Asn2ffJobPtr ajp, GBEntryPtr gbp, SeqLocPtr slp_head)
 			} else {
 				prefix = "<a href=%suid=gb|%s|&form=6&db=n&Dopt=g>";
 				ll = StringLen(prefix); 
-				s = MemNew(l+ ll + 10);
+				s = (CharPtr)MemNew(l+ ll + 10);
 				sprintf(s, prefix, link_seq, buf);
 				ff_AddString( buf);
 				p1 = StringLen(buf);
@@ -1646,11 +1662,6 @@ void PrintGenome(Asn2ffJobPtr ajp, GBEntryPtr gbp)
 
 }
 
-/***************************************************************************
-*PrintComment
-*
-***************************************************************************/
-
 NLM_EXTERN void LIBCALL www_accession (CharPtr string)
 {
 	Int2	l, ll;
@@ -1664,7 +1675,7 @@ NLM_EXTERN void LIBCALL www_accession (CharPtr string)
 	} else {
 			link = link_seq;
 			prefix = "<a href=%suid=%s&form=6&db=s&Dopt=g>";
-			s = MemNew(StringLen(link_seq)+ StringLen(prefix) + 10);
+			s = (CharPtr)MemNew(StringLen(link_seq)+ StringLen(prefix) + 10);
 			sprintf(s, prefix, link, string);
 			AddLink(s);
 			MemFree(s);
@@ -1680,50 +1691,60 @@ NLM_EXTERN void LIBCALL www_PrintComment (CharPtr string, Boolean identifier, Ui
 	Int4	gi;
 	CharPtr	s, prefix=NULL, p, link=NULL;
 
-	if (string != NULL)
-	{
-		if (format == EMBL_FMT || format == PSEUDOEMBL_FMT ||
-			format == EMBLPEPT_FMT) {
-			if (identifier == TRUE)
-				PrintXX();
-			ff_StartPrint(5, 5, ASN2FF_EMBL_MAX, "CC");
-		} else {
-			ff_StartPrint(0, 12, ASN2FF_GB_MAX, NULL);
-			if (identifier == TRUE) {
-				if (format == GRAPHIK_FMT && www) {
-					ff_AddString("<BR><b>COMMENT</b>&nbsp;&nbsp;&nbsp;");
-				} else {
-					ff_AddString("COMMENT");
-				}
-			}
-			TabToColumn(13);
-		}
-		if (!www) {
-			ff_AddStringWithTildes(string);
-		} else {
-			while ((p = StringStr(string, "gi:")) != NULL) {
-				p += 3;
-				s = TextSave(string, p-string);
-				ff_AddString(s);
-				gi = atoi(p);
-				link = link_seq;
-				prefix = "<a href=%suid=%d&form=6&db=s&Dopt=g>";
-				s = MemNew(StringLen(link_seq)+ StringLen(prefix) + 12);
-				sprintf(s, prefix, link, gi);
-				AddLink(s);
-				MemFree(s);
-				ff_AddInteger("%d", gi);
-				AddLink("</a>");
-				while (IS_DIGIT(*p)) 
-					p++;
-				string = p;
-			}
-			ff_AddStringWithTildes(string);
-		}
-	
-		ff_EndPrint();
+	if (string == NULL) {
+		return;
 	}
+	if (format == EMBL_FMT || format == PSEUDOEMBL_FMT ||
+		format == EMBLPEPT_FMT) {
+		if (identifier == TRUE)
+			PrintXX();
+		ff_StartPrint(5, 5, ASN2FF_EMBL_MAX, "CC");
+	} else {
+		ff_StartPrint(0, 12, ASN2FF_GB_MAX, NULL);
+		if (identifier == TRUE) {
+			if (format == GRAPHIK_FMT && www) {
+				ff_AddString("<BR><b>COMMENT</b>&nbsp;&nbsp;&nbsp;");
+			} else {
+				ff_AddString("COMMENT");
+			}
+		}
+		TabToColumn(13);
+	}
+	if (!www) {
+		ff_AddStringWithTildes(string);
+		ff_EndPrint();
+		return;
+	} 
+	if ((p = StringStr(string, "REFSEQ")) != NULL) {
+		p += 7;
+		AddLink("<a href=http://www.ncbi.nlm.nih.gov/LocusLink/refseq.html>");
+		ff_AddString("REFSEQ:");
+		AddLink("</a>");
+		ff_AddString(p);
+		ff_EndPrint();
+		return;
+	}
+	while ((p = StringStr(string, "gi:")) != NULL) {
+		p += 3;
+		s = TextSave(string, p-string);
+		ff_AddString(s);
+		gi = atoi(p);
+		link = link_seq;
+		prefix = "<a href=%suid=%d&form=6&db=s&Dopt=g>";
+		s = (CharPtr)MemNew(StringLen(link_seq)+ StringLen(prefix) + 12);
+		sprintf(s, prefix, link, gi);
+		AddLink(s);
+		MemFree(s);
+		ff_AddInteger("%d", gi);
+		AddLink("</a>");
+		while (IS_DIGIT(*p)) 
+			p++;
+		string = p;
+	}
+	ff_AddStringWithTildes(string);
+	ff_EndPrint();
 
 	return;
 }	/* PrintComment */
+
 

@@ -31,6 +31,9 @@
 *
 *
 * $Log: tree.h,v $
+* Revision 1.5  1999/05/18 21:13:47  soussov
+* TREE_SHUTDOWN event added
+*
 * Revision 1.4  1998/04/02 23:03:31  vakatov
 * PC-specific fixes
 *
@@ -76,7 +79,8 @@ typedef enum {
     TREE_CHILDREN_MV_DONE,
     TREE_NODE_ADDED,
     TREE_SUBTREE_DELETE,
-    TREE_SUBTREE_DEL_DONE
+    TREE_SUBTREE_DEL_DONE,
+    TREE_SHUTDOWN
 } TreeEvent;
 
 typedef struct t_nodeId0 {

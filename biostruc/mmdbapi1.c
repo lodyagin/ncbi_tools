@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   03/14/95
 *
-* $Revision: 6.29 $
+* $Revision: 6.30 $
 *
 * File Description: 
 *
@@ -44,6 +44,9 @@
 * 95/08/30 C. Hogue    Minor changes.
 *
 * $Log: mmdbapi1.c,v $
+* Revision 6.30  1999/06/07 21:23:36  ywang
+* add iUserDefinedFeatureOld, FeatureOnOld to MGD
+*
 * Revision 6.29  1999/05/07 20:48:59  kans
 * including new name of prunebsc.h
 *
@@ -338,7 +341,9 @@ PMGD LIBCALL NewMGD(void)
       pmgdNew->bJustHighlighted = 0;   /* be displayed by default */
       pmgdNew->bTurnedOff = 0;   /* be displayed by default */
       pmgdNew->iUserDefinedFeature = 0;
+      pmgdNew->iUserDefinedFeatureOld = 0;
       pmgdNew->FeatureOn = 0;
+      pmgdNew->FeatureOnOld = 0;
                                /* Yanli */
       pmgdNew->pbMasterReserved = NULL;
 

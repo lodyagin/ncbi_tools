@@ -32,8 +32,11 @@ Contents: definitions and prototypes used by blastkar.c to calculate BLAST
 
 ******************************************************************************/
 
-/* $Revision: 6.12 $ 
+/* $Revision: 6.13 $ 
 * $Log: blastkar.h,v $
+* Revision 6.13  1999/09/16 17:38:42  madden
+* Add posFreqs for position-specific frequencies
+*
 * Revision 6.12  1999/03/17 16:49:11  madden
 * Removed comment within comment
 *
@@ -316,6 +319,7 @@ protein alphabet (e.g., ncbistdaa etc.), FALSE for nt. alphabets. */
 	Boolean		read_in_matrix; /* If TRUE, matrix is read in, otherwise
 					produce one from penalty and reward above. */
 	BLAST_ScoreFreqPtr PNTR sfp;	/* score frequencies. */
+	Nlm_FloatHi **posFreqs; /*matrix of position specific frequencies*/
 	/* kbp & kbp_gap are ptrs that should be set to kbp_std, kbp_psi, etc. */
 	BLAST_KarlinBlkPtr 	PNTR kbp; 	/* Karlin-Altschul parameters. */
 	BLAST_KarlinBlkPtr 	PNTR kbp_gap; /* K-A parameters for gapped alignments. */

@@ -11,7 +11,8 @@
 
 <map name="sequin">
 <area shape="rect" coords="3,2 43,19" href="http://www.ncbi.nlm.nih.gov/">
-<area shape="rect" coords="424,2   506,19" href="http://www.ncbi.nlm.nih.gov/Sequin/">
+<area shape="rect" coords="424,2   506,19"
+href="http://www.ncbi.nlm.nih.gov/Sequin/">
 <area shape="default" nohref>
 </map>
 
@@ -92,11 +93,14 @@ and use the record viewer is presented below.
 
 >Welcome to Sequin Form
 
-#This window allows you to choose the type of project you want to work on. First,
+#This window allows you to choose the type of project you want to work on.
+First,
 indicate, with one of the three radio buttons, whether you are submitting the
 sequence to the GenBank, EMBL, or DDBJ database.  If you are working on a
-sequence submission for the first time, click on "Start New Submission."  If you
-are modifying an existing submission record, click on "Read Existing Record."  If
+sequence submission for the first time, click on "Start New Submission."  If
+you
+are modifying an existing submission record, click on "Read Existing Record." 
+If
 you would like to quit from Sequin, click on "Quit Program."
 
 #You can also "Read Existing Record" to read in a FASTA-formatted sequence file
@@ -192,14 +196,17 @@ under the File menu.  If you are processing multiple submissions, you
 can use the "Import" function under the File menu to paste previously
 entered information directly on the page.
 
-#The Contact, Authors, and Affiliation pages can be saved as a block so that you
+#The Contact, Authors, and Affiliation pages can be saved as a block so that
+you
 can use this information for your next submission.  For your first Sequin
-submission, fill in the requested information on the Submitting Authors form, and
+submission, fill in the requested information on the Submitting Authors form,
+and
 proceed with the preparation of the submision.  In the record viewer, when the
 submission is basically finished, click on "Edit Submitter Info" under the Edit
 menu.  Under the file menu in the resulting Submission Instructions form, click
 on Export Submitter Info to save the information to a file.  For subsequent
-Sequin submissions, if you have already saved the submittor information, click on
+Sequin submissions, if you have already saved the submittor information, click
+on
 Import Submitter Info under the File menu on the Submission page of the
 Submitting Authors form.  You must still fill in the manuscript title on the
 Submission page, though.
@@ -253,37 +260,51 @@ sequencing and/or analysis were carried out.  If multiple labs were
 involved in the project, this page should contain information about the
 workplace of the senior author.  This is not necessarily the same as the
 workplace of the person described on the Contact page.  This information will
-show up in the reference section of the record, with the title Direct Submission.
+show up in the reference section of the record, with the title Direct
+Submission.
 
 >Sequence Format Form
 
 #Use this form to indicate the type of sequence you are submitting, as
 well as the format of the sequence.  
 
-#Sequin can process single nuceotide sequences as well as sets of "related" sequences.  If the sequences are closely related on a sequence level, they may be part of a phylogenetic, population, or mutation
-study.  If the sequences are related in terms of coming from the same publication, or the same organism, they may be candidates for a Batch submission.  Segmented sets consist of a collection of non-overlapping sequences covering a specific genetic region.  In all cases, although the sequences are handled as a single submission,
-each sequence in a set will receive its own database accession number
-and can be annotated independently.
+#Sequin can process single nuceotide sequences as well as sets of "related"
+sequences.  If the sequences are closely related on a sequence level, they may
+be part of a phylogenetic, population, or mutation study.  If the sequences are
+related in terms of coming from the same publication, or the same organism,
+they may be candidates for a Batch submission.  Segmented sets consist of a
+collection of non-overlapping sequences covering a specific genetic region.  In
+all cases, although the sequences are handled as a single submission, each
+sequence in a set will receive its own database accession number and can be
+annotated independently.
 
-#Sequin can display the alignments of sequences which are submitted as part of an aligned phylogenetic, population, or mutation set.  Such sequences can be submitted in FASTA, Contiguous (FASTA+GAP, NEXUS, MACAW), or Interleaved (PHYLIP, NEXUS) formats.  If the sequences are in FASTA format,
-Sequin will generate an alignment. If the sequences have already been
-aligned in FASTA+GAP, PHYLIP, MACAW, or NEXUS, Sequin will not change the
-alignment. 
+#Sequin can display the alignments of sequences which are submitted as part of
+an aligned phylogenetic, population, or mutation set.  Such sequences can be
+submitted in FASTA, Contiguous (FASTA+GAP, NEXUS, MACAW), or Interleaved
+(PHYLIP, NEXUS) formats.  If the sequences are in FASTA format, Sequin will
+generate an alignment. If the sequences have already been aligned in FASTA+GAP,
+PHYLIP, MACAW, or NEXUS, Sequin will not change the alignment.
 
-#Single sequences, segmented sequences, and batch submissions must be submitted in FASTA format.  Sequin will not attempt to align such sequences, even those that are submitted together in one set.
+#Single sequences, segmented sequences, and batch submissions must be submitted
+in FASTA format.  Sequin will not attempt to align such sequences, even those
+that are submitted together in one set.
 
 *Submission type
 
 #Use the radio buttons to indicate which of the following type of
 submissions you are creating:
 
-#-Single sequence:  Select this option if you are submitting a single
-sequence, such as a single mRNA or genomic DNA sequence.  If you are submitting multiple sequences from the same publication, consider a Batch Submission.  If you decide to submit multiple Sequin files, each with one or more sequences, please send each file in a separate email message.
+#-Single sequence:  Select this option if you are submitting a single sequence,
+such as a single mRNA or genomic DNA sequence.  If you are submitting multiple
+sequences from the same publication, consider a Batch Submission.  If you
+decide to submit multiple Sequin files, each with one or more sequences, please
+send each file in a separate email message.
 
 #-Segmented sequence:  A segmented set of nucleotide sequences is a
 collection of non-overlapping sequences which cover a specified genetic
 region.  A standard example is a set of genomic DNA sequences which
-encode exons from a gene along with fragments of their flanking introns.  If the
+encode exons from a gene along with fragments of their flanking introns.  If
+the
 segmented set is part of an alignment, however, select the appropriate
 Population, Phylogenetic, or Mutation study button.
 
@@ -306,7 +327,11 @@ derived by sequencing multiple mutations in a single gene.  If you want
 the sequences to be part of an alignment, you can either import them in
 a pre-aligned format, or ask Sequin to align them.
 
-#-Batch submission:  Select this option if you are submitting a set of related sequences which are not part of a population, mutation, or phylogenetic study. The sequences should be related in some way, such as coming from the same publication or organism.  You should plan that all sequences will be released to the public on the same date. Sequin will not attempt to align the sequences.
+#-Batch submission:  Select this option if you are submitting a set of related
+sequences which are not part of a population, mutation, or phylogenetic study.
+The sequences should be related in some way, such as coming from the same
+publication or organism.  You should plan that all sequences will be released
+to the public on the same date. Sequin will not attempt to align the sequences.
 
 *Sequence data format
 
@@ -583,7 +608,8 @@ file, for a single sequence) should read
 
 #for example,
 
-!>DNA.new [org=Homo sapiens] [chromosome=17] [map=17q21] Human breast and ovarian cancer susceptibility (BRCA1) mRNA, complete cds.
+!>DNA.new [org=Homo sapiens] [chromosome=17] [map=17q21] Human breast and
+ovarian cancer susceptibility (BRCA1) mRNA, complete cds.
 
 #->:  The ">" sign must precede any descriptive information about your
 sequence.  Any line which does not begin with a ">" sign will be
@@ -620,16 +646,18 @@ taxonomy database
 with information about scientific and common organism names  
 http://www.ncbi.nlm.nih.gov/Taxonomy/tax.html
 
-#-[modifier=modifier name]:  Additional modifiers can also be encoded on
-the first line of the nucleotide sequence.  These modifiers include
-chromosome, map, clone, subclone, haplotype, genotype, sex, cell-line,
-cell-type, tissue-type, clone-lib, dev-stage, frequency, germline,
-rearranged, lab-host, pop-variant, tissue-lib, plasmid-name,
-transposon-name, ins-sequence-name, plastid-name, country, strain, substrain,
-type, subtype, variety, serotype, serogroup, serovar, cultivar,
-pathovar, chemovar, biovar, biotype, group, subgroup, isolate, common,
-acronym, dosage, natural host, sub-species, and specimen voucher.  Complete descriptions
-of these modifiers can be found in the 
+#-[modifier=modifier name]:  Additional modifiers can also be encoded on the
+first line of the nucleotide sequence.  These modifiers include moltype,
+molecule, chromosome, map, clone, subclone, haplotype, genotype, sex,
+cell-line,
+cell-type, tissue-type, clone-lib, dev-stage, frequency, germline, rearranged,
+lab-host, pop-variant, tissue-lib, plasmid-name, transposon-name,
+ins-sequence-name, plastid-name, country, strain, substrain, type, subtype,
+variety, serotype, serogroup, serovar, cultivar, pathovar, chemovar, biovar,
+biotype, group, subgroup, isolate, common, acronym, dosage, natural host,
+sub-species, and specimen voucher.  Complete descriptions of these modifiers
+can
+be found in the
 
 <A HREF="#SourceSubpage">
 Source
@@ -643,7 +671,8 @@ subpages of the Biological Source Modifiers page.  You may include as
 many modifiers as you like, but each must be bounded by a set of
 brackets.  The name of the modifier must be written exactly as shown in
 the list above.  An example of a string of modifiers is [strain=BALB/c]
-[chromosome=5] [sex=male] [tissue-type=testis]. Modifiers can also be
+[chromosome=5] [sex=male] [tissue-type=testis][moltype=mRNA]. Modifiers can
+also be
 added as 
 
 <A HREF="#BiologicalSource">
@@ -652,7 +681,8 @@ Biological Source
 descriptors or features later in the submission process.  
 
 #-[lineage=lineage]:  If you are working with an organism whose lineage is not
-listed in the NCBI taxonomy database, you can provide the complete lineage here.
+listed in the NCBI taxonomy database, you can provide the complete lineage
+here.
 
 
 #-title:  A definition or description of the sequence.  It is important
@@ -709,7 +739,8 @@ lines, as shown in the following examples:
 
 !-Saccharomyces cerevisiae cystathionine gamma-lyase (CYS3) gene, complete cds.
 
-!-Arabidopsis thaliana pyruvate dehydrogenase E1 alpha subunit mRNA, nuclear gene encoding mitochondrial protein, complete cds.
+!-Arabidopsis thaliana pyruvate dehydrogenase E1 alpha subunit mRNA, nuclear
+gene encoding mitochondrial protein, complete cds.
 
 !-Rattus norvegicus fos-related antigen 2 (fra-2) mRNA, complete cds.
 
@@ -724,11 +755,13 @@ large/small subunit, mitochondrial gene.
 
 #For example:
 
-!Ophraella conferta isolate 62 16S mitochondrial ribosomal RNA, large subunit, mitochondrial gene.
+!Ophraella conferta isolate 62 16S mitochondrial ribosomal RNA, large subunit,
+mitochondrial gene.
 
 **Example of the first line of a nucleotide FASTA sequence
 
-!>DNA.new [org=Homo sapiens] [chromosome=17] [map=17q21] Human breast and ovarian cancer susceptibility (BRCA1) mRNA, complete cds.
+!>DNA.new [org=Homo sapiens] [chromosome=17] [map=17q21] Human breast and
+ovarian cancer susceptibility (BRCA1) mRNA, complete cds.
 
 **FASTA+GAP format for aligned nucleotide sequences
 
@@ -739,7 +772,8 @@ FASTA+GAP format, gaps can be indicated by a "-".  Each sequence,
 including gaps, must be the same length.  The gaps will only show up in
 the alignment, not in the individual sequence in the database.  
 
-#Sequences in FASTA+GAP format resemble FASTA sequences.  The previous section on 
+#Sequences in FASTA+GAP format resemble FASTA sequences.  The previous section
+on 
 
 <A HREF="#FASTAformatfornucleotidesequences">
 FASTA format for nucleotide sequences
@@ -972,7 +1006,8 @@ Source Modifers form
 sequences are in FASTA or FASTA+GAP format.  Each segment should have its own
 sequence identifier (the tern immediately following the ">", but organism name
 and source modifiers should only be indicated for the first segment from each
-sequence. Square brackets are used to delimit the members of a set.  For example,
+sequence. Square brackets are used to delimit the members of a set.  For
+example,
 
 ![
 !>A-0V-1-Apart1 [org=Gallus gallus] [strain=C]
@@ -989,7 +1024,8 @@ sequence. Square brackets are used to delimit the members of a set.  For example
 !TTAGATACAGGAGCAGATGATACAGTATTAGAAGAAAT 
 !]
 
-#If the sequence is in FASTA+GAP format, Sequin will keep the alignment provided.
+#If the sequence is in FASTA+GAP format, Sequin will keep the alignment
+provided.
  However, if the sequence is in FASTA format, you must click on the Create
 Alignment button in order to make Sequin generate the alignment.
 
@@ -1100,7 +1136,9 @@ first line in the file, for a single sequence) should read:
 
 #for example,
 
-!>Prot.new [gene=BRCA1] [prot=Breast and ovarian cancer susceptibility protein] Human breast and ovarian cancer susceptibility (BRCA1) protein, complete sequence.
+!>Prot.new [gene=BRCA1] [prot=Breast and ovarian cancer susceptibility protein]
+Human breast and ovarian cancer susceptibility (BRCA1) protein, complete
+sequence.
 
 
 #->:  The ">" sign must precede any descriptive information about your
@@ -1157,27 +1195,35 @@ complete or partial.
 #However, the general format does not cover all possible Definition
 lines, as shown in the following examples:
 
-!-Human breast and ovarian cancer susceptibility (BRCA1) protein, complete sequence.
+!-Human breast and ovarian cancer susceptibility (BRCA1) protein, complete
+sequence.
 
-!-Human breast and ovarian cancer susceptibility (BRCA1) protein, translation of exon 4.
+!-Human breast and ovarian cancer susceptibility (BRCA1) protein, translation
+of exon 4.
 
 !-Gallus Gallus red-sensitive pigment protein, complete sequence.
 
 !-Bos Taurus retinal pigment (RPE1) protein, carboxyl terminus.
 
-!-Saccharomyces cerevisiae cystathionine gamma-lyase (CYS3) protein, complete sequence.
+!-Saccharomyces cerevisiae cystathionine gamma-lyase (CYS3) protein, complete
+sequence.
 
-!-Arabidopsis thaliana pyruvate dehydrogenase E1 alpha subunit protein, mitochondrial protein encoded by nuclear gene, complete sequence.
+!-Arabidopsis thaliana pyruvate dehydrogenase E1 alpha subunit protein,
+mitochondrial protein encoded by nuclear gene, complete sequence.
 
 !-Rattus norvegicus fos-related antigen 2 (fra-2) protein, complete sequence.
 
-!-Human Down syndrome region, chromosome 13, translation of putative ORF in genomic sequence.
+!-Human Down syndrome region, chromosome 13, translation of putative ORF in
+genomic sequence.
 
-!-Caenorhabditis elegans cosmid B0303, translation of putative ORF, similar to adenylate cyclase (SP:P08678).
+!-Caenorhabditis elegans cosmid B0303, translation of putative ORF, similar to
+adenylate cyclase (SP:P08678).
 
 **Example of the first line of a protein FASTA sequence:
 
-!>Prot.new [gene=BRCA1] [prot=Breast and ovarian cancer susceptibility protein] Human breast and ovarian cancer susceptibility (BRCA1) protein, complete sequence.
+!>Prot.new [gene=BRCA1] [prot=Breast and ovarian cancer susceptibility protein]
+Human breast and ovarian cancer susceptibility (BRCA1) protein, complete
+sequence.
 
 **To import a protein sequence into Sequin
 
@@ -1226,24 +1272,27 @@ Protein page
 
 **Adding Gene, rRNA and CDS features to a set of sequences
 
-#The radio buttons at the top of the page allow you to choose which
-feature(s) to add to your sequences.  Any annotation you add on this page
-will be propagated to ALL sequences in the set, and will apply over the full length of each sequence.  If you want to add
-annotations only to selected sequences, you must add them manually later
-in the submission process.  You may only select one of these buttons.
+#The radio buttons at the top of the page allow you to choose which feature(s)
+to add to your sequences.  Any annotation you add on this page will be
+propagated to ALL sequences in the set, and will apply over the full length of
+each sequence.  If you want to add annotations only to selected sequences, you
+must add them manually later in the submission process.  You may only select
+one of these buttons.
 
-#-Gene:  Select Gene to add a gene feature to all sequences in the set.  Once you mark the radio button, additional
-input lines will be displayed on the form.  If the gene is longer than the sequences in the submission, check Incomplete at 5' end or
-Incomplete at 3' end, or both.  Enter the gene symbol, and a comment if necessary.
+#-Gene:  Select Gene to add a gene feature to all sequences in the set.  Once
+you mark the radio button, additional input lines will be displayed on the
+form.  If the gene is longer than the sequences in the submission, check
+Incomplete at 5' end or Incomplete at 3' end, or both.  Enter the gene symbol,
+and a comment if necessary.
 
-#-rRNA:  Select rRNA if you want to add an rRNA feature to all sequences
-in the set.  This rRNA will span the entire sequence, from the first
-nucleotide to the last.  Once you mark the radio button, additional
-input lines will be displayed on the form.  If the sequence does not
-encode a complete rRNA molecule, check Incomplete at 5' end or
-Incomplete at 3' end, or both.  Enter the name of the rRNA, such as 16s
-rRNA.  The gene symbol box will be filled in automatically if you annotated a Gene feature.  The
-comment box allows you to enter any additional comments about the rRNA.
+#-rRNA:  Select rRNA if you want to add an rRNA feature to all sequences in the
+set.  This rRNA will span the entire sequence, from the first nucleotide to the
+last.  Once you mark the radio button, additional input lines will be displayed
+on the form.  If the sequence does not encode a complete rRNA molecule, check
+Incomplete at 5' end or Incomplete at 3' end, or both.  Enter the name of the
+rRNA, such as 16s rRNA.  The gene symbol box will be filled in automatically if
+you annotated a Gene feature.  The comment box allows you to enter any
+additional comments about the rRNA.
 
 #-CDS:  Select CDS if you want to add a coding sequence (amino acid
 translation) to all the sequences in the set.  Sequin will automatically
@@ -1282,7 +1331,8 @@ not include the organism names in the title.  Instead, check the box
 marked "Prefix title with organism name", and Sequin will add the
 appropriate organism name to the title for each sequence.
 
-#Sequin will also create titles automatically, using the Generate Definition Line
+#Sequin will also create titles automatically, using the Generate Definition
+Line
 function under the
 <A HREF="AnnotateMenu">
 Annotate
@@ -1391,25 +1441,30 @@ information, you must process your entry for submission to the database.
 discrepancies between the format of your submission and that required by
 the database selected for entry.
 
-#If Sequin detects problems with the format of your record, you will see
-a screen listing the validation errors as well as suggestions for how to
-fix the discrepancies.  If you double click on the error message, a new
-form will appear on which you can enter information to correct the
-problem.  You can also dismiss the suggestion and proceed on your own. 
-When you think you have corrected all the problems, click on
+#If Sequin detects problems with the format of your record, you will see a
+screen listing the validation errors as well as suggestions for how to fix the
+discrepancies.  Single clicking on an error message scrolls the record viewer
+to the feature that is causing the error.  Double clicking on the error message
+launches a new form on which you can enter information to correct the problem. 
+If you are annotating a set of multiple sequences, shift-click to scroll to the
+target sequence and feature.  You can also dismiss the suggestion and proceed
+on your own. When you think you have corrected all the problems, click on
 "Revalidate."
 
-#Message:  Select Verbose or Terse. Verbose gives a more detailed
+#Message:  Select Verbose, Normal, or Terse. Verbose gives a more detailed
 explanation of the problem.
 
-#Filter:  Select the error message(s) you wish to see.
+#Filter:  Select the error message(s) you wish to see.  You can select ALL,
+SEQ_INST (errors regarding the sequence itself, its type, or length), SEQ_DESCR
+(descriptor errors), SEQ_FEAT (feature errors), or errors specific to your
+record.
 
 #Severity:  Select the types of error messages you wish to see.  You
 will see the type of message selected, as well as any messages warning
 of more serious problems.
 
-#There are three types of error messages, Warning, Error, and Fatal.
-Warning is the least severe, and Fatal is the most severe.  You may
+#There are four types of error messages, Info, Warning, Error, and Reject.
+Info is the least severe, and Reject is the most severe.  You may
 submit the record even if it does contain errors.  However, we encourage
 you to fix as many problems as possible.  Note that some messages may be
 merely suggestions, not discrepancies.  A possible Warning message is
@@ -1418,7 +1473,7 @@ legitimate result, but you may wish to recheck the sequence.  A possible
 Error message is that the conceptual translation of the sequence which
 you supplied does not encode an open reading frame.  In this case, you
 might want to check that you translated the sequence in the correct
-reading frame.  A possible Fatal message is that you neglected to
+reading frame.  A possible Reject message is that you neglected to
 include the name of the organism from which the sequence derives.  The
 name of the organism is absolutely required for a database entry.
 
@@ -1585,7 +1640,8 @@ Submitting the finished record to the database
 *Controls on the bottom of the screen
 
 #If you have downloaded a sequence from Entrez, or if you have performed a
-PowerBLAST search, you will see additional controls at the bottom of the screen. 
+PowerBLAST search, you will see additional controls at the bottom of the
+screen. 
 A sequence downloaded from Entrez will have Entrez neighboring/linking buttons. 
 For example, by selecting the Nucleotide pop-up, you will be able to view
 nucleotide sequences which are similar to the sequence displayed in the Target
@@ -1758,7 +1814,8 @@ the 5' and 3', or amino- and carboxy- terminal, ends.
 
 ***Technique
 
-#From the pop-up menu, select the technique that was used to generate the sequence.
+#From the pop-up menu, select the technique that was used to generate the
+sequence.
 
 #-Standard:  Standard sequencing technique.
 
@@ -1841,7 +1898,8 @@ HTG division.
 
 ***Strand:
 
-#From the pop-up menu, please select which strand of the molecule was sequenced.
+#From the pop-up menu, please select which strand of the molecule was
+sequenced.
 
 #-Single:  Only one strand was sequenced.
 
@@ -2691,19 +2749,23 @@ sequence is from rearranged DNA.
 #-Lab-host:  Laboratory host used to propagate the organism from which
 the sequence was derived.
 
-#-Pop-variant:  Name of the population variant from which the sequence was obtained.
+#-Pop-variant:  Name of the population variant from which the sequence was
+obtained.
 
 #-Tissue-lib:  Tissue library from which the sequence was obtained.
 
 #-Plasmid-name:  Name of plasmid from which the sequence was obtained.
 
-#-Transposon-name:  Name of transposable element from which the sequence was obtained.
+#-Transposon-name:  Name of transposable element from which the sequence was
+obtained.
 
-#-Ins-sequence-name:  Name of insertion element from which the sequence was obtained.
+#-Ins-sequence-name:  Name of insertion element from which the sequence was
+obtained.
 
 #-Plastid-name:  Name of plastid from which the sequence was obtained.
 
-#-Country: The country of origin of DNA samples used for epidemiological or population studies
+#-Country: The country of origin of DNA samples used for epidemiological or
+population studies
 
 **Organism Subpage
 
@@ -2772,7 +2834,8 @@ name of the host species.
 
 #-Old name:  Do not select this item.
 
-#-Specimen voucher: An identifier of the individual or collection of the source organism and the place where it is currently stored, usually an institution.
+#-Specimen voucher: An identifier of the individual or collection of the source
+organism and the place where it is currently stored, usually an institution.
 
 *Miscellaneous Page
 
@@ -2868,7 +2931,8 @@ been written
 but not yet submitted, or, (3) A manuscript has been submitted for
 publication but has not yet been accepted.
 
-#-In Press: The article has been accepted for publication but is not yet in print.
+#-In Press: The article has been accepted for publication but is not yet in
+print.
 
 #-Published: The article has been published.
 
@@ -2991,7 +3055,8 @@ citation.
 *Open
 
 #Open an existing entry.  This option will open a record which has been
-previously saved in Sequin.  Furthermore, for analysis purposes, it can also open
+previously saved in Sequin.  Furthermore, for analysis purposes, it can also
+open
 a FASTA-formatted sequence file.  The sequence will be displayed in Sequin and
 can be analyzed with tools such as PowerBLAST, but it should not be submitted,
 because it does not have the appropriate annotations.
@@ -3104,11 +3169,15 @@ additional information about the person submitting the record.  Much of
 this information was entered on the first form in Sequin, the Submitting
 Authors form.
 
-#You can also save the information from the Submitting Authors form here, so that
-you can use it in subsequent Sequin submissions.  Click on "Edit Submitter Info",
-and, under the file menu in the resulting Submission Instructions form, click on
+#You can also save the information from the Submitting Authors form here, so
+that
+you can use it in subsequent Sequin submissions.  Click on "Edit Submitter
+Info",
+and, under the file menu in the resulting Submission Instructions form, click
+on
 Export Submitter Info to save the information to a file.  For subsequent Sequin
-submissions, if you have already saved the submittor information, click on Import
+submissions, if you have already saved the submittor information, click on
+Import
 Submitter Info under the File menu on the Submission page of the Submitting
 Authors form.
 
@@ -3163,17 +3232,26 @@ Network Aware mode,
 you can use
 Download Accession to import a record from Entrez.  If you have done a
 PowerBLAST search, you can use Selected Alignment to import a sequence from the
-alignment that you have selected in the Graphic or Alignment view.  Finally, if you are performing a batch update of a set of aligned sequences, choose FASTA set.  In this case, the new sequences should be in a single file in FASTA format; Sequin will update the original sequences with new ones that have the same accession number.
+alignment that you have selected in the Graphic or Alignment view.  Finally, if
+you are performing a batch update of a set of aligned sequences, choose FASTA
+set.  In this case, the new sequences should be in a single file in FASTA
+format; Sequin will update the original sequences with new ones that have the
+same accession number.
 
-#In all cases, the imported and original sequences must have a region of 
+#In all cases, the imported and original sequences must have a region of
 sequence similarity which is high enough for the two sequences to be aligned by
 BLAST using default parameters.
 
-#After you import the new sequence, a new window will open which
-displays a graphical view of the old (target) and new sequences and
-their associated features.  You can choose to Replace the target
-sequence with the new one, Merge two sequences which overlap, or Copy Features from the new sequence to the old.  If you select the Replace button, a message will appear indicating the Sequence Identifiers of the old and new sequences.  If you select Merge, you will be able to choose the range of sequence to merge.  Choose Copy features to copy the features, but not the
-sequence, from the new sequence onto the target.  If you are copying features from a sequence which contains exons interspersed with introns, check the box which appears after you select Copy features.
+#After you import the new sequence, a new window will open which displays a
+graphical view of the old (target) and new sequences and their associated
+features.  You can choose to Replace the target sequence with the new one,
+Merge two sequences which overlap, or Copy Features from the new sequence to
+the old.  If you select the Replace button, a message will appear indicating
+the Sequence Identifiers of the old and new sequences. If you select Merge, you
+will be able to choose the range of sequence to merge. Choose Copy features to
+copy the features, but not the sequence, from the new sequence onto the target. 
+If you are copying features from a sequence which contains exons interspersed
+with introns, check the box which appears after you select Copy features.
 
 #You may wish to
 Preview alignment before making any changes to see the alignment of the
@@ -3259,16 +3337,19 @@ sequences, you can see the alignment of all the sequences.  Click on any
 sequence in the record viewer, and select Edit Alignment under the Edit
 menu.
 
-#If you do a PowerBLAST search on a sequence that was not downloaded from Entrez
+#If you do a PowerBLAST search on a sequence that was not downloaded from
+Entrez
 (i.e., if the sequence does not have a gi number), additional controls will be
 added to the bottom of the window.  These controls allow you to retrieve the
 PowerBLAST hits from Entrez, and then look for Entrez neighbors.  Use the
 alignment pop-up to select the type of alignment (search) that was performed. 
 Then click on the Retrieve button to retrieve the records in an Entrez window. 
 In the new window, you can view Medline, Protein, Nucleotide, Structure, and
-Genome neighbors of the sequence(s).  Click on the Refine button to open a second
+Genome neighbors of the sequence(s).  Click on the Refine button to open a
+second
 Entrez window.  In this window, you can further refine the PowerBLAST hits by
-selecting other Entrez terms, such as Author name to view sequences belonging to
+selecting other Entrez terms, such as Author name to view sequences belonging
+to
 a specific author.
 
 #The results of the PowerBLAST search are for your use only.  If you
@@ -3361,7 +3442,8 @@ ftp://ncbi.nlm.nih.gov/repository/repbase
 *Select Target
 
 #This option changes the sequence which is selected in the Target Sequence
-pop-up.  Type the SeqID of the sequence in the box, and the record viewer will be
+pop-up.  Type the SeqID of the sequence in the box, and the record viewer will
+be
 updated to display that sequence.
 
 >Misc Menu
@@ -3396,14 +3478,20 @@ Configure under the Misc menu.  If you have already worked on a Sequin
 submission, and are looking at the record in the record viewer, select
 the Net Configure option from the Misc menu.
 
-#Most users will be able to use the default (Normal) settings on the Network Configuration page; select Accept to complete the configuration process.  
+#Most users will be able to use the default (Normal) settings on the Network
+Configuration page; select Accept to complete the configuration process.
 
-#If a "Normal" Connection does not work, you may need to select the Firewall Connection.  Contact your system administrator to determine what to enter into the Proxy and Port fields.  If you do not have access to domain name server (DNS), uncheck this box.
+#If a "Normal" Connection does not work, you may need to select the Firewall
+Connection.  Contact your system administrator to determine what to enter into
+the Proxy and Port fields.  If you do not have access to domain name server
+(DNS), uncheck this box.
 
-#The Timeout pop-up selects the length of time which your local copy of Sequin will wait for a reply from the NCBI server.  You may need to set this number higher (i.e., 60 seconds or 5 minutes) if you are outside of the United States or have a bad internet connection.
+#The Timeout pop-up selects the length of time which your local copy of Sequin
+will wait for a reply from the NCBI server.  You may need to set this number
+higher (i.e., 60 seconds or 5 minutes) if you are outside of the United States
+or have a bad internet connection.
 
-#If you have problems setting up the network
-configuration, contact
+#If you have problems setting up the network configuration, contact
 
 <a href="mailto:info@ncbi.nlm.nih.gov"> 
 info@ncbi.nlm.nih.gov
@@ -3558,7 +3646,8 @@ Descriptors,
 </A>
 above.
 #The ninth option Generate Definition Line, will generate an title for your
-sequence based on the information provided in the record.  This option will work
+sequence based on the information provided in the record.  This option will
+work
 for single sequences as well as sets of sequences, and can handle complex
 annotations with multiple features.  The title will follow
 GenBank conventions, but may be modified by the database staff if it is not
@@ -3639,7 +3728,8 @@ hit the Look at button.
 
 #Select a piece of sequence by highlighting it with the mouse.  To
 select the entire sequence, click on a sequence location number on the
-left side of the window.  Any sequence that is highlighted in the Sequence Editor
+left side of the window.  Any sequence that is highlighted in the Sequence
+Editor
 will show up as a box on the sequence when it is viewed in the Graphic
 <A HREF="#DisplayFormat">
 Display Format.
@@ -3968,16 +4058,19 @@ the location in the dialog box.
 
 *Sequence Editor Features menu
 
-#the Features menu changes depending whether you are viewing a single sequence or
+#the Features menu changes depending whether you are viewing a single sequence
+or
 a set of aligned sequences.
 
 #If you are viewing a single sequence, the menu contains a long list of all
 features that can be annotated on a sequence.  These features are the same as
 those that are accessible through the main Sequin Annotate menu.
 
-#You can annotate features either in the Annotate menu or in the Sequence Editor.
+#You can annotate features either in the Annotate menu or in the Sequence
+Editor.
  If you annotate them in the Annotate menu, you must provide the nucleotide
-sequence location of the feature.  However, if you add features from the Sequence
+sequence location of the feature.  However, if you add features from the
+Sequence
 Editor, you do not need to know their nucleotide coordinates.  Simply highlight
 the sequence which the feature covers, and the location of the sequence will be
 automatically entered in the feature location box.  Additional explanations of
@@ -3986,7 +4079,8 @@ how to annotate features are provided in the section on
 Features.
 </A>
 
-#If you are viewing a set of aligned sequences, you will see the following three
+#If you are viewing a set of aligned sequences, you will see the following
+three
 menu choices:
 
 **Make CDS +
@@ -4178,7 +4272,8 @@ Editing a CDS (coding sequence),
 
 **Save CDS
 
-#Saves the selected CDS as part of the entry.  For more details on working with a CDS, see 
+#Saves the selected CDS as part of the entry.  For more details on working with
+a CDS, see 
 <A HREF="#EditingaCDS(codingsequence)">
 Editing a CDS (coding sequence),
 </A>
@@ -4197,19 +4292,22 @@ sequences and features.
 
 **Cancel
 
-#Closes the Sequence Editor without saving any changes made to sequences or features.
+#Closes the Sequence Editor without saving any changes made to sequences or
+features.
 
 
-<p><A HREF="#Top"><IMG SRC="http://www.ncbi.nlm.nih.gov/Sequin/up2.gif" ALT="Table of Contents" ALIGN=top BORDER=2></A> 
+<p><A HREF="#Top"><IMG SRC="http://www.ncbi.nlm.nih.gov/Sequin/up2.gif"
+ALT="Table of Contents" ALIGN=top BORDER=2></A> 
 
 <HR> 
 
 
-<p>January 22, 1999
+<p>September 7, 1999
 <p>Credits:  Tyra Wolfsberg
 
 
-<br><EM>Comments and questions to:  <a href="mailto:info@ncbi.nlm.nih.gov"> info@ncbi.nlm.nih.gov</EM></a><br>
+<br><EM>Comments and questions to:  <a href="mailto:info@ncbi.nlm.nih.gov">
+info@ncbi.nlm.nih.gov</EM></a><br>
 
 </BODY>
 </HTML>

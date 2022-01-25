@@ -29,7 +29,7 @@
 *
 * Version Creation Date:  3/4/91
 *
-* $Revision: 6.2 $
+* $Revision: 6.3 $
 *
 * File Description:
 *   ByteStore functions
@@ -56,6 +56,9 @@
 * 04-15-93 Schuler     Changed _cdecl to LIBCALL
 *
 * $Log: ncbibs.c,v $
+* Revision 6.3  1999/08/25 17:43:04  madden
+* Removed extra comment starts
+*
 * Revision 6.2  1999/01/21 20:08:37  ostell
 * added SwitchUint2 and 4, added integer bytestores
 *
@@ -918,13 +921,12 @@ NLM_EXTERN Nlm_Int2 LIBCALL Nlm_BSPutUint4 (Nlm_ByteStorePtr bsp, Nlm_Uint4 valu
 }
 
        /* In functions below, size is 2 or 4 */
-       /* Integers are converted from ByteStore to native endian (BSUintXRead)
-	   /*   or from native endian to ByteStore (BSUintXWrite)
-	   /* len is number of INTEGERS, not number of bytes
-	   /* returns count of integers put in ptr
-	   /* WARNING: On LITTLE_ENDIAN machines the data in ptr is changed to BIG_ENDIAN in the
-	   /*   XXWrite functions and LEFT THAT WAY
-	   */
+       /* Integers are converted from ByteStore to native endian (BSUintXRead) */
+	   /*   or from native endian to ByteStore (BSUintXWrite) */
+	   /* len is number of INTEGERS, not number of bytes */
+	   /* returns count of integers put in ptr */
+	   /* WARNING: On LITTLE_ENDIAN machines the data in ptr is changed to BIG_ENDIAN in the */
+	   /*   XXWrite functions and LEFT THAT WAY */
 NLM_EXTERN Nlm_Int4 LIBCALL Nlm_BSUint4Read (Nlm_ByteStorePtr bsp, Nlm_Uint4Ptr ptr, Nlm_Int4 len)
 {
 	Nlm_Int4 len2;

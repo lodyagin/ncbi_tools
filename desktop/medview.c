@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/30/95
 *
-* $Revision: 6.8 $
+* $Revision: 6.9 $
 *
 * File Description: 
 *
@@ -246,7 +246,9 @@ static void MedlineEntryPtrToMedlineForm (ForM f, Pointer data)
           if (fp != NULL) {
             if (MedlineEntryToAbsFile (mep, fp)) {
               FileClose (fp);
-              FileToScrollText (mfp->text, path);
+              if (! FileToScrollText (mfp->text, path)) {
+                SetTitle (mfp->text, "(Text is too large to be displayed in this control.)");
+              }
             } else {
               FileClose (fp);
             }
@@ -263,7 +265,9 @@ static void MedlineEntryPtrToMedlineForm (ForM f, Pointer data)
           if (fp != NULL) {
             if (MedlineEntryToDocFile (mep, fp)) {
               FileClose (fp);
-              FileToScrollText (mfp->text, path);
+              if (! FileToScrollText (mfp->text, path)) {
+                SetTitle (mfp->text, "(Text is too large to be displayed in this control.)");
+              }
             } else {
               FileClose (fp);
             }
@@ -284,7 +288,9 @@ static void MedlineEntryPtrToMedlineForm (ForM f, Pointer data)
           if (MedlineEntryToDataFile (mep, fp)) {
             FileClose (fp);
             if (mfp->useScrollText) {
-              FileToScrollText (mfp->text, path);
+              if (! FileToScrollText (mfp->text, path)) {
+                SetTitle (mfp->text, "(Text is too large to be displayed in this control.)");
+              }
             } else {
               DisplayFancy (mfp->doc, path, &medParFmt, &medColFmt, fnt, 4);
             }
@@ -306,7 +312,9 @@ static void MedlineEntryPtrToMedlineForm (ForM f, Pointer data)
           if (MedlineEntryAsnWrite (mep, aipout, NULL)) {
             AsnIoClose (aipout);
             if (mfp->useScrollText) {
-              FileToScrollText (mfp->text, path);
+              if (! FileToScrollText (mfp->text, path)) {
+                SetTitle (mfp->text, "(Text is too large to be displayed in this control.)");
+              }
             } else {
               DisplayFancy (mfp->doc, path, &medParFmt, &medColFmt, fnt, 4);
             }

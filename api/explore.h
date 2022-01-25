@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 6/30/98
 *
-* $Revision: 6.29 $
+* $Revision: 6.30 $
 *
 * File Description:  Reengineered and optimized exploration functions
 *                      to be used for future code
@@ -295,6 +295,23 @@ NLM_EXTERN ValNodePtr LIBCALL SeqMgrGetDesiredDescriptor PROTO((Uint2 entityID, 
 NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetDesiredFeature PROTO((Uint2 entityID, BioseqPtr bsp,
                                                              Uint2 itemID, Uint2 index, SeqFeatPtr sfp,
                                                              SeqMgrFeatContext PNTR context));
+
+/*****************************************************************************
+*
+*   SeqMgrVisitDescriptors and SeqMgrVisitFeatures visit all descriptors or
+*     features in an entity in order of itemID, which is assigned by order of
+*     packaging within the record
+*   Both of these functions return the number of times the callback was called
+*
+*****************************************************************************/
+
+NLM_EXTERN Int2 LIBCALL SeqMgrVisitDescriptors PROTO((Uint2 entityID, Pointer userdata,
+                                                      SeqMgrDescExploreProc userfunc,
+                                                      BoolPtr seqDescFilter));
+
+NLM_EXTERN Int2 LIBCALL SeqMgrVisitFeatures PROTO((Uint2 entityID, Pointer userdata,
+                                                   SeqMgrFeatExploreProc userfunc,
+                                                   BoolPtr seqFeatFilter, BoolPtr featDefFilter));
 
 /*****************************************************************************
 *

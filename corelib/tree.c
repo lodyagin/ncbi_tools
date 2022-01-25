@@ -31,6 +31,9 @@
 *
 *
 * $Log: tree.c,v $
+* Revision 1.8  1999/05/18 21:13:47  soussov
+* TREE_SHUTDOWN event added
+*
 * Revision 1.7  1998/08/24 18:04:15  kans
 * added continue statements to empty for loops to suppress Mac warnings
 *
@@ -887,7 +890,11 @@ NLM_EXTERN Boolean tree_delete(TreePtr tree)
     TreeCursorPtr cursor;
     int i, j;
     _BagStore bs;
+    _NodeId nid;
 
+    nid.idi= 0;
+
+    notify(tree, TREE_SHUTDOWN, nid, nid, NULL, 0);
     /* close all existing cursors first */
     while((cursor= tree->cursor) != NULL) {
 	tree_closeCursor(cursor);

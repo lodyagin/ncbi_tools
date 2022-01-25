@@ -31,6 +31,12 @@
 *
 *
 * $Log: treeview.c,v $
+* Revision 1.10  1999/08/12 18:31:10  soussov
+* fixed bug in allocNewSegm
+*
+* Revision 1.9  1999/08/11 14:19:42  soussov
+* fixed bug with Int4 -> Int2 conversion
+*
 * Revision 1.8  1998/07/02 18:24:33  vakatov
 * Cleaned the code & made it pass through the C++ compilation
 *
@@ -78,11 +84,42 @@
 
 #define getTree4Cursor tree_getUserData
 
-#define port_MoveTo(p, a, b) MoveTo((a) + (p)->panel_origin_X, (b) + (p)->panel_origin_Y)
-#define port_LineTo(p, a, b) LineTo((a) + (p)->panel_origin_X, (b) + (p)->panel_origin_Y)
+#define port_MoveTo(p, a, b) sMoveTo((a) + (p)->panel_origin_X, (b) + (p)->panel_origin_Y)
+#define port_LineTo(p, a, b) sLineTo((a) + (p)->panel_origin_X, (b) + (p)->panel_origin_Y)
 
 static void closeAllSubtrees(TreeCursorPtr cursor);
 extern void Nlm_GetRect PROTO((Nlm_GraphiC a, Nlm_RectPtr r));
+
+static _tnSegmPtr getNewSegmBuff(void)
+{
+    _tnSegmPtr ts= (_tnSegmPtr)MemNew(4096*sizeof(_tnSegm));
+
+    if(ts) {
+	memset(ts, 0, 4096*sizeof(_tnSegm));
+	ts[4095].flags= LINK_TO_NEXT_BUFF;
+    }
+    return ts;
+}
+
+static void sMoveTo(Int4 x, Int4 y)
+{
+    if(x > 32000) x= 32000;
+    else if(x < -32000) x= -32000;
+    if(y > 32000) y= 32000;
+    else if(y < -32000) y= -32000;
+
+    MoveTo((Int2)x, (Int2)y);
+}
+
+static void sLineTo(Int4 x, Int4 y)
+{
+    if(x > 32000) x= 32000;
+    else if(x < -32000) x= -32000;
+    if(y > 32000) y= 32000;
+    else if(y < -32000) y= -32000;
+
+    LineTo((Int2)x, (Int2)y);
+}
 
 static void port_PaintRect(_drawContextPtr port, RectPtr r)
 {
@@ -236,6 +273,7 @@ static void freeNodeSegm(TreeCursorPtr cursor)
 static _tnSegmPtr allocNewSegm(TreeCursorPtr cursor)
 {
     _tnSegmPtr ts;
+    _tnSegmPtr tsn;
     TreeViewPtr tv;
     Int4 i, j;
 
@@ -243,7 +281,7 @@ static _tnSegmPtr allocNewSegm(TreeCursorPtr cursor)
     tv= (TreeViewPtr) getTree4Cursor(cursor);
     ts= tv->segm_buff;
 
-    for(i= tv->segm_buff_size; i--; ts++) {
+    while(ts) {
 	if(ts->flags == 0) {
 	    ts->flags= RESERVED_SEGM;
 	    ts->next= (_tnSegmPtr)cursor->node->sys_data;
@@ -251,22 +289,28 @@ static _tnSegmPtr allocNewSegm(TreeCursorPtr cursor)
 	    ts->viewer_id= tv->my_spy_id;
 	    return ts;
 	}
+	if((ts->flags & LINK_TO_NEXT_BUFF) != 0) {
+	    if(ts->next) {
+		ts= ts->next;
+		continue;
+	    }
+	    else break;
+	}
+	++ts;
     }
 
+    if(ts == NULL) return NULL;
     /* try to allocate more memory */
-    i= tv->segm_buff_size;
-    tv->segm_buff_size+= tv->segm_buff_size/4;
-    if((ts= (_tnSegmPtr) MemMore(tv->segm_buff, tv->segm_buff_size*sizeof(_tnSegm))) == NULL) {
-	tv->segm_buff_size= i;	
-	return NULL; /* no more room */
+    if((tsn= getNewSegmBuff()) == NULL) {
+	return NULL;
     }
     
-    for(tv->segm_buff= ts, j= i; i < tv->segm_buff_size; ts[i++].flags= 0);
-    ts[j].flags= RESERVED_SEGM;
-    ts[j].next= (_tnSegmPtr) cursor->node->sys_data;
-    cursor->node->sys_data= &ts[j];
-    ts[j].viewer_id= tv->my_spy_id;
-    return &ts[j];
+    tsn->flags= RESERVED_SEGM;
+    tsn->viewer_id= tv->my_spy_id;
+    ts->next= tsn;
+    cursor->node->sys_data= tsn;
+    
+    return tsn;
 }
     
     
@@ -1879,14 +1923,11 @@ TreeViewPtr tview_create(GrouP parent, Int2 width, Int2 height,
 
     if((tv= (TreeViewPtr) MemNew(sizeof(TreeView))) == NULL) return NULL;
 
-    if((tv->segm_buff= (_tnSegmPtr)MemNew(4096*sizeof(_tnSegm))) == NULL) {
+    if((tv->segm_buff= getNewSegmBuff()) == NULL) {
 	MemFree(tv);
 	return NULL;
     }
 
-    tv->segm_buff_size= 4096;
-
-    for(i= 0; i != 4096; tv->segm_buff[i++].flags= 0);
 
     if(parent == NULL) {
 	/* we need to create window for tree view */
@@ -1988,14 +2029,11 @@ TreeViewPtr tview_createCustom(Int2 left, Int2 top, Int2 width, Int2 height,
 
     if((tv= (TreeViewPtr) MemNew(sizeof(TreeView))) == NULL) return NULL;
 
-    if((tv->segm_buff= (_tnSegmPtr)MemNew(4096*sizeof(_tnSegm))) == NULL) {
+    if((tv->segm_buff= getNewSegmBuff()) == NULL) {
 	MemFree(tv);
 	return NULL;
     }
 
-    tv->segm_buff_size= 4096;
-
-    for(i= 0; i != 4096; tv->segm_buff[i++].flags= 0);
 
     /* we need to create window for tree view */
     tv->draw_port.tree_window= DocumentWindow(left, top, -10, -10, title, close_proc, resize_proc);
@@ -2495,6 +2533,8 @@ static void closeAllSubtrees(TreeCursorPtr cursor)
 	
 void tview_delete(TreeViewPtr tv, Boolean do_hide)
 {
+    _tnSegmPtr ts;
+    _tnSegmPtr tsn;
     /* close all subtrees */
     tree_root(tv->cr1);
     closeAllSubtrees(tv->cr1);
@@ -2514,7 +2554,10 @@ void tview_delete(TreeViewPtr tv, Boolean do_hide)
 	Remove(tv->draw_port.tree_window);
     }
 
-    if(tv->segm_buff != NULL) MemFree(tv->segm_buff);
+    for(ts= tv->segm_buff; ts != NULL; ts= tsn) {
+	tsn= ts[4095].next;
+	MemFree(ts);
+    }
     MemFree(tv);
 }
 	

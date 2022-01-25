@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.25 $
+* $Revision: 6.26 $
 *
 * File Description: 
 *
@@ -53,6 +53,9 @@
 *
 =======
 * $Log: asn2ff4.c,v $
+* Revision 6.26  1999/06/04 21:03:52  tatiana
+* a bug fixed in MatchAAGeneToFeat()
+*
 * Revision 6.25  1999/04/29 22:49:20  tatiana
 * added REFSEQ dbxrefs in GenPept format
 *
@@ -2267,7 +2270,7 @@ NLM_EXTERN void MatchAAGeneToFeat (OrganizeFeatPtr ofp, SortStructPtr p)
 	if (best_gene_feat != NULL) {
 		grp = best_gene_feat->data.value.ptrvalue;
 		GeneRefInfoToGsp(gsp, grp, best_gene_feat);  /*copy GeRefInfo to GeneStruct */
-		if (bsp->id->choice == SEQID_OTHER) {
+		if (bsp && bsp->id->choice == SEQID_OTHER) {
 			GetDBXrefFromGene(grp, sfp);
 		}
 	}

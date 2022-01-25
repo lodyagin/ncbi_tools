@@ -31,6 +31,9 @@
 *
 *
 * $Log: treevint.h,v $
+* Revision 1.6  1999/08/12 18:31:10  soussov
+* fixed bug in allocNewSegm
+*
 * Revision 1.5  1998/04/01 21:52:50  soussov
 * Prototype fixed
 *
@@ -76,6 +79,7 @@ typedef struct t_point {
 
 #define RESERVED_SEGM 0x1
 #define TREE_FIRST_NODE 0x2
+#define LINK_TO_NEXT_BUFF 0x4
 
 typedef struct t_tnSegm {
     struct t_tnSegm* next;
@@ -117,7 +121,6 @@ struct t_TreeView {
     _tnSegmPtr    segm_buff;
     TreeCursorPtr cr1, cr2, cr3, cr4, cr5;
     _ImageListPtr i_list;
-    Int4          segm_buff_size;
     Int4          sel_x, sel_y;
     TreeNodeCmpFunc   cmpSiblings;
     TreeViewEventFunc evntFunc;

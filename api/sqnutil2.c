@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/2/97
 *
-* $Revision: 6.15 $
+* $Revision: 6.28 $
 *
 * File Description: 
 *
@@ -425,11 +425,16 @@ static SeqLocRangePtr SeqLocRangeFree (SeqLocRangePtr slrp)
 static SeqLocRangePtr CollectRanges (BioseqPtr target, SeqLocPtr slp)
 
 {
+  SeqLocRangePtr  change;
   SeqLocPtr       curr;
   SeqLocRangePtr  head;
   SeqLocRangePtr  last;
+  Int4            left;
+  Int4            right;
   SeqLocRangePtr  slrp;
+  Uint1           strand;
 
+  if (target == NULL) return NULL;
   head = NULL;
   last = NULL;
   curr = SeqLocFindNext (slp, NULL);
@@ -453,6 +458,39 @@ static SeqLocRangePtr CollectRanges (BioseqPtr target, SeqLocPtr slp)
       }
     }
     curr = SeqLocFindNext (slp, curr);
+  }
+  if (head == NULL || target->topology != TOPOLOGY_CIRCULAR) return head;
+  left = GetOffsetInBioseq (slp, target, SEQLOC_LEFT_END);
+  right = GetOffsetInBioseq (slp, target, SEQLOC_RIGHT_END);
+  if (left == -1 || right == -1 || left <= right) return head;
+  /* feature spans origin */
+  change = NULL;
+  left = head->left;
+  strand = SeqLocStrand (slp);
+  if (strand == Seq_strand_minus) {
+    for (slrp = head->next; slrp != NULL; slrp = slrp->next) {
+      if (slrp->left > left && change == NULL) {
+        change = slrp;
+      }
+    }
+  } else {
+    for (slrp = head->next; slrp != NULL; slrp = slrp->next) {
+      if (slrp->left < left && change == NULL) {
+        change = slrp;
+      }
+    }
+  }
+  if (change == NULL) return head;
+  if (strand == Seq_strand_minus) {
+    for (slrp = change; slrp != NULL; slrp = slrp->next) {
+      slrp->left -= target->length;
+      slrp->right -= target->length;
+    }
+  } else {
+    for (slrp = head; slrp != NULL && slrp != change; slrp = slrp->next) {
+      slrp->left -= target->length;
+      slrp->right -= target->length;
+    }
   }
   return head;
 }
@@ -550,7 +588,8 @@ static SeqLocRangePtr MergeOverlaps (SeqLocRangePtr list, Boolean fuse_joints)
         last->right = MAX (this->right, last->right);
         MemFree (this);
         last->next = next;
-      } else if (fuse_joints && /* this->left == last->right */ this->left <= last->right + 1 ) {
+      } else if (fuse_joints &&
+                 (this->left <= last->right + 1 && last->right != -1)) {
         last->right = MAX (this->right, last->right);
         MemFree (this);
         last->next = next;
@@ -685,6 +724,7 @@ NLM_EXTERN SeqLocPtr SeqLocMerge (BioseqPtr target, SeqLocPtr to, SeqLocPtr from
                        Boolean add_null)
 
 {
+  SeqLocRangePtr  slrp;
   SeqLocRangePtr  head;
   SeqLocRangePtr  last;
   Boolean         partial5;
@@ -729,6 +769,14 @@ NLM_EXTERN SeqLocPtr SeqLocMerge (BioseqPtr target, SeqLocPtr to, SeqLocPtr from
     if (strand == Seq_strand_minus) {
       head = SortRanges (head, TRUE);
     }
+    for (slrp = head; slrp != NULL; slrp = slrp->next) {
+      if (slrp->left < 0) {
+        slrp->left += target->length;
+      }
+      if (slrp->right < 0) {
+        slrp->right += target->length;
+      }
+    }
     slp = SeqLocFromRange (head, target, partial5, partial3, add_null);
     head = SeqLocRangeFree (head);
   }
@@ -753,13 +801,20 @@ NLM_EXTERN Boolean SeqLocBadSortOrder (BioseqPtr bsp, SeqLocPtr slp)
   curr = head->next;
   while (curr != NULL) {
     if (curr->strand == Seq_strand_minus) {
-      if (last->right < curr->right) return TRUE;
+      if (last->right < curr->right) {
+        SeqLocRangeFree (head);
+        return TRUE;
+      }
     } else {
-      if (last->left > curr->left) return TRUE;
+      if (last->left > curr->left) {
+        SeqLocRangeFree (head);
+        return TRUE;
+      }
     }
     last = curr;
     curr = curr->next;
   }
+  SeqLocRangeFree (head);
   return FALSE;
 }
 
@@ -820,32 +875,15 @@ static void ConvertToFeatsOnNucsOnly (SeqEntryPtr sep, Pointer mydata, Int4 inde
   ConvertToFeatsCallback (sep, mydata, index, indent, FALSE);
 }
 
-NLM_EXTERN Boolean ConvertPubSrcComDescsToFeats (SeqEntryPtr sep, Boolean pub, Boolean src, Boolean com, Boolean toProts)
+static void ExtractPubSrcComDescs (SeqEntryPtr sep, ValNodePtr PNTR head, Boolean pub, Boolean src, Boolean com)
 
 {
   BioseqPtr     bsp;
   BioseqSetPtr  bssp;
-  ValNodePtr    head;
   ValNodePtr    nextsdp;
   Pointer PNTR  prevsdp;
-  Boolean       rsult;
   ValNodePtr    sdp;
 
-  rsult = FALSE;
-  if (! (pub || src || com)) return FALSE;
-  if (sep == NULL || sep->data.ptrvalue == NULL) return FALSE;
-  if (IS_Bioseq_set (sep)) {
-    bssp = (BioseqSetPtr) sep->data.ptrvalue;
-    if (bssp->_class == 7 || bssp->_class == 13 ||
-        bssp->_class == 14 || bssp->_class == 15) {
-      for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
-        if (ConvertPubSrcComDescsToFeats (sep, pub, src, com, toProts)) {
-          rsult = TRUE;
-        }
-      }
-      return rsult;
-    }
-  }
   if (IS_Bioseq (sep)) {
     bsp = (BioseqPtr) sep->data.ptrvalue;
     sdp = bsp->descr;
@@ -854,8 +892,7 @@ NLM_EXTERN Boolean ConvertPubSrcComDescsToFeats (SeqEntryPtr sep, Boolean pub, B
     bssp = (BioseqSetPtr) sep->data.ptrvalue;
     sdp = bssp->descr;
     prevsdp = (Pointer PNTR) &(bssp->descr);
-  } else return FALSE;
-  head = NULL;
+  } else return;
   while (sdp != NULL) {
     nextsdp = sdp->next;
     if ((sdp->choice == Seq_descr_pub && pub) ||
@@ -863,12 +900,36 @@ NLM_EXTERN Boolean ConvertPubSrcComDescsToFeats (SeqEntryPtr sep, Boolean pub, B
         (sdp->choice == Seq_descr_comment && com)) {
       *(prevsdp) = sdp->next;
       sdp->next = NULL;
-      ValNodeLink (&head, sdp);
+      ValNodeLink (head, sdp);
     } else {
       prevsdp = (Pointer PNTR) &(sdp->next);
     }
     sdp = nextsdp;
   }
+}
+
+NLM_EXTERN Boolean ConvertPubSrcComDescsToFeats (SeqEntryPtr sep, Boolean pub, Boolean src, Boolean com, Boolean toProts)
+
+{
+  BioseqSetPtr  bssp;
+  ValNodePtr    head;
+  Boolean       rsult;
+  ValNodePtr    sdp;
+
+  rsult = FALSE;
+  if (! (pub || src || com)) return FALSE;
+  if (sep == NULL || sep->data.ptrvalue == NULL) return FALSE;
+  if (IS_Bioseq_set (sep)) {
+    bssp = (BioseqSetPtr) sep->data.ptrvalue;
+    for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
+      if (ConvertPubSrcComDescsToFeats (sep, pub, src, com, toProts)) {
+        rsult = TRUE;
+      }
+    }
+    return rsult;
+  }
+  head = NULL;
+  ExtractPubSrcComDescs (sep, &head, pub, src, com);
   rsult = (head != NULL);
   if (toProts) {
     BioseqExplore (sep, head, ConvertToFeatsOnNucsAndProts);
@@ -1105,6 +1166,69 @@ NLM_EXTERN Int4 SequinEntryList (SeqEntryPtr sep, Pointer mydata,
     sep = sep->next;
   }
   return index;
+}
+
+/* functions to parse [org=Drosophila melanogaster] and [gene=lacZ] from titles */
+
+NLM_EXTERN SqnTagPtr SqnTagParse (CharPtr ttl)
+
+{
+  Int2       num_tags;
+  CharPtr    ptr;
+  CharPtr    query;
+  SqnTagPtr  stp;
+  CharPtr    str;
+  CharPtr    tmp;
+
+  if (StringHasNoText (ttl)) return NULL;
+  stp = (SqnTagPtr) MemNew (sizeof (SqnTag));
+  if (stp == NULL) return NULL;
+  query = StringSave (ttl);
+
+  str = StringChr (query, '[');
+  for (num_tags = 0; num_tags < MAX_SQN_TAGS && str != NULL; num_tags++) {
+    str++;
+    stp->tag [num_tags] = str;
+    ptr = StringChr (str, '=');
+    if (ptr != NULL) {
+      *ptr = '\0';
+      ptr++;
+      stp->val [num_tags] = ptr;
+      tmp = StringChr (ptr, ']');
+      if (tmp != NULL) {
+        *tmp = '\0';
+        tmp++;
+        str = StringChr (tmp, '[');
+      }
+    }
+  }
+
+  stp->query = query;
+  stp->num_tags = num_tags;
+
+  return stp;
+}
+
+NLM_EXTERN SqnTagPtr SqnTagFree (SqnTagPtr stp)
+
+{
+  if (stp == NULL) return NULL;
+  MemFree (stp->query);
+  return MemFree (stp);
+}
+
+NLM_EXTERN CharPtr SqnTagFind (SqnTagPtr stp, CharPtr tag)
+
+{
+  Int2  i;
+
+  if (stp == NULL || StringHasNoText (tag)) return NULL;
+  for (i = 0; i < stp->num_tags; i++) {
+    if (stp->tag [i] != NULL && StringICmp (stp->tag [i], tag) == 0) {
+      return stp->val [i];
+    }
+  }
+  return NULL;
 }
 
 /* PHRAP file reading functions */
@@ -2280,7 +2404,28 @@ static CharPtr aaList [] = {
   NULL, NULL, NULL
 };
 
-static Uint1 FindTrnaAA (CharPtr str)
+NLM_EXTERN Uint1 FindTrnaAA3 (CharPtr str)
+
+{
+  Uint1    aa;
+  Int2     i;
+  CharPtr  ptr;
+  Char     tmp [128];
+
+  if (HasNoText (str)) return 0;
+  StringNCpy_0 (tmp, str, sizeof (tmp));
+  SqnTrimSpacesAroundString (tmp);
+  for (i = 0; aaList [i] != NULL; i += 3) {
+    if (StringICmp (aaList [i + 1], tmp) == 0) {
+      ptr = aaList [i];
+      aa = (Uint1) ptr [0];
+      return aa;
+    }
+  }
+  return 0;
+}
+
+NLM_EXTERN Uint1 FindTrnaAA (CharPtr str)
 
 {
   Uint1    aa;
@@ -2304,12 +2449,77 @@ static Uint1 FindTrnaAA (CharPtr str)
   return 0;
 }
 
-static ValNodePtr TokenizeTRnaString (CharPtr strx)
+NLM_EXTERN CharPtr FindTrnaAAIndex (CharPtr str)
+
+{
+  Int2  i;
+  Int2  j;
+  Char  tmp [128];
+
+  if (StringHasNoText (str)) return 0;
+  StringNCpy_0 (tmp, str, sizeof (tmp));
+  TrimSpacesAroundString (tmp);
+  for (i = 0; aaList [i] != NULL; i += 3) {
+    for (j = 0; j < 3; j++) {
+      if (StringICmp (aaList [i + j], tmp) == 0) {
+        return aaList [i + 1];
+      }
+    }
+  }
+  return NULL;
+}
+
+NLM_EXTERN Uint1 ParseTRnaString (CharPtr strx, BoolPtr justTrnaText)
+
+{
+  Uint1       aa;
+  Uint1       curraa;
+  ValNodePtr  head;
+  Boolean     justt = TRUE;
+  CharPtr     str;
+  ValNodePtr  vnp;
+
+  if (justTrnaText != NULL) {
+    *justTrnaText = FALSE;
+  }
+  if (StringHasNoText (strx)) return 0;
+  aa = 0;
+  head = TokenizeTRnaString (strx);
+  for (vnp = head; (aa == 0 || aa == 'A') && vnp != NULL; vnp = vnp->next) {
+    str = (CharPtr) vnp->data.ptrvalue;
+    curraa = FindTrnaAA (str);
+    if (curraa != 0) {
+      aa = curraa;
+    } else if (StringICmp ("tRNA", str) != 0 &&
+               StringICmp ("transfer", str) != 0 &&
+               StringICmp ("RNA", str) != 0) {
+      justt = FALSE;
+    }
+  }
+  for (; vnp != NULL; vnp = vnp->next) {
+    str = (CharPtr) vnp->data.ptrvalue;
+    curraa = FindTrnaAA (str);
+    if (curraa != 0) {
+    } else if (StringICmp ("tRNA", str) != 0 &&
+               StringICmp ("transfer", str) != 0 &&
+               StringICmp ("RNA", str) != 0) {
+      justt = FALSE;
+    }
+  }
+  ValNodeFreeData (head);
+  if (justTrnaText != NULL) {
+    *justTrnaText = justt;
+  }
+  return aa;
+}
+
+NLM_EXTERN ValNodePtr TokenizeTRnaString (CharPtr strx)
 
 {
   Char        ch;
   ValNodePtr  head;
   Int2        i, j, k;
+  size_t      len;
   CharPtr     ptr;
   Char        str [256];
   CharPtr     strs;
@@ -2318,6 +2528,58 @@ static ValNodePtr TokenizeTRnaString (CharPtr strx)
   if (HasNoText (strx)) return NULL;
   strs = StringSave (strx);
   head = NULL;
+  /* SGD Tx(NNN)c or Tx(NNN)c#, where x is the amino acid, c is the chromosome (A-P, Q for mito),
+     and optional # is presumably for individual tRNAs with different anticodons and the same
+     amino acid */
+  len = StringLen (strs);
+  if (len >= 8 && len <= 10) {
+    if (strs [0] == 'T' || strs [0] == 't') {
+      if (IS_ALPHA (strs [1]) && strs [2] == '('
+          && strs [6] == ')' && IS_ALPHA (strs [7])) {
+        if (len == 8 ||
+            (len == 9 && IS_DIGIT (strs [8])) ||
+            (len == 10 && IS_DIGIT (strs [8]) && IS_DIGIT (strs [9]))) {
+          tmp [0] = '('; /* parse SGD tRNA anticodon */
+          tmp [1] = strs [5]; /* reverse */
+          tmp [2] = strs [4];
+          tmp [3] = strs [3];
+          tmp [4] = ')';
+          tmp [5] = '\0';
+          for (i = 1; i < 4; i++) {
+            ch = tmp [i];
+            ch = TO_UPPER (ch);
+            switch (ch) {
+              case 'A' :
+                ch = 'T';
+                break;
+              case 'C' :
+                ch = 'G';
+                break;
+              case 'G' :
+                ch = 'C';
+                break;
+              case 'T' :
+                ch = 'A';
+                break;
+              case 'U' :
+                ch = 'A';
+                break;
+              default :
+                ch = '?';
+                break;
+            }
+            tmp [i] = ch; /* and complement */
+          }
+          ValNodeCopyStr (&head, 0, tmp);
+          tmp [0] = strs [1]; /* parse SGD tRNA amino acid */
+          tmp [1] = '\0';
+          ValNodeCopyStr (&head, 0, tmp);
+          MemFree (strs);
+          return head;
+        }
+      }
+    }
+  }
   ptr = strs;
   ch = *ptr;
   while (ch != '\0') {
@@ -2390,9 +2652,25 @@ static void StripHyphens (CharPtr str)
   }
 }
 
+static Uint1 ParseCodon (CharPtr str)
+
+{
+  Char   ch;
+  Uint1  codon [4];
+  Int2   i, j;
+
+  if (str == NULL) return 255;
+  for (i = 0, j = 1; i < 3; i++, j++) {
+    ch = TO_UPPER (str [j]);
+    codon [i] = (Uint1) ch;
+  }
+  codon [3] = 0;
+  return IndexForCodon (codon, Seq_code_iupacna);
+}
+
 extern Boolean ParseCodeBreak (SeqFeatPtr sfp, CharPtr val);
 
-static void AddQualifierToFeature (SeqFeatPtr sfp, CharPtr qual, CharPtr val)
+NLM_EXTERN void AddQualifierToFeature (SeqFeatPtr sfp, CharPtr qual, CharPtr val)
 
 {
   Uint1           aa;
@@ -2407,13 +2685,14 @@ static void AddQualifierToFeature (SeqFeatPtr sfp, CharPtr qual, CharPtr val)
   ProtRefPtr      prp = NULL;
   Int2            qnum;
   RnaRefPtr       rrp;
+  CharPtr         str;
   tRNAPtr         trna;
   long            uid;
   ValNodePtr      vnp;
   SeqFeatXrefPtr  xref;
 
   if (sfp == NULL || HasNoText (qual) ||
-      (HasNoText (val) && StringCmp (qual, "pseudo") != 0 && StringCmp (qual, "gene") != 0)) return;
+      (HasNoText (val) && StringCmp (qual, "pseudo") != 0)) return;
   qnum = GBQualNameValid (qual);
   if (qnum <= -1) {
     if (StringNCmp (qual, "gene_syn", 8) == 0) {
@@ -2464,6 +2743,9 @@ static void AddQualifierToFeature (SeqFeatPtr sfp, CharPtr qual, CharPtr val)
     sfp->comment = StringSave (val);
     return;
   } else if (qnum == GBQUAL_gene && sfp->data.choice != SEQFEAT_GENE) {
+    if (StringCmp (val, "-") == 0) {
+      val = NULL;
+    }
     xref = sfp->xref;
     while (xref != NULL && xref->data.choice != SEQFEAT_GENE) {
       xref = xref->next;
@@ -2557,21 +2839,27 @@ static void AddQualifierToFeature (SeqFeatPtr sfp, CharPtr qual, CharPtr val)
         rrp->ext.value.ptrvalue = (Pointer) trna;
         if (trna != NULL) {
           trna->aatype = 2;
+          for (j = 0; j < 6; j++) {
+            trna->codon [j] = 255;
+          }
           head = TokenizeTRnaString (val);
           aa = 0;
           for (vnp = head; (aa == 0 || aa == 'A') && vnp != NULL; vnp = vnp->next) {
-            curraa = FindTrnaAA (vnp->data.ptrvalue);
-            if (curraa != 0) {
-              aa = curraa;
+            str = (CharPtr) vnp->data.ptrvalue;
+            if (StringLen (str) == 5 && str [0] == '(' && str [4] == ')') {
+              trna->codon [0] = ParseCodon (str);
+            } else {
+              curraa = FindTrnaAA (str);
+              if (curraa != 0) {
+                aa = curraa;
+              }
             }
           }
           if (aa == 0) {
             aa = 'X';
           }
           trna->aa = aa;
-          for (j = 0; j < 6; j++) {
-            trna->codon [j] = 255;
-          }
+          ValNodeFreeData (head);
         }
       } else {
         if (rrp->ext.choice == 1) {
@@ -2599,10 +2887,11 @@ static void AddQualifierToFeature (SeqFeatPtr sfp, CharPtr qual, CharPtr val)
   }
 }
 
-static SeqLocPtr AddIntervalToLocation (SeqLocPtr loc, SeqIdPtr sip, Int4 start, Int4 stop)
+NLM_EXTERN SeqLocPtr AddIntervalToLocation (SeqLocPtr loc, SeqIdPtr sip, Int4 start, Int4 stop)
 
 {
   Int4       flip;
+  SeqLocPtr  rsult = NULL;
   SeqIntPtr  sintp;
   SeqLocPtr  slp;
   Int2       strand;
@@ -2623,9 +2912,8 @@ static SeqLocPtr AddIntervalToLocation (SeqLocPtr loc, SeqIdPtr sip, Int4 start,
   sintp->strand = strand;
   sintp->id = SeqIdDup (sip);
   slp = ValNodeAddPointer (NULL, SEQLOC_INT, (Pointer) sintp);
-  if (loc == NULL) {
-    return slp;
-  }
+
+  if (loc == NULL) return slp;
 
   if (loc->choice == SEQLOC_MIX) {
     tmp = (ValNodePtr) (loc->data.ptrvalue);
@@ -2633,14 +2921,32 @@ static SeqLocPtr AddIntervalToLocation (SeqLocPtr loc, SeqIdPtr sip, Int4 start,
       tmp = tmp->next;
     }
     tmp->next = slp;
-    return loc;
+    rsult = loc;
   } else {
     tmp = ValNodeNew (NULL);
     tmp->choice = SEQLOC_MIX;
     tmp->data.ptrvalue = (Pointer) loc;
     loc->next = slp;
-    return tmp;
+    rsult = tmp;
   }
+
+  if (SeqLocStrand (rsult) == Seq_strand_other) {
+    slp = SeqLocFindNext (rsult, NULL);
+    while (slp != NULL) {
+      if (slp->choice == SEQLOC_INT) {
+        sintp = (SeqIntPtr) slp->data.ptrvalue;
+        if (sintp != NULL) {
+          /* exon of one base in feature */
+          if (sintp->from == sintp->to) {
+            sintp->strand = Seq_strand_minus;
+          }
+        }
+      }
+      slp = SeqLocFindNext (rsult, slp);
+    }
+  }
+
+  return rsult;
 }
 
 static SeqAnnotPtr ReadFeatureTable (FILE *fp, CharPtr seqid, CharPtr annotname)
@@ -2653,7 +2959,9 @@ static SeqAnnotPtr ReadFeatureTable (FILE *fp, CharPtr seqid, CharPtr annotname)
   Int2           idx;
   ImpFeatPtr     ifp;
   Int2           j;
+  CharPtr        label;
   Char           line [1023];
+  CharPtr        loc;
   PubdescPtr     pdp;
   Int4           pos;
   SeqFeatPtr     prev;
@@ -2811,9 +3119,22 @@ static SeqAnnotPtr ReadFeatureTable (FILE *fp, CharPtr seqid, CharPtr annotname)
           sfp->location = AddIntervalToLocation (sfp->location, sip, start, stop);
 
         } else if (sfp != NULL && qual != NULL &&
-                   (val != NULL || StringCmp (qual, "pseudo") == 0 || StringCmp (qual, "gene") == 0)) {
+                   (val != NULL || StringCmp (qual, "pseudo") == 0)) {
 
           AddQualifierToFeature (sfp, qual, val);
+
+        } else if (sfp != NULL && qual != NULL && val == NULL) {
+
+          label = (CharPtr) FeatDefTypeLabel (sfp);
+          if (label == NULL) {
+            label = "?";
+          }
+          loc = SeqLocPrint (sfp->location);
+          if (loc == NULL) {
+            loc = StringSave ("?");
+          }
+          ErrPostEx (SEV_ERROR, ERR_SEQ_FEAT_WrongQualOnImpFeat, "Qualifier '%s' has no value on %s feature at %s", qual, label, loc);
+          MemFree (loc);
         }
       }
 

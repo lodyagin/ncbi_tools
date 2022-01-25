@@ -117,13 +117,13 @@ typedef struct hit_str {
     struct hit_str *next;  /*next hit in linked list*/
 } *hit_ptr, hit_node;
 
-typedef struct y {
+typedef struct store_str {
     Int4 l_score;
     Uint1Ptr seq;
     Char *header;
     Int4 seqno;
     hit_ptr hit_list;
-    struct y *next;
+    struct store_str *next;
 } store_node, *store_ptr;
 
 typedef struct qseq {

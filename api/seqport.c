@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/13/91
 *
-* $Revision: 6.14 $
+* $Revision: 6.19 $
 *
 * File Description:  Ports onto Bioseqs
 *
@@ -39,6 +39,21 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: seqport.c,v $
+* Revision 6.19  1999/08/07 20:51:49  kans
+* map ncbi4na alphabet to finite state machine
+*
+* Revision 6.18  1999/08/06 20:22:19  kans
+* TransTable simplified to eliminate single and double letter states
+*
+* Revision 6.17  1999/08/06 02:20:16  kans
+* finite state machine for 6-frame translation and orf search enhanced to handle nucleotide ambiguity characters
+*
+* Revision 6.16  1999/07/29 14:50:33  sicotte
+* Make BioseqReverse and BioseqRevComp handle any alphabets.. and bug fixes
+*
+* Revision 6.15  1999/06/28 15:54:36  kans
+* fix for segmented bioseq minus strand - was not clearing q cache when backing up or at other exits
+*
 * Revision 6.14  1999/02/12 20:48:24  kans
 * made fast byte expansion functions public
 *
@@ -1021,6 +1036,20 @@ code);
 *       
 *
 *****************************************************************************/
+static void ClearQCache (SeqPortPtr spp, Int4 sp)
+
+{
+	SPCacheQPtr spcpq;
+
+	spcpq = spp->cacheq;
+	if (spcpq != NULL) {
+		spcpq->ctr = 0;
+		spcpq->total = 0; /* clear out cache parameters to force new read */
+	}
+	spp->curpos = sp;
+	spp->byte = SEQPORT_EOF;
+}
+
 NLM_EXTERN Int2 SeqPortSeek (SeqPortPtr spp, Int4 offset, Int2 origin)
 
 {
@@ -1031,7 +1060,6 @@ NLM_EXTERN Int2 SeqPortSeek (SeqPortPtr spp, Int4 offset, Int2 origin)
     SeqPortPtr curspp;
 	Uint1Ptr buf;
 	SPCachePtr spcp;
-	SPCacheQPtr spcpq;
 
     if (spp == NULL)
         return 1;
@@ -1048,16 +1076,20 @@ NLM_EXTERN Int2 SeqPortSeek (SeqPortPtr spp, Int4 offset, Int2 origin)
 	switch (origin)
 	{
 		case SEEK_SET:
-			if ((offset > spp->totlen) || (offset < 0))
+			if ((offset > spp->totlen) || (offset < 0)) {
+				ClearQCache (spp, sp);
 				return 1;
+			}
 			sp = offset;
 			break;
 		case SEEK_CUR:
 			if (((sp + offset) > spp->totlen) ||
 				((sp + offset) < 0 ))
             {
-                if (! spp->is_circle)
+                if (! spp->is_circle) {
+                	ClearQCache (spp, sp);
     				return 1;
+    			}
             }
             else
     			sp += offset;
@@ -1070,18 +1102,14 @@ NLM_EXTERN Int2 SeqPortSeek (SeqPortPtr spp, Int4 offset, Int2 origin)
             }
 			break;
 		case SEEK_END:
-			if ((ABS(offset) > spp->totlen) || (offset > 0))
+			if ((ABS(offset) > spp->totlen) || (offset > 0)) {
+				ClearQCache (spp, sp);
 				return 1;
+			}
 			sp = spp->totlen + offset;
 			break;
 		default:
-			if (spp->cacheq != NULL) {
-				spcpq = spp->cacheq;
-				spcpq->ctr = 0;
-				spcpq->total = 0; /* clear out cache parameters to force new read */
-				spp->curpos = sp;
-				spp->byte = SEQPORT_EOF;
-			}
+			ClearQCache (spp, sp);
 			return 1;
 	}
 
@@ -1092,13 +1120,7 @@ NLM_EXTERN Int2 SeqPortSeek (SeqPortPtr spp, Int4 offset, Int2 origin)
 	{
         spp->curpos = sp;
         spp->byte = SEQPORT_EOF;    /* set to nothing */
-		if (spp->cacheq != NULL) {
-			spcpq = spp->cacheq;
-			spcpq->ctr = 0;
-			spcpq->total = 0; /* clear out cache parameters to force new read */
-			spp->curpos = sp;
-			spp->byte = SEQPORT_EOF;
-		}
+		ClearQCache (spp, sp);
         return 0;
     }
 
@@ -1107,11 +1129,7 @@ NLM_EXTERN Int2 SeqPortSeek (SeqPortPtr spp, Int4 offset, Int2 origin)
 
 		/* if 2na or 4na to iupacna, now only need fast lookup caches */
 		if (spp->cacheq != NULL) {
-			spcpq = spp->cacheq;
-			spcpq->ctr = 0;
-			spcpq->total = 0; /* clear out cache parameters to force new read */
-			spp->curpos = sp;
-			spp->byte = SEQPORT_EOF;
+			ClearQCache (spp, sp);
 			return 0; /* bypass remaining code */
 		}
 
@@ -1537,7 +1555,8 @@ byte */
     }
     else              /* segmented or reference sequence */
     {
-        while (! IS_residue((residue = SeqPortGetResidue(spp->curr))))
+    	residue = SeqPortGetResidue(spp->curr);
+        while (! IS_residue(residue))
         {
             spp->curr->eos = FALSE;   /* just in case was set */
 			moveup = FALSE;
@@ -1614,6 +1633,7 @@ SEEK_END);
 			if ((residue == SEQPORT_VIRT) || (residue == 
 INVALID_RESIDUE))
 				return residue;
+			residue = SeqPortGetResidue(spp->curr);
         }
 
         if (! plus_strand)
@@ -2895,6 +2915,11 @@ NLM_EXTERN Boolean LIBCALL BioseqComplement (BioseqPtr bsp)
 	}
 
 	seqtype = bsp->seq_data_type;
+        if ( ISA_aa(bsp->mol)) {
+                ErrPostEx(SEV_ERROR,0,0, "Error:  cannot complement aa\n");
+		return FALSE;
+        }
+
 	if ((sctp = SeqCodeTableFind (seqtype)) == NULL)
 	{
 		ErrPostEx(SEV_ERROR,0,0, "Can't open table\n");
@@ -2915,7 +2940,25 @@ NLM_EXTERN Boolean LIBCALL BioseqComplement (BioseqPtr bsp)
 			lshift = 4;
 			mask = 240;
 			break;
-		default:			/* ignore amino acid */
+
+                case Seq_code_iupacna:
+                case Seq_code_ncbi8na:
+			bc = 1;
+			rshift = 0;
+			lshift = 0;
+			mask = 255;
+			break;
+                case Seq_code_iupacaa:
+                case Seq_code_ncbi8aa:
+                case Seq_code_ncbieaa:
+                case Seq_code_ncbipaa:
+                case Seq_code_iupacaa3:
+                case Seq_code_ncbistdaa: 			/* ignore amino acid */
+                    ErrPostEx(SEV_ERROR,0,0, "Error:  cannot complement aa ; No ->mol flag on Bioseq\n");
+                    return FALSE;
+                case Seq_code_ncbipna:
+                    ErrPostEx(SEV_WARNING,0,0, "Error: Don't yet know how to complement profile\n");
+		default:
 			return FALSE;
 	}
 
@@ -2925,7 +2968,7 @@ NLM_EXTERN Boolean LIBCALL BioseqComplement (BioseqPtr bsp)
 	bitctr = 0;
 	readbyte = 0;
 
-	while (readbyte != bslen)
+	while (readbyte < bslen)
 	{
 		if (!bitctr)
 		{				/*get new byte*/
@@ -2977,7 +3020,7 @@ NLM_EXTERN Boolean LIBCALL BioseqReverse (BioseqPtr bsp)
 	Int4 		seqlen, count = 0;
 	Uint1 		seqtype, byte = 0, byte2, byte_to = 0, byte_to2, newbyte = 0;
 	Uint1		newbyte2, finalbyte, residue, residue2, bitctr, bc2 = 0;
-	Uint1 		bitctr2, mask, mask2, lshift, rshift, bc = 0;
+	Uint1 		bitctr2, mask, mask2, lshift, rshift, bc = 0, jagged;
 	
         if (bsp == NULL)
         {
@@ -2996,7 +3039,7 @@ NLM_EXTERN Boolean LIBCALL BioseqReverse (BioseqPtr bsp)
                 ErrPostEx(SEV_ERROR,0,0, "Error:  No sequence data\n");
                 return FALSE;
         }
-                
+
 	seqlen = bsp->length;
 	seqtype = bsp->seq_data_type;
 	switch (seqtype){
@@ -3005,8 +3048,8 @@ NLM_EXTERN Boolean LIBCALL BioseqReverse (BioseqPtr bsp)
 			mask2 = 3;
 			lshift = 2;
 			rshift = 6;
-
-			switch (seqlen%4)	/*change if jagged last byte*/
+                        jagged = seqlen%4;
+			switch (jagged)	/*change if jagged last byte*/
 			{
 				case 1:
 					bc = 1;
@@ -3031,8 +3074,8 @@ NLM_EXTERN Boolean LIBCALL BioseqReverse (BioseqPtr bsp)
 			mask2 = 15;
 			lshift = 4;
 			rshift = 4;
-
-			switch (seqlen%2)
+                        jagged = seqlen%2;
+			switch (jagged)
 			{
 				case 1:
 					bc = 1;
@@ -3044,6 +3087,27 @@ NLM_EXTERN Boolean LIBCALL BioseqReverse (BioseqPtr bsp)
 					break;
 			}
 			break;
+                case Seq_code_iupacna:
+                case Seq_code_ncbi8na:
+
+                case Seq_code_iupacaa:
+                case Seq_code_ncbi8aa:
+                case Seq_code_ncbieaa:
+                case Seq_code_ncbistdaa:
+			bc = 1;
+                        bc2 = 0;
+			rshift = 0;
+			lshift = 0;
+                        jagged = 0;
+			mask = 255;
+                        mask2 = 0;
+			break;
+                case Seq_code_ncbipaa:
+                case Seq_code_iupacaa3:
+                    ErrPostEx(SEV_ERROR,0,0, "Error:  cannot  reverse %s protein alphabet",(int)seqtype);
+                    return FALSE;
+                case Seq_code_ncbipna:
+                    ErrPostEx(SEV_WARNING,0,0, "Error: Don't yet know how to reverse profile\n");
 		default:		/*ignores amino acid sequence*/
 			return FALSE;
 	}
@@ -3054,7 +3118,7 @@ NLM_EXTERN Boolean LIBCALL BioseqReverse (BioseqPtr bsp)
 	readbyte = 0;
 	count = 0;
 
-	if (!(seqlen%4))			/*no jagged last byte*/
+	if (!jagged)			/*no jagged last byte*/
 	{
 		while ((readbyte != BSLen(bysp1)))
 		{
@@ -3090,8 +3154,7 @@ NLM_EXTERN Boolean LIBCALL BioseqReverse (BioseqPtr bsp)
 		newbyte = newbyte2 = byte_to = byte_to2 = 0;
 		byte2 = residue = residue2 = 0;
 		BSSeek (bysp2, bslen-2, SEEK_SET);
-		byte2 = (Uint1) BSGetByte (bysp2);	/*byte closer to 
-beginning*/
+		byte2 = (Uint1) BSGetByte (bysp2);	/*byte closer to beginning*/
 		byte = (Uint1) BSGetByte (bysp2);
 		bitctr = bc;
 		bitctr2 = bc2;
@@ -3316,9 +3379,9 @@ NLM_EXTERN SPCompressPtr SPCompressDNA(SeqPortPtr spp)
 
 /*****************************************************************************
 *
-*   TransTableInit (TransTable PNTR tbl, Int2 genCode);
+*   TransTableNew (Int2 genCode);
 *       Initializes TransTable finite state machine for 6-frame translation
-*       and open reading frame search
+*       and open reading frame search, allowing nucleotide ambiguity characters
 *
 *****************************************************************************/
 
@@ -3367,21 +3430,58 @@ static Boolean SetGenCode (Int2 genCode, CharPtr PNTR ncbieaa, CharPtr PNTR sncb
   return FALSE;
 }
 
-#define BASE_A    0
-#define BASE_C    1
-#define BASE_G    2
-#define BASE_T    3
-#define BASE_N    4
+typedef enum {
+  BASE_A = 0,  /* A    */
+  BASE_C,      /* C    */
+  BASE_G,      /* G    */
+  BASE_T,      /* T    */
+  BASE_M,      /* AC   */
+  BASE_R,      /* AG   */
+  BASE_W,      /* AT   */
+  BASE_S,      /* CG   */
+  BASE_Y,      /* CT   */
+  BASE_K,      /* GT   */
+  BASE_V,      /* ACG  */
+  BASE_H,      /* ACT  */
+  BASE_D,      /* AGT  */
+  BASE_B,      /* CGT  */
+  BASE_N       /* ACGT */
+} BaseCode;
 
-NLM_EXTERN Boolean TransTableInit (TransTable PNTR tbl, Int2 genCode)
+NLM_EXTERN TransTablePtr TransTableNew (Int2 genCode)
 
 {
+  Char     ch, tpaa, btaa, tporf, btorf;
+  Char     charToBase [16] = "ACGTMRWSYKVHDBN";
+  Int2     fournaToBase [16] = {
+             BASE_N, BASE_A, BASE_C, BASE_M, BASE_G, BASE_R, BASE_S, BASE_V,
+             BASE_T, BASE_W, BASE_Y, BASE_H, BASE_K, BASE_D, BASE_B, BASE_N};
+  Int2     expansions [75] = {
+             BASE_A, -1,     -1,     -1,     -1,
+             BASE_C, -1,     -1,     -1,     -1,
+             BASE_G, -1,     -1,     -1,     -1,
+             BASE_T, -1,     -1,     -1,     -1,
+             BASE_A, BASE_C, -1,     -1,     -1,
+             BASE_A, BASE_G, -1,     -1,     -1,
+             BASE_A, BASE_T, -1,     -1,     -1,
+             BASE_C, BASE_G, -1,     -1,     -1,
+             BASE_C, BASE_T, -1,     -1,     -1,
+             BASE_G, BASE_T, -1,     -1,     -1,
+             BASE_A, BASE_C, BASE_G, -1,     -1,
+             BASE_A, BASE_C, BASE_T, -1,     -1,
+             BASE_A, BASE_G, BASE_T, -1,     -1,
+             BASE_C, BASE_G, BASE_T, -1,     -1,
+             BASE_A, BASE_C, BASE_G, BASE_T, -1};
+  Boolean  goOn;
   Int2     i, j, k, st, nx, cd;
+  Int2     p, q, r, x, y, z;
   Int2     codonidx [4] = {2, 1, 3, 0};  /* in genetic code table, T = 0, C = 1, A = 2, G = 3, */
   Int2     complidx [4] = {0, 3, 1, 2};  /* and index = (base1 * 16) + (base2 * 4) + base3 */
   CharPtr  ncbieaa = NULL, sncbieaa = NULL;
+  TransTablePtr  tbl;
 
-  if (tbl == NULL) return FALSE;
+  tbl = (TransTablePtr) MemNew (sizeof (TransTable));
+  if (tbl == NULL) return NULL;
   MemSet ((Pointer) tbl, 0, sizeof (TransTable));
 
   if ((! SetGenCode (genCode, &ncbieaa, &sncbieaa)) || ncbieaa == NULL || sncbieaa == NULL) {
@@ -3389,36 +3489,35 @@ NLM_EXTERN Boolean TransTableInit (TransTable PNTR tbl, Int2 genCode)
     sncbieaa = "---M---------------M---------------M----------------------------";
   }
 
-  /* table to convert any ASCII character to BASE_x integer from 0 through 4 */
+  /* table to convert any ASCII character to BASE_x integer from 0 through 14 */
   for (i = 0; i < 256; i++) {
     tbl->basesToIdx [i] = BASE_N;
   }
-  tbl->basesToIdx [(int) 'A'] = BASE_A;
-  tbl->basesToIdx [(int) 'C'] = BASE_C;
-  tbl->basesToIdx [(int) 'G'] = BASE_G;
-  tbl->basesToIdx [(int) 'T'] = BASE_T;
+
+  /* map iupacna alphabet to BaseCode */
+  for (i = BASE_A; i <= BASE_N; i++) {
+    ch = charToBase [i];
+    tbl->basesToIdx [(int) ch] = i;
+    ch = TO_LOWER (ch);
+    tbl->basesToIdx [(int) ch] = i;
+  }
+  tbl->basesToIdx [(int) 'U'] = BASE_T;
+  tbl->basesToIdx [(int) 'u'] = BASE_T;
+
+  /* also map ncbi4na alphabet to BaseCode */
+  for (i = 0; i < 16; i++) {
+    tbl->basesToIdx [(int) i] = fournaToBase [i];
+  }
 
   /* add tbl->basesToIdx [(int) ch] to tbl->nextBase [state] to get next state */
 
-  /* state 0 is original state */
-  tbl->nextBase [0] = 1;
+  /* treat state 0 as already having seen NN, avoiding single and double letter states */
+  tbl->nextBase [0] = 3361;
 
-  /* states 1 through 5 are single letter states (A, C, G, T, N) */
-  for (i = 0, st = 1, nx = 6; i < 5; i++, st++, nx += 5) {
-    tbl->nextBase [st] = nx;
-  }
-
-  /* states 6 through 30 are double letter states (AA, AC, ..., NT, NN) */
-  for (i = 0, st = 6, nx = 31; i < 5; i++) {
-    for (j = 0; j < 5; j++, st++, nx += 5) {
-      tbl->nextBase [st] = nx;
-    }
-  }
-
-  /* states 31 through 155 are triple letter states (AAA, AAC, ..., NNT, NNN) */
-  for (i = 0, st = 31; i < 5; i++) {
-    for (j = 0, nx = 31; j < 5; j++) {
-      for (k = 0; k < 5; k++, st++, nx += 5) {
+  /* states 1 through 3375 are triple letter states (AAA, AAC, ..., NNT, NNN) */
+  for (i = BASE_A, st = 1; i <= BASE_N; i++) {
+    for (j = BASE_A, nx = 1; j <= BASE_N; j++) {
+      for (k = BASE_A; k <= BASE_N; k++, st++, nx += 15) {
         tbl->nextBase [st] = nx;
       }
     }
@@ -3426,42 +3525,89 @@ NLM_EXTERN Boolean TransTableInit (TransTable PNTR tbl, Int2 genCode)
 
   /* tbl->aminoAcid [state] [strand] contains amino acid encoded by state */
 
-  /* single and double letter states do not represent a complete codon */
-  for (st = 0; st < 31; st++) {
-    tbl->aminoAcid [st] [TOP_STRAND] = '\0';
-    tbl->aminoAcid [st] [BOT_STRAND] = '\0';
-    tbl->orfStart [st] [TOP_STRAND] = FALSE;
-    tbl->orfStart [st] [BOT_STRAND] = FALSE;
-  }
-
-  /* initialize remaining states to return unknown amino acid X */
-  for (st = 31; st < 156; st++) {
-    tbl->aminoAcid [st] [TOP_STRAND] = 'X';
-    tbl->aminoAcid [st] [BOT_STRAND] = 'X';
-    tbl->orfStart [st] [TOP_STRAND] = FALSE;
-    tbl->orfStart [st] [BOT_STRAND] = FALSE;
+  /* initialize all states to return unknown amino acid X */
+  for (st = 0; st < 3376; st++) {
+    tbl->aminoAcid [st] [TTBL_TOP_STRAND] = 'X';
+    tbl->aminoAcid [st] [TTBL_BOT_STRAND] = 'X';
+    tbl->orfStart [st] [TTBL_TOP_STRAND] = '-';
+    tbl->orfStart [st] [TTBL_BOT_STRAND] = '-';
   }
 
   /* lookup amino acid for each codon in genetic code table */
-  for (i = 0, st = 31; i < 4; i++, st += 5) {
-    for (j = 0; j < 4; j++, st++) {
-      for (k = 0; k < 4; k++, st++) {
-        /* st = 25 * i + 5 * j + k + 31; */
+  for (i = BASE_A, st = 1; i <= BASE_N; i++) {
+    for (j = BASE_A; j <= BASE_N; j++) {
+      for (k = BASE_A; k <= BASE_N; k++, st++) {
+        /* st = 225 * i + 15 * j + k + 1; */
 
-        /* lookup amino acid for codon IJK */
-        cd = 16 * codonidx [i] + 4 * codonidx [j] + codonidx [k];
-        tbl->aminoAcid [st] [TOP_STRAND] = ncbieaa [cd];
-        tbl->orfStart [st] [TOP_STRAND] = (Boolean) (sncbieaa [cd] != '-');
+        tpaa = '\0';
+        btaa = '\0';
+        tporf = '\0';
+        btorf = '\0';
+        goOn = TRUE;
 
-        /* lookup amino acid for complement of reversed KJI */
-        cd = 16 * complidx [k] + 4 * complidx [j] + complidx [i];
-        tbl->aminoAcid [st] [BOT_STRAND] = ncbieaa [cd];
-        tbl->orfStart [st] [BOT_STRAND] = (Boolean) (sncbieaa [cd] != '-');
+        /* expand ambiguous IJK nucleotide symbols into component bases XYZ */
+        for (p = i * 5, x = expansions [p]; x != -1 && goOn; p++, x = expansions [p]) {
+          for (q = j * 5, y = expansions [q]; y != -1 && goOn; q++, y = expansions [q]) {
+            for (r = k * 5, z = expansions [r]; z != -1 && goOn; r++, z = expansions [r]) {
+
+              /* lookup amino acid for codon XYZ */
+              cd = 16 * codonidx [x] + 4 * codonidx [y] + codonidx [z];
+              ch = ncbieaa [cd];
+              if (tpaa == '\0') {
+                tpaa = ch;
+              } else if (tpaa != ch) {
+                tpaa = 'X';
+              }
+              /* and translation start flag on top strand */
+              ch = sncbieaa [cd];
+              if (tporf == '\0') {
+                tporf = ch;
+              } else if (tporf != ch) {
+                tporf = '-';
+              }
+
+              /* lookup amino acid for complement of reversed ZYX */
+              cd = 16 * complidx [z] + 4 * complidx [y] + complidx [x];
+              ch = ncbieaa [cd];
+              if (btaa == '\0') {
+                btaa = ch;
+              } else if (btaa != ch) {
+                btaa = 'X';
+              }
+              /* and translation start flag on bottom strand */
+              ch = sncbieaa [cd];
+              if (btorf == '\0') {
+                btorf = ch;
+              } else if (btorf != ch) {
+                btorf = '-';
+              }
+
+              /* drop out of loop as soon as answer is known */
+              if (tpaa == 'X' && btaa == 'X' && tporf == '-' && btorf == '-') {
+                goOn = FALSE;
+              }
+            }
+          }
+        }
+
+        /* assign amino acid */
+        tbl->aminoAcid [st] [TTBL_TOP_STRAND] = tpaa;
+        tbl->aminoAcid [st] [TTBL_BOT_STRAND] = btaa;
+
+        /* assign orf start */
+        tbl->orfStart [st] [TTBL_TOP_STRAND] = tporf;
+        tbl->orfStart [st] [TTBL_BOT_STRAND] = btorf;
       }
     }
   }
 
   /* finite state machine for 6-frame translation and ORF search is now initialized */
-  return TRUE;
+  return tbl;
+}
+
+NLM_EXTERN TransTablePtr TransTableFree (TransTablePtr tbl)
+
+{
+  return MemFree (tbl);
 }
 

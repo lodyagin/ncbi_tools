@@ -29,13 +29,22 @@
 *
 * Version Creation Date:   9/13/96
 *
-* $Revision: 6.40 $
+* $Revision: 6.43 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: docsum.c,v $
+* Revision 6.43  1999/08/25 18:58:52  kans
+* Boolean bit flags are now unsigned int - int for AIX, unsigned since document.[ch] already used that style
+*
+* Revision 6.42  1999/08/04 21:43:52  kans
+* tells Cn3D it can use network Entrez (LYG)
+*
+* Revision 6.41  1999/06/18 19:04:27  kans
+* set message level MAX for SeqEntryToFlat
+*
 * Revision 6.40  1999/03/03 18:26:02  kans
 * calls ClearStructures before MakeAModelstruc
 *
@@ -211,6 +220,7 @@
 #include <mmdbapi.h>
 #ifndef WIN16
 #include <cn3dmain.h>
+#include <cn3dopen.h>  /* added by lyg */
 #include <cn3dentr.h>
 #endif
 
@@ -233,9 +243,9 @@
 #define EVAL_MODE         2
 
 typedef struct docsumstatedata {
-  Boolean            checked     : 1;
-  Boolean            hasAbstract : 1;
-  Boolean            noSuchUid   : 1;
+  unsigned int       checked     : 1;
+  unsigned int       hasAbstract : 1;
+  unsigned int       noSuchUid   : 1;
 } StateData, PNTR StateDataPtr;
 
 typedef struct summformdata {
@@ -856,6 +866,7 @@ static CharPtr FetchGenBank (DoC d, Int2 item, Pointer ptr)
 {
   CharPtr      failed;
   FILE         *fp;
+  ErrSev       level;
   Char         path [PATH_MAX];
   SeqEntryPtr  sep;
   SummFormPtr  sfp;
@@ -877,12 +888,14 @@ static CharPtr FetchGenBank (DoC d, Int2 item, Pointer ptr)
   TmpNam (path);
   fp = FileOpen (path, "w");
   if (fp != NULL) {
+    level = ErrSetMessageLevel (SEV_MAX);
     if (SeqEntryToFlat (sep, fp, GENBANK_FMT, RELEASE_MODE)) {
       FileClose (fp);
       str = FileToString (path);
     } else {
       FileClose (fp);
     }
+    ErrSetMessageLevel (level);
   }
   FileRemove (path);
   BioseqUnlockByGi (uid);
@@ -896,6 +909,7 @@ static CharPtr FetchEmbl (DoC d, Int2 item, Pointer ptr)
 {
   CharPtr      failed;
   FILE         *fp;
+  ErrSev       level;
   Char         path [PATH_MAX];
   SeqEntryPtr  sep;
   SummFormPtr  sfp;
@@ -917,12 +931,14 @@ static CharPtr FetchEmbl (DoC d, Int2 item, Pointer ptr)
   TmpNam (path);
   fp = FileOpen (path, "w");
   if (fp != NULL) {
+    level = ErrSetMessageLevel (SEV_MAX);
     if (SeqEntryToFlat (sep, fp, EMBL_FMT, RELEASE_MODE)) {
       FileClose (fp);
       str = FileToString (path);
     } else {
       FileClose (fp);
     }
+    ErrSetMessageLevel (level);
   }
   FileRemove (path);
   BioseqUnlockByGi (uid);
@@ -936,6 +952,7 @@ static CharPtr FetchGenPept (DoC d, Int2 item, Pointer ptr)
 {
   CharPtr      failed;
   FILE         *fp;
+  ErrSev       level;
   Char         path [PATH_MAX];
   SeqEntryPtr  sep;
   SummFormPtr  sfp;
@@ -966,12 +983,14 @@ static CharPtr FetchGenPept (DoC d, Int2 item, Pointer ptr)
         Message (MSG_ERROR, "StdPrintOptionsNew failed");
       }
     }
+    level = ErrSetMessageLevel (SEV_MAX);
     if (SeqEntryToFlat (sep, fp, GENPEPT_FMT, RELEASE_MODE)) {
       FileClose (fp);
       str = FileToString (path);
     } else {
       FileClose (fp);
     }
+    ErrSetMessageLevel (level);
   }
   FileRemove (path);
   BioseqUnlockByGi (uid);
@@ -4029,17 +4048,20 @@ static void LaunchStructureViewer (Int4 uid, Int2 numAlign, Int4Ptr alignuids, I
     Message (MSG_OK, "Unable to find this record in the database.");
     return;
   }
-  ClearStructures ();
-  pdnms = MakeAModelstruc (bsp);
-  if (pdnms == NULL) {
-    ArrowCursor ();
-    Update ();
-    Message (MSG_OK, "Unable to convert this biostruc to a modelstruc.");
-    return;
-  }
+/*  ClearStructures (); lyg */
   w = (WindoW) Cn3DWin_Entrez(NULL, TRUE);
   if (w != NULL) {
-    Cn3D_ResetActiveStrucProc ();
+    Cn3D_useEntrez = TRUE;  /* tells Cn3D it can use netentrez. lyg */
+    Cn3D_OpenStart();
+    pdnms = MakeAModelstruc (bsp); /* moved here from before window creation. lyg */
+    if (pdnms == NULL) {
+      Remove(w);  /* lyg */
+      ArrowCursor ();
+      Update ();
+      Message (MSG_OK, "Unable to convert this biostruc to a modelstruc.");
+      return;
+    }
+    Cn3D_OpenEnd();
     Show (w);
     Select (w);
   }

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.14 $
+* $Revision: 6.15 $
 *
 * File Description: 
 *
@@ -73,7 +73,6 @@ extern void UntranslateFunc (PaneL pnl,  EditAlignDataPtr adp);
 extern Boolean ShowFeatureFunc (EditAlignDataPtr adp);
 extern Boolean HideFeatureFunc (EditAlignDataPtr adp);
 extern Boolean ResetFeatureFunc (EditAlignDataPtr adp);
-extern void PropagateFeatDialog (IteM i);
 extern ValNodePtr update_featpept (EditAlignDataPtr adp, ValNodePtr feathead, RecT *rp, SelStructPtr ssp, Int4 changevalue, Uint2 itemsubtype);
 extern void ShowFeatureProc (PaneL pnl, Boolean invalidate);
 extern void SaveFeatProc (PaneL pnl);

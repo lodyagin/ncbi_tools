@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/7/94
 *
-* $Revision: 6.9 $
+* $Revision: 6.13 $
 *
 * File Description: 
 *
@@ -39,6 +39,19 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: gather.c,v $
+* Revision 6.13  1999/09/07 17:59:52  kans
+* AssignIDsInEntity takes datatype and dataptr for when entityID is 0, allowing unlinked components to be updated
+*
+* Revision 6.12  1999/09/07 17:13:09  kans
+* added AssignIDsInEntity
+*
+* Revision 6.11  1999/09/01 14:41:26  shavirin
+* Adjusted functions gather_align_data() and get_align_ends() to accept
+* discontinuous alignment type.
+*
+* Revision 6.10  1999/07/26 20:55:52  ostell
+* added recursive support for SAS_DISC SeqAlign
+*
 * Revision 6.9  1999/03/16 13:17:28  ostell
 * changes in SeqLocOffset() to deal with multi-interval seqloc which is
 * a subset of a feature.
@@ -1710,89 +1723,93 @@ static Int2 get_master_order(SeqIdPtr ids, SeqIdPtr sip)
 	return -1;
 }
 
-NLM_EXTERN Boolean get_align_ends(SeqAlignPtr align, SeqIdPtr id, Int4Ptr start, Int4Ptr stop, Uint1Ptr strand)
+NLM_EXTERN Boolean get_align_ends(SeqAlignPtr align, SeqIdPtr id, 
+                                  Int4Ptr start, Int4Ptr stop, Uint1Ptr strand)
 {
-	Int2 i, n;
-	Boolean is_found;
-	Int4 c_start, c_stop;
-	DenseSegPtr dsp;
-	DenseDiagPtr ddp;
-	StdSegPtr ssp;
-	SeqLocPtr loc;
- 
-	*start = -1;
-	*stop = -1;
-	switch(align->segtype)
-	{
-		case 2:         /*DenseSeg*/
-			dsp = (DenseSegPtr)(align->segs);
-			if(id == NULL)
-				i =0;
-			else
-			{
-				i = get_master_order(dsp->ids, id);
-				if( i == -1)
-					return FALSE;
-			}
-			for(n =0; n<dsp->numseg; ++n)
-			{
-				c_start = dsp->starts[n*(dsp->dim) +i];
-				if(c_start != -1) /*check for a non-gapped region*/ 
-				{
-					c_stop = c_start + dsp->lens[n] -1;
-					load_start_stop(start, stop, c_start, c_stop);
-				}
-			}
-			*strand = align_strand_get(dsp->strands, i);
-			return (*start != -1);
-			
-		case 3:
-			ssp = (StdSegPtr)(align->segs);
-			while(ssp)
-			{
-				is_found = FALSE;
-				for (loc = ssp->loc; loc!=NULL && !is_found; loc=loc->next)
-				{
-					if(loc->choice != SEQLOC_EMPTY)
-					{
-					if(id == NULL)
-						is_found = TRUE;
-					else
-						
-						is_found=SeqIdForSameBioseq(SeqLocId(loc), id);
-					if(is_found)
-					{
-						load_start_stop(start, stop, SeqLocStart(loc), SeqLocStop(loc));
-						*strand = SeqLocStrand(loc);
-					}
-					}
-				}
-				ssp = ssp->next;
-			}
-			return (*start != -1);
-			
-		case 1:
-			ddp = (DenseDiagPtr)(align->segs);
-			while(ddp)
-			{
-				if(id == NULL)
-					i =0;
-				else
-					i = get_master_order(ddp->id, id);
-				if(i != -1)
-				{
-					c_start = ddp->starts[i];
-					c_stop = ddp->starts[i] + ddp->len -1;
-					*strand = align_strand_get(ddp->strands, i);
-					load_start_stop(start, stop, c_start, c_stop);
-				}
-				ddp = ddp->next;
-			}			
-			return (*start != -1);
-			
-		default:
-			return FALSE;
-	}
+    Int2 i, n;
+    Boolean is_found;
+    Int4 c_start, c_stop;
+    DenseSegPtr dsp;
+    DenseDiagPtr ddp;
+    StdSegPtr ssp;
+    SeqLocPtr loc;
+    SeqAlignPtr sap;
+
+    *start = -1;
+    *stop = -1;
+    switch(align->segtype) {
+    case 5: /* Discontinuous alignment */
+        
+        sap = (SeqAlignPtr)(align->segs);
+        
+        for(; sap != NULL; sap = sap->next) {
+            if(!get_align_ends(sap, id, &c_start, &c_stop, strand))
+                return FALSE;
+            load_start_stop(start, stop, c_start, c_stop);
+        }
+        return (*start != -1);
+        
+    case 2:         /*DenseSeg*/
+        dsp = (DenseSegPtr)(align->segs);
+        if(id == NULL)
+            i =0;
+        else {
+            i = get_master_order(dsp->ids, id);
+            if( i == -1)
+                return FALSE;
+        }
+        
+        for(n =0; n<dsp->numseg; ++n) {
+            c_start = dsp->starts[n*(dsp->dim) +i];
+            if(c_start != -1) { /*check for a non-gapped region*/
+                c_stop = c_start + dsp->lens[n] -1;
+                load_start_stop(start, stop, c_start, c_stop);
+            }
+        }
+        *strand = align_strand_get(dsp->strands, i);
+        return (*start != -1);
+        
+    case 3:
+        ssp = (StdSegPtr)(align->segs);
+        while(ssp) {
+            is_found = FALSE;
+            for (loc = ssp->loc; loc!=NULL && !is_found; loc=loc->next) {
+                if(loc->choice != SEQLOC_EMPTY) {
+                    if(id == NULL)
+                        is_found = TRUE;
+                    else
+                        
+                        is_found=SeqIdForSameBioseq(SeqLocId(loc), id);
+                    if(is_found) {
+                        load_start_stop(start, stop, SeqLocStart(loc), SeqLocStop(loc));
+                        *strand = SeqLocStrand(loc);
+                    }
+                }
+            }
+            ssp = ssp->next;
+        }
+        return (*start != -1);
+        
+    case 1:
+        ddp = (DenseDiagPtr)(align->segs);
+        while(ddp) {
+            if(id == NULL)
+                i =0;
+            else
+                i = get_master_order(ddp->id, id);
+            if(i != -1) {
+                c_start = ddp->starts[i];
+                c_stop = ddp->starts[i] + ddp->len -1;
+                *strand = align_strand_get(ddp->strands, i);
+                load_start_stop(start, stop, c_start, c_stop);
+            }
+            ddp = ddp->next;
+        }			
+        return (*start != -1);
+        
+    default:
+        return FALSE;
+    }
 }
 	
 				
@@ -2193,501 +2210,434 @@ static Uint1 get_DenseSeg_strand(DenseSegPtr dsp, Int2 order)
 	return 0;
 }
 
-NLM_EXTERN AlignDataPtr gather_align_data(SeqLocPtr m_slp, SeqAlignPtr align, Int4 offset, Boolean ck_interval, Boolean map)
+NLM_EXTERN AlignDataPtr gather_align_data(SeqLocPtr m_slp, SeqAlignPtr align, 
+                                          Int4 offset, Boolean ck_interval, 
+                                          Boolean map)
 {
-	SeqIdPtr m_sip, sip;
-	Uint1 m_strand, strand, c_strand;
-	DenseSegPtr dsp;
-	StdSegPtr ssp;
-	DenseDiagPtr ddp;
-	Int2 i, m_order, k, numseg, t_numseg;
-	Int4 s1;
-	Uint1 seg_type;
-	Boolean is_found = FALSE;
-	Int4 start, stop, c_start, c_stop;
-	Int4 m_start, m_stop;
-	Int4 master_pos;	/*position of the master sequence*/
-	Int4 off_start, off_stop;
-	Boolean rev;
-	GatherRange gr, t_range;
-	SeqLocPtr a_slp, loc;
-	AlignDataPtr head = NULL, curr;
-	Uint2 chain;
-	Int4 h_start, h_stop;
-	Boolean inc_left_mgap;	/*include the left gaps on the master sequence*/
-	Boolean inc_right_mgap;	/*include the right gaps on the master sequence*/
-	Boolean left_end_gap, right_end_gap;
-	Int2 k_seg;
-	Boolean collect;
-	Boolean load;
-	Boolean cont;	/*is it a continous segment ? */
-	Int4 len;
-	Int4 mag_val;	/*the magnification value */
-	SeqLocPtr master_loc, m_loc;
-	Boolean inverse;
-	Int4 leftover;
-	Int4 left, right;
-	Boolean use_stop;
-	Uint1 ma_strand;
+    SeqIdPtr m_sip, sip;
+    Uint1 m_strand, strand, c_strand;
+    DenseSegPtr dsp;
+    StdSegPtr ssp;
+    DenseDiagPtr ddp;
+    Int2 i, m_order, k, numseg, t_numseg;
+    Int4 s1;
+    Uint1 seg_type;
+    Boolean is_found = FALSE;
+    Int4 start, stop, c_start, c_stop;
+    Int4 m_start, m_stop;
+    Int4 master_pos;	/*position of the master sequence*/
+    Int4 off_start, off_stop;
+    Boolean rev;
+    GatherRange gr, t_range;
+    SeqLocPtr a_slp, loc;
+    AlignDataPtr head = NULL, curr;
+    Uint2 chain;
+    Int4 h_start, h_stop;
+    Boolean inc_left_mgap;	/*include the left gaps on the master sequence*/
+    Boolean inc_right_mgap;	/*include the right gaps on the master sequence*/
+    Boolean left_end_gap, right_end_gap;
+    Int2 k_seg;
+    Boolean collect;
+    Boolean load;
+    Boolean cont;	/*is it a continous segment ? */
+    Int4 len;
+    Int4 mag_val;	/*the magnification value */
+    SeqLocPtr master_loc, m_loc;
+    Boolean inverse;
+    Int4 leftover;
+    Int4 left, right;
+    Boolean use_stop;
+    Uint1 ma_strand;
+    SeqAlignPtr sap;
 
-	strand = 0;
- 	m_sip = SeqLocId(m_slp);
- 	if(!get_align_ends(align, m_sip, &start, &stop, &c_strand))
- 		return NULL;
- 		
-	a_slp = SeqLocIntNew(start, stop, c_strand, m_sip);
-	if(!SeqLocOffset(m_slp, a_slp, &gr, offset))
-	{
-		SeqLocFree(a_slp);
-		return NULL;
-	}
-	cont = FALSE;
-	if(align->segtype == 2)
-		cont = TRUE;
-	else if(align->segtype == 3)
-	{
-		cont = (align->type == 3);
-		/* cont = TRUE; */
-		ssp = align->segs;
-		mag_val = calculate_mag_val (ssp, m_sip, &inverse);
-		if(mag_val == -1)
-		{
-			mag_val = 1;
-			inverse = FALSE;
-		}
-	}
+    strand = 0;
+    m_sip = SeqLocId(m_slp);
+    if(!get_align_ends(align, m_sip, &start, &stop, &c_strand))
+        return NULL;
+    
+    a_slp = SeqLocIntNew(start, stop, c_strand, m_sip);
+    if(!SeqLocOffset(m_slp, a_slp, &gr, offset)) {
+        SeqLocFree(a_slp);
+        return NULL;
+    }
+    cont = FALSE;
+    if(align->segtype == 2)
+        cont = TRUE;
+    else if(align->segtype == 3) {
+        cont = (align->type == 3);
+        /* cont = TRUE; */
+        ssp = align->segs;
+        mag_val = calculate_mag_val (ssp, m_sip, &inverse);
+        if(mag_val == -1) {
+            mag_val = 1;
+            inverse = FALSE;
+        }
+    }
+    
+    m_strand = SeqLocStrand(m_slp);
+    m_start = SeqLocStart(m_slp);
+    m_stop = SeqLocStop(m_slp);
+    c_start = -1;
+    c_stop =-1;
 
-	m_strand = SeqLocStrand(m_slp);
-	m_start = SeqLocStart(m_slp);
-	m_stop = SeqLocStop(m_slp);
-	c_start = -1;
-	c_stop =-1;
-	switch(align->segtype)
- 	{
-		case 2: /*for DenseSegs*/
-			dsp = (DenseSegPtr)(align->segs);
-			m_order = get_master_order(dsp->ids, m_sip);
-			ma_strand = get_DenseSeg_strand(dsp, m_order);
-			rev = check_reverse_strand(m_strand, c_strand);
-			if(rev)
-				k = dsp->numseg -1;
-			else
-				k =0;
-			k_seg = k;
+    switch(align->segtype) {
 
-			get_end_diag_val(dsp, m_order, k, &h_start, &h_stop, TRUE);
-			if(!(h_stop < m_start || h_start > m_stop))	/*it is within the range*/
-				inc_left_mgap = TRUE;
-			else
-				inc_left_mgap = FALSE;
-			
-			get_end_diag_val(dsp, m_order, k, &h_start, &h_stop, FALSE);
-			if(!(h_stop < m_start || h_start > m_stop))	/*it is within the range*/
-				inc_right_mgap = TRUE;
-			else
-				inc_right_mgap = FALSE;
+    case 5: /* Discontinuous alignment */
+        for(sap = (SeqAlignPtr) align->segs; sap != NULL; sap = sap->next) {
+            curr =  gather_align_data(m_slp, sap, offset, ck_interval, map);
+            LinkAlignData(&head, curr);
+        }
+        break;
 
-			for(numseg = 0; numseg<dsp->numseg; ++numseg)
-			{
-			   if(dsp->lens[k] >0)
-			   {
-				s1 = (Int4)k*(Int4)(dsp->dim)+(Int4)m_order;
-				master_pos = dsp->starts[s1];
-				collect = FALSE;
-				if(master_pos == -1)
-				{	/*gap in the master sequence. It is an insertion*/
-					strand = ma_strand;
-					left_end_gap = is_end_gaps_for_master(dsp, m_order, k_seg, k, TRUE);
-					right_end_gap = is_end_gaps_for_master(dsp, m_order, k_seg, k, FALSE);
-					if(left_end_gap && inc_left_mgap && !map)
-					{
-						collect = TRUE;
-						t_range.left = offset;
-						t_range.right = offset + dsp->lens[k] -1;
-						offset += dsp->lens[k];
-					}
-					if(right_end_gap && inc_right_mgap && !map)
-					{
-						collect = TRUE;
-						t_range.left = t_range.right +1;
-						t_range.right = t_range.left + dsp->lens[k] -1;
-					}
-					if(!left_end_gap && !right_end_gap)
-					{
-						use_stop = TRUE;
-						if((strand != Seq_strand_minus && rev) || (strand == Seq_strand_minus && rev == FALSE))
-							use_stop = FALSE;
-						if(use_stop)
-							update_seq_loc(c_stop, c_stop, 0, a_slp);
-						else
-							update_seq_loc(c_start, c_start, 0, a_slp);
-						collect = SeqLocOffset(m_slp, a_slp, &t_range, offset);
-						if(collect)
-						{
-							++(t_range.left);
-							if(!map)
-							{
-								t_range.right = t_range.left+dsp->lens[k]-1;
-								offset += dsp->lens[k];
-							}
-						}
-					}
-					off_start = 0;
-					off_stop = 0;
-				}
-				else	/*master is not a gap*/
-				{
-					c_start = dsp->starts[s1];
-					c_stop = c_start + dsp->lens[k] -1;
-					update_seq_loc(c_start, c_stop, 0, a_slp);
-					collect = SeqLocOffset(m_slp, a_slp, &t_range, offset);
-					if(collect)
-					{
-						off_start = MAX(0, (m_start - c_start));
-						off_stop = MAX(0, (c_stop - m_stop));
-					}
-				}
-				if(collect)
-				{
-					for(sip = dsp->ids, i=0; sip!=NULL; sip = sip->next, ++i)
-					{
-						load = TRUE;
-						start = dsp->starts[k*(dsp->dim) +i];
-						if(map)
-						{
-							/*multiple pairwise, ignore the master and the gap in the master*/
-							if(i == m_order)
-								load = FALSE;
-							else if(master_pos == -1 && start == -1)
-								load= FALSE;
-						}
-						if(load)
-						{
-							strand = align_strand_get(dsp->strands, i);
-							if(start != -1)
-							{
-								stop = start + dsp->lens[k] -1;
-								if(master_pos == -1 && map)  /*master sequence*/
-								{
-									seg_type = INS_SEG;
-									t_range.right = dsp->lens[k];
-								}
-								else
-								{
-									if(check_reverse_strand(c_strand, strand))
-									{
-										start += off_stop;
-										stop -= off_start;
-									}
-									else
-									{
-										start += off_start;
-										stop -= off_stop;
-									}
-								   seg_type = REG_SEG;
-								}
-							}
-							else
-							{
-								seg_type = GAP_SEG;
-								start = -1;
-								stop = dsp->lens[k];
-							} 
-							load_align_data(&head, start, stop, strand, sip, rev, seg_type, t_range, ck_interval, i, 1);
-						}
-					}
-				}
-			   }
-				if(rev)
-					--k;
-				else
-					++k;
-			}
-			break;
-		
-		case 3:
-			ssp = (StdSegPtr)(align->segs);
-		if(cont)
-		{
-			c_strand = get_master_strand_for_continous_ssp (ssp, m_sip);
-			rev = check_reverse_strand(m_strand, c_strand);
-			numseg = get_ssp_numseg (ssp);
-			if(rev)
-				k = numseg - 1;
-			else
-				k = 0;
-			for(t_numseg = 0; t_numseg <numseg; ++t_numseg)
-			{
-				ssp = get_nth_ssp ((StdSegPtr)(align->segs), k);
-				is_found = FALSE;
-				for(loc= ssp->loc, i=0; loc!=NULL && !is_found; ++i, loc = loc->next)
-				{
-					if(SeqIdMatch(SeqLocId(loc), m_sip))
-					{
-						master_loc = loc;
-						m_order = i;
-						if(loc->choice == SEQLOC_EMPTY)
-							master_pos = -1;
-						else
-						{
-							master_pos = SeqLocStart(loc);
-							is_found = SeqLocOffset(m_slp, loc, &t_range, offset);
-						}
-						break;
-					}
-				}
-				len = -1;
-				for(loc= ssp->loc, i = 0; loc!=NULL; ++i, loc = loc->next)
-				{
-					if(i != m_order)
-					{
-						if(loc->choice != SEQLOC_EMPTY)
-							len = SeqLocLen(loc);
-						break;
-					}
-				}
+    case 2: /*for DenseSegs*/
+        dsp = (DenseSegPtr)(align->segs);
+        m_order = get_master_order(dsp->ids, m_sip);
+        ma_strand = get_DenseSeg_strand(dsp, m_order);
+        rev = check_reverse_strand(m_strand, c_strand);
+        if(rev)
+            k = dsp->numseg -1;
+        else
+            k =0;
+        k_seg = k;
+        
+        get_end_diag_val(dsp, m_order, k, &h_start, &h_stop, TRUE);
+        if(!(h_stop < m_start || h_start > m_stop))	/*it is within the range*/
+            inc_left_mgap = TRUE;
+        else
+            inc_left_mgap = FALSE;
+        
+        get_end_diag_val(dsp, m_order, k, &h_start, &h_stop, FALSE);
+        if(!(h_stop < m_start || h_start > m_stop))	/*it is within the range*/
+            inc_right_mgap = TRUE;
+        else
+            inc_right_mgap = FALSE;
+        
+        for(numseg = 0; numseg<dsp->numseg; ++numseg) {
+            if(dsp->lens[k] >0) {
+                s1 = (Int4)k*(Int4)(dsp->dim)+(Int4)m_order;
+                master_pos = dsp->starts[s1];
+                collect = FALSE;
+                if(master_pos == -1) {	/*gap in the master sequence. It is an insertion*/
+                    strand = ma_strand;
+                    left_end_gap = is_end_gaps_for_master(dsp, m_order, k_seg, k, TRUE);
+                    right_end_gap = is_end_gaps_for_master(dsp, m_order, k_seg, k, FALSE);
+                    if(left_end_gap && inc_left_mgap && !map) {
+                        collect = TRUE;
+                        t_range.left = offset;
+                        t_range.right = offset + dsp->lens[k] -1;
+                        offset += dsp->lens[k];
+                    }
+                    if(right_end_gap && inc_right_mgap && !map) {
+                        collect = TRUE;
+                        t_range.left = t_range.right +1;
+                        t_range.right = t_range.left + dsp->lens[k] -1;
+                    }
+                    if(!left_end_gap && !right_end_gap) {
+                        use_stop = TRUE;
+                        if((strand != Seq_strand_minus && rev) || (strand == Seq_strand_minus && rev == FALSE))
+                            use_stop = FALSE;
+                        if(use_stop)
+                            update_seq_loc(c_stop, c_stop, 0, a_slp);
+                        else
+                            update_seq_loc(c_start, c_start, 0, a_slp);
+                        collect = SeqLocOffset(m_slp, a_slp, &t_range, offset);
+                        if(collect) {
+                            ++(t_range.left);
+                            if(!map) {
+                                t_range.right = t_range.left+dsp->lens[k]-1;
+                                offset += dsp->lens[k];
+                            }
+                        }
+                    }
+                    off_start = 0;
+                    off_stop = 0;
+                } else {/*master is not a gap*/
+                    c_start = dsp->starts[s1];
+                    c_stop = c_start + dsp->lens[k] -1;
+                    update_seq_loc(c_start, c_stop, 0, a_slp);
+                    collect = SeqLocOffset(m_slp, a_slp, &t_range, offset);
+                    if(collect) {
+                            off_start = MAX(0, (m_start - c_start));
+                            off_stop = MAX(0, (c_stop - m_stop));
+                    }
+                }
+                if(collect) {
+                    for(sip = dsp->ids, i=0; sip!=NULL; sip = sip->next, ++i) {
+                        load = TRUE;
+                        start = dsp->starts[k*(dsp->dim) +i];
+                        if(map) {
+                            /*multiple pairwise, ignore the master and the gap in the master*/
+                            if(i == m_order)
+                                load = FALSE;
+                            else if(master_pos == -1 && start == -1)
+                                load= FALSE;
+                        }
+                        if(load)
+                            {
+                                strand = align_strand_get(dsp->strands, i);
+                                if(start != -1) {
+                                    stop = start + dsp->lens[k] -1;
+                                    if(master_pos == -1 && map) { /*master sequence*/
+                                        
+                                        seg_type = INS_SEG;
+                                        t_range.right = dsp->lens[k];
+                                    } else {
+                                        if(check_reverse_strand(c_strand, strand)) {
+                                            start += off_stop;
+                                            stop -= off_start;
+                                        } else {
+                                            start += off_start;
+                                            stop -= off_stop;
+                                        }
+                                        seg_type = REG_SEG;
+                                    }
+                                } else {
+                                    seg_type = GAP_SEG;
+                                    start = -1;
+                                    stop = dsp->lens[k];
+                                } 
+                                load_align_data(&head, start, stop, strand, sip, rev, seg_type, t_range, ck_interval, i, 1);
+                            }
+                    }
+                }
+            }
+            if(rev)
+                --k;
+            else
+                ++k;
+        }
+        break;
+        
+    case 3:
+        ssp = (StdSegPtr)(align->segs);
+        if(cont) {
+            c_strand = get_master_strand_for_continous_ssp (ssp, m_sip);
+            rev = check_reverse_strand(m_strand, c_strand);
+            numseg = get_ssp_numseg (ssp);
+            if(rev)
+                k = numseg - 1;
+            else
+                k = 0;
+            for(t_numseg = 0; t_numseg <numseg; ++t_numseg) {
+                ssp = get_nth_ssp ((StdSegPtr)(align->segs), k);
+                is_found = FALSE;
+                for(loc= ssp->loc, i=0; loc!=NULL && !is_found; ++i, loc = loc->next) {
+                    if(SeqIdMatch(SeqLocId(loc), m_sip)) {
+                        master_loc = loc;
+                        m_order = i;
+                        if(loc->choice == SEQLOC_EMPTY)
+                            master_pos = -1;
+                        else {
+                            master_pos = SeqLocStart(loc);
+                            is_found = SeqLocOffset(m_slp, loc, &t_range, offset);
+                        }
+                        break;
+                    }
+                }
+                len = -1;
+                for(loc= ssp->loc, i = 0; loc!=NULL; ++i, loc = loc->next) {
+                    if(i != m_order) {
+                        if(loc->choice != SEQLOC_EMPTY)
+                            len = SeqLocLen(loc);
+                        break;
+                    }
+                }
 				/*both segments are gaps */
-				if(is_found)
-				{
-					if(len == -1 && master_pos == -1)
-						is_found = FALSE;
-				}
-				if(loc != NULL && (is_found || master_pos == -1))
-				{
-					collect = FALSE;
-					if(master_pos == -1)/*the master is a gap, it is an insertion*/
-					{
-						if(m_strand == Seq_strand_minus)
-							update_seq_loc(c_start, c_start, 0, a_slp);
-						else
-							update_seq_loc(c_stop, c_stop, 0, a_slp);
-						collect = SeqLocOffset(m_slp, a_slp, &t_range, offset);
-						if(collect)
-						{
-							++(t_range.left);
-							if(!map)
-							{
-								if(!inverse)
-								{
-									t_range.right = t_range.left+len * mag_val -1;
-									offset += len * mag_val;
-								}
-								else
-								{
-									t_range.right = t_range.left+len / mag_val -1;
-									offset += len / mag_val;
-								}
-							}
-						}
-						off_start = 0;
-						off_stop = 0;
-					}
-					else
-					{
-						c_start = SeqLocStart(master_loc);
-						c_stop = SeqLocStop(master_loc);
-						collect = TRUE;
-						off_start = MAX(0, (m_start - c_start));
-						off_stop = MAX(0, (c_stop - m_stop));
-					}
-
-					if(collect)
-					{
-						for(loc = ssp->loc, i= 0; loc != NULL; loc = loc->next, ++i)
-						{
-							load = TRUE;
-							if(map && i == m_order)
-								load = FALSE;
-							if(load)
-							{
-								left = t_range.left;
-								right = t_range.right;
-								if(loc->choice == SEQLOC_EMPTY)
-								{	/*it is a gap */
-									strand = 0;
-									start = -1;
-									if(i == m_order)
-										stop = inverse ? (len /mag_val) : (len * mag_val);
-									else
-										stop = inverse ? SeqLocLen(master_loc) * mag_val : SeqLocLen(master_loc)/mag_val;
-									seg_type = GAP_SEG;
-								}
-								else
-								{
-									start = SeqLocStart(loc);
-									stop = SeqLocStop(loc);
-									strand = SeqLocStrand(loc);
-									if(master_pos == -1 && map)
-									{
-										seg_type = INS_SEG;
-										t_range.right = SeqLocLen(loc);
-									}
-									else
-									{
-										if(check_reverse_strand(strand, c_strand))
-										{
-											start += modify_offset(master_loc, loc, off_stop, &leftover);
-											t_range.left += leftover;
-											stop -= modify_offset(master_loc, loc, off_start, &leftover);
-											t_range.right += leftover;
-										}
-										else
-										{
-											start += modify_offset(master_loc, loc, off_start, &leftover);
-											t_range.left += leftover;
-											stop -= modify_offset(master_loc, loc, off_stop, &leftover);
-											t_range.right += leftover;
-										}
-										/* if(check_reverse_strand(c_strand, strand))
-										{
-											start += off_stop;
-											stop -= off_start;
-										}
-										else
-										{
-											start += off_start;
-											stop -= off_stop;
-										} */
-										seg_type = STD_SEG;
-									}
-								}
-								load_align_data(&head, start, stop, strand, SeqLocId(loc), rev, seg_type, t_range, ck_interval, i, 1);
-								t_range.left = left;
-								t_range.right = right;
-
-							}
-						}
-					}
-				}
-				if(rev)
-					--k;
-				else
-					++k;
-			}
-		}	/*end of if (count) */
-		else
-		{
-
-			chain = 0;
-			while(ssp)
-			{
-				++chain;
-				is_found = FALSE;
-				curr = NULL;
-				for(loc= ssp->loc, i=0; loc!=NULL && !is_found;)
-				{
-					if(SeqLocOffset(m_slp, loc, &t_range, offset))
-					{
-						m_loc = loc;
-						is_found = TRUE;
-						break;
-					}
-					else
-					{
-						++i;
-						loc = loc->next;
-					}
-				}
-				if(is_found)
-				{
-					m_order = i;
-					off_start = MAX(0, (m_start - SeqLocStart(loc)));
-					off_stop = MAX(0, (SeqLocStop(loc) - m_stop));
-					c_strand = SeqLocStrand(loc);
-					if(map)
-						rev = check_reverse_strand(c_strand, m_strand);
-					else
-						rev = FALSE;
-					for(loc = ssp->loc,i=0; loc != NULL; loc = loc->next,++i)
-					{
-						sip = SeqLocId(loc);
-						if(!map|| (m_order !=i))
-						{
-							start = SeqLocStart(loc);
-							stop = SeqLocStop(loc);
-							strand = SeqLocStrand(loc);
-							left = t_range.left;
-							right = t_range.right;
-							if(check_reverse_strand(strand, c_strand))
-							{
-								start += modify_offset(m_loc, loc, off_stop, &leftover);
-								t_range.left += leftover;
-								stop -= modify_offset(m_loc, loc, off_start, &leftover);
-								t_range.right += leftover;
-							}
-							else
-							{
-								start += modify_offset(m_loc, loc, off_start, &leftover);
-								t_range.left += leftover;
-								stop -= modify_offset(m_loc, loc, off_stop, &leftover);
-								t_range.right += leftover;
-							}
-							load_trunc_info(loc, &t_range);
-							load_align_data(&curr, start, stop, strand, sip, rev, STD_SEG, t_range, ck_interval, i, chain);
-							t_range.left = left;
-							t_range.right = right;
-						}
-					}
-				}
-				LinkAlignData(&head, curr);
-				ssp = ssp->next;
-			}
-		}
-			break;
-						
-		case 1:
-			ddp = (DenseDiagPtr)(align->segs);
-			chain = 0;
-			while(ddp)
-			{
-				++chain;
-				curr = NULL;
-				m_order = get_master_order(ddp->id, m_sip);
-				if(m_order != -1)
-				{
-					c_strand = align_strand_get(ddp->strands, m_order);
-					c_start = ddp->starts[m_order];
-					c_stop = c_start + ddp->len -1;
-					update_seq_loc(c_start, c_stop, 0, a_slp);
-					if(SeqLocOffset(m_slp, a_slp, &t_range, offset))
-					{
-						rev = check_reverse_strand(m_strand, c_strand);
-						off_start = MAX(0, (m_start-c_start));
-						off_stop = MAX(0, (c_stop - m_stop));
-						for(sip = ddp->id, i=0; sip!=NULL; sip = sip->next, ++i)
-						{
-							if(!map|| i != m_order)
-							{
-								start = ddp->starts[i];
-								stop = start + ddp->len -1;
-								strand = align_strand_get(ddp->strands, i);
-								if(check_reverse_strand(strand, c_strand))
-								{
-									start += off_stop;
-									stop -= off_start;
-								}
-								else
-								{
-									start += off_start;
-									stop -= off_stop;
-								}
-								load_align_data(&curr, start, stop, strand, sip, rev, DIAG_SEG, t_range, ck_interval, i, chain);
-							}
-						}
-					}
-				}
-				LinkAlignData(&head, curr);
-				ddp = ddp->next;
-			}
-			break;
-		default:
-			break;
-	}
-	
-	SeqLocFree(a_slp);
-	return head;
-			
-
+                if(is_found) {
+                    if(len == -1 && master_pos == -1)
+                        is_found = FALSE;
+                }
+                if(loc != NULL && (is_found || master_pos == -1)) {
+                    collect = FALSE;
+                    if(master_pos == -1) {/*the master is a gap, it is an insertion*/
+                        if(m_strand == Seq_strand_minus)
+                            update_seq_loc(c_start, c_start, 0, a_slp);
+                        else
+                            update_seq_loc(c_stop, c_stop, 0, a_slp);
+                        collect = SeqLocOffset(m_slp, a_slp, &t_range, offset);
+                        if(collect) {
+                            ++(t_range.left);
+                            if(!map) {
+                                if(!inverse) {
+                                    t_range.right = t_range.left+len * mag_val -1;
+                                    offset += len * mag_val;
+                                } else {
+                                    t_range.right = t_range.left+len / mag_val -1;
+                                    offset += len / mag_val;
+                                }
+                            }
+                        }
+                        off_start = 0;
+                        off_stop = 0;
+                    } else {
+                        c_start = SeqLocStart(master_loc);
+                        c_stop = SeqLocStop(master_loc);
+                        collect = TRUE;
+                        off_start = MAX(0, (m_start - c_start));
+                        off_stop = MAX(0, (c_stop - m_stop));
+                    }
+                    
+                    if(collect) {
+                        for(loc = ssp->loc, i= 0; loc != NULL; loc = loc->next, ++i) {
+                            load = TRUE;
+                            if(map && i == m_order)
+                                load = FALSE;
+                            if(load) {
+                                left = t_range.left;
+                                right = t_range.right;
+                                if(loc->choice == SEQLOC_EMPTY) {/*it is a gap */
+                                    strand = 0;
+                                    start = -1;
+                                    if(i == m_order)
+                                        stop = inverse ? (len /mag_val) : (len * mag_val);
+                                    else
+                                        stop = inverse ? SeqLocLen(master_loc) * mag_val : SeqLocLen(master_loc)/mag_val;
+                                    seg_type = GAP_SEG;
+                                } else {
+                                    start = SeqLocStart(loc);
+                                    stop = SeqLocStop(loc);
+                                    strand = SeqLocStrand(loc);
+                                    if(master_pos == -1 && map) {
+                                        seg_type = INS_SEG;
+                                        t_range.right = SeqLocLen(loc);
+                                    } else {
+                                        if(check_reverse_strand(strand, c_strand)) {
+                                            start += modify_offset(master_loc, loc, off_stop, &leftover);
+                                            t_range.left += leftover;
+                                            stop -= modify_offset(master_loc, loc, off_start, &leftover);
+                                            t_range.right += leftover;
+                                        } else {
+                                            start += modify_offset(master_loc, loc, off_start, &leftover);
+                                            t_range.left += leftover;
+                                            stop -= modify_offset(master_loc, loc, off_stop, &leftover);
+                                            t_range.right += leftover;
+                                        }
+                                        /* if(check_reverse_strand(c_strand, strand))
+                                           {
+                                           start += off_stop;
+                                           stop -= off_start;
+                                           }
+                                           else
+                                           {
+                                           start += off_start;
+                                           stop -= off_stop;
+                                           } */
+                                        seg_type = STD_SEG;
+                                    }
+                                }
+                                load_align_data(&head, start, stop, strand, SeqLocId(loc), rev, seg_type, t_range, ck_interval, i, 1);
+                                t_range.left = left;
+                                t_range.right = right;
+                                
+                            }
+                        }
+                    }
+                }
+                if(rev)
+                    --k;
+                else
+                    ++k;
+            }
+        } else {	/*end of if (count) */
+            chain = 0;
+            while(ssp) {
+                ++chain;
+                is_found = FALSE;
+                curr = NULL;
+                for(loc= ssp->loc, i=0; loc!=NULL && !is_found;) {
+                    if(SeqLocOffset(m_slp, loc, &t_range, offset)) {
+                        m_loc = loc;
+                        is_found = TRUE;
+                        break;
+                    } else {
+                        ++i;
+                        loc = loc->next;
+                    }
+                }
+                if(is_found) {
+                    m_order = i;
+                    off_start = MAX(0, (m_start - SeqLocStart(loc)));
+                    off_stop = MAX(0, (SeqLocStop(loc) - m_stop));
+                    c_strand = SeqLocStrand(loc);
+                    if(map)
+                        rev = check_reverse_strand(c_strand, m_strand);
+                    else
+                        rev = FALSE;
+                    for(loc = ssp->loc,i=0; loc != NULL; loc = loc->next,++i) {
+                        sip = SeqLocId(loc);
+                        if(!map|| (m_order !=i)) {
+                            start = SeqLocStart(loc);
+                            stop = SeqLocStop(loc);
+                            strand = SeqLocStrand(loc);
+                            left = t_range.left;
+                            right = t_range.right;
+                            if(check_reverse_strand(strand, c_strand)) {
+                                start += modify_offset(m_loc, loc, off_stop, &leftover);
+                                t_range.left += leftover;
+                                stop -= modify_offset(m_loc, loc, off_start, &leftover);
+                                t_range.right += leftover;
+                            } else {
+                                start += modify_offset(m_loc, loc, off_start, &leftover);
+                                t_range.left += leftover;
+                                stop -= modify_offset(m_loc, loc, off_stop, &leftover);
+                                t_range.right += leftover;
+                            }
+                            load_trunc_info(loc, &t_range);
+                            load_align_data(&curr, start, stop, strand, sip, rev, STD_SEG, t_range, ck_interval, i, chain);
+                            t_range.left = left;
+                            t_range.right = right;
+                        }
+                    }
+                }
+                LinkAlignData(&head, curr);
+                ssp = ssp->next;
+            }
+        }
+        break;
+        
+    case 1:
+        ddp = (DenseDiagPtr)(align->segs);
+        chain = 0;
+        while(ddp) {
+            ++chain;
+            curr = NULL;
+            m_order = get_master_order(ddp->id, m_sip);
+            if(m_order != -1) {
+                c_strand = align_strand_get(ddp->strands, m_order);
+                c_start = ddp->starts[m_order];
+                c_stop = c_start + ddp->len -1;
+                update_seq_loc(c_start, c_stop, 0, a_slp);
+                if(SeqLocOffset(m_slp, a_slp, &t_range, offset)) {
+                    rev = check_reverse_strand(m_strand, c_strand);
+                    off_start = MAX(0, (m_start-c_start));
+                    off_stop = MAX(0, (c_stop - m_stop));
+                    for(sip = ddp->id, i=0; sip!=NULL; sip = sip->next, ++i) {
+                        if(!map|| i != m_order) {
+                            start = ddp->starts[i];
+                            stop = start + ddp->len -1;
+                            strand = align_strand_get(ddp->strands, i);
+                            if(check_reverse_strand(strand, c_strand)) {
+                                start += off_stop;
+                                stop -= off_start;
+                            } else {
+                                start += off_start;
+                                stop -= off_stop;
+                            }
+                            load_align_data(&curr, start, stop, strand, sip, rev, DIAG_SEG, t_range, ck_interval, i, chain);
+                        }
+                    }
+                }
+            }
+            LinkAlignData(&head, curr);
+            ddp = ddp->next;
+        }
+        break;
+    default:
+        break;
+    }
+    
+    SeqLocFree(a_slp);
+    return head;
 }
 
 					
@@ -2706,7 +2656,7 @@ static Boolean NEAR GatherSeqAlign(InternalGCCPtr gccp, SeqAlignPtr sap,
         Int4 offset = 0;
 	Boolean check_interval;
 	AlignDataPtr adp;
-
+	SeqAlignPtr prevsap = NULL;
 
 	if (sap == NULL) return TRUE;
 
@@ -2726,10 +2676,6 @@ static Boolean NEAR GatherSeqAlign(InternalGCCPtr gccp, SeqAlignPtr sap,
 	}
 
 	thistype = obj_type;
-	gcp->previtem = NULL;
-	gcp->prevtype = thistype;
-	gcp->parentitem = tparent;
-	gcp->parenttype = ttype;
 
 
         if (gsp->target != NULL && check)
@@ -2756,6 +2702,10 @@ static Boolean NEAR GatherSeqAlign(InternalGCCPtr gccp, SeqAlignPtr sap,
 
 		if (in_scope)
 		{
+			gcp->previtem = (Pointer)prevsap;
+			gcp->prevtype = thistype;
+			gcp->parentitem = tparent;
+			gcp->parenttype = ttype;
 			gcp->itemID = gccp->itemIDs[obj_type];
 			gcp->prevlink = prevlink;
 			gcp->thisitem = (Pointer)sap;
@@ -2795,7 +2745,20 @@ static Boolean NEAR GatherSeqAlign(InternalGCCPtr gccp, SeqAlignPtr sap,
 			if (LocateData) return FALSE;
 		}
 
-		gcp->previtem = (Pointer)sap;
+		if (sap->segtype == SAS_DISC)
+		{
+			gcp->indent++;
+			if (! GatherSeqAlign(gccp, (SeqAlignPtr)(sap->segs),
+			       thistype, (Pointer)sap, &(sap->segs),
+			       in_scope, check, OBJ_SEQALIGN))
+			{
+			   return FALSE;
+			}
+			gcp->indent--;
+		}
+		             
+
+		prevsap = sap;
 		prevlink = (Pointer PNTR)&(sap->next);
 		sap = sap->next;
 	}
@@ -5813,5 +5776,187 @@ NLM_EXTERN Boolean LIBCALL GatherOverWrite (Pointer oldptr, Pointer newptr, Uint
 	MemFree(dest);
 
 	return TRUE;
+}
+
+
+
+/*****************************************************************************/
+
+/* AssignIDsInEntity section */
+
+typedef struct internalacc {
+  Uint2  entityID;
+  Int2   itemIDs [OBJ_MAX];
+} InternalACC, PNTR InternalACCPtr;
+
+static void AssignSeqEntry (InternalACCPtr iap, SeqEntryPtr sep);
+
+static void AssignSeqAlign (InternalACCPtr iap, SeqAlignPtr sap, Uint1 itemtype)
+
+{
+  if (iap == NULL || sap == NULL) return;
+
+  while (sap != NULL) {
+    (iap->itemIDs [itemtype])++;
+    sap->entityID = iap->entityID;
+    sap->itemID = iap->itemIDs [itemtype];
+    sap->itemtype = itemtype;
+    sap = sap->next;
+  }
+}
+
+static void AssignSeqHist (InternalACCPtr iap, SeqHistPtr shp)
+
+{
+  if (iap == NULL || shp == NULL) return;
+  (iap->itemIDs [OBJ_SEQHIST])++;
+
+  AssignSeqAlign (iap, shp->assembly, OBJ_SEQHIST_ALIGN);
+}
+
+static void AssignSeqAnnot (InternalACCPtr iap, SeqAnnotPtr sap)
+
+{
+  if (iap == NULL || sap == NULL) return;
+
+  while (sap != NULL) {
+    (iap->itemIDs [OBJ_SEQANNOT])++;
+    switch (sap->type) {
+      case 2 :
+        AssignSeqAlign (iap, (SeqAlignPtr) sap->data, OBJ_SEQALIGN);
+        break;
+      default :
+        break;
+    }
+    sap = sap->next;
+  }
+}
+
+static void AssignBioseq (InternalACCPtr iap, BioseqPtr bsp)
+
+{
+  if (iap == NULL || bsp == NULL) return;
+  (iap->itemIDs [OBJ_BIOSEQ])++;
+
+  AssignSeqHist (iap, bsp->hist);
+
+  AssignSeqAnnot (iap, bsp->annot);
+}
+
+static void AssignBioseqSet (InternalACCPtr iap, BioseqSetPtr bssp)
+
+{
+  SeqEntryPtr  sep;
+
+  if (iap == NULL || bssp == NULL) return;
+  (iap->itemIDs [OBJ_BIOSEQSET])++;
+
+  AssignSeqAnnot (iap, bssp->annot);
+
+  for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
+    AssignSeqEntry (iap, sep);
+  }
+}
+
+static void AssignSeqEntry (InternalACCPtr iap, SeqEntryPtr sep)
+
+{
+  if (iap == NULL || sep == NULL) return;
+
+  if (IS_Bioseq (sep)) {
+    AssignBioseq (iap, (BioseqPtr) sep->data.ptrvalue);
+  } else if (IS_Bioseq_set (sep)) {
+    AssignBioseqSet (iap, (BioseqSetPtr) sep->data.ptrvalue);
+  }
+}
+
+static void AssignSeqSubmit (InternalACCPtr iap, SeqSubmitPtr ssp)
+
+{
+  SeqEntryPtr  sep;
+
+  if (iap == NULL || ssp == NULL) return;
+  (iap->itemIDs [OBJ_SEQSUB])++;
+
+  switch (ssp->datatype) {
+    case 1 :
+      for (sep = (SeqEntryPtr) ssp->data; sep != NULL; sep = sep->next) {
+        AssignSeqEntry (iap, sep);
+      }
+      break;
+    case 2 :
+      AssignSeqAnnot (iap, (SeqAnnotPtr) ssp->data);
+      break;
+    default :
+      break;
+  }
+}
+
+/*****************************************************************************
+*
+*   AssignIDsInEntity explores registered entity in gather order, assigning
+*     entityID/itemID/itemtype numbers to actual objects (SeqAlign so far).
+*     It could also assign a parent pointer to allow rapid traversal up the
+*     data model hierarchy, functionality currently provided by the object
+*     manager.
+*
+*****************************************************************************/
+
+NLM_EXTERN Boolean LIBCALL AssignIDsInEntity (Uint2 entityID, Uint2 datatype, Pointer dataptr)
+
+{
+  InternalACC    iac;
+  ObjMgrDataPtr  omdp;
+  ObjMgrPtr      omp;
+
+  MemSet ((Pointer) &iac, 0, sizeof (InternalACC));
+  iac.entityID = entityID;
+
+  if (entityID > 0) {
+    omp = ObjMgrReadLock ();
+    omdp = ObjMgrGetDataStruct (omp, entityID);
+    ObjMgrUnlock();
+    if (omdp == NULL) return FALSE;
+    if (omdp->choicetype == OBJ_SEQENTRY) {
+      datatype = omdp->choicetype;
+      dataptr = omdp->choice;
+    } else {
+      datatype = omdp->datatype;
+      dataptr = omdp->dataptr;
+    }
+  }
+
+  if (datatype == 0 || dataptr == NULL) return FALSE;
+
+  switch (datatype) {
+    case OBJ_SEQENTRY :
+      AssignSeqEntry (&iac, (SeqEntryPtr) dataptr);
+      break;
+    case OBJ_BIOSEQ :
+      AssignBioseq (&iac, (BioseqPtr) dataptr);
+      break;
+    case OBJ_BIOSEQSET :
+      AssignBioseqSet (&iac, (BioseqSetPtr) dataptr);
+      break;
+    case OBJ_SEQANNOT :
+      AssignSeqAnnot (&iac, (SeqAnnotPtr) dataptr);
+      break;
+    case OBJ_SEQALIGN :
+      AssignSeqAlign (&iac, (SeqAlignPtr) dataptr, OBJ_SEQALIGN);
+      break;
+    case OBJ_SEQSUB :
+      AssignSeqSubmit (&iac, (SeqSubmitPtr) dataptr);
+      break;
+    case OBJ_SEQHIST :
+      AssignSeqHist (&iac, (SeqHistPtr) dataptr);
+      break;
+    case OBJ_SEQHIST_ALIGN :
+      AssignSeqAlign (&iac, (SeqAlignPtr) dataptr, OBJ_SEQHIST_ALIGN);
+      break;
+    default :
+      return FALSE;
+  }
+
+  return TRUE;
 }
 

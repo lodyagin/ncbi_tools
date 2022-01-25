@@ -39,6 +39,7 @@ Author: Tom Madden
 #include <objsset.h>
 #include <salsap.h>
 #include <blast.h>
+#include <salpedit.h>
 
 typedef struct dotmatrixform {
   FEATURE_FORM_BLOCK

@@ -1,4 +1,4 @@
-/* $Id: jzcoll.h,v 6.4 1998/07/22 18:57:34 kans Exp $
+/* $Id: jzcoll.h,v 6.5 1999/08/06 17:58:22 egorov Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,15 @@
 *
 * Initial Version Creation Date: 03/24/97
 *
-* $Revision: 6.4 $
+* $Revision: 6.5 $
 *
 * File Description:
 *         File for various alignments
 *
 * $Log: jzcoll.h,v $
+* Revision 6.5  1999/08/06 17:58:22  egorov
+* Print correct GI in formated output when user has specified list of gi's in blast search
+*
 * Revision 6.4  1998/07/22 18:57:34  kans
 * reconciled in new functions from JZ
 *
@@ -53,12 +56,15 @@
 * Revision 5.13  1997/08/13 18:45:33  zjing
 * add support for tblastx
 *
-* $Revision: 6.4 $
+* $Revision: 6.5 $
 *
 * File Description:
 *         File for various alignments
 *
 * $Log: jzcoll.h,v $
+* Revision 6.5  1999/08/06 17:58:22  egorov
+* Print correct GI in formated output when user has specified list of gi's in blast search
+*
 * Revision 6.4  1998/07/22 18:57:34  kans
 * reconciled in new functions from JZ
 *
@@ -420,6 +426,7 @@ typedef struct alignnode {      /*for collecting the alignment*/
   Uint1			index;	/*0, 1, 2 to indicate if it is a sequence/map index or 
 				  a normal alignment */
   CharPtr		label;		/*label for the aligned sequence*/
+  Boolean		keep_label;	/* says if a function can change the 'label' field */
   Uint1			m_frame;		/*mapped to the frame of translation in the master DNA sequence*/
   Boolean		is_master;	/*is it a master AlignNode*/
   GatherRange	extremes;

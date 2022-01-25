@@ -12,6 +12,17 @@
 #define SEQ_CENTER_LINK_FILE "sqcenter.link"
 #define YAC2BAC_FILE "yac2bac.lst"
 
+static void OrderInt4(Int4Ptr x, Int4Ptr y) /* replace jzmisc: swap */
+{
+  Int4 temp;
+
+	if((*x) > (*y)){
+	  temp = *x;
+	  *x = *y;
+	  *y = temp;
+	}
+}
+
 static void print_this_id (SeqIdPtr sip)
 {
 	Char buf[101];
@@ -1390,7 +1401,7 @@ static ValNodePtr find_gene_location (GlobalDrawPtr gdraw_p,
 	/*adding the priority and then sort the msp_list by the priority*/
 	AddPriorityToMatchList(msp_list, gdraw_p->gbp_list);
 	if(msp_list->next != NULL)
-		msp_list = SortValNode(msp_list, SortMspPriority);
+		msp_list = ValNodeSort(msp_list, SortMspPriority);
 
 	missing_ids = NULL;	/*store the Seq-ids that can not be found*/
 	anchor_id = NULL;
@@ -1415,7 +1426,7 @@ static ValNodePtr find_gene_location (GlobalDrawPtr gdraw_p,
 		return msp_list;
 	}
 	else
-		missing_ids = SortValNode(missing_ids, SortMissingIdPriority);
+		missing_ids = ValNodeSort(missing_ids, SortMissingIdPriority);
 
 	/* if(anchor_id != NULL)
 		change_anchor_to_front(msp_list, anchor_id); */
@@ -2409,7 +2420,7 @@ static Boolean PrintMarkerToFile (ValNodePtr msp_1_list, ValNodePtr msp_2_list, 
 			ValNodeAddPointer(&used_ids, 0, sip);
 			left = MIN(SeqLocStart(msp_1->slp), SeqLocStart(msp_2->slp));
 			right = MAX(SeqLocStop(msp_1->slp), SeqLocStop(msp_2->slp));
-			swap (&left, &right);
+			OrderInt4 (&left, &right);
 			temp_loc = SeqLocIntNew(left, right, Seq_strand_plus, sip);
 			print_genome_interval(temp_loc, g_data, is_html, line_len, fp);
 			SeqLocFree(temp_loc);
@@ -2442,7 +2453,7 @@ static Boolean PrintMarkerToFile (ValNodePtr msp_1_list, ValNodePtr msp_2_list, 
 				ValNodeAddPointer(&used_ids, 0, sip);
 				left = MIN(SeqLocStart(msp_1->slp), SeqLocStart(fsp->slp));
 				right = MAX(SeqLocStop(msp_1->slp), SeqLocStop(fsp->slp));
-				swap (&left, &right);
+				OrderInt4 (&left, &right);
 				temp_loc = SeqLocIntNew(left, right, Seq_strand_plus, sip);
 				print_genome_interval(temp_loc, g_data, is_html, line_len, fp);
 				SeqLocFree(temp_loc);
@@ -2477,7 +2488,7 @@ static Boolean PrintMarkerToFile (ValNodePtr msp_1_list, ValNodePtr msp_2_list, 
 				ValNodeAddPointer(&used_ids, 0, sip);
 				left = MIN(SeqLocStart(msp_1->slp), SeqLocStart(fsp->slp));
 				right = MAX(SeqLocStop(msp_1->slp), SeqLocStop(fsp->slp));
-				swap (&left, &right);
+				OrderInt4 (&left, &right);
 				temp_loc = SeqLocIntNew(left, right, Seq_strand_plus, sip);
 				print_genome_interval(temp_loc, g_data, is_html, line_len, fp);
 				SeqLocFree(temp_loc);
@@ -2514,7 +2525,7 @@ static Boolean PrintMarkerToFile (ValNodePtr msp_1_list, ValNodePtr msp_2_list, 
 					ValNodeAddPointer(&used_ids, 0, sip);
 					left = MIN(SeqLocStart(fsp->slp), SeqLocStart(fsp_2->slp));
 					right = MAX(SeqLocStop(fsp->slp), SeqLocStop(fsp_2->slp));
-					swap(&left, &right);
+					OrderInt4(&left, &right);
 					temp_loc = SeqLocIntNew(left, right, Seq_strand_plus, sip);
 					print_genome_interval(temp_loc, g_data, is_html, line_len, fp);
 					SeqLocFree(temp_loc);

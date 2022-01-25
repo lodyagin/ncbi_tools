@@ -1,4 +1,4 @@
-/* $Id: ncbisam.c,v 6.11 1999/03/17 21:38:04 kans Exp $
+/* $Id: ncbisam.c,v 6.12 1999/08/25 20:18:49 shavirin Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,16 @@
 *
 * Initial Version Creation Date: 02/24/1997
 *
-* $Revision: 6.11 $
+* $Revision: 6.12 $
 *
 * File Description:
 *         Main file for ISAM library
 *
 * $Log: ncbisam.c,v $
+* Revision 6.12  1999/08/25 20:18:49  shavirin
+* Added possibility to store user-specified Int4 options in the index
+* header.
+*
 * Revision 6.11  1999/03/17 21:38:04  kans
 * Int4Ptr argument must point to Int4
 *
@@ -130,6 +134,7 @@
 /* INTERNAL FINCTION DEFINITIONS  */
 /****************************************************************************/
 
+#ifdef NONO
 static Int4 GetPageNumElements(ISAMDataPtr data, Int4 SampleNum,
 			       Int4Ptr Start);
 
@@ -176,6 +181,8 @@ static ISAMErrorCode ISAMDumpTermEntry(ISAMTmpCAPtr cap, FILE *off_fd,
                                        FILE *db_fd, ISAMUidFieldPtr uidf, 
                                        Int4 count, Int4Ptr offset);
 static int LIBCALLBACK ISAMUidCompare(VoidPtr i, VoidPtr j);
+
+#endif
 
 /****************************************************************************/
 /* EXTERNAL FINCTIONS  */
@@ -304,6 +311,673 @@ ISAMErrorCode ISAMUpdateDatabase(CharPtr InFile,
 {
     
     return ISAMNotImplemented;
+}
+
+static ISAMTmpCAPtr ISAMTmpCANew(void)
+{
+    ISAMTmpCAPtr cap;
+
+    cap = MemNew(sizeof(ISAMTmpCA));
+
+    cap->allocated = CA_TMP_CHUNK;
+    cap->buffer = (Uint1Ptr) MemNew(cap->allocated);
+    
+    return cap;
+}
+
+static void ISAMTmpCAFree(ISAMTmpCAPtr cap)
+{
+    if(cap == NULL)
+        return;
+
+    MemFree(cap->buffer);
+    MemFree(cap);
+}
+
+/* ------------------------------------------------------------------
+                This is handler for HeapSort function
+   ------------------------------------------------------------------*/
+static int LIBCALLBACK ISAMUidCompare(VoidPtr i, VoidPtr j)
+{
+  if (*(Int4Ptr)i > *(Int4Ptr)j)
+    return (1);
+  if (*(Int4Ptr)i < *(Int4Ptr)j)
+    return (-1);
+  return (0);
+}
+
+static Boolean ISAMWriteBitNumber(ISAMTmpCAPtr cap, Int4 number)
+{
+    Int4 template;
+
+    if(cap->num_bits == 0)
+        return TRUE;
+    
+    template = PowersOfTwo[cap->num_bits - 1];
+    
+    for(; template; template >>= 1) {
+        
+        if(number & template)
+            cap->buffer[cap->byte_num] |= OneBit[cap->bit_num] ;
+        
+        if(++cap->bit_num > 7) {
+            cap->bit_num = 0;
+            if((++cap->byte_num >= cap->allocated)) {
+                cap->allocated += CA_TMP_CHUNK;
+                cap->buffer = Realloc(cap->buffer, cap->allocated);
+            }
+        }
+    }
+    return TRUE;
+}
+
+static Boolean ISAMWriteNBits10(ISAMTmpCAPtr cap, Int4 number)
+{
+    register Int4 i;
+
+    for(i = 0; i < number; i++) {
+        cap->buffer[cap->byte_num] |= OneBit[cap->bit_num];
+        if(++cap->bit_num > 7) {
+            cap->bit_num = 0;
+            if((++cap->byte_num >= cap->allocated)) {
+                cap->allocated += CA_TMP_CHUNK;
+                cap->buffer = Realloc(cap->buffer, cap->allocated);
+            }
+        }
+    }
+
+    /* Now wriiting 0 bit in the end of set of 1's */
+    
+    if(++cap->bit_num > 7) {
+        cap->bit_num = 0;
+        if((++cap->byte_num >= cap->allocated)) {
+            cap->allocated += CA_TMP_CHUNK;
+            cap->buffer = Realloc(cap->buffer, cap->allocated);
+        }
+    }
+    return TRUE;
+}
+
+static Boolean ISAMCreateCA(ISAMTmpCAPtr cap, 
+                            ISAMUidFieldPtr data, 
+                            Int4 num_uids)
+{
+    Nlm_FloatHi AverageDiff;
+    Int4 base, number, prev_number;
+    Int4 i, diff, dividend;
+
+    if(cap == NULL || data == NULL)
+        return FALSE;
+        
+    cap->byte_num = 0;
+    cap->bit_num  = 0;
+    cap->length   = 0;
+    cap->num_uids = num_uids;
+    MemSet(cap->buffer, 0, cap->allocated);
+    
+    
+    if((AverageDiff = (Nlm_FloatHi)(data[num_uids-1].uid - num_uids + 1) / 
+        (Nlm_FloatHi)num_uids ) < 1) {
+	AverageDiff = 1;
+    }
+
+    cap->num_bits = Log2(AverageDiff);
+    base = PowersOfTwo[cap->num_bits];
+
+    prev_number = -1;
+    
+    for(i = 0; i < num_uids; i++) {
+        number = data[i].uid;
+
+        if (number <= prev_number) {
+            ErrLogPrintf("%s\n%s%ld%s%ld\n",
+                         "Bad record number in writing to coded array!",
+                         "Number: ", number,
+                         "  Previous Number: ", prev_number);
+            ISAMTmpCAFree(cap);
+            return FALSE;
+        }
+        
+        diff = number - prev_number - 1;
+        
+        dividend = diff/base;
+
+        ISAMWriteNBits10(cap, dividend);
+        ISAMWriteBitNumber(cap, diff);
+        prev_number = number;
+    }
+
+    cap->length = cap->byte_num + (cap->bit_num != 0 ? 1 : 0);
+    
+    return TRUE;
+}
+
+static Boolean ISAMCreateFA(ISAMTmpCAPtr cap, 
+                             ISAMUidFieldPtr uidf, Int4 num_uids)
+{
+    Int4 i, j;
+    Int4 byte_start;
+
+    if(cap == NULL || uidf == NULL)
+        return FALSE;
+    
+    cap->byte_num = 0;
+    cap->length   = 0;
+    cap->num_uids = num_uids;    
+    MemSet(cap->buffer, 0, cap->allocated);
+
+    for(i = 0; i < num_uids; i++) {
+
+        byte_start = cap->byte_num;
+        
+        for(j = 0, cap->bit_num = 0; j < 32; j++) {
+            if(uidf[i].field & PowersOfTwo[j]) {
+                cap->buffer[cap->byte_num] |= j;
+                
+                if((++cap->byte_num >= cap->allocated)) {
+                    cap->allocated += CA_TMP_CHUNK;
+                    cap->buffer = Realloc(cap->buffer, cap->allocated);
+                }
+                
+                cap->bit_num++;
+            }
+        }
+        
+        for(j = 0; j < cap->bit_num -1; j++) {
+            cap->buffer[byte_start+j] |=PowersOfTwo[7];
+        }
+    }
+    
+    cap->length = cap->byte_num;
+    return TRUE;
+}
+
+static ISAMErrorCode ISAMDumpTermEntry(ISAMTmpCAPtr cap, FILE *off_fd, 
+                                       FILE *db_fd, 
+                                       ISAMUidFieldPtr uidf, 
+                                       Int4 count, Int4Ptr offset)
+{
+    Int4 i, j, offset_out, ca_offset, num_bits;
+    Uint4 numbers[32];
+    Uint4 bit_flag = 0;
+    Int4 length;
+
+    offset_out = ftell(off_fd);
+    ca_offset  = ftell(db_fd);
+    MemSet(numbers, 0, sizeof(numbers));
+
+    HeapSort(uidf, count, sizeof(Uint4)*2, ISAMUidCompare);
+
+    for(i = 0; i < count; i++) {
+        for(j = 0; j < 32; j++) {
+            if(uidf[i].field & PowersOfTwo[j]) {
+                numbers[j]++;
+                bit_flag |= PowersOfTwo[j];
+            }
+        }
+    }
+
+    /* Calculating and writting code and field arrays */
+
+    if(!ISAMCreateCA(cap, uidf, count)) {
+        ErrLogPrintf("Cannot create coded array. Formating failed.\n");
+        return ISAMInvalidFormat;
+    }
+    num_bits = cap->num_bits;
+
+    FileWrite(cap->buffer, 1, cap->length, db_fd);
+    length = cap->length;
+
+    if(!ISAMCreateFA(cap, uidf, count)) {
+        ErrLogPrintf("Cannot create field array. Formating failed.");
+        return ISAMInvalidFormat;
+    }
+
+    FileWrite(cap->buffer, 1, cap->length, db_fd);
+
+    /* ------- Now writting header ---------- */
+
+    FileWrite(&count, 1, sizeof(Uint4), off_fd);
+    FileWrite(&ca_offset, 1, sizeof(Uint4), off_fd);
+    FileWrite(&length, 1, sizeof(Uint4), off_fd);
+    FileWrite(&num_bits, 1, sizeof(Uint4), off_fd);
+    FileWrite(&bit_flag, 1, sizeof(Uint4), off_fd);
+
+    for(j = 0; j < 32; j++) {
+        if(numbers[j] > 0)
+            FileWrite(&numbers[j], 1, sizeof(Uint4), off_fd);
+    }
+
+    *offset = offset_out;
+    return ISAMNoError;
+}
+
+/* returns NULL terminated string \n\r are removed */
+
+static Int4 ISAMReadLine(ISAMDataPtr data)
+{
+    Int4 i = 0;
+    Int4 ch;
+    Int4 MaxChars;
+    FILE *fd = data->db_fd;
+
+    MaxChars = data->max_line_size-1;
+
+    for(i = 0; (( ch = getc(fd)) != EOF) ; i++)  {
+        if((ch == '\n') || (ch == '\r'))
+            break;
+        data->line[i] = (Char) ch;
+        
+        if(i == MaxChars) { /* Reallocating line buffer */
+            data->max_line_size += LINE_SIZE_CHUNK;
+            data->line = Realloc(data->line,  data->max_line_size);
+            MaxChars = data->max_line_size-1;
+        }
+    }
+    data->line[i] = NULLB;
+
+    /* Finding first character on new line */
+
+    while((ch = getc(fd)) != EOF) {
+        if(IS_WHITESP(ch)) {
+            continue;
+        } else {
+            ungetc(ch, fd);
+            break;
+        }
+    }
+    
+    return i;
+}
+
+static Boolean ISAMCheckIfSorted(ISAMDataPtr data) 
+{
+    CharPtr prevline;
+    Int4 length;
+    
+    if(data == NULL || data->db_fd == NULL || data->max_line_size == 0)
+        return FALSE;
+    
+    prevline = MemNew(data->max_line_size);
+    
+    rewind(data->db_fd);
+    data->NumTerms = 0;
+    
+    if(data->type == ISAMString || data->type == ISAMStringDatabase) {
+        while(ISAMReadLine(data) > 0) {
+            data->NumTerms++;
+            if (StringCmp(data->line, prevline) < 0) {
+
+                /* ErrLogPrintf("N Line: %s\nN-1 Line: %s\n", 
+                   data->line, prevline); */
+
+                MemFree(prevline);
+                return(FALSE);
+            } else {
+                length = StringLen(data->line);
+                StringNCpy_0(prevline, data->line, 
+                             length > LINE_SIZE_CHUNK ? LINE_SIZE_CHUNK : length);
+            }
+        }
+    } else {
+        return FALSE;
+    }
+
+    rewind(data->db_fd);
+    MemFree(prevline);
+    return(TRUE);
+}
+
+/* ---------------------- ISAMMakeStringIndex ---------------------
+   Purpose:     To create String ISAM Intex file for Database file
+   
+   Parameters:  ISAM Data 
+   Returns:     ISAM itemized error code 
+   NOTE:        Special default rules for UNIX platform
+   ------------------------------------------------------------------*/
+static ISAMErrorCode ISAMMakeStringIndex(
+                                 ISAMDataPtr data,
+                                 Int4 page_size,   /* ISAM page size */
+                                 Int4 idx_option   /* Option for upper layer */
+                                 )
+{
+    Int4 TermCount, Pos, count, SampleCount;
+    Int4Ptr MasterPos, SamplePos;
+    Int4 OffsetPos;
+    FILE *tf_fd;
+    Int4 Version = ISAM_VERSION;
+    Uint4 value;
+
+    if(page_size != 0)
+        data->PageSize = page_size;
+    else
+        data->PageSize = DEFAULT_SISAM_SIZE;
+    
+    if((data->db_fd = FileOpen(data->DBFileName, "r")) == NULL)
+        return ISAMBadFileName;
+    
+    
+    /* Temporary space for line initialy set to MAX_LINE_SIZE 
+       byt will be realocated if some line exceed this limit */
+    
+    if(data->max_line_size == 0) {
+        data->max_line_size = LINE_SIZE_CHUNK;
+        data->line = MemNew(LINE_SIZE_CHUNK);
+    }
+
+    /* This function will also split data if strings are
+       identical and finaly count lines*/
+    
+    if(!ISAMCheckIfSorted(data))
+        return ISAMNoOrder;
+    
+    /* Obtain the term offsets; select the sample terms. */
+    
+    MasterPos = (Int4 *)MemNew(sizeof(Int4) * (data->NumTerms + 1));
+    
+    Pos = TermCount = SampleCount = 0;
+    
+    while(ISAMReadLine(data) > 0) {
+        if (TermCount++ % data->PageSize == 0) {
+            MasterPos[SampleCount++] = SwapUint4(Pos);
+        }
+        
+        Pos = ftell(data->db_fd);
+    }
+    
+    MasterPos[SampleCount] = SwapUint4(Pos);
+    
+    
+    /* Create the sample file. */
+    
+    if (!(tf_fd = FileOpen(data->IndexFileName, "w")))
+        return ISAMBadFileName;
+    
+    /* Write the term counts and offsets to the sample file. */
+    value = SwapUint4(Version);     
+    FileWrite((CharPtr)&value, sizeof(Int4), 1, tf_fd);
+    value = SwapUint4(data->type);
+    FileWrite((CharPtr)&value, sizeof(Int4), 1, tf_fd);
+    value = SwapUint4(FileLength(data->DBFileName)); /* Length of DB file */
+    FileWrite((CharPtr)&value, sizeof(Int4), 1, tf_fd);
+    value = SwapUint4(TermCount); 
+    FileWrite((CharPtr)&value,    sizeof(Int4), 1, tf_fd);
+    value = SwapUint4(SampleCount); 
+    FileWrite((CharPtr)&value,  sizeof(Int4), 1, tf_fd);
+    value = SwapUint4(data->PageSize); 
+    FileWrite((CharPtr)&value,      sizeof(Int4), 1, tf_fd);
+    value = SwapUint4(data->max_line_size); 
+    FileWrite((CharPtr)&value, sizeof(Int4), 1, tf_fd);
+    value = SwapUint4(idx_option);
+    FileWrite(&value, sizeof(Int4), 1, tf_fd);
+    value = SwapUint4(0);      /* This space reserved for future use */
+    FileWrite(&value, sizeof(Int4), 1, tf_fd);
+
+    if(data->PageSize != MEMORY_ONLY_PAGE_SIZE)
+        FileWrite((CharPtr)MasterPos, sizeof(Int4), SampleCount+1, tf_fd);
+    
+    /* Leave space for the offsets of the selected terms. */
+    
+    OffsetPos = ftell(tf_fd);
+    SamplePos = (Int4 *)MemNew((SampleCount + 1) * sizeof(Int4));
+    FileWrite((CharPtr)SamplePos, sizeof(Int4), SampleCount+1, tf_fd);
+    
+    /* Copy the selected terms to the sample file. */
+  
+    for (count = 0; count < SampleCount; count++) {
+        SamplePos[count] = SwapUint4(ftell(tf_fd));
+        fseek(data->db_fd, SwapUint4(MasterPos[count]), SEEK_SET);
+        ISAMReadLine(data);
+        fprintf(tf_fd,"%s%c",data->line, NULLB);
+    }
+    
+    SamplePos[SampleCount] = ftell(tf_fd);
+    
+    /* Replace the space-holding zeroes with the offsets of the selected 
+       terms.*/
+    
+    fseek(tf_fd, OffsetPos, SEEK_SET);
+    FileWrite((CharPtr)SamplePos, sizeof(Int4), SampleCount+1, tf_fd);
+
+    FileClose(tf_fd);
+    FileClose(data->db_fd);
+    data->db_fd = NULL;
+
+    MemFree(SamplePos);
+    MemFree(MasterPos);
+    
+    MemFree(data->line);
+    data->max_line_size = 0;
+
+    return ISAMNoError;
+}
+
+/* ------------------- ISAMReadFileInMemory  -----------------------
+   Purpose:     Function reads data from file into a buffer 
+
+   Parameters:  filename -  Name of file to read file 
+
+   Returns:     Pointer to allocated buffer.
+  ------------------------------------------------------------------*/
+
+static CharPtr ISAMReadFileInMemory(CharPtr filename)
+{
+    CharPtr  in_buff;
+    Int4     new_size = BUFF_SIZE_CHUNK;
+    Int4     bytes = 0, buff_len = 0;
+    FILE *fd;
+    
+    if(filename == NULL)
+        return NULL;
+    
+    if((fd = FileOpen(filename, "rb")) == NULL)
+        return NULL;
+    
+    /* initial allocation of memory */
+    
+    if((in_buff = MemNew(BUFF_SIZE_CHUNK)) == NULL) {
+        ErrLogPrintf("Error in allocating memory\n");
+        FileClose(fd);
+        return NULL;
+    }
+    
+    while ((bytes = FileRead(in_buff + buff_len, 1,
+                             BUFF_SIZE_CHUNK, fd)) > 0) {
+        new_size += bytes;
+        buff_len += bytes;
+        
+        if ((in_buff = Realloc(in_buff, new_size)) == NULL) {
+            ErrLogPrintf("Error in reallocating memory\n");
+            FileClose(fd);
+            return NULL;
+        }
+    }
+
+    FileClose(fd);
+    return(in_buff);
+}
+
+/* ---------------------- ISAMMakeNumericIndex ---------------------
+   Purpose:     To create Numeric ISAM Intex file for Database file
+   
+   Parameters:  ISAM Data 
+   Returns:     ISAM itemized error code 
+   NOTE:        Special default rules for UNIX platform
+   ------------------------------------------------------------------*/
+static ISAMErrorCode ISAMMakeNumericIndex(
+                                  ISAMDataPtr data,
+                                  Int4 page_size,  /* ISAM page size */
+                                  Int4 idx_option  /* Option for upper layer */
+                                  )
+{
+    Int4 i, NumTerms, value;
+    Int4 MaxSamples, SampleCount;
+    Uint4Ptr KeyInfo, KeySamples;
+    NISAMKeyDataPtr KeyDataInfo, KeyDataSamples;
+    Boolean NoData;
+    FILE *fd;
+    Int4 Version = ISAM_VERSION;
+
+    NoData = (data->type == ISAMNumericNoData);
+    
+    NumTerms = FileLength(data->DBFileName) / 
+        (NoData ? sizeof(Uint4) : sizeof(NISAMKeyData));
+    
+    if(!Nlm_MemMapAvailable()) {
+        if((data->FileStart = 
+            ISAMReadFileInMemory(data->DBFileName)) == NULL)
+            return ISAMBadFileName;
+        if (NoData)
+            KeyInfo = (Uint4Ptr) data->FileStart;
+        else
+            KeyDataInfo = (NISAMKeyDataPtr)data->FileStart;
+    } else {    
+        if((data->mmp = Nlm_MemMapInit(data->DBFileName)) == NULL)
+            return ISAMMemMap;
+        if (NoData)
+            KeyInfo = (Uint4Ptr) data->mmp->mmp_begin;
+        else
+            KeyDataInfo = (NISAMKeyDataPtr)data->mmp->mmp_begin;
+    }
+
+    if(page_size != 0)
+        data->PageSize = page_size;
+    else
+        data->PageSize = DEFAULT_NISAM_SIZE;   
+    
+#ifndef CHECK_ORDER
+    for (i = 1; i < NumTerms; i++) {
+        if (NoData) {
+            if (SwapUint4(KeyInfo[i]) <= SwapUint4(KeyInfo[i-1]))
+                break;
+        } else {
+            if (SwapUint4(KeyDataInfo[i].key) <= SwapUint4(KeyDataInfo[i-1].key))
+                break;
+        }
+    }
+    
+    if (i < NumTerms) {
+        ErrLogPrintf("NIsam key file %s not in sorted order!\n", 
+                     data->DBFileName);
+        
+        if (NoData) {
+            ErrLogPrintf("unsorted or non-unique elements:"
+                         "#%ld, #%ld :  %ld, %ld\n",
+                         i-1, i, SwapUint4(KeyInfo[i-1]), 
+                         SwapUint4(KeyInfo[i]));
+        } else {
+            ErrLogPrintf("unsorted or non-unique elements:"
+                         "#%ld, #%ld : %ld, %ld\n",
+                         i-1, i, SwapUint4(KeyDataInfo[i-1].key), 
+                         SwapUint4(KeyDataInfo[i].key));
+        } 
+        return ISAMNoOrder;
+    } 
+#endif 
+    
+    /* Obtain the term offsets; select the sample terms. */
+    
+    MaxSamples = NumTerms/data->PageSize + 4;
+    
+    if (NoData)
+        KeySamples = (Uint4Ptr)MemNew(sizeof(Uint4)*(MaxSamples+1));
+    else
+        KeyDataSamples = (NISAMKeyDataPtr) MemNew(sizeof(NISAMKeyData)*
+                                                  (MaxSamples+1));
+    SampleCount = 0;
+    
+    for (i = 0; i < NumTerms; i++) {
+        if (i % data->PageSize == 0) {
+            if (NoData)
+                KeySamples[SampleCount] = KeyInfo[i];
+            else
+                KeyDataSamples[SampleCount] = KeyDataInfo[i];
+            SampleCount++;
+        }
+    }
+    
+    if (NoData) {
+        KeySamples[SampleCount] = SwapUint4(UINT4_MAX);
+    } else {
+        KeyDataSamples[SampleCount].key = SwapUint4(UINT4_MAX);
+        KeyDataSamples[SampleCount].data = SwapUint4(0);
+    }
+    
+    /* Create the sample file. */
+    
+    if((fd = FileOpen(data->IndexFileName, "wb")) == NULL)
+      return ISAMBadFileName;
+    
+    /* Write the term counts and offsets to the sample file. */
+
+    value = SwapUint4(Version);         /* Index version */
+    FileWrite((CharPtr)&value, sizeof(Int4), 1, fd);
+    value = SwapUint4(data->type);      /* Index type */
+    FileWrite(&value, sizeof(Int4), 1, fd);
+    value = SwapUint4(FileLength(data->DBFileName)); /* Length of DB file */
+    FileWrite(&value, sizeof(Int4), 1, fd);   
+    value = SwapUint4(NumTerms);        /* Number of terms in DB file */
+    FileWrite(&value, sizeof(Int4), 1, fd);
+    value = SwapUint4(SampleCount);     /* Number of elements in index file */
+    FileWrite(&value, sizeof(Int4), 1, fd);
+    value = SwapUint4(data->PageSize);  /* Page size of ISAM */
+    FileWrite(&value, sizeof(Int4), 1, fd);
+    value = SwapUint4(0);      /* 0  max_line-size for strings here */
+    FileWrite(&value, sizeof(Int4), 1, fd);
+    value = SwapUint4(idx_option);  /* Option for the upper layer */
+    FileWrite(&value, sizeof(Int4), 1, fd);
+    value = SwapUint4(0);      /* This space reserved for future use */
+    FileWrite(&value, sizeof(Int4), 1, fd);
+    
+    if (NoData) /* No swaping neeeded here */
+        FileWrite((VoidPtr)KeySamples, sizeof(Uint4), SampleCount+1, fd);
+    else
+        FileWrite((VoidPtr)KeyDataSamples, sizeof(NISAMKeyData),
+                  SampleCount+1, fd);
+    
+    FileClose(fd);
+
+    if(data->mmp != NULL) {
+        Nlm_MemMapFini(data->mmp);
+        data->mmp = NULL;
+    } else {
+        MemFree(data->FileStart);
+        data->FileStart = NULL;
+    }
+
+    if (NoData) 
+        MemFree(KeySamples);
+    else 
+        MemFree(KeyDataSamples);
+    
+    return ISAMNoError;
+}
+
+/* ---------------------- ISAMMakeIndex --------------------------
+   Purpose:     To create ISAM Intex file for Database file
+   
+   Parameters:  ISAM Object 
+   Returns:     ISAM itemized error code 
+   NOTE:        Special default rules for UNIX platform
+  ------------------------------------------------------------------*/
+ISAMErrorCode ISAMMakeIndex(ISAMObjectPtr object,
+                            Int4 page_size,       /* ISAM page size */
+                            Int4 idx_option       /* Option for upper layer */
+                            )
+{
+    ISAMDataPtr data;
+
+    if(object == NULL)
+        return ISAMBadParameter;
+    
+    data = (ISAMDataPtr) object;
+    
+    if(data->type == ISAMString || data->type == ISAMStringDatabase)
+        return ISAMMakeStringIndex(data, page_size, idx_option);
+    else if (data->type == ISAMNumeric || data->type == ISAMNumericNoData)
+        return ISAMMakeNumericIndex(data, page_size, idx_option);
+    else 
+        return ISAMNotImplemented;
 }
 
 /* ---------------------- ISAMCreateDatabase ------------------------
@@ -533,374 +1207,11 @@ ISAMErrorCode ISAMCreateDatabase(CharPtr PNTR files,
     FileClose(out_fd);
     FileClose(off_fd);
 
-    if((error = ISAMMakeIndex((VoidPtr)data, 0)) != ISAMNoError) {
+    if((error = ISAMMakeIndex((VoidPtr)data, 0, 0)) != ISAMNoError) {
         ErrLogPrintf("Failed to create ISAM String Index All failed!\n");
         return error;
     }
     ISAMObjectFree((VoidPtr)data);
-    return ISAMNoError;
-}
-
-static ISAMErrorCode ISAMDumpTermEntry(ISAMTmpCAPtr cap, FILE *off_fd, 
-                                       FILE *db_fd, 
-                                       ISAMUidFieldPtr uidf, 
-                                       Int4 count, Int4Ptr offset)
-{
-    Int4 i, j, offset_out, ca_offset, num_bits;
-    Uint4 numbers[32];
-    Uint4 bit_flag = 0;
-    Int4 length;
-
-    offset_out = ftell(off_fd);
-    ca_offset  = ftell(db_fd);
-    MemSet(numbers, 0, sizeof(numbers));
-
-    HeapSort(uidf, count, sizeof(Uint4)*2, ISAMUidCompare);
-
-    for(i = 0; i < count; i++) {
-        for(j = 0; j < 32; j++) {
-            if(uidf[i].field & PowersOfTwo[j]) {
-                numbers[j]++;
-                bit_flag |= PowersOfTwo[j];
-            }
-        }
-    }
-
-    /* Calculating and writting code and field arrays */
-
-    if(!ISAMCreateCA(cap, uidf, count)) {
-        ErrLogPrintf("Cannot create coded array. Formating failed.\n");
-        return ISAMInvalidFormat;
-    }
-    num_bits = cap->num_bits;
-
-    FileWrite(cap->buffer, 1, cap->length, db_fd);
-    length = cap->length;
-
-    if(!ISAMCreateFA(cap, uidf, count)) {
-        ErrLogPrintf("Cannot create field array. Formating failed.");
-        return ISAMInvalidFormat;
-    }
-
-    FileWrite(cap->buffer, 1, cap->length, db_fd);
-
-    /* ------- Now writting header ---------- */
-
-    FileWrite(&count, 1, sizeof(Uint4), off_fd);
-    FileWrite(&ca_offset, 1, sizeof(Uint4), off_fd);
-    FileWrite(&length, 1, sizeof(Uint4), off_fd);
-    FileWrite(&num_bits, 1, sizeof(Uint4), off_fd);
-    FileWrite(&bit_flag, 1, sizeof(Uint4), off_fd);
-
-    for(j = 0; j < 32; j++) {
-        if(numbers[j] > 0)
-            FileWrite(&numbers[j], 1, sizeof(Uint4), off_fd);
-    }
-
-    *offset = offset_out;
-    return ISAMNoError;
-}
-
-/* ---------------------- ISAMMakeIndex --------------------------
-   Purpose:     To create ISAM Intex file for Database file
-   
-   Parameters:  ISAM Object 
-   Returns:     ISAM itemized error code 
-   NOTE:        Special default rules for UNIX platform
-  ------------------------------------------------------------------*/
-ISAMErrorCode ISAMMakeIndex(ISAMObjectPtr object,
-                            Int4 page_size       /* ISAM page size */
-                            )
-{
-    ISAMDataPtr data;
-
-    if(object == NULL)
-        return ISAMBadParameter;
-    
-    data = (ISAMDataPtr) object;
-    
-    if(data->type == ISAMString || data->type == ISAMStringDatabase)
-        return ISAMMakeStringIndex(data, page_size);
-    else if (data->type == ISAMNumeric || data->type == ISAMNumericNoData)
-        return ISAMMakeNumericIndex(data, page_size);
-    else 
-        return ISAMNotImplemented;
-}
-/* ---------------------- ISAMMakeStringIndex ---------------------
-   Purpose:     To create Numeric ISAM Intex file for Database file
-   
-   Parameters:  ISAM Data 
-   Returns:     ISAM itemized error code 
-   NOTE:        Special default rules for UNIX platform
-   ------------------------------------------------------------------*/
-static ISAMErrorCode ISAMMakeStringIndex(
-                                 ISAMDataPtr data,
-                                 Int4 page_size       /* ISAM page size */
-                                 )
-{
-    Int4 TermCount, Pos, count, SampleCount;
-    Int4Ptr MasterPos, SamplePos;
-    Int4 OffsetPos;
-    FILE *tf_fd;
-    Int4 Version = ISAM_VERSION;
-    Uint4 value;
-
-    if(page_size != 0)
-        data->PageSize = page_size;
-    else
-        data->PageSize = DEFAULT_SISAM_SIZE;
-    
-    if((data->db_fd = FileOpen(data->DBFileName, "r")) == NULL)
-        return ISAMBadFileName;
-    
-    
-    /* Temporary space for line initialy set to MAX_LINE_SIZE 
-       byt will be realocated if some line exceed this limit */
-    
-    if(data->max_line_size == 0) {
-        data->max_line_size = LINE_SIZE_CHUNK;
-        data->line = MemNew(LINE_SIZE_CHUNK);
-    }
-
-    /* This function will also split data if strings are
-       identical and finaly count lines*/
-    
-    if(!ISAMCheckIfSorted(data))
-        return ISAMNoOrder;
-    
-    /* Obtain the term offsets; select the sample terms. */
-    
-    MasterPos = (Int4 *)MemNew(sizeof(Int4) * (data->NumTerms + 1));
-    
-    Pos = TermCount = SampleCount = 0;
-    
-    while(ISAMReadLine(data) > 0) {
-        if (TermCount++ % data->PageSize == 0) {
-            MasterPos[SampleCount++] = SwapUint4(Pos);
-        }
-        
-        Pos = ftell(data->db_fd);
-    }
-    
-    MasterPos[SampleCount] = SwapUint4(Pos);
-    
-    
-    /* Create the sample file. */
-    
-    if (!(tf_fd = FileOpen(data->IndexFileName, "w")))
-        return ISAMBadFileName;
-    
-    /* Write the term counts and offsets to the sample file. */
-    value = SwapUint4(Version);     
-    FileWrite((CharPtr)&value, sizeof(Int4), 1, tf_fd);
-    value = SwapUint4(data->type);
-    FileWrite((CharPtr)&value, sizeof(Int4), 1, tf_fd);
-    value = SwapUint4(FileLength(data->DBFileName)); /* Length of DB file */
-    FileWrite((CharPtr)&value, sizeof(Int4), 1, tf_fd);
-    value = SwapUint4(TermCount); 
-    FileWrite((CharPtr)&value,    sizeof(Int4), 1, tf_fd);
-    value = SwapUint4(SampleCount); 
-    FileWrite((CharPtr)&value,  sizeof(Int4), 1, tf_fd);
-    value = SwapUint4(data->PageSize); 
-    FileWrite((CharPtr)&value,      sizeof(Int4), 1, tf_fd);
-    value = SwapUint4(data->max_line_size); 
-    FileWrite((CharPtr)&value, sizeof(Int4), 1, tf_fd);
-    value = SwapUint4(0);      /* This space reserved for future use */
-    FileWrite(&value, sizeof(Int4), 1, tf_fd);
-    value = SwapUint4(0);      /* This space reserved for future use */
-    FileWrite(&value, sizeof(Int4), 1, tf_fd);
-
-    if(data->PageSize != MEMORY_ONLY_PAGE_SIZE)
-        FileWrite((CharPtr)MasterPos, sizeof(Int4), SampleCount+1, tf_fd);
-    
-    /* Leave space for the offsets of the selected terms. */
-    
-    OffsetPos = ftell(tf_fd);
-    SamplePos = (Int4 *)MemNew((SampleCount + 1) * sizeof(Int4));
-    FileWrite((CharPtr)SamplePos, sizeof(Int4), SampleCount+1, tf_fd);
-    
-    /* Copy the selected terms to the sample file. */
-  
-    for (count = 0; count < SampleCount; count++) {
-        SamplePos[count] = SwapUint4(ftell(tf_fd));
-        fseek(data->db_fd, SwapUint4(MasterPos[count]), SEEK_SET);
-        ISAMReadLine(data);
-        fprintf(tf_fd,"%s%c",data->line, NULLB);
-    }
-    
-    SamplePos[SampleCount] = ftell(tf_fd);
-    
-    /* Replace the space-holding zeroes with the offsets of the selected 
-       terms.*/
-    
-    fseek(tf_fd, OffsetPos, SEEK_SET);
-    FileWrite((CharPtr)SamplePos, sizeof(Int4), SampleCount+1, tf_fd);
-
-    FileClose(tf_fd);
-    FileClose(data->db_fd);
-    data->db_fd = NULL;
-
-    MemFree(SamplePos);
-    MemFree(MasterPos);
-    
-    MemFree(data->line);
-    data->max_line_size = 0;
-
-    return ISAMNoError;
-}
-
-/* ---------------------- ISAMMakeNumericIndex ---------------------
-   Purpose:     To create Numeric ISAM Intex file for Database file
-   
-   Parameters:  ISAM Data 
-   Returns:     ISAM itemized error code 
-   NOTE:        Special default rules for UNIX platform
-   ------------------------------------------------------------------*/
-static ISAMErrorCode ISAMMakeNumericIndex(
-                                  ISAMDataPtr data,
-                                  Int4 page_size       /* ISAM page size */
-                                  )
-{
-    Int4 i, NumTerms, value;
-    Int4 MaxSamples, SampleCount;
-    Uint4Ptr KeyInfo, KeySamples;
-    NISAMKeyDataPtr KeyDataInfo, KeyDataSamples;
-    Boolean NoData;
-    FILE *fd;
-    Int4 Version = ISAM_VERSION;
-
-    NoData = (data->type == ISAMNumericNoData);
-    
-    NumTerms = FileLength(data->DBFileName) / 
-        (NoData ? sizeof(Uint4) : sizeof(NISAMKeyData));
-    
-    if(!Nlm_MemMapAvailable()) {
-        if((data->FileStart = 
-            ISAMReadFileInMemory(data->DBFileName)) == NULL)
-            return ISAMBadFileName;
-        if (NoData)
-            KeyInfo = (Uint4Ptr) data->FileStart;
-        else
-            KeyDataInfo = (NISAMKeyDataPtr)data->FileStart;
-    } else {    
-        if((data->mmp = Nlm_MemMapInit(data->DBFileName)) == NULL)
-            return ISAMMemMap;
-        if (NoData)
-            KeyInfo = (Uint4Ptr) data->mmp->mmp_begin;
-        else
-            KeyDataInfo = (NISAMKeyDataPtr)data->mmp->mmp_begin;
-    }
-
-    if(page_size != 0)
-        data->PageSize = page_size;
-    else
-        data->PageSize = DEFAULT_NISAM_SIZE;   
-    
-#ifndef CHECK_ORDER
-    for (i = 1; i < NumTerms; i++) {
-        if (NoData) {
-            if (SwapUint4(KeyInfo[i]) <= SwapUint4(KeyInfo[i-1]))
-                break;
-        } else {
-            if (SwapUint4(KeyDataInfo[i].key) <= SwapUint4(KeyDataInfo[i-1].key))
-                break;
-        }
-    }
-    
-    if (i < NumTerms) {
-        ErrLogPrintf("NIsam key file %s not in sorted order!\n", 
-                     data->DBFileName);
-        
-        if (NoData) {
-            ErrLogPrintf("unsorted or non-unique elements:"
-                         "#%ld, #%ld :  %ld, %ld\n",
-                         i-1, i, SwapUint4(KeyInfo[i-1]), 
-                         SwapUint4(KeyInfo[i]));
-        } else {
-            ErrLogPrintf("unsorted or non-unique elements:"
-                         "#%ld, #%ld : %ld, %ld\n",
-                         i-1, i, SwapUint4(KeyDataInfo[i-1].key), 
-                         SwapUint4(KeyDataInfo[i].key));
-        } 
-        return ISAMNoOrder;
-    } 
-#endif 
-    
-    /* Obtain the term offsets; select the sample terms. */
-    
-    MaxSamples = NumTerms/data->PageSize + 4;
-    
-    if (NoData)
-        KeySamples = (Uint4Ptr)MemNew(sizeof(Uint4)*(MaxSamples+1));
-    else
-        KeyDataSamples = (NISAMKeyDataPtr) MemNew(sizeof(NISAMKeyData)*
-                                                  (MaxSamples+1));
-    SampleCount = 0;
-    
-    for (i = 0; i < NumTerms; i++) {
-        if (i % data->PageSize == 0) {
-            if (NoData)
-                KeySamples[SampleCount] = KeyInfo[i];
-            else
-                KeyDataSamples[SampleCount] = KeyDataInfo[i];
-            SampleCount++;
-        }
-    }
-    
-    if (NoData) {
-        KeySamples[SampleCount] = SwapUint4(UINT4_MAX);
-    } else {
-        KeyDataSamples[SampleCount].key = SwapUint4(UINT4_MAX);
-        KeyDataSamples[SampleCount].data = SwapUint4(0);
-    }
-    
-    /* Create the sample file. */
-    
-    if((fd = FileOpen(data->IndexFileName, "wb")) == NULL)
-      return ISAMBadFileName;
-    
-    /* Write the term counts and offsets to the sample file. */
-
-    value = SwapUint4(Version);         /* Index version */
-    FileWrite((CharPtr)&value, sizeof(Int4), 1, fd);
-    value = SwapUint4(data->type);      /* Index type */
-    FileWrite(&value, sizeof(Int4), 1, fd);
-    value = SwapUint4(FileLength(data->DBFileName)); /* Length of DB file */
-    FileWrite(&value, sizeof(Int4), 1, fd);   
-    value = SwapUint4(NumTerms);        /* Number of terms in DB file */
-    FileWrite(&value, sizeof(Int4), 1, fd);
-    value = SwapUint4(SampleCount);     /* Number of elements in index file */
-    FileWrite(&value, sizeof(Int4), 1, fd);
-    value = SwapUint4(data->PageSize);  /* Page size of ISAM */
-    FileWrite(&value, sizeof(Int4), 1, fd);
-    value = SwapUint4(0);      /* 0  max_line-size for strings here */
-    FileWrite(&value, sizeof(Int4), 1, fd);
-    value = SwapUint4(0);      /* This space reserved for future use */
-    FileWrite(&value, sizeof(Int4), 1, fd);
-    value = SwapUint4(0);      /* This space reserved for future use */
-    FileWrite(&value, sizeof(Int4), 1, fd);
-    
-    if (NoData) /* No swaping neeeded here */
-        FileWrite((VoidPtr)KeySamples, sizeof(Uint4), SampleCount+1, fd);
-    else
-        FileWrite((VoidPtr)KeyDataSamples, sizeof(NISAMKeyData),
-                  SampleCount+1, fd);
-    
-    FileClose(fd);
-
-    if(data->mmp != NULL) {
-        Nlm_MemMapFini(data->mmp);
-        data->mmp = NULL;
-    } else {
-        MemFree(data->FileStart);
-        data->FileStart = NULL;
-    }
-
-    if (NoData) 
-        MemFree(KeySamples);
-    else 
-        MemFree(KeyDataSamples);
-    
     return ISAMNoError;
 }
 
@@ -963,7 +1274,7 @@ static ISAMErrorCode ISAMInitSearch(ISAMObjectPtr object)
 
     /* This space reserved for future use */
 
-    reserved1           =  SwapUint4(FileInfo[7]);
+    data->idx_option    =  SwapUint4(FileInfo[7]);
     reserved2           =  SwapUint4(FileInfo[8]);
 
     if(data->max_line_size != 0)
@@ -984,6 +1295,33 @@ static ISAMErrorCode ISAMInitSearch(ISAMObjectPtr object)
     }
 
     data->initialized = TRUE;
+    return ISAMNoError;
+}
+
+/* ------------------------ ISAMGetIdxOption ------------------------
+   Purpose:     Returns user specified option from ISAM database
+
+   Parameters:  ISAM object
+   Returns:     User specified option (set while formating)
+   NOTE:        None
+  ------------------------------------------------------------------*/
+ISAMErrorCode ISAMGetIdxOption(ISAMObjectPtr object, Int4Ptr idx_option)
+{
+    ISAMDataPtr data;
+    ISAMErrorCode error;
+    
+    if(object == NULL)
+        return -1;
+    
+    data = (ISAMDataPtr) object;
+    
+    if(data->initialized == FALSE) {
+        if((error = ISAMInitSearch(object)) != ISAMNoError)
+            return error;
+    }
+    
+    *idx_option = data->idx_option;
+    
     return ISAMNoError;
 }
 
@@ -1029,6 +1367,18 @@ void ISAMObjectFree(ISAMObjectPtr object)
     MemFree(data);
     
     return;
+}
+
+static Int4 GetPageNumElements(ISAMDataPtr data, Int4 SampleNum,
+			       Int4Ptr Start)
+{
+    Int4 NumElements;
+    
+    *Start = SampleNum * data->PageSize;
+    NumElements = (SampleNum + 1 == data->NumSamples) ? 
+        data->NumTerms - *Start : data->PageSize;
+    
+    return NumElements;
 }
 
 #define NCBISAM_ITER_MAX 30
@@ -1261,6 +1611,85 @@ ISAMErrorCode NISAMSearchList(ISAMObjectPtr object,
     return ISAMNoError;
 }
 
+static Uint4Ptr ISAMDecompressCA(Uint1Ptr buffer, Int4 length, 
+                                 Int4 num_bits, Int4 num_uids)
+{
+    Uint4Ptr data;
+    Int4 diff, dividend;
+    Int4 i, template, base;
+    Int4 byte_num = 0, bit_num = 0;
+
+    if(buffer == NULL || num_uids == 0)
+        return NULL;
+    
+    data = MemNew(sizeof(Uint4)*num_uids);
+
+    base = PowersOfTwo[num_bits];
+
+    for(i = 0; i < num_uids; i++) {
+
+        diff = dividend = 0;
+
+        if(num_bits != 0)
+            template = PowersOfTwo[num_bits - 1];
+        else
+            template = 0;
+
+        /* Reading dividend first */
+        
+        while(buffer[byte_num] & OneBit[bit_num]) {
+            dividend++;            
+            if(++bit_num > 7) {
+                bit_num = 0;
+                byte_num++;
+            }
+        }
+
+        /* And skipping following 0 bit */
+
+        if(++bit_num > 7) {
+            bit_num = 0;
+            byte_num++;
+        }
+
+        for(; template; template >>= 1) {
+            if(buffer[byte_num] & OneBit[bit_num])
+                diff |= template;
+            
+            if(++bit_num > 7) {
+                bit_num = 0;
+                byte_num++;
+            }        
+        }
+        data[i] = dividend*base + diff + (i == 0 ? 0 : (data[i-1] + 1));
+
+    }  /* Over all uids */
+
+    return data;
+}
+
+static Uint4Ptr ISAMDecompressFA(Uint1Ptr buffer, Int4 num_uids)
+{
+    Uint4Ptr fields;
+    Int4 i, j;
+    
+    if(buffer == NULL || num_uids == 0)
+        return NULL;
+    
+    fields = MemNew(sizeof(Uint4)*num_uids);
+    
+    for(i = 0, j =0; j < num_uids; i++) {
+        
+        fields[j] |= PowersOfTwo[buffer[i] & FA_Mask]; 
+        
+        if(!(buffer[i] & 0x80)) {
+            j++;
+        }
+    }
+
+    return fields;
+}
+
 /* ------------------------ ISAMSearchTerm -------------------------
    Purpose:     Main search function of complete String ISAM
 
@@ -1420,6 +1849,44 @@ static Int4 ISAMGetDataNumber(CharPtr KeyData)
     }
     return -1;
 }
+
+/*
+  This returns the position of the first character that differs
+   between the query Term and the Isam Key, or -1 if they are identical. 
+*/
+static Int4 ISAMDiffChar(CharPtr Term, CharPtr Key, Boolean IgnoreCase)
+
+{
+    CharPtr Start = Term;
+  
+    if(IgnoreCase) {
+        while(*Term && (TO_UPPER(*Term) == TO_UPPER(*Key))) {
+            Term++;
+            Key++;
+        }
+    } else {
+        while(*Term && (*Term == *Key)) {
+            Term++;
+            Key++;
+        }
+    }
+    
+    if(*Term != NULLB)
+        return((Int4)(Term - Start));
+    
+    for(;;) {
+        if (ENDS_ISAM_KEY(Key))
+            return(-1);
+        
+        if (*Key != ' ')
+            break;
+        
+        Key++;
+    }
+    
+    return((Int4)(Term - Start));
+}
+
 #define ID_DATA_CHUNK 16
 ISAMErrorCode SISAMFindAllData(ISAMObjectPtr object, 
                                CharPtr term_in,
@@ -1532,6 +1999,32 @@ ISAMErrorCode SISAMFindAllData(ISAMObjectPtr object,
     MemFree(Page);
 
     return ISAMNoError;
+}
+
+static void ISAMExtractData(CharPtr KeyData, 
+                            CharPtr PNTR Key, CharPtr PNTR Data)
+{
+    CharPtr chptr, nkey;
+
+    if (KeyData == NULL)
+        return;
+
+    nkey = StringSave(KeyData);
+
+    if((chptr = StringChr(nkey, ISAM_DATA_CHAR)) != NULL) {
+        *chptr = NULLB;
+        if(Data != NULL)
+            *Data = StringSave(chptr+1);
+    } else if(Data != NULL) {
+        *Data = StringSave("");
+    }
+    
+    if(Key != NULL)
+        *Key = StringSave(nkey);
+    
+    MemFree(nkey);
+
+    return;
 }
 
 ISAMErrorCode SISAMSearch(ISAMObjectPtr object, 
@@ -1716,69 +2209,6 @@ ISAMErrorCode SISAMSearch(ISAMObjectPtr object,
     return ISAMNoError;
 }
 
-static void ISAMExtractData(CharPtr KeyData, 
-                            CharPtr PNTR Key, CharPtr PNTR Data)
-{
-    CharPtr chptr, nkey;
-
-    if (KeyData == NULL)
-        return;
-
-    nkey = StringSave(KeyData);
-
-    if((chptr = StringChr(nkey, ISAM_DATA_CHAR)) != NULL) {
-        *chptr = NULLB;
-        if(Data != NULL)
-            *Data = StringSave(chptr+1);
-    } else if(Data != NULL) {
-        *Data = StringSave("");
-    }
-    
-    if(Key != NULL)
-        *Key = StringSave(nkey);
-    
-    MemFree(nkey);
-
-    return;
-}
-
-/*
-  This returns the position of the first character that differs
-   between the query Term and the Isam Key, or -1 if they are identical. 
-*/
-static Int4 ISAMDiffChar(CharPtr Term, CharPtr Key, Boolean IgnoreCase)
-
-{
-    CharPtr Start = Term;
-  
-    if(IgnoreCase) {
-        while(*Term && (TO_UPPER(*Term) == TO_UPPER(*Key))) {
-            Term++;
-            Key++;
-        }
-    } else {
-        while(*Term && (*Term == *Key)) {
-            Term++;
-            Key++;
-        }
-    }
-    
-    if(*Term != NULLB)
-        return((Int4)(Term - Start));
-    
-    for(;;) {
-        if (ENDS_ISAM_KEY(Key))
-            return(-1);
-        
-        if (*Key != ' ')
-            break;
-        
-        Key++;
-    }
-    
-    return((Int4)(Term - Start));
-}
-
 /* ------------------------  NISAMFindKey ---------------------------
    Purpose:     Return Key value by absolute internal index
    
@@ -1897,67 +2327,6 @@ ISAMErrorCode ISAMNumTerms(ISAMObjectPtr object, Int4Ptr terms)
 /****************************************************************************/
 /* INTERNAL FINCTIONS  */
 /****************************************************************************/
-/* ------------------------------------------------------------------
-                This is handler for HeapSort function
-   ------------------------------------------------------------------*/
-static int LIBCALLBACK ISAMUidCompare(VoidPtr i, VoidPtr j)
-{
-  if (*(Int4Ptr)i > *(Int4Ptr)j)
-    return (1);
-  if (*(Int4Ptr)i < *(Int4Ptr)j)
-    return (-1);
-  return (0);
-}
-
-static Int4 GetPageNumElements(ISAMDataPtr data, Int4 SampleNum,
-			       Int4Ptr Start)
-{
-    Int4 NumElements;
-    
-    *Start = SampleNum * data->PageSize;
-    NumElements = (SampleNum + 1 == data->NumSamples) ? 
-        data->NumTerms - *Start : data->PageSize;
-    
-    return NumElements;
-}
-
-static Boolean ISAMCheckIfSorted(ISAMDataPtr data) 
-{
-    CharPtr prevline;
-    Int4 length;
-    
-    if(data == NULL || data->db_fd == NULL || data->max_line_size == 0)
-        return FALSE;
-    
-    prevline = MemNew(data->max_line_size);
-    
-    rewind(data->db_fd);
-    data->NumTerms = 0;
-    
-    if(data->type == ISAMString || data->type == ISAMStringDatabase) {
-        while(ISAMReadLine(data) > 0) {
-            data->NumTerms++;
-            if (StringCmp(data->line, prevline) < 0) {
-
-                /* ErrLogPrintf("N Line: %s\nN-1 Line: %s\n", 
-                   data->line, prevline); */
-
-                MemFree(prevline);
-                return(FALSE);
-            } else {
-                length = StringLen(data->line);
-                StringNCpy_0(prevline, data->line, 
-                             length > LINE_SIZE_CHUNK ? LINE_SIZE_CHUNK : length);
-            }
-        }
-    } else {
-        return FALSE;
-    }
-
-    rewind(data->db_fd);
-    MemFree(prevline);
-    return(TRUE);
-}
 
 ISAMErrorCode ISAMCountLines(ISAMDataPtr data)
      /* this returns the number of lines in a file. */
@@ -1972,334 +2341,6 @@ ISAMErrorCode ISAMCountLines(ISAMDataPtr data)
     
     rewind(data->db_fd);
     return ISAMNoError;
-}
-
-/* returns NULL terminated string \n\r are removed */
-
-static Int4 ISAMReadLine(ISAMDataPtr data)
-{
-    Int4 i = 0;
-    Int4 ch;
-    Int4 MaxChars;
-    FILE *fd = data->db_fd;
-
-    MaxChars = data->max_line_size-1;
-
-    for(i = 0; (( ch = getc(fd)) != EOF) ; i++)  {
-        if((ch == '\n') || (ch == '\r'))
-            break;
-        data->line[i] = (Char) ch;
-        
-        if(i == MaxChars) { /* Reallocating line buffer */
-            data->max_line_size += LINE_SIZE_CHUNK;
-            data->line = Realloc(data->line,  data->max_line_size);
-            MaxChars = data->max_line_size-1;
-        }
-    }
-    data->line[i] = NULLB;
-
-    /* Finding first character on new line */
-
-    while((ch = getc(fd)) != EOF) {
-        if(IS_WHITESP(ch)) {
-            continue;
-        } else {
-            ungetc(ch, fd);
-            break;
-        }
-    }
-    
-    return i;
-}
-/* ------------------- ISAMReadFileInMemory  -----------------------
-   Purpose:     Function reads data from file into a buffer 
-
-   Parameters:  filename -  Name of file to read file 
-
-   Returns:     Pointer to allocated buffer.
-  ------------------------------------------------------------------*/
-
-static CharPtr ISAMReadFileInMemory(CharPtr filename)
-{
-    CharPtr  in_buff;
-    Int4     new_size = BUFF_SIZE_CHUNK;
-    Int4     bytes = 0, buff_len = 0;
-    FILE *fd;
-    
-    if(filename == NULL)
-        return NULL;
-    
-    if((fd = FileOpen(filename, "rb")) == NULL)
-        return NULL;
-    
-    /* initial allocation of memory */
-    
-    if((in_buff = MemNew(BUFF_SIZE_CHUNK)) == NULL) {
-        ErrLogPrintf("Error in allocating memory\n");
-        FileClose(fd);
-        return NULL;
-    }
-    
-    while ((bytes = FileRead(in_buff + buff_len, 1,
-                             BUFF_SIZE_CHUNK, fd)) > 0) {
-        new_size += bytes;
-        buff_len += bytes;
-        
-        if ((in_buff = Realloc(in_buff, new_size)) == NULL) {
-            ErrLogPrintf("Error in reallocating memory\n");
-            FileClose(fd);
-            return NULL;
-        }
-    }
-
-    FileClose(fd);
-    return(in_buff);
-}
-static ISAMTmpCAPtr ISAMTmpCANew(void)
-{
-    ISAMTmpCAPtr cap;
-
-    cap = MemNew(sizeof(ISAMTmpCA));
-
-    cap->allocated = CA_TMP_CHUNK;
-    cap->buffer = (Uint1Ptr) MemNew(cap->allocated);
-    
-    return cap;
-}
-
-static void ISAMTmpCAFree(ISAMTmpCAPtr cap)
-{
-    if(cap == NULL)
-        return;
-
-    MemFree(cap->buffer);
-    MemFree(cap);
-}
-
-static Uint4Ptr ISAMDecompressCA(Uint1Ptr buffer, Int4 length, 
-                                 Int4 num_bits, Int4 num_uids)
-{
-    Uint4Ptr data;
-    Int4 diff, dividend;
-    Int4 i, template, base;
-    Int4 byte_num = 0, bit_num = 0;
-
-    if(buffer == NULL || num_uids == 0)
-        return NULL;
-    
-    data = MemNew(sizeof(Uint4)*num_uids);
-
-    base = PowersOfTwo[num_bits];
-
-    for(i = 0; i < num_uids; i++) {
-
-        diff = dividend = 0;
-
-        if(num_bits != 0)
-            template = PowersOfTwo[num_bits - 1];
-        else
-            template = 0;
-
-        /* Reading dividend first */
-        
-        while(buffer[byte_num] & OneBit[bit_num]) {
-            dividend++;            
-            if(++bit_num > 7) {
-                bit_num = 0;
-                byte_num++;
-            }
-        }
-
-        /* And skipping following 0 bit */
-
-        if(++bit_num > 7) {
-            bit_num = 0;
-            byte_num++;
-        }
-
-        for(; template; template >>= 1) {
-            if(buffer[byte_num] & OneBit[bit_num])
-                diff |= template;
-            
-            if(++bit_num > 7) {
-                bit_num = 0;
-                byte_num++;
-            }        
-        }
-        data[i] = dividend*base + diff + (i == 0 ? 0 : (data[i-1] + 1));
-
-    }  /* Over all uids */
-
-    return data;
-}
-
-static Boolean ISAMCreateCA(ISAMTmpCAPtr cap, 
-                            ISAMUidFieldPtr data, 
-                            Int4 num_uids)
-{
-    Nlm_FloatHi AverageDiff;
-    Int4 base, number, prev_number;
-    Int4 i, diff, dividend;
-
-    if(cap == NULL || data == NULL)
-        return FALSE;
-        
-    cap->byte_num = 0;
-    cap->bit_num  = 0;
-    cap->length   = 0;
-    cap->num_uids = num_uids;
-    MemSet(cap->buffer, 0, cap->allocated);
-    
-    
-    if((AverageDiff = (Nlm_FloatHi)(data[num_uids-1].uid - num_uids + 1) / 
-        (Nlm_FloatHi)num_uids ) < 1) {
-	AverageDiff = 1;
-    }
-
-    cap->num_bits = Log2(AverageDiff);
-    base = PowersOfTwo[cap->num_bits];
-
-    prev_number = -1;
-    
-    for(i = 0; i < num_uids; i++) {
-        number = data[i].uid;
-
-        if (number <= prev_number) {
-            ErrLogPrintf("%s\n%s%ld%s%ld\n",
-                         "Bad record number in writing to coded array!",
-                         "Number: ", number,
-                         "  Previous Number: ", prev_number);
-            ISAMTmpCAFree(cap);
-            return FALSE;
-        }
-        
-        diff = number - prev_number - 1;
-        
-        dividend = diff/base;
-
-        ISAMWriteNBits10(cap, dividend);
-        ISAMWriteBitNumber(cap, diff);
-        prev_number = number;
-    }
-
-    cap->length = cap->byte_num + (cap->bit_num != 0 ? 1 : 0);
-    
-    return TRUE;
-}
-
-static Boolean ISAMWriteNBits10(ISAMTmpCAPtr cap, Int4 number)
-{
-    register Int4 i;
-
-    for(i = 0; i < number; i++) {
-        cap->buffer[cap->byte_num] |= OneBit[cap->bit_num];
-        if(++cap->bit_num > 7) {
-            cap->bit_num = 0;
-            if((++cap->byte_num >= cap->allocated)) {
-                cap->allocated += CA_TMP_CHUNK;
-                cap->buffer = Realloc(cap->buffer, cap->allocated);
-            }
-        }
-    }
-
-    /* Now wriiting 0 bit in the end of set of 1's */
-    
-    if(++cap->bit_num > 7) {
-        cap->bit_num = 0;
-        if((++cap->byte_num >= cap->allocated)) {
-            cap->allocated += CA_TMP_CHUNK;
-            cap->buffer = Realloc(cap->buffer, cap->allocated);
-        }
-    }
-    return TRUE;
-}
-
-static Boolean ISAMWriteBitNumber(ISAMTmpCAPtr cap, Int4 number)
-{
-    Int4 template;
-
-    if(cap->num_bits == 0)
-        return TRUE;
-    
-    template = PowersOfTwo[cap->num_bits - 1];
-    
-    for(; template; template >>= 1) {
-        
-        if(number & template)
-            cap->buffer[cap->byte_num] |= OneBit[cap->bit_num] ;
-        
-        if(++cap->bit_num > 7) {
-            cap->bit_num = 0;
-            if((++cap->byte_num >= cap->allocated)) {
-                cap->allocated += CA_TMP_CHUNK;
-                cap->buffer = Realloc(cap->buffer, cap->allocated);
-            }
-        }
-    }
-    return TRUE;
-}
-
-/* New functions for today */
-
-static Boolean ISAMCreateFA(ISAMTmpCAPtr cap, 
-                             ISAMUidFieldPtr uidf, Int4 num_uids)
-{
-    Int4 i, j;
-    Int4 byte_start;
-
-    if(cap == NULL || uidf == NULL)
-        return FALSE;
-    
-    cap->byte_num = 0;
-    cap->length   = 0;
-    cap->num_uids = num_uids;    
-    MemSet(cap->buffer, 0, cap->allocated);
-
-    for(i = 0; i < num_uids; i++) {
-
-        byte_start = cap->byte_num;
-        
-        for(j = 0, cap->bit_num = 0; j < 32; j++) {
-            if(uidf[i].field & PowersOfTwo[j]) {
-                cap->buffer[cap->byte_num] |= j;
-                
-                if((++cap->byte_num >= cap->allocated)) {
-                    cap->allocated += CA_TMP_CHUNK;
-                    cap->buffer = Realloc(cap->buffer, cap->allocated);
-                }
-                
-                cap->bit_num++;
-            }
-        }
-        
-        for(j = 0; j < cap->bit_num -1; j++) {
-            cap->buffer[byte_start+j] |=PowersOfTwo[7];
-        }
-    }
-    
-    cap->length = cap->byte_num;
-    return TRUE;
-}
-static Uint4Ptr ISAMDecompressFA(Uint1Ptr buffer, Int4 num_uids)
-{
-    Uint4Ptr fields;
-    Int4 i, j;
-    
-    if(buffer == NULL || num_uids == 0)
-        return NULL;
-    
-    fields = MemNew(sizeof(Uint4)*num_uids);
-    
-    for(i = 0, j =0; j < num_uids; i++) {
-        
-        fields[j] |= PowersOfTwo[buffer[i] & FA_Mask]; 
-        
-        if(!(buffer[i] & 0x80)) {
-            j++;
-        }
-    }
-
-    return fields;
 }
 
 #ifdef NISAM_TEST_MODULE 

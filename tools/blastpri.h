@@ -32,8 +32,14 @@ Contents: prototypes for "private" BLAST functions, these should not be called
 
 ******************************************************************************/
 
-/* $Revision: 6.48 $ 
+/* $Revision: 6.50 $ 
 * $Log: blastpri.h,v $
+* Revision 6.50  1999/08/20 19:48:37  madden
+* Changed call to BlastSearchBlkNew(Extra)
+*
+* Revision 6.49  1999/05/27 17:33:06  madden
+* Fixed Int2 (should have been Int4) problem
+*
 * Revision 6.48  1999/04/15 13:25:07  madden
 * RealBlastGetGappedAlignmentTraceback returns Int4
 *
@@ -522,7 +528,7 @@ Int2 LIBCALL BlastLinkHsps PROTO ((BlastSearchBlkPtr search));
 
 Int2 LIBCALL BlastReapHitlistByEvalue PROTO ((BlastSearchBlkPtr search));
 
-Int2 LIBCALL BlastSaveCurrentHitlist PROTO((BlastSearchBlkPtr search));
+Int4 LIBCALL BlastSaveCurrentHitlist PROTO((BlastSearchBlkPtr search));
 
 BlastSearchBlkPtr LIBCALL BLASTPerformSearchWithReadDb PROTO((BlastSearchBlkPtr search, Int4 sequence_number));
 
@@ -536,10 +542,10 @@ Int2 LIBCALL BlastTimeFillStructure PROTO((BlastTimeKeeperPtr btkp));
 
 BlastSearchBlkPtr LIBCALL BlastSearchBlkDuplicate PROTO((BlastSearchBlkPtr search));
 
-BlastSearchBlkPtr LIBCALL BlastSearchBlkNew PROTO((Int2 wordsize, Int4 qlen, CharPtr dbname, Boolean multiple_hits, BLAST_Score threshold_first, BLAST_Score threshold_second, Int4 result_size, CharPtr prog_name, BlastAllWordPtr all_words, Int2 first_context, Int2 last_context));
+BlastSearchBlkPtr LIBCALL BlastSearchBlkNew PROTO((Int2 wordsize, Int4 qlen, CharPtr dbname, Boolean multiple_hits, BLAST_Score threshold_first, BLAST_Score threshold_second, Int4 result_size, CharPtr prog_name, BlastAllWordPtr all_words, Int2 first_context, Int2 last_context, Int4 window_size));
 
 /* Allocates a search Block, except it only attaches to the rdfp, does not allocate it. */
-BlastSearchBlkPtr LIBCALL BlastSearchBlkNewExtra PROTO((Int2 wordsize, Int4 qlen, CharPtr dbname, Boolean multiple_hits, BLAST_Score threshold_first, BLAST_Score threshold_second, Int4 result_size, CharPtr prog_name, BlastAllWordPtr all_words, Int2 first_context, Int2 last_context, ReadDBFILEPtr rdfp));
+BlastSearchBlkPtr LIBCALL BlastSearchBlkNewExtra PROTO((Int2 wordsize, Int4 qlen, CharPtr dbname, Boolean multiple_hits, BLAST_Score threshold_first, BLAST_Score threshold_second, Int4 result_size, CharPtr prog_name, BlastAllWordPtr all_words, Int2 first_context, Int2 last_context, ReadDBFILEPtr rdfp, Int4 window_size));
 
 BlastSearchBlkPtr LIBCALL BlastSearchBlkDestruct PROTO((BlastSearchBlkPtr search));
 

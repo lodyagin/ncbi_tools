@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.8 $
+* $Revision: 6.9 $
 *
 * File Description: 
 *
@@ -45,6 +45,9 @@
 /*************************************
 *
  * $Log: ffprint.h,v $
+ * Revision 6.9  1999/08/31 14:36:39  tatiana
+ * ff_print_string_mem() added
+ *
  * Revision 6.8  1999/04/09 22:21:53  kans
  * fixed prototype for FFBSPrint
  *
@@ -192,6 +195,7 @@ NLM_EXTERN CharPtr LIBCALL ff_MergeString PROTO((void));
 NLM_EXTERN CharPtr LIBCALL FFPrint PROTO((FFPrintArrayPtr pap, Int4 index, Int4 pap_size));
 NLM_EXTERN void LIBCALL FFBSPrint PROTO((FFPrintArrayPtr pap, Int4 index, Int4 pap_size));
 NLM_EXTERN void LIBCALL ff_print_string PROTO((FILE *fp, CharPtr string, CharPtr line_return));
+NLM_EXTERN CharPtr LIBCALL ff_print_string_mem PROTO((CharPtr string));
 NLM_EXTERN Int2 LIBCALL ff_StartPrint PROTO((Int2 init_indent, Int2 cont_indent, Int2 line_max, CharPtr line_prefix));
 NLM_EXTERN void LIBCALL ff_AddString PROTO((CharPtr string));
 NLM_EXTERN void LIBCALL ff_AddInteger PROTO((CharPtr fmt, long integer));

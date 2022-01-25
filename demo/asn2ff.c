@@ -53,6 +53,7 @@ Args myargs[] = {
 	{"Complex sets (phy-set,mut-set, pop-set)?",
 	"T",NULL,NULL,TRUE,'k',ARG_BOOLEAN,0.0,0,NULL},
 	{"Use SeqMgr indexing?","F",NULL,NULL,TRUE,'d',ARG_BOOLEAN,0.0,0,NULL},
+	{"Use VERSION?","F",NULL,NULL,TRUE,'V',ARG_BOOLEAN,0.0,0,NULL},
 	};
 
 
@@ -62,7 +63,7 @@ static MsgAnswer LIBCALLBACK myHook (MsgKey key, ErrSev sev, const char *caption
 	return ANS_OK;
 }
 
-static void FindNuc(SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
+/*static void FindNuc(SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
 {
     BioseqPtr PNTR bp;
     BioseqPtr local_bsp;
@@ -75,7 +76,7 @@ static void FindNuc(SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
           *bp = local_bsp;
     }
 }
-
+*/
 static void CheckForCookedBioseqs (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent)
 
 {
@@ -130,6 +131,7 @@ Int2 Main(void)
 	SeqIntPtr sip;
 	BioseqPtr bsp;
 	Boolean useSeqMgrIndexes;
+	CharPtr PNTR tmpstr = NULL, tstr;
 	
 	if ( ! GetArgs("asn2ff", sizeof(myargs)/sizeof(Args), myargs))
 		return 1;
@@ -216,14 +218,14 @@ Int2 Main(void)
 		format = EMBLPEPT_FMT;
 	}
 	if (format == GENPEPT_FMT) {
-		if (PrintTemplateSetLoad ("asn2ff.prt")) {
-			ErrShow();
+		if (!PrintTemplateSetLoad ("asn2ff.prt")) {
+			ErrPostEx(SEV_WARNING, 1, 1, "PrintTemplateSetLoad failed");
 		}
 		if ((Spop = StdPrintOptionsNew(NULL)) != NULL) {
 			Spop->newline = "~";
 			Spop->indent = "";
 		} else {
-			Message (MSG_FATAL, "StdPrintOptionsNew failed");
+			ErrPostEx (SEV_FATAL, 1, 1, "StdPrintOptionsNew failed");
 		}
 	}
 
@@ -267,10 +269,13 @@ Int2 Main(void)
 	ajp->Spop = Spop;
 	ajp->gb_style = TRUE;  /* show only non_right_truncated features */
 	
+	if (myargs[25].intvalue) {
+		ajp->show_version = TRUE;
+	}
 	if (myargs[14].intvalue) {
 		ajp->gb_style = FALSE;
 		ajp->only_one = TRUE;
-		ajp->ignore_top = TRUE;
+		ajp->ignore_top = FALSE;
 	}
 	if (myargs[15].intvalue) {
 		ajp->ignore_top = TRUE;
@@ -330,11 +335,14 @@ Int2 Main(void)
 				ssp = SeqSubmitAsnRead(aip, atp);
 				if (ssp->datatype == 1) {
 					IndexASeqEntry ((SeqEntryPtr) ssp->data, useSeqMgrIndexes);
-					if ((SeqSubmitToFlat(ssp, fp, mode, FALSE, format, 
+	 		if (SeqEntryToFlatAjp (ajp, (SeqEntryPtr) ssp->data, fp, ajp->format, ajp->mode)) {
+				num++;
+			}
+				/*	if ((SeqSubmitToFlat(ssp, fp, mode, FALSE, format, 
 							myargs[18].intvalue)) == TRUE)
 					{
 						num++;
-					}
+					}*/
 				} 
 				SeqSubmitFree(ssp);
 				
@@ -346,6 +354,11 @@ Int2 Main(void)
 		the_set = SeqEntryAsnRead(aip, NULL);
 		total++;
 /*********TEST*******
+	SeqEntryToFlatEx (the_set, fp, ajp->format, ajp->mode, NULL, 0);
+	exit (1);
+		for (tmpstr= AjpToStrArray(ajp, the_set); *tmpstr != NULL; tmpstr++) {
+			printf("%s", *tmpstr);
+		}
 		if (mode == PARTIAL_MODE) {
 			SeqEntryToPartRpt(the_set, stdout);
 *********TEST*******/

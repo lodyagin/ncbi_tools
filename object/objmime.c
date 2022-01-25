@@ -31,9 +31,12 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: objmime.c,v $
-* Revision 6.4  1998/12/07 16:29:28  ywang
-* add object loaded for mime type Biostruc-seqs
+* Revision 6.5  1999/09/16 17:12:02  ywang
+* use SeqAnnotSetAsnRead/Write to replace AsnGenericUserSeqOfAsnRead/Write to remove problem with seqannotset
 *
+ * Revision 6.4  1998/12/07  16:29:28  ywang
+ * add object loaded for mime type Biostruc-seqs
+ *
 * ==========================================================================
 */
 
@@ -806,10 +809,11 @@ BiostrucAlignAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       atp = AsnReadId(aip,amp, atp);
    }
    if (atp == BIOSTRUC_ALIGN_seqalign) {
-      ptr -> seqalign = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) SeqAnnotAsnRead, (AsnOptFreeFunc) SeqAnnotFree);
+/*    ptr -> seqalign = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) SeqAnnotAsnRead, (AsnOptFreeFunc) SeqAnnotFree);     
       if (isError && ptr -> seqalign == NULL) {
-         goto erret;
-      }
+         goto erret;     
+      }  */   /* yanli comment this out, add the following, Sept. 16, 1999 */
+      ptr -> seqalign = SeqAnnotSetAsnRead(aip, BIOSTRUC_ALIGN_seqalign, BIOSTRUC_ALIGN_seqalign_E);     
       atp = AsnReadId(aip,amp, atp);
    }
 
@@ -875,7 +879,10 @@ BiostrucAlignAsnWrite(BiostrucAlignPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
       }
    }
    AsnGenericChoiceSeqOfAsnWrite(ptr -> sequences, (AsnWriteFunc) SeqEntryAsnWrite, aip, BIOSTRUC_ALIGN_sequences, BIOSTRUC_ALIGN_sequences_E);
-   AsnGenericUserSeqOfAsnWrite(ptr -> seqalign, (AsnWriteFunc) SeqAnnotAsnWrite, aip, BIOSTRUC_ALIGN_seqalign, BIOSTRUC_ALIGN_seqalign_E);
+
+/* AsnGenericUserSeqOfAsnWrite(ptr -> seqalign, (AsnWriteFunc) SeqAnnotAsnWrite, aip, BIOSTRUC_ALIGN_seqalign, BIOSTRUC_ALIGN_seqalign_E); */
+       /* yanli comment it out, and add the following, Sept. 16, 1999 */
+   SeqAnnotSetAsnWrite(ptr -> seqalign, aip, BIOSTRUC_ALIGN_seqalign, BIOSTRUC_ALIGN_seqalign_E);
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
    }
@@ -978,10 +985,11 @@ BiostrucAlignSeqAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       atp = AsnReadId(aip,amp, atp);
    }
    if (atp == BIOSTRUC_ALIGN_SEQ_seqalign) {
-      ptr -> seqalign = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) SeqAnnotAsnRead, (AsnOptFreeFunc) SeqAnnotFree);
+/*    ptr -> seqalign = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) SeqAnnotAsnRead, (AsnOptFreeFunc) SeqAnnotFree);
       if (isError && ptr -> seqalign == NULL) {
          goto erret;
-      }
+      }  */ /* yanli comment this out, and add the following, Sept. 16, 1999 */
+      ptr -> seqalign = SeqAnnotSetAsnRead(aip, BIOSTRUC_ALIGN_SEQ_seqalign, BIOSTRUC_ALIGN_SEQ_seqalign_E);
       atp = AsnReadId(aip,amp, atp);
    }
 
@@ -1036,7 +1044,9 @@ BiostrucAlignSeqAsnWrite(BiostrucAlignSeqPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    AsnGenericChoiceSeqOfAsnWrite(ptr -> sequences, (AsnWriteFunc) SeqEntryAsnWrite, aip, BIOSTRUC_ALIGN_SEQ_sequences, BIOSTRUC_ALIGN_SEQ_sequences_E);
-   AsnGenericUserSeqOfAsnWrite(ptr -> seqalign, (AsnWriteFunc) SeqAnnotAsnWrite, aip, BIOSTRUC_ALIGN_SEQ_seqalign, BIOSTRUC_ALIGN_SEQ_seqalign_E);
+/* AsnGenericUserSeqOfAsnWrite(ptr -> seqalign, (AsnWriteFunc) SeqAnnotAsnWrite, aip, BIOSTRUC_ALIGN_SEQ_seqalign, BIOSTRUC_ALIGN_SEQ_seqalign_E); */
+     /* yanli comment it out, and add the following, Sept. 16, 1999 */
+   SeqAnnotSetAsnWrite(ptr -> seqalign, aip, BIOSTRUC_ALIGN_SEQ_seqalign, BIOSTRUC_ALIGN_SEQ_seqalign_E);
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
    }
@@ -1312,10 +1322,11 @@ BiostrucSeqsAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       atp = AsnReadId(aip,amp, atp);
    }
    if (atp == BIOSTRUC_SEQS_seqalign) {
-      ptr -> seqalign = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) SeqAnnotAsnRead, (AsnOptFreeFunc) SeqAnnotFree);
+/*    ptr -> seqalign = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) SeqAnnotAsnRead, (AsnOptFreeFunc) SeqAnnotFree);
       if (isError && ptr -> seqalign == NULL) {
          goto erret;
-      }
+      }  */ /* yanli comment it out, add following, Sept. 16, 1999 */
+      ptr -> seqalign = SeqAnnotSetAsnRead(aip, BIOSTRUC_SEQS_seqalign, BIOSTRUC_SEQS_seqalign_E);
       atp = AsnReadId(aip,amp, atp);
    }
 
@@ -1375,7 +1386,9 @@ BiostrucSeqsAsnWrite(BiostrucSeqsPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
       }
    }
    AsnGenericChoiceSeqOfAsnWrite(ptr -> sequences, (AsnWriteFunc) SeqEntryAsnWrite, aip, BIOSTRUC_SEQS_sequences, BIOSTRUC_SEQS_sequences_E);
-   AsnGenericUserSeqOfAsnWrite(ptr -> seqalign, (AsnWriteFunc) SeqAnnotAsnWrite, aip, BIOSTRUC_SEQS_seqalign, BIOSTRUC_SEQS_seqalign_E);
+/* AsnGenericUserSeqOfAsnWrite(ptr -> seqalign, (AsnWriteFunc) SeqAnnotAsnWrite, aip, BIOSTRUC_SEQS_seqalign, BIOSTRUC_SEQS_seqalign_E); */
+   /* yanli comment this out, and the following, Sept. 16, 1998 */
+   SeqAnnotSetAsnWrite(ptr -> seqalign, aip, BIOSTRUC_SEQS_seqalign, BIOSTRUC_SEQS_seqalign_E);
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
    }

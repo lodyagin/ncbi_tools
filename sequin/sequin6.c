@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11/12/97
 *
-* $Revision: 6.31 $
+* $Revision: 6.35 $
 *
 * File Description: 
 *
@@ -760,6 +760,7 @@ static void RemoveAFeatureText (SeqEntryPtr sep, Pointer mydata, Int4 index, Int
   RnaRefPtr       rrp;
   SeqAnnotPtr     sap;
   SeqFeatPtr      sfp;
+  CharPtr PNTR    strp;
   ValNodePtr      vnp;
 
   if (sep == NULL || sep->data.ptrvalue == NULL) return;
@@ -794,7 +795,8 @@ static void RemoveAFeatureText (SeqEntryPtr sep, Pointer mydata, Int4 index, Int
                 break;
               case 5 :
                 for (vnp = grp->syn; vnp != NULL; vnp = vnp->next) {
-                  SearchAndExciseText (&vnp->data.ptrvalue, cfp);
+                  strp = (CharPtr PNTR) &vnp->data.ptrvalue;
+                  SearchAndExciseText (strp, cfp);
                 }
                 break;
               case 6 :
@@ -820,7 +822,8 @@ static void RemoveAFeatureText (SeqEntryPtr sep, Pointer mydata, Int4 index, Int
             switch (cfp->subtype) {
               case 1 :
                 for (vnp = prp->name; vnp != NULL; vnp = vnp->next) {
-                  SearchAndExciseText (&vnp->data.ptrvalue, cfp);
+                  strp = (CharPtr PNTR) &vnp->data.ptrvalue;
+                  SearchAndExciseText (strp, cfp);
                 }
                 break;
               case 2 :
@@ -828,12 +831,14 @@ static void RemoveAFeatureText (SeqEntryPtr sep, Pointer mydata, Int4 index, Int
                 break;
               case 3 :
                 for (vnp = prp->ec; vnp != NULL; vnp = vnp->next) {
-                  SearchAndExciseText (&vnp->data.ptrvalue, cfp);
+                  strp = (CharPtr PNTR) &vnp->data.ptrvalue;
+                  SearchAndExciseText (strp, cfp);
                 }
                 break;
               case 4 :
                 for (vnp = prp->activity; vnp != NULL; vnp = vnp->next) {
-                  SearchAndExciseText (&vnp->data.ptrvalue, cfp);
+                  strp = (CharPtr PNTR) &vnp->data.ptrvalue;
+                  SearchAndExciseText (strp, cfp);
                 }
                 break;
               case 5 :
@@ -850,7 +855,8 @@ static void RemoveAFeatureText (SeqEntryPtr sep, Pointer mydata, Int4 index, Int
               case 1 :
                 if (rrp->ext.choice == 0 || rrp->ext.choice == 1) {
                   rrp->ext.choice = 1;
-                  SearchAndExciseText (&rrp->ext.value.ptrvalue, cfp);
+                  strp = (CharPtr PNTR) &rrp->ext.value.ptrvalue;
+                  SearchAndExciseText (strp, cfp);
                 }
                 break;
               case 2 :
@@ -4537,6 +4543,7 @@ static Boolean AddStrainGatherFunc (GatherContextPtr gcp)
 
 {
   BioSourcePtr  biop;
+  Boolean       influenza;
   size_t        len;
   OrgModPtr     mod;
   OrgNamePtr    onp;
@@ -4606,14 +4613,26 @@ static Boolean AddStrainGatherFunc (GatherContextPtr gcp)
             *ptr = '\0';
           }
         }
+        influenza = FALSE;
+        if (StringICmp (orp->taxname, "Influenza A virus") == 0 ||
+            StringICmp (orp->taxname, "Influenza B virus") == 0) {
+          influenza = TRUE;
+        }
         len = StringLen (orp->taxname) + StringLen (strain) + 6;
+        if (influenza) {
+          len += 2;
+        }
         str = MemNew (len);
         if (str != NULL) {
           StringCpy (str, orp->taxname);
-          /* StringCat (str, " ("); */
           StringCat (str, " ");
+          if (influenza) {
+            StringCat (str, "(");
+          }
           StringCat (str, strain);
-          /* StringCat (str, ")"); */
+          if (influenza) {
+            StringCat (str, ")");
+          }
           orp->taxname = MemFree (orp->taxname);
           orp->taxname = str;
         }

@@ -1,4 +1,4 @@
-/*  $Id: connutil.c,v 6.6 1999/04/09 22:27:01 vakatov Exp $
+/*  $Id: connutil.c,v 6.14 1999/09/13 15:54:31 vakatov Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -31,6 +31,43 @@
 *
 * --------------------------------------------------------------------------
 * $Log: connutil.c,v $
+* Revision 6.14  1999/09/13 15:54:31  vakatov
+* Added URL_DecodeEx() -- for "relaxed" URL decoding: let the user to
+* allow some of the symbols prohibited by the standard
+*
+* Revision 6.13  1999/07/26 17:58:35  vakatov
+* Use "\r\n" rather than just "\n" as the HTTP header line terminator.
+* Made the hard-coded names and defautl values of config.parameters
+* (#define CFG_CONN_, DEF_CONN_) be public.
+* +eMIME_Fasta.
+*
+* Revision 6.12  1999/07/23 13:16:08  vakatov
+* MIME_ParseContentType() - dont crash if passed NULL string
+*
+* Revision 6.11  1999/07/23 00:37:20  vakatov
+* Final version of NCBI MIME functions
+*
+* Revision 6.10  1999/07/21 21:32:32  vakatov
+* Get rid of the "nph-" prefixes for DISPD/NCBID -- use new DISPD/NCBID
+*
+* Revision 6.9  1999/07/16 21:19:10  vakatov
+* + NetConnInfo_Print()
+* + NCBI MIME-type handling routines and typedefs for a future use (MIME_*)
+* NetConnInfo_Create():  typo fixed ("info->ncbid_*")
+* Ncbi_ConnectURL():     use standard HTTP header terminator("\r\n\r\n")
+*
+* Revision 6.8  1999/07/09 22:53:37  vakatov
+* Added more conf. parameters:  SRV_NCBID_PORT, SRV_NCBID_PATH, SRV_LB_DISABLE
+*
+* Revision 6.7  1999/06/28 16:28:02  vakatov
+* SNetConnInfo:: separated the HTTP and the CERL-like(non-transparent)
+* firewall proxies;  renamed config./env. parameters accordingly:
+*   SRV_HTTP_PROXY_HOST/PORT replaced the former SRV_PROXY_HOST/PORT
+*   SRV_PROXY_HOST now specifies the host name of non-transparent CERN proxy
+*   SRV_PROXY_PORT is obsolete
+*   SRV_PROXY_TRANSPARENT is obsolete
+* Also:  NetConnInfo_AdjustForCernProxy --> ...HttpProxy
+*
 * Revision 6.6  1999/04/09 22:27:01  vakatov
 * Ncbi_ConnectURL():  added "encode_args"
 *
@@ -56,51 +93,6 @@
 
 
 /***********************************************************************
- *  Hard-coded constants, environment parameter names, limits & defaults
- ***********************************************************************/
-
-#define DEF_CONF_FILE          "ncbi"
-#define DEF_CONF_SECTION       "NET_SERV"
-
-#define ENV_PROXY_HOST         "SRV_PROXY_HOST"
-#define DEF_PROXY_HOST         ""
-
-#define ENV_PROXY_PORT         "SRV_PROXY_PORT"
-#define DEF_PROXY_PORT         80
-
-#define ENV_PROXY_TRANSPARENT  "SRV_PROXY_TRANSPARENT"
-#define DEF_PROXY_TRANSPARENT  ""
-
-#define ENV_ENGINE_HOST        "SRV_ENGINE_HOST"
-#define DEF_ENGINE_HOST        "www.ncbi.nlm.nih.gov"
-
-#define ENV_ENGINE_PORT        "SRV_ENGINE_PORT"
-#define DEF_ENGINE_PORT        80
-
-#define ENV_ENGINE_PATH        "SRV_ENGINE_PATH"
-#define DEF_ENGINE_PATH         "/Service/nph-dispd.cgi"
-
-#define ENV_ENGINE_ARGS        "SRV_ENGINE_ARGS"
-#define DEF_ENGINE_ARGS        ""
-
-#define ENV_CONN_TIMEOUT       "SRV_CONN_TIMEOUT"
-#define DEF_CONN_TIMEOUT       30.0
-
-#define ENV_CONN_TRY           "SRV_CONN_TRY"
-#define DEF_CONN_TRY           3
-
-#define ENV_DEBUG_PRINTOUT     "SRV_DEBUG_PRINTOUT"
-#define DEF_DEBUG_PRINTOUT     ""
-
-#define ENV_FIREWALL           "SRV_FIREWALL"
-#define DEF_FIREWALL           ""
-
-#define DEF_HOST_LEN           64
-#define DEF_ENGINE_PATH_LEN    1024
-#define DEF_ENGINE_ARGS_LEN    1024
-
-
-/***********************************************************************
  *  EXTERNAL
  ***********************************************************************/
 
@@ -113,51 +105,51 @@ NLM_EXTERN SNetConnInfo* NetConnInfo_Create
 
   /* fallbacks for the conf. file & section names */
   if (!conf_file  ||  !*conf_file)
-    conf_file = DEF_CONF_FILE;
+    conf_file = DEF_CONN_CONF_FILE;
   if (!conf_section  ||  !*conf_section)
-    conf_section = DEF_CONF_SECTION;
+    conf_section = DEF_CONN_CONF_SECTION;
 
   {{ /* client host */
-    info->client_host = (Char*)MemNew(DEF_HOST_LEN);
-    if ( !GetHostName(info->client_host, DEF_HOST_LEN) ) {
+    info->client_host = (Char*)MemNew(MAX_CONN_HOST_LEN);
+    if ( !GetHostName(info->client_host, MAX_CONN_HOST_LEN) ) {
       ErrPostEx(SEV_WARNING, 0, 0,
-                    "[NetConnInfo_Create]  Cannot get local host name");
+                "[NetConnInfo_Create]  Cannot get local host name");
       info->client_host[0] = '\0';
     }
   }}
 
   {{ /* alternate server host name */
-    info->host = (Char*)MemNew(DEF_HOST_LEN);
-    GetEnvParam(conf_file, conf_section, ENV_ENGINE_HOST,
-                info->host, DEF_HOST_LEN, DEF_ENGINE_HOST);
+    info->host = (Char*)MemNew(MAX_CONN_HOST_LEN);
+    GetEnvParam(conf_file, conf_section, CFG_CONN_ENGINE_HOST,
+                info->host, MAX_CONN_HOST_LEN, DEF_CONN_ENGINE_HOST);
   }}
 
-  {{ /* alternate server port */
+  {{ /* alternate service port */
     Char str[32];
     int      val;
-    GetEnvParam(conf_file, conf_section, ENV_ENGINE_PORT,
+    GetEnvParam(conf_file, conf_section, CFG_CONN_ENGINE_PORT,
                 str, sizeof(str), "");
     val = atoi(str);
-    info->port = (Uint2)(val > 0 ? val : DEF_ENGINE_PORT);
+    info->port = (Uint2)(val > 0 ? val : DEF_CONN_ENGINE_PORT);
   }}
 
-  {{ /* alternate path */
-    info->path = (Char*)MemNew(DEF_ENGINE_PATH_LEN);
-    GetEnvParam(conf_file, conf_section, ENV_ENGINE_PATH,
-                    info->path, DEF_ENGINE_PATH_LEN, DEF_ENGINE_PATH);
+  {{ /* alternate service path */
+    info->path = (Char*)MemNew(MAX_CONN_PATH_LEN);
+    GetEnvParam(conf_file, conf_section, CFG_CONN_ENGINE_PATH,
+                info->path, MAX_CONN_PATH_LEN, DEF_CONN_ENGINE_PATH);
   }}
 
   {{ /* alternate args */
-    info->args = (Char*)MemNew(DEF_ENGINE_ARGS_LEN);
-    GetEnvParam(conf_file, conf_section, ENV_ENGINE_ARGS,
-                info->args, DEF_ENGINE_ARGS_LEN, DEF_ENGINE_ARGS);
+    info->args = (Char*)MemNew(MAX_CONN_ARGS_LEN);
+    GetEnvParam(conf_file, conf_section, CFG_CONN_ENGINE_ARGS,
+                info->args, MAX_CONN_ARGS_LEN, DEF_CONN_ENGINE_ARGS);
   }}
 
   {{ /* alternate connection timeout */
     Char   str[32];
     double val;
-    GetEnvParam(conf_file, conf_section, ENV_CONN_TIMEOUT,
-                    str, sizeof(str), "");
+    GetEnvParam(conf_file, conf_section, CFG_CONN_TIMEOUT,
+                str, sizeof(str), "");
     val = atof(str);
     if (val <= 0)
       val = DEF_CONN_TIMEOUT;
@@ -165,52 +157,47 @@ NLM_EXTERN SNetConnInfo* NetConnInfo_Create
     info->timeout.usec = (Uint4)((val - info->timeout.sec) * 1000000);
   }}
 
-  {{ /* alternate max. number of attemts to establish a connection */
+  {{ /* alternate the max. number of attempts to establish a connection */
     Char str[32];
     int  val;
-    GetEnvParam(conf_file, conf_section, ENV_CONN_TRY,
+    GetEnvParam(conf_file, conf_section, CFG_CONN_TRY,
                 str, sizeof(str), "");
     val = atoi(str);
     info->conn_try = (Uint4)((val > 0) ? val : DEF_CONN_TRY);
   }}
 
-  {{ /* CERN-like firewall proxy server? */
-    Char str[DEF_HOST_LEN];
-    /* get the PROXY server name */
-    GetEnvParam(conf_file, conf_section, ENV_PROXY_HOST,
-                str, sizeof(str), DEF_PROXY_HOST);
+  {{ /* HTTP proxy server? */
+    Char http_proxy_host[MAX_CONN_HOST_LEN];
+    GetEnvParam(conf_file, conf_section, CFG_CONN_HTTP_PROXY_HOST,
+                http_proxy_host, sizeof(http_proxy_host),
+                DEF_CONN_HTTP_PROXY_HOST);
 
-    /* use the PROXY server, if specified */
-    if ( *str ) {
-      int proxy_port;
-
-      /* save host name of the proxy */
-      info->proxy_host = (Char*)StringSave(str);
-
-      /* retrieve port # of the proxy */
-      GetEnvParam(conf_file, conf_section, ENV_PROXY_PORT,
+    if ( *http_proxy_host ) {
+      /* yes, use the specified HTTP proxy server */
+      Char  str[32];
+      int   val;
+      GetEnvParam(conf_file, conf_section, CFG_CONN_HTTP_PROXY_PORT,
                   str, sizeof(str), "");
-      proxy_port = atoi(str);
-      info->proxy_port = (Uint2)(proxy_port > 0 ? proxy_port : DEF_PROXY_PORT);
+      val = atoi(str);
 
-      /* non-transparent proxy? */
-      GetEnvParam(conf_file, conf_section, ENV_PROXY_TRANSPARENT,
-                  str, sizeof(str), DEF_PROXY_TRANSPARENT);
-      info->proxy_transparent = (Boolean)
-        (*str  &&
-         (StringICmp(str, "1"   ) == 0  ||
-          StringICmp(str, "true") == 0  ||
-          StringICmp(str, "yes" ) == 0));
-
-      /* auto-set to FIREWALL mode when using a proxy server */
-      info->firewall = TRUE;
+      info->http_proxy_port = (Uint2)(val>0 ? val : DEF_CONN_HTTP_PROXY_PORT);
+      info->http_proxy_host = StringSave(http_proxy_host);
     }
+  }}
+
+  /* non-transparent CERN-like firewall proxy server? */
+  {{
+    Char proxy_host[MAX_CONN_HOST_LEN];
+    GetEnvParam(conf_file, conf_section, CFG_CONN_PROXY_HOST,
+                proxy_host, sizeof(proxy_host), DEF_CONN_PROXY_HOST);
+    if ( *proxy_host )
+      info->proxy_host = StringSave(proxy_host);
   }}
 
   {{ /* alternate the debug printout feature */
     Char str[32];
-    GetEnvParam(conf_file, conf_section, ENV_DEBUG_PRINTOUT,
-                str, sizeof(str), DEF_DEBUG_PRINTOUT);
+    GetEnvParam(conf_file, conf_section, CFG_CONN_DEBUG_PRINTOUT,
+                str, sizeof(str), DEF_CONN_DEBUG_PRINTOUT);
     info->debug_printout = (Boolean)
       (*str  &&
        (StringICmp(str, "1"   ) == 0  ||
@@ -218,11 +205,11 @@ NLM_EXTERN SNetConnInfo* NetConnInfo_Create
         StringICmp(str, "yes" ) == 0));
   }}
 
-  {{ /* alternate the farewall mode, if not set already */
+  {{ /* alternate the firewall mode, if not set already */
     if ( !info->firewall ) {
       Char str[32];
-      GetEnvParam(conf_file, conf_section, ENV_FIREWALL,
-                  str, sizeof(str), DEF_FIREWALL);
+      GetEnvParam(conf_file, conf_section, CFG_CONN_FIREWALL,
+                  str, sizeof(str), DEF_CONN_FIREWALL);
       info->firewall = (Boolean)
         (*str  &&
          (StringICmp(str, "1"   ) == 0  ||
@@ -231,15 +218,41 @@ NLM_EXTERN SNetConnInfo* NetConnInfo_Create
     }
   }}
 
+  {{ /* alternate NCBID port */
+    Char str[32];
+    int      val;
+    GetEnvParam(conf_file, conf_section, CFG_CONN_NCBID_PORT,
+                str, sizeof(str), "");
+    val = atoi(str);
+    info->ncbid_port = (Uint2)(val > 0 ? val : DEF_CONN_NCBID_PORT);
+  }}
+
+  {{ /* alternate NCBID path */
+    info->ncbid_path = (Char*)MemNew(MAX_CONN_PATH_LEN);
+    GetEnvParam(conf_file, conf_section, CFG_CONN_NCBID_PATH,
+                info->ncbid_path, MAX_CONN_PATH_LEN, DEF_CONN_NCBID_PATH);
+  }}
+
+  {{ /* if to prohibit the use of local load balancer */
+    Char str[32];
+    GetEnvParam(conf_file, conf_section, CFG_CONN_LB_DISABLE,
+                str, sizeof(str), DEF_CONN_LB_DISABLE);
+    info->lb_disable = (Boolean)
+        (*str  &&
+         (StringICmp(str, "1"   ) == 0  ||
+          StringICmp(str, "true") == 0  ||
+          StringICmp(str, "yes" ) == 0));
+  }}
+
   return info;
 }  /* CONN_ComposeConnectInfo */
 
 
-NLM_EXTERN Boolean NetConnInfo_AdjustForCernProxy
+NLM_EXTERN Boolean NetConnInfo_AdjustForHttpProxy
 (SNetConnInfo* info)
 {
   Char* x_path;
-  if (info->proxy_adjusted  ||  !info->proxy_host)
+  if (info->http_proxy_adjusted  ||  !info->http_proxy_host)
     return FALSE;
 
   x_path = (Char*)MemNew(16 + StrLen(info->host) + StrLen(info->path));
@@ -248,10 +261,10 @@ NLM_EXTERN Boolean NetConnInfo_AdjustForCernProxy
   MemFree(info->host);
   MemFree(info->path);
 
-  info->host = StringSave(info->proxy_host);
-  info->port = info->proxy_port;
+  info->host = StringSave(info->http_proxy_host);
+  info->port = info->http_proxy_port;
   info->path = x_path;
-  info->proxy_adjusted = TRUE;
+  info->http_proxy_adjusted = TRUE;
   return TRUE;
 }
 
@@ -264,27 +277,81 @@ NLM_EXTERN SNetConnInfo* NetConnInfo_Clone
   if ( !info )
     return 0;
 
-  x_info = (SNetConnInfo*)MemNew(sizeof(SNetConnInfo));
+  x_info = (SNetConnInfo*) MemNew(sizeof(SNetConnInfo));
 
   if ( info->client_host )
-    x_info->client_host     = StringSave(info->client_host);
+    x_info->client_host        = StringSave(info->client_host);
   if ( info->host )
-    x_info->host            = StringSave(info->host);
-  x_info->port              = info->port;
+    x_info->host               = StringSave(info->host);
+  x_info->port                 = info->port;
   if ( info->path )
-    x_info->path            = StringSave(info->path);
+    x_info->path               = StringSave(info->path);
   if ( info->args )
-    x_info->args            = StringSave(info->args);
-  x_info->timeout           = info->timeout;
-  x_info->conn_try          = info->conn_try;
+    x_info->args               = StringSave(info->args);
+  x_info->timeout              = info->timeout;
+  x_info->conn_try             = info->conn_try;
+  if ( info->http_proxy_host )
+    x_info->http_proxy_host    = StringSave(info->http_proxy_host);
+  x_info->http_proxy_port      = info->http_proxy_port;
   if ( info->proxy_host )
-    x_info->proxy_host      = StringSave(info->proxy_host);
-  x_info->proxy_port        = info->proxy_port;
-  x_info->proxy_transparent = info->proxy_transparent;
-  x_info->debug_printout    = info->debug_printout;
-  x_info->firewall          = info->firewall;
-  x_info->proxy_adjusted    = info->proxy_adjusted;
+    x_info->proxy_host         = StringSave(info->proxy_host);
+  x_info->debug_printout       = info->debug_printout;
+  x_info->firewall             = info->firewall;
+  x_info->ncbid_port           = info->ncbid_port;
+  if ( info->ncbid_path )
+    x_info->ncbid_path         = StringSave(info->ncbid_path);
+  x_info->lb_disable           = info->lb_disable;
+  x_info->http_proxy_adjusted  = info->http_proxy_adjusted;
+
   return x_info;
+}
+
+
+static void s_PrintString(FILE* fp, const char* name, const char* str) {
+  if ( str )
+    fprintf(fp, "%-16s: \"%s\"\n", name, str);
+  else
+    fprintf(fp, "%-16s: <NULL>\n", name);
+}
+static void s_PrintULong(FILE* fp, const char* name, unsigned long lll) {
+  fprintf(fp, "%-16s: %lu\n", name, lll);
+}
+static void s_PrintBool(FILE* fp, const char* name, Nlm_Boolean bbb) {
+  fprintf(fp, "%-16s: %s\n", name, bbb ? "TRUE" : "FALSE");
+}
+
+NLM_EXTERN void NetConnInfo_Print
+(const SNetConnInfo* info,
+ FILE*               fp)
+{
+  if ( !fp )
+    return;
+
+  fprintf(fp, "\n\n----- [BEGIN] NetConnInfo_Print -----\n");
+
+  if ( info ) {
+    s_PrintString(fp, "client_host",     info->client_host);
+    s_PrintString(fp, "host",            info->host);
+    s_PrintULong (fp, "port",            info->port);
+    s_PrintString(fp, "path",            info->path);
+    s_PrintString(fp, "args",            info->args);
+    s_PrintULong (fp, "timeout(sec)",    info->timeout.sec);
+    s_PrintULong (fp, "timeout(usec)",   info->timeout.usec);
+    s_PrintULong (fp, "conn_try",        info->conn_try);
+    s_PrintString(fp, "http_proxy_host", info->http_proxy_host);
+    s_PrintULong (fp, "http_proxy_port", info->http_proxy_port);
+    s_PrintString(fp, "proxy_host",      info->proxy_host);
+    s_PrintBool  (fp, "debug_printout",  info->debug_printout);
+    s_PrintBool  (fp, "firewall",        info->firewall);
+    s_PrintULong (fp, "ncbid_port",      info->ncbid_port);
+    s_PrintString(fp, "ncbid_path",      info->ncbid_path);
+    s_PrintBool  (fp, "lb_disable",      info->lb_disable);
+    s_PrintBool  (fp, "proxy_adjusted",  info->http_proxy_adjusted);
+  } else {
+    fprintf(fp, "<NULL>\n");
+  }
+
+  fprintf(fp, "----- [END] NetConnInfo_Print -----\n\n");
 }
 
 
@@ -298,7 +365,9 @@ NLM_EXTERN void NetConnInfo_Destroy
   MemFree((*info)->host);
   MemFree((*info)->path);
   MemFree((*info)->args);
+  MemFree((*info)->http_proxy_host);
   MemFree((*info)->proxy_host);
+  MemFree((*info)->ncbid_path);
   MemFree(*info);
   *info = 0;
 }
@@ -308,14 +377,14 @@ NLM_EXTERN EConnStatus ESOCK2ECONN
 (ESOCK_ErrCode err_code)
 {
   switch ( err_code ) {
-    case eSOCK_ESuccess:
-      return eCONN_Success;
-    case eSOCK_ETimeout:
-      return eCONN_Timeout;
-    case eSOCK_EClosed:
-      return eCONN_Closed;
-    case eSOCK_EUnknown:
-      return eCONN_Unknown;
+  case eSOCK_ESuccess:
+    return eCONN_Success;
+  case eSOCK_ETimeout:
+    return eCONN_Timeout;
+  case eSOCK_EClosed:
+    return eCONN_Closed;
+  case eSOCK_EUnknown:
+    return eCONN_Unknown;
   }
   ASSERT(0);
   return eCONN_Unknown;
@@ -331,12 +400,12 @@ NLM_EXTERN SOCK Ncbi_ConnectURL
  const STimeout* c_timeout,
  const STimeout* rw_timeout,
  const Char*     user_header,
- Nlm_Boolean     encode_args
+ Boolean         encode_args
  )
 {
   static const Char X_POST_1[] = "POST ";
   static const Char X_POST_Q[] = "?";
-  static const Char X_POST_E[] = " HTTP/1.0\n";
+  static const Char X_POST_E[] = " HTTP/1.0\r\n";
 
   SOCK  sock;
   Char  buffer[128];
@@ -363,9 +432,9 @@ NLM_EXTERN SOCK Ncbi_ConnectURL
   if (SOCK_SetTimeout(sock, eSOCK_OnReadWrite, rw_timeout, 0, 0)
       != eSOCK_ESuccess) {
     ErrPostEx(SEV_ERROR, 0, 0,
-                "[Ncbi_ConnectURL]  Cannot setup timeout for the connection"
-                " handshake with host \"%s\", port %d",
-                host, (int)port);
+              "[Ncbi_ConnectURL]  Cannot setup timeout for the connection"
+              " handshake with host \"%s\", port %d",
+              host, (int)port);
     SOCK_Close(sock);
     return 0;
   }
@@ -386,7 +455,7 @@ NLM_EXTERN SOCK Ncbi_ConnectURL
   }
 
   /* compose and send HTTP header */
-  if (/*  POST <path>?<args> HTTP/1.0\n */
+  if (/*  POST <path>?<args> HTTP/1.0\r\n */
       SOCK_Write(sock, (const void*)X_POST_1,  StrLen(X_POST_1 ), 0)
       != eSOCK_ESuccess  ||
       SOCK_Write(sock, (const void*)path, StrLen(path), 0)
@@ -401,27 +470,24 @@ NLM_EXTERN SOCK Ncbi_ConnectURL
       SOCK_Write(sock, (const void*)X_POST_E,  StrLen(X_POST_E ), 0)
       != eSOCK_ESuccess  ||
 
-      /*  Content-Length: <content_length>\n */
-      sprintf(buffer, "Content-Length: %lu\n",
-              (unsigned long)content_length) <= 0  ||
-      SOCK_Write(sock, (const void*)buffer, StrLen(buffer), 0)
-      != eSOCK_ESuccess  ||
-
       /*  <user_header> */
       (user_header  &&
        SOCK_Write(sock, (const void*)user_header, StrLen(user_header), 0)
        != eSOCK_ESuccess)  ||
 
-      /*  \n */
-      SOCK_Write(sock, (const void*)"\n", 1, 0) != eSOCK_ESuccess)
-  {
-    /* error */
-    ErrPostEx(SEV_ERROR, 0, 0,
-              "[Ncbi_ConnectURL]  Error sending HTTP header");
-    MemFree(x_args);
-    SOCK_Close(sock);
-    return 0;
-  }
+      /*  Content-Length: <content_length>\r\n\r\n */
+      sprintf(buffer, "Content-Length: %lu\r\n\r\n",
+              (unsigned long)content_length) <= 0  ||
+      SOCK_Write(sock, (const void*)buffer, StrLen(buffer), 0)
+      != eSOCK_ESuccess)
+    {
+      /* error */
+      ErrPostEx(SEV_ERROR, 0, 0,
+                "[Ncbi_ConnectURL]  Error sending HTTP header");
+      MemFree(x_args);
+      SOCK_Close(sock);
+      return 0;
+    }
 
   /* success */
   MemFree(x_args);
@@ -432,12 +498,12 @@ NLM_EXTERN SOCK Ncbi_ConnectURL
 /* Code for the "*_StripToPattern()" functions
  */
 typedef  EConnStatus (*FPeekRead)
-(void*       source,
- void*       buffer,
- Uint4       size,
- Uint4*      n_read,
- Boolean     do_peek
- );
+     (void*   source,
+      void*   buffer,
+      Uint4   size,
+      Uint4*  n_read,
+      Boolean do_peek
+      );
 
 static EConnStatus s_StripToPattern
 (void*       source,
@@ -562,13 +628,13 @@ static EConnStatus s_SOCK_Read
 }
 
 NLM_EXTERN EConnStatus SOCK_StripToPattern
-(SOCK        conn,
+(SOCK        sock,
  const void* pattern,
  Uint4       pattern_size,
  BUF*        buf,
  Uint4*      n_discarded)
 {
-  return s_StripToPattern(conn, s_SOCK_Read, pattern, pattern_size, buf,
+  return s_StripToPattern(sock, s_SOCK_Read, pattern, pattern_size, buf,
                           n_discarded);
 }
 
@@ -626,13 +692,14 @@ static const char s_Encode[256][4] = {
 #define VALID_URL_SYMBOL(ch)  (s_Encode[(unsigned char)ch][0] != '%')
 
 
-NLM_EXTERN Boolean URL_Decode
+NLM_EXTERN Boolean URL_DecodeEx
 (const void* src_buf,
  Uint4   src_size,
  Uint4*  src_read,
  void*   dst_buf,
  Uint4   dst_size,
- Uint4*  dst_written)
+ Uint4*  dst_written,
+ Char*   allow_symbols)
 {
   unsigned char *src = (unsigned char*)src_buf;
   unsigned char *dst = (unsigned char*)dst_buf;
@@ -667,7 +734,8 @@ NLM_EXTERN Boolean URL_Decode
     }
 
     default:
-      if ( VALID_URL_SYMBOL(*src) )
+      if (VALID_URL_SYMBOL(*src)  ||
+          (allow_symbols  &&  strchr(allow_symbols, *src)))
         *dst = *src;
       else
         return (Boolean)(*dst_written ? TRUE : FALSE);
@@ -677,6 +745,19 @@ NLM_EXTERN Boolean URL_Decode
   ASSERT( src == (unsigned char*)src_buf + *src_read    );
   ASSERT( dst == (unsigned char*)dst_buf + *dst_written );
   return TRUE;
+}
+
+
+NLM_EXTERN Boolean URL_Decode
+(const void* src_buf,
+ Uint4   src_size,
+ Uint4*  src_read,
+ void*   dst_buf,
+ Uint4   dst_size,
+ Uint4*  dst_written)
+{
+  return URL_DecodeEx
+    (src_buf, src_size, src_read, dst_buf, dst_size, dst_written, 0);
 }
 
 
@@ -714,6 +795,99 @@ NLM_EXTERN void URL_Encode
   ASSERT( src == (unsigned char*)src_buf + *src_read    );
   ASSERT( dst == (unsigned char*)dst_buf + *dst_written );
 }
+
+
+
+/****************************************************************************
+ * NCBI-specific MIME content type and sub-types
+ */
+
+static const char* s_MIME_SubType[eMIME_Unknown+1] = {
+  "asn-text",
+  "asn-binary",
+  "fasta",
+  "unknown"
+};
+static const char* s_MIME_Encoding[eENCOD_None+1] = {
+  "url-encoded",
+  ""
+};
+
+
+NLM_EXTERN char* MIME_ComposeContentType
+(EMIME_SubType  subtype,
+ EMIME_Encoding encoding,
+ char*          buf,
+ size_t         buflen)
+{
+  static const char s_ContentType[] = "Content-Type: x-ncbi-data/x-";
+  const char*       x_SubType       = s_MIME_SubType[(int)subtype];
+  const char*       x_Encoding      = s_MIME_Encoding[(int)encoding];
+  char              x_buf[MAX_CONTENT_TYPE_LEN];
+
+  ASSERT( sizeof(s_ContentType) + strlen(x_SubType) + strlen(x_Encoding) + 2
+          < MAX_CONTENT_TYPE_LEN );
+
+  if ( *x_Encoding )
+    sprintf(x_buf, "%s%s-%s\r\n", s_ContentType, x_SubType, x_Encoding);
+  else
+    sprintf(x_buf, "%s%s\r\n", s_ContentType, x_SubType);
+
+  ASSERT( strlen(x_buf) < sizeof(x_buf) );
+  StringNCpy_0(buf, x_buf, buflen);
+  return buf;
+}
+
+
+NLM_EXTERN Boolean MIME_ParseContentType
+(const char*     str,
+ EMIME_SubType*  subtype,
+ EMIME_Encoding* encoding)
+{
+  char*   x_buf;
+  char*   x_subtype;
+  int     i;
+
+  if ( subtype )
+    *subtype = eMIME_Unknown;
+  if ( encoding )
+    *encoding = eENCOD_None;
+
+  if (!str  ||  !*str)
+    return FALSE;
+
+  {{
+    size_t  x_size = strlen(str) + 1;
+    x_buf     = (char*) malloc(2 * x_size);
+    x_subtype = x_buf + x_size;
+  }}
+
+  strcpy(x_buf, str);
+  StrLower(x_buf);
+  if (sscanf(x_buf, " content-type: x-ncbi-data/x-%s ", x_subtype) != 1  &&
+      sscanf(x_buf, " x-ncbi-data/x-%s ", x_subtype) != 1) {
+    free(x_buf);
+    return FALSE;
+  }
+
+  if ( subtype ) {
+    for (i = 0;  i < (int)eMIME_Unknown;  i++) {
+      if ( !strncmp(x_subtype, s_MIME_SubType[i], strlen(s_MIME_SubType[i])) )
+        *subtype = (EMIME_SubType)i;
+    }
+  }
+
+  if ( encoding ) {
+    for (i = 0;  i < (int)eENCOD_None;  i++) {
+      if (strstr(x_subtype, s_MIME_Encoding[i]) != 0)
+        *encoding = (EMIME_Encoding)i;
+    }
+  }
+  
+  free(x_buf);
+  return TRUE;
+}
+
 
 
 
@@ -910,6 +1084,20 @@ Int2 Main(void)
       "_ _%_;_\n_:_\\_\"_", 13, 13, TRUE }
   };
 
+  static const STestArg s_TestDecodeEx[] = {
+    { "",    0, 0,    "", 0, 0,  TRUE },
+    { "%25", 3, 0,   "%", 0, 0,  TRUE },
+    { "%%%", 2, 0,    "", 1, 0,  FALSE },
+    { "%xy", 3, 0,    "", 1, 0,  FALSE },
+    { "\n",  1, 0,    "", 1, 0,  FALSE },
+    { ">>a", 3, 3, ">>a", 3, 3,  TRUE },
+    { ">b[", 3, 3, ">b[", 4, 3,  TRUE },
+    { ">b]", 3, 2, ">b",  3, 2,  TRUE },
+    { "[b]", 3, 2, "[b",  3, 2,  TRUE },
+    { "<b>", 3, 0,   "",  3, 0,  FALSE },
+    { "<e>", 3, 0,   "",  5, 0,  FALSE }
+  };
+
   size_t i;
   Uint4 src_read, dst_written;
   char dst[1024];
@@ -933,7 +1121,88 @@ Int2 Main(void)
     ASSERT( !dst_written  ||  !memcmp(dst, arg->dst_buf, dst_written) );
   }
 
+  for (i = 0;  i < DIM(s_TestDecodeEx);  i++) {
+    const STestArg* arg = &s_TestDecodeEx[i];
+    Boolean ok = URL_DecodeEx(arg->src_buf, arg->src_size, &src_read,
+                              dst, arg->dst_size, &dst_written, "[>");
+    ASSERT( ok == arg->ok );
+    ASSERT( src_read == arg->src_read );
+    ASSERT( dst_written == arg->dst_written );
+    ASSERT( !dst_written  ||  !memcmp(dst, arg->dst_buf, dst_written) );
+  }
+
   return 0;
 }
 
 #endif /* TEST__URL_Encode */
+
+
+
+/***********************************************************************
+ *  TEST 3:  Miscellaneous
+ ***********************************************************************/
+
+#ifdef TEST_MODULE__CONNUTIL
+
+static Boolean s_CheckMIME(const char* str,
+                           EMIME_SubType subtype, EMIME_Encoding encoding)
+{
+  EMIME_SubType  x_subtype;
+  EMIME_Encoding x_encoding;
+
+  if (!MIME_ParseContentType(str, &x_subtype, 0)   ||  x_subtype  != subtype)
+    return FALSE;
+  if (!MIME_ParseContentType(str, 0, &x_encoding)  ||  x_encoding != encoding)
+    return FALSE;    
+  if (!MIME_ParseContentType(str, &x_subtype, &x_encoding)  ||
+      x_subtype != subtype  ||  x_encoding != encoding)
+    return FALSE;    
+
+  str = strchr(str, ':');
+  if ( str ) {
+    str++;
+    return s_CheckMIME(str, subtype, encoding);
+  }
+
+  return TRUE;
+}
+
+
+#ifdef __cplusplus
+extern "C"
+#endif
+Int2 Main(void)
+{
+  int i,j;
+
+  /* MIME API */
+  EMIME_SubType  subtype;
+  EMIME_Encoding encoding;
+  char str[MAX_CONTENT_TYPE_LEN];
+  *str = '\0';
+  for (i = 0, subtype = (EMIME_SubType) i;
+       i <= (int)eMIME_Unknown;  i++, subtype = (EMIME_SubType) i) {
+    for (j = 0, encoding = (EMIME_Encoding) j; 
+         j <= (int)eENCOD_None;  j++, encoding = (EMIME_Encoding) j) {
+      ASSERT( !s_CheckMIME(str, subtype, encoding) );
+      MIME_ComposeContentType(subtype, encoding, str, sizeof(str));
+      ASSERT( s_CheckMIME(str, subtype, encoding) );
+    }
+  }
+
+  ASSERT( s_CheckMIME("content-type:  x-ncbi-data/x-asn-binary ",
+                      eMIME_AsnBinary, eENCOD_None) );
+  ASSERT( s_CheckMIME("content-TYPE: \t x-ncbi-data/x-asn-text-url-encoded\r",
+                      eMIME_AsnText, eENCOD_Url) );
+  ASSERT( s_CheckMIME("x-ncbi-data/x-eeee",
+                      eMIME_Unknown, eENCOD_None) );
+
+  ASSERT( !s_CheckMIME("content-TYPE : x-ncbi-data/x-unknown\r",
+                       eMIME_Unknown, eENCOD_None) );
+  ASSERT( !s_CheckMIME("", eMIME_Unknown, eENCOD_None) );
+  ASSERT( !s_CheckMIME(0, eMIME_Unknown, eENCOD_None) );
+
+  return 0;
+}
+
+#endif /* TEST_MODULE__CONNUTIL */

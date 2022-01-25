@@ -51,7 +51,7 @@ Detailed Contents:
 *
 * Version Creation Date:   10/26/95
 *
-* $Revision: 6.7 $
+* $Revision: 6.9 $
 *
 * File Description: 
 *       Functions to store "words" from a query and perform lookups against
@@ -67,6 +67,12 @@ Detailed Contents:
 *
 * RCS Modification History:
 * $Log: lookup.c,v $
+* Revision 6.9  1999/09/16 16:56:39  madden
+* Changes to lookup_new for long words
+*
+* Revision 6.8  1999/09/16 14:16:27  madden
+* lookup_find_init returns Uint1Ptr instead of CharPtr
+*
 * Revision 6.7  1999/04/27 15:40:12  madden
 * Use aux lookup only for short words
 *
@@ -247,7 +253,7 @@ static VoidPtr lookup_get_memory (LookupTablePtr lookup, size_t required)
 	bits the highest num_of_bits to zero).
 */
 LookupTablePtr LIBCALL
-lookup_new(Int2 alphabet_size, Int2 wordsize)
+lookup_new(Int2 alphabet_size, Int2 wordsize, Int2 reduced_wordsize)
 
 {
 	Int4 num_of_bits;
@@ -257,11 +263,13 @@ lookup_new(Int2 alphabet_size, Int2 wordsize)
 	num_of_bits = Nlm_Nint(log((Nlm_FloatHi)alphabet_size)/NCBIMATH_LN2);
 
 /* 32 bits is 4 bytes */ 
+/*
 	if (num_of_bits*wordsize > 32)
 	{
 		ErrPostEx(SEV_ERROR, 0, 0, "alphabet times wordsize > 32");
 		return NULL;
 	}
+*/
 
 	lookup = (LookupTablePtr) MemNew(sizeof(LookupTable));
 	if (lookup == NULL)
@@ -269,8 +277,11 @@ lookup_new(Int2 alphabet_size, Int2 wordsize)
 
 	lookup->char_size = num_of_bits;
 	lookup->wordsize = (Int4) wordsize;
-	lookup->array_size = (Int4) Nlm_Powi(2.0, (num_of_bits*wordsize));
-	lookup->mask = (Int4) Nlm_Powi(2.0, (num_of_bits*(wordsize-1))) - 1;
+	if (reduced_wordsize <= 0)
+		reduced_wordsize = wordsize;
+	lookup->reduced_wordsize = (Int4) reduced_wordsize;
+	lookup->array_size = (Int4) Nlm_Powi(2.0, (num_of_bits*reduced_wordsize));
+	lookup->mask = (Int4) Nlm_Powi(2.0, (num_of_bits*(reduced_wordsize-1))) - 1;
 	lookup->position =
 		(LookupPositionPtr PNTR) MemNew((lookup->array_size)*sizeof(LookupPositionPtr));
 	if (lookup->position == NULL)
@@ -409,15 +420,15 @@ AddPositionToLookupTable(LookupTablePtr lookup, Int4 index, Int4 position, Int1 
 	lookup_index.  The "new" starting point of the string is then returned.
 */ 
 
-CharPtr LIBCALL
-lookup_find_init(LookupTablePtr lookup, Int4 PNTR lookup_index, CharPtr string)
+Uint1Ptr LIBCALL
+lookup_find_init(LookupTablePtr lookup, Int4 PNTR lookup_index, Uint1Ptr string)
 
 {
 
 	Int4 char_size, wordsize;
 
 	char_size = lookup->char_size;
-	wordsize = lookup->wordsize;
+	wordsize = lookup->reduced_wordsize;
 
 	*lookup_index = *string;
 
@@ -443,6 +454,7 @@ BLAST_WordFinderNew (Int2 alphabet_size, Int2 wordsize, Int2 compression_ratio, 
 
 {
 	BLAST_WordFinderPtr wfp;
+	Int2 reduced_wordsize;
 
 	wfp = (BLAST_WordFinderPtr) MemNew(sizeof(BLAST_WordFinder));
 
@@ -454,13 +466,19 @@ BLAST_WordFinderNew (Int2 alphabet_size, Int2 wordsize, Int2 compression_ratio, 
 		if (compression_ratio > 1)
 		{
 			if (round_down)
-				wfp->lookup = lookup_new(alphabet_size, (Int2) ((wordsize-3)/compression_ratio));
+			{
+				reduced_wordsize = (Int2) MIN(2, ((wordsize-3)/compression_ratio));
+				wfp->lookup = lookup_new(alphabet_size, (Int2) ((wordsize-3)/compression_ratio), (Int2) reduced_wordsize);
+			}
 			else
-				wfp->lookup = lookup_new(alphabet_size, (Int2) (wordsize/compression_ratio));
+			{
+				reduced_wordsize = (Int2) (2, ((wordsize)/compression_ratio));
+				wfp->lookup = lookup_new(alphabet_size, (wordsize/compression_ratio), (Int2) reduced_wordsize);
+			}
 		}
 		else
 		{
-			wfp->lookup = lookup_new(alphabet_size, (Int2) (wordsize/compression_ratio));
+			wfp->lookup = lookup_new(alphabet_size, (Int2) (wordsize/compression_ratio), 0);
 		}
 		wfp->compression_ratio = compression_ratio;
 		wfp->wordsize = wordsize;

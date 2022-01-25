@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.202 $
+* $Revision: 6.220 $
 *
 * File Description: 
 *
@@ -41,6 +41,14 @@
 *
 * ==========================================================================
 */
+
+#ifndef CODECENTER
+static char *date_of_compilation = __DATE__;
+static char *time_of_compilation = __TIME__;
+#else
+static char *date_of_compilation = "today";
+static char *time_of_compilation = "now";
+#endif
 
 #include "sequin.h"
 #include <vsm.h>
@@ -59,10 +67,12 @@
 #include <tofasta.h>
 #include <saledit.h>
 #include <salstruc.h>
-#include <saldist.h>
 #include <salfiles.h>
-#include <salutil.h>
+#include <salign.h>
 #include <salsap.h>
+#include <salutil.h>
+#include <salpedit.h>
+#include <salptool.h>
 #include <pobutil.h>
 #include <accutils.h>
 #include <netcnfg.h>
@@ -109,11 +119,21 @@
 #endif
 #endif
 
+#define SEQ_APP_VER "3.00"
+
+#ifndef CODECENTER
+static char* sequin_version_binary = "Sequin Indexer Services Version " SEQ_APP_VER " " __DATE__ " " __TIME__;
+#else
+static char* sequin_version_binary = "Sequin Indexer Services Version curr today now";
+#endif
+
+CharPtr SEQUIN_APPLICATION = SEQ_APP_VER;
+CharPtr SEQUIN_SERVICES = NULL;
+CharPtr SEQUIN_VERSION = NULL;
+
 extern EnumFieldAssoc  orgmod_subtype_alist [];
 extern EnumFieldAssoc  subsource_subtype_alist [];
 extern EnumFieldAssoc  biosource_genome_simple_alist [];
-
-CharPtr SEQUIN_APP_VERSION = "2.90";
 
 Boolean  useDesktop = FALSE;
 Boolean  useEntrez = FALSE;
@@ -153,6 +173,7 @@ static IteM  saveItem = NULL;
 static IteM  saveAsItem = NULL;
 static IteM  restoreItem = NULL;
 static IteM  prepareItem = NULL;
+static IteM  submitItem = NULL;
 static IteM  loadUidItem = NULL;
 static IteM  saveUidItem = NULL;
 static IteM  printItem = NULL;
@@ -721,6 +742,8 @@ static void DoRemoveAlignmentFromRecord (SeqEntryPtr sep, Pointer mydata, Int4 i
   }
 }
 
+extern void SubmitToNCBI (IteM i);
+
 static void PrepareSeqSubmitProc (IteM i)
 
 {
@@ -1245,6 +1268,7 @@ static void ProcessDoneButton (ForM f)
           if (allRawOrSeg) {
             vsp->useSeqMgrIndexes = TRUE;
           }
+          vsp->suppressContext = ShouldSetSuppressContext ();
           oldErrHook = ErrSetHandler (ValidErrHook);
           oldErrSev = ErrSetMessageLevel (SEV_NONE);
           ValidateSeqEntry (sep, vsp);
@@ -1311,7 +1335,7 @@ static void AboutProc (IteM i)
   WindoW  w;
 
   w = ModalWindow (-50, -33, -1, -1, CloseAboutWindowProc);
-  p = SimplePanel (w, AboutBoxWidth (), 14 * stdLineHeight, DrawAbout);
+  p = SimplePanel (w, AboutBoxWidth (), AboutBoxHeight (), DrawAbout);
   SetPanelClick (p, NULL, NULL, NULL, CloseAboutPanelProc);
   Show (w);
   Select (w);
@@ -1388,6 +1412,7 @@ extern void ValSeqEntryForm (ForM f)
         if (allRawOrSeg) {
           vsp->useSeqMgrIndexes = TRUE;
         }
+        vsp->suppressContext = ShouldSetSuppressContext ();
         oldErrHook = ErrSetHandler (ValidErrHook);
         oldErrSev = ErrSetMessageLevel (SEV_NONE);
         ValidateSeqEntry (sep, vsp);
@@ -2542,11 +2567,13 @@ static void EnableEditSeqAlignAndSubItems (BaseFormPtr bfp)
     Enable (editsub);
 #ifdef WIN_MAC
     Enable (prepareItem);
+    Enable (submitItem);
 #endif
   } else {
     Disable (editsub);
 #ifdef WIN_MAC
     Disable (prepareItem);
+    Disable (submitItem);
 #endif
   }
   EnableEditAlignItem (bfp);
@@ -2596,6 +2623,7 @@ static void BioseqViewFormActivated (WindoW w)
                    (HANDLE) newFeatMenu,
                    (HANDLE) newPubMenu,
                    (HANDLE) prepareItem,
+                   (HANDLE) submitItem,
                    (HANDLE) validateItem,
                    (HANDLE) edithistoryitem,
                    NULL);
@@ -2861,6 +2889,7 @@ static void MacDeactProc (WindoW w)
                    (HANDLE) newFeatMenu,
                    (HANDLE) newPubMenu,
                    (HANDLE) prepareItem,
+                   (HANDLE) submitItem,
                    (HANDLE) validateItem,
                    (HANDLE) editsequenceitem,
                    (HANDLE) editseqalignitem,
@@ -2933,8 +2962,11 @@ static ValNodePtr LookupAnArticleFunc (ValNodePtr oldpep)
 {
   FindPubOption  fpo;
   MonitorPtr     mon;
+  Int4           muid = 0;
   ValNodePtr     pep;
+  Int4           pmid = 0;
   ValNodePtr     pub;
+  ValNodePtr     vnp;
 
   pub = NULL;
   if (oldpep != NULL) {
@@ -2957,6 +2989,25 @@ static ValNodePtr LookupAnArticleFunc (ValNodePtr oldpep)
       if (! fpo.fetches_succeeded) {
         ErrShow ();
         Update ();
+      } else {
+        for (vnp = pub; vnp != NULL; vnp = vnp->next) {
+          if (vnp->choice == PUB_Muid) {
+            muid = vnp->data.intvalue;
+          } else if (vnp->choice == PUB_PMid) {
+            pmid = vnp->data.intvalue;
+          }
+        }
+        if (muid != 0 && pmid == 0) {
+          pmid = MedArchMu2Pm (muid);
+          if (pmid != 0) {
+            ValNodeAddInt (&pub, PUB_PMid, pmid);
+          }
+        } else if (pmid != 0 && muid == 0) {
+          muid = MedArchPm2Mu (pmid);
+          if (muid != 0) {
+            ValNodeAddInt (&pub, PUB_Muid, muid);
+          }
+        }
       }
       MonitorStrValue (mon, "Closing MedArch");
       Update ();
@@ -4136,7 +4187,7 @@ static void CommonAddSeq (IteM i, Int2 type)
           title = SeqEntryGetTitle (sep);
           vnp = SeqEntryGetSeqDescr (sep, Seq_descr_source, NULL);
           if (vnp == NULL || title != NULL) {
-            ptr = StringStr (title, "[org=");
+            ptr = StringISearch (title, "[org=");
             StringNCpy_0 (str, ptr + 5, sizeof (str));
             ptr = StringChr (str, ']');
             if (ptr != NULL) {
@@ -4190,7 +4241,7 @@ static void CommonAddSeq (IteM i, Int2 type)
             ExciseString (title, "[subsource=", "]");
             ExciseString (title, "[org=", "]");
             if (bsp != NULL) {
-              ptr = StringStr (title, "[molecule=");
+              ptr = StringISearch (title, "[molecule=");
               if (ptr != NULL) {
                 StringNCpy_0 (str, ptr + 10, sizeof (str));
                 ptr = StringChr (str, ']');
@@ -4204,7 +4255,7 @@ static void CommonAddSeq (IteM i, Int2 type)
                 }
               }
             }
-            ptr = StringStr (title, "[location=");
+            ptr = StringISearch (title, "[location=");
             if (ptr != NULL) {
               StringNCpy_0 (str, ptr + 10, sizeof (str));
               ptr = StringChr (str, ']');
@@ -4220,7 +4271,7 @@ static void CommonAddSeq (IteM i, Int2 type)
                 }
               }
             }
-            ptr = StringStr (title, "[moltype=");
+            ptr = StringISearch (title, "[moltype=");
             if (ptr != NULL) {
               biomol = 0;
               StringNCpy_0 (str, ptr + 8, sizeof (str));
@@ -4430,6 +4481,11 @@ static void BioseqViewFormMenus (WindoW w)
       i = CommandItem (m, "Prepare Submission...", PrepareSeqSubmitProc);
       SetObjectExtra (i, bfp, NULL);
       omdp = ObjMgrGetData (bfp->input_entityID);
+      if (omdp != NULL && omdp->datatype != OBJ_SEQSUB) {
+        Disable (i);
+      }
+      i = CommandItem (m, "Submit to NCBI", SubmitToNCBI);
+      SetObjectExtra (i, bfp, NULL);
       if (omdp != NULL && omdp->datatype != OBJ_SEQSUB) {
         Disable (i);
       }
@@ -4672,13 +4728,13 @@ static void TermListFormMenus (WindoW w)
     FormCommandItem (m, CLEAR_MENU_ITEM, bfp, VIB_MSG_DELETE);
 
     m = PulldownMenu (w, "Options");
+    CommandItem (m, "Preferences...", PreferencesProc);
+    SeparatorItem (m);
     sub = SubMenu (m, "Query Style");
     CreateQueryTypeChoice (sub, bfp);
     CreateClearUnusedItem (m, bfp);
 
     m = PulldownMenu (w, "Misc");
-    CommandItem (m, "Preferences...", PreferencesProc);
-    SeparatorItem (m);
     CommandItem (m, "Style Manager...", StyleManagerProc);
 #ifndef WIN16
     if (BiostrucAvail ()) {
@@ -5206,11 +5262,13 @@ static void SequinSeqViewFormMessage (ForM f, Int2 mssg)
   Int2          mssgsub;
   Int2          mssgupwthaln;
   SeqEntryPtr   oldsep;
+  OMProcControl  ompc;
 /******** COLOMBE
   SeqAlignPtr   salp; ********COLOMBE END*/
   SeqAnnotPtr   sap;
   SelStructPtr  sel;
   SeqEntryPtr   sep;
+  SeqIdPtr      sip;
 
   bfp = (BaseFormPtr) GetObjectExtra (f);
   if (bfp != NULL) {
@@ -5261,6 +5319,43 @@ static void SequinSeqViewFormMessage (ForM f, Int2 mssg)
       case VIB_MSG_DELETE :
         sel = ObjMgrGetSelected ();
         if (sel != NULL) {
+          if (sel->itemtype == OBJ_BIOSEQ && sel->next == NULL && indexerVersion) {
+            bsp = GetBioseqGivenIDs (sel->entityID, sel->itemID, sel->itemtype);
+            sip = SeqIdDup (bsp->id);
+            entityID = sel->entityID;
+            MemSet ((Pointer) (&ompc), 0, sizeof (OMProcControl));
+            ompc.do_not_reload_from_cache = TRUE;
+            ompc.input_entityID = sel->entityID;
+            ompc.input_itemID = sel->itemID;
+            ompc.input_itemtype = sel->itemtype;
+            if (! DetachDataForProc (&ompc, FALSE)) {
+              Message (MSG_ERROR, "DetachDataForProc failed");
+            }
+            sep = GetTopSeqEntryForEntityID (entityID);
+            SeqAlignBioseqDeleteByIdFromSeqEntry (sep, sip);
+            SeqIdFree (sip);
+            /* see VSeqMgrDeleteProc - probably leaving one dangling SeqEntry */
+            BioseqFree (bsp);
+            ObjMgrSetDirtyFlag (entityID, TRUE);
+            ObjMgrSendMsg (OM_MSG_UPDATE, entityID, 0, 0);
+            ObjMgrDeSelect (0, 0, 0, 0, NULL);
+            Update ();
+          }
+          if (sel->itemtype == OBJ_SEQANNOT && sel->next == NULL && extraServices) {
+            entityID = sel->entityID;
+            MemSet ((Pointer) (&ompc), 0, sizeof (OMProcControl));
+            ompc.do_not_reload_from_cache = TRUE;
+            ompc.input_entityID = sel->entityID;
+            ompc.input_itemID = sel->itemID;
+            ompc.input_itemtype = sel->itemtype;
+            if (! DetachDataForProc (&ompc, FALSE)) {
+              Message (MSG_ERROR, "DetachDataForProc failed");
+            }
+            ObjMgrSetDirtyFlag (entityID, TRUE);
+            ObjMgrSendMsg (OM_MSG_UPDATE, entityID, 0, 0);
+            ObjMgrDeSelect (0, 0, 0, 0, NULL);
+            Update ();
+          }
           if (sel->itemtype != OBJ_SEQDESC && sel->itemtype != OBJ_SEQFEAT) return;
           if (sel->next == NULL) {
             entityID = sel->entityID;
@@ -5854,7 +5949,7 @@ static void SetupDesktop (void)
   Int2        val;
   Boolean     validateExons;
 
-  SetAppProperty ("SequinAppVersion", SEQUIN_APP_VERSION);
+  SetAppProperty ("SequinAppVersion", SEQUIN_APPLICATION);
 
   MemSet ((Pointer) (&medviewprocs), 0, sizeof (MedlineViewProcs));
   medviewprocs.cleanupObjectPtr = FALSE;
@@ -6564,12 +6659,13 @@ static void SetupMacMenus (void)
   SeparatorItem (m);
   duplicateViewItem = CommandItem (m, "Duplicate View", DuplicateViewProc);
   SeparatorItem (m);
-  saveItem = FormCommandItem (m, "Save", NULL, VIB_MSG_SAVE);
+  saveItem = FormCommandItem (m, "Save/S", NULL, VIB_MSG_SAVE);
   saveAsItem = FormCommandItem (m, "Save As...", NULL, VIB_MSG_SAVE_AS);
   SeparatorItem (m);
   restoreItem = CommandItem (m, "Restore...", RestoreSeqEntryProc);
   SeparatorItem (m);
   prepareItem = CommandItem (m, "Prepare Submission...", PrepareSeqSubmitProc);
+  submitItem = CommandItem (m, "Submit to NCBI", SubmitToNCBI);
   SeparatorItem (m);
   if (loadSaveUidListOK) {
     loadUidItem = CommandItem (m, "Load Uid List...", ObsoleteUidListProc);
@@ -6725,13 +6821,23 @@ static void SetupMacMenus (void)
 }
 #endif
 
+extern Boolean allowUnableToProcessMessage;
+Boolean allowUnableToProcessMessage = TRUE;
+
+static CharPtr canfeatpropagate =
+"Since this record has an alignment, you can annotate features on " \
+"one record and then use use feature propagation to annotate the "\
+"equivalent features on the other records. This is much faster " \
+"than annotating everything manually.";
+
 static void FinishPuttingTogether (ForM f)
 
 {
-  BaseFormPtr  bfp;
-  Uint2        entityID;
-  Int2         handled;
-  SeqEntryPtr  sep;
+  BaseFormPtr   bfp;
+  BioseqSetPtr  bssp;
+  Uint2         entityID = 0;
+  Int2          handled;
+  SeqEntryPtr   sep = NULL;
 
   bfp = (BaseFormPtr) GetObjectExtra (f);
   if (bfp != NULL) {
@@ -6756,11 +6862,21 @@ static void FinishPuttingTogether (ForM f)
       }
       ObjMgrSetOptions (OM_OPT_FREE_IF_NO_VIEW, entityID);
       ObjMgrSetDirtyFlag (entityID, TRUE);
-    } else {
+    } else if (allowUnableToProcessMessage) {
       Message (MSG_FATAL, "Unable to process Seq-entry.");
     }
     /*SetChecklistValue (checklistForm, 5);*/
     Remove (bfp->form);
+    if (sep != NULL && entityID > 0 && IS_Bioseq_set (sep)) {
+      bssp = (BioseqSetPtr) sep->data.ptrvalue;
+      if (bssp != NULL && (bssp->_class == 13 ||
+                           bssp->_class == 14 ||
+                           bssp->_class == 15)) {
+        if (SeqEntryHasAligns (entityID, sep)) {
+          Message (MSG_OK, "%s", canfeatpropagate);
+        }
+      }
+    }
   }
 }
 
@@ -7639,8 +7755,9 @@ Int2 Main (void)
   OMUserDataPtr  omudp;
   PaneL          p;
   Int2           procval = OM_MSG_RET_NOPROC;
+  CharPtr        ptr;
   SeqEntryPtr    sep;
-  Char           str [16];
+  Char           str [80];
   Int2           val;
   WindoW         w;
 #ifdef WIN_MOTIF
@@ -7658,12 +7775,32 @@ Int2 Main (void)
 
   ReadSettings ();
 
+  sprintf (str, "Sequin Application Version %s", SEQUIN_APPLICATION);
+  SEQUIN_VERSION = StringSave (str);
+
+  ptr = "Standard Release";
+  if (useEntrez || useBlast) {
+    ptr = "Network Aware";
+  }
+  if (indexerVersion) {
+    ptr = "Indexer Services";
+  }
+  if (genomeCenter != NULL) {
+    ptr = "Genome Center";
+  }
+  if (indexerVersion) {
+    sprintf (str, "%s [%s - %s]", ptr, date_of_compilation, time_of_compilation);
+  } else {
+    sprintf (str, "%s [%s]", ptr, date_of_compilation);
+  }
+  SEQUIN_SERVICES = StringSave (str);
+
   if (! indexerVersion) {
     ErrSetLogfile (NULL, 0);
   }
 
   w = FixedWindow (-50, -33, -10, -10, "Sequin", NULL);
-  p = SimplePanel (w, AboutBoxWidth (), 14 * stdLineHeight, DrawAbout);
+  p = SimplePanel (w, AboutBoxWidth (), AboutBoxHeight (), DrawAbout);
   Show (w);
 #ifdef WIN_MOTIF
   Select (w);

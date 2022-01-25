@@ -18,10 +18,10 @@ The toolkit is available by anonymous ftp from ncbi.nlm.nih.gov
 cd toolbox
 cd ncbi_tools
 bin
-get ncbi.tar.Z  (UNIX tar file)
+get ncbi.tar.Z  (compressed UNIX tar file)
 quit
 
-In this same directory are also ncbiZ.exe (DOS self extracting archive) and
+In this same directory are also ncbiz.exe (DOS self extracting archive) and
 ncbi.hqx (Mac self extracting archive). All three files contain the same
 source code and will make the toolkit for all platforms.
 
@@ -39,12 +39,77 @@ contacting us about its use for commercial, academic, or government groups.
 
 ===========================================================================
 
-                           Version 6.0
+                           Version 6.1
       the date of release may be obtained from the file ncbi/VERSION
 
 ===========================================================================
 
                              Summary
+
+The procedure of building the toolkit on Unix was slightly changed.
+Now there is no need to download any binary NCBI product for your
+platform to obtain the platform-specific ncbi.mk file.
+
+To build the NCBI toolkit you need to look for platform-dependent instructions:
+For UNIX:
+	look at the file make/readme.unx
+For Mac:
+	look at the file make/readme.mac
+For Microsoft Windows95/98/NT:
+	look at the file make/readme.dos
+There is some information which may be useful for NCBI tookit building
+in the file doc/FAQ.txt
+
+This release includes source code for the new (2.0.9) version of BLAST.
+Look at the file doc/README.bls for more detailed documentation on
+stand-alone BLAST.
+
+The file doc/README.pbl has the information about PowerBLAST.
+
+And the description on Integrating Matrix Profiles And Local Alignments
+(IMPALA) is located in the file doc/README.imp
+
+The file doc/sequin.htm describes the SEQUIN and its configuration.
+
+If you have problems configuring Entrez with a firewall, look at the
+file doc/firewall.txt
+
+This file has a section called CONFIGURATION OR SETTINGS FILES,
+which explains in detail how our configuration system works.  The ncbi
+config file (.ncbirc on UNIX, ncbi.ini on PC/Windows, and ncbi.cnf on
+Macintosh) is needed in order to find data files, such as
+gc.val (the genetic code table), provided in the toolkit or with programs
+like Sequin.  (The asnload files containing dynamic versions of the ASN.1
+parse tables are no longer needed, since all platforms can now have large
+static data.)
+
+It has recently become possible to eliminate the need for the ncbi config
+file by calling UseLocalAsnloadDataAndErrMsg () at the beginning of your
+program.  This looks for the data directory in the same directory as the
+running program.  If it doesn't find it, it looks up one level, in case you
+are compiling programs in the build directory of the toolkit.  If it finds
+the data directory in either of these places, it transiently sets the
+location, so code that loads these files is given the correct path.
+
+An even more recent change is that copies of several of our data files (gc,
+seqcode, and featdef) are now built into the source code, so if the data
+directory is not found, programs that require only these can still run.
+
+One final improvement is that access to our network services is now much
+simpler than before, so if you are not behind a firewall and have domain
+name server (DNS) available you can connect to our network without needing
+any configuration information in the ncbi config file.  Operation behind a
+firewall, or with a proxy, requires very little in the ncbi config file, and
+this is easily created by asking Sequin to configure for network access.
+
+=============================================================================
+                 Notes from Previous Releases
+=============================================================================
+
+=============================================================================
+                           Version 6.0
+      the date of release may be obtained from the file ncbi/VERSION
+=============================================================================
 
 This release includes source code for the new (2.0) version of BLAST.
 Also included are a small number of incremental changes in the ASN.1
@@ -59,19 +124,17 @@ Three BLAST programs may be compiled in the demo directory.   They are:
 
 formatdb: formats FASTA files as BLAST databases for BLAST 2.0.
 
-blastall: perform all five flavors of blast comparison.  blastn and blastp offer fully 
-	gapped alignments.  blastx and tblastn have 'in-frame' gapped alignments and 
-	use sum statistics to link alignments from different frames. tblastx provides 
-	only ungapped alignments.
+blastall: perform all five flavors of blast comparison.
+blastn and blastp offer fully gapped alignments.
+blastx and tblastn have 'in-frame' gapped alignments and use sum
+	statistics to link alignments from different frames.
+tblastx provides only ungapped alignments.
 
-blastpgp: performs gapped blastp searches and can be used to perform iterative 
-	searches in psi-blast mode.
+blastpgp: performs gapped blastp searches and can be used to perform
+iterative searches in psi-blast mode.
 
-Additional information may be obtained from the README in the BLAST directory of the
-FTP site and from the NCBI BLAST pages.
-
-
-
+Additional information may be obtained from the README in the BLAST
+directory of the FTP site and from the NCBI BLAST pages.
 
 ASN.1 Spec Changes for 1997
 
@@ -129,12 +192,11 @@ seqfeat.asn
 
 
 
-===========================================================================
+=============================================================================
+                 Notes from Previous Releases
+=============================================================================
 
                            Version 5.0
-      the date of release may be obtained from the file ncbi/VERSION
-
-===========================================================================
 
                              Summary
 
@@ -370,7 +432,7 @@ Prot-ref ::= SEQUENCE {
                  Notes from Previous Releases
 =============================================================================
 
-		New Functions in version 4.0
+		New Functions in Version 4.0
 
 There are a host of new functions in this release, but as usual we have not
 managed to make time to document them all. Large parts of Sequin are present
@@ -721,8 +783,47 @@ complain.  See the notes below if this is a problem.
 
 
                          Installation
+
+To build the NCBI toolkit you need to look for platform-dependent instructions:
+For UNIX:
+    look at the file make/readme.unx
+For Mac:
+    look at the file make/readme.mac
+For Microsoft Windows95/98/NT:
+    look at the file make/readme.dos
+
+There is some information which may be useful for NCBI tookit building
+in the file doc/FAQ.txt
+
 ALL -
-     change to the build subdirectory
+     change to the directory above ncbi subdirectory
+
+Unix
+    tested on Sun Sparc (Solaris 2.6, Sunos 4.1.3),
+	Silicon Graphics IRIX 5.* and 6.*, DEC Alpha with OSF/1 V4.0,
+	Linux (kernel 2.0.33) on Intel, Sun Solaris for Intel (Solaris 2.7).
+
+	Run the script ncbi/make/makedis.csh keeping it's output in the
+	separate file:
+	for sh or bash:
+		ncbi/make/makedis.csh 2>&1 | tee out.makedis.csh
+	for csh or tcsh:
+		ncbi/make/makedis.csh |& tee out.makedis.csh
+	If that script gives you an error like this:
+		Your platform is not supported.
+		To port ncbi toolkit to your platform consult
+		the files platform/*.ncbi.mk
+	then you should check the script ncbi/make/makedis.csh and
+	add proper platform-dependent ncbi.mk file in ncbi/platform
+	directory.
+	
+	Other UNIX: AIX, ULTRIX, NeXt, Sun acc, 
+          Follows models above.  Read header in makeall.unx and makedemo.unx
+    for details.
+
+    for all UNIX, edit .ncbirc as described in section "CONFIGURATION OR
+	SETTINGS FILES".
+    optional edit .login to "setenv NCBI=[path to .ncbirc file]"
 
 MS-DOS
     (Also see NEW MAKEFILES, below)
@@ -782,32 +883,6 @@ Mac
      Think C - no longer supported
      MPW C -   no longer supported
 
-Unix
-    tested on Sun Sparc (Solaris 2.6, Sunos 4.1.3),
-	Silicon Graphics IRIX 5.* and 6.*, DEC Alpha with OSF/1 V4.0,
-	Linux (kernel 2.0.33) on Intel, Sun Solaris for Intel (Solaris 2.7).
-
-	Run the script ncbi/make/makedis.csh keeping it's output in the
-	separate file:
-	for sh or bash:
-		ncbi/make/makedis.csh 2>&1 | tee out.makedis.csh
-	for csh or tcsh:
-		ncbi/make/makedis.csh |& tee out.makedis.csh
-	If that script gives you an error like that:
-		Your platform is not supported.
-		To port ncbi toolkit to your platform consult
-		the files platform/*.ncbi.mk
-	then you should check the script ncbi/make/makedis.csh and
-	add proper platform-dependent ncbi.mk file in ncbi/platform
-	directory.
-	
-	Other UNIX: AIX, ULTRIX, NeXt, Sun acc, 
-          Follows models above.  Read header in makeall.unx and makedemo.unx
-    for details.
-
-    for all UNIX, edit .ncbirc as described above for MSC.
-    optional edit .login to "setenv NCBI=[path to .ncbirc file]"
-
 Changes to VMS make file naming conventions:
 
     The old .dcl prefix (last character is a lower case L) was changed
@@ -827,7 +902,7 @@ VMS (without Vibrant) on VAX
      $copy [-.make]*.dc1 *.com
      $@makeall
 
-     check ncbi.cfg as described above for MSC.
+     check ncbi.cfg as described in section "CONFIGURATION OR SETTINGS FILES".
      edit LOGIN.COM to "define NCBI [path to ncbi.cfg file]"
 
     To make demos:
@@ -838,7 +913,7 @@ VMS (with Vibrant) on VAX
      $copy [-.make]*.dc1 *.com
      $@viball
 
-     check ncbi.cfg as described above for MSC.
+     check ncbi.cfg as described in section "CONFIGURATION OR SETTINGS FILES".
      edit LOGIN.COM to "define NCBI [path to ncbi.cfg file]"
 
     To make demos:
@@ -1021,16 +1096,10 @@ NETWORK LIBRARIES
 	The toolbox now includes NCBI "Network Services".  This includes
 everything which you need to build your own "Network Entrez" client software.
 The network libraries include a generic network services library (nsclilib),
-which is used to contact the network services dispatcher and connect to
-a desired server.  The network libraries also include an network analog of
-cdromlib.  Applications which access the Entrez CDROM using only the data
-libraries should operate correctly, without modifications, by linking in
-the network library (netentr) along with the nsclilib library.  However,
-developers must perform their initial software development using the Entrez
-CDROM, to avoid jeopardizing the Entrez Network Service.  Note that some
-development platforms require that you obtain a few source modules from
-external vendors.  Look at the README files contained in the network directory
-(network/*/README) for more details.
+which is used to contact the network services dispatcher and connect to a
+desired server.  Note that some development platforms require that you obtain
+a few source modules from external vendors.  Look at the README files
+contained in the network directory (network/*/README) for more details.
 
 
 DOCUMENTATION
@@ -1076,7 +1145,7 @@ CALLBACK CONVENTIONS
 
     The CoreLib, AsnLib, and Object Loader routines have been converted to use
 the LIBCALL and LIBCALLBACK symbols (FAR PASCAL) on the PC for Windows.  This will
-allow us to build dyanmic link libraries (DLLs) so that the code can be accessed
+allow us to build dynamic link libraries (DLLs) so that the code can be accessed
 from languages other than C.  Callback functions you write that are of types
 AsnOptFreeFunc, AsnExpOptFunc, IoFuncType, AsnReadFunc, AsnWriteFunc, and
 SeqEntryFunc, should be declared using the LIBCALLBACK macro.  For example, a

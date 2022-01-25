@@ -1,4 +1,4 @@
-/* $Id: stsutil.c,v 6.6 1998/08/24 20:25:15 kans Exp $
+/* $Id: stsutil.c,v 6.7 1999/07/27 18:44:01 shavirin Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE                          
@@ -29,11 +29,14 @@
 *
 * Version Creation Date: 12/18/1996
 *
-* $Revision: 6.6 $
+* $Revision: 6.7 $
 *
 * File Description:  NCBI STS Search Tool utilities
 *   
 * $Log: stsutil.c,v $
+* Revision 6.7  1999/07/27 18:44:01  shavirin
+* Fixed problems found on PC NT computer.
+*
 * Revision 6.6  1998/08/24 20:25:15  kans
 * fixed -v -fd warnings
 *
@@ -274,7 +277,7 @@ Int4 InitSTSSearch_r(STSDbNamesPtr db_name, STSDataPtr PNTR data_out)
     sts_data = STSDataNew(db_name);
     
     if((sts_data->fd_stsdb = 
-        FileOpen(sts_data->sts_db_name, "r")) == NULL) {
+        FileOpen(sts_data->sts_db_name, "rb")) == NULL) {
         ErrPostEx(SEV_ERROR, 0, 0, "Cannot open STS database file");
         return -1;
     }
@@ -298,7 +301,7 @@ Int4 InitSTSSearch_r(STSDbNamesPtr db_name, STSDataPtr PNTR data_out)
         
         sts_data->MMAddress = sts_data->mmp->mmp_begin;
     } else {
-        if((fd = FileOpen(sts_data->sts_map_name, "r")) == NULL)
+        if((fd = FileOpen(sts_data->sts_map_name, "rb")) == NULL)
             return -1;
         if((sts_data->MMAddress = WWWReadFileInMemory(fd, 0, FALSE)) == NULL) {
             ErrPostEx(SEV_ERROR, 0, 0, "ERROR: Failure to read STS search "
@@ -309,20 +312,38 @@ Int4 InitSTSSearch_r(STSDbNamesPtr db_name, STSDataPtr PNTR data_out)
     }
         
     sts_data->margin = STD_MARGIN; /* This may be changed later */
-
-#ifdef CHECK_MAPFILE
-    for(i=0; i < HSIZE; i++) {
-        for(sts=(STSHashPtr)(REAL_ADDRESS(sts_data, HashIndex[i])); 
-            sts != (STSHashPtr)MMAddress; 
-            sts = (STSHashPtr)(REAL_ADDRESS(sts_data, sts->next))) {
-            StsCount++;
-        }
-    }
-#endif 
     
     *data_out = sts_data;
     HashIndex = (Int4Ptr) sts_data->MMAddress;
-    return HashIndex[HSIZE];
+
+#ifdef CHECK_MAPFILE
+    {{
+
+        STSHashPtr sts;
+        int i;
+        CharPtr ch1, ch2;
+        
+        for(i=0; i < HSIZE; i++) {
+            for(sts = (STSHashPtr)(REAL_ADDRESS(sts_data, 
+                                                SwapUint4(HashIndex[i])));
+                
+                sts != (STSHashPtr)sts_data->MMAddress; 
+                sts = (STSHashPtr)(REAL_ADDRESS(sts_data, 
+                                                SwapUint4(sts->next)))) {
+                
+                ch1 = REAL_ADDRESS(sts_data, SwapUint4(sts->pr1));
+                ch2 = REAL_ADDRESS(sts_data, SwapUint4(sts->pr2));
+                
+                printf("%d.%d:%s:%s\n", i, StsCount, ch1, ch2);
+                fflush(stdout);
+                StsCount++;
+            }
+        }
+    }}
+    exit(1);
+#endif 
+
+    return SwapUint4(HashIndex[HSIZE]);
 }
 
 void STSDataFree(STSDataPtr sts_data)
@@ -419,7 +440,7 @@ Boolean STSSearch_r(STSDataPtr sts_data,
         sts = (STSHashPtr)(REAL_ADDRESS(sts_data, SwapUint4(HashIndex[h])));
     
         while(sts != (STSHashPtr)sts_data->MMAddress) {
-            if(!organism || organism == sts->organism) {
+            if(!organism || organism == (Int4) SwapUint4(sts->organism)) {
                 if((len = STSMatch(sts_data, 
                                    REAL_ADDRESS(sts_data, SwapUint4(sts->pr1)), 
                                    REAL_ADDRESS(sts_data, SwapUint4(sts->pr2)), 
@@ -808,7 +829,7 @@ static STSOrgPtr PNTR InitSTSOrgTable(CharPtr filename)
         MemNew((MAXORGNUM + 1) * sizeof(Uint4))) == NULL)
         return NULL;
   
-    if((fd = FileOpen(filename, "r")) == NULL)
+    if((fd = FileOpen(filename, "rb")) == NULL)
         return NULL;
     
     while(FileGets(line, sizeof(line), fd) != NULL && m < MAXORGNUM) {
@@ -906,7 +927,7 @@ STSHashInitPtr PNTR InitHashTable(STSDbNamesPtr db_name,
     }
     
     if ((fd = FileOpen(db_name == NULL? STS_DEFAULT_DATABASE : 
-                       db_name->sts_db_name, "r")) == NULL) {
+                       db_name->sts_db_name, "rb")) == NULL) {
         ErrPostEx(SEV_ERROR, 0, 0, "Cannot open database file.\n");
         return NULL;
     }
@@ -998,7 +1019,7 @@ STSHashInitPtr PNTR InitHashTable(STSDbNamesPtr db_name,
 
     return StsHashTable;
 }
-
+#define ALIGN_NUMBER 4
 Int4 DumpHashTable(STSDbNamesPtr db_name , STSHashInitPtr PNTR StsHashTable)
 {
     register Int4 i;
@@ -1008,7 +1029,7 @@ Int4 DumpHashTable(STSDbNamesPtr db_name , STSHashInitPtr PNTR StsHashTable)
     Uint4 value;
 
     if((fd = FileOpen(db_name == NULL? MAP_DEFAULT_DATABASE :
-                      db_name->sts_map_name, "w")) == NULL)
+                      db_name->sts_map_name, "wb")) == NULL)
         return -1;
     
     NextEntry = (HSIZE+1)*INT4_SIZE; /* first entry after hash */
@@ -1046,7 +1067,7 @@ Int4 DumpHashTable(STSDbNamesPtr db_name , STSHashInitPtr PNTR StsHashTable)
             pos = pos + StringLen(sts->pr2) +1;
             
             if(sts->next != NULL) {
-                pos +=4-pos%4;
+                pos +=ALIGN_NUMBER-pos%ALIGN_NUMBER;
                 value = SwapUint4(pos);
                 FileWrite(&value, INT4_SIZE, 1, fd);     /* offset of next sts */  
             } else {
@@ -1068,7 +1089,7 @@ Int4 DumpHashTable(STSDbNamesPtr db_name , STSHashInitPtr PNTR StsHashTable)
             value = SwapUint4(pos);
             FileWrite(&value, INT4_SIZE, 1, fd);     /* NULL for no entries */    
         } else {
-            pos += 4-pos%4;
+            pos += ALIGN_NUMBER-pos%ALIGN_NUMBER;
             NextEntry = pos;
         }
     }

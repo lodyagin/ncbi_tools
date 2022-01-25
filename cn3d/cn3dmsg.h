@@ -33,6 +33,15 @@
 *
 * Modifications:
 * $Log: cn3dmsg.h,v $
+* Revision 6.44  1999/08/04 21:19:46  lewisg
+* modularized open operations to allow sequin to launch cn3d
+*
+* Revision 6.43  1999/07/09 20:50:55  ywang
+* set highlight color for salsa in Cn3dObjRegiste
+*
+* Revision 6.42  1999/07/07 20:45:37  ywang
+* clear domaindata, mediadata, special feature before reading in new data in cn3d
+*
 * Revision 6.41  1999/04/06 20:12:57  lewisg
 * more opengl
 *
@@ -115,7 +124,6 @@ extern Boolean Salsa_BioseqUpdate;
 extern Boolean Cn3D_ReColor;
 extern Int4 Num_Bioseq, Num_Biostruc;
 extern Int4 Num_ActiveSlave;
-extern Boolean Mime_ReadIn;
 
 extern Uint2 sap_entityID, sap_itemID;
 
@@ -164,6 +172,8 @@ extern void Cn3DSendColorMsgForBioseq(Int4 iCount);
 extern void Cn3DColorSalsaForStrucSeqs(void);
 extern void Cn3DCheckAlignmentStatusForStrucSeqs(void);
 extern void Cn3DCheckAlignmentStatusForStrucSeqsForMasterSeq(void);
+extern void ClearMediaData(void);
+extern void Cn3DSetHLColorForSalsa(void);
 #ifdef __cplusplus
 }
 #endif

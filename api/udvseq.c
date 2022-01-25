@@ -29,20 +29,54 @@
 *
 * Version Creation Date:   5/3/99
 *
-* $Revision: 6.2 $
+* $Revision: 6.14 $
 *
 * File Description: 
 *
-* Modifications:  
+* Modifications:
 * --------------------------------------------------------------------------
-* Date     Name        Description of modification
-* -------  ----------  -----------------------------------------------------
+* $Log: udvseq.c,v $
+* Revision 6.14  1999/09/16 18:51:52  durand
+* move MsaTxtDisp struct from pgppop.h to udvseq.h
+*
+* Revision 6.13  1999/09/14 12:09:48  durand
+* don't show publication features
+*
+* Revision 6.12  1999/09/07 19:39:18  durand
+* don't display special features
+*
+* Revision 6.11  1999/08/07 17:04:00  sicotte
+* fixed cast warning
+*
+* Revision 6.10  1999/07/31 14:28:07  durand
+* take into account parent for seg-set
+*
+* Revision 6.9  1999/07/30 20:08:27  durand
+* updates for the new Entrez graphical viewer
+*
+* Revision 6.8  1999/07/21 21:38:45  durand
+* fix a bug for the display of spanning features on circular DNA
+*
+* Revision 6.7  1999/07/12 21:12:09  durand
+* fix a bug in the cgi-bin release of UDV
+*
+* Revision 6.6  1999/06/16 13:07:51  durand
+* update UDV functions to be used by DDV
+*
+* Revision 6.5  1999/06/15 15:24:40  durand
+* update for DDV
+*
+* Revision 6.4  1999/06/07 15:10:19  durand
+* add LOG line to keep track of the history
+*
 *
 *
 * ==========================================================================
 */
 
 #include <udvseq.h>
+#include <udvdef.h>
+#include <subutil.h>
 
 /*******************************************************************************
 
@@ -288,14 +322,21 @@ NLM_EXTERN void  UDV_ReadBspDataForViewer(BspInfoPtr bsp_i)
 *******************************************************************************/
 NLM_EXTERN void UDV_FreeListParaG(ValNodePtr PNTR vnp_head)
 {
-ValNodePtr vnp;
+ValNodePtr vnp,vnp2;
 ParaGPtr pgp;
+
 
 	if ((*vnp_head)){
 		for(vnp=(*vnp_head) ; vnp != NULL ; vnp=vnp->next){
 			if (vnp->data.ptrvalue){
 				pgp=(ParaGPtr)vnp->data.ptrvalue;
 				if (pgp->pFeatList) ValNodeFree(pgp->pFeatList);
+				if (pgp->ptxtList){
+					for(vnp2=pgp->ptxtList;vnp2 != NULL ; vnp2=vnp2->next){
+						if(vnp2->data.ptrvalue) MemFree(vnp2->data.ptrvalue);
+					}
+					ValNodeFree(pgp->ptxtList);
+				}
 				Free(pgp);
 			}		
 		}	
@@ -322,8 +363,30 @@ NLM_EXTERN void  UDV_DecodeIdxFeat (Uint4 index_g, Uint2Ptr val1,
 Uint2Ptr  index_g2;
 
 	index_g2 = (Uint2Ptr) (&index_g);
-	*val1 = (Uint2) index_g2 [0];
-	*val2 = (Uint2) index_g2 [1];
+	if (val1) *val1 = (Uint2) index_g2 [0];
+	if (val2) *val2 = (Uint2) index_g2 [1];
+}
+
+/*******************************************************************************
+
+Function: UDV_BigDecodeIdxFeat()
+
+Purpose: decode a 64 bits integer into 16 bits integers
+
+Parameters: index_g; value to decode in 'val1' and 'val2'
+
+*******************************************************************************/
+
+NLM_EXTERN void  UDV_BigDecodeIdxFeat (Uint8 index_g, Uint2Ptr val1, Uint2Ptr val2,
+	Uint2Ptr val3, Uint2Ptr val4)
+{
+Uint2Ptr  index_g2;
+
+	index_g2 = (Uint2Ptr) (&index_g);
+	if (val1) *val1 = (Uint2) index_g2 [0];
+	if (val2) *val2 = (Uint2) index_g2 [1];
+	if (val3) *val3 = (Uint2) index_g2 [2];
+	if (val4) *val4 = (Uint2) index_g2 [3];
 }
 
 /*******************************************************************************
@@ -352,6 +415,107 @@ Uint2 index_g[2];
 
 /*******************************************************************************
 
+Function: UDV_BigEncodeIdxFeat()
+
+Purpose: encode a 64 bits integer with 4 16 bits integers
+
+Parameters: values to decode 
+
+Return : the 64 bits encoded value
+
+*******************************************************************************/
+
+NLM_EXTERN Uint8 UDV_BigEncodeIdxFeat (Uint2 val1,Uint2 val2,Uint2 val3,Uint2 val4)
+{
+Uint2 index_g[4];
+	
+	index_g[0]=val1;
+	index_g[1]=val2;
+	index_g[2]=val3;
+	index_g[3]=val4;
+	
+	return *((Uint8Ptr) index_g);
+	
+}
+
+/*******************************************************************************
+
+Function: UDV_ConvertFeatContext()
+
+Purpose: convert the coordinates from master bioseq to a part sequence (seg-set)
+
+*******************************************************************************/
+NLM_EXTERN SeqMgrFeatContextPtr UDV_ConvertFeatContext(
+		SeqMgrFeatContextPtr context,Int4 cumOffset,Int4 bsp_part_length)
+{
+SeqMgrFeatContextPtr newContext;
+Int2 i,i2;
+
+	newContext=(SeqMgrFeatContextPtr)MemNew(sizeof(SeqMgrFeatContext));
+	
+	if (!newContext) return(NULL);
+	
+	memcpy(newContext,context,sizeof(SeqMgrFeatContext));
+	
+	newContext->left=context->left-cumOffset;
+	if (newContext->left<0 &&  
+			newContext->bsp->topology!=TOPOLOGY_CIRCULAR) newContext->left=0;
+	newContext->right=context->right-cumOffset;
+	if (newContext->right<0 &&  
+			newContext->bsp->topology!=TOPOLOGY_CIRCULAR) newContext->right=0;
+	if (newContext->right>bsp_part_length){
+		newContext->right=bsp_part_length-1;
+	}
+	
+	i2=context->numivals*2;
+	newContext->ivals=(Int4Ptr)MemNew((i2)*sizeof(Int4));
+	for(i=0;i<i2;i+=2){
+		newContext->ivals[i]=context->ivals[i]-cumOffset;
+		/*if (newContext->ivals[i]<0 && 
+			newContext->bsp->topology!=TOPOLOGY_CIRCULAR) newContext->ivals[i]=0;*/
+		newContext->ivals[i+1]=context->ivals[i+1]-cumOffset;
+		/*if (newContext->ivals[i+1]<0 &&  
+			newContext->bsp->topology!=TOPOLOGY_CIRCULAR) newContext->ivals[i+1]=0;*/
+	}
+
+	return(newContext);
+}
+
+/*******************************************************************************
+
+Function: UDV_ComputeBspCoordRangeinPGP()
+
+Purpose: compute from and to in Bioseq coordinates given the line descriptor
+         (pgp->ptxtList) of a ParaG invloved in a multiple sequence 
+		 alignement (MSA).
+
+Parameters: pgp; the ParaG to analyse
+            from, to; return values
+
+*******************************************************************************/
+NLM_EXTERN void UDV_ComputeBspCoordRangeinPGP(ParaGPtr pgp,Int4Ptr from, Int4Ptr to)
+{
+ValNodePtr    vnp2;
+MsaTxtDispPtr mtdp;
+
+	*from=INT4_MAX;
+	*to=INT4_MIN;
+
+	if (!pgp->ptxtList) return;
+	
+	for(vnp2=pgp->ptxtList;vnp2!=NULL;vnp2=vnp2->next){
+		mtdp=(MsaTxtDispPtr)(vnp2->data.ptrvalue);
+		if (mtdp){
+			if (mtdp->IsGap==0) {
+				*from=MIN(*from,mtdp->from);
+				*to=MAX(*to,mtdp->to);
+			}
+		}
+	}
+}
+
+/*******************************************************************************
+
 Function: UDV_IsTranslationNeeded()
 
 Purpose: for a CDS in a ParaG, determine whether a translation is needed or not
@@ -366,6 +530,7 @@ NLM_EXTERN Boolean UDV_IsTranslationNeeded(SeqMgrFeatContextPtr context,ParaGPtr
 {
 Int2 i,numivals2,i_decal;	/*counters*/
 Uint1 strand;
+Int4 StartLetter,StopLetter;
 
 	strand=context->strand;
 	
@@ -386,16 +551,25 @@ Uint1 strand;
 		i=numivals2;
 		i_decal=-2;
 	}		
-
+	
+	/*are the ParaG from a MSA ?*/
+	if (pgp->ptxtList){
+		UDV_ComputeBspCoordRangeinPGP(pgp,&StartLetter, &StopLetter);
+	}
+	else{
+		StartLetter=pgp->StartLetter;
+		StopLetter=pgp->StopLetter;
+	}
+	
 	while (TRUE){
 		/*if ivals.stop<= start ParaG : not yet in the current ParaG*/
-		if (context->ivals[i+1]<pgp->StartLetter) {
+		if (context->ivals[i+1]<StartLetter) {
 			if (strand==Seq_strand_plus){
 				if (numivals2>2 && i+2<numivals2){
 					/*stop ParaG < start next ivals -> inter-region: fill 
 					the ParaG with a thin line; this is the case
 					for coding region: draw thin line to delineate the introns*/		
-					if (context->ivals[i+2]>pgp->StopLetter){
+					if (context->ivals[i+2]>StopLetter){
 						return(FALSE);
 					}
 				}
@@ -405,7 +579,7 @@ Uint1 strand;
 					/*stop ParaG < start next ivals -> inter-region: fill 
 					the ParaG with a thin line; this is the case
 					for coding region: draw thin line to delineate the introns*/		
-					if (context->ivals[i-2]>pgp->StopLetter){
+					if (context->ivals[i-2]>StopLetter){
 						return(FALSE);
 					}
 				}
@@ -424,34 +598,63 @@ Uint1 strand;
 	return(TRUE);
 }
 
-
-
 /*******************************************************************************
 
 Function: UDV_ParaGFTableFeatures()
 
-Purpose: retrieve features for several ParaG at a time
+Purpose: populate several ParaG with one feature at a time
 
 Parameters: see explore.h
 
 *******************************************************************************/
-
 NLM_EXTERN Boolean LIBCALLBACK UDV_ParaGFTableFeatures (SeqFeatPtr sfp, 
-			SeqMgrFeatContextPtr context)
+			SeqMgrFeatContextPtr context2)
 
 {
 ParaGFeaturesInLocPtr pgfl;
 ValNodePtr vnp,vnp2,vnp3,vnp4;
 ParaGPtr pgp;
-Int4 BeginLines=0;
-Int2 nLines=0,i=1;
+Int4 BeginLines=0,PosFeat,StartLetter,StopLetter;
+Int2 nLines=0,i=1,j,nFeatLines,decal;
 Boolean FeatInParaG=FALSE;
 Boolean bFirst=TRUE,bTrouve=FALSE;
 Boolean IsTransNeeded=FALSE;
+SeqMgrFeatContextPtr context;
+SeqAnnotPtr sap;
 
-	if (!context->sfp) return (TRUE);
+	if (!context2->sfp) return (TRUE);
 
-	pgfl = (ParaGFeaturesInLocPtr) context->userdata;	
+
+/* for test only : print out the Feature list
+{{
+ Char  str [256];
+ int i;
+
+  if (FeatDefLabel (sfp, str, sizeof (str) - 1, OM_LABEL_BOTH)) {
+    printf ( "   Feature item %d index %d (%d) (%d - %d) (%d) %s\n",
+             (int) context2->itemID, (int) context2->index, 
+                         (int) context2->numivals,(int) context2->left,
+                         (int) context2->right,(int) context2->strand,str);
+        if (context2->numivals>1){
+                for (i=0;i<context2->numivals*2;i+=2){
+                        printf ( "   Ivals: (%d - %d)\n", context2->ivals[i],
+                                                context2->ivals[i+1]);
+                }
+        }
+  }
+	
+
+}}
+*/
+	pgfl = (ParaGFeaturesInLocPtr) context2->userdata;	
+
+	/*don't retrieve special annotations*/
+	sap = context2->sap;
+	if (sap && sap->desc!=NULL) return(TRUE);
+	if (context2->seqfeattype==SEQFEAT_PUB) return(TRUE);
+	
+	context=UDV_ConvertFeatContext(context2,pgfl->cumOffset,pgfl->bsp_part_length);
+	if (!context) return(TRUE);
 
 	vnp=pgfl->ParaG_head;
 	pgp=(ParaGPtr)vnp->data.ptrvalue;
@@ -459,71 +662,157 @@ Boolean IsTransNeeded=FALSE;
 	BeginLines=pgp->StartLine;
 
 	pgfl->nFeat++;
-	
+
 	/*HET feature correction for the ends*/
 	if(context->featdeftype== FEATDEF_HET){
 		context->right=context->ivals[2*context->numivals-1];
 	}
 	
+	if(context->left<0){/*if circular DNA with feature overlapping the junction*/
+		/*technically, just for the purpose of a display, a feature
+		overlapping the ends of a circular DNA covers all the sequence; that is
+		because I ALWAYS display from LEFT to RIGHT.*/
+		context->left=0;
+		context->right=context->bsp->length-1;
+	}
+	
 	while(TRUE){		
 		pgp=(ParaGPtr)vnp->data.ptrvalue;
+
+		/*are the ParaG from a MSA ?*/
+		if (pgp->ptxtList){
+			UDV_ComputeBspCoordRangeinPGP(pgp,&StartLetter, &StopLetter);
+		}
+		else{
+			StartLetter=pgp->StartLetter;
+			StopLetter=pgp->StopLetter;
+		}
 		
 		FeatInParaG=FALSE;
 		if (pgp){
-			if (pgp->StartLetter>context->right){
+			if (StartLetter>context->right){
 				pgfl->ParaG_last_head=vnp;/*uses to count last ParaG of the list
 											where there is no feature*/
 				break;
 			}
 			/*Feature in pgp ?*/
-			if(pgp->StopLetter>=context->left && pgp->StopLetter<=context->right){
+			if(StopLetter>=context->left && StopLetter<=context->right){
 					FeatInParaG=TRUE;
 			}
-			else if(pgp->StartLetter>=context->left && 
-				pgp->StartLetter<=context->right){
+			else if(StartLetter>=context->left && 
+				StartLetter<=context->right){
 					FeatInParaG=TRUE;
 			}
-			else if(pgp->StartLetter<=context->left && 
-				pgp->StopLetter>=context->right){
+			else if(StartLetter<=context->left && 
+				StopLetter>=context->right){
 					FeatInParaG=TRUE;
 
 			}
 
 			if (FeatInParaG){
-				if (bFirst) {
-					pgfl->ParaG_next_head=vnp;
-					bFirst=FALSE;
-				}
-				nLines=1;
-				if (context->sfp->data.choice==SEQFEAT_CDREGION) {
-					IsTransNeeded=UDV_IsTranslationNeeded(context,pgp);
-					if (IsTransNeeded) {
-						nLines++;
-						pgp->nTrans++;
+				nLines=1;decal=0;
+				if (pgfl->DispType&DDV_DISP_VERT){
+					if (bFirst) {
+						pgfl->ParaG_next_head=vnp;
+						bFirst=FALSE;
 					}
-				}
-				if (pgfl->ShowFeatures) {
-					if (context->left<=pgp->OccupyTo){/*new line of features*/
-						pgp->nLines+=nLines;
-						pgp->nFeatLines+=nLines;
-					}
-					else{/*same feature line, but CDS*/
-						/*for the translation*/
-						if (context->sfp->data.choice==SEQFEAT_CDREGION){
-							pgp->nLines++;
-							pgp->nFeatLines++;
+					if (context->sfp->data.choice==SEQFEAT_CDREGION) {
+						IsTransNeeded=UDV_IsTranslationNeeded(context,pgp);
+						if (IsTransNeeded) {
+							nLines++;
+							pgp->nTrans++;
+							decal=1;
 						}
 					}
-					pgp->OccupyTo=context->right;
+					if (pgfl->ShowFeatures) {
+						if (context->left<=pgp->OccupyTo){/*new line of features*/
+							pgp->nLines+=nLines;
+							pgp->nFeatLines+=nLines;
+						}
+						else{/*same feature line, but CDS*/
+							/*for the translation*/
+							if (context->sfp->data.choice==SEQFEAT_CDREGION){
+								pgp->nLines++;
+								pgp->nFeatLines++;
+							}
+						}
+						pgp->OccupyTo=context->right;
+					}
+					PosFeat=pgp->nFeatLines;
 				}
+				else{
+					if (context->sfp->data.choice==SEQFEAT_CDREGION) {
+						/*IsTransNeeded=UDV_IsTranslationNeeded(context,pgp);
+						if (IsTransNeeded) {*/
+							nLines++;
+							pgp->nTrans++;
+						/*}*/
+					}
+					decal=0;
+					if (bFirst) {
+				/*A*/	/*where to put the feature (line number); I compute this value
+						when I populate the first ParaG with the current feature. To
+						populate next ParaG with the same feature, see B./
+
+						/*PosFeat is used for every ParaG where the current feature
+						is located. In that way, the feature always belongs to the
+						same line from one ParaG to the next one*/
+						PosFeat=0;/*always base 1 for a line number;*/
+						j=0;
+						while(j<pgp->nFeatLines){
+							if (context->left>pgfl->OccupyTo[j]){
+								if (context->sfp->data.choice==SEQFEAT_CDREGION){
+									if (context->left>pgfl->OccupyTo[j+1]){
+										PosFeat=j+1;break;
+									}
+								}
+								else {
+									PosFeat=j+1;break;
+								}
+							}
+							j++;
+						}
+						if (PosFeat==0){/*if this case, means we need to create nLines
+								new lines*/
+							PosFeat=pgp->nFeatLines+1;
+							pgp->nFeatLines+=nLines;
+						}
+						pgfl->OccupyTo[PosFeat-1]=context->right;
+						if (context->sfp->data.choice==SEQFEAT_CDREGION)
+							pgfl->OccupyTo[PosFeat]=context->right;
+						pgfl->ParaG_next_head=vnp;
+						nFeatLines=pgp->nFeatLines;
+						bFirst=FALSE;
+					}
+					else{
+				/*B*/	/*to pupulate other ParaG with the current feature, I check if 
+						there is blank line before PosFeat line (use ONLY for a full
+						vertical display)*/
+/*						for(j=0;j<PosFeat;j++){
+							if (pgfl->OccupyTo[j]<pgp->StartLetter){
+								decal++;
+							}
+						}*/
+						pgp->nFeatLines=nFeatLines/*-decal*/;
+					}
+
+					/*new number of lines in the ParaG*/
+					if (pgfl->ShowFeatures)
+						pgp->nLines=pgp->MinLine+pgp->nFeatLines;
+					else
+						pgp->nLines=pgp->MinLine;
+				}
+
+				/*total number of features in a ParaG*/
 				pgp->nFeat++;
+				
 				/*(re)populate Features structure; if a previous structure already
 				exists, use it; avoid a lot of MemNew/MemFree; see also the function
 				which create/(re)populate ParaG structure (CreateParaGList)*/
 				if (pgp->pFeatList==NULL) {
-					pgp->pFeatList = ValNodeAddInt(&pgp->pFeatList,1,
-							UDV_EncodeIdxFeat ((Uint2) context->itemID,
-							(Uint2) context->index));
+					pgp->pFeatList = ValNodeAddBigInt(&pgp->pFeatList,0,
+							UDV_BigEncodeIdxFeat ((Uint2) context->itemID,
+								(Uint2) context->index,(Uint2)PosFeat-decal,(Uint2)0));
 					if (!pgp->pFeatList) return TRUE;
 				}
 				else {
@@ -536,24 +825,28 @@ Boolean IsTransNeeded=FALSE;
 						i++;
 						vnp3=vnp2;
 					}
-					/*mem alloc only if it's necessary*/
+					/*mem alloc only if it's needed*/
 					if (bTrouve) {
-						vnp2->data.intvalue=UDV_EncodeIdxFeat((Uint2)
-								context->itemID,(Uint2) context->index);
+						vnp2->data.bigintvalue=UDV_BigEncodeIdxFeat(
+								(Uint2) context->itemID,
+								(Uint2) context->index,
+								(Uint2)(PosFeat-decal),(Uint2)0);
 					}
 					else{
-						vnp4=ValNodeAddInt(&vnp3,1,UDV_EncodeIdxFeat((Uint2)
-								context->itemID,(Uint2) context->index));
+						vnp4=ValNodeAddBigInt(&vnp3,0,
+							UDV_BigEncodeIdxFeat ((Uint2) context->itemID,
+								(Uint2) context->index,
+								(Uint2)PosFeat-decal,(Uint2)0));
 						if (!vnp4)return TRUE;
 					}
 				}
 			}
 
-			pgp->StartLine=BeginLines;
+			pgp->StartLine=BeginLines;/*beginning of this ParaG*/
 
-			BeginLines+=pgp->nLines;
+			BeginLines+=pgp->nLines;/*will be used for the next ParaG*/
 
-			vnp=vnp->next;
+			vnp=vnp->next;/*get the next ParaG*/
 
 			if (vnp==NULL){
 				pgfl->ParaG_next_head=NULL; /*end*/
@@ -566,7 +859,8 @@ Boolean IsTransNeeded=FALSE;
 	
 	if (pgfl->ParaG_next_head)
 		pgfl->ParaG_head=pgfl->ParaG_next_head;
-
+	MemFree(context->ivals);
+	MemFree(context);
 	return TRUE;
 }
 
@@ -716,11 +1010,16 @@ Int4		nParaG=0;				/*ParaG counter*/
 		/*modify values*/
 		nTotLines+=minLineByParaG;
 		start+=nCharByLine;
-		stop=start-1;/*nCharByLine;*/
-		
-		if (stop>to/*bsp_length*/) stop=to/*bsp_length*/;
+		stop=start-1;
+		if (stop>to) stop=to;
 		pgp->StopLetter=stop;
+
 		pgp->OccupyTo=pgp->StopLetter;
+		/*this element is used to keep track of the minimum number
+		of lines in a ParaG; i.e. ruler+sequence, 1 to 3 lines. I need this
+		value in the function UDV_ParaGFTableFeatures() to increase pgp->nLines
+		during the population of the ParaG with the features*/
+		pgp->MinLine=(Int2)minLineByParaG;
 
 		nParaG++;
 	}
@@ -760,13 +1059,19 @@ Int4		nParaG=0;				/*ParaG counter*/
 
 *******************************************************************************/
 NLM_EXTERN Boolean UDV_PopulateParaGFeatures(BioseqPtr bsp,ValNodePtr ParaG_vnp,
-			Boolean ShowFeatures,Int4Ptr nTotL)
+			Boolean ShowFeatures,Int4Ptr nTotL,Uint4 DispType,Int2Ptr nFeatFound)
 {
 ParaGFeaturesInLoc pgfl;	/*used for the Explore features function*/
 ValNodePtr vnp;				/*to scan ParaG list*/
 ParaGPtr pgp;				/*to modify ParaG, when needed*/
 Int4 n=0;					/*a little counter*/
 Boolean nRet;
+/*variables used to populate a bsp which is a segment of a "master" sequence (parent)*/
+BioseqPtr parent;
+SeqMgrSegmentContext context;
+SeqLocPtr   slp;
+Int4 from,to;
+Int2 nFeat;
 
 	if (ParaG_vnp == NULL) {*nTotL=0;return(FALSE);}
 
@@ -778,11 +1083,35 @@ Boolean nRet;
 	/*pgfl.rcP_top=rcP.top;*/
 	pgfl.ParaG_last_head=NULL;
 	pgfl.ShowFeatures=ShowFeatures;
+	pgfl.DispType=DispType;
 	
-	/*Explore the features */
-	SeqMgrExploreFeatures (bsp, (Pointer) &pgfl, UDV_ParaGFTableFeatures, 
-				NULL, NULL, NULL);
+	MemSet(pgfl.OccupyTo,(Int4)-1,sizeof(pgfl.OccupyTo));
 
+	/*the current bsp is just a segment ?*/
+	parent=SeqMgrGetParentOfPart(bsp,&context);
+	
+	/*convert the from-to of the segment to the "master" bioseq
+	coordinates system*/
+	if (parent){
+		from=context.cumOffset;
+		to=from+context.to-context.from;
+		slp=SeqLocIntNew(from, to, Seq_strand_plus, parent->id);
+		pgfl.cumOffset=context.cumOffset;
+		pgfl.bsp_part_length=bsp->length;
+	}
+	else{
+		slp=NULL;
+		pgfl.cumOffset=0;
+		pgfl.bsp_part_length=bsp->length;
+	}
+
+	/*Explore the features */
+	nFeat=SeqMgrExploreFeatures ((parent!=NULL ? parent : bsp), (Pointer) &pgfl, 
+				UDV_ParaGFTableFeatures, slp, NULL, NULL);
+
+	if (nFeatFound){
+		*nFeatFound=nFeat;
+	}
 	/*complete the list where no features have been found; actually, this
 	code is used to locate (RecT) correctly the end of the ParaG list*/
 	if (pgfl.ParaG_next_head && pgfl.ParaG_last_head){
@@ -804,7 +1133,71 @@ Boolean nRet;
 	}
 	else nRet=FALSE;
 
+/*DEBUG purpose : check the feature content of each ParaG
+{{
+ValNodePtr vnp2;
+Int4 i;
+Uint2 eID,idx,line,not;
+
+	vnp=ParaG_vnp;
+	i=0;
+	while(vnp){
+		pgp=(ParaGPtr)vnp->data.ptrvalue;
+		printf("ParaG [%6i]:[%7i..%7i]================\n",i,pgp->StartLetter+1,pgp->StopLetter+1);
+		vnp2=pgp->pFeatList;
+		while(vnp2){
+			UDV_BigDecodeIdxFeat((Uint8)vnp2->data.bigintvalue, &eID, &idx, &line, &not);
+			printf("   eID:%4i ; idx:%4i ; Line :%4i\n",eID,idx,line);
+			vnp2=vnp2->next;
+		}
+		vnp=vnp->next;i++;
+	}
+}}*/
+
 	return(nRet);
+}
+
+/*******************************************************************************
+
+  Function : UDV_Read_SequenceEx()
+  
+  Purpose : read a sequence 
+  
+  Parameters : Warning, from must be < than to; always
+  
+  Return value : the sequence 
+
+*******************************************************************************/
+NLM_EXTERN CharPtr UDV_Read_SequenceEx (SeqIdPtr sip, Int4 from, Int4 to, 
+		Boolean IsProt,Int2 len,Uint1 strand)
+{
+/*BioseqPtr        bsp;*/
+SeqLocPtr        slp;
+SeqPortPtr       spp;
+CharPtr          str = NULL;
+Uint1			residue;
+Uint2			i=0;
+
+	/*from always < than to*/
+	slp = SeqLocIntNew (from, to, strand, sip);
+	spp = SeqPortNewByLoc (slp, (Uint1)(IsProt==TRUE ? Seq_code_iupacaa 
+			: Seq_code_iupacna));
+	if (spp != NULL) {
+		str = MemNew ((len+1) * sizeof(Char));
+		if (!str) return(NULL);
+		while ((residue = SeqPortGetResidue(spp)) != SEQPORT_EOF) {
+			if (IS_residue(residue)) {
+				str[i] = residue;
+				i++;
+			}
+		}
+		/*SeqPortRead(spp, (BytePtr)str, len);*/
+		SeqPortFree (spp);
+	}   
+
+	SeqLocFree (slp);
+	
+	return str;
 }
 
 /*******************************************************************************
@@ -821,31 +1214,7 @@ Boolean nRet;
 NLM_EXTERN CharPtr UDV_Read_Sequence (SeqIdPtr sip, Int4 from, Int4 to, 
 		Boolean IsProt,Int2 len)
 {
-/*BioseqPtr        bsp;*/
-SeqLocPtr        slp;
-SeqPortPtr       spp;
-CharPtr          str = NULL;
-Uint1			residue;
-Uint2			i=0;
-
-	/*from always < than to*/
-	slp = SeqLocIntNew (from, to, Seq_strand_plus, sip);
-	spp = SeqPortNewByLoc (slp, (Uint1)(IsProt==TRUE ? Seq_code_iupacaa 
-			: Seq_code_iupacna));
-	if (spp != NULL) {
-		str = MemNew ((len+1) * sizeof(Char));
-		if (!str) return(NULL);
-		while ((residue = SeqPortGetResidue(spp)) != SEQPORT_EOF) {
-			if (IS_residue(residue)) {
-				str[i] = residue;
-				i++;
-			}
-		}
-		SeqPortRead(spp, (BytePtr)str, len);
-		SeqPortFree (spp);
-	}   
-
-	SeqLocFree (slp);
-	
-	return str;
+	return (UDV_Read_SequenceEx ( sip,  from,  to, 
+		 IsProt, len,Seq_strand_plus));
 }
+

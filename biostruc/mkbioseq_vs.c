@@ -29,6 +29,12 @@
  * Author: Ken Addess
  *
  * $Log: mkbioseq_vs.c,v $
+ * Revision 6.2  1999/06/15 18:12:53  addess
+ * fixed some lines related to BioseqPtr
+ *
+ * Revision 6.2  1999/06/15 18:12:53  addess
+ * fixed some lines related to BioseqPtr
+ *
  * Revision 6.1  1998/07/17 18:59:57  madej
  * Created by Ken Addess.
  *
@@ -266,7 +272,6 @@ SeqEntryPtr LIBCALL MakeBioseqs(BiostrucPtr bsp, BiostrucResidueGraphSetPtr stdD
    
   for (index = 0, currentbp = bp; index < nbp, currentbp != NULL; currentbp = currentbp->next, index++)
   {
-     current_bioseq = BioseqNew();
      current_bioseq = bioseqs[index];
      if (currentbp->seq_id->choice == '\f')
      {
@@ -319,7 +324,7 @@ SeqEntryPtr LIBCALL MakeBioseqs(BiostrucPtr bsp, BiostrucResidueGraphSetPtr stdD
   for (index = 0, currenthet = het; index < nhet, currenthet; currenthet = currenthet->next, index++)
   {
     hetval = MakeHetValNode(currenthet, stdDictionary, bsgp->residue_graphs);
-    bioseq_idx = -1;
+    bioseq_idx = 0;
     interchain = FALSE;
 
     for (abp = bsgp->inter_molecule_bonds, bonds = FALSE, rescount = 0; abp; abp = abp->next)

@@ -1,5 +1,5 @@
 #
-# $Id: sgi5.ncbi.mk,v 1.3 1999/03/22 16:00:28 beloslyu Exp $
+# $Id: sgi5.ncbi.mk,v 1.5 1999/08/12 18:32:41 beloslyu Exp $
 #
 NCBI_MAKE_SHELL = /bin/sh
 NCBI_DEFAULT_LCL = sgi
@@ -9,7 +9,7 @@ NCBI_SYBLIBS = -L$(NCBI_SYBASE)/lib -lsybdb
 NCBI_SYBLIBS_STATIC = $(NCBI_SYBASE)/lib/libsybdb.a
 NCBI_SYBFLAG = -I$(NCBI_SYBASE)/include -L$(NCBI_SYBASE)/lib
 NCBI_CFLAGS1 = -c
-NCBI_LDFLAGS1 = 
+NCBI_LDFLAGS1 = -O
 NCBI_OPTFLAG = -O
 NCBI_INCDIR = /usr/ncbi/ncbi5/include/NCBI
 NCBI_LIBDIR = /usr/ncbi/ncbi5/lib
@@ -34,3 +34,5 @@ NCBI_ALTSRC =  /usr/ncbi/ncbi5/altsrc
 #
 #FastCGI library
 LIBFASTCGI = -lfcgi
+NETENTREZVERSION = 2.02c2ASN1SPEC6 
+

@@ -40,6 +40,7 @@ SEEDTOP_EXE  = seedtop.___
 MAKEMAT_EXE  = makemat.___
 COPYMAT_EXE  = copymat.___
 IMPALA_EXE  = impala.___
+BL2SEQ_EXE  = bl2seq.___
 !endif
 !endif
 
@@ -82,7 +83,8 @@ $(BLASTPGP_EXE) \
 $(SEEDTOP_EXE)  \
 $(MAKEMAT_EXE) \
 $(COPYMAT_EXE) \
-$(IMPALA_EXE)
+$(IMPALA_EXE) \
+$(BL2SEQ_EXE)
 
 
 ##################################################
@@ -375,6 +377,19 @@ MT = 1
 $(INCLUDE_GEN)
 TEST_NAME = impala
 TEST_OBJ = profiles.obj
+TEST_LIB = $(LIB23) $(LIB4) $(LIB2) $(LIB1)
+RES = 1
+$(INCLUDE_EXE)
+<<
+!endif
+##################################################
+!ifdef BL2SEQ_EXE
+$(BL2SEQ_EXE):
+	$(MAKE) -f <<
+MT = 1
+$(INCLUDE_GEN)
+TEST_NAME = bl2seq
+TEST_OBJ = bl2seq.obj
 TEST_LIB = $(LIB23) $(LIB4) $(LIB2) $(LIB1)
 RES = 1
 $(INCLUDE_EXE)

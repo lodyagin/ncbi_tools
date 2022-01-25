@@ -31,6 +31,15 @@
 *
 *
 * $Log: parttree.c,v $
+* Revision 1.8  1999/07/19 18:02:33  soussov
+* fixed bug with realloc
+*
+* Revision 1.7  1999/05/18 21:15:53  soussov
+* memory leak in ptree_spy fixed
+*
+* Revision 1.6  1999/05/10 21:44:53  soussov
+* tax_ptree_toTaxId tax_id=1 bug fixed
+*
 * Revision 1.5  1999/03/29 23:09:56  soussov
 * performance improvements in tax_ptreeToTaxId
 *
@@ -77,14 +86,20 @@ static void ptree_spy(TreePtr tree, Int2 spy_id, TreeEvent event, TreeNodeId id1
 
 	    if(t != NULL) {
 		id0.idi= 0;
-		for(i= spy_bag->bag_size; i < (tnp->tax_id + 100); spy_bag->id_x_ref[i++]= id0);
 		spy_bag->id_x_ref= t;
+		for(i= spy_bag->bag_size; i < (tnp->tax_id + 100); spy_bag->id_x_ref[i++]= id0);
 		spy_bag->bag_size= tnp->tax_id + 100;
 	    }
 	    else spy_bag->no_room= 1;
 	}
 	
 	if(spy_bag->bag_size > tnp->tax_id) spy_bag->id_x_ref[tnp->tax_id]= id2;
+    }
+    else if(event == TREE_SHUTDOWN) {
+	if(spy_bag != NULL) {
+	    if(spy_bag->id_x_ref != NULL) MemFree(spy_bag->id_x_ref);
+	    MemFree(spy_bag);
+	}
     }
 }
 
@@ -122,7 +137,7 @@ TreePtr tax_ptree_new(void)
     spy_bag= MemNew(sizeof(_ptree_spy_bag));
 
     do {
-	spy_bag->bag_size= 100000;
+	spy_bag->bag_size= 140000;
 	spy_bag->id_x_ref= MemNew(sizeof(TreeNodeId)*spy_bag->bag_size);
 	if(spy_bag->id_x_ref == NULL) spy_bag->bag_size-= spy_bag->bag_size/8;
     }
@@ -232,6 +247,8 @@ Boolean tax_ptree_toTaxId(TreeCursorPtr cursor, Int4 tax_id, Boolean search_in_s
 {
     TreeNodeId id= tree_getId(cursor);
     _ptree_spy_bag* spy_bag= tree_getSpyData(cursor->tree, 0);
+
+    if(tax_id <= 1) return tree_root(cursor);
 
     if(spy_bag->bag_size > tax_id) {
 	return tree_toNode(cursor, spy_bag->id_x_ref[tax_id]);

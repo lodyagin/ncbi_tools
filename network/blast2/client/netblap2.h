@@ -29,21 +29,17 @@
 *
 * Version Creation Date:   06/16/95
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description: 
 *       Application Programming Interface (API) for BLAST network server
 *
 * Modifications:  
 * --------------------------------------------------------------------------
-* Date     Name        Description of modification
-* -------  ----------  -----------------------------------------------------
-*
-* ==========================================================================
-*
-*
-* RCS Modification History:
 * $Log: netblap2.h,v $
+* Revision 6.2  1999/05/12 17:02:53  vakatov
+* For C++:  extern "C" { ... }
+*
 * Revision 6.1  1998/02/19 21:13:49  shavirin
 * Added parameter to MT save function BlastBioseqMT()
 *
@@ -156,6 +152,12 @@
 #include <prtutil.h>
 #include <blast2.h>
 #include <ni_types.h>
+
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 
 #define BLAST_SERVER_OMIT_MATRIX 1
 #define BLAST_SERVER_OMIT_QUERY 2
@@ -294,5 +296,8 @@ Boolean LIBCALL  CheckIfBlastJobCancelled PROTO((void));
 
 Boolean LIBCALLBACK Blast2callbackWithMon PROTO((BLAST0ResponsePtr brp, Boolean PNTR cancel));
 
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* _NETBLAP2_ */

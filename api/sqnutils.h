@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/2/97
 *
-* $Revision: 6.25 $
+* $Revision: 6.33 $
 *
 * File Description: 
 *
@@ -89,6 +89,13 @@ NLM_EXTERN Int2 SeqEntryToBioSource (SeqEntryPtr sep, BoolPtr mito, CharPtr taxn
 NLM_EXTERN SeqLocPtr   CreateWholeInterval (SeqEntryPtr sep);
 NLM_EXTERN SeqFeatPtr  CreateNewFeature (SeqEntryPtr sep, SeqEntryPtr placeHere, Uint1 choice, SeqFeatPtr useThis);
 NLM_EXTERN ValNodePtr  CreateNewDescriptor (SeqEntryPtr sep, Uint1 choice);
+
+/* Variants that call SeqMgrGetSeqEntryForData. The feature version allows a location
+to be specified, overriding the default full-length seq-int location.  (If location is
+not NULL, it copies it after deleting the existing sfp->location.)  For both functions
+you still need to set the sfp->data.value.ptrvalue of the sdp->data.ptrvalue. */
+NLM_EXTERN SeqFeatPtr CreateNewFeatureOnBioseq (BioseqPtr bsp, Uint1 choice, SeqLocPtr slp);
+NLM_EXTERN ValNodePtr CreateNewDescriptorOnBioseq (BioseqPtr bsp, Uint1 choice);
 
 NLM_EXTERN void        UpdateLocalId (BioseqPtr bsp, CharPtr localId);
 NLM_EXTERN void        UpdateTitle (BioseqPtr bsp, CharPtr title);
@@ -162,6 +169,23 @@ NLM_EXTERN Uint2 GetItemIDGivenPointer (Uint2 entityID, Uint2 itemtype, Pointer 
 
 NLM_EXTERN Uint2 FindFeatFromFeatDefType (Uint2 subtype);
 
+/* functions to parse [org=Drosophila melanogaster] and [gene=lacZ] from titles */
+/* for example, passing "gene" to SqnTagFind returns "lacZ" */
+
+#define MAX_SQN_TAGS  32
+
+typedef struct sqntag {
+  CharPtr  query;
+  Int2     num_tags;
+  CharPtr  tag [MAX_SQN_TAGS];
+  CharPtr  val [MAX_SQN_TAGS];
+} SqnTag, PNTR SqnTagPtr;
+
+NLM_EXTERN SqnTagPtr SqnTagParse (CharPtr ttl);
+NLM_EXTERN SqnTagPtr SqnTagFree (SqnTagPtr stp);
+
+NLM_EXTERN CharPtr SqnTagFind (SqnTagPtr stp, CharPtr tag);
+
 /* UseLocalAsnloadDataAndErrMsg transiently sets paths to asnload, data, and errmsg
   if they are packaged in the same directory as the executing program. */
 
@@ -179,6 +203,13 @@ NLM_EXTERN SeqIdPtr SeqIdStripLocus (SeqIdPtr sip);
 NLM_EXTERN Boolean ConvertPubSrcComDescsToFeats (SeqEntryPtr sep, Boolean pub, Boolean src, Boolean com, Boolean toProts);
 
 NLM_EXTERN void DeleteMultipleTitles (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent);
+
+
+NLM_EXTERN Uint1 FindTrnaAA (CharPtr str);
+NLM_EXTERN Uint1 FindTrnaAA3 (CharPtr str);
+NLM_EXTERN Uint1 ParseTRnaString (CharPtr strx, BoolPtr justTrnaText);
+NLM_EXTERN CharPtr FindTrnaAAIndex (CharPtr str);
+NLM_EXTERN ValNodePtr TokenizeTRnaString (CharPtr strx);
 
 /* from Colombe */
 NLM_EXTERN SeqLocPtr StringSearchInBioseq (SeqIdPtr sip, CharPtr sub);
@@ -221,6 +252,27 @@ option of saving FASTA results as OBJ_FASTA (SimpleSeq) to avoid ID collisions *
 NLM_EXTERN Pointer ReadAsnFastaOrFlatFile (FILE *fp, Uint2Ptr datatypeptr, Uint2Ptr entityIDptr,
                                            Boolean forceNuc, Boolean forceProt,
                                            Boolean parseFastaSeqId, Boolean fastaAsSimpleSeq);
+
+/* PromoteXrefs expands generef or protref feature cross-references (made by reading a
+feature table with ReadAsnFastaOrFlatFile) to stand-alone gene features or protein features
+and protein bioseqs.  It processes ALL features in the list - you give it the FIRST sfp. */
+
+NLM_EXTERN void PromoteXrefs (SeqFeatPtr sfp, BioseqPtr bsp, Uint2 entityID);
+
+/* SetEmptyGeneticCodes imposes genetic code on all coding regions within a feature table */
+
+NLM_EXTERN void SetEmptyGeneticCodes (SeqAnnotPtr sap, Int2 genCode);
+
+/* AddIntervalToLocation is a convenience function to add a single interval, and is called by
+ReadAsnFastaOrFlatFile internally. */
+
+NLM_EXTERN SeqLocPtr AddIntervalToLocation (SeqLocPtr loc, SeqIdPtr sip, Int4 start, Int4 stop);
+
+/* AddQualifierToFeature applies cds product and gene qualifiers as protref or generef stored
+as feature xrefs.  Most others (e.g., protein_id) are stored as gbquals.  PromoteXrefs can then
+turn these special cases into the appropriate structures in fully expanded records. */
+
+NLM_EXTERN void AddQualifierToFeature (SeqFeatPtr sfp, CharPtr qual, CharPtr val);
 
 /* BasicSeqEntryCleanup cleans up strings, moves gbquals to the appropriate field, and
 does several other conversions, all without changing the itemID structure (which would

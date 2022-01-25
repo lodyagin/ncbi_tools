@@ -1,12 +1,12 @@
 #
-# $Id: alphaOSF1.ncbi.mk,v 1.2 1999/04/02 17:21:19 beloslyu Exp $
+# $Id: alphaOSF1.ncbi.mk,v 1.4 1999/08/12 18:32:41 beloslyu Exp $
 #
 NCBI_MAKE_SHELL = /usr/bin/sh
 NCBI_DEFAULT_LCL = alf
 NCBI_CC = cc
 NCBI_CFLAGS1 = -c
-NCBI_LDFLAGS1 = 
-NCBI_OPTFLAG = -O
+NCBI_LDFLAGS1 = -fast
+NCBI_OPTFLAG = -fast
 NCBI_BIN_MASTER = /usr/home/coremake/ncbi/bin
 NCBI_BIN_COPY = /usr/home/coremake/ncbi/bin
 NCBI_INCDIR = /usr/home/coremake/ncbi/include
@@ -24,3 +24,4 @@ NCBI_RANLIB = ls -l
 # Used by makedis.csh
 NCBI_MT_OTHERLIBS = -lpthread
 NCBI_THREAD_OBJ = ncbithr.o
+NETENTREZVERSION = 2.02c2ASN1SPEC6 

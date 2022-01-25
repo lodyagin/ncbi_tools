@@ -57,7 +57,7 @@ on DoSetGlobals()
 	tell application "Finder"
 		
 		set HARDDISK to startup disk as string
-		set METRO to HARDDISK & "CodeWarrior Pro 4:" as string
+		set METRO to HARDDISK & "CodeWarrior Pro 5:" as string
 		set METROWERKSCW to METRO & "Metrowerks CodeWarrior:" as string
 		
 		set NCBISOURCE to METRO & "ncbi:" as string
@@ -77,7 +77,7 @@ on DoSetGlobals()
 end DoSetGlobals
 
 on DoSetPreferences()
-	tell application "CodeWarrior IDE 3.2"
+	tell application "CodeWarrior IDE 4.0"
 		
 		(* ===== Panel Target ===== *)
 		if MASTER = "PPC" then
@@ -86,11 +86,12 @@ on DoSetPreferences()
 			Set Preferences of panel "Target Settings" to {Linker:"MacOS 68K Linker"}
 		end if
 		
-		(* ===== Panel PowerPC Project =====  *)
-		Set Preferences of panel "PPC Project" to {Project Type:library}
-		
-		(* ===== Panel 68K Project =====  *)
-		Set Preferences of panel "68K Project" to {Project Type:library}
+		(* ===== Panel Project ===== *)
+		if MASTER = "PPC" then
+			Set Preferences of panel "PPC Project" to {Project Type:library}
+		else if MASTER = "68K" then
+			Set Preferences of panel "68K Project" to {Project Type:library}
+		end if
 		
 		(* ===== Panel C/C++ Language =====  *)
 		Set Preferences of panel "C/C++ Compiler" to Â
@@ -121,65 +122,68 @@ on DoSetPreferences()
 				, Extra Commas:true Â
 				, Extended Error Checking:true}
 		
-		(* ===== Panel PPC Processor =====  *)
-		Set Preferences of panel "PPC CodeGen" to Â
-			{Struct Alignment:Align_PPC Â
-				, Make Strings ReadOnly:true Â
-				, Store Data in TOC:true Â
-				, Use FMADD Instructions:false Â
-				, Use Profiler:false Â
-				, Traceback Tables:TB_None Â
-				, Schedule:false Â
-				, Peephole Optimizer:false}
-		
-		(* ===== Panel PPC Linker ===== *)
-		Set Preferences of panel "PPC Linker" to Â
-			{Generate SYM File:true Â
-				, Full Path In Sym Files:true Â
-				, Generate Link Map:false Â
-				, Suppress Warnings:false Â
-				, Link Mode:fast Â
-				, Initialization Name:Â
-				"", Main Name:Â
-				"__start", Termination Name:""}
-		
-		(* ===== Panel PPC PEF =====  *)
-		Set Preferences of panel "PPC PEF" to Â
-			{Export Symbols:none Â
-				, Old Definition:0 Â
-				, Old Implementation:0 Â
-				, Current Version:0 Â
-				, Code Sorting:nosort Â
-				, Share Data Section:false Â
-				, Expand Uninitialized Data:false Â
-				, Fragment Name:""}
-		
-		(* ===== Panel 68K Processor =====  *)
-		Set Preferences of panel "68K CodeGen" to Â
-			{Code Model:large Â
-				, Struct Alignment:Align_68k Â
-				, MC68020 CodeGen:false Â
-				, Floating Point CodeGen:SANE Â
-				, PC Relative Strings:false Â
-				, Use Profiler:false Â
-				, Four Bytes Ints:true Â
-				, Eight Byte Double:true Â
-				, Far Data:true Â
-				, Far Method Tables:true Â
-				, Far String Constants:true Â
-				, MPW Calling Conventions:false}
-		
-		(* ===== Panel 68K Linker ===== *)
-		Set Preferences of panel "68K Linker" to Â
-			{MacsBug Symbols:newsymbols Â
-				, Generate SYM File:true Â
-				, Full Path In Sym Files:true Â
-				, Generate Link Map:false Â
-				, Generate A6 Stack Frames:true Â
-				, Link Single Segment:false Â
-				, Suppress Warnings:false Â
-				, Fast Link:true Â
-				, Merge Compiler Glue:false}
+		if MASTER = "PPC" then
+			
+			(* ===== Panel PPC Processor =====  *)
+			Set Preferences of panel "PPC CodeGen" to Â
+				{Struct Alignment:Align_PPC Â
+					, Make Strings ReadOnly:true Â
+					, Store Data in TOC:true Â
+					, Use FMADD Instructions:false Â
+					, Use Profiler:false Â
+					, Traceback Tables:TB_None Â
+					, Schedule:false Â
+					, Peephole Optimizer:false}
+			
+			(* ===== Panel PPC Linker ===== *)
+			Set Preferences of panel "PPC Linker" to Â
+				{Generate SYM File:true Â
+					, Full Path In Sym Files:true Â
+					, Generate Link Map:false Â
+					, Suppress Warnings:false Â
+					, Link Mode:fast Â
+					, Initialization Name:Â
+					"", Main Name:Â
+					"__start", Termination Name:""}
+			
+			(* ===== Panel PPC PEF =====  *)
+			Set Preferences of panel "PPC PEF" to Â
+				{Export Symbols:none Â
+					, Old Definition:0 Â
+					, Old Implementation:0 Â
+					, Current Version:0 Â
+					, Code Sorting:nosort Â
+					, Share Data Section:false Â
+					, Expand Uninitialized Data:false Â
+					, Fragment Name:""}
+			
+		else if MASTER = "68K" then
+			(* ===== Panel 68K Processor =====  *)
+			Set Preferences of panel "68K CodeGen" to Â
+				{Code Model:large Â
+					, Struct Alignment:Align_68k Â
+					, MC68020 CodeGen:false Â
+					, Floating Point CodeGen:SANE Â
+					, PC Relative Strings:false Â
+					, Use Profiler:false Â
+					, Four Bytes Ints:true Â
+					, Eight Byte Double:true Â
+					, Far Data:true Â
+					, Far Method Tables:true Â
+					, Far String Constants:true Â
+					, MPW Calling Conventions:false}
+			
+			(* ===== Panel 68K Linker ===== *)
+			Set Preferences of panel "68K Linker" to Â
+				{Generate SYM File:true Â
+					, Full Path In Sym Files:true Â
+					, Generate Link Map:false Â
+					, Link Single Segment:false Â
+					, Suppress Warnings:false Â
+					, Fast Link:true Â
+					, Merge Compiler Glue:false}
+			
+		end if
 		
 		my DoSetPaths1()
 		
@@ -187,7 +191,7 @@ on DoSetPreferences()
 end DoSetPreferences
 
 on DoSetPaths1()
-	tell application "CodeWarrior IDE 3.2"
+	tell application "CodeWarrior IDE 4.0"
 		
 		(* ===== Panel Access Paths ===== *)
 		-- We need to be able to move the default system compiler folder to the end of the list
@@ -202,18 +206,20 @@ on DoSetPaths1()
 end DoSetPaths1
 
 on DoSetPaths2()
-	tell application "CodeWarrior IDE 3.2"
+	tell application "CodeWarrior IDE 4.0"
 		
 		-- After we have added all paths, reinsert compiler default at end of list
 		Set Preferences of panel "Access Paths" to {System Paths:{{name:":MacOS Support:Headers:", recursive:true, origin:shell relative}}}
 		Set Preferences of panel "Access Paths" to {System Paths:{{name:":MacOS Support:Libraries:", recursive:true, origin:shell relative}}}
-		Set Preferences of panel "Access Paths" to {System Paths:{{name:":Metrowerks Standard Library:MSL C:", recursive:true, origin:shell relative}}}
+		Set Preferences of panel "Access Paths" to {System Paths:{{name:":MacOS Support:Universal:", recursive:true, origin:shell relative}}}
+		Set Preferences of panel "Access Paths" to {System Paths:{{name:":MacOS Support:Profiler:", recursive:true, origin:shell relative}}}
+		Set Preferences of panel "Access Paths" to {System Paths:{{name:":MSL:MSL_C:", recursive:true, origin:shell relative}}}
 		
 	end tell
 end DoSetPaths2
 
 on DoCompileLibraries()
-	tell application "CodeWarrior IDE 3.2"
+	tell application "CodeWarrior IDE 4.0"
 		
 		open (LIBRARIES & "ncsasock" & SUFFIX & ".µ")
 		Make Project
@@ -267,7 +273,7 @@ end DoCompileLibraries
 with timeout of 60000 seconds
 	my DoSetGlobals()
 	
-	tell application "CodeWarrior IDE 3.2"
+	tell application "CodeWarrior IDE 4.0"
 		
 		activate
 		
@@ -290,7 +296,7 @@ with timeout of 60000 seconds
 		
 		Add Files {NCSASOCK & "dprintf.c", NCSASOCK & "netdb.c", NCSASOCK & "rexec.c", NCSASOCK & "socket.c", NCSASOCK & "sock_std.c", NCSASOCK & "sock_tcp.c"} To Segment 1
 		Add Files {NCSASOCK & "sock_udp.c", NCSASOCK & "sock_utl.c", NCSASOCK & "syslog.c", NCSASOCK & "tcpglue.c", NCSASOCK & "unixlib.c"} To Segment 1
-		Add Files {METROWERKSCW & "MacOS Support:Headers:System Extras Headers:MacTCP Headers:dnr.c"} To Segment 1
+		Add Files {METROWERKSCW & "MacOS Support:Headers:MacTCP Headers:dnr.c"} To Segment 1
 		
 		Reset File Paths
 		Close Project
@@ -317,7 +323,7 @@ with timeout of 60000 seconds
 		set NCBICONNECT to NCBISOURCE & "connect:" as string
 		
 		Add Files {NCBICONNECT & "connectn.c", NCBICONNECT & "connutil.c", NCBICONNECT & "con_url.c", NCBICONNECT & "con_sock.c"} To Segment 2
-		Add Files {NCBICONNECT & "ncbibuf.c", NCBICONNECT & "ncbisock.c", NCBICONNECT & "urlquery.c"} To Segment 2
+		Add Files {NCBICONNECT & "con_stateless.c", NCBICONNECT & "ncbibuf.c", NCBICONNECT & "ncbi_buffer.c", NCBICONNECT & "ncbisock.c", NCBICONNECT & "urlquery.c"} To Segment 2
 		
 		set NCBIASNLIB to NCBISOURCE & "asnlib:" as string
 		
@@ -336,6 +342,7 @@ with timeout of 60000 seconds
 		Set Preferences of panel "PPC Project" to {File Name:"ncbiobjppc"}
 		Set Preferences of panel "68K Project" to {File Name:"ncbiobj68k"}
 		Set Preferences of panel "Access Paths" to {User Paths:{{name:NCBISOURCE & "object:", origin:absolute}}}
+		Set Preferences of panel "Access Paths" to {User Paths:{{name:NCBISOURCE & "access:", origin:absolute}}}
 		Set Preferences of panel "Access Paths" to {User Paths:{{name:NCBISOURCE & "api:", origin:absolute}}}
 		my DoSetPaths2()
 		
@@ -347,15 +354,20 @@ with timeout of 60000 seconds
 		Add Files {NCBIOBJECT & "objpub.c", NCBIOBJECT & "objpubme.c", NCBIOBJECT & "objres.c", NCBIOBJECT & "objseq.c", NCBIOBJECT & "objsset.c"} To Segment 1
 		Add Files {NCBIOBJECT & "objsub.c"} To Segment 1
 		
+		set NCBIACCESS to NCBISOURCE & "access:" as string
+		Add Files {NCBIACCESS & "objent2.c"} To Segment 2
+		
 		set NCBIAPI to NCBISOURCE & "api:" as string
 		
-		Add Files {NCBIAPI & "asn2ff1.c", NCBIAPI & "asn2ff2.c", NCBIAPI & "asn2ff3.c", NCBIAPI & "asn2ff4.c", NCBIAPI & "asn2ff5.c", NCBIAPI & "asn2ff6.c"} To Segment 2
-		Add Files {NCBIAPI & "codon.c", NCBIAPI & "edutil.c", NCBIAPI & "ffprint.c", NCBIAPI & "findrepl.c", NCBIAPI & "ftusrstr.c", NCBIAPI & "gather.c"} To Segment 2
-		Add Files {NCBIAPI & "gbfeat.c", NCBIAPI & "gbftglob.c", NCBIAPI & "gbparint.c", NCBIAPI & "jzcoll.c", NCBIAPI & "jzmisc.c", NCBIAPI & "lsqfetch.c"} To Segment 2
-		Add Files {NCBIAPI & "maputil.c", NCBIAPI & "mconsist.c", NCBIAPI & "objmgr.c", NCBIAPI & "prtutil.c", NCBIAPI & "satutil.c", NCBIAPI & "seqmgr.c"} To Segment 2
-		Add Files {NCBIAPI & "seqport.c", NCBIAPI & "sequtil.c", NCBIAPI & "simple.c", NCBIAPI & "sqnutil1.c", NCBIAPI & "sqnutil2.c", NCBIAPI & "subutil.c"} To Segment 2
-		Add Files {NCBIAPI & "tofasta.c", NCBIAPI & "tofile.c", NCBIAPI & "tomedlin.c", NCBIAPI & "txalign.c", NCBIAPI & "utilpars.c", NCBIAPI & "utilpub.c"} To Segment 2
-		Add Files {NCBIAPI & "valid.c", NCBIAPI & "wprint.c", NCBIAPI & "salpacc.c", NCBIAPI & "udvseq.c"} To Segment 2
+		Add Files {NCBIAPI & "asn2ff1.c", NCBIAPI & "asn2ff2.c", NCBIAPI & "asn2ff3.c", NCBIAPI & "asn2ff4.c", NCBIAPI & "asn2ff5.c", NCBIAPI & "asn2ff6.c"} To Segment 3
+		Add Files {NCBIAPI & "codon.c", NCBIAPI & "edutil.c", NCBIAPI & "ffprint.c", NCBIAPI & "findrepl.c", NCBIAPI & "ftusrstr.c", NCBIAPI & "gather.c"} To Segment 3
+		Add Files {NCBIAPI & "gbfeat.c", NCBIAPI & "gbftglob.c", NCBIAPI & "gbparint.c", NCBIAPI & "jzcoll.c", NCBIAPI & "jzmisc.c", NCBIAPI & "lsqfetch.c"} To Segment 3
+		Add Files {NCBIAPI & "maputil.c", NCBIAPI & "mconsist.c", NCBIAPI & "objmgr.c", NCBIAPI & "prtutil.c", NCBIAPI & "satutil.c", NCBIAPI & "seqmgr.c"} To Segment 3
+		Add Files {NCBIAPI & "seqport.c", NCBIAPI & "sequtil.c", NCBIAPI & "simple.c", NCBIAPI & "sqnutil1.c", NCBIAPI & "sqnutil2.c", NCBIAPI & "subutil.c"} To Segment 3
+		Add Files {NCBIAPI & "tofasta.c", NCBIAPI & "tofile.c", NCBIAPI & "tomedlin.c", NCBIAPI & "txalign.c", NCBIAPI & "utilpars.c", NCBIAPI & "utilpub.c"} To Segment 3
+		Add Files {NCBIAPI & "salpstat.c", NCBIAPI & "salpedit.c", NCBIAPI & "valid.c", NCBIAPI & "alignmgr.c", NCBIAPI & "alignval.c", NCBIAPI & "wprint.c"} To Segment 3
+		Add Files {NCBIAPI & "salpacc.c", NCBIAPI & "salprop.c", NCBIAPI & "salsap.c", NCBIAPI & "salstruc.c", NCBIAPI & "salutil.c"} To Segment 3
+		Add Files {NCBIAPI & "udvseq.c", NCBIAPI & "blocks.c", NCBIAPI & "pgppop.c"} To Segment 3
 		
 		Reset File Paths
 		Close Project
@@ -486,11 +498,11 @@ with timeout of 60000 seconds
 		Add Files {NCBITOOLS & "splutil.c", NCBITOOLS & "gapxdrop.c", NCBITOOLS & "bandalg0.c", NCBITOOLS & "bandalg1.c", NCBITOOLS & "bandalg2.c"} To Segment 1
 		Add Files {NCBITOOLS & "bandalg3.c", NCBITOOLS & "bandalg4.c", NCBITOOLS & "bandalg5.c", NCBITOOLS & "bandalgn.c", NCBITOOLS & "blastkar.c"} To Segment 1
 		Add Files {NCBITOOLS & "lookup.c", NCBITOOLS & "posit.c", NCBITOOLS & "readdb.c", NCBITOOLS & "ncbisam.c", NCBITOOLS & "ncbisort.c"} To Segment 1
-		Add Files {NCBITOOLS & "salpstat.c", NCBITOOLS & "salpedit.c", NCBITOOLS & "salsap.c", NCBITOOLS & "salstruc.c", NCBITOOLS & "salutil.c"} To Segment 1
+		Add Files {NCBITOOLS & "salign.c", NCBITOOLS & "salptool.c"} To Segment 1
 		Add Files {NCBITOOLS & "urkutil.c", NCBITOOLS & "urkpcc.c", NCBITOOLS & "urkptpf.c", NCBITOOLS & "urkepi.c", NCBITOOLS & "urkfltr.c"} To Segment 1
 		Add Files {NCBITOOLS & "urkdust.c", NCBITOOLS & "urksigu.c", NCBITOOLS & "seg.c", NCBITOOLS & "urkbias.c", NCBITOOLS & "urkcnsrt.c"} To Segment 1
 		Add Files {NCBITOOLS & "urktree.c", NCBITOOLS & "pattern1.c", NCBITOOLS & "pseed3.c", NCBITOOLS & "impatool.c", NCBITOOLS & "posit2.c", NCBITOOLS & "newkar.c"} To Segment 1
-		
+		Add Files {NCBITOOLS & "ddvcolor.c"} To Segment 1 
 		Reset File Paths
 		Close Project
 		

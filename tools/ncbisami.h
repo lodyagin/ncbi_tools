@@ -1,4 +1,4 @@
-/* $Id: ncbisami.h,v 6.1 1999/02/19 22:01:59 madden Exp $
+/* $Id: ncbisami.h,v 6.2 1999/08/25 20:19:24 shavirin Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,15 @@
 *
 * Initial Version Creation Date: 02/24/1997
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description:
 *         Internal include file for ISAM library
 *
 * $Log: ncbisami.h,v $
+* Revision 6.2  1999/08/25 20:19:24  shavirin
+* Added parameter for user options to the internal structure.
+*
 * Revision 6.1  1999/02/19 22:01:59  madden
 * Add NlmMFILEPtr to ISAMData typedef
 *
@@ -147,6 +150,7 @@ typedef struct ISAMData
     
     CharPtr         line;           /* Temporary buffer to work with strings */
     Int4            max_line_size;  /* Maximum string length in the database */
+    Int4            idx_option;    /* Options set by upper layer */
 } ISAMData, PNTR ISAMDataPtr;
 
 typedef struct ISAMTmpCA

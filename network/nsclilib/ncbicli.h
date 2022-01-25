@@ -1,7 +1,7 @@
 #ifndef NCBICLI__H
 #define NCBICLI__H
 
-/*  $RCSfile: ncbicli.h,v $  $Revision: 4.5 $  $Date: 1999/02/18 18:47:40 $
+/*  $RCSfile: ncbicli.h,v $  $Revision: 4.6 $  $Date: 1999/06/24 17:59:36 $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -34,6 +34,9 @@
 *
 * --------------------------------------------------------------------------
 * $Log: ncbicli.h,v $
+* Revision 4.6  1999/06/24 17:59:36  vakatov
+* Untie the HTTP and regular proxy servers: SRV_HTTP_PROXY_***, SRV_PROXY_HOST
+*
 * Revision 4.5  1999/02/18 18:47:40  shavirin
 * Added definition of new functions, those do not interfere with
 * existing API.
@@ -79,10 +82,12 @@ struct Nlm_NICtag;              /* internal storage  */
 typedef struct Nlm_NICtag *NIC; /* handle */
 
 
-/* Open read/write connection to the service specified by "service_name"
+/* Open a read/write connection to the service specified by "service_name"
  * using dispatcher located at URL "http://disp_host:disp_port/disp_path".
  * If both "timeout_sec" and "timeout_usec" are equal to zero then wait
- * ad infinitum; otherwise, fail if the specified timeout expires.
+ * ad infinitum; otherwise, fail if the specified "timeout" expires.
+ * If "proxy_host" is not NULL/empty then connect via the specified proxy
+ * server(using the same port #).
  * Return handle to the opened connection; NULL on error.
  */
 
@@ -93,26 +98,25 @@ typedef enum {
   eNIC_Default /* use default agent */
 } ENIC_Agent;
 
-/* the "flags" arg for NIC_GetService()
- */
+/* "flags" arg for NIC_GetService() */
+typedef Uint4 TNIC_Flags;
 /* printout reply from dispatcher */
 #define NIC_DEBUG_PRINTOUT 0x1
-/* use an NCBI firewall daemon to make a connection */
+/* use the NCBI firewall daemon to make a connection */
 #define NIC_FIREWALL       0x2
-/* non-transparent CERN-like proxy */
-#define NIC_CERN_PROXY     0x4
 
 
 NLM_EXTERN NIC NIC_GetService
-(const Nlm_Char  *service_name,
- const Nlm_Char  *disp_host,
- Nlm_Uint2        disp_port,
- const Nlm_Char  *disp_path,
+(const Char      *service_name,
+ const Char      *disp_host,
+ Uint2            disp_port,
+ const Char      *disp_path,
  const STimeout  *timeout,
  ENIC_Agent       client_agent,
  const Char      *client_host,
+ const Char      *proxy_host,
  const ByteStore *service_query,
- Uint4            flags
+ TNIC_Flags       flags
  );
 
 /* Get SOCK structure associated with the connection
@@ -123,20 +127,22 @@ NLM_EXTERN SOCK NIC_GetSOCK
 
 /* Close the connection, destroy relevant internal data
  */
-NLM_EXTERN Nlm_Boolean NIC_CloseService
+NLM_EXTERN Boolean NIC_CloseService
 (NIC nic
  );
 
+
+#ifdef SERGEI_SHAVIRIN_CUT_AND_PASTE
+/* Sergei Shavirin's temporary ad hoc API */
 typedef VoidPtr NETC_HandlePtr;
-
 Boolean NET_Connect(VoidPtr handle);
-
 NETC_HandlePtr NET_GenericGetService (CharPtr defService, 
                                       CharPtr configSection, 
                                       Int4 interface);
-    
 Int2 NET_ServiceDisconnect(NETC_HandlePtr handle);
 SOCK NET_GetSOCK(NETC_HandlePtr handle);
+#endif /* SERGEI_SHAVIRIN_CUT_AND_PASTE */
+
 
 #ifdef __cplusplus
 }

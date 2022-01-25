@@ -27,7 +27,7 @@
 *
 * Author:  Alex Smirnov,  Denis Vakatov
 *
-* $Revision: 6.2 $
+* $Revision: 6.3 $
 *
 * File Description:
 *       Image(pixmap) processing.
@@ -37,6 +37,9 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: image.c,v $
+* Revision 6.3  1999/06/22 15:14:50  lewisg
+* fix image library so that works on linux with > 8 bits
+*
 * Revision 6.2  1998/01/05 20:00:13  vakatov
 * [WIN_X11] Nlm_AllocateImage() -- better diagnostics for mismatching visual
 *
@@ -98,6 +101,7 @@
 #include <vibtypes.h>
 #include <vibprocs.h>
 #include <vibincld.h>
+#include <math.h>
 
 #ifndef _IMAGE_
 #include <image.h>
@@ -298,12 +302,17 @@ Nlm_Boolean Nlm_AllocateImage ( Nlm_Image image, Nlm_Uint2Ptr width,
   MemFree ( lppe );
 #endif
 #ifdef WIN_MOTIF
+#ifdef OS_UNIX_LINUX 
+  if(!Nlm_CheckX(&visinfo))
+#else /* OS_UNIX_LINUX */
   if( !(XMatchVisualInfo(Nlm_currentXDisplay,
                          DefaultScreen(Nlm_currentXDisplay),
                          8,PseudoColor,&visinfo) ||
         XMatchVisualInfo(Nlm_currentXDisplay,
                          DefaultScreen(Nlm_currentXDisplay),
-                         8,GrayScale,&visinfo)) ){
+                         8,GrayScale,&visinfo)) )
+#endif /* else OS_UNIX_LINUX */      
+      {
     Nlm_DiagPutRecord ( DA_ERROR, imageClass, "AllocateImage",
 "Your X display cannot support 8-bit(256 colors) neither PseudoColor nor GrayScale visual" );
     return FALSE;
@@ -317,7 +326,7 @@ Nlm_Boolean Nlm_AllocateImage ( Nlm_Image image, Nlm_Uint2Ptr width,
   HandUnlock ( im->image );
   if ( im->imageX11 == NULL ){
     im->imageX11 = XCreateImage(Nlm_currentXDisplay, 
-                                visinfo.visual, 8, ZPixmap, 0,
+                                visinfo.visual, visinfo.depth, ZPixmap, 0,
                                 (char*)im->curImagePtr,
                                 *width, height, 8, 0);
   }
@@ -864,6 +873,19 @@ Nlm_Boolean Nlm_ImageSetPalette(Nlm_Image image, Nlm_WindoW w)
   return TRUE;
 }
 
+#ifdef WIN_MOTIF
+static int ShiftXMask(unsigned long mask, int bitmap_unit)
+{
+    int low, hi;
+    for(low = 0; low < bitmap_unit; low++) {
+      if((mask >> low) & (unsigned long)1) break;
+    }
+    for (hi = 1; hi < bitmap_unit - low; hi++) {
+        if(!((mask >> hi + low) & (unsigned long)1)) break;
+    }
+    return low - ( 8 - hi);  /* correct for default 8 bit palette */
+}
+#endif /* WIN_MOTIF */
 
 Nlm_Boolean Nlm_ImageShow(Nlm_Image image, Nlm_PoinT p)
 {
@@ -876,6 +898,10 @@ Nlm_Boolean Nlm_ImageShow(Nlm_Image image, Nlm_PoinT p)
   CTabPtr      tabPtr;
   Nlm_Int2     i;
 #endif
+#ifdef WIN_MOTIF
+  XVisualInfo visinfo;
+#endif /* WIN_MOTIF */
+
 
   Nlm_DiagReset();
   if ( !im->image ) {
@@ -966,16 +992,90 @@ Nlm_Boolean Nlm_ImageShow(Nlm_Image image, Nlm_PoinT p)
         for (i = 0;  i < im_size;  i++)
           *dst++ = altcol[*src++];
       }
-
+#ifdef OS_UNIX_LINUX
+      else if (Nlm_CheckX(&visinfo)){
+          Nlm_Int4 im_size, i, xx, yy;
+          Nlm_Uint1Ptr src = im->curImagePtr;
+          unsigned long dst;
+          int red_shift, blue_shift, green_shift;
+          
+          im_size = (im->imageX11->height * im->imageX11->bytes_per_line
+                  + im->imageX11->xoffset * im->imageX11->bitmap_unit/8);
+          
+          red_shift = ShiftXMask(im->imageX11->red_mask,
+                                im->imageX11->bitmap_unit);
+          green_shift = ShiftXMask(im->imageX11->green_mask,
+                                im->imageX11->bitmap_unit);
+          blue_shift = ShiftXMask(im->imageX11->blue_mask,
+                                im->imageX11->bitmap_unit);
+           
+          if((visinfo.class == PseudoColor || visinfo.class == GrayScale)
+                  && visinfo.depth == 16) {
+            im->imageX11->data = (char *) Nlm_MemNew((size_t)im_size);
+            for (xx = 0; xx < im->imageX11->width; xx++) {
+              for( yy = 0;  yy < im->imageX11->height; yy++) {
+                  i = yy * im->imageX11->width + xx;
+                  XPutPixel(im->imageX11, xx, yy, (unsigned long)src[i]);
+              }
+            }
+          }
+          else if(visinfo.class == TrueColor) {
+            im->imageX11->data = (char *) Nlm_MemNew((size_t)im_size);
+            for (xx = 0; xx < im->imageX11->width; xx++) {
+              for( yy = 0;  yy < im->imageX11->height; yy++) {
+                  i = yy * im->imageX11->width + xx;
+                  dst = (((red_shift > 0 ?
+                          (((unsigned long)im->red[src[i]]) << red_shift) :
+                          (((unsigned long)im->red[src[i]])>>-red_shift)) &
+                          im->imageX11->red_mask) |
+                          ((green_shift > 0 ?
+                          (((unsigned long)im->green[src[i]]) << green_shift) :
+                          (((unsigned long)im->green[src[i]])>>-green_shift)) &
+                          im->imageX11->green_mask) |
+                          ((blue_shift > 0 ?
+                          (((unsigned long)im->blue[src[i]]) << blue_shift) :
+                          (((unsigned long)im->blue[src[i]])>>-blue_shift)) &
+                          im->imageX11->blue_mask) );
+                  XPutPixel(im->imageX11, xx, yy, dst);           
+              }
+            }
+          }
+          else if((visinfo.class == PseudoColor || visinfo.class == GrayScale)
+                  && visinfo.depth == 8) {
+              dst = dst;  /* placeholder */
+          }
+          else {
+            Nlm_MemFree(im->imageX11->data);
+            Nlm_DiagPutRecord(DA_ERROR, imageClass, "ImageShow",
+                          "Can't handle display class");
+            return FALSE;
+          }
+      }
+      else {
+          Nlm_DiagPutRecord(DA_ERROR, imageClass, "ImageShow",
+                          "Not valid display class");
+          return FALSE;
+      }
+#endif /* OS_UNIX_LINUX */
+          
     XPutImage(Nlm_currentXDisplay, Nlm_currentXWindow,
               Nlm_currentXGC, im->imageX11, 0, 0, p.x, p.y,
-              im->width, im->height);
+              im->imageX11->width, im->imageX11->height);
 
     if (im->curWin == NULL)
       {
         Nlm_MemFree( im->imageX11->data );
         im->imageX11->data = (char *)im->curImagePtr;
       }
+#ifdef OS_UNIX_LINUX
+      else if (Nlm_CheckX(&visinfo)) {
+          if(!((visinfo.class == PseudoColor || visinfo.class == GrayScale)
+                  && visinfo.depth == 8)) {
+            MemFree(im->imageX11->data);
+            im->imageX11->data = (char *)im->curImagePtr;
+        }
+      }
+#endif /* OS_UNIX_LINUX */
 
     XFlush( Nlm_currentXDisplay );
   }}

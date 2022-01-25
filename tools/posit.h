@@ -34,8 +34,14 @@ Contents: header file for position-based BLAST.
 
 
 *****************************************************************************/
-/* $Revision: 6.8 $ *
+/* $Revision: 6.10 $ *
 * $Log: posit.h,v $
+* Revision 6.10  1999/09/03 17:23:48  madden
+* Eliminated use of posMaxThresh field in posSearchItems
+*
+* Revision 6.9  1999/08/04 13:27:11  madden
+* Added -B option
+*
 * Revision 6.8  1999/03/21 19:40:30  madden
 * Added 3rd argument matrixfp to definition of outputPosMatrix
 *
@@ -111,6 +117,9 @@ extern "C" {
 #define charsPerLine 20 /*Number of characters of a sequence to print
                           per line for score matrix*/
 
+#define ALIGN_LINE_LENGTH 8192
+#define ALIGN_CHARS_PER_LINE 70
+
 #define UNUSED (-1)
 
 #define Xchar   21    /*character for low-complexity columns*/
@@ -142,7 +151,6 @@ typedef struct posSearchItems {
   BLAST_Score **posPrivateMatrix;
   Nlm_FloatHi **posFreqs;
   Int4 *threshSequences;   /*Which sequences are below p-value threshold*/
-  Int4 posMaxThresh;  /*Highest index of a sequence below p-value threshold*/
   Int4 posNumSequences;
   Int4 posResultsCounter;
   Int4 *posResultSequences;
@@ -179,6 +187,8 @@ void LIBCALL outputPosMatrix PROTO((posSearchItems *posSearch, compactSearchItem
 Int4Ptr * LIBCALL CposComputation PROTO((posSearchItems *posSearch, BlastSearchBlkPtr search, compactSearchItems * compactSearch, SeqAlignPtr listOfSeqAligns, Char *ckptFileName, Boolean patternSearchStart, ValNodePtr * error_return));
 
 Int4Ptr * LIBCALL WposComputation PROTO((compactSearchItems *compactSearch, SeqAlignPtr listOfSeqAligns));
+
+Int4Ptr * LIBCALL BposComputation PROTO((posSearchItems *posSearch, BlastSearchBlkPtr search, compactSearchItems * compactSearch, Char *ckptFileName, Char *takeCkptFileName, ValNodePtr * error_return));
 
 void LIBCALL posPrintInformation PROTO((posSearchItems *posSearch, BlastSearchBlkPtr search, Int4 passNum));
 

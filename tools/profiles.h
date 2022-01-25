@@ -25,7 +25,7 @@
 **************************************************************************/
 
 /**************************************************************************
-File name: profiles.c
+File name: profiles.h
 
 Author: Alejandro Schaffer
 
@@ -36,7 +36,7 @@ Contents: utilities for IMPALA
 
 
 #define MAXLINELEN 2000
-#define MAX_NAME_LENGTH 100
+#define MAX_NAME_LENGTH 500
 
 #define   ARG_DB 0
 #define   ARG_QUERY_FILE 1
@@ -59,8 +59,8 @@ Contents: utilities for IMPALA
 #define   ARG_DB_LENGTH  18
 
 
-#define PRO_VERSION "0.2"
-#define PRO_DATE "11-Jan-1998"
+#define PRO_VERSION "1.0"
+#define PRO_DATE "4-August-1999"
 #define PRO_MAX_HIT_LIST 250
 #define PRO_NUM_TICKS 50
 
@@ -68,6 +68,9 @@ Contents: utilities for IMPALA
 
 #define PRO_DEFAULT_SCALING_UP  100
 #define PRO_DEFAULT_SCALING_DOWN 0.01
+
+#define Xchar 21
+#define Xscore (-1)
 
 #define scoreRange 10000
 
@@ -81,22 +84,6 @@ typedef struct SWpairs {
   Int4 noGap;
   Int4 gapExists;
 } SWpairs;
-
-typedef struct SWResults {
-  Uint1Ptr seq;
-  Int4 seqStart;
-  Int4 seqEnd;
-  Int4 queryStart;
-  Int4 queryEnd;
-  Int4 *reverseAlignScript;
-  BLAST_Score score;
-  Nlm_FloatHi eValue;
-  Nlm_FloatHi eValueThisAlign;
-  Nlm_FloatHi Lambda;
-  Nlm_FloatHi logK;
-  SeqIdPtr subject_id;  /*used to display the sequence in alignment*/
-  struct SWResults *next;
-} SWResults;
 
 typedef struct proDemographicsItems {
   Uint1 matrixName[MAX_NAME_LENGTH];
@@ -125,3 +112,7 @@ void LIBCALL impalaScaling PROTO((posSearchItems *posSearch, compactSearchItems 
 
 Boolean LIBCALL  impalaReadCheckpoint PROTO((posSearchItems * posSearch, compactSearchItems * compactSearch, CharPtr fileName, ValNodePtr * error_return,
 Nlm_FloatHi scalingFactor));
+
+void  LIBCALL impalaMakeFileNames PROTO((Char * matrixDbName, Char * auxiliaryFileName, Char * mmapFileName, Char * seqFileName, Char *matrixFileName, Char * ckptFileName,  Char *directoryPrefix));
+
+Boolean LIBCALL IMPALAPrintHelp PROTO((Boolean html, Int4 line_length, Char * programName, FILE *outfp));

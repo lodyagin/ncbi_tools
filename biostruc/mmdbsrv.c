@@ -1,4 +1,4 @@
-/* $Id: mmdbsrv.c,v 6.16 1999/04/28 21:08:30 lewisg Exp $
+/* $Id: mmdbsrv.c,v 6.21 1999/06/17 14:44:09 zimmerma Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,30 @@
 *
 * Version Creation Date: 6 January 1997
 *
-* $Revision: 6.16 $
+* $Revision: 6.21 $
 *
 * File Description:
 *        MMDB WWW-server 
 *
 * $Log: mmdbsrv.c,v $
+* Revision 6.21  1999/06/17 14:44:09  zimmerma
+* Added static char variable for cvsId in order to use unix "what"
+*
+* Revision 6.20  1999/06/15 18:15:34  addess
+* Initialized this_uid to 0 on line 1286
+*
+* Revision 6.19  1999/05/13 15:51:33  kimelman
+* bugfix: memory deallocation fixed
+*
+* Revision 6.19  1999/05/13 15:51:33  kimelman
+* bugfix: memory deallocation fixed
+*
+* Revision 6.18  1999/05/11 23:36:34  kimelman
+* make StrToInt4 static
+*
+* Revision 6.17  1999/05/11 17:50:23  kimelman
+* style
+*
 * Revision 6.16  1999/04/28 21:08:30  lewisg
 * fixed double freeing of Biostruc
 *
@@ -343,7 +361,7 @@ static Char MAILto[256];
 static Char MAILTO[PATH_MAX];
 static Char ARROW[PATH_MAX];
 
-
+static char* cvsId_ = "@(#)$Id: mmdbsrv.c,v 6.21 1999/06/17 14:44:09 zimmerma Exp $";
 
 static FILE    *GlobalDisplayFile = NULL;
 static Char    GlobalDisplayName[PATH_MAX];
@@ -471,7 +489,7 @@ static void WWWPrintFileData(CharPtr FName,  FILE *pFile)
 }
 
 
-Boolean
+static Boolean
 StrToInt4 (CharPtr str, Int4Ptr longval)
 {
   Nlm_Int2     i;
@@ -1220,20 +1238,10 @@ static void DumpMime(AsnIoPtr aip, CharPtr title, VoidPtr datum)
   mime->choice = NcbiMimeAsn1_strucseq;
   mime->data.ptrvalue= datum;
 
-                                 /* yanli made the following comment-out */
-/*mime->choice = NcbiMimeAsn1_entrez;
-  egp = EntrezGeneralNew();                                     
-  mime->data.ptrvalue = (VoidPtr) egp;
-  egp->Data_data = ValNodeNew(NULL);
-  egp->title = StringSave(title);
-  egp->style = style;
-  egp->Data_data->choice = choice;
-  egp->Data_data->data.ptrvalue = datum;  */
-
   NcbiMimeAsn1AsnWrite(mime, aip, NULL);
   AsnIoFlush(aip);
 
-/*egp->Data_data->data.ptrvalue = NULL; */ /* for clean free */
+  mime->data.ptrvalue=NULL ; /* for clean free */
   NcbiMimeAsn1Free(mime);
 }
 
@@ -1263,7 +1271,7 @@ SendStructureMIME(Char Filetype, Int4 uid, Int4 Mime, Int4 Complexity,
         SeqIdPtr sip;
         SeqEntryPtr sep;
         Int2 retcode = 3;
-        Int4 This_uid;
+        Int4 This_uid = 0;
 
 	GlobalDisplayName[0] = '\0';
 	StringCat(GlobalDisplayName, TmpNam(NULL)); 
@@ -1379,7 +1387,8 @@ SendStructureMIME(Char Filetype, Int4 uid, Int4 Mime, Int4 Complexity,
 			fprintf(GlobalDisplayFile, "Content-type: chemical/x-kinemage\r\n\r\n");
 
 		ModelStruc = MakeAModelstruc(bsp);
-		bssp->structure = NULL;  /* already linked into modelstruc */		WriteKinAllModel(ModelStruc, GlobalDisplayFile, Color, Render);
+		bssp->structure = NULL;  /* already linked into modelstruc */
+		WriteKinAllModel(ModelStruc, GlobalDisplayFile, Color, Render);
 		ClearStructures();
 	}
 	else {

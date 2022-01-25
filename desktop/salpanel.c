@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.43 $
+* $Revision: 6.54 $
 *
 * File Description: 
 *
@@ -283,13 +283,13 @@ static CharPtr get_substring (CharPtr str, Int4 drw_start, Int4 drw_width)
   stringlens = StringLen (strp);
   if (stringlens == 0) 
      return NULL; 
-  width = MIN ((Int2) drw_width, (Int2) stringlens);
+  width = MIN ((Int4) drw_width, (Int4) stringlens);
   if ( !not_empty_string (strp, width) ) 
      return NULL;
   return strp;
 }
 
-static SelStructPtr go_to_next_to_draw (EditAlignDataPtr adp, Boolean next, Int2 offset)
+static SelStructPtr go_to_next_to_draw (EditAlignDataPtr adp, Boolean next, Int4 offset)
 {
   TextAlignBufPtr  curtdp;
   SelStructPtr     curvnp;
@@ -297,11 +297,10 @@ static SelStructPtr go_to_next_to_draw (EditAlignDataPtr adp, Boolean next, Int2
   ValNodePtr       vnp = NULL;
   Int4             from_inbuf;  /* alignment coordinates in buffer */
   Int4             from_inseq;  /* alignment coordinates in buffer */
-  Int2             drw_width;   /* length of drw_str */
+  Int4             drw_width;   /* length of drw_str */
   Uint2            itemsubtype;
   CharPtr          curstr = NULL;
-  SeqAlignPtr      salp = (SeqAlignPtr) adp->sap_align->data;
-  Int2             offsettmp;
+  Int4             offsettmp;
 
   if (adp->voffset == 0)
      return adp->buffer;
@@ -309,7 +308,7 @@ static SelStructPtr go_to_next_to_draw (EditAlignDataPtr adp, Boolean next, Int2
      return adp->firstssp;
   from_inseq = adp->hoffset;
   from_inbuf = adp->hoffset - adp->bufferstart;
-  drw_width = MIN ((Int2) adp->visibleWidth, (Int2) (adp->bufferlength - from_inbuf));
+  drw_width = MIN ((Int4) adp->visibleWidth, (Int4) (adp->bufferlength - from_inbuf));
   if ( drw_width <= 0 ) {
          return NULL;
   }
@@ -323,7 +322,8 @@ static SelStructPtr go_to_next_to_draw (EditAlignDataPtr adp, Boolean next, Int2
                 offsettmp++;
          else if (itemsubtype == EDITDEF_SCB) 
                 offsettmp;
-         else if (curssp->itemtype ==OBJ_BIOSEQ && itemsubtype == FEATDEF_BAD)
+         else if (curssp->itemtype ==OBJ_BIOSEQ) /*&&itemsubtype==FEATDEF_BAD)*/
+
          {
                 vnp = (ValNodePtr) curssp->data;
                 curtdp = (TextAlignBufPtr) vnp->data.ptrvalue;
@@ -352,8 +352,8 @@ static SelStructPtr go_to_next_to_draw (EditAlignDataPtr adp, Boolean next, Int2
             } 
             if (from_inseq >= adp->length) break;
             if (from_inseq <= 0 || from_inbuf <= 0 || adp->hoffset<=0) break;
-            drw_width = MIN ((Int2) adp->visibleWidth, 
-                (Int2)(adp->bufferlength -(adp->hoffset -adp->bufferstart)));
+            drw_width = MIN ((Int4) adp->visibleWidth, 
+                (Int4)(adp->bufferlength -(adp->hoffset -adp->bufferstart)));
          }
   }
   if (from_inseq < 0 || from_inbuf < 0 || adp->hoffset<0)  {
@@ -370,7 +370,7 @@ static SelStructPtr next_to_draw (EditAlignDataPtr adp, Boolean next)
 {
   TextAlignBufPtr  curtdp;
   SelStructPtr     curvnp;
-  SelStructPtr     tmp;
+  SelStructPtr     ssptmp;
   SelEdStructPtr   curssp = NULL;
   ValNodePtr       vnp = NULL;
   SeqLocPtr        curslp;
@@ -380,8 +380,8 @@ static SelStructPtr next_to_draw (EditAlignDataPtr adp, Boolean next)
   Int4             start2, stop2;
   Int4             from_inbuf;  /* alignment coordinates in buffer */
   Int4             from_inseq;  /* alignment coordinates in buffer */
-  Int2             drw_width;   /* length of drw_str */
-  Int2             chklocp;
+  Int4             drw_width;   /* length of drw_str */
+  Int4             chklocp;
   Uint2            itemsubtype;
   SeqAlignPtr      salp = (SeqAlignPtr) adp->sap_align->data;
   Boolean          empty_line;
@@ -392,7 +392,9 @@ static SelStructPtr next_to_draw (EditAlignDataPtr adp, Boolean next)
          adp->hoffset += adp->visibleWidth;
          return adp->buffer;
      }
-     else tmp = adp->firstssp->next;
+     else {
+         ssptmp = adp->firstssp->next;
+     }
   }
   if (!next) {
      if ( adp->firstssp->prev == NULL)
@@ -402,28 +404,58 @@ static SelStructPtr next_to_draw (EditAlignDataPtr adp, Boolean next)
             return adp->buffer;
          }
          adp->hoffset -= adp->visibleWidth;
-         tmp = adp->buffertail;
+         ssptmp = adp->buffertail;
      }
-     else tmp = adp->firstssp->prev;
+     else ssptmp = adp->firstssp->prev;
   }
   from_inseq = adp->hoffset;
   from_inbuf = adp->hoffset - adp->bufferstart;
-  drw_width = MIN ((Int2) adp->visibleWidth, 
-                   (Int2) (adp->bufferlength - from_inbuf));
+  drw_width = MIN ((Int4) adp->visibleWidth, 
+                   (Int4) (adp->bufferlength - from_inbuf));
   if ( drw_width <= 0 ) {
          return NULL;
   }
   empty_line = FALSE;
-  curvnp = tmp;
+  curvnp = ssptmp;
   while ( from_inseq < adp->length )
   {
          curssp = (SelEdStructPtr) curvnp->region;
          itemsubtype = curvnp->itemtype;
          if (itemsubtype == EDITDEF_SCA)      
                 return curvnp;
-         else if (itemsubtype == EDITDEF_SCB) 
+         if (itemsubtype == EDITDEF_SCB) 
                 return curvnp;
-         else if (curssp->itemtype ==OBJ_BIOSEQ && itemsubtype == FEATDEF_BAD)
+         if (itemsubtype == FEATDEF_TRSL) 
+         {
+            if (!empty_line ) {
+             while (curssp!=NULL) 
+             {
+               if (curssp->region !=NULL) {
+                  curslp = (SeqLocPtr) curssp->region;
+                  sip = SeqLocId (curslp);
+                  start2=SeqLocStart(curslp);
+                  chklocp =chkloc(sip, start2, adp->sqloc_list, &start2);
+                  start= SeqCoordToAlignCoord(start2, sip, salp, 0, chklocp);
+                  stop2=SeqLocStop(curslp);
+                  chklocp =chkloc(sip, stop2, adp->sqloc_list, &stop2);
+                  stop = SeqCoordToAlignCoord(stop2, sip, salp, 0, chklocp);
+                  if (start<=stop && start<from_inseq+drw_width && stop>from_inseq) 
+                     return curvnp;      
+               }
+               curssp = FindNextSegment (curssp);
+             }
+            }
+         }
+         else if (itemsubtype>=EDITDEF_RF1 && itemsubtype<=EDITDEF_RF6) 
+         {
+            if (curssp->region !=NULL && !empty_line) {
+                curslp = (SeqLocPtr) curssp->region;
+                if ( SeqLocStop (curslp) > from_inseq && curssp->data != NULL) 
+                   return curvnp; 
+            }
+         }
+         else if (curssp->itemtype ==OBJ_BIOSEQ) /*&&itemsubtype==FEATDEF_BAD)*/
+
          {
             if (curssp->data !=NULL) {
                 vnp = (ValNodePtr) curssp->data;
@@ -448,27 +480,6 @@ static SelStructPtr next_to_draw (EditAlignDataPtr adp, Boolean next)
                    return curvnp;      
             }
          }
-         else if (itemsubtype == FEATDEF_TRSL) 
-         {
-            if (!empty_line ) {
-             while (curssp!=NULL) 
-             {
-               if (curssp->region !=NULL) {
-                  curslp = (SeqLocPtr) curssp->region;
-                  sip = SeqLocId (curslp);
-                  start2=SeqLocStart(curslp);
-                  chklocp =chkloc(sip, start2, adp->sqloc_list, &start2);
-                  start= SeqCoordToAlignCoord(start2, sip, salp, 0, chklocp);
-                  stop2=SeqLocStop(curslp);
-                  chklocp =chkloc(sip, stop2, adp->sqloc_list, &stop2);
-                  stop = SeqCoordToAlignCoord(stop2, sip, salp, 0, chklocp);
-                  if (start<stop && start<from_inseq+drw_width && stop>from_inseq) 
-                     return curvnp;      
-               }
-               curssp = FindNextSegment (curssp);
-             }
-            }
-         }
          else if (curssp->itemtype ==OBJ_SEQFEAT)
          {
             if ( !empty_line ) {
@@ -483,7 +494,7 @@ static SelStructPtr next_to_draw (EditAlignDataPtr adp, Boolean next)
                   stop2=SeqLocStop(curslp);
                   chklocp =chkloc(sip, stop2, adp->sqloc_list, &stop2);
                   stop = SeqCoordToAlignCoord(stop2, sip, salp, 0, chklocp);
-                  if (start<stop && start<from_inseq+drw_width && stop>=from_inseq) 
+                  if (start<=stop && start<from_inseq+drw_width && stop>=from_inseq) 
                      return curvnp;      
                }
                curssp = FindNextSegment (curssp);
@@ -516,19 +527,11 @@ static SelStructPtr next_to_draw (EditAlignDataPtr adp, Boolean next)
                   stop2=SeqLocStop(curslp);
                   chklocp =chkloc(sip, stop2, adp->sqloc_list, &stop2);
                   stop = SeqCoordToAlignCoord(stop2, sip, salp, 0, chklocp);
-                  if (start<stop && start<from_inseq+drw_width && stop>from_inseq) 
+                  if (start<=stop && start<from_inseq+drw_width && stop>from_inseq) 
                      return curvnp;
                }
                curssp = FindNextSegment (curssp);
              }
-            }
-         }
-         else if (itemsubtype>=EDITDEF_RF1 && itemsubtype<=EDITDEF_RF6) 
-         {
-            if (curssp->region !=NULL && !empty_line) {
-                curslp = (SeqLocPtr) curssp->region;
-                if ( SeqLocStop (curslp) > from_inseq && curssp->data != NULL) 
-                   return curvnp; 
             }
          }
          else {
@@ -555,8 +558,8 @@ static SelStructPtr next_to_draw (EditAlignDataPtr adp, Boolean next)
                from_inseq -= drw_width;
             } 
             if (from_inseq >= adp->length) break;
-            drw_width = MIN ((Int2) adp->visibleWidth, 
-                (Int2)(adp->bufferlength -(adp->hoffset -adp->bufferstart)));
+            drw_width = MIN ((Int4) adp->visibleWidth, 
+                (Int4)(adp->bufferlength -(adp->hoffset -adp->bufferstart)));
          }
   }
   return NULL;
@@ -585,17 +588,17 @@ extern BaR SeqEdGetSlateScrollBar (PaneL pnl)
   return NULL;
 }
 
-extern Int2 SeqEdGetValueScrollBar (PaneL pnl)
+extern Int4 SeqEdGetValueScrollBar (PaneL pnl)
 {
   return GetValue(SeqEdGetSlateScrollBar(pnl));
 }
 
-extern void SeqEdSetValueScrollBar (PaneL pnl, Int2 value)
+extern void SeqEdSetValueScrollBar (PaneL pnl, Int4 value)
 {
   SetValue(SeqEdGetSlateScrollBar(pnl), value);
 }
 
-extern void SeqEdCorrectBarPage (PaneL pnl, Int2 page1, Int2 page2)
+extern void SeqEdCorrectBarPage (PaneL pnl, Int4 page1, Int4 page2)
 {
   BaR sb;
 
@@ -603,7 +606,7 @@ extern void SeqEdCorrectBarPage (PaneL pnl, Int2 page1, Int2 page2)
   CorrectBarPage (sb, page1, page2);
 }
 
-extern void SeqEdCorrectBarValue (PaneL pnl, Int2 value)
+extern void SeqEdCorrectBarValue (PaneL pnl, Int4 value)
 {
   BaR sb;
 
@@ -611,7 +614,7 @@ extern void SeqEdCorrectBarValue (PaneL pnl, Int2 value)
   CorrectBarValue (sb, value);
 }
 
-extern void SeqEdCorrectBarMax (PaneL pnl, Int2 value)
+extern void SeqEdCorrectBarMax (PaneL pnl, Int4 value)
 {
   BaR sb;
 
@@ -619,20 +622,28 @@ extern void SeqEdCorrectBarMax (PaneL pnl, Int2 value)
   CorrectBarMax (sb, value);
 }
 
-extern void SeqEdSetCorrectBarMax (PaneL pnl, Int4 max, Int4 offset)
+extern void SeqEdSetCorrectBarMax (PaneL pnl, EditAlignDataPtr adp, float hratio)
 {
   BaR          sb;
-  Int2         cbm = 0;
+  Int4         cbm = 0;
 
-  if (max < 0) 
+  if (adp->nlines < 11) {
+     adp->voffset = 0;
+     adp->hoffset = 0;
+     adp->firstssp = get_firstline (NULL, adp->buffer);
+  }
+  else {
+     adp->hoffset = (Int4)(hratio * (float)adp->length); 
+     adp->voffset = hoffset2voffset (adp, adp->anp_list, adp->visibleWidth, 0, adp->length-1, adp->hoffset);
+  }
+
+  if (adp->nlines < 0) 
      cbm = 0;
-  else if (max > 32767) 
-     cbm = 32767;
   else 
-     cbm = MAX ((Int2) 0, (Int2) (max -1));
+     cbm = MAX ((Int4) 0, (Int4) (adp->nlines -1));
   sb = SeqEdGetSlateScrollBar (pnl);
   CorrectBarMax (sb, cbm);
-  SetValue (sb, (Int2)(offset));
+  SetValue (sb, (Int4)(adp->voffset));
 }
 
 static void count_feature_buf_line (ValNodePtr fnp_list, Int4 g_left, Int4 g_right, ValNodePtr PNTR feature_line)
@@ -647,7 +658,7 @@ static void count_feature_buf_line (ValNodePtr fnp_list, Int4 g_left, Int4 g_rig
         
         while(fnp_list)
         {
-           fnp = fnp_list->data.ptrvalue;
+           fnp = (FeatNodePtr)fnp_list->data.ptrvalue;
            c_left = fnp->extremes.left;
            c_right = fnp->extremes.right;
            if(!(c_left > g_right || c_right < g_left))
@@ -734,7 +745,7 @@ static Int4 addline_perblock (EditAlignDataPtr adp, Int4 diffs)
   return line;
 }  
  
-static Int2 feat_linenum (Int4 slp_start, Int4 slp_stop, Int4 line_len, Int4 left,
+static Int4 feat_linenum (Int4 slp_start, Int4 slp_stop, Int4 line_len, Int4 left,
 Int4 right)
 {
   Int4         modstart;
@@ -748,7 +759,7 @@ Int4 right)
   modstop = slp_stop % line_len;
   if ( modstop > 0) slp_stop += line_len;
  
-  return (Int2)((slp_stop - slp_start) / line_len);
+  return (Int4)((slp_stop - slp_start) / line_len);
 }
  
 static Int4 CountFeatNum (ValNodePtr adpfeat, Int4 line_len, Int4 left, Int4 right){
@@ -766,7 +777,8 @@ static Int4 CountFeatNum (ValNodePtr adpfeat, Int4 line_len, Int4 left, Int4 rig
         && sesp->region !=NULL)
         {
            slp = (SeqLocPtr) sesp->region;;
-           if (SeqLocStart(slp) > right || SeqLocStop(slp) < left) { }
+           if (SeqLocStart(slp) > right || SeqLocStop(slp) < left) 
+              line+=0;
            else {
               line+= feat_linenum (SeqLocStart(slp), SeqLocStop(slp), line_len, left, right);
            }
@@ -787,7 +799,7 @@ static Int4 count_nline (EditAlignDataPtr adp, ValNodePtr anp_list, Int4 line_le
                 return h_block;
         if(voffset == 0)
                 return h_block;
-        anp = anp_list->data.ptrvalue;
+        anp = (AlignNodePtr)anp_list->data.ptrvalue;
         if(left == -1)
                 left = anp->extremes.left;
         if(right == -1)
@@ -804,7 +816,7 @@ static Int4 count_nline (EditAlignDataPtr adp, ValNodePtr anp_list, Int4 line_le
                 c_stop = MIN(right, (c_start+line_len-1));
                 for(curr = anp_list; curr != NULL; curr = curr->next)
                 {
-                        anp = curr->data.ptrvalue;
+                        anp = (AlignNodePtr)curr->data.ptrvalue;
                         line_num += CountTextAlignNodeNum(anp, c_start, c_stop);
                 }
                 line_num += (Int4) addline_perblock (adp, 1);
@@ -817,20 +829,20 @@ static Int4 count_nline (EditAlignDataPtr adp, ValNodePtr anp_list, Int4 line_le
   return c_start;
 }
 
-extern Int2 hoffset2voffset (EditAlignDataPtr adp, ValNodePtr anp_list, Int4 line_len, Int4 left, Int4 right, Int4 hoffset)
+extern Int4 hoffset2voffset (EditAlignDataPtr adp, ValNodePtr anp_list, Int4 line_len, Int4 left, Int4 right, Int4 hoffset)
 {
         AlignNodePtr anp;
         Int4 c_start, c_stop;
         Int4 line_num = 0;
-        Int2 preline;
-        Int2 h_block = 0;
+        Int4 preline;
+        Int4 h_block = 0;
         ValNodePtr curr;
  
         if(anp_list == NULL)
                 return h_block;
         if(hoffset == 0)
                 return h_block;
-        anp = anp_list->data.ptrvalue;
+        anp = (AlignNodePtr)anp_list->data.ptrvalue;
         if(left == -1)
                 left = anp->extremes.left;
         if(right == -1)
@@ -848,7 +860,7 @@ extern Int2 hoffset2voffset (EditAlignDataPtr adp, ValNodePtr anp_list, Int4 lin
                 c_stop = MIN(right, (c_start+line_len-1));
                 for(curr = anp_list; curr != NULL; curr = curr->next)
                 {
-                        anp = curr->data.ptrvalue;
+                        anp = (AlignNodePtr)curr->data.ptrvalue;
                         line_num += CountTextAlignNodeNum(anp, c_start, c_stop);
                 }
                 line_num += (Int4) addline_perblock (adp, 1);
@@ -857,6 +869,8 @@ extern Int2 hoffset2voffset (EditAlignDataPtr adp, ValNodePtr anp_list, Int4 lin
                 ++h_block;
                 c_start = c_stop+1;
         }
+
+preline = line_num;
   return preline;
 }
 
@@ -868,22 +882,23 @@ extern Int2 hoffset2voffset (EditAlignDataPtr adp, ValNodePtr anp_list, Int4 lin
 ***          not used 
 ***
 ********************************************/
-extern void VscrlProc (BaR sb, SlatE s, Int2 newval, Int2 oldval)
+extern void VscrlProc (BaR sb, SlatE s, Int4 newval, Int4 oldval)
 {
   EditAlignDataPtr adp;
   RecT         r;
-  Int2         pixels;
+  Int4         pixels;
   WindoW       tempPort;
-  Int4         oldhoffset;
-  Int2         oldvoffset;
   Int4         temp;
-  Int2         x;
+  Int4         x;
+  Int4         oldhoffset;
 
   if ( s == NULL ) { 
     return; 
   }
-  if ( (adp = GetAlignDataPanel ((PaneL) s)) == NULL ) return;
-  if ( adp->seqnumber == 0 ) return;
+  if ( (adp = GetAlignDataPanel ((PaneL) s)) == NULL ) 
+     return;
+  if ( adp->seqnumber == 0 ) 
+     return;
   tempPort = SavePort ((PaneL) s);
   Select ((PaneL) s);
   ObjectRect ((PaneL) s, &r);
@@ -896,7 +911,6 @@ extern void VscrlProc (BaR sb, SlatE s, Int2 newval, Int2 oldval)
      r.top = r.top + 1;
      ScrollRect (&r, 0, pixels);
   } 
-  oldvoffset = adp->voffset;
   adp->voffset = GetValue (sb);
   if (abs(newval - oldval) == 1)
   {
@@ -914,22 +928,22 @@ extern void VscrlProc (BaR sb, SlatE s, Int2 newval, Int2 oldval)
          if (temp < adp->length)
             InvalRect (&r);
      }
-     if (adp->hoffset == 0 && adp->firstssp->prev == NULL && adp->voffset != 0)
+     if (adp->hoffset == 0 && adp->firstssp->prev == NULL && adp->voffset != 0) 
      {
          adp->voffset = 0;
-         CorrectBarValue (sb, (Int2) 0);
+         CorrectBarValue (sb, (Int4) 0);
      }
      if (adp->hoffset+adp->visibleWidth>adp->length && adp->voffset<adp->nlines)
      {
         adp->voffset = adp->nlines;
-        CorrectBarValue (sb, (Int2) adp->nlines);
+        CorrectBarValue (sb, (Int4) adp->nlines);
      }
   } 
   else {
      x = adp->seqnumber;
      if (adp->draw_scale) x++;
      if (adp->draw_bars) x++;
-     adp->hoffset = count_nline (adp, adp->anp_list, adp->visibleWidth, 0, adp->length-1, (Int4)((FloatLo)adp->voffset * adp->vscrollunit));
+     adp->hoffset = count_nline (adp, adp->anp_list, adp->visibleWidth, 0, adp->length-1, (Int4)((FloatLo)adp->voffset));
      if (adp->hoffset > adp->bufferstart 
      && adp->hoffset+adp->visibleLength+ adp->visibleWidth < adp->bufferstart +adp->bufferlength) 
      {
@@ -938,9 +952,9 @@ extern void VscrlProc (BaR sb, SlatE s, Int2 newval, Int2 oldval)
          data_collect_arrange (adp, TRUE);
      }
      if (x == 0) {
-        adp->firstssp=go_to_next_to_draw(adp, TRUE, (Int2)0);
+        adp->firstssp=go_to_next_to_draw(adp, TRUE, (Int4)0);
      } else {
-        adp->firstssp=go_to_next_to_draw(adp, TRUE, (Int2)(adp->voffset%x));
+        adp->firstssp=go_to_next_to_draw(adp, TRUE, (Int4)(adp->voffset%x));
      }
      InvalRect (&r);
   }
@@ -948,13 +962,12 @@ extern void VscrlProc (BaR sb, SlatE s, Int2 newval, Int2 oldval)
   Update ();
 }
 
-extern void HscrlProc (BaR sb, SlatE s, Int2 newval, Int2 oldval)
+extern void HscrlProc (BaR sb, SlatE s, Int4 newval, Int4 oldval)
 {
   EditAlignDataPtr adp;
   RecT         r;
-  Int2         pixels;
+  Int4         pixels;
   WindoW       tempPort;
-  Int4         oldhoffset;
 
   if ( s == NULL ) {
     return;
@@ -973,7 +986,6 @@ extern void HscrlProc (BaR sb, SlatE s, Int2 newval, Int2 oldval)
   } else {
      InvalRect (&r);
   }
-  oldhoffset = adp->hoffset;
   adp->hoffset = GetValue (sb);
   RestorePort(tempPort);
   Update ();
@@ -984,18 +996,20 @@ extern void HscrlProc (BaR sb, SlatE s, Int2 newval, Int2 oldval)
 ***    do_resize
 ***  
 *******************************************************************/
-extern void do_resize_panel (PaneL pnl, EditAlignDataPtr adp, Int2 width, Int2 height, Boolean rearrange)
+extern void do_resize_panel (PaneL pnl, EditAlignDataPtr adp, Int4 width, Int4 height, Boolean rearrange)
 {
   Int4         old_voffset;
   Int4         new_buffer;
   Int4         j;
   Int4         lg;
-  Int2         old_visibleWidth;
-  Int2         x, y;
-
+  Int4         old_visibleWidth;
+  Int4         x, y;
+  float hratio;
+  
   x = (width - adp->margin.right) / adp->charw;
   if (x < 0) 
      x = 0;
+  hratio = (float)adp->hoffset / (float)adp->length;
   adp->pnlWidth = x;  
   if (adp->pnlWidth < adp->marginleft + 10) {
      adp->firstssp = NULL;
@@ -1011,13 +1025,13 @@ extern void do_resize_panel (PaneL pnl, EditAlignDataPtr adp, Int2 width, Int2 h
   }
   y = 0; x = 0;
   if (adp->columnpcell > 0) {
-     y = (Int2) (adp->pnlWidth -adp->marginleft) / (Int2) adp->columnpcell;
-     x = (Int2) (adp->pnlWidth -adp->marginleft -y) % (Int2)(adp->columnpcell);
+     y = (Int4) (adp->pnlWidth -adp->marginleft) / (Int4) adp->columnpcell;
+     x = (Int4) (adp->pnlWidth -adp->marginleft -y) % (Int4)(adp->columnpcell);
      if (x == 9) 
         x = -1;
   }
   old_visibleWidth = adp->visibleWidth;
-  adp->visibleWidth = (Int2) (adp->pnlWidth -adp->marginleft -y -x);
+  adp->visibleWidth = (Int4) (adp->pnlWidth -adp->marginleft -y -x);
   if (adp->visibleWidth < 10) {
      adp->firstssp = NULL;
      return;
@@ -1026,13 +1040,15 @@ extern void do_resize_panel (PaneL pnl, EditAlignDataPtr adp, Int2 width, Int2 h
      return;
   if (old_visibleWidth != adp->visibleWidth) {
      old_voffset = adp->voffset;
-     adp->voffset = (Int2)(((float)old_visibleWidth/(float)adp->visibleWidth) * (float)old_voffset);
+     adp->voffset = (Int4)(((float)old_visibleWidth/(float)adp->visibleWidth) * (float)old_voffset);
   }
   new_buffer = adp->pnlLine * adp->visibleWidth;
   if (new_buffer * 3 > adp->minbufferlength)
   {
      adp->minbufferlength = new_buffer * 3;
-     if ( adp->colonne != NULL ) adp->colonne = MemFree (adp->colonne);
+     if ( adp->colonne != NULL ) 
+        MemFree (adp->colonne);
+     adp->colonne = NULL;
      lg = adp->minbufferlength + adp->editbuffer + 4;
      adp->colonne = (Int4Ptr) MemNew ((size_t) (lg * sizeof(Int4)));
      for (j=0; j<adp->minbufferlength +adp->editbuffer; j++) adp->colonne[j] = -1;
@@ -1041,7 +1057,7 @@ extern void do_resize_panel (PaneL pnl, EditAlignDataPtr adp, Int2 width, Int2 h
   adp->vPage = adp->pnlLine - 1;  
   adp->hPage = adp->visibleWidth - 1;
   data_collect_arrange (adp, rearrange);
-  SeqEdSetCorrectBarMax (pnl, adp->nlines, adp->voffset);
+  SeqEdSetCorrectBarMax (pnl, adp, hratio);
   SeqEdCorrectBarPage (pnl, adp->vPage, adp->vPage);
   SeqEdCorrectBarValue (pnl, SeqEdGetValueScrollBar (pnl));
 }
@@ -1054,9 +1070,9 @@ extern void do_resize_window (PaneL pnl, EditAlignDataPtr adp, Boolean rearrange
   RecT         rp;    /* panel rect         */
   RecT         rb;    /* buttons rect       */
   RecT         rct;   /* new rect for panel */
-  Int2         buttonwidth,
+  Int4         buttonwidth,
                buttonheight;
-  Int2         x, y;
+  Int4         x, y;
 
   w = getwindow_frompanel (pnl);
   wdp = (SeqEditViewFormPtr) GetObjectExtra (w);
@@ -1067,8 +1083,8 @@ extern void do_resize_window (PaneL pnl, EditAlignDataPtr adp, Boolean rearrange
   GetPosition (pnl, &rp);
   x = adp->xoff;
   y = rw.bottom - rw.top;
-  LoadRect ( &rct, x, adp->yoff, (Int2)(rw.right - rw.left - adp->x), 
-                                 (Int2)(y - adp->y));
+  LoadRect ( &rct, x, adp->yoff, (Int4)(rw.right - rw.left - adp->x), 
+                                 (Int4)(y - adp->y));
   SetPosition (pnl, &rct );
   AdjustPrnt (pnl, &rct, FALSE);
   ObjectRect (pnl, &rp );
@@ -1076,15 +1092,15 @@ extern void do_resize_window (PaneL pnl, EditAlignDataPtr adp, Boolean rearrange
   GetPosition ((GrouP) wdp->btngp, &rb);
   buttonwidth  = rb.right  - rb.left;
   buttonheight = rb.bottom - rb.top;
-  LoadRect (&rb, x, (Int2)(y -buttonheight - adp->ybutt - 1),
-                     (Int2)(x+ buttonwidth), (Int2)(y-adp->ybutt-1));
+  LoadRect (&rb, x, (Int4)(y -buttonheight - adp->ybutt - 1),
+                     (Int4)(x+ buttonwidth), (Int4)(y-adp->ybutt-1));
   SetPosition(wdp->btngp, &rb);
   AdjustPrnt (wdp->btngp, &rb, FALSE);
 
   ResetClip ();
   Update ();
   InsetRect (&rp, 4, 4);
-  do_resize_panel (pnl, adp, (Int2)(rp.right - rp.left), (Int2)(rp.bottom - rp.top), rearrange);
+  do_resize_panel (pnl, adp, (Int4)(rp.right - rp.left), (Int4)(rp.bottom - rp.top), rearrange);
   return;
 }
 
@@ -1101,19 +1117,19 @@ extern void do_resize_window (PaneL pnl, EditAlignDataPtr adp, Boolean rearrange
 ***         draw_bars
 ***
 ***********************************************************************/
-static void draw_scale (EditAlignDataPtr adp, Int4 hoffset, Int2 scalelength, PoinT *ptlh)
+static void draw_scale (EditAlignDataPtr adp, Int4 hoffset, Int4 scalelength, PoinT *ptlh)
 {
   Char   str[128];
   Int4   scal;
-  Int2   ptx, pty;
+  Int4   ptx, pty;
   Int4   j;
-  Int2   marqueediff;
+  Int4   marqueediff;
 
   if ( !adp->draw_scale ) return;
   SetColor (adp->colorRefs[COLOR_SCALE]);
-  ptx = ptlh->x + adp->margin.left + (Int2)(adp->charw * 0.5) - 2;
+  ptx = ptlh->x + adp->margin.left + (Int4)(adp->charw * 0.5) - 2;
   pty = ptlh->y + adp->ascent;
-  marqueediff = (Int2)( 2.00 / 6.00 * adp->lineheight);
+  marqueediff = (Int4)( 2.00 / 6.00 * adp->lineheight);
   for ( j = hoffset; j < hoffset + scalelength; j++) 
   {
          if ( adp->colonne[j] > -1) 
@@ -1122,34 +1138,34 @@ static void draw_scale (EditAlignDataPtr adp, Int4 hoffset, Int2 scalelength, Po
                 if (scal % 10 == 0) 
                 {
                        sprintf (str, "%d", (int)scal);
-                       MoveTo ((Int2)(ptx - StringWidth(str) + (adp->charw/2) +1), 
-                               (Int2)(pty + marqueediff));
+                       MoveTo ((Int4)(ptx - StringWidth(str) + (adp->charw/2) +1), 
+                               (Int4)(pty + marqueediff));
                        PaintString (str);
                 }
          }
          if (adp->columnpcell > 0 && j > hoffset)
-            if ((Int2) j % (Int2) adp->columnpcell == 0) ptx += adp->charw;
+            if ((Int4) j % (Int4) adp->columnpcell == 0) ptx += adp->charw;
          ptx += adp->charw;
   }
   Black();
   return ;
 }
 
-static void draw_bars (EditAlignDataPtr adp, Int4 hoffset, Int2 scalelength, PoinT *ptlh)
+static void draw_bars (EditAlignDataPtr adp, Int4 hoffset, Int4 scalelength, PoinT *ptlh)
 {
   Int4   scal;
-  Int2   ptx;
-  Int2   y;
+  Int4   ptx;
+  Int4   y;
   Int4   j;
-  Int2   marqueelong, marqueeshort, marqueediff;
+  Int4   marqueelong, marqueeshort, marqueediff;
 
   if ( !adp->draw_bars ) return;
   SetColor (adp->colorRefs[COLOR_SCALE]);
-  ptx = ptlh->x + adp->margin.left + (Int2)(adp->charw * 0.5) - 1;
-  y = ptlh->y + (Int2) (2.00 / 6.00 * adp->lineheight);
-  marqueelong = (Int2) (4.00 / 6.00 * adp->lineheight);
-  marqueeshort= (Int2) (2.00 / 6.00 * adp->lineheight);
-  marqueediff = (Int2) (2.00 / 6.00 * adp->lineheight);
+  ptx = ptlh->x + adp->margin.left + (Int4)(adp->charw * 0.5) - 1;
+  y = ptlh->y + (Int4) (2.00 / 6.00 * adp->lineheight);
+  marqueelong = (Int4) (4.00 / 6.00 * adp->lineheight);
+  marqueeshort= (Int4) (2.00 / 6.00 * adp->lineheight);
+  marqueediff = (Int4) (2.00 / 6.00 * adp->lineheight);
   for ( j = hoffset; j < hoffset + scalelength; j++) 
   {
          if ( adp->colonne[j] > -1) 
@@ -1158,16 +1174,16 @@ static void draw_bars (EditAlignDataPtr adp, Int4 hoffset, Int2 scalelength, Poi
                 if (scal % 10 == 0) 
                 {
                        MoveTo (ptx , y );
-                       LineTo (ptx , (Int2)(y + marqueelong));
+                       LineTo (ptx , (Int4)(y + marqueelong));
                 }
                 else if (scal % 5 == 0) 
                 {
-                       MoveTo (ptx , (Int2)(y + marqueediff));
-                       LineTo (ptx , (Int2)(y + marqueediff + marqueeshort));
+                       MoveTo (ptx , (Int4)(y + marqueediff));
+                       LineTo (ptx , (Int4)(y + marqueediff + marqueeshort));
                 }
          }
          if (adp->columnpcell > 0 && j > hoffset)
-            if ((Int2) j % (Int2) adp->columnpcell == 0) ptx += adp->charw;
+            if ((Int4) j % (Int4) adp->columnpcell == 0) ptx += adp->charw;
          ptx += adp->charw;
   }
   Black();
@@ -1177,15 +1193,15 @@ static void draw_bars (EditAlignDataPtr adp, Int4 hoffset, Int2 scalelength, Poi
 /***********************************************************************
 ***  draw_id  
 ************************************************************************/
-static void draw_id (EditAlignDataPtr adp, PoinT *pt, Int2 index, CharPtr strid, Uint1 strand, Int4 pos, Uint2 itemtype, Boolean idselected, Boolean is_master, Int2 group)
+static void draw_id (EditAlignDataPtr adp, PoinT *pt, Int4 index, CharPtr strid, Uint1 strand, Int4 pos, Uint2 itemtype, Boolean idselected, Boolean is_master, Int4 group)
 {
   Char     str[128], str1[128];
   RecT     rct;
   CharPtr  tmp;
-  Int2     stringlens;
-  Int2     j;
-  Int2     total = 0;
-  Int2     posspace;
+  Int4     stringlens;
+  Int4     j;
+  Int4     total = 0;
+  Int4     posspace;
 
   /*!!!!!!!!!!!!!!!!!!!!!!!!!!*/ idselected = FALSE;
 
@@ -1221,7 +1237,7 @@ static void draw_id (EditAlignDataPtr adp, PoinT *pt, Int2 index, CharPtr strid,
   }
 
   if (strid != NULL && strid[0]!='\0') {
-     stringlens = (Int2)(StringLen (strid));
+     stringlens = (Int4)(StringLen (strid));
 /******!!!!!!!!!!!!!!!
      if (stringlens > 4) {
          if (strid[0] == 'l' && strid[1] == 'c' && strid[2] == 'l') {
@@ -1237,7 +1253,7 @@ static void draw_id (EditAlignDataPtr adp, PoinT *pt, Int2 index, CharPtr strid,
         for (j=stringlens; j<adp->size_labels; j++)
               str1 [j] = ' ';
         str1 [j] = '\0';
-        stringlens = (Int2)(StringLen (str1));
+        stringlens = (Int4)(StringLen (str1));
      }
      stringlens = MIN (adp->marginleft - total, stringlens);
      str1 [stringlens] = '\0';
@@ -1278,7 +1294,7 @@ static void draw_id (EditAlignDataPtr adp, PoinT *pt, Int2 index, CharPtr strid,
   }
   *tmp = '\0';
 
-  stringlens = (Int2)(StringLen(str));
+  stringlens = (Int4)(StringLen(str));
   if (stringlens < adp->marginleft -1)
          for (j = stringlens; j < adp->marginleft; j++, tmp++) 
             *tmp = ' '; 
@@ -1293,15 +1309,15 @@ static void draw_id (EditAlignDataPtr adp, PoinT *pt, Int2 index, CharPtr strid,
   if ( !idselected ) 
   {
 Black();
-         MoveTo (pt->x, (Int2)(pt->y + adp->ascent));
+         MoveTo (pt->x, (Int4)(pt->y + adp->ascent));
          PaintString (str);
   }
   else  {
          InvertColors ();
-         LoadRect(&rct, pt->x, pt->y, (Int2)(pt->x +stringlens *adp->charw -2), 
-                         (Int2)(pt->y + adp->lineheight));
+         LoadRect(&rct, pt->x, pt->y, (Int4)(pt->x +stringlens *adp->charw -2), 
+                         (Int4)(pt->y + adp->lineheight));
          EraseRect (&rct);
-         MoveTo (pt->x, (Int2)(pt->y +adp->ascent));
+         MoveTo (pt->x, (Int4)(pt->y +adp->ascent));
          PaintString (str);
          InvertColors();
   } 
@@ -1321,12 +1337,12 @@ Black();
   pt2.y = pt1.y + lineheight -2;
 ***
 *******************************************************************/
-static void paint_caret (PoinT pt, Int2 column, Int2 charw, Int2 lineheight, Int2 marginleft)
+static void paint_caret (PoinT pt, Int4 column, Int4 charw, Int4 lineheight, Int4 marginleft)
 {
   PoinT pt1, pt2;
-  Int2  lenv = 3;
-  Int2  lenh = 2;
-  Int2  row;
+  Int4  lenv = 3;
+  Int4  lenh = 2;
+  Int4  row;
 
   Red ();
   WidePen (2);
@@ -1346,10 +1362,10 @@ static void paint_caret (PoinT pt, Int2 column, Int2 charw, Int2 lineheight, Int
   Black ();
 } 
 
-static void draw_caret (EditAlignDataPtr adp, SelEdStructPtr sesp, PoinT pt, Int2 line)
+static void draw_caret (EditAlignDataPtr adp, SelEdStructPtr sesp, PoinT pt, Int4 line)
 {
   SeqLocPtr    slp;
-  Int2         column;  
+  Int4         column;  
   
   if (!adp->display_panel) 
   {
@@ -1392,16 +1408,15 @@ static void PaintSubseq (Int4 k, Int4 lg, Int4 from, PoinT *pt, CharPtr vstr, Bo
   Char         str[512];
   Uint4        curColor;
   Int4         to = k + lg;
-  Int2         caret_color = 0;
+  Int4         caret_color = 0;
   CharPtr      masterstrptr = NULL;
   RecT         rct;
-  Int4         lg2 = MIN (lg, adp->visibleWidth); 
   Uint4        blackColor = GetColorRGB(0,0,0), whiteColor = GetColorRGB(255, 255, 255),
                newColor;
 
-	Boolean      pretty = (Boolean) (seq_color!=NULL);
-	ResidueColorCellPtr rgb;
-	Int4 from2;	
+  Boolean      pretty = (Boolean) (seq_color!=NULL);
+  ResidueColorCellPtr rgb;
+  Int4 from2;	
 	
   dashedstring ((CharPtr) str, 512);
   strPtr = str;
@@ -1464,7 +1479,7 @@ static void PaintSubseq (Int4 k, Int4 lg, Int4 from, PoinT *pt, CharPtr vstr, Bo
         strPtr = str;
         if (cmplt) 
            strPtr = complement_string (strPtr);
-        MoveTo ((Int2)(pt->x +adp->margin.left), (Int2)(pt->y + adp->ascent));
+        MoveTo ((Int4)(pt->x +adp->margin.left), (Int4)(pt->y + adp->ascent));
 	PaintString (strPtr);
         pt->x += caret_color * adp->charw;
         caret_color = 1;
@@ -1482,12 +1497,12 @@ static void PaintSubseq (Int4 k, Int4 lg, Int4 from, PoinT *pt, CharPtr vstr, Bo
         strPtr = str;
         if (cmplt) 
            strPtr = complement_string (strPtr);
-        MoveTo ((Int2)(pt->x +adp->margin.left), (Int2)(pt->y +adp->ascent));
+        MoveTo ((Int4)(pt->x +adp->margin.left), (Int4)(pt->y +adp->ascent));
         if (invert)
         {
            SetColor (adp->colorRefs[COLOR_SELECT]);
            InvertColors ();
-           LoadRect (&rct, (Int2)(pt->x+adp->margin.left), pt->y, (Int2)(pt->x +adp->margin.left+ caret_color*adp->charw), (Int2)(pt->y +adp->lineheight -1));
+           LoadRect (&rct, (Int4)(pt->x+adp->margin.left), pt->y, (Int4)(pt->x +adp->margin.left+ caret_color*adp->charw), (Int4)(pt->y +adp->lineheight -1));
            EraseRect (&rct);
            InvertColors ();
            if (adp->colorRefs[COLOR_SELECT]==blackColor)
@@ -1506,23 +1521,19 @@ static void PaintSubseq (Int4 k, Int4 lg, Int4 from, PoinT *pt, CharPtr vstr, Bo
         if ( draw_diff && masterstrptr != NULL ) 
         {
            if (vstr[k] !='-') {
-              if (*masterstrptr == vstr[k]) {
-                 if (ISA_na(adp->mol_type)) {
-                    if (vstr[k]<65 || vstr[k]>91)
-                       *strPtr = '.';
-                    else 
-                       *strPtr = vstr[k];
-                 } 
-                 else {
-                    if (TO_LOWER(*masterstrptr) == TO_LOWER(vstr[k]))
-                       *strPtr = '.';
-                    else 
-                       *strPtr = vstr[k];
-                 }
+              if (ISA_na(adp->mol_type)) {
+                 if ((*masterstrptr == vstr[k]) && (vstr[k]<65 || vstr[k]>91))
+                    *strPtr = '.';
+                 else 
+                   *strPtr = vstr[k];
               } 
               else {
-                 *strPtr = vstr[k];
-              }
+                 if (TO_LOWER(*masterstrptr) == TO_LOWER(vstr[k])) {
+                    *strPtr = '.';
+                 } else {
+                    *strPtr = vstr[k];
+                 }
+              } 
            }
            else 
               *strPtr = vstr[k];
@@ -1533,7 +1544,7 @@ static void PaintSubseq (Int4 k, Int4 lg, Int4 from, PoinT *pt, CharPtr vstr, Bo
         strPtr++;
         if (adp->columnpcell > 0) 
         {
-           if ((Int2) (k+1) % (Int2) adp->columnpcell == 0) {
+           if ((Int4) (k+1) % (Int4) adp->columnpcell == 0) {
               *strPtr = ' ';
               strPtr++;
               caret_color++;
@@ -1546,22 +1557,18 @@ static void PaintSubseq (Int4 k, Int4 lg, Int4 from, PoinT *pt, CharPtr vstr, Bo
         if ( draw_diff && masterstrptr != NULL ) 
         {
            if (vstr[k] !='-') {
-              if (*masterstrptr == vstr[k]) {
-                 if (ISA_na(adp->mol_type)) {
-                    if (vstr[k]<65 || vstr[k]>91)
-                       *strPtr = '.';
-                    else 
-                       *strPtr = vstr[k];
-                 } 
-                 else {
-                    if (TO_LOWER(*masterstrptr) == TO_LOWER(vstr[k]))
-                       *strPtr = '.';
-                    else 
-                       *strPtr = vstr[k];
-                 }
+              if (ISA_na(adp->mol_type)) {
+                 if ((*masterstrptr == vstr[k]) && (vstr[k]<65 || vstr[k]>91))
+                    *strPtr = '.';
+                 else 
+                    *strPtr = vstr[k];
               } 
               else {
-                 *strPtr = vstr[k];
+                 if (TO_LOWER(*masterstrptr) == TO_LOWER(vstr[k])) {
+                    *strPtr = '.';
+                 } else {
+                    *strPtr = vstr[k];
+                 }
               }
            }
            else 
@@ -1574,7 +1581,7 @@ static void PaintSubseq (Int4 k, Int4 lg, Int4 from, PoinT *pt, CharPtr vstr, Bo
         caret_color++;
         if (adp->columnpcell > 0) 
         {
-           if ((Int2) (k+1) % (Int2) adp->columnpcell == 0) 
+           if ((Int4) (k+1) % (Int4) adp->columnpcell == 0) 
            {
               *strPtr = ' ';
               strPtr++;
@@ -1588,12 +1595,12 @@ static void PaintSubseq (Int4 k, Int4 lg, Int4 from, PoinT *pt, CharPtr vstr, Bo
   strPtr = str;
   if (cmplt) 
      strPtr = complement_string (strPtr);
-  MoveTo ((Int2)(pt->x +adp->margin.left), (Int2)(pt->y +adp->ascent));
+  MoveTo ((Int4)(pt->x +adp->margin.left), (Int4)(pt->y +adp->ascent));
   if (invert)
   {
      SetColor (adp->colorRefs[COLOR_SELECT]); 
      InvertColors ();
-     LoadRect (&rct, (Int2)(pt->x+adp->margin.left), pt->y, (Int2)(pt->x +adp->margin.left+ caret_color*adp->charw), (Int2)(pt->y +adp->lineheight -1));
+     LoadRect (&rct, (Int4)(pt->x+adp->margin.left), pt->y, (Int4)(pt->x +adp->margin.left+ caret_color*adp->charw), (Int4)(pt->y +adp->lineheight -1));
      EraseRect (&rct);
      InvertColors ();
      if(adp->colorRefs[COLOR_SELECT]==blackColor)
@@ -1634,7 +1641,8 @@ static ValNodePtr deleteseqloc (ValNodePtr head,  ValNodePtr delp)
            pre->next = next;
         }
         tmp->next = NULL;
-        tmp->data.ptrvalue = SeqLocFree (tmp->data.ptrvalue);
+        SeqLocFree ((SeqLocPtr)tmp->data.ptrvalue);
+        tmp->data.ptrvalue = NULL;
         ValNodeFree (tmp);
      }
      else 
@@ -1763,14 +1771,12 @@ static void draw_seq (EditAlignDataPtr adp, SelEdStructPtr sesp, Int4 from, Int4
   SelStructPtr  ssptmp;
   SeqIdPtr      sip;
   Int4          start, stop;
-  Int4          startb, stopb;
   Int4          left, right;
   Int4          seg_lg;
   Int4          k,
                 k1;
-  Int2          chklocp;
-  Int2          ptx, pty;
-  Int2          iCount = 0;
+  Int4          chklocp;
+  Int4          iCount = 0;
   SeqLocPtr     slp;
   ValNodePtr    startp = NULL;
 
@@ -1783,10 +1789,9 @@ SeqIntPtr sinp = NULL;
 	SeqIdPtr            vnpcn3d_sip = NULL;
 	MediaInfoPtr        MIPtr;
 
-  ptx = ptlh.x +adp->margin.left;
-  pty = ptlh.y;
+
   adp->start_select = -1;
-  start = stop = startb = stopb = -1;
+  start = stop = -1;
   ssptmp = NULL;
   if (check_selection) 
   {
@@ -1803,12 +1808,17 @@ SeqIntPtr sinp = NULL;
          stop  = SeqLocStop  ((SeqLocPtr) ssptmp->region);
          chklocp =chkloc(sip, stop, adp->sqloc_list, &stop);
          stop = SeqCoordToAlignCoord (stop, sip, (SeqAlignPtr) adp->sap_align->data, 0, chklocp);
-
+/******
          if (start<=stop && (start < from + drw_width && (stop + 1) > from)) 
+******/
+         if ((start < from + drw_width && (stop + 1) > from)) 
          {
+            if(start<=stop)
                slp = SeqLocIntNew (start, stop, Seq_strand_plus, sip); 
-               ValNodeAddPointer (&startp, 0, (Pointer)slp);
-               iCount ++;
+            else
+               slp = SeqLocIntNew (stop, start, Seq_strand_plus, sip); 
+            ValNodeAddPointer (&startp, 0, (Pointer)slp);
+            iCount ++;
          }
      }
     }
@@ -1818,8 +1828,8 @@ SeqIntPtr sinp = NULL;
   svpp = (SeqEditViewProcsPtr) GetAppProperty ("SeqEditDisplayForm");
 
   if(sesp->regiontype == 1){
-     slp = sesp->region;
-     sinp = slp->data.ptrvalue;
+     slp = (SeqLocPtr)sesp->region;
+     sinp = (SeqIntPtr)slp->data.ptrvalue;
      sesp_sip = sinp->id;
   }               
   if (svpp) {
@@ -1887,7 +1897,7 @@ SeqIntPtr sinp = NULL;
 /*****************************************************************
 ***  draw_line
 ******************************************************************/
-static void draw_line (EditAlignDataPtr adp, Int4 start, Int4 stop, Uint1 strand, PoinT *pt, Int4 from, Int4 drw_width, Int2 line, Int2 alignline, Uint4 color, Uint2 wideline, Boolean selected, Boolean partialstart, Boolean partialstop, BoolPtr gapline)
+static void draw_line (EditAlignDataPtr adp, Int4 start, Int4 stop, Uint1 strand, PoinT *pt, Int4 from, Int4 drw_width, Int4 line, Int4 alignline, Uint4 color, Uint2 wideline, Boolean selected, Boolean partialstart, Boolean partialstop, BoolPtr gapline)
 {
   PoinT         pt1, pt2,
                 pttmp;
@@ -1895,17 +1905,17 @@ static void draw_line (EditAlignDataPtr adp, Int4 start, Int4 stop, Uint1 strand
   FloatLo       hgt = (FloatLo)(2.5 / 4.0);
   RecT          leftrct, rightrct;
   Int4          left, right;
-  Int2          yline;  
-  Int2          column;  
-  Int2          above, below;
+  Int4          yline;  
+  Int4          column;  
+  Int4          above, below;
   Int4          j, k;
-  Int2          col1;
+  Int4          col1;
   Uint1         startin, stopin;
   BoolPtr       gap;
   
   left = (Int4) MAX ((Int4) from, (Int4) start);
   SeqPosInLineColumn (left, alignline, &column, adp->hoffset, adp);
-  yline = pt->y + (Int2) (hgt * adp->ascent);
+  yline = pt->y + (Int4) (hgt * adp->ascent);
   pt1.x = pt->x + (column + adp->marginleft) * adp->charw;
   pt1.y = yline;
 
@@ -1935,12 +1945,12 @@ static void draw_line (EditAlignDataPtr adp, Int4 start, Int4 stop, Uint1 strand
   oldpt2.x = pt2.x;
   oldpt2.y = pt2.y;
   if (start<stop) {
-   if (startin > 0)
+   if (startin)
      pt1.x += 5;
   
    SetColor (color);
    if (gapline == NULL) {
-     if (stopin > 0)
+     if (stopin)
         pt2.x -= 5;
      WidePen (wideline);
      DrawLine (pt1, pt2);
@@ -2011,7 +2021,7 @@ static void draw_line (EditAlignDataPtr adp, Int4 start, Int4 stop, Uint1 strand
   pt2.y = oldpt2.y;
   if (startin == 1) {
 #ifdef WIN_MAC
-     LoadRect(&leftrct, pt1.x , (Int2)(pt1.y -3), (Int2)(pt1.x +7), (Int2)(pt1.y +4) );
+     LoadRect(&leftrct, pt1.x , (Int2)(pt1.y -3), (Int2)(pt1.x +7), (Int4)(pt1.y +4) );
      OffsetRect (&leftrct, 0, 1);
 #endif
 #ifdef WIN_MSWIN
@@ -2096,7 +2106,7 @@ static void draw_trans (EditAlignDataPtr adp, SelEdStructPtr cds, CharPtr trans,
   if (right < left) {
      ErrPostEx (SEV_ERROR, 0, 0, "fail in draw_trans: left %ld right %ld", (long) left, (long) right);
   }
-  transtr = MemNew ((size_t)(512 * (sizeof (Char))));
+  transtr = (CharPtr)MemNew ((size_t)(512 * (sizeof (Char))));
   emptystring (transtr, 512);
   transtr[0] = ' ';
   transtr[511] = '\0';
@@ -2119,7 +2129,7 @@ static void draw_trans (EditAlignDataPtr adp, SelEdStructPtr cds, CharPtr trans,
   strPtr++;
   *strPtr= '\0';
   draw_seq (adp, cds, from, drw_width, *pt, transtr, FALSE, NULL, TRUE, OBJ_SEQFEAT, FALSE);
-  transtr = MemFree (transtr);
+  transtr = (CharPtr)MemFree (transtr);
   return;
 }
 
@@ -2143,7 +2153,7 @@ static void draw_pept (EditAlignDataPtr adp, SelEdStructPtr cds, PoinT *pt, Int4
 /*********************************************************************
 ***  draw_feat
 *********************************************************************/
-static void draw_feat (EditAlignDataPtr adp, Uint2 eid, Uint2 iid, Uint2 it, Uint2 choice, Int4 start, Int4 stop, Uint1 strand, CharPtr label, PoinT *pt, Int4 from, Int4 drw_width, Int2 line, Int2 alignline, Uint4 color, Boolean partialstart, Boolean partialstop, BoolPtr gapline)
+static void draw_feat (EditAlignDataPtr adp, Uint2 eid, Uint2 iid, Uint2 it, Uint2 choice, Int4 start, Int4 stop, Uint1 strand, CharPtr label, PoinT *pt, Int4 from, Int4 drw_width, Int2 line, Int4 alignline, Uint4 color, Boolean partialstart, Boolean partialstop, BoolPtr gapline)
 {
   Char      str[128];
   Uint2     wideline;
@@ -2171,7 +2181,7 @@ static void draw_feat (EditAlignDataPtr adp, Uint2 eid, Uint2 iid, Uint2 it, Uin
   draw_line (adp, start, stop, strand, pt, from, drw_width, line, alignline, color, wideline, featselect, partialstart, partialstop, gapline);
 }
 
-static void what_inline (EditAlignDataPtr adp, Int2 line, Uint2 ei, Uint2 ii, Uint2 it, Uint2 ist, Uint2 al)
+static void what_inline (EditAlignDataPtr adp, Int4 line, Uint2 ei, Uint2 ii, Uint2 it, Uint2 ist, Uint2 al)
 { 
   adp->seqEntity_id [line]  = ei;
   adp->item_id [line]  = ii;
@@ -2232,7 +2242,7 @@ static CharPtr seqid_tolabel (SeqIdPtr sip, Uint2 choice)
   Uint4     val;
 
   str[0] = '\0';
-  if (choice > 0 && choice <= PRINTID_GIcc)
+  if (choice && choice <= PRINTID_GIcc)
   {
      bsp = BioseqLockById(sip);
      if (bsp!=NULL) 
@@ -2291,14 +2301,14 @@ extern void on_draw (PaneL p)
   Int4          start,  stop;
   Int4          start2, stop2;
 
-  Int2          line;        /* current line */
-  Int2          curalgline;
-  Int2          drw_width;   /* length of drw_str */
-  Int2          group;
-  Int2          chklocp,
+  Int4          line;        /* current line */
+  Int4          curalgline;
+  Int4          drw_width;   /* length of drw_str */
+  Int4          group;
+  Int4          chklocp,
                 chklocp2;
   Uint2         itemsubtype;
-  Uint2         offset;
+  Uint4         offset;
  
   CharPtr       stridp;
   CharPtr       curstr = NULL;
@@ -2318,27 +2328,23 @@ extern void on_draw (PaneL p)
                 gaplinep;
   
   if ( (adp = GetAlignDataPanel (p)) == NULL ) 
-         return;
-  if ( adp->seqnumber == 0 ) return;
-
-  if (adp->showfeat) {
-     HideFeatureFunc (adp);
-     ShowFeatureFunc (adp);
-     data_collect_arrange (adp, TRUE);
-     SeqEdSetCorrectBarMax (p, adp->nlines, adp->voffset);
-  }
+     return;
+  if ( adp->seqnumber == 0 ) 
+     return;
 
   salp = (SeqAlignPtr) adp->sap_align->data;
 
   if ( adp->firstssp == NULL ) {
      adp->firstssp = get_firstline (NULL, adp->buffer);
   }
-  if ( adp->firstssp == NULL ) return;
-  if ( adp->firstssp->region == NULL ) return;
+  if ( adp->firstssp == NULL ) 
+     return;
+  if ( adp->firstssp->region == NULL ) 
+     return;
   from_inseq = adp->hoffset;
   from_inbuf = adp->hoffset - adp->bufferstart;
-  drw_width = MIN ((Int2) adp->visibleWidth, 
-                   (Int2) (adp->bufferlength - from_inbuf));
+  drw_width = MIN ((Int4) adp->visibleWidth, 
+                   (Int4) (adp->bufferlength - from_inbuf));
   if ( drw_width <= 0 || adp->bufferstart < 0 ) {
          return;
   }
@@ -2357,7 +2363,7 @@ extern void on_draw (PaneL p)
   if (curssp->itemtype ==OBJ_SEQFEAT) {
      for (curvnp=adp->firstssp; curvnp!=NULL; curvnp=curvnp->prev) {
         curssp = (SelEdStructPtr) curvnp->region;
-        if (curssp->itemtype==OBJ_BIOSEQ && curvnp->itemtype== FEATDEF_BAD)
+        if (curssp->itemtype==OBJ_BIOSEQ)   /*&&curvnp->itemtype==FEATDEF_BAD)*/
         {
            if (curssp->data !=NULL) {
               vnp = (ValNodePtr) curssp->data;
@@ -2386,10 +2392,11 @@ extern void on_draw (PaneL p)
   adp->visibleLength = drw_width;
   masterbuf = get_master (adp->linebuff, adp->master.entityID, 
                           adp->master.itemID, adp->master.itemtype);
-  curvnp = adp->firstssp;
 
+  curvnp = adp->firstssp;
   while ( line < adp->pnlLine )
   {
+
      curssp = (SelEdStructPtr) curvnp->region;
      if (curssp !=NULL) {
          adp->lastses = curssp;
@@ -2414,7 +2421,90 @@ extern void on_draw (PaneL p)
                 line++;
                 ptlh.y += adp->lineheight;
          }
-         else if (curssp->itemtype ==OBJ_BIOSEQ && itemsubtype == FEATDEF_BAD)
+         else if (itemsubtype>=EDITDEF_RF1 && itemsubtype<=EDITDEF_RF6) 
+         {
+            if (curssp->data !=NULL  && !empty_line) {
+               curslp = (SeqLocPtr) curssp->region;
+               vnp = (ValNodePtr) curssp->data;
+               if ( SeqLocStop (curslp) > from_inseq && vnp != NULL) 
+               {
+                  what_inline (adp, line, curssp->entityID, curssp->itemID,
+                                curssp->itemtype, itemsubtype, curalgline);
+                  curstr = (CharPtr) vnp->data.ptrvalue;
+                  offset = (Uint2)(itemsubtype - EDITDEF_RF1) % (Uint2)3;
+                  if (itemsubtype>=EDITDEF_RF1 && itemsubtype<EDITDEF_RF4)
+                     draw_id (adp, &ptlh, rang(adp->input_format, curssp), NULL,  Seq_strand_plus, 0, curssp->itemtype, FALSE, FALSE, -1);
+                  else
+                     draw_id (adp, &ptlh, rang(adp->input_format, curssp), NULL, Seq_strand_minus, 0, curssp->itemtype, FALSE, FALSE, -1);
+
+                  if ( invalid_row ) 
+                  {
+                    draw_trans (adp, curssp, curstr, &ptlh, from_inseq, drw_width, offset);
+                  }
+               }
+               line++;
+               ptlh.y += adp->lineheight;
+            }
+         }
+         else if ( itemsubtype == FEATDEF_TRSL ) 
+         {
+            if (!empty_line) {
+               first = TRUE;
+               line_drawn = FALSE;
+               while ( curssp != NULL && curssp->data != NULL) 
+               {
+                  curslp = (SeqLocPtr) curssp->region;
+                  sip = SeqLocId (curslp);
+                  start2 = SeqLocStart(curslp);
+                  chklocp =chkloc(sip, start2, adp->sqloc_list, &start2);
+                  start= SeqCoordToAlignCoord (start2, sip, salp, 0, chklocp);
+                  stop2 = SeqLocStop(curslp);
+                  chklocp =chkloc(sip, stop2, adp->sqloc_list, &stop2);
+                  stop = SeqCoordToAlignCoord (stop2, sip, salp, 0, chklocp);
+                  if (start < from_inseq + drw_width && stop >= from_inseq)
+                  {
+                     if ( invalid_row ) {
+                        draw_pept (adp, curssp, &ptlh, from_inseq, drw_width, line, 0);
+                     }
+                     if (first) {
+                        what_inline (adp, line, curssp->entityID, curssp->itemID, curssp->itemtype, itemsubtype, curalgline);
+                        line_drawn = TRUE;
+                        first = FALSE;
+                     }
+                  }
+                  curssp = FindNextSegment (curssp);
+               }
+               if (line_drawn) {
+                  line++;
+                  ptlh.y += adp->lineheight;
+               }
+            }
+         }
+         else if ( itemsubtype == EDITDEF_CPL ) 
+         {
+            if (curssp->data !=NULL && !empty_line) 
+            {
+                vnp = (ValNodePtr) curssp->data;
+                curtdp = (TextAlignBufPtr) vnp->data.ptrvalue;
+                curstr = get_substring (curtdp->buf, from_inbuf, drw_width);
+                if ( curstr != NULL )                         /* !!!!!!! */
+                {
+                   what_inline (adp, line, curssp->entityID, curssp->itemID,  
+                            curssp->itemtype, itemsubtype, curalgline);
+                   if ( invalid_id && (( !adp->displaytype 
+                   && curssp->itemtype != OBJ_BIOSEQ) || adp->displaytype)) 
+                      draw_id (adp, &ptlh, -1, strcmpl, 255, 0, curssp->itemtype, FALSE, FALSE, -1);
+                   if ( invalid_row && (( !adp->displaytype 
+                   && curssp->itemtype != OBJ_BIOSEQ) || adp->displaytype) ) 
+                   {
+                      draw_seq (adp, curssp, from_inseq, drw_width, ptlh, curstr, draw_diff, masterstr, TRUE, itemsubtype, FALSE);
+                   }
+                   line++;
+                   ptlh.y += adp->lineheight;
+                }
+            }
+         }
+         else if (curssp->itemtype == OBJ_BIOSEQ)
          {
             if (curssp->data !=NULL) {
                vnp = (ValNodePtr) curssp->data;
@@ -2481,40 +2571,6 @@ extern void on_draw (PaneL p)
                }
             }
          }
-         else if ( itemsubtype == FEATDEF_TRSL ) 
-         {
-            if (!empty_line) {
-               first = TRUE;
-               line_drawn = FALSE;
-               while ( curssp != NULL && curssp->data != NULL) 
-               {
-                  curslp = (SeqLocPtr) curssp->region;
-                  sip = SeqLocId (curslp);
-                  start2 = SeqLocStart(curslp);
-                  chklocp =chkloc(sip, start2, adp->sqloc_list, &start2);
-                  start= SeqCoordToAlignCoord (start2, sip, salp, 0, chklocp);
-                  stop2 = SeqLocStop(curslp);
-                  chklocp =chkloc(sip, stop2, adp->sqloc_list, &stop2);
-                  stop = SeqCoordToAlignCoord (stop2, sip, salp, 0, chklocp);
-                  if (start < from_inseq + drw_width && stop >= from_inseq)
-                  {
-                     if ( invalid_row ) {
-                        draw_pept (adp, curssp, &ptlh, from_inseq, drw_width, line, 0);
-                     }
-                     if (first) {
-                        what_inline (adp, line, curssp->entityID, curssp->itemID, curssp->itemtype, itemsubtype, curalgline);
-                        line_drawn = TRUE;
-                        first = FALSE;
-                     }
-                  }
-                  curssp = FindNextSegment (curssp);
-               }
-               if (line_drawn) {
-                  line++;
-                  ptlh.y += adp->lineheight;
-               }
-            }
-         }
          else if ( curssp->itemtype ==OBJ_SEQFEAT )
          {
             if (!empty_line) {
@@ -2549,30 +2605,6 @@ extern void on_draw (PaneL p)
                   line++;
                   ptlh.y += adp->lineheight;
                }
-            }
-         }
-         else if ( itemsubtype == EDITDEF_CPL ) 
-         {
-            if (curssp->data !=NULL && !empty_line) 
-            {
-                vnp = (ValNodePtr) curssp->data;
-                curtdp = (TextAlignBufPtr) vnp->data.ptrvalue;
-                curstr = get_substring (curtdp->buf, from_inbuf, drw_width);
-                if ( curstr != NULL )                         /* !!!!!!! */
-                {
-                   what_inline (adp, line, curssp->entityID, curssp->itemID,  
-                            curssp->itemtype, itemsubtype, curalgline);
-                   if ( invalid_id && (( !adp->displaytype 
-                   && curssp->itemtype != OBJ_BIOSEQ) || adp->displaytype)) 
-                      draw_id (adp, &ptlh, -1, strcmpl, 255, 0, curssp->itemtype, FALSE, FALSE, -1);
-                   if ( invalid_row && (( !adp->displaytype 
-                   && curssp->itemtype != OBJ_BIOSEQ) || adp->displaytype) ) 
-                   {
-                      draw_seq (adp, curssp, from_inseq, drw_width, ptlh, curstr, draw_diff, masterstr, TRUE, itemsubtype, FALSE);
-                   }
-                   line++;
-                   ptlh.y += adp->lineheight;
-                }
             }
          }
          else if( itemsubtype==SEQFEAT_GENE || itemsubtype==SEQFEAT_RNA
@@ -2612,31 +2644,6 @@ extern void on_draw (PaneL p)
                }
             }
          }
-         else if (itemsubtype>=EDITDEF_RF1 && itemsubtype<=EDITDEF_RF6) 
-         {
-            if (curssp->data !=NULL  && !empty_line) {
-               curslp = (SeqLocPtr) curssp->region;
-               vnp = (ValNodePtr) curssp->data;
-               if ( SeqLocStop (curslp) > from_inseq && vnp != NULL) 
-               {
-                  what_inline (adp, line, curssp->entityID, curssp->itemID,
-                                curssp->itemtype, itemsubtype, curalgline);
-                  curstr = (CharPtr) vnp->data.ptrvalue;
-                  offset = (Uint2)(itemsubtype - EDITDEF_RF1) % (Uint2)3;
-                  if (itemsubtype>=EDITDEF_RF1 && itemsubtype<EDITDEF_RF4)
-                     draw_id (adp, &ptlh, rang(adp->input_format, curssp), NULL,  Seq_strand_plus, 0, curssp->itemtype, FALSE, FALSE, -1);
-                  else
-                     draw_id (adp, &ptlh, rang(adp->input_format, curssp), NULL, Seq_strand_minus, 0, curssp->itemtype, FALSE, FALSE, -1);
-
-                  if ( invalid_row ) 
-                  {
-                    draw_trans (adp, curssp, curstr, &ptlh, from_inseq, drw_width, offset);
-                  }
-               }
-               line++;
-               ptlh.y += adp->lineheight;
-            }
-         }
          else {
 /**
             ErrPostEx (SEV_ERROR, 0, 0, "fail in on_draw [46] subtype %ld type %ld", (long) itemsubtype, (long) curssp->itemtype); 
@@ -2649,19 +2656,26 @@ extern void on_draw (PaneL p)
          if (curvnp == NULL) 
          {
             if (adp->rowpcell > 0 
-            && ((Int2)(curalgline+1) % (Int2)adp->rowpcell) == 0) 
+            && ((Int4)(curalgline+1) % (Int4)adp->rowpcell) == 0) 
             {
                 what_inline(adp,line,LINE0,LINE0, LINE0, LINE0, curalgline);
-                line++;
                 ptlh.y += adp->lineheight;
+                line++;
             }
             curvnp = adp->buffer;
             curalgline++;
+/*****************
+*******************/
+if (curalgline>500)
+break;
+/*****************
+*******************/
+
             from_inbuf += drw_width;
             from_inseq += drw_width;
             if (from_inseq >= adp->length) 
                 break;
-            drw_width = MIN ((Int2) adp->visibleWidth, (Int2)(adp->bufferlength 
+            drw_width = MIN ((Int4) adp->visibleWidth, (Int4)(adp->bufferlength 
                       - (adp->hoffset -adp->bufferstart) - adp->visibleLength));
             adp->visibleLength += drw_width;
          }

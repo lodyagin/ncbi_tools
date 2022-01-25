@@ -59,7 +59,7 @@ on DoSetGlobals()
 	tell application "Finder"
 		
 		set HARDDISK to startup disk as string
-		set METRO to HARDDISK & "CodeWarrior Pro 4:" as string
+		set METRO to HARDDISK & "CodeWarrior Pro 5:" as string
 		set METROWERKSCW to METRO & "Metrowerks CodeWarrior:" as string
 		
 		set NCBISOURCE to METRO & "ncbi:" as string

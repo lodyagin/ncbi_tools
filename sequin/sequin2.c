@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.69 $
+* $Revision: 6.81 $
 *
 * File Description: 
 *
@@ -56,11 +56,14 @@
 #include <toporg.h>
 #include <salfiles.h>
 #include <salsap.h>
-#include <salutil.h>
+#include <salign.h>
 #include <edutil.h>
 #include <vsm.h>
 #include <accentr.h>
 #include <accutils.h>
+#ifdef WIN_MOTIF
+#include <netscape.h>
+#endif
 
 extern EnumFieldAssoc  orgmod_subtype_alist [];
 extern EnumFieldAssoc  subsource_subtype_alist [];
@@ -159,7 +162,7 @@ static Boolean LookForSearchString (CharPtr title, CharPtr str, CharPtr tmp, siz
 {
   CharPtr  ptr;
 
-  ptr = StringStr (title, str);
+  ptr = StringISearch (title, str);
   if (ptr != NULL) {
     StringNCpy_0 (tmp, ptr + StringLen (str), maxsize);
      ptr = StringChr (tmp, ']');
@@ -306,7 +309,7 @@ static void FormatFastaDoc (FastaPagePtr fpp)
         } else {
           StringCat (str, "No protein name detected\n");
         }
-        ptr = StringStr (title, "[orf]");
+        ptr = StringISearch (title, "[orf]");
         if (ptr != NULL) {
         StringCat (str, "ORF indicated\n");
         }
@@ -336,6 +339,9 @@ static void FormatFastaDoc (FastaPagePtr fpp)
         if (LookForSearchString (title, "[note=", tmp, FastaFormatBufLen - 1)) {
           AddReportLine (str, "Note", tmp);
         }
+        if (LookForSearchString (title, "[comment=", tmp, FastaFormatBufLen - 1)) {
+          AddReportLine (str, "Comment", tmp);
+        }
         if (LookForSearchString (title, "[subsource=", tmp, FastaFormatBufLen - 1)) {
           AddReportLine (str, "Note", tmp);
         }
@@ -351,7 +357,7 @@ static void FormatFastaDoc (FastaPagePtr fpp)
         /*
         for (ap = biosource_genome_simple_alist; ap->name != NULL; ap++) {
           MakeSearchStringFromAlist (lookfor, ap->name);
-          ptr = StringStr (lookfor, "=");
+          ptr = StringISearch (lookfor, "=");
           if (ptr != NULL) {
             *ptr = '\0';
           }
@@ -359,11 +365,11 @@ static void FormatFastaDoc (FastaPagePtr fpp)
             AddReportLine (str, ap->name, tmp);
           }
         }
-        ptr = StringStr (title, "[dna]");
+        ptr = StringISearch (title, "[dna]");
         if (ptr != NULL) {
           AddReportLine (str, "DNA", "");
         }
-        ptr = StringStr (title, "[rna]");
+        ptr = StringISearch (title, "[rna]");
         if (ptr != NULL) {
           AddReportLine (str, "RNA", "");
         }
@@ -413,6 +419,7 @@ static void FormatFastaDoc (FastaPagePtr fpp)
             ExciseString (title, lookfor, "]");
           }
           ExciseString (title, "[note=", "]");
+          ExciseString (title, "[comment=", "]");
           ExciseString (title, "[subsource=", "]");
           /*
           ExciseString (title, "[clone=", "]");
@@ -425,7 +432,7 @@ static void FormatFastaDoc (FastaPagePtr fpp)
           /*
           for (ap = biosource_genome_simple_alist; ap->name != NULL; ap++) {
             MakeSearchStringFromAlist (lookfor, ap->name);
-            ptr = StringStr (lookfor, "=");
+            ptr = StringISearch (lookfor, "=");
             if (ptr != NULL) {
               *ptr = '\0';
             }
@@ -871,7 +878,7 @@ static void FormatPhylipDoc (PhylipPagePtr ppp)
             /*
             for (ap = biosource_genome_simple_alist; ap->name != NULL; ap++) {
               MakeSearchStringFromAlist (lookfor, ap->name);
-              ptr = StringStr (lookfor, "=");
+              ptr = StringISearch (lookfor, "=");
               if (ptr != NULL) {
                 *ptr = '\0';
               }
@@ -879,11 +886,11 @@ static void FormatPhylipDoc (PhylipPagePtr ppp)
                 AddReportLine (str, ap->name, tmp);
               }
             }
-            ptr = StringStr (title, "[dna]");
+            ptr = StringISearch (title, "[dna]");
             if (ptr != NULL) {
               AddReportLine (str, "DNA", "");
             }
-            ptr = StringStr (title, "[rna]");
+            ptr = StringISearch (title, "[rna]");
             if (ptr != NULL) {
               AddReportLine (str, "RNA", "");
             }
@@ -917,7 +924,7 @@ static void FormatPhylipDoc (PhylipPagePtr ppp)
             /*
             for (ap = biosource_genome_simple_alist; ap->name != NULL; ap++) {
               MakeSearchStringFromAlist (lookfor, ap->name);
-              ptr = StringStr (lookfor, "=");
+              ptr = StringISearch (lookfor, "=");
               if (ptr != NULL) {
                 *ptr = '\0';
               }
@@ -962,6 +969,37 @@ static void ResetPhylipPage (PhylipPagePtr ppp)
   }
 }
 
+static void LookForATitle (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent)
+
+{
+  BoolPtr  rsult;
+
+  if (sep == NULL || sep->data.ptrvalue == NULL) return;
+  rsult = (BoolPtr) mydata;
+  if (SeqEntryGetSeqDescr (sep, Seq_descr_title, NULL) != NULL) {
+    *rsult = FALSE;
+  }
+}
+
+static Boolean SeqEntryHasNoTitles (SeqEntryPtr sep)
+
+{
+  Boolean hasNoTitles = TRUE;
+
+  SeqEntryExplore (sep, (Pointer) &hasNoTitles, LookForATitle);
+  return hasNoTitles;
+}
+
+static CharPtr noOrgInTitleWarning =
+"sequences have organism information in titles. " \
+"It is critical to annotate the data file with organism and source information. " \
+"Please quit Sequin and read the Sequin Quick Guide section on preparing the data files before proceeding.";
+
+static CharPtr noSrcInTitleWarning =
+"sequences have source information in titles. " \
+"It is critical to annotate the data file with organism and source information. " \
+"Please quit Sequin and read the Sequin Quick Guide section on preparing the data files before proceeding.";
+
 static Boolean ImportPhylipDialog (DialoG d, CharPtr filename)
 
 {
@@ -980,8 +1018,11 @@ static Boolean ImportPhylipDialog (DialoG d, CharPtr filename)
   RecT           r;
   ValNodePtr     sdp;
   SeqEntryPtr    sep;
+  Int2           seqtitles;
+  Int2           seqtotals;
   Char           str [256];
   SeqEntryPtr    tmp;
+  CharPtr        ttl;
   ValNodePtr     vnp;
 
   path [0] = '\0';
@@ -1042,24 +1083,60 @@ static Boolean ImportPhylipDialog (DialoG d, CharPtr filename)
             SeqMgrLinkSeqEntry (sep, parenttype, parentptr);
             RestoreSeqEntryObjMgrData (sep, omdptop, &omdata);
 
-            if (sep != NULL && IS_Bioseq_set (sep)) {
+            if (sep != NULL && IS_Bioseq_set (sep) && SeqEntryHasNoTitles (sep)) {
               bssp = (BioseqSetPtr) sep->data.ptrvalue;
               if (bssp != NULL && (bssp->_class == 7 || bssp->_class == 13 ||
                                    bssp->_class == 14 || bssp->_class == 15)) {
                 for (tmp = bssp->seq_set, vnp = head;
                      tmp != NULL && vnp != NULL;
                      tmp = tmp->next, vnp = vnp->next) {
-                   sdp = CreateNewDescriptor (tmp, Seq_descr_title);
-                   if (sdp != NULL) {
-                     sdp->data.ptrvalue = vnp->data.ptrvalue;
-                     vnp->data.ptrvalue = NULL;
-                   }
+                  sdp = CreateNewDescriptor (tmp, Seq_descr_title);
+                  if (sdp != NULL) {
+                    sdp->data.ptrvalue = vnp->data.ptrvalue;
+                    vnp->data.ptrvalue = NULL;
+                  }
                 }
               }
             }
 
             FormatPhylipDoc (ppp);
             SafeShow (ppp->doc);
+
+            if (sep != NULL && IS_Bioseq_set (sep)) {
+              bssp = (BioseqSetPtr) sep->data.ptrvalue;
+              if (bssp != NULL && (bssp->_class == 7 || bssp->_class == 13 ||
+                                   bssp->_class == 14 || bssp->_class == 15)) {
+                seqtitles = 0;
+                seqtotals = 0;
+                for (tmp = bssp->seq_set; tmp != NULL; tmp = tmp->next) {
+                  ttl = SeqEntryGetTitle (tmp);
+                  if (ttl != NULL) {
+                    if (bssp->_class == BioseqseqSet_class_phy_set) {
+                      if (StringISearch (ttl, "[org=") != NULL) {
+                        seqtitles++;
+                      }
+                    } else if (StringISearch (ttl, "[") != NULL) {
+                      seqtitles++;
+                    }
+                  }
+                  seqtotals++;
+                }
+                if (seqtotals != seqtitles) {
+                  sprintf (str, "None");
+                  if (seqtitles > 0) {
+                    sprintf (str, "Only %d", (int) seqtitles);
+                  }
+                  ArrowCursor ();
+                  Update ();
+                  Beep ();
+                  if (bssp->_class == BioseqseqSet_class_phy_set) {
+                    Message (MSG_OK, "%s of %d %s", str, (int) seqtotals, noOrgInTitleWarning);
+                  } else {
+                    Message (MSG_OK, "%s of %d %s", str, (int) seqtotals, noSrcInTitleWarning);
+                  }
+                }
+              }
+            }
           } else {
             SafeHide (ppp->doc);
             Update ();
@@ -1954,7 +2031,7 @@ static Boolean HasMinimalInformation (BioseqPtr pbsp)
   vnp = ValNodeFindNext (pbsp->descr, NULL, Seq_descr_title);
   if (vnp == NULL || vnp->data.ptrvalue == NULL) return FALSE;
   title = (CharPtr) vnp->data.ptrvalue;
-  ptr = StringStr (title, "[gene=");
+  ptr = StringISearch (title, "[gene=");
   if (ptr == NULL) return FALSE;
   StringNCpy_0 (str, ptr + 6, sizeof (str));
   ptr = StringChr (str, ']');
@@ -1966,7 +2043,7 @@ static Boolean HasMinimalInformation (BioseqPtr pbsp)
     ptr++;
   }
   if (StringHasNoText (str)) return FALSE;
-  ptr = StringStr (title, "[prot=");
+  ptr = StringISearch (title, "[prot=");
   if (ptr == NULL) return FALSE;
   StringNCpy_0 (str, ptr + 6, sizeof (str));
   ptr = StringChr (str, ']');
@@ -1989,6 +2066,8 @@ static void LetUserFixProteinInfo (SequencesFormPtr sqfp)
   SeqEntryPtr        esep;
   FixProtFormPtr     fpfp;
   GrouP              g;
+  GrouP              k;
+  Int2               len;
   SeqEntryPtr        nsep;
   BioseqPtr          pbsp;
   SeqEntryPtr        psep;
@@ -2077,44 +2156,55 @@ static void LetUserFixProteinInfo (SequencesFormPtr sqfp)
     }
     SetActivate (w, FixUpProtActivate);
 
-    SetGroupSpacing (w, 10, 10);
+    SelectFont (programFont);
+    len = StringWidth ("Protein Name") + 2;
+    SelectFont (systemFont);
 
-    g = HiddenGroup (w, 2, 0, NULL);
-    SetGroupSpacing (g, 3, 5);
-    StaticPrompt (g, "Sequence ID", 0, dialogTextHeight, programFont, 'l');
-    fpfp->seqID = DialogText (g, "", 20, NULL);
-    StaticPrompt (g, "Title", 0, dialogTextHeight, programFont, 'l');
-    fpfp->title = DialogText (g, "", 20, NULL);
+    g = HiddenGroup (w, 1, 0, NULL);
 
-    StaticPrompt (g, "", 0, dialogTextHeight, programFont, 'l');
-    StaticPrompt (g, "", 0, dialogTextHeight, programFont, 'l');
+    k = HiddenGroup (g, 2, 0, NULL);
+    StaticPrompt (k, "Sequence ID", len, dialogTextHeight, programFont, 'l');
+    fpfp->seqID = DialogText (k, "", 20, NULL);
+    StaticPrompt (k, "Title", len, dialogTextHeight, programFont, 'l');
+    fpfp->title = DialogText (k, "", 20, NULL);
 
-    StaticPrompt (g, "Gene Symbol", 0, dialogTextHeight, programFont, 'l');
-    fpfp->geneSymbol = DialogText (g, "", 20, NULL);
-    StaticPrompt (g, "Description", 0, dialogTextHeight, programFont, 'l');
-    fpfp->geneDesc = DialogText (g, "", 20, NULL);
+    k = HiddenGroup (g, 2, 0, NULL);
+    StaticPrompt (k, "Gene Symbol", len, dialogTextHeight, programFont, 'l');
+    fpfp->geneSymbol = DialogText (k, "", 20, NULL);
+    StaticPrompt (k, "Description", len, dialogTextHeight, programFont, 'l');
+    fpfp->geneDesc = DialogText (k, "", 20, NULL);
 
-    StaticPrompt (g, "", 0, dialogTextHeight, programFont, 'l');
-    StaticPrompt (g, "", 0, dialogTextHeight, programFont, 'l');
+    k = HiddenGroup (g, 2, 0, NULL);
+    StaticPrompt (k, "Protein Name", len, dialogTextHeight, programFont, 'l');
+    fpfp->protName = DialogText (k, "", 20, NULL);
+    StaticPrompt (k, "Description", len, dialogTextHeight, programFont, 'l');
+    fpfp->protDesc = DialogText (k, "", 20, NULL);
 
-    StaticPrompt (g, "Protein Name", 0, dialogTextHeight, programFont, 'l');
-    fpfp->protName = DialogText (g, "", 20, NULL);
-    StaticPrompt (g, "Description", 0, dialogTextHeight, programFont, 'l');
-    fpfp->protDesc = DialogText (g, "", 20, NULL);
+    k = HiddenGroup (g, 2, 0, NULL);
+    StaticPrompt (k, "Comment", len, 3 * Nlm_stdLineHeight, programFont, 'l');
+    fpfp->comment = ScrollText (k, 20, 3, programFont, TRUE, NULL);
 
-    StaticPrompt (g, "", 0, dialogTextHeight, programFont, 'l');
-    StaticPrompt (g, "", 0, dialogTextHeight, programFont, 'l');
+    AlignObjects (ALIGN_RIGHT, (HANDLE) fpfp->seqID, (HANDLE) fpfp->title,
+                  (HANDLE) fpfp->geneSymbol, (HANDLE) fpfp->geneDesc,
+                  (HANDLE) fpfp->protName, (HANDLE) fpfp->protDesc,
+                  (HANDLE) fpfp->comment, NULL);
 
-    StaticPrompt (g, "Comment", 0, 3 * Nlm_stdLineHeight, programFont, 'l');
-    fpfp->comment = ScrollText (g, 20, 3, programFont, TRUE, NULL);
-
-    fpfp->orf = CheckBox (w, "Open Reading Frame", NULL);
+    fpfp->orf = NULL;
+    if (pbsp->descr != NULL) {
+      vnp = ValNodeFindNext (pbsp->descr, NULL, Seq_descr_title);
+      if (vnp != NULL && vnp->data.ptrvalue != NULL) {
+        title = (CharPtr) vnp->data.ptrvalue;
+        if (StringISearch (title, "[orf]") != NULL) {
+          fpfp->orf = CheckBox (w, "Open Reading Frame", NULL);
+        }
+      }
+    }
 
     c = HiddenGroup (w, 2, 0, NULL);
     acceptBtn = PushButton (c, "OK", AcceptThisFixup);
     SetObjectExtra (acceptBtn, fpfp, NULL);
 
-    AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) fpfp->orf, (HANDLE) c, NULL);
+    AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) c, (HANDLE) fpfp->orf, NULL);
 
     RealizeWindow (w);
 
@@ -2125,7 +2215,7 @@ static void LetUserFixProteinInfo (SequencesFormPtr sqfp)
       vnp = ValNodeFindNext (pbsp->descr, NULL, Seq_descr_title);
       if (vnp != NULL && vnp->data.ptrvalue != NULL) {
         title = (CharPtr) vnp->data.ptrvalue;
-        ptr = StringStr (title, "[gene=");
+        ptr = StringISearch (title, "[gene=");
         if (ptr != NULL) {
           StringNCpy_0 (str, ptr + 6, sizeof (str));
           ptr = StringChr (str, ']');
@@ -2140,7 +2230,7 @@ static void LetUserFixProteinInfo (SequencesFormPtr sqfp)
             SetTitle (fpfp->geneDesc, ptr);
           }
         }
-        ptr = StringStr (title, "[prot=");
+        ptr = StringISearch (title, "[prot=");
         if (ptr != NULL) {
           StringNCpy_0 (str, ptr + 6, sizeof (str));
           ptr = StringChr (str, ']');
@@ -2155,7 +2245,7 @@ static void LetUserFixProteinInfo (SequencesFormPtr sqfp)
             SetTitle (fpfp->protDesc, ptr);
           }
         }
-        ptr = StringStr (title, "[comment=");
+        ptr = StringISearch (title, "[comment=");
         if (ptr != NULL) {
           StringNCpy_0 (str, ptr + 9, sizeof (str));
           ptr = StringChr (str, ']');
@@ -2164,7 +2254,7 @@ static void LetUserFixProteinInfo (SequencesFormPtr sqfp)
             SetTitle (fpfp->comment, str);
           }
         }
-        ptr = StringStr (title, "[orf]");
+        ptr = StringISearch (title, "[orf]");
         if (ptr != NULL) {
           SetStatus (fpfp->orf, TRUE);
         } else {
@@ -2240,13 +2330,15 @@ extern void AddToSubSource (BioSourcePtr biop, CharPtr title, CharPtr label, Uin
 {
   CharPtr       ptr;
   SubSourcePtr  ssp;
-  Char          str [128];
+  CharPtr       str;
   SubSourcePtr  tmpssp;
 
   if (biop == NULL || title == NULL || label == NULL) return;
-  ptr = StringStr (title, label);
+  str = MemNew (StringLen (title));
+  if (str == NULL) return;
+  ptr = StringISearch (title, label);
   if (ptr != NULL) {
-    StringNCpy_0 (str, ptr + StringLen (label), sizeof (str));
+    StringCpy (str, ptr + StringLen (label));
     ptr = StringChr (str, ']');
     if (ptr != NULL) {
       *ptr = '\0';
@@ -2267,6 +2359,7 @@ extern void AddToSubSource (BioSourcePtr biop, CharPtr title, CharPtr label, Uin
       }
     }
   }
+  MemFree (str);
 }
 
 extern void AddToOrgMod (BioSourcePtr biop, CharPtr title, CharPtr label, Uint1 subtype)
@@ -2276,13 +2369,15 @@ extern void AddToOrgMod (BioSourcePtr biop, CharPtr title, CharPtr label, Uint1 
   OrgNamePtr  onp;
   OrgRefPtr   orp;
   CharPtr     ptr;
-  Char        str [128];
+  CharPtr     str;
   OrgModPtr   tmpmod;
 
   if (biop == NULL || title == NULL || label == NULL) return;
-  ptr = StringStr (title, label);
+  str = MemNew (StringLen (title));
+  if (str == NULL) return;
+  ptr = StringISearch (title, label);
   if (ptr != NULL) {
-    StringNCpy_0 (str, ptr + StringLen (label), sizeof (str));
+    StringCpy (str, ptr + StringLen (label));
     ptr = StringChr (str, ']');
     if (ptr != NULL) {
       *ptr = '\0';
@@ -2317,7 +2412,10 @@ extern void AddToOrgMod (BioSourcePtr biop, CharPtr title, CharPtr label, Uint1 
       }
     }
   }
+  MemFree (str);
 }
+
+#define PROC_NUC_STR_SIZE 4096
 
 extern Boolean ProcessOneNucleotideTitle (Int2 seqPackage, DialoG genbio, PopuP genome,
                                           PopuP gencode, SeqEntryPtr nsep, SeqEntryPtr top,
@@ -2341,7 +2439,7 @@ extern Boolean ProcessOneNucleotideTitle (Int2 seqPackage, DialoG genbio, PopuP 
   OrgRefPtr          orp;
   CharPtr            ptr;
   SeqEntryPtr        sep;
-  Char               str [128];
+  CharPtr            str;
   CharPtr            title;
   UIEnum             val;
   ValNodePtr         vnp;
@@ -2350,6 +2448,8 @@ extern Boolean ProcessOneNucleotideTitle (Int2 seqPackage, DialoG genbio, PopuP 
   nbsp = (BioseqPtr) nsep->data.ptrvalue;
   if (nbsp == NULL) return FALSE;
   if (! ISA_na (nbsp->mol)) return FALSE;
+  str = MemNew (PROC_NUC_STR_SIZE * sizeof (Char));
+  if (str == NULL) return FALSE;
   sep = NULL;
   SeqEntryExplore (top, (Pointer) &sep, FindFirstSeqEntryTitle);
   if (sep != NULL) {
@@ -2359,43 +2459,46 @@ extern Boolean ProcessOneNucleotideTitle (Int2 seqPackage, DialoG genbio, PopuP 
       needbiop = FALSE;
       if (seqPackage >= SEQ_PKG_POPULATION && seqPackage <= SEQ_PKG_GENBANK) {
         needbiop = TRUE;
-        if (GetAppParam ("SEQUIN", "PREFERENCES", "BIOSRCONALL", NULL, str, sizeof (str))) {
+        if (GetAppParam ("SEQUIN", "PREFERENCES", "BIOSRCONALL", NULL, str, PROC_NUC_STR_SIZE)) {
           if (StringICmp (str, "FALSE") == 0) {
             needbiop = FALSE;
           }
         }
       }
-      if ((! needbiop) && StringStr (title, "[") != NULL) {
+      if ((! needbiop) && StringISearch (title, "[") != NULL) {
         for (ap = orgmod_subtype_alist; ap->name != NULL; ap++) {
           MakeSearchStringFromAlist (str, ap->name);
-          if (StringStr (title, str) != NULL) {
+          if (StringISearch (title, str) != NULL) {
             needbiop = TRUE;
           }
         }
         for (ap = subsource_subtype_alist; ap->name != NULL; ap++) {
           MakeSearchStringFromAlist (str, ap->name);
-          if (StringStr (title, str) != NULL) {
+          if (StringISearch (title, str) != NULL) {
             needbiop = TRUE;
           }
         }
-        if (StringStr (title, "[note=") != NULL) {
+        if (StringISearch (title, "[note=") != NULL) {
           needbiop = TRUE;
         }
-        if (StringStr (title, "[subsource=") != NULL) {
+        if (StringISearch (title, "[comment=") != NULL) {
+          needbiop = TRUE;
+        }
+        if (StringISearch (title, "[subsource=") != NULL) {
           needbiop = TRUE;
         }
         /*
-        if (StringStr (title, "[strain=") != NULL ||
-            StringStr (title, "[isolate=") != NULL ||
-            StringStr (title, "[clone=") != NULL) {
+        if (StringISearch (title, "[strain=") != NULL ||
+            StringISearch (title, "[isolate=") != NULL ||
+            StringISearch (title, "[clone=") != NULL) {
           needbiop = TRUE;
         }
         */
       }
       biop = NULL;
-      ptr = StringStr (title, "[org=");
+      ptr = StringISearch (title, "[org=");
       if (ptr != NULL) {
-        StringNCpy_0 (str, ptr + 5, sizeof (str));
+        StringNCpy_0 (str, ptr + 5, PROC_NUC_STR_SIZE);
         ptr = StringChr (str, ']');
         if (ptr != NULL) {
           *ptr = '\0';
@@ -2432,7 +2535,7 @@ extern Boolean ProcessOneNucleotideTitle (Int2 seqPackage, DialoG genbio, PopuP 
         }
       }
       if (biop != NULL) {
-        ptr = StringStr (title, "[lineage=");
+        ptr = StringISearch (title, "[lineage=");
         if (ptr != NULL) {
           lin = StringSave (ptr + 9);
           if (lin != NULL) {
@@ -2493,6 +2596,8 @@ extern Boolean ProcessOneNucleotideTitle (Int2 seqPackage, DialoG genbio, PopuP 
         }
         AddToOrgMod (biop, title, "[note=", 255);
         ExciseString (title, "[note=", "]");
+        AddToOrgMod (biop, title, "[comment=", 255);
+        ExciseString (title, "[comment=", "]");
         AddToSubSource (biop, title, "[subsource=", 255);
         ExciseString (title, "[subsource=", "]");
         /*
@@ -2503,9 +2608,9 @@ extern Boolean ProcessOneNucleotideTitle (Int2 seqPackage, DialoG genbio, PopuP 
         ExciseString (title, "[isolate=", "]");
         ExciseString (title, "[clone=", "]");
         */
-        ptr = StringStr (title, "[molecule=");
+        ptr = StringISearch (title, "[molecule=");
         if (ptr != NULL) {
-          StringNCpy_0 (str, ptr + 10, sizeof (str));
+          StringNCpy_0 (str, ptr + 10, PROC_NUC_STR_SIZE);
           ptr = StringChr (str, ']');
           if (ptr != NULL) {
             *ptr = '\0';
@@ -2516,9 +2621,9 @@ extern Boolean ProcessOneNucleotideTitle (Int2 seqPackage, DialoG genbio, PopuP 
             }
           }
         }
-        ptr = StringStr (title, "[location=");
+        ptr = StringISearch (title, "[location=");
         if (ptr != NULL) {
-          StringNCpy_0 (str, ptr + 10, sizeof (str));
+          StringNCpy_0 (str, ptr + 10, PROC_NUC_STR_SIZE);
           ptr = StringChr (str, ']');
           if (ptr != NULL) {
             *ptr = '\0';
@@ -2532,10 +2637,10 @@ extern Boolean ProcessOneNucleotideTitle (Int2 seqPackage, DialoG genbio, PopuP 
             }
           }
         }
-        ptr = StringStr (title, "[moltype=");
+        ptr = StringISearch (title, "[moltype=");
         if (ptr != NULL) {
           biomol = 0;
-          StringNCpy_0 (str, ptr + 9, sizeof (str));
+          StringNCpy_0 (str, ptr + 9, PROC_NUC_STR_SIZE);
           ptr = StringChr (str, ']');
           if (ptr != NULL) {
             *ptr = '\0';
@@ -2559,22 +2664,22 @@ extern Boolean ProcessOneNucleotideTitle (Int2 seqPackage, DialoG genbio, PopuP 
         /*
         for (ap = biosource_genome_simple_alist; ap->name != NULL; ap++) {
           MakeSearchStringFromAlist (str, ap->name);
-          ptr = StringStr (str, "=");
+          ptr = StringISearch (str, "=");
           if (ptr != NULL) {
             *ptr = '\0';
           }
-          ptr = StringStr (title, str);
+          ptr = StringISearch (title, str);
           if (ptr != NULL) {
             biop->genome = (Uint1) ap->value;
           }
           ExciseString (title, str, "]");
         }
-        ptr = StringStr (title, "[dna]");
+        ptr = StringISearch (title, "[dna]");
         if (ptr != NULL) {
           nbsp->mol = Seq_mol_dna;
           ExciseString (title, "[dna", "]");
         }
-        ptr = StringStr (title, "[rna]");
+        ptr = StringISearch (title, "[rna]");
         if (ptr != NULL) {
           nbsp->mol = Seq_mol_rna;
           ExciseString (title, "[rna", "]");
@@ -2614,7 +2719,7 @@ extern Boolean ProcessOneNucleotideTitle (Int2 seqPackage, DialoG genbio, PopuP 
     needbiop = FALSE;
     if (seqPackage >= SEQ_PKG_POPULATION && seqPackage <= SEQ_PKG_GENBANK) {
       needbiop = TRUE;
-      if (GetAppParam ("SEQUIN", "PREFERENCES", "BIOSRCONALL", NULL, str, sizeof (str))) {
+      if (GetAppParam ("SEQUIN", "PREFERENCES", "BIOSRCONALL", NULL, str, PROC_NUC_STR_SIZE)) {
         if (StringICmp (str, "FALSE") == 0) {
           needbiop = FALSE;
         }
@@ -2646,6 +2751,7 @@ extern Boolean ProcessOneNucleotideTitle (Int2 seqPackage, DialoG genbio, PopuP 
       }
     }
   }
+  MemFree (str);
   return TRUE;
 }
 
@@ -2972,7 +3078,7 @@ static void AutomaticMrnaProcess (SeqEntryPtr nucsep, SeqEntryPtr mrnasep, Boole
       ttl = (CharPtr) vnp->data.ptrvalue;
     }
     if (ttl != NULL) {
-      ptr = StringStr (ttl, "[gene=");
+      ptr = StringISearch (ttl, "[gene=");
       if (ptr != NULL) {
         StringNCpy_0 (str, ptr + 6, sizeof (str));
         ptr = StringChr (str, ']');
@@ -3027,7 +3133,7 @@ static void AutomaticMrnaProcess (SeqEntryPtr nucsep, SeqEntryPtr mrnasep, Boole
         }
       }
       str [0] = '\0';
-      ptr = StringStr (ttl, "[mrna=");
+      ptr = StringISearch (ttl, "[mrna=");
       if (ptr != NULL) {
         StringNCpy_0 (str, ptr + 6, sizeof (str));
         ptr = StringChr (str, ']');
@@ -3035,7 +3141,7 @@ static void AutomaticMrnaProcess (SeqEntryPtr nucsep, SeqEntryPtr mrnasep, Boole
           *ptr = '\0';
         }
       } else {
-        ptr = StringStr (ttl, "[cdna=");
+        ptr = StringISearch (ttl, "[cdna=");
         if (ptr != NULL) {
           StringNCpy_0 (str, ptr + 6, sizeof (str));
           ptr = StringChr (str, ']');
@@ -3063,7 +3169,7 @@ static void AutomaticMrnaProcess (SeqEntryPtr nucsep, SeqEntryPtr mrnasep, Boole
         SetSeqLocPartial (sfp->location, partial5, partial3);
         sfp->partial = (sfp->partial || partial5 || partial3);
         if (ttl != NULL) {
-          ptr = StringStr (ttl, "[comment=");
+          ptr = StringISearch (ttl, "[comment=");
           if (ptr != NULL) {
             StringNCpy_0 (str, ptr + 9, sizeof (str));
             ptr = StringChr (str, ']');
@@ -3802,7 +3908,7 @@ static ValNodePtr FastaTestSequencesForm (ForM f)
           title = NULL;
           SeqEntryExplore (sep, (Pointer) (&title), FindFirstTitle);
           if (title != NULL) {
-            ptr = StringStr (title, "[org=");
+            ptr = StringISearch (title, "[org=");
             if (ptr != NULL) {
               StringNCpy_0 (str, ptr + 5, sizeof (str));
               ptr = StringChr (str, ']');
@@ -3844,6 +3950,42 @@ static ValNodePtr FastaTestSequencesForm (ForM f)
   return head;
 }
 
+static void LaunchSequinQuickGuide (void)
+
+{
+  Char       str [256];
+#ifdef WIN_MOTIF
+  NS_Window  window = NULL;
+#endif
+
+  sprintf (str,
+           "http://www.ncbi.nlm.nih.gov/Sequin/QuickGuide/sequin.htm#before");
+#ifdef WIN_MAC
+  Nlm_SendURLAppleEvent (str, "MOSS", NULL);
+#endif
+#ifdef WIN_MSWIN
+  Nlm_MSWin_OpenDocument (str);
+#endif
+#ifdef WIN_MOTIF
+  NS_OpenURL (&window, str, NULL, TRUE);
+  NS_WindowFree (window);
+#endif
+}
+
+extern Boolean allowUnableToProcessMessage;
+
+static CharPtr noOrgInTitleAbort =
+"sequences have organism information in titles. " \
+"It is critical to annotate the data file with organism and source information. " \
+"Sequin will not continue processing this submission. " \
+"Please read the Sequin Quick Guide section on preparing the data files before proceeding.";
+
+static CharPtr noSrcInTitleAbort =
+"sequences have source information in titles. " \
+"It is critical to annotate the data file with organism and source information. " \
+"Sequin will continue processing this submission. " \
+"However, please consider reading the Sequin Quick Guide section on preparing the data files before proceeding.";
+
 static Pointer PhylipSequencesFormToSeqEntryPtr (ForM f)
 
 {
@@ -3857,8 +3999,12 @@ static Pointer PhylipSequencesFormToSeqEntryPtr (ForM f)
   CharPtr           plural;
   PhylipPagePtr     ppp;
   SeqEntryPtr       sep;
+  Int2              seqtitles;
+  Int2              seqtotals;
+  Char              str [256];
   SequencesFormPtr  sqfp;
   SeqEntryPtr       tmp;
+  CharPtr           ttl;
   UIEnum            val;
   ValNodePtr        vnp;
 
@@ -3891,6 +4037,50 @@ static Pointer PhylipSequencesFormToSeqEntryPtr (ForM f)
       }
       if (IS_Bioseq_set (sep)) {
         bssp = (BioseqSetPtr) sep->data.ptrvalue;
+        if (bssp != NULL && (bssp->_class == 7 || bssp->_class == 13 ||
+                             bssp->_class == 14 || bssp->_class == 15)) {
+          seqtitles = 0;
+          seqtotals = 0;
+          for (tmp = bssp->seq_set; tmp != NULL; tmp = tmp->next) {
+            ttl = SeqEntryGetTitle (tmp);
+            if (ttl != NULL) {
+              if (sqfp->seqPackage == SEQ_PKG_PHYLOGENETIC) {
+                if (StringISearch (ttl, "[org=") != NULL) {
+                  seqtitles++;
+                }
+              } else if (StringISearch (ttl, "[") != NULL) {
+                seqtitles++;
+              }
+            }
+            seqtotals++;
+          }
+          if (seqtotals != seqtitles) {
+            sprintf (str, "None");
+            if (seqtitles > 0) {
+              sprintf (str, "Only %d", (int) seqtitles);
+            }
+            ArrowCursor ();
+            Update ();
+            Beep ();
+            if (! indexerVersion) {
+              if (sqfp->seqPackage == SEQ_PKG_PHYLOGENETIC) {
+                Message (MSG_OK, "%s of %d %s", str, (int) seqtotals, noOrgInTitleAbort);
+                LaunchSequinQuickGuide ();
+                allowUnableToProcessMessage = FALSE;
+                QuitProgram ();
+                return NULL; /* aborting */
+              } else {
+                Message (MSG_OK, "%s of %d %s", str, (int) seqtotals, noSrcInTitleAbort);
+              }
+            } else {
+              if (sqfp->seqPackage == SEQ_PKG_PHYLOGENETIC) {
+                Message (MSG_OK, "%s of %d %s (Regular version will abort here.)", str, (int) seqtotals, noOrgInTitleAbort);
+              } else {
+                Message (MSG_OK, "%s of %d %s (Regular version will continue here.)", str, (int) seqtotals, noSrcInTitleAbort);
+              }
+            }
+          }
+        }
         if (bssp != NULL) {
           switch (sqfp->seqPackage) {
             case SEQ_PKG_POPULATION :
@@ -4013,7 +4203,7 @@ static ValNodePtr PhylipTestSequencesForm (ForM f)
           title = NULL;
           SeqEntryExplore (sep, (Pointer) (&title), FindFirstTitle);
           if (title != NULL) {
-            ptr = StringStr (title, "[org=");
+            ptr = StringISearch (title, "[org=");
             if (ptr != NULL) {
               StringNCpy_0 (str, ptr + 5, sizeof (str));
               ptr = StringChr (str, ']');
@@ -5007,7 +5197,7 @@ static SubmitBlockPtr ConvertSequinBlockToSubmitBlock (SequinBlockPtr sqp)
     sbp = SubmitBlockNew ();
     if (sbp != NULL) {
       sbp->subtype = 1;
-      sprintf (str, "Sequin %s", SEQUIN_APP_VERSION);
+      sprintf (str, "Sequin %s", SEQUIN_APPLICATION);
       sbp->tool = StringSave (str);
       sbp->reldate = sqp->releasedate;
       dp = sbp->reldate;

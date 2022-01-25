@@ -29,14 +29,46 @@
 *
 * Version Creation Date:   5/3/99
 *
-* $Revision: 6.3 $
+* $Revision: 6.15 $
 *
 * File Description: 
 *
-* Modifications:  
+* Modifications:
 * --------------------------------------------------------------------------
-* Date     Name        Description of modification
-* -------  ----------  -----------------------------------------------------
+* $Log: udviewer.h,v $
+* Revision 6.15  1999/09/08 15:36:58  beloslyu
+* Typo fixed
+*
+* Revision 6.14  1999/09/08 14:09:32  durand
+* update UDV_Draw_scale to deal with discontinuous SEqAlign
+*
+* Revision 6.13  1999/07/30 20:08:56  durand
+* updates for the new Entrez graphical viewer
+*
+* Revision 6.12  1999/07/19 20:35:36  durand
+* switch ScalePositionfrom from Boolean to Uint1 in UDV_Draw_scale
+*
+* Revision 6.11  1999/07/09 13:56:56  durand
+* removed all the defines to udvdef.h
+*
+* Revision 6.10  1999/07/06 17:02:59  durand
+* add UDVPanelRegion structure for DDV
+*
+* Revision 6.9  1999/06/16 22:11:24  durand
+* update UDV functions to be used by DDV
+*
+* Revision 6.8  1999/06/16 13:07:00  durand
+* update UDV functions to be used by DDV
+*
+* Revision 6.7  1999/06/15 15:25:53  durand
+* remove DDV_win in UDVPanelData structure
+*
+* Revision 6.6  1999/06/08 13:52:36  durand
+* update UDV data structures for the MSA editor
+*
+* Revision 6.5  1999/06/07 15:39:43  durand
+* add LOG line to keep track of the history
+*
 *
 *
 * ==========================================================================
@@ -69,6 +101,7 @@ extern "C" {
 
 #include <odlbox.h>
 #include <udvseq.h>
+#include <udvdef.h>
 
 /*******************************************************************************
 
@@ -103,99 +136,20 @@ extern "C" {
 
 /*******************************************************************************
 
-  DEFINE SECTION 
-
-*******************************************************************************/
-
-	/*number of letter by block: default is ten-letter blocks*/
-#define LETTER_BLOCK_WIDTH 10
-
-	/*margins around the UnDViewer*/
-#define VIEWER_HORZ_MARGIN 10
-#define VIEWER_VERT_MARGIN 10
-
-	/*Numerical scale */
-#define SCALE_POS_LEFT 1	/*scale position*/
-#define SCALE_POS_TOP  2
-#define SCALE_POS_BOTH  3
-#define SCALE_MAJOR_TICK_EVERY 10	/*position of the ticks*/
-#define SCALE_MINOR_TICK_EVERY 5
-#define SCALE_LETTER_COLOR (GetColorRGB(0,0,255))	/*scale colours*/
-#define SCALE_MAJTICK_COLOR (GetColorRGB(0,0,0))
-#define SCALE_MINTICK_COLOR (GetColorRGB(128,128,128))
-#define SCALE_WIDTH_IF_LEFT 9 /*nb. of cxChar (see Font struct); used to
-                                   the scale on the left*/
-
-	/*Font*/	
-#define FONT_DEF_COLOR (GetColorRGB(0,0,0))/*default font colour*/
-
-	/*Panel*/	
-#define PANEL_NAME_WIDTH 30 /*nb. of cxChar (see Font struct) MAX: 50 !!;
-	                            used to put names pn the left on the UDV window*/
-
-	/*Info Panel*/	
-#define BUFFER_SIZE  255 /*nb. of cxChar for Info Buffer*/
-
-	/*NA and AA color layout*/	
-#define NA_A_LAYOUT	0
-#define NA_G_LAYOUT	1
-#define NA_C_LAYOUT	2
-#define NA_T_LAYOUT	3
-#define NA_U_LAYOUT	4
-#define LAYOUT_UPPER_CASE	1
-#define LAYOUT_LOWER_CASE	2
-	
-	/*Mouse actions*/
-#define MS_ACTION_FEAT_NOTHING	1 /*no action*/
-#define MS_ACTION_FEAT_CURSOR	2 /* double cursor for features*/
-#define MS_ACTION_RESIZE_WIN	3 /*resize cxName region*/	
-
-	/*************************************************************************
-
-	  I defined _min_ & _max_ because I needed the test '>=' in both 
-	  _max_ and _min_
-
-	*************************************************************************/
-#define _min_(a,b)        ((a)>=(b)?(b):(a))
-#define _max_(a,b)        ((a)>=(b)?(a):(b))
-
-	/*used to draw features*/
-		/*     |===>......===>.....===>|   : a big arrow feature*/
-#define FEATURE_START_BOX		1	/*used to draw big arrows*/
-#define FEATURE_START_ARROW		2
-#define FEATURE_START_ARROW_END	3
-#define FEATURE_START_NOTHING	4
-		/* /\/\/\/\   : a helix feature (2D structures)*/
-#define DRAW_HELIX_DOWN		1  /*used to draw helix faeture*/
-#define DRAW_HELIX_MIDDLE	2
-#define DRAW_HELIX_UP		3
-		/*  >------<  : a bond feature*/
-#define BOND_RIGHT 1	/*used to draw a bond feature*/
-#define BOND_LEFT  2
-#define SZBUF_SIZE 250
-	
-	/*sequence buffer management ; depending on VScroll up/down*/
-#define BUFFER_REPOP_VCRL_LUP	1   /*line up*/
-#define BUFFER_REPOP_VCRL_LDN	2   /*line down*/
-#define BUFFER_REPOP_VCRL_PUP	3   /*page up*/
-#define BUFFER_REPOP_VCRL_PDN	4   /*page down*/
-	
-/*******************************************************************************
-
   DATA STRUCTURE SECTION 
 
 *******************************************************************************/
 	typedef struct udvscaledata {
-		Int2 ScalePosition;	/*position of the scale, see #define above*/
-		Int2 cxLeftScale;	/*width of the 'SCALE_POS_LEFT' area, pixel unit
-							NULL if ScalePosition== _TOP or if ShowScale==FALSE*/
-		Boolean ShowMajorTick;	/*display tick marks if TRUE*/
-		Boolean ShowMMinorTick;	/*display tick marks if TRUE*/
-		Int2 MajorTickEvery;	/*put a major tick every*/
-		Int2 MinorTickEvery;	/*put a minor tick every*/
 		Uint4 ScaleColor;	/*letter color*/
 		Uint4 TickMajColor;	/*tick color*/
 		Uint4 TickMinColor;	/*tick color*/
+		Boolean ShowMajorTick;	/*display tick marks if TRUE*/
+		Boolean ShowMMinorTick;	/*display tick marks if TRUE*/
+		Int2 ScalePosition;	/*position of the scale, see #define above*/
+		Int2 cxLeftScale;	/*width of the 'SCALE_POS_LEFT' area, pixel unit
+							NULL if ScalePosition== _TOP or if ShowScale==FALSE*/
+		Int2 MajorTickEvery;	/*put a major tick every*/
+		Int2 MinorTickEvery;	/*put a minor tick every*/
 		} UDVScaleData, PNTR UDVScaleDataPtr;
 
 	typedef struct udvletterlayout {
@@ -206,48 +160,64 @@ extern "C" {
 
 	typedef struct udvfontdata {
 		FonT hFnt;			/*Current Font*/
-		Int2 cxChar;		/*width of a char, pixel unit*/
-		Int2 cyChar;		/*height of a char, pixel unit*/
-		Int2 LineHeight;	/*height of a single data line*/
 		Boolean UseDefaultColorLetter; /*if true, use the following color for 
 							letter (NA or AA); draft mode*/
 		Uint4 LetterColor;
+		Int2 cxChar;		/*width of a char, pixel unit*/
+		Int2 cyChar;		/*height of a char, pixel unit*/
+		Int2 LineHeight;	/*height of a single data line*/
+		Int2 ColWidth;/*width of a single data column-MSA only*/
 		} UDVFontData, PNTR UDVFontDataPtr;
 
+	/*the following structure was added for DDV. It's here (and not in the
+	code of DDV), because that struct is part of UDVPanelData*/
+	typedef struct udvpanelregion{/*descriptor of panel regions : ruler,
+									names list, ParaG region, etc.*/
+		RecT  region;/*size of the region*/
+		Uint1 type;  /*type of the region; see above*/
+		} UDVPanelRegion, PNTR UDVPanelRegionPtr;
+
 	typedef struct udvpaneldata {
+		ValNodePtr region;/*descriptor of the panel content; each 
+						region->data.ptrvalue contains a pointer to UDVPanelRegion*/
+		Int4 nTotLines;		/*total number of line to display*/
+		Int4 nTotCol;/*total number of column to display-MSA only*/
+		/*Display options*/
+		Boolean ShowFeatures; /*TRUE: show features*/
+		Boolean ShowScale;	/*TRUE: show num. scale*/
+		Boolean ShowByBlock;/*TRUE: use nBlockByLine -MSA only*/
 		/*panel size*/
 		Int2 cxClient;		/*width of the client panel area, pixel unit*/
 		Int2 cyClient;		/*height of the client panel area, pixel unit*/
 		Int2 cxName;		/*width of the 'Name' area, pixel unit*/
+		Int2 cyScale;		/*height of the 'Sacle' area, pixel unit (MSA only)*/
 
 		/*Letter lines*/
 		Int2 nCharByLine;	/*number of letter displayed on one line of the viewer*/
 		Int2 nBlockByLine;	/*number Ten-letter blocks displayed on one line of 
 							the viewer*/
-		Int4 nTotLines;		/*total number of line to display*/
-
-		/*Display options*/
-		Boolean ShowFeatures; /*TRUE: show features*/
-		Boolean ShowScale;	/*TRUE: show num. scale*/
 		} UDVPanelData, PNTR UDVPanelDataPtr;
 
-	typedef struct udvvscrolldata {
-		/*vertical Scroll Bar*/
+	typedef struct udvscrolldata {
+		/*Scroll Bar*/
 		Int4 ScrollMax;		/*Size of the vertical Scroll Bar*/
 							/*also equal number of data lines displayed within
 							UnDViewer*/
 		Int4 ScrollPos;		/*Current position within the vertical Scroll Bar*/
 		Int4 ScrollPage;	/*Page decal of the vertical Scroll Bar*/
-		} UDVVScrollData, PNTR UDVVScrollDataPtr;
+		} UDVScrollData, PNTR UDVScrollDataPtr;
 
 	typedef struct undviewergraphdata {
 		UDVFontData 	udv_font;	/*Font*/
 		UDVPanelData 	udv_panel;	/*Panel*/		
 		UDVScaleData	udv_scale;	/*Numerical scale*/
-		UDVVScrollData	udv_vscrl;	/*vertical Scroll Bar*/
+		UDVScrollData	udv_vscrl;	/*vertical Scroll Bar*/
+		UDVScrollData	udv_hscrl;	/*horizontal Scroll Bar-MSA only*/
 		Uint4Ptr 		pClr;		/*Color table for Features*/
+		Uint4			DisplayOptions;/*bits vector to encode display options*/
 		UDVLetterLayout NA_LayoutPal[5];
 		UDVLetterLayout AA_LayoutPal[26];
+		Boolean         bFirst;/*need to be removed in a future release*/
 		} UnDViewerGraphData, PNTR UnDViewerGraphDataPtr;
 
 	typedef struct udv_item_select {
@@ -304,6 +274,14 @@ extern "C" {
 		IteM RefreshScreen;	/*redraw the entire screen*/
 		IteM HelpAbout;	/*what's that ?*/
 	} UDVMainMenu, PNTR UDVMainMenuPtr;
+
+	typedef struct udvlogodata {
+		FonT	f1;
+		FonT	f2;
+		FonT	f3;
+		Char	szTitle[25];
+		Char	szDesc[80];
+	} UDVLogoData, PNTR UDVLogoDataPtr;
 		
 	typedef struct viewermain {
 			/*main win menu*/
@@ -313,9 +291,6 @@ extern "C" {
 			/*Logo Panel*/
 		PaneL				Logo_Panel;
 		Boolean				Show_logo;
-		FonT				f1;
-		FonT				f2;
-		FonT				f3;
 			/*viewer data used only when AutonomeViewer is TRUE */
 		Boolean				AutonomeViewer;
 		Pointer				dataptr;		/*identification of the object*/
@@ -384,6 +359,7 @@ extern "C" {
 	NLM_EXTERN void UDV_ComputeBlockByLine(Int2 cxClient,Int2 cxName,
 				Int2 cxLeftScale,Int2 cxChar,Int2Ptr nCharByLine,
 				Int2Ptr nBlockByLine);
+	NLM_EXTERN void  UDV_Init_ScaleData(UnDViewerGraphDataPtr GrDataPtr);
 	NLM_EXTERN void UDV_Init_GraphData(PaneL p, 
 											UnDViewerGraphDataPtr GrDataPtr);
 	NLM_EXTERN Uint4Ptr UDV_BuildFeatColorTable(void);
@@ -397,6 +373,10 @@ extern "C" {
 	NLM_EXTERN void UDV_DragProc(PaneL p, PoinT pt);
 	NLM_EXTERN void UDV_ReleaseMouse(PaneL p,ViewerDialogDataPtr vdp, PoinT pt);
 	NLM_EXTERN void UDV_ReleaseProc(PaneL p, PoinT pt);
+	NLM_EXTERN void UDV_Draw_scale(UnDViewerGraphDataPtr GrData,
+		Boolean ShowMajorTick,Boolean ShowMMinorTick,Uint1 ScalePosition,
+		Int4 StartLetter,Int4 StopLetter,RecT PNTR rc,Int2 LeftDecal,
+		Int4 ScaleMaxVal,Int4 AlignPos,Boolean UseBlockDisp,Int2 ColWidth);
 	NLM_EXTERN void UDV_draw_viewer (PaneL p);
 	NLM_EXTERN void UDV_InfoPanelDrawProc(PaneL p);
 	NLM_EXTERN void UDV_Logo_onDraw (PaneL p);

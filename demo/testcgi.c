@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/24/98
 *
-* $Revision: 6.19 $
+* $Revision: 6.24 $
 *
 * File Description: 
 *
@@ -91,6 +91,10 @@ typedef short Int2, * Int2Ptr;
 typedef long Int4, * Int4Ptr;
 #endif
 
+#ifndef MIN
+#define MIN(a,b)	((a)>(b)?(b):(a))
+#endif
+
 /* useful portable character macros from NCBI toolkit (assumes ASCII) */
 
 #define IS_DIGIT(c)	('0'<=(c) && (c)<='9')
@@ -102,6 +106,211 @@ typedef long Int4, * Int4Ptr;
 #define IS_WHITESP(c) (((c) == ' ') || ((c) == '\n') || ((c) == '\r') || ((c) == '\t'))
 #define IS_ALPHANUM(c) (IS_ALPHA(c) || IS_DIGIT(c))
 #define IS_PRINT(c)	(' '<=(c) && (c)<='~')
+
+/* url decode/encode functions modified from NCBI toolkit */
+
+/* Return integer (0..15) corresponding to the "ch" as a hex digit
+ * Return -1 on error
+ */
+static int s_HexChar(char ch)
+{
+  if ('0' <= ch  &&  ch <= '9')
+    return ch - '0';
+  if ('a' <= ch  &&  ch <= 'f')
+    return 10 + (ch - 'a');
+  if ('A' <= ch  &&  ch <= 'F')
+    return 10 + (ch - 'A');
+  return -1;
+}
+
+/* The URL-encoding table
+ */
+static const char s_Encode[256][4] = {
+  "%00", "%01", "%02", "%03", "%04", "%05", "%06", "%07",
+  "%08", "%09", "%0A", "%0B", "%0C", "%0D", "%0E", "%0F",
+  "%10", "%11", "%12", "%13", "%14", "%15", "%16", "%17",
+  "%18", "%19", "%1A", "%1B", "%1C", "%1D", "%1E", "%1F",
+  "+",   "!",   "%22", "%23", "$",   "%25", "%26", "'",
+  "(",   ")",   "*",   "%2B", ",",   "-",   ".",   "%2F",
+  "0",   "1",   "2",   "3",   "4",   "5",   "6",   "7",
+  "8",   "9",   "%3A", "%3B", "%3C", "%3D", "%3E", "%3F",
+  "%40", "A",   "B",   "C",   "D",   "E",   "F",   "G",
+  "H",   "I",   "J",   "K",   "L",   "M",   "N",   "O",
+  "P",   "Q",   "R",   "S",   "T",   "U",   "V",   "W",
+  "X",   "Y",   "Z",   "%5B", "%5C", "%5D", "%5E", "_",
+  "%60", "a",   "b",   "c",   "d",   "e",   "f",   "g",
+  "h",   "i",   "j",   "k",   "l",   "m",   "n",   "o",
+  "p",   "q",   "r",   "s",   "t",   "u",   "v",   "w",
+  "x",   "y",   "z",   "%7B", "%7C", "%7D", "%7E", "%7F",
+  "%80", "%81", "%82", "%83", "%84", "%85", "%86", "%87",
+  "%88", "%89", "%8A", "%8B", "%8C", "%8D", "%8E", "%8F",
+  "%90", "%91", "%92", "%93", "%94", "%95", "%96", "%97",
+  "%98", "%99", "%9A", "%9B", "%9C", "%9D", "%9E", "%9F",
+  "%A0", "%A1", "%A2", "%A3", "%A4", "%A5", "%A6", "%A7",
+  "%A8", "%A9", "%AA", "%AB", "%AC", "%AD", "%AE", "%AF",
+  "%B0", "%B1", "%B2", "%B3", "%B4", "%B5", "%B6", "%B7",
+  "%B8", "%B9", "%BA", "%BB", "%BC", "%BD", "%BE", "%BF",
+  "%C0", "%C1", "%C2", "%C3", "%C4", "%C5", "%C6", "%C7",
+  "%C8", "%C9", "%CA", "%CB", "%CC", "%CD", "%CE", "%CF",
+  "%D0", "%D1", "%D2", "%D3", "%D4", "%D5", "%D6", "%D7",
+  "%D8", "%D9", "%DA", "%DB", "%DC", "%DD", "%DE", "%DF",
+  "%E0", "%E1", "%E2", "%E3", "%E4", "%E5", "%E6", "%E7",
+  "%E8", "%E9", "%EA", "%EB", "%EC", "%ED", "%EE", "%EF",
+  "%F0", "%F1", "%F2", "%F3", "%F4", "%F5", "%F6", "%F7",
+  "%F8", "%F9", "%FA", "%FB", "%FC", "%FD", "%FE", "%FF"
+};
+#define VALID_URL_SYMBOL(ch)  (s_Encode[(unsigned char)ch][0] != '%')
+
+static Bool Url_Decode
+(const void* src_buf,
+ size_t      src_size,
+ size_t*     src_read,
+ void*       dst_buf,
+ size_t      dst_size,
+ size_t*     dst_written)
+{
+  unsigned char *src = (unsigned char*)src_buf;
+  unsigned char *dst = (unsigned char*)dst_buf;
+
+  *src_read    = 0;
+  *dst_written = 0;
+  if (!src_size  ||  !dst_size)
+    return TRUE;
+
+  for ( ;  *src_read != src_size  &&  *dst_written != dst_size;
+        (*src_read)++, (*dst_written)++, src++, dst++) {
+    switch ( *src ) {
+    case '%': {
+      int i1, i2;
+      if (*src_read + 2 > src_size)
+        return TRUE;
+      if ((i1 = s_HexChar(*(++src))) == -1)
+        return (Bool)(*dst_written ? TRUE : FALSE);
+      if (*src_read + 3 > src_size)
+        return TRUE;
+      if ((i2 = s_HexChar(*(++src))) == -1)
+        return (Bool)(*dst_written ? TRUE : FALSE);
+
+      *dst = (unsigned char)((i1 << 4) + i2);
+      *src_read += 2;
+      break;
+    }
+
+    case '+': {
+      *dst = ' ';
+      break;
+    }
+
+    default:
+      if ( VALID_URL_SYMBOL(*src) )
+        *dst = *src;
+      else
+        return (Bool)(*dst_written ? TRUE : FALSE);
+    }
+  }
+
+  /*
+  ASSERT( src == (unsigned char*)src_buf + *src_read    );
+  ASSERT( dst == (unsigned char*)dst_buf + *dst_written );
+  */
+  return TRUE;
+}
+
+static void Url_Encode
+(const void* src_buf,
+ size_t      src_size,
+ size_t*     src_read,
+ void*       dst_buf,
+ size_t      dst_size,
+ size_t*     dst_written)
+{
+  unsigned char *src = (unsigned char*)src_buf;
+  unsigned char *dst = (unsigned char*)dst_buf;
+
+  *src_read    = 0;
+  *dst_written = 0;
+  if (!src_size  ||  !dst_size)
+    return;
+
+  for ( ;  *src_read != src_size  &&  *dst_written != dst_size;
+        (*src_read)++, (*dst_written)++, src++, dst++) {
+    const char* subst = s_Encode[*src];
+    if (*subst != '%') {
+      *dst = *subst;
+    } else if (*dst_written < dst_size - 2) {
+      *dst = '%';
+      *(++dst) = *(++subst);
+      *(++dst) = *(++subst);
+      *dst_written += 2;
+    }
+    else {
+      return;
+    }
+  }
+  /*
+  ASSERT( src == (unsigned char*)src_buf + *src_read    );
+  ASSERT( dst == (unsigned char*)dst_buf + *dst_written );
+  */
+}
+
+/* combined read and decode, encode and write functions */
+
+#define URLBUF 256
+
+static size_t ReadAndDecode (CharPtr buf, size_t size, FILE *file)
+
+{
+  size_t  cnt;
+  size_t  ct;
+  size_t  len;
+  size_t  more;
+  size_t  srcrd;
+  Char    tmp [URLBUF + 2];
+
+  if (buf == NULL || size < 3 || file == NULL) return 0;
+  len = MIN ((size_t) URLBUF, (size_t) (size - 2));
+  cnt = fread (tmp, 1, len, file);
+  if (cnt == 0) return 0;
+  more = 0;
+  if (tmp [cnt - 1] == '%') {
+    more = 2;
+  } else if (cnt > 1 && tmp [cnt - 2] == '%') {
+    more = 1;
+  }
+  if (more > 0) {
+    ct = fread (tmp + cnt, 1, more, file);
+    if (ct == more) {
+      cnt += more;
+    }
+  }
+  if (Url_Decode (tmp, cnt, &srcrd, buf, size, &ct)) {
+    return ct;
+  }
+  return 0;
+}
+
+static size_t EncodeAndWrite (CharPtr buf, size_t size, FILE *file)
+
+{
+  size_t  cnt;
+  size_t  ct = 0;
+  size_t  len;
+  size_t  srcrd;
+  Char    tmp [URLBUF * 3];
+
+  if (buf == NULL || size < 1 || file == NULL) return 0;
+  while (size > 0) {
+    len = MIN ((size_t) URLBUF, (size_t) size);
+    Url_Encode (buf, len, &srcrd, tmp, URLBUF, &cnt);
+    buf += srcrd;
+    size -= srcrd;
+    if (cnt > 0) {
+      ct += fwrite (tmp, 1, cnt, file);
+    }
+    if (srcrd == 0) return ct;
+  }
+  return ct;
+}
 
 /* copy of query string is parsed with strtok into tag and val paired arrays */
 
@@ -116,13 +325,11 @@ static CharPtr  val [MAX_ENTRIES];
 static Bool ParseQuery (CharPtr qstr, Bool queryRequired)
 
 {
-  Char     ch;
   size_t   len;
   CharPtr  ptr;
-  CharPtr  to;
 
 /*
-*  given a query string enzyme=EcoRI&pattern=GAATTC&supplemental_input=\n
+*  given a query string enzyme=EcoRI&pattern=GAATTC
 */
 
 /* The >Message prefix causes Sequin to display the message to the user */
@@ -147,25 +354,7 @@ static Bool ParseQuery (CharPtr qstr, Bool queryRequired)
   }
 
   memset (query, 0, len + 2);
-  /* strcpy (query, qstr); */
-
-/* may need to convert %20 encoding in URL to a space */
-
-  to = query;
-  ch = *qstr;
-  while (ch != '\0') {
-    if (ch == '%' && *(qstr + 1) == '2' && *(qstr + 2) == '0') {
-      *to = ' ';
-      to++;
-      qstr += 3;
-    } else {
-      *to = ch;
-      to++;
-      qstr++;
-    }
-    ch = *qstr;
-  }
-  *to = '\0';
+  strcpy (query, qstr);
 
 /* parse tag=value&tag=value query into arrays for easier interpretation */
 
@@ -313,7 +502,7 @@ static void RunCustom (CharPtr tempfile)
 /* assumes program sends output to stdout */
 
   while ((ct = fread (buf, 1, sizeof (buf), fp)) > 0) {
-    fwrite (buf, 1, ct, stdout);
+    EncodeAndWrite (buf, ct, stdout);
     fflush (stdout);
   }
   pclose (fp);
@@ -326,18 +515,24 @@ static void RunEcho (CharPtr tempfile)
   size_t  ct;
   Char    buf [256];
   FILE*   fp;
-  Int2    i;
 
 /* reconstruct and print the query string */
 
+/*
   for (i = 0; i < num_tags; i++) {
     if (i > 0) {
-      printf ("%");
+      sprintf (buf, "%");
+      EncodeAndWrite (buf, strlen (buf), stdout);
+      fflush (stdout);
     }
-    printf ("%s=%s", tag [i], val [i]);
+    sprintf (buf, "%s=%s", tag [i], val [i]);
+    EncodeAndWrite (buf, strlen (buf), stdout);
+    fflush (stdout);
   }
-  printf ("\n");
+  sprintf (buf, "\n");
+  EncodeAndWrite (buf, strlen (buf), stdout);
   fflush (stdout);
+*/
 
 /* now echo the data file */
 
@@ -345,7 +540,7 @@ static void RunEcho (CharPtr tempfile)
   if (fp == NULL) return;
 
   while ((ct = fread (buf, 1, sizeof (buf), fp)) > 0) {
-    fwrite (buf, 1, ct, stdout);
+    EncodeAndWrite (buf, ct, stdout);
     fflush (stdout);
   }
   fclose (fp);
@@ -393,7 +588,7 @@ static void RunSeg (CharPtr tempfile)
 /* send processed FASTA data from seg directly to stdout and calling program */
 
   while ((ct = fread (buf, 1, sizeof (buf), fp)) > 0) {
-    fwrite (buf, 1, ct, stdout);
+    EncodeAndWrite (buf, ct, stdout);
     fflush (stdout);
   }
   pclose (fp);
@@ -423,6 +618,7 @@ static void RunTrnaScan (CharPtr tempfile)
   CharPtr   ptr;
   long int  start;
   long int  stop;
+  Char      str [80];
 
 /* launch tRNAscan-SE with -q parameter and name of data file */
 
@@ -471,7 +667,8 @@ static void RunTrnaScan (CharPtr tempfile)
 /* first line of output gives SeqId from FASTA definition line */
 
         if (idNotSent) {
-          printf (">Features %s tRNAscan-SE\n", id);
+          sprintf (str, ">Features %s tRNAscan-SE\n", id);
+          EncodeAndWrite (str, strlen (str), stdout);
           fflush (stdout);
           idNotSent = FALSE;
         }
@@ -480,24 +677,34 @@ static void RunTrnaScan (CharPtr tempfile)
 /* multiple intervals would have lines of start (tab) stop */
 
         if (intronStart == 0 && intronStop == 0) {
-          printf ("%ld\t%ld\ttRNA\n", (long) start, (long) stop);
+          sprintf (str, "%ld\t%ld\ttRNA\n", (long) start, (long) stop);
+          EncodeAndWrite (str, strlen (str), stdout);
+          fflush (stdout);
         } else {
-          printf ("%ld\t%ld\ttRNA\n", (long) start, (long) (intronStart - 1));
-          printf ("%ld\t%ld\t\n", (long) (intronStop + 1), (long) stop);
+          sprintf (str, "%ld\t%ld\ttRNA\n", (long) start, (long) (intronStart - 1));
+          EncodeAndWrite (str, strlen (str), stdout);
+          fflush (stdout);
+          sprintf (str, "%ld\t%ld\t\n", (long) (intronStop + 1), (long) stop);
+          EncodeAndWrite (str, strlen (str), stdout);
+          fflush (stdout);
         }
 
 /* qualifier lines are (tab) (tab) (tab) qualifier key (tab) value */
 
         if (strstr (aa, "Pseudo") != NULL) {
-          printf ("\t\t\tnote\ttRNA-Pseudo\n");
+          sprintf (str, "\t\t\tnote\ttRNA-Pseudo\n");
+          EncodeAndWrite (str, strlen (str), stdout);
+          fflush (stdout);
         } else {
-          printf ("\t\t\tproduct\t%s\n", aa);
+          sprintf (str, "\t\t\tproduct\t%s\n", aa);
+          EncodeAndWrite (str, strlen (str), stdout);
+          fflush (stdout);
         }
 
-/* empty gene qualifier to suppress /gene (e.g., if tRNA is in an intron) */
+/* dash (formerly empty) gene qualifier to suppress /gene (e.g., if tRNA is in an intron) */
 
-        printf ("\t\t\tgene\t\n");
-
+        sprintf (str, "\t\t\tgene\t-\n");
+        EncodeAndWrite (str, strlen (str), stdout);
         fflush (stdout);
       }
     }
@@ -509,6 +716,11 @@ static void RunTrnaScan (CharPtr tempfile)
     }
   }
   pclose (fp);
+
+  if (idNotSent) {
+    printf (">Message\ntRNAscan-SE found no tRNA genes in this sequence\n");
+    fflush (stdout);
+  }
 }
 
 
@@ -520,21 +732,17 @@ static CharPtr services [] = {
 
 /* main function of cgi program, called by HTTPD server */
 
-#define BUFLEN 4096
-
 main (int argc, char *argv[])
 
 {
   CharPtr  bf;
-  CharPtr  buf;
-  Char     ch;
+  Char     buf [256];
   size_t   ct;
   FILE*    fp;
   CharPtr  method;
   CharPtr  ptr;
   CharPtr  request;
   Int2     service;
-  CharPtr  supp;
   Char     tempfile [L_tmpnam];
 
 /* at startup, first verify environment */
@@ -561,6 +769,7 @@ main (int argc, char *argv[])
   ptr = getenv ("QUERY_STRING");
   if (ptr != NULL && strlen (ptr) > 0) {
     if (! ParseQuery (ptr, TRUE)) {
+      printf ("Content-type: text/html\n\n");
       printf (">Message\nFAILURE - QUERY_STRING parsing failed\n");
       fflush (stdout);
       if (query != NULL) {
@@ -585,57 +794,9 @@ main (int argc, char *argv[])
     return 1;
   }
 
-/* allocate large buffer for copying stdin */
+  while ((ct = ReadAndDecode (buf, sizeof (buf), stdin)) > 0) {
 
-  buf = malloc (BUFLEN);
-  if (buf == NULL) {
-    printf ("Content-type: text/html\n\n");
-    printf (">Message\nFAILURE - buffer allocation failed\n");
-    fflush (stdout);
-    return 1;
-  }
-
-  while ((ct = fread (buf, 1, BUFLEN, stdin)) > 0) {
     bf = buf;
-
-    if (query == NULL) {
-
-/* find supplemental_input= string marking end of query at beginning of POST data */
-
-      supp = "&supplemental_input=";
-      ptr = strstr (buf, supp);
-      if (ptr == NULL) {
-        supp = "supplemental_input=";
-        ptr = strstr (buf, supp);
-      }
-
-/* separate query string and remainder of buffer */
-
-      if (ptr != NULL) {
-        *ptr = '\0';
-
-        ptr += strlen (supp);
-        ptr++;
-        bf = ptr;
-
-        ch = *bf;
-        while (ch == '\n' || ch == '\r') {
-          bf++;
-          ch = *bf;
-        }
-
-        ct -= (bf - buf);
-
-/* parse POST query into tag and val arrays */
-
-        if (! ParseQuery (buf, TRUE)) {
-          printf (">Message\nFAILURE - query parsing failed\n");
-          fflush (stdout);
-          free (buf);
-          return 1;
-        }
-      }
-    }
 
 /* write data part of buffer to temporary file */
 
@@ -643,8 +804,6 @@ main (int argc, char *argv[])
   }
   fflush (fp);
   fclose (fp);
-
-  free (buf);
 
 /* now send required first header information to stdout */
 

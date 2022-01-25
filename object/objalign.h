@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.0 $
+* $Revision: 6.3 $
 *
 * File Description:  Object manager interface for module NCBI-Seqalign
 *
@@ -39,6 +39,15 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: objalign.h,v $
+* Revision 6.3  1999/09/07 17:00:26  kans
+* added entityID, itemID, itemtype fields for new Alignment Indexing functions
+*
+* Revision 6.2  1999/07/29 15:49:58  ostell
+* added pointer and free for a SeqAlignIndex
+*
+* Revision 6.1  1999/07/26 20:41:01  ostell
+* added SAT_ and SAS_ defines, added master to SeqAlign
+*
 * Revision 6.0  1997/08/25 18:49:14  madden
 * Revision changed to 6.0
 *
@@ -118,6 +127,27 @@ NLM_EXTERN Boolean  LIBCALL ScoreSetAsnWrite PROTO((ScorePtr sp, AsnIoPtr aip, A
 NLM_EXTERN ScorePtr LIBCALL ScoreSetAsnRead PROTO((AsnIoPtr aip, AsnTypePtr settype));
 NLM_EXTERN ScorePtr LIBCALL ScoreSetFree PROTO((ScorePtr anp));
 
+/****************************************************************************
+*
+*  SeqAlignIndex
+*
+*    This structure is the public face of a data structure which is
+*    extended in AlignMgr for alignment indexing, alignment features
+*    and other utilities.
+*
+*    It is left as a limited structure "stub" here
+*
+****************************************************************************/
+/** the VoidPtr below should really be a SeqAlignIndexPtr **/
+typedef Boolean (LIBCALLBACK * SeqAlignIndexFreeFunc)(VoidPtr);
+
+typedef struct seqalignindex {
+	Uint1 indextype;
+	SeqAlignIndexFreeFunc freefunc;
+} SeqAlignIndex, PNTR SeqAlignIndexPtr;
+
+NLM_EXTERN SeqAlignIndexPtr LIBCALL SeqAlignIndexFree (SeqAlignIndexPtr saip);
+    
 /*****************************************************************************
 *
 *   SeqAlign
@@ -134,9 +164,26 @@ NLM_EXTERN ScorePtr LIBCALL ScoreSetFree PROTO((ScorePtr anp));
         std 3
 		packed 4
 		disc 5      SeqAlignSet is used
+	compseq 6       used by colombe 
 *   
 *
 *****************************************************************************/
+/** SeqAlign.type values ***/
+#define SAT_GLOBAL 1    /* ordered segments, over full length of seqs */
+#define SAT_DIAGS 2     /* unordered, possibly overlapping segments */
+#define SAT_PARTIAL 3   /* ordered segments, over part of sequence */
+#define SAT_MASTERSLAVE 4   /* set of SeqAligns, all of which have one common */
+                            /* sequence. Not in ASN.1 yet */
+
+/** SeqAlign.segtype values ***/
+#define SAS_DENDIAG 1
+#define SAS_DENSEG 2
+#define SAS_STD 3
+#define SAS_PACKED 4
+#define SAS_DISC 5
+#define SAS_COMPSEQ 6
+
+
 typedef struct seqalign {
     Uint1 type,
         segtype;
@@ -145,6 +192,11 @@ typedef struct seqalign {
     Pointer segs;
     struct seqalign PNTR next;
 	SeqLocPtr bounds;      /* sequence of SeqLocPtr */
+    SeqIdPtr master;   /* for SAT_MASTERSLAVE */
+    SeqAlignIndexPtr saip;  /* for added Alignment Indexing structures */
+    Uint2 entityID,   /* for new Alignment Indexing functions */
+        itemID,
+        itemtype;
 } SeqAlign, PNTR SeqAlignPtr;
 
 NLM_EXTERN SeqAlignPtr LIBCALL SeqAlignNew PROTO((void));

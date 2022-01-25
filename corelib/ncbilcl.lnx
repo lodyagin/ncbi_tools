@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/1/94
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description:
 *		system dependent header
@@ -37,10 +37,10 @@
 *
 * Modifications:
 * --------------------------------------------------------------------------
-* Date     Name          Description of modification
-* -------  ----------    ---------------------------------------------------
-*
 * $Log: ncbilcl.lnx,v $
+* Revision 6.2  1999/07/12 05:50:49  vakatov
+* Avoid redefinition of #_REENTRANT
+*
 * Revision 6.1  1998/12/10 17:04:07  vakatov
 * Fixed to compile under LINUX(Red Hat 2.XX, gcc, with POSIX threads)
 *
@@ -49,18 +49,6 @@
 *
 * Revision 5.1  1996/06/10 17:41:33  epstein
 * added SYSV_IPC_AVAIL per Warren Gish
-*
-Revision 5.0  1996/05/28  13:18:57  ostell
-Set to revision 5.0
-
-Revision 4.0  1995/07/26  13:46:50  ostell
-force revision to 4.0
-
-Revision 1.4  1995/05/15  18:45:58  ostell
-added Log line
-
-*
-*
 * ==========================================================================
 */
 #ifndef _NCBILCL_
@@ -79,7 +67,10 @@ added Log line
 /*----------------------------------------------------------------------*/
 #define SYSV_IPC_AVAIL	/* System V Interprocess Communication available */
 #define _POSIX_C_SOURCE 199309L
+
+#ifndef _REENTRANT
 #define _REENTRANT
+#endif
 
 /*----------------------------------------------------------------------*/
 /*      #includes                                                       */

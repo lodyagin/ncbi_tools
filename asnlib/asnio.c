@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 3/4/91
 *
-* $Revision: 6.5 $
+* $Revision: 6.6 $
 *
 * File Description:
 *   Routines for AsnIo objects.  This code has some machine dependencies.
@@ -45,6 +45,9 @@
 * 01-31-94 Schuler     Changed ErrGetOpts/ErrSetOpts to ErrSaveOptions/ErrRestoreOptions
 *
 * $Log: asnio.c,v $
+* Revision 6.6  1999/07/30 20:34:25  vakatov
+* AsnIoGets():  rewritten -- to handle an incremental read
+*
 * Revision 6.5  1998/02/27 17:22:21  vakatov
 * [WIN32 DLL]  Declared some functions as NLM_EXTERN(DLL-exportable)
 *
@@ -505,6 +508,7 @@ NLM_EXTERN void AsnIoPuts (AsnIoPtr aip)
     return;
 }
 
+
 /*****************************************************************************
 *
 *   CharPtr AsnIoGets(aip)
@@ -515,67 +519,56 @@ NLM_EXTERN void AsnIoPuts (AsnIoPtr aip)
 *****************************************************************************/
 NLM_EXTERN CharPtr AsnIoGets (AsnIoPtr aip)
 {
-	CharPtr ptr;
-    Int2 bytes, offset, len;
+  Int2    offset = aip->offset;                 /* current end of line */
+  Int2    bytes  = aip->bytes - offset;         /* unread bytes in buffer */
+  CharPtr str    = (CharPtr)aip->buf + offset;  /* start of next line */
+  Int2    len    = 0;                           /* # of bytes read in line */
 
-    offset = aip->offset;   /* current end of line */
-    bytes = aip->bytes - aip->offset;     /* unread bytes in buffer */
+  for (;;) {
+    /* no more data in the buffer? */
+    if (bytes <= 0) {
+      /* check if line is longer than the whole block */
+      if (offset == 0  &&  len == aip->bufsize) {
+        AsnIoErrorMsg(aip, 74, (int)aip->bufsize, aip->linenumber);
+        return 0;
+      }
 
-    if (bytes <= 0)     /* nothing in buffer */
-    {
-        aip->offset = 0;     /* nothing to move */
-        bytes = AsnIoReadBlock(aip);
-        if (! bytes)
-            return NULL;
-        aip->linebuf = (CharPtr)aip->buf;
-        ptr = aip->linebuf;
-        len = 0;
-        while (*ptr != '\n' && *ptr != '\r')
-        {
-            ptr++; len++;
-            if (len == bytes)
-			{
-                AsnIoErrorMsg(aip, 74, (int)aip->bufsize, aip->linenumber);
-				return NULL;
-			}
+      /* move data to the very beginning of the buffer, if necessary */
+      if (offset  &&  aip->bytes == aip->bufsize) {
+        if ( len )
+          MemCopy(aip->buf, aip->buf + offset, (size_t)len);
+        offset = 0;
+        str = (CharPtr)aip->buf + len;
+      }
+
+      /* read to the buffer */
+      aip->offset = offset + len;
+      bytes = AsnIoReadBlock(aip);
+      if ( !bytes ) {
+        if ( !len ) {
+          return 0;  /* cant read a thing */
+        } else {
+          *str = '\n';
+          break;     /* assume EOF and no last newline */
         }
-        len++;
-        aip->offset = len;   /* point to next line */
+      }
+      continue;
     }
-    else
-    {
-        ptr = (CharPtr)(aip->buf + offset);  /* start of next line */
-        len = 0;
-        while (*ptr != '\n' && *ptr != '\r')
-        {
-            ptr++; len++; bytes--;
 
-            if (bytes < 1)
-            {
-                if (offset == 0 && len > aip->bufsize)    /* longer than whole block */
-				{
-                    AsnIoErrorMsg(aip, 74, (int)aip->bufsize, aip->linenumber);
-					return NULL;
-				}
-                MemCopy(aip->buf, aip->buf + offset, (size_t)len);
-                offset = len;
-                aip->offset = offset;
-                bytes = AsnIoReadBlock(aip);
-                offset = 0;
-                ptr = (CharPtr)(aip->buf + len);
-                if (! bytes)    /* EOF and no last newline */
-				{
-                    *ptr = '\n'; bytes++;
-				}
-            }
-        }
-        len++; bytes--;   /* subtract for newline */
-        aip->linebuf = (CharPtr)(aip->buf + offset);
-        aip->offset = offset + len;
-    }
-	aip->linenumber++;
-	return aip->linebuf;
+    /* check for EOL, else forward to the next symbol */
+    len++;  /* EOL included */
+    if (*str == '\n'  ||  *str == '\r')
+      break; /* EOL */
+    str++;
+    bytes--;
+  }  /* for (;;) */
+
+  aip->offset = offset + len;
+  aip->linenumber++;
+  aip->linebuf = (CharPtr)aip->buf + offset;
+  return aip->linebuf;
 }
+
 
 /*****************************************************************************
 *

@@ -29,14 +29,25 @@
 *
 * Version Creation Date:   5/3/99
 *
-* $Revision: 6.3 $
+* $Revision: 6.7 $
 *
 * File Description: 
 *
-* Modifications:  
+* Modifications:
 * --------------------------------------------------------------------------
-* Date     Name        Description of modification
-* -------  ----------  -----------------------------------------------------
+* $Log: udvpanel.c,v $
+* Revision 6.7  1999/09/07 19:38:45  durand
+* don't display special features
+*
+* Revision 6.6  1999/07/30 20:08:57  durand
+* updates for the new Entrez graphical viewer
+*
+* Revision 6.5  1999/06/08 13:52:36  durand
+* update UDV data structures for the MSA editor
+*
+* Revision 6.4  1999/06/07 15:39:44  durand
+* add LOG line to keep track of the history
+*
 *
 *
 * ==========================================================================
@@ -49,7 +60,7 @@ static Char szAppName[]="UnD-Viewer";
 
 /*local text*/
 static Char szAbout[]="UnD-Viewer : A sequence viewer for GenBank\n\
-Version beta\n\nInformation Engineering Branch\n\
+Version 1.0\n\nInformation Engineering Branch\n\
 NCBI - NLM - NIH, Bldg 38A\n\
 8600 Rockville Pike\n\
 Bethesda, MD 20894 - USA\n\n\
@@ -153,6 +164,7 @@ ViewerDialogDataPtr vdp;
 			if (ommsp->itemtype==OBJ_SEQFEAT) {
 				/*just for test, when I first implemented ObjMgr*/
 				/*Message(MSG_OK, "Got a select message on [%s]", buf);*/
+				vdp->udv_graph.bFirst=TRUE;
 				UDV_select_feature(vdp->UnDViewer,vdp,ommsp->entityID,
 					ommsp->itemID,
 					(Boolean)(vdp->ClickFeatFromDlg ? TRUE : FALSE));
@@ -244,7 +256,7 @@ UdvGlobalsPtr       ugp=NULL;
 		/*non-autonomous viewer*/
 		if (!CreateUDVpanel(w,&vmp)) return OM_MSG_RET_ERROR;
 	}
-	
+	vmp->vdp->udv_graph.bFirst=TRUE;
 	/*init specific data for the ObjMgr msg loop*/	
 	vdp=vmp->vdp;
 	if (!vdp) return OM_MSG_RET_ERROR;
@@ -274,9 +286,6 @@ UdvGlobalsPtr       ugp=NULL;
 		omudp->userdata.ptrvalue = (Pointer) vdp;
 		omudp->messagefunc = UDV_OM_MsgFunc;
 	}
-
-/*	ObjMgrSendMsg(OM_MSG_UPDATE,ompcp->input_entityID,ompcp->input_itemID,
-			ompcp->input_itemtype);*/
 
 	return(OM_MSG_RET_DONE);
 }
@@ -1184,7 +1193,8 @@ WindoW				temport;
 
 	if (vdp->ParaG) UDV_PopulateParaGFeatures(/*vdp->udv_graph,*/vdp->bsp_i.bsp,
 			vdp->ParaG,vdp->udv_graph.udv_panel.ShowFeatures,
-			/*rcP,*/&vdp->udv_graph.udv_panel.nTotLines);
+			/*rcP,*/&vdp->udv_graph.udv_panel.nTotLines,
+			vdp->udv_graph.DisplayOptions,NULL);
 
 	/*compute new Vscroll pos */
 	if (vdp->ParaG){
@@ -1333,7 +1343,8 @@ WindoW		temport;
 	if (vdp->ParaG) {
 		UDV_PopulateParaGFeatures(vdp->bsp_i.bsp,vdp->ParaG,
 			vdp->udv_graph.udv_panel.ShowFeatures,
-			&vdp->udv_graph.udv_panel.nTotLines);
+			&vdp->udv_graph.udv_panel.nTotLines,vdp->udv_graph.DisplayOptions,
+			NULL);
 	}
 	else {
 		UDV_Init_vdp_struct(p,vdp,FALSE,TRUE,TRUE);
@@ -1437,9 +1448,9 @@ NLM_EXTERN Boolean UDV_Init_NonAutonomous(PaneL p,ViewerDialogDataPtr PNTR vdp,
 static Boolean  CreateUDVpanel(WindoW w,ViewerMainPtr PNTR vmp)
 {
 ViewerDialogDataPtr vdp;
-RecT				rcP,rcI;
+RecT				rcP,rcI,rcW;
 CharPtr				szTexte;
-WindoW				hParent;
+WindoW				hParent/*,temport*/;
 
 
 
@@ -1479,13 +1490,15 @@ WindoW				hParent;
 		UDV_SetupMenus(hParent,FALSE);
 
 		UDV_set_MainMenus(&((*vmp)->MainMenu),FALSE);
+		RealizeWindow(hParent);
+		Show(hParent);
 	}
-	else hParent=w;
+	else {
+		hParent=w;
+		/*hide the logo panel; only fot the autonomous viewer variant*/
+		if ((*vmp)->AutonomeViewer) Hide((*vmp)->Logo_Panel);
+	}
 
-
-/*	if (w) hParent=w;
-	else return(FALSE);
-*/
 	if (!(*vmp)->vdp){
 		(*vmp)->vdp=(ViewerDialogDataPtr)MemNew(sizeof(ViewerDialogData));
 		if ((*vmp)->vdp){
@@ -1525,7 +1538,10 @@ WindoW				hParent;
 
 	/*FonT & FonT size*/
 	if (!UDV_InitFont(&(vdp->udv_graph.udv_font))) return(FALSE);
-	Select(hParent);
+
+/*	temport=SavePort(hParent);
+	Select((WindoW)vdp->UnDViewer);
+*/
 	SelectFont(vdp->udv_graph.udv_font.hFnt);
 	UDV_FontDim(&(vdp->udv_graph.udv_font.cxChar),
 			&(vdp->udv_graph.udv_font.cyChar));
@@ -1550,17 +1566,14 @@ WindoW				hParent;
 	SetPosition (vdp->UnDViewer, &rcP );
 	AdjustPrnt (vdp->UnDViewer, &rcP, FALSE);
 
-	/*hide the logo panel; only fot the autonomous viewer variant*/
-	if ((*vmp)->AutonomeViewer) Hide((*vmp)->Logo_Panel);
-
 	/*general graph data init; scale pos, etc.*/
 	UDV_Init_GraphData(vdp->UnDViewer,&vdp->udv_graph);
 	
 	vdp->AlreadyInit=TRUE;
 
-	RealizeWindow(hParent);
-	Show(hParent);
-	Update();
+/*	InvalRect(&rcP);
+	RestorePort(temport);
+*/	Update();
 	
 	return(TRUE);
 }

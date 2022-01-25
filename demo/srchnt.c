@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 98-01-01
 *
-* $Revision: 6.15 $
+* $Revision: 6.16 $
 *
 * File Description: nucleotide pattern match
 *
@@ -38,6 +38,9 @@
 * Date       Name        Description of modification
 * --------------------------------------------------------------------------
 * $Log: srchnt.c,v $
+* Revision 6.16  1999/07/13 13:07:32  sicotte
+* prefix functions SeqAlignSort* with URK to resolve toolkit conflicts
+*
 * Revision 6.15  1999/02/26 18:52:11  kuzio
 * correct cast
 *
@@ -311,11 +314,11 @@ Int2 Main (void)
                                     (Int4) myargs[4].intvalue);
           if (sap != NULL)
             printf ("   Start\n");
-          SeqAlignSortByStart (&sap);
+          URK_SeqAlignSortByStart (&sap);
           if (myargs[3].intvalue)
           {
             EmbedFragLengthInfo (sap, gnbsp->bsp->length);
-            SeqAlignSortByLength (&sap);
+            URK_SeqAlignSortByLength (&sap);
             while (sap != NULL)
             {
               ssp = (StdSegPtr) sap->segs;

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/31/96
 *
-* $Revision: 6.4 $
+* $Revision: 6.5 $
 *
 * File Description: Cn3d file opening routines 
 *                   
@@ -39,6 +39,9 @@
 * Date     Name        Description of modification
 * -------  ----------  -----------------------------------------------------
 * $Log: cn3dopen.h,v $
+* Revision 6.5  1999/08/04 21:18:01  lewisg
+* modularized open operations to allow sequin to launch cn3d
+*
 * Revision 6.4  1999/01/14 19:07:17  kans
 * network availability is configurable
 *
@@ -72,7 +75,9 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-  
+
+#include <objmime.h>
+
 #define MAX_MDLNO 1000
 #define PRINT_FORM_MIME_NAME "Ncbi-mime-asn1"
  
@@ -80,6 +85,13 @@ extern MenU LIBCALL Cn3D_OpenSub PROTO((MenU m, Boolean usingEntrez));
 extern Boolean OpenMimeFileWithDeletion PROTO((CharPtr filename, Boolean removeIt));
 extern void LIBCALLBACK fnClearMarkedResidues PROTO((PFB pfbThis,Int4 iModel, Int4 iIndex, Pointer ptr));
 extern ValNodePtr fnMarkAlignedResidues PROTO((PDNMS pdnmsMaster, PDNMS pdnmsSlave, BiostrucFeaturePtr pbsfThis));
+NLM_EXTERN Boolean MMDB_ReadMime(NcbiMimeAsn1Ptr mime);
+NLM_EXTERN void Cn3D_OpenEnd();
+NLM_EXTERN void Cn3D_OpenStart();
+extern Boolean Cn3D_useEntrez;
+
+
+
 
 #ifdef __cplusplus
 }

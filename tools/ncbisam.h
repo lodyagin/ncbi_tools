@@ -1,4 +1,4 @@
-/* $Id: ncbisam.h,v 6.1 1997/11/07 16:18:06 shavirin Exp $
+/* $Id: ncbisam.h,v 6.2 1999/08/25 20:18:50 shavirin Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,16 @@
 *
 * Initial Version Creation Date: 02/24/1997
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description:
 *         External include file for ISAM library
 *
 * $Log: ncbisam.h,v $
+* Revision 6.2  1999/08/25 20:18:50  shavirin
+* Added possibility to store user-specified Int4 options in the index
+* header.
+*
 * Revision 6.1  1997/11/07 16:18:06  shavirin
 * Added definition for the function SISAMFindAllData()
 *
@@ -217,10 +221,10 @@ ISAMErrorCode ISAMSetUpCAInfo(ISAMObjectPtr object, Int4 MaxOffset,
    NOTE:        Special default rules for UNIX platform
                 Page size is set to default value if 0
   ------------------------------------------------------------------*/
-ISAMErrorCode ISAMMakeIndex(ISAMObjectPtr,
-                            Int4 page_size     /* ISAM page size */
+ISAMErrorCode ISAMMakeIndex(ISAMObjectPtr object,
+                            Int4 page_size,       /* ISAM page size */
+                            Int4 idx_option       /* Option for upper layer */
                             );
-
 
 /* ------------------------ NISAMSearch ----------------------------
    Purpose:     Main search function of Numeric ISAM
@@ -305,6 +309,15 @@ ISAMErrorCode NISAMFindKeys(ISAMObjectPtr object,
    NOTE:        None
   ------------------------------------------------------------------*/
 ISAMErrorCode ISAMNumTerms(ISAMObjectPtr object, Int4Ptr terms);
+
+/* ------------------------ ISAMGetIdxOption ------------------------
+   Purpose:     Returns user specified option from ISAM database
+
+   Parameters:  ISAM object
+   Returns:     User specified option (set while formating)
+   NOTE:        None
+  ------------------------------------------------------------------*/
+ISAMErrorCode ISAMGetIdxOption(ISAMObjectPtr object, Int4Ptr idx_option);
 
 #ifdef __cplusplus
 }

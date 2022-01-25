@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.1 $
+* $Revision: 6.4 $
 *
 * File Description: 
 *
@@ -65,21 +65,21 @@ extern EditAlignDataPtr GetAlignDataPanel (PaneL pnl);
 ***    
 *********************************************************/
 extern BaR  SeqEdGetSlateScrollBar (PaneL pnl);
-extern Int2 SeqEdGetValueScrollBar (PaneL pnl);
-extern void SeqEdSetValueScrollBar (PaneL pnl, Int2 value);
-extern void SeqEdCorrectBarPage (PaneL pnl, Int2 page1, Int2 page2);
-extern void SeqEdCorrectBarValue (PaneL pnl, Int2 value);
-extern void SeqEdCorrectBarMax (PaneL pnl, Int2 value);
-extern void SeqEdSetCorrectBarMax (PaneL pnl, Int4 max, Int4 offset);
-extern void VscrlProc (BaR sb, SlatE s, Int2 newval, Int2 oldval);
-extern void HscrlProc (BaR sb, SlatE s, Int2 newval, Int2 oldval);
+extern Int4 SeqEdGetValueScrollBar (PaneL pnl);
+extern void SeqEdSetValueScrollBar (PaneL pnl, Int4 value);
+extern void SeqEdCorrectBarPage (PaneL pnl, Int4 page1, Int4 page2);
+extern void SeqEdCorrectBarValue (PaneL pnl, Int4 value);
+extern void SeqEdCorrectBarMax (PaneL pnl, Int4 value);
+extern void SeqEdSetCorrectBarMax (PaneL pnl, EditAlignDataPtr adp, float hratio);
+extern void VscrlProc (BaR sb, SlatE s, Int4 newval, Int4 oldval);
+extern void HscrlProc (BaR sb, SlatE s, Int4 newval, Int4 oldval);
 
-extern Int2 hoffset2voffset (EditAlignDataPtr adp, ValNodePtr anp_list, Int4 line_len, Int4 left, Int4 right, Int4 hoffset);
+extern Int4 hoffset2voffset (EditAlignDataPtr adp, ValNodePtr anp_list, Int4 line_len, Int4 left, Int4 right, Int4 hoffset);
 
 /************************************************************
 ***  ResizeAlignDataWindow: Call Back for DocumentWindow
 *************************************************************/
-extern void do_resize_panel (PaneL pnl, EditAlignDataPtr adp, Int2 width, Int2 height, Boolean rearrange);
+extern void do_resize_panel (PaneL pnl, EditAlignDataPtr adp, Int4 width, Int4 height, Boolean rearrange);
 extern void do_resize_window (PaneL pnl, EditAlignDataPtr adp, Boolean rearrange);
 /*****************************************************************
 ***

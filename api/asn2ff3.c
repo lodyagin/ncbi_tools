@@ -35,6 +35,9 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: asn2ff3.c,v $
+* Revision 6.49  1999/08/03 20:48:23  tatiana
+* UMR error fixed in PrintImpFeat
+*
 * Revision 6.47  1999/04/26 18:53:00  tatiana
 *  added pseuod from sfp in ConvertToNAImpFeat()
 *
@@ -584,7 +587,7 @@ static SeqIdPtr GetSeqIdChoice(SeqIdPtr sip)
 	
 	for (si = sip; si; si=si->next) {
 		ch = si->choice;
-		if (ch == SEQID_GI || ch == SEQID_GENBANK || ch == SEQID_EMBL || ch == SEQID_DDBJ || SEQID_OTHER) {
+		if (ch == SEQID_GI || ch == SEQID_GENBANK || ch == SEQID_EMBL || ch == SEQID_DDBJ || ch == SEQID_OTHER) {
 			return si;
 		}
 	}
@@ -4164,6 +4167,42 @@ NLM_EXTERN Int2 PrintImpFeatEx (Asn2ffJobPtr ajp, BioseqPtr bsp, SeqFeatPtr sfp,
 	return 1;
 } /*PrintImpFeatEx */
 		
+static GBQualPtr extract_qual(GBQualPtr PNTR head, GBQualPtr x)
+{
+	GBQualPtr	v, p;
+	
+	if (*head == NULL) {
+		return NULL;
+	}
+	if (x == *head) {
+		*head = x->next;
+		x->next = NULL;
+		return x;
+	}
+	for (v = *head; v != NULL && v != x; v = v->next) {
+		p = v;
+	}
+	if (v == NULL) {
+		return NULL;
+	}
+	p->next = x->next;
+	x->next = NULL;
+	return x;
+}
+static GBQualPtr tie_next_qual(GBQualPtr head, GBQualPtr next)
+{
+	GBQualPtr v;
+
+	if (head == NULL) {
+		return next;
+	}
+	for (v = head; v->next != NULL; v = v->next) {
+		v = v;
+	}
+	v->next = next;
+	return head;
+}
+
 /****************************************************************************
 *PrintImpFeat
 *
@@ -4179,6 +4218,8 @@ NLM_EXTERN Int2 PrintImpFeat (Asn2ffJobPtr ajp, BioseqPtr bsp, SeqFeatPtr sfp)
 	Int2 class_equal, gbqual_index;
 	static CharPtr buf = NULL;
 	Uint2 retval;
+	Boolean first=TRUE;
+	GBQualPtr tmp, gbqpnext, head=NULL;
 
 	if (sfp == NULL)
 		return -1;
@@ -4221,19 +4262,34 @@ NLM_EXTERN Int2 PrintImpFeat (Asn2ffJobPtr ajp, BioseqPtr bsp, SeqFeatPtr sfp)
 			ff_AddString("/partial");
 		}
 	}
+/* put all /note last */
+	for (gbqp=sfp->qual; gbqp; gbqp=gbqpnext) {
+		gbqpnext=gbqp->next;
+		if (StringCmp(gbqp->qual, "note") == 0) {
+			tmp = extract_qual(&(sfp->qual), gbqp);
+			head = tie_next_qual(head, tmp);
+		}
+	}
+	if (head) {
+		sfp->qual = tie_next_qual(sfp->qual, head);
+	}
 	for (gbqp=sfp->qual; gbqp; gbqp=gbqp->next) {
 		gbqual_index = GBQualNameValid(gbqp->qual);
 		if (gbqual_index != -1) {
 			NewContLine();
-			ff_AddChar( '/');
-			ff_AddString(gbqp->qual);
+			if (first) {
+				ff_AddChar( '/');
+				ff_AddString(gbqp->qual);
+			}
 			class_qual = ParFlat_GBQual_names[gbqual_index].gbclass;
 			if (class_qual == Class_none) {
 				class_equal=CheckForEqualSign(gbqp->qual);
 				if (class_equal == 1)
 					continue;
 			}
-			ff_AddChar('=');
+			if (first) {
+				ff_AddChar('=');
+			}
 			if (class_qual == Class_text && 
 				StringCmp(gbqp->val, "\"\"") == 0) { 
 			/* an empty string is considered legal */ 
@@ -4247,8 +4303,10 @@ NLM_EXTERN Int2 PrintImpFeat (Asn2ffJobPtr ajp, BioseqPtr bsp, SeqFeatPtr sfp)
 				buf = StringSave(gbqp->val);
 			}
 			if (class_qual == Class_text || class_qual == Class_none
-				|| class_qual == Class_ecnum || class_qual == Class_note)
+				|| class_qual == Class_ecnum)
 				ff_AddString("\"");
+			if (first && class_qual == Class_note)
+					ff_AddString("\"");					
 			if (class_qual == Class_note) {
 				www_note_gi(buf);
 			} else if (class_qual != Class_none) {
@@ -4261,10 +4319,16 @@ NLM_EXTERN Int2 PrintImpFeat (Asn2ffJobPtr ajp, BioseqPtr bsp, SeqFeatPtr sfp)
 				}
 			}
 			if (class_qual == Class_text || class_qual == Class_none
-				|| class_qual == Class_ecnum || class_qual == Class_note)
+				|| class_qual == Class_ecnum)
+				ff_AddString("\"");
+			if (gbqp->next == NULL && class_qual == Class_note)
 				ff_AddString("\"");
 			if (buf) {
 				MemFree(buf);
+			}
+			if (class_qual == Class_note) {
+				if (first == TRUE)
+					first = FALSE;
 			}
 		} else if (format == GENPEPT_FMT) {
 			if (StringCmp(gbqp->qual, "site_type") == 0) {

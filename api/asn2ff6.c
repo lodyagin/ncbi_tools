@@ -29,13 +29,16 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.18 $
+* $Revision: 6.22 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: asn2ff6.c,v $
+* Revision 6.22  1999/09/15 18:17:12  tatiana
+* GRAPHIK_FMT corrected
+*
 * Revision 6.18  1999/04/02 19:33:55  tatiana
 * MI_TECH_htgs_0 added in BioseqGetGBDivCode()
 *
@@ -1956,25 +1959,26 @@ void GR_PrintPubs (Asn2ffJobPtr ajp, GBEntryPtr gbp, PubStructPtr psp)
 
 	ff_StartPrint(0, 12, ASN2FF_GB_MAX, NULL);
 	ff_AddString("<BR><BR>");
+	title = FlatPubTitle(pub);
+	if (title ) {
+		if ( *title  != NULLB) {
+			StrStripSpaces(title);
+			ff_AddString("<B>");
+			ff_AddString(title);
+			ff_AddString("</B>");
+			ff_EndPrint();
+		}
+	}
 	authors = FlatAuthor(ajp, pub);
 
 	if (authors && *authors != NULLB) {
+		ff_AddString("<BR>");
 		ff_AddString(authors);
 	} else {
 		ff_AddChar('.');
 	}
 	ff_EndPrint();
 
-	title = FlatPubTitle(pub);
-	if (title ) {
-		if ( *title  != NULLB) {
-			ff_StartPrint(2, 12, ASN2FF_GB_MAX, NULL);
-			ff_AddString("<BR>");
-			StrStripSpaces(title);
-			ff_AddString(title);
-			ff_EndPrint();
-		}
-	}
 
 	journal = FlatJournal(ajp, gbp, pub, pat_seqid, &submit, FALSE);
 	ff_StartPrint(2, 12, ASN2FF_GB_MAX, NULL);
@@ -2594,7 +2598,7 @@ Int2 ValidateAccession(CharPtr new_buf, CharPtr orig_buf)
 				return -2;
 			}
 		} else {
-		return -2;
+			return -2;
 		}
 	} else {
 		return -1;
@@ -2895,6 +2899,7 @@ NLM_EXTERN void GetLocusPartsAwp (Asn2ffJobPtr ajp)
 		    case SEQID_GENBANK:
 	    	case SEQID_EMBL:
 	    	case SEQID_DDBJ:
+	    	case SEQID_OTHER:
 				tsip = (TextSeqIdPtr) sip->data.ptrvalue;
 				if ((ValidateAccession(buf_acc, tsip->accession)) < 0) {
 					if (base_a != NULL) {
@@ -2915,28 +2920,6 @@ NLM_EXTERN void GetLocusPartsAwp (Asn2ffJobPtr ajp)
 					PRINTID_TEXTID_ACC_VER, MAX_ACCESSION_LEN+6);
 				StringNCpy_0(gbp->version, buf_acc, MAX_ACCESSION_LEN+6);
 			}
-				break;
-	    	case SEQID_OTHER:
-				tsip = (TextSeqIdPtr) sip->data.ptrvalue;
-				if ((ValidateOtherAccession(buf_acc, tsip->accession)) < 0) {
-					if (base_a != NULL) {
-						StringNCpy_0(buf_acc, base_a, MAX_ACCESSION_LEN+1);
-					} else {
-						buf_acc = MakeAnAccession(buf_acc, isip, 
-													MAX_ACCESSION_LEN+1);
-					}
-				}
-				buf_locus = ValidateLocus(ajp, bsp, base_locus, 
-					total_segs, num_seg, buf_locus, tsip->name, buf_acc); 
-				StringNCpy_0(gbp->accession, 
-					buf_acc, MAX_ACCESSION_LEN+1);
-				sprintf(gbp->locus, "%-10s", buf_locus); 
-				num_seg--;
-				if (ajp->show_version) {
-					SeqIdWrite(sip, buf_acc, 
-						PRINTID_TEXTID_ACC_VER, MAX_ACCESSION_LEN+6);
-					StringNCpy_0(gbp->version, buf_acc, MAX_ACCESSION_LEN+6);
-				}
 				break;
 		    case SEQID_LOCAL:
 				if ((((ObjectIdPtr)sip->data.ptrvalue)->str) == NULL) {
@@ -3223,17 +3206,21 @@ NLM_EXTERN Boolean SeqToAwp (GatherContextPtr gcp)
 						}
 				}
 				if (ISA_na(bsp->mol) && (format == GENBANK_FMT ||
-					format == EMBL_FMT || format == PSEUDOEMBL_FMT)) {
+					format == EMBL_FMT || format == PSEUDOEMBL_FMT
+						|| format == GRAPHIK_FMT)) {
 					awp->seg = bsp;
 				} else if (ISA_aa(bsp->mol) && 
-					(format == GENPEPT_FMT || format == EMBLPEPT_FMT)) {
+					(format == GENPEPT_FMT || format == EMBLPEPT_FMT
+						|| format == GRAPHIK_FMT)) {
 					awp->seg = bsp;
 				}
 			}
 			if (ASN2FF_LOOK_FOR_SEQ == FALSE) {
-				if (ajp->format == GENPEPT_FMT || ajp->format == EMBLPEPT_FMT) {
+				if (ajp->format == GENPEPT_FMT || ajp->format == EMBLPEPT_FMT
+					|| (ISA_aa(bsp->mol) && format == GRAPHIK_FMT)) {
 					if (ISA_aa(bsp->mol) && (bsp->repr == Seq_repr_raw 
-		   	|| bsp->repr == Seq_repr_const || bsp->repr == Seq_repr_delta)) {
+		   	|| bsp->repr == Seq_repr_const || bsp->repr == Seq_repr_delta 
+		   	|| 	bsp->repr == Seq_repr_virtual)) {
 						gbep = CreateGBEntry(awp, bsp, gcp->entityID, 
 							gcp->itemID, gcp->thistype);
 						++awp->total_seg;
@@ -3241,7 +3228,8 @@ NLM_EXTERN Boolean SeqToAwp (GatherContextPtr gcp)
 					}
 				} else {
 					if (ISA_na(bsp->mol) && (bsp->repr == Seq_repr_raw 
-		   		|| bsp->repr == Seq_repr_const|| bsp->repr == Seq_repr_delta)) {
+		   		|| bsp->repr == Seq_repr_const|| bsp->repr == Seq_repr_delta
+		   		|| 	bsp->repr == Seq_repr_virtual)) {
 						if (ASN2FF_LOCAL_ID == FALSE) {
 							sip = SeqIdSelect(bsp->id, fasta_order, NUM_ORDER);
 							if (sip && sip->choice != SEQID_LOCAL) {
@@ -3270,7 +3258,8 @@ NLM_EXTERN Boolean SeqToAwp (GatherContextPtr gcp)
 						bsp = BioseqFind(SeqLocId(slp));
 						if (bsp->repr == Seq_repr_raw || 
 							bsp->repr == Seq_repr_const 
-							|| bsp->repr == Seq_repr_delta) {
+							|| bsp->repr == Seq_repr_delta 
+							|| bsp->repr == Seq_repr_virtual) {
 							if (CompareToAwpList(bsp, awp) == FALSE) {
 								if (ASN2FF_LOCAL_ID == FALSE) {
 									isip = bsp->id;
@@ -3304,7 +3293,8 @@ NLM_EXTERN Boolean SeqToAwp (GatherContextPtr gcp)
 					}
 				} else if (ISA_na(bsp->mol) && (bsp->repr == Seq_repr_raw || 
 						bsp->repr == Seq_repr_const 
-							|| bsp->repr == Seq_repr_delta)) {
+							|| bsp->repr == Seq_repr_delta 
+							|| bsp->repr == Seq_repr_virtual)) {
 						if (CompareToAwpList(bsp, awp) == FALSE) {
 						if (ASN2FF_LOCAL_ID == FALSE) {
 							isip = bsp->id;

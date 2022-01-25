@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.34 $
+* $Revision: 6.42 $
 *
 * File Description:  Sequence Utilities for objseq and objsset
 *
@@ -39,6 +39,30 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: sequtil.c,v $
+* Revision 6.42  1999/08/31 20:49:03  shavirin
+* Added case 5 (discontinous alignment) in function TxGetIdFromSeqAlign().
+*
+* Revision 6.41  1999/08/11 15:49:21  sicotte
+* Add AW prefix for NCBI EST in WHICH_db_accession
+*
+* Revision 6.40  1999/08/05 20:52:25  sicotte
+* fix in SeqIdFindBestAccession
+*
+* Revision 6.39  1999/08/03 20:00:34  sicotte
+* Add SeqIdFindBestAccession
+*
+* Revision 6.38  1999/07/30 09:28:17  sicotte
+* Transfered fns from salutil.c(chappey) AddSeqId,SeqIdDupList,SeqIdDupBestList,SeqIdListfromSeqLoc
+*
+* Revision 6.37  1999/06/24 20:39:21  kans
+* SeqIdPrint just calls SeqIdWrite, PRINTID_TEXTID_LOCUS uses accession (no version) if no locus name
+*
+* Revision 6.36  1999/05/24 22:22:25  sicotte
+* SeqIdFromAccession: Fix bug for embl/ddbj accessions
+*
+* Revision 6.35  1999/05/20 14:33:13  sicotte
+* SeqIdFromAccession: remove tsp->name to accomodate LOCUS names
+*
 * Revision 6.34  1999/04/22 14:52:34  tatiana
 * changes in MuskSeqIdWrite to print human chromosome Ids
 *
@@ -2560,6 +2584,23 @@ NLM_EXTERN SeqIdPtr SeqIdFindBest (SeqIdPtr sip, Uint1 target)
 
 	return SeqIdSelect (sip, order, NUM_SEQID);
 }
+/*****************************************************************************
+*
+*   SeqIdFindBestAccn(sip)
+*       Find the most reliable Accession SeqId in a chain
+*       else returns gi;
+*
+*****************************************************************************/
+NLM_EXTERN SeqIdPtr SeqIdFindBestAccession (SeqIdPtr sip)
+{
+	Uint1 order[NUM_SEQID];
+
+	if (sip == NULL)
+		return NULL;
+	SeqIdBestRank(order, NUM_SEQID);
+        order[SEQID_GI]=order[SEQID_LOCAL]+1;
+	return SeqIdSelect (sip, order, NUM_SEQID);
+}
 
 /*****************************************************************************
 *
@@ -2687,207 +2728,7 @@ NLM_EXTERN SeqIdPtr SeqIdSelect (SeqIdPtr sip, Uint1Ptr order, Int2 num)
 NLM_EXTERN CharPtr SeqIdPrint (SeqIdPtr isip, CharPtr buf, Uint1 format)
 
 {
-	SeqIdPtr sip;
-    char localbuf[15];    /* for MS Windows */
-	char *ldelim;
-	char d [2];
-    CharPtr tmp;
-        char versionbuf[10];
-	static Uint1 fasta_order[NUM_SEQID] = {  /* order for other id FASTA_LONG */
- 	33, /* 0 = not set */
-	20, /* 1 = local Object-id */
-	15,  /* 2 = gibbsq */
-	16,  /* 3 = gibbmt */
-	30, /* 4 = giim Giimport-id */
-	10, /* 5 = genbank */
-	10, /* 6 = embl */
-	10, /* 7 = pir */
-	10, /* 8 = swissprot */
-	15,  /* 9 = patent */
-	20, /* 10 = other TextSeqId */
-	20, /* 11 = general Dbtag */
-	255,  /* 12 = gi */
-	10, /* 13 = ddbj */
-	10, /* 14 = prf */
-	12  /* 15 = pdb */
-    };
-    TextSeqIdPtr tsip;
-	PDBSeqIdPtr psip;
-	ObjectIdPtr oip;
-	PatentSeqIdPtr patsip;
-	Boolean got_gi = FALSE;
-        Int2 version = 0;
-
-	buf[0] = '\0';
-	tmp = buf;
-	if (isip == NULL)
-		return tmp;
-
-	d [0] = *delim;
-	d [1] = '\0';
-	ldelim = &(d [0]);
-	if ((format >= ' ') && (format <= 127))  /* change delimiter */
-	{
-		if (format == 127)
-			d [0] = '\t';
-		else
-			d [0] = (char) format;
-		format = PRINTID_FASTA_SHORT;
-	}
-	
-	localbuf[0] = '\0';
-							/* error on input, return ??? */
-	if ( (! (isip -> choice)) || (format < PRINTID_FASTA_SHORT)
-		|| (format > PRINTID_REPORT))
-	{
-		return StringMove(tmp, txtid[0]);
-	}
-
-	if (format == PRINTID_FASTA_LONG)   /* find the ids in the chain */
-	{
-		for (sip = isip; sip != NULL; sip = sip->next)  /* GI present? */
-		{
-			if (sip->choice == SEQID_GI)
-			{
-				sprintf(localbuf, "%s%s%ld", txtid[SEQID_GI], ldelim,
-					(long)(sip->data.intvalue));
-				tmp = StringMove(tmp, localbuf);
-				got_gi = TRUE;
-				break;
-			}
-		}
-		sip = SeqIdSelect(isip, fasta_order, NUM_SEQID);
-		if (sip == NULL)   /* only GI */
-			return tmp;
-		else if (got_gi)
-		{
-			if (sip->choice == SEQID_GIIM)   /* don't show GIIM with GI */
-				return tmp;
-
-			tmp = StringMove(tmp, ldelim);
-		}
-	}
-	else
-		sip = isip;          /* only one id processed */
-
-							 /* deal with LOCUS and ACCESSION */
-	if ((format == PRINTID_TEXTID_ACCESSION) || (format == PRINTID_TEXTID_LOCUS))
-	{
-		switch (sip->choice)   /* get the real TextSeqId types */
-		{
-	        case SEQID_GENBANK:
-    	    case SEQID_EMBL:
-    	    case SEQID_DDBJ:
-    	        tsip = (TextSeqIdPtr)sip->data.ptrvalue;
-				if ((format == PRINTID_TEXTID_LOCUS) && (tsip->name != NULL))
-                    tmp = StringMove(tmp, tsip->name);
-                else if ((format == PRINTID_TEXTID_ACCESSION)
-					&& (tsip->accession != NULL))
-                    tmp = StringMove(tmp, tsip->accession);
-				return tmp;
-					case SEQID_LOCAL:
-					if (format == PRINTID_TEXTID_ACCESSION)
-						if ((((ObjectIdPtr)sip->data.ptrvalue)->str)
-							 != NULL){
-						 tmp = StringMove(tmp, 
-							((ObjectIdPtr)sip->data.ptrvalue)->str);
-							return tmp;
-						}
-					break;
-			default:
-				break;
-		}
-	}
-
-		tmp = StringMove(tmp, txtid[sip->choice]);
-		tmp = StringMove(tmp, ldelim);
-
-    switch (sip->choice) 
-    {
-        case SEQID_LOCAL:           /* object id */
-            if ((((ObjectIdPtr)sip->data.ptrvalue)->str) == NULL)
-			{
-                sprintf(localbuf, "%ld", 
-							(long)((ObjectIdPtr)sip->data.ptrvalue)->id);
-				tmp = StringMove(tmp, localbuf);
-			}
-            else
-                tmp = StringMove(tmp, ((ObjectIdPtr)sip->data.ptrvalue)->str);
-            break;
-        case SEQID_GIBBSQ:         
-        case SEQID_GIBBMT:
-		case SEQID_GI:
-			sprintf(localbuf, "%ld", (long)sip->data.intvalue);
-			tmp = StringMove(tmp, localbuf);
-            break;
-        case SEQID_GIIM:
-            sprintf(localbuf, "%ld", (long)((GiimPtr)sip->data.ptrvalue)->id);
-			tmp = StringMove(tmp, localbuf);
-            break;
-        case SEQID_GENBANK:
-        case SEQID_EMBL:
-        case SEQID_DDBJ:
-        case SEQID_OTHER:
-            tsip = (TextSeqIdPtr)(sip->data.ptrvalue);
-	    if (((tsip->version > 0) && (tsip->release == NULL)) && SHOWVERSION)
-                version = tsip->version;  /* write the version */
-	    sprintf(versionbuf, ".%d", (int)version);
-        case SEQID_PIR:
-        case SEQID_SWISSPROT:
-	case SEQID_PRF:
-            tsip = (TextSeqIdPtr)sip->data.ptrvalue;
-            if (tsip->accession != NULL)
-			{
-                           tmp = StringMove(tmp, tsip->accession);
-                           if (version)
-                              tmp = StringMove(tmp, versionbuf);
-			   if (format == PRINTID_REPORT)
-			 	break;
-			}
-			if (format != PRINTID_REPORT)
-				tmp = StringMove(tmp, ldelim);
-			if (tsip->name != NULL)
-				tmp = StringMove(tmp, tsip->name);
-            break;
-        case SEQID_PATENT:
-			patsip = (PatentSeqIdPtr)(sip->data.ptrvalue);
-			tmp = StringMove(tmp, patsip->cit->country);
-			tmp = StringMove(tmp, ldelim);
-			tmp = StringMove(tmp, patsip->cit->number);
-			tmp = StringMove(tmp, ldelim);
-			sprintf(localbuf, "%d", (int)patsip->seqid);
-			tmp = StringMove(tmp, localbuf);
-            break;
-        case SEQID_GENERAL:
-			oip = ((DbtagPtr)sip->data.ptrvalue)->tag;
-			tmp = StringMove(tmp, ((DbtagPtr)sip->data.ptrvalue)->db);
-			tmp = StringMove(tmp, ldelim);
-			if (oip->str == NULL)
-			{
-				sprintf(localbuf, "%ld", (long) oip->id);
-				tmp = StringMove(tmp, localbuf);
-			}
-			else
-				tmp = StringMove(tmp, oip->str);
-            break;
-        case SEQID_PDB:
-			psip = (PDBSeqIdPtr) sip->data.ptrvalue;
-			tmp = StringMove(tmp, psip->mol);
-			tmp = StringMove(tmp, ldelim);
-			if (psip->chain == '|')
-				tmp = StringMove(tmp, "VB");
-			else
-			{
-				if (psip->chain != '\0')
-					*tmp = psip->chain;
-				else
-					*tmp = ' ';
-				tmp++;
-				*tmp = '\0';
-			}
-            break;
-    }
-    return tmp;
+	return SeqIdWrite (isip, buf, format, 255); /* no knowledge of buffer size */
 }
 
 /*****************************************************************************
@@ -3011,7 +2852,7 @@ NLM_EXTERN CharPtr SeqIdWrite (SeqIdPtr isip, CharPtr buf, Uint1 format, Int2 bu
 				if ((format == PRINTID_TEXTID_LOCUS) && (tsip->name != NULL)) {
 					Nlm_LabelCopyNext(&tmp, tsip->name, &buflen);
 					return tmp;
-                } else if ((format == PRINTID_TEXTID_ACC_ONLY) 
+                } else if ((format == PRINTID_TEXTID_ACC_ONLY || format == PRINTID_TEXTID_LOCUS) 
 					&& (tsip->accession != NULL)) {
 					Nlm_LabelCopyNext(&tmp, tsip->accession, &buflen);
 					return tmp;
@@ -7008,43 +6849,45 @@ static SeqIdPtr LIBCALL
 TxGetIdFromSeqAlign(SeqAlignPtr seqalign, Boolean subject)
 
 {
-        DenseDiagPtr ddp;
-        DenseSegPtr dsp;
-        StdSegPtr ssp;
-	SeqIdPtr sip;
-	
-	sip = NULL;
-	switch (seqalign->segtype)
-	{
-		case 1: /*Dense-diag*/
-			ddp = seqalign->segs;
-			if (subject == TRUE)
-				sip = ddp->id->next;
-			else
-				sip = ddp->id;
-			break;
-		case 2:
-			dsp = seqalign->segs;
-			if (subject == TRUE)
-				sip = dsp->ids->next;
-			else
-				sip = dsp->ids;
-			break;
-		case 3:
-			ssp = seqalign->segs;
-			if(ssp && ssp->loc && ssp->loc->next)
-			{
-				if (subject == TRUE)
-					sip = SeqLocId(ssp->loc->next);
-				else
-					sip = SeqLocId(ssp->loc);
-			}
-			break;
-		default:
-			break;
-	}
+    DenseDiagPtr ddp;
+    DenseSegPtr dsp;
+    StdSegPtr ssp;
+    SeqIdPtr sip;
+    
+    sip = NULL;
+    switch (seqalign->segtype) {
+    case 1: /*Dense-diag*/
+        ddp = seqalign->segs;
+        if (subject == TRUE)
+            sip = ddp->id->next;
+        else
+            sip = ddp->id;
+        break;
+    case 2: /*Dense-seq */
+        dsp = seqalign->segs;
+        if (subject == TRUE)
+            sip = dsp->ids->next;
+        else
+            sip = dsp->ids;
+        break;
+    case 3: /* Std-seg */
+        ssp = seqalign->segs;
+        if(ssp && ssp->loc && ssp->loc->next) {
+            if (subject == TRUE)
+                sip = SeqLocId(ssp->loc->next);
+            else
+                sip = SeqLocId(ssp->loc);
+        }
+        break;
+    case 5: /* Discontinuous alignment */
 
-	return sip;
+        sip = TxGetIdFromSeqAlign(seqalign->segs, subject);
+        break;
+    default:
+        break;
+    }
+
+    return sip;
 }
 
 /* 
@@ -7395,7 +7238,6 @@ NLM_EXTERN Uint4 LIBCALL SeqIdOrderInList (SeqIdPtr a, SeqIdPtr list) {
 NLM_EXTERN Uint4 LIBCALL SeqIdOrderInBioseqIdList (SeqIdPtr a, SeqIdPtr list) {
         SeqIdPtr now;
         Uint4 order;
-        Uint1 retval;
 
         if (a == NULL)
             return 0;
@@ -7453,10 +7295,10 @@ NLM_EXTERN void LIBCALL ExtractAccession(CharPtr accn,CharPtr accession,CharPtr 
 /*
   Hugues Sicotte:
   Function to make a proper type SeqId given a string that represents
-   an accession Number 
-   If (UseNetworkForUnknown) ==> Will use network if the accession number
-   cannot be mapped unambigouly mapped to a database.
-   User must Call ExtractAccession function separately before calling this.
+  an accession Number. 
+  If version number is unknown, set version=0 for latest.
+  name is ignored because it is not always consistently used in databases.
+  User may need to Call ExtractAccession to parse out accession and version.
 */
 NLM_EXTERN  SeqIdPtr LIBCALL SeqIdFromAccession(CharPtr accession, Uint4 version,CharPtr name) {
     SeqIdPtr sip;
@@ -7467,34 +7309,8 @@ NLM_EXTERN  SeqIdPtr LIBCALL SeqIdFromAccession(CharPtr accession, Uint4 version
     sip=NULL;
     status = WHICH_db_accession(accession);
     if(!(ACCN_IS_UNKNOWN(status))) {
-        sip = ValNodeNew(NULL);
-        if(ACCN_IS_GENBANK(status) ) {
-            tsp = TextSeqIdNew();
-            tsp->accession = StringSave(accession);
-            tsp->version = version;
-            sip->data.ptrvalue = tsp;
-            if(ACCN_IS_NCBI(status)) {
-                sip->choice = SEQID_GENBANK;
-                tsp->name = StringSave("GENBANK");
-            } else if (ACCN_IS_EMBL(status)) {
-                sip->choice = SEQID_EMBL;
-                tsp->name = StringSave("EMBL");
-            } else if (ACCN_IS_DDBJ(status)) {
-                sip->choice = SEQID_DDBJ;
-                tsp->name = StringSave("DDBJ");
-            } else if (ACCN_IS_SWISSPROT(status)) {
-                sip->choice = SEQID_SWISSPROT;
-                tsp->name = StringSave("SWISSPROT");
-            } else if (ACCN_IS_AMBIGOUSDB(status)) {
-                /* the ambigous Accession with N are both ddbj and embl */
-                if(TO_UPPER(accession[0])=='N') {
-                    sip->choice = SEQID_EMBL;
-                    tsp->name = StringSave("EMBL");
-                } else {
-                    sip = SeqIdFree(sip);
-                }
-            }
-        } else if(ACCN_IS_REFSEQ(status)) {
+        if(ACCN_IS_REFSEQ(status)) {
+            sip = ValNodeNew(NULL);
             tsp = TextSeqIdNew();
             tsp->accession = StringSave(accession);
             sip->data.ptrvalue = tsp;
@@ -7502,8 +7318,35 @@ NLM_EXTERN  SeqIdPtr LIBCALL SeqIdFromAccession(CharPtr accession, Uint4 version
             tsp->name = StringSave("REFSEQ");
             tsp->version = version;
         } else {
-            sip = SeqIdFree(sip);
-        }
+            sip = ValNodeNew(NULL);
+            tsp = TextSeqIdNew();
+            tsp->accession = StringSave(accession);
+            tsp->version = version;
+            sip->data.ptrvalue = tsp;
+            if(ACCN_IS_GENBANK(status)) {
+                sip->choice = SEQID_GENBANK;
+                tsp->name = NULL;
+            } else if (ACCN_IS_EMBL(status)) {
+                sip->choice = SEQID_EMBL;
+                tsp->name = NULL;
+            } else if (ACCN_IS_DDBJ(status)) {
+                sip->choice = SEQID_DDBJ;
+                tsp->name = NULL;
+            } else if (ACCN_IS_SWISSPROT(status)) {
+                sip->choice = SEQID_SWISSPROT;
+                tsp->name = NULL;
+            } else if (ACCN_IS_AMBIGOUSDB(status)) {
+                /* the ambigous Accession with N are both ddbj and embl */
+                if(TO_UPPER(accession[0])=='N') {
+                    sip->choice = SEQID_EMBL;
+                    tsp->name = NULL;
+                } else {
+                    sip = SeqIdFree(sip);
+                }
+            } else {
+                sip=SeqIdFree(sip);
+            }
+        } 
     }
     return sip;
 }
@@ -7676,7 +7519,9 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
           
           if ((StringICmp(temp,"AR") == 0)) {      /* NCBI patent */
               retcode = ACCN_NCBI_PATENT | ACCN_AMBIGOUS_MOL; /* Can be either protein or nuc */
-          }      else if ((StringICmp(temp,"AA") == 0) || (StringICmp(temp,"AI") == 0)) { /* NCBI EST */
+          }      else if ((StringICmp(temp,"AA") == 0) ||
+                          (StringICmp(temp,"AI") == 0) || 
+                          (StringICmp(temp,"AW") == 0) ) { /* NCBI EST */
               retcode = ACCN_NCBI_EST;
           } else if ((StringICmp(temp,"AC") == 0)) {      /* NCBI HTGS */
               retcode = ACCN_NCBI_HTGS;
@@ -7861,3 +7706,86 @@ NLM_EXTERN Boolean LIBCALL SeqIdInSeqLocList(SeqIdPtr sip, ValNodePtr list) {
   }
   return FALSE;
 }
+
+/*********************************************************
+***
+***    AddSeqId  : create a new seqid and add at the end
+***                of the list starting with sip_head
+***
+**********************************************************/
+NLM_EXTERN SeqIdPtr AddSeqId (SeqIdPtr *sip_head, SeqIdPtr sip)
+{
+  SeqIdPtr sip_tmp, 
+           sip_copy;
+
+  sip_copy = SeqIdDup (sip);
+  sip_tmp = sip_copy->next;
+  sip_copy->next = NULL;
+  if (sip_tmp!=NULL)
+     SeqIdFree (sip_tmp);
+  if ( (sip_tmp = *sip_head) != NULL ) {
+     while (sip_tmp->next != NULL) 
+        sip_tmp = sip_tmp->next; 
+     sip_tmp->next = sip_copy;
+  }  
+  else {
+     *sip_head = sip_copy;
+  }
+  return (*sip_head);
+
+}
+
+/*******************************************************
+***
+***   SeqIdDupList : duplicate a list of SeqIdPtr
+***
+*******************************************************/
+NLM_EXTERN SeqIdPtr SeqIdDupList (SeqIdPtr id_list)
+{
+  SeqIdPtr     sip=NULL;
+  SeqIdPtr     sid;
+
+  for (sid = id_list; sid != NULL; sid = sid->next) {
+         sip = AddSeqId (&sip, sid);  
+  }
+  return sip;
+}
+
+NLM_EXTERN SeqIdPtr SeqIdDupBestList (SeqIdPtr id_list)
+{
+  SeqIdPtr     sip=NULL;
+  SeqIdPtr     sid, sid2;
+  BioseqPtr    bsp;
+
+  for (sid = id_list; sid != NULL; sid = sid->next) {
+     sid2 = NULL;
+     bsp = BioseqLockById (sid);
+     if (bsp!=NULL) {
+        sid2 = SeqIdFindBest(bsp->id, 0);
+        BioseqUnlock (bsp);
+     }
+     if (sid2!=NULL)
+        sip = AddSeqId (&sip, sid2);
+     else 
+        sip = AddSeqId (&sip, sid);  
+  }
+  return sip;
+}
+
+NLM_EXTERN SeqIdPtr SeqIdListfromSeqLoc (ValNodePtr vnpslp)
+{
+  SeqIdPtr     sip=NULL, siptmp;
+  ValNodePtr   vnp=NULL;
+  Int2         j = 0, k;
+  for (vnp = vnpslp; vnp != NULL; vnp = vnp->next)
+  {
+         sip = AddSeqId (&sip, SeqLocId ((SeqLocPtr) vnp->data.ptrvalue));  
+         j++;
+  }
+  if (sip!=NULL) {
+     for (siptmp=sip, k=0; k<j-1; siptmp=siptmp->next, k++) continue;
+     siptmp->next = NULL;
+  }
+  return sip;
+}
+

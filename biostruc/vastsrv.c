@@ -29,11 +29,29 @@
  * Version Creation Date: 10 March 1998
  *
  * $Log: vastsrv.c,v $
+ * Revision 6.22  1999/07/30 19:46:27  addess
+ * more changes to ValidateMMDBID by Diane and Ken
+ *
+ * Revision 6.21  1999/07/29 20:56:02  addess
+ * added ValidateMMDBID() to determine if MMDBID from neighbor is live
+ *
+ * Revision 6.20  1999/07/21 17:25:36  addess
+ * changed printout from Cn3D v2.0 to Cn3D v2.5
+ *
+ * Revision 6.19  1999/05/13 16:31:58  kimelman
+ * - extra spaces
+ *
+ * Revision 6.18  1999/05/11 20:34:14  kimelman
+ * style fixes
+ *
  * Revision 6.17  1999/05/07 14:02:13  zimmerma
  *  Removed local copy of MMDBBiostrucGet
  *
  * Revision 6.16  1999/02/09 15:14:00  addess
- * Modified by DZ to extract html path dependencies: created two new static char vars: DATApath and VASTpath, and text file getCn3D.txt in data and modified .vastrc to include new vars.
+ * Modified by DZ to extract html path dependencies: 
+ * - created two new static Char vars: DATApath and VASTpath - read by GetAppParam -
+ *   and modified .vastrc to include these new vars.
+ * - created text file getCn3D.txt in data directory - used by WWWPrintFileData
  *
  * Revision 6.15  1998/12/22 18:01:51  addess
  * changes relevant to reading new type of annot-set data
@@ -308,9 +326,6 @@ VastTableBegin (FILE *table, CharPtr pcPDB, CharPtr JobID, CharPtr pcPass,
     } 
 
     fprintf(table, "<TABLE CELLPADDING=0 CELLSPACING=4>\n");
-    /*****
-    fprintf(table, "<TR><TH COLSPAN=2 ALIGN=LEFT><strong><INPUT TYPE=SUBMIT VALUE=\"View / Save Alignments\"></strong></TH></TR>\n");
-    *****/
     fprintf(table, "<TR><TH COLSPAN=2 ALIGN=LEFT>\n");
     fprintf(table, "<strong><INPUT TYPE=SUBMIT VALUE=\"View / Save Alignments\"></strong>\n");
     fprintf(table, "&nbsp<img src=\"%s/new.gif\" alt=\"New\">\n", VASTpath);
@@ -325,7 +340,7 @@ VastTableBegin (FILE *table, CharPtr pcPDB, CharPtr JobID, CharPtr pcPass,
     fprintf(table,"<INPUT TYPE=\"radio\" NAME=\"action\" value=\"1\"> See File<BR>\n");
     fprintf(table,"<INPUT TYPE=\"radio\" NAME=\"action\" value=\"2\"> Save File<BR></TD>\n");
     fprintf(table,"<TD VALIGN=TOP NOWRAP>\n");
-    fprintf(table,"<INPUT TYPE=\"radio\" NAME=\"calltype\" value=\"a\"CHECKED> Cn3D v2.0 (asn.1)<BR>\n");
+    fprintf(table,"<INPUT TYPE=\"radio\" NAME=\"calltype\" value=\"a\"CHECKED> Cn3D v2.5 (asn.1)<BR>\n");
     fprintf(table,"<INPUT TYPE=\"radio\" NAME=\"calltype\" value=\"m\"> Mage (Kinemage)<BR>\n");
     fprintf(table,"<INPUT TYPE=\"radio\" NAME=\"calltype\" value=\"p\"> (PDB)<BR></TD>\n");
     fprintf(table, "<TD VALIGN=TOP NOWRAP>\n");
@@ -337,32 +352,46 @@ VastTableBegin (FILE *table, CharPtr pcPDB, CharPtr JobID, CharPtr pcPass,
     fprintf(table, "</TR>\n</TABLE>\n");
     
     DisplayOpt = upper - lower;
-    if (!DisplayOpt)
-      fprintf(table, "<H4>Structure neighbor %d out of %d displayed. Page %d of %d.</H4>\n", lower, numhits, pagenum, numpages);
+
+    if (!DisplayOpt) 
+      fprintf(table, "<H4>Structure neighbor %d out of %d displayed. ", lower, numhits);
     else
-      fprintf(table, "<H4>Structure neighbors %d-%d out of %d displayed. Page %d of %d.</H4>\n", lower, upper, numhits, pagenum, numpages);
-    /* VAST data table begins here */
-    fprintf(table,"<table cellspacing=3 cellpadding=2 width=100%% border=1>\n");
-    fprintf(table,"<tr valign=middle>\n");
-    fprintf(table,"<th>&nbsp</th>\n");
-    fprintf(table,"<th align=left><pre> <a href=\"%s/vasthelp.html#Structure\">PDB</a>", VASTpath);
-    fprintf(table," <a href=\"%s/vasthelp.html#C\">C</a>", VASTpath);
-    fprintf(table," <a href=\"%s/vasthelp.html#D\">D</a></pre></th>\n", VASTpath);
-
-    if (iFull) {
-      fprintf(table,"<th align=right><pre><a href=\"%s/vasthelp.html#SCORE\">SCO</a></pre></th>\n", VASTpath); 
-      fprintf(table,"<th align=right><pre><a href=\"%s/vasthelp.html#P-VAL\">P-VAL</a></pre></th>\n", VASTpath);
-    }
+      fprintf(table, "<H4>Structure neighbors %d-%d out of %d displayed. ", lower, upper, numhits);
+    fprintf(table, "Page %d of %d.</H4>\n", pagenum, numpages);
     
-    fprintf(table,"<th align=right><pre><a href=\"%s/vasthelp.html#RMSD\">RMSD</a></pre></th>\n", VASTpath);
-    fprintf(table,"<th align=right><pre><a href=\"%s/vasthelp.html#NRES\">NRES</a></pre></th>\n",VASTpath);
-    fprintf(table,"<th align=right><pre><a href=\"%s/vasthelp.html#Id\">%s</a></pre></th>\n", VASTpath, "%Id");
-    fprintf(table,"<th align=left><pre><a href=\"%s/vasthelp.html#Contents\">Description</pre></th>\n",VASTpath);
-    fprintf(table,"</tr><br>\n");
-    fflush(table);
+    /* VAST data table begins here */
+    if (numhits > 0) {
+      fprintf(table,"<table cellspacing=3 cellpadding=2 width=100%% border=1>\n");
+      fprintf(table,"<tr valign=middle>\n");
+      fprintf(table,"<th>&nbsp</th>\n");
+      fprintf(table,"<th align=left><pre> <a href=\"%s/vasthelp.html#Structure\">PDB</a>", VASTpath);
+      fprintf(table," <a href=\"%s/vasthelp.html#C\">C</a>", VASTpath);
+      fprintf(table," <a href=\"%s/vasthelp.html#D\">D</a></pre></th>\n", VASTpath);
 
+      if (iFull) {
+        fprintf(table,"<th align=right><pre><a href=\"%s/vasthelp.html#SCORE\">SCO</a></pre></th>\n", VASTpath); 
+        fprintf(table,"<th align=right><pre><a href=\"%s/vasthelp.html#P-VAL\">P-VAL</a></pre></th>\n", VASTpath);
+      }
+    
+      fprintf(table,"<th align=right><pre><a href=\"%s/vasthelp.html#RMSD\">RMSD</a></pre></th>\n", VASTpath);
+      fprintf(table,"<th align=right><pre><a href=\"%s/vasthelp.html#NRES\">NRES</a></pre></th>\n",VASTpath);
+      fprintf(table,"<th align=right><pre><a href=\"%s/vasthelp.html#Id\">%s</a></pre></th>\n", VASTpath, "%Id");
+      fprintf(table,"<th align=left><pre><a href=\"%s/vasthelp.html#Contents\">Description</pre></th>\n",VASTpath);
+      fprintf(table,"</tr><br>\n");
+      fflush(table);
+    }
 } /* end of VastTableBegin */
 
+
+static Boolean ValidateMMDBID(CharPtr pcAccession, Int4 iMMDBid)
+{
+  DocUid uid;
+  
+  uid = MMDBEvalPDB(pcAccession);
+  if ((Int4)uid == iMMDBid) return TRUE;
+  else return FALSE;
+
+}
 
 
 static void
@@ -386,11 +415,11 @@ VastTableRows(FILE *table, BiostrucFeatureSetPtr pbsfs, Int4 iMMDBid1, Int4 iFSI
    /* use cnt_MMDBid and save_MMDBid[] for docsum display of the correct subset hits */
    cnt_MMDBid = 0;
 
-   for (pbsf = pbsfs->features; pbsf != NULL, pvnBools != NULL; pbsf = pbsf->next, pvnBools = pvnBools->next) {
+   for (pbsf = pbsfs->features; pbsf != NULL || pvnBools != NULL ; pbsf = pbsf->next, pvnBools = pvnBools->next) {
        /* Filter Hits By Page*/
        page = pvnBools->data.boolvalue;
        if (page == FALSE) continue;
-  
+      
        /* get the embedded PDB code of the hit */
        pcPDB = StringSave(PDBNAME_DEFAULT);
        pcSlaveName = NULL;
@@ -407,9 +436,6 @@ VastTableRows(FILE *table, BiostrucFeatureSetPtr pbsfs, Int4 iMMDBid1, Int4 iFSI
 	   iDomain = atoi((char *) &pbsf->name[12]);  
         }
 
-       fprintf(table, "<tr>\n");
-       fprintf(table, "<td VALIGN=TOP><INPUT TYPE=\"checkbox\" NAME=\"hit\"");
-       fprintf(table, "VALUE=\"%ld\"></td>\n", (long) pbsf->id);
        pvn = ValNodeFindNext(pbsf->Location_location,NULL,Location_location_alignment);
        if (pvn) pcga = (ChemGraphAlignmentPtr) pvn->data.ptrvalue;
        iMMDBid = 0;
@@ -445,7 +471,9 @@ VastTableRows(FILE *table, BiostrucFeatureSetPtr pbsfs, Int4 iMMDBid1, Int4 iFSI
       fprintf(table,"<a href=\"%smmdbsrv?uid=%ld&form=6&db=t&Dopt=s\">%ld</a></pre></td>\n",
           URLcgi, (long) iMMDBid, iMMDBid);
       *****/
-
+      fprintf(table, "<tr>\n");
+      fprintf(table, "<td VALIGN=TOP><INPUT TYPE=\"checkbox\" NAME=\"hit\"");
+      fprintf(table, "VALUE=\"%ld\"></td>\n", (long) pbsf->id);
       fprintf(table,"<td VALIGN=TOP><pre>");
       fprintf(table, "<a href=\"%smmdbsrv?uid=%ld&form=6&db=t&Dopt=s\">%s</a>", URLcgi,
          (long) iMMDBid, pcPDB);
@@ -695,7 +723,7 @@ static BiostrucFeaturePtr FilterHitsByDomainSubset(BiostrucFeaturePtr pbsf, Int4
   BiostrucFeaturePtr current, pbsfHead = NULL, pbsfTail;
   Int4 h, i, n;
   Int4 gn, gr, hcnt, *min_ranks, *group_num, *group_rank;
-  Char domid[DOMID_SIZE + 1];
+  Char domid[DOMID_SIZE + 1], pdbcode[4+1];
  
 /* The next bit of code is used for filtering the hit lists.  When we go through a hit
  * list we skip domains that do not belong to the subset of interest, or which belong to
@@ -726,11 +754,15 @@ static BiostrucFeaturePtr FilterHitsByDomainSubset(BiostrucFeaturePtr pbsf, Int4
        domid[3] = current->name[10];
        domid[4] = current->name[11];
        domid[5] = current->name[12];
-
+      
+       StringNCpy(pdbcode, domid, 4);	/* also get pdbcode to validate mmdbid */
+       pdbcode[4]= '\0';
+       
        if (domid[5] == '0') domid[5] = ' ';
 
        /* skip over domains that do not belong to the subset */
-       if (BelongsToSubset(domid, subsetnum, &gn, &gr) <= 0)
+       if (BelongsToSubset(domid, subsetnum, &gn, &gr) <= 0 ||
+            !ValidateMMDBID(pdbcode, (current->id)/100000))
           continue;
 
        /* record group data for this hit */
@@ -799,7 +831,17 @@ static ValNodePtr FilterHitsByPage(BiostrucFeatureSetPtr pbsfs, Int4 PageNum, In
   ValNodePtr pvnBools = NULL;
   float n;
   
+ 
+  
   pbsf = pbsfs->features;
+  if (pbsf == NULL) {
+    *numpages = 1;
+    *numhits = 0;
+    *lower = 0;
+    *upper = 0;
+    return pvnBools;
+  }
+  
   FidCount = 0;
   
   while (pbsf)
@@ -859,7 +901,7 @@ MakeVastTable(Int4 FSID, BiostrucAnnotSetPtr pbsas, Int2 iSort, Int4 subsetnum, 
   BiostrucIdPtr pbsidThis = NULL;
   BiostrucDescrPtr pbsdrThis = NULL;
   CharPtr pcVast = NULL;
-  ValNodePtr pvnBools;
+  ValNodePtr pvnBools = NULL;
 
   if ((!pbsas) || (!FSID) ) return;
 	
@@ -922,34 +964,29 @@ MakeVastTable(Int4 FSID, BiostrucAnnotSetPtr pbsas, Int2 iSort, Int4 subsetnum, 
 	   }  
 
         if (pbsfs->features != NULL) {
-            pbsfs2 = BiostrucFeatureSetNew();
-            pbsfs2->id = pbsfs->id;
-            pbsfs->id = NULL;
-            pbsfs2->descr = pbsfs->descr;
-            pbsfs->descr = NULL;
-            pbsfs2->features = FilterHitsByDomainSubset(pbsfs->features, subsetnum);
-            if (pbsfs2->features == NULL)
-            {
-              printf("Content-type: text/html\n\n");
-	      printf("<h2>Error</h2>\n");
-	      printf("VASTSERV: Hits are not present in non-redundant subset<p>\n");
-              goto oot;
-            }  
-            pbsfs->features = NULL;
-            pvnBools = ValNodeNew(NULL);
-            pvnBools = FilterHitsByPage(pbsfs2, pagenum, HitsPerPage, &numhits, &numpages, &upper, &lower);
-            if ((numhits < HitsPerPage) || (lower > numhits)) pagenum = DEFAULT_PAGE;
-            VastTableSort(pbsfs2, iSort);
- 	    VastTableBegin(table, pcPDB, JobID, pcPass, cChain, iDomain, iMMDBid, FSID, iFull, numhits, upper, lower, numpages, HitsPerPage, pagenum);
- 	    VastTableRows(table, pbsfs2, iMMDBid, FSID, iFull, pvnBools);
-            VastTableEnd(table, iMMDBid, FSID, pbsas, subsetnum, iSort, iFull, JobID, pcPass, numpages, pagenum, HitsPerPage);
-	}
+          pbsfs2 = BiostrucFeatureSetNew();
+          pbsfs2->id = pbsfs->id;
+          pbsfs->id = NULL;
+          pbsfs2->descr = pbsfs->descr;
+          pbsfs->descr = NULL;
+          pbsfs2->features = FilterHitsByDomainSubset(pbsfs->features, subsetnum);
+          pbsfs->features = NULL;
+          pvnBools = FilterHitsByPage(pbsfs2, pagenum, HitsPerPage, &numhits, &numpages, &upper, &lower);
+          if (numhits < HitsPerPage || lower > numhits) pagenum = DEFAULT_PAGE;
+          if (pbsfs2->features != NULL) VastTableSort(pbsfs2, iSort);
+ 	  VastTableBegin(table, pcPDB, JobID, pcPass, cChain, iDomain, iMMDBid, FSID, iFull, numhits, upper, lower, numpages, HitsPerPage, pagenum);
+ 	  if (pbsfs2->features != NULL || pvnBools != NULL)   
+            VastTableRows(table, pbsfs2, iMMDBid, FSID, iFull, pvnBools);
+          else
+            fprintf(table,"<h2><p>Hits are not present in the selected subset</p></h2>\n");
+          VastTableEnd(table, iMMDBid, FSID, pbsas, subsetnum, iSort, iFull, JobID, pcPass, numpages, pagenum, HitsPerPage);
+        }  
 	else {
-	    VastPageHeader(table, pcPDB, cChain, iDomain, iMMDBid, JobID);
-	    fprintf(table, "<h1><a href=\"%s/vasthelp.html#NoNeighbor\">%s</a></h1>\n", VASTpath,
+	  VastPageHeader(table, pcPDB, cChain, iDomain, iMMDBid, JobID);
+	  fprintf(table, "<h1><a href=\"%s/vasthelp.html#NoNeighbor\">%s</a></h1>\n", VASTpath,
 		"VAST did not find any structure neighbors.");
-	    fprintf(table, "<HR SIZE=5 NOSHADE>\n");
-	    fprintf(table, "</body></html>\n");
+	  fprintf(table, "<HR SIZE=5 NOSHADE>\n");
+	  fprintf(table, "</body></html>\n");
 	}
 
 	fflush(table);
@@ -1407,7 +1444,14 @@ Main()
 		exit(1);
 	}
  
-	if ((indx = WWWFindName(www_info, "chaindom")) < 0) {
+	if (!MMDBInit()) {
+            printf("Content-type: text/html\n\n");
+            printf("<h2>VASTSERV Error</h2>\n");
+	    printf("<h3>Cannot find MMDB data on server.\nContact %s</h3>\n", MAILto);
+	    exit(1);
+	}
+     
+       if ((indx = WWWFindName(www_info, "chaindom")) < 0) {
 		printf("Content-type: text/html\n\n");
 		printf("<h2>VASTSERV Error</h2>\n");
 		printf("<h3>Internal failure (no chaindom).\nContact %s</h3>\n", MAILto);
@@ -1533,6 +1577,7 @@ Main()
 	if ((indx = WWWFindName(www_info, "hit")) < 0) {
 		MakeVastTable(Fsid, pbsa, iSort, subsetnum, pagenum, HitsPerPage, iFull, JobID, pcPass);
 		BiostrucAnnotSetFree(pbsa);
+                MMDBFini();
 		exit(0);
 	}
 

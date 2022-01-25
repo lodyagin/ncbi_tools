@@ -17,7 +17,7 @@ extern "C" { /* } */
 /**************************************************
 *
 *    Generated objects for Module NCBI-Blast
-*    Generated using ASNCODE Revision: 6.0 at Apr 13, 1999  9:19 AM
+*    Generated using ASNCODE Revision: 6.8 at Aug 11, 1999  4:42 PM
 *
 **************************************************/
 
@@ -90,6 +90,7 @@ typedef ValNode BlastResponse;
 #define BlastResponse_progress 16
 #define BlastResponse_done 17
 #define BlastResponse_fini 18
+#define BlastResponse_phialign 19
 
 
 NLM_EXTERN BlastResponsePtr LIBCALL BlastResponseFree PROTO ((BlastResponsePtr ));
@@ -135,6 +136,7 @@ typedef struct struct_Blast_parameters {
    Int4   block_width;
    Uint1   perform_culling;
    Int4   strand_option;
+   CharPtr   phi_pattern;
 } BlastParameters, PNTR BlastParametersPtr;
 
 
@@ -180,6 +182,29 @@ static Cutoff_cutoffPtr LIBCALL Cutoff_cutoffAsnRead PROTO (( AsnIoPtr, AsnTypeP
 static Boolean LIBCALL Cutoff_cutoffAsnWrite PROTO (( Cutoff_cutoffPtr , AsnIoPtr, AsnTypePtr));
 
 #endif /* NLM_GENERATED_CODE_PROTO */
+
+
+
+/**************************************************
+*
+*    BlastMatrix
+*
+**************************************************/
+typedef struct struct_Blast_matrix {
+   Uint1   is_protein;
+   CharPtr   name;
+   ValNodePtr   comments;
+   Int4   row_length;
+   Int4   column_length;
+   ValNodePtr   scores;
+   FloatHi   karlinK;
+} BlastMatrix, PNTR BlastMatrixPtr;
+
+
+NLM_EXTERN BlastMatrixPtr LIBCALL BlastMatrixFree PROTO ((BlastMatrixPtr ));
+NLM_EXTERN BlastMatrixPtr LIBCALL BlastMatrixNew PROTO (( void ));
+NLM_EXTERN BlastMatrixPtr LIBCALL BlastMatrixAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL BlastMatrixAsnWrite PROTO (( BlastMatrixPtr , AsnIoPtr, AsnTypePtr));
 
 
 
@@ -255,6 +280,31 @@ NLM_EXTERN Boolean LIBCALL BlastKABlkAsnWrite PROTO (( BlastKABlkPtr , AsnIoPtr,
 
 /**************************************************
 *
+*    BlastError
+*
+**************************************************/
+typedef struct struct_Blast_error {
+   Uint2   level;
+   /* following #defines are for enumerated type, not used by object loaders */
+#define Blast_error_level_none 0
+#define Blast_error_level_info 1
+#define Blast_error_level_warn 2
+#define Blast_error_level_error 3
+#define Blast_error_level_fatal 4
+
+   CharPtr   msg;
+} BlastError, PNTR BlastErrorPtr;
+
+
+NLM_EXTERN BlastErrorPtr LIBCALL BlastErrorFree PROTO ((BlastErrorPtr ));
+NLM_EXTERN BlastErrorPtr LIBCALL BlastErrorNew PROTO (( void ));
+NLM_EXTERN BlastErrorPtr LIBCALL BlastErrorAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL BlastErrorAsnWrite PROTO (( BlastErrorPtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
 *    BlastDbinfoGet
 *
 **************************************************/
@@ -292,29 +342,6 @@ NLM_EXTERN BlastSeqIdPtr LIBCALL BlastSeqIdFree PROTO ((BlastSeqIdPtr ));
 NLM_EXTERN BlastSeqIdPtr LIBCALL BlastSeqIdNew PROTO (( void ));
 NLM_EXTERN BlastSeqIdPtr LIBCALL BlastSeqIdAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
 NLM_EXTERN Boolean LIBCALL BlastSeqIdAsnWrite PROTO (( BlastSeqIdPtr , AsnIoPtr, AsnTypePtr));
-
-
-
-/**************************************************
-*
-*    BlastMatrix
-*
-**************************************************/
-typedef struct struct_Blast_matrix {
-   Uint1   is_protein;
-   CharPtr   name;
-   ValNodePtr   comments;
-   Int4   row_length;
-   Int4   column_length;
-   ValNodePtr   scores;
-   FloatHi   karlinK;
-} BlastMatrix, PNTR BlastMatrixPtr;
-
-
-NLM_EXTERN BlastMatrixPtr LIBCALL BlastMatrixFree PROTO ((BlastMatrixPtr ));
-NLM_EXTERN BlastMatrixPtr LIBCALL BlastMatrixNew PROTO (( void ));
-NLM_EXTERN BlastMatrixPtr LIBCALL BlastMatrixAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-NLM_EXTERN Boolean LIBCALL BlastMatrixAsnWrite PROTO (( BlastMatrixPtr , AsnIoPtr, AsnTypePtr));
 
 
 
@@ -391,26 +418,19 @@ NLM_EXTERN Boolean LIBCALL BlastVersionAsnWrite PROTO (( BlastVersionPtr , AsnIo
 
 /**************************************************
 *
-*    BlastError
+*    BlastPhialign
 *
 **************************************************/
-typedef struct struct_Blast_error {
-   Uint2   level;
-   /* following #defines are for enumerated type, not used by object loaders */
-#define Blast_error_level_none 0
-#define Blast_error_level_info 1
-#define Blast_error_level_warn 2
-#define Blast_error_level_error 3
-#define Blast_error_level_fatal 4
-
-   CharPtr   msg;
-} BlastError, PNTR BlastErrorPtr;
+typedef struct struct_Blast_phialign {
+   Int4   numaligns;
+   ValNodePtr   seqloc;
+} BlastPhialign, PNTR BlastPhialignPtr;
 
 
-NLM_EXTERN BlastErrorPtr LIBCALL BlastErrorFree PROTO ((BlastErrorPtr ));
-NLM_EXTERN BlastErrorPtr LIBCALL BlastErrorNew PROTO (( void ));
-NLM_EXTERN BlastErrorPtr LIBCALL BlastErrorAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-NLM_EXTERN Boolean LIBCALL BlastErrorAsnWrite PROTO (( BlastErrorPtr , AsnIoPtr, AsnTypePtr));
+NLM_EXTERN BlastPhialignPtr LIBCALL BlastPhialignFree PROTO ((BlastPhialignPtr ));
+NLM_EXTERN BlastPhialignPtr LIBCALL BlastPhialignNew PROTO (( void ));
+NLM_EXTERN BlastPhialignPtr LIBCALL BlastPhialignAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL BlastPhialignAsnWrite PROTO (( BlastPhialignPtr , AsnIoPtr, AsnTypePtr));
 
 #ifdef __cplusplus
 /* { */ }

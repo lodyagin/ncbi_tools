@@ -37,6 +37,10 @@
 #define NLM_EXTERN extern
 #endif
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 
 /* The following bits are used to determine the regexp syntax we
    recognize.  The set/not-set meanings are chosen so that Emacs syntax
@@ -490,6 +494,10 @@ NLM_EXTERN size_t regerror
              size_t errbuf_size));
 NLM_EXTERN void regfree _RE_ARGS ((regex_t *preg));
 
+
+#ifdef __cplusplus
+}
+#endif
 
 #undef NLM_EXTERN
 #ifdef NLM_EXPORT

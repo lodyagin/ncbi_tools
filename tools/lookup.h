@@ -39,7 +39,7 @@ Contents: defines and prototype used by lookup.c.
 *
 * Version Creation Date:   10/26/95
 *
-* $Revision: 6.4 $
+* $Revision: 6.6 $
 *
 * File Description: 
 *       Functions that format traditional BLAST output.
@@ -54,6 +54,12 @@ Contents: defines and prototype used by lookup.c.
 *
 * RCS Modification History:
 * $Log: lookup.h,v $
+* Revision 6.6  1999/09/16 16:56:39  madden
+* Changes to lookup_new for long words
+*
+* Revision 6.5  1999/09/16 14:16:27  madden
+* lookup_find_init returns Uint1Ptr instead of CharPtr
+*
 * Revision 6.4  1998/09/22 16:27:48  madden
 * Added function lookup_position_aux_destruct
 *
@@ -144,6 +150,7 @@ typedef struct lookup_position {
 typedef struct lookup_table {
 	Int4	char_size,		/* number of bits per residue/bp */
 		wordsize,		/* size of "word" */
+		reduced_wordsize,	/* size of word */
 		array_size,		/* size of table's array. */
 		mask;		/* Used to mask off top set of bits. */
 	LookupPositionPtr PNTR position;	/* positions of the hits. */
@@ -167,7 +174,7 @@ typedef struct _blast_wordfinder {
         } BLAST_WordFinder, PNTR BLAST_WordFinderPtr;
 
 
-LookupTablePtr LIBCALL lookup_new PROTO((Int2 alphabet_size, Int2 wordsize));
+LookupTablePtr LIBCALL lookup_new PROTO((Int2 alphabet_size, Int2 wordsize, Int2 reduced_wordsize));
 
 LookupTablePtr LIBCALL lookup_destruct PROTO((LookupTablePtr lookup));
 
@@ -175,7 +182,7 @@ void LIBCALL lookup_add PROTO((LookupTablePtr lookup, CharPtr string, Int4 posit
 
 void LIBCALL lookup_add_index PROTO((LookupTablePtr lookup, Int4 lookup_index, Int4 position, Int1 context));
 
-CharPtr LIBCALL lookup_find_init PROTO((LookupTablePtr lookup, Int4 PNTR lookup_index, CharPtr string));
+Uint1Ptr LIBCALL lookup_find_init PROTO((LookupTablePtr lookup, Int4 PNTR lookup_index, Uint1Ptr string));
 
 Boolean lookup_position_aux_destruct PROTO((LookupTablePtr lookup));
 

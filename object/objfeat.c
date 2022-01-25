@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.8 $
+* $Revision: 6.10 $
 *
 * File Description:  Object manager for module NCBI-SeqFeat
 *
@@ -1791,7 +1791,7 @@ static CharPtr genCodeTblMemStr = "Genetic-code-table ::= {\n" \
 "sncbieaa \"--------------------------------MMMM---------------M------------\" } ,\n" \
 "{ name \"Yeast Mitochondrial\" , name \"SGC2\" , id 3 ,\n" \
 "ncbieaa  \"FFLLSSSSYY**CCWWTTTTPPPPHHQQRRRRIIMMTTTTNNKKSSRRVVVVAAAADDEEGGGG\",\n" \
-"sncbieaa \"-----------------------------------M----------------------------\" } ,\n" \
+"sncbieaa \"----------------------------------MM----------------------------\" } ,\n" \
 "{ name \"Mold Mitochondrial; Protozoan Mitochondrial; Coelenterate\n" \
 "Mitochondrial; Mycoplasma; Spiroplasma\" ,\n" \
 "name \"SGC3\" , id 4 ,\n" \
@@ -1824,7 +1824,13 @@ static CharPtr genCodeTblMemStr = "Genetic-code-table ::= {\n" \
 "sncbieaa \"-----------------------------------M----------------------------\" } ,\n" \
 "{ name \"Blepharisma Macronuclear\" , id 15 ,\n" \
 "ncbieaa  \"FFLLSSSSYY*QCC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG\",\n" \
-"sncbieaa \"-----------------------------------M----------------------------\" } };\n";
+"sncbieaa \"-----------------------------------M----------------------------\" } ,\n" \
+"{ name \"Chlorophycean Mitochondrial\" , id 16 ,\n" \
+"ncbieaa  \"FFLLSSSSYY*LCC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG\",\n" \
+"sncbieaa \"-----------------------------------M----------------------------\" } ,\n" \
+"{ name \"Trematode Mitochondrial\" , id 23 ,\n" \
+"ncbieaa  \"FFLLSSSSYY**CCWWLLLLPPPPHHQQRRRRIIMMTTTTNNNKSSSSVVVVAAAADDEEGGGG\",\n" \
+"sncbieaa \"-----------------------------------M---------------M------------\" } };\n";
 #endif
 
 /*****************************************************************************

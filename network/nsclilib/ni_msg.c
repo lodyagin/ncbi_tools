@@ -29,7 +29,7 @@
 *
 * Version Creation Date:        1/1/92
 *
-* $Revision: 6.0 $
+* $Revision: 6.1 $
 *
 * File Description: 
 *   This file consists mostly of functions for creating, destroying, reading,
@@ -138,6 +138,9 @@
 *
 * RCS Modification History:
 * $Log: ni_msg.c,v $
+* Revision 6.1  1999/07/30 19:11:09  vakatov
+* Use "strerror()" instead of "sys_errlist[]"
+*
 * Revision 6.0  1997/08/25 18:39:01  madden
 * Revision changed to 6.0
 *
@@ -3387,13 +3390,13 @@ NLM_EXTERN MHandPtr MsgMakeHandle(Boolean createSocket)
 #ifdef NETP_INET_NEWT
             SOCK_ERRNO = ABS(mh->sok);
 #endif
-            StringCpy(ni_errtext, sys_errlist[SOCK_INDEX_ERRNO]);
+            StringCpy(ni_errtext, strerror(SOCK_INDEX_ERRNO));
             MemFree(mh);
             return NULL;
         }
         LOG_SOCKET(mh->sok, TRUE);
         if (NI_SETNONBLOCKING(mh->sok) == -1) {
-            StringCpy(ni_errtext, sys_errlist[SOCK_INDEX_ERRNO]);
+            StringCpy(ni_errtext, strerror(SOCK_INDEX_ERRNO));
             MemFree(mh);
             return NULL;
         }

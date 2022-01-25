@@ -1,12 +1,12 @@
 #
-# $Id: solarisintel.ncbi.mk,v 1.3 1999/04/21 13:21:43 beloslyu Exp $
+# $Id: solarisintel.ncbi.mk,v 1.5 1999/08/12 18:32:41 beloslyu Exp $
 #
 NCBI_DEFAULT_LCL = sin
 NCBI_MAKE_SHELL = /usr/bin/sh
 NCBI_CC = cc -xildoff
 NCBI_CFLAGS1 = -c -Xa
-NCBI_LDFLAGS1 = -Xa
-NCBI_OPTFLAG = -O -fast
+NCBI_LDFLAGS1 = -fast
+NCBI_OPTFLAG = -fast
 # following 2 lines are temporary; J. Epstein, 8/11/97
 NCBI_INCDIR = /netopt/ncbi_tools/ver0.0/ncbi/include
 NCBI_LIBDIR = /netopt/ncbi_tools/ver0.0/ncbi/lib
@@ -63,3 +63,4 @@ NCBI_SYBLIBS_OS_r = -L$(NCBI_SYBASE)/lib  -R$(NCBI_SYBASE)/lib -lsrv_r -lblk_r -
 NCBI_LAGOTHERLIBS = $(NCBI_OTHERLIBS)
 NCBI_LAGVIBFLAG = -I/usr/openwin/include -I/usr/dt/include -L/usr/openwin/lib -L/usr/dt/lib -DWIN_MOTIF
 NCBI_DBUGEXTRA = -xsb
+NETENTREZVERSION = 2.02c2ASN1SPEC6 

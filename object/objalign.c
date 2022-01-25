@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.6 $
+* $Revision: 6.7 $
 *
 * File Description:  Object manager for module NCBI-Seqalign
 *
@@ -291,6 +291,29 @@ NLM_EXTERN Boolean LIBCALL SeqAlignAsnLoad (void)
 *   SeqAlign Routines
 *
 *****************************************************************************/
+NLM_EXTERN SeqAlignIndexPtr LIBCALL SeqAlignIndexFree (SeqAlignIndexPtr saip)
+{
+	Boolean retval;
+	VoidPtr ptr;
+	SeqAlignIndexPtr tmp = NULL;
+
+	if (saip == NULL)
+		return saip;
+
+	if (saip->freefunc != NULL)
+	{
+		ptr = (VoidPtr)(saip);
+		retval = (*(saip->freefunc))(ptr);
+		if (! retval)
+			ErrPostEx(SEV_ERROR,0,0,"SeqAlignFreeFunc: saip->freefunc returned FALSE");
+		return tmp;
+	}
+
+	ErrPostEx(SEV_ERROR,0,0,"SeqAlignIndexFree: saip lacking a freefunc");
+
+	return tmp;
+}
+
 /*****************************************************************************
 *
 *   SeqAlignNew()
@@ -314,6 +337,7 @@ NLM_EXTERN SeqAlignPtr LIBCALL SeqAlignFree (SeqAlignPtr sap)
     if (sap == NULL)
         return (SeqAlignPtr)NULL;
 
+    sap->saip = SeqAlignIndexFree (sap->saip);  /* free index elements */
     
     switch (sap->segtype)
     {

@@ -31,6 +31,9 @@
  * Version Creation Date: 6/16/98
  *
  * $Log: vastchkid.c,v $
+ * Revision 6.6  1999/07/21 22:33:43  ywang
+ * assign local id to seq-annot
+ *
  * Revision 6.5  1998/12/22 18:01:52  addess
  * changes relevant to reading new type of annot-set data
  *
@@ -272,7 +275,13 @@ Boolean ReplaceBioseqId(SeqIdPtr sip, Char *PDBName, Char Chain, BioseqPtr bsp)
 {
   PDBSeqIdPtr pdb_seq_id;
   Char ThisChain;
-  
+
+  SeqAnnotPtr sap = NULL;
+  SeqFeatPtr sfp = NULL;
+  SeqLocPtr slp = NULL;
+  SeqIntPtr  sintp = NULL;
+  SeqIdPtr  sip_temp = NULL;
+ 
   pdb_seq_id = GetPdbSeqId(bsp->id);
           /* may need to be modified according to how bioseq id is */
           /* in bioseq fetched from Entrez, PDBSeqId exists, but not sure */
@@ -282,6 +291,27 @@ Boolean ReplaceBioseqId(SeqIdPtr sip, Char *PDBName, Char Chain, BioseqPtr bsp)
   
   if(ThisChain == Chain) {
      bsp->id = sip;
+
+     sap = bsp->annot;
+     if(sap == NULL) return TRUE;
+     else if(sap->type == 1){
+        sfp = sap->data;
+        while(sfp){
+           slp = sfp->location;
+           if(slp != NULL ) sintp = slp->data.ptrvalue;
+           else return TRUE;
+           if(sintp) {
+              sip_temp = sintp->id;
+              sintp->id = sip;
+    /*        sip_temp = SeqIdFree(sip_temp); */
+              /* cause problem when slave is a duplication of master */
+              /* might be related to the way how the sequence is made */
+              /* or fetched */
+           }
+           sfp = sfp->next;
+        }
+     }     
+
      return TRUE;
   }
 

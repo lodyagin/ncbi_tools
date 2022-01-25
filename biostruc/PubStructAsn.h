@@ -1,4 +1,4 @@
-/*   $Id: PubStructAsn.h,v 6.4 1998/05/14 16:11:14 kimelman Exp $
+/*   $Id: PubStructAsn.h,v 6.6 1999/08/02 19:50:51 kimelman Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -32,6 +32,12 @@
  * Modifications:  
  * --------------------------------------------------------------------------
  * $Log: PubStructAsn.h,v $
+ * Revision 6.6  1999/08/02 19:50:51  kimelman
+ * keep connection alive foor mmdbsrv & vastsrv sessions
+ *
+ * Revision 6.5  1999/05/11 23:37:15  kimelman
+ * throw away 'extern info' -- it's mmdbsrv specifics
+ *
  * Revision 6.4  1998/05/14 16:11:14  kimelman
  * Compression stuff added in debug mode.
  * few bugs fixed, related to OpenServer/SQL Server switching
@@ -60,7 +66,10 @@
 #include <ncbi.h>
 #include <asn.h>
 
-extern WWWInfoPtr 		info;
+typedef struct pubstruct_t *ps_handle_t ;
+
+NLM_EXTERN ps_handle_t PubStruct_connect   (char *server);
+NLM_EXTERN void        PubStruct_disconnect(ps_handle_t handle);
 
 /**
  * PubStruct_lookup transforms mmdb and state into accession number (return value)
@@ -71,13 +80,15 @@ extern WWWInfoPtr 		info;
  * state < 0 : prohibited value.
  *
  */
-NLM_EXTERN Int4     LIBCALL PubStruct_lookup(char *server,Int4 mmdb,int state);
+NLM_EXTERN Int4     LIBCALL PubStruct_lookup(char       *server,Int4 mmdb,int state);
+NLM_EXTERN Int4     LIBCALL PubStruct_lookup1(ps_handle_t server,Int4 mmdb,int state);
 
 /** (production)
  * PubStruct_pdb2mmdb makes a lookup from pdb to current mmdb
  */
 
 NLM_EXTERN Int4     LIBCALL PubStruct_pdb2mmdb(char *server,CharPtr pcPdb);
+NLM_EXTERN Int4     LIBCALL PubStruct_pdb2mmdb1(ps_handle_t server,CharPtr pcPdb);
 
 /**
  * PubStruct_newasn opens AsnIo stream to created new entry in the database. When
@@ -92,13 +103,15 @@ NLM_EXTERN AsnIoPtr LIBCALL PubStruct_newasn     (char *server,int state,
 /**
  * PubStruct_readasn opens AsnIo stream for reading asn found by accession number
  */
-NLM_EXTERN AsnIoPtr LIBCALL PubStruct_readasn    (char *server,Int4 acc);
+NLM_EXTERN AsnIoPtr LIBCALL PubStruct_readasn    (char       *server,Int4 acc);
+NLM_EXTERN AsnIoPtr LIBCALL PubStruct_readasn1   (ps_handle_t server,Int4 acc);
 
 /** (production)
  * PubStruct_viewasn opens AsnIo stream for reading indexed structure found by mmdbID
  * 
  */
-NLM_EXTERN AsnIoPtr LIBCALL PubStruct_viewasn    (char *server,Int4 mmdbID);
+NLM_EXTERN AsnIoPtr LIBCALL PubStruct_viewasn    (char       *server,Int4 mmdbID);
+NLM_EXTERN AsnIoPtr LIBCALL PubStruct_viewasn1   (ps_handle_t server,Int4 mmdbID);
 
 /**
  * PubStruct_updateasn opens AsnIo stream for updating existing asn. asn identified

@@ -1,4 +1,4 @@
---$Revision: 1.8 $
+--$Revision: 1.12 $
 --********************************************************************
 --
 --  Network BLAST 
@@ -14,8 +14,8 @@ NCBI-Blast DEFINITIONS ::=
 BEGIN
 
 EXPORTS	Blast-search, Blast-request,
-	Blast-response, Blast-parameters,
-	Blast-dbinfo, Blast-mask, Blast-KABlk;
+	Blast-response, Blast-parameters, Blast-matrix,
+	Blast-dbinfo, Blast-mask, Blast-KABlk, Blast-error;
 
 	
 IMPORTS Bioseq FROM NCBI-Sequence
@@ -151,7 +151,8 @@ Blast-parameters ::= SEQUENCE {
 	hsp-range-max	INTEGER OPTIONAL,	-- range for keeping HSPs in culling
 	block-width	INTEGER OPTIONAL,	-- width of block to be used in culling
 	perform-culling	BOOLEAN OPTIONAL,	-- perform culling?
-	strand-option	INTEGER OPTIONAL	-- indicates strand to use.
+	strand-option	INTEGER OPTIONAL,	-- indicates strand to use.
+        phi-pattern     VisibleString OPTIONAL  -- indicates, that this is phi-blast search and supplies pattern
 }
 
 				-- series of these when the request is queued
@@ -207,7 +208,10 @@ Blast-error ::= SEQUENCE {
     },
     msg VisibleString OPTIONAL
 }
-
+Blast-phialign ::= SEQUENCE {
+        numaligns  INTEGER,             -- number of aligns
+	seqloc	   SEQUENCE OF Seq-loc  -- region locations
+}
 
 Blast-response ::= CHOICE {
 	init Blast-version ,		-- acknowledges init
@@ -245,7 +249,8 @@ Blast-response ::= CHOICE {
 	start	Blast-Progress ,	-- one emitted at start of search
 	progress	Blast-Progress ,-- regular messages emitted during search
 	done	Blast-Progress ,	-- one emitted at end of search
-	fini NULL               -- acknowledge fini
+	fini NULL,               -- acknowledge fini
+        phialign Blast-phialign -- The result of PHI-Blast 
 }
 
 END

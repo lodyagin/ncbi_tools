@@ -15,7 +15,7 @@ Building the NCBI toolkit
 
 1) Take the sources of NCBI tookit at
 	ftp://ncbi.nlm.nih.gov/toolbox/ncbi_tools/ncbi.tar.Z
-Extract that file to some empty directory, for example "toolkit" :
+Extract this file to some empty directory, for example "toolkit" :
 	mkdir toolkit
 	cd toolkit
 	#assume that the file ncbi.tar.Z is already here
@@ -72,6 +72,898 @@ Solaris:
 	NCBI_DEFAULT_LCL = sol
 	NCBI_CC = gcc
 
+5) There is some useful information about NCBI toolkit located at:
+	ftp://ftp.ncbi.nlm.nih.gov/toolbox/FAQ.html
+	
+6) Here is sample scenario to build NCBI toolkit on SGI IRIX 6.5
+I'm using bash as login shell
+
+
+$ exec /bin/bash
+xena|~|427> uname -a
+IRIX64 xena 6.5 11051732 IP25
+
+First I'm creating an empty directory with name 'toolkit'
+
+xena|~|428> mkdir toolkit
+xena|~|429> cd toolkit
+xena|~/toolkit|430> ls -ltra
+total 8
+drwxr-xr-x    2 dima dima       9 Apr  7 14:48 .
+drwxr-xr-x   13 dima dima    4096 Apr  7 14:48 ..
+
+Now I need to download the latest version of NCBI toolkit:
+
+xena|~/toolkit|431> ftp ftp.ncbi.nlm.nih.gov
+Connected to ncbi.nlm.nih.gov.
+220-Welcome to the NCBI FTP Server (ncbi.nlm.nih.gov)
+220-
+220 ncbi FTP server (Version wu-2.4.2-academ[BETA-18-VR13](1) Thu Feb 18 10:06:37 EST 1999) ready.
+Name (ftp.ncbi.nlm.nih.gov:dima): ftp
+331 Guest login ok, send your complete e-mail address as password.
+Password: -dima@
+230 Guest login ok, access restrictions apply.
+Remote system type is UNIX.
+Using binary mode to transfer files.
+ftp> cd toolbox/ncbi_tools
+250 CWD command successful.
+ftp> ls -ltraL
+200 PORT command successful.
+150 Opening ASCII mode data connection for /bin/ls.
+total 71584
+drwxr-sr-x   2 1042     506          512 Sep  9  1997 newdoc
+drwxr-sr-x   2 1042     506          512 Sep  9  1997 docs
+drwxr-sr-x   2 3755     506          512 Oct  1  1998 19981002
+drwxrws---   2 4039     506          512 Oct  2  1998 LastToolKit
+drwxr-sr-x   2 3755     506          512 Jan 26 15:09 19990126
+-rw-r--r--   2 3755     506       112063 Jan 27 15:07 asnload.tar.Z
+-rw-r--r--   1 3755     506      10281741 May 10 16:57 ncbi.hqx
+-rw-r--r--   1 3755     511         2530 May 10 19:02 readme.unx
+-rw-r--r--   1 3755     506      7267314 May 10 19:23 ncbiz.exe
+-rw-r--r--   1 3755     506      6984369 May 10 20:24 ncbi.tar.gz
+-rw-r--r--   1 3755     506      11579956 May 10 20:26 ncbi.tar.Z
+-rw-r--r--   1 3755     511       215983 May 10 20:33 data.tar.Z
+drwxr-sr-x   2 3755     506          512 May 10 20:33 CURRENT
+drwxr-sr-x   2 3755     506          512 May 10 20:33 19990510
+-rw-rw-r--   1 3755     511        52019 May 13 18:32 README
+-rw-rw-r--   1 3755     511        59692 May 13 21:01 README.htm
+drwxrwsr-x   9 1042     506          512 May 18 13:39 ..
+drwxrwsr-x   7 1042     506          512 Jun  2 14:21 .
+-rw-rw-r--   1 3755     506         5795 Jun 22 22:37 FAQ.html
+226 Transfer complete.
+ftp> bin
+200 Type set to I.
+ftp> get ncbi.tar.Z
+local: ncbi.tar.Z remote: ncbi.tar.Z
+200 PORT command successful.
+150 Opening BINARY mode data connection for ncbi.tar.Z (11579956 bytes).
+226 Transfer complete.
+11579956 bytes received in 2.25 seconds (5037.02 Kbytes/s)
+ftp> bye
+221 Goodbye.
+
+OK, here it is.
+
+xena|~/toolkit|432> ls -l
+total 22624
+-rw-r--r--    1 dima dima 11579956 Jul 14 14:18 ncbi.tar.Z
+
+Now I'm extracting the archive to the current directory:
+
+xena|~/toolkit|433> compress -d < ncbi.tar.Z |tar xf -
+
+After that step I'll have:
+xena|~/toolkit|507> ls -l
+total 22632
+drwxr-xr-x   31 dima dima     4096 Jul 14 14:20 ncbi
+-rw-r--r--    1 dima dima 11579956 Jul 14 14:18 ncbi.tar.Z
+
+Now I'm ready to start the build process.
+Starting build process:
+
+xena|~/toolkit|439> ./ncbi/make/makedis.csh - 2>&1 | tee out.makedis.csh
+platform is sgi
+make SHELL="/bin/sh" LCL="sgi" RAN="ls -l" CC="cc -mips1 -32 " VIBLIBS="-lXm -lXmu -lXt -lX11 -lgen" LIB30=libncbicn3d.a LIB28=libvibgif.a LIB4=libvibrant.a LIB20=libncbidesk.a VIBFLAG="-DWIN_MOTIF" all
+         chmod -R ug+rw,o+r .
+        cp -p ../corelib/tsprintf.h ../include
+        cp -p ../corelib/gifgen.h ../include
+        cp -p ../corelib/ncbi*.h ../include
+        cp -p ../corelib/tree*.h ../include
+        cp -p ../corelib/regex.h ../include
+        cp -p ../corelib/matrix.h ../include
+        cp -p ../corelib/ncbilcl.sgi ../include/ncbilcl.h
+        cp -p ../corelib/*.c .
+        cp -p ../corelib/core*.h .
+        cp -p ../asnlib/*.h .
+        mv asn.h ../include
+        cp -p ../asnlib/*.c .
+        cp -p ../connect/*.c .
+        cp -p ../connect/*.h ../include
+        cp -p ../object/*.c .
+        cp -p ../object/*.h ../include
+        cp -p ../asnstat/*.h ../include
+        cp -p ../api/*.h ../include
+        cp -p ../api/*.c .
+        cp -p ../cdromlib/*.h ../include
+        cp -p ../cdromlib/*.c .
+        cp -p ../vibrant/*.h ../include
+        cp -p ../vibrant/*.c .
+        cp -p ../desktop/*.h ../include
+        cp -p ../desktop/*.c .
+        cp -p ../biostruc/*.h ../include
+        cp -p ../biostruc/*.c .
+        cp -p ../tools/*.h ../include
+        cp -p ../tools/*.c .
+        cp -p ../cn3d/*.h ../include
+        cp -p ../cn3d/*.c .
+        cp -p ../gif/*.c .
+        cp -p ../gif/*.h ../include
+         cp -p ../internal/compr/*.c .
+../internal/compr/*.c - No such file or directory
+*** Error code 2 (bu21) (ignored)
+         cp -p ../internal/compr/*.h ../include
+../internal/compr/*.h - No such file or directory
+*** Error code 2 (bu21) (ignored)
+         cp -p ../internal/libindx/*.c .
+../internal/libindx/*.c - No such file or directory
+*** Error code 2 (bu21) (ignored)
+         cp -p ../internal/libindx/*.h ../include
+../internal/libindx/*.h - No such file or directory
+*** Error code 2 (bu21) (ignored)
+         cp -p ../internal/libpars/*.c .
+../internal/libpars/*.c - No such file or directory
+*** Error code 2 (bu21) (ignored)
+         cp -p ../internal/libpars/*.h ../include
+../internal/libpars/*.h - No such file or directory
+*** Error code 2 (bu21) (ignored)
+        cp -p ncbidraw.c ncbidrwg.c
+        cp -p ncbithr.c ncbithrs.c
+        cp -p ../network/id1arch/*.h ../include
+         chmod -R ug+rw,o+r .
+        echo Waiting...go
+Waiting...go
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF ncbithr.c
+        cp -p ncbithr.o ../lib
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF ncbibs.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF wwwutils.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF ncbierr.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF ncbienv.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF ncbifile.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF ncbimain.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF ncbiprop.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF ncbimath.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF ncbimem.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF ncbimisc.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF ncbimsg.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF ncbistr.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF ncbisgml.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF ncbitime.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF ncbilang.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF asnbufo.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF asndebin.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF asnenbin.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF asngen.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF asnio.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF asnlex.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF asnlext.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF asnout.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF asnprint.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF asntypes.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF asngenob.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF gifgen.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF togif.c
+        cc -mips1 -32  -DNCBI_NOTHREADS_AVAIL -c -O -I../include -DWIN_MOTIF ncbithrs.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF -DHAVE_STRING_H -DREGEX_MALLOC regex.c
+uopt: Warning: regex_compile: this procedure not optimized because it
+      exceeds size threshold; to optimize this procedure, use -Olimit option
+      with value >= 1383.
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF tsprintf.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF ncbiargs.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF tree.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF ncbisock.c
+cfe: Warning 581: /usr/include/sys/endian.h:46: Macro BYTE_ORDER redefined.
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF matrix.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF ncbibuf.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF connectn.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF connutil.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF con_url.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF con_sock.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF urlquery.c
+         rm -f libncbi.a
+        ar cru libncbi.a ncbibs.o wwwutils.o ncbierr.o ncbienv.o ncbifile.o  ncbimain.o ncbiprop.o ncbimath.o ncbimem.o ncbimisc.o  ncbimsg.o ncbistr.o ncbisgml.o ncbitime.o ncbilang.o  asnbufo.o asndebin.o asnenbin.o asngen.o asnio.o asnlex.o  asnlext.o asnout.o asnprint.o asntypes.o asngenob.o  gifgen.o togif.o ncbithrs.o regex.o tsprintf.o ncbiargs.o tree.o  ncbisock.o matrix.o ncbibuf.o connectn.o connutil.o con_url.o con_sock.o  urlquery.o
+        cp -p libncbi.a ../lib
+        ls -l ../lib/libncbi.a
+-rw-r--r--    1 dima dima 745972 Jul 14 14:22 ../lib/libncbi.a
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF objacces.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF objalign.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF objall.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF objbibli.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF objfeat.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF objgen.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF objloc.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF objmedli.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF objpub.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF objres.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF objseq.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF objblock.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF objcode.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF objsset.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF objsub.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF objprt.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF objfdef.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF objmime.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF objpubme.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF objmdrs.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF objproj.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF seqport.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF sequtil.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF prtutil.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF simple.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF tofasta.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF tofile.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF tomedlin.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF valid.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF sqnutil1.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF sqnutil2.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF subutil.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF edutil.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF asn2ff1.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF asn2ff2.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF asn2ff3.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF asn2ff4.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF asn2ff5.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF asn2ff6.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF ftusrstr.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF gbfeat.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF gbftglob.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF gbparint.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF utilpars.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF utilpub.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF ffprint.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF wprint.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF satutil.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF seqmgr.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF objmgr.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF gather.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF accmmdbs.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF acccn3ds.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF lsqfetch.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF findrepl.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF apparam.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF codon.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF jzcoll.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF jzmisc.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF maputil.c
+cfe: Warning 728: maputil.c, line 314: Long double not supported; double assumed.
+                   sprintf(label, "%2.2Lf", (long double) m_val);
+                -----------------------------^
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF mconsist.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF txalign.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF salpacc.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF udvseq.c
+         rm -f libncbiobj.a
+        ar cru libncbiobj.a objacces.o objalign.o objall.o objbibli.o objfeat.o  objgen.o objloc.o objmedli.o objpub.o objres.o objseq.o  objblock.o objcode.o objsset.o objsub.o objprt.o objfdef.o  objmime.o objpubme.o objmdrs.o objproj.o  seqport.o sequtil.o prtutil.o simple.o tofasta.o  tofile.o tomedlin.o  valid.o sqnutil1.o sqnutil2.o subutil.o edutil.o asn2ff1.o asn2ff2.o  asn2ff3.o asn2ff4.o asn2ff5.o asn2ff6.o ftusrstr.o gbfeat.o gbftglob.o  gbparint.o utilpars.o utilpub.o ffprint.o wprint.o satutil.o  seqmgr.o objmgr.o gather.o accmmdbs.o acccn3ds.o lsqfetch.o findrepl.o  apparam.o codon.o jzcoll.o jzmisc.o maputil.o mconsist.o txalign.o  salpacc.o udvseq.o
+        cp -p libncbiobj.a ../lib
+        ls -l ../lib/libncbiobj.a
+-rw-r--r--    1 dima dima 3077780 Jul 14 14:24 ../lib/libncbiobj.a
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF cdentrez.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF cdromlib.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF cdnewlib.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF casn.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF cdconfig.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF objentr.c
+         rm -f libncbicdr.a
+        ar cru libncbicdr.a cdentrez.o cdromlib.o cdnewlib.o casn.o cdconfig.o objentr.o
+        cp -p libncbicdr.a ../lib
+        ls -l ../lib/libncbicdr.a
+-rw-r--r--    1 dima dima 249492 Jul 14 14:24 ../lib/libncbicdr.a
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF vibbutns.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF vibextra.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF vibfiles.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF vibforms.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF vibgroup.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF viblists.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF vibmenus.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF vibprmpt.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF vibsbars.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF vibslate.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF vibtexts.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF vibutils.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF vibwndws.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF ncbidraw.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF drawing.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF mapping.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF picture.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF viewer.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF document.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF table.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF palette.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF diagnost.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF image.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF pictur3d.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF prim3d1.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF prim3d2.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF prim3d3.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF prim3d4.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF prim3d5.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF viewer3d.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF vibmouse.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF netscape.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF imagelst.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF treeview.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF shim3d.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF odlbox.c
+         rm -f libvibrant.a
+        ar cru libvibrant.a vibbutns.o vibextra.o vibfiles.o vibforms.o  vibgroup.o viblists.o vibmenus.o vibprmpt.o  vibsbars.o vibslate.o vibtexts.o  vibutils.o vibwndws.o ncbidraw.o  drawing.o mapping.o picture.o viewer.o  document.o table.o palette.o diagnost.o image.o  pictur3d.o prim3d1.o prim3d2.o prim3d3.o  prim3d4.o prim3d5.o viewer3d.o vibmouse.o netscape.o  imagelst.o treeview.o shim3d.o odlbox.o
+        cp -p libvibrant.a ../lib
+        ls -l ../lib/libvibrant.a
+-rw-r--r--    1 dima dima 1381076 Jul 14 14:25 ../lib/libvibrant.a
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF accentr.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF accutils.c
+         rm -f libncbiacc.a
+        ar cru libncbiacc.a accentr.o accutils.o
+        cp -p libncbiacc.a ../lib
+        ls -l ../lib/libncbiacc.a
+-rw-r--r--    1 dima dima  76724 Jul 14 14:25 ../lib/libncbiacc.a
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF drawseq.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF dotmatrx.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF fea2seg.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF fstyle.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF smdlg1.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF smdlg2.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF smdlg3.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF smtools.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF styleman.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF stylemui.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF glbpic.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF layout.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF saldist.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF saled.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF salfiles.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF salpanel.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF salparam.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF salsa.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF seqfltr.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF seqgraph.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF seqgrphx.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF seqmtrx.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF seqpcc.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF seqanal.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF aacomp.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF seqscrl.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF vsm.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF vsmfile.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF vsmutil.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF udvgraph.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF udvopen.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF udvpanel.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF dlgutil1.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF dlgutil2.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF medview.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF bspview.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF gbfview.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF gphview.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF gphdraw.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF gxydraw.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF gtrdraw.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF biosrc.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF cdrgn.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF import.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF pubdesc.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF seqsub.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF mapgene.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF prtgene.c
+         rm -f libncbidesk.a
+        ar cru libncbidesk.a drawseq.o dotmatrx.o fea2seg.o fstyle.o smdlg1.o smdlg2.o smdlg3.o  smtools.o styleman.o stylemui.o glbpic.o  layout.o saldist.o saled.o salfiles.o salpanel.o  salparam.o salsa.o seqfltr.o seqgraph.o seqgrphx.o seqmtrx.o  seqpcc.o seqanal.o aacomp.o seqscrl.o  vsm.o vsmfile.o vsmutil.o udvgraph.o udvopen.o udvpanel.o  dlgutil1.o dlgutil2.o  medview.o bspview.o gbfview.o gphview.o  gphdraw.o gxydraw.o gtrdraw.o  biosrc.o cdrgn.o import.o pubdesc.o seqsub.o mapgene.o prtgene.o
+        cp -p libncbidesk.a ../lib
+        ls -l ../lib/libncbidesk.a
+-rw-r--r--    1 dima dima 2255412 Jul 14 14:27 ../lib/libncbidesk.a
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF corematx.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF dvncode.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF objmmdb1.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF objmmdb2.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF objmmdb3.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF mmdbapi.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF mmdbapi1.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF mmdbapi2.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF mmdbapi3.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF mmdbapi4.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF mmdbentr.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF vastsubs.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF prunebsc.c
+         rm -f libncbimmdb.a
+        ar cru libncbimmdb.a corematx.o dvncode.o objmmdb1.o objmmdb2.o objmmdb3.o  mmdbapi.o mmdbapi1.o mmdbapi2.o mmdbapi3.o mmdbapi4.o mmdbentr.o  vastsubs.o prunebsc.o
+        cp -p libncbimmdb.a ../lib
+        ls -l ../lib/libncbimmdb.a
+-rw-r--r--    1 dima dima 634852 Jul 14 14:27 ../lib/libncbimmdb.a
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF csim.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF db_slist.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF dust.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF falign.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF g_any.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF sim2.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF sim3.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF sim4.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF simutil.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF slist.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF sec.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF tfuns.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF toasn3.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF toporg.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF pobutil.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF stsutil.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF suggadj.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF suggest.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF suggslp.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF blast.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF blastutl.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF blastool.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF splutil.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF gapxdrop.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF bandalg0.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF bandalg1.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF bandalg2.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF bandalg3.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF bandalg4.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF bandalg5.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF bandalgn.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF blastkar.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF posit.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF lookup.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF readdb.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF ncbisam.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF ncbisort.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF salpedit.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF salpstat.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF salsap.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF salstruc.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF salutil.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF urkutil.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF urkpcc.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF urkptpf.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF urkepi.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF urkfltr.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF urkdust.c
+as1: Warning: urkdust.c, line 176: Division by zero
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF urksigu.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF seg.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF urkbias.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF urkcnsrt.c
+cfe: Warning 740: urkcnsrt.c, line 744: conflicting declarations for 'FindNuc'
+ static void FindNuc (SeqEntryPtr sep, Nlm_VoidPtr  data, Nlm_Int4  index,
+ ------------^
+cfe: Warning 653: urkcnsrt.c, line 744: (previous declaration of 'FindNuc' at line 920 in file '../include/sequtil.h')
+ static void FindNuc (SeqEntryPtr sep, Nlm_VoidPtr  data, Nlm_Int4  index,
+ ------------^
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF urktree.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF pseed3.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF pattern1.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF impatool.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF posit2.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF newkar.c
+         rm -f libncbitool.a
+        ar cru libncbitool.a csim.o db_slist.o dust.o falign.o g_any.o sim2.o sim3.o sim4.o  simutil.o slist.o sec.o tfuns.o toasn3.o toporg.o  pobutil.o stsutil.o suggadj.o suggest.o suggslp.o  blast.o blastutl.o blastool.o splutil.o gapxdrop.o bandalg0.o bandalg1.o  bandalg2.o bandalg3.o bandalg4.o bandalg5.o bandalgn.o blastkar.o  posit.o lookup.o readdb.o ncbisam.o ncbisort.o  salpedit.o salpstat.o salsap.o salstruc.o salutil.o  urkutil.o urkpcc.o urkptpf.o urkepi.o  urkfltr.o urkdust.o urksigu.o seg.o urkbias.o urkcnsrt.o urktree.o  pseed3.o pattern1.o impatool.o posit2.o newkar.o
+        cp -p libncbitool.a ../lib
+        ls -l ../lib/libncbitool.a
+-rw-r--r--    1 dima dima 2120932 Jul 14 14:29 ../lib/libncbitool.a
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF gdfontg.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF gdfontmb.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF gdfontt.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF pictogif.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF gdfontl.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF gdfonts.c
+        cc -mips1 -32  -DWIN_GIF -c -O -I../include -DWIN_MOTIF ncbidrwg.c
+         rm -f libvibgif.a
+        ar cru libvibgif.a gdfontg.o gdfontmb.o gdfontt.o pictogif.o  gdfontl.o gdfonts.o ncbidrwg.o ncbimain.o
+        cp -p libvibgif.a ../lib
+        ls -l ../lib/libvibgif.a
+-rw-r--r--    1 dima dima 137092 Jul 14 14:30 ../lib/libvibgif.a
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF algorend.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF cn3dmsel.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF cn3dopen.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF cn3dsave.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF cn3dslct.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF cn3dwipe.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF cn3dxprt.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF naybor.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF cn3dwin.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF cn3dentr.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF cn3dpane.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF cn3dmsg.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF cn3dmatn.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF cn3dmodl.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF cn3dshim.c
+         rm -f libncbicn3d.a
+        ar cru libncbicn3d.a algorend.o cn3dmsel.o cn3dopen.o cn3dsave.o cn3dslct.o  cn3dwipe.o cn3dxprt.o naybor.o cn3dwin.o cn3dentr.o  cn3dpane.o cn3dmsg.o cn3dmatn.o cn3dmodl.o cn3dshim.o
+        cp -p libncbicn3d.a ../lib
+        ls -l ../lib/libncbicn3d.a
+-rw-r--r--    1 dima dima 401956 Jul 14 14:30 ../lib/libncbicn3d.a
+        cc -mips1 -32  -o asntool -O -I../include -DWIN_MOTIF  -L../lib asntool.c asncode.c ../lib/libncbi.a -lm
+asntool.c:
+asncode.c:
+        cp -p asntool ../bin
+make -f makedemo.unx SHELL="/bin/sh" LCL="sgi" RAN="ls -l" CC="cc -mips1 -32 " VIBLIBS="-lXm -lXmu -lXt -lX11 -lgen" LIB4=-lvibrant VIBFLAG="-DWIN_MOTIF"
+        cp -p ../demo/*.* .
+        cp -p ../internal/*.* .
+../internal/*.* - No such file or directory
+*** Error code 2 (bu21) (ignored)
+        chmod -R ug+rw,o+r .
+        echo Waiting...go
+Waiting...go
+        cc -mips1 -32  -o testcore -O -I../include  -L../lib -DWIN_MOTIF testcore.c -lvibrant -lncbi -lXm -lXmu -lXt -lX11 -lgen -lm
+        cc -mips1 -32  -o makeset -O -I../include  -L../lib -DWIN_MOTIF makeset.c -lvibrant -lncbiobj -lncbi -lXm -lXmu -lXt -lX11 -lgen -lm
+ld: WARNING 84: ../lib/libncbiobj.a is not used for resolving any symbol.
+        cc -mips1 -32  -o getmesh -O -I../include  -L../lib -DWIN_MOTIF getmesh.c -lvibrant -lncbiobj -lncbi -lXm -lXmu -lXt -lX11 -lgen -lm
+ld: WARNING 84: ../lib/libncbiobj.a is not used for resolving any symbol.
+        cc -mips1 -32  -o indexpub -O -I../include  -L../lib -DWIN_MOTIF indexpub.c -lvibrant -lncbiobj -lncbi -lXm -lXmu -lXt -lX11 -lgen -lm
+ld: WARNING 84: ../lib/libncbiobj.a is not used for resolving any symbol.
+        cc -mips1 -32  -o getpub -O -I../include  -L../lib -DWIN_MOTIF getpub.c -lvibrant -lncbiobj -lncbi -lXm -lXmu -lXt -lX11 -lgen -lm
+ld: WARNING 84: ../lib/libncbiobj.a is not used for resolving any symbol.
+        cc -mips1 -32  -o testobj -O -I../include  -L../lib -DWIN_MOTIF testobj.c -lvibrant -lncbiobj -lncbi -lXm -lXmu -lXt -lX11 -lgen -lm
+        cc -mips1 -32  -o seqtest -O -I../include  -L../lib -DWIN_MOTIF seqtest.c -lvibrant -lncbiobj -lncbi -lXm -lXmu -lXt -lX11 -lgen -lm
+        cc -mips1 -32  -o dosimple -O -I../include  -L../lib -DWIN_MOTIF dosimple.c -lvibrant -lncbiobj -lncbi -lXm -lXmu -lXt -lX11 -lgen -lm
+        cc -mips1 -32  -o asn2ff -O -I../include  -L../lib -DWIN_MOTIF asn2ff.c -lvibrant -lncbiobj -lncbi -lXm -lXmu -lXt -lX11 -lgen -lm
+cfe: Warning 740: asn2ff.c, line 65: conflicting declarations for 'FindNuc'
+ static void FindNuc(SeqEntryPtr sep, Nlm_VoidPtr  data, Nlm_Int4  index, Nlm_Int2  indent)
+ ------------^
+cfe: Warning 653: asn2ff.c, line 65: (previous declaration of 'FindNuc' at line 920 in file '../include/sequtil.h')
+ static void FindNuc(SeqEntryPtr sep, Nlm_VoidPtr  data, Nlm_Int4  index, Nlm_Int2  indent)
+ ------------^
+        cc -mips1 -32  -o getseq -O -I../include  -L../lib -DWIN_MOTIF getseq.c -lvibrant -lncbiacc -lncbicdr -lncbiobj -lncbi -lXm -lXmu -lXt -lX11 -lgen -lm
+        cc -mips1 -32  -o getfeat -O -I../include  -L../lib -DWIN_MOTIF getfeat.c -lvibrant -lncbiacc -lncbicdr -lncbiobj -lncbi -lXm -lXmu -lXt -lX11 -lgen -lm
+        cc -mips1 -32  -o checksub -O -I../include  -L../lib -DWIN_MOTIF checksub.c -lvibrant -lncbiobj -lncbi -lXm -lXmu -lXt -lX11 -lgen -lm
+        cc -mips1 -32  -o asndhuff -O -I../include  -L../lib -DWIN_MOTIF asndhuff.c -lvibrant -lncbiacc -lncbicdr -lncbiobj -lncbi -lXm -lXmu -lXt -lX11 -lgen -lm
+ld: WARNING 84: ../lib/libncbiacc.a is not used for resolving any symbol.
+        cc -mips1 -32  -o entrcmd -O -I../include  -L../lib -DWIN_MOTIF entrcmd.c -lncbiacc -lncbicdr -lncbiobj -lncbi -lm
+cfe: Warning 740: entrcmd.c, line 249: conflicting declarations for 'FindNuc'
+ static void FindNuc(SeqEntryPtr sep, Nlm_VoidPtr  data, Nlm_Int4  index, Nlm_Int2  indent)
+ ------------^
+cfe: Warning 653: entrcmd.c, line 249: (previous declaration of 'FindNuc' at line 920 in file '../include/sequtil.h')
+ static void FindNuc(SeqEntryPtr sep, Nlm_VoidPtr  data, Nlm_Int4  index, Nlm_Int2  indent)
+ ------------^
+cfe: Warning 740: entrcmd.c, line 264: conflicting declarations for 'FindProt'
+ static void FindProt(SeqEntryPtr sep, Nlm_VoidPtr  data, Nlm_Int4  index, Nlm_Int2  indent)
+ ------------^
+cfe: Warning 653: entrcmd.c, line 264: (previous declaration of 'FindProt' at line 921 in file '../include/sequtil.h')
+ static void FindProt(SeqEntryPtr sep, Nlm_VoidPtr  data, Nlm_Int4  index, Nlm_Int2  indent)
+ ------------^
+        cc -mips1 -32  -o asn2fast -O -I../include  -L../lib -DWIN_MOTIF asn2fast.c -lvibrant -lncbiobj -lncbi -lXm -lXmu -lXt -lX11 -lgen -lm
+        cc -mips1 -32  -o errhdr -O -I../include  -L../lib -DWIN_MOTIF errhdr.c -lvibrant -lncbiobj -lncbi -lXm -lXmu -lXt -lX11 -lgen -lm
+ld: WARNING 84: ../lib/libvibrant.a is not used for resolving any symbol.
+ld: WARNING 84: ../lib/libncbiobj.a is not used for resolving any symbol.
+ld: WARNING 84: /usr/lib/libXm.so is not used for resolving any symbol.
+ld: WARNING 84: /usr/lib/libXmu.so is not used for resolving any symbol.
+        cc -mips1 -32  -o cdscan -O -I../include  -L../lib -DWIN_MOTIF cdscan.c -lvibrant -lncbiacc -lncbicdr -lncbiobj -lncbi -lXm -lXmu -lXt -lX11 -lgen -lm
+        cc -mips1 -32  -o findspl -O -I../include  -L../lib -DWIN_MOTIF findspl.c -lncbiacc -lncbicdr -lncbiobj -lncbi -lm
+        cc -mips1 -32  -o ncbisort -O -I../include  -L../lib -DWIN_MOTIF sortcmd.c -lncbitool -lncbi -lm
+        cc -mips1 -32  -o fa2htgs -O -I../include  -L../lib -DWIN_MOTIF fa2htgs.c -lncbiobj -lncbi -lXm -lXmu -lXt -lX11 -lgen -lm
+ld: WARNING 84: /usr/lib/libXm.so is not used for resolving any symbol.
+ld: WARNING 84: /usr/lib/libXmu.so is not used for resolving any symbol.
+        cc -mips1 -32  -o fastacmd -O -I../include  -L../lib -DWIN_MOTIF fastacmd.c -lncbitool -lncbiobj -lncbi -lm
+        cc -mips1 -32  -o formatdb -O -I../include  -L../lib -DWIN_MOTIF formatdb.c -lncbitool -lncbiobj -lncbi -lm
+        cc -mips1 -32  -o blastall -O -I../include  -L../lib -DWIN_MOTIF blastall.c  -lncbitool -lncbiobj -lncbi -lm 
+        cc -mips1 -32  -o blastpgp -O -I../include  -L../lib -DWIN_MOTIF blastpgp.c  -lncbitool -lncbiobj -lncbi -lm 
+        cc -mips1 -32  -o testval -O -I../include  -L../lib -DWIN_MOTIF testval.c -lncbiobj -lncbi -lm
+        cc -mips1 -32  -o seedtop -O -I../include  -L../lib -DWIN_MOTIF seedtop.c  -lncbitool -lncbiobj -lncbi -lm 
+        cc -mips1 -32  -o fmerge -O -I../include  -L../lib -DWIN_MOTIF fmerge.c -lncbitool -lncbiobj -lncbi -lm
+ld: WARNING 84: ../lib/libncbitool.a is not used for resolving any symbol.
+ld: WARNING 84: ../lib/libncbiobj.a is not used for resolving any symbol.
+        cc -mips1 -32  -o makemat -O -I../include  -L../lib -DWIN_MOTIF makemat.c  -lncbitool -lncbiobj -lncbi -lm 
+        cc -mips1 -32  -o copymat -O -I../include  -L../lib -DWIN_MOTIF copymat.c  -lncbitool -lncbiobj -lncbi -lm 
+        cc -mips1 -32  -o impala -O -I../include  -L../lib -DWIN_MOTIF profiles.c  -lncbitool -lncbiobj -lncbi -lm 
+make -f makedemo.unx SHELL="/bin/sh" LCL="sgi" RAN="ls -l" CC="cc -mips1 -32 " VIBLIBS="-lXm -lXmu -lXt -lX11 -lgen" LIB4=-lvibrant THREAD_OBJ=ncbithr.o THREAD_OTHERLIBS=-lpthread VIBFLAG="-DWIN_MOTIF" blastall blastpgp seedtop
+        cc -mips1 -32  -o blastall -O -I../include  -L../lib -DWIN_MOTIF blastall.c ncbithr.o -lncbitool -lncbiobj -lncbi -lm -lpthread
+        cc -mips1 -32  -o blastpgp -O -I../include  -L../lib -DWIN_MOTIF blastpgp.c ncbithr.o -lncbitool -lncbiobj -lncbi -lm -lpthread
+        cc -mips1 -32  -o seedtop -O -I../include  -L../lib -DWIN_MOTIF seedtop.c ncbithr.o -lncbitool -lncbiobj -lncbi -lm -lpthread
+make -f makenet.unx SHELL="/bin/sh" CC="cc -mips1 -32 " RAN="ls -l" VIBLIBS="-lXm -lXmu -lXt -lX11 -lgen" VIBFLAG="-DWIN_MOTIF" VIB="Psequin Nentrez Cn3D powblast pblcmd blastcl3" BLIB31=libvibnet.a OTHERLIBS="-lm -lPW -lsun -lrpcsvc"
+        cp -p ../network/entrez/client/*.h ../include
+        cp -p ../network/entrez/client/*.c .
+        cp -p ../network/medarch/client/*.h ../include
+        cp -p ../network/medarch/client/*.c .
+        cp -p ../network/taxonomy/client/*.h ../include
+../network/taxonomy/client/*.h - No such file or directory
+*** Error code 2 (bu21) (ignored)
+        cp -p ../network/taxonomy/client/*.c .
+../network/taxonomy/client/*.c - No such file or directory
+*** Error code 2 (bu21) (ignored)
+        cp -p ../network/taxon1/stdalone/*.h ../include
+        cp -p ../network/taxon1/stdalone/*.c .
+        cp -p ../network/taxon1/client/*.h ../include
+        cp -p ../network/taxon1/client/*.c .
+        cp -p ../network/taxon1/common/*.h ../include
+        cp -p ../network/taxon1/common/*.c .
+        cp -p ../network/taxon1/taxon2/*.h ../include
+        cp -p ../network/taxon1/taxon2/*.c .
+        cp -p ../network/id0arch/client/*.h ../include
+../network/id0arch/client/*.h - No such file or directory
+*** Error code 2 (bu21) (ignored)
+        cp -p ../network/id0arch/client/*.c .
+../network/id0arch/client/*.c - No such file or directory
+*** Error code 2 (bu21) (ignored)
+        cp -p ../network/id1arch/*.h ../include
+        cp -p ../network/id1arch/*.c .
+        cp -p ../network/blast2/client/*.h ../include
+        cp -p ../network/blast2/client/*.c .
+        cp -p ../network/spell/client/*.h ../include
+../network/spell/client/*.h - No such file or directory
+*** Error code 2 (bu21) (ignored)
+        cp -p ../network/spell/client/*.c .
+../network/spell/client/*.c - No such file or directory
+*** Error code 2 (bu21) (ignored)
+        cp -p ../network/suggest/client/*.h ../include
+        cp -p ../network/suggest/client/*.c .
+        cp -p ../network/blast3/client/*.h ../include
+        cp -p ../network/blast3/client/*.c .
+        cp -p ../network/encrypt/ripem/rsaref/source/*.c .
+../network/encrypt/ripem/rsaref/source/*.c - No such file or directory
+*** Error code 2 (bu21) (ignored)
+        cp -p ../network/socks/socks.cstc.4.2/lib/*.c .
+        cp -p ../internal/misc/*.c .
+../internal/misc/*.c - No such file or directory
+*** Error code 2 (bu21) (ignored)
+        cp -p ../internal/misc/*.h ../include
+../internal/misc/*.h - No such file or directory
+*** Error code 2 (bu21) (ignored)
+        cp -p ../internal/ssparse/*.c .
+../internal/ssparse/*.c - No such file or directory
+*** Error code 2 (bu21) (ignored)
+        cp -p ../internal/ssparse/*.h ../include
+../internal/ssparse/*.h - No such file or directory
+*** Error code 2 (bu21) (ignored)
+        cp -p ../internal/libparsn/*.c .
+../internal/libparsn/*.c - No such file or directory
+*** Error code 2 (bu21) (ignored)
+        cp -p ../internal/libparsn/*.h ../include
+../internal/libparsn/*.h - No such file or directory
+*** Error code 2 (bu21) (ignored)
+        cp -p ../internal/smart/smartnet/*.c .
+../internal/smart/smartnet/*.c - No such file or directory
+*** Error code 2 (bu21) (ignored)
+        cp -p ../internal/smart/smartnet/*.h ../include
+../internal/smart/smartnet/*.h - No such file or directory
+*** Error code 2 (bu21) (ignored)
+        cp -p ../internal/www/*.c .
+../internal/www/*.c - No such file or directory
+*** Error code 2 (bu21) (ignored)
+        cp -p ../internal/www/*.h ../include
+../internal/www/*.h - No such file or directory
+*** Error code 2 (bu21) (ignored)
+        cp -p ../internal/query/*.c .
+../internal/query/*.c - No such file or directory
+*** Error code 2 (bu21) (ignored)
+        cp -p ../internal/query/*.h ../include
+../internal/query/*.h - No such file or directory
+*** Error code 2 (bu21) (ignored)
+        cp -p ../network/sybutils/ctlib/*.c .
+../network/sybutils/ctlib/*.c - No such file or directory
+*** Error code 2 (bu21) (ignored)
+        cp -p ../network/sybutils/ctlib/*.h ../include
+../network/sybutils/ctlib/*.h - No such file or directory
+*** Error code 2 (bu21) (ignored)
+        cp -p ../network/sybutils/oslib/*.c .
+../network/sybutils/oslib/*.c - No such file or directory
+*** Error code 2 (bu21) (ignored)
+        cp -p ../network/sybutils/oslib/*.h ../include
+../network/sybutils/oslib/*.h - No such file or directory
+*** Error code 2 (bu21) (ignored)
+        cp -p ../network/nsclilib/*.h ../include
+        cp -p ../network/nsclilib/*.c .
+        cp -p ../network/vibnet/*.c .
+        cp -p ../network/vibnet/*.h ../include
+        cp -p ../cdromlib/*.h ../include
+        cp -p ../cdromlib/accentr.c .
+        cp -p ../cdromlib/accutils.c .
+        cp -p ../sequin/*.* .
+        cp -p ../demo/entrez.c .
+        cp -p ../demo/netentcf.c .
+        cp -p ../demo/seqget.c .
+        cp -p ../demo/entrcmd.c .
+        cp -p ../demo/batch.c .
+        cp -p ../demo/elecpcr.c .
+        cp -p ../demo/fetchent.c .
+        cp -p ../demo/genget.c .
+        cp -p ../demo/powblast.c .
+        cp -p ../demo/pblcmd.c .
+        cp -p ../demo/pblproc.c .
+        cp -p ../demo/pblproc.h ../include
+        cp -p ../demo/srchnt.c ../demo/srchaa.c ../demo/mts.c ../demo/sigme.c  ../demo/dst.c ../demo/ccp.c ../demo/epi.c ../demo/twop.c  ../demo/cnsrt.c ../demo/cnsgn.c  ../demo/ccpv.c ../demo/dustv.c ../demo/epiv.c ../demo/sigmev.c  ../demo/twopv.c ../demo/cnsrtv.c ../demo/cnsgnv.c ../demo/searchv.c .
+        cp -p ../network/entrez/server/*.* .
+../network/entrez/server/*.* - No such file or directory
+*** Error code 2 (bu21) (ignored)
+        cp -p ../network/suggest/server/*.* .
+        cp -p ../network/nsdaemon/*.* .
+../network/nsdaemon/*.* - No such file or directory
+*** Error code 2 (bu21) (ignored)
+        cp -p ../network/nsdemocl/*.* .
+        chmod -R ug+rw,o+r .
+        echo Waiting...go
+Waiting...go
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF  ni_lib_.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF ncbicli.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF ncbiurl.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF  ni_www.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF ni_debug.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF  lbapi.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF ni_disp.c
+cfe: Warning 581: /usr/include/sys/endian.h:46: Macro BYTE_ORDER redefined.
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF ni_msg.c
+cfe: Warning 581: /usr/include/sys/endian.h:46: Macro BYTE_ORDER redefined.
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF ni_error.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF ni_encrs.c
+         rm -f libnetcli.a
+        ar cru libnetcli.a ni_lib_.o ncbicli.o ncbiurl.o ni_www.o ni_debug.o lbapi.o  ni_disp.o ni_msg.o ni_error.o ni_encrs.o
+        cp -p libnetcli.a ../lib
+        ls -l ../lib/libnetcli.a
+-rw-r--r--    1 dima dima 250116 Jul 14 14:31 ../lib/libnetcli.a
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF ni_lib.c
+cfe: Warning 581: /usr/include/sys/endian.h:46: Macro BYTE_ORDER redefined.
+         rm -f libnetcli_.a
+        ar cru libnetcli_.a ni_lib.o ni_msg.o ni_error.o ni_encrs.o
+        cp -p libnetcli_.a ../lib
+        ls -l ../lib/libnetcli_.a
+-rw-r--r--    1 dima dima 183364 Jul 14 14:31 ../lib/libnetcli_.a
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF netentr.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF netlib.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF objneten.c
+         rm -f libnetentr.a
+        ar cru libnetentr.a netentr.o netlib.o objneten.o
+        cp -p libnetentr.a ../lib
+        ls -l ../lib/libnetentr.a
+-rw-r--r--    1 dima dima 240628 Jul 14 14:31 ../lib/libnetentr.a
+        cp -p accentr.c Naccentr.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF -D_NETENT_ Naccentr.c
+         rm -f libncbiNacc.a
+        ar cru libncbiNacc.a Naccentr.o accutils.o
+        cp -p libncbiNacc.a ../lib
+        ls -l ../lib/libncbiNacc.a
+-rw-r--r--    1 dima dima  78724 Jul 14 14:32 ../lib/libncbiNacc.a
+        cp -p accentr.c Caccentr.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF -D_NET_AND_CD_ Caccentr.c
+         rm -f libncbiCacc.a
+        ar cru libncbiCacc.a Caccentr.o accutils.o
+        cp -p libncbiCacc.a ../lib
+        ls -l ../lib/libncbiCacc.a
+-rw-r--r--    1 dima dima  83332 Jul 14 14:32 ../lib/libncbiCacc.a
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF netcnfg.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF trmlst.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF docsum.c
+         rm -f libvibnet.a
+        ar cru libvibnet.a netcnfg.o trmlst.o docsum.o
+        cp -p libvibnet.a ../lib
+        ls -l ../lib/libvibnet.a
+-rw-r--r--    1 dima dima 220532 Jul 14 14:32 ../lib/libvibnet.a
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF objtax1.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF taxutil.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF -c -o tc2dproc.o -DTAXSERVICE tc2proc.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF -c -o txcdproc.o -DTAXSERVICE txcdproc.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF parttree.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF taxcs.c
+         rm -f libncbitxc2.a
+        ar cru libncbitxc2.a objtax1.o taxutil.o tc2dproc.o txcdproc.o parttree.o taxcs.o
+        cp -p libncbitxc2.a ../lib
+        ls -l ../lib/libncbitxc2.a
+-rw-r--r--    1 dima dima 153188 Jul 14 14:32 ../lib/libncbitxc2.a
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF id1gen.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF id1arch.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF accid1.c
+         rm -f libncbiid1.a
+        ar cru libncbiid1.a id1gen.o id1arch.o accid1.o 
+        cp -p libncbiid1.a ../lib
+        ls -l ../lib/libncbiid1.a
+-rw-r--r--    1 dima dima  56116 Jul 14 14:32 ../lib/libncbiid1.a
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF objblst2.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF netblap2.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF blstout2.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF blast2.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF blastasn.c
+         rm -f libncbibls2.a
+        ar cru libncbibls2.a objblst2.o netblap2.o blstout2.o blast2.o blastasn.o
+        cp -p libncbibls2.a ../lib
+        ls -l ../lib/libncbibls2.a
+-rw-r--r--    1 dima dima 261908 Jul 14 14:32 ../lib/libncbibls2.a
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF -DNLM_OBJ_INCL=\"mapmla.h\" objmla.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF medarch.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF medutil.c
+         rm -f libncbimla.a
+        ar cru libncbimla.a objmla.o medarch.o medutil.o
+        cp -p libncbimla.a ../lib
+        ls -l ../lib/libncbimla.a
+-rw-r--r--    1 dima dima  91652 Jul 14 14:32 ../lib/libncbimla.a
+        cc -mips1 -32  -o Psequin -I. -I../include  -L../lib -DWIN_MOTIF -UINTERNAL_NCBI_SEQUIN sequin1.c sequin2.c sequin3.c sequin4.c sequin5.c sequin6.c  sequin7.c sequin8.c sequin9.c sequinx.c \
+        -lncbitool -lncbicn3d -lncbidesk -lncbimmdb -lncbitool -lncbitxc2 -lncbiid1 -lncbibls2 -lncbimla -lncbiNacc -lnetentr -lnetcli -lncbicdr \
+        -lvibnet -lvibrant -lncbiobj -lncbi -lXm -lXmu -lXt -lX11 -lgen -lm -lPW -lsun -lrpcsvc
+sequin1.c:
+sequin2.c:
+sequin3.c:
+sequin4.c:
+sequin5.c:
+sequin6.c:
+cfe: Warning 709: sequin6.c, line 797: Incompatible pointer type assignment
+                   SearchAndExciseText (&vnp->data.ptrvalue, cfp);
+ ---------------------------------------^
+cfe: Warning 709: sequin6.c, line 823: Incompatible pointer type assignment
+                   SearchAndExciseText (&vnp->data.ptrvalue, cfp);
+ ---------------------------------------^
+cfe: Warning 709: sequin6.c, line 831: Incompatible pointer type assignment
+                   SearchAndExciseText (&vnp->data.ptrvalue, cfp);
+ ---------------------------------------^
+cfe: Warning 709: sequin6.c, line 836: Incompatible pointer type assignment
+                   SearchAndExciseText (&vnp->data.ptrvalue, cfp);
+ ---------------------------------------^
+cfe: Warning 709: sequin6.c, line 853: Incompatible pointer type assignment
+                   SearchAndExciseText (&rrp->ext.value.ptrvalue, cfp);
+ ---------------------------------------^
+sequin7.c:
+sequin8.c:
+sequin9.c:
+sequinx.c:
+ld: WARNING 84: ../lib/libncbitool.a is not used for resolving any symbol.
+ld: WARNING 84: ../lib/libncbiid1.a is not used for resolving any symbol.
+ld: WARNING 84: /usr/lib/libsun.a is not used for resolving any symbol.
+ld: WARNING 84: /usr/lib/librpcsvc.so is not used for resolving any symbol.
+        cc -mips1 -32  -o netentcf -I../include  -L../lib -DWIN_MOTIF netentcf.c -lvibnet -lncbidesk -lvibrant -lncbitool -lncbicdr -lncbiNacc -lnetentr -lnetcli -lncbiobj -lncbi -lXm -lXmu -lXt -lX11 -lgen -lm -lPW -lsun -lrpcsvc
+ld: WARNING 84: ../lib/libncbidesk.a is not used for resolving any symbol.
+ld: WARNING 84: ../lib/libncbitool.a is not used for resolving any symbol.
+ld: WARNING 84: ../lib/libncbicdr.a is not used for resolving any symbol.
+ld: WARNING 84: ../lib/libncbiNacc.a is not used for resolving any symbol.
+ld: WARNING 84: ../lib/libnetentr.a is not used for resolving any symbol.
+ld: WARNING 84: ../lib/libnetcli.a is not used for resolving any symbol.
+ld: WARNING 84: ../lib/libncbiobj.a is not used for resolving any symbol.
+ld: WARNING 84: /usr/lib/libsun.a is not used for resolving any symbol.
+ld: WARNING 84: /usr/lib/librpcsvc.so is not used for resolving any symbol.
+        cc -mips1 -32  -o Nentrez -I../include  -L../lib -DWIN_MOTIF entrez.c -lvibnet -lncbicn3d -lncbidesk -lncbimmdb -lncbitool -lncbiNacc -lnetentr -lnetcli -lncbiacc -lvibrant -lncbicdr -lncbiobj -lncbi -lXm -lXmu -lXt -lX11 -lgen -lm -lPW -lsun -lrpcsvc
+ld: WARNING 84: ../lib/libncbiacc.a is not used for resolving any symbol.
+ld: WARNING 84: /usr/lib/libsun.a is not used for resolving any symbol.
+ld: WARNING 84: /usr/lib/librpcsvc.so is not used for resolving any symbol.
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF cn3dmain.c
+        cc -mips1 -32  -o Cn3D -I../include  -L../lib -DWIN_MOTIF cn3dmain.o -lvibnet -lncbicn3d -lncbidesk -lncbimmdb -lncbitool -lncbiNacc -lnetentr -lnetcli -lvibrant -lncbicdr -lncbiobj -lncbi -lXm -lXmu -lXt -lX11 -lgen -lm -lPW -lsun -lrpcsvc
+ld: WARNING 84: /usr/lib/libsun.a is not used for resolving any symbol.
+ld: WARNING 84: /usr/lib/librpcsvc.so is not used for resolving any symbol.
+        cc -mips1 -32  -g -o powblast -I../include  -L../lib -DWIN_MOTIF powblast.c pblproc.c -lvibrant -lncbiNacc -lnetentr -lncbidesk -lncbitool -lncbibls2 -lnetcli -lncbicdr -lncbiobj -lncbi -lXm -lXmu -lXt -lX11 -lgen -lm -lPW -lsun -lrpcsvc
+powblast.c:
+pblproc.c:
+ld: WARNING 84: ../lib/libncbidesk.a is not used for resolving any symbol.
+ld: WARNING 84: /usr/lib/libsun.a is not used for resolving any symbol.
+ld: WARNING 84: /usr/lib/librpcsvc.so is not used for resolving any symbol.
+        cc -mips1 -32  -g -o pblcmd -I../include  -L../lib -DWIN_MOTIF pblcmd.c pblproc.c -lncbiNacc -lnetentr -lncbidesk -lncbitool -lncbibls2 -lnetcli -lncbicdr -lncbiobj -lncbi -lm -lPW -lsun -lrpcsvc
+pblcmd.c:
+pblproc.c:
+ld: WARNING 84: ../lib/libncbidesk.a is not used for resolving any symbol.
+ld: WARNING 84: /usr/lib/libPW.so is not used for resolving any symbol.
+ld: WARNING 84: /usr/lib/libsun.a is not used for resolving any symbol.
+ld: WARNING 84: /usr/lib/librpcsvc.so is not used for resolving any symbol.
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF objblst3.c
+        cc -mips1 -32  -c -O -I../include -DWIN_MOTIF netblap3.c
+         rm -f libnetblast.a
+        ar cru libnetblast.a objblst3.o netblap3.o
+        cp -p libnetblast.a ../lib
+        ls -l ../lib/libnetblast.a
+-rw-r--r--    1 dima dima 135300 Jul 14 14:33 ../lib/libnetblast.a
+        cc -mips1 -32  -g -o blastcl3 -I../include  -L../lib -DWIN_MOTIF blastcl3.c -lnetblast -lncbitool -lnetcli -lncbiobj -lncbi -lm -lPW -lsun -lrpcsvc
+cfe: Warning 740: blastcl3.c, line 134: conflicting declarations for 'FindNuc'
+ static void FindNuc(SeqEntryPtr sep, Nlm_VoidPtr  data, Nlm_Int4  index, Nlm_Int2  indent)
+ ------------^
+cfe: Warning 653: blastcl3.c, line 134: (previous declaration of 'FindNuc' at line 920 in file '../include/sequtil.h')
+ static void FindNuc(SeqEntryPtr sep, Nlm_VoidPtr  data, Nlm_Int4  index, Nlm_Int2  indent)
+ ------------^
+cfe: Warning 740: blastcl3.c, line 149: conflicting declarations for 'FindProt'
+ static void FindProt(SeqEntryPtr sep, Nlm_VoidPtr  data, Nlm_Int4  index, Nlm_Int2  indent)
+ ------------^
+cfe: Warning 653: blastcl3.c, line 149: (previous declaration of 'FindProt' at line 921 in file '../include/sequtil.h')
+ static void FindProt(SeqEntryPtr sep, Nlm_VoidPtr  data, Nlm_Int4  index, Nlm_Int2  indent)
+ ------------^
+ld: WARNING 84: /usr/lib/libPW.so is not used for resolving any symbol.
+ld: WARNING 84: /usr/lib/libsun.a is not used for resolving any symbol.
+ld: WARNING 84: /usr/lib/librpcsvc.so is not used for resolving any symbol.
+putting date stamp to the file ../VERSION
+
+
+If all is correct, you will find newly built executables in
+the directory ./ncbi/build/
+
+Good luck!
+
+
 =======================================================================	
- $Id: readme.unx,v 6.9 1999/04/07 18:36:41 beloslyu Exp $
+ $Id: readme.unx,v 6.11 1999/07/14 18:56:50 beloslyu Exp $
 =======================================================================	

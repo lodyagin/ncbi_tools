@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/12/91
 *
-* $Revision: 6.31 $
+* $Revision: 6.33 $
 *
 * File Description:  various sequence objects to fasta output
 *
@@ -39,6 +39,12 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: tofasta.c,v $
+* Revision 6.33  1999/08/05 11:37:04  kans
+* allow # or ! as comment symbols
+*
+* Revision 6.32  1999/08/04 22:59:00  kans
+* FastaToSeqEntry ignores lines beginning with ! if read from file
+*
 * Revision 6.31  1999/04/07 12:49:06  ostell
 * made changes to rank RefSeq ids higher for BLAST deflines
 *
@@ -1429,6 +1435,11 @@ NLM_EXTERN SeqEntryPtr FastaToSeqEntryInternal
     if(type == FASTA_FILE_IO) {
         do {
             ch = getc(fd);
+            if (ch == '!' || ch == '#') { /* comment symbol - ignore rest of line */
+            	do {
+            		ch = getc(fd);
+            	} while (ch != '\n' && ch != '\r' && ch != '\0' && ch != EOF);
+            }
         } while (IS_WHITESP(ch));
     } else {   /* if(type == FASTA_MEM_IO*/
         while (IS_WHITESP(ch = *firstchar)) /* Rolling spaces */

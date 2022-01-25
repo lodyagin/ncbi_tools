@@ -1,7 +1,7 @@
 #ifndef NCBISOCK__H
 #define NCBISOCK__H
 
-/*  $RCSfile: ncbisock.h,v $  $Revision: 4.14 $  $Date: 1999/03/11 15:20:15 $
+/*  $RCSfile: ncbisock.h,v $  $Revision: 4.18 $  $Date: 1999/08/13 21:59:37 $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -33,6 +33,20 @@
 *
 * --------------------------------------------------------------------------
 * $Log: ncbisock.h,v $
+* Revision 4.18  1999/08/13 21:59:37  vakatov
+* Added macro to get "native"(platform-specific) socket handle
+*
+* Revision 4.17  1999/08/04 21:04:24  vakatov
+* + SOCK_PushBack()
+*
+* Revision 4.16  1999/07/16 21:09:09  vakatov
+* Removed the dangling "#define STimeout ..."
+*
+* Revision 4.15  1999/07/09 15:25:48  vakatov
+* + SOCK_Eof()
+* Also, use the "home-made" PEEK buffering on all platforms and
+* preset the PEEK buffer chunk size to 4096
+*
 * Revision 4.14  1999/03/11 15:20:15  vakatov
 * Added "timeout" arg to SOCK_Create() and SOCK_Reconnect()
 *
@@ -63,7 +77,6 @@
 *
 * Revision 4.3  1998/03/30 17:50:13  vakatov
 * Ingrafted to the main NCBI CVS tree
-*
 * ==========================================================================
 */
 
@@ -76,7 +89,6 @@
 
 #define ESOCK_ErrCode      Nlm_ESOCK_ErrCode
 #define ESOCK_Mode         Nlm_ESOCK_Mode
-#define STimeout           Nlm_STimeout
 
 #define SOCK_ErrCodeStr    Nlm_SOCK_ErrCodeStr
 
@@ -93,6 +105,7 @@
 #define SOCK_Read          Nlm_SOCK_Read
 #define SOCK_ReadPersist   Nlm_SOCK_ReadPersist
 #define SOCK_Peek          Nlm_SOCK_Peek
+#define SOCK_PushBack      Nlm_SOCK_PushBack
 #define SOCK_Write         Nlm_SOCK_Write
 #define SOCK_Reconnect     Nlm_SOCK_Reconnect
 #define SOCK_Close         Nlm_SOCK_Close
@@ -109,11 +122,36 @@
 extern "C" {
 #endif
 
+/* Forward declarations of the hidden socket internal structure, and
+ * their upper-level handles to use by the LSOCK_*() and SOCK_*() API
+ */
 struct Nlm_LSOCKtag;                /* listening socket:  internal storage  */
-typedef struct Nlm_LSOCKtag *LSOCK; /* listening socket:  handle */
+typedef struct Nlm_LSOCKtag* LSOCK; /* listening socket:  handle */
 
 struct Nlm_SOCKtag;               /* socket:  internal storage  */
-typedef struct Nlm_SOCKtag *SOCK; /* socket:  handle */
+typedef struct Nlm_SOCKtag* SOCK; /* socket:  handle */
+
+
+/* Platform-dependent native socket handle to use by platform-specific
+ * system API.
+ * NOTE:  the macros are complicated to provide at least some type checking.
+ */
+#if defined(OS_MSWIN)
+#define SOCK_NATIVE_HANDLE SOCKET
+#else
+#define SOCK_NATIVE_HANDLE int
+#endif
+
+#define LSOCK_GET_NATIVE_HANDLE(lsock, handle)  do { \
+  LSOCK x_lsock = lsock; \
+  handle = *((SOCK_NATIVE_HANDLE*) x_lsock); \
+} while(0)
+
+#define SOCK_GET_NATIVE_HANDLE(sock, handle)  do { \
+  SOCK x_sock = sock; \
+  handle = *((SOCK_NATIVE_HANDLE*) x_sock); \
+} while(0)
+
 
 /* Error code
  */
@@ -138,7 +176,7 @@ typedef enum {
 
 /* Return (const) verbal description for the passed error code
  */
-NLM_EXTERN const Nlm_Char *SOCK_ErrCodeStr
+NLM_EXTERN const char* SOCK_ErrCodeStr
 (ESOCK_ErrCode err_code
  );
 
@@ -149,7 +187,7 @@ NLM_EXTERN const Nlm_Char *SOCK_ErrCodeStr
 NLM_EXTERN ESOCK_ErrCode LSOCK_Create
 (Nlm_Uint2  port,     /* [in] the port to listen at            */
  Nlm_Uint2  n_listen, /* [in] maximal # of pending connections */
- LSOCK     *lsock     /* [out]  handle of the created listening socket  */
+ LSOCK*     lsock     /* [out]  handle of the created listening socket  */
  );
 
 
@@ -159,8 +197,8 @@ NLM_EXTERN ESOCK_ErrCode LSOCK_Create
  */
 NLM_EXTERN ESOCK_ErrCode LSOCK_Accept
 (LSOCK           lsock,    /* [in] handle of a listening socket   */
- const STimeout *timeout,  /* [in] timeout(infinite if NULL)      */
- SOCK           *sock      /* [out]  handle of the created socket */
+ const STimeout* timeout,  /* [in] timeout(infinite if NULL)      */
+ SOCK*           sock      /* [out]  handle of the created socket */
  );
 
 
@@ -175,10 +213,10 @@ NLM_EXTERN ESOCK_ErrCode LSOCK_Close
  * (socket() + connect() [+ select()])
  */
 NLM_EXTERN ESOCK_ErrCode SOCK_Create
-(const Nlm_Char *host,    /* [in] server host */
+(const char*     host,    /* [in] server host */
  Nlm_Uint2       port,    /* [in] server port */
- const STimeout *timeout, /* [in] the connect timeout */
- SOCK           *sock     /* [out] handle of the created socket */
+ const STimeout* timeout, /* [in] the connect timeout */
+ SOCK*           sock     /* [out] handle of the created socket */
 );
 
 
@@ -192,9 +230,9 @@ NLM_EXTERN ESOCK_ErrCode SOCK_Create
  */
 NLM_EXTERN ESOCK_ErrCode SOCK_Reconnect
 (SOCK            sock,    /* [in/out] handle of the socket to reconnect */
- const Nlm_Char *host,    /* [in] server host */
+ const char*     host,    /* [in] server host */
  Nlm_Uint2       port,    /* [in] server port */
- const STimeout *timeout  /* [in] the connect timeout */
+ const STimeout* timeout  /* [in] the connect timeout */
  );
 
 
@@ -215,21 +253,21 @@ NLM_EXTERN ESOCK_ErrCode SOCK_Close
 NLM_EXTERN ESOCK_ErrCode SOCK_Select
 (SOCK            sock,
  ESOCK_Mode      mode,
- const STimeout *timeout
+ const STimeout* timeout
  );
 
 
-/* Specify timeout for the connection i/o(see SOCK_[Read|Write|Close] funcs).
+/* Specify timeout for the connection i/o (see SOCK_[Read|Write|Close] funcs).
  * NOTE: set the timeout to the maximum if "new_timeout" is NULL
  * NOTE: the default timeout is the maximum possible(wait "ad infinitum")
  */
-#define SOCK_GET_TIMEOUT ((const STimeout *)~0)
+#define SOCK_GET_TIMEOUT ((const STimeout*)~0)
 NLM_EXTERN ESOCK_ErrCode SOCK_SetTimeout
-(SOCK           sock,
- ESOCK_Mode     mode,
- const STimeout *new_timeout, /* (dont set if equal to SOCK_GET_TIMEOUT) */
- STimeout       *r_timeout,   /* if non-NULL, return previous read */
- STimeout       *w_timeout    /* and(or) write timeout values      */
+(SOCK            sock,
+ ESOCK_Mode      mode,
+ const STimeout* new_timeout, /* (dont set if equal to SOCK_GET_TIMEOUT) */
+ STimeout*       r_timeout,   /* if non-NULL, return previous read */
+ STimeout*       w_timeout    /* and(or) write timeout values      */
  );
 
 
@@ -237,37 +275,59 @@ NLM_EXTERN ESOCK_ErrCode SOCK_SetTimeout
  * In "*n_read", return the number of succesfully read bytes.
  * If there is no data available to read and the timeout(see
  * SOCK_Timeout()) is expired then return eSOCK_ETimeout.
- * NOTE: eSOCK_Closed may indicate an empty message rather than a
- *       a real closure of connection
+ * NOTE: Theoretically, eSOCK_Closed may indicate an empty message
+ *       rather than a real closure of the connection...
  */
 NLM_EXTERN ESOCK_ErrCode SOCK_Read
-(SOCK        sock,
- Nlm_VoidPtr buf,
- Nlm_Uint4   size,
- Nlm_Uint4  *n_read
+(SOCK       sock,
+ void*      buf,
+ Nlm_Uint4  size,
+ Nlm_Uint4* n_read
  );
 
 
-/* Operate just like SOCK_Read() but it pessistently tries to read *exactly*
+/* Operate just like SOCK_Read() but it persistently tries to read *exactly*
  * "size" bytes, and it reads again and again -- until timeout expiration or
  * error 
  */
 NLM_EXTERN ESOCK_ErrCode SOCK_ReadPersist
-(SOCK        sock,
- Nlm_VoidPtr buf,
- Nlm_Uint4   size,
- Nlm_Uint4  *n_read
+(SOCK       sock,
+ void*      buf,
+ Nlm_Uint4  size,
+ Nlm_Uint4* n_read
  );
 
 
 /* Operate just like SOCK_Read() but dont remove the read data from the
- * input queue
+ * input queue.
  */
 NLM_EXTERN ESOCK_ErrCode SOCK_Peek
+(SOCK       sock,
+ void*      buf,
+ Nlm_Uint4  size,
+ Nlm_Uint4* n_read
+ );
+
+
+/* Push the specified data back to the socket input queue(to the socket's
+ * internal read buffer). These can be any data, not necessarily the data
+ * previously read from the socket.
+ */
+NLM_EXTERN ESOCK_ErrCode SOCK_PushBack
 (SOCK        sock,
- Nlm_VoidPtr buf,
- Nlm_Uint4   size,
- Nlm_Uint4  *n_read
+ const void* buf,
+ Nlm_Uint4   size
+ );
+
+
+/* If the last input operation (Read, ReadPersist or Peek) hit EOF.
+ * NOTE:  the input operations does not return SOCK_eClosed unless there
+ *        is no more data to read/peek;  thus, in the case of Peek, this is
+ *        the only "non-destructive" way to check whether it already hit
+ *        the EOF or we can still expect more data to come.
+ */
+NLM_EXTERN Nlm_Boolean SOCK_Eof
+(SOCK sock
  );
 
 
@@ -278,9 +338,9 @@ NLM_EXTERN ESOCK_ErrCode SOCK_Peek
  */
 NLM_EXTERN ESOCK_ErrCode SOCK_Write
 (SOCK        sock,
- const void *buf,
+ const void* buf,
  Nlm_Uint4   size,
- Nlm_Uint4  *n_written
+ Nlm_Uint4*  n_written
  );
 
 
@@ -289,10 +349,10 @@ NLM_EXTERN ESOCK_ErrCode SOCK_Write
  * NOTE:  "host" or "port" can be NULL
  */
 NLM_EXTERN void SOCK_Address
-(SOCK         sock,
- Nlm_Uint4   *host,
- Nlm_Uint2   *port,
- Nlm_Boolean  network_byte_order
+(SOCK        sock,
+ Nlm_Uint4*  host,
+ Nlm_Uint2*  port,
+ Nlm_Boolean network_byte_order
  );
 
 
@@ -306,15 +366,15 @@ NLM_EXTERN ESOCK_ErrCode SOCK_Destroy(void);
  */
 #define GetHostName Nlm_GetHostName
 NLM_EXTERN Nlm_Boolean GetHostName
-(Nlm_Char *name,
- Nlm_Uint4 namelen
+(char*      name,
+ Nlm_Uint4  namelen
  );
 
 #define Uint4toInaddr Nlm_Uint4toInaddr
 NLM_EXTERN Nlm_Boolean Uint4toInaddr
-(Nlm_Uint4   ui4_addr,  /* NOTE: must be in the network byte-order  */
- Nlm_CharPtr buf,       /* to be filled by smth. like "123.45.67.89\0" */
- Nlm_Uint4   buf_len
+(Nlm_Uint4  ui4_addr,  /* NOTE: must be in the network byte-order  */
+ char*      buf,       /* to be filled by smth. like "123.45.67.89\0" */
+ Nlm_Uint4  buf_len
  );
 
 /* KLUDGE(dont use this beast, please) */

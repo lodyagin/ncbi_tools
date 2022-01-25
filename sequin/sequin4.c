@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/28/96
 *
-* $Revision: 6.107 $
+* $Revision: 6.119 $
 *
 * File Description: 
 *
@@ -56,6 +56,7 @@
 #include <salfiles.h>
 #include <salsap.h>
 #include <saledit.h>
+#include <salign.h>
 #include <subutil.h>
 #include <pobutil.h>
 #include <tfuns.h>
@@ -66,6 +67,7 @@
 #include <bspview.h>
 #include <vsmpriv.h>
 #include <explore.h>
+#include <alignval.h>
 
 #define REGISTER_UPDATESEGSET ObjMgrProcLoadEx (OMPROC_FILTER,"Update Segmented Set","UpdateSegSet",0,0,0,0,NULL,UpdateSegSet,PROC_PRIORITY_DEFAULT, "Indexer")
 
@@ -81,11 +83,13 @@
 
 #define REGISTER_REMOVE_MESSEDUP ObjMgrProcLoadEx (OMPROC_FILTER,"Repair Messed Up Sets","RepairMessedUpSets",0,0,0,0,NULL,RepairMessedUpRecord,PROC_PRIORITY_DEFAULT, "Indexer")
 
+#define REGISTER_UPDATE_SEQALIGN ObjMgrProcLoadEx (OMPROC_FILTER, "Update SeqAlign","UpdateSeqAlign",OBJ_SEQALIGN,0,OBJ_SEQALIGN,0,NULL,UpdateSeqAlign,PROC_PRIORITY_DEFAULT, "Indexer")
+
 #define REGISTER_MAKESEQALIGN ObjMgrProcLoadEx (OMPROC_FILTER,"Make SeqAlign","CreateSeqAlign",0,0,0,0,NULL,GenerateSeqAlignFromSeqEntry,PROC_PRIORITY_DEFAULT, "Alignment")
 
 #define REGISTER_MAKESEQALIGNP ObjMgrProcLoadEx (OMPROC_FILTER,"Make Protein SeqAlign","CreateSeqAlignProt",0,0,0,0,NULL,GenerateSeqAlignFromSeqEntryProt,PROC_PRIORITY_DEFAULT, "Alignment")
 
-#define REGISTER_NORMSEQALIGN ObjMgrProcLoadEx (OMPROC_FILTER,"Validate SeqAlign","ValidateSeqAlign",0,0,0,0,NULL,ValidateSeqAlignFromSeqEntry,PROC_PRIORITY_DEFAULT, "Alignment")
+#define REGISTER_NORMSEQALIGN ObjMgrProcLoadEx (OMPROC_FILTER,"Validate SeqAlign","ValidateSeqAlign",0,0,0,0,NULL,ValidateSeqAlignFromData,PROC_PRIORITY_DEFAULT, "Alignment")
 
 #define REGISTER_GROUP_EXPLODE ObjMgrProcLoadEx (OMPROC_FILTER, "Explode a group", "GroupExplode", OBJ_SEQFEAT, 0, OBJ_SEQFEAT, 0, NULL, GroupExplodeFunc, PROC_PRIORITY_DEFAULT, "Indexer")
 
@@ -125,6 +129,8 @@
 #define REGISTER_PROT_IDS_TO_GENE_SYN ObjMgrProcLoadEx (OMPROC_FILTER,"Protein SeqID to Gene Synonym","ProtLocalIDtoGeneSyn",0,0,0,0,NULL,ProtLocalIDtoGeneSyn,PROC_PRIORITY_DEFAULT, "Indexer")
 
 #define REGISTER_DESKTOP_REPORT ObjMgrProcLoadEx (OMPROC_FILTER, "Desktop Report", "DesktopReport", 0, 0, 0, 0, NULL, DesktopReportFunc, PROC_PRIORITY_DEFAULT, "Indexer")
+
+#define REGISTER_DESCRIPTOR_PROPAGATE ObjMgrProcLoadEx (OMPROC_FILTER, "Descriptor Propagate", "DescriptorPropagate", 0, 0, 0, 0, NULL, DoDescriptorPropagate, PROC_PRIORITY_DEFAULT, "Indexer")
 
 #define REGISTER_SEQUIN_PROT_TITLES ObjMgrProcLoadEx (OMPROC_FILTER,"Sequin Style Protein Titles","SequinStyleProteinTitles",0,0,0,0,NULL,MakeSequinProteinTitles,PROC_PRIORITY_DEFAULT, "Misc")
 static Int2 LIBCALLBACK MakeSequinProteinTitles (Pointer data);
@@ -933,31 +939,6 @@ static Int2 LIBCALLBACK GenerateSeqAlignFromSeqEntryProt (Pointer data)
       ObjMgrSendMsg (OM_MSG_UPDATE, ompcp->input_entityID, 0, 0);
     }
   }
-  return OM_MSG_RET_DONE;
-}
-
-static Int2 LIBCALLBACK ValidateSeqAlignFromSeqEntry (Pointer data)
-
-{
-  OMProcControlPtr  ompcp;
-  SeqEntryPtr       sep;
-
-  ompcp = (OMProcControlPtr) data;
-  if (ompcp == NULL || ompcp->proc == NULL) return OM_MSG_RET_ERROR;
-  switch (ompcp->input_itemtype) {
-    case OBJ_BIOSEQ :
-      break;
-    case OBJ_BIOSEQSET :
-      break;
-    case 0 :
-      return OM_MSG_RET_ERROR;
-    default :
-      return OM_MSG_RET_ERROR;
-  }
-  if (ompcp->input_data == NULL) return OM_MSG_RET_ERROR;
-  sep = SeqMgrGetSeqEntryForData (ompcp->input_data);
-  if (sep == NULL) return OM_MSG_RET_ERROR;
-  ValidateSeqAlignInSeqEntry (sep, FALSE, TRUE);
   return OM_MSG_RET_DONE;
 }
 
@@ -2721,8 +2702,10 @@ extern void MRnaFromCdsProc (Uint2 entityID)
   ValNodePtr    head;
   Char          mRnaName [128];
   ValNodePtr    name;
+  /*
   Boolean       noLeft;
   Boolean       noRight;
+  */
   ProtRefPtr    prp;
   SeqFeatPtr    rna;
   RnaRefPtr     rrp;
@@ -2764,8 +2747,10 @@ extern void MRnaFromCdsProc (Uint2 entityID)
           rna->location = AsnIoMemCopy ((Pointer) cds->location,
                                         (AsnReadFunc) SeqLocAsnRead,
                                         (AsnWriteFunc) SeqLocAsnWrite);
-          CheckSeqLocForPartial (rna->location, &noLeft, &noRight);
-          rna->partial = (rna->partial || noLeft || noRight);
+          /* CheckSeqLocForPartial (rna->location, &noLeft, &noRight); */
+          SetSeqLocPartial (rna->location, TRUE, TRUE); /* now always set */
+          /* rna->partial = (rna->partial || noLeft || noRight); */
+          rna->partial = TRUE;
           bsp = GetBioseqGivenSeqLoc (rna->location, entityID);
           if (bsp != NULL) {
             sep = SeqMgrGetSeqEntryForData (bsp);
@@ -4434,6 +4419,64 @@ static Int2 LIBCALLBACK SplitIntoSegmentedBioseq (Pointer data)
   return OM_MSG_RET_DONE;
 }
 
+static Int2 LIBCALLBACK DoDescriptorPropagate (Pointer data)
+
+{
+  BioseqPtr         bsp;
+  BioseqSetPtr      bssp = NULL;
+  OMProcControlPtr  ompcp;
+  SeqEntryPtr       seqentry;
+  ValNodePtr        sourcedescr;
+
+  ompcp = (OMProcControlPtr) data;
+  if (ompcp == NULL || ompcp->input_entityID == 0) {
+    Message (MSG_ERROR, "Please select a BioseqSet");
+    return OM_MSG_RET_ERROR;
+  }
+  switch (ompcp->input_itemtype) {
+    case OBJ_BIOSEQSET :
+      bssp = (BioseqSetPtr) ompcp->input_data;
+      break;
+    case 0 :
+      Message (MSG_ERROR, "Please select a BioseqSet");
+      return OM_MSG_RET_ERROR;
+    default :
+      Message (MSG_ERROR, "Please select a BioseqSet");
+      return OM_MSG_RET_ERROR;
+  }
+
+  if (bssp != NULL) {
+    sourcedescr = bssp->descr;
+    if (sourcedescr != NULL) {
+      bssp->descr = NULL;
+      seqentry = bssp->seq_set;
+      while (seqentry != NULL) {
+        if (seqentry->data.ptrvalue != NULL) {
+          if (seqentry->choice == 1) {
+            bsp = (BioseqPtr) seqentry->data.ptrvalue;
+            ValNodeLink (&(bsp->descr),
+                         AsnIoMemCopy ((Pointer) sourcedescr,
+                                       (AsnReadFunc) SeqDescrAsnRead,
+                                       (AsnWriteFunc) SeqDescrAsnWrite));
+          } else if (seqentry->choice == 2) {
+            bssp = (BioseqSetPtr) seqentry->data.ptrvalue;
+            ValNodeLink (&(bssp->descr),
+                         AsnIoMemCopy ((Pointer) sourcedescr,
+                                       (AsnReadFunc) SeqDescrAsnRead,
+                                       (AsnWriteFunc) SeqDescrAsnWrite));
+          }
+        }
+        seqentry = seqentry->next;
+      }
+      SeqDescrFree (sourcedescr);
+    }
+  }
+
+  ObjMgrSetDirtyFlag (ompcp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, ompcp->input_entityID, 0, 0);
+  return OM_MSG_RET_DONE;
+}
+
 extern void SetupSequinFilters (void)
 
 {
@@ -4454,6 +4497,7 @@ extern void SetupSequinFilters (void)
     REGISTER_SEQUIN_GI_TO_ACCN;
     REGISTER_REFGENEUSER_DESC_EDIT;
     REGISTER_PROT_IDS_TO_GENE_SYN;
+    REGISTER_DESCRIPTOR_PROPAGATE;
   }
 
   if (indexerVersion) {
@@ -4475,6 +4519,7 @@ extern void SetupSequinFilters (void)
   REGISTER_MAP_TO_PROT;
   REGISTER_MAP_TO_NUC;
 
+  REGISTER_UPDATE_SEQALIGN;
   REGISTER_MAKESEQALIGN;
   REGISTER_MAKESEQALIGNP;
   REGISTER_NORMSEQALIGN;
@@ -4777,13 +4822,13 @@ static int LIBCALLBACK SortCDStRNArRNAByLocation (VoidPtr ptr1, VoidPtr ptr2)
               return 1;
             } else if (leftend1 < leftend2) {
               return -1;
-            } else if (rightend1 > rightend2) {
-              return 1;
-            } else if (rightend1 < rightend2) {
-              return -1;
             } else if (sfp2->data.choice == SEQFEAT_GENE) {
               return 1;
             } else if (sfp1->data.choice == SEQFEAT_GENE) {
+              return -1;
+            } else if (rightend1 > rightend2) {
+              return 1;
+            } else if (rightend1 < rightend2) {
               return -1;
             } else {
               return 0;
@@ -4968,9 +5013,9 @@ static void FinishAutoDefProc (Uint2 entityID, SeqEntryPtr sep,
           if (dfp->protname != NULL) {
             if (StringICmp (dfp->protname, "unknown") == 0 && (! StringHasNoText (dfp->genename))) {
               StringNCpy_0 (text, dfp->genename, sizeof (text));
-              StringCat (str, "(");
+              /* StringCat (str, "("); */
               StringCat (str, text);
-              StringCat (str, ")");
+              /* StringCat (str, ")"); */
             } else {
               StringNCpy_0 (str, dfp->protname, sizeof (str) - 100);
               if (dfp->genename != NULL) {
@@ -4984,7 +5029,7 @@ static void FinishAutoDefProc (Uint2 entityID, SeqEntryPtr sep,
             }
             if (dfp->lastInGroup || dfp->lastInType) {
               if (mip != NULL) {
-                ptr = StringStr (str, "precursor");
+                ptr = StringISearch (str, "precursor");
                 if (ptr != NULL && StringICmp (ptr, "precursor") == 0) {
                   StringCat (str, ",");
                 }
@@ -5004,7 +5049,7 @@ static void FinishAutoDefProc (Uint2 entityID, SeqEntryPtr sep,
                 StringCat (str, " allele");
               }
               if (dfp->altSplices > 1) {
-                StringCat (str, ", alternative splice products");
+                StringCat (str, ", alternatively spliced products");
               }
               if (dfp->sfp->partial) {
                 StringCat (str, ", partial cds");
@@ -5038,7 +5083,7 @@ static void FinishAutoDefProc (Uint2 entityID, SeqEntryPtr sep,
           StringNCpy_0 (str, dfp->genename, sizeof (str) - 50);
           if (dfp->lastInGroup || dfp->lastInType) {
             if (mip != NULL) {
-              ptr = StringStr (str, "precursor");
+              ptr = StringISearch (str, "precursor");
               if (ptr != NULL && StringICmp (ptr, "precursor") == 0) {
                 StringCat (str, ",");
               }
@@ -5090,11 +5135,11 @@ static void FinishAutoDefProc (Uint2 entityID, SeqEntryPtr sep,
             if (rrp->ext.choice == 1) {
               StringNCpy_0 (str, (CharPtr) rrp->ext.value.ptrvalue, sizeof (str) - 50);
               if (dfp->subtype == FEATDEF_rRNA) {
-                ptr = StringStr (str, " rRNA");
+                ptr = StringISearch (str, " rRNA");
                 if (ptr != NULL) {
                   *ptr = '\0';
                 }
-                ptr = StringStr (str, " ribosomal RNA");
+                ptr = StringISearch (str, " ribosomal RNA");
                 if (ptr != NULL) {
                   *ptr = '\0';
                 }
@@ -5112,13 +5157,11 @@ static void FinishAutoDefProc (Uint2 entityID, SeqEntryPtr sep,
                 }
               }
               if (dfp->lastInString || dfp->lastInGroup || dfp->lastInType) {
-                if (dfp->subtype == FEATDEF_rRNA) {
-                  /*
+                if (dfp->subtype == FEATDEF_rRNA && mip->biomol == MOLECULE_TYPE_GENOMIC) {
                   StringCat (str, " gene");
                   if (count > 1) {
                     StringCat (str, "s");
                   }
-                  */
                 }
               }
               if (dfp->lastInGroup || dfp->lastInType) {
@@ -5163,11 +5206,11 @@ static void FinishAutoDefProc (Uint2 entityID, SeqEntryPtr sep,
         } else if (dfp->subtype == FEATDEF_LTR) {
           if (! StringHasNoText (sfp->comment)) {
             StringNCpy_0 (str, sfp->comment, sizeof (str));
-            ptr = StringStr (str, " long terminal repeat");
+            ptr = StringISearch (str, " long terminal repeat");
             if (ptr != NULL) {
               *ptr = '\0';
             }
-            ptr = StringStr (str, " long terminal repeat");
+            ptr = StringISearch (str, " long terminal repeat");
             if (ptr != NULL) {
               *ptr = '\0';
             }
@@ -6616,7 +6659,7 @@ static void PrintFtableIntervals (FILE *fp, SeqLocPtr location, Uint2 entityID, 
   Int4       stop;
 
   if (fp == NULL || location == NULL || StringHasNoText (label)) return;
-  bsp = GetBioseqGivenSeqLoc (location, entityID);
+  bsp = BioseqFindFromSeqLoc (location);
   if (bsp == NULL) return;
   slp = SeqLocFindNext (location, NULL);
   if (slp == NULL) return;
@@ -6626,7 +6669,9 @@ static void PrintFtableIntervals (FILE *fp, SeqLocPtr location, Uint2 entityID, 
   while ((slp = SeqLocFindNext (location, slp)) != NULL) {
     start = GetOffsetInBioseq (slp, bsp, SEQLOC_START) + 1;
     stop = GetOffsetInBioseq (slp, bsp, SEQLOC_STOP) + 1;
-    fprintf (fp, "%ld\t%ld\n", (long) start, (long) stop);
+    if (start != 0 && stop != 0) {
+      fprintf (fp, "%ld\t%ld\n", (long) start, (long) stop);
+    }
   }
 }
 
@@ -6766,6 +6811,7 @@ static Boolean LIBCALLBACK SequinFTableFeature (SeqFeatPtr sfp, SeqMgrFeatContex
   SeqFeatPtr   prot;
   ProtRefPtr   prp;
   RnaRefPtr    rrp;
+  SeqIdPtr     sip;
   Char         str [256];
   tRNAPtr      trna;
   ValNodePtr   vnp;
@@ -6788,7 +6834,7 @@ static Boolean LIBCALLBACK SequinFTableFeature (SeqFeatPtr sfp, SeqMgrFeatContex
         for (vnp = grp->syn; vnp != NULL; vnp = vnp->next) {
           StringNCpy_0 (str, (CharPtr) vnp->data.ptrvalue, sizeof (str));
           if (! StringHasNoText (str)) {
-            fprintf (fp, "\t\t\tgene\t%s\n", str);
+            fprintf (fp, "\t\t\tgene_syn\t%s\n", str);
           }
         }
       }
@@ -6822,6 +6868,17 @@ static Boolean LIBCALLBACK SequinFTableFeature (SeqFeatPtr sfp, SeqMgrFeatContex
             StringNCpy_0 (str, (CharPtr) vnp->data.ptrvalue, sizeof (str));
             if (! StringHasNoText (str)) {
               fprintf (fp, "\t\t\tEC_number\t%s\n", str);
+            }
+          }
+        }
+      }
+      if (prod != NULL) {
+        for (sip = prod->id; sip != NULL; sip = sip->next) {
+          if (sip->choice == SEQID_GENBANK ||
+              sip->choice == SEQID_EMBL ||
+              sip->choice == SEQID_DDBJ) {
+            if (SeqIdWrite (sip, str, PRINTID_TEXTID_ACC_VER, sizeof (str)) != NULL) {
+              fprintf (fp, "\t\t\tprotein_id\t%s\n", str);
             }
           }
         }

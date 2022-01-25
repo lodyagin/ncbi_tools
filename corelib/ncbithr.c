@@ -1,4 +1,4 @@
-/* $Id: ncbithr.c,v 6.19 1998/12/10 17:04:08 vakatov Exp $ */
+/* $Id: ncbithr.c,v 6.20 1999/08/20 19:55:18 vakatov Exp $ */
 /*****************************************************************************
 
     Name: ncbithr.c
@@ -35,6 +35,12 @@
  Modification History:
 -----------------------------------------------------------------------------
 * $Log: ncbithr.c,v $
+* Revision 6.20  1999/08/20 19:55:18  vakatov
+* s_ThreadCounter***:  use {counter + semaphore} instead of just
+* {RWlock} to count and join all threads.
+* [POSIX_THREADS_AVAIL] Changed the locking policy for nested RW-locks.
+* // Fully tested on Solaris(native and POSIX), Win-NT, IRIX, OSF1 and Linux
+*
 * Revision 6.19  1998/12/10 17:04:08  vakatov
 * Fixed to compile under LINUX(Red Hat 2.XX, gcc, with POSIX threads)
 *
@@ -300,8 +306,8 @@ TNlmMutex corelibMutex; /* exported in "corepriv.h" */
 
 
 /* POSIX implementation suppose that semaphore and RW objects
-   must be implemented by user himself .... */
-
+ * must be implemented by the user himself
+ */
 #if defined (POSIX_THREADS_AVAIL)
 typedef struct psema_t {
   Int4             count;
@@ -310,12 +316,25 @@ typedef struct psema_t {
 } psema_t;
 #endif
 
-/* locked for reading if at least one NCBI thread is running
+
+/* To allow main NCBI thread to wait until all other NCBI threads are exited
  */
 #ifdef NCBI_THREADS_AVAIL
-static TNlmRWlock s_ThreadCounter;
-static TNlmMutex  s_ThreadCounter_mutex; /* protective mutex for the counter */
+/* Counter for the running NCBI threads (excluding the main thread):  >= 0
+ */
+static Uint4 s_ThreadCounter = 0;
+
+/* Semaphore to wait (at the very end of main thread) for the
+ * "s_ThreadCounter" to become zero -- to make sure that all registered
+ * NCBI threads are terminated
+ */ 
+static TNlmSemaphore s_ThreadCounter_sema = 0;
+
+/* Protective mutex for the counter and the semaphore
+ */
+static TNlmMutex s_ThreadCounter_mutex = 0;
 #endif
+
 
 /*
  *  Functions and data structures providing storage and execution of
@@ -642,14 +661,12 @@ NLM_EXTERN TNlmThread NlmThreadCreateEx(TNlmThreadStart  theStartFunction,
   ErrSaveOptions(&wrapper_data->errOpts);
 
   /* indicate that one more NCBI thread is running */
-  if ( !s_ThreadCounter ) {
-    NlmMutexLockEx(&s_ThreadCounter_mutex);
-    if ( !s_ThreadCounter ) {
-      s_ThreadCounter = NlmRWinit();
-    }    
-    NlmMutexUnlock(s_ThreadCounter_mutex);
-  }
-  NlmRWrdlock(s_ThreadCounter);
+  NlmMutexLockEx(&s_ThreadCounter_mutex);
+  if ( !s_ThreadCounter_sema ) {
+    s_ThreadCounter_sema = NlmSemaInit(0);
+  }    
+  s_ThreadCounter++;
+  NlmMutexUnlock(s_ThreadCounter_mutex);
 
   /* create new thread */
 #if   defined(SOLARIS_THREADS_AVAIL)
@@ -733,7 +750,10 @@ NLM_EXTERN TNlmThread NlmThreadCreateEx(TNlmThreadStart  theStartFunction,
     wrapper_data->logName  = (CharPtr)Nlm_MemFree(wrapper_data->logName);
     wrapper_data->progName = (CharPtr)Nlm_MemFree(wrapper_data->progName);
     Nlm_Free(wrapper_data);
-    NlmRWunlock(s_ThreadCounter);
+    NlmMutexLock(s_ThreadCounter_mutex);
+    ASSERT(s_ThreadCounter > 0);
+    s_ThreadCounter--;
+    NlmMutexUnlock(s_ThreadCounter_mutex);
   }
 #endif  /* NCBI_THREADS_AVAIL */
 
@@ -793,11 +813,18 @@ NLM_EXTERN Int4 NlmThreadJoin(TNlmThread wait_for, VoidPtr *status)
 NLM_EXTERN Int4 NlmThreadJoinAll(void)
 {
 #ifdef NCBI_THREADS_AVAIL
-  if ( !s_ThreadCounter )
-    return 0;
+  /* wait for all threads to exit */
+  while (s_ThreadCounter > 0)
+    NlmSemaWait(s_ThreadCounter_sema);
 
-  return (NlmRWwrlock(s_ThreadCounter) == 0  &&
-          NlmRWunlock(s_ThreadCounter) == 0) ? 0 : -1;
+  /* make sure the s_ThreadCounter_mutex become unlocked */
+  if ( s_ThreadCounter_mutex ) {
+    NlmMutexLock(s_ThreadCounter_mutex);
+    NlmMutexUnlock(s_ThreadCounter_mutex);
+  }
+
+  ASSERT(s_ThreadCounter == 0);
+  return (s_ThreadCounter == 0) ? 0 : -1;
 #else
   return 0;
 #endif
@@ -831,7 +858,13 @@ NLM_EXTERN void NlmThreadExit(VoidPtr status)
   s_TlsCleanupAll();
 
   /* indicate that one more thread has exited */
-  NlmRWunlock(s_ThreadCounter);
+  NlmMutexLock(s_ThreadCounter_mutex);
+  ASSERT(s_ThreadCounter > 0);
+  s_ThreadCounter--;
+  if (s_ThreadCounter == 0) {
+    NlmSemaPost(s_ThreadCounter_sema);
+  }
+  NlmMutexUnlock(s_ThreadCounter_mutex);
 #endif  /* NCBI_THREADS_AVAIL */
 
   /* exit the thread */
@@ -1012,7 +1045,7 @@ NLM_EXTERN Int4 NlmSemaPost(TNlmSemaphore theSemaphore)
 /*                                                                  */
 /********************************************************************/
 
-#if defined(_DEBUG_HARD) && (defined(POSIX_THREADS_AVAIL) || defined(WIN32_THREADS_AVAIL))
+#if defined(_DEBUG_HARD) && defined(WIN32_THREADS_AVAIL)
 #define RW_UNKNOWN_OWNER ((TNlmThread)(~0))
 #define DO_RW(source_code) source_code
 #define IF_RW X_ASSERT
@@ -1023,20 +1056,47 @@ NLM_EXTERN Int4 NlmSemaPost(TNlmSemaphore theSemaphore)
 
 
 #if   defined (SOLARIS_THREADS_AVAIL)
+
 typedef struct TNlmRWlockTag {
   rwlock_t rwlock; /* native Solaris-style RW-lock */
 } structRWlock;
 
 #elif defined (POSIX_THREADS_AVAIL)
+
+/* [POSIX-only for now]  Nested locking policy:
+ *   W after R -- never allowed;
+ *   W after W -- allowed if the W-lock is owned by the same thread;
+ *   R after W -- allowed if the W-lock is owned by the same thread (and,
+ *                then this R is treated as if it was W);
+ *   R after R -- always allowed (unless there already was a "R after W"
+ *                performed in another thread)
+ *   U after W -- only if the W-lock is owned by the same thread
+ */
 typedef struct TNlmRWlockTag {
-  DO_RW( TNlmThread owner; )
-  Int4             readers; /* -1 if writer, else # of readers */
-  pthread_mutex_t  mutex;   /* the internal consistency mutex  */
+  /* if W-locked -- keeps the lock owner;
+   * also, exclusively for the reason of being easier to debug: 
+   *   if R-locked -- keeps the owner of the 1st R-lock,
+   *   if Unlocked -- keeps what it kept just before the last unlock.
+   */
+  TNlmThread owner;
+
+  /* < 0 -- negative # of locks if locked by writers or nested writers/readers
+   * = 0 -- not locked
+   * > 0 -- # of readers
+   */
+  Int4 readers;
+
+  /* protects members of this RW from being modified by more than one thread
+   * at once
+   */
+  pthread_mutex_t  mutex;
+
   pthread_cond_t   cond_r;  /* condition variable for readers  */
   pthread_cond_t   cond_w;  /* condition variable for writers  */
 } structRWlock;
 
 #elif defined (WIN32_THREADS_AVAIL)
+
 typedef struct TNlmRWlockTag {
   DO_RW( TNlmThread owner; )
   Int4    readers; /* -1 if writer, else # of readers     */
@@ -1122,6 +1182,7 @@ NLM_EXTERN Int4 NlmRWdestroy(TNlmRWlock RW)
   err_code = rwlock_destroy(&RW->rwlock);
 
 #elif defined (POSIX_THREADS_AVAIL)
+  ASSERT(RW->readers == 0);
   err_code = pthread_mutex_destroy(&RW->mutex);
   if (err_code == 0) {
     err_code = pthread_cond_destroy(&RW->cond_r);
@@ -1159,13 +1220,31 @@ NLM_EXTERN Int4 NlmRWrdlock(TNlmRWlock RW)
   err_code = rw_rdlock(&RW->rwlock);
 
 #elif defined(POSIX_THREADS_AVAIL)
+  /* protect members of "*RW" from being changed by other threads */
   err_code = pthread_mutex_lock(&RW->mutex);
+
+  /* obtain R-lock */
   if (err_code == 0) {
-    while (RW->readers < 0)
-      pthread_cond_wait(&RW->cond_r, &RW->mutex);
-    RW->readers++;
-    DO_RW ( RW->owner = NlmThreadSelf(); )
-    X_VERIFY ( !pthread_mutex_unlock(&RW->mutex) );
+    TNlmThread this_thread = NlmThreadSelf();
+    if (RW->readers < 0  &&  RW->owner == this_thread) {
+      /* W-locked by this the same thread already */
+      RW->readers--;  /* treate it as a W-lock then */
+    } else if (RW->readers <= 0) {
+      /* Unlocked or W-locked by another thread(s) */
+      /* if W-locked by another thread(s) -- wait here until it is Unlocked */
+      while (RW->readers < 0)
+        pthread_cond_wait(&RW->cond_r, &RW->mutex);
+      /* ...not locked, or it can be R-locked by other thread by now */
+      ASSERT(RW->readers >= 0);
+      RW->readers++;
+      RW->owner = this_thread;
+    } else {
+      /* R-locked already -- just increment the # of R-locks */
+      RW->readers++;
+    }
+
+    /* release members of "*RW" for changing by other threads */
+    VERIFY( !pthread_mutex_unlock(&RW->mutex) );
   }
 
 #elif defined(WIN32_THREADS_AVAIL)
@@ -1209,13 +1288,31 @@ NLM_EXTERN Int4 NlmRWwrlock(TNlmRWlock RW)
   err_code = rw_wrlock(&RW->rwlock);
 
 #elif defined(POSIX_THREADS_AVAIL)
+  /* protect members of "*RW" from being changed by other threads */
   err_code = pthread_mutex_lock(&RW->mutex);
+
+  /* obtain W-lock */
   if (err_code == 0) {
-    while (RW->readers != 0)
-      pthread_cond_wait(&RW->cond_w, &RW->mutex);
-    RW->readers = -1; /* -1 is a special counter value -- for writer */
-    DO_RW ( RW->owner = NlmThreadSelf(); )
-    X_VERIFY ( !pthread_mutex_unlock(&RW->mutex) );
+    TNlmThread this_thread = NlmThreadSelf();
+    if (RW->readers < 0  &&  RW->owner == this_thread) {
+      /* W-locked by this the same thread already */
+      RW->readers--;
+    } else if (RW->readers == 0  ||  RW->owner != this_thread) {
+      /* Unlocked or RW-locked by another thread(s) */
+      /* if RW-locked by another thread(s) -- wait here until it is Unlocked */
+      while (RW->readers != 0)
+        pthread_cond_wait(&RW->cond_w, &RW->mutex);
+      /* ...not locked now */
+      RW->readers = -1;
+      RW->owner   = this_thread;
+    } else {
+      /* already R-locked by this thread (sorry, it's not always detectable) */
+      ASSERT(0);
+      err_code = -1;
+    }
+
+    /* release members of "*RW" for changing by other threads */
+    VERIFY( !pthread_mutex_unlock(&RW->mutex) );
   }
 
 #elif defined(WIN32_THREADS_AVAIL)
@@ -1257,22 +1354,36 @@ NLM_EXTERN Int4 NlmRWunlock(TNlmRWlock RW)
   err_code = rw_unlock(&RW->rwlock);
 
 #elif defined (POSIX_THREADS_AVAIL)
+  /* protect members of "*RW" from being changed by other threads */
   err_code = pthread_mutex_lock(&RW->mutex);
+
+  /* unlock (R or W) */
   if (err_code == 0) {
-    X_ASSERT ( RW->readers != 0 );
-    if (RW->readers == -1) { /* the writer unlock, clear access for all */
+    ASSERT( RW->readers != 0 );
+    if (RW->readers < 0  &&  RW->owner != NlmThreadSelf()) {
+        /* attempted to Unlock a W-lock held by another thread -- trouble! */
+        ASSERT(0);
+        err_code = 1;
+    } else if (RW->readers == -1) {
+      /* only one W-lock left -- allow for both R- and W-locks */
       if ((err_code = pthread_cond_broadcast(&RW->cond_r)) == 0)
         err_code = pthread_cond_signal(&RW->cond_w);
       if (err_code == 0)
         RW->readers = 0;
-    } else if (RW->readers == 1) { /* clear access for writer */
+    } else if (RW->readers < 1) {
+      /* nested W-lock -- just decrement the # of W-locks left */
+      RW->readers++;
+    } else if (RW->readers == 1) {
+      /* one R-lock left -- allow for W-locks (R-locks are allowed already)  */
       if ((err_code = pthread_cond_signal(&RW->cond_w)) == 0)
         RW->readers = 0;
-    } else { /* more than one reader -- decrease the readers counter */
+    } else {
+      /* nested R-lock -- just decrement the # of R-locks left */
       RW->readers--;
     }
-    DO_RW ( if (err_code == 0)  RW->owner = RW_UNKNOWN_OWNER; )
-    X_VERIFY ( !pthread_mutex_unlock(&RW->mutex) );
+
+    /* release members of "*RW" for changing by other threads */
+    VERIFY( !pthread_mutex_unlock(&RW->mutex) );
   }
 
 #elif defined(WIN32_THREADS_AVAIL)
@@ -1318,16 +1429,34 @@ NLM_EXTERN Int4 NlmRWtryrdlock(TNlmRWlock RW)
     return err_code ? -1 : 0;
 
 #elif defined(POSIX_THREADS_AVAIL)
+  TNlmThread this_thread = NlmThreadSelf();
+  /* quick check -- dont care to lock here */
+  if (RW->readers < 0  &&  RW->owner != this_thread)
+    return -1;
+
+  /* protect members of "*RW" from being changed by other threads */
   err_code = pthread_mutex_lock(&RW->mutex);
+
+  /* trying to obtain R-lock */
   if (err_code == 0) {
-    if (RW->readers < 0) {
-      X_ASSERT ( RW->readers = -1 );
-      X_VERIFY ( !pthread_mutex_unlock(&RW->mutex) );
-      return -1; /* already locked by a writer */
+    if (RW->readers == 0) {
+      /* Unlocked -- do R-lock, store ownership to help catch "W after R" */
+      RW->readers = 1;
+      RW->owner   = this_thread;
+    } else if (RW->readers > 0) {
+      /* R-locked already -- just increment the # of R-locks */
+      RW->readers++;
+    } else {
+      /* W-locked already -- check if locked by the same thread (nested W) */
+      if (RW->owner == this_thread)
+        RW->readers--;  /* nested locking (interpret R as W here) */
+      else
+        err_code = -1;  /* cannot R-lock instantaneously */
     }
-    RW->readers++;
-    DO_RW ( RW->owner = NlmThreadSelf(); )
-    X_VERIFY ( !pthread_mutex_unlock(&RW->mutex) );
+
+    /* release members of "*RW" for changing by other threads */
+    VERIFY( !pthread_mutex_unlock(&RW->mutex) );
+    return err_code;
   }
 
 #elif defined(WIN32_THREADS_AVAIL)
@@ -1369,15 +1498,35 @@ NLM_EXTERN Int4 NlmRWtrywrlock(TNlmRWlock RW)
     return err_code ? -1 : 0;
 
 #elif defined(POSIX_THREADS_AVAIL)
+  TNlmThread this_thread = NlmThreadSelf();
+  /* quick check -- dont care to lock here */
+  if (RW->readers > 0  ||
+      (RW->readers < 0  &&  RW->owner != this_thread))
+    return -1;
+
+  /* protect members of "*RW" from being changed by other threads */
   err_code = pthread_mutex_lock(&RW->mutex);
+
+  /* trying to obtain W-lock */
   if (err_code == 0) {
-    if ( RW->readers ) {
-      X_VERIFY ( !pthread_mutex_unlock(&RW->mutex) );
-      return -1; /* already locked by a reader or a writer */
+    if (RW->readers == 0) {
+      /* Unlocked -- do W-lock, store ownership */
+      RW->readers = -1;
+      RW->owner   = this_thread;
+    } else if (RW->readers > 0) {
+      /* R-locked already -- cannot W-lock instantaneously */
+      err_code = -1;
+    } else {
+      /* W-locked already -- check if locked by the same thread (nested W) */
+      if (RW->owner == this_thread)
+        RW->readers--;  /* nested locking (interpret R as W here) */
+      else
+        err_code = -1;  /* cannot W-lock instantaneously */
     }
-  RW->readers = -1;
-  DO_RW ( RW->owner = NlmThreadSelf(); )
-  X_VERIFY ( !pthread_mutex_unlock(&RW->mutex) );
+
+    /* release members of "*RW" for changing by other threads */
+    VERIFY( !pthread_mutex_unlock(&RW->mutex) );
+    return err_code;
   }
 
 #elif defined(WIN32_THREADS_AVAIL)
@@ -2010,8 +2159,9 @@ NLM_EXTERN void NlmThreadDestroyAll(void)
 #ifdef NCBI_THREADS_AVAIL
   if (s_ThreadCounter_mutex  &&  NlmMutexDestroy(s_ThreadCounter_mutex) == 0)
     s_ThreadCounter_mutex = 0;
-  if (s_ThreadCounter  &&  NlmRWdestroy(s_ThreadCounter) == 0)
-    s_ThreadCounter = 0;
+  if (s_ThreadCounter_sema  &&  NlmSemaDestroy(s_ThreadCounter_sema) == 0)
+    s_ThreadCounter_sema = 0;
+  s_ThreadCounter = 0;
   X_VERIFY( !s_MutexDestroy(&s_Init_mutex) );
 #endif /* NCBI_THREADS_AVAIL */
 }
@@ -2170,7 +2320,7 @@ static VoidPtr TEST__MyThread(VoidPtr arg)
     if ( ++iii % 5 ) { /* reader */
       for (i = 0;  i < 500;  i++) {
         int x_var, j;
-        if (NlmRWtryrdlock(RWlock) == -1)
+        if (NlmRWtryrdlock(RWlock) != 0)
           VERIFY ( !NlmRWrdlock(RWlock) );
         x_var = var;
         for (j = 0;  j < 10;  j++)
@@ -2186,7 +2336,7 @@ static VoidPtr TEST__MyThread(VoidPtr arg)
     else { /* writer */
       for (i = 0;  i < 1000;  i++) {
         int j;
-        if (NlmRWtrywrlock(RWlock) == -1)
+        if (NlmRWtrywrlock(RWlock) != 0)
           VERIFY ( !NlmRWwrlock(RWlock) );
         var++;
         for (j = 0;  j < 7;  j++, var++)

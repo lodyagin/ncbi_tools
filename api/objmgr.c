@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.17 $
+* $Revision: 6.24 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
@@ -40,6 +40,27 @@
 *
 *
 * $Log: objmgr.c,v $
+* Revision 6.24  1999/08/13 19:43:35  kans
+* ObjMgrDelete and ObjMgrGetEntityIDForPointer now multithread-safe (EY)
+*
+* Revision 6.23  1999/08/11 15:17:53  kans
+* added ObjMgrFreeByEntityID
+*
+* Revision 6.22  1999/06/11 16:42:39  kans
+* remove from recycle just shrinks stack if removing last element
+*
+* Revision 6.21  1999/06/10 21:10:28  kans
+* added ObjMgrRemoveEntityIDFromRecycle, called from RestoreSeqEntryObjMgrData
+*
+* Revision 6.20  1999/06/01 21:06:48  ywang
+* get rid of (sip1->strand == sip2->strand) in ObjMgrRegionMatch
+*
+* Revision 6.19  1999/05/17 02:11:23  chappey
+* remove the temporary fix
+*
+* Revision 6.18  1999/05/17 00:41:54  chappey
+* temporary fix in ObjMgrRegionComp when SeqLocStop==APPEND_RESIDUE
+*
 * Revision 6.17  1999/02/19 19:24:34  chappey
 * Possible deselection of a region included in a selected region
 *
@@ -336,6 +357,28 @@ NLM_EXTERN ObjMgrDataPtr LIBCALL ObjMgrFindByData (ObjMgrPtr omp, Pointer ptr)
 
 static Uint2 recycledEntityIDs [ENTITY_ID_STACK_SIZE];
 static Int2  recycledIDStackPt = 0;
+
+extern void ObjMgrRemoveEntityIDFromRecycle (Uint2 entityID, ObjMgrPtr omp);
+extern void ObjMgrRemoveEntityIDFromRecycle (Uint2 entityID, ObjMgrPtr omp)
+
+{
+	Int2  i;
+
+	if (entityID < 1) return;
+	if (omp != NULL) {
+		for (i = 0; i < recycledIDStackPt; i++) {
+			if (entityID == recycledEntityIDs [i]) {
+				recycledEntityIDs [i] = 0; /* remove from recycle list */
+				if (recycledIDStackPt > i + 1) {
+					recycledIDStackPt--;
+					recycledEntityIDs [i] = recycledEntityIDs [recycledIDStackPt];
+				} else {
+					recycledIDStackPt--;
+				}
+			}
+		}
+	}
+}
 
 static Uint2 ObjMgrNextAvailEntityID (ObjMgrPtr omp)
 
@@ -1389,9 +1432,9 @@ NLM_EXTERN Boolean LIBCALL ObjMgrDelete (Uint2 type, Pointer data)
 	Int2 i, j;
 	Boolean retval = FALSE;
 
-	omp = ObjMgrGet();
-
+	omp = ObjMgrReadLock(); /* (EY) */
 	i = ObjMgrLookup(omp, data);
+	ObjMgrUnlock(); /* (EY) */
 	if (i < 0)  /* not found */
 	{
 	   /***	may not be registered with objmgr ***
@@ -2123,7 +2166,7 @@ NLM_EXTERN Uint2 LIBCALL ObjMgrGetEntityIDForPointer (Pointer ptr)
 	if (ptr == NULL)
 		return retval;
 
-	omp = ObjMgrReadLock();
+	omp = ObjMgrWriteLock(); /* (EY) */
 	omdp = ObjMgrFindByData(omp, ptr);
 
 	if (omdp == NULL) goto erret;
@@ -3402,8 +3445,8 @@ static Boolean NEAR ObjMgrRegionMatch (Uint1 regiontype1, Pointer region1,
 			sip2 = (SeqIntPtr)(slp->data.ptrvalue);
 			if (sip1 == NULL || sip2 == NULL) return FALSE;
 			if ( ((sip1->from == sip2->from) &&
-				(sip1->to == sip2->to) &&
-				(sip1->strand == sip2->strand)))
+				(sip1->to == sip2->to)))
+                       /* get rid of (sip1->strand == sip2->strand) */
 					return TRUE;
 			break;
 		default:
@@ -3567,7 +3610,7 @@ static Int2 NEAR ObjMgrRegionComp (Pointer region1,Pointer region2, Boolean dire
 
         slp1 = (SeqLocPtr)region1;
         slp2 = (SeqLocPtr)region2;
-        res = SeqLocCompare(slp1,slp2);
+        res = SeqLocCompare (slp1,slp2);
         if (res == SLC_NO_MATCH)
         {
            if (SeqLocStop(slp1) == SeqLocStart(slp2)-1)
@@ -3677,6 +3720,7 @@ SeqLocPtr slp;
                 SeqLocChangeIntervalle ((SeqLocPtr)ssp->region, -1, (Int4)(SeqLocStop(region)));
 		ValNodeFree (tmp);
                 retval=ObjMgrSendDeSelMsg (omp, entityID, itemID, itemtype, OM_REGION_SEQLOC, tmp2);
+
 		ValNodeFree (tmp2);
         }
         else if (res==6) /* shrink ssp->region from left */
@@ -4172,6 +4216,27 @@ NLM_EXTERN Pointer LIBCALL ObjMgrFree (Uint2 type, Pointer ptr)
 	newptr = ObjMgrFreeFunc(omp, type, ptr, TRUE);
 
 	return newptr;
+}
+
+NLM_EXTERN Pointer LIBCALL ObjMgrFreeByEntityID (Uint2 entityID)
+{
+	ObjMgrDataPtr omdp;
+	Uint2 type;
+	Pointer ptr;
+
+	if (entityID < 1) return NULL;
+	omdp = ObjMgrGetData (entityID);
+	if (omdp == NULL) return NULL;
+
+	if (omdp->choice != NULL) {
+		type = omdp->choicetype;
+		ptr = omdp->choice;
+	} else {
+		type = omdp->datatype;
+		ptr = omdp->dataptr;
+	}
+
+	return ObjMgrFree (type, ptr);
 }
 
 static Pointer NEAR ObjMgrFreeFunc (ObjMgrPtr omp, Uint2 type, Pointer ptr, Boolean unlock)

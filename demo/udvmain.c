@@ -29,14 +29,19 @@
 *
 * Version Creation Date:   5/3/99
 *
-* $Revision: 6.2 $
+* $Revision: 6.5 $
 *
 * File Description: 
 *
-* Modifications:  
+* Modifications:
 * --------------------------------------------------------------------------
-* Date     Name        Description of modification
-* -------  ----------  -----------------------------------------------------
+* $Log: udvmain.c,v $
+* Revision 6.5  1999/07/30 20:10:15  durand
+* updates for the new Entrez graphical viewer
+*
+* Revision 6.4  1999/06/07 15:40:30  durand
+* add LOG line to keep track of the history
+*
 *
 *
 * ==========================================================================
@@ -93,6 +98,7 @@ Int2			Margins;
 Boolean 		isID1Ok;
 RecT			rcL;
 UdvGlobals      ug;
+UDVLogoData		ldp;
 	
 	ErrSetMessageLevel(SEV_NONE);
 	ErrSetOptFlags(EO_SHOW_CODES);
@@ -169,7 +175,10 @@ UdvGlobals      ug;
 
 	UDV_set_MainMenus(&vmp->MainMenu,FALSE);
 	/*init logo_panel*/
-	LogoFontCreate(&vmp->f1,&vmp->f2,&vmp->f3);
+	LogoFontCreate(&ldp.f1,&ldp.f2,&ldp.f3);
+	StringCpy(ldp.szTitle,"UnD-Viewer");
+	StringCpy(ldp.szDesc,", a sequence viewer for GenBank");
+	SetAppProperty("UDVLogoData",(Pointer)&ldp);	
 	vmp->Logo_Panel=AutonomousPanel4(w,10,10,UDV_Logo_onDraw,
 			NULL,NULL,0,NULL,NULL);
 	UDV_Resize_Logo_Panel (w,&rcL);
@@ -177,6 +186,9 @@ UdvGlobals      ug;
 	AdjustPrnt (vmp->Logo_Panel, &rcL, FALSE);
 	vmp->Show_logo=TRUE;	
 	SetAppProperty("AutonomousUDVViewer",(Pointer)vmp);	
+	
+	/*ProcessUpdatesFirst(FALSE);*/
+	
 	RealizeWindow(w);
 	Show(w);
 
@@ -201,6 +213,7 @@ UdvGlobals      ug;
 	ID1BioseqFetchDisable();
 
 	RemoveAppProperty("AutonomousUDVViewer");	
+	RemoveAppProperty("UDVLogoData");	
 	RemoveAppProperty("UdvGlobals");
 
 	return(0);

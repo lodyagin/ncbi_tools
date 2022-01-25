@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.17 $
+* $Revision: 6.19 $
 *
 * File Description: 
 *
@@ -1276,11 +1276,13 @@ extern GrouP CreateCommonFeatureGroup (GrouP h, FeatureFormPtr ffp,
     cdsQuals = FALSE;
     if (ffp->gbquals == NULL && sfp != NULL && sfp->qual != NULL) {
       hasQuals = TRUE;
+      /*
       if (GetAppProperty ("InternalNcbiSequin") != NULL) {
         if (sfp->data.choice == SEQFEAT_CDREGION) {
           cdsQuals = TRUE;
         }
       }
+      */
     }
     m = HiddenGroup (h, -1, 0, NULL);
     SetGroupSpacing (m, 10, 10);
@@ -1515,7 +1517,7 @@ extern void SetNewFeatureDefaultInterval (FeatureFormPtr ffp)
   }
 }
 
-extern void FileToScrollText (TexT t, CharPtr path)
+extern Boolean FileToScrollText (TexT t, CharPtr path)
 
 {
   FILE     *fp;
@@ -1570,9 +1572,11 @@ extern void FileToScrollText (TexT t, CharPtr path)
           SetTitle (t, str);
         }
         MemFree (str);
+        return TRUE;
       }
     }
   }
+  return FALSE;
 }
 
 extern void ScrollTextToFile (TexT t, CharPtr path)
@@ -1883,7 +1887,9 @@ extern void LaunchGeneralTextViewer (CharPtr path, CharPtr title)
                               fnt, FALSE, NULL);
       SetObjectExtra (tfp->text, tfp, NULL);
       RealizeWindow (w);
-      FileToScrollText (tfp->text, path);
+      if (! FileToScrollText (tfp->text, path)) {
+        SetTitle (tfp->text, "(Text is too large to be displayed in this control.)");
+      }
     } else {
       tfp->doc = DocumentPanel (w, pixwidth, pixheight);
       SetObjectExtra (tfp->doc, tfp, NULL);

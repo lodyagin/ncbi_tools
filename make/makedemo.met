@@ -79,7 +79,7 @@ on DoSetGlobals()
 	tell application "Finder"
 		
 		set HARDDISK to startup disk as string
-		set METRO to HARDDISK & "CodeWarrior Pro 4:" as string
+		set METRO to HARDDISK & "CodeWarrior Pro 5:" as string
 		set METROWERKSCW to METRO & "Metrowerks CodeWarrior:" as string
 		
 		set NCBISOURCE to METRO & "ncbi:" as string
@@ -99,7 +99,7 @@ on DoSetGlobals()
 end DoSetGlobals
 
 on DoSetPreferences()
-	tell application "CodeWarrior IDE 3.2"
+	tell application "CodeWarrior IDE 4.0"
 		
 		(* ===== Panel Target ===== *)
 		if MASTER = "PPC" then
@@ -108,11 +108,12 @@ on DoSetPreferences()
 			Set Preferences of panel "Target Settings" to {Linker:"MacOS 68K Linker"}
 		end if
 		
-		(* ===== Panel PowerPC Project =====  *)
-		Set Preferences of panel "PPC Project" to {Project Type:standard application}
-		
-		(* ===== Panel 68K Project =====  *)
-		Set Preferences of panel "68K Project" to {Project Type:standard application}
+		(* ===== Panel Project ===== *)
+		if MASTER = "PPC" then
+			Set Preferences of panel "PPC Project" to {Project Type:library}
+		else if MASTER = "68K" then
+			Set Preferences of panel "68K Project" to {Project Type:library}
+		end if
 		
 		(* ===== Panel C/C++ Language =====  *)
 		Set Preferences of panel "C/C++ Compiler" to Â
@@ -143,65 +144,68 @@ on DoSetPreferences()
 				, Extra Commas:true Â
 				, Extended Error Checking:true}
 		
-		(* ===== Panel PPC Processor =====  *)
-		Set Preferences of panel "PPC CodeGen" to Â
-			{Struct Alignment:Align_PPC Â
-				, Make Strings ReadOnly:true Â
-				, Store Data in TOC:true Â
-				, Use FMADD Instructions:false Â
-				, Use Profiler:false Â
-				, Traceback Tables:TB_None Â
-				, Schedule:false Â
-				, Peephole Optimizer:false}
-		
-		(* ===== Panel PPC Linker ===== *)
-		Set Preferences of panel "PPC Linker" to Â
-			{Generate SYM File:true Â
-				, Full Path In Sym Files:true Â
-				, Generate Link Map:false Â
-				, Suppress Warnings:false Â
-				, Link Mode:fast Â
-				, Initialization Name:Â
-				"", Main Name:Â
-				"__start", Termination Name:""}
-		
-		(* ===== Panel PPC PEF =====  *)
-		Set Preferences of panel "PPC PEF" to Â
-			{Export Symbols:none Â
-				, Old Definition:0 Â
-				, Old Implementation:0 Â
-				, Current Version:0 Â
-				, Code Sorting:nosort Â
-				, Share Data Section:false Â
-				, Expand Uninitialized Data:false Â
-				, Fragment Name:""}
-		
-		(* ===== Panel 68K Processor =====  *)
-		Set Preferences of panel "68K CodeGen" to Â
-			{Code Model:large Â
-				, Struct Alignment:Align_68k Â
-				, MC68020 CodeGen:false Â
-				, Floating Point CodeGen:SANE Â
-				, PC Relative Strings:false Â
-				, Use Profiler:false Â
-				, Four Bytes Ints:true Â
-				, Eight Byte Double:true Â
-				, Far Data:true Â
-				, Far Method Tables:true Â
-				, Far String Constants:true Â
-				, MPW Calling Conventions:false}
-		
-		(* ===== Panel 68K Linker ===== *)
-		Set Preferences of panel "68K Linker" to Â
-			{MacsBug Symbols:newsymbols Â
-				, Generate SYM File:true Â
-				, Full Path In Sym Files:true Â
-				, Generate Link Map:false Â
-				, Generate A6 Stack Frames:true Â
-				, Link Single Segment:false Â
-				, Suppress Warnings:false Â
-				, Fast Link:true Â
-				, Merge Compiler Glue:false}
+		if MASTER = "PPC" then
+			
+			(* ===== Panel PPC Processor =====  *)
+			Set Preferences of panel "PPC CodeGen" to Â
+				{Struct Alignment:Align_PPC Â
+					, Make Strings ReadOnly:true Â
+					, Store Data in TOC:true Â
+					, Use FMADD Instructions:false Â
+					, Use Profiler:false Â
+					, Traceback Tables:TB_None Â
+					, Schedule:false Â
+					, Peephole Optimizer:false}
+			
+			(* ===== Panel PPC Linker ===== *)
+			Set Preferences of panel "PPC Linker" to Â
+				{Generate SYM File:true Â
+					, Full Path In Sym Files:true Â
+					, Generate Link Map:false Â
+					, Suppress Warnings:false Â
+					, Link Mode:fast Â
+					, Initialization Name:Â
+					"", Main Name:Â
+					"__start", Termination Name:""}
+			
+			(* ===== Panel PPC PEF =====  *)
+			Set Preferences of panel "PPC PEF" to Â
+				{Export Symbols:none Â
+					, Old Definition:0 Â
+					, Old Implementation:0 Â
+					, Current Version:0 Â
+					, Code Sorting:nosort Â
+					, Share Data Section:false Â
+					, Expand Uninitialized Data:false Â
+					, Fragment Name:""}
+			
+		else if MASTER = "68K" then
+			(* ===== Panel 68K Processor =====  *)
+			Set Preferences of panel "68K CodeGen" to Â
+				{Code Model:large Â
+					, Struct Alignment:Align_68k Â
+					, MC68020 CodeGen:false Â
+					, Floating Point CodeGen:SANE Â
+					, PC Relative Strings:false Â
+					, Use Profiler:false Â
+					, Four Bytes Ints:true Â
+					, Eight Byte Double:true Â
+					, Far Data:true Â
+					, Far Method Tables:true Â
+					, Far String Constants:true Â
+					, MPW Calling Conventions:false}
+			
+			(* ===== Panel 68K Linker ===== *)
+			Set Preferences of panel "68K Linker" to Â
+				{Generate SYM File:true Â
+					, Full Path In Sym Files:true Â
+					, Generate Link Map:false Â
+					, Link Single Segment:false Â
+					, Suppress Warnings:false Â
+					, Fast Link:true Â
+					, Merge Compiler Glue:false}
+			
+		end if
 		
 		my DoSetPaths1()
 		
@@ -209,7 +213,7 @@ on DoSetPreferences()
 end DoSetPreferences
 
 on DoSetPaths1()
-	tell application "CodeWarrior IDE 3.2"
+	tell application "CodeWarrior IDE 4.0"
 		
 		(* ===== Panel Access Paths ===== *)
 		-- We need to be able to move the default system compiler folder to the end of the list
@@ -224,33 +228,35 @@ on DoSetPaths1()
 end DoSetPaths1
 
 on DoSetPaths2()
-	tell application "CodeWarrior IDE 3.2"
+	tell application "CodeWarrior IDE 4.0"
 		
 		-- After we have added all paths, reinsert compiler default at end of list
 		Set Preferences of panel "Access Paths" to {System Paths:{{name:":MacOS Support:Headers:", recursive:true, origin:shell relative}}}
 		Set Preferences of panel "Access Paths" to {System Paths:{{name:":MacOS Support:Libraries:", recursive:true, origin:shell relative}}}
-		Set Preferences of panel "Access Paths" to {System Paths:{{name:":Metrowerks Standard Library:MSL C:", recursive:true, origin:shell relative}}}
+		Set Preferences of panel "Access Paths" to {System Paths:{{name:":MacOS Support:Universal:", recursive:true, origin:shell relative}}}
+		Set Preferences of panel "Access Paths" to {System Paths:{{name:":MacOS Support:Profiler:", recursive:true, origin:shell relative}}}
+		Set Preferences of panel "Access Paths" to {System Paths:{{name:":MSL:MSL_C:", recursive:true, origin:shell relative}}}
 		
 	end tell
 end DoSetPaths2
 
 on AddLibraries()
-	tell application "CodeWarrior IDE 3.2"
+	tell application "CodeWarrior IDE 4.0"
 		
 		if MASTER = "PPC" then
-			Add Files {METROWERKSCW & "Metrowerks Standard Library:MSL C:Bin:MSL C.PPC.Lib"} To Segment 1
-			Add Files {METROWERKSCW & "Metrowerks Standard Library:MSL C:Bin:MSL SIOUX.PPC.Lib"} To Segment 1
-			Add Files {METROWERKSCW & "MacOS Support:Libraries:MacOS Common:InterfaceLib"} To Segment 1
-			Add Files {METROWERKSCW & "MacOS Support:Libraries:MacOS Common:AppearanceLib"} To Segment 1
+			Add Files {METROWERKSCW & "MSL:MSL_C:MSL_MacOS:Lib:PPC:MSL C.PPC.Lib"} To Segment 1
+			Add Files {METROWERKSCW & "MSL:MSL_C:MSL_MacOS:Lib:PPC:MSL SIOUX.PPC.Lib"} To Segment 1
+			Add Files {METROWERKSCW & "MacOS Support:Universal:Libraries:StubLibraries:InterfaceLib"} To Segment 1
+			Add Files {METROWERKSCW & "MacOS Support:Universal:Libraries:StubLibraries::AppearanceLib"} To Segment 1
 			Set Project File "AppearanceLib" to {weak link:true}
-			Add Files {METROWERKSCW & "MacOS Support:Libraries:MacOS Common:NavigationLib"} To Segment 1
+			Add Files {METROWERKSCW & "MacOS Support:Universal:Libraries:StubLibraries:NavigationLib"} To Segment 1
 			Set Project File "NavigationLib" to {weak link:true}
-			Add Files {METROWERKSCW & "MacOS Support:Libraries:MacOS Common:MathLib"} To Segment 1
+			Add Files {METROWERKSCW & "MacOS Support:Universal:Libraries:StubLibraries:MathLib"} To Segment 1
 			Add Files {METROWERKSCW & "MacOS Support:Libraries:Runtime:Runtime PPC:MSL RuntimePPC.Lib"} To Segment 1
 		else if MASTER = "68K" then
 			Add Files {METROWERKSCW & "MacOS Support:Libraries:Runtime:Runtime 68K:MSL Runtime68k.Lib"} To Segment 1
-			Add Files {METROWERKSCW & "Metrowerks Standard Library:MSL C:Bin:MSL C.68K Fa(4i_8d).Lib"} To Segment 1
-			Add Files {METROWERKSCW & "Metrowerks Standard Library:MSL C:Bin:MSL SIOUX.68K.Lib"} To Segment 1
+			Add Files {METROWERKSCW & "MSL:MSL_C:MSL_MacOS:Lib:68K:MSL C.68K Fa(4i_8d).Lib"} To Segment 1
+			Add Files {METROWERKSCW & "MSL:MSL_C:MSL_MacOS:Lib:68K:MSL SIOUX.68K.Lib"} To Segment 1
 			Add Files {METROWERKSCW & "MacOS Support:Libraries:MacOS 68K:MacOS.lib"} To Segment 1
 			Add Files {METROWERKSCW & "MacOS Support:Libraries:MacOS 68K:MathLib68K:MathLib68K (Model Far):MathLib68K Fa(4i_8d).Lib"} To Segment 1
 		end if
@@ -258,7 +264,7 @@ on AddLibraries()
 end AddLibraries
 
 on CompilePrograms()
-	tell application "CodeWarrior IDE 3.2"
+	tell application "CodeWarrior IDE 4.0"
 		
 		open (BUILDTEST & "nentrez" & SUFFIX & ".µ")
 		Make Project
@@ -298,7 +304,7 @@ end CompilePrograms
 (* ==== This section populates the programs ==== *)
 
 on CreateNENTREZ()
-	tell application "CodeWarrior IDE 3.2"
+	tell application "CodeWarrior IDE 4.0"
 		
 		Create Project {BUILDTEST & "nentrez" & SUFFIX & ".µ"}
 		
@@ -326,10 +332,10 @@ on CreateNENTREZ()
 		
 		set segmentCounter to segmentCounter + 1
 		
-		Add Files (LIBRARIES & "ncsasock" & SUFFIX, LIBRARIES & "ncbi" & SUFFIX, LIBRARIES & "ncbiobj" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "ncbicdr" & SUFFIX, LIBRARIES & "vibrant" & SUFFIX, LIBRARIES & "ncbidesk" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "ncbimmdb" & SUFFIX, LIBRARIES & "ncbicn3d" & SUFFIX, LIBRARIES & "ncbitool" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "netcli" & SUFFIX, LIBRARIES & "netentr" & SUFFIX, LIBRARIES & "vibnet" & SUFFIX) To Segment segmentCounter
+		Add Files {LIBRARIES & "ncsasock" & SUFFIX, LIBRARIES & "ncbi" & SUFFIX, LIBRARIES & "ncbiobj" & SUFFIX} To Segment segmentCounter
+		Add Files {LIBRARIES & "ncbicdr" & SUFFIX, LIBRARIES & "vibrant" & SUFFIX, LIBRARIES & "ncbidesk" & SUFFIX} To Segment segmentCounter
+		Add Files {LIBRARIES & "ncbimmdb" & SUFFIX, LIBRARIES & "ncbicn3d" & SUFFIX, LIBRARIES & "ncbitool" & SUFFIX} To Segment segmentCounter
+		Add Files {LIBRARIES & "netcli" & SUFFIX, LIBRARIES & "netentr" & SUFFIX, LIBRARIES & "vibnet" & SUFFIX} To Segment segmentCounter
 		
 		set segmentCounter to segmentCounter + 1
 		
@@ -338,7 +344,7 @@ on CreateNENTREZ()
 		
 		set segmentCounter to segmentCounter + 1
 		
-		Add Files (NCBISOURCE & "demo:entrez.c") To Segment segmentCounter
+		Add Files {NCBISOURCE & "demo:entrez.c"} To Segment segmentCounter
 		
 		Reset File Paths
 		Close Project
@@ -347,7 +353,7 @@ on CreateNENTREZ()
 end CreateNENTREZ
 
 on CreateSEQUIN()
-	tell application "CodeWarrior IDE 3.2"
+	tell application "CodeWarrior IDE 4.0"
 		
 		Create Project {BUILDTEST & "sequin" & SUFFIX & ".µ"}
 		
@@ -375,12 +381,12 @@ on CreateSEQUIN()
 		
 		set segmentCounter to segmentCounter + 1
 		
-		Add Files (LIBRARIES & "ncsasock" & SUFFIX, LIBRARIES & "ncbi" & SUFFIX, LIBRARIES & "ncbiobj" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "ncbicdr" & SUFFIX, LIBRARIES & "vibrant" & SUFFIX, LIBRARIES & "ncbidesk" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "ncbimmdb" & SUFFIX, LIBRARIES & "ncbicn3d" & SUFFIX, LIBRARIES & "ncbitool" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "netcli" & SUFFIX, LIBRARIES & "netentr" & SUFFIX, LIBRARIES & "ncbibls2" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "ncbimla" & SUFFIX, LIBRARIES & "ncbitxc2" & SUFFIX, LIBRARIES & "ncbiid1" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "vibnet" & SUFFIX) To Segment segmentCounter
+		Add Files {LIBRARIES & "ncsasock" & SUFFIX, LIBRARIES & "ncbi" & SUFFIX, LIBRARIES & "ncbiobj" & SUFFIX} To Segment segmentCounter
+		Add Files {LIBRARIES & "ncbicdr" & SUFFIX, LIBRARIES & "vibrant" & SUFFIX, LIBRARIES & "ncbidesk" & SUFFIX} To Segment segmentCounter
+		Add Files {LIBRARIES & "ncbimmdb" & SUFFIX, LIBRARIES & "ncbicn3d" & SUFFIX, LIBRARIES & "ncbitool" & SUFFIX} To Segment segmentCounter
+		Add Files {LIBRARIES & "netcli" & SUFFIX, LIBRARIES & "netentr" & SUFFIX, LIBRARIES & "ncbibls3" & SUFFIX} To Segment segmentCounter
+		Add Files {LIBRARIES & "ncbimla" & SUFFIX, LIBRARIES & "ncbitxc2" & SUFFIX, LIBRARIES & "ncbiid1" & SUFFIX} To Segment segmentCounter
+		Add Files {LIBRARIES & "vibnet" & SUFFIX} To Segment segmentCounter
 		
 		set segmentCounter to segmentCounter + 1
 		
@@ -392,10 +398,10 @@ on CreateSEQUIN()
 		
 		set NCBISEQUIN to NCBISOURCE & "sequin:" as string
 		
-		Add Files (NCBISEQUIN & "sequin1.c", NCBISEQUIN & "sequin2.c", NCBISEQUIN & "sequin3.c") To Segment segmentCounter
-		Add Files (NCBISEQUIN & "sequin4.c", NCBISEQUIN & "sequin5.c", NCBISEQUIN & "sequin6.c") To Segment segmentCounter
-		Add Files (NCBISEQUIN & "sequin7.c", NCBISEQUIN & "sequin8.c", NCBISEQUIN & "sequin9.c") To Segment segmentCounter
-		Add Files (NCBISEQUIN & "sequinx.c") To Segment segmentCounter
+		Add Files {NCBISEQUIN & "sequin1.c", NCBISEQUIN & "sequin2.c", NCBISEQUIN & "sequin3.c"} To Segment segmentCounter
+		Add Files {NCBISEQUIN & "sequin4.c", NCBISEQUIN & "sequin5.c", NCBISEQUIN & "sequin6.c"} To Segment segmentCounter
+		Add Files {NCBISEQUIN & "sequin7.c", NCBISEQUIN & "sequin8.c", NCBISEQUIN & "sequin9.c"} To Segment segmentCounter
+		Add Files {NCBISEQUIN & "sequinx.c"} To Segment segmentCounter
 		
 		Reset File Paths
 		Close Project
@@ -404,7 +410,7 @@ on CreateSEQUIN()
 end CreateSEQUIN
 
 on CreateCn3D()
-	tell application "CodeWarrior IDE 3.2"
+	tell application "CodeWarrior IDE 4.0"
 		
 		Create Project {BUILDTEST & "cn3d" & SUFFIX & ".µ"}
 		
@@ -432,10 +438,10 @@ on CreateCn3D()
 		
 		set segmentCounter to segmentCounter + 1
 		
-		Add Files (LIBRARIES & "ncsasock" & SUFFIX, LIBRARIES & "ncbi" & SUFFIX, LIBRARIES & "ncbiobj" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "ncbicdr" & SUFFIX, LIBRARIES & "vibrant" & SUFFIX, LIBRARIES & "ncbidesk" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "ncbimmdb" & SUFFIX, LIBRARIES & "ncbicn3d" & SUFFIX, LIBRARIES & "ncbitool" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "netcli" & SUFFIX, LIBRARIES & "netentr" & SUFFIX, LIBRARIES & "vibnet" & SUFFIX) To Segment segmentCounter
+		Add Files {LIBRARIES & "ncsasock" & SUFFIX, LIBRARIES & "ncbi" & SUFFIX, LIBRARIES & "ncbiobj" & SUFFIX} To Segment segmentCounter
+		Add Files {LIBRARIES & "ncbicdr" & SUFFIX, LIBRARIES & "vibrant" & SUFFIX, LIBRARIES & "ncbidesk" & SUFFIX} To Segment segmentCounter
+		Add Files {LIBRARIES & "ncbimmdb" & SUFFIX, LIBRARIES & "ncbicn3d" & SUFFIX, LIBRARIES & "ncbitool" & SUFFIX} To Segment segmentCounter
+		Add Files {LIBRARIES & "netcli" & SUFFIX, LIBRARIES & "netentr" & SUFFIX, LIBRARIES & "vibnet" & SUFFIX} To Segment segmentCounter
 		
 		set segmentCounter to segmentCounter + 1
 		
@@ -445,7 +451,7 @@ on CreateCn3D()
 		
 		set segmentCounter to segmentCounter + 1
 		
-		Add Files (NCBISOURCE & "cn3d:cn3dmain.c") To Segment segmentCounter
+		Add Files {NCBISOURCE & "cn3d:cn3dmain.c"} To Segment segmentCounter
 		
 		Reset File Paths
 		Close Project
@@ -454,7 +460,7 @@ on CreateCn3D()
 end CreateCn3D
 
 on CreatePOWBLAST()
-	tell application "CodeWarrior IDE 3.2"
+	tell application "CodeWarrior IDE 4.0"
 		
 		Create Project {BUILDTEST & "powblast" & SUFFIX & ".µ"}
 		
@@ -481,14 +487,14 @@ on CreatePOWBLAST()
 		
 		set segmentCounter to segmentCounter + 1
 		
-		Add Files (LIBRARIES & "ncsasock" & SUFFIX, LIBRARIES & "ncbi" & SUFFIX, LIBRARIES & "ncbiobj" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "ncbicdr" & SUFFIX, LIBRARIES & "vibrant" & SUFFIX, LIBRARIES & "ncbidesk" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "ncbitool" & SUFFIX, LIBRARIES & "ncbiNacc" & SUFFIX, LIBRARIES & "netcli" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "netentr" & SUFFIX, LIBRARIES & "ncbibls2" & SUFFIX) To Segment segmentCounter
+		Add Files {LIBRARIES & "ncsasock" & SUFFIX, LIBRARIES & "ncbi" & SUFFIX, LIBRARIES & "ncbiobj" & SUFFIX} To Segment segmentCounter
+		Add Files {LIBRARIES & "ncbicdr" & SUFFIX, LIBRARIES & "vibrant" & SUFFIX, LIBRARIES & "ncbidesk" & SUFFIX} To Segment segmentCounter
+		Add Files {LIBRARIES & "ncbitool" & SUFFIX, LIBRARIES & "ncbiNacc" & SUFFIX, LIBRARIES & "netcli" & SUFFIX} To Segment segmentCounter
+		Add Files {LIBRARIES & "netentr" & SUFFIX, LIBRARIES & "ncbibls2" & SUFFIX} To Segment segmentCounter
 		
 		set segmentCounter to segmentCounter + 1
 		
-		Add Files (NCBISOURCE & "demo:powblast.c", NCBISOURCE & "demo:pblproc.c") To Segment segmentCounter
+		Add Files {NCBISOURCE & "demo:powblast.c", NCBISOURCE & "demo:pblproc.c"} To Segment segmentCounter
 		
 		Reset File Paths
 		Close Project
@@ -497,7 +503,7 @@ on CreatePOWBLAST()
 end CreatePOWBLAST
 
 on CreateBLASTCL3()
-	tell application "CodeWarrior IDE 3.2"
+	tell application "CodeWarrior IDE 4.0"
 		
 		Create Project {BUILDTEST & "blastcl3" & SUFFIX & ".µ"}
 		
@@ -524,13 +530,13 @@ on CreateBLASTCL3()
 		
 		set segmentCounter to segmentCounter + 1
 		
-		Add Files (LIBRARIES & "ncsasock" & SUFFIX, LIBRARIES & "ncbi" & SUFFIX, LIBRARIES & "ncbiobj" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "vibrant" & SUFFIX, LIBRARIES & "ncbitool" & SUFFIX, LIBRARIES & "netcli" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "ncbibls3" & SUFFIX) To Segment segmentCounter
+		Add Files {LIBRARIES & "ncsasock" & SUFFIX, LIBRARIES & "ncbi" & SUFFIX, LIBRARIES & "ncbiobj" & SUFFIX} To Segment segmentCounter
+		Add Files {LIBRARIES & "vibrant" & SUFFIX, LIBRARIES & "ncbitool" & SUFFIX, LIBRARIES & "netcli" & SUFFIX} To Segment segmentCounter
+		Add Files {LIBRARIES & "ncbibls3" & SUFFIX} To Segment segmentCounter
 		
 		set segmentCounter to segmentCounter + 1
 		
-		Add Files (NCBISOURCE & "network:blast3:client:blastcl3.c") To Segment segmentCounter
+		Add Files {NCBISOURCE & "network:blast3:client:blastcl3.c"} To Segment segmentCounter
 		
 		Reset File Paths
 		Close Project
@@ -539,7 +545,7 @@ on CreateBLASTCL3()
 end CreateBLASTCL3
 
 on CreateFORMATDB()
-	tell application "CodeWarrior IDE 3.2"
+	tell application "CodeWarrior IDE 4.0"
 		
 		Create Project {BUILDTEST & "formatdb" & SUFFIX & ".µ"}
 		
@@ -566,10 +572,10 @@ on CreateFORMATDB()
 		
 		set segmentCounter to segmentCounter + 1
 		
-		Add Files (LIBRARIES & "ncbi" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "ncbiobj" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "vibrant" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "ncbitool" & SUFFIX) To Segment segmentCounter
+		Add Files {LIBRARIES & "ncbi" & SUFFIX} To Segment segmentCounter
+		Add Files {LIBRARIES & "ncbiobj" & SUFFIX} To Segment segmentCounter
+		Add Files {LIBRARIES & "vibrant" & SUFFIX} To Segment segmentCounter
+		Add Files {LIBRARIES & "ncbitool" & SUFFIX} To Segment segmentCounter
 		
 		set segmentCounter to segmentCounter + 1
 		
@@ -582,7 +588,7 @@ on CreateFORMATDB()
 end CreateFORMATDB
 
 on CreateBLASTALL()
-	tell application "CodeWarrior IDE 3.2"
+	tell application "CodeWarrior IDE 4.0"
 		
 		Create Project {BUILDTEST & "blastall" & SUFFIX & ".µ"}
 		
@@ -609,10 +615,10 @@ on CreateBLASTALL()
 		
 		set segmentCounter to segmentCounter + 1
 		
-		Add Files (LIBRARIES & "ncbi" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "ncbiobj" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "vibrant" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "ncbitool" & SUFFIX) To Segment segmentCounter
+		Add Files {LIBRARIES & "ncbi" & SUFFIX} To Segment segmentCounter
+		Add Files {LIBRARIES & "ncbiobj" & SUFFIX} To Segment segmentCounter
+		Add Files {LIBRARIES & "vibrant" & SUFFIX} To Segment segmentCounter
+		Add Files {LIBRARIES & "ncbitool" & SUFFIX} To Segment segmentCounter
 		
 		set segmentCounter to segmentCounter + 1
 		
@@ -625,7 +631,7 @@ on CreateBLASTALL()
 end CreateBLASTALL
 
 on CreateBLASTPGP()
-	tell application "CodeWarrior IDE 3.2"
+	tell application "CodeWarrior IDE 4.0"
 		
 		Create Project {BUILDTEST & "blastpgp" & SUFFIX & ".µ"}
 		
@@ -652,10 +658,10 @@ on CreateBLASTPGP()
 		
 		set segmentCounter to segmentCounter + 1
 		
-		Add Files (LIBRARIES & "ncbi" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "ncbiobj" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "vibrant" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "ncbitool" & SUFFIX) To Segment segmentCounter
+		Add Files {LIBRARIES & "ncbi" & SUFFIX} To Segment segmentCounter
+		Add Files {LIBRARIES & "ncbiobj" & SUFFIX} To Segment segmentCounter
+		Add Files {LIBRARIES & "vibrant" & SUFFIX} To Segment segmentCounter
+		Add Files {LIBRARIES & "ncbitool" & SUFFIX} To Segment segmentCounter
 		
 		set segmentCounter to segmentCounter + 1
 		

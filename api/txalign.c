@@ -27,11 +27,18 @@
 #include <codon.h>
 #include <ncbimisc.h>
 #include <salpacc.h>
+#include <salpstat.h>
 
-#define BUFFER_LENGTH 512
+#define NEW_ENTREZ_LINKS 0
+
+#define BUFFER_LENGTH 1024
 #define MIN_INS_SPACE 50
-#define MAX_GI_NUM	10
+#define MAX_GI_NUM    10
+#define MAX_DB_NUM    10
+
 #define TXALIGN_HREF "http://www.ncbi.nlm.nih.gov"
+
+#define NEW_ENTREZ_HREF "http://www.ncbi.nlm.nih.gov:80/entrez/query.fcgi"
 
 /*
 	Used by the functions that format the one-line descriptions.
@@ -50,8 +57,9 @@ typedef struct _txdfline_struct {
 	Boolean found_score;
 	Boolean isnew;		/* used to print mark "new.gif" near defline */
 	Boolean waschecked;	/* used to print some another .gif near such defline */
-	CharPtr segs_str;
-	size_t segs_buflen;
+	CharPtr segs_str;	/* Used to print segs for dumpgnl program. */
+	size_t  segs_buflen,
+		segs_used;
 } TxDfLineStruct, *TxDfLineStructPtr;
 
 
@@ -60,8 +68,8 @@ static Int4 get_num_empty_space(Boolean compress)
 	return (compress ? (8+5 +1) : B_SPACE+POS_SPACE+STRAND_SPACE +1);
 }
 
-static Boolean SeqAlignSegsStr(SeqAlignPtr salp, Int2 index, CharPtr *dst, size_t *size);
-static CharPtr StringAppend(CharPtr *dst, size_t *size, CharPtr src);
+static Boolean SeqAlignSegsStr(SeqAlignPtr salp, Int2 index, CharPtr *dst, size_t *size, size_t *used);
+static CharPtr StringAppend(CharPtr *dst, size_t *size, CharPtr src, size_t *used);
 
 
 static ValNodePtr ProcessTextInsertion PROTO((AlignNodePtr anp, Int4 m_left, Int4 m_right, BioseqPtr bsp, Int4 line_len, Int1 frame));
@@ -834,7 +842,8 @@ static Boolean add_html_label(TextAlignBufPtr tdp)
 	/* return (tdp->feattype == 0); */
 }
 
-static SeqIdPtr get_seqid_for_textbuf(TextAlignBufPtr tdp, CharPtr HTML_db)
+static SeqIdPtr get_seqid_for_textbuf(TextAlignBufPtr tdp, CharPtr HTML_db,
+                                      CharPtr HTML_dopt)
 {
 	ValNode vn;
 	SeqIdPtr sip;
@@ -850,12 +859,22 @@ static SeqIdPtr get_seqid_for_textbuf(TextAlignBufPtr tdp, CharPtr HTML_db)
 	else
 		GatherItem(tdp->seqEntityID, tdp->bsp_itemID, OBJ_BIOSEQ, (Pointer)(&vn), find_seqid_for_bioseq);
 	sip = (SeqIdPtr)(vn.data.ptrvalue);
-	if(sip != NULL)
-	{
-		if(vn.choice == Seq_mol_aa)
-			StringCpy(HTML_db, "p");
-		else
-			StringCpy(HTML_db, "n");
+	if(sip != NULL) {
+#if(NEW_ENTREZ_LINKS)
+            if(vn.choice == Seq_mol_aa) {
+                sprintf(HTML_dopt, "%s" "GenPept");
+                sprintf(HTML_db,   "%s", "Protein");
+            } else {
+                StringCpy(HTML_dopt, "GenBank");
+                StringCpy(HTML_db, "Nucleotide");
+            }
+#else
+            if(vn.choice == Seq_mol_aa)
+                StringCpy(HTML_db, "p");
+            else
+                StringCpy(HTML_db, "n");
+#endif
+
 	}
 	return sip;
 
@@ -884,7 +903,7 @@ static CharPtr DrawTextToBuffer(ValNodePtr tdp_list, CharPtr PNTR m_buf,
 	Int4 size;
 	CharPtr HTML_buffer;
 	CharPtr matrix_buf;
-	Char HTML_db[10];
+	Char HTML_db[32], HTML_dopt[16];
 	Int4 html_len;
 	SeqIdPtr sip;
 	DbtagPtr db_tag;
@@ -915,13 +934,19 @@ static CharPtr DrawTextToBuffer(ValNodePtr tdp_list, CharPtr PNTR m_buf,
 	}
 	/* max_len = 150; */
 	max_len = line_len + num_empty + 20;
-	if(is_html)
-	{
-		html_len = StringLen("<a href=\"http://www.ncbi.nlm.nih.gov/"
-                            "htbin-post/Entrez/query?form=6&dopt=g&db=&"
-                            "uid=\">");
-		html_len += 1 + MAX_GI_NUM + 10 + 20;
-		HTML_buffer = MemNew((size_t)html_len * sizeof(Char));
+	if(is_html) {
+#if(NEW_ENTREZ_LINKS)
+            Char buffer[1024];
+            sprintf(buffer, "%s?cmd=Retrieve&db=&list_uids=&"
+                    "dopt=GenPept", NEW_ENTREZ_HREF);
+            html_len = StringLen(buffer);
+#else
+            html_len = StringLen("<a href=\"http://www.ncbi.nlm.nih.gov/"
+                                 "htbin-post/Entrez/query?form=6&dopt=g&db=&"
+                                 "uid=\">");
+#endif
+            html_len += 1 + MAX_GI_NUM + 10 + 20 + MAX_DB_NUM;
+            HTML_buffer = MemNew((size_t)html_len * sizeof(Char));
 	}
 	size = 0;
 	max_pos_val = 12;
@@ -1003,7 +1028,7 @@ static CharPtr DrawTextToBuffer(ValNodePtr tdp_list, CharPtr PNTR m_buf,
 		load = FALSE;
 		if(is_html)
 		{
-			sip = get_seqid_for_textbuf(tdp, HTML_db);
+			sip = get_seqid_for_textbuf(tdp, HTML_db, HTML_dopt);
 			while(!load && sip)
 			{
 				if(sip->choice == SEQID_GI && sip->data.intvalue != 0)
@@ -1019,19 +1044,30 @@ static CharPtr DrawTextToBuffer(ValNodePtr tdp_list, CharPtr PNTR m_buf,
 						}
 						seqid_var = seqid_var->next;
 					}
-					if (already_done)
-					{
-					
-					sprintf(HTML_buffer, "<a href=\"http://www.ncbi.nlm.nih.gov/"
-                            		"htbin-post/Entrez/query?form=6&dopt=g&db=%s&"
-                            		"uid=%08ld\">",HTML_db, (long)sip->data.intvalue);
-					}
-					else
-					{
-					sprintf(HTML_buffer, "<a name = %ld></a><a href=\"http://www.ncbi.nlm.nih.gov/"
-                            		"htbin-post/Entrez/query?form=6&dopt=g&db=%s&"
-                            		"uid=%08ld\">",(long) sip->data.intvalue, HTML_db, (long)sip->data.intvalue);
-					ValNodeAddInt(already_linked, SEQID_GI, sip->data.intvalue);
+					if (already_done) {
+#if(NEW_ENTREZ_LINKS)
+       sprintf(HTML_buffer, 
+               "<a href=%s?cmd=Retrieve&db=%s&list_uids=%08ld&dopt=%s>", 
+               NEW_ENTREZ_HREF, HTML_db, (long)sip->data.intvalue, HTML_dopt);
+#else
+       sprintf(HTML_buffer, "<a href=\"http://www.ncbi.nlm.nih.gov/"
+               "htbin-post/Entrez/query?form=6&dopt=g&db=%s&"
+               "uid=%08ld\">",HTML_db, (long)sip->data.intvalue);
+#endif
+					} else {
+#if(NEW_ENTREZ_LINKS)
+       sprintf(HTML_buffer, "<a name = %ld></a>"
+               "<a href=%s?cmd=Retrieve&db=%s&list_uids=%08ld&dopt=%s>", 
+               (long) sip->data.intvalue, NEW_ENTREZ_HREF, HTML_db, 
+               (long)sip->data.intvalue, HTML_dopt);
+#else
+       sprintf(HTML_buffer, "<a name = %ld></a>"
+               "<a href=\"http://www.ncbi.nlm.nih.gov/"
+               "htbin-post/Entrez/query?form=6&dopt=g&db=%s&"
+               "uid=%08ld\">",(long) sip->data.intvalue, HTML_db, 
+               (long)sip->data.intvalue);
+#endif
+       ValNodeAddInt(already_linked, SEQID_GI, sip->data.intvalue);
 					}
 					html_len = StringLen(HTML_buffer);
 					sprintf(docbuf+pos, HTML_buffer);
@@ -1048,7 +1084,7 @@ static CharPtr DrawTextToBuffer(ValNodePtr tdp_list, CharPtr PNTR m_buf,
 						oip = db_tag->tag;
 						if(oip->id != 0)
 						{
-							sprintf(HTML_buffer, "<a href=\"http://www.tigr.org/docs/tigr-scripts/hgi_scripts/thc_report.spl?est=THC%ld&report_type=n\">", (long) oip->id);
+							sprintf(HTML_buffer, "<a name = THC%ld></a><a href=\"http://www.tigr.org/docs/tigr-scripts/hgi_scripts/thc_report.spl?est=THC%ld&report_type=n\">", (long) oip->id, (long) oip->id);
 
 							html_len = StringLen(HTML_buffer);
 							sprintf(docbuf+pos, HTML_buffer);
@@ -1969,11 +2005,14 @@ static Boolean load_align_sum_for_StdSeg(StdSegPtr ssp, AlignSumPtr asp)
 		asp->t_frame = SeqLocStart(ssp->loc->next);
 		if (SeqLocStrand(ssp->loc->next) == Seq_strand_minus)
 		{
-			bsp = BioseqLockById(SeqLocId(ssp->loc->next));
-			asp->t_frame += SeqLocLen(ssp->loc->next);
-			asp->t_frame = -(1+(bsp->length - asp->t_frame)%3);
-			asp->t_frame_set = TRUE;
-			BioseqUnlock(bsp);
+			if (bsp = BioseqLockById(SeqLocId(ssp->loc->next))) {
+			    asp->t_frame += SeqLocLen(ssp->loc->next);
+			    asp->t_frame = -(1+(bsp->length - asp->t_frame)%3);
+			    asp->t_frame_set = TRUE;
+			    BioseqUnlock(bsp);
+			} else {
+			    return FALSE;
+			}
 		}
 		else
 		{
@@ -2068,66 +2107,69 @@ static Boolean load_align_sum_for_StdSeg(StdSegPtr ssp, AlignSumPtr asp)
 *			identical residues
 *
 *****************************************************************/
-NLM_EXTERN ScorePtr find_score_in_align(SeqAlignPtr align, Uint2 chain, AlignSumPtr asp)
+NLM_EXTERN ScorePtr find_score_in_align(SeqAlignPtr align, Uint2 chain, 
+                                        AlignSumPtr asp)
 {
-	DenseDiagPtr ddp;
-	DenseSegPtr dsp;
-	StdSegPtr ssp;
-	Uint2 order = 0;
+    DenseDiagPtr ddp;
+    DenseSegPtr dsp;
+    StdSegPtr ssp;
+    Uint2 order = 0;
+    SeqAlignPtr sap;
+    ScorePtr    sp;
 
-	if(align == NULL)
-		return NULL;
+    if(align == NULL)
+        return NULL;
+    
+    if(asp != NULL) {
+        asp->totlen = 0;
+        asp->positive = 0;
+        asp->identical = 0;
+        asp->gaps = 0;
+    }
+    switch (align->segtype) {
+    case 1: /*Dense-diag*/
+        ddp = align->segs;
+        while(ddp) {
+            ++order;
+            if(order == chain) {
+                if(asp != NULL)
+                    load_align_sum_for_DenseDiag(ddp, asp);
+                return ddp->scores;
+            }
+            ddp = ddp->next;
+        }
+        break;
+    case 2:
+        dsp = align->segs;
+        if(asp != NULL)
+            load_align_sum_for_DenseSeg(dsp, asp);
+        if (dsp->scores)
+            return dsp->scores;
+        else
+            return align->score;
+    case 3:
+        ssp = align->segs;
+        while(ssp) {
+            ++order;
+            if(order == chain) {
+                if(asp != NULL)
+                    load_align_sum_for_StdSeg(ssp, asp);
+                return ssp->scores;
+            }
+            ssp = ssp->next;
+        }
+        break;
+    case 5: /* Discontinuous alignment */
+        sap = (SeqAlignPtr) align->segs;
 
-	if(asp != NULL)
-	{
-		asp->totlen = 0;
-		asp->positive = 0;
-		asp->identical = 0;
-		asp->gaps = 0;
-	}
-	switch (align->segtype)
-	{
-	case 1: /*Dense-diag*/
-		ddp = align->segs;
-		while(ddp)
-		{
-			++order;
-			if(order == chain)
-			{
-				if(asp != NULL)
-					load_align_sum_for_DenseDiag(ddp, asp);
-				return ddp->scores;
-			}
-			ddp = ddp->next;
-		}
-		break;
-	case 2:
-		dsp = align->segs;
-		if(asp != NULL)
-			load_align_sum_for_DenseSeg(dsp, asp);
-		if (dsp->scores)
-			return dsp->scores;
-		else
-			return align->score;
-	case 3:
-		ssp = align->segs;
-		while(ssp)
-		{
-			++order;
-			if(order == chain)
-			{
-				if(asp != NULL)
-					load_align_sum_for_StdSeg(ssp, asp);
-				return ssp->scores;
-			}
-			ssp = ssp->next;
-		}
-		break;
-	default:
-		break;
-	}
-
-	return NULL;
+        if((sp = find_score_in_align(sap, chain, asp)) == NULL)
+            return align->score;
+        else
+            return sp;
+    default:
+        break;
+    }
+    return NULL;
 }
 
 /*try to decide if this fit the prototype of reversing the BLASTX 
@@ -2514,7 +2556,8 @@ static void convert_label_to_gi(ValNodePtr anp_list)
 		if(anp_list->choice != OBJ_SEQANNOT)
 		{
 			anp = anp_list->data.ptrvalue;
-			if(anp && anp->sip && anp->sip->choice == SEQID_GI)
+			if(anp && anp->sip && anp->sip->choice == SEQID_GI &&
+				!anp->keep_label)
 			{
 				sprintf(temp, "%ld", (long) anp->sip->data.intvalue);
 				if(anp->label != NULL)
@@ -2824,6 +2867,11 @@ NLM_EXTERN Boolean ShowAlignNodeText2(ValNodePtr anp_list, Int2 num_node, Int4 l
 		else
 			aso.no_entrez = FALSE;
 
+		if (option & TXALIGN_NO_DUMPGNL)
+			aso.no_dumpgnl = TRUE;
+		else
+			aso.no_dumpgnl = FALSE;
+
 		if (option & TXALIGN_HTML)
 		{
 			aso.html_hot_link = TRUE;
@@ -2868,7 +2916,7 @@ NLM_EXTERN Boolean ShowAlignNodeText2(ValNodePtr anp_list, Int2 num_node, Int4 l
 					GatherItem(anp->entityID, anp->itemID, (Uint2)(curr->choice), (Pointer)(&align), find_align_proc);
 					if(align != NULL)
 					{
-						if(align->segtype == 1 || align->segtype == 2 || align->segtype == 3)
+						if(align->segtype == 1 || align->segtype == 2 || align->segtype == 3 || align->segtype == 5)
 						{
 							as.matrix = matrix;
 							as.master_sip = master_anp->sip;
@@ -2922,15 +2970,18 @@ NLM_EXTERN Boolean ShowAlignNodeText2(ValNodePtr anp_list, Int2 num_node, Int4 l
 							{{
 								SeqAlignPtr sap;
 								size_t size = 0;
+								size_t used = 0;
 
 								aso.segs = NULL;
 								for (sap = align; sap != NULL; sap = sap->next) {
 									if (SeqIdMatch(TxGetSubjectIdFromSeqAlign(align), TxGetSubjectIdFromSeqAlign(sap))) {
 										if (aso.segs != NULL) {
-											StringAppend(&aso.segs, &size, ",");
+											StringAppend(&aso.segs, &size, ",", &used);
 										}
-										SeqAlignSegsStr(sap, 1, &aso.segs, &size);
+										SeqAlignSegsStr(sap, 1, &aso.segs, &size, &used);
 									}
+									else
+										break;
 								}
 								if (aso.segs == NULL) {
 									/**
@@ -3791,8 +3842,8 @@ NLM_EXTERN ValNodePtr ProcessTextAlignNode(AlignNodePtr anp, Int4 m_left, Int4 m
 		{
 			maxlen = m_right - m_left +1;
 			l_seq = MemGet((size_t)(maxlen+1)*sizeof(Char), MGET_ERRPOST);
-			if(option & TXALIGN_BLUNT_END)
-				MemSet((Pointer)l_seq, '-',(size_t)maxlen * sizeof(Char));
+			MemSet((Pointer)l_seq, '-',(size_t)(maxlen) * sizeof(Char));
+			l_seq[maxlen] = '\0';
 			tdp = MemNew(sizeof(TextAlignBuf));
 			tdp->pos = *p_stop;
 			tdp->strand = anp->extremes.strand;
@@ -4667,7 +4718,7 @@ MakeURLSafe(CharPtr src)
 
 static
 CharPtr
-StringAppend(CharPtr *dst, size_t *size, CharPtr src)
+StringAppend(CharPtr *dst, size_t *size, CharPtr src, size_t *used)
 {
 	size_t pos, len;
 
@@ -4676,12 +4727,13 @@ StringAppend(CharPtr *dst, size_t *size, CharPtr src)
 		pos = 0;
 	}
 	else {
-		pos = StringLen(*dst);
+		pos = *used;
 	}
 	if (src == NULL) {
 		return *dst;
 	}
 	len = StringLen(src);
+	*used += len;
 	if (*dst == NULL || pos + len + 1 > *size) {
 		/**
 		 * extending destination buffer
@@ -4702,7 +4754,7 @@ StringAppend(CharPtr *dst, size_t *size, CharPtr src)
 
 static
 Boolean
-SeqAlignSegsStr(SeqAlignPtr sap, Int2 index, CharPtr *dst, size_t *size)
+SeqAlignSegsStr(SeqAlignPtr sap, Int2 index, CharPtr *dst, size_t *size, size_t *used)
 {
 	Char buf[128];
 	Int4 start, stop;
@@ -4715,9 +4767,56 @@ SeqAlignSegsStr(SeqAlignPtr sap, Int2 index, CharPtr *dst, size_t *size)
 	}
 
 	sprintf(buf, "%ld-%ld", (long)(start), (long)(stop));
-	StringAppend(dst, size, buf);
+	StringAppend(dst, size, buf, used);
 
 	return TRUE;
+}
+
+/**
+	* links to incomplete genomes
+**/
+static void
+make_dumpgnl_links(SeqIdPtr sip, CharPtr blast_type, CharPtr segs, CharPtr dbname, Boolean is_na, FILE *fp)
+{
+	Char gnl[256];
+	CharPtr str;
+	Uchar buf[32];
+	Int4 length;
+	MD5Context context;
+	Char passwd[128];
+	Char tool_url[128];
+
+	GetAppParam("NCBI", blast_type, "PASSWD", "", passwd, sizeof(passwd));
+	GetAppParam("NCBI", blast_type, "TOOL_URL", "", tool_url, sizeof(tool_url));
+	/*
+	 * Need to protect start and stop positions
+	 * to avoid web users sending us hand-made URLs
+	 * to retrive full sequences
+	 */
+	MD5Init(&context);
+	length = StringLen(passwd);
+	MD5Update(&context, (UcharPtr)passwd, (Uint4)length);
+	SeqIdWrite(sip, gnl, PRINTID_FASTA_SHORT, sizeof(gnl));
+	MD5Update(&context, (UcharPtr)gnl, (Uint4)StringLen(gnl));
+	MD5Update(&context, (UcharPtr)segs, (Uint4)StringLen(segs));
+	MD5Update(&context, (UcharPtr)passwd, (Uint4)length);
+	MD5Final(&context, (UcharPtr)buf);
+
+	str = MakeURLSafe(dbname == NULL ? "nr" : dbname);
+	fprintf(fp, "<a href=\"%s?db=%s&na=%d&", tool_url, str, is_na);
+	str = MemFree(str);
+	str = MakeURLSafe(gnl);
+	fprintf(fp,
+		"gnl=%s&segs=%s&seal=%02X%02X%02X%02X"
+		"%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X\">",
+		str, segs,
+		buf[0], buf[1], buf[2], buf[3],
+		buf[4], buf[5], buf[6], buf[7],
+		buf[8], buf[9], buf[10], buf[11],
+		buf[12], buf[13], buf[14], buf[15]);
+	str = MemFree(str);
+
+	return;
 }
 
 NLM_EXTERN Boolean LIBCALL
@@ -4729,7 +4828,7 @@ PrintDefLinesFromSeqAlignEx2(SeqAlignPtr seqalign, Int4 line_length, FILE *outfp
 	BioseqPtr bsp;
 	Boolean found_next_one, found_gnl_id, same_id, found_score=FALSE, make_link=FALSE;
 	Char buffer[BUFFER_LENGTH+1], buffer1[BUFFER_LENGTH+1], eval_buff[10], bit_score_buff[10]; 
-	Char HTML_buffer[BUFFER_LENGTH+1], HTML_database[3], id_buffer[BUFFER_LENGTH+1];
+	Char HTML_buffer[BUFFER_LENGTH+1], HTML_database[32], HTML_dopt[16], id_buffer[BUFFER_LENGTH+1];
 	Char *ptr, *ptr_start, *eval_buff_ptr, *bit_score_buff_ptr;
 	Int2 pos, title_length, title_allocated, titleIdAllocated;
 	Nlm_FloatHi bit_score, evalue;
@@ -4742,6 +4841,8 @@ PrintDefLinesFromSeqAlignEx2(SeqAlignPtr seqalign, Int4 line_length, FILE *outfp
 	Int4	numalign;
 	Char passwd[128];
 	Char tool_url[128];
+	DbtagPtr db_tag;
+	ObjectIdPtr oip;
 
 	if (outfp == NULL)
 	{
@@ -4832,8 +4933,8 @@ PrintDefLinesFromSeqAlignEx2(SeqAlignPtr seqalign, Int4 line_length, FILE *outfp
 				txsp->evalue = evalue;
 			if (number < txsp->number)
 				txsp->number = number;
-			StringAppend(&txsp->segs_str, &txsp->segs_buflen, ",");
-			SeqAlignSegsStr(seqalign, 1, &txsp->segs_str, &txsp->segs_buflen);
+			StringAppend(&txsp->segs_str, &txsp->segs_buflen, ",", &txsp->segs_used);
+			SeqAlignSegsStr(seqalign, 1, &txsp->segs_str, &txsp->segs_buflen, &txsp->segs_used);
 			subject_id = SeqIdFree(subject_id);
 		}
 		else
@@ -4874,7 +4975,7 @@ PrintDefLinesFromSeqAlignEx2(SeqAlignPtr seqalign, Int4 line_length, FILE *outfp
 			txsp->evalue = evalue;
 			txsp->number = number;
 			txsp->found_score = found_score;
-			SeqAlignSegsStr(seqalign, 1, &txsp->segs_str, &txsp->segs_buflen);
+			SeqAlignSegsStr(seqalign, 1, &txsp->segs_str, &txsp->segs_buflen, &txsp->segs_used);
 			if (marks) {
 			    /* seq is new if it was not Good on previous iteration */
 			    txsp->isnew = (Boolean) !(marks[numalign] & SEQ_ALIGN_MARK_PREVGOOD);
@@ -4897,29 +4998,38 @@ PrintDefLinesFromSeqAlignEx2(SeqAlignPtr seqalign, Int4 line_length, FILE *outfp
 		return FALSE;
 
 
-	txsp = txsp_head;
-	if (blast_type == NULL) {
+	/* Used for dumpgnl reports if GNL id's. (overwrite parameter!) */
+	if (blast_type == NULL) 
+	{
 		blast_type = StringSave("UNFIN_GEN");
 	}
-	else {
+	else 
+	{
 		blast_type = StringSave(blast_type);
 		StringUpper(blast_type);
 	}
-	GetAppParam("NCBI", blast_type, "PASSWD", "", passwd, sizeof(passwd));
-	GetAppParam("NCBI", blast_type, "TOOL_URL", "", tool_url, sizeof(tool_url));
-	blast_type = MemFree(blast_type);
+
+	txsp = txsp_head;
 	while (txsp)
 	{
 		found_next_one = FALSE;
-		if (options & TXALIGN_HTML)
-		{
-			if (txsp->is_na)
-				HTML_database[0] = 'n';
-			else
-				HTML_database[0] = 'p';
-	
-			HTML_database[1] = NULLB;
-			gi = 0;
+		if (options & TXALIGN_HTML) {
+#if(NEW_ENTREZ_LINKS)
+                    if (txsp->is_na) {
+                        StringCpy(HTML_dopt, "GenBank");
+                        StringCpy(HTML_database, "Nucleotide");
+                    } else {
+                        StringCpy(HTML_dopt, "GenPept");
+                        StringCpy(HTML_database, "Protein");
+                    }
+#else
+                    if (txsp->is_na)
+                        HTML_database[0] = 'n';
+                    else
+                        HTML_database[0] = 'p';
+                    
+                    HTML_database[1] = NULLB;
+#endif			gi = 0;
 			make_link = FALSE;
 			bestid = SeqIdFindBest(txsp->id, SEQID_GI);
 			if (bestid != NULL && bestid->choice == SEQID_GI && !(options & TXALIGN_NO_ENTREZ))
@@ -4927,35 +5037,53 @@ PrintDefLinesFromSeqAlignEx2(SeqAlignPtr seqalign, Int4 line_length, FILE *outfp
 				gi = bestid->data.intvalue;
 				if (options & TXALIGN_CHECK_BOX && options & TXALIGN_CHECK_BOX_CHECKED) {
 				    if (countdescr == -1 || countdescr > 0)
-					sprintf(HTML_buffer, 
-						"<INPUT TYPE=\"checkbox\" NAME=\"checked_GI\" VALUE=\"%d\" CHECKED> <a href=\""
-						"%s/htbin-post/Entrez/query?form=6&dopt=g&db=%s&"
-						"uid=%08ld\"><INPUT TYPE=\"hidden\" NAME =\"good_GI\" VALUE = \"%d\">",
-						gi,
-						options & TXALIGN_HTML_RELATIVE ? "" : TXALIGN_HREF,
-						HTML_database,  (long) gi, gi);
+#if(NEW_ENTREZ_LINKS)
+   sprintf(HTML_buffer, 
+           "<INPUT TYPE=\"checkbox\" NAME=\"checked_GI\" VALUE=\"%d\" CHECKED>"
+           "<a href=%s?cmd=Retrieve&db=%s&list_uids=%08ld&dopt=%s>"
+           "<INPUT TYPE=\"hidden\" NAME =\"good_GI\" VALUE = \"%d\">",
+           gi, NEW_ENTREZ_HREF, HTML_database, (long) gi, HTML_dopt, gi);
+#else
+   sprintf(HTML_buffer, 
+           "<INPUT TYPE=\"checkbox\" NAME=\"checked_GI\" VALUE=\"%d\" CHECKED>"
+           "<a href=\%s/htbin-post/Entrez/query?form=6&dopt=g&db=%s&"
+           "uid=%08ld\"><INPUT TYPE=\"hidden\" NAME =\"good_GI\" "
+           "VALUE = \"%d\">",
+           gi, options & TXALIGN_HTML_RELATIVE ? "" : TXALIGN_HREF,
+           HTML_database,  (long) gi, gi);
+#endif
 				    else
-					sprintf(HTML_buffer, 
-						"<INPUT TYPE=\"hidden\" NAME=\"checked_GI\" VALUE=\"%d\">"
-						"<INPUT TYPE=\"hidden\" NAME =\"good_GI\" VALUE = \"%d\">",
-						gi, gi);
+   sprintf(HTML_buffer, 
+           "<INPUT TYPE=\"hidden\" NAME=\"checked_GI\" VALUE=\"%d\">"
+           "<INPUT TYPE=\"hidden\" NAME =\"good_GI\" VALUE = \"%d\">",
+           gi, gi);
 				} else if (options & TXALIGN_CHECK_BOX) {
 				    if (countdescr == -1 || countdescr > 0) 
-					sprintf(HTML_buffer, 
-						"<INPUT TYPE=\"checkbox\" NAME=\"checked_GI\" VALUE=\"%d\"> <a href=\""
-						"%s/htbin-post/Entrez/query?form=6&dopt=g&db=%s&"
-						"uid=%08ld\">",
-						gi,
-						options & TXALIGN_HTML_RELATIVE ? "" : TXALIGN_HREF,
-						HTML_database,  (long) gi);
+#if(NEW_ENTREZ_LINKS)
+   sprintf(HTML_buffer, 
+           "<INPUT TYPE=\"checkbox\" NAME=\"checked_GI\" VALUE=\"%d\">"
+           "<a href=\"%s?cmd=Retrieve&db=%s&list_uids=%08ld&dopt=%s\">",
+           gi, NEW_ENTREZ_HREF, HTML_database, (long) gi, HTML_dopt);
+#else
+   sprintf(HTML_buffer, 
+           "<INPUT TYPE=\"checkbox\" NAME=\"checked_GI\" VALUE=\"%d\">"
+           "<a href=\"%s/htbin-post/Entrez/query?form=6&dopt=g&db=%s&"
+           "uid=%08ld\">", gi, options & TXALIGN_HTML_RELATIVE ? 
+           "" : TXALIGN_HREF, HTML_database,  (long) gi);
+#endif
+
 				} else {
 				    if (countdescr == -1 || countdescr > 0)
-					sprintf(HTML_buffer, 
-						"<a href=\""
-						"%s/htbin-post/Entrez/query?form=6&dopt=g&db=%s&"
-						"uid=%08ld\">",
-						options & TXALIGN_HTML_RELATIVE ? "" : TXALIGN_HREF,
-						HTML_database,  (long) gi);
+#if(NEW_ENTREZ_LINKS)
+   sprintf(HTML_buffer, 
+           "<a href=\"%s?cmd=Retrieve&db=%s&list_uids=%08ld&dopt=%s\">", 
+           NEW_ENTREZ_HREF, HTML_database, (long) gi, HTML_dopt);
+#else
+   sprintf(HTML_buffer, 
+           "<a href=\"%s/htbin-post/Entrez/query?form=6&dopt=g&db=%s&"
+           "uid=%08ld\">", options & TXALIGN_HTML_RELATIVE ? "" : TXALIGN_HREF,
+           HTML_database,  (long) gi);
+#endif
 				}
 				if (options & TXALIGN_NEW_GIF && (countdescr == -1 || countdescr > 0)) {
 				    if (txsp->isnew) {
@@ -4976,48 +5104,22 @@ PrintDefLinesFromSeqAlignEx2(SeqAlignPtr seqalign, Int4 line_length, FILE *outfp
 				fprintf(outfp, "%s", HTML_buffer);
 				make_link = TRUE;
 			}
-			else if (bestid != NULL && (bestid->choice == SEQID_GENERAL || (options & TXALIGN_NO_ENTREZ)))
+			else if (bestid != NULL && (bestid->choice == SEQID_GENERAL && !(options & TXALIGN_NO_DUMPGNL)) || (options & TXALIGN_NO_ENTREZ))
 			{
-				/**
-				 * links to incomplete genomes
-				 */
-				Char gnl[256];
-				CharPtr str;
-				Uchar buf[32];
-				Int4 length;
-				CharPtr segs;
-				MD5Context context;
+				db_tag = bestid->data.ptrvalue;
+				if(db_tag->db && StringCmp(db_tag->db, "THC") == 0)
+				{
+					oip = db_tag->tag;
+					if(oip->id != 0)
+					{
+						fprintf(outfp, "<a href=\"http://www.tigr.org/docs/tigr-scripts/hgi_scripts/thc_report.spl?est=THC%ld&report_type=n\">", (long) oip->id);
 
-				segs = txsp->segs_str;
-				/*
-				 * Need to protect start and stop positions
-				 * to avoid web users sending us hand-made URLs
-				 * to retrive full sequences
-				 */
-				MD5Init(&context);
-				length = StringLen(passwd);
-				MD5Update(&context, (UcharPtr)passwd, (Uint4)length);
-				SeqIdWrite(bestid, gnl, PRINTID_FASTA_SHORT, sizeof(gnl));
-				MD5Update(&context, (UcharPtr)gnl, (Uint4)StringLen(gnl));
-				MD5Update(&context, (UcharPtr)segs, (Uint4)StringLen(segs));
-				MD5Update(&context, (UcharPtr)passwd, (Uint4)length);
-				MD5Final(&context, (UcharPtr)buf);
-
-				str = MakeURLSafe(db_name == NULL ? "nr" : db_name);
-				fprintf(outfp,
-					"<a href=\"%s?db=%s&na=%d&",
-					tool_url, str, txsp->is_na);
-				str = MemFree(str);
-				str = MakeURLSafe(gnl);
-				fprintf(outfp,
-					"gnl=%s&segs=%s&seal=%02X%02X%02X%02X"
-					"%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X\">",
-					str, segs,
-					buf[0], buf[1], buf[2], buf[3],
-					buf[4], buf[5], buf[6], buf[7],
-					buf[8], buf[9], buf[10], buf[11],
-					buf[12], buf[13], buf[14], buf[15]);
-				str = MemFree(str);
+					}
+				}
+				else
+				{
+					make_dumpgnl_links(bestid, blast_type, txsp->segs_str, db_name, ISA_na(bsp->mol), outfp);
+				}
 				make_link = TRUE;
 			}
 		}
@@ -5076,46 +5178,61 @@ PrintDefLinesFromSeqAlignEx2(SeqAlignPtr seqalign, Int4 line_length, FILE *outfp
 		{
 			StringCpy(ptr+pos, "</a> ");
 			pos++;		/* One for the space after "</a>" */
-			title_allocated = titleIdAllocated - pos;
 			pos += 4;	/* for "</a>" */
-		}
-		else
-		{
 			title_allocated = titleIdAllocated - pos;
 		}
 
-		if (found_gnl_id == FALSE)
-		{
-			*(ptr + pos) = ' ';
-			pos++;
-		}
+		title_allocated = titleIdAllocated - pos;
 
-		title_length = StringLen(txsp->title);
-		if (title_length > title_allocated)
+		if (pos >= titleIdAllocated)
 		{
-			title_length = title_allocated;
-			title_length -= 3;	/* For "..." */
-			StringNCpy((ptr+pos), txsp->title, title_length);
-			pos += title_length;
-			sprintf((ptr+pos), "...");
-			pos += 3;
+			pos = titleIdAllocated+1; /* no space to definition. */
+			sprintf(ptr+pos-3, "...");
+			*(ptr+pos) = ' ';
+			pos++;
+			*(ptr+pos) = NULLB; /* in case no scores are printed. */
 		}
-		else
+		else 
 		{
-			StringNCpy((ptr+pos), txsp->title, title_length);
-			pos += title_length;
-			while (title_length < title_allocated)
+			if (found_gnl_id == FALSE)
 			{
 				*(ptr + pos) = ' ';
-				title_length++;
 				pos++;
 			}
-		}
-		*(ptr + pos) = ' ';
-		pos++;
+
+			title_length = StringLen(txsp->title);
+			if (title_length > title_allocated)
+			{
+				title_length = title_allocated;
+				title_length -= 3;	/* For "..." */
+				if (txsp->title)
+				{
+					StringNCpy((ptr+pos), txsp->title, title_length);
+					pos += title_length;
+				}
+				sprintf((ptr+pos), "...");
+				pos += 3;
+			}
+			else
+			{
+				if (txsp->title)
+				{
+					StringNCpy((ptr+pos), txsp->title, title_length);
+					pos += title_length;
+				}
+				while (title_length < title_allocated)
+				{
+					*(ptr + pos) = ' ';
+					title_length++;
+					pos++;
+				}
+			}
+			*(ptr + pos) = ' ';
+			pos++;
 		
-		/* set to NULLB in case no scores have been found. */
-		*(ptr + pos) = NULLB;
+			/* set to NULLB in case no scores have been found. */
+			*(ptr + pos) = NULLB;
+		}
 
 #ifdef OS_MAC
 		if (txsp->found_score)
@@ -5247,7 +5364,12 @@ PrintDefLinesFromSeqAlignEx2(SeqAlignPtr seqalign, Int4 line_length, FILE *outfp
 				if (gi != 0)
 					sprintf(id_buffer, "%ld", (long) gi);
 				else
+				{
+/*
 					sprintf(id_buffer, "%s", txsp->buffer_id);
+*/
+					MuskSeqIdWrite(txsp->id, id_buffer, BUFFER_LENGTH, PRINTID_TEXTID_ACCESSION, FALSE, FALSE);
+				}
 				bit_score_buff_ptr = bit_score_buff; 
 				if (*bit_score_buff_ptr == ' ')
 				{
@@ -5278,6 +5400,9 @@ PrintDefLinesFromSeqAlignEx2(SeqAlignPtr seqalign, Int4 line_length, FILE *outfp
                     countdescr--;
 	}
 	fprintf(outfp, "\n");
+
+	/* blast_type (overwriting parameter) allocated before last while loop. */
+	blast_type = MemFree(blast_type);
 
 	txsp = txsp_head;
 	while (txsp)
@@ -5333,13 +5458,16 @@ NLM_EXTERN int LIBCALLBACK FormatScoreFunc(AlignStatOptionPtr asop)
 	CharPtr defline, ptr, eval_buff_ptr;
 	Char buf1[5], buf2[5];
 	Char buffer[BUFFER_LENGTH+1], eval_buff[10], bit_score_buff[10];
-	Char HTML_buffer[BUFFER_LENGTH+1], HTML_database[3], id_buffer[BUFFER_LENGTH+1];
+	Char HTML_buffer[BUFFER_LENGTH+1];
+        Char HTML_database[32], HTML_dopt[16], id_buffer[BUFFER_LENGTH+1];
 	Nlm_FloatHi bit_score, evalue; 
 	Int4 percent_identical, percent_positive;
 	Int4 number, score, gi;
 	ObjectIdPtr obid;
 	SeqIdPtr bestid, gilist, sip;
 	ScorePtr	scrp, sp;
+	DbtagPtr db_tag;
+	ObjectIdPtr oip;
 
 	sp = asop->sp;
 	bsp = asop->bsp;
@@ -5369,15 +5497,26 @@ NLM_EXTERN int LIBCALLBACK FormatScoreFunc(AlignStatOptionPtr asop)
 			defline = BioseqGetTitle(bsp);
 		}
 
-		if (asop->html_hot_link == TRUE)
-		{
-			/* if (ISA_na(bsp->seq_data_type)) */
-			if(bsp->mol != Seq_mol_aa)
-				HTML_database[0] = 'n';
-			else
-				HTML_database[0] = 'p';
+		if (asop->html_hot_link == TRUE)  {
+                    /* if (ISA_na(bsp->seq_data_type)) */
+                    
+#if(NEW_ENTREZ_LINKS)
+                    if (bsp->mol != Seq_mol_aa) {
+                        StringCpy(HTML_dopt, "GenBank");
+                        StringCpy(HTML_database, "Nucleotide");
+                    } else {
+                        StringCpy(HTML_dopt, "GenPept");
+                        StringCpy(HTML_database, "Protein");
+                    }
+#else
+                    if (bsp->mol != Seq_mol_aa)
+                        HTML_database[0] = 'n';
+                    else
+                        HTML_database[0] = 'p';
+                    
+                    HTML_database[1] = NULLB;
+#endif
 
-			HTML_database[1] = NULLB;
 			bestid = SeqIdFindBest(sip, SEQID_GI);
 			make_link = FALSE;
 			gi = 0;
@@ -5391,62 +5530,42 @@ NLM_EXTERN int LIBCALLBACK FormatScoreFunc(AlignStatOptionPtr asop)
 				}
 				else
 				{
-					sprintf(id_buffer, "%s", buffer);
+					MuskSeqIdWrite(bestid, id_buffer, BUFFER_LENGTH, PRINTID_TEXTID_ACCESSION, FALSE, FALSE);
 				}
 
        	          		fprintf(asop->fp, "<a name = %s> </a>", id_buffer);
 				if (make_link)
 				{
-       	          			fprintf(asop->fp, "<a href=\""
-                         		"%s/htbin-post/Entrez/query?form=6&dopt=g&db=%s&"
-                            		"uid=%08ld\">", 
-					asop->html_hot_link_relative == TRUE ? "" : TXALIGN_HREF,
-					HTML_database,  (long) gi);
+#if(NEW_ENTREZ_LINKS)
+   fprintf(asop->fp, 
+           "<a href=\"%s?cmd=Retrieve&db=%s&list_uids=%08ld&dopt=%s\">", 
+           NEW_ENTREZ_HREF, HTML_database, (long) gi, HTML_dopt);
+#else
+   fprintf(asop->fp, "<a href=\""
+           "%s/htbin-post/Entrez/query?form=6&dopt=g&db=%s&"
+           "uid=%08ld\">", 
+           asop->html_hot_link_relative == TRUE ? "" : TXALIGN_HREF,
+           HTML_database,  (long) gi);
+#endif
+
 				}
-				else if (bestid->choice == SEQID_GENERAL || asop->no_entrez == TRUE)
+				else if ((bestid->choice == SEQID_GENERAL && asop->no_dumpgnl == FALSE) || asop->no_entrez == TRUE)
 				{
-					/**
-					 * links to incomplete genomes
-					 */
-					Char gnl[256];
-					CharPtr str;
-					Uchar buf[32];
-					Int4 length;
-					MD5Context context;
-					Char passwd[128];
-					Char tool_url[128];
+					db_tag = bestid->data.ptrvalue;
+					if(db_tag->db && StringCmp(db_tag->db, "THC") == 0)
+					{
+						oip = db_tag->tag;
+						if(oip->id != 0)
+						{
+							fprintf(asop->fp, "<a href=\"http://www.tigr.org/docs/tigr-scripts/hgi_scripts/thc_report.spl?est=THC%ld&report_type=n\">", (long) oip->id);
 
-					GetAppParam("NCBI", asop->blast_type, "PASSWD", "", passwd, sizeof(passwd));
-					GetAppParam("NCBI", asop->blast_type, "TOOL_URL", "", tool_url, sizeof(tool_url));
-					/*
-					 * Need to protect start and stop positions
-					 * to avoid web users sending us hand-made URLs
-					 * to retrive full sequences
-					 */
-					MD5Init(&context);
-					length = StringLen(passwd);
-					MD5Update(&context, (UcharPtr)passwd, (Uint4)length);
-					SeqIdWrite(bestid, gnl, PRINTID_FASTA_SHORT, sizeof(gnl));
-					MD5Update(&context, (UcharPtr)gnl, (Uint4)StringLen(gnl));
-					MD5Update(&context, (UcharPtr)asop->segs, (Uint4)StringLen(asop->segs));
-					MD5Update(&context, (UcharPtr)passwd, (Uint4)length);
-					MD5Final(&context, (UcharPtr)buf);
-
-					str = MakeURLSafe(asop->db_name == NULL ? "nr" : asop->db_name);
-					fprintf(asop->fp,
-						"<a href=\"%s?db=%s&na=%d&",
-						tool_url, str, bsp->mol != Seq_mol_aa);
-					str = MemFree(str);
-					str = MakeURLSafe(gnl);
-					fprintf(asop->fp,
-						"gnl=%s&segs=%s&seal=%02X%02X%02X%02X"
-						"%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X\">",
-						str, asop->segs,
-						buf[0], buf[1], buf[2], buf[3],
-						buf[4], buf[5], buf[6], buf[7],
-						buf[8], buf[9], buf[10], buf[11],
-						buf[12], buf[13], buf[14], buf[15]);
-					str = MemFree(str);
+						}
+					}
+					else
+					{
+					/** * links to incomplete genomes */
+						make_dumpgnl_links(bestid, asop->blast_type, asop->segs, asop->db_name, ISA_na(bsp->mol), asop->fp);
+					}
 					make_link = TRUE;
 				}
 			}
@@ -5967,6 +6086,9 @@ MakeDisplaySeqLoc (SeqAlignPtr PNTR seqalign_ptr, ValNodePtr PNTR vnp, Int4 leng
 	Nlm_FloatHi bit_score, evalue;
 	SeqLocPtr seqloc1=NULL, seqloc2=NULL, seqloc3=NULL, seqloc, seqloc_tmp;
 	SeqAlignPtr seqalign, head=NULL, next;
+	SeqAlignPtr sap1=NULL, sap2=NULL, sap3=NULL;
+	Uint2Ptr HitsPerBase=NULL;
+	Int4 last_start=INT4_MAX, last_stop=-1;
 
 	seqalign = *seqalign_ptr;
 	
@@ -5982,29 +6104,20 @@ MakeDisplaySeqLoc (SeqAlignPtr PNTR seqalign_ptr, ValNodePtr PNTR vnp, Int4 leng
 			start = stop;
 			stop = tmp;
 		}
-		if (score >= 30 || (score >= 24 && (start <= KITTS_DISTANCE_TO_END || length-stop <= KITTS_DISTANCE_TO_END)))
+		if (score >= 30 || (score >= 24 && (start <= KITTS_DISTANCE_TO_END || length-(stop+1) <= KITTS_DISTANCE_TO_END)))
 		{
-			AddToSeqAlign(&head, seqalign);
+			AddToSeqAlign(&sap1, seqalign);
 			seqalign->next = NULL;
-			seqloc_tmp = SeqLocFromSeqAlign(seqalign, NULL);
-			SeqLocToPlusStrand(seqloc_tmp);
-			ValNodeLink(&seqloc1, seqloc_tmp);
 		}
-		else if (score >= 25 || (score >= 19 && (start <= KITTS_DISTANCE_TO_END || length-stop <= KITTS_DISTANCE_TO_END)))
+		else if (score >= 25 || (score >= 19 && (start <= KITTS_DISTANCE_TO_END || length-(stop+1) <= KITTS_DISTANCE_TO_END)))
 		{
-			AddToSeqAlign(&head, seqalign);
+			AddToSeqAlign(&sap2, seqalign);
 			seqalign->next = NULL;
-			seqloc_tmp = SeqLocFromSeqAlign(seqalign, NULL);
-			SeqLocToPlusStrand(seqloc_tmp);
-			ValNodeLink(&seqloc2, seqloc_tmp);
 		}
-		else if (score >= 23 || (score >= 16 && (start <= KITTS_DISTANCE_TO_END || length-stop <= KITTS_DISTANCE_TO_END)))
+		else if (score >= 23 || (score >= 16 && (start <= KITTS_DISTANCE_TO_END || length-(stop+1) <= KITTS_DISTANCE_TO_END)))
 		{
-			AddToSeqAlign(&head, seqalign);
+			AddToSeqAlign(&sap3, seqalign);
 			seqalign->next = NULL;
-			seqloc_tmp = SeqLocFromSeqAlign(seqalign, NULL);
-			SeqLocToPlusStrand(seqloc_tmp);
-			ValNodeLink(&seqloc3, seqloc_tmp);
 		}
 		else
 		{
@@ -6012,6 +6125,48 @@ MakeDisplaySeqLoc (SeqAlignPtr PNTR seqalign_ptr, ValNodePtr PNTR vnp, Int4 leng
 		}
 		seqalign = next;
 	}
+
+	if (sap1)
+	{
+		sap1 = SeqAlignFilterByCoverage(sap1, NULL, NULL, 1, &HitsPerBase, &last_start, &last_stop);
+		seqalign = sap1;
+		while (seqalign)
+		{
+			seqloc_tmp = SeqLocFromSeqAlign(seqalign, NULL);
+			SeqLocToPlusStrand(seqloc_tmp);
+			ValNodeLink(&seqloc1, seqloc_tmp);
+			seqalign = seqalign->next;
+		}
+		AddToSeqAlign(&head, sap1);
+	}
+	if (sap2)
+	{
+		sap2 = SeqAlignFilterByCoverage(sap2, NULL, NULL, 1, &HitsPerBase, &last_start, &last_stop);
+		seqalign = sap2;
+		while (seqalign)
+		{
+			seqloc_tmp = SeqLocFromSeqAlign(seqalign, NULL);
+			SeqLocToPlusStrand(seqloc_tmp);
+			ValNodeLink(&seqloc2, seqloc_tmp);
+			seqalign = seqalign->next;
+		}
+		AddToSeqAlign(&head, sap2);
+	}
+	if (sap3)
+	{
+		sap3 = SeqAlignFilterByCoverage(sap3, NULL, NULL, 1, &HitsPerBase, &last_start, &last_stop);
+		seqalign = sap3;
+		while (seqalign)
+		{
+			seqloc_tmp = SeqLocFromSeqAlign(seqalign, NULL);
+			SeqLocToPlusStrand(seqloc_tmp);
+			ValNodeLink(&seqloc3, seqloc_tmp);
+			seqalign = seqalign->next;
+		}
+		AddToSeqAlign(&head, sap3);
+	}
+
+	HitsPerBase = MemFree(HitsPerBase);
 
 	*vnp = NULL;
 
@@ -6312,8 +6467,9 @@ PrintOverviewFromSeqLocs (ValNodePtr vnp, Int4 query_length, FILE *outfp)
 	fprintf(outfp, "   <B>Match to Vector: </B>");
 	fprintf(outfp, "<IMG SRC=http://www.ncbi.nlm.nih.gov/gorf/gun2.cgi?0M(000M)FF0000(000M)> <B>Strong </B>  ");
 	fprintf(outfp, "<IMG SRC=http://www.ncbi.nlm.nih.gov/gorf/gun2.cgi?0M(000M)FF00FF(000M)> <B>Moderate </B>  ");
-	fprintf(outfp, "<IMG SRC=http://www.ncbi.nlm.nih.gov/gorf/gun2.cgi?0M(000M)00FF00(000M)> <B>Weak </B>  ");
-	fprintf(outfp, "<IMG SRC=http://www.ncbi.nlm.nih.gov/gorf/gun2.cgi?0M(000M)FFFF00(000M)> <B>Segment of suspect origin</B>  \n\n");
+	fprintf(outfp, "<IMG SRC=http://www.ncbi.nlm.nih.gov/gorf/gun2.cgi?0M(000M)00FF00(000M)> <B>Weak </B>\n");
+        fprintf(outfp, "   <B>Segment of suspect origin: </B>");
+	fprintf(outfp, "<IMG SRC=http://www.ncbi.nlm.nih.gov/gorf/gun2.cgi?0M(000M)FFFF00(000M)>\n\n");
 
 
 	fprintf(outfp, "<B>Segments matching vector: </B>\n");
@@ -6321,7 +6477,7 @@ PrintOverviewFromSeqLocs (ValNodePtr vnp, Int4 query_length, FILE *outfp)
 	{
 		if (n_seqloc1->choice == SEQLOC_PACKED_INT)
 			tmp = n_seqloc1->data.ptrvalue;
-		fprintf(outfp, "Strong match:  ");
+                fprintf(outfp, "<A HREF=\"http://ray:6224/VecScreen/VecScreen_docs.html#Strong\">Strong match</A>:  ");
 		while (tmp)
 		{
 			fprintf(outfp, " %ld-%ld", SeqLocStart(tmp)+1, SeqLocStop(tmp)+1);
@@ -6337,7 +6493,7 @@ PrintOverviewFromSeqLocs (ValNodePtr vnp, Int4 query_length, FILE *outfp)
 	{
 		if (n_seqloc2->choice == SEQLOC_PACKED_INT)
 			tmp = n_seqloc2->data.ptrvalue;
-		fprintf(outfp, "Moderate match:");
+                fprintf(outfp, "<A HREF=\"http://ray:6224/VecScreen/VecScreen_docs.html#Moderate\">Moderate match</A>:");
 		while (tmp)
 		{
 			fprintf(outfp, " %ld-%ld", SeqLocStart(tmp)+1, SeqLocStop(tmp)+1);
@@ -6353,7 +6509,7 @@ PrintOverviewFromSeqLocs (ValNodePtr vnp, Int4 query_length, FILE *outfp)
 	{
 		if (n_seqloc3->choice == SEQLOC_PACKED_INT)
 			tmp = n_seqloc3->data.ptrvalue;
-		fprintf(outfp, "Weak match:    ");
+                fprintf(outfp, "<A HREF=\"http://ray:6224/VecScreen/VecScreen_docs.html#Weak\">Weak match</A>:    ");
 		while (tmp)
 		{
 			fprintf(outfp, " %ld-%ld", SeqLocStart(tmp)+1, SeqLocStop(tmp)+1);
@@ -6369,7 +6525,7 @@ PrintOverviewFromSeqLocs (ValNodePtr vnp, Int4 query_length, FILE *outfp)
 	{
 		if (n_seqloc4->choice == SEQLOC_PACKED_INT)
 			tmp = n_seqloc4->data.ptrvalue;
-		fprintf(outfp, "Suspect origin:");
+                fprintf(outfp, "<A HREF=\"http://ray:6224/VecScreen/VecScreen_docs.html#Suspect\">Suspect origin</A>:");
 		while (tmp)
 		{
 			fprintf(outfp, " %ld-%ld", SeqLocStart(tmp)+1, SeqLocStop(tmp)+1);

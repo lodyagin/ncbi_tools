@@ -1,6 +1,7 @@
 #include <pobutil.h>
 #include <gather.h>
 #include <edutil.h>
+#include <salign.h>
 #include <salutil.h>
 #include <salsap.h>
 
