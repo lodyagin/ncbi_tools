@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/13/91
 *
-* $Revision: 6.49 $
+* $Revision: 6.50 $
 *
 * File Description:  Ports onto Bioseqs
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: seqport.h,v $
+* Revision 6.50  2005/06/01 20:27:06  kans
+* added MapNa4ByteToIUPACplusGapString
+*
 * Revision 6.49  2005/03/15 14:35:44  kans
 * seqport stream gap control flags (2-bit set) are STREAM_EXPAND_GAPS, GAP_TO_SINGLE_DASH, and EXPAND_GAPS_TO_DASHES
 *
@@ -461,6 +464,7 @@ Uint2 or Uint4 for fast integer copying.
 
 NLM_EXTERN Uint4Ptr LIBCALL MapNa2ByteToIUPACString PROTO((Uint1Ptr bytep, Uint4Ptr buf, Int4 total));
 NLM_EXTERN Uint2Ptr LIBCALL MapNa4ByteToIUPACString PROTO((Uint1Ptr bytep, Uint2Ptr buf, Int4 total));
+NLM_EXTERN Uint2Ptr LIBCALL MapNa4ByteToIUPACplusGapString PROTO((Uint1Ptr bytep, Uint2Ptr buf, Int4 total));
 NLM_EXTERN Uint2Ptr LIBCALL MapNa2ByteToNa4String PROTO((Uint1Ptr bytep, Uint2Ptr buf, Int4 total));
 NLM_EXTERN Uint4Ptr LIBCALL MapNa2ByteTo4BitString PROTO((Uint1Ptr bytep, Uint4Ptr buf, Int4 total));
 NLM_EXTERN Uint2Ptr LIBCALL MapNa4ByteTo4BitString PROTO((Uint1Ptr bytep, Uint2Ptr buf, Int4 total));

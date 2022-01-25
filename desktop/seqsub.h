@@ -29,13 +29,20 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.2 $
+* $Revision: 6.4 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: seqsub.h,v $
+* Revision 6.4  2005/05/24 13:28:20  bollin
+* added optional button to Contact Info dialog name and affiliation tabs to
+* allow user to copy name or affiliation into the supplied citation dialog
+*
+* Revision 6.3  2005/05/19 20:25:35  bollin
+* added dialog for editing Submission Template files.  Still in progress.
+*
 * Revision 6.2  2002/12/20 18:31:08  kans
 * added REGISTER_SEQSUBCIT_EDIT, support for OBJ_SEQSUB_CIT in SubmitBlockGenFunc
 *
@@ -56,7 +63,7 @@
 extern "C" {
 #endif
 
-extern DialoG CreateContactDialog (GrouP h, CharPtr title);
+extern DialoG CreateContactDialog (GrouP h, CharPtr title, DialoG citsub_dlg);
 extern DialoG CreateCitSubDialog (GrouP h, CharPtr title, CitSubPtr csp);
 extern DialoG CreateSubmitDataDialog (GrouP h, CharPtr title, Boolean newOnly, Boolean defaultAsUpdate);
 
@@ -69,6 +76,14 @@ extern ForM CreateSubmitBlockForm (Int2 left, Int2 top, CharPtr title,
 extern Int2 LIBCALLBACK SubmitBlockGenFunc (Pointer data);
 
 extern CitSubPtr CitSubFromContactInfo (ContactInfoPtr cip);
+
+extern DialoG SubmitBlockDialog (GrouP parent, Boolean newOnly, Boolean defaultAsUpdate);
+
+typedef void (*CloseSubmitTemplateEditorFunc) PROTO ((Pointer, WindoW));
+
+extern ForM CreateSubmitTemplateEditorForm (Int2 left, Int2 top, CharPtr title,
+                                            CloseSubmitTemplateEditorFunc close_proc,
+                                            Pointer closedata);
 
 
 #ifdef __cplusplus

@@ -1,4 +1,4 @@
-/* $Id: seqpanel.c,v 6.144 2005/04/27 20:09:54 bollin Exp $
+/* $Id: seqpanel.c,v 6.156 2005/06/02 20:27:10 bollin Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -176,6 +176,19 @@ typedef struct seqpanpara
 /* This is the number of paragraphs to be allocated per chapter. */
 #define SEQ_PAN_CHAPTER_SIZE 50
 
+static Boolean 
+PlayJournal 
+(SeqEdJournalPtr      list, 
+ SeqEdJournalPtr PNTR last, 
+ Int4                 num_steps,
+ BoolPtr              pfeats_deleted,
+ SeqEdFormPtr         sefp);
+static Boolean 
+UnplayJournal 
+(SeqEdJournalPtr PNTR last, 
+ Int4                 num_steps, 
+ SeqEdFormPtr sefp);
+
 
 static BioseqViewPtr GetBioseqViewPtr(PaneL p)
 {
@@ -226,25 +239,88 @@ static void ShowSeqView (BioseqViewPtr bvp, Boolean show)
   SafeShow (bvp->newFeatControl);
 }
 
+static Boolean isSelected(Uint2 itemID, Int2 itemtype, BioseqViewPtr bvp)
+{
+  SelStructPtr      sel;
+
+  if (bvp->salp == NULL)
+  {
+    if (bvp->bsp != NULL)
+    {
+      for (sel = bvp->sel_list; sel != NULL; sel = sel->next)
+      {
+        if (sel->itemID == itemID && sel->itemtype == itemtype
+            && sel->entityID == bvp->bsp->idx.entityID)
+        {
+          return TRUE;
+        }
+      }
+    }
+  }
+  else  
+  {
+    sel = ObjMgrGetSelected ();
+    while (sel != NULL)
+    {
+      if (sel->entityID == bvp->salp->idx.entityID
+          && sel->itemtype == itemtype && sel->itemID == itemID) 
+      {
+        return TRUE;
+      }
+      sel = sel->next;
+    }
+  }
+  
+  return FALSE;
+}
+
+
+static SelStructPtr SelStructListFree (SelStructPtr sel)
+{
+  if (sel == NULL)
+  {
+    return NULL;
+  }
+  sel->next = SelStructListFree (sel->next);
+  sel = MemFree (sel);
+  return sel;
+}
+
+
+static void SeqEdSelectFeature (BioseqViewPtr bvp, Int4 idx)
+{
+  
+  if (bvp == NULL) return;
+  if (bvp->bsp == NULL && bvp->salp == NULL) return;
+  
+  if (bvp->salp != NULL)
+  {
+    ObjMgrDeSelectAll ();
+    ObjMgrSelect (bvp->salp->idx.entityID,
+                  idx,
+                  OBJ_SEQFEAT,
+                  0, NULL);
+  }
+  else if (bvp->bsp != NULL)
+  {
+    bvp->sel_list = SelStructListFree (bvp->sel_list);
+    bvp->sel_list = SelStructNew (bvp->bsp->idx.entityID,
+                                  idx,
+                                  OBJ_SEQFEAT,
+                                  0, 0, NULL, 0, FALSE);
+  }
+}
+
 
 static void SelectSeqView (BioseqViewPtr bvp, Uint2 selentityID, Uint2 selitemID,
             Uint2 selitemtype, SeqLocPtr region, Boolean select, Boolean scrollto)
 {
   RecT r_redraw;
-  ValNodePtr vnp;
   Boolean found = FALSE;
 
   if (selitemtype != OBJ_SEQFEAT) return;
 
-  for (vnp = bvp->Selection; vnp != NULL; vnp = vnp->next) {
-    if (vnp->data.intvalue == selitemID) {
-      vnp->choice = select;
-      found = TRUE;
-      break;
-     }
-  }
-  
-  if (select && !found) ValNodeAddInt(&bvp->Selection, 1, selitemID);
+  SeqEdSelectFeature (bvp, selitemID);
   
   UseWindow (ParentWindow(bvp->seqView));
   ObjectRect (bvp->seqView, &r_redraw);
@@ -260,19 +336,51 @@ static Int4 x_Coord(BioseqViewPtr bvp, Int4 pos, Int4 row)
   else return pos;
 }
 
-
-static Int4 x_FeatLeft(BioseqViewPtr bvp, Int4 fpos)  /* trim feature to fit alignment */
+static Int4 GetAlnRowForBsp (BioseqPtr bsp, SeqAlignPtr salp)
 {
-  if (bvp->seqAlignMode) return MAX(0, fpos);
+  Int4     aln_row;
+  SeqIdPtr sip;
+  
+  if (bsp == NULL || salp == NULL)
+  {
+    return 0;
+  }
+  
+  for (aln_row = 1; aln_row <= salp->dim; aln_row++) 
+  {
+    sip = AlnMgr2GetNthSeqIdPtr(salp, aln_row);
+    if (SeqIdIn (sip, bsp->id))
+    {
+      return aln_row;
+    }
+  }
+  return 0;
+}
+
+static Int4 x_FeatLeft(BioseqViewPtr bvp, Int4 fpos, Int4 row)  /* trim feature to fit alignment */
+{
+  Int4 start = 0, stop;
+  
+  if (bvp->seqAlignMode)
+  {
+    if (row > 0)
+    {
+      AlnMgr2GetNthSeqRangeInSA(bvp->salp, row, &start, &stop);
+    }
+    return MAX(start, fpos);
+  }
   else return fpos;
 }
 
-static Int4 x_FeatRight(BioseqViewPtr bvp, Int4 fpos)  /* trim feature to fit alignment */
+static Int4 x_FeatRight(BioseqViewPtr bvp, Int4 fpos, Int4 row)  /* trim feature to fit alignment */
 {
+  Int4 start, stop = 0;
+  
   if (bvp->seqAlignMode) {
-    Int4 aln_len = AlnMgr2GetAlnLength(bvp->salp, FALSE);
-    return MIN(aln_len-1, fpos);
-  } else return fpos;
+    AlnMgr2GetNthSeqRangeInSA(bvp->salp, row, &start, &stop);
+    return MIN(stop, fpos);
+  } 
+  else return fpos;
 }
 
 static void FillFeatureInfo(BioseqViewPtr bvp, BioseqPtr bsp, Int2 lineLength, Int4 pCount, Int4 row, Int4 idx, SeqParaGPtr PNTR ref)
@@ -280,17 +388,41 @@ static void FillFeatureInfo(BioseqViewPtr bvp, BioseqPtr bsp, Int2 lineLength, I
   Int4 j, start, stop;
   SeqMgrFeatContext fcontext;
   SeqFeatPtr        sfp = SeqMgrGetNextFeature (bsp, NULL, 0, 0, &fcontext);
+  Int4              aln_row = -1;
+  Uint2             aln_strand = Seq_strand_plus;
+  Int4              paraFrom; /* feature starting paragraph */
+  Int4              paraTo;   /* feature ending paragraph   */
   
+  if (bvp == NULL || bsp == NULL)
+  {
+    return;
+  }
+  if (bvp->seqAlignMode)
+  {
+    aln_row = GetAlnRowForBsp (bsp, bvp->salp);
+    aln_strand = AlnMgr2GetNthStrand (bvp->salp, aln_row);
+  }
   while (sfp != NULL) {
   	
     if (fcontext.seqfeattype != SEQFEAT_PUB  &&  
         fcontext.seqfeattype != SEQFEAT_BIOSRC  &&
        (fcontext.left        != fcontext.right)) {
       Boolean coding   = fcontext.seqfeattype == SEQFEAT_CDREGION;
-      Int4    fLeft    = x_FeatLeft (bvp, fcontext.left );
-      Int4    fRight   = x_FeatRight(bvp, fcontext.right);      
-      Int4    paraFrom = floor(x_Coord(bvp, fLeft,  row) / lineLength);      /* feature starting paragraph */
-      Int4    paraTo   = ceil (x_Coord(bvp, fRight, row) / lineLength) + 1;  /* feature ending paragraph   */
+      Int4    fLeft    = x_FeatLeft (bvp, fcontext.left, aln_row);
+      Int4    fRight   = x_FeatRight(bvp, fcontext.right, aln_row); 
+      
+      if (aln_strand == Seq_strand_minus)
+      {
+        /* if the alignment strand is reversed, the left and right endpoints will be
+         * reversed during mapping */
+        paraFrom = floor(x_Coord(bvp, fRight,  row) / lineLength); 
+        paraTo   = ceil (x_Coord(bvp, fLeft, row) / lineLength) + 1;  
+      }
+      else
+      {
+        paraFrom = floor(x_Coord(bvp, fLeft,  row) / lineLength);      
+        paraTo   = ceil (x_Coord(bvp, fRight, row) / lineLength) + 1;  
+      }
       /*BioseqPtr bsp_prot = BioseqFind (SeqLocId(sfp->product));*/
       start = SeqLocStart (sfp->location);
       stop = SeqLocStop (sfp->location);
@@ -783,7 +915,7 @@ static void onCloseSeqPanel (PaneL p)
   if (bvp->SeqPanLines) FreeSeqPanelLines (bvp->SeqPanLines, bvp);
   bvp->SeqPanLines = NULL;
 
-  ValNodeFree(bvp->Selection);
+  bvp->sel_list = SelStructListFree (bvp->sel_list);
 }
 
 
@@ -994,6 +1126,12 @@ AlignmentIntervalToString
   MemSet(alnbuf, '-', alnbuf_len); /* assume all gaps and fill the sequence later */
   MemSet(seqbuf, 0, alnbuf_len);
   if (target_row < 0) return;
+  
+  if (stop > aln_len && start > aln_len)
+  {
+    aln_len = AlnMgr2GetAlnLength(salp, FALSE);
+    return;
+  }
 
   if (stop > aln_len) {
     MemSet (alnbuf + aln_len - start, 0, stop - aln_len);
@@ -1134,16 +1272,6 @@ AlignmentIntervalToString
 }
 
 
-static Boolean isSelected(Int2 itemID, BioseqViewPtr bvp)
-{
-    ValNodePtr vnp;
-
-    for (vnp = bvp->Selection; vnp != NULL; vnp = vnp->next) {
-      if (vnp->data.intvalue == itemID  &&  vnp->choice == 1) return TRUE;
-    }
-    return FALSE;
-}
-
 
 static void DrawAlignment
 (Int2 x, Int2 y, Int4 line, Int4 row, Uint1Ptr buf, Uint1Ptr seqbuf,
@@ -1185,18 +1313,23 @@ static void DrawAlignment
   SelectFont ((FonT)(bvp->displayFont));  
   PaintStringEx (alnlabel, x+10, y);                                   /* Draw sequence label */
 
-  Black ();
   
-  if (isSelected (bsp->idx.itemID, bvp))
+  if (isSelected (bsp->idx.itemID, OBJ_BIOSEQ, bvp))
   {
+    Gray ();
     InvertColors ();
-    LoadRect (&rct, x + SEQ_X_OFFSET + bvp->SeqStartPosX, y,
+    Black ();
+    LoadRect (&rct, x + SEQ_X_OFFSET + bvp->SeqStartPosX, y + Descent (),
               x + SEQ_X_OFFSET + bvp->SeqStartPosX 
                 + bvp->BlocksAtLine * SEQ_GROUP_SIZE * bvp->CharWidth
                 + (bvp->BlocksAtLine - 1) * bvp->CharWidth,
-              y - bvp->LineHeight);
+              y - bvp->LineHeight + Descent ());
     EraseRect (&rct);
     invert = TRUE;
+  }
+  else
+  {
+    Black ();
   }
 
   block = 0;
@@ -1465,6 +1598,133 @@ static void DrawMismatchBox (Int4 x, Int4 y, Int4 lineheight, Int4 charwidth)
   Blue ();
 }
 
+static Int4 
+CalculatePreviousProductLength 
+(SeqMgrFeatContext    fcontext,
+ Int4                 interval_offset,
+ Int4                 display_start,
+ Int4                 display_end,
+ Int4                 aln_pos_left,
+ Int4                 aln_pos_right,
+ Uint2                aln_strand,
+ Int4                 aln_row,
+ BioseqViewPtr        bvp)
+{
+  Int4 product_start = 0, k, seq_offset;
+  Int4 interval_high, interval_low;
+  
+  if (bvp == NULL || interval_offset < 0)
+  {
+    return 0;
+  }
+  
+  for (k = 0; k < interval_offset; k++)
+  {
+  	product_start += ABS (fcontext.ivals [2 * k + 1] - fcontext.ivals [2 * k]) + 1;
+  }
+
+  interval_high = MAX (fcontext.ivals [2 * interval_offset], fcontext.ivals [2 * interval_offset + 1]);
+  interval_low = MIN (fcontext.ivals [2 * interval_offset], fcontext.ivals [2 * interval_offset + 1]);
+  
+  if (aln_strand == Seq_strand_plus)
+  {
+    if ((fcontext.strand == Seq_strand_minus && aln_pos_right <= display_end)
+        || (fcontext.strand != Seq_strand_minus && aln_pos_left > display_start))
+    {
+      return product_start;
+    }
+  }
+  else
+  {
+    if ((fcontext.strand == Seq_strand_minus && aln_pos_left > display_start)
+        || (fcontext.strand != Seq_strand_minus && aln_pos_right < display_end))
+    {
+      return product_start;
+    }
+  }
+    
+  if (bvp->seqAlignMode)
+  {
+    if (fcontext.strand == Seq_strand_minus)
+    {
+      if (aln_strand == Seq_strand_plus)
+      {
+        for (seq_offset = interval_high; 
+             seq_offset >= interval_low; 
+             seq_offset--)
+  	    {
+  	      if (x_Coord (bvp, seq_offset, aln_row) <= display_end)
+  	      {
+            break;
+  	      }
+  	    }
+  	    product_start += interval_high - seq_offset + 1;
+      }
+      else
+      {
+        for (seq_offset = interval_high;
+             seq_offset >= interval_low;
+             seq_offset --)
+        {
+  	      if (x_Coord (bvp, seq_offset, aln_row) >= display_start)
+  	      {
+            break;
+  	      }
+        }
+  	    product_start += interval_high - seq_offset + 1;
+      }
+    }
+    else
+    {
+      if (aln_strand == Seq_strand_plus)
+      {
+  	    /* need to find out how much of the product appears in lines before this one.
+  	     * Can't simply subtract the distance, because we can't count the gap characters
+  	     * as part of the product.
+  	     */
+  	    for (seq_offset = interval_low; 
+  	       seq_offset <= interval_high; 
+  	       seq_offset++)
+  	    {
+  	      if (x_Coord (bvp, seq_offset, aln_row) >= display_start)
+  	      {
+  	  	    break;
+  	      }
+  	    }
+  	    product_start += seq_offset - interval_low;
+      }
+      else
+      {
+        for (seq_offset = interval_low;
+             seq_offset <= interval_high;
+             seq_offset ++)
+        {
+  	      if (x_Coord (bvp, seq_offset, aln_row) <= display_end)
+  	      {
+            break;
+  	      }
+        }
+  	    product_start += seq_offset - interval_low;
+      }
+    }
+  }
+  else
+  {
+    if (fcontext.strand == Seq_strand_minus)
+    {
+      /* how much of the product appears in lines after this one? */
+  	  product_start += interval_high - display_end + 1;
+    }
+    else
+    {
+      /* how much of the product appears in lines before this one? */
+      product_start += display_start - interval_low;
+    }
+  }
+  
+  return product_start;  
+}
+
 /* This function puts the letters for a minus strand product in the correct positions
  * in the feature line.
  */
@@ -1479,7 +1739,8 @@ static void PaintMinusProtein
  Int4              frame,
  CharPtr           str_prot,
  CharPtr           str_trans,
- BioseqViewPtr     bvp)
+ BioseqViewPtr     bvp,
+ Uint2             aln_strand)
 {
   Int4 product_start, k;
   Int4 prot_pos, x_pos;
@@ -1488,7 +1749,6 @@ static void PaintMinusProtein
   Int4 aln_pos_right, aln_pos_left;
   Int4 product_pos;
   
-  product_start = 0;
   tmp [1] = 0;
   if (str_prot == NULL || interval_offset >= fcontext.numivals) return;
   prot_len = StringLen (str_prot);
@@ -1503,43 +1763,21 @@ static void PaintMinusProtein
   {
   	trans_len = StringLen (str_trans);
   }
-  for (k = 0; k < interval_offset; k++)
-  {
-  	product_start += fcontext.ivals [2 * k] - fcontext.ivals [2 * k + 1] + 1;
-  }
+
   /* in the alignment coordinate system, find the mapping for the right end of the
    * interval.
    */
   aln_pos_right = x_Coord(bvp, fcontext.ivals [2 * interval_offset], row);
+  aln_pos_left = x_Coord(bvp, fcontext.ivals [2 * interval_offset + 1], row);
   
-  /* does this interval extend into the next line? */
-  if (aln_pos_right > bsFinish - 1)
-  {
-    if (bvp->seqAlignMode) 
-    {
-  	  /* need to find out how much of the product appears in lines after this one.
-  	   * Can't simply subtract the distance, because we can't count the gap characters
-  	   * as part of the product.
-  	   */
-  	   for (k = fcontext.ivals [2 * interval_offset]; k >= fcontext.ivals [2 * interval_offset + 1]; k--)
-  	   {
-  	     if (x_Coord (bvp, k, row) <= bsFinish)
-  	     {
-  	   	   break;
-  	     }
-  	   }
-  	   product_start += fcontext.ivals [2 * interval_offset] - k + 1;
-    }
-    else
-    {
-      /* how much of the product appears in lines after this one? */
-  	  product_start += fcontext.ivals [ 2 * interval_offset] - bsFinish + 1;
-    }
-  }
+  product_start = CalculatePreviousProductLength (fcontext, interval_offset,
+                                                  bsStart, bsFinish,
+                                                  aln_pos_left,
+                                                  aln_pos_right,
+                                                  aln_strand, row, bvp);
 
   product_pos = product_start;
   product_pos -= frame - 1;
-  aln_pos_left = x_Coord(bvp, fcontext.ivals [2 * interval_offset + 1], row);
   
   if (aln_pos_right > bsFinish - 1)
   {
@@ -1601,7 +1839,8 @@ static void PaintPlusProtein
  Int4              frame,
  CharPtr           str_prot,
  CharPtr           str_trans,
- BioseqViewPtr     bvp)
+ BioseqViewPtr     bvp,
+ Uint2             aln_strand)
 {
   Int4 product_start, k;
   Int4 prot_pos, x_pos;
@@ -1610,7 +1849,6 @@ static void PaintPlusProtein
   Int4 aln_pos_right, aln_pos_left;
   Int4 product_pos;
 
-  product_start = 0;
   tmp [1] = 0;
   if (str_prot == NULL || interval_offset >= fcontext.numivals) return;
   prot_len = StringLen (str_prot);
@@ -1625,40 +1863,18 @@ static void PaintPlusProtein
   {
   	trans_len = StringLen (str_trans);
   }
-  for (k = 0; k < interval_offset; k++)
-  {
-  	product_start += fcontext.ivals [2 * k + 1] - fcontext.ivals [2 * k] + 1;
-  }
+
   /* in the alignment coordinate system, find the mapping for the right end of the
    * interval.
    */
   aln_pos_right = x_Coord(bvp, fcontext.ivals [2 * interval_offset + 1], row);
   aln_pos_left = x_Coord (bvp, fcontext.ivals [2 * interval_offset], row);
   
-  /* does this interval extend into the previous line? */
-  if (aln_pos_left < bsStart)
-  {
-    if (bvp->seqAlignMode) 
-    {
-  	  /* need to find out how much of the product appears in lines before this one.
-  	   * Can't simply subtract the distance, because we can't count the gap characters
-  	   * as part of the product.
-  	   */
-  	   for (k = fcontext.ivals [2 * interval_offset]; k <= fcontext.ivals [2 * interval_offset + 1]; k++)
-  	   {
-  	     if (x_Coord (bvp, k, row) >= bsStart)
-  	     {
-  	   	   break;
-  	     }
-  	   }
-  	   product_start += k - fcontext.ivals [2 * interval_offset];
-    }
-    else
-    {
-      /* how much of the product appears in lines before this one? */
-  	  product_start += bsStart - fcontext.ivals [ 2 * interval_offset];
-    }
-  }
+  product_start = CalculatePreviousProductLength (fcontext, interval_offset,
+                                                  bsStart, bsFinish,
+                                                  aln_pos_left,
+                                                  aln_pos_right,
+                                                  aln_strand, row, bvp);
 
   product_pos = product_start;
   product_pos -= frame - 1;
@@ -1731,7 +1947,7 @@ static void DrawFeatureCodonLines
   CdRegionPtr       crp;
   Int2              frame = 1;
 
-  if (!isSelected(itemID, bvp) || ! protProduct) 
+  if (!isSelected(itemID, OBJ_SEQFEAT, bvp) || ! protProduct) 
   {
     return;
   }
@@ -1955,6 +2171,8 @@ static void DrawFeature(Int2 x, Int2 y, Int4 line, Int4 row, Int2 itemID,
   Int4              prot_len;
   ByteStorePtr      bs;
   CharPtr           str_trans = NULL;
+  Int4              aln_row = -1;
+  Uint2             aln_strand = Seq_strand_plus;
 
   y -= Descent();
     
@@ -1964,6 +2182,8 @@ static void DrawFeature(Int2 x, Int2 y, Int4 line, Int4 row, Int2 itemID,
     sfp = SeqMgrGetDesiredFeature (ObjMgrGetEntityIDForPointer(bsp_tmp), bsp_tmp, itemID, 0, NULL, &fcontext);
     BioseqUnlock (bsp_tmp);
     SeqIdFree    (sip_tmp);
+    aln_row = row;
+    aln_strand = AlnMgr2GetNthStrand (bvp->salp, row);
   }
   else {
     sfp = SeqMgrGetDesiredFeature (0, bsp, itemID, 0, NULL, &fcontext);
@@ -1974,10 +2194,18 @@ static void DrawFeature(Int2 x, Int2 y, Int4 line, Int4 row, Int2 itemID,
   bsStart  = line    * bvp->CharsAtLine;
   bsFinish = bsStart + bvp->CharsAtLine;
   
-  fLeft    = x_FeatLeft (bvp, fcontext.left );
-  fRight   = x_FeatRight(bvp, fcontext.right);
-  ffStart  = GetFeatureX(x_Coord(bvp, fLeft,  row), bsStart, bsFinish, TRUE ) - bsStart;
-  ffFinish = GetFeatureX(x_Coord(bvp, fRight, row), bsStart, bsFinish, FALSE) - bsStart;
+  fLeft    = x_FeatLeft (bvp, fcontext.left, aln_row);
+  fRight   = x_FeatRight(bvp, fcontext.right, aln_row);
+  if (aln_strand == Seq_strand_minus)
+  {
+    ffStart  = GetFeatureX(x_Coord(bvp, fRight,  row), bsStart, bsFinish, TRUE ) - bsStart;
+    ffFinish = GetFeatureX(x_Coord(bvp, fLeft, row), bsStart, bsFinish, FALSE) - bsStart;
+  }
+  else
+  {
+    ffStart  = GetFeatureX(x_Coord(bvp, fLeft,  row), bsStart, bsFinish, TRUE ) - bsStart;
+    ffFinish = GetFeatureX(x_Coord(bvp, fRight, row), bsStart, bsFinish, FALSE) - bsStart;
+  }
   x1       = SeqPos2XCoord(x, ffStart,  bvp);
   x2       = SeqPos2XCoord(x, ffFinish, bvp);
 
@@ -2039,13 +2267,25 @@ static void DrawFeature(Int2 x, Int2 y, Int4 line, Int4 row, Int2 itemID,
   else DrawLineEx(x1, y-bvp->LineHeight/2+2, x2, y-bvp->LineHeight/2+2, 1);
 
   for (i = 0; i != fcontext.numivals; i++) {
+    Int4 regStart, regFinish;
+    Int4 fStart, fFinish;
     RecT rect;
-    Int4 ifLeft  = x_FeatLeft  (bvp, fcontext.strand==Seq_strand_minus ? fcontext.ivals[i*2+1] : fcontext.ivals[i*2]);
-    Int4 ifRight = x_FeatRight (bvp, fcontext.strand==Seq_strand_minus ? fcontext.ivals[i*2] : fcontext.ivals[i*2+1]);
-    Int4 regStart  = x_Coord(bvp, ifLeft,  row);
-    Int4 regFinish = x_Coord(bvp, ifRight, row);
-    Int4 fStart    = GetFeatureX(regStart,  bsStart, bsFinish, TRUE );
-    Int4 fFinish   = GetFeatureX(regFinish, bsStart, bsFinish, FALSE);
+    Int4 ifLeft  = x_FeatLeft  (bvp, fcontext.strand==Seq_strand_minus ? fcontext.ivals[i*2+1] : fcontext.ivals[i*2],
+                                aln_row);
+    Int4 ifRight = x_FeatRight (bvp, fcontext.strand==Seq_strand_minus ? fcontext.ivals[i*2] : fcontext.ivals[i*2+1],
+                                aln_row);
+    if (aln_strand == Seq_strand_minus)
+    {
+      regStart  = x_Coord(bvp, ifRight,  row);
+      regFinish = x_Coord(bvp, ifLeft, row);
+    }
+    else
+    {
+      regStart  = x_Coord(bvp, ifLeft,  row);
+      regFinish = x_Coord(bvp, ifRight, row);
+    }
+    fStart    = GetFeatureX(regStart,  bsStart, bsFinish, TRUE );
+    fFinish   = GetFeatureX(regFinish, bsStart, bsFinish, FALSE);
     
     if( !IsInRange(regStart, bsStart,  bsFinish ) && !IsInRange(regFinish, bsStart,  bsFinish) &&
         !IsInRange(bsStart,  regStart, regFinish) && !IsInRange(bsFinish,  regStart, regFinish) ) continue;       
@@ -2076,13 +2316,16 @@ static void DrawFeature(Int2 x, Int2 y, Int4 line, Int4 row, Int2 itemID,
 #endif 
       Blue();
 
-      if (fcontext.strand == Seq_strand_minus)
+      if ((fcontext.strand == Seq_strand_minus && aln_strand != Seq_strand_minus)
+          || (fcontext.strand != Seq_strand_minus && aln_strand == Seq_strand_minus))
       {
-        PaintMinusProtein  (x, y, row, fcontext, i, bsStart, bsFinish, frame, str_prot, str_trans, bvp);
+        PaintMinusProtein  (x, y, row, fcontext, i, bsStart, bsFinish, frame, 
+                            str_prot, str_trans, bvp, aln_strand);
       }
       else
       {
-        PaintPlusProtein (x, y, row, fcontext, i, bsStart, bsFinish, frame, str_prot, str_trans, bvp);
+        PaintPlusProtein (x, y, row, fcontext, i, bsStart, bsFinish, frame, 
+                          str_prot, str_trans, bvp, aln_strand);
       }
     } /* protein product */
     else {  /* draw feature line */
@@ -2091,34 +2334,52 @@ static void DrawFeature(Int2 x, Int2 y, Int4 line, Int4 row, Int2 itemID,
       fcontext.seqfeattype == SEQFEAT_CDREGION ? Blue() : Black();
 #if defined(WIN_MOTIF)
       DrawLineEx(x1+1, y-bvp->LineHeight/2+2, x2, y-bvp->LineHeight/2+2, 3);
-      if (isSelected(itemID, bvp)) {
+      if (isSelected(itemID, OBJ_SEQFEAT, bvp)) {
         Black();
         DrawLineEx(x1+1, y-bvp->LineHeight/2-1, x2, y-bvp->LineHeight/2-1, 1);
         DrawLineEx(x1+1, y-bvp->LineHeight/2+7, x2, y-bvp->LineHeight/2+7, 1);
       }
 #elif defined(WIN_MSWIN)  /* should be verified */
       DrawLineEx(x1+1, y-bvp->LineHeight/2+2, x2, y-bvp->LineHeight/2+2, 3);
-      if (isSelected(itemID, bvp)) {
+      if (isSelected(itemID, OBJ_SEQFEAT, bvp)) {
         Black();
         DrawLineEx(x1+1, y-bvp->LineHeight/2-1, x2, y-bvp->LineHeight/2-1, 1);
         DrawLineEx(x1+1, y-bvp->LineHeight/2+7, x2, y-bvp->LineHeight/2+7, 1);
       }
 #else
       DrawLineEx(x1, y-bvp->LineHeight/2+1, x2, y-bvp->LineHeight/2+1, 3);
-      if (isSelected(itemID, bvp)) {
+      if (isSelected(itemID, OBJ_SEQFEAT, bvp)) {
         Black();
         DrawLineEx(x1, y-bvp->LineHeight/2-2, x2, y-bvp->LineHeight/2-2, 1);
         DrawLineEx(x1, y-bvp->LineHeight/2+6, x2, y-bvp->LineHeight/2+6, 1);
       }
 #endif      
 
+      /* draw arrow or endpoint for left side */
       if (IsInRange(regStart, bsStart, bsFinish)) {
         LoadRect (&rect, x1, y-bvp->LineHeight/2-1, x1+7, y-bvp->LineHeight/2+6);
-        CopyBits (&rect, fcontext.strand==Seq_strand_minus ? FillLeftArrowSym : FillRectangleSym );
+        if ((fcontext.strand == Seq_strand_minus && aln_strand != Seq_strand_minus)
+            || (fcontext.strand != Seq_strand_minus && aln_strand == Seq_strand_minus))
+        {
+          CopyBits (&rect, FillLeftArrowSym);
+        }
+        else
+        {
+          CopyBits (&rect, FillRectangleSym );
+        }
+      
       }
       if (IsInRange(regFinish, bsStart, bsFinish)) {
         LoadRect (&rect, x2, y-bvp->LineHeight/2-1, x2+7, y-bvp->LineHeight/2+6);
-        CopyBits (&rect, fcontext.strand==Seq_strand_minus ? FillRectangleSym : FillRightArrowSym);
+        if ((fcontext.strand == Seq_strand_minus && aln_strand != Seq_strand_minus)
+            || (fcontext.strand != Seq_strand_minus && aln_strand == Seq_strand_minus))
+        {
+          CopyBits (&rect, FillRectangleSym);
+        }
+        else
+        {
+          CopyBits (&rect, FillRightArrowSym);
+        }
       }
       
       if (bvp->seqAlignMode) {  /* Check for gaps in this feature if in alignment mode */
@@ -2356,6 +2617,10 @@ static void DrawSeqPanel (BioseqViewPtr bvp)
           DrawDkGrid(x, y+bvp->LineSpace/2, r.right, y+bvp->LineSpace/2);             /* Draw Horizontal Grid */
       /* draw end */
     }
+    else if (bvp->SeqPanLines[line]->lineType == eTypeAlignDivider)
+    {
+      aln_idx++;
+    }
     y += bvp->LineHeight;
   }
 
@@ -2543,13 +2808,13 @@ static Boolean AddJournalEntryEx
   sejp->next = end;
   end->prev = sejp;
 
-  rval = PlayJournal (sejp, &sefp->last_journal_entry, 1, &feats_deleted);
+  rval = PlayJournal (sejp, &sefp->last_journal_entry, 1, &feats_deleted, sefp);
   if (feats_deleted)
   {
     ans = Message (MSG_YN, "You are about to delete one or more features - do you want to continue?");
     if (ans == ANS_NO)
     {
-      rval = UnplayJournal (&sefp->last_journal_entry, 1);
+      rval = UnplayJournal (&sefp->last_journal_entry, 1, sefp);
     }
   }
   
@@ -3541,6 +3806,7 @@ static void PrintFeature(CharPtr feature_line, Int4 line, Int4 row, Int2 itemID,
   Int4              bsStart, bsFinish, ffStart, ffFinish, i;
   Int4              fLeft, fRight;
   CharPtr           no_prot_msg = "Protein sequence is not available";
+  Int4              aln_row = -1;
     
   if (bvp->seqAlignMode) {
     SeqIdPtr  sip_tmp = AlnMgr2GetNthSeqIdPtr(bvp->salp, row);
@@ -3548,6 +3814,7 @@ static void PrintFeature(CharPtr feature_line, Int4 line, Int4 row, Int2 itemID,
     sfp = SeqMgrGetDesiredFeature (ObjMgrGetEntityIDForPointer(bsp_tmp), bsp_tmp, itemID, 0, NULL, &fcontext);
     BioseqUnlock (bsp_tmp);
     SeqIdFree    (sip_tmp);
+    aln_row = row;
   }
   else {
     sfp = SeqMgrGetDesiredFeature (0, bsp, itemID, 0, NULL, &fcontext);
@@ -3562,8 +3829,8 @@ static void PrintFeature(CharPtr feature_line, Int4 line, Int4 row, Int2 itemID,
   bsStart  = line    * bvp->CharsAtLine;
   bsFinish = bsStart + bvp->CharsAtLine;
   
-  fLeft    = x_FeatLeft (bvp, fcontext.left );
-  fRight   = x_FeatRight(bvp, fcontext.right);
+  fLeft    = x_FeatLeft (bvp, fcontext.left, aln_row);
+  fRight   = x_FeatRight(bvp, fcontext.right, aln_row);
   ffStart  = GetFeatureX(x_Coord(bvp, fLeft,  row), bsStart, bsFinish, TRUE ) - bsStart;
   ffFinish = GetFeatureX(x_Coord(bvp, fRight, row), bsStart, bsFinish, FALSE) - bsStart;
 
@@ -4389,17 +4656,19 @@ static void SeqEdTranslateAndJournalOneCDS (SeqFeatPtr sfp, SeqEdFormPtr sefp)
 
 static void SeqEdTranslateCDSCmd (SeqEdFormPtr sefp)
 {
-  ValNodePtr        vnp;
   SeqFeatPtr        sfp;
   SeqMgrFeatContext fcontext;
+  SelStructPtr      sel;
   
   if (sefp == NULL || sefp->bfp == NULL) return;
   
-  for (vnp = sefp->bfp->bvd.Selection; vnp != NULL; vnp = vnp->next)
+  for (sel = sefp->bfp->bvd.sel_list; sel != NULL; sel = sel->next)
   {
-    if (vnp->choice != 1) continue;
-    
-  	sfp = SeqMgrGetDesiredFeature (0, sefp->bfp->bvd.bsp, vnp->data.intvalue, 0, NULL, &fcontext);
+    if (sel->itemtype != OBJ_SEQFEAT)
+    {
+      continue;
+    }
+  	sfp = SeqMgrGetDesiredFeature (0, sefp->bfp->bvd.bsp, sel->itemID, 0, NULL, &fcontext);
     SeqEdTranslateAndJournalOneCDS (sfp, sefp);
   }
   Select (sefp->bfp->bvd.seqView);
@@ -4422,18 +4691,6 @@ static void SeqEdTranslateCDSItem (IteM i)
   
   sefp = (SeqEdFormPtr) GetObjectExtra (i);
   SeqEdTranslateCDSCmd (sefp);
-}
-
-static void SeqEdSelectFeature (SeqEdFormPtr sefp, Int4 idx)
-{
-  if (sefp == NULL) return;
-  
-  sefp->bfp->bvd.Selection = ValNodeNew (NULL);
-  if (sefp->bfp->bvd.Selection != NULL)
-  {
-    sefp->bfp->bvd.Selection->data.intvalue = idx;
-    sefp->bfp->bvd.Selection->choice = 1;
-  }    	
 }
 
 static Int4 FindBestNonGapPosition (Int4 seq_offset, BioseqPtr bsp, Boolean push_left)
@@ -4618,13 +4875,13 @@ static void SeqEdOnClick (PaneL pnl, PoinT pt)
     } 
     else
     {
-      if (!isSelected (splp->idx, &(sefp->bfp->bvd)))
+      if (!isSelected (splp->idx, OBJ_SEQFEAT, &(sefp->bfp->bvd)))
       {
-        SeqEdSelectFeature (sefp, splp->idx);
+        SeqEdSelectFeature ( &(sefp->bfp->bvd), splp->idx);
       }
       else
       {
-      	sefp->bfp->bvd.Selection = ValNodeFree (sefp->bfp->bvd.Selection);
+        sefp->bfp->bvd.sel_list = SelStructListFree (sefp->bfp->bvd.sel_list);
       }
       sefp->feature_to_drag = SeqMgrGetDesiredFeature (0, sefp->bfp->bvd.bsp, splp->idx, 0, NULL, &fcontext);
       sefp->feature_orig_loc = SeqLocFree (sefp->feature_orig_loc);
@@ -4964,9 +5221,9 @@ static void SeqEdOnDrag (PaneL pnl, PoinT pt)
   
   if (sefp->feature_to_drag != NULL)
   {
-    if (!isSelected (sefp->feature_to_drag->idx.itemID, &(sefp->bfp->bvd)))
+    if (!isSelected (sefp->feature_to_drag->idx.itemID, OBJ_SEQFEAT, &(sefp->bfp->bvd)))
     {
-      SeqEdSelectFeature (sefp, splp->idx);
+      SeqEdSelectFeature ( &(sefp->bfp->bvd), splp->idx);
     }
 
     change = x + splp->bioSeqLine * sefp->bfp->bvd.CharsAtLine - sefp->feature_drag_origin;
@@ -5123,26 +5380,28 @@ static void SetSeqEdPanelClick (SeqEdFormPtr sefp)
 }
 
 
-static void SeqAlnToggleItemSelection (BioseqViewPtr bvp, Int2 itemID)
+static void SeqAlnToggleItemSelection (BioseqViewPtr bvp, Int2 itemID, Int2 itemtype)
 {
-  ValNodePtr vnp;
-  
-  for (vnp = bvp->Selection; vnp != NULL; vnp = vnp->next)
+  if (bvp->salp == NULL)
   {
-    if (vnp->data.intvalue == itemID)
+    return;
+  }
+  
+  if (isSelected (itemID, itemtype, bvp))
+  {
+    ObjMgrDeSelect (bvp->salp->idx.entityID, itemID, itemtype, 0, NULL);
+  }
+  else 
+  {
+    if (itemtype == OBJ_BIOSEQ)
     {
-      if (vnp->choice == 1)
-      {
-        vnp->choice = 0;
-      }
-      else
-      {
-        vnp->choice = 1;
-      }
-      return;    
+      ObjMgrAlsoSelect (bvp->salp->idx.entityID, itemID, itemtype, 0, NULL);
+    }
+    else
+    {
+      ObjMgrSelect (bvp->salp->idx.entityID, itemID, itemtype, 0, NULL);
     }
   }
-  ValNodeAddInt (&bvp->Selection, 1, itemID);
 }
 
 
@@ -5181,9 +5440,15 @@ static void SeqAlnOnClick (PaneL pnl, PoinT pt)
     {
       if (!is_ctrl)
       {
-        sefp->bfp->bvd.Selection = ValNodeFree (sefp->bfp->bvd.Selection);
+        ObjMgrDeSelectAll ();
       }
-      SeqAlnToggleItemSelection (&(sefp->bfp->bvd), bsp->idx.itemID);
+      SeqAlnToggleItemSelection (&(sefp->bfp->bvd), bsp->idx.itemID, OBJ_BIOSEQ);
+      /* if user double-clicks on sequence, make it the target */
+      if (is_double_click)
+      {
+        sefp->bfp->bvd.TargetRow = GetAlnRowForBsp (bsp, sefp->bfp->bvd.salp);
+      }
+      
       inval_panel (sefp->bfp->bvd.seqView, -1, -1);
       
       aln_pos = x + splp->bioSeqLine * sefp->bfp->bvd.CharsAtLine;
@@ -5193,7 +5458,32 @@ static void SeqAlnOnClick (PaneL pnl, PoinT pt)
       sefp->bfp->bvd.last_aln_row_clicked = splp->row;
       SeqEdUpdateStatus (sefp);
     }
-  } 
+  }
+  else if (splp->lineType == eTypeFeature)
+  {
+    if (is_double_click) 
+    {
+      WatchCursor ();
+      Update ();
+      GatherProcLaunch (OMPROC_EDIT, FALSE, sefp->input_entityID, splp->idx, OBJ_SEQFEAT, 0, 0, OBJ_SEQFEAT, 0);
+      ArrowCursor ();
+      Update ();
+      return;
+    } 
+    else
+    {
+      sip = AlnMgr2GetNthSeqIdPtr(sefp->bfp->bvd.salp, splp->row);
+      bsp = BioseqFind (sip);
+      if (bsp != NULL)
+      {
+        SeqAlnToggleItemSelection (&(sefp->bfp->bvd), splp->idx, OBJ_SEQFEAT);
+        /* make target sequence the one the feature belongs to */
+        sefp->bfp->bvd.TargetRow = GetAlnRowForBsp (bsp, sefp->bfp->bvd.salp);
+        Select (sefp->bfp->bvd.seqView);
+        inval_panel (sefp->bfp->bvd.seqView, -1, -1);
+      }
+    }
+  }
   CaptureSlateFocus ((SlatE) sefp->bfp->bvd.seqView);     
 
 }
@@ -5398,7 +5688,7 @@ static void SeqEdCancel (SeqEdFormPtr sefp)
 
   if (sefp == NULL) return;
   Hide (sefp->form);
-  if (UnplayJournal ( &sefp->last_journal_entry, -1))
+  if (UnplayJournal ( &sefp->last_journal_entry, -1, sefp))
   {
     entityID = ObjMgrGetEntityIDForPointer (sefp->bfp->bvd.bsp);
     ObjMgrSetDirtyFlag (entityID, TRUE);
@@ -5970,6 +6260,10 @@ static void FreeSeqEdFormGapFeatList (SeqEdFormPtr sefp)
 
 static void SeqEdReindexGaps (SeqEdFormPtr sefp, BioseqPtr edit_bsp)
 {
+  if (sefp == NULL || edit_bsp == NULL || edit_bsp->repr != Seq_repr_delta)
+  {
+    return;
+  }
   FreeSeqEdFormGapFeatList (sefp);
   
   MakeGapFeats (edit_bsp, &(sefp->gapvnp));
@@ -6069,7 +6363,6 @@ static void SeqEdInsertGapMenuItem (IteM i)
         AddJournalEntryEx (eSeqEdInsertGap, sefp->edit_pos_start,
                                             gap_len, NULL,
                                             sefp, is_unknown_gap);
-        SeqEdReindexGaps (sefp, sefp->bfp->bvd.bsp);
         changed = TRUE;
 
         done = TRUE;
@@ -6327,7 +6620,7 @@ static void onCloseSeqEdPanel (PaneL p)
   bvp->chapter_list = FreeChapterList (bvp->chapter_list);
   bvp->feature_lists = FreeFeatureLists (bvp->feature_lists);
 
-  ValNodeFree(bvp->Selection);
+  bvp->sel_list = SelStructListFree (bvp->sel_list);
 }
 
 static void SetUndoRedoStatus (SeqEdFormPtr sefp)
@@ -6392,7 +6685,7 @@ static void SeqEdUndoMenuItem (IteM i)
   sefp = (SeqEdFormPtr) GetObjectExtra (i);
   if (sefp == NULL) return;
 
-  if (UnplayJournal (&sefp->last_journal_entry, 1))
+  if (UnplayJournal (&sefp->last_journal_entry, 1, sefp))
   {
     RemapSeqEdIntervalForGap (sefp);
     SetUndoRedoStatus (sefp);
@@ -6409,7 +6702,7 @@ static void SeqEdRedoMenuItem (IteM i)
   sefp = (SeqEdFormPtr) GetObjectExtra (i);
   if (sefp == NULL) return;
 
-  if (PlayJournal (sefp->last_journal_entry->next, &sefp->last_journal_entry, 1, NULL))
+  if (PlayJournal (sefp->last_journal_entry->next, &sefp->last_journal_entry, 1, NULL, sefp))
   {
     RemapSeqEdIntervalForGap (sefp);
     SetUndoRedoStatus (sefp);
@@ -7109,18 +7402,44 @@ static void SeqEdFindPatternDialog (IteM i)
   return;
 }
 
-static void ObjMgrSelectSeqEdSelection (SeqEdFormPtr sefp)
+static void ObjMgrSelectSeqEdSelection (SeqEdFormPtr sefp, BioseqPtr target_bsp)
 {
   SeqLocPtr slp;
   Uint2     itemID;
   Uint2     entityID;
+  Int4      real_start, real_stop;
+  Int4      aln_len;
+  Uint2     strand;
   
-  if (sefp == NULL || sefp->edit_pos_start == sefp->edit_pos_end) return;
-  slp = SeqLocIntNew (sefp->edit_pos_start, sefp->edit_pos_end - 1,
-  	                      Seq_strand_plus, sefp->bfp->bvd.bsp->id);
+  if (sefp == NULL || sefp->edit_pos_start == sefp->edit_pos_end || target_bsp == NULL) 
+  {
+    return;
+  }
+  
+  if (sefp->bfp->bvd.salp == NULL)
+  {
+    real_start = sefp->edit_pos_start;
+    real_stop = sefp->edit_pos_end - 1;
+    strand = Seq_strand_plus;
+  }
+  else
+  {
+    real_start = sefp->edit_pos_start + 1;
+    real_stop = sefp->edit_pos_end;
+    aln_len = SeqAlignLength (sefp->bfp->bvd.salp);
+    
+    AdjustFromForGap (&real_start, sefp->bfp->bvd.salp, aln_len, sefp->bfp->bvd.TargetRow);
+    AdjustToForGap (&real_stop, sefp->bfp->bvd.salp, sefp->bfp->bvd.TargetRow);
+    strand = AlnMgr2GetNthStrand (sefp->bfp->bvd.salp, sefp->bfp->bvd.TargetRow);
+    real_start --;
+    real_stop --;
+  }
+  
+  slp = SeqLocIntNew (real_start, real_stop,
+  	                  strand, target_bsp->id);
   	                      
-  entityID = ObjMgrGetEntityIDForPointer (sefp->bfp->bvd.bsp);
-  BioseqFindEntity (sefp->bfp->bvd.bsp->id, &itemID);
+  entityID = ObjMgrGetEntityIDForPointer (target_bsp);
+  BioseqFindEntity (target_bsp->id, &itemID);
   	      
   ObjMgrSelect (entityID, itemID, OBJ_BIOSEQ, OM_REGION_SEQLOC, slp);
   
@@ -7147,6 +7466,8 @@ static void SeqEditNewFeatureMenuProc (IteM i)
   Int2              retval;
   SeqEdFormPtr      sefp;
   Uint2             itemID;
+  SeqIdPtr          sip;
+  BioseqPtr         target_bsp;
 
   sefp = (SeqEdFormPtr) GetObjectExtra ((WindoW) ParentWindow (i));
   if (sefp == NULL) return;
@@ -7160,11 +7481,26 @@ static void SeqEditNewFeatureMenuProc (IteM i)
     if (ans == ANS_NO) return;
   }
   MemSet ((Pointer) (&ompc), 0, sizeof (OMProcControl));
+  
+  if (sefp->bfp->bvd.salp == NULL)
+  {
+    target_bsp = sefp->bfp->bvd.bsp;
+  }
+  else
+  {
+    sip = AlnMgr2GetNthSeqIdPtr(sefp->bfp->bvd.salp, sefp->bfp->bvd.TargetRow);
+    target_bsp = BioseqFind (sip);
+  }
+  if (target_bsp == NULL)
+  {
+    return;
+  }
+  
   ompc.input_entityID =  ObjMgrGetEntityIDForPointer (sefp->bfp->bvd.bsp);
-  BioseqFindEntity (sefp->bfp->bvd.bsp->id, &itemID);
+  BioseqFindEntity (target_bsp->id, &itemID);
   ompc.input_itemID = itemID;
   ompc.input_itemtype = OBJ_BIOSEQ;
-  ObjMgrSelectSeqEdSelection (sefp);
+  ObjMgrSelectSeqEdSelection (sefp, target_bsp);
   GatherDataForProc (&ompc, FALSE);
   ompc.proc = ompp;
   retval = (*(ompp->func)) (&ompc);
@@ -7431,9 +7767,15 @@ static Int2 LIBCALLBACK SeqEditMsgFunc (OMMsgStructPtr ommsp)
           inval_panel (sefp->bfp->bvd.seqView, -1, -1);	
           break;
       case OM_MSG_DESELECT:
+          ResizeSeqEdView (sefp);
+          Select (sefp->bfp->bvd.seqView);
+          inval_panel (sefp->bfp->bvd.seqView, -1, -1);	
           break;
 
       case OM_MSG_SELECT: 
+          ResizeSeqEdView (sefp);
+          Select (sefp->bfp->bvd.seqView);
+          inval_panel (sefp->bfp->bvd.seqView, -1, -1);	
           break;
       case OM_MSG_DEL:
           Hide (sefp->form);
@@ -7692,35 +8034,6 @@ static Int4 GetScrollPosForAlnPos (Int4 aln_pos, BioseqViewPtr bvp)
     display_line++;
   }
   return display_line;
-}
-
-static void SeqAlnSelectItem (BioseqViewPtr bvp, Int2 itemID)
-{
-  ValNodePtr vnp;
-  
-  for (vnp = bvp->Selection; vnp != NULL; vnp = vnp->next)
-  {
-    if (vnp->data.intvalue == itemID)
-    {
-      vnp->choice = 1;
-      return;    
-    }
-  }
-  ValNodeAddInt (&bvp->Selection, 1, itemID);
-}
-
-static void SeqAlnUnselectItem (BioseqViewPtr bvp, Int2 itemID)
-{
-  ValNodePtr vnp;
-  
-  for (vnp = bvp->Selection; vnp != NULL; vnp = vnp->next)
-  {
-    if (vnp->data.intvalue == itemID)
-    {
-      vnp->choice = 0;
-      return;    
-    }
-  }
 }
 
 static void SeqAlnScrollToAlnPos (SeqEdFormPtr sefp, Int4 pos)
@@ -8144,7 +8457,7 @@ static void RemoveSequencesFromAlignment (IteM i)
     {
       sip = AlnMgr2GetNthSeqIdPtr(sefp->bfp->bvd.salp, n);
       bsp = BioseqFind (sip);
-      if (bsp != NULL && isSelected (bsp->idx.itemID, &(sefp->bfp->bvd)))
+      if (bsp != NULL && isSelected (bsp->idx.itemID, OBJ_BIOSEQ, &(sefp->bfp->bvd)))
       {
         if (IsSequenceFirstInPairwise (sep, sip))
 	      {
@@ -8163,7 +8476,7 @@ static void RemoveSequencesFromAlignment (IteM i)
     for (vnp = sip_list; vnp != NULL; vnp = vnp->next)
     {
       SeqAlignBioseqDeleteById (sefp->bfp->bvd.salp, vnp->data.ptrvalue);
-      SeqAlnUnselectItem (&(sefp->bfp->bvd), vnp->choice);
+      ObjMgrDeSelect (sefp->input_entityID, vnp->choice, OBJ_BIOSEQ, 0, NULL);
     }
     sip_list = ValNodeFree (sip_list);
     DeleteMarkedObjects (sefp->input_entityID, 0, NULL);
@@ -8210,6 +8523,135 @@ static void SeqAlnValidateAlignment (IteM i)
   ValidateSeqAlign (sefp->bfp->bvd.salp, 0, TRUE, TRUE, TRUE, FALSE, FALSE, NULL);
 }
 
+static void SeqAlnFeaturePropagate (IteM i)
+{
+  SeqEdFormPtr       sefp;
+  BioseqPtr          bsp = NULL;
+  ForM               f;
+  SeqMgrFeatContext  fcontext;
+  Uint2              itemID = 0;
+  SeqFeatPtr         sfp;
+  SelStructPtr       sel;
+  SeqEntryPtr        sep;
+  SeqIdPtr           sip = NULL;
+  
+  sefp = (SeqEdFormPtr) GetObjectExtra (i);
+  if (sefp == NULL || sefp->bfp->bvd.salp == NULL) return;
+
+  sep = GetTopSeqEntryForEntityID (sefp->input_entityID);
+  if (sep == NULL) return;
+  
+  if (sefp->bfp->bvd.TargetRow > 0 
+      && sefp->bfp->bvd.TargetRow <= sefp->bfp->bvd.salp->dim)
+  {
+    sip = AlnMgr2GetNthSeqIdPtr(sefp->bfp->bvd.salp, sefp->bfp->bvd.TargetRow);
+    if (sip != NULL)
+    {
+      bsp = BioseqFind (sip);
+    }
+  }
+  
+  if (bsp == NULL)
+  {
+    Message (MSG_OK, "You must target a single sequence in order to propagate");
+    return;
+  }
+
+  
+  sfp = GetNextFeatureOnSegOrMaster (bsp, NULL, 0, 0, &fcontext);
+  if (sfp == NULL)
+  {
+    Message (MSG_OK, "The sequence must have features in order to propagate");
+    return;
+  }
+  
+  sel = ObjMgrGetSelected ();
+  if (sel != NULL && sel->entityID == sefp->input_entityID &&
+      sel->next == NULL && sel->itemtype == OBJ_SEQFEAT) {
+    sfp = SeqMgrGetDesiredFeature (sefp->input_entityID, NULL, sel->itemID, 0, NULL, &fcontext);
+    if (sfp != NULL && fcontext.bsp == bsp) {
+      itemID = sel->itemID;
+    }
+  }
+
+  f = FeaturePropagateForm (bsp, sefp->bfp->bvd.salp, itemID);
+  if (f == NULL) return;
+  Show (f);
+  Select (f);
+  
+}
+
+static SeqLocPtr GetSeqLocForAlignmentEdit (SeqEdFormPtr sefp)
+{
+  Int4 real_start, real_stop, aln_len;
+  Uint2 strand;
+  SeqLocPtr slp;
+  SeqIdPtr  sip;
+  
+  if (sefp == NULL || sefp->bfp->bvd.salp == NULL)
+  {
+    return NULL;
+  }
+  
+  real_start = sefp->edit_pos_start + 1;
+  real_stop = sefp->edit_pos_end;
+  if (real_start < 1)
+  {
+    real_start = 1;
+  }
+  if (real_stop < real_start)
+  {
+    real_stop = real_start;
+  }
+  
+  aln_len = SeqAlignLength (sefp->bfp->bvd.salp);
+  if (real_start == 1 && real_stop == 1)
+  {
+    real_stop = aln_len;
+  }
+      
+  AdjustFromForGap (&real_start, sefp->bfp->bvd.salp, aln_len, sefp->bfp->bvd.TargetRow);
+  
+  AdjustToForGap (&real_stop, sefp->bfp->bvd.salp, sefp->bfp->bvd.TargetRow);
+  strand = AlnMgr2GetNthStrand (sefp->bfp->bvd.salp, sefp->bfp->bvd.TargetRow);
+  real_start --;
+  real_stop --;
+  
+  sip = AlnMgr2GetNthSeqIdPtr(sefp->bfp->bvd.salp, sefp->bfp->bvd.TargetRow);
+  
+  slp = SeqLocIntNew (real_start, real_stop,
+  	                  strand, sip);
+  return slp;
+}
+
+static void AlnEdApplyFeatureToAlignment (IteM i, Int4 feattype)
+{
+  SeqEdFormPtr    sefp;
+  SeqLocPtr       slp;
+  
+  sefp = (SeqEdFormPtr) GetObjectExtra (i);
+  if (sefp == NULL || sefp->bfp->bvd.salp == NULL) return;
+
+  slp = GetSeqLocForAlignmentEdit (sefp);
+  ApplyFeatureToAlignment (sefp->input_entityID, sefp->bfp->bvd.salp, slp, feattype);
+  
+}
+
+static void ApplyCDSToAlignment (IteM i)
+{
+  AlnEdApplyFeatureToAlignment (i, ADD_CDS);
+}
+
+static void ApplyRRNAToAlignment (IteM i)
+{
+  AlnEdApplyFeatureToAlignment (i, ADD_RRNA);
+}
+
+static void ApplyOtherFeatureToAlignment (IteM i)
+{
+  AlnEdApplyFeatureToAlignment (i, ADD_IMP);
+}
+
 static void CreateAlnMenus (WindoW w)
 
 {
@@ -8243,7 +8685,9 @@ static void CreateAlnMenus (WindoW w)
   localItem = CommandItem (edit_menu, "Remove Sequences From Alignment", 
                            RemoveSequencesFromAlignment);
   SetObjectExtra (localItem, sefp, NULL);
-  localItem = CommandItem (edit_menu, "Validate Alignemtn", SeqAlnValidateAlignment);
+  localItem = CommandItem (edit_menu, "Validate Alignment", SeqAlnValidateAlignment);
+  SetObjectExtra (localItem, sefp, NULL);
+  localItem = CommandItem (edit_menu, "Propagate Features", SeqAlnFeaturePropagate);
   SetObjectExtra (localItem, sefp, NULL);
 
   /* View menu */
@@ -8269,6 +8713,21 @@ static void CreateAlnMenus (WindoW w)
   }
   localItem = StatusItem (edit_menu, "Show Substitutions", SeqAlnShowSubstitutionsMenuItem);
   SetObjectExtra (localItem, sefp, NULL);
+  
+  /* Features Menu */
+  edit_menu = PulldownMenu (w, "Features");
+  sub = SubMenu (edit_menu, "Apply To Target Sequence");
+  SeqEdNewFeaturesMenu (sub, TRUE);
+
+  sub = SubMenu (edit_menu, "Apply To Alignment");
+  localItem = CommandItem (sub, "CDS", ApplyCDSToAlignment);
+  SetObjectExtra (localItem, sefp, NULL);
+  localItem = CommandItem (sub, "RNA", ApplyRRNAToAlignment);
+  SetObjectExtra (localItem, sefp, NULL);
+  localItem = CommandItem (sub, "Other Feature", ApplyOtherFeatureToAlignment);
+  SetObjectExtra (localItem, sefp, NULL);
+  
+  
 }
 
 extern ForM CreateAlnEditorWindow (Int2 left, Int2 top, CharPtr windowname, SeqAlignPtr salp, Uint2 entityID)
@@ -8981,11 +9440,12 @@ static Boolean PlayOneJournalEntry (SeqEdJournalPtr sejp, BoolPtr pfeats_deleted
   return rval;
 }
 
-NLM_EXTERN Boolean PlayJournal 
+static Boolean PlayJournal 
 (SeqEdJournalPtr      list, 
  SeqEdJournalPtr PNTR last, 
  Int4                 num_steps,
- BoolPtr              pfeats_deleted)
+ BoolPtr              pfeats_deleted,
+ SeqEdFormPtr         sefp)
 {
   Boolean rval = TRUE;
   Int4 steps_removed = 0;
@@ -9001,6 +9461,7 @@ NLM_EXTERN Boolean PlayJournal
     *last = list;
     list = list->next;
   }
+  SeqEdReindexGaps (sefp, sefp->bfp->bvd.bsp);
   return rval;
 }
 
@@ -9047,7 +9508,7 @@ static Boolean UnplayOneJournalEntry (SeqEdJournalPtr sejp)
   return rval; 
 }
 
-NLM_EXTERN Boolean UnplayJournal (SeqEdJournalPtr PNTR last, Int4 num_steps)
+static Boolean UnplayJournal (SeqEdJournalPtr PNTR last, Int4 num_steps, SeqEdFormPtr sefp)
 {
   Int4            steps_removed = 0;
   Boolean         rval = TRUE;
@@ -9066,6 +9527,7 @@ NLM_EXTERN Boolean UnplayJournal (SeqEdJournalPtr PNTR last, Int4 num_steps)
   	  *last = (*last)->prev;
   	}
   }
+  SeqEdReindexGaps (sefp, sefp->bfp->bvd.bsp);
   return rval;
 }
 

@@ -28,11 +28,11 @@
 * Author:  Karl Sirotkin, Tom Madden, Tatiana Tatusov, Jonathan Kans,
 *          Mati Shomrat
 *
-* $Id: asn2gnb1.c,v 1.66 2005/04/27 20:32:38 kans Exp $
+* $Id: asn2gnb1.c,v 1.67 2005/05/05 15:08:35 kans Exp $
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.66 $
+* $Revision: 1.67 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -3078,7 +3078,7 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
   ajp->remotefree = remotefree;
   ajp->remotedata = remotedata;
   if (remotelock != NULL && bsp != NULL) {
-    sip = SeqIdFindBest (bsp->id, 0);
+    sip = SeqIdFindBest (bsp->id, SEQID_GI);
     if (sip != NULL) {
       remotevnp = remotelock (sip, remotedata);
     }

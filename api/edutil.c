@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 2/4/94
 *
-* $Revision: 6.47 $
+* $Revision: 6.48 $
 *
 * File Description:  Sequence editing utilities
 *
@@ -39,6 +39,11 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: edutil.c,v $
+* Revision 6.48  2005/05/02 14:20:02  bollin
+* when inserting gaps, adjust coding region locations to not include gaps.
+* when removing gaps, if a feature location has intervals that stop and start
+* again at the point where the gap was removed, connect the intervals.
+*
 * Revision 6.47  2005/04/28 20:10:31  bollin
 * added new function AdjustFeaturesForInsertion which is called by BioseqInsert
 * and also by a new function in sequin3.c for converting a raw bioseq to a delta
@@ -4880,6 +4885,7 @@ static void SeqEdInsertAdjustFeat (SeqFeatPtr sfp, SeqEdJournalPtr sejp, Int4 in
   ValNodePtr      vnp;
   AffectedFeatPtr afp = NULL;
   SeqLocPtr       tmp_loc;
+  Boolean         split_mode;
   
   if (sfp == NULL || sejp == NULL)
   {
@@ -4898,6 +4904,15 @@ static void SeqEdInsertAdjustFeat (SeqFeatPtr sfp, SeqEdJournalPtr sejp, Int4 in
       afp = NULL;
     }
   }
+
+  /* if we're inserting a gap and the feature is a coding region, need to split location
+   * regardless of mode */
+  split_mode = sejp->spliteditmode;
+  if (sejp->action == eSeqEdInsertGap || sejp->action == eSeqEdDeleteGap
+      && sfp->data.choice == SEQFEAT_CDREGION)
+  {
+    split_mode = TRUE;
+  }
   
   if (afp != NULL)
   {
@@ -4907,15 +4922,18 @@ static void SeqEdInsertAdjustFeat (SeqFeatPtr sfp, SeqEdJournalPtr sejp, Int4 in
   }
   else
   {
-    sfp->location = SeqEdSeqLocInsert (sfp->location, sejp->bsp, insert_point, sejp->num_chars, sejp->spliteditmode, NULL);
+    sfp->location = SeqEdSeqLocInsert (sfp->location, sejp->bsp, insert_point,
+                                       sejp->num_chars, split_mode, NULL);
   }
 	switch (sfp->data.choice)
 	{
     case SEQFEAT_CDREGION:   /* cdregion */
-      SeqEdInsertAdjustCdRgn (sfp, sejp->bsp, insert_point, sejp->num_chars, sejp->spliteditmode);
+      SeqEdInsertAdjustCdRgn (sfp, sejp->bsp, insert_point, sejp->num_chars,
+                              split_mode);
       break;
     case SEQFEAT_RNA:
-      SeqEdInsertAdjustRNA (sfp, sejp->bsp, insert_point, sejp->num_chars, sejp->spliteditmode);
+      SeqEdInsertAdjustRNA (sfp, sejp->bsp, insert_point, sejp->num_chars,
+                            split_mode);
       break;
     default:
       break;
@@ -5797,6 +5815,127 @@ static Boolean SeqEdDeleteFromMapBioseq (BioseqPtr bsp, Int4 from, Int4 to)
   return TRUE;
 }
 
+static SeqLocPtr FreeSeqLocList (SeqLocPtr slp)
+{
+  if (slp == NULL)
+  {
+    return NULL;
+  }
+  slp->next = SeqLocFree (slp->next);
+  slp = SeqLocFree (slp);
+  return slp;
+}
+
+static Boolean ReStitchLocation (Int4 delete_point, SeqFeatPtr sfp)
+{
+  Int4      this_start, this_stop, next_start, next_stop;
+  SeqLocPtr this_slp, next_slp, loc_list = NULL, tmp_slp, last_slp = NULL, tmp_next;
+  SeqIdPtr  this_id, next_id;
+  Boolean   merged = FALSE;
+  Uint2     this_strand, next_strand;
+  
+  if (sfp->location == NULL)
+  {
+    return FALSE;
+  }
+  
+  this_start = SeqLocStart (sfp->location);
+  this_stop = SeqLocStop (sfp->location);
+  if (delete_point <= this_start || delete_point >= this_stop)
+  {
+    return FALSE;
+  }
+  
+  this_slp = SeqLocFindNext (sfp->location, NULL);
+  if (this_slp == NULL)
+  {
+    return FALSE;
+  }
+  next_slp = SeqLocFindNext (sfp->location, this_slp);
+  
+  while (next_slp != NULL)
+  {
+    this_start = SeqLocStart (this_slp);
+    this_stop = SeqLocStop (this_slp);
+    this_id = SeqLocId (this_slp);
+    this_strand = SeqLocStrand (this_slp);
+    next_start = SeqLocStart (next_slp);
+    next_stop = SeqLocStop (next_slp);
+    next_id = SeqLocId (next_slp);
+    next_strand = SeqLocStrand (next_slp);
+    if (this_stop + 1 == next_start 
+        && next_start == delete_point
+        && SeqIdComp (this_id, next_id) == SIC_YES
+        && this_strand == next_strand)
+    {
+      tmp_slp = SeqLocIntNew (this_start, next_stop, this_strand, this_id);
+      next_slp = SeqLocFindNext (sfp->location, next_slp);
+      merged = TRUE;
+    }
+    else
+    {
+      tmp_next = this_slp->next;
+      this_slp->next = NULL;
+      tmp_slp = SeqLocCopy (this_slp);
+      this_slp->next = tmp_next;
+    }
+    if (tmp_slp != NULL)
+    {
+      if (last_slp == NULL)
+      {
+        loc_list = tmp_slp;
+      }
+      else
+      {
+        last_slp->next = tmp_slp;
+      }
+      last_slp = tmp_slp;
+    }
+    
+    this_slp = next_slp;
+    if (this_slp != NULL)
+    {
+      next_slp = SeqLocFindNext (sfp->location, this_slp);
+    }
+  }
+  if (merged && loc_list != NULL)
+  {
+    if (this_slp != NULL)
+    {
+      this_start = SeqLocStart (this_slp);
+      this_stop = SeqLocStop (this_slp);
+      tmp_next = this_slp->next;
+      this_slp->next = NULL;
+      tmp_slp = SeqLocCopy (this_slp);
+      this_slp->next = tmp_next;
+      if (last_slp == NULL)
+      {
+        loc_list = tmp_slp;
+      }
+      else
+      {
+        last_slp->next = tmp_slp;
+      }
+    }
+    if (loc_list->next == NULL)
+    {
+      sfp->location = SeqLocFree (sfp->location);
+      sfp->location = loc_list;
+    }
+    else
+    {
+      /* already mix, just need to replace list */
+      sfp->location->data.ptrvalue = FreeSeqLocList (sfp->location->data.ptrvalue);
+      sfp->location->data.ptrvalue = loc_list;
+    }
+    return TRUE;
+  }
+  else
+  {
+    loc_list = FreeSeqLocList (loc_list);
+    return FALSE;
+  }
+}
 
 /* ideally, this should take a SeqJournalEntry and perform the deletion.
  * We will always be deleting a contiguous section of characters.
@@ -5815,6 +5954,8 @@ NLM_EXTERN Boolean SeqEdDeleteFromBsp (SeqEdJournalPtr sejp, BoolPtr pfeats_dele
   Int2              feats_deleted = FALSE;
   SeqFeatPtr        tmp_sfp;
   AffectedFeatPtr   afp;
+  Boolean           merge_mode;
+  Boolean           location_restitched = FALSE;
 
   if (sejp == NULL || sejp->bsp == NULL || sejp->offset < 0 || sejp->offset >= sejp->bsp->length
 	  || sejp->offset + sejp->num_chars + 1 < 0 || sejp->offset + sejp->num_chars > sejp->bsp->length
@@ -5827,7 +5968,7 @@ NLM_EXTERN Boolean SeqEdDeleteFromBsp (SeqEdJournalPtr sejp, BoolPtr pfeats_dele
   {
     sejp->affected_feats = SeqEdJournalAffectedFeatsFree (sejp->affected_feats);
   }
-
+  
   /* fix features */
   if (sejp->entityID > 0 && SeqMgrFeaturesAreIndexed (sejp->entityID)) {
     sfp = NULL;
@@ -5843,7 +5984,28 @@ NLM_EXTERN Boolean SeqEdDeleteFromBsp (SeqEdJournalPtr sejp, BoolPtr pfeats_dele
       {
         tmp_sfp = NULL;
       }
-      feat_change = SeqEdSeqFeatDelete (sfp, sejp->bsp, sejp->offset, sejp->offset + sejp->num_chars - 1, sejp->spliteditmode);
+      /* if we're deleting a gap and the feature is a coding region, merge location
+       * by default */
+      merge_mode = sejp->spliteditmode;
+      if (sejp->action == eSeqEdInsertGap || sejp->action == eSeqEdDeleteGap
+          && sfp->data.choice == SEQFEAT_CDREGION)
+      {
+        merge_mode = TRUE;
+      }
+
+      feat_change = SeqEdSeqFeatDelete (sfp, sejp->bsp, sejp->offset, 
+                                        sejp->offset + sejp->num_chars - 1,
+                                        sejp->spliteditmode);
+                                        
+      if (feat_change == 0 || feat_change == 1)
+      {
+        if (ReStitchLocation (sejp->offset, sfp))
+        {
+          feat_change = 1;
+          location_restitched = TRUE;
+        }
+      }
+      
       if (feat_change > 0)
 	    {
 	      if (feat_change == 2)
@@ -5852,6 +6014,7 @@ NLM_EXTERN Boolean SeqEdDeleteFromBsp (SeqEdJournalPtr sejp, BoolPtr pfeats_dele
 	        sfp->idx.deleteme = TRUE;
 	        feats_deleted = TRUE;
 	      }
+
 	      afp = AffectedFeatNew ();
 	      if (afp != NULL)
 	      {
@@ -5881,7 +6044,27 @@ NLM_EXTERN Boolean SeqEdDeleteFromBsp (SeqEdJournalPtr sejp, BoolPtr pfeats_dele
     while ((sfp = BioseqContextGetSeqFeat(bcp, 0, sfp, NULL, 0)) != NULL)
     {
       tmp_sfp = (SeqFeatPtr)AsnIoMemCopy((Pointer)sfp, (AsnReadFunc)SeqFeatAsnRead, (AsnWriteFunc)SeqFeatAsnWrite);
-      feat_change = SeqEdSeqFeatDelete (sfp, sejp->bsp, sejp->offset, sejp->offset + sejp->num_chars - 1, sejp->spliteditmode);
+      /* if we're deleting a gap and the feature is a coding region, merge location
+       * by default */
+      merge_mode = sejp->spliteditmode;
+      if (sejp->action == eSeqEdInsertGap || sejp->action == eSeqEdDeleteGap
+          && sfp->data.choice == SEQFEAT_CDREGION)
+      {
+        merge_mode = TRUE;
+      }      
+      feat_change = SeqEdSeqFeatDelete (sfp, sejp->bsp, sejp->offset, 
+                                        sejp->offset + sejp->num_chars - 1, 
+                                        sejp->spliteditmode);
+
+      if (feat_change == 0 || feat_change == 1)
+      {
+        if (ReStitchLocation (sejp->offset, sfp))
+        {
+          feat_change = 1;
+          location_restitched = TRUE;
+        }
+      }
+
       if (feat_change > 0)
 	    {
 	      if (feat_change == 2)
@@ -5911,41 +6094,41 @@ NLM_EXTERN Boolean SeqEdDeleteFromBsp (SeqEdJournalPtr sejp, BoolPtr pfeats_dele
   switch (sejp->bsp->repr)
   {
     case Seq_repr_raw:
-	case Seq_repr_const:
+    case Seq_repr_const:
       /* if actual sequence present */
       if (ISA_na(sejp->bsp->mol))
       {
         if (sejp->bsp->seq_data_type != Seq_code_iupacna)  /* need 1 byte/base */
-		  BioseqRawConvert(sejp->bsp, Seq_code_iupacna);
-	  }
-	  else
-	  {
-	    if (sejp->bsp->seq_data_type != Seq_code_ncbieaa)
+          BioseqRawConvert(sejp->bsp, Seq_code_iupacna);
+	    }
+      else
+      {
+        if (sejp->bsp->seq_data_type != Seq_code_ncbieaa)
           BioseqRawConvert(sejp->bsp, Seq_code_ncbieaa);
-	  }
+      }
 
       BSSeek(sejp->bsp->seq_data, sejp->offset, SEEK_SET);
-	  deleted = BSDelete(sejp->bsp->seq_data, sejp->num_chars);
-	  if (deleted != sejp->num_chars)  /* error */
+      deleted = BSDelete(sejp->bsp->seq_data, sejp->num_chars);
+      if (deleted != sejp->num_chars)  /* error */
         ErrPost(CTX_NCBIOBJ, 1, "Delete of %ld residues failed", sejp->num_chars);
-	  else
+      else
         retval = TRUE;
       break;
-	case Seq_repr_seg:
+    case Seq_repr_seg:
       /* update segmented sequence */
       retval = SeqEdDeleteFromSegOrDeltaBsp (sejp->bsp, sejp->offset, sejp->offset + sejp->num_chars - 1);
       break;
-	case Seq_repr_delta:
+    case Seq_repr_delta:
 	    /* update delta sequence */
       retval = SeqEdDeleteFromDeltaBsp (sejp->bsp, sejp->offset, sejp->offset + sejp->num_chars - 1);
       break;
-	case Seq_repr_map:
+    case Seq_repr_map:
       /* map bioseq */
       retval = SeqEdDeleteFromMapBioseq (sejp->bsp, sejp->offset, sejp->offset + sejp->num_chars - 1);
       break;
-	case Seq_repr_virtual:
+    case Seq_repr_virtual:
       retval = TRUE;                 /* nothing to do */
-	  break;
+      break;
   }
 
   if (retval)
@@ -5954,6 +6137,10 @@ NLM_EXTERN Boolean SeqEdDeleteFromBsp (SeqEdJournalPtr sejp, BoolPtr pfeats_dele
   if (feats_deleted)
   {
     DeleteMarkedObjects (sejp->entityID, 0, NULL);
+    SeqMgrIndexFeatures (sejp->entityID, NULL);
+  }
+  else if (location_restitched)
+  {
     SeqMgrIndexFeatures (sejp->entityID, NULL);
   }
   else

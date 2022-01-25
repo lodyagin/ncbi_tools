@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.24 $
+* $Revision: 6.26 $
 *
 * File Description:  Object manager for module NCBI-Seq
 *

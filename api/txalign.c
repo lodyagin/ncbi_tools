@@ -1,4 +1,4 @@
-/* $Id: txalign.c,v 6.90 2004/12/13 16:14:45 jianye Exp $
+/* $Id: txalign.c,v 6.91 2005/05/16 17:39:20 papadopo Exp $
 ***************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -27,13 +27,17 @@
 *
 * File Name:  txalign.c
 *
-* $Revision: 6.90 $
+* $Revision: 6.91 $
 * 
 * File Description:  Formating of text alignment for the BLAST output
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: txalign.c,v $
+* Revision 6.91  2005/05/16 17:39:20  papadopo
+* From Alejandro Schaffer: if matrix is adjusted due to composition in
+* blastpgp, then print the method for adjustment in the output alignments.
+*
 * Revision 6.90  2004/12/13 16:14:45  jianye
 * increase the width of new.gif so that it looks normal on window browsers
 *
@@ -542,6 +546,7 @@
 #include <salpacc.h>
 #include <salpstat.h>
 #include <fdlKludge.h>
+#include <blastdef.h>
 
 #define BUFFER_LENGTH 2048
 #define MIN_INS_SPACE 50
@@ -5657,6 +5662,7 @@ NLM_EXTERN int LIBCALLBACK FormatScoreFunc(AlignStatOptionPtr asop)
     Char fastaLongIdBuf[BUFFER_LENGTH+1];
     SeqIdPtr firstSip=NULL;
     Int4 num_ident;
+    Int2 comp_adjustment_method = NO_COMP_ADJUSTMENT;
 
 
     sp = asop->sp;
@@ -5801,7 +5807,9 @@ NLM_EXTERN int LIBCALLBACK FormatScoreFunc(AlignStatOptionPtr asop)
                 continue;
             } else if (StringICmp(obid->str, "splice_junction") == 0) {
                splice_junction = TRUE;
-            } else if (StringICmp(obid->str, "warning") == 0) {
+            } else if (StringICmp(obid->str, "comp_adjustment_method") == 0) {
+               comp_adjustment_method = scrp->value.intvalue;
+	    }   else if (StringICmp(obid->str, "warning") == 0) {
                warning_msg = Malloc(256);
                sprintf(warning_msg, 
                        "WARNING: HSPs with e-values below %.2g have been skipped\n",
@@ -5872,8 +5880,15 @@ NLM_EXTERN int LIBCALLBACK FormatScoreFunc(AlignStatOptionPtr asop)
         sprintf(buffer, "Expect(%ld) = %s", (long) number, eval_buff_ptr);
     else
         sprintf(buffer, "Expect(%ld+) = %s", (long) number, eval_buff_ptr);
-
-    fprintf(asop->fp, "%s\n", buffer);
+    fprintf(asop->fp, "%s", buffer);
+    if (NO_COMP_ADJUSTMENT != comp_adjustment_method) {
+      if (COMP_BASED_STATISTICS == comp_adjustment_method)
+	sprintf(buffer,",   Method: Composition-based stats.");
+      if (COMP_MATRIX_ADJUSTMENT == comp_adjustment_method)
+	sprintf(buffer,",   Method: Compositional matrix adjust.");
+      fprintf(asop->fp, "%s", buffer);
+    }
+    fprintf(asop->fp, "\n", buffer);
     ff_StartPrint(0, 0, (Int2)(asop->line_len+asop->indent_len), NULL);
     if (asop->align_len > 0) {
         asop->positive += asop->identical;

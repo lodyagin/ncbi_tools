@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.289 $
+* $Revision: 6.300 $
 *
 * File Description: 
 *
@@ -181,6 +181,7 @@ extern ForM CreateStartupForm (Int2 left, Int2 top, CharPtr title,
                                BtnActnProc readExisting,
                                BtnActnProc fetchFromNet,
                                BtnActnProc showHelp,
+                               BtnActnProc createSubmissionTemplate,
                                BtnActnProc quitProgram,
                                WndActnProc activateForm);
 
@@ -348,12 +349,6 @@ extern Int2 LIBCALLBACK BioseqSetEditFunc (Pointer data);
 
 extern void LaunchOrfViewer (BioseqPtr bsp, Uint2 entityID, Uint2 itemID, Boolean standAlone);
 
-#define ADD_TITLE 1
-#define ADD_RRNA  2
-#define ADD_CDS   3
-#define ADD_IMP   4
-#define ADD_GENE  5
-
 extern Int2 ApplyAnnotationToAll (Int2 type, SeqEntryPtr sep,
                                   ButtoN partialLft, ButtoN partialRgt,
                                   TexT geneName, TexT protName, 
@@ -415,6 +410,7 @@ extern void ExportAlignmentInterleave (IteM i);
 extern void ExportAlignmentContiguous (IteM i);
 extern void FixFeatureIntervals (IteM i);
 extern void ConvertInnerCDSsToProteinFeatures (IteM i);
+extern void CombineMultipleCDS (IteM i);
 
 extern void NewDescriptorMenuFunc (ObjMgrProcPtr ompp, BaseFormPtr bfp, Uint2 descsubtype);
 extern Boolean PropagateFromGenBankBioseqSet (SeqEntryPtr sep, Boolean ask);
@@ -440,6 +436,8 @@ extern void ApplyTitle (IteM i);
 extern void ApplyCDS (IteM i);
 extern void ApplyRRNA (IteM i);
 extern void ApplyImpFeat (IteM i);
+extern void AdjustCDSLocationsForGapsCallback (SeqFeatPtr sfp, Pointer userdata);
+extern void AdjustCDSLocationsForGaps (IteM i);
 extern void LoadTPAAccessionNumbersFromFile (IteM i);
 extern void LoadSecondaryAccessionNumbersFromFile (IteM i);
 extern void LoadHistoryAccessionNumbersFromFile (IteM i);
@@ -677,7 +675,8 @@ typedef struct sequencesform {
   ButtoN          specify_mgcode_btn;
   ButtoN          clear_mods_btn;
   DoC             org_doc;
-  DoC             summary_doc;
+  ButtoN          ident_org_btn;
+  DialoG          summary_dlg;
   
   /* These allow the user to specify topology and molecule */
   ButtoN          topology_btn;
@@ -685,14 +684,7 @@ typedef struct sequencesform {
 
 } SequencesForm, PNTR SequencesFormPtr;
 
-typedef int (LIBCALLBACK *CompareFunc) (Nlm_VoidPtr, Nlm_VoidPtr);
-
-extern int LIBCALLBACK CompareImpFeatEnumFieldAssoc (VoidPtr ptr1, VoidPtr ptr2);
-extern int LIBCALLBACK CompareFeatureValNodeStrings (VoidPtr ptr1, VoidPtr ptr2);
-
 extern ValNodePtr InsertMostUsedFeatureValNodes (ValNodePtr old_list);
-
-extern void SortEnumFieldAssocPtrArray (EnumFieldAssocPtr alist, CompareFunc compar);
 
 extern ValNodePtr FindExactStringInStrings ( ValNodePtr strings, CharPtr value);
 
@@ -923,6 +915,8 @@ typedef struct stringconstraint
   Boolean not_present;
 } StringConstraintData, PNTR StringConstraintPtr;
 
+extern StringConstraintPtr StringConstraintFree (StringConstraintPtr scp);
+
 #define CHOICE_CONSTRAINT_ANY          1
 #define CHOICE_CONSTRAINT_QUAL_PRESENT 3
 #define CHOICE_CONSTRAINT_STRING       5
@@ -944,6 +938,9 @@ typedef struct filterset
   ChoiceConstraintPtr   cgp;
 } FilterSetData, PNTR FilterSetPtr;
 
+extern void FilterSetClearText (FilterSetPtr fsp);
+extern FilterSetPtr FilterSetFree (FilterSetPtr fsp);
+
 extern Boolean DoesStringMatchConstraint (CharPtr pchSource, StringConstraintPtr scp);
 
 typedef CharPtr (*GetFeatureFieldString) PROTO ((SeqFeatPtr, ValNodePtr, FilterSetPtr));
@@ -954,6 +951,17 @@ typedef void (*SetDescriptorFieldString) PROTO ((SeqDescrPtr, Pointer, FilterSet
 typedef void (*RemoveDescriptorFieldString) PROTO ((SeqDescrPtr, Pointer, FilterSetPtr));
 typedef void (*FeatureActionProc) PROTO ((SeqFeatPtr, Pointer, FilterSetPtr));
 typedef void (*DescriptorActionProc) PROTO ((SeqDescrPtr, Pointer, FilterSetPtr));
+
+extern void 
+OperateOnSeqEntryConstrainedObjects 
+(SeqEntryPtr           sep,
+ FilterSetPtr          fsp,
+ FeatureActionProc     feature_action,
+ DescriptorActionProc  descriptor_action,
+ Uint1                 seqFeatChoice,
+ Uint1                 featDefChoice,
+ Uint1                 descriptorChoice,
+ Pointer               userdata);
 
 extern CharPtr HandleApplyValue (CharPtr orig_text, ApplyValuePtr avp);
 extern ValNodePtr 
@@ -1031,43 +1039,31 @@ typedef struct pubconstraint
 extern PubConstraintPtr PubConstraintFree (PubConstraintPtr pcp);
 extern DialoG PubConstraintDialog (GrouP h);
 
+extern DialoG AcceptCancelDialog 
+(GrouP                 parent,
+ Nlm_AcceptActnProc    accept_actn,
+ Nlm_CancelActnProc    cancel_actn,
+ Nlm_ClearActnProc     clear_actn,
+ Nlm_ClearTextActnProc clear_text_actn,
+ Pointer               userdata,
+ WindoW                w);
+extern void EnableAcceptCancelDialogAccept (DialoG d);
+extern void DisableAcceptCancelDialogAccept (DialoG d);
 
-extern DialoG SelectionDialog 
-(GrouP h,
- Nlm_ChangeNotifyProc     change_notify,
- Pointer                  change_userdata,
+extern ValNodePtr BuildFeatureDialogList (Boolean list_most_used_first);
+
+extern DialoG 
+FeatureSelectionDialog 
+(GrouP                    h,
  Boolean                  allow_multi,
- CharPtr                  err_msg,
- ValNodePtr               choice_list,
- Int2                     list_height);
-
-extern DialoG ValNodeSelectionDialog
-(GrouP h,
- ValNodePtr               choice_list,
- Int2                     list_height,
- NameFromValNodeProc      name_proc,
- FreeValNodeProc          free_vn_proc,
- CopyValNodeDataProc      copy_vn_proc,
- MatchValNodeProc         match_vn_proc,
- CharPtr                  err_name,
  Nlm_ChangeNotifyProc     change_notify,
- Pointer                  change_userdata,
- Boolean                  allow_multi);
+ Pointer                  change_userdata);
 
 extern DialoG SourceQualTypeSelectionDialog 
 (GrouP h,
  Boolean                  allow_multi,
  Nlm_ChangeNotifyProc     change_notify,
  Pointer                  change_userdata);
-
-extern DialoG SequenceSelectionDialog 
-(GrouP h,
- Nlm_ChangeNotifyProc     change_notify,
- Pointer                  change_userdata,
- Boolean                  allow_multi,
- Boolean                  show_nucs,
- Boolean                  show_prots,
- Uint2                    entityID);
 
 extern DialoG 
 FeatureFieldSelectionDialog
@@ -1115,21 +1111,21 @@ extern CharPtr GetCDSGeneProtField (SeqFeatPtr sfp, ValNodePtr vnp, FilterSetPtr
 extern DialoG
 RNAAddFieldSelectionDialog
 (GrouP                    h,
- Boolean                  allow_none,
+ Boolean                  allow_multi,
  Nlm_ChangeNotifyProc     change_notify,
  Pointer                  change_userdata);
  
 extern DialoG
 RNARemoveFieldSelectionDialog
 (GrouP                    h,
- Boolean                  allow_none,
+ Boolean                  allow_multi,
  Nlm_ChangeNotifyProc     change_notify,
  Pointer                  change_userdata);
 
 extern DialoG
 RNAFieldSelectionDialog
 (GrouP                    h,
- Boolean                  allow_none,
+ Boolean                  allow_multi,
  Nlm_ChangeNotifyProc     change_notify,
  Pointer                  change_userdata);
  
@@ -1220,6 +1216,24 @@ extern void StringToLower (CharPtr str);
 
 extern Boolean ExportSubmitterBlockTemplate (SeqEntryPtr sep, SeqDescrPtr sdp);
 extern DialoG OrganismSelectionDialog (GrouP parent, CharPtr org_name);
+
+typedef struct getsample
+{
+  GetFeatureFieldString    fieldstring_func;
+  GetDescriptorFieldString descrstring_func;
+  ValNodePtr               requested_field;
+  FreeValNodeProc          free_vn_proc;
+  CopyValNodeDataProc      copy_vn_proc;
+
+  CharPtr                  sample_text;
+  Int4                     num_found;
+  Boolean                  all_same;
+} GetSampleData, PNTR GetSamplePtr;
+
+extern GetSamplePtr GetSampleNew (void);
+extern GetSamplePtr GetSampleFree (GetSamplePtr gsp);
+
+extern ExistingTextPtr GetExistingTextHandlerInfo (GetSamplePtr gsp, Boolean non_text);
 
 
 #ifdef __cplusplus

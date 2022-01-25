@@ -31,8 +31,12 @@ Contents: prototypes and defines for Blast formatting utilities
 
 ******************************************************************************/
 
-/* $Revision: 1.3 $ 
+/* $Revision: 1.4 $ 
 * $Log: blfmtutl.h,v $
+* Revision 1.4  2005/05/16 17:42:19  papadopo
+* From Alejandro Schaffer: Print references for composition-based statistics
+* and for compositional score matrix adjustment, if either method was used.
+*
 * Revision 1.3  2004/10/04 17:54:14  madden
 * BlastPrintVersionInfo[Ex] now takes const char* as arg for program
 *
@@ -146,6 +150,10 @@ CharPtr LIBCALL BlastGetPhiReference PROTO((Boolean html));
 
 Boolean LIBCALL BlastPrintPhiReference PROTO((Boolean html, Int4 line_length, FILE *outfp));
 
+Boolean LIBCALL CBStatisticsPrintReference PROTO((Boolean html, Int4 line_length, Boolean firstRound, Boolean moreRounds, FILE *outfp));
+
+Boolean LIBCALL CAdjustmentPrintReference PROTO((Boolean html, Int4 line_length, FILE *outfp));
+
 Boolean BlastPrintVersionInfo PROTO((const char* program, Boolean html, FILE *outfp));
 Boolean BlastPrintVersionInfoEx PROTO((const char* program, Boolean html, CharPtr version, CharPtr date, FILE *outfp));
 
@@ -166,4 +174,3 @@ Boolean LIBCALL add_string_to_buffer PROTO((CharPtr buffer, CharPtr *old, Int2Pt
 }
 #endif
 #endif /* !__BLFMTUTL__ */
-

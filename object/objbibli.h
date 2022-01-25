@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 1/1/91
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description:  Object manager interface for module NCBI-Biblio
 *
@@ -42,6 +42,9 @@
 *                      C++ compilers take to be a constructor function).
 *
 * $Log: objbibli.h,v $
+* Revision 6.2  2005/05/18 17:31:01  bollin
+* added AffilMatch and AuthorMatch functions
+*
 * Revision 6.1  2000/01/18 19:40:52  ostell
 * added support for PubStatusDate, ArticleIds
 *
@@ -168,6 +171,7 @@ NLM_EXTERN AffilPtr LIBCALL AffilNew PROTO((void));
 NLM_EXTERN AffilPtr LIBCALL AffilFree PROTO((AffilPtr afp));
 NLM_EXTERN AffilPtr LIBCALL AffilAsnRead PROTO((AsnIoPtr aip, AsnTypePtr atp));
 NLM_EXTERN Boolean  LIBCALL AffilAsnWrite PROTO((AffilPtr afp, AsnIoPtr aip, AsnTypePtr atp));
+NLM_EXTERN Boolean AffilMatch (AffilPtr ap1, AffilPtr ap2);
 
 /*****************************************************************************
 *
@@ -202,6 +206,7 @@ NLM_EXTERN AuthorPtr LIBCALL AuthorNew PROTO((void));
 NLM_EXTERN AuthorPtr LIBCALL AuthorFree PROTO((AuthorPtr ap));
 NLM_EXTERN AuthorPtr LIBCALL AuthorAsnRead PROTO((AsnIoPtr aip, AsnTypePtr atp));
 NLM_EXTERN Boolean   LIBCALL AuthorAsnWrite PROTO((AuthorPtr ap, AsnIoPtr aip, AsnTypePtr atp));
+NLM_EXTERN Boolean LIBCALL AuthorMatch (AuthorPtr ap1, AuthorPtr ap2);
 
 /*****************************************************************************
 *

@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.245 $
+* $Revision: 6.246 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
@@ -39,6 +39,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: seqmgr.c,v $
+* Revision 6.246  2005/05/05 20:33:27  kans
+* record operon twice if spanning origin
+*
 * Revision 6.245  2005/04/27 17:24:21  kans
 * support seqid_gpipe in combination with a more public accession type
 *
@@ -6458,7 +6461,8 @@ static Boolean RecordFeaturesInBioseqs (GatherObjectPtr gop)
     if (left < 0 && bsp->topology == TOPOLOGY_CIRCULAR) {
       if (sfp->data.choice == SEQFEAT_GENE ||
           sfp->data.choice == SEQFEAT_PUB ||
-          sfp->data.choice == SEQFEAT_BIOSRC) {
+          sfp->data.choice == SEQFEAT_BIOSRC ||
+          sfp->idx.subtype == FEATDEF_operon) {
 
         RecordOneFeature (bspextra, omdp, bsp, exindx, sfp, left + bsp->length,
                           right + bsp->length, gop->itemID, gop->subtype, usingLocalBsp, TRUE);

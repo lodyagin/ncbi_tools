@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.36 $
+* $Revision: 1.39 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -1240,13 +1240,44 @@ static Boolean IsSuccessor(CharPtr acc, CharPtr prev)
 }
 
 
+static Boolean IsProjectAccn(CharPtr acc)
+{
+    Int2 letters;
+    Char digits[3];
+    CharPtr ptr;
+
+    if (acc == NULL) {
+        return FALSE;
+    }
+    digits[0] = '\0';
+
+    for (ptr = acc, letters = 0; ptr != '\0'  &&  IS_ALPHA(*ptr); ++ptr, ++letters);
+    if (letters != 4  ||  StringLen(ptr) < 2) {
+        return FALSE;
+    }
+    digits[0] = *ptr++;
+    digits[1] = *ptr++;
+    digits[2] = '\0';
+    if (atoi(digits) < 1) {
+        return FALSE;
+    }
+    while (*ptr != '\0') {
+        if (*ptr != '0') {
+            return FALSE;
+        }
+        ++ptr;
+    }
+    return TRUE;
+}
+
+
 static ValNodePtr GetSecondaryAccessions(ValNodePtr extra_access)
 {
 #define EXTRA_ACCESSION_CUTOFF 20
 #define BIN_ACCESSION_CUTOFF   5
 
   Int4 extra_acc_num = 0;
-  ValNodePtr  bins, bin, vnp, result = NULL, temp;
+  ValNodePtr  bins, bin, vnp, result = NULL, temp, prj;
   CharPtr first, last, curr, prev = NULL;
   Char  range[40];
 
@@ -1264,6 +1295,13 @@ static ValNodePtr GetSecondaryAccessions(ValNodePtr extra_access)
     curr = (CharPtr) vnp->data.ptrvalue;
     if (ValidateAccn (curr) != 0) {
       continue;
+    }
+    if (IsProjectAccn(curr)) {
+        prj = ValNodeNew(NULL);
+        ValNodeAddStr ((ValNodePtr PNTR) &(prj->data.ptrvalue), 0, curr);
+        prj->next = bins;
+        bins = prj;
+        continue;
     }
     if (!IsSuccessor(curr, prev)) {
       bin = ValNodeAdd(&bins);
@@ -4323,7 +4361,7 @@ NLM_EXTERN Boolean AddReferenceBlock (
   Boolean            excise;
   Int2               firstserial;
   ValNodePtr         head = NULL;
-  Int2               i;
+  Int2               i = 0;
   IntRefBlockPtr     irp;
   Boolean            is_aa;
   Boolean            is_embl = FALSE;
@@ -4516,6 +4554,9 @@ NLM_EXTERN Boolean AddReferenceBlock (
         excise = TRUE;
         combine = FALSE;
       }
+    }
+    if (awp->mode == DUMP_MODE) {
+      excise = FALSE;
     }
     if (excise) {
       *prev = vnp->next;

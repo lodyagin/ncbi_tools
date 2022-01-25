@@ -3243,6 +3243,18 @@ Package=<4>
 
 ###############################################################################
 
+Project: "ncbiconfig"=.\corelib\ncbiconfig.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+}}}
+
+###############################################################################
+
 Project: "ncbidesk"=.\desktop\ncbidesk.dsp - Package Owner=<4>
 
 Package=<5>
@@ -3269,18 +3281,6 @@ Package=<4>
     Begin Project Dependency
     Project_Dep_Name ncbiconfig
     End Project Dependency
-}}}
-
-###############################################################################
-
-Project: "ncbiconfig"=.\corelib\ncbiconfig.dsp - Package Owner=<4>
-
-Package=<5>
-{{{
-}}}
-
-Package=<4>
-{{{
 }}}
 
 ###############################################################################

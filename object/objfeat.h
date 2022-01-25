@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.11 $
+* $Revision: 6.13 $
 *
 * File Description:  Object manager interface for module NCBI-SeqFeat
 *
@@ -40,6 +40,13 @@
 *
 *
 * $Log: objfeat.h,v $
+* Revision 6.13  2005/05/23 12:52:44  bollin
+* added OrgModSetMatch, OrgNameMatch, OrgRefMatch, SubSourceSetMatch, and
+* BioSourceMatch functions
+*
+* Revision 6.12  2005/05/16 16:03:56  kans
+* added support for new sfp->ids and sfp->exts fields
+*
 * Revision 6.11  2002/06/03 17:43:48  kans
 * added locus_tag to GeneRef
 *
@@ -238,6 +245,8 @@ typedef struct seqfeat {
 	ValNodePtr dbxref;    /* each vnp->data.ptrvalue is a DbtagPtr */
 	Boolean pseudo;      /* pseudogene feature ? */
 	CharPtr except_text;   /* explanation of biological exception */
+	ValNodePtr ids;
+	UserObjectPtr exts;
     struct seqfeat PNTR next;
 	GatherIndex idx;      /* internal gather/objmgr tracking fields */
 } SeqFeat, PNTR SeqFeatPtr;
@@ -524,6 +533,7 @@ NLM_EXTERN OrgModPtr LIBCALL OrgModFree PROTO((OrgModPtr omp));
 NLM_EXTERN Boolean    LIBCALL OrgModSetAsnWrite PROTO((OrgModPtr omp, AsnIoPtr aip, AsnTypePtr set, AsnTypePtr element));
 NLM_EXTERN OrgModPtr LIBCALL OrgModSetAsnRead PROTO((AsnIoPtr aip, AsnTypePtr set, AsnTypePtr element));
 NLM_EXTERN OrgModPtr LIBCALL OrgModSetFree PROTO((OrgModPtr omp));
+NLM_EXTERN Boolean LIBCALL OrgModSetMatch (OrgModPtr mod1, OrgModPtr mod2);
 
 typedef struct orgname {
 	Uint1 choice;  /* 1=binomial, 2=virus, 3=hybrid, 4=namedhybrid, 5=partial */
@@ -545,7 +555,7 @@ NLM_EXTERN OrgNamePtr LIBCALL OrgNameFree PROTO((OrgNamePtr onp));
 NLM_EXTERN Boolean    LIBCALL OrgNameSetAsnWrite PROTO((OrgNamePtr onp, AsnIoPtr aip, AsnTypePtr set, AsnTypePtr element));
 NLM_EXTERN OrgNamePtr LIBCALL OrgNameSetAsnRead PROTO((AsnIoPtr aip, AsnTypePtr set, AsnTypePtr element));
 NLM_EXTERN OrgNamePtr LIBCALL OrgNameSetFree PROTO((OrgNamePtr onp));
-
+NLM_EXTERN Boolean LIBCALL OrgNameMatch (OrgNamePtr onp1, OrgNamePtr onp2);
 
 typedef struct orgref {
     CharPtr taxname,		/* preferred full formal name */
@@ -560,6 +570,7 @@ NLM_EXTERN OrgRefPtr LIBCALL OrgRefNew PROTO((void));
 NLM_EXTERN Boolean   LIBCALL OrgRefAsnWrite PROTO((OrgRefPtr orp, AsnIoPtr aip, AsnTypePtr atp));
 NLM_EXTERN OrgRefPtr LIBCALL OrgRefAsnRead PROTO((AsnIoPtr aip, AsnTypePtr atp));
 NLM_EXTERN OrgRefPtr LIBCALL OrgRefFree PROTO((OrgRefPtr orp));
+NLM_EXTERN Boolean LIBCALL OrgRefMatch (OrgRefPtr orp1, OrgRefPtr orp2);
 
 /*****************************************************************************
 *
@@ -582,6 +593,7 @@ NLM_EXTERN SubSourcePtr LIBCALL SubSourceFree PROTO((SubSourcePtr ssp));
 NLM_EXTERN Boolean    LIBCALL SubSourceSetAsnWrite PROTO((SubSourcePtr ssp, AsnIoPtr aip, AsnTypePtr set, AsnTypePtr element));
 NLM_EXTERN SubSourcePtr LIBCALL SubSourceSetAsnRead PROTO((AsnIoPtr aip, AsnTypePtr set, AsnTypePtr element));
 NLM_EXTERN SubSourcePtr LIBCALL SubSourceSetFree PROTO((SubSourcePtr ssp));
+NLM_EXTERN Boolean LIBCALL SubSourceSetMatch (SubSourcePtr ssp1, SubSourcePtr ssp2);
 
 /******************************
 * BioSource
@@ -620,6 +632,7 @@ NLM_EXTERN BioSourcePtr LIBCALL BioSourceNew PROTO((void));
 NLM_EXTERN Boolean    LIBCALL BioSourceAsnWrite PROTO((BioSourcePtr bsp, AsnIoPtr aip, AsnTypePtr atp));
 NLM_EXTERN BioSourcePtr LIBCALL BioSourceAsnRead PROTO((AsnIoPtr aip, AsnTypePtr atp));
 NLM_EXTERN BioSourcePtr LIBCALL BioSourceFree PROTO((BioSourcePtr bsp));
+NLM_EXTERN Boolean LIBCALL BioSourceMatch (BioSourcePtr biop1, BioSourcePtr biop2);
 
 /*****************************************************************************
 *

@@ -1,4 +1,4 @@
-/* $Id: blast_returns.c,v 1.19 2005/04/27 20:00:15 dondosha Exp $
+/* $Id: blast_returns.c,v 1.23 2005/06/02 21:30:04 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -28,7 +28,7 @@
  * Manipulating data returned from BLAST other than Seq-aligns
  */
 
-static char const rcsid[] = "$Id: blast_returns.c,v 1.19 2005/04/27 20:00:15 dondosha Exp $";
+static char const rcsid[] = "$Id: blast_returns.c,v 1.23 2005/06/02 21:30:04 dondosha Exp $";
 
 #include <algo/blast/api/blast_returns.h>
 #include <algo/blast/api/blast_seq.h>
@@ -418,8 +418,8 @@ s_SummarySearchParamsFree(Blast_SearchParams* search_params)
  * @param search_params object to be allocated and filled [out]
  * @return zero on success
  */
-static Int2 
-s_SummarySearchParamsFill(EBlastProgramType program_number,
+Int2 
+Blast_SearchParamsFill(EBlastProgramType program_number,
    const BlastScoringOptions* score_options,
    const LookupTableOptions* lookup_options,
    const BlastHitSavingOptions* hit_options,
@@ -532,7 +532,7 @@ Int2 Blast_SummaryReturnFill(EBlastProgramType program_number,
    s_SummaryDBStatsFill(program_number, eff_len_options, query_info, 
                             seq_src, &(sum_returns->db_stats));
    
-   s_SummarySearchParamsFill(program_number, score_options,
+   Blast_SearchParamsFill(program_number, score_options,
             lookup_options, hit_options, query_setup, word_options,
             NULL, &(sum_returns->search_params));
    if (diagnostics)
@@ -541,14 +541,85 @@ Int2 Blast_SummaryReturnFill(EBlastProgramType program_number,
       *diagnostics = NULL;
    }
 
-   if (program_number == eBlastTypePhiBlastn || 
-       program_number == eBlastTypePhiBlastp) {
+   if (Blast_ProgramIsPhiBlast(program_number)) {
        /* Copy the pattern information structure. */
        sum_returns->pattern_info = 
            SPHIQueryInfoCopy(query_info->pattern_info);
    }
 
    return 0;
+}
+
+/** Duplicates the Blast_SearchParams structure.
+ * @param params Search parameters structure [in]
+ * @return New copy of the search parameters structure.
+ */
+static Blast_SearchParams* 
+s_SearchParamsDup(const Blast_SearchParams* params)
+{
+    Blast_SearchParams* new_params = (Blast_SearchParams*)
+        BlastMemDup(params, sizeof(Blast_SearchParams));
+    if (params->filter_string)
+        new_params->filter_string = strdup(params->filter_string);
+    if (params->matrix)
+        new_params->matrix = strdup(params->matrix);
+    if (params->pattern)
+        new_params->pattern = strdup(params->pattern);
+    if (params->entrez_query)
+        new_params->entrez_query = strdup(params->entrez_query);
+
+    return new_params;
+}
+
+int Blast_SummaryReturnUpdate(const Blast_SummaryReturn* new_return,
+                              Blast_SummaryReturn* *full_return_out)
+{
+    Blast_SummaryReturn* full_return;
+ 
+    if (!new_return)
+        return 0;
+    if (!full_return_out)
+        return -1;
+
+    /* If aggregate returns have not been allocated yet, do it here. Otherwise,
+     * remove all previously saved data, except for the diagnostics structure.
+     * Note that diagnostics structure must be allocated before the call to 
+     * Blast_DiagnosticsUpdate.
+     */
+    if (*full_return_out == NULL) {
+        *full_return_out = full_return = Blast_SummaryReturnNew();
+        full_return->diagnostics = Blast_DiagnosticsInit();
+    } else {
+        BlastDiagnostics* diagnostics;
+        full_return = *full_return_out;
+        /* Save the diagnostics structure before cleaning the previous data. */
+        diagnostics = full_return->diagnostics;
+        full_return->diagnostics = NULL;
+        Blast_SummaryReturnClean(full_return);
+        full_return->diagnostics = diagnostics;
+    }
+
+    full_return->ka_params = (BLAST_KAParameters*) 
+        BlastMemDup(new_return->ka_params, sizeof(BLAST_KAParameters));
+    full_return->ka_params_gap = (BLAST_KAParameters*) 
+        BlastMemDup(new_return->ka_params_gap, sizeof(BLAST_KAParameters));
+    full_return->db_stats = (Blast_DatabaseStats*) 
+        BlastMemDup(new_return->db_stats, sizeof(Blast_DatabaseStats));
+    full_return->search_params = 
+        s_SearchParamsDup(new_return->search_params);
+
+    Blast_DiagnosticsUpdate(full_return->diagnostics, new_return->diagnostics);
+    
+    if (new_return->error) {
+        full_return->error = (Blast_Message*)
+            BlastMemDup(new_return->error, sizeof(Blast_Message));
+        full_return->error->message = strdup(new_return->error->message);
+    }
+
+    full_return->pattern_info = (SPHIQueryInfo*)
+        BlastMemDup(new_return->pattern_info, sizeof(SPHIQueryInfo));
+
+    return 0;
 }
 
 /* @} */

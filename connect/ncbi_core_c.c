@@ -1,4 +1,4 @@
-/*  $Id: ncbi_core_c.c,v 6.10 2005/04/20 20:38:42 lavr Exp $
+/*  $Id: ncbi_core_c.c,v 6.13 2005/05/03 11:59:00 ivanov Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -33,15 +33,15 @@
  *
  */
 
-#include "ncbi_config.h"
-#include "ncbi_assert.h"
-#include <connect/ncbi_ansi_ext.h>
+#include "ncbi_ansi_ext.h"
+#include "ncbi_priv.h"
 #include <connect/ncbi_core_c.h>
 #include <connect/ncbi_util.h>
 #include <ncbienv.h>
 #include <ncbierr.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 
 /***********************************************************************
@@ -223,6 +223,9 @@ extern MT_LOCK MT_LOCK_c2c(TNlmRWlock lock, int/*bool*/ pass_ownership)
 
 extern void CONNECT_Init(const char* conf_file)
 {
+    g_NCBI_ConnectRandomSeed = (int) time(0) ^ NCBI_CONNECT_SRAND_ADDENT;
+    srand(g_NCBI_ConnectRandomSeed);
+
     CORE_SetLOCK(MT_LOCK_c2c(0, 1/*true*/));
     CORE_SetLOG(LOG_c2c());
     CORE_SetREG(REG_c2c(conf_file));
@@ -232,6 +235,15 @@ extern void CONNECT_Init(const char* conf_file)
 /*
  * ---------------------------------------------------------------------------
  * $Log: ncbi_core_c.c,v $
+ * Revision 6.13  2005/05/03 11:59:00  ivanov
+ * Removing #include <connect/ncbi_priv.h>
+ *
+ * Revision 6.12  2005/05/03 11:51:13  ivanov
+ * Include ncbi_priv.h instead of ncbi_socket.h
+ *
+ * Revision 6.11  2005/05/02 16:28:02  lavr
+ * CONNECT_Init() to set global random seed
+ *
  * Revision 6.10  2005/04/20 20:38:42  lavr
  * +"ncbi_assert.h"
  *

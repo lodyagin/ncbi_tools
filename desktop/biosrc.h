@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.5 $
+* $Revision: 6.6 $
 *
 * File Description: 
 *
@@ -91,6 +91,8 @@ extern ForM CreateBioSourceFeatForm (Int2 left, Int2 top, Int2 width,
                                      Int2 height, CharPtr title, SeqFeatPtr sfp,
                                      SeqEntryPtr sep, FormActnFunc actproc,
                                      BioSourceEditProcsPtr bepp);
+
+extern DialoG BioSourceDialog (GrouP parent);
 
 extern Int2 LIBCALLBACK BioSourceGenFunc (Pointer data);
 extern Boolean BioSourceDialogToGenBankDivision (DialoG d, CharPtr div, size_t maxsize);

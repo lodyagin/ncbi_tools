@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.550 $
+* $Revision: 6.565 $
 *
 * File Description: 
 *
@@ -1362,6 +1362,7 @@ static void RemoveSelFeats (IteM i)
   SeqEntryPtr        sep;
   SeqFeatPtr         sfp;
   SelStructPtr       ssp;
+  Boolean            unremoved_feats = FALSE;
 
 #ifdef WIN_MAC
   bfp = currentFormDataPtr;
@@ -1376,7 +1377,11 @@ static void RemoveSelFeats (IteM i)
   if (ssp == NULL) return;
 
   for (sel = ssp; sel != NULL; sel = sel->next) {
-    if (sel->entityID != bfp->input_entityID) continue;
+    if (sel->entityID != bfp->input_entityID) 
+    {
+      unremoved_feats = TRUE;
+      continue;      
+    }
     if (sel->itemtype == OBJ_SEQFEAT) {
       sfp = SeqMgrGetDesiredFeature (sel->entityID, NULL, sel->itemID, 0, NULL, &fcontext);
       if (sfp != NULL) {
@@ -1406,6 +1411,10 @@ static void RemoveSelFeats (IteM i)
 
   ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
   ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+  if (unremoved_feats)
+  {
+    Message (MSG_ERROR, "Warning!  Features mapped to far sequences cannot be deleted!");
+  }
 }
 
 static void RemoveUnselFeats (IteM i)
@@ -1423,6 +1432,8 @@ static void RemoveUnselFeats (IteM i)
   SeqFeatPtr         sfp;
   SelStructPtr       ssp;
   SeqEntryPtr        scope;
+  Boolean            sel_on_local = FALSE;
+  Boolean            sel_on_far = FALSE;
 
 #ifdef WIN_MAC
   bfp = currentFormDataPtr;
@@ -1439,15 +1450,30 @@ static void RemoveUnselFeats (IteM i)
   scope = SeqEntrySetScope (NULL);
   bsp = NULL;
   for (sel = ssp; sel != NULL && bsp == NULL; sel = sel->next) {
-    if (sel->entityID != bfp->input_entityID) continue;
+    if (sel->entityID != bfp->input_entityID) 
+    {
+      if (sel->itemtype == OBJ_SEQFEAT)
+      {
+        sel_on_far = TRUE;
+      }
+      continue;
+    }    
     if (sel->itemtype == OBJ_SEQFEAT) {
+      sel_on_local = TRUE;
       sfp = SeqMgrGetDesiredFeature (sel->entityID, NULL, sel->itemID, 0, NULL, &fcontext);
       if (sfp != NULL) {
         bsp = BioseqFindFromSeqLoc (sfp->location);
       }
     }
   }
-  if (bsp == NULL) return;
+  if (bsp == NULL) 
+  {
+    if (sel_on_far && ! sel_on_local)
+    {
+      Message (MSG_ERROR, "Warning!  Features mapped to far sequences cannot be deleted!");
+    }
+    return;
+  }
   SeqEntrySetScope (scope);
 
   sfp = SeqMgrGetNextFeature (bsp, NULL, 0, 0, &fcontext);
@@ -2101,7 +2127,7 @@ typedef struct gapconversiondata
   TexT   known_val_txt;
   ButtoN acceptBtn;
   DoC    explanation;
-
+  ButtoN adjust_CDS_locations;
   
 } GapConversionData, PNTR GapConversionPtr;
 
@@ -2113,7 +2139,7 @@ static void SetConvertGapsAcceptAndText (GapConversionPtr gcp)
   Char             str[15];
   Int4 unknown_val, known_val;
   Int4 unknown_op, known_op;
-  Char explanation[255];
+  Char explanation[300];
   	
   if (gcp == NULL || gcp->explanation == NULL) return;
   GetTitle (gcp->unknown_val_txt, str, sizeof (str));
@@ -2380,6 +2406,10 @@ static void ConvertGaps (ButtoN b)
   
   Hide (gcp->form);
   VisitBioseqsInSep (sep, gap_sizes, ConvertNsToGaps); 
+  if (GetStatus (gcp->adjust_CDS_locations))
+  {
+    VisitFeaturesInSep (sep, NULL, AdjustCDSLocationsForGapsCallback);
+  }
   ObjMgrSetDirtyFlag (gcp->input_entityID, TRUE);
   ObjMgrSendMsg (OM_MSG_UPDATE, gcp->input_entityID, 0, 0);
   Remove (gcp->form);  
@@ -2390,8 +2420,9 @@ static void RawSeqToDeltaSeqUnknownWithUnknownLengthGaps (IteM i)
   BaseFormPtr      bfp;
   GapConversionPtr gcp;
   WindoW           w;
-  GrouP            h, k, l, g, c;
+  GrouP            h, l, g, c;
   RecT             r;
+  PrompT           p1, p2;
 
 #ifdef WIN_MAC
   bfp = currentFormDataPtr;
@@ -2409,8 +2440,7 @@ static void RawSeqToDeltaSeqUnknownWithUnknownLengthGaps (IteM i)
   gcp->form = (ForM) w;
   h = HiddenGroup (w, -1, 0, NULL);
   SetGroupSpacing (h, 10, 10);
-  k = HiddenGroup (h, 1, 0, NULL);
-  StaticPrompt (k, "Choose size of length of Ns to convert to gaps of unknown length", 0, dialogTextHeight, programFont, 'c');
+  p1 = StaticPrompt (h, "Choose size of length of Ns to convert to gaps of unknown length", 0, dialogTextHeight, programFont, 'c');
   g = HiddenGroup (h, 2, 0, NULL);
   gcp->unknown_op = HiddenGroup (g, 0, 2, SetGapsConvertAcceptButtonAndTextGroup);
   SetObjectExtra (gcp->unknown_op, gcp, NULL);
@@ -2419,8 +2449,7 @@ static void RawSeqToDeltaSeqUnknownWithUnknownLengthGaps (IteM i)
   SetValue (gcp->unknown_op, 1);
   gcp->unknown_val_txt = DialogText (g, "100", 14, SetGapsConvertAcceptButtonAndTextText);
   SetObjectExtra (gcp->unknown_val_txt, gcp, NULL);
-  k = HiddenGroup (h, 1, 0, NULL);
-  StaticPrompt (k, "Choose size of length of Ns to convert to gaps of known length", 0, dialogTextHeight, programFont, 'c');
+  p2 = StaticPrompt (h, "Choose size of length of Ns to convert to gaps of known length", 0, dialogTextHeight, programFont, 'c');
   l = HiddenGroup (h, 2, 0, NULL);
   gcp->known_op = HiddenGroup (l, 0, 2, SetGapsConvertAcceptButtonAndTextGroup);
   SetObjectExtra (gcp->known_op, gcp, NULL);
@@ -2431,16 +2460,27 @@ static void RawSeqToDeltaSeqUnknownWithUnknownLengthGaps (IteM i)
   SetObjectExtra (gcp->known_val_txt, gcp, NULL);
   
   /* status text */
-  l = HiddenGroup (h, 1, 0, NULL);
-  gcp->explanation = DocumentPanel (l, stdCharWidth * 27, stdLineHeight * 8);
+  gcp->explanation = DocumentPanel (h, stdCharWidth * 27, stdLineHeight * 8);
   ObjectRect (gcp->explanation, &r);
   InsetRect (&r, 4, 4);
   faColFmt.pixWidth = r.right - r.left;
+  
+  gcp->adjust_CDS_locations = CheckBox (h, "Adjust CDS locations for gaps", NULL);
+  SetStatus (gcp->adjust_CDS_locations, TRUE);
 
   c = HiddenGroup (h, 4, 0, NULL);
   gcp->acceptBtn = PushButton (c, "Accept", ConvertGaps);
   SetObjectExtra (gcp->acceptBtn, gcp, NULL);
   PushButton (c, "Cancel", StdCancelButtonProc);
+  
+  AlignObjects (ALIGN_CENTER, (HANDLE) p1,
+                              (HANDLE) g, 
+                              (HANDLE) p2, 
+                              (HANDLE) l,
+                              (HANDLE) gcp->explanation,
+                              (HANDLE) gcp->adjust_CDS_locations, 
+                              (HANDLE) c, 
+                              NULL);
   
   SetConvertGapsAcceptAndText (gcp);
   RealizeWindow (w);
@@ -2472,6 +2512,7 @@ typedef struct deltaconversion
 
   DialoG gap_locations;
   GrouP  coord_grp;
+  ButtoN adjust_CDS_locations;
   
 } DeltaConversionData, PNTR DeltaConversionPtr;
 
@@ -2714,12 +2755,7 @@ static Pointer DeltaLocToData (DialoG d)
       if (start_pos > 0)
       {
         str = ExtractTagListColumn ((CharPtr) vnp->data.ptrvalue, 1);
-        if (StringICmp (str, "0"))
-        {
-          is_known = FALSE;
-          len = 100;
-        }
-        else
+        if (StringICmp (str, "1") == 0)
         {
           is_known = TRUE;
           len = -1;
@@ -2735,6 +2771,12 @@ static Pointer DeltaLocToData (DialoG d)
             return NULL;
           }
         }
+        else
+        {
+          is_known = FALSE;
+          len = 100;
+        }
+
         glip = (GapLocInfoPtr) MemNew (sizeof (GapLocInfoData));
         if (glip != NULL)
         {
@@ -2786,6 +2828,12 @@ static void DoConvertRawToDeltaWithGapLocations (ButtoN b)
     VisitBioseqsInSep (sep, location_list, ConvertBioseqToDeltaWithAlignmentGapList);
   }
   location_list = ValNodeFreeData (location_list);
+  
+  if (GetStatus (dcp->adjust_CDS_locations))
+  {
+    VisitFeaturesInSep (sep, NULL, AdjustCDSLocationsForGapsCallback);
+  }
+  
   ObjMgrSetDirtyFlag (dcp->input_entityID, TRUE);
   ObjMgrSendMsg (OM_MSG_UPDATE, dcp->input_entityID, 0, 0);
   Remove (dcp->form);    
@@ -2851,6 +2899,9 @@ static void ConvertRawToDeltaWithGapLocations (IteM i)
     Disable (dcp->coord_grp);
   }
   
+  dcp->adjust_CDS_locations = CheckBox (h, "Adjust CDS locations for gaps", NULL);
+  SetStatus (dcp->adjust_CDS_locations, TRUE);
+  
   c = HiddenGroup (h, 2, 0, NULL);
   b = PushButton (c, "Accept", DoConvertRawToDeltaWithGapLocations);
   SetObjectExtra (b, dcp, NULL);
@@ -2858,6 +2909,7 @@ static void ConvertRawToDeltaWithGapLocations (IteM i)
   
   AlignObjects (ALIGN_CENTER, (HANDLE) dcp->gap_locations,
                               (HANDLE) dcp->coord_grp,
+                              (HANDLE) dcp->adjust_CDS_locations,
                               (HANDLE) c,
                               NULL);
 
@@ -3078,193 +3130,393 @@ static void GeneToXref (IteM i)
   ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
 }
 
+typedef struct featurefieldforgenechoice
+{
+  Int4    first_choice;
+  Int4    second_choice;
+  CharPtr field_txt;  
+} FeatureFieldForGeneChoiceData, PNTR FeatureFieldForGeneChoicePtr;
+
+static FeatureFieldForGeneChoicePtr FeatureFieldForGeneChoiceFree (FeatureFieldForGeneChoicePtr fcp)
+{
+  if (fcp != NULL)
+  {
+    fcp->field_txt = MemFree (fcp->field_txt);
+    fcp = MemFree (fcp);
+  }
+  return fcp;
+}
+
 typedef struct featuretogene
 {
   FEATURE_FORM_BLOCK
 
-  Uint1  subtype; 
-  PopuP  qualchoice[3];
+  DialoG *gene_src_dlg_list;
+  Int4   num_choices;
+  ValNodePtr feature_choices;
+  
+  TexT   label_txt;
   PopuP  genechoice;
-  ButtoN accept_btn;
   GrouP  qual_caps_grp;
+  DialoG feature_dlg;
+  DialoG filter_grp;
+  DialoG accept_cancel;
   
   ButtoN single_interval_btn;
   ButtoN selected_features_only_btn;
   
   Boolean single_interval;
+  FeatureFieldForGeneChoicePtr fcp;
   
 } FeatureToGeneData, PNTR FeatureToGenePtr;
+
+static Int4 GetGeneSrcDlgIndex (FeatureToGenePtr fgp)
+{
+  ValNodePtr vnp, check_vnp;
+  Int4       rval = -1, i;
+  
+  if (fgp == NULL) return -1;
+
+  vnp = DialogToPointer (fgp->feature_dlg);
+  if (vnp == NULL)
+  {
+    return -1;
+  }
+
+  check_vnp = fgp->feature_choices;
+  i = 0;
+  while (check_vnp != NULL && check_vnp->choice != vnp->choice)
+  {
+    check_vnp = check_vnp->next;
+    i++;    
+  }
+  if (check_vnp != NULL)
+  {
+    rval = i;
+  }
+  ValNodeFreeData (vnp);
+  return rval;
+}
+
+static void EnableFeatureToGeneControls (Pointer userdata)
+{
+  Int4             i;
+  FeatureToGenePtr fgp;
+  FeatureFieldForGeneChoicePtr fcp;
+  
+  fgp = (FeatureToGenePtr) userdata;
+  if (fgp == NULL) return;
+  Disable (fgp->qual_caps_grp);
+  Disable (fgp->genechoice);
+  
+  i = GetGeneSrcDlgIndex (fgp);
+  if (i >= 0)
+  {
+    fcp = (FeatureFieldForGeneChoicePtr) DialogToPointer (fgp->gene_src_dlg_list [i]);
+    if (fcp != NULL)
+    {
+      if (fcp->first_choice > 1 || !StringHasNoText (fcp->field_txt))
+      {
+        Enable (fgp->qual_caps_grp);
+        Enable (fgp->genechoice);
+      }     
+      fcp = FeatureFieldForGeneChoiceFree (fcp);
+    }
+  }
+}
 
 static void EnableFeatureToGeneControlsPopup (PopuP p)
 {
   FeatureToGenePtr fgp;
-  Int4             i, j, val;
   
   fgp = (FeatureToGenePtr) GetObjectExtra (p);
-  if (fgp == NULL) return;
-  Disable (fgp->qual_caps_grp);
-  Disable (fgp->genechoice);
-  for (i = 0; i < 2; i++)
+  EnableFeatureToGeneControls (fgp);
+}
+
+static void EnableFeatureToGeneControlsText (TexT t)
+{
+  FeatureToGenePtr fgp;
+  
+  fgp = (FeatureToGenePtr) GetObjectExtra (t);
+  EnableFeatureToGeneControls (fgp);
+  
+}
+
+typedef struct featurefieldforgenedlg 
+{
+  DIALOG_MESSAGE_BLOCK
+  PopuP first_choice_popup;
+  PopuP second_choice_popup;
+  TexT  label_txt;
+  Nlm_ChangeNotifyProc change_notify;
+  Pointer              change_userdata;
+} FeatureFieldForGeneDlgData, PNTR FeatureFieldForGeneDlgPtr;
+
+static void ResetFeatureFieldForGeneDlg (FeatureFieldForGeneDlgPtr dlg)
+{
+  if (dlg == NULL)
   {
-    val = GetValue (fgp->qualchoice[i]);
-  	if (val == 1)
-  	{
-  	  for (j = i + 1; i < 3; i++)
-  	  {
-  	  	Disable (fgp->qualchoice[j]);
-  	  	SetValue (fgp->qualchoice[j], 1);
-  	  }
-  	}
-  	else
-  	{
-  	  Enable (fgp->qualchoice [i + 1]);
-   	  Enable (fgp->qual_caps_grp);
-   	  Enable (fgp->genechoice);
- 	}
+    return;
+  }
+  
+  SetValue (dlg->first_choice_popup, 1);
+  SafeSetValue (dlg->second_choice_popup, 1);
+  SetTitle (dlg->label_txt, "");
+}
+
+static void FeatureFieldForGeneToDialog (DialoG d, Pointer userdata)
+{
+  FeatureFieldForGeneDlgPtr    dlg;
+  FeatureFieldForGeneChoicePtr data;
+
+  dlg = (FeatureFieldForGeneDlgPtr) GetObjectExtra (d);
+  data = (FeatureFieldForGeneChoicePtr) userdata;
+  if (dlg == NULL)
+  {
+    return;
+  }
+  ResetFeatureFieldForGeneDlg (dlg);
+  if (data == NULL)
+  {
+    return;
+  }
+  if (data->first_choice > 0)
+  {
+    SetValue (dlg->first_choice_popup, data->first_choice);
+  }
+  if (data->second_choice > 0)
+  {
+    SafeSetValue (dlg->second_choice_popup, data->second_choice);
+  }
+  if (!StringHasNoText (data->field_txt))
+  {
+    SetTitle (dlg->label_txt, data->field_txt);
   }
 }
 
-static PopuP MakeCDSPopup (GrouP g, FeatureToGenePtr fgp)
+static Pointer FeatureFieldForGeneFromDialog (DialoG d)
+{
+  FeatureFieldForGeneDlgPtr    dlg;
+  FeatureFieldForGeneChoicePtr data;
+
+  dlg = (FeatureFieldForGeneDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL)
+  {
+    return NULL;
+  }
+  data = (FeatureFieldForGeneChoicePtr) MemNew (sizeof (FeatureFieldForGeneChoiceData));
+  if (data != NULL)
+  {
+    data->first_choice = GetValue (dlg->first_choice_popup);
+    if (dlg->second_choice_popup != NULL)
+    {
+      data->second_choice = GetValue (dlg->second_choice_popup);
+    }
+    else
+    {
+      data->second_choice = 0;
+    }
+    if (TextHasNoText (dlg->label_txt))
+    {
+      data->field_txt = NULL;
+    }
+    else
+    {
+      data->field_txt = SaveStringFromText (dlg->label_txt);
+    }
+  }
+  return data;
+}
+
+static void FeatureFieldForGeneChange (FeatureFieldForGeneDlgPtr dlg)
+{
+  if (dlg == NULL)
+  {
+    return;
+  }
+  if (GetValue (dlg->first_choice_popup) > 1)
+  {
+    SafeEnable (dlg->second_choice_popup);
+  }
+  else
+  {
+    SafeDisable (dlg->second_choice_popup);
+  }
+  if (dlg->change_notify != NULL)
+  {
+    (dlg->change_notify) (dlg->change_userdata);
+  }
+}
+
+static void FeatureFieldForGeneChangePopup (PopuP p)
+{
+  FeatureFieldForGeneDlgPtr  dlg;
+
+  dlg = (FeatureFieldForGeneDlgPtr) GetObjectExtra (p);
+  FeatureFieldForGeneChange (dlg);  
+}
+
+static void FeatureFieldForGeneChangeText (TexT t)
+{
+  FeatureFieldForGeneDlgPtr  dlg;
+
+  dlg = (FeatureFieldForGeneDlgPtr) GetObjectExtra (t);
+  FeatureFieldForGeneChange (dlg);  
+}
+
+static PopuP MakeFieldChoicePopup (GrouP g, Int4 featdef_choice, Pointer extradata)
 {
   PopuP p;
   
-  p = PopupList (g, TRUE, EnableFeatureToGeneControlsPopup);
-  SetObjectExtra (p, fgp, NULL);
-  PopupItem (p, "None");
-  PopupItem (p, "Comment");
-  PopupItem (p, "Product");
+  p = PopupList (g, TRUE, FeatureFieldForGeneChangePopup);
+  SetObjectExtra (p, extradata, NULL);
+  
+  if (featdef_choice == FEATDEF_CDS
+      || featdef_choice == FEATDEF_tRNA
+      || featdef_choice == FEATDEF_rRNA
+      || featdef_choice == FEATDEF_misc_RNA
+      || featdef_choice == FEATDEF_mRNA)
+  {  
+    PopupItem (p, "None");
+    PopupItem (p, "Comment");
+    PopupItem (p, "Product");
+  }
+  else
+  {
+    PopupItem (p, "None");
+    PopupItem (p, "Comment");
+  }
   SetValue (p, 1);
   return p;	
 }
 
-static CharPtr GetCDSPopupText (PopuP p, SeqFeatPtr cds)
+static DialoG 
+FeatureFieldForGeneDialog 
+(GrouP parent, 
+ Int4  featdef_choice,
+ Nlm_ChangeNotifyProc change_notify,
+ Pointer              change_userdata)
 {
-  Int4              val;
-  SeqMgrFeatContext context;
-  if (p == NULL || cds == NULL) return NULL;
-  val = GetValue (p);
+  FeatureFieldForGeneDlgPtr  dlg;
+  GrouP                     p;
   
-  if (val == 2 && !StringHasNoText (cds->comment))
+  dlg = (FeatureFieldForGeneDlgPtr) MemNew (sizeof (FeatureFieldForGeneDlgData));
+  if (dlg == NULL)
   {
-  	return StringSave (cds->comment);
+    return NULL;
   }
-  else if (val == 3)
+
+  p = NormalGroup (parent, 2, 0, "Select qualifier to use in gene", NULL, NULL);
+  SetObjectExtra (p, dlg, StdCleanupExtraProc);
+
+  dlg->dialog = (DialoG) p;
+  dlg->todialog = FeatureFieldForGeneToDialog;
+  dlg->fromdialog = FeatureFieldForGeneFromDialog;
+  dlg->dialogmessage = NULL;
+  dlg->testdialog = NULL;
+  dlg->change_notify = change_notify;
+  dlg->change_userdata = change_userdata;
+
+  StaticPrompt (p, "1st Choice", 0, 0, programFont, 'c');
+  dlg->first_choice_popup = MakeFieldChoicePopup (p, featdef_choice, dlg);
+  
+  if (featdef_choice == FEATDEF_CDS
+      || featdef_choice == FEATDEF_tRNA
+      || featdef_choice == FEATDEF_rRNA
+      || featdef_choice == FEATDEF_misc_RNA
+      || featdef_choice == FEATDEF_mRNA)
   {
-    cds = SeqMgrGetDesiredFeature (cds->idx.entityID, NULL, 0, 0, cds, &context);
-    if (cds == NULL || StringHasNoText (context.label)) return NULL;
-    return StringSave (context.label);
+    StaticPrompt (p, "2nd Choice", 0, 0, programFont, 'c');
+    dlg->second_choice_popup = MakeFieldChoicePopup (p, featdef_choice, dlg);
+    Disable (dlg->second_choice_popup);
   }
   else
   {
-  	return NULL;
+    dlg->second_choice_popup = NULL;
   }
+
+  StaticPrompt (p, "Use this string:", 0, 0, programFont, 'c');
+  dlg->label_txt = DialogText (p, "", 10, FeatureFieldForGeneChangeText);
+  SetObjectExtra (dlg->label_txt, dlg, NULL);
+    
+  return (DialoG) p;  
 }
 
-static PopuP MaketRNAPopup (GrouP g, FeatureToGenePtr fgp)
+static CharPtr GetGeneSrcChoice (SeqFeatPtr sfp, Int4 choice)
 {
-  PopuP p;
+  CharPtr           src_txt = NULL;
+  RnaRefPtr         rrp;
+  SeqMgrFeatContext fcontext;
   
-  p = PopupList (g, TRUE, EnableFeatureToGeneControlsPopup);
-  SetObjectExtra (p, fgp, NULL);
-  PopupItem (p, "None");
-  PopupItem (p, "Comment");
-  SetValue (p, 1);
-  return p;		
+  if (sfp == NULL || choice < 2)
+  {
+    return NULL;
+  }
+  
+  if (choice == 2 && !StringHasNoText (sfp->comment))
+  {
+    src_txt = StringSave (sfp->comment);
+  }
+  else if (choice == 3)
+  {
+    if (sfp->idx.subtype == FEATDEF_tRNA)
+    {
+      sfp = SeqMgrGetDesiredFeature (sfp->idx.entityID, NULL,
+                                     0, 0, sfp, &fcontext);
+      if (!StringHasNoText (fcontext.label))
+      {
+        src_txt = (CharPtr) MemNew (StringLen (fcontext.label) + 6);
+        if (src_txt != NULL)
+        {
+          sprintf (src_txt, "tRNA-%s", fcontext.label);
+        }
+      }
+    }
+    else if (sfp->idx.subtype == FEATDEF_CDS
+             || sfp->idx.subtype == FEATDEF_mRNA)
+    {
+      sfp = SeqMgrGetDesiredFeature (sfp->idx.entityID, NULL,
+                                     0, 0, sfp, &fcontext);
+      if (!StringHasNoText (fcontext.label))
+      {
+        src_txt = StringSave (fcontext.label);
+      }
+    }
+    else if (sfp->data.choice == SEQFEAT_RNA)
+    {
+      rrp = (RnaRefPtr) (sfp->data.value.ptrvalue);
+      if (rrp != NULL && rrp->ext.choice == 1
+          && !StringHasNoText (rrp->ext.value.ptrvalue))
+      {
+        src_txt = StringSave (rrp->ext.value.ptrvalue);
+      }
+    }
+  }
+  return src_txt;  
 }
 
-static CharPtr GettRNAPopupText (PopuP p, SeqFeatPtr cds)
+static CharPtr GetGeneSrc (SeqFeatPtr sfp, FeatureFieldForGeneChoicePtr fcp)
 {
-  Int4 val;
-  if (p == NULL || cds == NULL) return NULL;
-  val = GetValue (p);
+  CharPtr src_txt = NULL;
   
-  if (val == 2 && !StringHasNoText (cds->comment))
+  if (sfp == NULL || fcp == NULL)
   {
-  	return StringSave (cds->comment);
+    return NULL;
   }
-  else
+  
+  src_txt = GetGeneSrcChoice (sfp, fcp->first_choice);
+  if (src_txt == NULL)
   {
-  	return NULL;
+    src_txt = GetGeneSrcChoice (sfp, fcp->second_choice);
   }
+  if (src_txt == NULL && !StringHasNoText (fcp->field_txt))
+  {
+    src_txt = StringSave (fcp->field_txt);
+  }
+  return src_txt;  
 }
 
-static PopuP MakerRNAPopup (GrouP g, FeatureToGenePtr fgp)
-{
-  PopuP p;
-  
-  p = PopupList (g, TRUE, EnableFeatureToGeneControlsPopup);
-  SetObjectExtra (p, fgp, NULL);
-  PopupItem (p, "None");
-  PopupItem (p, "Comment");
-  PopupItem (p, "Product Name");
-  SetValue (p, 1);
-  return p;		
-}
-
-static CharPtr GetrRNAPopupText (PopuP p, SeqFeatPtr sfp)
-{
-  Int4 val;
-  RnaRefPtr    rrp;
-
-  if (p == NULL || sfp == NULL || sfp->data.choice != SEQFEAT_RNA) return NULL;
-  
-  val = GetValue (p);
-  rrp = (RnaRefPtr) (sfp->data.value.ptrvalue);
-
-  if (val == 2 && !StringHasNoText (sfp->comment))
-  {
-  	return StringSave (sfp->comment);
-  }
-  else if (val == 3 && rrp != NULL && rrp->ext.choice == 1 
-           && !StringHasNoText (rrp->ext.value.ptrvalue))
-  {
-  	return StringSave (rrp->ext.value.ptrvalue);
-  }
-  else
-  {
-  	return NULL;
-  }
-}
-
-static PopuP MakemiscRNAPopup (GrouP g, FeatureToGenePtr fgp)
-{
-  PopuP p;
-  
-  p = PopupList (g, TRUE, EnableFeatureToGeneControlsPopup);
-  SetObjectExtra (p, fgp, NULL);
-  PopupItem (p, "None");
-  PopupItem (p, "Comment");
-  PopupItem (p, "Product Name");
-  SetValue (p, 1);
-  return p;			
-}
-
-static CharPtr GetmiscRNAPopupText (PopuP p, SeqFeatPtr sfp)
-{
-  Int4 val;
-  RnaRefPtr    rrp;
-
-  if (p == NULL || sfp == NULL || sfp->data.choice != SEQFEAT_RNA) return NULL;
-  
-  val = GetValue (p);
-  rrp = (RnaRefPtr) (sfp->data.value.ptrvalue);
-
-  if (val == 2 && !StringHasNoText (sfp->comment))
-  {
-  	return StringSave (sfp->comment);
-  }
-  else if (val == 3 && rrp != NULL && rrp->ext.choice == 1 
-           && !StringHasNoText (rrp->ext.value.ptrvalue))
-  {
-  	return StringSave (rrp->ext.value.ptrvalue);
-  }
-  else
-  {
-  	return NULL;
-  }
-}
-
-static void FeatureToGeneCallback (SeqFeatPtr sfp, Pointer userdata)
+static void FeatureToGeneCallback (SeqFeatPtr sfp, Pointer userdata, FilterSetPtr fsp)
 {
   SeqFeatPtr         gene, overlap_gene;
   GeneRefPtr         grp, overlap_grp = NULL;
@@ -3279,7 +3531,6 @@ static void FeatureToGeneCallback (SeqFeatPtr sfp, Pointer userdata)
   if (sfp == NULL || userdata == NULL) return;
   fgp = (FeatureToGenePtr) userdata;
   
-  if (sfp->idx.subtype != fgp->subtype) return;
   if (SeqMgrGetGeneXref (sfp) != NULL) return;
   
   bsp = BioseqFindFromSeqLoc (sfp->location);
@@ -3295,24 +3546,8 @@ static void FeatureToGeneCallback (SeqFeatPtr sfp, Pointer userdata)
     return;
   }
   
-  for (i = 0; gene_val == NULL && i < 2 && GetValue (fgp->qualchoice[i]) != 1; i++)
-  {
-    switch (fgp->subtype)
-    {
-      case FEATDEF_CDS:
-  	    gene_val = GetCDSPopupText (fgp->qualchoice[i], sfp);
-  	    break;
-      case FEATDEF_tRNA:
-   	    gene_val = GettRNAPopupText (fgp->qualchoice[i], sfp);
-  	    break;
-      case FEATDEF_rRNA:
-   	    gene_val = GetrRNAPopupText (fgp->qualchoice[i], sfp);
-  	    break;
-      case FEATDEF_otherRNA:
-   	    gene_val = GetmiscRNAPopupText (fgp->qualchoice[i], sfp);
-  	    break;
-    }
-  }
+  gene_val = GetGeneSrc (sfp, fgp->fcp);
+
   if (gene_val != NULL)
   {
   	/* apply capitalization */
@@ -3370,17 +3605,37 @@ static void FeatureToGeneCallback (SeqFeatPtr sfp, Pointer userdata)
   sfp->next = gene;
 }
 
-static void FeatureToGeneAccept (ButtoN b)
+static Boolean FeatureToGeneAccept (Pointer userdata)
 {
   FeatureToGenePtr  fgp;
   SeqEntryPtr       sep;
   SelStructPtr      sel;
   SeqFeatPtr        sfp;
   SeqMgrFeatContext fcontext;
+  FilterSetPtr      fsp;
+  Int4              i, featdef_choice;
+  ValNodePtr        vnp;
   
-  fgp = (FeatureToGenePtr) GetObjectExtra (b);
-  if (fgp == NULL) return;
-  Hide (fgp->form);
+  fgp = (FeatureToGenePtr) userdata;
+  if (fgp == NULL) return FALSE;
+  
+  vnp = DialogToPointer (fgp->feature_dlg);
+  if (vnp == NULL)
+  {
+    return FALSE;
+  }
+  featdef_choice = vnp->choice;
+  vnp = ValNodeFreeData (vnp);
+  
+  i = GetGeneSrcDlgIndex (fgp);
+  if (i < 0)
+  {
+    return FALSE;
+  }
+
+  fgp->fcp = DialogToPointer (fgp->gene_src_dlg_list [i]);
+  
+  fsp = DialogToPointer (fgp->filter_grp);
   
   sep = GetTopSeqEntryForEntityID (fgp->input_entityID);
   if (sep == NULL) return;
@@ -3395,7 +3650,7 @@ static void FeatureToGeneAccept (ButtoN b)
         sfp = SeqMgrGetDesiredFeature (sel->entityID, NULL, sel->itemID, 0, NULL, &fcontext);
         if (sfp != NULL)
         {
-          FeatureToGeneCallback (sfp, fgp);
+          FeatureToGeneCallback (sfp, fgp, NULL);
         }
       }
       sel = sel->next;
@@ -3403,22 +3658,126 @@ static void FeatureToGeneAccept (ButtoN b)
   }
   else
   {
-    VisitFeaturesInSep (sep, fgp, FeatureToGeneCallback);    
+    OperateOnSeqEntryConstrainedObjects (sep, fsp, FeatureToGeneCallback,
+                                         NULL, 0, featdef_choice, 0, fgp);
   }
+  
+  FilterSetFree (fsp);
+  fgp->fcp = FeatureFieldForGeneChoiceFree (fgp->fcp);
+  
   ObjMgrSetDirtyFlag (fgp->input_entityID, TRUE);
   ObjMgrSendMsg (OM_MSG_UPDATE, fgp->input_entityID, 0, 0);
-  Remove (fgp->form);
+  return TRUE;
 }
 
-static void FeatureToGene (IteM i, Uint1 subtype)
+static void ChangeGeneFeatureSelection (Pointer userdata)
+{
+  FeatureToGenePtr  fgp;
+  Int4              i;
+  
+  fgp = (FeatureToGenePtr) userdata;
+  if (fgp == NULL)
+  {
+    return;
+  }
+  
+  for (i = 0; i < fgp->num_choices; i++)
+  {
+    Hide (fgp->gene_src_dlg_list [i]);
+  }
+
+  i = GetGeneSrcDlgIndex (fgp);
+  
+  if (i < 0)
+  {
+    DisableAcceptCancelDialogAccept (fgp->accept_cancel);
+  }
+  else
+  {
+    EnableAcceptCancelDialogAccept (fgp->accept_cancel);
+    Show (fgp->gene_src_dlg_list [i]);
+  }
+  EnableFeatureToGeneControls (fgp);
+}
+
+static void CleanupFeatureToGeneForm (GraphiC g, VoidPtr data)
+{
+  FeatureToGenePtr fgp;
+
+  fgp = (FeatureToGenePtr) data;
+  if (fgp != NULL) 
+  {
+    fgp->feature_choices = ValNodeFreeData (fgp->feature_choices);
+    MemFree (fgp);
+  }
+}
+
+static void FeatureToGeneClearText (Pointer userdata)
+{
+  FeatureToGenePtr             fgp;
+  Int4                         j;
+  FilterSetPtr                 fsp;
+  FeatureFieldForGeneChoicePtr fcp;
+
+  fgp = (FeatureToGenePtr) userdata;
+  if (fgp == NULL)
+  {
+    return;
+  }
+  
+  for (j = 0; j < fgp->num_choices; j++)
+  {
+    fcp = (FeatureFieldForGeneChoicePtr) DialogToPointer (fgp->gene_src_dlg_list [j]);
+    if (fcp != NULL)
+    {
+      fcp->field_txt = MemFree (fcp->field_txt);
+    }
+    PointerToDialog (fgp->gene_src_dlg_list [j], fcp);
+    FeatureFieldForGeneChoiceFree (fcp);
+  }
+  
+  fsp = (FilterSetPtr) DialogToPointer (fgp->filter_grp);
+  FilterSetClearText (fsp);
+  PointerToDialog (fgp->filter_grp, fsp);
+  FilterSetFree (fsp);
+  EnableFeatureToGeneControls (fgp);
+}
+
+static void FeatureToGeneClear (Pointer userdata)
+{
+  FeatureToGenePtr  fgp;
+  Int4              j;
+
+  fgp = (FeatureToGenePtr) userdata;
+  if (fgp == NULL)
+  {
+    return;
+  }
+  
+  PointerToDialog (fgp->feature_dlg, NULL);
+  for (j = 0; j < fgp->num_choices; j++)
+  {
+    PointerToDialog (fgp->gene_src_dlg_list [j], NULL);
+  }
+  PointerToDialog (fgp->filter_grp, NULL);
+  
+  SetValue (fgp->qual_caps_grp, 1);
+  SetValue (fgp->genechoice, 1);
+  SetStatus (fgp->single_interval_btn, TRUE);
+  SetStatus (fgp->selected_features_only_btn, FALSE);
+
+  ChangeGeneFeatureSelection (fgp);
+  EnableFeatureToGeneControls (fgp);
+}
+
+static void FeatureToGene (IteM i)
 {
   BaseFormPtr       bfp;
   FeatureToGenePtr  fgp;
   WindoW            w;
   Int4              j;
-  CharPtr           choice_labels[3] = { "1st Choice", "2nd Choice", "3rd Choice" };
-  GrouP             h, g, k, m, n, c;
-  ButtoN            b;
+  GrouP             h, k, m, n;
+  ValNodePtr        vnp;
 
 #ifdef WIN_MAC
   bfp = currentFormDataPtr;
@@ -3432,63 +3791,38 @@ static void FeatureToGene (IteM i, Uint1 subtype)
   
   fgp = (FeatureToGenePtr) MemNew (sizeof (FeatureToGeneData));
   if (fgp == NULL) return;
-  fgp->subtype = subtype;
   fgp->input_entityID = bfp->input_entityID;
-  switch (fgp->subtype)
-  {
-  	case FEATDEF_CDS:
-      w = FixedWindow (-50, -33, -10, -10, "CDS to Gene", StdCloseWindowProc);
-  	  break;
-  	case FEATDEF_tRNA:
-      w = FixedWindow (-50, -33, -10, -10, "tRNA to Gene", StdCloseWindowProc);
-  	  break;
-  	case FEATDEF_rRNA:
-      w = FixedWindow (-50, -33, -10, -10, "rRNA to Gene", StdCloseWindowProc);
-  	  break;
-  	case FEATDEF_otherRNA:
-      w = FixedWindow (-50, -33, -10, -10, "miscRNA to Gene", StdCloseWindowProc);
-  	  break;
-  	default:
-  	  Message (MSG_ERROR, "Unrecognized subtype for feature to gene");
-  	  return;
-  	  break;
-  }
-  SetObjectExtra (w, fgp, NULL);
+  w = FixedWindow (-50, -33, -10, -10, "Feature to Gene", StdCloseWindowProc);
+  SetObjectExtra (w, fgp, CleanupFeatureToGeneForm);
   fgp->form = (ForM) w;
 
   h = HiddenGroup (w, -1, 0, NULL);
   SetGroupSpacing (h, 10, 10);
 
-  g = HiddenGroup (h, 0, 6, NULL);
+  fgp->feature_dlg = FeatureSelectionDialog (h, FALSE, ChangeGeneFeatureSelection, fgp);
+  k = HiddenGroup (h, 0, 0, NULL);
 
-  k = NormalGroup (g, 2, 0, "Select qualifier to use in gene", NULL, NULL);
-  for (j = 0; j < 2; j++)
+  fgp->feature_choices = BuildFeatureDialogList (TRUE);
+  fgp->num_choices = ValNodeLen (fgp->feature_choices);
+  fgp->gene_src_dlg_list = (DialoG *) MemNew (fgp->num_choices * sizeof (DialoG));
+  
+  for (j = 0, vnp = fgp->feature_choices;
+       j < fgp->num_choices && vnp != NULL;
+       j++, vnp = vnp->next)
   {
-    StaticPrompt (k, choice_labels [j], 0, 0, programFont, 'c');
-    switch (fgp->subtype)
-    {
-  	  case FEATDEF_CDS:
-  	    fgp->qualchoice[j] = MakeCDSPopup (k, fgp);
-  	    break;
-  	  case FEATDEF_tRNA:
-  	    fgp->qualchoice[j] = MaketRNAPopup (k, fgp);
-  	    break;
-  	  case FEATDEF_rRNA:
-  	    fgp->qualchoice[j] = MakerRNAPopup (k, fgp);
-  	    break;
-  	  case FEATDEF_otherRNA:
-  	    fgp->qualchoice[j] = MakemiscRNAPopup (k, fgp);
-  	    break;  
-    }
-  }  
-  fgp->qual_caps_grp = NormalGroup (g, 3, 0,
+    fgp->gene_src_dlg_list [j] = FeatureFieldForGeneDialog (k, vnp->choice,
+                                                            EnableFeatureToGeneControls,
+                                                            fgp);
+  }
+  
+  fgp->qual_caps_grp = NormalGroup (h, 3, 0,
                      "Capitalization for gene", NULL, NULL);
   RadioButton (fgp->qual_caps_grp, "As is");
   RadioButton (fgp->qual_caps_grp, "Capitalize first initial");
   RadioButton (fgp->qual_caps_grp, "Capitalize all");
   SetValue (fgp->qual_caps_grp, 1);
   Disable (fgp->qual_caps_grp);
-  m = HiddenGroup (g, 2, 0, NULL);
+  m = HiddenGroup (h, 2, 0, NULL);
   StaticPrompt (m, "Select gene qualifier to populate", 0,0, programFont, 'c');
   fgp->genechoice = PopupList (m, TRUE, NULL);
   PopupItem (fgp->genechoice, "locus");
@@ -3499,45 +3833,29 @@ static void FeatureToGene (IteM i, Uint1 subtype)
   SetValue (fgp->genechoice, 1);
   Disable (fgp->genechoice);
   
-  n = HiddenGroup (g, 2, 0, NULL);
+  n = HiddenGroup (h, 2, 0, NULL);
   fgp->single_interval_btn = CheckBox (n, "Create gene with single interval location", NULL);
   SetStatus (fgp->single_interval_btn, TRUE);
   fgp->selected_features_only_btn = CheckBox (n, "Only create genes for selected features", NULL);
   SetStatus (fgp->selected_features_only_btn, FALSE);
   
-  c = HiddenGroup (g, 4, 0, NULL); 
-  b = PushButton (c, "Accept", FeatureToGeneAccept);
-  SetObjectExtra (b, fgp, NULL);
-  
-  PushButton (c, "Cancel", StdCancelButtonProc);
+  fgp->filter_grp = FilterGroup (h, TRUE, FALSE, FALSE, FALSE, "Where feature field contains");
 
+  fgp->accept_cancel = AcceptCancelDialog (h, FeatureToGeneAccept, NULL, FeatureToGeneClear, FeatureToGeneClearText, (Pointer)fgp, w);
 
-  AlignObjects (ALIGN_CENTER, (HANDLE) k, (HANDLE) fgp->qual_caps_grp, (HANDLE) n,
-                (HANDLE) c, NULL);
+  AlignObjects (ALIGN_CENTER, (HANDLE) fgp->feature_dlg,
+                              (HANDLE) k, 
+                              (HANDLE) fgp->qual_caps_grp, 
+                              (HANDLE) m,
+                              (HANDLE) n,
+                              (HANDLE) fgp->filter_grp,
+                              (HANDLE) fgp->accept_cancel, 
+                              NULL);
                 
   RealizeWindow (w);
   Show (w);
   Update ();
-}
-
-static void CdsToGene (IteM i)
-{
-  FeatureToGene (i, FEATDEF_CDS);
-}
-
-static void tRNAtoGene (IteM i)
-{
-  FeatureToGene (i, FEATDEF_tRNA);
-}
-
-static void rRNAtoGene (IteM i)
-{
-  FeatureToGene (i, FEATDEF_rRNA);
-}
-
-static void MiscRNAtoGene (IteM i)
-{
-  FeatureToGene (i, FEATDEF_otherRNA);
+  ChangeGeneFeatureSelection (fgp);
 }
 
 typedef struct genetocdsform
@@ -6485,126 +6803,6 @@ static void RemoveTaxonXrefsFromFeaturesAndBioSources (IteM i)
   RemoveTaxonXrefs (i, TRUE);
 }
 
-/*-------------------------------------------------------------------------*/
-/*                                                                         */
-/* SuppressGeneXref_Callback () -- Suppresses any gene xref on the feature */
-/*                                 that is passed to it.                   */
-/*                                                                         */
-/*-------------------------------------------------------------------------*/
-
-static Boolean LIBCALLBACK SuppressGeneXref_Callback (SeqFeatPtr sfp,
-					       SeqMgrFeatContextPtr context)
-{
-  GeneRefPtr      grp = NULL;
-  SeqFeatXrefPtr  xref;
-
-  /* If there is a gene xref, then change it */
-  /* to a suppression gene xref.             */
-
-  grp = SeqMgrGetGeneXref (sfp);
-  if (NULL != grp)
-    {
-      if (SeqMgrGeneIsSuppressed (grp) == FALSE)
-	{
-	  if (NULL != grp->locus)
-	    {
-	      MemFree(grp->locus);
-	      grp->locus = NULL;
-	    }
-	  if (NULL != grp->allele)
-	    {
-	      MemFree(grp->allele);
-	      grp->allele = NULL;
-	    }
-	  if (NULL != grp->desc)
-	    {
-	      MemFree(grp->desc);
-	      grp->desc = NULL;
-	    }
-	  if (NULL != grp->maploc)
-	    {
-	      MemFree (grp->maploc);
-	      grp->maploc = NULL;
-	    }
-	  if (NULL != grp->locus_tag)
-	    {
-	      MemFree (grp->locus_tag);
-	      grp->locus_tag = NULL;
-	    }
-	  grp->db  = ValNodeFreeData (grp->db);
-	  grp->syn = ValNodeFreeData (grp->syn);
-	}    
-    }
-
-  /* Otherwise, if there is an overlapping gene, add */
-  /* a suppression xref for it.                      */
-
-  else if (SeqMgrGetOverlappingGene (sfp->location, NULL) != NULL)
-    {
-      grp = GeneRefNew ();
-      if (grp != NULL) {
-	xref = SeqFeatXrefNew ();
-	xref->data.choice = SEQFEAT_GENE;
-	xref->data.value.ptrvalue = grp;
-	xref->next = sfp->xref;
-	sfp->xref = xref;
-      }
-    }
-
-  /* Return successfully */
-
-  return TRUE;
-}
-
-/*-------------------------------------------------------------------------*/
-/*                                                                         */
-/* SuppressGeneXrefsForFeatureType () -- Suppresses gene xrefs for all     */
-/*                                       features of the given type.       */
-/*                                                                         */
-/*-------------------------------------------------------------------------*/
-
-static void SuppressGeneXrefsForFeatureType (BioseqPtr bsp,
-					     Int2      seqfeat,
-					     Int2      featdef)
-{
-  Boolean featDefFilterArray [FEATDEF_MAX];
-  Boolean seqFeatFilterArray [SEQFEAT_MAX];
-
-  /* Check for valid parameters */
-
-  if (bsp == NULL)
-    return;
-
-  if ((seqfeat == 0) && (featdef == 0))
-    return;
-
-  /* Explore all of the given feature type */
-
-  WatchCursor ();
-  Update ();
-
-  if (featdef != 0)
-    {
-      MemSet ((Pointer) (featDefFilterArray),
-	      (int) FALSE,
-	      sizeof (featDefFilterArray));
-      featDefFilterArray [featdef] = TRUE;
-      
-      SeqMgrExploreFeatures (bsp, NULL, SuppressGeneXref_Callback,
-			     NULL, NULL, featDefFilterArray);
-    }
-  else /* featdef != 0 */
-    {
-      MemSet ((Pointer) (seqFeatFilterArray),
-	      (int) FALSE,
-	      sizeof (seqFeatFilterArray));
-      seqFeatFilterArray [seqfeat] = TRUE;
-      
-      SeqMgrExploreFeatures (bsp, NULL, SuppressGeneXref_Callback,
-			     NULL, seqFeatFilterArray, NULL);
-    }
-}
-
 /*=========================================================================*/
 /*                                                                         */
 /* SuppressError_Callback () --                                            */
@@ -6793,29 +6991,173 @@ static void RestoreCDSGeneRangeError (IteM i)
   return;
 }
 
-/*=========================================================================*/
+/*-------------------------------------------------------------------------*/
 /*                                                                         */
-/* SuppressGenesOnAllRBS () -- Suppress gene xrefs on all RBS features     */
+/* SuppressFeatureGeneXref () -- Suppresses any gene xref on the feature   */
+/*                               that is passed to it.                     */
 /*                                                                         */
-/*=========================================================================*/
+/*-------------------------------------------------------------------------*/
 
-static void DoOneSuppressGeneOnRBS (BioseqPtr bsp, Pointer userdata)
-
+static void SuppressFeatureGeneXref (SeqFeatPtr sfp)
 {
-  /* Suppress the gene xrefs for all RBS features */
+  GeneRefPtr      grp = NULL;
+  SeqFeatXrefPtr  xref;
 
-  SuppressGeneXrefsForFeatureType (bsp, 0, FEATDEF_RBS);
+  if (sfp == NULL)
+  {
+    return;
+  }
+  /* If there is a gene xref, then change it */
+  /* to a suppression gene xref.             */
+
+  grp = SeqMgrGetGeneXref (sfp);
+  if (grp != NULL)
+  {
+    if (SeqMgrGeneIsSuppressed (grp) == FALSE)
+	  {
+	    if (NULL != grp->locus)
+	    {
+	      MemFree(grp->locus);
+        grp->locus = NULL;
+	    }
+	    if (NULL != grp->allele)
+	    {
+	      MemFree(grp->allele);
+	      grp->allele = NULL;
+	    }
+	    if (NULL != grp->desc)
+	    {
+	      MemFree(grp->desc);
+	      grp->desc = NULL;
+	    }
+	    if (NULL != grp->maploc)
+      {
+	      MemFree (grp->maploc);
+	      grp->maploc = NULL;
+      }
+      if (NULL != grp->locus_tag)
+      {
+        MemFree (grp->locus_tag);
+        grp->locus_tag = NULL;
+      }
+      grp->db  = ValNodeFreeData (grp->db);
+      grp->syn = ValNodeFreeData (grp->syn);
+	  }
+	}    
+  /* Otherwise, if there is an overlapping gene, add */
+  /* a suppression xref for it.                      */
+  else if (SeqMgrGetOverlappingGene (sfp->location, NULL) != NULL)
+  {
+    grp = GeneRefNew ();
+    if (grp != NULL) 
+    {
+	    xref = SeqFeatXrefNew ();
+	    xref->data.choice = SEQFEAT_GENE;
+	    xref->data.value.ptrvalue = grp;
+	    xref->next = sfp->xref;
+	    sfp->xref = xref;
+    }
+  }
 }
 
-static void SuppressGenesOnAllRBS (IteM i)
+/*=============================================================================*/
+/*                                                                             */
+/* SuppressGenesOnFeatures () -- Suppress gene xrefs on selected feature types */
+/*                                                                             */
+/*=============================================================================*/
 
+typedef struct suppressgenes
 {
-  BaseFormPtr  bfp;
-  BioseqPtr    bsp;
-  Uint2        entityID;
-  SeqEntryPtr  sep;
+  FORM_MESSAGE_BLOCK
+  DialoG feature_choice_dlg;
+  DialoG constraint_dlg;
+  ButtoN accept_btn;
+  
+} SuppressGenesData, PNTR SuppressGenesPtr;
 
-  /* Get the Bioseq */
+static void SetSuppressGenesAccept (Pointer userdata)
+{
+  SuppressGenesPtr dlg;
+  ValNodePtr       feature_type_list;
+
+  dlg = (SuppressGenesPtr) userdata;
+  if (dlg == NULL)
+  {
+    return;
+  }
+  feature_type_list = DialogToPointer (dlg->feature_choice_dlg);
+  if (feature_type_list == NULL)
+  {
+    Disable (dlg->accept_btn);
+  }
+  else
+  {
+    Enable (dlg->accept_btn);
+  }
+  feature_type_list = ValNodeFree (feature_type_list);
+}
+
+static void SuppressOneGeneOnFeature (SeqFeatPtr sfp, Pointer userdata, FilterSetPtr fsp)
+{
+  SuppressFeatureGeneXref (sfp);  
+}
+
+static void DoSuppressGenesOnFeatures (ButtoN b)
+{
+  SuppressGenesPtr dlg;
+  ValNodePtr       feature_type_list, vnp;
+  FilterSetPtr     fsp;
+  Int2             feat_def_choice;
+  SeqEntryPtr      sep;
+
+  dlg = (SuppressGenesPtr) GetObjectExtra (b);
+  if (dlg == NULL)
+  {
+    return;
+  }
+  
+  sep = GetTopSeqEntryForEntityID (dlg->input_entityID);
+  if (sep == NULL)
+  {
+    return;
+  }
+  
+  feature_type_list = DialogToPointer (dlg->feature_choice_dlg);
+  if (feature_type_list == NULL)
+  {
+    return;
+  }
+  
+  fsp = (FilterSetPtr) DialogToPointer (dlg->constraint_dlg);
+  
+  for (vnp = feature_type_list; vnp != NULL; vnp = vnp->next)
+  {
+    feat_def_choice = vnp->choice;
+    if (feat_def_choice == 255)
+    {
+      feat_def_choice = 0;
+    }
+    OperateOnSeqEntryConstrainedObjects (sep, fsp, 
+                                         SuppressOneGeneOnFeature,
+                                         NULL, 0, feat_def_choice, 0, dlg);
+  }
+  
+  ValNodeFree (feature_type_list);
+  FilterSetFree (fsp);
+  
+  ObjMgrSetDirtyFlag (dlg->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, dlg->input_entityID, 0, 0);
+  Remove (dlg->form);
+  Update ();
+}
+
+static void SuppressGenesOnFeatures (IteM i)
+{
+  BaseFormPtr      bfp;
+  SuppressGenesPtr dlg;
+  WindoW           w;
+  GrouP            h, c;
+  ButtoN           b;
 
 #ifdef WIN_MAC
   bfp = currentFormDataPtr;
@@ -6824,24 +7166,35 @@ static void SuppressGenesOnAllRBS (IteM i)
 #endif
   if (bfp == NULL) return;
 
-  bsp =  GetBioseqGivenIDs (bfp->input_entityID, 1, OBJ_BIOSEQ);
-  sep = SeqMgrGetSeqEntryForData (bsp);
-  entityID = ObjMgrGetEntityIDForChoice (sep);
-  sep = GetTopSeqEntryForEntityID (entityID);
+  dlg = (SuppressGenesPtr) MemNew (sizeof (SuppressGenesData));
+  if (dlg == NULL) return;
+  
+  w = FixedWindow (-50, -33, -10, -10, "Suppress Genes on Features", StdCloseWindowProc);
+  SetObjectExtra (w, dlg, StdCleanupExtraProc);
+  dlg->form = (ForM) w;
+  dlg->input_entityID = bfp->input_entityID;
+  
+  h = HiddenGroup (w, -1, 0, NULL);
+  SetGroupSpacing (h, 10, 10);
 
-  VisitBioseqsInSep (sep, NULL, DoOneSuppressGeneOnRBS);
-
-  /* Force an update and redraw */
-
-  ObjMgrSetDirtyFlag (entityID, TRUE);
-  ObjMgrSendMsg (OM_MSG_UPDATE, entityID, 0, 0);
-  ArrowCursor ();
+  dlg->feature_choice_dlg = FeatureSelectionDialog (h, TRUE, SetSuppressGenesAccept, dlg);
+  dlg->constraint_dlg = FilterGroup (h, TRUE, FALSE, TRUE, FALSE, "Where feature text");
+  
+  c = HiddenGroup (h, 2, 0, NULL);
+  dlg->accept_btn = PushButton (c, "Accept", DoSuppressGenesOnFeatures);
+  SetObjectExtra (dlg->accept_btn, dlg, NULL);
+  b = PushButton (c, "Cancel", StdCancelButtonProc);
+  
+  AlignObjects (ALIGN_CENTER, (HANDLE) dlg->feature_choice_dlg,
+                              (HANDLE) dlg->constraint_dlg,
+                              (HANDLE) c,
+                              NULL);
+  RealizeWindow (w);
+  Show (w);
+  Select (w);
   Update ();
-
-  /* Return successfully */
-
-  return;
 }
+
 
 /*=======================================================================*/
 /*                                                                       */
@@ -7552,6 +7905,7 @@ static void EditMolInfoCallback (SeqEntryPtr sep, Pointer mydata, Int4 index, In
   MolInfoEditPtr  miep;
   MolInfoPtr      mip;
   ValNodePtr      sdp;
+  Uint1           new_mol;
 
   if (mydata == NULL) return;
   if (sep == NULL || sep->data.ptrvalue == NULL) return;
@@ -7572,8 +7926,17 @@ static void EditMolInfoCallback (SeqEntryPtr sep, Pointer mydata, Int4 index, In
       {
         if (GetValue (miep->to.molPopup) != 1)
         {
-          bsp->mol = (Uint1) GetValNodePopup (miep->to.molPopup,
-                                              miep->to.mol_values);
+          new_mol = (Uint1) GetValNodePopup (miep->to.molPopup,
+                                             miep->to.mol_values);
+          if (ISA_na (bsp->mol) && ISA_aa (new_mol))
+          {
+            BioseqConvert (bsp, Seq_code_ncbieaa);
+          }
+          else if (ISA_aa (bsp->mol) && ISA_na (new_mol))
+          {
+            BioseqConvert (bsp, Seq_code_ncbi2na);
+          }
+          bsp->mol = new_mol;                                              
         }
       }
       if ((Uint1)GetValNodePopup (miep->from.strandPopup,
@@ -10360,8 +10723,10 @@ static void AttcBioSourceStrainToXref (BioSourcePtr biop)
   if (onp == NULL) return;
   for (omp = onp->mod; omp != NULL; omp = omp->next) {
     if (omp->subtype == ORGMOD_strain) {
-      if (StringNICmp (omp->subname, "ATCC", 4) == 0) {
-        str = omp->subname + 4;
+      str = StringISearch (omp->subname, "ATCC");
+      if (str != NULL)
+      {
+        str += 4;
         ch = *str;
         while (IS_WHITESP (ch) || ch == ':') {
           str++;
@@ -13755,7 +14120,36 @@ static Boolean AmbiguousCdsMrna (BioseqPtr bsp)
   return FALSE;
 }
 
-static void InstantiateMrnaIntoProt (SeqFeatPtr cds, SeqFeatPtr mrna, Int2Ptr ctrp)
+static SeqIdPtr MakeIdFromLocusTag (SeqFeatPtr mrna)
+
+{
+  Char        buf [64];
+  SeqFeatPtr  gene;
+  GeneRefPtr  grp;
+
+  if (mrna == NULL) return NULL;
+  grp = SeqMgrGetGeneXref (mrna);
+  if (grp != NULL) {
+    if (SeqMgrGeneIsSuppressed (grp)) return NULL;
+  }
+  if (grp == NULL) {
+    gene = SeqMgrGetOverlappingGene (mrna->location, NULL);
+    if (gene != NULL) {
+      grp = (GeneRefPtr) gene->data.value.ptrvalue;
+    }
+  }
+  if (grp != NULL) {
+    if (StringDoesHaveText (grp->locus_tag)) {
+      /* StringCpy (buf, "lcl|"); */
+      StringCpy (buf, "gnl|MTRACK|");
+      StringCat (buf, grp->locus_tag);
+      return MakeSeqID (buf);
+    }
+  }
+  return NULL;
+}
+
+static void InstantiateMrnaIntoProt (SeqFeatPtr cds, SeqFeatPtr mrna, Int2Ptr ctrp, Boolean useLocusTag)
 
 {
   ByteStorePtr  bs;
@@ -13793,7 +14187,14 @@ static void InstantiateMrnaIntoProt (SeqFeatPtr cds, SeqFeatPtr mrna, Int2Ptr ct
   mbsp->length = BSLen (bs);
   BioseqPack (mbsp);
 
-  mbsp->id = MakeNewProteinSeqIdEx (mrna->location, NULL, NULL, ctrp);
+  if (useLocusTag) {
+    mbsp->id = MakeIdFromLocusTag (mrna);
+    if (mbsp->id == NULL) {
+      mbsp->id = MakeNewProteinSeqIdEx (mrna->location, NULL, NULL, ctrp);
+    }
+  } else {
+    mbsp->id = MakeNewProteinSeqIdEx (mrna->location, NULL, NULL, ctrp);
+  }
   CheckSeqLocForPartial (mrna->location, &partial5, &partial3);
   SeqMgrAddToBioseqIndex (mbsp);
 
@@ -13823,7 +14224,7 @@ static void InstantiateMrnaIntoProt (SeqFeatPtr cds, SeqFeatPtr mrna, Int2Ptr ct
   AddSeqEntryToSeqEntry (psep, msep, FALSE);
 }
 
-static void NPStoGPS (IteM i)
+static void NPStoGPS (IteM i, Boolean useLocusTag)
 
 {
   BaseFormPtr        bfp;
@@ -13907,7 +14308,7 @@ static void NPStoGPS (IteM i)
     mrna = SeqMgrGetOverlappingFeature (sfp->location, FEATDEF_mRNA, NULL, 0,
                                         NULL, CHECK_INTERVALS, &mcontext);
     if (mrna != NULL) {
-      InstantiateMrnaIntoProt (sfp, mrna, &ctr);
+      InstantiateMrnaIntoProt (sfp, mrna, &ctr, useLocusTag);
     }
     sfp = SeqMgrGetNextFeature (bsp, sfp, SEQFEAT_CDREGION, 0, &fcontext);
   }
@@ -13955,6 +14356,18 @@ static void NPStoGPS (IteM i)
   ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
   ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
   Update ();
+}
+
+static void NPStoGPSLocusTag (IteM i)
+
+{
+  NPStoGPS (i, TRUE);
+}
+
+static void NPStoGPSArbitrary (IteM i)
+
+{
+  NPStoGPS (i, FALSE);
 }
 
 static void MakePhrap (IteM i)
@@ -15752,7 +16165,7 @@ extern void SetupSpecialMenu (MenU m, BaseFormPtr bfp)
     SetObjectExtra (i, bfp, NULL);
     SeparatorItem (s);
   }
-  i = CommandItem (s, "Suppress Genes On All RBS", SuppressGenesOnAllRBS);
+  i = CommandItem (s, "Suppress Genes On Features", SuppressGenesOnFeatures);
   SetObjectExtra (i, bfp, NULL);
   i = CommandItem (s, "Suppress CDSGeneRange Error", SuppressCDSGeneRangeError);
   SetObjectExtra (i, bfp, NULL);
@@ -15823,6 +16236,8 @@ extern void SetupSpecialMenu (MenU m, BaseFormPtr bfp)
   i = CommandItem (x, "Ignore Stop Codon", RetranslateCdRegionsDoStop);
   SetObjectExtra (i, bfp, NULL);
   i = CommandItem (x, "Ignore Stop Codon Except at End of Complete CDS", RetranslateCdRegionsNoStopExceptEndCompleteCDS);
+  SetObjectExtra (i, bfp, NULL);
+  i = CommandItem (s, "Adjust CDS Locations for Gaps", AdjustCDSLocationsForGaps);
   SetObjectExtra (i, bfp, NULL);
   i = CommandItem (s, "Retranscribe mRNA Products", ReprocessmRNAProducts);
   SetObjectExtra (i, bfp, NULL);
@@ -15931,7 +16346,10 @@ extern void SetupSpecialMenu (MenU m, BaseFormPtr bfp)
     i = CommandItem (s, "Add mRNA Titles to GenProdSet", MrnaTitlesToGPS);
     SetObjectExtra (i, bfp, NULL);
     SeparatorItem (s);
-    i = CommandItem (s, "Promote NucProtSet to GenProdSet", NPStoGPS);
+    x = SubMenu (s, "Promote NucProtSet to GenProdSet");
+    i = CommandItem (x, "Locus Tag ID", NPStoGPSLocusTag);
+    SetObjectExtra (i, bfp, NULL);
+    i = CommandItem (x, "Arbitrary ID", NPStoGPSArbitrary);
     SetObjectExtra (i, bfp, NULL);
   }
 
@@ -15952,14 +16370,7 @@ extern void SetupSpecialMenu (MenU m, BaseFormPtr bfp)
   i = CommandItem (s, "Gene Xrefs from Features", GeneToXref);
   SetObjectExtra (i, bfp, NULL);
   SeparatorItem (s);
-  x = SubMenu (s, "Gene Features From");
-  i = CommandItem (x, "CDS", CdsToGene);
-  SetObjectExtra (i, bfp, NULL);
-  i = CommandItem (x, "tRNA", tRNAtoGene);
-  SetObjectExtra (i, bfp, NULL);
-  i = CommandItem (x, "rRNA", rRNAtoGene);
-  SetObjectExtra (i, bfp, NULL);
-  i = CommandItem (x, "miscRNA", MiscRNAtoGene);
+  i  = CommandItem (s, "Gene Features From Other Features", FeatureToGene);
   SetObjectExtra (i, bfp, NULL);
   i = CommandItem (s, "CDS Features from Gene", GeneToCds);
   SetObjectExtra (i, bfp, NULL);
@@ -15986,6 +16397,8 @@ extern void SetupSpecialMenu (MenU m, BaseFormPtr bfp)
     i = CommandItem (s, "Connect CDS to Closest Protein", ReconnectCDSProduct);
     SetObjectExtra (i, bfp, NULL);
     i = CommandItem (s, "Merge Multiple CDS Into One", MergeCDS);
+    SetObjectExtra (i, bfp, NULL);
+    i = CommandItem (s, "Convert CDS to mat_peptide", CombineMultipleCDS);
     SetObjectExtra (i, bfp, NULL);
     SeparatorItem (s);
     i = CommandItem (s, "Reload Publications", LookupAllPubs);

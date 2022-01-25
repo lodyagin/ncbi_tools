@@ -1,6 +1,6 @@
 #!/bin/csh -f
 #
-# $Id: makedis.csh,v 1.108 2005/04/05 18:21:45 ucko Exp $
+# $Id: makedis.csh,v 1.110 2005/05/13 03:41:52 beloslyu Exp $
 #
 ##                            PUBLIC DOMAIN NOTICE                          
 #               National Center for Biotechnology Information
@@ -165,6 +165,11 @@ case GNU/Linux:
 		breaksw
 	case "i?86":
 		set platform=linux-x86
+		if ("$?LINUX_MODE" == 1) then
+			if ("$LINUX_MODE" == "icc") then
+				set platform=linux_icc
+			endif
+		endif
 		breaksw
 	case "alpha":
 		set platform=linux-alpha
@@ -513,6 +518,6 @@ cat << EoF
 Your platform is not supported.
 To port ncbi toolkit to your platform consult
 the files ./ncbi/platform/*.ncbi.mk
-The NCBI toolkit FAQ at ftp://ncbi.nlm.nih.gov/toolbox/FAQ.html may be useful.
+The NCBI toolkit FAQ at ftp://ftp.ncbi.nih.gov/toolbox/FAQ.html may be useful.
 EoF
 exit 0

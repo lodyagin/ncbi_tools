@@ -1,4 +1,4 @@
-/*  $Id: ncbi_dispd.c,v 6.65 2005/04/25 18:46:13 lavr Exp $
+/*  $Id: ncbi_dispd.c,v 6.67 2005/05/04 16:14:22 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -37,6 +37,7 @@
 #include "ncbi_priv.h"
 #include <connect/ncbi_connection.h>
 #include <connect/ncbi_http_connector.h>
+#include <connect/ncbi_service_misc.h>
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -73,7 +74,7 @@ extern "C" {
 #endif /*__cplusplus*/
 
 
-static int s_RandomSeed = 0;
+int g_NCBIConnectRandomSeed = 0;
 
 
 typedef struct {
@@ -449,9 +450,9 @@ const SSERV_VTable* SERV_DISPD_Open(SERV_ITER iter,
 
     if (!(data = (SDISPD_Data*) calloc(1, sizeof(*data))))
         return 0;
-    if (!s_RandomSeed) {
-        s_RandomSeed = (int) time(0) + (int) SOCK_gethostbyname(0);
-        srand(s_RandomSeed);
+    if (g_NCBI_ConnectRandomSeed == 0) {
+        g_NCBI_ConnectRandomSeed = (int) time(0) ^ NCBI_CONNECT_SRAND_ADDENT;
+        srand(g_NCBI_ConnectRandomSeed);
     }
     data->net_info = ConnNetInfo_Clone(net_info); /*called with non-NULL*/
     if (iter->types & fSERV_StatelessOnly)
@@ -475,7 +476,7 @@ const SSERV_VTable* SERV_DISPD_Open(SERV_ITER iter,
 }
 
 
-void DISP_SetMessageHook(FDISP_MessageHook hook)
+extern void DISP_SetMessageHook(FDISP_MessageHook hook)
 {
     if (hook) {
         if (hook != s_MessageHook)
@@ -489,6 +490,12 @@ void DISP_SetMessageHook(FDISP_MessageHook hook)
 /*
  * --------------------------------------------------------------------------
  * $Log: ncbi_dispd.c,v $
+ * Revision 6.67  2005/05/04 16:14:22  lavr
+ * +<connect/ncbi_service_misc.h>
+ *
+ * Revision 6.66  2005/05/02 16:04:09  lavr
+ * Use global random seed
+ *
  * Revision 6.65  2005/04/25 18:46:13  lavr
  * Made parallel with ncbi_lbsmd.c
  *

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/30/95
 *
-* $Revision: 6.59 $
+* $Revision: 6.60 $
 *
 * File Description: 
 *
@@ -108,6 +108,7 @@ typedef struct bioseqviewdata {
   SeqAlignPtr     salp;
   Boolean         DrawGrid, seqAlignMode;
   SeqPanLinePtr   PNTR SeqPanLines;
+  SelStructPtr    sel_list;
   ValNodePtr      Selection;
   Boolean         frames[6]; /* indicates which frames should be displayed */
   Boolean         ShowComplement;

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.16 $
+* $Revision: 6.18 $
 *
 * File Description: 
 *
@@ -40,6 +40,13 @@
 *
 *
 * $Log: vibforms.c,v $
+* Revision 6.18  2005/05/12 15:25:34  bollin
+* added callbacks to the TagListDialog, so that when a value is changed, the
+* callback for the column in which the value is changed will be called.
+*
+* Revision 6.17  2005/05/05 16:01:34  bollin
+* added ReplaceTagListColumn function
+*
 * Revision 6.16  2005/04/05 13:09:32  bollin
 * avoid SetEnumPopup error when resetting a TagList with a Popup control for
 * which the alist has no 0 value.
@@ -1497,6 +1504,22 @@ static CharPtr ReplaceColumn (CharPtr source, CharPtr str, Int2 col)
   return tmp;
 }
 
+extern Nlm_CharPtr ReplaceTagListColumn (CharPtr source, CharPtr new_value, Int2 col)
+{
+  if (source == NULL || col < 0)
+  {
+    return source;
+  }
+  if (new_value == NULL)
+  {
+    return ReplaceColumn (source, "", col);
+  }
+  else
+  {
+    return ReplaceColumn (source, new_value, col);
+  }
+}
+
 extern CharPtr ExtractTagListColumn (CharPtr source, Int2 col)
 
 {
@@ -1692,6 +1715,10 @@ static void PopupTagProc (PopuP p)
               ptr = ReplaceColumn ((CharPtr)vnp->data.ptrvalue, str, j);
               vnp->data.ptrvalue = MemFree (vnp->data.ptrvalue);
               vnp->data.ptrvalue = ptr;
+              if (tlp->callbacks != NULL && tlp->callbacks [j] != NULL)
+              {
+                (tlp->callbacks [j])(tlp->callback_data);
+              }
             }
           }
         }
@@ -1726,6 +1753,10 @@ static void ListTagProc (LisT l)
               ptr = ReplaceColumn ((CharPtr)vnp->data.ptrvalue, str, j);
               vnp->data.ptrvalue = MemFree (vnp->data.ptrvalue);
               vnp->data.ptrvalue = ptr;
+              if (tlp->callbacks != NULL && tlp->callbacks [j] != NULL)
+              {
+                (tlp->callbacks [j])(tlp->callback_data);
+              }
             }
           }
         }
@@ -1759,6 +1790,10 @@ static void TextTagProc (TexT t)
             vnp->data.ptrvalue = MemFree (vnp->data.ptrvalue);
             vnp->data.ptrvalue = ptr;
             MemFree (str);
+            if (tlp->callbacks != NULL && tlp->callbacks [j] != NULL)
+            {
+              (tlp->callbacks [j]) (tlp->callback_data);
+            }
           }
         }
       }
@@ -1878,6 +1913,10 @@ static void TagRtnProc (TexT t)
               SendMessageToDialog (tlp->dialog, VIB_MSG_REDRAW);
               Update ();
               CheckExtendTag (tlp);
+              if (tlp->callbacks != NULL && tlp->callbacks [j] != NULL)
+              {
+                (tlp->callbacks [j]) (tlp->callback_data);
+              }
             }
           }
           return;
@@ -1987,11 +2026,12 @@ extern DialoG CreateTagListDialogEx (GrouP h, Uint2 rows, Uint2 cols,
                                      Boolean useBar, Boolean noExtend,
                                      ToDialogFunc tofunc, FromDialogFunc fromfunc);
 
-extern DialoG CreateTagListDialogEx (GrouP h, Uint2 rows, Uint2 cols,
-                                     Int2 spacing, Uint2Ptr types,
-                                     Uint2Ptr textWidths, EnumFieldAssocPtr PNTR alists,
-                                     Boolean useBar, Boolean noExtend,
-                                     ToDialogFunc tofunc, FromDialogFunc fromfunc)
+extern DialoG CreateTagListDialogExEx (GrouP h, Uint2 rows, Uint2 cols,
+                                       Int2 spacing, Uint2Ptr types,
+                                       Uint2Ptr textWidths, Nlm_EnumFieldAssocPtr PNTR alists,
+                                       Boolean useBar, Boolean noExtend,
+                                       Nlm_ToDialogFunc tofunc, Nlm_FromDialogFunc fromfunc,
+                                       TaglistCallback PNTR callbacks, Pointer callback_data)
 
 {
   EnumFieldAssocPtr  al;
@@ -2030,6 +2070,10 @@ extern DialoG CreateTagListDialogEx (GrouP h, Uint2 rows, Uint2 cols,
     }
     tlp->alists = alists;
     tlp->noExtend = noExtend;
+    
+    /* add callbacks */
+    tlp->callbacks = callbacks;
+    tlp->callback_data = callback_data;
 
     s = HiddenGroup (p, 2, 0, NULL);
 
@@ -2110,6 +2154,17 @@ extern DialoG CreateTagListDialogEx (GrouP h, Uint2 rows, Uint2 cols,
 
   return (DialoG) p;
 }
+
+extern DialoG CreateTagListDialogEx (GrouP h, Uint2 rows, Uint2 cols,
+                                     Int2 spacing, Uint2Ptr types,
+                                     Uint2Ptr textWidths, EnumFieldAssocPtr PNTR alists,
+                                     Boolean useBar, Boolean noExtend,
+                                     ToDialogFunc tofunc, FromDialogFunc fromfunc)
+{
+  return CreateTagListDialogExEx (h, rows, cols, spacing, types, textWidths, alists,
+                                  useBar, noExtend, tofunc, fromfunc, NULL, NULL);
+}
+
 
 extern DialoG CreateTagListDialog (GrouP h, Uint2 rows, Uint2 cols, Int2 spacing,
                                    Uint2Ptr types, Uint2Ptr textWidths,

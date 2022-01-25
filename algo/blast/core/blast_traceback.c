@@ -1,4 +1,4 @@
-/* $Id: blast_traceback.c,v 1.167 2005/04/27 21:11:35 dondosha Exp $
+/* $Id: blast_traceback.c,v 1.173 2005/05/23 16:17:51 dondosha Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -51,11 +51,12 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_traceback.c,v 1.167 2005/04/27 21:11:35 dondosha Exp $";
+    "$Id: blast_traceback.c,v 1.173 2005/05/23 16:17:51 dondosha Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_traceback.h>
 #include <algo/blast/core/blast_util.h>
+#include <algo/blast/core/blast_encoding.h>
 #include <algo/blast/core/link_hsps.h>
 #include <algo/blast/core/blast_setup.h>
 #include <algo/blast/core/blast_kappa.h>
@@ -203,7 +204,7 @@ s_BlastHSPListRPSUpdate(EBlastProgramType program, BlastHSPList *hsplist)
    BlastSeg tmp;
 
    /* If this is not an RPS BLAST search, do not do anything. */
-   if (program != eBlastTypeRpsBlast && program != eBlastTypeRpsTblastn)
+   if ( !Blast_ProgramIsRpsBlast(program))
       return;
 
    hsp = hsplist->hsp_array;
@@ -269,9 +270,8 @@ s_HSPListPostTracebackUpdate(EBlastProgramType program_number,
        * computations. 
        */
       double scale_factor = 
-         (program_number == eBlastTypeRpsBlast || 
-          program_number == eBlastTypeRpsTblastn) ? 
-         score_params->scale_factor : 1.0;
+         (Blast_ProgramIsRpsBlast(program_number) ?
+         score_params->scale_factor : 1.0);
       Blast_HSPListGetEvalues(query_info, hsp_list, kGapped, sbp, 0,
                               scale_factor);
    }
@@ -313,7 +313,6 @@ Blast_TracebackFromHSPList(EBlastProgramType program_number,
    Int4 q_start, s_start;
    BlastHitSavingOptions* hit_options = hit_params->options;
    BlastScoringOptions* score_options = score_params->options;
-   Int4 context_offset;
    Uint1* translation_buffer = NULL;
    Int4 * frame_offsets   = NULL;
    Int4 * frame_offsets_a = NULL;
@@ -360,8 +359,7 @@ Blast_TracebackFromHSPList(EBlastProgramType program_number,
       subject_length = subject_blk->length;
    }
 
-   if (program_number == eBlastTypeRpsBlast || 
-       program_number == eBlastTypeRpsTblastn) {
+   if (Blast_ProgramIsRpsBlast(program_number)) {
       /* Create a local BlastQueryInfo structure for this subject sequence
 	 that has been switched with the query. */
       query_info = BlastMemDup(query_info_in, sizeof(BlastQueryInfo));
@@ -386,20 +384,13 @@ Blast_TracebackFromHSPList(EBlastProgramType program_number,
 
    for (index=0; index < hsp_list->hspcnt; index++) {
       hsp = hsp_array[index];
-      if (program_number == eBlastTypeBlastx || 
-          program_number == eBlastTypeTblastx) {
-         Int4 context = hsp->context - hsp->context % 3;
-         context_offset = query_info->contexts[context].query_offset;
+      if (program_number == eBlastTypeBlastx && kIsOutOfFrame) {
+          Int4 context = hsp->context - hsp->context % 3;
+          Int4 context_offset = query_info->contexts[hsp->context].query_offset;
          
-         if (kIsOutOfFrame) {
-            query = query_blk->oof_sequence + CODON_LENGTH + context_offset;
-            query_length = query_info->contexts[context+2].query_offset +
-                query_info->contexts[context+2].query_length - context_offset;
-         } else {
-            query = query_blk->sequence + 
-               query_info->contexts[hsp->context].query_offset;
-            query_length = query_info->contexts[hsp->context].query_length;
-         }
+          query = query_blk->oof_sequence + CODON_LENGTH + context_offset;
+          query_length = query_info->contexts[context+2].query_offset +
+              query_info->contexts[context+2].query_length - context_offset;
       } else {
           query = query_blk->sequence + 
               query_info->contexts[hsp->context].query_offset;
@@ -542,9 +533,7 @@ Blast_TracebackFromHSPList(EBlastProgramType program_number,
    
    /* Remove any HSPs that share a starting or ending diagonal
       with a higher-scoring HSP. */
-   hsp_list->hspcnt = 
-       Blast_CheckHSPsForCommonEndpoints(hsp_list->hsp_array, 
-                                         hsp_list->hspcnt);
+   Blast_HSPListPurgeHSPsWithCommonEndpoints(program_number, hsp_list);
 
    /* Sort HSPs by score again, as the scores might have changed. */
    Blast_HSPListSortByScore(hsp_list);
@@ -613,8 +602,7 @@ s_PHITracebackFromHSPList(EBlastProgramType program_number,
    Int4 q_start, s_start;
    SPHIQueryInfo* pattern_info = NULL;
    
-   if (program_number != eBlastTypePhiBlastn &&
-       program_number != eBlastTypePhiBlastp)
+   if ( !Blast_ProgramIsPhiBlast(program_number))
        return -1;
    
    ASSERT(hsp_list && query_blk && subject_blk && gap_align && sbp &&
@@ -675,14 +663,14 @@ s_PHITracebackFromHSPList(EBlastProgramType program_number,
    return 0;
 }
 
-Uint1 Blast_TracebackGetEncoding(EBlastProgramType program_number) 
+EBlastEncoding Blast_TracebackGetEncoding(EBlastProgramType program_number) 
 {
-   Uint1 encoding;
+   EBlastEncoding retval = eBlastEncodingError;
 
    switch (program_number) {
    case eBlastTypeBlastn:
    case eBlastTypePhiBlastn:
-      encoding = BLASTNA_ENCODING;
+      retval = eBlastEncodingNucleotide;
       break;
    case eBlastTypeBlastp:
    case eBlastTypeRpsBlast:
@@ -690,17 +678,17 @@ Uint1 Blast_TracebackGetEncoding(EBlastProgramType program_number)
    case eBlastTypeRpsTblastn:
    case eBlastTypePsiBlast:
    case eBlastTypePhiBlastp:
-      encoding = BLASTP_ENCODING;
+      retval = eBlastEncodingProtein;
       break;
    case eBlastTypeTblastn:
    case eBlastTypeTblastx:
-      encoding = NCBI4NA_ENCODING;
+      retval = eBlastEncodingNcbi4na;
       break;
    default:
-      encoding = ERROR_ENCODING;
+      retval = eBlastEncodingError;
       break;
    }
-   return encoding;
+   return retval;
 }
 
 /** Delete extra subject sequences hits, if after-traceback hit list size is
@@ -854,7 +842,7 @@ Int2 s_RPSComputeTraceback(EBlastProgramType program_number,
    BlastScoreBlk* sbp;
    Int4 **rpsblast_pssms = NULL;
    Int4 db_seq_start;
-   Uint1 encoding;
+   EBlastEncoding encoding;
    BlastSeqSrcGetSeqArg seq_arg;
    BlastQueryInfo* one_query_info = NULL;
    BLAST_SequenceBlk* one_query = NULL;
@@ -1015,8 +1003,7 @@ BLAST_ComputeTraceback(EBlastProgramType program_number,
 
    results = Blast_HSPResultsNew(query_info->num_queries);
 
-   if (program_number == eBlastTypeRpsBlast ||
-       program_number == eBlastTypeRpsTblastn) {
+   if (Blast_ProgramIsRpsBlast(program_number)) {
        status = 
            s_RPSComputeTraceback(program_number, hsp_stream, seq_src, query, 
                                  query_info, gap_align, score_params, ext_params,
@@ -1033,12 +1020,11 @@ BLAST_ComputeTraceback(EBlastProgramType program_number,
                                   psi_options, results); 
    } else {
       BlastSeqSrcGetSeqArg seq_arg;
-      Uint1 encoding = Blast_TracebackGetEncoding(program_number);
+      EBlastEncoding encoding = Blast_TracebackGetEncoding(program_number);
       Boolean perform_traceback = 
          (score_params->options->gapped_calculation && 
           (ext_params->options->ePrelimGapExt != eGreedyWithTracebackExt));
-      const Boolean kPhiBlast = (program_number == eBlastTypePhiBlastn ||
-                                 program_number == eBlastTypePhiBlastp);
+      const Boolean kPhiBlast = Blast_ProgramIsPhiBlast(program_number);
 
       memset((void*) &seq_arg, 0, sizeof(seq_arg));
 
@@ -1112,9 +1098,7 @@ BLAST_ComputeTraceback(EBlastProgramType program_number,
 
    /* Eliminate extra hits from results, if preliminary hit list size is larger
       than the final hit list size */
-   if (hit_params->options->hitlist_size < 
-       hit_params->options->prelim_hitlist_size)
-      s_BlastPruneExtraHits(results, hit_params->options->hitlist_size);
+    s_BlastPruneExtraHits(results, hit_params->options->hitlist_size);
 
    *results_out = results;
 

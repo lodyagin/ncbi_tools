@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.75 $
+* $Revision: 6.77 $
 *
 * File Description: 
 *
@@ -2797,18 +2797,27 @@ static void CdRgnFormAcceptButtonProc (ButtoN b)
   WindoW         w;
   SeqLocPtr      prod_slp;
   Boolean        delete_old_product = FALSE;
+  ValNodePtr     err_list = NULL;
+  SeqEntryPtr    oldscope;
 
   if (b != NULL) {
     w = ParentWindow (b);
     cfp = (CdRgnFormPtr) GetObjectExtra (b);
     if (cfp != NULL && cfp->form != NULL && cfp->actproc != NULL) {
+      sep = GetTopSeqEntryForEntityID (cfp->input_entityID);
+      oldscope = SeqEntrySetScope (sep);
       if (! cfp->locvisited) {
         ErrPostEx (SEV_ERROR, 0, 0, "%s", noLocMessage);
+        SeqEntrySetScope (oldscope);
         return;
       }
       slp = DialogToPointer (cfp->location);
       if (slp == NULL) {
         ErrPostEx (SEV_ERROR, 0, 0, "%s", noLocMessage);
+        err_list = TestDialog (cfp->location);
+        DisplayErrorMessages ("Location Errors", err_list);
+        err_list = ValNodeFree (err_list);
+        SeqEntrySetScope (oldscope);
         return;
       }
 
@@ -2853,6 +2862,7 @@ static void CdRgnFormAcceptButtonProc (ButtoN b)
         ObjMgrSendMsg (OM_MSG_UPDATE, cfp->input_entityID,
                        cfp->input_itemID, cfp->input_itemtype);
         ObjMgrDeSelect (0, 0, 0, 0, NULL);
+        SeqEntrySetScope (oldscope);
         Update ();
         Remove (w);
         return;
@@ -2915,6 +2925,7 @@ static void CdRgnFormAcceptButtonProc (ButtoN b)
           if (ans != ANS_OK)
           {
             SeqLocFree (slp);
+            SeqEntrySetScope (oldscope);
             return;
           }
         }
@@ -2924,6 +2935,7 @@ static void CdRgnFormAcceptButtonProc (ButtoN b)
           {
             SeqLocFree (slp);
             BioseqFree (bsp);
+            SeqEntrySetScope (oldscope);
             return;
           }
         }
@@ -2952,6 +2964,7 @@ static void CdRgnFormAcceptButtonProc (ButtoN b)
       }
       
       (cfp->actproc) (cfp->form);
+      SeqEntrySetScope (oldscope);
     }
     SeqLocFree (slp);
     if (delete_old_product)
@@ -3282,7 +3295,7 @@ extern void CdRgnFeatFormActnProc (ForM f)
   SeqLocPtr     slp;
   BioseqPtr     target = NULL;
   PartialTrio   trio;
-  ValNodePtr    vnp;
+  ValNodePtr    vnp, err_list;
 
   cfp = (CdRgnFormPtr) GetObjectExtra (f);
   sep = NULL;
@@ -3294,6 +3307,9 @@ extern void CdRgnFeatFormActnProc (ForM f)
     slp = DialogToPointer (cfp->location);
     if (slp == NULL) {
       ErrPostEx (SEV_ERROR, 0, 0, "Feature must have a location!");
+      err_list = TestDialog (cfp->location);
+      DisplayErrorMessages ("Location Errors", err_list);
+      err_list = ValNodeFree (err_list);    
       return;
     }
 	/** this was causing a coredump ***

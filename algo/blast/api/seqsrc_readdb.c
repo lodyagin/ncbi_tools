@@ -1,4 +1,4 @@
-/*  $Id: seqsrc_readdb.c,v 1.49 2005/04/21 15:00:36 dondosha Exp $
+/*  $Id: seqsrc_readdb.c,v 1.50 2005/05/10 16:07:59 camacho Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -28,7 +28,7 @@
  * Implementation of the BlastSeqSrc interface using readdb
  */
 
-static char const rcsid[] = "$Id: seqsrc_readdb.c,v 1.49 2005/04/21 15:00:36 dondosha Exp $";
+static char const rcsid[] = "$Id: seqsrc_readdb.c,v 1.50 2005/05/10 16:07:59 camacho Exp $";
 
 #include <algo/blast/api/seqsrc_readdb.h>
 #include <algo/blast/core/blast_seqsrc_impl.h>
@@ -134,7 +134,8 @@ s_ReaddbGetSequence(void* readdb_handle, void* args)
     ReadDBFILEPtr rdfp = (ReadDBFILEPtr) readdb_handle;
     BlastSeqSrcGetSeqArg* readdb_args = (BlastSeqSrcGetSeqArg*) args;
     Int4 oid = -1, len = 0, buflen = 0;
-    Uint1 *buf = NULL, encoding;
+    Uint1 *buf = NULL;
+    EBlastEncoding encoding = eBlastEncodingError;
     Boolean has_sentinel_byte;
     Boolean buffer_allocated;
 
@@ -143,9 +144,9 @@ s_ReaddbGetSequence(void* readdb_handle, void* args)
 
     oid = readdb_args->oid;
     encoding = readdb_args->encoding;
-    has_sentinel_byte = (encoding == BLASTNA_ENCODING);
+    has_sentinel_byte = (encoding == eBlastEncodingNucleotide);
     buffer_allocated = 
-       (encoding == BLASTNA_ENCODING || encoding == NCBI4NA_ENCODING);
+       (encoding == eBlastEncodingNucleotide || encoding == eBlastEncodingNcbi4na);
 
     /* free buffers if necessary */
     if (readdb_args->seq)

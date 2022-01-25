@@ -29,13 +29,17 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.175 $
+* $Revision: 6.176 $
 *
 * File Description:  Sequence Utilities for objseq and objsset
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: sequtil.c,v $
+* Revision 6.176  2005/05/18 20:33:45  bollin
+* changed BSConvertSeq to handle transitions from nucleotide to protein and
+* protein to nucleotide
+*
 * Revision 6.175  2005/04/28 19:24:45  kans
 * DR prefix moved from STS to EST
 *
@@ -1491,6 +1495,38 @@ NLM_EXTERN ByteStorePtr BSPack (ByteStorePtr from, Uint1 oldcode,
     return BSConvertSeq(from, newcode, oldcode, length);
 }
 
+static Boolean IsNASeqCode (Uint1 seqcode)
+{
+  if (seqcode == Seq_code_iupacna
+      || seqcode == Seq_code_ncbi2na
+      || seqcode == Seq_code_ncbi4na
+      || seqcode == Seq_code_ncbi8na
+      || seqcode == Seq_code_ncbipna)
+  {
+    return TRUE;
+  }
+  else
+  {
+    return FALSE;
+  }
+}
+
+static Boolean IsAASeqCode (Uint1 seqcode)
+{
+  if (seqcode == Seq_code_iupacaa
+      || seqcode == Seq_code_ncbi8aa
+      || seqcode == Seq_code_ncbieaa
+      || seqcode == Seq_code_ncbipaa
+      || seqcode == Seq_code_iupacaa3
+      || seqcode == Seq_code_ncbistdaa)
+  {
+    return TRUE;
+  }
+  else
+  {
+    return FALSE;
+  }
+}
 
 /*****************************************************************************
 *
@@ -1519,6 +1555,22 @@ NLM_EXTERN ByteStorePtr BSConvertSeq (ByteStorePtr from, Uint1 newcode,
   
   if (oldcode == newcode)
     return from;
+  
+  /* if we are converting from a protein to a nucleotide or vice versa, 
+   * need this intermediate step.
+   */
+  if (IsAASeqCode (oldcode) && IsNASeqCode (newcode))
+  {
+    from = BSConvertSeq (from, Seq_code_iupacaa, oldcode, len);
+    oldcode = Seq_code_iupacna;    
+  }
+  else if (IsNASeqCode (oldcode) && IsAASeqCode (newcode))
+  {
+    from = BSConvertSeq (from, Seq_code_iupacna, oldcode, len);
+    oldcode = Seq_code_iupacaa;    
+  }
+  if (oldcode == newcode)
+    return from;  
   
   if ((smtp = SeqMapTableFind(newcode, oldcode)) == NULL)
     return NULL;
@@ -5953,6 +6005,10 @@ NLM_EXTERN Uint1 SeqLocCheck (SeqLocPtr slp)
 	tmp = NULL;
 	while ((tmp = SeqLocFindNext(slp, tmp)) != NULL)
 	{
+	  if (tmp->choice == SEQLOC_NULL)
+	  {
+	    continue;
+	  }
 		thisstrand = SeqLocStrand(tmp);
 		if (! first)
 		{
@@ -5961,8 +6017,8 @@ NLM_EXTERN Uint1 SeqLocCheck (SeqLocPtr slp)
 				ErrPostEx(SEV_WARNING,0,0,"Mixed strand location");
 				retval = SEQLOCCHECK_WARNING;
 			}
-			first = FALSE;
 		}
+		first = FALSE;
 		laststrand = thisstrand;
 
 		switch (tmp->choice)

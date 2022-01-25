@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: rpsblast.c,v 6.67 2005/04/27 14:55:09 papadopo Exp $";
+static char const rcsid[] = "$Id: rpsblast.c,v 6.70 2005/06/02 20:43:38 dondosha Exp $";
 
-/* $Id: rpsblast.c,v 6.67 2005/04/27 14:55:09 papadopo Exp $
+/* $Id: rpsblast.c,v 6.70 2005/06/02 20:43:38 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -31,12 +31,23 @@ static char const rcsid[] = "$Id: rpsblast.c,v 6.67 2005/04/27 14:55:09 papadopo
 *
 * Initial Version Creation Date: 12/14/1999
 *
-* $Revision: 6.67 $
+* $Revision: 6.70 $
 *
 * File Description:
 *         Main file for RPS BLAST program
 *
 * $Log: rpsblast.c,v $
+* Revision 6.70  2005/06/02 20:43:38  dondosha
+* 1. Added loop over concatenated query sets;
+* 2. Removed unused variables and other clean-up;
+* 3. Use BlastFormattingInfo structure for formatting.
+*
+* Revision 6.69  2005/05/20 18:57:51  camacho
+* Update to use new signature to BLAST_FillLookupTableOptions
+*
+* Revision 6.68  2005/05/02 17:00:28  coulouri
+* change default to new engine
+*
 * Revision 6.67  2005/04/27 14:55:09  papadopo
 * change signature of BlastFillHitSavingOptions
 *
@@ -260,7 +271,7 @@ static char const rcsid[] = "$Id: rpsblast.c,v 6.67 2005/04/27 14:55:09 papadopo
 #include <algo/blast/api/blast_api.h>
 #include <algo/blast/api/blast_seq.h>
 
-#if PURIFY
+#ifdef PURIFY
 #include "/am/purew/solaris2/new/../purify/purify-4.5-solaris2/purify.h"
 #endif
 
@@ -378,8 +389,8 @@ static Args myargs[] = {
       "      0 in 'stop' refers to the end of the sequence",
       "0,0", NULL, NULL, TRUE, 'L', ARG_STRING, 0.0, 0, NULL},
     /* OPT_FORCE_OLD_ENGINE */
-    { "Force use of the original BLAST engine",
-      "T", NULL, NULL, TRUE, 'V', ARG_BOOLEAN, 0.0, 0, NULL},
+    { "Force use of the legacy BLAST engine",
+      "F", NULL, NULL, TRUE, 'V', ARG_BOOLEAN, 0.0, 0, NULL},
 };
 
 
@@ -389,7 +400,7 @@ static Args myargs[] = {
    in blast_driver.c; unneeded setup is removed */
 
 static Int2 
-BLAST_FillOptions(SBlastOptions* options)
+s_FillOptions(SBlastOptions* options)
 {
    Int2 status;
    EBlastProgramType program_number = options->program;
@@ -406,8 +417,7 @@ BLAST_FillOptions(SBlastOptions* options)
                                 FALSE, /* megablast */
                                 0,     /* default threshold */
                                 0,     /* default wordsize */
-                                FALSE, /* no variable wordsize */
-                                FALSE);/* no PSSM (i.e. not psiblast) */
+                                FALSE);/* no variable wordsize */
 
    BLAST_FillQuerySetUpOptions(query_setup_options, program_number, 
                               myargs[OPT_FILTER].strvalue, 0);
@@ -485,32 +495,24 @@ Int2 Main_New(void)
 {
    Int2 status;
    Boolean query_is_na;
-   LookupTableOptions* lookup_options;
    char* blast_program = NULL;
    EBlastProgramType program_number;
-   BlastInitialWordOptions* word_options;
-   BlastScoringOptions* score_options;
-   BlastExtensionOptions* ext_options;
-   BlastHitSavingOptions* hit_options;
    char* dbname = NULL;
    FILE *infp;
    Int2 ctr = 1;
    Int4 letters_read;
    Int4 query_from = 0, query_to = 0;
    SBlastOptions* options = NULL;
-   QuerySetUpOptions* query_options=NULL;	
-   BlastEffectiveLengthsOptions* eff_len_options=NULL;
    SeqLoc* query_slp = NULL;
    SeqAlign* seqalign = NULL;
-   BlastFormattingOptions* format_options;
-   PSIBlastOptions* psi_options = NULL;
-   BlastDatabaseOptions* db_options = NULL;
+   BlastFormattingInfo* format_info = NULL;
    Blast_SummaryReturn* sum_returns=Blast_SummaryReturnNew();
-   Boolean believe_defline = FALSE;
    Int4 num_queries = 0;
    SeqLoc* lcase_mask = NULL;
    SeqLoc* filter_loc = NULL;
    Boolean mask_at_hash;
+   const int kMaxConcatLength = 40000;
+   Blast_SummaryReturn* full_sum_returns = NULL;
 
    /* select protein or nucleotide query, and choose
       the appropriate program type */
@@ -537,31 +539,8 @@ Int2 Main_New(void)
 
    dbname = myargs[OPT_DB].strvalue;
 
-   BLAST_FillOptions(options);
+   s_FillOptions(options);
    program_number = options->program;
-
-   if ((status = BlastFormattingOptionsNew(program_number, 
-                       myargs[OPT_OUTPUT_FILE].strvalue, 
-                       myargs[OPT_NUM_DESC].intvalue, 
-                       myargs[OPT_NUM_RESULTS].intvalue, 
-                       myargs[OPT_FORMAT].intvalue, &format_options)) != 0) {
-       ErrPostEx(SEV_FATAL, 1, 0,  "Formatting setup failed");
-   }
-
-   if (myargs[OPT_HTML].intvalue) {
-       format_options->html = TRUE;
-       format_options->align_options += TXALIGN_HTML;
-       format_options->print_options += TXALIGN_HTML;
-   }
-   if (myargs[OPT_SHOW_GI].intvalue) {
-       format_options->align_options += TXALIGN_SHOW_GI;
-       format_options->print_options += TXALIGN_SHOW_GI;
-   }
-
-   BLAST_PrintOutputHeader(format_options, FALSE, blast_program, 
-                           dbname, TRUE);
-
-   believe_defline = myargs[OPT_BELIEVE_QUERY].intvalue;
 
    /* Get the query */
 
@@ -576,88 +555,116 @@ Int2 Main_New(void)
       ErrPostEx(SEV_FATAL, 1, 0, "Invalid subject sequence location\n");
       return -1;                   
    }
+
    if ((query_from != 0 || query_to != 0) && 
        (Boolean)myargs[OPT_PROT_QUERY].intvalue == FALSE) {
       ErrPostEx(SEV_FATAL, 1, 0, "No query range allowed for nucleotide query");
       return -1;                   
    }
 
-   if ((Boolean)myargs[OPT_LCASE].intvalue) {
-      letters_read = BLAST_GetQuerySeqLoc(infp, query_is_na, 0, 0, 
-                                          query_from, query_to, &lcase_mask, 
-                                          &query_slp, &ctr, &num_queries, 
-                                          believe_defline);
-   } else {
-      letters_read = BLAST_GetQuerySeqLoc(infp, query_is_na, 0, 0,
-                                          query_from, query_to, NULL, 
-                                          &query_slp, &ctr, &num_queries, 
-                                          believe_defline);
-   }
-   if (letters_read <= 0) {
-        ErrPostEx(SEV_FATAL, 1, 0, "Failure reading query\n");
-        return -1;
-   }
+   BlastFormattingInfoNew(myargs[OPT_FORMAT].intvalue, options, blast_program,
+                          dbname, myargs[OPT_OUTPUT_FILE].strvalue,
+                          &format_info);
 
-   /* Call database search function. Pass NULL for tabular formatting structure 
-    * pointer, because on-the-fly tabular formatting is not allowed for RPS 
-    * BLAST.
-    */
-   status = 
-       Blast_DatabaseSearch(query_slp, dbname, lcase_mask, options, NULL, 
-                            &seqalign, &filter_loc, &mask_at_hash, sum_returns);
+   /* This is not megablast, so pass FALSE for the respective arguments. */
+   BlastFormattingInfoSetUpOptions(format_info, myargs[OPT_NUM_DESC].intvalue, 
+                                   myargs[OPT_NUM_RESULTS].intvalue,
+                                   (Boolean) myargs[OPT_HTML].intvalue,
+                                   FALSE, (Boolean) myargs[OPT_SHOW_GI].intvalue,
+                                   (Boolean) myargs[OPT_BELIEVE_QUERY].intvalue);
 
-   /* Free the lower case mask in SeqLoc form. */
-   lcase_mask = Blast_ValNodeMaskListFree(lcase_mask);
-   
-   /* If masking was done for lookup table only, free the masking locations,
-      because they will not be used for formatting. */
-   if (mask_at_hash)
+   BLAST_PrintOutputHeader(format_info);
+
+   /* Loop over sets of queries. */
+   while (1) {
+
+       if ((Boolean)myargs[OPT_LCASE].intvalue) {
+           letters_read = 
+               BLAST_GetQuerySeqLoc(infp, query_is_na, 0, kMaxConcatLength, 
+                                    query_from, query_to, &lcase_mask,
+                                    &query_slp, &ctr, &num_queries, 
+                                    myargs[OPT_BELIEVE_QUERY].intvalue);
+       } else {
+           letters_read = 
+               BLAST_GetQuerySeqLoc(infp, query_is_na, 0, kMaxConcatLength,
+                                    query_from, query_to, NULL, 
+                                    &query_slp, &ctr, &num_queries, 
+                                    myargs[OPT_BELIEVE_QUERY].intvalue);
+       }
+       
+       if (letters_read <= 0)
+           break;
+       
+       /* Call database search function. Pass NULL for tabular formatting 
+        * structure pointer, because on-the-fly tabular formatting is not
+        * allowed for RPS BLAST.
+        */
+       status = 
+           Blast_DatabaseSearch(query_slp, dbname, lcase_mask, options, NULL, 
+                                &seqalign, &filter_loc, &mask_at_hash, 
+                                sum_returns);
+
+       /* Free the lower case mask in SeqLoc form. */
+       lcase_mask = Blast_ValNodeMaskListFree(lcase_mask);
+       
+       /* If masking was done for lookup table only, free the masking locations,
+          because they will not be used for formatting. */
+       if (mask_at_hash)
+           filter_loc = Blast_ValNodeMaskListFree(filter_loc);
+       
+       /* Post warning or error messages, no matter what the search status 
+          was. */
+       Blast_SummaryReturnsPostError(sum_returns);
+
+       if (status != 0) {
+           ErrPostEx(SEV_FATAL, 1, 0, "BLAST search failed");
+           return status;
+       }
+       
+       /* do initial cleanup */
+       
+       /* format results */
+       
+       if (myargs[OPT_ASNOUT].strvalue) {
+           AsnIoPtr asnout = AsnIoOpen(myargs[OPT_ASNOUT].strvalue, (char*)"w");
+           GenericSeqAlignSetAsnWrite(seqalign, asnout);
+           asnout = AsnIoClose(asnout);
+       }
+       
+       status = 
+           BLAST_FormatResults(seqalign, num_queries, query_slp, filter_loc,
+                               format_info, sum_returns);
+       
+       /* finish cleanup */
        filter_loc = Blast_ValNodeMaskListFree(filter_loc);
-
-   /* Post warning or error messages, no matter what the search status was. */
-   Blast_SummaryReturnsPostError(sum_returns);
-
-   if (status != 0) {
-       ErrPostEx(SEV_FATAL, 1, 0, "BLAST search failed");
-       return status;
+       seqalign = SeqAlignSetFree(seqalign);
+       query_slp = SeqLocSetFree(query_slp);
+       
+       /* Update the cumulative summary returns structure and clean the returns
+          substructures for the current search iteration. */
+       Blast_SummaryReturnUpdate(sum_returns, &full_sum_returns);
+       Blast_SummaryReturnClean(sum_returns);
    }
 
-   /* do initial cleanup */
-
-   /* format results */
-
-   if (myargs[OPT_ASNOUT].strvalue) {
-      AsnIoPtr asnout = AsnIoOpen(myargs[OPT_ASNOUT].strvalue, (char*)"w");
-      GenericSeqAlignSetAsnWrite(seqalign, asnout);
-      asnout = AsnIoClose(asnout);
-   }
- 
-   status = BLAST_FormatResults(seqalign, dbname, blast_program, 
-                                num_queries, query_slp,
-                                filter_loc, format_options, 
-                                FALSE, NULL, sum_returns);
-
-   /* finish cleanup */
-   filter_loc = Blast_ValNodeMaskListFree(filter_loc);
-   seqalign = SeqAlignSetFree(seqalign);
-   query_slp = SeqLocSetFree(query_slp);
-   options = SBlastOptionsFree(options);
-
-   /* Print the footer with summary information */
-   Blast_PrintOutputFooter(program_number, format_options, dbname, sum_returns);
+   if (infp)
+      FileClose(infp);
+   
+   /* Print the footer with summary information. */
+   Blast_PrintOutputFooter(format_info, full_sum_returns);
 
    sum_returns = Blast_SummaryReturnFree(sum_returns);
+   full_sum_returns = Blast_SummaryReturnFree(full_sum_returns);
 
-   if(format_options->html && myargs[OPT_FORMAT].intvalue < 7) {
-      fprintf(format_options->outfp, "</PRE>\n</BODY>\n</HTML>\n");
-   }
-   BlastFormattingOptionsFree(format_options);
+   format_info = BlastFormattingInfoFree(format_info);
+   options = SBlastOptionsFree(options);
+   
    return status;
 }
 
 /*------------------- RPS BLAST USING OLD ENGINE ------------------------*/
 
-void PGPGetPrintOptions(Boolean gapped, Uint4Ptr align_options_out, 
+static void 
+s_PGPGetPrintOptions(Boolean gapped, Uint4Ptr align_options_out, 
                         Uint4Ptr print_options_out)
 {
     Uint4 print_options, align_options;
@@ -708,7 +715,8 @@ void PGPGetPrintOptions(Boolean gapped, Uint4Ptr align_options_out,
     return;
 }
 
-void RPSBlastOptionsFree(RPSBlastOptionsPtr rpsbop)
+static void 
+s_RPSBlastOptionsFree(RPSBlastOptionsPtr rpsbop)
 {
 
     FileClose(rpsbop->outfp);
@@ -723,11 +731,11 @@ void RPSBlastOptionsFree(RPSBlastOptionsPtr rpsbop)
     return;
 }
 
-static RPSBlastOptionsPtr RPSReadBlastOptions(void)
+static RPSBlastOptionsPtr 
+s_RPSReadBlastOptions(void)
 {
     RPSBlastOptionsPtr rpsbop;
     BLAST_OptionsBlkPtr options;
-    static Int4 count=0;
     CharPtr location = NULL;
     
     rpsbop = MemNew(sizeof(RPSBlastOptions));
@@ -791,8 +799,8 @@ static RPSBlastOptionsPtr RPSReadBlastOptions(void)
 		rpsbop->asn1_mode = StringSave("wb");
     }
     else
-       PGPGetPrintOptions(options->gapped_calculation, 
-                          &rpsbop->align_options, &rpsbop->print_options);
+       s_PGPGetPrintOptions(options->gapped_calculation, 
+                            &rpsbop->align_options, &rpsbop->print_options);
     
 
     if (!rpsbop->is_xml_output && 
@@ -882,9 +890,9 @@ static RPSBlastOptionsPtr RPSReadBlastOptions(void)
     return rpsbop;
 }
 
-static void RPSViewSeqAlign(BioseqPtr query_bsp, 
-                            SeqAlignPtr seqalign, RPSBlastOptionsPtr rpsbop, 
-                            ValNodePtr other_returns)
+static void 
+s_RPSViewSeqAlign(BioseqPtr query_bsp, SeqAlignPtr seqalign, 
+                  RPSBlastOptionsPtr rpsbop, ValNodePtr other_returns)
 {
     SeqAnnotPtr seqannot;
     BlastPruneSapStructPtr prune;
@@ -978,7 +986,8 @@ static void RPSViewSeqAlign(BioseqPtr query_bsp,
     return;
 }
 
-Boolean RPSFormatFooter(RPSBlastOptionsPtr rpsbop,  ValNodePtr other_returns)
+static Boolean 
+s_RPSFormatFooter(RPSBlastOptionsPtr rpsbop,  ValNodePtr other_returns)
 {
     ValNodePtr  mask_loc, vnp;
     BLAST_KarlinBlkPtr ka_params=NULL, ka_params_gap=NULL;
@@ -1044,7 +1053,8 @@ Boolean RPSFormatFooter(RPSBlastOptionsPtr rpsbop,  ValNodePtr other_returns)
     return TRUE;
 }
 
-static SeqEntryPtr LIBCALLBACK RPSGetNextSeqEntry(SeqLocPtr PNTR slp, VoidPtr data)
+static SeqEntryPtr LIBCALLBACK 
+s_RPSGetNextSeqEntry(SeqLocPtr PNTR slp, VoidPtr data)
 {
     SeqEntryPtr sep;
     static TNlmMutex read_mutex;
@@ -1091,11 +1101,10 @@ static SeqEntryPtr LIBCALLBACK RPSGetNextSeqEntry(SeqLocPtr PNTR slp, VoidPtr da
     return sep;
 }
 
-static Boolean LIBCALLBACK RPSResultsCallback(BioseqPtr query_bsp,
-                                  RPSBlastOptionsPtr rpsbop, 
-                                  SeqAlignPtr seqalign, 
-                                  ValNodePtr other_returns, 
-                                  ValNodePtr error_returns, VoidPtr data)
+static Boolean LIBCALLBACK 
+s_RPSResultsCallback(BioseqPtr query_bsp, RPSBlastOptionsPtr rpsbop, 
+                     SeqAlignPtr seqalign, ValNodePtr other_returns, 
+                     ValNodePtr error_returns, VoidPtr data)
 {
     if(rpsbop->is_xml_output == TRUE) {
        AsnIoPtr aip = AsnIoOpen(rpsbop->out_filename, "wx");
@@ -1116,8 +1125,8 @@ static Boolean LIBCALLBACK RPSResultsCallback(BioseqPtr query_bsp,
                                   rpsbop->believe_query, 0, 0, rpsbop->outfp,
                                   FALSE);
     } else {
-        RPSViewSeqAlign(query_bsp, seqalign, rpsbop, other_returns);
-        RPSFormatFooter(rpsbop, other_returns);
+        s_RPSViewSeqAlign(query_bsp, seqalign, rpsbop, other_returns);
+        s_RPSFormatFooter(rpsbop, other_returns);
     }
     
     return TRUE;
@@ -1132,7 +1141,7 @@ Int2 Main_Old(void)
     if((fd = FileOpen(myargs[OPT_OUTPUT_FILE].strvalue, "w")) != NULL)
         FileClose(fd);
     
-    if((rpsbop = RPSReadBlastOptions()) == NULL) {
+    if((rpsbop = s_RPSReadBlastOptions()) == NULL) {
         ErrPostEx(SEV_FATAL, 1, 0, "Unable to create RPS Blast options");
         return 1;
     }
@@ -1140,9 +1149,11 @@ Int2 Main_Old(void)
     if (!rpsbop->is_xml_output && !rpsbop->is_tabular && !rpsbop->is_asn1_output)
 	    BlastPrintVersionInfo("RPS-BLAST", rpsbop->html, rpsbop->outfp);
     
-    RPSBlastSearchMT(rpsbop, RPSGetNextSeqEntry, NULL, 
-                     RPSResultsCallback, NULL);
-    RPSBlastOptionsFree(rpsbop);
+    RPSBlastSearchMT(rpsbop, s_RPSGetNextSeqEntry, NULL, 
+                     s_RPSResultsCallback, NULL);
+    s_RPSBlastOptionsFree(rpsbop);
+
+    return 0;
 }
 
 /*-------------------------- TOP LEVEL DRIVER -------------------------*/

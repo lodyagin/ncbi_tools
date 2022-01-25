@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_PRIV__H
 #define CONNECT___NCBI_PRIV__H
 
-/*  $Id: ncbi_priv.h,v 6.11 2005/04/20 18:14:10 lavr Exp $
+/*  $Id: ncbi_priv.h,v 6.13 2005/05/03 11:50:19 ivanov Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -32,6 +32,9 @@
  *    Private aux. code for the "ncbi_*.[ch]"
  *
  *********************************
+ * Random generator seeding support
+ *    private global:  g_NCBI_ConnectRandomSeed
+ *    macro:           NCBI_CONNECT_SRAND_ADDENT
  * Critical section (basic multi-thread synchronization):
  *    private global:  g_CORE_MT_Lock
  *    macros:          CORE_LOCK_WRITE, CORE_LOCK_READ, CORE_UNLOCK
@@ -48,6 +51,15 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+
+/******************************************************************************
+ *  Random generator seeding support
+ */
+
+extern NCBI_XCONNECT_EXPORT int g_NCBI_ConnectRandomSeed;
+extern NCBI_XCONNECT_EXPORT int g_NCBI_ConnectSrandAddent();
+#define NCBI_CONNECT_SRAND_ADDENT g_NCBI_ConnectSrandAddent()
 
 
 /******************************************************************************
@@ -184,6 +196,13 @@ extern NCBI_XCONNECT_EXPORT char* g_CORE_RegistryGET
 /*
  * ---------------------------------------------------------------------------
  * $Log: ncbi_priv.h,v $
+ * Revision 6.13  2005/05/03 11:50:19  ivanov
+ * Added MS Win specific for NCBI_CONNECT_SRAND_ADDENT, removing dependency
+ * from socket library.
+ *
+ * Revision 6.12  2005/05/02 16:04:17  lavr
+ * Use global random seed
+ *
  * Revision 6.11  2005/04/20 18:14:10  lavr
  * +"ncbi_assert.h"
  *

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11-29-94
 *
-* $Revision: 6.10 $
+* $Revision: 6.11 $
 *
 * File Description: 
 *
@@ -716,6 +716,34 @@ static Boolean SaveOneSelectedItem (GatherObjectPtr gop)
   return TRUE;
 }
 
+static void SaveSeqLocEntity (Uint2 entityID, SelectedSavePtr ssp)
+{
+  ObjMgrDataPtr  omdp;
+	ObjMgrTypePtr  omtp;
+
+  if (entityID == 0 || ssp == NULL)
+  {
+    return;
+  }
+  
+  omdp = ObjMgrGetDataStruct (ssp->omp, entityID);
+  if (omdp == NULL) return;
+  if (omdp->choicetype == OBJ_SEQENTRY || omdp->datatype != OBJ_SEQLOC) 
+  {
+    return; /* not seqloc */  
+  }
+  
+ 	omtp = ObjMgrTypeFind(ssp->omp, OBJ_SEQLOC, NULL, NULL);
+	if (omtp == NULL)
+	{
+		ErrPostEx(SEV_ERROR,0,0,"Can't locate type record for [%d]", (int)OBJ_SEQLOC);
+		return;
+	}	
+		
+  (*(omtp->asnwrite))(omdp->dataptr, ssp->aip, NULL);
+  AsnPrintNewLine (ssp->aip);
+  AsnIoFlush (ssp->aip);
+}
 
 static Int2 LIBCALLBACK VSMGenericAsnSave (OMProcControlPtr ompcp, CharPtr mode )
 {
@@ -766,6 +794,7 @@ static Int2 LIBCALLBACK VSMGenericAsnSave (OMProcControlPtr ompcp, CharPtr mode 
 	
 	  for (vnp = entity_list; vnp != NULL; vnp = vnp->next)
 	  {
+	    SaveSeqLocEntity (vnp->data.intvalue, &ssd);
       GatherObjectsInEntity (vnp->data.intvalue, 0, NULL, SaveOneSelectedItem, (Pointer) &ssd, NULL);
 	  }
 

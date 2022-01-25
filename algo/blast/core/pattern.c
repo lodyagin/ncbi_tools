@@ -1,4 +1,4 @@
-/* $Id: pattern.c,v 1.13 2005/04/27 19:55:55 dondosha Exp $
+/* $Id: pattern.c,v 1.15 2005/05/19 14:56:40 dondosha Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -56,11 +56,11 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: pattern.c,v 1.13 2005/04/27 19:55:55 dondosha Exp $";
+    "$Id: pattern.c,v 1.15 2005/05/19 14:56:40 dondosha Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/pattern.h>
-
+#include "pattern_priv.h"
 
 void 
 _PHIGetRightOneBits(Int4 s, Int4 mask, Int4* rightOne, Int4* rightMaskOnly)
@@ -524,7 +524,7 @@ SPHIQueryInfoCopy(SPHIQueryInfo* pat_info)
 }
 
 /** Adds a new pattern hit to the PHI BLAST pseudo lookup table.
- * @param lookup The lookup table structure [in] [out]
+ * @param pattern_info The query pattern information structure. [in] [out]
  * @param offset Offset in query at which pattern was found. [in]
  * @param length Length of the pattern at this offset. [in] 
  */

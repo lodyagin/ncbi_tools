@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.64 $
+* $Revision: 6.65 $
 *
 * File Description:
 *       Vibrant miscellaneous functions
@@ -37,6 +37,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: vibutils.c,v $
+* Revision 6.65  2005/04/29 15:12:05  kans
+* removed unused variable in WIN version of Nlm_GetOutputFileName
+*
 * Revision 6.64  2005/04/19 14:52:23  rsmith
 * handle unix style paths in Nlm_SendOpenDocAppleEventEx
 *
@@ -5305,7 +5308,6 @@ extern Nlm_Boolean Nlm_GetOutputFileName (Nlm_CharPtr fileName, size_t maxsize,
 #endif /* ifdef WIN_MAC */
 
 #ifdef WIN_MSWIN
-  FILE  *f;
   char  szDirName [256];
   char  szFile [256];
   char  szFileTitle [256];

@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: blastall.c,v 6.150 2005/02/07 15:30:39 dondosha Exp $";
+static char const rcsid[] = "$Id: blastall.c,v 6.151 2005/05/05 14:41:32 coulouri Exp $";
 
-/* $Id: blastall.c,v 6.150 2005/02/07 15:30:39 dondosha Exp $
+/* $Id: blastall.c,v 6.151 2005/05/05 14:41:32 coulouri Exp $
 **************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -28,6 +28,9 @@ static char const rcsid[] = "$Id: blastall.c,v 6.150 2005/02/07 15:30:39 dondosh
 ************************************************************************** 
  * 
  * $Log: blastall.c,v $
+ * Revision 6.151  2005/05/05 14:41:32  coulouri
+ * plug object manager entity id leak - rt ticket 15084082
+ *
  * Revision 6.150  2005/02/07 15:30:39  dondosha
  * Removed restriction on the value of longest intron option
  *
@@ -1847,8 +1850,6 @@ Int2 Main (void)
                        }
                     } /* show text align, loop over seqalign/seqannots for concat */
                     ObjMgrClearHold();
-                    
-                    ObjMgrFreeCache(0);
                  } /* if outfp */
                  for (sap_iter=0; sap_iter < num_queries; sap_iter++) {
                     /* upper bound is num_queries, take care not to do this unless concat */
@@ -1965,6 +1966,8 @@ Int2 Main (void)
         
         if (!options->is_megablast_search) 
            BlastDeleteUserErrorString(err_ticket);
+                    
+        ObjMgrFreeCache(0);
     } /* while(TRUE)  - main loop of the program over all FASTA entries */
     
 #ifdef BLAST_CS_API

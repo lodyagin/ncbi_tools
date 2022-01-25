@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: mbalign.c,v 6.41 2003/10/29 17:46:59 dondosha Exp $";
+static char const rcsid[] = "$Id: mbalign.c,v 6.42 2005/05/03 20:29:17 papadopo Exp $";
 
-/* $Id: mbalign.c,v 6.41 2003/10/29 17:46:59 dondosha Exp $
+/* $Id: mbalign.c,v 6.42 2005/05/03 20:29:17 papadopo Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,12 +32,15 @@ static char const rcsid[] = "$Id: mbalign.c,v 6.41 2003/10/29 17:46:59 dondosha 
 *
 * Initial Creation Date: 10/27/1999
 *
-* $Revision: 6.41 $
+* $Revision: 6.42 $
 *
 * File Description:
 *        Alignment functions for Mega Blast program
 *
 * $Log: mbalign.c,v $
+* Revision 6.42  2005/05/03 20:29:17  papadopo
+* remove use of ICEIL macro; use either a true integer ceiling or (quotient+1) as circumstances warrant
+*
 * Revision 6.41  2003/10/29 17:46:59  dondosha
 * Allow 2-stage greedy extension in megablast
 *
@@ -537,7 +540,7 @@ BlastSearchBlkPtr GreedyAlignMemAlloc(BlastSearchBlkPtr search)
    search->abmp = (GreedyAlignMemPtr) MemNew(sizeof(GreedyAlignMem));
 
    if (search->pbp->gap_open==0 && search->pbp->gap_extend==0) {
-      d_diff = ICEIL(Xdrop+reward/2, penalty+reward);
+      d_diff = (Xdrop+reward/2) / (penalty+reward) + 1;
    
       search->abmp->flast_d = (Int4Ptr PNTR) Malloc((max_d + 2) * sizeof(Int4Ptr));
       if (search->abmp->flast_d == NULL) {
@@ -562,7 +565,7 @@ BlastSearchBlkPtr GreedyAlignMemAlloc(BlastSearchBlkPtr search)
       max_d *= GE_cost;
       max_cost = MAX(Mis_cost, gap_open+GE_cost);
       gd = gdb3(&Mis_cost, &gap_open, &GE_cost);
-      d_diff = ICEIL(Xdrop+reward/2, gd);
+      d_diff = (Xdrop+reward/2) / gd + 1;
       search->abmp->uplow_free = MemNew(sizeof(Int4)*2*(max_d+1+max_cost));
       search->abmp->flast_d_affine = (ThreeValPtr PNTR) 
 	 Malloc((MAX(max_d, max_cost) + 2) * sizeof(ThreeValPtr));
@@ -647,7 +650,7 @@ Int4 MegaBlastGreedyAlign(const UcharPtr s1, Int4 len1,
     Int4 X_pen = xdrop_threshold;
     Int4 M_half = match_cost/2;
     Int4 Op_cost = mismatch_cost + M_half*2;
-    Int4 D_diff = ICEIL(X_pen+M_half, Op_cost);
+    Int4 D_diff = (X_pen+M_half) / Op_cost + 1;
     
     Int4 x, cur_max, b_diag = 0, best_diag = INT_MAX/2;
     Int4Ptr max_row_free = abmp->max_row_free;
@@ -715,7 +718,7 @@ Int4 MegaBlastGreedyAlign(const UcharPtr s1, Int4 len1,
 	flast_d[d - 1][flower - 1] = flast_d[d - 1][flower] = -1;
 	flast_d[d - 1][fupper] = flast_d[d - 1][fupper + 1] = -1;
 	x = max_row[d - D_diff] + Op_cost * d - X_pen;
-	x = ICEIL(x, M_half);	
+	x = (Int4)ceil(x/M_half);	
 	cur_max = 0;
 	fl0 = flower;
 	fu0 = fupper;
@@ -895,7 +898,7 @@ Int4 MegaBlastAffineGreedyAlign (const UcharPtr s1, Int4 len1,
     GO_cost = gap_open;
     GE_cost = gap_extend+M_half;
     gd = gdb3(&Mis_cost, &GO_cost, &GE_cost);
-    D_diff = ICEIL(xdrop_threshold+M_half, gd);
+    D_diff = (xdrop_threshold+M_half) / gd + 1;
     
     
     MAX_D = (Int4) (len1/ERROR_FRACTION + 1);
@@ -969,7 +972,7 @@ Int4 MegaBlastAffineGreedyAlign (const UcharPtr s1, Int4 len1,
     while (d <= max_d) {
 	Int4 fl0, fu0;
 	x = max_row[d - D_diff] + gd * d - xdrop_threshold;
-	x = ICEIL(x, M_half);
+	x = (Int4)ceil(x/M_half);
 	if (x < 0) x=0;
 	cur_max = 0;
 	fl0 = flower;

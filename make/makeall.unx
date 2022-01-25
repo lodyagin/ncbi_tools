@@ -1,6 +1,6 @@
 #	makefile for asntool and ncbi core routines,
 #
-#	$Id: makeall.unx,v 6.260 2005/04/27 20:03:42 dondosha Exp $
+#	$Id: makeall.unx,v 6.261 2005/05/16 17:49:23 papadopo Exp $
 #
 #	cdromlib data access functions, vibrant, and entrez
 #	SunOS with unbundled ANSI compiler [ make LCL=acc RAN=ranlib CC=acc ]
@@ -250,6 +250,8 @@ SRC23 = csim.c db_slist.c dust.c falign.c g_any.c sim2.c sim3.c sim4.c \
 	pobutil.c stsutil.c suggadj.c suggest.c suggslp.c \
 	blast.c blastutl.c blastool.c blastconcat.c splutil.c gapxdrop.c bandalg0.c bandalg1.c \
 	bandalg2.c bandalg3.c bandalg4.c bandalg5.c bandalgn.c blastkar.c \
+        Mode_condition.c Newton_procedures.c RE_interface_ds.c \
+        nlm_numerics.c re_newton.c \
 	actutils.c posit.c lookup.c readdb.c ncbisam.c ncbisort.c \
 	salign.c salptool.c urkutil.c urkpcc.c urkptpf.c urkepi.c \
 	urkfltr.c urkdust.c urksigu.c seg.c urkbias.c urkcnsrt.c urktree.c \
@@ -395,6 +397,8 @@ OBJ23 = csim.o db_slist.o dust.o falign.o g_any.o sim2.o sim3.o sim4.o \
 	blast.o blastutl.o blastool.o blastconcat.o splutil.o \
 	gapxdrop.o bandalg0.o bandalg1.o \
 	bandalg2.o bandalg3.o bandalg4.o bandalg5.o bandalgn.o blastkar.o \
+        Mode_condition.o Newton_procedures.o RE_interface_ds.o \
+        nlm_numerics.o re_newton.o \
 	actutils.o posit.o lookup.o readdb.o ncbisam.o ncbisort.o \
 	salign.o salptool.o urkutil.o urkpcc.o urkptpf.o urkepi.o \
 	urkfltr.o urkdust.o urksigu.o seg.o urkbias.o urkcnsrt.o urktree.o \

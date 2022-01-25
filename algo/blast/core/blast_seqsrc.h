@@ -1,4 +1,4 @@
-/*  $Id: blast_seqsrc.h,v 1.40 2005/04/21 15:27:31 camacho Exp $
+/*  $Id: blast_seqsrc.h,v 1.42 2005/05/26 15:45:10 dondosha Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -46,6 +46,7 @@
 
 #include <algo/blast/core/blast_def.h>
 #include <algo/blast/core/blast_message.h>
+#include <algo/blast/core/blast_encoding.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -100,13 +101,14 @@ typedef struct BlastSeqSrcNewInfo BlastSeqSrcNewInfo;
 NCBI_XBLAST_EXPORT
 BlastSeqSrc* BlastSeqSrcNew(const BlastSeqSrcNewInfo* bssn_info);
 
-/** Copy function: needed to guarantee thread safety.
- * @todo Is this function really needed? Shouldn't this description be a bit
- * more elaborate?
+/** Copy function: needed to guarantee thread safety. Copies the contents of an
+ * input BlastSeqSrc, then calls a copier function, provided by the 
+ * implementation, to achieve multi-thread safety.
+ * @todo Is this function really needed? 
  * @param seq_src BlastSeqSrc to copy [in]
- * @return an MT-safe copy of the structure passed in, NULL in case of memory
- * allocation failure, or if no copy function was provided by the
- * implementation, a bitwise copy of the input parameter.
+ * @return An MT-safe copy of the structure passed in, NULL in case of memory
+ *         allocation failure, or, if no copy function was provided by the
+ *         implementation, a bitwise copy of the input.
  */
 NCBI_XBLAST_EXPORT
 BlastSeqSrc* BlastSeqSrcCopy(const BlastSeqSrc* seq_src);
@@ -172,8 +174,9 @@ BlastSeqSrcGetIsProt(const BlastSeqSrc* seq_src);
 typedef struct BlastSeqSrcGetSeqArg {
     /** Oid in BLAST database, index in an array of sequences, etc [in] */
     Int4 oid;
-    /** Encoding of sequence, ie: BLASTP_ENCODING, NCBI4NA_ENCODING, etc [in] */
-    Uint1 encoding;
+    /** Encoding of sequence, i.e.: eBlastEncodingProtein,
+     * eBlastEncodingNucleotide, etc [in] */
+    EBlastEncoding encoding;
     /** Sequence to return, if NULL, it should allocated by GetSeqBlkFnPtr, else
      * its contents are freed and the structure is reused [out]*/
     BLAST_SequenceBlk* seq;

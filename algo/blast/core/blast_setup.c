@@ -1,4 +1,4 @@
-/* $Id: blast_setup.c,v 1.117 2005/04/27 19:54:21 dondosha Exp $
+/* $Id: blast_setup.c,v 1.119 2005/05/20 18:20:01 camacho Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,7 +34,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] =
-    "$Id: blast_setup.c,v 1.117 2005/04/27 19:54:21 dondosha Exp $";
+    "$Id: blast_setup.c,v 1.119 2005/05/20 18:20:01 camacho Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_setup.h>
@@ -323,15 +323,9 @@ Blast_ScoreBlkMatrixInit(EBlastProgramType program_number,
         }
  
      } else {
-        char* p = NULL;
-
         sbp->read_in_matrix = TRUE;
         BLAST_ScoreSetAmbigRes(sbp, 'X');
-        sbp->name = strdup(scoring_options->matrix);
-        /* protein matrices are in all caps by convention */
-        for (p = sbp->name; *p != NULLB; p++) {
-            *p = toupper(*p);
-        }
+        sbp->name = BLAST_StrToUpper(scoring_options->matrix);
     }
     status = Blast_ScoreBlkMatrixFill(sbp, scoring_options->matrix_path);
     if (status) {
@@ -374,8 +368,7 @@ BlastSetup_ScoreBlkInit(BLAST_SequenceBlk* query_blk,
     }
 
     /* Fills in block for gapped blast. */
-    if (program_number == eBlastTypePhiBlastn ||
-        program_number == eBlastTypePhiBlastp) {
+    if (Blast_ProgramIsPhiBlast(program_number)) {
        status = s_PHIScoreBlkFill(sbp, scoring_options, blast_message);
     } else {
        if ((status = Blast_ScoreBlkKbpUngappedCalc(program_number, sbp, 
@@ -513,8 +506,7 @@ Int2 BLAST_CalcEffLengths (EBlastProgramType program_number,
 
    /* Do nothing for PHI BLAST, because search space is calculated by 
       completely different formulas there. */
-   if (program_number == eBlastTypePhiBlastn || 
-       program_number == eBlastTypePhiBlastp)
+   if (Blast_ProgramIsPhiBlast(program_number))
        return 0;
 
    /* use overriding value from effective lengths options or the real value
@@ -549,7 +541,9 @@ Int2 BLAST_CalcEffLengths (EBlastProgramType program_number,
       }
    }
    
-   kbp_ptr = (scoring_options->gapped_calculation ? sbp->kbp_gap : sbp->kbp);
+   /* N.B.: the old code used kbp_gap_std instead of the kbp_gap alias (which
+    * could be kbp_gap_psi), hence we duplicate that behavior here */
+   kbp_ptr = (scoring_options->gapped_calculation ? sbp->kbp_gap_std : sbp->kbp);
    
    for (index = query_info->first_context;
         index <= query_info->last_context;
@@ -725,7 +719,7 @@ Blast_SetPHIPatternInfo(EBlastProgramType program,
 {
     const Boolean kIsNa = (program == eBlastTypePhiBlastn);
 
-    ASSERT(program == eBlastTypePhiBlastn || program  == eBlastTypePhiBlastp);
+    ASSERT(Blast_ProgramIsPhiBlast(program));
     ASSERT(query_info && pattern_blk);
 
     query_info->pattern_info = SPHIQueryInfoNew();

@@ -1,4 +1,4 @@
-/* $Id: blast_options.c,v 1.163 2005/04/27 19:53:45 dondosha Exp $
+/* $Id: blast_options.c,v 1.169 2005/06/03 16:22:22 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,13 +34,14 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_options.c,v 1.163 2005/04/27 19:53:45 dondosha Exp $";
+    "$Id: blast_options.c,v 1.169 2005/06/03 16:22:22 lavr Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_options.h>
 #include <algo/blast/core/blast_filter.h>
 
 const int kUngappedHSPNumMax = 400;
+const double kPSSM_NoImpalaScaling = 1.0;
 
 SDustOptions* SDustOptionsFree(SDustOptions* dust_options)
 {
@@ -248,6 +249,7 @@ BlastQuerySetUpOptionsNew(QuerySetUpOptions* *options)
 
    (*options)->genetic_code = BLAST_GENETIC_CODE;
 
+   /** @todo the code below should be deprecated */
    status = SBlastFilterOptionsNew(&((*options)->filtering_options), eEmpty);
    
    return status;
@@ -330,8 +332,8 @@ BlastInitialWordOptionsValidate(EBlastProgramType program_number,
    /* For some blastn variants (i.e., megablast), and for PHI BLAST there is no
     * ungapped extension. */
    if (program_number != eBlastTypeBlastn  &&
-       program_number != eBlastTypePhiBlastn  &&
-       program_number != eBlastTypePhiBlastp && options->x_dropoff <= 0.0)
+       (!Blast_ProgramIsPhiBlast(program_number)) &&
+       options->x_dropoff <= 0.0)
    {
       Blast_MessageWrite(blast_msg, BLAST_SEV_ERROR, code, subcode,
                             "x_dropoff must be greater than zero");
@@ -397,12 +399,19 @@ BlastExtensionOptionsNew(EBlastProgramType program, BlastExtensionOptions* *opti
     (*options)->ePrelimGapExt = eDynProgExt;
     (*options)->eTbackExt = eDynProgTbck;
 
+    /** @todo how to determine this for PSI-BLAST bootstrap run (i.e. when
+     * program is blastp? */
+    if (program == eBlastTypePsiBlast) {
+        (*options)->compositionBasedStats = TRUE;
+    }
+
 	return 0;
 }
 
 Int2
 BLAST_FillExtensionOptions(BlastExtensionOptions* options, 
-   EBlastProgramType program, Int4 greedy, double x_dropoff, double x_dropoff_final)
+   EBlastProgramType program, Int4 greedy, double x_dropoff, 
+   double x_dropoff_final)
 {
    if (!options)
       return 1;
@@ -427,6 +436,10 @@ BLAST_FillExtensionOptions(BlastExtensionOptions* options,
          options->eTbackExt = eDynProgTbck;
          break;
       }
+   }
+
+   if (program == eBlastTypePsiBlast) {
+       options->compositionBasedStats = TRUE;
    }
 
    if (x_dropoff)
@@ -668,7 +681,7 @@ Int2 BlastScoringOptionsSetMatrix(BlastScoringOptions* opts,
         opts->matrix = strdup(matrix_name);
         /* Make it all upper case */
         for (i=0; i<strlen(opts->matrix); ++i)
-            opts->matrix[i] = toupper(opts->matrix[i]);
+            opts->matrix[i] = toupper((unsigned char) opts->matrix[i]);
     }
     return 0;
 }
@@ -772,15 +785,14 @@ LookupTableOptionsNew(EBlastProgramType program_number, LookupTableOptions* *opt
            (*options)->threshold = BLAST_WORD_THRESHOLD_TBLASTX;
        break;
    }
-   
+
    return 0;
 }
 
 Int2 
 BLAST_FillLookupTableOptions(LookupTableOptions* options, 
    EBlastProgramType program_number, Boolean is_megablast, Int4 threshold,
-   Int4 word_size, Boolean variable_wordsize,
-   Boolean use_pssm)
+   Int4 word_size, Boolean variable_wordsize)
 {
    if (!options)
       return 1;
@@ -802,16 +814,11 @@ BLAST_FillLookupTableOptions(LookupTableOptions* options,
    if (threshold == -1)
       options->threshold = 0;
 
-   /* if the supplied threshold is > 0, use it */
+   /* if the supplied threshold is > 0, use it otherwise, use the default */
    if (threshold > 0)
       options->threshold = threshold;
 
-   /* otherwise, use the default */
-
-   if (use_pssm)
-      options->use_pssm = use_pssm;
-   if (program_number == eBlastTypeRpsBlast ||
-       program_number == eBlastTypeRpsTblastn)
+   if (Blast_ProgramIsRpsBlast(program_number))
       options->lut_type = RPS_LOOKUP_TABLE;
    if (word_size)
       options->word_size = word_size;
@@ -854,8 +861,7 @@ LookupTableOptionsValidate(EBlastProgramType program_number,
 {
    Int4 code=2;
    Int4 subcode=1;
-   const Boolean kPhiBlast = (program_number == eBlastTypePhiBlastn || 
-                              program_number == eBlastTypePhiBlastp);
+   const Boolean kPhiBlast = Blast_ProgramIsPhiBlast(program_number);
 
 	if (options == NULL)
 		return 1;
@@ -871,9 +877,8 @@ LookupTableOptionsValidate(EBlastProgramType program_number,
         return 0;
 
 	if (program_number != eBlastTypeBlastn && 
-            program_number != eBlastTypeRpsBlast &&
-            program_number != eBlastTypeRpsTblastn &&
-            options->threshold <= 0)
+        (!Blast_ProgramIsRpsBlast(program_number)) &&
+        options->threshold <= 0)
 	{
 		Blast_MessageWrite(blast_msg, BLAST_SEV_ERROR, code, subcode, 
                          "Non-zero threshold required");
@@ -882,13 +887,12 @@ LookupTableOptionsValidate(EBlastProgramType program_number,
 
 	if (options->word_size <= 0)
 	{
-                if (program_number != eBlastTypeRpsBlast &&
-                    program_number != eBlastTypeRpsTblastn) {
-        		Blast_MessageWrite(blast_msg, BLAST_SEV_ERROR, 
-                                           code, subcode, 
-                                         "Word-size must be greater than zero");
-		        return (Int2) code;
-                }
+        if ( !Blast_ProgramIsRpsBlast(program_number)) {
+            Blast_MessageWrite(blast_msg, BLAST_SEV_ERROR, 
+                                       code, subcode, 
+                                     "Word-size must be greater than zero");
+            return (Int2) code;
+        }
 	} else if (program_number == eBlastTypeBlastn && options->word_size < 4)
 	{
 		Blast_MessageWrite(blast_msg, BLAST_SEV_ERROR, code, subcode, 
@@ -962,7 +966,6 @@ Int2 BlastHitSavingOptionsNew(EBlastProgramType program_number,
       return 1;
 
    (*options)->hitlist_size = BLAST_HITLIST_SIZE;
-   (*options)->prelim_hitlist_size = BLAST_PRELIM_HITLIST_SIZE;
    (*options)->expect_value = BLAST_EXPECT_VALUE;
 
    return 0;
@@ -978,7 +981,7 @@ BLAST_FillHitSavingOptions(BlastHitSavingOptions* options,
       return 1;
 
    if (hitlist_size)
-      options->hitlist_size = options->prelim_hitlist_size = hitlist_size;
+      options->hitlist_size = hitlist_size;
    if (evalue)
       options->expect_value = evalue;
    if(!is_gapped)
@@ -996,7 +999,7 @@ BlastHitSavingOptionsValidate(EBlastProgramType program_number,
 	if (options == NULL)
 		return 1;
 
-	if (options->hitlist_size < 1 || options->prelim_hitlist_size < 1)
+	if (options->hitlist_size < 1)
 	{
 		Int4 code=1;
 		Int4 subcode=1;
@@ -1053,7 +1056,7 @@ Int2 PSIBlastOptionsNew(PSIBlastOptions** psi_options)
    options->use_best_alignment = TRUE;
 
    options->nsg_compatibility_mode = FALSE;
-   options->impala_scaling_factor = 1.0;    /* 1.0 indicates not to use this */
+   options->impala_scaling_factor = kPSSM_NoImpalaScaling;
    
    return 0;
 }
@@ -1193,6 +1196,24 @@ Int2 BLAST_ValidateOptions(EBlastProgramType program_number,
  * ===========================================================================
  *
  * $Log: blast_options.c,v $
+ * Revision 1.169  2005/06/03 16:22:22  lavr
+ * Explicit (unsigned char) casts in ctype routines
+ *
+ * Revision 1.168  2005/06/02 16:18:40  camacho
+ * Remove LookupTableOptions::use_pssm
+ *
+ * Revision 1.167  2005/05/20 18:26:54  camacho
+ * Deduce LookupTableOptions::use_pssm from program type
+ *
+ * Revision 1.166  2005/05/16 12:22:07  madden
+ * Removal of prelim_hitlist_size as an option
+ *
+ * Revision 1.165  2005/05/06 14:27:26  camacho
+ * + Blast_ProgramIs{Phi,Rps}Blast
+ *
+ * Revision 1.164  2005/05/02 19:38:47  camacho
+ * Introduced constant for IMPALA-style PSSM scaling
+ *
  * Revision 1.163  2005/04/27 19:53:45  dondosha
  * Added handling of PHI BLAST program enumeration values
  *

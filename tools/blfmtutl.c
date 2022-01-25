@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: blfmtutl.c,v 1.4 2004/10/19 15:28:59 coulouri Exp $";
+static char const rcsid[] = "$Id: blfmtutl.c,v 1.8 2005/06/05 02:54:41 coulouri Exp $";
 
 /* ===========================================================================
 *
@@ -36,6 +36,19 @@ Contents: Utilities for BLAST formatting
 /*
 * $Revision: 
 * $Log: blfmtutl.c,v $
+* Revision 1.8  2005/06/05 02:54:41  coulouri
+* bump date
+*
+* Revision 1.7  2005/05/20 15:28:03  coulouri
+* bump date
+*
+* Revision 1.6  2005/05/16 17:42:19  papadopo
+* From Alejandro Schaffer: Print references for composition-based statistics
+* and for compositional score matrix adjustment, if either method was used.
+*
+* Revision 1.5  2005/05/08 13:32:52  coulouri
+* bump version to 2.2.11
+*
 * Revision 1.4  2004/10/19 15:28:59  coulouri
 * bump version and date
 *
@@ -61,8 +74,8 @@ Contents: Utilities for BLAST formatting
 
 
 /* the version of BLAST. */
-#define BLAST_ENGINE_VERSION "2.2.10"
-#define BLAST_RELEASE_DATE "Oct-19-2004"
+#define BLAST_ENGINE_VERSION "2.2.11"
+#define BLAST_RELEASE_DATE "Jun-05-2005"
 
 #define BUFFER_LENGTH 255
 
@@ -444,6 +457,125 @@ BlastPrintReference(Boolean html, Int4 line_length, FILE *outfp)
 	The newlines are represented by tildes, use PrintTildeSepLines
 	to print this.
 */
+
+
+/* 
+	Returns a reference for composition-based statistics to use
+        in the header.
+	The newlines are represented by tildes, use PrintTildeSepLines
+	to print this.
+*/
+
+CharPtr LIBCALL
+CBStatisticsGetReference(Boolean html, Boolean firstRound, Boolean moreRounds)
+
+{
+	CharPtr ret_buffer;
+	Int2 ret_buffer_length;
+
+	ret_buffer = NULL;
+	ret_buffer_length = 0;
+
+	
+        if (firstRound) {
+	  if (html) {
+	    add_string_to_bufferEx("<b><a href=\"http://www.ncbi.nlm.nih.gov/entrez/query.fcgi?db=PubMed&cmd=Retrieve&list_uids=11452024&dopt=Citation\">Reference for composition-based statistics</a>:</b>", &ret_buffer, &ret_buffer_length, TRUE);
+	    add_string_to_bufferEx("Sch&auml;ffer, Alejandro A., L. Aravind, Thomas L. Madden, ", &ret_buffer, &ret_buffer_length, TRUE);
+	} else
+	  add_string_to_bufferEx("Reference for composition-based statistics:", &ret_buffer, &ret_buffer_length, TRUE);
+	  add_string_to_bufferEx("Schaffer, Alejandro A., L. Aravaind, Thomas L. Madden,", &ret_buffer, &ret_buffer_length, TRUE);
+	}
+	else {
+	  if (html) {
+	    add_string_to_bufferEx("<b><a href=\"http://www.ncbi.nlm.nih.gov/entrez/query.fcgi?db=PubMed&cmd=Retrieve&list_uids=11452024&dopt=Citation\">Reference for composition-based statistics </a></b>", &ret_buffer, &ret_buffer_length, TRUE);
+	    add_string_to_bufferEx("starting in round 2:", &ret_buffer, &ret_buffer_length, TRUE);
+
+	    add_string_to_bufferEx("Sch&auml;ffer, Alejandro A., L. Aravind, Thomas L. Madden, ", &ret_buffer, &ret_buffer_length, TRUE);
+	  } else {
+	    add_string_to_bufferEx("Reference for composition-based statistics starting in round 2:", &ret_buffer, &ret_buffer_length, TRUE);
+	    add_string_to_bufferEx("Schaffer, Alejandro A., L. Aravind, Thomas L. Madden,", &ret_buffer, &ret_buffer_length, TRUE);
+	  }
+	}
+	add_string_to_bufferEx("Sergei Shavirin, John L. Spouge, Yuri I. Wolf,  ", &ret_buffer, &ret_buffer_length, TRUE);
+	add_string_to_bufferEx("Eugene V. Koonin, and Stephen F. Altschul (2001), ", &ret_buffer, &ret_buffer_length, TRUE);
+	add_string_to_bufferEx("\"Improving the accuracy of PSI-BLAST protein database searches with ", &ret_buffer, &ret_buffer_length, TRUE);
+	add_string_to_bufferEx("composition-based statistics and other refinements\",  Nucleic Acids Res. 29:2994-3005.", &ret_buffer, &ret_buffer_length, TRUE);
+	return ret_buffer;
+}
+
+/*print the reference for composition-based statistics when they are used*/
+Boolean LIBCALL
+CBStatisticsPrintReference(Boolean html, Int4 line_length, 
+			   Boolean firstRound, Boolean moreRounds, FILE *outfp)
+
+{
+	CharPtr ret_buffer;
+	
+	if (outfp == NULL)
+		return FALSE;
+
+	if (!(firstRound || moreRounds))
+	  return FALSE;
+	
+        ret_buffer = CBStatisticsGetReference(html,firstRound, moreRounds);
+        PrintTildeSepLines(ret_buffer, line_length, outfp);
+        ret_buffer = MemFree(ret_buffer);
+
+	return TRUE;
+}
+
+/* 
+	Returns a reference for the header.
+	The newlines are represented by tildes, use PrintTildeSepLines
+	to print this.
+*/
+
+CharPtr LIBCALL
+CAdjustmentGetReference(Boolean html)
+
+{
+	CharPtr ret_buffer;
+	Int2 ret_buffer_length;
+
+	ret_buffer = NULL;
+	ret_buffer_length = 0;
+
+	
+	add_string_to_bufferEx("Reference for compositional score matrix adjustment: Altschul, Stephen F., ", &ret_buffer, &ret_buffer_length, TRUE);
+	add_string_to_bufferEx("John C. Wootton, E. Michael Gertz, Richa Agarwala, Aleksandr Morgulis, ", &ret_buffer, &ret_buffer_length, TRUE);
+        if (html)
+	  add_string_to_bufferEx("Alejandro A. Sch&auml;ffer, and Yi-Kuo Yu \"Protein database searches using ", &ret_buffer, &ret_buffer_length, TRUE);
+	else
+	  add_string_to_bufferEx("Alejandro A. Schaffer, and Yi-Kuo Yu \"Protein database searches using ", &ret_buffer, &ret_buffer_length, TRUE);
+
+	add_string_to_bufferEx("compositionally adjusted substitution matrices\", submitted.", &ret_buffer, &ret_buffer_length, TRUE);	
+	return ret_buffer;
+}
+
+/*print the reference for composition-based statistics when they are used*/
+Boolean LIBCALL
+CAdjustmentPrintReference(Boolean html, Int4 line_length, FILE *outfp)
+
+{
+	CharPtr ret_buffer;
+	
+	if (outfp == NULL)
+		return FALSE;
+
+        ret_buffer = CAdjustmentGetReference(html);
+        PrintTildeSepLines(ret_buffer, line_length, outfp);
+        ret_buffer = MemFree(ret_buffer);
+
+	return TRUE;
+}
+
+/* 
+	Returns a reference for the header.
+	The newlines are represented by tildes, use PrintTildeSepLines
+	to print this.
+*/
+
+
 
 CharPtr LIBCALL
 BlastGetPhiReference(Boolean html)

@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.44 $
+* $Revision: 1.46 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -391,6 +391,7 @@ NLM_EXTERN CharPtr legalDbXrefs [] = {
   "axeldb",
   "BDGP_EST",
   "BDGP_INS",
+  "BoLD",
   "CDD",
   "CK",
   "COG",
@@ -407,10 +408,12 @@ NLM_EXTERN CharPtr legalDbXrefs [] = {
   "GDB",
   "GeneDB",
   "GeneID",
+  "Genew",
   "GI",
   "GO",
   "GOA",
   "H-InvDB",
+  "HSSP",
   "IFO",
   "IMGT/GENE-DB",
   "IMGT/HLA",
@@ -759,6 +762,7 @@ NLM_EXTERN CharPtr FormatOrganismBlock (
   Uint1              genome;
   CharPtr            lineage = NULL;
   ObjectIdPtr        oip;
+  OrgModPtr          omp;
   OrgNamePtr         onp;
   CharPtr            organelle = NULL;
   OrgRefPtr          orp;
@@ -805,6 +809,13 @@ NLM_EXTERN CharPtr FormatOrganismBlock (
       onp = orp->orgname;
       if (onp != NULL) {
         lineage = onp->lineage;
+        if (StringHasNoText (lineage)) {
+          for (omp = onp->mod; omp != NULL; omp = omp->next) {
+            if (omp->subtype == ORGMOD_old_lineage) {
+              lineage = omp->subname;
+            }
+          }
+        }
       }
       for (vnp = orp->db; vnp != NULL; vnp = vnp->next) {
         dbt = (DbtagPtr) vnp->data.ptrvalue;

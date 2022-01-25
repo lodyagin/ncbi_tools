@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: blast_seq.c,v 1.66 2005/04/27 20:00:36 dondosha Exp $";
+static char const rcsid[] = "$Id: blast_seq.c,v 1.68 2005/05/26 14:28:18 dondosha Exp $";
 /*
 * ===========================================================================
 *
@@ -330,7 +330,7 @@ s_QueryInfoSetUp(SeqLocPtr slp, EBlastProgramType program,
  * @param buffer Buffer to fill.
  */
 static Int2 
-s_SeqLocReadSequence(SeqLocPtr slp, Uint1 encoding, Uint1** buffer)
+s_SeqLocReadSequence(SeqLocPtr slp, EBlastEncoding encoding, Uint1** buffer)
 {
    Uint1* buffer_var = *buffer;
    Int4 size, index;
@@ -342,18 +342,22 @@ s_SeqLocReadSequence(SeqLocPtr slp, Uint1 encoding, Uint1** buffer)
                           buffer_var, NULL);
 
    switch (encoding) {
-   case BLASTP_ENCODING: 
+   case eBlastEncodingProtein: 
       for (index = 0; index < size; index++) 
           buffer_var[index] = AMINOACID_TO_NCBISTDAA[buffer_var[index]];
       break;
-   case NCBI4NA_ENCODING:
+   case eBlastEncodingNcbi4na:
       for (index = 0; index < size; index++) 
          buffer_var[index] = IUPACNA_TO_NCBI4NA[buffer_var[index]];
       break;
-   case BLASTNA_ENCODING:
+   case eBlastEncodingNucleotide:
       for (index = 0; index < size; index++) 
          buffer_var[index] = IUPACNA_TO_BLASTNA[buffer_var[index]];
       break;
+   default:
+       /* This function should not be called for any other encodings - 
+          return an error status. */
+       return -1;
    }
 
    *buffer = buffer_var + size;
@@ -370,12 +374,13 @@ s_SeqLocReadSequence(SeqLocPtr slp, Uint1 encoding, Uint1** buffer)
  * @param buffer Buffer to populate. Must be already allocated. [in] [out]
  */
 static Int2 
-s_SeqLocFillSequenceBuffer(SeqLocPtr slp, Uint1 encoding, 
+s_SeqLocFillSequenceBuffer(SeqLocPtr slp, EBlastEncoding encoding, 
     Boolean add_sentinel_bytes, Boolean both_strands, Uint1* buffer)
 {
    Uint1* buffer_var;
-   Uint1 sentinel = 
-      (encoding == BLASTNA_ENCODING ? NCBI4NA_TO_BLASTNA[NULLB] : NULLB);
+   Uint1 sentinel = (encoding == eBlastEncodingNucleotide 
+                     ? NCBI4NA_TO_BLASTNA[NULLB] 
+                     : NULLB);
    Uint1 seq_code, strand;
 
    buffer_var = buffer;
@@ -385,7 +390,7 @@ s_SeqLocFillSequenceBuffer(SeqLocPtr slp, Uint1 encoding,
       ++buffer_var;
    }
 
-   if (encoding == BLASTP_ENCODING) {
+   if (encoding == eBlastEncodingProtein) {
       seq_code = Seq_code_ncbistdaa;
       strand = Seq_strand_unknown;
    } else {
@@ -465,8 +470,8 @@ Int2 BLAST_GeneticCodeFind(Int4 gc, Uint1** genetic_code)
  */
 static Int2 
 s_GetSequence(SeqLocPtr slp, BlastQueryInfo* query_info, 
-   const QuerySetUpOptions* query_options, Uint1 num_frames, Uint1 encoding, 
-   Uint1* *buffer_out, Int4 *buffer_length)
+   const QuerySetUpOptions* query_options, Uint1 num_frames, 
+   EBlastEncoding encoding, Uint1* *buffer_out, Int4 *buffer_length)
 {
    Int2		status=0; /* return value. */
    Int4 total_length; /* Total length of all queries/frames/strands */
@@ -486,7 +491,7 @@ s_GetSequence(SeqLocPtr slp, BlastQueryInfo* query_info,
       /* allow two extra bytes for sentinels or a trailing
          null appended by the low-level sequence conversion */
       total_length = (*buffer_length) + 2;
-      if (encoding == NCBI4NA_ENCODING) {
+      if (encoding == eBlastEncodingNcbi4na) {
          /* Searches with translated subjects (tblastn, tblastx) */
          add_sentinel_bytes = FALSE;
       }
@@ -576,7 +581,7 @@ Int2 BLAST_SetUpQuery(EBlastProgramType program_number,
    Int4 buffer_length;
    Int2 status;
    Uint1 num_frames;
-   Uint1 encoding;
+   EBlastEncoding encoding;
    BlastMaskLoc* lcase_mask = NULL;
 
    if (query_slp == NULL || query_options == NULL ||
@@ -590,16 +595,16 @@ Int2 BLAST_SetUpQuery(EBlastProgramType program_number,
 
    if (program_number == eBlastTypeBlastn || 
        program_number == eBlastTypePhiBlastn) {
-      encoding = BLASTNA_ENCODING;
+      encoding = eBlastEncodingNucleotide;
       num_frames = 2;
    } else if (program_number == eBlastTypeBlastp ||
               program_number == eBlastTypeRpsBlast ||
               program_number == eBlastTypeTblastn ||
               program_number == eBlastTypePhiBlastp) {
-      encoding = BLASTP_ENCODING;
+      encoding = eBlastEncodingProtein;
       num_frames = 1;
    } else { /* blastx or rpstblastn, which is also essentially blastx */
-      encoding = NCBI4NA_ENCODING;
+      encoding = eBlastEncodingNcbi4na;
       num_frames = NUM_FRAMES;
    }
 
@@ -633,18 +638,18 @@ Int2 BLAST_SetUpSubject(EBlastProgramType program_number,
                                       sequence in two sequences case */
    Int4 buffer_length=0; /* Length of subject sequence for two sequences 
                             case */
-   Uint1 encoding;
+   EBlastEncoding encoding;
    const Boolean kNucleotide = (program_number == eBlastTypeBlastn || 
                                 program_number == eBlastTypePhiBlastn);
    const Boolean kTranslated = (program_number == eBlastTypeTblastn ||
                                 program_number == eBlastTypeTblastx);
 
    if (kNucleotide)
-      encoding = BLASTNA_ENCODING;
+      encoding = eBlastEncodingNucleotide;
    else if (kTranslated) {
-      encoding = NCBI4NA_ENCODING;
+      encoding = eBlastEncodingNcbi4na;
    } else {
-      encoding = BLASTP_ENCODING;
+      encoding = eBlastEncodingProtein;
    }
 
    if ((status = s_GetSequence(subject_slp, NULL, NULL, 1, encoding,

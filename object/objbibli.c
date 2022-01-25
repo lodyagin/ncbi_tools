@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 1/1/91
 *
-* $Revision: 6.5 $
+* $Revision: 6.6 $
 *
 * File Description:  Object manager for module NCBI-Biblio
 *
@@ -41,6 +41,9 @@
 * 07-19-93 Ostell      Support for ASN30 added
 *
 * $Log: objbibli.c,v $
+* Revision 6.6  2005/05/18 17:31:01  bollin
+* added AffilMatch and AuthorMatch functions
+*
 * Revision 6.5  2001/10/09 15:57:38  kans
 * AuthListMatch does StringICmp if both are structured last names, StringNICmp otherwise
 *
@@ -365,6 +368,44 @@ NLM_EXTERN Boolean LIBCALL AffilAsnWrite (AffilPtr afp, AsnIoPtr aip, AsnTypePtr
 erret:
 	AsnUnlinkType(orig);
 	return retval;
+}
+
+/*****************************************************************************
+*
+*   AffilMatch(ap1, ap2)
+*
+*****************************************************************************/
+NLM_EXTERN Boolean AffilMatch (AffilPtr ap1, AffilPtr ap2)
+{
+  if (ap1 == NULL && ap2 == NULL)
+  {
+    return TRUE;
+  }
+  else if (ap1 == NULL || ap2 == NULL)
+  {
+    return FALSE;
+  }
+  else if (ap1->choice != ap2->choice)
+  {
+    return FALSE;
+  }
+  else if (StringCmp (ap1->affil, ap2->affil) != 0
+           || StringCmp (ap1->div, ap2->div) != 0
+           || StringCmp (ap1->city, ap2->city) != 0
+           || StringCmp (ap1->sub, ap2->sub) != 0
+           || StringCmp (ap1->country, ap2->country) != 0
+           || StringCmp (ap1->street, ap2->street) != 0
+           || StringCmp (ap1->email, ap2->email) != 0
+           || StringCmp (ap1->fax, ap2->fax) != 0
+           || StringCmp (ap1->phone, ap2->phone) != 0
+           || StringCmp (ap1->postal_code, ap2->postal_code) != 0)
+  {
+    return FALSE;
+  }  
+  else
+  {
+    return TRUE;
+  }
 }
 
 /*****************************************************************************
@@ -763,6 +804,40 @@ NLM_EXTERN Boolean LIBCALL AuthorAsnWrite (AuthorPtr ap, AsnIoPtr aip, AsnTypePt
 erret:
     AsnUnlinkType(orig);
 	return retval;
+}
+
+/*****************************************************************************
+*
+*   AuthorMatch(ap1, ap2)
+*
+*****************************************************************************/
+NLM_EXTERN Boolean LIBCALL AuthorMatch (AuthorPtr ap1, AuthorPtr ap2)
+{
+  if (ap1 == NULL && ap2 == NULL)
+  {
+    return TRUE;
+  }
+  else if (ap1 == NULL || ap2 == NULL)
+  {
+    return FALSE;
+  }
+  
+  if (ap1->is_corr != ap2->is_corr
+      || ap1->lr[0] != ap2->lr[0]
+      || ap1->lr[1] != ap2->lr[1])
+  return FALSE;
+  
+  if (!PersonIdMatch (ap1->name, ap2->name))
+  {
+    return FALSE;
+  }
+  
+  /* compare affil */
+  if (!AffilMatch (ap1->affil, ap2->affil))
+  {
+    return FALSE;
+  }
+  return TRUE;
 }
 
 /*****************************************************************************

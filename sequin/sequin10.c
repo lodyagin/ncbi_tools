@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/3/2003
 *
-* $Revision: 1.265 $
+* $Revision: 1.269 $
 *
 * File Description: 
 *
@@ -4146,7 +4146,9 @@ static void GroupSegmentedCDSs (
       vnp->choice = DEFLINE_FEATLIST;
       vnp->data.ptrvalue = search_sfp;
       search_fcp->delete_me = TRUE;
-      new_slp = SeqLocIntersection (fcp->slp, search_fcp->slp, bsp);
+      new_slp = SeqLocMerge (bsp, fcp->slp, search_fcp->slp,
+                             FALSE, TRUE, FALSE);
+
       SeqLocFree (fcp->slp);
       fcp->slp = new_slp;
     }
@@ -5082,7 +5084,7 @@ static CharPtr GetGenericInterval
   {
     StringCat (interval, "complete ");
   }
-  if (IsCDS (sfp))
+  if (IsCDS (sfp) && ! IsPseudo (sfp))
   {
     StringCat (interval, "cds");
     if (fcp->is_alt_spliced)
@@ -8642,8 +8644,11 @@ static CharPtr BuildFeatureClauses (
 
     GroupAltSplicedExons (feature_list, bsp, TRUE);
     
-    /* group CDSs that have the same name and are under the same gene together */
-    GroupSegmentedCDSs (feature_list, bsp, TRUE, feature_requests->suppress_locus_tags);
+    if (!isSegment)
+    {
+       /* group CDSs that have the same name and are under the same gene together */
+      GroupSegmentedCDSs (feature_list, bsp, TRUE, feature_requests->suppress_locus_tags);
+    }
 
     /* now group clauses */
     GroupAllClauses ( feature_list, bsp );
@@ -9928,6 +9933,10 @@ typedef struct orgmodloadformdata {
   SeqEntryPtr       seq_list;
   Boolean           done;
   Boolean           mods_added;
+  
+  /* this member is used for detecting existing fields */
+  GetSamplePtr      gsp;
+  ExistingTextPtr   etp;
 } OrgModLoadFormData, PNTR OrgModLoadFormPtr;
  
 static void SetFormModsAcceptButton (Handle a)
@@ -10081,11 +10090,54 @@ static void CleanupOrgModLoadForm (
   StdCleanupFormProc (g, data);
 } 
 
-static void AddOneQualToOrg (
-  BioSourcePtr biop,
+static CharPtr genome_names[] = 
+{
+  "",
+  "genomic",
+  "chloroplast",
+  "chromoplast",
+  "kinteoplast",
+  "mitochondrion",
+  "plastid",
+  "macronuclear",
+  "extrachrom",
+  "plasmid",
+  "transposon",
+  "insertion_seq",
+  "cyanelle",
+  "proviral",
+  "virion",
+  "nucleomorph",
+  "apicoplast",
+  "leucoplast",
+  "proplastid",
+  "endogenous_virus",
+};
+
+static Uint1 GetGenomeValFromString (CharPtr value_string)
+{
+  Uint1 genome_val;
+  
+  if (StringHasNoText (value_string))
+  {
+    return 0;
+  }
+  for (genome_val = 1; genome_val < sizeof (genome_names); genome_val++)
+  {
+    if (StringICmp (value_string, genome_names[genome_val]) == 0)
+    {
+      return genome_val;
+    }
+  }
+  return 0;
+}
+
+
+static void AddOneQualToOrg 
+( BioSourcePtr biop,
   CharPtr      value_string,
-  Int4         modifier_index
-)
+  Int4         modifier_index,
+  ExistingTextPtr etp)
 {
   OrgRefPtr     orp;
   OrgModPtr     mod, last_mod;
@@ -10115,8 +10167,9 @@ static void AddOneQualToOrg (
     }
     if (mod != NULL)
     {
-      MemFree (mod->subname);
-      mod->subname = StringSave (value_string);
+      mod->subname = HandleExistingText (mod->subname,
+                                         StringSave (value_string),
+                                         etp); 
     }
     else
     {
@@ -10142,8 +10195,9 @@ static void AddOneQualToOrg (
     }
     if (ssp != NULL)
     {
-      MemFree (ssp->name);
-      ssp->name = StringSave (value_string);
+      ssp->name = HandleExistingText (ssp->name,
+                                      StringSave (value_string),
+                                      etp);
     }
     else
     {
@@ -10162,7 +10216,7 @@ static void AddOneQualToOrg (
   }
 }
 
-static void ApplyTaxNameToOrg (BioSourcePtr biop, CharPtr value_string)
+static void ApplyTaxNameToOrg (BioSourcePtr biop, CharPtr value_string, ExistingTextPtr etp)
 {
   if (biop == NULL) return;
   if (biop->org == NULL)
@@ -10170,52 +10224,9 @@ static void ApplyTaxNameToOrg (BioSourcePtr biop, CharPtr value_string)
   	biop->org = OrgRefNew ();
   }
   if (biop->org == NULL) return;
-  if (biop->org->taxname != NULL)
-  {
-  	biop->org->taxname = MemFree (biop->org->taxname);
-  }
-  biop->org->taxname = StringSave (value_string);
-}
-
-static Uint1 GetGenomeValFromString (CharPtr value_string)
-{
-  static CharPtr genome_names[] = 
-  {
-    "",
-    "genomic",
-    "chloroplast",
-    "chromoplast",
-    "kinteoplast",
-    "mitochondrion",
-    "plastid",
-    "macronuclear",
-    "extrachrom",
-    "plasmid",
-    "transposon",
-    "insertion_seq",
-    "cyanelle",
-    "proviral",
-    "virion",
-    "nucleomorph",
-    "apicoplast",
-    "leucoplast",
-    "proplastid",
-    "endogenous_virus",
-  };
-  Uint1 genome_val;
-  
-  if (StringHasNoText (value_string))
-  {
-    return 0;
-  }
-  for (genome_val = 1; genome_val < sizeof (genome_names); genome_val++)
-  {
-    if (StringICmp (value_string, genome_names[genome_val]) == 0)
-    {
-      return genome_val;
-    }
-  }
-  return 0;
+  biop->org->taxname = HandleExistingText (biop->org->taxname,
+                                           StringSave (value_string),
+                                           etp);
 }
 
 static void ApplyLocationToOrg (BioSourcePtr biop, CharPtr value_string)
@@ -10252,11 +10263,12 @@ static void ApplyQualsToOrg (
         if (apply_choice < NumDefLineModifiers + 1)
         {
           AddOneQualToOrg (biop, part->data.ptrvalue,
-              GetValue (form_data->line_forms[column_index].apply_choice) - 1);
+              GetValue (form_data->line_forms[column_index].apply_choice) - 1,
+              form_data->etp);
         }
         else if (apply_choice == NumDefLineModifiers + 1)
         {  
-          ApplyTaxNameToOrg (biop, part->data.ptrvalue);   
+          ApplyTaxNameToOrg (biop, part->data.ptrvalue, form_data->etp);   
         }
         else if (apply_choice == NumDefLineModifiers + 2)
         {
@@ -10539,6 +10551,295 @@ static void ApplyTableModsByBankitID (BioseqPtr bsp, Pointer userdata)
   }
 }
 
+/* This code is used to detect existing modifiers before a change is made */
+static void FindOneQualOnOrg 
+( BioSourcePtr biop,
+  Int4         modifier_index,
+  GetSamplePtr gsp)
+{
+  OrgModPtr     mod;
+  SubSourcePtr  ssp;
+
+  if (biop == NULL || gsp == NULL) return;
+
+  if (DefLineModifiers[modifier_index].isOrgMod)
+  {
+    if (biop->org == NULL
+        || biop->org->orgname == NULL)
+    {
+      return;
+    }
+    
+    mod = biop->org->orgname->mod;
+    while (mod != NULL
+           && mod->subtype != DefLineModifiers[modifier_index].subtype)
+    {
+      mod = mod->next;
+    }
+    if (mod != NULL)
+    {
+      gsp->num_found ++;
+      if (gsp->sample_text == NULL)
+      {
+        gsp->sample_text = StringSave (mod->subname);
+      }
+      else if (StringCmp (gsp->sample_text, mod->subname) != 0)
+      {
+        gsp->all_same = FALSE;
+      }
+    }
+  }
+  else
+  {
+    ssp = biop->subtype;
+    while (ssp != NULL && ssp->subtype != DefLineModifiers[modifier_index].subtype)
+    {
+      ssp = ssp->next;
+    }
+    if (ssp != NULL)
+    {
+      gsp->num_found ++;
+      if (gsp->sample_text == NULL)
+      {
+        gsp->sample_text = StringSave (ssp->name);
+      }
+      else if (StringCmp (gsp->sample_text, ssp->name) != 0)
+      {
+        gsp->all_same = FALSE;
+      }
+    }
+  }
+}
+
+static void FindQualsOnOrg 
+( BioSourcePtr biop, 
+  ValNodePtr parts,
+  OrgModLoadFormPtr form_data)
+{
+  Int4       column_index;
+  ValNodePtr part;
+  Int4       apply_choice;
+
+  if (biop == NULL || parts == NULL 
+      || form_data == NULL || form_data->gsp == NULL) return;
+
+  part = parts;
+  for (column_index = 0;
+       column_index < form_data->num_line_forms && part != NULL;
+       column_index ++)
+  {
+    apply_choice = GetValue (form_data->line_forms[column_index].apply_choice);
+    if (GetValue (form_data->line_forms[column_index].action_choice) == 2
+      && apply_choice > 0)
+    {
+      if (form_data->replace_with_blank || ! StringHasNoText (part->data.ptrvalue)) 
+      {
+        if (apply_choice < NumDefLineModifiers + 1)
+        {
+          FindOneQualOnOrg (biop, 
+                            GetValue (form_data->line_forms[column_index].apply_choice) - 1,
+                            form_data->gsp);
+        }
+        else if (apply_choice == NumDefLineModifiers + 1)
+        {  
+          if (biop->org != NULL && !StringHasNoText (biop->org->taxname))
+          {
+            form_data->gsp->num_found ++;
+            if (form_data->gsp->sample_text == NULL)
+            {
+              form_data->gsp->sample_text = StringSave (biop->org->taxname);
+            }
+            else if (StringCmp (form_data->gsp->sample_text, biop->org->taxname) != 0)
+            {
+              form_data->gsp->all_same = FALSE;
+            }
+          }
+        }
+        else if (apply_choice == NumDefLineModifiers + 2)
+        {
+          if (biop->genome > 0)
+          {
+            form_data->gsp->num_found ++;
+            if (form_data->gsp->sample_text == NULL)
+            {
+              form_data->gsp->sample_text = StringSave (genome_names [biop->genome]);
+            }
+            else if (StringCmp (form_data->gsp->sample_text, genome_names [biop->genome]) != 0)
+            {
+              form_data->gsp->all_same = FALSE;
+            }
+          }
+        }
+      }
+    }
+    part = part->next;
+  }
+}
+
+static void FindTableModsByTaxName (BioSourcePtr biop, Pointer userdata)
+{
+  OrgModLoadFormPtr form_data;
+  Int4 column_index, part_index;
+  ValNodePtr line, part;
+  TableLinePtr tlp;
+  Boolean found_org;
+  
+  form_data = (OrgModLoadFormPtr) userdata;
+  if (form_data == NULL || form_data->gsp == NULL) return;
+  if (biop == NULL) return;
+  if (biop->org == NULL) return;
+  if (biop->org->taxname == NULL) return;
+
+  for (column_index = 0;
+       column_index < form_data->num_line_forms;
+       column_index ++)
+  {
+    if (GetValue (form_data->line_forms[column_index].action_choice) == 1
+      && GetValue (form_data->line_forms[column_index].match_choice) == 3)
+    {
+      for (line = form_data->line_list; line != NULL; line = line->next)
+      {
+        tlp = line->data.ptrvalue;
+        if (tlp == NULL) continue;
+        part = tlp->parts;
+        for (part_index = 0;
+             part_index < column_index && part != NULL;
+             part_index ++)
+        {
+          part = part->next;
+        }
+        if (part != NULL
+          && StringCmp (part->data.ptrvalue, biop->org->taxname) == 0)
+        {
+          FindQualsOnOrg (biop, tlp->parts, form_data);
+          found_org = TRUE;
+        }
+      }
+    }
+  }
+}
+
+static void FindTableModsByAccessionNumber (BioseqPtr bsp, Pointer userdata)
+{
+  OrgModLoadFormPtr form_data;
+  SeqDescrPtr       sdp;
+  GBBlockPtr        gbp;
+  Int4              column_index, part_index;
+  BioSourcePtr      biop;
+  ValNodePtr        line, part;
+  TableLinePtr      tlp;
+  Boolean           use_local_id;
+  Boolean           look_for_tmsmart;
+  Int4              match_choice;
+  
+  form_data = (OrgModLoadFormPtr) userdata;
+  if (form_data == NULL || bsp == NULL) return;
+
+  biop = GetBiopForBsp (bsp);
+  if (biop == NULL) return;
+
+  gbp = NULL;
+  sdp = BioseqGetSeqDescr (bsp, Seq_descr_genbank, NULL);
+  if (sdp != NULL)
+  {
+    gbp = sdp->data.ptrvalue;
+  }
+
+  for (column_index = 0;
+       column_index < form_data->num_line_forms;
+       column_index ++)
+  {
+    match_choice = GetValue (form_data->line_forms[column_index].match_choice);
+    if (GetValue (form_data->line_forms[column_index].action_choice) == 1
+      && (match_choice == 1 || match_choice == 2 || match_choice == 4))
+    {
+      if (match_choice == 1 || match_choice == 4) {
+        use_local_id = FALSE;
+      } else {
+        use_local_id = TRUE;
+      }
+      if (match_choice == 4) {
+        look_for_tmsmart = TRUE;
+      } else {
+        look_for_tmsmart = FALSE;
+      }
+
+      for (line = form_data->line_list; line != NULL; line = line->next)
+      {
+        tlp = line->data.ptrvalue;
+        if (tlp == NULL) continue;
+        part = tlp->parts;
+        for (part_index = 0;
+             part_index < column_index && part != NULL;
+             part_index ++)
+        {
+          part = part->next;
+        }
+        if (part != NULL
+          && ( IDListHasValue ( part->data.ptrvalue,
+                                bsp->id, use_local_id, look_for_tmsmart)
+            || (! use_local_id && 
+                HasExtraAccession ( part->data.ptrvalue, gbp))))
+        {
+          FindQualsOnOrg (biop, tlp->parts, form_data);
+        }
+      }
+    }
+  }
+}
+
+static void FindTableModsByBankitID (BioseqPtr bsp, Pointer userdata)
+{
+  OrgModLoadFormPtr form_data;
+  ObjectIdPtr       oip;
+  SeqIdPtr          sip;
+  DbtagPtr          dp;
+  Char              match_str [30];
+  Int4              column_index, part_index;
+  BioSourcePtr      biop;
+  ValNodePtr        line, part;
+  TableLinePtr      tlp;
+  Int4              match_choice;
+  
+  form_data = (OrgModLoadFormPtr) userdata;
+  if (form_data == NULL || bsp == NULL) return;
+
+  biop = GetBiopForBsp (bsp);
+  if (biop == NULL) return;
+
+  match_str [0] = 0;
+  for(sip = bsp->id; sip != NULL; sip = sip->next) {
+    if(sip->choice == SEQID_GENERAL) {
+      dp = (DbtagPtr) sip->data.ptrvalue;
+      if(StringICmp(dp->db, "BankIt") == 0) {
+        oip = dp->tag;
+        sprintf (match_str, "bankit%d", oip->id);
+        break;
+      }
+    }
+  }
+  if (match_str [0] == 0) return;
+
+  for (column_index = 0;
+       column_index < form_data->num_line_forms;
+       column_index ++)
+  {
+    match_choice = GetValue (form_data->line_forms[column_index].match_choice);
+    if (GetValue (form_data->line_forms[column_index].action_choice) == 1 && match_choice == 5) {
+      for (line = form_data->line_list; line != NULL; line = line->next) {
+        tlp = line->data.ptrvalue;
+        if (tlp == NULL) continue;
+        part = tlp->parts;
+        for (part_index = 0; part_index < column_index && part != NULL; part_index ++) {
+          part = part->next;
+        }
+        if (part != NULL && StringCmp (part->data.ptrvalue, match_str) == 0) {
+          FindQualsOnOrg (biop, tlp->parts, form_data);
+        }
+      }
+    }
+  }
+}
 
 static void DoAcceptFormMods (ButtoN b)
 {
@@ -10553,9 +10854,17 @@ static void DoAcceptFormMods (ButtoN b)
   sep = GetTopSeqEntryForEntityID (form_data->entityID);
   if (sep == NULL) return;
   
+  form_data->gsp = GetSampleNew ();
+  VisitBioSourcesInSep (sep, form_data, FindTableModsByTaxName);
+  VisitBioseqsInSep (sep, form_data, FindTableModsByAccessionNumber);
+  VisitBioseqsInSep (sep, form_data, FindTableModsByBankitID);
+  form_data->etp = GetExistingTextHandlerInfo (form_data->gsp, FALSE);
+  form_data->gsp = GetSampleFree (form_data->gsp);
+  
   VisitBioSourcesInSep (sep, form_data, ApplyTableModsByTaxName);
   VisitBioseqsInSep (sep, form_data, ApplyTableModsByAccessionNumber);
   VisitBioseqsInSep (sep, form_data, ApplyTableModsByBankitID);
+  form_data->etp = MemFree (form_data->etp);
   Update ();
   ObjMgrSetDirtyFlag (form_data->entityID, TRUE);
   ObjMgrSendMsg (OM_MSG_UPDATE, form_data->entityID, 0, 0);

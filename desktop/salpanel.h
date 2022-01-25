@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.4 $
+* $Revision: 6.11 $
 *
 * File Description: 
 *
@@ -49,6 +49,7 @@
 #include <seqport.h>
 #include <vibrant.h>
 #include <txalign.h>
+#include <explore.h>
 
 extern WindoW getwindow_frompanel (PaneL pnl);
 extern PaneL GetPanelFromWindow (WindoW w);
@@ -87,4 +88,70 @@ extern void do_resize_window (PaneL pnl, EditAlignDataPtr adp, Boolean rearrange
 ***
 ******************************************************************/
 extern void on_draw (PaneL p);
+
+extern SeqFeatPtr 
+GetNextFeatureOnSegOrMaster 
+(BioseqPtr            bsp,
+ SeqFeatPtr           sfp, 
+ Uint4                itemID, 
+ Uint4                index, 
+ SeqMgrFeatContextPtr fcontext);
+
+extern void DoFixCDS (SeqFeatPtr sfp, Pointer userdata);
+#ifdef WIN_MAC
+extern void UpdateSequenceFormActivate (WindoW w);
+extern void UpdateSequenceFormActivated (WindoW w);
+#define SEQFORM_INIT_ACTIVE "SeqFormInitActive"
+#define SEQFORM_OPEN_ITEM   "SeqFormOpenItem"
+#define SEQFORM_CLOSE_ITEM  "SeqFormCloseItem"
+#endif
+extern ForM 
+FeaturePropagateForm 
+(BioseqPtr   bsp,
+ SeqAlignPtr salp,
+ Uint2       selFeatItemID);
+
+#define ADD_TITLE   1
+#define ADD_RRNA    2
+#define ADD_CDS     3
+#define ADD_IMP     4
+#define ADD_GENE    5
+#define CHECK_TITLE 6
+
+typedef struct batchapplyfeaturedetails
+{
+  CharPtr defline;
+  CharPtr geneName;
+  CharPtr protName;
+  CharPtr protDesc;
+  CharPtr rnaName;
+  CharPtr featcomment;
+  Int4    featdef_choice;
+  CharPtr featdef_name;
+  Int4    reading_frame;
+  Int4    rnaSubType;
+  
+} BatchApplyFeatureDetailsData, PNTR BatchApplyFeatureDetailsPtr;
+
+extern BatchApplyFeatureDetailsPtr 
+BatchApplyFeatureDetailsFree 
+(BatchApplyFeatureDetailsPtr bafdp);
+extern BatchApplyFeatureDetailsPtr BatchApplyFeatureDetailsNew (void);
+
+typedef int (LIBCALLBACK *CompareFunc) (Nlm_VoidPtr, Nlm_VoidPtr);
+extern int LIBCALLBACK CompareImpFeatEnumFieldAssoc (VoidPtr ptr1, VoidPtr ptr2);
+extern int LIBCALLBACK CompareFeatureValNodeStrings (VoidPtr ptr1, VoidPtr ptr2);
+extern void SortEnumFieldAssocPtrArray (EnumFieldAssocPtr alist, CompareFunc compar);
+
+extern DialoG 
+BatchApplyFeatureDetailsDialog (GrouP parent, Int4 feattype);
+
+extern void 
+ApplyFeatureToAlignment 
+(Uint2       entityID, 
+ SeqAlignPtr salp,
+ SeqLocPtr   slp, 
+ Int4        feattype);
+
+
 #endif

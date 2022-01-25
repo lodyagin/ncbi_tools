@@ -30,8 +30,12 @@ Author: Tom Madden
 Contents: #defines and definitions for structures used by BLAST.
 
 ******************************************************************************/
-/* $Revision: 6.162 $ 
+/* $Revision: 6.163 $ 
 * $Log: blastdef.h,v $
+* Revision 6.163  2005/05/16 17:43:29  papadopo
+* From Alejandro Schaffer: Added support for compositional score
+* matrix adjustment
+*
 * Revision 6.162  2005/04/25 14:16:36  coulouri
 * set db_chunk_size adaptively
 *
@@ -1119,7 +1123,7 @@ typedef struct _blast_optionsblk {
         CharPtr		org_name;	/* user specified name of organizm;  corresponding .gil file will be used */
 	Uint1		strand_option;	/* BLAST_TOP_STRAND, BLAST_BOTTOM_STRAND, or BLAST_BOTH_STRAND.  used by blast[nx] and tblastx */
 	Int4		hsp_num_max;	/* maximum number of HSP's allowed.  Zero indicates no limit. */
-	Boolean		tweak_parameters, /* For impala related stuff. */
+	Uint1		tweak_parameters, /* For composition-based statistics. */
 			smith_waterman;
         CharPtr         phi_pattern;      /* Pattern for PHI-Blast search */
 	Boolean		use_real_db_size; /* Use real DB size.  meant for use if a list of gis' is submitted, 
@@ -1209,7 +1213,7 @@ struct _blast_wizardoptionsblk {
     Uint1           strand_option;
     Int4            threshold_first;
     Int4            threshold_second;
-    Boolean         tweak_parameters;
+    Uint1           tweak_parameters;
     Boolean         use_best_align;
     Boolean         use_real_db_size;
     Int4            window_size;
@@ -1461,6 +1465,11 @@ typedef struct _blast_seg {
 
 #define BLAST_NUMBER_OF_ORDERING_METHODS 2
 
+/*possible values for comp_adjustment_method*/
+#define NO_COMP_ADJUSTMENT 0
+#define COMP_BASED_STATISTICS 1
+#define COMP_MATRIX_ADJUSTMENT 2
+
 /*
 	The following structure is used in "link_hsps" to decide between
 	two different "gapping" models.  Here link is used to hook up
@@ -1509,6 +1518,9 @@ typedef struct _blast_hsp {
                 GapXEditBlockPtr gap_info; /* ALL gapped alignment is here */
 		Int4 num_ref;
 		Int4 linked_to;
+/*which method if any was used for compositional adjustment?
+  relevant only for blastp*/
+		Int2		comp_adjustment_method; 
 	} BLAST_HSP, PNTR BLAST_HSPPtr;
 
 /* The helper arrays contains the info used frequently in the inner for loops. -cfj

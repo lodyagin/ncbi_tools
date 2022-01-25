@@ -1,4 +1,4 @@
-/* $Id: blast_engine.c,v 1.189 2005/04/27 19:51:37 dondosha Exp $
+/* $Id: blast_engine.c,v 1.193 2005/05/10 16:07:51 camacho Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -57,7 +57,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_engine.c,v 1.189 2005/04/27 19:51:37 dondosha Exp $";
+    "$Id: blast_engine.c,v 1.193 2005/05/10 16:07:51 camacho Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_engine.h>
@@ -258,7 +258,7 @@ s_BlastSearchEngineCore(EBlastProgramType program_number, BLAST_SequenceBlk* que
       first_context = 0;
       last_context = 5;
       if (score_options->is_ooframe) {
-         BLAST_GetAllTranslations(orig_sequence, NCBI2NA_ENCODING,
+         BLAST_GetAllTranslations(orig_sequence, eBlastEncodingNcbi2na,
             orig_length, db_options->gen_code_string, &translation_buffer,
             &frame_offsets, &subject->oof_sequence);
          subject->oof_sequence_allocated = TRUE;
@@ -270,7 +270,7 @@ s_BlastSearchEngineCore(EBlastProgramType program_number, BLAST_SequenceBlk* que
           frame_offsets_a = frame_offsets =
               ContextOffsetsToOffsetArray(query_info_in);
       } else {
-         BLAST_GetAllTranslations(orig_sequence, NCBI2NA_ENCODING,
+         BLAST_GetAllTranslations(orig_sequence, eBlastEncodingNcbi2na,
             orig_length, db_options->gen_code_string, &translation_buffer,
             &frame_offsets, NULL);
          frame_offsets_a = frame_offsets;
@@ -298,8 +298,7 @@ s_BlastSearchEngineCore(EBlastProgramType program_number, BLAST_SequenceBlk* que
    }
 
    /* Substitute query info by concatenated database info for RPS BLAST search */
-   if (program_number == eBlastTypeRpsBlast || 
-       program_number == eBlastTypeRpsTblastn) {
+   if (Blast_ProgramIsRpsBlast(program_number)) {
       BlastRPSLookupTable* lut = (BlastRPSLookupTable*) lookup->lut;
       query_info = (BlastQueryInfo*) calloc(1, sizeof(BlastQueryInfo));
       query_info->num_queries = lut->num_profiles;
@@ -377,6 +376,12 @@ s_BlastSearchEngineCore(EBlastProgramType program_number, BLAST_SequenceBlk* que
             aux_struct->GetGappedScore(program_number, query, query_info, 
                subject, gap_align, score_params, ext_params, hit_params, 
                init_hitlist, &hsp_list, gapped_stats);
+
+            /* Removes redundant HSPs. */
+             Blast_HSPListPurgeHSPsWithCommonEndpoints(program_number, hsp_list);
+
+             Blast_HSPListSortByScore(hsp_list);
+
             if (score_options->is_ooframe && kTranslatedSubject)
                subject->length = prot_length;
          } else {
@@ -417,10 +422,8 @@ s_BlastSearchEngineCore(EBlastProgramType program_number, BLAST_SequenceBlk* que
       status = BLAST_LinkHsps(program_number, hsp_list, query_info,
                   subject->length, gap_align->sbp, hit_params->link_hsp_params, 
                   score_options->gapped_calculation);
-   } else if (program_number != eBlastTypePhiBlastn &&
-              program_number != eBlastTypePhiBlastp &&
-              program_number != eBlastTypeRpsBlast &&
-          program_number != eBlastTypeRpsTblastn) {
+   } else if (!Blast_ProgramIsPhiBlast(program_number) &&
+              !Blast_ProgramIsRpsBlast(program_number)) {
        /* Calculate e-values for all HSPs. Skip this step
           for PHI and RPS BLAST, since calculating the E values 
           requires precomputation that has not been done yet */
@@ -608,8 +611,7 @@ s_RPSPreliminarySearchEngine(EBlastProgramType program_number,
    BLAST_SequenceBlk* one_query = NULL;
    Int4 index;
 
-   if (program_number != eBlastTypeRpsBlast &&
-       program_number != eBlastTypeRpsTblastn)
+   if ( !Blast_ProgramIsRpsBlast(program_number))
       return -1;
 
    /* modify scoring and gap alignment structures for
@@ -734,8 +736,7 @@ BLAST_PreliminarySearchEngine(EBlastProgramType program_number,
 
    /* For RPS BLAST, there is no loop over subject sequences, so the preliminary
       search engine is done in a separate function. */
-   if (program_number == eBlastTypeRpsBlast || 
-       program_number == eBlastTypeRpsTblastn) {
+   if (Blast_ProgramIsRpsBlast(program_number)) {
       status =         
          s_RPSPreliminarySearchEngine(program_number, query, query_info, 
             seq_src, score_params, lookup_wrap, aux_struct, word_params, 
@@ -754,7 +755,7 @@ BLAST_PreliminarySearchEngine(EBlastProgramType program_number,
 
    /* Encoding is set so there are no sentinel bytes, and protein/nucleotide
       sequences are retieved in ncbistdaa/ncbi2na encodings respectively. */
-   seq_arg.encoding = BLASTP_ENCODING; 
+   seq_arg.encoding = eBlastEncodingProtein; 
 
    db_length = BlastSeqSrcGetTotLen(seq_src);
 
@@ -951,8 +952,7 @@ Blast_RunFullSearch(EBlastProgramType program_number,
    /* Prohibit any subsequent writing to the HSP stream. */
    BlastHSPStreamClose(hsp_stream);
 
-   if (program_number == eBlastTypePhiBlastn || 
-       program_number == eBlastTypePhiBlastp) {
+   if (Blast_ProgramIsPhiBlast(program_number)) {
        PHIPatternSpaceCalc(query_info, diagnostics);
        pattern_blk = ((SPHIPatternSearchBlk*) lookup_wrap->lut);
    } 

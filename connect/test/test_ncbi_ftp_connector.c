@@ -1,4 +1,4 @@
-/*  $Id: test_ncbi_ftp_connector.c,v 1.3 2004/12/27 15:32:10 lavr Exp $
+/*  $Id: test_ncbi_ftp_connector.c,v 1.8 2005/05/20 12:56:35 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -35,6 +35,7 @@
 #include <connect/ncbi_connection.h>
 #include <connect/ncbi_ftp_connector.h>
 #include <stdlib.h>
+#include <time.h>
 /* This header must go last */
 #include "test_assert.h"
 
@@ -43,50 +44,64 @@
 #define TEST_PORT            0
 #define TEST_USER            "ftp"
 #define TEST_PASS            "none"
-#define TEST_PATH            "/"
+#define TEST_PATH            ((char*) 0)
 
 
 int main(int argc, char* argv[])
 {
-    static const char chdir[] = "CWD /toolbox/ncbi_tools\n";
-    static const char file[] = "RETR CURRENT/ncbi.tar.gz";
+    static const char k_chdir[] = "CWD /toolbox/ncbi_tools\n";
+    static const char k_file[] = "RETR CURRENT/ncbi.tar.gz";
     const char* env = getenv("CONN_DEBUG_PRINTOUT");
-    int/*bool*/ aborting = 0;
-    STimeout    timeout;
+    int/*bool*/ aborting = 0, first;
+    TFCDC_Flags flags = 0;
+    char        buf[1024];
     CONNECTOR   connector;
     FILE*       data_file;
-    CONN        conn;
-    ESwitch     log = eDefault;
-    size_t      n;
-    char        buf[1024];
+    size_t      size, n;
+    STimeout    timeout;
     EIO_Status  status;
+    CONN        conn;
+
+    g_NCBI_ConnectRandomSeed = (int) time(0) ^ NCBI_CONNECT_SRAND_ADDENT;
+    srand(g_NCBI_ConnectRandomSeed);
 
     /* Log and data-log streams */
     CORE_SetLOGFormatFlags(fLOG_None          | fLOG_Level   |
                            fLOG_OmitNoteLevel | fLOG_DateTime);
     CORE_SetLOGFILE(stderr, 0/*false*/);
-    data_file = fopen("test_ncbi_ftp_connector.log", "wb");
+    data_file = fopen("test_ncbi_ftp_connector.out", "wb");
     assert(data_file);
 
-    timeout.sec = 3;
+    timeout.sec  = 3;
     timeout.usec = 0;
 
-    if (env  &&  (strcasecmp(env, "1")    == 0  ||
-                  strcasecmp(env, "TRUE") == 0  ||
-                  strcasecmp(env, "SOME") == 0  ||
-                  strcasecmp(env, "DATA") == 0)) {
-        log = eOn;
-    }
-    if (env  &&  (strcasecmp(env, "0")     == 0  ||
-                  strcasecmp(env, "NONE")  == 0  ||
-                  strcasecmp(env, "FALSE") == 0)) {
-        log = eOff;
+    if (env) {
+        if (    strcasecmp(env, "1")    == 0  ||
+                strcasecmp(env, "TRUE") == 0  ||
+                strcasecmp(env, "SOME") == 0)
+            flags |= eFCDC_LogControl;
+        else if (strcasecmp(env, "DATA") == 0)
+            flags |= eFCDC_LogData;
+        else if (strcasecmp(env, "ALL")  == 0)
+            flags |= eFCDC_LogAll;
     }
 
+    if (TEST_PORT) {
+        sprintf(buf, ":%hu", TEST_PORT);
+    } else {
+        *buf = 0;
+    }
+    CORE_LOGF(eLOG_Note, ("Connecting to ftp://%s%s@%s%s%s%s%s",
+                          TEST_HOST, buf,
+                          TEST_USER ? TEST_USER                : "",
+                          TEST_PASS ? ":"                      : "",
+                          TEST_PASS ? TEST_PASS                : "",
+                          !TEST_PATH || *TEST_PATH == '/' ? "" : "/",
+                          TEST_PATH ? TEST_PATH                : ""));
     /* Run the tests */
     connector = FTP_CreateDownloadConnector(TEST_HOST, TEST_PORT,
                                             TEST_USER, TEST_PASS,
-                                            TEST_PATH, log);
+                                            TEST_PATH, flags);
 
     if (CONN_Create(connector, &conn) != eIO_Success)
         CORE_LOG(eLOG_Fatal, "Cannot create FTP download connection");
@@ -99,45 +114,102 @@ int main(int argc, char* argv[])
 
     if (CONN_Wait(conn, eIO_Read, &timeout) != eIO_Unknown)
         CORE_LOG(eLOG_Fatal, "Test failed in waiting on READ");
+    CORE_LOG(eLOG_Note, "Unrecognized command was correctly rejected");
+
+    if (CONN_Write(conn, "LIST\nSIZE", 9, &n, eIO_WritePlain) != eIO_Unknown)
+        CORE_LOG(eLOG_Fatal, "Test failed to reject multiple commands");
+    CORE_LOG(eLOG_Note, "Multiple commands were correctly rejected");
 
     if (CONN_Write(conn, "LIST", 4, &n, eIO_WritePlain) != eIO_Success)
         CORE_LOG(eLOG_Fatal, "Cannot write LIST command");
 
+    CORE_LOG(eLOG_Note, "LIST command output:");
+    first = 1/*true*/;
     do {
         status = CONN_Read(conn, buf, sizeof(buf), &n, eIO_ReadPlain);
-        if (n != 0)
+        if (n != 0) {
             printf("%.*s", (int) n, buf);
+            first = 0/*false*/;
+        }
     } while (status == eIO_Success);
+    if (first) {
+        printf("<EOF>\n");
+    }
 
-    if (CONN_Write(conn, chdir, sizeof(chdir) - 1, &n, eIO_WritePlain)
+    if (CONN_Write(conn, "NLST\r\n", 6, &n, eIO_WritePlain) != eIO_Success)
+        CORE_LOG(eLOG_Fatal, "Cannot write NLST command");
+
+    CORE_LOG(eLOG_Note, "NLST command output:");
+    first = 1/*true*/;
+    do {
+        status = CONN_Read(conn, buf, sizeof(buf), &n, eIO_ReadPlain);
+        if (n != 0) {
+            printf("%.*s", (int) n, buf);
+            first = 0/*false*/;
+        }
+    } while (status == eIO_Success);
+    if (first) {
+        printf("<EOF>\n");
+    }
+
+    if (CONN_Write(conn, k_chdir, sizeof(k_chdir) - 1, &n, eIO_WritePlain)
         != eIO_Success) {
         CORE_LOGF(eLOG_Fatal, ("Cannot execute %.*s",
-                               (int)sizeof(chdir) - 2, chdir));
+                               (int)sizeof(k_chdir) - 2, k_chdir));
     }
 
-    if (CONN_Write(conn, file, sizeof(file) - 1, &n, eIO_WritePersist)
+    if (CONN_Write(conn, k_file, sizeof(k_file) - 1, &n, eIO_WritePersist)
         != eIO_Success) {
-        CORE_LOGF(eLOG_Fatal, ("Cannot write %s", file));
+        CORE_LOGF(eLOG_Fatal, ("Cannot write %s", k_file));
     }
 
-     do {
+    size = 0;
+    do {
         status = CONN_Read(conn, buf, sizeof(buf), &n, eIO_ReadPlain);
-        if (n != 0)
+        if (n != 0) {
             fwrite(buf, n, 1, data_file);
+            size += n;
+        }
         if (argc > 1  &&  rand() % 100 == 0) {
             aborting = 1;
             break;
         }
     } while (status == eIO_Success);
-   
-    if (CONN_Close(conn) != eIO_Success)
+
+    if (!aborting  ||  (rand() & 1) == 0) {
+        if (CONN_Write(conn, "NLST blah*", 10, &n, eIO_WritePlain)
+            != eIO_Success) {
+            CORE_LOG(eLOG_Fatal, "Cannot write gobbled NLST command");
+        }
+
+        CORE_LOG(eLOG_Note, "Gobbled NLST command output (should be empty):");
+        first = 1/*true*/;
+        do {
+            status = CONN_Read(conn, buf, sizeof(buf), &n, eIO_ReadPlain);
+            if (n != 0) {
+                printf("%.*s", (int) n, buf);
+                first = 0/*false*/;
+            }
+        } while (status == eIO_Success);
+        if (first) {
+            printf("<EOF>\n");
+        }
+    }
+
+    if (CONN_Close(conn) != eIO_Success) {
         CORE_LOGF(eLOG_Fatal, ("Error %s FTP connection",
                                aborting ? "aborting" : "closing"));
+    }
 
-    /* Cleanup and Exit */
+    /* Cleanup and exit */
     fclose(data_file);
-    if (aborting)
-        remove("test_ncbi_ftp_connector.log");
+    if (aborting) {
+        remove("test_ncbi_ftp_connector.out");
+    } else {
+        CORE_LOGF(eLOG_Note, ("%lu bytes downloaded", (unsigned long) size));
+    }
+
+    CORE_LOG(eLOG_Note, "Test completed");
     CORE_SetLOG(0);
     return 0;
 }
@@ -146,6 +218,21 @@ int main(int argc, char* argv[])
 /*
  * --------------------------------------------------------------------------
  * $Log: test_ncbi_ftp_connector.c,v $
+ * Revision 1.8  2005/05/20 12:56:35  lavr
+ * Added test for multiple commands and '[\r]\n'-terminated input
+ *
+ * Revision 1.7  2005/05/20 12:11:29  lavr
+ * Test ABOR with command and connection closure (both should now work)
+ *
+ * Revision 1.6  2005/05/20 11:41:47  lavr
+ * Separate control and data FTP connection debugging setting
+ *
+ * Revision 1.5  2005/05/11 20:00:25  lavr
+ * Empty NLST result list bug fixed
+ *
+ * Revision 1.4  2005/05/02 16:13:05  lavr
+ * Use global random seed; show NLST use example; add more logging
+ *
  * Revision 1.3  2004/12/27 15:32:10  lavr
  * Randomly test ABORTs (if there is an argument for main())
  *

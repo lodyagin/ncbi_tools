@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/2/97
 *
-* $Revision: 6.333 $
+* $Revision: 6.338 $
 *
 * File Description: 
 *
@@ -1277,6 +1277,34 @@ NLM_EXTERN Boolean CheckSeqLocForPartial (SeqLocPtr location, BoolPtr p5ptr, Boo
   return (Boolean) (partial5 || partial3);
 }
 
+static void ConvertWholeToIntLoc (SeqLocPtr slp)
+{
+  BioseqPtr bsp;
+  SeqIntPtr sip;
+  
+  if (slp == NULL || slp->choice != SEQLOC_WHOLE || slp->data.ptrvalue == NULL)
+  {
+    return;
+  }
+  bsp = BioseqFind (slp->data.ptrvalue);
+  if (bsp == NULL)
+  {
+    return;
+  }
+  
+  sip = SeqIntNew ();
+  if (sip != NULL)
+  {
+    sip->from = 0;
+    sip->to = bsp->length - 1;
+    sip->id = SeqIdDup (SeqIdFindBest (bsp->id, 0));
+    sip->strand = bsp->strand;
+    slp->data.ptrvalue = SeqIdFree (slp->data.ptrvalue);
+    slp->data.ptrvalue = sip;
+    slp->choice = SEQLOC_INT;
+  } 
+}
+
 NLM_EXTERN void SetSeqLocPartial (SeqLocPtr location, Boolean partial5, Boolean partial3)
 
 {
@@ -1288,6 +1316,12 @@ NLM_EXTERN void SetSeqLocPartial (SeqLocPtr location, Boolean partial5, Boolean 
   SeqPntPtr   spp;
 
   if (location != NULL) {
+    /* if whole, need to convert to int */
+    if (partial5 || partial3)
+    {
+      ConvertWholeToIntLoc (location);
+    }
+  
     firstSlp = NULL;
     lastSlp = NULL;
     slp = SeqLocFindNext (location, NULL);
@@ -5372,6 +5406,7 @@ static void NormalizeAuthors (AuthListPtr alp, Boolean fixInitials)
 {
   AuthorPtr        ap;
   CharPtr          initials;
+  size_t           len;
   ValNodePtr       names;
   ValNodePtr       next;
   NameStdPtr       nsp;
@@ -5432,6 +5467,15 @@ static void NormalizeAuthors (AuthListPtr alp, Boolean fixInitials)
             nsp->names [1] = MemFree (nsp->names [1]);
             nsp->names [0] = MemFree (nsp->names [0]);
             nsp->names [0] = StringSave ("et al.");
+          }
+          str = nsp->names [0];
+          len = StringLen (str);
+          if (len > 4 && StringHasNoText (nsp->names [5])) {
+            if (StringCmp (str + len - 4, " Jr.") == 0 || StringCmp (str + len - 4, " Sr.") == 0) {
+              nsp->names [5] = StringSave (str + len - 3);
+              str [len - 4] = '\0';
+              TrimSpacesAroundString (str);
+            }
           }
           if (StringHasNoText (nsp->names [0]) &&
               StringHasNoText (nsp->names [1]) &&
@@ -6245,11 +6289,13 @@ static void CleanupFeatureStrings (SeqFeatPtr sfp, Boolean stripSerial, ValNodeP
           ValNodeFreeData (vnp);
         }
       }
+      /*
       if (grp->locus != NULL && sfp->comment != NULL) {
         if (StringCmp (grp->locus, sfp->comment) == 0) {
           sfp->comment = MemFree (sfp->comment);
         }
       }
+      */
       break;
     case SEQFEAT_ORG :
       orp = (OrgRefPtr) sfp->data.value.ptrvalue;
@@ -6715,9 +6761,15 @@ static void CleanupDescriptorStrings (ValNodePtr sdp, Boolean stripSerial, ValNo
       break;
     case Seq_descr_name :
       CleanVisString ((CharPtr PNTR) &sdp->data.ptrvalue);
+      if (sdp->data.ptrvalue == NULL) {
+        sdp->data.ptrvalue = StringSave ("");
+      }
       break;
     case Seq_descr_title :
       CleanVisString ((CharPtr PNTR) &sdp->data.ptrvalue);
+      if (sdp->data.ptrvalue == NULL) {
+        sdp->data.ptrvalue = StringSave ("");
+      }
       break;
     case Seq_descr_org :
       orp = (OrgRefPtr) sdp->data.ptrvalue;
@@ -6725,6 +6777,9 @@ static void CleanupDescriptorStrings (ValNodePtr sdp, Boolean stripSerial, ValNo
     case Seq_descr_comment :
       CleanVisStringJunk ((CharPtr PNTR) &sdp->data.ptrvalue);
       RemoveSpacesBetweenTildes ((CharPtr) sdp->data.ptrvalue);
+      if (sdp->data.ptrvalue == NULL) {
+        sdp->data.ptrvalue = StringSave ("");
+      }
       break;
     case Seq_descr_num :
       break;
@@ -6756,10 +6811,14 @@ static void CleanupDescriptorStrings (ValNodePtr sdp, Boolean stripSerial, ValNo
       break;
     case Seq_descr_pub :
       pdp = (PubdescPtr) sdp->data.ptrvalue;
+      CleanDoubleQuote (pdp->comment);
       NormalizePubdesc (pdp, stripSerial, publist);
       break;
     case Seq_descr_region :
       CleanVisString ((CharPtr PNTR) &sdp->data.ptrvalue);
+      if (sdp->data.ptrvalue == NULL) {
+        sdp->data.ptrvalue = StringSave ("");
+      }
       break;
     case Seq_descr_user :
       VisitUserObjectsInUop ((UserObjectPtr) sdp->data.ptrvalue, NULL, CleanUserObject);

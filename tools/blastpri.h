@@ -32,8 +32,15 @@ Contents: prototypes for "private" BLAST functions, these should not be called
 
 ******************************************************************************/
 
-/* $Revision: 6.114 $ 
+/* $Revision: 6.116 $ 
 * $Log: blastpri.h,v $
+* Revision 6.116  2005/05/16 17:44:24  papadopo
+* From Alejandro Schaffer: Change in prototype for RedoAlignmentCore to
+* support more than two options for adjustParameters
+*
+* Revision 6.115  2005/05/02 16:03:14  coulouri
+* refactor code to set db_chunk_size
+*
 * Revision 6.114  2004/08/23 17:03:52  papadopo
 * From Michael Gertz: make CopyResultHspToHSP public
 *
@@ -1010,7 +1017,7 @@ Boolean FastaCheckDna PROTO((CharPtr seq));
 BLASTHSPSegmentPtr BLASTHSPSegmentFromSeqAlign PROTO((SeqAlignPtr sap));
 SeqAlignPtr BlastClusterHitsFromSeqAlign PROTO((SeqAlignPtr seqalign, CharPtr prog_name, CharPtr database, BLAST_OptionsBlkPtr options, FloatHi length_thresh, FloatHi score_thresh, FloatHi overlap_thresh, Boolean two_sided));
 SeqAlignPtr RedoAlignmentCore PROTO((BlastSearchBlkPtr search,   
-  BLAST_OptionsBlkPtr options, Int4 hitlist_count, Boolean adjustParameters,
+  BLAST_OptionsBlkPtr options, Int4 hitlist_count, Int4 adjustParameters,
   Boolean SmithWaterman));
 BLAST_HSPPtr BLAST_HSPFree PROTO((BLAST_HSPPtr hsp));
 void BLASTResultFreeHsp PROTO((BLASTResultHitlistPtr result));
@@ -1051,6 +1058,8 @@ Int2 blast_set_parameters PROTO((BlastSearchBlkPtr search, Int4
                                  avglen, Nlm_FloatHi searchsp, Int4 window));
 Boolean 
 BlastGetFirstAndLastContext PROTO((CharPtr prog_name, SeqLocPtr query_slp, Int2Ptr first_context, Int2Ptr last_context, Uint1 strand_options));
+
+void ConfigureDbChunkSize(BlastSearchBlkPtr search, Int4 num_seq);
 
 #ifdef __cplusplus
 }

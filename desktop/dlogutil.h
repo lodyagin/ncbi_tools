@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.33 $
+* $Revision: 6.38 $
 *
 * File Description: 
 *
@@ -191,6 +191,22 @@ extern DialoG CreateIntervalEditorDialogEx (GrouP h, CharPtr title, Uint2 rows,
                                             Boolean useBar, Boolean showPartials,
                                             Boolean allowGaps, FeatureFormPtr ffp,
                                             IntEdPartialProc proc);
+                                            
+extern DialoG CreateIntervalEditorDialogExEx (GrouP h, CharPtr title, Uint2 rows,
+                                              Int2 spacing, SeqEntryPtr sep,
+                                              Boolean nucsOK, Boolean protsOK,
+                                              Boolean useBar, Boolean showPartials,
+                                              Boolean allowGaps, FeatureFormPtr ffp,
+                                              IntEdPartialProc proc, 
+                                              Boolean use_aln, Boolean show_seqid,
+                                              TaglistCallback tlp_callback, 
+                                              Pointer callback_data);
+
+extern void DisplayErrorMessages (CharPtr title, ValNodePtr err_list);
+
+extern Boolean AdjustFromForGap (Int4Ptr p_from, SeqAlignPtr salp, Int4 aln_len, Int4 aln_row);
+extern Boolean AdjustToForGap (Int4Ptr p_to, SeqAlignPtr salp, Int4 aln_row);
+                                            
 extern void SetSequenceAndStrandForIntervalPage (DialoG d);                                            
 extern void StdFeatIntEdPartialCallback (FeatureFormPtr ffp, Boolean partial5, Boolean partial3, Boolean order);
 
@@ -330,10 +346,13 @@ extern void ModalAcceptButton (ButtoN b);
 extern void ModalCancelButton (ButtoN b);
 
 typedef void (*TableDisplayDblClick) PROTO((PoinT, CharPtr, CharPtr, Pointer));
+typedef Boolean (*TableDisplayLeftInRed) PROTO ((Int4, ValNodePtr, Pointer));
 extern DialoG TableDisplayDialog (GrouP parent, Int4 width, Int4 height,
                                   Int4 frozen_header, Int4 frozen_left,
                                   TableDisplayDblClick dbl_click,
-                                  Pointer dbl_click_data);
+                                  Pointer dbl_click_data,
+                                  TableDisplayLeftInRed,
+                                  Pointer left_in_red_data);
 extern ValNodePtr FreeTableDisplayRowList (ValNodePtr row_list);
 extern void PrintTableDisplayRowListToFile (ValNodePtr row_list, FILE *fp);
 extern ValNodePtr CopyTableDisplayRowList (ValNodePtr row_list);
@@ -402,6 +421,15 @@ extern CharPtr ValNodeStringName (ValNodePtr vnp);
 extern void ValNodeSimpleDataFree (ValNodePtr vnp);
 extern ValNodePtr ValNodeStringCopy (ValNodePtr vnp);
 extern Boolean ValNodeChoiceMatch (ValNodePtr vnp1, ValNodePtr vnp2);
+
+extern DialoG SequenceSelectionDialog 
+(GrouP h,
+ Nlm_ChangeNotifyProc     change_notify,
+ Pointer                  change_userdata,
+ Boolean                  allow_multi,
+ Boolean                  show_nucs,
+ Boolean                  show_prots,
+ Uint2                    entityID);
 
 
 #ifdef __cplusplus

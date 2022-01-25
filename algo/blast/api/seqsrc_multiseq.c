@@ -1,4 +1,4 @@
-/*  $Id: seqsrc_multiseq.c,v 1.22 2005/04/27 20:00:36 dondosha Exp $
+/*  $Id: seqsrc_multiseq.c,v 1.23 2005/05/10 16:07:59 camacho Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
  * locations.
  */
 
-static char const rcsid[] = "$Id: seqsrc_multiseq.c,v 1.22 2005/04/27 20:00:36 dondosha Exp $";
+static char const rcsid[] = "$Id: seqsrc_multiseq.c,v 1.23 2005/05/10 16:07:59 camacho Exp $";
 
 #include <algo/blast/api/seqsrc_multiseq.h>
 #include <algo/blast/core/blast_seqsrc_impl.h>
@@ -231,9 +231,9 @@ s_MultiSeqGetSequence(void* multiseq_handle, void* args)
        we need the uncompressed buffer, stored in the 'sequence_start' 
        pointer. That buffer has a sentinel byte in case of blastn, but
        no sentinel byte for translated programs. */
-    if (seq_args->encoding == BLASTNA_ENCODING)
+    if (seq_args->encoding == eBlastEncodingNucleotide)
        seq_args->seq->sequence = seq_args->seq->sequence_start + 1;
-    else if (seq_args->encoding == NCBI4NA_ENCODING)
+    else if (seq_args->encoding == eBlastEncodingNcbi4na)
        seq_args->seq->sequence = seq_args->seq->sequence_start;
 
     seq_args->seq->oid = index;

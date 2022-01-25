@@ -1,4 +1,4 @@
-/* $Id: twoseq_api.c,v 1.45 2005/04/27 14:53:19 papadopo Exp $
+/* $Id: twoseq_api.c,v 1.47 2005/06/02 20:39:38 dondosha Exp $
 ***************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -167,8 +167,7 @@ s_TwoSeqBasicFillOptions(const BLAST_SummaryOptions* basic_options,
                                  do_megablast,
                                  basic_options->word_threshold,
                                  word_size,
-                                 0,              /* no variable wordsize */ 
-                                 FALSE);         /* no PSSM */ 
+                                 0);             /* no variable wordsize */ 
  
     /* If discontiguous megablast is specified, choose
        the 11-of-21 optimal template).*/
@@ -313,21 +312,14 @@ s_SeqLocListLen(SeqLoc* seqloc)
 }
 
 Int2 
-BLAST_TwoSeqLocSets(const BLAST_SummaryOptions *basic_options,
-                    SeqLoc* query_seqloc, SeqLoc* subject_seqloc, 
-                    SeqLoc* masking_locs,
-                    SeqAlign **seqalign_out,
-                    SeqLoc** filter_out,
-                    Boolean* mask_at_hash,
-                    Blast_SummaryReturn* *extra_returns_ptr)
+Blast_SearchOptionsFromSummaryOptions(const BLAST_SummaryOptions *basic_options,
+                                      SeqLoc* query_seqloc,
+                                      Blast_SummaryReturn* extra_returns, 
+                                      SBlastOptions* *search_options,
+                                      char* *program_name)
 {
-    SBlastOptions* options = NULL;
     const char *kProgram = NULL;
     Int2 status = 0;
-    Blast_SummaryReturn* extra_returns;
-
-    if (!basic_options || !query_seqloc || !subject_seqloc)
-        return -1;
 
     switch(basic_options->program) {
     case eBlastn:
@@ -349,14 +341,44 @@ BLAST_TwoSeqLocSets(const BLAST_SummaryOptions *basic_options,
        return -1;
     }
 
-    extra_returns = Blast_SummaryReturnNew();
-    status = SBlastOptionsNew(kProgram, &options, extra_returns);
+    status = SBlastOptionsNew(kProgram, search_options, extra_returns);
 
     if (status)
         return -1;
     
-    status = s_TwoSeqBasicFillOptions(basic_options, options, 
+    status = s_TwoSeqBasicFillOptions(basic_options, *search_options, 
                                       s_SeqLocListLen(query_seqloc));
+
+    if (program_name)
+        *program_name = strdup(kProgram);
+
+    return status;
+}
+
+Int2 
+BLAST_TwoSeqLocSets(const BLAST_SummaryOptions *basic_options,
+                    SeqLoc* query_seqloc, SeqLoc* subject_seqloc, 
+                    SeqLoc* masking_locs,
+                    SeqAlign **seqalign_out,
+                    SeqLoc** filter_out,
+                    Boolean* mask_at_hash,
+                    Blast_SummaryReturn* *extra_returns_ptr)
+{
+    SBlastOptions* options = NULL;
+    char *program_name = NULL;
+    Int2 status = 0;
+    Blast_SummaryReturn* extra_returns;
+
+    if (!basic_options || !query_seqloc || !subject_seqloc)
+        return -1;
+
+    extra_returns = Blast_SummaryReturnNew();
+
+    status = 
+        Blast_SearchOptionsFromSummaryOptions(basic_options, query_seqloc, 
+                                              extra_returns, &options, 
+                                              &program_name);
+    sfree(program_name);
 
     if (!status) {
         status = 

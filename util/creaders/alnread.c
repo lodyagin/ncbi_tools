@@ -1,5 +1,5 @@
 /*
- * $Id: alnread.c,v 1.17 2005/01/13 14:56:42 bollin Exp $
+ * $Id: alnread.c,v 1.22 2005/06/03 17:03:57 lavr Exp $
  *
  * ===========================================================================
  *
@@ -294,6 +294,8 @@ s_ReportInconsistentBlockLine
 }
 
 
+#if 0
+/* this section was removed by indexer request */
 /* This function creates and sends an error message regarding mismatched
  * definition lines
  */
@@ -316,6 +318,7 @@ s_ReportDefinitionLineMismatch
     eip->message = strdup ("Mismatched definition lines");
     report_error (eip, report_error_userdata);
 }
+#endif
 
 
 /* This function recursively creates and sends an error message 
@@ -1691,7 +1694,7 @@ static char * s_LineInfoMergeAndStripSpaces (TLineInfoPtr list)
         if (lip->data != NULL) {
             cp_from = lip->data;
             while (*cp_from != 0) {
-                if (! isspace ((int )*cp_from)) {
+                if (! isspace ((unsigned char)*cp_from)) {
                     *cp_to = *cp_from;
                     cp_to ++;
                 }
@@ -1726,9 +1729,9 @@ static void s_LineInfoReaderAdvancePastSpace (TLineInfoReaderPtr lirp)
     if (lirp->curr_line_pos == NULL) {
         return;
     }
-    while ( isspace ((int ) *lirp->curr_line_pos)
+    while ( isspace ((unsigned char) *lirp->curr_line_pos)
            ||  *lirp->curr_line_pos == 0) {
-        while ( isspace ((int )*lirp->curr_line_pos)) {
+        while ( isspace ((unsigned char)*lirp->curr_line_pos)) {
             lirp->curr_line_pos ++;
         }
         if (*lirp->curr_line_pos == 0) {
@@ -2024,7 +2027,7 @@ static int s_StringNICmp (char * str1, char *str2, int cmp_count)
     cp2 = str2;
     char_count = 0;
     while (*cp1 != 0  &&  *cp2 != 0  &&  char_count < cmp_count) {
-        diff = toupper ((int) *cp1) - toupper ((int) *cp2);
+        diff = toupper ((unsigned char)(*cp1)) - toupper ((unsigned char)(*cp2));
         if (diff != 0) {
             return diff;
         }
@@ -2106,12 +2109,12 @@ s_GetFASTAExpectedNumbers
         return;
     }
     cp = str;
-    while (! isdigit ((int )*cp)  &&  *cp != 0) {
+    while (! isdigit ((unsigned char)*cp)  &&  *cp != 0) {
         cp++;
     }
 
     cpend = cp;
-    while (isdigit ((int )*cpend)  &&  *cpend != 0) {
+    while (isdigit ((unsigned char)*cpend)  &&  *cpend != 0) {
         cpend++;
     }
     if (cp == cpend) {
@@ -2123,12 +2126,12 @@ s_GetFASTAExpectedNumbers
     *cpend = replace;
 
     cp = cpend;
-    while (! isdigit ((int )*cp)  &&  *cp != 0) {
+    while (! isdigit ((unsigned char)*cp)  &&  *cp != 0) {
         cp++;
     }
 
     cpend = cp;
-    while (isdigit ((int )*cpend)  &&  *cpend != 0) {
+    while (isdigit ((unsigned char)*cpend)  &&  *cpend != 0) {
         cpend++;
     }
     if (cp == cpend) {
@@ -2164,33 +2167,33 @@ static EBool s_IsTwoNumbersSeparatedBySpace (char * str)
     }
     cp = str;
     while (*cp != 0) {
-        if (! isdigit ((int )*cp)  &&  ! isspace ((int )*cp)) {
+        if (! isdigit ((unsigned char)*cp)  &&  ! isspace ((unsigned char)*cp)) {
             return eFalse;
         }
         if (! found_first_number) {
-            if (! isdigit ((int )*cp)) {
+            if (! isdigit ((unsigned char)*cp)) {
                 return eFalse;
             }
             found_first_number = eTrue;
         } else if (! found_dividing_space) {
-            if ( isspace ((int ) *cp)) {
+            if ( isspace ((unsigned char) *cp)) {
                 found_dividing_space = eTrue;
-            } else if ( ! isdigit ((int )*cp)) {
+            } else if ( ! isdigit ((unsigned char)*cp)) {
                 return eFalse;
             }
         } else if (! found_second_number) {
-            if ( isdigit ((int )*cp)) {
+            if ( isdigit ((unsigned char)*cp)) {
                 found_second_number = eTrue;
-            } else if (! isspace ((int ) *cp)) {
+            } else if (! isspace ((unsigned char) *cp)) {
                 return eFalse;
             }
         } else if (! found_second_number_end) {
-            if ( isspace ((int ) *cp)) {
+            if ( isspace ((unsigned char) *cp)) {
                 found_second_number_end = eTrue;
-            } else if (! isdigit ((int )*cp)) {
+            } else if (! isdigit ((unsigned char)*cp)) {
                 return eFalse;
             }
-        } else if (! isspace ((int ) *cp)) {
+        } else if (! isspace ((unsigned char) *cp)) {
             return eFalse;
         }
         cp++;
@@ -2228,22 +2231,22 @@ s_GetOneNexusSizeComment
         return eFalse;
     }
     cpstart += strlen (valname);
-    while (*cpstart != 0  &&  isspace ((int )*cpstart)) {
+    while (*cpstart != 0  &&  isspace ((unsigned char)*cpstart)) {
         cpstart++;
     }
     if (*cpstart != '=') {
         return eFalse;
     }
     cpstart ++;
-    while (*cpstart != 0  &&  isspace ((int )*cpstart)) {
+    while (*cpstart != 0  &&  isspace ((unsigned char)*cpstart)) {
         cpstart++;
     }
 
-    if (! isdigit ((int )*cpstart)) {
+    if (! isdigit ((unsigned char)*cpstart)) {
         return eFalse;
     }
     cpend = cpstart + 1;
-    while ( *cpend != 0  &&  isdigit ((int )*cpend)) {
+    while ( *cpend != 0  &&  isdigit ((unsigned char)*cpend)) {
         cpend ++;
     }
     maxlen = cpend - cpstart;
@@ -2313,14 +2316,14 @@ static char GetNexusTypechar (char * str, char * val_name)
         return 0;
     }
     cp += strlen (val_name);
-    while ( isspace ((int )*cp)) {
+    while ( isspace ((unsigned char)*cp)) {
         cp ++;
     }
     if (*cp != '=') {
         return 0;
     }
     cp++;
-    while ( isspace ((int )*cp) || *cp == '\'') {
+    while ( isspace ((unsigned char)*cp) || *cp == '\'') {
         cp ++;
     }
     return *cp;
@@ -2616,7 +2619,7 @@ static EBool s_IsOrganismComment (TCommentLocPtr clp)
         return eFalse;
     }
     cp_end --;
-    while (cp_end > cp  &&  isspace ((int )*cp_end)) {
+    while (cp_end > cp  &&  isspace ((unsigned char)*cp_end)) {
       cp_end --;
     }
     cp_end ++;
@@ -2758,6 +2761,87 @@ static char * s_CreateOrderedOrgName (TCommentLocPtr org_clp)
     return ordered_org_name;
 }
 
+static void s_AddDeflineFromOrganismLine 
+(char             *defline, 
+ int              line_num,
+ int              defline_offset,
+ SAlignRawFilePtr afrp)
+{
+    TLineInfoPtr lip;
+    int          org_num, defline_num, new_len;
+    char         *empty_defline, *new_defline;
+    
+    if (afrp == NULL || defline == NULL) {
+        return;
+    }
+    
+    /* make sure that we are adding the definition line to the correct position
+     * in the list - should match last organism name */
+    lip = afrp->organisms;
+    org_num = 0;
+    while (lip != NULL)
+    {
+        org_num++;
+        lip = lip->next;
+    }
+    
+    lip = afrp->deflines;
+    defline_num = 0;
+    while (lip != NULL  &&  defline_num < org_num) {
+        lip = lip->next;
+        defline_num ++;
+    }
+    
+    if (defline_num == org_num) {
+        /* if previous defline is empty, replace with new defline */
+        if (strlen (lip->data) == 0)
+        {
+            free (lip->data);
+            lip->data = defline;
+        }
+        else
+        {
+            /* append defline to the end of the existing entry */
+            new_len = strlen (lip->data) + strlen (defline) + 2;
+            new_defline = (char *) malloc (new_len * sizeof (char));
+            if (new_defline != NULL)
+            {
+                strcpy (new_defline, lip->data);
+                strcat (new_defline, " ");
+                strcat (new_defline, defline);
+                free (lip->data);
+                lip->data = new_defline;
+                free (defline);
+                defline = NULL;
+            }
+        }
+        /* use new line numbers */
+        lip->line_num = line_num;
+        lip->line_offset = defline_offset;
+        lip->delete_me = eFalse;        
+    }
+    else
+    {
+        /* add empty deflines to get to the correct position */
+        while (defline_num < org_num - 1)
+        {
+            empty_defline = (char *) malloc (sizeof (char));
+            if (empty_defline != NULL)
+            {
+                *empty_defline = 0;
+                afrp->deflines = s_AddLineInfo (afrp->deflines, 
+                                                empty_defline, 0,
+                                                0);
+                afrp->num_deflines ++;
+            }
+            defline_num++;
+        }
+        /* now add new defline in correct position */
+        afrp->deflines = s_AddLineInfo (afrp->deflines, defline, 
+                                        line_num, defline_offset);
+        afrp->num_deflines ++;
+    }
+}
 
 /* This function is used to read any organism names that may appear in
  * string, including any modifiers that may appear after the organism name.
@@ -2799,9 +2883,7 @@ static void s_ReadOrgNamesFromText
                 defline_offset = clp->end - string + 1;
             }
         }
-        afrp->deflines = s_AddLineInfo (afrp->deflines, defline, line_num,
-                                      defline_offset);
-        afrp->num_deflines ++;
+        s_AddDeflineFromOrganismLine (defline, line_num, defline_offset, afrp);
                                       
         comment_end = clp->end;
         s_CommentLocFree (clp);
@@ -3987,7 +4069,7 @@ s_CreateAnchorPatternForMarkedIDs
         } else if (this_pattern != NULL) {
             /* This section gets rid of base pair number comments */
             cp = lip->data;
-            while ( isspace ((int )*cp)  ||  isdigit ((int )*cp)) {
+            while ( isspace ((unsigned char)*cp)  ||  isdigit ((unsigned char)*cp)) {
                 cp++;
             }
             s_AddLengthRepeat (this_pattern, strlen (cp));
@@ -4942,7 +5024,7 @@ static EBool s_ContainsDigits (char *data)
 
     if (data == NULL) return eFalse;
     for (cp = data; *cp != 0; cp++) {
-        if (isdigit (*cp)) {
+        if (isdigit ((unsigned char)(*cp))) {
             return eTrue;
         }
     }
@@ -5263,8 +5345,8 @@ s_FindBadDataCharsInSequence
 {
     TLineInfoReaderPtr lirp, master_lirp;
     int                data_position;
-    int                middle_start;
-    int                middle_end;
+    int                middle_start = 0;
+    int                middle_end = 0;
     char               curr_char, master_char;
     EBool              found_middle_start;
     EBool              rval = eFalse;
@@ -5771,6 +5853,20 @@ ReadAlignmentFile
 /*
  * ===========================================================================
  * $Log: alnread.c,v $
+ * Revision 1.22  2005/06/03 17:03:57  lavr
+ * Explicit (unsigned char) casts in ctype routines
+ *
+ * Revision 1.21  2005/05/12 17:41:01  bollin
+ * changed cast for ctype classification macros
+ *
+ * Revision 1.19  2005/05/06 14:24:01  bollin
+ * when adding a definition line that follows an organism comment, make sure
+ * that the new definition line has the same list position as the organism
+ * name
+ *
+ * Revision 1.18  2005/05/04 18:54:42  bollin
+ * removed Linux warnings
+ *
  * Revision 1.17  2005/01/13 14:56:42  bollin
  * be sure to skip over segment brackets when reading segments for alignment of
  * segmented sets

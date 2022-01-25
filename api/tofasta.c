@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/12/91
 *
-* $Revision: 6.142 $
+* $Revision: 6.144 $
 *
 * File Description:  various sequence objects to fasta output
 *
@@ -39,6 +39,12 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: tofasta.c,v $
+* Revision 6.144  2005/06/01 18:03:27  camacho
+* Augmented FASTA_BUFFER_LEN by a factor of 4
+*
+* Revision 6.143  2005/05/23 15:44:37  dondosha
+* Skip empty lines in FastaReadSequenceChunk, also fixing a bug when one line is exactly 4096 characters long
+*
 * Revision 6.142  2005/04/27 14:30:33  kans
 * gpipe was making TPA defline, moved to its own case
 *
@@ -744,7 +750,7 @@ static Uint1 aa_order[NUM_SEQID] = {   /* order of nucleic acid deflines */
         60   /* 18 = tpd */
     };
 
-#define FASTA_BUFFER_LEN 65536
+#define FASTA_BUFFER_LEN 262144
 #define PATENT_ORDER 110         /* order for any patent */
 
 /*****************************************************************************
@@ -2062,21 +2068,29 @@ static Int4 FastaReadSequenceChunk
     const Char PNTR firstchar;
     FILE *fd;
     register Int4 i;
-    Int2 ch;
+    Int2 ch = 0;
     
     /* Type of input depends upon calling function */
     
     if(type == FASTA_FILE_IO) {
 	fd = (FILE *) input;
-	ch = NLM_GETC(fd);
-	if (ch == EOF || ch == '\n' || ch == '\r')
-		return 0;
-        if(ch == '>' || ch == '&' || ch == '{' || ch == '}' || ch == '[' || ch == ']') 
+
+    /* Skip empty lines. */
+    while (1) {
+        ch = NLM_GETC(fd);
+        /* If end of file reached, return 0. */
+        if (ch == EOF)
+            return 0;
+        if (ch != '\n' && ch != '\r')
+            break;
+    }
+    
+    if(ch == '>' || ch == '&' || ch == '{' || ch == '}' || ch == '[' || ch == ']') 
 	{
 		ungetc(ch, fd);
-                if (special_symbol != NULL) {
-                        *special_symbol = (Char) ch;
-                }
+        if (special_symbol != NULL) {
+            *special_symbol = (Char) ch;
+        }
 		return 0;
 	}
 	sequence[0] = (Uint1) ch;
@@ -2257,6 +2271,7 @@ static Boolean FastaReadSequenceInternalEx
         mask_sint=NULL;
         this_char_masked=FALSE;
     }
+
     while(TRUE) {
         if (in_index == total_read) {
             if((total_read = FastaReadSequenceChunk(input, type, 
@@ -2268,7 +2283,7 @@ static Boolean FastaReadSequenceInternalEx
                 input = (VoidPtr) *next_char;
 	  
             in_index = 0;
-	}
+        }
       	byte_from = in_buff[in_index];
       	in_index++;
         if ((! is_na) && (! last_was_star) && byte_from == '*') {

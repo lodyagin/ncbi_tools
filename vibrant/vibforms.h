@@ -29,13 +29,22 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.10 $
+* $Revision: 6.12 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: vibforms.h,v $
+* Revision 6.12  2005/05/12 15:25:34  bollin
+* added callbacks to the TagListDialog, so that when a value is changed, the
+* callback for the column in which the value is changed will be called.
+*
+* Revision 6.11  2005/05/05 15:29:06  bollin
+* added function ReplaceTagListColumn:
+* similar to ExtractTagListColumn in that it acts on the data.ptrvalue
+* of a TagListPtr ValNode list
+*
 * Revision 6.10  2005/04/15 15:11:28  kans
 * switched font for SYSTEM_FOLDER_TAB and PROGRAM_FOLDER_TAB if MS Windows
 *
@@ -467,6 +476,8 @@ extern Nlm_DialoG Nlm_CreateTextTabs (Nlm_GrouP h, Nlm_CharPtr PNTR titles, Nlm_
 #define TAGLIST_LIST     3
 #define TAGLIST_PROMPT   4
 
+typedef void (*TaglistCallback) PROTO ((Pointer userdata));
+
 typedef struct Nlm_taglist {
   DIALOG_MESSAGE_BLOCK
   Nlm_Int2               rows;
@@ -478,6 +489,8 @@ typedef struct Nlm_taglist {
   Nlm_Int2               max;
   Nlm_Boolean            noExtend;
   ValNodePtr             vnp;
+  TaglistCallback        PNTR callbacks;
+  Pointer                callback_data;
 } Nlm_TagList, PNTR Nlm_TagListPtr;
 
 extern Nlm_DialoG Nlm_CreateTagListDialog (Nlm_GrouP h, Nlm_Uint2 rows, Nlm_Uint2 cols,
@@ -486,7 +499,15 @@ extern Nlm_DialoG Nlm_CreateTagListDialog (Nlm_GrouP h, Nlm_Uint2 rows, Nlm_Uint
                                            Nlm_EnumFieldAssocPtr PNTR alists,
                                            Nlm_ToDialogFunc tofunc, Nlm_FromDialogFunc fromfunc);
 
+extern Nlm_DialoG CreateTagListDialogExEx (Nlm_GrouP h, Nlm_Uint2 rows, Nlm_Uint2 cols,
+                                       Nlm_Int2 spacing, Nlm_Uint2Ptr types,
+                                       Nlm_Uint2Ptr textWidths, Nlm_EnumFieldAssocPtr PNTR alists,
+                                       Nlm_Boolean useBar, Nlm_Boolean noExtend,
+                                       Nlm_ToDialogFunc tofunc, Nlm_FromDialogFunc fromfunc,
+                                       TaglistCallback PNTR callbacks, Pointer callback_data);
+
 extern Nlm_CharPtr Nlm_ExtractTagListColumn (Nlm_CharPtr source, Nlm_Int2 col);
+extern Nlm_CharPtr ReplaceTagListColumn (CharPtr source, CharPtr new_value, Int2 col);
 
 #ifdef WIN_MAC
 #define currentFormDataPtr Nlm_currentFormDataPtr

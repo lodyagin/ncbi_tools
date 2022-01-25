@@ -32,8 +32,6 @@ enum {         /* half of the (fixed) match score */
     sC = 0, sI = 1, sD = 2, LARGE=100000000
 };
 
-#define ICEIL(x,y) ((((x)-1)/(y))+1)
-
 /* ----- pool allocator ----- */
 typedef struct _three_val_ {
     Int4 I, C, D;

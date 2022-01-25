@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/30/95
 *
-* $Revision: 6.128 $
+* $Revision: 6.129 $
 *
 * File Description: 
 *
@@ -3096,6 +3096,10 @@ static ForM LIBCALL CreateNewSeqEntryViewFormEx (Int2 left, Int2 top, CharPtr ti
         SetTitle (bfp->bvd.clickMe, "This accession has been replaced by a newer record.");
       }
       Hide (bfp->bvd.clickMe);
+    }
+    else
+    {
+      bfp->bvd.clickMe = NULL;
     }
 
     h = HiddenGroup (g, 0, 0, NULL);

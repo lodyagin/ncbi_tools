@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: pseed3.c,v 6.42 2004/04/01 13:43:08 lavr Exp $";
+static char const rcsid[] = "$Id: pseed3.c,v 6.43 2005/05/02 16:03:14 coulouri Exp $";
 
-/* $Id: pseed3.c,v 6.42 2004/04/01 13:43:08 lavr Exp $ */
+/* $Id: pseed3.c,v 6.43 2005/05/02 16:03:14 coulouri Exp $ */
 /**************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -35,9 +35,12 @@ Maintainer: Alejandro Schaffer
  
 Contents: high-level routines for PHI-BLAST and pseed3
 
-$Revision: 6.42 $
+$Revision: 6.43 $
 
 $Log: pseed3.c,v $
+Revision 6.43  2005/05/02 16:03:14  coulouri
+refactor code to set db_chunk_size
+
 Revision 6.42  2004/04/01 13:43:08  lavr
 Spell "occurred", "occurrence", and "occurring"
 
@@ -1576,7 +1579,6 @@ static void do_the_seed_search(BlastSearchBlkPtr search, Int4 num_seq,
   seedResultItems * seedResults)
 {
     Int2 threadIndex, secondIndex; /*indices over threads*/
-    Int4 number_of_entries;  /*number of entries in the database*/
     seedParallelItems **seedParallelArray; /*keeps search information for each thread*/
     TNlmThread PNTR thread_array;
     VoidPtr status=NULL;
@@ -1592,8 +1594,6 @@ static void do_the_seed_search(BlastSearchBlkPtr search, Int4 num_seq,
     search->thr_info->number_seqs_done = 
         search->pbp->first_db_seq;  /* The 1st sequence to compare against. */
 
-    search->thr_info->db_incr = num_seq / BLAST_NTICKS;
-    
     /*readjustment of final_db_seq needs to be after initThreadInfo*/
     if (search->pbp->final_db_seq > 0)
         search->thr_info->final_db_seq = search->pbp->final_db_seq;
@@ -1605,22 +1605,10 @@ static void do_the_seed_search(BlastSearchBlkPtr search, Int4 num_seq,
         search->thr_info->realdb_done = TRUE;
     else
         search->thr_info->realdb_done = FALSE;
+
+    ConfigureDbChunkSize(search, num_seq);
     
     if (NlmThreadsAvailable() && search->pbp->process_num > 1) {
-        number_of_entries = INT4_MAX;
-        /* Look for smallest database. */
-        /* local_rdfp = readdb_attach(search->rdfp); */
-        local_rdfp = search->rdfp;
-
-        while (local_rdfp) {
-            number_of_entries = MIN(number_of_entries, readdb_get_num_entries(local_rdfp));
-            local_rdfp = local_rdfp->next;
-        }
-        /* Divide up the chunks differently if db is small. */
-        if (search->thr_info->db_chunk_size*(search->pbp->process_num) > number_of_entries) {
-            /* check that it is at least one. */
-            search->thr_info->db_chunk_size = MAX(number_of_entries/(search->pbp->process_num), 1);
-        }
         NlmMutexInit(&(search->thr_info->db_mutex));
         NlmMutexInit(&(search->thr_info->results_mutex));
         

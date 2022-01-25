@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/2/97
 *
-* $Revision: 6.208 $
+* $Revision: 6.214 $
 *
 * File Description: 
 *
@@ -1562,6 +1562,32 @@ NLM_EXTERN SqnTagPtr SqnTagFree (SqnTagPtr stp)
   return MemFree (stp);
 }
 
+static Boolean StringsAreEquivalent (CharPtr str1, CharPtr str2)
+
+{
+  Char  ch1, ch2;
+
+  if (StringHasNoText (str1) || StringHasNoText (str2)) return FALSE;
+
+  ch1 = *str1;
+  ch2 = *str2;
+  while (ch1 != '\0' && ch2 != '\0') {
+    if (TO_LOWER (ch1) != TO_LOWER (ch2)) {
+      if ((ch1 != '-' && ch1 != '_') || (ch2 != '_' && ch2 != '-')) return FALSE;
+    }
+    str1++;
+    str2++;
+    ch1 = *str1;
+    ch2 = *str2;
+  }
+
+  if (TO_LOWER (ch1) != TO_LOWER (ch2)) {
+    if ((ch1 != '-' && ch1 != '_') || (ch2 != '_' && ch2 != '-')) return FALSE;
+  }
+
+  return TRUE;
+}
+
 NLM_EXTERN CharPtr SqnTagFind (SqnTagPtr stp, CharPtr tag)
 
 {
@@ -1569,7 +1595,7 @@ NLM_EXTERN CharPtr SqnTagFind (SqnTagPtr stp, CharPtr tag)
 
   if (stp == NULL || StringHasNoText (tag)) return NULL;
   for (i = 0; i < stp->num_tags; i++) {
-    if (stp->tag [i] != NULL && StringICmp (stp->tag [i], tag) == 0) {
+    if (stp->tag [i] != NULL && StringsAreEquivalent (stp->tag [i], tag)) {
       stp->used [i] = TRUE;
       return stp->val [i];
     }
@@ -1679,7 +1705,7 @@ NLM_EXTERN BioSourcePtr ParseTitleIntoBioSource (
       str = "proviral";
     }
     for (i = 0; sqntag_biosrc_genome_list [i] != NULL; i++) {
-      if (StringICmp (str, sqntag_biosrc_genome_list [i]) == 0) {
+      if (StringsAreEquivalent (str, sqntag_biosrc_genome_list [i])) {
         biop->genome = (Uint1) i;
       }
     }
@@ -1688,7 +1714,7 @@ NLM_EXTERN BioSourcePtr ParseTitleIntoBioSource (
   str = SqnTagFind (stp, "origin");
   if (str != NULL) {
     for (i = 0; sqntag_biosrc_origin_list [i] != NULL; i++) {
-      if (StringICmp (str, sqntag_biosrc_origin_list [i]) == 0) {
+      if (StringsAreEquivalent (str, sqntag_biosrc_origin_list [i])) {
         biop->origin = (Uint1) i;
       }
     }
@@ -1807,9 +1833,15 @@ NLM_EXTERN MolInfoPtr ParseTitleIntoMolInfo (
   }
 
   str = SqnTagFind (stp, "moltype");
+  if (str == NULL) {
+    str = SqnTagFind (stp, "mol-type");
+  }
+  if (str == NULL) {
+    str = SqnTagFind (stp, "mol_type");
+  }
   if (str != NULL) {
     for (i = 0; molinfo_biomol_list [i] != NULL; i++) {
-      if (StringICmp (str, molinfo_biomol_list [i]) == 0) {
+      if (StringsAreEquivalent (str, molinfo_biomol_list [i])) {
         mip->biomol = (Uint1) i;
       }
     }
@@ -1818,9 +1850,16 @@ NLM_EXTERN MolInfoPtr ParseTitleIntoMolInfo (
   str = SqnTagFind (stp, "tech");
   if (str != NULL) {
     for (i = 0; molinfo_tech_list [i] != NULL; i++) {
-      if (StringICmp (str, molinfo_tech_list [i]) == 0) {
+      if (StringsAreEquivalent (str, molinfo_tech_list [i])) {
         mip->tech = (Uint1) i;
       }
+    }
+  }
+
+  str = SqnTagFind (stp, "completeness");
+  if (str != NULL) {
+    if (StringICmp (str, "complete") == 0) {
+      mip->completeness = 1;
     }
   }
 
@@ -2946,6 +2985,27 @@ static CharPtr GetSeqId (CharPtr seqid, CharPtr str, size_t max, Boolean skiptag
   }
   *str = '\0';
 
+  if (ch != 0) {    
+    /* trim optional annot name */
+
+    *str = '\0';
+    str++;
+    ch = *str;
+    while (ch != '\0' && (IS_WHITESP (ch))) {
+      str++;
+      ch = *str;
+    }
+    if (trimwhite) {
+      ptr = str;
+      while (ch != '\0' && (! IS_WHITESP (ch))) {
+        ptr++;
+        ch = *ptr;
+      }
+      *ptr = '\0';
+    }
+  }
+
+
   /* remove quotation marks in seqid */
 
   dst = seqid;
@@ -2961,25 +3021,6 @@ static CharPtr GetSeqId (CharPtr seqid, CharPtr str, size_t max, Boolean skiptag
   }
   *dst = '\0';
 
-  if (ch == '\0') return NULL;
-
-  /* trim optional annot name */
-
-  *str = '\0';
-  str++;
-  ch = *str;
-  while (ch != '\0' && (IS_WHITESP (ch))) {
-    str++;
-    ch = *str;
-  }
-  if (trimwhite) {
-    ptr = str;
-    while (ch != '\0' && (! IS_WHITESP (ch))) {
-      ptr++;
-      ch = *ptr;
-    }
-    *ptr = '\0';
-  }
   return str;
 }
 
@@ -4300,7 +4341,7 @@ static Boolean ParseQualIntoBioSource (SeqFeatPtr sfp, CharPtr qual, CharPtr val
 
   found = 0;
   for (j = 0, str = orgRefList [j]; str != NULL; j++, str = orgRefList [j]) {
-    if (StringICmp (qual, str) == 0) {
+    if (StringsAreEquivalent (qual, str)) {
       found = j;
     }
   }
@@ -4347,7 +4388,7 @@ static Boolean ParseQualIntoBioSource (SeqFeatPtr sfp, CharPtr qual, CharPtr val
 
   found = 0;
   for (j = 0, str = orgModList [j]; str != NULL; j++, str = orgModList [j]) {
-    if (StringICmp (qual, str) == 0) {
+    if (StringsAreEquivalent (qual, str)) {
       found = j;
     }
   }
@@ -4372,7 +4413,7 @@ static Boolean ParseQualIntoBioSource (SeqFeatPtr sfp, CharPtr qual, CharPtr val
 
   found = 0;
   for (j = 0, str = subSourceList [j]; str != NULL; j++, str = subSourceList [j]) {
-    if (StringICmp (qual, str) == 0) {
+    if (StringsAreEquivalent (qual, str)) {
       found = j;
     }
   }
@@ -7207,18 +7248,14 @@ NLM_EXTERN BioseqPtr ReadDeltaFasta (FILE *fp, Uint2Ptr entityIDptr)
           }
         }
 
-        GetSeqId (seqid, line + 1, sizeof (seqid), FALSE, TRUE);
+        tmp = GetSeqId (seqid, line + 1, sizeof (seqid), FALSE, FALSE);
 
         if (StringDoesHaveText (seqid)) {
 
-          tmp = StringStr (line + 1, seqid);
-          if (tmp != NULL) {
-            tmp += StringLen (seqid);
-            if (! StringHasNoText (tmp)) {
-              TrimSpacesAroundString (tmp);
-              title = MemFree (title);
-              title = StringSaveNoNull (tmp);
-            }
+          if (StringDoesHaveText (tmp)) {
+            TrimSpacesAroundString (tmp);
+            title = MemFree (title);
+            title = StringSaveNoNull (tmp);
           }
 
           bsp = ReadDeltaSet (&fc);
@@ -7569,6 +7606,7 @@ NLM_EXTERN TextFsaPtr TextFsaFree (TextFsaPtr tbl)
   if (tbl == NULL) return NULL;
   statePtr = tbl->statePtr;
   if (statePtr == NULL) {
+    ValNodeFreeData (tbl->siteList);
     return MemFree (tbl);
   }
   maxState = tbl->maxState;

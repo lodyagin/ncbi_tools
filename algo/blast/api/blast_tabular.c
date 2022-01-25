@@ -1,4 +1,4 @@
-/* $Id: blast_tabular.c,v 1.27 2005/04/19 13:56:48 kans Exp $
+/* $Id: blast_tabular.c,v 1.28 2005/05/10 16:07:59 camacho Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -28,7 +28,7 @@
  * On-the-fly tabular formatting of BLAST results
  */
 
-static char const rcsid[] = "$Id: blast_tabular.c,v 1.27 2005/04/19 13:56:48 kans Exp $";
+static char const rcsid[] = "$Id: blast_tabular.c,v 1.28 2005/05/10 16:07:59 camacho Exp $";
 
 #include <algo/blast/api/blast_tabular.h>
 #include <algo/blast/core/blast_util.h>
@@ -394,7 +394,7 @@ void* Blast_TabularFormatThread(void* data)
       if (tf_data->format_options == eBlastTabularAddSequences && 
           !tf_data->perform_traceback) {
           seq_arg.oid = hsp_list->oid;
-          seq_arg.encoding = BLASTNA_ENCODING;
+          seq_arg.encoding = eBlastEncodingNucleotide;
           if (BlastSeqSrcGetSequence(seq_src, (void*) &seq_arg) < 0)
               continue;
       }

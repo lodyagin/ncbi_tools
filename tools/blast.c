@@ -1,7 +1,7 @@
 
-static char const rcsid[] = "$Id: blast.c,v 6.434 2005/04/25 14:16:36 coulouri Exp $";
+static char const rcsid[] = "$Id: blast.c,v 6.439 2005/05/19 11:11:59 coulouri Exp $";
 
-/* $Id: blast.c,v 6.434 2005/04/25 14:16:36 coulouri Exp $
+/* $Id: blast.c,v 6.439 2005/05/19 11:11:59 coulouri Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -50,9 +50,25 @@ Detailed Contents:
 	further manipulation.
 
 ******************************************************************************
- * $Revision: 6.434 $
+ * $Revision: 6.439 $
  *
  * $Log: blast.c,v $
+ * Revision 6.439  2005/05/19 11:11:59  coulouri
+ * Changes from morgulis to address rt ticket 15091715:
+ * null hsp_array in blastall tblastn query concatenation causes segfault
+ *
+ * Revision 6.438  2005/05/10 18:51:15  dondosha
+ * Removed unused functions and variables; moved sorting of HSPs by score after new_link_hsps inside this function
+ *
+ * Revision 6.437  2005/05/10 16:15:23  dondosha
+ * Back-porting changes in uneven gap HSP linking from algo/blast code: from Mike Gertz
+ *
+ * Revision 6.436  2005/05/06 11:49:22  coulouri
+ * remove unnecessary evalue check that results in instability of number_of_seqs_better_E; addresses rt ticket 15075332
+ *
+ * Revision 6.435  2005/05/02 16:03:14  coulouri
+ * refactor code to set db_chunk_size
+ *
  * Revision 6.434  2005/04/25 14:16:36  coulouri
  * set db_chunk_size adaptively
  *
@@ -2984,10 +3000,6 @@ BlastReevaluateWithAmbiguities (BlastSearchBlkPtr search, Int4 sequence_number)
 			current_evalue = hsp_array[index]->evalue;
 	}
 
-	/* The evalue is worse the worst evalue, and the list is full. */
-	if (search->worst_evalue < current_evalue)
-		return 0;
-
 	if (StringCmp(search->prog_name, "blastn") != 0)
 	{
 		longest_hsp_length *= CODON_LENGTH;
@@ -3558,8 +3570,6 @@ do_the_blast_run(BlastSearchBlkPtr search)
     BlastSearchBlkPtr PNTR array;
     Char buffer[256];
     Int2 index;
-    Int4 number_of_entries, num_seq;
-    ReadDBFILEPtr rdfp;
     TNlmThread PNTR thread_array;
     VoidPtr status=NULL;
     int num_entries_total;
@@ -3604,16 +3614,9 @@ do_the_blast_run(BlastSearchBlkPtr search)
     
     search->thr_info->final_db_seq = end_seq;
     
-    /* Tick control */
-    num_seq = search->dbseq_num;
-    search->thr_info->db_incr = num_seq / BLAST_NTICKS;
-
-    /* Chunk size */
-    search->thr_info->db_chunk_size = MAX(num_seq / 100,1);
+    ConfigureDbChunkSize(search, search->dbseq_num);
 
     if (NlmThreadsAvailable() && search->pbp->process_num > 1) {
-        search->thr_info->db_chunk_size = MAX(num_seq/(100*(search->pbp->process_num)), 1);
-
         NlmMutexInit(&search->thr_info->db_mutex);
         NlmMutexInit(&search->thr_info->results_mutex);
         NlmMutexInit(&search->thr_info->ambiguities_mutex);
@@ -3848,7 +3851,7 @@ HackSeqLocId(SeqLocPtr slp, SeqIdPtr id)
 	}
 }
 /* This function duplicates a SEQLOC_PACKED_INT or a SEQLOC_INT type of SeqLoc */
-SeqLocPtr  blastDuplicateSeqLocInt(SeqLocPtr slp_head)
+static SeqLocPtr blastDuplicateSeqLocInt(SeqLocPtr slp_head)
 {
     SeqLocPtr dup_slp, slp, dup_head = NULL;
     SeqIntPtr sqip;
@@ -5994,8 +5997,7 @@ void AdjustOffsetsInBLASTHitList(BLAST_HitListPtr hitlist, Int4 start)
    if they intersect 
 */
 static Boolean
-BLASTMergeHsps(BlastSearchBlkPtr search, BLAST_HSPPtr hsp1, BLAST_HSPPtr hsp2,
-               Int4 start)
+BLASTMergeHsps(BLAST_HSPPtr hsp1, BLAST_HSPPtr hsp2, Int4 start)
 {
    BLASTHSPSegmentPtr segments1, segments2, new_segment1, new_segment2;
    GapXEditScriptPtr esp1, esp2, esp;
@@ -6303,8 +6305,7 @@ BLASTMergeHitLists(BlastSearchBlkPtr search, BLAST_HitListPtr hitlist1,
              ABS(diag_compare_hsps(&hspp1[index], &hspp2[index1])) < 
              OVERLAP_DIAG_CLOSE) {
             if (merge_hsps) {
-               if (BLASTMergeHsps(search, hspp1[index], hspp2[index1], 
-                                  start)) {
+               if (BLASTMergeHsps(hspp1[index], hspp2[index1], start)) {
                   /* Free the second HSP. */
                   hspp2[index1] = BLAST_HSPFree(hspp2[index1]);
                }
@@ -10323,66 +10324,70 @@ CalculateSecondCutoffScore. */
 
 	Could this all be integrated with link_hsp's?? 
 */
-static BLAST_HSPPtr
-new_link_hsps(BlastSearchBlkPtr search, BLAST_HitListPtr hitlist, BLAST_HSPPtr PNTR hsp_array);
+static Int2
+new_link_hsps(BlastSearchBlkPtr search, BLAST_HitListPtr hitlist);
 
 Int2 LIBCALL
 BlastLinkHsps (BlastSearchBlkPtr search)
 
 {
-	BLAST_HitListPtr hitlist;
+	BLAST_HitListPtr hitlist, orig_hitlist;
 	BLAST_HSPPtr hsp;
 	Int4 index;
+    Int2 status = 0;
 
         /* AM: Support for query concatenation. */
-	if( !search->mult_queries || !search->mult_queries->use_mq )
-	  hitlist = search->current_hitlist;
-        else
-	  hitlist = search->mult_queries->HitListArray[
-	    search->mult_queries->current_query];
+        if( search->mult_queries && search->mult_queries->use_mq )
+        {
+                orig_hitlist = search->current_hitlist;
+                search->current_hitlist = search->mult_queries->HitListArray[
+                        search->mult_queries->current_query];
+        }
+
+        hitlist = search->current_hitlist;
 
 	if (hitlist && hitlist->hspcnt > 0)
 	{
-           /* For ungapped blastn, assign frames to all HSPs, 
-	      since this is necessary for linking, and frames have not yet been
-              assigned. Do it only if both strands are searched. Note that
-	      we don't assign context numbers here because the offsets have
-	      not yet been adjusted to be relative to individual contexts. */
-	   if (search->prog_number == blast_type_blastn &&
-	       search->last_context > search->first_context) {
+        /* For ungapped blastn, assign frames to all HSPs, 
+           since this is necessary for linking, and frames have not yet been
+           assigned. Do it only if both strands are searched. Note that
+           we don't assign context numbers here because the offsets have
+           not yet been adjusted to be relative to individual contexts. */
+        if (search->prog_number == blast_type_blastn &&
+            search->last_context > search->first_context) {
             
-	      for (index = 0; index < hitlist->hspcnt; ++index) {
-		 if (hitlist->hsp_array[index]->query.offset >= 
-		     search->query_context_offsets[search->last_context]) {
-		    hitlist->hsp_array[index]->query.frame = -1;
-		 }
-	      }
-	   }
-
-
-           /* Link up the HSP's for this hitlist. */
-           if (search->pbp->longest_intron <= 0 || 
-               (search->prog_number != blast_type_tblastn && 
-                search->prog_number != blast_type_psitblastn &&
-                search->prog_number != blast_type_blastx))
-           {
-              hsp = link_hsps(search, hitlist, hitlist->hsp_array);
-              /* The HSP's may be in a different order than they were before, 
-                 but hsp contains the first one. */
-              for (index=0; index<hitlist->hspcnt; index++) {
-                 hitlist->hsp_array[index] = hsp;
-                 hsp = hsp->next;
-              }
-           } else {
-              hsp = new_link_hsps(search, hitlist, hitlist->hsp_array);
-              for (index=0; index<hitlist->hspcnt; index++) {
-                 hitlist->hsp_array[index] = hsp;
-                 hsp = hsp->next;
-              }
-           }
+            for (index = 0; index < hitlist->hspcnt; ++index) {
+                if (hitlist->hsp_array[index]->query.offset >= 
+                    search->query_context_offsets[search->last_context]) {
+                    hitlist->hsp_array[index]->query.frame = -1;
+                }
+            }
+        }
+        
+        
+        /* Link up the HSP's for this hitlist. */
+        if (search->pbp->longest_intron <= 0 || 
+            (search->prog_number != blast_type_tblastn && 
+             search->prog_number != blast_type_psitblastn &&
+             search->prog_number != blast_type_blastx))
+        {
+            hsp = link_hsps(search, hitlist, hitlist->hsp_array);
+            /* The HSP's may be in a different order than they were before, 
+               but hsp contains the first one. */
+            for (index=0; index<hitlist->hspcnt; index++) {
+                hitlist->hsp_array[index] = hsp;
+                hsp = hsp->next;
+            }
+        } else {
+            status = new_link_hsps(search, hitlist);
+        }
 	}
 
-	return 0;
+        /* AM: Support for query concatenation. */
+        if( search->mult_queries && search->mult_queries->use_mq )
+                search->current_hitlist = orig_hitlist;
+
+	return status;
 }
 
 /*
@@ -10417,39 +10422,6 @@ fwd_compare_hsps(VoidPtr v1, VoidPtr v2)
 	if (h1->subject.offset < h2->subject.offset) 
 		return -1;
 	if (h1->subject.offset > h2->subject.offset) 
-		return 1;
-
-	return 0;
-}
-
-/* Comparison function based on end position in the query */
-static int LIBCALLBACK
-end_compare_hsps(VoidPtr v1, VoidPtr v2)
-
-{
-	BLAST_HSPPtr h1, h2;
-	BLAST_HSPPtr PNTR hp1, PNTR hp2;
-
-	hp1 = (BLAST_HSPPtr PNTR) v1;
-	hp2 = (BLAST_HSPPtr PNTR) v2;
-	h1 = *hp1;
-	h2 = *hp2;
-
-	if (SIGN(h1->query.frame) != SIGN(h2->query.frame))
-	{
-		if (h1->query.frame < h2->query.frame)
-			return 1;
-		else
-			return -1;
-	}
-	if (h1->query.end < h2->query.end) 
-		return -1;
-	if (h1->query.end > h2->query.end) 
-		return 1;
-	/* Necessary in case both HSP's have the same query end. */
-	if (h1->subject.end < h2->subject.end) 
-		return -1;
-	if (h1->subject.end > h2->subject.end) 
 		return 1;
 
 	return 0;
@@ -10542,42 +10514,39 @@ rev_compare_hsps_cfj(VoidPtr v1, VoidPtr v2)
 	return 0;
 }
 
-/* Find an HSP with offset closest, but not smaller (larger) than a given one. */
-   
-static Int4 hsp_binary_search(BLAST_HSPPtr PNTR hsp_array, Int4 size, 
-                              Int4 offset, Boolean right)
-{
-   Int4 index, begin, end, coord;
-   
-   begin = 0;
-   end = size;
-   while (begin < end) {
-      index = (begin + end) / 2;
-      if (right) 
-         coord = hsp_array[index]->query.offset;
-      else
-         coord = hsp_array[index]->query.end;
-      if (coord >= offset) 
-         end = index;
-      else
-         begin = index + 1;
-   }
-
-   return end;
-}
-
-
 static FloatHi SumHSPEvalue(BlastSearchBlkPtr search, BLAST_HSPPtr head_hsp, 
                             BLAST_HSPPtr hsp, Nlm_FloatHi *xsum)
 {
    FloatHi gap_decay_rate, sum_evalue;
    Int4 gap_size, num, subject_length;
 
+   /* AM: The following are added for query multiplexing. */
+   Int4 effective_length, length_adjustment;
+   Uint4 qnum;
+   Int8 dblen_eff;
+
+   if( search->mult_queries )
+   {
+	qnum = GetQueryNum( search->mult_queries,
+                            head_hsp->query.offset,
+                            head_hsp->query.end,
+                            head_hsp->query.frame );
+
+        effective_length  = search->mult_queries->EffLengths[qnum];
+        length_adjustment = search->mult_queries->Adjustments[qnum];
+        dblen_eff         = search->mult_queries->DbLenEff[qnum];
+   }
+   else
+   {
+        effective_length  = search->context[search->first_context].query->effective_length;
+        length_adjustment = search->length_adjustment;
+        dblen_eff         = search->dblen_eff;
+   }
+
    gap_size = search->pbp->gap_size;
    gap_decay_rate = search->pbp->gap_decay_rate;
    num = head_hsp->num + hsp->num;
-   subject_length = 
-      MAX((search->subject->length - search->length_adjustment), 1);
+   subject_length = MAX((search->subject->length - length_adjustment), 1);
 
    if (search->prog_number == blast_type_tblastn ||
        search->prog_number == blast_type_blastx ||
@@ -10592,10 +10561,9 @@ static FloatHi SumHSPEvalue(BlastSearchBlkPtr search, BLAST_HSPPtr head_hsp,
       BlastUnevenGapSumE(LINK_HSP_OVERLAP + search->pbp->gap_size + 1,
                          search->pbp->longest_intron + LINK_HSP_OVERLAP + 1,
                          num, *xsum,
-                         search->context[search->first_context].
-                         query->effective_length,
+                         effective_length,
                          subject_length,
-                         search->dblen_eff,
+                         dblen_eff,
                          BlastGapDecayDivisor(gap_decay_rate, num));
 
    return sum_evalue;
@@ -10628,29 +10596,363 @@ xsum_compare_hsps(VoidPtr v1, VoidPtr v2)
 	return 0;
 }
 
-static BLAST_HSPPtr
-new_link_hsps(BlastSearchBlkPtr search, BLAST_HitListPtr hitlist, BLAST_HSPPtr PNTR hsp_array)
-{
-   BLAST_HSPPtr PNTR score_hsp_array, PNTR offset_hsp_array, PNTR end_hsp_array;
-   BLAST_HSPPtr hsp, head_hsp, best_hsp, var_hsp;
-   Int4 hspcnt, index, index1, i;
-   FloatHi best_evalue, evalue;
-   Nlm_FloatHi xsum, best_xsum=0.0;
-   Boolean reverse_link;
-   Uint1Ptr subject_seq = NULL;
-   Int4 gap_size = search->pbp->gap_size;
-   BLAST_KarlinBlkPtr * kbp_array;
-   const Int4 overlap_size = LINK_HSP_OVERLAP;
-   Nlm_FloatHi gap_decay_divisor =
-      BlastGapDecayDivisor(search->pbp->gap_decay_rate, 1);
 
-   if( search->pbp->gapped_calculation ) {
-       kbp_array = search->sbp->kbp_gap;
-   } else {
-       kbp_array = search->sbp->kbp;
+/** Merges HSPs from two linked HSP sets into an array of HSPs, sorted
+ * in increasing order of contexts and increasing order of query
+ * offsets.
+ * @param hsp_set1 First linked set. [in]
+ * @param hsp_set2 Second linked set. [in]
+ * @param merged_size The total number of HSPs in two sets. [out]
+ * @return The array of pointers to HSPs representing a merged set.
+ */
+static BLAST_HSPPtr *
+BLAST_HSPMergedLinkedSet(BLAST_HSPPtr hsp_set1, BLAST_HSPPtr hsp_set2,
+                         Int4* merged_size)
+{
+    Int4 index;
+    Int4 length;
+    BLAST_HSPPtr * merged_hsps;
+
+    /* Find the first link of the old HSP chain. */
+    while (hsp_set1->prev)
+        hsp_set1 = hsp_set1->prev;
+    /* Find first and last link in the new HSP chain. */
+    while (hsp_set2->prev)
+        hsp_set2 = hsp_set2->prev;
+
+    *merged_size = length = hsp_set1->num + hsp_set2->num;
+
+    if( *merged_size == 0 ) return NULL;
+
+    merged_hsps = (BLAST_HSPPtr*) MemNew(length*sizeof(BLAST_HSPPtr));
+
+    index = 0;
+    while (hsp_set1 || hsp_set2) {
+        /* NB: HSP sets for which some HSPs have identical query
+           offsets cannot possibly be admissible, so it doesn't matter
+           how to deal with equal offsets. */
+        if (!hsp_set2 || (hsp_set1 &&
+            hsp_set1->query.offset < hsp_set2->query.offset)) {
+            merged_hsps[index] = hsp_set1;
+            hsp_set1 = hsp_set1->next;
+        } else {
+            merged_hsps[index] = hsp_set2;
+            hsp_set2 = hsp_set2->next;
+        }
+        ++index;
+    }
+
+    return merged_hsps;
+}
+
+
+/** Combines two linked sets of HSPs into a single set; the original
+ *  linked sets are consumed by this operation.
+ *
+ * @param hsp_set1 First set of HSPs [in]
+ * @param hsp_set2 Second set of HSPs [in]
+ * @param sum_score The sum score of the combined linked set
+ * @param evalue The E-value of the combined linked set
+ * @return Combined linked set.
+ */
+static BLAST_HSPPtr
+BLAST_HSPCombineLinkedSets(BLAST_HSPPtr hsp_set1, BLAST_HSPPtr hsp_set2,
+                           Nlm_FloatHi sum_score, Nlm_FloatHi evalue)
+{
+    BLAST_HSPPtr* merged_hsps;
+    BLAST_HSPPtr head_hsp;
+    Int4 index, new_num;
+
+    if (!hsp_set2)
+        return hsp_set1;
+    else if (!hsp_set1)
+        return hsp_set2;
+
+    merged_hsps = BLAST_HSPMergedLinkedSet(hsp_set1, hsp_set2, &new_num);
+
+    head_hsp = merged_hsps[0];
+    head_hsp->start_of_chain = TRUE;
+    head_hsp->prev = NULL;
+    for (index = 0; index < new_num; ++index) {
+        BLAST_HSPPtr link = merged_hsps[index];
+        if (index < new_num - 1) {
+            BLAST_HSPPtr next_link = merged_hsps[index+1];
+            link->next = next_link;
+            next_link->prev = link;
+        } else {
+            link->next = NULL;
+        }
+        link->xsum = sum_score;
+        link->evalue = evalue;
+        link->num = new_num;
+        link->linked_set = TRUE;
+        if (link != head_hsp)
+            link->start_of_chain = FALSE;
+    }
+
+    MemFree(merged_hsps);
+    return head_hsp;
+}
+
+
+/** Given an array of HSPs (H), sorted in increasing order of query
+ * offsets, fills an array of indices into array H such that for each
+ * i, the index is the smallest HSP index, for which query ending
+ * offset is >= than query ending offset of H[i]. This indexing is
+ * performed before any of the HSPs in H are linked.
+ *
+ * @param hsp_array       Array HSPs [in]
+ * @param hspcnt Size of  the hsp_array. [in]
+ * @param qend_index_ptr  Pointer to the new array of indices.
+ */
+static Int2
+BLAST_HSPArrayIndexQueryEnds(BLAST_HSPPtr* hsp_array, Int4 hspcnt,
+                             Int4** qend_index_ptr)
+{
+    Int4 index;
+    Int4* qend_index_array = NULL;
+    BLAST_HSPPtr link;
+    Int4 current_end = 0;
+    Int4 current_index = 0;
+
+    /* Allocate the array. */
+    *qend_index_ptr = qend_index_array =
+        (Int4*) Nlm_Calloc(hspcnt, sizeof(Int4));
+    if (!qend_index_array)
+        return -1;
+
+    current_end = hsp_array[0]->query.end;
+
+    for (index = 1; index < hspcnt; ++index) {
+        link = hsp_array[index];
+        if (link->context > hsp_array[current_index]->context ||
+            link->query.end > current_end) {
+            current_index = index;
+            current_end = link->query.end;
+        }
+        qend_index_array[index] = current_index;
+    }
+    return 0;
+}
+
+
+/** Find an HSP on the same context as the one given, with closest
+ * start offset that is greater than a specified value. The list of
+ * HSPs to search must be sorted by query offset and in increasing
+ * order of contexts.
+ * @param hsp_array   Array of pointers to HSPs [in]
+ * @param size        Number of elements in the array [in]
+ * @param context     Context of the target HSP [in]
+ * @param offset      The target offset to search for [in]
+ * @return The index in the array of the HSP whose start/end offset
+ *         is closest to but >= the value 'offset'
+ */
+static Int4
+BLAST_HSPOffsetBinarySearch(BLAST_HSPPtr* hsp_array, Int4 size,
+                            Int4 context, Int4 offset)
+{
+   Int4 index, begin, end;
+
+   begin = 0;
+   end = size;
+   while (begin < end) {
+      index = (begin + end) / 2;
+
+      if (hsp_array[index]->context < context)
+          begin = index + 1;
+      else if (hsp_array[index]->context > context)
+          end = index;
+      else {
+          if (hsp_array[index]->query.offset >= offset)
+              end = index;
+          else
+              begin = index + 1;
+      }
    }
 
-   hspcnt = hitlist->hspcnt;
+   return end;
+}
+
+
+/** Find an HSP in an array sorted in increasing order of query
+ * offsets and increasing order of contexts, with the smallest index
+ * such that its query end is >= to a given offset.
+ *
+ * @param hsp_array   Array of pointers to HSPs. [in]
+ * @param size        Number of elements in the array [in]
+ * @param qend_index_array  Array indexing query ends in the hsp_array [in]
+ * @param context     Context of the target HSP [in]
+ * @param offset      The target offset to search for [in]
+ * @return            The found index in the hsp_array.
+ */
+static Int4
+BLAST_HSPOffsetEndBinarySearch(BLAST_HSPPtr* hsp_array, Int4 size,
+                               Int4* qend_index_array, Int4 context,
+                               Int4 offset)
+{
+   Int4 begin, end;
+
+   begin = 0;
+   end = size;
+   while (begin < end) {
+       Int4 right_index = (begin + end) / 2;
+       Int4 left_index = qend_index_array[right_index];
+
+       if (hsp_array[right_index]->context < context)
+           begin = right_index + 1;
+       else if (hsp_array[right_index]->context > context)
+           end = left_index;
+       else {
+           if (hsp_array[left_index]->query.end >= offset)
+               end = left_index;
+           else
+               begin = right_index + 1;
+       }
+   }
+
+   return end;
+}
+
+
+/** Checks if new candidate HSP is admissible to be linked to a set of
+ * HSPs on the left. The new HSP must start strictly before the parent
+ * HSP in both query and subject, and its end must lie within an
+ * interval from the parent HSP's start, determined by the allowed gap
+ * and overlap sizes in query and subject.  This function also
+ * indicates whether parent is already too far to the right of the
+ * candidate HSP, via a boolean pointer.
+ *
+ * @param hsp_set1        First linked set of HSPs. [in]
+ * @param hsp_set2        Second linked set of HSPs. [in]
+ * @param overlap_size    Amount by which HSPs are allowed to overlap. [in]
+ * @param gap_size        Size of the maximum permitted gap in the
+ *                        query. [in]
+ * @param longest_intron  Size of the maximum permitted gap in the
+ *                        sujbect. [in]
+ * @return                Do the two sets satisfy the admissibility
+ *                        criteria to form a combined set?
+ */
+static Boolean
+BLAST_HSPLinkedSetsAdmissible(BLAST_HSPPtr hsp_set1,
+                              BLAST_HSPPtr hsp_set2,
+                              Int4 overlap_size, Int4 gap_size,
+                              Int4 longest_intron)
+{
+    BLAST_HSPPtr* merged_hsps;
+    Int4 combined_size = 0;
+    Int4 index;
+
+    if (!hsp_set1 || !hsp_set2 )
+        return FALSE;
+
+    /* The first input HSP must be the head of its set. */
+    if (hsp_set1->prev)
+        return FALSE;
+
+    /* The second input HSP may not be the head of its set. Hence
+       follow the previous pointers to get to the head. */
+    for ( ; hsp_set2->prev; hsp_set2 = hsp_set2->prev);
+
+    /* If left and right HSP are the same, return inadmissible
+       status. */
+    if (hsp_set1 == hsp_set2)
+        return FALSE;
+
+    /* Check if these HSPs are for the same protein sequence (same
+       context) */
+    if (hsp_set1->context != hsp_set2->context)
+        return FALSE;
+
+    /* Check if new HSP and hsp_set2 are on the same nucleotide
+       sequence strand.  (same sign of subject frame) */
+    if (SIGN(hsp_set1->subject.frame) !=
+        SIGN(hsp_set2->subject.frame))
+        return FALSE;
+
+    /* Merge the two sets into an array with increasing order of query
+       offsets. */
+    merged_hsps =
+        BLAST_HSPMergedLinkedSet(hsp_set1, hsp_set2, &combined_size);
+
+    for (index = 0; index < combined_size - 1; ++index) {
+        BLAST_HSPPtr left_hsp = merged_hsps[index];
+        BLAST_HSPPtr right_hsp = merged_hsps[index+1];
+
+
+        /* If the new HSP is too far to the left from the right_hsp,
+           indicate this by setting the boolean output value to
+           TRUE. */
+        if (left_hsp->query.end < right_hsp->query.offset - gap_size)
+            break;
+
+        /* Check if the left HSP's query offset is to the right of the
+           right HSP's offset, i.e. they came in wrong order. */
+        if (left_hsp->query.offset >= right_hsp->query.offset)
+            break;
+
+        /* Check the remaining condition for query offsets: left HSP
+           cannot end further than the maximal allowed overlap from
+           the right HSP's offset; and left HSP must end before the
+           right HSP. */
+        if (left_hsp->query.end > right_hsp->query.offset + overlap_size ||
+            left_hsp->query.end >= right_hsp->query.end)
+            break;
+
+        /* Check the subject offsets conditions. */
+        if (left_hsp->subject.end >
+            right_hsp->subject.offset + overlap_size ||
+            left_hsp->subject.end <
+            right_hsp->subject.offset - longest_intron ||
+            left_hsp->subject.offset >= right_hsp->subject.offset ||
+            left_hsp->subject.end >= right_hsp->subject.end)
+            break;
+    }
+
+    MemFree(merged_hsps);
+
+    if (index < combined_size - 1)
+        return FALSE;
+
+    return TRUE;
+}
+
+
+/**
+ * Swap the role of the query and subject within an HSP; used by
+ * new_link_hsps to implement HSP linking for blastx using the code
+ * for blastn.
+ */
+static void
+BLAST_HSPArraySwapSequences(BLAST_HSPPtr PNTR hsp_array, Int4 hspcnt)
+{
+    Int4 i;
+
+    for(i = 0; i < hspcnt; i++ ) {
+        BLAST_Seg seg          = hsp_array[i]->query;
+        hsp_array[i]->query    = hsp_array[i]->subject;
+        hsp_array[i]->subject  = seg;
+    }
+}
+
+
+/**
+ * Prepares an array of HSPs for linking within new_link_hsps.
+ *
+ * @param search      Parameters for a blast search. [in]
+ * @param kbp_array   Array of Karlin-Altchul statitic parameters, on
+ *                    block for each contex. [in]
+ * @param hsp_array    Array of HSPs. [in/out]
+ * @pamam hspcnt      Size of hsp_array. [in]
+ */
+static void
+new_link_hsps_setup(BlastSearchBlkPtr search,
+                    BLAST_KarlinBlkPtr * kbp_array,
+                    BLAST_HSPPtr PNTR hsp_array, Int4 hspcnt)
+{
+   Int4 index;
+   BLAST_HSPPtr hsp;
+   Nlm_FloatHi gap_decay_divisor =
+      BlastGapDecayDivisor(search->pbp->gap_decay_rate, 1);
 
    /* Find e-values for single HSPs */
    BlastGetNonSumStatsEvalue(search);
@@ -10660,198 +10962,188 @@ new_link_hsps(BlastSearchBlkPtr search, BLAST_HitListPtr hitlist, BLAST_HSPPtr P
 
        hsp->num              = 1;
        hsp->linked_set       = FALSE;
+       hsp->start_of_chain   = FALSE;
+       hsp->next             = NULL;
+       hsp->prev             = NULL;
+
        hsp->ordering_method  = 3;
        hsp->evalue          /= gap_decay_divisor;
 
        hsp->xsum = kbp_array[hsp->context]->Lambda * hsp->score -
            kbp_array[hsp->context]->logK;
    }
+}
 
-   if (search->prog_number == blast_type_blastx) {
-      BLAST_Seg seg;
-      /* Switch query and subject in hsp_array.They will be switched back in the
-       * end.
-       */
-      for (index = 0; index < hspcnt; ++index) {
-         seg = hsp_array[index]->query;
-         hsp_array[index]->query = hsp_array[index]->subject;
-         hsp_array[index]->subject = seg;
-      }
+/** Greedy algorithm to link HSPs with uneven gaps.  Sorts HSPs by
+ * score. Starting with the highest scoring HSP, finds an HSP that
+ * produces the best sum e-value when added to the HSP set under
+ * consideration. The neighboring HSPs in a set must have endpoints
+ * within a window of each other on the protein axis, and within the
+ * longest allowed intron length on the nucleotide axis. When no more
+ * HSPs can be added to the highest scoring set, the next highest
+ * scoring HSP is considered that is not yet part of any set.
+ *
+ * @param search      Paramters for a blast search. [in]
+ * @param hitlist     A hitlist of HSPs to be linked. [in/out]
+ * @param hsp_array   An array of HSPs to be linked (redundantly contained
+ *                    within hitlist.) [in/out]
+ * @returns           Status: 0 on success, -1 if bad input.
+ */
+static Int2
+new_link_hsps(BlastSearchBlkPtr search, BLAST_HitListPtr hitlist)
+{
+   BLAST_HSPPtr PNTR hsp_array; /* Original HSP array. */
+   BLAST_HSPPtr PNTR score_hsp_array;  /* an array of HSPs sorted by
+                                        decreasing score */
+   BLAST_HSPPtr PNTR offset_hsp_array; /* an array of HSPs sorted by
+                                        increasing query offset */
+   BLAST_HSPPtr head_hsp;
+   BLAST_KarlinBlkPtr PNTR kbp_array;
+
+   Int4 hspcnt, index, index1;
+   Int4 overlap_size;           /* Maximal overlap size in query or
+                                   subject */
+   Int4 gap_size;               /* Maximal gap size in query */
+   Int4 longest_intron;         /* Maximum gap size in subject */
+
+   Int4* qend_index_array = NULL;
+
+   /* Check input arguments. */
+   if (!search || !hitlist)
+       return -1;
+
+   hsp_array = hitlist->hsp_array;
+
+   if(search->pbp->gapped_calculation) {
+       kbp_array = search->sbp->kbp_gap;
+   } else {
+       kbp_array = search->sbp->kbp;
    }
+   hspcnt = hitlist->hspcnt;
+
+   /* Set up the HSP array to be an array of singleton sets, with
+    * correct evalue, num and sumscore */
+   new_link_hsps_setup(search, kbp_array, hsp_array, hspcnt);
+   
+   /* If there is a single HSP, don't try to link, just use the
+    * evalue set in new_link_hsps_setup */
+   if(hitlist->hspcnt == 1)
+       return 0;
+ 
+   overlap_size    = LINK_HSP_OVERLAP;
+   gap_size        = search->pbp->gap_size;
+   longest_intron  = search->pbp->longest_intron;
+
+   if(search->prog_number == blast_type_blastx) {
+       BLAST_HSPArraySwapSequences(hsp_array, hspcnt);
+   }
+ 
+   /* Allocate, fill and sort the auxiliary arrays. */
    score_hsp_array = (BLAST_HSPPtr PNTR) Malloc(hspcnt*sizeof(BLAST_HSPPtr));
-   offset_hsp_array = (BLAST_HSPPtr PNTR) Malloc(hspcnt*sizeof(BLAST_HSPPtr));
-   end_hsp_array = (BLAST_HSPPtr PNTR) Malloc(hspcnt*sizeof(BLAST_HSPPtr));
-
    MemCpy(score_hsp_array, hsp_array, hspcnt*sizeof(BLAST_HSPPtr));
-   MemCpy(offset_hsp_array, hsp_array, hspcnt*sizeof(BLAST_HSPPtr));
-   MemCpy(end_hsp_array, hsp_array, hspcnt*sizeof(BLAST_HSPPtr));
-   HeapSort(offset_hsp_array, hspcnt, sizeof(BLAST_HSPPtr), fwd_compare_hsps);
-   HeapSort(end_hsp_array, hspcnt, sizeof(BLAST_HSPPtr), end_compare_hsps);
-
    HeapSort(score_hsp_array, hspcnt, sizeof(BLAST_HSPPtr), xsum_compare_hsps);
-      
-   /* head_hsp is set to NULL whenever there is no current linked set that is
-      being worked on. */
+
+   offset_hsp_array = (BLAST_HSPPtr PNTR) Malloc(hspcnt*sizeof(BLAST_HSPPtr));
+   MemCpy(offset_hsp_array, hsp_array, hspcnt*sizeof(BLAST_HSPPtr));
+   HeapSort(offset_hsp_array, hspcnt, sizeof(BLAST_HSPPtr), fwd_compare_hsps);
+
+   BLAST_HSPArrayIndexQueryEnds(offset_hsp_array, hspcnt, &qend_index_array);
+
+   /* head_hsp is set to NULL whenever there is no current linked set
+      that is being worked on. */
    head_hsp = NULL;
    for (index = 0; index < hspcnt && score_hsp_array[index]; ) {
-      if (!head_hsp) {
-         /* Find the highest scoring HSP that is not yet part of a linked set. */
-         while (index<hspcnt && score_hsp_array[index] && 
-                score_hsp_array[index]->linked_set)
-            index++;
-         if (index==hspcnt)
-            break;
-         head_hsp = score_hsp_array[index];
-      }
-      best_evalue = head_hsp->evalue;
-      best_hsp = NULL;
-      reverse_link = FALSE;
-      
-      if (head_hsp->linked_set)
-         for (var_hsp = head_hsp, i=1; i<head_hsp->num; 
-              var_hsp = var_hsp->next, i++);
-      else
-         var_hsp = head_hsp;
+       double best_evalue, best_sum_score = 0;
+       BLAST_HSPPtr best_hsp = NULL;
+       BLAST_HSPPtr tail_hsp = NULL;
+       Int4 hsp_index_left, hsp_index_right;
+       Int4 left_offset;
 
-      index1 = hsp_binary_search(offset_hsp_array, hspcnt,
-                                 var_hsp->query.end - overlap_size, TRUE);
-      while (index1 < hspcnt && offset_hsp_array[index1]->query.offset <= 
-             var_hsp->query.end + gap_size) {
-         hsp = offset_hsp_array[index1++];
-         /* If this is already part of a linked set, disregard it */
-         if (hsp == var_hsp || hsp == head_hsp || 
-             (hsp->linked_set && !hsp->start_of_chain))
-            continue;
-         /* Check if the subject coordinates are consistent with query. Also
-            make sure the HSPs to be linked are on the same strand. */
-         if (SIGN(hsp->subject.frame) != SIGN(var_hsp->subject.frame) ||
-             hsp->subject.offset < var_hsp->subject.end - overlap_size || 
-             hsp->subject.offset > var_hsp->subject.end + search->pbp->longest_intron)
-            continue;
-         /* Check if the e-value for the new combined HSP set is better than for
-            the previously obtained set. */
-         if ((evalue = SumHSPEvalue(search, head_hsp, hsp, &xsum)) < 
-             MIN(best_evalue, hsp->evalue)) {
-            best_hsp = hsp;
-            best_evalue = evalue;
-            best_xsum = xsum;
-         }
-      }
+       if (!head_hsp) {
+           /* Find the highest scoring HSP that is not yet part of a
+              linked set.  An HSP is part of a linked set if and only
+              if either prev or next pointer is not NULL. */
+           while (index<hspcnt && score_hsp_array[index] &&
+                  (score_hsp_array[index]->next ||
+                   score_hsp_array[index]->prev))
+               index++;
+           if (index==hspcnt)
+               break;
+           head_hsp = score_hsp_array[index];
+       }
+       /* Find the last link in the current HSP set. */
+       for (tail_hsp = head_hsp; tail_hsp->next; tail_hsp = tail_hsp->next);
 
-      /* Look for farthest HSP to the left that ends within a window from 
-       * where this HSP set starts.
-       */
-      index1 = hsp_binary_search(end_hsp_array, hspcnt,
-                                 head_hsp->query.offset - gap_size, FALSE);
-      while (index1 < hspcnt && end_hsp_array[index1]->query.end <= 
-             head_hsp->query.offset + overlap_size) {
-         hsp = end_hsp_array[index1++];
+       best_evalue = head_hsp->evalue;
+       best_sum_score = head_hsp->xsum;
+       /* left_offset is the leftmost point where an HSP can end to be
+          admissible for linking with head_hsp. */
+       left_offset = head_hsp->query.offset - gap_size;
 
-         /* Check if the subject coordinates are consistent with query. Also
-            make sure the HSPs are on the same strand. */
-         if (hsp == head_hsp || 
-             SIGN(hsp->subject.frame) != SIGN(head_hsp->subject.frame) ||
-             hsp->subject.end > head_hsp->subject.offset + overlap_size || 
-             hsp->subject.end < head_hsp->subject.offset - search->pbp->longest_intron)
-            continue;
-         if (hsp->linked_set) {
-            for (var_hsp = hsp, i=1; var_hsp->start_of_chain == FALSE; 
-                 var_hsp = var_hsp->prev, i++);
-            if (i<var_hsp->num || var_hsp == head_hsp)
+       /* Find the smallest index in the offset array, for which an
+          HSP can possibly be added to the set currently being
+          explored. */
+       hsp_index_left =
+           BLAST_HSPOffsetEndBinarySearch(offset_hsp_array,
+                                          hspcnt, qend_index_array,
+                                          head_hsp->context, left_offset);
+
+       /* Find the largest index in the offset array, for which an HSP
+          can be possibly added to the currently explored set. */
+       hsp_index_right =
+           BLAST_HSPOffsetBinarySearch(offset_hsp_array, hspcnt,
+                                       tail_hsp->context,
+                                       tail_hsp->query.end + gap_size);
+
+       for (index1 = hsp_index_left; index1 < hsp_index_right; ++index1) {
+           BLAST_HSPPtr lhsp = offset_hsp_array[index1];
+
+           /* From each previously linked HSP set consider only one
+              representative - the leftmost HSP whose query end is >=
+              left_offset. */
+           if (lhsp->prev && lhsp->prev->query.end >= left_offset)
                continue;
-         } else {
-            var_hsp = hsp;
-         }
-         /* Check if the e-value for the new combined HSP set is better than for
-            the previously obtained set. */
-         if ((evalue = SumHSPEvalue(search, var_hsp, head_hsp, &xsum)) < 
-             MIN(var_hsp->evalue, best_evalue)) {
-            best_hsp = hsp;
-            best_evalue = evalue;
-            best_xsum = xsum;
-            reverse_link = TRUE;
-         }
-      }
-         
-      /* Link these HSPs together */
-      if (best_hsp != NULL) {
-         if (!reverse_link) {
-            head_hsp->start_of_chain = TRUE;
-            head_hsp->xsum = best_xsum;
-            head_hsp->evalue = best_evalue;
-            best_hsp->start_of_chain = FALSE;
-            if (head_hsp->linked_set) 
-               for (var_hsp = head_hsp, i=1; i<head_hsp->num; 
-                    var_hsp = var_hsp->next, i++);
-            else 
-               var_hsp = head_hsp;
-            var_hsp->next = best_hsp;
-            best_hsp->prev = var_hsp;
-            head_hsp->num += best_hsp->num;
-         } else {
-            best_hsp->next = head_hsp;
-            head_hsp->prev = best_hsp;
-            if (best_hsp->linked_set) {
-               for (var_hsp = best_hsp; 
-                    var_hsp->start_of_chain == FALSE; 
-                    var_hsp = var_hsp->prev);
-            } else
-                  var_hsp = best_hsp;
-            var_hsp->start_of_chain = TRUE;
-            var_hsp->xsum = best_xsum;
-            var_hsp->evalue = best_evalue;
-            var_hsp->num += head_hsp->num;
-            head_hsp->start_of_chain = FALSE;
-         }
-         
-         head_hsp->linked_set = best_hsp->linked_set = TRUE;
-         if (reverse_link)
-            head_hsp = var_hsp;
+
+           if (BLAST_HSPLinkedSetsAdmissible(head_hsp, lhsp,
+                                             overlap_size, gap_size,
+                                             longest_intron)) {
+               double evalue, sum_score;
+               /* Check if the e-value for the new combined HSP set is
+                  better than for the previously obtained set. */
+               if ((evalue = SumHSPEvalue(search, head_hsp,
+                                          lhsp, &sum_score)) <
+                   MIN(best_evalue, lhsp->evalue)) {
+                   best_hsp = lhsp;
+                   best_evalue = evalue;
+                   best_sum_score = sum_score;
+               }
+           }
+       }
+
+      /* Link the new HSP to the set, if it qualified. */
+      if (best_hsp) {
+         head_hsp = BLAST_HSPCombineLinkedSets(head_hsp, best_hsp,
+                                               best_sum_score, best_evalue);
       } else {
          head_hsp = NULL;
-         index++;
+         ++index;
       }
    }
 
-   HeapSort(score_hsp_array, hspcnt, sizeof(BLAST_HSPPtr),
-            xsum_compare_hsps);
-
-   hsp = head_hsp = score_hsp_array[0];
-   for (index=0; index<hspcnt; hsp = hsp->next) {
-      if (hsp->linked_set) {
-         index1 = hsp->num;
-         for (i=1; i < index1; i++, hsp = hsp->next) {
-            hsp->next->evalue = hsp->evalue;
-            hsp->next->num = hsp->num;
-            hsp->next->xsum = hsp->xsum;
-         }
-      }
-      while (++index < hspcnt)
-         if (!score_hsp_array[index]->linked_set ||
-             score_hsp_array[index]->start_of_chain)
-            break;
-      if (index == hspcnt) {
-         hsp->next = NULL;
-         break;
-      }
-      hsp->next = score_hsp_array[index];
-   }
-
-   if (search->prog_number == blast_type_blastx) {
-      BLAST_Seg seg;
-      /* Switch back query and subject segments. */ 
-      for (hsp = head_hsp; hsp; hsp = hsp->next) {
-         seg = hsp->query;
-         hsp->query = hsp->subject;
-         hsp->subject = seg;
-      }
-   }
-
-   MemFree(subject_seq);
+   /* Free the auxiliary arrays. */
    MemFree(score_hsp_array);
    MemFree(offset_hsp_array);
-   MemFree(end_hsp_array);
-   return head_hsp;
+   MemFree(qend_index_array);
+
+   if(search->prog_number == blast_type_blastx) {
+       BLAST_HSPArraySwapSequences(hsp_array, hspcnt);
+   }
+
+   /* Make sure that HSPs are sorted by individual score at exit. */
+   HeapSort(hitlist->hsp_array, hitlist->hspcnt,
+            sizeof(BLAST_HSPPtr), score_compare_hsps);
+   
+   return 0;
 }
 
 
@@ -11788,8 +12080,8 @@ BlastGetNonSumStatsEvalue (BlastSearchBlkPtr search)
 			  /* AM: changed to support query concatenation. */
 			  if( !search->mult_queries )
                             hsp->evalue = BlastKarlinStoE_simple(hsp->score, 
-			                                         kbp[hsp->context], 
-								 search->searchsp_eff);
+                                                                 kbp[hsp->context], 
+                                                                 search->searchsp_eff);
                           else
 			  {
 			    query_num = GetQueryNum( search->mult_queries,

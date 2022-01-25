@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.63 $
+* $Revision: 6.66 $
 *
 * File Description: 
 *
@@ -46,6 +46,7 @@
 #include <document.h>
 #include <gather.h>
 #include <subutil.h>
+#include <explore.h>
 
 extern EnumFieldAssoc  orgmod_subtype_alist [];
 ENUM_ALIST(orgmod_subtype_alist)
@@ -3114,6 +3115,209 @@ extern ForM CreateBioSourceDescForm (Int2 left, Int2 top, Int2 width,
   return (ForM) w;
 }
 
+typedef struct biosourcedlg
+{
+  DIALOG_MESSAGE_BLOCK
+  DialoG             foldertabs;
+  GrouP              pages [NUM_PAGES];
+  DialoG             location;
+  Int2               currentPage;
+  DialoG             gbp;
+  
+  LookupTaxonomyProc lookupTaxonomy; /* read in from the application properties */
+} BioSourceDlgData, PNTR BioSourceDlgPtr;
+
+static void ChangeBioSourceDialogPage (VoidPtr data, Int2 newval, Int2 oldval)
+
+{
+  BioSourceDlgPtr dlg;
+
+  dlg = (BioSourceDlgPtr) data;
+  if (dlg != NULL) {
+    dlg->currentPage = newval;
+    SafeHide (dlg->pages [oldval]);
+    SafeShow (dlg->pages [newval]);
+    switch (newval) {
+      case ORGANISM_PAGE :
+        break;
+      case MODIFIERS_PAGE :
+        break;
+      case MISCELLANEOUS_PAGE :
+        break;
+      case COMMON_PAGE :
+        break;
+      case LOCATION_PAGE :
+        SendMessageToDialog (dlg->location, VIB_MSG_ENTER);
+        break;
+      default :
+        break;
+    }
+    Update ();
+  }
+}
+
+static void BioSourceToDialog (DialoG d, Pointer userdata)
+{
+  BioSourceDlgPtr dlg;
+  BioSourcePtr    biop;
+  
+  dlg = (BioSourceDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL)
+  {
+    return;
+  }
+  
+  biop = (BioSourcePtr) userdata;
+  PointerToDialog (dlg->gbp, biop);
+}
+
+static Pointer DialogToBioSource (DialoG d)
+{
+  BioSourceDlgPtr dlg;
+  
+  dlg = (BioSourceDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL)
+  {
+    return NULL;
+  }
+  
+  return DialogToPointer (dlg->gbp);
+}
+
+static ValNodePtr TestBioSourceDialog (DialoG d)
+{
+  BioSourceDlgPtr dlg;
+  
+  dlg = (BioSourceDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL)
+  {
+    return NULL;
+  }
+  return TestDialog (dlg->gbp);
+}
+
+static void BioSourceDialogMessage (DialoG d, Int2 message)
+{
+  BioSourceDlgPtr dlg;
+  
+  dlg = (BioSourceDlgPtr) GetObjectExtra (d);
+  if (dlg != NULL)
+  {
+    SendMessageToDialog (dlg->gbp, message);
+  }    
+}
+
+static void DoTaxLookup (ButtoN b)
+{
+  BioSourceDlgPtr dlg;
+  SeqEntryPtr     sep;
+  BioseqSetPtr    bssp;
+  SeqDescrPtr     sdp;
+  BioSourcePtr    biop;
+  Uint2           entityID;
+  
+  dlg = (BioSourceDlgPtr) GetObjectExtra (b);
+  if (dlg == NULL)
+  {
+    return;
+  }
+  
+  sep = SeqEntryNew ();
+  if (sep == NULL)
+  {
+    return;
+  }
+  
+  biop = (BioSourcePtr) DialogToPointer (dlg->dialog);
+  bssp = BioseqSetNew ();
+  
+  if (biop == NULL || bssp == NULL)
+  {
+    biop = BioSourceFree (biop);
+    bssp = BioseqSetFree (bssp);
+    sep = SeqEntryFree (sep);
+    return;
+  }
+  
+  sep->choice = 2;
+  sep->data.ptrvalue = bssp;
+  sdp = CreateNewDescriptor (sep, Seq_descr_source);
+  sdp->data.ptrvalue = biop;
+  entityID = ObjMgrGetEntityIDForChoice (sep);
+  if (entityID > 0)
+  {
+    SeqMgrIndexFeatures (entityID, NULL);
+    if ((dlg->lookupTaxonomy) (entityID))
+    {
+      /* find the new BioSource */
+      sdp = bssp->descr;
+      while (sdp != NULL && sdp->choice != Seq_descr_source)
+      {
+        sdp = sdp->next;
+      }
+      if (sdp != NULL)
+      {
+        /* put it in our dialog */
+        PointerToDialog (dlg->dialog, sdp->data.ptrvalue);
+      }
+    }
+  }                 
+  SeqEntryFree (sep);
+}
+
+extern DialoG BioSourceDialog (GrouP parent)
+{
+  BioSourceDlgPtr       dlg;
+  GrouP                 p;
+  BioSourceEditProcsPtr bepp;
+  ButtoN                b;
+  
+  dlg = (BioSourceDlgPtr) MemNew (sizeof (BioSourceDlgData));
+  if (dlg == NULL)
+  {
+    return NULL;
+  }
+  
+  p = HiddenGroup (parent, -1, 0, NULL);
+  SetObjectExtra (p, dlg, StdCleanupExtraProc);
+  SetGroupSpacing (p, 3, 10);
+  dlg->dialog = (DialoG) p;
+  dlg->todialog = BioSourceToDialog;
+  dlg->fromdialog = DialogToBioSource;
+  dlg->dialogmessage = BioSourceDialogMessage;
+  dlg->testdialog = TestBioSourceDialog;
+
+  dlg->foldertabs = CreateFolderTabs (p, biosourceDescFormTabs, ORGANISM_PAGE,
+                                      0, 0, SYSTEM_FOLDER_TAB,
+                                      ChangeBioSourceDialogPage, (Pointer) dlg);
+  dlg->currentPage = ORGANISM_PAGE;
+
+  dlg->gbp = CreateBioSourceDialog (p, NULL, dlg->pages, NULL, NULL, TRUE);
+  
+  bepp = (BioSourceEditProcsPtr) GetAppProperty ("BioSourcEditForm");
+  
+  if (bepp != NULL) {
+    dlg->lookupTaxonomy = bepp->lookupTaxonomy;
+    b = PushButton (p, "Look up Taxonomy", DoTaxLookup);
+    SetObjectExtra (b, dlg, NULL);
+  }
+  else
+  {
+    b = NULL;
+  }
+
+  
+  AlignObjects (ALIGN_CENTER, (HANDLE) dlg->foldertabs,
+                              (HANDLE) dlg->gbp, 
+                              (HANDLE) b, 
+                              NULL);
+
+  SendMessageToDialog (dlg->gbp, VIB_MSG_INIT);
+  SendMessageToDialog (dlg->gbp, VIB_MSG_ENTER);
+
+  return (DialoG) p;
+}
+
 static CharPtr  biosourceFeatFormTabs [] = {
   "Organism", "Modifiers", "Miscellaneous", "Properties", "Location", NULL
 };
@@ -3383,4 +3587,3 @@ extern Int2 LIBCALLBACK BioSourceGenFunc (Pointer data)
   }
   return OM_MSG_RET_DONE;
 }
-

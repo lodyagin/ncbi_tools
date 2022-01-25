@@ -1,4 +1,4 @@
-/* $Id: blast_def.h,v 1.58 2005/04/27 19:47:22 dondosha Exp $
+/* $Id: blast_def.h,v 1.59 2005/05/06 14:26:44 camacho Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -58,6 +58,14 @@ typedef enum {
     eBlastTypePhiBlastp,
     eBlastTypeUndefined
 } EBlastProgramType;
+
+/** Returns true if program is PHI-BLAST (i.e.: involves a pattern) */
+#define Blast_ProgramIsPhiBlast(p) \
+(p == eBlastTypePhiBlastn || p == eBlastTypePhiBlastp)
+
+/** Returns true if program is RPS-BLAST (i.e.: involves a PSSM as subject) */
+#define Blast_ProgramIsRpsBlast(p) \
+(p == eBlastTypeRpsBlast || p == eBlastTypeRpsTblastn)
 
 extern const int kDustLevel;  /**< Level parameter used by dust. */
 extern const int kDustWindow; /**< Window parameter used by dust. */

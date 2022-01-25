@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: blast_input.c,v 1.21 2005/04/06 23:27:53 dondosha Exp $";
+static char const rcsid[] = "$Id: blast_input.c,v 1.22 2005/05/17 14:00:44 dondosha Exp $";
 /* ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -138,7 +138,7 @@ BLAST_GetQuerySeqLoc(FILE *infp, Boolean query_is_na, Uint1 strand,
          }
       } else {
          last_slp = ValNodeAddPointer(&last_slp, SEQLOC_WHOLE, 
-                       SeqIdSetDup(query_bsp->id));
+                       SeqIdDup(SeqIdFindBest(query_bsp->id, SEQID_GI)));
          if (*query_slp == NULL)
             *query_slp = last_slp;
       }

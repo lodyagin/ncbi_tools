@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   5/5/00
 *
-* $Revision: 6.107 $
+* $Revision: 6.111 $
 *
 * File Description: 
 *
@@ -64,7 +64,7 @@
 #include <pmfapi.h>
 #include <tax3api.h>
 
-#define TBL2ASN_APP_VER "3.6"
+#define TBL2ASN_APP_VER "3.8"
 
 CharPtr TBL2ASN_APPLICATION = TBL2ASN_APP_VER;
 
@@ -1235,7 +1235,8 @@ static void ProcessOneNuc (
   Uint2 entityID,
   BioseqPtr bsp,
   BioSourcePtr src,
-  TblArgsPtr tbl
+  TblArgsPtr tbl,
+  MolInfoPtr template_molinfo
 )
 
 {
@@ -1306,6 +1307,10 @@ static void ProcessOneNuc (
       if (stp != NULL) {
         mip = ParseTitleIntoMolInfo (stp, mip);
       }
+	  if (mip->biomol == 0 && template_molinfo != NULL)
+	  {
+	    mip->biomol = template_molinfo->biomol;
+	  }
       if (mip->biomol == 0) {
         mip->biomol = MOLECULE_TYPE_GENOMIC;
       }
@@ -1590,7 +1595,8 @@ static Uint2 ProcessOneAsn (
   BioSourcePtr src,
   TblArgsPtr tbl,
   CharPtr localname,
-  SeqEntryPtr gsep
+  SeqEntryPtr gsep,
+  MolInfoPtr template_molinfo
 )
 
 {
@@ -1621,6 +1627,14 @@ static Uint2 ProcessOneAsn (
     } else if (datatype == OBJ_BIOSEQSET) {
       bssp->seq_set = SeqMgrGetSeqEntryForData (dataptr);
       SeqMgrSeqEntry (SM_BIOSEQSET, (Pointer) dataptr, gsep);
+    } else if (datatype == OBJ_SEQENTRY) {
+      sep = (SeqEntryPtr) dataptr;
+      bssp->seq_set = sep;
+      if (IS_Bioseq (sep)) {
+        SeqMgrSeqEntry (SM_BIOSEQ, (Pointer) sep->data.ptrvalue, gsep);
+      } else if (IS_Bioseq_set (sep)) {
+        SeqMgrSeqEntry (SM_BIOSEQSET, (Pointer) sep->data.ptrvalue, gsep);
+      } else return 0;
     } else return 0;
 
     SeqMgrLinkSeqEntry (gsep, parenttype, parentptr);
@@ -1649,7 +1663,7 @@ static Uint2 ProcessOneAsn (
     }
   }
 
-  ProcessOneNuc (entityID, bsp, src, tbl);
+  ProcessOneNuc (entityID, bsp, src, tbl, template_molinfo);
 
   return entityID;
 }
@@ -1657,7 +1671,8 @@ static Uint2 ProcessOneAsn (
 static Uint2 ProcessBulkSet (
   FILE* fp,
   BioSourcePtr src,
-  TblArgsPtr tbl
+  TblArgsPtr tbl,
+  MolInfoPtr template_molinfo
 )
 
 {
@@ -1733,7 +1748,7 @@ while ((bsp = ReadDeltaFasta (fp, NULL)) != NULL) {
     }
     lastsep = sep;
 
-    ProcessOneNuc (entityID, bsp, src, tbl);
+    ProcessOneNuc (entityID, bsp, src, tbl, template_molinfo);
   }
 
   SeqMgrLinkSeqEntry (topsep, 0, NULL);
@@ -1776,7 +1791,8 @@ static Uint2 ProcessDeltaSet (
   BioSourcePtr src,
   TblArgsPtr tbl,
   CharPtr localname,
-  SeqEntryPtr gsep
+  SeqEntryPtr gsep,
+  MolInfoPtr template_molinfo
 )
 
 {
@@ -1847,7 +1863,7 @@ static Uint2 ProcessDeltaSet (
       entityID = ObjMgrRegister (OBJ_BIOSEQ, (Pointer) bsp);
     }
 
-    ProcessOneNuc (entityID, bsp, src, tbl);
+    ProcessOneNuc (entityID, bsp, src, tbl, template_molinfo);
     return entityID;
   }
 
@@ -1962,7 +1978,7 @@ static Uint2 ProcessDeltaSet (
     }
   }
 
-  ProcessOneNuc (entityID, deltabsp, src, tbl);
+  ProcessOneNuc (entityID, deltabsp, src, tbl, template_molinfo);
 
   return entityID;
 }
@@ -2029,7 +2045,8 @@ static void ShowAlignmentNotes
 static Uint2 ProcessAlignSet (
   FILE *fp,
   BioSourcePtr src,
-  TblArgsPtr tbl
+  TblArgsPtr tbl,
+  MolInfoPtr template_molinfo
 )
 
 {
@@ -2129,7 +2146,7 @@ static Uint2 ProcessAlignSet (
   if (IS_Bioseq (sep)) {
     bsp = (BioseqPtr) sep->data.ptrvalue;
   	entityID = ObjMgrRegister (OBJ_BIOSEQ, (Pointer) bsp);
-  	ProcessOneNuc (entityID, bsp, src, tbl);
+  	ProcessOneNuc (entityID, bsp, src, tbl, template_molinfo);
   } else if (IS_Bioseq_set (sep)) {
     bssp = (BioseqSetPtr) sep->data.ptrvalue;
     bssp->_class = BioseqseqSet_class_phy_set;
@@ -2137,7 +2154,7 @@ static Uint2 ProcessAlignSet (
   	for (tmp = bssp->seq_set; tmp != NULL; tmp = tmp->next) {
   	  if (IS_Bioseq (tmp)) {
   	  	bsp = (BioseqPtr) tmp->data.ptrvalue;
-        ProcessOneNuc (entityID, bsp, src, tbl);
+        ProcessOneNuc (entityID, bsp, src, tbl, template_molinfo);
   	  }
   	}
   } else return 0;
@@ -3086,6 +3103,46 @@ static void ProcessSourceTable (
   }
 }
 
+static SeqDescrPtr GetDescriptorTypeAlreadyInList (Uint1 descr_choice, SeqDescrPtr list)
+
+{
+  while (list != NULL && list->choice != descr_choice)
+  {
+    list = list->next;
+  }
+  return list;
+}
+
+static void AddTemplateDescriptors 
+(
+  SeqDescrPtr PNTR current_list,
+  SeqDescrPtr new_list
+)
+
+{
+  SeqDescrPtr  sdp_next, sdp;
+
+  if (current_list == NULL || new_list == NULL) return;
+  
+  for (sdp = new_list; sdp != NULL; sdp = sdp->next)
+  {
+	if ((sdp->choice == Seq_descr_molinfo || sdp->choice == Seq_descr_source)
+		&& GetDescriptorTypeAlreadyInList (Seq_descr_molinfo, *current_list) != NULL)
+	{
+      continue;
+	}
+	else
+	{
+	  sdp_next = sdp->next;
+	  sdp->next = NULL;
+	  ValNodeLink (current_list, AsnIoMemCopy ((Pointer) sdp,
+                   (AsnReadFunc) SeqDescrAsnRead,
+                   (AsnWriteFunc) SeqDescrAsnWrite));
+	  sdp->next = sdp_next;
+	}
+  }
+}
+
 static void ProcessOneRecord (
   SubmitBlockPtr sbp,
   PubdescPtr pdp,
@@ -3132,6 +3189,7 @@ static void ProcessOneRecord (
   SimpleSeqPtr       ssp;
   CharPtr            str;
   SeqEntryPtr        tmp;
+  MolInfoPtr         template_molinfo = NULL;
 
   fp = OpenOneFile (directory, base, suffix);
   if (fp == NULL) return;
@@ -3154,16 +3212,25 @@ static void ProcessOneRecord (
     localname = base;
   }
 
+  /* find MolInfo from template, if there is any */
+  sdp = sdphead;
+  while (sdp != NULL && sdp->choice != Seq_descr_molinfo) {
+    sdp = sdp->next;
+  }
+  if (sdp != NULL) {
+    template_molinfo = (MolInfoPtr) sdp->data.ptrvalue;
+  }
+
   /* read one or more ASN.1 or FASTA sequence files */
 
   if (tbl->fastaset) {
-    entityID = ProcessBulkSet (fp, src, tbl);
+    entityID = ProcessBulkSet (fp, src, tbl, template_molinfo);
   } else if (tbl->deltaset) {
-    entityID = ProcessDeltaSet (fp, src, tbl, localname, gsep);
+    entityID = ProcessDeltaSet (fp, src, tbl, localname, gsep, template_molinfo);
   } else if (tbl->alignset) {
-    entityID = ProcessAlignSet (fp, src, tbl);
+    entityID = ProcessAlignSet (fp, src, tbl, template_molinfo);
   } else {
-    entityID = ProcessOneAsn (fp, src, tbl, localname, gsep);
+    entityID = ProcessOneAsn (fp, src, tbl, localname, gsep, template_molinfo);
   }
   FileClose (fp);
 
@@ -3359,16 +3426,10 @@ static void ProcessOneRecord (
     if (sdphead != NULL) {
       if (IS_Bioseq (sep)) {
         bsp = (BioseqPtr) sep->data.ptrvalue;
-        ValNodeLink (&(bsp->descr),
-                     AsnIoMemCopy ((Pointer) sdphead,
-                                   (AsnReadFunc) SeqDescrAsnRead,
-                                   (AsnWriteFunc) SeqDescrAsnWrite));
+		AddTemplateDescriptors (&(bsp->descr), sdphead);
       } else if (IS_Bioseq_set (sep)) {
         dssp = (BioseqSetPtr) sep->data.ptrvalue;
-        ValNodeLink (&(dssp->descr),
-                     AsnIoMemCopy ((Pointer) sdphead,
-                                   (AsnReadFunc) SeqDescrAsnRead,
-                                   (AsnWriteFunc) SeqDescrAsnWrite));
+ 		AddTemplateDescriptors (&(dssp->descr), sdphead);
       }
     }
     dp = DateCurr ();
@@ -3412,11 +3473,9 @@ static void ProcessOneRecord (
       VisitFeaturesInSep (sep, NULL, RemoveUnnecGeneXref);
     }
 
-    if (SeqMgrFeaturesAreIndexed (entityID)) {
-      InstantiateProteinTitles (entityID, NULL);
-    } else {
-      Message (MSG_POSTERR, "Unable to instantiate protein titles due to dropped index");
-    }
+    /* need to reindex so hypothetical protein titles pick up locus_tag */
+    SeqMgrIndexFeatures (entityID, NULL);
+    InstantiateProteinTitles (entityID, NULL);
 
     if (tbl->genprodset) {
       /* need to reindex before instantiating mRNA titles */

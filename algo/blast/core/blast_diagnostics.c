@@ -1,4 +1,4 @@
-/* $Id: blast_diagnostics.c,v 1.5 2004/11/02 18:19:22 madden Exp $
+/* $Id: blast_diagnostics.c,v 1.6 2005/05/26 15:24:05 dondosha Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,7 +34,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_diagnostics.c,v 1.5 2004/11/02 18:19:22 madden Exp $";
+    "$Id: blast_diagnostics.c,v 1.6 2005/05/26 15:24:05 dondosha Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_diagnostics.h>
@@ -128,6 +128,7 @@ Blast_DiagnosticsUpdate(BlastDiagnostics* global, BlastDiagnostics* local)
       global->cutoffs->x_drop_gap = local->cutoffs->x_drop_gap;
       global->cutoffs->x_drop_gap_final = local->cutoffs->x_drop_gap_final;
       global->cutoffs->ungapped_cutoff = local->cutoffs->ungapped_cutoff;
+      global->cutoffs->cutoff_score = local->cutoffs->cutoff_score;
    }
 
    if (global->mt_lock) 

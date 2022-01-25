@@ -1,4 +1,4 @@
-/* $Id: phi_extend.h,v 1.8 2005/04/27 19:50:31 dondosha Exp $
+/* $Id: phi_extend.h,v 1.10 2005/05/18 15:27:19 papadopo Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -41,7 +41,22 @@
 extern "C" {
 #endif
 
-/** WordFinder type function for PHI BLAST. */
+/** WordFinder type function for PHI BLAST.
+ * @param subject Subject sequence [in]
+ * @param query Query sequence [in]
+ * @param lookup_wrap Wrapper for the lookup table with pattern information [in]
+ * @param matrix Scoring matrix (not used) 
+ * @param word_params Initial word parameters (not used)
+ * @param ewp Word extension structure (not used)
+ * @param offset_pairs Allocated array of offset pairs for storing subject 
+ *                     pattern hits in  [in] [out]
+ * @param max_hits Maximal number of hits allowed in the offset_pairs 
+ *                 array. Not used - array is always allocated to fit all 
+ *                 pattern hits.
+ * @param init_hitlist Structure for saving initial hits. [in]
+ * @param ungapped_stats Structure for saving hit counts [in] [out]
+ * @return always zero
+ */
 Int2 PHIBlastWordFinder(BLAST_SequenceBlk* subject, 
         BLAST_SequenceBlk* query, LookupTableWrap* lookup_wrap,
         Int4** matrix, const BlastInitialWordParameters* word_params,

@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.8 $
+* $Revision: 6.10 $
 *
 * File Description:  Object manager interface for type Pubdesc from
 *                    NCBI-Sequence.  This is separate to avoid typedef
@@ -45,6 +45,13 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: objpubd.h,v $
+* Revision 6.10  2005/05/24 19:13:47  bollin
+* removed PubdescMatch function - was conflicting with local versions elsewhere.
+* Function is now a local function in desktop\seqsub.c
+*
+* Revision 6.9  2005/05/23 12:59:31  bollin
+* added PubdescMatch function
+*
 * Revision 6.8  2004/12/08 20:20:34  kans
 * changed MI_TECH_composite to MI_TECH_composite_wgs_htgs
 *

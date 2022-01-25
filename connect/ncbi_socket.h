@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_SOCKET__H
 #define CONNECT___NCBI_SOCKET__H
 
-/*  $Id: ncbi_socket.h,v 6.54 2005/01/05 17:37:20 lavr Exp $
+/*  $Id: ncbi_socket.h,v 6.55 2005/05/20 11:39:55 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -630,9 +630,9 @@ extern NCBI_XCONNECT_EXPORT EIO_Status SOCK_Read
 
 
 /*
- * Read a line from SOCK.  A line is terminated by either '\n' or '\0'
- * with optional preceding '\r'.  Returned result is always '\0'-
- * terminated with preceding '\r' (if any) stripped. *n_read (if 'n_read'
+ * Read a line from SOCK.  A line is terminated by either '\n' (with
+ * optional preceding '\r') or '\0'.  Returned result is always '\0'-
+ * terminated and having '\r'(if any)'\n' stripped. *n_read (if 'n_read'
  * passed non-NULL) contains the numbed of characters written into
  * 'buf' (not counting the terminating '\0').  If 'buf', whose size is
  * specified via 'size' parameter, is not big enough to contain the
@@ -1015,6 +1015,9 @@ extern NCBI_XCONNECT_EXPORT char* SOCK_gethostbyaddr
 /*
  * ---------------------------------------------------------------------------
  * $Log: ncbi_socket.h,v $
+ * Revision 6.55  2005/05/20 11:39:55  lavr
+ * Correct documentation on SOCK_ReadLine()
+ *
  * Revision 6.54  2005/01/05 17:37:20  lavr
  * SOCK_ReadLine() documented in details
  *

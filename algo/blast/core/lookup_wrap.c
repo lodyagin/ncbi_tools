@@ -1,4 +1,4 @@
-/* $Id: lookup_wrap.c,v 1.14 2005/04/27 19:55:29 dondosha Exp $
+/* $Id: lookup_wrap.c,v 1.15 2005/06/02 16:18:40 camacho Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -37,7 +37,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: lookup_wrap.c,v 1.14 2005/04/27 19:55:29 dondosha Exp $";
+    "$Id: lookup_wrap.c,v 1.15 2005/06/02 16:18:40 camacho Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/lookup_wrap.h>
@@ -62,13 +62,16 @@ Int2 LookupTableWrapInit(BLAST_SequenceBlk* query,
    case AA_LOOKUP_TABLE:
        {
        Int4** matrix = NULL;
-       if (lookup_options->use_pssm) {
+       Boolean has_pssm = FALSE;
+       if (sbp->psi_matrix && sbp->psi_matrix->pssm) {
            matrix = sbp->psi_matrix->pssm->data;
+           has_pssm = TRUE;
        } else {
            matrix = sbp->matrix->data;
        }
        BlastAaLookupNew(lookup_options, (BlastLookupTable* *)
                         &lookup_wrap->lut);
+       ((BlastLookupTable*)lookup_wrap->lut)->use_pssm = has_pssm;
        BlastAaLookupIndexQuery( (BlastLookupTable*) lookup_wrap->lut, matrix, 
                                  query, lookup_segments);
        _BlastAaLookupFinalize((BlastLookupTable*) lookup_wrap->lut);

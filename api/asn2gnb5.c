@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.35 $
+* $Revision: 1.36 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -254,6 +254,15 @@ static Char link_ccds [MAX_WWWBUF];
 static Char link_ecocyc [MAX_WWWBUF];
 #define DEF_LINK_ECOCYC "http://biocyc.org/ECOLI/new-image?type=GENE&object="
 
+static Char link_hssp [MAX_WWWBUF];
+#define DEF_LINK_HSSP "http://www.sander.ebi.ac.uk/hssp"
+
+static Char link_genew [MAX_WWWBUF];
+#define DEF_LINK_GENEW "http://www.gene.ucl.ac.uk/cgi-bin/nomenclature/searchgenes.pl"
+
+static Char link_bold [MAX_WWWBUF];
+#define DEF_LINK_BOLD "http://www.barcodinglife.com"
+
 
 /* www utility functions */
 
@@ -342,6 +351,9 @@ NLM_EXTERN void InitWWW (IntAsn2gbJobPtr ajp)
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_VBASE2", DEF_LINK_VBASE2, link_vbase2, MAX_WWWBUF);
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_CCDS", DEF_LINK_CCDS, link_ccds, MAX_WWWBUF);
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_ECOCYC", DEF_LINK_ECOCYC, link_ecocyc, MAX_WWWBUF);
+  GetAppParam ("NCBI", "WWWENTREZ", "LINK_HSSP", DEF_LINK_HSSP, link_hssp, MAX_WWWBUF);
+  GetAppParam ("NCBI", "WWWENTREZ", "LINK_GENEW", DEF_LINK_GENEW, link_genew, MAX_WWWBUF);
+  GetAppParam ("NCBI", "WWWENTREZ", "LINK_BOLD", DEF_LINK_BOLD, link_bold, MAX_WWWBUF);
 }
 
 
@@ -601,6 +613,21 @@ static void FF_www_db_xref_tax (
   FF_www_db_xref_std(ffstring, db, identifier, link);
 }
 
+static void FF_www_db_xref_null (
+  StringItemPtr ffstring,
+  CharPtr db,
+  CharPtr identifier,
+  CharPtr link
+)
+{
+  while (*identifier == ' ')
+    identifier++;
+
+  FFAddTextToString(ffstring, NULL, db, ":", FALSE, FALSE, TILDE_IGNORE);
+  FFAddTextToString(ffstring, "<a href=", link, NULL, FALSE, FALSE, TILDE_IGNORE);
+  FFAddTextToString(ffstring, ">", identifier, "</a>", FALSE, FALSE, TILDE_IGNORE);
+}
+
 static void Do_www_db_xref(
   IntAsn2gbJobPtr ajp,
   StringItemPtr ffstring,
@@ -715,6 +742,12 @@ static void Do_www_db_xref(
     FF_www_db_xref_std(ffstring, db, identifier, link_ecocyc);
   } else if ( StringCmp(db , "taxon") == 0) {
     FF_www_db_xref_tax(ffstring, db, identifier);
+  } else if ( StringCmp(db , "HSSP") == 0) {
+    FF_www_db_xref_null(ffstring, db, identifier, link_hssp);
+  } else if ( StringCmp(db , "Genew") == 0) {
+    FF_www_db_xref_null(ffstring, db, identifier, link_genew);
+  } else if ( StringCmp(db , "BoLD") == 0) {
+    FF_www_db_xref_null(ffstring, db, identifier, link_bold);
 
   } else {  
     /* default: no link just the text */

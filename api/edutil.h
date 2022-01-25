@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 2/2/94
 *
-* $Revision: 6.15 $
+* $Revision: 6.16 $
 *
 * File Description:  Sequence editing utilities
 *
@@ -39,6 +39,10 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: edutil.h,v $
+* Revision 6.16  2005/05/02 14:21:15  bollin
+* removed function prototypes for PlayJournal and UnplayJournal, since these
+* functions live in desktop/seqpanel.c and are only used there
+*
 * Revision 6.15  2005/04/28 20:10:32  bollin
 * added new function AdjustFeaturesForInsertion which is called by BioseqInsert
 * and also by a new function in sequin3.c for converting a raw bioseq to a delta
@@ -687,13 +691,6 @@ NLM_EXTERN SeqEdJournalPtr SeqEdJournalNewTranslate
 (SeqFeatPtr sfp,
  BioseqPtr  bsp,
  Uint2      entityID);
-
-NLM_EXTERN Boolean PlayJournal 
-(SeqEdJournalPtr      list, 
- SeqEdJournalPtr PNTR last, 
- Int4                 num_steps,
- BoolPtr              pfeats_deleted);
-NLM_EXTERN Boolean UnplayJournal (SeqEdJournalPtr PNTR last, Int4 num_steps);
 
 NLM_EXTERN SeqFeatPtr 
 SeqEdGetNextFeature 

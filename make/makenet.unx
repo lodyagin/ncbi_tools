@@ -1,6 +1,6 @@
 #   makefile for network demo programs and network entrez
 #
-#	$Id: makenet.unx,v 6.197 2005/03/03 18:53:35 beloslyu Exp $
+#	$Id: makenet.unx,v 6.200 2005/06/01 14:01:54 kans Exp $
 #   test, ignore
 #
 #   Sun with unbundled ANSI compiler [ make CC=acc RAN=ranlib ]
@@ -476,7 +476,7 @@ utilities : $(EXEUTIL)
 
 vibutilities : $(EXEUTILVIB)
 
-.NO_PARALLEL:	copy nocopy Tentrez sequin Psequin Ssequin elecpcr asn2fast asn2asn Nbatch Nbatch3 Nentrcmd seqget idfetch test_ncbi_socket test_ncbi_dsock debug_server rtestval rasn2ff asn2gb asn2gb_psf asn2fsa asn2fsa_psf tbl2asn asn2all gene2xml asnval asnval_psf flint gbseqget insdseqget testent2 entrez2 spidey dotmatrix ingenue condense bl2seq
+.NO_PARALLEL:	copy nocopy Tentrez sequin Psequin Ssequin elecpcr asn2fast asn2asn Nbatch Nbatch3 Nentrcmd seqget idfetch test_ncbi_socket test_ncbi_dsock debug_server rtestval rasn2ff asn2gb asn2gb_psf asn2fsa asn2fsa_psf tbl2asn asn2all gene2xml asnval asnval_psf flint gbseqget insdseqget trna2tbl testent2 entrez2 spidey dotmatrix ingenue condense bl2seq
 
 .WAIT:
 	echo Waiting...go
@@ -631,7 +631,9 @@ copy :
 	$(SRCCOPY) ../demo/flint.c .
 	$(SRCCOPY) ../demo/gbseqget.c .
 	$(SRCCOPY) ../demo/insdseqget.c .
+	$(SRCCOPY) ../demo/nps2gps.c .
 	$(SRCCOPY) ../demo/testent2.c .
+	$(SRCCOPY) ../demo/trna2tbl.c .
 	$(SRCCOPY) ../demo/entrez2.c .
 	$(SRCCOPY) ../demo/condense.c .
 	$(SRCCOPY) ../demo/spideymain.c .
@@ -1150,6 +1152,14 @@ gbseqget :	gbseqget.c
 # insdseqget program (insdseqget)
 insdseqget :	insdseqget.c
 	$(CC) -g -o insdseqget $(LDFLAGS) insdseqget.c $(LIB41) $(NETCLILIB) $(LIB23) $(LIB2) $(LIB1) $(OTHERLIBS)
+
+# nps2gps program (nps2gps)
+nps2gps :	nps2gps.c
+	$(CC) -g -o nps2gps $(LDFLAGS) nps2gps.c $(LIB23) $(LIB2) $(LIB1) $(OTHERLIBS)
+
+# trna2tbl program (trna2tbl)
+trna2tbl :	trna2tbl.c
+	$(CC) -g -o trna2tbl $(LDFLAGS) trna2tbl.c $(LIB23) $(LIB2) $(LIB1) $(OTHERLIBS)
 
 # Entrez2 service test program (testent2)
 testent2 :	testent2.c

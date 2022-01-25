@@ -23,13 +23,13 @@
 *
 * ===========================================================================
 *
-* RCS $Id: objsub.h,v 6.2 1999/09/27 17:48:39 kans Exp $
+* RCS $Id: objsub.h,v 6.3 2005/05/18 17:31:43 bollin Exp $
 *
 * Author:  James Ostell
 *   
 * Version Creation Date: 6/20/92
 *
-* $Revision: 6.2 $
+* $Revision: 6.3 $
 *
 * File Description:  Object manager interface for module NCBI-Sub
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: objsub.h,v $
+* Revision 6.3  2005/05/18 17:31:43  bollin
+* added ContactInfoMatch and SubmitBlockMatch functions
+*
 * Revision 6.2  1999/09/27 17:48:39  kans
 * using GatherIndex structure
 *
@@ -121,6 +124,7 @@ NLM_EXTERN ContactInfoPtr LIBCALL ContactInfoNew PROTO((void));
 NLM_EXTERN ContactInfoPtr LIBCALL ContactInfoFree PROTO(( ContactInfoPtr cip));
 NLM_EXTERN ContactInfoPtr LIBCALL ContactInfoAsnRead PROTO((AsnIoPtr aip, AsnTypePtr atp));
 NLM_EXTERN Boolean        LIBCALL ContactInfoAsnWrite PROTO((ContactInfoPtr cip, AsnIoPtr aip, AsnTypePtr atp));
+NLM_EXTERN Boolean LIBCALL ContactInfoMatch (ContactInfoPtr cip1, ContactInfoPtr cip2);
 NLM_EXTERN Int2 LIBCALL ContactInfoLabel PROTO((ContactInfoPtr cip, CharPtr buffer, Int2 buflen, Uint1 content));
 
 /*****************************************************************************
@@ -143,6 +147,7 @@ NLM_EXTERN SubmitBlockPtr LIBCALL SubmitBlockNew PROTO((void));
 NLM_EXTERN SubmitBlockPtr LIBCALL SubmitBlockFree PROTO(( SubmitBlockPtr sbp));
 NLM_EXTERN SubmitBlockPtr LIBCALL SubmitBlockAsnRead PROTO((AsnIoPtr aip, AsnTypePtr atp));
 NLM_EXTERN Boolean        LIBCALL SubmitBlockAsnWrite PROTO((SubmitBlockPtr sbp, AsnIoPtr aip, AsnTypePtr atp));
+NLM_EXTERN Boolean        LIBCALL SubmitBlockMatch (SubmitBlockPtr sbp1, SubmitBlockPtr sbp2);
 NLM_EXTERN Int2 LIBCALL SubmitBlockLabel PROTO((SubmitBlockPtr sbp, CharPtr buffer, Int2 buflen, Uint1 content));
 
 /*****************************************************************************

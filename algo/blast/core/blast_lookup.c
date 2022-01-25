@@ -1,4 +1,4 @@
-/* $Id: blast_lookup.c,v 1.40 2005/04/05 01:47:00 coulouri Exp $
+/* $Id: blast_lookup.c,v 1.41 2005/06/02 16:18:40 camacho Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -43,7 +43,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_lookup.c,v 1.40 2005/04/05 01:47:00 coulouri Exp $";
+    "$Id: blast_lookup.c,v 1.41 2005/06/02 16:18:40 camacho Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 /** Structure containing information needed for adding neighboring words. 
@@ -239,7 +239,6 @@ Int4 LookupTableNew(const LookupTableOptions* opt,
      (Int4**) calloc(lookup->backbone_size , sizeof(Int4*));
   ASSERT(lookup->thin_backbone != NULL);
 
-  lookup->use_pssm = opt->use_pssm;
   lookup->overflow=NULL;
   return 0;
 }
@@ -584,8 +583,6 @@ Int4 BlastAaLookupIndexQuery(BlastLookupTable* lookup,
 			       BlastSeqLoc* locations)
 {
 
-    /** @todo: why not pass query unconditionally here? PSSMs should be handled
-     * in a different code path for clarity */
 return _BlastAaLookupIndexQuery(lookup,
                                matrix, 
                                (lookup->use_pssm == TRUE) ? NULL : query, 

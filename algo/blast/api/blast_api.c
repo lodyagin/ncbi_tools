@@ -1,4 +1,4 @@
-/* $Id: blast_api.c,v 1.6 2005/04/27 19:59:26 dondosha Exp $
+/* $Id: blast_api.c,v 1.14 2005/06/02 16:24:53 dondosha Exp $
 ***************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -77,43 +77,54 @@ s_BlastRPSInfoInit(BlastRPSInfo **ppinfo, Nlm_MemMap **rps_mmap,
    Nlm_MemMapPtr lut_mmap;
    Nlm_MemMapPtr pssm_mmap;
    char buffer[PATH_MAX];
+   ReadDBFILEPtr rdfp;
+   char *tmp_dbname;
 
    info = (BlastRPSInfo *)malloc(sizeof(BlastRPSInfo));
    if (info == NULL)
       ErrPostEx(SEV_FATAL, 1, 0, "Memory allocation failed");
 
-   /* construct the full path to the DB file. Look in
-      the local directory, then BLASTDB environment 
-      variable (if any), then .ncbirc */
-
-   sprintf(filename, "%s.loo", dbname);
-
-   if (FileLength(filename) > 0) {
-      strcpy(pathname, dbname);
-   } else {
-#ifdef OS_UNIX
-      if (getenv("BLASTDB"))
-         Nlm_GetAppParam("NCBI", "BLAST", "BLASTDB", 
-                         getenv("BLASTDB"), pathname, PATH_MAX);
-      else
-#endif
-         Nlm_GetAppParam ("NCBI", "BLAST", "BLASTDB", 
-                          BLASTDB_DIR, pathname, PATH_MAX);
-      sprintf(filename, "%s%s%s", pathname, DIRDELIMSTR, dbname);
-      strcpy(pathname, filename);
-   }
+   /* find the path to the RPS database */
+   tmp_dbname = strdup(dbname);
+   rdfp = readdb_new_ex2(tmp_dbname, READDB_DB_IS_PROT, 
+                         READDB_NEW_DO_REPORT, NULL, NULL);
+   sfree(tmp_dbname);
+   if (rdfp == NULL)
+      ErrPostEx(SEV_FATAL, 1, 0, "Cannot map RPS BLAST database");
+   sprintf(pathname, "%s", rdfp->full_filename);
+   rdfp = readdb_destruct(rdfp);
 
    sprintf(filename, "%s.loo", (char *)pathname);
    lut_mmap = Nlm_MemMapInit(filename);
    if (lut_mmap == NULL)
       ErrPostEx(SEV_FATAL, 1, 0, "Cannot map RPS BLAST lookup file");
+
    info->lookup_header = (BlastRPSLookupFileHeader *)lut_mmap->mmp_begin;
+   if (info->lookup_header->magic_number != RPS_MAGIC_NUM) {
+       if (Nlm_SwapUint4(info->lookup_header->magic_number) == RPS_MAGIC_NUM) {
+           ErrPostEx(SEV_FATAL, 1, 0, "RPS BLAST lookup file was created "
+                           "on an incompatible platform");
+       }
+       else {
+           ErrPostEx(SEV_FATAL, 1, 0, "RPS BLAST lookup file is corrupt");
+       }
+   }
 
    sprintf(filename, "%s.rps", (char *)pathname);
    pssm_mmap = Nlm_MemMapInit(filename);
    if (pssm_mmap == NULL)
       ErrPostEx(SEV_FATAL, 1, 0, "Cannot map RPS BLAST profile file");
+
    info->profile_header = (BlastRPSProfileHeader *)pssm_mmap->mmp_begin;
+   if (info->profile_header->magic_number != RPS_MAGIC_NUM) {
+       if (Nlm_SwapUint4(info->profile_header->magic_number) == RPS_MAGIC_NUM) {
+           ErrPostEx(SEV_FATAL, 1, 0, "RPS BLAST profile file was created "
+                           "on an incompatible platform");
+       }
+       else {
+           ErrPostEx(SEV_FATAL, 1, 0, "RPS BLAST profile file is corrupt");
+       }
+   }
 
    num_db_seqs = info->profile_header->num_profiles;
 
@@ -197,8 +208,6 @@ s_RPSExtraStructsSetUp(const BlastSeqSrc* seq_src, const SBlastOptions* options,
         rps_info->aux_info.gap_extend_penalty;
     rps_score_options->matrix = 
         strdup(rps_info->aux_info.orig_score_matrix);
-    rps_hit_options->prelim_hitlist_size = 
-        rps_info->profile_header->num_profiles;
 
     *rps_options = (SBlastOptions*) BlastMemDup(options, sizeof(SBlastOptions));
     (*rps_options)->score_options = rps_score_options;
@@ -229,7 +238,10 @@ s_RPSExtraStructsFree(BlastRPSInfo* rps_info, Nlm_MemMapPtr rps_mmap,
         sfree(rps_info);
     }
     if (options) {
-        sfree(options->score_options);
+        if (options->score_options) {
+            sfree(options->score_options->matrix);
+            sfree(options->score_options);
+        }
         sfree(options->hit_options);
         sfree(options);
     }
@@ -252,20 +264,20 @@ s_BlastHSPStreamSetUp(BLAST_SequenceBlk* query, BlastQueryInfo* query_info,
     ASSERT(query && query_info && seq_src && options && sbp);
 
     if (!tf_data) {
-        const Int4 kNumResults =
-            ((options->program == eBlastTypeRpsBlast ||
-             options->program == eBlastTypeRpsTblastn) ?
-             BlastSeqSrcGetNumSeqs(seq_src) : query_info->num_queries);
+        const Int4 kNumResults = query_info->num_queries;
         /* Results in the collector stream should be sorted only for a
            database search. The latter is true if and only if the sequence
            source has non-zero database length. */
         const Boolean kSortOnRead = (BlastSeqSrcGetTotLen(seq_src) != 0);
+        SBlastHitsParameters* blasthit_params=NULL;
         MT_LOCK lock = NULL;
         if (options->num_cpus > 1)
             lock = Blast_MT_LOCKInit();
         
+        SBlastHitsParametersNew(options->hit_options, options->ext_options,
+                                options->score_options, &blasthit_params);
         *hsp_stream =
-            Blast_HSPListCollectorInitMT(options->program, options->hit_options,
+            Blast_HSPListCollectorInitMT(options->program, blasthit_params,
                                          kNumResults, kSortOnRead, lock);
     } else {
         /* Initialize the queue HSP stream for tabular formatting. */
@@ -352,8 +364,7 @@ s_BlastThreadManager(BLAST_SequenceBlk* query, BlastQueryInfo* query_info,
         
         if (!tf_data) {
             SPHIPatternSearchBlk* pattern_blk = NULL;
-            if (kProgram == eBlastTypePhiBlastn || 
-                kProgram == eBlastTypePhiBlastp) {
+            if (Blast_ProgramIsPhiBlast(kProgram)) {
                 PHIPatternSpaceCalc(query_info, diagnostics);
                 pattern_blk = (SPHIPatternSearchBlk*) lookup_wrap->lut;
             }
@@ -444,9 +455,7 @@ Blast_RunSearch(SeqLoc* query_seqloc,
     const BlastScoringOptions* score_options = options->score_options;
     const BlastHitSavingOptions* hit_options = options->hit_options;
     SBlastOptions* rps_options = NULL;
-    const Boolean kPhiBlast = 
-        (kProgram == eBlastTypePhiBlastp ||
-         kProgram == eBlastTypePhiBlastn);
+    const Boolean kPhiBlast = Blast_ProgramIsPhiBlast(kProgram);
 
     if (!query_seqloc || !seq_src || !options || !extra_returns) 
         return -1;
@@ -603,6 +612,54 @@ Blast_DatabaseSearch(SeqLoc* query_seqloc, char* db_name,
     return status;
 }
 
+/** Splits the PHI BLAST results corresponding to different pattern occurrences
+ * in query, converts them to Seq-aligns and puts in a list of ValNodes.
+ * @param results All results from different pattern occurrences 
+ *                mixed together. On return points to NULL. [in]
+ * @param pattern_info Query pattern occurrences information [in]
+ * @param program Program type (phiblastp or phiblastn) [in]
+ * @param phivnps List of ValNodes containing Seq-aligns. [out]
+ * @return Status, 0 on success, -1 on failure.
+ */
+static Int2
+s_PHIResultsToSeqAlign(const BlastHSPResults* results, 
+                       const SPHIQueryInfo* pattern_info,
+                       EBlastProgramType program, SeqLoc* query_seqloc, 
+                       ReadDBFILE* rdfp, ValNode* *phivnps)
+{
+    Int2 status = 0;
+    /* Split results into an array of BlastHSPResults structures corresponding
+       to different pattern occurrences. */
+    BlastHSPResults* *phi_results = 
+        PHIBlast_HSPResultsSplit(results, pattern_info);
+
+    if (phi_results) {
+        int pattern_index; /* Index over pattern occurrences. */
+
+        for (pattern_index = 0; pattern_index < pattern_info->num_patterns;
+             ++pattern_index) {
+            SeqAlign* seqalign = NULL;
+            BlastHSPResults* one_phi_results = phi_results[pattern_index];
+
+            if (one_phi_results) {
+                /* PHI BLAST is always gapped, and never out-of-frame, hence
+                 * TRUE and FALSE values for the respective booleans in the next
+                 * call.
+                 */
+                status =
+                    BLAST_ResultsToSeqAlign(program, one_phi_results, 
+                                            query_seqloc, rdfp, NULL, TRUE, 
+                                            FALSE, &seqalign);
+                ValNodeAddPointer(phivnps, pattern_index, seqalign);
+
+                one_phi_results = Blast_HSPResultsFree(one_phi_results);
+            }
+        }
+        sfree(phi_results);
+    }
+    return status;
+}
+
 Int2
 PHIBlastRunSearch(SeqLoc* query_seqloc, char* db_name, SeqLoc* masking_locs,
                   const SBlastOptions* options, ValNode* *phivnps,
@@ -617,8 +674,7 @@ PHIBlastRunSearch(SeqLoc* query_seqloc, char* db_name, SeqLoc* masking_locs,
     if (!options || !query_seqloc || !db_name || !extra_returns || !phivnps)
         return -1;
 
-    ASSERT(options->program == eBlastTypePhiBlastp ||
-           options->program == eBlastTypePhiBlastn);
+    ASSERT(Blast_ProgramIsPhiBlast(options->program));
 
     is_prot = (options->program == eBlastTypePhiBlastp);
 
@@ -652,76 +708,16 @@ PHIBlastRunSearch(SeqLoc* query_seqloc, char* db_name, SeqLoc* masking_locs,
 
     *phivnps = NULL;
 
-    if (!status && results && results->hitlist_array[0]) {
-        /* For PHI BLAST, results for different pattern occurrences in query
-           must be separated. */
-        SPHIQueryInfo* pattern_info = extra_returns->pattern_info;
-        int pattern_index, hit_index, hsp_index;
-        const int kNumPatterns = pattern_info->num_patterns;
-        BlastHitList* hit_list = results->hitlist_array[0];
-        const int kHitListSize = hit_list->hsplist_max;
-        BlastHSPResults* *phi_results = (BlastHSPResults**)
-            calloc(kNumPatterns, sizeof(BlastHSPResults*));
-        /* Temporary per-pattern HSP lists. */  
-        BlastHSPList** hsplist_array = (BlastHSPList**)
-            calloc(kNumPatterns, sizeof(BlastHSPList*));
-        SeqAlign* seqalign = NULL;
-
-        for (hit_index = 0; hit_index < hit_list->hsplist_count; ++hit_index) {
-            BlastHSPList* hsp_list = hit_list->hsplist_array[hit_index];
-            /* Move HSPs corresponding to different pattern occurrences into
-               separate HSP lists. */
-            for (hsp_index = 0; hsp_index < hsp_list->hspcnt; ++hsp_index) {
-                BlastHSP* hsp = hsp_list->hsp_array[hsp_index];
-                pattern_index = hsp->pat_info->index;
-                if (!hsplist_array[pattern_index])
-                    hsplist_array[pattern_index] = Blast_HSPListNew(0);
-                hsplist_array[pattern_index]->oid = hsp_list->oid;
-                Blast_HSPListSaveHSP(hsplist_array[pattern_index], hsp);
-            }
-            /* All HSPs from hsp_list have been moved to hsplist_array. */
-            hsp_list->hspcnt = 0;
-
-            /* Save HSP lists corresponding to different pattern occurrences 
-               in separate hit lists. */
-            for (pattern_index = 0; pattern_index < kNumPatterns; 
-                 ++pattern_index) {
-                if (hsplist_array[pattern_index]) {
-                    if (!phi_results[pattern_index])
-                        phi_results[pattern_index] = Blast_HSPResultsNew(1);
-                    Blast_HSPResultsInsertHSPList(phi_results[pattern_index],
-                                                  hsplist_array[pattern_index],
-                                                  kHitListSize);
-                    hsplist_array[pattern_index] = NULL;
-                }
-            }
-        }
-
-        sfree(hsplist_array);
-        /* Now we have a results structure with results for different pattern 
-           occurrences saved in separate hit list substructures.
-           Save these results in a Seq-align one at a time. */
-        for (pattern_index = 0; pattern_index < kNumPatterns; ++pattern_index) {
-            Blast_HSPResultsSortByEvalue(phi_results[pattern_index]);
-            /* PHI BLAST is always gapped, and never out-of-frame, hence TRUE 
-               and FALSE values for the respective booleans in the next call. */
-            status =
-                BLAST_ResultsToSeqAlign(options->program, 
-                                        phi_results[pattern_index], query_seqloc,
-                                        rdfp, NULL, TRUE, FALSE, &seqalign);
-            ValNodeAddPointer(phivnps, pattern_index, seqalign);
-            phi_results[pattern_index] = 
-                Blast_HSPResultsFree(phi_results[pattern_index]);
-        }
-        sfree(phi_results);
+    if (!status) {
+        status = 
+            s_PHIResultsToSeqAlign(results, extra_returns->pattern_info, 
+                                   options->program, query_seqloc, rdfp,
+                                   phivnps);
     }
 
-    readdb_destruct(rdfp);
     results = Blast_HSPResultsFree(results);
 
-    if (status)
-        return status;
-
+    readdb_destruct(rdfp);
     return status;
 }
 

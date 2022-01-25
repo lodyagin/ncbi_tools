@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/13/91
 *
-* $Revision: 6.139 $
+* $Revision: 6.140 $
 *
 * File Description:  Ports onto Bioseqs
 *
@@ -39,6 +39,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: seqport.c,v $
+* Revision 6.140  2005/06/01 20:27:06  kans
+* added MapNa4ByteToIUPACplusGapString
+*
 * Revision 6.139  2005/03/15 14:35:44  kans
 * seqport stream gap control flags (2-bit set) are STREAM_EXPAND_GAPS, GAP_TO_SINGLE_DASH, and EXPAND_GAPS_TO_DASHES
 *
@@ -594,6 +597,7 @@ NLM_EXTERN Boolean LIBCALL SeqPortAdjustLength (SeqPortPtr spp);
 
 static Uint1Ptr Na2toIUPAC = NULL;
 static Uint1Ptr Na4toIUPAC = NULL;
+static Uint1Ptr Na4toIUPACplusGap = NULL;
 static Uint1Ptr Na2toNa4 = NULL;
 static Uint1Ptr Na2to4Bit = NULL;
 static Uint1Ptr Na4to4Bit = NULL;
@@ -747,6 +751,82 @@ NLM_EXTERN Uint2Ptr LIBCALL MapNa4ByteToIUPACString (Uint1Ptr bytep, Uint2Ptr bu
     bytep++;
     index = 2 * byte;
     bp = (Uint2Ptr)  (Na4toIUPAC + index);
+    /* copy 2 bytes at a time */
+    /*
+    for (j = 0; j < 2; j++) {
+      *ptr = *bp;
+      ptr++;
+      bp++;
+    }
+    */
+    *ptr = *bp;
+    ptr++;
+  }
+
+  return ptr;
+}
+
+static void InitNa4toIUPACplusGap (void)
+
+{
+  Int2  base [2], index, j;
+  Char  convert [16] = {'-', 'A', 'C', 'M', 'G', 'R', 'S', 'V',
+                        'T', 'W', 'Y', 'H', 'K', 'D', 'B', 'N'};
+  Int4  ret;
+  Uint1Ptr Na4toIUPACplusGap_local = NULL;
+
+  ret = NlmMutexLockEx (&seqport_mutex);  /* protect this section */
+  if (ret) {
+    ErrPostEx (SEV_FATAL, 0, 0, "MapNa4ByteToIUPACString mutex failed [%ld]", (long) ret);
+    return;
+  }
+
+  if (Na4toIUPACplusGap == NULL) {
+    Na4toIUPACplusGap_local = MemNew (sizeof (Uint1) * 512);
+
+    if (Na4toIUPACplusGap_local != NULL) {
+      for (base [0] = 0; base [0] < 16; (base [0])++) {
+        for (base [1] = 0; base [1] < 16; (base [1])++) {
+          index = 2 * (base [0] * 16 + base [1]);
+          for (j = 0; j < 2; j++) {
+            Na4toIUPACplusGap_local [index + j] = convert [(base [j])];
+          }
+        }
+      }
+    }
+    Na4toIUPACplusGap = Na4toIUPACplusGap_local;
+  }
+
+  NlmMutexUnlock (seqport_mutex);
+}
+
+NLM_EXTERN Uint2Ptr LIBCALL MapNa4ByteToIUPACplusGapString (Uint1Ptr bytep, Uint2Ptr buf, Int4 total)
+
+{
+  Uint2Ptr  bp;
+  Uint1     byte;
+  Int2      index;
+  Int4      k;
+  Uint2Ptr  ptr;
+
+  if (bytep == NULL || buf == NULL) return buf;
+  ptr = buf;
+
+  /* initialize array if not yet set (first time function is called) */
+
+  if (Na4toIUPACplusGap == NULL) {
+    InitNa4toIUPACplusGap ();
+  }
+
+  if (Na4toIUPACplusGap == NULL) return buf;
+
+  /* now return 2 character string for each compressed byte */
+
+  for (k = 0; k < total; k++) {
+    byte = *bytep;
+    bytep++;
+    index = 2 * byte;
+    bp = (Uint2Ptr)  (Na4toIUPACplusGap + index);
     /* copy 2 bytes at a time */
     /*
     for (j = 0; j < 2; j++) {
@@ -2616,6 +2696,7 @@ static Int4 SeqPortStreamBlock (
   Char      ch;
   Int4      count = 0, cumulative, total;
   Int2      from, to;
+  Boolean   many_dashes, single_dash;
   CharPtr   nd, ptr, str, tmp;
 
   if (bs == NULL || sdp == NULL) return 0;
@@ -2636,7 +2717,13 @@ static Int4 SeqPortStreamBlock (
       ptr = (CharPtr) MapNa2ByteToIUPACString (bytes, (Uint4Ptr) ptr, total);
       break;
     case Seq_code_ncbi4na :
-      ptr = (CharPtr) MapNa4ByteToIUPACString (bytes, (Uint2Ptr) ptr, total);
+      single_dash = (Boolean) ((sdp->flags & STREAM_GAP_MASK) == GAP_TO_SINGLE_DASH);
+      many_dashes = (Boolean) ((sdp->flags & STREAM_GAP_MASK) == EXPAND_GAPS_TO_DASHES);
+      if (single_dash || many_dashes) {
+        ptr = (CharPtr) MapNa4ByteToIUPACplusGapString (bytes, (Uint2Ptr) ptr, total);
+      } else {
+        ptr = (CharPtr) MapNa4ByteToIUPACString (bytes, (Uint2Ptr) ptr, total);
+      }
       break;
     default :
       ptr = (CharPtr) MapNa8ByteToIUPACString (bytes, (Uint1Ptr) ptr, total, badchar, smtp, sdp);

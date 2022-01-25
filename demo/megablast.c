@@ -1,5 +1,5 @@
-static char const rcsid[] = "$Id: megablast.c,v 6.158 2005/04/27 14:55:09 papadopo Exp $";
-/* $Id: megablast.c,v 6.158 2005/04/27 14:55:09 papadopo Exp $
+static char const rcsid[] = "$Id: megablast.c,v 6.162 2005/06/02 20:45:05 dondosha Exp $";
+/* $Id: megablast.c,v 6.162 2005/06/02 20:45:05 dondosha Exp $
 **************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -26,6 +26,20 @@ static char const rcsid[] = "$Id: megablast.c,v 6.158 2005/04/27 14:55:09 papado
 *                                                                         *
 ************************************************************************** 
  * $Log: megablast.c,v $
+ * Revision 6.162  2005/06/02 20:45:05  dondosha
+ * 1. Print footer only once after the loop over sets of queries;
+ * 2. Format XML output in a valid XML;
+ * 3. Use BlastFormattingInfo structure for formatting.
+ *
+ * Revision 6.161  2005/05/20 18:57:51  camacho
+ * Update to use new signature to BLAST_FillLookupTableOptions
+ *
+ * Revision 6.160  2005/05/02 17:44:07  coulouri
+ * bring default evalue and output type in line with other blast programs
+ *
+ * Revision 6.159  2005/05/02 17:00:28  coulouri
+ * change default to new engine
+ *
  * Revision 6.158  2005/04/27 14:55:09  papadopo
  * change signature of BlastFillHitSavingOptions
  *
@@ -528,6 +542,7 @@ static char const rcsid[] = "$Id: megablast.c,v 6.158 2005/04/27 14:55:09 papado
 #include <algo/blast/api/blast_api.h>
 #include <algo/blast/api/blast_seq.h>
 #include <algo/blast/api/repeats_filter.h>
+#include <algo/blast/core/blast_setup.h>
 #endif
 
 #define DEFLINE_BUF 255
@@ -581,7 +596,6 @@ MegaBlastPrintEndpoints(VoidPtr ptr)
    BLAST_HSPPtr hsp; 
    Int2 context;
    Char context_sign;
-   Uint4 header_index = 0;
    Int4 subject_gi, score;
    FILE *fp = (FILE *) search->output;
 
@@ -611,7 +625,7 @@ MegaBlastPrintEndpoints(VoidPtr ptr)
            !StringICmp(db_tag->db, "TI")) && 
           db_tag->tag->id != 0) {
          subject_buffer = (CharPtr) Malloc(16);
-         sprintf(subject_buffer, "%ld", db_tag->tag->id);
+         sprintf(subject_buffer, "%ld", (long) db_tag->tag->id);
       } else {
          subject_buffer = StringTokMT(subject_descr, " \t", &subject_descr);
          subject_descr = subject_buffer;
@@ -680,9 +694,8 @@ MegaBlastPrintEndpoints(VoidPtr ptr)
             query_buffer = StringTokMT(title, " ", &title);
          else {
             Int4 query_gi;
-            Boolean numeric_query_id =
-               GetAccessionFromSeqId(query_bsp->id, &query_gi,
-                                     &query_buffer);
+            GetAccessionFromSeqId(query_bsp->id, &query_gi,
+                                  &query_buffer);
          }  
          BioseqUnlock(query_bsp);
       } else {
@@ -720,7 +733,7 @@ MegaBlastPrintEndpoints(VoidPtr ptr)
       hsp->subject.end += s_shift;
 
       if (numeric_sip_type)
-	 fprintf(fp, "'%ld'=='%c%s' (%d %d %d %d) %d\n", subject_gi, 
+	 fprintf(fp, "'%ld'=='%c%s' (%d %d %d %d) %d\n", (long) subject_gi, 
 		 context_sign, query_buffer, hsp->subject.offset, q_start, 
 		 hsp->subject.end, q_end, score);
       else 
@@ -859,9 +872,8 @@ MegaBlastPrintSegments(VoidPtr ptr)
             query_buffer = StringTokMT(title, " ", &title);
          else {
             Int4 query_gi;
-            Boolean numeric_query_id =
-               GetAccessionFromSeqId(query_bsp->id, &query_gi,
-                                     &query_buffer);
+            GetAccessionFromSeqId(query_bsp->id, &query_gi,
+                                  &query_buffer);
          }  
          BioseqUnlock(query_bsp);
       } else {
@@ -876,7 +888,7 @@ MegaBlastPrintSegments(VoidPtr ptr)
 
       if (numeric_sip_type)
 	 sprintf(buffer, "\n#'>%ld'=='%c%s' (%d %d %d %d) %d\na {\n  s %d\n  b %d %d\n  e %d %d\n", 
-	      subject_gi, strand, query_buffer, 
+	      (long) subject_gi, strand, query_buffer, 
 	      s_start, q_start, s_end, q_end, score, score, 
 	      s_start, q_start, s_end, q_end);
       else 
@@ -1030,7 +1042,7 @@ static Args myargs [] = {
   { "Query File", 
 	NULL, NULL, NULL, FALSE, 'i', ARG_FILE_IN, 0.0, 0, NULL}, /* ARG_QUERY */
   { "Expectation value", 
-	"1000000.0", NULL, NULL, FALSE, 'e', ARG_FLOAT, 0.0, 0, NULL},/* ARG_EVALUE */
+	"10.0", NULL, NULL, FALSE, 'e', ARG_FLOAT, 0.0, 0, NULL},/* ARG_EVALUE */
   { "alignment view options:\n0 = pairwise,\n1 = query-anchored showing identities,\n2 = query-anchored no identities,\n3 = flat query-anchored, show identities,\n4 = flat query-anchored, no identities,\n5 = query-anchored no identities and blunt ends,\n6 = flat query-anchored, no identities and blunt ends,\n7 = XML Blast output,\n8 = tabular, \n9 tabular with comment lines,\n10 ASN, text\n11 ASN, binary", 
         "0", NULL, NULL, FALSE, 'm', ARG_INT, 0.0, 0, NULL},       /* ARG_FORMAT */
   { "BLAST report Output File", 
@@ -1050,7 +1062,7 @@ static Args myargs [] = {
   { "Number of database sequence to show alignments for (B)",
         "250", NULL, NULL, FALSE, 'b', ARG_INT, 0.0, 0, NULL},     /* ARG_ALIGNMENTS */
   { "Type of output:\n0 - alignment endpoints and score,\n1 - all ungapped segments endpoints,\n2 - traditional BLAST output,\n3 - tab-delimited one line format",
-        "0", NULL, NULL, FALSE, 'D', ARG_INT, 0.0, 0, NULL},       /* ARG_OUTTYPE */
+        "2", NULL, NULL, FALSE, 'D', ARG_INT, 0.0, 0, NULL},       /* ARG_OUTTYPE */
   { "Number of processors to use",
         "1", NULL, NULL, FALSE, 'a', ARG_INT, 0.0, 0, NULL},       /* ARG_THREADS */
   { "ASN.1 SeqAlign file; must be used in conjunction with -D2 option", 
@@ -1108,8 +1120,8 @@ static Args myargs [] = {
 	"0", NULL, NULL, FALSE, 'H', ARG_INT, 0.0, 0, NULL},        /* ARG_MAXHSP */
 #endif
 #if MB_ALLOW_NEW
-  {"Force use of old engine",
-        "T", NULL, NULL, TRUE, 'V', ARG_BOOLEAN, 0.0, 0, NULL}    /* ARG_FORCE_OLD */
+  {"Force use of the legacy BLAST engine",
+        "F", NULL, NULL, TRUE, 'V', ARG_BOOLEAN, 0.0, 0, NULL}    /* ARG_FORCE_OLD */
 #endif
 
 };
@@ -1119,7 +1131,7 @@ static Args myargs [] = {
 static Int2 Main_old (void)
  
 {
-   AsnIoPtr aip, xml_aip;
+   AsnIoPtr aip, xml_aip = NULL;
    BioseqPtr query_bsp, PNTR query_bsp_array;
    BioSourcePtr source;
    BLAST_MatrixPtr matrix;
@@ -1762,11 +1774,9 @@ BLAST_FillOptions(SBlastOptions* options)
    BlastExtensionOptions* ext_options = options->ext_options;
    BlastHitSavingOptions* hit_options = options->hit_options ;
    BlastScoringOptions* score_options = options->score_options;
-   BlastEffectiveLengthsOptions* eff_len_options = options->eff_len_options;
    Boolean ag_blast = FALSE, variable_wordsize = FALSE, mb_lookup = TRUE;
    Boolean greedy=TRUE; /* greedy alignment should be done. */
    double lambda=0;
-   Int2 status;
    const Uint1 program_number = eBlastTypeBlastn; 
 
    if (myargs[ARG_DYNAMIC].intvalue != 0) 
@@ -1795,7 +1805,7 @@ BLAST_FillOptions(SBlastOptions* options)
    }
 
    BLAST_FillLookupTableOptions(lookup_options, program_number, mb_lookup,
-      0, myargs[ARG_WORDSIZE].intvalue, variable_wordsize, FALSE);
+      0, myargs[ARG_WORDSIZE].intvalue, variable_wordsize);
    /* Fill the rest of the lookup table options */
    lookup_options->mb_template_length = 
       (Uint1) myargs[ARG_TEMPL_LEN].intvalue;
@@ -1850,25 +1860,24 @@ BLAST_FillOptions(SBlastOptions* options)
 static Int2 Main_new(void)
 {
    const Boolean query_is_na = TRUE; 
-   const Boolean db_is_na = TRUE;
    Boolean believe_query = FALSE;
    char* program_name = "blastn";
    Int2 status = 0;
    Int4 start=0, end=0;   /* start and end of sequence to be searched as specified by ARG_QUERYLOC */
    SeqLoc* lcase_mask = NULL;
-   SeqLoc* filter_loc=NULL;	/* All masking locations */
    SeqLoc* query_slp = NULL;
    FILE *infp=NULL, *outfp=NULL;
    SBlastOptions* options = NULL;
-   BlastFormattingOptions* format_options;
    Int2 ctr = 1;
    Int4 num_queries_total=0;  /* total number of queries read. */
    Boolean tabular_output = FALSE;
    BlastTabularFormatData* tf_data = NULL;
    int num_threads;
    char* dbname = myargs[ARG_DB].strvalue;
+   BlastFormattingInfo* format_info = NULL;
    Blast_SummaryReturn* sum_returns = NULL;
-   Int4 align_view;
+   Blast_SummaryReturn* full_sum_returns = NULL;
+   EAlignView align_view = eAlignViewMax;
 
    if (myargs[ARG_OUTTYPE].intvalue == 3)
        tabular_output = TRUE;
@@ -1886,19 +1895,19 @@ static Int2 Main_new(void)
 
    BLAST_FillOptions(options);
 
-   align_view = myargs[ARG_FORMAT].intvalue;
+   if (myargs[ARG_FORMAT].intvalue >= eAlignViewPairwise &&
+       myargs[ARG_FORMAT].intvalue < eAlignViewMax)
+       align_view = (EAlignView) myargs[ARG_FORMAT].intvalue;
+   else 
+       ErrPostEx(SEV_FATAL, 1, 0, "Unsupported value for the -m option");
 
-   /* If tabular output is requested, set believe_query to TRUE,
-      to guarantee meaningful sequence ids in the output. */
-   if (tabular_output)
-       believe_query = TRUE;
-   else
-       believe_query = (Boolean) myargs[ARG_BELIEVEQUERY].intvalue;
+   believe_query = (Boolean) myargs[ARG_BELIEVEQUERY].intvalue;
 
    /* If ASN.1 output is requested and believe_query is not set to TRUE,
       exit with an error. */
    if (!believe_query && (myargs[ARG_ASNOUT].strvalue ||
-                          align_view == 10 || align_view == 11)) {
+                          align_view == eAlignViewAsnText || 
+                          align_view == eAlignViewAsnBinary)) {
        ErrPostEx(SEV_FATAL, 1, 0,
                  "-J option must be TRUE to produce ASN.1 output; before "
                  "changing -J to TRUE please also ensure that all query "
@@ -1907,31 +1916,30 @@ static Int2 Main_new(void)
    }
 
    if (!tabular_output) {
-      if ((status = BlastFormattingOptionsNew(options->program, 
-                       myargs[ARG_OUT].strvalue, 
-                       myargs[ARG_DESCRIPTIONS].intvalue, 
-                       myargs[ARG_ALIGNMENTS].intvalue, 
-                       align_view, &format_options)) != 0)
-         return status;
-      format_options->html = (Boolean) myargs[ARG_HTML].intvalue;
-      if (myargs[ARG_SHOWGIS].intvalue == 0)
-      { /* These are default in new api, so we turn off if not requested. */
-           format_options->align_options -= TXALIGN_SHOW_GI;
-           format_options->print_options -= TXALIGN_SHOW_GI;
-      }
+       BlastFormattingInfoNew(myargs[ARG_FORMAT].intvalue, options, 
+                              program_name, dbname, 
+                              myargs[ARG_OUT].strvalue, &format_info);
 
-      if (dbname) {
-         BLAST_PrintOutputHeader(format_options, TRUE, program_name, dbname, 
-                                 !db_is_na);
-      }
-   }
-   else
-   { /* tabular output requires raw FILE*. */
+       /* Pass TRUE for the "is megablast" argument. Since megablast is always
+          gapped, pass FALSE for the "is ungapped" argument. */
+       BlastFormattingInfoSetUpOptions(format_info, 
+                                       myargs[ARG_DESCRIPTIONS].intvalue, 
+                                       myargs[ARG_ALIGNMENTS].intvalue,
+                                       (Boolean) myargs[ARG_HTML].intvalue,
+                                       TRUE,
+                                       (Boolean) myargs[ARG_SHOWGIS].intvalue,
+                                       believe_query);
+
+       if (dbname)
+           BLAST_PrintOutputHeader(format_info);
+   } else { /* tabular output requires raw FILE*. */
        if ((outfp = FileOpen(myargs[ARG_OUT].strvalue, "w")) == NULL) {
             ErrPostEx(SEV_FATAL, 1, 0, "blast: Unable to open output file %s\n", 
                 myargs[ARG_OUT].strvalue);
             return (1);
        }
+       /* If tabular output is requested, automatically set believe_query to
+          TRUE, to guarantee meaningful sequence ids in the output. */
        believe_query = TRUE;
    }
 
@@ -2027,29 +2035,33 @@ static Int2 Main_new(void)
           /* Format the results; note that seqalign and filter locations 
              are freed inside. */
           status = 
-              BLAST_FormatResults(seqalign, myargs[ARG_DB].strvalue, 
-                                  program_name, num_queries, query_slp, 
-                                  filter_loc, format_options, FALSE, NULL, 
-                                  sum_returns);
+              BLAST_FormatResults(seqalign, num_queries, query_slp, 
+                                  filter_loc, format_info, sum_returns);
           
           seqalign = SeqAlignSetFree(seqalign);
 
-          Blast_PrintOutputFooter(options->program, format_options, dbname, 
-                                  sum_returns);
       }
+      /* Update the cumulative summary returns structure and clean the returns
+         substructures for the current search iteration. */
+      Blast_SummaryReturnUpdate(sum_returns, &full_sum_returns);
       Blast_SummaryReturnClean(sum_returns);
       filter_loc = Blast_ValNodeMaskListFree(filter_loc);
       query_slp = SeqLocSetFree(query_slp);
    } /* End loop on sets of queries */
    
-   options = SBlastOptionsFree(options);
+   if (infp)
+      FileClose(infp);
+   
+   Blast_PrintOutputFooter(format_info, full_sum_returns);
+
    sum_returns = Blast_SummaryReturnFree(sum_returns);
+   full_sum_returns = Blast_SummaryReturnFree(full_sum_returns);
 
    if (!tabular_output)
    {
-      if (align_view < 7 && myargs[ARG_LOGINFO].intvalue)
-            BlastPrintLogReport(format_options, num_queries_total);
-      format_options = BlastFormattingOptionsFree(format_options);
+       if (align_view < eAlignViewXml && myargs[ARG_LOGINFO].intvalue)
+           BlastPrintLogReport(format_info);
+       format_info = BlastFormattingInfoFree(format_info);       
    }
    else
    {
@@ -2059,9 +2071,8 @@ static Int2 Main_new(void)
       FileClose(outfp);
    }
 
-   if (infp)
-      FileClose(infp);
-   
+   options = SBlastOptionsFree(options);
+
    return status;
 }
 #endif

@@ -1,4 +1,4 @@
-/* $Id: blast_parameters.c,v 1.8 2005/04/27 19:54:03 dondosha Exp $
+/* $Id: blast_parameters.c,v 1.9 2005/05/06 14:27:26 camacho Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -30,7 +30,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_parameters.c,v 1.8 2005/04/27 19:54:03 dondosha Exp $";
+    "$Id: blast_parameters.c,v 1.9 2005/05/06 14:27:26 camacho Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_parameters.h>
@@ -387,8 +387,7 @@ Int2 BlastExtensionParametersNew(EBlastProgramType program_number,
    }
    
    if (sbp->scale_factor > 1.0) {
-       ASSERT(program_number == eBlastTypeRpsBlast ||
-              program_number == eBlastTypeRpsTblastn);
+       ASSERT(Blast_ProgramIsRpsBlast(program_number));
        params->gap_x_dropoff *= (Int4)sbp->scale_factor;
        params->gap_x_dropoff_final *= (Int4)sbp->scale_factor;
    }
@@ -661,8 +660,7 @@ BlastHitSavingParametersUpdate(EBlastProgramType program_number,
    if (options->cutoff_score > 0) {
       params->cutoff_score_max = params->cutoff_score = 
                             options->cutoff_score * (Int4) sbp->scale_factor;
-   } else if (program_number != eBlastTypePhiBlastn &&
-              program_number != eBlastTypePhiBlastp) {
+   } else if (!Blast_ProgramIsPhiBlast(program_number)) {
       Int4 context;
       Int4 cutoff_score_max = INT4_MAX;
 
@@ -829,6 +827,9 @@ CalculateLinkHSPCutoffs(EBlastProgramType program, BlastQueryInfo* query_info,
  * ===========================================================================
  *
  * $Log: blast_parameters.c,v $
+ * Revision 1.9  2005/05/06 14:27:26  camacho
+ * + Blast_ProgramIs{Phi,Rps}Blast
+ *
  * Revision 1.8  2005/04/27 19:54:03  dondosha
  * Change due to elimination of BlastHitSavingOptions::phi_align field
  *

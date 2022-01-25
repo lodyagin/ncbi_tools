@@ -163,6 +163,10 @@ SOURCE=..\..\..\tools\mblast.c
 # End Source File
 # Begin Source File
 
+SOURCE=..\..\..\tools\Mode_condition.c
+# End Source File
+# Begin Source File
+
 SOURCE=..\..\..\tools\motif.c
 # End Source File
 # Begin Source File
@@ -172,6 +176,14 @@ SOURCE=..\..\..\tools\ncbisam.c
 # Begin Source File
 
 SOURCE=..\..\..\tools\ncbisort.c
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\tools\Newton_procedures.c
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\tools\nlm_numerics.c
 # End Source File
 # Begin Source File
 
@@ -200,6 +212,14 @@ SOURCE=..\..\..\tools\pseed3.c
 # Begin Source File
 
 SOURCE=..\..\..\tools\readdb.c
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\tools\RE_interface_ds.c
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\tools\re_newton.c
 # End Source File
 # Begin Source File
 
@@ -423,6 +443,10 @@ SOURCE=..\..\..\tools\motif.h
 # End Source File
 # Begin Source File
 
+SOURCE=..\..\..\tools\Mode_condition.h
+# End Source File
+# Begin Source File
+
 SOURCE=..\..\..\tools\ncbisam.h
 # End Source File
 # Begin Source File
@@ -436,6 +460,14 @@ SOURCE=..\..\..\tools\ncbisort.h
 # Begin Source File
 
 SOURCE=..\..\..\tools\ncbisrti.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\tools\nlm_numerics.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\tools\NRdefs.h
 # End Source File
 # Begin Source File
 
@@ -456,6 +488,10 @@ SOURCE=..\..\..\tools\profiles.h
 # Begin Source File
 
 SOURCE=..\..\..\tools\readdb.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\tools\re_newton.h
 # End Source File
 # Begin Source File
 

@@ -1,4 +1,4 @@
-/* $Id: twoseq_api.h,v 1.11 2005/02/09 20:55:38 dondosha Exp $
+/* $Id: twoseq_api.h,v 1.12 2005/06/02 20:39:38 dondosha Exp $
 ***************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -40,6 +40,7 @@
 #include <tofasta.h>
 #include <sqnutils.h>
 #include <algo/blast/api/blast_returns.h>
+#include <algo/blast/api/blast_options_api.h>
 
 /** @addtogroup CToolkitAlgoBlast
  *
@@ -177,6 +178,20 @@ Int2 BLAST_TwoSequencesSearch(BLAST_SummaryOptions *options,
                               Bioseq *bsp1, 
                               Bioseq *bsp2,
                               SeqAlign **seqalign_out);
+
+/** Creates the advanced search options structure from the basic options. 
+ * @param basic_options Basic options for the two sequences search [in]
+ * @param query_seqloc Query Seq-loc, needed to find query length. [in]
+ * @param extra_returns Initialized summary returns structure. [in]
+ * @param search_options Populated advanced options structure [out]
+ * @param program_name Program name [out]
+ */
+Int2 
+Blast_SearchOptionsFromSummaryOptions(const BLAST_SummaryOptions *basic_options,
+                                      SeqLoc* query_seqloc,
+                                      Blast_SummaryReturn* extra_returns, 
+                                      SBlastOptions* *search_options,
+                                      char* *program_name);
 
 /**
   * Perform a BLAST search on the two input sequences and return

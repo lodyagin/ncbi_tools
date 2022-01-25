@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: copymat.c,v 6.41 2005/02/14 14:11:55 camacho Exp $";
+static char const rcsid[] = "$Id: copymat.c,v 6.42 2005/05/20 18:57:51 camacho Exp $";
 
 /*
 * ===========================================================================
@@ -36,6 +36,9 @@ Contents: main routines for copymatrices program to convert
 score matrices output by makematrices into a single byte-encoded file.
    
 $Log: copymat.c,v $
+Revision 6.42  2005/05/20 18:57:51  camacho
+Update to use new signature to BLAST_FillLookupTableOptions
+
 Revision 6.41  2005/02/14 14:11:55  camacho
 Changes to use SBlastScoreMatrix
 
@@ -608,8 +611,8 @@ Boolean RPSCreateLookupFile(ScoreRow *combinedMatrix, Int4 numProfiles,
     sbp = BlastScoreBlkNew(BLASTAA_SEQ_CODE, 1);
     RPSPsiMatrixAttach(sbp, posMatrix);
     LookupTableOptionsNew(eBlastTypeBlastp, &lookup_options);
-    BLAST_FillLookupTableOptions(lookup_options, eBlastTypeBlastp, FALSE, 
-	(Int4) (myargs[3].floatvalue*scalingFactor), myargs[4].intvalue, FALSE, TRUE);  /* add last arg for psi-blast?? */
+    BLAST_FillLookupTableOptions(lookup_options, eBlastTypePsiBlast, FALSE, 
+	(Int4) (myargs[3].floatvalue*scalingFactor), myargs[4].intvalue, FALSE);
 
 
     BlastSeqLocNew(&lookup_segment, 0, all_length);

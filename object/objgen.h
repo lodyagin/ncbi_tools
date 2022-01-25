@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 1/1/91
 *
-* $Revision: 6.11 $
+* $Revision: 6.12 $
 *
 * File Description:  Object manager interface for module NCBI-General
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: objgen.h,v $
+* Revision 6.12  2005/05/18 17:30:16  bollin
+* added NameStdMatch and PersonIdMatch functions
+*
 * Revision 6.11  2002/07/22 20:02:16  kans
 * document person-id.consortium choice
 *
@@ -261,6 +264,7 @@ NLM_EXTERN NameStdPtr LIBCALL NameStdNew PROTO((void));
 NLM_EXTERN NameStdPtr LIBCALL NameStdFree PROTO(( NameStdPtr nsp));
 NLM_EXTERN NameStdPtr LIBCALL NameStdAsnRead PROTO((AsnIoPtr aip, AsnTypePtr atp));
 NLM_EXTERN Boolean    LIBCALL NameStdAsnWrite PROTO((NameStdPtr nsp, AsnIoPtr aip, AsnTypePtr atp));
+NLM_EXTERN Boolean LIBCALL NameStdMatch (NameStdPtr nsp1, NameStdPtr nsp2);
 
 /*****************************************************************************
 *
@@ -282,6 +286,7 @@ NLM_EXTERN PersonIdPtr	LIBCALL PersonIdNew PROTO((void));
 NLM_EXTERN PersonIdPtr	LIBCALL PersonIdFree PROTO(( PersonIdPtr pid));
 NLM_EXTERN PersonIdPtr	LIBCALL PersonIdAsnRead PROTO((AsnIoPtr aip, AsnTypePtr atp));
 NLM_EXTERN Boolean     	LIBCALL PersonIdAsnWrite PROTO((PersonIdPtr pid, AsnIoPtr aip, AsnTypePtr atp));
+NLM_EXTERN Boolean LIBCALL PersonIdMatch (PersonIdPtr pip1, PersonIdPtr pip2);
 
 /*****************************************************************************
 *

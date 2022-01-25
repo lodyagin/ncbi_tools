@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.11 $
+* $Revision: 6.28 $
 *
 * File Description: 
 *
@@ -44,6 +44,11 @@
 
 #include <seqsub.h>
 #include <gather.h>
+#include <biosrc.h>
+#include <pubdesc.h>
+#include <asn2gnbp.h>
+#include <document.h>
+#include <explore.h>
 
 static ENUM_ALIST(name_suffix_alist)
   {" ",    0},
@@ -56,60 +61,61 @@ static ENUM_ALIST(name_suffix_alist)
   {"VI",   7},
 END_ENUM_ALIST
 
-typedef struct contactpage {
+typedef struct contactnamedialog 
+{
   DIALOG_MESSAGE_BLOCK
   TexT            firstname;
   TexT            middleinit;
   TexT            lastname;
-  PopuP           suffix;
-  DialoG          affil;
-  GrouP           contactGrp [3];
-} ContactPage, PNTR ContactPagePtr;
+  PopuP           suffix;  
+} ContactNameDialogData, PNTR ContactNameDialogPtr;
 
 extern CharPtr NameStdPtrToAuthorSpreadsheetString (NameStdPtr nsp);
 
-static void ContactInfoPtrToContactPage (DialoG d, Pointer data)
-
+static void AuthorToContactNameDialog (DialoG d, Pointer userdata)
 {
-  AuthorPtr       ap;
-  ContactInfoPtr  cip;
-  ContactPagePtr  cpp;
-  NameStdPtr      nsp;
-  PersonIdPtr     pid;
-  CharPtr         str;
-  CharPtr         txt;
-
-  cpp = (ContactPagePtr) GetObjectExtra (d);
-  cip = (ContactInfoPtr) data;
-  if (cpp != NULL) {
-    SafeSetTitle (cpp->firstname, "");
-    SafeSetTitle (cpp->lastname, "");
-    PointerToDialog (cpp->affil, NULL);
-    if (cip != NULL) {
-      ap = cip->contact;
-      if (ap != NULL) {
-        pid = ap->name;
-        if (pid != NULL && pid->choice == 2) {
-          nsp = pid->data;
-          if (nsp != NULL) {
-            str = NameStdPtrToAuthorSpreadsheetString (nsp);
-            if (str != NULL) {
-              txt = ExtractTagListColumn (str, 0);
-              SafeSetTitle (cpp->firstname, txt);
-              MemFree (txt);
-              txt = ExtractTagListColumn (str, 1);
-              SafeSetTitle (cpp->middleinit, txt);
-              MemFree (txt);
-              txt = ExtractTagListColumn (str, 2);
-              SafeSetTitle (cpp->lastname, txt);
-              MemFree (txt);
-              txt = ExtractTagListColumn (str, 3);
-	      SafeSetValue (cpp->suffix, atoi(txt)+1);
-              MemFree (str);
-            }
-          }
+  ContactNameDialogPtr dlg;
+  AuthorPtr            ap;
+  PersonIdPtr          pid;
+  NameStdPtr           nsp;
+  CharPtr              str;
+  CharPtr              txt;
+  
+  dlg = (ContactNameDialogPtr) GetObjectExtra (d);
+  if (dlg == NULL)
+  {
+    return;
+  }
+  
+  ap = (AuthorPtr) userdata;
+  if (ap == NULL)
+  {
+    SafeSetTitle (dlg->firstname, "");
+    SafeSetTitle (dlg->middleinit, "");  
+    SafeSetTitle (dlg->lastname, "");
+    SafeSetValue (dlg->suffix, 0);  
+  }
+  else
+  {
+    pid = ap->name;
+    if (pid != NULL && pid->choice == 2) {
+      nsp = pid->data;
+      if (nsp != NULL) {
+        str = NameStdPtrToAuthorSpreadsheetString (nsp);
+        if (str != NULL) {
+          txt = ExtractTagListColumn (str, 0);
+          SafeSetTitle (dlg->firstname, txt);
+          MemFree (txt);
+          txt = ExtractTagListColumn (str, 1);
+          SafeSetTitle (dlg->middleinit, txt);
+          MemFree (txt);
+          txt = ExtractTagListColumn (str, 2);
+          SafeSetTitle (dlg->lastname, txt);
+          MemFree (txt);
+          txt = ExtractTagListColumn (str, 3);
+          SafeSetValue (dlg->suffix, atoi(txt)+1);
+          MemFree (str);
         }
-        PointerToDialog (cpp->affil, ap->affil);
       }
     }
   }
@@ -117,18 +123,158 @@ static void ContactInfoPtrToContactPage (DialoG d, Pointer data)
 
 extern NameStdPtr AuthorSpreadsheetStringToNameStdPtr (CharPtr txt);
 
+static Pointer ContactNameDialogToAuthor (DialoG d)
+{
+  ContactNameDialogPtr dlg;
+  NameStdPtr           nsp;
+  AuthorPtr            ap;
+  PersonIdPtr          pid;
+  Char                 str [128];
+  CharPtr              txt;
+  Char                 suffix [32];
+  Uint2                suffixVal;
+  
+  dlg = (ContactNameDialogPtr) GetObjectExtra (d);
+  if (dlg == NULL)
+  {
+    return NULL;
+  }
+  
+  nsp = NULL;
+  ap = AuthorNew ();
+  if (ap != NULL) {
+    pid = PersonIdNew ();
+    ap->name = pid;
+    if (pid != NULL) {
+      pid->choice = 2;
+      str [0] = '\0';
+      txt = SaveStringFromText (dlg->firstname);
+      StringCat (str, txt);
+      StringCat (str, "\t");
+      MemFree (txt);
+      txt = SaveStringFromText (dlg->middleinit);
+      StringCat (str, txt);
+      StringCat (str, "\t");
+      MemFree (txt);
+      txt = SaveStringFromText (dlg->lastname);
+      StringCat (str, txt);
+      StringCat (str, "\t");
+      MemFree (txt);
+      suffixVal = GetValue (dlg->suffix);
+      if (suffixVal < 1)
+      {
+        suffixVal = 1;
+      }
+      sprintf (suffix, "%d", (int) (suffixVal - 1));
+      StringCat (str, suffix);
+      StringCat (str, "\n");
+      txt = StringSave (str);
+      nsp = AuthorSpreadsheetStringToNameStdPtr (txt);
+      MemFree (txt);
+      pid->data = nsp;
+    } 
+  }
+  return (Pointer) ap;
+}
+
+static ValNodePtr TestContactNameDialog (DialoG d)
+{
+  ContactNameDialogPtr dlg;
+  ValNodePtr           head;
+  
+  dlg = (ContactNameDialogPtr) GetObjectExtra (d);
+  if (dlg == NULL)
+  {
+    return NULL;
+  }
+
+
+  head = NULL;
+  dlg = (ContactNameDialogPtr) GetObjectExtra (d);
+  if (dlg != NULL) {
+    if (TextHasNoText (dlg->firstname)) {
+      head = AddStringToValNodeChain (head, "You must specify a first name for the contact!", 0);
+    }
+    if (TextHasNoText (dlg->lastname)) {
+      head = AddStringToValNodeChain (head, "You must specify a last name for the contact!", 0);
+    }
+  }
+  return head;
+  
+}
+
+static DialoG ContactNameDialog (GrouP parent)
+{
+  ContactNameDialogPtr dlg;
+  GrouP                g;
+  
+  dlg = (ContactNameDialogPtr) MemNew (sizeof (ContactNameDialogData));
+  if (dlg == NULL)
+  {
+    return NULL;
+  }
+  
+  g = HiddenGroup (parent, 4, 0, NULL);
+  SetGroupSpacing (g, -1, 2);
+  
+  SetObjectExtra (g, dlg, StdCleanupExtraProc);
+  dlg->dialog = (DialoG) g;
+  dlg->todialog = AuthorToContactNameDialog;
+  dlg->fromdialog = ContactNameDialogToAuthor;
+  dlg->testdialog = TestContactNameDialog;
+  
+  StaticPrompt (g, "First Name", 0, 0, programFont, 'c');
+  StaticPrompt (g, "M.I.", 0, 0, programFont, 'c');
+  StaticPrompt (g, "Last Name", 0, 0, programFont, 'c');
+  StaticPrompt (g, "Sfx", 0, 0, programFont, 'c');
+  dlg->firstname = DialogText (g, "", 8, NULL);
+  dlg->middleinit = DialogText (g, "", 4, NULL);
+  dlg->lastname = DialogText (g, "", 9, NULL);
+  dlg->suffix = PopupList (g, TRUE, NULL);
+  InitEnumPopup (dlg->suffix, name_suffix_alist, NULL);
+  SetEnumPopup (dlg->suffix, name_suffix_alist, 0);
+
+  return (DialoG) g;
+}
+
+typedef struct contactpage {
+  DIALOG_MESSAGE_BLOCK
+  DialoG          contact_name_dlg;
+  TexT            firstname;
+  TexT            middleinit;
+  TexT            lastname;
+  PopuP           suffix;
+  DialoG          affil;
+  GrouP           contactGrp [3];
+  DialoG          citsub_dlg;
+  ButtoN          copy_btn;
+  Int4            currentPage;
+  DialoG          tbs;           /* folder tabs dialog */
+} ContactPage, PNTR ContactPagePtr;
+
+static void ContactInfoPtrToContactPage (DialoG d, Pointer data)
+
+{
+  ContactInfoPtr  cip;
+  ContactPagePtr  cpp;
+
+  cpp = (ContactPagePtr) GetObjectExtra (d);
+  cip = (ContactInfoPtr) data;
+  if (cpp != NULL) {
+    PointerToDialog (cpp->contact_name_dlg, NULL);
+    PointerToDialog (cpp->affil, NULL);
+    if (cip != NULL && cip->contact != NULL) {
+      PointerToDialog (cpp->contact_name_dlg, cip->contact);  
+      PointerToDialog (cpp->affil, cip->contact->affil);
+    }
+  }
+}
+
 static Pointer ContactPageToContactInfoPtr (DialoG d)
 
 {
-  AuthorPtr       ap;
   ContactInfoPtr  cip;
   ContactPagePtr  cpp;
-  NameStdPtr      nsp;
-  PersonIdPtr     pid;
-  Char            str [128];
-  CharPtr         txt;
-  Char            suffix [32];
-  Uint2           suffixVal;
 
 
   cip = NULL;
@@ -136,40 +282,20 @@ static Pointer ContactPageToContactInfoPtr (DialoG d)
   if (cpp != NULL) {
     cip = ContactInfoNew ();
     if (cip != NULL) {
-      nsp = NULL;
-      ap = AuthorNew ();
-      cip->contact = ap;
-      if (ap != NULL) {
-        pid = PersonIdNew ();
-        ap->name = pid;
-        if (pid != NULL) {
-          pid->choice = 2;
-          str [0] = '\0';
-          txt = SaveStringFromText (cpp->firstname);
-          StringCat (str, txt);
-          StringCat (str, "\t");
-          MemFree (txt);
-          txt = SaveStringFromText (cpp->middleinit);
-          StringCat (str, txt);
-          StringCat (str, "\t");
-          MemFree (txt);
-          txt = SaveStringFromText (cpp->lastname);
-          StringCat (str, txt);
-          StringCat (str, "\t");
-          MemFree (txt);
-          suffixVal = GetValue (cpp->suffix);
-	  sprintf (suffix, "%d", (int) (suffixVal - 1));
-          StringCat (str, suffix);
-          StringCat (str, "\n");
-          txt = StringSave (str);
-          nsp = AuthorSpreadsheetStringToNameStdPtr (txt);
-          MemFree (txt);
-          pid->data = nsp;
-        }
-        ap->affil = DialogToPointer (cpp->affil);
-        if (nsp == NULL || nsp->names [0] == NULL || ap->affil == NULL) {
-          cip = ContactInfoFree (cip);
-        }
+      cip->contact = DialogToPointer (cpp->contact_name_dlg);
+      if (cip->contact == NULL)
+      {
+        cip->contact = AuthorNew ();
+      }
+      if (cip->contact != NULL)
+      {
+        cip->contact->affil = DialogToPointer (cpp->affil);
+      }
+      if (cip->contact->affil == NULL
+          || cip->contact->name == NULL
+          || cip->contact->name->data == NULL)
+      {
+        cip = ContactInfoFree (cip);
       }
     }
   }
@@ -248,25 +374,19 @@ static ValNodePtr TestContactDialog (DialoG d)
 {
   ContactPagePtr  cpp;
   ValNodePtr      head;
+  AffilPtr        affil;
 
   head = NULL;
   cpp = (ContactPagePtr) GetObjectExtra (d);
   if (cpp != NULL) {
-    if (TextHasNoText (cpp->firstname)) {
-      head = AddStringToValNodeChain (head, "You must specify a first name", 0);
-    }
-    if (TextHasNoText (cpp->lastname)) {
-      head = AddStringToValNodeChain (head, "You must specify a last name", 0);
-    }
-    /*
-    if (TextHasNoText (cpp->phone)) {
-      head = AddStringToValNodeChain (head, "You must specify a phone number", 0);
-    }
-    if (TextHasNoText (cpp->email)) {
-      head = AddStringToValNodeChain (head, "You must specify an e-mail address", 0);
-    }
-    */
+    head = TestDialog (cpp->contact_name_dlg);
   }
+  affil = (AffilPtr) DialogToPointer (cpp->affil);
+  if (affil == NULL)
+  {
+    ValNodeAddPointer (&head, 1, StringSave ("You must supply an affiliation for the contact"));
+  }
+  
   return head;
 }
 
@@ -281,26 +401,124 @@ static void ChangeContactSubPage (VoidPtr data, Int2 newval, Int2 oldval)
 
   cpp = (ContactPagePtr) data;
   if (cpp != NULL) {
+    cpp->currentPage = newval;
     if (oldval >= 0 && oldval <= 2) {
       SafeHide (cpp->contactGrp [oldval]);
     }
     if (newval >= 0 && newval <= 2) {
       SafeShow (cpp->contactGrp [newval]);
     }
+    
+    if (cpp->currentPage == 0)
+    {
+      SafeSetTitle (cpp->copy_btn, "Copy Contact Name to Citation");
+      SafeShow (cpp->copy_btn);
+    }
+    else if (cpp->currentPage == 1)
+    {
+      SafeSetTitle (cpp->copy_btn, "Copy Affiliation to Citation");
+      SafeShow (cpp->copy_btn);
+    }
+    else
+    {
+      SafeHide (cpp->copy_btn);
+    }
+    
     Update ();
   }
 }
 
-extern DialoG CreateContactDialog (GrouP h, CharPtr title)
+static void CopyToCitation (ButtoN b)
+{
+  ContactPagePtr  cpp;
+  CitSubPtr       csp;
+  AuthorPtr       ap;
+
+  cpp = (ContactPagePtr) GetObjectExtra (b);
+  if (cpp == NULL || cpp->citsub_dlg == NULL)
+  {
+    return;
+  }
+  if (cpp->currentPage != 0 && cpp->currentPage != 1)
+  {
+    return;
+  }
+  
+  csp = (CitSubPtr) DialogToPointer (cpp->citsub_dlg);
+  if (csp == NULL)
+  {
+    csp = CitSubNew ();
+    if (csp == NULL)
+    {
+      return;
+    }
+  }
+  
+  if (csp->authors == NULL)
+  {
+    csp->authors = AuthListNew ();
+    if (csp->authors == NULL)
+    {
+      return;
+    }
+    else
+    {
+      csp->authors->choice = 1;
+    }
+  }
+  
+  if (cpp->currentPage == 0)
+  {
+    /* copy name */
+    ap = (AuthorPtr) DialogToPointer (cpp->contact_name_dlg);
+    if (ap != NULL)
+    {
+      ValNodeAddPointer (&(csp->authors->names), 1, ap);
+    }
+  }
+  else if (cpp->currentPage == 1)
+  {
+    /* copy affiliation */
+    csp->authors->affil = AffilFree (csp->authors->affil);
+    csp->authors->affil = DialogToPointer (cpp->affil);
+  }
+  
+  PointerToDialog (cpp->citsub_dlg, csp);
+  csp = CitSubFree (csp);
+}
+
+static void ContactDialogMessage (DialoG d, Int2 mssg)
+
+{
+  ContactPagePtr dlg;
+  Int2           pageval;
+
+  dlg = (ContactPagePtr) GetObjectExtra (d);
+  if (dlg != NULL) {
+    if (mssg == VIB_MSG_ENTER)
+    {
+      SetValue (dlg->tbs, 0);
+    }
+    else if (mssg > NUM_VIB_MSG)
+    {
+      pageval = mssg - NUM_VIB_MSG - 1;
+      if (pageval < 3)
+      {
+        SetValue (dlg->tbs, pageval);
+      }
+    }
+  }
+}
+
+
+extern DialoG CreateContactDialog (GrouP h, CharPtr title, DialoG citsub_dlg)
 
 {
   ContactPagePtr  cpp;
-  GrouP           g;
   GrouP           k;
   GrouP           m;
   GrouP           p;
   GrouP           s;
-  DialoG          tbs;
 
   p = HiddenGroup (h, 1, 0, NULL);
   SetGroupSpacing (p, 10, 10);
@@ -315,6 +533,10 @@ extern DialoG CreateContactDialog (GrouP h, CharPtr title)
     cpp->testdialog = TestContactDialog;
     cpp->importdialog = ReadContactDialog;
     cpp->exportdialog = WriteContactDialog;
+    cpp->dialogmessage = ContactDialogMessage;
+    
+    cpp->citsub_dlg = citsub_dlg;
+    cpp->currentPage = 0;
 
     if (title != NULL && title [0] != '\0') {
       s = NormalGroup (p, 0, -2, title, systemFont, NULL);
@@ -324,31 +546,33 @@ extern DialoG CreateContactDialog (GrouP h, CharPtr title)
     m = HiddenGroup (s, -1, 0, NULL);
     SetGroupSpacing (m, 10, 10);
 
-    tbs = CreateFolderTabs (m, contactTabs, 0, 0, 0,
+    cpp->tbs = CreateFolderTabs (m, contactTabs, 0, 0, 0,
                             PROGRAM_FOLDER_TAB,
                             ChangeContactSubPage, (Pointer) cpp);
     k = HiddenGroup (m, 0, 0, NULL);
 
     cpp->contactGrp [0] = HiddenGroup (k, -1, 0, NULL);
-    g = HiddenGroup (cpp->contactGrp [0], 4, 0, NULL);
-    SetGroupSpacing (g, -1, 2);
-    StaticPrompt (g, "First Name", 0, 0, programFont, 'c');
-    StaticPrompt (g, "M.I.", 0, 0, programFont, 'c');
-    StaticPrompt (g, "Last Name", 0, 0, programFont, 'c');
-    StaticPrompt (g, "Sfx", 0, 0, programFont, 'c');
-    cpp->firstname = DialogText (g, "", 8, NULL);
-    cpp->middleinit = DialogText (g, "", 4, NULL);
-    cpp->lastname = DialogText (g, "", 9, NULL);
-    cpp->suffix = PopupList (g, TRUE, NULL);
-    SetObjectExtra (cpp->suffix, cpp, NULL);
-    InitEnumPopup (cpp->suffix, name_suffix_alist, NULL);
-    SetEnumPopup (cpp->suffix, name_suffix_alist, 0);
+    cpp->contact_name_dlg = ContactNameDialog (cpp->contactGrp [0]);
 
     cpp->affil = CreateExtAffilDialog (k, NULL,
                                        &(cpp->contactGrp [1]),
                                        &(cpp->contactGrp [2]));
 
-    AlignObjects (ALIGN_CENTER, (HANDLE) tbs, (HANDLE) g, (HANDLE) cpp->affil, NULL);
+    if (cpp->citsub_dlg != NULL)
+    {
+      cpp->copy_btn = PushButton (m, "Copy Contact Name to Citation", CopyToCitation);
+      SetObjectExtra (cpp->copy_btn, cpp, NULL);
+    }
+    else
+    {
+      cpp->copy_btn = NULL;
+    }
+
+    AlignObjects (ALIGN_CENTER, (HANDLE) cpp->tbs,
+                                (HANDLE) cpp->contact_name_dlg, 
+                                (HANDLE) cpp->affil, 
+                                (HANDLE) cpp->copy_btn, 
+                                NULL);
   }
 
   return (DialoG) p;
@@ -362,6 +586,7 @@ typedef struct citsubpage {
   DialoG          affil;
   TexT            descr;
   GrouP           citsubGrp [5];
+  DialoG          tbs;           /* folder tabs dialog */
 } CitsubPage, PNTR CitsubPagePtr;
 
 static AuthListPtr AddConsortiumToAuthList (AuthListPtr alp, TexT consortium)
@@ -542,20 +767,26 @@ static ValNodePtr TestCitsubDialog (DialoG d)
 {
   CitsubPagePtr  cpp;
   ValNodePtr     head;
-  /*
-  CharPtr        ptr;
-  */
+  AuthListPtr    alp = NULL;
+  AffilPtr       affil = NULL;
 
   head = NULL;
   cpp = (CitsubPagePtr) GetObjectExtra (d);
   if (cpp != NULL) {
-    /*
-    ptr = GetDocText (cpp->authors.doc, 0, 0, 0);
-    if (StringHasNoText (ptr)) {
-      head = AddStringToValNodeChain (head, "You must specify an author for the citation", 0);
+    alp = (AuthListPtr) DialogToPointer (cpp->authors);
+    alp = AddConsortiumToAuthList (alp, cpp->consortium);
+    if (alp == NULL)
+    {
+      ValNodeAddPointer (&head, 0, StringSave ("You must supply authors for the citation!"));
     }
-    MemFree (ptr);
-    */
+    alp = AuthListFree (alp);
+    
+    affil = (AffilPtr) DialogToPointer (cpp->affil);
+    if (affil == NULL)
+    {
+      ValNodeAddPointer (&head, 1, StringSave ("You must supply an affiliation for the citation!"));
+    }
+    affil = AffilFree (affil);
   }
   return head;
 }
@@ -581,6 +812,28 @@ static void ChangeCitsubSubPage (VoidPtr data, Int2 newval, Int2 oldval)
   }
 }
 
+static void CitSubDialogMessage (DialoG d, Int2 mssg)
+{
+  CitsubPagePtr dlg;
+  Int2          pageval;
+
+  dlg = (CitsubPagePtr) GetObjectExtra (d);
+  if (dlg != NULL) {
+    if (mssg == VIB_MSG_ENTER)
+    {
+      SetValue (dlg->tbs, 0);
+    }
+    else if (mssg > NUM_VIB_MSG)
+    {
+      pageval = mssg - NUM_VIB_MSG - 1;
+      if (pageval < 3)
+      {
+        SetValue (dlg->tbs, pageval);
+      }
+    }
+  }
+}
+
 extern DialoG CreateCitSubDialog (GrouP h, CharPtr title, CitSubPtr csp)
 
 {
@@ -590,7 +843,6 @@ extern DialoG CreateCitSubDialog (GrouP h, CharPtr title, CitSubPtr csp)
   GrouP          p;
   GrouP          q;
   GrouP          s;
-  DialoG         tbs;
 
   p = HiddenGroup (h, 1, 0, NULL);
   SetGroupSpacing (p, 10, 10);
@@ -605,6 +857,7 @@ extern DialoG CreateCitSubDialog (GrouP h, CharPtr title, CitSubPtr csp)
     cpp->testdialog = TestCitsubDialog;
     cpp->importdialog = ReadCitsubDialog;
     cpp->exportdialog = WriteCitsubDialog;
+    cpp->dialogmessage = CitSubDialogMessage;
 
     if (title != NULL && title [0] != '\0') {
       s = NormalGroup (p, 0, -2, title, systemFont, NULL);
@@ -624,7 +877,7 @@ extern DialoG CreateCitSubDialog (GrouP h, CharPtr title, CitSubPtr csp)
         citsubTabs [4] = "Date";
       }
     }
-    tbs = CreateFolderTabs (m, citsubTabs, 0, 0, 0,
+    cpp->tbs = CreateFolderTabs (m, citsubTabs, 0, 0, 0,
                             PROGRAM_FOLDER_TAB,
                             ChangeCitsubSubPage, (Pointer) cpp);
     citsubTabs [4] = NULL;
@@ -649,7 +902,7 @@ extern DialoG CreateCitSubDialog (GrouP h, CharPtr title, CitSubPtr csp)
     cpp->date = CreateDateDialog (cpp->citsubGrp [4], NULL);
     Hide (cpp->citsubGrp [4]);
 
-    AlignObjects (ALIGN_CENTER, (HANDLE) tbs, (HANDLE) cpp->authors,
+    AlignObjects (ALIGN_CENTER, (HANDLE) cpp->tbs, (HANDLE) cpp->authors,
                   (HANDLE) q, (HANDLE) cpp->citsubGrp [3],
                   (HANDLE) cpp->date, (HANDLE) cpp->affil, NULL);
   }
@@ -1495,7 +1748,7 @@ extern ForM CreateSubmitBlockForm (Int2 left, Int2 top, CharPtr title,
 
     q = HiddenGroup (h, -1, 0, NULL);
     SetGroupSpacing (q, 10, 20);
-    sbfp->contact = CreateContactDialog (q, "");
+    sbfp->contact = CreateContactDialog (q, "", NULL);
     sbfp->pages [CONTACT_PAGE] = q;
     Hide (sbfp->pages [CONTACT_PAGE]);
 
@@ -1529,6 +1782,478 @@ extern ForM CreateSubmitBlockForm (Int2 left, Int2 top, CharPtr title,
     Show (sbfp->pages [sbfp->currentPage]);
   }
   return (ForM) w;
+}
+
+typedef struct submitblockdlg
+{
+  DIALOG_MESSAGE_BLOCK
+  GrouP           pages [3];
+  Boolean         visited [3];
+
+  Int2            currentPage;
+  Boolean         firstTime;
+  Boolean         contactSeen;
+
+  DialoG          submit;
+  DialoG          contact;
+  DialoG          citsub;
+  DialoG          tbs;
+  
+  ButtoN          copy_btn;
+  ButtoN          import_btn;
+  ButtoN          export_btn;
+
+} SubmitBlockDialogData, PNTR SubmitBlockDialogPtr;
+
+static void ChangeSubmitBlockDialogPage (VoidPtr data, Int2 newval, Int2 oldval)
+
+{
+  /*
+  ContactInfoPtr  cip;
+  CitSubPtr       csp;
+  */
+  Int2            i;
+  SubmitBlockDialogPtr   sbfp;
+  Int2            sum;
+
+  sbfp = (SubmitBlockDialogPtr) data;
+  if (sbfp != NULL) {
+    sbfp->currentPage = newval;
+    SafeHide (sbfp->pages [oldval]);
+    Update ();
+    if (sbfp->firstTime && sbfp->contactSeen && newval == CITATION_PAGE) {
+      /*
+      cip = (ContactInfoPtr) DialogToPointer (sbfp->contact);
+      if (cip != NULL) {
+        csp = CitSubFromContactInfo (cip);
+        if (csp != NULL) {
+          PointerToDialog (sbfp->citsub, (Pointer) csp);
+          CitSubFree (csp);
+        }
+        ContactInfoFree (cip);
+      }
+      */
+      sbfp->firstTime = FALSE;
+    }
+    SafeShow (sbfp->pages [newval]);
+    sbfp->visited [sbfp->currentPage] = TRUE;
+    if (newval == CONTACT_PAGE) {
+      sbfp->contactSeen = TRUE;
+    }
+    sum = 0;
+    for (i = 0; i < 3; i++) {
+      if (sbfp->visited [i]) {
+        sum++;
+      }
+    }
+    
+    /* set title for import button */
+    switch (newval)
+    {
+      case CITATION_PAGE:
+        SetTitle (sbfp->import_btn, "Import Citation");
+        Show (sbfp->import_btn);
+        SetTitle (sbfp->export_btn, "Export Citation");
+        Show (sbfp->export_btn);
+        break;
+      case CONTACT_PAGE:
+        SetTitle (sbfp->import_btn, "Import Contact");
+        Show (sbfp->import_btn);
+        SetTitle (sbfp->export_btn, "Export Contact");
+        Show (sbfp->export_btn);
+        break;
+      case SUBMISSION_PAGE:
+        SetTitle (sbfp->import_btn, "Import Submitter Info");
+        Show (sbfp->import_btn);
+        SetTitle (sbfp->export_btn, "Export Submitter Info");
+        Show (sbfp->export_btn);
+        break;
+      default:
+        Hide (sbfp->import_btn);
+        Hide (sbfp->export_btn);
+        break;
+    }
+    
+    Update ();
+  }
+}
+
+static void SubmitBlockPointerToDialog (DialoG d, Pointer userdata)
+{
+  SubmitBlockDialogPtr dlg;
+  SubmitBlockPtr       sbp;
+  
+  dlg = (SubmitBlockDialogPtr) GetObjectExtra (d);
+  if (dlg == NULL)
+  {
+    return;
+  }
+  
+  sbp = (SubmitBlockPtr) userdata;
+  
+  if (sbp == NULL)
+  {
+    PointerToDialog (dlg->submit, NULL);
+    PointerToDialog (dlg->contact, NULL);
+    PointerToDialog (dlg->citsub, NULL);
+  }
+  else
+  {
+    PointerToDialog (dlg->submit, sbp);
+    PointerToDialog (dlg->contact, sbp->contact);
+    PointerToDialog (dlg->citsub, sbp->cit);
+  }
+
+}
+
+static Pointer SubmitBlockDialogToPointer (DialoG d)
+{
+  SubmitBlockDialogPtr dlg;
+  SubmitBlockPtr       sbp;
+  
+  dlg = (SubmitBlockDialogPtr) GetObjectExtra (d);
+  if (dlg == NULL)
+  {
+    return NULL;
+  }
+  
+  sbp = DialogToPointer (dlg->submit);
+  if (sbp != NULL)
+  {
+    sbp->contact = DialogToPointer (dlg->contact);
+    sbp->cit = DialogToPointer (dlg->citsub);
+  }
+  return sbp;
+}
+
+#define MAX_SUBMIT_BLOCK_TABS 5
+
+static ValNodePtr TestSubmitBlockDialog (DialoG d)
+{
+  SubmitBlockDialogPtr dlg;
+  ValNodePtr           errlist = NULL, new_errlist, tmp;
+  
+  dlg = (SubmitBlockDialogPtr) GetObjectExtra (d);
+  if (dlg == NULL)
+  {
+    return NULL;
+  }
+  
+  new_errlist = TestDialog (dlg->submit);
+  tmp = new_errlist;
+  while (tmp != NULL)
+  {
+    tmp->choice *= MAX_SUBMIT_BLOCK_TABS;
+    tmp->choice += SUBMISSION_PAGE;
+    tmp = tmp->next;
+  }
+  ValNodeLink (&errlist, new_errlist);
+  new_errlist = TestDialog (dlg->contact);
+  tmp = new_errlist;
+  while (tmp != NULL)
+  {
+    tmp->choice *= MAX_SUBMIT_BLOCK_TABS;
+    tmp->choice += CONTACT_PAGE;
+    tmp = tmp->next;
+  }
+  ValNodeLink (&errlist, new_errlist);
+  new_errlist = TestDialog (dlg->citsub);
+  tmp = new_errlist;
+  while (tmp != NULL)
+  {
+    tmp->choice *= MAX_SUBMIT_BLOCK_TABS;
+    tmp->choice += CITATION_PAGE;
+    tmp = tmp->next;
+  }
+  ValNodeLink (&errlist, new_errlist);
+  
+  return errlist;
+}
+
+static void SubmitBlockDialogMessage (DialoG d, Int2 mssg)
+
+{
+  SubmitBlockDialogPtr dlg;
+  Int2                 this_page, subpage, pageval;
+
+  dlg = (SubmitBlockDialogPtr) GetObjectExtra (d);
+  if (dlg != NULL) {
+    if (mssg == VIB_MSG_ENTER)
+    {
+      SetValue (dlg->tbs, 0);
+    }
+    else if (mssg > NUM_VIB_MSG)
+    {
+      pageval = mssg - NUM_VIB_MSG - 1;
+      
+      this_page = pageval % MAX_SUBMIT_BLOCK_TABS;
+      subpage = pageval / MAX_SUBMIT_BLOCK_TABS;
+      if (this_page < 3)
+      {
+        SetValue (dlg->tbs, this_page);
+        switch (this_page)
+        {
+          case SUBMISSION_PAGE:
+            SendMessageToDialog (dlg->submit, NUM_VIB_MSG + 1 + subpage);
+            break;
+          case CONTACT_PAGE:
+            SendMessageToDialog (dlg->contact, NUM_VIB_MSG + 1 + subpage);
+            break;
+          case CITATION_PAGE:
+            SendMessageToDialog (dlg->citsub, NUM_VIB_MSG + 1 + subpage);
+            break;
+        }
+      }
+    }
+  }
+}
+
+static Boolean FileToSubmitDialog (DialoG d, CharPtr filename)
+{
+  SubmitBlockDialogPtr dlg;
+  Pointer              dataptr;
+  Uint2                datatype;
+  Uint2                entityID;
+  SubmitBlockPtr       sbp;
+  SeqSubmitPtr         ssp;
+  Char                 path [PATH_MAX];
+  Boolean              rval = FALSE;
+
+  dlg = (SubmitBlockDialogPtr) GetObjectExtra (d);
+  
+  if (dlg == NULL)
+  {
+    return FALSE;
+  }
+  
+  path [0] = '\0';
+  StringNCpy_0 (path, filename, sizeof (path));
+  if (path [0] != '\0' || GetInputFileName (path, sizeof (path), "", "TEXT")) 
+  {
+    dataptr = ObjMgrGenericAsnTextFileRead (path, &datatype, &entityID);
+    if (dataptr == NULL)
+    {
+      Message (MSG_ERROR, "Unable to read %s", path);
+      return FALSE;
+    }
+
+    if (datatype == OBJ_SUBMIT_BLOCK)
+    {
+      sbp = (SubmitBlockPtr) dataptr;
+      PointerToDialog (dlg->dialog, sbp);
+      rval = TRUE;
+    }
+    else if (datatype == OBJ_SEQSUB)
+    {
+      ssp = (SeqSubmitPtr) dataptr;
+      if (ssp != NULL)
+      {
+        PointerToDialog (dlg->dialog, ssp->sub);
+      }
+      rval = TRUE;
+    }
+    else
+    {
+      Message (MSG_ERROR, "Wrong data type in file!");
+    }
+    ObjMgrDelete (datatype, dataptr);
+  }
+  
+  return rval;
+}
+
+static Boolean ReadSubmitBlockDialog (DialoG d, CharPtr filename)
+
+{
+  SubmitBlockDialogPtr dlg;
+  Boolean              rval = FALSE;
+  
+  dlg = (SubmitBlockDialogPtr) GetObjectExtra (d);
+  if (dlg == NULL)
+  {
+    return;
+  }
+  
+  switch (dlg->currentPage) {
+    case SUBMISSION_PAGE :
+      rval = FileToSubmitDialog (dlg->dialog, filename);
+      break;
+    case CONTACT_PAGE:
+      rval = ReadContactDialog (dlg->contact, filename);
+      break;
+    case CITATION_PAGE :
+      rval = ReadCitsubDialog (dlg->citsub, filename);
+      break;
+  }
+  return rval;
+}
+
+static void ImportSubmitBlockBtn (ButtoN b)
+{
+  SubmitBlockDialogPtr dlg;
+
+  dlg = (SubmitBlockDialogPtr) GetObjectExtra (b);
+  if (dlg == NULL)
+  {
+    return;
+  }
+  
+  ReadSubmitBlockDialog (dlg->dialog, NULL);
+}
+
+static Boolean SubmitBlockDialogToFile (DialoG d, CharPtr filename)
+{
+  SubmitBlockDialogPtr dlg;
+  Char                 path [PATH_MAX];
+  SubmitBlockPtr       sbp;
+  AsnIoPtr             aip;
+#ifdef WIN_MAC
+  FILE                 *f;
+#endif
+
+  path [0] = '\0';
+  StringNCpy_0 (path, filename, sizeof (path));
+
+  dlg = (SubmitBlockDialogPtr) GetObjectExtra (d);
+  if (dlg == NULL)
+  {
+    return FALSE;
+  }
+
+  if (path [0] != '\0' || GetOutputFileName (path, sizeof (path), NULL)) {
+#ifdef WIN_MAC
+    f = FileOpen (path, "r");
+    if (f != NULL) {
+      FileClose (f);
+    } else {
+      FileCreate (path, "TEXT", "ttxt");
+    }
+#endif
+    aip = AsnIoOpen (path, "w");
+    if (aip != NULL) {
+      sbp = SubmitBlockDialogToPointer (d);
+      SubmitBlockAsnWrite (sbp, aip, NULL);
+      AsnIoClose (aip);
+      sbp = SubmitBlockFree (sbp);
+      return TRUE;
+    }
+  }
+  return FALSE;
+}
+
+static Boolean WriteSubmitBlockDialog (DialoG d, CharPtr filename)
+
+{
+  SubmitBlockDialogPtr dlg;
+  Boolean              rval = FALSE;
+
+  dlg = (SubmitBlockDialogPtr) GetObjectExtra (d);
+  if (dlg == NULL)
+  {
+    return;
+  }
+  
+  switch (dlg->currentPage) {
+    case SUBMISSION_PAGE :
+      rval = SubmitBlockDialogToFile (dlg->dialog, filename);
+      break;
+    case CONTACT_PAGE:
+      rval = WriteContactDialog (dlg->contact, filename);
+      break;
+    case CITATION_PAGE :
+      rval = WriteCitsubDialog (dlg->citsub, filename);
+      break;
+  }
+  return rval;
+
+}
+
+static void ExportSubmitBlockBtn (ButtoN b)
+{
+  SubmitBlockDialogPtr dlg;
+
+  dlg = (SubmitBlockDialogPtr) GetObjectExtra (b);
+  if (dlg == NULL)
+  {
+    return;
+  }
+  
+  WriteSubmitBlockDialog (dlg->dialog, NULL);
+}
+
+extern DialoG SubmitBlockDialog (GrouP parent, Boolean newOnly, Boolean defaultAsUpdate)
+{
+  SubmitBlockDialogPtr dlg;
+  GrouP                p, h, q, g;
+  Int4                 i;
+  
+  dlg = (SubmitBlockDialogPtr) MemNew (sizeof (SubmitBlockDialogData));
+  if (dlg == NULL)
+  {
+    return NULL;
+  }
+  
+  p = HiddenGroup (parent, -1, 0, NULL);
+  SetObjectExtra (p, dlg, StdCleanupExtraProc);
+  SetGroupSpacing (p, 10, 10);
+
+  dlg->dialog = (DialoG) p;
+  dlg->todialog = SubmitBlockPointerToDialog;
+  dlg->fromdialog = SubmitBlockDialogToPointer;
+  dlg->dialogmessage = SubmitBlockDialogMessage;
+  dlg->testdialog = TestSubmitBlockDialog;
+  dlg->importdialog = ReadSubmitBlockDialog;
+
+  
+  dlg->tbs = CreateFolderTabs (p, submitFormTabs, 0, 0, 0,
+                          SYSTEM_FOLDER_TAB,
+                          ChangeSubmitBlockDialogPage, (Pointer) dlg);
+  dlg->currentPage = SUBMISSION_PAGE;
+  dlg->firstTime = TRUE;
+  dlg->contactSeen = FALSE;
+  for (i = 0; i < 3; i++) {
+    dlg->visited [i] = FALSE;
+  }
+  dlg->visited [dlg->currentPage] = TRUE;
+
+  h = HiddenGroup (p, 0, 0, NULL);
+
+  q = HiddenGroup (h, -1, 0, NULL);
+  SetGroupSpacing (q, 10, 20);
+  dlg->submit = CreateSubmitDataDialog (q, "", newOnly, defaultAsUpdate);
+  dlg->pages [SUBMISSION_PAGE] = q;
+  Hide (dlg->pages [SUBMISSION_PAGE]);
+
+  q = HiddenGroup (h, -1, 0, NULL);
+  SetGroupSpacing (q, 10, 20);
+  dlg->citsub = CreateCitSubDialog (q, "", NULL);
+  dlg->pages [CITATION_PAGE] = q;
+  Hide (dlg->pages [CITATION_PAGE]);
+
+  q = HiddenGroup (h, -1, 0, NULL);
+  SetGroupSpacing (q, 10, 20);
+  dlg->contact = CreateContactDialog (q, "", dlg->citsub);
+  dlg->pages [CONTACT_PAGE] = q;
+  Hide (dlg->pages [CONTACT_PAGE]);
+  
+  g = HiddenGroup (p, 2, 0, NULL);
+  SetGroupSpacing (g, 10, 10);
+  dlg->import_btn = PushButton (g, "Import Submitter Info", ImportSubmitBlockBtn);
+  SetObjectExtra  (dlg->import_btn, dlg, NULL);
+  dlg->export_btn = PushButton (g, "Export Submitter Info", ExportSubmitBlockBtn);
+  SetObjectExtra  (dlg->export_btn, dlg, NULL);
+
+  AlignObjects (ALIGN_CENTER, (HANDLE) dlg->tbs,
+                              (HANDLE) dlg->pages [SUBMISSION_PAGE],
+                              (HANDLE) dlg->pages [CONTACT_PAGE],
+                              (HANDLE) dlg->pages [CITATION_PAGE],
+                              (HANDLE) g,
+                              NULL);
+
+
+  Show (dlg->pages [dlg->currentPage]);
+  
+  return (DialoG) p;
 }
 
 static void SubmitBlockFormActnProc (ForM f)
@@ -1719,5 +2444,1706 @@ extern CitSubPtr CitSubFromContactInfo (ContactInfoPtr cip)
     }
   }
   return csp;
+}
+
+typedef struct commentdlg
+{
+  DIALOG_MESSAGE_BLOCK
+  TexT comment_txt;
+} CommentDlgData, PNTR CommentDlgPtr;
+
+static void CommentDlgFromPtr (DialoG d, Pointer userdata)
+{
+  CommentDlgPtr dlg;
+  
+  dlg = (CommentDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL)
+  {
+    return;
+  }
+  
+  if (userdata == NULL)
+  {
+    SetTitle (dlg->comment_txt, "");
+  }
+  else
+  {
+    SetTitle (dlg->comment_txt, (CharPtr) userdata);
+  }
+}
+
+static Pointer CommentFromDlg (DialoG d)
+{
+  CommentDlgPtr dlg;
+  
+  dlg = (CommentDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL || TextHasNoText (dlg->comment_txt))
+  {
+    return NULL;
+  }
+  else
+  {
+    return SaveStringFromText (dlg->comment_txt);
+  }
+}
+
+static DialoG CommentDialog (GrouP parent)
+{
+  CommentDlgPtr dlg;
+  GrouP         p;
+  PrompT        s;
+  
+  dlg = (CommentDlgPtr) MemNew (sizeof (CommentDlgData));
+  if (dlg == NULL)
+  {
+    return NULL;
+  }
+
+  p = HiddenGroup (parent, -1, 0, NULL);
+  SetObjectExtra (p, dlg, StdCleanupExtraProc);
+  SetGroupSpacing (p, 10, 10);
+  
+  dlg->dialog = (DialoG) p;
+  dlg->todialog = CommentDlgFromPtr;
+  dlg->fromdialog = CommentFromDlg;
+  dlg->dialogmessage = NULL;
+  dlg->testdialog = NULL;
+  
+  s = StaticPrompt (p, "Comment", 25 * stdCharWidth, 0, programFont, 'c');
+  dlg->comment_txt = ScrollText (p, 25, 10, programFont, TRUE, NULL);
+  
+  AlignObjects (ALIGN_CENTER, (HANDLE) s, (HANDLE) dlg->comment_txt, NULL);
+  
+  return (DialoG) p;
+}
+
+static ENUM_ALIST(molinfo_biomol_nucX_alist)
+  {" ",                      0},
+  {"Genomic",                1},
+  {"Precursor RNA",          2},
+  {"mRNA [cDNA]",            3},
+  {"Ribosomal RNA",          4},
+  {"Transfer RNA",           5},
+  {"Small nuclear RNA",      6},
+  {"Small cytoplasmic RNA",  7},
+  {"Other-Genetic",          9},
+  {"Genomic-mRNA",          10},
+  {"cRNA",                  11},
+  {"Small nucleolar RNA",   12},
+  {"Transcribed RNA",       13},
+  {"Other",                255},
+END_ENUM_ALIST
+
+typedef struct molinfodlg
+{
+  DIALOG_MESSAGE_BLOCK
+  PopuP moltype;
+} SeqSubMolInfoDlgData, PNTR SeqSubMolInfoDlgPtr;
+
+static void SeqSubMolInfoDlgFromPtr (DialoG d, Pointer userdata)
+{
+  SeqSubMolInfoDlgPtr dlg;
+  MolInfoPtr          mip;
+  
+  dlg = (SeqSubMolInfoDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL)
+  {
+    return;
+  }
+  
+  mip = (MolInfoPtr) userdata;
+  if (mip == NULL)
+  {
+    SetEnumPopup (dlg->moltype, molinfo_biomol_nucX_alist, 0);
+  }
+  else
+  {
+    SetEnumPopup (dlg->moltype, molinfo_biomol_nucX_alist, mip->biomol);
+  }  
+}
+
+static Pointer MolInfoFromSeqSubMolInfoDlgDlg (DialoG d)
+{
+  SeqSubMolInfoDlgPtr dlg;
+  MolInfoPtr          mip = NULL;
+  UIEnum              val;
+  
+  dlg = (SeqSubMolInfoDlgPtr) GetObjectExtra (d);
+  if (dlg != NULL)
+  {
+    if (GetEnumPopup (dlg->moltype, molinfo_biomol_nucX_alist, &val)
+        && val > 0)
+    {
+      mip = MolInfoNew ();
+      if (mip != NULL)
+      {
+        mip->biomol = val;
+      }
+    }
+  }
+  return mip;
+}
+
+static DialoG SeqSubMolInfoDlg (GrouP parent)
+{
+  SeqSubMolInfoDlgPtr dlg;
+  GrouP         p;
+  PrompT        s;
+  
+  dlg = (SeqSubMolInfoDlgPtr) MemNew (sizeof (SeqSubMolInfoDlgData));
+  if (dlg == NULL)
+  {
+    return NULL;
+  }
+  
+  p = HiddenGroup (parent, -1, 0, NULL);
+  SetObjectExtra (p, dlg, StdCleanupExtraProc);
+  SetGroupSpacing (p, 10, 10);
+  
+  dlg->dialog = (DialoG) p;
+  dlg->todialog = SeqSubMolInfoDlgFromPtr;
+  dlg->fromdialog = MolInfoFromSeqSubMolInfoDlgDlg;
+  dlg->dialogmessage = NULL;
+  dlg->testdialog = NULL;
+  
+  s = StaticPrompt (p, "Molecule Type", 25 * stdCharWidth, 0, programFont, 'c');
+  dlg->moltype = PopupList (p, TRUE, NULL);
+  InitEnumPopup (dlg->moltype, molinfo_biomol_nucX_alist, NULL);
+  SetEnumPopup (dlg->moltype, molinfo_biomol_nucX_alist, 1);
+  
+  AlignObjects (ALIGN_CENTER, (HANDLE) s, (HANDLE) dlg->moltype, NULL);
+  
+  return (DialoG) p;
+}
+
+typedef void (*TemplatePreviewCallbackProc) PROTO ((Uint2, Uint2, Uint4,
+                                                    BlockType, Pointer, 
+                                                    Boolean, Int4));
+
+typedef struct templatepreviewdialog
+{
+  DIALOG_MESSAGE_BLOCK
+  DoC            preview_doc;
+
+  Asn2gbJobPtr   ajp;
+  SeqSubmitPtr   ssp;
+  TemplatePreviewCallbackProc click_callback;
+  Pointer        callback_data;
+   
+} TemplatePreviewDialogData, PNTR TemplatePreviewDialogPtr;
+
+static void CleanUpTemplatePreviewDialog (GraphiC g, VoidPtr data)
+{
+  TemplatePreviewDialogPtr dlg;
+  
+  dlg = (TemplatePreviewDialogPtr) data;
+  if (dlg != NULL)
+  {
+    asn2gnbk_cleanup (dlg->ajp);
+    dlg->ssp = SeqSubmitFree (dlg->ssp);
+  }
+  MemFree (dlg);
+}
+
+static Int4 GetRefNumForPub (SeqSubmitPtr ssp, Int4 itemID)
+{
+  SeqEntryPtr  sep;
+  BioseqPtr    bsp;
+  BioseqSetPtr bssp;
+  SeqDescrPtr  sdp = NULL;
+  Int4         ref_num = 0;
+  ObjValNodePtr ovp;
+  
+  if (ssp == NULL || ssp->datatype != OBJ_SEQENTRY || ssp->data == NULL)
+  {
+    return -1;
+  }
+  
+  sep = (SeqEntryPtr) ssp->data;
+  if (IS_Bioseq (sep))
+  {
+    bsp = (BioseqPtr) sep->data.ptrvalue;
+    if (bsp != NULL)
+    {
+      sdp = bsp->descr;
+    }
+  }
+  else if (IS_Bioseq_set (sep))
+  {
+    bssp = (BioseqSetPtr) sep->data.ptrvalue;
+    if (bssp != NULL)
+    {
+      sdp = bssp->descr;
+    }
+  }
+  while (sdp != NULL)
+  {
+    if (sdp->choice == Seq_descr_pub)
+    {
+      if (sdp->extended != 0) 
+      {
+        ovp = (ObjValNodePtr) sdp;
+        if (ovp->idx.itemID == itemID)
+        {
+          return ref_num;
+        }
+      }
+      ref_num++;
+    }
+    sdp = sdp->next;
+  }
+  return -1;
+}
+
+static void ClickPreviewItem (DoC d, PoinT pt)
+
+{
+  TemplatePreviewDialogPtr dlg;
+  Int2                     itemClicked = 0;
+  BaseBlockPtr             bbp;
+  Int4                     par_num, item_num, ref_num = 0;
+
+  dlg = (TemplatePreviewDialogPtr) GetObjectExtra (d);
+  if (dlg == NULL || dlg->ajp == NULL || dlg->click_callback == NULL) return;
+  MapDocPoint (d, pt, &itemClicked, NULL, NULL, NULL);
+  if (itemClicked < 0 || itemClicked > dlg->ajp->numParagraphs)
+  {
+    return;
+  }
+  else
+  {
+    par_num = 0;
+    item_num = 1;
+    while (par_num < dlg->ajp->numParagraphs
+           && dlg->ajp->paragraphArray[par_num]->blocktype != SOURCE_BLOCK
+           && dlg->ajp->paragraphArray[par_num]->blocktype !=  REFERENCE_BLOCK
+           && dlg->ajp->paragraphArray[par_num]->blocktype != COMMENT_BLOCK
+           && dlg->ajp->paragraphArray[par_num]->blocktype !=  SOURCEFEAT_BLOCK
+           && dlg->ajp->paragraphArray[par_num]->blocktype != LOCUS_BLOCK)
+    {
+      par_num++;
+    }
+    while (item_num < itemClicked && par_num < dlg->ajp->numParagraphs)
+    {
+      item_num++;
+      par_num++;
+      while (par_num < dlg->ajp->numParagraphs
+             && dlg->ajp->paragraphArray[par_num]->blocktype != SOURCE_BLOCK
+             && dlg->ajp->paragraphArray[par_num]->blocktype !=  REFERENCE_BLOCK
+             && dlg->ajp->paragraphArray[par_num]->blocktype != COMMENT_BLOCK
+             && dlg->ajp->paragraphArray[par_num]->blocktype !=  SOURCEFEAT_BLOCK
+             && dlg->ajp->paragraphArray[par_num]->blocktype != LOCUS_BLOCK)
+      {
+        par_num++;
+      }
+    }
+    if (par_num < dlg->ajp->numParagraphs)
+    {
+      bbp = dlg->ajp->paragraphArray [par_num];
+      if (bbp->blocktype == REFERENCE_BLOCK
+          && bbp->itemtype != OBJ_SEQSUB_CIT)
+      {
+        ref_num = GetRefNumForPub (dlg->ssp, bbp->itemID);
+      }
+      (dlg->click_callback) (bbp->entityID, bbp->itemtype, bbp->itemID, 
+                             bbp->blocktype, dlg->callback_data, dblClick, ref_num);
+    }
+  }
+}
+
+static void ReformatPreviewLocusLine (CharPtr locus_line, SeqDescrPtr mol_sdp)
+{
+  CharPtr cp, dst;
+  Int4    copy_len;
+  
+  if (StringHasNoText (locus_line) || StringNCmp (locus_line, "LOCUS", 5) != 0)
+  {
+    return;
+  }
+  
+  cp = locus_line + 5;
+  if (mol_sdp == NULL)
+  {
+    *cp = 0;
+    return;
+  }
+  
+  /* skip over whitespace after "LOCUS" */
+  cp += StringSpn (cp, " \t");
+  dst = cp;
+  
+  /* remove ID */
+  cp += StringCSpn (cp, " \t");
+  cp += StringSpn (cp, " \t");
+  
+  /* remove length */
+  cp += StringCSpn (cp, " \t");
+  cp += StringSpn (cp, " \t");
+  cp += StringCSpn (cp, " \t");
+  cp += StringSpn (cp, " \t");
+  
+  /* copy moltype and topology */
+  copy_len = StringCSpn (cp, " \t");
+  copy_len += StringSpn (cp + copy_len, " \t");
+  copy_len += StringCSpn (cp + copy_len, " \t");
+  StringNCpy (dst, cp, copy_len);
+  dst [copy_len] = 0;
+}
+
+static void SeqSubmitToTemplatePreviewDialog (DialoG d, Pointer userdata)
+{
+  TemplatePreviewDialogPtr dlg;
+  ErrSev                   level;
+  Int4                     index;
+  BaseBlockPtr             bbp;
+  CharPtr                  string;
+  BioseqPtr                bsp = NULL;
+  SeqEntryPtr              sep;
+  SeqSubmitPtr             ssp;
+  SeqDescrPtr              mol_sdp = NULL;
+  
+  dlg = (TemplatePreviewDialogPtr) GetObjectExtra (d);
+  if (dlg == NULL)
+  {
+    return;
+  }
+
+  Reset (dlg->preview_doc);
+  dlg->ajp = asn2gnbk_cleanup (dlg->ajp);
+
+  dlg->ssp = SeqSubmitFree (dlg->ssp);
+
+  ssp = (SeqSubmitPtr) userdata;
+  if (ssp == NULL || ssp->datatype != OBJ_SEQENTRY || ssp->data == NULL)
+  {
+    return;
+  }
+  
+  if (ssp->sub == NULL || ssp->sub->cit == NULL || ssp->sub->contact == NULL)
+  {
+    AppendText (dlg->preview_doc, "Need citation and contact before preview can be generated!",
+                NULL, NULL, programFont);
+    UpdateDocument (dlg->preview_doc, 0, 0);
+    Update ();
+    return;
+  }
+  
+  
+  dlg->ssp = (SeqSubmitPtr) AsnIoMemCopy (ssp, (AsnReadFunc) SeqSubmitAsnRead,
+                                               (AsnWriteFunc) SeqSubmitAsnWrite);
+
+  sep = (SeqEntryPtr) dlg->ssp->data;
+  if (IS_Bioseq (sep))
+  {
+    bsp = sep->data.ptrvalue;
+    if (bsp != NULL)
+    {
+      mol_sdp = bsp->descr;
+      while (mol_sdp != NULL && mol_sdp->choice != Seq_descr_molinfo)
+      {
+        mol_sdp = mol_sdp->next;
+      }
+    }
+  }
+  
+  if (bsp != NULL)
+  {
+    level = ErrSetMessageLevel (SEV_MAX);
+
+    dlg->ajp = asn2gnbk_setup (bsp, NULL, NULL, (FmtType)GENBANK_FMT, SEQUIN_MODE, NORMAL_STYLE, 0, 0, 0, NULL);
+    if (dlg->ajp != NULL) {
+      for (index = 0; index < dlg->ajp->numParagraphs; index++) {
+        bbp = dlg->ajp->paragraphArray [index];
+        if (bbp->blocktype == SOURCE_BLOCK
+            || bbp->blocktype == REFERENCE_BLOCK
+            || bbp->blocktype == COMMENT_BLOCK
+            || bbp->blocktype == SOURCEFEAT_BLOCK)
+        {
+          string = asn2gnbk_format (dlg->ajp, (Int4) index);
+          if (string != NULL && *string != '\0') {
+            AppendText (dlg->preview_doc, string, NULL, NULL, programFont);
+          }
+          MemFree (string);
+        }
+        else if (bbp->blocktype == LOCUS_BLOCK)
+        {
+          string = asn2gnbk_format (dlg->ajp, (Int4) index);
+          if (string != NULL && *string != '\0') {
+            ReformatPreviewLocusLine (string, mol_sdp);
+            AppendText (dlg->preview_doc, string, NULL, NULL, programFont);
+          }
+          MemFree (string);
+        }
+      }
+    }
+
+    ErrSetMessageLevel (level);    
+  }
+
+  UpdateDocument (dlg->preview_doc, 0, 0);
+  Update ();
+  
+}
+
+static DialoG 
+TemplatePreviewDialog 
+(GrouP parent, 
+ TemplatePreviewCallbackProc click_callback,
+ Pointer callback_data)
+{
+  TemplatePreviewDialogPtr dlg;
+  GrouP                    p;
+  PrompT                   s;
+  
+  dlg = (TemplatePreviewDialogPtr) MemNew (sizeof (TemplatePreviewDialogData));
+  if (dlg == NULL)
+  {
+    return NULL;
+  }
+  
+  p = HiddenGroup (parent, -1, 0, NULL);
+  SetObjectExtra (p, dlg, CleanUpTemplatePreviewDialog);
+  SetGroupSpacing (p, 10, 10);
+  
+  dlg->dialog = (DialoG) p;
+  dlg->todialog = SeqSubmitToTemplatePreviewDialog;
+  dlg->fromdialog = NULL;
+  dlg->dialogmessage = NULL;
+  dlg->testdialog = NULL;
+
+  dlg->click_callback = click_callback;
+  dlg->callback_data = callback_data;
+  
+  s = StaticPrompt (p, "Flatfile Preview", 0, 0, programFont, 'c');
+  dlg->preview_doc = DocumentPanel (p, stdCharWidth * 35, stdLineHeight * 10);
+  SetDocAutoAdjust (dlg->preview_doc, TRUE);
+  SetObjectExtra (dlg->preview_doc, dlg, NULL);
+  SetDocProcs (dlg->preview_doc, ClickPreviewItem, NULL, NULL, NULL);
+  
+  AlignObjects (ALIGN_CENTER, (HANDLE) s, (HANDLE) dlg->preview_doc, NULL);
+  
+  return (DialoG) p;
+}
+
+/*****************************************************************************
+*
+*   PubdescMatch(pub1, pub2)
+*
+*****************************************************************************/
+static Boolean LIBCALL PubdescMatch (PubdescPtr pdp1, PubdescPtr pdp2)
+{
+    if (pdp1 == NULL && pdp2 == NULL)
+    {
+        return TRUE;
+    }
+    else if (pdp1 == NULL || pdp2 == NULL)
+    {
+        return FALSE;
+    }
+    else if (pdp1->reftype != pdp2->reftype)
+    {
+        return FALSE;
+    }
+    else if (StringCmp (pdp1->name, pdp2->name) != 0
+             || StringCmp (pdp1->fig, pdp2->fig) != 0
+             || StringCmp (pdp1->maploc, pdp2->maploc) != 0
+             || StringCmp (pdp1->seq_raw, pdp2->seq_raw) != 0
+             || StringCmp (pdp1->comment, pdp2->comment) != 0)
+    {
+        return FALSE;
+    }
+    else if (PubMatch (pdp1->pub, pdp2->pub) != 0)
+    {
+        return FALSE;
+    }
+    else
+    {
+        return TRUE;
+    }
+}
+
+static Boolean MolInfoMatch (MolInfoPtr mip1, MolInfoPtr mip2)
+{
+  if (mip1 == NULL && mip2 == NULL)
+  {
+    return TRUE;
+  }
+  else if (mip1 == NULL || mip2 == NULL)
+  {
+    return FALSE;
+  }
+  else if (mip1->biomol != mip2->biomol
+           || mip1->tech != mip2->tech
+           || mip1->completeness != mip2->completeness
+           || StringCmp (mip1->techexp, mip2->techexp) != 0)
+  {
+    return FALSE;
+  }
+  else
+  {
+    return TRUE;
+  }
+}
+
+static Boolean SeqDescrListMatch (SeqDescrPtr sdp_list1, SeqDescrPtr sdp_list2)
+{
+  while (sdp_list1 != NULL && sdp_list2 != NULL)
+  {
+    if (sdp_list1->choice != sdp_list2->choice)
+    {
+      return FALSE;
+    }
+    if (sdp_list1->choice == Seq_descr_comment)
+    {
+      /* compare comments */
+      if (StringCmp (sdp_list1->data.ptrvalue, sdp_list2->data.ptrvalue) != 0)
+      {
+        return FALSE;
+      }
+    }
+    else if (sdp_list1->choice == Seq_descr_pub)
+    {
+      /* compare publications */
+      if (! PubdescMatch (sdp_list1->data.ptrvalue, sdp_list2->data.ptrvalue))
+      {
+        return FALSE;
+      }
+    }
+    else if (sdp_list1->choice == Seq_descr_source)
+    {
+      /* compare sources */
+      if (! BioSourceMatch (sdp_list1->data.ptrvalue, sdp_list2->data.ptrvalue))
+      {
+        return FALSE;
+      }
+    }
+    else if (sdp_list1->choice == Seq_descr_molinfo)
+    {
+      if (! MolInfoMatch (sdp_list1->data.ptrvalue, sdp_list2->data.ptrvalue))
+      {
+        return FALSE;
+      }
+    }
+    else
+    {
+      /* won't compare other kinds of descriptors */
+      return FALSE;
+    }
+    sdp_list1 = sdp_list1->next;
+    sdp_list2 = sdp_list2->next;
+  }
+  if (sdp_list1 == NULL && sdp_list2 == NULL)
+  {
+    return TRUE;
+  }
+  else
+  {
+    return FALSE;
+  }
+}
+
+static Boolean SeqSubmitMatch (SeqSubmitPtr ssp1, SeqSubmitPtr ssp2)
+{
+  BioseqPtr bsp1 = NULL, bsp2 = NULL;
+  BioseqSetPtr bssp1 = NULL, bssp2 = NULL;
+  SeqEntryPtr  sep1 = NULL, sep2 = NULL;
+  SeqDescrPtr  sdp_list1 = NULL, sdp_list2 = NULL;
+  
+  if (ssp1 == NULL && ssp2 == NULL)
+  {
+    return TRUE;
+  }
+  else if (ssp1 == NULL || ssp2 == NULL)
+  {
+    return FALSE;
+  }
+  else if (!SubmitBlockMatch (ssp1->sub, ssp2->sub))
+  {
+    return FALSE;
+  }
+  else if (ssp1->datatype != ssp2->datatype)
+  {
+    return FALSE;
+  }
+  else if (ssp1->data == NULL && ssp2->data == NULL)
+  {
+    return TRUE;
+  }
+  else if (ssp1->data == NULL || ssp2->data == NULL)
+  {
+    return FALSE;
+  }
+  
+  if (ssp1->datatype == OBJ_SEQENTRY)
+  {
+    sep1 = (SeqEntryPtr) ssp1->data;
+    if (IS_Bioseq (sep1) && sep1->data.ptrvalue != NULL)
+    {
+      bsp1 = (BioseqPtr) sep1->data.ptrvalue;
+    }
+    else if (IS_Bioseq_set (sep1))
+    {
+      bssp1 = (BioseqSetPtr) sep1->data.ptrvalue;
+    }
+    sep2 = (SeqEntryPtr) ssp2->data;
+    if (IS_Bioseq (sep2) && sep2->data.ptrvalue != NULL)
+    {
+      bsp2 = (BioseqPtr) sep2->data.ptrvalue;
+    }
+    else if (IS_Bioseq_set (sep2))
+    {
+      bssp2 = (BioseqSetPtr) sep2->data.ptrvalue;
+    }
+  }
+  else if (ssp1->datatype == OBJ_BIOSEQ)
+  {
+    bsp1 = (BioseqPtr) ssp1->data;
+    bsp2 = (BioseqPtr) ssp2->data;
+  }
+  else if (ssp1->datatype == OBJ_BIOSEQSET)
+  {
+    bssp1 = (BioseqSetPtr) ssp1->data;
+    bssp2 = (BioseqSetPtr) ssp2->data;
+  }
+  else
+  {
+    /* won't compare other types */
+    return FALSE;
+  }
+  
+  if (bsp1 != NULL)
+  {
+    sdp_list1 = bsp1->descr;
+  }
+  else if (bssp1 != NULL)
+  {
+    sdp_list1 = bssp1->descr;
+  }
+  
+  if (bsp2 != NULL)
+  {
+    sdp_list2 = bsp2->descr;
+  }
+  else if (bssp2 != NULL)
+  {
+    sdp_list2 = bssp2->descr;
+  }
+  
+  return SeqDescrListMatch (sdp_list1, sdp_list2);
+  
+}
+
+#define TEMPLATE_SUBMITBLOCK_PAGE  0
+#define TEMPLATE_ORGANISM_PAGE     1
+#define TEMPLATE_MOLINFO_PAGE      2
+#define TEMPLATE_COMMENT_PAGE      3
+#define TEMPLATE_REFERENCES_PAGE   4
+#define NUM_TEMPLATE_PAGES         5
+
+typedef struct submittemplateeditor
+{
+  FORM_MESSAGE_BLOCK
+  DialoG sbt_dlg;
+  DialoG src_dlg;
+  DialoG comment_dlg;
+  DialoG reference_dlg;
+  DialoG molinfo_dlg;
+  DialoG tbs;
+  GrouP  pages [NUM_TEMPLATE_PAGES];
+  ButtoN clear_page_btn;
+  
+  Int2   currentPage;
+  Int2   tagFromPage [NUM_TEMPLATE_PAGES];
+  
+  DialoG preview_dlg;
+  
+  CloseSubmitTemplateEditorFunc close_proc;
+  Pointer      closedata;
+  SeqSubmitPtr last_saved_ssp;
+  CharPtr      last_loaded_filename;
+} SubmitTemplateEditorData, PNTR SubmitTemplateEditorPtr;
+
+static CharPtr  submitTemplateFormTabs [] = {
+  "Submit-Block", "Organism", "Molecule", "Comment", "References", NULL
+};
+
+static Pointer SeqSubmitFromTemplateEditor (ForM f)
+{
+  SubmitTemplateEditorPtr dlg;
+  BioseqPtr        bsp;
+  SeqEntryPtr      sep;
+  SeqSubmitPtr     ssp;
+  SubmitBlockPtr   sbp;
+  SeqDescrPtr      sdp, pub_sdp;
+  BioSourcePtr     biop;
+  CharPtr          comment;
+  Uint2            entityID;
+  ObjMgrDataPtr    omdp;
+  MolInfoPtr       mip;
+
+  dlg = (SubmitTemplateEditorPtr) GetObjectExtra (f);
+  if (dlg == NULL)
+  {
+    return NULL;
+  }
+
+  sbp = (SubmitBlockPtr) DialogToPointer (dlg->sbt_dlg);
+  
+  
+  if (sbp == NULL)
+  {
+    Message (MSG_ERROR, "No submit block!");
+    return NULL;
+  }
+  
+  ssp = SeqSubmitNew ();
+  if (ssp == NULL)
+  {
+    Message (MSG_ERROR, "Unable to allocate memory for seq-submit");
+    return NULL;
+  }
+
+  bsp = BioseqNew ();
+  bsp->mol = Seq_mol_dna;
+  bsp->repr = Seq_repr_raw;
+  bsp->id = MakeSeqID ("lcl|tmp_id");
+  sep = SeqEntryNew ();
+  sep->choice = 1;
+  sep->data.ptrvalue = bsp;
+    
+  biop = DialogToPointer (dlg->src_dlg);
+  if (biop != NULL)
+  {
+    sdp = CreateNewDescriptor (sep, Seq_descr_source);
+    sdp->data.ptrvalue = biop;
+  }
+    
+  sdp = NULL;   
+  comment = DialogToPointer (dlg->comment_dlg);
+  if (comment != NULL)
+  {
+    sdp = CreateNewDescriptor (sep, Seq_descr_comment);
+    sdp->data.ptrvalue = comment;
+  }
+  
+  mip = (MolInfoPtr) DialogToPointer (dlg->molinfo_dlg);
+  if (mip != NULL)
+  {
+    sdp = CreateNewDescriptor (sep, Seq_descr_molinfo);
+    sdp->data.ptrvalue = mip;
+  }
+  
+  pub_sdp = (SeqDescrPtr) DialogToPointer (dlg->reference_dlg);
+  if (pub_sdp != NULL)
+  {
+    ValNodeLink (&(bsp->descr), pub_sdp);
+  }
+
+  ssp->datatype = OBJ_SEQENTRY;
+  ssp->data = (Pointer) sep;
+  
+  SeqMgrLinkSeqEntry (sep, OBJ_SEQSUB, ssp);
+
+  ssp->sub = sbp;
+
+  entityID = ObjMgrGetEntityIDForPointer (ssp);
+  omdp = ObjMgrGetData (entityID);
+  SeqMgrIndexFeatures (entityID, NULL);
+  
+  return (Pointer) ssp;  
+}
+
+static void DrawTemplatePreview (SubmitTemplateEditorPtr dlg)
+{
+  SeqSubmitPtr     ssp;
+
+  if (dlg == NULL)
+  {
+    return;
+  }
+
+  ssp = FormToPointer (dlg->form);
+  PointerToDialog (dlg->preview_dlg, ssp);
+  ssp = SeqSubmitFree (ssp);  
+}
+
+
+static void ChangeSubmitTemplatePage (VoidPtr data, Int2 newval, Int2 oldval)
+
+{
+  SubmitTemplateEditorPtr dlg;
+
+  dlg = (SubmitTemplateEditorPtr) data;
+  if (dlg != NULL) {
+    dlg->currentPage = newval;
+    SafeHide (dlg->pages [oldval]);
+    Update ();
+    switch (dlg->tagFromPage [newval]) {
+      case TEMPLATE_SUBMITBLOCK_PAGE :
+        SendMessageToDialog (dlg->sbt_dlg, VIB_MSG_ENTER);
+        SetTitle (dlg->clear_page_btn, "Clear Submit Block");
+        break;
+      case TEMPLATE_ORGANISM_PAGE :
+        SendMessageToDialog (dlg->src_dlg, VIB_MSG_ENTER);
+        SetTitle (dlg->clear_page_btn, "Clear Organism");
+        break;
+      case TEMPLATE_COMMENT_PAGE :
+        SendMessageToDialog (dlg->comment_dlg, VIB_MSG_ENTER);
+        SetTitle (dlg->clear_page_btn, "Clear Comment");
+        break;
+      case TEMPLATE_REFERENCES_PAGE :
+        SendMessageToDialog (dlg->reference_dlg, VIB_MSG_ENTER);
+        SetTitle (dlg->clear_page_btn, "Clear References");
+        break;
+      case TEMPLATE_MOLINFO_PAGE :
+        SendMessageToDialog (dlg->molinfo_dlg, VIB_MSG_ENTER);
+        SetTitle (dlg->clear_page_btn, "Clear Molecule Type");
+        break;
+      default :
+        break;
+    }
+    SafeShow (dlg->pages [newval]);
+    DrawTemplatePreview (dlg);
+    Update ();
+  }
+}
+static CharPtr submit_template_editor_quit_warning =
+"You have not saved your template since your last change - are you sure you want to lose your changes?";
+
+static void TemplatePreviewClick 
+(Uint2      entityID,
+ Uint2      itemtype,
+ Uint4      itemID,
+ BlockType  blocktype,
+ Pointer    userdata,
+ Boolean    was_double,
+ Int4       ref_num)
+{
+  SubmitTemplateEditorPtr dlg;
+
+  dlg = (SubmitTemplateEditorPtr) userdata;
+  if (userdata == NULL)
+  {
+    return;
+  }
+  
+  switch (blocktype)
+  {
+    case SOURCE_BLOCK:
+      SetValue (dlg->tbs, TEMPLATE_ORGANISM_PAGE);
+      break;
+    case REFERENCE_BLOCK:
+      if (itemtype == OBJ_SEQSUB_CIT)
+      {
+        SetValue (dlg->tbs, TEMPLATE_SUBMITBLOCK_PAGE);
+        SendMessageToDialog (dlg->sbt_dlg, NUM_VIB_MSG + 3);
+      }
+      else
+      {
+        SetValue (dlg->tbs, TEMPLATE_REFERENCES_PAGE);
+        if (was_double)
+        {
+          EditPublicationInDialog (dlg->reference_dlg, ref_num);
+        }
+      }
+      break;
+    case COMMENT_BLOCK:
+      SetValue (dlg->tbs, TEMPLATE_COMMENT_PAGE);
+      break;
+    case SOURCEFEAT_BLOCK:
+      SetValue (dlg->tbs, TEMPLATE_ORGANISM_PAGE);
+      break;
+    case LOCUS_BLOCK:
+      SetValue (dlg->tbs, TEMPLATE_MOLINFO_PAGE);
+      break;
+  }
+}
+
+static Boolean OkToQuitSBTEditor (SubmitTemplateEditorPtr dlg)
+{
+  SeqSubmitPtr this_ssp;
+  MsgAnswer    ans = ANS_OK;
+  
+  if (dlg == NULL)
+  {
+    return TRUE;
+  }
+  
+  this_ssp = (SeqSubmitPtr) FormToPointer (dlg->form);
+  if (!SeqSubmitMatch (this_ssp, dlg->last_saved_ssp))
+  {
+    ans = Message (MSG_OKC, submit_template_editor_quit_warning);
+  }
+  
+  this_ssp = SeqSubmitFree (this_ssp);
+  
+  if (ans == ANS_CANCEL)
+  {
+    return FALSE;
+  }
+  else
+  {
+    return TRUE;
+  }
+}
+
+static SeqDescrPtr ExtractPubCommentMolinfoDescriptors (SeqDescrPtr PNTR sdp_list)
+{
+  SeqDescrPtr sdp, sdp_prev = NULL, sdp_next;
+  SeqDescrPtr pubs_and_comments = NULL;
+  
+  if (sdp_list == NULL)
+  {
+    return;
+  }
+  
+  sdp = *sdp_list;
+  while (sdp != NULL)
+  {
+    sdp_next = sdp->next;
+    if (sdp->choice == Seq_descr_pub 
+        || sdp->choice == Seq_descr_comment
+        || sdp->choice == Seq_descr_molinfo)
+    {
+      if (sdp_prev == NULL)
+      {
+        *sdp_list = sdp->next;
+      }
+      else
+      {
+        sdp_prev->next = sdp_next;
+      }
+      sdp->next = NULL;
+      ValNodeLink (&pubs_and_comments, (ValNodePtr) sdp);
+    }
+    else
+    {
+      sdp_prev = sdp;
+    }
+   
+    
+    sdp = sdp_next;
+  }
+  return pubs_and_comments;
+}
+
+static Boolean ExportSeqSubmitForm (ForM f, CharPtr filename)
+{
+  SubmitTemplateEditorPtr dlg;
+  SeqSubmitPtr            ssp;
+  Char                    path [PATH_MAX];
+  AsnIoPtr                aip;
+  FILE                    *fp;
+  SeqDescrPtr             write_sdp;
+  BioseqSetPtr            bssp;
+  BioseqPtr               bsp;
+  SeqEntryPtr             sep;
+  ValNodePtr              err_list;
+  SeqDescrPtr             comment_pub_list = NULL;
+
+  dlg = (SubmitTemplateEditorPtr) GetObjectExtra (f);
+  if (dlg == NULL)
+  {
+    return FALSE;
+  }
+  
+  err_list = TestDialog (dlg->sbt_dlg);
+  
+  if (err_list != NULL)
+  {
+    SendMessageToDialog (dlg->sbt_dlg, NUM_VIB_MSG + 1 + err_list->choice);
+    DisplayErrorMessages ("Submit-Block Errors", err_list);
+    ValNodeFreeData (err_list);
+    return FALSE;
+  }
+  
+  path [0] = '\0';
+  StringNCpy_0 (path, filename, sizeof (path));
+  
+  if (!GetOutputFileName (path, sizeof (path), NULL))
+  {
+    return FALSE;
+  }
+  
+  fp = FileOpen (path, "w");
+  if (fp == NULL)
+  {
+    Message (MSG_ERROR, "Unable to open %s", path);
+    return FALSE;
+  }
+
+  ssp = (SeqSubmitPtr) FormToPointer (dlg->form);
+  if (ssp == NULL)
+  {
+    return FALSE;
+  }
+  
+  if (ssp->datatype == OBJ_SEQENTRY && ssp->data != NULL)
+  {
+    sep = ssp->data;
+    if (IS_Bioseq (sep) && sep->data.ptrvalue != NULL)
+    {
+      bsp = (BioseqPtr) sep->data.ptrvalue;
+      comment_pub_list = ExtractPubCommentMolinfoDescriptors (&(bsp->descr));
+    }
+    else if (IS_Bioseq_set (sep) && sep->data.ptrvalue != NULL)
+    {
+      bssp = (BioseqSetPtr) sep->data.ptrvalue;
+      comment_pub_list = ExtractPubCommentMolinfoDescriptors (&(bssp->descr));
+    }
+  }
+  
+  aip = AsnIoNew(ASNIO_TEXT_OUT, fp, NULL, NULL, NULL);
+  SeqSubmitAsnWrite(ssp, aip, NULL);
+  
+	AsnIoFlush(aip);
+  AsnIoReset(aip);
+
+  /* write out comment and pub descriptors */
+  write_sdp = comment_pub_list;
+  while (write_sdp != NULL)
+  {
+    SeqDescAsnWrite (write_sdp, aip, NULL);  
+	  AsnIoFlush(aip);
+    AsnIoReset(aip);
+    write_sdp = write_sdp->next;
+  }
+
+  AsnIoClose (aip);
+  
+  ssp = SeqSubmitFree (ssp);
+  comment_pub_list = SeqDescrFree (comment_pub_list);
+
+  dlg->last_saved_ssp = SeqSubmitFree (dlg->last_saved_ssp);
+  dlg->last_saved_ssp = (SeqSubmitPtr) FormToPointer (dlg->form);
+
+  dlg->last_loaded_filename = MemFree (dlg->last_loaded_filename);
+  dlg->last_loaded_filename = StringSave (path);    
+}
+
+static void ExportSubmissionTemplate (IteM i)
+{
+  SubmitTemplateEditorPtr dlg;
+
+  dlg = (SubmitTemplateEditorPtr) GetObjectExtra (i);
+  if (dlg == NULL)
+  {
+    return;
+  }
+  
+  ExportSeqSubmitForm (dlg->form, dlg->last_loaded_filename);
+}
+
+static void SaveSubmissionTemplate (ButtoN b)
+{
+  SubmitTemplateEditorPtr dlg;
+
+  dlg = (SubmitTemplateEditorPtr) GetObjectExtra (b);
+  if (dlg == NULL)
+  {
+    return;
+  }
+  
+  ExportSeqSubmitForm (dlg->form, dlg->last_loaded_filename);
+}
+
+static void ClearSubmissionTemplate (SubmitTemplateEditorPtr dlg)
+{
+  if (dlg == NULL)
+  {
+    return;
+  }
+  
+  PointerToDialog (dlg->sbt_dlg, NULL);
+  PointerToDialog (dlg->comment_dlg, NULL);
+  PointerToDialog (dlg->src_dlg, NULL);
+  PointerToDialog (dlg->reference_dlg, NULL);
+  PointerToDialog (dlg->molinfo_dlg, NULL);
+  PointerToDialog (dlg->preview_dlg, NULL);
+}
+
+static void ClearSubmissionTemplateItem (IteM i)
+{
+  SubmitTemplateEditorPtr dlg;
+
+  dlg = (SubmitTemplateEditorPtr) GetObjectExtra (i);
+  if (dlg == NULL)
+  {
+    return;
+  }
+  
+  ClearSubmissionTemplate (dlg);
+}
+
+static void ClearSubmissionTemplateButton (ButtoN b)
+{
+  SubmitTemplateEditorPtr dlg;
+
+  dlg = (SubmitTemplateEditorPtr) GetObjectExtra (b);
+  if (dlg == NULL)
+  {
+    return;
+  }
+  
+  ClearSubmissionTemplate (dlg);
+}
+
+static void ClearTemplatePage (ButtoN b)
+{
+  SubmitTemplateEditorPtr dlg;
+
+  dlg = (SubmitTemplateEditorPtr) GetObjectExtra (b);
+  if (dlg == NULL)
+  {
+    return;
+  }
+  
+  switch (dlg->currentPage)
+  {
+    case TEMPLATE_SUBMITBLOCK_PAGE :
+      PointerToDialog (dlg->sbt_dlg, NULL);
+      break;
+    case TEMPLATE_ORGANISM_PAGE :
+      PointerToDialog (dlg->src_dlg, NULL);    
+      break;
+    case TEMPLATE_COMMENT_PAGE :
+      PointerToDialog (dlg->comment_dlg, NULL);    
+      break;
+    case TEMPLATE_REFERENCES_PAGE :
+      PointerToDialog (dlg->reference_dlg, NULL);    
+      break;
+    case TEMPLATE_MOLINFO_PAGE:
+      PointerToDialog (dlg->molinfo_dlg, NULL);
+    default :
+      break;
+  }
+  DrawTemplatePreview (dlg);
+  Update ();  
+}
+
+static Boolean GetBioSourceFromSeqEntry (SeqEntryPtr sep, BioSourcePtr PNTR pbiop)
+{
+  BioseqPtr    bsp = NULL;
+  BioseqSetPtr bssp = NULL;
+  Boolean      rval = TRUE;
+  SeqDescrPtr  sdp;
+  
+  if (pbiop == NULL)
+  {
+    return FALSE;
+  }
+  
+  if (sep == NULL)
+  {
+    return TRUE;
+  }
+  
+  if (sep->data.ptrvalue != NULL)
+  {
+    if (IS_Bioseq (sep))
+    {
+      bsp = (BioseqPtr) sep->data.ptrvalue;
+      sdp = bsp->descr;
+    }
+    else if (IS_Bioseq_set (sep))
+    {
+      bssp = (BioseqSetPtr) sep->data.ptrvalue;
+      rval = GetBioSourceFromSeqEntry (bssp->seq_set, pbiop);
+      sdp = bssp->descr;
+    }
+    
+    while (rval && sdp != NULL)
+    {
+      if (sdp->choice == Seq_descr_source && sdp->data.ptrvalue != NULL)
+      {
+        if (*pbiop != NULL)
+        {
+          Message (MSG_ERROR, "Found more than one biosource in SeqEntry!");
+          rval = FALSE;
+        }
+        else
+        {
+          *pbiop = sdp->data.ptrvalue;
+        }
+      }
+      sdp = sdp->next;
+    }
+    
+  }
+  if (rval)
+  {
+    rval = GetBioSourceFromSeqEntry (sep->next, pbiop);
+  }
+  return rval;
+}
+
+static Boolean GetBioSourceFromSeqSubmit (SeqSubmitPtr ssp, BioSourcePtr PNTR pbiop)
+{
+  SeqEntryPtr sep;
+  Boolean     rval;
+  
+  if (pbiop == NULL || ssp == NULL || ssp->data == NULL || ssp->datatype != OBJ_SEQENTRY)
+  {
+    return FALSE;
+  }
+  *pbiop = NULL;
+    
+  sep = (SeqEntryPtr) ssp->data;  
+    
+  rval = GetBioSourceFromSeqEntry (sep, pbiop);
+  return rval;
+}
+
+static Boolean ImportSeqSubmitForm (ForM f, CharPtr filename)
+{
+  SubmitTemplateEditorPtr dlg;
+  SeqSubmitPtr            ssp = NULL;
+  Char                    path [PATH_MAX];
+  Boolean                 bad_data_found = FALSE;
+  Pointer                 dataptr;
+  Uint2                   datatype;
+  Uint2                   entityID;
+  FILE                    *fp;
+  SubmitBlockPtr          sbp = NULL;
+  SeqDescrPtr             sdp_comment, sdp_pub = NULL;
+  CharPtr                 comment = NULL;
+  BioSourcePtr            biop = NULL;
+  MolInfoPtr              mip = NULL;
+  
+  dlg = (SubmitTemplateEditorPtr) GetObjectExtra (f);
+  if (dlg == NULL)
+  {
+    return FALSE;
+  }
+  
+  if (!OkToQuitSBTEditor (dlg))
+  {
+    return FALSE;
+  }
+  
+  
+  if (!GetInputFileName (path, sizeof (path), NULL, NULL))
+  {
+    return FALSE;
+  }
+  
+  fp = FileOpen (path, "r");
+  if (fp == NULL)
+  {
+    Message (MSG_ERROR, "Unable to open %s", path);
+    return FALSE;
+  }
+  
+  dataptr = ReadAsnFastaOrFlatFile (fp, &datatype, &entityID,
+                                    FALSE, FALSE, FALSE, FALSE);
+  
+  while (dataptr != NULL && ! bad_data_found)
+  {
+    if (datatype == OBJ_SEQSUB)
+    {
+      if (ssp != NULL)
+      {
+        Message (MSG_ERROR, "Found more than one SeqSubmit!  Bad file!");
+        bad_data_found = TRUE;
+      }
+      else if (sbp != NULL)
+      {
+        Message (MSG_ERROR, "Found Separate SeqSubmit and SubmitBlock!  Bad file!");
+        bad_data_found = TRUE;
+      }
+      else
+      {
+        ssp = (SeqSubmitPtr) dataptr;
+        if (ssp->data == NULL || ssp->datatype != OBJ_SEQENTRY)
+        {
+          Message (MSG_ERROR, "SeqSubmit contained data other than a SeqEntry! Bad file!");
+          bad_data_found = TRUE;
+        }
+        if (!GetBioSourceFromSeqSubmit (ssp, &biop))
+        {
+          bad_data_found = TRUE;
+        }
+      }
+    }
+    else if (datatype == OBJ_SUBMIT_BLOCK)
+    {
+      if (sbp != NULL)
+      {
+        Message (MSG_ERROR, "Found more than one SubmitBlock!  Bad file!");
+        bad_data_found = TRUE;
+      }
+      else if (ssp != NULL)
+      {
+        Message (MSG_ERROR, "Found Separate SeqSubmit and SubmitBlock!  Bad file!");
+        bad_data_found = TRUE;
+      }
+      else
+      {
+        sbp = (SubmitBlockPtr) dataptr;
+      }
+    }
+    else if (datatype == OBJ_SEQDESC)
+    {
+      sdp_comment = (SeqDescrPtr) dataptr;
+      if (sdp_comment->choice == Seq_descr_pub)
+      {
+        ValNodeLink (&sdp_pub, sdp_comment);
+        sdp_comment = NULL;
+      }
+      else if (sdp_comment->choice == Seq_descr_molinfo)
+      {
+        if (mip != NULL)
+        {
+          Message (MSG_ERROR, "Found more than one molinfo descriptor!  Bad file!");
+          bad_data_found = TRUE;
+        }
+        else
+        {
+          mip = (MolInfoPtr) sdp_comment->data.ptrvalue;
+        }
+        sdp_comment = NULL;
+      }
+      else if (sdp_comment->choice != Seq_descr_comment)
+      {
+        Message (MSG_ERROR, "Found descriptor other than comment or pub!  Bad file!");
+        bad_data_found = TRUE;
+      }
+      else if (comment != NULL)
+      {
+        Message (MSG_ERROR, "Found more than one comment!  Cannot edit this file!");
+        bad_data_found = TRUE;
+      }
+      else
+      {
+        comment = StringSave (sdp_comment->data.ptrvalue);
+      }
+      sdp_comment = SeqDescrFree (sdp_comment);
+    }
+    else
+    {
+      Message (MSG_ERROR, "Read unrecognized data!  Bad file!");
+    }
+    
+    dataptr = ReadAsnFastaOrFlatFile (fp, &datatype, &entityID,
+                                    FALSE, FALSE, FALSE, FALSE);    
+  }
+  
+  FileClose (fp);
+  
+  if (!bad_data_found)
+  {
+    PointerToDialog (dlg->comment_dlg, comment);
+    PointerToDialog (dlg->src_dlg, biop);
+    if (ssp == NULL)
+    {
+      PointerToDialog (dlg->sbt_dlg, sbp);
+    }
+    else
+    {
+      PointerToDialog (dlg->sbt_dlg, ssp->sub);
+    }
+    
+    PointerToDialog (dlg->reference_dlg, sdp_pub);
+    
+    if (mip == NULL)
+    {
+      /* necessary so that we don't carry over values from the last file */
+      mip = MolInfoNew ();
+    }
+    PointerToDialog (dlg->molinfo_dlg, mip);
+    
+    DrawTemplatePreview (dlg);
+    dlg->last_loaded_filename = MemFree (dlg->last_loaded_filename);
+    dlg->last_loaded_filename = StringSave (path);
+    dlg->last_saved_ssp = SeqSubmitFree (dlg->last_saved_ssp);
+    dlg->last_saved_ssp = FormToPointer (dlg->form);
+  }
+    
+  ssp = SeqSubmitFree (ssp);
+  sbp = SubmitBlockFree (sbp);
+  comment = MemFree (comment);
+  sdp_pub = SeqDescrFree (sdp_pub);
+  mip = MolInfoFree (mip);
+  
+  return bad_data_found;  
+}
+
+static void ImportSubmissionTemplateFileMenu (IteM i)
+{
+  SubmitTemplateEditorPtr dlg;
+  
+  dlg = (SubmitTemplateEditorPtr) GetObjectExtra (i);
+  if (dlg == NULL)
+  {
+    return;
+  }
+    
+  ImportSeqSubmitForm (dlg->form, NULL);
+}
+
+static void ImportSubmissionTemplateFileButton (ButtoN b)
+{
+  SubmitTemplateEditorPtr dlg;
+  
+  dlg = (SubmitTemplateEditorPtr) GetObjectExtra (b);
+  if (dlg == NULL)
+  {
+    return;
+  }
+  
+  ImportSeqSubmitForm (dlg->form, NULL);
+}
+
+static void CleanUpSubmitTemplateEditor (GraphiC g, VoidPtr data)
+{
+  SubmitTemplateEditorPtr dlg;
+  
+  dlg = (SubmitTemplateEditorPtr) data;
+  if (dlg != NULL)
+  {
+    dlg->last_saved_ssp = SeqSubmitFree (dlg->last_saved_ssp);
+    dlg->last_loaded_filename = MemFree (dlg->last_loaded_filename);
+  }
+  MemFree (dlg);
+}
+
+static void CloseSBTWindowProc (WindoW w)
+{
+  SubmitTemplateEditorPtr dlg;
+  
+  dlg = (SubmitTemplateEditorPtr) GetObjectExtra (w);
+  if (OkToQuitSBTEditor (dlg))
+  {
+    ObjMgrFreeUserData(dlg->input_entityID, 0, 0, 0);
+    dlg->close_proc (dlg->closedata, w);
+  }
+}
+
+static void QuitSbt (IteM i)
+{
+  SubmitTemplateEditorPtr dlg;
+  
+  dlg = (SubmitTemplateEditorPtr) GetObjectExtra (i);
+  if (OkToQuitSBTEditor (dlg))
+  {
+    ObjMgrFreeUserData(dlg->input_entityID, 0, 0, 0);
+    dlg->close_proc (dlg->closedata, (WindoW) dlg->form);
+  }
+}
+
+static void SetupSubmissionTemplateMenus (WindoW w, SubmitTemplateEditorPtr dlg)
+{
+  MenU edit_menu;
+  IteM localItem;
+  
+  if (w == NULL)
+  {
+    return;
+  }
+  
+  edit_menu = PulldownMenu (w, "File");
+  
+  localItem = CommandItem (edit_menu, "Load Submission Template", ImportSubmissionTemplateFileMenu);
+  SetObjectExtra (localItem, dlg, NULL);
+  localItem = CommandItem (edit_menu, "Save Submission Template", ExportSubmissionTemplate);
+  SetObjectExtra (localItem, dlg, NULL);
+  localItem = CommandItem (edit_menu, "Clear Submission Template", ClearSubmissionTemplateItem);
+  SetObjectExtra (localItem, dlg, NULL);
+  
+  localItem = CommandItem (edit_menu, "Quit", QuitSbt);
+  SetObjectExtra (localItem, dlg, NULL);
+}
+
+static void DrawTemplatePreviewBtn (ButtoN b)
+{
+  SubmitTemplateEditorPtr dlg;
+  
+  dlg = (SubmitTemplateEditorPtr) GetObjectExtra (b);
+  DrawTemplatePreview (dlg);
+}
+
+static Int2 LIBCALLBACK SeqSubFormMsgFunc (OMMsgStructPtr ommsp)
+{
+  WindoW             currentport,
+                     temport;
+  OMUserDataPtr      omudp;
+  SubmitTemplateEditorPtr dlg = NULL;
+  
+  omudp = (OMUserDataPtr)(ommsp->omuserdata);
+  if (omudp == NULL) return OM_MSG_RET_ERROR;
+  dlg = (SubmitTemplateEditorPtr) omudp->userdata.ptrvalue;
+  if (dlg == NULL) return OM_MSG_RET_ERROR;
+
+  currentport = (WindoW)dlg->form;
+  temport = SavePort (currentport);
+  UseWindow (currentport);
+  Select (currentport);
+  switch (ommsp->message) 
+  {
+      case OM_MSG_UPDATE:
+          SendMessageToDialog (dlg->reference_dlg, VIB_MSG_REDRAW);
+          DrawTemplatePreview (dlg);
+          break;
+
+#if 0
+      case OM_MSG_DESELECT:
+          ResizeSeqEdView (sefp);
+          Select (sefp->bfp->bvd.seqView);
+          inval_panel (sefp->bfp->bvd.seqView, -1, -1);	
+          break;
+
+      case OM_MSG_SELECT: 
+          ResizeSeqEdView (sefp);
+          Select (sefp->bfp->bvd.seqView);
+          inval_panel (sefp->bfp->bvd.seqView, -1, -1);	
+          break;
+      case OM_MSG_HIDE:
+          break;
+      case OM_MSG_SHOW:
+          break;
+      case OM_MSG_FLUSH:
+          SeqEdCancel (sefp);	
+          break;
+#endif
+      default:
+          break;
+  }
+  RestorePort (temport);
+  UseWindow (temport);
+  return OM_MSG_RET_OK;
+}
+
+extern ForM 
+CreateSubmitTemplateEditorForm 
+(Int2 left, Int2 top, CharPtr title,
+ CloseSubmitTemplateEditorFunc close_proc, Pointer closedata)
+{
+
+  WindoW w;
+  SubmitTemplateEditorPtr dlg;
+  GrouP                   h, tab_page_grp, k, preview_grp, op_grp;
+  Int4                    page_num = 0;
+  ButtoN                  b, b2;
+  OMUserDataPtr           omudp;
+ 
+  dlg = (SubmitTemplateEditorPtr) MemNew (sizeof (SubmitTemplateEditorData));
+  if (dlg == NULL)
+  {
+    return;
+  }
+  
+  w = FixedWindow (left, top, -10, -10, "Submission Template Editor", CloseSBTWindowProc);
+  SetObjectExtra (w, dlg, CleanUpSubmitTemplateEditor);
+  dlg->form = (ForM) w;
+  dlg->fromform = SeqSubmitFromTemplateEditor;
+  dlg->importform = ImportSeqSubmitForm;
+  dlg->exportform = ExportSeqSubmitForm;
+  
+  dlg->close_proc = close_proc;
+  dlg->closedata = closedata;
+  
+  dlg->last_saved_ssp = NULL;
+  dlg->last_loaded_filename = NULL;
+  
+  SetupSubmissionTemplateMenus (w, dlg);
+  
+  k = HiddenGroup (w, -1, 0, NULL);
+  h = HiddenGroup (k, -1, 0, NULL);
+  SetGroupSpacing (h, 10, 10);
+
+
+  dlg->tbs = CreateFolderTabs (h, submitTemplateFormTabs, TEMPLATE_SUBMITBLOCK_PAGE,
+                                    0, 0, SYSTEM_FOLDER_TAB,
+                                    ChangeSubmitTemplatePage, (Pointer) dlg);
+  
+  tab_page_grp = HiddenGroup (h, 0, 0, NULL);
+  dlg->currentPage = TEMPLATE_SUBMITBLOCK_PAGE;
+  page_num = 0;
+
+  /* submit block page */
+  dlg->sbt_dlg = SubmitBlockDialog (tab_page_grp, TRUE, FALSE);
+
+  dlg->pages [page_num] = (GrouP)dlg->sbt_dlg;
+  dlg->tagFromPage [page_num] = TEMPLATE_SUBMITBLOCK_PAGE;
+  Hide (dlg->pages [page_num]);
+  page_num++;
+
+  /* organism page */
+  dlg->src_dlg = BioSourceDialog (tab_page_grp);
+  dlg->pages [page_num] = (GrouP)dlg->src_dlg;
+  dlg->tagFromPage [page_num] = TEMPLATE_ORGANISM_PAGE;
+  Hide (dlg->pages [page_num]);
+  page_num++;
+
+  /* molinfo page */
+  dlg->molinfo_dlg = SeqSubMolInfoDlg (tab_page_grp);
+  dlg->pages [page_num] = (GrouP)dlg->molinfo_dlg;
+  dlg->tagFromPage [page_num] = TEMPLATE_MOLINFO_PAGE;
+  Hide (dlg->pages [page_num]);
+  page_num++;
+
+  /* comment page */
+  dlg->comment_dlg = CommentDialog (tab_page_grp);
+  dlg->pages [page_num] = (GrouP)dlg->comment_dlg;
+  dlg->tagFromPage [page_num] = TEMPLATE_COMMENT_PAGE;
+  Hide (dlg->pages [page_num]);
+  page_num++;
+  
+  /* reference page */
+  dlg->reference_dlg = PublicationListDialog (tab_page_grp);
+  dlg->pages [page_num] = (GrouP)dlg->reference_dlg;
+  dlg->tagFromPage [page_num] = TEMPLATE_REFERENCES_PAGE;
+  Hide (dlg->pages [page_num]);
+  page_num++;
+  
+  Show (dlg->pages [dlg->currentPage]);
+  AlignObjects (ALIGN_CENTER, (HANDLE) dlg->sbt_dlg,
+                              (HANDLE) dlg->src_dlg,
+                              (HANDLE) dlg->comment_dlg,
+                              (HANDLE) dlg->reference_dlg,
+                              (HANDLE) dlg->molinfo_dlg,
+                              NULL);
+  
+  dlg->clear_page_btn = PushButton (h, "Clear Submit Block", ClearTemplatePage);
+  SetObjectExtra (dlg->clear_page_btn, dlg, NULL);
+  
+  AlignObjects (ALIGN_CENTER, (HANDLE) dlg->tbs,
+                              (HANDLE) tab_page_grp,
+                              (HANDLE) dlg->clear_page_btn,
+                              NULL);
+
+  preview_grp = HiddenGroup (k, -1, 0, NULL);
+  dlg->preview_dlg = TemplatePreviewDialog (preview_grp, TemplatePreviewClick, dlg);
+  b = PushButton (preview_grp, "Update Flatfile Preview", DrawTemplatePreviewBtn);
+  SetObjectExtra (b, dlg, NULL);
+  op_grp = HiddenGroup (preview_grp, 4, 0, NULL);
+  SetGroupSpacing (op_grp, 10, 10);
+  b2 = PushButton (op_grp, "Load Submission Template File", ImportSubmissionTemplateFileButton);
+  SetObjectExtra (b2, dlg, NULL);
+  b2 = PushButton (op_grp, "Save Submission Template File", SaveSubmissionTemplate);
+  SetObjectExtra (b2, dlg, NULL);
+  b2 = PushButton (op_grp, "Clear Submission Template", ClearSubmissionTemplateButton);
+  SetObjectExtra (b2, dlg, NULL);
+  
+  AlignObjects (ALIGN_CENTER, (HANDLE) dlg->preview_dlg, 
+                              (HANDLE) b, 
+                              (HANDLE) op_grp, 
+                              NULL);
+
+  AlignObjects (ALIGN_CENTER, (HANDLE) h, (HANDLE) preview_grp, NULL);
+                              
+  /* register to receive update messages */
+  dlg->userkey = OMGetNextUserKey ();
+  dlg->procid = 0;
+  dlg->proctype = OMPROC_EDIT;
+  omudp = ObjMgrAddUserData (dlg->input_entityID, dlg->procid, dlg->proctype, dlg->userkey);
+  if (omudp != NULL) {
+    omudp->userdata.ptrvalue = (Pointer) dlg;
+    omudp->messagefunc = SeqSubFormMsgFunc;
+  }
+  
+  dlg->last_saved_ssp = (SeqSubmitPtr) FormToPointer (dlg->form);
+                              
+  return (ForM) w;  
 }
 

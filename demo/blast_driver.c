@@ -1,4 +1,4 @@
-/* $Id: blast_driver.c,v 1.92 2005/04/27 20:01:00 dondosha Exp $
+/* $Id: blast_driver.c,v 1.96 2005/06/02 20:59:38 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,10 +32,10 @@ Author: Ilya Dondoshansky
 Contents: Main function for running BLAST
 
 ******************************************************************************
- * $Revision: 1.92 $
+ * $Revision: 1.96 $
  * */
 
-static char const rcsid[] = "$Id: blast_driver.c,v 1.92 2005/04/27 20:01:00 dondosha Exp $";
+static char const rcsid[] = "$Id: blast_driver.c,v 1.96 2005/06/02 20:59:38 dondosha Exp $";
 
 #include <ncbi.h>
 #include <sqnutils.h>
@@ -247,7 +247,6 @@ s_FillOptions(SBlastOptions* options)
    Boolean greedy_with_ungapped = FALSE;
    Boolean is_gapped = FALSE;
    EBlastProgramType program_number = options->program;
-   Boolean use_pssm = FALSE;
 
    /* The following options are for blastn only */
    if (program_number == eBlastTypeBlastn) {
@@ -268,7 +267,7 @@ s_FillOptions(SBlastOptions* options)
 
    BLAST_FillLookupTableOptions(lookup_options, program_number, mb_lookup,
       myargs[ARG_THRESHOLD].intvalue, (Int2)myargs[ARG_WORDSIZE].intvalue, 
-      variable_wordsize, use_pssm);
+      variable_wordsize);
    /* Fill the rest of the lookup table options */
    lookup_options->mb_template_length = 
       (Uint1) myargs[ARG_TEMPL_LEN].intvalue;
@@ -391,9 +390,9 @@ Int2 Nlm_Main(void)
    Int2 status = 0;
    SeqLoc* lcase_mask = NULL;
    SeqLoc* query_slp = NULL;
-   FILE *infp, *outfp;
+   FILE *infp, *outfp = NULL;
    SBlastOptions* options = NULL;
-   BlastFormattingOptions* format_options = NULL;
+   BlastFormattingInfo* format_info = NULL;
    Int2 ctr = 1;
    Int4 num_queries=0;
    int tabular_output = FALSE;
@@ -403,6 +402,7 @@ Int2 Nlm_Main(void)
    Blast_SummaryReturn* sum_returns = NULL;
    Boolean phi_blast = FALSE;
    ValNode* phivnps = NULL;
+   Blast_SummaryReturn* full_sum_returns = NULL;
 
    if (! GetArgs (buf, NUMARG, myargs))
       return (1);
@@ -439,8 +439,7 @@ Int2 Nlm_Main(void)
                   program_number == eBlastTypeTblastx ||
                   program_number == eBlastTypePhiBlastn);
 
-   phi_blast = (program_number == eBlastTypePhiBlastn ||
-                program_number == eBlastTypePhiBlastp);
+   phi_blast = Blast_ProgramIsPhiBlast(program_number);
 
    if ((dbname = myargs[ARG_DB].strvalue) == NULL) {
       Int4 letters_read;
@@ -475,8 +474,27 @@ Int2 Nlm_Main(void)
 
    s_FillOptions(options);
 
+   if ((infp = FileOpen(myargs[ARG_QUERY].strvalue, "r")) == NULL) {
+      ErrPostEx(SEV_FATAL, 1, 0, "blast: Unable to open input file %s\n", 
+                myargs[ARG_QUERY].strvalue);
+      return (1);
+   }
+
+   if (s_ParseIntervalLocationArgument(myargs[ARG_QUERY_LOC].strvalue,
+                                       &q_from, &q_to)) {
+         ErrPostEx(SEV_FATAL, 1, 0, "Invalid query sequence location\n");
+         return -1;
+   }
+
    tabular_output = myargs[ARG_TABULAR].intvalue;
-       
+   
+   /* For on-the-fly tabular and for ASN.1 output, the believe query defline 
+      option must be set to true, otherwise it should be false. */
+   believe_defline = 
+       (tabular_output || myargs[ARG_FORMAT].intvalue == eAlignViewAsnText ||
+        myargs[ARG_FORMAT].intvalue == eAlignViewAsnBinary);
+
+
    if (tabular_output) {
       if ((outfp = FileOpen(myargs[ARG_OUT].strvalue, "w")) == NULL) {
          ErrPostEx(SEV_FATAL, 1, 0, "blast: Unable to open output file %s\n", 
@@ -484,48 +502,20 @@ Int2 Nlm_Main(void)
         return (1);
       }
    } else {
-      if ((status = BlastFormattingOptionsNew(program_number, 
-                       myargs[ARG_OUT].strvalue, 
-                       myargs[ARG_DESCRIPTIONS].intvalue, 
-                       myargs[ARG_ALIGNMENTS].intvalue, 
-                       myargs[ARG_FORMAT].intvalue, &format_options)) != 0)
-         return status;
+       BlastFormattingInfoNew(myargs[ARG_FORMAT].intvalue, options, 
+                              blast_program, dbname, 
+                              myargs[ARG_OUT].strvalue, &format_info);
 
-      if (myargs[ARG_HTML].intvalue) {
-         format_options->html = TRUE;
-         format_options->align_options += TXALIGN_HTML;
-         format_options->print_options += TXALIGN_HTML;
-      }
+       BlastFormattingInfoSetUpOptions(format_info, 
+                                       myargs[ARG_DESCRIPTIONS].intvalue, 
+                                       myargs[ARG_ALIGNMENTS].intvalue,
+                                       (Boolean) myargs[ARG_HTML].intvalue,
+                                       (Boolean) myargs[ARG_GREEDY].intvalue,
+                                       (Boolean) myargs[ARG_SHOWGI].intvalue,
+                                       believe_defline);
 
-      if (myargs[ARG_SHOWGI].intvalue) {
-         format_options->align_options += TXALIGN_SHOW_GI;
-         format_options->print_options += TXALIGN_SHOW_GI;
-      }
-
-      if (dbname) {
-         BLAST_PrintOutputHeader(format_options, 
-            (Boolean)myargs[ARG_GREEDY].intvalue, blast_program, dbname, !db_is_na);
-      }
-
-     if (myargs[ARG_UNGAPPED].intvalue != 0) 
-         format_options->print_options += TXALIGN_SHOW_NO_OF_SEGS;
-
-   }
-
-   if ((infp = FileOpen(myargs[ARG_QUERY].strvalue, "r")) == NULL) {
-      ErrPostEx(SEV_FATAL, 1, 0, "blast: Unable to open input file %s\n", 
-                myargs[ARG_QUERY].strvalue);
-      return (1);
-   }
-
-   if (tabular_output) {
-      believe_defline = TRUE;
-   }
-
-   if (s_ParseIntervalLocationArgument(myargs[ARG_QUERY_LOC].strvalue,
-                                       &q_from, &q_to)) {
-         ErrPostEx(SEV_FATAL, 1, 0, "Invalid query sequence location\n");
-         return -1;
+       if (dbname)
+           BLAST_PrintOutputHeader(format_info);
    }
 
    /* Get the query (queries), loop if necessary. */
@@ -539,7 +529,7 @@ Int2 Nlm_Main(void)
        if ((Boolean)myargs[ARG_LCASE].intvalue) {
            letters_read = 
                BLAST_GetQuerySeqLoc(infp, query_is_na, 
-                   (Uint1)myargs[ARG_STRAND].intvalue, 0, q_from, q_to, &lcase_mask,
+                   (Uint1)myargs[ARG_STRAND].intvalue, 10000, q_from, q_to, &lcase_mask,
                    &query_slp, &ctr, &num_queries, believe_defline);
        } else {
            letters_read = 
@@ -622,9 +612,8 @@ Int2 Nlm_Main(void)
        if (!status) {
            if (phi_blast) {
                status =
-                   PHIBlastFormatResults(program_number, phivnps, dbname,
-                                          query_slp, format_options, 
-                                          sum_returns);
+                   PHIBlastFormatResults(phivnps, query_slp, format_info, 
+                                         sum_returns);
                phivnps = PHIBlastResultsFree(phivnps);
            } else if (!tabular_output) {
                if (myargs[ARG_ASNOUT].strvalue) {
@@ -636,40 +625,39 @@ Int2 Nlm_Main(void)
                
                /* Format the results */
                status = 
-                   BLAST_FormatResults(seqalign, dbname, blast_program, 
-                                       num_queries, query_slp, 
-                                       filter_loc, format_options, 
-                                       (Boolean)myargs[ARG_FRAMESHIFT].intvalue, 
-                                       NULL, sum_returns);
+                   BLAST_FormatResults(seqalign, num_queries, query_slp, 
+                                       filter_loc, format_info, sum_returns);
                
                seqalign = SeqAlignSetFree(seqalign);
            }
 
-           Blast_PrintOutputFooter(program_number, format_options, dbname, 
-                                   sum_returns);
        }
-       /* Clean the summary returns substructures. */
+       /* Update the cumulative summary returns structure and clean the returns
+          substructures for the current search iteration. */
+       Blast_SummaryReturnUpdate(sum_returns, &full_sum_returns);
        Blast_SummaryReturnClean(sum_returns);
        filter_loc = Blast_ValNodeMaskListFree(filter_loc);
        query_slp = SeqLocSetFree(query_slp);
    } /* End loop on sets of queries */
    
-   subject_slp = SeqLocSetFree(subject_slp);
-   options = SBlastOptionsFree(options);
-   sum_returns = Blast_SummaryReturnFree(sum_returns);
-
-   if (!tabular_output) { 
-      if(format_options->html && myargs[ARG_FORMAT].intvalue < 7) {
-         fprintf(format_options->outfp, "</PRE>\n</BODY>\n</HTML>\n");
-      }
-      BlastFormattingOptionsFree(format_options);
-   } else {
-      FileClose(outfp);
-   }
-
    if (infp)
       FileClose(infp);
    
+   subject_slp = SeqLocSetFree(subject_slp);
+
+   /* Print the footer with cumulative summary information. */
+   Blast_PrintOutputFooter(format_info, full_sum_returns);
+
+   sum_returns = Blast_SummaryReturnFree(sum_returns);
+   full_sum_returns = Blast_SummaryReturnFree(full_sum_returns);
+
+   if (!tabular_output) 
+       format_info = BlastFormattingInfoFree(format_info);       
+   else
+       FileClose(outfp);
+
+   options = SBlastOptionsFree(options);
+
    return status;
 }
 

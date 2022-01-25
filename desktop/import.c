@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/18/95
 *
-* $Revision: 6.48 $
+* $Revision: 6.49 $
 *
 * File Description: 
 *
@@ -2393,6 +2393,13 @@ static Boolean UpdateSeqInstGatherFunc (GatherContextPtr gcp)
   if (gcp->thistype == OBJ_BIOSEQ && gcp->thisitem != NULL) {
     bsp = (BioseqPtr) gcp->thisitem;
     if (GetEnumPopup (mfp->molPopup, mol_alist, &val)) {
+      /* also convert data if switching from na to aa or aa to na */
+      if (ISA_na (bsp->mol) && ISA_aa (val)) {
+        BioseqConvert (bsp, Seq_code_ncbieaa);
+      }
+      else if (ISA_aa (bsp->mol) && ISA_na (val)) {
+        BioseqConvert (bsp, Seq_code_ncbi2na);
+      }
       bsp->mol = (Uint1) val;
     }
     if (GetEnumPopup (mfp->strandPopup, strand_alist, &val)) {

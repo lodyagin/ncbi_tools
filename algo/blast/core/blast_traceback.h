@@ -1,4 +1,4 @@
-/* $Id: blast_traceback.h,v 1.45 2005/04/27 19:49:35 dondosha Exp $
+/* $Id: blast_traceback.h,v 1.46 2005/05/10 16:07:35 camacho Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -76,7 +76,7 @@ Blast_TracebackFromHSPList(EBlastProgramType program_number,
  * given a program number.
  */
 NCBI_XBLAST_EXPORT
-Uint1 Blast_TracebackGetEncoding(EBlastProgramType program_number);
+EBlastEncoding Blast_TracebackGetEncoding(EBlastProgramType program_number);
 
 /** Modifies the HSP data after the final gapped alignment.
  * Input includes only data that likely needs modification. This function

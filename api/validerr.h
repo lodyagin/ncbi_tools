@@ -53,6 +53,7 @@
 #define ERR_SEQ_INST_BadHTGSeq  1,49
 #define ERR_SEQ_INST_GapInProtein  1,50
 #define ERR_SEQ_INST_BadProteinStart  1,51
+#define ERR_SEQ_INST_TerminalGap  1,52
 #define ERR_SEQ_DESCR  2,0
 #define ERR_SEQ_DESCR_BioSourceMissing  2,1
 #define ERR_SEQ_DESCR_InvalidForType  2,2
@@ -86,6 +87,8 @@
 #define ERR_SEQ_DESCR_MultipleTitles  2,30
 #define ERR_SEQ_DESCR_RefGeneTrackingOnNonRefSeq  2,31
 #define ERR_SEQ_DESCR_BioSourceInconsistency  2,32
+#define ERR_SEQ_DESCR_FastaBracketTitle  2,33
+#define ERR_SEQ_DESCR_MissingText  2,34
 #define ERR_GENERIC  3,0
 #define ERR_GENERIC_NonAsciiAsn  3,1
 #define ERR_GENERIC_Spell  3,2
@@ -94,6 +97,7 @@
 #define ERR_GENERIC_UnnecessaryPubEquiv  3,5
 #define ERR_GENERIC_BadPageNumbering  3,6
 #define ERR_GENERIC_MedlineEntryPub  3,7
+#define ERR_GENERIC_BadDate  3,8
 #define ERR_SEQ_PKG  4,0
 #define ERR_SEQ_PKG_NoCdRegionPtr  4,1
 #define ERR_SEQ_PKG_NucProtProblem  4,2
@@ -205,6 +209,10 @@
 #define ERR_SEQ_FEAT_PolyATail  5,92
 #define ERR_SEQ_FEAT_ProteinNameEndsInBracket  5,93
 #define ERR_SEQ_FEAT_CDSwithMultipleMRNAs  5,94
+#define ERR_SEQ_FEAT_MultipleEquivBioSources  5,95
+#define ERR_SEQ_FEAT_MultipleEquivPublications  5,96
+#define ERR_SEQ_FEAT_BadFullLengthFeature  5,97
+#define ERR_SEQ_FEAT_RedundantFields  5,98
 #define ERR_SEQ_ALIGN  6,0
 #define ERR_SEQ_ALIGN_SeqIdProblem  6,1
 #define ERR_SEQ_ALIGN_StrandRev  6,2

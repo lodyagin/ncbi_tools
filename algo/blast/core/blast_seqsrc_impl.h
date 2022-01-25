@@ -1,4 +1,4 @@
-/*  $Id: blast_seqsrc_impl.h,v 1.3 2005/04/21 15:27:31 camacho Exp $
+/*  $Id: blast_seqsrc_impl.h,v 1.4 2005/05/26 15:45:10 dondosha Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -80,10 +80,10 @@ typedef BlastSeqSrc* (*BlastSeqSrcDestructor)
     (BlastSeqSrc* seqrc /**< BlastSeqSrc structure to free */
      );
 
-/** Function pointer typedef to modify whatever is necessary in a copy of a 
- * BlastSeqSrc structure to achieve multi-thread safety.
- * Argument is the already copied BlastSeqSrc structure; FIXME
- * returns the modified structure. 
+/** Function pointer typedef to modify the contents of a BlastSeqSrc
+ * structure, copied by BlastSeqSrcCopy, to achieve multi-thread safety.
+ * Argument is a pointer to the BlastSeqSrc structure to be modified.
+ * Returns the same structure, with modified contents. 
  */
 typedef BlastSeqSrc* (*BlastSeqSrcCopier) (BlastSeqSrc*);
 

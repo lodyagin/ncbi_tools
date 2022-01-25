@@ -1,4 +1,4 @@
-/* $Id: blast_hits.c,v 1.159 2005/04/27 19:53:02 dondosha Exp $
+/* $Id: blast_hits.c,v 1.167 2005/05/26 14:30:27 dondosha Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -33,7 +33,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_hits.c,v 1.159 2005/04/27 19:53:02 dondosha Exp $";
+    "$Id: blast_hits.c,v 1.167 2005/05/26 14:30:27 dondosha Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_options.h>
@@ -42,6 +42,48 @@ static char const rcsid[] =
 #include <algo/blast/core/blast_util.h>
 #include "blast_hits_priv.h"
 #include "blast_itree.h"
+
+NCBI_XBLAST_EXPORT
+Int2 SBlastHitsParametersNew(const BlastHitSavingOptions* hit_options,
+                             const BlastExtensionOptions* ext_options,
+                             const BlastScoringOptions* scoring_options,
+                             SBlastHitsParameters* *retval)
+{
+       ASSERT(retval);
+       *retval = NULL;
+
+       if (hit_options == NULL ||
+           ext_options == NULL || 
+           scoring_options == NULL)
+           return 1;
+
+       *retval = (SBlastHitsParameters*) malloc(sizeof(SBlastHitsParameters));
+       if (*retval == NULL)
+           return 2;
+
+       if (ext_options->compositionBasedStats)
+            (*retval)->prelim_hitlist_size = 2*hit_options->hitlist_size;
+       else if (scoring_options->gapped_calculation)
+            (*retval)->prelim_hitlist_size = 
+                MIN(2*hit_options->hitlist_size, hit_options->hitlist_size+50);
+       else
+            (*retval)->prelim_hitlist_size = hit_options->hitlist_size;
+
+       (*retval)->options = hit_options;
+
+       return 0;
+}
+
+NCBI_XBLAST_EXPORT
+SBlastHitsParameters* SBlastHitsParametersFree(SBlastHitsParameters* param)
+{
+       if (param)
+       {
+               param->options = NULL;
+               sfree(param);
+       }
+       return NULL;
+}
 
 /********************************************************************************
           Functions manipulating BlastHSP's
@@ -105,6 +147,48 @@ Blast_HSPInit(Int4 query_start, Int4 query_end, Int4 subject_start,
    *ret_hsp = new_hsp;
 
    return 0;
+}
+
+/** Copies all contents of a BlastHSP structure. Used in PHI BLAST for splitting
+ * results corresponding to different pattern occurrences in query.
+ * @param hsp Original HSP [in]
+ * @return New HSP, copied from the original.
+ */
+static BlastHSP* 
+s_BlastHSPCopy(const BlastHSP* hsp)
+{
+    BlastHSP* new_hsp = NULL;
+    /* Do not pass the edit script, because we don't want to tranfer 
+       ownership. */
+    Blast_HSPInit(hsp->query.offset, hsp->query.end, hsp->subject.offset, 
+                  hsp->subject.end, hsp->query.gapped_start, 
+                  hsp->subject.gapped_start, hsp->context, 
+                  hsp->query.frame, hsp->subject.frame, hsp->score, 
+                  NULL, &new_hsp);
+    new_hsp->evalue = hsp->evalue;
+    new_hsp->num = hsp->num;
+    new_hsp->num_ident = hsp->num_ident;
+    new_hsp->bit_score = hsp->bit_score;
+    if (hsp->gap_info) {
+        GapEditScript* edit_script = hsp->gap_info;
+        GapEditScript* new_edit_script;
+        new_hsp->gap_info = new_edit_script =
+            (GapEditScript*) BlastMemDup(edit_script, sizeof(GapEditScript));
+        /* Copy the linked list of edit scripts. */
+        for (edit_script = edit_script->next; edit_script; 
+             edit_script = edit_script->next) {
+            new_edit_script->next =
+                (GapEditScript*) BlastMemDup(edit_script, sizeof(GapEditScript));
+            new_edit_script = new_edit_script->next;
+        }
+    }
+
+    if (hsp->pat_info) {
+        /* Copy this HSP's pattern data. */
+        new_hsp->pat_info = 
+            (SPHIHspInfo*) BlastMemDup(hsp->pat_info, sizeof(SPHIHspInfo));
+    }
+    return new_hsp;
 }
 
 /** Calculate e-value for an HSP found by PHI BLAST.
@@ -1673,6 +1757,183 @@ Blast_HSPListPurgeNullHSPs(BlastHSPList* hsp_list)
         return 0;
 }
 
+/** Callback for sorting HSPs by starting offset in query. The sorting criteria
+ * in order of priority: context, starting offset in query, starting offset in 
+ * subject. Null HSPs are moved to the end of the array.
+ * @param v1 pointer to first HSP [in]
+ * @param v2 pointer to second HSP [in]
+ * @return Result of comparison.
+ */
+static int
+s_QueryOffsetCompareHSPs(const void* v1, const void* v2)
+{
+	BlastHSP* h1,* h2;
+	BlastHSP** hp1,** hp2;
+
+	hp1 = (BlastHSP**) v1;
+	hp2 = (BlastHSP**) v2;
+	h1 = *hp1;
+	h2 = *hp2;
+
+   if (!h1 && !h2)
+      return 0;
+   else if (!h1) 
+      return 1;
+   else if (!h2)
+      return -1;
+
+   /* If these are from different contexts, don't compare offsets */
+   if (h1->context < h2->context) 
+      return -1;
+   if (h1->context > h2->context)
+      return 1;
+
+	if (h1->query.offset < h2->query.offset)
+		return -1;
+	if (h1->query.offset > h2->query.offset)
+		return 1;
+
+	if (h1->subject.offset < h2->subject.offset)
+		return -1;
+	if (h1->subject.offset > h2->subject.offset)
+		return 1;
+
+	return 0;
+}
+
+/** Callback for sorting HSPs by ending offset in query. The sorting criteria
+ * in order of priority: context, ending offset in query, ending offset in 
+ * subject. Null HSPs are moved to the end of the array.
+ * @param v1 pointer to first HSP [in]
+ * @param v2 pointer to second HSP [in]
+ * @return Result of comparison.
+ */
+static int
+s_QueryEndCompareHSPs(const void* v1, const void* v2)
+{
+	BlastHSP* h1,* h2;
+	BlastHSP** hp1,** hp2;
+
+	hp1 = (BlastHSP**) v1;
+	hp2 = (BlastHSP**) v2;
+	h1 = *hp1;
+	h2 = *hp2;
+
+   if (!h1 && !h2)
+      return 0;
+   else if (!h1) 
+      return 1;
+   else if (!h2)
+      return -1;
+
+   /* If these are from different contexts, don't compare offsets */
+   if (h1->context < h2->context) 
+      return -1;
+   if (h1->context > h2->context)
+      return 1;
+
+	if (h1->query.end < h2->query.end)
+		return -1;
+	if (h1->query.end > h2->query.end)
+		return 1;
+
+	if (h1->subject.end < h2->subject.end)
+		return -1;
+	if (h1->subject.end > h2->subject.end)
+		return 1;
+
+	return 0;
+}
+
+Int4
+Blast_HSPListPurgeHSPsWithCommonEndpoints(EBlastProgramType program, 
+                                          BlastHSPList* hsp_list)
+
+{
+   BlastHSP** hsp_array;  /* hsp_array to purge. */
+   Int4 index = 0;        /* loop index. */
+   Int4 increment = 1;    
+   Int2 retval = 0;
+   Int4 hsp_count;
+   
+   /* If HSP list is empty, return immediately. */
+   if (hsp_list == NULL || hsp_list->hspcnt == 0)
+       return 0;
+
+   /* Do nothing for PHI BLAST, because HSPs corresponding to different pattern
+      occurrences may have common end points, but should all be kept. */
+   if (Blast_ProgramIsPhiBlast(program))
+       return hsp_list->hspcnt;
+
+   hsp_array = hsp_list->hsp_array;
+   hsp_count = hsp_list->hspcnt;
+
+   qsort(hsp_array, hsp_count, sizeof(BlastHSP*), s_QueryOffsetCompareHSPs);
+   while (index < hsp_count-increment) 
+   {
+      if (hsp_array[index+increment] == NULL) 
+      {
+         increment++;
+         continue;
+      }
+      
+      if (hsp_array[index] && hsp_array[index]->query.offset == hsp_array[index+increment]->query.offset &&
+          hsp_array[index]->subject.offset == hsp_array[index+increment]->subject.offset &&
+          hsp_array[index]->context == hsp_array[index+increment]->context)
+      {
+         if (hsp_array[index]->score > hsp_array[index+increment]->score) {
+            hsp_array[index+increment] = 
+                                Blast_HSPFree(hsp_array[index+increment]);
+            increment++;
+         } else {
+            hsp_array[index] = Blast_HSPFree(hsp_array[index]);
+            index++;
+            increment = 1;
+         }
+      } else {
+         index++;
+         increment = 1;
+      }
+   }
+   
+   qsort(hsp_array, hsp_count, sizeof(BlastHSP*), s_QueryEndCompareHSPs);
+   index=0;
+   increment=1;
+   while (index < hsp_count-increment)
+   { 
+      if (hsp_array[index+increment] == NULL)
+      {
+         increment++;
+         continue;
+      }
+      
+      if (hsp_array[index] &&
+          hsp_array[index]->query.end == hsp_array[index+increment]->query.end &&
+          hsp_array[index]->subject.end == hsp_array[index+increment]->subject.end &&
+          hsp_array[index]->context == hsp_array[index+increment]->context)
+      {
+         if (hsp_array[index]->score > hsp_array[index+increment]->score) {
+            hsp_array[index+increment] = 
+                                Blast_HSPFree(hsp_array[index+increment]);
+            increment++;
+         } else	{
+            hsp_array[index] = Blast_HSPFree(hsp_array[index]);
+            index++;
+            increment = 1;
+         }
+      } else {
+         index++;
+         increment = 1;
+      }
+   }
+
+   retval = Blast_HSPListPurgeNullHSPs(hsp_list);
+   if (retval < 0)
+      return retval;
+
+   return hsp_list->hspcnt;
+}
+
 /** Status values returned by an HSP inclusion test function. */
 typedef enum EHSPInclusionStatus {
    eEqual = 0,      /**< Identical */
@@ -1837,7 +2098,7 @@ Blast_HSPListReevaluateWithAmbiguities(EBlastProgramType program,
       BlastSeqSrcGetSeqArg seq_arg;
       seq_arg.oid = subject_blk->oid;
       seq_arg.encoding =
-         (kTranslateSubject ? NCBI4NA_ENCODING : BLASTNA_ENCODING);
+         (kTranslateSubject ? eBlastEncodingNcbi4na : eBlastEncodingNucleotide);
       seq_arg.seq = subject_blk;
       /* Return the packed sequence to the database */
       BlastSeqSrcReleaseSequence(seq_src, (void*) &seq_arg);
@@ -2509,7 +2770,7 @@ typedef struct SHspWrap {
  *  structures in order of increasing e-value, using
  *  the raw score as a tiebreaker
  */
-int s_SortHspWrapEvalue(const void *x, const void *y)
+static int s_SortHspWrapEvalue(const void *x, const void *y)
 {
     SHspWrap *wrap1 = (SHspWrap *)x;
     SHspWrap *wrap2 = (SHspWrap *)y;
@@ -2614,85 +2875,101 @@ Int2 Blast_HSPResultsPerformCulling(BlastHSPResults *results,
    return 0;
 }
 
-
-Int2 Blast_HSPResultsSaveRPSHSPList(EBlastProgramType program, BlastHSPResults* results, 
-        BlastHSPList* hsplist_in, const BlastHitSavingOptions* hit_options)
+static int
+s_ScoreCompareHSPWithContext(const void* h1, const void* h2)
 {
-   Int4 index, oid;
-   BlastHitList* hit_list;
-   BlastHSPList* hsp_list;
-   BlastHSP* hsp;
-   Int2 status = 0;
+   BlastHSP* hsp1,* hsp2;   /* the HSPs to be compared */
+   int result = 0;      /* the result of the comparison */
+   
+   hsp1 = *((BlastHSP**) h1);
+   hsp2 = *((BlastHSP**) h2);
 
-   if (!hsplist_in)
+   /* Null HSPs are "greater" than any non-null ones, so they go to the end
+      of a sorted list. */
+   if (!hsp1 && !hsp2)
+       return 0;
+   else if (!hsp1)
+       return 1;
+   else if (!hsp2)
+       return -1;
+
+   if ((result = BLAST_CMP(hsp1->context, hsp2->context)) != 0)
+       return result;
+   return ScoreCompareHSPs(h1, h2);
+}
+
+Int2 
+Blast_HSPResultsSaveRPSHSPList(EBlastProgramType program, 
+                               BlastHSPResults* results, 
+                               BlastHSPList* hsplist_in,
+                               const SBlastHitsParameters* blasthit_params)
+{
+   Int4 index, next_index;
+   BlastHitList* hit_list;
+
+   if (!hsplist_in || hsplist_in->hspcnt == 0)
       return 0;
 
-   /* Query index should be filled before saving the HSP list for RPS BLAST. 
-      The hitlist size for RPS BLAST should be available in the preliminary
-      hitlist size option. Because of the database concatenation, there is
-      no hitlist size restriction in the preliminary phase of the search. */
+   /* Check that the query index is in the correct range. */
+   ASSERT(hsplist_in->query_index < results->num_queries);
+
+   /* Check that program is indeed RPS Blast */
+   ASSERT(Blast_ProgramIsRpsBlast(program));
+
+   /* If hit list for this query has not yet been allocated, do it here. */
    hit_list = results->hitlist_array[hsplist_in->query_index];
    if (!hit_list) {
-       results->hitlist_array[hsplist_in->query_index] = 
-           hit_list = Blast_HitListNew(hit_options->prelim_hitlist_size);
+       results->hitlist_array[hsplist_in->query_index] =
+           hit_list = Blast_HitListNew(blasthit_params->prelim_hitlist_size);
    }
 
-   /* Initialize the HSPList array, if necessary. */
-   if (hsplist_in->hspcnt > 0 && !hit_list->hsplist_array) {
-      hit_list->hsplist_array = (BlastHSPList**)
-         calloc(hit_list->hsplist_max, sizeof(BlastHSPList*));
+   /* Sort the input HSPList with context (i.e. oid) as the first priority, 
+      and then score, etc. */
+   qsort(hsplist_in->hsp_array, hsplist_in->hspcnt, sizeof(BlastHSP*), 
+         s_ScoreCompareHSPWithContext);
+
+   /* Sequentially extract HSPs corresponding to one subject into a new 
+      HSPList, and save these new HSPLists in a normal way, as in all other
+      BLAST programs. */
+   next_index = 0;
+   
+   for (index = 0; index < hsplist_in->hspcnt; index = next_index) {
+       BlastHSPList* hsp_list;
+       Int4 oid = hsplist_in->hsp_array[index]->context;
+       Int4 hspcnt;
+       /* Find the first HSP that corresponds to a different subject. 
+          At the same time, set all HSP contexts to 0, since this is what
+          traceback code expects. */
+       for (next_index = index; next_index < hsplist_in->hspcnt; 
+            ++next_index) {
+           if (hsplist_in->hsp_array[next_index]->context != oid)
+               break;
+           hsplist_in->hsp_array[next_index]->context = 0;
+       }
+       hspcnt = next_index - index;
+       hsp_list = Blast_HSPListNew(hspcnt);
+       /* Set the oid field for this HSPList. */
+       hsp_list->oid = oid;
+       hsp_list->query_index = hsplist_in->query_index;
+       /* Save all HSPs corresponding to this subject. */
+       for ( ; index < next_index; ++index)
+           Blast_HSPListSaveHSP(hsp_list, hsplist_in->hsp_array[index]);
+       /* Check that HSPs are correctly sorted by score, as they should be. */
+       ASSERT(Blast_HSPListIsSortedByScore(hsp_list));
+       /* Insert this HSPList into this query's hit list. */
+       Blast_HitListUpdate(hit_list, hsp_list);
    }
 
-   /* Save all HSPs into HSPList's corresponding to correct database 
-      sequences. */
-   for (index = 0; index < hsplist_in->hspcnt; ++index) {
-      hsp = hsplist_in->hsp_array[index];
-      oid = Blast_GetQueryIndexFromContext(hsp->context, program);
-      /* HSP context is no longer needed; set it to 0. */
-      hsp->context = 0;
-      ASSERT(oid < hit_list->hsplist_max);
-      hsp_list = hit_list->hsplist_array[oid];
-      if (!hsp_list) {
-         hsp_list = hit_list->hsplist_array[oid] = 
-            Blast_HSPListNew(hit_options->hsp_num_max);
-         hsp_list->oid = oid;
-      }
-      status = Blast_HSPListSaveHSP(hsp_list, hsp);
-   }
-   /* Purge the NULL HSPLists from the resulting HitList. */
-   hit_list->hsplist_count = hit_list->hsplist_max;
-   s_BlastHitListPurgeNullHSPLists(hit_list);
-
-   /* Check that all HSP lists are sorted by score, as they should be. */
-   for (index = 0; index < hit_list->hsplist_count; ++index) {
-       ASSERT(Blast_HSPListIsSortedByScore(hit_list->hsplist_array[index]));
-   }
-   /* Sort the HSPList's by score - e-values are not yet available, but
-      the evalue comparison function looks at scores as tie-breakers,
-      so it can still be used here. */
-   qsort(hit_list->hsplist_array, hit_list->hsplist_count,
-         sizeof(BlastHSPList*), s_EvalueCompareHSPLists);
-   /* Leave only the number of HSPList's allowed by the hitlist size 
-      option. */
-   for (index = hit_options->prelim_hitlist_size; 
-        index < hit_list->hsplist_count; ++index) {
-      hit_list->hsplist_array[index] = 
-         Blast_HSPListFree(hit_list->hsplist_array[index]);
-   }
-   hit_list->hsplist_count = 
-      MIN(hit_list->hsplist_count, hit_options->prelim_hitlist_size);
-
-   /* All HSPs from the input HSP list have been moved to the results 
-      structure, so make sure there is no attempt to free them now. */
-   sfree(hsplist_in->hsp_array);
+   /* All HSPs have been moved from the input HSPList to new HSPLists, so
+      set the input HSPList's count to 0. */
    hsplist_in->hspcnt = 0;
-   hsplist_in = Blast_HSPListFree(hsplist_in);
-
+   Blast_HSPListFree(hsplist_in);
+   
    return 0;
 }
 
 Int2 Blast_HSPResultsSaveHSPList(EBlastProgramType program, BlastHSPResults* results, 
-        BlastHSPList* hsp_list, const BlastHitSavingOptions* hit_options)
+        BlastHSPList* hsp_list, const SBlastHitsParameters* blasthit_params)
 {
    Int2 status = 0;
    BlastHSP* hsp;
@@ -2700,7 +2977,7 @@ Int2 Blast_HSPResultsSaveHSPList(EBlastProgramType program, BlastHSPResults* res
    if (!hsp_list)
       return 0;
 
-   if (!results || !hit_options)
+   if (!results || !blasthit_params)
       return -1;
 
    /* The HSP list should already be sorted by score coming into this function.
@@ -2725,7 +3002,7 @@ Int2 Blast_HSPResultsSaveHSPList(EBlastProgramType program, BlastHSPResults* res
 
          if (!tmp_hsp_list) {
             hsp_list_array[query_index] = tmp_hsp_list = 
-               Blast_HSPListNew(hit_options->hsp_num_max);
+               Blast_HSPListNew(blasthit_params->options->hsp_num_max);
             tmp_hsp_list->oid = hsp_list->oid;
          }
 
@@ -2762,7 +3039,7 @@ Int2 Blast_HSPResultsSaveHSPList(EBlastProgramType program, BlastHSPResults* res
          if (hsp_list_array[index]) {
             if (!results->hitlist_array[index]) {
                results->hitlist_array[index] = 
-                  Blast_HitListNew(hit_options->prelim_hitlist_size);
+                  Blast_HitListNew(blasthit_params->prelim_hitlist_size);
             }
             Blast_HitListUpdate(results->hitlist_array[index], 
                                 hsp_list_array[index]);
@@ -2778,7 +3055,7 @@ Int2 Blast_HSPResultsSaveHSPList(EBlastProgramType program, BlastHSPResults* res
          structure */
       if (!results->hitlist_array[0]) {
          results->hitlist_array[0] = 
-            Blast_HitListNew(hit_options->prelim_hitlist_size);
+            Blast_HitListNew(blasthit_params->prelim_hitlist_size);
       }
       Blast_HitListUpdate(results->hitlist_array[0], hsp_list);
    } else {
@@ -2804,4 +3081,64 @@ Int2 Blast_HSPResultsInsertHSPList(BlastHSPResults* results,
    Blast_HitListUpdate(results->hitlist_array[hsp_list->query_index], 
                        hsp_list);
    return 0;
+}
+
+BlastHSPResults** 
+PHIBlast_HSPResultsSplit(const BlastHSPResults* results, 
+                         const SPHIQueryInfo* pattern_info)
+{
+    BlastHSPResults* *phi_results = NULL;
+    int pattern_index, hit_index, hsp_index;
+    int num_patterns;
+    BlastHitList* hit_list = NULL;
+    int hitlist_size;
+    BlastHSPList** hsplist_array; /* Temporary per-pattern HSP lists. */  
+
+    if (!results || !results->hitlist_array[0] || !pattern_info)
+        return NULL;
+
+    num_patterns = pattern_info->num_patterns;
+    hit_list = results->hitlist_array[0];
+    hitlist_size = hit_list->hsplist_max;
+    
+    phi_results = 
+        (BlastHSPResults**) calloc(num_patterns, sizeof(BlastHSPResults*));
+    hsplist_array = (BlastHSPList**) calloc(num_patterns, sizeof(BlastHSPList*));
+
+    for (hit_index = 0; hit_index < hit_list->hsplist_count; ++hit_index) {
+        BlastHSPList* hsp_list = hit_list->hsplist_array[hit_index];
+        /* Copy HSPs corresponding to different pattern occurrences into
+           separate HSP lists. */
+        for (hsp_index = 0; hsp_index < hsp_list->hspcnt; ++hsp_index) {
+            BlastHSP* hsp = s_BlastHSPCopy(hsp_list->hsp_array[hsp_index]);
+            pattern_index = hsp->pat_info->index;
+            if (!hsplist_array[pattern_index])
+                hsplist_array[pattern_index] = Blast_HSPListNew(0);
+            hsplist_array[pattern_index]->oid = hsp_list->oid;
+            Blast_HSPListSaveHSP(hsplist_array[pattern_index], hsp);
+        }
+        
+        /* Save HSP lists corresponding to different pattern occurrences 
+           in separate results structures. */
+        for (pattern_index = 0; pattern_index < num_patterns; 
+             ++pattern_index) {
+            if (hsplist_array[pattern_index]) {
+                if (!phi_results[pattern_index])
+                    phi_results[pattern_index] = Blast_HSPResultsNew(1);
+                Blast_HSPResultsInsertHSPList(phi_results[pattern_index],
+                                              hsplist_array[pattern_index],
+                                              hitlist_size);
+                hsplist_array[pattern_index] = NULL;
+            }
+        }
+    }
+    
+    sfree(hsplist_array);
+
+    /* Sort HSPLists in each of the results structures by e-value. */
+    for (pattern_index = 0; pattern_index < num_patterns; ++pattern_index) {
+        Blast_HSPResultsSortByEvalue(phi_results[pattern_index]);
+    }
+
+    return phi_results;
 }

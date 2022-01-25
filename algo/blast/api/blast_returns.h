@@ -1,4 +1,4 @@
-/* $Id: blast_returns.h,v 1.12 2005/04/27 20:00:15 dondosha Exp $
+/* $Id: blast_returns.h,v 1.13 2005/06/02 20:38:51 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -91,6 +91,16 @@ typedef struct Blast_SearchParams {
    Int4 window_size;        /**< max allowed distance between hits to init extension in 2-hit mode. */
 } Blast_SearchParams;
 
+Int2 
+Blast_SearchParamsFill(EBlastProgramType program_number,
+                       const BlastScoringOptions* score_options,
+                       const LookupTableOptions* lookup_options,
+                       const BlastHitSavingOptions* hit_options,
+                       const QuerySetUpOptions* query_setup, 
+                       const BlastInitialWordOptions* word_options,
+                       const char* entrez_query,
+                       Blast_SearchParams** search_params);
+
 /** Structure holding all calculated data returned from a BLAST search other
  * than the alignment.
  */
@@ -174,6 +184,16 @@ Blast_SummaryReturn* Blast_SummaryReturnFree(Blast_SummaryReturn* sum_return);
  */
 void 
 Blast_SummaryReturnClean(Blast_SummaryReturn* sum_returns);
+
+/** Updates the summary returns structure in case of multiple iterations
+ * over the database. The hit counts from all iterations are aggregated in the
+ * diagnostics structure. The rest of the data is copied from the new summary
+ * returns.
+ * @param new_return Data returned from the new database scan [in]
+ * @param full_return The aggregate return. [in] [out]
+ */
+int Blast_SummaryReturnUpdate(const Blast_SummaryReturn* new_return,
+                              Blast_SummaryReturn* *full_return);
 
 /* @} */
 

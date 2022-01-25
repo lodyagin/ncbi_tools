@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: blastpgp.c,v 6.127 2005/04/04 14:57:47 papadopo Exp $";
+static char const rcsid[] = "$Id: blastpgp.c,v 6.130 2005/05/18 17:35:49 papadopo Exp $";
 
-/* $Id: blastpgp.c,v 6.127 2005/04/04 14:57:47 papadopo Exp $ */
+/* $Id: blastpgp.c,v 6.130 2005/05/18 17:35:49 papadopo Exp $ */
 /**************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -26,8 +26,18 @@ static char const rcsid[] = "$Id: blastpgp.c,v 6.127 2005/04/04 14:57:47 papadop
 * appreciated.                                                            *
 *                                                                         *
 **************************************************************************
- * $Revision: 6.127 $ 
+ * $Revision: 6.130 $ 
  * $Log: blastpgp.c,v $
+ * Revision 6.130  2005/05/18 17:35:49  papadopo
+ * add warnings if new composition-based statistics options are selected
+ *
+ * Revision 6.129  2005/05/17 17:51:20  papadopo
+ * make the -t argument a string and handle values of 'T' or 'F' manually (required for backward compatibility)
+ *
+ * Revision 6.128  2005/05/16 17:41:00  papadopo
+ * From Alejandro Schaffer: Added support for compositional adjustment
+ * of matrices via enhanced -t flag, which now is integer to allow 4 options.
+ *
  * Revision 6.127  2005/04/04 14:57:47  papadopo
  * remove requirement for a fasta format query file if restarting from scoremat
  *
@@ -528,6 +538,8 @@ star_callback(Int4 sequence_number, Int4 number_of_positive_hits)
     return 0;
 }
 
+#define EVALUE_EXPAND 10
+
 #define YES_TO_DECLINE_TO_ALIGN
 
 #define NUMARG (sizeof(myargs)/sizeof(myargs[0]))
@@ -617,8 +629,13 @@ static Args myargs[] = {
       NULL, NULL, NULL, TRUE, 'l', ARG_STRING, 0.0, 0, NULL},
     {"Use lower case filtering of FASTA sequence",    /* 41 */
      "F", NULL,NULL,TRUE,'U',ARG_BOOLEAN, 0.0,0,NULL},
-    { "Use composition based statistics", /* 42 */
-      "T", NULL, NULL, FALSE, 't', ARG_BOOLEAN, 0.0, 0, NULL},
+    { "Use composition based statistics\n" /* 42 */
+      "0 or F or f: no composition-based statistics\n"
+      "1 or T or t: Composition-based statistics as in NAR  29:2994--3005, 2001\n"
+      "2: Composition-based score adjustment as in Bioinformatics 21:902-911, 2005, conditioned on sequence properties in round 1\n"
+      "3: Composition-based score adjustment as in Bioinformatics 21:902-911, 2005, unconditionally in round 1\n",
+
+      "1", NULL, NULL, FALSE, 't', ARG_STRING, 0.0, 0, NULL},
     { "ASN.1 Scoremat input of checkpoint data:\n"
       "0: no scoremat input\n"
       "1: Restart is from ASCII scoremat checkpoint file,\n"
@@ -990,7 +1007,33 @@ PGPBlastOptionsPtr PGPReadBlastOptions(void)
     if (myargs[34].floatvalue)
         options->searchsp_eff = (Nlm_FloatHi) myargs[34].floatvalue;
 
-    options->tweak_parameters = (Boolean) myargs[42].intvalue;
+    switch (myargs[42].strvalue[0]) {
+    case 'F':
+    case 'f':
+    case '0':
+        options->tweak_parameters = NO_COMP_ADJUSTMENT;
+        break;
+    case 'T':
+    case 't':
+    case '1':
+        options->tweak_parameters = COMP_BASED_STATISTICS;
+        break;
+    case '2':
+        ErrPostEx(SEV_WARNING, 1, 0, "this argument for composition-"
+                  "based statistics is currently experimental\n");
+        options->tweak_parameters = COMP_MATRIX_ADJUSTMENT;
+        break;
+    case '3':
+        ErrPostEx(SEV_WARNING, 1, 0, "this argument for composition-"
+                  "based statistics is currently experimental\n");
+        options->tweak_parameters = COMP_BASED_STATISTICS |
+                                    COMP_MATRIX_ADJUSTMENT;
+        break;
+    default:
+        ErrPostEx(SEV_FATAL, 1, 0, "invalid argument for composition-"
+                  "based statistics; see -t options\n");
+        break;
+    }
     options->smith_waterman = (Boolean) myargs[33].intvalue;
 
     if (bop->options->tweak_parameters) {
@@ -998,6 +1041,14 @@ PGPBlastOptionsPtr PGPReadBlastOptions(void)
         hitlist_size */
       bop->options->original_expect_value = bop->options->expect_value;
       bop->options->hitlist_size *= 2; 
+      if (bop->options->tweak_parameters > 1) {
+        if ((NULL == myargs[29].strvalue) && (NULL == myargs[39].strvalue)) {
+	  /*round 1 and not recovering from checkpoint*/
+	  bop->options->expect_value = EVALUE_EXPAND * bop->options->expect_value;
+	}
+	else
+	  bop->options->tweak_parameters = 1;
+      }
     }
 
 
@@ -1089,6 +1140,16 @@ Boolean PGPFormatHeader(PGPBlastOptionsPtr bop)
     fprintf(bop->outfp, "\n");
     BlastPrintReference(html, 90, bop->outfp);
     fprintf(bop->outfp, "\n");
+    if (bop->options->tweak_parameters > 1) {
+      CAdjustmentPrintReference(html, 90, bop->outfp);
+      fprintf(bop->outfp, "\n");
+    }
+    if ((1== bop->options->tweak_parameters) || 
+	((1 < bop->options->tweak_parameters) && (bop->options->maxNumPasses > 1))) {
+      CBStatisticsPrintReference(html, 90, (1 == bop->options->tweak_parameters), 
+				 (bop->options->maxNumPasses > 1),  bop->outfp);
+      fprintf(bop->outfp, "\n");
+    }
     AcknowledgeBlastQuery(bop->query_bsp, 70, 
                           bop->outfp, bop->believe_query, html);
     PrintDbInformation(bop->blast_database, TRUE, 70, bop->outfp, html);
@@ -1677,6 +1738,7 @@ Int2 Main (void)
                       BioseqBlastEngineCore for the second pass. */
                     bop->options->original_expect_value = 
                         bop->options->expect_value;
+		    search->pbp->cutoff_e =  bop->options->expect_value;
                     bop->options->hitlist_size *= 2; 
                 }
                 
@@ -1846,9 +1908,14 @@ Int2 Main (void)
         head = SeqAlignSetFree(head);
         
         /* Here we will print out footer of BLAST output */
-        
-        if(!bop->is_xml_output && !tabular_output) {
-            PGPFormatFooter(bop, search);
+
+        /*need to temporarily adjust cutoff_e for printing*/
+	if(!bop->is_xml_output && !tabular_output) {
+	  if ((bop->options->tweak_parameters > 1) && (1 == thisPassNum)) 
+	    search->pbp->cutoff_e = EVALUE_EXPAND * bop->options->expect_value;
+	  PGPFormatFooter(bop, search);
+	  if ((bop->options->tweak_parameters > 1) && (1 == thisPassNum)) 
+	    search->pbp->cutoff_e = bop->options->original_expect_value;
         }
 
         /* PGPOneQueryCleanup */

@@ -247,6 +247,10 @@ SOURCE=..\..\..\connect\ncbi_service.h
 # End Source File
 # Begin Source File
 
+SOURCE=..\..\..\connect\ncbi_service_misc.h
+# End Source File
+# Begin Source File
+
 SOURCE=..\..\..\connect\ncbi_service_connector.h
 # End Source File
 # Begin Source File

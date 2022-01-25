@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: readdb.c,v 6.473 2005/04/26 21:34:39 kans Exp $";
+static char const rcsid[] = "$Id: readdb.c,v 6.474 2005/05/16 16:12:45 camacho Exp $";
 
-/* $Id: readdb.c,v 6.473 2005/04/26 21:34:39 kans Exp $ */
+/* $Id: readdb.c,v 6.474 2005/05/16 16:12:45 camacho Exp $ */
 /*
 * ===========================================================================
 *
@@ -50,7 +50,7 @@ Detailed Contents:
 *
 * Version Creation Date:   3/22/95
 *
-* $Revision: 6.473 $
+* $Revision: 6.474 $
 *
 * File Description: 
 *       Functions to rapidly read databases from files produced by formatdb.
@@ -65,6 +65,11 @@ Detailed Contents:
 *
 * RCS Modification History:
 * $Log: readdb.c,v $
+* Revision 6.474  2005/05/16 16:12:45  camacho
+* Added auxiliary function for the SI_Record structure to fix a bug in
+* FDBAddSequence, which caused all but the first BlastDefLine structure in
+* a linked list to be ignored.
+*
 * Revision 6.473  2005/04/26 21:34:39  kans
 * added SEQID_GPIPE
 *
@@ -8965,6 +8970,89 @@ static Int4 FDBExtend4Sequence(FormatDBPtr fdbp,
     return 0;
 }
 
+/********* BEGIN:  Auxiliary functions to the SI_Record structure ************/
+
+/** Allocates a single node in the SI_Record linked list structure */
+static SI_Record* SI_RecordNew(void)
+{
+    return (SI_Record*) calloc(1, sizeof(SI_Record));
+}
+
+/** Deallocates the linked list of SI_Record structures in srp 
+ * @return NULL
+ */
+static SI_Record* SI_RecordFree(SI_Record* srp)
+{
+    if ( !srp ) {
+        return NULL;
+    }
+    
+    while (srp) {
+        SI_Record* tmp = srp->next;
+        if (srp->title) {
+            srp->title = MemFree(srp->title);
+        }
+        MemFree(srp);
+        srp = tmp;
+    }
+    return NULL;
+}
+
+/** Appends a new node to the srp linked list. 
+ * @return the newly allocated node 
+ */
+static SI_Record* SI_RecordAddNode(SI_Record* srp)
+{
+    if ( !srp ) {
+        return SI_RecordNew();
+    } else {
+        for (; srp->next; srp = srp->next) ;
+        srp->next = SI_RecordNew();
+        return srp->next;
+    }
+}
+
+/** Appends a new node to the srp linked list from data used in the
+ * FORMATDB_VER_TEXT format of the BLAST databases
+ * @return pointer to the newly added node
+ */
+static SI_Record* SI_RecordAddFormatdb_ver(SI_Record* srp, 
+                                           const BlastDefLinePtr bdp)
+{
+    srp = SI_RecordAddNode(srp);
+    SeqIdWrite(bdp->seqid, srp->seqid, PRINTID_FASTA_LONG, sizeof(srp->seqid));
+    if (bdp->title) {
+        srp->title = StringSave(bdp->title);
+    }
+    srp->taxid = bdp->taxid;
+    return srp;
+}
+
+/** Appends a new node to the srp linked list from data used in the
+ * FORMATDB_VER_TEXT format of the BLAST databases
+ * @return pointer to the newly added node
+ */
+static SI_Record* SI_RecordAddFormatdb_ver_text(SI_Record* srp,
+                               Int4 gi, Int4 owner, Int4 taxid, char* div,
+                               Int4 date, char* seq_id, char* title)
+{
+    srp = SI_RecordAddNode(srp);
+
+    srp->gi = gi;
+    srp->owner = owner;
+    srp->ent = date;
+    srp->taxid = taxid;
+    if (div)
+        StringNCpy_0(srp->div, div, sizeof(srp->div));
+    if (seq_id)
+        StringNCpy_0(srp->seqid, seq_id, sizeof(srp->seqid));
+    if (title)
+        srp->title = StringSave(title);
+    return srp;
+}
+
+/********* END:    Auxiliary functions to the SI_Record structure ************/
+
 /* If the bdp parameter is given, the defline, Seq-id, and taxonomy
  * information, is obtained from this parameter and thus the remainder
  * parameters are ignored. */
@@ -8986,13 +9074,10 @@ Int2 FDBAddSequence(FormatDBPtr fdbp, BlastDefLinePtr bdp,
 {
     Uint4Ptr AmbCharPtr = NULL;
     ByteStorePtr new_data;
-    SI_Record si;
     Int2 status = 0;
 
     ASSERT(seq_data);
     ASSERT(seq_data_type);
-
-    si.title = NULL;  
 
     if (SequenceLen <= 0) {
         ErrLogPrintf("Sequence number %ld has zero-length!\n",
@@ -9058,31 +9143,30 @@ Int2 FDBAddSequence(FormatDBPtr fdbp, BlastDefLinePtr bdp,
         }
     }                           /* if(!fdbp->options->is_protein) */
 
-    si.gi = gi;
-    si.owner = owner;
-    StringNCpy_0(si.div, div, sizeof(si.div));
-    si.ent = date;
-    si.next = NULL;
+    /* Prepare SI_Record structure for calling FDBAddSequence2 */
+    {
+        SI_Record* si = NULL;
 
-    if (bdp != NULL) {
-        SeqIdWrite(bdp->seqid, si.seqid, PRINTID_FASTA_LONG,
-                   sizeof(si.seqid));
-        if (bdp->title)
-           si.title = StringSave(bdp->title);
-        si.taxid = bdp->taxid;
-    } else {
-        if (seq_id)
-            StringNCpy_0(si.seqid, seq_id, sizeof(si.seqid));
-        if (title)
-           si.title = StringSave(title);
-        si.taxid = tax_id;
+        if (bdp != NULL) {
+            Boolean first_iteration = TRUE;
+            for (; bdp; bdp = bdp->next) {
+                if (first_iteration) {
+                    si = SI_RecordAddFormatdb_ver(si, bdp);
+                    first_iteration = FALSE;
+                } else {
+                    SI_RecordAddFormatdb_ver(si, bdp);
+                }
+            }
+        } else {
+            si = SI_RecordAddFormatdb_ver_text(si, gi, owner, tax_id, div, 
+                                               date, seq_id, title);
+        }
+
+        status = FDBAddSequence2(fdbp, si, *seq_data_type, seq_data, 
+                                 SequenceLen, AmbCharPtr, PIG_NONE, 0);
+
+        si = SI_RecordFree(si);
     }
-
-    status = FDBAddSequence2(fdbp, &si, *seq_data_type, seq_data, SequenceLen,
-                           AmbCharPtr, PIG_NONE, 0);
-
-    if (si.title)
-       si.title = MemFree(si.title);
 
     return status;
 }

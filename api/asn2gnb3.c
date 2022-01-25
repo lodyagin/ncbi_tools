@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.28 $
+* $Revision: 1.34 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -1417,35 +1417,14 @@ static CharPtr GetEncodeString (
   return str;
 }
 
-static void GetAnnotComments (
-  SeqAnnotPtr sap,
-  Pointer userdata
-)
-
-{
-  AnnotDescrPtr    desc;
-  ValNodePtr PNTR  head;
-  CharPtr          str;
-
-  head = (ValNodePtr PNTR) userdata;
-  if (sap == NULL || head == NULL) return;
-
-  for (desc = sap->desc; desc != NULL; desc = desc->next) {
-    str = NULL;
-    if (desc->choice == Annot_descr_comment) {
-      str = (CharPtr) desc->data.ptrvalue;
-    }
-    if (StringHasNoText (str)) continue;
-    ValNodeCopyStr (head, 0, str);
-  }
-}
-
 NLM_EXTERN void AddCommentBlock (
   Asn2gbWorkPtr awp
 )
 
 {
   size_t             acclen;
+  SeqMgrAndContext   acontext;
+  AnnotDescPtr       adp;
   IntAsn2gbJobPtr    ajp;
   BarCodeData        bcd;
   BioSourcePtr       biop;
@@ -1470,7 +1449,6 @@ NLM_EXTERN void AddCommentBlock (
   Int4               gsdbid = 0;
   Boolean            has_gaps = FALSE;
   Boolean            hasRefTrackStatus = FALSE;
-  ValNodePtr         head;
   SeqHistPtr         hist;
   Boolean            is_collab = FALSE;
   Boolean            is_encode = FALSE;
@@ -1495,7 +1473,6 @@ NLM_EXTERN void AddCommentBlock (
   Char               taxID [32];
   TextSeqIdPtr       tsip;
   UserObjectPtr      uop;
-  ValNodePtr         vnp;
   CharPtr            wgsaccn = NULL;
   CharPtr            wgsname = NULL;
   StringItemPtr      ffstring = NULL, temp = NULL;
@@ -2463,7 +2440,7 @@ NLM_EXTERN void AddCommentBlock (
 
   sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_comment, &dcontext);
   while (sdp != NULL) {
-    if (sdp->data.ptrvalue != NULL) {
+    if (StringDoesHaveText ((CharPtr)sdp->data.ptrvalue)) {
       cbp = (CommentBlockPtr) Asn2gbAddBlock (awp, COMMENT_BLOCK, sizeof (CommentBlock));
       if (cbp != NULL) {
 
@@ -2656,36 +2633,36 @@ NLM_EXTERN void AddCommentBlock (
 
   /* look for Seq-annot.desc.comment on annots packaged on current bioseq */
 
-  head = NULL;
-  VisitAnnotsOnBsp (bsp, (Pointer) &head, GetAnnotComments);
-  for (vnp = head; vnp != NULL; vnp = vnp->next) {
-    str = (CharPtr) vnp->data.ptrvalue;
-    if (StringHasNoText (str)) continue;
-    cbp = (CommentBlockPtr) Asn2gbAddBlock (awp, COMMENT_BLOCK, sizeof (CommentBlock));
-    if (cbp != NULL) {
+  adp = SeqMgrGetNextAnnotDesc (bsp, NULL, Annot_descr_comment, &acontext);
+  while (adp != NULL) {
+    str = (CharPtr) adp->data.ptrvalue;
+    if (StringDoesHaveText (str)) {
+      cbp = (CommentBlockPtr) Asn2gbAddBlock (awp, COMMENT_BLOCK, sizeof (CommentBlock));
+      if (cbp != NULL) {
 
-      cbp->entityID = awp->entityID;
-      cbp->first = first;
-      first = FALSE;
+        cbp->entityID = awp->entityID;
+        cbp->first = first;
+        first = FALSE;
 
-      if (cbp->first) {
-        FFStartPrint (ffstring, awp->format, 0, 12, "COMMENT", 12, 5, 5, "CC", TRUE);
-      } else {
-        FFStartPrint (ffstring, awp->format, 0, 12, NULL, 12, 5, 5, "CC", FALSE);
-      }
+        if (cbp->first) {
+          FFStartPrint (ffstring, awp->format, 0, 12, "COMMENT", 12, 5, 5, "CC", TRUE);
+        } else {
+          FFStartPrint (ffstring, awp->format, 0, 12, NULL, 12, 5, 5, "CC", FALSE);
+        }
 
-      FFAddOneString (ffstring, str, TRUE, FALSE, TILDE_EXPAND);
+        FFAddOneString (ffstring, str, TRUE, FALSE, TILDE_EXPAND);
 
-      cbp->string = FFEndPrint(ajp, ffstring, awp->format, 12, 12, 5, 5, "CC");
-      FFRecycleString(ajp, ffstring);
-      ffstring = FFGetString(ajp);
+        cbp->string = FFEndPrint (ajp, ffstring, awp->format, 12, 12, 5, 5, "CC");
+        FFRecycleString (ajp, ffstring);
+        ffstring = FFGetString (ajp);
 
-      if (awp->afp != NULL) {
-        DoImmediateFormat (awp->afp, (BaseBlockPtr) cbp);
+        if (awp->afp != NULL) {
+          DoImmediateFormat (awp->afp, (BaseBlockPtr) cbp);
+        }
       }
     }
+    adp = SeqMgrGetNextAnnotDesc (bsp, adp, Annot_descr_comment, &acontext);
   }
-  ValNodeFreeData (head);
 
   FFRecycleString(ajp, ffstring);
 }
@@ -3327,7 +3304,7 @@ static Boolean isIdenticalSource (IntSrcBlockPtr isp1, IntSrcBlockPtr isp2)
     {
       if (ssp1->subtype != ssp2->subtype)
         return FALSE;
-      if (StringICmp(ssp1->name,ssp2->name) != 0)
+      if (StringICmp(ssp1->name, ssp2->name) != 0)
         return FALSE;
       ssp1 = ssp1->next;
       ssp2 = ssp2->next;
@@ -3347,7 +3324,7 @@ static Boolean isIdenticalSource (IntSrcBlockPtr isp1, IntSrcBlockPtr isp2)
       dbt2 = (DbtagPtr) vnp2->data.ptrvalue;
 
       if ((dbt1 != NULL) && (dbt2 != NULL)) {
-        if (dbt1->db != dbt2->db)
+        if (StringCmp (dbt1->db, dbt2->db) != 0)
           return FALSE;
 
         oip1 = dbt1->tag;
@@ -3636,6 +3613,9 @@ NLM_EXTERN void AddSourceFeatBlock (
         }
       }
     }
+    if (awp->mode == DUMP_MODE) {
+      excise = FALSE;
+    }
     if (excise) {
       *prev = vnp->next;
       vnp->next = NULL;
@@ -3879,6 +3859,173 @@ static void GetFeatsOnCdsProduct (
       }
     }
     prt = SeqMgrGetNextFeature (pbsp, prt, 0, 0, &pcontext);
+  }
+}
+
+static void GetRemoteFeatsOnCdsProduct (
+  SeqFeatPtr cds,
+  BioseqPtr nbsp,
+  BioseqPtr pbsp,
+  IntAsn2gbJobPtr ajp,
+  Asn2gbWorkPtr awp
+)
+
+{
+  BioseqPtr        bsp;
+  FeatBlockPtr     fbp;
+  ValNodePtr       head = NULL;
+  IntFeatBlockPtr  ifp;
+  Boolean          isRefSeq;
+  Int4             lastleft;
+  Int4             lastright;
+  SeqAnnotPtr      lastsap;
+  SeqFeatPtr       lastsfp;
+  SeqLocPtr        location;
+  SeqLocPtr        newloc;
+  SeqFeatPtr       prt;
+  ValNodePtr       publist;
+  Asn2gbFreeFunc   remotefree;
+  Asn2gbLockFunc   remotelock;
+  ValNodePtr       remotevnp;
+  SeqAnnotPtr      sap;
+  SeqFeatPtr       sfp;
+  SeqIdPtr         sip;
+  SeqLocPtr        slp;
+  Boolean          suppress;
+  ValNodePtr       vnp;
+
+  if (cds == NULL || ajp == NULL || awp == NULL) return;
+  if (nbsp == NULL || pbsp == NULL || (! ISA_aa (pbsp->mol))) return;
+
+  if (awp->hideCdsProdFeats) return;
+
+  if (ajp->remotelock == NULL) return;
+
+  remotelock = ajp->remotelock;
+  remotefree = ajp->remotefree;
+
+  sip = SeqIdFindBest (pbsp->id, SEQID_GI);
+  if (sip == NULL) return;
+
+  remotevnp = remotelock (sip, ajp->remotedata);
+  if (remotevnp == NULL) return;
+
+  /* do cleanup of remotely fetched feature tables */
+
+  for (vnp = remotevnp; vnp != NULL; vnp = vnp->next) {
+    bsp = (BioseqPtr) vnp->data.ptrvalue;
+    if (bsp == NULL) continue;
+    for (sap = bsp->annot; sap != NULL; sap = sap->next) {
+      if (sap->type != 1) continue;
+      for (sfp = (SeqFeatPtr) sap->data; sfp != NULL; sfp = sfp->next) {
+        publist = NULL;
+        CleanUpSeqFeat (sfp, FALSE, TRUE, &publist);
+        sfp->idx.subtype = FindFeatDefType (sfp);
+        ValNodeFreeData (publist);
+        ValNodeAddPointer (&head, 0, (Pointer) sfp);
+      }
+    }
+  }
+
+  if (head == NULL) return;
+
+  isRefSeq = FALSE;
+  for (sip = nbsp->id; sip != NULL; sip = sip->next) {
+    if (sip->choice == SEQID_OTHER) {
+      isRefSeq = TRUE;
+    }
+  }
+
+  /* explore mat_peptides, sites, etc. */
+
+  lastsfp = NULL;
+  lastsap = NULL;
+  lastleft = 0;
+  lastright = 0;
+
+  for (vnp = head; vnp != NULL; vnp = vnp->next) {
+
+    prt = (SeqFeatPtr) vnp->data.ptrvalue;
+    if (prt == NULL) continue;
+
+    if (prt->idx.subtype == FEATDEF_REGION ||
+        prt->idx.subtype == FEATDEF_SITE ||
+        prt->idx.subtype == FEATDEF_BOND ||
+        prt->idx.subtype == FEATDEF_mat_peptide_aa ||
+        prt->idx.subtype == FEATDEF_sig_peptide_aa ||
+        prt->idx.subtype == FEATDEF_transit_peptide_aa ||
+        (prt->idx.subtype == FEATDEF_preprotein /* && isRefSeq */)) {
+
+      if (awp->hideCddFeats && prt->idx.subtype == FEATDEF_REGION && IsCDD (prt)) {
+
+        /* passing this test prevents mapping of COG CDD region features */
+
+      } else {
+
+        suppress = FALSE;
+
+        /* make sure feature maps within nucleotide sublocation */
+
+        if (! suppress) {
+          if (ajp->ajp.slp != NULL) {
+            location = aaFeatLoc_to_dnaFeatLoc (cds, prt->location);
+            slp = SeqLocMerge (nbsp, location, NULL, FALSE, TRUE, FALSE);
+            if (slp != NULL) {
+              sip = SeqIdParse ("lcl|dummy");
+              newloc = SeqLocReMapEx (sip, ajp->ajp.slp, slp, 0, FALSE, ajp->masterStyle);
+              SeqIdFree (sip);
+              SeqLocFree (slp);
+              if (newloc == NULL) {
+                suppress = TRUE;
+              }
+              SeqLocFree (newloc);
+            } else {
+              suppress = TRUE;
+            }
+            SeqLocFree (location);
+          }
+        }
+
+        if (! suppress) {
+
+          fbp = (FeatBlockPtr) Asn2gbAddBlock (awp, FEATURE_BLOCK, sizeof (IntFeatBlock));
+          if (fbp != NULL) {
+
+            fbp->entityID = 0;
+            fbp->itemID = 0;
+            fbp->itemtype = OBJ_SEQFEAT;
+            fbp->featdeftype = prt->idx.subtype;
+            ifp = (IntFeatBlockPtr) fbp;
+            ifp->mapToNuc = TRUE;
+            ifp->mapToProt = FALSE;
+            ifp->mapToGen = FALSE;
+            ifp->mapToMrna = FALSE;
+            ifp->mapToPep = FALSE;
+            ifp->firstfeat = awp->firstfeat;
+            awp->firstfeat = FALSE;
+
+            if (awp->afp != NULL) {
+              DoImmediateRemoteFeatureFormat (awp->afp, (BaseBlockPtr) fbp, prt);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  ValNodeFree (head);
+
+  if (remotefree != NULL) {
+    remotefree (remotevnp, ajp->remotedata);
+  } else {
+    /* otherwise free Bioseqs and ValNode chain ourselves */
+    for (vnp = remotevnp; vnp != NULL; vnp = vnp->next) {
+      bsp = (BioseqPtr) vnp->data.ptrvalue;
+      if (bsp != NULL) {
+        BioseqFree (bsp);
+      }
+    }
+    ValNodeFree (remotevnp);
   }
 }
 
@@ -4434,6 +4581,8 @@ static Boolean LIBCALLBACK GetFeatsOnBioseq (
   /* then explore mat_peptides, sites, etc. */
 
   GetFeatsOnCdsProduct (sfp, asp->bsp, bsp, ajp, awp);
+
+  GetRemoteFeatsOnCdsProduct (sfp, asp->bsp, bsp, ajp, awp);
 
   return TRUE;
 }

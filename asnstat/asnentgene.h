@@ -9,8 +9,8 @@
 #include <asn.h>
 #endif
 
-static char * asnfilename = "asnentgene.h28";
-static AsnValxNode avnx[45] = {
+static char * asnfilename = "asnentgene.h29";
+static AsnValxNode avnx[47] = {
     {20,"live" ,0,0.0,&avnx[1] } ,
     {20,"secondary" ,1,0.0,&avnx[2] } ,
     {20,"discontinued" ,2,0.0,&avnx[3] } ,
@@ -54,7 +54,9 @@ static AsnValxNode avnx[45] = {
     {20,"reference" ,17,0.0,&avnx[41] } ,
     {20,"generif" ,18,0.0,&avnx[42] } ,
     {20,"phenotype" ,19,0.0,&avnx[43] } ,
-    {20,"comment" ,254,0.0,&avnx[44] } ,
+    {20,"complex" ,20,0.0,&avnx[44] } ,
+    {20,"compound" ,21,0.0,&avnx[45] } ,
+    {20,"comment" ,254,0.0,&avnx[46] } ,
     {20,"other" ,255,0.0,NULL } };
 
 static AsnType atx[104] = {
@@ -164,7 +166,7 @@ static AsnType atx[104] = {
   {314, "SET OF" ,0,17,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} };
 
 static AsnModule ampx[1] = {
-  { "NCBI-Entrezgene" , "asnentgene.h28",&atx[0],NULL,NULL,0,0} };
+  { "NCBI-Entrezgene" , "asnentgene.h29",&atx[0],NULL,NULL,0,0} };
 
 static AsnValxNodePtr avn = avnx;
 static AsnTypePtr at = atx;

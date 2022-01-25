@@ -25,6 +25,9 @@
  * Author Karl Sirotkin
  *
  $Log: idfetch.c,v $
+ Revision 1.38  2005/05/16 23:18:34  vysokolo
+ Added features 'HPRD' and 'STS' to the key '-F'.
+
  Revision 1.37  2005/04/13 14:38:12  kans
  prototype for TryGetGi, send NORMAL_STYLE to SeqEntryToGnbk again
 
@@ -241,7 +244,7 @@ prf|acc|name pdb|entry|chain",
         {"Generate gi list by entrez query", NULL,NULL,NULL,TRUE,'q',ARG_STRING,0.0,0,NULL},
         {"Generate gi list by entrez query", NULL,NULL,NULL,TRUE,'Q',ARG_FILE_IN,0.0,0,NULL},
         {"Output only the list of gis, used with -q", NULL,NULL,NULL,TRUE,'n',ARG_BOOLEAN,0.0,0,NULL},
-        {"Add features delimited by ','. Allowed values are: 'CDD', 'SNP', 'SNP_graph', 'MGC'.", NULL,NULL,NULL,TRUE,'F',ARG_STRING,0.0,0,NULL}
+        {"Add features delimited by ','. Allowed values are: 'CDD', 'SNP', 'SNP_graph', 'MGC', 'HPRD', 'STS'.", NULL,NULL,NULL,TRUE,'F',ARG_STRING,0.0,0,NULL}
 };
 int Numarg = sizeof(myargs)/sizeof(myargs[0]);
 
@@ -1288,6 +1291,26 @@ MyBioseqToFasta(BioseqPtr bsp, Pointer userdata)
 	}
 }
 
+/*
+select * from annot_types;
+ id          name                           is_private  dependencies
+ ----------- ------------------------------ ----------- ------------
+           1 SNP                                      0            0
+           2 WGS descriptor                           1            0
+           3 SNP graph                               -2            1
+           4 CDD                                      0            0
+           5 MGC                                      0            0
+           6 HPRD                                     0            0
+           7 STS                                      0            0
+
+1 "SNP"       ffef 5
+3 "SNP_graph" ffbf 7
+4 "CDD"       ff7f 8
+5 "MGC"       feff 9
+6 "HPRD"      fdff 10
+7 "STS"       fbff 11
+*/
+
 Boolean CreateMaxPlexParam()
 {
   Char buf[1024];
@@ -1315,6 +1338,14 @@ Boolean CreateMaxPlexParam()
       else if( !StringICmp( ptoken, "MGC"))
       {
 	maxplex_param &= 0xfffffeff;
+      }
+      else if( !StringICmp( ptoken, "HPRD"))
+      {
+	maxplex_param &= 0xfffffdff;
+      }
+      else if( !StringICmp( ptoken, "STS"))
+      {
+	maxplex_param &= 0xfffffbff;
       }
       else
       {

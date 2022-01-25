@@ -1,4 +1,4 @@
-/* $Id: phi_lookup.c,v 1.26 2005/04/27 19:56:29 dondosha Exp $
+/* $Id: phi_lookup.c,v 1.27 2005/05/04 16:16:37 papadopo Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,7 +34,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: phi_lookup.c,v 1.26 2005/04/27 19:56:29 dondosha Exp $";
+    "$Id: phi_lookup.c,v 1.27 2005/05/04 16:16:37 papadopo Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_def.h>
@@ -565,6 +565,29 @@ SPHIPatternSearchBlkNew(char* pattern, Boolean is_dna, BlastScoreBlk* sbp,
     
     /* Free the residue frequencies structure - it's no longer needed */
     rfp = Blast_ResFreqFree(rfp);
+    
+    /* Pattern should not end in a variable region */
+    while (multiword_items->inputPatternMasked[posIndex-1] < 0)
+        posIndex--;
+
+    /* The first pattern region should also be of fixed size */
+    for (charIndex = 0; charIndex < posIndex; charIndex++) {
+        if (multiword_items->inputPatternMasked[charIndex] != 
+                                             kMaskAaAlphabetBits)
+            break;
+    }
+    if (multiword_items->inputPatternMasked[charIndex] < 0) {
+        for (secondIndex = charIndex + 1; secondIndex < posIndex; 
+                                            secondIndex++) {
+            if (multiword_items->inputPatternMasked[secondIndex] > 0)
+                break;
+        }
+        for (; secondIndex < posIndex; secondIndex++, charIndex++) {
+              multiword_items->inputPatternMasked[charIndex] =
+                        multiword_items->inputPatternMasked[secondIndex];
+        }
+        posIndex = charIndex;
+    }
     
     localPattern[posIndex-1] = 1;
     if (pattern_blk->patternProbability > 1.0)

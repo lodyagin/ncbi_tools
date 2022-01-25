@@ -1,4 +1,4 @@
-/*  $Id: hspstream_collector.c,v 1.12 2005/01/31 15:14:15 dondosha Exp $
+/*  $Id: hspstream_collector.c,v 1.14 2005/05/16 12:21:40 madden Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,7 +34,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: hspstream_collector.c,v 1.12 2005/01/31 15:14:15 dondosha Exp $";
+    "$Id: hspstream_collector.c,v 1.14 2005/05/16 12:21:40 madden Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 
@@ -53,6 +53,7 @@ s_BlastHSPListCollectorFree(BlastHSPStream* hsp_stream)
    BlastHSPListCollectorData* stream_data = 
       (BlastHSPListCollectorData*) GetData(hsp_stream);
    stream_data->x_lock = MT_LOCK_Delete(stream_data->x_lock);
+   SBlastHitsParametersFree(stream_data->blasthit_params);
    Blast_HSPResultsFree(stream_data->results);
    sfree(stream_data);
    sfree(hsp_stream);
@@ -170,13 +171,12 @@ s_BlastHSPListCollectorWrite(BlastHSPStream* hsp_stream,
 
    /* For RPS BLAST saving procedure is different, because HSPs from different
       subjects are bundled in one HSP list */
-   if (stream_data->program == eBlastTypeRpsBlast || 
-       stream_data->program == eBlastTypeRpsTblastn) {
+   if (Blast_ProgramIsRpsBlast(stream_data->program)) {
       Blast_HSPResultsSaveRPSHSPList(stream_data->program, 
-         stream_data->results, *hsp_list, stream_data->hit_options);
+         stream_data->results, *hsp_list, stream_data->blasthit_params);
    } else {
       Blast_HSPResultsSaveHSPList(stream_data->program, stream_data->results, 
-                                  *hsp_list, stream_data->hit_options);
+                                  *hsp_list, stream_data->blasthit_params);
    }
    /* Results structure is no longer sorted, even if it was before. 
       The following assignment is only necessary if the logic to prohibit
@@ -217,7 +217,7 @@ s_BlastHSPListCollectorNew(BlastHSPStream* hsp_stream, void* args)
 
 BlastHSPStream* 
 Blast_HSPListCollectorInitMT(EBlastProgramType program, 
-                             const BlastHitSavingOptions* hit_options,
+                             SBlastHitsParameters* blasthit_params,
                              Int4 num_queries, Boolean sort_on_read,
                              MT_LOCK lock)
 {
@@ -226,7 +226,7 @@ Blast_HSPListCollectorInitMT(EBlastProgramType program,
     BlastHSPStreamNewInfo info;
 
     stream_data->program = program;
-    stream_data->hit_options = hit_options;
+    stream_data->blasthit_params = blasthit_params;
 
     stream_data->results = Blast_HSPResultsNew(num_queries);
 
@@ -243,10 +243,10 @@ Blast_HSPListCollectorInitMT(EBlastProgramType program,
 
 BlastHSPStream* 
 Blast_HSPListCollectorInit(EBlastProgramType program, 
-                           const BlastHitSavingOptions* hit_options,
+                           SBlastHitsParameters* blasthit_params,
                            Int4 num_queries, Boolean sort_on_read)
 {
-   return Blast_HSPListCollectorInitMT(program, hit_options, num_queries, 
+   return Blast_HSPListCollectorInitMT(program, blasthit_params, num_queries, 
                                        sort_on_read, NULL);
 }
 

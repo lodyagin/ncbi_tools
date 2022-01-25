@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 1/1/91
 *
-* $Revision: 6.11 $
+* $Revision: 6.12 $
 *
 * File Description:  Object manager for module NCBI-General
 *
@@ -43,6 +43,9 @@
 *                      it is linked as a DLL).
 *
 * $Log: objgen.c,v $
+* Revision 6.12  2005/05/18 17:30:16  bollin
+* added NameStdMatch and PersonIdMatch functions
+*
 * Revision 6.11  2004/04/01 13:43:08  lavr
 * Spell "occurred", "occurrence", and "occurring"
 *
@@ -1247,6 +1250,34 @@ erret:
 
 /*****************************************************************************
 *
+*   NameStdMatch(nsp1, nsp2)
+*
+*****************************************************************************/
+NLM_EXTERN Boolean LIBCALL NameStdMatch (NameStdPtr nsp1, NameStdPtr nsp2)
+{
+  Int4 j;
+  
+  if (nsp1 == NULL && nsp2 == NULL)
+  {
+    return TRUE;
+  }
+  else if (nsp1 == NULL || nsp2 == NULL)
+  {
+    return FALSE;
+  }
+  
+  for (j = 0; j < 7; j++)
+  {
+    if (StringCmp (nsp1->names [j], nsp2->names[j]) != 0)
+    {
+      return FALSE;
+    }
+  }
+  return TRUE;
+}
+
+/*****************************************************************************
+*
 *   PersonIdNew()
 *
 *****************************************************************************/
@@ -1477,6 +1508,53 @@ NLM_EXTERN Int2 LIBCALL PersonIdLabel (PersonIdPtr pid, CharPtr buf, Int2 buflen
 		return LabelCopy(buf, "Unsupported PersonID", buflen);
 	
 	return (len - buflen);
+}
+
+/*****************************************************************************
+*
+*   PersonIdMatch(pip1, pip2)
+*
+*****************************************************************************/
+NLM_EXTERN Boolean LIBCALL PersonIdMatch (PersonIdPtr pip1, PersonIdPtr pip2)
+{
+  Boolean does_match = TRUE;
+  
+  if (pip1 == NULL && pip2 == NULL)
+  {
+    return TRUE;
+  }
+  else if (pip1 == NULL || pip2 == NULL)
+  {
+    return FALSE;
+  }
+  else if (pip1->choice != pip2->choice)
+  {
+    return FALSE;
+  }
+  
+  switch (pip1->choice)
+  {
+    case 0:
+      /* not set */
+      break;
+    case 1:
+      /* dbtag */
+      does_match = DbtagMatch (pip1->data, pip2->data);
+      break;
+    case 2:
+      /* name */
+      does_match = NameStdMatch (pip1->data, pip2->data);
+      break;
+    case 3: /* ml */
+    case 4: /* str */
+    case 5: /* consortium */
+      if (StringCmp (pip1->data, pip2->data) != 0)
+      {
+        does_match = FALSE;
+      }
+      break;
+  }
+  return does_match;
 }
 
 /*****************************************************************************

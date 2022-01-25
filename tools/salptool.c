@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: salptool.c,v 6.40 2005/04/13 14:56:26 kans Exp $";
+static char const rcsid[] = "$Id: salptool.c,v 6.41 2005/05/27 19:06:59 bollin Exp $";
 
 #include <sequtil.h> /* SeqIdDupList */
 #include <salpedit.h>
@@ -1624,20 +1624,62 @@ static Int4 getlengthforid (SeqIdPtr sip)
   return lens;
 }
 
-static ValNodePtr nrSeqIdAdd (ValNodePtr vnp, SeqIdPtr sip)
+/**********************************************************************
+ * 
+ * nrSeqIdIsInValNodeList (vnp, sip)
+ * 
+ * This function checks to see if SeqIdPtr sip points to the same Bioseq
+ * as the SeqIdPtr values in ValNode list vnp's data.ptrvalues.
+ *
+ * Return values:
+ *       TRUE if a match was found
+ *       FALSE if no match was found
+ **********************************************************************/
+static Boolean nrSeqIdIsInValNodeList (ValNodePtr vnp, SeqIdPtr sip)
 {
   ValNodePtr vnptmp=NULL;
   SeqIdPtr   siptmp;
+  Boolean    rval = FALSE;
 
-  if (vnp!=NULL) {
-     for (vnptmp=vnp; vnptmp!=NULL; vnptmp=vnptmp->next) {
-        siptmp=(SeqIdPtr)vnptmp->data.ptrvalue;
-           if (SeqIdForSameBioseq(sip, siptmp))
-              break;
-     }
+  if (sip == NULL)
+  {
+    return FALSE;
   }
-  if (vnptmp==NULL)
-     ValNodeAddPointer(&vnp, 0, sip);
+  
+  for (vnptmp=vnp; vnptmp!=NULL && !rval; vnptmp=vnptmp->next) {
+    siptmp=(SeqIdPtr)vnptmp->data.ptrvalue;
+    if (SeqIdForSameBioseq(sip, siptmp))
+    {
+      rval = TRUE;
+    }
+  }
+ 
+  return rval;
+}
+
+/**********************************************************************
+ * 
+ * nrSeqIdAdd (vnp, sip)
+ * 
+ * This function checks to see if SeqIdPtr sip points to the same Bioseq
+ * as the SeqIdPtr values in ValNode list vnp's data.ptrvalues.
+ * If not, sip is added to the list.
+ *
+ * Return value:
+ *       A ValNodeList pointing to SeqIDPtr values
+ **********************************************************************/
+static ValNodePtr nrSeqIdAdd (ValNodePtr vnp, SeqIdPtr sip)
+{
+  if (sip == NULL)
+  {
+    return;
+  }
+  
+  if (!nrSeqIdIsInValNodeList (vnp, sip))
+  {
+    ValNodeAddPointer(&vnp, 0, sip);
+  }
+     
   return vnp;
 }
 
@@ -2218,6 +2260,7 @@ static ValNodePtr CCNormalizeSeqAlignId (SeqAlignPtr salp, ValNodePtr vnp)
                       offset,
                       totlenlcl = 0, totlendb = 0;
   Int4                i, j, k, len = 0, n;
+  Int4                num_not_asked;
   Int2                index;
   Uint1               strand;
   Boolean             ok, 
@@ -2403,14 +2446,38 @@ static ValNodePtr CCNormalizeSeqAlignId (SeqAlignPtr salp, ValNodePtr vnp)
         }
         if (i > 0)
         {
+           /* If there are sequences that can be treated as Far Pointers
+            * and are identical to the most recent version of the sequence
+            * in GenBank, ask the user if these sequences should be replace
+            * by the GenBank sequence.
+            */
            messagestr[0] = '\0';
+           ans = ANS_OK;
+           num_not_asked = 0;
            for (j=0; j<i; j++)
            {
-              SeqIdWrite(hiparray[j]->sip2, strLog, PRINTID_TEXTID_ACCESSION, 50);
-              StringCat(messagestr, strLog);
-              StringCat(messagestr, ", ");
+             /* if we are looking at an alignment of segmented sets,
+              * and the far pointer points to something other than a
+              * segmented set, the sequence ID will be the same for
+              * the alignments for each segment.  We only want to ask
+              * about the same sequence once.
+              */
+             if (! nrSeqIdIsInValNodeList (vnp, hiparray[j]->sip1))
+             {
+               SeqIdWrite(hiparray[j]->sip2, strLog, PRINTID_TEXTID_ACCESSION, 50);
+               StringCat(messagestr, strLog);
+               StringCat(messagestr, ", ");
+               ans = ANS_CANCEL;
+               num_not_asked ++;
+             }
            }
-           ans = Message(MSG_OKC, "This alignment contains %s that %s already in GenBank. \nDo you wish to replace %s?", messagestr, i>1?"are":"is", i>1?"them":"it");
+           if (ans == ANS_CANCEL)
+           {
+             ans = Message(MSG_OKC, 
+                           "This alignment contains %s that %s already in GenBank. \nDo you wish to replace %s?", 
+                           messagestr, num_not_asked > 1 ? "are":"is",
+                           num_not_asked > 1 ? "them":"it");
+           }
            if (ans != ANS_CANCEL)
            {
               for (j=0; j<i; j++)
@@ -2432,7 +2499,12 @@ static ValNodePtr CCNormalizeSeqAlignId (SeqAlignPtr salp, ValNodePtr vnp)
                     sip = presip->next;
                  else
                     sip = dsp->ids;
-                 /*SeqAlignReplaceId (hiparray[j]->sip1, hiparray[j]->sip2, salp);*/
+                 
+                 /* We add the ID of the sequence we are replacing to a list
+                  * of sequences that will be deleted later.
+                  * We can't delete the sequence now, in case it is present
+                  * in more than one alignment for this record.
+                  */
                  vnp = nrSeqIdAdd (vnp, hiparray[j]->sip1);
                  found = TRUE;
                  SeqAlignFree(hiparray[j]->sap);
@@ -2839,13 +2911,16 @@ static void delete_bioseqs (ValNodePtr ids, Uint2 entityID)
      SeqIdFree ((SeqIdPtr) vnp->data.ptrvalue);
      vnp->data.ptrvalue = NULL;
   }
-  ValNodeFree (vnp);
+  ValNodeFree (ids);
   return;
 }
 
-NLM_EXTERN Boolean ValidateSeqAlignandACC (SeqAlignPtr salp, Uint2 entityID, Boolean message,
-                         Boolean msg_success, Boolean find_remote_bsp,Boolean find_acc_bsp,
-                         Boolean delete_bsp, Boolean delete_salp, BoolPtr dirty)
+static Boolean 
+ValidateSeqAlignandACCEx 
+(SeqAlignPtr salp, Uint2 entityID, Boolean message,
+ Boolean msg_success, Boolean find_remote_bsp,Boolean find_acc_bsp,
+ Boolean delete_bsp, Boolean delete_salp, BoolPtr dirty,
+ ValNodePtr PNTR id_list) /* added id_list so that we could defer deleting bioseqs */
 {  
   SeqAlignPtr  pre,
                salptmp;
@@ -2854,92 +2929,126 @@ NLM_EXTERN Boolean ValidateSeqAlignandACC (SeqAlignPtr salp, Uint2 entityID, Boo
   MsgAnswer    ans;
   Int2         err_count=0,
                salp_count=0;
-  Boolean      ok; 
+  Boolean      ok;
 
   if(salp!=NULL)
   {
-        sv.message = message;
-        sv.msg_success = msg_success;
-        sv.find_remote_bsp = find_remote_bsp;
-        sv.find_acc_bsp = find_acc_bsp;
-        sv.delete_salp = delete_salp;
-        sv.delete_bsp = delete_bsp;
-        sv.retdel = TRUE;
-        sv.ids = NULL;
-        sv.entityID = entityID; 
-        sv.dirty = FALSE;   
-        svp = &sv;   
-     pre=NULL;
-     salptmp=salp; 
-     while (salptmp)
-     {
-        salp_count++;
-        if(salp->segtype==5)
+    /* initialize SaVal structure */
+    sv.message = message;
+    sv.msg_success = msg_success;
+    sv.find_remote_bsp = find_remote_bsp;
+    sv.find_acc_bsp = find_acc_bsp;
+    sv.delete_salp = delete_salp;
+    sv.delete_bsp = delete_bsp;
+    sv.retdel = TRUE;
+    sv.ids = NULL;
+    sv.entityID = entityID; 
+    sv.dirty = FALSE;   
+    svp = &sv;
+    
+    pre=NULL;
+    salptmp=salp; 
+    while (salptmp)
+    {
+      salp_count++;
+      if(salp->segtype==5)
+      {
+        ValidateSeqAlignandACCEx ((SeqAlignPtr) (salptmp->segs), entityID, 
+                                  message, msg_success, find_remote_bsp, 
+                                  find_acc_bsp, delete_bsp, delete_salp, 
+                                  &svp->dirty, id_list);
+      } 
+      else if (salp->segtype<1 || salp->segtype>4)
+      {
+        ValMessage (Err_Segtype, SEV_ERROR, NULL, NULL, salptmp->segtype);
+      }
+      else 
+      {
+        ValidateSeqAlign (salptmp, svp->entityID, svp->message, 
+                          svp->msg_success, svp->find_remote_bsp, 
+                          svp->delete_bsp, svp->delete_salp, &svp->dirty);
+        if (svp->find_acc_bsp) 
         {
-           ValidateSeqAlignandACC ((SeqAlignPtr) (salptmp->segs), entityID, message, msg_success, find_remote_bsp, find_acc_bsp, delete_bsp, delete_salp, &svp->dirty);
-        } 
-        else if (salp->segtype<1 || salp->segtype>4)
+	        ok = check_dbid_seqalign (salptmp);
+	        if (ok) 
+	        {
+	          if (id_list != NULL)
+	          {
+	            svp->ids = *id_list;
+	          }
+            svp->ids = CCNormalizeSeqAlignId (salptmp, svp->ids);
+            if (svp->ids!=NULL && svp->entityID > 0) {
+              if (svp->delete_bsp)
+              {
+                delete_bioseqs (svp->ids, svp->entityID);
+                svp->ids = NULL;
+              }
+              svp->dirty = TRUE;
+            }
+          }       	
+        }
+      }     	
+   	  if (errorp)
+   	  {
+        if(svp->message)
+  	    {
+          BlastErrorPrint (errorp);
+          errorp = BlastErrorChainDestroy (errorp);
+        }
+        if (svp->delete_salp)
         {
-           ValMessage (Err_Segtype, SEV_ERROR, NULL, NULL, salptmp->segtype);
+          if (pre==NULL) 
+          {
+            salp=salptmp->next;
+            salptmp->next = NULL;
+            SeqAlignFree (salptmp);
+            salptmp = salp;
+          }
+          else 
+          {
+            pre->next = salptmp->next;
+            salptmp->next = NULL;
+            SeqAlignFree (salptmp);
+            salptmp = pre->next;
+          }
         }
-        else {
-           ValidateSeqAlign (salptmp, svp->entityID, svp->message, svp->msg_success, svp->find_remote_bsp, svp->delete_bsp, svp->delete_salp, &svp->dirty);
-           if (svp->find_acc_bsp) {
-	      ok = check_dbid_seqalign (salptmp);
-	      if (ok) {
-                 svp->ids = CCNormalizeSeqAlignId (salptmp, svp->ids);
-                 if (svp->ids!=NULL && svp->entityID > 0) {
-                    if (svp->delete_bsp)
-                       delete_bioseqs (svp->ids, svp->entityID); 
-                    svp->dirty = TRUE;
-                 }
-              }       	
-           }
-        }     	
-       	if (errorp)
-       	{
-       	   if(svp->message)
-       	   {
-              BlastErrorPrint (errorp);
-       	      errorp = BlastErrorChainDestroy (errorp);
-       	   }
-       	   if (svp->delete_salp)
-       	   {
-            if (pre==NULL) {
-              salp=salptmp->next;
-              salptmp->next = NULL;
-              SeqAlignFree (salptmp);
-              salptmp = salp;
-            }
-            else {
-              pre->next = salptmp->next;
-              salptmp->next = NULL;
-              SeqAlignFree (salptmp);
-              salptmp = pre->next;
-            }
-           }
-       	   else {
-       	      salptmp = salptmp->next;
-       	   }
-       	   err_count++;
-           svp->retdel=FALSE;
+        else 
+        {
+         	salptmp = salptmp->next;
         }
-       	else {
-       	   salptmp = salptmp->next;
-       	}
-     }
-     if (err_count==0 && svp->msg_success) {
-        if (salp_count>1)
-           ans = Message (MSG_OK, "Validation test of %d alignments succeded", salp_count);
-        else
-           ans = Message (MSG_OK, "Validation test of the alignment succeded");
-     }
-     if (dirty)
-        *dirty = svp->dirty;
-  }   
+        err_count++;
+        svp->retdel=FALSE;
+      }
+      else 
+      {
+        salptmp = salptmp->next;
+      }
+    }
+    if (err_count==0 && svp->msg_success) 
+    {
+      if (salp_count>1)
+        ans = Message (MSG_OK, "Validation test of %d alignments succeded", salp_count);
+      else
+        ans = Message (MSG_OK, "Validation test of the alignment succeded");
+    }
+    if (dirty)
+      *dirty = svp->dirty;
+  }
+  if (id_list != NULL)
+  {
+    *id_list = svp->ids;
+  }
   return svp->retdel;
 } 
 
+NLM_EXTERN Boolean ValidateSeqAlignandACC (SeqAlignPtr salp, Uint2 entityID, Boolean message,
+                         Boolean msg_success, Boolean find_remote_bsp,Boolean find_acc_bsp,
+                         Boolean delete_bsp, Boolean delete_salp, BoolPtr dirty)
+{
+  return ValidateSeqAlignandACCEx (salp, entityID, message, msg_success, 
+                                   find_remote_bsp, find_acc_bsp, delete_bsp, 
+                                   delete_salp, dirty, NULL);
+}
 
 /******************************************************************
 call back function for REGISTER_ALIGNVALIDATION defined in sequin4.c.  
@@ -2948,23 +3057,6 @@ SeqalignValidation under menu Filer/Alignment.
 Either individual alignment or alignment block 
 should be highlighted for this validation to work
 ******************************************************************/ 
-
-static Pointer LIBCALL sap_empty (SeqAnnotPtr sap, Uint1 type, Pointer PNTR ptr)
-{
-  SeqAlignPtr      salp = NULL;
-
-  if (sap != NULL) {
-     for (; sap!= NULL; sap=sap->next) {
-        if (sap->type == type) {
-           salp = (SeqAlignPtr) sap->data;
-           if (ptr!=NULL)
-              *ptr = (Pointer) sap;
-           break;
-        }
-     }
-  }
-  return salp;
-}
 
 NLM_EXTERN Int2 LIBCALLBACK ValidateSeqAlignandACCFromData (Pointer data)
 { 
@@ -3016,35 +3108,85 @@ NLM_EXTERN Int2 LIBCALLBACK ValidateSeqAlignandACCFromData (Pointer data)
   return OM_MSG_RET_DONE;
 }
 
+/***************************************************************************
+ *
+ * ValidateAllAlignmentsInAnnotList (sap, svp)
+ *
+ * This function validates all of the alignments in the annotation list
+ * (there may be multiple alignments, especially when there is an alignment
+ * of segmented sequences), and then deletes the local versions of sequences
+ * which have been replaced by farpointers.
+ * We wait to remove the sequences in case the sequence is used in more than
+ * one alignment, which may be the case if an alignment of segmented sets
+ * contains a far pointer, and that far pointer points to a sequence that is
+ * not actually a segmented set.
+ *
+ ***************************************************************************/
+static void ValidateAllAlignmentsInAnnotList (SeqAnnotPtr sap, SaValPtr svp)
+{
+  SeqAlignPtr salp;
+  ValNodePtr  id_list = NULL;
+  
+  if (svp == NULL)
+  {
+    return;
+  }
+  
+  while (sap != NULL)    
+  {
+    if (sap->type == 2 && sap->data != NULL)
+    {
+      salp = (SeqAlignPtr) sap->data;
+      ValidateSeqAlignandACCEx (salp, svp->entityID, svp->message, 
+                                svp->msg_success, svp->find_remote_bsp, 
+                                svp->find_acc_bsp, FALSE, 
+                                svp->delete_salp, &svp->dirty,
+                                &id_list);
+    }
+    sap = sap->next;
+  }
+  if (svp->delete_bsp)
+  {
+    delete_bioseqs (id_list, svp->entityID);
+  }
+}
+
+/***************************************************************************
+ *
+ * ValidateSeqAlignandACCCallback (sep, mydata, index, indent)
+ *
+ * This function is a callback for SeqEntryExplore used by 
+ * ValidateSeqAlignandACCInSeqEntry.  It will validate the alignments
+ * found in the record.
+ * This function used to only validate the first alignment found on a
+ * SeqEntry.  It was repaired to validate all alignments on the SeqEntry
+ * on May 27, 2005 by Colleen Bollin.
+ *
+ ***************************************************************************/
 static void ValidateSeqAlignandACCCallback (SeqEntryPtr sep, Pointer mydata,
                                           Int4 index, Int2 indent)
 {
   BioseqPtr          bsp;
   BioseqSetPtr       bssp;
-  SeqAlignPtr        salp;
-  SaValPtr           svp;
+  SaValPtr           svp = NULL;
+  SeqAnnotPtr        sap = NULL;
 
   if (sep != NULL && sep->data.ptrvalue && mydata != NULL) {
      svp = (SaValPtr)mydata;
      if (IS_Bioseq(sep)) {
         bsp = (BioseqPtr) sep->data.ptrvalue;
         if (bsp!=NULL) {
-           salp=sap_empty(bsp->annot, 2, NULL);
-           if (salp!=NULL) {
-              ValidateSeqAlignandACC (salp, svp->entityID, svp->message, svp->msg_success, svp->find_remote_bsp, svp->find_acc_bsp, svp->delete_bsp, svp->delete_salp, &svp->dirty);
-           }
+           sap = bsp->annot;
         }
      }   
      else if(IS_Bioseq_set(sep)) {
         bssp = (BioseqSetPtr)sep->data.ptrvalue;
         if (bssp!=NULL) {
-           salp=sap_empty(bssp->annot, 2, NULL);
-           if (salp!=NULL) {
-              ValidateSeqAlignandACC (salp, svp->entityID, svp->message, svp->msg_success, svp->find_remote_bsp, svp->find_acc_bsp, svp->delete_bsp, svp->delete_salp, &svp->dirty);
-           }
+           sap = bssp->annot;
         }
      }
   }
+  ValidateAllAlignmentsInAnnotList (sap, svp);
 }
 
 

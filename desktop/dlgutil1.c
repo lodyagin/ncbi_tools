@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.54 $
+* $Revision: 6.66 $
 *
 * File Description: 
 *
@@ -52,6 +52,7 @@
 #include <edutil.h>
 #include <explore.h>
 #include <sqnutils.h>
+#include <alignmgr2.h>
 
 #define NUMBER_OF_SUFFIXES    8
 
@@ -492,8 +493,8 @@ extern void UpdateGeneLocation
       if ((strandfeat == Seq_strand_minus && strandgene != Seq_strand_minus)
           || (strandfeat != Seq_strand_minus && strandgene == Seq_strand_minus))
       {
-        tmpslp = SeqLocCopyRegion (SeqLocId (gene->location), gene->location,
-                                   bsp, 0, bsp->length - 1, Seq_strand_minus, FALSE);
+        tmpslp = SeqLocCopy (gene->location);
+        SeqLocRevCmp (tmpslp);
         slp = SeqLocMerge (bsp, tmpslp, new_feat_loc, TRUE, FALSE, hasNulls);
         tmpslp = SeqLocFree (tmpslp);
       }
@@ -1171,7 +1172,7 @@ extern Boolean FeatFormReplaceWithoutUpdateProc (ForM f)
   Char            symbol [128];
   Int2            usexref;
   Int2            val;
-  ValNodePtr      vnp;
+  ValNodePtr      vnp, err_list;
   SeqFeatXrefPtr  xref;
   SeqLocPtr       old_location = NULL; /* we need the old location of the feature 
                                         * if we're going to do a gene update    
@@ -1234,6 +1235,9 @@ extern Boolean FeatFormReplaceWithoutUpdateProc (ForM f)
       if (sfp->location == NULL) {
         SeqEntrySetScope (oldscope);
         ErrPostEx (SEV_ERROR, 0, 0, "Feature must have a location!");
+        err_list = TestDialog (ffp->location);
+        DisplayErrorMessages ("Location Errors", err_list);
+        err_list = ValNodeFree (err_list);    
         return FALSE;
       }
       bsp = GetBioseqGivenSeqLoc (sfp->location, ffp->input_entityID);
@@ -1570,19 +1574,28 @@ extern void StdFeatFormAcceptButtonProc (ButtoN b)
   FeatureFormPtr  ffp;
   SeqLocPtr       slp;
   WindoW          w;
+  ValNodePtr      err_list;
+  SeqEntryPtr     oldscope, sep;
 
   if (b != NULL) {
     w = ParentWindow (b);
     ffp = (FeatureFormPtr) GetObjectExtra (b);
     if (ffp != NULL && ffp->form != NULL && ffp->actproc != NULL) {
+      sep = GetTopSeqEntryForEntityID (ffp->input_entityID);
+      oldscope = SeqEntrySetScope (sep);
       slp = DialogToPointer (ffp->location);
       if (slp == NULL) {
         ErrPostEx (SEV_ERROR, 0, 0, "Feature must have a location!");
+        err_list = TestDialog (ffp->location);
+        DisplayErrorMessages ("Location Errors", err_list);
+        err_list = ValNodeFree (err_list);    
+        SeqEntrySetScope (oldscope);
         return;
       }
       SeqLocFree (slp);
       Hide (w);
       (ffp->actproc) (ffp->form);
+      SeqEntrySetScope (oldscope);
     }
     Update ();
     Remove (w);
@@ -2768,6 +2781,85 @@ extern DialoG CreateQualsDialog (GrouP h, Uint2 rows, Int2 spacing,
                               QualsDialogToGBQualPtr);
 }
 
+static void CreateSeqAlignLabel (SeqAlignPtr salp, CharPtr buf, Int4 buf_size)
+{
+  Int4     remaining_len, aln_pos, id_len;
+  SeqIdPtr sip;
+  CharPtr  buf_ptr;
+  
+  if (buf == NULL || buf_size < 1)
+  {
+    return;
+  }
+  MemSet (buf, 0, buf_size);
+  if (salp == NULL)
+  {
+    return;
+  }
+  remaining_len = buf_size - 1;
+  buf_ptr = buf;
+  StringNCat (buf_ptr, "aln|", remaining_len);
+  remaining_len -= 4;
+  
+  if (remaining_len <= 3)
+  {
+    return;
+  }
+  buf_ptr += 4;
+  
+  for (aln_pos = 1; aln_pos <= salp->dim && remaining_len > 0; aln_pos++)
+  {
+    sip = AlnMgr2GetNthSeqIdPtr(salp, aln_pos);
+    SeqIdWrite (sip, buf_ptr, PRINTID_REPORT, remaining_len);
+    id_len = StringLen (buf_ptr);
+    remaining_len -= id_len;
+    buf_ptr += id_len;
+    /* put comma between IDs in list */
+    if (aln_pos < salp->dim && remaining_len > 0)
+    {
+      StringCat (buf_ptr, ",");
+      remaining_len -= 1;
+      buf_ptr += 1;
+    }
+  }
+  
+  /* add ellipsis to indicate unshown IDs */
+  if (remaining_len == 0 && aln_pos < salp->dim)
+  {
+    buf_ptr -= 3;
+    StringCat (buf_ptr, "...");
+  }
+}
+
+static void GetAlignmentsInSeqEntryCallback (SeqAnnotPtr sap, Pointer userdata)
+{
+  SeqAlignPtr PNTR salp_list;
+  SeqAlignPtr salp, last_salp;
+  
+  if (sap == NULL || sap->type != 2 || userdata == NULL) 
+  {
+    return;
+  }
+  salp_list = (SeqAlignPtr PNTR) userdata;
+  salp = (SeqAlignPtr) sap->data;
+  if (salp == NULL) return;
+  salp = SeqAlignListDup(salp);
+  AlnMgr2IndexSeqAlign(salp);
+  if (*salp_list == NULL)
+  {
+    *salp_list = salp; 
+  }
+  else
+  {
+    last_salp = *salp_list;
+    while (last_salp->next != NULL)
+    {
+      last_salp = last_salp->next;
+    }
+    last_salp->next = salp;
+  }
+}
+
 typedef struct intervalpage {
   DIALOG_MESSAGE_BLOCK
   DialoG             ivals;
@@ -2777,13 +2869,36 @@ typedef struct intervalpage {
   Int2               count;
   SeqIdPtr           PNTR sip_list;
   EnumFieldAssoc     PNTR alist;
-  EnumFieldAssocPtr  alists [4];
+  EnumFieldAssocPtr  alists [5];
   Int4               PNTR lengths;
   Boolean            nucsOK;
   Boolean            protsOK;
   Boolean            showIdTags;
   FeatureFormPtr     ffp;
   IntEdPartialProc   proc;
+  
+  Int4               strand_col;  /* column for selecting strand.
+                                   * 2 if nucsOK, -1 otherwise
+                                   */
+  Int4               seqid_col;   /* column for entering SeqIds,
+                                   * which could be in a different place 
+                                   * depending on nucsOK or -1 if not show_seqid
+                                   */
+  Int4               aln_col;     /* column for selecting alignments,
+                                   * could be in a different place if not show_seqid
+                                   * or -1 if not use_aln
+                                   */
+  Boolean            show_seqids; /* false when entering coordinates for an entire
+                                   * alignments, true otherwise
+                                   */
+  
+  /* for editing alignment intervals */
+  SeqAlignPtr        PNTR salp_list; 
+  TaglistCallback    PNTR callbacks;
+  EnumFieldAssoc     PNTR aln_alist;
+  Int2               aln_count;
+  Int4               PNTR aln_lengths;
+  
 } IntervalPage, PNTR IntervalPagePtr;
 
 #define NUM_IVAL_ROWS  7
@@ -2956,7 +3071,6 @@ static void CorrectIntervalEditorSeqIdEnum (IntervalPagePtr ipp, SeqLocPtr slp)
   BioseqPtr           bsp;
   Char                str [128];
   CharPtr             ptr;
-  Int4                id_column;
   
   if (ipp == NULL || slp == NULL)
   {
@@ -3065,18 +3179,89 @@ static void CorrectIntervalEditorSeqIdEnum (IntervalPagePtr ipp, SeqLocPtr slp)
     ipp->lengths = new_lengths;
     ipp->count = j;
     
-    if (ipp->nucsOK) 
-    {
-      id_column = 3;
-    }
-    else
-    {
-      id_column = 2;
-    }
-    ipp->alists [id_column] = ipp->alist;
-    UpdateTagListPopupChoices (ipp->ivals, id_column);
+    ipp->alists [ipp->seqid_col] = ipp->alist;
+    UpdateTagListPopupChoices (ipp->ivals, ipp->seqid_col);
   }
   missing_list = ValNodeFree (missing_list);
+}
+
+static void 
+BuildIntervalString 
+(IntervalPagePtr ipp,
+ CharPtr         fuzz_from_ch,
+ Int4            start,
+ CharPtr         fuzz_to_ch,
+ Int4            stop,
+ Uint2           strand,
+ Int4            seq,
+ Int4            salp_num,
+ Boolean         isInterval,
+ Boolean         isPoint,
+ CharPtr         buf,
+ Int4            buf_len)
+{
+  CharPtr cp;
+  Boolean need_tab = FALSE;
+  
+  if (ipp == NULL || fuzz_from_ch == NULL || fuzz_to_ch == NULL || buf == NULL || buf_len == 0)
+  {
+    return;
+  }
+  
+  MemSet (buf, 0, buf_len);  
+  
+  if (isInterval)
+  {
+    sprintf (buf, "%s%ld\t%s%ld",
+             fuzz_from_ch, (long) (start + 1),
+             fuzz_to_ch, (long) (stop + 1));
+    need_tab = TRUE;
+  }
+  else if (isPoint)
+  {
+    sprintf (buf, "%ld%s\t%ld%s",
+             (long) (start + 1), fuzz_from_ch,
+             (long) (stop + 1), fuzz_to_ch);
+    need_tab = TRUE;
+  }
+  
+  cp = buf + StringLen (buf);
+  if (ipp->strand_col > -1)
+  {
+    if (need_tab)
+    {
+      StringCat (cp, "\t");
+      cp++;
+    }
+    sprintf (cp, "%d", (int) strand);
+    need_tab = TRUE;
+    cp += StringLen (cp);
+  }
+  
+  if (ipp->seqid_col > -1)
+  {
+    if (need_tab)
+    {
+      StringCat (cp, "\t");
+      cp++;
+    }
+    sprintf (cp, "%d", (int) seq);
+    need_tab = TRUE;
+    cp += StringLen (cp);
+  }
+  
+  if (ipp->aln_col > -1)
+  {
+    if (need_tab)
+    {
+      StringCat (cp, "\t");
+      cp++;
+    }
+    sprintf (cp, "%d", (int) salp_num);
+    need_tab = TRUE;
+    cp += StringLen (cp);
+  }
+  StringCat (cp, "\n");
 }
 
 static void SeqLocPtrToIntervalPage (DialoG d, Pointer data)
@@ -3105,10 +3290,12 @@ static void SeqLocPtrToIntervalPage (DialoG d, Pointer data)
   SeqPntPtr        spp;
   Int4             start;
   Int4             stop;
-  Char             str [128];
-  Uint1            strand;
+  Char             str [255];
+  Uint1            strand, aln_strand;
   TagListPtr       tlp;
   ValNodePtr       vnp;
+  Int4             salp_num, salp_row;
+  SeqIdPtr         tmp_sip, bsp_id;
 
   ipp = (IntervalPagePtr) GetObjectExtra (d);
   if (ipp == NULL) return;
@@ -3207,30 +3394,58 @@ static void SeqLocPtrToIntervalPage (DialoG d, Pointer data)
               }
             }
           }
-          if (ipp->nucsOK) {
-            if (isInterval) {
-              sprintf (str, "%s%ld\t%s%ld\t%d\t%d\n",
-                       fuzz_from_ch, (long) (start + 1),
-                       fuzz_to_ch, (long) (stop + 1),
-                       (int) strand, (int) seq);
-            } else if (isPoint) {
-              /*
-              sprintf (str, "%s%ld\t%s%ld\t%d\t%d\n",
-                       fuzz_from_ch, (long) (start + 1),
-                       fuzz_to_ch, (long) (stop + 1),
-                       (int) strand, (int) seq);
-              */
-              sprintf (str, "%ld%s\t%ld%s\t%d\t%d\n",
-                       (long) (start + 1), fuzz_from_ch,
-                       (long) (stop + 1), fuzz_to_ch,
-                       (int) strand, (int) seq);
+          
+          salp_num = 0;
+          salp_row = 0;
+          if (seq > 0 && ipp->salp_list != NULL)
+          {
+            salp_num = 1;
+            while (salp_num <= ipp->aln_count
+                   && salp_row == 0)
+            {
+              tmp_sip = SeqIdPtrFromSeqAlign (ipp->salp_list [salp_num]);
+              bsp = BioseqFind (ipp->sip_list [seq]);
+              if (bsp != NULL)
+              {
+                for (bsp_id = bsp->id;
+                     bsp_id != NULL && salp_row == 0; 
+                     bsp_id = bsp_id->next)
+                {
+                  salp_row = SeqIdOrderInBioseqIdList(bsp_id, tmp_sip);
+                }
+              }
+              if (salp_row < 1)
+              {
+                salp_num++;
+              }
             }
-          } else {
-            sprintf (str, "%s%ld\t%s%ld\t%d\n",
-                     fuzz_from_ch, (long) (start + 1),
-                     fuzz_to_ch, (long) (stop + 1),
-                     (int) seq);
+            if (salp_row < 1)
+            {
+              salp_num = 0;
+            }
+            else
+            {
+              start = AlnMgr2MapBioseqToSeqAlign(ipp->salp_list [salp_num], start, salp_row);
+              stop = AlnMgr2MapBioseqToSeqAlign(ipp->salp_list [salp_num], stop, salp_row);
+              aln_strand = AlnMgr2GetNthStrand (ipp->salp_list [salp_num], salp_row);
+              /* if reverse strand in alignment, reverse strand for location */
+              if (aln_strand == Seq_strand_minus)
+              {
+                if (strand == Seq_strand_minus)
+                {
+                  strand = Seq_strand_plus;
+                }
+                else if (strand == Seq_strand_plus)
+                {
+                  strand = Seq_strand_minus;
+                }
+              }
+            }
           }
+          
+          BuildIntervalString (ipp, fuzz_from_ch, start, fuzz_to_ch, stop,
+                               strand, seq, salp_num, isInterval, isPoint,
+                               str, sizeof (str));
           vnp = ValNodeNew (head);
           if (head == NULL) {
             head = vnp;
@@ -3316,357 +3531,1178 @@ static void SeqLocPtrToIntervalPage (DialoG d, Pointer data)
 
 extern void SetSequenceAndStrandForIntervalPage (DialoG d)
 {
-  IntervalPagePtr  ipp;
-  TagListPtr       tlp;
-  ValNodePtr       vnp;
-  CharPtr          cp;
-  CharPtr          tabptr;
-  ValNodePtr       saved_list;
+  SendMessageToDialog (d, NUM_VIB_MSG + 1);
+}
+
+static Boolean 
+ReadFromValueFromDialogLine 
+(CharPtr line,
+ Int4Ptr p_from_val,
+ BoolPtr fuzz_after)
+{
+  CharPtr txt, ptr;
+  Int4    len;
+  Boolean okay;
+  Int4    val;
+  Int4    j;
+  Char    ch;
   
-  ipp = (IntervalPagePtr) GetObjectExtra (d);
-  if (ipp == NULL) return;
-  tlp = GetObjectExtra (ipp->ivals);
-  if (tlp == NULL) return;
-  saved_list = tlp->vnp;
-  tlp->vnp = NULL;
-  SendMessageToDialog (tlp->dialog, VIB_MSG_RESET);
-  tlp->vnp = saved_list;
-  for (vnp = tlp->vnp; vnp != NULL; vnp = vnp->next) 
+  if (p_from_val == NULL || fuzz_after == NULL || StringHasNoText (line))
   {
-    cp = vnp->data.ptrvalue;
-    if (cp != NULL)
-    {
-      tabptr = StringChr (cp, '\t');
-      if (tabptr != NULL)
-      {
-      	tabptr = StringChr (tabptr + 1, '\t');
+    return FALSE;
+  }
+
+  txt = ExtractTagListColumn (line, 0);
+  okay = FALSE;
+  len = StringLen (txt);
+  for (j = 0; j < len; j++) {
+    ch = txt [j];
+    if (ch != ' ' && ch != '\t' && ch != '\n') {
+      okay = TRUE;
+    }
+  }
+  if (okay) {
+    *fuzz_after = FALSE;
+    *p_from_val = 0;
+
+    ptr = StringChr (txt, '<');
+    if (ptr != NULL) {
+      *ptr = ' ';
+    }
+    ptr = StringChr (txt, '>');
+    if (ptr != NULL) {
+      *ptr = ' ';
+    }
+    ptr = StringChr (txt, '^');
+    if (ptr != NULL) {
+      *fuzz_after = TRUE;
+      *ptr = ' ';
+    }
+    TrimSpacesAroundString (txt);
+    if (StrToLong (txt, &val)) {
+      *p_from_val = val;
+    } else {
+      okay = FALSE;
+    }
+  } else {
+    okay = FALSE;
+  }
+  MemFree (txt);
+  return okay;
+}
+
+static Boolean 
+ReadToValueFromDialogLine 
+(CharPtr line,
+ Int4Ptr p_to_val,
+ Int4Ptr p_from_val,
+ BoolPtr fuzz_after,
+ BoolPtr isInterval,
+ BoolPtr isPoint,
+ Boolean partial5,
+ Boolean partial3)
+{
+  CharPtr txt, ptr;
+  Int4    val, tmp;
+  Boolean okay = TRUE;
+  
+  if (p_to_val == NULL || p_from_val == NULL || fuzz_after == NULL
+      || isInterval == NULL || isPoint == NULL)
+  {
+    return FALSE;
+  }
+  
+  *p_to_val = 0;
+  
+  txt = ExtractTagListColumn (line, 1);
+  if (! StringHasNoText (txt)) {
+    ptr = StringChr (txt, '<');
+    if (ptr != NULL) {
+      *ptr = ' ';
+    }
+    ptr = StringChr (txt, '>');
+    if (ptr != NULL) {
+      *ptr = ' ';
+    }
+    ptr = StringChr (txt, '^');
+    if (ptr != NULL) {
+      *fuzz_after = TRUE;
+      *ptr = ' ';
+    }
+    TrimSpacesAroundString (txt);
+    if (StrToLong (txt, &val)) {
+      *p_to_val = val;
+      if (*fuzz_after && *p_to_val == *p_from_val + 1) {
+        *isInterval = FALSE;
+        *isPoint = TRUE;
+        /* from++; */ /* this was causing point to be thrown off */
+      } else if (*p_to_val == *p_from_val && (! partial5) && (! partial3)) {
+        *isInterval = FALSE;
+        *isPoint = TRUE;
       }
-      if (tabptr != NULL)
+    } else {
+      okay = FALSE;
+    }
+  } else {
+    /*
+    okay = FALSE;
+    */
+    *isInterval = FALSE;
+    *isPoint = TRUE;
+    *p_to_val = *p_from_val;
+  }
+  MemFree (txt);
+  
+  if (okay && *isInterval) {
+    if (*p_from_val > *p_to_val) {
+      tmp = *p_from_val;
+      *p_from_val = *p_to_val;
+      *p_to_val = tmp;
+    }
+  }
+  
+
+  return okay;
+}
+
+static Boolean 
+ReadStrandFromDialogLine 
+(CharPtr  line,
+ Int4     strand_col,
+ Uint2Ptr p_strand_val,
+ Uint2Ptr p_prev_strand_val)
+{
+  CharPtr txt;
+  Int2    val2;
+  
+  if (p_strand_val == NULL
+      || p_prev_strand_val == NULL)
+  {
+    return FALSE;
+  }
+  
+  *p_strand_val = Seq_strand_unknown;
+  if (strand_col > -1) {
+    txt = ExtractTagListColumn (line, strand_col);
+    if (txt != NULL && StrToInt (txt, &val2)) {
+      *p_strand_val = val2;
+      if (*p_strand_val > Seq_strand_both_rev) {
+        *p_strand_val = Seq_strand_other;
+      }
+      *p_prev_strand_val = *p_strand_val;
+    } else {
+      *p_strand_val = *p_prev_strand_val;
+    }
+    MemFree (txt);
+  }
+  if (*p_strand_val == Seq_strand_unknown) {
+    *p_strand_val = Seq_strand_plus;
+  }
+  return TRUE;
+}
+
+static Boolean 
+ReadSeqIdFromDialogLine 
+(CharPtr       line, 
+ Int4          seqid_col,
+ SeqIdPtr PNTR p_sip_val,
+ SeqIdPtr PNTR p_prev_sip_val,
+ SeqIdPtr PNTR sip_list,
+ Int4          sip_count)
+{
+  CharPtr txt;
+  Int2    val2;
+  Boolean okay = TRUE;
+  
+  if (p_sip_val == NULL || p_prev_sip_val == NULL
+      || sip_count == 0 || sip_list == NULL
+      || seqid_col < 0)
+  {
+    return FALSE;
+  }
+  *p_sip_val = NULL;
+  txt = ExtractTagListColumn (line, seqid_col);
+  if (txt != NULL) {
+    if (! StrToInt (txt, &val2) || val2 <= 0)
+    {
+      if (*p_prev_sip_val != NULL)
       {
-      	cp[0] = '\t';
-      	cp++;
-      	while (*tabptr != 0)
-      	{
-      	  *cp = *tabptr;
-      	  cp++;
-      	  tabptr++;
-      	}
-      	*cp = 0;
+        *p_sip_val = *p_prev_sip_val;
+      }
+      else
+      {
+        okay = FALSE;
+      }
+    }
+    else if (val2 <= sip_count)
+    {
+      *p_sip_val = sip_list [val2];
+      *p_prev_sip_val = *p_sip_val;
+    } else {
+      okay = FALSE;
+    }
+  }
+  else
+  {
+    okay = FALSE;
+  }
+  MemFree (txt);
+  return okay;
+}
+
+static Boolean 
+ReadSeqAlignFromDialogLine
+(CharPtr          line,
+ Int4             aln_col,
+ SeqAlignPtr PNTR p_salp_val,
+ SeqAlignPtr PNTR p_prev_salp_val,
+ SeqAlignPtr PNTR salp_list,
+ Int4             salp_count)
+{
+  CharPtr txt;
+  Int2    val2;
+  Boolean okay = TRUE;
+  
+  if (p_salp_val == NULL || p_prev_salp_val == NULL 
+      || salp_count == 0 || salp_list == NULL
+      || aln_col < 0)
+  {
+    return FALSE;
+  }
+  
+  txt = ExtractTagListColumn (line, aln_col);
+  if (txt != NULL) {
+    if (! StrToInt (txt, &val2) || val2 <= 0)
+    {
+      if (*p_prev_salp_val != NULL)
+      {
+        *p_salp_val = *p_prev_salp_val;
+      }
+      else
+      {
+        okay = FALSE;
+      }
+    }
+    else if (val2 <= salp_count)
+    {
+      *p_salp_val = salp_list [val2];
+      *p_prev_salp_val = *p_salp_val;
+    } else {
+      okay = FALSE;
+    }
+  }
+  else
+  {
+    if (*p_prev_salp_val == NULL)
+    {
+      okay = FALSE;
+    }
+    else
+    {
+      *p_salp_val = *p_prev_salp_val;
+    }
+ }
+ MemFree (txt);
+ return okay;
+}
+
+static Boolean 
+GetBioseqAlignmentRow 
+(SeqAlignPtr salp,
+ BioseqPtr   bsp, 
+ Int4Ptr     aln_row)
+{
+  SeqIdPtr  tmp_sip, bsp_id;
+  if (salp == NULL || bsp == NULL || aln_row == NULL)
+  {
+    return FALSE;
+  }
+  
+  *aln_row = 0;
+
+  tmp_sip = SeqIdPtrFromSeqAlign (salp);
+  
+  for (bsp_id = bsp->id;
+       bsp_id != NULL && *aln_row == 0; 
+       bsp_id = bsp_id->next)
+  {
+    *aln_row = SeqIdOrderInBioseqIdList(bsp_id, tmp_sip);
+  }
+  if (*aln_row < 1)
+  {
+    return FALSE;
+  }
+  else
+  {
+    return TRUE;
+  }
+}
+
+static void 
+ListAlignmentsThatContainSequence 
+(SeqAlignPtr PNTR salp_list, 
+ Int4        salp_count,
+ BioseqPtr   bsp,
+ SeqIdPtr    sip,
+ ValNodePtr  PNTR head)
+{
+  Int4       i;
+  Char       str [34];
+  Char       id_label [128];
+  Int4       aln_row;
+  ValNodePtr good_aln = NULL;
+  CharPtr    none_found_fmt = "%s is not found in any alignments";
+  CharPtr    one_found_fmt = "%s is found in %s";
+  CharPtr    some_found_fmt = "%s is found in the following alignments";
+  CharPtr    err_msg;
+  CharPtr    cp;
+  
+  if (head == NULL || bsp == NULL || sip == NULL)
+  {
+    return;
+  }
+  SeqIdWrite (sip, id_label, PRINTID_REPORT, sizeof (id_label));
+  
+  /* indent the names of the alignments */
+  str [0] = ' ';
+  str [1] = ' ';
+  str [2] = ' ';
+  str [3] = ' ';
+  for (i = 0; i < salp_count; i++)
+  {
+    if (GetBioseqAlignmentRow (salp_list [i], bsp, &aln_row))
+    {
+      CreateSeqAlignLabel (salp_list [i], str + 4, sizeof (str) - 4);
+      ValNodeAddPointer (&good_aln, 0, StringSave (str));
+    }           
+  }
+  if (good_aln == NULL)
+  {
+    err_msg = (CharPtr) MemNew ((StringLen (none_found_fmt) + StringLen (id_label))
+                                * sizeof (Char));
+    if (err_msg != NULL)
+    {
+      sprintf (err_msg, none_found_fmt, id_label);
+      ValNodeAddPointer (head, 0, err_msg);
+    }
+  }
+  else if (good_aln->next == NULL)
+  {
+    err_msg = (CharPtr) MemNew ((StringLen (one_found_fmt) 
+                                 + StringLen (id_label)
+                                 + StringLen (good_aln->data.ptrvalue))
+                                * sizeof (Char));
+    if (err_msg != NULL)
+    {
+      cp = (CharPtr) good_aln->data.ptrvalue;
+      /* skip over indented space */
+      cp += 4;
+      sprintf (err_msg, one_found_fmt, id_label, cp);
+      ValNodeAddPointer (head, 0, err_msg);
+      good_aln = ValNodeFreeData (good_aln);
+    }
+  }
+  else
+  {
+    err_msg = (CharPtr) MemNew ((StringLen (some_found_fmt) 
+                                 + StringLen (id_label))
+                                * sizeof (Char));
+    if (err_msg != NULL)
+    {
+      sprintf (err_msg, some_found_fmt, id_label);
+      ValNodeAddPointer (head, 0, err_msg);
+      ValNodeLink (head, good_aln);
+    }
+  }
+}
+
+static void 
+ListSequencesInAlignment 
+(SeqIdPtr    PNTR sip_list,
+ Int4        sip_count,
+ SeqAlignPtr salp,
+ ValNodePtr  PNTR head)
+{
+  SeqIdPtr   tmp_sip, aln_id;
+  BioseqPtr  bsp;
+  Int4       i;
+  Boolean    found;
+  Char       id_label [128];
+  
+  if (salp == NULL || head == NULL)
+  {
+    return;
+  }
+
+  tmp_sip = SeqIdPtrFromSeqAlign (salp);
+  if (tmp_sip == NULL)
+  {
+    ValNodeAddPointer (head, 0, StringSave ("Selected alignment contains no sequences"));
+    return;
+  }
+  /* indent list of sequence IDs */
+  id_label [0] = ' ';
+  id_label [1] = ' ';
+  id_label [2] = ' ';
+  id_label [3] = ' ';
+  ValNodeAddPointer (head, 0, StringSave ("The selected alignment contains the following sequences:"));
+  for (aln_id = tmp_sip; aln_id != NULL; aln_id = aln_id->next)
+  {
+    bsp = BioseqFind (aln_id);
+    if (bsp == NULL)
+    {
+      continue;
+    }
+    found = FALSE;
+    for (i = 0; i < sip_count && ! found; i++)
+    {
+      if (SeqIdIn (sip_list [i], bsp->id))
+      {
+        SeqIdWrite (sip_list [i], id_label + 4, PRINTID_REPORT, sizeof (id_label) - 4);
+        ValNodeAddPointer (head, 0, StringSave (id_label));
+        found = TRUE;
       }
     }
   }
+}
 
-  SendMessageToDialog (tlp->dialog, VIB_MSG_REDRAW);
-	
+extern Boolean AdjustFromForGap (Int4Ptr p_from, SeqAlignPtr salp, Int4 aln_len, Int4 aln_row)
+{
+  Int4 aln_from, aln_offset = 0;
+  
+  if (p_from == NULL || salp == NULL || aln_len == 0 || aln_row == 0
+      || *p_from < 1)
+  {
+    return FALSE;
+  }
+  
+  aln_from = AlnMgr2MapSeqAlignToBioseq(salp, (*p_from) - 1, aln_row);
+  
+  while (aln_from == -2 && (*p_from) + aln_offset < aln_len)
+  {
+    aln_offset ++;
+    aln_from = AlnMgr2MapSeqAlignToBioseq(salp, (*p_from) + aln_offset - 1, aln_row);
+  }
+  if (aln_from < 0)
+  {
+    return FALSE;
+  }
+  else
+  {
+    *p_from = aln_from + 1;
+    return TRUE;
+  }
+}
+
+extern Boolean AdjustToForGap (Int4Ptr p_to, SeqAlignPtr salp, Int4 aln_row)
+{
+  Int4 aln_to, aln_offset = 0;
+  
+  if (p_to == NULL || salp == NULL || aln_row == 0
+      || *p_to < 1)
+  {
+    return FALSE;
+  }
+  
+  aln_to = AlnMgr2MapSeqAlignToBioseq(salp, (*p_to) - 1, aln_row);
+  aln_offset = 0;
+  while (aln_to == -2 && (*p_to) - 1 - aln_offset >= 0)
+  {
+    aln_offset ++;
+    aln_to = AlnMgr2MapSeqAlignToBioseq(salp, (*p_to) - 1 - aln_offset, aln_row);
+  }
+  if (aln_to < 0)
+  {
+    return FALSE;
+  }
+  else
+  {
+    *p_to = aln_to + 1;
+    return TRUE;
+  }
+}
+
+static Boolean AdjustStrandForAlignment (Uint2Ptr p_strand, SeqAlignPtr salp, Int4 aln_row)
+{
+  Uint2 aln_strand;
+  
+  if (p_strand == NULL || salp == NULL || aln_row < 1)
+  {
+    return FALSE;
+  }
+  
+  aln_strand = AlnMgr2GetNthStrand (salp, aln_row);
+  if (aln_strand == Seq_strand_minus)
+  {
+    /* if alignment strand is minus, reverse strand of location */
+    if (*p_strand == Seq_strand_minus)
+    {
+      *p_strand = Seq_strand_plus;
+    }
+    else if (*p_strand == Seq_strand_plus)
+    {
+      *p_strand = Seq_strand_minus;
+    }
+  }
+  return TRUE;
+}
+
+static Boolean CoordinatesValidForBioseq (Int4 from, Int4 to, BioseqPtr bsp)
+{
+  if (bsp == NULL || from < 1 || to > bsp->length) 
+  {
+    return FALSE;
+  }
+  else
+  {
+    return TRUE;
+  }
+}
+
+static ValNodePtr TestIntervalEditor (DialoG d)
+{
+  IntervalPagePtr  ipp;
+  TagListPtr       tlp;
+  ValNodePtr       head = NULL, vnp;
+  Boolean          from_ok, to_ok, seqid_ok, salp_ok;
+  Boolean          partial5, partial3;
+  Int4             to, from, aln_row;
+  Int4             interval_num;
+  Uint2            strand, prev_strand = Seq_strand_unknown;
+  SeqIdPtr         seqid, prev_seqid = NULL;
+  SeqAlignPtr      salp, prev_salp = NULL;
+  Char             err_msg[200];
+  BioseqPtr        bsp = NULL;
+  Int4             aln_len;
+  Boolean          isInterval, isPoint, fuzz_before, fuzz_after;
+  Int2             fuzz_from;
+  Int2             fuzz_to;
+  
+  ipp = (IntervalPagePtr) GetObjectExtra (d);
+  if (ipp == NULL) 
+  {
+    ValNodeAddPointer (&head, 0, StringSave ("No dialog data"));
+    return head;
+  }
+  
+  tlp = GetObjectExtra (ipp->ivals);
+  if (tlp == NULL)
+  {
+    ValNodeAddPointer (&head, 0, StringSave ("No dialog data"));
+    return head;
+  }
+  
+  if (tlp->vnp == NULL)
+  {
+    ValNodeAddPointer (&head, 0, StringSave ("No location intervals listed!"));
+  }
+
+  partial5 = GetStatus (ipp->partial5);
+  partial3 = GetStatus (ipp->partial3);
+
+  for (vnp = tlp->vnp, interval_num = 1;
+       vnp != NULL; 
+       vnp = vnp->next, interval_num++) {
+    isInterval = TRUE;
+    isPoint = FALSE;
+    fuzz_from = -1;
+    fuzz_to = -1;
+    fuzz_before = FALSE;
+    fuzz_after = FALSE;
+    from = 0;
+    to = 0;
+
+    from_ok = ReadFromValueFromDialogLine ((CharPtr) vnp->data.ptrvalue,
+                                           &from, &fuzz_after);
+    if (!from_ok)
+    {
+      /* we'll silently ignore lines that have no from value */
+      continue;
+    }
+    
+    to_ok = ReadToValueFromDialogLine ((CharPtr) vnp->data.ptrvalue, 
+                                         &to, &from, &fuzz_after, &isInterval, &isPoint,
+                                         partial5, partial3);
+    if (!to_ok)
+    {
+      sprintf (err_msg, "Bad to value in interval %d", interval_num);
+      ValNodeAddPointer (&head, 0, StringSave ("err_msg"));
+    }
+    strand = Seq_strand_unknown;
+    ReadStrandFromDialogLine (vnp->data.ptrvalue, ipp->strand_col, 
+                              &strand, &prev_strand);
+    
+    seqid_ok = ReadSeqIdFromDialogLine (vnp->data.ptrvalue, ipp->seqid_col,
+                                         &seqid, &prev_seqid,
+                                         ipp->sip_list, ipp->count);
+    if (seqid_ok)
+    {
+      bsp = BioseqFind (seqid);
+      if (bsp == NULL)
+      {
+        sprintf (err_msg, "Can't find bioseq for interval %d", interval_num);
+        ValNodeAddPointer (&head, 0, StringSave (err_msg));
+        seqid_ok = FALSE;
+      }
+    }
+    else
+    {
+      sprintf (err_msg, "No sequence ID in interval %d", interval_num);
+      ValNodeAddPointer (&head, 0, StringSave (err_msg));
+    }
+
+      
+    /* get SeqAlign */
+    salp = NULL;
+    if (ipp->salp_list == NULL)
+    {
+      salp_ok = TRUE;
+      if (bsp != NULL)
+      {
+        if (!CoordinatesValidForBioseq (from, to, bsp))
+        {
+          sprintf (err_msg, "Coordinates for interval %d are not in sequence (1-%d)",
+                   interval_num, bsp->length);
+          ValNodeAddPointer (&head, 0, StringSave (err_msg));
+        }
+      }
+    }
+    else
+    {
+      salp_ok = ReadSeqAlignFromDialogLine (vnp->data.ptrvalue, 
+                                            ipp->aln_col,
+                                            &salp, &prev_salp,
+                                            ipp->salp_list,
+                                            ipp->aln_count);
+      if (!salp_ok)
+      {
+        sprintf (err_msg, "No alignment for interval %d", interval_num);
+        ValNodeAddPointer (&head, 0, StringSave (err_msg));
+      }
+      
+      if (salp_ok && seqid_ok)
+      {
+        aln_row = 0;
+        if (GetBioseqAlignmentRow (salp, bsp, &aln_row))
+        {
+          aln_len = SeqAlignLength (salp);
+          if (from < 1 || to > aln_len)
+          {
+            sprintf (err_msg, "Coordinates for interval %d are not in alignment interval (%d-%d)",
+                     interval_num, 1, aln_len);
+            ValNodeAddPointer (&head, 0, StringSave (err_msg));
+          }
+          else
+          {
+            /* check for locations in gaps */
+            if (!AdjustFromForGap (&from, salp, aln_len, aln_row)
+                || ! AdjustToForGap (&to, salp, aln_row))
+            {
+              sprintf (err_msg, "Interval %d is completely contained in a gap in the alignment.",
+                       interval_num);
+              ValNodeAddPointer (&head, 0, StringSave (err_msg));
+            }
+          }
+        }
+        else
+        {
+          sprintf (err_msg, "Sequence for interval %d not in selected alignment", interval_num);
+          ValNodeAddPointer (&head, 0, StringSave (err_msg));
+          ListAlignmentsThatContainSequence (ipp->salp_list, ipp->aln_count, 
+                                             bsp, seqid, &head);
+          ListSequencesInAlignment (ipp->sip_list, ipp->count, salp, &head);
+        }
+      }
+    }
+  }
+  
+  return head;
+}
+
+
+static Boolean 
+AddLocToList 
+(SeqIdPtr       seqid,
+ Uint2          strand,
+ Int4           from,
+ Int4           to,
+ Boolean        add_null,
+ Int2           fuzz_from,
+ Int2           fuzz_to,
+ Boolean        fuzz_before,
+ Boolean        fuzz_after,
+ Boolean        partial5,
+ Boolean        partial3,
+ SeqLocPtr PNTR pslp)
+{
+  SeqLocPtr slp;
+  SeqLocPtr tmploc1, tmploc2;
+  Boolean   isInterval;
+  Boolean   isPoint;
+  Int4      tmp;
+  
+  if (pslp == NULL || seqid == NULL)
+  {
+    return FALSE;
+  }
+            
+  if (add_null) {
+    /* add NULL location between last location and this one */
+    slp = ValNodeNew (NULL);
+    if (slp != NULL) {
+      slp->choice = SEQLOC_NULL;
+      tmploc1 = *pslp;
+      if (tmploc1 != NULL) {
+        if (tmploc1->choice == SEQLOC_MIX) {
+          tmploc2 = (ValNodePtr) (tmploc1->data.ptrvalue);
+          if (tmploc2 != NULL) {
+            while (tmploc2->next != NULL) {
+              tmploc2 = tmploc2->next;
+            }
+            tmploc2->next = slp;
+          }
+        } else {
+          tmploc2 = ValNodeNew (NULL);
+          if (tmploc2 != NULL) {
+            tmploc2->choice = SEQLOC_MIX;
+            tmploc2->data.ptrvalue = (Pointer) tmploc1;
+            tmploc1->next = slp;
+            *pslp = tmploc2;
+          }
+        }
+      }
+    }
+  }
+    
+  isInterval = TRUE;
+  isPoint = FALSE;
+  
+  /* make sure from and to are in correct order */
+  if (from > to)
+  {
+    tmp = from;
+    from = to;
+    to = tmp;
+  }
+
+  if (fuzz_after && to == from + 1) {
+    isInterval = FALSE;
+    isPoint = TRUE;
+    /* from++; */ /* this was causing point to be thrown off */
+  } else if (to == from && (! partial5) && (! partial3)) {
+    isInterval = FALSE;
+    isPoint = TRUE;
+  }
+          
+  if (isInterval) {
+    AddIntToSeqLoc (pslp, from - 1, to - 1, seqid,
+                    fuzz_from, fuzz_to, strand);
+  } else if (isPoint) {
+    AddSeqLocPoint (pslp, seqid, from, fuzz_before, fuzz_after, strand);
+  }
+  return TRUE;
+}
+
+static void SetPartialsForOneLocation (SeqLocPtr master_slp, Boolean partial5, Boolean partial3)
+{
+  SeqLocPtr  firstSlp, lastSlp, tmp_slp;
+  IntFuzzPtr ifp;
+  SeqIntPtr  sip;
+  SeqPntPtr  spp;
+  
+  if (master_slp == NULL)
+  {
+    return;
+  }
+  
+  /* now set partials for location */
+  firstSlp = NULL;
+  lastSlp = NULL;
+  tmp_slp = SeqLocFindNext (master_slp, NULL);
+  while (tmp_slp != NULL) {
+    if (firstSlp == NULL) {
+      firstSlp = tmp_slp;
+    }
+    lastSlp = tmp_slp;
+    tmp_slp = SeqLocFindNext (master_slp, tmp_slp);
+  }
+  if (firstSlp != NULL && partial5) {
+    if (firstSlp->choice == SEQLOC_INT && firstSlp->data.ptrvalue != NULL) {
+      sip = (SeqIntPtr) firstSlp->data.ptrvalue;
+      ifp = IntFuzzNew ();
+      if (ifp != NULL) {
+        ifp->choice = 4;
+        if (sip->strand == Seq_strand_minus || sip->strand == Seq_strand_both_rev) {
+          sip->if_to = ifp;
+          ifp->a = 1;
+        } else {
+          sip->if_from = ifp;
+          ifp->a = 2;
+        }
+      }
+    } else if (firstSlp->choice == SEQLOC_PNT && firstSlp->data.ptrvalue != NULL) {
+      spp = (SeqPntPtr) firstSlp->data.ptrvalue;
+      ifp = IntFuzzNew ();
+      if (ifp != NULL) {
+        ifp->choice = 4;
+        if (spp->strand == Seq_strand_minus || spp->strand == Seq_strand_both_rev) {
+          spp->fuzz = ifp;
+          ifp->a = 1;
+        } else {
+          spp->fuzz = ifp;
+          ifp->a = 2;
+        }
+      }
+    }
+  }
+  if (lastSlp != NULL && partial3) {
+    if (lastSlp->choice == SEQLOC_INT && lastSlp->data.ptrvalue != NULL) {
+      sip = (SeqIntPtr) lastSlp->data.ptrvalue;
+      ifp = IntFuzzNew ();
+      if (ifp != NULL) {
+        ifp->choice = 4;
+        if (sip->strand == Seq_strand_minus || sip->strand == Seq_strand_both_rev) {
+          sip->if_from = ifp;
+          ifp->a = 2;
+        } else {
+          sip->if_to = ifp;
+          ifp->a = 1;
+        }
+      }
+    } else if (lastSlp->choice == SEQLOC_PNT && lastSlp->data.ptrvalue != NULL) {
+      spp = (SeqPntPtr) lastSlp->data.ptrvalue;
+      ifp = IntFuzzNew ();
+      if (ifp != NULL) {
+        ifp->choice = 4;
+        if (spp->strand == Seq_strand_minus || spp->strand == Seq_strand_both_rev) {
+          spp->fuzz = ifp;
+          ifp->a = 2;
+        } else {
+          spp->fuzz = ifp;
+          ifp->a = 1;
+        }
+      }
+    }
+  }
+}
+
+static SeqLocPtr 
+ReadSingleSeqLoc 
+(TagListPtr      tlp,
+ IntervalPagePtr ipp,
+ Boolean         partial5,
+ Boolean         partial3, 
+ Boolean         nullsBetween)
+{
+  Int4             from, to, aln_row, aln_len;
+  Boolean          fuzz_after;
+  Boolean          fuzz_before;
+  Int2             fuzz_from;
+  Int2             fuzz_to;
+  Boolean          isInterval;
+  Boolean          isPoint;
+  Boolean          notFirst;
+  Boolean          okay;
+  SeqIdPtr         seqid, prev_sip;
+  SeqLocPtr        master_slp;
+  Uint2            strand, prev_strand;
+  ValNodePtr       vnp;
+  SeqAlignPtr      salp, prev_salp;
+  BioseqPtr        bsp;
+
+  if (tlp == NULL)
+  {
+    return NULL;
+  }
+  
+  prev_sip = NULL;
+  prev_salp = NULL;
+  prev_strand = Seq_strand_unknown;
+  master_slp = NULL;
+
+  notFirst = FALSE;
+  for (vnp = tlp->vnp; vnp != NULL; vnp = vnp->next) {
+    if (StringHasNoText (vnp->data.ptrvalue))
+    {
+      continue;
+    }
+    fuzz_from = -1;
+    fuzz_to = -1;
+    fuzz_before = FALSE;
+    fuzz_after = FALSE;
+    from = 0;
+    to = 0;
+    isInterval = TRUE;
+    isPoint = FALSE;
+    strand = Seq_strand_unknown;
+    seqid = NULL;
+    salp = NULL;
+    aln_row = 0;
+    if (!ReadFromValueFromDialogLine ((CharPtr) vnp->data.ptrvalue,
+                                           &from, &fuzz_after))
+    {
+      continue;
+    }
+    okay = ReadToValueFromDialogLine ((CharPtr) vnp->data.ptrvalue,
+                                         &to, &from, &fuzz_after,
+                                         &isInterval, &isPoint, 
+                                         partial5, partial3)
+           && ReadStrandFromDialogLine ((CharPtr) vnp->data.ptrvalue,
+                                        ipp->strand_col,
+                                        &strand, &prev_strand)
+           && ReadSeqIdFromDialogLine ((CharPtr) vnp->data.ptrvalue, ipp->seqid_col,
+                                       &seqid, &prev_sip,
+                                       ipp->sip_list, ipp->count)
+           && (ipp->salp_list == NULL 
+               || ReadSeqAlignFromDialogLine ((CharPtr) vnp->data.ptrvalue, ipp->aln_col,
+                                              &salp, &prev_salp, 
+                                              ipp->salp_list, ipp->aln_count))
+           && ((bsp = BioseqFind (seqid)) != NULL)
+           && (salp != NULL || CoordinatesValidForBioseq (from, to, bsp))
+           && (salp == NULL || 
+                (GetBioseqAlignmentRow (salp, bsp, &aln_row)
+                 && AdjustStrandForAlignment (&strand, salp, aln_row)
+                 && (aln_len = SeqAlignLength (salp)) > 0
+                 && AdjustFromForGap (&from, salp, aln_len, aln_row)
+                 && AdjustToForGap (&to, salp, aln_row)))
+           && AddLocToList (seqid, strand, from, to,
+                            (nullsBetween  && notFirst),
+                            fuzz_from, fuzz_to,
+                            fuzz_before, fuzz_after,
+                            partial5, partial3,
+                            &(master_slp));
+    if (okay)
+    {
+      notFirst = TRUE;
+    }
+    else
+    {
+      master_slp = SeqLocFree (master_slp);
+      return NULL;
+    }
+  }
+  
+  /* now set partials for location */
+  SetPartialsForOneLocation (master_slp, partial5, partial3);  
+  return master_slp;
+}
+
+static SeqLocPtr PNTR FreeSeqLocArray (SeqLocPtr PNTR loc_list, Int4 num_loc)
+{
+  Int4 j;
+  if (loc_list != NULL)
+  {
+    for (j = 0; j < num_loc; j++)
+    {
+      loc_list [j] = SeqLocFree (loc_list [j]);
+    }
+    loc_list = MemFree (loc_list);
+  }
+  return loc_list;
+}
+
+static SeqLocPtr 
+ReadAlignedSeqLocList
+(TagListPtr      tlp,
+ IntervalPagePtr ipp,
+ Boolean         partial5,
+ Boolean         partial3, 
+ Boolean         nullsBetween)
+{
+  Int4             from, to, aln_from, aln_to, aln_row, aln_len;
+  Boolean          fuzz_after;
+  Boolean          fuzz_before;
+  Int2             fuzz_from;
+  Int2             fuzz_to;
+  Boolean          isInterval;
+  Boolean          isPoint;
+  Boolean          notFirst;
+  Boolean          okay;
+  SeqIdPtr         seqid;
+  SeqLocPtr        master_slp, tmp_slp;
+  Uint2            strand, prev_strand, aln_strand;
+  ValNodePtr       vnp;
+  SeqAlignPtr      salp, prev_salp;
+  BioseqPtr        bsp;
+  SeqLocPtr PNTR   loc_list;
+  Int4             loc_num, max_locs;
+  Boolean          asked_about_repair = FALSE;
+  MsgAnswer        ans = ANS_YES;
+
+  if (tlp == NULL || ipp == NULL || ipp->salp_list == NULL)
+  {
+    return NULL;
+  }
+  
+  prev_salp = NULL;
+  prev_strand = Seq_strand_unknown;
+  master_slp = NULL;
+  
+  max_locs = 0;
+  for (vnp = tlp->vnp; vnp != NULL; vnp = vnp->next)
+  {
+    if (!ReadSeqAlignFromDialogLine ((CharPtr) vnp->data.ptrvalue, ipp->aln_col,
+                                     &salp, &prev_salp, 
+                                     ipp->salp_list, ipp->aln_count))
+    {
+      return NULL;
+    }
+    else
+    {
+      max_locs = MAX (max_locs, salp->dim);
+    }
+  }
+  if (max_locs == 0)
+  {
+    return NULL;
+  }
+  
+  loc_list = (SeqLocPtr PNTR) MemNew (max_locs * sizeof (SeqLocPtr));
+  if (loc_list == NULL)
+  {
+    return NULL;
+  }
+
+  prev_salp = NULL;
+
+  okay = TRUE;
+  notFirst = FALSE;
+  for (vnp = tlp->vnp; vnp != NULL && okay; vnp = vnp->next) {
+    if (StringHasNoText (vnp->data.ptrvalue))
+    {
+      continue;
+    }
+    fuzz_from = -1;
+    fuzz_to = -1;
+    fuzz_before = FALSE;
+    fuzz_after = FALSE;
+    from = 0;
+    to = 0;
+    isInterval = TRUE;
+    isPoint = FALSE;
+    strand = Seq_strand_unknown;
+    seqid = NULL;
+    salp = NULL;
+    aln_row = 0;
+    if (! ReadFromValueFromDialogLine ((CharPtr) vnp->data.ptrvalue,
+                                           &from, &fuzz_after))
+    {
+      continue;
+    }
+    okay = ReadToValueFromDialogLine ((CharPtr) vnp->data.ptrvalue,
+                                       &to, &from, &fuzz_after,
+                                       &isInterval, &isPoint, 
+                                       partial5, partial3)
+           && ReadStrandFromDialogLine ((CharPtr) vnp->data.ptrvalue,
+                                        ipp->strand_col,
+                                        &strand, &prev_strand)
+           && ReadSeqAlignFromDialogLine ((CharPtr) vnp->data.ptrvalue, ipp->aln_col,
+                                              &salp, &prev_salp, 
+                                              ipp->salp_list, ipp->aln_count);
+    if (okay)
+    {
+      for (loc_num = 0; loc_num < salp->dim; loc_num++)
+      {
+        aln_row = loc_num + 1;
+        aln_from = from;
+        aln_to = to;
+        aln_strand = strand;
+        seqid = AlnMgr2GetNthSeqIdPtr (salp, aln_row);
+        okay = ((bsp = BioseqFind (seqid)) != NULL)
+                 && AdjustStrandForAlignment (&aln_strand, salp, aln_row)
+                 && (aln_len = SeqAlignLength (salp)) > 0
+                 && AdjustFromForGap (&aln_from, salp, aln_len, aln_row)
+                 && AdjustToForGap (&aln_to, salp, aln_row)
+             && AddLocToList (seqid, aln_strand, aln_from, aln_to,
+                              (nullsBetween  && notFirst),
+                              fuzz_from, fuzz_to,
+                              fuzz_before, fuzz_after,
+                              partial5, partial3,
+                              &(loc_list [loc_num]));                              
+      }
+    }
+      
+    notFirst = TRUE;
+  }
+  
+  if (!okay)
+  {
+    loc_list = FreeSeqLocArray (loc_list, max_locs);
+    return NULL;
+  }
+  
+  /* now fix intervals that are out of order and set partials for locations */
+  for (loc_num = 0; loc_num < max_locs && loc_list [loc_num] != NULL; loc_num++)
+  {
+    bsp = BioseqFindFromSeqLoc (loc_list [loc_num]);
+    if (bsp != NULL && SeqLocBadSortOrder (bsp, loc_list [loc_num])) 
+    {
+      if (!asked_about_repair)
+      {
+        ans = Message (MSG_YN,
+            "Feature location intervals are out of order.  Do you want them repaired?");
+        asked_about_repair = TRUE;
+      }
+      if (ans == ANS_YES) {
+        tmp_slp = SeqLocMerge (bsp, loc_list [loc_num], NULL, FALSE, FALSE, nullsBetween);
+        loc_list [loc_num] = SeqLocFree (loc_list [loc_num]);
+        loc_list [loc_num] = tmp_slp;
+        if (bsp->repr == Seq_repr_seg) {
+          tmp_slp = SegLocToParts (bsp, loc_list [loc_num]);
+          loc_list [loc_num] = SeqLocFree (loc_list [loc_num]);
+          loc_list [loc_num] = tmp_slp;
+        }
+        FreeAllFuzz (loc_list [loc_num]);
+      }
+    }
+    SetSeqLocPartial (loc_list [loc_num], partial5, partial3);
+  }
+  
+  /* now make chain */
+  master_slp = loc_list [0];
+  tmp_slp = loc_list [0];
+  for (tmp_slp = loc_list [0], loc_num = 1; 
+       tmp_slp != NULL && loc_num < max_locs;
+       loc_num++)
+  {
+    tmp_slp->next = loc_list [loc_num];
+    tmp_slp = tmp_slp->next;
+  }
+  
+  loc_list = MemFree (loc_list);
+  
+  return master_slp;
 }
 
 static Pointer IntervalPageToSeqLocPtr (DialoG d)
 
 {
-  Char             ch;
-  SeqLocPtr        firstSlp;
-  Int4             from;
-  Boolean          fuzz_after;
-  Boolean          fuzz_before;
-  Int2             fuzz_from;
-  Int2             fuzz_to;
-  ValNodePtr       head;
-  IntFuzzPtr       ifp;
   IntervalPagePtr  ipp;
-  Boolean          isInterval;
-  Boolean          isPoint;
-  Int2             j;
-  SeqLocPtr        lastSlp;
-  Int2             len;
-  Boolean          notFirst;
   Boolean          nullsBetween;
-  Boolean          okay;
   Boolean          partial5;
   Boolean          partial3;
-  CharPtr          ptr;
-  SeqFeatPtr       sfp;
-  SeqIdPtr         seqid, prev_sip;
-  SeqIntPtr        sip;
-  SeqLocPtr        slp;
-  SeqPntPtr        spp;
-  Int2             strand, prev_strand;
+  SeqLocPtr        master_slp;
   TagListPtr       tlp;
-  Int4             tmp;
-  SeqLocPtr        tmploc1;
-  SeqLocPtr        tmploc2;
-  Int4             to;
-  CharPtr          txt;
-  Int4             val;
-  Int2             val2;
-  ValNodePtr       vnp;
 
   ipp = (IntervalPagePtr) GetObjectExtra (d);
   if (ipp == NULL) return NULL;
   tlp = GetObjectExtra (ipp->ivals);
   if (tlp == NULL) return NULL;
+  
 
-  prev_sip = NULL;
-  prev_strand = Seq_strand_unknown;
-  slp = NULL;
-  sfp = SeqFeatNew ();
-  if (sfp != NULL) {
-    nullsBetween = GetStatus (ipp->nullsBetween);
-    partial5 = GetStatus (ipp->partial5);
-    partial3 = GetStatus (ipp->partial3);
-    notFirst = FALSE;
-    head = tlp->vnp;
-    for (vnp = tlp->vnp; vnp != NULL; vnp = vnp->next) {
-      txt = ExtractTagListColumn ((CharPtr) vnp->data.ptrvalue, 0);
-      okay = FALSE;
-      isInterval = TRUE;
-      isPoint = FALSE;
-      len = StringLen (txt);
-      for (j = 0; j < len; j++) {
-        ch = txt [j];
-        if (ch != ' ' && ch != '\t' && ch != '\n') {
-          okay = TRUE;
-        }
-      }
-      MemFree (txt);
-      if (okay) {
-        fuzz_from = -1;
-        fuzz_to = -1;
-        fuzz_before = FALSE;
-        fuzz_after = FALSE;
-        from = 0;
-        txt = ExtractTagListColumn ((CharPtr) vnp->data.ptrvalue, 0);
-        if (txt != NULL) {
-          ptr = StringChr (txt, '<');
-          if (ptr != NULL) {
-            /*
-            fuzz_to = 2;
-            */
-            *ptr = ' ';
-          }
-          ptr = StringChr (txt, '>');
-          if (ptr != NULL) {
-            /*
-            fuzz_to = 1;
-            */
-            *ptr = ' ';
-          }
-          ptr = StringChr (txt, '^');
-          if (ptr != NULL) {
-            fuzz_after = TRUE;
-            *ptr = ' ';
-          }
-          TrimSpacesAroundString (txt);
-          if (StrToLong (txt, &val)) {
-            from = val;
-          } else {
-            okay = FALSE;
-          }
-        } else {
-          okay = FALSE;
-        }
-        MemFree (txt);
-        to = 0;
-        txt = ExtractTagListColumn ((CharPtr) vnp->data.ptrvalue, 1);
-        if (! StringHasNoText (txt)) {
-          ptr = StringChr (txt, '<');
-          if (ptr != NULL) {
-            /*
-            fuzz_to = 2;
-            */
-            *ptr = ' ';
-          }
-          ptr = StringChr (txt, '>');
-          if (ptr != NULL) {
-            /*
-            fuzz_to = 1;
-            */
-            *ptr = ' ';
-          }
-          ptr = StringChr (txt, '^');
-          if (ptr != NULL) {
-            fuzz_after = TRUE;
-            *ptr = ' ';
-          }
-          TrimSpacesAroundString (txt);
-          if (StrToLong (txt, &val)) {
-            to = val;
-            if (fuzz_after && to == from + 1) {
-              isInterval = FALSE;
-              isPoint = TRUE;
-              /* from++; */ /* this was causing point to be thrown off */
-            } else if (to == from && (! partial5) && (! partial3)) {
-              isInterval = FALSE;
-              isPoint = TRUE;
-            }
-          } else {
-            okay = FALSE;
-          }
-        } else {
-          /*
-          okay = FALSE;
-          */
-          isInterval = FALSE;
-          isPoint = TRUE;
-          to = from;
-        }
-        MemFree (txt);
-        strand = Seq_strand_unknown;
-        if (ipp->nucsOK) {
-          txt = ExtractTagListColumn ((CharPtr) vnp->data.ptrvalue, 2);
-          if (txt != NULL && StrToInt (txt, &val2)) {
-            strand = val2;
-            if (strand > Seq_strand_both_rev) {
-              strand = Seq_strand_other;
-            }
-            prev_strand = strand;
-          } else {
-            strand = prev_strand;
-          }
-          MemFree (txt);
-        }
-        if (isInterval) {
-          if (from > to) {
-            tmp = from;
-            from = to;
-            to = tmp;
-          }
-        }
-        sip = NULL;
-        txt = ExtractTagListColumn ((CharPtr) vnp->data.ptrvalue, ipp->nucsOK ? 3 : 2);
-        if (txt != NULL) {
-          if (! StrToInt (txt, &val2) || val2 <= 0)
-          {
-            if (prev_sip != NULL)
-            {
-              seqid = prev_sip;
-            }
-            else
-            {
-              okay = FALSE;
-            }
-          }
-          else if (val2 <= ipp->count)
-          {
-            seqid = ipp->sip_list [val2];
-            prev_sip = seqid;
-          } else {
-            okay = FALSE;
-          }
-        }
-        MemFree (txt);
-        if (okay) {
-          if (nullsBetween  && notFirst) {
-            slp = ValNodeNew (NULL);
-            if (slp != NULL) {
-              slp->choice = SEQLOC_NULL;
-              tmploc1 = sfp->location;
-              if (tmploc1 != NULL) {
-                if (tmploc1->choice == SEQLOC_MIX) {
-                  tmploc2 = (ValNodePtr) (tmploc1->data.ptrvalue);
-                  if (tmploc2 != NULL) {
-                    while (tmploc2->next != NULL) {
-                      tmploc2 = tmploc2->next;
-                    }
-                    tmploc2->next = slp;
-                  }
-                } else {
-                  tmploc2 = ValNodeNew (NULL);
-                  if (tmploc2 != NULL) {
-                    tmploc2->choice = SEQLOC_MIX;
-                    tmploc2->data.ptrvalue = (Pointer) tmploc1;
-                    tmploc1->next = slp;
-                    sfp->location = tmploc2;
-                  }
-                }
-              }
-            }
-          }
-          if (strand == Seq_strand_unknown) {
-            strand = Seq_strand_plus;
-          }
-          if (isInterval) {
-            AddIntToSeqLoc (&(sfp->location), from - 1, to - 1, seqid,
-                             fuzz_from, fuzz_to, strand);
-          } else if (isPoint) {
-            AddSeqLocPoint (&(sfp->location), seqid, from, fuzz_before, fuzz_after, strand);
-          }
-          notFirst = TRUE;
-        }
-      }
-    }
-    firstSlp = NULL;
-    lastSlp = NULL;
-    slp = SeqLocFindNext (sfp->location, NULL);
-    while (slp != NULL) {
-      if (firstSlp == NULL) {
-        firstSlp = slp;
-      }
-      lastSlp = slp;
-      slp = SeqLocFindNext (sfp->location, slp);
-    }
-    if (firstSlp != NULL && GetStatus (ipp->partial5)) {
-      if (firstSlp->choice == SEQLOC_INT && firstSlp->data.ptrvalue != NULL) {
-        sip = (SeqIntPtr) firstSlp->data.ptrvalue;
-        ifp = IntFuzzNew ();
-        if (ifp != NULL) {
-          ifp->choice = 4;
-          if (sip->strand == Seq_strand_minus || sip->strand == Seq_strand_both_rev) {
-            sip->if_to = ifp;
-            ifp->a = 1;
-          } else {
-            sip->if_from = ifp;
-            ifp->a = 2;
-          }
-        }
-      } else if (firstSlp->choice == SEQLOC_PNT && firstSlp->data.ptrvalue != NULL) {
-        spp = (SeqPntPtr) firstSlp->data.ptrvalue;
-        ifp = IntFuzzNew ();
-        if (ifp != NULL) {
-          ifp->choice = 4;
-          if (spp->strand == Seq_strand_minus || spp->strand == Seq_strand_both_rev) {
-            spp->fuzz = ifp;
-            ifp->a = 1;
-          } else {
-            spp->fuzz = ifp;
-            ifp->a = 2;
-          }
-        }
-      }
-    }
-    if (lastSlp != NULL && GetStatus (ipp->partial3)) {
-      if (lastSlp->choice == SEQLOC_INT && lastSlp->data.ptrvalue != NULL) {
-        sip = (SeqIntPtr) lastSlp->data.ptrvalue;
-        ifp = IntFuzzNew ();
-        if (ifp != NULL) {
-          ifp->choice = 4;
-          if (sip->strand == Seq_strand_minus || sip->strand == Seq_strand_both_rev) {
-            sip->if_from = ifp;
-            ifp->a = 2;
-          } else {
-            sip->if_to = ifp;
-            ifp->a = 1;
-          }
-        }
-      } else if (lastSlp->choice == SEQLOC_PNT && lastSlp->data.ptrvalue != NULL) {
-        spp = (SeqPntPtr) lastSlp->data.ptrvalue;
-        ifp = IntFuzzNew ();
-        if (ifp != NULL) {
-          ifp->choice = 4;
-          if (spp->strand == Seq_strand_minus || spp->strand == Seq_strand_both_rev) {
-            spp->fuzz = ifp;
-            ifp->a = 2;
-          } else {
-            spp->fuzz = ifp;
-            ifp->a = 1;
-          }
-        }
-      }
-    }
-    slp = sfp->location;
-    sfp->location = NULL;
-    SeqFeatFree (sfp);
+  nullsBetween = GetStatus (ipp->nullsBetween);
+  partial5 = GetStatus (ipp->partial5);
+  partial3 = GetStatus (ipp->partial3);
+  
+  if (ipp->seqid_col > -1)
+  {
+    master_slp = ReadSingleSeqLoc (tlp, ipp, partial5, partial3, nullsBetween);
   }
-  return (Pointer) slp;
+  else
+  {
+    master_slp = ReadAlignedSeqLocList (tlp, ipp, partial5, partial3, nullsBetween);
+  }
+  return (Pointer) master_slp;
 }
 
 static void CleanupIntervalPage (GraphiC g, VoidPtr data)
@@ -3677,6 +4713,7 @@ static void CleanupIntervalPage (GraphiC g, VoidPtr data)
 
   ipp = (IntervalPagePtr) data;
   if (ipp != NULL) {
+    /* free seq ID list */
     if (ipp->sip_list != NULL)
     {
       for (j = 0; j <= ipp->count + 1; j++) {
@@ -3691,16 +4728,38 @@ static void CleanupIntervalPage (GraphiC g, VoidPtr data)
     }
     MemFree (ipp->alist);
     MemFree (ipp->lengths);
+
+    /* free list of alignments */
+    if (ipp->salp_list != NULL)
+    {
+      for (j = 0; j <= ipp->aln_count + 1; j++) {
+        ipp->salp_list [j] = SeqAlignFree (ipp->salp_list [j]); 
+      }
+    }
+    MemFree (ipp->salp_list);
+    /* free alignment tags */
+    if (ipp->aln_alist != NULL) {
+      for (j = 0; j <= ipp->aln_count + 1; j++) {
+        MemFree (ipp->aln_alist [j].name);
+      }
+    }
+    MemFree (ipp->aln_alist);
+    /* free alignment lengths */
+    MemFree (ipp->aln_lengths);
+
+    
+    /* free callback list */
+    MemFree (ipp->callbacks);
   }
   MemFree (data);
 }
 
 Uint2 interval_types [] = {
-  TAGLIST_TEXT, TAGLIST_TEXT, TAGLIST_POPUP, TAGLIST_POPUP
+  TAGLIST_TEXT, TAGLIST_TEXT, TAGLIST_POPUP, TAGLIST_POPUP, TAGLIST_POPUP
 };
 
 Uint2 interval_widths [] = {
-  5, 5, 0, 0
+  5, 5, 0, 0, 0
 };
 
 static Boolean ReadSeqLocDialog (DialoG d, CharPtr filename)
@@ -3769,6 +4828,49 @@ static Boolean WriteSeqLocDialog (DialoG d, CharPtr filename)
   return FALSE;
 }
 
+static void SetOnlySequenceAndStrand (IntervalPagePtr ipp)
+{
+  TagListPtr       tlp;
+  ValNodePtr       vnp;
+  CharPtr          cp;
+  CharPtr          tabptr;
+  ValNodePtr       saved_list;
+  
+  if (ipp == NULL) return;
+  tlp = GetObjectExtra (ipp->ivals);
+  if (tlp == NULL) return;
+  saved_list = tlp->vnp;
+  tlp->vnp = NULL;
+  SendMessageToDialog (tlp->dialog, VIB_MSG_RESET);
+  tlp->vnp = saved_list;
+  for (vnp = tlp->vnp; vnp != NULL; vnp = vnp->next) 
+  {
+    cp = vnp->data.ptrvalue;
+    if (cp != NULL)
+    {
+      tabptr = StringChr (cp, '\t');
+      if (tabptr != NULL)
+      {
+      	tabptr = StringChr (tabptr + 1, '\t');
+      }
+      if (tabptr != NULL)
+      {
+      	cp[0] = '\t';
+      	cp++;
+      	while (*tabptr != 0)
+      	{
+      	  *cp = *tabptr;
+      	  cp++;
+      	  tabptr++;
+      	}
+      	*cp = 0;
+      }
+    }
+  }
+
+  SendMessageToDialog (tlp->dialog, VIB_MSG_REDRAW);  
+}
+
 static void IntervalEditorMessage (DialoG d, Int2 mssg)
 
 {
@@ -3781,6 +4883,10 @@ static void IntervalEditorMessage (DialoG d, Int2 mssg)
     } else if (mssg == VIB_MSG_ENTER) {
       SendMessageToDialog (ipp->ivals, VIB_MSG_ENTER);
     } else if (mssg == VIB_MSG_RESET) {
+    }
+    else if (mssg == NUM_VIB_MSG + 1)
+    {
+      SetOnlySequenceAndStrand (ipp);
     }
   }
 }
@@ -3812,12 +4918,15 @@ extern DialoG CreateTagListDialogEx (GrouP h, Uint2 rows, Uint2 cols,
                                      Boolean useBar, Boolean noExtend,
                                      ToDialogFunc tofunc, FromDialogFunc fromfunc);
 
-extern DialoG CreateIntervalEditorDialogEx (GrouP h, CharPtr title, Uint2 rows,
-                                            Int2 spacing, SeqEntryPtr sep,
-                                            Boolean nucsOK, Boolean protsOK,
-                                            Boolean useBar, Boolean showPartials,
-                                            Boolean allowGaps, FeatureFormPtr ffp,
-                                            IntEdPartialProc proc)
+extern DialoG CreateIntervalEditorDialogExEx (GrouP h, CharPtr title, Uint2 rows,
+                                              Int2 spacing, SeqEntryPtr sep,
+                                              Boolean nucsOK, Boolean protsOK,
+                                              Boolean useBar, Boolean showPartials,
+                                              Boolean allowGaps, FeatureFormPtr ffp,
+                                              IntEdPartialProc proc, 
+                                              Boolean use_aln, Boolean show_seqid,
+                                              TaglistCallback tlp_callback, 
+                                              Pointer callback_data)
 
 {
   BioseqPtr        bsp;
@@ -3829,6 +4938,7 @@ extern DialoG CreateIntervalEditorDialogEx (GrouP h, CharPtr title, Uint2 rows,
   GrouP            p;
   PrompT           p1;
   PrompT           p2;
+  PrompT           p3;
   CharPtr          ptr;
   GrouP            q;
   GrouP            s;
@@ -3836,6 +4946,8 @@ extern DialoG CreateIntervalEditorDialogEx (GrouP h, CharPtr title, Uint2 rows,
   SeqIdPtr         sip;
   Char             str [128];
   TagListPtr       tlp;
+  SeqAlignPtr      salp_list = NULL, salp;
+  Int4             num_cols;
 
   p = HiddenGroup (h, 1, 0, NULL);
   SetGroupSpacing (p, 10, 10);
@@ -3848,7 +4960,7 @@ extern DialoG CreateIntervalEditorDialogEx (GrouP h, CharPtr title, Uint2 rows,
     ipp->todialog = SeqLocPtrToIntervalPage;
     ipp->fromdialog = IntervalPageToSeqLocPtr;
     ipp->dialogmessage = IntervalEditorMessage;
-    ipp->testdialog = NULL;
+    ipp->testdialog = TestIntervalEditor;
     ipp->importdialog = ReadSeqLocDialog;
     ipp->exportdialog = WriteSeqLocDialog;
 
@@ -3869,8 +4981,119 @@ extern DialoG CreateIntervalEditorDialogEx (GrouP h, CharPtr title, Uint2 rows,
     ipp->protsOK = protsOK;
     ipp->showIdTags = FALSE;
     ipp->count = 0;
+        
+    if (ipp->nucsOK)
+    {
+      ipp->strand_col = 2;
+    }
+    else
+    {
+      ipp->strand_col = -1;
+    }
+    
+    ipp->aln_col = -1;
+    if (show_seqid)
+    {
+      if (ipp->nucsOK)
+      {
+        ipp->seqid_col = 3;
+      }
+      else
+      {
+        ipp->seqid_col = 2;
+      }
+      if (use_aln)
+      {
+        ipp->aln_col = ipp->seqid_col + 1;
+      }
+    }
+    else
+    {
+      ipp->seqid_col = -1;
+      if (use_aln)
+      {
+        if (ipp->nucsOK)
+        {
+          ipp->aln_col = 3;
+        }
+        else
+        {
+          ipp->aln_col = 2;
+        }
+      }
+    }
+    
+    /* set up callbacks */
+    ipp->callbacks = (TaglistCallback PNTR) MemNew (5 * sizeof (TaglistCallback));
+    if (ipp->callbacks != NULL)
+    {
+      ipp->callbacks [0] = NULL;
+      ipp->callbacks [1] = NULL;
+      ipp->callbacks [2] = NULL;
+      ipp->callbacks [3] = NULL;
+      ipp->callbacks [4] = NULL;
+  
+      if (ipp->seqid_col > -1)
+      {
+        ipp->callbacks [ipp->seqid_col] = tlp_callback;
+      }
+      if (ipp->aln_col > -1)
+      {
+        ipp->callbacks [ipp->aln_col] = tlp_callback;
+      }
+    }
 
     if (sep != NULL) {
+      if (use_aln)
+      {
+        VisitAnnotsInSep (sep, &salp_list, GetAlignmentsInSeqEntryCallback);
+        count = 4;
+        salp = salp_list;
+        while (salp != NULL)
+        {
+          count++;
+          salp = salp->next;
+        }
+        
+        ipp->salp_list = (SeqAlignPtr PNTR) MemNew (sizeof (SeqAlignPtr) * count);
+        ipp->aln_alist = MemNew (sizeof (EnumFieldAssoc) * (size_t) count);
+        ipp->aln_lengths = MemNew (sizeof (Int4) * (size_t) count);
+        ipp->aln_count = 0;
+        if (ipp->salp_list != NULL && ipp->aln_alist != NULL && ipp->aln_lengths != NULL)
+        {
+          /* first one is NULL */
+          ipp->salp_list [0] = NULL;
+          ipp->aln_lengths [0] = 0;
+          ipp->aln_alist [0].name = StringSave ("     ");
+          ipp->aln_alist [0].value = (UIEnum) 0;
+          ipp->aln_count ++;
+          salp = salp_list;
+          while (salp != NULL)
+          {
+            ipp->salp_list [ipp->aln_count] = salp;
+            ipp->aln_lengths [ipp->aln_count] = SeqAlignLength (ipp->salp_list [ipp->aln_count]);
+            CreateSeqAlignLabel (ipp->salp_list [ipp->aln_count], str, 30);
+            ipp->aln_alist [ipp->aln_count].name = StringSave (str);
+            ipp->aln_alist [ipp->aln_count].value = (UIEnum) ipp->aln_count;
+                        
+            salp = salp->next;
+            /* sever chain */
+            ipp->salp_list [ipp->aln_count]->next = NULL;
+            ipp->aln_count++;
+          }
+        }
+        /* add end of list marker */
+        ipp->aln_alist [ipp->aln_count].name = NULL;
+        ipp->aln_alist [ipp->aln_count].value = (UIEnum) 0;
+
+      }
+      else
+      {
+        ipp->salp_list = NULL;
+        ipp->aln_alist = NULL;
+        ipp->aln_lengths = NULL;
+        ipp->aln_count = 0;
+      }
       count = SegmentedEntryCount (sep);
       count += 4;
       ipp->sip_list = MemNew (sizeof (SeqIdPtr) * (size_t) count);
@@ -3910,33 +5133,28 @@ extern DialoG CreateIntervalEditorDialogEx (GrouP h, CharPtr title, Uint2 rows,
             ipp->alist [j].value = (UIEnum) j;
           }
         }
+        /* add end of list marker */
         j = ipp->count + 1;
         ipp->alist [j].name = NULL;
         ipp->alist [j].value = (UIEnum) 0;
+      }
 #ifdef WIN_MOTIF
-        if (ipp->count > 31) {
-          if (nucsOK) {
-            interval_types [3] = TAGLIST_LIST;
-          } else {
-            interval_types [2] = TAGLIST_LIST;
-          }
-        } else {
-          interval_types [2] = TAGLIST_POPUP;
-          interval_types [3] = TAGLIST_POPUP;
+      if (ipp->count > 31) {
+        if (ipp->seqid_col > -1)
+        {
+          interval_types [ipp->seqid_col] = TAGLIST_LIST;
         }
+        if (ipp->aln_col > -1)
+        {
+          interval_types [ipp->aln_col] = TAGLIST_LIST;
+        }
+      } else {
+        interval_types [2] = TAGLIST_POPUP;
+        interval_types [3] = TAGLIST_POPUP;
+        interval_types [4] = TAGLIST_POPUP;
+      }
 #endif
-      }
 
-      if (ipp->alists != NULL) {
-        ipp->alists [0] = NULL;
-        ipp->alists [1] = NULL;
-        if (nucsOK) {
-          ipp->alists [2] = strand_alist;
-          ipp->alists [3] = ipp->alist;
-        } else {
-          ipp->alists [2] = ipp->alist;
-        }
-      }
     } else {
       ipp->alist = MemNew (sizeof (EnumFieldAssoc) * (size_t) 4);
       if (ipp->alist != NULL) {
@@ -3947,15 +5165,25 @@ extern DialoG CreateIntervalEditorDialogEx (GrouP h, CharPtr title, Uint2 rows,
         ipp->alist [j].name = NULL;
         ipp->alist [j].value = (UIEnum) 0;
 
-        ipp->alists [0] = NULL;
-        ipp->alists [1] = NULL;
-        if (nucsOK) {
-          ipp->alists [2] = strand_alist;
-          ipp->alists [3] = ipp->alist;
-        } else {
-          ipp->alists [2] = ipp->alist;
-        }
       }
+    }
+    
+    ipp->alists [0] = NULL;
+    ipp->alists [1] = NULL;
+    ipp->alists [2] = NULL;
+    ipp->alists [3] = NULL;
+    ipp->alists [4] = NULL;
+    if (ipp->strand_col > -1)
+    {
+      ipp->alists [ipp->strand_col] = strand_alist;
+    }
+    if (ipp->seqid_col > -1)
+    {
+      ipp->alists [ipp->seqid_col] = ipp->alist;
+    }
+    if (ipp->aln_col > -1)
+    {
+      ipp->alists [ipp->aln_col] = ipp->aln_alist;
     }
 
     q = NULL;
@@ -3976,25 +5204,51 @@ extern DialoG CreateIntervalEditorDialogEx (GrouP h, CharPtr title, Uint2 rows,
       SetObjectExtra (ipp->partial3, ipp, NULL);
     }
 
-    f = HiddenGroup (m, 4, 0, NULL);
+    f = HiddenGroup (m, 5, 0, NULL);
     StaticPrompt (f, "From", 5 * stdCharWidth, 0, programFont, 'c');
     StaticPrompt (f, "To", 5 * stdCharWidth, 0, programFont, 'c');
-    if (nucsOK) {
+    p1 = NULL;
+    p2 = NULL;
+    p3 = NULL;
+    if (ipp->strand_col > -1)
+    {
       p1 = StaticPrompt (f, "Strand", 0, 0, programFont, 'c');
-    } else {
-      p1 = NULL;
     }
-    p2 = StaticPrompt (f, "SeqID", 0, 0, programFont, 'c');
+    if (ipp->seqid_col > -1)
+    {
+      p2 = StaticPrompt (f, "SeqID", 0, 0, programFont, 'c');
+    }
+    if (ipp->aln_col > -1)
+    {
+      p3 = StaticPrompt (f, "Alignment", 0, 0, programFont, 'c');
+    }
 
     f = HiddenGroup (m, 0, 4, NULL);
     SetGroupSpacing (f, 0, 0);
 
-    ipp->ivals = CreateTagListDialogEx (f, rows, nucsOK ? 4 : 3, spacing,
+    num_cols = 2;
+    if (ipp->strand_col > -1)
+    {
+      num_cols ++;
+    }
+    if (ipp->seqid_col > -1)
+    {
+      num_cols ++;
+    }
+    if (ipp->aln_col > -1)
+    {
+      num_cols ++;
+    }
+    
+    ipp->ivals = CreateTagListDialogExEx (f, rows, num_cols, spacing,
                                         interval_types, interval_widths, ipp->alists,
-                                        useBar, FALSE, NULL, NULL);
+                                        useBar, FALSE, NULL, NULL,
+                                        ipp->callbacks, callback_data);
 
+    /* put back static interval_types values that may have been changed */
     interval_types [2] = TAGLIST_POPUP;
     interval_types [3] = TAGLIST_POPUP;
+    interval_types [4] = TAGLIST_POPUP;
     ipp->nullsBetween = CheckBox (m, "'order' (intersperse intervals with gaps)", ChangedPartialProc);
     SetObjectExtra (ipp->nullsBetween, ipp, NULL);
     if (GetAppProperty ("InternalNcbiSequin") != NULL) {
@@ -4008,14 +5262,346 @@ extern DialoG CreateIntervalEditorDialogEx (GrouP h, CharPtr title, Uint2 rows,
                   (HANDLE) q, (HANDLE) ipp->nullsBetween, NULL);
     tlp = (TagListPtr) GetObjectExtra (ipp->ivals);
     if (tlp != NULL) {
-      if (nucsOK) {
-        AlignObjects (ALIGN_JUSTIFY, (HANDLE) tlp->control [2], (HANDLE) p1, NULL);
+      if (ipp->strand_col > -1)
+      {
+        AlignObjects (ALIGN_JUSTIFY, (HANDLE) tlp->control [ipp->strand_col], (HANDLE) p1, NULL);
       }
-      AlignObjects (ALIGN_JUSTIFY, (HANDLE) tlp->control [nucsOK ? 3 : 2], (HANDLE) p2, NULL);
+      if (ipp->seqid_col > -1)
+      {
+        AlignObjects (ALIGN_JUSTIFY, (HANDLE) tlp->control [ipp->seqid_col], (HANDLE) p2, NULL);
+      }
+      if (ipp->aln_col > -1)
+      {
+        AlignObjects (ALIGN_JUSTIFY, (HANDLE) tlp->control [ipp->aln_col], (HANDLE) p3, NULL);
+      }
     }
   }
 
   return (DialoG) p;
+}
+
+typedef struct intervalchoice 
+{
+  DIALOG_MESSAGE_BLOCK
+  GrouP  seq_or_aln;
+  DialoG aln_dlg;
+  DialoG seq_dlg;  
+} IntervalChoiceData, PNTR IntervalChoicePtr;
+
+static void IntervalChoiceCallback (Pointer userdata)
+{
+  IntervalChoicePtr dlg;
+  SeqLocPtr         slp, slp_tmp;
+  Boolean           ok_for_aln = FALSE;
+  BioseqPtr         bsp;
+  SeqAlignPtr       salp, salp_next;
+
+  if (userdata == NULL)
+  {
+    return;
+  }
+
+  dlg = (IntervalChoicePtr) userdata;
+  
+  if (GetValue (dlg->seq_or_aln) == 1)
+  {
+    slp = DialogToPointer (dlg->seq_dlg);
+    if (slp != NULL)
+    {
+      ok_for_aln = TRUE;
+      slp_tmp = SeqLocFindNext (slp, NULL);
+      while (slp_tmp != NULL && ok_for_aln)
+      {
+        bsp = BioseqFindFromSeqLoc (slp_tmp);
+        salp = FindAlignmentsForBioseq (bsp);
+        if (salp == NULL)
+        {
+          ok_for_aln = FALSE;
+        }
+        else
+        {
+          while (salp != NULL)
+          {
+            salp_next = salp->next;
+            salp->next = NULL;
+            salp = SeqAlignFree (salp);
+            salp = salp_next;
+          }
+        }
+        slp_tmp = SeqLocFindNext (slp, slp_tmp);
+      }
+    }
+    if (ok_for_aln)  
+    {
+      Enable (dlg->seq_or_aln);
+    }
+    else
+    {
+      Disable (dlg->seq_or_aln);
+    }
+  }
+}
+
+static void SeqLocToIntervalChoiceEditor (DialoG d, Pointer userdata)
+{
+  IntervalChoicePtr dlg;
+  
+  dlg = (IntervalChoicePtr) GetObjectExtra (d);
+  if (dlg == NULL)
+  {
+    return;
+  }
+  PointerToDialog (dlg->seq_dlg, userdata);
+  PointerToDialog (dlg->aln_dlg, userdata); 
+  IntervalChoiceCallback (dlg);
+}
+
+static Pointer IntervalChoiceEditorToSeqLoc (DialoG d)
+{
+  IntervalChoicePtr dlg;
+  
+  dlg = (IntervalChoicePtr) GetObjectExtra (d);
+  if (dlg == NULL)
+  {
+    return;
+  }
+  if (GetValue (dlg->seq_or_aln) == 1)
+  {
+    return DialogToPointer (dlg->seq_dlg);
+  }
+  else
+  {
+    return DialogToPointer (dlg->aln_dlg);
+  }
+}
+
+static void IntervalChoiceEditorMessage (DialoG d, Int2 mssg)
+
+{
+  IntervalChoicePtr dlg;
+
+  dlg = (IntervalChoicePtr) GetObjectExtra (d);
+  if (dlg != NULL) {  
+    if (GetValue (dlg->seq_or_aln) == 1)
+    {
+      SendMessageToDialog (dlg->seq_dlg, mssg);
+    }
+    else
+    {
+      SendMessageToDialog (dlg->aln_dlg, mssg);
+    }
+  }
+}
+
+static ValNodePtr TestIntervalChoiceEditor (DialoG d)
+{
+  IntervalChoicePtr dlg;
+
+  dlg = (IntervalChoicePtr) GetObjectExtra (d);
+  if (dlg == NULL)
+  {
+    return NULL;
+  }
+  else if (GetValue (dlg->seq_or_aln) == 1)
+  {
+    return TestDialog (dlg->seq_dlg);
+  }
+  else
+  {
+    return TestDialog (dlg->aln_dlg);
+  }
+}
+
+static void DisplayErrorMessagesOk (ButtoN b)
+{
+  BoolPtr pdone;
+  
+  pdone = (BoolPtr) GetObjectExtra (b);
+  if (pdone != NULL)
+  {
+    *pdone = TRUE;
+  }
+}
+
+extern void DisplayErrorMessages (CharPtr title, ValNodePtr err_list)
+{
+  WindoW     w;
+  GrouP      h;
+  DoC        doc;
+  ButtoN     b;
+  ValNodePtr vnp;
+  Boolean    done = FALSE;
+  
+  w = MovableModalWindow(-20, -13, -10, -10, title, NULL);
+  h = HiddenGroup (w, -1, 0, NULL);
+  SetGroupSpacing (h, 10, 10);
+
+  doc = DocumentPanel (h, stdCharWidth * 27, stdLineHeight * 8);
+  SetDocAutoAdjust (doc, TRUE);
+  for (vnp = err_list; vnp != NULL; vnp = vnp->next)
+  {
+    if (!StringHasNoText (vnp->data.ptrvalue))
+    {
+      AppendText (doc, vnp->data.ptrvalue, NULL, NULL, programFont);
+    }
+  }
+  b = PushButton (h, "OK", DisplayErrorMessagesOk);
+  SetObjectExtra (b, &done, NULL);
+  AlignObjects (ALIGN_CENTER, (HANDLE) doc,
+                              (HANDLE) b, 
+                              NULL);
+  Show (w);
+  Select (w);
+  while (!done)
+  {
+    ProcessExternalEvent ();
+    Update ();
+  }
+  ProcessAnEvent ();
+  Remove (w);
+}
+
+static void ShowIntervalChoice (IntervalChoicePtr dlg)
+{
+  if (dlg == NULL)
+  {
+    return;
+  }
+  if (GetValue (dlg->seq_or_aln) == 1)
+  {
+    Show (dlg->seq_dlg);
+    Hide (dlg->aln_dlg);
+  }
+  else
+  {
+    Show (dlg->aln_dlg);
+    Hide (dlg->seq_dlg);
+  }
+}
+
+static void ChangeIntervalChoice (GrouP g)
+{
+  IntervalChoicePtr dlg;
+  SeqLocPtr         slp;
+  ValNodePtr        err_list = NULL;
+  CharPtr           title = NULL;
+
+  dlg = (IntervalChoicePtr) GetObjectExtra (g);
+  if (dlg == NULL)
+  {
+    return;
+  }
+  if (GetValue (dlg->seq_or_aln) == 1)
+  {
+    title = "Unable to translate to sequence coordinates";
+    err_list = TestDialog (dlg->aln_dlg);
+    if (err_list == NULL)
+    {
+      slp = DialogToPointer (dlg->aln_dlg);
+      PointerToDialog (dlg->seq_dlg, slp);
+      slp = SeqLocFree (slp);
+      err_list = TestDialog (dlg->seq_dlg);
+    }    
+    if (err_list != NULL)
+    {
+      SetValue (dlg->seq_or_aln, 2);       
+    }
+  }
+  else
+  {
+    title = "Unable to translate to alignment coordinates";
+    err_list = TestDialog (dlg->seq_dlg);
+    if (err_list == NULL)
+    {
+      slp = DialogToPointer (dlg->seq_dlg);
+      PointerToDialog (dlg->aln_dlg, slp);
+      slp = SeqLocFree (slp);
+      err_list = TestDialog (dlg->aln_dlg);
+    }
+    if (err_list != NULL)
+    {
+      SetValue (dlg->seq_or_aln, 1);
+    }
+  }
+  ShowIntervalChoice (dlg);
+  if (err_list != NULL)
+  {
+    DisplayErrorMessages (title, err_list);
+    err_list = ValNodeFreeData (err_list);
+  }
+}
+
+static DialoG CreateIntervalEditorDialogAlnChoice (GrouP h, CharPtr title, Uint2 rows,
+                                            Int2 spacing, SeqEntryPtr sep,
+                                            Boolean nucsOK, Boolean protsOK,
+                                            Boolean useBar, Boolean showPartials,
+                                            Boolean allowGaps, FeatureFormPtr ffp,
+                                            IntEdPartialProc proc)
+{
+  SeqAlignPtr       salp_list = NULL;
+  GrouP             p, g;
+  IntervalChoicePtr dlg;
+  
+  VisitAnnotsInSep (sep, &salp_list, GetAlignmentsInSeqEntryCallback);
+  if (salp_list == NULL)
+  {
+    return CreateIntervalEditorDialogExEx (h, title, rows, spacing, sep,
+                                         nucsOK, protsOK, useBar, showPartials,
+                                         allowGaps, ffp, proc, FALSE, TRUE,
+                                         NULL, NULL);
+  }
+  else
+  {
+    dlg = (IntervalChoicePtr) MemNew (sizeof (IntervalChoiceData));
+    if (dlg == NULL)
+    {
+      return NULL;
+    }
+  
+    p = HiddenGroup (h, -1, 0, NULL);
+    SetGroupSpacing (p, 10, 10);
+    SetObjectExtra (p, dlg, StdCleanupExtraProc);
+    
+    dlg->dialog = (DialoG) p;
+    dlg->todialog = SeqLocToIntervalChoiceEditor;
+    dlg->fromdialog = IntervalChoiceEditorToSeqLoc;
+    dlg->dialogmessage = IntervalChoiceEditorMessage;
+    dlg->testdialog = TestIntervalChoiceEditor;
+
+    g = HiddenGroup (p, 0, 0, NULL);
+    dlg->seq_dlg = CreateIntervalEditorDialogExEx (g, title, rows, spacing, sep,
+                                         nucsOK, protsOK, useBar, showPartials,
+                                         allowGaps, ffp, proc, FALSE, TRUE,
+                                         IntervalChoiceCallback, dlg);
+                                         
+    dlg->aln_dlg = CreateIntervalEditorDialogExEx (g, title, rows, spacing, sep,
+                                         nucsOK, protsOK, useBar, showPartials,
+                                         allowGaps, ffp, proc, TRUE, TRUE,
+                                         IntervalChoiceCallback, dlg);
+    AlignObjects (ALIGN_CENTER, (HANDLE)dlg->seq_dlg, (HANDLE) dlg->aln_dlg, NULL);                                         
+    dlg->seq_or_aln = HiddenGroup (p, 2, 0, ChangeIntervalChoice);
+    SetObjectExtra (dlg->seq_or_aln, dlg, NULL);
+    RadioButton (dlg->seq_or_aln, "Sequence Coordinates");
+    RadioButton (dlg->seq_or_aln, "Alignment Coordinates");
+    SetValue (dlg->seq_or_aln, 1);
+    
+    AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) dlg->seq_or_aln, NULL);
+    ShowIntervalChoice (dlg);
+    IntervalChoiceCallback (dlg);
+    return (DialoG) p; 
+  }
+}
+
+extern DialoG CreateIntervalEditorDialogEx (GrouP h, CharPtr title, Uint2 rows,
+                                            Int2 spacing, SeqEntryPtr sep,
+                                            Boolean nucsOK, Boolean protsOK,
+                                            Boolean useBar, Boolean showPartials,
+                                            Boolean allowGaps, FeatureFormPtr ffp,
+                                            IntEdPartialProc proc)
+{
+  return CreateIntervalEditorDialogAlnChoice (h, title, rows, spacing, sep,
+                                         nucsOK, protsOK, useBar, showPartials,
+                                         allowGaps, ffp, proc);
 }
 
 extern DialoG CreateIntervalEditorDialog (GrouP h, CharPtr title, Uint2 rows,

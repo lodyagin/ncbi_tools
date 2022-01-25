@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.505 $
+* $Revision: 6.510 $
 *
 * File Description: 
 *
@@ -72,6 +72,7 @@ static char *time_of_compilation = "now";
 #include <salsap.h>
 #include <salutil.h>
 #include <salpedit.h>
+#include <salpanel.h>
 #include <salptool.h>
 #include <pobutil.h>
 #include <accutils.h>
@@ -4174,18 +4175,6 @@ static void StdValidatorFormActivated (WindoW w)
                    (HANDLE) importItem,
                    (HANDLE) exportItem,
                    (HANDLE) printItem,
-                   NULL);
-}
-
-extern void UpdateSequenceFormActivated (WindoW w);
-extern void UpdateSequenceFormActivated (WindoW w)
-
-{
-  currentFormDataPtr = (VoidPtr) GetObjectExtra (w);
-  initialFormsActive = FALSE;
-  RepeatProcOnHandles (Enable,
-                   (HANDLE) openItem,
-                   (HANDLE) closeItem,
                    NULL);
 }
 
@@ -8555,7 +8544,12 @@ static void SetupMacMenus (void)
 
   m = PulldownMenu (NULL, "File");
   openItem = CommandItem (m, "Open.../O", MacReadNewAsnProc);
+  SetAppProperty (SEQFORM_OPEN_ITEM, openItem);
   closeItem = FormCommandItem (m, "Close", NULL, VIB_MSG_CLOSE);
+  SetAppProperty (SEQFORM_CLOSE_ITEM, closeItem);
+  
+  SetAppProperty (SEQFORM_INIT_ACTIVE, &initialFormsActive);
+  
   SeparatorItem (m);
   importItem = FormCommandItem (m, "Import.../I", NULL, VIB_MSG_IMPORT);
   exportItem = FormCommandItem (m, "Export.../E", NULL, VIB_MSG_EXPORT);
@@ -9190,6 +9184,27 @@ static void StartNew (ButtoN b)
   Select (initSubmitForm);
   SendHelpScrollMessage (helpForm, "Submitting Authors Form", NULL);
   Update ();
+}
+
+static void CloseSubmissionTemplateEditor (Pointer userdata, WindoW w)
+{
+  Remove (w);
+  Show (startupForm);
+  Update ();  
+}
+
+static void CreateSubmissionTemplate (ButtoN b)
+
+{
+  WindoW w;
+  
+  Hide (startupForm);
+  Update ();
+  
+  w = (WindoW) CreateSubmitTemplateEditorForm (-50, -33, "Submission Template Editor",
+                                      CloseSubmissionTemplateEditor, NULL);
+  
+  Show (w); 
 }
 
 static void FinishGenome (ButtoN b)
@@ -10943,11 +10958,11 @@ Int2 Main (void)
       startupForm = CreateStartupForm (-5, -67, "Welcome to Sequin",
                                        StartFa2htgs, StartPhrap, BuildContig,
                                        StartNew, ReadOld, fetchProc,
-                                       ShowHelp, DoQuit, StartupActivateProc);
+                                       ShowHelp, CreateSubmissionTemplate, DoQuit, StartupActivateProc);
     } else {
       startupForm = CreateStartupForm (-5, -67, "Welcome to Sequin",
                                        NULL, NULL, NULL, StartNew, ReadOld, fetchProc,
-                                       ShowHelp, DoQuit, StartupActivateProc);
+                                       ShowHelp, NULL, DoQuit, StartupActivateProc);
     }
     globalFormatBlock.seqPackage = SEQ_PKG_SINGLE;
     globalFormatBlock.seqFormat = SEQ_FMT_FASTA;
@@ -11087,10 +11102,12 @@ extern Boolean ExportSubmitterBlockTemplate (SeqEntryPtr sep, SeqDescrPtr sdp)
   
 	AsnIoFlush(aip);
   AsnIoReset(aip);
-  SeqDescAsnWrite (sdp, aip, NULL);
-  
-	AsnIoFlush(aip);
-  AsnIoReset(aip);
+  if (sdp != NULL)
+  {
+    SeqDescAsnWrite (sdp, aip, NULL);  
+	  AsnIoFlush(aip);
+    AsnIoReset(aip);
+  }
   AsnIoClose (aip);
   
   ssp = SeqSubmitFree (ssp);

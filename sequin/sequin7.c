@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/3/98
 *
-* $Revision: 6.196 $
+* $Revision: 6.200 $
 *
 * File Description: 
 *
@@ -374,6 +374,7 @@ extern ForM CreateStartupForm (Int2 left, Int2 top, CharPtr title,
                                BtnActnProc readExisting,
                                BtnActnProc fetchFromNet,
                                BtnActnProc showHelp,
+                               BtnActnProc createSubmissionTemplate,
                                BtnActnProc quitProgram,
                                WndActnProc activateForm)
 
@@ -466,6 +467,11 @@ extern ForM CreateStartupForm (Int2 left, Int2 top, CharPtr title,
     }
     b = PushButton (c, "Show Help", showHelp);
     SetObjectExtra (b, sfp, NULL);
+    if (createSubmissionTemplate != NULL)
+    {
+      b = PushButton (c, "Submission Template", createSubmissionTemplate);
+      SetObjectExtra (b, sfp, NULL);
+    }
     b = PushButton (c, "Quit Program", quitProgram);
     SetObjectExtra (b, sfp, NULL);
 
@@ -611,6 +617,22 @@ static Boolean ExportTemplateMenu (ForM f, CharPtr filename)
   CharPtr               org_name;
   Boolean               done;
   
+  if (ANS_NO == Message (MSG_YN, "Do you want to add an organism name and comment before saving the template?"))
+  {
+    bssp = BioseqSetNew ();
+    sep = SeqEntryNew ();
+    sep->choice = 2;
+    sep->data.ptrvalue = bssp;
+       
+    done = ExportSubmitterBlockTemplate (sep, NULL);
+    if (!done)
+    {
+      /* if done were TRUE, sep would have been freed as part of the new SeqSubmit */
+      SeqEntryFree (sep);
+    }
+    return done;
+  }
+  
   w = MovableModalWindow (-20, -13, -10, -10, "Submission Template", NULL);
   h = HiddenGroup(w, -1, 0, NULL);
   SetGroupSpacing (h, 10, 10);
@@ -676,7 +698,11 @@ static Boolean ExportTemplateMenu (ForM f, CharPtr filename)
       }
     
       done = ExportSubmitterBlockTemplate (sep, sdp);
-      SeqEntryFree (sep);
+      if (!done)
+      {
+        /* if done were TRUE, sep would have been freed as part of the new SeqSubmit */
+        SeqEntryFree (sep);
+      }
     }
   }
   Remove (w);
@@ -4451,6 +4477,21 @@ static void FindFormMessage (ForM f, Int2 mssg)
   }
 }
 
+static void CopyFindReplBtn (ButtoN b)
+{
+  FindFormPtr ffp;
+  CharPtr     str;
+  
+  ffp = (FindFormPtr) GetObjectExtra (b); 
+  if (ffp == NULL)
+  {
+    return;
+  }
+  str = SaveStringFromText (ffp->findTxt);
+  SetTitle (ffp->replaceTxt, str);
+  str = MemFree (str);
+}
+
 static ForM CreateFindForm (Int2 left, Int2 top, CharPtr title,
                             Uint2 entityID, Uint2 itemID, Uint2 itemtype,
                             Int2 type)
@@ -4491,14 +4532,17 @@ static ForM CreateFindForm (Int2 left, Int2 top, CharPtr title,
     j = HiddenGroup (w, -1, 0, NULL);
     SetGroupSpacing (j, 10, 10);
 
-    g = HiddenGroup (j, 2, 0, NULL);
+    g = HiddenGroup (j, 3, 0, NULL);
     StaticPrompt (g, "Find", 0, dialogTextHeight, programFont, 'l');
     ffp->findTxt = DialogText (g, "", 25, FindTextProc);
     SetObjectExtra (ffp->findTxt, ffp, NULL);
+    StaticPrompt (g, "", 0, 0, programFont, 'l');
     if (type == FIND_ASN) {
       StaticPrompt (g, "Replace", 0, dialogTextHeight, programFont, 'l');
       ffp->replaceTxt = DialogText (g, "", 25, NULL);
       SetObjectExtra (ffp->replaceTxt, ffp, NULL);
+      b = PushButton (g, "Copy", CopyFindReplBtn);
+      SetObjectExtra (b, ffp, NULL);
     }
 
     if (type == FIND_ASN || type == FIND_FLAT) {

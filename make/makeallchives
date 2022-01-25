@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# $Id: makeallchives,v 1.79 2004/12/08 04:34:33 beloslyu Exp $
+# $Id: makeallchives,v 1.81 2005/05/13 04:01:00 beloslyu Exp $
 #
 #
 # Creates all archives from a directory above 'ncbi'
@@ -43,7 +43,7 @@ test -d archive && rm -rf archive
 #make sure we have timestamp file
 test -f ncbi/VERSION || date > ncbi/VERSION
 
-for i in sequin entrez fa2htgs netblast asn2xml
+for i in sequin entrez fa2htgs asn2xml
 do
 	f=""
 	mkdir -p archive/$i/data
@@ -67,7 +67,7 @@ do
 If you have not done so already, please refer to the
 file at ftp://ftp.ncbi.nih.gov/entrez/README
 EOF
-		f="entrez entrez2 blastcl3 ../doc/firewall.html"		
+		f="entrez entrez2 ../doc/firewall.html"		
 		(cd ncbi/build; test -f Nentrez && ln -f Nentrez entrez)
 		;;
 	sequin)
@@ -89,9 +89,6 @@ EOF
 		;;
 	fa2htgs)
 		f="fa2htgs"
-		;;
-	netblast)
-		f="blastcl3 ../doc/firewall.html ../doc/blast/netblast.html"
 		;;
 	*)
 		;;
@@ -164,6 +161,9 @@ Linux)
 		;;
 	i?86)
 		platform=linux-x86
+		if [ "$LINUX_MODE" = "icc" ] ; then
+			platform=linux-x86_icc
+		fi
 		;;
 	ia64)
 		platform=linux-ia64
@@ -265,7 +265,7 @@ EOF
 	cd ..
 done
 
-for A in sequin entrez fa2htgs netblast asn2xml
+for A in sequin entrez fa2htgs asn2xml
 do
 	cd $A || continue
 	tar cf ../$A.$platform.tar .
@@ -301,7 +301,7 @@ do
 cp ../ncbi/data/$file $BLASTDIR/data
 done
 
-for file in bl2seq.html blast.html blastall.html blastclust.html blastdb.html blastftp.html blastpgp.html fastacmd.html filter.html formatdb.html formatrpsdb.html history.html impala.html index.html megablast.html netblast.html rpsblast.html
+for file in bl2seq.html blast.html blastall.html blastclust.html blastdb.html blastftp.html blastpgp.html fastacmd.html filter.html formatdb.html formatrpsdb.html history.html impala.html index.html megablast.html netblast.html rpsblast.html scoring.pdf web_blast.pl
 do
 cp ../ncbi/doc/blast/$file $BLASTDIR/doc
 done
@@ -314,6 +314,26 @@ rm -rf $BLASTDIR
 
 # end build blast archive
 
+echo Building netblast archive...
+
+mkdir net$BLASTDIR
+mkdir net$BLASTDIR/data
+mkdir net$BLASTDIR/bin
+mkdir net$BLASTDIR/doc
+
+for file in $datafiles
+do
+cp ../ncbi/data/$file              net$BLASTDIR/data
+done
+
+cp ../ncbi/doc/firewall.html       net$BLASTDIR/doc
+cp ../ncbi/doc/blast/netblast.html net$BLASTDIR/doc
+cp ../ncbi/bin/blastcl3            net$BLASTDIR/bin
+cp ../ncbi/VERSION                 net$BLASTDIR
+
+tar -cpf netblast.$platform.tar    net$BLASTDIR
+gzip netblast.$platform.tar
+rm -rf net$BLASTDIR
 
 echo Building wwwblast archive...
 

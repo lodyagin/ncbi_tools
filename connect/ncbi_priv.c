@@ -1,4 +1,4 @@
-/*  $Id: ncbi_priv.c,v 6.4 2002/09/24 15:06:40 lavr Exp $
+/*  $Id: ncbi_priv.c,v 6.7 2005/05/03 13:56:40 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -31,13 +31,34 @@
  */
 
 #include "ncbi_priv.h"
+#if defined(NCBI_OS_UNIX)
+#  include <unistd.h>
+#elif defined(NCBI_OS_MSWIN)
+#  include <windows.h>
+#else
+#  include <connect/ncbi_socket.h>
+#endif /*NCBI_OS_...*/
 #include <stdarg.h>
 #include <string.h>
 
 
-MT_LOCK g_CORE_MT_Lock = 0;
-LOG     g_CORE_Log = 0;
-REG     g_CORE_Registry = 0;
+int     g_NCBI_ConnectRandomSeed = 0;
+
+MT_LOCK g_CORE_MT_Lock           = 0;
+LOG     g_CORE_Log               = 0;
+REG     g_CORE_Registry          = 0;
+
+
+extern int g_NCBI_ConnectSrandAddent(void)
+{
+#if defined(NCBI_OS_UNIX)
+    return (int) getpid(); 
+#elif defined(NCBI_OS_MSWIN)
+    return (int) GetCurrentProcessId();
+#else
+    return SOCK_gethostbyname(0);
+#endif /*NCBI_OS_...*/ 
+}
 
 
 extern const char* g_CORE_Sprintf(const char* fmt, ...)
@@ -73,6 +94,16 @@ extern char* g_CORE_RegistryGET
 /*
  * ---------------------------------------------------------------------------
  * $Log: ncbi_priv.c,v $
+ * Revision 6.7  2005/05/03 13:56:40  lavr
+ * +<connect/ncbi_socket.h> for non-UNIX, non-Windows platforms
+ *
+ * Revision 6.6  2005/05/03 11:50:19  ivanov
+ * Added MS Win specific for NCBI_CONNECT_SRAND_ADDENT, removing dependency
+ * from socket library.
+ *
+ * Revision 6.5  2005/05/02 16:04:20  lavr
+ * Use global random seed
+ *
  * Revision 6.4  2002/09/24 15:06:40  lavr
  * Log moved to end
  *

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/28/95
 *
-* $Revision: 6.39 $
+* $Revision: 6.45 $
 *
 * File Description:
 *
@@ -39,6 +39,28 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: pubdesc.c,v $
+* Revision 6.45  2005/06/03 13:24:36  bollin
+* unregister dialogs for ObjMgr messages when the form is being removed
+*
+* Revision 6.44  2005/05/23 15:58:33  bollin
+* improved appearance of publications listed in PublicationListDialog -
+* don't include the word "citation" at the front of the string, use semicolons
+* instead of carriage returns.
+*
+* Revision 6.43  2005/05/23 15:47:56  bollin
+* added external method for invoking the editor for a publication listed by the
+* PublicationListDialog
+*
+* Revision 6.42  2005/05/20 19:12:11  bollin
+* user can now edit publications from the publication list dialog
+*
+* Revision 6.41  2005/05/20 14:34:30  bollin
+* fixed bug in SeqDescrListCopy
+*
+* Revision 6.40  2005/05/19 20:24:37  bollin
+* created a new dialog for editing a list of publications.  Will be used by
+* the new Submission Template File Editor dialog.  Still needs some work.
+*
 * Revision 6.39  2005/04/20 19:46:02  kans
 * fixed ReplaceAllCallback
 *
@@ -380,6 +402,7 @@
 #include <pubdesc.h>
 #include <gather.h>
 #include <utilpub.h>
+#include <explore.h>
 
 #define FIRST_PAGE      0
 
@@ -5684,3 +5707,364 @@ static void LaunchRelaxedQuery (PubdescPtr pdp, Pointer userdata)
   Select (w);
 }
 
+typedef struct publicationlistdialog 
+{
+  DIALOG_MESSAGE_BLOCK
+  DialoG      pubdesc_table;
+  
+  SeqEntryPtr  sep;
+  BioseqSetPtr bssp;
+  Uint2        entityID;
+} PublicationListDialogData, PNTR PublicationListDialogPtr;
+
+static SeqDescrPtr SeqDescrListCopy (SeqDescrPtr sdp_list)
+{
+  SeqDescrPtr new_list = NULL;
+  
+  new_list = AsnIoMemCopy((Pointer)sdp_list, (AsnReadFunc)SeqDescrAsnRead, (AsnWriteFunc)SeqDescrAsnWrite);
+  return new_list;
+}
+
+static void 
+AddOnePublicationToTableDisplayList 
+(ValNodePtr PNTR    row_list, 
+ SeqDescrPtr        sdp,
+ StdPrintOptionsPtr spop)
+
+{
+  ValNodePtr     new_row = NULL;
+  CharPtr        str;
+
+  if (row_list == NULL || sdp == NULL || sdp->data.ptrvalue == NULL)
+  {
+    return;
+  }
+  
+  if (StdFormatPrint ((Pointer) sdp, (AsnWriteFunc) SeqDescAsnWrite,
+                                    "StdSeqDesc", spop))
+  {
+    ValNodeAddPointer (&new_row, 4, StringSave ("Edit"));
+    ValNodeAddPointer (&new_row, 6, StringSave ("Delete"));
+    if (StringNICmp (spop->ptr, "citation;", 9) == 0)
+    {
+      str = StringSave (spop->ptr + 9);
+    }
+    else
+    {
+      str = StringSave (spop->ptr);
+    }
+    ValNodeAddPointer (&new_row, 30, str);
+    spop->ptr = MemFree (spop->ptr);
+    
+    ValNodeAddPointer (row_list, 0, new_row);
+  }
+}
+
+static void PublicationListDialogRedraw (PublicationListDialogPtr dlg)
+{
+  StdPrintOptionsPtr       spop = NULL;
+  SeqDescrPtr              sdp;
+  ValNodePtr               row_list = NULL;
+
+  if (dlg == NULL || dlg->bssp == NULL)
+  {
+    return;
+  }
+  
+  SeqMgrIndexFeatures (dlg->entityID, NULL);
+  spop = StdPrintOptionsNew (NULL);
+  if (spop == NULL) 
+  {
+    Message (MSG_FATAL, "StdPrintOptionsNew failed");
+    return;
+  }
+  
+  spop->newline = ";";
+  spop->indent = "";
+  
+  /* make row list for table display and update table display */
+  for (sdp = dlg->bssp->descr;
+       sdp != NULL;
+       sdp = sdp->next)
+  {
+    AddOnePublicationToTableDisplayList (&row_list, sdp, spop);
+  }
+  PointerToDialog (dlg->pubdesc_table, row_list);
+  row_list = FreeTableDisplayRowList (row_list);
+  spop = StdPrintOptionsFree (spop);
+  
+  
+}
+
+static void SeqDescrToPublicationListDialog (DialoG d, Pointer userdata)
+{
+  PublicationListDialogPtr dlg;
+  
+  dlg = (PublicationListDialogPtr) GetObjectExtra (d);
+  if (dlg == NULL || dlg->bssp == NULL)
+  {
+    return;
+  }
+  
+  dlg->bssp->descr = SeqDescrFree (dlg->bssp->descr);
+  dlg->bssp->descr = SeqDescrListCopy((SeqDescrPtr) userdata);
+ 
+  SeqMgrIndexFeatures (dlg->entityID, NULL);
+  PublicationListDialogRedraw (dlg);
+}
+
+static Pointer PublicationListDialogToSeqDescr (DialoG d)
+{
+  PublicationListDialogPtr dlg;
+  
+  dlg = (PublicationListDialogPtr) GetObjectExtra (d);
+  if (dlg == NULL)
+  {
+    return NULL;
+  }
+  else
+  {
+    return SeqDescrListCopy (dlg->bssp->descr);
+  }
+  
+}
+
+static void AddToPublicationList (ButtoN b)
+{
+  WindoW                   w;
+  PublicationListDialogPtr dlg;
+  DescriptorFormPtr        dfp;
+  
+  dlg = (PublicationListDialogPtr) GetObjectExtra (b);
+  if (dlg == NULL || dlg->sep == NULL || ! IS_Bioseq_set (dlg->sep)
+      || dlg->bssp == NULL)
+  {
+    return;
+  }
+  
+  w =  (WindoW) CreatePubdescInitForm (-50, -33, "New Reference", NULL, NULL, 
+                             NULL, OBJ_SEQDESC, NULL, NULL);
+
+  dfp = (DescriptorFormPtr) GetObjectExtra (w);
+  if (dfp != NULL)
+  {
+    dfp->input_entityID = dlg->entityID;
+    dfp->input_itemID = dlg->bssp->idx.itemID;
+    dfp->input_itemtype = dlg->bssp->idx.itemtype;
+    dfp->this_subtype = Seq_descr_pub;
+
+    SendMessageToForm (dfp->form, VIB_MSG_INIT);
+  }
+
+  Show (w);
+  Select (w);
+                             
+}
+
+static void EditPublicationInList (PublicationListDialogPtr dlg, SeqDescrPtr sdp)
+{
+  PubinitFormPtr pifp;
+  WindoW         w;
+  ObjValNodePtr  ovp;
+  
+  if (dlg == NULL)
+  {
+    return;
+  }
+  
+  w =  (WindoW) CreatePubdescInitForm (-50, -33, "New Reference", sdp, NULL, 
+                             dlg->sep, OBJ_SEQDESC, PubdescDescFormActnProc, NULL);
+
+  
+  pifp = (PubinitFormPtr) GetObjectExtra (w);
+  if (pifp != NULL)
+  {
+    pifp->input_entityID = dlg->entityID;
+    
+    if (sdp == NULL)
+    {
+      pifp->input_itemID = dlg->bssp->idx.itemID;
+      pifp->input_itemtype = OBJ_BIOSEQSET;
+    }
+    else
+    {
+      if (sdp->extended != 0) {
+        ovp = (ObjValNodePtr) sdp;
+        pifp->input_itemID = ovp->idx.itemID;
+        pifp->input_itemtype = OBJ_SEQDESC;
+      }
+    }
+    
+    pifp->this_itemtype = OBJ_SEQDESC;
+    pifp->this_subtype = Seq_descr_pub;
+#if 0    
+    pifp->procid = ompcp->proc->procid;
+    pifp->proctype = ompcp->proc->proctype;
+#endif    
+    pifp->userkey = OMGetNextUserKey ();
+
+    SendMessageToForm (pifp->form, VIB_MSG_INIT);
+    if (sdp != NULL)
+    {
+      PointerToForm (pifp->form, (Pointer) sdp->data.ptrvalue);
+      SetClosestParentIfDuplicating ((BaseFormPtr) pifp);
+    }
+  }
+  
+  Show (w);
+  Select (w);
+}
+
+static void PublicationListDblClick (PoinT cell_coord, CharPtr header_text, CharPtr cell_text, Pointer userdata)
+{
+  PublicationListDialogPtr dlg;
+  SeqDescrPtr              sdp, prev_sdp = NULL;
+  Int4                     sdp_num;
+  
+  dlg = (PublicationListDialogPtr) userdata;
+  if (dlg == NULL || dlg->bssp == NULL || dlg->bssp->descr == NULL)
+  {
+    return;
+  }
+  
+  for (sdp = dlg->bssp->descr, sdp_num = 0;
+       sdp != NULL && sdp_num < cell_coord.y;
+       sdp = sdp->next, sdp_num++)
+  {
+    prev_sdp = sdp;
+  }
+  
+  if (sdp == NULL)
+  {
+    return;
+  }
+  
+  if (cell_coord.x == 1)
+  {
+    if (ANS_YES != Message (MSG_YN, "Are you sure you want to delete the publication?"))
+    {
+      return;
+    }
+    /* delete */
+    if (prev_sdp == NULL)
+    {
+      dlg->bssp->descr = sdp->next;
+    }
+    else
+    {
+      prev_sdp->next = sdp->next;
+    }
+    sdp->next = NULL;
+    sdp = SeqDescrFree (sdp);
+  }
+  else
+  {
+    EditPublicationInList (dlg, sdp);
+  }
+  PublicationListDialogRedraw (dlg);
+ 
+}
+
+static void CleanupPublicationListDialog (GraphiC g, VoidPtr data)
+{
+  PublicationListDialogPtr dlg;
+  
+  dlg = (PublicationListDialogPtr) data;
+  if (dlg != NULL)
+  {
+    ObjMgrFreeUserData(dlg->entityID, 0, 0, 0);  
+    dlg->sep = SeqEntryFree (dlg->sep);
+    data = MemFree (data);
+  }
+}
+
+static void PublicationListDialogMessage (DialoG d, Int2 mssg)
+{
+  PublicationListDialogPtr dlg;
+
+  dlg = (PublicationListDialogPtr) GetObjectExtra (d);
+  if (dlg == NULL)
+  {
+    return;
+  }
+  
+  if (mssg == VIB_MSG_REDRAW)
+  {
+    PublicationListDialogRedraw (dlg);
+  }
+}
+
+extern DialoG PublicationListDialog (GrouP parent)
+{
+  PublicationListDialogPtr dlg;
+  GrouP                    p, c;
+  PrompT                   s;
+  ButtoN                   b; 
+  
+  dlg = (PublicationListDialogPtr) MemNew (sizeof (PublicationListDialogData));
+  if (dlg == NULL)
+  {
+    return NULL;
+  }
+
+  p = HiddenGroup (parent, -1, 0, NULL);
+  SetObjectExtra (p, dlg, CleanupPublicationListDialog);
+  SetGroupSpacing (p, 10, 10);
+  
+  dlg->dialog = (DialoG) p;
+  dlg->todialog = SeqDescrToPublicationListDialog;
+  dlg->fromdialog = PublicationListDialogToSeqDescr;
+  dlg->dialogmessage = PublicationListDialogMessage;
+  dlg->testdialog = NULL;
+  
+  dlg->sep = SeqEntryNew ();
+  dlg->bssp = BioseqSetNew ();
+  dlg->sep->choice = 2;
+  dlg->sep->data.ptrvalue = dlg->bssp;
+  
+/*  SeqMgrSeqEntry (SM_BIOSEQSET, (Pointer) dlg->bssp, dlg->sep);*/
+  dlg->entityID = ObjMgrGetEntityIDForChoice (dlg->sep);
+  if (dlg->entityID > 0)
+  {
+    SeqMgrIndexFeatures (dlg->entityID, NULL);
+  }                 
+  
+  s = StaticPrompt (p, "References", 0, 0, programFont, 'c');
+  
+  dlg->pubdesc_table = TableDisplayDialog (p, stdCharWidth * 27, stdLineHeight * 16, 0, 2,
+                                       PublicationListDblClick, dlg,
+                                       NULL, NULL);
+  c = HiddenGroup (p, 2, 0, NULL);                                       
+  b = PushButton (c, "Add new publication", AddToPublicationList);
+  SetObjectExtra (b, dlg, NULL);
+  
+  AlignObjects (ALIGN_CENTER, (HANDLE) s, (HANDLE) dlg->pubdesc_table, (HANDLE) c, NULL);
+  
+  return (DialoG) p;  
+}
+
+extern void EditPublicationInDialog (DialoG d, Int4 ref_num)
+{
+  PublicationListDialogPtr dlg;
+  SeqDescrPtr              sdp;
+  Int4                     sdp_num;
+  
+  dlg = (PublicationListDialogPtr) GetObjectExtra (d);
+  if (dlg == NULL || dlg->bssp == NULL || dlg->bssp->descr == NULL)
+  {
+    return;
+  }
+  
+  for (sdp = dlg->bssp->descr, sdp_num = 0;
+       sdp != NULL && sdp_num < ref_num;
+       sdp = sdp->next, sdp_num++)
+  {
+  }
+  
+  if (sdp == NULL)
+  {
+    return;
+  }
+  
+  EditPublicationInList (dlg, sdp);
+}

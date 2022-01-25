@@ -1,4 +1,4 @@
-/* $Id: blast_kappa.c,v 1.52 2005/04/27 19:53:19 dondosha Exp $ 
+/* $Id: blast_kappa.c,v 1.53 2005/05/10 16:07:51 camacho Exp $ 
  * ==========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,7 +34,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_kappa.c,v 1.52 2005/04/27 19:53:19 dondosha Exp $";
+    "$Id: blast_kappa.c,v 1.53 2005/05/10 16:07:51 camacho Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_def.h>
@@ -2132,9 +2132,9 @@ Kappa_MatchingSequenceInitialize(
   self->seq_arg.oid = self->index = subject_index;
 
   if( program_number == eBlastTypeTblastn ) {
-    self->seq_arg.encoding = NCBI4NA_ENCODING;
+    self->seq_arg.encoding = eBlastEncodingNcbi4na;
   } else {
-    self->seq_arg.encoding = BLASTP_ENCODING;
+    self->seq_arg.encoding = eBlastEncodingProtein;
   }
 
   if (BlastSeqSrcGetSequence(seqSrc, (void*) &self->seq_arg) < 0)

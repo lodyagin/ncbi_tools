@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: formatrpsdb.c,v 1.15 2005/02/22 14:17:31 camacho Exp $";
+static char const rcsid[] = "$Id: formatrpsdb.c,v 1.16 2005/05/20 18:57:51 camacho Exp $";
 
 /*****************************************************************************
 
@@ -38,6 +38,9 @@ static char const rcsid[] = "$Id: formatrpsdb.c,v 1.15 2005/02/22 14:17:31 camac
 
 ***************************************************************************
     $Log: formatrpsdb.c,v $
+    Revision 1.16  2005/05/20 18:57:51  camacho
+    Update to use new signature to BLAST_FillLookupTableOptions
+
     Revision 1.15  2005/02/22 14:17:31  camacho
     Fix bioseq data type
 
@@ -633,12 +636,11 @@ Int2 RPSAddFirstSequence(RPS_DbInfo *info,
     }
 
     if (BLAST_FillLookupTableOptions(info->lookup_options,
-                                     eBlastTypeBlastp,
+                                     eBlastTypePsiBlast,
                                      FALSE, /* no megablast */
                                      threshold, /* neighboring threshold */
                                      BLAST_WORDSIZE_PROT,
-                                     FALSE, /* no variable words */
-                                     TRUE  /* use a PSSM */
+                                     FALSE /* no variable words */
                                     ) != 0) {
         ErrPostEx(SEV_ERROR, 0, 0, "Cannot set lookup table options");
         return 1;

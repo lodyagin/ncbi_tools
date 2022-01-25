@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/28/96
 *
-* $Revision: 6.296 $
+* $Revision: 6.300 $
 *
 * File Description: 
 *
@@ -431,7 +431,7 @@ static void FindSegSetComponentsCallback (SeqEntryPtr sep, Pointer mydata,
     ussp = (UpdateSegStrucPtr) mydata;
     if (sep->choice == 1) {
       bsp = (BioseqPtr) sep->data.ptrvalue;
-      if (ISA_na (bsp->mol) && bsp->repr == Seq_repr_seg) {
+      if (bsp->repr == Seq_repr_seg) {
         ussp->segseq = bsp;
       }
     } else if (sep->choice == 2) {
@@ -2056,6 +2056,38 @@ static void RemoveIntermediateGenBankWrapper (BioseqSetPtr bssp)
   SeqEntryFree (this_sep);
 }
 
+static Boolean SetContainsProteins (BioseqSetPtr bssp)
+{
+  BioseqPtr   bsp;
+  SeqEntryPtr sep;
+  Boolean     has_proteins = FALSE;
+  
+  if (bssp == NULL || bssp->seq_set == NULL)
+  {
+    return FALSE;
+  }
+  
+  for (sep = bssp->seq_set; sep != NULL && !has_proteins; sep = sep->next)
+  {
+    if (sep->data.ptrvalue == NULL)
+    {
+      continue;
+    }
+    if (IS_Bioseq (sep))
+    {
+      bsp = (BioseqPtr) sep->data.ptrvalue;
+      if (ISA_aa (bsp->mol))
+      {
+        has_proteins = TRUE;
+      }
+    }
+    else if (IS_Bioseq_set (sep))
+    {
+      has_proteins |= SetContainsProteins (sep->data.ptrvalue);
+    }
+  }
+  return has_proteins;
+}
 
 static void 
 RemoveOneSegSet 
@@ -2064,7 +2096,8 @@ RemoveOneSegSet
  BioseqSetPtr      target_bssp,
  Uint2             entityID)
 {
-  SeqEntryPtr  seg_list, seg_sep, protein_list, prot_sep;
+  SeqEntryPtr  protein_list = NULL;
+  SeqEntryPtr  seg_list, seg_sep, prot_sep;
   SeqEntryPtr  prev_prot_sep, next_prot_sep;
   BioseqPtr    seg_bsp;
   SeqEntryPtr  this_prot_list, last_this;
@@ -2084,7 +2117,9 @@ RemoveOneSegSet
   
   target_bssp = (BioseqSetPtr) this_sep->data.ptrvalue;
   
-  if (parent_bssp != NULL && parent_bssp->_class == BioseqseqSet_class_nuc_prot)
+  if (parent_bssp != NULL 
+      && parent_bssp->_class == BioseqseqSet_class_nuc_prot
+      && !SetContainsProteins (target_bssp))
   {
     seg_list = target_bssp->seq_set;
     target_bssp->seq_set = NULL;
@@ -2156,7 +2191,7 @@ RemoveOneSegSet
         }
         prot_sep = next_prot_sep;
       }
-    
+
       if (this_prot_list != NULL)
       {
         seg_nuc_prot = BioseqSetNew ();
@@ -2173,10 +2208,26 @@ RemoveOneSegSet
     parent_bssp->seq_set = seg_list;
   }
   
+  if (protein_list != NULL && parent_bssp != NULL)
+  {
+    seg_sep = parent_bssp->seq_set;
+    while (seg_sep != NULL && seg_sep->next != NULL)
+    {
+      seg_sep = seg_sep->next;
+    }
+    if (seg_sep == NULL)
+    {
+      parent_bssp->seq_set = protein_list;
+    }
+    else
+    {
+      seg_sep->next = protein_list; 
+    }
+  }
+  
   /* if we have just put a genbank set inside another genbank set, move the nuc-prot sets
    * up. */
   RemoveIntermediateGenBankWrapper (parent_bssp);
-
 }
 
 static void 
@@ -2248,23 +2299,24 @@ static Int2 LIBCALLBACK RemoveSet (Pointer data)
 
   top_sep = GetTopSeqEntryForEntityID (ompcp->input_entityID);
   if (top_sep == NULL) return OM_MSG_RET_ERROR;
-  SaveSeqEntryObjMgrData (top_sep, &omdptop, &omdata);
-  GetSeqEntryParent (top_sep, &top_parentptr, &top_parenttype);
-
   this_sep = SeqMgrGetSeqEntryForData (ompcp->input_data);
   GetSeqEntryParent (this_sep, &parentptr, &parenttype);
 
   if (parenttype != OBJ_BIOSEQSET || parentptr == NULL)
   {
+	Message (MSG_ERROR, "Can't remove top set!");
     return OM_MSG_RET_ERROR;
   }
-  
+ 
+  SaveSeqEntryObjMgrData (top_sep, &omdptop, &omdata);
+  GetSeqEntryParent (top_sep, &top_parentptr, &top_parenttype);
+
   target_bssp = (BioseqSetPtr) ompcp->input_data;
   parent_bssp = (BioseqSetPtr) parentptr;
   
   if (parent_bssp->_class == BioseqseqSet_class_not_set
       || parent_bssp->_class == BioseqseqSet_class_segset
-      || parent_bssp->_class == BioseqseqSet_class_parts)
+      || parent_bssp->_class == BioseqseqSet_class_parts) 
   {
     Message (MSG_ERROR, "Can't move sequences up into parent");
     return OM_MSG_RET_ERROR;
@@ -2286,7 +2338,8 @@ static Int2 LIBCALLBACK RemoveSet (Pointer data)
     DoFixupLocus (top_sep);
     DoFixupSegSet (top_sep);
   }
-  else if (parent_bssp->_class == BioseqseqSet_class_nuc_prot)
+  else if (parent_bssp->_class == BioseqseqSet_class_nuc_prot
+            && ! SetContainsProteins (target_bssp))
   {
     Message (MSG_ERROR, "Can't move sequences up into parent");
     return OM_MSG_RET_ERROR;
@@ -4193,38 +4246,56 @@ static Int2 CreateOneAlignment
        sip2 = SeqIdDup(sbp->bsp->id);
        revcomp = FALSE;
        salp = Sqn_GlobalAlign2Seq(bsp, sbp->bsp, &revcomp);
-       if (revcomp) {
-         if (flip_for_aln)
-         {
-           if (!flip_feat)
-           {
-             ReverseBioseqFeatureStrands (sbp->bsp);      	
-           }
-           if (num_reversed == 0)
-           {
-         	 fprintf (fp, "The following sequences were reversed in order to "
-         	              "construct the alignment:\n");
-           }
-           sip = SeqIdFindBest(sbp->bsp->id, 0);
-           SeqIdWrite (sip, buf, PRINTID_REPORT, sizeof (buf) - 1);
-           fprintf (fp, "%s\n", buf);
-           num_reversed ++;	
-         }
-         else
+       
+       /* count the number of sequences we are trying to align */
+       num_seqs ++;
+       
+       if (salp != NULL 
+           && ! ValidateSeqAlign (salp, entityID, FALSE, FALSE, TRUE, FALSE, FALSE, &dirty))
+       {
+         /* if an alignment was created and the sequence was reversed to create the alignment,
+          * but the new alignment wasn't valid, un-reverse the sequence and don't add the
+          * sequence to the list of sequences reversed.
+          */
+         salp = SeqAlignFree (salp);
+         if (revcomp)
          {
            BioseqRevComp (sbp->bsp);
            ReverseBioseqFeatureStrands (sbp->bsp);
-           ReverseAlignmentStrand (salp, 2);
+           revcomp = FALSE;
          }
-         revcomp = FALSE;
        }
-       num_seqs ++;
-       if (!ValidateSeqAlign (salp, entityID, FALSE, FALSE, TRUE, FALSE, FALSE, &dirty))
-       {
-         salp = SeqAlignFree (salp);
-       }
+       
        if (salp != NULL)
        {
+         if (revcomp) {
+           if (flip_for_aln)
+           {
+             if (!flip_feat)
+             {
+               ReverseBioseqFeatureStrands (sbp->bsp);      	
+             }
+             if (num_reversed == 0)
+             {
+             	 fprintf (fp, "The following sequences were reversed in order to "
+         	              "construct the alignment:\n");
+             }
+             sip = SeqIdFindBest(sbp->bsp->id, 0);
+             SeqIdWrite (sip, buf, PRINTID_REPORT, sizeof (buf) - 1);
+             fprintf (fp, "%s\n", buf);
+             num_reversed ++;	
+           }
+           else
+           {
+             /* un-reverse the sequence */
+             BioseqRevComp (sbp->bsp);
+             ReverseBioseqFeatureStrands (sbp->bsp);
+             /* change the alignment to show the reversed strand */
+             ReverseAlignmentStrand (salp, 2);
+           }
+           revcomp = FALSE;
+         }
+
          dsp = (DenseSegPtr)(salp->segs);
          SeqIdSetFree(dsp->ids);
          dsp->ids = sip1;
@@ -10624,23 +10695,29 @@ extern void ProcessPseudoMiscFeat (IteM i)
   Update ();	
 }
 
-static void ParseInfluenzaAVirusNamesCallback (BioSourcePtr biop, Pointer userdata)
+static Boolean 
+IsParseableInfluenzaAVirusBioSource 
+(BioSourcePtr biop, 
+ CharPtr PNTR strain,
+ CharPtr PNTR serotype)
 {
-  CharPtr desired_name = "Influenza A virus";
-  Int4    desired_len = StringLen (desired_name);
-  CharPtr first_paren = NULL, second_paren = NULL;
-  CharPtr first_paren_close = NULL, second_paren_close = NULL;
-  CharPtr cp;
-  Int4    strain_len, serotype_len;
-  CharPtr strain, serotype;
-  OrgModPtr strain_omp, serotype_omp, last_omp, omp;
-  Boolean   added_strain = FALSE, added_serotype = FALSE;
-  
-  if (biop == NULL || biop->org == NULL || biop->org->taxname == NULL) return;
+  CharPtr         desired_name = "Influenza A virus";
+  Int4            desired_len = StringLen (desired_name);
+  CharPtr         first_paren = NULL, second_paren = NULL;
+  CharPtr         first_paren_close = NULL, second_paren_close = NULL;
+  CharPtr         cp;
+  Int4            strain_len, serotype_len;
+
+  if (biop == NULL || biop->org == NULL || biop->org->taxname == NULL
+      || strain == NULL
+      || serotype == NULL)
+  {
+    return FALSE;
+  }
   
   if (StringNCmp (biop->org->taxname, desired_name, desired_len) != 0)
   {
-    return;
+    return FALSE;
   }
   
   first_paren = StringChr (biop->org->taxname + desired_len, '(');
@@ -10652,7 +10729,7 @@ static void ParseInfluenzaAVirusNamesCallback (BioSourcePtr biop, Pointer userda
   }
   if (*cp != '(')
   {
-    return;
+    return FALSE;
   }
   second_paren = cp;
   cp++;
@@ -10662,7 +10739,7 @@ static void ParseInfluenzaAVirusNamesCallback (BioSourcePtr biop, Pointer userda
   }
   if (*cp != ')')
   {
-    return;
+    return FALSE;
   }
   second_paren_close = cp;
   cp++;
@@ -10672,9 +10749,44 @@ static void ParseInfluenzaAVirusNamesCallback (BioSourcePtr biop, Pointer userda
   }
   if (*cp != ')')
   {
-    return;
+    return FALSE;
   }
   first_paren_close = cp;
+
+  strain_len = second_paren - first_paren + first_paren_close - second_paren_close;
+  serotype_len = second_paren_close - second_paren;
+  *strain = (CharPtr) MemNew (strain_len * sizeof (Char));
+  *serotype = (CharPtr) MemNew (serotype_len * sizeof (Char));
+  if (*strain == NULL || *serotype == NULL)
+  {
+    *strain = MemFree (*strain);
+    *serotype = MemFree (*serotype);
+    return FALSE;
+  }
+  StringNCpy (*strain, first_paren + 1, second_paren - first_paren - 1);
+  if (first_paren_close - second_paren_close > 1)
+  {
+    StringCat (*strain, " ");
+    StringNCat (*strain, second_paren_close + 1, first_paren_close - second_paren_close - 1);
+  }
+  StringNCpy (*serotype, second_paren + 1, second_paren_close - second_paren - 1);
+  
+  return TRUE;
+}
+
+static void ParseInfluenzaAVirusNamesCallback (BioSourcePtr biop, Pointer userdata)
+{
+  CharPtr         strain = NULL, serotype = NULL;
+  OrgModPtr       strain_omp, serotype_omp, last_omp, omp;
+  Boolean         added_strain = FALSE, added_serotype = FALSE;
+  ExistingTextPtr etp;
+   
+  etp = (ExistingTextPtr) userdata;
+  
+  if (!IsParseableInfluenzaAVirusBioSource (biop, &strain, &serotype))
+  {
+    return;
+  }  
 
   if (biop->org->orgname == NULL)
   {
@@ -10685,24 +10797,6 @@ static void ParseInfluenzaAVirusNamesCallback (BioSourcePtr biop, Pointer userda
     }
   }
 
-  strain_len = second_paren - first_paren + first_paren_close - second_paren_close;
-  serotype_len = second_paren_close - second_paren;
-  strain = (CharPtr) MemNew (strain_len * sizeof (Char));
-  serotype = (CharPtr) MemNew (serotype_len * sizeof (Char));
-  if (strain == NULL || serotype == NULL)
-  {
-    strain = MemFree (strain);
-    serotype = MemFree (serotype);
-    return;
-  }
-  StringNCpy (strain, first_paren + 1, second_paren - first_paren - 1);
-  if (first_paren_close - second_paren_close > 1)
-  {
-    StringCat (strain, " ");
-    StringNCat (strain, second_paren_close + 1, first_paren_close - second_paren_close - 1);
-  }
-  StringNCpy (serotype, second_paren + 1, second_paren_close - second_paren - 1);
-
   last_omp = NULL;
   for (omp = biop->org->orgname->mod;
        omp != NULL && (!added_strain || ! added_serotype); 
@@ -10710,14 +10804,12 @@ static void ParseInfluenzaAVirusNamesCallback (BioSourcePtr biop, Pointer userda
   {
     if (omp->subtype == ORGMOD_strain)
     {
-      omp->subname = MemFree (omp->subname);
-      omp->subname = strain;
+      omp->subname = HandleExistingText (omp->subname, strain, etp);
       added_strain = TRUE;
     }
     else if (omp->subtype == ORGMOD_serotype)
     {
-      omp->subname = MemFree (omp->subname);
-      omp->subname = serotype;
+      omp->subname = HandleExistingText (omp->subname, serotype, etp);
       added_serotype = TRUE;      
     }
     last_omp = omp;
@@ -10757,13 +10849,67 @@ static void ParseInfluenzaAVirusNamesCallback (BioSourcePtr biop, Pointer userda
       }
     }
   }
+}
+
+static void ParseInfluenzaAVirusNamesSample (BioSourcePtr biop, Pointer userdata)
+{
+  CharPtr      strain = NULL, serotype = NULL;
+  GetSamplePtr gsp;
+  OrgModPtr    omp;
+  Boolean      found_strain = FALSE, found_serotype = FALSE;
+  CharPtr      overwrite_val;
   
+  if (biop == NULL || biop->org == NULL || biop->org->orgname == NULL || userdata == NULL)
+  {
+    return;
+  }
+  
+  gsp = (GetSamplePtr) userdata;
+  
+  if (!IsParseableInfluenzaAVirusBioSource (biop, &strain, &serotype))
+  {
+    return;
+  }
+  
+  for (omp = biop->org->orgname->mod;
+       omp != NULL && (!found_strain || !found_serotype);
+       omp = omp->next)
+  {
+    overwrite_val = NULL;
+    if (omp->subtype == ORGMOD_strain)
+    {
+      found_strain = TRUE;
+      overwrite_val = omp->subname;
+    }
+    else if (omp->subtype == ORGMOD_serotype)
+    {
+      found_serotype = TRUE;
+      overwrite_val = omp->subname;
+    }
+    if (!StringHasNoText (overwrite_val))
+    {
+      gsp->num_found ++;
+      if (gsp->sample_text == NULL)
+      {
+        gsp->sample_text = StringSave (overwrite_val);
+      }
+      else if (StringCmp (gsp->sample_text, overwrite_val) != 0)
+      {
+        gsp->all_same = FALSE;
+      }
+    }
+  }
+
+  strain = MemFree (strain);
+  serotype = MemFree (serotype);  
 }
 
 extern void ParseInfluenzaAVirusNames (IteM i)
 {
-  BaseFormPtr  bfp;
-  SeqEntryPtr  sep;
+  BaseFormPtr     bfp;
+  SeqEntryPtr     sep;
+  GetSamplePtr    gsp;
+  ExistingTextPtr etp;
 
 #ifdef WIN_MAC
   bfp = currentFormDataPtr;
@@ -10774,7 +10920,16 @@ extern void ParseInfluenzaAVirusNames (IteM i)
 
   sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
   if (sep == NULL) return;
-  VisitBioSourcesInSep (sep, NULL, ParseInfluenzaAVirusNamesCallback);
+  
+  gsp = GetSampleNew ();
+  VisitBioSourcesInSep (sep, gsp, ParseInfluenzaAVirusNamesSample);
+  etp = GetExistingTextHandlerInfo (gsp, FALSE);
+  gsp = GetSampleFree (gsp);
+  if (etp == NULL || etp->existing_text_choice != EXISTING_TEXT_CHOICE_CANCEL)
+  {
+    VisitBioSourcesInSep (sep, etp, ParseInfluenzaAVirusNamesCallback);
+  }
+  etp = MemFree (etp);
   ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
   ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
   Update ();	  	  

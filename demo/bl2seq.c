@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: bl2seq.c,v 6.75 2005/03/16 00:43:40 dondosha Exp $";
+static char const rcsid[] = "$Id: bl2seq.c,v 6.77 2005/06/02 20:45:32 dondosha Exp $";
 
 /**************************************************************************
 *                                                                         *
@@ -27,6 +27,12 @@ static char const rcsid[] = "$Id: bl2seq.c,v 6.75 2005/03/16 00:43:40 dondosha E
 ***************************************************************************
 *
 * $Log: bl2seq.c,v $
+* Revision 6.77  2005/06/02 20:45:32  dondosha
+* Use BlastFormattingInfo structure for formatting
+*
+* Revision 6.76  2005/05/02 17:00:27  coulouri
+* change default to new engine
+*
 * Revision 6.75  2005/03/16 00:43:40  dondosha
 * Correction to previous commit to make reported deflines the same as before
 *
@@ -550,8 +556,8 @@ static Args myargs [] = {
         "F", NULL, NULL, TRUE, 'U', ARG_BOOLEAN, 0.0, 0, NULL}, /* ARG_LCASE */
   { "Input sequences in the form of accession.version",
         "F", NULL, NULL, FALSE, 'A', ARG_BOOLEAN, 0.0, 0, NULL}, /* ARG_ACCN */
-  {"Force use of old engine",
-        "T", NULL, NULL, TRUE, 'V', ARG_BOOLEAN, 0.0, 0, NULL}  /* ARG_FORCE_OLD */
+  {"Force use of the legacy BLAST engine",
+        "F", NULL, NULL, TRUE, 'V', ARG_BOOLEAN, 0.0, 0, NULL}  /* ARG_FORCE_OLD */
 };
 
 /**
@@ -807,7 +813,7 @@ Int2 Main_new(void)
         BioseqPtr query_bsp=NULL, subject_bsp=NULL;
         BioseqPtr bsp1=NULL, bsp2=NULL;
         BioseqPtr fake_bsp=NULL, fake_subject_bsp=NULL;
-        BlastFormattingOptions* format_options;
+        BlastFormattingInfo* format_info = NULL;
         BLAST_SummaryOptions* options=NULL;
         Blast_SummaryReturn* extra_returns=NULL;
         Boolean believe_query= FALSE;
@@ -818,7 +824,7 @@ Int2 Main_new(void)
         DbtagPtr        dbtagptr;
         EBlastProgramType program_number;
         Int2 status; /* return value */
-        Int4 align_view=0; /* Used for formatting */
+        EAlignView align_view = eAlignViewPairwise; /* Used for formatting */
         SeqAlignPtr seqalign=NULL;
         SeqEntryPtr sep=NULL, sep1=NULL;
         SeqLocPtr slp1, slp2;   /* Used for actual search. */
@@ -826,14 +832,16 @@ Int2 Main_new(void)
         SeqLocPtr lcase_mask=NULL;    /* For lower-case masking info from query FASTA. */
         SeqLoc* repeat_mask = NULL; /* Repeat mask locations */
         Uint1 strand_option = 0; /* FIXME */
+        SBlastOptions* search_options = NULL; /* Needed for formatting. */
         
         strand_option = (Uint1) myargs[ARG_STRAND].intvalue;
 
         entrez_lookup = (Boolean) myargs[ARG_ACCN].intvalue;
         seqannot_output = (myargs[ARG_ASNOUT].strvalue != NULL);
         believe_query = (seqannot_output || entrez_lookup); 
+        /* Non-zero value for -m option means tabular output. */
         if (myargs[ARG_FORMAT].intvalue != 0)
-           align_view = 9;  /* Means tabular output. */
+           align_view = eAlignViewTabularWithComments; 
 
         BlastProgram2Number(myargs[ARG_PROGRAM].strvalue, &program_number);
 
@@ -914,17 +922,17 @@ Int2 Main_new(void)
             asnout = AsnIoClose(asnout);
         }
 
-        if ((status = BlastFormattingOptionsNew(program_number, 
-                          myargs[ARG_OUT].strvalue, 0, 1, align_view, 
-                          &format_options)) != 0)
-           return status;
-
-        if (myargs[ARG_HTML].intvalue) {
-           format_options->html = TRUE;
-           format_options->align_options += TXALIGN_HTML;
-           format_options->print_options += TXALIGN_HTML;
-        }
-        format_options->believe_query = believe_query;
+        /* Pass NULL for the database name, since there is no database. */
+        BlastFormattingInfoNewBasic(align_view, options, slp1, 
+                                    myargs[ARG_OUT].strvalue, 
+                                    &search_options, &format_info);
+        
+        /* Always show gis in the output, hence pass TRUE for respective 
+           argument. */
+        BlastFormattingInfoSetUpOptions(format_info, 0, 1,
+                                        (Boolean) myargs[ARG_HTML].intvalue,
+                                        (Boolean) myargs[ARG_USEMEGABLAST].intvalue,
+                                        TRUE, believe_query);
 
         if (mask_at_hash) {
             /* Masking locations in SeqLoc form are no longer needed */
@@ -933,14 +941,14 @@ Int2 Main_new(void)
 
         /* Format the results */
         status = 
-            BLAST_FormatResults(seqalign, NULL, myargs[ARG_PROGRAM].strvalue,
-                                1, slp1, filter_loc, format_options, FALSE, NULL,
+            BLAST_FormatResults(seqalign, 1, slp1, filter_loc, format_info, 
                                 extra_returns);
         
-        status = Blast_PrintOutputFooter(program_number, format_options, NULL, extra_returns);
+        status = Blast_PrintOutputFooter(format_info, extra_returns);
 
-        format_options = BlastFormattingOptionsFree(format_options);
+        format_info = BlastFormattingInfoFree(format_info);
         extra_returns = Blast_SummaryReturnFree(extra_returns);
+        search_options = SBlastOptionsFree(search_options);
 
         if (entrez_lookup) {
            BioseqFree(query_bsp);

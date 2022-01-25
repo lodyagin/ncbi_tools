@@ -1,4 +1,4 @@
-/*  $Id: ncbi_server_info.c,v 6.54 2005/04/20 18:15:59 lavr Exp $
+/*  $Id: ncbi_server_info.c,v 6.55 2005/06/03 16:40:47 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -218,7 +218,7 @@ SSERV_Info* SERV_ReadInfo(const char* info_str)
             EMIME_SubType  mime_s;
             EMIME_Encoding mime_e;
             
-            switch (toupper(*str++)) {
+            switch (toupper((unsigned char)(*str++))) {
             case 'B':
                 if (!coef && sscanf(str, "=%lf%n", &d, &n) >= 1) {
                     if (d < -100.0)
@@ -839,6 +839,9 @@ static const SSERV_Attr* s_GetAttrByTag(const char* tag)
 /*
  * --------------------------------------------------------------------------
  * $Log: ncbi_server_info.c,v $
+ * Revision 6.55  2005/06/03 16:40:47  lavr
+ * Explicit (unsigned char) casts in ctype routines
+ *
  * Revision 6.54  2005/04/20 18:15:59  lavr
  * +<assert.h>
  *

@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: blastutl.c,v 6.459 2005/04/25 14:16:36 coulouri Exp $";
+static char const rcsid[] = "$Id: blastutl.c,v 6.460 2005/05/02 16:03:14 coulouri Exp $";
 
 /* ===========================================================================
 *
@@ -32,12 +32,15 @@ Author: Tom Madden
 
 Contents: Utilities for BLAST
 
-$Revision: 6.459 $
+$Revision: 6.460 $
 
 ******************************************************************************/
 /*
  *
 * $Log: blastutl.c,v $
+* Revision 6.460  2005/05/02 16:03:14  coulouri
+* refactor code to set db_chunk_size
+*
 * Revision 6.459  2005/04/25 14:16:36  coulouri
 * set db_chunk_size adaptively
 *
@@ -12298,3 +12301,23 @@ GetScoreSetFromBlastResultHsp(BLASTResultHspPtr hsp, SeqIdPtr gi_list)
 	return score_set;
 }
 
+/** Configure the database chunk size adaptively.
+ * Note: Must be called from a single-threaded context
+ * @param search the The search block to configure [inout]
+ * @param num_seq The number of sequences in the database [in]
+ */
+void ConfigureDbChunkSize(BlastSearchBlkPtr search, Int4 num_seq)
+{
+/* Emit a tick after how many sequences? */
+search->thr_info->db_incr = num_seq / BLAST_NTICKS;
+
+/* Divide the search into chunks */
+search->thr_info->db_chunk_size = MAX(num_seq / 100,1);
+
+/* Loadbalance more finely for multithreaded searches. */
+if (NlmThreadsAvailable() && search->pbp->process_num > 1)
+    search->thr_info->db_chunk_size = MAX(num_seq/(100*(search->pbp->process_num
+)), 1);
+
+return;
+}

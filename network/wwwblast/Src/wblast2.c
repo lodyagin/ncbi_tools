@@ -1,4 +1,4 @@
-/* $Id: wblast2.c,v 1.20 2005/04/11 19:14:37 dondosha Exp $
+/* $Id: wblast2.c,v 1.22 2005/05/16 14:36:59 coulouri Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -27,12 +27,18 @@
 *
 * Initial Creation Date: 10/23/2000
 *
-* $Revision: 1.20 $
+* $Revision: 1.22 $
 *
 * File Description:
 *        BLAST 2 Sequences CGI program
 *
 * $Log: wblast2.c,v $
+* Revision 1.22  2005/05/16 14:36:59  coulouri
+* delayed declarations are not allowed in c
+*
+* Revision 1.21  2005/05/04 17:29:40  zaretska
+* Combined accession/GI and sequence input in one entry box. Added checking for error after BLAST_TwoSeqLocSets call
+*
 * Revision 1.20  2005/04/11 19:14:37  dondosha
 * Changed blast_form.map to IMG USEMAP for standalone version
 *
@@ -371,9 +377,7 @@ static void JavaScriptFun()
    printf("    document.bl2.seqfile1.value=''\n");
    printf("    document.bl2.seqfile2.value=''\n");
    printf("    document.bl2.sseq.value=''\n");
-   printf("    document.bl2.seq.value=''\n");
-   printf("    document.bl2.one.value=''\n");
-   printf("    document.bl2.two.value=''\n");
+   printf("    document.bl2.seq.value=''\n");   
    printf("    document.bl2.to.value=''\n");
    printf("    document.bl2.tto.value=''\n");
    printf("    document.bl2.from.value=''\n");
@@ -521,6 +525,7 @@ static void sighandler(int sig)
    sigflag |= wb2_sigmask[sig];
 }
 
+
 static void	Blast2SeqMainPage(CharPtr warning, CharPtr seq1, CharPtr seq2, CharPtr one, CharPtr two, ValNodePtr error, Boolean is_prot, BLAST_OptionsBlkPtr options, Int2 mtrx, Int4 from, Int4 to, Int4 ffrom, Int4 tto, Int2 filter, Int2 pagecount) {
 /*****************************************************************
 	0 - no sequences
@@ -612,7 +617,7 @@ static void	Blast2SeqMainPage(CharPtr warning, CharPtr seq1, CharPtr seq2, CharP
         printf("<FORM NAME=\"bl2\" method=\"Post\" action=\"wblast2.cgi?%d\" enctype=\"multipart/form-data\">\n", pagecount);
 #else /* defined BL2SEQ_STANDALONE */
         printf("<BODY BGCOLOR=\"#F0F0FE\" LINK=\"#0000FF\" "
-               "VLINK=\"#660099\" ALINK=\"#660099\">\n");
+           "VLINK=\"#660099\" ALINK=\"#660099\">\n");
         printf("<map name=img_map>\n");
         printf("<area shape=rect coords=2,1,48,21 "
                "href=\"http://www.ncbi.nlm.nih.gov\">\n");
@@ -755,20 +760,12 @@ static void	Blast2SeqMainPage(CharPtr warning, CharPtr seq1, CharPtr seq2, CharP
            printf("<INPUT TYPE=\"reset\" VALUE=\"Clear Input\">\n");
         
         printf("<HR>\n");
-#ifdef NCBI_ENTREZ_CLIENT
-        printf("<font color=ff0000>Sequence 1</font> Enter accession or GI <INPUT type=text size=8 name=\"one\"");
-        if (one) {
-           printf("value=%s>\n", one);
-        } else {
-           printf(">\n");
-        }
-        printf("or download from file <INPUT type=file name=\"seqfile1\">");
+#ifdef NCBI_ENTREZ_CLIENT        
+        printf("<font color=ff0000>Sequence 1</font><BR>\n Enter accession, GI or sequence in FASTA format \n");
 #else
-        printf("Download sequence from file <INPUT type=file name=\"seqfile1\">");
+       printf("<font color=ff0000>Sequence 1</font> Enter sequence in FASTA format \n");
 #endif
-
-        printf("<BR>or sequence in FASTA format <font color=ff0000>from:<INPUT type=text size=8 name=\"from\" value=%d>to:<INPUT type=text size=8 name=\"to\" value=%d></font><BR>\n", from, to);
-        
+       printf("<font color=ff0000>from:<INPUT type=text size=8 name=\"from\" value=%d>to:<INPUT type=text size=8 name=\"to\" value=%d></font><BR>\n", from, to);        
         printf("<textarea name=\"seq\" rows=6 cols=60>");
         if (seq1) {
            if (*seq1 == '>') {
@@ -780,19 +777,14 @@ static void	Blast2SeqMainPage(CharPtr warning, CharPtr seq1, CharPtr seq2, CharP
            printf("</textarea>\n");
         }
         printf("<BR>\n");
+        printf("or download from file <INPUT type=file name=\"seqfile1\">");
+        printf("<HR>\n");
 #ifdef NCBI_ENTREZ_CLIENT
-        printf("<font color=ff0000>Sequence 2</font> Enter accession or GI <INPUT type=text size=8 name=\"two\"");
-        if (two) {
-           printf("value=%s>\n", two);
-        } else {
-           printf(">\n");
-        }
-        printf("or download from file <INPUT type=file name=\"seqfile2\">");
+        printf("<font color=ff0000>Sequence 2</font><BR>\n  Enter accession, GI or sequence in FASTA format \n");
 #else
-        printf("Download sequence from file <INPUT type=file name=\"seqfile2\">");
+        printf("<font color=ff0000>Sequence 2</font> Enter sequence in FASTA format \n");
 #endif
-
-        printf("<BR>or sequence in FASTA format <font color=ff0000>from:<INPUT type=text size=8 name=\"ffrom\" value=%d>to:<INPUT type=text size=8 name=\"tto\" value=%d></font><BR>\n", ffrom, tto);
+        printf("<font color=ff0000>from:<INPUT type=text size=8 name=\"ffrom\" value=%d>to:<INPUT type=text size=8 name=\"tto\" value=%d></font><BR>\n", ffrom, tto);
         printf("<textarea name=\"sseq\" rows=6 cols=60>");
         if (seq2) {
            if (*seq2 == '>') {
@@ -803,8 +795,10 @@ static void	Blast2SeqMainPage(CharPtr warning, CharPtr seq1, CharPtr seq2, CharP
         } else {
            printf("</textarea>\n");
         }
-
         printf("<BR>\n");
+        printf("or download from file <INPUT type=file name=\"seqfile2\">");
+        printf("<BR>\n");
+
         printf("<INPUT TYPE=\"submit\" VALUE=\"Align\">\n");
         printf("<INPUT TYPE=\"reset\" VALUE=\"Clear Input\">\n");
         printf("<INPUT TYPE=hidden name=\"page\" value=\"%d\">\n", pagecount+1);
@@ -1604,7 +1598,8 @@ static void PrintRectAlign(PrymPtr PNTR rect, Int2 k, Int2 color, Int2 height, I
 
 #define LOCAL_BUFLEN 255
 static BioseqPtr 
-FindSeqByAccession(CharPtr accver, Int2 id_num, Boolean is_na)
+
+FindSeqByAccession(CharPtr accver, Int2 id_num)
 {
    BioseqPtr bsp = NULL;
 
@@ -1690,12 +1685,8 @@ FindSeqByAccession(CharPtr accver, Int2 id_num, Boolean is_na)
 
    if (bsp == NULL)
       return NULL;
-   
-   if (ISA_na(bsp->mol) != is_na) {
-      BioseqUnlock(bsp);
-      return NULL;
-   }
 
+   
    /* We need to keep this bioseq to preserve the protein information for the 
       CDS translation feature. However we also need to pack the sequence data,
       so bsp->seq_data has to be modified.
@@ -2007,6 +1998,161 @@ static void BLASTOptions2SummaryOptions(BLAST_OptionsBlk* options,
 }
 #endif
 
+typedef enum {
+    UNDEFINED_SEQ_TYPE,
+    FASTA_WITH_DEFLINE,
+    BARE_FASTA,
+    NCBI_SEQID,
+    ACCESSION_GI
+} BlastQuerySequenceType;
+
+#define MAX_ALLOWED_ID_LEN 20
+#define IS_NEWLINE(a) ((a)=='\0' || (a)=='\n' || (a)=='\r')
+static int get_sequence_type(char *querystr)
+{
+    int seqtype = UNDEFINED_SEQ_TYPE;
+    int length;
+    char *line, *remainder, *word;
+
+    /* If query starts with '>', then it is a FASTA with defline */
+    if (*querystr == '>')
+        return FASTA_WITH_DEFLINE;
+    for (remainder = querystr; !IS_NEWLINE(*remainder); remainder++) ;
+
+    length = remainder - querystr;
+
+    line = (char *) Malloc(length + 1);
+    strncpy(line, querystr, length);
+    line[length] = NULLB;
+
+    /* If first line contains a '|', then it is presumably an NCBI sequence
+       identifier */
+    if (strstr(line, "|") != NULL) {
+        sfree(line);
+        return NCBI_SEQID;
+    }
+    /* Accessions or gis cannot be more than 20 characters */
+    if (length > MAX_ALLOWED_ID_LEN) {
+        sfree(line);
+        return BARE_FASTA;
+    }
+    /* If first line contains a white space between non-white space, then it
+       is a bare sequence, possibly from GenBank flat file */
+    word = StringTokMT(line, " \t", &remainder);
+
+    if (remainder)
+        StringTokMT(remainder, " \t", &remainder);
+
+    if (remainder) {
+        sfree(line);
+        return BARE_FASTA;
+    }
+    while (*word != NULLB && !IS_DIGIT(*word))
+        word++;
+    if (*word != NULLB)
+        seqtype = ACCESSION_GI;
+    else
+        seqtype = BARE_FASTA;
+    sfree(line);
+    return seqtype;
+}
+
+
+//This function 
+//1. Reads sequence entry field ("SEQ" for seqNbr=1 or SSEQ for seqNbr=2)
+//2. Reads file entry field (SEQFILE1 for seqNbr=1 or SEQFILE2 for seqNbr=2)
+//3. If coming from blast reads accesion/gi entry field ("ONE" for seqNbr=1 or TWO for seqNbr=2)
+//4. Determines sequence type
+//5. If raw sequence without subject line inserts subject line
+//6. Returns pointer to the entered sequence(raw or accession)
+static char * GetAndFormatEnteredSequence(WWWBlastInfoPtr theInfo,int seqNbr,int *seq_type) 
+{
+    CharPtr seq=NULL, c, chptr, sbuf;
+    static Char seqEntryName[5],seqFileEntryName[9],blastReqEntryName[4];
+
+    
+    if(seqNbr == 1) {
+        sprintf(seqEntryName,"SEQ");                //entry box name will be "SEQ"
+        //need to keep this if request comes directly from blast
+        sprintf(blastReqEntryName,"ONE");           
+    }
+    else {
+        sprintf(seqEntryName,"SSEQ");               //entry box name will be "SSEQ"
+        //need to keep this if request comes directly from blast
+        sprintf(blastReqEntryName,"TWO");
+    }
+    sprintf(seqFileEntryName,"SEQFILE%d",seqNbr);   //entry box name will be "SEQFILE1" or "SEQFILE2"
+
+
+    #ifdef NCBI_ENTREZ_CLIENT        
+        //need to keep those if request comes directly from blast
+        chptr = WWWGetValueByName(theInfo->info, blastReqEntryName);        
+    #endif
+    //If ONE or TWO chptr will contain accession or GI    
+    
+    if (!chptr) {
+        //Now check sequence entry boxes
+        if((chptr = WWWGetValueByName(theInfo->info, seqEntryName)) == NULL ||
+            *chptr == NULLB)
+            chptr = WWWGetValueByName(theInfo->info, seqFileEntryName);
+    }
+    
+    if (chptr) {
+       while (IS_WHITESP(*chptr))
+          chptr++;
+    }
+    if (chptr && *chptr != NULLB)
+       c = StringSave(chptr);
+    else
+       c = NULL;
+
+    if(c) {
+        *seq_type = get_sequence_type(c);
+        //Check here if sequence is enetered with subjetc line !!!
+        if(*seq_type != ACCESSION_GI && *seq_type != FASTA_WITH_DEFLINE) {        
+        // if (c1 && *c1 != '>') {
+            sbuf = MemNew(StringLen(c)+8);
+            sprintf(sbuf, ">seq_%d\n%s", seqNbr, c);
+            seq = StringSave(sbuf);
+            MemFree(c);
+            c = seq;
+            MemFree(sbuf);
+        }        
+    }
+    return c;
+}
+
+
+//This function readjusts subject lines for two sequences if they are
+//originally the same
+static void AdjustSubjectLine(CharPtr *pSeq1EntryData,CharPtr *pSeq2EntryData)
+{
+    CharPtr seq1,seq2,sbuf;
+
+    seq1 = *pSeq1EntryData;
+    seq2 = *pSeq2EntryData;
+
+    if (**pSeq1EntryData == '>')
+            seq1 = seq1 + 1;
+    sbuf = Malloc(StringLen(seq1)+4);
+    sprintf(sbuf, ">1_%s", seq1);
+    seq1 = StringSave(sbuf);
+    sbuf = MemFree(sbuf);
+    MemFree(*pSeq1EntryData);
+    *pSeq1EntryData = seq1;
+    if (**pSeq2EntryData == '>')
+        seq2 = seq2 + 1;
+    sbuf = Malloc(StringLen(seq2)+4);
+    sprintf(sbuf, ">2_%s",seq2);
+    seq2 = StringSave(sbuf);
+    MemFree(sbuf);
+    MemFree(*pSeq2EntryData);
+    *pSeq2EntryData = seq2;
+}    
+
+
+
+
 #define BL2SEQ_CPU_LIMIT 240
 
 Int2 Main(void)
@@ -2023,8 +2169,12 @@ Int2 Main(void)
     SeqAnnotPtr hsat= NULL, sat, satnext;
     FloatHi	expect;
     Boolean is_prot=FALSE, is_aa1=FALSE, is_aa2=FALSE, is_na1=TRUE, is_na2=TRUE;
-    CharPtr seq_1=NULL, seq_2=NULL, c1, c2, chptr;
-    CharPtr sq_1=NULL, sq_2=NULL, one=NULL, two=NULL, sbuf, progname;
+    CharPtr seq_1=NULL, seq_2=NULL, chptr;
+    CharPtr sq_1=NULL, sq_2=NULL, sbuf, progname;
+
+    CharPtr accessionOrGi_1=NULL,accessionOrGi_2=NULL;
+    CharPtr seq1EntryData, seq2EntryData;
+    
     static Char mbuf[12];
     BLAST_OptionsBlkPtr options = NULL;
     Int4 ll, len1, len2, txoption;
@@ -2050,6 +2200,7 @@ Int2 Main(void)
     BLAST_KarlinBlkPtr ka_params=NULL, ka_gap_params=NULL;
     TxDfDbInfoPtr      dbinfo = NULL;
     BlastTimeKeeper    time_keeper;
+    int seq_1_type = UNDEFINED_SEQ_TYPE, seq_2_type = UNDEFINED_SEQ_TYPE;
     
     WWWBlastInfoPtr theInfo;
     ReadDBFILEPtr rdfp;
@@ -2226,8 +2377,10 @@ Int2 Main(void)
         options->strand_option = Seq_strand_both;
 
 #ifdef NCBI_ENTREZ_CLIENT
-    one = WWWGetValueByName(theInfo->info, "ONE");
-    two = WWWGetValueByName(theInfo->info, "TWO");
+    //Moved this into function GetAndFormatEnteredSequence()
+    //need to keep those if request comes directly from blast
+    //one = WWWGetValueByName(theInfo->info, "ONE");
+    //two = WWWGetValueByName(theInfo->info, "TWO");
 #endif
     options->cpu_limit = BL2SEQ_CPU_LIMIT;
     
@@ -2252,92 +2405,73 @@ Int2 Main(void)
                            THREAD_RUN|THREAD_BOUND, eTP_Default, NULL, NULL);
 #endif
     
-    if((chptr = WWWGetValueByName(theInfo->info, "SEQ")) == NULL ||
-       *chptr == NULLB)
-        chptr = WWWGetValueByName(theInfo->info, "SEQFILE1");
-    
-    if (chptr) {
-       while (IS_WHITESP(*chptr))
-          chptr++;
-    }
-    if (chptr && *chptr != NULLB)
-       c1 = StringSave(chptr);
-    else
-       c1 = NULL;
+    //At this point seq_1,seq_2,accessionOrGi_1,accessionOrGi_2 are NULLS
+    seq1EntryData = GetAndFormatEnteredSequence(theInfo,1,&seq_1_type);
+    seq2EntryData = GetAndFormatEnteredSequence(theInfo,2,&seq_2_type);
 
-    if (c1 && *c1 != '>') {
-        sbuf = MemNew(StringLen(c1)+8);
-        sprintf(sbuf, ">seq_1\n%s", c1);
-        seq_1 = StringSave(sbuf);
-        MemFree(c1);
-        c1 = seq_1;
-        MemFree(sbuf);
+    //seq_type will contain one of the following after GetEnteredSequence() call
+    //UNDEFINED_SEQ_TYPE,FASTA_WITH_DEFLINE, BARE_FASTA,NCBI_SEQID,ACCESSION_GI
+
+    //seq1or2EntryData - will conatain sequence entered in any format in SEQ or SSEQ
+    //if seq_type != ACCESSION_GI, seqEntryData at this point will contain 
+    //raw sequence with subject line 
+    //otherwise it will contain - accesion/gi
+    
+    if(seq1EntryData && seq2EntryData && 
+            seq_1_type != ACCESSION_GI && seq_2_type != ACCESSION_GI &&
+                            StrNCmp(seq1EntryData, seq2EntryData, 6) == 0 ) {
+        AdjustSubjectLine(&seq1EntryData,&seq2EntryData);
     }
     
-    if((chptr = WWWGetValueByName(theInfo->info, "SSEQ")) == NULL || 
-       *chptr == NULLB)
-        chptr = WWWGetValueByName(theInfo->info, "SEQFILE2");
-    
-    if (chptr) {
-       while (IS_WHITESP(*chptr))
-          chptr++;
+    if(seq_1_type == ACCESSION_GI) {
+        accessionOrGi_1 = seq1EntryData;
     }
-    if (chptr && *chptr != NULLB)
-        c2 = StringSave(chptr);
-    else 
-        c2 = NULL;
-    
-    if (c2 && *c2 != '>') {
-        sbuf = MemNew(StringLen(c2)+8);
-        sprintf(sbuf, ">seq_2\n%s", c2);
-        seq_2 = StringSave(sbuf);
-        MemFree(c2);
-        c2 = seq_2;
-        MemFree(sbuf);
+    else {
+        seq_1 = seq1EntryData;
     }
-    seq_1 = c1;
-    seq_2 = c2;
-    if (c1 && c2 && StrNCmp(c1, c2, 6) == 0) {
-        if (*c1 == '>')
-            seq_1 = seq_1 + 1;
-        sbuf = Malloc(StringLen(seq_1)+4);
-        sprintf(sbuf, ">1_%s", seq_1);
-        seq_1 = StringSave(sbuf);
-        sbuf = MemFree(sbuf);
-        MemFree(c1);
-        if (*c2 == '>')
-            seq_2 = seq_2 + 1;
-        sbuf = Malloc(StringLen(seq_2)+4);
-        sprintf(sbuf, ">2_%s",seq_2);
-        seq_2 = StringSave(sbuf);
-        MemFree(sbuf);
-        MemFree(c2);
+
+    if(seq_2_type == ACCESSION_GI) {
+        accessionOrGi_2 = seq2EntryData;
     }
+    else {     
+        seq_2 = seq2EntryData;
+    }
+  
+
+    //seq1EntryData - data enetered in SEQ, could be raw sequence or GI/Accession
+    //seq2EntryData - data enetered in SSEQ, could be raw sequence or GI/Accession
+    //seq_1, seq_2 - raw sequence with subject line
+    //accessionOrGi_1, accessinOrGi_2 - accesion number or GI
+
+    //After that changed all one,two to accessionOrGi_1 or accessionOrGi_2
     
+
     if (seq_1 != NULL) {
         query_sep = FastaToSeqBuff(seq_1, &sq_1, !is_aa1);
         query_bsp = (BioseqPtr) query_sep->data.ptrvalue;
         is_na1 = FastaCheckDna(seq_1);
-    } else if (one != NULL && *one != NULLB) {
+    } else if (accessionOrGi_1 != NULL && *accessionOrGi_1 != NULLB) { 
        if ((rid = WWWGetValueByName(theInfo->info, "RID")) != NULL) {
 #ifndef BL2SEQ_STANDALONE
           /* Get the query sequence from the QBlast results */
-          sip = SeqIdParse(one);
+          sip = SeqIdParse(accessionOrGi_1);
           
           QBlastGetResultsEx(rid, NULL, &query_bsp, NULL, &database, NULL,
                              NULL, sip);
 #endif
           if (!query_bsp) {
              error_msg = "The query sequence is not found";
-             Blast2SeqMainPage(error_msg, seq_1, seq_2, 
-                               one, two, NULL, is_prot, options, mtrx,
+             
+             Blast2SeqMainPage(error_msg, seq1EntryData, seq2EntryData, 
+                               NULL, NULL, NULL, is_prot, options, mtrx,
                                from, to, ffrom, tto, filter, pagecount);
           }
        } else {
-          if ((query_bsp = FindSeqByAccession(one, 1, !is_aa1)) == NULL) {
+          if ((query_bsp = FindSeqByAccession(accessionOrGi_1, 1)) == NULL) {
              error_msg = "The first sequence accession is not found";
-             Blast2SeqMainPage(error_msg, seq_1, seq_2, 
-                               one, two, NULL, is_prot, options, mtrx,
+             
+             Blast2SeqMainPage(error_msg, seq1EntryData, seq2EntryData, 
+                           NULL, NULL, NULL, is_prot, options, mtrx,
                                from, to, ffrom, tto, filter, pagecount);
           }
        }
@@ -2348,27 +2482,29 @@ Int2 Main(void)
         subject_sep = FastaToSeqBuff(seq_2, &sq_2, !is_aa2);
         subject_bsp = (BioseqPtr) subject_sep->data.ptrvalue;
         is_na2 = FastaCheckDna(seq_2);
-    } else if (two != NULL && *two != NULLB) {
+    } else if (accessionOrGi_2 != NULL && *accessionOrGi_2 != NULLB) {
        if (rid && database) {
           /* Fetch the subject seqience from the BLAST database by the 
              SeqId provided in the link */
-          sip = SeqIdParse(two);
+          sip = SeqIdParse(accessionOrGi_2);
           ReadDBBioseqFetchEnable("wblast2", database, TRUE, TRUE);
           subject_bsp = BioseqLockById(sip);
           ReadDBBioseqFetchDisable();
           if (!subject_bsp) {
              error_msg = "The database sequence is not found";
-             Blast2SeqMainPage(error_msg, seq_1, seq_2, 
-                               one, two, NULL, is_prot, options, mtrx,
+             
+             Blast2SeqMainPage(error_msg, seq1EntryData, seq2EntryData, 
+                               NULL, NULL, NULL, is_prot, options, mtrx,
                                from, to, ffrom, tto, filter, pagecount);
           }
        } else {
-          subject_bsp = FindSeqByAccession(two, 2, !is_aa2);
+          subject_bsp = FindSeqByAccession(accessionOrGi_2, 2);
        }
        if (subject_bsp == NULL) {
             error_msg = "The second sequence accession is not found";
-            Blast2SeqMainPage(error_msg, seq_1, seq_2, 
-                              one, two, NULL, is_prot, options, mtrx,
+            
+            Blast2SeqMainPage(error_msg, seq1EntryData, seq2EntryData, 
+                              NULL, NULL, NULL, is_prot, options, mtrx,
                               from, to, ffrom, tto, filter, pagecount);
         }
         is_na2 = ISA_na(subject_bsp->mol);
@@ -2482,8 +2618,9 @@ Int2 Main(void)
     
     if (query_bsp == NULL || subject_bsp == NULL) {
         error_msg = "Please enter the sequences";   
-        Blast2SeqMainPage(error_msg, seq_1, seq_2, 
-                          one, two, NULL, is_prot, options, mtrx,
+        
+        Blast2SeqMainPage(error_msg, seq1EntryData, seq1EntryData, 
+                          NULL, NULL, NULL, is_prot, options, mtrx,
                           from, to, ffrom, tto, filter, pagecount);
     }
     
@@ -2497,10 +2634,11 @@ Int2 Main(void)
     if (!is_aa2 && !is_na2)
         BlastConstructErrorMessage(NULL, "Second sequence must be nucleotide for this program", 1, &error_return);  
     if (error_return)
-        Blast2SeqMainPage(NULL, seq_1, seq_2, one, two, error_return, is_prot, 
+        
+        Blast2SeqMainPage(NULL, seq1EntryData, seq2EntryData, NULL,NULL, error_return, is_prot, 
                           options, mtrx, from, to, ffrom, tto, filter, pagecount);
-    
-    BLASTOptionValidateHTML(options, progname, seq_1, seq_2, one, two, 
+        
+        BLASTOptionValidateHTML(options, progname, seq1EntryData, seq2EntryData, NULL, NULL, 
                             is_prot, mtrx, from, to, ffrom, tto, filter,
                             pagecount);
 
@@ -2532,13 +2670,15 @@ Int2 Main(void)
     }
     if ((spp = SeqPortNewByLoc(slp1, code1)) == NULL) {
         error_msg = "The first sequence location is not valid";
-        Blast2SeqMainPage(error_msg, seq_1, seq_2, one, two, NULL, is_prot, options, 
+        
+        Blast2SeqMainPage(error_msg, seq1EntryData, seq2EntryData, NULL, NULL, NULL, is_prot, options, 
                           mtrx, from, to, ffrom, tto, filter, pagecount);
     } else
        SeqPortFree(spp);
     if ((spp = SeqPortNewByLoc(slp2, code2)) == NULL) {
         error_msg = "The second sequence location is not valid";
-        Blast2SeqMainPage(error_msg, seq_1, seq_2, one, two, NULL, is_prot, options, 
+        
+        Blast2SeqMainPage(error_msg, seq1EntryData, seq2EntryData, NULL, NULL, NULL, is_prot, options, 
                           mtrx, from, to, ffrom, tto, filter, pagecount);
     } else
        SeqPortFree(spp);
@@ -2570,11 +2710,12 @@ Int2 Main(void)
     BLAST_TwoSeqLocSets(s_options, slp1, slp2, NULL, &seqalign, &mask, &mask_at_hash,
                         &s_return);
     if (s_return->error) {
-        /* Print the error message. */
-        Blast2SeqMainPage(s_return->error->message, seq_1, seq_2, one, two, NULL,
+        /* Print the error message. */        
+        Blast2SeqMainPage(s_return->error->message, seq1EntryData, seq2EntryData, NULL, NULL, NULL,
                           is_prot, options, mtrx, from, to, ffrom, tto, filter, 
                           pagecount);    
     } 
+
 
     if (mask_at_hash) {
        /* If masking was done for lookup table only, do not use mask locations
@@ -2594,18 +2735,21 @@ Int2 Main(void)
     /*	seqalign =  BlastTwoSequencesEx(query_bsp, subject_bsp, progname, 
         options, &other_returns, NULL);*/
     
-    if (seqalign == NULL) {
+    if (seqalign == NULL) { 
         if ((chptr = WWWGetValueByName(theInfo->info, "SEQ")) != NULL) {
-            MemFree(seq_1);
-            seq_1 = StringSave(chptr);
+            
+            MemFree(seq1EntryData);
+            seq1EntryData = StringSave(chptr);            
         }
         if((chptr = WWWGetValueByName(theInfo->info, "SSEQ")) != NULL) {
-            MemFree(seq_2);
-            seq_2 = StringSave(chptr);
+            
+            MemFree(seq2EntryData);
+            seq2EntryData = StringSave(chptr);                        
         }
         CreateJavaHeadHTML(query_bsp, subject_bsp, from, to, ffrom, tto, 
                            len1, len2, progname);
-        PrintParam(is_prot, mtrx, ma, ms, options, seq_2, seq_1, one, two,
+        
+        PrintParam(is_prot, mtrx, ma, ms, options, seq2EntryData, seq1EntryData, NULL, NULL,
                    query_bsp, subject_bsp, len1, len2, from, to, ffrom, tto, pagecount);
         printf("<strong><font color=#0000EE>No significant similarity was found</font></strong>\n");
 
@@ -2657,7 +2801,8 @@ Int2 Main(void)
     
     CreateJavaHeadHTML(query_bsp, subject_bsp, 
                        from, to, ffrom, tto, len1, len2, progname);
-    PrintParam(is_prot, mtrx, ma, ms, options, seq_2, seq_1, one, two,
+    
+    PrintParam(is_prot, mtrx, ma, ms, options, seq2EntryData, seq1EntryData, NULL, NULL,
                query_bsp, subject_bsp, len1, len2, from, to, ffrom, tto, pagecount);
     
     align_type = BlastGetProgramNumber(progname);
@@ -2978,15 +3123,19 @@ Int2 Main(void)
     }
 
 cleanup:
-    MemFree(seq_1);
-    MemFree(seq_2);
+    
+    
+    
+    MemFree(seq1EntryData);
+    MemFree(seq2EntryData);
+
     SeqLocSetFree(slp1);
     SeqLocSetFree(slp2);
-    if (one && *one != NULLB)
+    if (accessionOrGi_1 && *accessionOrGi_1 != NULLB)
         BioseqUnlock(query_bsp);
     else
         SeqEntryFree(query_sep);
-    if (two && *two != NULLB)
+    if (accessionOrGi_2 && *accessionOrGi_2 != NULLB)
         BioseqUnlock(subject_bsp);
     else
         SeqEntryFree(subject_sep);
@@ -3056,3 +3205,4 @@ cleanup:
 #endif
     return 0;
 }
+

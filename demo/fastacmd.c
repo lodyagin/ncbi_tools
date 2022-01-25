@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: fastacmd.c,v 6.34 2004/12/04 03:39:48 camacho Exp $";
+static char const rcsid[] = "$Id: fastacmd.c,v 6.35 2005/05/05 15:54:06 dondosha Exp $";
 
-/* $Id: fastacmd.c,v 6.34 2004/12/04 03:39:48 camacho Exp $
+/* $Id: fastacmd.c,v 6.35 2005/05/05 15:54:06 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -31,12 +31,15 @@ static char const rcsid[] = "$Id: fastacmd.c,v 6.34 2004/12/04 03:39:48 camacho 
 *
 * Initial Version Creation Date: 05/20/1997
 *
-* $Revision: 6.34 $
+* $Revision: 6.35 $
 *
 * File Description:
 *        FASTA retrievel system using ISAM indexes
 *
 * $Log: fastacmd.c,v $
+* Revision 6.35  2005/05/05 15:54:06  dondosha
+* Enhanced comment for the -s option and fixed typo in -i option description
+*
 * Revision 6.34  2004/12/04 03:39:48  camacho
 * Set range of data on -D option
 *
@@ -173,11 +176,12 @@ static Args myargs [] = {
       "         T - protein   \n"
       "         F - nucleotide", 
       "G", NULL,NULL,TRUE,'p',ARG_STRING,0.0,0,NULL},
-    { "Search string: GIs, accessions and loci may be used delimited\n"
-      "      by comma.",                                        /* 2 */
+    { "Comma-delimited search string(s).\n"
+      "      GIs, accessions, loci, or fullSeq-id strings may be used,\n"
+      "      e.g. 555, AC147927, 'gnl|dbname|tag'",             /* 2 */
       NULL, NULL, NULL, TRUE, 's', ARG_STRING, 0.0, 0, NULL},
-    { "Input file wilth GIs/accessions/loci for batch\n"
-      "      retrieval",/* 3 */
+    { "Input file with GIs/accessions/loci for batch\n"
+      "      retrieval",                                        /* 3 */
       NULL, NULL, NULL, TRUE, 'i', ARG_STRING, 0.0, 0, NULL},
     { "Retrieve duplicate accessions",                          /* 4 */
       "F", NULL, NULL, TRUE, 'a', ARG_BOOLEAN, 0.0, 0, NULL},

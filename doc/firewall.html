@@ -48,7 +48,7 @@
       <p>&nbsp;</p>
 
 			 <p>
-				<i>Last modified:</i> $Date: 2004/11/05 20:47:17 $<br>
+				<i>Last modified:</i> $Date: 2005/05/27 19:57:07 $<br>
 				<i>Latest version: </i>
 				<a href="http://www.ncbi.nlm.nih.gov/IEB/ToolBox/NETWORK/firewall.html">
 				  http://www.ncbi.nlm.nih.gov/IEB/ToolBox/NETWORK/firewall.html</a>
@@ -123,6 +123,19 @@ Firewall Port        IP Address
 <p>
 If your firewall is not transparent, the firewall port number
 should be mapped to the same port number on the external host.
+
+<p>
+Port 5860 is usually not accessible by the public but reserved
+for NCBI internal purposes only.  However, we recommend that it
+is kept open just as all other ports in the range in case the
+public access will be eventually enabled on this port.
+
+<p>
+To see what ports are currently on, and their status, as reported within
+NCBI, please refer to the following <a href="fwd_check.cgi">Firewall
+Daemon Presence Check</a> page.  Ports marked <b>INTERNAL</b> are
+for NCBI use only and may be inaccessible from your site without,
+however, affecting availability of any services that NCBI provides.
 
 <p>
 TROUBLESHOOTING:  You can test if these ports are accessible from

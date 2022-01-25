@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: xmlblast.c,v 6.36 2004/10/20 19:58:58 dondosha Exp $";
+static char const rcsid[] = "$Id: xmlblast.c,v 6.37 2005/05/16 18:16:40 dondosha Exp $";
 
-/* $Id: xmlblast.c,v 6.36 2004/10/20 19:58:58 dondosha Exp $ */
+/* $Id: xmlblast.c,v 6.37 2005/05/16 18:16:40 dondosha Exp $ */
 /**************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -32,12 +32,15 @@ static char const rcsid[] = "$Id: xmlblast.c,v 6.36 2004/10/20 19:58:58 dondosha
 *   
 * Version Creation Date: 05/17/2000
 *
-* $Revision: 6.36 $
+* $Revision: 6.37 $
 *
 * File Description:  Functions to print simplified BLAST output (XML)
 *
 * 
 * $Log: xmlblast.c,v $
+* Revision 6.37  2005/05/16 18:16:40  dondosha
+* Removed calls to ObjMgrFreeCache - it should be called on a higher level
+*
 * Revision 6.36  2004/10/20 19:58:58  dondosha
 * Replace sequence data in Bioseq, as done in txalign.c, to assure proper masking and identities/positives calculation for all programs
 *
@@ -1091,8 +1094,6 @@ Boolean BXMLPrintOutput(AsnIoPtr aip, SeqAlignPtr seqalign,
     
     BlastOutputFree(boutp);
     
-    ObjMgrFreeCache(0);
-    
     return TRUE;
 }
 
@@ -1209,8 +1210,6 @@ Boolean BXMLPrintMultiQueryOutput(AsnIoPtr aip, SeqAlignPtr seqalign,
     
     MBXmlClose(mbxp, other_returns, !options->gapped_calculation);
 
-    ObjMgrFreeCache(0);
-    
     return TRUE;
 }
 

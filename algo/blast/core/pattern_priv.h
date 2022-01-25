@@ -1,4 +1,4 @@
-/* $Id: pattern_priv.h,v 1.1 2005/04/27 19:57:14 dondosha Exp $
+/* $Id: pattern_priv.h,v 1.2 2005/05/03 20:33:46 dondosha Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -96,7 +96,7 @@ extern const int kMaskAaAlphabetBits;
  * @param s Number to check bits in [in]
  * @param mask Mask to apply [in]
  * @param rightOne The rightmost position where s and mask both have a 1 [out]
- * @param rightMaskLonly The rightmost position < rightOne, where mask has a 1,
+ * @param rightMaskOnly The rightmost position < rightOne, where mask has a 1,
  *                       if any, or -1 otherwise [out]
  */
 void

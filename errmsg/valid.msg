@@ -184,6 +184,9 @@ Gap symbols found in this protein Bioseq.
 $^   BadProteinStart, 51
 A gap symbols was found at the start of this protein Bioseq.
 
+$^   TerminalGap, 52
+The Bioseq has a gap at the end.
+
 $$ SEQ_DESCR, 2
 
 $^   BioSourceMissing, 1
@@ -312,6 +315,15 @@ The RefGeneTracking user object should only be in RefSeq records.
 $^   BioSourceInconsistency, 32
 There is an internal inconsistency with specific fields in the BioSource.
 
+$^   FastaBracketTitle, 33
+Bracketed [...=...] information remains in the title.  This should have been parsed
+out during sequence record generation to obtain qualifier values.
+
+$^   MissingText, 34
+Comments, regions, and other text descriptors need a descriptive text string.
+The string provided with this descriptor is empty. If no text is desired, then
+the descriptor should be removed.
+
 $$ GENERIC, 3
 
 $^   NonAsciiAsn, 1
@@ -338,6 +350,9 @@ $^   MedlineEntryPub, 7
 Publications should not be of type medline-entry.  This has abstract and MeSH
 term information that does not appear in the GenBank flatfile.  Type cit-art
 should be used instead.
+
+$^   BadDate, 8
+There are bad values for month, day, or year in a date.
 
 $$ SEQ_PKG, 4
 
@@ -775,6 +790,22 @@ appended to the definition line and placed inside brackets.
 $^ CDSwithMultipleMRNAs, 94
 The CDS feature has more than one overlapping mRNA with the proper intervals and
 no other identification assigning it to a different coding region.
+
+$^ MultipleEquivBioSources, 95
+Multiple equivalent biosource features exist on the sequence. They should be
+fused into a single feature with multiple intervals.
+
+$^ MultipleEquivPublications, 96
+Multiple equivalent publication features exist on the sequence. They should be
+fused into a single feature with multiple intervals.
+
+$^ BadFullLengthFeature, 97
+A publication or biosource feature is on the full length the sequence. It should be
+converted to a publication or biosource descriptor.
+
+$^ RedundantFields, 98
+A comment or other field contains information that is redundant with the primary
+field on a feature.
 
 $$ SEQ_ALIGN, 6
 

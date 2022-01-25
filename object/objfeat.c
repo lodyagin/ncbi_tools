@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.24 $
+* $Revision: 6.26 $
 *
 * File Description:  Object manager for module NCBI-SeqFeat
 *
@@ -218,6 +218,8 @@ NLM_EXTERN SeqFeatPtr LIBCALL SeqFeatFree (SeqFeatPtr sfp)
 		MemFree(vnp);
 	}
 	MemFree(sfp->except_text);
+	AsnGenericChoiceSeqOfFree (sfp->ids, (AsnOptFreeFunc) SeqFeatIdFree);
+	AsnGenericUserSeqOfFree (sfp->exts, (AsnOptFreeFunc) UserObjectFree);
 
 	ObjMgrDelete(OBJ_SEQFEAT, (Pointer)sfp);
 
@@ -373,6 +375,14 @@ NLM_EXTERN Boolean LIBCALL SeqFeatAsnWrite (SeqFeatPtr sfp, AsnIoPtr aip, AsnTyp
         if (! AsnWrite(aip, SEQ_FEAT_except_text, &av)) goto erret;
 		}
     }
+    if (sfp->ids != NULL)
+    {
+        AsnGenericChoiceSeqOfAsnWrite (sfp->ids, (AsnWriteFunc) SeqFeatIdAsnWrite, aip, SEQ_FEAT_ids, SEQ_FEAT_ids_E);
+    }
+    if (sfp->exts != NULL)
+    {
+        AsnGenericUserSeqOfAsnWrite (sfp->exts, (AsnWriteFunc) UserObjectAsnWrite, aip, SEQ_FEAT_exts, SEQ_FEAT_exts_E);
+    }
     if (! AsnCloseStruct(aip, atp, (Pointer)sfp))
         goto erret;
     retval = TRUE;
@@ -399,6 +409,7 @@ NLM_EXTERN SeqFeatPtr LIBCALL SeqFeatAsnRead (AsnIoPtr aip, AsnTypePtr orig)
 	SeqFeatXrefPtr sfxp, sfxplast = NULL;
 	ValNodePtr vnp, vnplast = NULL;
 	DbtagPtr dbtp;
+	Boolean isError = FALSE;
 
 	if (! loaded)
 	{
@@ -488,6 +499,20 @@ NLM_EXTERN SeqFeatPtr LIBCALL SeqFeatAsnRead (AsnIoPtr aip, AsnTypePtr orig)
 			vnplast = vnp;
 			vnp->data.ptrvalue = (Pointer)dbtp;
 		}
+		else if (atp == SEQ_FEAT_ids)
+		{
+		    sfp->ids = AsnGenericChoiceSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) SeqFeatIdAsnRead, (AsnOptFreeFunc) SeqFeatIdFree);
+            if (isError && sfp->ids == NULL) {
+                goto erret;
+            }
+        }
+        else if (atp == SEQ_FEAT_exts)
+        {
+            sfp->exts = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) UserObjectAsnRead, (AsnOptFreeFunc) UserObjectFree);
+            if (isError && sfp->exts == NULL) {
+                goto erret;
+            }
+        }
         else
         {
             if (AsnReadVal(aip, atp, &av) <= 0) goto erret;
@@ -3142,6 +3167,101 @@ erret:
 
 /*****************************************************************************
 *
+*   ValNodeStringMatch(vnp1, vnp2)
+*
+*   This function is used by OrgRefMatch.
+*****************************************************************************/
+static Boolean ValNodeStringMatch (ValNodePtr vnp1, ValNodePtr vnp2)
+{
+  if (vnp1 == NULL && vnp2 == NULL)
+  {
+    return TRUE;
+  }
+  else if (vnp1 == NULL || vnp2 == NULL)
+  {
+    return FALSE;
+  }
+  else if (vnp1->choice != vnp2->choice)
+  {
+    return FALSE;
+  }
+  else if (StringCmp (vnp1->data.ptrvalue, vnp2->data.ptrvalue) != 0)
+  {
+    return FALSE;
+  }
+  else
+  {
+    return ValNodeStringMatch (vnp1->next, vnp2->next);
+  }
+}
+
+/*****************************************************************************
+*
+*   ValNodeDbtagMatch(vnp1, vnp2)
+*
+*   This function is used by OrgRefMatch.
+*****************************************************************************/
+static Boolean ValNodeDbtagMatch (ValNodePtr vnp1, ValNodePtr vnp2)
+{
+  if (vnp1 == NULL && vnp2 == NULL)
+  {
+    return TRUE;
+  }
+  else if (vnp1 == NULL || vnp2 == NULL)
+  {
+    return FALSE;
+  }
+  else if (vnp1->choice != vnp2->choice)
+  {
+    return FALSE;
+  }
+  else if (!DbtagMatch (vnp1->data.ptrvalue, vnp2->data.ptrvalue))
+  {
+    return FALSE;
+  }
+  else
+  {
+    return ValNodeDbtagMatch (vnp1->next, vnp2->next);
+  }
+}
+
+/*****************************************************************************
+*
+*   OrgRefMatch(orp1, orp2)
+*
+*****************************************************************************/
+NLM_EXTERN Boolean LIBCALL OrgRefMatch (OrgRefPtr orp1, OrgRefPtr orp2)
+{
+  if (orp1 == NULL && orp2 == NULL)
+  {
+    return TRUE;
+  }
+  else if (orp1 == NULL || orp2 == NULL)
+  {
+    return FALSE;
+  }
+  else if (StringCmp (orp1->taxname, orp2->taxname) != 0
+           || StringCmp (orp1->common, orp2->common) != 0)
+  {
+    return FALSE;
+  }
+  else if (!ValNodeStringMatch (orp1->syn, orp2->syn)
+          || ! ValNodeDbtagMatch (orp1->syn, orp2->syn))
+  {
+    return FALSE;
+  }
+  else if (! OrgNameMatch (orp1->orgname, orp2->orgname))
+  {
+    return FALSE;
+  }
+  else
+  {
+    return TRUE;
+  }  
+}
+
+/*****************************************************************************
+*
 *   OrgNameNew()
 *
 *****************************************************************************/
@@ -3552,6 +3672,37 @@ erret:
     goto ret;
 }
 
+/*****************************************************************************
+*
+*   OrgNameMatch (onp1, onp2)
+*
+*****************************************************************************/
+NLM_EXTERN Boolean LIBCALL OrgNameMatch (OrgNamePtr onp1, OrgNamePtr onp2)
+{
+    if (onp1 == NULL && onp2 == NULL)
+  {
+    return TRUE;
+  }
+  else if (onp1 == NULL || onp2 == NULL)
+  {
+    return FALSE;
+  }
+  else if (onp1->choice != onp2->choice
+           || onp1->gcode != onp2->gcode
+           || onp2->mgcode != onp2->mgcode
+           || StringCmp (onp1->attrib, onp2->attrib) != 0
+           || StringCmp (onp1->lineage, onp2->lineage) != 0
+           || StringCmp (onp1->div, onp2->div) != 0
+           || ! OrgModSetMatch (onp1->mod, onp2->mod)
+           || ! OrgNameMatch (onp1->next, onp2->next))
+  {
+    return FALSE;
+  }
+  else
+  {
+    return TRUE;
+  }  
+}
 
 /*****************************************************************************
 *
@@ -4885,6 +5036,33 @@ erret:
 
 /*****************************************************************************
 *
+*   OrgModSetMatch (mod1, mod2)
+*
+*****************************************************************************/
+NLM_EXTERN Boolean LIBCALL OrgModSetMatch (OrgModPtr mod1, OrgModPtr mod2)
+{
+  if (mod1 == NULL && mod2 == NULL)
+  {
+    return TRUE;
+  }
+  else if (mod1 == NULL || mod2 == NULL)
+  {
+    return FALSE;
+  }
+  else if (mod1->subtype != mod2->subtype
+           || StringCmp (mod1->attrib, mod2->attrib) != 0
+           || StringCmp (mod1->subname, mod2->subname) != 0)
+  {
+    return FALSE;
+  }
+  else
+  {
+    return OrgModSetMatch (mod1->next, mod2->next);
+  }
+}
+
+/*****************************************************************************
+*
 *   TaxElementNew()
 *
 *****************************************************************************/
@@ -5442,6 +5620,32 @@ erret:
 
 /*****************************************************************************
 *
+*   BioSourceMatch(biop1, biop2)
+*
+*****************************************************************************/
+NLM_EXTERN Boolean LIBCALL BioSourceMatch (BioSourcePtr biop1, BioSourcePtr biop2)
+{
+  if (biop1 == NULL && biop2 == NULL)
+  {
+    return TRUE;
+  }
+  else if (biop1 == NULL || biop2 == NULL)
+  {
+    return FALSE;
+  }
+  else if (biop1->genome != biop2->genome
+           || biop1->origin != biop2->origin
+           || biop1->is_focus != biop2->is_focus
+           || ! OrgRefMatch (biop1->org, biop2->org)
+           || ! SubSourceSetMatch (biop1->subtype, biop2->subtype))
+  {
+    return FALSE;
+  }
+  return TRUE;
+}
+
+/*****************************************************************************
+*
 *   SubSourceNew()
 *
 *****************************************************************************/
@@ -5682,6 +5886,41 @@ erret:
     goto ret;
 }
 
+/*****************************************************************************
+*
+*   SubSourceSetMatch(ssp1, ssp2)
+*
+*****************************************************************************/
+NLM_EXTERN Boolean LIBCALL SubSourceSetMatch (SubSourcePtr ssp1, SubSourcePtr ssp2)
+{
+  while (ssp1 != NULL && ssp2 != NULL)
+  {
+    if (ssp1->subtype != ssp2->subtype)
+    {
+      return FALSE;
+    }
+    else if (StringCmp (ssp1->name, ssp2->name) != 0)
+    {
+      return FALSE;
+    }
+    else if (StringCmp (ssp1->attrib, ssp2->attrib) != 0)
+    {
+      return FALSE;
+    }
+    
+    ssp1 = ssp1->next;
+    ssp2 = ssp2->next;
+  }
+ 
+  if (ssp1 == NULL && ssp2 == NULL)
+  {
+    return TRUE;
+  }
+  else
+  {
+    return FALSE;
+  }
+}
 
 
 

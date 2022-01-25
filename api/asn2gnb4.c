@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.51 $
+* $Revision: 1.52 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -1622,8 +1622,8 @@ static void GetStrFormRNAEvidence (
 
 {
   size_t        len;
-  CharPtr       method = NULL;
-  Int2          nm = 0;
+  CharPtr       method = NULL, prefix = NULL;
+  Int2          ne = 0, nm = 0, np = 0;
   ObjectIdPtr   oip;
   CharPtr       str = NULL;
   CharPtr PNTR  strp;
@@ -1653,10 +1653,32 @@ static void GetStrFormRNAEvidence (
           }
         }
       }
+    } else if (StringCmp (oip->str, "EST") == 0) {
+      for (u = (UserFieldPtr) ufp->data.ptrvalue; u != NULL; u = u->next) {
+        if (u->data.ptrvalue == NULL) continue;
+        for (uu = (UserFieldPtr) u->data.ptrvalue; uu != NULL; uu = uu->next) {
+          oip = uu->label;
+          if (oip == NULL) continue;
+          if (StringCmp (oip->str, "accession") == 0) {
+            ne++;
+          }
+        }
+      }
+    } else if (StringCmp (oip->str, "Protein") == 0) {
+      for (u = (UserFieldPtr) ufp->data.ptrvalue; u != NULL; u = u->next) {
+        if (u->data.ptrvalue == NULL) continue;
+        for (uu = (UserFieldPtr) u->data.ptrvalue; uu != NULL; uu = uu->next) {
+          oip = uu->label;
+          if (oip == NULL) continue;
+          if (StringCmp (oip->str, "accession") == 0) {
+            np++;
+          }
+        }
+      }
     }
   }
 
-  len = StringLen (mrnaevtext1) + StringLen (mrnaevtext2) + StringLen (mrnaevtext3) + StringLen (method) + 30;
+  len = StringLen (mrnaevtext1) + StringLen (mrnaevtext2) + StringLen (mrnaevtext3) + StringLen (method) + 80;
   str = (CharPtr) MemNew (len);
   if (str == NULL) return;
 
@@ -1665,15 +1687,40 @@ static void GetStrFormRNAEvidence (
   } else {
     sprintf (str, "%s.", mrnaevtext1);
   }
-  if (nm > 0) {
+  if (nm > 0 || ne > 0 || np > 0) {
     StringCat (str, " ");
     StringCat (str, mrnaevtext3);
+  }
+  prefix = " ";
+  if (nm > 0) {
+    StringCat (str, prefix);
     if (nm > 1) {
-      sprintf (tmp, " %d mRNAs", (int) nm);
+      sprintf (tmp, "%d mRNAs", (int) nm);
     } else {
-      sprintf (tmp, " %d mRNA", (int) nm);
+      sprintf (tmp, "%d mRNA", (int) nm);
     }
     StringCat (str, tmp);
+    prefix = ", ";
+  }
+  if (ne > 0) {
+    StringCat (str, prefix);
+    if (ne > 1) {
+      sprintf (tmp, "%d ESTs", (int) ne);
+    } else {
+      sprintf (tmp, "%d EST", (int) ne);
+    }
+    StringCat (str, tmp);
+    prefix = ", ";
+  }
+  if (np > 0) {
+    StringCat (str, prefix);
+    if (np > 1) {
+      sprintf (tmp, "%d Proteins", (int) np);
+    } else {
+      sprintf (tmp, "%d Protein", (int) np);
+    }
+    StringCat (str, tmp);
+    prefix = ", ";
   }
 
   *strp = str;

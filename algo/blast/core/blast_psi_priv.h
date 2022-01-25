@@ -1,7 +1,7 @@
 #ifndef ALGO_BLAST_CORE___BLAST_PSI_PRIV__H
 #define ALGO_BLAST_CORE___BLAST_PSI_PRIV__H
 
-/*  $Id: blast_psi_priv.h,v 1.27 2005/03/23 14:04:24 camacho Exp $
+/*  $Id: blast_psi_priv.h,v 1.29 2005/05/24 12:49:24 camacho Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -422,7 +422,7 @@ _PSIScaleMatrix(const Uint1* query,
 /** Updates the Karlin-Altschul parameters based on the query sequence and 
  * PSSM's score frequencies. Port of blastool.c's updateLambdaK
  * @param pssm PSSM [in]
- @ @param query query sequence in ncbistdaa encoding [in]
+ * @param query query sequence in ncbistdaa encoding [in]
  * @param query_length length of the query sequence above [in]
  * @param std_probs array containing the standard background residue 
  * probabilities [in]
@@ -442,6 +442,7 @@ _PSIUpdateLambdaK(const int** pssm,
  * @todo Ideally all scaling code should be refactored so that it is
  * consolidated, eliminating the need for blast_posit.[hc]. Please note that
  * blast_kappa.c's scalePosMatrix also does something very similar.
+ * @todo remove std_probs as it's not used
  */
 int
 _IMPALAScaleMatrix(const Uint1* query, const double* std_probs,
@@ -579,6 +580,12 @@ __printMsa(const char* filename, const _PSIMsa* msa);
  * ===========================================================================
  *
  * $Log: blast_psi_priv.h,v $
+ * Revision 1.29  2005/05/24 12:49:24  camacho
+ * doxygen fix
+ *
+ * Revision 1.28  2005/05/10 16:07:51  camacho
+ * Changed *_ENCODING #defines to EBlastEncoding enumeration
+ *
  * Revision 1.27  2005/03/23 14:04:24  camacho
  * doxygen fix
  *

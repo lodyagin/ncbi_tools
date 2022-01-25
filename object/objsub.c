@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 1/1/91
 *
-* $Revision: 6.3 $
+* $Revision: 6.5 $
 *
 * File Description:  Object manager for module NCBI-Submit
 *
@@ -41,6 +41,12 @@
 *
 *
 * $Log: objsub.c,v $
+* Revision 6.5  2005/05/20 21:08:43  bollin
+* allow SubmitBlocks to match if both have NULL CitSubs
+*
+* Revision 6.4  2005/05/18 17:31:43  bollin
+* added ContactInfoMatch and SubmitBlockMatch functions
+*
 * Revision 6.3  2004/05/12 20:41:57  kans
 * set aip->io_failure in several erret blocks for compatibility of old object loaders with new ones
 *
@@ -812,6 +818,61 @@ erret:
 
 /*****************************************************************************
 *
+*   SubmitBlockMatch( sbp1, sbp2)
+*
+*****************************************************************************/
+NLM_EXTERN Boolean LIBCALL SubmitBlockMatch (SubmitBlockPtr sbp1, SubmitBlockPtr sbp2)
+{
+  if (sbp1 == NULL && sbp2 == NULL)
+  {
+    return TRUE;
+  }
+  else if (sbp1 == NULL || sbp2 == NULL)
+  {
+    return FALSE;
+  }
+
+  if ((sbp1->hup && ! sbp2->hup) || (!sbp1->hup && sbp2->hup))
+  {
+    return FALSE;
+  }
+
+  if (sbp1->subtype != sbp2->subtype)
+  {
+    return FALSE;
+  }
+
+  if (StringCmp (sbp1->tool, sbp2->tool) != 0
+      || StringCmp (sbp1->user_tag, sbp2->user_tag) != 0
+      || StringCmp (sbp1->comment, sbp2->comment) != 0)
+  {
+    return FALSE;
+  }
+
+  /* compare contacts */
+  if (! ContactInfoMatch (sbp1->contact, sbp2->contact))
+  {
+    return FALSE;
+  }
+  
+  /* compare CitSubs */
+  if ((sbp1->cit != NULL || sbp2->cit != NULL)
+       && CitSubMatch (sbp1->cit, sbp2->cit) != 0)
+  {
+    return FALSE;
+  }
+  
+  /* compare dates */  
+  if (! DateMatch (sbp1->reldate, sbp2->reldate, TRUE))
+  {
+    return FALSE;
+  }
+  
+  return TRUE;  
+}
+
+/*****************************************************************************
+*
 *   ContactInfoNew()
 *
 *****************************************************************************/
@@ -1068,3 +1129,58 @@ erret:
     goto ret;
 }
 
+/*****************************************************************************
+*
+*   ContactInfoMatch(cip1, cip2)
+*
+*****************************************************************************/
+NLM_EXTERN Boolean LIBCALL ContactInfoMatch (ContactInfoPtr cip1, ContactInfoPtr cip2)
+{
+  Boolean    address_same = TRUE;
+  ValNodePtr vnp1, vnp2;
+  
+  if (cip1 == NULL && cip2 == NULL)
+  {
+    return TRUE;
+  }
+  else if (cip1 == NULL || cip2 == NULL)
+  {
+    return FALSE;
+  }
+  
+  if (StringCmp (cip1->name, cip2->name) != 0
+      || StringCmp (cip1->phone, cip2->phone) != 0
+      || StringCmp (cip1->fax, cip2->fax) != 0
+      || StringCmp (cip1->telex, cip2->telex) != 0
+      || StringCmp (cip1->last_name, cip2->last_name) != 0
+      || StringCmp (cip1->first_name, cip2->first_name) != 0
+      || StringCmp (cip1->middle_initial, cip2->middle_initial) != 0)
+  {
+    return FALSE;
+  }
+  
+  for (vnp1 = cip1->address, vnp2 = cip2->address;
+       vnp1 != NULL && vnp2 != NULL && address_same;
+       vnp1 = vnp1->next, vnp2 = vnp2->next)
+  {
+    if (StringICmp (vnp1->data.ptrvalue, vnp2->data.ptrvalue) != 0)
+    {
+      address_same = FALSE;
+    }
+  }
+  if (!address_same || vnp1 != NULL || vnp2 != NULL)
+  {
+    return FALSE;
+  }
+
+  if (! ObjectIdMatch (cip1->owner_id, cip2->owner_id))
+  {
+    return FALSE;
+  }
+  
+  if (! AuthorMatch (cip1->contact, cip2->contact))
+  {
+    return FALSE;
+  }
+  return TRUE;  
+}

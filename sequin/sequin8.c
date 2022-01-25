@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/3/98
 *
-* $Revision: 6.294 $
+* $Revision: 6.295 $
 *
 * File Description: 
 *
@@ -57,6 +57,7 @@
 #include <alignmgr2.h>
 #include <spidey.h>
 #include <blast.h>
+#include <salpanel.h>
 
 #define DEFLINE_MAX_LEN          380
 #define TEXT_MAX_LEN             64

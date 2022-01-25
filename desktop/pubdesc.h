@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/28/95
 *
-* $Revision: 6.2 $
+* $Revision: 6.4 $
 *
 * File Description: 
 *
@@ -97,6 +97,8 @@ extern ForM CreatePubdescFeatForm (Int2 left, Int2 top, CharPtr title,
 
 extern Int2 LIBCALLBACK PubdescGenFunc (Pointer data);
 
+extern DialoG PublicationListDialog (GrouP parent);
+extern void EditPublicationInDialog (DialoG d, Int4 ref_num);
 
 #ifdef __cplusplus
 }

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.65 $
+* $Revision: 6.69 $
 *
 * File Description: 
 *
@@ -2095,7 +2095,7 @@ static void FindInGeneralText (ButtoN b)
 
   str = SaveStringFromText (tfp->find);
 
-  if (StringDoesHaveText) {
+  if (StringDoesHaveText (str)) {
     TmpNam (path);
     if (ExportForm (tfp->form, path)) {
       tbl = TextFsaNew ();
@@ -2312,7 +2312,7 @@ LaunchGeneralTextViewerEx
         rp->tfp = tfp;
         rp->fnt = fnt;
         b = PushButton (g, "Repopulate", RepopulateViewer);
-        SetObjectExtra (b, rp, StdCleanupExtraProc);
+        SetObjectExtra (b, rp, CleanupRepopulateViewer);
       }
     }
   }
@@ -2972,6 +2972,8 @@ typedef struct tabledisplay
   FonT display_font;
   TableDisplayDblClick dbl_click;
   Pointer dbl_click_data;
+  TableDisplayLeftInRed left_in_red;
+  Pointer left_in_red_data;
 } TableDisplayData, PNTR TableDisplayPtr;
 
 extern ValNodePtr FreeTableDisplayRowList (ValNodePtr row_list)
@@ -3142,7 +3144,8 @@ static void DrawTableDisplayLine (Int4 x, Int4 y,
  Int4       frozen_left,
  Int4       start_col,
  Int4       char_width,
- Int4       descent)
+ Int4       descent,
+ Boolean    left_in_red)
 {
   ValNodePtr header_vnp, data_vnp;
   Int4       x_offset, chars_to_paint, col_num;
@@ -3157,6 +3160,14 @@ static void DrawTableDisplayLine (Int4 x, Int4 y,
   {
     Gray ();
     InvertColors ();
+    if (left_in_red)
+    {
+      Red ();
+    }
+    else
+    {
+      White ();
+    }
     chars_to_paint = PrepareTableDisplayTextBuffer (buf, 
                                    (row_length - x_offset) / char_width,
                                    header_vnp->choice,
@@ -3220,6 +3231,7 @@ static void OnDrawTableDisplay (PaneL p)
   Int4            num_rows, num_columns, visible_rows;
   PoinT           pt1, pt2;
   Int4            new_vmax, new_hmax, old_vmax, old_hmax;
+  Boolean         left_in_red;
 
   dlg = (TableDisplayPtr) GetObjectExtra (p);
   if (dlg == NULL)
@@ -3297,7 +3309,7 @@ static void OnDrawTableDisplay (PaneL p)
   {
     DrawTableDisplayLine (x, y, dlg->row_list->data.ptrvalue, row_vnp->data.ptrvalue,
                           row_buffer, row_length, dlg->frozen_left, start_col, 
-                          dlg->char_width, dlg->descent);
+                          dlg->char_width, dlg->descent, FALSE);
     y += stdLineHeight;
   }
   
@@ -3309,11 +3321,17 @@ static void OnDrawTableDisplay (PaneL p)
   
   while (row_vnp != NULL && y <= r.bottom - 2 * dlg->table_inset)
   {
+    left_in_red = FALSE;
+    if (dlg->left_in_red != NULL)
+    {
+      left_in_red = (dlg->left_in_red) (row, dlg->row_list, dlg->left_in_red_data);
+    }
     DrawTableDisplayLine (x, y, dlg->row_list->data.ptrvalue, row_vnp->data.ptrvalue,
                           row_buffer, row_length, dlg->frozen_left, start_col,
-                          dlg->char_width, dlg->descent);
+                          dlg->char_width, dlg->descent, left_in_red);
     row_vnp = row_vnp->next;
     y += stdLineHeight;
+    row++;
   }
   
   /* draw line to separate header from remaining lines */
@@ -3479,7 +3497,9 @@ static void TableDisplayOnClick (PaneL p, PoinT pt)
 extern DialoG TableDisplayDialog (GrouP parent, Int4 width, Int4 height,
                                   Int4 frozen_header, Int4 frozen_left,
                                   TableDisplayDblClick dbl_click,
-                                  Pointer dbl_click_data)
+                                  Pointer dbl_click_data,
+                                  TableDisplayLeftInRed left_in_red,
+                                  Pointer left_in_red_data)
 {
   TableDisplayPtr dlg;
   GrouP           p;
@@ -3504,6 +3524,8 @@ extern DialoG TableDisplayDialog (GrouP parent, Int4 width, Int4 height,
   dlg->table_inset = 4;
   dlg->dbl_click = dbl_click;
   dlg->dbl_click_data = dbl_click_data;
+  dlg->left_in_red = left_in_red;
+  dlg->left_in_red_data = left_in_red_data;
 
 #ifdef WIN_MAC
   dlg->display_font = ParseFont ("Monaco, 9");
@@ -4196,9 +4218,11 @@ extern DialoG ValNodeSelectionDialog
  Pointer                  change_userdata,
  Boolean                  allow_multi)
 {
-  ValNodeSelectionDialogEx (h, choice_list, list_height, name_proc, free_vn_proc,
-                            copy_vn_proc, match_vn_proc, err_name, change_notify,
-                            change_userdata, allow_multi, NULL);
+  return ValNodeSelectionDialogEx (h, choice_list, list_height,
+                                   name_proc, free_vn_proc,
+                                   copy_vn_proc, match_vn_proc, err_name,
+                                   change_notify, change_userdata,
+                                   allow_multi, NULL);
 }
 
 extern DialoG EnumAssocSelectionDialog 
@@ -4280,4 +4304,236 @@ extern Boolean ValNodeChoiceMatch (ValNodePtr vnp1, ValNodePtr vnp2)
   {
     return FALSE;
   }
+}
+
+typedef struct sequenceselection
+{
+  DIALOG_MESSAGE_BLOCK
+  DialoG     sequence_list_dlg;
+  ValNodePtr sequence_choice_list;
+} SequenceSelectionData, PNTR SequenceSelectionPtr;
+
+static void CleanupSequenceSelectionDialogForm (GraphiC g, VoidPtr data)
+
+{
+  SequenceSelectionPtr dlg;
+
+  dlg = (SequenceSelectionPtr) data;
+  if (dlg != NULL) {
+    dlg->sequence_choice_list = ValNodeFree (dlg->sequence_choice_list);
+  }
+  StdCleanupExtraProc (g, data);
+}
+
+static void ResetSequenceSelectionDialog (SequenceSelectionPtr dlg)
+{  
+  if (dlg != NULL)
+  {
+    PointerToDialog (dlg->sequence_list_dlg, NULL);
+  }
+}
+
+static void SequenceSelectionListToSequenceSelectionDialog (DialoG d, Pointer userdata)
+{
+  SequenceSelectionPtr dlg;
+  ValNodePtr           sequence_list, vnp_list, vnp_sel, pos_list = NULL;
+  Int4                 i;
+  SeqIdPtr             sip;
+  Boolean              found;
+
+  dlg = (SequenceSelectionPtr) GetObjectExtra (d);
+  if (dlg == NULL)
+  {
+    return;
+  }
+  
+  ResetSequenceSelectionDialog (dlg);  
+  sequence_list = (ValNodePtr) userdata;
+  for (vnp_list = sequence_list; vnp_list != NULL; vnp_list = vnp_list->next)
+  {
+    sip = (SeqIdPtr) vnp_list->data.ptrvalue;
+    found = FALSE;
+    while (sip != NULL && ! found)
+    {
+      for (vnp_sel = dlg->sequence_choice_list, i = 1;
+           vnp_sel != NULL && !found;
+           vnp_sel = vnp_sel->next, i++)
+      {
+        found = SeqIdIn (sip, vnp_sel->data.ptrvalue);
+        if (found)
+        {
+          ValNodeAddInt (&pos_list, 0, i);
+        }
+      }
+      sip = sip->next;
+    }
+  }
+  PointerToDialog (dlg->sequence_list_dlg, pos_list);
+  ValNodeFree (pos_list);
+}
+
+static Pointer SequenceSelectionDialogToSequenceSelectionList (DialoG d)
+{
+  SequenceSelectionPtr dlg;
+  ValNodePtr           sequence_list = NULL, vnp_list, pos_list, vnp_pos;
+  Int4                 i;
+
+  dlg = (SequenceSelectionPtr) GetObjectExtra (d);
+  if (dlg == NULL)
+  {
+    return NULL;
+  }
+  
+  pos_list = DialogToPointer (dlg->sequence_list_dlg);
+  for (vnp_pos = pos_list; vnp_pos != NULL; vnp_pos = vnp_pos->next)
+  {
+    for (i = 1, vnp_list = dlg->sequence_choice_list;
+         i < vnp_pos->data.intvalue && vnp_list != NULL;
+         i++, vnp_list = vnp_list->next)
+    {
+    }
+    if (i == vnp_pos->data.intvalue && vnp_list != NULL)
+    {
+      ValNodeAddPointer (&sequence_list, 0, vnp_list->data.ptrvalue);
+    }
+  }
+  return sequence_list;
+}
+
+static void 
+GetSequenceChoiceList 
+(SeqEntryPtr sep,
+ ValNodePtr PNTR list, 
+ Boolean show_nucs, 
+ Boolean show_prots)
+{
+  BioseqPtr                bsp;
+  BioseqSetPtr             bssp;
+  
+  if (sep == NULL) return;
+  
+  if (IS_Bioseq (sep))
+  {
+    bsp = (BioseqPtr) sep->data.ptrvalue;
+    if (bsp == NULL) return;
+    if (!show_nucs && ISA_na (bsp->mol))
+    {
+      return;
+    }
+    if (!show_prots && ISA_aa (bsp->mol))
+    {
+      return;
+    }
+    ValNodeAddPointer (list, 0, bsp->id);
+  }
+  else
+  {
+  	bssp = (BioseqSetPtr) sep->data.ptrvalue;
+    for (sep = bssp->seq_set; sep != NULL; sep = sep->next) 
+    {
+      GetSequenceChoiceList (sep, list, show_nucs, show_prots);
+    }
+  }
+}
+
+static void SequenceSelectionDialogMessage (DialoG d, Int2 mssg)
+
+{
+  SequenceSelectionPtr dlg;
+
+  dlg = (SequenceSelectionPtr) GetObjectExtra (d);
+  if (dlg != NULL) {
+    switch (mssg) {
+      case VIB_MSG_INIT :
+        /* reset list */
+        ResetSequenceSelectionDialog (dlg);
+        break;
+      case VIB_MSG_SELECT:
+        Select (dlg->sequence_list_dlg);
+        break;
+      case VIB_MSG_ENTER :
+        Select (dlg->sequence_list_dlg);
+        break;
+      case NUM_VIB_MSG + 1:
+        SendMessageToDialog (dlg->sequence_list_dlg, NUM_VIB_MSG + 1);
+        break;
+      default :
+        break;
+    }
+  }
+}
+
+static ValNodePtr TestSequenceSelectionDialog (DialoG d)
+
+{
+  SequenceSelectionPtr dlg;
+  ValNodePtr           head = NULL;
+
+  dlg = (SequenceSelectionPtr) GetObjectExtra (d);
+  if (dlg != NULL) {
+    head = TestDialog (dlg->sequence_list_dlg);
+  }
+  return head;
+}
+
+
+extern DialoG SequenceSelectionDialog 
+(GrouP h,
+ Nlm_ChangeNotifyProc     change_notify,
+ Pointer                  change_userdata,
+ Boolean                  allow_multi,
+ Boolean                  show_nucs,
+ Boolean                  show_prots,
+ Uint2                    entityID)
+
+{
+  SequenceSelectionPtr  dlg;
+  GrouP                 p;
+  ValNodePtr                vnp;
+  SeqEntryPtr               sep;
+  SeqIdPtr                  sip;
+  Char                      tmp[128];
+  ValNodePtr            choice_name_list = NULL;
+  
+  if (!show_nucs && ! show_prots)
+  {
+    return NULL;
+  }
+  
+  sep = GetTopSeqEntryForEntityID (entityID);
+  if (sep == NULL)
+  {
+    return NULL;
+  }
+
+  dlg = (SequenceSelectionPtr) MemNew (sizeof (SequenceSelectionData));
+  if (dlg == NULL)
+  {
+    return NULL;
+  }
+  
+  p = HiddenGroup (h, 1, 0, NULL);
+  SetObjectExtra (p, dlg, CleanupSequenceSelectionDialogForm);
+
+  dlg->dialog = (DialoG) p;
+  dlg->todialog = SequenceSelectionListToSequenceSelectionDialog;
+  dlg->fromdialog = SequenceSelectionDialogToSequenceSelectionList;
+  dlg->dialogmessage = SequenceSelectionDialogMessage;
+  dlg->testdialog = TestSequenceSelectionDialog;
+
+  dlg->sequence_choice_list = NULL;
+  GetSequenceChoiceList (sep, &dlg->sequence_choice_list, show_nucs, show_prots);
+  
+  
+  for (vnp = dlg->sequence_choice_list; vnp != NULL; vnp = vnp->next) {
+    sip = SeqIdFindWorst ((SeqIdPtr) vnp->data.ptrvalue);
+    SeqIdWrite (sip, tmp, PRINTID_REPORT, sizeof (tmp));
+    ValNodeAddPointer (&choice_name_list, 0, StringSave (tmp));
+  }
+
+  dlg->sequence_list_dlg = SelectionDialog (p, change_notify, change_userdata,
+                                            allow_multi, "sequence",
+                                            choice_name_list, TALL_SELECTION_LIST);
+  ValNodeFreeData (choice_name_list); 
+  return (DialoG) p;
 }
