@@ -1,6 +1,6 @@
 #   makefile for network demo programs and network entrez
 #
-#	$Id: makenet.unx,v 6.231 2008/12/10 21:23:29 ucko Exp $
+#	$Id: makenet.unx,v 6.230 2008/11/07 15:51:59 kans Exp $
 #   test, ignore
 #
 #   Sun with unbundled ANSI compiler [ make CC=acc RAN=ranlib ]
@@ -1197,7 +1197,7 @@ bl2seq : bl2seq.c
 		$(LIBCOMPADJ) $(LIB41) $(NETCLILIB) $(LIB2) $(LIB1) \
 		$(OTHERLIBS)
 
-taxblast: taxblast_main.c $(BLIB41) $(BLIB40)
+taxblast: taxblast_main.c
 	$(CC) -g -o taxblast $(LDFLAGS) taxblast_main.c \
 		$(LIB61) $(LIB60) $(LIB36) $(LIB41) $(LIB40) $(LIB23) $(LIBCOMPADJ) \
 		$(NETCLILIB) $(LIB2) $(LIB1) $(OTHERLIBS)
