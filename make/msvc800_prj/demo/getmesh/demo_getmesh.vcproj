@@ -3,7 +3,7 @@
 	ProjectType="Visual C++"
 	Version="8.00"
 	Name="demo_getmesh"
-	ProjectGUID="{A250CCFC-47DA-4895-BC62-66CADA053A52}"
+	ProjectGUID="{EB8FB82E-5466-4430-9BD2-17CF562E8349}"
 	>
 	<Platforms>
 		<Platform

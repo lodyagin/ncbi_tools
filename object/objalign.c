@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.14 $
+* $Revision: 6.15 $
 *
 * File Description:  Object manager for module NCBI-Seqalign
 *
@@ -332,6 +332,7 @@ NLM_EXTERN SeqAlignPtr LIBCALL SeqAlignFree (SeqAlignPtr sap)
 {
 	DenseDiagPtr ddp, ddpnext;
 	StdSegPtr ssp, sspnext;
+	ValNodePtr anp, next;
 	
     if (sap == NULL)
         return (SeqAlignPtr)NULL;
@@ -373,7 +374,16 @@ NLM_EXTERN SeqAlignPtr LIBCALL SeqAlignFree (SeqAlignPtr sap)
             break;
     }
     ScoreSetFree(sap->score);
+    anp = sap->id;
+    while (anp != NULL) {
+        next = anp->next;
+        ObjectIdFree((ObjectIdPtr)anp->data.ptrvalue);
+        MemFree(anp);
+        anp = next;
+    }
+    /*
     AsnGenericChoiceSeqOfFree(sap -> id, (AsnOptFreeFunc) ObjectIdFree);
+    */
     AsnGenericUserSeqOfFree(sap -> ext, (AsnOptFreeFunc) UserObjectFree);
 	SeqLocSetFree(sap->bounds);
     SeqIdFree(sap->master);
@@ -397,6 +407,7 @@ NLM_EXTERN Boolean LIBCALL SeqAlignAsnWrite (SeqAlignPtr sap, AsnIoPtr aip, AsnT
     DenseDiagPtr ddp;
     StdSegPtr ssp;
     Boolean retval = FALSE;
+    ValNodePtr anp;
 
 	if (! loaded)
 	{
@@ -509,8 +520,18 @@ NLM_EXTERN Boolean LIBCALL SeqAlignAsnWrite (SeqAlignPtr sap, AsnIoPtr aip, AsnT
 	   {
 	   	ErrPostEx(SEV_ERROR,0,0,"ASN3: SeqAlign.id stripped");
 	   }
-	   else
-	    AsnGenericChoiceSeqOfAsnWrite(sap -> id, (AsnWriteFunc) ObjectIdAsnWrite, aip, SEQ_ALIGN_id, SEQ_ALIGN_id_E);
+	   else {
+			if (! AsnOpenStruct(aip, SEQ_ALIGN_id, (Pointer)sap->id)) goto erret;
+			anp = sap->id;
+			while (anp != NULL) {
+		        if (! ObjectIdAsnWrite((ObjectIdPtr)anp->data.ptrvalue, aip, SEQ_ALIGN_id_E)) goto erret;
+		        anp = anp->next;
+			}
+			if (! AsnCloseStruct(aip, SEQ_ALIGN_id, (Pointer)sap->id)) goto erret;
+			/*
+			AsnGenericChoiceSeqOfAsnWrite(sap -> id, (AsnWriteFunc) ObjectIdAsnWrite, aip, SEQ_ALIGN_id, SEQ_ALIGN_id_E);
+			*/
+	   }
 	}
 
 	if (sap->ext != NULL)
@@ -548,6 +569,8 @@ NLM_EXTERN SeqAlignPtr LIBCALL SeqAlignAsnRead (AsnIoPtr aip, AsnTypePtr orig)
     DenseDiagPtr currddp = NULL, ddp;
     StdSegPtr currssp = NULL, ssp;
     Boolean isError = FALSE;
+	ValNodePtr anp, prev = NULL;
+	ObjectIdPtr oip;
 
 	if (! loaded)
 	{
@@ -669,7 +692,25 @@ NLM_EXTERN SeqAlignPtr LIBCALL SeqAlignAsnRead (AsnIoPtr aip, AsnTypePtr orig)
         }
         else if (atp == SEQ_ALIGN_id)
         {
+            if (AsnReadVal (aip, atp, &av) <= 0) goto erret;  /* START_STRUCT */
+            while ((atp = AsnReadId(aip, amp, atp)) == SEQ_ALIGN_id_E) {
+                oip = ObjectIdAsnRead (aip, atp);
+                if (oip == NULL) goto erret;
+                anp = ValNodeNew (NULL);
+                if (anp == NULL) goto erret;
+                anp->data.ptrvalue = (Pointer) oip;
+                if (sap->id == NULL) {
+                    sap->id = anp;
+                }
+                if (prev != NULL) {
+                    prev->next = anp;
+                }
+                prev = anp;
+            }
+            if (AsnReadVal (aip, atp, &av) <= 0) goto erret;  /* END_STRUCT */
+            /*
             sap->id = AsnGenericChoiceSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) ObjectIdAsnRead, (AsnOptFreeFunc) ObjectIdFree);
+            */
             if (sap->id == NULL)
                 goto erret;
         }

@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/13/91
 *
-* $Revision: 6.169 $
+* $Revision: 6.172 $
 *
 * File Description:  Ports onto Bioseqs
 *
@@ -39,6 +39,15 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: seqport.c,v $
+* Revision 6.172  2008/02/12 18:56:52  bollin
+* Made ReverseSeqData and ComplementSeqData extern
+*
+* Revision 6.171  2007/12/28 16:27:58  kans
+* in SeqPortStreamSetup, on failure, return -1 if count was 0 to ensure failure signal
+*
+* Revision 6.170  2007/12/04 19:00:21  kans
+* SeqPortStreamSeqLoc uses scope to get local (segset) components while allowing multiple simultaneous StreamCache objects
+*
 * Revision 6.169  2007/05/30 18:10:06  kans
 * added KNOWN_GAP_AS_PLUS to distinguish known-length from unknown-length gaps, use for validation
 *
@@ -2647,6 +2656,7 @@ typedef struct streamdata {
   CharPtr            tmp;
   Boolean            failed;
   Int2               depth;
+  SeqEntryPtr        scope;
 } StreamData, PNTR StreamDataPtr;
 
 /* prototype for main internal recursive processing function */
@@ -3065,15 +3075,16 @@ static Int4 SeqPortStreamSeqLoc (
 )
 
 {
-  BioseqPtr bsp;
-  Char      buf [64];
-  Int4      count = 0;
-  Char      pid [64];
-  SeqIdPtr  sip;
+  BioseqPtr    bsp;
+  Char         buf [64];
+  Int4         count = 0;
+  SeqEntryPtr  oldscope = NULL;
+  Char         pid [64];
+  SeqIdPtr     sip;
 #ifdef OS_UNIX
-  Int2      attempts;
-  CharPtr   str;
-  int       val = 0;
+  Int2         attempts;
+  CharPtr      str;
+  int          val = 0;
 #endif
 
   if (slp == NULL || sdp == NULL) return 0;
@@ -3098,7 +3109,9 @@ static Int4 SeqPortStreamSeqLoc (
     return 0;
   }
 
+  oldscope = SeqEntrySetScope (sdp->scope);
   bsp = BioseqLockById (sip);
+  SeqEntrySetScope (oldscope);
 
 #ifdef OS_UNIX
   if (bsp == NULL) {
@@ -3134,7 +3147,9 @@ static Int4 SeqPortStreamSeqLoc (
           sleep (stream_retry_sleep);
         }
 
+        oldscope = SeqEntrySetScope (sdp->scope);
         bsp = BioseqLockById (sip);
+        SeqEntrySetScope (oldscope);
         attempts++;
       }
       if (bsp != NULL) {
@@ -3612,6 +3627,7 @@ static Int4 SeqPortStreamSetup (
   Char        ch, lttr;
   CharPtr     complementBase = " TVGH  CD  M KN   YSAABW R ";
   Int4        count = 0, from, to;
+  Uint2       entityID;
   Int2        i;
   StreamData  sd;
   SeqLocPtr   slp;
@@ -3658,9 +3674,14 @@ static Int4 SeqPortStreamSetup (
 
   if (bsp != NULL) {
 
+    entityID = ObjMgrGetEntityIDForPointer (bsp);
+    sd.scope = GetTopSeqEntryForEntityID (entityID);
+
     count += SeqPortStreamWork (bsp, start, stop, strand, &sd);
 
   } else if (loc != NULL) {
+
+    sd.scope = SeqEntryGetScope ();
 
     slp = SeqLocFindNext (loc, NULL);
     while (slp != NULL) {
@@ -3678,6 +3699,7 @@ static Int4 SeqPortStreamSetup (
   /* return number of bases or residues streamed to callback */
 
   if (sd.failed) {
+    if (count  < 1) return -1;
     return -count;
   }
 
@@ -5216,7 +5238,7 @@ NLM_EXTERN Boolean LIBCALL BioseqRevComp (BioseqPtr bsp)
 	return retval;
 }
 
-static Boolean ComplementSeqData (Uint1 seqtype, Int4 seqlen, SeqDataPtr sdp)
+NLM_EXTERN Boolean ComplementSeqData (Uint1 seqtype, Int4 seqlen, SeqDataPtr sdp)
 {
 	SeqCodeTablePtr sctp;
 	ByteStorePtr    bysp;
@@ -5393,7 +5415,7 @@ NLM_EXTERN Boolean LIBCALL BioseqComplement (BioseqPtr bsp)
 } /* BioseqComplement */
 
 
-static Boolean LIBCALL ReverseSeqData (Uint1 seqtype, Int4 seqlen, SeqDataPtr sdp)
+NLM_EXTERN Boolean LIBCALL ReverseSeqData (Uint1 seqtype, Int4 seqlen, SeqDataPtr sdp)
 {
 	ByteStorePtr 	bysp1, bysp2 = '\0';
 	long 		readbyte, bslen = 0;

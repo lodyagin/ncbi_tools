@@ -3,7 +3,7 @@
 	ProjectType="Visual C++"
 	Version="8.00"
 	Name="exe_sbtedit"
-	ProjectGUID="{6F58FEBB-1C0A-4C28-B0D4-82629AC0E1C6}"
+	ProjectGUID="{028EEC3D-499E-453C-A1F4-5A4478BBB39F}"
 	>
 	<Platforms>
 		<Platform

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.16 $
+* $Revision: 6.17 $
 *
 * File Description: 
 *
@@ -51,6 +51,7 @@
 #include <txalign.h>
 #include <explore.h>
 #include <dlogutil.h>
+#include <cdrgn.h>
 
 extern WindoW getwindow_frompanel (PaneL pnl);
 extern PaneL GetPanelFromWindow (WindoW w);
@@ -127,11 +128,11 @@ typedef struct batchapplyfeaturedetails
   CharPtr protName;
   CharPtr protDesc;
   CharPtr rnaName;
+  RnaTypePtr rnaType;
   CharPtr featcomment;
   Int4    featdef_choice;
   CharPtr featdef_name;
   Int4    reading_frame;
-  Int4    rnaSubType;
   
 } BatchApplyFeatureDetailsData, PNTR BatchApplyFeatureDetailsPtr;
 
@@ -148,6 +149,7 @@ extern void SortEnumFieldAssocPtrArray (EnumFieldAssocPtr alist, CompareFunc com
 extern DialoG 
 BatchApplyFeatureDetailsDialog (GrouP parent, Int4 feattype, Nlm_ChangeNotifyProc change_notify, Pointer change_userdata);
 extern Boolean OkToAcceptBatchApplyFeatureDetails (DialoG d);
+extern Boolean AlreadyHasRNA (SeqEntryPtr sep, RnaTypePtr rtp);
 
 extern void 
 ApplyFeatureToAlignment 

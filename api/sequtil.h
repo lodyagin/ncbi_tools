@@ -29,13 +29,19 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.52 $
+* $Revision: 6.54 $
 *
 * File Description:  Sequence Utilities for objseq and objsset
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: sequtil.h,v $
+* Revision 6.54  2008/02/12 16:30:29  kans
+* added ACCN_REFSEQ_ARTIFICIAL_ASSEMBLY for NS_
+*
+* Revision 6.53  2008/01/25 22:31:48  kans
+* added ACCN_XXXX_TSA and ACCN_XXXX_TSA_PROT, EZ as NCBI TSA accession
+*
 * Revision 6.52  2007/03/13 18:03:45  kans
 * added FreeSeqLocSetComponents to free sequence records referenced in a chain of SeqLocs
 *
@@ -1218,6 +1224,15 @@ NLM_EXTERN Boolean LIBCALL NAccnIsDDBJ (CharPtr s);
 
 #define ACCN_DDBJ_GSS 61
 
+#define ACCN_NCBI_TSA 62
+#define ACCN_NCBI_TSA_PROT 63
+#define ACCN_EMBL_TSA 64
+#define ACCN_EMBL_TSA_PROT 65
+#define ACCN_DDBJ_TSA 66
+#define ACCN_DDBJ_TSA_PROT 67
+
+#define ACCN_REFSEQ_ARTIFICIAL_ASSEMBLY 68
+
 
 /* Some accessions prefix can be either protein or nucleotide 
    such as NCBI PATENT I, AR .. or segmented set Bioseqs 'AH'
@@ -1247,18 +1262,20 @@ NLM_EXTERN Boolean LIBCALL NAccnIsDDBJ (CharPtr s);
    Define to detect Genbank's accessions: Genbank-subsumed GSDB accession numbers
    are defined to be Genbank's as well as GSDB DIRSUB records.
 */
-#define ACCN_IS_GENBANK(c) ((((c)&65535) == ACCN_NCBI_GSDB) ||  (((c)&65535)==ACCN_GSDB_DIRSUB) || (((c)&65535) == ACCN_NCBI_EST) ||  (((c)&65535) == ACCN_NCBI_DIRSUB) ||  (((c)&65535) == ACCN_NCBI_GENOME) ||  (((c)&65535) == ACCN_NCBI_PATENT) ||  (((c)&65535) == ACCN_NCBI_HTGS) ||  (((c)&65535) == ACCN_NCBI_GSS) ||  (((c)&65535) == ACCN_NCBI_STS) ||  (((c)&65535) == ACCN_NCBI_BACKBONE) ||  (((c)&65535) == ACCN_NCBI_SEGSET)  ||  (((c)&65535) == ACCN_NCBI_WGS) ||  (((c)&65535) == ACCN_NCBI_OTHER)  || (((c)&65535) == ACCN_NCBI_PROT) || (((c)&65535) == ACCN_NCBI_cDNA) || (((c)&65535) == ACCN_EMBL_GB) || (((c)&65535) == ACCN_EMBL_GB_DDBJ || (((c)&65535) == ACCN_GB_DDBJ)) )
+#define ACCN_IS_GENBANK(c) ((((c)&65535) == ACCN_NCBI_GSDB) ||  (((c)&65535)==ACCN_GSDB_DIRSUB) || (((c)&65535) == ACCN_NCBI_EST) ||  (((c)&65535) == ACCN_NCBI_DIRSUB) ||  (((c)&65535) == ACCN_NCBI_GENOME) ||  (((c)&65535) == ACCN_NCBI_PATENT) ||  (((c)&65535) == ACCN_NCBI_HTGS) ||  (((c)&65535) == ACCN_NCBI_GSS) ||  (((c)&65535) == ACCN_NCBI_STS) ||  (((c)&65535) == ACCN_NCBI_BACKBONE) ||  (((c)&65535) == ACCN_NCBI_SEGSET)  ||  (((c)&65535) == ACCN_NCBI_WGS) ||  (((c)&65535) == ACCN_NCBI_OTHER)  || (((c)&65535) == ACCN_NCBI_PROT) || (((c)&65535) == ACCN_NCBI_cDNA) || (((c)&65535) == ACCN_NCBI_TSA) || (((c)&65535) == ACCN_NCBI_TSA_PROT) || (((c)&65535) == ACCN_EMBL_GB) || (((c)&65535) == ACCN_EMBL_GB_DDBJ || (((c)&65535) == ACCN_GB_DDBJ)) )
 
 /* XM_,NP_,NM_,NT_,NC_ reference sequence records created and curated by NCBI 
    REFSEQ project
 */
-#define ACCN_IS_REFSEQ(c) (((c)== ACCN_REFSEQ_PROT) || ((c)== ACCN_REFSEQ_mRNA) || ((c)== ACCN_REFSEQ_CONTIG) || ((c)== ACCN_REFSEQ_CHROMOSOME) || ((c)== ACCN_REFSEQ_mRNA_PREDICTED) || ((c)== ACCN_REFSEQ_PROT_PREDICTED) || ((c)== ACCN_REFSEQ_GENOMIC) || (((c)&65535)== ACCN_REFSEQ) )
+#define ACCN_IS_REFSEQ(c) (((c)== ACCN_REFSEQ_PROT) || ((c)== ACCN_REFSEQ_mRNA) || ((c)== ACCN_REFSEQ_CONTIG) || ((c)== ACCN_REFSEQ_CHROMOSOME) || ((c)== ACCN_REFSEQ_mRNA_PREDICTED) || ((c)== ACCN_REFSEQ_PROT_PREDICTED) || ((c)== ACCN_REFSEQ_GENOMIC) || ((c)== ACCN_REFSEQ_ARTIFICIAL_ASSEMBLY) || (((c)&65535)== ACCN_REFSEQ) )
 
 #define ACCN_IS_TPA(c) (((c)== ACCN_NCBI_TPA) || ((c)== ACCN_NCBI_TPA_PROT) || ((c)== ACCN_EMBL_TPA) || ((c)== ACCN_EMBL_TPA_PROT) || ((c)== ACCN_DDBJ_TPA) || ((c)== ACCN_DDBJ_TPA_PROT))
 
 #define ACCN_IS_WGS(c) (((c)== ACCN_NCBI_WGS) || ((c)== ACCN_NCBI_WGS_PROT) || ((c)== ACCN_EMBL_WGS) || ((c)== ACCN_EMBL_WGS_PROT) || ((c)== ACCN_DDBJ_WGS) || ((c)== ACCN_DDBJ_WGS_PROT))
 
-#define ACCN_IS_NCBI(c) (ACCN_IS_REFSEQ((c)) || ACCN_IS_GENBANK((c)) || ((c)== ACCN_NCBI_TPA) || ((c)== ACCN_NCBI_TPA_PROT) || ((c)== ACCN_NCBI_WGS) || ((c)== ACCN_NCBI_WGS_PROT))
+#define ACCN_IS_TSA(c) (((c)== ACCN_NCBI_TSA) || ((c)== ACCN_NCBI_TSA_PROT) || ((c)== ACCN_EMBL_TSA) || ((c)== ACCN_EMBL_TSA_PROT) || ((c)== ACCN_DDBJ_TSA) || ((c)== ACCN_DDBJ_TSA_PROT))
+
+#define ACCN_IS_NCBI(c) (ACCN_IS_REFSEQ((c)) || ACCN_IS_GENBANK((c)) || ((c)== ACCN_NCBI_TPA) || ((c)== ACCN_NCBI_TPA_PROT) || ((c)== ACCN_NCBI_WGS) || ((c)== ACCN_NCBI_WGS_PROT) || ((c)== ACCN_NCBI_TSA))
 
 /*
   Macro to detect EMBL accession numbers  (can also belong to another DB)

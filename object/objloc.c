@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.10 $
+* $Revision: 6.11 $
 *
 * File Description:  Object manager for module NCBI-Seqloc
 *
@@ -41,6 +41,9 @@
 *
 *
 * $Log: objloc.c,v $
+* Revision 6.11  2007/10/04 14:30:35  madden
+* Fix typo in SeqIdDup
+*
 * Revision 6.10  2005/04/26 21:33:00  kans
 * added SEQID_GPIPE
 *
@@ -709,7 +712,7 @@ NLM_EXTERN SeqIdPtr LIBCALL SeqIdDup (SeqIdPtr oldid)
 			if (bt == NULL) return NULL;
 			bt->name = StringSave(at->name);
 			bt->accession = StringSave(at->accession);
-			bt->release = StringSave(bt->release);
+			bt->release = StringSave(at->release);
 			bt->version = at->version;
 			newid->data.ptrvalue = bt;
 			break;

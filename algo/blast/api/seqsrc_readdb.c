@@ -1,4 +1,4 @@
-/*  $Id: seqsrc_readdb.c,v 1.57 2007/05/15 15:29:56 camacho Exp $
+/*  $Id: seqsrc_readdb.c,v 1.59 2008/01/02 14:00:35 madden Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
  */
 
 #ifndef SKIP_DOXYGEN_PROCESSING
-static char const rcsid[] = "$Id: seqsrc_readdb.c,v 1.57 2007/05/15 15:29:56 camacho Exp $";
+static char const rcsid[] = "$Id: seqsrc_readdb.c,v 1.59 2008/01/02 14:00:35 madden Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/api/seqsrc_readdb.h>
@@ -142,7 +142,7 @@ s_ReaddbGetName(void* readdb_handle, void* ignoreme)
 {
     ReadDBFILEPtr rdfp = (ReadDBFILEPtr) readdb_handle;
 
-    return readdb_get_filename(rdfp);
+    return readdb_get_full_filename(rdfp);
 }
 
 /** Retrieves the date of the BLAST database.
@@ -342,7 +342,7 @@ s_ReadDbGetNextOidListChunk(ReadDBFILEPtr rdfp, BlastSeqSrcIterator* itr,
             bit_start = 0;
          }
 
-         if (oidindex == itr->chunk_sz || !rdfp->next) {
+         if (oidindex == itr->chunk_sz || (oidindex && !rdfp->next)) {
             itr->itr_type = eOidList;
             itr->current_pos = 0;
             *last_oid_assigned = rdfp->start + gi;

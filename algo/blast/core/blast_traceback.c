@@ -1,4 +1,4 @@
-/* $Id: blast_traceback.c,v 1.204 2007/07/27 18:25:30 kazimird Exp $
+/* $Id: blast_traceback.c,v 1.206 2007/12/07 18:25:42 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -50,7 +50,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_traceback.c,v 1.204 2007/07/27 18:25:30 kazimird Exp $";
+    "$Id: blast_traceback.c,v 1.206 2007/12/07 18:25:42 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_traceback.h>
@@ -455,7 +455,7 @@ Blast_TracebackFromHSPList(EBlastProgramType program_number,
               query_info->contexts[hsp->context].query_offset;
           query_length = query_info->contexts[hsp->context].query_length;
       }
-      
+
       /* preliminary RPS blast alignments have not had
          the composition-based correction applied yet, so
          we cannot reliably check whether an HSP is contained
@@ -1200,6 +1200,8 @@ BLAST_ComputeTraceback(EBlastProgramType program_number,
             seq_arg.oid = batch->hsplist_array[0]->oid;
             seq_arg.encoding = encoding;
             seq_arg.enable_ranges = kSubjectRanges;
+            seq_arg.check_oid_exclusion = TRUE;
+            
             BlastSequenceBlkClean(seq_arg.seq);
             if (BlastSeqSrcGetSequence(seq_src, (void*) &seq_arg) < 0) {
                Blast_HSPStreamResultBatchReset(batch);
@@ -1314,7 +1316,7 @@ BLAST_ComputeTraceback(EBlastProgramType program_number,
 
       }         /* loop over all batches */
 
-      Blast_HSPStreamResultBatchFree(batch);
+      batch = Blast_HSPStreamResultBatchFree(batch);
       BlastSequenceBlkFree(seq_arg.seq);
    }
 

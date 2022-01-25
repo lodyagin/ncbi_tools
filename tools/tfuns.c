@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: tfuns.c,v 6.13 2006/11/07 20:01:24 bollin Exp $";
+static char const rcsid[] = "$Id: tfuns.c,v 6.14 2007/10/10 16:10:17 bollin Exp $";
 
 #include <stdio.h>
 #include <ncbi.h>
@@ -1253,7 +1253,7 @@ static Boolean get_src (GatherContextPtr gcp)
 	return TRUE;
 }
 
-static Int2 GetGcodeFromBioseq(BioseqPtr bsp)
+NLM_EXTERN Int2 GetGcodeFromBioseq(BioseqPtr bsp)
 {
 	GatherScope gs;
 	BioSourcePtr biop;

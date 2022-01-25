@@ -1,6 +1,6 @@
 #	makefile for asntool and ncbi core routines,
 #
-#	$Id: makeall.unx,v 6.286 2007/08/03 12:42:48 lavr Exp $
+#	$Id: makeall.unx,v 6.291 2008/01/25 19:56:25 ucko Exp $
 #
 #	cdromlib data access functions, vibrant, and entrez
 #	SunOS with unbundled ANSI compiler [ make LCL=acc RAN=ranlib CC=acc ]
@@ -188,18 +188,18 @@ SRC1 =	ncbimain.c $(SRC1e)
 SRC2 =	objacces.c objalign.c objall.c objbibli.c \
 	objfeat.c objgen.c objloc.c objmedli.c objpub.c \
 	objres.c objscoremat.c objseq.c objblock.c objcode.c objsset.c \
-	objsub.c objprt.c objfdef.c objalignloc.c \
-	objpubme.c objmdrs.c objproj.c objgbseq.c objtseq.c objinsdseq.c \
+	objsub.c objprt.c objfdef.c objalignloc.c objtable.c \
+	objpubme.c objmdrs.c objproj.c objgbseq.c objtseq.c objinsdseq.c objmacro.c \
 	objent2.c ent2api.c pmfapi.c objtax3.c tax3api.c objegkludge.c objentgene.c \
 	objmla2.c mla2api.c qblastapi.c vecscnapi.c objmim.c mimapi.c cddapi.c seqport.c \
 	sequtil.c prtutil.c simple.c tofasta.c tofile.c tomedlin.c \
 	valid.c alignmgr.c aliparse.c aliread.c alignval.c sqnutil1.c sqnutil2.c sqnutil3.c \
-	subutil.c edutil.c asn2ff1.c asn2ff2.c asn2ff3.c asn2ff4.c \
+	sqnutil4.c subutil.c edutil.c asn2ff1.c asn2ff2.c asn2ff3.c asn2ff4.c \
 	asn2ff5.c asn2ff6.c asn2gnb1.c asn2gnb2.c asn2gnb3.c asn2gnb4.c \
 	asn2gnb5.c asn2gnb6.c ftusrstr.c gbfeat.c gbftglob.c \
 	gbparint.c utilpars.c utilpub.c ffprint.c wprint.c satutil.c \
 	seqmgr.c objmgr.c gather.c accmmdbs.c acccn3ds.c lsqfetch.c findrepl.c \
-	codon.c jzcoll.c jzmisc.c maputil.c mconsist.c \
+	codon.c jzcoll.c jzmisc.c maputil.c mconsist.c macroapi.c \
 	salpedit.c salpstat.c salpacc.c salprop.c salsap.c salstruc.c salutil.c \
 	udvseq.c blocks.c pgppop.c samutil.c ddvcolor.c viewmgr.c ddvcreate.c \
 	jsavlt.c needleman.c txalign.c fdlobj.c alignmgr2.c alnread.c
@@ -232,7 +232,7 @@ SRC20 = drawseq.c dotmatrx.c fea2seg.c fstyle.c smdlg1.c smdlg2.c smdlg3.c \
 	vsm.c vsmfile.c vsmutil.c udvgraph.c udvopen.c udvpanel.c dotvibrant.c \
 	dlgutil1.c dlgutil2.c e2trmlst.c e2docsum.c asn2graphic.c \
 	medview.c bspview.c gbfview.c gphview.c gphdraw.c gxydraw.c gtrdraw.c \
-	seqpanel.c ingengraph.c ingenext.c ingenwin.c \
+	seqpanel.c ingengraph.c ingenext.c ingenwin.c macrodlg.c \
 	biosrc.c cdrgn.c import.c pubdesc.c seqsub.c mapgene.c prtgene.c salogif.c
 
 SRC45 = ddvclick.c ddvgraph.c ddvopen.c ddvpanel.c
@@ -304,6 +304,9 @@ SRC61 = blast_api.c blast_format.c blast_input.c blast_mtlock.c \
         seqsrc_multiseq.c seqsrc_readdb.c twoseq_api.c dust_filter.c \
         blast_message_api.c
 
+SRCALL = $(THR_SRC) $(SRC1) $(SRC2) $(SRC3) $(SRC4) $(SRC5) $(SRC20) $(SRC22) \
+    $(SRC23) $(SRC28) $(SRC30) $(SRC50) $(SRC60) $(SRC61) $(SRCCOMPADJ)
+
 # objects needed for versions of asntool and entrez
 
 THR_OBJ = ncbithr.o
@@ -329,18 +332,18 @@ OBJ1 =	ncbimain.o $(OBJ1e)
 OBJ2 =	objacces.o objalign.o objall.o objbibli.o \
 	objfeat.o objgen.o objloc.o objmedli.o objpub.o \
 	objres.o objscoremat.o objseq.o objblock.o objcode.o objsset.o \
-	objsub.o objprt.o objfdef.o objalignloc.o \
-	objpubme.o objmdrs.o objproj.o objgbseq.o objtseq.o objinsdseq.o \
+	objsub.o objprt.o objfdef.o objalignloc.o objtable.o \
+	objpubme.o objmdrs.o objproj.o objgbseq.o objtseq.o objinsdseq.o objmacro.o \
 	objent2.o ent2api.o pmfapi.o objtax3.o tax3api.o objegkludge.o objentgene.o \
 	objmla2.o mla2api.o qblastapi.o vecscnapi.o objmim.o mimapi.o cddapi.o seqport.o \
 	sequtil.o prtutil.o simple.o tofasta.o tofile.o tomedlin.o \
 	valid.o alignmgr.o aliparse.o aliread.o alignval.o sqnutil1.o sqnutil2.o sqnutil3.o \
-	subutil.o edutil.o asn2ff1.o asn2ff2.o asn2ff3.o asn2ff4.o \
+	sqnutil4.o subutil.o edutil.o asn2ff1.o asn2ff2.o asn2ff3.o asn2ff4.o \
 	asn2ff5.o asn2ff6.o asn2gnb1.o asn2gnb2.o asn2gnb3.o asn2gnb4.o \
 	asn2gnb5.o asn2gnb6.o ftusrstr.o gbfeat.o gbftglob.o \
 	gbparint.o utilpars.o utilpub.o ffprint.o wprint.o satutil.o \
 	seqmgr.o objmgr.o gather.o accmmdbs.o acccn3ds.o lsqfetch.o findrepl.o \
-	codon.o jzcoll.o jzmisc.o maputil.o mconsist.o \
+	codon.o jzcoll.o jzmisc.o maputil.o mconsist.o macroapi.o \
 	salpedit.o salpstat.o salpacc.o salprop.o salsap.o salstruc.o salutil.o \
 	udvseq.o blocks.o pgppop.o samutil.o ddvcolor.o viewmgr.o ddvcreate.o \
 	jsavlt.o needleman.o txalign.o fdlobj.o alignmgr2.o alnread.o
@@ -383,7 +386,7 @@ OBJ20 = drawseq.o dotmatrx.o fea2seg.o fstyle.o smdlg1.o smdlg2.o smdlg3.o \
 	vsm.o vsmfile.o vsmutil.o udvgraph.o udvopen.o udvpanel.o dotvibrant.o \
 	dlgutil1.o dlgutil2.o e2trmlst.o e2docsum.o asn2graphic.o \
 	medview.o bspview.o gbfview.o gphview.o gphdraw.o gxydraw.o gtrdraw.o \
-	seqpanel.o ingengraph.o ingenext.o ingenwin.o \
+	seqpanel.o ingengraph.o ingenext.o ingenwin.o macrodlg.o \
 	biosrc.o cdrgn.o import.o pubdesc.o seqsub.o mapgene.o prtgene.o salogif.o
 
 OBJ45 = ddvclick.o ddvgraph.o ddvopen.o ddvpanel.o
@@ -483,8 +486,7 @@ nocopy : sources $(THR_OBJ) $(LIB1) $(LIB2) $(LIB3) $(DLIB4) $(DLIB400) \
 	$(DLIB28) $(DLIB30) $(DLIB3000) \
 	$(DLIB34) $(DLIB37) $(DLIB38) $(LIB50) $(LIB60) $(LIB61) $(NCBI_SHLIBS)
 
-sources : $(THR_SRC) $(SRC1) $(SRC2) $(SRC3) $(SRC4) $(SRC5) $(SRC20) $(SRC22) \
-    $(SRC23) $(SRC28) $(SRC30) $(SRC50) $(SRC60) $(SRC61) $(SRCCOMPADJ)
+sources : $(SRCALL)
 
 ## To clean out the directory without removing make
 ##
@@ -669,6 +671,8 @@ shlib.alf :
 ## get all the source files
 ##
 
+$(SRCALL) : copy
+
 copy :
 	-chmod -R ug+rw,o+r . ../include
 	$(SRCCOPY) ../corelib/tsprintf.h ../include
@@ -714,6 +718,7 @@ copy :
 	-mkdir -p ../include/util/creaders
 	cp -fp ../util/creaders/*.h ../include/util/creaders
 	$(SRCCOPY) ../ctools/*.c .
+	$(SRCCOPY) ../ctools/*.h .
 	-mkdir ../include/ctools
 	-chmod ug+rw,o+r ../include/ctools
 	cp -fp ../ctools/*.h ../include/ctools

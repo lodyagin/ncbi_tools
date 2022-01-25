@@ -1,6 +1,6 @@
 #!/bin/csh -f
 #
-# $Id: makedis.csh,v 1.116 2007/05/09 16:06:55 ucko Exp $
+# $Id: makedis.csh 117677 2008-01-18 17:07:17Z vakatov $
 #
 ##                            PUBLIC DOMAIN NOTICE                          
 #               National Center for Biotechnology Information

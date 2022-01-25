@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.825 $
+* $Revision: 6.861 $
 *
 * File Description: 
 *
@@ -74,7 +74,8 @@
 #include <asn2gnbi.h>
 #include <alignval.h>
 #include <cdrgn.h>
-
+#include <macrodlg.h>
+#include <macroapi.h>
 
 /* For converting primer names to primer seqs and vice versa */
 static void PrimerSeqToPrimerNameCallback (BioSourcePtr biop, Pointer userdata)
@@ -153,6 +154,7 @@ typedef struct fndeldata {
   Int4        gap_count;
   Int4        bsp_length;
   Boolean     in_gap;
+  Boolean     unk_gap;
   ValNodePtr  head;
   ValNodePtr  last;
 } DelData, PNTR DelDataPtr;
@@ -163,6 +165,7 @@ static void AddNextBlock (
 
 {
   ByteStorePtr  bs;
+  IntFuzzPtr    ifp;
   SeqLitPtr     slitp;
   CharPtr       str;
   ValNodePtr    vnp;
@@ -173,6 +176,13 @@ static void AddNextBlock (
     if (slitp != NULL) {
       slitp->length = ddp->gap_count;
       ddp->bsp_length += slitp->length;
+      if (ddp->unk_gap) {
+        ifp = IntFuzzNew ();
+        if (ifp != NULL) {
+          ifp->choice = 4;
+          slitp->fuzz = ifp;
+        }
+      }
       vnp = ValNodeAddPointer (&(ddp->last), 2, (Pointer) slitp);
       if (ddp->head == NULL) {
         ddp->head = vnp;
@@ -222,10 +232,11 @@ static void LIBCALLBACK FarToNearCallback (
   str = ddp->curr;
 
   while (ch != '\0') {
-    if (ch != '-') {
+    if (ch != '-' && ch != '+') {
       if (ddp->in_gap) {
         AddNextBlock (ddp);
         ddp->in_gap = FALSE;
+        ddp->unk_gap = FALSE;
         ddp->gap_count = 0;
         ddp->curr = ddp->buffer;
         ddp->seqlen = 0;
@@ -246,6 +257,7 @@ static void LIBCALLBACK FarToNearCallback (
       if (! ddp->in_gap) {
         AddNextBlock (ddp);
         ddp->in_gap = TRUE;
+        ddp->unk_gap = (Boolean) (ch == '-');
         ddp->gap_count = 0;
         ddp->curr = ddp->buffer;
         ddp->seqlen = 0;
@@ -272,7 +284,7 @@ static void FarToNearProc (BioseqPtr bsp, Pointer userdata)
   if (dd.buffer == NULL) return;
   dd.curr = dd.buffer;
   dd.seqlen = 0;
-  SeqPortStream (bsp, EXPAND_GAPS_TO_DASHES, (Pointer) &dd, FarToNearCallback);
+  SeqPortStream (bsp, EXPAND_GAPS_TO_DASHES | KNOWN_GAP_AS_PLUS, (Pointer) &dd, FarToNearCallback);
   AddNextBlock (&dd);
   MemFree (dd.buffer);
   olddelta = bsp->seq_ext;
@@ -1107,7 +1119,8 @@ static void AddEnvironmentalSampleQual (BioSourcePtr biop, Pointer userdata)
   
   if (biop == NULL || biop->org == NULL || biop->org->orgname == NULL) return;
 
-  if (StringISearch (biop->org->orgname->lineage, "environmental sample") == NULL)
+  if (StringISearch (biop->org->orgname->lineage, "environmental sample") == NULL
+      && StringCmp (biop->org->orgname->div, "ENV") != 0)
   {
   	return;
   }
@@ -1333,6 +1346,45 @@ static void ReassignFeatIDs (IteM i)
   if (ans == ANS_CANCEL) return;
 
   ReassignFeatureIDs (sep);
+
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+  ObjMgrDeSelect (0, 0, 0, 0, NULL);
+  Update ();
+}
+
+static void UniqifyFeatIDs (IteM i)
+
+{
+  MsgAnswer     ans;
+  BaseFormPtr   bfp;
+  BioseqSetPtr  bssp;
+  Int4          count;
+  Int4          offset = 0;
+  SeqEntryPtr   sep;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL) return;
+
+  if (! IS_Bioseq_set (sep)) return;
+  bssp = (BioseqSetPtr) sep->data.ptrvalue;
+  if (bssp == NULL || bssp->_class != BioseqseqSet_class_genbank) return;
+
+  ans = Message (MSG_OKC, "Are you sure you want to make merged feature identifiers unique?");
+  if (ans == ANS_CANCEL) return;
+
+  for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
+    count = FindHighestFeatureID (sep);
+    OffsetFeatureIDs (sep, offset);
+    OffsetFeatureIDXrefs (sep, offset);
+    offset += count;
+  }
 
   ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
   ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
@@ -1685,6 +1737,25 @@ static void ForceTaxonFixup (IteM i)
 
 {
   ForceTaxonFixupBtn (i, NULL);
+}
+
+static void JustTaxonFixup (IteM i)
+
+{
+  BaseFormPtr  bfp;
+  SeqEntryPtr  sep;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL) return;
+  Taxon3ReplaceOrgInSeqEntry (sep, FALSE);
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
 }
 
 static void DupFeatRemovalWarning (SeqFeatPtr sfp)
@@ -4665,7 +4736,7 @@ ConvertRawBioseqToDelta
 
   sep = GetTopSeqEntryForEntityID (bsp->idx.entityID);
 
-  VisitFeaturesInSep (sep, bsp, AdjustCDSLocationsForUnknownGapsCallback);
+  VisitFeaturesInSep (sep, (Pointer) Sequin_GlobalAlign2Seq, AdjustCDSLocationsForUnknownGapsCallback);
   
 }
 
@@ -4909,7 +4980,7 @@ static void DoConvertRawToDeltaWithGapLocations (ButtoN b)
   
   if (GetStatus (dcp->adjust_CDS_locations))
   {
-    VisitFeaturesInSep (sep, NULL, AdjustCDSLocationsForUnknownGapsCallback);
+    VisitFeaturesInSep (sep, (Pointer)Sequin_GlobalAlign2Seq, AdjustCDSLocationsForUnknownGapsCallback);
     DeleteMarkedObjects (dcp->input_entityID, 0, NULL);
   }  
   
@@ -7617,7 +7688,7 @@ static void DoConvertPubDescStringConstraint (ButtoN b)
   Remove (cpdp->form);
 }
 
-static void CreateConvertPubDescStringConstraintDialog (IteM i)
+static void CreateConvertPubDescStringConstraintDialogX (IteM i)
 {
   BaseFormPtr       bfp;
   ConvertPubDescPtr cpdp;
@@ -8031,6 +8102,27 @@ static void UpdateECnumbers (IteM i)
   ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
   ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
 }
+
+
+static void ParseGoTermsFromUserFieldsItem (IteM i)
+
+{
+  BaseFormPtr  bfp;
+  SeqEntryPtr  sep;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL) return;
+  ParseGoTermsFromFields (sep);
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+}
+
 
 /*---------------------------------------------------------------------*/
 /*                                                                     */
@@ -10010,24 +10102,11 @@ static void FreeMolInfoBlockData (MolInfoBlockPtr mibp)
 }
 
 
-typedef struct sequenceconstraint 
-{
-  Boolean nucs_ok;
-  Boolean prots_ok;
-  
-  Int4                other_constraint_type;
-  StringConstraintPtr string_constraint;
-  ChoiceConstraintPtr source_constraint;
-  ValNodePtr          feature_list;
-  
-} SequenceConstraintData, PNTR SequenceConstraintPtr;
-
-
-static SequenceConstraintPtr SequenceConstraintFree (SequenceConstraintPtr scp)
+extern SequenceConstraintXPtr SequenceConstraintXFree (SequenceConstraintXPtr scp)
 {
   if (scp != NULL)
   {
-    scp->string_constraint = StringConstraintFree (scp->string_constraint);
+    scp->string_constraint = StringConstraintXFree (scp->string_constraint);
     scp->source_constraint = ChoiceConstraintFree (scp->source_constraint);
     scp->feature_list = ValNodeFree (scp->feature_list);
     scp = MemFree (scp);
@@ -10046,7 +10125,7 @@ typedef struct sequenceconstraintdlg
   DialoG feature_string_constraint;
   DialoG id_string_constraint;
   
-} SequenceConstraintDlgData, PNTR SequenceConstraintDlgPtr;
+} SequenceConstraintXDlgData, PNTR SequenceConstraintXDlgPtr;
 
 
 enum sequenceconstraintothertype 
@@ -10058,12 +10137,12 @@ enum sequenceconstraintothertype
 };
 
 
-static void ChangeSequenceConstraintType (GrouP g)
+static void ChangeSequenceConstraintXType (GrouP g)
 {
-  SequenceConstraintDlgPtr scdp;
+  SequenceConstraintXDlgPtr scdp;
   Int4                     other_constraint_type;
   
-  scdp = (SequenceConstraintDlgPtr) GetObjectExtra (g);
+  scdp = (SequenceConstraintXDlgPtr) GetObjectExtra (g);
   if (scdp == NULL)
   {
     return;
@@ -10086,11 +10165,11 @@ static void ChangeSequenceConstraintType (GrouP g)
   }
 }
 
-static void ResetSequenceConstraintDialog (DialoG d)
+static void ResetSequenceConstraintXDialog (DialoG d)
 {
-  SequenceConstraintDlgPtr scdp;
+  SequenceConstraintXDlgPtr scdp;
   
-  scdp = (SequenceConstraintDlgPtr) GetObjectExtra (d);
+  scdp = (SequenceConstraintXDlgPtr) GetObjectExtra (d);
   if (scdp == NULL)
   {
     return;
@@ -10098,25 +10177,25 @@ static void ResetSequenceConstraintDialog (DialoG d)
   
   SetValue (scdp->seq_type_constraint, 1);
   SetValue (scdp->other_constraint_type, SEQ_CONSTRAINT_ANY + 1);
-  ChangeSequenceConstraintType (scdp->other_constraint_type);
+  ChangeSequenceConstraintXType (scdp->other_constraint_type);
 }
 
-static void SequenceConstraintToDialog (DialoG d, Pointer data)
+static void SequenceConstraintXToDialog (DialoG d, Pointer data)
 {
-  SequenceConstraintPtr    scp;
-  SequenceConstraintDlgPtr scdp;
+  SequenceConstraintXPtr    scp;
+  SequenceConstraintXDlgPtr scdp;
   
-  scdp = (SequenceConstraintDlgPtr) GetObjectExtra (d);
+  scdp = (SequenceConstraintXDlgPtr) GetObjectExtra (d);
   if (scdp == NULL)
   {
     return;
   }
   
-  scp = (SequenceConstraintPtr) data;
+  scp = (SequenceConstraintXPtr) data;
   
   if (scp == NULL)
   {
-    ResetSequenceConstraintDialog (d);
+    ResetSequenceConstraintXDialog (d);
   }
   else
   {
@@ -10146,23 +10225,23 @@ static void SequenceConstraintToDialog (DialoG d, Pointer data)
           PointerToDialog (scdp->id_string_constraint, scp->string_constraint);
           break;
     }
-    ChangeSequenceConstraintType (scdp->other_constraint_type);
+    ChangeSequenceConstraintXType (scdp->other_constraint_type);
   }
 }
 
 
-static Pointer DialogToSequenceConstraint (DialoG d)
+static Pointer DialogToSequenceConstraintX (DialoG d)
 {
-  SequenceConstraintPtr    scp;
-  SequenceConstraintDlgPtr scdp;
+  SequenceConstraintXPtr    scp;
+  SequenceConstraintXDlgPtr scdp;
   
-  scdp = (SequenceConstraintDlgPtr) GetObjectExtra (d);
+  scdp = (SequenceConstraintXDlgPtr) GetObjectExtra (d);
   if (scdp == NULL)
   {
     return NULL;
   }
   
-  scp = (SequenceConstraintPtr) MemNew (sizeof (SequenceConstraintData));
+  scp = (SequenceConstraintXPtr) MemNew (sizeof (SequenceConstraintXData));
   if (scp != NULL)
   {
     switch (GetValue (scdp->seq_type_constraint))
@@ -10198,16 +10277,16 @@ static Pointer DialogToSequenceConstraint (DialoG d)
 }
 
 
-static void SequenceConstraintMessage (DialoG d, Int2 mssg)
+static void SequenceConstraintXMessage (DialoG d, Int2 mssg)
 
 {
-  SequenceConstraintDlgPtr scdp;
+  SequenceConstraintXDlgPtr scdp;
 
-  scdp = (SequenceConstraintDlgPtr) GetObjectExtra (d);
+  scdp = (SequenceConstraintXDlgPtr) GetObjectExtra (d);
   if (scdp != NULL) {
     switch (mssg) {
       case VIB_MSG_INIT :
-        ResetSequenceConstraintDialog (d);        
+        ResetSequenceConstraintXDialog (d);        
         break;
       case VIB_MSG_ENTER :
         Select (scdp->other_constraint_type);
@@ -10218,19 +10297,19 @@ static void SequenceConstraintMessage (DialoG d, Int2 mssg)
   }
 }
 
-static ValNodePtr TestSequenceConstraintDialog (DialoG d)
+static ValNodePtr TestSequenceConstraintXDialog (DialoG d)
 
 {
   return NULL;
 }
 
 
-static DialoG SequenceConstraintDialog (GrouP g)
+extern DialoG SequenceConstraintXDialog (GrouP g)
 {
-  SequenceConstraintDlgPtr dlg;
+  SequenceConstraintXDlgPtr dlg;
   GrouP p, k;
   
-  dlg = (SequenceConstraintDlgPtr) MemNew (sizeof (SequenceConstraintDlgData));
+  dlg = (SequenceConstraintXDlgPtr) MemNew (sizeof (SequenceConstraintXDlgData));
   if (dlg == NULL) return NULL;
 
   p = HiddenGroup (g, -1, 0, NULL);
@@ -10238,10 +10317,10 @@ static DialoG SequenceConstraintDialog (GrouP g)
   SetGroupSpacing (p, 10, 10);
 
   dlg->dialog = (DialoG) p;
-  dlg->todialog = SequenceConstraintToDialog;
-  dlg->fromdialog = DialogToSequenceConstraint;
-  dlg->dialogmessage = SequenceConstraintMessage;
-  dlg->testdialog = TestSequenceConstraintDialog;
+  dlg->todialog = SequenceConstraintXToDialog;
+  dlg->fromdialog = DialogToSequenceConstraintX;
+  dlg->dialogmessage = SequenceConstraintXMessage;
+  dlg->testdialog = TestSequenceConstraintXDialog;
 
   dlg->seq_type_constraint = HiddenGroup (p, 4, 0, NULL);
   RadioButton (dlg->seq_type_constraint, "All Sequences");
@@ -10249,21 +10328,21 @@ static DialoG SequenceConstraintDialog (GrouP g)
   RadioButton (dlg->seq_type_constraint, "Proteins");
   SetValue (dlg->seq_type_constraint, 2);
 
-  dlg->other_constraint_type = HiddenGroup (p, 2, 0, ChangeSequenceConstraintType);
+  dlg->other_constraint_type = HiddenGroup (p, 2, 0, ChangeSequenceConstraintXType);
   RadioButton (dlg->other_constraint_type, "Any sequence");
   StaticPrompt (dlg->other_constraint_type, "", 0, dialogTextHeight, systemFont, 'l');  
   
   RadioButton (dlg->other_constraint_type, "Where sequence source");
-  dlg->source_constraint = SourceConstraintDialog (dlg->other_constraint_type, FALSE);
+  dlg->source_constraint = SourceConstraintDialogX (dlg->other_constraint_type, FALSE);
     
   RadioButton (dlg->other_constraint_type, "Where feature text");
   k = HiddenGroup (dlg->other_constraint_type, 2, 0, NULL);
   SetGroupSpacing (k, 10, 10);
   dlg->feature_list = FeatureSelectionDialog (k, TRUE, NULL, NULL);
-  dlg->feature_string_constraint = StringConstraintDialog (k, NULL, FALSE);
+  dlg->feature_string_constraint = StringConstraintDialogX (k, NULL, FALSE);
     
   RadioButton (dlg->other_constraint_type, "Where sequence ID");
-  dlg->id_string_constraint = StringConstraintDialog (dlg->other_constraint_type, NULL, FALSE);
+  dlg->id_string_constraint = StringConstraintDialogX (dlg->other_constraint_type, NULL, FALSE);
   
   SetValue (dlg->other_constraint_type, CHOICE_CONSTRAINT_ANY);
   SetObjectExtra (dlg->other_constraint_type, dlg, NULL);
@@ -10280,7 +10359,7 @@ static DialoG SequenceConstraintDialog (GrouP g)
 }
 
 
-extern Boolean DoesIDListMeetStringConstraint (SeqIdPtr sip, StringConstraintPtr string_constraint)
+extern Boolean DoesIDListMeetStringConstraint (SeqIdPtr sip, StringConstraintXPtr string_constraint)
 {
   Char       id [41];
   CharPtr    cp, cp_dst;
@@ -10303,7 +10382,7 @@ extern Boolean DoesIDListMeetStringConstraint (SeqIdPtr sip, StringConstraintPtr
     sip->next = NULL;
     id [0] = '\0';
     SeqIdWrite (sip, id, PRINTID_FASTA_LONG, sizeof (id) - 1);
-    match = DoesStringMatchConstraint (id, string_constraint);
+    match = DoesStringMatchConstraintX (id, string_constraint);
     if (!match) 
     {
       changed = FALSE;
@@ -10330,7 +10409,7 @@ extern Boolean DoesIDListMeetStringConstraint (SeqIdPtr sip, StringConstraintPtr
       }  
       if (changed) 
       {
-        match = DoesStringMatchConstraint (id, string_constraint);
+        match = DoesStringMatchConstraintX (id, string_constraint);
       }
 
       /* if search text doesn't have ., try ID without version */
@@ -10340,7 +10419,7 @@ extern Boolean DoesIDListMeetStringConstraint (SeqIdPtr sip, StringConstraintPtr
         if (cp != NULL) 
         {
           *cp = 0;
-          match = DoesStringMatchConstraint (id, string_constraint);
+          match = DoesStringMatchConstraintX (id, string_constraint);
         }
       }       
     }
@@ -10370,7 +10449,7 @@ extern Boolean DoesIDListMeetStringConstraint (SeqIdPtr sip, StringConstraintPtr
 }
 
 
-static Boolean DoesSequenceMatchSequenceConstraint (BioseqPtr bsp, SequenceConstraintPtr scp)
+extern Boolean DoesSequenceMatchSequenceConstraintX (BioseqPtr bsp, SequenceConstraintXPtr scp)
 {
   SeqDescrPtr       sdp;
   SeqMgrDescContext dcontext;
@@ -10392,7 +10471,7 @@ static Boolean DoesSequenceMatchSequenceConstraint (BioseqPtr bsp, SequenceConst
       }
       break;
     case SEQ_CONSTRAINT_FEATURE_TEXT:
-      return DoBioseqFeaturesMatchSequenceConstraint (bsp, scp->feature_list, scp->string_constraint);
+      return DoBioseqFeaturesMatchSequenceConstraintX (bsp, scp->feature_list, scp->string_constraint);
       break;
     case SEQ_CONSTRAINT_ID:
       return DoesIDListMeetStringConstraint(bsp->id, scp->string_constraint);
@@ -10407,7 +10486,7 @@ typedef struct molinfoedit {
   MolInfoBlock    from;
   MolInfoBlock    to;
   DialoG          sequence_constraint;
-  SequenceConstraintPtr scp;
+  SequenceConstraintXPtr scp;
   Boolean               allow_existing;
 } MolInfoEdit, PNTR MolInfoEditPtr;
 
@@ -10487,7 +10566,7 @@ static void EditMolInfoCallback (SeqEntryPtr sep, Pointer mydata, Int4 index, In
   if (IS_Bioseq (sep)) {
 
     bsp = (BioseqPtr) sep->data.ptrvalue;
-    if (DoesSequenceMatchSequenceConstraint (bsp, miep->scp)) {
+    if (DoesSequenceMatchSequenceConstraintX (bsp, miep->scp)) {
       if ((Uint1)GetValNodePopup (miep->from.molPopup,
                                   miep->from.mol_values) == bsp->mol
         || GetValue (miep->from.molPopup) == 1)
@@ -10593,7 +10672,7 @@ static void DoProcessEditMolInfo (ButtoN b)
   SeqEntryExplore (miep->sep, (Pointer) miep, EditMolInfoCallback);
   FreeMolInfoBlockData (&(miep->from));
   FreeMolInfoBlockData (&(miep->to));
-  miep->scp = SequenceConstraintFree (miep->scp);
+  miep->scp = SequenceConstraintXFree (miep->scp);
   ArrowCursor ();
   Update ();
   ObjMgrSetDirtyFlag (miep->input_entityID, TRUE);
@@ -10639,7 +10718,7 @@ static void EditMolInfoFields (IteM i)
   StaticPrompt (h, "To", 0, 0, programFont, 'c');
   CreateMolInfoBlock (&miep->to, h, TRUE);
 
-  miep->sequence_constraint = SequenceConstraintDialog (w);
+  miep->sequence_constraint = SequenceConstraintXDialog (w);
 
   c = HiddenGroup (w, 2, 0, NULL);
   b = DefaultButton (c, "Accept", DoProcessEditMolInfo);
@@ -10717,14 +10796,14 @@ static void RibosomalRNAToGenomicDNAToolBtn (ButtoN b)
   RibosomalRNAToGenomicDNA (bfp);
 }
 
-static Boolean MolInfoOkForSeqEntry (SeqEntryPtr sep, SequenceConstraintPtr scp)
+static Boolean MolInfoOkForSeqEntry (SeqEntryPtr sep, SequenceConstraintXPtr scp)
 {
   BioseqSetPtr bssp;
   SeqEntryPtr  seq_set;
 
   if (IS_Bioseq (sep)) 
   {
-    return DoesSequenceMatchSequenceConstraint(sep->data.ptrvalue, scp);
+    return DoesSequenceMatchSequenceConstraintX(sep->data.ptrvalue, scp);
   } 
   else if (IS_Bioseq_set (sep)) 
   {
@@ -10843,7 +10922,7 @@ static void DoApplyMolInfo (SeqEntryPtr sep, MolInfoEditPtr miep)
 
   if (IS_Bioseq (sep)) {
     bsp = (BioseqPtr) sep->data.ptrvalue;
-    if (DoesSequenceMatchSequenceConstraint(bsp, miep->scp)) {
+    if (DoesSequenceMatchSequenceConstraintX(bsp, miep->scp)) {
       DoApplyMolInfoToBioseq (bsp, miep);
     } else return;
   } else if (IS_Bioseq_set (sep)) {
@@ -10902,7 +10981,7 @@ static Boolean WillEditMolInfo (MolInfoEditPtr miep)
 }
 
 typedef struct molinfocheck {
-  SequenceConstraintPtr scp;
+  SequenceConstraintXPtr scp;
   Int4                  num_with;
   Int4                  num_without;
 } MolInfoCheckData, PNTR MolInfoCheckPtr;
@@ -11077,7 +11156,7 @@ static void DoProcessApplyMolInfo (ButtoN b)
 
   DoApplyMolInfo (miep->sep, miep);
   FreeMolInfoBlockData (&miep->to);
-  miep->scp = SequenceConstraintFree (miep->scp);
+  miep->scp = SequenceConstraintXFree (miep->scp);
   ArrowCursor ();
   Update ();
   ObjMgrSetDirtyFlag (miep->input_entityID, TRUE);
@@ -11119,7 +11198,7 @@ static void ApplyMolInfo (IteM i)
   h = HiddenGroup (g, 0, 2, NULL);
   CreateMolInfoBlock (&miep->to, h, TRUE);
 
-  miep->sequence_constraint = SequenceConstraintDialog (w);
+  miep->sequence_constraint = SequenceConstraintXDialog (w);
 
   c = HiddenGroup (w, 2, 0, NULL);
   b = DefaultButton (c, "Accept", DoProcessApplyMolInfo);
@@ -12055,7 +12134,9 @@ static void CaptureFFLineEx (
         MemSet (subcip, 0, sizeof (ClickableItemData));
         subcip->clickable_item_type = blocktype;
         subcip->description = StringSave (ptr);
-        ValNodeAddPointer (&(subcip->item_list), item_list->choice, item_list->data.ptrvalue);
+        if (item_list != NULL) {
+          ValNodeAddPointer (&(subcip->item_list), item_list->choice, item_list->data.ptrvalue);
+        }
         ValNodeAddPointer (&(cip->subcategories), 0, subcip);
         /* iterate to add the rest of the lines of the qual */
         while (ch != 0 && tmp != NULL && (qual_name = StartsWithQualOrFeat (tmp + 1)) == NULL) {
@@ -12070,7 +12151,9 @@ static void CaptureFFLineEx (
             MemSet (subcip, 0, sizeof (ClickableItemData));
             subcip->clickable_item_type = blocktype;
             subcip->description = StringSave (ptr);
-            ValNodeAddPointer (&(subcip->item_list), item_list->choice, item_list->data.ptrvalue);
+            if (item_list != NULL) {
+              ValNodeAddPointer (&(subcip->item_list), item_list->choice, item_list->data.ptrvalue);
+            }
             ValNodeAddPointer (&(cip->subcategories), 0, subcip);
           }
         }
@@ -12160,6 +12243,7 @@ extern ValNodePtr GetSUCCommonList (SeqEntryPtr sep, Boolean reverse, Boolean by
   ErrSev          level;
   Boolean         okay;
   SeqEntryPtr     oldscope;
+  Uint2           entityID;
 
   if (sep == NULL) return NULL;
   
@@ -12191,6 +12275,8 @@ extern ValNodePtr GetSUCCommonList (SeqEntryPtr sep, Boolean reverse, Boolean by
   oldscope = SeqEntrySetScope (sep);
   okay = SeqEntryToGnbk (sep, NULL, GENBANK_FMT, SEQUIN_MODE, NORMAL_STYLE,
                          SHOW_CONTIG_FEATURES, 0, 0, &xtra, NULL);
+  entityID = SeqMgrGetEntityIDForSeqEntry (sep);
+  SeqMgrIndexFeatures (entityID, NULL);
   SeqEntrySetScope (oldscope);
   ErrSetMessageLevel (level);
   if (okay) {
@@ -15723,6 +15809,7 @@ static void UnsetPartialForTruncatedProteins (SeqFeatPtr sfp, Pointer userdata)
   change_name = (BoolPtr) userdata;
   CheckSeqLocForPartial (sfp->location, &partial5, &partial3);
   SetSeqLocPartial (sfp->location, partial5, FALSE);
+  sfp->partial = partial5;
   if (*change_name) {
     prp = sfp->data.value.ptrvalue;
     if (prp != NULL && prp->name != NULL 
@@ -15754,6 +15841,7 @@ static void UnsetCDSPartialForTruncatedProteins (SeqFeatPtr sfp, Pointer userdat
   if (product_bsp == prot_bsp) {
     CheckSeqLocForPartial (sfp->location, &partial5, &partial3);
     SetSeqLocPartial (sfp->location, partial5, FALSE);
+    sfp->partial = partial5;
 
     cds_len = (prot_bsp->length + 1) * 3 ;
     crp = (CdRegionPtr) sfp->data.value.ptrvalue;
@@ -15903,6 +15991,7 @@ static void TruncProtsCallback (BioseqPtr bsp, Pointer userdata)
       SetSeqLocPartial (slp, partial5, partial3);
       SeqLocFree (gene->location);
       gene->location = slp;
+      gene->partial = partial5 || partial3;
     }
     else
     {
@@ -18801,271 +18890,6 @@ static void ReverseNameOrderInAuthor (AuthorPtr pAuthor)
 
 }
 
-typedef struct replaceitempair {
-  CharPtr FindString;
-  CharPtr ReplaceString;
-} ReplaceItemPair, PNTR ReplaceItemPairPtr;
-
-
-ReplaceItemPair AbbreviationList[] = {
- { "arabidopsis thaliana", "Arabidopsis thaliana" },
- { "adp", "ADP" },
- { "adp-", "ADP-" },
- { "atp", "ATP" },
- { "atp-", "ATP-" },
- { "bac", "BAC" },
- { "caenorhabditis elegans", "Caenorhabditis elegans" },
- { "cdna", "cDNA" },
- { "cdnas", "cDNAs" },
- { "coa", "CoA" },
- { "coi", "COI" },
- { "coii", "COII" },
- { "danio rerio", "Danio rerio" },
- { "dna", "DNA" },
- { "dna-", "DNA-" },
- { "drosophila melanogaster", "Drosophila melanogaster" },
- { "dsrna", "dsRNA" },
- { "escherichia coli", "Escherichia coli" },
- { "hiv", "HIV" },
- { "hiv-1", "HIV-1" },
- { "hiv-2", "HIV-2" },
- { "hnrna", "hnRNA" },
- { "homo sapiens", "Homo sapiens" },
- { "mhc", "MHC" },
- { "mrna", "mRNA" },
- { "mtdna", "mtDNA" },
- { "mus musculus", "Mus musculus" },
- { "nadh", "NADH" },
- { "nov.", "nov." },
- { "nov..", "nov.." },
- { "pcr", "PCR" },
- { "pcr-", "PCR-" },
- { "rattus norvegicus", "Rattus norvegicus" },
- { "rapd", "RAPD" },
- { "rdna", "rDNA" },
- { "rna", "RNA" },
- { "rna-", "RNA-" },
- { "rrna", "rRNA" },
- { "rt-pcr", "RT-PCR" },
- { "saccharomyces cerevisiae", "Saccharomyces cerevisiae" },
- { "scrna", "scRNA" },
- { "siv-1", "SIV-1" },
- { "snp", "SNP"     },
- { "snps", "SNPs"   },
- { "snrna", "snRNA" },
- { "sp.", "sp." },
- { "sp..", "sp.." },
- { "ssp.", "ssp." },
- { "ssp..", "ssp.." },
- { "ssrna", "ssRNA" },
- { "subsp.", "subsp." },
- { "subsp..", "subsp.." },
- { "trna", "tRNA" },
- { "trna-", "tRNA-" },
- { "var.", "var." },
- { "var..", "var.." },
- { "usa", "USA" },
- { "U.S.A.", "USA" },
- { "U.S.A", "USA" },
- { "United States of America", "USA" },
- {"(hiv)", "(HIV)" },
- {"(hiv1)", "(HIV1)" },
- {"(hiv-1)", "(HIV-1)" }
-};
-
-ReplaceItemPair SpecialAbbreviationList[] = {
- { "sp.", "sp." },
- { "nov.", "nov." },
- { "ssp.", "ssp." },
- { "var.", "var." },
- { "subsp.", "subsp." }
-};
-
-static void FixAbbreviationsInElement (CharPtr PNTR pEl)
-{
-  int i;
-  CharPtr NewPtr;
-  Boolean whole_word;
-
-  if (pEl == NULL) return;
-  if (*pEl == NULL) return;
-
-  for (i = 0; i < sizeof (AbbreviationList) / sizeof (ReplaceItemPair); i++)
-  {
-    if (AbbreviationList[i].FindString[StringLen (AbbreviationList[i].FindString) - 1] == '-')
-    {
-      whole_word = FALSE;
-    }
-    else
-    {
-      whole_word = TRUE;
-    }
-    FindReplaceString (pEl, AbbreviationList[i].FindString,
-			AbbreviationList[i].ReplaceString, FALSE, whole_word);
-  }
-  for (i = 0; i < sizeof (SpecialAbbreviationList) / sizeof (ReplaceItemPair); i++)
-  {
-    FindReplaceString (pEl, SpecialAbbreviationList[i].FindString,
-			SpecialAbbreviationList[i].ReplaceString, FALSE, TRUE);
-    if (StringLen (*pEl) >= StringLen (SpecialAbbreviationList[i].ReplaceString)
-      && StringCmp ((*pEl) + StringLen (*pEl) - StringLen (SpecialAbbreviationList[i].ReplaceString), SpecialAbbreviationList[i].ReplaceString) == 0)
-    {
-      NewPtr = MemNew (StringLen (*pEl) + 2);
-      if (NewPtr == NULL) return;
-      StringCpy (NewPtr, *pEl);
-      StringCat (NewPtr, ".");
-      MemFree (*pEl);
-      *pEl = NewPtr;
-    }
-  }
-}
-
-ReplaceItemPair ShortWordList[] = {
- { "A", "a" },
- { "About", "about" },
- { "And", "and" },
- { "At", "at" },
- { "But", "but" },
- { "By", "by" },
- { "For", "for" },
- { "In", "in" },
- { "Is", "is" },
- { "Of", "of" },
- { "On", "on" },
- { "Or", "or" },
- { "The", "the" },
- { "To", "to" },
- { "With", "with" }
-};
-
-static void FixShortWordsInElement (CharPtr PNTR pEl)
-{
-  Int2 i;
-
-  if (pEl == NULL) return;
-  if (*pEl == NULL) return;
-
-  for (i = 0; i < sizeof (ShortWordList) / sizeof (ReplaceItemPair); i++)
-  {
-    FindReplaceString (pEl, ShortWordList[i].FindString,
-			ShortWordList[i].ReplaceString, FALSE, TRUE);
-  }
-  if (isalpha ((Int4)((*pEl)[0])))
-  {
-    (*pEl)[0] = toupper ((*pEl)[0]);
-  }
-}
-
-static void 
-FixCapitalizationInElement 
-(CharPtr PNTR pEl,
- Boolean      bAbbrev, 
- Boolean      bShortWords,
- Boolean      bApostrophes)
-{
-  CharPtr pCh;
-  Boolean bSendToLower;
- 
-  if(pEl == NULL) return; 
-  if(*pEl == NULL) return; 
-
-  bSendToLower = FALSE;
-  for(pCh = *pEl; *pCh != 0; pCh++)
-  {
-    if(isalpha((Int4)(*pCh)))
-    {
-      if(bSendToLower)
-      {
-        *pCh = tolower(*pCh);
-      }
-      else
-      {
-        *pCh = toupper(*pCh);
-        bSendToLower = TRUE;
-      }
-    }
-    else if (bApostrophes || *pCh != '\'')
-    {
-      bSendToLower = FALSE;
-    }
-  }
-  if (bShortWords)
-    FixShortWordsInElement (pEl);
-  if (bAbbrev)
-    FixAbbreviationsInElement (pEl);
-}
-
-
-static void FixOrgNamesInString (CharPtr str, ValNodePtr org_names)
-{
-  ValNodePtr vnp;
-  CharPtr    cp, taxname;
-  Int4       taxname_len;
-  
-  if (StringHasNoText (str) || org_names == NULL) return;
-  for (vnp = org_names; vnp != NULL; vnp = vnp->next)
-  {
-    taxname = (CharPtr) org_names->data.ptrvalue;
-    taxname_len = StringLen (taxname);
-    cp = StringISearch (str, taxname);
-    while (cp != NULL)
-    {
-      StringNCpy (cp, taxname, taxname_len);
-      cp = StringISearch (cp + taxname_len, taxname);
-    }
-  }
-}
-
-
-extern void ResetCapitalization (Boolean first_is_upper, CharPtr pString)
-{
-  CharPtr pCh;
-  Boolean was_digit = FALSE;
-
-  pCh = pString;
-  if (pCh == NULL) return;
-  if (*pCh == '\0') return;
-  
-  if (first_is_upper)
-  {
-    /* Set first character to upper */
-    *pCh = toupper (*pCh);	
-  }
-  else
-  {
-    /* set first character to lower */
-    *pCh = tolower (*pCh);	
-  }
-  
-  if (isdigit ((Int4)(*pCh)))
-  {
-  	was_digit = TRUE;
-  }
-  pCh++;
-  /* Set rest of characters to lower */
-  while (*pCh != '\0')
-  {
-    if (was_digit 
-        && (*pCh == 'S' || *pCh == 's') 
-        && (isspace ((Int4)(*(pCh + 1))) || *(pCh + 1) == 0))
-    {
-      *pCh = toupper (*pCh);
-      was_digit = FALSE;
-    }
-    else if (isdigit ((Int4)(*pCh)))
-    {
-      was_digit = TRUE;
-    }
-    else
-    {
-      was_digit = FALSE;
-      *pCh = tolower (*pCh);
-    }
-    pCh++;
-  }  
-}
-
-
 extern void 
 FixCapitalizationInTitle 
 (CharPtr PNTR pTitle,
@@ -19142,7 +18966,7 @@ static void TruncateAuthorMiddleInitials (AuthorPtr pAuthor)
   }
 }
 
-static void ChangeAuthorLastNameToConsortium (AuthorPtr pAuthor, StringConstraintPtr author_scp)
+static void ChangeAuthorLastNameToConsortium (AuthorPtr pAuthor, StringConstraintXPtr author_scp)
 {
   NameStdPtr pNameStandard;
   CharPtr    consortium;
@@ -19160,7 +18984,7 @@ static void ChangeAuthorLastNameToConsortium (AuthorPtr pAuthor, StringConstrain
       len = StringLen (pNameStandard->names[0]);
       if (len > 0)
       {
-        if (DoesStringMatchConstraint (pNameStandard->names[0], author_scp))
+        if (DoesStringMatchConstraintX (pNameStandard->names[0], author_scp))
         {
     	    consortium = (CharPtr) MemNew ((len + 1) * sizeof (Char));
     	    if (consortium != NULL)
@@ -19190,7 +19014,7 @@ static void ChangeAuthorLastNameToConsortium (AuthorPtr pAuthor, StringConstrain
 typedef struct fixpubdesc 
 {
   Int4                iType;
-  StringConstraintPtr author_scp;
+  StringConstraintXPtr author_scp;
   ValNodePtr          org_names;
 } FixPubdescData, PNTR FixPubdescPtr;
 
@@ -19336,7 +19160,7 @@ extern void GetOrgNamesInRecordCallback (BioSourcePtr biop, Pointer userdata)
 
 
 /* This function is used to apply fixes to citations */
-static void FixPubs (Uint2 entityID, Int4 iType, StringConstraintPtr author_scp)
+static void FixPubs (Uint2 entityID, Int4 iType, StringConstraintXPtr author_scp)
 {
   SeqEntryPtr  sep;
   SelStructPtr	sel;
@@ -19477,7 +19301,7 @@ static void ChangeAllAuthorNameToConsortium (IteM i)
 static void ChangeAuthorNameWithConsortiumToConsortium (IteM i)
 {
   BaseFormPtr bfp;
-  StringConstraintPtr scp;
+  StringConstraintXPtr scp;
 
 #ifdef WIN_MAC
   bfp = currentFormDataPtr;
@@ -19487,7 +19311,7 @@ static void ChangeAuthorNameWithConsortiumToConsortium (IteM i)
 
   if (bfp == NULL) return;
   
-  scp = (StringConstraintPtr) MemNew (sizeof (StringConstraintData));
+  scp = (StringConstraintXPtr) MemNew (sizeof (StringConstraintData));
   if (scp == NULL)
   {
     return;
@@ -19500,7 +19324,7 @@ static void ChangeAuthorNameWithConsortiumToConsortium (IteM i)
   scp->not_present = FALSE;   
   
   FixPubs (bfp->input_entityID, FIX_PUB_SWAP_NAME_CONSORTIUM, scp);
-  scp = StringConstraintFree (scp);
+  scp = StringConstraintXFree (scp);
 }
 
 typedef struct authornamestringconstraintform 
@@ -19512,7 +19336,7 @@ typedef struct authornamestringconstraintform
 static void DoChangeAuthorNameToConsortiumWithConstraint (ButtoN b)
 {
   AuthorNameStringConstraintFormPtr frm;
-  StringConstraintPtr               scp;
+  StringConstraintXPtr               scp;
   
   frm = (AuthorNameStringConstraintFormPtr) GetObjectExtra (b);
   if (frm == NULL)
@@ -19520,14 +19344,14 @@ static void DoChangeAuthorNameToConsortiumWithConstraint (ButtoN b)
     return;
   }
   
-  scp = (StringConstraintPtr) DialogToPointer (frm->author_name_constraint_dlg);
+  scp = (StringConstraintXPtr) DialogToPointer (frm->author_name_constraint_dlg);
   
   Hide (frm->form);
   WatchCursor ();
   Update ();
   
   FixPubs (frm->input_entityID, FIX_PUB_SWAP_NAME_CONSORTIUM, scp);
-  scp = StringConstraintFree (scp);
+  scp = StringConstraintXFree (scp);
   Remove ((WindoW)frm->form);  
   ArrowCursor ();
   Update ();
@@ -19563,7 +19387,7 @@ static void ChangeAuthorNameToConsortiumWithConstraint (IteM i)
   h = HiddenGroup (w, -1, 0, NULL);
   SetGroupSpacing (h, 10, 10);
 
-  frm->author_name_constraint_dlg =  StringConstraintDialog (h, "Where author last name", TRUE);
+  frm->author_name_constraint_dlg =  StringConstraintDialogX (h, "Where author last name", TRUE);
   
   c = HiddenGroup (h, 2, 0, NULL);
   SetGroupSpacing (h, 10, 10);
@@ -19873,6 +19697,35 @@ static void RenormalizeNucProtSetsMenuItem (IteM i)
 }
 
 
+static void AddAllDbxrefsBioseqCallback (BioseqPtr bsp, Pointer data)
+{
+  AddAllDbxrefsToBioseq (bsp);
+}
+
+
+static void AddAllDbxrefsMenuItem (IteM i)
+{
+  BaseFormPtr  bfp;
+  SeqEntryPtr  sep;
+ 
+  /* Get the current data */
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+
+  if (bfp == NULL)
+    return;
+
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+
+  VisitBioseqsInSep (sep, NULL, AddAllDbxrefsBioseqCallback);
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+}
+
 extern void LookupAllPubs (IteM i);
 extern void ResolveExistingLocalIDs (IteM i);
 extern void PromoteAlignsToBestIDProc (IteM i);
@@ -19945,7 +19798,7 @@ static void ShowDiscrepancyReport (IteM i)
 
   if (bfp == NULL) return;
   
-  CreateDiscrepancyReportWindow (bfp);
+  CreateDiscrepancyReportWindow (/* bfp */);
 }
 
 static void TestTax3 (IteM i, Int4 taxid, CharPtr name)
@@ -20224,7 +20077,7 @@ static void MakeSpecialOrganismMenu (MenU m, BaseFormPtr bfp)
   MenU  x;
   
   s = SubMenu (m, "Organism/ G");
-  i = CommandItem (s, "Parse Text", ParseTaxnameToSourceQual);
+  i = CommandItem (s, "Parse Text After Bionomial", ParseTaxnameToSourceQual);
   SetObjectExtra (i, bfp, NULL);
   SeparatorItem (s);
   i = CommandItem (s, "Parse ATCC Strain to Xref", AtccStrainToXref);
@@ -20248,6 +20101,8 @@ static void MakeSpecialOrganismMenu (MenU m, BaseFormPtr bfp)
   i = CommandItem (x, "Fix Capitalization After Colon", CountryLookupWithCapFix);
   SetObjectExtra (i, bfp, NULL);
   i = CommandItem (s, "Lat-lon Tool", LatLonTool);
+  SetObjectExtra (i, bfp, NULL);
+  i = CommandItem (s, "Lat-Lon Country Conflict Tool", LatLonCountryTool);
   SetObjectExtra (i, bfp, NULL);
   i = CommandItem (s, "Fix Specific-Host Values", FixSpecificHostValues);
   SetObjectExtra (i, bfp, NULL);
@@ -20287,6 +20142,8 @@ static void MakeSpecialOrganismMenu (MenU m, BaseFormPtr bfp)
   SeparatorItem (s);
   x = SubMenu(s, "Parse Organism Modifiers");
   i = CommandItem (x, "Load From File", LoadOrganismModifierTable);
+  SetObjectExtra (i, bfp, NULL);
+  i = CommandItem (x, "Load Tax Consult File", LoadTaxConsult);
   SetObjectExtra (i, bfp, NULL);
   i = CommandItem (x, "Export To File", ExportOrganismTable);
   SetObjectExtra (i, bfp, NULL);
@@ -20370,6 +20227,9 @@ static void MakeSpecialProjectsMenu (MenU m, BaseFormPtr bfp)
     i = CommandItem (s, "BARCODE Discrepancy Tool", BarcodeTestTool);
     SetObjectExtra (i, bfp, NULL);
     i = CommandItem (s, "Apply BARCODE Dbxrefs", ApplyBarcodeDbxrefs);
+    SetObjectExtra (i, bfp, NULL);
+    SeparatorItem (s);
+    i = CommandItem (s, "Add Note to Coding Regions in Source Features", ApplyTagToCodingRegionsInSourceFeatures);
     SetObjectExtra (i, bfp, NULL);
   }
 }
@@ -20680,7 +20540,7 @@ static void MakeSpecialConvertMenu (MenU m, BaseFormPtr bfp)
   z = SubMenu (y, "Publication");
   i = CommandItem (z, "All", ConvertPubDescToFeat);
   SetObjectExtra (i, bfp, NULL);
-  i = CommandItem (z, "By Constraint", CreateConvertPubDescStringConstraintDialog);
+  i = CommandItem (z, "By Constraint", CreateConvertPubDescStringConstraintDialogX);
   SetObjectExtra (i, bfp, NULL);
 
   y = SubMenu (x, "Convert Full Length Feature to Descriptor");
@@ -20717,6 +20577,8 @@ static void MakeSpecialConvertMenu (MenU m, BaseFormPtr bfp)
   if (indexerVersion) {
     x = SubMenu (s, "Convert IDs, Accessions, or GenBank.names");
     i = CommandItem (x, "LocalIDs to GeneralIDs", ConvertLocalToGeneral);
+    SetObjectExtra (i, bfp, NULL);
+    i = CommandItem (x, "Convert GeneralIDs to LocalIDs", ConvertGeneralIdToLocalID);
     SetObjectExtra (i, bfp, NULL);
     y = SubMenu (x, "Accession to LocalIDs");
     i = CommandItem (y, "For All Sequences", ConvertToLocalProcAll);
@@ -20756,7 +20618,7 @@ static void MakeSpecialEditMenu (MenU m, BaseFormPtr bfp)
   SetObjectExtra (i, bfp, NULL);
   i = CommandItem (x, "Exception", FeatureExceptionEditor);
   SetObjectExtra (i, bfp, NULL);
-  i = CommandItem (x, "Partial", FeaturePartialEditor);
+  i = CommandItem (x, "Location", FeaturePartialEditor);
   SetObjectExtra (i, bfp, NULL);
   i = CommandItem (x, "Strand", FeatureStrandEditor);
   SetObjectExtra (i, bfp, NULL);
@@ -20769,6 +20631,10 @@ static void MakeSpecialEditMenu (MenU m, BaseFormPtr bfp)
   i = CommandItem (x, "Pseudo", FeaturePseudoEditor);
   SetObjectExtra (i, bfp, NULL);
   i = CommandItem (x, "Reverse Location Interval Order", ReverseFeatureIntervals);
+  SetObjectExtra (i, bfp, NULL);
+  i = CommandItem (x, "Resolve Intersecting Feature Locations", ResolveFeatureOverlaps);
+  SetObjectExtra (i, bfp, NULL);
+  i = CommandItem (x, "Update Features", UpdateFeatures);
   SetObjectExtra (i, bfp, NULL);
 
   SeparatorItem (s);
@@ -20786,8 +20652,12 @@ static void MakeSpecialEditMenu (MenU m, BaseFormPtr bfp)
   SetObjectExtra (i, bfp, NULL);
 
   SeparatorItem (s);
-  i = CommandItem (s, "Extend Partial Features", ExtendPartialFeatures);
+  x = SubMenu (s, "Extend Partial Features");
+  i = CommandItem (x, "All", ExtendPartialFeatures);
   SetObjectExtra (i, bfp, NULL);
+  i = CommandItem (x, "With Constraint", ExtendPartialFeaturesWithConstraint);
+  SetObjectExtra (i, bfp, NULL);
+
   i = CommandItem (s, "Extend Gene", ExtendGeneReg);
   SetObjectExtra (i, bfp, NULL);
   SeparatorItem (s);
@@ -20912,6 +20782,9 @@ static void MakeSpecialGapSequencesMenu (MenU m, BaseFormPtr bfp)
   SetObjectExtra (i, bfp, NULL);
   i = CommandItem (s, "Remove Unnecessary Gap Features", RemoveUnnecessaryGapFeatures);
   SetObjectExtra (i, bfp, NULL);
+  SeparatorItem (s);
+  i = CommandItem (s, "Flip Intervals Between Gaps", FlipSequenceIntervals);
+  SetObjectExtra (i, bfp, NULL);
 }
 
 static void MakeSpecialSelectMenu (MenU m, BaseFormPtr bfp)
@@ -20947,6 +20820,8 @@ static void MakeSpecialLinkMenu (MenU m, BaseFormPtr bfp)
   SetObjectExtra (i, bfp, NULL);
   i = CommandItem (x, "Reassign", ReassignFeatIDs);
   SetObjectExtra (i, bfp, NULL);
+  i = CommandItem (x, "Unique in Merged Set", UniqifyFeatIDs);
+  SetObjectExtra (i, bfp, NULL);
   i = CommandItem (x, "Clear IDs and Links", ClearFeatIDsAndLinks);
   SetObjectExtra (i, bfp, NULL);
   SeparatorItem (s);
@@ -20966,7 +20841,6 @@ static void MakeSpecialLinkMenu (MenU m, BaseFormPtr bfp)
   i = CommandItem (s, "Show Linked CDS or mRNA Feature", SelCDSmRNALink);
   SetObjectExtra (i, bfp, NULL);
 }
-
 
 extern void SetupSpecialMenu (MenU m, BaseFormPtr bfp)
 
@@ -21095,6 +20969,11 @@ extern void SetupSpecialMenu (MenU m, BaseFormPtr bfp)
 
   i = CommandItem (s, "Load Feature Fields from File", LoadFeatureFieldTable);
   SetObjectExtra (i, bfp, NULL);
+#if 1
+  i = CommandItem (s, "New Load Feature Fields from File", NewLoadFeatureQualifierTable);
+  SetObjectExtra (i, bfp, NULL);
+#endif
+
     
   MakeSpecialRemoveMenu (m, bfp);
 
@@ -21215,6 +21094,8 @@ extern void SetupSpecialMenu (MenU m, BaseFormPtr bfp)
   i = CommandItem (s, "Reload Publications", LookupAllPubs);
   SetObjectExtra (i, bfp, NULL);
   i = CommandItem (s, "Add Cit-sub for update", AddCitSubForUpdate);
+  SetObjectExtra (i, bfp, NULL);
+  i = CommandItem (s, "Fix USA and States", AbbreviateCitSubAffilStates);
   SetObjectExtra (i, bfp, NULL);
   
   MakeSpecialGapSequencesMenu (m, bfp);
@@ -21376,10 +21257,17 @@ extern void SetupSpecialMenu (MenU m, BaseFormPtr bfp)
   i = CommandItem (s, "Force Locus Fixup", ForceLocusFixup);
   SetObjectExtra (i, bfp, NULL);
   SeparatorItem (s);
+  /*
+  i = CommandItem (s, "Just Taxonomy Fixup", JustTaxonFixup);
+  SetObjectExtra (i, bfp, NULL);
+  SeparatorItem (s);
+  */
   i = CommandItem (s, "Correct CDS Genetic Codes", CorrectCDSGenCodes);
   SetObjectExtra (i, bfp, NULL);
   SeparatorItem (s);
   i = CommandItem (s, "Update Replace EC_numbers", UpdateECnumbers);
+  SetObjectExtra (i, bfp, NULL);
+  i = CommandItem (s, "Parse GO Terms from User Fields", ParseGoTermsFromUserFieldsItem);
   SetObjectExtra (i, bfp, NULL);
   SeparatorItem (s);
   i = CommandItem (s, "NC_Cleanup", DoNCCleanup);
@@ -21461,11 +21349,20 @@ extern void SetupSpecialMenu (MenU m, BaseFormPtr bfp)
     SetObjectExtra (i, bfp, NULL);
 #endif
     
+#if 0
     SeparatorItem (m);
-    i = CommandItem (m, "Discrepancy Report", ShowDiscrepancyReport);
+    i = CommandItem (m, "Add All Dbxrefs", AddAllDbxrefsMenuItem);
     SetObjectExtra (i, bfp, NULL);
+#endif
     
   }
+  SeparatorItem (m);
+  i = CommandItem (m, "Discrepancy Report", ShowDiscrepancyReport);
+  SetObjectExtra (i, bfp, NULL);
+  SeparatorItem (m);
+  i = CommandItem (m, "Macro Editor", LaunchMacroEditor);
+  SetObjectExtra (i, bfp, NULL);
+
 /*#ifdef INTERNAL_NCBI_SEQUIN*/
 /*#ifdef NEW_TAXON_SERVICE*/
 /*

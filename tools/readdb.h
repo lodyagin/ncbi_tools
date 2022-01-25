@@ -41,7 +41,7 @@ Contents: defines and prototypes used by readdb.c and formatdb.c.
 *
 * Version Creation Date:   3/21/95
 *
-* $Revision: 6.178 $
+* $Revision: 6.179 $
 *
 * File Description: 
 *       Functions to rapidly read databases from files produced by formatdb.
@@ -56,6 +56,9 @@ Contents: defines and prototypes used by readdb.c and formatdb.c.
 *
 * RCS Modification History:
 * $Log: readdb.h,v $
+* Revision 6.179  2007/09/27 17:20:54  madden
+* Add readdb_get_full_filename
+*
 * Revision 6.178  2007/08/21 20:06:07  kans
 * added prototype for FDBCleanUp
 *
@@ -1443,6 +1446,9 @@ Get the name of the file used for formatting.
 NOTE: the CharPtr returned is not owned by the caller! 
 */
 CharPtr LIBCALL readdb_get_filename PROTO((ReadDBFILEPtr rdfp));
+
+/* For use by the seq-src to get the alias file name with full path. */
+CharPtr LIBCALL readdb_get_full_filename PROTO((ReadDBFILEPtr rdfp));
 
 /* 
 Get the date the database was formatted. 

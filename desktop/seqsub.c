@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.34 $
+* $Revision: 6.36 $
 *
 * File Description: 
 *
@@ -3763,6 +3763,122 @@ static Boolean GetBioSourceFromSeqSubmit (SeqSubmitPtr ssp, BioSourcePtr PNTR pb
   return rval;
 }
 
+
+static CitSubPtr GetCitSubFromPub (PubdescPtr pdp)
+{
+  ValNodePtr   vnp;
+  CitSubPtr    cit = NULL;
+
+  if (pdp == NULL) return NULL;
+  for (vnp = pdp->pub; vnp != NULL && cit == NULL; vnp = vnp->next)
+  {
+    if (vnp->choice == PUB_Sub)
+    {
+      cit = vnp->data.ptrvalue;
+    }
+  }
+  return cit;
+}
+
+
+static ContactInfoPtr ContactInfoFromAuthList (AuthListPtr auth_list)
+{
+  ContactInfoPtr contact_info = NULL;
+  AffilPtr       affil = NULL;
+  ValNodePtr     vnp;
+  AuthorPtr      author = NULL;
+
+  if (auth_list == NULL) return NULL;
+
+  for (vnp = auth_list->names; vnp != NULL && author == NULL; vnp = vnp->next)
+  {
+    if (vnp->choice == 1)
+    {
+      author = vnp->data.ptrvalue;
+    }
+  }
+
+  if (author != NULL)
+  {
+    contact_info = ContactInfoNew();
+    contact_info->contact = (AuthorPtr) AsnIoMemCopy (author, (AsnReadFunc) AuthorAsnRead, (AsnWriteFunc) AuthorAsnWrite);
+    if (contact_info->contact->affil == NULL && auth_list->affil != NULL)
+    {
+      contact_info->contact->affil = (AffilPtr) AsnIoMemCopy (auth_list->affil, (AsnReadFunc) AffilAsnRead, (AsnWriteFunc) AffilAsnWrite);
+    }
+  }
+
+  return contact_info;
+}
+
+
+static SubmitBlockPtr SubmitBlockFromSeqEntry (SeqEntryPtr sep)
+{
+  BioseqPtr    bsp;
+  BioseqSetPtr bssp;
+  SeqDescrPtr  sdp = NULL;
+  CitSubPtr    cit = NULL;
+  SubmitBlockPtr sbp = NULL;
+
+  if (sep == NULL || sep->data.ptrvalue == NULL) return NULL;
+  if (IS_Bioseq (sep))
+  {
+    bsp = (BioseqPtr) sep->data.ptrvalue;
+    sdp = bsp->descr;
+  }
+  else if (IS_Bioseq_set (sep))
+  {
+    bssp = (BioseqSetPtr) sep->data.ptrvalue;
+    sdp = bssp->descr;
+  }
+  while (sdp != NULL && cit == NULL)
+  {
+    if (sdp->choice == Seq_descr_pub && sdp->data.ptrvalue != NULL)
+    {
+      cit = GetCitSubFromPub (sdp->data.ptrvalue);
+    }
+    sdp = sdp->next;
+  }
+      
+  if (cit != NULL)
+  { 
+    sbp = SubmitBlockNew ();
+    sbp->cit = (CitSubPtr) AsnIoMemCopy (cit, (AsnReadFunc) CitSubAsnRead, (AsnWriteFunc) CitSubAsnWrite);
+    sbp->contact = ContactInfoFromAuthList (sbp->cit->authors);
+  }
+  
+  return sbp;
+}
+
+
+static void ListDescriptorsCallback (SeqDescrPtr sdp, Pointer data, Uint1 desc_choice)
+{
+  SeqDescrPtr tmp;
+
+  if (sdp != NULL && sdp->choice == desc_choice && data != NULL)
+  {
+    if (sdp->choice != Seq_descr_pub 
+        || GetCitSubFromPub (sdp->data.ptrvalue) == NULL)
+    {
+      tmp = sdp->next;
+      sdp->next = NULL;
+      ValNodeLink ((ValNodePtr PNTR) data, AsnIoMemCopy (sdp, (AsnReadFunc) SeqDescrAsnRead, (AsnWriteFunc) SeqDescrAsnWrite));
+      sdp->next = tmp;
+    }
+  }
+}
+
+
+static void ListCommentsCallback (SeqDescrPtr sdp, Pointer data)
+{
+  ListDescriptorsCallback (sdp, data, Seq_descr_comment);
+}
+
+static void ListPubsCallback (SeqDescrPtr sdp, Pointer data)
+{
+  ListDescriptorsCallback (sdp, data, Seq_descr_pub);
+}
+
 static Boolean ImportSeqSubmitForm (ForM f, CharPtr filename)
 {
   SubmitTemplateEditorPtr dlg;
@@ -3773,11 +3889,12 @@ static Boolean ImportSeqSubmitForm (ForM f, CharPtr filename)
   Uint2                   datatype;
   Uint2                   entityID;
   FILE                    *fp;
-  SubmitBlockPtr          sbp = NULL;
+  SubmitBlockPtr          sbp = NULL, t_sbp;
   SeqDescrPtr             sdp_comment, sdp_pub = NULL;
   CharPtr                 comment = NULL;
   BioSourcePtr            biop = NULL;
   MolInfoPtr              mip = NULL;
+  SeqEntryPtr             sep = NULL;
   
   dlg = (SubmitTemplateEditorPtr) GetObjectExtra (f);
   if (dlg == NULL)
@@ -3849,6 +3966,44 @@ static Boolean ImportSeqSubmitForm (ForM f, CharPtr filename)
       else
       {
         sbp = (SubmitBlockPtr) dataptr;
+      }
+    }
+    else if (datatype == OBJ_SEQENTRY)
+    {
+      sep = (SeqEntryPtr) dataptr;
+      t_sbp = SubmitBlockFromSeqEntry (sep);
+      if (t_sbp != NULL)
+      {
+        if (sbp != NULL)
+        {
+          Message (MSG_ERROR, "Found more than one SubmitBlock!  Bad file!");
+          bad_data_found = TRUE;
+        }
+        else if (ssp != NULL)
+        {
+          Message (MSG_ERROR, "Found Separate SeqSubmit and SubmitBlock!  Bad file!");
+          bad_data_found = TRUE;
+        }
+        else
+        {
+          sbp = t_sbp;
+          VisitDescriptorsInSep (sep, &sdp_pub, ListPubsCallback);
+          sdp_comment = NULL;
+          VisitDescriptorsInSep (sep, &sdp_comment, ListCommentsCallback);
+          if (sdp_comment != NULL)
+          {
+            if (comment != NULL)
+            {
+              Message (MSG_ERROR, "Found more than one comment!  Cannot edit this file!");
+              bad_data_found = TRUE;
+            }
+            else
+            {
+              comment = StringSave (sdp_comment->data.ptrvalue);
+            }
+            sdp_comment = SeqDescrFree (sdp_comment);
+          }
+        }
       }
     }
     else if (datatype == OBJ_SEQDESC)

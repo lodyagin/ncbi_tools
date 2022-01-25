@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/28/96
 *
-* $Revision: 6.399 $
+* $Revision: 6.411 $
 *
 * File Description: 
 *
@@ -79,24 +79,17 @@
 #include <seqpanel.h>
 #include <salpanel.h>
 #include <findrepl.h>
+#include <macrodlg.h>
+#include <macroapi.h>
 
 static Int2 LIBCALLBACK CreateSegSet (Pointer data);
 static Int2 LIBCALLBACK ConvertToDeltaSequence (Pointer data);
 static Int2 LIBCALLBACK FeatToDeltaSeq (Pointer data);
 static Int2 LIBCALLBACK CopyMasterSourceToSegments (Pointer data);
 
-#define REGISTER_CREATESEGSET ObjMgrProcLoadEx (OMPROC_FILTER,"Create Segmented Set", "CreateSegSet", 0,0,0,0,NULL,CreateSegSet, PROC_PRIORITY_DEFAULT, "Indexer")
-#define REGISTER_UPDATESEGSET ObjMgrProcLoadEx (OMPROC_FILTER,"Update Segmented Set","UpdateSegSet",0,0,0,0,NULL,UpdateSegSet,PROC_PRIORITY_DEFAULT, "Indexer")
-
-#define REGISTER_NEWUPDATESEGSET ObjMgrProcLoadEx (OMPROC_FILTER,"New Update Segmented Set","NewUpdateSegSet",0,0,0,0,NULL,NewUpdateSegSet,PROC_PRIORITY_DEFAULT, "Indexer")
-
-#define REGISTER_ADJUSTMULTISEGSEQ ObjMgrProcLoadEx (OMPROC_FILTER,"Adjust SegSeq Length","AdjustSegLength",0,0,0,0,NULL,AdjustSegSeqLength,PROC_PRIORITY_DEFAULT, "Indexer")
-
 #define REGISTER_REMOVESET ObjMgrProcLoadEx (OMPROC_FILTER,"Remove Set","RemoveSet",0,0,0,0,NULL,RemoveSet,PROC_PRIORITY_DEFAULT, "Indexer")
 
 #define REGISTER_REMOVESETSINSET ObjMgrProcLoadEx (OMPROC_FILTER,"Remove Sets in Selected Set","RemoveSetsInSelectedSet",0,0,0,0,NULL,RemoveSetsInSelectedSet,PROC_PRIORITY_DEFAULT, "Indexer")
-
-#define REGISTER_UNDOSEGSET ObjMgrProcLoadEx (OMPROC_FILTER,"Undo Segmented Set","UndoSegSet",0,0,0,0,NULL,UndoSegSet,PROC_PRIORITY_DEFAULT, "Indexer")
 
 #define REGISTER_REPACKAGE_PARTS ObjMgrProcLoadEx (OMPROC_FILTER,"Repackage Segmented Parts","RepackageParts",0,0,0,0,NULL,PackagePartsInPartsSet,PROC_PRIORITY_DEFAULT, "Indexer")
 
@@ -117,18 +110,6 @@ static Int2 LIBCALLBACK CopyMasterSourceToSegments (Pointer data);
 #define REGISTER_FIX_ALIGNMENT_GAP_GAPS ObjMgrProcLoadEx (OMPROC_FILTER, "Fix Alignment Gaps Containing Known Gaps", "FixKnownGapAlignmentGaps", 0,0,0,0,NULL,ConsolidateGapGaps, PROC_PRIORITY_DEFAULT, "Alignment")
 
 #define REGISTER_DELETE_BY_TEXT ObjMgrProcLoadEx (OMPROC_FILTER, "Delete By Text","DeleteByText",0,0,0,0,NULL,CreateDeleteByTextWindow,PROC_PRIORITY_DEFAULT, "Indexer")
-
-#define REGISTER_SEGREGATE_BY_TEXT ObjMgrProcLoadEx (OMPROC_FILTER, "Segregate By Text","SegregateByText",0,0,0,0,NULL,CreateSegregateByTextWindow,PROC_PRIORITY_DEFAULT, "Indexer")
-
-#define REGISTER_SEGREGATE_BY_FIELD ObjMgrProcLoadEx (OMPROC_FILTER, "Segregate By Options","NewSegregateByOptions",0,0,0,0,NULL,SegregateSetsByField,PROC_PRIORITY_DEFAULT, "Indexer")
-
-#define REGISTER_SEGREGATE_BY_FEATURE ObjMgrProcLoadEx (OMPROC_FILTER, "Segregate By Feature","SegregateByFeature",0,0,0,0,NULL,CreateSegregateByFeatureWindow,PROC_PRIORITY_DEFAULT, "Indexer")
-
-#define REGISTER_SEGREGATE_BY_DESCRIPTOR ObjMgrProcLoadEx (OMPROC_FILTER, "Segregate By Descriptor","SegregateByDescriptor",0,0,0,0,NULL,CreateSegregateByDescriptorWindow,PROC_PRIORITY_DEFAULT, "Indexer")
-
-#define REGISTER_SEGREGATE_BY_MOLECULE_TYPE ObjMgrProcLoadEx (OMPROC_FILTER, "Segregate By Molecule Type","SegregateByMoleculeType",0,0,0,0,NULL,CreateSegregateByMoleculeTypeWindow,PROC_PRIORITY_DEFAULT, "Indexer")
-
-#define REGISTER_SEGREGATE_BY_ID ObjMgrProcLoadEx (OMPROC_FILTER, "Segregate By ID","SegregateByID",0,0,0,0,NULL,CreateSegregateByIdWindow,PROC_PRIORITY_DEFAULT, "Indexer")
 
 #define REGISTER_REORDER_BY_ID ObjMgrProcLoadEx (OMPROC_FILTER, "Reorder by ID","ReorderByID",0,0,0,0,NULL,ReorderSetByAccession,PROC_PRIORITY_DEFAULT, "Indexer")
 
@@ -176,6 +157,7 @@ static Int2 LIBCALLBACK CopyMasterSourceToSegments (Pointer data);
 #define REGISTER_BIOSEQ_REVCOMP_NOTFEAT ObjMgrProcLoadEx (OMPROC_FILTER, "Bioseq only RevComp", "BioseqOnlyRevComp", OBJ_BIOSEQ, 0, OBJ_BIOSEQ, 0, NULL, RevCompFunc, PROC_PRIORITY_DEFAULT, "Utilities")
 #define REGISTER_BIOSEQ_REVERSE ObjMgrProcLoadEx (OMPROC_FILTER, "Bioseq Reverse", "BioseqReverse", OBJ_BIOSEQ, 0, OBJ_BIOSEQ, 0, NULL, RevFunc, PROC_PRIORITY_DEFAULT, "Utilities")
 #define REGISTER_BIOSEQ_COMPLEMENT ObjMgrProcLoadEx (OMPROC_FILTER, "Bioseq Complement", "BioseqComplement", OBJ_BIOSEQ, 0, OBJ_BIOSEQ, 0, NULL, CompFunc, PROC_PRIORITY_DEFAULT, "Utilities")
+#define REGISTER_BIOSEQ_REVCOMP_BYID ObjMgrProcLoadEx (OMPROC_FILTER, "Bioseq and Features RevComp By ID", "RevCompByID", OBJ_BIOSEQ, 0, OBJ_BIOSEQ, 0, NULL, BioseqRevCompByID, PROC_PRIORITY_DEFAULT, "Utilities")
 
 #define REGISTER_BIOSEQ_SEG_REPORT ObjMgrProcLoadEx (OMPROC_FILTER, "Bioseq Seg Report", "BioseqSegReport", OBJ_BIOSEQ, 0, OBJ_BIOSEQ, 0, NULL, ReportDeltaSegments, PROC_PRIORITY_DEFAULT, "Misc")
 
@@ -249,6 +231,28 @@ extern Int2 LIBCALLBACK StruCommUserGenFunc (Pointer data);
 #if defined(OS_UNIX) || defined(OS_MSWIN) 
 #define REGISTER_CORRECTRNASTRAND ObjMgrProcLoadEx (OMPROC_FILTER, "Correct RNA Strand","CorrectRNAStrand",0,0,0,0,NULL,CorrectRNAStrandedness,PROC_PRIORITY_DEFAULT, "Analysis")
 #endif
+
+/* commands for Desktop Segregate menu */
+#define REGISTER_SEGREGATE_BY_TEXT ObjMgrProcLoadEx (OMPROC_FILTER, "Segregate By Text","SegregateByText",0,0,0,0,NULL,CreateSegregateByTextWindow,PROC_PRIORITY_DEFAULT, "Segregate")
+
+#define REGISTER_SEGREGATE_BY_FIELD ObjMgrProcLoadEx (OMPROC_FILTER, "Segregate By Options","NewSegregate",0,0,0,0,NULL,SegregateSetsByField,PROC_PRIORITY_DEFAULT, "Segregate")
+
+#define REGISTER_SEGREGATE_BY_FEATURE ObjMgrProcLoadEx (OMPROC_FILTER, "Segregate By Feature","SegregateByFeature",0,0,0,0,NULL,CreateSegregateByFeatureWindow,PROC_PRIORITY_DEFAULT, "Segregate")
+
+#define REGISTER_SEGREGATE_BY_DESCRIPTOR ObjMgrProcLoadEx (OMPROC_FILTER, "Segregate By Descriptor","SegregateByDescriptor",0,0,0,0,NULL,CreateSegregateByDescriptorWindow,PROC_PRIORITY_DEFAULT, "Segregate")
+
+#define REGISTER_SEGREGATE_BY_MOLECULE_TYPE ObjMgrProcLoadEx (OMPROC_FILTER, "Segregate By Molecule Type","SegregateByMoleculeType",0,0,0,0,NULL,CreateSegregateByMoleculeTypeWindow,PROC_PRIORITY_DEFAULT, "Segregate")
+
+#define REGISTER_SEGREGATE_BY_ID ObjMgrProcLoadEx (OMPROC_FILTER, "Segregate By ID","SegregateByID",0,0,0,0,NULL,CreateSegregateByIdWindow,PROC_PRIORITY_DEFAULT, "Segregate")
+
+/* commands for Desktop SegmentedSets menu */
+#define REGISTER_CREATESEGSET ObjMgrProcLoadEx (OMPROC_FILTER,"Create Segmented Set", "CreateSegSet", 0,0,0,0,NULL,CreateSegSet, PROC_PRIORITY_DEFAULT, "SegmentedSets")
+#define REGISTER_UPDATESEGSET ObjMgrProcLoadEx (OMPROC_FILTER,"Update Segmented Set","UpdateSegSet",0,0,0,0,NULL,UpdateSegSet,PROC_PRIORITY_DEFAULT, "SegmentedSets")
+#define REGISTER_NEWUPDATESEGSET ObjMgrProcLoadEx (OMPROC_FILTER,"New Update Segmented Set","NewUpdateSegSet",0,0,0,0,NULL,NewUpdateSegSet,PROC_PRIORITY_DEFAULT, "SegmentedSets")
+#define REGISTER_ADJUSTMULTISEGSEQ ObjMgrProcLoadEx (OMPROC_FILTER,"Adjust SegSeq Length","AdjustSegLength",0,0,0,0,NULL,AdjustSegSeqLength,PROC_PRIORITY_DEFAULT, "SegmentedSets")
+#define REGISTER_UNDOSEGSET ObjMgrProcLoadEx (OMPROC_FILTER,"Undo Segmented Set","UndoSegSet",0,0,0,0,NULL,UndoSegSet,PROC_PRIORITY_DEFAULT, "SegmentedSets")
+#define REGISTER_SEGSETREMOVESETSINSET ObjMgrProcLoadEx (OMPROC_FILTER,"Remove Sets in Selected Set (Like Undo SegSet)","RemoveSetsInSelectedSet",0,0,0,0,NULL,RemoveSetsInSelectedSet,PROC_PRIORITY_DEFAULT, "SegmentedSets")
+
 
 typedef struct {
   CharPtr  oldStr;
@@ -1736,7 +1740,7 @@ static void SplitSegmentedFeatsOnOneSet (BioseqSetPtr set)
             crp->frame = new_frame;
  
             new_sfp->product = SeqLocFree (new_sfp->product);
-            SeqEdTranslateOneCDS (new_sfp, last_bsp, sfp->idx.entityID);
+            SeqEdTranslateOneCDS (new_sfp, last_bsp, sfp->idx.entityID, Sequin_GlobalAlign2Seq);
            
             SplitSegmentedProduct (BioseqFindFromSeqLoc (sfp->product),
                                    BioseqFindFromSeqLoc (new_sfp->product),
@@ -1766,7 +1770,7 @@ static void SplitSegmentedFeatsOnOneSet (BioseqSetPtr set)
         sfp->partial = TRUE;
         if (sfp->data.choice == SEQFEAT_CDREGION && sfp->product != NULL)
         {
-          SeqEdTranslateOneCDS (sfp, last_bsp, sfp->idx.entityID);
+          SeqEdTranslateOneCDS (sfp, last_bsp, sfp->idx.entityID, Sequin_GlobalAlign2Seq);
           
           ResynchCDSPartials (sfp, NULL);
         }
@@ -5814,7 +5818,7 @@ SetExplodedProtein
   }
   
   /* retranslate coding region */
-  SeqEdTranslateOneCDS (sfp, nucbsp, nucbsp->idx.entityID);
+  SeqEdTranslateOneCDS (sfp, nucbsp, nucbsp->idx.entityID, Sequin_GlobalAlign2Seq);
 }
 
 static Boolean ExplodeGroup (SeqEntryPtr sep, SeqFeatPtr sfp)
@@ -7588,61 +7592,6 @@ static void LIBCALLBACK LookForOrfs (
   }
 }
 
-static Boolean get_src (GatherContextPtr gcp)
-{
-	ValNodePtr	vnp, new;
-	ValNodePtr	PNTR vnpp;
-	
-	vnpp = gcp->userdata;
-	switch (gcp->thistype)
-	{
-		case OBJ_SEQDESC:
-			vnp = (ValNodePtr) (gcp->thisitem);
-			if (vnp->choice == Seq_descr_source) {
-				if (vnp->data.ptrvalue != NULL) {
-					new = SeqDescrNew(NULL);
-					new = MemCopy(new, vnp, sizeof(ValNode));
-					new->next = NULL;
-					*vnpp = new;
-					return FALSE;  /*only top level BioSource will be returned*/
-				}
-			} 
-			break;
-		default:
-			break;
-	}
-	return TRUE;
-}
-
-static Int2 GetGcodeFromBioseq(BioseqPtr bsp)
-{
-	GatherScope gs;
-	BioSourcePtr biop;
-	Int2 code = -1;
-	Uint2	entityID;
-	ValNodePtr vnp = NULL;	
-	   
-	entityID = ObjMgrGetEntityIDForPointer(bsp);
-  	MemSet ((Pointer) (&gs), 0, sizeof (GatherScope));
-  	gs.get_feats_location = TRUE;
-	MemSet ((Pointer) (gs.ignore), (int)(TRUE), (size_t) (OBJ_MAX * sizeof(Boolean)));
-	gs.ignore[OBJ_SEQDESC] = FALSE;
-	
-	GatherEntity(entityID, &vnp, get_src, &gs);
-	if (vnp == NULL) {
-		ErrPostStr(SEV_WARNING, 0, 0, "BioSource not found");
-		return code;
-	}
-	if (vnp) {
-		biop = vnp->data.ptrvalue;
-		code = BioSourceToGeneticCode(biop);
-		if (code == 0) {
-			code = 1;  /* try standard genetic code if it's not found */
-		}
-	}
-	return code;
-}
-
 static ValNodePtr ListOrfs (
   BioseqPtr bsp,
   Boolean altstart,
@@ -8870,20 +8819,67 @@ static Int2 LIBCALLBACK MapToNucFunc (Pointer data)
   }
 }
 
+
+NLM_EXTERN void RevCompOneFeatForBioseq (SeqFeatPtr sfp, BioseqPtr bsp)
+{
+  SeqIdPtr     sip;
+  SeqLocPtr    slp;
+  CodeBreakPtr cbp;
+  CdRegionPtr  crp;
+  RnaRefPtr    rrp;
+  tRNAPtr      trp;
+  Boolean      split;
+
+  if (sfp == NULL || bsp == NULL) return;
+
+  sip = SeqLocId (sfp->location);
+  if (sip != NULL) {
+    if (SeqIdIn (sip, bsp->id)) {
+      slp = SeqLocCopyRegion (sip, sfp->location, bsp, 0,
+                              bsp->length - 1, Seq_strand_minus, &split);
+      sfp->location = SeqLocFree (sfp->location);
+      sfp->location = slp;
+      switch (sfp->data.choice) {
+        case SEQFEAT_CDREGION :
+          crp = (CdRegionPtr) sfp->data.value.ptrvalue;
+          if (crp != NULL) {
+            for (cbp = crp->code_break; cbp != NULL; cbp = cbp->next) {
+              sip = SeqLocId (cbp->loc);
+              slp = SeqLocCopyRegion (sip, cbp->loc, bsp, 0,
+                                      bsp->length - 1, Seq_strand_minus, &split);
+              cbp->loc = SeqLocFree (cbp->loc);
+              cbp->loc = slp;
+            }
+          }
+          break;
+        case SEQFEAT_RNA :
+          rrp = (RnaRefPtr) sfp->data.value.ptrvalue;
+          if (rrp != NULL && rrp->ext.choice == 2) {
+            trp = (tRNAPtr) rrp->ext.value.ptrvalue;
+            if (trp != NULL && trp->anticodon != NULL) {
+              sip = SeqLocId (trp->anticodon);
+              slp = SeqLocCopyRegion (sip, trp->anticodon, bsp, 0,
+                                      bsp->length - 1, Seq_strand_minus, &split);
+              trp->anticodon = SeqLocFree (trp->anticodon);
+              trp->anticodon = slp;
+            }
+          }
+          break;
+        default :
+          break;
+      }
+    }
+  }
+}
+
+
 static void RevCompFeats (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent)
 
 {
   BioseqPtr     bsp;
   BioseqSetPtr  bssp;
-  CodeBreakPtr  cbp;
-  CdRegionPtr   crp;
-  RnaRefPtr     rrp;
   SeqAnnotPtr   sap;
   SeqFeatPtr    sfp;
-  SeqIdPtr      sip;
-  SeqLocPtr     slp;
-  Boolean       split;
-  tRNAPtr       trp;
 
   if (mydata == NULL) return;
   if (sep == NULL || sep->data.ptrvalue == NULL) return;
@@ -8901,44 +8897,7 @@ static void RevCompFeats (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 inde
     if (sap->type == 1) {
       sfp = (SeqFeatPtr) sap->data;
       while (sfp != NULL) {
-        sip = SeqLocId (sfp->location);
-        if (sip != NULL) {
-          if (SeqIdIn (sip, bsp->id)) {
-            slp = SeqLocCopyRegion (sip, sfp->location, bsp, 0,
-                                    bsp->length - 1, Seq_strand_minus, &split);
-            sfp->location = SeqLocFree (sfp->location);
-            sfp->location = slp;
-            switch (sfp->data.choice) {
-              case SEQFEAT_CDREGION :
-                crp = (CdRegionPtr) sfp->data.value.ptrvalue;
-                if (crp != NULL) {
-                  for (cbp = crp->code_break; cbp != NULL; cbp = cbp->next) {
-                    sip = SeqLocId (cbp->loc);
-                    slp = SeqLocCopyRegion (sip, cbp->loc, bsp, 0,
-                                            bsp->length - 1, Seq_strand_minus, &split);
-                    cbp->loc = SeqLocFree (cbp->loc);
-                    cbp->loc = slp;
-                  }
-                }
-                break;
-              case SEQFEAT_RNA :
-                rrp = (RnaRefPtr) sfp->data.value.ptrvalue;
-                if (rrp != NULL && rrp->ext.choice == 2) {
-                  trp = (tRNAPtr) rrp->ext.value.ptrvalue;
-                  if (trp != NULL && trp->anticodon != NULL) {
-                    sip = SeqLocId (trp->anticodon);
-                    slp = SeqLocCopyRegion (sip, trp->anticodon, bsp, 0,
-                                            bsp->length - 1, Seq_strand_minus, &split);
-                    trp->anticodon = SeqLocFree (trp->anticodon);
-                    trp->anticodon = slp;
-                  }
-                }
-                break;
-              default :
-                break;
-            }
-          }
-        }
+        RevCompOneFeatForBioseq (sfp, bsp);
         sfp = sfp->next;
       }
     }
@@ -9018,30 +8977,22 @@ extern void ReverseBioseqInAlignment (SeqAlignPtr salp, Pointer userdata)
 }
 
 
-static void ProcessMultipleBioseqFunctions (OMProcControlPtr ompcp, BioseqFunc func,
-                                            Boolean revCompFeats, Boolean check_for_aln)
+static void RevCompBioseqList (ValNodePtr bsp_list, Uint2 entityID, BioseqFunc func,
+                               Boolean revCompFeats, Boolean check_for_aln)
 
 {
-  BioseqPtr     bsp;
-  ValNodePtr    head;
-  SelStructPtr  sel;
   SeqEntryPtr   sep;
+  BioseqPtr     bsp;
   ValNodePtr    vnp, seq_in_aln = NULL, aln_bsp = NULL;
   Char          id_str[255];
   CharPtr       msg;
   MsgAnswer     ans;
 
-  if (ompcp == NULL || ompcp->input_entityID == 0 || func == NULL) return;
-  head = NULL;
-  for (sel = ObjMgrGetSelected (); sel != NULL; sel = sel->next) {
-    GatherItem (sel->entityID, sel->itemID, sel->itemtype,
-                (Pointer) &head, AddBspToVnp);
-  }
-  if (head == NULL) return;
+  if (bsp_list == NULL) return;
   
-  if (check_for_aln) {
+  if (func != NULL && check_for_aln) {
     /* check for alignments, warn about reversals, allow cancel */
-    for (vnp = head; vnp != NULL; vnp = vnp->next) {
+    for (vnp = bsp_list; vnp != NULL; vnp = vnp->next) {
       bsp = (BioseqPtr) vnp->data.ptrvalue;
       if (bsp != NULL && IsBioseqInAnyAlignment (bsp, bsp->idx.entityID)) {
         SeqIdWrite (SeqIdFindBest (bsp->id, SEQID_GENBANK), id_str, PRINTID_REPORT, sizeof (id_str) - 1);
@@ -9072,13 +9023,15 @@ static void ProcessMultipleBioseqFunctions (OMProcControlPtr ompcp, BioseqFunc f
     }
   }
   
-  sep = GetTopSeqEntryForEntityID (ompcp->input_entityID);
+  sep = GetTopSeqEntryForEntityID (entityID);
   
-  for (vnp = head; vnp != NULL; vnp = vnp->next) {
+  for (vnp = bsp_list; vnp != NULL; vnp = vnp->next) {
     bsp = (BioseqPtr) vnp->data.ptrvalue;
-    func (bsp);
-    if (check_for_aln) {
-      VisitAlignmentsInSep (sep, (Pointer) bsp, ReverseBioseqInAlignment);
+    if (func != NULL) {
+      func (bsp);
+      if (check_for_aln) {
+        VisitAlignmentsInSep (sep, (Pointer) bsp, ReverseBioseqInAlignment);
+      }
     }
     if (revCompFeats) {
       if (bsp->repr == Seq_repr_raw || bsp->repr == Seq_repr_const) {
@@ -9089,17 +9042,167 @@ static void ProcessMultipleBioseqFunctions (OMProcControlPtr ompcp, BioseqFunc f
       }
     }
   }
-  ValNodeFree (head);
   
   /* flip alignments if all sequences in alignment were flipped */
   if (aln_bsp != NULL) {
-    VisitAnnotsInSep (GetTopSeqEntryForEntityID (ompcp->input_entityID), aln_bsp, FlipEntireAlignmentIfAllSequencesFlipped);
+    VisitAnnotsInSep (GetTopSeqEntryForEntityID (entityID), aln_bsp, FlipEntireAlignmentIfAllSequencesFlipped);
     aln_bsp = ValNodeFree (aln_bsp);    
   }
   
-  ObjMgrSetDirtyFlag (ompcp->input_entityID, TRUE);
-  ObjMgrSendMsg (OM_MSG_UPDATE, ompcp->input_entityID, 0, 0);
+  ObjMgrSetDirtyFlag (entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, entityID, 0, 0);
 }
+
+static void ProcessMultipleBioseqFunctions (OMProcControlPtr ompcp, BioseqFunc func,
+                                            Boolean revCompFeats, Boolean check_for_aln)
+
+{
+  ValNodePtr    head;
+  SelStructPtr  sel;
+
+  if (ompcp == NULL || ompcp->input_entityID == 0 || func == NULL) return;
+  head = NULL;
+  for (sel = ObjMgrGetSelected (); sel != NULL; sel = sel->next) {
+    GatherItem (sel->entityID, sel->itemID, sel->itemtype,
+                (Pointer) &head, AddBspToVnp);
+  }
+  if (head == NULL) return;
+
+  RevCompBioseqList (head, ompcp->input_entityID, func, revCompFeats, check_for_aln);
+  head = ValNodeFree (head);
+}
+
+
+typedef struct collectbioseqwithconstraint 
+{
+  SequenceConstraintXPtr scp;
+  ValNodePtr            bsp_list;
+} CollectBioseqWithConstraintData, PNTR CollectBioseqWithConstraintPtr;
+
+static void CollectBioseqsWithConstraintCallback (BioseqPtr bsp, Pointer userdata)
+{
+  CollectBioseqWithConstraintPtr p;
+
+  if (bsp == NULL || userdata == NULL) return;
+
+  p = (CollectBioseqWithConstraintPtr) userdata;
+  if (DoesSequenceMatchSequenceConstraintX (bsp, p->scp))
+  {
+    ValNodeAddPointer (&p->bsp_list, OBJ_BIOSEQ, bsp);
+  }
+}
+
+static ValNodePtr CollectBioseqsWithConstraint (SeqEntryPtr sep, SequenceConstraintXPtr scp)
+{
+  CollectBioseqWithConstraintData p;
+
+  p.scp = scp;
+  p.bsp_list = NULL;
+
+  VisitBioseqsInSep (sep, &p, CollectBioseqsWithConstraintCallback);
+  return p.bsp_list;
+}
+
+
+typedef struct revcompbyidfrm {
+  FORM_MESSAGE_BLOCK
+  DialoG sequence_constraint;
+  ButtoN revcomp_seq;
+  ButtoN reverse_feats; 
+  ButtoN accept;
+} RevCompByIdFrmData, PNTR RevCompByIdFrmPtr;
+
+
+static void ChangeRevComp (ButtoN b)
+{
+  RevCompByIdFrmPtr f;
+
+  f = (RevCompByIdFrmPtr) GetObjectExtra (b);
+  if (f == NULL) return;
+
+  if (!GetStatus (f->revcomp_seq) && !GetStatus (f->reverse_feats))
+  {
+    Disable (f->accept);
+  }
+  else
+  {
+    Enable (f->accept);
+  }
+}
+
+
+static void DoRevComp (ButtoN b)
+{
+  RevCompByIdFrmPtr f;
+  SequenceConstraintXPtr scp;
+  ValNodePtr            bsp_list;
+  SeqEntryPtr           sep;
+
+  f = (RevCompByIdFrmPtr) GetObjectExtra (b);
+  if (f == NULL) return;
+
+  sep = GetTopSeqEntryForEntityID (f->input_entityID);
+  scp = DialogToPointer (f->sequence_constraint);
+  bsp_list = CollectBioseqsWithConstraint (sep, scp);
+  scp = SequenceConstraintXFree (scp);
+
+  if (bsp_list == NULL) 
+  {
+    Message (MSG_ERROR, "No sequences match constraint!");
+  }
+  else
+  {
+    RevCompBioseqList (bsp_list, f->input_entityID, 
+                       GetStatus (f->revcomp_seq) ? BioseqRevComp : NULL, 
+                       GetStatus (f->reverse_feats), GetStatus (f->revcomp_seq));
+    Remove (f->form);
+  }
+  bsp_list = ValNodeFree (bsp_list);
+}
+
+static Int2 LIBCALLBACK BioseqRevCompByID (Pointer data)
+
+{
+  OMProcControlPtr ompcp;
+  GrouP            c;
+  GrouP            h;
+  RevCompByIdFrmPtr f;
+  WindoW           w;
+
+  ompcp = (OMProcControlPtr) data;
+  if (ompcp == NULL) return OM_MSG_RET_ERROR;
+
+  f = (RevCompByIdFrmPtr) MemNew (sizeof (RevCompByIdFrmData));
+  if (f == NULL) return OM_MSG_RET_ERROR;
+  w = FixedWindow (-50, -33, -10, -10, "Reverse Complement", StdCloseWindowProc);
+  SetObjectExtra (w, f, StdCleanupFormProc);
+  f->form = (ForM) w;
+  f->formmessage = NULL;
+
+  f->input_entityID = ompcp->input_entityID;
+
+  h = HiddenGroup (w, -1, 0, NULL);
+  f->revcomp_seq = CheckBox (h, "Reverse complement sequence", ChangeRevComp);
+  SetStatus (f->revcomp_seq, TRUE);
+  f->reverse_feats = CheckBox (h, "Reverse features", ChangeRevComp);
+  SetStatus (f->reverse_feats, TRUE);
+
+  f->sequence_constraint = SequenceConstraintXDialog (h);
+
+  c = HiddenGroup (h, 2, 0, NULL);
+  f->accept = DefaultButton (c, "Accept", DoRevComp);
+  SetObjectExtra (f->accept, f, NULL);
+  PushButton (c, "Cancel", StdCancelButtonProc);
+  AlignObjects (ALIGN_CENTER, (HANDLE) f->sequence_constraint,
+                              (HANDLE) f->revcomp_seq,
+                              (HANDLE) f->reverse_feats,
+                              (HANDLE) c, NULL);
+  RealizeWindow (w);
+  Show (w);
+  Update ();
+  return OM_MSG_RET_DONE;
+}
+
 
 extern void ReverseComplementBioseqAndFeats (BioseqPtr bsp, Uint2 entityID)
 {
@@ -10738,6 +10841,7 @@ extern void SetupSequinFilters (void)
   REGISTER_BIOSEQ_REVERSE;
   REGISTER_BIOSEQ_REVCOMP_WITHFEAT;
   REGISTER_BIOSEQ_REVCOMP_NOTFEAT;
+  REGISTER_BIOSEQ_REVCOMP_BYID;
 
 #if defined(OS_UNIX) || defined(OS_MSWIN) 
   if (indexerVersion) {
@@ -10776,9 +10880,10 @@ extern void SetupSequinFilters (void)
     REGISTER_INTERVAL_COMBINE_AND_FUSE;
     REGISTER_INTERVAL_COMBINE;
     REGISTER_REPACKAGE_PARTS;
-    REGISTER_UNDOSEGSET;
     REGISTER_REMOVESET;
     REGISTER_REMOVESETSINSET;
+    REGISTER_UNDOSEGSET;
+    REGISTER_SEGSETREMOVESETSINSET;
     REGISTER_ADJUSTMULTISEGSEQ;
     REGISTER_UPDATESEGSET;
     REGISTER_NEWUPDATESEGSET;
@@ -10796,8 +10901,8 @@ extern void SetupSequinFilters (void)
     REGISTER_SEGREGATE_BY_MOLECULE_TYPE;
     REGISTER_SEGREGATE_BY_FEATURE;
     REGISTER_SEGREGATE_BY_DESCRIPTOR;
-    REGISTER_SEGREGATE_BY_FIELD;
     REGISTER_SEGREGATE_BY_TEXT;
+    REGISTER_SEGREGATE_BY_FIELD;
     REGISTER_FIND_NON_ACGT;
     REGISTER_BSP_INDEX;
     REGISTER_POPSET_WITHIN_GENBANK;
@@ -10819,57 +10924,6 @@ extern void SetupSequinFilters (void)
   REGISTER_GROUP_MATRIX;
   REGISTER_GROUP_MOLWT;
   
-}
-
-extern CharPtr MergeValNodeStrings (ValNodePtr list, Boolean useReturn)
-
-{
-  size_t      len;
-  CharPtr     ptr;
-  CharPtr     str;
-  CharPtr     tmp;
-  ValNodePtr  vnp;
-
-
-  ptr = NULL;
-  if (list != NULL) {
-    vnp = list;
-    len = 0;
-    while (vnp != NULL) {
-      if (vnp->data.ptrvalue != NULL) {
-        len += StringLen ((CharPtr) vnp->data.ptrvalue) + 1;
-      }
-      vnp = vnp->next;
-    }
-    if (len > 0) {
-      ptr = MemNew (sizeof (Char) * (len + 2));
-      if (ptr != NULL) {
-        vnp = list;
-        tmp = NULL;
-        while (vnp != NULL) {
-          str = (CharPtr) vnp->data.ptrvalue;
-          if (str != NULL) {
-            if (tmp == NULL) {
-              tmp = ptr;
-            } else if (useReturn) {
-              tmp = StringMove (tmp, "\n");
-            } else if (IsJapanese () && (tmp - ptr > 2) &&
-            		IsMBLetter (tmp - 2) && IsMBLetter (str)) {
-              /* no space required between two Japanese letters. */
-              tmp = tmp;
-            } else if (str [0] != ',' && str [0] != ';' && str [0] != ':') {
-              tmp = StringMove (tmp, " ");
-            } else {
-              tmp = StringMove (tmp, " ");
-            }
-            tmp = StringMove (tmp, str);
-          }
-          vnp = vnp->next;
-        }
-      }
-    }
-  }
-  return ptr;
 }
 
 
@@ -11869,33 +11923,14 @@ extern void ConsolidateOrganismNotes (IteM i)
 }
 
 
-static void CountryLookupProc (BioSourcePtr biop, Pointer userdata)
-{
-  CharPtr PNTR  list;
-  SubSourcePtr  ssp;
-  CharPtr       new_country;
-
-  if (biop == NULL || (list = (CharPtr PNTR)userdata) == NULL)
-  {
-  	return;
-  }
-
-  for (ssp = biop->subtype; ssp != NULL; ssp = ssp->next) 
-  {
-  	if (ssp->subtype == SUBSRC_country && !StringHasNoText (ssp->name))
-    {
-      new_country = GetCountryFix (ssp->name, list);
-      if (new_country != NULL)
-      {
-        ssp->name = MemFree (ssp->name);
-        ssp->name = new_country;
-      }
-    }
-  }
-}
+typedef struct countryfixup {
+  CharPtr PNTR country_list;
+  ValNodePtr warning_list;
+  Boolean capitalize_after_colon;
+} CountryFixupData, PNTR CountryFixupPtr;
 
 
-static void CapitalizeFirstLetterOfEveryWord (CharPtr pString)
+extern void CapitalizeFirstLetterOfEveryWord (CharPtr pString)
 {
   CharPtr pCh;
 
@@ -11929,39 +11964,110 @@ static void CapitalizeFirstLetterOfEveryWord (CharPtr pString)
 }
 
 
-static void CountryCapitalizationFixup (BioSourcePtr biop, Pointer userdata)
+static void CountryFixupItem (Uint1 choice, Pointer data, CountryFixupPtr c)
 {
-  SubSourcePtr  ssp;
-  CharPtr       cp;
+  BioSourcePtr biop;
+  SubSourcePtr ssp;
+  CharPtr      new_country;
+  CharPtr      cp;
 
-  if (biop == NULL)
-  {
-  	return;
-  }
+  if (data == NULL || c == NULL) return;
+
+  biop = GetBioSourceFromObject (choice, data);
+  if (biop == NULL) return;
 
   for (ssp = biop->subtype; ssp != NULL; ssp = ssp->next) 
   {
-  	if (ssp->subtype != SUBSRC_country || ssp->name == NULL) continue;
-    cp = StringChr (ssp->name, ':');
-  	if (cp != NULL)
-  	{
-  	  /* skip colon */
-  	  cp++;
-  	  /* skip over space after colon */
-  	  cp += StringSpn (cp, " \t");
- 	  
-  	  /* reset capitalization */
-  	  CapitalizeFirstLetterOfEveryWord (cp);
-  	}
-  }  
-
+  	if (ssp->subtype == SUBSRC_country && !StringHasNoText (ssp->name))
+    {
+      new_country = GetCountryFix (ssp->name, c->country_list);
+      if (new_country == NULL) {
+        ValNodeAddPointer (&c->warning_list, choice, data);
+      } else {
+        if (c->capitalize_after_colon) {
+          cp = StringChr (new_country, ':');
+  	      if (cp != NULL)
+  	      {
+  	        /* skip colon */
+  	        cp++;
+  	        /* skip over space after colon */
+  	        cp += StringSpn (cp, " \t");
+       	  
+  	        /* reset capitalization */
+  	        CapitalizeFirstLetterOfEveryWord (cp);
+          }
+        }
+        ssp->name = MemFree (ssp->name);
+        ssp->name = new_country;
+      }
+    }
+  }
 }
+
+
+static void CountryFixupDesc (SeqDescrPtr sdp, Pointer userdata)
+{
+  if (sdp != NULL && userdata != NULL && sdp->choice == Seq_descr_source) {
+    CountryFixupItem (OBJ_SEQDESC, sdp, (CountryFixupPtr) userdata);
+  }
+}
+
+
+static void CountryFixupFeat (SeqFeatPtr sfp, Pointer userdata)
+{
+  if (sfp != NULL && userdata != NULL && sfp->data.choice == SEQFEAT_BIOSRC) {
+    CountryFixupItem (OBJ_SEQFEAT, sfp, (CountryFixupPtr) userdata);
+  }
+}
+
+
+static Pointer GetCountry (Uint1 data_choice, Pointer data, Pointer metadata)
+{
+  ValNode vn;
+
+  vn.choice = SourceQualChoice_textqual;
+  vn.data.intvalue = Source_qual_country;
+  vn.next = NULL;
+  return GetSourceQualFromBioSource (GetBioSourceFromObject (data_choice, data), &vn, NULL);
+}
+
+
+static Pointer GetAccession (Uint1 data_choice, Pointer data, Pointer metadata)
+{
+  ValNode vn;
+
+  vn.choice = data_choice;
+  vn.data.ptrvalue = data;
+  vn.next = NULL;
+  return GetParentLabelForDiscrepancyItem (&vn);
+}
+
+static void BulkSetCountry (Pointer target, Pointer data)
+{
+  ValNode    vn;
+  SeqDescrPtr sdp = (SeqDescrPtr) target;
+
+  if (sdp == NULL || sdp->choice != Seq_descr_source) return;
+
+  vn.choice = SourceQualChoice_textqual;
+  vn.data.intvalue = Source_qual_country;
+  vn.next = NULL;
+
+  SetSourceQualInBioSource (sdp->data.ptrvalue, &vn, NULL, (CharPtr) data, ExistingTextOption_replace_old);
+}
+
+
+static BulkEdFieldData country_fields[] = {
+  { "Country", BulkSetCountry, BulkSetSimpleTextString, GetCountry, BulkDisplaySimpleText, BulkFreeSimpleText, BulkSimpleTextDialog, BulkFormatSimpleText, NULL, NULL, BulkSimpleTextCopy },
+  { "Accession", NULL, NULL, GetAccession, BulkDisplaySimpleText, BulkFreeSimpleText, NULL, BulkFormatSimpleText, NULL, NULL, BulkSimpleTextCopy },
+  { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL}};
+
 
 static void CountryLookup (IteM i, Boolean with_cap_fix)
 {
   BaseFormPtr  bfp;
   SeqEntryPtr  sep;
-  CharPtr PNTR list;
+  CountryFixupData c;
 
 
 #ifdef WIN_MAC
@@ -11973,13 +12079,16 @@ static void CountryLookup (IteM i, Boolean with_cap_fix)
   sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
   if (sep == NULL) return;
   
-  list = GetValidCountryList ();
-  if (list == NULL) return;
-  VisitBioSourcesInSep (sep, list, CountryLookupProc);
-  if (with_cap_fix)
-  {
-    VisitBioSourcesInSep (sep, NULL, CountryCapitalizationFixup);
+  c.country_list = GetValidCountryList ();
+  if (c.country_list == NULL) return;
+  c.capitalize_after_colon = with_cap_fix;
+  c.warning_list = NULL;
+  VisitDescriptorsInSep (sep, &c, CountryFixupDesc);
+  VisitFeaturesInSep (sep, &c, CountryFixupFeat);
+  if (c.warning_list != NULL) {
+    BulkEditorObjectList (bfp->input_entityID, "Country Modifiers That Could Not Be Autocorrected", c.warning_list, country_fields);
   }
+
   ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
   ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
 }

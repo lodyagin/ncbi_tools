@@ -1,5 +1,5 @@
 #ifndef SKIP_DOXYGEN_PROCESSING
-static char const rcsid[] = "$Id: blast_input.c,v 1.30 2007/05/07 13:27:15 kans Exp $";
+static char const rcsid[] = "$Id: blast_input.c,v 1.31 2008/01/10 15:43:35 madden Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 /* ===========================================================================
 *
@@ -117,10 +117,17 @@ BLAST_GetQuerySeqLoc(FILE *infp, Boolean query_is_na, Uint1 strand,
       }
 
       if (query_bsp == NULL) {
-         ErrPostEx(SEV_FATAL, 0, 0, "Unable to obtain bioseq\n");
+         ErrPostEx(SEV_FATAL, 0, 0, "Unable to obtain bioseq for sequence number %ld", (long) query_count-1);
          *ctr += query_index;
          return -1;
       }
+
+      if (query_bsp->length <= 0) {
+         ErrPostEx(SEV_FATAL, 0, 0, "Sequence number %ld had length %ld", (long) query_count-1, (long) query_bsp->length);
+         *ctr += query_index;
+         return -1;
+      }
+
 
       
       /* Original from and to are 1-offsets, except when they are 0's,

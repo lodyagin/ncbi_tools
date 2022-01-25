@@ -62,16 +62,16 @@ that has a .tbl suffix, and then generate a .sqn file.
 The -t command-line argument specifies the template file.
 
 Normally a single FASTA sequence per .fsa file is expected.  If there are
-multiple sequences, only the first is processed, unless one of two other
-flags is given.  These are discussed below.
+multiple sequences, only the first is processed, unless one of two -a flag
+variants are given.  These are discussed below.
 
-The -s flag tells tbl2asn to package the multiple FASTA components as a set
+The -a s flag tells tbl2asn to package the multiple FASTA components as a set
 of unrelated sequences.  This accommodates users who create a single file
-instead of one file per sequence. A single FASTA component can now have gap
+instead of one file per sequence.  A single FASTA component can now have gap
 indications (e.g., >?unk100) on a separate line as long as it is followed
 immediately by more sequence lines, with no > and a mock identifier.
 
-The -d flag tells the program to make a delta sequence out of the multiple
+The -a d flag tells the program to make a delta sequence out of the multiple
 components.  This can be used for HTGS submissions where the sequence of
 the BAC/PAC clone has not been completely determined.  By convention, gaps
 of 100 base pairs should be inserted in between the actual sequence
@@ -89,20 +89,21 @@ transcripts, and all proteins will be entered into the database and given
 accessions.  Note, however, that -g cannot be used for records submitted to
 GenBank.  It is only suitable for records going into RefSeq.
 
-If a feature table is not given, the -c flag tells tbl2asn to annotate the
-longest Open Reading Frame (ORF) on each record.  The -m flag allows
+If a feature table is not given, the -k c flag tells tbl2asn to annotate the
+longest Open Reading Frame (ORF) on each record.  The -k m flag allows
 alternative start codons to be used when finding the ORF.  The protein will
 be named 'unknown' unless the name is present in the .fsa file definition
-line, e.g., [protein=helicase].
+line, e.g., [protein=helicase].  The two flags can be combined as -k cm.
 
-Data records will be validated when the -v flag is indicated.  Output is
+Data records will be validated when the -V v flag is indicated.  Output is
 saved to files with a .val suffix.  The validator checks for many things,
 including internal stops in CDS features and mismatches between the CDS
 translation and the supplied protein sequence.  Errors need to be corrected
 before submitting files to GenBank.
 
-GenBank format output is generated when the -b flag is used.  Resulting
-files have a .gbf suffix.
+GenBank format output is generated when the -V b flag is used.  Resulting
+files have a .gbf suffix.  The validation and flatfile generation flags can
+be combined as -V vb.
 
 
 NUCLEOTIDE SEQUENCE FORMAT

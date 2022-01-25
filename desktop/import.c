@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/18/95
 *
-* $Revision: 6.63 $
+* $Revision: 6.68 $
 *
 * File Description: 
 *
@@ -240,8 +240,6 @@ static void CleanupImportPage (GraphiC g, VoidPtr data)
   MemFree (data);
 }
 
-extern void CleanupEvidenceGBQuals (GBQualPtr PNTR prevgbq);
-extern void VisStringDialogToGbquals (SeqFeatPtr sfp, DialoG d, CharPtr qual);
 
 static void ChangeKey (Handle obj)
 
@@ -2013,21 +2011,23 @@ typedef struct molinfoform {
 } MolInfoForm, PNTR MolInfoFormPtr;
 
 static ENUM_ALIST(molinfo_biomol_alist)
-  {" ",                      0},
-  {"Genomic DNA or RNA",     1},
-  {"Precursor RNA",          2},
-  {"mRNA [cDNA]",            3},
-  {"Ribosomal RNA",          4},
-  {"Transfer RNA",           5},
-  {"Small nuclear RNA",      6},
-  {"Small cytoplasmic RNA",  7},
-  {"Peptide",                8},
-  {"Other-Genetic",          9},
-  {"Genomic-mRNA",          10},
-  {"cRNA",                  11},
-  {"Small nucleolar RNA",   12},
-  {"Transcribed RNA",       13},
-  {"Other",                255},
+  {" ",                       0},
+  {"Genomic DNA or RNA",      1},
+  {"Precursor RNA",           2},
+  {"mRNA [cDNA]",             3},
+  {"Ribosomal RNA",           4},
+  {"Transfer RNA",            5},
+  {"Small nuclear RNA",       6},
+  {"Small cytoplasmic RNA",   7},
+  {"Peptide",                 8},
+  {"Other-Genetic",           9},
+  {"Genomic-mRNA",           10},
+  {"cRNA",                   11},
+  {"Small nucleolar RNA",    12},
+  {"Transcribed RNA",        13},
+  {"Non-coding  RNA",        14},
+  {"Transfer-messenger RNA", 15},
+  {"Other",                 255},
 END_ENUM_ALIST
 
 extern CharPtr GetMoleculeTypeName (Uint1 mol_val)
@@ -2043,38 +2043,42 @@ extern CharPtr GetMoleculeTypeName (Uint1 mol_val)
 
 
 static ENUM_ALIST(molinfo_biomol_nuc_alist)
-  {" ",                      0},
-  {"Genomic DNA or RNA",     1},
-  {"Precursor RNA",          2},
-  {"mRNA [cDNA]",            3},
-  {"Ribosomal RNA",          4},
-  {"Transfer RNA",           5},
-  {"Small nuclear RNA",      6},
-  {"Small cytoplasmic RNA",  7},
-  {"Other-Genetic",          9},
-  {"Genomic-mRNA",          10},
-  {"cRNA",                  11},
-  {"Small nucleolar RNA",   12},
-  {"Transcribed RNA",       13},
-  {"Other",                255},
+  {" ",                       0},
+  {"Genomic DNA or RNA",      1},
+  {"Precursor RNA",           2},
+  {"mRNA [cDNA]",             3},
+  {"Ribosomal RNA",           4},
+  {"Transfer RNA",            5},
+  {"Small nuclear RNA",       6},
+  {"Small cytoplasmic RNA",   7},
+  {"Other-Genetic",           9},
+  {"Genomic-mRNA",           10},
+  {"cRNA",                   11},
+  {"Small nucleolar RNA",    12},
+  {"Transcribed RNA",        13},
+  {"Non-coding  RNA",        14},
+  {"Transfer-messenger RNA", 15},
+  {"Other",                 255},
 END_ENUM_ALIST
 
 static ENUM_ALIST(molinfo_biomol_nucX_alist)
-  {" ",                      0},
-  {"Genomic DNA",          253},
-  {"Genomic RNA",          254},
-  {"Precursor RNA",          2},
-  {"mRNA [cDNA]",            3},
-  {"Ribosomal RNA",          4},
-  {"Transfer RNA",           5},
-  {"Small nuclear RNA",      6},
-  {"Small cytoplasmic RNA",  7},
-  {"Other-Genetic",          9},
-  {"Genomic-mRNA",          10},
-  {"cRNA",                  11},
-  {"Small nucleolar RNA",   12},
-  {"Transcribed RNA",       13},
-  {"Other",                255},
+  {" ",                       0},
+  {"Genomic DNA",           253},
+  {"Genomic RNA",           254},
+  {"Precursor RNA",           2},
+  {"mRNA [cDNA]",             3},
+  {"Ribosomal RNA",           4},
+  {"Transfer RNA",            5},
+  {"Small nuclear RNA",       6},
+  {"Small cytoplasmic RNA",   7},
+  {"Other-Genetic",           9},
+  {"Genomic-mRNA",           10},
+  {"cRNA",                   11},
+  {"Small nucleolar RNA",    12},
+  {"Transcribed RNA",        13},
+  {"Non-coding  RNA",        14},
+  {"Transfer-messenger RNA", 15},
+  {"Other",                 255},
 END_ENUM_ALIST
 
 static ENUM_ALIST(molinfo_biomol_prot_alist)
@@ -2107,6 +2111,7 @@ static ENUM_ALIST(molinfo_tech_alist)
   {"WGS",                20},
   {"Barcode",            21},
   {"Composite-WGS-HTGS", 22},
+  {"TSA",                23},
   {"Other:",            255},
 END_ENUM_ALIST
 
@@ -2128,6 +2133,7 @@ static ENUM_ALIST(molinfo_tech_nuc_alist)
   {"WGS",                20},
   {"Barcode",            21},
   {"Composite-WGS-HTGS", 22},
+  {"TSA",                23},
   {"Other:",            255},
 END_ENUM_ALIST
 
@@ -2181,14 +2187,14 @@ END_ENUM_ALIST
 static Uint1 check_biomol (Uint1 biomol)
 
 {
-  if (biomol > 13 && biomol < 253) return 0;
+  if (biomol > MOLECULE_TYPE_TMRNA && biomol < 253) return 0;
   return biomol;
 }
 
 static Uint1 check_technique (Uint1 tech)
 
 {
-  if (tech > MI_TECH_composite_wgs_htgs && tech != MI_TECH_other) return 0;
+  if (tech > MI_TECH_tsa && tech != MI_TECH_other) return 0;
   return tech;
 }
 
@@ -3496,11 +3502,19 @@ static Pointer VisStrPageToCharPtr (DialoG d)
 {
   CharPtr        title;
   VisStrPagePtr  vpp;
+  ValNodePtr     find_list = NULL;
 
   title = NULL;
   vpp = (VisStrPagePtr) GetObjectExtra (d);
   if (vpp != NULL) {
-    title = SaveStringFromTextAndStripNewlines (vpp->title);
+    title = SaveStringFromText (vpp->title);
+    title = StripNewlines (title);
+    SpecialCharFindWithContext (&title, &find_list, NULL, NULL);
+    FixSpecialCharactersForStringsInList (find_list, "Special characters are not permitted.", TRUE);      
+    if (find_list != NULL) {
+      PointerToDialog (d, title);
+      find_list = FreeContextList (find_list);
+    }
   }
   return (Pointer) title;
 }

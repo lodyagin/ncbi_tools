@@ -41,52 +41,6 @@
 * ==========================================================================
 *
 *
-* RCS Modification History:
-* -------------------------
-* $Log: findrepl.h,v $
-* Revision 6.6  2006/07/13 18:17:17  bollin
-* use Uint4 instead of Uint2 for itemID values
-*
-* Revision 6.5  2006/01/04 20:39:41  kans
-* added FindStringsInEntity using finite state machine, general cleanup of code
-*
-* Revision 6.4  2005/12/29 20:54:41  kans
-* FindReplaceInEntity takes callback and userdata
-*
-* Revision 6.3  2003/07/31 20:54:54  kans
-* FindReplaceString does not need do_replace argument
-*
-* Revision 6.2  2003/07/31 18:18:03  kans
-* added FindReplaceString
-*
-* Revision 6.1  2000/11/03 20:36:00  kans
-* FindReplaceInEntity replaces FindInEntity and FindInEntityX - complete redesign, no longer using AsnExpOptExplore because of the difficulty of replacing with a larger string (TF + JK)
-*
-* Revision 6.0  1997/08/25 18:05:40  madden
-* Revision changed to 6.0
-*
-* Revision 5.3  1997/06/19 18:37:43  vakatov
-* [WIN32,MSVC++]  Adopted for the "NCBIOBJ.LIB" DLL'ization
-*
-* Revision 5.2  1997/03/17 23:44:39  kans
-* added whole_word parameter to FindInEntity and FindInEntityX
-*
- * Revision 5.1  1996/09/06  20:20:41  kans
- * keeps going even if ObjMgrTypeFind returns NULL (e.g., on OBJ_BIOSEQ_SEG),
- * and adds a case_counts parameter for case sensitive/insensitive searches.
- *
- * Revision 5.0  1996/05/28  13:23:23  ostell
- * Set to revision 5.0
- *
- * Revision 1.3  1996/01/03  23:06:32  ostell
- * support for longer replaces, controlled updating
- *
- * Revision 1.1  1995/12/31  18:13:14  kans
- * Initial revision
- *
-* Revision 1.1.1.1  1995/10/19 18:42:10  sad
-* Initial version
-*
 */
 
 #ifndef __FINDREPL_H__
@@ -113,6 +67,38 @@ extern "C" {
 #define UPDATE_ONCE  2  /* send once for whole entityID, if any replacements occur */
 
 typedef void (*FindReplProc) (Uint2 entityID, Uint4 itemID, Uint2 itemtype, Pointer userdata);
+
+typedef void (*StringActionFunc) (CharPtr PNTR strp, Pointer userdata, BoolPtr did_find, BoolPtr did_change);
+/* EXTERNAL FIND-REPLACE FUNCTIONS */
+NLM_EXTERN void StringActionInEntity (
+  Uint2 entityID,
+  Boolean select_item,
+  Int2 send_update,
+  BoolPtr descFilter,
+  BoolPtr featFilter,
+  BoolPtr seqidFilter,
+  Boolean do_seqid_local,
+  StringActionFunc action_func,
+  FindReplProc callback,
+  Pointer userdata
+);
+
+NLM_EXTERN void StringActionForObject (
+  Uint2   datatype,
+  Pointer objdata,
+  Uint2 entityID,
+  Boolean select_item,
+  Int2 send_update,
+  StringActionFunc action_func,
+  FindReplProc callback,
+  Pointer userdata
+);
+
+NLM_EXTERN void SpecialCharReplace (CharPtr PNTR strp, Pointer userdata, BoolPtr did_find, BoolPtr did_change);
+NLM_EXTERN void SpecialCharFind (CharPtr PNTR strp, Pointer userdata, BoolPtr did_find, BoolPtr did_change);
+NLM_EXTERN CharPtr GetSpecialCharacterReplacement (unsigned char ch);
+NLM_EXTERN CharPtr GetSpecialWinCharacterReplacement (unsigned char ch);
+NLM_EXTERN CharPtr GetSpecialMacCharacterReplacement (unsigned char ch);
 
 NLM_EXTERN void FindReplaceInEntity (
   Uint2 entityID,
@@ -153,6 +139,9 @@ NLM_EXTERN void FindStringsInEntity (
   FindReplProc callback,
   Pointer userdata
 );
+
+
+extern void RemoveTaxRef (OrgRefPtr orp);
 
 
 #ifdef __cplusplus

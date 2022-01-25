@@ -3,7 +3,7 @@
 	ProjectType="Visual C++"
 	Version="8.00"
 	Name="demo_gbseqget"
-	ProjectGUID="{F2092248-A59C-4CC3-8571-F6F6809919A5}"
+	ProjectGUID="{D92CDEC8-1E56-4F1C-8563-04037BCCB9BD}"
 	>
 	<Platforms>
 		<Platform

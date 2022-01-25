@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11/3/04
 *
-* $Revision: 1.55 $
+* $Revision: 1.56 $
 *
 * File Description:
 *
@@ -60,7 +60,7 @@
 #include <accpubseq.h>
 #endif
 
-#define ASNVAL_APP_VER "4.7"
+#define ASNVAL_APP_VER "4.8"
 
 CharPtr ASNVAL_APPLICATION = ASNVAL_APP_VER;
 

@@ -1,6 +1,6 @@
 #	makefile for flat2asn
 #
-#	$Id: makeindx.unx,v 6.5 2002/06/17 14:27:20 ivanov Exp $
+#	$Id: makeindx.unx,v 6.6 2008/01/25 19:56:25 ucko Exp $
 #
 #	Sun with unbundled ANSI compiler [ make LCL=acc RAN=ranlib CC=acc ]
 #	Sun with Gnu C [ make LCL=gcc RAN=ranlib CC=gcc ]
@@ -61,6 +61,8 @@ SRC_P = add.c asci_blk.c citation.c flat2asn.c flatargs.c \
 		nucprot.c ref.c sp_global.c sp_ref.c sp_ascii.c\
 		taxcash.c utilfeat.c utilref.c 
 
+SRC_ALL = $(SRC_I) $(SRC_P)
+
 # objects needed for indexing and parsing
 
 OBJ_I = indx_blk.o block.o entry.o gb_index.o em_index.o \
@@ -77,7 +79,7 @@ all : copy .WAIT nocopy flat2asn
 
 nocopy : sources $(LIBPARSE)
 
-sources : $(SRC_I) $(SRC_P)
+sources : $(SRC_ALL)
 
 ## To clean out the directory without removing make
 ##
@@ -95,6 +97,8 @@ clean :
 
 ## get all the source files
 ##
+
+$(SRC_ALL) : copy
 
 copy :
 	- chmod -R ug+rw,o+r .

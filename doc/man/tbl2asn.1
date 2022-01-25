@@ -1,4 +1,4 @@
-.TH TBL2ASN 1 2006-05-29 NCBI "NCBI Tools User's Manual"
+.TH TBL2ASN 1 2007-10-19 NCBI "NCBI Tools User's Manual"
 .SH NAME
 tbl2asn \- prepare a GenBank submission using an ASCII feature table
 .SH SYNOPSIS
@@ -6,18 +6,22 @@ tbl2asn \- prepare a GenBank submission using an ASCII feature table
 [\|\fB\-\fP\|]
 [\|\fB\-B\fP\ \fIstr\fP\|]
 [\|\fB\-C\fP\ \fIstr\fP\|]
+[\|\fB\-D\fP\ \fIfilename\fP\|]
 [\|\fB\-E\fP\ \fIstr\fP\|]
-[\|\fB\-F\fP\|]
+[\|\fB\-F\fP\ \fIstr\fP|]
 [\|\fB\-G\fP\ \fIstr\fP\|]
 [\|\fB\-H\fP\|]
+[\|\fB\-K\fP\|]
 [\|\fB\-L\fP\|]
 [\|\fB\-M\fP\ \fIstr\fP\|]
+[\|\fB\-O\fP\|]
 [\|\fB\-P\fP\|]
 [\|\fB\-Q\fP\|]
 [\|\fB\-R\fP\|]
 [\|\fB\-S\fP\|]
 [\|\fB\-T\fP\|]
 [\|\fB\-U\fP\|]
+[\|\fB\-W\fP\|]
 [\|\fB\-X\fP\ \fIstr\fP\|]
 [\|\fB\-Y\fP\ \fIfilename\fP\|]
 [\|\fB\-a\fP\ \fIstr\fP\|]
@@ -25,6 +29,7 @@ tbl2asn \- prepare a GenBank submission using an ASCII feature table
 [\|\fB\-c\fP\|]
 [\|\fB\-d\fP\|]
 [\|\fB\-e\fP\|]
+[\|\fB\-f\fP\ \fIfilename\fP\|]
 [\|\fB\-g\fP\|]
 [\|\fB\-h\fP\|]
 [\|\fB\-i\fP\ \fIfilename\fP\|]
@@ -64,11 +69,14 @@ Alignment Beginning gap characters
 \fB\-C\fP\ \fIstr\fP
 Genome Center tag
 .TP
+\fB\-D\fP\ \fIfilename\fP
+Descriptors file
+.TP
 \fB\-E\fP\ \fIstr\fP
 Alignment End gap characters
 .TP
 \fB\-F\fP
-Feature ID links
+Feature ID links (\fBo\fP by Overlap, \fBp\fP by Product)
 .TP
 \fB\-G\fP\ \fIstr\fP
 Alignment middle Gap characters
@@ -76,11 +84,17 @@ Alignment middle Gap characters
 \fB\-H\fP
 Implicit gaps
 .TP
+\fB\-K\fP
+Safe Bioseq-set
+.TP
 \fB\-L\fP
 Force Local protein_id/transcript_id
 .TP
 \fB\-M\fP\ \fIstr\fP
 Alignment Match characters
+.TP
+\fB\-O\fP
+Allow run-on ORFs
 .TP
 \fB\-P\fP
 Alignment is Proteins
@@ -99,6 +113,9 @@ Remote Taxonomy lookup
 .TP
 \fB\-U\fP
 Remove Unnecessary gene xref
+.TP
+\fB\-W\fP
+Log progress
 .TP
 \fB\-X\fP\ \fIstr\fP
 Alignment missing characters
@@ -120,6 +137,9 @@ Read FASTAs as Delta
 .TP
 \fB\-e\fP
 Read PHRAP/ACE format
+.TP
+\fB\-f\fP\ \fIfilename\fP
+Single table file
 .TP
 \fB\-g\fP
 Input is a genomic product set

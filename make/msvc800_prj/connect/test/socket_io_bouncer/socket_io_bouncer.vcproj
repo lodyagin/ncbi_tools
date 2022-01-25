@@ -3,7 +3,7 @@
 	ProjectType="Visual C++"
 	Version="8.00"
 	Name="socket_io_bouncer"
-	ProjectGUID="{1F10C6E1-3C88-4C78-9C18-05AC31B2421F}"
+	ProjectGUID="{BC50422E-D841-4EDF-B987-5135EC4D8F11}"
 	>
 	<Platforms>
 		<Platform

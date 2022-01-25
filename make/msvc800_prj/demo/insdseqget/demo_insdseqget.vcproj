@@ -3,7 +3,7 @@
 	ProjectType="Visual C++"
 	Version="8.00"
 	Name="demo_insdseqget"
-	ProjectGUID="{D3399079-037C-4873-AB41-8535E0F5124E}"
+	ProjectGUID="{DF2DCFDD-1AFC-418A-80AC-EA2624BB534A}"
 	>
 	<Platforms>
 		<Platform

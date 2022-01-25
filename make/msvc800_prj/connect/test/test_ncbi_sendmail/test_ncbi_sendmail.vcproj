@@ -3,7 +3,7 @@
 	ProjectType="Visual C++"
 	Version="8.00"
 	Name="test_ncbi_sendmail"
-	ProjectGUID="{AA4B7095-5FBB-41E5-AE2A-39247638EC14}"
+	ProjectGUID="{E459338E-39A8-49C9-9DFC-612E47863CE3}"
 	>
 	<Platforms>
 		<Platform

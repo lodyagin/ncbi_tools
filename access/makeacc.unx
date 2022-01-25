@@ -27,3 +27,5 @@ asntool -m mla2.asn -o asnmla2.h
 mv asnmla2.h ../asnstat/
 asntool -m mla2.asn -M ../asn/pub.asn,../asn/biblio.asn,../asn/medline.asn,../asn/medlars.asn,../asn/pubmed.asn -G -B objmla2 -I mlkludge.h -K asnmla2.h -Z
 
+asntool -m seqtable.asn -M ../asn/seqloc.asn -G -B objtable -K asntable.h -Z
+

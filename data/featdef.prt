@@ -121,7 +121,7 @@ FeatDefGroupSet ::= {
     menulabel "Small Nuclear RNA" ,
     featdef-key 9 ,
     seqfeat-key 5 ,
-    entrygroup 3 ,
+    entrygroup 0 ,
     displaygroup 3 ,
     molgroup na
   } ,
@@ -130,7 +130,7 @@ FeatDefGroupSet ::= {
     menulabel "Small Cytoplasmic RNA" ,
     featdef-key 10 ,
     seqfeat-key 5 ,
-    entrygroup 3 ,
+    entrygroup 0 ,
     displaygroup 3 ,
     molgroup na
   } ,
@@ -850,7 +850,7 @@ FeatDefGroupSet ::= {
     menulabel "Small Nucleolar RNA" ,
     featdef-key 90 ,
     seqfeat-key 5 ,
-    entrygroup 3 ,
+    entrygroup 0 ,
     displaygroup 3 ,
     molgroup na
   } ,
@@ -879,6 +879,24 @@ FeatDefGroupSet ::= {
     seqfeat-key 8 ,
     entrygroup 5 ,
     displaygroup 5 ,
+    molgroup na
+  } ,
+  {                   -- ncRNA
+    typelabel "ncRNA" ,
+    menulabel "Non-coding RNA" ,
+    featdef-key 94 ,
+    seqfeat-key 5 ,
+    entrygroup 3 ,
+    displaygroup 3 ,
+    molgroup na
+  } ,
+  {                   -- tmRNA
+    typelabel "tmRNA" ,
+    menulabel "Transfer-messenger RNA" ,
+    featdef-key 95 ,
+    seqfeat-key 5 ,
+    entrygroup 3 ,
+    displaygroup 3 ,
     molgroup na
   } ,
 

@@ -3,7 +3,7 @@
 	ProjectType="Visual C++"
 	Version="8.00"
 	Name="demo_fastacmd"
-	ProjectGUID="{C9D7C3C5-2568-46D9-A1C8-08305F90C6A0}"
+	ProjectGUID="{531E4D12-C794-4509-8160-A6B6FCB1FE0C}"
 	>
 	<Platforms>
 		<Platform

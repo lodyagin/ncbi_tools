@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_CONFIG__H
 #define CONNECT___NCBI_CONFIG__H
 
-/*  $Id: ncbi_config.h,v 6.13 2006/03/07 17:23:22 lavr Exp $
+/*  $Id: ncbi_config.h,v 6.14 2007/10/12 14:18:31 ucko Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -59,13 +59,13 @@
 #      define HAVE_GETHOSTBYNAME_R 6
 #      define HAVE_GETHOSTBYADDR_R 8
 #    endif
-#    if !defined(HAVE_GETPWUID_R)
-#      define HAVE_GETPWUID_R      5
+#    if !defined(NCBI_HAVE_GETPWUID_R)
+#      define NCBI_HAVE_GETPWUID_R 5
 #    endif
 #  elif defined(OS_UNIX_IRIX)
 #    define NCBI_OS_IRIX 1
-#    if !defined(HAVE_GETPWUID_R)
-#      define HAVE_GETPWUID_R      5
+#    if !defined(NCBI_HAVE_GETPWUID_R)
+#      define NCBI_HAVE_GETPWUID_R 5
 #    endif
 #  elif defined(OS_UNIX_SOL)
 #    define NCBI_OS_SOLARIS 1

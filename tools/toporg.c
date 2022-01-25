@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: toporg.c,v 6.99 2007/01/05 17:45:21 bollin Exp $";
+static char const rcsid[] = "$Id: toporg.c,v 6.101 2007/10/25 18:43:45 bollin Exp $";
 
 #include <stdio.h>
 #include <ncbi.h>
@@ -1046,14 +1046,8 @@ BioSourcePtr BioSourceCommon(BioSourcePtr host, BioSourcePtr guest)
 
 static Boolean EmptyBioSource(BioSourcePtr bio)
 {
-	OrgRefPtr org;
-	
-	if (bio->genome == 0 && bio->origin == 0 && bio->org == NULL)
-		return TRUE;
-	if ((org = bio->org) != NULL) {
-		if (org->taxname == NULL && org->common == NULL && org->db == NULL)
-			return TRUE;
-	}
+	if (bio == NULL || bio->org == NULL) return TRUE;
+  if (bio->org->taxname == NULL && bio->org->common == NULL && bio->org->db == NULL) return TRUE;
 	return FALSE;
 }
 
@@ -3286,63 +3280,14 @@ extern void ConvertFullLenPubFeatToDesc (SeqEntryPtr sep)
   DeleteMarkedObjects (0, OBJ_SEQENTRY, (Pointer) sep);
 }
 
-static Boolean ConvertSourceFeatDescProc (GatherObjectPtr gop)
+static Boolean GatherConvertSourceFeatDescProc (GatherObjectPtr gop)
 
 {
-  BioSourcePtr  biop;
-  BioseqPtr     bsp;
-  SubSourcePtr  lastssp;
-  SeqDescPtr    sdp;
-  SeqEntryPtr   sep;
   SeqFeatPtr    sfp;
-  SeqIdPtr      sip;
-  SubSourcePtr  ssp;
-  ValNode       vn;
 
   if (gop->itemtype != OBJ_SEQFEAT) return TRUE;
   sfp = (SeqFeatPtr) gop->dataptr;
-  /* look for biosource features */
-  if (sfp == NULL || sfp->data.choice != SEQFEAT_BIOSRC) return TRUE;
-  /* get bioseq by feature location */
-  sip = SeqLocId (sfp->location);
-  bsp = BioseqFind (sip);
-  if (bsp == NULL) return TRUE;
-  sip = SeqIdFindBest(bsp->id, 0);
-  if (sip == NULL) return TRUE;
-  vn.choice = SEQLOC_WHOLE;
-  vn.extended = 0;
-  vn.data.ptrvalue = (Pointer) sip;
-  vn.next = NULL;
-  /* is feature full length? */
-  if (SeqLocCompare (sfp->location, &vn) != SLC_A_EQ_B) return TRUE;
-  sep = SeqMgrGetSeqEntryForData (bsp);
-  if (sep == NULL) return TRUE;
-  sdp = CreateNewDescriptor (sep, Seq_descr_source);
-  if (sdp == NULL) return TRUE;
-  /* move biosource from feature to descriptor */
-  sdp->data.ptrvalue = sfp->data.value.ptrvalue;
-  sfp->data.value.ptrvalue = NULL;
-  /* flag old feature for removal */
-  sfp->idx.deleteme = TRUE;
-  /* move comment to subsource note */
-  if (sfp->comment == NULL) return TRUE;
-  biop = (BioSourcePtr) sdp->data.ptrvalue;
-  if (biop == NULL) return TRUE;
-  ssp = SubSourceNew ();
-  if (ssp == NULL) return TRUE;
-  ssp->subtype = SUBSRC_other;
-  ssp->name = sfp->comment;
-  sfp->comment = NULL;
-  /* link in at end, since BasicSeqEntry will have sorted this list */
-  if (biop->subtype == NULL) {
-    biop->subtype = ssp;
-  } else {
-    lastssp = biop->subtype;
-    while (lastssp->next != NULL) {
-      lastssp = lastssp->next;
-    }
-    lastssp->next = ssp;
-  }
+  ConvertSourceFeatDescProc (sfp, NULL);
   return TRUE;
 }
 
@@ -3382,7 +3327,7 @@ extern void ConvertFullLenSourceFeatToDesc (SeqEntryPtr sep)
   objMgrFilter [OBJ_SEQFEAT] = TRUE;
 
   GatherObjectsInEntity (0, OBJ_SEQENTRY, (Pointer) sep,
-                         ConvertSourceFeatDescProc, NULL, objMgrFilter);
+                         GatherConvertSourceFeatDescProc, NULL, objMgrFilter);
 
   SeqEntrySetScope (oldscope);
   DeleteMarkedObjects (0, OBJ_SEQENTRY, (Pointer) sep);

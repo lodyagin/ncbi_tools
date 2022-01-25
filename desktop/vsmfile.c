@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11-29-94
 *
-* $Revision: 6.20 $
+* $Revision: 6.22 $
 *
 * File Description: 
 *
@@ -73,6 +73,9 @@ Boolean LIBCALL VSMFileInit(void)
                            VSMGenericTextAsnOpen, PROC_PRIORITY_DEFAULT);
    
                          /*** SAVE ***/   
+  ObjMgrProcLoad(OMPROC_SAVE, "Save Descriptor File", "Descriptor file", 0,0,0,0,NULL,
+                           VSMDescriptorAsnSave, PROC_PRIORITY_DEFAULT);
+                           
 	ObjMgrProcLoad(OMPROC_SAVE, "Export Protein Feature Table","Protein Feature Table", 0,0,0,0,NULL,
                            VSMExportProteinFeatureTable, PROC_PRIORITY_DEFAULT);
 
@@ -138,7 +141,7 @@ Boolean LIBCALL VSMFileInit(void)
                            
 	ObjMgrProcLoad(OMPROC_SAVE, "Save As Text ASN1 File","ASN.1 text file", 0,0,0,0,NULL,
                            VSMGenericTextAsnSave, PROC_PRIORITY_DEFAULT);
-                           
+
 	return TRUE;
 }
 
@@ -1168,6 +1171,138 @@ Int2 LIBCALLBACK VSMGenericTextAsnSave ( Pointer data )
 Int2 LIBCALLBACK VSMGenericBinAsnSave ( Pointer data )
 {
 	return VSMGenericAsnSave((OMProcControlPtr)data, "wb");
+}
+
+
+static Boolean AddToSaveList (GatherContextPtr gcp)
+
+{
+  ValNodePtr PNTR list;
+
+  list = (ValNodePtr PNTR) gcp->userdata;
+  if (list == NULL) return TRUE;
+  ValNodeAddPointer (list, gcp->thistype, gcp->thisitem);
+  return TRUE;
+}
+
+
+typedef struct savesetsdp {
+  AsnIoPtr aip;
+  Boolean  already_have_molinfo;  
+} SaveSetSdpData, PNTR SaveSetSdpPtr;
+
+
+static void SaveSetDescriptors (SeqDescrPtr sdp, Pointer userdata)
+{
+  SaveSetSdpPtr sp;
+  MolInfoPtr    mip;
+
+  if (sdp == NULL || userdata == NULL) return;
+  if (sdp->choice != Seq_descr_source
+      && sdp->choice != Seq_descr_pub
+      && sdp->choice != Seq_descr_molinfo
+      && sdp->choice != Seq_descr_comment) return;
+
+  sp = (SaveSetSdpPtr) userdata;
+  if (sdp->choice == Seq_descr_molinfo
+      && (mip = (MolInfoPtr) sdp->data.ptrvalue) != NULL)
+  {
+    if (mip->biomol == MOLECULE_TYPE_PEPTIDE || sp->already_have_molinfo) 
+    {
+      return;
+    }
+    else
+    {
+      sp->already_have_molinfo = TRUE;
+    }
+  }
+  SeqDescAsnWrite (sdp, sp->aip, NULL);
+  AsnPrintNewLine (sp->aip);
+  AsnIoFlush (sp->aip);
+}
+
+Int2 LIBCALLBACK VSMDescriptorAsnSave (Pointer data)
+{
+  OMProcControlPtr ompcp;
+  Char filename[255];
+  SelStructPtr  ssp, sel;
+  SeqDescrPtr   sdp;
+  BioseqPtr     bsp;
+  SeqEntryPtr   sep;
+  SeqMgrDescContext dcontext;
+#ifdef WIN_MAC
+  FILE * fp;
+#endif
+  ValNodePtr entity_list = NULL, vnp;
+  SaveSetSdpData sd;
+  ValNodePtr obj_list = NULL;
+
+  ompcp = (OMProcControlPtr)data;
+  if (ompcp == NULL) return OM_MSG_RET_ERROR;
+
+  sd.already_have_molinfo = FALSE;
+  ssp = ObjMgrGetSelected();
+  if (ssp == NULL)
+	{
+    Message (MSG_ERROR, "You must select a sequence or set from which descriptors should be saved");
+    return OM_MSG_RET_DONE;
+  } else {
+	  for (sel = ssp; sel != NULL; sel = sel->next)
+	  {
+      GatherItem (sel->entityID, sel->itemID, sel->itemtype,
+                (Pointer) &obj_list, AddToSaveList);
+    }
+  }
+
+  /* get file name to use */	
+	filename[0] = '\0';
+	if (GetOutputFileName(filename, (size_t)254, NULL))
+	{
+		WatchCursor();
+#ifdef WIN_MAC
+		fp = FileOpen (filename, "r");
+		if (fp != NULL) {
+			FileClose (fp);
+		} else {
+			FileCreate (filename, "TEXT", "ttxt");
+		}
+#endif
+
+		sd.aip = AsnIoOpen(filename, "w");
+	  for (vnp = obj_list; vnp != NULL; vnp = vnp->next)
+	  {
+      switch (vnp->choice) {
+        case OBJ_SEQDESC:
+          sdp = (SeqDescrPtr) vnp->data.ptrvalue;
+          SeqDescAsnWrite (sdp, sd.aip, NULL);
+          AsnPrintNewLine (sd.aip);
+          AsnIoFlush (sd.aip);
+          break;
+        case OBJ_BIOSEQ:
+          bsp = (BioseqPtr) vnp->data.ptrvalue;
+          for (sdp = SeqMgrGetNextDescriptor (bsp, NULL, 0, &dcontext);
+               sdp != NULL;
+               sdp = SeqMgrGetNextDescriptor (bsp, sdp, 0, &dcontext)) {
+            if (sdp->choice != Seq_descr_source
+                && sdp->choice != Seq_descr_pub
+                && sdp->choice != Seq_descr_molinfo
+                && sdp->choice != Seq_descr_comment) continue;
+            SeqDescAsnWrite (sdp, sd.aip, NULL);
+            AsnPrintNewLine (sd.aip);
+            AsnIoFlush (sd.aip);
+          }
+          break;
+        case OBJ_BIOSEQSET:
+          sep = SeqMgrGetSeqEntryForData (vnp->data.ptrvalue);
+          VisitDescriptorsInSep (sep, &sd, SaveSetDescriptors);
+          break;
+      }              
+    }   
+		AsnIoClose(sd.aip);
+		ArrowCursor();
+	}
+	
+	return OM_MSG_RET_DONE;  
 }
 
 

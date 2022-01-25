@@ -1,4 +1,4 @@
-/* $Id: seqpanel.h,v 6.17 2006/12/05 13:49:46 bollin Exp $
+/* $Id: seqpanel.h,v 6.18 2007/11/30 14:32:28 bollin Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -54,9 +54,6 @@ WriteAlignmentInterleaveToFileEx
 
 extern ForM CreateSeqEditorWindow (Int2 left, Int2 top, CharPtr windowname, BioseqPtr bsp);
 
-NLM_EXTERN void SeqEdTranslateOneCDS (SeqFeatPtr sfp, BioseqPtr featbsp, Uint2 entityID);
-NLM_EXTERN void SeqEdRemapLocation (SeqAlignPtr salp, SeqLocPtr slp, Int4 seq_len);
-NLM_EXTERN Boolean SeqEdFixProteinFeatures (BioseqPtr oldbsp, BioseqPtr newbsp, Boolean force_fix);
 NLM_EXTERN SeqAlignPtr Sequin_GlobalAlign2Seq (BioseqPtr bsp1, BioseqPtr bsp2, BoolPtr revcomp);
 extern ForM CreateAlnEditorWindow (Int2 left, Int2 top, CharPtr windowname, SeqAlignPtr salp, Uint2 entityID);
 NLM_EXTERN CharPtr FeatureLocationAlignment (SeqFeatPtr sfp, SeqAlignPtr salp, Int4 begin, Int4 fin);

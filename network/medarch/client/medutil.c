@@ -28,7 +28,7 @@
 *   
 * Version Creation Date: 8/31/93
 *
-* $Revision: 6.21 $
+* $Revision: 6.23 $
 *
 * File Description:  Medline Utilities for MedArch
 *   Assumes user calls MedArchInit and Fini
@@ -44,6 +44,13 @@
 *
 * RCS Modification History:
 * $Log: medutil.c,v $
+* Revision 6.23  2007/12/04 23:29:22  bazhin
+* MergePubIds() renamed to MergeNonPubmedPubIds(). Merging is
+* limited to types DOI and OTHER only.
+*
+* Revision 6.22  2007/12/04 20:07:02  bazhin
+* Added ability to merge input article ids with ones from med server.
+*
 * Revision 6.21  2005/02/15 17:45:32  bazhin
 * Modified MedlineToISO() function: now in addition to Cit-art.Auth-list.ml
 * slot it also looks at Cit-art.Auth-list.Author.Person-id.ml one
@@ -587,6 +594,59 @@ void FindPub(SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
     }
 }
 
+/**********************************************************/
+static void MergeNonPubmedPubIds(CitArtPtr new, CitArtPtr old)
+{
+    ValNodePtr vnpnew;
+    ValNodePtr vnpold;
+    ValNodePtr vnpoldprev;
+    ValNodePtr vnpoldnext;
+    DbtagPtr   dpnew;
+    DbtagPtr   dpold;
+
+    if(old->ids == NULL)
+        return;
+
+    vnpoldprev = NULL;
+    for(vnpold = old->ids; vnpold != NULL; vnpold = vnpoldnext)
+    {
+        vnpoldnext = vnpold->next;
+
+        if(vnpold->choice != ARTICLEID_DOI &&
+           vnpold->choice != ARTICLEID_OTHER)
+        {
+            vnpoldprev = vnpold;
+            continue;
+        }
+
+        for(vnpnew = new->ids; vnpnew != NULL; vnpnew = vnpnew->next)
+        {
+            if(vnpnew->choice != vnpold->choice)
+                continue;
+
+            if(vnpnew->choice != ARTICLEID_OTHER)
+                break;
+            dpnew = vnpnew->data.ptrvalue;
+            dpold = vnpold->data.ptrvalue;
+            if(StringCmp(dpold->db, dpnew->db) == 0)
+                break;
+        }
+
+        if(vnpnew != NULL)
+        {
+            vnpoldprev = vnpold;
+            continue;
+        }
+
+        vnpold->next = new->ids;
+        new->ids = vnpold;
+        if(vnpoldprev == NULL)
+            old->ids = vnpoldnext;
+        else
+            vnpoldprev->next = vnpoldnext;
+    }
+}
+
 /*****************************************************************************
 *
 *   FixPub(pub, fpop)
@@ -637,6 +697,9 @@ ValNodePtr FixPub(ValNodePtr pub, FindPubOptionPtr fpop)
                         if(ten_authors(pub->data.ptrvalue, tmp->data.ptrvalue))
                         {
                             fpop->fetches_succeeded++;
+                            if(fpop->merge_ids != FALSE)
+                                MergeNonPubmedPubIds(tmp->data.ptrvalue,
+                                                     pub->data.ptrvalue);
                             PubFree(pub);
                             pub = ValNodeNew(tmp);
                             pub->choice = PUB_PMid;
@@ -995,6 +1058,10 @@ ValNodePtr FixPubEquiv(ValNodePtr pube, FindPubOptionPtr fpop)
                         tmp->data.intvalue = pmid;
                         pube = FixPubEquivAppend(pube, tmp2, tmp);
                         tmp->next = new;
+
+                        if(fpop->merge_ids != FALSE)
+                            MergeNonPubmedPubIds(new->data.ptrvalue,
+                                                 citartptr->data.ptrvalue);
 
                         PubFree(citartptr);
                         citartptr = new;

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.76 $
+* $Revision: 6.91 $
 *
 * File Description: 
 *
@@ -46,6 +46,7 @@
 #define _DLOGUTIL_
 
 #include <vibrant.h>
+#include <document.h>
 #include <sqnutils.h>
 #include <prtutil.h>
 #include <asn.h>
@@ -327,6 +328,8 @@ typedef void (*HelpMessageFunc) (CharPtr, CharPtr);
 *****************************************************************************/
 
 extern CharPtr SaveStringFromTextAndStripNewlines (TexT t);
+extern CharPtr StripNewlines (CharPtr str);
+extern void NewlinesToTildes (CharPtr str);
 
 /* GetRidOfEmptyFeatsDescStrings takes either an entityID or a SeqEntryPtr */
 
@@ -468,6 +471,17 @@ extern DialoG SequenceSelectionDialog
  Boolean                  show_prots,
  Uint2                    entityID);
 
+extern DialoG SequenceSelectionDialogEx 
+(GrouP h,
+ Nlm_ChangeNotifyProc     change_notify,
+ Pointer                  change_userdata,
+ Boolean                  allow_multi,
+ Boolean                  allow_none,
+ Boolean                  show_nucs,
+ Boolean                  show_prots,
+ Uint2                    entityID,
+ Int4                     list_height);
+
 extern DialoG SubSourceTypeDialog 
 (GrouP                    h,
  Int2                     list_height,
@@ -504,13 +518,18 @@ CreateClickableListDialogEx
 (GrouP h, 
  CharPtr label1, 
  CharPtr label2,
+ CharPtr help1,
+ CharPtr help2,
  ClickableCallback item_single_click_callback,
  ClickableCallback item_double_click_callback,
  Pointer         item_click_callback_data,
  GetClickableItemText get_item_text,
  Int4            left_width,
  Int4            right_width,
- Boolean         horizontal);
+ Boolean         horizontal,
+ Boolean         show_find);
+
+extern void SetClickableListDialogTitles (DialoG d, CharPtr title1, CharPtr title2, CharPtr help1, CharPtr help2);
 
 extern void ScrollToNextClickableTextDescription (CharPtr txt, DialoG d);
 extern void ScrollToPreviousClickableTextDescription (CharPtr txt, DialoG d);
@@ -575,6 +594,7 @@ typedef struct editapply
 } EditApplyData, PNTR EditApplyPtr;
 
 extern EditApplyPtr EditApplyFree (EditApplyPtr eap);
+extern EditApplyPtr EditApplyNew (void);
 
 typedef enum {
   eEditApplyChoice_Apply = 0,
@@ -683,9 +703,34 @@ extern DialoG CollectionDateDialog (GrouP h, SeqEntryPtr sep, CharPtr name,
                                TaglistCallback tlp_callback,
                                Pointer callback_data);
 
+extern DialoG CreateRptUnitRangeDialog (GrouP h, SeqEntryPtr sep, CharPtr name,
+                                         TaglistCallback tlp_callback,
+                                         Pointer callback_data);
 
 extern void CreateStandardEditMenu (WindoW w);
 
+extern void CleanupEvidenceGBQuals (GBQualPtr PNTR prevgbq);
+extern void VisStringDialogToGbquals (SeqFeatPtr sfp, DialoG d, CharPtr qual);
+
+extern void RememberSqnTempFile (CharPtr file);
+extern void FreeSqnTempFiles (void);
+
+/* For fixing special characters */
+NLM_EXTERN Boolean FixSpecialCharacters (Uint2 entityID);
+extern Boolean FixSpecialCharactersForStringsInList (ValNodePtr find_list, CharPtr exp_text, Boolean force_fix);
+NLM_EXTERN Boolean FixSpecialCharactersForObject (Uint2 datatype, Pointer objdata, CharPtr msg, Boolean force_fix, BoolPtr changed);
+
+/* for functions that act on all open records */
+NLM_EXTERN ValNodePtr GetBaseFormList ();
+NLM_EXTERN ValNodePtr GetViewedSeqEntryList (void);
+NLM_EXTERN SeqEntryPtr RestoreFromFile (CharPtr path);
+NLM_EXTERN Uint2 RestoreEntityIDFromFile (CharPtr path, Uint2 entityID);
+
+NLM_EXTERN Int2 PanelOffsetFromCharOffsetEx (DoC doc, FonT font, Int2 item, Int2 col, Int2 char_offset);
+NLM_EXTERN Int2 GetTextSelectCharOffsetEx (PoinT pt, DoC doc, FonT font, Int2 item, Int2 row, Int2 col);
+NLM_EXTERN CharPtr GetSelectedDocText (DoC doc, Int2 item_start, Int2 row_start, Int2 col_start, Int2 char_start,
+                                       Int2 item_stop, Int2 row_stop, Int2 col_stop, Int2 char_stop,
+                                       Int2Ptr only_these_columns, Int2 num_col);
 
 #ifdef __cplusplus
 }

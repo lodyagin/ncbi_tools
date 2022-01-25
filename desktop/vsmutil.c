@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/3/95
 *
-* $Revision: 6.47 $
+* $Revision: 6.55 $
 *
 * File Description: 
 *
@@ -114,6 +114,19 @@ typedef struct validextra {
   FormActnFunc   revalProc;
   ButtoN         revalBtn;
   Boolean        okaytosetviewtarget;
+  Boolean        indexerVersion;
+  Int2           selected_text_start_item;
+  Int2           selected_text_start_col;
+  Int2           selected_text_start_row;
+  Int4           selected_text_start_offset;
+  Int2           selected_text_end_item;
+  Int2           selected_text_end_col;
+  Int2           selected_text_end_row;
+  Int4           selected_text_end_offset;
+  Int2           selected_text_anchor_item;
+  Int2           selected_text_anchor_col;
+  Int2           selected_text_anchor_row;
+  Int4           selected_text_anchor_offset;
 } ValidExtra, PNTR ValidExtraPtr;
 
 static WindoW  validWindow = NULL;
@@ -156,6 +169,71 @@ static void InvalBorder (DoC d, Int2 item)
   }
 }
 
+
+static Int2 val_columns_for_copy[] = {1, 2, 3, 5};
+
+static void DrawTextSelection (DoC doc, ValidExtraPtr vep, Int2 item, RectPtr r)
+{
+  Int2 lineHeight, numRows, numCols;
+  Int2 last_right;
+  Int2 left_start;
+  Int4 top, line_y;
+  CharPtr txt;
+
+  if (vep == NULL || r == NULL
+      || item < vep->selected_text_start_item
+      || item > vep->selected_text_end_item) {
+    return;
+  }
+
+  if (vep->selected_text_start_item == vep->selected_text_end_item
+      && vep->selected_text_start_row == vep->selected_text_end_row
+      && vep->selected_text_start_offset == vep->selected_text_end_offset) {
+    /* if we've only selected one char, and it's blank, don't draw it. */
+    txt = GetSelectedDocText (doc, vep->selected_text_start_item, vep->selected_text_start_row,
+                              vep->selected_text_start_col, vep->selected_text_start_offset,
+                              vep->selected_text_end_item, vep->selected_text_end_row,
+                              vep->selected_text_end_col, vep->selected_text_end_offset,
+                              val_columns_for_copy, sizeof (val_columns_for_copy));
+    if (StringHasNoText (txt)) {
+      MemFree (txt);
+      return;
+    }
+    MemFree (txt);
+  }
+
+  GetItemParams4 (doc, item, &top, &numRows, &numCols, &lineHeight, NULL);
+
+  /* calculate missing rows from end first */
+  if (vep->selected_text_end_item == item) {
+    numRows = vep->selected_text_end_row;
+    last_right = PanelOffsetFromCharOffsetEx (doc, vep->font, item, vep->selected_text_end_col, vep->selected_text_end_offset);
+  } else {
+    last_right = r->right;
+  }
+
+  if (vep->selected_text_start_item == item) {
+    left_start = PanelOffsetFromCharOffsetEx (doc, vep->font, item, vep->selected_text_start_col, vep->selected_text_start_offset);
+    line_y = r->top + (vep->selected_text_start_row) * lineHeight - 1;
+    numRows -= vep->selected_text_start_row - 1;
+  } else {
+    left_start = PanelOffsetFromCharOffsetEx (doc, vep->font, item, 1, 0);
+    line_y = r->top + lineHeight - 1;
+  }
+
+  while (numRows > 1) {
+    MoveTo (left_start, line_y);
+    left_start = PanelOffsetFromCharOffsetEx (doc, vep->font, item, numCols, 0);
+    LineTo (r->right, line_y);
+    line_y += lineHeight;
+    numRows--;
+  }
+  MoveTo (left_start, line_y);
+  LineTo (last_right, line_y);
+
+}
+
+
 static void DrawValid (DoC d, RectPtr r, Int2 item, Int2 firstLine)
 
 {
@@ -169,19 +247,62 @@ static void DrawValid (DoC d, RectPtr r, Int2 item, Int2 firstLine)
       rct.right = rct.left + 4;
       PaintRect (&rct);
     }
+    if (vep->indexerVersion && vep->selected_text_start_item > -1) {
+      DrawTextSelection (d, vep, item, r);
+    }
   }
 }
+
+
+static void UpdateValidTextSelection (ValidExtraPtr vep, DoC d, PoinT pt)
+{
+  Int2           item, row, col, offset;
+
+  if (vep == NULL) return;
+
+  MapDocPoint (d, pt, &item, &row, &col, NULL);
+
+  if (item < 1 || row < 1 || col < 1) return;
+  offset = GetTextSelectCharOffsetEx (pt, d, vep->font, item, row, col);
+  if (item > vep->selected_text_anchor_item
+      || (item == vep->selected_text_anchor_item 
+          && (col > vep->selected_text_anchor_col
+              || (col == vep->selected_text_anchor_col
+                  && (row > vep->selected_text_anchor_row
+                      || (row == vep->selected_text_anchor_row
+                          && offset >= vep->selected_text_anchor_offset)))))) {
+    vep->selected_text_start_item = vep->selected_text_anchor_item;
+    vep->selected_text_start_row = vep->selected_text_anchor_row;
+    vep->selected_text_start_col = vep->selected_text_anchor_col;
+    vep->selected_text_start_offset = vep->selected_text_anchor_offset;
+    vep->selected_text_end_item = item;
+    vep->selected_text_end_row = row;
+    vep->selected_text_end_col = col;
+    vep->selected_text_end_offset = offset;
+  } else {
+    vep->selected_text_start_item = item;
+    vep->selected_text_start_row = row;
+    vep->selected_text_start_col = col;
+    vep->selected_text_start_offset = offset;
+    vep->selected_text_end_item = vep->selected_text_anchor_item;
+    vep->selected_text_end_row = vep->selected_text_anchor_row;
+    vep->selected_text_end_col = vep->selected_text_anchor_col;
+    vep->selected_text_end_offset = vep->selected_text_anchor_offset;
+  }
+  InvalDocRows (d, 0, 0, 0);
+} 
+
 
 static void ClickValid (DoC d, PoinT pt)
 
 {
   Int2           item;
-  Int2           row;
+  Int2           row, col;
   ValidExtraPtr  vep;
 
   vep = GetObjectExtra (d);
   if (vep != NULL) {
-    MapDocPoint (d, pt, &item, &row, NULL, NULL);
+    MapDocPointEx (d, pt, &item, &row, &col, NULL, TRUE);
     if (item > 0 && row > 0 && vep->clicked == item) {
       vep->dblClick = dblClick;
     } else {
@@ -191,9 +312,28 @@ static void ClickValid (DoC d, PoinT pt)
     vep->shftKey = shftKey;
     if (item > 0 && row > 0) {
       vep->clicked = item;
+      if (vep->indexerVersion) {
+        vep->selected_text_anchor_item = item;
+        vep->selected_text_anchor_col = col;
+        vep->selected_text_anchor_row = row;
+        vep->selected_text_anchor_offset = GetTextSelectCharOffsetEx (pt, d, vep->font, item, row, col);
+        UpdateValidTextSelection (vep, d, pt);
+      }
     }
   }
 }
+
+
+static void DragValid (DoC d, PoinT pt)
+{
+  ValidExtraPtr   vep;
+
+  vep = GetObjectExtra (d);
+  if (vep != NULL && vep->indexerVersion) {
+    UpdateValidTextSelection (vep, d, pt);
+  }
+}
+
 
 static Boolean FindSfpItem (GatherContextPtr gcp)
 
@@ -650,10 +790,10 @@ static void RepopVal (PopuP p)
 
 static CharPtr FormatConsensusSpliceReport (CharPtr doc_line)
 {
-  CharPtr cp, cp2;
+  CharPtr cp, cp2, feat_start, feat_end = NULL;
   CharPtr report_str = NULL;
   CharPtr msg_abbrev = NULL;
-  Char    ch;
+  Char    ch, ch_2;
   Int4    pos;
 
   cp = StringChr (doc_line, '\n');
@@ -669,14 +809,34 @@ static CharPtr FormatConsensusSpliceReport (CharPtr doc_line)
   cp = StringSearch (cp, "position ");
   cp2 = StringSearch (cp, "FEATURE:");
   if (cp2 != NULL) {
+    feat_start = cp2 + 8;
+    if (feat_start != NULL) {
+      feat_end = StringChr (feat_start, ':');
+      if (feat_end != NULL) {
+        ch_2 = *feat_end;
+        *feat_end = 0;
+      }
+    }
     ch = *cp2;
     *cp2 = 0;
-    report_str = (CharPtr) MemNew (sizeof (Char) * StringLen (cp));
+    if (feat_start == NULL) {
+      report_str = (CharPtr) MemNew (sizeof (Char) * StringLen (cp));
+    } else {
+      report_str = (CharPtr) MemNew (sizeof (Char) * (StringLen (cp) + StringLen (feat_start) + 2));
+    }
     if (sscanf (cp, "position %ld of %s", &pos, report_str) == 2) {
-      sprintf (report_str + StringLen (report_str), "\t%s at %ld", msg_abbrev, pos);
+      if (feat_start == NULL) {
+        sprintf (report_str + StringLen (report_str), "\t%s at %ld", msg_abbrev, pos);
+      } else {
+        sprintf (report_str + StringLen (report_str), "\t%s\t%s at %ld", feat_start, msg_abbrev, pos);
+      }
     } else {
       report_str = MemFree (report_str);
     }
+    if (feat_end != NULL) {
+      *feat_end = ch_2;
+    }
+    *cp2 = ch;
   }
 
   return report_str;
@@ -748,7 +908,7 @@ static CharPtr GetEcNumberReport (SeqFeatPtr sfp)
         ec_number = StringSave (str);
       } else {
         tmp = (CharPtr) MemNew (sizeof (Char) * (StringLen (ec_number) + StringLen (str) + 2));
-        sprintf (tmp, "%s;%s", ec_number, gbq->val);
+        sprintf (tmp, "%s;%s", ec_number, str);
         ec_number = MemFree (ec_number);
         ec_number = tmp;
       }
@@ -927,6 +1087,214 @@ extern Boolean WriteBadSpecificHostTable (ValNodePtr bad_biop_list, FILE *fp)
   return any_in_list;
 }
 
+
+typedef struct validatoreporttype {
+  ButtoN PNTR btn_array;
+  ValNodePtr  errorfilter;
+} ValidatorReportTypeData, PNTR ValidatorReportTypePtr;
+
+
+static void EnableValidatorReportTypeButtons (ButtoN b)
+{
+  ValidatorReportTypePtr data;
+  ValNodePtr             vnp, vnp2;
+  Int4                   pos, pos2;
+  ErrFltrPtr             efp;
+
+  data = (ValidatorReportTypePtr) GetObjectExtra (b);
+  if (data == NULL) return;
+
+  for (vnp = data->errorfilter, pos = 0;
+       vnp != NULL;
+       vnp = vnp->next, pos++)
+  {
+    if (data->btn_array[pos] == b)
+    {
+      efp = (ErrFltrPtr) vnp->data.ptrvalue;
+      if (efp != NULL && efp->subcode == INT_MIN)
+      {
+        if (GetStatus (b)) 
+        {
+          /* main category checked, disable subcategories */
+          for (vnp2 = vnp->next, pos2 = pos + 1;
+               vnp2 != NULL && (vnp2->data.ptrvalue == NULL 
+                                || ((ErrFltrPtr)vnp2->data.ptrvalue)->errcode == efp->errcode);
+               vnp2 = vnp2->next, pos2++)
+          {
+            Disable (data->btn_array[pos2]);
+          }
+        } 
+        else
+        {
+          /* main category unchecked, enable subcategories */
+          for (vnp2 = vnp->next, pos2 = pos + 1;
+               vnp2 != NULL && (vnp2->data.ptrvalue == NULL || ((ErrFltrPtr)vnp2->data.ptrvalue)->errcode == efp->errcode);
+               vnp2 = vnp2->next, pos2++)
+          {
+            Enable (data->btn_array[pos2]);
+          }
+        } 
+      }
+      break;
+    }
+  }
+}
+
+
+static ValNodePtr CollectValidatorReportTypes (ValidExtraPtr vep)
+{
+  ErrFltrPtr  efp;
+  ValNodePtr  chosen = NULL, vnp;
+  WindoW      w, h, btn_grp, g1 = NULL, c;
+  Int4        num_buttons, i;
+  ValidatorReportTypeData data;
+  ButtoN PNTR btn_array;
+  ButtoN      b;
+  int         last_errcode = 0;
+  ModalAcceptCancelData acd;
+  
+  if (vep == NULL || vep->errorfilter == NULL) return NULL;
+
+  /* if only one, just select the one */
+  if (vep->errorfilter->next == NULL) 
+  {
+    ValNodeAddPointer (&chosen, 0, vep->errorfilter->data.ptrvalue);
+    return chosen;
+  }
+
+  num_buttons = ValNodeLen (vep->errorfilter);
+  btn_array = (ButtoN PNTR) MemNew (sizeof (ButtoN) * num_buttons);
+
+  data.btn_array = btn_array;
+  data.errorfilter = vep->errorfilter;
+
+  w = MovableModalWindow (-50, -33, -10, -10, "Choose Report Items", NULL);
+  SetGroupSpacing (w, 10, 10);
+  h = HiddenGroup (w, -1, 0, NULL);
+  SetGroupSpacing (h, 10, 10);
+
+  btn_grp = HiddenGroup (h, 3, 0, NULL);
+  for (vnp = vep->errorfilter, i = 0; vnp != NULL; vnp = vnp->next, i++) {
+    efp = (ErrFltrPtr) vnp->data.ptrvalue;
+    if (efp == NULL) continue;
+    if (efp->subcode == INT_MIN) {
+      g1 = NormalGroup (btn_grp, 0, 10, efp->text2, programFont, NULL);
+      btn_array[i] = CheckBox (g1, "All", EnableValidatorReportTypeButtons);
+      SetObjectExtra (btn_array[i], &data, NULL);
+      last_errcode = efp->errcode;
+    } else {
+      if (last_errcode != efp->errcode) {
+        g1 = NULL;
+      }
+      btn_array[i] = CheckBox (g1 == NULL ? btn_grp : g1, efp->text3 == NULL ? "" : efp->text3, NULL);
+    }
+  }
+
+  c = HiddenGroup (w, 4, 0, NULL);
+  SetGroupSpacing (c, 10, 2);
+  b = DefaultButton (c, "Accept", ModalAcceptButton);
+  SetObjectExtra (b, &acd, NULL);
+  b = PushButton (c, "Cancel", ModalCancelButton);
+  SetObjectExtra (b, &acd, NULL);
+
+  AlignObjects (ALIGN_CENTER, (HANDLE) btn_grp, (HANDLE) c, NULL);
+  RealizeWindow (w);
+
+  Show (w);
+  Select (w);
+  Update ();
+
+  acd.accepted = FALSE;
+  acd.cancelled = FALSE;
+  
+  while (!acd.accepted && ! acd.cancelled)
+  {
+    while (!acd.accepted && ! acd.cancelled)
+    {
+      ProcessExternalEvent ();
+      Update ();
+    }
+    ProcessAnEvent ();
+
+    if (acd.accepted)
+    {
+      for (vnp = vep->errorfilter, i = 0; vnp != NULL; vnp = vnp->next, i++)
+      {
+        if (vnp->data.ptrvalue != NULL && GetStatus (btn_array[i])) 
+        {
+          ValNodeAddPointer (&chosen, 0, vnp->data.ptrvalue);
+        }
+      }
+    }
+  }
+  btn_array = MemFree (btn_array);
+  Remove (w);
+  return chosen;
+}
+
+
+static Int4 FindReportPositionForError (ErrItemPtr eip, ValNodePtr chosen)
+{
+  Int4       pos;
+  ValNodePtr vnp;
+  ErrFltrPtr efp;
+
+  if (eip == NULL || chosen == NULL) return -1;
+
+  for (vnp = chosen, pos = 0; vnp != NULL; vnp = vnp->next, pos++)
+  {
+    efp = (ErrFltrPtr) vnp->data.ptrvalue;
+    if (efp != NULL && efp->errcode == eip->errcode 
+        && (efp->subcode == INT_MIN || efp->subcode == eip->subcode))
+    {
+      return pos;
+    }
+  }
+  return -1;
+}
+
+
+static Boolean MakeStandardReports (ValNodePtr chosen, ValNodePtr PNTR reports_list, FILE *fp)
+{
+  ValNodePtr chosen_vnp, item_vnp;
+  ErrFltrPtr efp;
+  Int4       i;
+  CharPtr    cp;
+  Boolean    found_any = FALSE;
+  CharPtr    label;
+
+  if (chosen == NULL || reports_list == NULL || fp == NULL) return FALSE;
+  
+  for (chosen_vnp = chosen, i = 0; chosen_vnp != NULL; chosen_vnp = chosen_vnp->next, i++)
+  {
+    efp = (ErrFltrPtr) chosen_vnp->data.ptrvalue;
+    if (efp != NULL && reports_list[i] != NULL) 
+    {
+      fprintf (fp, "%s%s%s\n", efp->text2 == NULL ? "" : efp->text2,
+                               efp->subcode == INT_MIN || efp->text3 != NULL ? ":" : "",
+                               efp->subcode == INT_MIN ? "ALL" : efp->text3 == NULL ? "" : efp->text3);
+      for (item_vnp = reports_list[i]; item_vnp != NULL; item_vnp = item_vnp->next)
+      {
+        cp = GetDiscrepancyItemText (item_vnp);
+        if (cp != NULL)
+        {
+          label = GetParentLabelForDiscrepancyItem (item_vnp);
+          if (label != NULL) {
+            fprintf (fp, "%s:", label);
+            label = MemFree (label);
+          }
+          fprintf (fp, "%s", cp);
+          found_any = TRUE;
+          cp = MemFree (cp);
+        }
+      }
+      fprintf (fp, "\n");
+    }
+  }
+  return found_any;
+}
+
+
 static void MakeValidatorReport (ButtoN b)
 {
   ValidExtraPtr  vep;
@@ -938,20 +1306,28 @@ static void MakeValidatorReport (ButtoN b)
   Boolean        found_any = FALSE;
   FILE           *fp;
   ValNodePtr     consensus_splice_list = NULL;
-  ValNodePtr     stop_codon_list = NULL;
   ValNodePtr     ecnumber_list = NULL;
   ValNodePtr     specific_host_list = NULL;
-  ValNodePtr     its_does_not_abut_list = NULL;
   SeqFeatPtr     sfp;
   SeqDescrPtr    sdp;
+  BioseqPtr      bsp;
   CharPtr        str;
   Char           ch;
   CharPtr        tmp;
   SeqMgrFeatContext fcontext;
   SeqMgrDescContext dcontext;
+  ValNodePtr        chosen = NULL;
+  ValNodePtr PNTR   report_lists = NULL;
+  Int4              num_reports, pos;
 
   vep = (ValidExtraPtr) GetObjectExtra (b);
   if (vep == NULL) return;
+
+  chosen = CollectValidatorReportTypes (vep);
+  if (chosen == NULL) return;
+  num_reports = ValNodeLen (chosen);
+  report_lists = (ValNodePtr PNTR) MemNew (sizeof (ValNodePtr) * num_reports);
+  MemSet (report_lists, 0, sizeof (ValNodePtr) * num_reports);
 
   TmpNam (path); 
 #ifdef WIN_MAC
@@ -970,6 +1346,9 @@ static void MakeValidatorReport (ButtoN b)
       item++;
       eip = (ErrItemPtr) vnp->data.ptrvalue;
       if (eip != NULL) {
+        pos = FindReportPositionForError (eip, chosen);
+        if (pos == -1) continue;
+
         if (eip->errcode == 5 && (eip->subcode == 16 || eip->subcode == 137 || eip->subcode == 138 || eip->subcode == 139)) {
           /* ERR_SEQ_FEAT_NotSpliceConsensus */
           str = GetDocText (vep->doc, item, 0, 5);
@@ -990,18 +1369,13 @@ static void MakeValidatorReport (ButtoN b)
           if (cp != NULL) {
             ValNodeAddPointer (&consensus_splice_list, 0, cp);
           }
-        } else if (eip->errcode == 5 && eip->subcode == 9) {
-          sfp = SeqMgrGetDesiredFeature (eip->entityID, NULL, eip->itemID, 0, NULL, &fcontext);
-          if (sfp != NULL) {
-            ValNodeAddPointer (&stop_codon_list, OBJ_SEQFEAT, sfp);
-          }
         } else if (eip->errcode == 5 && (eip->subcode == 124 || eip->subcode == 125 || eip->subcode == 126)) {
           /* ERR_SEQ_FEAT_BadEcNumberValue */
           sfp = SeqMgrGetDesiredFeature (eip->entityID, NULL, eip->itemID, 0, NULL, &fcontext);
           if (sfp != NULL) {
             ValNodeAddPointer (&ecnumber_list, OBJ_SEQFEAT, sfp);
           }
-        } else if (eip->errcode == 2 && eip->subcode == 29 && StringCmp (eip->message, "Invalid value for specific host") == 0) {
+        } else if (eip->errcode == 2 && eip->subcode == 50) {
           if (eip->itemtype == OBJ_SEQDESC) {
             sdp = SeqMgrGetDesiredDescriptor (eip->entityID, NULL, eip->itemID, 0, NULL, &dcontext);
             if (sdp != NULL) {
@@ -1013,10 +1387,20 @@ static void MakeValidatorReport (ButtoN b)
               ValNodeAddPointer (&specific_host_list, OBJ_SEQFEAT, sfp);
             }
           }
-        } else if (eip->errcode == 5 && eip->subcode == 116 && eip->itemtype == OBJ_SEQFEAT) {
+        } else if (eip->itemtype == OBJ_SEQFEAT) {
           sfp = SeqMgrGetDesiredFeature (eip->entityID, NULL, eip->itemID, 0, NULL, &fcontext);
           if (sfp != NULL) {
-            ValNodeAddPointer (&its_does_not_abut_list, OBJ_SEQFEAT, sfp);
+            ValNodeAddPointer (&(report_lists[pos]), OBJ_SEQFEAT, sfp);
+          }
+        } else if (eip->itemtype == OBJ_SEQDESC) {
+          sdp = SeqMgrGetDesiredDescriptor (eip->entityID, NULL, eip->itemID, 0, NULL, &dcontext);
+          if (sdp != NULL) {
+            ValNodeAddPointer (&(report_lists[pos]), OBJ_SEQDESC, sdp);
+          }
+        } else if (eip->itemtype == OBJ_BIOSEQ) {
+          bsp = GetBioseqGivenIDs (eip->entityID, eip->itemID, OBJ_BIOSEQ);
+          if (bsp != NULL) {
+            ValNodeAddPointer (&(report_lists[pos]), OBJ_BIOSEQ, bsp);
           }
         }
       }
@@ -1028,21 +1412,9 @@ static void MakeValidatorReport (ButtoN b)
     for (vnp = consensus_splice_list; vnp != NULL; vnp = vnp->next) {
       fprintf (fp, "%s\n", vnp->data.ptrvalue);
     }
+    fprintf (fp, "\n");
     found_any = TRUE;
     consensus_splice_list = ValNodeFreeData (consensus_splice_list);
-  }
-
-  if (stop_codon_list != NULL) {
-    fprintf (fp, "Internal Stop Codons\n");
-    for (vnp = stop_codon_list; vnp != NULL; vnp = vnp->next) {
-      cp = GetDiscrepancyItemText (vnp);
-      if (cp != NULL) {
-        fprintf (fp, "%s", cp);
-        found_any = TRUE;
-        cp = MemFree (cp);
-      }
-    }
-    stop_codon_list = ValNodeFree (stop_codon_list);
   }
 
   if (ecnumber_list != NULL) {
@@ -1055,6 +1427,7 @@ static void MakeValidatorReport (ButtoN b)
         cp = MemFree (cp);
       }
     }
+    fprintf (fp, "\n");
     ecnumber_list = ValNodeFree (ecnumber_list);
   }
  
@@ -1064,18 +1437,13 @@ static void MakeValidatorReport (ButtoN b)
     found_any = TRUE;
   }
 
-  if (its_does_not_abut_list != NULL) {
-    fprintf (fp, "ITS Features that do not Abut rRNA\n");
-    for (vnp = its_does_not_abut_list; vnp != NULL; vnp = vnp->next) {
-      cp = GetDiscrepancyItemText (vnp);
-      if (cp != NULL) {
-        fprintf (fp, "%s", cp);
-        found_any = TRUE;
-        cp = MemFree (cp);
-      }
-    }
-    its_does_not_abut_list = ValNodeFree (its_does_not_abut_list);
-  }    
+  found_any |= MakeStandardReports (chosen, report_lists, fp);
+
+  for (pos = 0; pos < num_reports; pos++) {
+    report_lists[pos] = ValNodeFree (report_lists[pos]);
+  }
+  report_lists = MemFree (report_lists);
+  chosen = ValNodeFree (chosen);      
 
   FileClose (fp);
   if (found_any) {
@@ -1349,16 +1717,27 @@ static void CopyValToClipboard (ValidExtraPtr vep)
 {
   FILE         *fp;
   Char         path [PATH_MAX];
+  CharPtr      selected_text;
 
   if (vep == NULL) return;
-  TmpNam (path);
-  fp = FileOpen (path, "w");
-  if (fp != NULL) {
-    SaveDocument (vep->doc, fp);
-    FileClose (fp);
-    FileToClipboard (path);
+  selected_text = GetSelectedDocText (vep->doc, vep->selected_text_start_item, vep->selected_text_start_row,
+                                      vep->selected_text_start_col, vep->selected_text_start_offset,
+                                      vep->selected_text_end_item, vep->selected_text_end_row,
+                                      vep->selected_text_end_col, vep->selected_text_end_offset,
+                                      val_columns_for_copy, sizeof (val_columns_for_copy));
+  if (StringHasNoText (selected_text)) {      
+    TmpNam (path);
+    fp = FileOpen (path, "w");
+    if (fp != NULL) {
+      SaveDocument (vep->doc, fp);
+      FileClose (fp);
+      FileToClipboard (path);
+    }
+    FileRemove (path);
+  } else {
+    StringToClipboard (selected_text);
   }
-  FileRemove (path);
+  selected_text = MemFree (selected_text);
 }
 
 static void PrintValProc (ValidExtraPtr vep)
@@ -1476,6 +1855,7 @@ extern void CreateValidateWindowEx (ErrNotifyProc notify, CharPtr title,
   if (validWindow == NULL) {
     vep = (ValidExtraPtr) MemNew (sizeof (ValidExtra));
     if (vep != NULL) {
+      vep->indexerVersion = indexerVersion;
       if (title == NULL || title [0] == '\0') {
         title = "Validation Errors";
       }
@@ -1583,7 +1963,7 @@ extern void CreateValidateWindowEx (ErrNotifyProc notify, CharPtr title,
         vep->doc = DocumentPanel (g, stdCharWidth * 30, stdLineHeight * 20);
         SetObjectExtra (vep->doc, vep, NULL);
         SetDocAutoAdjust (vep->doc, FALSE);
-        SetDocProcs (vep->doc, ClickValid, NULL, ReleaseValid, NULL);
+        SetDocProcs (vep->doc, ClickValid, DragValid, ReleaseValid, NULL);
         SetDocShade (vep->doc, DrawValid, NULL, NULL, NULL);
         vep->font = font;
 

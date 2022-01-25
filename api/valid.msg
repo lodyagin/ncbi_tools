@@ -404,6 +404,14 @@ The lat_lon coordinate does not map to the indicated country.
 $^   LatLonState, 49
 The lat_lon coordinate does not map to the indicated state or province.
 
+$^   BadSpecificHost, 50
+A BioSource descriptor or feature has a specific host value that may
+require a taxonomy consult.
+
+$^   RefGeneTrackingIllegalStatus, 51
+The RefGeneTracking user object has an illegal Status value.
+
+
 $$ GENERIC, 3
 
 $^   NonAsciiAsn, 1
@@ -490,7 +498,7 @@ Bioseq packaged in the set, perhaps within a nuc-prot set.  RefSeq records may
 however be referenced remotely.
 
 $^   InconsistentMolInfoBiomols, 12
-Mol-info.biomol is inconsistent within a segset or parts set.
+Mol-info.biomol is inconsistent within a segset, parts set, or pop/phy/mut/eco set.
 
 $^   ArchaicFeatureLocation, 13
 A feature location should refer to the accession or gi number, not a local or general ID.
@@ -1079,6 +1087,18 @@ and wobble expansion of the anticodon sequence.
 
 $^   BadAnticodonStrand, 147
 The tRNA feature location and anticodon location are not on the same strand.
+
+$^   UndesiredGeneSynonym, 148
+The gene synonym is uninformative.
+
+$^   UndesiredProteinName, 149
+The protein name is uninformative.
+
+$^ FeatureBeginsOrEndsInGap, 150
+The feature starts or stops within a sequence gap.
+
+$^ GeneOntologyTermMissingGOID, 151
+A Gene Ontology (GO) term is missing the GO Identifier.
 
 $$ SEQ_ALIGN, 6
 

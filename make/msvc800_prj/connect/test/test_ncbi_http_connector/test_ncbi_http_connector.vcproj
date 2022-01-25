@@ -3,7 +3,7 @@
 	ProjectType="Visual C++"
 	Version="8.00"
 	Name="test_ncbi_http_connector"
-	ProjectGUID="{8B6B0E08-62BA-4E92-8672-06CCA7432096}"
+	ProjectGUID="{862D2BCD-67ED-4398-A811-7E247C2029E5}"
 	>
 	<Platforms>
 		<Platform

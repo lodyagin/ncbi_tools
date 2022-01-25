@@ -1,6 +1,7 @@
 asntool -m ..\asn\general.asn -o asngen.h
 asntool -m ..\asn\seqset.asn -o asnsset.h
 asntool -m ..\asn\seqfeat.asn -o asnfeat.h
+asntool -m ..\asn\seqtable.asn -o asntable.h
 asntool -m ..\asn\seqalign.asn -o asnalign.h
 asntool -m ..\asn\seqloc.asn -o asnloc.h
 asntool -m ..\asn\seqres.asn -o asnres.h
@@ -42,3 +43,4 @@ asntool -m ..\access\mla2.asn -o asnmla2.h
 asntool -m ..\asn\gbseq.asn -o asngbseq.h
 asntool -m ..\asn\insdseq.asn -o asninsdseq.h
 asntool -m ..\asn\tinyseq.asn -o asntseq.h
+asntool -m ..\sequin\macro.asn -o asnmacro.h

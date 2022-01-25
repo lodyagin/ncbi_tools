@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_SOCKET__H
 #define CONNECT___NCBI_SOCKET__H
 
-/*  $Id: ncbi_socket.h,v 6.65 2007/04/09 15:25:44 kazimird Exp $
+/*  $Id: ncbi_socket.h,v 6.68 2007/11/05 15:25:52 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -37,8 +37,6 @@
  *
  *********************************
  * Generic:
- *
- *  SOCK, LSOCK
  *
  *  SOCK_AllowSigPipeAPI
  *
@@ -77,6 +75,7 @@
  *  SOCK_Status
  *  SOCK_Write
  *  SOCK_Abort
+ *  SOCK_GetLocalPort
  *  SOCK_GetPeerAddress
  *  SOCK_GetPeerAddressString
  *
@@ -1084,6 +1083,21 @@ extern NCBI_XCONNECT_EXPORT EIO_Status SOCK_Abort
  );
 
 
+/** Get local port of the socket.
+ * @param sock
+ *  [in] socket handle 
+ * @param byte_order
+ *  [in] port byte order
+ * @return
+ *  If "network_byte_order" is true(non-zero) then return the port in the
+ *  network byte order; otherwise return it in the local host byte order.
+ */
+extern NCBI_XCONNECT_EXPORT unsigned short SOCK_GetLocalPort
+(SOCK            sock,
+ ENH_ByteOrder   byte_order          
+ );
+
+
 /** Get host and port of the socket's peer.
  * @param sock
  *  [in]  socket handle 
@@ -1442,25 +1456,28 @@ extern NCBI_XCONNECT_EXPORT int SOCK_ntoa
  );
 
 
-/** Equivalent to SOCK_isipEx(host, strlen(host)).
- * @sa SOCK_isipEx
- */
-extern NCBI_XCONNECT_EXPORT int/*bool*/ SOCK_isip
-(const char* host
- );
-
-
 /**
  * @param host
- *  [in] host name to check against being a plain IP address
- * @param len
- *  [in] length of "host" to check for
+ *  [in] '\0'-terminated string to check against being a plain IP address
+ * @param fullquad
+ *  [in] non-zero to only accept "host" if it is a full-quad IP notation
  * @return
  *  Non-zero (true) if given string is an IP address, zero (false) otherwise.
  */
 extern NCBI_XCONNECT_EXPORT int/*bool*/ SOCK_isipEx
 (const char* host,
- size_t      len
+ int/*bool*/ fullquad
+ );
+
+
+/** Equivalent of SOCK_isip(host, 0)
+ * @param host
+ *  [in] '\0'-terminated string to check against being a plain IP address
+ * @return
+ *  Non-zero (true) if given string is an IP address, zero (false) otherwise.
+ */
+extern NCBI_XCONNECT_EXPORT int/*bool*/ SOCK_isip
+(const char* host
  );
 
 

@@ -29,13 +29,37 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.6 $
+* $Revision: 6.13 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: cdrgn.h,v $
+* Revision 6.13  2008/01/17 21:18:09  bollin
+* Fixes for RNA dialog for ncRNA product/class handling
+*
+* Revision 6.12  2007/12/21 17:30:27  bollin
+* Changes to dialog for selecting ncRNA class and RNA type - allow ncRNA class
+* Any if selecting RNA type in a constraint context, test dialog to generate
+* error if "other" is the class but no text is specified.
+*
+* Revision 6.11  2007/11/26 21:16:29  bollin
+* Moved CreatencRNAClassDialog proto into cdrgn.h
+*
+* Revision 6.10  2007/09/21 18:05:23  bollin
+* code in place for conversion of old-style misc_RNA, snRNA, scRNA, and snoRNA
+* features to new ncRNA features, commented out until changeover.
+*
+* Revision 6.9  2007/09/10 20:08:51  bollin
+* Correction to MatchesRnaType
+*
+* Revision 6.8  2007/09/10 18:47:11  kans
+* prototype for SetRnaSpecificQuals, cast for codon argument to ParseTRnaString
+*
+* Revision 6.7  2007/09/10 18:33:15  bollin
+* Changes for new ncRNA and tmRNA class editor.
+*
 * Revision 6.6  2007/07/25 13:53:12  bollin
 * Removed local copy of TruncateLocation from sequin3.c, made TruncateLocation
 * function in desktop/cdrgn.c extern and added prototype to cdrgn.h
@@ -94,8 +118,26 @@ extern ForM CreateRnaForm (Int2 left, Int2 top, CharPtr title,
                            Uint2 subtype, FormActnFunc actproc);
 extern Int2 LIBCALLBACK RnaGenFunc (Pointer data);
 
+extern void AddRnaSpecificQuals (SeqFeatPtr sfp, DialoG d);
+extern void ConvertProductQualToRnaRefName (SeqFeatPtr sfp);
+extern void SetRnaSpecificQuals (SeqFeatPtr sfp, DialoG d);
+extern void ConvertToOldRNAFormat (SeqFeatPtr sfp);
+
 extern SeqLocPtr TruncateLocation (SeqLocPtr head, Int4 len);
 
+/* for searching for RNA values of a certain type */
+typedef struct rnatype {
+  Int4    rna_featdef; /* use FEATDEF_ANY for match any RNA */
+  CharPtr ncrna_class; /* value to look for in ncrna_class qual */
+} RnaTypeData, PNTR RnaTypePtr;
+
+extern RnaTypePtr RnaTypeFree (RnaTypePtr rtp);
+extern Boolean MatchesRnaType (SeqFeatPtr sfp, RnaTypePtr rtp);
+extern void ApplyRnaTypeToSeqFeat (SeqFeatPtr sfp, RnaTypePtr rtp);
+extern void ApplyProductToRNA (SeqFeatPtr sfp, CharPtr product);
+extern void AddToComment (SeqFeatPtr sfp, CharPtr comment);
+extern DialoG RnaTypeDialog (GrouP h, Boolean is_constraint, Nlm_ChangeNotifyProc change_notify, Pointer change_userdata);
+extern DialoG CreatencRNAClassDialog (GrouP h, Boolean is_constraint, Nlm_ChangeNotifyProc change_notify, Pointer change_userdata);
 
 #ifdef __cplusplus
 }

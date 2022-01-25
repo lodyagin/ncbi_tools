@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.99 $
+* $Revision: 6.114 $
 *
 * File Description: 
 *
@@ -136,7 +136,6 @@ typedef struct rnaform {
   GrouP         pages [NUM_PAGES];
   DialoG        foldertabs;
   Int2          currentPage;
-  TexT          prodSeqIdTxt;
   Boolean       empty_feat;
 } RnaForm, PNTR RnaFormPtr;
 
@@ -154,6 +153,19 @@ typedef struct rnapage {
   DialoG        anticodon;
   GrouP         trnaPages [3];
   RnaFormPtr    rfp;
+
+  /* for ncRNA page */
+  GrouP         ncrnaGrp;
+  DialoG        ncrnaClass;
+  TexT          ncrnaProduct;
+
+  /* for tmRNA page */
+  GrouP         tmrnaGrp;
+  TexT          tmrnaProduct;
+  DialoG        tmrnaTagPeptide;
+  
+  /* for switching between types */
+  Int4          prev_rna_type;
 } RnaPage, PNTR RnaPagePtr;
 
 
@@ -1313,7 +1325,10 @@ static Pointer ProductToSeqLocPtr (DialoG d)
       return NULL;
     }
   }
-  if (ppp != NULL && ppp->bsptr != NULL) {
+
+  if (ppp == NULL) return NULL;  
+
+  if (ppp->bsptr != NULL) {
     if (ppp->nucProducts) {
       if (! Visible (d)) return NULL; /* not an mRNA, do not make product */
     }
@@ -1363,18 +1378,6 @@ static Pointer ProductToSeqLocPtr (DialoG d)
               slp->choice = 3;
               slp->data.ptrvalue = SeqIdStripLocus (sip);
             }
-          }
-        }
-      }
-    } else if (rfp != NULL && rfp->prodSeqIdTxt != NULL) {
-      GetTitle (rfp->prodSeqIdTxt, id, sizeof (id) - 1);
-      if ((! StringHasNoText (id)) && StringChr (id, '|') != NULL) {
-        sip = MakeSeqID (id);
-        if (sip != NULL) {
-          slp = ValNodeNew (NULL);
-          if (slp != NULL) {
-            slp->choice = 3;
-            slp->data.ptrvalue = SeqIdStripLocus (sip);
           }
         }
       }
@@ -1511,6 +1514,171 @@ static DialoG CreateProteinOrMRNAProductDialog (GrouP h, CharPtr title,
 
   return (DialoG) p;
 }
+
+
+typedef struct rnatranscriptiddlg {
+  DIALOG_MESSAGE_BLOCK
+  DialoG               product;
+  Boolean              usePopupForProduct;
+  GrouP                far_id_grp;
+  TexT                 far_id;
+  Nlm_ChangeNotifyProc change_notify;
+  Pointer              change_userdata;
+} RnaTranscriptIDDlgData, PNTR RnaTranscriptIdDlgPtr;
+
+static void ChangeTranscriptIDSequenceSelection (Pointer userdata)
+{
+  RnaTranscriptIdDlgPtr  dlg;
+  ValNodePtr             vnp;
+
+  dlg = (RnaTranscriptIdDlgPtr) userdata;
+  if (dlg == NULL) return;
+
+  if (dlg->far_id_grp != NULL)
+  {
+    vnp = DialogToPointer (dlg->product);
+    if (vnp == NULL || vnp->data.ptrvalue == NULL) 
+    {
+      Enable (dlg->far_id_grp);
+    }
+    else 
+    {
+      Disable (dlg->far_id_grp);
+    }
+    vnp = ValNodeFree (vnp);
+  }
+
+  if (dlg->change_notify != NULL)
+  {
+    (dlg->change_notify) (dlg->change_userdata);
+  }
+}
+
+static void ChangeTranscriptIDText (TexT t)
+{
+  RnaTranscriptIdDlgPtr  dlg;
+
+  dlg = (RnaTranscriptIdDlgPtr) GetObjectExtra (t);
+  if (dlg == NULL) return;
+
+  if (dlg->change_notify != NULL)
+  {
+    (dlg->change_notify) (dlg->change_userdata);
+  }  
+}
+
+
+static void LocToTranscriptIDDialog (DialoG d, Pointer data)
+{
+  RnaTranscriptIdDlgPtr  dlg;
+  SeqLocPtr              slp;
+  BioseqPtr              bsp;
+  ValNode                vn;
+  SeqIdPtr               sip;
+  Char                   str [128];
+
+  dlg = (RnaTranscriptIdDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) return;
+  slp = (SeqLocPtr) data;
+
+  if (slp == NULL)
+  {
+    PointerToDialog (dlg->product, NULL);
+    SafeSetTitle (dlg->far_id, "");
+  }
+  else
+  {
+    sip = SeqLocId (slp);
+    bsp = BioseqFind (sip);
+    if (bsp == NULL)
+    {
+      PointerToDialog (dlg->product, NULL);
+      SeqIdWrite (sip, str, PRINTID_FASTA_LONG, sizeof (str));
+      SafeSetTitle (dlg->far_id, str);
+    }
+    else
+    {
+      vn.choice = 0;
+      vn.data.ptrvalue = sip;
+      vn.next = NULL;
+      PointerToDialog (dlg->product, &vn);
+      SafeSetTitle (dlg->far_id, "");
+    }    
+  }
+}
+
+
+static Pointer TranscriptIDDialogToLoc (DialoG d)
+{
+  RnaTranscriptIdDlgPtr  dlg;
+  SeqLocPtr              slp = NULL;
+  ValNodePtr             vnp;
+  SeqIdPtr               sip = NULL;
+  CharPtr                str;
+
+  dlg = (RnaTranscriptIdDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) return NULL;
+
+  vnp = DialogToPointer (dlg->product);
+  if (vnp == NULL || vnp->data.ptrvalue == NULL)
+  {
+    if (!TextHasNoText (dlg->far_id))
+    {
+      str = SaveStringFromText (dlg->far_id);
+      sip = MakeSeqID (str);
+      str = MemFree (str);
+    }
+  }
+  else
+  {
+    sip = SeqIdDup (vnp->data.ptrvalue);
+  }
+  vnp = ValNodeFree (vnp);
+  
+  if (sip != NULL)
+  {
+    slp = ValNodeNew (NULL);
+    slp->choice = SEQLOC_WHOLE;
+    slp->data.ptrvalue = SeqIdStripLocus (sip);
+  }
+
+  return slp;
+}
+
+
+static DialoG CreateRNATranscriptIDDialog (GrouP h, Uint2 entityID, Boolean allow_far_id, Nlm_ChangeNotifyProc change_notify, Pointer change_userdata)
+{
+  GrouP                  p;
+  RnaTranscriptIdDlgPtr  dlg;
+  ValNodePtr             bsp_list = NULL;
+
+  p = HiddenGroup (h, 3, 0, NULL);
+  SetGroupSpacing (p, 10, 10);
+
+  dlg = (RnaTranscriptIdDlgPtr) MemNew (sizeof (RnaTranscriptIDDlgData));
+  if (dlg == NULL) return NULL;
+
+  SetObjectExtra (p, dlg, StdCleanupExtraProc);
+  dlg->dialog = (DialoG) p;
+  dlg->todialog = LocToTranscriptIDDialog;
+  dlg->fromdialog = TranscriptIDDialogToLoc;
+
+  dlg->change_notify = change_notify;
+  dlg->change_userdata = change_userdata;
+
+  StaticPrompt (p, "Transcript Sequence ID", 0, popupMenuHeight, programFont, 'l');
+  dlg->product = SequenceSelectionDialogEx (p, ChangeTranscriptIDSequenceSelection, dlg, FALSE, TRUE, TRUE, FALSE, entityID, SHORT_SELECTION_LIST);
+  if (allow_far_id) 
+  {
+    dlg->far_id_grp = HiddenGroup (p, 2, 0, NULL);
+    StaticPrompt (dlg->far_id_grp, "Far ID", 0, dialogTextHeight, programFont, 'l');
+    dlg->far_id = DialogText (dlg->far_id_grp, "", 5, ChangeTranscriptIDText);
+    SetObjectExtra (dlg->far_id, dlg, NULL);
+  }
+
+  return (DialoG) p;
+}
+
 
 extern SeqLocPtr PredictCodingRegion (BioseqPtr nuc, BioseqPtr prot, Int2 genCode)
 
@@ -3090,7 +3258,7 @@ static Boolean FixCdRegionFormProteinFeatures (CdRgnFormPtr cfp, BioseqPtr newpr
   sip = SeqLocId (slp);
   target = BioseqFind (sip);
   if (target != NULL) {
-    if (!SeqEdFixProteinFeatures (target, newprot, FALSE))
+    if (!SeqEdFixProteinFeatures (target, newprot, FALSE, Sequin_GlobalAlign2Seq))
     {
       if (ANS_CANCEL == Message (MSG_OKC, "Unable to construct alignment between old and new proteins.\nYou will need to adjust the protein features manually if you continue."))
       {
@@ -5777,16 +5945,15 @@ static ENUM_ALIST(rna_type_alist)
   {"mRNA",         2},
   {"tRNA",         3},
   {"rRNA",         4},
-  {"snRNA",        5},
-  {"scRNA",        6},
-  {"snoRNA",       7},
+  {"ncRNA",        8},
+  {"tmRNA",        9},
   {"misc_RNA",   255},
 END_ENUM_ALIST
 
 static Uint1 check_rna_type (Uint1 type)
 
 {
-  if (type > 7 && type != 255) return 0;
+  if (type > 9 && type != 255) return 0;
   return type;
 }
 
@@ -5882,7 +6049,76 @@ static DialoG CreateMrnaUserObjectDialog (GrouP h, CharPtr label, SeqEntryPtr se
   return (DialoG) p;
 }
 
-/* trna aa conversion modified from Tatiana Tatusov's code */
+
+static Uint1 RnaFeatDefFromRnaRef (RnaRefPtr rrp)
+{
+  if (rrp == NULL) {
+    return FEATDEF_otherRNA;
+  }
+
+  switch (rrp->type) 
+  {
+    case 1:
+      return FEATDEF_preRNA;
+      break;
+    case 2:
+      return FEATDEF_mRNA;
+      break;
+    case 3:
+      return FEATDEF_tRNA;
+      break;
+    case 4:
+      return FEATDEF_rRNA;
+      break;
+    case 5:
+      return FEATDEF_snRNA;
+      break;
+    case 6:
+      return FEATDEF_scRNA;
+      break;
+    case 7:
+      return FEATDEF_snoRNA;
+      break;
+    case 255:
+      if (rrp->ext.choice != 1 || StringHasNoText (rrp->ext.value.ptrvalue)) {
+        return FEATDEF_otherRNA;
+      } else if (StringCmp (rrp->ext.value.ptrvalue, "ncRNA") == 0
+                 || IsStringInNcRNAClassList(rrp->ext.value.ptrvalue)) {
+        return FEATDEF_ncRNA;
+      } else if (StringCmp (rrp->ext.value.ptrvalue, "tmRNA") == 0) {
+        return FEATDEF_tmRNA;
+      } else {
+        return FEATDEF_otherRNA;
+      }
+    default:
+      return FEATDEF_otherRNA;
+      break;
+  }
+}
+
+
+static Uint1 RnaSubtypeFromRnaRef (RnaRefPtr rrp)
+{
+  if (rrp == NULL) {
+    return 0;
+  }
+
+  if (rrp->type == 255) {
+    if (rrp->ext.choice == 1 && StringCmp (rrp->ext.value.ptrvalue, "tmRNA") == 0) {
+      return 9;
+    } else if (StringCmp (rrp->ext.value.ptrvalue, "ncRNA") == 0
+               || IsStringInNcRNAClassList (rrp->ext.value.ptrvalue)) {
+      return 8;
+    } else {
+      return 255;
+    }
+  } else if (rrp->type == 5 || rrp->type == 6 || rrp->type == 7) {
+    return 8;
+  } else {
+    return rrp->type;
+  }
+}
+
 
 static void RnaRefPtrToRnaPage (DialoG d, Pointer data)
 
@@ -5905,8 +6141,9 @@ static void RnaRefPtrToRnaPage (DialoG d, Pointer data)
   rrp = (RnaRefPtr) data;
 
   if (rrp != NULL) {
+
     SetEnumPopup (rpp->type, rna_type_alist,
-                  (UIEnum) check_rna_type (rrp->type));
+                  RnaSubtypeFromRnaRef(rrp));
     SafeSetStatus (rpp->pseudo, rrp->pseudo);
     switch (rrp->type) {
       case 0 :
@@ -5914,12 +6151,16 @@ static void RnaRefPtrToRnaPage (DialoG d, Pointer data)
         SafeHide (rpp->nameGrp);
         SafeHide (rpp->rrnaPrompt);
         SafeHide (rpp->ornaPrompt);
+        SafeHide (rpp->ncrnaGrp);
+        SafeHide (rpp->tmrnaGrp);
         break;
       case 3 :
         SafeSetTitle (rpp->name, "");
         SafeHide (rpp->nameGrp);
         SafeHide (rpp->rrnaPrompt);
         SafeHide (rpp->ornaPrompt);
+        SafeHide (rpp->ncrnaGrp);
+        SafeHide (rpp->tmrnaGrp);
         SafeSetValue (rpp->AAitem, 1);
         if (rrp->ext.choice == 2) {
           trna = rrp->ext.value.ptrvalue;
@@ -6024,17 +6265,63 @@ static void RnaRefPtrToRnaPage (DialoG d, Pointer data)
         SafeHide (rpp->ornaPrompt);
         SafeShow (rpp->rrnaPrompt);
         SafeShow (rpp->nameGrp);
+        SafeHide (rpp->ncrnaGrp);
+        SafeHide (rpp->tmrnaGrp);
         break;
+      case 5:
+      case 6:
+      case 7:
+      case 8:
       case 255 :
         SafeHide (rpp->trnaGrp);
-        if (rrp->ext.choice == 1 && rrp->ext.value.ptrvalue != NULL) {
-          SafeSetTitle (rpp->name, (CharPtr) rrp->ext.value.ptrvalue);
-        } else {
-          SafeSetTitle (rpp->name, "");
-        }
+        SafeHide (rpp->nameGrp);
         SafeHide (rpp->rrnaPrompt);
-        SafeShow (rpp->ornaPrompt);
-        SafeShow (rpp->nameGrp);
+        SafeHide (rpp->ornaPrompt);
+        if (rrp->type == 5) {
+          PointerToDialog (rpp->ncrnaClass, "snRNA");
+          SafeHide (rpp->tmrnaGrp);
+          SafeShow (rpp->ncrnaGrp); 
+        } else if (rrp->type == 6) {
+          PointerToDialog (rpp->ncrnaClass, "scRNA");
+          SafeHide (rpp->tmrnaGrp);
+          SafeShow (rpp->ncrnaGrp); 
+        } else if (rrp->type == 7) {
+          PointerToDialog (rpp->ncrnaClass, "snoRNA");
+          SafeHide (rpp->tmrnaGrp);
+          SafeShow (rpp->ncrnaGrp); 
+        } else if (rrp->type == 255) {
+          if (rrp->ext.choice == 1) {
+            if (StringCmp (rrp->ext.value.ptrvalue, "ncRNA") == 0) {
+              SafeHide (rpp->tmrnaGrp);
+              SafeShow (rpp->ncrnaGrp);
+              /* get class from qual */
+            } else if (IsStringInNcRNAClassList (rrp->ext.value.ptrvalue)) {
+              SafeHide (rpp->tmrnaGrp);
+              SafeShow (rpp->ncrnaGrp);
+              /* get class from rrp */
+              PointerToDialog (rpp->ncrnaClass, rrp->ext.value.ptrvalue);
+            } else if (StringCmp (rrp->ext.value.ptrvalue, "tmRNA") == 0) {
+              SafeHide (rpp->ncrnaGrp);
+              SafeShow (rpp->tmrnaGrp);
+            } else {
+              if (StringCmp (rrp->ext.value.ptrvalue, "misc_RNA") != 0) {
+                SafeSetTitle (rpp->name, (CharPtr) rrp->ext.value.ptrvalue);
+              }
+              SafeHide (rpp->ornaPrompt);
+              SafeShow (rpp->rrnaPrompt);
+              SafeShow (rpp->nameGrp);
+              SafeHide (rpp->ncrnaGrp);
+              SafeHide (rpp->tmrnaGrp);
+            }
+          } else {
+            SafeSetTitle (rpp->name, "");
+            SafeHide (rpp->ornaPrompt);
+            SafeShow (rpp->rrnaPrompt);
+            SafeShow (rpp->nameGrp);
+            SafeHide (rpp->ncrnaGrp);
+            SafeHide (rpp->tmrnaGrp);
+          }
+        }
         break;
       default :
         SafeHide (rpp->trnaGrp);
@@ -6046,6 +6333,8 @@ static void RnaRefPtrToRnaPage (DialoG d, Pointer data)
         SafeHide (rpp->rrnaPrompt);
         SafeHide (rpp->ornaPrompt);
         SafeShow (rpp->nameGrp);
+        SafeHide (rpp->ncrnaGrp);
+        SafeHide (rpp->tmrnaGrp);
         break;
     }
   } else {
@@ -6057,6 +6346,8 @@ static void RnaRefPtrToRnaPage (DialoG d, Pointer data)
     SafeHide (rpp->ornaPrompt);
     SafeSetValue (rpp->AAitem, 0);
     SafeHide (rpp->trnaGrp);
+    SafeHide (rpp->ncrnaGrp);
+    SafeHide (rpp->tmrnaGrp);
   }
 }
 
@@ -6086,10 +6377,14 @@ static Pointer RnaPageToRnaRefPtr (DialoG d)
     rrp = RnaRefNew ();
     if (rrp != NULL) {
       if (GetEnumPopup (rpp->type, rna_type_alist, &val)) {
-        rrp->type = (Uint1) val;
+        if (val == 8 || val == 9) {
+          rrp->type = 255;
+        } else {
+          rrp->type = (Uint1) val;
+        }
       }
       rrp->pseudo = GetStatus (rpp->pseudo);
-      switch (rrp->type) {
+      switch (val) {
         case 3 :
           rrp->ext.choice = 2;
           trna = (tRNAPtr) MemNew (sizeof (tRNA));
@@ -6158,6 +6453,18 @@ static Pointer RnaPageToRnaRefPtr (DialoG d)
             trna->anticodon = DialogToPointer (rpp->anticodon);
           }
           break;
+        case 5:
+        case 6:
+        case 7:
+        case 8: /* ncRNA */
+          rrp->ext.choice = 1;
+          rrp->ext.value.ptrvalue = StringSave ("ncRNA");
+          break;
+        case 9: /* tmRNA */
+          rrp->ext.choice = 1;
+          rrp->ext.value.ptrvalue = StringSave ("tmRNA");
+          break;
+        case 255:
         default :
           if (! TextHasNoText (rpp->name)) {
             rrp->ext.choice = 1;
@@ -6169,6 +6476,369 @@ static Pointer RnaPageToRnaRefPtr (DialoG d)
   }
   return (Pointer) rrp;
 }
+
+
+static GBQualPtr FindOrAddQual (SeqFeatPtr sfp, CharPtr qual_name)
+{
+  GBQualPtr gbq;
+
+  if (sfp == NULL) return NULL;
+  gbq = sfp->qual;
+  while (gbq != NULL && StringCmp (gbq->qual, qual_name) != 0) {
+    gbq = gbq->next;
+  }
+  if (gbq == NULL) {
+    gbq = GBQualNew ();
+    gbq->qual = StringSave (qual_name);
+    gbq->next = sfp->qual;
+    sfp->qual = gbq;
+  }
+  return gbq;
+}
+
+
+static void RemoveQualByName (SeqFeatPtr sfp, CharPtr qual_name)
+{
+  GBQualPtr gbq, gbq_next, gbq_prev = NULL;
+
+  if (sfp == NULL || StringHasNoText (qual_name))
+  {
+    return;
+  }
+  gbq = sfp->qual;
+  while (gbq != NULL)
+  {
+    gbq_next = gbq->next;
+    if (StringCmp (gbq->qual, qual_name) == 0)
+    {
+      if (gbq_prev == NULL)
+      {
+        sfp->qual = gbq->next;
+      }
+      else
+      {
+        gbq_prev->next = gbq->next;
+      }
+      gbq->next = NULL;
+      gbq = GBQualFree (gbq);
+    }
+    else
+    {
+      gbq_prev = gbq;
+    }
+    gbq = gbq_next;
+  }
+}
+
+static void SetRNAMiscNameForType (SeqFeatPtr sfp, UIEnum val)
+{
+  RnaRefPtr  rrp;
+
+  if (sfp == NULL || sfp->data.choice != SEQFEAT_RNA) return;
+  rrp = (RnaRefPtr) sfp->data.value.ptrvalue;
+  
+  if (rrp == NULL) { 
+    rrp = RnaRefNew ();
+    sfp->data.value.ptrvalue = rrp;
+  }
+
+  if (val == 8) {
+    rrp->ext.value.ptrvalue = MemFree (rrp->ext.value.ptrvalue);
+    rrp->ext.value.ptrvalue = StringSave ("ncRNA");
+    rrp->ext.choice = 1;
+  } else if (val == 9) {
+    rrp->ext.value.ptrvalue = MemFree (rrp->ext.value.ptrvalue);
+    rrp->ext.value.ptrvalue = StringSave ("tmRNA");
+    rrp->ext.choice = 1;
+  } else if (val == 255) {
+    rrp->ext.value.ptrvalue = MemFree (rrp->ext.value.ptrvalue);
+    rrp->ext.value.ptrvalue = StringSave ("misc_RNA");
+    rrp->ext.choice = 1;
+  }
+
+}
+
+
+extern void ConvertProductQualToRnaRefName (SeqFeatPtr sfp)
+{
+  RnaRefPtr rrp;
+  GBQualPtr gbq, gbq_prev = NULL;
+
+  if (sfp == NULL || sfp->data.choice != SEQFEAT_RNA || sfp->data.value.ptrvalue == NULL) return;
+  rrp = (RnaRefPtr) sfp->data.value.ptrvalue;
+
+  gbq = sfp->qual;
+  while (gbq != NULL && StringCmp (gbq->qual, "product") != 0) {
+    gbq_prev = gbq;
+    gbq = gbq->next;
+  }
+  if (gbq != NULL) {
+    rrp->ext.value.ptrvalue = MemFree (rrp->ext.value.ptrvalue);
+    rrp->ext.choice = 1;
+    rrp->ext.value.ptrvalue = gbq->val;
+    gbq->val = NULL;
+    if (gbq_prev == NULL) {
+      sfp->qual = gbq->next;
+    } else {
+      gbq_prev->next = gbq->next;
+    }
+    gbq->next = NULL;
+    gbq = GBQualFree (gbq);
+  }
+}
+
+
+static void ConvertRnaRefNameToProductQual (SeqFeatPtr sfp)
+{
+  RnaRefPtr rrp;
+  GBQualPtr gbq, gbq_prev = NULL;
+
+  if (sfp == NULL || sfp->data.choice != SEQFEAT_RNA || sfp->data.value.ptrvalue == NULL) return;
+  rrp = (RnaRefPtr) sfp->data.value.ptrvalue;
+  if (rrp->ext.choice != 1) return;
+  
+  gbq = GBQualNew ();
+  gbq->next = sfp->qual;
+  sfp->qual = gbq;
+  gbq->qual = StringSave ("product");
+  gbq->val = StringSave (rrp->ext.value.ptrvalue);
+}
+
+
+static void AddRnaSpecificQualsForType (SeqFeatPtr sfp, RnaPagePtr rpp, UIEnum val)
+{
+  CharPtr    str;
+  GBQualPtr  gbq;
+  RnaRefPtr  rrp;
+
+  if (rpp == NULL || sfp == NULL || sfp->data.choice != SEQFEAT_RNA) return;
+  rrp = (RnaRefPtr) sfp->data.value.ptrvalue;
+
+  if (val == 8) {
+    str = DialogToPointer (rpp->ncrnaClass);
+    if (StringHasNoText (str)) {
+      str = MemFree (str);
+      RemoveQualByName (sfp, "ncRNA_class"); 
+    } else {
+      gbq = FindOrAddQual (sfp, "ncRNA_class");
+      gbq->val = MemFree (gbq->val);
+      gbq->val = str;
+    }
+    if (TextHasNoText (rpp->ncrnaProduct)) {
+      RemoveQualByName (sfp, "product");
+    } else {
+      gbq = FindOrAddQual (sfp, "product");
+      gbq->val = MemFree (gbq->val);
+      gbq->val = SaveStringFromText (rpp->ncrnaProduct);
+    }
+  } else if (val == 9) {
+    str = DialogToPointer (rpp->tmrnaTagPeptide);
+    if (StringHasNoText (str)) {
+      str = MemFree (str);
+      RemoveQualByName (sfp, "tag_peptide");
+    } else {
+      gbq = FindOrAddQual (sfp, "tag_peptide");
+      gbq->val = MemFree (gbq->val);
+      gbq->val = str;
+    }
+    if (TextHasNoText (rpp->tmrnaProduct)) {
+      RemoveQualByName (sfp, "product");
+    } else {
+      gbq = FindOrAddQual (sfp, "product");
+      gbq->val = MemFree (gbq->val);
+      gbq->val = SaveStringFromText (rpp->tmrnaProduct);
+    }
+  } else if (val == 255) {
+    if (TextHasNoText (rpp->name)) {
+      RemoveQualByName (sfp, "product");
+    } else {
+      str = SaveStringFromText (rpp->name);
+      if (StringCmp (str, "misc_RNA") == 0) {
+        str = MemFree (str);
+      } else {
+        gbq = FindOrAddQual (sfp, "product");
+        gbq->val = MemFree (gbq->val);
+        gbq->val = str;
+      }
+    }
+  }
+}
+
+
+extern void AddRnaSpecificQuals (SeqFeatPtr sfp, DialoG d)
+{
+  RnaPagePtr rpp;
+  UIEnum     val;
+
+  rpp = (RnaPagePtr) GetObjectExtra (d);
+  if (rpp == NULL || sfp == NULL) return;
+
+  if (GetEnumPopup (rpp->type, rna_type_alist, &val)) {
+    AddRnaSpecificQualsForType (sfp, rpp, val);
+    SetRNAMiscNameForType (sfp, val);
+    if (val != 8) {
+      RemoveQualByName (sfp, "ncRNA_class");
+    }
+    if (val != 8 && val != 9 && val != 255) {
+      ConvertProductQualToRnaRefName (sfp);
+    }
+  }
+}
+
+
+extern void SetRnaSpecificQuals (SeqFeatPtr sfp, DialoG d)
+{
+  RnaPagePtr rpp;
+  RnaRefPtr  rrp;
+  GBQualPtr  gbq;
+
+  rpp = (RnaPagePtr) GetObjectExtra (d);
+  if (rpp == NULL || sfp == NULL || sfp->data.choice != SEQFEAT_RNA || sfp->data.value.ptrvalue == NULL) return;
+
+  rrp = (RnaRefPtr) sfp->data.value.ptrvalue;
+  if ((rrp->type == 5 || rrp->type == 6 || rrp->type == 7)
+      && rrp->ext.choice == 1
+      && StringCmp (rrp->ext.value.ptrvalue, "ncRNA") != 0) {
+    SetTitle (rpp->ncrnaProduct, rrp->ext.value.ptrvalue);
+  }
+  else if (rrp->type != 255 || rrp->ext.choice != 1) return;
+
+  if (StringCmp (rrp->ext.value.ptrvalue, "ncRNA") == 0) {
+    gbq = sfp->qual;
+    while (gbq != NULL) {
+      if (StringCmp (gbq->qual, "ncRNA_class") == 0) {
+        PointerToDialog (rpp->ncrnaClass, gbq->val);
+      } else if (StringCmp (gbq->qual, "product") == 0) {
+        SetTitle (rpp->ncrnaProduct, gbq->val);
+      }
+      gbq = gbq->next;
+    }
+  } else if (StringCmp (rrp->ext.value.ptrvalue, "tmRNA") == 0) {
+    gbq = sfp->qual;
+    while (gbq != NULL) {
+      if (StringCmp (gbq->qual, "tag_peptide") == 0) {
+        PointerToDialog (rpp->tmrnaTagPeptide, gbq->val);
+      } else if (StringCmp (gbq->qual, "product") == 0) {
+        SetTitle (rpp->tmrnaProduct, gbq->val);
+      }
+      gbq = gbq->next;
+    }
+  } else if (IsStringInNcRNAClassList (rrp->ext.value.ptrvalue)) {
+    gbq = sfp->qual;
+    while (gbq != NULL) {
+      if (StringCmp (gbq->qual, "product") == 0) {
+        SetTitle (rpp->ncrnaProduct, gbq->val);
+      }
+      gbq = gbq->next;
+    }
+  } else if (StringCmp (rrp->ext.value.ptrvalue, "misc_RNA") == 0) {
+    gbq = sfp->qual;
+    while (gbq != NULL) {
+      if (StringCmp (gbq->qual, "product") == 0) {
+        SetTitle (rpp->name, gbq->val);
+      }
+      gbq = gbq->next;
+    }
+  }
+}
+
+
+extern void ConvertToOldRNAFormat (SeqFeatPtr sfp)
+{
+  RnaRefPtr rrp;
+  GBQualPtr gbq, gbq_prod = NULL, gbq_class = NULL, gbq_prev = NULL, gbq_next;
+  Boolean   do_convert = TRUE;
+
+  if (sfp == NULL || sfp->data.choice != SEQFEAT_RNA)
+  {
+    return;
+  }
+
+  rrp = (RnaRefPtr) sfp->data.value.ptrvalue;
+  if (rrp == NULL || rrp->type != 255 || rrp->ext.choice != 1
+      || StringCmp (rrp->ext.value.ptrvalue, "ncRNA") != 0)
+  {
+    return;
+  }
+  for (gbq = sfp->qual; gbq != NULL && (gbq_prod == NULL || gbq_class == NULL); gbq = gbq->next)
+  {
+    if (StringCmp (gbq->qual, "ncRNA_class") == 0)
+    {
+      gbq_class = gbq;
+    }
+    else if (StringCmp (gbq->qual, "product") == 0)
+    {
+      gbq_prod = gbq;
+    }
+  }
+
+  if (gbq_class == NULL)
+  {
+    do_convert = FALSE;
+  }
+  else if (StringCmp (gbq_class->val, "snRNA") == 0)
+  {
+    rrp->type = 5;
+  }
+  else if (StringCmp (gbq_class->val, "scRNA") == 0)
+  {
+    rrp->type = 6;
+  }
+  else if (StringCmp (gbq_class->val, "snoRNA") == 0)
+  {
+    rrp->type = 7;
+  }
+  else if (IsStringInNcRNAClassList (gbq_class->val))
+  {
+    do_convert = FALSE;
+    rrp->ext.value.ptrvalue = MemFree (rrp->ext.value.ptrvalue);
+    rrp->ext.value.ptrvalue = StringSave (gbq_class->val);
+    RemoveQualByName (sfp, "ncRNA_class");
+  }
+  else
+  {
+    do_convert = FALSE;
+  }
+  if (do_convert)
+  {
+    if (gbq_prod == NULL)
+    {
+      rrp->ext.choice = 0;
+      rrp->ext.value.ptrvalue = MemFree (rrp->ext.value.ptrvalue);
+    }
+    else
+    {
+      rrp->ext.value.ptrvalue = MemFree (rrp->ext.value.ptrvalue);
+      rrp->ext.value.ptrvalue = gbq_prod->val;
+      gbq_prod->val = NULL;
+    }
+    gbq = sfp->qual;
+    while (gbq != NULL)
+    {
+      gbq_next = gbq->next;
+      if (StringCmp (gbq->qual, "ncRNA_class") == 0
+          || StringCmp (gbq->qual, "product") == 0)
+      {
+        if (gbq_prev == NULL)
+        {
+          sfp->qual = gbq->next;
+        }
+        else
+        {
+          gbq_prev->next = gbq->next;
+        }
+        gbq->next = NULL;
+        gbq = GBQualFree (gbq);
+      }
+      else
+      {
+        gbq_prev = gbq;
+      }
+      gbq = gbq_next;
+    }
+  }
+}
+
 
 static void SetRnaImportExportItems (RnaFormPtr rfp)
 
@@ -6214,91 +6884,126 @@ static void SetRnaImportExportItems (RnaFormPtr rfp)
   }
 }
 
-static void ChangeRnaProc (PopuP p)
+static void SetRnaType (RnaPagePtr rpp, Uint2 subtype)
 
 {
   RnaFormPtr  rfp;
-  RnaPagePtr  rpp;
-  UIEnum      val;
+  RnaRefPtr   rrp = NULL;
 
-  rpp = (RnaPagePtr) GetObjectExtra (p);
-  if (rpp != NULL) {
+  if (rpp != NULL && rpp->rfp != NULL) {
     rfp = rpp->rfp;
-    if (GetEnumPopup (rpp->type, rna_type_alist, &val)) {
-      switch (val) {
-        case 0 :
-          SafeHide (rpp->nameGrp);
-          SafeHide (rpp->rrnaPrompt);
-          SafeHide (rpp->ornaPrompt);
-          SafeHide (rpp->trnaGrp);
-          SafeHide (rfp->product);
-          SafeHide (rfp->usrobjext);
-          break;
-        case 2 :
-          SafeHide (rpp->trnaGrp);
-          SafeHide (rpp->rrnaPrompt);
-          SafeHide (rpp->ornaPrompt);
-          SafeShow (rpp->nameGrp);
-          SafeShow (rfp->product);
-          SafeShow (rfp->usrobjext);
-          break;
-        case 3 :
-          SafeHide (rpp->nameGrp);
-          SafeHide (rpp->rrnaPrompt);
-          SafeHide (rpp->ornaPrompt);
-          SafeShow (rpp->trnaGrp);
-          SafeShow (rfp->product);
-          SafeHide (rfp->usrobjext);
-          break;
-        case 4 :
-          SafeHide (rpp->trnaGrp);
-          SafeHide (rpp->ornaPrompt);
-          SafeShow (rpp->rrnaPrompt);
-          SafeShow (rpp->nameGrp);
-          SafeShow (rfp->product);
-          SafeHide (rfp->usrobjext);
-          break;
-        case 5 :
-          SafeHide (rpp->trnaGrp);
-          SafeHide (rpp->rrnaPrompt);
-          SafeHide (rpp->ornaPrompt);
-          SafeShow (rpp->nameGrp);
-          SafeShow (rfp->product);
-          SafeHide (rfp->usrobjext);
-          break;
-        case 6 :
-          SafeHide (rpp->trnaGrp);
-          SafeHide (rpp->rrnaPrompt);
-          SafeHide (rpp->ornaPrompt);
-          SafeShow (rpp->nameGrp);
-          SafeShow (rfp->product);
-          SafeHide (rfp->usrobjext);
-          break;
-        case 7 :
-          SafeHide (rpp->trnaGrp);
-          SafeHide (rpp->rrnaPrompt);
-          SafeHide (rpp->ornaPrompt);
-          SafeShow (rpp->nameGrp);
-          SafeShow (rfp->product);
-          SafeHide (rfp->usrobjext);
-          break;
-        case 255 :
-          SafeHide (rpp->trnaGrp);
-          SafeHide (rpp->rrnaPrompt);
-          SafeShow (rpp->ornaPrompt);
-          SafeShow (rpp->nameGrp);
-          SafeShow (rfp->product);
-          SafeHide (rfp->usrobjext);
-          break;
-        default :
-          SafeHide (rpp->trnaGrp);
-          SafeHide (rpp->rrnaPrompt);
-          SafeHide (rpp->ornaPrompt);
-          SafeShow (rpp->nameGrp);
-          SafeHide (rfp->product);
-          SafeHide (rfp->usrobjext);
-          break;
-      }
+    switch (subtype) {
+      case 0 :
+        SafeHide (rpp->nameGrp);
+        SafeHide (rpp->rrnaPrompt);
+        SafeHide (rpp->ornaPrompt);
+        SafeHide (rpp->trnaGrp);
+        SafeHide (rfp->product);
+        SafeHide (rfp->usrobjext);
+        SafeHide (rpp->ncrnaGrp);
+        SafeHide (rpp->tmrnaGrp);
+        break;
+      case FEATDEF_mRNA:
+        SafeHide (rpp->trnaGrp);
+        SafeHide (rpp->rrnaPrompt);
+        SafeHide (rpp->ornaPrompt);
+        SafeShow (rpp->nameGrp);
+        SafeShow (rfp->product);
+        SafeShow (rfp->usrobjext);
+        SafeHide (rpp->ncrnaGrp);
+        SafeHide (rpp->tmrnaGrp);
+        break;
+     case FEATDEF_preRNA :
+        SafeHide (rpp->trnaGrp);
+        SafeHide (rpp->rrnaPrompt);
+        SafeHide (rpp->ornaPrompt);
+        SafeShow (rpp->nameGrp);
+        SafeShow (rfp->product);
+        SafeShow (rfp->usrobjext);
+        SafeHide (rpp->ncrnaGrp);
+        SafeHide (rpp->tmrnaGrp);
+        break;
+      case FEATDEF_tRNA :
+        SafeHide (rpp->nameGrp);
+        SafeHide (rpp->rrnaPrompt);
+        SafeHide (rpp->ornaPrompt);
+        SafeShow (rpp->trnaGrp);
+        SafeShow (rfp->product);
+        SafeHide (rfp->usrobjext);
+        SafeHide (rpp->ncrnaGrp);
+        SafeHide (rpp->tmrnaGrp);
+        break;
+      case FEATDEF_rRNA :
+        SafeHide (rpp->trnaGrp);
+        SafeHide (rpp->ornaPrompt);
+        SafeShow (rpp->rrnaPrompt);
+        SafeShow (rpp->nameGrp);
+        SafeShow (rfp->product);
+        SafeHide (rfp->usrobjext);
+        SafeHide (rpp->ncrnaGrp);
+        SafeHide (rpp->tmrnaGrp);
+        break;
+      case FEATDEF_snRNA :
+      case FEATDEF_scRNA :
+      case FEATDEF_snoRNA :
+        SafeHide (rpp->trnaGrp);
+        SafeHide (rpp->rrnaPrompt);
+        SafeHide (rpp->ornaPrompt);
+        SafeHide (rpp->nameGrp);
+        SafeShow (rfp->product);
+        SafeHide (rfp->usrobjext);
+        SafeShow (rpp->ncrnaGrp);
+        SafeHide (rpp->tmrnaGrp);
+        if (subtype == FEATDEF_snRNA) {
+          PointerToDialog (rpp->ncrnaClass, "snRNA");
+          
+        } else if (subtype == FEATDEF_scRNA) {
+          PointerToDialog (rpp->ncrnaClass, "scRNA");
+        } else if (subtype == FEATDEF_snoRNA) {
+          PointerToDialog (rpp->ncrnaClass, "snoRNA");
+        } else if (subtype == FEATDEF_snoRNA) {
+          PointerToDialog (rpp->ncrnaClass, "miscRNA");
+        }
+        break;
+
+      case FEATDEF_ncRNA :
+        SafeHide (rpp->trnaGrp);
+        SafeHide (rpp->rrnaPrompt);
+        SafeHide (rpp->ornaPrompt);
+        SafeHide (rpp->nameGrp);
+        SafeShow (rfp->product);
+        SafeHide (rfp->usrobjext);
+        SafeShow (rpp->ncrnaGrp);
+        SafeHide (rpp->tmrnaGrp);
+        break;
+      case FEATDEF_tmRNA :
+        SafeHide (rpp->trnaGrp);
+        SafeHide (rpp->rrnaPrompt);
+        SafeHide (rpp->ornaPrompt);
+        SafeHide (rpp->nameGrp);
+        SafeShow (rfp->product);
+        SafeHide (rfp->usrobjext);
+        SafeHide (rpp->ncrnaGrp);
+        SafeShow (rpp->tmrnaGrp);
+        break;
+      case FEATDEF_otherRNA :
+        SafeHide (rpp->trnaGrp);
+        SafeHide (rpp->rrnaPrompt);
+        SafeShow (rpp->ornaPrompt);
+        SafeShow (rpp->nameGrp);
+        SafeShow (rfp->product);
+        SafeHide (rfp->usrobjext);
+        break;
+      default :
+        SafeHide (rpp->trnaGrp);
+        SafeHide (rpp->rrnaPrompt);
+        SafeHide (rpp->ornaPrompt);
+        SafeShow (rpp->nameGrp);
+        SafeHide (rfp->product);
+        SafeHide (rfp->usrobjext);
+        SafeHide (rpp->ncrnaGrp);
+        SafeHide (rpp->tmrnaGrp);
+        break;
     }
     SetRnaImportExportItems (rpp->rfp);
     Update ();
@@ -6356,6 +7061,173 @@ static CharPtr trnaTabs [] = {
   "Amino Acid", "Codons", "Anticodon", NULL
 };
 
+
+static Uint1 RnaTypeFromFeatdef (Uint2 featdef)
+{
+  switch (featdef) 
+  {
+    case FEATDEF_preRNA:
+      return 1;
+      break;
+    case FEATDEF_mRNA:
+      return 2;
+      break;
+    case FEATDEF_tRNA:
+      return 3;
+      break;
+    case FEATDEF_rRNA:
+      return 4;
+      break;
+    case FEATDEF_snRNA:
+      return 8;
+      break;
+    case FEATDEF_scRNA:
+      return 8;
+      break;
+    case FEATDEF_snoRNA:
+      return 8;
+      break;
+    case FEATDEF_ncRNA:
+      return 8;
+      break;
+    case FEATDEF_tmRNA:
+      return 9; 
+      break;
+    case FEATDEF_otherRNA:
+    default:
+      return 255;
+      break;
+  }
+}
+
+
+static void ChangeRNAType (PopuP p)
+
+{
+  Char             ch;
+  Int2             expev;
+  Int2             geneval;
+  HelpMessageFunc  helpfunc;
+  RnaFormPtr       rfp;
+  RnaFormPtr       newrfp;
+  RnaRefPtr        rrp;
+  RnaPagePtr       rpp;
+  ObjMgrPtr        omp;
+  ObjMgrTypePtr    omtp;
+  CharPtr          ptr;
+  SeqEntryPtr      sep;
+  SeqFeatPtr       sfp;
+  Char             title [128];
+  WindoW           w;
+  UIEnum           val;
+  GBQualPtr        gbq;
+
+  rfp = (RnaFormPtr) GetObjectExtra (p);
+  if (rfp == NULL) return;
+  rpp = (RnaPagePtr) GetObjectExtra (rfp->data);
+  if (rpp == NULL) return;
+  sfp = SeqFeatNew ();
+  if (sfp != NULL) {
+    if (GetEnumPopup (rpp->type, rna_type_alist, &val)) {
+
+      sfp->data.choice = SEQFEAT_RNA;
+      sfp->data.value.ptrvalue = DialogToPointer (rfp->data);
+      sfp->comment = SaveStringFromText (rfp->comment);
+      ptr = sfp->comment;
+      if (ptr != NULL) {
+        ch = *ptr;
+        while (ch != '\0') {
+          if (ch < ' ' || ch > '~') {
+            *ptr = '~';
+          }
+          ptr++;
+          ch = *ptr;
+        }
+      }
+      expev = GetValue (rfp->evidence);
+      if (expev > 0 && expev <= 3) {
+        sfp->exp_ev = expev - 1;
+      } else {
+        sfp->exp_ev = 0;
+      }
+      sfp->partial = GetStatus (rfp->partial);
+      sfp->excpt = GetStatus (rfp->exception);
+      sfp->title = NULL;
+      sfp->product = DialogToPointer (rfp->product);
+      sfp->location = DialogToPointer (rfp->location);
+      sfp->cit = DialogToPointer (rfp->featcits);
+      sfp->dbxref = DialogToPointer (rfp->dbxrefs);
+      sfp->qual = DialogToPointer (rfp->gbquals);
+      CleanupEvidenceGBQuals (&(sfp->qual));
+      VisStringDialogToGbquals (sfp, rfp->experiment, "experiment");
+      InferenceDialogToGBQuals (rfp->inference, sfp, TRUE);
+      AddRnaSpecificQualsForType (sfp, rpp, rpp->prev_rna_type < 0 ? val : rpp->prev_rna_type);
+      if (rpp->prev_rna_type == 8 && val != 8) {
+        RemoveQualByName (sfp, "ncRNA_class");
+      }
+      if (rpp->prev_rna_type == 8 || rpp->prev_rna_type == 9 || rpp->prev_rna_type == 255) {
+        if (val != 8 && val != 9 && val != 255) {
+          ConvertProductQualToRnaRefName (sfp);
+        }
+      } else if (val == 8 || val == 9 || val == 255) {
+        if (rpp->name != NULL && !TextHasNoText (rpp->name)) {
+          gbq = FindOrAddQual (sfp, "product");
+          gbq->val = SaveStringFromText (rpp->name);
+        }
+      }
+
+      SetRNAMiscNameForType (sfp, val);
+      rpp->prev_rna_type = val;
+
+      geneval = GetValue (rfp->gene);
+      sep = GetTopSeqEntryForEntityID (rfp->input_entityID);
+      StringCpy (title, "RNA");
+      if (sfp != NULL && sfp->data.value.ptrvalue != NULL) {
+        rrp = (RnaRefPtr) sfp->data.value.ptrvalue;
+        /* set title based on type of RNA feature */
+      }
+      /* need to set subtype to correctly calculate which quals should be suppressed */
+      sfp->idx.subtype = RnaFeatDefFromRnaRef ((RnaRefPtr)sfp->data.value.ptrvalue);
+      w = (WindoW) CreateRnaForm (-50, -33, title, sfp, sep, RnaFeatDefFromRnaRef (rrp),
+                                     StdFeatFormActnProc);
+      newrfp = (RnaFormPtr) GetObjectExtra (w);
+      if (newrfp != NULL) {
+        newrfp->input_entityID = rfp->input_entityID;
+        newrfp->input_itemID = rfp->input_itemID;
+        newrfp->input_itemtype = rfp->input_itemtype;
+        newrfp->this_itemtype = rfp->this_itemtype;
+        newrfp->this_subtype = rfp->this_subtype;
+        if (sfp != NULL) {
+          omp = ObjMgrGet ();
+          if (omp != NULL) {
+            omtp = ObjMgrTypeFind (omp, OBJ_SEQFEAT, NULL, NULL);
+            if (omtp != NULL && omtp->subtypefunc != NULL) {
+              newrfp->this_subtype = (*(omtp->subtypefunc)) (sfp);
+            }
+          }
+        }
+        SendMessageToForm (newrfp->form, VIB_MSG_INIT);
+        SetValue (newrfp->gene, geneval);
+        if (sfp != NULL) {
+          PointerToForm (newrfp->form, (Pointer) sfp);
+        }
+      }
+      Remove (rfp->form);
+      Show (w);
+      Select (w);
+      helpfunc = (HelpMessageFunc) GetAppProperty ("HelpMessageProc");
+      if (helpfunc != NULL) {
+        helpfunc ("Features", title);
+      }
+    }
+    SeqFeatFree (sfp);
+    Update ();
+  }
+}
+
+
+
+
 static DialoG CreateRnaDialog (GrouP h, CharPtr title,
                                Uint2 subtype, SeqEntryPtr sep,
                                SeqFeatPtr sfp, RnaFormPtr rfp)
@@ -6375,6 +7247,8 @@ static DialoG CreateRnaDialog (GrouP h, CharPtr title,
   PrompT      t;
   DialoG      tbs;
   GrouP       x;
+  Uint1       rna_type;
+  Uint2       entityID;
 
   p = HiddenGroup (h, 1, 0, NULL);
   SetGroupSpacing (p, 10, 10);
@@ -6388,6 +7262,8 @@ static DialoG CreateRnaDialog (GrouP h, CharPtr title,
     rpp->fromdialog = RnaPageToRnaRefPtr;
     rpp->testdialog = NULL;
 
+    rpp->prev_rna_type = -1;
+
     if (title != NULL && title [0] != '\0') {
       s = NormalGroup (p, 0, -2, title, systemFont, NULL);
     } else {
@@ -6400,10 +7276,13 @@ static DialoG CreateRnaDialog (GrouP h, CharPtr title,
 
     f = HiddenGroup (m, -2, 0, NULL);
     StaticPrompt (f, "Type", 0, popupMenuHeight, programFont, 'l');
-    rpp->type = PopupList (f, TRUE, ChangeRnaProc);
-    SetObjectExtra (rpp->type, rpp, NULL);
+    rpp->type = PopupList (f, TRUE, ChangeRNAType);
+    SetObjectExtra (rpp->type, rfp, NULL);
     InitEnumPopup (rpp->type, rna_type_alist, NULL);
     SetEnumPopup (rpp->type, rna_type_alist, (UIEnum) 0);
+
+    StaticPrompt (m, "Changing RNA type will recreate the window.",
+                        0, 0, programFont, 'c');
 
     showpseudo = FALSE;
     if (sfp != NULL && sfp->data.choice == SEQFEAT_RNA) {
@@ -6429,15 +7308,6 @@ static DialoG CreateRnaDialog (GrouP h, CharPtr title,
     x = HiddenGroup (rpp->nameGrp, 0, 0, NULL);
     rpp->rrnaPrompt = StaticPrompt (x, "E.g., 16S ribosomal RNA", 0, 0, programFont, 'c');
     rpp->ornaPrompt = StaticPrompt (x, "E.g., internal transcribed spacer 1", 0, 0, programFont, 'c');
-    if ((sfp != NULL && (sfp->product != NULL || sfp->ext != NULL)) || indexerVersion) {
-      rfp->product = CreateProteinOrMRNAProductDialog (rpp->nameGrp, NULL, "cDNA Product   ", TRUE, sep, NULL, rfp, (BaseFormPtr) rfp);
-      rfp->usrobjext = CreateMrnaUserObjectDialog (rpp->nameGrp, "Protein Product", sep, (BaseFormPtr) rfp);
-    }
-    if ((sfp != NULL && sfp->product != NULL) || indexerVersion) {
-      x = HiddenGroup (rpp->nameGrp, 2, 0, NULL);
-      StaticPrompt (x, "SeqID", 0, dialogTextHeight, programFont, 'l');
-      rfp->prodSeqIdTxt = DialogText (x, "", 6, NULL);
-    }
     AlignObjects (ALIGN_CENTER, (HANDLE) q, (HANDLE) rpp->rrnaPrompt, (HANDLE) rpp->ornaPrompt, NULL);
     Hide (rpp->nameGrp);
 
@@ -6468,81 +7338,38 @@ static DialoG CreateRnaDialog (GrouP h, CharPtr title,
                   (HANDLE) rpp->trnaPages [2], NULL);
     AlignObjects (ALIGN_CENTER, (HANDLE) f, (HANDLE) rpp->nameGrp,
                   (HANDLE) rpp->trnaGrp,  (HANDLE) rpp->pseudo,NULL);
+    Hide (rpp->ncrnaGrp);
 
-    switch (subtype) {
-      case 0 :
-        SafeHide (rpp->nameGrp);
-        SafeHide (rpp->rrnaPrompt);
-        SafeHide (rpp->ornaPrompt);
-        SafeHide (rpp->trnaGrp);
-        SafeHide (rfp->product);
-        SafeHide (rfp->usrobjext);
-        break;
-      case FEATDEF_mRNA :
-        SafeHide (rpp->trnaGrp);
-        SafeHide (rpp->rrnaPrompt);
-        SafeHide (rpp->ornaPrompt);
-        SafeShow (rpp->nameGrp);
-        SafeShow (rfp->product);
-        SafeShow (rfp->usrobjext);
-        break;
-      case FEATDEF_tRNA :
-        SafeHide (rpp->nameGrp);
-        SafeHide (rpp->rrnaPrompt);
-        SafeHide (rpp->ornaPrompt);
-        SafeShow (rpp->trnaGrp);
-        SafeShow (rfp->product);
-        SafeHide (rfp->usrobjext);
-        break;
-      case FEATDEF_rRNA :
-        SafeHide (rpp->trnaGrp);
-        SafeHide (rpp->ornaPrompt);
-        SafeShow (rpp->rrnaPrompt);
-        SafeShow (rpp->nameGrp);
-        SafeShow (rfp->product);
-        SafeHide (rfp->usrobjext);
-        break;
-      case FEATDEF_snRNA :
-        SafeHide (rpp->trnaGrp);
-        SafeHide (rpp->ornaPrompt);
-        SafeHide (rpp->rrnaPrompt);
-        SafeShow (rpp->nameGrp);
-        SafeShow (rfp->product);
-        SafeHide (rfp->usrobjext);
-        break;
-      case FEATDEF_scRNA :
-        SafeHide (rpp->trnaGrp);
-        SafeHide (rpp->ornaPrompt);
-        SafeHide (rpp->rrnaPrompt);
-        SafeShow (rpp->nameGrp);
-        SafeShow (rfp->product);
-        SafeHide (rfp->usrobjext);
-        break;
-      case FEATDEF_snoRNA :
-        SafeHide (rpp->trnaGrp);
-        SafeHide (rpp->ornaPrompt);
-        SafeHide (rpp->rrnaPrompt);
-        SafeShow (rpp->nameGrp);
-        SafeShow (rfp->product);
-        SafeHide (rfp->usrobjext);
-        break;
-      case FEATDEF_otherRNA :
-        SafeHide (rpp->trnaGrp);
-        SafeHide (rpp->rrnaPrompt);
-        SafeShow (rpp->ornaPrompt);
-        SafeShow (rpp->nameGrp);
-        SafeShow (rfp->product);
-        SafeHide (rfp->usrobjext);
-        break;
-      default :
-        SafeHide (rpp->trnaGrp);
-        SafeHide (rpp->ornaPrompt);
-        SafeHide (rpp->rrnaPrompt);
-        SafeShow (rpp->nameGrp);
-        SafeHide (rfp->product);
-        SafeHide (rfp->usrobjext);
-        break;
+    rpp->ncrnaGrp = HiddenGroup (g, 2, 0, NULL);
+    SetGroupSpacing (rpp->ncrnaGrp, 10, 10);
+    StaticPrompt (rpp->ncrnaGrp, "Class", 0, popupMenuHeight, programFont, 'l');
+    rpp->ncrnaClass = CreatencRNAClassDialog (rpp->ncrnaGrp, FALSE, NULL, NULL);
+    StaticPrompt (rpp->ncrnaGrp, "Product", 0, dialogTextHeight, programFont, 'l');
+    rpp->ncrnaProduct = DialogText (rpp->ncrnaGrp, "", 10, NULL);
+    Hide (rpp->ncrnaGrp);
+
+    rpp->tmrnaGrp = HiddenGroup (g, 2, 0, NULL);
+    SetGroupSpacing (rpp->tmrnaGrp, 10, 10);
+    StaticPrompt (rpp->tmrnaGrp, "Tag Peptide", 0, dialogTextHeight, programFont, 'l');
+    rpp->tmrnaTagPeptide = CreateRptUnitRangeDialog (rpp->tmrnaGrp, NULL, NULL, NULL, NULL);
+    StaticPrompt (rpp->tmrnaGrp, "Product", 0, dialogTextHeight, programFont, 'l');
+    rpp->tmrnaProduct = DialogText (rpp->tmrnaGrp, "", 10, NULL);
+    Hide (rpp->tmrnaGrp);
+
+    if (sfp != NULL && sfp->data.choice == SEQFEAT_RNA && sfp->data.value.ptrvalue != NULL) {
+      rna_type = RnaSubtypeFromRnaRef ((RnaRefPtr)sfp->data.value.ptrvalue);
+    } else {
+      rna_type = RnaTypeFromFeatdef (subtype);
     }
+    SetEnumPopup (rpp->type, rna_type_alist, (UIEnum) rna_type);
+    rpp->prev_rna_type = rna_type;
+
+    if ((sfp != NULL && sfp->product != NULL) || indexerVersion) {
+      entityID = SeqMgrGetEntityIDForSeqEntry(sep);
+      rfp->product = CreateRNATranscriptIDDialog (m, entityID, TRUE, NULL, NULL);
+    }
+
+    SetRnaType (rpp, subtype);
   }
 
   return (DialoG) p;
@@ -6741,13 +7568,10 @@ static void RnaFormActivate (WindoW w)
 static void RnaRefPtrToForm (ForM f, Pointer data)
 
 {
-  BioseqPtr     bsp;
-  Char          id [41];
   SeqEntryPtr   oldsep;
   RnaFormPtr    rfp;
   SeqEntryPtr   sep;
   SeqFeatPtr    sfp;
-  SeqIdPtr      sip;
   Int4          val;
 
   rfp = (RnaFormPtr) GetObjectExtra (f);
@@ -6772,16 +7596,6 @@ static void RnaRefPtrToForm (ForM f, Pointer data)
       }
       SeqFeatPtrToCommon ((FeatureFormPtr) rfp, sfp);
       PointerToDialog (rfp->product, sfp->product);
-      if (sfp->product != NULL) {
-        sip = SeqLocId (sfp->product);
-        if (sip != NULL) {
-          bsp = BioseqFind (sip);
-          if (bsp == NULL) {
-            SeqIdWrite (sip, id, PRINTID_FASTA_LONG, sizeof (id));
-            SafeSetTitle (rfp->prodSeqIdTxt, id);
-          }
-        }
-      }
     }
     SeqEntrySetScope (oldsep);
   }
@@ -6875,6 +7689,7 @@ extern ForM CreateRnaForm (Int2 left, Int2 top, CharPtr title,
     s = HiddenGroup (h, -1, 0, NULL);
     SetGroupSpacing (s, 3, 10);
     rfp->data = CreateRnaDialog (s, NULL, subtype, sep, sfp, rfp);
+    SetRnaSpecificQuals (sfp, rfp->data);
     rfp->pages [RNA_PAGE] = s;
     Hide (rfp->pages [RNA_PAGE]);
     rnaFormTabs [0] = NULL;
@@ -6987,7 +7802,7 @@ extern Int2 LIBCALLBACK RnaGenFunc (Pointer data)
   if (sfp != NULL && sfp->data.value.ptrvalue != NULL) {
     rrp = (RnaRefPtr) sfp->data.value.ptrvalue;
     StringNCpy_0 (title,
-                GetEnumName ((UIEnum) rrp->type, rna_type_alist),
+                GetEnumName (RnaSubtypeFromRnaRef(rrp), rna_type_alist),
                 sizeof (title));
     if (StringHasNoText (title)) {
       StringCpy (title, "Unknown RNA");
@@ -7043,27 +7858,16 @@ extern Int2 LIBCALLBACK RnaGenFunc (Pointer data)
       rpp = (RnaPagePtr) GetObjectExtra (rfp->data);
       if (rpp != NULL) {
         SetNewFeatureDefaultInterval ((FeatureFormPtr) rfp);
-        if (subtype >= FEATDEF_preRNA && subtype <= FEATDEF_scRNA) {
-          SetEnumPopup (rpp->type, rna_type_alist,
-                        (UIEnum) check_rna_type (subtype - FEATDEF_preRNA + 1));
-          if (subtype == FEATDEF_tRNA)
-          {
-            /* attempt to provide default location for anticodons */
-            SeqLocPtr tmp_loc = NULL;
-            
-            tmp_loc = DialogToPointer (rpp->rfp->location);
-            PointerToDialog (rpp->anticodon, tmp_loc);
-            SetSequenceAndStrandForIntervalPage (rpp->anticodon);
-            SeqLocFree (tmp_loc);              
-          }
-        } else if (subtype == FEATDEF_snoRNA) {
-          SetEnumPopup (rpp->type, rna_type_alist,
-                        (UIEnum) check_rna_type (7));
-        } else if (subtype == FEATDEF_otherRNA) {
-          SetEnumPopup (rpp->type, rna_type_alist,
-                        (UIEnum) check_rna_type (255));
-        } else {
-          SetEnumPopup (rpp->type, rna_type_alist, (UIEnum) 0);
+        SetEnumPopup (rpp->type, rna_type_alist, RnaTypeFromFeatdef (subtype));
+        if (subtype == FEATDEF_tRNA)
+        {
+          /* attempt to provide default location for anticodons */
+          SeqLocPtr tmp_loc = NULL;
+          
+          tmp_loc = DialogToPointer (rpp->rfp->location);
+          PointerToDialog (rpp->anticodon, tmp_loc);
+          SetSequenceAndStrandForIntervalPage (rpp->anticodon);
+          SeqLocFree (tmp_loc);              
         }
       }
     }
@@ -7075,5 +7879,647 @@ extern Int2 LIBCALLBACK RnaGenFunc (Pointer data)
     helpfunc ("Features", title);
   }
   return OM_MSG_RET_DONE;
+}
+
+
+typedef struct ncrnaclassdlg {
+  DIALOG_MESSAGE_BLOCK
+  PopuP                ncrnaclass;
+  TexT                 otherclass;
+  Nlm_ChangeNotifyProc change_notify;
+  Pointer              change_userdata;
+  Boolean              is_constraint;
+
+} NcrnaClassDlgData, PNTR NcrnaClassDlgPtr;
+
+static void ChangeNcrnaClass (PopuP p)
+{
+  NcrnaClassDlgPtr dlg;
+
+  dlg = (NcrnaClassDlgPtr) GetObjectExtra (p);
+  if (dlg == NULL) return;
+
+  if (GetValue (dlg->ncrnaclass) == NcrnaOTHER) {
+    Show (dlg->otherclass);
+  } else {
+    Hide (dlg->otherclass);
+  }
+
+  if (dlg->change_notify != NULL) {
+    (dlg->change_notify) (dlg->change_userdata);
+  }
+}
+
+
+static void ChangeNcrnaOtherClass (TexT t)
+{
+  NcrnaClassDlgPtr dlg;
+
+  dlg = (NcrnaClassDlgPtr) GetObjectExtra (t);
+  if (dlg == NULL) return;
+  if (dlg->change_notify != NULL) {
+    (dlg->change_notify) (dlg->change_userdata);
+  }
+}
+
+
+static void PointerToNcrnaClassDialog (DialoG d, Pointer data)
+{
+  NcrnaClassDlgPtr dlg;
+  CharPtr PNTR     cpp;
+  Int4             pos = NcrnaOTHER;
+
+  dlg = (NcrnaClassDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) return;
+
+  if (data == NULL) {
+    if (dlg->is_constraint) {
+      pos = NcrnaOTHER + 1;
+    }
+  } else {
+    if (data != NULL) {
+      for (cpp = ncrnaClassList, pos = 1;
+          *cpp != NULL && pos < NcrnaOTHER;
+          cpp++, pos++) {
+        if (StringCmp (*cpp, (CharPtr) data) == 0) {
+          break;
+        }
+      }
+    }
+  }
+  
+  SetValue (dlg->ncrnaclass, pos);
+  if (pos == NcrnaOTHER) {
+    SetTitle (dlg->otherclass, (CharPtr) data);
+    Show (dlg->otherclass);
+  } else {
+    Hide (dlg->otherclass);
+  }
+}
+
+
+static Pointer NcrnaClassDialogToPointer (DialoG d)
+{
+  NcrnaClassDlgPtr dlg;
+  Int4             pos;
+
+  dlg = (NcrnaClassDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) return NULL;
+  pos = GetValue (dlg->ncrnaclass);
+  if (pos > 0 && pos < NcrnaOTHER) {
+    return StringSave (ncrnaClassList[pos - 1]);
+  } else if (pos == NcrnaOTHER && !TextHasNoText (dlg->otherclass)) {
+    return SaveStringFromText (dlg->otherclass);
+  } else {
+    return NULL;
+  }  
+}
+
+
+static ValNodePtr TestNcrnaClassDialog (DialoG d)
+{
+  ValNodePtr err_list = NULL;
+
+  NcrnaClassDlgPtr dlg;
+  Int4             pos;
+
+  dlg = (NcrnaClassDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) return NULL;
+  pos = GetValue (dlg->ncrnaclass);
+
+  if (pos < 1 && !dlg->is_constraint) {
+    ValNodeAddPointer (&err_list, 0, "No ncRNA class");
+  } else if (pos == NcrnaOTHER) {
+    if (TextHasNoText (dlg->otherclass)) {
+      ValNodeAddPointer (&err_list, 0, "No ncRNA class");
+    }
+  } else if (!dlg->is_constraint && pos > NcrnaOTHER) {
+    ValNodeAddPointer (&err_list, 0, "No ncRNA class");
+  }
+  return err_list;
+}
+
+
+extern DialoG CreatencRNAClassDialog (GrouP h, Boolean is_constraint, Nlm_ChangeNotifyProc change_notify, Pointer change_userdata)
+{
+  NcrnaClassDlgPtr dlg;
+  GrouP            p;
+  CharPtr PNTR cpp;
+
+  p = HiddenGroup (h, 2, 0, NULL);  
+  dlg = (NcrnaClassDlgPtr) MemNew (sizeof (NcrnaClassDlgData));
+  SetObjectExtra (p, dlg, StdCleanupExtraProc);
+  
+  dlg->dialog = (DialoG) p;
+  dlg->todialog = PointerToNcrnaClassDialog;
+  dlg->fromdialog = NcrnaClassDialogToPointer;
+  dlg->testdialog = TestNcrnaClassDialog;
+  dlg->change_notify = change_notify;
+  dlg->change_userdata = change_userdata;
+  dlg->is_constraint = is_constraint;
+  
+  dlg->ncrnaclass = PopupList (p, TRUE, ChangeNcrnaClass);
+  SetObjectExtra (dlg->ncrnaclass, dlg, NULL);
+  for (cpp = ncrnaClassList; *cpp != NULL; cpp++) {
+    PopupItem (dlg->ncrnaclass, *cpp);
+  }
+  if (is_constraint) {
+    PopupItem (dlg->ncrnaclass, "Any");
+    SetValue (dlg->ncrnaclass, NcrnaOTHER + 1);
+  } else {
+    SetValue (dlg->ncrnaclass, NcrnaOTHER);
+  }
+  dlg->otherclass = DialogText (p, "", 10, ChangeNcrnaOtherClass);
+  SetObjectExtra (dlg->otherclass, dlg, NULL);
+
+  return (DialoG) p;
+}
+
+
+extern RnaTypePtr RnaTypeFree (RnaTypePtr rtp)
+{
+  if (rtp != NULL)
+  {
+    rtp->ncrna_class = MemFree (rtp->ncrna_class);
+    rtp = MemFree (rtp);
+  }
+  return rtp;
+}
+
+
+extern Boolean MatchesRnaType (SeqFeatPtr sfp, RnaTypePtr rtp)
+{
+  RnaRefPtr rrp;
+  GBQualPtr gbq;
+  Uint1     featdef;
+  Boolean   matches = TRUE;
+
+  if (sfp == NULL || sfp->data.choice != SEQFEAT_RNA) return FALSE;
+  if (rtp == NULL || rtp->rna_featdef == FEATDEF_ANY) return TRUE;
+
+  rrp = (RnaRefPtr) sfp->data.value.ptrvalue;
+  if (rrp == NULL) return FALSE;
+
+  featdef = RnaFeatDefFromRnaRef (rrp);
+  if (featdef != rtp->rna_featdef) return FALSE;
+
+  if (featdef == FEATDEF_ncRNA)
+  {
+    if (rtp->ncrna_class == NULL) {
+      matches = TRUE;
+    } else {
+      gbq = sfp->qual;
+      while (gbq != NULL && StringCmp (gbq->qual, "ncRNA_class") != 0)
+      {
+        gbq = gbq->next;
+      }
+      if (gbq == NULL)
+      {
+        if (rrp->ext.choice == 1 && StringCmp (rrp->ext.value.ptrvalue, rtp->ncrna_class) == 0)
+        {
+          matches = TRUE;
+        }
+        else if (StringDoesHaveText (rtp->ncrna_class)) 
+        {
+          matches = FALSE;
+        }
+      }
+      else if (StringCmp (gbq->val, rtp->ncrna_class) != 0)
+      {
+        matches = FALSE;
+      }
+    }
+  }
+  return matches; 
+}
+
+
+static void ClearRNAProduct (RnaRefPtr rrp)
+{
+  tRNAPtr trna;
+
+  if (rrp == NULL || rrp->ext.choice == 0)
+  {
+    return;
+  }
+  if (rrp->ext.choice == 2)
+  {
+		trna = (tRNAPtr)(rrp->ext.value.ptrvalue);
+    if (trna != NULL) {
+		  trna->anticodon = SeqLocFree(trna->anticodon);
+    }
+  }
+
+  rrp->ext.value.ptrvalue = MemFree (rrp->ext.value.ptrvalue);
+  rrp->ext.choice = 0;
+}
+
+
+static void MoveRnaProductToQual (SeqFeatPtr sfp)
+{
+  RnaRefPtr rrp;
+  CharPtr   product = NULL;
+  GBQualPtr gbq;
+
+  if (sfp == NULL || sfp->data.choice != SEQFEAT_RNA || sfp->data.value.ptrvalue == NULL)
+  {
+    return;
+  }
+
+  rrp = (RnaRefPtr) sfp->data.value.ptrvalue;
+  if (rrp->ext.choice == 1)
+  { 
+    product = rrp->ext.value.ptrvalue;
+    rrp->ext.value.ptrvalue = NULL;
+  }
+  ClearRNAProduct (rrp);
+  rrp->ext.choice = 1;
+  rrp->ext.value.ptrvalue = StringSave ("ncRNA");
+  if (product != NULL)
+  {
+    gbq = FindOrAddQual (sfp, "product");
+    gbq->val = product;
+  }
+}
+
+
+extern void ApplyRnaTypeToSeqFeat (SeqFeatPtr sfp, RnaTypePtr rtp)
+{
+  RnaRefPtr rrp;
+  GBQualPtr gbq;
+
+  if (sfp == NULL || sfp->data.choice != SEQFEAT_RNA)
+  {
+    return;
+  }
+
+  rrp = (RnaRefPtr) sfp->data.value.ptrvalue;
+  if (rrp == NULL)
+  {
+    rrp = RnaRefNew();
+    sfp->data.value.ptrvalue = rrp;
+  }
+
+  if (rtp == NULL || rtp->rna_featdef == FEATDEF_ANY)
+  {
+    return;
+  }
+
+  switch (rtp->rna_featdef)
+  {
+    case FEATDEF_preRNA:
+      rrp->type = 1;
+      break;
+    case FEATDEF_mRNA:
+      rrp->type = 2;
+      break;
+    case FEATDEF_tRNA:
+      rrp->type = 3;
+      break;
+    case FEATDEF_rRNA:
+      rrp->type = 4;
+      break;
+    case FEATDEF_scRNA:
+      rrp->type = 255;
+      MoveRnaProductToQual (sfp);
+      gbq = FindOrAddQual (sfp, "ncRNA_class");
+      gbq->val = MemFree (gbq->val);
+      gbq->val = StringSave ("scRNA");
+      break;
+    case FEATDEF_snRNA:
+      rrp->type = 255;
+      MoveRnaProductToQual (sfp);
+      gbq = FindOrAddQual (sfp, "ncRNA_class");
+      gbq->val = MemFree (gbq->val);
+      gbq->val = StringSave ("snRNA");
+      break;
+    case FEATDEF_snoRNA:
+      rrp->type = 255;
+      MoveRnaProductToQual (sfp);
+      gbq = FindOrAddQual (sfp, "ncRNA_class");
+      gbq->val = MemFree (gbq->val);
+      gbq->val = StringSave ("snoRNA");
+      break;
+    case FEATDEF_ncRNA:
+      rrp->type = 255;
+      MoveRnaProductToQual (sfp);
+      gbq = FindOrAddQual (sfp, "ncRNA_class");
+      gbq->val = MemFree (gbq->val);
+      gbq->val = StringSave (rtp->ncrna_class);
+      break;
+    case FEATDEF_tmRNA:
+      rrp->type = 255;
+      MoveRnaProductToQual (sfp);
+      rrp->ext.value.ptrvalue = MemFree (rrp->ext.value.ptrvalue);
+      rrp->ext.value.ptrvalue = StringSave ("tmRNA");
+      rrp->ext.choice = 1;
+      break;
+    case FEATDEF_otherRNA:
+      rrp->type = 255;
+      if (rrp->ext.choice == 1 && IsStringInNcRNAClassList (rrp->ext.value.ptrvalue))
+      {
+        gbq = FindOrAddQual (sfp, "ncRNA_class");
+        gbq->val = MemFree (gbq->val);
+        gbq->val = rrp->ext.value.ptrvalue;
+        rrp->ext.value.ptrvalue = StringSave ("ncRNA");
+      }
+      break;
+  }
+
+}
+
+
+extern void AddToComment (SeqFeatPtr sfp, CharPtr comment)
+{
+  CharPtr tmp;
+
+  if (sfp == NULL || StringHasNoText (comment)) return;
+
+  if (StringHasNoText (sfp->comment))
+  {
+    sfp->comment = MemFree (sfp->comment);
+    sfp->comment = StringSave (comment);
+  }
+  else
+  {
+    tmp = (CharPtr) MemNew (sizeof (Char) * (StringLen (sfp->comment) + StringLen (comment) + 3));
+    sprintf (tmp, "%s; %s", sfp->comment, comment);
+    sfp->comment = MemFree (sfp->comment);
+    sfp->comment = tmp;
+  }
+}
+
+
+extern void ApplyProductToRNA (SeqFeatPtr sfp, CharPtr product)
+{
+  RnaRefPtr rrp;
+  GBQualPtr gbq;
+  Uint1     aa;
+  Int4      j;
+  Boolean   justTrnaText = FALSE;
+  Char      codon [16];
+  tRNAPtr   trp;
+
+  if (sfp == NULL || sfp->data.choice != SEQFEAT_RNA
+      || sfp->data.value.ptrvalue == NULL)
+  {
+    return;
+  }
+
+  rrp = (RnaRefPtr) sfp->data.value.ptrvalue;
+  if (rrp->type == 3)
+  {
+    ClearRNAProduct (rrp);
+
+    aa = ParseTRnaString (product, &justTrnaText, (Uint1Ptr) codon, TRUE);
+    if (aa != 0) 
+    {
+      trp = (tRNAPtr) MemNew (sizeof (tRNA));
+      if (trp != NULL) 
+      {
+        trp->aatype = 2;
+        for (j = 0; j < 6; j++)
+        {
+          trp->codon [j] = 255;
+        }
+        if (justTrnaText)
+        {
+          for (j = 0; j < 6; j++)
+          {
+            trp->codon [j] = codon [j];
+          }
+        }
+        trp->aa = aa;
+        rrp->ext.choice = 2;
+        rrp->ext.value.ptrvalue = (Pointer) trp;
+      }
+    }
+    if (aa == 0 || !justTrnaText)
+    {
+      AddToComment (sfp, product);
+    }
+  }
+  else if (rrp->type == 255 
+           && rrp->ext.choice == 1 
+           && (StringCmp (rrp->ext.value.ptrvalue, "ncRNA") == 0
+               || StringCmp (rrp->ext.value.ptrvalue, "tmRNA") == 0
+               || StringCmp (rrp->ext.value.ptrvalue, "misc_RNA") == 0))
+  {
+    gbq = FindOrAddQual (sfp, "product");
+    gbq->val = MemFree (gbq->val);
+    gbq->val = StringSave (product);    
+  }
+  else
+  {
+    ClearRNAProduct (rrp);
+    rrp->ext.choice = 1;
+    rrp->ext.value.ptrvalue = StringSave (product);
+  }
+}
+
+
+
+typedef struct rnatypedlg {
+  DIALOG_MESSAGE_BLOCK
+  PopuP                rna_type;
+  DialoG               ncrna_class;
+  Nlm_ChangeNotifyProc change_notify;
+  Pointer              change_userdata;
+  Boolean              is_constraint;
+
+} RnaTypeDlgData, PNTR RnaTypeDlgPtr;
+
+
+static void ChangeRnaTypeDlg (PopuP p)
+{
+  RnaTypeDlgPtr dlg;
+  UIEnum        val;
+
+  dlg = (RnaTypeDlgPtr) GetObjectExtra (p);
+  if (dlg != NULL)
+  {
+    if (GetEnumPopup (dlg->rna_type, rna_type_alist, &val) && val == 8)
+    {
+      Enable (dlg->ncrna_class);
+    }
+    else
+    {
+      Disable (dlg->ncrna_class);
+    }
+    if (dlg->change_notify != NULL)
+    {
+      (dlg->change_notify) (dlg->change_userdata);
+    }
+  }
+}
+
+
+static void PointerToRnaTypeDialog (DialoG d, Pointer data)
+{
+  RnaTypeDlgPtr dlg;
+  RnaTypePtr    rtp = NULL;
+
+  dlg = (RnaTypeDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) return;
+
+  rtp = (RnaTypePtr) data;
+  if (rtp == NULL || rtp->rna_featdef == FEATDEF_ANY) 
+  {
+    SetEnumPopup (dlg->rna_type, rna_type_alist, (UIEnum) 0);
+    PointerToDialog (dlg->ncrna_class, NULL);
+  }
+  else
+  {
+    switch (rtp->rna_featdef)
+    {
+      case FEATDEF_preRNA:
+        SetEnumPopup (dlg->rna_type, rna_type_alist, (UIEnum) 1);
+        PointerToDialog (dlg->ncrna_class, NULL);
+        break;
+      case FEATDEF_mRNA:
+        SetEnumPopup (dlg->rna_type, rna_type_alist, (UIEnum) 2);
+        PointerToDialog (dlg->ncrna_class, NULL);
+        break;
+      case FEATDEF_tRNA:
+        SetEnumPopup (dlg->rna_type, rna_type_alist, (UIEnum) 3);
+        PointerToDialog (dlg->ncrna_class, NULL);
+        break;
+      case FEATDEF_rRNA:
+        SetEnumPopup (dlg->rna_type, rna_type_alist, (UIEnum) 4);
+        PointerToDialog (dlg->ncrna_class, NULL);
+        break;
+      case FEATDEF_scRNA:
+        SetEnumPopup (dlg->rna_type, rna_type_alist, (UIEnum) 8);
+        PointerToDialog (dlg->ncrna_class, "scRNA");
+        break;
+      case FEATDEF_snRNA:
+        SetEnumPopup (dlg->rna_type, rna_type_alist, (UIEnum) 8);
+        PointerToDialog (dlg->ncrna_class, "snRNA");
+        break;
+      case FEATDEF_snoRNA:
+        SetEnumPopup (dlg->rna_type, rna_type_alist, (UIEnum) 8);
+        PointerToDialog (dlg->ncrna_class, "snoRNA");
+        break;
+      case FEATDEF_ncRNA:
+        SetEnumPopup (dlg->rna_type, rna_type_alist, (UIEnum) 8);
+        PointerToDialog (dlg->ncrna_class, rtp->ncrna_class);
+        break;
+      case FEATDEF_tmRNA:
+        SetEnumPopup (dlg->rna_type, rna_type_alist, (UIEnum) 9);
+        PointerToDialog (dlg->ncrna_class, NULL);
+        break;
+      case FEATDEF_otherRNA:
+        SetEnumPopup (dlg->rna_type, rna_type_alist, (UIEnum) 255);
+        PointerToDialog (dlg->ncrna_class, NULL);
+        break;
+      default:
+        SetEnumPopup (dlg->rna_type, rna_type_alist, (UIEnum) 0);
+        PointerToDialog (dlg->ncrna_class, NULL);
+        break;
+    }
+  }
+  ChangeRnaTypeDlg (dlg->rna_type);
+}
+
+
+static Pointer RnaTypeDialogToPointer (DialoG d)
+{
+  RnaTypeDlgPtr dlg;
+  RnaTypePtr    rtp = NULL;
+  UIEnum        val;
+
+  dlg = (RnaTypeDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) return NULL;
+
+  if (GetEnumPopup (dlg->rna_type, rna_type_alist, &val))
+  {
+    rtp = (RnaTypePtr) MemNew (sizeof (RnaTypeData));
+    rtp->rna_featdef = FEATDEF_ANY;
+    rtp->ncrna_class = NULL;
+    switch (val)
+    {
+      case 0:
+        rtp->rna_featdef = FEATDEF_ANY;
+        break;
+      case 1:
+        rtp->rna_featdef = FEATDEF_preRNA;
+        break;
+      case 2:
+        rtp->rna_featdef = FEATDEF_mRNA;
+        break;
+      case 3:
+        rtp->rna_featdef = FEATDEF_tRNA;
+        break;
+      case 4:
+        rtp->rna_featdef = FEATDEF_rRNA;
+        break;
+      case 8:
+        rtp->rna_featdef = FEATDEF_ncRNA;
+        rtp->ncrna_class = DialogToPointer (dlg->ncrna_class);
+        break;
+      case 9:
+        rtp->rna_featdef = FEATDEF_tmRNA;
+        break;
+      case 255:
+        rtp->rna_featdef = FEATDEF_otherRNA;
+        break;
+    }
+  }
+  return rtp;
+}
+ 
+
+static ValNodePtr TestRnaTypeDialog (DialoG d)
+{
+  RnaTypeDlgPtr dlg;
+  ValNodePtr    err_list = NULL;
+  UIEnum        val;
+
+  dlg = (RnaTypeDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) return NULL;
+  if (GetEnumPopup (dlg->rna_type, rna_type_alist, &val)) {
+    if (val == 8) {
+      err_list = TestDialog (dlg->ncrna_class);
+    }
+  } else {
+    ValNodeAddPointer (&err_list, 0, "RNA type");
+  }
+  return err_list;
+}  
+
+extern DialoG RnaTypeDialog (GrouP h, Boolean is_constraint, Nlm_ChangeNotifyProc change_notify, Pointer change_userdata)
+{
+  RnaTypeDlgPtr dlg;
+  GrouP         p;
+  CharPtr       title;
+
+  if (is_constraint) {
+    title = "RNA Type of Feature to be Edited";
+  } else {
+    title = "RNA Type";
+  }
+  
+  p = NormalGroup (h, -1, 0, title, programFont, NULL);  
+  dlg = (RnaTypeDlgPtr) MemNew (sizeof (RnaTypeDlgData));
+  SetObjectExtra (p, dlg, StdCleanupExtraProc);
+  
+  dlg->dialog = (DialoG) p;
+  dlg->todialog = PointerToRnaTypeDialog;
+  dlg->fromdialog = RnaTypeDialogToPointer;
+  dlg->testdialog = TestRnaTypeDialog;
+  dlg->change_notify = change_notify;
+  dlg->change_userdata = change_userdata;
+  dlg->is_constraint = is_constraint;
+
+  dlg->rna_type = PopupList (p, TRUE, ChangeRnaTypeDlg);
+  SetObjectExtra (dlg->rna_type, dlg, NULL);
+  InitEnumPopup (dlg->rna_type, rna_type_alist, NULL);
+  SetEnumPopup (dlg->rna_type, rna_type_alist, (UIEnum) 0);
+  
+  dlg->ncrna_class = CreatencRNAClassDialog (p, is_constraint, change_notify, change_userdata);
+
+  AlignObjects (ALIGN_CENTER, (HANDLE) dlg->rna_type, (HANDLE) dlg->ncrna_class, NULL);
+
+  return (DialoG) p;
 }
 

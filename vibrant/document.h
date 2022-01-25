@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/12/93
 *
-* $Revision: 6.3 $
+* $Revision: 6.4 $
 *
 * File Description:  Converts fielded text into final report in a document
 *
@@ -40,6 +40,10 @@
 *
 *
 * $Log: document.h,v $
+* Revision 6.4  2008/02/13 18:52:08  bollin
+* Added MapDocPointEx, which allows you to prefer the first matching column to
+* the last matching column.
+*
 * Revision 6.3  2006/09/27 18:30:00  kans
 * support for Int4 scroll bars for switching between text and doc views in Sequin (CB)
 *
@@ -165,6 +169,9 @@ extern VoidPtr Nlm_GetDocData     PROTO((Nlm_DoC d));
 extern Nlm_CharPtr Nlm_GetDocText PROTO((Nlm_DoC d, Nlm_Int2 item, Nlm_Int2 row, Nlm_Int2 col));
 extern void    Nlm_MapDocPoint    PROTO((Nlm_DoC d, Nlm_PoinT pt, Nlm_Int2Ptr item, Nlm_Int2Ptr row,
                                   Nlm_Int2Ptr col, Nlm_RectPtr rct));
+extern void    Nlm_MapDocPointEx  PROTO((Nlm_DoC d, Nlm_PoinT pt, Nlm_Int2Ptr item, Nlm_Int2Ptr row, 
+                                  Nlm_Int2Ptr col, Nlm_RectPtr rct, Nlm_Boolean prefer_first_match_col));
+
 extern void    Nlm_PrintDocument  PROTO((Nlm_DoC d));
 extern void    Nlm_SaveDocument   PROTO((Nlm_DoC d, FILE *f));
 extern void    Nlm_SaveDocumentItem PROTO((Nlm_DoC d, FILE *f, Nlm_Int2 item));
@@ -276,6 +283,7 @@ extern void Nlm_DisplayFancy  PROTO((Nlm_DoC d, Nlm_CharPtr file, Nlm_ParPtr par
 #define SetDocData Nlm_SetDocData
 #define GetDocData Nlm_GetDocData
 #define GetDocText Nlm_GetDocText
+#define MapDocPointEx Nlm_MapDocPointEx
 #define MapDocPoint Nlm_MapDocPoint
 #define PrintDocument Nlm_PrintDocument
 #define SaveDocument Nlm_SaveDocument

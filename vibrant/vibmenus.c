@@ -29,250 +29,14 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.25 $
+* $Revision: 6.26 $
 *
 * File Description: 
 *       Vibrant menu functions
 *
 * Modifications:  
 * --------------------------------------------------------------------------
-* $Log: vibmenus.c,v $
-* Revision 6.25  2007/03/13 13:33:13  bollin
-* Initialize variables before they are used.
 *
-* Revision 6.24  2006/09/14 19:18:29  ivanov
-* Rollback last changes. All missed defines added to corelib/ncbiwin.h.
-*
-* Revision 6.23  2006/09/14 18:05:45  ivanov
-* Fixed compilation errors on MS Windows
-*
-* Revision 6.22  2006/09/14 14:45:38  kans
-* changes for 64-bit Windows (GC) plus a few CodeWarrior complaints (JK)
-*
-* Revision 6.21  2005/11/30 20:19:27  rsmith
-* Update Mac API to fix hier-menus.
-*
-* Revision 6.20  2005/07/18 15:15:18  kans
-* fixed minor xcode compiler warnings
-*
-* Revision 6.19  2004/04/01 13:43:09  lavr
-* Spell "occurred", "occurrence", and "occurring"
-*
-* Revision 6.18  2004/01/20 23:35:38  sinyakov
-* [WIN_MSWIN] implemented menu accelerators
-*
-* Revision 6.17  2003/11/17 17:03:30  kans
-* changed C++ style comments to C comments
-*
-* Revision 6.16  2003/03/27 19:35:43  kans
-* Nlm_PrepareTitle removes non-Mac accelerator from Mac menu item
-*
-* Revision 6.15  2002/03/28 13:30:27  kans
-* check for OS_UNIX_DARWIN before including MoreCarbonAccessors.h, Profiler.h (EN)
-*
-* Revision 6.14  2002/01/09 15:23:53  kans
-* added HasAquaMenuLayout
-*
-* Revision 6.13  2001/05/17 22:04:26  kans
-* separator item in mswin creates a fake status item link, so GetChildPosition is correct, and thus later submenus have the correct position for enabling and disabling
-*
-* Revision 6.12  2001/04/03 22:10:19  juran
-* Carbon fixes.
-*
-* Revision 6.11  2001/01/24 18:43:00  kans
-* remove artifact bar caused by popup label on Solaris (TF)
-*
-* Revision 6.10  2000/02/07 20:17:35  lewisg
-* minor bug fixes, use gui font for win32
-*
-* Revision 6.9  1999/12/30 16:47:09  kans
-* Carbon changes (Churchill)
-*
-* Revision 6.8  1999/04/22 15:18:57  vakatov
-* Call XtUnrealizeWidget() before XtDestroyWidget() to make sure no
-* "post-mortem" callbacks(registered by XtAddEventHandler()) get
-* triggered for the destroyed widget. Reason: the widget may not be
-* immediately destroyed if XtDestroyWidget() was called in a nested
-* event dispatch loop.
-*
-* Revision 6.7  1999/03/09 17:55:48  vakatov
-* [WIN_MOTIF]  Fixed for the ">63 items menu overflow" in
-*              Nlm_AppendChoice() and Nlm_AppendOnePopListChoice()
-*
-* Revision 6.6  1999/02/08 15:46:55  vakatov
-* [WIN_MOTIF]  Nlm_SetPopListValue() catch(and just ignore) attempts to
-* se a value larger than 63
-*
-* Revision 6.5  1997/12/12 21:08:35  kans
-* a number of symbols changed in the latest CodeWarrior release, now using headers from Apple
-*
-* Revision 6.4  1997/11/26 21:30:26  vakatov
-* Fixed errors and warnings issued by C and C++ (GNU and Sun) compilers
-*
-* Revision 6.3  1997/10/08 18:43:58  vakatov
-* [WIN_MOTIF] Nlm_ResetMenu() -- remove separator items too
-*
-* Revision 6.2  1997/10/01 17:08:04  vakatov
-* [WIN_MSWIN, WIN_MOTIF]  RemoveSubMenu() -- set parent's "submenu" to NULL
-*
-* Revision 6.1  1997/09/30 16:39:04  vakatov
-* [WIN_MOTIF] ResetMenu() -- check for NULL(ch.group) item;;  destroy
-* items in RemoveChoiceGroup()
-*
-* Revision 5.28  1997/07/10 21:49:32  vakatov
-* [WIN_X]  Now able to manage windows having different depths(and
-* different visuals and GC).
-*
-* Revision 5.27  1997/06/04 18:25:22  vakatov
-* [WIN_MOTIF] Added accelerators to PopupList items
-*
-* Revision 5.26  1997/05/12 19:01:57  vakatov
-* Disable and gray out the PopupList's cascade button properly;
-* [WIN_MOTIF] disable accelerators and mnemonics in the PopupList menu
-* when the menu is disabled
-*
-* Revision 5.25  1997/04/25 19:52:22  kans
-* mac submenus call prepare title
-*
- * Revision 5.24  1997/04/25  16:13:27  vakatov
- * [WIN_MOTIF,WIN_MSWIN] Catch and render(DoSendFocus) navigation key events
- * occurred in PopupList
- *
- * Revision 5.23  1997/04/18  22:17:49  vakatov
- * New way of specifying mnemonics/accelerators in the item(or menu) title:
- * use 1st sybbol after '/' for WIN_MAC;  2nd -- for WIN_MOTIF & WIN_MSWIN
- * mnemonic; 3rd -- for WIN_MOTIF accelerator.
- * [WIN_MOTIF] Added mnemonics for PopupList items.
- *
- * Revision 5.22  1997/04/10  21:35:38  vakatov
- * [WIN_MOTIF]  Implemented the mnemonic and accelerator key functionality
- * for menus and popup lists.
- * [WIN_MSWIN]  Impl. mnemonic keys for submenu cascade items. +typecasting.
- *
- * Revision 5.21  1997/02/13  22:32:59  vakatov
- * [WIN_MOTIF]  In addition to R5.17 -- (1) do not destroy CascadeButtons
- * at all;  (2) do these workarounds only if the preprocessor
- * variable NLM_MOTIF_CASCADEB_BUG is set (see in <vibincld.h>)
- *
- * Revision 5.20  1997/01/28  19:07:39  vakatov
- * [WIN_MOTIF] Nlm_ResetMenu() -- got rid of an unallocated memory read
- *
- * Revision 5.19  1997/01/27  20:13:41  vakatov
- * [WIN_MOTIF] Nlm_RemovePopupList():  remove colormap-change event handler --
- * to ignore events coming from the dangling shell(see "vibwndws.c" R5.38)
- *
- * Revision 5.18  1997/01/14  22:02:07  vakatov
- * Fixed inaccurate string copying -- <mostly potential> 1-byte exceeding of
- * the string size by StringNCat;  missing terminating '\0' by StringNCpy.
- * Removed some unused variables;  set preprocessor conditions more
- * thoroughly to exclude some functions from the compilation on some platforms.
- *
- * Revision 5.17  1997/01/03  21:45:37  vakatov
- * [WIN_MOTIF]  Unmanage(rather than destroy completely) menubar and its
- * cascade buttons to workaround the MOTIF/X11 "double memory freeing" quirk
- * (a "pure" simplest non-Vibrant MOTIF/X11 code also goes to the same bug).
- *
- * Revision 5.16  1996/11/18  20:52:41  vakatov
- * [WIN_MSWIN]  Allowed enabling/disabling of submenus and removing
- * of(top-level, menubar-attached only!) pulldown menus
- *
- * Revision 5.15  1996/11/08  16:54:07  vakatov
- * [WIN_MAC] RemoveMenuItemButNotSub(): now we can remove the submenu(J.Kans);
- * The problems were caused by a bug in "vibutils":Nlm_RemoveLink(), now
- * fixed(in Revision 5.7)
- *
- * Revision 5.14  1996/10/28  19:34:30  vakatov
- * [WIN_MOTIF]  Use Nlm_VibrantDefaultColormap() instead of the display
- * default colormap everywhere in the color handling code.
- * Made a lot of type castings to get rid of all compiler warnings.
- *
- * Revision 5.13  1996/10/10  20:22:17  vakatov
- * [WIN_MOTIF]  Rewrote Nlm_ResetPopList() function to avoid unexpected
- * displaying of popup-list on reset;  also got rid of the unnecessary
- * destroying and further re-creating of underlying widgets and data
- *
- * Revision 5.12  1996/10/04  23:38:19  kans
- * added Nlm_RemoveMenuItemButNotSub to prevent double removal of submenus
- * in windows.  this is tricky code, since submenus must really be installed
- * in the desktop menu bar, but attached to a menu item with the label.  this
- * change fixes a crash when a window containing a window submenu was removed,
- * but there may be uncollected garbage.
- *
- * Revision 5.11  1996/09/04  18:05:54  vakatov
- * [WIN_MOTIF]  PopupList & its Items::  prohibited automatic(Motif-initiated)
- * size change;  PopupList cascade button oversize:: increased from 48 to 52
- * pixels
- *
- * Revision 5.10  1996/07/26  18:12:28  kans
- * Colormap is Motif only
- *
- * Revision 5.9  1996/07/26  18:05:44  vakatov
- * [WIN_MOTIF]  Explicitly set colormaps for all pulldown menus;
- * changed the colormap switching method for the option menus
- * (to fit the LINUX/MOO-TIFF "features")
- *
- * Revision 5.8  1996/07/23  21:20:14  vakatov
- * [WIN_MOTIF]  Do not delay the pop-up(/down) menus realization as it
- * results in problems on SUN_OS and SGI4
- *
- * Revision 5.7  1996/07/09  20:29:10  vakatov
- * [WIN_MOTIF] [OS_UNIX_SUN] (see Revision 4.7 log) -- the same quirk is
- * for the XmPulldownMenu -- fixed
- *
- * Revision 5.6  1996/07/03  20:23:04  kans
- * don't extend margins everywhere - popups got enlarged improperly
- *
- * Revision 5.5  1996/07/03  19:42:37  kans
- * set margin height and width now that resize is automatic
- *
- * Revision 5.4  1996/07/03  16:57:13  vakatov
- * Menu items are allowed to change their size to fit a new title
- *
- * Revision 5.3  1996/06/20  18:19:14  kans
- * submenu before pulldown menu prevented notJustSubMenu from being set
- *
- * Revision 5.2  1996/06/20  17:03:52  kans
- * [WIN_MAC] if desktop menu bar created by submenu only, won't look for
- * command key accelerator (MenuKey call with no menus corrupted system)
- *
- * Revision 5.1  1996/06/14  14:31:24  vakatov
- * [WIN_MOTIF]  Added focus on/off event handler(new function MenuShellFocusCB)
- * to the OptionList's(ad hoc) menu shell -- to keep fixed colormap there
- *
- * Revision 4.9  1996/04/25  16:42:05  kans
- * removed Nlm_WindowMenuBarKey, which caused a crash
- *
- * Revision 4.8  1996/04/25  14:13:50  kans
- * removed Nlm_PopListKey, which caused a crash if no menus in program
- *
- * Revision 4.7  1996/03/27  19:29:51  vakatov
- * OS_UNIX_SUN quirk causing incorrect delayed realization of
- * XmOptionMenu, is fixed
- *
- * Revision 4.6  1996/03/05  19:59:08  epstein
- * fix call to XtSetSensitive()
- *
- * Revision 4.5  1996/03/02  22:36:38  kans
- * reduction of X traffic (DV)
- *
- * Revision 4.4  1996/02/13  17:24:07  kans
- * accelerated set position prior to realization (Denis Vakatov)
- *
- * Revision 4.3  1996/01/10  18:25:01  smirnov
- * AS: add Enable / Disable function for X11 popup.
- *
- * Revision 4.2  1995/12/25  16:03:50  kans
- * popup menu height now always Nlm_popupMenuHeight
- *
- * Revision 4.1  1995/11/27  15:13:41  kans
- * ResetMenu implementation for Windows and Motif (VL)
- *
- * Revision 4.0  1995/07/26  13:51:04  ostell
- * force revision to 4.0
- *
- * Revision 2.29  1995/07/19  20:42:23  kans
- * window rectangle takes Motif menu bar height into account
- *
 * ==========================================================================
 */
 
@@ -1746,13 +1510,13 @@ static void Nlm_DrawWindowMenuBar (Nlm_GraphiC mb)
   Rect bounds;
 
   wptr = Nlm_ParentWindowPtr (mb);
-  GetPortBounds(GetWindowPort(wptr), &bounds);
+  GetWindowPortBounds(wptr, &bounds);
   Nlm_RectToolToRecT (&bounds, &r);
   r.top = 19;
   r.bottom = 21;
   if (Nlm_RectInRgn (&r, Nlm_updateRgn)) {
-    MoveTo (0, 20);
-    LineTo (r.right, 20);
+    Nlm_MoveTo (0, 20);
+    Nlm_LineTo (r.right, 20);
   }
   m = (Nlm_MenU) Nlm_GetChild (mb);
   while (m != NULL) {
@@ -1857,7 +1621,11 @@ static void Nlm_ShowWindowMenuBar (Nlm_GraphiC mb, Nlm_Boolean setFlag, Nlm_Bool
   tempPort = Nlm_SavePortIfNeeded (mb, savePort);
   Nlm_SetVisible (mb, TRUE);
 #ifdef WIN_MAC
+#ifdef WIN_MAC_QUARTZ
+  Nlm_SetGraphicNeedsDisplay (mb);
+#else
   Nlm_DoDraw (mb);
+#endif
 #endif
 #ifdef WIN_MSWIN
   wptr = Nlm_ParentWindowPtr (mb);
@@ -1992,9 +1760,11 @@ static void Nlm_HidePulldown (Nlm_GraphiC m, Nlm_Boolean setFlag, Nlm_Boolean sa
 
   tempPort = Nlm_SavePortIfNeeded (m, savePort);
   Nlm_SetVisible (m, FALSE);
+#ifndef WIN_MAC_QUARTZ
   Nlm_GetRect (m, &r);
   Nlm_EraseRect (&r);
   Nlm_ValidRect (&r);
+#endif
   Nlm_RestorePort (tempPort);
 #endif
 }

@@ -3,7 +3,7 @@
 	ProjectType="Visual C++"
 	Version="8.00"
 	Name="test_ncbi_dsock"
-	ProjectGUID="{032E43BB-816C-4BEE-9ABD-1E0B599C007A}"
+	ProjectGUID="{3B976840-4F3F-46A9-832D-4AB79417F712}"
 	>
 	<Platforms>
 		<Platform

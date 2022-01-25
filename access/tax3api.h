@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/8/04
 *
-* $Revision: 1.15 $
+* $Revision: 1.16 $
 *
 * File Description: 
 *
@@ -137,9 +137,9 @@ NLM_EXTERN void Taxon3ReplaceOrgInSeqEntry (SeqEntryPtr sep, Boolean keep_syn);
 NLM_EXTERN void Taxon3CheckOrgInSeqEntry (SeqEntryPtr sep, ValNodePtr PNTR not_found, ValNodePtr PNTR bad_match);
 NLM_EXTERN void CheckTaxNamesAgainstTaxDatabase (ValNodePtr PNTR discrepancy_list, ValNodePtr sep_list);
 
-NLM_EXTERN Boolean IsOrgModSpecificHostToBeChecked (OrgModPtr mod, Boolean for_validator);
-NLM_EXTERN ValNodePtr Taxon3CheckSpecificHostInSeqEntry (SeqEntryPtr sep, Boolean for_validator);
-NLM_EXTERN Boolean Taxon3FixSpecificHostInSeqEntry (SeqEntryPtr sep);
+NLM_EXTERN Boolean IsOrgModSpecificHostToBeChecked (OrgModPtr mod, Boolean for_validator, Boolean check_single_word);
+NLM_EXTERN ValNodePtr Taxon3CheckSpecificHostInSeqEntry (SeqEntryPtr sep, Boolean for_validator, Boolean check_single_word);
+NLM_EXTERN Boolean Taxon3FixSpecificHostInSeqEntry (SeqEntryPtr sep, Boolean check_single_word);
 
 typedef struct specifichostfix {
   ValNodePtr feat_or_desc;
@@ -151,7 +151,7 @@ typedef struct specifichostfix {
 extern ValNodePtr SpecificHostFixListFree (ValNodePtr vnp);
 extern Boolean ApplyOneSpecificHostFix (SpecificHostFixPtr s);
 /* returns ValNodePtr list of SpecificHostFixPtr */
-NLM_EXTERN ValNodePtr Taxon3GetSpecificHostFixesInSeqEntry (SeqEntryPtr sep);
+NLM_EXTERN ValNodePtr Taxon3GetSpecificHostFixesInSeqEntry (SeqEntryPtr sep, Boolean check_single_word);
 
 NLM_EXTERN ValNodePtr GetOrganismTaxLookupFailuresInSeqEntry (SeqEntryPtr sep);
 

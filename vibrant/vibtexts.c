@@ -29,237 +29,13 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.34 $
+* $Revision: 6.36 $
 *
 * File Description: 
 *       Vibrant edit text functions
 *
 * Modifications:  
 * --------------------------------------------------------------------------
-* $Log: vibtexts.c,v $
-* Revision 6.34  2007/05/02 14:55:58  kans
-* preparation for supporting Quartz on Mac
-*
-* Revision 6.33  2006/09/27 18:30:00  kans
-* support for Int4 scroll bars for switching between text and doc views in Sequin (CB)
-*
-* Revision 6.32  2006/09/14 19:18:29  ivanov
-* Rollback last changes. All missed defines added to corelib/ncbiwin.h.
-*
-* Revision 6.31  2006/09/14 18:05:45  ivanov
-* Fixed compilation errors on MS Windows
-*
-* Revision 6.30  2006/09/14 14:45:39  kans
-* changes for 64-bit Windows (GC) plus a few CodeWarrior complaints (JK)
-*
-* Revision 6.29  2005/07/18 15:15:18  kans
-* fixed minor xcode compiler warnings
-*
-* Revision 6.28  2004/07/19 13:36:43  bollin
-* replaced obsolete XmFontListCreate function to get rid of run-time warnings
-*
-* Revision 6.27  2004/06/24 15:34:48  bollin
-* added lines from Yoon Choi to make ctrl-A select all text in TextMode in
-* Sequin
-*
-* Revision 6.26  2004/03/17 16:09:14  sinyakov
-* WIN_MSWIN: fixed text box activation and text selection logic,
-* do not reset currentText when text window loses focus (to match Motif version),
-* removed scroll text size limit,
-* in Nlm_SelectAText(): scroll selection into view for scroll text,
-* in Nlm_TextGainFocus(), when focus changes to a single-line edit box,
-* do not highlight all text, instead just set the cursor pos to beginning,
-* in MyCls_OnChar(), multiline edit boxes accept tabs
-* as input characters and not as focus change commands.
-*
-* Revision 6.25  2004/02/23 16:36:52  sinyakov
-* Use Int4 instead of Int2 for cursor position and text selection in text boxes
-*
-* Revision 6.24  2004/02/17 16:01:15  bollin
-* implemented Nlm_SetScrollTextOffset for Motif
-*
-* Revision 6.23  2004/02/12 20:29:09  kans
-* put ifdef WIN_MOTIF wrapper around Nlm_KeepCrNlTextFieldCallback
-*
-* Revision 6.22  2004/02/12 20:05:10  bazhin
-* Added callback function "Nlm_SetKeepCrNlTextFieldCallback(Nlm_TexT t)",
-* which allows to copy-paste texts from multiple columns to single string.
-*
-* Revision 6.21  2004/02/09 17:46:27  bollin
-* added fix from Yoon Choi for copy-paste from Windows clipboard into Unix application
-*
-* Revision 6.20  2004/02/06 19:27:33  bollin
-* Use PostMessage to communicate with scrolling function on TextViewer window
-*
-* Revision 6.19  2004/02/05 16:25:05  kans
-* revert to Nlm_GetTextVScrollBar and Nlm_GetTextHScrollBar being static, implement setOffset and getOffset for scroll text, since Windows scroll text has its own scroll bar
-*
-* Revision 6.18  2004/02/04 15:21:03  kans
-* make GetTextVScrollBar and GetTextHScrollBar extern, to add search function to general text viewer
-*
-* Revision 6.17  2003/11/17 17:03:30  kans
-* changed C++ style comments to C comments
-*
-* Revision 6.16  2003/11/03 21:51:34  sinyakov
-* WIN_MSWIN: bugfix: strlen(title) moved out of loop condition
-*
-* Revision 6.15  2003/10/29 19:10:08  bazhin
-* Added function Nlm_SetTextColor(Nlm_TexT t, Nlm_Uint4 r, Nlm_Uint4 g,
-*                                 Nlm_Uint4 b).
-*
-* Revision 6.14  2003/07/30 13:51:42  johnson
-* MSWIN: multi-line text boxes now respond to 'enter' key
-*
-* Revision 6.13  2003/03/28 21:27:18  rsmith
-* on Mac OS took out ClearCurrentScrap after Cut/Copy. It only erased whatever was copied.
-*
-* Revision 6.12  2003/01/07 15:08:11  shomrat
-* Change condition in for loop in Nlm_SetScrollText
-*
-* Revision 6.11  2002/12/04 22:35:11  johnson
-* WIN_MSWIN: replace UNIX '\n' with DOS "\r\n" in Nlm_SetScrollText
-*
-* Revision 6.10  2001/09/10 17:58:28  bazhin
-* Removed odd lines from SetTextCursorBlinkRate() function.
-*
-* Revision 6.9  2001/09/10 17:34:10  bazhin
-* Added function Nlm_SetTextCursorBlinkRate(Nlm_TexT t, Nlm_Int2 msec).
-*
-* Revision 6.8  2001/05/14 20:29:04  juran
-* Redesign Mac clipboard support.
-*
-* Revision 6.7  2000/05/02 22:02:15  vakatov
-* Nlm_TextCallback():  get rid of an extra condition
-*
-* Revision 6.6  2000/03/31 19:20:03  thiessen
-* fix recursion bug
-*
-* Revision 6.5  2000/02/07 20:17:36  lewisg
-* minor bug fixes, use gui font for win32
-*
-* Revision 6.4  1998/07/02 18:24:35  vakatov
-* Cleaned the code & made it pass through the C++ compilation
-*
-* Revision 6.3  1997/12/19 18:01:45  vakatov
-* [X11,MSWIN]  When pasting into a single-line text field, replace all
-* non-printable characters by spaces
-*
-* Revision 6.2  1997/11/26 21:30:42  vakatov
-* Fixed errors and warnings issued by C and C++ (GNU and Sun) compilers
-*
-* Revision 6.1  1997/10/18 23:30:16  kans
-* implemented Nlm_GetTextCursorPos (DV)
-*
-* Revision 6.0  1997/08/25 18:57:44  madden
-* Revision changed to 6.0
-*
-* Revision 5.22  1997/08/07 16:46:39  vakatov
-* [WIN_MOTIF] Nlm_PasswordCallback() -- process <DEL> at the first text pos
-*
-* Revision 5.21  1997/08/07 13:38:32  kans
-* password text does action callback on delete (Mac)
-*
-* Revision 5.20  1997/08/05 16:42:26  kans
-* allowTextCallback not declared in Mac, so ifdefs changed in Nlm_SetTextCursorPos
-*
-* Revision 5.19  1997/08/04 14:15:14  vakatov
-* Added Nlm_SetTextCursorPos() function
-*
-* Revision 5.18  1997/07/21 18:49:09  vakatov
-* [WIN_MAC] SetPasswordText() -- moved "r" and "GetRect()"(sorry, missed
-* that!) back to the if(Visible... scope
-*
-* Revision 5.17  1997/07/21 18:39:42  kans
-* SetPasswordText r in Mac version at top scope
-*
-* Revision 5.16  1997/07/21 18:24:36  vakatov
-* SetPasswordText() -- show all symbols as '*'
-*
-* Revision 5.15  1997/07/17 15:31:47  vakatov
-* [WIN_MSWIN]  Emulate non-editable text(crack WM_CHAR event in TextProc
-* as the WinSDK's Edit_SetReadOnly lead to invalidation bug for ScrollText)
-*
-* Revision 5.14  1997/07/16 13:47:20  kans
-* non-editable scroll text now scrolls on Mac
-*
-* Revision 5.12  1997/07/13 23:03:05  kans
-* ScrollText height is in stdLineHeight units
-*
-* Revision 5.11  1997/07/08 13:42:06  kans
-* ttool to rtool fix in Nlm_DrawScrollText/DCLAP
-*
-* Revision 5.10  1997/06/24 21:30:37  kans
-* implemented SetTextEditable on Mac
-*
-* Revision 5.9  1997/06/24 19:10:00  vakatov
-* Nlm_ScrollText() -- calculate the text box limits using the systemFont
-* (not the current font!) dimensions
-*
-* Revision 5.8  1997/06/23 21:21:05  vakatov
-* Added Nlm_SetTextEditable() function to allow/prohibit text editing
-* [WIN_MOTIF] Made text widgets to fit the specified number of lines
-*
-* Revision 5.7  1997/04/25 16:14:06  vakatov
-* [WIN_MOTIF,WIN_MSWIN] Catch and render(DoSendFocus) navigation key events
-* Extensive code cleaning and type casting
-*
- * Revision 5.6  1997/02/12  17:47:28  vakatov
- * [WIN_MOTIF]  Do not reset selection when activating a window containing
- * a text or when the text is empty
- *
- * Revision 5.5  1997/01/29  17:53:59  kans
- * minor changes due to StringNCpy_0 change
- *
- * Revision 5.4  1997/01/29  16:41:22  kans
- * using StringNCpy_0
- *
- * Revision 5.3  1996/07/23  21:07:10  epstein
- * Vakatov/Epstein avoid trying to clear an area on an unrealized window
- *
- * Revision 5.2  1996/06/18  15:44:56  vakatov
- * Do not assign last (maxsize-1) symbol of output buffer
- * in Nlm_GetScrollText() and Nlm_GetDialogText() to '\0'.
- *
- * Revision 5.1  1996/06/17  19:28:17  vakatov
- * [WIN_MOTIF]  Positioning of scrolled text postponed until its realization
- *
- * Revision 4.9  1996/05/08  20:42:52  vakatov
- * [WIN_MOTIF]  Nlm_PasswordCallback() function -- rewritten to avoid stack
- * corruption on the case of too long(>30 symbols) user input and
- * to make the password text field more convenient to edit;
- * [ALL]  Nlm_GetPasswordLength() function added (other than
- * Nlm_TextLength());  a lot of other tiny changes and corrections
- *
- * Revision 4.8  1996/05/08  13:43:47  vakatov
- * [WIN_MOTIF]  Modified Nlm_SetPasswordText() to reset the password
- *
- * Revision 4.7  1996/05/03  17:02:08  kans
- * added a cast to SelectText call
- *
- * Revision 4.6  1996/03/02  22:36:38  kans
- * reduction of X traffic (DV)
- *
- * Revision 4.5  1996/02/13  17:24:07  kans
- * accelerated set position prior to realization (Denis Vakatov)
- *
- * Revision 4.4  1995/11/27  16:04:00  kans
- * ScrollText now handles killfocus and setfocus messages (VL)
- *
- * Revision 4.3  1995/11/27  15:13:41  kans
- * allow select and deselect callbacks for DialogText and ScrollText (VL)
- *
- * Revision 4.2  1995/11/08  23:30:31  kans
- * removed edit block fields, which belong in the application
- *
- * Revision 4.1  1995/10/10  15:51:53  kans
- * fully implemented scroll text resizing
- *
- * Revision 2.52  1995/07/14  17:48:26  kans
- * forces dialog, hidden text to use systemFont (AS)
- *
- * Revision 2.51  1995/05/20  18:27:38  kans
- * corrected accidental prevention of passing returns to other objects
- *
 *
 * ==========================================================================
 */
@@ -271,7 +47,7 @@
 #ifdef WIN_MAC
 #ifdef WIN_MAC_QUARTZ
 #define Nlm_TextTool TXNObject
-extern CGRect Nlm_RecTToCGRect(Nlm_RectPtr r);
+extern CGRect Nlm_RecTToCGRect(Nlm_RecT r);
 #else
 #define Nlm_TextTool TEHandle
 #endif
@@ -1772,8 +1548,10 @@ static void Nlm_TextSelectProc (Nlm_GraphiC t, Nlm_Boolean savePort)
 #ifdef WIN_MAC
   Nlm_Int2      end;
   Nlm_TextTool  h;
-  TEPtr         hp;
   Nlm_WindoW    tempPort;
+#ifndef WIN_MAC_QUARTZ
+  TEPtr         hp;
+#endif
 
   if (t != NULL) {
     tempPort = Nlm_SavePortIfNeeded (t, savePort);
@@ -2051,10 +1829,12 @@ static void Nlm_GetDialogText (Nlm_GraphiC t, Nlm_Int2 item,
   Nlm_TextTool  h;
 #ifdef WIN_MAC
   Nlm_Char      **chars;
-  TEPtr         hp;
   Nlm_Int2      i;
   Nlm_Int2      length;
   Nlm_Char      *ptr;
+#ifndef WIN_MAC_QUARTZ
+  TEPtr         hp;
+#endif
 #endif
 #ifdef WIN_MOTIF
   Nlm_CharPtr   ptr;
@@ -2111,10 +1891,12 @@ static void Nlm_GetScrollText (Nlm_GraphiC t, Nlm_Int2 item,
   Nlm_TextTool  h;
 #ifdef WIN_MAC
   Nlm_Char      **chars;
-  TEPtr         hp;
   Nlm_Int2      i;
   Nlm_Int2      length;
   Nlm_Char      *ptr;
+#ifndef WIN_MAC_QUARTZ
+  TEPtr         hp;
+#endif
 #endif
 #ifdef WIN_MOTIF
   Nlm_CharPtr   ptr;
@@ -2500,7 +2282,7 @@ static LRESULT CALLBACK EXPORT TextProc (HWND hwnd, UINT message,
           break;  /* no suitable data found in the clipboard */
 
         for (str = text;  *str;  str++)
-          if ( !isprint(*str) ) {
+          if ( !isprint((unsigned char)*str) ) {
             *str = ' ';
             call_win_proc = FALSE;
           }
@@ -2634,7 +2416,9 @@ static void Nlm_SetTextPosition (Nlm_GraphiC t, Nlm_RectPtr r,
   Nlm_WindoW    tempPort;
   Nlm_RecT      tr;
 #ifdef WIN_MAC
+#ifndef WIN_MAC_QUARTZ
   TEPtr         hp;
+#endif
   Nlm_RectTool  rtool;
 #endif
 
@@ -2700,7 +2484,9 @@ static void Nlm_SetHiddenTextPosition (Nlm_GraphiC t, Nlm_RectPtr r,
   Nlm_WindoW    tempPort;
   Nlm_RecT      tr;
 #ifdef WIN_MAC
+#ifndef WIN_MAC_QUARTZ
   TEPtr         hp;
+#endif
   Nlm_RectTool  rtool;
 #endif
 
@@ -2723,11 +2509,17 @@ static void Nlm_SetHiddenTextPosition (Nlm_GraphiC t, Nlm_RectPtr r,
   tr = *r;
 #ifdef WIN_MAC
   Nlm_RecTToRectTool (&tr, &rtool);
+#ifdef WIN_MAC_QUARTZ
+  CGRect viewCG = Nlm_RectQDToCG (rtool);
+  CGRect destCG = Nlm_RectQDToCG (rtool);
+  TXNSetHIRectBounds (h, &viewCG, &destCG, 1);
+#else
   HLock ((Handle) h);
   hp = (TEPtr) *((Handle) h);
   hp->destRect = rtool;
   hp->viewRect = rtool;
   HUnlock ((Handle) h);
+#endif
   Nlm_SetRect (t, r);
   Nlm_InvalText (t);
 #endif
@@ -2972,9 +2764,13 @@ static void Nlm_SetScrollTextPosition (Nlm_GraphiC t, Nlm_RectPtr r,
   Nlm_Int2      deltax;
   Nlm_Int2      deltay;
   Nlm_RectTool  dtool;
+#ifndef WIN_MAC_QUARTZ
   TEPtr         hp;
+#endif
   Nlm_RectTool  rtool;
   Nlm_BaR       sb;
+  Rect          textViewRect;
+  Rect          textDestRect;
 #endif
   Nlm_Boolean   is_realized;
 
@@ -3021,19 +2817,34 @@ static void Nlm_SetScrollTextPosition (Nlm_GraphiC t, Nlm_RectPtr r,
       Nlm_ResetVisLines ((Nlm_TexT) t);
       Nlm_InsetRect (&tr, 4, 2);
       tr.bottom = tr.top + Nlm_GetVisLines ((Nlm_TexT) t) * Nlm_GetFontHeight ((Nlm_TexT) t);
+#ifdef WIN_MAC_QUARTZ
+      TXNGetViewRect (h, &textViewRect);
+      CGRect cgr;
+      TXNGetHIRect (h, kTXNDestinationRectKey, &cgr);
+      textDestRect = Nlm_RectCGToQD (cgr);
+#else
       HLock ((Handle) h);
       hp = (TEPtr) *((Handle) h);
-      deltax = hp->destRect.left - hp->viewRect.left;
-      deltay = hp->destRect.top - hp->viewRect.top;
+      textViewRect = hp->viewRect;
+      textDestRect = hp->destRect;
+#endif
+      deltax = textDestRect.left - textViewRect.left;
+      deltay = textDestRect.top - textViewRect.top;
       Nlm_RecTToRectTool (&tr, &rtool);
       Nlm_OffsetRect (&tr, deltax, deltay);
       Nlm_RecTToRectTool (&tr, &dtool);
       if (! wrap) {
     dtool.right += HSCROLL_POSITIONS * Nlm_stdCharWidth;
       }
+#ifdef WIN_MAC_QUARTZ
+      CGRect viewCG = Nlm_RectQDToCG (textViewRect);
+      CGRect destCG = Nlm_RectQDToCG (textDestRect);
+      TXNSetHIRectBounds (h, &viewCG, &destCG, 1);
+#else
       hp->destRect = dtool;
       hp->viewRect = rtool;
       HUnlock ((Handle) h);
+#endif
       Nlm_InvalScrollText (t);
     }
 
@@ -3365,7 +3176,7 @@ static void Nlm_NewDialogText (Nlm_TexT t, Nlm_CharPtr dfault, Nlm_TxtActnProc a
   Nlm_InsetRect (&r, 2, 2);
   Nlm_RecTToRectTool (&r, &rtool);
 #ifdef WIN_MAC_QUARTZ
-  cgr = Nlm_RecTToCGRect(&r);
+  cgr = Nlm_RecTToCGRect(r);
   TXNCreateObject( &cgr, kTXNSingleLineOnlyMask, &h);
   TXNAttachObjectToWindowRef(h, wptr);
 #else
@@ -3483,7 +3294,7 @@ static void Nlm_NewPasswordText (Nlm_TexT t, Nlm_CharPtr dfault, Nlm_TxtActnProc
   Nlm_InsetRect (&r, 2, 2);
   Nlm_RecTToRectTool (&r, &rtool);
 #ifdef WIN_MAC_QUARTZ
-  cgr = Nlm_RecTToCGRect(&r);
+  cgr = Nlm_RecTToCGRect(r);
   TXNCreateObject( &cgr, kTXNSingleLineOnlyMask, &h);
   TXNAttachObjectToWindowRef(h, wptr);
 #else
@@ -3594,7 +3405,7 @@ static void Nlm_NewHiddenText (Nlm_TexT t, Nlm_CharPtr dfault,
 #ifdef WIN_MAC
   Nlm_RecTToRectTool (&r, &rtool);
 #ifdef WIN_MAC_QUARTZ
-  cgr = Nlm_RecTToCGRect(&r);
+  cgr = Nlm_RecTToCGRect(r);
   TXNCreateObject( &cgr, kTXNSingleLineOnlyMask, &h);
   TXNAttachObjectToWindowRef(h, wptr);
 #else
@@ -3718,7 +3529,7 @@ static void Nlm_NewSpecialText (Nlm_TexT t, Nlm_CharPtr dfault,
   Nlm_InsetRect (&r, 2, 2);
   Nlm_RecTToRectTool (&r, &rtool);
 #ifdef WIN_MAC_QUARTZ
-  cgr = Nlm_RecTToCGRect(&r);
+  cgr = Nlm_RecTToCGRect(r);
   TXNCreateObject( &cgr, kTXNSingleLineOnlyMask, &h);
   TXNAttachObjectToWindowRef(h, wptr);
 #else
@@ -3869,7 +3680,7 @@ static void Nlm_NewScrollText (Nlm_TexT t, Nlm_Int2 height,
   }
   Nlm_RecTToRectTool (&r, &dtool);
 #ifdef WIN_MAC_QUARTZ
-  cgr = Nlm_RecTToCGRect(&r);
+  cgr = Nlm_RecTToCGRect(r);
   TXNCreateObject( &cgr, 0, &h);
   TXNAttachObjectToWindowRef(h, wptr);
 #else

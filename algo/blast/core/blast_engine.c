@@ -1,4 +1,4 @@
-/* $Id: blast_engine.c,v 1.249 2007/08/23 20:25:30 kazimird Exp $
+/* $Id: blast_engine.c,v 1.251 2008/01/31 23:55:42 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -55,7 +55,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_engine.c,v 1.249 2007/08/23 20:25:30 kazimird Exp $";
+    "$Id: blast_engine.c,v 1.251 2008/01/31 23:55:42 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_engine.h>
@@ -81,8 +81,8 @@ static char const rcsid[] =
 
 NCBI_XBLAST_EXPORT const int   kBlastMajorVersion = 2;
 NCBI_XBLAST_EXPORT const int   kBlastMinorVersion = 2;
-NCBI_XBLAST_EXPORT const int   kBlastPatchVersion = 17;
-NCBI_XBLAST_EXPORT const char* kBlastReleaseDate = "Aug-26-2007";
+NCBI_XBLAST_EXPORT const int   kBlastPatchVersion = 18;
+NCBI_XBLAST_EXPORT const char* kBlastReleaseDate = "Feb-03-2008";
 
 /** Structure to be passed to s_BlastSearchEngineCore, containing pointers 
     to various preallocated structures and arrays. */
@@ -860,7 +860,6 @@ BLAST_PreliminarySearchEngine(EBlastProgramType program_number,
    Boolean gapped_calculation = score_options->gapped_calculation;
    BlastScoreBlk* sbp = gap_align->sbp;
    BlastSeqSrcIterator* itr;
-   Int4 default_db_genetic_code = db_options->genetic_code;
    const Boolean kNucleotide = (program_number == eBlastTypeBlastn ||
                                 program_number == eBlastTypePhiBlastn);
 
@@ -939,7 +938,7 @@ BLAST_PreliminarySearchEngine(EBlastProgramType program_number,
       if (Blast_SubjectIsTranslated(program_number) && 
           seq_arg.seq->gen_code_string == NULL) {
           seq_arg.seq->gen_code_string = 
-              GenCodeSingletonFind(default_db_genetic_code);
+              GenCodeSingletonFind(db_options->genetic_code);
           ASSERT(seq_arg.seq->gen_code_string);
       }
       status = 

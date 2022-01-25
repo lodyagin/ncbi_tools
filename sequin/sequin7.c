@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/3/98
 *
-* $Revision: 6.309 $
+* $Revision: 6.325 $
 *
 * File Description: 
 *
@@ -78,6 +78,7 @@ static char *time_of_compilation = "now";
 #include <algo/blast/api/blast_seqalign.h>
 #include <algo/blast/api/blast_api.h>
 #include <salstruc.h>
+#include <valid.h> /* added for latloncountry conflict checking */
 
 #define CONVERT_TO_JOIN  1
 #define CONVERT_TO_ORDER 2
@@ -6421,6 +6422,7 @@ static void TrimFromSequenceEnd (EditSeqPtr  esp,
   CharPtr currSeqStr;
   Int2    length;
   Int4    pos;
+  Int4    trim_length;
 
   /* Get the current sequence string */
 
@@ -6430,59 +6432,76 @@ static void TrimFromSequenceEnd (EditSeqPtr  esp,
   /* the beginning of the string...     */
 
   if (esp->endval == EDIT_FIVE_PRIME)
-    {
-      /* Find end point */
+  {
+    /* Find end point */
 
-      if (esp->trimByBool == TRIM_BY_SEQUENCE)
-	{
-	  length = StringLen (esp->seqstr);
-	  if (StringNICmp (esp->seqstr, currSeqStr, length) != 0)
-	    return;
-	  pos = length - 1;
-	}
-      else  if (esp->trimByBool == TRIM_BY_COUNT)
-	pos = esp->trimCount - 1;
-      else
-	return;
-      
-      /* Trim from beginning of string to end point */
-      
-      esp->frameshift = length;
-      BioseqDelete (bsp->id, 0, pos, TRUE, FALSE);
-      esp->extendedthis = bsp;
-      FixAndRetranslateCDSs (bsp, sep, esp, TRUE);
+    if (esp->trimByBool == TRIM_BY_SEQUENCE)
+	  {
+	    length = StringLen (esp->seqstr);
+	    if (StringNICmp (esp->seqstr, currSeqStr, length) != 0)
+	      return;
+	    pos = length - 1;
+      trim_length = length;
+	  }
+    else  if (esp->trimByBool == TRIM_BY_COUNT) 
+    {
+	    pos = esp->trimCount - 1;
+      trim_length = esp->trimCount;
     }
+    else
+	    return;
+      
+    /* Trim from beginning of string to end point */
+    
+    esp->frameshift = trim_length;
+    BioseqDelete (bsp->id, 0, pos, TRUE, FALSE);
+    esp->extendedthis = bsp;
+    FixAndRetranslateCDSs (bsp, sep, esp, TRUE);
+
+    /* trim quality scores */
+    TrimQualityScores (bsp, trim_length, TRUE);
+  }
   
   /* .. or the 3' end (i.e., the */
   /* end of the string.          */
   
   else if (esp->endval == EDIT_THREE_PRIME)
-    {
-      /* Find trim point */
+  {
+    /* Find trim point */
 
-      if (esp->trimByBool == TRIM_BY_SEQUENCE)
-	{
-	  length = StringLen (esp->seqstr);
-	  pos = bsp->length - length;
-	  if (StringICmp (esp->seqstr, &currSeqStr[pos]) != 0)
-	    return;
-	}
-      else  if (esp->trimByBool == TRIM_BY_COUNT)
-	pos = bsp->length - esp->trimCount;
-      else
-	return;
-      
-      /* Trim from there to end of string */
-      
-      BioseqDelete (bsp->id, pos, bsp->length - 1, TRUE, FALSE);
-      esp->extendedthis = bsp;
-      FixAndRetranslateCDSs (bsp, sep, esp, FALSE);
+    if (esp->trimByBool == TRIM_BY_SEQUENCE)
+	  {
+	    length = StringLen (esp->seqstr);
+	    pos = bsp->length - length;
+	    if (StringICmp (esp->seqstr, &currSeqStr[pos]) != 0)
+	      return;
+      trim_length = length;
+	  }
+    else  if (esp->trimByBool == TRIM_BY_COUNT)
+    {
+	    pos = bsp->length - esp->trimCount;
+      trim_length = esp->trimCount;
     }
+    else
+	    return;
+      
+    /* Trim from there to end of string */
+    
+    BioseqDelete (bsp->id, pos, bsp->length - 1, TRUE, FALSE);
+    esp->extendedthis = bsp;
+    FixAndRetranslateCDSs (bsp, sep, esp, FALSE);
+
+    /* trim quality scores */
+    TrimQualityScores (bsp, trim_length, FALSE);
+  }
 }
 
-static void AddToSequenceEnd (EditSeqPtr  esp,
-			      SeqEntryPtr sep,
-			      BioseqPtr   bsp)
+static void 
+AddToSequenceEnd 
+(EditSeqPtr  esp,
+ SeqEntryPtr sep,
+ BioseqPtr   bsp,
+ LogInfoPtr lip)
 {
   ValNodePtr    head;
   Int4          len;
@@ -6542,10 +6561,16 @@ static void AddToSequenceEnd (EditSeqPtr  esp,
         FixAndRetranslateCDSs (bsp, sep, esp, TRUE);
       }
       ValNodeFree (head);
+      if (lip != NULL) {
+        RemoveQualityScores (bsp, lip->fp, &(lip->data_in_log));
+      }
     }
     MemFree (str);
   } else {
     insertchar (esp->seqstr, pos, bsp->id, bsp->mol, FALSE);
+    if (lip != NULL) {
+      RemoveQualityScores (bsp, lip->fp, &(lip->data_in_log));
+    }
   }
 }
 
@@ -6562,6 +6587,7 @@ static void DoEditSeqEndsProc (ButtoN b)
   BioseqPtr   bsp;
   SeqEntryPtr sep;
   Boolean     add_cit_subs = FALSE;
+  LogInfoPtr  lip;
 
   esp = (EditSeqPtr) GetObjectExtra (b);
   if (esp == NULL) {
@@ -6606,6 +6632,7 @@ static void DoEditSeqEndsProc (ButtoN b)
   
   add_cit_subs = GetStatus (esp->addCitSub);
 
+  lip = OpenLog ("Quality Scores Affected");
   for (vnp = sip_list; vnp != NULL; vnp = vnp->next)
   {
     sip = (SeqIdPtr) vnp->data.ptrvalue;
@@ -6614,7 +6641,7 @@ static void DoEditSeqEndsProc (ButtoN b)
     if (bsp != NULL && sep != NULL && EditSeqEntryHasGene (bsp, sep, esp))
     {
       if (esp->addOrTrimBool == 1)
-        AddToSequenceEnd (esp, sep, bsp);
+        AddToSequenceEnd (esp, sep, bsp, lip);
       else
         TrimFromSequenceEnd (esp, sep, bsp);
       if (add_cit_subs)
@@ -6623,6 +6650,8 @@ static void DoEditSeqEndsProc (ButtoN b)
       }
     }
   }
+  CloseLog (lip);
+  lip = FreeLog (lip);
 
   MemFree (esp->seqstr);
   MemFree (esp->genestr);
@@ -7059,7 +7088,7 @@ static void FixFeatureIntervalCallback (SeqFeatPtr sfp, Pointer userdata)
   if (sfp->idx.subtype == FEATDEF_CDS)
   {
     bsp = BioseqFindFromSeqLoc (sfp->location);
-  	SeqEdTranslateOneCDS (sfp, bsp, ffp->entityID);
+  	SeqEdTranslateOneCDS (sfp, bsp, ffp->entityID, Sequin_GlobalAlign2Seq);
   }
 }
 
@@ -7395,7 +7424,7 @@ extern void ConvertInnerCDSsToProteinFeatures (IteM i)
 
 typedef struct objstringdata 
 {
-  StringConstraintPtr scp;
+  StringConstraintXPtr scp;
   Boolean found;	
 } ObjStringData, PNTR ObjStringPtr;
 
@@ -7409,14 +7438,14 @@ static void LIBCALLBACK AsnWriteStringConstraintCallBack (AsnExpOptStructPtr pAE
   if (ISA_STRINGTYPE (AsnFindBaseIsa (pAEOS->atp))) 
   {
 	  pchSource = (CharPtr) pAEOS->dvp->ptrvalue;
-    if (DoesStringMatchConstraint (pchSource, osp->scp))
+    if (DoesStringMatchConstraintX (pchSource, osp->scp))
     {
       osp->found = TRUE;
     }
   }
 }
 
-static Boolean DoesBioseqMatchStringConstraint (BioseqPtr bsp, StringConstraintPtr scp)
+static Boolean DoesBioseqMatchStringConstraint (BioseqPtr bsp, StringConstraintXPtr scp)
 
 {
   ObjMgrPtr         omp;
@@ -7450,7 +7479,7 @@ static Boolean DoesBioseqMatchStringConstraint (BioseqPtr bsp, StringConstraintP
 }
 
 
-extern Boolean DoBioseqFeaturesMatchSequenceConstraint (BioseqPtr bsp, ValNodePtr feat_list, StringConstraintPtr scp)
+extern Boolean DoBioseqFeaturesMatchSequenceConstraintX (BioseqPtr bsp, ValNodePtr feat_list, StringConstraintXPtr scp)
 {
   AsnExpOptPtr            aeop;
   AsnIoPtr                aip;
@@ -7697,7 +7726,7 @@ static void DoApplyKeywords (ButtoN b)
   
   scfp->pfp = (ParseFieldPtr) DialogToPointer (scfp->string_src_dlg);
   scfp->fsp = FilterSetNew ();
-  scfp->fsp->scp = (StringConstraintPtr) DialogToPointer (scfp->string_constraint_dlg);
+  scfp->fsp->scp = (StringConstraintXPtr) DialogToPointer (scfp->string_constraint_dlg);
   scfp->keyword = SaveStringFromText (scfp->keyword_txt);
   
   sep = GetTopSeqEntryForEntityID (scfp->input_entityID);
@@ -7748,9 +7777,9 @@ extern void ApplyKeywordWithStringConstraint (IteM i)
   scfp->keyword_txt = DialogText (g, "", 30, NULL);
   
   ppt = StaticPrompt (h, "Where", 0, 0, programFont, 'l');
-  scfp->string_src_dlg = ParseFieldDestDialog (h, NULL, NULL);
+  scfp->string_src_dlg = ParseFieldDestDialogEx (h, NULL, NULL, FALSE, TRUE);
 
-  scfp->string_constraint_dlg = StringConstraintDialog (h, NULL, FALSE);
+  scfp->string_constraint_dlg = StringConstraintDialogX (h, NULL, FALSE);
   
   c = HiddenGroup (h, 2, 0, NULL);
   b = PushButton (c, "Accept", DoApplyKeywords);
@@ -7782,7 +7811,7 @@ static void DoRemoveKeywords (ButtoN b)
   
   scfp->pfp = (ParseFieldPtr) DialogToPointer (scfp->string_src_dlg);
   scfp->fsp = FilterSetNew ();
-  scfp->fsp->scp = (StringConstraintPtr) DialogToPointer (scfp->string_constraint_dlg);
+  scfp->fsp->scp = (StringConstraintXPtr) DialogToPointer (scfp->string_constraint_dlg);
   scfp->keyword = SaveStringFromText (scfp->keyword_txt);
   
   sep = GetTopSeqEntryForEntityID (scfp->input_entityID);
@@ -7833,9 +7862,9 @@ extern void RemoveKeywordWithStringConstraint (IteM i)
   scfp->keyword_txt = DialogText (g, "", 30, NULL);
   
   ppt = StaticPrompt (h, "Where", 0, 0, programFont, 'l');
-  scfp->string_src_dlg = ParseFieldDestDialog (h, NULL, NULL);
+  scfp->string_src_dlg = ParseFieldDestDialogEx (h, NULL, NULL, FALSE, TRUE);
 
-  scfp->string_constraint_dlg = StringConstraintDialog (h, NULL, FALSE);
+  scfp->string_constraint_dlg = StringConstraintDialogX (h, NULL, FALSE);
   
   c = HiddenGroup (h, 2, 0, NULL);
   b = PushButton (c, "Accept", DoRemoveKeywords);
@@ -11764,6 +11793,43 @@ static void RearrangeVecScreenList (GrouP g)
 }
 
 
+static void ReportVecScreenDiscrepancies (LogInfoPtr lip, ValNodePtr item_list)
+{
+  ClickableItemPtr cip;
+  if (item_list == NULL || lip == NULL || lip->fp == NULL) return;
+
+  while (item_list != NULL)
+  {
+    cip = (ClickableItemPtr) item_list->data.ptrvalue;
+    if (cip != NULL)
+    {
+      if (!StringHasNoText (cip->description))
+      {
+        fprintf (lip->fp, "%s\n", cip->description);
+        lip->data_in_log = TRUE;
+      }
+      ReportVecScreenDiscrepancies (lip, cip->subcategories);
+    }
+    item_list = item_list->next;
+  }
+}
+
+
+static void MakeVecScreenReport (ButtoN b)
+{
+  VecScreenToolPtr vstp;
+  LogInfoPtr       lip;
+
+  vstp = (VecScreenToolPtr) GetObjectExtra (b);
+  if (vstp == NULL) return;
+
+  lip = OpenLog ("VecScreen Report");
+  ReportVecScreenDiscrepancies (lip, vstp->item_list);
+  CloseLog (lip);
+  lip = FreeLog (lip);
+}
+
+
 extern void VecScreenTool (IteM i)
 {
   BaseFormPtr              bfp;
@@ -11855,7 +11921,9 @@ extern void VecScreenTool (IteM i)
 
   c = HiddenGroup (h, 4, 0, NULL);
   SetGroupSpacing (c, 10, 10);
-    
+  
+  b = PushButton (c, "Make Report", MakeVecScreenReport);
+  SetObjectExtra (b, drfp, NULL);
   b = PushButton (c, "Trim Selected Regions", TrimSelectedBtn);
   SetObjectExtra (b, drfp, NULL);
   PushButton (c, "Dismiss", StdCancelButtonProc);
@@ -12114,20 +12182,27 @@ static ValNodePtr BarcodeResultsVNFreeFunc (ValNodePtr vnp)
 
 
 /* Barcode Tool */
-typedef struct barcodetool {
-  FORM_MESSAGE_BLOCK
-  DialoG          clickable_list;
-  BaseFormPtr     bfp;
-  PrompT          pass_fail_summary;
-  ButtoN          undo;
-  ButtoN          undo_all;
-  ButtoN          redo;
+struct barcodetool;
 
-  ValNodePtr      item_list;
-  SeqEntryPtr     top_sep;
-  LogInfoPtr      lip;
-  BarcodeTestConfigPtr cfg;
-  BarcodeUndoListPtr   undo_list;
+typedef void (*RefreshBarcodeDataFunc) PROTO ((Pointer));
+
+#define BARCODE_TOOL_BLOCK \
+  FORM_MESSAGE_BLOCK \
+  DialoG          clickable_list; \
+  BaseFormPtr     bfp; \
+  PrompT          pass_fail_summary; \
+  ButtoN          undo; \
+  ButtoN          undo_all; \
+  ButtoN          redo; \
+  ValNodePtr      item_list; \
+  SeqEntryPtr     top_sep; \
+  LogInfoPtr      lip; \
+  BarcodeTestConfigPtr cfg; \
+  BarcodeUndoListPtr   undo_list; \
+  RefreshBarcodeDataFunc refresh_func;
+
+typedef struct barcodetool {
+BARCODE_TOOL_BLOCK
 } BarcodeToolData, PNTR BarcodeToolPtr;
 
 static void CleanupBarcodeTool (GraphiC g, VoidPtr data)
@@ -12220,12 +12295,14 @@ static Int2 LIBCALLBACK BarcodeToolMsgFunc (OMMsgStructPtr ommsp)
 }
 
 
-static void RefreshBarcodeList (BarcodeToolPtr vstp)
+static void RefreshBarcodeList (Pointer data)
 {
+  BarcodeToolPtr vstp;
   ValNodePtr pass_fail_list = NULL, vnp;
   Int4       num_fail = 0, num_pass = 0;
   Char       msg[30];
 
+  vstp = (BarcodeToolPtr) data;
   if (vstp == NULL) return;
   
   PointerToDialog (vstp->clickable_list, NULL);
@@ -12437,7 +12514,10 @@ extern void BarcodeRefreshButton (ButtoN b)
   vstp = (BarcodeToolPtr) GetObjectExtra (b);
   if (vstp == NULL) return;
 
-  RefreshBarcodeList (vstp);
+  if (vstp->refresh_func != NULL) 
+  {
+    (vstp->refresh_func) (vstp);
+  }
   RedrawBarcodeTool (vstp);  
 }
 
@@ -12465,7 +12545,7 @@ extern void BarcodeReportButton (ButtoN b)
   }
 
   lip = OpenLog ("BARCODE Discrepancies");
-  WriteBarcodeDiscrepancies (lip->fp, vstp->item_list);
+  WriteBarcodeDiscrepancies (lip->fp, object_list);
   lip->data_in_log = TRUE;
   CloseLog (lip);
   lip = FreeLog (lip);
@@ -12979,6 +13059,25 @@ static void BarcodeTestApplyTagTable (ButtoN b)
 }
 
 
+static void BarcodeComprehensiveReportButton (ButtoN b)
+{
+  BarcodeToolPtr         drfp;
+  LogInfoPtr             lip;
+  ValNodePtr             object_list;
+
+  drfp = (BarcodeToolPtr) GetObjectExtra (b);
+  if (drfp == NULL) return;
+
+  lip = OpenLog ("BARCODE Discrepancies");
+  object_list = GetBarcodePassFail (drfp->top_sep, drfp->cfg);
+  WriteBarcodeTestComprehensive (lip->fp, object_list);
+  lip->data_in_log = TRUE;
+  CloseLog (lip);
+  lip = FreeLog (lip);
+  object_list = BarcodeTestResultsListFree (object_list);
+}
+
+
 extern void BarcodeTestTool (IteM i)
 {
   BaseFormPtr              bfp;
@@ -13012,6 +13111,7 @@ extern void BarcodeTestTool (IteM i)
   SetObjectExtra (w, drfp, CleanupBarcodeTool);
   drfp->form = (ForM) w;
   drfp->formmessage = BarcodeToolMessage;
+  drfp->refresh_func = RefreshBarcodeList;
     
   /* register to receive update messages */
   drfp->userkey = OMGetNextUserKey ();
@@ -13040,11 +13140,13 @@ extern void BarcodeTestTool (IteM i)
   drfp->pass_fail_summary = StaticPrompt (h, "0 Pass, 0 Fail", 20 * stdCharWidth, dialogTextHeight, programFont, 'l');
   RefreshBarcodeList(drfp);
 
-  c3 = HiddenGroup (h, 7, 0, NULL);
+  c3 = HiddenGroup (h, 8, 0, NULL);
   SetGroupSpacing (c3, 10, 10);
   b = PushButton (c3, "Compliance Report", BarcodeTestComplianceReport);
   SetObjectExtra (b, drfp, NULL);
   b = PushButton (c3, "Failure Report", BarcodeReportButton);
+  SetObjectExtra (b, drfp, NULL);
+  b = PushButton (c3, "Comprehensive Report", BarcodeComprehensiveReportButton);
   SetObjectExtra (b, drfp, NULL);
 
   b = PushButton (c3, "Replace Tags", BarcodeTestImportTagTable);
@@ -13984,8 +14086,9 @@ static void FindBadLatLonSourceFeat (SeqFeatPtr sfp, Pointer userdata)
 
 
 
-static void RefreshLatLonTool (BarcodeToolPtr vstp)
+static void RefreshLatLonTool (Pointer data)
 {
+  BarcodeToolPtr vstp = (BarcodeToolPtr) data;
   if (vstp == NULL) return;
   
   PointerToDialog (vstp->clickable_list, NULL);
@@ -14186,18 +14289,6 @@ static void LatLonReport (ButtoN b)
 }
 
 
-extern void LatLonRefreshButton (ButtoN b)
-{
-  BarcodeToolPtr vstp;
-
-  vstp = (BarcodeToolPtr) GetObjectExtra (b);
-  if (vstp == NULL) return;
-
-  RefreshLatLonTool (vstp);
-  RedrawBarcodeTool (vstp);  
-}
-
-
 static void MoveIncorrectlyFormattedLatLonToNote (ButtoN b)
 {
   BarcodeToolPtr vstp;
@@ -14319,7 +14410,8 @@ extern void LatLonTool (IteM i)
   SetObjectExtra (w, drfp, CleanupLatLonTool);
   drfp->form = (ForM) w;
   drfp->formmessage = BarcodeToolMessage;
-    
+
+  drfp->refresh_func = RefreshLatLonTool;    
   /* register to receive update messages */
   drfp->userkey = OMGetNextUserKey ();
   drfp->procid = 0;
@@ -14353,7 +14445,7 @@ extern void LatLonTool (IteM i)
   SetObjectExtra (b, drfp, NULL);
   b = PushButton (c, "Make Report", LatLonReport);
   SetObjectExtra (b, drfp, NULL);
-  b = PushButton (c, "Refresh List", LatLonRefreshButton);
+  b = PushButton (c, "Refresh List", BarcodeRefreshButton);
   SetObjectExtra (b, drfp, NULL);
   b = PushButton (c, "Move to Note", MoveIncorrectlyFormattedLatLonToNote);
   SetObjectExtra (b, drfp, NULL);
@@ -14369,12 +14461,450 @@ extern void LatLonTool (IteM i)
 }
 
 
+static void FindLatLonCountryConflicts (SeqDescrPtr sdp, Pointer data)
+{
+  BioSourcePtr biop;
+  SubSourcePtr ssp;
+  CharPtr      orig_country = NULL, country = NULL, cp;
+  Boolean      found_lat_lon = FALSE;
+  FloatHi      lat, lon;
+
+  if (sdp == NULL || sdp->choice != Seq_descr_source || sdp->data.ptrvalue == NULL || data == NULL) return;
+  biop = (BioSourcePtr) sdp->data.ptrvalue;
+
+  for (ssp = biop->subtype; ssp != NULL && (country == NULL || !found_lat_lon); ssp = ssp->next)
+  {
+    if (ssp->subtype == SUBSRC_country && !StringHasNoText (ssp->name))
+    {
+      orig_country = ssp->name;
+      country = StringSave (orig_country);
+    }
+    else if (ssp->subtype == SUBSRC_lat_lon)
+    {
+      if (ParseLatLon (ssp->name, &lat, &lon))
+      {
+        found_lat_lon = TRUE;
+      }
+    }
+  }
+
+  cp = StringChr (country, ':');
+  if (cp != NULL) 
+  {
+    *cp = 0;
+  }
+
+  if (found_lat_lon && IsCountryInLatLonList (country)) 
+  {
+    if (!TestLatLonForCountry (country, lat, lon) 
+        && !TestLatLonForCountry (orig_country, lat, lon) 
+        && !StringContainsBodyOfWater (orig_country))
+    {
+      ValNodeAddPointer ((ValNodePtr PNTR) data, OBJ_SEQDESC, sdp);
+    }
+  }
+  country = MemFree (country);
+}
+
+
+static void RefreshLatLonCountryTool (Pointer data)
+{
+  BarcodeToolPtr vstp = (BarcodeToolPtr) data;
+  if (vstp == NULL) return;
+  
+  PointerToDialog (vstp->clickable_list, NULL);
+  vstp->item_list = ValNodeFree (vstp->item_list);
+
+  VisitDescriptorsInSep (vstp->top_sep, &(vstp->item_list), FindLatLonCountryConflicts);
+
+  PointerToDialog (vstp->clickable_list, vstp->item_list);  
+
+}
+
+
+static void LatLonCountryReport (ButtoN b)
+{
+  BarcodeToolPtr    drfp;
+  ValNodePtr        vnp;
+  LogInfoPtr        lip;
+  SeqDescrPtr       sdp;
+  BioSourcePtr      biop;
+  SubSourcePtr      ssp;
+  CharPtr           fix, country = NULL, lat_lon = NULL;
+
+  drfp = (BarcodeToolPtr) GetObjectExtra (b);
+  if (drfp == NULL) return;
+  
+  lip = OpenLog ("Incorrectly Formatted Lat-lon Values");
+  
+  for (vnp = drfp->item_list; vnp != NULL; vnp = vnp->next)
+  {
+    if (vnp->choice != OBJ_SEQDESC) continue;
+    sdp = vnp->data.ptrvalue;
+    if (sdp != NULL && sdp->choice == Seq_descr_source && sdp->data.ptrvalue != NULL)
+    {
+      biop = (BioSourcePtr) sdp->data.ptrvalue;
+      country = NULL;
+      lat_lon = NULL;
+      for (ssp = biop->subtype; ssp != NULL && (country == NULL || lat_lon == NULL); ssp = ssp->next)
+      {
+        if (ssp->subtype == SUBSRC_country && country == NULL)
+        {
+          country = ssp->name;
+        }
+        else if (ssp->subtype == SUBSRC_lat_lon && lat_lon == NULL)
+        {
+          lat_lon = ssp->name;
+        }
+      }
+      if (country == NULL) country = "missing";
+      if (lat_lon == NULL) lat_lon = "missing";
+      fix = GetLatLonCountryCorrection (OBJ_SEQDESC, sdp, NULL);
+
+      fprintf (lip->fp, "Country: %s\tLat-lon: %s\tCorrection: %s\n",
+               country, lat_lon, fix == NULL ? "No suggestion" : fix);
+      fix = MemFree (fix);
+      lip->data_in_log = TRUE;
+    }
+  }
+
+  CloseLog (lip);
+  lip = FreeLog (lip);
+
+}
+
+
+static CharPtr SkipNumberInString (CharPtr str)
+{
+  CharPtr cp;
+
+  cp = str;
+  while (isdigit (*cp))
+  {
+    cp++;
+  }
+  if (*cp == '.')
+  {
+    cp++;
+  }
+  while (isdigit (*cp))
+  {
+    cp++;
+  }
+  return cp;
+}
+
+static Boolean GetLatLonTokens (CharPtr str, CharPtr PNTR lat, CharPtr PNTR ns, CharPtr PNTR lon, CharPtr PNTR ew)
+{
+  CharPtr cp;
+
+  if (StringHasNoText (str) || lat == NULL || ns == NULL || lon == NULL || ew == NULL) return FALSE;
+
+  cp = str;
+  while (isspace (*cp)) 
+  {
+    cp++;
+  }
+  if (!isdigit (*cp)) return FALSE;
+  *lat = cp;
+  cp = SkipNumberInString (cp);
+
+  while (isspace (*cp)) 
+  {
+    cp++;
+  }
+
+  if (*cp != 'N' && *cp != 'S') return FALSE;
+  *ns = cp;
+  cp++;
+
+  while (isspace (*cp)) 
+  {
+    cp++;
+  }
+
+  if (!isdigit (*cp)) return FALSE;
+  *lon = cp;
+  cp = SkipNumberInString (cp);
+
+  while (isspace (*cp)) 
+  {
+    cp++;
+  }
+
+  if (*cp != 'E' && *cp != 'W') return FALSE;
+  *ew = cp;
+
+  return TRUE;
+}
+
+static CharPtr MakeLatLonValue (CharPtr lat, Char ns, CharPtr lon, Char ew)
+{
+  CharPtr newval, cp;
+  Int4 latlen, lonlen, len;
+
+  if (StringHasNoText (lat) || StringHasNoText (lon))
+  {
+    return NULL;
+  }
+  cp = SkipNumberInString (lat);
+  latlen = cp - lat;
+  cp = SkipNumberInString (lon);
+  lonlen = cp - lon;
+
+  len = latlen + lonlen + 6;
+
+  newval = (CharPtr) MemNew (sizeof (Char) * len);
+
+  cp = newval;
+  StringNCpy (newval, lat, latlen);
+  cp += latlen;
+  *(cp++) = ' ';
+  *(cp++) = ns;
+  *(cp++) = ' ';
+  StringNCpy (cp, lon, lonlen);
+  cp += lonlen;
+  *(cp++) = ' ';
+  *(cp++) = ew;
+  *(cp++) = 0;
+  
+  return newval;
+}
+
+
+static void LatLonCountryAutocorrectList (FILE *fp, ValNodePtr object_list)
+{
+  ValNodePtr vnp;
+  SeqDescrPtr sdp;
+  BioSourcePtr biop;
+  SubSourcePtr country_ssp, lat_lon_ssp, ssp;
+  FloatHi      lat, lon;
+  CharPtr      country, cp;
+  CharPtr      fix;
+
+  CharPtr      pLat, pNs, pLon, pEw;
+
+  if (fp == NULL || object_list == NULL) return;
+
+  for (vnp = object_list; vnp != NULL; vnp = vnp->next)
+  {
+    if (vnp->choice != OBJ_SEQDESC) continue;
+    sdp = vnp->data.ptrvalue;
+    if (sdp != NULL && sdp->choice == Seq_descr_source)
+    {
+      biop = (BioSourcePtr) sdp->data.ptrvalue;
+      country_ssp = NULL;
+      lat_lon_ssp = NULL;
+      for (ssp = biop->subtype; ssp != NULL && (country_ssp == NULL || lat_lon_ssp == NULL); ssp = ssp->next)
+      {
+        if (StringHasNoText (ssp->name)) continue;
+        if (ssp->subtype == SUBSRC_country && country_ssp == NULL)
+        {
+          country_ssp = ssp;
+        }
+        else if (ssp->subtype == SUBSRC_lat_lon && lat_lon_ssp == NULL && ParseLatLon (ssp->name, &lat, &lon))
+        {
+          lat_lon_ssp = ssp;
+        }
+      }
+      if (country_ssp == NULL)
+      {
+        country = NULL;
+      } else {
+        country = StringSave (country_ssp->name);
+        cp = StringChr (country, ':');
+        if (cp != NULL) *cp = 0;
+      }
+      if (country != NULL && lat_lon_ssp != NULL
+          && IsCountryInLatLonList (country)
+          && !TestLatLonForCountry (country, lat, lon)
+          && GetLatLonTokens (lat_lon_ssp->name, &pLat, &pNs, &pLon, &pEw))
+      {
+        fix = NULL;
+        if (TestLatLonForCountry (country, -lat, lon)) 
+        {
+          fix = MakeLatLonValue (pLat, *pNs == 'N' ? 'S' : 'N',
+                                 pLon, *pEw);
+        }
+        else if (TestLatLonForCountry (country, lat, -lon)) 
+        {
+          fix = MakeLatLonValue (pLat, *pNs,
+                                 pLon, *pEw == 'E' ? 'W' : 'E');
+        } else if (TestLatLonForCountry (country, lon, lat)) {
+          fix = MakeLatLonValue (pLon, *pEw == 'E' ? 'N' : 'S',
+                                 pLat, *pNs == 'N' ? 'E' : 'W');
+        }
+
+        if (fix != NULL) 
+        {
+          fprintf (fp, "Corrected %s to %s\n", lat_lon_ssp->name, fix);
+          lat_lon_ssp->name = MemFree (lat_lon_ssp->name);
+          lat_lon_ssp->name = fix;
+        }
+        else
+        {
+          fprintf (fp, "Unable to correct %s\n", lat_lon_ssp->name);
+        }
+      }
+      country = MemFree (country);
+    }
+  }
+}
+
+
+static void LatLonCountryAutocorrect (ButtoN b)
+{
+  BarcodeToolPtr    drfp;
+  ValNodePtr        object_list;
+  LogInfoPtr        lip;
+
+  drfp = (BarcodeToolPtr) GetObjectExtra (b);
+  if (drfp == NULL) return;
+  object_list = DialogToPointer (drfp->clickable_list);
+
+  if (object_list == NULL)
+  {
+    if (ANS_YES == Message (MSG_YN, "You have not selected any BioSources - correct all?"))
+    {
+      object_list = drfp->item_list;
+    }
+    else
+    {
+      return;
+    }
+  }
+  
+  lip = OpenLog ("Lat-lon Values Corrected");
+  
+  LatLonCountryAutocorrectList (lip->fp, object_list);
+
+  if (object_list != drfp->item_list) 
+  {
+    object_list = ValNodeFree (object_list);
+  }
+
+  RefreshLatLonCountryTool (drfp);
+  RedrawBarcodeTool (drfp);  
+
+  ObjMgrSetDirtyFlag (drfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, drfp->input_entityID, 0, 0);
+  Update();
+
+  lip->data_in_log = TRUE;
+  CloseLog (lip);
+  lip = FreeLog (lip);
+}
+
+
+
+extern void LatLonCountryTool (IteM i)
+{
+  BaseFormPtr       bfp;
+  SeqEntryPtr       sep;
+  ValNodePtr        biosources = NULL;
+  BarcodeToolPtr    drfp;
+  WindoW            w;
+  GrouP             h, c;
+  ButtoN            b;
+  OMUserDataPtr     omudp;
+  PrompT            ppt;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL || bfp->input_entityID == 0) return;
+
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+
+  VisitDescriptorsInSep (sep, &biosources, FindLatLonCountryConflicts);
+
+  if (biosources == NULL)
+  {
+    Message (MSG_OK, "No conflicts found.");
+    return;
+  }
+
+  biosources = ValNodeFree (biosources);
+
+  drfp = (BarcodeToolPtr) MemNew (sizeof (BarcodeToolData));
+  if (drfp == NULL)
+  {
+    return;
+  }
+  
+  drfp->bfp = bfp;
+  drfp->input_entityID = bfp->input_entityID;
+  drfp->top_sep = GetTopSeqEntryForEntityID (drfp->input_entityID);
+  w = FixedWindow (-50, -33, -10, -10, "Lat-Lon Country Conflict Tool", StdCloseWindowProc);
+  SetObjectExtra (w, drfp, CleanupLatLonTool);
+  drfp->form = (ForM) w;
+  drfp->formmessage = BarcodeToolMessage;
+
+  drfp->refresh_func = RefreshLatLonCountryTool;
+    
+  /* register to receive update messages */
+  drfp->userkey = OMGetNextUserKey ();
+  drfp->procid = 0;
+  drfp->proctype = OMPROC_EDIT;
+  omudp = ObjMgrAddUserData (drfp->input_entityID, drfp->procid, drfp->proctype, drfp->userkey);
+  if (omudp != NULL) {
+    omudp->userdata.ptrvalue = (Pointer) drfp;
+    omudp->messagefunc = BarcodeToolMsgFunc;
+  }
+
+
+#ifndef WIN_MAC
+  CreateStdValidatorFormMenus (w);
+#endif
+  
+  drfp->item_list = NULL;
+  drfp->cfg = NULL;
+  drfp->undo_list = NULL;
+  
+  h = HiddenGroup (w, -1, 0, NULL);
+  SetGroupSpacing (h, 10, 10);
+  
+  drfp->clickable_list = LatLonCountryResultsDisplay (h);
+
+  RefreshLatLonCountryTool (drfp);
+
+  ppt = StaticPrompt (h, "Note - only hemisphere transpositions and lat-lon transpositions can be corrected",
+                      0, stdLineHeight, programFont, 'c');
+
+  c = HiddenGroup (h, 5, 0, NULL);
+  SetGroupSpacing (c, 10, 10);
+
+  b = PushButton (c, "Autocorrect Values", LatLonCountryAutocorrect);
+  SetObjectExtra (b, drfp, NULL);
+  b = PushButton (c, "Make Report", LatLonCountryReport);
+  SetObjectExtra (b, drfp, NULL);
+  b = PushButton (c, "Refresh List", BarcodeRefreshButton);
+  SetObjectExtra (b, drfp, NULL);
+    
+  PushButton (c, "Dismiss", StdCancelButtonProc);
+
+  AlignObjects (ALIGN_CENTER, (HANDLE) drfp->clickable_list, (HANDLE) ppt, (HANDLE) c, NULL);
+
+  RealizeWindow (w);
+  
+  Show (w);
+
+}
+
+
+typedef struct specifichosttool {
+  BARCODE_TOOL_BLOCK
+  ButtoN check_single_word;
+} SpecificHostToolData, PNTR SpecificHostToolPtr;
+
 static void CleanupSpecificHostTool (GraphiC g, VoidPtr data)
 
 {
-  BarcodeToolPtr drfp;
+  SpecificHostToolPtr drfp;
 
-  drfp = (BarcodeToolPtr) data;
+  drfp = (SpecificHostToolPtr) data;
   if (drfp != NULL) {
     drfp->item_list = SpecificHostFixListFree (drfp->item_list);
     ObjMgrFreeUserData (drfp->input_entityID, drfp->procid, drfp->proctype, drfp->userkey);
@@ -14383,14 +14913,15 @@ static void CleanupSpecificHostTool (GraphiC g, VoidPtr data)
 }
 
 
-static void RefreshSpecificHostTool (BarcodeToolPtr vstp)
+static void RefreshSpecificHostTool (Pointer data)
 {
+  SpecificHostToolPtr vstp = (SpecificHostToolPtr) data;
   if (vstp == NULL) return;
   
   PointerToDialog (vstp->clickable_list, NULL);
   vstp->item_list = SpecificHostFixListFree (vstp->item_list);
 
-  vstp->item_list = Taxon3GetSpecificHostFixesInSeqEntry (vstp->top_sep);
+  vstp->item_list = Taxon3GetSpecificHostFixesInSeqEntry (vstp->top_sep, GetStatus (vstp->check_single_word));
 
   PointerToDialog (vstp->clickable_list, vstp->item_list);  
 
@@ -14399,12 +14930,12 @@ static void RefreshSpecificHostTool (BarcodeToolPtr vstp)
 
 static void SpecificHostAutocorrect (ButtoN b)
 {
-  BarcodeToolPtr    drfp;
-  ValNodePtr        object_list, vnp;
-  LogInfoPtr        lip;
-  SpecificHostFixPtr   s;
+  SpecificHostToolPtr drfp;
+  ValNodePtr          object_list, vnp;
+  LogInfoPtr          lip;
+  SpecificHostFixPtr  s;
 
-  drfp = (BarcodeToolPtr) GetObjectExtra (b);
+  drfp = (SpecificHostToolPtr) GetObjectExtra (b);
   if (drfp == NULL) return;
   object_list = DialogToPointer (drfp->clickable_list);
 
@@ -14442,7 +14973,7 @@ static void SpecificHostAutocorrect (ButtoN b)
   }
 
   RefreshSpecificHostTool (drfp);
-  RedrawBarcodeTool (drfp);  
+  RedrawBarcodeTool ((BarcodeToolPtr)drfp);  
 
   ObjMgrSetDirtyFlag (drfp->input_entityID, TRUE);
   ObjMgrSendMsg (OM_MSG_UPDATE, drfp->input_entityID, 0, 0);
@@ -14457,13 +14988,13 @@ static void SpecificHostAutocorrect (ButtoN b)
 
 static void SpecificHostReport (ButtoN b)
 {
-  BarcodeToolPtr    drfp;
-  ValNodePtr        vnp;
-  LogInfoPtr        lip;
-  SpecificHostFixPtr s;
-  CharPtr            fix;
+  SpecificHostToolPtr drfp;
+  ValNodePtr          vnp;
+  LogInfoPtr          lip;
+  SpecificHostFixPtr  s;
+  CharPtr             fix;
 
-  drfp = (BarcodeToolPtr) GetObjectExtra (b);
+  drfp = (SpecificHostToolPtr) GetObjectExtra (b);
   if (drfp == NULL) return;
   
   lip = OpenLog ("Incorrect Specific-Host Values");
@@ -14498,29 +15029,16 @@ static void SpecificHostReport (ButtoN b)
 }
 
 
-extern void SpecificHostRefreshButton (ButtoN b)
-{
-  BarcodeToolPtr vstp;
-
-  vstp = (BarcodeToolPtr) GetObjectExtra (b);
-  if (vstp == NULL) return;
-
-  RefreshSpecificHostTool (vstp);
-  RedrawBarcodeTool (vstp);  
-}
-
-
-
 extern void FixSpecificHostValues (IteM i)
 {
-  BaseFormPtr       bfp;
-  SeqEntryPtr       sep;
-  BarcodeToolPtr    drfp;
-  WindoW            w;
-  GrouP             h, c;
-  ButtoN            b;
-  OMUserDataPtr     omudp;
-  ValNodePtr        fix_list = NULL;
+  BaseFormPtr         bfp;
+  SeqEntryPtr         sep;
+  SpecificHostToolPtr drfp;
+  WindoW              w;
+  GrouP               h, c;
+  ButtoN              b;
+  OMUserDataPtr       omudp;
+  ValNodePtr          fix_list = NULL;
 
 #ifdef WIN_MAC
   bfp = currentFormDataPtr;
@@ -14531,7 +15049,7 @@ extern void FixSpecificHostValues (IteM i)
 
   sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
 
-  fix_list = Taxon3GetSpecificHostFixesInSeqEntry (sep);
+  fix_list = Taxon3GetSpecificHostFixesInSeqEntry (sep, TRUE);
 
   if (fix_list == NULL)
   {
@@ -14541,7 +15059,7 @@ extern void FixSpecificHostValues (IteM i)
 
   fix_list = SpecificHostFixListFree (fix_list);
 
-  drfp = (BarcodeToolPtr) MemNew (sizeof (BarcodeToolData));
+  drfp = (SpecificHostToolPtr) MemNew (sizeof (SpecificHostToolData));
   if (drfp == NULL)
   {
     return;
@@ -14554,6 +15072,8 @@ extern void FixSpecificHostValues (IteM i)
   SetObjectExtra (w, drfp, CleanupSpecificHostTool);
   drfp->form = (ForM) w;
   drfp->formmessage = BarcodeToolMessage;
+
+  drfp->refresh_func = RefreshSpecificHostTool;
     
   /* register to receive update messages */
   drfp->userkey = OMGetNextUserKey ();
@@ -14578,6 +15098,8 @@ extern void FixSpecificHostValues (IteM i)
   SetGroupSpacing (h, 10, 10);
   
   drfp->clickable_list = SpecificHostResultsDisplay (h);
+  drfp->check_single_word = CheckBox (h, "Also check single-word specific host values", BarcodeRefreshButton);
+  SetObjectExtra (drfp->check_single_word, drfp, NULL);
 
   RefreshSpecificHostTool (drfp);
 
@@ -14588,12 +15110,12 @@ extern void FixSpecificHostValues (IteM i)
   SetObjectExtra (b, drfp, NULL);
   b = PushButton (c, "Make Report", SpecificHostReport);
   SetObjectExtra (b, drfp, NULL);
-  b = PushButton (c, "Refresh List", SpecificHostRefreshButton);
+  b = PushButton (c, "Refresh List", BarcodeRefreshButton);
   SetObjectExtra (b, drfp, NULL);
     
   PushButton (c, "Dismiss", StdCancelButtonProc);
 
-  AlignObjects (ALIGN_CENTER, (HANDLE) drfp->clickable_list, (HANDLE) c, NULL);
+  AlignObjects (ALIGN_CENTER, (HANDLE) drfp->clickable_list, (HANDLE) drfp->check_single_word, (HANDLE) c, NULL);
 
   RealizeWindow (w);
   
@@ -14690,3 +15212,4 @@ extern void ListFailedTaxonomyLookups (IteM i)
                            ReportFailedTaxonomyLookups, RefreshFailedTaxonomyLookups);
 
 }
+

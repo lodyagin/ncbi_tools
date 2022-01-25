@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/13/91
 *
-* $Revision: 6.58 $
+* $Revision: 6.59 $
 *
 * File Description:  Ports onto Bioseqs
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: seqport.h,v $
+* Revision 6.59  2008/02/12 18:56:52  bollin
+* Made ReverseSeqData and ComplementSeqData extern
+*
 * Revision 6.58  2007/05/30 18:10:06  kans
 * added KNOWN_GAP_AS_PLUS to distinguish known-length from unknown-length gaps, use for validation
 *
@@ -1057,6 +1060,11 @@ NLM_EXTERN FloatHi MolWtForLoc (SeqLocPtr slp);
 NLM_EXTERN FloatHi MolWtForBsp (BioseqPtr bsp);
 
 NLM_EXTERN FloatHi MolWtForStr (CharPtr str);
+
+
+
+NLM_EXTERN Boolean LIBCALL ReverseSeqData (Uint1 seqtype, Int4 seqlen, SeqDataPtr sdp);
+NLM_EXTERN Boolean ComplementSeqData (Uint1 seqtype, Int4 seqlen, SeqDataPtr sdp);
 
 
 #ifdef __cplusplus

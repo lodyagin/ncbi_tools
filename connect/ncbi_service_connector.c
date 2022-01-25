@@ -1,4 +1,4 @@
-/*  $Id: ncbi_service_connector.c,v 6.73 2006/06/07 20:06:48 lavr Exp $
+/*  $Id: ncbi_service_connector.c,v 6.77 2008/02/02 01:55:55 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -39,6 +39,9 @@
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
+
+
+#define NCBI_USE_ERRCODE_X   Connect_Service
 
 
 typedef struct SServiceConnectorTag {
@@ -141,15 +144,15 @@ static int/*bool*/ s_ParseHeader(const char* header,
             if (uuu->host)
                 break/*failed - duplicate connection info*/;
             header += sizeof(HTTP_CONNECTION_INFO) - 1;
-            while (*header && isspace((unsigned char)(*header)))
+            while (*header  &&  isspace((unsigned char)(*header)))
                 header++;
             if (strncasecmp(header, kStateless, sizeof(kStateless) - 1) == 0) {
                 /* Special keyword for switching into stateless mode */
                 uuu->host = (unsigned int)(-1);
 #if defined(_DEBUG) && !defined(NDEBUG)
                 if (uuu->net_info->debug_printout) {
-                    CORE_LOG(eLOG_Note,
-                             "[SERVICE]  Fallback to stateless requested");
+                    CORE_LOG_X(2, eLOG_Note,
+                               "[SERVICE]  Fallback to stateless requested");
                 }
 #endif
             } else {
@@ -159,7 +162,7 @@ static int/*bool*/ s_ParseHeader(const char* header,
                 }
                 o1 = i1; o2 = i2; o3 = i3; o4 = i4;
                 sprintf(ipaddr, "%u.%u.%u.%u", o1, o2, o3, o4);
-                if (!(uuu->host = SOCK_gethostbyname(ipaddr)) || !uuu->port)
+                if (!(uuu->host = SOCK_gethostbyname(ipaddr))  ||  !uuu->port)
                     break/*failed - bad host:port in connection info*/;
                 uuu->ticket = SOCK_HostToNetLong(ticket);
             }
@@ -167,7 +170,7 @@ static int/*bool*/ s_ParseHeader(const char* header,
         if ((header = strchr(header, '\n')) != 0)
             header++;
     }
-    if (!header || !*header)
+    if (!header  ||  !*header)
         return 1/*success*/;
 
     uuu->host = 0;
@@ -175,15 +178,15 @@ static int/*bool*/ s_ParseHeader(const char* header,
 }
 
 
-static int/*bool*/ s_ContentTypeDefined(const SConnNetInfo* net_info,
-                                        EMIME_Type          mime_t,
-                                        EMIME_SubType       mime_s,
-                                        EMIME_Encoding      mime_e)
+static int/*bool*/ s_IsContentTypeDefined(const SConnNetInfo* net_info,
+                                          EMIME_Type          mime_t,
+                                          EMIME_SubType       mime_s,
+                                          EMIME_Encoding      mime_e)
 {
     const char* s;
 
     assert(net_info);
-    for (s = net_info->http_user_header; s; s = strchr(s, '\n')) {
+    for (s = net_info->http_user_header;  s;  s = strchr(s, '\n')) {
         if (s != net_info->http_user_header)
             s++;
         if (!*s)
@@ -197,13 +200,13 @@ static int/*bool*/ s_ContentTypeDefined(const SConnNetInfo* net_info,
             if (net_info->debug_printout                      &&
                 mime_t != SERV_MIME_TYPE_UNDEFINED            &&
                 mime_t != eMIME_T_Unknown                     &&
-                MIME_ParseContentTypeEx(s, &m_t, &m_s, &m_e)  &&
-                (mime_t != m_t
-                 ||  (mime_s != SERV_MIME_SUBTYPE_UNDEFINED &&
-                      mime_s != eMIME_Unknown &&
-                      m_s != eMIME_Unknown && mime_s != m_s)
-                 ||  (mime_e != eENCOD_None &&
-                      m_e != eENCOD_None && mime_e != m_e))) {
+                (!MIME_ParseContentTypeEx(s, &m_t, &m_s, &m_e)
+                 ||   mime_t != m_t
+                 ||  (mime_s != SERV_MIME_SUBTYPE_UNDEFINED  &&
+                      mime_s != eMIME_Unknown                &&
+                      m_s    != eMIME_Unknown  &&  mime_s != m_s)
+                 ||  (mime_e != eENCOD_None                  &&
+                      m_e    != eENCOD_None    &&  mime_e != m_e))) {
                 const char* c;
                 size_t len;
                 char* t;
@@ -213,7 +216,7 @@ static int/*bool*/ s_ContentTypeDefined(const SConnNetInfo* net_info,
                 }
                 if (!(c = strchr(s, '\n')))
                     c = s + strlen(s);
-                if (c > s && c[-1] == '\r')
+                if (c > s  &&  c[-1] == '\r')
                     c--;
                 len = (size_t)(c - s);
                 if ((t = (char*) malloc(len + 1)) != 0) {
@@ -224,14 +227,16 @@ static int/*bool*/ s_ContentTypeDefined(const SConnNetInfo* net_info,
                                                c_t, sizeof(c_t))) {
                     *c_t = '\0';
                 }
-                CORE_LOGF(eLOG_Warning,
-                          ("[SERVICE]  Content-Type mismatch for \"%s\" "
-                           "%s%s%s%s%s", net_info->service,
-                           t && *t         ? "specified="  : "",
-                           t && *t         ? t             : "",
-                           t && *t && *c_t ? ", "          : "",
-                           *c_t            ? "configured=" : "",
-                           *c_t            ? c_t           : ""));
+                CORE_LOGF_X(3, eLOG_Warning,
+                            ("[SERVICE]  Content-Type mismatch for \"%s\" "
+                             "%s%s%s%s%s%s%s", net_info->service,
+                             t  &&  *t           ? "specified=<"  : "",
+                             t  &&  *t           ? t              : "",
+                             t  &&  *t           ? ">"            : "",
+                             t  &&  *t  &&  *c_t ? ", "           : "",
+                             *c_t                ? "configured=<" : "",
+                             *c_t                ? c_t            : "",
+                             *c_t                ? ">"            : ""));
                 if (t)
                     free(t);
             }
@@ -243,19 +248,18 @@ static int/*bool*/ s_ContentTypeDefined(const SConnNetInfo* net_info,
 }
 
 
-static char* s_AdjustNetParams(SConnNetInfo*  net_info,
-                               EReqMethod     req_method,
-                               const char*    cgi_path,
-                               const char*    cgi_args,
-                               const char*    args,
-                               const char*    static_header,
-                               EMIME_Type     mime_t,
-                               EMIME_SubType  mime_s,
-                               EMIME_Encoding mime_e,
-                               char*          dynamic_header/*will be freed*/)
+static const char* s_AdjustNetParams(SConnNetInfo*  net_info,
+                                     EReqMethod     req_method,
+                                     const char*    cgi_path,
+                                     const char*    cgi_args,
+                                     const char*    args,
+                                     const char*    static_header,
+                                     EMIME_Type     mime_t,
+                                     EMIME_SubType  mime_s,
+                                     EMIME_Encoding mime_e,
+                                     char*          dynamic_header/*freed!*/)
 {
-    char c_t[MAX_CONTENT_TYPE_LEN], *retval;
-    size_t sh_len, dh_len, ct_len;
+    const char *retval = 0;
 
     net_info->req_method = req_method;
 
@@ -265,30 +269,36 @@ static char* s_AdjustNetParams(SConnNetInfo*  net_info,
     if (args)
         strncpy0(net_info->args, args, sizeof(net_info->args) - 1);
     ConnNetInfo_DeleteAllArgs(net_info, cgi_args);
-    if (!ConnNetInfo_PrependArg(net_info, cgi_args, 0)) {
-        if (dynamic_header)
-            free(dynamic_header);
-        return 0/*failed*/;
+
+    if (ConnNetInfo_PrependArg(net_info, cgi_args, 0)) {
+        size_t sh_len = static_header  ? strlen(static_header)  : 0;
+        size_t dh_len = dynamic_header ? strlen(dynamic_header) : 0;
+        char   c_t[MAX_CONTENT_TYPE_LEN];
+        size_t ct_len, len;
+
+        if (s_IsContentTypeDefined(net_info, mime_t, mime_s, mime_e)  ||
+            mime_t == SERV_MIME_TYPE_UNDEFINED                        ||
+            mime_s == SERV_MIME_SUBTYPE_UNDEFINED                     ||
+            !MIME_ComposeContentTypeEx(mime_t, mime_s, mime_e,
+                                       c_t, sizeof(c_t))) {
+            c_t[0] = '\0';
+            ct_len = 0;
+        } else
+            ct_len = strlen(c_t);
+        if ((len = sh_len + dh_len + ct_len) != 0) {
+            char* temp = (char*) malloc(len + 1/*EOL*/);
+            if (temp) {
+                strcpy(temp,          static_header  ? static_header  : "");
+                strcpy(temp + sh_len, dynamic_header ? dynamic_header : "");
+                strcpy(temp + sh_len + dh_len, c_t);
+                retval = temp;
+            }
+        } else
+            retval = "";
     }
 
-    sh_len = static_header  ? strlen(static_header)  : 0;
-    dh_len = dynamic_header ? strlen(dynamic_header) : 0;
-    if (s_ContentTypeDefined(net_info, mime_t, mime_s, mime_e)  ||
-        mime_t == SERV_MIME_TYPE_UNDEFINED                      ||
-        mime_s == SERV_MIME_SUBTYPE_UNDEFINED                   ||
-        !MIME_ComposeContentTypeEx(mime_t, mime_s, mime_e, c_t, sizeof(c_t))) {
-        c_t[0] = '\0';
-        ct_len = 0;
-    } else
-        ct_len = strlen(c_t);
-    if ((retval = (char*) malloc(sh_len + dh_len +ct_len + 1/*EOL*/)) != 0) {
-        strcpy(retval,                   static_header  ? static_header  : "");
-        strcpy(retval + sh_len,          dynamic_header ? dynamic_header : "");
-        strcpy(retval + sh_len + dh_len, c_t);
-    }
     if (dynamic_header)
         free(dynamic_header);
-
     return retval;
 }
 
@@ -326,7 +336,7 @@ static int/*bool*/ s_AdjustNetInfo(SConnNetInfo* net_info,
     const SSERV_Info* info;
 
     assert(n != 0); /* paranoid assertion :-) */
-    if (uuu->net_info->firewall && !uuu->net_info->stateless)
+    if (uuu->net_info->firewall  &&  !uuu->net_info->stateless)
         return 0; /*cannot adjust firewall stateful client*/
 
     for (;;) {
@@ -394,11 +404,11 @@ static int/*bool*/ s_AdjustNetInfo(SConnNetInfo* net_info,
         ConnNetInfo_DeleteUserHeader(net_info, uuu->user_header);
         free((void*) uuu->user_header);
     }
-    uuu->user_header = user_header;
+    uuu->user_header = *user_header ? user_header : 0;
     if (!ConnNetInfo_OverrideUserHeader(net_info, user_header))
         return 0/*false - not adjusted*/;
 
-    if (info->type == fSERV_Ncbid || (info->type & fSERV_Http)) {
+    if (info->type == fSERV_Ncbid  ||  (info->type & fSERV_Http)) {
         SOCK_ntoa(info->host, net_info->host, sizeof(net_info->host));
         net_info->port = info->port;
     } else {
@@ -420,10 +430,10 @@ static CONNECTOR s_Open(SServiceConnector* uuu,
                         int/*bool*/        second_try)
 {
     const char* user_header; /* either "" or non-empty dynamic string */
-    char*       iter_header;
+    char*       iter_header = SERV_Print(uuu->iter, net_info);
     EReqMethod  req_method;
 
-    if (info && info->type != fSERV_Firewall) {
+    if (info  &&  info->type != fSERV_Firewall) {
         /* Not a firewall/relay connection here */
         assert(!second_try);
         /* We know the connection point, let's try to use it! */
@@ -488,8 +498,8 @@ static CONNECTOR s_Open(SServiceConnector* uuu,
         EMIME_Type     mime_t;
         EMIME_SubType  mime_s;
         EMIME_Encoding mime_e;
-        if (net_info->stateless ||
-            (info && (info->u.firewall.type & fSERV_Http))) {
+        if (net_info->stateless  ||
+            (info  &&  (info->u.firewall.type & fSERV_Http))) {
             if (info) {
                 req_method = info->u.firewall.type == fSERV_HttpGet
                     ? eReqMethod_Get : (info->u.firewall.type == fSERV_HttpPost
@@ -516,10 +526,13 @@ static CONNECTOR s_Open(SServiceConnector* uuu,
                                         0, 0, 0, user_header,
                                         mime_t, mime_s, mime_e, 0);
     }
-    if (!user_header)
+    if (!user_header) {
+        if (iter_header)
+            free(iter_header);
         return 0;
+    }
 
-    if ((iter_header = SERV_Print(uuu->iter, net_info)) != 0) {
+    if (iter_header) {
         size_t uh_len;
         if ((uh_len = strlen(user_header)) > 0) {
             char*  ih;
@@ -554,9 +567,9 @@ static CONNECTOR s_Open(SServiceConnector* uuu,
              "\r\n");
     }
 
-    if (!net_info->stateless && (!info                        ||
-                                 info->type == fSERV_Firewall ||
-                                 info->type == fSERV_Ncbid)) {
+    if (!net_info->stateless  &&  (!info                         ||
+                                   info->type == fSERV_Firewall  ||
+                                   info->type == fSERV_Ncbid)) {
         /* HTTP connector is auxiliary only */
         CONNECTOR conn;
         CONN c;
@@ -580,20 +593,20 @@ static CONNECTOR s_Open(SServiceConnector* uuu,
             /* This also triggers parse header callback */
             CONN_Close(c);
         } else {
-            CORE_LOGF(eLOG_Error, ("[SERVICE]  Unable to create aux. %s",
-                                   conn ? "connection" : "connector"));
+            CORE_LOGF_X(4, eLOG_Error, ("[SERVICE]  Unable to create aux. %s",
+                                        conn ? "connection" : "connector"));
             assert(0);
         }
         if (!uuu->host)
             return 0/*failed, no connection info returned*/;
         if (uuu->host == (unsigned int)(-1)) {
             /* Firewall mode only in stateful mode, fallback requested */
-            assert((!info || info->type == fSERV_Firewall) && !second_try);
+            assert((!info  ||  info->type == fSERV_Firewall)  &&  !second_try);
             /* Try to use stateless mode instead */
             net_info->stateless = 1/*true*/;
             return s_Open(uuu, timeout, info, net_info, 1/*second try*/);
         }
-        if (net_info->firewall && *net_info->proxy_host)
+        if (net_info->firewall  &&  *net_info->proxy_host)
             strcpy(net_info->host, net_info->proxy_host);
         else
             SOCK_ntoa(uuu->host, net_info->host, sizeof(net_info->host));
@@ -670,7 +683,7 @@ static EIO_Status s_VT_Open(CONNECTOR connector, const STimeout* timeout)
     CONNECTOR conn;
 
     assert(!uuu->meta.list && !uuu->name);
-    if (!uuu->iter && !s_OpenDispatcher(uuu)) {
+    if (!uuu->iter  &&  !s_OpenDispatcher(uuu)) {
         uuu->status = status;
         return status;
     }
@@ -720,7 +733,7 @@ static EIO_Status s_VT_Open(CONNECTOR connector, const STimeout* timeout)
                 static const char prefix[] = "SERVICE/";
                 char* name = (char*) malloc(sizeof(prefix) + strlen(type));
                 if (name) {
-                    strcpy(&name[0],                prefix);
+                    memcpy(&name[0],                prefix, sizeof(prefix)-1);
                     strcpy(&name[sizeof(prefix)-1], type);
                     uuu->name = name;
                 }
@@ -757,9 +770,9 @@ static void s_Setup(SMetaConnector *meta, CONNECTOR connector)
 {
     SServiceConnector* uuu = (SServiceConnector*) connector->handle;
     /* initialize virtual table */
-    CONN_SET_METHOD(meta, get_type,   s_VT_GetType,   connector);
-    CONN_SET_METHOD(meta, open,       s_VT_Open,      connector);
-    CONN_SET_METHOD(meta, close,      s_VT_Close,     connector);
+    CONN_SET_METHOD(meta, get_type, s_VT_GetType, connector);
+    CONN_SET_METHOD(meta, open,     s_VT_Open,    connector);
+    CONN_SET_METHOD(meta, close,    s_VT_Close,   connector);
     CONN_SET_DEFAULT_TIMEOUT(meta, uuu->net_info->timeout);
     /* all the rest is reset to NULL */
     s_Reset(meta);
@@ -798,7 +811,7 @@ extern CONNECTOR SERVICE_CreateConnectorEx
     CONNECTOR          ccc;
     SServiceConnector* xxx;
 
-    if (!service || !*service)
+    if (!service  ||  !*service)
         return 0;
 
     ccc = (SConnector*)        malloc(sizeof(SConnector));
@@ -843,240 +856,3 @@ extern CONNECTOR SERVICE_CreateConnectorEx
     /* done */
     return ccc;
 }
-
-
-/*
- * --------------------------------------------------------------------------
- * $Log: ncbi_service_connector.c,v $
- * Revision 6.73  2006/06/07 20:06:48  lavr
- * Adjust use of net_infos passed to SERV_Print()
- *
- * Revision 6.72  2006/04/23 18:27:54  lavr
- * BUGFIX:  typo in SServiceConnector allocation caused memory corruption
- *
- * Revision 6.71  2006/04/20 14:00:59  lavr
- * Keep original service name and use it for service mappers
- *
- * Revision 6.70  2006/01/27 17:10:24  lavr
- * Replace obsolete call names with current ones
- *
- * Revision 6.69  2006/01/17 20:28:21  lavr
- * Do not override user-provided Content-Type
- *
- * Revision 6.68  2006/01/12 18:12:46  lavr
- * Fix erroneous use of non-translated service name
- * Stricter checks on uniqueness of returned Connection-Info:
- *
- * Revision 6.67  2006/01/11 20:28:47  lavr
- * Take advantage of ConnNetInfo_SetupStandardArgs();  other changes to
- * allow to pass user-supplied parameters to services (where feasible)
- *
- * Revision 6.66  2006/01/11 16:28:28  lavr
- * Simplify code (mostly, by factoring out)
- *
- * Revision 6.65  2005/12/23 18:12:32  lavr
- * fSERV_StatelessOnly -> fSERV_Stateless
- *
- * Revision 6.64  2005/10/26 14:44:59  lavr
- * Insure service name appears in URLs for HTTP services
- *
- * Revision 6.63  2005/08/12 19:21:52  lavr
- * Take fHCC_Flushable from connector's extra params in case of HTTP
- *
- * Revision 6.62  2005/07/11 18:15:30  lavr
- * SERV_PrintEx() -> SERV_Print()
- *
- * Revision 6.61  2004/07/01 16:28:44  lavr
- * Generate "Referer:" for resolved HTTP service hits
- *
- * Revision 6.60  2003/08/25 14:41:53  lavr
- * Employ new k..Timeout constants  --  log modification only
- *
- * Revision 6.59  2003/05/31 05:16:45  lavr
- * Add ARGSUSED where args are meant to be unused
- *
- * Revision 6.58  2003/05/29 20:13:48  lavr
- * -#include <connect/ncbi_connection.h>
- *
- * Revision 6.57  2003/05/22 20:31:28  lavr
- * Callbacks in the constructor had to be set after successful init only
- *
- * Revision 6.56  2003/05/14 15:43:45  lavr
- * Modify format of host address in dispatcher's CGI query
- *
- * Revision 6.55  2003/05/14 13:55:06  lavr
- * BUGFIX: Buffer overrun in s_GetArgs()
- *
- * Revision 6.54  2003/05/14 04:19:48  lavr
- * BUGFIX: Actually add IP address in "address=" CGI argument
- *
- * Revision 6.53  2003/05/14 03:55:28  lavr
- * Arguments to include host address (for statistics purposes on backends)
- *
- * Revision 6.52  2002/12/19 17:34:58  lavr
- * Do not initiate STATEFUL_CAPABLE challenge with HTTP servers in relay mode
- *
- * Revision 6.51  2002/12/10 22:11:50  lavr
- * Stamp HTTP packets with "User-Agent:" header tag and DISP_PROTOCOL_VERSION
- *
- * Revision 6.50  2002/11/19 19:23:25  lavr
- * Set MIME type whenever possible; introduce status of last op
- *
- * Revision 6.49  2002/11/12 05:52:00  lavr
- * Use client_host from conn.info as value for "address="
- *
- * Revision 6.48  2002/11/01 20:16:05  lavr
- * Expand hostname buffers to hold up to 256 chars
- *
- * Revision 6.47  2002/10/29 22:19:37  lavr
- * Fix proper use of non-transparent proxy if one is specified
- *
- * Revision 6.46  2002/10/28 15:44:00  lavr
- * Use "ncbi_ansi_ext.h" privately and use strncpy0()
- *
- * Revision 6.45  2002/10/22 15:11:24  lavr
- * Zero connector's handle to crash if revisited
- *
- * Revision 6.44  2002/10/21 18:32:28  lavr
- * Append service arguments "address" and "platform" in dispatcher requests
- *
- * Revision 6.43  2002/10/11 19:56:42  lavr
- * Add "myargs" into connector structure (for later use in requests to
- * show address and platform of the dispatcher's requestors)
- *
- * Revision 6.42  2002/09/06 17:45:33  lavr
- * Include <connect/ncbi_priv.h> unconditionally (reported by J.Kans)
- *
- * Revision 6.41  2002/09/06 15:44:02  lavr
- * Use fHCC_SureFlush and CONN_Flush() instead of dummy read
- *
- * Revision 6.40  2002/08/07 16:33:33  lavr
- * Changed EIO_ReadMethod enums accordingly; log moved to end
- *
- * Revision 6.39  2002/06/10 19:51:43  lavr
- * Wrong assertion removed from FIREWALL open case
- *
- * Revision 6.38  2002/05/07 15:31:47  lavr
- * +#include <stdio.h>: noticed by J.Kans
- *
- * Revision 6.37  2002/05/06 19:17:33  lavr
- * Take advantage of SERV_ServiceName()
- *
- * Revision 6.36  2002/04/26 16:28:51  lavr
- * SSERVICE_Params: reset added for use in open/close pairs
- * No checks for kDefaultTimeout: now real timeouts always go from CONN
- *
- * Revision 6.35  2002/03/30 03:34:32  lavr
- * BUGFIX: Memory leak from SERV_ITER in usused connector
- *
- * Revision 6.34  2002/03/22 22:18:28  lavr
- * Remove uuu->conn (contained in uuu->meta.list); honor timeout on open
- *
- * Revision 6.33  2002/03/22 19:52:18  lavr
- * Do not include <stdio.h>: included from ncbi_util.h or ncbi_priv.h
- *
- * Revision 6.32  2002/03/19 22:14:53  lavr
- * Proper indentation of nested preprocessor directives
- *
- * Revision 6.31  2002/03/11 22:00:22  lavr
- * Support encoding in MIME content type for server data
- *
- * Revision 6.30  2001/12/04 15:56:47  lavr
- * Use strdup() instead of explicit strcpy(malloc(...), ...)
- *
- * Revision 6.29  2001/10/26 21:17:59  lavr
- * 'service=name' now always precedes other params in connects to DISPD/NCBID
- *
- * Revision 6.28  2001/09/28 20:51:31  lavr
- * Comments revised; parameter (and SHttpConnector's) names adjusted
- * Retry logic moved entirely into s_Adjust()
- *
- * Revision 6.27  2001/09/24 20:29:36  lavr
- * +SSERVICE_Extra* parameter in constructor; store and use of this parameter
- *
- * Revision 6.26  2001/09/10 21:21:20  lavr
- * Support for temporary switching into firewall mode as per dispatcher request
- *
- * Revision 6.25  2001/07/26 15:12:17  lavr
- * while(1) -> for(;;)
- *
- * Revision 6.24  2001/06/05 14:11:29  lavr
- * SERV_MIME_UNDEFINED split into 2 (typed) constants:
- * SERV_MIME_TYPE_UNDEFINED and SERV_MIME_SUBTYPE_UNDEFINED
- *
- * Revision 6.23  2001/06/04 17:02:17  lavr
- * Insert MIME type/subtype in Content-Type for servers,
- * which have this feature configured
- *
- * Revision 6.22  2001/05/30 18:46:38  lavr
- * Always call dispatcher in header-parsing callback (to see err.msg. if any)
- *
- * Revision 6.21  2001/05/23 21:53:19  lavr
- * Do not close dispatcher in Open; leave it as it is
- *
- * Revision 6.20  2001/05/17 15:03:07  lavr
- * Typos corrected
- *
- * Revision 6.19  2001/05/11 15:32:05  lavr
- * Minor patch in code of 'fallback to STATELESS'
- *
- * Revision 6.18  2001/05/08 20:27:05  lavr
- * Patches in re-try code
- *
- * Revision 6.17  2001/05/03 16:37:09  lavr
- * Flow control fixed in s_Open for firewall connection
- *
- * Revision 6.16  2001/04/26 20:20:57  lavr
- * Default tags are explicitly used to differ from a Web browser
- *
- * Revision 6.15  2001/04/25 15:49:54  lavr
- * Memory leaks in Open (when unsuccessful) fixed
- *
- * Revision 6.14  2001/04/24 21:36:50  lavr
- * More structured code to re-try abrupted connection/mapping attempts
- *
- * Revision 6.13  2001/03/07 23:01:07  lavr
- * fSERV_Any used instead of 0 in SERVICE_CreateConnector
- *
- * Revision 6.12  2001/03/06 23:55:37  lavr
- * SOCK_gethostaddr -> SOCK_gethostbyname
- *
- * Revision 6.11  2001/03/02 20:10:07  lavr
- * Typo fixed
- *
- * Revision 6.10  2001/03/01 00:32:15  lavr
- * FIX: Empty update does not generate parse error
- *
- * Revision 6.9  2001/02/09 17:35:45  lavr
- * Modified: fSERV_StatelessOnly overrides info->stateless
- * Bug fixed: free(type) -> free(name)
- *
- * Revision 6.8  2001/01/25 17:04:43  lavr
- * Reversed:: DESTROY method calls free() to delete connector structure
- *
- * Revision 6.7  2001/01/23 23:09:19  lavr
- * Flags added to 'Ex' constructor
- *
- * Revision 6.6  2001/01/11 16:38:18  lavr
- * free(connector) removed from s_Destroy function
- * (now always called from outside, in METACONN_Remove)
- *
- * Revision 6.5  2001/01/08 22:39:40  lavr
- * Further development of service-mapping protocol: stateless/stateful
- * is now separated from firewall/direct mode (see also in few more files)
- *
- * Revision 6.4  2001/01/03 22:35:53  lavr
- * Next working revision (bugfixes and protocol changes)
- *
- * Revision 6.3  2000/12/29 18:05:12  lavr
- * First working revision.
- *
- * Revision 6.2  2000/10/20 17:34:39  lavr
- * Partially working service connector (service mapping works)
- * Checkin for backup purposes
- *
- * Revision 6.1  2000/10/07 22:14:07  lavr
- * Initial revision, placeholder mostly
- *
- * ==========================================================================
- */

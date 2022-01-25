@@ -3,7 +3,7 @@
 	ProjectType="Visual C++"
 	Version="8.00"
 	Name="demo_nentrez"
-	ProjectGUID="{3657A377-E327-4B16-9EE9-16E0E1ECFCE9}"
+	ProjectGUID="{02F5DB27-2C2D-4995-AE03-AE866FD0D726}"
 	>
 	<Platforms>
 		<Platform

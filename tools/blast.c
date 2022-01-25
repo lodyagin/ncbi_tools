@@ -1,7 +1,7 @@
 
-static char const rcsid[] = "$Id: blast.c,v 6.450 2007/05/07 13:30:54 kans Exp $";
+static char const rcsid[] = "$Id: blast.c,v 6.451 2008/01/25 21:15:22 bealer Exp $";
 
-/* $Id: blast.c,v 6.450 2007/05/07 13:30:54 kans Exp $
+/* $Id: blast.c,v 6.451 2008/01/25 21:15:22 bealer Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -50,9 +50,13 @@ Detailed Contents:
 	further manipulation.
 
 ******************************************************************************
- * $Revision: 6.450 $
+ * $Revision: 6.451 $
  *
  * $Log: blast.c,v $
+ * Revision 6.451  2008/01/25 21:15:22  bealer
+ * - Fix synchronization issue with blastpgp -a4 -j4 when composition based
+ *   statistics is used for databases with multiple volumes.
+ *
  * Revision 6.450  2007/05/07 13:30:54  kans
  * added casts for Seq-data.gap (SeqDataPtr, SeqGapPtr, ByteStorePtr)
  *
@@ -6523,9 +6527,25 @@ BLASTPerformSearchWithReadDb (BlastSearchBlkPtr search, Int4 sequence_number)
 {
 	Int4 subject_length;
 	Uint1Ptr subject_seq=NULL;
-
+        
+        /* This mutex should not be necessary - readdb seems to have
+         * synchronization issues when dealing with multiple volumes
+         * from multiple threads.  This mutex fixes the symptom. */
+        
+        static int init_mutex = 0;
+        static TNlmMutex wrap_readdb_mutex = 0;
+        
+        if (! init_mutex) {
+            init_mutex++;
+            NlmMutexInit(& wrap_readdb_mutex);
+        }
+        
+        NlmMutexLock(wrap_readdb_mutex);
+        
 	subject_length = readdb_get_sequence(search->rdfp, sequence_number, &subject_seq);
-
+        
+        NlmMutexUnlock(wrap_readdb_mutex);
+        
 	search->dblen_eff_real += MAX(subject_length-search->length_adjustment, 1);
 	search->subject_id = sequence_number;
 

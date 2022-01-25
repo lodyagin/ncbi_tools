@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 1/1/91
 *
-* $Revision: 6.12 $
+* $Revision: 6.14 $
 *
 * File Description:  Object manager for module NCBI-General
 *
@@ -43,6 +43,12 @@
 *                      it is linked as a DLL).
 *
 * $Log: objgen.c,v $
+* Revision 6.14  2008/01/25 15:24:21  kans
+* in UserFieldAsnRead, finished implementing ints, reals, oss as list, does not need num in advance
+*
+* Revision 6.13  2008/01/24 23:05:55  kans
+*  User-field.strs stores strings as list, does not need num supplied in advance - have not done ints, reals, oss yet
+*
 * Revision 6.12  2005/05/18 17:30:16  bollin
 * added NameStdMatch and PersonIdMatch functions
 *
@@ -1849,6 +1855,7 @@ NLM_EXTERN UserFieldPtr LIBCALL UserFieldAsnRead (AsnIoPtr aip, AsnTypePtr orig)
     FloatHiPtr fp;
     UserFieldPtr ufpa, ufpb = NULL;
     UserObjectPtr uopa, uopb = NULL;
+    ValNodePtr vnp, first = NULL, last = NULL;
     static char * emsg1 = "Too many %s in UserField. line %ld",
         * emsg2 = "Too few %s in UserField. line %ld";
 
@@ -1901,108 +1908,174 @@ NLM_EXTERN UserFieldPtr LIBCALL UserFieldAsnRead (AsnIoPtr aip, AsnTypePtr orig)
     {
         ufp->choice = 7;
         if (AsnReadVal(aip, atp, &av) <= 0) goto erret;   /* start SEQUENCE OF */
-        ufp->data.ptrvalue = MemNew((size_t)(sizeof(CharPtr) * num));
-        if (ufp->data.ptrvalue == NULL)
-            goto erret;
-        cpp = (CharPtr PNTR) ufp->data.ptrvalue;
+
         while ((atp = AsnReadId(aip, amp, atp)) == USER_FIELD_data_strs_E)
         {
-            if (i >= num)
+            if (num > 0 && i >= num)
             {
                 ErrPost(CTX_NCBIOBJ,1, emsg1, "strs", aip->linenumber);
                 goto erret;
             }
             if (AsnReadVal(aip, atp, &av) <= 0) goto erret;
+            /*
             cpp[i] = (CharPtr)av.ptrvalue;
+            */
+            vnp = ValNodeAddStr (&last, 0, (CharPtr)av.ptrvalue);
+            if (first == NULL) {
+                first = vnp;
+            }
+            last = vnp;
             i++;
         }
         if (atp == NULL) goto erret;
-        if (i != num)
+        if (num > 0 && i != num)
         {
             ErrPost(CTX_NCBIOBJ,1, emsg2, "strs", aip->linenumber);
             goto erret;
         }
         if (AsnReadVal(aip, atp, &av) <= 0) goto erret;   /* end SEQUENCE OF */
+
+        num = i;
+        ufp->num = num;
+
+        ufp->data.ptrvalue = MemNew((size_t)(sizeof(CharPtr) * num));
+        cpp = (CharPtr PNTR) ufp->data.ptrvalue;
+        if (cpp == NULL) goto erret;
+        for (vnp = first, i = 0; vnp != NULL && i < num; vnp = vnp->next, i++) {
+            cpp [i] = (CharPtr) vnp->data.ptrvalue;
+        }
+
+        ValNodeFree (first);
     }
     else if (atp == USER_FIELD_data_ints)
     {
         ufp->choice = 8;
         if (AsnReadVal(aip, atp, &av) <= 0) goto erret;   /* start SEQUENCE OF */
-        ufp->data.ptrvalue = MemNew((size_t)(sizeof(Int4) * num));
-        ip = (Int4Ptr) ufp->data.ptrvalue;
-        if (ip == NULL) goto erret;
+
         while ((atp = AsnReadId(aip, amp, atp)) == USER_FIELD_data_ints_E)
         {
-            if (i >= num)
+            if (num > 0 && i >= num)
             {
                 ErrPost(CTX_NCBIOBJ,1, emsg1, "ints", aip->linenumber);
                 goto erret;
             }
             if (AsnReadVal(aip, atp, &av) <= 0) goto erret;
+            /*
             ip[i] = av.intvalue;
+            */
+            vnp = ValNodeAddInt (&last, 0, (Int4)av.intvalue);
+            if (first == NULL) {
+                first = vnp;
+            }
+            last = vnp;
             i++;
         }
         if (atp == NULL) goto erret;
-        if (i != num)
+        if (num > 0 && i != num)
         {
             ErrPost(CTX_NCBIOBJ,1, emsg2, "ints", aip->linenumber);
             goto erret;
         }
         if (AsnReadVal(aip, atp, &av) <= 0) goto erret;   /* end SEQUENCE OF */
+
+        num = i;
+        ufp->num = num;
+
+        ufp->data.ptrvalue = MemNew((size_t)(sizeof(Int4) * num));
+        ip = (Int4Ptr) ufp->data.ptrvalue;
+        if (ip == NULL) goto erret;
+        for (vnp = first, i = 0; vnp != NULL && i < num; vnp = vnp->next, i++) {
+            ip [i] = (Int4) vnp->data.intvalue;
+        }
+
+        ValNodeFree (first);
     }
     else if (atp == USER_FIELD_data_reals)
     {
         ufp->choice = 9;
         if (AsnReadVal(aip, atp, &av) <= 0) goto erret;   /* start SEQUENCE OF */
-        ufp->data.ptrvalue = MemNew((size_t)(sizeof(FloatHi) * num));
-        fp = (FloatHiPtr) ufp->data.ptrvalue;
-        if (fp == NULL)
-            goto erret;
+
         while ((atp = AsnReadId(aip, amp, atp)) == USER_FIELD_data_reals_E)
         {
-            if (i >= num)
+            if (num > 0 && i >= num)
             {
                 ErrPost(CTX_NCBIOBJ,1, emsg1, "reals", aip->linenumber);
                 goto erret;
             }
             if (AsnReadVal(aip, atp, &av) <= 0) goto erret;
+            /*
             fp[i] = av.realvalue;
+            */
+            vnp = ValNodeAddFloat (&last, 0, (FloatHi)av.realvalue);
+            if (first == NULL) {
+                first = vnp;
+            }
+            last = vnp;
             i++;
         }
         if (atp == NULL) goto erret;
-        if (i != num)
+        if (num > 0 && i != num)
         {
             ErrPost(CTX_NCBIOBJ,1, emsg2, "reals", aip->linenumber);
             goto erret;
         }
         if (AsnReadVal(aip, atp, &av) <= 0) goto erret;   /* end SEQUENCE OF */
+
+        num = i;
+        ufp->num = num;
+
+        ufp->data.ptrvalue = MemNew((size_t)(sizeof(FloatHi) * num));
+        fp = (FloatHiPtr) ufp->data.ptrvalue;
+        if (fp == NULL) goto erret;
+        for (vnp = first, i = 0; vnp != NULL && i < num; vnp = vnp->next, i++) {
+            fp [i] = (FloatHi) vnp->data.realvalue;
+        }
+
+        ValNodeFree (first);
     }
     else if (atp == USER_FIELD_data_oss)
     {
         ufp->choice = 10;
         if (AsnReadVal(aip, atp, &av) <= 0) goto erret;   /* start SEQUENCE OF */
-        ufp->data.ptrvalue = MemNew((size_t)(sizeof(ByteStorePtr) * num));
-        bpp = (ByteStorePtr PNTR) ufp->data.ptrvalue;
-        if (bpp == NULL)
-            goto erret;
+
         while ((atp = AsnReadId(aip, amp, atp)) == USER_FIELD_data_oss_E)
         {
-            if (i >= num)
+            if (num > 0 && i >= num)
             {
                 ErrPost(CTX_NCBIOBJ,1, emsg1, "oss", aip->linenumber);
                 goto erret;
             }
             if (AsnReadVal(aip, atp, &av) <= 0) goto erret;
+            /*
             bpp[i] = (ByteStorePtr)av.ptrvalue;
+            */
+            vnp = ValNodeAddPointer (&last, 0, (Pointer)av.ptrvalue);
+            if (first == NULL) {
+                first = vnp;
+            }
+            last = vnp;
             i++;
         }
         if (atp == NULL) goto erret;
-        if (i != num)
+        if (num > 0 && i != num)
         {
             ErrPost(CTX_NCBIOBJ,1, emsg2, "oss", aip->linenumber);
             goto erret;
         }
         if (AsnReadVal(aip, atp, &av) <= 0) goto erret;   /* end SEQUENCE OF */
+
+        num = i;
+        ufp->num = num;
+
+        ufp->data.ptrvalue = MemNew((size_t)(sizeof(ByteStorePtr) * num));
+        bpp = (ByteStorePtr PNTR) ufp->data.ptrvalue;
+        if (bpp == NULL) goto erret;
+
+        for (vnp = first, i = 0; vnp != NULL && i < num; vnp = vnp->next, i++) {
+            bpp [i] = (ByteStorePtr) vnp->data.ptrvalue;
+        }
+
+        ValNodeFree (first);
     }
     else if (atp == USER_FIELD_data_fields)
     {

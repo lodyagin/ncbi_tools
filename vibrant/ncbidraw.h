@@ -29,63 +29,14 @@
 *
 * Version Creation Date:   1/1/91
 *
-* $Revision: 6.9 $
+* $Revision: 6.10 $
 *
 * File Description: 
 *       Vibrant drawing procedure definitions
 *
 * Modifications:  
 * --------------------------------------------------------------------------
-* $Log: ncbidraw.h,v $
-* Revision 6.9  2000/07/08 20:44:13  vakatov
-* Get all "#include" out of the 'extern "C" { }' scope;  other cleanup...
 *
-* Revision 6.8  2000/01/24 16:11:13  lewisg
-* speed up seqid comparison in color manager, make fast windows version of SetColor()
-*
-* Revision 6.7  1999/10/20 23:10:04  vakatov
-* + Nlm_SetCurrentGIF(), + Nlm_DestroyGIF() proto.
-* Get rid of the (now obsolete) PROTO macro; added more comments.
-*
-* Revision 6.6  1999/10/04 17:16:32  kans
-* include ncbidraw.h instead of vibrant.h, a couple Nlm_ prefixes
-*
-* Revision 6.5  1998/07/14 16:44:26  vakatov
-* Added VibrantIsGUI() and <internal> Nlm_VibrantSetGUI()
-*
-* Revision 6.4  1998/07/01 18:27:42  vakatov
-* Use "const" qualifier somewhere
-*
-* Revision 6.3  1998/06/10 22:05:26  lewisg
-* added PROTO() around *Quadrant()
-*
-* Revision 6.2  1998/06/01 17:20:13  vakatov
-* Added code to draw/fill 90-degree arc/pie (quadrants)
-*
-* Revision 6.1  1997/09/16 20:24:53  vakatov
-* Added Nlm_FitStringWidth()
-*
-* Revision 5.8  1997/07/23 19:42:22  vakatov
-* Added Nlm_PaintStringEx function(text + position)
-*
-* Revision 5.7  1997/07/18 15:18:45  vakatov
-* [!WIN_GIF] +Dummy Nlm_CreateGIF() and Nlm_SaveGIF();  /return FALSE/
-*
-* Revision 5.6  1997/06/18 22:10:10  vakatov
-* [WIN_GIF] Moved Create/SaveGIF() decl. from "ncbigif.h" to "ncbidraw.h"
-*
-* Revision 5.2  1997/06/04 00:05:20  kans
-* support for Japanese by Tomo Koike of DDBJ
-*
-* Revision 5.1  1996/09/30 19:56:00  vakatov
-* + Nlm_SetPenDash PROTO and synopsis
-*
-* Revision 4.1  1996/05/10  21:14:21  vakatov
-* Added UpdateColorTable() function to allow the user to read his color
-* preferencies from an external config.-file
-*
-* Revision 2.12  1995/07/14  17:48:26  kans
-* new CopyPixmap (AS)
 * ==========================================================================
 */
 
@@ -309,6 +260,7 @@ size_t Nlm_FitStringWidth(const Nlm_Char PNTR str, Nlm_Int4 max_width);
 
 void         Nlm_SetPen(Nlm_PoinT pt);
 void         Nlm_GetPen(Nlm_PointPtr pt);
+void         Nlm_SetPenWidth(Nlm_Int2 width);
 
 void         Nlm_PaintChar(Nlm_Char ch);
 void         Nlm_PaintString(Nlm_CharPtr text);

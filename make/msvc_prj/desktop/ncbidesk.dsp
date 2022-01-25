@@ -165,6 +165,10 @@ SOURCE=..\..\..\desktop\layout.c
 # End Source File
 # Begin Source File
 
+SOURCE=..\..\..\desktop\macrodlg.c
+# End Source File
+# Begin Source File
+
 SOURCE=..\..\..\desktop\mapgene.c
 # End Source File
 # Begin Source File
@@ -382,6 +386,10 @@ SOURCE=..\..\..\desktop\layout.h
 # Begin Source File
 
 SOURCE=..\..\..\desktop\legend.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\desktop\macrodlg.h
 # End Source File
 # Begin Source File
 

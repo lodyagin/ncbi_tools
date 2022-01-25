@@ -3,7 +3,7 @@
 	ProjectType="Visual C++"
 	Version="8.00"
 	Name="exe_ddv"
-	ProjectGUID="{3BF6CF52-B403-4F8A-8DD5-4F1CF619CCC9}"
+	ProjectGUID="{49F50B13-96C8-44F1-9B8C-68197E0DBE7E}"
 	>
 	<Platforms>
 		<Platform

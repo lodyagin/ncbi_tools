@@ -1,4 +1,4 @@
-/* $Id: blast_nalookup.c,v 1.6 2007/02/14 20:25:43 kazimird Exp $
+/* $Id: blast_nalookup.c,v 1.8 2008/01/31 23:55:42 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -32,10 +32,11 @@
 #include <algo/blast/core/lookup_util.h>
 #include <algo/blast/core/blast_encoding.h>
 #include <algo/blast/core/blast_util.h>
+#include <algo/blast/core/blast_filter.h>
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] =
-    "$Id: blast_nalookup.c,v 1.6 2007/02/14 20:25:43 kazimird Exp $";
+    "$Id: blast_nalookup.c,v 1.8 2008/01/31 23:55:42 kazimird Exp $";
 #endif                          /* SKIP_DOXYGEN_PROCESSING */
 
 /** bitfield used to detect ambiguities in uncompressed
@@ -316,10 +317,46 @@ static Int4 s_BlastSmallNaLookupFinalize(Int4 **thin_backbone,
     return 0;
 }
 
+static BlastSeqLoc* s_SeqLocListInvert(BlastSeqLoc* locations, Int4 length)
+{
+     BlastSeqLoc* retval = NULL;
+     BlastSeqLoc* tail = NULL;  /* Tail of the list. */
+     Int4 start, stop;
+
+     ASSERT(locations);
+
+     start = 0;
+     stop = MAX( 0, locations->ssr->left);
+
+     if (stop - start > 2)
+        tail = BlastSeqLocNew(&retval, start, stop);
+
+     while (locations)
+     {
+         start = locations->ssr->right;
+         locations = locations->next;
+
+         if (locations)
+             stop = locations->ssr->left;
+         else
+             stop = length;
+
+         if (stop - start > 2)
+         {
+            if (retval == NULL)
+               tail = BlastSeqLocNew(&retval, start, stop);
+            else
+               tail = BlastSeqLocNew(&tail, start, stop);
+         }
+     }
+     return retval;
+}
+
 Int4 BlastSmallNaLookupTableNew(BLAST_SequenceBlk* query, 
                            BlastSeqLoc* locations,
                            BlastSmallNaLookupTable * *lut,
                            const LookupTableOptions * opt, 
+                           const QuerySetUpOptions* query_options,
                            Int4 lut_width)
 {
     Int4 status = 0;
@@ -344,6 +381,13 @@ Int4 BlastSmallNaLookupTableNew(BLAST_SequenceBlk* query,
                                       BITS_PER_NUC,
                                       lookup->lut_word_length,
                                       query, locations);
+    if (locations && lookup->word_length > lookup->lut_word_length && 
+       ((query_options->filtering_options && SBlastFilterOptionsMaskAtHash(query_options->filtering_options)) ||
+        (query_options->filter_string && strstr(query_options->filter_string, "m"))))
+    {
+       lookup->masked_locations = s_SeqLocListInvert(locations, query->length);
+    }
+
     status = s_BlastSmallNaLookupFinalize(thin_backbone, lookup, query);
     if (status != 0) {
         lookup = BlastSmallNaLookupTableDestruct(lookup);
@@ -359,6 +403,8 @@ BlastSmallNaLookupTable *BlastSmallNaLookupTableDestruct(
 {
     sfree(lookup->final_backbone);
     sfree(lookup->overflow);
+    if (lookup->masked_locations)
+       lookup->masked_locations = BlastSeqLocFree(lookup->masked_locations);
     sfree(lookup);
     return NULL;
 }

@@ -1,12 +1,14 @@
-.TH ASN2IDX 1 2005-05-16 NCBI "NCBI Tools User's Manual"
+.TH ASN2IDX 1 2007-10-19 NCBI "NCBI Tools User's Manual"
 .SH NAME
 asn2idx \- index ASN.1 Bioseq-sets for fast access to individual sequences
 .SH SYNOPSIS
 .B asn2idx
 [\|\fB\-\fP\|]
 [\|\fB\-b\fP\|]
-[\|\fB\-d\fP\ \fIstr\fP\|]
-\fB\-p\fP\ \fIstr\fP
+[\|\fB\-d\fP\ \fIdir\fP\|]
+[\|\fB\-f\fP\ \fIfilter\fP\|]
+\fB\-p\fP\ \fIpath\fP
+[\|\fB\-r\fP\ \fIpath\fP\|]
 [\|\fB\-t\fP\|]
 [\|\fB\-x\fP\ \fIstr\fP\|]
 .SH DESCRIPTION
@@ -23,17 +25,23 @@ Print usage message
 \fB\-b\fP
 Bioseq-sets are Binary
 .TP
-\fB\-d\fP\ \fIstr\fP
+\fB\-d\fP\ \fIdir\fP
 Required Subdirectory
 .TP
-\fB\-p\fP\ \fIstr\fP
+\fB\-f\fP\ \fIfilter\fP
+Filter (default = \fBgbcon,gbest,gbgss,gbsts\fP)
+.TP
+\fB\-p\fP\ \fIpath\fP
 Path to Files
+.TP
+\fB\-p\fP\ \fIpath\fP
+Path for Results
 .TP
 \fB\-t\fP
 Recurse
 .TP
 \fB\-x\fP\ \fIstr\fP
-File Selection Substring (default = .aso)
+File Selection Substring (default = \fB.aso\fP)
 .SH AUTHOR
 The National Center for Biotechnology Information.
 .SH SEE ALSO

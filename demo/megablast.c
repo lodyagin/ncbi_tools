@@ -1,5 +1,5 @@
-static char const rcsid[] = "$Id: megablast.c,v 6.199 2007/03/20 14:56:58 camacho Exp $";
-/* $Id: megablast.c,v 6.199 2007/03/20 14:56:58 camacho Exp $
+static char const rcsid[] = "$Id: megablast.c,v 6.201 2007/10/23 16:03:23 madden Exp $";
+/* $Id: megablast.c,v 6.201 2007/10/23 16:03:23 madden Exp $
 **************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -26,6 +26,12 @@ static char const rcsid[] = "$Id: megablast.c,v 6.199 2007/03/20 14:56:58 camach
 *                                                                         *
 ************************************************************************** 
  * $Log: megablast.c,v $
+ * Revision 6.201  2007/10/23 16:03:23  madden
+ * No longer set ungapped_extension as an initial word option
+ *
+ * Revision 6.200  2007/10/03 17:12:36  papadopo
+ * do not ignore the value of -H when configuring the current blast engine
+ *
  * Revision 6.199  2007/03/20 14:56:58  camacho
  * Call GeneticCodeSingletonInit/GeneticCodeSingletonFini
  *
@@ -1948,14 +1954,6 @@ BLAST_FillOptions(SBlastOptions* options, Blast_SummaryReturn* sum_returns)
       lambda*myargs[ARG_XDROP].intvalue/NCBIMATH_LN2, 
       lambda*myargs[ARG_XDROP_FINAL].intvalue/NCBIMATH_LN2);
 
-   /* For discontiguous megablast we skip ungapped extensions
-      when using the 2-hit wordfinder */
-   if (lookup_options->mb_template_length > 0)
-   {
-      if (word_options->window_size > 0)
-          word_options->ungapped_extension = FALSE;
-   }
-
    BLAST_FillHitSavingOptions(hit_options, 
       myargs[ARG_EVALUE].floatvalue, 
       MAX(myargs[ARG_DESCRIPTIONS].intvalue, 
@@ -1963,6 +1961,7 @@ BLAST_FillOptions(SBlastOptions* options, Blast_SummaryReturn* sum_returns)
       score_options->gapped_calculation, 
       0,                /* turn off culling */
       diag_separation);
+   hit_options->hsp_num_max = myargs[ARG_MAXHSP].intvalue;
 
    if (myargs[ARG_MINSCORE].intvalue)
         hit_options->cutoff_score = myargs[ARG_MINSCORE].intvalue;

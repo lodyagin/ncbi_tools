@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/8/04
 *
-* $Revision: 1.28 $
+* $Revision: 1.35 $
 *
 * File Description: 
 *
@@ -52,12 +52,29 @@
 
 /* low-level connection functions */
 
+static Boolean text_tax_asn = FALSE;
+static Boolean text_tax_set = FALSE;
+
 NLM_EXTERN CONN Tax3OpenConnection (
   void
 )
 
 {
-  return QUERY_OpenServiceQuery ("TaxService3", NULL, 30);
+#ifdef OS_UNIX
+  CharPtr  str;
+
+  if (! text_tax_set) {
+    str = (CharPtr) getenv ("TEXT_TAX_ASN");
+    if (StringDoesHaveText (str)) {
+      if (StringICmp (str, "TRUE") == 0) {
+        text_tax_asn = TRUE;
+      }
+    }
+    text_tax_set = TRUE;
+  }
+#endif
+
+  return QUERY_OpenServiceQuery (text_tax_asn ? "TaxService3Text" : "TaxService3", NULL, 30);
 }
 
 #ifdef OS_MAC
@@ -98,7 +115,7 @@ NLM_EXTERN Taxon3ReplyPtr Tax3WaitForReply (
 #endif
   }
   if (status == eIO_Success) {
-    aicp = QUERY_AsnIoConnOpen ("rb", conn);
+    aicp = QUERY_AsnIoConnOpen (text_tax_asn ? "r" : "rb", conn);
     t3ry = Taxon3ReplyAsnRead (aicp->aip, NULL);
     QUERY_AsnIoConnClose (aicp);
   }
@@ -124,7 +141,7 @@ NLM_EXTERN Taxon3ReplyPtr Tax3SynchronousQuery (
 
   if (conn == NULL) return NULL;
 
-  aicp = QUERY_AsnIoConnOpen ("wb", conn);
+  aicp = QUERY_AsnIoConnOpen (text_tax_asn ? "w" : "wb", conn);
 
   Taxon3RequestAsnWrite (t3rq, aicp->aip, NULL);
 
@@ -155,7 +172,7 @@ NLM_EXTERN Boolean Tax3AsynchronousQuery (
 
   if (conn == NULL) return FALSE;
 
-  aicp = QUERY_AsnIoConnOpen ("wb", conn);
+  aicp = QUERY_AsnIoConnOpen (text_tax_asn ? "w" : "wb", conn);
 
   Taxon3RequestAsnWrite (t3rq, aicp->aip, NULL);
 
@@ -187,7 +204,7 @@ NLM_EXTERN Taxon3ReplyPtr Tax3ReadReply (
   Taxon3ReplyPtr  t3ry = NULL;
 
   if (conn != NULL && status == eIO_Success) {
-    aicp = QUERY_AsnIoConnOpen ("rb", conn);
+    aicp = QUERY_AsnIoConnOpen (text_tax_asn ? "r" : "rb", conn);
     t3ry = Taxon3ReplyAsnRead (aicp->aip, NULL);
     QUERY_AsnIoConnClose (aicp);
   }
@@ -250,6 +267,23 @@ NLM_EXTERN Taxon3RequestPtr CreateMultiTaxon3Request (ValNodePtr org_list)
   return t3rp;
 }
 
+
+static Boolean HasMisspellingFlag (T3DataPtr t)
+{
+  T3StatusFlagsPtr status;
+
+  if (t == NULL) return FALSE;
+  status = t->status;
+  while (status != NULL) {
+    if (StringCmp (status->property, "misspelled_name") == 0) {
+      return TRUE;
+    }
+    status = status->next;
+  }
+  return FALSE;
+}
+
+
 NLM_EXTERN ValNodePtr Taxon3GetOrgRefList (ValNodePtr org_list)
 {
   Taxon3RequestPtr t3rq;
@@ -295,7 +329,11 @@ NLM_EXTERN ValNodePtr Taxon3GetOrgRefList (ValNodePtr org_list)
             tdp = (T3DataPtr) trp->data.ptrvalue;
             if (tdp != NULL) {
               t3orp = (OrgRefPtr)(tdp->org);
-              ValNodeAddPointer (&response_list, 3, (Pointer) t3orp);
+              if (HasMisspellingFlag (tdp)) {
+                ValNodeAddPointer (&response_list, 4, (Pointer) t3orp);
+              } else {
+                ValNodeAddPointer (&response_list, 3, (Pointer) t3orp);
+              }
               tdp->org = NULL;
             }
             break;
@@ -748,7 +786,6 @@ static Boolean DoTaxonIdsMatch (OrgRefPtr org1, OrgRefPtr org2)
 
 NLM_EXTERN void Taxon3CheckOrgInSeqEntry (SeqEntryPtr sep, ValNodePtr PNTR not_found, ValNodePtr PNTR bad_match)
 {
-  ValNodePtr   biop_list = NULL;
   ValNodePtr   request_list = NULL;
   ValNodePtr   response_list = NULL;
   ValNodePtr   biop_vnp, response_vnp;
@@ -883,6 +920,33 @@ static ValNodePtr FreeOrgRefValNodeList (ValNodePtr vnp)
 }
 
 
+static Boolean EndsWithSp (CharPtr str)
+{
+  Int4 len;
+
+  if (StringHasNoText (str)) return FALSE;
+  len = StringLen (str);
+  if (len < 4) return FALSE;
+  if (StringCmp (str + len - 4, " sp.") == 0) return TRUE;
+  return FALSE;
+}
+
+
+static CharPtr RemoveSp (CharPtr orig)
+{
+  CharPtr cpy = NULL;
+  Int4    len;
+
+  len = StringLen (orig);
+  if (len >= 4 && StringCmp (orig + len - 4, " sp.") == 0) {
+    cpy = (CharPtr) MemNew (sizeof (Char) * len - 3);
+    StringNCpy (cpy, orig, len - 4);
+    cpy[len - 4] = 0;
+  }
+  return cpy;
+}
+
+  
 static void AddRequestOrgForString (CharPtr str, CharPtr host, ValNodePtr PNTR request_list, ValNodePtr PNTR req_host_list)
 {
   OrgRefPtr    request_org;
@@ -894,28 +958,38 @@ static void AddRequestOrgForString (CharPtr str, CharPtr host, ValNodePtr PNTR r
     return;
   }
 
-  request_org = OrgRefNew();
-  request_org->taxname = StringSave (str);
-  ValNodeAddPointer (request_list, 3, request_org);
-  ValNodeAddPointer (req_host_list, 0, host);
+  /* if ends with " sp.", remove " sp." */
+  cpy = RemoveSp (host);
+  if (cpy != NULL) {
+    request_org = OrgRefNew();
+    request_org->taxname = cpy;
+    ValNodeAddPointer (request_list, 3, request_org);
+    ValNodeAddPointer (req_host_list, 0, host);
+  } else {
+    request_org = OrgRefNew();
+    request_org->taxname = StringSave (str);
+    ValNodeAddPointer (request_list, 3, request_org);
+    ValNodeAddPointer (req_host_list, 0, host);
 
-  /* if more than one word, try chopping off last to see if abbreviated name looks up */
-  word1_len = StringCSpn (str, " ");
-  if (word1_len == 0) return;
-  space_len = StringSpn (str + word1_len, " ");
-  if (space_len == 0) return;
-  word2_len = StringCSpn (str + word1_len + space_len, " ");
-  if (word2_len == 0) return;
-  if (isspace (*(str + word1_len + space_len + word2_len)))
-  {
-    cpy = StringSave (str);    
-    cp = StringRChr (cpy, ' ');
-    if (cp != NULL)
+     
+    /* if more than one word, try chopping off last to see if abbreviated name looks up */
+    word1_len = StringCSpn (str, " ");
+    if (word1_len == 0) return;
+    space_len = StringSpn (str + word1_len, " ");
+    if (space_len == 0) return;
+    word2_len = StringCSpn (str + word1_len + space_len, " ");
+    if (word2_len == 0) return;
+    if (isspace (*(str + word1_len + space_len + word2_len)))
     {
-      *cp = 0;
-      AddRequestOrgForString (cpy, host, request_list, req_host_list);
+      cpy = StringSave (str);    
+      cp = StringRChr (cpy, ' ');
+      if (cp != NULL)
+      {
+        *cp = 0;
+        AddRequestOrgForString (cpy, host, request_list, req_host_list);
+      }
+      cpy = MemFree (cpy);
     }
-    cpy = MemFree (cpy);
   }
 }
 
@@ -1083,26 +1157,13 @@ static void AddBioSourcesToSpecificHostChecklist (ValNodePtr biop_list, ValNodeP
 }
 
 
-static Boolean EndsWithSp (CharPtr str)
-{
-  Int4 len;
-
-  if (StringHasNoText (str)) return FALSE;
-  len = StringLen (str);
-  if (len < 4) return FALSE;
-  if (StringCmp (str + len - 4, " sp.") == 0) return TRUE;
-  return FALSE;
-}
-
-
-NLM_EXTERN Boolean IsOrgModSpecificHostToBeChecked (OrgModPtr mod, Boolean for_validator)
+NLM_EXTERN Boolean IsOrgModSpecificHostToBeChecked (OrgModPtr mod, Boolean for_validator, Boolean check_single_word)
 {
   CharPtr   cp;
   Boolean   any_upper = FALSE, any_space = FALSE;
 
   if (mod != NULL && mod->subtype == ORGMOD_nat_host
-      && !StringHasNoText (mod->subname)
-      && (!for_validator || !EndsWithSp(mod->subname)))
+      && !StringHasNoText (mod->subname))
   {
     cp = mod->subname;
     while (*cp != 0 && (!any_upper || !any_space))
@@ -1121,7 +1182,7 @@ NLM_EXTERN Boolean IsOrgModSpecificHostToBeChecked (OrgModPtr mod, Boolean for_v
       }
       cp++;
     }
-    if (any_upper && any_space)
+    if (any_upper && (any_space || check_single_word))
     {
       return TRUE;
     }
@@ -1130,7 +1191,7 @@ NLM_EXTERN Boolean IsOrgModSpecificHostToBeChecked (OrgModPtr mod, Boolean for_v
 }
 
 
-static Boolean HasSpecificHostToBeChecked (BioSourcePtr biop, Boolean for_validator)
+static Boolean HasSpecificHostToBeChecked (BioSourcePtr biop, Boolean for_validator, Boolean check_single_word)
 {
   OrgModPtr mod;
 
@@ -1138,7 +1199,7 @@ static Boolean HasSpecificHostToBeChecked (BioSourcePtr biop, Boolean for_valida
   mod = biop->org->orgname->mod;
   while (mod != NULL)
   {
-    if (IsOrgModSpecificHostToBeChecked (mod, for_validator))
+    if (IsOrgModSpecificHostToBeChecked (mod, for_validator, check_single_word))
     {
       return TRUE;
     }
@@ -1223,6 +1284,7 @@ static Boolean MatchesCommonName (CharPtr txt, CharPtr common_name)
 typedef struct spechostgather {
   ValNodePtr list;
   Boolean    for_validator;
+  Boolean    check_single_word;
 } SpecHostGatherData, PNTR SpecHostGatherPtr;
 
 static void AddSpecificHostBioSourceFeatToList (SeqFeatPtr sfp, Pointer userdata)
@@ -1232,7 +1294,7 @@ static void AddSpecificHostBioSourceFeatToList (SeqFeatPtr sfp, Pointer userdata
   if (sfp == NULL || sfp->data.choice != SEQFEAT_BIOSRC || userdata == NULL) return;
 
   p = (SpecHostGatherPtr) userdata;
-  if (HasSpecificHostToBeChecked (sfp->data.value.ptrvalue, p->for_validator))
+  if (HasSpecificHostToBeChecked (sfp->data.value.ptrvalue, p->for_validator, p->check_single_word))
   {
     ValNodeAddPointer (&(p->list), OBJ_SEQFEAT, sfp);
   }
@@ -1246,18 +1308,19 @@ static void AddSpecificHostBioSourceDescToList (SeqDescrPtr sdp, Pointer userdat
   if (sdp == NULL || sdp->choice != Seq_descr_source || userdata == NULL) return;
 
   p = (SpecHostGatherPtr) userdata;
-  if (HasSpecificHostToBeChecked (sdp->data.ptrvalue, p->for_validator))
+  if (HasSpecificHostToBeChecked (sdp->data.ptrvalue, p->for_validator, p->check_single_word))
   {
     ValNodeAddPointer (&(p->list), OBJ_SEQDESC, sdp);
   }
 }
 
 
-static ValNodePtr GetSpecificHostBioSourceList (SeqEntryPtr sep, Boolean for_validator)
+static ValNodePtr GetSpecificHostBioSourceList (SeqEntryPtr sep, Boolean for_validator, Boolean check_single_word)
 {
   SpecHostGatherData   d;
   
   d.for_validator = for_validator;
+  d.check_single_word = check_single_word;
   d.list = NULL;
   VisitFeaturesInSep (sep, &d, AddSpecificHostBioSourceFeatToList);
   VisitDescriptorsInSep (sep, &d, AddSpecificHostBioSourceDescToList);
@@ -1351,8 +1414,79 @@ FormatSpecificHostRequests
 }
 
 
+static Boolean IsShorterVersionOfEarlierMatch (ValNodePtr request_vnp, ValNodePtr request_list, ValNodePtr response_list)
+{
+  OrgRefPtr this_org, earlier_org, earlier_response;
+  Int4      len;
+  Boolean   found = FALSE;
+
+  if (request_vnp == NULL || request_list == NULL) return FALSE;
+  this_org = (OrgRefPtr) request_vnp->data.ptrvalue;
+  if (this_org == NULL || StringHasNoText (this_org->taxname)) return FALSE;
+  len = StringLen (this_org->taxname);
+  while (request_list != NULL && request_list != request_vnp && !found && response_list != NULL)
+  {
+    earlier_org = (OrgRefPtr) request_list->data.ptrvalue;
+    earlier_response = (OrgRefPtr) response_list->data.ptrvalue;
+    if (earlier_org != NULL && earlier_response != NULL
+        && StringNCmp (earlier_org->taxname, this_org->taxname, len) == 0
+        && (MatchesCommonName (earlier_org->taxname, earlier_response->common)
+            || MatchesSynonym (earlier_org->taxname, earlier_response)
+            || MatchesGenBankSynonym (earlier_org->taxname, earlier_response)))
+    { 
+      found = TRUE;
+    }
+
+    request_list = request_list->next;
+    response_list = response_list->next;
+  }
+  return found;
+}
+
+
+static Boolean MatchWithSp (CharPtr request, CharPtr response)
+{
+  CharPtr cpy = NULL;
+  Boolean rval = FALSE;
+
+  if (StringCmp (request, response) == 0) {
+    rval = TRUE;
+  } else {
+    cpy = RemoveSp (request);
+    if (cpy != NULL && StringCmp (cpy, response) == 0) {
+      rval = TRUE;
+    }
+    cpy = MemFree (cpy);
+  }
+  return rval;
+}
+
+
+static Boolean FindMatchInResponseOrgList (CharPtr request_str, ValNodePtr response_list)
+{
+  ValNodePtr vnp;
+  OrgRefPtr  org;
+  Boolean    rval = FALSE;
+
+  if (StringHasNoText (request_str) || response_list == NULL) {
+    return FALSE;
+  }
+
+  for (vnp = response_list; vnp != NULL && !rval; vnp = vnp->next) {
+    org = (OrgRefPtr) vnp->data.ptrvalue;
+    if (org != NULL) {
+      if (MatchesCommonName (request_str, org->common)
+          || MatchesSynonym (request_str, org)) {
+        rval = TRUE;
+      }
+    }
+  }
+  return rval;
+}
+
+
 /* Want to check that specific host names are valid */
-NLM_EXTERN ValNodePtr Taxon3CheckSpecificHostInSeqEntry (SeqEntryPtr sep, Boolean for_validator)
+NLM_EXTERN ValNodePtr Taxon3CheckSpecificHostInSeqEntry (SeqEntryPtr sep, Boolean for_validator, Boolean check_single_word)
 {
   ValNodePtr   biop_list = NULL;
   ValNodePtr   req_host_list = NULL, spec_host_list = NULL;
@@ -1362,11 +1496,11 @@ NLM_EXTERN ValNodePtr Taxon3CheckSpecificHostInSeqEntry (SeqEntryPtr sep, Boolea
   ValNodePtr   check_list, check_vnp;
   OrgRefPtr    request_org, response_org;
   SpecificHostCheckPtr p;
-  Boolean              has_taxname, has_bad;
+  Boolean              has_taxname, has_bad, all_synonyms;
   ValNodePtr           bad_biop_list = NULL;
-  Int4                 level;
+  ErrSev               level;
     
-  biop_list = GetSpecificHostBioSourceList (sep, for_validator);
+  biop_list = GetSpecificHostBioSourceList (sep, for_validator, check_single_word);
 
   /* get a list of unique specific_host values */
   spec_host_list = GetListOfUniqueSpecificHostValues (biop_list);
@@ -1401,23 +1535,37 @@ NLM_EXTERN ValNodePtr Taxon3CheckSpecificHostInSeqEntry (SeqEntryPtr sep, Boolea
         has_bad = FALSE;
         request_vnp = p->request_list;
         response_vnp = p->response_list;
+        all_synonyms = TRUE;
         while (!has_taxname && request_vnp != NULL && response_vnp != NULL)
         {
           request_org = (OrgRefPtr) request_vnp->data.ptrvalue;
           response_org = (OrgRefPtr) response_vnp->data.ptrvalue;
-          if (response_org == NULL)
+          if (response_vnp->choice == 4) 
           {
             has_bad = TRUE;
+          }  
+          else if (response_org == NULL)
+          {
+            if (!IsShorterVersionOfEarlierMatch(request_vnp, p->request_list, p->response_list)
+                && !FindMatchInResponseOrgList (request_org->taxname, p->response_list))
+            {
+              has_bad = TRUE;
+            }
           }
-          else if (StringCmp (request_org->taxname, response_org->taxname) == 0)
+          else if (MatchWithSp (request_org->taxname, response_org->taxname))
           {
             has_taxname = TRUE;
+          }          
+          else if (MatchesCommonName (request_org->taxname, response_org->common)
+                   || MatchesSynonym (request_org->taxname, response_org)
+                   || MatchesGenBankSynonym (request_org->taxname, response_org))
+          {
+            /* it's a synonym */
           }
-          else if (!MatchesCommonName (request_org->taxname, response_org->common)
-                   && ! MatchesSynonym (request_org->taxname, response_org)
-                   && ! MatchesGenBankSynonym (request_org->taxname, response_org))
+          else
           {
             has_bad = TRUE;
+            all_synonyms = FALSE;
           }
           request_vnp = request_vnp->next;
           response_vnp = response_vnp->next;
@@ -1557,6 +1705,7 @@ static CharPtr StringIsFirstPartOfItemInList (CharPtr str, ValNodePtr list)
   return NULL;
 }
 
+
 static ValNodePtr GetFixesForOneSpecificHostValue (SpecificHostCheckPtr p)
 {
   CharPtr new_taxname = NULL, old_taxname = NULL;
@@ -1578,10 +1727,12 @@ static ValNodePtr GetFixesForOneSpecificHostValue (SpecificHostCheckPtr p)
     response_org = (OrgRefPtr) response_vnp->data.ptrvalue;
     if (response_org == NULL)
     {
-      /* no data */
-      ValNodeAddPointer (&failed_requests, 0, StringSave (request_org->taxname));
+      if (!FindMatchInResponseOrgList (request_org->taxname, p->response_list)) {
+        /* no data */
+        ValNodeAddPointer (&failed_requests, 0, StringSave (request_org->taxname));
+      }
     }
-    else if (StringCmp (request_org->taxname, response_org->taxname) == 0)
+    else if (MatchWithSp (request_org->taxname, response_org->taxname))
     {
       /* found taxname */
       /* is it just a shorter version of an earlier failed request? */
@@ -1617,7 +1768,7 @@ static ValNodePtr GetFixesForOneSpecificHostValue (SpecificHostCheckPtr p)
 }
 
 
-NLM_EXTERN ValNodePtr Taxon3GetSpecificHostFixesInSeqEntry (SeqEntryPtr sep)
+NLM_EXTERN ValNodePtr Taxon3GetSpecificHostFixesInSeqEntry (SeqEntryPtr sep, Boolean check_single_word)
 {
   ValNodePtr   biop_list = NULL;
   ValNodePtr   req_host_list = NULL, spec_host_list = NULL;
@@ -1625,11 +1776,10 @@ NLM_EXTERN ValNodePtr Taxon3GetSpecificHostFixesInSeqEntry (SeqEntryPtr sep)
   ValNodePtr   response_list = NULL;
   ValNodePtr   check_list, check_vnp;
   SpecificHostCheckPtr p;
-  Int4                 level;
-  Boolean              rval = FALSE;
+  ErrSev               level;
   ValNodePtr           fix_list = NULL;
   
-  biop_list = GetSpecificHostBioSourceList (sep, FALSE);
+  biop_list = GetSpecificHostBioSourceList (sep, FALSE, check_single_word);
 
   /* get a list of unique specific_host values */
   spec_host_list = GetListOfUniqueSpecificHostValues (biop_list);
@@ -1673,12 +1823,12 @@ NLM_EXTERN ValNodePtr Taxon3GetSpecificHostFixesInSeqEntry (SeqEntryPtr sep)
 }
 
 
-NLM_EXTERN Boolean Taxon3FixSpecificHostInSeqEntry (SeqEntryPtr sep)
+NLM_EXTERN Boolean Taxon3FixSpecificHostInSeqEntry (SeqEntryPtr sep, Boolean check_single_word)
 {
   ValNodePtr fix_list, vnp;
   Boolean    rval = FALSE;
 
-  fix_list = Taxon3GetSpecificHostFixesInSeqEntry (sep);
+  fix_list = Taxon3GetSpecificHostFixesInSeqEntry (sep, check_single_word);
   for (vnp = fix_list; vnp != NULL; vnp = vnp->next)
   {
     rval |= ApplyOneSpecificHostFix (vnp->data.ptrvalue);
@@ -1825,8 +1975,7 @@ NLM_EXTERN ValNodePtr GetOrganismTaxLookupFailuresInSeqEntry (SeqEntryPtr sep)
   ValNodePtr   request_list = NULL;
   ValNodePtr   response_list = NULL;
   ValNodePtr   req_vnp, resp_vnp;
-  Int4                 level;
-  Boolean              rval = FALSE;
+  ErrSev               level;
   ValNodePtr           failed_list = NULL, vnp;
   OrgRefPtr            request_org;
   

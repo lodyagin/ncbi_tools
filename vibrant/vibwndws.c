@@ -29,676 +29,16 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.79 $
+* $Revision: 6.80 $
 *
 * File Description:
 *       Vibrant main, event loop, and window functions
 *
 * Modifications:
 * --------------------------------------------------------------------------
-* $Log: vibwndws.c,v $
-* Revision 6.79  2007/06/18 12:21:29  ivanov
-* Fixed EOLs
 *
-* Revision 6.78  2007/06/15 20:27:27  kans
-* CreateNewWindow does not set window title, so revert to old function for now
-*
-* Revision 6.77  2007/05/09 16:42:10  kans
-* use CreateNewWindow instead of NewWindow or NewCWindow (RS)
-*
-* Revision 6.76  2007/05/02 17:24:03  kans
-* preparation for supporting Quartz on Mac
-*
-* Revision 6.75  2006/12/13 17:27:24  kans
-* Nlm_VibMainPrelude and Nlm_VibMainFinale called by separate vibmain.c file containing main or WinMain
-*
-* Revision 6.74  2006/11/24 20:06:31  kans
-* include Carbon/Carbon.h if not MWERKS - attempting to simplify Xcode search paths
-*
-* Revision 6.73  2006/09/14 19:18:29  ivanov
-* Rollback last changes. All missed defines added to corelib/ncbiwin.h.
-*
-* Revision 6.72  2006/09/14 18:05:45  ivanov
-* Fixed compilation errors on MS Windows
-*
-* Revision 6.71  2006/09/14 14:45:39  kans
-* changes for 64-bit Windows (GC) plus a few CodeWarrior complaints (JK)
-*
-* Revision 6.70  2005/11/16 19:50:37  kans
-* Nlm_showGetArgTag always TRUE, do not get shift key for old Vibrant about box
-*
-* Revision 6.69  2005/07/18 15:15:18  kans
-* fixed minor xcode compiler warnings
-*
-* Revision 6.68  2005/01/24 15:02:40  kans
-* remove unnecessary and uninitialized StringMove (tmp...) in GetArgs_ST
-*
-* Revision 6.67  2005/01/13 18:47:01  kans
-* Nlm_showGetArgTag set by Nlm_GetReady, used by GetArg_ST
-*
-* Revision 6.66  2004/07/19 13:37:24  bollin
-* adjusted FixVisibilityIssues function to handle nesting of groups
-*
-* Revision 6.65  2004/07/16 18:47:29  bollin
-* added FixVisibilityIssues function to handle LessTif problems with not correctly hiding
-* widgets before the parent widget is managed.
-* Also replaced obsolete XmFontListCreate function to get rid of run-time warning.
-*
-* Revision 6.64  2004/06/02 15:53:17  bollin
-* fixed Nlm_ProcessKeyPress for MOTIF to handle arrow keys
-*
-* Revision 6.63  2004/06/02 14:54:33  bollin
-* fixed Nlm_ProcessKeyPress to also handle arrow keys
-*
-* Revision 6.62  2004/04/14 19:14:06  sinyakov
-* WIN_MSWIN: support X-Windows-like -bg color command line option
-*
-* Choi: Added support for either the left or right monitor being the primary
-* monitor in a dual monitor setup.  Added function Nlm_UsePrimaryMonitor.
-*
-* Choi: modified Nlm_SetupWindows to use the virtual screen
-* size to support dual monitor setups.  this effectively limits our target
-* platform to WINVER >= 0x0500 (Windows2000 or later) which all indexers
-* have.  modified Nlm_HasDualScreen to use system metrics call for
-* windows2000 or later platforms.
-*
-* Revision 6.61  2004/02/03 23:34:58  sinyakov
-* Nlm_WindowGainFocus(): call Nlm_GetNext() before calling Nlm_DoGainFocus()
-*
-* Revision 6.60  2004/01/20 23:35:38  sinyakov
-* [WIN_MSWIN] implemented menu accelerators
-*
-* Revision 6.59  2004/01/05 18:42:40  kans
-* record screen mode at time of window creation
-*
-* Revision 6.58  2004/01/05 17:08:09  kans
-* added functions to control use of dual screens
-*
-* Revision 6.57  2003/12/03 17:45:21  kans
-* For OS_MAC, always include Profiler.h
-*
-* Revision 6.56  2003/11/17 17:03:30  kans
-* changed C++ style comments to C comments
-*
-* Revision 6.55  2003/11/03 21:57:48  sinyakov
-* WIN_MSWIN: added ability to put a message into message processing loop
-* to call a callback function within the main GUI thread
-* callback function address is passed in WPARAM,
-* callback function parameter is passed in LPARAM
-* this functionality is used by Win32 implementation of smartnet.c module
-*
-* Revision 6.54  2003/04/09 18:16:53  kans
-* motif version of Nlm_ProcessKeyPress sets ctrlKey and shftKey, clears cmmdKey and optKey, leaves dblClick alone
-*
-* Revision 6.53  2003/01/27 17:43:03  kans
-* do not set silent if xx_argc > 1
-*
-* Revision 6.52  2003/01/24 20:55:42  rsmith
-* ConvertFilename now extern not static, renamed Nlm_* and only defined in vibutils.c
-*
-* Revision 6.51  2002/11/06 21:32:50  ucko
-* Accept "--help" as a synonym for the less intuitive "-"
-*
-* Revision 6.50  2002/07/09 15:20:19  lavr
-* Call CONNECT_Init(0) in initialization sequence
-*
-* Revision 6.49  2002/06/13 16:15:13  kans
-* fix includes for OS_UNIX_DARWIN with WIN_MAC (EN) - still bug in vibutils.c file dialog
-*
-* Revision 6.48  2002/05/07 16:50:14  bazhin
-* Changes in Nlm_SetWindowConfigureCallback().
-*
-* Revision 6.47  2002/04/30 18:25:12  bazhin
-* Added function "Nlm_SetWindowConfigureCallback(WindoW w)", which
-* allows to catch events, when window just moved without resizing.
-* Fixed some "gcc -Wall -ansi" warnings.
-*
-* Revision 6.46  2002/03/28 13:30:28  kans
-* check for OS_UNIX_DARWIN before including MoreCarbonAccessors.h, Profiler.h (EN)
-*
-* Revision 6.45  2002/03/18 16:55:19  kans
-* ProfilerInit stackDepth parameter to 50
-*
-* Revision 6.44  2002/03/18 16:33:53  kans
-* ProfilerInit numFunctions parameter to 1000
-*
-* Revision 6.43  2001/11/26 21:25:04  juran
-* Define type AERefCon as SInt32 for AE handler prototypes.
-* It may need to be UInt32 for pre-3.4 Universal Interfaces under Carbon, or something.
-*
-* Revision 6.42  2001/08/29 17:35:38  juran
-* Universal Interfaces 3.4 changes:
-* AE handler refCon is an SInt32.
-* convertClipboardFlag doesn't exist under Carbon.
-*
-* Revision 6.41  2001/05/14 20:50:09  juran
-* Remove Mac clipboard code -- the scrap is updated whenever it's used.
-*
-* Revision 6.40  2001/04/18 18:39:29  juran
-* AE handlers take a UInt32 refCon.
-*
-* Revision 6.39  2001/04/05 20:32:34  juran
-* Major Carbon changes, including the new Scrap Manager (not tested).
-*
-* Revision 6.38  2000/06/15 20:51:45  vakatov
-* Use "const" in Args code
-*
-* Revision 6.37  2000/03/31 16:14:13  thiessen
-* fix modal window lockout bug
-*
-* Revision 6.36  2000/02/03 22:29:16  lewisg
-* make windows version of vibrant use standard color
-*
-* Revision 6.35  2000/01/13 23:37:14  beloslyu
-* changes because of port to HP-UX 11.0
-*
-* Revision 6.34  2000/01/07 00:22:47  thiessen
-* fixes for LessTif and OpenGL X visual selection
-*
-* Revision 6.33  1999/12/30 16:47:10  kans
-* Carbon changes (Churchill)
-*
-* Revision 6.32  1999/12/21 18:04:24  kans
-* removed MPW/THINKC conditional code, starting upgrade to Carbon compatibility - Churchill
-*
-* Revision 6.31  1999/12/07 19:18:58  thiessen
-* fixed font color problem in OpenGL on SGI
-*
-* Revision 6.30  1999/10/27 20:17:32  thiessen
-* when _OPENGL is defined, make Motif choose a better-than-8-bit color depth, if possible
-*
-* Revision 6.29  1999/07/21 17:57:42  vakatov
-* GetArgs_ST():  fixed array boundary read
-*
-* Revision 6.28  1999/07/08 14:49:26  kans
-* MultiLinePrompt copies string to avoid modifying read-only string passed in from GetArgs when Mac virtual memory is on
-*
-* Revision 6.27  1999/06/22 15:14:53  lewisg
-* fix image library so that works on linux with > 8 bits
-*
-* Revision 6.26  1999/04/22 15:19:01  vakatov
-* Call XtUnrealizeWidget() before XtDestroyWidget() to make sure no
-* "post-mortem" callbacks(registered by XtAddEventHandler()) get
-* triggered for the destroyed widget. Reason: the widget may not be
-* immediately destroyed if XtDestroyWidget() was called in a nested
-* event dispatch loop.
-*
-* Revision 6.25  1999/04/06 14:23:27  lewisg
-* add opengl replacement for viewer3d
-*
-* Revision 6.24  1999/03/17 15:10:50  vakatov
-* + Nlm_XLoadStandardFont() to find a "last-resort" font
-*
-* Revision 6.23  1999/02/11 21:34:37  kans
-* check __profile__ symbol to turn on Mac profiling
-*
-* Revision 6.22  1999/02/10 22:22:14  kans
-* added commented-out CodeWarrior Profiler setup instructions
-*
-* Revision 6.21  1999/01/29 18:42:57  kans
-* appearancelib and navigationlib ifdef OS_MAC and PROC_PPC
-*
-* Revision 6.20  1999/01/21 23:58:32  kans
-* Mac navigation services code ifdefed out because is available function does not appear to work properly
-*
-* Revision 6.19  1999/01/06 02:52:00  kans
-* support for Mac Navigation Services file selection dialogs
-*
-* Revision 6.18  1998/12/14 18:39:11  kans
-* okayToDrawContents extern, used to inhibit slate drawing
-*
-* Revision 6.17  1998/12/10 21:28:50  kans
-* okayToDrawContents accessed only in WIN_MAC section
-*
-* Revision 6.16  1998/12/10 17:45:09  kans
-* okayToDrawContents to suppress drawing after return from Main
-*
-* Revision 6.15  1998/12/01 17:41:58  vakatov
-* Use just "0" instead of "(caddr_t)NULL" -- (a compilation fix)
-*
-* Revision 6.14  1998/07/14 16:44:29  vakatov
-* Added VibrantIsGUI() and <internal> Nlm_VibrantSetGUI()
-*
-* Revision 6.13  1998/03/22 03:01:11  kans
-* changed names to RegisterServiceProc and RegisterResultProc
-*
-* Revision 6.12  1998/03/22 02:33:30  kans
-* added request proc, result proc, message handlers to support, and send open doc event, launch app now work with file names or signatures
-*
-* Revision 6.11  1998/03/09 21:03:47  vakatov
-* FetchArg(), float|int:  fixed for assignment of default value
-*
-* Revision 6.10  1998/01/08 21:33:32  kans
-* OS_AXP_VMS includes <Xm/StdCmap.h>
-*
-* Revision 6.9  1997/11/27 05:52:16  vakatov
-* [WIN_X] "defaultXerror_handler()" -- fixed non-portable(internal X11) code
-*
-* Revision 6.7  1997/11/21 19:31:23  vakatov
-* [WIN_X] "defaultXerror_handler()" -- issue a std X error msg, don't crash
-*
-* Revision 6.6  1997/11/12 20:56:14  kans
-* added SetMouseMoveCallback and SetMouseMoveRegion, implemented first on Mac
-*
-* Revision 6.5  1997/10/30 19:30:47  kans
-* added Nlm_DisplayEnvironmentVariables for Solaris
-*
-* Revision 6.4  1997/10/01 21:51:52  vakatov
-* Trying to catch strayed Expose or MapNotify(for SetVisible(...)) event
-*
-* Revision 6.3  1997/09/29 20:00:51  vakatov
-* [WIN_X11]  Do not parse "-d" cmd.-line, use "-dpy" instead(or "-display")
-*
-* Revision 6.2  1997/09/22 23:51:23  vakatov
-* [WIN_MSWIN] ParseSetupArguments(): remove leading quote from cmd-line args
-*
-* Revision 6.1  1997/09/17 21:09:05  vakatov
-* [WIN_X]  Parse command-line "-d" / "-display" options to choose X-display
-*
-* Revision 6.0  1997/08/25 18:58:01  madden
-* Revision changed to 6.0
-*
-* Revision 5.71  1997/08/14 18:54:45  vakatov
-* [WIN_MOTIF] Let X11 parse the command-line args at first;  leave the
-* rest(not fetched by X11) for NCBI-wise arg. processing
-*
-* Revision 5.70  1997/08/08 14:43:08  vakatov
-* [WIN_X] Nlm_XCheckUpdateEvent() -- check for mapping and expose events
-*
-* Revision 5.69  1997/08/01 16:47:32  vakatov
-* [WIN_MOTIF,WIN_MSWIN]  Added IconifyWindow() and IconicWindow()
-*
-* Revision 5.68  1997/07/23 16:39:02  vakatov
-* [WIN_MSWIN] ParseSetupArguments() -- fixed a quote("') handling bug
-*
-* Revision 5.67  1997/07/22 19:12:17  vakatov
-* Separated Main() from GetArg[svc]() functions;  [WIN_MSWIN] converged
-* console and GUI libraries; [for WIN32-DLL] encapsulated global variables
-*
-* Revision 5.66  1997/07/18 17:01:17  vakatov
-* [WIN_MOTIF]  Removed "arg[cv]";  use "Nlm_GetArg[cv]()" instead
-*
-* Revision 5.65  1997/07/14 19:31:04  vakatov
-* [WIN_X] Nlm_NewWindow() -- use common Vibrant colormap(and visual, and
-* depth) if failed to create Nlm_BusyColormap()
-*
-* Revision 5.64  1997/07/14 16:25:02  vakatov
-* Nlm_RemoveDyingWindows() -- look for Nlm_currentXWindow starting from
-* the shell level(was -- from the BullBoard level)
-*
-* Revision 5.63  1997/07/10 21:49:50  vakatov
-* [WIN_X]  Now able to manage windows having different depths(and
-* different visuals and GC).
-*
-* Revision 5.62  1997/07/02 18:46:07  vakatov
-* [WIN_X11]  If non-default colormap is used for a window -- make the
-* window to use the relevant visual(PseudoColor or GrayScale)
-*
-* Revision 5.61  1997/06/24 18:20:41  vakatov
-* Keep Nlm_dialogTextHeight value in-sync with the "vibtexts.c" R5.8 fixes
-*
-* Revision 5.60  1997/06/23 22:10:52  vakatov
-* [WIN_MOTIF,WIN_MSWIN]  GetArgs_ST() -- parse command line arguments
-* close to the console version
-*
-* Revision 5.59  1997/06/19 20:34:58  vakatov
-* [WIN_MSWIN]  Do not set the window class cursor to IDC_ARROW -- to avoid
-* confusing with the alternative cursors set by Vibrant application
-*
-* Revision 5.58  1997/06/18 20:00:27  kans
-* removed extra parenthesis
-*
-* Revision 5.57  1997/06/18 19:05:54  kans
-* protect against NULL curarg->to or curarg->from
-*
-* Revision 5.56  1997/06/09 21:54:49  vakatov
-* [WIN_X] #include <X11/Xatom.h> to fit old versions of X11
-*
-* Revision 5.55  1997/06/09 18:53:39  vakatov
-* [WIN_X]  Use(create if necessary) standard RGB_DEFAULT_MAP colormap as
-* the Vibrant default colormap, if possible.  Nlm_XAllocColor() moved from
-* "ncbidraw.c" and made external.
-*
-* Revision 5.54  1997/05/27 21:51:00  vakatov
-* Added Nlm_PopupParentWindow() to popup window w/o switching input focus
- *
- * Revision 5.53  1997/05/23 17:32:53  kans
- * added GetArgv, GetArgc for Mac
- *
- * Revision 5.52  1997/05/16 21:00:12  vakatov
- * [WIN_X11]  WindowStructFocusCallback() -- replaced XtFree() by XFree()
- *
- * Revision 5.51  1997/05/16 16:44:47  vakatov
- * [WIN_MSWIN,WIN32]  Addition to R5.49 -- do not abort() the failed
- * application; just popup an error message and then rely on the default
- * exception handler
- *
- * Revision 5.50  1997/05/15 15:14:17  vakatov
- * [WIN_MSWIN] Tune the StaticPrompt, etc. background color to match the
- * parent window background color
- *
- * Revision 5.49  1997/05/08 15:45:05  vakatov
- * [WIN_MSWIN,WIN32]  Abort() application in the case of unhandled
- * exception -- to prevent endless loop with the diagnostic dialog box
- *
- * Revision 5.48  1997/05/06  19:00:16  epstein
- * don't modify window title if environment variable is 0; this is a workaround for subtool
- *
- * Revision 5.47  1997/04/29  14:45:13  epstein
- *  corrections to tagged window titles
- *
- * Revision 5.46  1997/04/28  19:36:49  epstein
- * when VIBRANT_USE_APPLICATION_NAME environment variable is set, prepend program name unto each window
- *
- * Revision 5.45  1997/04/25  16:11:28  vakatov
- * [WIN_MOTIF] Register navigation key translation actions
- * [WIN_MOTIF, WIN_MSWIN] Catch and render(DoSendFocus) navigation key events
- *
- * Revision 5.44  1997/04/17  16:17:50  kans
- * InitForms and FreeForms called
- *
- * Revision 5.43  1997/03/19  16:00:18  vakatov
- * Added QuittingProgram() -- useful to timely break internal event loops
- *
- * Revision 5.42  1997/02/28  20:10:03  vakatov
- * Nlm_CleanUpWindows():  call to Nlm_RemoveDyingWindows() at first!
- *
- * Revision 5.41  1997/02/28  19:09:58  vakatov
- * [NLM_RISKY] Nlm_Add/DelSubwindowShell():  set "allShells" properly in
- * order to avoid discrepancy with later use of Nlm_GetWindowData()
- *
- * Revision 5.40  1997/02/21  19:24:16  vakatov
- * Do not apply fallback resources when running on a B&W screen
- *
- * Revision 5.39  1997/02/13  22:26:30  vakatov
- * Nlm_CleanUpWindows(), Nlm_RemoveDyingWindows() -- remove the window
- * menubar *after*(not *before*) removal of other window children
- * [WIN_MOTIF] Nlm_RemoveDyingWindows() -- let the removed shell be
- * dangling(see R5.38) only if NLM_MOTIF_CASCADEB_BUG is set
- *
- * Revision 5.38  1997/01/14  22:09:10  vakatov
- * Workaround for the MOTIF/X11 bug(see also "vibmenus.c", Rev. 5.17) --
- * do not completely destroy the shells having menubars -- let them
- * dangling. It still looks better than a program crash...
- * Fixed inaccurate string copying -- <mostly potential> 1-byte exceeding of
- * the string size by StringNCat;  missing terminating '\0' by StringNCpy.
- * Removed some unused variables;  set preprocessor conditions more
- * thoroughly to exclude some functions from the compilation on some platforms.
- *
- * Revision 5.37  1997/01/02  16:03:19  vakatov
- * [WIN_MOTIF]  Revert input focus to "PointerRoot" rather than to "None"
- *
- * Revision 5.36  1996/12/30  17:42:38  vakatov
- * [WIN_MOTIF]  Fixed Nlm_ProcessKeyPress() -- do not put uninitialized(stack-
- * located) input arguments to the XLookupString();  use NULL instead.
- *
- * Revision 5.35  1996/12/30  15:12:35  vakatov
- * Made all argument conversions be performed in the <new> FetchArg() routine.
- * Nlm_GetArgs() function rearranged:  added command-line arguments parsing
- * for MS-Windows and let one avoid posting of the arg-query dialog if all
- * arguments can be resolved by default or using the program command line.
- *
- * Revision 5.34  1996/12/13  17:27:38  kans
- * added GetArgv and GetArgc for WIN_MOTIF only
- *
- * Revision 5.33  1996/12/03  18:30:05  vakatov
- * [WIN_MSWIN]  Added (static) function win2client() to calculate client
- * rectangle on the base of the known top-level window rectangle.  Added
- * (static) function OnSizeMove() to re-implement(and fix) the MyCls_OnSize()
- * and MyCls_OnMove() window callbacks.
- *
- * Revision 5.32  1996/11/22  19:15:13  vakatov
- * [WIN_MSWIN]  Nlm_SetColorCell():  invalidate rather than animate
- *
- * Revision 5.31  1996/11/12  21:59:46  vakatov
- * [WIN_MOTIF]  Nlm_ResizeWindow():  count the menubar height when SetRect()
- *
- * Revision 5.30  1996/11/07  15:25:52  vakatov
- * [WIN_MOTIF]  IsXParentOf():  test for "children" != NULL
- *
- * Revision 5.29  1996/11/05  23:32:35  vakatov
- * [WIN_MSWIN]  Fit window into the screen borders on the window creation
- * or resizing;  changed the style definition(but not appearance) of
- * ShadowWindow; +extensive type casting
- *
- * Revision 5.28  1996/10/30  16:06:42  vakatov
- * Nlm_XrmGetResource1():  replaced XrmGetDatabase() by XtDatabase() to
- * suit X11R4 function set.
- *
- * Revision 5.27  1996/10/29  22:09:29  vakatov
- * [WIN_MOTIF]  Nlm_VibrantDefaultColormap():  Replaced X resource value
- * converters(which are absent in X releases < X11R5) by the hand-written
- * code; and made the "privateColormap" resorce value "false" by default.
- *
- * Revision 5.26  1996/10/28  21:24:24  vakatov
- * [WIN_MOTIF][_DEBUG]  Removed extra debug print
- *
- * Revision 5.25  1996/10/28  19:32:14  vakatov
- * [WIN_MOTIF]
- * Nlm_BusyColorMap():  added special case to create new colormap where
- * only specified number of colorcells "inherited" from the default
- * will be allocated.
- * Added Nlm_XrmGetResource2(), Nlm_XrmGetResource1() and
- * Nlm_XrmGetResource() functions and modified Nlm_SetupWindows()
- * to handle user-specified X-resources.
- * Added Nlm_VibrantDefaultColormap() to initialize the application
- * colormap according to the newly introduced Vibrant/X11 recources
- * "nPrivateColormap" and "nInheritColors".
- * Made a lot of type castings to get rid of all compiler warnings.
- *
- * Revision 5.24  1996/10/21  21:38:16  vakatov
- * [WIN_MOTIF]  Renamed WindowResizeCallback() to WindowStructFocusCallback()
- * and made it call DoActivate/DoDeactivate when accepting/loosing
- * input focus -- to sync. with [WIN_MSWIN] behaviour.  Removed explicit
- * (not quite correct) calls to DoActivate/DoDeactivate.
- *
- * Revision 5.23  1996/10/21  15:21:11  vakatov
- * [WIN_MOTIF]  WindowResizeCallback() <on the mapping event>:  protected
- *              from setting input focus to yet(or already) unmapped window
- *
- * Revision 5.22  1996/10/01  16:11:27  kans
- * wasn't setting ctrlKey on Mac
- *
- * Revision 5.21  1996/09/26  00:40:05  kans
- * on remove window, immediately null out window timer
- *
- * Revision 5.20  1996/09/26  00:29:23  kans
- * added SetWindowTimer
- *
- * Revision 5.19  1996/08/29  20:46:46  vakatov
- * [WIN_MSWIN]  Synchronized Nlm_Get- and Nlm_SetWindowPosition
- *
- * Revision 5.18  1996/08/27  16:34:24  vakatov
- * [WIN_MOTIF]  Nlm_SelectWindow() : fixed a case when it did not set input
- * focus to the selected window sometimes.
- *
- * Revision 5.17  1996/08/19  21:24:00  vakatov
- * [WIN_MOTIF]  Set default ToggleButton's foreground to "blue" --
- * "dark blue" is absent sometimes, somewhere.
- *
- * Revision 5.16  1996/07/26  17:56:57  vakatov
- * [WIN_MOTIF]  Nlm_NewWindow() : had to specify the MainWindow's colormap
- * explicitly to make LINUX/MOO-TIFF/X11 properly accept the colormap
- *
- * Revision 5.15  1996/07/23  21:36:05  vakatov
- * [WIN_MOTIF]  Nlm_BusyColorMap() : do not redefine 0th color
- * [WIN_MOTIF]  Nlm_HideWindow()   : do not change input focus is it
- * does not belong to the window being hided
- *
- * Revision 5.14  1996/07/19  19:44:51  vakatov
- * [WIN_MOTIF]  Nlm_RemoveDyingWindows() : set Nlm_currentXWindow to NULL
- * if it points to either the dying window or one of its children;
- * added new function IsXParentOf() determining whether the given window
- * is the parent of another one.
- *
- * Revision 5.13  1996/07/18  16:49:03  vakatov
- * [WIN_MOTIF]  Nlm_SelectWindow() : Removed extra call of XSetInputFocus()
- *
- * Revision 5.12  1996/07/17  16:24:05  vakatov
- * [WIN_MOTIF]  Nlm_Hide()/WM/Nlm_Select() case -- the input focus quirk fixed
- *
- * Revision 5.11  1996/06/24  17:00:21  vakatov
- * [WIN_MOTIF]  Nlm_Select() now seems to work properly for all cases
- *
- * Revision 5.10  1996/06/24  16:05:08  vakatov
- * [WIN_MOTIF]  Fixed bug in Nlm_Select()
- *
- * Revision 5.9  1996/06/19  21:15:28  vakatov
- * [WIN_MOTIF]  Made Nlm_Select() to select(pop-up) the specified window
- * in most cases; there is still a problem when Nlm_Select is called just AFTER
- * (not before) hiding of another Vibrant window which has current input focus --
- * some WMs are "too smart" and in some special conditions takes control over
- * the "focus inheritance" after the dying window.
- *
- * Revision 5.8  1996/06/18  21:57:42  vakatov
- * [WIN_MOTIF]  Made ModalWindow to be really modal
- *
- * Revision 5.7  1996/06/17  21:57:17  kans
- * InvalObject in Nlm_SetColorCell on Mac
- *
- * Revision 5.6  1996/06/17  17:00:47  vakatov
- * [WIN_MSWIN]  The shell window's border/caption/menu-bar dimensions are to
- * be taken into account inside the Nlm_ResizeWindow() function
- *
- * Revision 5.5  1996/06/14  14:32:24  vakatov
- * [WIN_MOTIF] Added cMap_fixed field to WindowData structure to indicate
- * fixed(having reserved cells for Motif colors) colormap attached to
- * the window.
- * SetColorMap() function partially rewritten to treate the fixed colormap
- * under WIN_MOTIF and to reserve colorcells for animation under WIN_MSWIN.
- * Added Nlm_SetColorCell() -- to immediately change the color appearence.
- * [WIN_MOTIF]  Added Nlm_RestrictMotifColorsTo() -- to avoid Motif/3D-Viewer
- * color overlapping; it is now called inside "Nlm_NewWindow()" before
- * initializing Motif resources
- *
- * Revision 5.3  1996/06/03  19:12:32  vakatov
- * [WIN_MOTIF]  Added hard-coding fallbacks to provide default set of
- * basic colors in Vibrant-based applications
- *
- * Revision 5.2  1996/05/30  20:06:07  vakatov
- * [WIN_MSWIN]  <Shift> and <Ctrl> key status checking added to MainProc()
- *
- * Revision 5.1  1996/05/30  14:02:46  vakatov
- * [WIN_MOTIF]  Corrected fallback resources to provide proper setting of the
- * background color under CDE
- *
- * Revision 4.29  1996/05/21  13:58:06  epstein
- * fix type for XtFree() calls
- *
- * Revision 4.28  1996/05/21  12:32:16  kans
- * prototypes for add, del subwindow shell
- *
- * Revision 4.27  1996/05/20  21:38:13  vakatov
- * [WIN_MOTIF]  All "Widget" / "NULL" comparisons and assignments replaced
- * by the "Widget" / "(Widget)0" these
- *
- * Revision 4.26  1996/05/13  16:00:50  vakatov
- * WindowResizeCallback() modified to take into account the shell window
- * repositioning -- it is usually made by window manager when framing the
- * shell window with the WM-specific window border and title bar.
- *
- * Revision 4.24  1996/05/06  18:28:03  vakatov
- * Nlm_SetWindowDefaultButton() modified;  some extra stuff removed
- *
- * Revision 4.23  1996/05/03  21:03:43  kans
- * removed erroneous textscrapfull = FALSE lines
- *
- * Revision 4.22  1996/05/03  20:27:25  kans
- * put back scrap fixes
- *
- * Revision 4.21  1996/05/03  20:05:22  vakatov
- * [WIN_MOTIF/_DEBUG]  Added event handler to allow the Vibrant windows
- * to interact with the standard X-utility "editres";
- * this utility provides runtime read/write access to all widget attributes
- *
- * Revision 4.20  1996/05/02  20:59:16  kans
- * sets textScrapFull flag properly on startup, resume
- *
- * Revision 4.19  1996/04/30  19:52:19  vakatov
- * GetPosition() now returns actual position for a top-level window having menu bar
- *
- * Revision 4.18  1996/04/30  14:27:29  kans
- * copies text clipboard into text scrap on startup (Mac)
- *
- * Revision 4.17  1996/04/25  17:06:48  vakatov
- * Nlm_ShowDocument():   extraw = extrah = 0;  for WIN_MSWIN
- *
- * Revision 4.16  1996/04/12  19:26:14  vakatov
- * "WindowResizeCallback()" corrected to provide regular extraction of
- * new window position (for the case of the window resizing --
- * rather than just moving)
- *
- * Revision 4.15  1996/03/27  23:10:13  vakatov
- * Function Nlm_SetCursorShape() added to let programmer
- * easily store/restore current cursor shape
- *
- * Revision 4.14  1996/03/19  23:19:36  kans
- * used proper gestalt selector, test, before registering apple events
- *
- * Revision 4.13  1996/03/13  21:40:00  epstein
- * export command-line arguments
- *
- * Revision 4.12  1996/03/12  20:06:10  epstein
- * fix drag-and-drop for Windows
- *
- * Revision 4.11  1996/03/11  23:25:23  kans
- * apple event open file handler added (modified from RasMol code)
- *
- * Revision 4.10  1996/03/11  20:37:56  epstein
- * add support for Drag & Drop
- *
- * Revision 4.9  1996/03/08  16:10:43  vakatov
- * Made Nlm_Update() for Motif/X11 to act more like that for
- * MS-Windows and Mac.  However, it still avoid automatic (without a
- * Nlm_Update() call) recursive synchronization...
- *
- * Revision 4.8  1996/03/07  15:55:35  kans
- * invalidate whole content of resized window in mswin version (DV)
- *
- * Revision 4.7  1996/03/02  22:36:38  kans
- * reduction of X traffic (DV)
- *
- * Revision 4.6  1996/02/13  17:24:07  kans
- * accelerated set position prior to realization (Denis Vakatov)
- *
- * Revision 4.5  1996/01/19  00:55:46  kans
- * UseWindow sets theWindow, returned (on the Mac) by ActiveWindow
- *
- * Revision 4.4  1995/11/29  15:45:23  smirnov
- * Position of window (MOTIF only)
- *
- * Revision 4.3  1995/11/28  19:02:36  smirnov
- * GetWindowRect()/GetClientRect problem (AS) (MS-Windows only)
- *
- * Revision 4.2  1995/11/08  23:30:31  kans
- * removed edit block fields, which belong in the application
- *
- * Revision 4.1  1995/09/06  20:30:24  kans
- * fixed bug due to GetWindowRect vs. GetClientRect (AS + GS)
- *
- * Revision 2.88  1995/07/24  20:03:03  kans
- * removed duplicate ClearEditProcs, reference X11 colormap as integer
- *
- * Revision 2.87  1995/07/19  20:42:23  kans
- * window rectangle takes Motif menu bar height into account
- *
- * Revision 2.86  1995/06/28  21:48:57  kans
- * added Add and Del SubwindowShell (Alex)
- *
- * Revision 2.85  1995/06/13  16:30:38  kans
- * Motif version of GetArgs can parse remaining arguments in lieu of dialog
- *
- * Revision 2.83  1995/05/31  21:24:29  kans
- * XFreeColormap fix (AS)
- *
- * Revision 2.82  1995/05/31  18:00:58  kans
- * added SetColorMap and related code (AS)
- *
- * 08-24-94 Schuler     Change try and except to __try and _except for
- *                      compatibility with Visual C 2.0
- *
- * ==========================================================================
- */
+* ==========================================================================
+*/
 
 #include <vibtypes.h>
 #include <vibprocs.h>
@@ -736,6 +76,23 @@
 #ifdef WIN_MAC
 /* imported from vibutils.c, not in the header files. rsmith */
 extern void Nlm_ConvertFilename ( FSSpec *fss, Nlm_CharPtr filename );
+#endif
+
+/* remove this define to remove Quartz/Cocoa cursor handling
+   cursor calls will become no-ops if removed */
+/*
+#define WIN_MAC_QUARTZ_COCOA_CURSORS
+*/
+
+#ifdef WIN_MAC_QUARTZ
+#ifdef WIN_MAC_QUARTZ_COCOA_CURSORS
+/* needed to be able to access a bit of Cocoa */
+#include <CoreFoundation/CoreFoundation.h>
+char NSApplicationLoad(void);
+void *NSClassFromString(CFStringRef aClassName);
+void *NSSelectorFromString(CFStringRef aSelectorName);
+void *objc_msgSend(void *self, void *_cmd, ...);
+#endif
 #endif
 
 #ifdef WIN_MAC
@@ -854,6 +211,9 @@ Nlm_Boolean Nlm_usesMacNavServices = FALSE;
 
 #ifdef WIN_MAC
 EventRecord  Nlm_currentEvent;
+#ifdef WIN_MAC_QUARTZ
+static void Nlm_DrawWindow (Nlm_GraphiC w, Nlm_Boolean drawGrowIcon);
+#endif
 #ifdef __CONDITIONALMACROS__
 /* Global RoutineDescriptors - from RasMol */
 AEEventHandlerUPP HandleAEIgnorePtr;
@@ -1623,6 +983,9 @@ extern void Nlm_SetColorMap (Nlm_WindoW w, Nlm_Uint2 totalColors,
 #endif
 
 #ifdef WIN_MAC
+// QUARTZ_FIXME: there's no replacement for this in CG, does anything
+// need to be done?
+#ifndef WIN_MAC_QUARTZ
   if ( wdata.cMap != NULL ){
     if ( wdata.cMapStatus ){
       SetPalette( wdata.handle, NULL, FALSE);
@@ -1645,6 +1008,7 @@ extern void Nlm_SetColorMap (Nlm_WindoW w, Nlm_Uint2 totalColors,
       wdata.cMapStatus = 1;
     }
   }
+#endif
 #endif
 
 #ifdef WIN_MOTIF
@@ -2286,6 +1650,8 @@ static Nlm_WindoW Nlm_MakeWindowLink (Nlm_RectPtr r, Nlm_Int2 recordSize,
 extern void Nlm_SetUpdateRegion (WindowPtr wptr)
 
 {
+// QUARTZ_FIXME: what does this do? does it need to do anything?
+#ifndef WIN_MAC_QUARTZ
   Rect bounds;
 
   if (wptr != NULL) {
@@ -2295,6 +1661,7 @@ extern void Nlm_SetUpdateRegion (WindowPtr wptr)
     Nlm_RectToolToRecT (&bounds, &Nlm_updateRect);
     /* HUnlock ((Handle) Nlm_updateRgn); */
   }
+#endif
 }
 #endif
 
@@ -2660,7 +2027,79 @@ static void win2client(Nlm_WindoW w,
 }
 #endif 
 
+#ifdef WIN_MAC_QUARTZ
+// QUARTZ_FIXME: this stuff is probably not needed
+//static void Nlm_WindowSetProperty (WindowRef wptr, PropertyTag tag, void *ptr)
+//{
+//  SetWindowProperty (wptr, 'NCBI', tag, sizeof(ptr), &ptr);
+//}
+//
+//static void *Nlm_WindowGetProperty (WindowRef wptr, PropertyTag tag)
+//{
+//  void *ret = 0;
+//  GetWindowProperty (wptr, 'NCBI', tag, sizeof(ret), 0, &ret);
+//  return ret;
+//}
+//
+//static void Nlm_EnsureQuartzPort (CGContextRef *ctxPtr, HIViewRef imageView)
+//{
+//  /* note: the context must actually be a bitmap context, this 
+//      is guaranteed since this function is the only one that
+//      gets to make it anyway */
+//  HIRect bounds;
+//  HIViewGetBounds (imageView, &bounds);
+//  int good = *ctxPtr != 0;
+//  if (good)
+//  {
+//    
+//    if (bounds.size.width != CGBitmapContextGetWidth (*ctxPtr))
+//      good = 0;
+//    if (bounds.size.height != CGBitmapContextGetHeight (*ctxPtr))
+//      good = 0;
+//  }
+//  if (!good)
+//  {
+//    CGContextRelease (*ctxPtr);
+//    
+//    CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB ();
+//    *ctxPtr = CGBitmapContextCreate (0, bounds.size.width, bounds.size.height, 32, 0, colorSpace, kCGImageAlphaNoneSkipLast);
+//    CGColorSpaceRelease (colorSpace);
+//  }
+//}
+//
+//CGContextRef Nlm_GetQuartzWindowPort (WindowRef wptr)
+//{
+//  HIViewRef imageView = Nlm_WindowGetProperty (wptr, 'imgv');
+//  CGContextRef ref = Nlm_WindowGetProperty (wptr, 'cntx');
+//  CGContextRef old = ref;
+//  Nlm_EnsureQuartzPort (&ref, imageView);
+//  if (ref != old)
+//    Nlm_WindowSetProperty (wptr, 'cntx', ref);
+//  return ref;
+//}
 
+static OSStatus Nlm_RootHIViewRedrawHandler (EventHandlerCallRef handler, EventRef event, void *userData)
+{
+  Nlm_WindoW w = userData;
+  
+  CGContextRef ctx;
+  GetEventParameter (event,
+                     kEventParamCGContextRef,
+                     typeCGContextRef,
+                     NULL,
+                     sizeof (CGContextRef),
+                     NULL,
+                     &ctx);
+  Nlm_SetPort (ctx);
+  Nlm_SetPortWindowPort (Nlm_ParentWindowPtr ((Nlm_GraphiC)w));
+  Nlm_DrawWindow ((Nlm_GraphiC)w, 0);
+  Nlm_SetPortWindowPort (NULL);
+  Nlm_SetPort (NULL);
+	
+  return noErr;
+}
+
+#endif
 
 #define DOCUMENT_STYLE 1
 #define FIXED_STYLE    2
@@ -2700,7 +2139,7 @@ static void Nlm_NewWindow (Nlm_WindoW w, Nlm_Int2 type, Nlm_Int2 procID,
   CCTabPtr        colorPtr;
   Nlm_RectTool    rtool;
   WindowClass     winClass = 0;
-  WindowAttributes winAttrs = 0; /* kWindowStandardHandlerAttribute; */
+  WindowAttributes winAttrs = kWindowCompositingAttribute; /* kWindowStandardHandlerAttribute; */
   OSStatus        osErr;
 #endif
 #ifdef WIN_MOTIF
@@ -2785,8 +2224,10 @@ static void Nlm_NewWindow (Nlm_WindoW w, Nlm_Int2 type, Nlm_Int2 procID,
     }
 
   behindNone = (Nlm_WindowTool) (-1);
+#ifndef WIN_MAC_QUARTZ
   TextFont (0);
   TextSize (0);
+#endif
   Nlm_RecTToRectTool (&r, &rtool);
   if (close == NULL) {
     goAway = FALSE;
@@ -2810,6 +2251,53 @@ static void Nlm_NewWindow (Nlm_WindoW w, Nlm_Int2 type, Nlm_Int2 procID,
     return;
   }
 #endif
+#ifdef WIN_MAC_QUARTZ
+  HIViewRef root = HIViewGetRoot (wptr);
+  HIViewRef content;
+  HIViewFindByID (root, kHIViewWindowContentID, &content);
+  
+  EventTypeSpec updateEventSpec[] = { kEventClassControl, kEventControlDraw };
+  InstallEventHandler (GetControlEventTarget (content),
+                       Nlm_RootHIViewRedrawHandler,
+                       GetEventTypeCount (updateEventSpec),
+                       updateEventSpec,
+                       w,
+                       NULL);
+  
+// QUARTZ_FIXME: unneeded unless we really do need the triple buffer
+//  HIViewRef imageView;
+//  HIImageViewCreate (0, &imageView);
+//  
+//  HIViewAddSubview (root, imageView);
+//  HIRect bounds;
+//  HIViewGetBounds (root, &bounds);
+//  HIViewSetFrame (imageView, &bounds);
+//  
+//  HILayoutInfo layout;
+//  layout.version = kHILayoutInfoVersionZero;
+//  
+//  HIViewGetLayoutInfo (imageView, &layout);
+//  layout.binding.top.toView = root;
+//  layout.binding.top.kind = kHILayoutBindTop;
+//  layout.binding.bottom.toView = root;
+//  layout.binding.bottom.kind = kHILayoutBindBottom;
+//  layout.binding.left.toView = root;
+//  layout.binding.left.kind = kHILayoutBindLeft;
+//  layout.binding.right.toView = root;
+//  layout.binding.right.kind = kHILayoutBindRight;
+//  HIViewSetLayoutInfo (imageView, &layout);
+//  HIViewApplyLayout (imageView);
+//  HIViewSetVisible (imageView, 1);
+//  
+//  char *path = "/Users/mikeash/bob_eggleton_adeepnessinthesky.jpg";
+//  CFURLRef url = CFURLCreateFromFileSystemRepresentation (NULL, (const UInt8 *)path, strlen (path), 0);
+//  CGDataProviderRef provider = CGDataProviderCreateWithURL (url);
+//  CGImageRef img = CGImageCreateWithJPEGDataProvider (provider, NULL, 1, kCGRenderingIntentDefault);
+//  HIImageViewSetImage (imageView, img);
+  
+//  Nlm_WindowSetProperty (wptr, 'imgv', imageView);
+  
+#else
   Nlm_SetPortWindowPort(wptr);
   Nlm_currentWindowTool = wptr;
   prt = (Nlm_PortTool) wptr;
@@ -2832,6 +2320,7 @@ static void Nlm_NewWindow (Nlm_WindoW w, Nlm_Int2 type, Nlm_Int2 procID,
     GetForeColor (&Nlm_RGBforeColor);
     GetBackColor (&Nlm_RGBbackColor);
   }
+#endif
 #endif
 
 #ifdef WIN_MSWIN
@@ -3303,8 +2792,10 @@ static void Nlm_ResizeWindow (Nlm_GraphiC w, Nlm_Int2 dragHeight,
 
 #ifdef WIN_MAC
   menuHeight = 21;
+#ifndef WIN_MAC_QUARTZ
   TextFont (0);
   TextSize (0);
+#endif
 #endif
 #ifdef WIN_MOTIF
   if (Nlm_GetWindowMenuBar( (Nlm_WindoW)w ) != NULL)
@@ -3821,9 +3312,11 @@ extern void Nlm_UseWindow (Nlm_WindoW w)
     wptr = Nlm_ParentWindowPtr ((Nlm_GraphiC) w);
     if (wptr  &&  !Nlm_IsWindowDying( w )) {
 #ifdef WIN_MAC
+#ifndef WIN_MAC_QUARTZ
       Nlm_SetPortWindowPort(wptr);
       Nlm_SetUpdateRegion (wptr);
       Nlm_ResetDrawingTools();
+#endif
       Nlm_theWindow = w;
 #endif
 #ifdef WIN_MSWIN
@@ -3926,9 +3419,11 @@ static void Nlm_SelectWindow(Nlm_GraphiC w, Nlm_Boolean savePort)
 
 #ifdef WIN_MAC
   SelectWindow (wptr);
+#ifndef WIN_MAC_QUARTZ
   Nlm_SetPortWindowPort(wptr);
   Nlm_SetUpdateRegion(wptr);
   Nlm_ResetDrawingTools();
+#endif
 #endif
 #ifdef WIN_MSWIN
   BringWindowToTop (wptr);
@@ -4026,6 +3521,9 @@ extern void Nlm_EraseWindow (Nlm_WindoW w)
 
   if (w != NULL) {
     wptr = Nlm_ParentWindowPtr ((Nlm_GraphiC) w);
+#ifdef WIN_MAC_QUARTZ
+    HIViewSetNeedsDisplay (HIViewGetRoot (wptr), 1);
+#else
     GetPort(&temp);
     Nlm_SetPortWindowPort(wptr);
     Nlm_ResetDrawingTools();
@@ -4036,6 +3534,7 @@ extern void Nlm_EraseWindow (Nlm_WindoW w)
     Nlm_SetPort(temp);
     Nlm_currentWindowTool = GetWindowFromPort(temp);
     Nlm_Update();
+#endif
   }
 #endif
 #ifdef WIN_MSWIN
@@ -4116,7 +3615,9 @@ static Nlm_Boolean Nlm_GrowClick (Nlm_GraphiC w, Nlm_PoinT pt)
   if (windowLoc == inGrow) {
     Nlm_LoadRect (&r, -32768, -32768, 32767, 32767);
     Nlm_RecTToRectTool (&r, &rtool);
+#ifndef WIN_MAC_QUARTZ
     ClipRect (&rtool);
+#endif
     Nlm_GetWindowData ((Nlm_WindoW) w, &wdata);
     Nlm_RecTToRectTool (&(wdata.growArea), &rtool);
     newSize = GrowWindow (wptr, ptool, &rtool);
@@ -4127,7 +3628,9 @@ static Nlm_Boolean Nlm_GrowClick (Nlm_GraphiC w, Nlm_PoinT pt)
  */
     GetPortBounds(GetWindowPort(wptr), &bounds);
     if (! newSize) {
+#ifndef WIN_MAC_QUARTZ
       ClipRect (&bounds);
+#endif
       return rsult;
     }
     if (wd < 50) {
@@ -4143,7 +3646,9 @@ static Nlm_Boolean Nlm_GrowClick (Nlm_GraphiC w, Nlm_PoinT pt)
     Nlm_UpdateScrollBar (w);
     wptr = Nlm_GetWindowPtr ((Nlm_WindoW) w);
     Nlm_RectToolToRecT (&bounds, &r);
+#ifndef WIN_MAC_QUARTZ
     ClipRect (&bounds);
+#endif
     Nlm_LocalToGlobal ((Nlm_PointPtr) &(r.left));
     Nlm_LocalToGlobal ((Nlm_PointPtr) &(r.right));
     Nlm_SetRect (w, &r);
@@ -4166,14 +3671,18 @@ static void Nlm_DrawGrowIcon (Nlm_GraphiC w, Nlm_Boolean drawgrow, Nlm_Boolean d
   Nlm_WindowTool  wptr;
   Rect bounds;
 
+#ifndef WIN_MAC_QUARTZ
   GetPort (&temp);
   GetPenState (&state);
+#endif
   wptr = Nlm_ParentWindowPtr (w);
   GetPortBounds(GetWindowPort(wptr), &bounds);
   Nlm_RectToolToRecT (&bounds, &r);
   if (drawbar && Nlm_GetWindowMenuBar ((Nlm_WindoW) w) != NULL) {
     Nlm_RecTToRectTool (&r, &rtool);
+#ifndef WIN_MAC_QUARTZ
     ClipRect (&rtool);
+#endif
     Nlm_MoveTo (r.right - 16, 20);
     Nlm_LineTo (r.right, 20);
     r.top = r.top + 21;
@@ -4182,7 +3691,9 @@ static void Nlm_DrawGrowIcon (Nlm_GraphiC w, Nlm_Boolean drawgrow, Nlm_Boolean d
     Nlm_RecTToRectTool (&r, &rtool);
     rtool.left = rtool.right - 15;
     rtool.top = rtool.bottom - 15;
+#ifndef WIN_MAC_QUARTZ
     ClipRect (&rtool);
+#endif
     DrawGrowIcon (wptr);
   }
   Nlm_RecTToRectTool (&r, &rtool);
@@ -4197,11 +3708,13 @@ static void Nlm_DrawGrowIcon (Nlm_GraphiC w, Nlm_Boolean drawgrow, Nlm_Boolean d
   */
 #endif
   Nlm_RecTToRectTool (&r, &rtool);
+#ifndef WIN_MAC_QUARTZ
   ClipRect (&rtool);
   Nlm_SetPort(temp);
   Nlm_currentWindowTool = GetWindowFromPort(temp);
   Nlm_SetUpdateRegion (GetWindowFromPort(temp));
   SetPenState (&state);
+#endif
 }
 
 static Nlm_Boolean Nlm_ZoomClick (Nlm_GraphiC w, Nlm_PoinT pt)
@@ -4255,7 +3768,9 @@ static Nlm_Boolean Nlm_ZoomClick (Nlm_GraphiC w, Nlm_PoinT pt)
       Nlm_UpdateScrollBar (w);
       wptr = Nlm_GetWindowPtr ((Nlm_WindoW) w);
       Nlm_RectToolToRecT (&bounds, &r);
+#ifndef WIN_MAC_QUARTZ
       ClipRect (&bounds);
+#endif
       Nlm_LocalToGlobal ((Nlm_PointPtr) &(r.left));
       Nlm_LocalToGlobal ((Nlm_PointPtr) &(r.right));
       Nlm_SetRect (w, &r);
@@ -4312,6 +3827,7 @@ static Nlm_Boolean Nlm_ContentClick (Nlm_GraphiC w, Nlm_PoinT pt)
   Nlm_RevPtr     top;
 
   Nlm_localMouse = Nlm_globalMouse;
+  Nlm_SetPortWindowPort (Nlm_ParentWindowPtr (w));
   Nlm_GlobalToLocal (&Nlm_localMouse);
   g = Nlm_GetChild (w);
   notInside = TRUE;
@@ -4381,12 +3897,16 @@ static Nlm_Boolean Nlm_CommonClick (Nlm_GraphiC w, Nlm_PoinT pt,
   rsult = FALSE;
   if (chosenWindow == (Nlm_WindoW) w) {
     wptr = Nlm_ParentWindowPtr (w);
+#ifndef WIN_MAC_QUARTZ
     GetPort (&temp);
     GetPenState (&state);
+#endif
+#ifndef WIN_MAC_QUARTZ
     Nlm_SetPortWindowPort(wptr);
     Nlm_currentWindowTool = wptr;
     Nlm_SetUpdateRegion (wptr);
     Nlm_ResetDrawingTools ();
+#endif
     if ((close && Nlm_CloseClick (w, pt)) ||
        (drag && Nlm_DragClick (w, pt)) ||
        (grow && Nlm_GrowClick (w, pt)) ||
@@ -4395,10 +3915,12 @@ static Nlm_Boolean Nlm_CommonClick (Nlm_GraphiC w, Nlm_PoinT pt,
     } else {
       rsult = Nlm_ContentClick (w, pt);
     }
+#ifndef WIN_MAC_QUARTZ
     Nlm_SetPort(temp);
     Nlm_currentWindowTool = GetWindowFromPort(temp);
     Nlm_SetUpdateRegion (GetWindowFromPort(temp));
     SetPenState (&state);
+#endif
   } else if (chosenWindow != NULL) {
     Nlm_DoSelect ((Nlm_GraphiC) chosenWindow, TRUE);
   }
@@ -4447,17 +3969,21 @@ static Nlm_Boolean Nlm_ModalClick (Nlm_GraphiC w, Nlm_PoinT pt)
       cls = wdata.close;
       if (cls != NULL) {
         wptr = Nlm_ParentWindowPtr (w);
+#ifndef WIN_MAC_QUARTZ
         GetPort (&temp);
         GetPenState (&state);
+#endif
         Nlm_SetPortWindowPort(wptr);
         Nlm_currentWindowTool = wptr;
         Nlm_SetUpdateRegion (wptr);
         Nlm_ResetDrawingTools ();
         cls ((Nlm_WindoW) w);
+#ifndef WIN_MAC_QUARTZ
         Nlm_SetPort(temp);
         Nlm_currentWindowTool = GetWindowFromPort(temp);
         Nlm_SetUpdateRegion (GetWindowFromPort(temp));
         SetPenState (&state);
+#endif
       }
     }
   } else {
@@ -4484,17 +4010,21 @@ static Nlm_Boolean Nlm_MovableModalClick (Nlm_GraphiC w, Nlm_PoinT pt)
       cls = wdata.close;
       if (cls != NULL) {
         wptr = Nlm_ParentWindowPtr (w);
+#ifndef WIN_MAC_QUARTZ
         GetPort (&temp);
         GetPenState (&state);
+#endif
         Nlm_SetPortWindowPort(wptr);
         Nlm_currentWindowTool = wptr;
         Nlm_SetUpdateRegion (wptr);
         Nlm_ResetDrawingTools ();
         cls ((Nlm_WindoW) w);
+#ifndef WIN_MAC_QUARTZ
         Nlm_SetPort(temp);
         Nlm_currentWindowTool = GetWindowFromPort(temp);
         Nlm_SetUpdateRegion(GetWindowFromPort(temp));
         SetPenState (&state);
+#endif
       }
     }
   } else {
@@ -4589,8 +4119,10 @@ static void Nlm_FloatingSelect (Nlm_GraphiC w, Nlm_Boolean savePort)
   Nlm_WindowTool  wptr;
 
   wptr = Nlm_ParentWindowPtr (w);
+#ifndef WIN_MAC_QUARTZ
   GetPort (&temp);
   GetPenState (&state);
+#endif
   Nlm_SetPortWindowPort(wptr);
   Nlm_currentWindowTool = wptr;
   Nlm_SetUpdateRegion (wptr);
@@ -4601,10 +4133,12 @@ static void Nlm_FloatingSelect (Nlm_GraphiC w, Nlm_Boolean savePort)
   } else {
     Nlm_ContentClick (w, Nlm_globalMouse);
   }
+#ifndef WIN_MAC_QUARTZ
   Nlm_SetPort(temp);
   Nlm_currentWindowTool = GetWindowFromPort(temp);
   Nlm_SetUpdateRegion (GetWindowFromPort(temp));
   SetPenState (&state);
+#endif
   Nlm_localMouse = Nlm_globalMouse;
   Nlm_GlobalToLocal (&Nlm_localMouse);
 #endif
@@ -4623,14 +4157,18 @@ static void Nlm_DesktopSelect (Nlm_GraphiC w, Nlm_Boolean savePort)
   PenState      state;
   Nlm_PortTool  temp;
 
+#ifndef WIN_MAC_QUARTZ
   GetPort (&temp);
   GetPenState (&state);
   PenNormal ();
+#endif
   Nlm_DesktopClick (w, Nlm_globalMouse);
+#ifndef WIN_MAC_QUARTZ
   Nlm_SetPort(temp);
   Nlm_currentWindowTool = GetWindowFromPort(temp);
   Nlm_SetUpdateRegion (GetWindowFromPort(temp));
   SetPenState (&state);
+#endif
 #endif
 }
 
@@ -4662,12 +4200,14 @@ static Nlm_Boolean Nlm_NormalKey (Nlm_GraphiC w, Nlm_Char ch)
   Nlm_WindowTool  wptr;
 
   wptr = Nlm_ParentWindowPtr (w);
+#ifndef WIN_MAC_QUARTZ
   GetPort (&temp);
   GetPenState (&state);
   Nlm_SetPortWindowPort(wptr);
   Nlm_currentWindowTool = wptr;
   Nlm_SetUpdateRegion (wptr);
   Nlm_ResetDrawingTools ();
+#endif
   Nlm_localMouse = Nlm_globalMouse;
   Nlm_GlobalToLocal (&Nlm_localMouse);
   if (Nlm_currentKey != '\0') {
@@ -4691,10 +4231,12 @@ static Nlm_Boolean Nlm_NormalKey (Nlm_GraphiC w, Nlm_Char ch)
       Nlm_DesktopKey ((Nlm_GraphiC) Nlm_desktopWindow, ch);
     }
   }
+#ifndef WIN_MAC_QUARTZ
   Nlm_SetPort(temp);
   Nlm_currentWindowTool = GetWindowFromPort(temp);
   Nlm_SetUpdateRegion(GetWindowFromPort(temp));
   SetPenState (&state);
+#endif
   return TRUE;
 }
 
@@ -4711,8 +4253,10 @@ static Nlm_Boolean Nlm_FloatingKey (Nlm_GraphiC w, Nlm_Char ch)
   Nlm_WindowTool  wptr;
 
   wptr = Nlm_ParentWindowPtr (w);
+#ifndef WIN_MAC_QUARTZ
   GetPort (&temp);
   GetPenState (&state);
+#endif
   Nlm_SetPortWindowPort(wptr);
   Nlm_currentWindowTool = wptr;
   Nlm_SetUpdateRegion (wptr);
@@ -4741,10 +4285,12 @@ static Nlm_Boolean Nlm_FloatingKey (Nlm_GraphiC w, Nlm_Char ch)
       Nlm_DoKey ((Nlm_GraphiC) nw, ch);
     }
   }
+#ifndef WIN_MAC_QUARTZ
   Nlm_SetPort(temp);
   Nlm_currentWindowTool = GetWindowFromPort(temp);
   Nlm_SetUpdateRegion(GetWindowFromPort(temp));
   SetPenState (&state);
+#endif
   return TRUE;
 }
 
@@ -4771,6 +4317,7 @@ static void Nlm_DrawWindow (Nlm_GraphiC w, Nlm_Boolean drawGrowIcon)
   Nlm_WindowTool  wptr;
   Rect bounds;
 
+#ifndef WIN_MAC_QUARTZ
   wptr = Nlm_ParentWindowPtr (w);
   GetPort (&temp);
   GetPenState (&state);
@@ -4787,6 +4334,7 @@ static void Nlm_DrawWindow (Nlm_GraphiC w, Nlm_Boolean drawGrowIcon)
   Nlm_RectToolToRecT (&bounds, &r);
   Nlm_EraseRect (&r);
 
+#endif
   if (okayToDrawContents) {
     if (drawGrowIcon) {
       Nlm_DrawGrowIcon (w, FALSE, TRUE);
@@ -4806,13 +4354,17 @@ static void Nlm_DrawWindow (Nlm_GraphiC w, Nlm_Boolean drawGrowIcon)
     }
   }
 
+#ifndef WIN_MAC_QUARTZ
   EndUpdate (wptr);
+#endif
   Nlm_ResetDrawingTools ();
+#ifndef WIN_MAC_QUARTZ
   Nlm_ResetClip ();
   Nlm_SetPort(temp);
   Nlm_currentWindowTool = GetWindowFromPort(temp);
   Nlm_SetUpdateRegion(GetWindowFromPort(temp));
   SetPenState (&state);
+#endif
 }
 
 static void Nlm_DocumentDraw (Nlm_GraphiC w)
@@ -5356,13 +4908,64 @@ static void Nlm_SetCursor (Cursor cursor)
 }
 #endif
 
+#ifdef WIN_MAC_QUARTZ
+#ifdef WIN_MAC_QUARTZ_COCOA_CURSORS
+/* these support functions make life a bit easier and centralize the
+   ugly Cocoa access */
+
+/* objc_msgSend is actually a trampoline which is effectively has no real prototype
+   but actually just takes on the prototype of the target method;
+   in order to shut the compiler up about methods which return char and generate
+   the correct machine code at the call site, we define this global function pointer
+   which points to the same function but with a different prototype */
+static char (*objc_msgSend_charRetFptr)(void *, void *, ...) = (void *)objc_msgSend;
+
+/* handy shortcut macros for invoking NSCursor methods */
+#define COCOA_SELECTOR(name) NSSelectorFromString(CFSTR(name))
+
+/* NSCursor does not define all of the methods we use when running
+   on 10.2, so we check to ensure it responds before calling anything.
+   If it does not respond, we'll return 0 (nil) and the following
+   set operation will be a no-op. */
+#define COCOA_NSCURSOR_CLASS_RESPONDS(name) objc_msgSend_charRetFptr(Nlm_NSCursorClass(), COCOA_SELECTOR("respondsToSelector:"), COCOA_SELECTOR(name))
+
+#define COCOA_NAMED_CURSOR(name) (COCOA_NSCURSOR_CLASS_RESPONDS(name "Cursor") \
+                                  ? objc_msgSend(Nlm_NSCursorClass(), COCOA_SELECTOR(name "Cursor")) \
+                                  : 0)
+
+static void *Nlm_NSCursorClass (void)
+{
+  static int didLoadApplication = 0;
+  if (!didLoadApplication)
+  {
+    didLoadApplication = 1;
+    NSApplicationLoad();
+  }
+  
+  return NSClassFromString(CFSTR("NSCursor"));
+}
+
+static void Nlm_SetCursor (void *cursor)
+{
+  objc_msgSend(cursor, NSSelectorFromString(CFSTR("set")));
+}
+
+#endif
+#endif
+
 extern void Nlm_ArrowCursor (void)
 
 {
 #ifdef WIN_MAC
+#ifdef WIN_MAC_QUARTZ
+#ifdef WIN_MAC_QUARTZ_COCOA_CURSORS
+  Nlm_SetCursor(COCOA_NAMED_CURSOR("arrow"));
+#endif
+#else
   Cursor cursor;
   GetQDGlobalsArrow(&cursor);
   SetCursor (&cursor);
+#endif
 #endif
 #ifdef WIN_MSWIN
   Nlm_currentCursor = LoadCursor (NULL, IDC_ARROW);
@@ -5377,7 +4980,13 @@ extern void Nlm_CrossCursor (void)
 
 {
 #ifdef WIN_MAC
+#ifdef WIN_MAC_QUARTZ
+#ifdef WIN_MAC_QUARTZ_COCOA_CURSORS
+  Nlm_SetCursor(COCOA_NAMED_CURSOR("crosshair"));
+#endif
+#else
   SetCursor (&cross);
+#endif
 #endif
 #ifdef WIN_MSWIN
   Nlm_currentCursor = LoadCursor (NULL, IDC_CROSS);
@@ -5392,7 +5001,13 @@ extern void Nlm_IBeamCursor (void)
 
 {
 #ifdef WIN_MAC
+#ifdef WIN_MAC_QUARTZ
+#ifdef WIN_MAC_QUARTZ_COCOA_CURSORS
+  Nlm_SetCursor(COCOA_NAMED_CURSOR("IBeam"));
+#endif
+#else
   SetCursor (&iBeam);
+#endif
 #endif
 #ifdef WIN_MSWIN
   Nlm_currentCursor = LoadCursor (NULL, IDC_IBEAM);
@@ -5407,7 +5022,13 @@ extern void Nlm_PlusCursor (void)
 
 {
 #ifdef WIN_MAC
+#ifdef WIN_MAC_QUARTZ
+#ifdef WIN_MAC_QUARTZ_COCOA_CURSORS
+  Nlm_SetCursor(COCOA_NAMED_CURSOR("crosshair"));
+#endif
+#else
   SetCursor (&plus);
+#endif
 #endif
 #ifdef WIN_MSWIN
   Nlm_currentCursor = LoadCursor (NULL, IDC_CROSS);
@@ -5422,7 +5043,13 @@ extern void Nlm_WatchCursor (void)
 
 {
 #ifdef WIN_MAC
+#ifdef WIN_MAC_QUARTZ
+#ifdef WIN_MAC_QUARTZ_COCOA_CURSORS
+// QUARTZ_FIXME: do we even need or want a watch cursor?
+#endif
+#else
   SetCursor (&watch);
+#endif
 #endif
 #ifdef WIN_MSWIN
   Nlm_currentCursor = LoadCursor (NULL, IDC_WAIT);
@@ -5585,7 +5212,7 @@ static pascal OSErr HandleAEOpenDoc (const AppleEvent *event, AppleEvent *reply,
   char tempfile [PATH_MAX];
   AEDesc docDesc;
   AEDescList theList;
-  FSSpec rsultfss;
+  CFURLRef cfurl;
   OSErr theErr;
   
   stat = AEGetParamDesc (event, keyDirectObject, typeAEList, &list);
@@ -5616,10 +5243,11 @@ static pascal OSErr HandleAEOpenDoc (const AppleEvent *event, AppleEvent *reply,
 
         theErr = AECreateList(NULL, 0, FALSE, &theList);
         if (theErr == noErr) {
-          Nlm_CtoPstr ((Nlm_CharPtr) tempfile);
-          theErr = FSMakeFSSpec (0, 0, (ConstStr255Param) tempfile, &rsultfss);
-          if (theErr == noErr) {
-            theErr = AECreateDesc(typeFSS, (Ptr)&rsultfss, sizeof(fss), &docDesc);
+          cfurl = CFURLCreateFromFileSystemRepresentation (NULL, (const UInt8 *)tempfile, strlen (tempfile), 0);
+          if (cfurl) {
+            CFDataRef cfdata = CFURLCreateData (NULL, cfurl, kCFStringEncodingUTF8, 1);
+            theErr = AECreateDesc(typeFileURL, CFDataGetBytePtr (cfdata), CFDataGetLength (cfdata), &docDesc);
+            CFRelease (cfdata);
             if (theErr == noErr) {
               theErr = AEPutDesc(&theList, 0, &docDesc);
               if (theErr == noErr) {
@@ -5723,7 +5351,10 @@ static void Nlm_HandleEvent (void)
       }
       break;
     case updateEvt:
+#ifndef WIN_MAC_QUARTZ
+/* this gets handled by the HIView infrastructure behind our backs in Quartz */
       Nlm_DoDraw ((Nlm_GraphiC) Nlm_theWindow);
+#endif
       break;
     case osEvt:
       mess = (Nlm_currentEvent.message & osEvtMessageMask) >> 24;
@@ -5786,6 +5417,7 @@ extern Nlm_Boolean Nlm_RegisterWindows (void)
   return TRUE;
 }
 
+#ifndef WIN_MAC_QUARTZ
 static void Nlm_ReturnCursor (Cursor *cursor, Nlm_Int2 cursorID)
 
 {
@@ -5802,6 +5434,7 @@ static void Nlm_ReturnCursor (Cursor *cursor, Nlm_Int2 cursorID)
     GetQDGlobalsArrow(cursor);
   }
 }
+#endif
 
 static Nlm_Boolean Nlm_SetupWindows (void)
 
@@ -5809,17 +5442,27 @@ static Nlm_Boolean Nlm_SetupWindows (void)
   Nlm_PoinT  pt;
   Nlm_RecT   r;
   long  gval;
+#ifdef WIN_MAC_QUARTZ
+  CGDirectDisplayID display;
+  CGDisplayCount displayCount;
+#else
   BitMap myScreenBits;
 
   Nlm_ReturnCursor (&cross, 2);
   Nlm_ReturnCursor (&iBeam, 1);
   Nlm_ReturnCursor (&plus, 3);
   Nlm_ReturnCursor (&watch, 4);
+#endif
   Nlm_WatchCursor ();
   Nlm_ClearKeys ();
   Nlm_LoadPt (&pt, 0, 0);
+#ifdef WIN_MAC_QUARTZ
+  CGGetActiveDisplayList (1, &display, &displayCount);
+  screenBitBounds = Nlm_CGRectToRecT (CGDisplayBounds (display));
+#else
   GetQDGlobalsScreenBits(&myScreenBits);
   Nlm_RectToolToRecT (&(myScreenBits.bounds), &screenBitBounds);
+#endif
   r = screenBitBounds;
   Nlm_screenRect = screenBitBounds;
   Nlm_desktopWindow = (Nlm_WindoW) Nlm_HandNew (sizeof (Nlm_WindowRec));
@@ -6824,7 +6467,7 @@ extern void Nlm_DisplayEnvironmentVariables (void)
 extern int Nlm_VibMainPrelude (int argc, char *argv[])
 {
   long   gval;
-  OSErr  err;
+  OSStatus  err;
 
   Nlm_SetupArguments (argc, argv);
 # else /* ! OS_UNIX_DARWIN */
@@ -6867,7 +6510,12 @@ extern void Nlm_VibMainPrelude ()
   TEInit ();
   InitDialogs (0);
 #endif
+#ifdef WIN_MAC_QUARTZ
+  err = TXNInitTextension (NULL, 0, 0);
+  if(err) abort();
+#else
   InitCursor ();
+#endif
 
   err = Gestalt (gestaltAppleEventsAttr, &gval);
   if (err == noErr && ((short) gval & (1 << gestaltAppleEventsPresent)) != 0) {
@@ -7219,8 +6867,10 @@ extern void Nlm_RemoveDyingWindows (void)
     w = dyingWindow;
     wptr = Nlm_ParentWindowPtr ((Nlm_GraphiC) w);
 #ifdef WIN_MAC
+#ifndef WIN_MAC_QUARTZ
     GetPort (&tempPort);
     GetPenState (&state);
+#endif
     Nlm_SetPortWindowPort(wptr);
     Nlm_currentWindowTool = wptr;
     Nlm_SetUpdateRegion (wptr);
@@ -7254,7 +6904,7 @@ extern void Nlm_RemoveDyingWindows (void)
       Nlm_SetWindowMenuBar (w, NULL);
     }
 
-#ifndef WIN_MOTIF
+#if !defined(WIN_MOTIF) && !defined(WIN_MAC_QUARTZ)
     Nlm_ResetDrawingTools ();
 #endif
 
@@ -7263,6 +6913,7 @@ extern void Nlm_RemoveDyingWindows (void)
       wdata.cleanup (w, wdata.data);
     }
 #ifdef WIN_MAC
+#ifndef WIN_MAC_QUARTZ
     if ( wdata.cMap != NULL ){
       DisposePalette ( wdata.cMap );
       wdata.cMap = NULL;
@@ -7271,6 +6922,7 @@ extern void Nlm_RemoveDyingWindows (void)
     Nlm_currentWindowTool = GetWindowFromPort(tempPort);
     Nlm_SetUpdateRegion (GetWindowFromPort(tempPort));
     SetPenState (&state);
+#endif
     /* 2001-03-22:  Joshua Juran
        Carbon does not support application-supplied storage for windows. */
     DisposeWindow(wptr);
@@ -7584,8 +7236,8 @@ static void Nlm_ProcessIdle (void)
 
   Nlm_ProcessTimerEvent ();
   GetMouse (&ptool);
-  LocalToGlobal (&ptool);
   Nlm_PointToolToPoinT (ptool, &Nlm_globalMouse);
+  Nlm_LocalToGlobal (&Nlm_globalMouse);
   frontWindow = Nlm_FindWindowRec (FrontWindow ());
   Nlm_DoIdle ((Nlm_GraphiC) frontWindow, Nlm_globalMouse);
   Nlm_ClearKeys ();

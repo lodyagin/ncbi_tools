@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.126 $
+* $Revision: 6.136 $
 *
 * File Description: 
 *
@@ -55,6 +55,8 @@
 #include <alignmgr2.h>
 #include <toasn3.h>
 #include <vibforms.h>
+#include <cdrgn.h>
+#include <findrepl.h>
 
 #define NUMBER_OF_SUFFIXES    8
 
@@ -236,6 +238,8 @@ extern Boolean DescFormReplaceWithoutUpdateProc (ForM f)
           sdp->data.ptrvalue = DialogToPointer (dfp->data);
           break;
       }
+      FixSpecialCharactersForObject (OBJ_SEQDESC, sdp, "You may not include special characters in the text.\nIf you do not choose replacement characters, these special characters will be replaced with '#'.", TRUE, NULL);
+
       ompc.output_data = (Pointer) sdp;
       if (ompc.input_entityID == 0) {
         if (! ObjMgrRegister (OBJ_SEQDESC, (Pointer) sdp)) {
@@ -1278,7 +1282,6 @@ extern void SeqFeatPtrToCommon (FeatureFormPtr ffp, SeqFeatPtr sfp)
   }
 }
 
-extern void CleanupEvidenceGBQuals (GBQualPtr PNTR prevgbq);
 extern void CleanupEvidenceGBQuals (GBQualPtr PNTR prevgbq)
 
 {
@@ -1609,7 +1612,6 @@ extern Boolean FeatFormReplaceWithoutUpdateProc (ForM f)
   Char            badInfMssg [32];
   Char            badInfQual [256];
   BioseqPtr       bsp;
-  Char            ch;
   Char            desc [128];
   Int2            expev;
   SeqMgrFeatContext  fcontext;
@@ -1629,7 +1631,6 @@ extern Boolean FeatFormReplaceWithoutUpdateProc (ForM f)
   Boolean         noRight;
   SeqEntryPtr     oldscope;
   OMProcControl   ompc;
-  CharPtr         ptr;
   ReplaceData     rd;
   Boolean         rsult;
   SeqAnnotPtr     sap;
@@ -1677,17 +1678,7 @@ extern Boolean FeatFormReplaceWithoutUpdateProc (ForM f)
           break;
       }
       sfp->comment = SaveStringFromText (ffp->comment);
-      ptr = sfp->comment;
-      if (ptr != NULL) {
-        ch = *ptr;
-        while (ch != '\0') {
-          if (ch < ' ' || ch > '~') {
-            *ptr = '~';
-          }
-          ptr++;
-          ch = *ptr;
-        }
-      }
+      NewlinesToTildes (sfp->comment);
       expev = GetValue (ffp->evidence);
       if (expev > 0 && expev <= 3) {
         sfp->exp_ev = expev - 1;
@@ -1845,11 +1836,18 @@ extern Boolean FeatFormReplaceWithoutUpdateProc (ForM f)
           }
         }
       }
+
       ompc.output_data = (Pointer) sfp;
       if (ompc.input_entityID == 0) {
         sfp->qual = DialogToPointer (ffp->gbquals);
         VisStringDialogToGbquals (sfp, ffp->experiment, "experiment");
         InferenceDialogToGBQuals (ffp->inference, sfp, TRUE);
+        if (sfp->data.choice == SEQFEAT_RNA) {
+          AddRnaSpecificQuals (sfp, ffp->data);
+          /* NOTE - we will remove this line when we convert to the new data format */
+/*          ConvertToOldRNAFormat (sfp); */
+        }
+
         sfp->ext = DialogToPointer (ffp->usrobjext);
         if (ffp->goTermUserObj != NULL) {
           sfp->ext = CombineGOTermUserObjects (sfp->ext, ffp->goTermUserObj);
@@ -1864,6 +1862,7 @@ extern Boolean FeatFormReplaceWithoutUpdateProc (ForM f)
           TextToFeatXref (ffp->fidxref, sfp);
         }
         AddProtRefXref (sfp, ffp->protXrefName, ffp->protXrefDesc);
+        FixSpecialCharactersForObject (OBJ_SEQFEAT, sfp, "You may not include special characters in the text.\nIf you do not choose replacement characters, these special characters will be replaced with '#'.", TRUE, NULL);
         if (! ObjMgrRegister (OBJ_SEQFEAT, (Pointer) sfp)) {
           Message (MSG_ERROR, "ObjMgrRegister failed");
         }
@@ -1874,6 +1873,12 @@ extern Boolean FeatFormReplaceWithoutUpdateProc (ForM f)
         sfp->qual = DialogToPointer (ffp->gbquals);
         VisStringDialogToGbquals (sfp, ffp->experiment, "experiment");
         InferenceDialogToGBQuals (ffp->inference, sfp, TRUE);
+        if (sfp->data.choice == SEQFEAT_RNA) {
+          AddRnaSpecificQuals (sfp, ffp->data);
+          /* NOTE - we will remove this line when we convert to the new data format */
+/*          ConvertToOldRNAFormat (sfp); */
+        }
+
         sfp->ext = DialogToPointer (ffp->usrobjext);
         if (ffp->goTermUserObj != NULL) {
           sfp->ext = CombineGOTermUserObjects (sfp->ext, ffp->goTermUserObj);
@@ -1888,6 +1893,7 @@ extern Boolean FeatFormReplaceWithoutUpdateProc (ForM f)
           TextToFeatXref (ffp->fidxref, sfp);
         }
         AddProtRefXref (sfp, ffp->protXrefName, ffp->protXrefDesc);
+        FixSpecialCharactersForObject (OBJ_SEQFEAT, sfp, "You may not include special characters in the text.\nIf you do not choose replacement characters, these special characters will be replaced with '#'.", TRUE, NULL);
         ompc.output_itemtype = OBJ_SEQFEAT;
         if (ompc.input_itemtype == OBJ_BIOSEQ) {
           bsp = GetBioseqGivenIDs (ompc.input_entityID, ompc.input_itemID, ompc.input_itemtype);
@@ -1925,6 +1931,11 @@ extern Boolean FeatFormReplaceWithoutUpdateProc (ForM f)
         rd.sfp = sfp;
         GatherItem (ompc.input_entityID, ompc.input_itemID, ompc.input_itemtype,
                     (Pointer) &rd, ReplaceFeatureExtras);
+        if (sfp->data.choice == SEQFEAT_RNA) {
+          AddRnaSpecificQuals (sfp, ffp->data);
+          /* NOTE - we will remove this line when we convert to the new data format */
+/*          ConvertToOldRNAFormat (sfp); */
+        }
         if (HasExceptionGBQual (sfp)) {
           sfp->excpt = TRUE;
         }
@@ -1939,6 +1950,7 @@ extern Boolean FeatFormReplaceWithoutUpdateProc (ForM f)
         {
           AddProtRefXref (sfp, ffp->protXrefName, ffp->protXrefDesc);
         }
+        FixSpecialCharactersForObject (OBJ_SEQFEAT, sfp, "You may not include special characters in the text.\nIf you do not choose replacement characters, these special characters will be replaced with '#'.", TRUE, NULL);
         if (! ReplaceDataForProc (&ompc, FALSE)) {
           Message (MSG_ERROR, "ReplaceDataForProc failed");
         }
@@ -1972,6 +1984,7 @@ extern Boolean FeatFormReplaceWithoutUpdateProc (ForM f)
               sfp = CreateNewFeature (sep, NULL, SEQFEAT_GENE, NULL);
               if (sfp != NULL) {
                 sfp->data.value.ptrvalue = (Pointer) grp;
+                FixSpecialCharactersForObject (OBJ_SEQFEAT, sfp, "You may not include special characters in the text.\nIf you do not choose replacement characters, these special characters will be replaced with '#'.", TRUE, NULL);
                 sfp->location = SeqLocFree (sfp->location);
                 sfp->location = DialogToPointer (ffp->location);
                 bsp = GetBioseqGivenSeqLoc (sfp->location, ffp->input_entityID);
@@ -2722,12 +2735,231 @@ static void AuthorDialogMessage (DialoG d, Int2 mssg)
   }
 }
 
+
+static Boolean IsAuthList (CharPtr path)
+{
+  FILE *fp;
+  Char buffer[10];
+  Int4 len;
+  Boolean rval = FALSE;
+
+  fp = FileOpen (path, "r");
+  if (fp == NULL) return FALSE;
+  
+  len = fread (buffer, 1, 9, fp);
+  buffer[9] = 0;
+  if (StringCmp (buffer, "Auth-list") == 0)
+  {
+    rval = TRUE;
+  }
+  FileClose (fp);
+  return rval;
+}
+
+
+static NameStdPtr ReadNameFromString (CharPtr str, CharPtr PNTR next_name, BoolPtr found_special)
+{
+  CharPtr cp_end, cp_space;
+  NameStdPtr n;
+
+  if (StringHasNoText (str)) 
+  {
+    if (next_name != NULL)
+    {
+      *next_name = NULL;
+    }
+    return NULL;
+  }
+
+  /* skip over any leading spaces */
+  str += StringSpn (str, " \t");
+
+  /* skip over "and" if found */
+  if (StringNCmp (str, "and ", 4) == 0)
+  {
+    str += 4;
+  }
+  if (StringHasNoText (str)) return NULL;
+
+  cp_end = StringChr (str, ',');
+  if (cp_end != NULL)
+  {
+    *cp_end = 0;
+    if (next_name != NULL)
+    {
+      if (StringHasNoText (cp_end + 1))
+      {
+        *next_name = NULL;
+      }
+      else
+      {
+        *next_name = cp_end + 1;
+      }
+    }
+  }
+  else if (next_name != NULL)
+  {
+    *next_name = NULL;
+  }
+
+  n = NameStdNew ();  
+  /* look for elements in name */
+  cp_space = StringRChr (str, ' ');
+  if (cp_space == NULL)
+  {
+    n->names[0] = StringSave (str);
+  }
+  else
+  {
+    n->names[0] = StringSave (cp_space + 1);
+    while (isspace (*cp_space))
+    {
+      cp_space--;
+    }
+    *(cp_space + 1) = 0;
+    cp_space = StringChr (str, ' ');
+    if (cp_space == NULL)
+    {
+       n->names[1] = StringSave (str);
+       n->names[4] = (CharPtr) MemNew (sizeof (Char) * 3);
+       sprintf (n->names[4], "%c.", *(n->names[1]));
+    }
+    else
+    {
+      *(cp_space) = 0;
+      n->names[1] = StringSave (str);
+
+      cp_space++;
+      while (isspace (*cp_space))
+      {
+        cp_space++;
+      }
+      
+      n->names[4] = (CharPtr) MemNew (sizeof (Char) * (4 + StringLen (cp_space)));
+      sprintf (n->names[4], "%c.%s.", *(n->names[1]), cp_space);
+    }
+    SpecialCharReplace (&(n->names[1]), NULL, found_special, NULL);
+    SpecialCharReplace (&(n->names[4]), NULL, found_special, NULL);
+  }
+  SpecialCharReplace (&(n->names[0]), NULL, found_special, NULL);
+
+  return n;
+}
+
+
+static Boolean EndsWithComma (CharPtr str)
+{
+  CharPtr cp;
+
+  if (StringHasNoText (str)) return FALSE;
+  cp = str + StringLen (str) - 1;
+  while (isspace (*cp) && cp > str)
+  {
+    cp--;
+  }
+  if (*cp == ',')
+  {
+    return TRUE;
+  }
+  else
+  {
+    return FALSE;
+  }
+}
+
+
+static CharPtr ExtendToComma (CharPtr line, ReadBufferPtr rbp)
+{
+  CharPtr next_line = NULL, tmp;
+  Boolean end_of_file = FALSE;
+
+  while (!EndsWithComma (line) && !end_of_file)
+  {
+    next_line = AbstractReadFunction (rbp);
+    if (next_line == NULL)
+    {
+      end_of_file = TRUE;
+    }
+    else if (StringHasNoText (next_line))
+    {
+      next_line = MemFree (next_line);
+    }
+    else if (StringHasNoText (line))
+    {
+      line = MemFree (line);
+      line = next_line;
+    }
+    else
+    {
+      tmp = (CharPtr) MemNew (sizeof (Char) * (StringLen (line) + StringLen (next_line) + 2));
+      sprintf (tmp, "%s %s", line, next_line);
+      next_line = MemFree (next_line);
+      line = MemFree (line);
+      line = tmp;
+    }
+  }
+  return line;
+}
+
+
+static AuthListPtr ReadAuthorListFromTextFile (CharPtr path)
+{
+  ReadBufferData rbd;
+  CharPtr        line;
+  AuthListPtr    alp;
+  AuthorPtr      ap;
+  CharPtr        cp, next_cp;
+  NameStdPtr     n;
+  ValNodePtr     names = NULL;
+  Boolean        found_special = FALSE;
+
+  rbd.fp = FileOpen (path, "r");
+  if (rbd.fp == NULL) return FALSE;
+  rbd.current_data = NULL;
+
+  line = ExtendToComma (NULL, &rbd);
+  while (line != NULL) 
+  {
+    cp = line;
+    next_cp = NULL;
+    while (cp != NULL)
+    {
+      n = ReadNameFromString (cp, &next_cp, &found_special);
+      if (n != NULL)
+      {
+        ap = AuthorNew ();
+        ap->name = PersonIdNew ();
+        ap->name->choice = 2;
+        ap->name->data = n;
+        ValNodeAddPointer (&names, 0, ap);
+      }
+      cp = next_cp;
+    }
+    line = MemFree (line);
+    line = ExtendToComma (NULL, &rbd);
+  }
+  if (names != NULL)
+  {
+    alp = AuthListNew ();
+    alp->choice = 1;
+    alp->names = names;
+  }
+  if (found_special)
+  {
+    Message (MSG_OK, "Special characters in names were converted");
+  }
+  
+  FileClose (rbd.fp);
+  return alp;
+}
+
+
 static Boolean ReadAuthorDialog (DialoG d, CharPtr filename)
 
 {
   AuthorDialogPtr  adp;
   AsnIoPtr         aip;
-  AuthListPtr      alp;
+  AuthListPtr      alp = NULL;
   Char             path [PATH_MAX];
 
   path [0] = '\0';
@@ -2735,16 +2967,20 @@ static Boolean ReadAuthorDialog (DialoG d, CharPtr filename)
   adp = (AuthorDialogPtr) GetObjectExtra (d);
   if (adp != NULL) {
     if (path [0] != '\0' || GetInputFileName (path, sizeof (path), "", "TEXT")) {
-      aip = AsnIoOpen (path, "r");
-      if (aip != NULL) {
-        alp = AuthListAsnRead (aip, NULL);
-        AsnIoClose (aip);
-        if (alp != NULL) {
-          PointerToDialog (adp->dialog, (Pointer) alp);
-          alp = AuthListFree (alp);
-          Update ();
-          return TRUE;
+      if (IsAuthList (path)) {
+        aip = AsnIoOpen (path, "r");
+        if (aip != NULL) {
+          alp = AuthListAsnRead (aip, NULL);
+          AsnIoClose (aip);
         }
+      } else {
+        alp = ReadAuthorListFromTextFile (path);
+      }
+      if (alp != NULL) {
+        PointerToDialog (adp->dialog, (Pointer) alp);
+        alp = AuthListFree (alp);
+        Update ();
+        return TRUE;
       }
     }
   }
@@ -7019,6 +7255,7 @@ static void StringToLatLonDlg (DialoG d, Pointer data)
   tmp = (CharPtr) MemNew (sizeof (Char) * len);
   StringNCpy (tmp, str, len - 1);
   tmp [len - 1] = 0;
+  TrimSpacesAroundString (tmp);
   SetTitle (dlg->deg_ns, tmp);
   tmp = MemFree (tmp);
   SetValue (dlg->dir_ns, *ns == 'N' ? 1 : 2);
@@ -7027,6 +7264,7 @@ static void StringToLatLonDlg (DialoG d, Pointer data)
   tmp = (CharPtr) MemNew (sizeof (Char) * len);
   StringNCpy (tmp, ns + 1, len - 1);
   tmp [len - 1] = 0;
+  TrimSpacesAroundString (tmp);
   SetTitle (dlg->deg_ew, tmp);
   tmp = MemFree (tmp);
   SetValue (dlg->dir_ew, *ew == 'E' ? 1 : 2);
@@ -8501,6 +8739,176 @@ extern void CreateStandardEditMenu (WindoW w)
   i = CommandItem (m, "Copy", StdCopyTextProc);
   i = CommandItem (m, "Paste", StdPasteTextProc);
   i = CommandItem (m, "Clear", StdDeleteTextProc);
+}
 
+
+static ValNodePtr sqnTempFiles = NULL;
+
+extern void RememberSqnTempFile (CharPtr file)
+
+{
+  ValNodePtr  vnp;
+
+  if (StringHasNoText (file)) return;
+
+  vnp = ValNodeCopyStr (NULL, 0, file);
+  if (vnp == NULL) return;
+
+  vnp->next = sqnTempFiles;
+  sqnTempFiles = vnp;
+}
+
+extern void FreeSqnTempFiles (void)
+
+{
+  CharPtr     file;
+  ValNodePtr  list;
+  ValNodePtr  vnp;
+
+  if (sqnTempFiles == NULL) return;
+
+  list = sqnTempFiles;
+  sqnTempFiles = NULL;
+
+  for (vnp = list; vnp != NULL; vnp = vnp->next) {
+    file = (CharPtr) vnp->data.ptrvalue;
+    if (StringHasNoText (file)) continue;
+    FileRemove (file);
+  }
+
+  ValNodeFreeData (list);
+}
+
+
+/* This gets a list of the open views */
+NLM_EXTERN ValNodePtr GetBaseFormList ()
+
+{
+  Uint4          j;
+  Uint4          num;
+  ObjMgrPtr      omp;
+  ObjMgrDataPtr  omdp;
+  ObjMgrDataPtr  PNTR omdpp;
+  OMUserDataPtr  omudp;
+  BaseFormPtr    bfp;
+  ValNodePtr     base_form_list = NULL;
+
+  omp = ObjMgrGet ();
+  if (omp == NULL) return NULL;
+  num = omp->currobj;
+  for (j = 0, omdpp = omp->datalist; j < num && omdpp != NULL; j++, omdpp++) {
+    omdp = *omdpp;
+    if (omdp->parentptr == NULL) {
+      for (omudp = omdp->userdata; omudp != NULL; omudp = omudp->next) {
+        if (omudp->proctype == OMPROC_VIEW) {
+          bfp = (BaseFormPtr) omudp->userdata.ptrvalue;
+          ValNodeAddPointer (&base_form_list, 0, bfp);
+        }
+      }
+    }
+  }
+  return base_form_list;
+}
+
+
+/* This gets a list of the top SeqEntry for each open view */
+NLM_EXTERN ValNodePtr GetViewedSeqEntryList (void)
+{
+  ValNodePtr  sep_list = NULL, base_form_list, vnp;
+  BaseFormPtr bfp;
+  SeqEntryPtr sep;
+  
+  base_form_list = GetBaseFormList();
+  for (vnp = base_form_list; vnp != NULL; vnp = vnp->next) {
+    bfp = (BaseFormPtr) vnp->data.ptrvalue;
+    if (bfp != NULL && bfp->input_entityID != 0) {
+      sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+      ValNodeAddPointer (&sep_list, 0, sep);
+    }
+  }
+  base_form_list = ValNodeFree (base_form_list);
+  return sep_list;
+}
+
+
+NLM_EXTERN SeqEntryPtr RestoreFromFile (CharPtr path)
+
+{
+  BioseqPtr     bsp;
+  BioseqSetPtr  bssp;
+  Pointer       dataptr;
+  Uint2         datatype;
+  Uint2         entityID;
+  SeqEntryPtr   rsult;
+  SeqEntryPtr   sep;
+
+  rsult = NULL;
+  if (path != NULL && path [0] != '\0') {
+    dataptr = ObjMgrGenericAsnTextFileRead (path, &datatype, &entityID);
+    if (dataptr != NULL && entityID > 0) {
+      if (datatype == OBJ_SEQSUB || datatype == OBJ_SEQENTRY ||
+          datatype == OBJ_BIOSEQ || datatype == OBJ_BIOSEQSET) {
+        WatchCursor ();
+        sep = GetTopSeqEntryForEntityID (entityID);
+        if (sep == NULL) {
+          sep = SeqEntryNew ();
+          if (sep != NULL) {
+            if (datatype == OBJ_BIOSEQ) {
+              bsp = (BioseqPtr) dataptr;
+              sep->choice = 1;
+              sep->data.ptrvalue = bsp;
+              SeqMgrSeqEntry (SM_BIOSEQ, (Pointer) bsp, sep);
+            } else if (datatype == OBJ_BIOSEQSET) {
+              bssp = (BioseqSetPtr) dataptr;
+              sep->choice = 2;
+              sep->data.ptrvalue = bssp;
+              SeqMgrSeqEntry (SM_BIOSEQSET, (Pointer) bssp, sep);
+            } else {
+              sep = SeqEntryFree (sep);
+            }
+          }
+          sep = GetTopSeqEntryForEntityID (entityID);
+        }
+        if (sep != NULL) {
+          rsult = SeqEntryNew ();
+          if (rsult != NULL) {
+            rsult->choice = sep->choice;
+            rsult->data.ptrvalue = sep->data.ptrvalue;
+            sep->data.ptrvalue = NULL;
+            if (datatype == OBJ_SEQSUB) {
+              SeqSubmitFree ((SeqSubmitPtr) dataptr);
+            } else {
+              SeqEntryFree (sep);
+            }
+            /*Message (MSG_OK, "Call new object manager free function");*/
+          }
+        }
+        ArrowCursor ();
+      }
+      /*
+      ObjMgrDelete (entityID);
+      */
+    }
+  }
+  return rsult;
+}
+
+
+NLM_EXTERN Uint2 RestoreEntityIDFromFile (CharPtr path, Uint2 entityID)
+{
+  SeqEntryPtr scope, oldsep, currsep;
+  Uint2 newid = 0;
+
+  scope = SeqEntrySetScope (NULL);
+  oldsep = RestoreFromFile (path);
+  currsep = GetTopSeqEntryForEntityID (entityID);
+  if (oldsep == NULL || currsep == NULL) {
+    SeqEntrySetScope (scope);
+  } else {  
+    ReplaceSeqEntryWithSeqEntry (currsep, oldsep, TRUE);
+    SeqEntrySetScope (NULL);
+    newid = ObjMgrGetEntityIDForChoice (currsep);
+  }
+  return newid;
 }
 

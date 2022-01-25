@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   5/12/05
 *
-* $Revision: 1.11 $
+* $Revision: 1.13 $
 *
 * File Description:
 *
@@ -50,7 +50,7 @@
 #include <toasn3.h>
 #include <pmfapi.h>
 
-#define NPS2GPSAPP_VER "1.9"
+#define NPS2GPSAPP_VER "2.1"
 
 CharPtr NPS2GPSAPPLICATION = NPS2GPSAPP_VER;
 
@@ -60,6 +60,7 @@ typedef struct n2gdata {
   Boolean  failure;
   Boolean  lock;
   Boolean  byFeatID;
+  Boolean  useProtID;
 } N2GData, PNTR N2GPtr;
 
 typedef struct npsseqs {
@@ -381,10 +382,30 @@ static SeqIdPtr MakeIdFromLocusTag (
   return NULL;
 }
 
+static SeqIdPtr MakeIdFromProtein (
+  BioseqPtr pbsp
+)
+
+{
+  Char      buf [64], tmp [64];
+  SeqIdPtr  sip;
+
+  if (pbsp == NULL) return NULL;
+  sip = SeqIdFindBestAccession (pbsp->id);
+  if (sip == NULL) return NULL;
+  SeqIdWrite (sip, buf, PRINTID_TEXTID_ACC_VER, sizeof (buf) - 1);
+  if (StringHasNoText (buf)) return NULL;
+  StringCpy (tmp, "gnl|MTRACK|");
+  StringCat (tmp, buf);
+  StringCat (tmp, "_mrna");
+  return MakeSeqID (tmp);
+}
+
 static void InstantiateMrnaIntoProt (
   SeqFeatPtr cds,
   SeqFeatPtr mrna,
-  Int2Ptr ctrp
+  Int2Ptr ctrp,
+  N2GPtr ngp
 )
 
 {
@@ -397,11 +418,11 @@ static void InstantiateMrnaIntoProt (
   CharPtr       rnaseq;
   ValNodePtr    vnp;
 
-  if (cds == NULL || mrna == NULL) return;
+  if (cds == NULL || mrna == NULL || ngp == NULL) return;
   if (cds->product == NULL || mrna->product != NULL) return;
 
   pbsp = BioseqFindFromSeqLoc (cds->product);
-  if (pbsp  == NULL) return;
+  if (pbsp == NULL) return;
   psep = SeqMgrGetSeqEntryForData (pbsp);
   if (psep == NULL) return;
 
@@ -423,8 +444,13 @@ static void InstantiateMrnaIntoProt (
   mbsp->length = BSLen (bs);
   BioseqPack (mbsp);
 
-  /* now adds _# suffix to general Seq-id if ambiguous */
+  /* now adds _# suffix to general Seq-id if ambiguous - but messed up Drosophila record, so only use feature ID */
+  /*
   mbsp->id = MakeIdFromLocusTag (mrna);
+  */
+  if (ngp->useProtID) {
+    mbsp->id = MakeIdFromProtein (pbsp);
+  }
   if (mbsp->id == NULL) {
     mbsp->id = MakeNewProteinSeqIdEx (mrna->location, NULL, NULL, ctrp);
   }
@@ -544,7 +570,7 @@ static void LoopThroughCDSs (
         count = SeqMgrGetAllOverlappingFeatures (sfp->location, FEATDEF_mRNA, NULL, 0,
                                                  CHECK_INTERVALS, (Pointer) &ld, FindSingleMrnaProc);
         if (ld.count == 1 && ld.mrna != NULL) {
-          InstantiateMrnaIntoProt (sfp, ld.mrna, ctrp);
+          InstantiateMrnaIntoProt (sfp, ld.mrna, ctrp, ngp);
           sfp->idx.scratch = (Pointer) MemNew (sizeof (Int4));
           ld.mrna->idx.scratch = (Pointer) MemNew (sizeof (Int4));
           goOn = TRUE;
@@ -736,7 +762,7 @@ static void NPStoGPS (
     while (sfp != NULL) {
       mrna = GetmRNAByFeatureID (sfp);
       if (mrna != NULL) {
-        InstantiateMrnaIntoProt (sfp, mrna, &ctr);
+        InstantiateMrnaIntoProt (sfp, mrna, &ctr, ngp);
       }
       sfp = SeqMgrGetNextFeature (bsp, sfp, SEQFEAT_CDREGION, 0, &fcontext);
     }
@@ -959,6 +985,7 @@ static void ProcessOneRecord (
 #define R_argRemote      6
 #define L_argLockFar     7
 #define F_argUseFeatID   8
+#define P_argUseProtID   9
 
 
 Args myargs [] = {
@@ -980,6 +1007,8 @@ Args myargs [] = {
     TRUE, 'L', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Map by Feature ID", "F", NULL, NULL,
     TRUE, 'F', ARG_BOOLEAN, 0.0, 0, NULL},
+  {"mRNA ID from Protein", "F", NULL, NULL,
+    TRUE, 'P', ARG_BOOLEAN, 0.0, 0, NULL},
 };
 
 Int2 Main (void)
@@ -1032,6 +1061,7 @@ Int2 Main (void)
   ngd.failure = FALSE;
   ngd.lock = (Boolean) myargs [L_argLockFar].intvalue;
   ngd.byFeatID = (Boolean) myargs [F_argUseFeatID].intvalue;
+  ngd.useProtID = (Boolean) myargs [P_argUseProtID].intvalue;
 
   directory = (CharPtr) myargs [p_argInputPath].strvalue;
   results = (CharPtr) myargs [r_argOutputPath].strvalue;

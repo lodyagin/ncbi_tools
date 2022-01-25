@@ -29,200 +29,13 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.32 $
+* $Revision: 6.33 $
 *
 * File Description: 
 *       Vibrant procedure definitions
 *
 * Modifications:  
 * --------------------------------------------------------------------------
-* $Log: vibprocs.h,v $
-* Revision 6.32  2007/05/01 22:01:30  kans
-* changes in preparation for supporing Quartz on Macintosh
-*
-* Revision 6.31  2006/09/27 18:30:00  kans
-* support for Int4 scroll bars for switching between text and doc views in Sequin (CB)
-*
-* Revision 6.30  2005/09/23 20:30:10  kans
-* added NLM_BACK for backspace key, which is separate from delete, even though the label may be the same on a keyboard
-*
-* Revision 6.29  2005/01/24 15:01:25  kans
-* prototype UsePrimaryMonitor
-*
-* Revision 6.28  2004/04/01 13:43:09  lavr
-* Spell "occurred", "occurrence", and "occurring"
-*
-* Revision 6.27  2004/02/23 16:36:51  sinyakov
-* Use Int4 instead of Int2 for cursor position and text selection in text boxes
-*
-* Revision 6.26  2004/02/12 20:05:26  bazhin
-* Added callback function "Nlm_SetKeepCrNlTextFieldCallback(Nlm_TexT t)",
-* which allows to copy-paste texts from multiple columns to single string.
-*
-* Revision 6.25  2004/02/05 16:25:06  kans
-* revert to Nlm_GetTextVScrollBar and Nlm_GetTextHScrollBar being static, implement setOffset and getOffset for scroll text, since Windows scroll text has its own scroll bar
-*
-* Revision 6.24  2004/02/04 15:21:02  kans
-* make GetTextVScrollBar and GetTextHScrollBar extern, to add search function to general text viewer
-*
-* Revision 6.23  2004/01/05 17:08:09  kans
-* added functions to control use of dual screens
-*
-* Revision 6.22  2003/10/29 19:19:34  kans
-* added prototype for Nlm_SetTextColor
-*
-* Revision 6.21  2002/04/30 18:25:12  bazhin
-* Added function "Nlm_SetWindowConfigureCallback(WindoW w)", which
-* allows to catch events, when window just moved without resizing.
-* Fixed some "gcc -Wall -ansi" warnings.
-*
-* Revision 6.20  2002/01/09 15:23:54  kans
-* added HasAquaMenuLayout
-*
-* Revision 6.19  2001/09/10 17:34:33  bazhin
-* Added function Nlm_SetTextCursorBlinkRate(Nlm_TexT t, Nlm_Int2 msec).
-*
-* Revision 6.18  2000/08/01 15:57:32  kans
-* separate lines for Nlm_HANDLE on all platforms, even if two are currently the same, and no space between # and define in case some compilers complain
-*
-* Revision 6.17  2000/08/01 15:23:29  vakatov
-* Addition to R6.13:   error if neither of "WIN_***" is #defined
-*
-* Revision 6.16  2000/07/31 13:28:46  lewisg
-* Nlm_GetExecPath
-*
-* Revision 6.15  2000/07/28 21:25:11  lewisg
-* *** empty log message ***
-*
-* Revision 6.14  2000/07/28 21:05:54  lewisg
-* more c++ fixes
-*
-* Revision 6.13  2000/07/28 15:36:34  kans
-* for OS_UNIX, give error message if WIN_MOTIF not defined
-*
-* Revision 6.12  2000/07/25 21:19:00  lewisg
-* eliminate redundant windows pathname code
-*
-* Revision 6.11  2000/07/25 19:18:36  lewisg
-* get pathname for executable on windows
-*
-* Revision 6.10  2000/07/14 20:30:40  kans
-* added Nlm_MSWin_OpenApplication (for launching Cn3D with a data file)
-*
-* Revision 6.9  1999/04/06 14:23:26  lewisg
-* add opengl replacement for viewer3d
-*
-* Revision 6.8  1999/02/19 20:48:36  vakatov
-* [WIN_MSWIN]  Added Nlm_MSWin_OpenDocument(also can be used to
-* auto-launch IE or Netscape if passed an URL)
-*
-* Revision 6.7  1999/01/07 22:32:36  kans
-* added Mac-specific Nlm_SendURLAppleEvent
-*
-* Revision 6.6  1998/07/07 23:03:34  vakatov
-* Added Nlm_Execv() to spawn applications with cmd-line parameters;
-* now implemented for [OS_MSWIN, OS_UNIX].
-*
-* Revision 6.5  1998/03/22 03:00:59  kans
-* changed names to RegisterServiceProc and RegisterResultProc
-*
-* Revision 6.4  1998/03/22 02:33:17  kans
-* added request proc, result proc, message handlers to support, and send open doc event, launch app now work with file names or signatures
-*
-* Revision 6.3  1998/03/17 21:07:59  kans
-* added Nlm_SendOpenDocAppleEventEx, and private Nlm_LaunchAppEx
-*
-* Revision 6.2  1997/11/12 20:56:09  kans
-* added SetMouseMoveCallback and SetMouseMoveRegion, implemented first on Mac
-*
-* Revision 6.1  1997/10/18 23:30:21  kans
-* implemented Nlm_GetTextCursorPos (DV)
-*
-* Revision 6.0  1997/08/25 18:57:29  madden
-* Revision changed to 6.0
-*
-* Revision 5.18  1997/08/04 14:15:11  vakatov
-* Added Nlm_SetTextCursorPos() function
-*
-* Revision 5.17  1997/08/01 16:47:28  vakatov
-* [WIN_MOTIF,WIN_MSWIN]  Added IconifyWindow() and IconicWindow()
-*
-* Revision 5.16  1997/07/21 21:52:37  vakatov
-* [WIN_MOTIF] Added Nlm_[Un]RegisterIO() functions to wait for I/O
-* events and call(via X) user-defined callback(s)
-*
-* Revision 5.15  1997/07/18 17:01:13  vakatov
-* [WIN_MOTIF]  Removed "arg[cv]";  use "Nlm_GetArg[cv]()" instead
-*
-* Revision 5.14  1997/07/16 19:47:00  vakatov
-* +Nlm_StrngPrintable() proto
-*
-* Revision 5.13  1997/06/23 21:18:46  vakatov
-* Added Nlm_SetTextEditable() function to allow/prohibit text editing
-*
-* Revision 5.12  1997/05/27 21:50:55  vakatov
-* Added Nlm_PopupParentWindow() to popup window w/o switching input focus
-*
-* Revision 5.11  1997/04/28 21:42:46  vakatov
-* Added AUTO_FOCUS, FOCUS_NAVIG and DEFAULT_SLATE_POLICY defs & comments
-*
- * Revision 5.10  1997/04/25  16:08:45  vakatov
- * Changed old and added new navigation and special key names.
- * Added Nlm_SetSlatePolicy() and definitions for now available slate
- * navigation key handling policies.
- * Added Nlm_Scroll() -- for one-line/one-page scrolling of scrollbars.
- *
- * Revision 5.9  1997/03/19  15:57:07  vakatov
- * Added:  Nlm_Boolean Nlm_QuittingProgram PROTO((void));
- *
- * Revision 5.8  1996/12/12  23:11:10  kans
- * added Nlm_ClipPrintingRect (DV)
- *
- * Revision 5.7  1996/09/26  00:29:23  kans
- * added SetWindowTimer
- *
- * Revision 5.6  1996/09/09  00:15:01  kans
- * AutonomousPanel4 uses ScrollBar4 to have > 32K positions
- *
- * Revision 5.5  1996/08/27  20:56:26  vakatov
- * Added prototypes of function for creating and handling Int2- and
- * Int4-range scrollbars homogeneously
- *
- * Revision 5.4  1996/07/25  18:49:02  vakatov
- * Added prototype of Nlm_GetBarMax()
- *
- * Revision 5.3  1996/06/19  20:30:42  vakatov
- * Added prototype for function Nlm_GetListItem()
- *
- * Revision 5.2  1996/06/14  14:26:46  vakatov
- * Nlm_SetColorCell() -- to immediately change the color appearence
- * [WIN_MOTIF]  Nlm_RestrictMotifColorsTo() -- to avoid Motif/3D-Viewer
- * color overlapping
- *
- * Revision 5.1  1996/05/31  20:11:14  vakatov
- * Added Nlm_ExtendedList() function to set the list selection policy
- * to EXTENDED_SELECTION -- as it was for Nlm_MultiList() since Revision 4.4.
- *
- * Revision 4.5  1996/04/24  21:25:17  vakatov
- *  Nlm_WaitForCondition(cond) modified; now it waits until the next X-event
- * rather than sleeping 100, 200, ..., 900 msec.
- *  Nlm_WaitForXEvent() function added for this reason.
- *
- * Revision 4.4  1996/03/27  23:09:15  vakatov
- * Function Nlm_SetCursorShape() added to let programmer
- * easily store/restore current cursor shape
- *
- * Revision 4.3  1996/03/11  20:39:19  epstein
- * add support for Drag & Drop
- *
- * Revision 4.2  1995/11/08  23:30:31  kans
- * removed edit block fields, which belong in the application
- *
- * Revision 4.1  1995/10/06  16:44:39  epstein
- * add Nlm_WaitForCondition macro
- *
- * Revision 2.56  1995/05/31  18:00:58  kans
- * added SetColorMap
 *
 * ==========================================================================
 */
@@ -1237,6 +1050,7 @@ Nlm_VoidPtr Nlm_GetObject PROTO((Nlm_GraphiC a));
 extern void Nlm_SendOpenDocAppleEvent PROTO((Nlm_CharPtr datafile, Nlm_CharPtr sig));
 extern void Nlm_SendOpenDocAppleEventEx PROTO((Nlm_CharPtr datafile, Nlm_CharPtr sig, Nlm_CharPtr prog, Nlm_Boolean wantReply));
 extern void Nlm_SendURLAppleEvent (Nlm_CharPtr urlString, Nlm_CharPtr sig, Nlm_CharPtr prog);
+extern void Nlm_SendAppleScriptString (Nlm_CharPtr script);
 #endif
 
 #ifdef WIN_MSWIN

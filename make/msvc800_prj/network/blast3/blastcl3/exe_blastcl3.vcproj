@@ -3,7 +3,7 @@
 	ProjectType="Visual C++"
 	Version="8.00"
 	Name="exe_blastcl3"
-	ProjectGUID="{74C9A79B-EAE3-46B3-848E-73C3B5F679B9}"
+	ProjectGUID="{0516C2CE-F3B1-476B-AECC-9E2A02D40D8D}"
 	>
 	<Platforms>
 		<Platform

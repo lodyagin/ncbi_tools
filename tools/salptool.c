@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: salptool.c,v 6.54 2006/10/23 15:10:58 bollin Exp $";
+static char const rcsid[] = "$Id: salptool.c,v 6.55 2007/08/31 18:46:04 bollin Exp $";
 
 #include <sequtil.h> /* SeqIdDupList */
 #include <salpedit.h>
@@ -1926,7 +1926,8 @@ static SeqPortPtr SeqPortFromAlignmentInterval (Int4 seqstart, Int4 seqstop, Uin
   SeqLocPtr  slp;
   SeqPortPtr spp;
 
-  if (bsp == NULL) return NULL;
+  if (bsp == NULL || seqstart >= bsp->length - 1) return NULL;
+  seqstop = MIN (bsp->length -1, seqstop);
   sinp = SeqIntNew();
   if (sinp == NULL) return NULL;
   sinp->from = seqstart;

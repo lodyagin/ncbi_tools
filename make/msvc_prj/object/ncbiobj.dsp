@@ -207,6 +207,10 @@ SOURCE=..\..\..\api\lsqfetch.c
 # End Source File
 # Begin Source File
 
+SOURCE=..\..\..\api\macroapi.c
+# End Source File
+# Begin Source File
+
 SOURCE=..\..\..\api\maputil.c
 # End Source File
 # Begin Source File
@@ -291,6 +295,10 @@ SOURCE=..\..\..\object\objloc.c
 # End Source File
 # Begin Source File
 
+SOURCE=..\..\..\object\objmacro.c
+# End Source File
+# Begin Source File
+
 SOURCE=..\..\..\object\objmdrs.c
 # End Source File
 # Begin Source File
@@ -344,6 +352,10 @@ SOURCE=..\..\..\object\objsset.c
 # Begin Source File
 
 SOURCE=..\..\..\object\objsub.c
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\object\objtable.c
 # End Source File
 # Begin Source File
 
@@ -432,6 +444,10 @@ SOURCE=..\..\..\api\sqnutil2.c
 # Begin Source File
 
 SOURCE=..\..\..\api\sqnutil3.c
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\api\sqnutil4.c
 # End Source File
 # Begin Source File
 
@@ -763,6 +779,10 @@ SOURCE=..\..\..\api\lsqfetch.h
 # End Source File
 # Begin Source File
 
+SOURCE=..\..\..\api\macroapi.h
+# End Source File
+# Begin Source File
+
 SOURCE=..\..\..\object\mapmime.h
 # End Source File
 # Begin Source File
@@ -875,6 +895,10 @@ SOURCE=..\..\..\object\objloc.h
 # End Source File
 # Begin Source File
 
+SOURCE=..\..\..\object\objmacro.h
+# End Source File
+# Begin Source File
+
 SOURCE=..\..\..\object\objmdrs.h
 # End Source File
 # Begin Source File
@@ -932,6 +956,10 @@ SOURCE=..\..\..\object\objsset.h
 # Begin Source File
 
 SOURCE=..\..\..\object\objsub.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\object\objtable.h
 # End Source File
 # Begin Source File
 

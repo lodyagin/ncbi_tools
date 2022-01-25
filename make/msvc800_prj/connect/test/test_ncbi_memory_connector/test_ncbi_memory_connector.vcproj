@@ -3,7 +3,7 @@
 	ProjectType="Visual C++"
 	Version="8.00"
 	Name="test_ncbi_memory_connector"
-	ProjectGUID="{42140DF3-03C5-4A99-9D7B-F4385733D694}"
+	ProjectGUID="{6F8036D0-9AEE-4B60-A65A-5A51A9D8725F}"
 	>
 	<Platforms>
 		<Platform

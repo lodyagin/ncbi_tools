@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   5/5/00
 *
-* $Revision: 1.91 $
+* $Revision: 1.96 $
 *
 * File Description: 
 *
@@ -158,18 +158,18 @@ static void SplitMLAuthorName (
   *p = '\0';
 
   if (sbuf [0]) {
-    if (StringCmp (sbuf, "1d") == 0)
-      p = StringMove (suffix, "I.");
-    else if (StringCmp (sbuf, "2d") == 0)
-      p = StringMove (suffix, "II.");
-    else if (StringCmp (sbuf, "3d") == 0)
-      p = StringMove (suffix, "III.");
+    if (StringCmp (sbuf, "1d") == 0 || StringCmp (sbuf, "1st") == 0)
+      p = StringMove (suffix, "I");
+    else if (StringCmp (sbuf, "2d") == 0 || StringCmp (sbuf, "2nd") == 0)
+      p = StringMove (suffix, "II");
+    else if (StringCmp (sbuf, "3d") == 0 || StringCmp (sbuf, "3rd") == 0)
+      p = StringMove (suffix, "III");
     else if (StringCmp (sbuf, "4th") == 0)
-      p = StringMove (suffix, "IV.");
+      p = StringMove (suffix, "IV");
     else if (StringCmp (sbuf, "5th") == 0)
-      p = StringMove (suffix, "V.");
+      p = StringMove (suffix, "V");
     else if (StringCmp (sbuf, "6th") == 0)
-      p = StringMove (suffix, "VI.");
+      p = StringMove (suffix, "VI");
     else if (StringCmp (sbuf, "Sr") == 0)
       p = StringMove (suffix, "Sr.");
     else if (StringCmp (sbuf, "Jr") == 0)
@@ -380,6 +380,75 @@ NLM_EXTERN CONN PubSeqFetchOpenConnection (
 
   return conn;
 }
+
+NLM_EXTERN CONN PubSeqFetchTraceOpenConnection (
+  Int4 tid,
+  Int2 retcode,
+  Int4 flags
+)
+
+{
+  Char     buf [32];
+  CONN     conn;
+  Char     query [64];
+#ifdef OS_UNIX
+  CharPtr  str;
+#endif
+
+  if (tid < 1) return NULL;
+  if (retcode < 0 || retcode > 4) {
+    retcode = 0;
+  }
+  if (flags < 0) {
+    flags = 1;
+  }
+
+#ifdef PUB_SEQ_FETCH_DEBUG
+  sprintf (query, "val=0:TRACE:%ld&save=idf&view=1&maxplex=%d&extrafeat=%ld", (long) tid, (int) retcode, (long) flags);
+  return QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 80, "/entrez/viewer.fcgi",
+                             query, "Entrez2Tool", 30, eMIME_T_NcbiData,
+                             eMIME_AsnText, eENCOD_None, 0);
+#endif
+
+  sprintf (query, "val=0:TRACE:%ld&maxplex=%d&extrafeat=%ld", (long) tid, (int) retcode, (long) flags);
+  conn = QUERY_OpenServiceQuery ("SeqFetch", query, 30);
+
+#ifdef OS_UNIX
+  if (! log_query_url_set) {
+    str = (CharPtr) getenv ("PUBSEQ_FETCH_LOG_URL");
+    if (StringDoesHaveText (str)) {
+      if (StringICmp (str, "TRUE") == 0) {
+        log_query_url = TRUE;
+      }
+    }
+    log_query_url_set = TRUE;
+  }
+#endif
+
+  if (conn == NULL) {
+    MakeDateTimeStamp (buf);
+    if (StringHasNoText (buf)) {
+      StringCpy (buf, "?");
+    }
+    ErrPostEx (SEV_ERROR, 0, 0, "PubSeqFetchTraceOpenConnection failed for ti %ld, date/time %s", (long) tid, buf);
+    return conn;
+  }
+
+#ifdef OS_UNIX
+  if (log_query_url) {
+    str = CONN_Description (conn);
+    if (str == NULL) {
+      ErrPostEx (SEV_ERROR, 0, 0, "CONN_Description failed for ti %ld", (long) tid);
+    } else {
+      ErrPostEx (SEV_ERROR, 0, 0, "CONN_Description for ti %ld is %s", (long) tid, str);
+    }
+    MemFree (str);
+  }
+#endif
+
+  return conn;
+}
+
 
 static CharPtr girevtxt = "cmd=seqid&txt=on&seqid=fasta&val=";
 
@@ -1023,10 +1092,39 @@ static void ConfirmGiInSep (
   }
 }
 
-NLM_EXTERN SeqEntryPtr PubSeqSynchronousQuery (
+
+static void ConfirmTiInSep (
+  BioseqPtr bsp,
+  Pointer userdata
+)
+
+{
+  Int4          ti;
+  PsConfirmPtr  psp;
+  SeqIdPtr      sip;
+  DbtagPtr      dbtag;
+
+  if (bsp == NULL || userdata == NULL) return;
+  psp = (PsConfirmPtr) userdata;
+  for (sip = bsp->id; sip != NULL; sip = sip->next) {
+    if (sip->choice != SEQID_GENERAL) continue;
+    dbtag = (DbtagPtr) sip->data.ptrvalue;
+    if (dbtag == NULL || StringCmp (dbtag->db, "ti") != 0 || dbtag->tag == NULL) continue;
+    if (dbtag->tag->str == NULL && dbtag->tag->id > 0) {
+      ti = dbtag->tag->id;
+      if (psp->gi == 0 || ti == psp->uid) {
+        psp->gi = ti;
+      }
+    }
+  }
+}
+
+
+NLM_EXTERN SeqEntryPtr PubSeqSynchronousQueryEx (
   Int4 uid,
   Int2 retcode,
-  Int4 flags
+  Int4 flags,
+  Boolean is_trace
 )
 
 {
@@ -1055,7 +1153,11 @@ NLM_EXTERN SeqEntryPtr PubSeqSynchronousQuery (
   }
 #endif
 
-  conn = PubSeqFetchOpenConnection (uid, retcode, flags);
+  if (is_trace) {
+    conn = PubSeqFetchTraceOpenConnection (uid, retcode, flags);
+  } else {
+    conn = PubSeqFetchOpenConnection (uid, retcode, flags);
+  }
 
   if (conn == NULL) return NULL;
 
@@ -1084,11 +1186,18 @@ NLM_EXTERN SeqEntryPtr PubSeqSynchronousQuery (
   if (sep != NULL) {
     ps.uid = uid;
     ps.gi = 0;
-    VisitBioseqsInSep (sep, (Pointer) &ps, ConfirmGiInSep);
+    if (is_trace) {
+      VisitBioseqsInSep (sep, (Pointer) &ps, ConfirmTiInSep);
+    } else {
+      VisitBioseqsInSep (sep, (Pointer) &ps, ConfirmGiInSep);
+    }
     if (ps.gi != uid) {
       ErrPostEx (SEV_ERROR, 0, 0,
-                 "PubSeqSynchronousQuery requested gi %ld but received gi %ld",
-                 (long) uid, (long) ps.gi);
+                 "PubSeqSynchronousQuery requested %s %ld but received %s %ld",
+                 is_trace ? "ti" : "gi",
+                 (long) uid,
+                 is_trace ? "ti" : "gi",
+                 (long) ps.gi);
     }
   } else {
     MakeDateTimeStamp (buf);
@@ -1096,13 +1205,36 @@ NLM_EXTERN SeqEntryPtr PubSeqSynchronousQuery (
       StringCpy (buf, "?");
     }
     ErrPostEx (SEV_ERROR, 0, 0,
-               "PubSeqSynchronousQuery failed for gi %ld, date/time %s, URL is %s",
+               "PubSeqSynchronousQuery failed for %s %ld, date/time %s, URL is %s",
+               is_trace ? "ti" : "gi",
                (long) uid, buf, str);
   }
 
   MemFree (str);
 
   return sep;
+}
+
+
+NLM_EXTERN SeqEntryPtr PubSeqSynchronousQuery (
+  Int4 uid,
+  Int2 retcode,
+  Int4 flags
+)
+
+{
+  return PubSeqSynchronousQueryEx (uid, retcode, flags, FALSE);
+}
+
+
+NLM_EXTERN SeqEntryPtr PubSeqSynchronousQueryTI (
+  Int4 uid,
+  Int2 retcode,
+  Int4 flags
+)
+
+{
+  return PubSeqSynchronousQueryEx (uid, retcode, flags, TRUE);
 }
 
 NLM_EXTERN CharPtr GiRevHistSynchronousQuery (
@@ -1565,9 +1697,10 @@ NLM_EXTERN Int4 AccnListCheckQueue (
   return QUERY_CheckQueue (queue);
 }
 
-/* object manager registerable fetch function */
+/* object manager registerable fetch functions */
 
 static CharPtr pubseqfetchproc = "PubSeqBioseqFetch";
+static CharPtr tracefetchproc = "TraceBioseqFetch";
 static CharPtr pubseqseqidtogi = "PubSeqSeqIdForGi";
 static CharPtr pubseqgitoseqid = "PubSeqGiForSeqId";
 
@@ -1693,6 +1826,61 @@ static Int2 LIBCALLBACK PubSeqBioseqFetchFunc (Pointer data)
   return OM_MSG_RET_DONE;
 }
 
+static Int2 LIBCALLBACK TraceBioseqFetchFunc (Pointer data)
+
+{
+  BioseqPtr         bsp;
+  DbtagPtr          dbt;
+  Int4              flags = -1;
+  ObjectIdPtr       oip;
+  OMUserDataPtr     omdp = NULL;
+  OMProcControlPtr  ompcp;
+  ObjMgrProcPtr     ompp;
+  Int2              retcode = 0;
+  SeqEntryPtr       sep = NULL;
+  SeqIdPtr          sip;
+  Int4              uid = 0;
+
+  ompcp = (OMProcControlPtr) data;
+  if (ompcp == NULL) return OM_MSG_RET_ERROR;
+  ompp = ompcp->proc;
+  if (ompp == NULL) return OM_MSG_RET_ERROR;
+  sip = (SeqIdPtr) ompcp->input_data;
+  if (sip == NULL) return OM_MSG_RET_ERROR;
+
+  omdp = ObjMgrGetUserData (ompcp->input_entityID, ompp->procid, OMPROC_FETCH, 0);
+  if (omdp != NULL) {
+    uid = omdp->userdata.intvalue;
+    if (uid == 0) return OM_MSG_RET_ERROR;
+  } else if (sip->choice == SEQID_GENERAL) {
+    dbt = (DbtagPtr) sip->data.ptrvalue;
+    if (dbt == NULL) return OM_MSG_RET_OK;
+    if (StringICmp (dbt->db, "ti") != 0) return OM_MSG_RET_OK;
+    oip = dbt->tag;
+    if (oip == NULL || oip->id == 0) return OM_MSG_RET_OK;
+    uid = oip->id;
+  }
+
+  if (uid == 0) return OM_MSG_RET_OK;
+
+  sep = PubSeqSynchronousQueryTI (uid, retcode, flags);
+
+  if (sep == NULL) {
+    return OM_MSG_RET_OK;
+  }
+  bsp = BioseqFindInSeqEntry (sip, sep);
+
+  ompcp->output_data = (Pointer) bsp;
+  ompcp->output_entityID = ObjMgrGetEntityIDForChoice (sep);
+
+  omdp = ObjMgrAddUserData (ompcp->output_entityID, ompp->procid, OMPROC_FETCH, 0);
+  if (omdp != NULL) {
+    omdp->userdata.intvalue = uid;
+  }
+
+  return OM_MSG_RET_DONE;
+}
+
 static Int2 LIBCALLBACK PubSeqSeqIdForGiFunc (Pointer data)
 
 {
@@ -1776,6 +1964,10 @@ static Int2 LIBCALLBACK PubSeqGiForSeqIdFunc (Pointer data)
 NLM_EXTERN Boolean PubSeqFetchEnable (void)
 
 {
+  ObjMgrProcLoad (OMPROC_FETCH, tracefetchproc, tracefetchproc,
+                  OBJ_SEQID, 0, OBJ_BIOSEQ, 0, NULL,
+                  TraceBioseqFetchFunc, PROC_PRIORITY_DEFAULT);
+
   ObjMgrProcLoad (OMPROC_FETCH, pubseqfetchproc, pubseqfetchproc,
                   OBJ_SEQID, 0, OBJ_BIOSEQ, 0, NULL,
                   PubSeqBioseqFetchFunc, PROC_PRIORITY_DEFAULT);
@@ -1805,6 +1997,10 @@ NLM_EXTERN Boolean PubSeqFetchEnableEx (
 
 {
   if (fetch) {
+    ObjMgrProcLoad (OMPROC_FETCH, tracefetchproc, tracefetchproc,
+                    OBJ_SEQID, 0, OBJ_BIOSEQ, 0, NULL,
+                    TraceBioseqFetchFunc, PROC_PRIORITY_DEFAULT);
+
     ObjMgrProcLoad (OMPROC_FETCH, pubseqfetchproc, pubseqfetchproc,
                     OBJ_SEQID, 0, OBJ_BIOSEQ, 0, NULL,
                     PubSeqBioseqFetchFunc, PROC_PRIORITY_DEFAULT);
@@ -1840,6 +2036,10 @@ NLM_EXTERN void PubSeqFetchDisable (void)
   ObjMgrProcPtr  ompp;
 
   omp = ObjMgrGet ();
+  ompp = ObjMgrProcFind (omp, 0, tracefetchproc, OMPROC_FETCH);
+  if (ompp != NULL) {
+    ObjMgrFreeUserData (0, ompp->procid, OMPROC_FETCH, 0);
+  }
   ompp = ObjMgrProcFind (omp, 0, pubseqfetchproc, OMPROC_FETCH);
   if (ompp != NULL) {
     ObjMgrFreeUserData (0, ompp->procid, OMPROC_FETCH, 0);
@@ -2439,6 +2639,7 @@ static CharPtr inferencePrefix [] = {
   "nucleotide motif",
   "protein motif",
   "ab initio prediction",
+  "alignment",
   NULL
 };
 

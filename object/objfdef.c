@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.32 $
+* $Revision: 6.36 $
 *
 * File Description:  Object manager for feature definitions
 *
@@ -613,8 +613,8 @@ static CharPtr featDefSetMemStr = "FeatDefGroupSet ::= {\n" \
 "{ typelabel \"mRNA\" , menulabel \"Mature Messenger RNA\" , featdef-key 6 , seqfeat-key 5 , entrygroup 2 , displaygroup 2 , molgroup na } ,\n" \
 "{ typelabel \"tRNA\" , menulabel \"Transfer RNA\" , featdef-key 7 , seqfeat-key 5 , entrygroup 3 , displaygroup 3 , molgroup na } ,\n" \
 "{ typelabel \"rRNA\" , menulabel \"Ribosomal RNA\" , featdef-key 8 , seqfeat-key 5 , entrygroup 3 , displaygroup 3 , molgroup na } ,\n" \
-"{ typelabel \"snRNA\" , menulabel \"Small Nuclear RNA\" , featdef-key 9 , seqfeat-key 5 , entrygroup 3 , displaygroup 3 , molgroup na } ,\n" \
-"{ typelabel \"scRNA\" , menulabel \"Small Cytoplasmic RNA\" , featdef-key 10 , seqfeat-key 5 , entrygroup 3 , displaygroup 3 , molgroup na } ,\n" \
+"{ typelabel \"snRNA\" , menulabel \"Small Nuclear RNA\" , featdef-key 9 , seqfeat-key 5 , entrygroup 0 , displaygroup 3 , molgroup na } ,\n" \
+"{ typelabel \"scRNA\" , menulabel \"Small Cytoplasmic RNA\" , featdef-key 10 , seqfeat-key 5 , entrygroup 0 , displaygroup 3 , molgroup na } ,\n" \
 "{ typelabel \"RNA\" , menulabel \"Other Types of RNA\" , featdef-key 11 , seqfeat-key 5 , entrygroup 3 , displaygroup 3 , molgroup na } ,\n" \
 "{ typelabel \"Cit\" , menulabel \"Bibliographic Citations\" , featdef-key 12 , seqfeat-key 6 , entrygroup 4 , displaygroup 4 , molgroup both } ,\n" \
 "{ typelabel \"Xref\" , menulabel \"Reference to Another Sequence\" , featdef-key 13 , seqfeat-key 7 , entrygroup 4 , displaygroup 4 , molgroup both } ,\n" \
@@ -694,10 +694,12 @@ static CharPtr featDefSetMemStr = "FeatDefGroupSet ::= {\n" \
 "{ typelabel \"mat_peptide\" , menulabel \"Mature Peptide\" , featdef-key 87 , seqfeat-key 4 , entrygroup 1 , displaygroup 1 , molgroup aa } ,\n" \
 "{ typelabel \"sig_peptide\" , menulabel \"Signal Peptide\" , featdef-key 88 , seqfeat-key 4 , entrygroup 1 , displaygroup 1 , molgroup aa } ,\n" \
 "{ typelabel \"transit_peptide\" , menulabel \"Transit Peptide\" , featdef-key 89 , seqfeat-key 4 , entrygroup 1 , displaygroup 1 , molgroup aa } ,\n" \
-"{ typelabel \"snoRNA\" , menulabel \"Small Nucleolar RNA\" , featdef-key 90 , seqfeat-key 5 , entrygroup 3 , displaygroup 3 , molgroup na } ,\n" \
+"{ typelabel \"snoRNA\" , menulabel \"Small Nucleolar RNA\" , featdef-key 90 , seqfeat-key 5 , entrygroup 0 , displaygroup 3 , molgroup na } ,\n" \
 "{ typelabel \"gap\" , menulabel \"Gap\" , featdef-key 91 , seqfeat-key 8 , entrygroup 0 , displaygroup 4 , molgroup na } ,\n" \
 "{ typelabel \"operon\" , menulabel \"Operon\" , featdef-key 92 , seqfeat-key 8 , entrygroup 1 , displaygroup 1 , molgroup na } ,\n" \
-"{ typelabel \"oriT\" , menulabel \"Origin of Transcription\" , featdef-key 93 , seqfeat-key 8 , entrygroup 5 , displaygroup 5 , molgroup na  } } };\n";
+"{ typelabel \"oriT\" , menulabel \"Origin of Transcription\" , featdef-key 93 , seqfeat-key 8 , entrygroup 5 , displaygroup 5 , molgroup na } ,\n" \
+"{ typelabel \"ncRNA\" , menulabel \"Non-coding RNA\" , featdef-key 94 , seqfeat-key 5 , entrygroup 3 , displaygroup 3 , molgroup na } ,\n" \
+"{ typelabel \"tmRNA\" , menulabel \"Transfer-messenger RNA\" , featdef-key 95 , seqfeat-key 5 , entrygroup 3 , displaygroup 3 , molgroup na  } } };\n";
 #endif
 
 /*****************************************************************************
@@ -930,8 +932,8 @@ NLM_EXTERN Uint1 LIBCALL FindFeatDefType(SeqFeatPtr sfp)
 				    if (rrp->ext.choice == 1) {
 				      name = (CharPtr) rrp->ext.value.ptrvalue;
 				      if (StringICmp (name, "misc_RNA") == 0) return FEATDEF_otherRNA;
-				      if (StringICmp (name, "ncRNA") == 0) return FEATDEF_otherRNA; /* FEATDEF_ncRNA */
-				      if (StringICmp (name, "tmRNA") == 0) return FEATDEF_otherRNA; /* FEATDEF_tmRNA */
+				      if (StringICmp (name, "ncRNA") == 0) return FEATDEF_ncRNA;
+				      if (StringICmp (name, "tmRNA") == 0) return FEATDEF_tmRNA;
 				    }
 					return FEATDEF_otherRNA;
 			}
@@ -1132,7 +1134,15 @@ protref:    if (prp->name != NULL)
 					}
 					break;
 				case 1:
-					label = (CharPtr)(trrp->ext.value.ptrvalue);
+          label = (CharPtr)(trrp->ext.value.ptrvalue);
+          if (StringCmp (label, "ncRNA") == 0 || StringCmp (label, "tmRNA") == 0 || StringCmp (label, "misc_RNA") == 0) {
+            for (gbp = sfp->qual; gbp != NULL; gbp = gbp->next) {
+              if (StringICmp ("product", gbp->qual) == 0) {
+						  	label = gbp->val;
+                break;
+              }
+            }
+          }
 					if (label != NULL) {
 					  if (StringStr(label, typelabel) != NULL)
 					  	prefix = NULL;
@@ -1415,7 +1425,6 @@ NLM_EXTERN Int2 LIBCALL FeatDefLabel (SeqFeatPtr sfp, CharPtr buf, Int2 buflen, 
 {
 	Int2 len, i, diff;
 	CharPtr curr, typelabel, tmp;
-	Uint1 extras = 0;
 	Char tbuf[40];
 	ImpFeatPtr ifp;
 	FeatDefPtr fdp;

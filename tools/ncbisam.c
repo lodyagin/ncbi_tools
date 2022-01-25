@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: ncbisam.c,v 6.33 2006/06/21 13:55:06 camacho Exp $";
+static char const rcsid[] = "$Id: ncbisam.c,v 6.34 2007/11/06 19:20:06 coulouri Exp $";
 
-/* $Id: ncbisam.c,v 6.33 2006/06/21 13:55:06 camacho Exp $
+/* $Id: ncbisam.c,v 6.34 2007/11/06 19:20:06 coulouri Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -31,12 +31,15 @@ static char const rcsid[] = "$Id: ncbisam.c,v 6.33 2006/06/21 13:55:06 camacho E
 *
 * Initial Version Creation Date: 02/24/1997
 *
-* $Revision: 6.33 $
+* $Revision: 6.34 $
 *
 * File Description:
 *         Main file for ISAM library
 *
 * $Log: ncbisam.c,v $
+* Revision 6.34  2007/11/06 19:20:06  coulouri
+* fix memory allocation; resolves blast-rt#15351152
+*
 * Revision 6.33  2006/06/21 13:55:06  camacho
 * Fixed from Ilya Dondoshansky in s_ISAMBufferReadLine
 * Change FILEREAD_BUFFER_SIZE from 1MB to 64k
@@ -2219,7 +2222,7 @@ ISAMErrorCode SISAMFindAllData(ISAMObjectPtr object,
         if (Diff == -1) {
             if(count >= allocated) {
                 allocated += ID_DATA_CHUNK;
-                ids = Realloc(ids, allocated);
+                ids = Realloc(ids, allocated * sizeof(Int4));
             }
             ids[count] = ISAMGetDataNumber(Ptr);
             count++;

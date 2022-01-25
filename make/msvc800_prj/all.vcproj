@@ -3,8 +3,7 @@
 	ProjectType="Visual C++"
 	Version="8.00"
 	Name="all"
-	ProjectGUID="{27665816-D337-4E8D-AA41-AEB7CA3C7FF1}"
-	RootNamespace="all"
+	ProjectGUID="{347672C9-B4CA-4B21-8281-51955A9C50AC}"
 	Keyword="MakeFileProj"
 	>
 	<Platforms>

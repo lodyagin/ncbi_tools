@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: seedtop.c,v 6.18 2006/08/04 20:40:15 papadopo Exp $";
+static char const rcsid[] = "$Id: seedtop.c,v 6.19 2008/01/09 19:17:49 merezhuk Exp $";
 
-/* $Id: seedtop.c,v 6.18 2006/08/04 20:40:15 papadopo Exp $ */
+/* $Id: seedtop.c,v 6.19 2008/01/09 19:17:49 merezhuk Exp $ */
 /**************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -35,9 +35,12 @@ Maintainer: Alejandro Schaffer
  
 Contents: main routine for pseed3, stand-alone counterpart to PHI-BLAST.
  
-$Revision: 6.18 $
+$Revision: 6.19 $
 
 $Log: seedtop.c,v $
+Revision 6.19  2008/01/09 19:17:49  merezhuk
+-K option, extra hitArraySz parameter to get_a_pat call; print error if array size is not enough
+
 Revision 6.18  2006/08/04 20:40:15  papadopo
 allow filtering of query sequences
 
@@ -103,7 +106,7 @@ extern "C" {
 #endif
 
 
-#define NUMARG 20
+#define NUMARG 21
 
 static Args myargs [NUMARG] = {
   { "Database", 
@@ -145,7 +148,10 @@ static Args myargs [NUMARG] = {
   { "Filter query sequence with SEG",
 	"F", NULL, NULL, FALSE, 'F', ARG_BOOLEAN, 0.0, 0, NULL},
   { "Force searching for patterns even if they are too likely",
-	"F", NULL, NULL, FALSE, 'f', ARG_BOOLEAN, 0.0, 0, NULL}     
+    "F", NULL, NULL, FALSE, 'f', ARG_BOOLEAN, 0.0, 0, NULL},
+  { "internal hit buffer size multiplier (default: 2 /query_length/ )", 
+	"2", NULL, NULL, FALSE, 'K', ARG_INT, 0.0, 0, NULL},
+     
 };
 
 
@@ -200,6 +206,7 @@ Int2 Main(void)
         BLAST_OptionsBlkPtr options; /*used as placeholder for fillCandLambda*/
         ValNodePtr error_returns=NULL; /*store error messages*/
         ValNodePtr info_vnp = NULL;    /* store information messages */
+	Int4  hitArraySz = 0;
 
         seedSearch = (seedSearchItems *) ckalloc(sizeof(seedSearchItems));
         seedResults = (seedResultItems *) ckalloc(sizeof(seedResultItems));
@@ -343,9 +350,9 @@ Int2 Main(void)
 	  num_seq = readdb_get_num_entries(rdpt);
 	  dbLength = (Nlm_FloatHi) readdb_get_dblen(rdpt);              
         }
-
-	occurArray = (Int4 *) ckalloc(sizeof(Int4)*queryLength*2);
-	hitArray = (Int4 *) MemNew(sizeof(Int4)*queryLength*2);
+	hitArraySz = (Int4)(queryLength* myargs[20].intvalue);
+	occurArray = (Int4 *) ckalloc(sizeof(Int4)*hitArraySz);
+	hitArray = (Int4 *) MemNew(sizeof(Int4)*hitArraySz);
 
 	/* perform the search one pattern at a time */
 	while (pattern = get_a_pat(patfp, &pname, occurArray, hitArray, 
@@ -353,7 +360,7 @@ Int2 Main(void)
 				   program_flag, unfilter_query, query, 
                                    queryLength, is_dna,
                                    patternSearch, seedSearch, TRUE, 
-                                   &error_returns, &info_vnp)) {
+                                   &error_returns, &info_vnp,hitArraySz)) {
 
           PGPOutTextMessages(info_vnp, outfp);
           info_vnp = ValNodeFreeData(info_vnp);
@@ -443,18 +450,25 @@ Int2 Main(void)
             }
           }
 	}
+	if( error_returns )   BlastErrorPrint(error_returns);	
 
         BLAST_ScoreBlkDestruct(sbp);
         GapAlignBlkDelete(gap_align);
         BLASTOptionDelete(options);
 	rdpt = readdb_destruct(rdpt);
+	/* */
         MemFree(occurArray);
+	
         MemFree(hitArray);
+	
         MemFree(query);
         MemFree(unfilter_query);
+	
         MemFree(seedSearch);
-        MemFree(seedResults);
+	
+        MemFree(seedResults);	
         MemFree(patternSearch);
+	
         FileClose(patfp);
         FileClose(infp);
         FreeArgs(NUMARG, myargs);

@@ -1,4 +1,4 @@
-/*  $Id: ncbi_service.c,v 6.91 2007/04/20 01:55:30 kazimird Exp $
+/*  $Id: ncbi_service.c,v 6.94 2007/10/17 15:25:43 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -38,6 +38,8 @@
 #include <ctype.h>
 #include <stdlib.h>
 #include <time.h>
+
+#define NCBI_USE_ERRCODE_X   Connect_Service
 
 #define CONN_SERVICE_NAME  DEF_CONN_REG_SECTION "_" REG_CONN_SERVICE_NAME
 
@@ -244,7 +246,7 @@ static SERV_ITER s_Open(const char*          service,
          !(do_dispd= !s_IsMapperConfigured(service, REG_CONN_DISPD_DISABLE)) ||
          !(op = SERV_DISPD_Open(iter, net_info, info, host_info)))) {
         if (!do_lbsmd  &&  !do_dispd) {
-            CORE_LOGF(eLOG_Warning,
+            CORE_LOGF_X(1, eLOG_Warning,
                       ("[SERV]  No service mappers available for `%s'",
                        service));
         }
@@ -571,11 +573,11 @@ static void s_SetDefaultReferer(SERV_ITER iter, SConnNetInfo* net_info)
         const char* args = net_info->args;
         char        port[8];
 
-        if (net_info->port && net_info->port != DEF_CONN_PORT)
+        if (net_info->port  &&  net_info->port != DEF_CONN_PORT)
             sprintf(port, ":%hu", net_info->port);
         else
             *port = '\0';
-        if (!(referer = (char*) malloc(9 + strlen(host) + strlen(port)
+        if (!(referer = (char*) malloc(7 + 1 + 1 + strlen(host) + strlen(port)
                                        + strlen(path) + strlen(args)))) {
             return;
         }
@@ -584,6 +586,7 @@ static void s_SetDefaultReferer(SERV_ITER iter, SConnNetInfo* net_info)
             strcat(strcat(referer, "?"), args);
     } else if ((str = strdup(iter->op->name)) != 0) {
         const char* host = net_info->client_host;
+        const char* args = net_info->args;
         const char* name = iter->name;
 
         if (!*net_info->client_host  &&
@@ -592,12 +595,18 @@ static void s_SetDefaultReferer(SERV_ITER iter, SConnNetInfo* net_info)
             SOCK_gethostname(net_info->client_host,
                              sizeof(net_info->client_host));
         }
-        if (!(referer = (char*) malloc(3 + 1 + 9 + 1 + 2*strlen(strlwr(str)) +
-                                       strlen(host) + strlen(name)))) {
+        if (!(referer = (char*) malloc(3 + 1 + 1 + 1 + 2*strlen(strlwr(str)) +
+                                       strlen(host) + (args[0]
+                                                       ? strlen(args)
+                                                       : 8 + strlen(name))))) {
             return;
         }
-        strcat(strcat(strcat(strcpy(referer, str), "://"), host), "/");
-        strcat(strcat(strcat(referer, str), "?service="), name);
+        strcat(strcat(strcat(strcat(strcpy
+                                    (referer, str), "://"), host), "/"), str);
+        if (args[0])
+            strcat(strcat(referer, "?"),         args);
+        else
+            strcat(strcat(referer, "?service="), name);
         free(str);
     }
     assert(!net_info->http_referer);

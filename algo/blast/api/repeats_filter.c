@@ -1,5 +1,5 @@
 #ifndef SKIP_DOXYGEN_PROCESSING
-static char const rcsid[] = "$Id: repeats_filter.c,v 1.18 2007/03/12 16:13:36 madden Exp $";
+static char const rcsid[] = "$Id: repeats_filter.c,v 1.19 2007/12/19 21:56:48 camacho Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 /*
@@ -150,10 +150,9 @@ s_FillMaskLocFromBlastHSPResults(SeqLoc* query_seqloc, BlastHSPResults* results,
             }
         }
         /* Make the intervals unique */
-        ordered_loc_list = BlastSeqLocCombine(loc_list, REPEAT_MASK_LINK_VALUE);
-
-        /* Free the list of locations that's no longer needed. */
-        loc_list = BlastSeqLocFree(loc_list);
+        BlastSeqLocCombine(&loc_list, REPEAT_MASK_LINK_VALUE);
+        ordered_loc_list = loc_list;
+        loc_list = NULL;
 
         mask->seqloc_array[query_index*kNumContexts] = ordered_loc_list;
     }

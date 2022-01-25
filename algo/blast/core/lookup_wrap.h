@@ -1,4 +1,4 @@
-/* $Id: lookup_wrap.h,v 1.16 2006/11/21 16:50:02 papadopo Exp $
+/* $Id: lookup_wrap.h,v 1.18 2008/01/31 23:55:42 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -62,13 +62,16 @@ typedef struct LookupTableWrap {
  * @param rps_info Structure containing RPS blast setup information [in]
  * @param error_msg message with warning or errors [in|out]
  */
+NCBI_XBLAST_EXPORT
 Int2 LookupTableWrapInit(BLAST_SequenceBlk* query, 
         const LookupTableOptions* lookup_options,	
+        const QuerySetUpOptions* query_options,
         BlastSeqLoc* lookup_segments, BlastScoreBlk* sbp, 
         LookupTableWrap** lookup_wrap_ptr, const BlastRPSInfo *rps_info,
         Blast_Message* *error_msg);
 
 /** Deallocate memory for the lookup table */
+NCBI_XBLAST_EXPORT
 LookupTableWrap* LookupTableWrapFree(LookupTableWrap* lookup);
 
 /** Default size of offset arrays filled in a single ScanSubject call. */
@@ -77,6 +80,7 @@ LookupTableWrap* LookupTableWrapFree(LookupTableWrap* lookup);
 /** Determine the size of the offsets arrays to be filled by
  * the ScanSubject function.
  */
+NCBI_XBLAST_EXPORT
 Int4 GetOffsetArraySize(LookupTableWrap* lookup);
 
 #ifdef __cplusplus

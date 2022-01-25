@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/30/95
 *
-* $Revision: 6.141 $
+* $Revision: 6.142 $
 *
 * File Description: 
 *
@@ -84,7 +84,7 @@
 extern ForM smartBioseqViewForm;
 ForM smartBioseqViewForm = NULL;
 
-#define MAX_VIEWABLE_TARGET_SEQUENCES 60000
+#define MAX_VIEWABLE_TARGET_SEQUENCES 32768
 
 static void LookForGenomeTag (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent)
 

@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/12/93
 *
-* $Revision: 6.20 $
+* $Revision: 6.21 $
 *
 * File Description:  Converts fielded text into final report in a document
 *
@@ -41,6 +41,10 @@
 * 01-25-94 DGG + JK    Fixed MapDocPoint bug
 *
 * $Log: document.c,v $
+* Revision 6.21  2008/02/13 18:52:08  bollin
+* Added MapDocPointEx, which allows you to prefer the first matching column to
+* the last matching column.
+*
 * Revision 6.20  2006/09/27 18:30:00  kans
 * support for Int4 scroll bars for switching between text and doc views in Sequin (CB)
 *
@@ -3433,7 +3437,7 @@ void GetColParams (DoC d, Int2 item, Int2 col, Int2Ptr pixPos,
 *
 *****************************************************************************/
 
-extern void MapDocPoint (DoC d, PoinT pt, Int2Ptr item, Int2Ptr row, Int2Ptr col, RectPtr rct)
+extern void MapDocPointEx (DoC d, PoinT pt, Int2Ptr item, Int2Ptr row, Int2Ptr col, RectPtr rct, Boolean prefer_first_match_col)
 
 {
   Int2     cl;
@@ -3441,7 +3445,7 @@ extern void MapDocPoint (DoC d, PoinT pt, Int2Ptr item, Int2Ptr row, Int2Ptr col
   DocData  ddata;
   Int2     firstItem;
   Int2     firstLine;
-  Boolean  goOn;
+  Boolean  goOn, found;
   Int2     i;
   Int2     itemNum;
   ItemPtr  itemPtr;
@@ -3501,7 +3505,8 @@ extern void MapDocPoint (DoC d, PoinT pt, Int2Ptr item, Int2Ptr row, Int2Ptr col
                   rw = firstLine + ((pt.y - q.top - leadHeight) / lineHeight) + 1;
                 }
                 if (numCols > 0 && colFmt != NULL) {
-                  for (i = 0; i < numCols; i++) {
+                  found = FALSE;
+                  for (i = 0; i < numCols && !found; i++) {
                     if (pt.x >= colFmt [i].position &&
                         pt.x < colFmt [i].position + colFmt [i].pixWidth) {
                       cl = i + 1;
@@ -3510,6 +3515,9 @@ extern void MapDocPoint (DoC d, PoinT pt, Int2Ptr item, Int2Ptr row, Int2Ptr col
                         rc.top = q.top + leadHeight + lineHeight * (rw - firstLine - 1);
                         rc.right = rc.left + colFmt [i].pixWidth;
                         rc.bottom = rc.top + lineHeight;
+                      }
+                      if (prefer_first_match_col) {
+                        found = TRUE;
                       }
                     }
                   }
@@ -3540,6 +3548,11 @@ extern void MapDocPoint (DoC d, PoinT pt, Int2Ptr item, Int2Ptr row, Int2Ptr col
   if (rct != NULL) {
     *rct = rc;
   }
+}
+
+extern void MapDocPoint (DoC d, PoinT pt, Int2Ptr item, Int2Ptr row, Int2Ptr col, RectPtr rct)
+{
+  MapDocPointEx (d, pt, item, row, col, rct, FALSE);
 }
 
 /*****************************************************************************

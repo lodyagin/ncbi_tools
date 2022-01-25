@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: toasn3.c,v 6.95 2007/05/07 13:30:54 kans Exp $";
+static char const rcsid[] = "$Id: toasn3.c,v 6.99 2007/10/10 16:10:17 bollin Exp $";
 
 /*****************************************************************************
 *
@@ -859,51 +859,6 @@ ValNodePtr GetMultBiosource(SeqEntryPtr sep)
 /*****************************************************************************
 * RemoveEmptyTitleAndPubGenAsOnlyPub removes pub { pub { gen { } } empty pubs
 *****************************************************************************/
-
-/* from utilpub.c */
-static Boolean empty_citgen(CitGenPtr  cit)
-{
-	if (cit == NULL)
-		return TRUE;
-	if (cit->cit)
-		return FALSE;
-	if (cit->authors)
-		return FALSE;
-	if (cit->muid > 0)
-		return FALSE;
-	if (cit->journal)
-		return FALSE;
-	if (cit->volume)
-		return FALSE;
-	if (cit->issue)
-		return FALSE;
-	if (cit->pages)
-		return FALSE;
-	if (cit->date)
-		return FALSE;
-	if (cit->serial_number > 0)
-		return FALSE;
-	if (cit->title)
-		return FALSE;
-	if (cit->pmid > 0)
-		return FALSE;
-	return TRUE;
-}
-
-static Boolean PubIsEffectivelyEmpty (PubdescPtr pdp)
-
-{
-  ValNodePtr       vnp;
-
-  if (pdp == NULL) return FALSE;
-  vnp = pdp->pub;
-  if (vnp != NULL && vnp->next == NULL && vnp->choice == PUB_Gen) {
-    if (empty_citgen ((CitGenPtr) vnp->data.ptrvalue)) {
-      return TRUE;
-    }
-  }
-  return FALSE;
-}
 
 static void RemoveEmptyTitleAndPubGenAsOnlyPub (SeqEntryPtr sep)
 
@@ -2714,32 +2669,6 @@ static BioSourcePtr GetTopBioSourceFromSep (SeqEntryPtr sep)
   return biop;
 }
 
-static Boolean get_src (GatherContextPtr gcp)
-{
-	ValNodePtr	vnp, new;
-	ValNodePtr	PNTR vnpp;
-	
-	vnpp = gcp->userdata;
-	switch (gcp->thistype)
-	{
-		case OBJ_SEQDESC:
-			vnp = (ValNodePtr) (gcp->thisitem);
-			if (vnp->choice == Seq_descr_source) {
-				if (vnp->data.ptrvalue != NULL) {
-					new = SeqDescrNew(NULL);
-					new = MemCopy(new, vnp, sizeof(ValNode));
-					new->next = NULL;
-					*vnpp = new;
-					return FALSE;  /*only top level BioSource will be returned*/
-				}
-			} 
-			break;
-		default:
-			break;
-	}
-	return TRUE;
-}
-
 static void FixPIDDbtag(ValNodePtr PNTR vnpp)
 {
 	ValNodePtr 		vnp;
@@ -3512,36 +3441,10 @@ void EntryChangeGBSource (SeqEntryPtr sep)
 	BioSourcePtr 	biosp;
 	CharPtr 		source=NULL, s, div = NULL;
 	ValNodePtr 		v;
-	/*
-	GatherScope 	gs;
-	Uint2			entityID;	   
-	Uint1 			focus;
-	ValNodePtr 		vnp = NULL;
-	*/
 	Int2			len=0;
 	
 	if (sep == NULL)
 		return;
-
-	/*
-	entityID = ObjMgrGetEntityIDForChoice(sep);
-  	MemSet ((Pointer) (&gs), 0, sizeof (GatherScope));
-	focus = FocusSeqEntry(sep, &gs);
-	MemSet ((Pointer) (gs.ignore), (int)(TRUE), (size_t) (OBJ_MAX * sizeof(Boolean)));
-	gs.ignore[OBJ_SEQDESC] = FALSE;
-	
-	GatherSeqEntry (sep, &vnp, get_src, &gs);
-
-        if(gs.target != NULL)
-            SeqLocFree(gs.target);
-
-	if (vnp == NULL) {
-		ErrPostStr(SEV_WARNING, ERR_SOURCE_NotFound, "BioSource not found");
-		return;
-	}
-	biosp = (BioSourcePtr) vnp->data.ptrvalue;
-	vnp=MemFree(vnp);
-	*/
 
 	biosp = GetTopBioSourceFromSep (sep);
 	if (biosp != NULL) {
@@ -5235,66 +5138,6 @@ void StripTitleFromProtsInNucProts (SeqEntryPtr sep)
   SeqEntryExplore (sep, NULL, StripTitleFromProteinProducts);
 }
 
-static void CleanOrgModList (OrgModPtr PNTR ompp)
-
-{
-  OrgModPtr       next;
-  OrgModPtr       omp;
-  OrgModPtr PNTR  prev;
-
-  if (ompp == NULL) return;
-  prev = ompp;
-  omp = *ompp;
-  while (omp != NULL) {
-    next = omp->next;
-    CleanVisString (&(omp->subname));
-    CleanVisString (&(omp->attrib));
-    if (TASNStringHasNoText (omp->subname)) {
-      *prev = omp->next;
-      omp->next = NULL;
-      OrgModFree (omp);
-    } else {
-      prev = &(omp->next);
-    }
-    omp = next;
-  }
-}
-
-static void CleanSubSourceList (SubSourcePtr PNTR sspp)
-
-{
-  SubSourcePtr       next;
-  SubSourcePtr PNTR  prev;
-  SubSourcePtr       ssp;
-
-  if (sspp == NULL) return;
-  prev = sspp;
-  ssp = *sspp;
-  while (ssp != NULL) {
-    next = ssp->next;
-    if (ssp->subtype != SUBSRC_germline &&
-        ssp->subtype != SUBSRC_rearranged &&
-        ssp->subtype != SUBSRC_transgenic &&
-        ssp->subtype != SUBSRC_environmental_sample &&
-        ssp->subtype != SUBSRC_metagenomic) {
-      CleanVisString (&(ssp->name));
-    }
-    CleanVisString (&(ssp->attrib));
-    if (TASNStringHasNoText (ssp->name) &&
-        ssp->subtype != SUBSRC_germline &&
-        ssp->subtype != SUBSRC_rearranged &&
-        ssp->subtype != SUBSRC_transgenic &&
-        ssp->subtype != SUBSRC_environmental_sample &&
-        ssp->subtype != SUBSRC_metagenomic) {
-      *prev = ssp->next;
-      ssp->next = NULL;
-      SubSourceFree (ssp);
-    } else {
-      prev = &(ssp->next);
-    }
-    ssp = next;
-  }
-}
 
 static void CleanFeatStrings (SeqFeatPtr sfp)
 
@@ -5398,7 +5241,7 @@ static void CleanFeatStrings (SeqFeatPtr sfp)
     case SEQFEAT_BIOSRC :
       biop = (BioSourcePtr) sfp->data.value.ptrvalue;
       orp = biop->org;
-      CleanSubSourceList (&(biop->subtype));
+      CleanSubSourceList (&(biop->subtype), biop->genome);
       break;
     default :
       break;
@@ -5552,7 +5395,7 @@ static void CleanDescStrings (ValNodePtr sdp)
     case Seq_descr_source :
       biop = (BioSourcePtr) sdp->data.ptrvalue;
       orp = biop->org;
-      CleanSubSourceList (&(biop->subtype));
+      CleanSubSourceList (&(biop->subtype), biop->genome);
       break;
     case Seq_descr_molinfo :
       break;

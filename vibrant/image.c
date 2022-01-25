@@ -27,7 +27,7 @@
 *
 * Author:  Alex Smirnov,  Denis Vakatov
 *
-* $Revision: 6.8 $
+* $Revision: 6.9 $
 *
 * File Description:
 *       Image(pixmap) processing.
@@ -36,80 +36,7 @@
 *
 * Modifications:  
 * --------------------------------------------------------------------------
-* $Log: image.c,v $
-* Revision 6.8  2004/04/01 13:43:08  lavr
-* Spell "occurred", "occurrence", and "occurring"
 *
-* Revision 6.7  2003/11/17 17:03:29  kans
-* changed C++ style comments to C comments
-*
-* Revision 6.6  2002/03/28 13:35:48  kans
-* only include MoreCarbonAccessors.h if not OS_UNIX_DARWIN
-*
-* Revision 6.5  2001/04/05 03:24:12  juran
-* Carbon fixes.
-*
-* Revision 6.4  1999/11/22 14:46:45  thiessen
-* moved _OPENGL code blocks to only vibrant and ncbicn3d libraries
-*
-* Revision 6.3  1999/06/22 15:14:50  lewisg
-* fix image library so that works on linux with > 8 bits
-*
-* Revision 6.2  1998/01/05 20:00:13  vakatov
-* [WIN_X11] Nlm_AllocateImage() -- better diagnostics for mismatching visual
-*
-* Revision 6.1  1997/11/26 21:29:54  vakatov
-* Fixed errors and warnings issued by C and C++ (GNU and Sun) compilers
-*
-* Revision 6.0  1997/08/25 18:55:46  madden
-* Revision changed to 6.0
-*
-* Revision 5.7  1997/06/12 20:52:03  vakatov
-* Lock/UnlockPixMapImage -- check for the NULL image
-*
-* Revision 5.6  1997/06/09 18:55:35  vakatov
-* [WIN_X]  Nlm_ImageShow():  by default, use standard RGB colormap for
-* the image drawing.  +code cleaning.
-*
-* Revision 5.5  1997/05/28 21:15:29  vakatov
-* Nlm_LoadImageGIF():  "pack" the image colors;; fixed Uint1-overflow bug
-*
-* Revision 5.4  1996/11/22 19:46:07  vakatov
-* Implemented function Nlm_LoadImageGIF();
-* added Nlm_ImageGetColorOffset() and Nlm_ImageGetColorMax();
-* slightly modified Nlm_ImageGetBlack()
-*
- * Revision 5.3  1996/07/23  21:57:32  vakatov
- * Do not reinstall colormap if this is identical to the previous one --
- * it eliminates a redundant screen blinking when redrawing the 3D-Viewer
- * [WIN_MOTIF]  Use 32th(instead of 0th) color for background
- *
- * Revision 5.2  1996/06/17  21:57:17  kans
- * use 255 instead of 254 for Nlm_ImageShow on Mac
- *
- * Revision 5.1  1996/06/14  14:30:42  vakatov
- * [WIN_MOTIF] Nlm_AllocateImage() function -- removed redundant color saving
- * [WIN_MOTIF] Nlm_ImageGetBlack() now always return zero
- *
- * Revision 5.0  1996/05/28  13:45:08  ostell
- * Set to revision 5.0
- *
- * Revision 1.8  1996/05/07  18:31:23  vakatov
- * [WIN_MSWIN]  Nlm_AllocateImage() now adjusts the image width
- * (performs sizeof(LONG) alignment),thus avoiding the image picture distortion
- *
- * Revision 1.7  1996/04/23  23:26:24  kans
- * added Mac-specific code to Nlm_SaveImageGIF
- *
- * Revision 1.6  1996/04/23  15:44:48  vakatov
- * Nlm_SaveImageGIF()/X11 accelerated
- *
- * Revision 1.5  1996/04/17  21:40:34  vakatov
- * Implemented "Nlm_SaveImageGIF()" function for MS-Windows and
- * X11 platforms -- "I can save to GIF-file whatever I can see on
- * my monitor".
- * VC log inserted.
- *
 * ==========================================================================
 */
 
@@ -358,6 +285,7 @@ Nlm_Boolean Nlm_AllocateImage ( Nlm_Image image, Nlm_Uint2Ptr width,
   }
 #endif
 #ifdef WIN_MAC
+#ifndef WIN_MAC_QUARTZ
   if ( im->pixelMap == NULL ) {
     im->pixelMap = (PixMap*)MemNew(sizeof(PixMap));
   }
@@ -412,6 +340,7 @@ Nlm_Boolean Nlm_AllocateImage ( Nlm_Image image, Nlm_Uint2Ptr width,
     }
   }
   if ( cTable != NULL ) DisposeCTable(cTable);
+#endif
 #endif
 
   for ( i=saveColors; i<256; i++ )
@@ -779,12 +708,14 @@ void Nlm_DeleteImage(Nlm_Image image)
     }
 #endif
 #ifdef WIN_MAC
+#ifndef WIN_MAC_QUARTZ
   if ( im->pixelMap )
     {
       if ( im->pixelMap->pmTable )
         DisposeCTable( im->pixelMap->pmTable );
       MemFree( im->pixelMap );
     }
+#endif
 #endif
 
   MemFree( im );
@@ -1107,6 +1038,7 @@ Nlm_Boolean Nlm_ImageShow(Nlm_Image image, Nlm_PoinT p)
 #endif
 
 #ifdef WIN_MAC
+#ifndef WIN_MAC_QUARTZ
   if ( Nlm_LockPixMapImage(image) == NULL ) return FALSE;
   if ( im->imageColorVer != im->imageColorVerOld ){
     if ( im->curWin != NULL ){
@@ -1143,6 +1075,7 @@ Nlm_Boolean Nlm_ImageShow(Nlm_Image image, Nlm_PoinT p)
   BackColor(blackColor);
   Nlm_UnlockPixMapImage(image);
 #endif
+#endif
 
   return TRUE;
 }
@@ -1162,4 +1095,3 @@ Nlm_Uint1 Nlm_ImageGetColorMax(Nlm_Image image)
 {
   return (Nlm_Uint1)(((Nlm_PImagePtr)image)->totalColors - 1);
 }
-

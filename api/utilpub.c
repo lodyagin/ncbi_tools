@@ -1442,7 +1442,7 @@ NLM_EXTERN void cleanup_pub(ValNodePtr pub)
 	}
 }
 
-static Boolean empty_citgen(CitGenPtr  cit)
+NLM_EXTERN Boolean empty_citgen(CitGenPtr  cit)
 {
 	if (cit == NULL)
 		return TRUE;

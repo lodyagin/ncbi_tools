@@ -1,4 +1,4 @@
-/*  $Id: ncbi_local.c,v 1.13 2007/04/20 01:55:30 kazimird Exp $
+/*  $Id: ncbi_local.c,v 1.14 2008/02/13 20:25:42 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -108,7 +108,7 @@ static int/*bool*/ s_LoadSingleService(const char* name, SERV_ITER iter)
             info = 0;
         }
         sprintf(buf, "%s_" REG_CONN_LOCAL_SERVER "_%d", name, n);
-        if (!(c = getenv(strupr(buf)))) {
+        if (!(c = getenv(buf))  &&  !(c = getenv(strupr(buf)))) {
             char*  b = buf + strlen(name);
             size_t len;
             *b++ = '\0';

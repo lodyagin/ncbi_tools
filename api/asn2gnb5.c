@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.98 $
+* $Revision: 1.115 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -104,17 +104,29 @@ NLM_EXTERN Char ec_ambig [MAX_WWWBUF];
 NLM_EXTERN Char link_tax [MAX_WWWBUF];
 #define DEF_LINK_TAX "http://www.ncbi.nlm.nih.gov/Taxonomy/Browser/wwwtax.cgi?"
 
-static Char link_ff [MAX_WWWBUF];
-#define DEF_LINK_FF  "/cgi-bin/Entrez/getfeat?"
-
 NLM_EXTERN Char link_muid [MAX_WWWBUF];
 #define DEF_LINK_MUID  "http://www.ncbi.nlm.nih.gov/sites/entrez?cmd=Retrieve&db=pubmed&list_uids="
 
-static Char link_ace [MAX_WWWBUF];
-#define DEF_LINK_ACE  "http://www.ncbi.nlm.nih.gov/IEB/Research/Acembly/av.cgi?db=worm&c=gene&q="
-
 NLM_EXTERN Char link_code [MAX_WWWBUF];
 #define DEF_LINK_CODE "http://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi?"
+
+NLM_EXTERN Char link_sp [MAX_WWWBUF];
+#define DEF_LINK_SP "http://www.uniprot.org/entry/"
+
+NLM_EXTERN Char link_encode [MAX_WWWBUF];
+#define DEF_LINK_ENCODE  "http://www.nhgri.nih.gov/10005107"
+
+NLM_EXTERN Char link_go [MAX_WWWBUF];
+#define DEF_LINK_GO "http://amigo.geneontology.org/cgi-bin/amigo/go.cgi?view=details&depth=1&query="
+
+NLM_EXTERN Char link_go_ref [MAX_WWWBUF];
+#define DEF_LINK_GO_REF "http://www.geneontology.org/cgi-bin/references.cgi#GO_REF:"
+
+static Char link_ff [MAX_WWWBUF];
+#define DEF_LINK_FF  "/cgi-bin/Entrez/getfeat?"
+
+static Char link_ace [MAX_WWWBUF];
+#define DEF_LINK_ACE  "http://www.ncbi.nlm.nih.gov/IEB/Research/Acembly/av.cgi?db=worm&c=gene&q="
 
 static Char link_fly [MAX_WWWBUF];
 #define DEF_LINK_FLY "http://flybase.bio.indiana.edu/.bin/fbidq.html?"
@@ -142,9 +154,6 @@ static Char link_ck [MAX_WWWBUF];
 
 static Char link_rice [MAX_WWWBUF];
 #define DEF_LINK_RICE "http://ars-genome.cornell.edu/cgi-bin/WebAce/webace?db=ricegenes&class=Marker&object="
-
-NLM_EXTERN Char link_sp [MAX_WWWBUF];
-#define DEF_LINK_SP "http://www.uniprot.org/entry/"
 
 static Char link_pdb [MAX_WWWBUF];
 #define DEF_LINK_PDB "http://www.rcsb.org/pdb/cgi/explore.cgi?pdbId="
@@ -230,20 +239,11 @@ static Char link_zfin [MAX_WWWBUF];
 static Char link_rebase [MAX_WWWBUF];
 #define DEF_LINK_REBASE "http://rebase.neb.com/rebase/enz/"
 
-NLM_EXTERN Char link_encode [MAX_WWWBUF];
-#define DEF_LINK_ENCODE  "http://www.nhgri.nih.gov/10005107"
-
 static Char link_pgn [MAX_WWWBUF];
 #define DEF_LINK_PGN  "http://pgn.cornell.edu/cgi-bin/search/seq_search_result.pl?identifier="
 
 static Char link_subtilist [MAX_WWWBUF];
 #define DEF_LINK_SUBTILIST  "http://genolist.pasteur.fr/SubtiList/genome.cgi?external_query+"
-
-NLM_EXTERN Char link_go [MAX_WWWBUF];
-#define DEF_LINK_GO "http://amigo.geneontology.org/cgi-bin/amigo/go.cgi?view=details&depth=1&query="
-
-NLM_EXTERN Char link_go_ref [MAX_WWWBUF];
-#define DEF_LINK_GO_REF "http://www.geneontology.org/cgi-bin/references.cgi#GO_REF:"
 
 static Char link_hinvdb [MAX_WWWBUF];
 #define DEF_LINK_HINVDB "http://www.h-invitational.jp"
@@ -261,7 +261,7 @@ static Char link_dicty [MAX_WWWBUF];
 #define DEF_LINK_DICTY "http://dictybase.org/db/cgi-bin/gene_page.pl?dictybaseid="
 
 static Char link_maizegdb [MAX_WWWBUF];
-#define DEF_LINK_MAIZEGDB "http://www.maizegdb.org/"
+#define DEF_LINK_MAIZEGDB "http://www.maizegdb.org/cgi-bin/displaylocusrecord.cgi?id="
 
 static Char link_axeldb [MAX_WWWBUF];
 #define DEF_LINK_AXELDB "http://www.dkfz-heidelberg.de/tbi/services/axeldb/clone/xenopus?name="
@@ -284,6 +284,9 @@ static Char link_hgnc [MAX_WWWBUF];
 static Char link_bold [MAX_WWWBUF];
 #define DEF_LINK_BOLD "http://www.boldsystems.org/connectivity/specimenlookup.php?processid="
 
+static Char link_aftol [MAX_WWWBUF];
+#define DEF_LINK_AFTOL "http://aftol.biology.duke.edu/pub/displayTaxonInfo?aftol_id="
+
 static Char link_hprd [MAX_WWWBUF];
 #define DEF_LINK_HPRD "http://www.hprd.org/protein/"
 
@@ -294,7 +297,7 @@ static Char link_cambia [MAX_WWWBUF];
 #define DEF_LINK_CAMBIA "http://www.patentlens.net/patentlens/simple.cgi?patnum="
 
 static Char link_vector [MAX_WWWBUF];
-#define DEF_LINK_VECTOR "http://www.vectorbase.org/Genome/BRCGene/?"
+#define DEF_LINK_VECTOR "http://www.vectorbase.org/Genome/BRCGene/?feature="
 
 static Char link_mirbase [MAX_WWWBUF];
 #define DEF_LINK_MIRBASE "http://microrna.sanger.ac.uk/cgi-bin/sequences/mirna_entry.pl?acc="
@@ -318,7 +321,7 @@ static Char link_eric [MAX_WWWBUF];
 #define DEF_LINK_ERIC "http://www.ericbrc.org/genbank/dbxref/"
 
 static Char link_pbr [MAX_WWWBUF];
-#define DEF_LINK_PBR "http://www.poxvirus.org/gene_detail.asp?gene_id="
+#define DEF_LINK_PBR "http://www.poxvirus.org/query.asp?web_id="
 
 static Char link_nmpdr [MAX_WWWBUF];
 #define DEF_LINK_NMPDR "http://www.nmpdr.org/linkin.cgi?id="
@@ -344,11 +347,39 @@ static Char link_apidb_plasmodb [MAX_WWWBUF];
 static Char link_apidb_toxodb [MAX_WWWBUF];
 #define DEF_LINK_APIDB_TOXODB "http://www.toxodb.org/toxo/showRecord.do?name=GeneRecordClasses.GeneRecordClass&project_id=&primary_key="
 
-static Char link_pathema_locus [MAX_WWWBUF];
-#define DEF_LINK_PATHEMA_LOCUS "http://pathema.tigr.org/tigr-scripts/pathema/shared/GenePage.cgi?locus="
+static Char link_pathema [MAX_WWWBUF];
+/* #define DEF_LINK_PATHEMA "http://pathema.tigr.org/tigr-cripts/Burkholderia/shared/GenePage.cgi?all=1&locus=" */
+#define DEF_LINK_PATHEMA "http://pathema.jcvi.org/cgi-bin/Burkholderia/shared/GenePage.cgi?all=1&locus="
 
-static Char link_pathema_taxon_id [MAX_WWWBUF];
-#define DEF_LINK_PATHEMA_TAXON_ID "http://pathema.tigr.org/tigr-scripts/pathema/GenomePage.cgi?taxon_id="
+/*
+static Char link_pathema_prefix [MAX_WWWBUF];
+#define DEF_LINK_PATHEMA_PREFIX "http://pathema.tigr.org/tigr-scripts/"
+
+static Char link_pathema_suffix [MAX_WWWBUF];
+#define DEF_LINK_PATHEMA_SUFFIX "/shared/GenePage.cgi?all=1&locus="
+*/
+
+static Char link_pfam [MAX_WWWBUF];
+#define DEF_LINK_PFAM "http://pfam.sanger.ac.uk/family?acc="
+
+static Char link_rfam [MAX_WWWBUF];
+#define DEF_LINK_RFAM "http://www.sanger.ac.uk/cgi-bin/Rfam/getacc?"
+
+static Char link_xenbase [MAX_WWWBUF];
+#define DEF_LINK_XENBASE "http://www.xenbase.org/gene/showgene.do?method=display&geneId="
+
+static Char link_nrestdb [MAX_WWWBUF];
+#define DEF_LINK_NRESTDB "http://genome.ukm.my/nrestdb/db/single_view_est.php?id="
+
+static Char link_tigrfam [MAX_WWWBUF];
+#define DEF_LINK_TIGRFAM "http://cmr.tigr.org/tigr-scripts/CMR/HmmReport.cgi?hmm_acc="
+
+static Char link_vbrc [MAX_WWWBUF];
+#define DEF_LINK_VBRC "http://vbrc.org/query.asp?web_view=curation&web_id="
+
+static Char link_unigene [MAX_WWWBUF];
+#define DEF_LINK_UNIGENE "http://www.ncbi.nlm.nih.gov/sites/entrez?Db=unigene&Cmd=Search&Term="
+
 
 
 /* www utility functions */
@@ -439,6 +470,7 @@ NLM_EXTERN void InitWWW (IntAsn2gbJobPtr ajp)
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_HSSP", DEF_LINK_HSSP, link_hssp, MAX_WWWBUF);
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_HGNC", DEF_LINK_HGNC, link_hgnc, MAX_WWWBUF);
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_BOLD", DEF_LINK_BOLD, link_bold, MAX_WWWBUF);
+  GetAppParam ("NCBI", "WWWENTREZ", "LINK_AFTOL", DEF_LINK_AFTOL, link_aftol, MAX_WWWBUF);
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_HPRD", DEF_LINK_HPRD, link_hprd, MAX_WWWBUF);
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_USPTO", DEF_LINK_USPTO, link_uspto, MAX_WWWBUF);
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_CAMBIA", DEF_LINK_CAMBIA, link_cambia, MAX_WWWBUF);
@@ -459,10 +491,19 @@ NLM_EXTERN void InitWWW (IntAsn2gbJobPtr ajp)
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_APIDB_CRYPTODB", DEF_LINK_APIDB_CRYPTODB, link_apidb_cryptodb, MAX_WWWBUF);
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_APIDB_PLASMODB", DEF_LINK_APIDB_PLASMODB, link_apidb_plasmodb, MAX_WWWBUF);
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_APIDB_TOXODB", DEF_LINK_APIDB_TOXODB, link_apidb_toxodb, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_PATHEMA_LOCUS", DEF_LINK_PATHEMA_LOCUS, link_pathema_locus, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_PATHEMA_TAXON_ID", DEF_LINK_PATHEMA_TAXON_ID, link_pathema_taxon_id, MAX_WWWBUF);
+  GetAppParam ("NCBI", "WWWENTREZ", "LINK_PATHEMA", DEF_LINK_PATHEMA, link_pathema, MAX_WWWBUF);
+  /*
+  GetAppParam ("NCBI", "WWWENTREZ", "LINK_PATHEMA_PREFIX", DEF_LINK_PATHEMA_PREFIX, link_pathema_prefix, MAX_WWWBUF);
+  GetAppParam ("NCBI", "WWWENTREZ", "LINK_PATHEMA_SUFFIX", DEF_LINK_PATHEMA_SUFFIX, link_pathema_suffix, MAX_WWWBUF);
+  */
+  GetAppParam ("NCBI", "WWWENTREZ", "LINK_PFAM", DEF_LINK_PFAM, link_pfam, MAX_WWWBUF);
+  GetAppParam ("NCBI", "WWWENTREZ", "LINK_RFAM", DEF_LINK_RFAM, link_rfam, MAX_WWWBUF);
+  GetAppParam ("NCBI", "WWWENTREZ", "LINK_XENBASE", DEF_LINK_XENBASE, link_xenbase, MAX_WWWBUF);
+  GetAppParam ("NCBI", "WWWENTREZ", "LINK_NRESTDB", DEF_LINK_NRESTDB, link_nrestdb, MAX_WWWBUF);
+  GetAppParam ("NCBI", "WWWENTREZ", "LINK_TIGRFAM", DEF_LINK_TIGRFAM, link_tigrfam, MAX_WWWBUF);
+  GetAppParam ("NCBI", "WWWENTREZ", "LINK_VBRC", DEF_LINK_VBRC, link_vbrc, MAX_WWWBUF);
+  GetAppParam ("NCBI", "WWWENTREZ", "LINK_UNIGENE", DEF_LINK_UNIGENE, link_unigene, MAX_WWWBUF);
 }
-
 
 NLM_EXTERN void FF_www_featloc(StringItemPtr ffstring, CharPtr loc)
 {
@@ -547,10 +588,12 @@ static Boolean IsOnlyDigits (CharPtr str)
 static void FF_www_db_xref_pathema (
   StringItemPtr ffstring,
   CharPtr db, 
-  CharPtr identifier
+  CharPtr identifier,
+  BioseqPtr bsp
 )
 
 {
+  /*
   if ( StringStr (identifier, "SOP_") != NULL ) {
     FFAddTextToString(ffstring, db, ":", identifier, FALSE, FALSE, TILDE_IGNORE);
   } else if ( StringChr (identifier, '_') != NULL ) {
@@ -560,6 +603,30 @@ static void FF_www_db_xref_pathema (
   } else {
     FFAddTextToString(ffstring, db, ":", identifier, FALSE, FALSE, TILDE_IGNORE);
   }
+  */
+
+  /*
+  Char     link [256];
+  CharPtr  ptr;
+  Char     taxname [128];
+
+  if (bsp != NULL && BioseqToGeneticCode (bsp, NULL, NULL, NULL, taxname, sizeof (taxname), NULL)) {
+    ptr = StringChr (taxname, ' ');
+    if (ptr != NULL) {
+      *ptr = '\0';
+    }
+    StringCpy (link, link_pathema_prefix);
+    StringCat (link, taxname);
+    StringCat (link, link_pathema_suffix);
+
+    FF_www_db_xref_std(ffstring, db, identifier, link);
+  } else {
+    FFAddTextToString(ffstring, db, ":", identifier, FALSE, FALSE, TILDE_IGNORE);
+  }
+  */
+
+
+  FF_www_db_xref_std(ffstring, db, identifier, link_pathema);
 }
 
 static void FF_www_db_xref_imgt_gene (
@@ -689,22 +756,6 @@ static void FF_www_db_xref_niaEST(
 }
 
 
-static void FF_www_db_xref_maizegdb(
-  StringItemPtr ffstring,
-  CharPtr db, 
-  CharPtr identifier
-)
-{
-  while (*identifier == ' ')
-    identifier++;
-
-  FFAddTextToString(ffstring, NULL, db, ":", FALSE, FALSE, TILDE_IGNORE);
-  FFAddTextToString(ffstring, "<a href=", link_maizegdb, ">", FALSE, FALSE, TILDE_IGNORE);
-  FFAddOneString(ffstring, identifier, FALSE, FALSE, TILDE_IGNORE);
-  FFAddOneString(ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
-}
-
-
 static void FF_www_db_xref_gdb(
   StringItemPtr ffstring,
   CharPtr db, 
@@ -804,6 +855,7 @@ static void FF_www_db_xref_hprd (
   FF_www_db_xref_std (ffstring, db, identifier, link);
 }
 
+/*
 static void FF_www_db_xref_vector (
   StringItemPtr ffstring,
   CharPtr db, 
@@ -836,6 +888,7 @@ static void FF_www_db_xref_vector (
   StringCat (buf, "gene=");
   FF_www_db_xref_std (ffstring, db, identifier, buf);
 }
+*/
 
 static void FF_www_db_xref_null (
   StringItemPtr ffstring,
@@ -963,7 +1016,7 @@ static void Do_www_db_xref(
   } else if ( StringCmp(db , "dictyBase") == 0) {
     FF_www_db_xref_std(ffstring, db, identifier, link_dicty);
   } else if ( StringCmp(db , "MaizeGDB") == 0) {
-    FF_www_db_xref_maizegdb(ffstring, db, identifier);
+    FF_www_db_xref_std(ffstring, db, identifier, link_maizegdb);
   } else if ( StringCmp(db , "axeldb") == 0) {
     FF_www_db_xref_std(ffstring, db, identifier, link_axeldb);
   } else if ( StringCmp(db , "VBASE2") == 0) {
@@ -980,10 +1033,12 @@ static void Do_www_db_xref(
     FF_www_db_xref_std(ffstring, db, identifier, link_hgnc);
   } else if ( StringCmp(db , "BOLD") == 0) {
     FF_www_db_xref_std(ffstring, db, identifier, link_bold);
+  } else if ( StringCmp(db , "AFTOL") == 0) {
+    FF_www_db_xref_std(ffstring, db, identifier, link_aftol);
   } else if ( StringCmp(db , "HPRD") == 0) {
     FF_www_db_xref_hprd(ffstring, db, identifier, link_hprd);
   } else if ( StringCmp(db , "VectorBase") == 0) {
-    FF_www_db_xref_vector(ffstring, db, identifier, bsp, link_vector);
+    FF_www_db_xref_std(ffstring, db, identifier, link_vector);
   } else if ( StringCmp(db , "miRBase") == 0) {
     FF_www_db_xref_std(ffstring, db, identifier, link_mirbase);
   } else if ( StringCmp(db , "dbClone") == 0) {
@@ -1009,7 +1064,7 @@ static void Do_www_db_xref(
   } else if ( StringCmp(db , "TAIR") == 0) {
     FF_www_db_xref_std(ffstring, db, identifier, link_tair);
   } else if ( StringCmp(db , "Pathema") == 0) {
-    FF_www_db_xref_pathema(ffstring, db, identifier);
+    FF_www_db_xref_pathema(ffstring, db, identifier, bsp);
   } else if ( StringCmp(db , "ApiDB") == 0) {
     FF_www_db_xref_std(ffstring, db, identifier, link_apidb);
   } else if ( StringCmp(db , "ApiDB_CryptoDB") == 0) {
@@ -1018,6 +1073,27 @@ static void Do_www_db_xref(
     FF_www_db_xref_std(ffstring, db, identifier, link_apidb_plasmodb);
   } else if ( StringCmp(db , "ApiDB_ToxoDB") == 0) {
     FF_www_db_xref_std(ffstring, db, identifier, link_apidb_toxodb);
+  } else if ( StringCmp(db , "PFAM") == 0 || StringCmp(db , "Pfam") == 0 ) {
+    FF_www_db_xref_std(ffstring, db, identifier, link_pfam);
+  } else if ( StringCmp(db , "RFAM") == 0) {
+    FF_www_db_xref_std(ffstring, db, identifier, link_rfam);
+  } else if ( StringCmp(db , "Xenbase") == 0) {
+    FF_www_db_xref_std(ffstring, db, identifier, link_xenbase);
+  } else if ( StringCmp(db , "NRESTdb") == 0) {
+    FF_www_db_xref_std(ffstring, db, identifier, link_nrestdb);
+  } else if ( StringCmp(db , "TIGRFAM") == 0) {
+    FF_www_db_xref_std(ffstring, db, identifier, link_tigrfam);
+  } else if ( StringCmp(db , "VBRC") == 0) {
+    FF_www_db_xref_std(ffstring, db, identifier, link_vbrc);
+
+  /* for dbsource */
+  } else if ( StringCmp(db , "UniGene") == 0) {
+    FF_www_db_xref_std(ffstring, db, identifier, link_unigene);
+  } else if ( StringCmp(db , "RefSeq") == 0) {
+    FFAddTextToString(ffstring, NULL, db, ":", FALSE, FALSE, TILDE_IGNORE);
+    FFAddTextToString(ffstring, "<a href=", link_seq, "val=", FALSE, FALSE, TILDE_IGNORE);
+    FFAddTextToString(ffstring, identifier, ">", identifier, FALSE, FALSE, TILDE_IGNORE);
+    FFAddOneString(ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
 
   } else {  
     /* default: no link just the text */
@@ -1306,10 +1382,12 @@ NLM_EXTERN CharPtr GetAuthorsString (
 
   if (alp == NULL) return NULL;
 
+  /*
   alp = AsnIoMemCopy ((Pointer) alp,
                       (AsnReadFunc) AuthListAsnRead,
                       (AsnWriteFunc) AuthListAsnWrite);
   if (alp == NULL) return NULL;
+  */
 
   count = 0;
   if (alp->choice == 1) {
@@ -1418,7 +1496,9 @@ NLM_EXTERN CharPtr GetAuthorsString (
 
   ValNodeFreeData (head);
 
+  /*
   AuthListFree (alp);
+  */
 
   return str;
 }

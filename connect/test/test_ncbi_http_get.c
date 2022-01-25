@@ -1,4 +1,4 @@
-/*  $Id: test_ncbi_http_get.c,v 6.14 2005/04/20 15:51:19 lavr Exp $
+/*  $Id: test_ncbi_http_get.c,v 6.15 2007/09/26 14:55:37 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -115,7 +115,7 @@ int main(int argc, char* argv[])
         fclose(fp);
 
     t = time(0);
-    for (;;) {
+    do {
         status = CONN_Wait(conn, eIO_Read, net_info->timeout);
         if (status != eIO_Success) {
             if (status == eIO_Closed)
@@ -124,21 +124,20 @@ int main(int argc, char* argv[])
                 CORE_LOG(eLOG_Fatal, "Timed out");
 #ifdef NCBI_OS_UNIX
             usleep(500);
-#endif
+#endif /*NCBI_OS_UNIX*/
             continue;
         }
 
-        status = CONN_Read(conn, blk, sizeof(blk), &n, eIO_ReadPlain);
-        if (status != eIO_Success && status != eIO_Closed)
+        status = CONN_ReadLine(conn, blk, sizeof(blk), &n);
+        if (status != eIO_Success  &&  status != eIO_Closed)
             CORE_LOGF(eLOG_Fatal, ("Read error: %s", IO_StatusStr(status)));
-        if (n) {
+        if (n == sizeof(blk))
+            CORE_LOGF(eLOG_Warning, ("Line too long, continuing..."));
+        if (n)
             fwrite(blk, 1, n, stdout);
-            fflush(stdout);
-        } else if (status == eIO_Closed) {
-            break;
-        } else
-            CORE_LOG(eLOG_Fatal, "Empty read");
-    }
+        fputc('\n', stdout);
+        fflush(stdout);
+    } while (status == eIO_Success);
 
     ConnNetInfo_Destroy(net_info);
     CORE_LOG(eLOG_Note, "Closing connection");
@@ -148,52 +147,3 @@ int main(int argc, char* argv[])
     CORE_SetLOG(0);
     return 0;
 }
-
-
-/*
- * --------------------------------------------------------------------------
- * $Log: test_ncbi_http_get.c,v $
- * Revision 6.14  2005/04/20 15:51:19  lavr
- * Allow addtl file argument to attach as a body ('-' for stdin)
- *
- * Revision 6.13  2005/04/19 16:37:52  lavr
- * Allow HTTP method to be overridden from the environment
- *
- * Revision 6.12  2003/09/30 20:59:39  lavr
- * Fix typo in previous log message
- *
- * Revision 6.11  2003/09/30 20:57:15  lavr
- * Allow to set zero timeout via environment
- *
- * Revision 6.10  2003/05/20 23:52:01  lavr
- * Explicit cast "time_t"->"unsigned" to avoid GCC warning
- *
- * Revision 6.9  2003/05/19 16:58:37  lavr
- * Modified to use {0,0} timeouts in CONN_Wait() and use app timeout handling
- *
- * Revision 6.8  2003/05/14 03:58:43  lavr
- * Match changes in respective APIs of the tests
- *
- * Revision 6.7  2002/10/28 15:47:06  lavr
- * Use "ncbi_ansi_ext.h" privately
- *
- * Revision 6.6  2002/08/14 14:42:46  lavr
- * Use fwrite() instead of printf() when printing out the data fetched
- *
- * Revision 6.5  2002/08/07 16:38:08  lavr
- * EIO_ReadMethod enums changed accordingly; log moved to end
- *
- * Revision 6.4  2002/03/22 19:47:23  lavr
- * Test_assert.h made last among the include files
- *
- * Revision 6.3  2002/02/05 21:45:55  lavr
- * Included header files rearranged
- *
- * Revision 6.2  2002/01/16 21:23:15  vakatov
- * Utilize header "test_assert.h" to switch on ASSERTs in the Release mode too
- *
- * Revision 6.1  2001/12/30 19:42:06  lavr
- * Initial revision
- *
- * ==========================================================================
- */

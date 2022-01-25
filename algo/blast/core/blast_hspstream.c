@@ -1,4 +1,4 @@
-/*  $Id: blast_hspstream.c,v 1.8 2007/07/27 18:25:30 kazimird Exp $
+/*  $Id: blast_hspstream.c,v 1.9 2007/12/07 18:25:41 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -33,7 +33,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_hspstream.c,v 1.8 2007/07/27 18:25:30 kazimird Exp $";
+    "$Id: blast_hspstream.c,v 1.9 2007/12/07 18:25:41 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_hspstream.h>
@@ -150,7 +150,8 @@ void Blast_HSPStreamResultBatchReset(BlastHSPStreamResultBatch *batch)
 {
     Int4 i;
     for (i = 0; i < batch->num_hsplists; i++) {
-        sfree(batch->hsplist_array[i]);
+        batch->hsplist_array[i] = 
+           Blast_HSPListFree(batch->hsplist_array[i]);
     }
     batch->num_hsplists = 0;
 }

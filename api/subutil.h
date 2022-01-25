@@ -31,7 +31,7 @@
 *   
 * Version Creation Date: 11/3/93
 *
-* $Revision: 6.61 $
+* $Revision: 6.64 $
 *
 * File Description: Utilities for creating ASN.1 submissions
 *
@@ -42,6 +42,15 @@
 *
 *
 * $Log: subutil.h,v $
+* Revision 6.64  2007/11/28 21:47:58  kans
+* added defines for mip->biomol ncRNA and tmRNA
+*
+* Revision 6.63  2007/11/08 16:43:18  kans
+* added chromosome and chromatophore to BioSource.genome defines
+*
+* Revision 6.62  2007/10/11 21:57:44  kans
+* added AddGeneratedToRefGeneTrackUserObject, changed AddAccessionToRefGeneTrackUserObject
+*
 * Revision 6.61  2007/07/17 14:46:42  kans
 * added support for metagenome_source orgmod
 *
@@ -703,6 +712,8 @@ NLM_EXTERN SeqLitPtr AddLiteralToDeltaSeq (
 #define MOLECULE_TYPE_CRNA 11
 #define MOLECULE_TYPE_SNORNA 12
 #define MOLECULE_TYPE_TRANSCRIBED_RNA 13
+#define MOLECULE_TYPE_NCRNA 14
+#define MOLECULE_TYPE_TMRNA 15
 
 #define TOPOLOGY_LINEAR 1
 #define TOPOLOGY_CIRCULAR 2
@@ -876,6 +887,8 @@ NLM_EXTERN Boolean AddGenBankBlockToEntry (
 #define GENOME_proplastid 18
 #define GENOME_endogenous_virus 19
 #define GENOME_hydrogenosome 20
+#define GENOME_chromosome 21
+#define GENOME_chromatophore 22
 
 /********************************************
 *  Genome describes the type of genome from which the DNA or gene for
@@ -1664,13 +1677,12 @@ NLM_EXTERN Boolean AddPhrapGraphToSeqLit (
 /* internal functions for reference gene project */
 NLM_EXTERN UserObjectPtr CreateRefGeneTrackUserObject (void);
 NLM_EXTERN void AddStatusToRefGeneTrackUserObject (UserObjectPtr uop, CharPtr status);
+NLM_EXTERN void AddGeneratedToRefGeneTrackUserObject (UserObjectPtr uop, Boolean generated);
 NLM_EXTERN void AddCuratorToRefGeneTrackUserObject (UserObjectPtr uop, CharPtr collaborator);
 NLM_EXTERN void AddSourceToRefGeneTrackUserObject (UserObjectPtr uop, CharPtr genomicSource);
 NLM_EXTERN void AddAccessionToRefGeneTrackUserObject (UserObjectPtr uop, CharPtr field,
-                                                      CharPtr accn, Int4 gi,
-                                                      Boolean sequenceChange,
-                                                      Boolean annotationChange,
-                                                      CharPtr comment);
+                                                      CharPtr accn, Int4 gi, Int4 from,
+                                                      Int4 to, CharPtr comment);
 
 /* experimental function to associate mRNA with protein product in cases of alt splicing */
 NLM_EXTERN UserObjectPtr CreateMrnaProteinLinkUserObject (BioseqPtr protbsp);

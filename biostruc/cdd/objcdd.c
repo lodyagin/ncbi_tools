@@ -36,7 +36,7 @@ objcddAsnLoad(void)
 
 /**************************************************
 *    Generated object loaders for Module NCBI-Cdd
-*    Generated using ASNCODE Revision: 6.16 at Feb 8, 2006  1:12 PM
+*    Generated using ASNCODE Revision: 6.16 at Aug 27, 2007  9:39 AM
 *
 **************************************************/
 
@@ -242,6 +242,7 @@ NLM_EXTERN
 CddIdSetPtr LIBCALL
 CddIdSetAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
+   DataVal av;
    AsnTypePtr atp;
    Boolean isError = FALSE;
    AsnReadFunc func;
@@ -297,6 +298,7 @@ erret:
 NLM_EXTERN Boolean LIBCALL 
 CddIdSetAsnWrite(CddIdSetPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
+   DataVal av;
    AsnTypePtr atp;
    Boolean retval = FALSE;
 
@@ -788,6 +790,7 @@ NLM_EXTERN
 CddSetPtr LIBCALL
 CddSetAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
+   DataVal av;
    AsnTypePtr atp;
    Boolean isError = FALSE;
    AsnReadFunc func;
@@ -843,6 +846,7 @@ erret:
 NLM_EXTERN Boolean LIBCALL 
 CddSetAsnWrite(CddSetPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
+   DataVal av;
    AsnTypePtr atp;
    Boolean retval = FALSE;
 
@@ -1133,6 +1137,7 @@ NLM_EXTERN
 CddTreeSetPtr LIBCALL
 CddTreeSetAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
+   DataVal av;
    AsnTypePtr atp;
    Boolean isError = FALSE;
    AsnReadFunc func;
@@ -1188,6 +1193,7 @@ erret:
 NLM_EXTERN Boolean LIBCALL 
 CddTreeSetAsnWrite(CddTreeSetPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
+   DataVal av;
    AsnTypePtr atp;
    Boolean retval = FALSE;
 
@@ -1356,6 +1362,7 @@ erret:
 NLM_EXTERN Boolean LIBCALL 
 CddPrefNodesAsnWrite(CddPrefNodesPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
+   DataVal av;
    AsnTypePtr atp;
    Boolean retval = FALSE;
 
@@ -1817,6 +1824,7 @@ NLM_EXTERN
 CddOrgRefSetPtr LIBCALL
 CddOrgRefSetAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
+   DataVal av;
    AsnTypePtr atp;
    Boolean isError = FALSE;
    AsnReadFunc func;
@@ -1872,6 +1880,7 @@ erret:
 NLM_EXTERN Boolean LIBCALL 
 CddOrgRefSetAsnWrite(CddOrgRefSetPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
+   DataVal av;
    AsnTypePtr atp;
    Boolean retval = FALSE;
 
@@ -2106,6 +2115,7 @@ NLM_EXTERN
 CddPrefNodeDescrSetPtr LIBCALL
 CddPrefNodeDescrSetAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
+   DataVal av;
    AsnTypePtr atp;
    Boolean isError = FALSE;
    AsnReadFunc func;
@@ -2161,6 +2171,7 @@ erret:
 NLM_EXTERN Boolean LIBCALL 
 CddPrefNodeDescrSetAsnWrite(CddPrefNodeDescrSetPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
+   DataVal av;
    AsnTypePtr atp;
    Boolean retval = FALSE;
 
@@ -2818,6 +2829,9 @@ CddDescrFree(ValNodePtr anp)
    case CddDescr_book_ref:
       CddBookRefFree(anp -> data.ptrvalue);
       break;
+   case CddDescr_attribution:
+      PubFree(anp -> data.ptrvalue);
+      break;
    }
    return MemFree(anp);
 }
@@ -2963,6 +2977,10 @@ CddDescrAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       choice = CddDescr_book_ref;
       func = (AsnReadFunc) CddBookRefAsnRead;
    }
+   else if (atp == CDD_DESCR_attribution) {
+      choice = CddDescr_attribution;
+      func = (AsnReadFunc) PubAsnRead;
+   }
    anp->choice = choice;
    if (func != NULL)
    {
@@ -3086,6 +3104,10 @@ CddDescrAsnWrite(CddDescrPtr anp, AsnIoPtr aip, AsnTypePtr orig)
       writetype = CDD_DESCR_book_ref;
       func = (AsnWriteFunc) CddBookRefAsnWrite;
       break;
+   case CddDescr_attribution:
+      writetype = CDD_DESCR_attribution;
+      func = (AsnWriteFunc) PubAsnWrite;
+      break;
    }
    if (writetype != NULL) {
       retval = (* func)(pnt, aip, writetype);   /* write it out */
@@ -3128,6 +3150,7 @@ NLM_EXTERN
 CddDescrSetPtr LIBCALL
 CddDescrSetAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
+   DataVal av;
    AsnTypePtr atp;
    Boolean isError = FALSE;
    AsnReadFunc func;
@@ -3183,6 +3206,7 @@ erret:
 NLM_EXTERN Boolean LIBCALL 
 CddDescrSetAsnWrite(CddDescrSetPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
+   DataVal av;
    AsnTypePtr atp;
    Boolean retval = FALSE;
 
@@ -4081,6 +4105,7 @@ erret:
 NLM_EXTERN Boolean LIBCALL 
 RejectIdAsnWrite(RejectIdPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
+   DataVal av;
    AsnTypePtr atp;
    Boolean retval = FALSE;
 
@@ -4433,6 +4458,13 @@ AlignAnnotAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       }
       atp = AsnReadId(aip,amp, atp);
    }
+   if (atp == ALIGN_ANNOT_type) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> type = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
 
    if (AsnReadVal(aip, atp, &av) <= 0) {
       goto erret;
@@ -4494,6 +4526,8 @@ AlignAnnotAsnWrite(AlignAnnotPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
       retval = AsnWrite(aip, ALIGN_ANNOT_description,  &av);
    }
    AsnGenericChoiceSeqOfAsnWrite(ptr -> evidence, (AsnWriteFunc) FeatureEvidenceAsnWrite, aip, ALIGN_ANNOT_evidence, ALIGN_ANNOT_evidence_E);
+   av.intvalue = ptr -> type;
+   retval = AsnWrite(aip, ALIGN_ANNOT_type,  &av);
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
    }
@@ -4533,6 +4567,7 @@ NLM_EXTERN
 AlignAnnotSetPtr LIBCALL
 AlignAnnotSetAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
+   DataVal av;
    AsnTypePtr atp;
    Boolean isError = FALSE;
    AsnReadFunc func;
@@ -4588,6 +4623,7 @@ erret:
 NLM_EXTERN Boolean LIBCALL 
 AlignAnnotSetAsnWrite(AlignAnnotSetPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
+   DataVal av;
    AsnTypePtr atp;
    Boolean retval = FALSE;
 
@@ -5123,6 +5159,20 @@ AlgorithmTypeAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       ptr -> cTerminalExt = av.intvalue;
       atp = AsnReadId(aip,amp, atp);
    }
+   if (atp == ALGORITHM_TYPE_tree_scope) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> tree_scope = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == ALGORITHM_TYPE_coloring_scope) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> coloring_scope = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
 
    if (AsnReadVal(aip, atp, &av) <= 0) {
       goto erret;
@@ -5190,6 +5240,10 @@ AlgorithmTypeAsnWrite(AlgorithmTypePtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    retval = AsnWrite(aip, ALGORITHM_TYPE_nTerminalExt,  &av);
    av.intvalue = ptr -> cTerminalExt;
    retval = AsnWrite(aip, ALGORITHM_TYPE_cTerminalExt,  &av);
+   av.intvalue = ptr -> tree_scope;
+   retval = AsnWrite(aip, ALGORITHM_TYPE_tree_scope,  &av);
+   av.intvalue = ptr -> coloring_scope;
+   retval = AsnWrite(aip, ALGORITHM_TYPE_coloring_scope,  &av);
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
    }

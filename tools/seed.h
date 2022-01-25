@@ -1,4 +1,4 @@
-/* $Id: seed.h,v 6.21 2007/03/13 20:41:20 madden Exp $
+/* $Id: seed.h,v 6.22 2008/01/09 19:04:04 merezhuk Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -31,9 +31,12 @@ Author: Alejandro Schaffer
  
 Contents: header file for PHI-BLAST and pseed3.
 
-$Revision: 6.21 $
+$Revision: 6.22 $
 
 $Log: seed.h,v $
+Revision 6.22  2008/01/09 19:04:04  merezhuk
+add extra hitArraySz parameter and provide error message if number of hits exceed it.
+
 Revision 6.21  2007/03/13 20:41:20  madden
   - In the prototype for seedEngineCore, the searchSpEff parameter
     should be a Nlm_FloatHi, not an Nlm_FloatLo
@@ -309,7 +312,7 @@ Char*  LIBCALL get_a_pat PROTO((FILE *fp, Char **name, Int4Ptr hitArray, Int4Ptr
    Uint1Ptr unfilter_seq, Uint1Ptr seq, Int4 len, Boolean is_dna,
    patternSearchItems *patternSearch, seedSearchItems * seedSearch,
    Boolean showDiagnostics, ValNodePtr * error_return, 
-   ValNodePtr PNTR info_vnp));
+   ValNodePtr PNTR info_vnp, Int4 hitArraySz));
 
 
 void LIBCALL quicksort_hits PROTO((Int4 no_of_seq, seedResultItems *seedResults));

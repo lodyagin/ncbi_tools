@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.477 $
+* $Revision: 6.513 $
 *
 * File Description: 
 *
@@ -167,7 +167,6 @@ extern void ExtendFastaSet (IteM i);
 extern void ExtendAllSequencesInSet (IteM i);
 extern void SeqLocAdjustByOffset (SeqLocPtr slp, Int4 offset);
 extern void SplitSegmentedFeatsMenuItem (IteM i);
-extern SeqLocPtr SeqLocWholeNew (BioseqPtr bsp);
 extern SeqFeatPtr SeqFeatCopy (SeqFeatPtr sfp);
 extern SeqLocPtr SeqLocReplaceLocalID (SeqLocPtr slp,
 				       SeqIdPtr  new_sip);
@@ -248,6 +247,7 @@ extern void EditPubsEx (BaseFormPtr bfp);
 extern void RemovePubConsortiums (IteM i);
 
 extern void ExtendPartialFeatures (IteM i);
+extern void ExtendPartialFeaturesWithConstraint (IteM i);
 extern void TrimOrganismName (IteM i);
 extern void SUCSubmitterProc (IteM i);
 
@@ -348,7 +348,6 @@ extern Uint2 PackageFormResults (SequinBlockPtr sbp, SeqEntryPtr sep,
 extern void EnableFeaturesPerTarget (BaseFormPtr bfp);
 extern void EnableAnalysisItems (BaseFormPtr bfp, Boolean isDocSum);
 
-extern Int4 ExtendSeqLocToEnd (SeqLocPtr slp, BioseqPtr bsp, Boolean end5);
 extern void ExtendSeqLocToPosition (SeqLocPtr slp, Boolean end5, Int4 pos);
 
 #define REGISTER_BIOSEQ_SEG_EDIT ObjMgrProcLoad(OMPROC_EDIT,"Edit Bioseq Seg","BioseqSegEditor",OBJ_BIOSEQ_SEG,0,OBJ_BIOSEQ_SEG,0,NULL,BioseqSegEditFunc,PROC_PRIORITY_DEFAULT)
@@ -435,7 +434,6 @@ extern void CombineMultipleCDS (IteM i);
 
 extern void NewDescriptorMenuFunc (ObjMgrProcPtr ompp, BaseFormPtr bfp, Uint2 descsubtype);
 extern Boolean PropagateFromGenBankBioseqSet (SeqEntryPtr sep, Boolean ask);
-extern CharPtr MergeValNodeStrings (ValNodePtr list, Boolean useReturn);
 extern int LIBCALLBACK SortByVnpChoice (VoidPtr ptr1, VoidPtr ptr2);
 extern void PrepareToConvertToCDS (SeqEntryPtr sep, Uint2 entityID,
                                    Uint2 subtype, CharPtr findthis);
@@ -449,23 +447,21 @@ extern void ChangeGenBankNameToLocal (IteM i);
 extern void RemoveGBIDsFromBioseqs (IteM i);
 extern void RemoveGBIDsFromProteins (IteM i);
 extern void RemoveGIsFromBioseqs (IteM i);
-extern CharPtr MergeValNodeStrings (ValNodePtr list, Boolean useReturn);
 
 extern void CommonApplyToAllProc (BaseFormPtr bfp, Int2 type);
 extern void ApplyTitle (IteM i);
 extern void ApplyCDS (IteM i);
 extern void ApplyRRNA (IteM i);
 extern void ApplyImpFeat (IteM i);
-extern void AdjustCDSLocationsForUnknownGapsCallback (SeqFeatPtr sfp, Pointer userdata);
 extern void AdjustCDSLocationsForKnownAndUnknownGapsCallback (SeqFeatPtr sfp, Pointer userdata);
 extern void AdjustFeaturesForGaps (IteM i);
 extern void LoadTPAAccessionNumbersFromFile (IteM i);
 extern void LoadSecondaryAccessionNumbersFromFile (IteM i);
 extern void LoadHistoryAccessionNumbersFromFile (IteM i);
 extern void LoadOrganismModifierTable (IteM i);
+extern void LoadTaxConsult (IteM i);
 extern void ExportOrganismTable (IteM i);
 extern void LoadFeatureQualifierTable (IteM i);
-extern CharPtr GetModifierPopupPositionName (Int2 val);
 
 extern void AddCodonListTotRNA (tRNAPtr trna, ValNodePtr codons);
 
@@ -807,13 +803,6 @@ extern void LogCDSAmbiguousFrame (LogInfoPtr lip, SeqFeatPtr sfp);
 extern void LoadGenomeProjectIDsFromFile (IteM i);
 extern void RemoveEmptyGenomeProjectIDs (IteM i);
 
-typedef struct sourcequaldesc
-{
-  CharPtr       name;
-  Boolean       isOrgMod;
-  Uint1         subtype;
-} SourceQualDescData, PNTR SourceQualDescPtr;
-
 extern CharPtr SourceQualValNodeName (ValNodePtr vnp);
 extern ValNodePtr SourceQualValNodeDataCopy (ValNodePtr vnp);
 extern Boolean SourceQualValNodeMatch (ValNodePtr vnp1, ValNodePtr vnp2);
@@ -888,7 +877,7 @@ extern void ExportLastLineage (IteM i);
 #define LOCATION_CONSTRAINT_NUC_SEQ      2
 #define LOCATION_CONSTRAINT_PROT_SEQ     3
 
-typedef struct locationconstraint
+typedef struct LocationConstraintX
 {
   Int4      left;
   Int4      right;
@@ -896,7 +885,7 @@ typedef struct locationconstraint
   Int4      match_choice;
   Int4      strand;
   Int4      sequence_type;
-} LocationConstraintData, PNTR LocationConstraintPtr;
+} LocationConstraintXData, PNTR LocationConstraintXPtr;
 
 typedef enum
 {
@@ -914,9 +903,9 @@ typedef struct stringconstraint
   Boolean insensitive;
   Boolean whole_word;
   Boolean not_present;
-} StringConstraintData, PNTR StringConstraintPtr;
+} StringConstraintData, PNTR StringConstraintXPtr;
 
-extern StringConstraintPtr StringConstraintFree (StringConstraintPtr scp);
+extern StringConstraintXPtr StringConstraintXFree (StringConstraintXPtr scp);
 
 typedef struct pseudoconstraint
 {
@@ -935,7 +924,7 @@ typedef struct choiceconstraint
   Int4                constraint_type;
   ValNodePtr          qual_choice;
   ValNodePtr          qual_choice_match;
-  StringConstraintPtr string_constraint;
+  StringConstraintXPtr string_constraint;
   PseudoConstraintPtr pseudo_constraint;
   FreeValNodeProc     free_vn_proc;
   CopyValNodeDataProc copy_vn_proc;
@@ -943,20 +932,38 @@ typedef struct choiceconstraint
 
 extern ChoiceConstraintPtr ChoiceConstraintFree (ChoiceConstraintPtr scp);
 
+typedef struct sequenceconstraint 
+{
+  Boolean nucs_ok;
+  Boolean prots_ok;
+  
+  Int4                other_constraint_type;
+  StringConstraintXPtr string_constraint;
+  ChoiceConstraintPtr source_constraint;
+  ValNodePtr          feature_list;
+  
+} SequenceConstraintXData, PNTR SequenceConstraintXPtr;
+
+extern SequenceConstraintXPtr SequenceConstraintXFree (SequenceConstraintXPtr scp);
+extern DialoG SequenceConstraintXDialog (GrouP g);
+extern Boolean DoesSequenceMatchSequenceConstraintX (BioseqPtr bsp, SequenceConstraintXPtr scp);
+
+
+
 typedef struct filterset 
 {
-  StringConstraintPtr   scp;
+  StringConstraintXPtr   scp;
   ChoiceConstraintPtr   ccp;
-  LocationConstraintPtr lcp;
+  LocationConstraintXPtr lcp;
   ChoiceConstraintPtr   cgp;
-  StringConstraintPtr   id_list;
+  StringConstraintXPtr   id_list;
 } FilterSetData, PNTR FilterSetPtr;
 
 extern void FilterSetClearText (FilterSetPtr fsp);
 extern FilterSetPtr FilterSetNew (void);
 extern FilterSetPtr FilterSetFree (FilterSetPtr fsp);
 
-extern Boolean DoesStringMatchConstraint (CharPtr pchSource, StringConstraintPtr scp);
+extern Boolean DoesStringMatchConstraintX (CharPtr pchSource, StringConstraintXPtr scp);
 
 typedef CharPtr (*GetFeatureFieldString) PROTO ((SeqFeatPtr, ValNodePtr, FilterSetPtr));
 typedef void (*SetFeatureFieldString) PROTO ((SeqFeatPtr, Pointer, FilterSetPtr));
@@ -999,18 +1006,18 @@ typedef struct textportion
   CharPtr end_text;
   Boolean insensitive;
   Boolean whole_word;
-} TextPortionData, PNTR TextPortionPtr;
+} TextPortionXData, PNTR TextPortionXPtr;
 
-extern TextPortionPtr TextPortionFree (TextPortionPtr tp);
+extern TextPortionXPtr TextPortionXFree (TextPortionXPtr tp);
 extern void 
-FindTextPortionInString 
+FindTextPortionXInString 
 (CharPtr        str, 
- TextPortionPtr tp, 
+ TextPortionXPtr tp, 
  CharPtr PNTR   ploc, 
  Int4Ptr        plen);
 
-extern DialoG TextPortionDialogEx (GrouP h, Boolean inside, Nlm_ChangeNotifyProc change_notify, Pointer change_userdata);
-extern DialoG TextPortionDialog (GrouP h);
+extern DialoG TextPortionXDialogEx (GrouP h, Boolean inside, Nlm_ChangeNotifyProc change_notify, Pointer change_userdata);
+extern DialoG TextPortionXDialog (GrouP h);
 
 #define CONVERT_TYPE_MOVE  0
 #define CONVERT_TYPE_COPY  1
@@ -1031,13 +1038,13 @@ typedef struct convertfield
   RemoveDescriptorFieldString remove_d_str_func;
   NameFromValNodeProc         name_field_func;
   FilterSetPtr                fsp;
-  TextPortionPtr              text_portion;
+  TextPortionXPtr              text_portion;
   Boolean                     strip_name_from_text;
   Boolean                     remove_parsed;
 } ConvertFieldData, PNTR ConvertFieldPtr;
 
-extern DialoG StringConstraintDialog (GrouP h, CharPtr label, Boolean clear_btn);
-extern DialoG LocationConstraintDialog (GrouP h, Boolean show_interval_controls, Boolean clear_btn);
+extern DialoG StringConstraintDialogX (GrouP h, CharPtr label, Boolean clear_btn);
+extern DialoG LocationConstraintXDialog (GrouP h, Boolean show_interval_controls, Boolean clear_btn);
 
 enum pub_field_nums 
 {
@@ -1235,7 +1242,7 @@ ConstraintChoiceDialog
  CharPtr                   text_name,
  Boolean                   clear_btn,
  Boolean                   use_pseudo);
-extern DialoG SourceConstraintDialog (GrouP h, Boolean clear_btn);
+extern DialoG SourceConstraintDialogX (GrouP h, Boolean clear_btn);
 extern Boolean DoesOneSourceMatchConstraint (BioSourcePtr biop, ChoiceConstraintPtr scp);
 extern DialoG CDSGeneProtConstraintDialog (GrouP h, Boolean clear_btn);
 extern DialoG 
@@ -1259,6 +1266,12 @@ typedef struct parsefield
 
 extern ParseFieldPtr ParseFieldFree (ParseFieldPtr pfp);
  
+extern DialoG ParseFieldDestDialogEx 
+(GrouP                    h,
+ Nlm_ChangeNotifyProc     change_notify,
+ Pointer                  change_userdata,
+ Boolean                  is_search_field,
+ Boolean                  include_dbxref);
 extern DialoG ParseFieldDestDialog 
 (GrouP                    h, 
  Nlm_ChangeNotifyProc     change_notify,
@@ -1452,7 +1465,7 @@ extern void ConvertCodingRegionsWithInternalKnownGapToMiscFeat (IteM i);
 extern void FixOneAlignmentOverGaps (SeqAlignPtr salp, Uint2 entityID);
 extern void ConsolidateSegmentsOverKnownLengthGaps (SeqAlignPtr salp);
 
-extern void CreateDiscrepancyReportWindow ();
+extern void CreateDiscrepancyReportWindow (void);
 extern void ScrollToDiscrepancyItem (ValNodePtr vnp, Pointer userdata);
 extern void EditDiscrepancyItem (ValNodePtr vnp, Pointer userdata);
 extern void WriteClickableListReport (FILE *fp, ValNodePtr discrepancy_list, Boolean show_all, Boolean use_feature_table_fmt);
@@ -1462,9 +1475,8 @@ extern void ChangeKnownGapLength (IteM i);
 extern void AddFlankingNsToKnownLengthGaps (IteM i);
 
 extern Int2 GetSequinAppParam (CharPtr section, CharPtr type, CharPtr dflt, CharPtr buf, Int2 buflen);
-extern Boolean DoBioseqFeaturesMatchSequenceConstraint (BioseqPtr bsp, ValNodePtr feat_list, StringConstraintPtr scp);
-extern Boolean DoesIDListMeetStringConstraint (SeqIdPtr sip, StringConstraintPtr string_constraint);
-extern void ResetCapitalization (Boolean first_is_upper, CharPtr pString);
+extern Boolean DoBioseqFeaturesMatchSequenceConstraintX (BioseqPtr bsp, ValNodePtr feat_list, StringConstraintXPtr scp);
+extern Boolean DoesIDListMeetStringConstraint (SeqIdPtr sip, StringConstraintXPtr string_constraint);
 extern Int2 LIBCALLBACK ReorderSetByAccession (Pointer data);
 
 extern Int2 LIBCALLBACK CopyDescriptorToList (Pointer data);
@@ -1516,7 +1528,7 @@ extern void MakeGeneralIDsFromLocusTags (IteM i);
 extern void ShowClickableItemList (ValNodePtr clickable_list, BaseFormPtr bfp, CharPtr win_title, CharPtr label1, CharPtr label2);
 
 extern Int4 CountChosenDiscrepancies (ValNodePtr discrepancy_list, Boolean count_all);
-extern void AddTranslExcept (SeqFeatPtr sfp, CharPtr cds_comment, Boolean use_strict);
+extern void AddTranslExcept (SeqFeatPtr sfp, CharPtr cds_comment, Boolean use_strict, Boolean extend);
 
 enum table_data_errors 
 {
@@ -1603,17 +1615,20 @@ ConvertOneCDSToMiscFeat
 
 extern void SuppressGenesOnFeaturesInsideMobileElements (IteM i);
 
-extern Int4 GetDeltaSeqLen (DeltaSeqPtr dsp);
 extern BaseFormPtr GetBaseFormForEntityID (Uint2 entityID);
 
 extern ValNodePtr ParseAccessionNumberListFromString (CharPtr list_str, SeqEntryPtr sep);
-extern SeqIdPtr CreateSeqIdFromText (CharPtr id_str, SeqEntryPtr sep);
 
 extern SubSourcePtr FindBadLatLon (BioSourcePtr biop);
 extern DialoG LatLonTestResultsDisplay (GrouP h);
 extern void LatLonTool (IteM i);
 extern DialoG SpecificHostResultsDisplay (GrouP h);
 extern void FixSpecificHostValues (IteM i);
+extern DialoG LatLonCountryResultsDisplay (GrouP h);
+extern Pointer GetLatLonCountryCorrection (Uint1 data_choice, Pointer data, Pointer metadata);
+extern void LatLonCountryTool (IteM i);
+extern DialoG CountryTestResultsDisplay (GrouP h, Pointer metadata);
+extern void CountryFixupTool (IteM i);
 
 extern void SetTransgenicOnSourceDescWhenSourceFeatPresent (IteM i);
 extern void SetFocusOnSourceDescWhenSourceFeatPresent (IteM i);
@@ -1624,7 +1639,7 @@ extern const char *nucleotide_alphabet;
 extern const char *protein_alphabet;
 
 extern DialoG AlnSettingsDlg (GrouP h, Boolean allow_sequence_type);
-extern TSequenceInfoPtr GetDefaultSequenceInfo ();
+extern TSequenceInfoPtr GetDefaultSequenceInfo (void);
 extern TSequenceInfoPtr GetAlignmentOptions (Uint1Ptr moltype, TSequenceInfoPtr sequence_info);
 
 
@@ -1633,6 +1648,85 @@ extern void ListFailedTaxonomyLookups (IteM i);
 extern SeqFeatPtr GetGeneForFeature (SeqFeatPtr sfp);
 
 extern void LoadFeatureFieldTable (IteM i);
+
+/* structure used for taxname options for loading values froma table or the Apply/Edit/Convert/Remove dialogs */
+typedef struct taxnameoptions {
+ Boolean remove_taxref;
+ Boolean remove_old_name;
+ Boolean remove_common;
+} TaxnameOptionsData, PNTR TaxnameOptionsPtr;
+
+extern void ApplyTaxnameOptionsToBioSource (BioSourcePtr biop, TaxnameOptionsPtr top);
+extern DialoG TaxnameOptionsDialog (GrouP h, Nlm_ChangeNotifyProc change_notify, Pointer change_userdata);
+
+extern void CleanTableLine (CharPtr line);
+
+extern void ApplyTagToCodingRegionsInSourceFeatures (IteM i);
+extern Boolean EntityIDAlreadyInList (Uint2 entityID, ValNodePtr entityIDList);
+
+extern void ResolveFeatureOverlaps (IteM i);
+extern void ConvertGeneralIdToLocalID (IteM i);
+
+extern void UpdateFeatures (IteM i);
+
+extern void AbbreviateCitSubAffilStates (IteM i);
+extern void RemoveQualityScores (BioseqPtr bsp, FILE *log_fp, BoolPtr data_in_log);
+extern void NewLoadFeatureQualifierTable (IteM i);
+extern void ListAllSequences (BioseqPtr bsp, Pointer userdata);
+extern void ChooseCategories (ValNodePtr value_list, Boolean do_choose);
+extern void ChooseCategoriesByStringConstraint (ValNodePtr value_list, StringConstraintXPtr scp, Boolean do_choose);
+extern void CapitalizeFirstLetterOfEveryWord (CharPtr pString);
+
+typedef void (*BulkSetFieldFunc) PROTO ((Pointer, Pointer));
+typedef Pointer (*BulkSetFieldStringFunc) PROTO ((Pointer, ApplyValuePtr));
+typedef Pointer (*BulkGetFieldFunc) PROTO ((Uint1, Pointer, Pointer));
+typedef CharPtr (*BulkDisplayFieldFunc) PROTO ((Pointer));
+typedef void (*BulkFreeFieldFunc) PROTO ((Pointer));
+typedef DialoG (*BulkCreateDlgFunc) PROTO ((GrouP, CharPtr, SeqEntryPtr));
+typedef Int4 (*BulkFormatColumnFunc) PROTO ((ColPtr, CharPtr));
+typedef void (*BulkDrawColumnFunc) PROTO ((Pointer, RectPtr));
+typedef Pointer (*BulkReleaseCellFunc) PROTO ((Pointer));
+typedef Pointer (*BulkCopyFieldFunc) PROTO ((Pointer));
+
+typedef struct bulkedfield {
+  CharPtr name;
+  BulkSetFieldFunc set_func;
+  BulkSetFieldStringFunc set_str_func;
+  BulkGetFieldFunc get_func;
+  BulkDisplayFieldFunc display_func;
+  BulkFreeFieldFunc free_func;
+  BulkCreateDlgFunc create_dlg_func;
+  BulkFormatColumnFunc format_col_func;
+  BulkDrawColumnFunc  draw_col_func;
+  BulkReleaseCellFunc release_cell_func;
+  BulkCopyFieldFunc   copy_func;
+} BulkEdFieldData, PNTR BulkEdFieldPtr;
+
+NLM_EXTERN Pointer BulkSetSimpleTextString (Pointer curr_val, ApplyValuePtr avp);
+NLM_EXTERN CharPtr BulkDisplaySimpleText (Pointer data);
+NLM_EXTERN void BulkFreeSimpleText (Pointer data);
+NLM_EXTERN Int4 BulkFormatSimpleText (ColPtr col, CharPtr name);
+NLM_EXTERN Pointer BulkSimpleTextCopy (Pointer data);
+NLM_EXTERN DialoG BulkSimpleTextDialog (GrouP g, CharPtr name, SeqEntryPtr sep);
+
+NLM_EXTERN void BulkEditorObjectList (Uint2 entityID, CharPtr title, ValNodePtr feat_list, BulkEdFieldPtr field_list);
+NLM_EXTERN DialoG 
+CreateBulkEditorDialog 
+(GrouP               h,
+ BulkEdFieldPtr      field_list,
+ ValNodePtr          feat_list,
+ SeqEntryPtr         sep, 
+ Boolean             collapse_by_default,
+ ClickableCallback   single_click_func,
+ ClickableCallback   double_click_func);
+
+NLM_EXTERN void RevCompOneFeatForBioseq (SeqFeatPtr sfp, BioseqPtr bsp);
+NLM_EXTERN void FlipSequenceIntervals (IteM i);
+
+#ifdef OS_MSWIN
+NLM_EXTERN Int4 RunSilent(const char *cmdline);
+#endif
+
 
 #ifdef __cplusplus
 }

@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 1/1/94
 *
-* $Revision: 6.36 $
+* $Revision: 6.39 $
 *
 * File Description:  Sequence editing utilities
 *
@@ -178,13 +178,13 @@ NLM_EXTERN CharPtr GetValidErrorName (int errcode, int subcode);
 NLM_EXTERN CharPtr GetValidExplanation (int errcode, int subcode);
 
 NLM_EXTERN CharPtr PNTR GetValidCountryList (void);
+NLM_EXTERN Boolean CountryIsValid (CharPtr name, BoolPtr old_countryP);
 NLM_EXTERN Boolean LookForECnumberPattern (CharPtr str);
 
 NLM_EXTERN Boolean IsCountryInLatLonList (CharPtr country);
 NLM_EXTERN Boolean TestLatLonForCountry (CharPtr country, FloatHi lat, FloatHi lon);
 NLM_EXTERN CharPtr GuessCountryForLatLon (FloatHi lat, FloatHi lon);
-
-NLM_EXTERN Boolean ParseLatLon (CharPtr lat_lon, FloatHi PNTR latP, FloatHi PNTR lonP);
+NLM_EXTERN Boolean StringContainsBodyOfWater (CharPtr str);
 
 /* EC_number finite state machine persists to avoid expensive reload, should free on program exit */
 NLM_EXTERN void ECNumberFSAFreeAll (void);

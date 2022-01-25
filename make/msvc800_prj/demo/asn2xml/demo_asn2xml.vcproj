@@ -3,7 +3,7 @@
 	ProjectType="Visual C++"
 	Version="8.00"
 	Name="demo_asn2xml"
-	ProjectGUID="{CBF870AB-2EE6-4F12-9F0E-0D8CB207751D}"
+	ProjectGUID="{C17DDF84-6A2C-4801-85ED-04AD0B29CD0F}"
 	>
 	<Platforms>
 		<Platform

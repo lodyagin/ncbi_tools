@@ -1,4 +1,4 @@
-/* $Id: blast_options.c,v 1.205 2007/05/22 20:55:36 kazimird Exp $
+/* $Id: blast_options.c,v 1.207 2007/10/25 15:55:36 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,7 +34,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_options.c,v 1.205 2007/05/22 20:55:36 kazimird Exp $";
+    "$Id: blast_options.c,v 1.207 2007/10/25 15:55:36 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_options.h>
@@ -458,7 +458,7 @@ BlastInitialWordOptionsNew(EBlastProgramType program,
       (*options)->gap_trigger = BLAST_GAP_TRIGGER_NUCL;
       (*options)->x_dropoff = BLAST_UNGAPPED_X_DROPOFF_NUCL;
    }
-   (*options)->ungapped_extension = TRUE;
+
    (*options)->program_number = program;
 
    return 0;
@@ -473,8 +473,8 @@ BlastInitialWordOptionsValidate(EBlastProgramType program_number,
 
    ASSERT(options);
 
-   /* For some blastn variants (i.e., megablast), and for PHI BLAST there is no
-    * ungapped extension. */
+   /* PHI-BLAST has no ungapped extension phase.  Megablast may not have it,
+    but generally does now. */
    if (program_number != eBlastTypeBlastn  &&
        (!Blast_ProgramIsPhiBlast(program_number)) &&
        options->x_dropoff <= 0.0)
@@ -515,7 +515,7 @@ BlastExtensionOptionsFree(BlastExtensionOptions* options)
 }
 
 Int2
-BlastExtensionOptionsNew(EBlastProgramType program, BlastExtensionOptions* *options)
+BlastExtensionOptionsNew(EBlastProgramType program, BlastExtensionOptions* *options, Boolean gapped)
 
 {
 	*options = (BlastExtensionOptions*) 
@@ -541,7 +541,7 @@ BlastExtensionOptionsNew(EBlastProgramType program, BlastExtensionOptions* *opti
 
     /** @todo how to determine this for PSI-BLAST bootstrap run (i.e. when
      * program is blastp? */
-    if (Blast_QueryIsPssm(program) && ! Blast_SubjectIsTranslated(program)) {
+    if (gapped && (Blast_QueryIsPssm(program) && ! Blast_SubjectIsTranslated(program))) {
         (*options)->compositionBasedStats = eCompositionBasedStats;
     }
 
@@ -985,7 +985,8 @@ BLAST_FillLookupTableOptions(LookupTableOptions* options,
    if (word_size)
       options->word_size = word_size;
    if ((program_number == eBlastTypeTblastn ||
-        program_number == eBlastTypeBlastp) && 
+        program_number == eBlastTypeBlastp ||
+        program_number == eBlastTypeBlastx) && 
        word_size > 5)
        options->lut_type = eCompressedAaLookupTable;
 
@@ -1141,13 +1142,14 @@ LookupTableOptionsValidate(EBlastProgramType program_number,
     } else if (program_number != eBlastTypeBlastn && options->word_size > 5)
     {
         if (program_number == eBlastTypeBlastp ||
-            program_number == eBlastTypeTblastn)
+            program_number == eBlastTypeTblastn ||
+            program_number == eBlastTypeBlastx)
         {
             if (options->word_size > 7) {
                 Blast_MessageWrite(blast_msg, eBlastSevError, 
                                    kBlastMessageNoContext,
                                    "Word-size must be less than "
-                                   "8 for a tblastn search");
+                                   "8 for a tblastn, blastp or blastx search");
                 return BLASTERR_OPTION_VALUE_INVALID;
             }
         }
@@ -1169,13 +1171,16 @@ LookupTableOptionsValidate(EBlastProgramType program_number,
     }
 
     if (program_number == eBlastTypeBlastp ||
-        program_number == eBlastTypeTblastn)
+        program_number == eBlastTypeTblastn ||
+        program_number == eBlastTypeBlastx)
     {
         if (options->word_size > 5 &&
             options->lut_type != eCompressedAaLookupTable) {
-           Blast_MessageWrite(blast_msg, eBlastSevError, kBlastMessageNoContext,
-                         "Blastp or Tblastn with word size > 5 requires a "
-                         "compressed alphabet lookup table");
+           Blast_MessageWrite(blast_msg, eBlastSevError,
+                              kBlastMessageNoContext,
+                              "Blastp, Blastx or Tblastn with word size"
+                              " > 5 requires a "
+                              "compressed alphabet lookup table");
            return BLASTERR_OPTION_VALUE_INVALID;
         }
         else if (options->lut_type == eCompressedAaLookupTable &&
@@ -1412,10 +1417,11 @@ Int2 BLAST_InitDefaultOptions(EBlastProgramType program_number,
    if ((status=BlastInitialWordOptionsNew(program_number, word_options)))
       return status;
 
-   if ((status = BlastExtensionOptionsNew(program_number, ext_options)))
+   if ((status=BlastScoringOptionsNew(program_number, score_options)))
       return status;
 
-   if ((status=BlastScoringOptionsNew(program_number, score_options)))
+   if ((status = BlastExtensionOptionsNew(program_number, ext_options,
+                                       (*score_options)->gapped_calculation)))
       return status;
 
    if ((status=BlastHitSavingOptionsNew(program_number, hit_options,
@@ -1462,6 +1468,22 @@ static Int2 s_BlastExtensionScoringOptionsValidate(EBlastProgramType program_num
 			return BLASTERR_OPTION_VALUE_INVALID;
 	    }
 	}
+    }
+
+    if (ext_options->compositionBasedStats != eNoCompositionBasedStats)
+    {
+            if (!Blast_QueryIsPssm(program_number) && program_number != eBlastTypeTblastn && 
+                 program_number != eBlastTypeBlastp) {
+			Blast_MessageWrite(blast_msg, eBlastSevWarning, kBlastMessageNoContext,
+                            "Compositional adjustments are only supported with blastp or tblastn");
+			return BLASTERR_OPTION_VALUE_INVALID;
+            }
+            if (!score_options->gapped_calculation) {
+			Blast_MessageWrite(blast_msg, eBlastSevWarning, kBlastMessageNoContext,
+                            "Compositional adjustments are only supported for gapped searches");
+			return BLASTERR_OPTION_VALUE_INVALID;
+            }
+            
     }
 
     return 0;

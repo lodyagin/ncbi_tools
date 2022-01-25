@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/2/97
 *
-* $Revision: 6.290 $
+* $Revision: 6.310 $
 *
 * File Description: 
 *
@@ -54,6 +54,8 @@
 #include <tofasta.h>
 #include <simple.h>
 #include <validerr.h>
+#include <findrepl.h>
+#include <alignmgr2.h>
 
 static CharPtr SqnTrimSpacesAroundString (CharPtr str)
 
@@ -1962,7 +1964,7 @@ NLM_EXTERN BioSourcePtr ParseTitleIntoBioSource (
 static CharPtr molinfo_biomol_list [] = {
   "?", "genomic", "precursor RNA", "mRNA", "rRNA", "tRNA", "snRNA",
   "scRNA", "peptide", "other-genetic", "genomic-mRNA", "cRNA", "snoRNA",
-  "transcribed RNA", NULL
+  "transcribed RNA", "non-coding RNA", "transfer-messenger RNA", NULL
 };
 
 static CharPtr molinfo_tech_list [] = {
@@ -5219,6 +5221,7 @@ static CharPtr okayInferencePrefixes [] = {
   "nucleotide motif",
   "protein motif",
   "ab initio prediction",
+  "alignment",
   NULL
 };
 
@@ -5793,14 +5796,15 @@ static void AddQualifierToFeatureEx (SeqFeatPtr sfp, CharPtr qual, CharPtr val, 
             sfp->comment = str;
           }
         }
-      } else {
+        return;
+      } else if (rrp->type != 255) {
         if (rrp->ext.choice == 1) {
           rrp->ext.value.ptrvalue = MemFree (rrp->ext.value.ptrvalue);
         }
         rrp->ext.choice = 1;
         rrp->ext.value.ptrvalue = StringSave (val);
+        return;
       }
-      return;
     } else if (qnum == GBQUAL_anticodon) {
       if (ParseAnticodon (sfp, val, offset)) return;
     }
@@ -6052,6 +6056,7 @@ static SeqAnnotPtr ReadFeatureTable (FileCachePtr fcp, CharPtr seqid, CharPtr an
   GeneRefPtr     grp;
   Int2           idx;
   ImpFeatPtr     ifp;
+  Boolean        inquals = FALSE;
   Boolean        isminus;
   Boolean        isnote;
   Boolean        ispoint;
@@ -6210,13 +6215,32 @@ static SeqAnnotPtr ReadFeatureTable (FileCachePtr fcp, CharPtr seqid, CharPtr an
                 } else if (StringCmp (feat, "rRNA") == 0) {
                   rnatype = 4;
                 } else if (StringCmp (feat, "snRNA") == 0) {
-                  rnatype = 5;
+                  rnatype = 255;
+                  rrp->ext.choice = 1;
+                  rrp->ext.value.ptrvalue = StringSave ("ncRNA");
+                  AddQualifierToFeatureEx (sfp, "ncRNA_class", feat, offset, lin_num);
                 } else if (StringCmp (feat, "scRNA") == 0) {
-                  rnatype = 6;
+                  rnatype = 255;
+                  rrp->ext.choice = 1;
+                  rrp->ext.value.ptrvalue = StringSave ("ncRNA");
+                  AddQualifierToFeatureEx (sfp, "ncRNA_class", feat, offset, lin_num);
                 } else if (StringCmp (feat, "snoRNA") == 0) {
-                  rnatype = 7;
+                  rnatype = 255;
+                  rrp->ext.choice = 1;
+                  rrp->ext.value.ptrvalue = StringSave ("ncRNA");
+                  AddQualifierToFeatureEx (sfp, "ncRNA_class", feat, offset, lin_num);
                 } else if (StringCmp (feat, "misc_RNA") == 0) {
                   rnatype = 255;
+                  rrp->ext.choice = 1;
+                  rrp->ext.value.ptrvalue = StringSave ("misc_RNA");
+                } else if (StringCmp (feat, "ncRNA") == 0) {
+                  rnatype = 255;
+                  rrp->ext.choice = 1;
+                  rrp->ext.value.ptrvalue = StringSave ("ncRNA");
+                } else if (StringCmp (feat, "tmRNA") == 0) {
+                  rnatype = 255;
+                  rrp->ext.choice = 1;
+                  rrp->ext.value.ptrvalue = StringSave ("tmRNA");
                 }
                 rrp->type = rnatype;
               }
@@ -6329,12 +6353,21 @@ static SeqAnnotPtr ReadFeatureTable (FileCachePtr fcp, CharPtr seqid, CharPtr an
             }
           }
 
+          inquals = FALSE;
+
         } else if (start >= 0 && stop >= 0 && feat == NULL && qual == NULL && val == NULL && sfp != NULL) {
 
-          sfp->location = AddIntervalToLocation (sfp->location, sip, start, stop, partial5, partial3);
+          if (inquals) {
 
-          if (partial5 || partial3) {
-            sfp->partial = TRUE;
+            ErrPostEx (SEV_ERROR, ERR_SEQ_FEAT_ImpFeatBadLoc, "Unexpected intervals after qualifiers (start %ld, stop %ld)", (long) start, (long) stop);
+
+          } else {
+
+            sfp->location = AddIntervalToLocation (sfp->location, sip, start, stop, partial5, partial3);
+
+            if (partial5 || partial3) {
+              sfp->partial = TRUE;
+            }
           }
 
         } else if (sfp != NULL && qual != NULL &&
@@ -6347,6 +6380,8 @@ static SeqAnnotPtr ReadFeatureTable (FileCachePtr fcp, CharPtr seqid, CharPtr an
             isnote = TRUE;
           }
           AddQualifierToFeatureEx (sfp, qual, val, offset, lin_num);
+
+          inquals = TRUE;
 
         } else if (sfp != NULL && qual != NULL && val == NULL) {
 
@@ -8898,7 +8933,7 @@ NLM_EXTERN TextFsaPtr TextFsaFree (TextFsaPtr tbl)
   if (stateTable != NULL) {
     highState = tbl->highState;
 
-    for (state = 0; state < highState; state++) {
+    for (state = 0; state <= highState; state++) {
       sp = stateTable [state];
       if (sp == NULL) continue;
 
@@ -8909,14 +8944,15 @@ NLM_EXTERN TextFsaPtr TextFsaFree (TextFsaPtr tbl)
         gp = nxtgp;
       }
 
-      ValNodeFreeData (sp->matchfound);
-      MemFree (sp);
+      sp->matchfound = ValNodeFreeData (sp->matchfound);
+      sp = MemFree (sp);
+      stateTable[state] = NULL;
     }
 
-    MemFree (stateTable);
+    stateTable = MemFree (stateTable);
   }
 
-  ValNodeFreeData (tbl->siteList);
+  tbl->siteList = ValNodeFreeData (tbl->siteList);
 
   return MemFree (tbl);
 }
@@ -10258,3 +10294,2348 @@ NLM_EXTERN SeqAnnotPtr PhrapGraphForContig (
   return sap;
 }
 
+/* Functions for correcting capitalization */
+
+typedef struct replaceitempair {
+  CharPtr FindString;
+  CharPtr ReplaceString;
+} ReplaceItemPair, PNTR ReplaceItemPairPtr;
+
+
+ReplaceItemPair AbbreviationList[] = {
+ { "arabidopsis thaliana", "Arabidopsis thaliana" },
+ { "adp", "ADP" },
+ { "adp-", "ADP-" },
+ { "atp", "ATP" },
+ { "atp-", "ATP-" },
+ { "bac", "BAC" },
+ { "caenorhabditis elegans", "Caenorhabditis elegans" },
+ { "cdna", "cDNA" },
+ { "cdnas", "cDNAs" },
+ { "coa", "CoA" },
+ { "coi", "COI" },
+ { "coii", "COII" },
+ { "danio rerio", "Danio rerio" },
+ { "dna", "DNA" },
+ { "dna-", "DNA-" },
+ { "drosophila melanogaster", "Drosophila melanogaster" },
+ { "dsrna", "dsRNA" },
+ { "escherichia coli", "Escherichia coli" },
+ { "hiv", "HIV" },
+ { "hiv-1", "HIV-1" },
+ { "hiv-2", "HIV-2" },
+ { "hnrna", "hnRNA" },
+ { "homo sapiens", "Homo sapiens" },
+ { "mhc", "MHC" },
+ { "mrna", "mRNA" },
+ { "mtdna", "mtDNA" },
+ { "mus musculus", "Mus musculus" },
+ { "nadh", "NADH" },
+ { "nov.", "nov." },
+ { "nov..", "nov.." },
+ { "pcr", "PCR" },
+ { "pcr-", "PCR-" },
+ { "rattus norvegicus", "Rattus norvegicus" },
+ { "rapd", "RAPD" },
+ { "rdna", "rDNA" },
+ { "rna", "RNA" },
+ { "rna-", "RNA-" },
+ { "rrna", "rRNA" },
+ { "rt-pcr", "RT-PCR" },
+ { "saccharomyces cerevisiae", "Saccharomyces cerevisiae" },
+ { "scrna", "scRNA" },
+ { "siv-1", "SIV-1" },
+ { "snp", "SNP"     },
+ { "snps", "SNPs"   },
+ { "snrna", "snRNA" },
+ { "sp.", "sp." },
+ { "sp..", "sp.." },
+ { "ssp.", "ssp." },
+ { "ssp..", "ssp.." },
+ { "ssrna", "ssRNA" },
+ { "subsp.", "subsp." },
+ { "subsp..", "subsp.." },
+ { "trna", "tRNA" },
+ { "trna-", "tRNA-" },
+ { "var.", "var." },
+ { "var..", "var.." },
+ { "usa", "USA" },
+ { "U.S.A.", "USA" },
+ { "U.S.A", "USA" },
+ { "United States of America", "USA" },
+ {"(hiv)", "(HIV)" },
+ {"(hiv1)", "(HIV1)" },
+ {"(hiv-1)", "(HIV-1)" }
+};
+
+ReplaceItemPair SpecialAbbreviationList[] = {
+ { "sp.", "sp." },
+ { "nov.", "nov." },
+ { "ssp.", "ssp." },
+ { "var.", "var." },
+ { "subsp.", "subsp." }
+};
+
+NLM_EXTERN void FixAbbreviationsInElement (CharPtr PNTR pEl)
+{
+  int i;
+  CharPtr NewPtr;
+  Boolean whole_word;
+
+  if (pEl == NULL) return;
+  if (*pEl == NULL) return;
+
+  for (i = 0; i < sizeof (AbbreviationList) / sizeof (ReplaceItemPair); i++)
+  {
+    if (AbbreviationList[i].FindString[StringLen (AbbreviationList[i].FindString) - 1] == '-')
+    {
+      whole_word = FALSE;
+    }
+    else
+    {
+      whole_word = TRUE;
+    }
+    FindReplaceString (pEl, AbbreviationList[i].FindString,
+			AbbreviationList[i].ReplaceString, FALSE, whole_word);
+  }
+  for (i = 0; i < sizeof (SpecialAbbreviationList) / sizeof (ReplaceItemPair); i++)
+  {
+    FindReplaceString (pEl, SpecialAbbreviationList[i].FindString,
+			SpecialAbbreviationList[i].ReplaceString, FALSE, TRUE);
+    if (StringLen (*pEl) >= StringLen (SpecialAbbreviationList[i].ReplaceString)
+      && StringCmp ((*pEl) + StringLen (*pEl) - StringLen (SpecialAbbreviationList[i].ReplaceString), SpecialAbbreviationList[i].ReplaceString) == 0)
+    {
+      NewPtr = MemNew (StringLen (*pEl) + 2);
+      if (NewPtr == NULL) return;
+      StringCpy (NewPtr, *pEl);
+      StringCat (NewPtr, ".");
+      MemFree (*pEl);
+      *pEl = NewPtr;
+    }
+  }
+}
+
+ReplaceItemPair ShortWordList[] = {
+ { "A", "a" },
+ { "About", "about" },
+ { "And", "and" },
+ { "At", "at" },
+ { "But", "but" },
+ { "By", "by" },
+ { "For", "for" },
+ { "In", "in" },
+ { "Is", "is" },
+ { "Of", "of" },
+ { "On", "on" },
+ { "Or", "or" },
+ { "The", "the" },
+ { "To", "to" },
+ { "With", "with" }
+};
+
+static void FixShortWordsInElement (CharPtr PNTR pEl)
+{
+  Int2 i;
+
+  if (pEl == NULL) return;
+  if (*pEl == NULL) return;
+
+  for (i = 0; i < sizeof (ShortWordList) / sizeof (ReplaceItemPair); i++)
+  {
+    FindReplaceString (pEl, ShortWordList[i].FindString,
+			ShortWordList[i].ReplaceString, FALSE, TRUE);
+  }
+  if (isalpha ((Int4)((*pEl)[0])))
+  {
+    (*pEl)[0] = toupper ((*pEl)[0]);
+  }
+}
+
+NLM_EXTERN void 
+FixCapitalizationInElement 
+(CharPtr PNTR pEl,
+ Boolean      bAbbrev, 
+ Boolean      bShortWords,
+ Boolean      bApostrophes)
+{
+  CharPtr pCh;
+  Boolean bSendToLower;
+ 
+  if(pEl == NULL) return; 
+  if(*pEl == NULL) return; 
+
+  bSendToLower = FALSE;
+  for(pCh = *pEl; *pCh != 0; pCh++)
+  {
+    if(isalpha((Int4)(*pCh)))
+    {
+      if(bSendToLower)
+      {
+        *pCh = tolower(*pCh);
+      }
+      else
+      {
+        *pCh = toupper(*pCh);
+        bSendToLower = TRUE;
+      }
+    }
+    else if (bApostrophes || *pCh != '\'')
+    {
+      bSendToLower = FALSE;
+    }
+  }
+  if (bShortWords)
+    FixShortWordsInElement (pEl);
+  if (bAbbrev)
+    FixAbbreviationsInElement (pEl);
+}
+
+
+NLM_EXTERN void FixOrgNamesInString (CharPtr str, ValNodePtr org_names)
+{
+  ValNodePtr vnp;
+  CharPtr    cp, taxname;
+  Int4       taxname_len;
+  
+  if (StringHasNoText (str) || org_names == NULL) return;
+  for (vnp = org_names; vnp != NULL; vnp = vnp->next)
+  {
+    taxname = (CharPtr) org_names->data.ptrvalue;
+    taxname_len = StringLen (taxname);
+    cp = StringISearch (str, taxname);
+    while (cp != NULL)
+    {
+      StringNCpy (cp, taxname, taxname_len);
+      cp = StringISearch (cp + taxname_len, taxname);
+    }
+  }
+}
+
+
+NLM_EXTERN void ResetCapitalization (Boolean first_is_upper, CharPtr pString)
+{
+  CharPtr pCh;
+  Boolean was_digit = FALSE;
+
+  pCh = pString;
+  if (pCh == NULL) return;
+  if (*pCh == '\0') return;
+  
+  if (first_is_upper)
+  {
+    /* Set first character to upper */
+    *pCh = toupper (*pCh);	
+  }
+  else
+  {
+    /* set first character to lower */
+    *pCh = tolower (*pCh);	
+  }
+  
+  if (isdigit ((Int4)(*pCh)))
+  {
+  	was_digit = TRUE;
+  }
+  pCh++;
+  /* Set rest of characters to lower */
+  while (*pCh != '\0')
+  {
+    if (was_digit 
+        && (*pCh == 'S' || *pCh == 's') 
+        && (isspace ((Int4)(*(pCh + 1))) || *(pCh + 1) == 0))
+    {
+      *pCh = toupper (*pCh);
+      was_digit = FALSE;
+    }
+    else if (isdigit ((Int4)(*pCh)))
+    {
+      was_digit = TRUE;
+    }
+    else
+    {
+      was_digit = FALSE;
+      *pCh = tolower (*pCh);
+    }
+    pCh++;
+  }  
+}
+
+
+static Boolean IsAllDigits (CharPtr str)
+{
+  CharPtr cp;
+
+  if (StringHasNoText (str)) return FALSE;
+
+  cp = str;
+  while (*cp != 0 && isdigit (*cp)) {
+    cp++;
+  }
+  if (*cp == 0) {
+    return TRUE;
+  } else {
+    return FALSE;
+  }
+}
+
+
+NLM_EXTERN SeqIdPtr CreateSeqIdFromText (CharPtr id_str, SeqEntryPtr sep)
+{
+  BioseqPtr   bsp = NULL;
+  CharPtr     tmpstr;
+  SeqIdPtr    sip = NULL;
+  SeqEntryPtr scope;
+  
+  if (StringStr (id_str, "|") == NULL) {
+    tmpstr = (CharPtr) MemNew (sizeof (Char) * (StringLen (id_str) + 20));
+    sprintf (tmpstr, "lcl|%s", id_str);
+    sip = SeqIdParse (tmpstr);
+    if (sip != NULL) {
+      scope = SeqEntrySetScope (sep);
+      bsp = BioseqFind (sip);
+      SeqEntrySetScope (scope);
+      if (bsp == NULL) {
+        sip = SeqIdFree (sip);
+      }
+    } 
+    if (bsp == NULL) {
+      sprintf (tmpstr, "gb|%s", id_str);
+      sip = SeqIdParse (tmpstr);
+      if (sip != NULL) {
+        scope = SeqEntrySetScope (sep);
+        bsp = BioseqFind (sip);
+        SeqEntrySetScope (scope);
+        if (bsp == NULL) {
+          sip = SeqIdFree (sip);
+        }
+      }
+    }
+    if (bsp == NULL) {
+      sprintf (tmpstr, "gnl|%s", id_str);
+      sip = SeqIdParse (tmpstr);
+      if (sip != NULL) {
+        scope = SeqEntrySetScope (sep);
+        bsp = BioseqFind (sip);
+        SeqEntrySetScope (scope);
+        if (bsp == NULL) {
+          sip = SeqIdFree (sip);
+        }
+      }
+    }
+    if (bsp == NULL) {
+      if (StringNICmp (id_str, "bankit", 6) == 0) {
+        sprintf (tmpstr, "gnl|BankIt|%s", id_str + 6);
+      } else {
+        sprintf (tmpstr, "gnl|BankIt|%s", id_str);
+      }
+      sip = SeqIdParse (tmpstr);
+      if (sip != NULL) {
+        scope = SeqEntrySetScope (sep);
+        bsp = BioseqFind (sip);
+        SeqEntrySetScope (scope);
+        if (bsp == NULL) {
+          sip = SeqIdFree (sip);
+        }
+      }
+    }
+
+    if (bsp == NULL) {
+      sprintf (tmpstr, "gnl|NCBIFILE|%s", id_str);
+      sip = SeqIdParse (tmpstr);
+      if (sip != NULL) {
+        scope = SeqEntrySetScope (sep);
+        bsp = BioseqFind (sip);
+        SeqEntrySetScope (scope);
+        if (bsp == NULL) {
+          sip = SeqIdFree (sip);
+        }
+      }
+    }
+
+    if (bsp == NULL && IsAllDigits (id_str)) {
+      sprintf (tmpstr, "gi|%s", id_str);
+      sip = SeqIdParse (tmpstr);
+      if (sip != NULL) {
+        scope = SeqEntrySetScope (sep);
+        bsp = BioseqFind (sip);
+        SeqEntrySetScope (scope);
+        if (bsp == NULL) {
+          sip = SeqIdFree (sip);
+        }
+      }
+    }
+    MemFree (tmpstr);
+  } else {
+    sip = SeqIdParse (id_str);
+    if (sip != NULL) {
+      scope = SeqEntrySetScope (sep);
+      bsp = BioseqFind (sip);
+      SeqEntrySetScope (scope);
+      if (bsp == NULL) {
+        sip = SeqIdFree (sip);
+      }
+    }
+  }        
+  return sip;
+}
+
+
+NLM_EXTERN SeqLocPtr SeqLocWholeNew (BioseqPtr bsp)
+{
+  ValNodePtr vnp;
+
+  if (bsp == NULL) return NULL;
+
+  vnp = ValNodeNew (NULL);
+
+  if (vnp == NULL) return NULL;
+
+  vnp->choice = SEQLOC_WHOLE;
+  vnp->data.ptrvalue = (Pointer) SeqIdDup (SeqIdFindBest (bsp->id, 0));
+  return (SeqLocPtr)vnp;
+}
+
+
+NLM_EXTERN Int4 GetDeltaSeqLen (DeltaSeqPtr dsp)
+{
+  Int4 len = 0;
+  SeqLitPtr slp;
+
+  if (dsp == NULL || dsp->data.ptrvalue == NULL) {
+    /* do nothing, empty */
+  } else if (dsp->choice == 1) {
+    len = SeqLocLen ((SeqLocPtr)(dsp->data.ptrvalue));
+  } else if (dsp->choice == 2) {
+    slp = (SeqLitPtr) dsp->data.ptrvalue;
+    len = slp->length;
+  }
+  return len;
+}
+
+
+/* The following section of code is used for retranslating a CDS and updating
+ * the protein features based on an alignment between the old and new protein
+ * sequences.
+ */
+static Int4 SeqEdRemapCoord (SeqAlignPtr salp, Int4 coord, Boolean move_up, Int4 len)
+
+{
+  Int4 aln_pos;
+  
+  if (salp == NULL) return -1;
+  aln_pos = AlnMgr2MapBioseqToSeqAlign (salp, coord, 1);
+  while (aln_pos == -1)
+  {
+  	if (move_up)
+  	{
+  	  if (coord >= len - 1)
+  	  {
+  	  	return len - 1;
+  	  }
+  	  else
+  	  {
+  	  	coord ++;
+  	  }
+  	}
+  	else
+  	{
+  	  if (coord <= 0)
+  	  {
+  	  	return 0;
+  	  }
+  	  else
+  	  {
+  	  	coord --;
+  	  }
+  	}
+  	aln_pos = AlnMgr2MapBioseqToSeqAlign (salp, coord, 1);
+  }
+  return AlnMgr2MapSeqAlignToBioseq (salp, aln_pos, 2);
+}
+
+
+static void SeqEdRemapSeqIntLoc (SeqAlignPtr salp, SeqIntPtr sintp, Int4 seq_len)
+
+{  
+  if (salp == NULL || sintp == NULL) return;
+  sintp->from = SeqEdRemapCoord (salp, sintp->from, TRUE, seq_len);
+  sintp->to = SeqEdRemapCoord (salp, sintp->to, FALSE, seq_len); 
+}
+
+static void SeqEdRemapSeqPntLoc (SeqAlignPtr salp, SeqPntPtr spp, Int4 seq_len)
+
+{  
+  if (salp == NULL || spp == NULL) return;
+  
+  spp->point = SeqEdRemapCoord (salp, spp->point, FALSE, seq_len);
+}
+
+
+static void SeqEdRemapPackSeqPnt (SeqAlignPtr salp, PackSeqPntPtr pspp, Int4 seq_len)
+
+{
+  Uint1          used;
+
+  if (salp == NULL || pspp == NULL) return;
+  for (used = 0; used < pspp->used; used++) 
+  {
+    pspp->pnts [used] = SeqEdRemapCoord (salp, pspp->pnts [used], FALSE, seq_len);
+  }
+}
+
+
+NLM_EXTERN void SeqEdRemapLocation (SeqAlignPtr salp, SeqLocPtr slp, Int4 seq_len)
+
+{
+
+  if (slp == NULL) return;
+  switch (slp->choice) {
+    case SEQLOC_INT :
+      SeqEdRemapSeqIntLoc (salp, slp->data.ptrvalue, seq_len);
+      break;
+    case SEQLOC_PNT :
+      SeqEdRemapSeqPntLoc (salp, slp->data.ptrvalue, seq_len);
+      break;
+    case SEQLOC_PACKED_PNT :
+      SeqEdRemapPackSeqPnt (salp, slp->data.ptrvalue, seq_len);
+      break;
+    default :
+      break;
+  }
+}
+
+
+static void MakeLocationMatchEntireSequence (SeqLocPtr slp, BioseqPtr bsp)
+{
+  SeqIntPtr sip;
+  
+  if (slp == NULL || bsp == NULL) return;
+  
+  if (slp->choice == SEQLOC_WHOLE)
+  {
+  	SeqIdFree (slp->data.ptrvalue);
+  	slp->data.ptrvalue = SeqIdDup (bsp->id);
+  }
+  else if (slp->choice == SEQLOC_INT)
+  {
+    sip = (SeqIntPtr) slp->data.ptrvalue;
+    if (sip == NULL)
+    {
+      sip = SeqIntNew ();
+      slp->data.ptrvalue = sip;
+    }
+    if (sip != NULL)
+    {
+      sip->from = 0;
+      sip->to = bsp->length - 1;
+    }
+  }
+}
+
+
+NLM_EXTERN Boolean SeqEdFixProteinFeatures (BioseqPtr oldbsp, BioseqPtr newbsp, Boolean force_fix, GlobalAlignFunc align_func)
+{
+  SeqAlignPtr       salp = NULL;
+  Boolean           revcomp = FALSE;
+  SeqFeatPtr        sfp;
+  Boolean           tried_to_get_alignment = FALSE;
+  Boolean           unmappable_feats = FALSE;
+  SeqLocPtr         slp_tmp = NULL;
+  SeqAnnotPtr       sap;
+  ProtRefPtr        prp;
+  
+  if (oldbsp == NULL || newbsp == NULL) return FALSE;
+
+  /* get alignment between old and new proteins */
+
+  if (ISA_na (oldbsp->mol) != ISA_na (newbsp->mol)) return FALSE;
+
+  /* iterate through the features on the old protein.  Full length features
+   * should be set to the new length.  Other features should be mapped through
+   * the alignment (if possible), otherwise warn the user that they could not
+   * be remapped. */      
+
+  if (!force_fix)
+  {
+    for (sap = oldbsp->annot; sap != NULL && !unmappable_feats; sap = sap->next) {
+      if (sap->type == 1) {
+        for (sfp = sap->data; sfp != NULL && !unmappable_feats; sfp = sfp->next) {
+          if (sfp->data.choice != SEQFEAT_PROT || sfp->data.value.ptrvalue == NULL) {
+            continue;
+          }
+          prp = (ProtRefPtr) sfp->data.value.ptrvalue;
+          if (prp->processed != 0)
+          {
+            if (salp == NULL)
+            {
+              if (align_func != NULL)
+              {
+                salp = align_func (oldbsp, newbsp, &revcomp);
+              }
+            }
+            if (salp == NULL)
+            {
+              unmappable_feats = TRUE;
+            } 
+            else
+            {
+              slp_tmp = (SeqLocPtr) AsnIoMemCopy (sfp->location,
+                                                  (AsnReadFunc) SeqLocAsnRead,
+                                                  (AsnWriteFunc) SeqLocAsnWrite);
+              SeqEdRemapLocation (salp, slp_tmp, newbsp->length);	  	  	
+              if (slp_tmp == NULL)
+              {
+                unmappable_feats = TRUE;
+              }
+              else
+              {
+                slp_tmp = SeqLocFree (slp_tmp);
+              }
+            }
+          }
+        }
+      }
+    }
+    if (unmappable_feats)
+    {
+      return FALSE;
+    }
+  }
+
+  for (sap = oldbsp->annot; sap != NULL && !unmappable_feats; sap = sap->next) {
+    if (sap->type == 1) {
+      for (sfp = sap->data; sfp != NULL && !unmappable_feats; sfp = sfp->next) {
+        if (sfp->data.choice != SEQFEAT_PROT || sfp->data.value.ptrvalue == NULL) {
+          continue;
+        }
+        prp = (ProtRefPtr) sfp->data.value.ptrvalue;
+        if (prp->processed == 0)
+        {
+          /* make new location match new sequence length */
+          MakeLocationMatchEntireSequence (sfp->location, newbsp);
+        }
+        else
+        {
+          if (salp == NULL && !tried_to_get_alignment && align_func != NULL)
+          {
+            salp = align_func (oldbsp, newbsp, &revcomp);
+            tried_to_get_alignment = TRUE;
+          }
+          if (salp != NULL)
+          {
+            SeqEdRemapLocation (salp, sfp->location, newbsp->length);	  	  	
+          }
+          else
+          {
+            unmappable_feats = TRUE;
+          }
+        }
+      }
+    }
+  } 
+        
+  if (salp != NULL)
+  {
+    SeqAlignFree (salp);
+  }
+  if (unmappable_feats)
+  {
+    return FALSE;
+  }
+  else
+  {
+    return TRUE;
+  }
+}
+
+
+NLM_EXTERN void SeqEdTranslateOneCDS (SeqFeatPtr sfp, BioseqPtr featbsp, Uint2 entityID, GlobalAlignFunc align_func)
+{
+  ByteStorePtr  bs;
+  Char          ch;
+  CharPtr       prot;
+  CharPtr       ptr;
+  Int4          star_at_end = 0;
+  BioseqPtr     old_prot;
+  SeqIdPtr      new_prot_id;
+  SeqEntryPtr   parent, new_prot_sep;
+  SeqLocPtr     slp;
+  Uint1         seq_data_type;
+  Int4          old_length;
+  BioseqPtr     newbsp;
+  ProtRefPtr    prp;
+  SeqFeatPtr    prot_sfp;
+  SeqDataPtr    sdp;
+  
+  if (featbsp == NULL || sfp == NULL || sfp->location == NULL 
+      || sfp->data.choice != SEQFEAT_CDREGION) 
+  {
+  	return;
+  }
+  
+  old_prot = BioseqFindFromSeqLoc (sfp->product);
+  new_prot_id = SeqIdDup (SeqLocId (sfp->product));
+  if (new_prot_id == NULL)
+  {
+  	new_prot_id = MakeNewProteinSeqId (sfp->location, featbsp->id);
+  }
+  	
+  bs = ProteinFromCdRegionEx (sfp, TRUE, FALSE);
+  if (bs != NULL) {
+    prot = BSMerge (bs, NULL);
+    bs = BSFree (bs);
+    if (prot != NULL) {
+      ptr = prot;
+      ch = *ptr;
+      while (ch != '\0') {
+        *ptr = TO_UPPER (ch);
+        if (ch == '*') {
+          star_at_end = 1;
+        } else {
+          star_at_end = 0;
+        }
+        ptr++;
+        ch = *ptr;
+      }
+      if (star_at_end)
+      {
+      	*(ptr - 1) = 0;
+      }
+      bs = BSNew (1000);
+      if (bs != NULL) {
+        ptr = prot;
+        BSWrite (bs, (VoidPtr) ptr, (Int4) StringLen (ptr));
+      }
+      MemFree (prot);
+    }
+    newbsp = BioseqNew ();
+    if (newbsp != NULL) {
+      newbsp->id = SeqIdParse ("lcl|CdRgnTransl");
+      newbsp->repr = Seq_repr_raw;
+      newbsp->mol = Seq_mol_aa;
+      newbsp->seq_data_type = Seq_code_ncbieaa;
+      newbsp->seq_data = (SeqDataPtr) bs;
+      newbsp->length = BSLen (bs);
+      
+      if (old_prot == NULL)
+      {
+  	    /* need to create a new protein sequence */
+  	    SeqIdFree (newbsp->id);
+  	    newbsp->id = new_prot_id;
+  	    new_prot_sep = SeqEntryNew ();
+  	    new_prot_sep->choice = 1;
+  	    new_prot_sep->data.ptrvalue = newbsp;
+  	    parent = GetBestTopParentForData (entityID, featbsp);
+  	    if (parent != NULL)
+  	    {
+  	      AddSeqEntryToSeqEntry (parent, new_prot_sep, TRUE);
+  	    }
+  	    slp = ValNodeNew (NULL);
+  	    if (slp != NULL)
+  	    {
+  	      slp->choice = SEQLOC_WHOLE;
+  	      slp->data.ptrvalue = SeqIdDup (new_prot_id);
+  	    }
+  	    sfp->product = slp;
+  	    
+  	    /* create full length protein feature */
+        prp = ProtRefNew ();
+        prot_sfp = CreateNewFeature (new_prot_sep, NULL, SEQFEAT_PROT, NULL);
+        if (prot_sfp != NULL) {
+          prot_sfp->data.value.ptrvalue = (Pointer) prp;
+        }
+      }
+      else
+      {
+        /* propagate features to new protein */
+        if (!SeqEdFixProteinFeatures (old_prot, newbsp, TRUE, align_func))
+        {
+          Message (MSG_ERROR, "Unable to construct alignment between old and new "
+                  "proteins - you will need to adjust the protein features "
+                  "manually.");
+        }
+             	
+      	/* then replace old protein with new */
+      	seq_data_type = old_prot->seq_data_type;
+      	sdp = old_prot->seq_data;
+      	old_length = old_prot->length;
+      	old_prot->seq_data_type = newbsp->seq_data_type;
+      	old_prot->seq_data = newbsp->seq_data;
+      	old_prot->length = newbsp->length;
+      	newbsp->seq_data_type = seq_data_type;
+      	newbsp->seq_data = sdp;
+      	newbsp->length = old_length;
+      	BioseqFree (newbsp);
+      }
+    }
+  }
+}
+
+
+static SeqLocPtr RemoveGapsFromSegmentedLocation (SeqLocPtr slp, BioseqPtr bsp)
+{
+  SeqLocPtr loc_slp, slp_new, slp_tmp, loc_list = NULL, loc_last = NULL;
+  SeqIdPtr  sip;
+  Uint1     strand;
+  Int4      seq_offset, start_pos, end_pos, piece_len;
+  
+  if (slp == NULL || bsp == NULL || bsp->repr != Seq_repr_seg)
+  {
+    return slp;
+  }
+  
+  loc_slp = SeqLocFindNext (slp, NULL);
+
+  while (loc_slp != NULL)
+  {
+    strand = SeqLocStrand (loc_slp);
+    start_pos = SeqLocStart (loc_slp);
+    end_pos = SeqLocStop (loc_slp);
+  
+    /* create list of locations */
+    slp_tmp = bsp->seq_ext;
+    seq_offset = 0;
+    while (slp_tmp != NULL)
+    {
+      piece_len = SeqLocLen (slp_tmp);
+      
+      if (seq_offset < end_pos
+          && seq_offset + piece_len >= start_pos)
+      {
+        sip = SeqLocId (slp_tmp);
+      
+        slp_new = SeqLocIntNew (MAX (0, start_pos - seq_offset),
+                                MIN (piece_len, end_pos - seq_offset),
+                                strand, sip);
+
+        if (slp_new != NULL)
+        {
+          if (loc_last == NULL)
+          {
+            loc_list = slp_new;
+          }
+          else
+          {
+            loc_last->next = slp_new;
+          }
+          loc_last = slp_new;
+        }
+      }
+      seq_offset += piece_len;
+      slp_tmp = slp_tmp->next;
+    }
+    loc_slp = SeqLocFindNext (slp, loc_slp);
+  }
+  
+  if (loc_list == NULL)
+  {
+    /* failed to convert - do not change */
+  }
+  else if (loc_list->next == NULL)
+  {
+    /* only found one piece */
+    slp = SeqLocFree (slp);
+    slp = loc_list;
+  }
+  else
+  {
+    /* make mixed location */
+    slp_new = ValNodeNew (NULL);
+    if (slp_new != NULL)
+    {
+      slp_new->choice = SEQLOC_MIX;
+      slp_new->data.ptrvalue = loc_list;
+      slp = SeqLocFree (slp);
+      slp = slp_new;
+    }
+  }
+  return slp;
+}
+
+static Boolean PointInInterval (Int4 interval_start, Int4 interval_length, Int4 point)
+{
+  if (point >= interval_start && point < interval_start + interval_length) 
+  {
+    return TRUE;
+  }
+  else
+  {
+    return FALSE;
+  }
+}
+
+NLM_EXTERN Boolean GapInLocation (Int4 seq_offset, Int4 length, SeqLocPtr loc)
+{
+  SeqLocPtr slp;
+  Int4      start, stop;
+  Boolean   gap_in_location = FALSE;
+  
+  slp = SeqLocFindNext (loc, NULL);
+  
+  while (slp != NULL && ! gap_in_location)
+  {
+    start = SeqLocStart (slp);
+    stop = SeqLocStop (slp);
+    
+    if (PointInInterval (seq_offset, length, start)
+        || PointInInterval (seq_offset, length, stop)
+        || PointInInterval (start, stop - start + 1, seq_offset)
+        || PointInInterval (start, stop - start + 1, seq_offset + length))
+    {
+      gap_in_location = TRUE;
+    }
+    
+    slp = SeqLocFindNext (loc, slp);
+  }
+  return gap_in_location;
+}
+
+
+NLM_EXTERN void
+LocationContainsGaps
+(SeqLocPtr slp,
+ BioseqPtr bsp,
+ Boolean   unknown_gaps,
+ Boolean   known_gaps,
+ BoolPtr   terminal_gaps,
+ BoolPtr   internal_gaps,
+ BoolPtr   entirely_in_gap)
+{
+  DeltaSeqPtr dsp;
+  Int4        seq_offset = 0;
+  Int4        dsp_len;
+  Boolean     has_terminal_gaps = FALSE;
+  Boolean     has_internal_gaps = FALSE;
+  Boolean     all_sublocs_in_gap = TRUE, this_subloc_in_gap = FALSE, this_subloc_start_gap = FALSE, this_subloc_stop_gap = FALSE;
+  Boolean     right_sublocs_in_gap = FALSE;
+  SeqLocPtr   tmp_slp;
+  Int4        start, stop;
+
+  if (slp == NULL || bsp == NULL 
+      || bsp->repr != Seq_repr_delta
+      || bsp->seq_ext_type != 4
+      || bsp->seq_ext == NULL)
+  {
+    return;
+  }
+    
+  for (tmp_slp = SeqLocFindNext (slp, NULL); 
+       tmp_slp != NULL;
+       tmp_slp = SeqLocFindNext (slp, tmp_slp))
+  {
+    seq_offset = 0;
+    start = SeqLocStart (tmp_slp);
+    stop = SeqLocStop (tmp_slp);
+    this_subloc_in_gap = FALSE;
+    this_subloc_start_gap = FALSE;
+    this_subloc_stop_gap = FALSE;
+    for (dsp = (DeltaSeqPtr) bsp->seq_ext;
+         dsp != NULL && seq_offset <= stop && !this_subloc_in_gap;
+         dsp = dsp->next)
+    {
+      dsp_len = GetDeltaSeqLen(dsp);
+      if (IsDeltaSeqGap (dsp) && !DoesDeltaSeqHaveGapTypeOrLinkage(dsp)
+          && ((unknown_gaps && IsDeltaSeqUnknownGap (dsp))
+              || (known_gaps && IsDeltaSeqKnownGap (dsp)))
+          && GapInLocation (seq_offset, dsp_len, tmp_slp))
+      {
+        if (PointInInterval (seq_offset, dsp_len, start)
+            && PointInInterval (seq_offset, dsp_len, stop))
+        {
+          this_subloc_in_gap = TRUE;
+        }
+        else if (PointInInterval (seq_offset, dsp_len, start))
+        {
+          this_subloc_start_gap = TRUE;
+        }
+        else if (PointInInterval (seq_offset, dsp_len, stop)) 
+        {
+          this_subloc_stop_gap = TRUE;
+        }
+        else 
+        {
+          has_internal_gaps = TRUE;
+        }
+      }
+      seq_offset += dsp_len;
+    }
+
+    if (this_subloc_in_gap)
+    {
+      /* all sublocs up to this point have been in the gap, so still part of left gap */
+      if (all_sublocs_in_gap)
+      {
+        has_terminal_gaps = TRUE;
+      }
+      /* could be part of chain of sublocs on the right in gap */
+      right_sublocs_in_gap = TRUE;
+    }
+    else
+    {
+      if (right_sublocs_in_gap && !all_sublocs_in_gap)
+      {
+        /* a chain of prior gapped sublocs has ended that did not start at the left end */
+        has_internal_gaps = TRUE;
+      }
+
+      if (this_subloc_start_gap)
+      { 
+        if (all_sublocs_in_gap)
+        {
+          has_terminal_gaps = TRUE;
+        }
+        else
+        {
+          /* gap on left, not part of chain of sublocs on left in gap */
+          has_internal_gaps = TRUE;
+        }
+      } 
+      
+      if (this_subloc_stop_gap)
+      {
+        /* could be start of chain of sublocs on the right in gap */
+        right_sublocs_in_gap = TRUE;
+      }
+      else
+      {
+        right_sublocs_in_gap = FALSE;
+      }
+      /* at least this subloc is not completely contained in a gap */
+      all_sublocs_in_gap = FALSE;
+    }
+  }
+
+  if (right_sublocs_in_gap)
+  {
+    has_terminal_gaps = TRUE;
+  }
+
+  if (all_sublocs_in_gap)
+  {
+    has_terminal_gaps = FALSE;
+    has_internal_gaps = FALSE;
+  }
+
+  if (terminal_gaps != NULL)
+  {
+    *terminal_gaps = has_terminal_gaps;
+  }
+
+  if (internal_gaps != NULL)
+  {
+    *internal_gaps = has_internal_gaps;
+  }
+
+  if (entirely_in_gap != NULL)
+  {
+    *entirely_in_gap = all_sublocs_in_gap;
+  }
+}
+
+
+static SeqLocPtr 
+RemoveGapsFromDeltaLocation 
+(SeqLocPtr slp,
+ BioseqPtr bsp,
+ Boolean   unknown_gaps,
+ Boolean   known_gaps,
+ Boolean   trim_ends,
+ Boolean   split_internal,
+ Boolean   set_partial_ends,
+ BoolPtr   split)
+{
+  DeltaSeqPtr dsp;
+  Int4        seq_offset = 0;
+  Int4        dsp_len;
+  SeqLocPtr   loc_list = NULL, prev_loc = NULL;
+  SeqIdPtr    sip, before_sip, after_sip;
+  Boolean     changed, partial5, partial3;
+  SeqLocPtr   before = NULL, after = NULL;
+  Int4        start, stop;
+  Boolean     delete_for_this_gap;
+  Uint1       strand;
+
+  if (slp == NULL || bsp == NULL 
+      || bsp->repr != Seq_repr_delta
+      || bsp->seq_ext_type != 4
+      || bsp->seq_ext == NULL)
+  {
+    return slp;
+  }
+  
+  sip = SeqLocId (slp);
+  if (sip == NULL)
+  {
+    return slp;
+  }
+  
+  CheckSeqLocForPartial (slp, &partial5, &partial3);
+  
+  seq_offset = 0;
+  before = SeqLocCopy (slp);
+  loc_list = before;
+  
+  for (dsp = (DeltaSeqPtr) bsp->seq_ext;
+       dsp != NULL;
+       dsp = dsp->next)
+  {
+    dsp_len = GetDeltaSeqLen(dsp);
+    if (IsDeltaSeqGap (dsp) && !DoesDeltaSeqHaveGapTypeOrLinkage(dsp)
+        && ((unknown_gaps && IsDeltaSeqUnknownGap (dsp))
+            || (known_gaps && IsDeltaSeqKnownGap (dsp)))
+        && GapInLocation (seq_offset, dsp_len, before))
+    {
+      delete_for_this_gap = TRUE;
+      start = SeqLocStart (before);
+      stop = SeqLocStop (before);
+      if (PointInInterval (seq_offset, dsp_len, start)
+          && PointInInterval (seq_offset, dsp_len, stop))
+      {
+        loc_list = SeqLocFree (loc_list);
+        before = NULL;
+        after = NULL;
+        break;
+      }
+      else if (!PointInInterval (seq_offset, dsp_len, start) 
+          && !PointInInterval (seq_offset, dsp_len, stop)) 
+      {
+        if (!split_internal) 
+        {
+          delete_for_this_gap = FALSE;
+        }
+        else
+        {
+          if (split != NULL)
+          {
+            *split = TRUE;
+          }
+        }
+      }
+      else if (!trim_ends)
+      {
+        delete_for_this_gap = FALSE;
+      }
+
+      if (delete_for_this_gap)
+      {
+        /* get strand - determines direction of partials */
+        strand = SeqLocStrand (before);
+
+        /* we make a copy of the original location */
+        after = SeqLocCopy (before);
+        
+        /* note - we need to use duplicates of the SeqID returned by
+         * SeqLocId, just in case the first location in a mixed location 
+         * is deleted, which would free the result from SeqLocId 
+         */
+        after_sip = SeqIdDup (SeqLocId (after));
+        before_sip = SeqIdDup (SeqLocId (before));
+        /* in the "after" location, we free everything before the 
+         * end of the gap.
+         */
+        after = SeqLocDeleteEx (after, after_sip,
+                          0, seq_offset + dsp_len - 1,
+                          FALSE, &changed, &partial5, &partial3);
+                          
+        /* in the "before" location, we free everything after the
+         * beginning of the gap.
+         */
+        before = SeqLocDeleteEx (before, before_sip, 
+                          seq_offset, bsp->length,
+                          FALSE, &changed, &partial5, &partial3);
+        
+        /* handle partialness for ends */
+        CheckSeqLocForPartial (after, &partial5, &partial3);
+        if (strand == Seq_strand_minus) 
+        {
+          if (before == NULL)
+          {
+            /* truncated at 3' end */
+            SetSeqLocPartial (after, partial5, set_partial_ends);
+          }
+          else
+          {
+            SetSeqLocPartial (after, partial5, TRUE);
+          }
+
+        }
+        else
+        {        
+          if (before == NULL)
+          {
+            /* truncated at 5' end*/
+            SetSeqLocPartial (after, set_partial_ends, partial3);
+          }
+          else
+          {
+            SetSeqLocPartial (after, TRUE, partial3);
+          }
+        }
+       
+        CheckSeqLocForPartial (before, &partial5, &partial3);
+        if (strand == Seq_strand_minus)
+        {
+          if (after == NULL) 
+          {
+            /* truncated at 5' end*/
+            SetSeqLocPartial (before, set_partial_ends, partial3);
+          } else {
+            SetSeqLocPartial (before, TRUE, partial3);
+          }
+        }
+        else
+        {
+          if (after == NULL) 
+          {
+            /* truncated */
+            SetSeqLocPartial (before, partial5, set_partial_ends);
+          } else {
+            SetSeqLocPartial (before, partial5, TRUE);
+          }
+        }
+        
+        /* we're done with these IDs now */                  
+        after_sip = SeqIdFree (after_sip);
+        before_sip = SeqIdFree (before_sip);                          
+                          
+        if (before == NULL)
+        {
+          if (prev_loc == NULL)
+          {
+            loc_list = after;
+          }
+          else
+          {
+            prev_loc->next = after;
+          }
+        }
+        else
+        {
+          before->next = after;
+          prev_loc = before;
+        }        
+        before = after;
+      }
+    }
+    seq_offset += dsp_len;
+  }
+
+  slp = SeqLocFree (slp);
+  return loc_list;  
+}
+
+
+static SeqLocPtr 
+RemoveGapsFromLocation 
+(SeqLocPtr slp, 
+ Boolean   unknown_gaps,
+ Boolean   known_gaps,
+ Boolean   trim_ends,
+ Boolean   split_internal,
+ Boolean   set_partial_ends,
+ BoolPtr   split)
+{
+  BioseqPtr   bsp;
+  SeqIdPtr    sip;
+  
+  if (slp == NULL)
+  {
+    return slp;
+  }
+  
+  sip = SeqLocId (slp);
+  if (sip == NULL)
+  {
+    return slp;
+  }
+  
+  bsp = BioseqFind (sip);
+  if (bsp == NULL)
+  {
+    return slp;
+  }
+  else if (bsp->repr == Seq_repr_seg)
+  {
+    if (!split_internal) {
+      return slp;
+    } else {
+      return RemoveGapsFromSegmentedLocation (slp, bsp);
+    }
+  }
+  else if (bsp->repr == Seq_repr_delta
+          && bsp->seq_ext_type == 4
+          && bsp->seq_ext != NULL)
+  {
+    return RemoveGapsFromDeltaLocation (slp, bsp, unknown_gaps, known_gaps, trim_ends, split_internal, set_partial_ends, split);
+  }
+  else
+  {
+    return slp;
+  }
+}
+
+NLM_EXTERN void AdjustFrame (SeqFeatPtr sfp, BioseqPtr oldprot)
+{
+  ByteStorePtr bs;
+  CdRegionPtr  crp;
+  CharPtr      oldprot_str, newprot_str;
+  Uint1        orig_frame, best_frame = 0;
+  
+  if (sfp == NULL || sfp->data.choice != SEQFEAT_CDREGION
+      || sfp->data.value.ptrvalue == NULL
+      || oldprot == NULL)
+  {
+    return;
+  }
+  
+  crp = (CdRegionPtr) sfp->data.value.ptrvalue;
+  
+  oldprot_str = GetSequenceByBsp (oldprot);
+  
+  orig_frame = crp->frame;
+  for (crp->frame = 1; crp->frame <= 3 && best_frame == 0; crp->frame++)
+  {
+    newprot_str = NULL;
+    bs = ProteinFromCdRegionEx (sfp, TRUE, FALSE);
+    if (bs != NULL) 
+    {
+      newprot_str = BSMerge (bs, NULL);
+      bs = BSFree (bs);
+    }
+    
+    if (StringHasNoText (newprot_str))
+    {
+      newprot_str = MemFree (newprot_str);
+      continue;
+    }
+    if (StringSearch (oldprot_str, newprot_str) != NULL
+        || StringSearch (oldprot_str, newprot_str + 1) != NULL)
+    {
+      best_frame = crp->frame;
+    }
+    else
+    {
+      newprot_str [StringLen (newprot_str) - 1] = 0;
+      if (StringSearch (oldprot_str, newprot_str) != NULL
+          || StringSearch (oldprot_str, newprot_str + 1) != NULL)
+      {
+        best_frame = crp->frame;
+      }
+    }
+    newprot_str = MemFree (newprot_str);
+  }
+  oldprot_str = MemFree (oldprot_str);
+  if (best_frame > 0)
+  {
+    crp->frame = best_frame;
+  }
+  else
+  {
+    crp->frame = orig_frame;
+  }
+
+}
+
+
+NLM_EXTERN AdjustFeatForGapPtr AdjustFeatForGapFree (AdjustFeatForGapPtr agp)
+{
+  if (agp != NULL) {
+    agp->feature_list = ValNodeFree (agp->feature_list);
+    agp->features_in_gap = ValNodeFree (agp->features_in_gap);
+    agp = MemFree (agp);
+  }
+  return agp;
+}
+ 
+
+NLM_EXTERN Boolean FeatureOkForFeatureList (SeqFeatPtr sfp, ValNodePtr feature_list)
+{
+  ValNodePtr vnp;
+  Boolean    rval = FALSE;
+
+  if (sfp == NULL) return FALSE;
+  if (feature_list == NULL) return TRUE;
+  for (vnp = feature_list; vnp != NULL && !rval; vnp = vnp->next) {
+    if (vnp->choice == 255 || vnp->choice == sfp->idx.subtype) {
+      rval = TRUE;
+    }
+  }
+  return rval;
+}
+
+
+NLM_EXTERN SeqFeatPtr GetGeneForFeature (SeqFeatPtr sfp)
+{
+  GeneRefPtr grp;
+  SeqFeatPtr overlap_gene;
+  Boolean    is_suppressed;
+  SeqMgrFeatContext fcontext;
+
+  grp = SeqMgrGetGeneXref (sfp);
+  is_suppressed = SeqMgrGeneIsSuppressed (grp);
+  if (is_suppressed) return NULL;
+
+  if (grp != NULL) {
+    overlap_gene = SeqMgrGetGeneByLocusTag (BioseqFindFromSeqLoc(sfp->location), grp->locus_tag, &fcontext);
+  } else {
+    overlap_gene = SeqMgrGetOverlappingGene(sfp->location, &fcontext);
+  }
+  return overlap_gene;
+}
+
+
+const char *cds_gap_comment = "coding region disrupted by sequencing gap";
+
+NLM_EXTERN void AddCDSGapComment (SeqFeatPtr sfp)
+{
+  CharPtr new_comment = NULL;
+  
+  if (sfp == NULL || StringSearch (sfp->comment, cds_gap_comment) != NULL)
+  {
+    return;
+  }
+  
+  if (StringHasNoText (sfp->comment))
+  {
+    sfp->comment = MemFree (sfp->comment);
+    sfp->comment = StringSave (cds_gap_comment);
+  }
+  else
+  {
+    new_comment = (CharPtr) MemNew ((StringLen (sfp->comment) 
+                                     + StringLen (cds_gap_comment)
+                                     + 4) * sizeof (Char));
+    StringCpy (new_comment, sfp->comment);
+    StringCat (new_comment, "; ");
+    StringCat (new_comment, cds_gap_comment);
+    sfp->comment = MemFree (sfp->comment);
+    sfp->comment = new_comment;
+  }
+}
+
+
+NLM_EXTERN BioseqPtr 
+AddProteinSequenceCopy 
+(BioseqPtr  protbsp, 
+ BioseqPtr  featbsp,
+ SeqFeatPtr new_sfp,
+ Uint2      entityID)
+{
+  Char        str [128];
+  SeqIdPtr    new_id;
+  BioseqPtr   new_protbsp;
+  SeqEntryPtr prot_sep, parent_sep;
+  SeqFeatPtr  prot_sfp, prot_cpy;
+  SeqAnnotPtr sap;
+  SeqLocPtr   slp;
+
+  if (protbsp == NULL || featbsp == NULL || new_sfp == NULL)
+  {
+    return NULL;
+  }
+  
+  parent_sep = GetBestTopParentForData (entityID, featbsp);
+  if (parent_sep == NULL 
+      || !IS_Bioseq_set (parent_sep) 
+      || parent_sep->data.ptrvalue == NULL)
+  {
+    return NULL;
+  }
+  
+  SeqIdWrite (protbsp->id, str, PRINTID_REPORT, sizeof (str) - 1);    
+  new_id = MakeUniqueSeqID (str);                                            
+  new_protbsp = BioseqCopyEx (new_id, protbsp, 0, protbsp->length - 1,
+                                      Seq_strand_plus, TRUE);
+  ValNodeLink (&(new_protbsp->descr),
+               AsnIoMemCopy ((Pointer) protbsp->descr,
+                             (AsnReadFunc) SeqDescrAsnRead,
+                             (AsnWriteFunc) SeqDescrAsnWrite));
+                                      
+  prot_sep = SeqEntryNew ();
+  if (prot_sep != NULL)
+  {
+    prot_sep->choice = 1;
+    prot_sep->data.ptrvalue = new_protbsp;
+    SeqMgrSeqEntry (SM_BIOSEQ, (Pointer) new_protbsp, prot_sep);
+    AddSeqEntryToSeqEntry (parent_sep, prot_sep, TRUE);
+  }
+  
+  SeqMgrAddToBioseqIndex (new_protbsp);           
+  new_sfp->product = SeqLocWholeNew (new_protbsp); 
+
+  for (sap = protbsp->annot; sap != NULL; sap = sap->next) {
+    if (sap->type == 1) {
+      for (prot_sfp = sap->data; prot_sfp != NULL; prot_sfp = prot_sfp->next) {
+        slp = SeqLocCopy (prot_sfp->location);
+        slp = SeqLocReplaceID (slp, new_protbsp->id);
+        prot_cpy = CreateNewFeatureOnBioseq (new_protbsp, SEQFEAT_PROT, slp);
+        prot_cpy->data.value.ptrvalue = AsnIoMemCopy (prot_sfp->data.value.ptrvalue, (AsnReadFunc) ProtRefAsnRead, (AsnWriteFunc) ProtRefAsnWrite);
+      }
+    }
+  }
+  SeqMgrIndexFeatures (entityID, NULL);
+  return new_protbsp;
+}
+
+
+NLM_EXTERN void SetProductSequencePartials (BioseqPtr protbsp, Boolean partial5, Boolean partial3)
+{
+  SeqFeatPtr  prot_sfp;
+  SeqMgrFeatContext context;
+  SeqMgrDescContext dcontext;
+  SeqDescrPtr       sdp;
+  MolInfoPtr        mip;
+
+  if (protbsp == NULL)
+  {
+    return;
+  }
+        
+  /* set partials on product */
+  prot_sfp = SeqMgrGetNextFeature (protbsp, NULL, 
+                                          SEQFEAT_PROT, FEATDEF_PROT, &context);
+  if (prot_sfp != NULL)
+  {
+    SetSeqLocPartial (prot_sfp->location, partial5, partial3);
+    prot_sfp->partial = partial5 || partial3;
+  }
+        
+  sdp = SeqMgrGetNextDescriptor (protbsp, NULL, Seq_descr_molinfo, &dcontext);
+  if (sdp != NULL)
+  {
+    mip = (MolInfoPtr) sdp->data.ptrvalue;
+    if (partial5 && partial3) {
+      mip->completeness = 5;
+    } else if (partial5) {
+      mip->completeness = 3;
+    } else if (partial3) {
+      mip->completeness = 4;
+    } else if (prot_sfp != NULL && prot_sfp->partial) {
+      mip->completeness = 2;
+    } else {
+      mip->completeness = 0;
+    }
+  }  
+}
+
+
+static SeqLocPtr MakeMixedLocFromLocList (SeqLocPtr loc_list)
+{
+  SeqLocPtr   slp_mix, tmp_slp, prev_slp = NULL, next_slp;
+
+  /* make location mixed */    
+  slp_mix = ValNodeNew(NULL);
+  slp_mix->choice = SEQLOC_MIX;
+  slp_mix->data.ptrvalue = loc_list;
+  tmp_slp = loc_list;
+  while (tmp_slp != NULL) {
+    next_slp = tmp_slp->next;
+    if (tmp_slp->choice == SEQLOC_MIX) {
+      if (tmp_slp->data.ptrvalue == NULL) {
+        /* empty mixed loc, just remove it */
+        if (prev_slp == NULL) {
+          slp_mix->data.ptrvalue = tmp_slp->next;
+        } else {
+          prev_slp->next = tmp_slp->next;
+        }
+        tmp_slp->next = NULL;
+        tmp_slp = SeqLocFree (tmp_slp);
+      } else {
+        /* take sublocations and promote them */
+        if (prev_slp == NULL) {
+          slp_mix->data.ptrvalue = tmp_slp->data.ptrvalue;
+        } else {
+          prev_slp->next = tmp_slp->data.ptrvalue;
+        }
+        prev_slp = tmp_slp->data.ptrvalue;
+        while (prev_slp->next != NULL) {
+          prev_slp = prev_slp->next;
+        }
+        prev_slp->next = next_slp;
+        tmp_slp->next = NULL;
+        tmp_slp->data.ptrvalue = NULL;
+        tmp_slp = SeqLocFree (tmp_slp);
+      }
+    } else {
+      prev_slp = tmp_slp;
+    }
+    tmp_slp = next_slp;
+  }
+  return slp_mix;
+}
+
+
+NLM_EXTERN void AdjustFeatureForGapsCallback (SeqFeatPtr sfp, Pointer data)
+{
+  AdjustFeatForGapPtr afgp;
+  BioseqPtr   protbsp = NULL, new_protbsp;
+  SeqFeatPtr  new_sfp, tmp, gene, mrna;
+  Boolean     partial5, partial3;
+  Uint2       entityID;
+  SeqLocPtr   slp_new;
+  Boolean     split;
+  Boolean     split_internal;
+  ValNodePtr  tmp_list;
+  BioseqPtr   gapped_bioseq;
+  SeqMgrFeatContext fcontext;
+  Boolean           set_partial_ends;
+
+  if (sfp == NULL || data == NULL) return;
+
+  afgp = (AdjustFeatForGapPtr) data;
+
+  if (!FeatureOkForFeatureList(sfp, afgp->feature_list)) return;
+
+  gapped_bioseq = BioseqFind (SeqLocId (sfp->location));
+  
+  CheckSeqLocForPartial (sfp->location, &partial5, &partial3);
+  slp_new = (SeqLocPtr) AsnIoMemCopy (sfp->location, 
+                                      (AsnReadFunc) SeqLocAsnRead, 
+                                      (AsnWriteFunc) SeqLocAsnWrite);                                         
+  split = FALSE;
+  set_partial_ends = afgp->make_partial;
+  if (set_partial_ends && ! afgp->partial_for_pseudo) {
+    if (sfp->pseudo) {
+      set_partial_ends = FALSE;
+    } else {
+      gene = GetGeneForFeature (sfp);
+      if (gene != NULL && gene->pseudo) {
+        set_partial_ends = FALSE;
+      }
+    }
+  }
+
+  /* handle overlapping features if coding region */
+  if (sfp->data.choice == SEQFEAT_CDREGION) 
+  {    
+    split_internal = afgp->split_internal;
+    afgp->split_internal = FALSE;
+    tmp_list = afgp->feature_list;
+    afgp->feature_list = NULL;
+    gene = GetGeneForFeature (sfp);
+    AdjustFeatureForGapsCallback (gene, afgp);
+    mrna = SeqMgrGetOverlappingmRNA (sfp->location, &fcontext);
+    afgp->split_internal = split_internal;
+    AdjustFeatureForGapsCallback (mrna, afgp);
+    afgp->feature_list = tmp_list;
+  }
+
+  slp_new = RemoveGapsFromLocation (slp_new, afgp->unknown_gaps, afgp->known_gaps, afgp->trim_ends, afgp->split_internal, set_partial_ends, &split);
+  if (slp_new == NULL) {
+    ValNodeAddPointer (&(afgp->features_in_gap), OBJ_SEQFEAT, sfp);
+    return;
+  } else if (SeqLocCompare (slp_new, sfp->location) == SLC_A_EQ_B) {
+    slp_new = SeqLocFree (slp_new);
+    return;
+  }
+
+  if (split) {
+    AddCDSGapComment(sfp);
+  }
+
+  sfp->location = SeqLocFree (sfp->location);
+  sfp->location = slp_new;
+
+  if (gapped_bioseq != NULL && gapped_bioseq->repr == Seq_repr_delta)
+  {
+    entityID = gapped_bioseq->idx.entityID;
+   
+    while (sfp->location->next != NULL)
+    {
+      /* create a copy of the feature for each interval between gaps */
+      tmp = sfp->next;
+      sfp->next = NULL;
+      new_sfp = (SeqFeatPtr) AsnIoMemCopy (sfp, 
+                                          (AsnReadFunc) SeqFeatAsnRead, 
+                                          (AsnWriteFunc) SeqFeatAsnWrite);
+      sfp->next = new_sfp;
+      new_sfp->next = tmp;
+
+      new_sfp->location = sfp->location->next;
+      new_sfp->comment = StringSave (sfp->comment);
+
+      sfp->location->next = NULL;
+        
+      /* fix partials */
+      CheckSeqLocForPartial (sfp->location, &partial5, &partial3);
+      sfp->partial = partial5 || partial3;
+
+      if (sfp->data.choice == SEQFEAT_CDREGION) {
+        protbsp = BioseqFindFromSeqLoc (sfp->product);        
+        if (protbsp != NULL)
+        {
+          new_protbsp = AddProteinSequenceCopy (protbsp, gapped_bioseq, new_sfp, entityID);                                                  
+        }
+                
+        /* adjust frame */
+        AdjustFrame (sfp, protbsp);
+
+        /* retranslate coding region */
+        SeqEdTranslateOneCDS (sfp, gapped_bioseq, entityID, afgp->align_func);
+        
+        /* set partials on product */
+        if (protbsp == NULL)
+        {
+          protbsp = BioseqFindFromSeqLoc (sfp->product);
+        }
+        SetProductSequencePartials (protbsp, partial5, partial3);
+        protbsp = new_protbsp;
+      }    
+      partial5 = TRUE;
+      sfp = new_sfp;
+    }
+    /* fix partials for last feature */
+    CheckSeqLocForPartial (sfp->location, &partial5, &partial3);
+    sfp->partial = partial5 || partial3;
+
+    if (sfp->data.choice == SEQFEAT_CDREGION) 
+    {    
+      /* adjust frame */
+      protbsp = BioseqFindFromSeqLoc (sfp->product);
+      AdjustFrame (sfp, protbsp);
+
+      /* retranslate coding region */
+      SeqEdTranslateOneCDS (sfp, gapped_bioseq, entityID, afgp->align_func);
+      /* set partials on product */
+      SetProductSequencePartials (protbsp, partial5, partial3);
+    }
+  }
+  else 
+  {
+    /* make location mixed */
+    sfp->location = MakeMixedLocFromLocList (sfp->location);
+  }
+}
+
+
+NLM_EXTERN void MarkFeaturesInGapsForDeletion (AdjustFeatForGapPtr afgp)
+{
+  ValNodePtr vnp;
+  SeqFeatPtr sfp;
+  BioseqPtr  product_bsp;
+
+  if (afgp == NULL || afgp->features_in_gap == NULL)
+  {
+    return;
+  }
+  
+  for (vnp = afgp->features_in_gap; vnp != NULL; vnp = vnp->next)
+  {
+    sfp = (SeqFeatPtr) vnp->data.ptrvalue;
+    sfp->idx.deleteme = TRUE;
+    if (sfp->data.choice == SEQFEAT_CDREGION && sfp->product != NULL)
+    {
+      product_bsp = BioseqFindFromSeqLoc (sfp->product);
+      if (product_bsp != NULL)
+      {
+        product_bsp->idx.deleteme = TRUE;
+      }
+    }
+  }
+  afgp->features_in_gap = ValNodeFree (afgp->features_in_gap);
+}
+
+NLM_EXTERN void AdjustCDSLocationsForUnknownGapsCallback (SeqFeatPtr sfp, Pointer data)
+{
+  AdjustFeatForGapData agd;
+
+  agd.feature_list = NULL;
+
+  agd.unknown_gaps = TRUE;
+  agd.known_gaps = FALSE;
+  agd.make_partial = TRUE;
+  agd.partial_for_pseudo = FALSE;
+  agd.split_internal = TRUE;
+  agd.trim_ends = TRUE;
+  agd.align_func = data;
+
+  agd.features_in_gap = NULL;
+
+  AdjustFeatureForGapsCallback (sfp, &agd);
+  MarkFeaturesInGapsForDeletion (&agd);
+}
+
+
+static Boolean GetNumberInNthColumn (CharPtr line, Int4 n, Int4Ptr pVal)
+{
+  CharPtr cp, col_start;
+  Int4    col = 1, val = 0;
+  Boolean rval = FALSE;
+
+  if (line == NULL || pVal == NULL) return FALSE;
+
+  col_start = line;
+  cp = StringChr (col_start, '\t');
+  while (n > col && cp != NULL) {
+    col++;
+    col_start = cp + 1;
+    cp = StringChr (col_start, '\t');
+  }
+  if (n == col) {
+    if (cp != NULL) {
+      *cp = 0;
+    }
+    val = atoi (col_start);
+    if (cp != NULL) {
+      *cp = '\t';
+    }
+    *pVal = val;
+    rval = TRUE;
+  }
+  return rval;
+}
+
+
+
+static UserFieldPtr AddTranscriptomeNumberUserField (Int4 value, CharPtr label)
+{
+  UserFieldPtr ufp;
+  ObjectIdPtr  oip;
+
+  ufp = UserFieldNew ();
+  oip = ObjectIdNew ();
+  oip->str = StringSave (label);
+  ufp->label = oip;
+  ufp->choice = 2; /* int */
+  ufp->data.intvalue = value;
+  return ufp;
+}
+
+
+static UserFieldPtr AddTranscriptomeStringUserField (CharPtr value, CharPtr label)
+{
+  UserFieldPtr ufp;
+  ObjectIdPtr  oip;
+
+  ufp = UserFieldNew ();
+  oip = ObjectIdNew ();
+  oip->str = StringSave (label);
+  ufp->label = oip;
+  ufp->choice = 1; /* visible string */
+  ufp->data.ptrvalue = (Pointer) StringSave (value);
+  return ufp;
+}
+
+const CharPtr TSA_assembly_from = "assembly from";
+const CharPtr TSA_assembly_to = "assembly to";
+const CharPtr TSA_primary_id = "primary ID";
+const CharPtr TSA_primary_from = "primary from";
+const CharPtr TSA_primary_to = "primary to";
+
+NLM_EXTERN UserFieldPtr AddLineToTranscriptomeTable (Int4 assembly_from, Int4 assembly_to, CharPtr primary_id, Int4 primary_from, Int4 primary_to)
+{
+  UserFieldPtr row, list, ufp, prev = NULL;
+  ObjectIdPtr oip;
+
+  row = UserFieldNew ();
+  oip = ObjectIdNew ();
+  oip->id = 0;
+  row->label = oip;
+  row->choice = 11; /* user fields */
+
+  ufp = AddTranscriptomeNumberUserField (assembly_from, TSA_assembly_from);
+
+  list = ufp;
+  prev = list;
+
+  ufp = AddTranscriptomeNumberUserField (assembly_to, TSA_assembly_to);
+  prev->next = ufp;
+  prev = ufp;
+
+  ufp = AddTranscriptomeStringUserField (primary_id, TSA_primary_id);
+  prev->next = ufp;
+  prev = ufp;
+
+  ufp = AddTranscriptomeNumberUserField (primary_from, TSA_primary_from);
+  prev->next = ufp;
+  prev = ufp;
+
+  ufp = AddTranscriptomeNumberUserField (primary_to, TSA_primary_to);
+  prev->next = ufp;
+  prev = ufp;
+
+  row->data.ptrvalue = list;
+
+  return row;  
+}
+
+
+NLM_EXTERN Boolean AddTranscriptomeTable (BioseqPtr bsp, FILE *fp)
+{
+  ReadBufferData    rbd;
+  Int4 assembly_from, assembly_to, primary_from, primary_to;
+  CharPtr first_tab;
+  Int4    line_num = 1;
+  UserFieldPtr row_list = NULL, prev = NULL, ufp;
+  UserObjectPtr uop;
+  ObjectIdPtr   oip;
+  Boolean       rval = FALSE;
+  CharPtr line;
+
+  if (bsp == NULL || fp == NULL) return FALSE;
+
+  rbd.fp = fp;
+  rbd.current_data = NULL;
+
+  line = AbstractReadFunction (&rbd);
+  while (line != NULL) {
+    if (line[0] != ';') {
+      first_tab = StringChr (line, '\t');
+      if (first_tab == NULL
+          || !GetNumberInNthColumn (line, 7, &primary_from)
+          || !GetNumberInNthColumn (line, 8, &primary_to)
+          || !GetNumberInNthColumn (line, 3, &assembly_from)
+          || !GetNumberInNthColumn (line, 4, &assembly_to)) {
+        Message (MSG_POST, "Line %d could not be read", line_num);
+      } else {
+        *first_tab = 0;
+        ufp = AddLineToTranscriptomeTable (assembly_from, assembly_to, line, primary_from, primary_to);
+        *first_tab = '\t';
+        if (prev == NULL) {
+          row_list = ufp;
+        } else {
+          prev->next = ufp;
+        }
+        prev = ufp;
+      }
+    }
+    line = AbstractReadFunction (&rbd);
+    line++;
+  }
+
+  if (row_list == NULL) {
+    Message (MSG_POST, "No rows found for table");
+  } else {
+    uop = UserObjectNew ();
+    oip = ObjectIdNew ();
+    oip->str = StringSave ("TSA");
+    uop->type = oip;
+    uop->data = row_list;
+    SeqDescrAddPointer (&(bsp->descr), Seq_descr_user, (Pointer) uop);
+    rval = TRUE;
+  }
+  return rval;
+}
+
+
+static Int4 ReadNumberFromPortionOfString (CharPtr str, Int4 len)
+{
+  CharPtr num_buf;
+  Int4    val;
+
+  if (str == NULL) return -1;
+  num_buf = (CharPtr) MemNew (sizeof (Char) * (len + 1));
+  StringNCpy (num_buf, str, len);
+  num_buf[len] = 0;
+  val = atoi (num_buf);
+  num_buf = MemFree (num_buf);
+  return val;
+}
+
+
+NLM_EXTERN Boolean IsStringInSpanInList (CharPtr str, CharPtr list)
+{
+  CharPtr cp, hyphen;
+  Int4    prefix_len = 0;
+  CharPtr num_start, range_start;
+  Int4    start_val, end_val, swap_val, str_val;
+  Boolean rval = FALSE;
+
+  if (StringHasNoText (list) || StringHasNoText (str)) {
+    return FALSE;
+  }
+
+  cp = str;
+  while (isalpha (*cp)) {
+    prefix_len++;
+    cp++;
+  }
+  if (*cp == 0) {
+    return FALSE;
+  }
+
+  num_start = cp;
+  while (isdigit (*cp)) {
+    cp++;
+  }
+  if (*cp != 0) {
+    return FALSE;
+  }
+
+  /* find ranges */
+
+  hyphen = StringChr (list, '-');
+  while (hyphen != NULL && !rval) {
+    if (hyphen == list) {
+      hyphen = StringChr (hyphen + 1, '-');
+    } else {
+      /* is the second part of the range what we're looking for? */
+      if ((prefix_len == 0 || isdigit (*(hyphen + 1)) || StringNCmp (hyphen + 1, str, prefix_len) == 0)
+          && isdigit (*(hyphen + 1 + prefix_len))) {
+        cp = hyphen + 1 + prefix_len;
+        while (isdigit (*cp)) {
+          cp++;
+        }
+        if (*cp == 0 || ispunct (*cp) || isspace (*cp)) {
+          end_val = ReadNumberFromPortionOfString (hyphen + 1 + prefix_len, cp - hyphen - 1 - prefix_len);
+          if (end_val > -1) {
+            range_start = hyphen - 1;
+            while (range_start > list && isdigit (*range_start)) {
+              range_start --;
+            }
+            if (!isdigit (*range_start)) {
+              range_start++;
+            }
+            if (range_start - list >= prefix_len
+                /* make sure prefix matches */
+                && (prefix_len == 0 || StringNCmp (range_start - prefix_len, str, prefix_len) == 0)
+                /* make sure the prefix is at the beginning of the list, or else the character before is punctuation or space */
+                && (list == range_start - prefix_len 
+                    || ispunct (*(range_start - prefix_len - 1))
+                    || isspace (*(range_start - prefix_len - 1)))) {
+              start_val = ReadNumberFromPortionOfString (range_start, hyphen - range_start);
+              if (start_val > end_val) {
+                swap_val = start_val;
+                start_val = end_val;
+                end_val = swap_val;
+              }
+              str_val = ReadNumberFromPortionOfString (str + prefix_len, StringLen (str + prefix_len));
+              if (str_val > start_val && str_val <= end_val) {
+                rval = TRUE;
+              }
+            }
+          }
+        }
+      }
+      hyphen = StringChr (hyphen + 1, '-');
+    }
+  }
+  
+  return rval;
+}
+
+
+static void ParseGoTermsFromFieldsSfp (UserObjectPtr uop, Pointer userdata)
+{
+  ObjectIdPtr  oip;
+  UserFieldPtr ufp_process, ufp_new, ufp2, ufp, ufp_last = NULL, new_list = NULL, last_new = NULL;
+  CharPtr      cp;
+
+  if (uop == NULL) return;
+  oip = uop->type;
+  if (oip == NULL) return;
+  if (StringCmp (oip->str, "GeneOntology") == 0) {
+    for (ufp_process = uop->data; ufp_process != NULL; ufp_process = ufp_process->next) {
+      if (ufp_process->label == NULL 
+          || (StringCmp (ufp_process->label->str, "Process") != 0
+              && StringCmp (ufp_process->label->str, "Function") != 0
+              && StringCmp (ufp_process->label->str, "Component") != 0)) {
+        continue;
+      }
+      for (ufp2 = ufp_process->data.ptrvalue; ufp2 != NULL; ufp2 = ufp2->next) {
+        if (ufp2->choice != 11) continue;
+        new_list = NULL;
+        ufp_last = NULL;
+        last_new = NULL;
+        for (ufp = ufp2->data.ptrvalue; ufp != NULL; ufp = ufp->next) {
+          ufp_last = ufp;
+          if (ufp->label != NULL && StringCmp (ufp->label->str, "text string") == 0
+              && (cp = StringISearch (ufp->data.ptrvalue, "GO:")) != NULL) {
+            ufp_new = UserFieldNew ();
+            ufp_new->label = ObjectIdNew ();
+            ufp_new->label->str = StringSave ("go id");
+            ufp_new->choice = 1; /* visible string - need to keep leading zeroes */
+            ufp_new->data.ptrvalue = StringSave (cp + 3);
+            *cp = 0;
+            cp--;
+            while (cp > (CharPtr) ufp->data.ptrvalue && isspace (*cp)) {
+              *cp = 0;
+              cp--;
+            }
+            if (last_new == NULL) {
+              new_list = ufp_new;
+            } else {
+              last_new->next = ufp_new;
+            }
+            last_new = ufp_new;
+          }
+        }
+        if (new_list != NULL) {
+          if (ufp_last == NULL) {
+            uop->data = new_list;
+          } else {
+            ufp_last->next = new_list;
+          }
+        }
+      }
+    }
+  }
+}
+
+
+static void ParseGoTermsFromFieldsCallback (SeqFeatPtr sfp, Pointer data)
+{
+  if (sfp == NULL || sfp->ext == NULL) return;
+
+  VisitUserObjectsInUop (sfp->ext, NULL, ParseGoTermsFromFieldsSfp);
+
+}
+
+
+NLM_EXTERN void ParseGoTermsFromFields (SeqEntryPtr sep)
+{
+  VisitFeaturesInSep (sep, NULL, ParseGoTermsFromFieldsCallback);
+}
+
+
+static ValNodePtr ReadOneColumnList (CharPtr line)
+{
+  CharPtr p_start, p_end;
+  Int4    plen;
+  Boolean found_end;
+  ValNodePtr col_list = NULL;
+
+  if (StringHasNoText (line)) return NULL;
+  p_start = line;
+  found_end = FALSE;
+  while (*p_start != 0 && !found_end)
+  {
+    plen = StringCSpn (p_start, "\t\n");
+    if (plen == 0)
+    {
+      if (col_list != NULL)
+      {
+        ValNodeAddStr (&col_list, 0, StringSave (""));
+      }
+      p_start++;
+      if (*p_start == 0) {
+        if (col_list != NULL)
+        {
+          ValNodeAddStr (&col_list, 0, StringSave (""));
+        }
+      }
+      continue;
+    }
+    if (plen == StringLen (p_start))
+    {
+      found_end = TRUE;
+    }
+    else
+    {
+      p_end = p_start + plen;
+      *p_end = 0;
+    }
+    TrimSpacesAroundString (p_start);
+    ValNodeAddStr (&col_list, 0, StringSave (p_start));
+    if (!found_end)
+    {
+      p_start = p_end + 1;
+    }
+  }
+  return col_list;  
+}
+
+NLM_EXTERN ValNodePtr ReadTabTableFromFile (FILE *fp)
+{
+  Int4          max_columns, num_cols;
+  ValNodePtr    header_line;
+  ValNodePtr    line_list, column_list;
+  ValNodePtr    vnp;
+  ReadBufferData rbd;
+  CharPtr        line;
+
+  if (fp == NULL) return NULL;
+  rbd.fp = fp;
+  rbd.current_data = NULL;
+
+  line_list = NULL;
+  max_columns = 0;
+  header_line = NULL;
+  line = AbstractReadFunction (&rbd);
+  while (line != NULL) 
+  {
+    column_list = ReadOneColumnList (line);
+    if (column_list != NULL)
+    {
+      vnp = ValNodeAddPointer (&line_list, 0, column_list);
+      num_cols = ValNodeLen (column_list);
+      if (num_cols > max_columns)
+      {
+        max_columns = num_cols;
+        header_line = vnp;
+      }
+    }
+    line = MemFree (line);
+    line = AbstractReadFunction (&rbd);
+  }
+  FileClose (rbd.fp);
+  /* throw out all lines before header line */
+  if (header_line != line_list)
+  {
+    vnp = line_list;
+    while (vnp != NULL && vnp->next != header_line)
+    {
+      vnp = vnp->next;
+    }
+    vnp->next = NULL;
+    ValNodeFreeData (line_list);
+    line_list = NULL;
+  }
+  return header_line;
+}
+
+
+NLM_EXTERN ValNodePtr FreeTabTable (ValNodePtr row_list)
+{
+  ValNodePtr row_vnp, column_list;
+  
+  if (row_list != NULL)
+  {
+    /* free table text */
+    for (row_vnp = row_list; row_vnp != NULL; row_vnp = row_vnp->next)
+    {
+      column_list = (ValNodePtr) row_vnp->data.ptrvalue;
+      row_vnp->data.ptrvalue = ValNodeFreeData (column_list);
+    }
+    row_list = ValNodeFree (row_list);
+  }
+  return row_list;
+}
+
+
+NLM_EXTERN ValNodePtr CountTabTableBlanks (ValNodePtr row_list)
+{
+  ValNodePtr   line_vnp, col_vnp, blank_vnp;
+  Int4         num_rows = 0;
+  ValNodePtr   blank_list = NULL;
+  
+  if (row_list == NULL) return NULL;  
+
+  for (line_vnp = row_list; line_vnp != NULL; line_vnp = line_vnp->next)
+  {
+    col_vnp = line_vnp->data.ptrvalue;
+    blank_vnp = blank_list;
+    while (col_vnp != NULL || blank_vnp != NULL) {
+      if (blank_vnp == NULL) {
+        /* for all rows prior to this one, this column was blank */
+        blank_vnp = ValNodeAddInt (&blank_list, 0, num_rows);
+      }
+      if (col_vnp == NULL || StringHasNoText (col_vnp->data.ptrvalue)) {
+        blank_vnp->data.intvalue ++;
+      }
+      if (col_vnp != NULL) {
+        col_vnp = col_vnp->next;
+      }
+      blank_vnp = blank_vnp->next;
+    }
+    num_rows ++;
+  }
+  return blank_list;
+}
+
+
+static void AddToContextList (Char ch, CharPtr PNTR strp, ValNodePtr PNTR search_list)
+{
+  ValNodePtr vnp, vnp_last = NULL, vnp2, clist;
+
+  if (strp == NULL || search_list == NULL) return;
+
+  /* group contexts for the same character together */
+  vnp = *search_list;
+  while (vnp != NULL && vnp->choice != (Uint1)ch)
+  {
+    vnp_last = vnp;
+    vnp = vnp->next;
+  }
+  if (vnp == NULL)
+  {
+    vnp = ValNodeNew(NULL);
+    if (vnp_last == NULL) 
+    {
+      *search_list = vnp;
+    }
+    else
+    {
+      vnp_last->next = vnp;
+    }
+  }
+  vnp->choice = (Uint1) ch;
+  clist = vnp->data.ptrvalue;
+  /* don't add the same string twice for the same character */
+  vnp2 = clist;
+  vnp_last = NULL;
+  while (vnp2 != NULL && vnp2->data.ptrvalue != strp)
+  {
+    vnp_last = vnp2;
+    vnp2 = vnp2->next;
+  }
+  if (vnp2 == NULL)
+  {
+    vnp2 = ValNodeNew (NULL);
+    vnp2->data.ptrvalue = strp;
+    if (vnp_last == NULL)
+    {
+      clist = vnp2;
+    }
+    else
+    {
+      vnp_last->next = vnp2;
+    }
+  }
+  vnp->data.ptrvalue = clist;
+}
+
+
+NLM_EXTERN ValNodePtr FreeContextList (ValNodePtr context_list)
+{
+  ValNodePtr vnp;
+
+  for (vnp = context_list; vnp != NULL; vnp = vnp->next)
+  {
+    vnp->data.ptrvalue = ValNodeFree (vnp->data.ptrvalue);
+  }
+  context_list = ValNodeFree (context_list);
+  return context_list;
+}
+
+
+NLM_EXTERN void SpecialCharFindWithContext (CharPtr PNTR strp, Pointer userdata, BoolPtr did_find, BoolPtr did_change)
+{
+  CharPtr cp;
+  Boolean found_any = FALSE;
+
+  if (strp == NULL || *strp == NULL || userdata == NULL) return;
+
+  cp = *strp;
+  while (*cp != 0)
+  {
+    if (*cp < ' ' || *cp > '~')
+    {
+      found_any = TRUE;
+      AddToContextList (*cp, strp, (ValNodePtr PNTR) userdata);
+    }
+    cp++;
+  }
+  if (found_any && did_find != NULL)
+  {
+    *did_find = TRUE;
+  }
+}
+
+
+NLM_EXTERN ValNodePtr ScanTabTableForSpecialCharacters (ValNodePtr row_list)
+{
+  ValNodePtr special_list = NULL, line_vnp, col_vnp;
+
+  if (row_list == NULL) return NULL;  
+
+  for (line_vnp = row_list; line_vnp != NULL; line_vnp = line_vnp->next)
+  {
+    col_vnp = line_vnp->data.ptrvalue;
+    while (col_vnp != NULL) {
+      SpecialCharFindWithContext ((CharPtr PNTR)&(col_vnp->data.ptrvalue), &special_list, NULL, NULL);
+      col_vnp = col_vnp->next;
+    }
+  }
+  return special_list;
+}

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/23/07
 *
-* $Revision: 1.11 $
+* $Revision: 1.20 $
 *
 * File Description:
 *
@@ -80,10 +80,10 @@ typedef struct drflags {
   CharPtr  output_dir;
   FILE     *outfp;
   Int4     numrecords;
+  DiscReportOutputConfigData ocd;
   DiscrepancyConfigData dcd;
   ValNodePtr            sep_list;
   ValNodePtr            bsplist;
-  ValNodePtr            filename_list;
 } DRFlagData, PNTR DRFlagPtr;
 
 #ifdef INTERNAL_NCBI_ASNDISC
@@ -493,31 +493,15 @@ static ValNodePtr DoLockFarComponents (
   return rsult;
 }
 
-static ValNodePtr FreeFilenameList (ValNodePtr filename_list)
-{
-  ValNodePtr vnp_next;
-  if (filename_list == NULL) return NULL;
-  vnp_next = filename_list->next;
-  filename_list->next = NULL;
-  if (filename_list->choice == 2) {
-    filename_list = ValNodeFreeData (filename_list);
-  } else {
-    filename_list = ValNodeFree (filename_list);
-  }
-  vnp_next = FreeFilenameList (vnp_next);
-  return NULL;
-}
-
 static void ProcessSeqEntryList (DRFlagPtr drfp, CharPtr filename)
 {
-  ValNodePtr  discrepancy_list, vnp, subcat;
+  ValNodePtr  discrepancy_list, vnp;
   ObjMgrPtr   omp;
   SeqEntryPtr sep;
   FILE        *ofp = NULL;
   Boolean     need_ofp_close = FALSE;
   Char        path [PATH_MAX];
   CharPtr     ptr;
-  ClickableItemPtr cip;
 
   if (drfp == NULL || drfp->sep_list == NULL) return;
 
@@ -568,17 +552,7 @@ static void ProcessSeqEntryList (DRFlagPtr drfp, CharPtr filename)
   }
 
   discrepancy_list = CollectDiscrepancies (&(drfp->dcd), drfp->sep_list, taxlookup);
-  for (vnp = discrepancy_list; vnp != NULL; vnp = vnp->next) {
-    cip = (ClickableItemPtr) vnp->data.ptrvalue;
-    if (cip != NULL) {
-      WriteDiscrepancyEx (ofp, vnp->data.ptrvalue, drfp->dcd.use_feature_table_format, drfp->filename_list, "DiscRep");
-      if (cip->item_list == NULL && cip->subcategories != NULL) {
-        for (subcat = cip->subcategories; subcat != NULL; subcat = subcat->next) {
-          WriteDiscrepancyEx (ofp, subcat->data.ptrvalue, drfp->dcd.use_feature_table_format, drfp->filename_list, "DiscRep");
-        }
-      }
-    }
-  }
+  WriteAsnDiscReport (discrepancy_list, ofp, &(drfp->ocd), TRUE);
   discrepancy_list = FreeClickableList (discrepancy_list);
   for (vnp = drfp->sep_list; vnp != NULL; vnp = vnp->next) {
     sep = vnp->data.ptrvalue;
@@ -592,7 +566,7 @@ static void ProcessSeqEntryList (DRFlagPtr drfp, CharPtr filename)
   SeqEntrySetScope (NULL);
   drfp->sep_list = ValNodeFree (drfp->sep_list);
   
-  drfp->filename_list = FreeFilenameList (drfp->filename_list);
+  drfp->ocd.filename_list = FreeFilenameList (drfp->ocd.filename_list);
 
   drfp->bsplist = UnlockFarComponents (drfp->bsplist);
 
@@ -707,8 +681,8 @@ static void ProcessSingleRecord (
 
     if (sep != NULL) {
       ValNodeAddPointer (&(drfp->sep_list), 0, sep);
-      ValNodeAddInt (&(drfp->filename_list), FILENAME_LIST_ENTITY_ID_ITEM, (Int4) entityID);
-      ValNodeAddPointer (&(drfp->filename_list), FILENAME_LIST_FILENAME_ITEM, StringSave (filename));
+      ValNodeAddInt (&(drfp->ocd.filename_list), FILENAME_LIST_ENTITY_ID_ITEM, (Int4) entityID);
+      ValNodeAddPointer (&(drfp->ocd.filename_list), FILENAME_LIST_FILENAME_ITEM, StringSave (filename));
 
       if (drfp->lock) {
         bsplist_next = DoLockFarComponents (sep, drfp);
@@ -942,16 +916,18 @@ typedef enum {
   e_argEnableTests,
   d_argDisableTests,
   s_argOutputSuffix,
-  q_argOutputDir,
+  r_argOutputDir,
   Z_argRemoteCDS,
   a_argType,
   b_argBinary,
   c_argCompressed,
-  r_argRemote,
+  R_argRemote,
   k_argLocalFetch,
   I_argAsnIdx,
   l_argLockFar,
   T_argThreads,
+  X_argExpandCategories,
+  S_argSummaryReport,
   C_argMaxCount
 } DRFlagNum;
 
@@ -985,7 +961,7 @@ Args myargs [] = {
   {"Output File Suffix", ".dr", NULL, NULL,
     TRUE, 's', ARG_STRING, 0.0, 0, NULL},
   {"Output Directory", NULL, NULL, NULL,
-    TRUE, 'q', ARG_STRING, 0.0, 0, NULL},
+    TRUE, 'r', ARG_STRING, 0.0, 0, NULL},
   {"Remote CDS Product Fetch", "F", NULL, NULL,
     TRUE, 'Z', ARG_BOOLEAN, 0.0, 0, NULL},
   {"ASN.1 Type (a Any, e Seq-entry, b Bioseq, s Bioseq-set, m Seq-submit, t Batch Bioseq-set, u Batch Seq-submit)", "a", NULL, NULL,
@@ -995,7 +971,7 @@ Args myargs [] = {
   {"Batch File is Compressed", "F", NULL, NULL,
     TRUE, 'c', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Remote Fetching from ID", "F", NULL, NULL,
-    TRUE, 'r', ARG_BOOLEAN, 0.0, 0, NULL},
+    TRUE, 'R', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Local Fetching", "F", NULL, NULL,
     TRUE, 'k', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Path to Indexed Binary ASN.1 Data", NULL, NULL, NULL,
@@ -1004,48 +980,19 @@ Args myargs [] = {
     TRUE, 'l', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Use Threads", "F", NULL, NULL,
     TRUE, 'T', ARG_BOOLEAN, 0.0, 0, NULL},
+  {"Expand Report Categories (comma-delimited list of test names or ALL)\n\tALL\n\tMISSING_GENES\n\tEXTRA_GENES\n\tMISSING_LOCUS_TAGS\n\tDUPLICATE_LOCUS_TAGS\n\tBAD_LOCUS_TAG_FORMAT\n"
+   "\tINCONSISTENT_LOCUS_TAG_PREFIX\n\tNON_GENE_LOCUS_TAG\n\tMISSING_PROTEIN_ID\n\tINCONSISTENT_PROTEIN_ID\n"
+   "\tFEATURE_LOCATION_CONFLICT\n\tGENE_PRODUCT_CONFLICT\n\tDUPLICATE_GENE_LOCUS\n\tEC_NUMBER_NOTE\n\tPSEUDO_MISMATCH\n"
+   "\tJOINED_FEATURES\n\tOVERLAPPING_GENES\n\tOVERLAPPING_CDS\n\tSHORT_CONTIG\n\tINCONSISTENT_BIOSOURCE\n\tSUSPECT_PRODUCT_NAMES\n"
+   "\tINCONSISTENT_SOURCE_DEFLINE\n\tPARTIAL_CDS_COMPLETE_SEQUENCE\n\tEC_NUMBER_ON_UNKNOWN_PROTEIN\n\tTAX_LOOKUP_MISSING\n"
+   "\tTAX_LOOKUP_MISMATCH\n\tSHORT_SEQUENCES\n\tSUSPECT_PHRASES\n", "", NULL, NULL,
+    TRUE, 'X', ARG_STRING, 0.0, 0, NULL},
+  {"Summary Report", "F", NULL, NULL,
+    TRUE, 'S', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Max Count", "0", NULL, NULL,
     TRUE, 'C', ARG_INT, 0.0, 0, NULL},
 };
 
-
-static CharPtr SetTestsFromString (CharPtr list, Boolean enable, DiscrepancyConfigPtr dcp)
-{
-  CharPtr         ptr, tmp, name_start, err_msg;
-  DiscrepancyType test_type;
-  CharPtr         err_fmt = "%s is an unrecognized test name";
-  
-  if (dcp == NULL) return StringSave ("Unable to configure");
-
-  if (!StringDoesHaveText (list)) {
-      return StringSave ("No tests specified!");
-  }
-
-  tmp = StringSave (list);
-  name_start = tmp;
-  while (name_start != NULL && StringDoesHaveText (name_start)) {
-    ptr = StringChr (name_start, ',');
-    if (ptr != NULL) {
-      *ptr = 0;
-    }
-    TrimSpacesAroundString (name_start);
-    test_type = GetDiscrepancyTypeFromSettingName (name_start);
-    if (test_type == MAX_DISC_TYPE) {
-      err_msg = (CharPtr) MemNew (StringLen (err_fmt) + StringLen (name_start));
-      sprintf (err_msg, err_fmt, name_start);
-      tmp = MemFree (tmp);
-      return err_msg;
-    }
-    dcp->conf_list[test_type] = enable;
-    if (ptr == NULL) {
-      name_start = NULL;
-    } else {
-      name_start = ptr + 1;
-    }
-  }
-  tmp = MemFree (tmp);
-  return NULL;  
-}
 
 static CharPtr GetTestNameList (CharPtr intro)
 {
@@ -1115,7 +1062,7 @@ Int2 Main (void)
   /* set up help descriptions for enable and disable */
   myargs[e_argEnableTests].prompt = GetTestNameList("Enable Tests (comma-delimited list of test names)\n");
   myargs[d_argDisableTests].prompt = GetTestNameList("Disable Tests (comma-delimited list of test names)\n");
-
+  myargs[X_argExpandCategories].prompt = GetTestNameList("Expand Report Categories (comma-delimited list of test names or ALL)\n");
   /* process command line arguments */
 
   sprintf (app, "asndisc %s", ASNDISC_APPLICATION);
@@ -1131,7 +1078,7 @@ Int2 Main (void)
   dfd.output_suffix = (CharPtr) myargs [s_argOutputSuffix].strvalue;
   infile = (CharPtr) myargs [i_argInputFile].strvalue;
   outfile = (CharPtr) myargs [o_argOutputFile].strvalue;
-  output_dir = (CharPtr) myargs [q_argOutputDir].strvalue;
+  output_dir = (CharPtr) myargs [r_argOutputDir].strvalue;
   if (StringDoesHaveText (outfile) && StringDoesHaveText (output_dir)) {
     Message (MSG_FATAL, "-o and -q are incompatible: specify the output file name with the full path.");
     return 1;
@@ -1144,7 +1091,7 @@ Int2 Main (void)
   }
 
   dorecurse = (Boolean) myargs [u_argRecurse].intvalue;
-  remote = (Boolean ) myargs [r_argRemote].intvalue;
+  remote = (Boolean ) myargs [R_argRemote].intvalue;
   local = (Boolean) myargs [k_argLocalFetch].intvalue;
 
   asnidx = (CharPtr) myargs [I_argAsnIdx].strvalue;
@@ -1152,6 +1099,8 @@ Int2 Main (void)
   lock = (Boolean) myargs [l_argLockFar].intvalue;
   usethreads = (Boolean) myargs [T_argThreads].intvalue;
   dfd.farFetchCDSproducts = (Boolean) myargs [Z_argRemoteCDS].intvalue;
+  ExpandDiscrepancyReportTestsFromString ((CharPtr) myargs [X_argExpandCategories].strvalue, TRUE, &dfd.ocd);
+  dfd.ocd.summary_report = (Boolean) myargs [S_argSummaryReport].intvalue;
 
   /* set up Discrepancy Report Configuration */
   enabled_list = (CharPtr) myargs [e_argEnableTests].strvalue;
@@ -1167,13 +1116,13 @@ Int2 Main (void)
     DisableTRNATests (&(dfd.dcd));
 
     /* now disable tests from string */
-    err_msg = SetTestsFromString (disabled_list, FALSE, &(dfd.dcd));
+    err_msg = SetDiscrepancyReportTestsFromString (disabled_list, FALSE, &(dfd.dcd));
   } else if (StringDoesHaveText (enabled_list)) {
     for (k = 0; k < MAX_DISC_TYPE; k++) {
       dfd.dcd.conf_list[k] = FALSE;
     }
     /* now enable tests from string */
-    err_msg = SetTestsFromString (enabled_list, TRUE, &(dfd.dcd));
+    err_msg = SetDiscrepancyReportTestsFromString (enabled_list, TRUE, &(dfd.dcd));
   } else {
     /* enable all tests by default */
     for (k = 0; k < MAX_DISC_TYPE; k++) {
@@ -1189,6 +1138,7 @@ Int2 Main (void)
 
   if ((Boolean) myargs[f_argUseFT].intvalue) {
     dfd.dcd.use_feature_table_format = TRUE;
+    dfd.ocd.use_feature_table_format = TRUE;
   }
 
   dfd.maxcount = (Int4) myargs [C_argMaxCount].intvalue;

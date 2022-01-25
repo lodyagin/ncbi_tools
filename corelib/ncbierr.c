@@ -23,9 +23,9 @@
 *
 * ===========================================================================
 *
-* $Id: ncbierr.c,v 6.24 2006/11/09 17:46:58 kans Exp $
+* $Id: ncbierr.c,v 6.25 2008/01/18 17:09:13 lavr Exp $
 *
-* $Revision: 6.24 $
+* $Revision: 6.25 $
 *
 * Authors:  Schuler, Sirotkin (UserErr stuff)
 *
@@ -71,6 +71,9 @@
 * 03-06-95 Schuler     Fixed problem with ErrMsgRoot_fopen
 *
 * $Log: ncbierr.c,v $
+* Revision 6.25  2008/01/18 17:09:13  lavr
+* Use SEV_MIN (instead of explicit SEV_INFO) in level setting routines
+*
 * Revision 6.24  2006/11/09 17:46:58  kans
 * added cast to quiet CodeWarrior complaint
 *
@@ -1542,7 +1545,7 @@ NLM_EXTERN ErrSev LIBCALL ErrSetLogLevel (ErrSev level)
 {
 	AppErrInfoPtr info = GetAppErrInfo();
 	ErrSev prev = (ErrSev) info->opts.log_level;
-	info->opts.log_level = (short) MAX(SEV_INFO,MIN(level,SEV_MAX));
+	info->opts.log_level = (short) MAX(SEV_MIN,MIN(level,SEV_MAX));
 	return prev;
 }
 
@@ -1561,7 +1564,7 @@ NLM_EXTERN ErrSev LIBCALL ErrSetMessageLevel (ErrSev level)
 {
 	AppErrInfoPtr info = GetAppErrInfo();
 	ErrSev prev = (ErrSev) info->opts.msg_level;
-	info->opts.msg_level = (short) MAX(SEV_INFO,MIN(level,SEV_MAX));
+	info->opts.msg_level = (short) MAX(SEV_MIN,MIN(level,SEV_MAX));
 	return prev;
 }
 
@@ -1580,7 +1583,7 @@ NLM_EXTERN ErrSev LIBCALL ErrSetFatalLevel (ErrSev level)
 {
 	AppErrInfoPtr info = GetAppErrInfo();
 	ErrSev prev = (ErrSev) info->opts.die_level;
-	info->opts.die_level = (short) MAX(SEV_INFO,MIN(level,SEV_MAX));
+	info->opts.die_level = (short) MAX(SEV_MIN,MIN(level,SEV_MAX));
 	return prev;
 }
 

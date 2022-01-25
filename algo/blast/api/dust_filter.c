@@ -1,5 +1,5 @@
 #ifndef SKIP_DOXYGEN_PROCESSING
-static char const rcsid[] = "$Id: dust_filter.c,v 1.10 2007/01/24 14:31:16 madden Exp $";
+static char const rcsid[] = "$Id: dust_filter.c,v 1.12 2007/12/19 22:05:56 camacho Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 /*
@@ -175,9 +175,7 @@ s_GetFilteringLocations(BLAST_SequenceBlk* query_blk, BlastQueryInfo* query_info
                   /* Reverse this relative to the part of the query being searched, leave it up to 
                     BlastMaskLocToSeqLoc to put it into the context of the entire query sequence (and
                     not just that part being searched). */
-                  filter_slp_rev = BlastSeqLocReverse(filter_slp, query_length);
-                  filter_slp = BlastSeqLocFree(filter_slp);
-                  filter_slp = filter_slp_rev;
+                  BlastSeqLocReverse(filter_slp, query_length);
             }
             else
             {

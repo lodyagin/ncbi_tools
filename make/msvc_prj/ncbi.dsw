@@ -90,6 +90,9 @@ Package=<4>
     Project_Dep_Name demo_checksub
     End Project Dependency
     Begin Project Dependency
+    Project_Dep_Name demo_cleanasn
+    End Project Dependency
+    Begin Project Dependency
     Project_Dep_Name demo_cnsgn
     End Project Dependency
     Begin Project Dependency
@@ -103,6 +106,9 @@ Package=<4>
     End Project Dependency
     Begin Project Dependency
     Project_Dep_Name demo_copymat
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name demo_cspeedtest
     End Project Dependency
     Begin Project Dependency
     Project_Dep_Name demo_dosimple
@@ -284,6 +290,15 @@ Package=<4>
     Begin Project Dependency
     Project_Dep_Name test_regexp
     End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name demo_asnbarval
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name demo_raw2delt
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name demo_asnmacro
+    End Project Dependency
 }}}
 
 ###############################################################################
@@ -424,6 +439,12 @@ Package=<4>
     End Project Dependency
     Begin Project Dependency
     Project_Dep_Name blastcompadj
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbimain
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name xconntest
     End Project Dependency
 }}}
 
@@ -772,6 +793,48 @@ Package=<4>
     End Project Dependency
     Begin Project Dependency
     Project_Dep_Name ncbiobj
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbi
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbimain
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "demo_asnmacro"=.\demo\asnmacro\demo_asnmacro.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name blast
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name blastapi
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name blastcompadj
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name netblast
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbitool
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbiobj
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name netcli
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbinacc
     End Project Dependency
     Begin Project Dependency
     Project_Dep_Name ncbi
@@ -1161,6 +1224,33 @@ Package=<4>
 
 ###############################################################################
 
+Project: "demo_cleanasn"=.\demo\cleanasn\demo_cleanasn.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name ncbitool
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbinacc
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbiobj
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbi
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbimain
+    End Project Dependency
+}}}
+
+###############################################################################
+
 Project: "demo_cnsgn"=.\demo\cnsgn\demo_cnsgn.dsp - Package Owner=<4>
 
 Package=<5>
@@ -1351,6 +1441,33 @@ Package=<4>
     End Project Dependency
     Begin Project Dependency
     Project_Dep_Name blastcompadj
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbi
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbimain
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "demo_cspeedtest"=.\demo\cspeedtest\demo_cspeedtest.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name ncbitool
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbinacc
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbiobj
     End Project Dependency
     Begin Project Dependency
     Project_Dep_Name ncbi
@@ -2175,6 +2292,30 @@ Package=<4>
 
 ###############################################################################
 
+Project: "demo_raw2delt"=.\demo\raw2delt\demo_raw2delt.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name ncbimmdb
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbiobj
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbi
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbimain
+    End Project Dependency
+}}}
+
+###############################################################################
+
 Project: "demo_regexp"=.\regexp\demo\demo_regexp.dsp - Package Owner=<4>
 
 Package=<5>
@@ -2977,6 +3118,9 @@ Package=<4>
     End Project Dependency
     Begin Project Dependency
     Project_Dep_Name blastapi
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name blastcompadj
     End Project Dependency
     Begin Project Dependency
     Project_Dep_Name ncbi

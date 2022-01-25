@@ -1,4 +1,4 @@
-/* $Id: blast_kappa.c,v 1.86 2007/05/22 20:55:36 kazimird Exp $
+/* $Id: blast_kappa.c,v 1.94 2008/02/14 15:55:42 kazimird Exp $
  * ==========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,7 +34,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] =
-"$Id: blast_kappa.c,v 1.86 2007/05/22 20:55:36 kazimird Exp $";
+"$Id: blast_kappa.c,v 1.94 2008/02/14 15:55:42 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <float.h>
@@ -44,6 +44,7 @@ static char const rcsid[] =
 #include <algo/blast/core/blast_util.h>
 #include <algo/blast/core/blast_gapalign.h>
 #include <algo/blast/core/blast_filter.h>
+#include <algo/blast/core/blast_traceback.h>
 #include <algo/blast/core/link_hsps.h>
 #include <algo/blast/core/gencode_singleton.h>
 #include "blast_psi_priv.h"
@@ -295,7 +296,7 @@ s_HSPListFromDistinctAlignments(BlastCompo_Alignment ** alignments,
                                 BlastQueryInfo* queryInfo)
 {
     int status = 0;                    /* return code for any routine called */
-    const int unknown_value = 0;   /* dummy constant to use when a
+    static const int unknown_value = 0;   /* dummy constant to use when a
                                       parameter value is not known */
     BlastCompo_Alignment * align;  /* an alignment in the list */
     BlastHSPList * hsp_list;       /* the new HSP list */
@@ -381,7 +382,7 @@ s_HSPListFromDistinctAlignments(BlastCompo_Alignment ** alignments,
 static int
 s_HitlistEvaluateAndPurge(int * pbestScore, double *pbestEvalue,
                           BlastHSPList * hsp_list,
-			  const BlastSeqSrc* seqSrc,
+                          const BlastSeqSrc* seqSrc,
                           int subject_length,
                           EBlastProgramType program_number,
                           BlastQueryInfo* queryInfo,
@@ -395,7 +396,7 @@ s_HitlistEvaluateAndPurge(int * pbestScore, double *pbestEvalue,
     int status = 0;
     *pbestEvalue = DBL_MAX;
     *pbestScore  = 0;
-    if (hitParams->options->do_sum_stats) {
+    if (hitParams->do_sum_stats) {
         status = BLAST_LinkHsps(program_number, hsp_list, queryInfo,
                                 subject_length, sbp,
                                 hitParams->link_hsp_params, TRUE);
@@ -426,6 +427,70 @@ s_HitlistEvaluateAndPurge(int * pbestScore, double *pbestEvalue,
     }
     return status == 0 ? 0 : -1;
 }
+
+#if 0
+/** Compute the number of identities for the HSPs in the hsp_list
+ * @note this only works for blastp right now and it's not currently being used
+ * because we cannot reliably calculate the number of identities for queries
+ * that have hard masking applied to them (which is the default).
+ * 
+ * @param query_blk the query sequence data [in]
+ * @param query_info structure describing the query_blk structure [in]
+ * @param seq_src source of subject sequence data [in]
+ * @param hsp_list list of HSPs to be processed [in|out]
+ * @param scoring_options scoring options [in]
+ */
+static void
+s_ComputeNumIdentities(const BLAST_SequenceBlk* query_blk,
+                       const BlastQueryInfo* query_info,
+                       const BlastSeqSrc* seq_src,
+                       BlastHSPList* hsp_list,
+                       const BlastScoringOptions* scoring_options)
+{
+    Uint1* query = NULL;
+    Uint1* subject = NULL;
+    const EBlastProgramType program_number = scoring_options->program_number;
+    const Boolean kIsOutOfFrame = scoring_options->is_ooframe;
+    const EBlastEncoding encoding = Blast_TracebackGetEncoding(program_number);
+    BlastSeqSrcGetSeqArg seq_arg;
+    Int2 status = 0;
+    int i;
+
+    if ( !hsp_list || program_number != eBlastTypeBlastp ) {
+        return;
+    }
+
+    /* Initialize the subject */
+    {
+        memset((void*) &seq_arg, 0, sizeof(seq_arg));
+        seq_arg.oid = hsp_list->oid;
+        seq_arg.encoding = encoding;
+        status = BlastSeqSrcGetSequence(seq_src, (void*) &seq_arg);
+        ASSERT(status == 0);
+        subject = seq_arg.seq->sequence;
+    }
+
+    for (i = 0; i < hsp_list->hspcnt; i++) {
+        BlastHSP* hsp = hsp_list->hsp_array[i];
+
+        /* Initialize the query */
+        if (program_number == eBlastTypeBlastx && kIsOutOfFrame) {
+            Int4 context = hsp->context - hsp->context % CODON_LENGTH;
+            Int4 context_offset = query_info->contexts[context].query_offset;
+            query = query_blk->oof_sequence + CODON_LENGTH + context_offset;
+        } else {
+            query = query_blk->sequence + 
+                query_info->contexts[hsp->context].query_offset;
+        }
+
+        status = Blast_HSPGetNumIdentities(query, subject, hsp, 
+                                           scoring_options, 0);
+        ASSERT(status == 0);
+    }
+    BlastSeqSrcReleaseSequence(seq_src, (void*) &seq_arg);
+    BlastSequenceBlkFree(seq_arg.seq);
+}
+#endif
 
 
 /**
@@ -801,6 +866,48 @@ s_MatchingSequenceRelease(BlastCompo_MatchingSequence * self)
     }
 }
 
+#define MINUMUM_FRACTION_NEAR_IDENTICAL 0.98
+
+/**
+ * Test whether the aligned parts of two sequences that
+ * have a high-scoring gapless alignment are nearly identical
+ *
+ * @param seqData           subject sequence
+ * @param queryData         query sequence
+ * @param align             information about the alignment
+ * @param rangeOffset       offset for subject sequence (used for tblastn)
+ *
+ * @return                  TRUE if the aligned portions are nearly identical
+ */
+static Boolean 
+s_TestNearIdentical(const BlastCompo_SequenceData *seqData, 
+		 const BlastCompo_SequenceData *queryData, 
+		    const int queryOffset,   
+		 const BlastCompo_Alignment *align,
+		 const int rangeOffset)
+{
+  int numIdentical = 0;
+  double fractionIdentical;
+  int qPos, sPos; /*positions in query and subject;*/
+  int qEnd; /*end of query*/
+
+  qPos = align->queryStart - queryOffset;
+  qEnd = align->queryEnd - queryOffset;
+  sPos = align->matchStart - rangeOffset;
+  while (qPos < qEnd)  {
+      if (queryData->data[qPos] == seqData->data[sPos])
+	numIdentical++;
+      sPos++;
+      qPos++;
+  }
+  fractionIdentical = ((double) numIdentical/
+  (double) (align->queryEnd - align->queryStart));
+  if (fractionIdentical >= MINUMUM_FRACTION_NEAR_IDENTICAL)
+    return(TRUE);
+  else
+    return(FALSE);
+}
+
 
 /**
  * Initialize a new matching sequence, obtaining information about the
@@ -918,13 +1025,23 @@ s_DoSegSequenceData(BlastCompo_SequenceData * seqData,
  * @param self          the sequence from which to obtain the data [in]
  * @param range         the range and translation frame to get [in]
  * @param seqData       the resulting data [out]
+ * @param queryData     the query sequence [in]
+ * @param queryOffset   offset for align if there are multiple queries
+ * @param align          information about the alignment between query and subject
+ * @param shouldTestIdentical did alignment pass a preliminary test in
+ *                       redo_alignment.c that indicates the sequence
+ *                        pieces may be near identical
  *
  * @return 0 on success; -1 on failure
  */
 static int
 s_SequenceGetTranslatedRange(const BlastCompo_MatchingSequence * self,
                              const BlastCompo_SequenceRange * range,
-                             BlastCompo_SequenceData * seqData )
+                             BlastCompo_SequenceData * seqData,
+			     const BlastCompo_SequenceData * queryData,
+			     const int queryOffset,
+			     const BlastCompo_Alignment *align,
+			     const Boolean shouldTestIdentical)
 {
     int status = 0;
     BlastKappa_SequenceInfo * local_data; /* BLAST-specific
@@ -970,6 +1087,9 @@ s_SequenceGetTranslatedRange(const BlastCompo_MatchingSequence * self,
         seqData->length = translated_length;
 
         if ( !(KAPPA_TBLASTN_NO_SEG_SEQUENCE) ) {
+	  if ((!shouldTestIdentical) || 
+            (shouldTestIdentical && 
+	     (!s_TestNearIdentical(seqData, queryData, queryOffset, align, range->begin)))) {
             status = s_DoSegSequenceData(seqData, eBlastTypeTblastn);
             if (status != 0) {
                 free(seqData->buffer);
@@ -977,6 +1097,7 @@ s_SequenceGetTranslatedRange(const BlastCompo_MatchingSequence * self,
                 seqData->data = NULL;
                 seqData->length = 0;
             }
+	  }
         }
     }
     return status;
@@ -989,13 +1110,25 @@ s_SequenceGetTranslatedRange(const BlastCompo_MatchingSequence * self,
  * @param self          a protein sequence [in]
  * @param range         the range to get [in]
  * @param seqData       the resulting data [out]
+ * @param queryData     the query sequence [in]
+ * @param queryOffset   offset for align if there are multiple queries
+ * @param align          information about the alignment 
+ *                         between query and subject [in]
+ * @param shouldTestIdentical did alignment pass a preliminary test in
+ *                       redo_alignment.c that indicates the sequence
+ *                        pieces may be near identical [in]
  *
  * @return 0 on success; -1 on failure
  */
 static int
 s_SequenceGetProteinRange(const BlastCompo_MatchingSequence * self,
                           const BlastCompo_SequenceRange * range,
-                          BlastCompo_SequenceData * seqData )
+                          BlastCompo_SequenceData * seqData,
+			  const BlastCompo_SequenceData * queryData,
+			  const int queryOffset,
+			  const BlastCompo_Alignment *align,
+			  const Boolean shouldTestIdentical)
+
 {
     int status = 0;       /* return status */
     Int4       idx;       /* loop index */
@@ -1030,7 +1163,12 @@ s_SequenceGetProteinRange(const BlastCompo_MatchingSequence * self,
         }
     }
     if ( !(KAPPA_BLASTP_NO_SEG_SEQUENCE) ) {
+      if ((!shouldTestIdentical) || 
+	  (shouldTestIdentical && 
+	   (!s_TestNearIdentical(seqData, queryData, queryOffset, align, 0)))) {
+	status = -1;
         status = s_DoSegSequenceData(seqData, eBlastTypeBlastp);
+      }
     }
     /* Fit the data to the range. */
     seqData ->data    = &seqData->data[range->begin - 1];
@@ -1052,20 +1190,32 @@ s_SequenceGetProteinRange(const BlastCompo_MatchingSequence * self,
  * @param self          sequence information [in]
  * @param range        range specifying the range of data [in]
  * @param seqData       the sequence data obtained [out]
+ * @param seqData       the resulting data [out]
+ * @param queryData     the query sequence [in]
+ * @param queryOffset   offset for align if there are multiple queries
+ * @param align          information about the alignment between query and subject
+ * @param shouldTestIdentical did alignment pass a preliminary test in
+ *                       redo_alignment.c that indicates the sequence
+ *                        pieces may be near identical
  *
  * @return 0 on success; -1 on failure
  */
 static int
 s_SequenceGetRange(const BlastCompo_MatchingSequence * self,
                    const BlastCompo_SequenceRange * range,
-                   BlastCompo_SequenceData * seqData )
+                   BlastCompo_SequenceData * seqData,
+		   const BlastCompo_SequenceData * queryData,
+		   const int queryOffset,
+		   const BlastCompo_Alignment *align,
+		   const Boolean shouldTestIdentical)
 {
     BlastKappa_SequenceInfo * seq_info = self->local_data;
     if (seq_info->prog_number ==  eBlastTypeTblastn) {
         /* The sequence must be translated. */
-        return s_SequenceGetTranslatedRange(self, range, seqData);
+      return s_SequenceGetTranslatedRange(self, range, seqData,
+					  queryData, queryOffset, align, shouldTestIdentical);
     } else {
-        return s_SequenceGetProteinRange(self, range, seqData);
+      return s_SequenceGetProteinRange(self, range, seqData, queryData, queryOffset, align, shouldTestIdentical);
     }
 }
 
@@ -1741,7 +1891,7 @@ s_GetAlignParams(BlastKappa_GappingParamsContext * context,
     /* is this a positiion-based search */
     Boolean positionBased = (Boolean) (context->sbp->psi_matrix != NULL);
     /* will BLAST_LinkHsps be called to assign e-values */
-    Boolean do_link_hsps = (hitParams->options->do_sum_stats);
+    Boolean do_link_hsps = (hitParams->do_sum_stats);
     ECompoAdjustModes compo_adjust_mode =
         (ECompoAdjustModes) extendParams->options->compositionBasedStats;
     
@@ -1922,8 +2072,10 @@ Blast_RedoAlignmentCore(EBlastProgramType program_number,
         return -1;   /* Unsupported matrix */
     }
     /*****************/
-    inclusion_ethresh =
-        (psiOptions != NULL) ? psiOptions->inclusion_ethresh : 0;
+    inclusion_ethresh = (psiOptions /* this can be NULL for CBl2Seq */
+                         ? psiOptions->inclusion_ethresh 
+                         : PSI_INCLUSION_ETHRESH);
+    ASSERT(inclusion_ethresh != 0.0);
 
     /* Initialize savedParams */
     savedParams =
@@ -2094,7 +2246,7 @@ Blast_RedoAlignmentCore(EBlastProgramType program_number,
                 status_code =
                     s_HitlistEvaluateAndPurge(&bestScore, &bestEvalue,
                                               hsp_list,
-					      seqSrc,
+                                              seqSrc,
                                               matchingSeq.length,
                                               program_number,
                                               queryInfo, query_index,
@@ -2112,6 +2264,10 @@ Blast_RedoAlignmentCore(EBlastProgramType program_number,
                     s_HSPListNormalizeScores(hsp_list,
                                              kbp->Lambda, kbp->logK,
                                              localScalingFactor);
+                    /* currently commented out, see function definition for
+                      explanation
+                     s_ComputeNumIdentities(queryBlk, queryInfo, seqSrc,
+                                           hsp_list, scoringParams->options);*/
                     status_code =
                         BlastCompo_HeapInsert(&redoneMatches[query_index],
                                               hsp_list, bestEvalue,

@@ -1,4 +1,4 @@
-/* $Id: lookup_wrap.c,v 1.30 2007/03/07 19:25:34 kazimird Exp $
+/* $Id: lookup_wrap.c,v 1.31 2008/01/31 23:55:42 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -37,7 +37,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: lookup_wrap.c,v 1.30 2007/03/07 19:25:34 kazimird Exp $";
+    "$Id: lookup_wrap.c,v 1.31 2008/01/31 23:55:42 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/lookup_wrap.h>
@@ -51,6 +51,7 @@ static char const rcsid[] =
 
 Int2 LookupTableWrapInit(BLAST_SequenceBlk* query, 
         const LookupTableOptions* lookup_options,	
+        const QuerySetUpOptions* query_options,
         BlastSeqLoc* lookup_segments, BlastScoreBlk* sbp, 
         LookupTableWrap** lookup_wrap_ptr, const BlastRPSInfo *rps_info,
         Blast_Message* *error_msg)
@@ -120,7 +121,7 @@ Int2 LookupTableWrapInit(BLAST_SequenceBlk* query,
           else if (lookup_wrap->lut_type == eSmallNaLookupTable) {
              status = BlastSmallNaLookupTableNew(query, lookup_segments,
                             (BlastSmallNaLookupTable* *) &(lookup_wrap->lut), 
-                             lookup_options, lut_width);
+                             lookup_options, query_options, lut_width);
              if (status != 0) {
                 lookup_wrap->lut_type = eNaLookupTable;
                 status = BlastNaLookupTableNew(query, lookup_segments,

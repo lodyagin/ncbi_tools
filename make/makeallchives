@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# $Id: makeallchives,v 1.83 2006/08/30 12:10:29 ivanov Exp $
+# $Id: makeallchives 117677 2008-01-18 17:07:17Z vakatov $
 #
 #
 # Creates all archives from a directory above 'ncbi'

@@ -65,3 +65,7 @@ void DelFeatFromList PROTO((SeqFeatPtr PNTR gbqp, SeqFeatPtr curq, SeqFeatPtr pr
 
 ValNodePtr GetOrfList PROTO((BioseqPtr bsp, Int2 limit));
 ValNodePtr GetAltList PROTO((ValNodePtr list));
+
+NLM_EXTERN Int2 GetGcodeFromBioseq(BioseqPtr bsp);
+
+

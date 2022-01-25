@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 3/4/91
 *
-* $Revision: 6.22 $
+* $Revision: 6.23 $
 *
 * File Description:
 *   Routines for printing ASN.1 value notation (text) messages and
@@ -42,6 +42,9 @@
 * 3/4/91   Kans        Stricter typecasting for GNU C and C++
 *
 * $Log: asnprint.c,v $
+* Revision 6.23  2007/12/03 18:15:31  gouriano
+* Corrected line length in AsnPrintString
+*
 * Revision 6.22  2004/12/08 04:39:38  beloslyu
 * c++ comment changed to c-style one. Anrdrei, please be careful
 *
@@ -1650,7 +1653,7 @@ NLM_EXTERN Boolean AsnPrintString (CharPtr the_string, AsnIoPtr aip)
             *current = *(str+1);
             *(current+1) = 0;
             pos = AsnPrintGetWordBreak(str_begin, 
-                                       aip->linelength - linepos_start);
+                                       aip->linepos - linepos_start);
 
             /* Save rest of string */
 

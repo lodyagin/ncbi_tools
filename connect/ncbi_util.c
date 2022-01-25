@@ -1,4 +1,4 @@
-/* $Id: ncbi_util.c,v 6.42 2007/07/31 16:25:29 kazimird Exp $
+/* $Id: ncbi_util.c,v 6.49 2008/02/29 00:25:42 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -47,7 +47,7 @@
 #  ifndef NCBI_OS_SOLARIS
 #    include <limits.h>
 #  endif
-#  if defined(HAVE_GETPWUID)  ||  defined(HAVE_GETPWUID_R)
+#  if defined(HAVE_GETPWUID)  ||  defined(NCBI_HAVE_GETPWUID_R)
 #    include <pwd.h>
 #  endif
 #  include <unistd.h>
@@ -57,6 +57,8 @@
 #  endif
 #  include <windows.h>
 #endif
+
+#define NCBI_USE_ERRCODE_X   Connect_Util
 
 #define NCBI_USE_PRECOMPILED_CRC32_TABLES 1
 
@@ -139,7 +141,8 @@ extern int/*bool*/ CORE_SetLOGFILE_NAME_Ex
 {
     FILE* fp = fopen(filename, "a");
     if ( !fp ) {
-        CORE_LOGF_ERRNO(eLOG_Error, errno, ("Cannot open \"%s\"", filename));
+        CORE_LOGF_ERRNO_X(9, eLOG_Error, errno,
+                          ("Cannot open \"%s\"", filename));
         return 0/*false*/;
     }
 
@@ -172,9 +175,9 @@ inline
 #endif /*__GNUC__*/
 static int/*bool*/ s_IsQuoted(unsigned char c)
 {
-    return (c == '\t'  ||   c == '\v'  ||  c == '\b'  ||
-            c == '\r'  ||   c == '\f'  ||  c == '\a'  ||
-            c == '\n'  ||   c == '\\'  ||  c == '\''  ||
+    return (c == '\t'  ||  c == '\v'  ||  c == '\b'  ||
+            c == '\r'  ||  c == '\f'  ||  c == '\a'  ||
+            c == '\n'  ||  c == '\\'  ||  c == '\''  ||
             c == '"' ? 1/*true*/ : 0/*false*/);
 }
 
@@ -356,8 +359,12 @@ extern char* LOG_ComposeMessage
                 if (!isprint(*d)) {
                     int/*bool*/ reduce;
                     unsigned char v;
-                    reduce = (i == 1          ||  s_IsQuoted(d[1])  ||
-                              !isprint(d[1])  ||  d[1] < '0'  ||  d[1] > '7');
+                    if (format_flags & fLOG_FullOctal)
+                        reduce = 0/*false*/;
+                    else {
+                        reduce = (i == 1         || s_IsQuoted(d[1]) ||
+                                  !isprint(d[1]) || d[1] < '0' || d[1] > '7');
+                    }
                     *s++ = '\\';
                     v =  *d >> 6;
                     if (v  ||  !reduce) {
@@ -468,7 +475,7 @@ static int/*bool*/ s_SafeCopy(const char* src, char** beg, const char* end)
 }
 
 
-extern char* MessagePlusErrno
+extern const char* MessagePlusErrno
 (const char*  message,
  int          x_errno,
  const char*  descr,
@@ -478,9 +485,14 @@ extern char* MessagePlusErrno
     char* beg;
     char* end;
 
+    /* Check for an empty result */
+    if (!x_errno  &&  (!descr  ||  !*descr))
+        return !message  ||  !*message ? "" : message;
+
     /* Check and init */
     if (!buf  ||  !buf_size)
         return 0;
+
     buf[0] = '\0';
     if (buf_size < 2)
         return buf;  /* empty */
@@ -493,10 +505,6 @@ extern char* MessagePlusErrno
             descr = s_UnknownErrno;
         }
     }
-
-    /* Check for an empty result, calculate string lengths */
-    if ((!message  ||  !*message)  &&  !x_errno  &&  (!descr  ||  !*descr))
-        return buf;  /* empty */
 
     /* Compose:   <message> {errno=<x_errno>,<descr>} */
     beg = buf;
@@ -625,7 +633,7 @@ extern const char* CORE_GetUsername(char* buf, size_t bufsize)
     char loginbuf[LOGIN_NAME_MAX + 1];
 #  endif
     struct passwd* pw;
-#  if !defined(NCBI_OS_SOLARIS)  &&  defined(HAVE_GETPWUID_R)
+#  if !defined(NCBI_OS_SOLARIS)  &&  defined(NCBI_HAVE_GETPWUID_R)
     struct passwd pwd;
     char pwdbuf[256];
 #  endif
@@ -677,7 +685,7 @@ extern const char* CORE_GetUsername(char* buf, size_t bufsize)
 #  endif
 
 #  if defined(NCBI_OS_SOLARIS)  ||  \
-    (!defined(HAVE_GETPWUID_R)  &&  defined(HAVE_GETPWUID))
+    (!defined(NCBI_HAVE_GETPWUID_R)  &&  defined(HAVE_GETPWUID))
     /* NB:  getpwuid() is MT-safe on Solaris, so use it here, if available */
 #  ifndef NCBI_OS_SOLARIS
     CORE_LOCK_WRITE;
@@ -689,23 +697,23 @@ extern const char* CORE_GetUsername(char* buf, size_t bufsize)
 #  endif
     if (pw  &&  pw->pw_name)
         return buf;
-#  elif defined(HAVE_GETPWUID_R)
-#    if   HAVE_GETPWUID_R == 4
+#  elif defined(NCBI_HAVE_GETPWUID_R)
+#    if   NCBI_HAVE_GETPWUID_R == 4
     /* obsolete but still existent */
     pw = getpwuid_r(getuid(), &pwd, pwdbuf, sizeof(pwdbuf));
-#    elif HAVE_GETPWUID_R == 5
+#    elif NCBI_HAVE_GETPWUID_R == 5
     /* POSIX-conforming */
     if (getpwuid_r(getuid(), &pwd, pwdbuf, sizeof(pwdbuf), &pw) != 0)
         pw = 0;
 #    else
-#      error "Unknown value of HAVE_GETPWUID_R, 4 or 5 expected."
+#      error "Unknown value of NCBI_HAVE_GETPWUID_R, 4 or 5 expected."
 #    endif
     if (pw  &&  pw->pw_name) {
         assert(pw == &pwd);
         strncpy0(buf, pw->pw_name, bufsize - 1);
         return buf;
     }
-#  endif /*HAVE_GETPWUID_R*/
+#  endif /*NCBI_HAVE_GETPWUID_R*/
 
 #endif /*!NCBI_OS_UNIX*/
 
@@ -934,4 +942,32 @@ extern int/*bool*/ UTIL_MatchesMaskEx(const char* name, const char* mask,
 extern int/*bool*/ UTIL_MatchesMask(const char* name, const char* mask)
 {
     return UTIL_MatchesMaskEx(name, mask, 1/*ignore case*/);
+}
+
+
+extern char* UTIL_NcbiLocalHostName(char* hostname)
+{
+    static const struct {
+        const char* text;
+        size_t      len;
+    } kEndings[] = {
+        { ".ncbi.nlm.nih.gov", 17},
+        { ".ncbi.nih.gov", 13}
+    };
+    size_t len = hostname ? strlen(hostname) : 0;
+
+    if (len) {
+        size_t i;
+        for (i = 0;  i < sizeof(kEndings) / sizeof(kEndings[0]);  i++) {
+            assert(strlen(kEndings[i].text) == kEndings[i].len);
+            if (len > kEndings[i].len) {
+                size_t prefix = len - kEndings[i].len;
+                if (strcasecmp(hostname + prefix, kEndings[i].text) == 0) {
+                    hostname[prefix] = '\0';
+                    return hostname;
+                }
+            }
+        }
+    }
+    return 0;
 }

@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.148 $
+* $Revision: 1.159 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -79,6 +79,7 @@ static FtQualType feat_qual_order [] = {
   FTQUAL_operon,
 
   FTQUAL_ncRNA_class,
+  FTQUAL_ncRNA_other,
 
   FTQUAL_product,
 
@@ -191,6 +192,7 @@ static FtQualType feat_note_order [] = {
   FTQUAL_prot_note,
   FTQUAL_prot_comment,
   FTQUAL_prot_method,
+  FTQUAL_ncRNA_note,
   FTQUAL_figure,
   FTQUAL_maploc,
   FTQUAL_prot_conflict,
@@ -281,6 +283,8 @@ static FeaturQual asn2gnbk_featur_quals [ASN2GNBK_TOTAL_FEATUR]  =  {
   { "model_evidence",     Qual_class_model_ev       },
   { "calculated_mol_wt",  Qual_class_mol_wt         },
   { "ncRNA_class",        Qual_class_quote          },
+  { "ncRNA_note",         Qual_class_string         },
+  { "ncRNA_class",        Qual_class_string         },
   { "nomenclature",       Qual_class_nomenclature   },
   { "note",               Qual_class_note           },
   { "number",             Qual_class_number         },
@@ -1055,7 +1059,6 @@ static ValQual legalGbqualList [] = {
   { FEATDEF_misc_recomb , FTQUAL_label },
   { FEATDEF_misc_recomb , FTQUAL_map },
   { FEATDEF_misc_recomb , FTQUAL_old_locus_tag },
-  { FEATDEF_misc_recomb , FTQUAL_organism },
   { FEATDEF_misc_recomb , FTQUAL_standard_name },
 
   { FEATDEF_misc_signal , FTQUAL_allele },
@@ -1135,6 +1138,7 @@ static ValQual legalGbqualList [] = {
   { FEATDEF_protein_bind , FTQUAL_label },
   { FEATDEF_protein_bind , FTQUAL_map },
   { FEATDEF_protein_bind , FTQUAL_old_locus_tag },
+  { FEATDEF_protein_bind , FTQUAL_operon },
   { FEATDEF_protein_bind , FTQUAL_standard_name },
 
   { FEATDEF_RBS , FTQUAL_allele },
@@ -2683,9 +2687,12 @@ static void FormatFeatureBlockQuals (
   UserObjectPtr      uop;
   ValNodePtr         vnp;
   StringItemPtr      unique;
+  Boolean            indexerVersion;
 
   unique = FFGetString(ajp);
   if ( unique == NULL ) return;
+
+  indexerVersion = (Boolean) (GetAppProperty ("InternalNcbiSequin") != NULL);
 
   for (i = 0, idx = feat_qual_order [i]; idx != (FtQualType) 0; i++, idx = feat_qual_order [i]) {
 
@@ -4153,7 +4160,11 @@ static void FormatFeatureBlockQuals (
                   }
                 } else if (jdx == FTQUAL_seqfeat_note) {
                   str = StringSave (qvp [jdx].str);
-                  TrimSpacesAndJunkFromEnds (str, TRUE);
+                  if (indexerVersion) {
+                    TrimSpacesAroundString (str);
+                  } else {
+                    TrimSpacesAndJunkFromEnds (str, TRUE);
+                  }
                   if (! IsEllipsis (str))
                     add_period = s_RemovePeriodFromEnd (str);
                   /*  NOTE -- The following function call cleans up some strings
@@ -5050,6 +5061,7 @@ static CharPtr legalInferencePrefixes [] = {
   "nucleotide motif",
   "protein motif",
   "ab initio prediction",
+  "alignment",
   NULL
 };
 
@@ -5184,8 +5196,10 @@ static SeqFeatPtr GetOverlappingGeneInEntity (
         vn.data.ptrvalue = (Pointer) &spt;
         gene = SeqMgrGetOverlappingGene (&vn, gcontext);
 
+      /*
       } else {
         gene = SeqMgrGetOverlappingGene (locforgene, gcontext);
+      */
       }
     }
   } else {
@@ -5197,6 +5211,23 @@ static SeqFeatPtr GetOverlappingGeneInEntity (
   }
   SeqEntrySetScope (oldscope);
   return gene;
+}
+
+static Boolean LocStrandsMatch (SeqLocPtr loc1, SeqLocPtr loc2)
+
+{
+  Uint1  featstrand;
+  Uint1  locstrand;
+
+  if (loc1 == NULL || loc2 == NULL) return FALSE;
+  featstrand = SeqLocStrand (loc1);
+  locstrand = SeqLocStrand (loc2);
+  if (featstrand == locstrand) return TRUE;
+  if (locstrand == Seq_strand_unknown && featstrand != Seq_strand_minus) return TRUE;
+  if (featstrand == Seq_strand_unknown && locstrand != Seq_strand_minus) return TRUE;
+  if (featstrand == Seq_strand_both && locstrand != Seq_strand_minus) return TRUE;
+  if (locstrand == Seq_strand_both) return TRUE;
+  return FALSE;
 }
 
 static CharPtr FormatFeatureBlockEx (
@@ -5248,6 +5279,7 @@ static CharPtr FormatFeatureBlockEx (
   ValNodePtr         illegal = NULL;
   ImpFeatPtr         imp = NULL;
   IndxPtr            index;
+  Boolean            is_ed = FALSE;
   Boolean            is_ged = FALSE;
   Boolean            is_gps = FALSE;
   Boolean            is_journalscan = FALSE;
@@ -5259,6 +5291,7 @@ static CharPtr FormatFeatureBlockEx (
   SeqLocPtr          loc = NULL;
   SeqLocPtr          location = NULL;
   SeqLocPtr          locforgene = NULL;
+  SeqLocPtr          locformatpep = NULL;
   SeqMgrFeatContext  mcontext;
   MolInfoPtr         mip;
   SeqFeatPtr         mrna;
@@ -5363,8 +5396,9 @@ static CharPtr FormatFeatureBlockEx (
       locforgene = location;
       */
       if (cds != NULL) {
-        locforgene = cds->location;    /* mat_peptide always gets parent CDS /gene value */
-        grp = SeqMgrGetGeneXref (cds); /* mat_peptide also needs to use CDS gene xref */
+        grp = SeqMgrGetGeneXref (cds); /* mat_peptide first obeys any CDS gene xref */
+        locformatpep = location;       /* mat_peptide next gets exact match for /gene */
+        locforgene = cds->location;    /* mat_peptide last gets parent CDS /gene */
       }
       loc = location;
   
@@ -5441,8 +5475,16 @@ static CharPtr FormatFeatureBlockEx (
             is_journalscan = TRUE;
             break;
           case SEQID_GENBANK :
+            is_ged = TRUE;
+            break;
           case SEQID_EMBL :
+            is_ged = TRUE;
+            is_ed = TRUE;
+            break;
           case SEQID_DDBJ :
+            is_ged = TRUE;
+            is_ed = TRUE;
+            break;
           case SEQID_TPG :
           case SEQID_TPE :
           case SEQID_TPD :
@@ -5656,6 +5698,9 @@ static CharPtr FormatFeatureBlockEx (
           qvp [FTQUAL_operon].gbq = gbq;
         }
       }
+      if (operon->pseudo) {
+        pseudo = TRUE;
+      }
     }
 
   } else if (featdeftype != FEATDEF_operon && featdeftype != FEATDEF_gap) {
@@ -5688,7 +5733,35 @@ static CharPtr FormatFeatureBlockEx (
 
     if (! suppressed) {
 
-      /* if not suppressed, and no gene xref, get gene by overlap */
+      /* first look for gene that exactly matches mat_peptide DNA projection */
+
+      if (gene == NULL && grp == NULL && locformatpep != NULL) {
+        gene = GetOverlappingGeneInEntity (ajp->ajp.entityID, fcontext, &gcontext, locformatpep);
+        if (gene == NULL && ajp->ajp.entityID != sfp->idx.entityID) {
+          gene = GetOverlappingGeneInEntity (sfp->idx.entityID, fcontext, &gcontext, locformatpep);
+        }
+
+        if (gene != NULL) {
+          if (SeqLocCompare (gene->location, locformatpep) == SLC_A_EQ_B &&
+              LocStrandsMatch (gene->location, locformatpep)) {
+            qvp [FTQUAL_gene_note].str = gene->comment;
+
+            grp = (GeneRefPtr) gene->data.value.ptrvalue;
+            if (gene->pseudo) {
+              pseudo = TRUE;
+            }
+            if (grp != NULL && grp->db != NULL) {
+              qvp [FTQUAL_gene_xref].vnp = grp->db;
+            } else {
+              qvp [FTQUAL_gene_xref].vnp = gene->dbxref;
+            }
+          } else {
+            gene = NULL;
+          }
+        }
+      }
+
+      /* otherwise, if not suppressed and no gene xref, get gene by overlap */
 
       if (gene == NULL && grp == NULL) {
         if (featdeftype != FEATDEF_primer_bind) {
@@ -5728,7 +5801,7 @@ static CharPtr FormatFeatureBlockEx (
         pseudo = TRUE;
       }
 
-      if (grp != NULL && (featdeftype != FEATDEF_repeat_region || gene == NULL)) {
+      if (grp != NULL && (featdeftype != FEATDEF_repeat_region || is_ed || gene == NULL)) {
         if (! StringHasNoText (grp->locus)) {
           qvp [FTQUAL_gene].str = grp->locus;
           qvp [FTQUAL_locus_tag].str = grp->locus_tag;
@@ -5774,6 +5847,9 @@ static CharPtr FormatFeatureBlockEx (
             if (StringCmp (gbq->qual, "operon") == 0) {
               qvp [FTQUAL_operon].gbq = gbq;
             }
+          }
+          if (operon->pseudo) {
+            pseudo = TRUE;
           }
         }
       }
@@ -6261,20 +6337,9 @@ static CharPtr FormatFeatureBlockEx (
               if (rrp->type == 255) {
                 str = (CharPtr) rrp->ext.value.ptrvalue;
                 if (StringICmp (str, "misc_RNA") == 0 ||
-                    StringICmp (str, "ncRNA") == 0) {
+                    StringICmp (str, "ncRNA") == 0 ||
+                    StringICmp (str, "tmRNA") == 0) {
                    /* pick up product from gbqual */
-                 } else if (StringICmp (str, "tmRNA") == 0) {
-                   /* check for product gbqual in new records */
-                   for (gbq = sfp->qual; gbq != NULL; gbq = gbq->next) {
-                     if (StringICmp (gbq->qual, "product") == 0 &&
-                         StringDoesHaveText (gbq->val)) {
-                       break;
-                     }
-                   }
-                   if (gbq == NULL) {
-                     /* old record has no product gbqual, product is tmRNA */
-                     qvp [FTQUAL_product].str = str;
-                   }
                  } else {
                   str = (CharPtr) rrp->ext.value.ptrvalue;
                   qvp [FTQUAL_product].str = str;
@@ -6609,6 +6674,17 @@ static CharPtr FormatFeatureBlockEx (
     } else if (qvp [FTQUAL_evidence].num == 2) {
       qvp [FTQUAL_inference_string].str = "non-experimental evidence, no additional details recorded";
       qvp [FTQUAL_evidence].num = 0;
+    }
+  }
+
+  if (qvp [FTQUAL_ncRNA_class].gbq != NULL) {
+    gbq = qvp [FTQUAL_ncRNA_class].gbq;
+    if (StringDoesHaveText (gbq->val)) {
+      if (! IsStringInNcRNAClassList (gbq->val)) {
+        qvp [FTQUAL_ncRNA_other].str = "other";
+        qvp [FTQUAL_ncRNA_note].str = gbq->val;
+        qvp [FTQUAL_ncRNA_class].gbq = NULL;
+      }
     }
   }
 

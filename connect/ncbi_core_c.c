@@ -1,4 +1,4 @@
-/*  $Id: ncbi_core_c.c,v 6.18 2007/06/25 15:33:04 lavr Exp $
+/*  $Id: ncbi_core_c.c,v 6.19 2007/10/18 15:29:26 ivanovp Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -150,7 +150,7 @@ static void s_LOG_Handler(void* user_data/*unused*/, SLOG_Handler* call_data)
     if (!(msg = LOG_ComposeMessage(call_data, fLOG_None)))
         return/*failed*/;
 
-    Nlm_ErrPostStr(sev, 0, 0, msg);
+    Nlm_ErrPostStr(sev, call_data->err_code, call_data->err_subcode, msg);
 
     if (call_data->level == eLOG_Trace)
         Nlm_ErrClear();
@@ -240,6 +240,9 @@ extern void CONNECT_Init(const char* conf_file)
 /*
  * ---------------------------------------------------------------------------
  * $Log: ncbi_core_c.c,v $
+ * Revision 6.19  2007/10/18 15:29:26  ivanovp
+ * Connect and ctools libraries are changed to use new error and log posting system with error codes and subcodes. JIRA: CXX-3
+ *
  * Revision 6.18  2007/06/25 15:33:04  lavr
  * +eMT_TryLock[Read]
  *

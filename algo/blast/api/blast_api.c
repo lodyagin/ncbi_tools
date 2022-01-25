@@ -1,4 +1,4 @@
-/* $Id: blast_api.c,v 1.50 2007/07/27 18:02:26 papadopo Exp $
+/* $Id: blast_api.c,v 1.53 2008/02/13 22:35:49 camacho Exp $
 ***************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -284,6 +284,7 @@ s_BlastHSPStreamSetUp(BLAST_SequenceBlk* query, BlastQueryInfo* query_info,
                                 options->score_options, &blasthit_params);
         *hsp_stream =
             Blast_HSPListCollectorInitMT(options->program, blasthit_params,
+                                         options->ext_options, TRUE,
                                          kNumResults, lock);
     } else {
         /* Initialize the queue HSP stream for tabular formatting. */
@@ -718,7 +719,7 @@ Blast_RunSearch(SeqLoc* query_seqloc,
           }
     }
 
-    status = LookupTableWrapInit(query, lookup_options, 
+    status = LookupTableWrapInit(query, lookup_options, query_options,
                         lookup_segments, sbp, &lookup_wrap, rps_info, &core_msg);
     if (core_msg)
     {

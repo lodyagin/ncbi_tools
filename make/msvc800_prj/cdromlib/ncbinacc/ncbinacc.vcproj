@@ -3,7 +3,7 @@
 	ProjectType="Visual C++"
 	Version="8.00"
 	Name="ncbinacc"
-	ProjectGUID="{3E5CD700-5AE9-41CF-9A12-794A15EDE7D2}"
+	ProjectGUID="{7C0D1F06-0B97-49A1-A25D-93D5E7A96786}"
 	>
 	<Platforms>
 		<Platform

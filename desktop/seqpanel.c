@@ -1,4 +1,4 @@
-/* $Id: seqpanel.c,v 6.212 2007/07/18 16:00:17 bollin Exp $
+/* $Id: seqpanel.c,v 6.219 2008/02/28 20:24:30 bollin Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -47,6 +47,7 @@
 #include <algo/blast/api/blast_seqalign.h>
 #include <alignval.h>
 #include <salptool.h>
+#include <vsm.h>
 
 enum ESeqNum   { eNumNone=1, eNumSide=2, eNumTop=3 };
 enum EDrawGrid { eDrawGridOn=1, eDrawGridOff=2 };
@@ -1251,6 +1252,7 @@ static void DrawAlignment
   /* finally draw everything */
   best_id = SeqIdFindBestAccession (bsp->id);
   alnlabel_len = (bvp->SeqStartPosX / bvp->CharWidth) - 10;
+  if (alnlabel_len < 10) alnlabel_len = 10;
   alnlabel = (CharPtr) MemNew (sizeof (Char) * (alnlabel_len + 1)); 
 
   SeqIdWrite (best_id, alnlabel, PRINTID_TEXTID_ACCESSION, alnlabel_len);        /* Get label           */
@@ -2466,11 +2468,12 @@ static void DrawSeqPanel (BioseqViewPtr bvp)
   Int4             aln_idx;
   Int4             start;
   PaneL            p;
+  Int4             vis_seq_start_line, vis_seq_start, vis_seq_stop;
   
   if (bvp == NULL || bvp->bsp == NULL || bvp->SeqPanLines == NULL) return;
   bsp = bvp->bsp;
   p = bvp->seqView;
-  spp = SeqPortNew (bsp, 0, bsp->length-1, Seq_strand_plus, Seq_code_iupacna);
+
   buf = MemNew (SEQ_GROUP_SIZE+1);
   if (bvp->seqAlignMode) { /* allocate it here, to speed up drawing of alignments */
     seqbuf = MemNew (bvp->BlocksAtLine * SEQ_GROUP_SIZE + 3);
@@ -2494,6 +2497,20 @@ static void DrawSeqPanel (BioseqViewPtr bvp)
       aln_idx++;
     }
   }
+
+  splp = bvp->SeqPanLines[line];
+  vis_seq_start_line = splp->bioSeqLine;
+  vis_seq_start = vis_seq_start_line * bvp->CharsAtLine;
+  if (vis_seq_start > bsp->length - 1)
+  {
+    spp = NULL;
+  }
+  else
+  {
+    vis_seq_stop = vis_seq_start + ((r.bottom - 3 * SEQ_Y_OFFSET - r.top) / (bvp->LineHeight == 0 ? 1 : bvp->LineHeight)) * bvp->CharsAtLine;
+    vis_seq_stop = MIN (vis_seq_stop, bsp->length - 1);
+    spp = SeqPortNew (bsp, vis_seq_start, vis_seq_stop, Seq_strand_plus, Seq_code_iupacna); 
+  }
   
   for (line = start; line < bvp->TotalLines  &&  y <= r.bottom-2*SEQ_Y_OFFSET; line++) {
     if (IsInRange(y, updateRect.top,updateRect.bottom) || 
@@ -2512,11 +2529,11 @@ static void DrawSeqPanel (BioseqViewPtr bvp)
           break;
         case eTypeSequence:
           if (GetValue(bvp->newNumControl) != eNumNone) DrawSeqSideLineNumbers(x, y, splp->bioSeqLine, bvp); /* Draw line numbers    */
-          DrawSequence(x, y, splp->bioSeqLine, spp, buf, bvp);                /* Draw the sequence    */
+          DrawSequence(x, y, splp->bioSeqLine - vis_seq_start_line, spp, buf, bvp);                /* Draw the sequence    */
           if (bvp->DrawGrid) DrawLtGrid(x, y+bvp->LineSpace/2, r.right, y+bvp->LineSpace/2);
           break;
         case eTypeSequenceComplement:
-          DrawSequenceComplement(x, y, splp->bioSeqLine, spp, buf, bvp);                       /* Draw the sequence    */
+          DrawSequenceComplement(x, y, splp->bioSeqLine - vis_seq_start_line, spp, buf, bvp);  /* Draw the sequence    */
           if (bvp->DrawGrid) DrawLtGrid(x, y+bvp->LineSpace/2, r.right, y+bvp->LineSpace/2);
           break;
         case eTypeAlignSequence:
@@ -3133,8 +3150,8 @@ GetSeqChapterFeatureInfo
          || (fcontext.left <= chapter_start && fcontext.right > chapter_stop)))
     {
       Boolean coding   = fcontext.seqfeattype == SEQFEAT_CDREGION;
-      Int4    paraFrom = floor(fcontext.left / lineLength);      /* feature starting paragraph */
-      Int4    paraTo   = ceil (fcontext.right / lineLength) + 1;  /* feature ending paragraph   */
+      Int4    paraFrom = (Int4)floor(fcontext.left / lineLength);      /* feature starting paragraph */
+      Int4    paraTo   = (Int4)ceil (fcontext.right / lineLength) + 1;  /* feature ending paragraph   */
       /*BioseqPtr bsp_prot = BioseqFind (SeqLocId(sfp->product));*/
       start = SeqLocStart (sfp->location);
       stop = SeqLocStop (sfp->location);
@@ -3228,7 +3245,7 @@ static void UnindexSeqPanChapter (BioseqViewPtr bvp, ValNodePtr chapter_vnp, Int
   if (chapter_vnp == NULL || bvp == NULL) return;
   
   old_lines = CountChapterLines (chapter_vnp, bvp);
-  num_paragraphs = floor(bvp->bsp->length / bvp->CharsAtLine) + 1; /* sequence length */ 
+  num_paragraphs = (Int4) floor(bvp->bsp->length / bvp->CharsAtLine) + 1; /* sequence length */ 
 
   InitSeqPanChapter ((SeqPanParaPtr) chapter_vnp->data.ptrvalue, 
                      chapter_number * SEQ_PAN_CHAPTER_SIZE, num_paragraphs);
@@ -4743,7 +4760,7 @@ static void SeqEdTranslateAndJournalOneCDS (SeqFeatPtr sfp, SeqEdFormPtr sefp)
   sejp->next = end;
   end->prev = sejp;
   sefp->last_journal_entry = sejp;
-  SeqEdTranslateOneCDS (sfp, sefp->bfp->bvd.bsp, sefp->input_entityID);	
+  SeqEdTranslateOneCDS (sfp, sefp->bfp->bvd.bsp, sefp->input_entityID, Sequin_GlobalAlign2Seq);	
 
   SetUndoRedoStatus (sefp);
 }
@@ -7839,21 +7856,7 @@ static void SeqEdNewFeaturesMenu (MenU m, Boolean is_na)
               while ((ompp = ObjMgrProcFindNext (omp, OMPROC_EDIT,
                       omtp->datatype, 0, ompp)) != NULL) {
                 subtype = ompp->subinputtype;
-                if (subtype == fdp->featdef_key &&
-                    subtype != FEATDEF_PUB &&
-                    subtype != FEATDEF_IMP &&
-                    subtype != FEATDEF_Imp_CDS &&
-                    subtype != FEATDEF_misc_RNA &&
-                    subtype != FEATDEF_precursor_RNA &&
-                    subtype != FEATDEF_mat_peptide &&
-                    subtype != FEATDEF_sig_peptide &&
-                    subtype != FEATDEF_transit_peptide &&
-                    subtype != FEATDEF_source &&
-                    subtype != FEATDEF_virion &&
-                    subtype != FEATDEF_mutation &&
-                    subtype != FEATDEF_allele &&
-                    subtype != FEATDEF_site_ref &&
-                    subtype != FEATDEF_gap) {
+                if (subtype == fdp->featdef_key && OkToListFeatDefInRemainingFeatures (subtype)) {
                   i = CommandItem (sub, ompp->proclabel, SeqEditNewFeatureMenuProc);
                   nfp = (NewFeaturePtr) MemNew (sizeof (NewFeatureData));
                   if (nfp != NULL) {
@@ -9615,349 +9618,6 @@ BioseqPageData seqAlnPnlPageData = {
   NULL, NULL, ResizeSeqView, NULL
 };
 
-/* The following section of code is used for retranslating a CDS and updating
- * the protein features based on an alignment between the old and new protein
- * sequences.
- */
-static Int4 SeqEdRemapCoord (SeqAlignPtr salp, Int4 coord, Boolean move_up, Int4 len)
-
-{
-  Int4 aln_pos;
-  
-  if (salp == NULL) return -1;
-  aln_pos = AlnMgr2MapBioseqToSeqAlign (salp, coord, 1);
-  while (aln_pos == -1)
-  {
-  	if (move_up)
-  	{
-  	  if (coord >= len - 1)
-  	  {
-  	  	return len - 1;
-  	  }
-  	  else
-  	  {
-  	  	coord ++;
-  	  }
-  	}
-  	else
-  	{
-  	  if (coord <= 0)
-  	  {
-  	  	return 0;
-  	  }
-  	  else
-  	  {
-  	  	coord --;
-  	  }
-  	}
-  	aln_pos = AlnMgr2MapBioseqToSeqAlign (salp, coord, 1);
-  }
-  return AlnMgr2MapSeqAlignToBioseq (salp, aln_pos, 2);
-}
-
-
-static void SeqEdRemapSeqIntLoc (SeqAlignPtr salp, SeqIntPtr sintp, Int4 seq_len)
-
-{  
-  if (salp == NULL || sintp == NULL) return;
-  sintp->from = SeqEdRemapCoord (salp, sintp->from, TRUE, seq_len);
-  sintp->to = SeqEdRemapCoord (salp, sintp->to, FALSE, seq_len); 
-}
-
-static void SeqEdRemapSeqPntLoc (SeqAlignPtr salp, SeqPntPtr spp, Int4 seq_len)
-
-{  
-  if (salp == NULL || spp == NULL) return;
-  
-  spp->point = SeqEdRemapCoord (salp, spp->point, FALSE, seq_len);
-}
-
-
-static void SeqEdRemapPackSeqPnt (SeqAlignPtr salp, PackSeqPntPtr pspp, Int4 seq_len)
-
-{
-  Uint1          used;
-
-  if (salp == NULL || pspp == NULL) return;
-  for (used = 0; used < pspp->used; used++) 
-  {
-    pspp->pnts [used] = SeqEdRemapCoord (salp, pspp->pnts [used], FALSE, seq_len);
-  }
-}
-
-
-NLM_EXTERN void SeqEdRemapLocation (SeqAlignPtr salp, SeqLocPtr slp, Int4 seq_len)
-
-{
-
-  if (slp == NULL) return;
-  switch (slp->choice) {
-    case SEQLOC_INT :
-      SeqEdRemapSeqIntLoc (salp, slp->data.ptrvalue, seq_len);
-      break;
-    case SEQLOC_PNT :
-      SeqEdRemapSeqPntLoc (salp, slp->data.ptrvalue, seq_len);
-      break;
-    case SEQLOC_PACKED_PNT :
-      SeqEdRemapPackSeqPnt (salp, slp->data.ptrvalue, seq_len);
-      break;
-    default :
-      break;
-  }
-}
-
-static void MakeLocationMatchEntireSequence (SeqLocPtr slp, BioseqPtr bsp)
-{
-  SeqIntPtr sip;
-  
-  if (slp == NULL || bsp == NULL) return;
-  
-  if (slp->choice == SEQLOC_WHOLE)
-  {
-  	SeqIdFree (slp->data.ptrvalue);
-  	slp->data.ptrvalue = SeqIdDup (bsp->id);
-  }
-  else if (slp->choice == SEQLOC_INT)
-  {
-    sip = (SeqIntPtr) slp->data.ptrvalue;
-    if (sip == NULL)
-    {
-      sip = SeqIntNew ();
-      slp->data.ptrvalue = sip;
-    }
-    if (sip != NULL)
-    {
-      sip->from = 0;
-      sip->to = bsp->length - 1;
-    }
-  }
-}
-
-NLM_EXTERN Boolean SeqEdFixProteinFeatures (BioseqPtr oldbsp, BioseqPtr newbsp, Boolean force_fix)
-{
-  SeqAlignPtr       salp = NULL;
-  Boolean           revcomp = FALSE;
-  SeqFeatPtr        sfp;
-  SeqMgrFeatContext fcontext;
-  Boolean           tried_to_get_alignment = FALSE;
-  Boolean           unmappable_feats = FALSE;
-  SeqLocPtr         slp_tmp = NULL;
-  
-  if (oldbsp == NULL || newbsp == NULL) return FALSE;
-
-  /* get alignment between old and new proteins */
-
-  if (ISA_na (oldbsp->mol) != ISA_na (newbsp->mol)) return FALSE;
-
-  /* iterate through the features on the old protein.  Full length features
-   * should be set to the new length.  Other features should be mapped through
-   * the alignment (if possible), otherwise warn the user that they could not
-   * be remapped. */      
-
-  if (!force_fix)
-  {
-    for (sfp = SeqMgrGetNextFeature (oldbsp, NULL, 0, 0, &fcontext);
-         sfp != NULL && !unmappable_feats;
-         sfp = SeqMgrGetNextFeature (oldbsp, sfp, 0, 0, &fcontext))
-    {
-      if (sfp->idx.subtype != FEATDEF_PROT)
-      {
-        if (salp == NULL)
-        {
-          salp = Sequin_GlobalAlign2Seq (oldbsp, newbsp, &revcomp);
-        }
-        if (salp == NULL)
-        {
-          unmappable_feats = TRUE;
-        } 
-        else
-        {
-          slp_tmp = (SeqLocPtr) AsnIoMemCopy (sfp->location,
-                                              (AsnReadFunc) SeqLocAsnRead,
-                                              (AsnWriteFunc) SeqLocAsnWrite);
-          SeqEdRemapLocation (salp, slp_tmp, newbsp->length);	  	  	
-          if (slp_tmp == NULL)
-          {
-            unmappable_feats = TRUE;
-          }
-          else
-          {
-            slp_tmp = SeqLocFree (slp_tmp);
-          }
-        }
-      }
-    }
-    if (unmappable_feats)
-    {
-      return FALSE;
-    }
-  }
-  
-  for (sfp = SeqMgrGetNextFeature (oldbsp, NULL, 0, 0, &fcontext);
-       sfp != NULL;
-       sfp = SeqMgrGetNextFeature (oldbsp, sfp, 0, 0, &fcontext))
-  {
-    if (sfp->idx.subtype == FEATDEF_PROT)
-    {
-      /* make new location match new sequence length */
-      MakeLocationMatchEntireSequence (sfp->location, newbsp);
-    }
-    else
-    {
-      if (salp == NULL && !tried_to_get_alignment)
-      {
-        salp = Sequin_GlobalAlign2Seq (oldbsp, newbsp, &revcomp);
-        tried_to_get_alignment = TRUE;
-      }
-      if (salp != NULL)
-      {
-        SeqEdRemapLocation (salp, sfp->location, newbsp->length);	  	  	
-      }
-      else
-      {
-        unmappable_feats = TRUE;
-      }
-    }
-  } 
-        
-  if (salp != NULL)
-  {
-    SeqAlignFree (salp);
-  }
-  if (unmappable_feats)
-  {
-    return FALSE;
-  }
-  else
-  {
-    return TRUE;
-  }
-}
-
-
-NLM_EXTERN void SeqEdTranslateOneCDS (SeqFeatPtr sfp, BioseqPtr featbsp, Uint2 entityID)
-{
-  ByteStorePtr  bs;
-  Char          ch;
-  CharPtr       prot;
-  CharPtr       ptr;
-  Int4          star_at_end = 0;
-  BioseqPtr     old_prot;
-  SeqIdPtr      new_prot_id;
-  SeqEntryPtr   parent, new_prot_sep;
-  SeqLocPtr     slp;
-  Uint1         seq_data_type;
-  Int4          old_length;
-  BioseqPtr     newbsp;
-  ProtRefPtr    prp;
-  SeqFeatPtr    prot_sfp;
-  SeqDataPtr    sdp;
-  
-  if (featbsp == NULL || sfp == NULL || sfp->location == NULL 
-      || sfp->data.choice != SEQFEAT_CDREGION) 
-  {
-  	return;
-  }
-  
-  old_prot = BioseqFindFromSeqLoc (sfp->product);
-  new_prot_id = SeqIdDup (SeqLocId (sfp->product));
-  if (new_prot_id == NULL)
-  {
-  	new_prot_id = MakeNewProteinSeqId (sfp->location, featbsp->id);
-  }
-  	
-  bs = ProteinFromCdRegionEx (sfp, TRUE, FALSE);
-  if (bs != NULL) {
-    prot = BSMerge (bs, NULL);
-    bs = BSFree (bs);
-    if (prot != NULL) {
-      ptr = prot;
-      ch = *ptr;
-      while (ch != '\0') {
-        *ptr = TO_UPPER (ch);
-        if (ch == '*') {
-          star_at_end = 1;
-        } else {
-          star_at_end = 0;
-        }
-        ptr++;
-        ch = *ptr;
-      }
-      if (star_at_end)
-      {
-      	*(ptr - 1) = 0;
-      }
-      bs = BSNew (1000);
-      if (bs != NULL) {
-        ptr = prot;
-        BSWrite (bs, (VoidPtr) ptr, (Int4) StringLen (ptr));
-      }
-      MemFree (prot);
-    }
-    newbsp = BioseqNew ();
-    if (newbsp != NULL) {
-      newbsp->id = SeqIdParse ("lcl|CdRgnTransl");
-      newbsp->repr = Seq_repr_raw;
-      newbsp->mol = Seq_mol_aa;
-      newbsp->seq_data_type = Seq_code_ncbieaa;
-      newbsp->seq_data = (SeqDataPtr) bs;
-      newbsp->length = BSLen (bs);
-      
-      if (old_prot == NULL)
-      {
-  	    /* need to create a new protein sequence */
-  	    SeqIdFree (newbsp->id);
-  	    newbsp->id = new_prot_id;
-  	    new_prot_sep = SeqEntryNew ();
-  	    new_prot_sep->choice = 1;
-  	    new_prot_sep->data.ptrvalue = newbsp;
-  	    parent = GetBestTopParentForData (entityID, featbsp);
-  	    if (parent != NULL)
-  	    {
-  	      AddSeqEntryToSeqEntry (parent, new_prot_sep, TRUE);
-  	    }
-  	    slp = ValNodeNew (NULL);
-  	    if (slp != NULL)
-  	    {
-  	      slp->choice = SEQLOC_WHOLE;
-  	      slp->data.ptrvalue = SeqIdDup (new_prot_id);
-  	    }
-  	    sfp->product = slp;
-  	    
-  	    /* create full length protein feature */
-        prp = ProtRefNew ();
-        prot_sfp = CreateNewFeature (new_prot_sep, NULL, SEQFEAT_PROT, NULL);
-        if (prot_sfp != NULL) {
-          prot_sfp->data.value.ptrvalue = (Pointer) prp;
-        }
-      }
-      else
-      {
-        /* propagate features to new protein */
-        if (!SeqEdFixProteinFeatures (old_prot, newbsp, TRUE))
-        {
-          Message (MSG_ERROR, "Unable to construct alignment between old and new "
-                  "proteins - you will need to adjust the protein features "
-                  "manually.");
-        }
-             	
-      	/* then replace old protein with new */
-      	seq_data_type = old_prot->seq_data_type;
-      	sdp = old_prot->seq_data;
-      	old_length = old_prot->length;
-      	old_prot->seq_data_type = newbsp->seq_data_type;
-      	old_prot->seq_data = newbsp->seq_data;
-      	old_prot->length = newbsp->length;
-      	newbsp->seq_data_type = seq_data_type;
-      	newbsp->seq_data = sdp;
-      	newbsp->length = old_length;
-      	BioseqFree (newbsp);
-      }
-    }
-  }
-}
-
-
 #define SEQ_ED_TRANSLATE_BUFFER_SIZE 32000
 NLM_EXTERN SeqEdJournalPtr SeqEdJournalNewTranslate
 (SeqFeatPtr sfp,
@@ -10108,7 +9768,7 @@ static Boolean PlayOneTranslationJournalEntry (SeqEdJournalPtr sejp)
     AsnIoMemClose(aimp);					  /* close it */    
   }
   	
-  SeqEdTranslateOneCDS (sejp->sfp, sejp->bsp, sejp->entityID);	
+  SeqEdTranslateOneCDS (sejp->sfp, sejp->bsp, sejp->entityID, Sequin_GlobalAlign2Seq);	
   return TRUE;
 }
 

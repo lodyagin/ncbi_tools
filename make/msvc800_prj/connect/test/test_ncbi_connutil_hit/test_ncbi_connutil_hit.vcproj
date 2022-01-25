@@ -3,7 +3,7 @@
 	ProjectType="Visual C++"
 	Version="8.00"
 	Name="test_ncbi_connutil_hit"
-	ProjectGUID="{AD565A88-01DA-4401-8E8F-53CCF8C759B5}"
+	ProjectGUID="{760EA748-5473-48CE-8BE0-76538A0CE1B2}"
 	>
 	<Platforms>
 		<Platform

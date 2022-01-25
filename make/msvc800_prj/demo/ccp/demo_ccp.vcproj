@@ -3,7 +3,7 @@
 	ProjectType="Visual C++"
 	Version="8.00"
 	Name="demo_ccp"
-	ProjectGUID="{1E7F80A2-A2F7-43C5-A5CD-D9A745A2D9BC}"
+	ProjectGUID="{F8DA831A-6128-4FB6-A41F-D4051D736D81}"
 	>
 	<Platforms>
 		<Platform

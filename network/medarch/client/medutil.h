@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 8/31/93
 *
-* $Revision: 6.2 $
+* $Revision: 6.3 $
 *
 * File Description:  * File Description:  Medline Utilities for MedArch
 *   Assumes user calls MedArchInit and Fini
@@ -45,6 +45,10 @@
 *
 * RCS Modification History:
 * $Log: medutil.h,v $
+* Revision 6.3  2007/12/04 20:06:35  bazhin
+* Added Boolean variable "merge_ids" to merge input article
+* ids with ones from med server.
+*
 * Revision 6.2  2003/03/25 19:14:50  bazhin
 * Function "ten_authors()" became public (from static).
 *
@@ -93,6 +97,9 @@ typedef struct findpubstr {
 		lookups_succeeded,  /* citartmatch worked */
 		fetches_attempted,  /* FetchPubs tried */
 		fetches_succeeded;  /* FetchPubs that worked */
+	Boolean merge_ids;	    /* If TRUE then merges Cit-art.ids from
+				       input Cit-sub and one gotten from
+				       med server. */
 } FindPubOption, PNTR FindPubOptionPtr;
 
                               /* SeqEntryExplore callback to fix all Pubs */

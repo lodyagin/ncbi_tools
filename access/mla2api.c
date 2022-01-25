@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/30/07
 *
-* $Revision: 1.8 $
+* $Revision: 1.14 $
 *
 * File Description: 
 *
@@ -528,18 +528,18 @@ static void SplitMLAuthName (
   *p = '\0';
 
   if (sbuf [0]) {
-    if (StringCmp (sbuf, "1d") == 0)
-      p = StringMove (suffix, "I.");
-    else if (StringCmp (sbuf, "2d") == 0)
-      p = StringMove (suffix, "II.");
-    else if (StringCmp (sbuf, "3d") == 0)
-      p = StringMove (suffix, "III.");
+    if (StringCmp (sbuf, "1d") == 0 || StringCmp (sbuf, "1st") == 0)
+      p = StringMove (suffix, "I");
+    else if (StringCmp (sbuf, "2d") == 0 || StringCmp (sbuf, "2nd") == 0)
+      p = StringMove (suffix, "II");
+    else if (StringCmp (sbuf, "3d") == 0 || StringCmp (sbuf, "3rd") == 0)
+      p = StringMove (suffix, "III");
     else if (StringCmp (sbuf, "4th") == 0)
-      p = StringMove (suffix, "IV.");
+      p = StringMove (suffix, "IV");
     else if (StringCmp (sbuf, "5th") == 0)
-      p = StringMove (suffix, "V.");
+      p = StringMove (suffix, "V");
     else if (StringCmp (sbuf, "6th") == 0)
-      p = StringMove (suffix, "VI.");
+      p = StringMove (suffix, "VI");
     else if (StringCmp (sbuf, "Sr") == 0)
       p = StringMove (suffix, "Sr.");
     else if (StringCmp (sbuf, "Jr") == 0)
@@ -664,6 +664,123 @@ NLM_EXTERN void ChangeMlaBackMLAuthorsToSTD (
   cap = (CitArtPtr) pub->data.ptrvalue;
   if (cap == NULL) return;
   ChangeCitArtMLAuthorsToSTD (cap);
+}
+
+typedef struct ejour {
+  CharPtr  journal_name;
+  Int2     starting_year;
+} EjourData, PNTR EjourDataPtr;
+
+static EjourData mla2_ejour_list [] = {
+ {"Acta Crystallograph. Sect. F Struct. Biol. Cryst. Commun.",     0 },
+ {"Acta Vet. Scand.",                                           2006 },
+ {"Afr. J. Biotechnol.",                                           0 },
+ {"Ambul. Surg.",                                               2005 },
+ {"Ann. Clin. Microbiol. Antimicrob.",                             0 },
+ {"Biol. Direct",                                                  0 },
+ {"Biotecnol. Apl.",                                            2002 },
+ {"BMC Biochem.",                                                  0 },
+ {"BMC Bioinformatics",                                            0 },
+ {"BMC Biotechnol.",                                               0 },
+ {"BMC Cancer",                                                    0 },
+ {"BMC Cell Biol.",                                                0 },
+ {"BMC Dermatol.",                                                 0 },
+ {"BMC Dev. Biol.",                                                0 },
+ {"BMC Ecol.",                                                     0 },
+ {"BMC Evol. Biol.",                                               0 },
+ {"BMC Genet.",                                                    0 },
+ {"BMC Genomics",                                                  0 },
+ {"BMC Immunol.",                                                  0 },
+ {"BMC Infect. Dis.",                                              0 },
+ {"BMC Med. Genet.",                                               0 },
+ {"BMC Microbiol.",                                                0 },
+ {"BMC Mol. Biol.",                                                0 },
+ {"BMC Pharmacol.",                                                0 },
+ {"BMC Physiol.",                                                  0 },
+ {"BMC Plant Biol.",                                               0 },
+ {"BMC Struct. Biol.",                                             0 },
+ {"BMC Vet. Res.",                                                 0 },
+ {"Breast Cancer Res.",                                         2005 },
+ {"Cancer Cell Int.",                                              0 },
+ {"Cancer Immun.",                                                 0 },
+ {"Cell Commun. Signal",                                           0 },
+ {"Cell Struct. Funct.",                                        2005 },
+ {"Cell. Mol. Biol. (Noisy-le-grand)",                          2004 },
+ {"Colomb. Med.",                                               1998 },
+ {"Crit. Rev. Oral Biol. Med.",                                 2002 },
+ {"Dermatol. Online J.",                                           0 },
+ {"Electron. J. Biotechnol.",                                      0 },
+ {"Eur. J. Genet. Mol. Toxicol.",                                  0 },
+ {"Evol. Bioinform. Online",                                       0 },
+ {"Front. Zool.",                                                  0 },
+ {"Fungal Planet",                                                 0 },
+ {"Genome Biol.",                                               2005 },
+ {"Geochem. Trans.",                                               0 },
+ {"Hereditas",                                                  2004 },
+ {"Hum. Genomics",                                              2004 },
+ {"Infect. Agents Cancer",                                         0 },
+ {"J. Exp. Clin. Assist. Reprod.",                                 0 },
+ {"J. Plankton Res.",                                              0 },
+ {"JOP",                                                           0 },
+ {"Kinetoplastid Biol Dis",                                        0 },
+ {"Malar. J.",                                                     0 },
+ {"Microb. Cell Fact.",                                            0 },
+ {"Mol. Syst. Biol.",                                              0 },
+ {"Mol. Vis.",                                                     0 },
+ {"Neoplasia",                                                  2005 },
+ {"Nucl. Recept.",                                                 0 },
+ {"Pharmacologyonline",                                            0 },
+ {"Plant Methods",                                                 0 },
+ {"PLoS Biol.",                                                 2006 },
+ {"PLoS ONE",                                                      0 },
+ {"Redox Rep.",                                                 2004 },
+ {"Reprod. Biol. Endocrinol.",                                     0 },
+ {"Retrovirology",                                                 0 },
+ {"Saline Syst.",                                                  0 },
+ {"Sci. STKE",                                                     0 },
+ {"ScientificWorldJournal",                                        0 },
+ {"Tech. Tips Online",                                             0 },
+ {"Virol. J.",                                                     0 },
+ {NULL,                                                            0 }
+};
+
+NLM_EXTERN Boolean Mla2IsEPubOnlyJournal (
+  CharPtr jta,
+  Int2Ptr starting_yearP
+)
+
+{
+  EjourDataPtr  ejp;
+  Int2          L, R, mid;
+
+  if (starting_yearP != NULL) {
+    *starting_yearP = 0;
+  }
+
+  if (StringHasNoText (jta)) return FALSE;
+
+  L = 0;
+  R = sizeof (mla2_ejour_list) / sizeof (mla2_ejour_list [0]) - 1; /* -1 because now NULL terminated */
+
+  while (L < R) {
+    mid = (L + R) / 2;
+    ejp = &(mla2_ejour_list [mid]);
+    if (ejp != NULL && StringICmp (ejp->journal_name, jta) < 0) {
+      L = mid + 1;
+    } else {
+      R = mid;
+    }
+  }
+
+  ejp = &(mla2_ejour_list [R]);
+  if (ejp != NULL && StringICmp (ejp->journal_name, jta) == 0) {
+    if (starting_yearP != NULL) {
+      *starting_yearP = ejp->starting_year;
+    }
+    return TRUE;
+  }
+
+  return FALSE;
 }
 
 NLM_EXTERN Int2 Mla2CorrectCitArt (

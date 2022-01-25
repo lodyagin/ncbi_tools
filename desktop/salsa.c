@@ -28,7 +28,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.180 $
+* $Revision: 6.183 $
 *
 * File Description: 
 *
@@ -2722,21 +2722,7 @@ static void SalsaNewFeaturesMenu (MenU m, Boolean is_na)
               while ((ompp = ObjMgrProcFindNext (omp, OMPROC_EDIT,
                       omtp->datatype, 0, ompp)) != NULL) {
                 subtype = ompp->subinputtype;
-                if (subtype == fdp->featdef_key &&
-                    subtype != FEATDEF_PUB &&
-                    subtype != FEATDEF_IMP &&
-                    subtype != FEATDEF_Imp_CDS &&
-                    subtype != FEATDEF_misc_RNA &&
-                    subtype != FEATDEF_precursor_RNA &&
-                    subtype != FEATDEF_mat_peptide &&
-                    subtype != FEATDEF_sig_peptide &&
-                    subtype != FEATDEF_transit_peptide &&
-                    subtype != FEATDEF_source &&
-                    subtype != FEATDEF_virion &&
-                    subtype != FEATDEF_mutation &&
-                    subtype != FEATDEF_allele &&
-                    subtype != FEATDEF_site_ref &&
-                    subtype != FEATDEF_gap) {
+                if (subtype == fdp->featdef_key && OkToListFeatDefInRemainingFeatures (subtype)) {
                   i = CommandItem (sub, ompp->proclabel, SalsaNewFeatureMenuProc);
                   nfp = (NewFeaturePtr) MemNew (sizeof (NewFeatureData));
                   if (nfp != NULL) {
@@ -6592,6 +6578,24 @@ static Boolean DisplayFarPointerData (FarPointerPtr fpp, Int4 num)
   return acd.accepted;
 }
 
+
+static CharPtr FindFarPointerID (CharPtr str)
+{
+  CharPtr tmp = NULL;
+  if (StringHasNoText (str)) return NULL;
+
+  if (StringNICmp (str, "acc", 3) == 0) {
+    tmp = str + 3;
+  } else {
+    tmp = StringSearch (str, "|acc");
+    if (tmp != NULL) {
+      tmp += 4;
+    }
+  }
+  return tmp;
+}
+
+
 /* This function will replace a sequence in an alignment record with one
  * downloaded from GenBank.  It will also adjust the alignment starts
  * for that sequence if the GenBank sequence is not identical to the
@@ -6640,9 +6644,8 @@ static ValNodePtr CCNormalizeSeqAlignId (SeqAlignPtr salp, ValNodePtr vnp)
 
     /* is this a farpointer ID? */
     SeqIdWrite (far_pointer_list[i].sip_local, str, PRINTID_FASTA_LONG, sizeof (str) - 1);
-    tmp = StringISearch (str, "acc");
+    tmp = FindFarPointerID (str);
     if (tmp!=NULL) {
-      tmp += 3;
       if (*tmp == '|')
          tmp++;   
       id_start = tmp;
@@ -7372,9 +7375,8 @@ static Boolean check_dbid_seqalign (SeqAlignPtr salp)
            sip->next = NULL;
            SeqIdWrite (sip, str, PRINTID_FASTA_LONG, 50);
            sip->next = next;
-           tmp = StringStr (str, "acc");
+           tmp = FindFarPointerID (str);
            if (tmp!=NULL) {
-              tmp++; tmp++; tmp++;
               if (*tmp == '|')
                  tmp++;
               TmpBuff = tmp;

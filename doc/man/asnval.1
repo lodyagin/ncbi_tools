@@ -1,4 +1,4 @@
-.TH ASNVAL 1 2006-05-29 NCBI "NCBI Tools User's Manual"
+.TH ASNVAL 1 2007-10-19 NCBI "NCBI Tools User's Manual"
 .SH NAME
 asnval \- validate ASN.1 biological sequence records
 .SH SYNOPSIS
@@ -11,16 +11,19 @@ asnval \- validate ASN.1 biological sequence records
 [\|\fB\-J\fP\|]
 [\|\fB\-L\fP\ \fIfilename\fP\|]
 [\|\fB\-M\fP\|]
+[\|\fB\-N\fP\ \fIflags\fP\|]
 [\|\fB\-P\fP\ \fIN\fP\|]
 [\|\fB\-Q\fP\ \fIN\fP\|]
 [\|\fB\-R\fP\ \fIN\fP\|]
 [\|\fB\-S\fP\ \fIN\fP\|]
 [\|\fB\-T\fP\|]
+[\|\fB\-X\fP\|]
 [\|\fB\-Y\fP\|]
 [\|\fB\-Z\fP\|]
 [\|\fB\-a\fP\ \fItype\fP\|]
 [\|\fB\-b\fP\|]
 [\|\fB\-c\fP\|]
+[\|\fB\-d\fP\ \fIpath\fP\|]
 [\|\fB\-e\fP\|]
 [\|\fB\-i\fP\ \fIfilename\fP\|]
 [\|\fB\-k\fP\|]
@@ -61,6 +64,21 @@ Log File
 \fB\-M\fP
 Match locus_tag against General ID
 .TP
+\fB\-N\fP\ \fIflags\fP
+Latitude-longitude / country flags
+.RS
+.PD 0
+.IP 0
+none
+.IP 1
+test state/province
+.IP 2
+ignore water exception
+.IP 3
+both of the above
+.PD
+.RE
+.TP
 \fB\-P\fP\ \fIN\fP
 Highest severity for error to show:
 .RS
@@ -89,6 +107,9 @@ Skip count
 .TP
 \fB\-T\fP
 Use Threads
+.TP
+\fB\-X\fP
+Exon splice check
 .TP
 \fB\-Y\fP
 Check against old IDs
@@ -123,6 +144,9 @@ Batch file is Binary
 \fB\-c\fP
 Batch file is Compressed
 .TP
+\fB\-d\fP\ \fIpath\fP
+Path to Indexed Binary ASN.1 Data
+.TP
 \fB\-e\fP
 Ignore transcription/translation Exceptions
 .TP
@@ -139,7 +163,7 @@ Lock components in advance
 Single output file
 .TP
 \fB\-p\fP\ \fIpath\fP
-Path to ASN.1 Files [String]
+Path to ASN.1 Files
 .TP
 \fB\-r\fP
 Remote Fetching from ID
@@ -155,4 +179,5 @@ File selection substring (\fB.ent\fP by default)
 .SH AUTHOR
 The National Center for Biotechnology Information.
 .SH SEE ALSO
+.BR cleanasn (1),
 .BR sequin (1).

@@ -3,7 +3,7 @@
 	ProjectType="Visual C++"
 	Version="8.00"
 	Name="demo_bl2seq"
-	ProjectGUID="{E778C1FD-C2F7-47A9-A453-259F6F520B4A}"
+	ProjectGUID="{CFF41F73-FF0C-4EDF-94FD-5FDCB8D0D19F}"
 	>
 	<Platforms>
 		<Platform

@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: readdb.c,v 6.529 2007/08/17 15:56:10 papadopo Exp $";
+static char const rcsid[] = "$Id: readdb.c,v 6.535 2008/02/26 18:34:20 kans Exp $";
 
-/* $Id: readdb.c,v 6.529 2007/08/17 15:56:10 papadopo Exp $ */
+/* $Id: readdb.c,v 6.535 2008/02/26 18:34:20 kans Exp $ */
 /*
 * ===========================================================================
 *
@@ -50,7 +50,7 @@ Detailed Contents:
 *
 * Version Creation Date:   3/22/95
 *
-* $Revision: 6.529 $
+* $Revision: 6.535 $
 *
 * File Description: 
 *       Functions to rapidly read databases from files produced by formatdb.
@@ -65,6 +65,24 @@ Detailed Contents:
 *
 * RCS Modification History:
 * $Log: readdb.c,v $
+* Revision 6.535  2008/02/26 18:34:20  kans
+* use SeqDescrAddPointer instead of ValNodeAddPointer/Str
+*
+* Revision 6.534  2007/12/04 19:43:50  madden
+* Index accession.version for swissprot
+*
+* Revision 6.533  2007/11/27 18:51:54  madden
+* More efficient retrievals on string isam indices
+*
+* Revision 6.532  2007/11/15 21:10:49  madden
+* New version of SeqIdE2Index ifdef by REDUCED_E2INDEX_SET
+*
+* Revision 6.531  2007/11/06 20:09:39  coulouri
+* when printing taxonomy info, skip irrelevant sequences if a gi target was specified; fixes blast-rt#15347680
+*
+* Revision 6.530  2007/09/27 17:20:54  madden
+* Add readdb_get_full_filename
+*
 * Revision 6.529  2007/08/17 15:56:10  papadopo
 * 1. Make increment of reference count in readdb_attach atomic
 * 2. Never initialize the reference count to a fixed value when
@@ -5369,7 +5387,7 @@ ValNodePtr readdb_get_asn1_defline(ReadDBFILEPtr rdfp, Int4 sequence_number)
 
     /* Finaly descriptor is created as ... */
     vnp = NULL;
-    vnp = ValNodeAddPointer(&vnp, Seq_descr_user, uop);
+    vnp = SeqDescrAddPointer(&vnp, Seq_descr_user, uop);
     
     return vnp;
 }
@@ -5431,7 +5449,7 @@ ValNodePtr readdb_encode_subset_asn1_defline(ReadDBFILEPtr rdfp,
 
     /* Finaly descriptor is created as ... */
     vnp = NULL;
-    vnp = ValNodeAddPointer(&vnp, Seq_descr_user, uop);
+    vnp = SeqDescrAddPointer(&vnp, Seq_descr_user, uop);
     
     return vnp;
 }
@@ -5506,7 +5524,7 @@ ValNodePtr readdb_get_taxonomy_names(ReadDBFILEPtr rdfp, Int4 sequence_number)
     /* Finaly descriptor is created as ... */
     vnp = NULL;
     if (uop->data != NULL) 
-        vnp = ValNodeAddPointer(&vnp, Seq_descr_user, uop);
+        vnp = SeqDescrAddPointer(&vnp, Seq_descr_user, uop);
     else {
         UserObjectFree(uop);
     }
@@ -5653,7 +5671,7 @@ readdb_get_bioseq_ex(ReadDBFILEPtr rdfp, Int4 sequence_number,
     bsp->repr = Seq_repr_raw;
 
     if (new_defline != NULL)  {
-        bsp->descr = ValNodeAddStr(NULL, Seq_descr_title, new_defline);
+        bsp->descr = SeqDescrAddPointer(NULL, Seq_descr_title, new_defline);
     }
     
     if(rdfp->formatdb_ver > FORMATDB_VER_TEXT) {
@@ -6842,6 +6860,30 @@ readdb_get_filename (ReadDBFILEPtr rdfp)
 }
 
 /*
+Obtains the title of the database.  Note that the return CharPtr is not
+owned by the caller.  It should be copied if the user wishes to modify it.
+*/
+CharPtr LIBCALL
+readdb_get_full_filename (ReadDBFILEPtr rdfp)
+
+{
+    char* retval = NULL;
+
+    if (rdfp == NULL)
+        return NULL;
+    
+    if (!rdfp->aliasfilename)
+        retval = StringSave(rdfp->filename);
+    else {
+       char* path = Nlm_FilePathFind(rdfp->filename);
+       char buffer[PATH_MAX];
+       sprintf(buffer, "%s/%s", path, rdfp->aliasfilename);
+       retval = StringSave(buffer);
+    }
+    return retval;
+}
+
+/*
   Obtains the title of the database.  Note that the return CharPtr is not
   owned by the caller.  It should be copied if the user wishes to modify it.
 */
@@ -7117,7 +7159,7 @@ static Int2 LIBCALLBACK ReadDBBioseqFetchFunc(Pointer data)
             source->org = OrgRefNew();
             source->org->orgname = OrgNameNew();
             source->org->orgname->gcode = rdfsp->db_genetic_code;
-            ValNodeAddPointer(&(bsp->descr), Seq_descr_source, source);
+            SeqDescrAddPointer(&(bsp->descr), Seq_descr_source, source);
         }
 
     sep = SeqEntryNew();
@@ -8352,6 +8394,7 @@ ValNodePtr FDBDestroyMembershipsTable(ValNodePtr tbl)
 }
 
 
+/* #define REDUCED_E2INDEX_SET 1 */
 #ifdef REDUCED_E2INDEX_SET
 /*****************************************************************************
 *
@@ -8367,7 +8410,6 @@ static Boolean SeqIdE2Index (SeqIdPtr anp, FILE *fd, Int4 seq_num,
     TextSeqIdPtr tsip = NULL;
     ObjectIdPtr oid;
     PDBSeqIdPtr psip;
-    Boolean do_gb = FALSE;
     Uint1 tmptype;
     CharPtr tmp, ptr=NULL;
     Char buf[81];
@@ -8379,6 +8421,9 @@ static Boolean SeqIdE2Index (SeqIdPtr anp, FILE *fd, Int4 seq_num,
     if (anp == NULL)
         return FALSE;
     
+    if (anp->choice == SEQID_GI)
+        return TRUE; /* Do not index GI as string. */
+
     switch (anp->choice) {
 
     case SEQID_LOCAL:     /* local */
@@ -8395,7 +8440,6 @@ static Boolean SeqIdE2Index (SeqIdPtr anp, FILE *fd, Int4 seq_num,
         return TRUE;      /* not indexed */
     case SEQID_EMBL:      /* embl */
     case SEQID_DDBJ:      /* ddbj */
-        do_gb = TRUE;     /* also index embl, ddbj as genbank */
     case SEQID_GENBANK:   /* genbank */
     case SEQID_TPG:       /* Third Party Annot/Seq Genbank */
     case SEQID_TPE:       /* Third Party Annot/Seq EMBL */
@@ -8405,9 +8449,13 @@ static Boolean SeqIdE2Index (SeqIdPtr anp, FILE *fd, Int4 seq_num,
         tsip = (TextSeqIdPtr)(anp->data.ptrvalue);
     if ((tsip->version > 0) && (tsip->release == NULL))
         version = tsip->version;
-    break;
-    case SEQID_PIR:       /* pir   */
+        break;
     case SEQID_SWISSPROT: /* swissprot */
+        tsip = (TextSeqIdPtr)(anp->data.ptrvalue);
+    if (tsip->version > 0)
+        version = tsip->version;
+        break;
+    case SEQID_PIR:       /* pir   */
     case SEQID_PRF:       /* prf   */
         tsip = (TextSeqIdPtr)(anp->data.ptrvalue);
         break;
@@ -8426,17 +8474,24 @@ static Boolean SeqIdE2Index (SeqIdPtr anp, FILE *fd, Int4 seq_num,
         break;
     }
     
-    if(tsip == NULL && !sparse) {
+    if(tsip == NULL) {
         SeqIdWrite(anp, buf, PRINTID_FASTA_SHORT, 80);
-        StringLower(buf);
-        fprintf(fd, "%s%c%d\n", buf, ISAM_DATA_CHAR, seq_num);
-    }
+        
+        length = StringLen(buf);
+        for(i = 0; i < length; i++)
+            buf[i] = TO_LOWER(buf[i]);
 
-    if (ptr != NULL) {   /* write a single string */
-    StringMove(buf, ptr);
-        StringLower(buf);
         fprintf(fd, "%s%c%ld\n", buf, ISAM_DATA_CHAR, (long) seq_num);
+        
+    } 
 
+    if (tsip == NULL && ptr != NULL) {   /* write a single string for non TextSeqIDPtr cases. */
+    StringMove(buf, ptr);
+        length = StringLen(buf);
+        for(i = 0; i < length; i++)
+            buf[i] = TO_LOWER(buf[i]);
+        fprintf(fd, "%s%c%ld\n", buf, ISAM_DATA_CHAR, (long) seq_num);
+ 
         chain = TO_LOWER(chain);
 
         if (chain != 0) { /* PDB only. */
@@ -8448,65 +8503,25 @@ static Boolean SeqIdE2Index (SeqIdPtr anp, FILE *fd, Int4 seq_num,
     }
 
     if (tsip != NULL) {   /* separately index accession and locus */
-        if ((tsip->accession != NULL) && (tsip->name != NULL) && !sparse) {
-
-            /* Here is we indexing accession as part of SeqId */
-            tmp = tsip->name;
-            tsip->name = NULL;
-            SeqIdWrite(anp, buf, PRINTID_FASTA_SHORT, 80);
-            StringLower(buf);
-            fprintf(fd, "%s%c%d\n", buf, ISAM_DATA_CHAR, seq_num);
-            tsip->name = tmp;
-
-            /* If accession and locus are different we also print locus */
-            if(StringICmp(tsip->accession, tsip->name)) {
-                
-                tmp = tsip->accession;
-                tsip->accession = NULL;
-                SeqIdWrite(anp, buf, PRINTID_FASTA_SHORT, 80);
-                StringLower(buf);
-                fprintf(fd, "%s%c%d\n", buf, ISAM_DATA_CHAR, seq_num);
-                tsip->accession = tmp;
-            }
-
-        if (version) { /* Index accession without verison. */
-        tsip->version = 0;
-                tmp = tsip->name;
-                tsip->name = NULL;
-                SeqIdWrite(anp, buf, PRINTID_FASTA_SHORT, 80);
-                StringLower(buf);
-                fprintf(fd, "%s%c%d\n", buf, ISAM_DATA_CHAR, seq_num);
-                tsip->name = tmp;
-        tsip->version = version;
-        }
-        }
-
                /* now index as separate strings */
+        if (tsip->name != NULL) {
+            StringMove(buf, tsip->name);
+            length = StringLen(buf);
+            for(i = 0; i < length; i++)
+                buf[i] = TO_LOWER(buf[i]);
+            fprintf(fd, "%s%c%ld\n", buf, ISAM_DATA_CHAR, (long) seq_num);
+        }
         if (tsip->accession != NULL) {
             StringMove(buf, tsip->accession);
-            StringLower(buf);
-            fprintf(fd, "%s%c%d\n", buf, ISAM_DATA_CHAR, seq_num);
-        if (version && !sparse) {
-                fprintf(fd, "%s%.d%c%d\n", buf, version, 
-                        ISAM_DATA_CHAR, seq_num);
-            }
-    }
-
-        if(tsip->name != NULL && 
-           StringICmp(tsip->accession, tsip->name) && !sparse) {
-            StringMove(buf, tsip->name);
-            StringLower(buf);
-            fprintf(fd, "%s%c%d\n", buf, ISAM_DATA_CHAR, seq_num);
-    }
+            length = StringLen(buf);
+            for(i = 0; i < length; i++)
+                buf[i] = TO_LOWER(buf[i]);
+            fprintf(fd, "%s%c%ld\n", buf, ISAM_DATA_CHAR, (long) seq_num);
+            if (version)
+                fprintf(fd, "%s.%d%c%ld\n", buf, version, ISAM_DATA_CHAR, (long) seq_num);
+        }
     }
     
-    if (do_gb && !sparse) {   /* index embl and ddbj as genbank */
-        tmptype = anp->choice;
-        anp->choice = SEQID_GENBANK;
-        SeqIdE2Index(anp, fd, seq_num, sparse);
-        anp->choice = tmptype;
-    }
-
     retval = TRUE;
     return retval;
 }
@@ -8563,9 +8578,13 @@ static Boolean SeqIdE2Index (SeqIdPtr anp, FILE *fd, Int4 seq_num,
         tsip = (TextSeqIdPtr)(anp->data.ptrvalue);
     if ((tsip->version > 0) && (tsip->release == NULL))
         version = tsip->version;
-    break;
-    case SEQID_PIR:       /* pir   */
+        break;
     case SEQID_SWISSPROT: /* swissprot */
+        tsip = (TextSeqIdPtr)(anp->data.ptrvalue);
+    if (tsip->version > 0)
+        version = tsip->version;
+        break;
+    case SEQID_PIR:       /* pir   */
     case SEQID_PRF:       /* prf   */
         tsip = (TextSeqIdPtr)(anp->data.ptrvalue);
         break;
@@ -11546,7 +11565,7 @@ FCMDAccListPtr LIBCALL GetAccList(CharPtr file, Int4Ptr TotalItems)
       
       j= 0;
       while (j < 128  && i < FileLen) { 
-          TmpBuff[j] = file[i];
+          TmpBuff[j] = TO_LOWER(file[i]);
           j++; i++;
           if(isspace((int)file[i]) ||
              file[i] == ',' || /* Comma is valid delimiter */
@@ -11580,6 +11599,44 @@ FCMDAccListPtr LIBCALL GetAccList(CharPtr file, Int4Ptr TotalItems)
       gi = 0;
       if(k == j)
           gi = atol(TmpBuff);
+
+       if (gi == 0) {
+           if (StringChr(TmpBuff, '|') != NULL) {
+               SeqIdPtr sip = SeqIdParse(TmpBuff);
+               SeqIdPtr sip_var = sip;
+               SeqIdPtr best_acc = SeqIdFindBestAccession(sip);
+               if (best_acc)
+               {
+                   switch (best_acc->choice)
+                   {   /* Only TextSeqIdPtrs */
+                      case SEQID_GENBANK:
+                      case SEQID_EMBL:
+                      case SEQID_DDBJ:
+                      case SEQID_PIR:
+                      case SEQID_SWISSPROT:
+                      case SEQID_PRF:
+                      case SEQID_OTHER:
+                      case SEQID_TPG:
+                      case SEQID_TPE:
+                      case SEQID_TPD:
+                      case SEQID_GPIPE:
+                        SeqIdWrite(best_acc, TmpBuff, PRINTID_TEXTID_ACC_VER, 128);
+                        break;
+                      default:
+                        break;
+                   }
+               }
+               while (sip_var)
+               {
+                  if (sip_var->choice == SEQID_GI)
+                  {
+                     gi = sip_var->data.intvalue;
+                     break;
+                  }
+                  sip_var = sip_var->next;
+               }
+           }
+      }
       
       /* If this is valid Accession check and tranfer it to gi */
       
@@ -11646,6 +11703,11 @@ static Boolean Fastacmd_PrintTaxonomyInfo(ReadDBFILEPtr rdfp, Int4 oid,
 
     /* Print the taxonomy report for each sequence associated with this oid */
     for (bdp_tmp = bdp; bdp_tmp; bdp_tmp = bdp_tmp->next) {
+
+    /* skip irrelevant sequences if a gi target was specified */
+    SeqIdPtr gi = SeqIdFindBest(bdp_tmp->seqid, SEQID_GI);
+    if ( gi && (rdfp->gi_target != 0) && (gi->data.intvalue != rdfp->gi_target) )
+        continue;
 
         MemSet(buf, 0, sizeof(buf));
         SeqIdWrite(bdp_tmp->seqid, buf, PRINTID_FASTA_LONG, sizeof(buf)-1);

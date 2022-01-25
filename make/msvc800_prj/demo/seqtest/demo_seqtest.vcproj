@@ -3,7 +3,7 @@
 	ProjectType="Visual C++"
 	Version="8.00"
 	Name="demo_seqtest"
-	ProjectGUID="{4B5696EE-C2E8-49D1-A0ED-4E54AF811221}"
+	ProjectGUID="{05C7D1D5-557E-4868-90BB-2F7B1B0DB9C6}"
 	>
 	<Platforms>
 		<Platform

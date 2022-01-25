@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.88 $
+* $Revision: 1.93 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -71,14 +71,16 @@ static CharPtr strd [4] = {
   "   ", "ss-", "ds-", "ms-"
 };
 
-static CharPtr gnbk_mol [14] = {
-  "    ", "DNA ", "RNA ", "mRNA", "rRNA", "tRNA", "snRNA", "scRNA", " AA ", "DNA ", "DNA ", "cRNA ", "snoRNA", "RNA "
+static CharPtr gnbk_mol [16] = {
+  "    ", "DNA ", "RNA ", "mRNA", "rRNA", "tRNA", "snRNA", "scRNA",
+  " AA ", "DNA ", "DNA ", "cRNA ", "snoRNA", "RNA ", "RNA ", "tmRNA "
 };
 
 /* EMBL_FMT in RELEASE_MODE or ENTREZ_MODE, otherwise use gnbk_mol */
 
-static CharPtr embl_mol [14] = {
-  "xxx", "DNA", "RNA", "RNA", "RNA", "RNA", "RNA", "RNA", "AA ", "DNA", "DNA", "RNA", "RNA", "RNA"
+static CharPtr embl_mol [16] = {
+  "xxx", "DNA", "RNA", "RNA", "RNA", "RNA", "RNA", "RNA",
+  "AA ", "DNA", "DNA", "RNA", "RNA", "RNA", "RNA", "RNA"
 };
 
 static CharPtr embl_divs [18] = {
@@ -86,8 +88,8 @@ static CharPtr embl_divs [18] = {
   "SYN", "UNA", "VRL", "VRT", "PAT", "EST", "STS", "HUM", "HTC"
 };
 
-static Uint1 imolToMoltype [14] = {
-  0, 1, 2, 5, 4, 3, 6, 7, 9, 1, 1, 2, 8, 2
+static Uint1 imolToMoltype [16] = {
+  0, 1, 2, 5, 4, 3, 6, 7, 9, 1, 1, 2, 8, 2, 2, 2
 };
 
 static DatePtr GetBestDate (
@@ -648,7 +650,7 @@ NLM_EXTERN void AddLocusBlock (
 
     mip = (MolInfoPtr) sdp->data.ptrvalue;
     if (mip != NULL) {
-      if (mip->biomol <= MOLECULE_TYPE_TRANSCRIBED_RNA) {
+      if (mip->biomol <= MOLECULE_TYPE_TMRNA) {
         imol = (Int2) mip->biomol;
       }
       tech = mip->tech;
@@ -721,7 +723,8 @@ NLM_EXTERN void AddLocusBlock (
   /* ss=any RNA don't show ss */
 
   if ((bmol > Seq_mol_rna ||
-      (imol >= MOLECULE_TYPE_MRNA && imol <= MOLECULE_TYPE_PEPTIDE)) &&
+      (imol >= MOLECULE_TYPE_MRNA && imol <= MOLECULE_TYPE_PEPTIDE) ||
+      (imol >= MOLECULE_TYPE_CRNA && imol <= MOLECULE_TYPE_TMRNA)) &&
       istrand == 1) {
     istrand = 0;
   }
@@ -1098,6 +1101,9 @@ NLM_EXTERN void AddLocusBlock (
       }
       if (StringCmp (str, "viral cRNA") == 0) {
         str = "other RNA";
+      }
+      if (StringICmp (str, "ncRNA") == 0) {
+        str = "RNA";
       }
       StringNCpy_0 (mol, str, sizeof (mol));
 
@@ -2516,13 +2522,13 @@ static Boolean WriteDbsourceID (
       pfx = prefix;
       rsult = TRUE;
     }
-    if (tsip->version > 0) {
+    if (tsip->version > 0 && sip->choice != SEQID_SWISSPROT) {
       sprintf (tmp, ".%d", (int) tsip->version);
       StringCat (str, tmp);
       sfx = suffix;
       pfx = prefix;
     }
-    if (! StringHasNoText (tsip->release)) {
+    if (! StringHasNoText (tsip->release) && sip->choice != SEQID_SWISSPROT) {
       StringCat (str, pfx);
       StringCat (str, "release ");
       StringCat (str, tsip->release);
@@ -2757,6 +2763,25 @@ static void AddSPBlock (
     } else {
       FFAddOneString (ffstring, ", ", FALSE, FALSE, TILDE_IGNORE);
     }
+
+    str = NULL;
+    if ( oip->str != NULL ) {
+      str = oip->str;
+      if (StringNCmp (str, "GO:", 3) == 0) {
+        str += 3;
+      } else if (StringNCmp (str, "MGI:", 4) == 0) {
+        str += 4;
+      } else if (StringNCmp (str, "HGNC:", 5) == 0) {
+        str += 5;
+      }
+    } else if ( oip->id > 0 ) {
+      sprintf (numbuf, "%d", oip->id);
+      str = numbuf;
+    }
+
+    FF_www_db_xref (ajp, ffstring, db->db, str, bsp);
+
+    /*
     if (StringCmp (db->db, "MGD") == 0 || StringCmp (db->db, "MGI") == 0) {
       FFAddOneString (ffstring, "MGI", FALSE, FALSE, TILDE_IGNORE);
     } else {
@@ -2791,6 +2816,7 @@ static void AddSPBlock (
         FFAddOneString(ffstring, str, FALSE, FALSE, TILDE_IGNORE);
       }
     }
+    */
   }
 }
 
@@ -2958,32 +2984,28 @@ static void AddPRFBlock (
 
     if (extra->host != NULL) {
       FFAddTextToString(ffstring, "host:", extra->host, NULL, FALSE, TRUE, TILDE_IGNORE);
-      prefix = ";";
+      prefix = ";\n";
     }
 
     if (extra->part != NULL) {
       FFAddOneString(ffstring, prefix, FALSE, FALSE, TILDE_IGNORE);
-      FFAddNewLine(ffstring);
       FFAddTextToString(ffstring, "part: ", extra->part, NULL, FALSE, TRUE, TILDE_IGNORE);
-      prefix = ";";
+      prefix = ";\n";
     }
     if (extra->state != NULL) {
       FFAddOneString(ffstring, prefix, FALSE, FALSE, TILDE_IGNORE);
-      FFAddNewLine(ffstring);
       FFAddTextToString(ffstring, "state: ", extra->state, NULL, FALSE, TRUE, TILDE_IGNORE);
-      prefix = ";";
+      prefix = ";\n";
     }
     if (extra->strain != NULL) {
       FFAddOneString(ffstring, prefix, FALSE, FALSE, TILDE_IGNORE);
-      FFAddNewLine(ffstring);
       FFAddTextToString(ffstring, "strain: ", extra->strain, NULL, FALSE, TRUE, TILDE_IGNORE);
-      prefix = ";";
+      prefix = ";\n";
     }
     if (extra->taxon != NULL) {
       FFAddOneString(ffstring, prefix, FALSE, FALSE, TILDE_IGNORE);
-      FFAddNewLine(ffstring);
       FFAddTextToString(ffstring, "taxonomy: ", extra->taxon, NULL, FALSE, TRUE, TILDE_IGNORE);
-      prefix = ";";
+      prefix = ";\n";
     }
 
     FFAddOneChar(ffstring, '.', FALSE);
@@ -3682,6 +3704,14 @@ NLM_EXTERN void AddKeywordsBlock (
             ValNodeCopyStr (&head, 0, "; ");
           }
           ValNodeCopyStr (&head, 0, "BARCODE");
+          break;
+        case MI_TECH_tsa :
+          if (head != NULL) {
+            ValNodeCopyStr (&head, 0, "; ");
+          }
+          ValNodeCopyStr (&head, 0, "TSA");
+          ValNodeCopyStr (&head, 0, "; ");
+          ValNodeCopyStr (&head, 0, "Transcriptome Shotgun Assembly");
           break;
         case MI_TECH_unknown :
         case MI_TECH_standard :

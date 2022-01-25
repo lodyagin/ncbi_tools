@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.29 $
+* $Revision: 6.30 $
 *
 * File Description:  Object manager for module NCBI-Seq
 *
@@ -60,6 +60,7 @@ static char *this_file = __FILE__;
 #include <objgbseq.h>
 #include <objinsdseq.h>
 #include <objtseq.h>
+#include <objtable.h>
 
 static Boolean SeqDescrAsnWriteExtra (ValNodePtr anp, AsnIoPtr aip, AsnTypePtr orig,
 					Boolean anp_not_null);
@@ -3115,6 +3116,7 @@ NLM_EXTERN SeqAnnotPtr LIBCALL SeqAnnotFree (SeqAnnotPtr sap)
     SeqGraphPtr sgp, sgpnext;
 	SeqIdPtr sip;
 	SeqLocPtr slp;
+	SeqTablePtr stp;
 
     if (sap == NULL)
         return sap;
@@ -3160,6 +3162,10 @@ NLM_EXTERN SeqAnnotPtr LIBCALL SeqAnnotFree (SeqAnnotPtr sap)
 		case 5:   /* SeqLocs */
 			slp = (SeqLocPtr)sap->data;
 			SeqLocSetFree(slp);
+			break;
+		case 6:   /* SeqTable */
+			stp = (SeqTablePtr)sap->data;
+			SeqTableFree(stp);
 			break;
 
     }
@@ -3268,6 +3274,9 @@ static Boolean SeqAnnotAsnWriteExtra (SeqAnnotPtr sap, AsnIoPtr aip, AsnTypePtr 
             break;
         case 5:
             if (! SeqLocSetAsnWrite((SeqLocPtr)sap->data, aip, SEQ_ANNOT_data_locs, SEQ_ANNOT_data_locs_E)) goto erret;
+            break;
+        case 6:
+            if (! SeqTableAsnWrite((SeqTablePtr)sap->data, aip, SEQ_ANNOT_data_seq_table)) goto erret;
             break;
     }
 
@@ -3384,6 +3393,11 @@ NLM_EXTERN SeqAnnotPtr LIBCALL SeqAnnotAsnRead (AsnIoPtr aip, AsnTypePtr orig)
 			sap->data = NULL;
 			sap->type = 3;
 		}
+    }
+    else if (atp == SEQ_ANNOT_data_seq_table)
+    {
+        sap->type = 6;
+        sap->data = (Pointer) SeqTableAsnRead(aip, atp);
     }
 
     atp = AsnReadId(aip, amp, atp); if (atp == NULL) goto erret;   /* end struct */

@@ -3,7 +3,7 @@
 	ProjectType="Visual C++"
 	Version="8.00"
 	Name="xconntest"
-	ProjectGUID="{8D0BB3E1-BFB0-4557-9DD0-A2E82D3D9C70}"
+	ProjectGUID="{A9561C14-6DAF-4A28-9F59-297D39432D0B}"
 	>
 	<Platforms>
 		<Platform

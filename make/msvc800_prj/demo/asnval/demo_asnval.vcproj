@@ -3,7 +3,7 @@
 	ProjectType="Visual C++"
 	Version="8.00"
 	Name="demo_asnval"
-	ProjectGUID="{D13243FE-FD39-476C-BAB7-14C583B3BC9E}"
+	ProjectGUID="{43D2CAEA-F7C5-43AB-9460-53229B1A8CCE}"
 	>
 	<Platforms>
 		<Platform

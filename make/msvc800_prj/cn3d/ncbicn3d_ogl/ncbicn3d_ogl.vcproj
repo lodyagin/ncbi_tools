@@ -3,7 +3,7 @@
 	ProjectType="Visual C++"
 	Version="8.00"
 	Name="ncbicn3d_ogl"
-	ProjectGUID="{B5934B23-8476-4D68-9769-2A65BF5C33A4}"
+	ProjectGUID="{DEBC32A0-A4F7-4C4C-9E93-62C1C4E6544D}"
 	>
 	<Platforms>
 		<Platform

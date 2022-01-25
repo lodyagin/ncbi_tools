@@ -1,4 +1,4 @@
-/*  $Id: blast_encoding.h,v 1.12 2006/11/21 16:37:56 papadopo Exp $
+/*  $Id: blast_encoding.h,v 1.18 2008/01/24 21:25:45 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -36,6 +36,7 @@
 #define ALGO_BLAST_CORE___BLAST_ENCODING__H
 
 #include <algo/blast/core/ncbi_std.h>
+#include <algo/blast/core/blast_export.h>
 
 /** @addtogroup AlgoBlast
  *
@@ -64,22 +65,28 @@ typedef enum {
 
 /** Translates between ncbi4na and blastna. The first four elements
  *	of this array match ncbi2na. */
-extern const Uint1 NCBI4NA_TO_BLASTNA[];
+NCBI_XBLAST_EXPORT extern const Uint1 NCBI4NA_TO_BLASTNA[];
 
 /** Translates between blastna and ncbi4na. */
-extern const Uint1 BLASTNA_TO_NCBI4NA[];
+NCBI_XBLAST_EXPORT extern const Uint1 BLASTNA_TO_NCBI4NA[];
 
 /** Translates between iupacna and blastna. */
-extern const Uint1 IUPACNA_TO_BLASTNA[];
+NCBI_XBLAST_EXPORT extern const Uint1 IUPACNA_TO_BLASTNA[];
 
 /** Translates between iupacna and ncbi4na. */
-extern const Uint1 IUPACNA_TO_NCBI4NA[];
+NCBI_XBLAST_EXPORT extern const Uint1 IUPACNA_TO_NCBI4NA[];
 
 /** Translates between ncbieaa and ncbistdaa. */
-extern const Uint1 AMINOACID_TO_NCBISTDAA[];
+NCBI_XBLAST_EXPORT extern const Uint1 AMINOACID_TO_NCBISTDAA[];
 
 /** Translates between ncbieaa and ncbistdaa. */
-extern const char NCBISTDAA_TO_AMINOACID[];
+NCBI_XBLAST_EXPORT extern const char NCBISTDAA_TO_AMINOACID[];
+
+/** Translates between blastna and iupacna. */
+NCBI_XBLAST_EXPORT extern const char BLASTNA_TO_IUPACNA[];
+
+/** Translates between ncbi4na and iupacna. */
+NCBI_XBLAST_EXPORT extern const char NCBI4NA_TO_IUPACNA[];
 
 #define BLAST2NA_SIZE 4     /**< Size of compressed nucleic acid alphabet */
 #define BLASTNA_SIZE 16     /**< Size of nucleic acid alphabet */
@@ -92,57 +99,14 @@ extern const char NCBISTDAA_TO_AMINOACID[];
 #define NCBI4NA_SEQ_CODE 4  /**< == Seq_code_ncbi4na */	
 
 /** Sentinel byte for protein sequences */
-extern const Uint1 kProtSentinel;
+NCBI_XBLAST_EXPORT extern const Uint1 kProtSentinel;
 /** Sentinel nibble for nucleotide sequences */
-extern const Uint1 kNuclSentinel;
+NCBI_XBLAST_EXPORT extern const Uint1 kNuclSentinel;
 
 #ifdef __cplusplus
 }
 #endif
 
 /* @} */
-
-
-/*
- * ===========================================================================
- * $Log: blast_encoding.h,v $
- * Revision 1.12  2006/11/21 16:37:56  papadopo
- * minor
- *
- * Revision 1.11  2006/08/29 21:56:30  camacho
- * +NCBISTDAA_TO_AMINOACID
- *
- * Revision 1.10  2006/07/05 15:42:22  papadopo
- * change the amino acid alphabet size from 26 to 28
- *
- * Revision 1.9  2006/04/28 20:43:41  camacho
- * Remove C++-style comments
- *
- * Revision 1.8  2006/03/31 17:31:49  camacho
- * Added constants for sentinel values
- *
- * Revision 1.7  2005/12/19 16:19:18  papadopo
- * add define for size of ncbi2na alphabet
- *
- * Revision 1.6  2005/05/10 16:07:35  camacho
- * Changed *_ENCODING #defines to EBlastEncoding enumeration
- *
- * Revision 1.5  2004/11/24 16:00:39  dondosha
- * Added and/or fixed doxygen comments
- *
- * Revision 1.4  2004/06/21 12:53:54  camacho
- * Remove PSI_ALPHABET_SIZE as it is identical to BLASTAA_SIZE
- *
- * Revision 1.3  2004/04/09 14:48:05  camacho
- * Added doxygen comments
- *
- * Revision 1.2  2004/04/07 19:05:44  camacho
- * Minor fix in #ifdef guards
- *
- * Revision 1.1  2004/04/07 03:10:20  camacho
- * Initial revision
- *
- * ===========================================================================
- */
 
 #endif  /* ALGO_BLAST_CORE___BLAST_ENCODING__H */

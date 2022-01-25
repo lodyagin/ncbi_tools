@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.88 $
+* $Revision: 6.92 $
 *
 * File Description: 
 *
@@ -54,6 +54,7 @@
 #include <dlogutil.h>
 #include <import.h>
 #include <seqpanel.h>
+#include <cdrgn.h>
 
 #define OBJ_VIRT 254
 
@@ -4616,7 +4617,7 @@ typedef struct batchapplyfeaturedetailsdlg
   TexT           rnaName;
   TexT           featcomment;
   DialoG         featdef_choice_dlg;
-  PopuP          rnaSubType;
+  DialoG         rnaType;
   PopuP          reading_frame;
   Int4           feattype;
   Nlm_ChangeNotifyProc     change_notify;
@@ -4631,9 +4632,10 @@ BatchApplyFeatureDetailsFree
   {
     bafdp->defline = MemFree (bafdp->defline);
     bafdp->geneName = MemFree (bafdp->geneName);
-	bafdp->geneDesc = MemFree (bafdp->geneDesc);
+	  bafdp->geneDesc = MemFree (bafdp->geneDesc);
     bafdp->protName = MemFree (bafdp->protName);
     bafdp->protDesc = MemFree (bafdp->protDesc);
+    bafdp->rnaType = RnaTypeFree (bafdp->rnaType);
     bafdp->rnaName = MemFree (bafdp->rnaName);
     bafdp->featcomment = MemFree (bafdp->featcomment);
     bafdp->featdef_name = MemFree (bafdp->featdef_name);
@@ -4659,23 +4661,10 @@ extern BatchApplyFeatureDetailsPtr BatchApplyFeatureDetailsNew (void)
     bafdp->featdef_name = NULL;
     bafdp->featdef_choice = FEATDEF_GENE;
     bafdp->reading_frame = 4;
-    bafdp->rnaSubType = 4;
+    bafdp->rnaType = NULL;
   }
   return bafdp;
 }
-
-static ENUM_ALIST(rnax_subtype_alist)
-  {" ",           99},
-  {"unknown",      0},
-  {"preRna",       1},
-  {"mRNA",         2},
-  {"tRNA",         3},
-  {"rRNA",         4},
-  {"snRNA",        5},
-  {"scRNA",        6},
-  {"snoRNA",       7},
-  {"misc_RNA",   255},
-END_ENUM_ALIST
 
 static void BatchApplyFeatureDetailsToDialog (DialoG d, Pointer data)
 {
@@ -4709,7 +4698,7 @@ static void BatchApplyFeatureDetailsToDialog (DialoG d, Pointer data)
       vn.data.ptrvalue = NULL;
       PointerToDialog (dlg->featdef_choice_dlg, &vn);
     }
-    SafeSetValue (dlg->rnaSubType, 4);
+    PointerToDialog (dlg->rnaType, NULL);
   }
   else
   {
@@ -4774,7 +4763,7 @@ static void BatchApplyFeatureDetailsToDialog (DialoG d, Pointer data)
       vn.data.ptrvalue = NULL;
       PointerToDialog (dlg->featdef_choice_dlg, &vn);
     }
-    SafeSetValue (dlg->rnaSubType, bafdp->rnaSubType);
+    PointerToDialog (dlg->rnaType, bafdp->rnaType);
   } 
   if (dlg->change_notify != NULL)
   {
@@ -4787,7 +4776,6 @@ static Pointer BatchApplyFeatureDetailsDialogToData (DialoG d)
   BatchApplyFeatureDetailsDlgPtr dlg;
   BatchApplyFeatureDetailsPtr    bafdp;
   ValNodePtr                     vnp;
-  UIEnum                         val;
   
   dlg = (BatchApplyFeatureDetailsDlgPtr) GetObjectExtra (d);
   if (dlg == NULL)
@@ -4893,21 +4881,7 @@ static Pointer BatchApplyFeatureDetailsDialogToData (DialoG d)
     }
   }
 
-  if (dlg->rnaSubType == NULL)
-  {
-    bafdp->rnaSubType = 4;
-  }
-  else
-  {
-    if (GetEnumPopup (dlg->rnaSubType, rnax_subtype_alist, &val))
-    {
-      bafdp->rnaSubType = val;
-    }
-    else
-    {
-      bafdp->rnaSubType = 4;
-    }
-  }
+  bafdp->rnaType = DialogToPointer (dlg->rnaType);
   
   return bafdp;  
 }
@@ -5079,6 +5053,7 @@ static void AddTextToComment (ButtoN b, CharPtr text)
   BatchApplyFeatureDetailsDlgPtr dlg;
   CharPtr                        orig_comment;
   CharPtr                        new_comment;
+  RnaTypeData                    rtd;
   
   dlg = (BatchApplyFeatureDetailsDlgPtr) GetObjectExtra (b);
   if (dlg == NULL || StringHasNoText (text))
@@ -5105,7 +5080,9 @@ static void AddTextToComment (ButtoN b, CharPtr text)
   } 
   orig_comment = MemFree (orig_comment);
 
-  SetEnumPopup (dlg->rnaSubType, rnax_subtype_alist, (UIEnum) 255);
+  rtd.ncrna_class = NULL;
+  rtd.rna_featdef = FEATDEF_otherRNA;
+  PointerToDialog (dlg->rnaType, &rtd);
 }
 
 static void Add18SITS28SToComment (ButtoN b)
@@ -5149,6 +5126,7 @@ BatchApplyFeatureDetailsDialog (GrouP parent, Int4 feattype, Nlm_ChangeNotifyPro
   Nlm_EnumFieldAssocPtr          ap;
   Int4                           j;
   Boolean                        is_indexer = FALSE;
+  RnaTypeData                    rtd;
   
   dlg = (BatchApplyFeatureDetailsDlgPtr) MemNew (sizeof (BatchApplyFeatureDetailsDlgData));
   if (dlg == NULL)
@@ -5190,11 +5168,10 @@ BatchApplyFeatureDetailsDialog (GrouP parent, Int4 feattype, Nlm_ChangeNotifyPro
   }
   else if (dlg->feattype == ADD_RRNA) 
   {
-    r = HiddenGroup (p, 2, 0, NULL);
-    StaticPrompt (r, "RNA subtype", 0, dialogTextHeight, programFont, 'l');
-    dlg->rnaSubType = PopupList (r, TRUE, NULL);
-    InitEnumPopup (dlg->rnaSubType, rnax_subtype_alist, NULL);
-    SetEnumPopup (dlg->rnaSubType, rnax_subtype_alist, (UIEnum) 4);
+    dlg->rnaType = RnaTypeDialog (p, FALSE, change_notify, change_userdata);
+    rtd.ncrna_class = NULL;
+    rtd.rna_featdef = FEATDEF_rRNA;
+    PointerToDialog (dlg->rnaType, &rtd);
   }
 
   text_group = HiddenGroup (p, 0, 2, NULL);
@@ -5757,6 +5734,41 @@ ApplyOneCodingRegion
   return sfp;
 }
 
+
+typedef struct hasrna {
+  Boolean hasrna;
+  RnaTypePtr rtp;
+} HasRnaData, PNTR HasRnaPtr;
+
+static void AlreadyHasRNACallback (SeqFeatPtr sfp, Pointer userdata)
+{
+  HasRnaPtr hp;
+
+  if (sfp == NULL || sfp->data.choice != SEQFEAT_RNA || userdata == NULL)
+  {
+    return;
+  }
+
+  hp = (HasRnaPtr) userdata;
+
+  if (!hp->hasrna && MatchesRnaType (sfp, hp->rtp))
+  {
+    hp->hasrna = TRUE;
+  }
+}
+
+
+extern Boolean AlreadyHasRNA (SeqEntryPtr sep, RnaTypePtr rtp)
+{
+  HasRnaData hrd;
+
+  hrd.rtp = NULL;
+  hrd.hasrna = FALSE;
+  VisitFeaturesInSep (sep, &hrd, AlreadyHasRNACallback);
+  return hrd.hasrna;
+}
+
+
 static SeqFeatPtr ApplyOneRNA 
 (BatchApplyFeatureDetailsPtr feature_details_data,
  SeqEntryPtr                 sep, 
@@ -5772,27 +5784,21 @@ static SeqFeatPtr ApplyOneRNA
     return NULL;
   }
   
-  if (suppressDups && entityID > 0 &&
-	     AlreadyHasFeatOrDesc (sep, SEQFEAT_RNA, 0, feature_details_data->rnaSubType))
+  if (suppressDups && entityID > 0 && AlreadyHasRNA (sep, feature_details_data->rnaType))
   {
     return NULL;
   }
   
   rrp = RnaRefNew ();
-  if (rrp == NULL)
-  {
-    return NULL;
-  }
-
-  rrp->type = feature_details_data->rnaSubType;
-  if (! StringHasNoText (feature_details_data->rnaName)) {
-    rrp->ext.choice = 1;
-    rrp->ext.value.ptrvalue = StringSave (feature_details_data->rnaName);
-  }
   sfp = CreateNewFeature (nsep, NULL, SEQFEAT_RNA, NULL);
   if (sfp != NULL) {
     sfp->data.value.ptrvalue = (Pointer) rrp;
   }
+  ApplyRnaTypeToSeqFeat (sfp, feature_details_data->rnaType);
+  if (! StringHasNoText (feature_details_data->rnaName)) {
+    ApplyProductToRNA (sfp, feature_details_data->rnaName);
+  }
+
   return sfp;
 }
 
@@ -6131,7 +6137,10 @@ static void DoApplyFeatureToAlignment (ButtoN b)
                                  &errcount, &ambigList);
         AddProductForCDS (sfp, feature_details_data, sep, nsep, aafdp->entityID);
       }
-      
+      else if (aafdp->feattype == ADD_RRNA)
+      {
+/*        ConvertToOldRNAFormat (sfp); */
+      }
     }
     
     if (sfp != NULL
@@ -6192,10 +6201,7 @@ static void DoApplyFeatureToAlignment (ButtoN b)
     else
     {
       /* add comment */
-      if (!StringHasNoText (feature_details_data->featcomment))
-      {
-        sfp->comment = StringSave (feature_details_data->featcomment);
-      }
+      AddToComment (sfp, feature_details_data->featcomment);
     }
     
     slp_this = slp_next;

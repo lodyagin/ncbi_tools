@@ -1,4 +1,4 @@
-/* $Id: blast_parameters.h,v 1.18 2007/05/22 20:55:36 kazimird Exp $
+/* $Id: blast_parameters.h,v 1.20 2007/10/25 15:55:36 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -115,6 +115,8 @@ typedef struct BlastInitialWordParameters {
                                         seeds? */
    Int4 nucl_score_table[256]; /**< the combined score of all match/mismatch
                                     combinations for aligning four bases */
+   Boolean ungapped_extension; /**< Should an ungapped extension be
+                                  performed? */
 } BlastInitialWordParameters;
     
 /** Computed values used as parameters for gapped alignments.
@@ -167,6 +169,9 @@ typedef struct BlastHitSavingParameters {
                                                is not done if NULL. */
    Boolean restricted_align; /**< TRUE if approximate score-only gapped
                                   alignment is used */
+   Boolean do_sum_stats;  /**< TRUE if sum stats will be used.  Can override the
+                                  do_sum_stats Boolean in the options if criteria for 
+                                  doing sum stats are not met.  */
 } BlastHitSavingParameters;
 
 /** Because approximate gapped alignment adds extra overhead,

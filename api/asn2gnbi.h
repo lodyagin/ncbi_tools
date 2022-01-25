@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   12/30/03
 *
-* $Revision: 1.82 $
+* $Revision: 1.85 $
 *
 * File Description:  New GenBank flatfile generator, internal header
 *
@@ -465,6 +465,7 @@ typedef enum {
   Qual_class_pcr,
   Qual_class_mol_wt,
   Qual_class_voucher,
+  Qual_class_lat_lon,
   Qual_class_mobile_element
 }  QualType;
 
@@ -635,6 +636,8 @@ typedef enum {
   FTQUAL_modelev,
   FTQUAL_mol_wt,
   FTQUAL_ncRNA_class,
+  FTQUAL_ncRNA_note,
+  FTQUAL_ncRNA_other,
   FTQUAL_nomenclature,
   FTQUAL_note,
   FTQUAL_number,
@@ -712,6 +715,7 @@ NLM_EXTERN Char ec_link [MAX_WWWBUF];
 NLM_EXTERN Char ec_ambig [MAX_WWWBUF];
 NLM_EXTERN Char link_tax [MAX_WWWBUF];
 NLM_EXTERN Char link_muid [MAX_WWWBUF];
+NLM_EXTERN Char link_lat_lon [MAX_WWWBUF];
 NLM_EXTERN Char link_code [MAX_WWWBUF];
 NLM_EXTERN Char link_encode [MAX_WWWBUF];
 NLM_EXTERN Char link_go [MAX_WWWBUF];
@@ -823,7 +827,16 @@ NLM_EXTERN void FFTrim (
     StringItemPtr line_start,
     Int4 line_pos,
     Int4 line_prefix_len
-);NLM_EXTERN void FFCalculateLineBreak (
+);
+NLM_EXTERN int FFNextChar(
+  StringItemPtr start_sip,
+  Int4 start_pos
+);
+NLM_EXTERN void FFAdvanceChar(
+  StringItemPtr* start_sip,
+  Int4* start_pos
+);
+NLM_EXTERN void FFCalculateLineBreak (
   StringItemPtr PNTR break_sip, Int4 PNTR break_pos,
   Int4 init_indent, Int4 visible
 );
@@ -1070,6 +1083,17 @@ NLM_EXTERN CharPtr goFieldType [];
 
 NLM_EXTERN CharPtr legalDbXrefs [];
 NLM_EXTERN CharPtr legalRefSeqDbXrefs [];
+
+NLM_EXTERN Int4 IsDbxrefValid (
+  CharPtr    db,
+  SeqFeatPtr sfp,
+  OrgRefPtr  org, 
+  Boolean    IsRefSeq,
+  CharPtr PNTR case_correction
+);
+
+
+NLM_EXTERN void AddAllDbxrefsToBioseq (BioseqPtr bsp);
 
 
 NLM_EXTERN void AddRefStatsBlock (

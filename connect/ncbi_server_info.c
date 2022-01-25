@@ -1,4 +1,4 @@
-/*  $Id: ncbi_server_info.c,v 6.65 2007/05/10 14:25:28 kazimird Exp $
+/*  $Id: ncbi_server_info.c,v 6.66 2007/08/28 18:55:29 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -198,6 +198,9 @@ SSERV_Info* SERV_ReadInfoEx(const char* info_str, const char* name)
             return 0;
         while (*str && isspace((unsigned char)(*str)))
             str++;
+    } else {
+        host = 0;
+        port = 0;
     }
     /* read server-specific info according to the detected type */
     info = s_GetAttrByType(type)->vtable.Read(&str, name ? strlen(name)+1 : 0);

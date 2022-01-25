@@ -1,4 +1,4 @@
-/*  $Id: blast_seqsrc.c,v 1.34 2007/05/15 15:55:30 kazimird Exp $
+/*  $Id: blast_seqsrc.c,v 1.35 2008/02/14 15:55:42 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -36,7 +36,7 @@
 #ifndef SKIP_DOXYGEN_PROCESSING
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_seqsrc.c,v 1.34 2007/05/15 15:55:30 kazimird Exp $";
+    "$Id: blast_seqsrc.c,v 1.35 2008/02/14 15:55:42 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 #endif
 
@@ -259,8 +259,6 @@ BlastSeqSrcReleaseSequence(const BlastSeqSrc* seq_src,
 #ifdef KAPPA_PRINT_DIAGNOSTICS
 
 static const size_t kInitialGiListSize = 10;
-const Int2 kBadParameter = -1;
-const Int2 kOutOfMemory = -2;
 
 Blast_GiList*
 Blast_GiListNew(void)
@@ -280,7 +278,7 @@ Blast_GiListNewEx(size_t list_size)
     if ( !retval->data ) {
         return Blast_GiListFree(retval);
     }
-    retval->num_allocated = kInitialGiListSize;
+    retval->num_allocated = list_size;
 
     return retval;
 }

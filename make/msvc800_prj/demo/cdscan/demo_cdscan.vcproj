@@ -3,7 +3,7 @@
 	ProjectType="Visual C++"
 	Version="8.00"
 	Name="demo_cdscan"
-	ProjectGUID="{D221EDFA-64EB-479A-B15B-792A90ADE47D}"
+	ProjectGUID="{A8DC9C13-504F-4ED7-B299-ED251D8D7D57}"
 	>
 	<Platforms>
 		<Platform

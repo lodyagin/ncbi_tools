@@ -3,7 +3,7 @@
 	ProjectType="Visual C++"
 	Version="8.00"
 	Name="demo_copymat"
-	ProjectGUID="{1DC69786-C012-46C5-8B82-92C093434D05}"
+	ProjectGUID="{090B589F-7704-4D2F-9778-F884AFFB2359}"
 	>
 	<Platforms>
 		<Platform

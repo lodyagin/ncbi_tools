@@ -1,4 +1,4 @@
-/* $Id: blast_stat.c,v 1.157 2007/05/22 20:55:36 kazimird Exp $
+/* $Id: blast_stat.c,v 1.158 2007/09/24 14:55:29 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -50,7 +50,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_stat.c,v 1.157 2007/05/22 20:55:36 kazimird Exp $";
+    "$Id: blast_stat.c,v 1.158 2007/09/24 14:55:29 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_stat.h>
@@ -2491,7 +2491,16 @@ Blast_ScoreBlkKbpUngappedCalc(EBlastProgramType program,
    stdrfp = Blast_ResFreqFree(stdrfp);
 
    if (valid_context == FALSE)
-     status = 1;  /* Not a single context was valid. */
+   {   /* No valid contexts were found. */
+       /* Message for non-translated search issued above. */
+       if (Blast_QueryIsTranslated(program) ) {
+            Blast_MessageWrite(blast_message, eBlastSevWarning, kBlastMessageNoContext,
+                "Could not calculate ungapped Karlin-Altschul parameters due "
+                "to an invalid query sequence or its translation. Please verify the "
+                "query sequence(s) and/or filtering options");
+       }
+       status = 1;  /* Not a single context was valid. */
+   }
 
    /* Set ungapped Blast_KarlinBlk* alias */
    sbp->kbp = Blast_QueryIsPssm(program) ? sbp->kbp_psi : sbp->kbp_std;

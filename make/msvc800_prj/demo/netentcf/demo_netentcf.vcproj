@@ -3,7 +3,7 @@
 	ProjectType="Visual C++"
 	Version="8.00"
 	Name="demo_netentcf"
-	ProjectGUID="{AD4D8660-5128-4DAA-9CC9-BB4ABE051C4E}"
+	ProjectGUID="{4BCEFEBE-22AD-4D8E-BE1F-19FF5925271D}"
 	>
 	<Platforms>
 		<Platform

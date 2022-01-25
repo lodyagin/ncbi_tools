@@ -1,4 +1,4 @@
-/*  $Id: blast_seqsrc.h,v 1.47 2007/05/08 13:25:30 kazimird Exp $
+/*  $Id: blast_seqsrc.h,v 1.48 2007/08/28 17:25:29 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -195,12 +195,22 @@ typedef struct BlastSeqSrcGetSeqArg {
      * eBlastEncodingNucleotide, etc [in] */
     EBlastEncoding encoding;
 
-    /** Specify true here to disable this OID's ranges before fetching.
+    /** Specify true here to disable this OID's ranges before
+     * fetching.  OID ranges are a (somewhat complicated) performance
+     * feature that allows less nucleotide unpacking to be done in
+     * some cases.  If in doubt, specify FALSE here.
      * TRUE to disable ranges, FALSE to use them if they exist [in] */
     Boolean enable_ranges;
 
-    /** Sequence to return, if NULL, it should allocated by GetSeqBlkFnPtr, else
-     * its contents are freed and the structure is reused [out]*/
+    /** Check whether an OID is excluded due to overlapping filtering.
+     * The disease is rare, and the test for it is somewhat expensive,
+     * so it is deferred to the traceback stage.
+     * TRUE to disable ranges, FALSE to use them if they exist [in] */
+    Boolean check_oid_exclusion;
+
+    /** Sequence to return, if NULL, it should allocated by GetSeqBlkFnPtr
+     * (using BlastSeqBlkNew or BlastSetUp_SeqBlkNew), else its contents are 
+     * freed (using BlastSequenceBlkClean) and the structure is reused [out]*/
     BLAST_SequenceBlk* seq;
 } BlastSeqSrcGetSeqArg;
 
@@ -220,7 +230,7 @@ Int2
 BlastSeqSrcGetSequence(const BlastSeqSrc* seq_src, 
                        void* sequence);
 
-/** Retrieve sequence length.
+/** Retrieve sequence length (number of residues/bases)
  * @param seq_src the BLAST sequence source [in]
  * @param oid ordinal id of the sequence desired (should be Uint4) [in]
  */

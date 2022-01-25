@@ -3,7 +3,7 @@
 	ProjectType="Visual C++"
 	Version="8.00"
 	Name="blast"
-	ProjectGUID="{CD41CEB1-4E2C-494B-86E8-E29AF398D7ED}"
+	ProjectGUID="{B8E40D4D-C20C-42BD-B5E4-6BEB9D08344A}"
 	>
 	<Platforms>
 		<Platform

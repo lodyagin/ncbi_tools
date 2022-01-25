@@ -3,7 +3,7 @@
 	ProjectType="Visual C++"
 	Version="8.00"
 	Name="ncbitool"
-	ProjectGUID="{32AB53DD-66B1-4E17-B411-FEB804E62CF0}"
+	ProjectGUID="{19DB0E0E-BB30-4A19-93A8-7B67FBB0C937}"
 	>
 	<Platforms>
 		<Platform

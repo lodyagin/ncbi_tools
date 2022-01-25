@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/3/98
 *
-* $Revision: 6.438 $
+* $Revision: 6.458 $
 *
 * File Description: 
 *
@@ -63,6 +63,9 @@
 #include <asn2gnbp.h> /* included for discrepancy report */
 #include <algo/blast/api/twoseq_api.h>
 #include <algo/blast/api/blast_seqalign.h>
+
+#include <macrodlg.h>
+#include <macroapi.h>
 
 #define DEFLINE_MAX_LEN          380
 #define TEXT_MAX_LEN             64
@@ -397,86 +400,7 @@ extern void ExtendSeqLocToPosition (SeqLocPtr slp, Boolean end5, Int4 pos)
   }
 }
 
-extern Int4 ExtendSeqLocToEnd (SeqLocPtr slp, BioseqPtr bsp, Boolean end5)
-{
-  Uint1          strand;
-  SeqLocPtr      slp_to_change, slp_index;
-  Int4           extent_to_change;
-  Int4           start, stop;
-  SeqIdPtr       sip;
-  Int4           start_diff = 0;
-  
-  if (slp == NULL || bsp == NULL) return 0;
-
-  slp_to_change = NULL;
-  strand = SeqLocStrand (slp);
-  switch (slp->choice)
-  {
-    case SEQLOC_INT:
-      slp_to_change = slp;
-      break;
-    case SEQLOC_MIX:
-  	case SEQLOC_PACKED_INT:
-      sip = SeqLocId (slp);
-      if (sip == NULL) return 0; /* can only process if all on one bioseq */
-      slp_to_change = NULL;
-      if ((strand == Seq_strand_minus && end5)
-        || (strand != Seq_strand_minus && !end5))
-      {
-        extent_to_change = 0;
-        for (slp_index = (SeqLocPtr)slp->data.ptrvalue; slp_index != NULL; slp_index = slp_index->next)
-        {
-          stop = GetOffsetInBioseq (slp_index, bsp, SEQLOC_STOP);
-          if (stop > extent_to_change)
-          {
-            slp_to_change = slp_index;
-            extent_to_change = stop;
-          }
-        }
-      }
-      else
-      {
-        extent_to_change = bsp->length;
-        for (slp_index = (SeqLocPtr)slp->data.ptrvalue; slp_index != NULL; slp_index = slp_index->next)
-        {
-          start = GetOffsetInBioseq (slp_index, bsp, SEQLOC_START);
-          if (start < extent_to_change)
-          {
-            slp_to_change = slp_index;
-            extent_to_change = start;
-          }
-        }
-      }
-      break;
-  }
-
-  if (slp_to_change != NULL)
-  {
-    if ((strand == Seq_strand_minus && end5)
-      || (strand != Seq_strand_minus && !end5))
-    {
-      start = GetOffsetInBioseq (slp_to_change, bsp, SEQLOC_START);
-      stop = bsp->length - 1;
-    }
-    else
-    {
-      start = 0;
-      stop = GetOffsetInBioseq (slp_to_change, bsp, SEQLOC_STOP);
-    }
-    if (end5) {
-        if (strand == Seq_strand_minus) {
-            start_diff = bsp->length - 1 - GetOffsetInBioseq(slp_to_change, bsp, SEQLOC_START);
-        } else {
-            start_diff = GetOffsetInBioseq(slp_to_change, bsp, SEQLOC_START);
-        }
-    }
-    
-    expand_seq_loc (start, stop, strand, slp_to_change);
-  }
-  return start_diff;
-}
-
-static void ExtendOnePartialFeature (SeqFeatPtr sfp, Pointer userdata)
+static void ExtendOnePartialFeatureEx (SeqFeatPtr sfp, Boolean extend5, Boolean extend3)
 {
   BioseqPtr   bsp;
   Boolean     partial3, partial5;
@@ -487,7 +411,7 @@ static void ExtendOnePartialFeature (SeqFeatPtr sfp, Pointer userdata)
   bsp = BioseqFindFromSeqLoc (sfp->location);
   if (bsp == NULL) return;
   CheckSeqLocForPartial (sfp->location, &partial5, &partial3);
-  if (partial5)
+  if (partial5 && extend5)
   {
     start_diff = ExtendSeqLocToEnd (sfp->location, bsp, TRUE);
     if (start_diff > 0 && sfp->data.choice == SEQFEAT_CDREGION) {
@@ -500,10 +424,15 @@ static void ExtendOnePartialFeature (SeqFeatPtr sfp, Pointer userdata)
       }
     }
   }
-  if (partial3)
+  if (partial3 && extend3)
   {
     ExtendSeqLocToEnd (sfp->location, bsp, FALSE);
   }
+}
+
+static void ExtendOnePartialFeature (SeqFeatPtr sfp, Pointer userdata)
+{
+  ExtendOnePartialFeatureEx (sfp, TRUE, TRUE);
 }
 
 extern void ExtendPartialFeatures (IteM i)
@@ -552,6 +481,143 @@ extern void ExtendPartialFeatures (IteM i)
   ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
   ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
 }
+
+
+typedef struct extendpartialfeaturesform {
+  FORM_MESSAGE_BLOCK
+  DialoG feature_type;
+  ButtoN extend5;
+  ButtoN extend3;
+  DialoG string_constraint;
+  ButtoN leave_dlg_up;
+} ExtendPartialFeaturesFormData, PNTR ExtendPartialFeaturesFormPtr;
+
+static void DoExtendPartialFeatures (ButtoN b)
+{
+  ExtendPartialFeaturesFormPtr f;
+  SeqEntryPtr sep;
+  AECRActionPtr action;
+  ApplyActionPtr fake_apply;
+  FeatureFieldPtr feature_field;
+  ValNodePtr vnp;
+  StringConstraintPtr scp;
+  ValNodePtr object_list;
+  Boolean    extend5, extend3;
+
+  f = (ExtendPartialFeaturesFormPtr) GetObjectExtra (b);
+  if (f == NULL) return;
+
+  sep = GetTopSeqEntryForEntityID (f->input_entityID);
+  if (sep == NULL) return;
+
+  /* note - this is a small amount of hackery, designed to put off adding "extend partial features" as a macro language action.
+   * if this is ever added, this code should be moved to macroapi.c.
+   */
+  feature_field = FeatureFieldNew ();
+  vnp = DialogToPointer (f->feature_type);
+  if (vnp == NULL) {
+    feature_field->type = Feature_type_any;
+  } else {
+    feature_field->type = vnp->choice;
+    vnp = ValNodeFree (vnp);
+  }
+  fake_apply = ApplyActionNew ();
+  ValNodeAddPointer (&(fake_apply->field), FieldType_feature_field, feature_field);
+  action = AECRActionNew ();
+  ValNodeAddPointer (&(action->action), ActionChoice_apply, fake_apply);
+  
+  scp = DialogToPointer (f->string_constraint);
+  if (scp != NULL) {
+    ValNodeAddPointer (&(action->constraint), ConstraintChoice_string, scp);
+  }
+  object_list = GetObjectListForAECRAction (sep, action);
+  action = AECRActionFree (action);
+
+  extend5 = GetStatus (f->extend5);
+  extend3 = GetStatus (f->extend3);
+  for (vnp = object_list; vnp != NULL; vnp = vnp->next) {
+    if (vnp->choice == OBJ_SEQFEAT && vnp->data.ptrvalue != NULL) {
+      ExtendOnePartialFeatureEx (vnp->data.ptrvalue, extend5, extend3);
+    }
+  }
+  object_list = ValNodeFree (object_list);
+  ArrowCursor ();
+  Update ();
+  ObjMgrSetDirtyFlag (f->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, f->input_entityID, 0, 0);
+  if (!GetStatus (f->leave_dlg_up)) {
+    Remove (f->form);
+  }
+}
+
+
+extern void ExtendPartialFeaturesWithConstraint (IteM i)
+{
+  BaseFormPtr       bfp;
+  ExtendPartialFeaturesFormPtr f;
+  ValNodePtr          feature_list = NULL;
+  ValNode             vn;
+  WindoW              w;
+  GrouP               h, g, c;
+  PrompT              p1, p2;
+  ButtoN              b;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+
+  f = (ExtendPartialFeaturesFormPtr) MemNew (sizeof (ExtendPartialFeaturesFormData));
+  if (f == NULL) return;
+    
+  w = FixedWindow (-50, -33, -10, -10, "Extend Partial Features", StdCloseWindowProc);
+  SetObjectExtra (w, f, StdCleanupExtraProc);
+  f->form = (ForM) w;
+  f->input_entityID = bfp->input_entityID;
+  
+  h = HiddenGroup (w, -1, 0, NULL);
+  SetGroupSpacing (h, 10, 10);
+
+  p1 = StaticPrompt (h, "Feature Type to Extend", 0, dialogTextHeight, programFont, 'c');
+  ValNodeAddPointer (&feature_list, Feature_type_any, StringSave ("Any"));
+  AddAllFeaturesToChoiceList (&feature_list);
+  
+  f->feature_type = ValNodeSelectionDialog (h, feature_list, TALL_SELECTION_LIST, ValNodeStringName,
+                                ValNodeSimpleDataFree, ValNodeStringCopy,
+                                ValNodeChoiceMatch, "feature type", 
+                                NULL, NULL, FALSE);
+  vn.choice = Feature_type_any;
+  vn.data.ptrvalue = NULL;
+  vn.next = NULL;
+  PointerToDialog (f->feature_type, &vn);
+
+  g = HiddenGroup (h, 2, 0, NULL);
+  f->extend5 = CheckBox (g, "Extend partial 5'", NULL);
+  SetStatus (f->extend5, TRUE);
+  f->extend3 = CheckBox (g, "Extend partial 3'", NULL);
+  SetStatus (f->extend3, TRUE);
+  
+  p2 = StaticPrompt (h, "Optional Constraint", 0, dialogTextHeight, programFont, 'c');
+  f->string_constraint = StringConstraintDialog (h, "Where feature text", FALSE, NULL, NULL);
+  
+  c = HiddenGroup (h, 3, 0, NULL);
+  b = PushButton (c, "Accept", DoExtendPartialFeatures);
+  SetObjectExtra (b, f, NULL);
+  PushButton (c, "Cancel", StdCancelButtonProc);
+  f->leave_dlg_up = CheckBox (c, "Leave Dialog Up", NULL);
+
+  AlignObjects (ALIGN_CENTER, (HANDLE) p1,
+                              (HANDLE) f->feature_type,
+                              (HANDLE) g,
+                              (HANDLE) p2,
+                              (HANDLE) f->string_constraint,
+                              (HANDLE) c,
+                              NULL);
+  Show (w);
+}
+
 
 static Boolean HasValidStartCodon (SeqFeatPtr cds)
 {
@@ -4491,6 +4557,7 @@ extern Int2 LIBCALLBACK RefGeneUserGenFunc (Pointer data);
 typedef struct refgeneuserdialog {
   DIALOG_MESSAGE_BLOCK
   GrouP         status;
+  ButtoN        generated;
   TexT          curator;
   TexT          source;
   Int2          indexer;
@@ -4503,13 +4570,6 @@ typedef struct refgeneuserform {
   SeqEntryPtr   sep;
 } RefgeneUserForm, PNTR RefgeneUserFormPtr;
 
-static ENUM_ALIST(changeflags_alist)
-  {" ",           0},
-  {"Sequence",    1},
-  {"Annotation",  2},
-  {"Both",        3},
-END_ENUM_ALIST
-
 static ENUM_ALIST(refgene_alist)
   {" ",          0},
   {"Assembly",    REFGENE_ASSEMBLY},
@@ -4521,15 +4581,15 @@ static ENUM_ALIST(refgene_alist)
 END_ENUM_ALIST
 
 static Uint2 refgene_types [] = {
-  TAGLIST_TEXT, TAGLIST_TEXT, TAGLIST_TEXT, TAGLIST_POPUP, TAGLIST_POPUP
+  TAGLIST_TEXT, TAGLIST_TEXT, TAGLIST_TEXT, TAGLIST_TEXT, TAGLIST_TEXT, TAGLIST_POPUP
 };
 
 static Uint2 refgene_widths [] = {
-  9, 7, 15, 0, 0
+  9, 7, 7, 7, 8, 0
 };
 
 static EnumFieldAssocPtr refgene_popups [] = {
-  NULL, NULL, NULL, changeflags_alist, refgene_alist
+  NULL, NULL, NULL, NULL, NULL, refgene_alist
 };
 
 static CharPtr refgene_labels [] = {
@@ -4537,19 +4597,18 @@ static CharPtr refgene_labels [] = {
 };
 
 static CharPtr refgene_fields [] = {
-  "Accession", "GI", "Comment", "Change", "Type", NULL
+  "Accession", "GI", "Start", "Stop", "Comment", "Type", NULL
 };
 
 static void AccessionUserFieldPtrToVisStringDialog (DialoG d, Pointer data)
 
 {
   CharPtr       accession;
-  Boolean       annotChange;
   CharPtr       comment;
   UserFieldPtr  curr;
   UserFieldPtr  entry;
   Int2          field;
-  Int2          flags;
+  Char          fm [16];
   Int4          from;
   Int4          gi;
   ValNodePtr    head;
@@ -4557,10 +4616,10 @@ static void AccessionUserFieldPtrToVisStringDialog (DialoG d, Pointer data)
   Int2          j;
   CharPtr       name;
   ObjectIdPtr   oip;
-  Boolean       seqChange;
   CharPtr       str;
   TagListPtr    tlp;
   Int4          to;
+  Char          tu [16];
   UserFieldPtr  ufp;
   ValNodePtr    vnp;
 
@@ -4587,8 +4646,6 @@ static void AccessionUserFieldPtrToVisStringDialog (DialoG d, Pointer data)
           gi = 0;
           from = 0;
           to = 0;
-          annotChange = FALSE;
-          seqChange = FALSE;
           ufp = (UserFieldPtr) entry->data.ptrvalue;
           while (ufp != NULL) {
             oip = ufp->label;
@@ -4601,10 +4658,6 @@ static void AccessionUserFieldPtrToVisStringDialog (DialoG d, Pointer data)
                 from = ufp->data.intvalue;
               } else if (StringICmp (oip->str, "to") == 0 && ufp->choice == 2) {
                 to = ufp->data.intvalue;
-              } else if (StringICmp (oip->str, "sequenceChange") == 0 && ufp->choice == 4) {
-                seqChange = ufp->data.boolvalue;
-              } else if (StringICmp (oip->str, "annotationChange") == 0 && ufp->choice == 4) {
-                annotChange = ufp->data.boolvalue;
               } else if (StringICmp (oip->str, "comment") == 0 && ufp->choice == 1) {
                 comment = (CharPtr) ufp->data.ptrvalue;
               } else if (StringICmp (oip->str, "name") == 0 && ufp->choice == 1) {
@@ -4617,18 +4670,14 @@ static void AccessionUserFieldPtrToVisStringDialog (DialoG d, Pointer data)
             if (comment == NULL) {
               comment = "";
             }
-            flags = 0;
-            if (seqChange) {
-              flags++;
+            fm [0] = '\0';
+            tu [0] = '\0';
+            if (from > 0 && to > 0) {
+              sprintf (fm, "%ld", (long) from);
+              sprintf (tu, "%ld", (long) to);
             }
-            if (annotChange) {
-              flags += 2;
-            }
-            if (gi != 0) {
-              sprintf (str, "%s\t%ld\t%s\t%d\t%d\n", accession, (long) gi, comment, (int) flags, (int) field);
-            } else {
-              sprintf (str, "%s\t\t%s\t%d\t%d\n", accession, comment, (int) flags, (int) field);
-            }
+            sprintf (str, "%s\t%ld\t%s\t%s\t%s\t%d\n", accession,
+                     (long) gi, fm, tu, comment, (int) field);
             vnp = ValNodeNew (head);
             if (head == NULL) {
               head = vnp;
@@ -4637,7 +4686,7 @@ static void AccessionUserFieldPtrToVisStringDialog (DialoG d, Pointer data)
               vnp->data.ptrvalue = StringSave (str);
             }
           } else if (name != NULL) {
-            sprintf (str, "\t\t%s\t0\t%d\n", name, (int) field);
+            sprintf (str, "\t\t\t\t%s\t%d\n", name, (int) field);
             vnp = ValNodeNew (head);
             if (head == NULL) {
               head = vnp;
@@ -4673,6 +4722,7 @@ static void UserObjectPtrToRefGeneDialog (DialoG d, Pointer data)
 
 {
   UserFieldPtr          curr;
+  Boolean               gen;
   ObjectIdPtr           oip;
   RefgeneUserDialogPtr  rdp;
   Int2                  status = 0;
@@ -4714,6 +4764,16 @@ static void UserObjectPtrToRefGeneDialog (DialoG d, Pointer data)
       status = 8;
       SafeEnable (rdp->pipebtn);
     }
+  }
+  for (curr = uop->data; curr != NULL; curr = curr->next) {
+    oip = curr->label;
+    if (oip != NULL && StringICmp (oip->str, "Generated") == 0) {
+      break;
+    }
+  }
+  if (curr != NULL && curr->choice == 4) {
+    gen = curr->data.boolvalue;
+    SetStatus (rdp->generated, gen);
   }
   for (curr = uop->data; curr != NULL; curr = curr->next) {
     oip = curr->label;
@@ -4787,21 +4847,19 @@ static void AddIndexerToRefGeneTrackUserObject (UserObjectPtr uop, Int2 indexer)
 static Pointer RefGeneDialogToUserObjectPtr (DialoG d)
 
 {
-  Boolean               annotChange;
   Char                  ch;
   Char                  curator [256];
   Int2                  i;
-  Uint2                  j;
+  Uint2                 j;
   size_t                len;
-  Int4                  num [5];
+  Int4                  num [6];
   Boolean               okay;
   RefgeneUserDialogPtr  rdp;
-  Boolean               seqChange;
   Char                  source [64];
   Int2                  status;
   CharPtr               str;
   TagListPtr            tlp;
-  CharPtr               txt [5];
+  CharPtr               txt [6];
   UserObjectPtr         uop;
   long int              val;
   ValNodePtr            vnp;
@@ -4836,6 +4894,10 @@ static Pointer RefGeneDialogToUserObjectPtr (DialoG d)
     AddSourceToRefGeneTrackUserObject (uop, source);
   }
 
+  if (GetStatus (rdp->generated)) {
+    AddGeneratedToRefGeneTrackUserObject (uop, TRUE);
+  }
+
   GetTitle (rdp->curator, curator, sizeof (curator));
   if (! StringHasNoText (curator)) {
     AddCuratorToRefGeneTrackUserObject (uop, curator);
@@ -4858,43 +4920,33 @@ static Pointer RefGeneDialogToUserObjectPtr (DialoG d)
         }
       }
       if (okay) {
-        for (j = 0; j < 5; j++) {
+        for (j = 0; j < 6; j++) {
           txt [j] = ExtractTagListColumn ((CharPtr) vnp->data.ptrvalue, j);
           num [j] = 0;
         }
-        for (j = 1; j < 5; j++) {
-          if (j != 2) {
-            num [j] = 0;
-            if (txt [j] != NULL && sscanf (txt [j], "%ld", &val) == 1) {
-              num [j] = val;
-            }
+        for (j = 1; j < 4; j++) {
+          num [j] = 0;
+          if (txt [j] != NULL && sscanf (txt [j], "%ld", &val) == 1) {
+            num [j] = val;
           }
         }
-        annotChange = FALSE;
-        seqChange = FALSE;
-        if (num [3] >= 2) {
-          annotChange = TRUE;
-          (num [3]) -= 2;
+        if (txt [5] != NULL && sscanf (txt [5], "%ld", &val) == 1) {
+          num [5] = val;
         }
-        if (num [3] > 0) {
-          seqChange = TRUE;
-        }
-        i = num [4];
+        i = num [5];
         if (i >= REFGENE_ASSEMBLY && i <= REFGENE_UNKNOWN) {
           if (! StringHasNoText (txt [0])) {
             AddAccessionToRefGeneTrackUserObject (uop, refgene_labels [i],
-                                                  txt [0], num [1],
-                                                  seqChange, annotChange,
-                                                  txt [2]);
-          } else if (! StringHasNoText (txt [2])) {
+                                                  txt [0], num [1], num [2],
+                                                  num [3], txt [4]);
+          } else if (! StringHasNoText (txt [4])) {
             /* comment by itself goes into name */
             AddAccessionToRefGeneTrackUserObject (uop, refgene_labels [i],
-                                                  NULL, num [1],
-                                                  seqChange, annotChange,
-                                                  txt [2]);
+                                                  NULL, num [1], num [2],
+                                                  num [3], txt [4]);
           }
         }
-        for (j = 0; j < 5; j++) {
+        for (j = 0; j < 6; j++) {
           txt [j] = MemFree (txt [j]);
         }
       }
@@ -4942,7 +4994,8 @@ static DialoG CreateRefGeneDialog (GrouP g)
   rdp->pipebtn = RadioButton (rdp->status, "Pipeline");
   Disable (rdp->pipebtn);
 
-  y = HiddenGroup (p, 4, 0, NULL);
+  y = HiddenGroup (p, 6, 0, NULL);
+  rdp->generated = CheckBox (y, "Generated", NULL);
   StaticPrompt (y, "Curator", 0, dialogTextHeight, programFont, 'l');
   rdp->curator = DialogText (y, "", 14, NULL);
   StaticPrompt (y, "Genomic Source", 0, dialogTextHeight, programFont, 'l');
@@ -4950,22 +5003,22 @@ static DialoG CreateRefGeneDialog (GrouP g)
 
   rdp->indexer = 0;
 
-  q = HiddenGroup (p, -6, 0, NULL);
+  q = HiddenGroup (p, -7, 0, NULL);
   lastppt = NULL;
   ppt = NULL;
-  for (i = 0; i < 5; i++) {
+  for (i = 0; i < 6; i++) {
     lastppt = ppt;
     ppt = StaticPrompt (q, refgene_fields [i], refgene_widths [i] * stdCharWidth, 0, systemFont, 'c');
   }
-  rdp->fields = CreateTagListDialog (p, 6, 5, STD_TAG_SPACING,
+  rdp->fields = CreateTagListDialog (p, 6, 6, STD_TAG_SPACING,
                                      refgene_types, refgene_widths, refgene_popups,
                                      AccessionUserFieldPtrToVisStringDialog,
                                      VisStringDialogToUserFieldPtr);
 
   tlp = (TagListPtr) GetObjectExtra (rdp->fields);
   if (tlp != NULL) {
-    AlignObjects (ALIGN_JUSTIFY, (HANDLE) tlp->control [3], (HANDLE) lastppt, NULL);
-    AlignObjects (ALIGN_JUSTIFY, (HANDLE) tlp->control [4], (HANDLE) ppt, NULL);
+    AlignObjects (ALIGN_JUSTIFY, (HANDLE) tlp->control [4], (HANDLE) lastppt, NULL);
+    AlignObjects (ALIGN_JUSTIFY, (HANDLE) tlp->control [5], (HANDLE) ppt, NULL);
   }
 
   AlignObjects (ALIGN_CENTER, (HANDLE) x, (HANDLE) y, (HANDLE) q, (HANDLE) rdp->fields, NULL);
@@ -5186,6 +5239,45 @@ static void UserObjectPtrToStruCommDialog (DialoG d, Pointer data)
   ValNodeFreeData (head);
 }
 
+static void FixSpecialCharactersInStructuredCommentUserObject (UserObjectPtr uop, BoolPtr changed)
+{
+  UserFieldPtr           curr;
+  CharPtr                field;
+  ValNodePtr             find_list = NULL;
+  ObjectIdPtr            oip;
+  CharPtr                str;
+ 
+
+  if (changed != NULL) {
+    *changed = FALSE;
+  }
+  if (uop == NULL || uop->type == NULL || StringICmp (uop->type->str, "StructuredComment") != 0) {
+    return;
+  }
+
+  for (curr = uop->data; curr != NULL; curr = curr->next) {
+   if (curr->choice != 1) continue;
+    oip = curr->label;
+    if (oip == NULL) continue;
+    field = oip->str;
+    if (StringHasNoText (field)) continue;
+    str = (CharPtr) curr->data.ptrvalue;
+    if (StringHasNoText (str)) continue;
+
+    SpecialCharFindWithContext ((CharPtr PNTR) (&(oip->str)), &find_list, NULL, NULL);
+    SpecialCharFindWithContext ((CharPtr PNTR) (&(curr->data.ptrvalue)), &find_list, NULL, NULL);
+  }
+  FixSpecialCharactersForStringsInList (find_list, "Special characters are not permitted.", TRUE);  
+  if (find_list != NULL)
+  {
+    if (changed != NULL) {
+      *changed = TRUE;
+    }
+    find_list = FreeContextList (find_list);
+  }
+}
+
+
 static Pointer StruCommDialogToUserObjectPtr (DialoG d)
 
 {
@@ -5196,6 +5288,7 @@ static Pointer StruCommDialogToUserObjectPtr (DialoG d)
   StruCommUserDialogPtr  sdp;
   CharPtr                str;
   ValNodePtr             vnp;
+  Boolean                fixed_special = FALSE;
 
   sdp = (StruCommUserDialogPtr) GetObjectExtra (d);
   if (sdp == NULL) return NULL;
@@ -5219,6 +5312,11 @@ static Pointer StruCommDialogToUserObjectPtr (DialoG d)
   }
 
   ValNodeFreeData (head);
+
+  FixSpecialCharactersInStructuredCommentUserObject (uop, &fixed_special);
+  if (fixed_special) {
+    PointerToDialog (d, uop);
+  }
 
   return uop;
 }
@@ -6597,7 +6695,7 @@ static Boolean IsHUPIDAccession (BioseqPtr bsp)
     }
   }
 
-  if (ompp != NULL && StringCmp (ompp->procname, "SmartBioseqFetch") == 0) 
+  if (ompp != NULL && StringCmp (ompp->procname, "HUPBioseqFetch") == 0) 
   {
     rval = TRUE;
   }
@@ -9111,24 +9209,6 @@ static void FixDeltaFeatures (BioseqPtr bsp, Int4 offset, Int4 len_diff)
 }
 
 
-extern Int4 GetDeltaSeqLen (DeltaSeqPtr dsp)
-{
-  Int4 len = 0;
-  SeqLitPtr slp;
-
-  if (dsp == NULL || dsp->data.ptrvalue == NULL) {
-    /* do nothing, empty */
-  } else if (dsp->choice == 1) {
-    len = SeqLocLen ((SeqLocPtr)(dsp->data.ptrvalue));
-  } else if (dsp->choice == 2) {
-    slp = (SeqLitPtr) dsp->data.ptrvalue;
-    len = slp->length;
-  }
-  return len;
-}
-
-
-
 static void ConvertGapFeaturesToUnknownCallback (BioseqPtr bsp, Pointer userdata)
 {
   ConvertGapToUnknownPtr cgtup;
@@ -10155,7 +10235,7 @@ static Boolean EditDiscrepancyConfig (DiscrepancyConfigPtr dcp)
   SetGroupSpacing (g, 10, 10);
   for (i = 0; i < MAX_DISC_TYPE; i++)
   {
-    test_options[i] = CheckBox (g, GetDiscrepancyTestConfName (i), NULL);
+    test_options[i] = CheckBox (g, GetDiscrepancyTestConfName ((DiscrepancyType) i), NULL);
     SetStatus (test_options[i], dcp->conf_list[i]);
   }
   
@@ -10196,55 +10276,6 @@ static Boolean EditDiscrepancyConfig (DiscrepancyConfigPtr dcp)
 
   Remove (w);
   return rval;
-}
-
-/* This gets a list of the open views */
-static ValNodePtr GetBaseFormList ()
-
-{
-  Uint4          j;
-  Uint4          num;
-  ObjMgrPtr      omp;
-  ObjMgrDataPtr  omdp;
-  ObjMgrDataPtr  PNTR omdpp;
-  OMUserDataPtr  omudp;
-  BaseFormPtr    bfp;
-  ValNodePtr     base_form_list = NULL;
-
-  omp = ObjMgrGet ();
-  if (omp == NULL) return NULL;
-  num = omp->currobj;
-  for (j = 0, omdpp = omp->datalist; j < num && omdpp != NULL; j++, omdpp++) {
-    omdp = *omdpp;
-    if (omdp->parentptr == NULL) {
-      for (omudp = omdp->userdata; omudp != NULL; omudp = omudp->next) {
-        if (omudp->proctype == OMPROC_VIEW) {
-          bfp = (BaseFormPtr) omudp->userdata.ptrvalue;
-          ValNodeAddPointer (&base_form_list, 0, bfp);
-        }
-      }
-    }
-  }
-  return base_form_list;
-}
-
-
-static ValNodePtr GetViewedSeqEntryList (void)
-{
-  ValNodePtr  sep_list = NULL, base_form_list, vnp;
-  BaseFormPtr bfp;
-  SeqEntryPtr sep;
-  
-  base_form_list = GetBaseFormList();
-  for (vnp = base_form_list; vnp != NULL; vnp = vnp->next) {
-    bfp = (BaseFormPtr) vnp->data.ptrvalue;
-    if (bfp != NULL && bfp->input_entityID != 0) {
-      sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
-      ValNodeAddPointer (&sep_list, 0, sep);
-    }
-  }
-  base_form_list = ValNodeFree (base_form_list);
-  return sep_list;
 }
 
 static void VisitFeaturesInViewedBioseqs (Pointer userdata, VisitFeaturesFunc callback)
@@ -10573,6 +10604,44 @@ extern void ScrollToDiscrepancyItem (ValNodePtr vnp, Pointer userdata)
   }
 }
 
+static Uint2 GetEntityIDFromItem (ValNodePtr vnp);
+static void ApplyTagToCodingRegionsInEntityID (Uint2 entityID);
+
+static void ApplyTagToCodingRegionsCallback (ValNodePtr item_list, Pointer userdata)
+{
+  ValNodePtr vnp;
+  ValNodePtr entityIDList = NULL;
+  Uint2       entityID;
+  SeqEntryPtr sep;
+  ValNodePtr  cds_list;
+  Boolean     found_any = FALSE;
+
+  for (vnp = item_list; vnp != NULL; vnp = vnp->next)
+  {
+    entityID = GetEntityIDFromItem(vnp);
+    if (!EntityIDAlreadyInList(entityID, entityIDList))
+    {
+      ValNodeAddInt (&entityIDList, 0, entityID);
+    }
+  }
+  for (vnp = entityIDList; vnp != NULL; vnp = vnp->next)
+  {
+    sep = GetTopSeqEntryForEntityID (vnp->data.intvalue);
+    cds_list = ListCodingRegionsContainedInSourceFeatures (sep);
+    if (cds_list != NULL)
+    {
+      found_any = TRUE;
+      cds_list = ValNodeFree (cds_list);
+      ApplyTagToCodingRegionsInEntityID (vnp->data.intvalue);
+    }
+  }
+  if (!found_any)
+  {
+    Message (MSG_ERROR, "No coding regions found in source features!  Try editing the definition lines.");
+  }  
+  entityIDList = ValNodeFree (entityIDList);  
+}
+
 static void AddBulkEditing (ValNodePtr clickable_list)
 {
   ClickableItemPtr cip;
@@ -10582,7 +10651,9 @@ static void AddBulkEditing (ValNodePtr clickable_list)
     cip = (ClickableItemPtr) clickable_list->data.ptrvalue;
     if (cip->callback_func == NULL && cip->item_list != NULL) {
       if (cip->clickable_item_type == DISC_CDS_OVERLAP_TRNA) {
-        cip->callback_func = EditCDStRNAOverlapCallback;        
+        cip->callback_func = EditCDStRNAOverlapCallback;    
+      } else if (cip->clickable_item_type == DISC_INCONSISTENT_BIOSRC_DEFLINE) {
+        cip->callback_func = ApplyTagToCodingRegionsCallback;  
       } else {
         subtype = GetSubtypeForBulkEdit (cip->item_list);
         /* Note - using FEATDEF_rRNA to represent all editable RNA features */
@@ -10776,7 +10847,7 @@ extern void CreateStdValidatorFormMenus (WindoW w);
 #endif
 
 
-extern void CreateDiscrepancyReportWindow ()
+extern void CreateDiscrepancyReportWindow (void)
 {
   DiscrepancyReportFormPtr drfp;
   GrouP                    h;
@@ -10963,12 +11034,12 @@ extern void NewSUC (ValNodePtr suc_list, Uint2 entityID, Boolean reverse, Boolea
   h = HiddenGroup (w, -1, 0, NULL);
   SetGroupSpacing (h, 10, 10);
   
-  sfp->clickable_list_dlg = CreateClickableListDialogEx (h, "Text", "Affected Items",
+  sfp->clickable_list_dlg = CreateClickableListDialogEx (h, "Text", "Affected Items", NULL, NULL,
                                                          ScrollToDiscrepancyItem, EditDiscrepancyItem, NULL,
                                                          GetDiscrepancyItemText,
                                                          stdCharWidth * 55,
                                                          stdCharWidth * 55,
-                                                         FALSE);
+                                                         FALSE, TRUE);
   if (byblock) {
     suc_list = CategorizeSUCBlocks (suc_list);
     SetClickableItemExpanded (suc_list, FALSE);
@@ -11489,7 +11560,7 @@ static RNA_ITS_ItemPtr TagListStringToRNAITSItem (CharPtr line)
     rip->rna_type = eRNA_ITS_INVALID;
   } else {
     StrToLong (txt, &tmp);
-    rip->rna_type = tmp;
+    rip->rna_type = (ERNA_ITS_type) tmp;
   }
   txt = MemFree (txt);
 
@@ -11799,6 +11870,9 @@ static Int4 GetAlnRowForBsp (BioseqPtr bsp, SeqAlignPtr salp)
 static Int4 ChooseEndpoint (Int4 bsp_len, Int4 pos, Boolean is_left, SeqAlignPtr salp, Int4 aln_row)
 {
   Int4 tmp;
+  Int4 aln_len;
+
+  aln_len = SeqAlignLength (salp);
   if (pos < 0) {
     if (is_left) {
       pos = 0;
@@ -11813,10 +11887,10 @@ static Int4 ChooseEndpoint (Int4 bsp_len, Int4 pos, Boolean is_left, SeqAlignPtr
         pos = bsp_len - 1;
       }
     }
-  } else {
+  } else if (salp != NULL) {      
     tmp = AlnMgr2MapSeqAlignToBioseq (salp, pos, aln_row);
     if (is_left) {
-      while (tmp < 0 && pos < bsp_len) {
+      while (tmp < 0 && pos < aln_len) {
         pos++;
         tmp = AlnMgr2MapSeqAlignToBioseq (salp, pos, aln_row);
       }
@@ -12938,7 +13012,6 @@ static void ReleaseCDS (DoC d, PoinT pt)
   Int2            item;
   RecT            rct;
   Int2            row;
-  Int4            cds_num = 1;
   ValNodePtr      vnp, vnp_m, linked_mrnas;
   Boolean         found;
   Boolean         was_selected = FALSE;
@@ -13337,21 +13410,28 @@ static void TrimCDSFortRNAOverlap (ValNodePtr item_list)
 
 static Int4 GetOverlapLen (SeqLocPtr slp1, SeqLocPtr slp2)
 {
-  Int4  stop1, start2, len = 0;
-  Uint1 strand;
+  Int4  start1, stop1, start2, stop2, tmp, a, b, len = 0;
 
   if (slp1 == NULL || slp2 == NULL) return 0;
 
-  strand = SeqLocStrand (slp1);
-  if (strand == Seq_strand_minus) {
-    stop1 = SeqLocStart (slp1);
-    start2 = SeqLocStop (slp2);
-    len = start2 - stop1 + 1;
-  } else {
-    stop1 = SeqLocStop (slp1);
-    start2 = SeqLocStart (slp2);
-    len = stop1 - start2 + 1;
+  start1 = SeqLocStart (slp1);
+  stop1 = SeqLocStop (slp1);
+  if (start1 > stop1) {
+    tmp = start1;
+    start1 = stop1;
+    stop1 = tmp;
   }
+  start2 = SeqLocStart (slp2);
+  stop2 = SeqLocStop (slp2);
+  if (start2 > stop2) {
+    tmp = start2;
+    start2 = stop2;
+    stop2 = tmp;
+  }
+  
+  a = MAX(start1, start2);
+  b = MIN (stop1, stop2);
+  len = b - a + 1;
   return len; 
 }
 
@@ -13456,7 +13536,6 @@ static ValNodePtr CDStRNAOverlapListFromItemList (ValNodePtr item_list)
 {
   ValNodePtr new_item_list = NULL, vnp, vnp_trna;
   ValNodePtr        good_list = NULL, bad_list = NULL;
-  ValNodePtr        clickable_list = NULL;
   SeqFeatPtr        sfp, trna;
   CDStRNAOverlapPtr p = NULL;
   Int4              len;
@@ -13552,7 +13631,7 @@ static void FixCDStRNAOverlaps (ValNodePtr overlap_list)
       gene->location = TruncateLocation (gene->location, SeqLocLen (gene->location) - p->overlap_len);
     }
 
-    AddTranslExcept (p->cds, "TAA stop codon is completed by the addition of 3' A residues to the mRNA", FALSE);
+    AddTranslExcept (p->cds, "TAA stop codon is completed by the addition of 3' A residues to the mRNA", FALSE, FALSE);
   }
 }  
 
@@ -13823,5 +13902,193 @@ static void EditCDStRNAOverlap (ValNodePtr item_list)
   RealizeWindow (w);
   Show (w);
   Update ();
+}
+
+
+extern GetSamplePtr 
+GetSampleForItemList 
+(ValNodePtr               item_list,
+ ValNodePtr               requested_field,
+ GetFeatureFieldString    fieldstring_func,
+ GetDescriptorFieldString descrstring_func)
+{
+  ValNodePtr   vnp;
+  GetSamplePtr gsp;
+  SeqFeatPtr   sfp;
+  SeqDescrPtr  sdp;
+  CharPtr      str = NULL;
+
+  if (item_list == NULL || requested_field == NULL) return NULL;
+
+  gsp = GetSampleNew();
+
+  for (vnp = item_list; vnp != NULL; vnp = vnp->next)
+  {
+    if (vnp->choice == OBJ_SEQFEAT && fieldstring_func != NULL)
+    {
+      sfp = (SeqFeatPtr) vnp->data.ptrvalue;
+      str = fieldstring_func (sfp, requested_field, NULL);
+    }
+    else if (vnp->choice == OBJ_SEQDESC && descrstring_func != NULL)
+    {
+      sdp = (SeqDescrPtr) vnp->data.ptrvalue;
+      str = descrstring_func (sdp, requested_field, NULL);
+    }
+    if (!StringHasNoText (str))
+    {
+      gsp->num_found ++;
+      if (gsp->sample_text == NULL)
+      {
+        gsp->sample_text = str;
+      }
+      else
+      {
+        if (StringCmp (str, gsp->sample_text) != 0)
+        {
+          gsp->all_same = FALSE;
+        }
+      }
+    }
+    str = MemFree (str);
+  }
+
+  if (gsp->num_found == 0)
+  {
+    gsp = GetSampleFree (gsp);
+  }
+  return gsp;
+}
+
+
+typedef struct applytagtocdsinsrcfeat {
+  FORM_MESSAGE_BLOCK
+  TexT       note_text;
+  ValNodePtr cds_list;
+} ApplyTagToCDSInSrcFeatData, PNTR ApplyTagToCDSInSrcFeatPtr;
+
+
+static void CleanupApplyTagToCDSInSrcFeatForm (GraphiC g, VoidPtr data)
+
+{
+  ApplyTagToCDSInSrcFeatPtr dlg;
+
+  dlg = (ApplyTagToCDSInSrcFeatPtr) data;
+  if (dlg != NULL) {
+    dlg->cds_list = ValNodeFree (dlg->cds_list);
+  }
+  StdCleanupFormProc (g, data);
+}
+
+
+static void DoApplyTagToCodingRegionsInSourceFeatures (ButtoN b)
+{
+  ApplyTagToCDSInSrcFeatPtr dlg;
+  ValNodePtr                vnp;
+  GetSamplePtr              gsp;
+  ValNode                   vn;
+  SeqFeatPtr                sfp;
+  ApplyValueData            avd;
+
+  dlg = (ApplyTagToCDSInSrcFeatPtr) GetObjectExtra (b);
+  if (dlg == NULL) return;
+
+  if (TextHasNoText (dlg->note_text)) {
+    Message (MSG_ERROR, "No text supplied for note!");
+    return;
+  }
+  vn.choice = 0;
+  vn.next = NULL;
+  vn.data.intvalue = 2;
+  gsp = GetSampleForItemList (dlg->cds_list, &vn, GetCDSFieldString, NULL);
+  avd.etp = GetExistingTextHandlerInfo (gsp == NULL ? 0 : gsp->num_found, FALSE);
+  gsp = GetSampleFree (gsp);  
+  if (avd.etp != NULL && avd.etp->existing_text_choice == eExistingTextChoiceCancel)
+  {
+    avd.etp = MemFree (avd.etp);
+    return;
+  }
+  avd.new_text = SaveStringFromText (dlg->note_text);
+  avd.field_list = NULL;
+  avd.text_to_replace = NULL;
+  avd.where_to_replace = EditApplyFindLocation_anywhere;
+
+  WatchCursor();
+  Update();
+  for (vnp = dlg->cds_list; vnp != NULL; vnp = vnp->next)
+  {
+    sfp = (SeqFeatPtr) vnp->data.ptrvalue;
+    if (sfp != NULL)
+    {
+      sfp->comment = HandleApplyValue (sfp->comment, &avd);
+    }
+  }
+  avd.etp = MemFree (avd.etp);
+  ObjMgrSetDirtyFlag (dlg->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, dlg->input_entityID, 0, 0);
+  ArrowCursor();
+  Remove (dlg->form);
+  Update ();
+}
+
+
+static void ApplyTagToCodingRegionsInEntityID (Uint2 entityID)
+{
+  ApplyTagToCDSInSrcFeatPtr dlg;
+  ValNodePtr   cds_list;
+  WindoW       w;
+  GrouP        h, g, c;
+  ButtoN       b;
+  SeqEntryPtr  sep;
+
+  sep = GetTopSeqEntryForEntityID (entityID);
+
+  cds_list = ListCodingRegionsContainedInSourceFeatures (sep);
+
+  if (cds_list == NULL) {
+    Message (MSG_ERROR, "No coding regions found in source features!");
+    return;
+  }
+
+  /* create window to display and correct overlaps */
+  dlg = (ApplyTagToCDSInSrcFeatPtr) MemNew (sizeof (ApplyTagToCDSInSrcFeatData));
+  dlg->input_entityID = entityID;
+  dlg->cds_list = cds_list;
+
+  w = FixedWindow (-50, -33, -10, -10, "Apply Note to Coding Regions in Source Features", StdCloseWindowProc);
+  SetObjectExtra (w, dlg, CleanupApplyTagToCDSInSrcFeatForm);
+  dlg->form = (ForM) w;
+    
+  h = HiddenGroup (w, -1, 0, NULL);
+  SetGroupSpacing (h, 10, 10);
+  
+  g = HiddenGroup (h, 2, 0, NULL);
+  StaticPrompt (g, "Note Text:", 0, dialogTextHeight, programFont, 'r');
+  dlg->note_text = DialogText (g, "prophage-encoded protein", 0, NULL);
+  c = HiddenGroup (h, 4, 0, NULL);
+  SetGroupSpacing (c, 10, 10);
+
+  b = PushButton (c, "Accept", DoApplyTagToCodingRegionsInSourceFeatures);
+  SetObjectExtra (b, dlg, NULL);
+  b = PushButton (c, "Dismiss", StdCancelButtonProc);
+
+  AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) c, NULL);
+  RealizeWindow (w);
+  Show (w);
+  Update ();
+}
+
+
+extern void ApplyTagToCodingRegionsInSourceFeatures (IteM i)
+{
+  BaseFormPtr  bfp;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+
+  ApplyTagToCodingRegionsInEntityID (bfp->input_entityID);
 }
 

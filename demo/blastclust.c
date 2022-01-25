@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: blastclust.c,v 6.48 2005/08/19 20:12:32 dondosha Exp $";
+static char const rcsid[] = "$Id: blastclust.c,v 6.49 2007/12/21 14:00:47 madden Exp $";
 
-/*  $RCSfile: blastclust.c,v $  $Revision: 6.48 $  $Date: 2005/08/19 20:12:32 $
+/*  $RCSfile: blastclust.c,v $  $Revision: 6.49 $  $Date: 2007/12/21 14:00:47 $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -33,6 +33,9 @@ static char const rcsid[] = "$Id: blastclust.c,v 6.48 2005/08/19 20:12:32 dondos
 *
 * ---------------------------------------------------------------------------
 * $Log: blastclust.c,v $
+* Revision 6.49  2007/12/21 14:00:47  madden
+* Exit if query cannot be processed, JIRA SB-32
+*
 * Revision 6.48  2005/08/19 20:12:32  dondosha
 * Added extensive doxygen-style comments
 *
@@ -1316,6 +1319,8 @@ Int2 Main (void)
              do_the_blast_run(search);
           } else if (search) {
              BlastErrorPrint(search->error_return);
+             ErrPostEx(SEV_ERROR, 1, 0, "Failed to process query number %ld", (long) index);
+             return 1;
           }
           search = BlastSearchBlkDestruct(search);
           query_bsp = BioseqFree(query_bsp);

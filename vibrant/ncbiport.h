@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/1/91
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description: 
 *       Vibrant drawing port specification definitions
@@ -38,32 +38,6 @@
 * --------------------------------------------------------------------------
 * Date     Name        Description of modification
 * -------  ----------  -----------------------------------------------------
-*
-*
-* $Log: ncbiport.h,v $
-* Revision 6.1  2007/05/01 22:01:30  kans
-* changes in preparation for supporing Quartz on Macintosh
-*
-* Revision 6.0  1997/08/25 18:56:09  madden
-* Revision changed to 6.0
-*
-* Revision 5.2  1997/07/10 21:49:27  vakatov
-* [WIN_X]  Now able to manage windows having different depths(and
-* different visuals and GC).
-*
-* Revision 5.1  1997/06/18 19:46:32  vakatov
-* [WIN_GIF]  Do not use WIN_MAC/MSWIN/MOTIF-specific fields of the
-* Nlm_FontRec struct.
-*
-* Revision 5.0  1996/05/28 13:45:08  ostell
-* Set to revision 5.0
-*
- * Revision 4.0  1995/07/26  13:51:04  ostell
- * force revision to 4.0
- *
- * Revision 2.6  1995/05/17  15:15:14  kans
- * added Log line
- *
 *
 * ==========================================================================
 */
@@ -85,15 +59,27 @@
 extern "C" {
 #endif
 
+/* Quartz requires ATSUI, so ensure that the dependency is filled */
+#if defined(WIN_MAC_QUARTZ) && !defined(WIN_MAC_ATSUI)
+#define WIN_MAC_ATSUI
+#endif
+
 #ifdef WIN_MAC
 #define Nlm_PointTool Point
 #define Nlm_RectTool Rect
+
+#ifdef WIN_MAC_QUARTZ
+#define Nlm_RgnTool HIMutableShapeRef
+#else
 #define Nlm_RgnTool RgnHandle
+#endif
+
 #ifdef WIN_MAC_ATSUI
 #define Nlm_FontTool ATSUStyle
 #else
 #define Nlm_FontTool Nlm_Handle
 #endif
+
 #endif
 
 #ifdef WIN_MSWIN
@@ -135,11 +121,21 @@ typedef  struct  Nlm_fontrec {
 extern Nlm_Boolean  Nlm_nowPrinting;
 
 #ifdef WIN_MAC
-extern  RGBColor     Nlm_RGBforeColor;
-extern  RGBColor     Nlm_RGBbackColor;
-extern  Nlm_Boolean  Nlm_hasColorQD;
+#ifdef WIN_MAC_QUARTZ
+	
+typedef struct {
+  float r, g, b;
+} Nlm_QuartzColor;
+extern Nlm_QuartzColor Nlm_QuartzForeColor;
+extern Nlm_QuartzColor Nlm_QuartzBackColor;
+extern Nlm_Boolean  Nlm_hasColorQD;
+#else
+extern RGBColor     Nlm_RGBforeColor;
+extern RGBColor     Nlm_RGBbackColor;
+extern Nlm_Boolean  Nlm_hasColorQD;
 #endif
-
+#endif
+	
 #ifdef WIN_MSWIN
 extern  HWND  Nlm_currentHWnd;
 extern  HDC   Nlm_currentHDC;
@@ -159,8 +155,19 @@ extern  Nlm_Boolean  Nlm_hasColor;
 #endif
 
 #ifdef WIN_MAC
+#ifdef WIN_MAC_QUARTZ
+void  Nlm_SetPort PROTO((CGContextRef ctx));
+void  Nlm_PushPort PROTO((CGContextRef ctx));
+CGContextRef Nlm_PopPort PROTO((void));
+CGContextRef Nlm_GetQuartzWindowPort PROTO((WindowRef wptr));
+WindowRef Nlm_GetQuartzCurrentWindow PROTO((void));
+void Nlm_SetGraphicNeedsDisplay PROTO((Nlm_GraphiC graphic));
+#else
 void  Nlm_SetPort PROTO((GrafPtr grafptr));
+#endif
 void Nlm_SetPortWindowPort PROTO((WindowPtr wptr));
+
+
 #endif
 
 #ifdef WIN_MSWIN

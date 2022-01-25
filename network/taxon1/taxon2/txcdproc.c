@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   07/15/97
 *
-* $Revision: 1.17 $
+* $Revision: 1.18 $
 *
 * File Description: 
 *       API for Taxonomy service
@@ -44,6 +44,9 @@
 *
 * RCS Modification History:
 * $Log: txcdproc.c,v $
+* Revision 1.18  2007/09/14 18:28:47  soussov
+* fixes bug in init function (it now calls NetFini instead of TaxArchFini
+*
 * Revision 1.17  2006/07/13 17:14:49  bollin
 * use Uint4 instead of Uint2 for itemID values
 *
@@ -199,7 +202,7 @@ static Boolean TaxServInit(void)
 
     if (svcp == NULL) {
         ErrPostEx(SEV_ERROR, 0, 0, "NI_ServiceGet [%s] (%s)", ni_errlist[ni_errno], ni_errtext);
-        TaxServFini();
+        NetFini();
         return FALSE;
     }
 

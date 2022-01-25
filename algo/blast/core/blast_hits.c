@@ -1,4 +1,4 @@
-/* $Id: blast_hits.c,v 1.211 2007/07/27 18:25:29 kazimird Exp $
+/* $Id: blast_hits.c,v 1.217 2008/02/14 15:55:42 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -32,7 +32,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_hits.c,v 1.211 2007/07/27 18:25:29 kazimird Exp $";
+    "$Id: blast_hits.c,v 1.217 2008/02/14 15:55:42 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/ncbi_math.h>
@@ -570,10 +570,18 @@ Blast_HSPReevaluateWithAmbiguitiesUngapped(BlastHSP* hsp, Uint1* query_start,
                                       best_q_end, best_s_start, best_s_end);
 } 
 
-Int2
-Blast_HSPGetNumIdentities(Uint1* query, Uint1* subject, 
-                          BlastHSP* hsp, Int4* num_ident_ptr, 
-                          Int4* align_length_ptr)
+/** Calculate number of identities in a regular HSP.
+ * @param query The query sequence [in]
+ * @param subject The uncompressed subject sequence [in]
+ * @param hsp All information about the HSP [in]
+ * @param num_ident_ptr Number of identities [out]
+ * @param align_length_ptr The alignment length, including gaps [out]
+ * @return 0 on success, -1 on invalid parameters or error
+ */
+static Int2
+s_Blast_HSPGetNumIdentities(const Uint1* query, const Uint1* subject, 
+                            const BlastHSP* hsp, Int4* num_ident_ptr, 
+                            Int4* align_length_ptr)
 {
    Int4 i, num_ident, align_length, q_off, s_off;
    Uint1* q,* s;
@@ -583,11 +591,11 @@ Blast_HSPGetNumIdentities(Uint1* query, Uint1* subject,
    q_off = hsp->query.offset;
    s_off = hsp->subject.offset;
 
-   if (!subject || !query)
+   if ( !subject || !query || !hsp )
       return -1;
 
-   q = &query[q_off];
-   s = &subject[s_off];
+   q = (Uint1*) &query[q_off];
+   s = (Uint1*) &subject[s_off];
 
    num_ident = 0;
    align_length = 0;
@@ -630,14 +638,25 @@ Blast_HSPGetNumIdentities(Uint1* query, Uint1* subject,
       }
    }
 
-   *align_length_ptr = align_length;
+   if (align_length_ptr) {
+       *align_length_ptr = align_length;
+   }
    *num_ident_ptr = num_ident;
    return 0;
 }
 
-Int2
-Blast_HSPGetOOFNumIdentities(Uint1* query, Uint1* subject, 
-   BlastHSP* hsp, EBlastProgramType program, 
+/** Calculate number of identities in an HSP for an out-of-frame alignment.
+ * @param query The query sequence [in]
+ * @param subject The uncompressed subject sequence [in]
+ * @param hsp All information about the HSP [in]
+ * @param program BLAST program (blastx or tblastn) [in]
+ * @param num_ident_ptr Number of identities [out]
+ * @param align_length_ptr The alignment length, including gaps [out]
+ * @return 0 on success, -1 on invalid parameters or error
+ */
+static Int2
+s_Blast_HSPGetOOFNumIdentities(const Uint1* query, const Uint1* subject, 
+   const BlastHSP* hsp, EBlastProgramType program, 
    Int4* num_ident_ptr, Int4* align_length_ptr)
 {
    Int4 num_ident, align_length;
@@ -651,11 +670,11 @@ Blast_HSPGetOOFNumIdentities(Uint1* query, Uint1* subject,
 
    if (program == eBlastTypeTblastn ||
        program == eBlastTypeRpsTblastn) {
-       q = &query[hsp->query.offset];
-       s = &subject[hsp->subject.offset];
+       q = (Uint1*) &query[hsp->query.offset];
+       s = (Uint1*) &subject[hsp->subject.offset];
    } else {
-       s = &query[hsp->query.offset];
-       q = &subject[hsp->subject.offset];
+       s = (Uint1*) &query[hsp->query.offset];
+       q = (Uint1*) &subject[hsp->subject.offset];
    }
    num_ident = 0;
    align_length = 0;
@@ -701,25 +720,39 @@ Blast_HSPGetOOFNumIdentities(Uint1* query, Uint1* subject,
       }
    }
 
-   *align_length_ptr = align_length;
+   if (align_length_ptr) {
+       *align_length_ptr = align_length;
+   }
    *num_ident_ptr = num_ident;
 
    return 0;
 }
 
-/** Calculates number of identities and alignment lengths of an HSP and 
- * determines whether this HSP should be kept or deleted. The num_ident
- * field of the BlastHSP structure is filled here.
- * @param program_number Type of BLAST program [in]
- * @param hsp An HSP structure [in] [out]
- * @param query Query sequence [in]
- * @param subject Subject sequence [in]
- * @param score_options Scoring options, needed to distinguish the 
- *                      out-of-frame case. [in]
- * @param hit_options Hit saving options containing percent identity and
- *                    HSP length thresholds.
- * @return FALSE if HSP passes the test, TRUE if it should be deleted.
- */ 
+Int2
+Blast_HSPGetNumIdentities(const Uint1* query, 
+                          const Uint1* subject, 
+                          BlastHSP* hsp, 
+                          const BlastScoringOptions* score_options,
+                          Int4* align_length_ptr)
+{
+    Int2 retval = 0;
+
+    /* Calculate alignment length and number of identical letters. 
+       Do not get the number of identities if the query is not available */
+    if (score_options->is_ooframe) {
+        retval = s_Blast_HSPGetOOFNumIdentities(query, subject, hsp, 
+                                               score_options->program_number, 
+                                               &hsp->num_ident, 
+                                               align_length_ptr);
+    } else {
+        retval = s_Blast_HSPGetNumIdentities(query, subject, hsp, 
+                                            &hsp->num_ident, 
+                                            align_length_ptr);
+    }
+
+    return retval;
+}
+
 Boolean
 Blast_HSPTestIdentityAndLength(EBlastProgramType program_number, 
                                BlastHSP* hsp, Uint1* query, Uint1* subject, 
@@ -728,19 +761,14 @@ Blast_HSPTestIdentityAndLength(EBlastProgramType program_number,
 {
    Int4 align_length = 0;
    Boolean delete_hsp = FALSE;
+   Int2 status = 0;
 
    ASSERT(hsp && query && subject && score_options && hit_options);
 
-   /* Calculate alignment length and number of identical letters. 
-      Do not get the number of identities if the query is not available */
-   if (score_options->is_ooframe) {
-       Blast_HSPGetOOFNumIdentities(query, subject, hsp, program_number, 
-                                    &hsp->num_ident, &align_length);
-   } else {
-       Blast_HSPGetNumIdentities(query, subject, hsp, 
-                                 &hsp->num_ident, &align_length);
-   }
-      
+   status = Blast_HSPGetNumIdentities(query, subject, hsp, score_options,
+                                      &align_length);
+   ASSERT(status == 0);
+
    /* Check whether this HSP passes the percent identity and minimal hit 
       length criteria, and delete it if it does not. */
    if ((hsp->num_ident * 100.0 < 
@@ -1928,6 +1956,7 @@ Blast_HSPListReevaluateWithAmbiguitiesUngapped(EBlastProgramType program,
       /* Wrap subject sequence block into a BlastSeqSrcGetSeqArg structure, which is 
          needed by the BlastSeqSrc API. */
       BlastSeqSrcGetSeqArg seq_arg;
+      memset((void*) &seq_arg, 0, sizeof(seq_arg));
       seq_arg.oid = subject_blk->oid;
       seq_arg.encoding =
          (kTranslateSubject ? eBlastEncodingNcbi4na : eBlastEncodingNucleotide);
@@ -2377,6 +2406,15 @@ s_EvalueCompareHSPLists(const void* v1, const void* v2)
    return 0;
 }
 
+/** Callback for sorting hsp lists by their best e-value/score, in 
+ * reverse order - from higher e-value to lower (lower score to higher).
+*/
+static int
+s_EvalueCompareHSPListsRev(const void* v1, const void* v2)
+{
+   return s_EvalueCompareHSPLists(v2, v1);
+}
+
 /********************************************************************************
           Functions manipulating BlastHitList's
 ********************************************************************************/
@@ -2632,6 +2670,22 @@ Int2 Blast_HSPResultsSortByEvalue(BlastHSPResults* results)
       if (hit_list && hit_list->hsplist_count > 1) {
          qsort(hit_list->hsplist_array, hit_list->hsplist_count, 
                   sizeof(BlastHSPList*), s_EvalueCompareHSPLists);
+      }
+      s_BlastHitListPurge(hit_list);
+   }
+   return 0;
+}
+
+Int2 Blast_HSPResultsReverseSort(BlastHSPResults* results)
+{
+   Int4 index;
+   BlastHitList* hit_list;
+
+   for (index = 0; index < results->num_queries; ++index) {
+      hit_list = results->hitlist_array[index];
+      if (hit_list && hit_list->hsplist_count > 1) {
+         qsort(hit_list->hsplist_array, hit_list->hsplist_count, 
+               sizeof(BlastHSPList*), s_EvalueCompareHSPListsRev);
       }
       s_BlastHitListPurge(hit_list);
    }

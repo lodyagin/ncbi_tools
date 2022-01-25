@@ -82,6 +82,11 @@ pop-up menus and spreadsheets.
 #You may also use tables to import annotation of source information. 
 The formatting of these tables will be discussed below.
 
+#When entering information, you must use ASCII characters.  Non-ASCII
+characters, such as those with an accent or umlaut, can not be displayed
+properly.  If you enter a non-ASCII character, you will be prompted to select
+an alternative in a pop-up box.
+ 
 *Overview of Sequin
 
 #If you are using Sequin for the first time, you will be prompted to
@@ -205,7 +210,8 @@ it to the database. If you select "Release Date", fields will appear in
 which you can indicate the date on which the sequences should be
 released to the public.  The submission will then be held back until
 formal publication of the sequence or GenBank Accession number, or
-until the release date, whichever comes first.
+until the release date, whichever comes first.  The maximum hold 
+time is five years.
 
 **Tentative Title for Manuscript
 
@@ -1404,12 +1410,13 @@ the database selected for entry.
 #If Sequin detects problems with the format of your record, you will see a
 screen listing the validation errors as well as suggestions for how to fix the
 discrepancies.  Single clicking on an error message scrolls the record viewer
-to the feature that is causing the error.  Double clicking on the error message
-launches a new form on which you can enter information to correct the problem. 
-If you are annotating a set of multiple sequences, shift-click to scroll to the
-target sequence and feature.  You can also dismiss the suggestion and proceed
-on your own. When you think you have corrected all the problems, click on
-"Revalidate".
+to the feature that is causing the error.  Double clicking on the error
+message launches the relevant feature editor on which you can correct the
+problem.  If you are annotating a set of multiple sequences, shift-click to
+scroll to the target sequence and feature.  When you think you have corrected
+all the problems, click on "Revalidate".  You can submit files with errors,
+but it is strongly recommended that you correct as many errors as possible
+prior to submission.
 
 #Message:  Select Verbose, Normal, Terse, or Table. Verbose gives a more
 detailed explanation of the problem.
@@ -2318,7 +2325,7 @@ protein_bind).
 
 #Feature sequence is different from that presented in the entry and
 cannot be described by any other Difference key (conflict, unsure,
-old_sequence, mutation, variation, allele, or modified_base).
+ mutation, variation, allele, or modified_base).
 
 *misc_feature
 
@@ -2335,8 +2342,8 @@ source key (/proviral).
 *misc_RNA
 
 #Any transcript or RNA product that cannot be defined by other RNA keys
-(prim_transcript, precursor_RNA, mRNA, 5'clip, 3'clip, 5'UTR, 3'UTR,
-exon, intron, polyA_site, rRNA, tRNA, scRNA, snoRNA, and snRNA).
+(prim_transcript, precursor_RNA, mRNA, 5'UTR, 3'UTR,
+exon, transit_peptide, polyA_site, rRNA, tRNA, and ncRNA).
 
 *misc_signal
 
@@ -2361,14 +2368,16 @@ qualifier value).
 #messenger RNA; includes 5' untranslated region (5' UTR), coding sequences
 (CDS, exon) and 3' untranslated region (3' UTR).
 
+*ncRNA
+
+#non-coding RNA; a non-protein-coding transcript other than ribosomal RNA and
+transfer RNA, including antisense RNA, guide RNA, scRNA, siRNA, miRNA, piRNA,
+snoRNA, and snRNA.  The specific type of ncRNA must be specified in the
+/ncRNA_class qualifier.
+
 *N_region
 
 #Extra nucleotides inserted between rearranged immunoglobulin segments.
-
-*old_sequence
-
-#The presented sequence revises a previous version of the sequence at
-this location.
 
 *operon
 
@@ -2430,10 +2439,6 @@ rpt_type and mobile_element have controlled vocabularies.  These
 qualifiers have check boxes or pull-down menus to ensure that the
 correct format is used.
 
-*repeat_unit
-
-#Single repeat element.
-
 *rep_origin
 
 #Origin of replication; starting site for duplication of nucleic acid to
@@ -2457,26 +2462,11 @@ unit; many have a base composition or other property different from the
 genome average that allows them to be separated from the bulk (main
 band) genomic DNA.
 
-*scRNA
-
-#Small cytoplasmic RNA; any one of several small cytoplasmic RNA
-molecules present in the cytoplasm and (sometimes) nucleus of a
-eukaryote.
-
 *sig_peptide
 
 #Signal peptide coding sequence; coding sequence for an N-terminal
 domain of a secreted protein; this domain is involved in attaching
 nascent polypeptide to the membrane; leader sequence.
-
-*snRNA
-
-#Small nuclear RNA involved in pre-mRNA splicing and processing. 
-
-*snoRNA
-
-#Small nucleolar RNA molecules generally involved in rRNA modification
-and processing.
 
 *source
 
@@ -2510,6 +2500,11 @@ correct initiation; consensus=TATA(A or T)A(A or T).
 #Sequence of DNA located either at the end of the transcript or adjacent
 to a promoter region that causes RNA polymerase to terminate
 transcription; may also be site of binding of repressor protein.
+
+*tmRNA
+
+#Transfer messenger RNA; acts as a tRNA first, then an mRNA that encodes a
+peptide tag.
 
 *transit_peptide
 
@@ -2546,20 +2541,10 @@ region (V_region) and the last few amino acids of the leader peptide.
 RFLPs, polymorphisms, etc.) that differ from the presented sequence at
 this location (and possibly others).
 
-*3'clip
-
-#3'-most region of a precursor transcript that is clipped off during
-processing.
-
 *3'UTR
 
 #Region near or at the 3' end of a mature transcript (usually following
 the stop codon) that is not translated into a protein; trailer.
-
-*5'clip
-
-#5'-most region of a precursor transcript that is clipped off during
-processing.
 
 *5'UTR
 
@@ -2596,11 +2581,10 @@ Biological Source Features, like other features, provide organism
 information about a specific interval on a given sequence.
 
 #In most cases, you will want to use a Biological Source Descriptor, because
-all the sequences in the entry will derive from the same source. 
-However, if you have sequenced a transgenic molecule, for example, one
-that is part plant and part bacterial, you would use Biological Source
-Features to annotate which sequence was derived from plant and which from
-bacteria.
+all the sequences in the entry will derive from the same source.  However, if
+you have sequenced a transgenic molecule, for example, one that is part plant
+and part bacterial, you would use Biological Source Features to annotate which
+sequence was derived from plant and which from bacteria.
 
 #To add a Biological Source Descriptor, select Biological Source under
 the Descriptor section of the Annotate menu.  To add a Biological
@@ -2734,7 +2718,8 @@ transmission.
 
 #-Environmental-sample: Identifies sequence derived by direct molecular
 isolation from an unidentified organism.  You cannot include extra text when
-using this modifier; the text box will change to TRUE upon selection of this modifier from the pull-down list 
+using this modifier; the text box will change to TRUE upon selection of this
+modifier from the pull-down list
 
 #-Frequency:  Frequency of occurrence of a feature.
 
@@ -2770,13 +2755,11 @@ information in the mandatory format.
 #-Map:  Map location of the gene.
 
 #-Metagenomic:  Identifies sequence from a culture-independent genomic
-#analysis of an environmental sample submitted as part of a whole genome
-#shotgun project.  You may not include extra text when using this modifier,
-#instead the text box will change to TRUE upon selection.
+analysis of an environmental sample submitted as part of a whole genome
+shotgun project.  You may not include extra text when using this modifier,
+instead the text box will change to TRUE upon selection.
 
 #-Plasmid-name:  Name of plasmid from which the sequence was obtained.
-
-#-Plastid-name:  Name of plastid from which the sequence was obtained.
 
 #-Pop-variant:  Name of the population variant from which the sequence was
 obtained.
@@ -2816,7 +2799,7 @@ additional organism information as text in the field at the bottom of
 the page. You may add multiple modifiers to describe the source organism. 
 
 #Clicking on the X button to the right of the text box will remove the text
-#and clear the modifier from the pull-down in that line.
+and clear the modifier from the pull-down in that line.
 
 #The following is a description of the available modifiers:
 
@@ -2827,6 +2810,14 @@ of the formal name.  An example is HIV-1.
 
 #-Authority: The author or authors of the organism name from which sequence
 was obtained.
+
+#-Bio-material:  An identifier of the stored biological material from which
+the sequence was obtained.  This qualifier should be used to cite collections
+that are not appropriate in specimen-voucher or culture-collection.  Examples
+include stock centers and seed banks.  Mandatory format is "institution
+code:collection code:material_id".  However, only material_id is required.
+Selecting this modifier in the pull-down list will generate separate boxes for
+entering the information in the correct format.
 
 #-Biotype:  See biovar.
 
@@ -2844,6 +2835,16 @@ characterized by its biochemical properties.
 
 #-Cultivar:  Cultivated variety of plant from which sequence was obtained.
 
+#-Culture-collection:  Identifier and institution code of the microbial or
+viral culture or stored cell-line from which the sequence was obtained.  This
+qualifier should be used to cite the collection where the author has deposited
+the culture or from which the culture was obtained.  Personal library
+collections should be annotated in strain and not in culture-collection.
+Mandatory format is "institution code:collection code:culture_id".  However,
+collection code is not required.  Selecting this modifier in the pull-down
+list will generate separate boxes for entering the information in the correct
+format.
+
 #-Ecotype: The named ecotype (population adapted to a local habitat) from
 which sequence was obtained (customarily applied to populations of
 Arabidopsis thaliana).
@@ -2860,7 +2861,7 @@ was obtained (usually restricted to certain parasitic fungi).
 #-Isolate:  Identification or description of the specific individual
 from which this sequence was obtained.  An example is Patient X14.
 
-#-Old name:  Do not select this item.
+#-Metagenome-source: Used only for genome projects.  Do not select this item.
 
 #-Pathovar:  Variety of a species (usually a fungus, bacteria or virus)
 characterized by the biological target of the pathogen.  Examples
@@ -2880,9 +2881,13 @@ exists in a symbiotic, parasititc, or other special relationship with
 some second organism, use this modifier to identify the name of the
 host species.
 
-#-Specimen-voucher: An identifier of the individual or collection of the
-source organism and the place where it is currently stored, usually an
-institution.
+#-Specimen-voucher: Identifier of the physical specimen from which the
+sequence was obtained.  The qualifier is intended for use where the sample is
+still available in a curated museum, herbarium, frozen tissue collection, or
+personal collection.  Mandatory format is "institution code:collection
+code:specimen_id".  However, only specimen_id is required.  Selecting this
+modifier in the pull-down list will generate separate boxes for entering the
+information in the correct format.
 
 #-Strain:  Strain of organism from which sequence was obtained.
 
@@ -3099,7 +3104,7 @@ because it does not have the appropriate annotations.
 
 #Close this entry.
 
-*Export 
+*Export GenBank 
 
 #Exports the currently displayed format to a file.  Do not use export
 ASN1 for submission of sequences to the database.
@@ -3691,8 +3696,14 @@ Nucleotide Definition Line (Title)
 </A>
 , above.
 
+#Sort Unique Count by Group opens a new window which displays your record(s)
+the number of times an individual line appears in the flatfile(s).  This is
+particularly useful when checking that all records in a large set contain the
+required source or feature information.
+ 
 >Options Menu
 
+#This menu is only available when using Sequin in its network-aware mode.
 *Font
 
 #Use this item to change the display font.  From the pop-up menus,
@@ -4084,7 +4095,7 @@ be entered as the location relative to the alignment coordinates.
 <P CLASS=medium1><B>Questions or Comments?</B>
 <BR>Write to the <A HREF="mailto:info@ncbi.nlm.nih.gov">NCBI Service
 Desk</A></P>
-<P CLASS=medium1>Revised July 20, 2007
+<P CLASS=medium1>Revised October 31, 2007
 
 </CENTER>
 

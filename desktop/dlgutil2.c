@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.164 $
+* $Revision: 6.186 $
 *
 * File Description: 
 *
@@ -54,6 +54,7 @@
 #include <objseq.h>
 #include <toasn3.h>
 #include <explore.h>
+#include <findrepl.h>
 #ifdef WIN_MOTIF
 #include <netscape.h>
 #endif
@@ -99,6 +100,56 @@ extern CharPtr SaveStringFromTextAndStripNewlines (TexT t)
     return NULL;
   }
 }
+
+
+extern CharPtr StripNewlines (CharPtr str)
+
+{
+  Char     ch;
+  size_t   len;
+  CharPtr  ptr;
+
+  if (str == NULL) return str;
+  len = StringLen (str);
+  if (len > 0) {
+    ptr = str;
+    ch = *ptr;
+    while (ch != '\0') {
+      if (ch < ' ') {
+        *ptr = ' ';
+      }
+      ptr++;
+      ch = *ptr;
+    }
+    TrimSpacesAroundString (str);
+    if (StringHasNoText (str)) {
+      str = MemFree (str);
+    }
+  } else {
+    str = MemFree (str);
+  }
+  return str;
+}
+
+
+extern void NewlinesToTildes (CharPtr str)
+
+{
+  Uchar    ch;
+  CharPtr  ptr;
+
+  if (StringHasNoText (str)) return;
+  ptr = str;
+  ch = *ptr;
+  while (ch != '\0') {
+    if (ch < ' ') {
+      *ptr = '~';
+    }
+    ptr++;
+    ch = *ptr;
+  }
+}
+
 
 static void DatePtrToDatePage (DialoG d, Pointer data)
 
@@ -1000,6 +1051,37 @@ typedef struct fieldpage {
   ButtoN             PNTR boxes;
 } FieldPage, PNTR FieldPagePtr;
 
+
+static Boolean ShouldSuppressGBQual(Uint1 subtype, CharPtr qual_name)
+{
+  if (StringHasNoText (qual_name)) {
+    return FALSE;
+  }
+
+  /* always suppress experiment and inference quals */
+  if (StringCmp (qual_name, "experiment") == 0 || StringCmp (qual_name, "inference") == 0) {
+    return TRUE;
+  }
+  
+  if (subtype == FEATDEF_ncRNA) {
+    if (StringCmp (qual_name, "product") == 0
+        || StringCmp (qual_name, "ncRNA_class") == 0) {
+      return TRUE;
+    }
+  } else if (subtype == FEATDEF_tmRNA) {
+    if (StringCmp (qual_name, "product") == 0
+        || StringCmp (qual_name, "tag_peptide") == 0) {
+      return TRUE;
+    }
+  } else if (subtype == FEATDEF_otherRNA) {
+    if (StringCmp (qual_name, "product") == 0) {
+      return TRUE;
+    }
+  }
+  return FALSE;
+}
+    
+
 static Boolean ShouldBeAGBQual (Uint1 subtype, Int2 qual, Boolean allowProductGBQual)
 
 {
@@ -1020,6 +1102,8 @@ static Boolean ShouldBeAGBQual (Uint1 subtype, Int2 qual, Boolean allowProductGB
       qual == GBQUAL_rpt_unit ||
       qual == GBQUAL_transposon ||
       qual == GBQUAL_experiment ||
+      qual == GBQUAL_trans_splicing ||
+      qual == GBQUAL_ribosomal_slippage ||
       qual == GBQUAL_inference) {
     return FALSE;
   }
@@ -1030,6 +1114,11 @@ static Boolean ShouldBeAGBQual (Uint1 subtype, Int2 qual, Boolean allowProductGB
       return FALSE;
     }
   }
+
+  if (qual > -1 && ShouldSuppressGBQual (subtype, ParFlat_GBQual_names [qual].name)) {
+    return FALSE;
+  }
+
   return TRUE;
 }
 
@@ -1517,6 +1606,35 @@ static DialoG CreateInferenceDialog (GrouP h, Uint2 rows, Int2 spacing, Int2 wid
 static DialoG NewCreateInferenceDialog (GrouP prnt);
 extern void Nlm_LaunchGeneFeatEd (ButtoN b);
 
+
+static CharPtr GetNameForFeature (SeqFeatPtr sfp)
+{
+  FeatDefPtr curr;
+  Uint1      key;
+  CharPtr    label = NULL;
+  CharPtr    featname = NULL;
+  CharPtr    ptr;
+  Char       ch;
+
+  if (sfp != NULL) {
+    curr = FeatDefFindNext (NULL, &key, &label, sfp->idx.subtype, TRUE);
+    if (curr != NULL) {
+      featname = StringSave (label);
+      ptr = featname;
+      ch = *ptr;
+      while (ch != '\0') {
+        if (IS_UPPER (ch)) {
+          *ptr = TO_LOWER (ch);
+        }
+        ptr++;
+        ch = *ptr;
+      }
+    }
+  }
+  return featname;
+}
+
+
 extern GrouP CreateCommonFeatureGroupEx (GrouP h, FeatureFormPtr ffp,
                                          SeqFeatPtr sfp, Boolean hasGeneControl,
                                          Boolean hasCitationTab, Boolean hasGeneSuppress)
@@ -1544,14 +1662,15 @@ extern GrouP CreateCommonFeatureGroupEx (GrouP h, FeatureFormPtr ffp,
   GrouP      v;
   GrouP      x;
   GrouP      y;
+  CharPtr    featname;
 
   c = NULL;
   if (ffp != NULL) {
     hasQuals = FALSE;
     cdsQuals = FALSE;
     if (ffp->gbquals == NULL && sfp != NULL && sfp->qual != NULL) {
-      for (gbq = sfp->qual; gbq != NULL; gbq = gbq->next) {
-        if (StringCmp (gbq->qual, "experiment") != 0 && StringCmp (gbq->qual, "inference") != 0) {
+      for (gbq = sfp->qual; gbq != NULL && !hasQuals; gbq = gbq->next) {
+        if (!ShouldSuppressGBQual(sfp->idx.subtype, gbq->qual)) {
           hasQuals = TRUE;
         }
       }
@@ -1812,7 +1931,9 @@ extern GrouP CreateCommonFeatureGroupEx (GrouP h, FeatureFormPtr ffp,
     x = NULL;
     if (hasQuals && ffp->gbquals == NULL) {
       x = HiddenGroup (c, -1, 0, NULL);
-      ffp->gbquals = CreateImportFields (x, NULL, sfp, FALSE);
+      featname = GetNameForFeature (sfp);
+      ffp->gbquals = NewCreateImportFields (x, featname, sfp, FALSE);
+      featname = MemFree (featname);
     }
     ffp->commonSubGrp [page] = c;
     Hide (ffp->commonSubGrp [page]);
@@ -4950,14 +5071,16 @@ static ValNodePtr TestSequenceSelectionDialog (DialoG d)
 }
 
 
-extern DialoG SequenceSelectionDialog 
+extern DialoG SequenceSelectionDialogEx 
 (GrouP h,
  Nlm_ChangeNotifyProc     change_notify,
  Pointer                  change_userdata,
  Boolean                  allow_multi,
+ Boolean                  allow_none,
  Boolean                  show_nucs,
  Boolean                  show_prots,
- Uint2                    entityID)
+ Uint2                    entityID,
+ Int4                     list_height)
 
 {
   SequenceSelectionPtr  dlg;
@@ -4994,22 +5117,46 @@ extern DialoG SequenceSelectionDialog
   dlg->dialogmessage = SequenceSelectionDialogMessage;
   dlg->testdialog = TestSequenceSelectionDialog;
 
-  dlg->sequence_choice_list = NULL;
+  if (allow_none) {
+    dlg->sequence_choice_list = ValNodeNew (NULL);
+    dlg->sequence_choice_list->choice = 0;
+    dlg->sequence_choice_list->data.ptrvalue = NULL;
+  } else {
+    dlg->sequence_choice_list = NULL;
+  }
   GetSequenceChoiceList (sep, &dlg->sequence_choice_list, show_nucs, show_prots);
   
   
   for (vnp = dlg->sequence_choice_list; vnp != NULL; vnp = vnp->next) {
     sip = SeqIdFindWorst ((SeqIdPtr) vnp->data.ptrvalue);
-    SeqIdWrite (sip, tmp, PRINTID_REPORT, sizeof (tmp));
+    if (sip == NULL) {
+      sprintf (tmp, " ");
+    } else {
+      SeqIdWrite (sip, tmp, PRINTID_REPORT, sizeof (tmp));
+    }
     ValNodeAddPointer (&choice_name_list, 0, StringSave (tmp));
   }
 
   dlg->sequence_list_dlg = SelectionDialog (p, change_notify, change_userdata,
                                             allow_multi, "sequence",
-                                            choice_name_list, TALL_SELECTION_LIST);
+                                            choice_name_list, list_height);
   ValNodeFreeData (choice_name_list); 
   return (DialoG) p;
 }
+
+
+extern DialoG SequenceSelectionDialog 
+(GrouP h,
+ Nlm_ChangeNotifyProc     change_notify,
+ Pointer                  change_userdata,
+ Boolean                  allow_multi,
+ Boolean                  show_nucs,
+ Boolean                  show_prots,
+ Uint2                    entityID)
+{
+  return SequenceSelectionDialogEx (h, change_notify, change_userdata, allow_multi, FALSE, show_nucs, show_prots, entityID, TALL_SELECTION_LIST);
+}
+
 
 extern DialoG SubSourceTypeDialog 
 (GrouP                    h,
@@ -5304,6 +5451,320 @@ static DialoG CreateInferenceDialog (GrouP h, Uint2 rows, Int2 spacing, Int2 wid
 
 /* inference dialog controls, utility functions */
 
+Uint2 accessionlist_types [] = {
+  TAGLIST_POPUP, TAGLIST_TEXT
+};
+
+Uint2 accessionlist_widths [] = {
+  0, 10
+};
+
+ENUM_ALIST(accn_type_alist)
+  { " ",       0 },
+  { "GenBank", 1 },
+  { "EMBL",    2 },
+  { "DDBJ",    3 },
+  { "INSD",    4 },
+  { "RefSeq",  5 },
+  { "UniProt", 6 },
+  { "Other",   7 },
+END_ENUM_ALIST
+
+static EnumFieldAssocPtr accessionlist_popups [] = {
+  accn_type_alist, NULL
+};
+
+static CharPtr accnTypePrefix [] = {
+  "",
+  "GenBank",
+  "EMBL",
+  "DDBJ",
+  "INSD",
+  "RefSeq",
+  "UniProt",
+  "?",
+  NULL
+};
+
+const Int4 numAccnTypePrefixes = sizeof (accnTypePrefix) / sizeof (CharPtr);
+
+static Int4 GetAccnTypeNum (CharPtr str)
+{
+  Int4 i;
+
+  if (StringHasNoText (str)) return 0;
+
+  for (i = 1; i < numAccnTypePrefixes; i++)
+  {
+    if (StringCmp (accnTypePrefix[i], str) == 0)
+    {
+      return i;
+    }
+  }
+  return 0;
+}
+
+
+static CharPtr ValForOneAccession (CharPtr str)
+{
+  CharPtr cp, val_buf = NULL;
+  CharPtr val_fmt = "%d\t%s";
+  Int4    db;
+
+  if (!StringHasNoText (str))
+  {
+    cp = StringChr (str, '|');
+    if (cp == NULL)
+    {
+      if ((db = GetAccnTypeNum(str)) > 0)
+      {
+        val_buf = MemNew (sizeof (Char) * StringLen (val_fmt));
+        sprintf (val_buf, val_fmt, db, " ");
+      }
+      else
+      {
+        val_buf = MemNew (sizeof (Char) * (StringLen (val_fmt) + StringLen (str)));
+        sprintf (val_buf, val_fmt, 0, str);
+      }
+    }
+    else
+    {
+      *cp = 0;
+      db = GetAccnTypeNum (str);
+      val_buf = MemNew (sizeof (Char) * (StringLen (val_fmt) + StringLen (cp + 1)));
+      sprintf (val_buf, val_fmt, db, cp + 1);
+      *cp = '|';
+    }
+  }
+  return val_buf;
+}
+
+static void AccessionListDataToDialog (DialoG d, Pointer data)
+{
+  TagListPtr    tlp;
+  CharPtr       str, cp, val_buf;
+  ValNodePtr    new_list = NULL, vnp;
+  Int4          j;
+  Int2          scroll_pos;
+
+  tlp = (TagListPtr) GetObjectExtra (d);
+  
+  if (tlp == NULL) return;
+  str = (CharPtr) data;
+  
+  cp = StringChr (str, ',');
+  while (cp != NULL)
+  {
+    *cp = 0;
+    val_buf = ValForOneAccession (str);
+    if (val_buf != NULL)
+    {
+      ValNodeAddPointer (&new_list, 0, val_buf);
+    }
+    *cp = ',';
+    str = cp + 1;
+    cp = StringChr (str, ',');
+  }
+  val_buf = ValForOneAccession (str);
+  if (val_buf != NULL)
+  {
+    ValNodeAddPointer (&new_list, 0, val_buf);
+  }
+
+  scroll_pos = 0;
+  if (tlp->bar != NULL) 
+  {
+    scroll_pos = GetBarValue (tlp->bar);
+  }
+  else if (tlp->left_bar != NULL)
+  {
+    scroll_pos = GetBarValue (tlp->left_bar);
+  }
+
+  SendMessageToDialog (tlp->dialog, VIB_MSG_RESET);
+  tlp->vnp = new_list;
+  for (j = 0, vnp = tlp->vnp; vnp != NULL; j++, vnp = vnp->next) {
+  }
+  tlp->max = MAX ((Int2) 0, (Int2) (j - tlp->rows + 1));
+  CorrectBarMax (tlp->bar, tlp->max);
+  CorrectBarPage (tlp->bar, (Int2) (tlp->rows-1), (Int2) (tlp->rows-1));   
+
+  /* retain scroll position */
+  if (scroll_pos > tlp->max) {
+    scroll_pos = tlp->max;
+  }
+  
+  if (tlp->bar != NULL)
+  {
+    CorrectBarValue (tlp->bar, scroll_pos);      
+  }
+  if (tlp->left_bar != NULL)
+  {
+    CorrectBarValue (tlp->left_bar, scroll_pos);      
+  }
+    
+  SendMessageToDialog (tlp->dialog, VIB_MSG_REDRAW);
+  Update ();
+ 
+}
+
+
+static Pointer AccessionListDialogToData (DialoG d)
+{
+  TagListPtr    tlp;
+  ValNodePtr    vnp;
+  Int4          result_len = 0, db;
+  CharPtr       str, acc_str, result_str = NULL;
+  Boolean       first_item = TRUE;
+  
+  tlp = (TagListPtr) GetObjectExtra (d);
+  
+  if (tlp == NULL) return NULL;
+  
+  for (vnp = tlp->vnp;
+       vnp != NULL;
+       vnp = vnp->next)
+  {
+    acc_str = ExtractTagListColumn ((CharPtr) vnp->data.ptrvalue, 1);
+    str = ExtractTagListColumn ((CharPtr) vnp->data.ptrvalue, 0);
+    if (!StringHasNoText (acc_str) || !StringHasNoText (str))
+    {
+      result_len += StringLen (acc_str);
+      result_len += 1; /* comma */
+      db = atoi (str);
+      if (db >= 0 && db < numAccnTypePrefixes)
+      {
+        result_len += MAX (StringLen (accnTypePrefix[db]), 1);
+      }
+      else
+      {
+        result_len ++; /* will represent with ? */
+      }
+      result_len ++; /* for db/accession separator */
+    }
+    acc_str = MemFree (acc_str);
+    str = MemFree (str);
+  }
+  
+  if (result_len > 0) 
+  {
+    result_str = (CharPtr) MemNew (sizeof (Char) * (result_len + 1));
+    for (vnp = tlp->vnp;
+        vnp != NULL;
+        vnp = vnp->next)
+    {
+      acc_str = ExtractTagListColumn ((CharPtr) vnp->data.ptrvalue, 1);
+      str = ExtractTagListColumn ((CharPtr) vnp->data.ptrvalue, 0);
+      db = (str == NULL ? 0 : atoi (str));
+      str = MemFree (str);
+      if (!StringHasNoText (acc_str) || db > 0)
+      {
+        if (first_item)
+        {
+          first_item = FALSE;
+        }
+        else
+        {
+          StringCat (result_str, ",");
+        }
+
+        if (db > 0 && db < numAccnTypePrefixes)
+        {
+          StringCat (result_str, accnTypePrefix[db]);
+        }
+        else
+        {
+          StringCat (result_str, "?");
+        }
+        StringCat (result_str, "|");
+        if (!StringHasNoText (result_str)) {
+          StringCat (result_str, acc_str);
+        }
+      }
+      acc_str = MemFree (acc_str);
+    }
+    result_str[result_len] = 0;
+  }
+
+  return result_str;
+}
+
+
+static void RemoveEmptyAccessionStrings (CharPtr acc_list)
+{
+  CharPtr cp_prev_end = NULL, cp_src, cp_dst;
+
+  if (acc_list == NULL) return;
+  
+  cp_src = acc_list;
+  cp_dst = acc_list;
+  cp_prev_end = acc_list;
+  while (*cp_src != 0)
+  {
+    if (*cp_src == '|' && (*(cp_src + 1) == ',' || *(cp_src + 1) == 0))
+    {
+      cp_dst = cp_prev_end;
+      cp_prev_end = cp_dst;
+      cp_src++;
+    }
+    else
+    {
+      *cp_dst = *cp_src;      
+      if (*cp_src == ',')
+      {
+        cp_prev_end = cp_dst;
+      }
+      cp_dst++;
+      cp_src++;
+    }
+  }
+  *cp_dst = 0;
+}
+
+
+static CharPtr insdmessage =
+"GenBank, EMBL, and DDBJ records are part of the International Nucleotide " \
+"Sequence Database collaboration.\nThe database prefix for the /inference " \
+"qualifier in these cases is INSD by collaboration policy.";
+
+
+static Boolean ReplaceDatabaseStrings (CharPtr PNTR str)
+{
+  Boolean changed_db = FALSE;
+
+  if (str == NULL || *str == NULL) return FALSE;
+
+  if (StringSearch (*str, "GenBank|") != NULL)
+  {
+    changed_db = TRUE;
+    FindReplaceString (str, "GenBank|", "INSD|", TRUE, FALSE);
+  }
+  if (StringSearch (*str, "EMBL|") != NULL)
+  {
+    changed_db = TRUE;
+    FindReplaceString (str, "EMBL|", "INSD|", TRUE, FALSE);
+  }
+  if (StringSearch (*str, "DDBJ|") != NULL)
+  {
+    changed_db = TRUE;
+    FindReplaceString (str, "DDBJ|", "INSD|", TRUE, FALSE);
+  }
+
+  if (changed_db)
+  {
+    if (GetAppProperty ("InternalNcbiSequin") == NULL) {
+      Message (MSG_OK, "%s", insdmessage);
+    }
+  }
+
+  return changed_db;
+}
+
+
+static void ChangeInferAccessionList (Pointer data); 
+static TaglistCallback AccessionListCallbacks[] = 
+{ ChangeInferAccessionList, ChangeInferAccessionList };
+
 typedef struct inferevid {
   CharPtr  prefix;     /* from inferencePrefix     */
   Boolean  species;    /* optional (same species)  */
@@ -5315,6 +5776,7 @@ typedef struct inferevid {
   CharPtr  version;    /* program version          */
   CharPtr  basis1;     /* profile or motif         */
   CharPtr  basis2;     /*  evidence_basis texts    */
+  CharPtr  accession_list; /* accession list for alignment */
 } InferEvid, PNTR InferEvidPtr;
 
 typedef struct inferdialog {
@@ -5333,6 +5795,12 @@ typedef struct inferdialog {
   TexT          version;
   TexT          basis1;
   TexT          basis2;
+  PrompT        inf_free_program_prompt;
+  PrompT        inf_free_version_prompt;
+  PrompT        accession_list_program_prompt;
+  PrompT        accession_list_version_prompt;
+  PrompT        accession_list_prompt;
+  DialoG        accession_list;
 
   GrouP         inf_accn_group;
   GrouP         other_db_group;
@@ -5372,6 +5840,7 @@ static InferEvidPtr InferEvidFree (
   MemFree (iep->version);
   MemFree (iep->basis1);
   MemFree (iep->basis2);
+  MemFree (iep->accession_list);
 
   return MemFree (iep);
 }
@@ -5430,6 +5899,7 @@ static CharPtr inferencePrefix [] = {
   "nucleotide motif",
   "protein motif",
   "ab initio prediction",
+  "alignment",
   NULL
 };
 
@@ -5446,29 +5916,7 @@ ENUM_ALIST(inference_alist)
   { "nucleotide motif",      9 },
   { "protein motif",        10 },
   { "ab initio prediction", 11 },
-END_ENUM_ALIST
-
-static CharPtr accnTypePrefix [] = {
-  "",
-  "GenBank",
-  "EMBL",
-  "DDBJ",
-  "INSD",
-  "RefSeq",
-  "UniProt",
-  "?",
-  NULL
-};
-
-ENUM_ALIST(accn_type_alist)
-  { " ",       0 },
-  { "GenBank", 1 },
-  { "EMBL",    2 },
-  { "DDBJ",    3 },
-  { "INSD",    4 },
-  { "RefSeq",  5 },
-  { "UniProt", 6 },
-  { "Other",   7 },
+  { "alignment",            12 },
 END_ENUM_ALIST
 
 static CharPtr programPrefix [] = {
@@ -5505,7 +5953,7 @@ static CharPtr PrintInferTable (
 
   len = StringLen (iep->prefix) + StringLen (iep->database) + StringLen (iep->db_other) + StringLen (iep->accession) +
         StringLen (iep->program) + StringLen (iep->pr_other) + StringLen (iep->version) + StringLen (iep->basis1) +
-        StringLen (iep->basis2) + 50;
+        StringLen (iep->basis2) + StringLen (iep->accession_list) + 50;
   buf = MemNew (len);
   if (buf == NULL) return NULL;
 
@@ -5552,6 +6000,11 @@ static CharPtr PrintInferTable (
     if (StringDoesHaveText (iep->basis2)) {
       StringCat (buf, ":");
       StringCat (buf, iep->basis2);
+      if (StringCmp (iep->prefix, "alignment") == 0 && 
+          StringDoesHaveText (iep->accession_list)) {
+        StringCat (buf, ":");
+        StringCat (buf, iep->accession_list);
+      }
     }
   } else {
     StringCat (buf, " ");
@@ -5588,6 +6041,12 @@ static void ShowInferenceGroup (
       SafeHide (idp->species);
       SafeHide (idp->inf_prog_group);
       SafeShow (idp->inf_free_group);
+      SafeHide (idp->accession_list);
+      SafeShow (idp->inf_free_program_prompt);
+      SafeShow (idp->inf_free_version_prompt);
+      SafeHide (idp->accession_list_program_prompt);
+      SafeHide (idp->accession_list_version_prompt);
+      SafeHide (idp->accession_list_prompt);
     } else if (val == 11) {
       SafeHide (idp->inf_accn_group);
       SafeHide (idp->species);
@@ -5600,6 +6059,17 @@ static void ShowInferenceGroup (
         SafeHide (idp->other_pr_group);
       }
       MemFree (str);
+    } else if (val == 12) {
+      SafeHide (idp->inf_accn_group);
+      SafeHide (idp->species);
+      SafeHide (idp->inf_prog_group);
+      SafeShow (idp->inf_free_group);
+      SafeShow (idp->accession_list);
+      SafeHide (idp->inf_free_program_prompt);
+      SafeHide (idp->inf_free_version_prompt);
+      SafeShow (idp->accession_list_program_prompt);
+      SafeShow (idp->accession_list_version_prompt);
+      SafeShow (idp->accession_list_prompt);
     } else {
       SafeHide (idp->inf_accn_group);
       SafeHide (idp->species);
@@ -5664,6 +6134,9 @@ static void ChangeInferTableSelect (
 
     SafeSetTitle (idp->basis1, iep->basis1);
     SafeSetTitle (idp->basis2, iep->basis2);
+
+    ReplaceDatabaseStrings (&(iep->accession_list));
+    PointerToDialog (idp->accession_list, iep->accession_list);
 
     ShowInferenceGroup (idp);
   }
@@ -5740,11 +6213,6 @@ static void ChangeSameSpecies (
 
   CheckExtendInferTable (idp);
 }
-
-static CharPtr insdmessage =
-"GenBank, EMBL, and DDBJ records are part of the International Nucleotide " \
-"Sequence Database collaboration.\nThe database prefix for the /inference " \
-"qualifier in these cases is INSD by collaboration policy.";
 
 static void ChangeInferDatabase (
   PopuP p
@@ -5960,6 +6428,34 @@ static void ChangeInferBasis2 (
   CheckExtendInferTable (idp);
 }
 
+
+static void ChangeInferAccessionList (Pointer data)
+{
+  InferDialogPtr  idp;
+  InferEvidPtr    iep;
+
+  idp = (InferDialogPtr) data;
+  if (idp == NULL) return;
+  iep = GetInferEvid (idp, idp->currItem);
+  if (iep == NULL) return;
+
+  iep->accession_list = MemFree (iep->accession_list);
+  iep->accession_list = DialogToPointer (idp->accession_list);
+  
+  if (ReplaceDatabaseStrings (&(iep->accession_list)))
+  {
+    PointerToDialog (idp->accession_list, iep->accession_list);
+  }
+
+  ShowInferenceGroup (idp);
+
+  UpdateDocument (idp->inferdoc, idp->currItem, idp->currItem);
+  Update ();
+
+  CheckExtendInferTable (idp);
+}
+
+
 static Boolean StringInList (CharPtr str, CharPtr PNTR list)
 
 {
@@ -5986,7 +6482,7 @@ extern void GBQualsToInferenceDialog (DialoG d, SeqFeatPtr sfp)
   size_t          len;
   CharPtr         rest;
   CharPtr         str;
-  CharPtr         tmp;
+  CharPtr         tmp, tmp2;
 
   idp = (InferDialogPtr) GetObjectExtra (d);
   if (idp == NULL) return;
@@ -6111,8 +6607,19 @@ extern void GBQualsToInferenceDialog (DialoG d, SeqFeatPtr sfp)
       } else {
         iep->basis1 = MemFree (iep->basis1);
         iep->basis1 = StringSaveNoNull (str);
+        tmp2 = NULL;
+        if (StringCmp (iep->prefix, "alignment") == 0)
+        {
+          tmp2 = StringChr (tmp, ':');
+          if (tmp2 != NULL) {
+            *tmp2 = 0;
+            tmp2++;
+          }
+        }
         iep->basis2 = MemFree (iep->basis2);
         iep->basis2 = StringSaveNoNull (tmp);
+        iep->accession_list = MemFree (iep->accession_list);
+        iep->accession_list = StringSaveNoNull (tmp2);
       }
 
     } else {
@@ -6163,7 +6670,7 @@ extern void GBQualsToInferenceDialog (DialoG d, SeqFeatPtr sfp)
 extern void InferenceDialogToGBQuals (DialoG d, SeqFeatPtr sfp, Boolean convertBadToNote)
 
 {
-  CharPtr         first = NULL, second = NULL;
+  CharPtr         first = NULL, second = NULL, accession_list = NULL;
   GBQualPtr       gbq, lastgbq;
   InferDialogPtr  idp;
   InferEvidPtr    iep;
@@ -6194,7 +6701,7 @@ extern void InferenceDialogToGBQuals (DialoG d, SeqFeatPtr sfp, Boolean convertB
     gbq->qual = StringSave ("inference");
 
     if (WhereInEnumPopup (inference_alist, iep->prefix, &val)) {
-      if (val > 0 && val <= 11) {
+      if (val > 0 && val <= 12) {
         prefix = inferencePrefix [(int) val];
       }
     }
@@ -6225,11 +6732,16 @@ extern void InferenceDialogToGBQuals (DialoG d, SeqFeatPtr sfp, Boolean convertB
       if (StringDoesHaveText (iep->basis1)) {
         first = iep->basis1;
         second = iep->basis2;
+        if (StringCmp (iep->prefix, "alignment") == 0) {
+          accession_list = iep->accession_list;
+          RemoveEmptyAccessionStrings (accession_list);
+          ReplaceDatabaseStrings (&accession_list);
+        }
       }
     }
 
-    len = StringLen (prefix) + StringLen (speciesies) + StringLen (first) + StringLen (second);
-    str = MemNew (len + 5);
+    len = StringLen (prefix) + StringLen (speciesies) + StringLen (first) + StringLen (second) + StringLen (accession_list);
+    str = MemNew (len + 6);
     if (str != NULL) {
       StringCpy (str, prefix);
       StringCat (str, speciesies);
@@ -6237,6 +6749,10 @@ extern void InferenceDialogToGBQuals (DialoG d, SeqFeatPtr sfp, Boolean convertB
       StringCat (str, first);
       StringCat (str, ":");
       StringCat (str, second);
+      if (StringCmp (prefix, "alignment") == 0 && accession_list != NULL) {
+        StringCat (str, ":");
+        StringCat (str, accession_list);
+      }
       gbq->val = StringSave (str);
       MemFree (str);
     } else {
@@ -6276,6 +6792,7 @@ extern void InferenceDialogToGBQuals (DialoG d, SeqFeatPtr sfp, Boolean convertB
       lastgbq->next = gbq;
     }
     lastgbq = gbq;
+    accession_list = NULL;
   }
 }
 
@@ -6302,7 +6819,7 @@ static DialoG NewCreateInferenceDialog (
 )
 
 {
-  GrouP           cts, tbl, g0, g1, g2, g3, g4, g5, p;
+  GrouP           cts, tbl, g0, g1, g2, g3, g4, g5, p, prompt_grp;
   FonT            fnt;
   Int2            i, hgt, wid;
   InferDialogPtr  idp;
@@ -6414,13 +6931,25 @@ static DialoG NewCreateInferenceDialog (
   g5 = HiddenGroup (g2, 2, 0, NULL);
   SetGroupSpacing (g5, 5, 5);
 
-  StaticPrompt (g5, "Program or Database", 0, dialogTextHeight, programFont, 'l');
+  prompt_grp = HiddenGroup (g5, 0, 0, NULL);
+  idp->inf_free_program_prompt = StaticPrompt (prompt_grp, "Program or Database", 0, dialogTextHeight, programFont, 'l');
+  idp->accession_list_program_prompt = StaticPrompt (prompt_grp, "Program", 0, dialogTextHeight, programFont, 'l');
   idp->basis1 = DialogText (g5, "", 10, ChangeInferBasis1);
   SetObjectExtra (idp->basis1, idp, NULL);
 
-  StaticPrompt (g5, "Version or Accession", 0, dialogTextHeight, programFont, 'l');
+  prompt_grp = HiddenGroup (g5, 0, 0, NULL);
+  idp->inf_free_version_prompt = StaticPrompt (prompt_grp, "Version or Accession", 0, dialogTextHeight, programFont, 'l');
+  idp->accession_list_version_prompt = StaticPrompt (prompt_grp, "Version", 0, dialogTextHeight, programFont, 'l');
+
   idp->basis2 = DialogText (g5, "", 10, ChangeInferBasis2);
   SetObjectExtra (idp->basis2, idp, NULL);
+
+  idp->accession_list_prompt = StaticPrompt (g5, "Accessions", 0, dialogTextHeight, programFont, 'l');
+  idp->accession_list = CreateTagListDialogEx3 (g5, 3, 2, 2,
+                              accessionlist_types, accessionlist_widths,
+                              accessionlist_popups, TRUE, FALSE, AccessionListDataToDialog, AccessionListDialogToData,
+                              AccessionListCallbacks, idp,
+                              FALSE, FALSE);
 
   idp->inf_free_group = g5;
   Hide (idp->inf_free_group);
@@ -6727,6 +7256,17 @@ extern EditApplyPtr EditApplyFree (EditApplyPtr eap)
   return eap;
 }
 
+
+extern EditApplyPtr EditApplyNew (void)
+{
+  EditApplyPtr eap;
+
+  eap = (EditApplyPtr) MemNew (sizeof (EditApplyData));
+  eap->find_location = EditApplyFindLocation_anywhere;
+  return eap;
+}
+
+
 typedef struct EditApplydlg
 {
   DIALOG_MESSAGE_BLOCK
@@ -6905,7 +7445,7 @@ static Pointer DialogToEditApply (DialoG d)
     }
 
     if (dlg->location_choice != NULL) {
-      data->find_location = GetValue (dlg->location_choice);
+      data->find_location = (EditApplyFindLocation) GetValue (dlg->location_choice);
     } else {
       data->find_location = EditApplyFindLocation_anywhere;
     }
@@ -6968,7 +7508,7 @@ static ValNodePtr TestEditApply (DialoG d)
     {
       if (TextHasNoText (dlg->apply_txt))
       {
-        ValNodeAddPointer (&total_err_list, 0, "apply text");
+        ValNodeAddPointer (&total_err_list, 0, StringSave ("apply text"));
       }
     }
     else
@@ -6982,7 +7522,7 @@ static ValNodePtr TestEditApply (DialoG d)
     {
       if (TextHasNoText (dlg->find_txt))
       {
-        ValNodeAddPointer (&total_err_list, 0, "find text");
+        ValNodeAddPointer (&total_err_list, 0, StringSave ("find text"));
       }
     }
     else 
@@ -7009,30 +7549,6 @@ static void EditApplyDialogCopy (ButtoN b)
   SetTitle (dlg->repl_txt, str);
   str = MemFree (str);
 }
-
-static ValNodePtr ValNodeDupStringList (ValNodePtr vnp)
-{
-  ValNodePtr cpy = NULL, last = NULL, tmp;
-
-  while (vnp != NULL)
-  {
-    tmp = ValNodeNew (NULL);
-    tmp->choice = vnp->choice;
-    tmp->data.ptrvalue = StringSave (vnp->data.ptrvalue);
-    if (last == NULL)
-    {
-      cpy = tmp;
-    }
-    else
-    {
-      last->next = tmp;
-    }
-    last = tmp;
-    vnp = vnp->next;
-  }
-  return cpy;
-}
-      
 
 extern DialoG EditApplyDialog 
 (GrouP                    h,
@@ -7710,7 +8226,11 @@ typedef struct clickablelist
 {
   DIALOG_MESSAGE_BLOCK
   DoC  doc;
-  DoC  clickable_item_list;  
+  DoC  clickable_item_list;
+  PrompT title1;
+  PrompT title2;
+  PrompT help1;
+  PrompT help2;
   TexT find_txt;
 
   ClickableCallback item_single_click_callback;
@@ -7809,7 +8329,7 @@ static ClickableItemPtr GetSubItem (ValNodePtr item_list, Int2Ptr pitem)
 
 static Int4 CountLevels (ValNodePtr item_list)
 {
-  Int4       num_levels = 1, num, num_sublevels = 0;
+  Int4       num, num_sublevels = 0;
   ValNodePtr vnp;
   ClickableItemPtr cip;
   
@@ -7953,22 +8473,34 @@ static void PopulateClickableList (ClickableListPtr dlg, ValNodePtr list_list)
 
 }
 
-static Int2 PanelOffsetFromCharOffset (ClickableListPtr dlg, Int2 item, Int2 char_offset)
+
+NLM_EXTERN Int2 PanelOffsetFromCharOffsetEx (DoC doc, FonT font, Int2 item, Int2 col, Int2 char_offset)
 {
   Int2 numRows, numCols, lineHeight;
   Int2 left_start, width, inset, char_width;
-  if (dlg == NULL) return 0;
 
-  GetItemParams4 (dlg->doc, item, NULL, &numRows, &numCols, &lineHeight, NULL);
-  GetColParams (dlg->doc, item, numCols, &left_start, &width, &inset, NULL);
+  if (doc == NULL) return 0;
+  GetItemParams4 (doc, item, NULL, &numRows, &numCols, &lineHeight, NULL);
+  GetColParams (doc, item, col, &left_start, &width, &inset, NULL);
 
   /* need to set font so that Nlm_CharWidth works properly */
-  SelectFont (dlg->col_fmt_array_array[0][0].font);
+  SelectFont (font);
   char_width = Nlm_CharWidth ('A');
   return left_start + inset + char_offset * char_width;
 }
 
-static Int2 GetTextSelectCharOffset (PoinT pt, ClickableListPtr dlg, Int2 item, Int2 row, Int2 col)
+
+static Int2 PanelOffsetFromCharOffset (ClickableListPtr dlg, Int2 item, Int2 char_offset)
+{
+  Int2 numCols;
+  if (dlg == NULL) return 0;
+  GetItemParams4 (dlg->doc, item, NULL, NULL, &numCols, NULL, NULL);
+
+  return PanelOffsetFromCharOffsetEx (dlg->doc, dlg->col_fmt_array_array[0][0].font, item, numCols, char_offset);
+}
+
+
+NLM_EXTERN Int2 GetTextSelectCharOffsetEx (PoinT pt, DoC doc, FonT font, Int2 item, Int2 row, Int2 col)
 {
   Int2 pixPos, pixInset;
   Int2 one_char_width;
@@ -7976,18 +8508,18 @@ static Int2 GetTextSelectCharOffset (PoinT pt, ClickableListPtr dlg, Int2 item, 
   Int4    len;
   Int2    char_offset;
 
-  if (dlg == NULL) return 0;
+  if (doc == NULL) return 0;
 
-  GetColParams (dlg->doc, item, col, &pixPos,
+  GetColParams (doc, item, col, &pixPos,
                 NULL, &pixInset, NULL);
 
-  SelectFont (dlg->col_fmt_array_array[0][0].font);
+  SelectFont (font);
   one_char_width = Nlm_CharWidth ('A');
   if (one_char_width == 0) return 0;
 
   char_offset = (pt.x - pixPos - pixInset) / one_char_width;
   if (char_offset > 0) {
-    txt = GetDocText (dlg->doc, item, row, col);
+    txt = GetDocText (doc, item, row, col);
     len = StringLen (txt);
     if (char_offset >= len) {
       char_offset = - 1;
@@ -7995,6 +8527,14 @@ static Int2 GetTextSelectCharOffset (PoinT pt, ClickableListPtr dlg, Int2 item, 
   }
 
   return char_offset; 
+}
+
+
+static Int2 GetTextSelectCharOffset (PoinT pt, ClickableListPtr dlg, Int2 item, Int2 row, Int2 col)
+{
+  if (dlg == NULL) return 0;
+
+  return GetTextSelectCharOffsetEx (pt, dlg->doc, dlg->col_fmt_array_array[0][0].font, item, row, col);
 }
 
 
@@ -8635,19 +9175,21 @@ CreateClickableListDialogEx
 (GrouP h, 
  CharPtr label1, 
  CharPtr label2,
+ CharPtr help1,
+ CharPtr help2,
  ClickableCallback item_single_click_callback,
  ClickableCallback item_double_click_callback,
  Pointer         item_click_callback_data,
  GetClickableItemText get_item_text,
  Int4            left_width,
  Int4            right_width,
- Boolean         horizontal)
+ Boolean         horizontal,
+ Boolean         show_find)
 {
-  GrouP p, pnl_grp, find_grp;
+  GrouP p, pnl_grp, find_grp = NULL;
   ClickableListPtr dlg;
   RecT             r;
   ButtoN           b;
-  PrompT           p1, p2;
 
   dlg = (ClickableListPtr) MemNew (sizeof (ClickableListData));
   if (dlg == NULL)
@@ -8673,18 +9215,30 @@ CreateClickableListDialogEx
   if (horizontal) {
     pnl_grp = HiddenGroup (p, 2, 0, NULL);
     
-    StaticPrompt (pnl_grp, label1, 0, popupMenuHeight, programFont, 'c');
-    StaticPrompt (pnl_grp, label2, 0, popupMenuHeight, programFont, 'c');
-  
+    if (label1 || label2) {
+      dlg->title1 = StaticPrompt (pnl_grp, label1, left_width, popupMenuHeight, programFont, 'c');
+      dlg->title2 = StaticPrompt (pnl_grp, label2, right_width, popupMenuHeight, programFont, 'c');
+    }
     dlg->doc = DocumentPanel (pnl_grp, left_width, stdLineHeight * 20);
     dlg->clickable_item_list = DocumentPanel (pnl_grp, right_width, stdLineHeight * 20);
+    if (help1 || help2) {
+      dlg->help1 = StaticPrompt (pnl_grp, help1, left_width, popupMenuHeight, programFont, 'c');
+      dlg->help2 = StaticPrompt (pnl_grp, help2, right_width, popupMenuHeight, programFont, 'c');
+    } 
   } else {
     pnl_grp = HiddenGroup (p, -1, 0, NULL);
-    p1 = StaticPrompt (pnl_grp, label1, 0, popupMenuHeight, programFont, 'c');
+    dlg->title1 = StaticPrompt (pnl_grp, label1, left_width, popupMenuHeight, programFont, 'c');
     dlg->doc = DocumentPanel (pnl_grp, left_width, stdLineHeight * 20);
-    p2 = StaticPrompt (pnl_grp, label2, 0, popupMenuHeight, programFont, 'c');
+    if (help1 || help2) {
+      dlg->help1 = StaticPrompt (pnl_grp, help1, left_width, popupMenuHeight, programFont, 'c');
+    }
+    dlg->title2 = StaticPrompt (pnl_grp, label2, right_width, popupMenuHeight, programFont, 'c');
     dlg->clickable_item_list = DocumentPanel (pnl_grp, right_width, stdLineHeight * 20);
-    AlignObjects (ALIGN_CENTER, (HANDLE) p1, (HANDLE) dlg->doc, (HANDLE) p2, (HANDLE) dlg->clickable_item_list, NULL);
+    if (help1 || help2) {
+      dlg->help2 = StaticPrompt (pnl_grp, help2, right_width, popupMenuHeight, programFont, 'c');
+    }
+    AlignObjects (ALIGN_CENTER, (HANDLE) dlg->title1, (HANDLE) dlg->doc, (HANDLE) dlg->title2, (HANDLE) dlg->clickable_item_list, 
+                                (HANDLE) (dlg->help1 == NULL ? dlg->help2 : dlg->help1), (HANDLE) (dlg->help1 == NULL ? NULL : dlg->help2), NULL);
   }
 
   SetObjectExtra (dlg->doc, dlg, NULL);
@@ -8704,18 +9258,36 @@ CreateClickableListDialogEx
   InsetRect (&r, 4, 4);
   clickableColFmt[1].pixWidth = r.right - r.left - clickableColFmt[0].pixWidth;
   
-  find_grp = HiddenGroup (p, 4, 0, NULL);
-  SetGroupSpacing (find_grp, 10, 10);
-  StaticPrompt (find_grp, "Find Text", 0, popupMenuHeight, programFont, 'l');
-  dlg->find_txt = DialogText (find_grp, "", 20, NULL);
-  b = PushButton (find_grp, "<<", FindPreviousClickableText);
-  SetObjectExtra (b, dlg, NULL);
-  b = PushButton (find_grp, ">>", FindClickableText);
-  SetObjectExtra (b, dlg, NULL);
+  if (show_find) {
+    find_grp = HiddenGroup (p, 4, 0, NULL);
+    SetGroupSpacing (find_grp, 10, 10);
+    StaticPrompt (find_grp, "Find Text", 0, popupMenuHeight, programFont, 'l');
+    dlg->find_txt = DialogText (find_grp, "", 20, NULL);
+    b = PushButton (find_grp, "<<", FindPreviousClickableText);
+    SetObjectExtra (b, dlg, NULL);
+    b = PushButton (find_grp, ">>", FindClickableText);
+    SetObjectExtra (b, dlg, NULL);
+  }
   
   AlignObjects (ALIGN_CENTER, (HANDLE) pnl_grp, (HANDLE) find_grp, NULL);
   return (DialoG) p;
 }
+
+extern void SetClickableListDialogTitles (DialoG d, CharPtr title1, CharPtr title2, CharPtr help1, CharPtr help2)
+{
+  ClickableListPtr dlg;
+
+  dlg = (ClickableListPtr) GetObjectExtra (d);
+  if (dlg == NULL)
+  {
+    return;
+  }
+  SafeSetTitle (dlg->title1, title1);
+  SafeSetTitle (dlg->title2, title2);
+  SafeSetTitle (dlg->help1, help1);
+  SafeSetTitle (dlg->help2, help2);
+}
+
 
 extern DialoG 
 CreateClickableListDialog 
@@ -8727,14 +9299,14 @@ CreateClickableListDialog
  Pointer         item_click_callback_data,
  GetClickableItemText get_item_text)
 {
-  return CreateClickableListDialogEx (h, label1, label2,
+  return CreateClickableListDialogEx (h, label1, label2, NULL, NULL,
                                       item_single_click_callback,
                                       item_double_click_callback,
                                       item_click_callback_data,
                                       get_item_text, 
                                       stdCharWidth * 30,
                                       stdCharWidth * 30 + 5,
-                                      TRUE);
+                                      TRUE, TRUE);
 }
 
 
@@ -8912,6 +9484,202 @@ static CharPtr GetClickableTextFromItemList (ValNodePtr item_list, CharPtr separ
       StringCat (txt, separator);
     }
   }
+  return txt;
+}
+
+
+static CharPtr
+GetFragmentFromDocRow
+(DoC  doc,
+ Int2 item,
+ Int2 col,
+ Int2 row,
+ Int2 char_start, Int2 char_stop)
+{
+  CharPtr txt = NULL, cp_txt;
+  Int4    len;
+ 
+  txt = GetDocText (doc, item, row, col);
+
+  if (char_start == 0 && char_stop < 0) {
+    /* take all of row */
+    return txt;
+  } else {
+    len = StringLen (txt);
+    if (char_stop >= len) {
+      /* selection was drawn beyond length of text */
+      char_stop = len - 1;
+    } else if (char_stop < 0) {
+      /* take all of row */
+      char_stop = len - 1;
+    }
+    if (char_start >= len) {
+      /* do nothing - selection is not within text */
+      txt = MemFree (txt);
+    } else {
+      cp_txt = (CharPtr) MemNew (sizeof (Char) * (2 + char_stop - char_start));
+      StringNCpy (cp_txt, txt + char_start, 1 + char_stop - char_start);
+      cp_txt[1 + char_stop - char_start] = 0;
+      txt = MemFree (txt);
+      txt = cp_txt;
+    }
+  }  
+  return txt;
+}
+
+
+static CharPtr 
+GetFragmentsFromDocCol
+(DoC  doc,
+ Int2 item,
+ Int2 col,
+ Int2 row_start, Int2 row_stop,
+ Int2 char_start, Int2 char_stop)
+{
+  Int2       row;
+  CharPtr    txt;
+  ValNodePtr fragments = NULL;
+
+  if (row_start == row_stop) {
+    txt = GetFragmentFromDocRow (doc, item, col, row_start, char_start, char_stop);
+    if (StringHasNoText (txt)) {
+      txt = MemFree (txt);
+    } else {
+      ValNodeAddPointer (&fragments, 0, txt);
+    }
+  } else {
+    txt = GetFragmentFromDocRow (doc, item, col, row_start, char_start, -1);
+    if (StringHasNoText (txt)) {
+      txt = MemFree (txt);
+    } else {
+      ValNodeAddPointer (&fragments, 0, txt);
+    }
+    row = row_start + 1;
+    while (row < row_stop) {
+      txt = GetFragmentFromDocRow (doc, item, col, row, 0, -1);
+      if (StringHasNoText (txt)) {
+        txt = MemFree (txt);
+      } else {
+        ValNodeAddPointer (&fragments, 0, txt);
+      }
+      row++;
+    }
+    txt = GetFragmentFromDocRow (doc, item, col, row_stop, 0, char_stop);
+    if (StringHasNoText (txt)) {
+      txt = MemFree (txt);
+    } else {
+      ValNodeAddPointer (&fragments, 0, txt);
+    }
+  }
+  txt = GetClickableTextFromItemList (fragments, " ");
+  fragments = ValNodeFreeData (fragments);
+  return txt;
+}
+
+
+static Boolean CollectFromThisColumn (Int2 col, Int2Ptr only_these_columns, Int2 num_col)
+{
+  Int2 i;
+  Boolean rval = FALSE;
+
+  if (only_these_columns == NULL) {
+    rval = TRUE;
+  } else {
+    for (i = 0; i < num_col; i++) {
+      if (only_these_columns[i] == col) {
+        rval = TRUE;
+      }
+    }
+  }
+  return rval;
+}
+
+ 
+static CharPtr
+GetFragmentsFromDocItem 
+(DoC  doc,
+ Int2 item, 
+ Int2 col_start, Int2 col_stop,
+ Int2 row_start, Int2 row_stop,
+ Int2 char_start, Int2 char_stop,
+ Int2Ptr only_these_columns, Int2 num_col)
+{
+  Int2       col;
+  CharPtr    txt;
+  Int2       num_rows, num_cols;
+  ValNodePtr fragments = NULL;
+
+  GetItemParams4 (doc, item, NULL, &num_rows, &num_cols, NULL, NULL);
+  if (col_stop < 0) {
+    col_stop = num_cols;
+  }
+  if (row_stop < 0) {
+    row_stop = num_rows;
+  }
+
+  if (col_start == col_stop) {
+    if (CollectFromThisColumn (col_start, only_these_columns, num_col)) {
+      txt = GetFragmentsFromDocCol (doc, item, col_start, row_start, row_stop, char_start, char_stop);
+      ValNodeAddPointer (&fragments, 0, txt);
+    }
+  } else {
+    if (CollectFromThisColumn (col_start, only_these_columns, num_col)) {
+      txt = GetFragmentsFromDocCol (doc, item, col_start, row_start, num_rows, char_start, -1);
+      ValNodeAddPointer (&fragments, 0, txt);
+    }
+    col = col_start + 1;
+    while (col < col_stop) {
+      if (CollectFromThisColumn (col, only_these_columns, num_col)) {
+        txt = GetFragmentsFromDocCol (doc, item, col, 1, num_rows, 0, -1);
+        ValNodeAddPointer (&fragments, 0, txt);
+      }
+      col++;
+    }
+    if (CollectFromThisColumn (col_stop, only_these_columns, num_col)) {
+      txt = GetFragmentsFromDocCol (doc, item, col_stop, 1, row_stop, 0, char_stop);
+      ValNodeAddPointer (&fragments, 0, txt);
+    }
+  }
+  txt = GetClickableTextFromItemList (fragments, "\t");
+  fragments = ValNodeFreeData (fragments);
+
+  return txt;
+}
+
+
+NLM_EXTERN CharPtr GetSelectedDocText (DoC doc, Int2 item_start, Int2 row_start, Int2 col_start, Int2 char_start,
+                                       Int2 item_stop, Int2 row_stop, Int2 col_stop, Int2 char_stop,
+                                       Int2Ptr only_these_columns, Int2 num_col)
+{
+  Int2             item;
+  CharPtr          txt;
+  ValNodePtr       fragment_list = NULL;
+  
+  if (doc == NULL || item_start < 1)
+  {
+    return NULL;
+  }
+
+  if (char_start < 0) char_start = 0;
+
+  if (item_start == item_stop) {
+    txt = GetFragmentsFromDocItem (doc, item_start, col_start, col_stop, row_start, row_stop, char_start, char_stop, only_these_columns, num_col); 
+    ValNodeAddPointer (&fragment_list, 0, txt);
+  } else {
+    txt = GetFragmentsFromDocItem (doc, item_start, col_start, -1, row_start, -1, char_start, -1, only_these_columns, num_col);
+    ValNodeAddPointer (&fragment_list, 0, txt);
+    item = item_start + 1;
+    while (item < item_stop) {
+      txt = GetFragmentsFromDocItem (doc, item, 1, -1, 1, -1, 0, -1, only_these_columns, num_col);
+      ValNodeAddPointer (&fragment_list, 0, txt);
+      item++;
+    }
+    txt = GetFragmentsFromDocItem (doc, item, 1, col_stop, 1, row_stop, 0, char_stop, only_these_columns, num_col);
+    ValNodeAddPointer (&fragment_list, 0, txt);
+  }
+
+  txt = GetClickableTextFromItemList (fragment_list, "\r\n");
+  fragment_list = ValNodeFreeData (fragment_list);
   return txt;
 }
 
@@ -9145,12 +9913,6 @@ static Int4 GetYearFromToken (CharPtr token, Int4 token_len)
   
   return year;
 }
-
-static CharPtr months [12] = 
-{ 
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December"
-};
 
 static CharPtr month_abbrevs [12] =
 {
@@ -9395,7 +10157,6 @@ extern CharPtr ReformatDateStringEx (CharPtr orig_date, Boolean month_first, Boo
   CharPtr month = NULL;
   CharPtr token_list[3];
   Int4    token_lens[3];
-  CharPtr delimiters = " \t,-/";
   CharPtr numbers = "0123456789";
   CharPtr letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
   Int4    num_tokens = 0;
@@ -9880,7 +10641,7 @@ typedef struct rptunitrangedlg {
   TexT  range_stop;
 } RptUnitRangeDlgData, PNTR RptUnitRangeDlgPtr;
 
-Boolean ParseRptUnitRangeOkEx (CharPtr txt, Int4Ptr pstart, Int4Ptr pstop)
+static Boolean ParseRptUnitRangeOkEx (CharPtr txt, Int4Ptr pstart, Int4Ptr pstop)
 {
   CharPtr cp;
   Int4    start = -1, stop = -1;
@@ -10003,7 +10764,7 @@ extern DialoG CreateRptUnitRangeDialog (GrouP h, SeqEntryPtr sep, CharPtr name,
   return (DialoG) p;
 }
 
-Boolean ParseRptUnitRangeOk (CharPtr txt)
+static Boolean ParseRptUnitRangeOk (CharPtr txt)
 {
   return ParseRptUnitRangeOkEx (txt, NULL, NULL);
 }
@@ -10147,7 +10908,7 @@ static Pointer MobileElementDialogToString (DialoG d)
 }
 
 
-extern DialoG CreateMobileElementDialog (GrouP h, SeqEntryPtr sep, CharPtr name,
+static DialoG CreateMobileElementDialog (GrouP h, SeqEntryPtr sep, CharPtr name,
                                          TaglistCallback tlp_callback,
                                          Pointer callback_data)
 {
@@ -10230,7 +10991,7 @@ static Pointer TrueFalseDialogToPointer (DialoG d)
   }
 }
 
-extern DialoG TrueFalseDialog (GrouP h, SeqEntryPtr sep, CharPtr name,
+static DialoG TrueFalseDialog (GrouP h, SeqEntryPtr sep, CharPtr name,
                                TaglistCallback tlp_callback,
                                Pointer callback_data)
 {
@@ -10254,7 +11015,7 @@ extern DialoG TrueFalseDialog (GrouP h, SeqEntryPtr sep, CharPtr name,
   return (DialoG) p;
 }
 
-Boolean ParseTrueFalseOk (CharPtr txt)
+static Boolean ParseTrueFalseOk (CharPtr txt)
 {
   if (StringHasNoText (txt) || StringICmp (txt, "TRUE") == 0 || StringICmp (txt, "FALSE") == 0) {
     return TRUE;
@@ -10830,7 +11591,7 @@ static void GBQualEditDialogCopyText (ButtoN b)
   }
 }
 
-extern DialoG CreateSingleGBQualEditDialog (GrouP h, SeqEntryPtr sep, CharPtr name, 
+static DialoG CreateSingleGBQualEditDialog (GrouP h, SeqEntryPtr sep, CharPtr name, 
                                             Boolean force_string,
                                             TaglistCallback tlp_callback, 
                                             Pointer callback_data)
@@ -11143,7 +11904,12 @@ static Pointer NewDialogToImportFields (DialoG d)
   return (Pointer) gbq_list;
 }
 
-static void AddMandatoryAndOptionalQuals (CharPtr name, NewFieldPagePtr fpf, GBQualPtr gbq, Boolean use_rarely_used)
+static void 
+AddMandatoryAndOptionalQuals 
+(CharPtr         name,
+ NewFieldPagePtr fpf,
+ GBQualPtr       gbq, 
+ Boolean         use_rarely_used)
 {
   Int2 index, i, qual;
   SematicFeatPtr  sefp;
@@ -11234,8 +12000,10 @@ extern DialoG NewCreateImportFields (GrouP h, CharPtr name, SeqFeatPtr sfp, Bool
 
     /* add remaining qualifiers last */
     gbq_it = gbq;
-    while (gbq_it != NULL) {
-      AddTemporaryGBQual (&(fpf->new_gbq), gbq_it->qual, gbq, FALSE);
+    while (gbq_it != NULL) {  
+      if (!ShouldSuppressGBQual(fpf->subtype, gbq_it->qual)) {
+        AddTemporaryGBQual (&(fpf->new_gbq), gbq_it->qual, gbq, FALSE);
+      }
       gbq_it = gbq_it->next;
     }
 
@@ -11279,5 +12047,260 @@ extern DialoG NewCreateImportFields (GrouP h, CharPtr name, SeqFeatPtr sfp, Bool
   }
   return (DialoG) p;
 }
+
+
+typedef struct specialcharacterdialog 
+{
+  TexT PNTR       text_list;
+  ButtoN          accept_btn;
+  Int4            num_chars;
+  ValNodePtr      find_list;
+} SpecialCharacterDialogData, PNTR SpecialCharacterDialogPtr;  
+
+
+static void EnableSpecialCharacterAccept (TexT t)
+{
+  SpecialCharacterDialogPtr sd;
+  Int4                      pos;
+  CharPtr                   str;
+  Boolean                   has_bad = FALSE;
+
+  sd = (SpecialCharacterDialogPtr) GetObjectExtra (t);
+  if (sd == NULL) return;
+
+  for (pos = 0; pos < sd->num_chars && !has_bad; pos++)
+  {
+    str = SaveStringFromText (sd->text_list[pos]);
+    SpecialCharFind (&str, NULL, &has_bad, NULL);
+    str = MemFree (str);
+  }
+  if (has_bad) 
+  {
+    Disable (sd->accept_btn);
+  }
+  else
+  {
+    Enable (sd->accept_btn);
+  }
+}
+
+
+static void SetWindowsSpecialCharacterDefaults (ButtoN b)
+{
+  SpecialCharacterDialogPtr sd;
+  Int4                      pos;
+  CharPtr                   str;
+  ValNodePtr                vnp;
+
+  sd = (SpecialCharacterDialogPtr) GetObjectExtra (b);
+  if (sd == NULL) return;
+
+  for (vnp = sd->find_list, pos = 0; vnp != NULL; vnp = vnp->next, pos++)
+  {
+    str = GetSpecialWinCharacterReplacement ((unsigned char) vnp->choice);
+    SetTitle (sd->text_list[pos], str);
+  }
+}
+
+
+static void SetMacSpecialCharacterDefaults (ButtoN b)
+{
+  SpecialCharacterDialogPtr sd;
+  Int4                      pos;
+  CharPtr                   str;
+  ValNodePtr                vnp;
+
+  sd = (SpecialCharacterDialogPtr) GetObjectExtra (b);
+  if (sd == NULL) return;
+
+  for (vnp = sd->find_list, pos = 0; vnp != NULL; vnp = vnp->next, pos++)
+  {
+    str = GetSpecialMacCharacterReplacement ((unsigned char) vnp->choice);
+    SetTitle (sd->text_list[pos], str);
+  }
+
+}
+
+
+extern Boolean FixSpecialCharactersForStringsInList (ValNodePtr find_list, CharPtr exp_text, Boolean force_fix)
+{
+  ValNodePtr      vnp, context_list, vnp_c;
+  Int4            pos;
+  CharPtr         repl;
+  WindoW          w;
+  GrouP           h, c, g, p1, g2;
+  PrompT          p2;
+  LisT            contexts;
+  ButtoN          b;
+  SpecialCharacterDialogData sd;
+  ModalAcceptCancelData      acd;
+  Char                  label[2];
+  Int4                  num_contexts;
+  Boolean               rval = FALSE;
+
+  if (find_list == NULL) {
+    return TRUE;
+  } 
+
+  ArrowCursor();
+  Update();
+
+  sd.find_list = find_list;
+  sd.num_chars = ValNodeLen (find_list);
+  
+  acd.accepted = FALSE;
+  acd.cancelled = FALSE;
+  
+  w = ModalWindow(-20, -13, -10, -10, NULL);
+  h = HiddenGroup (w, -1, 0, NULL);
+  SetGroupSpacing (h, 10, 10);
+  
+  p1 = MultiLinePrompt (h, exp_text, 27 * stdCharWidth, programFont);
+  p2 = StaticPrompt (h, "Choose replacement characters.", 0, 0, programFont, 'l');
+
+  g = HiddenGroup (h, 3, 0, NULL);
+  StaticPrompt (g, "Character", 0, 0, programFont, 'l');
+  StaticPrompt (g, "Replacement", 0, 0, programFont, 'l');
+  StaticPrompt (g, "Contexts", 0, 0, programFont, 'l');
+
+  sd.text_list = MemNew (sizeof (TexT) * sd.num_chars);
+  label[1] = 0;
+  for (vnp = find_list, pos = 0; vnp != NULL; vnp = vnp->next, pos++)
+  {
+    label[0] = vnp->choice;
+    StaticPrompt (g, label, 0, 0, programFont, 'l');
+    repl = GetSpecialCharacterReplacement (vnp->choice);
+    sd.text_list[pos] = DialogText (g, repl, 5, EnableSpecialCharacterAccept);
+    SetObjectExtra (sd.text_list[pos], &sd, NULL);
+    context_list = vnp->data.ptrvalue;
+    num_contexts = ValNodeLen (context_list);
+    if (num_contexts == 0)
+    {
+      StaticPrompt (g, "", 0, 0, programFont, 'l');
+    }
+    else if (num_contexts == 1)
+    {
+      StaticPrompt (g, *((CharPtr PNTR)context_list->data.ptrvalue), 0, 0, programFont, 'l');
+    }
+    else
+    {
+      contexts = SingleList (g, 16, MIN (num_contexts, 5), NULL);
+      for (vnp_c = context_list; vnp_c != NULL; vnp_c = vnp_c->next)
+      {
+        ListItem (contexts, *((CharPtr PNTR)vnp_c->data.ptrvalue));
+      }
+      SetValue (contexts, 1);
+    }
+  }
+
+  g2 = HiddenGroup (h, 2, 0, NULL);
+  SetGroupSpacing (g2, 10, 10);
+  b = PushButton (g2, "Suggest Windows Replacements", SetWindowsSpecialCharacterDefaults);
+  SetObjectExtra (b, &sd, NULL);
+  b = PushButton (g2, "Suggest Mac Replacements", SetMacSpecialCharacterDefaults);
+  SetObjectExtra (b, &sd, NULL);
+
+  c = HiddenGroup (h, 3, 0, NULL);
+  SetGroupSpacing (c, 10, 10);
+  sd.accept_btn = PushButton (c, "Replace Characters", ModalAcceptButton);
+  SetObjectExtra (sd.accept_btn, &acd, NULL);
+  b = PushButton (c, "Cancel", ModalCancelButton);
+  SetObjectExtra (b, &acd, NULL);
+  AlignObjects (ALIGN_CENTER, (HANDLE) p1, (HANDLE) p2, (HANDLE) g, (HANDLE) g2, (HANDLE) c, NULL);
+  
+  Show(w); 
+  Select (w);
+  while (!acd.accepted && ! acd.cancelled)
+  {
+    ProcessExternalEvent ();
+    Update ();
+  }
+  ProcessAnEvent ();
+  if (acd.accepted)
+  {
+    for (vnp = find_list, pos = 0; vnp != NULL; vnp = vnp->next, pos++)
+    {
+      repl = JustSaveStringFromText (sd.text_list[pos]);
+      label[0] = vnp->choice;
+      for (vnp_c = vnp->data.ptrvalue; vnp_c != NULL; vnp_c = vnp_c->next)
+      {
+        FindReplaceString (vnp_c->data.ptrvalue, label, repl, TRUE, FALSE);
+      }
+      repl = MemFree (repl);
+    }
+
+    rval = TRUE;
+  }
+  else if (force_fix)
+  {
+    for (vnp = find_list; vnp != NULL; vnp = vnp->next)
+    {
+      label[0] = vnp->choice;
+      for (vnp_c = vnp->data.ptrvalue; vnp_c != NULL; vnp_c = vnp_c->next)
+      {
+        FindReplaceString (vnp_c->data.ptrvalue, label, "#", TRUE, FALSE);
+      }
+    }
+    rval = TRUE;
+  }
+
+  Remove (w);
+  return rval;
+
+}
+
+
+NLM_EXTERN Boolean FixSpecialCharacters (Uint2 entityID)
+{
+  ValNodePtr      find_list = NULL;
+  Boolean         rval;
+
+  StringActionInEntity (entityID, FALSE, UPDATE_NEVER, NULL, NULL, NULL, TRUE,
+                        SpecialCharFindWithContext, NULL, &find_list);
+
+  rval = FixSpecialCharactersForStringsInList (find_list,
+              "The ASN.1 contains special characters.\nIf you save it without stripping them,\nyou will be unable to load the file in Sequin.",
+              FALSE);
+
+  find_list = FreeContextList (find_list);
+  if (rval) 
+  {
+    ObjMgrSetDirtyFlag (entityID, TRUE);
+    ObjMgrSendMsg (OM_MSG_UPDATE, entityID, 0, 0);
+  }
+  return rval;
+}
+
+
+NLM_EXTERN Boolean FixSpecialCharactersForObject (Uint2 datatype, Pointer objdata, CharPtr msg, Boolean force_fix, BoolPtr changed)
+{
+  ValNodePtr      find_list = NULL;
+  Boolean         rval;
+
+  StringActionForObject (datatype, objdata, 0, FALSE, UPDATE_NEVER,
+                        SpecialCharFindWithContext, NULL, &find_list);
+
+  rval = FixSpecialCharactersForStringsInList (find_list,
+              msg == NULL ?
+                     "The ASN.1 contains special characters.\nIf you save it without stripping them,\nyou will be unable to load the file in Sequin."
+                     : msg,
+              force_fix);
+
+  if (changed != NULL)
+  {
+    if (find_list == NULL)
+    {
+      *changed = FALSE;
+    }
+    else
+    {
+      *changed = rval;
+    }
+  } 
+
+  find_list = FreeContextList (find_list);
+  return rval;
+}
+
 
 

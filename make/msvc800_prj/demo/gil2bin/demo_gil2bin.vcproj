@@ -3,7 +3,7 @@
 	ProjectType="Visual C++"
 	Version="8.00"
 	Name="demo_gil2bin"
-	ProjectGUID="{FD45D87E-E729-4BA2-90A6-F42C1ACD2CA4}"
+	ProjectGUID="{61AC31CE-6BF2-4C4A-97C7-7DE62A2A546E}"
 	>
 	<Platforms>
 		<Platform

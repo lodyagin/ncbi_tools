@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: blastall.c,v 6.198 2007/05/07 13:29:11 kans Exp $";
+static char const rcsid[] = "$Id: blastall.c,v 6.201 2008/01/02 14:02:06 madden Exp $";
 
-/* $Id: blastall.c,v 6.198 2007/05/07 13:29:11 kans Exp $
+/* $Id: blastall.c,v 6.201 2008/01/02 14:02:06 madden Exp $
 **************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -28,6 +28,15 @@ static char const rcsid[] = "$Id: blastall.c,v 6.198 2007/05/07 13:29:11 kans Ex
 ************************************************************************** 
  * 
  * $Log: blastall.c,v $
+ * Revision 6.201  2008/01/02 14:02:06  madden
+ * Make composition-based score adjustments the default for blastp and tblastn
+ *
+ * Revision 6.200  2007/11/13 20:31:51  madden
+ * Enable ARG_BESTHITS arg (culling)
+ *
+ * Revision 6.199  2007/10/10 13:16:46  madden
+ * Fix composition-based command-lines for blastall_old (from Alejandro Schaffer)
+ *
  * Revision 6.198  2007/05/07 13:29:11  kans
  * added casts for Seq-data.gap (SeqDataPtr, SeqGapPtr, ByteStorePtr)
  *
@@ -1024,7 +1033,7 @@ static Args myargs[] = {
       "0", NULL, NULL, FALSE, 'W', ARG_INT, 0.0, 0, NULL},            /* ARG_WORDSIZE */
     { "Effective length of the database (use zero for the real size)", 
       "0", NULL, NULL, FALSE, 'z', ARG_FLOAT, 0.0, 0, NULL},          /* ARG_DBSIZE */
-    { "Number of best hits from a region to keep (off by default, if used a value of 100 is recommended)", 
+    { "Number of best hits from a region to keep. Off by default.\nIf used a value of 100 is recommended.  Very high values of -v or -b is also suggested", 
       "0", NULL, NULL, FALSE, 'K', ARG_INT, 0.0, 0, NULL},            /* ARG_BESTHITS */
     { "0 for multiple hit, 1 for single hit (does not apply to blastn)",
        "0",  NULL, NULL, FALSE, 'P', ARG_INT, 0.0, 0, NULL},           /* ARG_MULTIPLEHITS */
@@ -1085,14 +1094,14 @@ static Args myargs[] = {
       "F", NULL, NULL, TRUE, 'V', ARG_BOOLEAN, 0.0, 0, NULL},              /* ARG_FORCE_OLD */
 #endif  /* BLASTALL_TOOLS_ONLY */
 #endif
-    { "Use composition-based statistics for blastp or tblastn:\n"                /* ARG_COMP_BASED_STATS */
+    { "Use composition-based score adjustments for blastp or tblastn:\n"                /* ARG_COMP_BASED_STATS */
       "      As first character:\n"
       "      D or d: default (equivalent to T)\n"
       "      0 or F or f: no composition-based statistics\n"
-      "      1 or T or t: Composition-based statistics as in "
-      "NAR 29:2994-3005, 2001\n"
-      "      2: Composition-based score adjustment as in "
+      "      2 or T or t: Composition-based score adjustments as in "
       "Bioinformatics 21:902-911,\n"
+      "      1: Composition-based statistics as in "
+      "NAR 29:2994-3005, 2001\n"
       "          2005, conditioned on sequence properties\n"
       "      3: Composition-based score adjustment as in "
       "Bioinformatics 21:902-911,\n"
@@ -1250,7 +1259,7 @@ s_FillOptions(SBlastOptions* options)
       MAX(myargs[ARG_DESCRIPTIONS].intvalue, 
           myargs[ARG_ALIGNMENTS].intvalue),
           is_gapped, 
-      0,                /* culling limit */
+      myargs[ARG_BESTHITS].intvalue,  /* culling limit */
       0);               /* min diag separation */
  
    hit_options->longest_intron = MIN(myargs[ARG_INTRON].intvalue, MAX_INTRON_LENGTH);
@@ -1274,13 +1283,11 @@ s_FillOptions(SBlastOptions* options)
        case '0': case 'F': case 'f':
            ext_options->compositionBasedStats = eNoCompositionBasedStats;
            break;
-       case 'D': case 'd':
-       case '1': case 'T': case 't':
+       case '1':
            ext_options->compositionBasedStats = eCompositionBasedStats;
            break;
-       case '2':
-           ErrPostEx(SEV_WARNING, 1, 0, "the -C 2 argument "
-                     "is currently experimental\n");
+       case 'D': case 'd':
+       case '2': case 'T': case 't':
            ext_options->compositionBasedStats = eCompositionMatrixAdjust;
            break;
        case '3':
@@ -1976,10 +1983,10 @@ Int2 Main_old (void)
     } else {
         /* Set options specific to gapped tblastn and blastp */
         switch (myargs[ARG_COMP_BASED_STATS].strvalue[0]) {
-        case 'D': case 'd':
         case '0': case 'F': case 'f':
             options->tweak_parameters = eNoCompositionBasedStats;
             break;
+        case 'D': case 'd':
         case '1': case 'T': case 't':
             options->tweak_parameters = eCompositionBasedStats;
             break;

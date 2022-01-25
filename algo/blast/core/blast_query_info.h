@@ -1,4 +1,4 @@
-/* $Id: blast_query_info.h,v 1.4 2006/11/21 16:44:39 papadopo Exp $
+/* $Id: blast_query_info.h,v 1.5 2007/12/20 22:55:46 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -101,6 +101,7 @@ Int4 Blast_GetQueryIndexFromContext(Int4 context, EBlastProgramType program);
  * (query_index < BlastQueryInfo::num_queries) [in]
  * @return the search space of the query sequence requested or 0 if this is not
  * set */
+NCBI_XBLAST_EXPORT
 Int8
 BlastQueryInfoGetEffSearchSpace(const BlastQueryInfo* qinfo,
                                 EBlastProgramType program,
@@ -113,6 +114,7 @@ BlastQueryInfoGetEffSearchSpace(const BlastQueryInfo* qinfo,
  * (query_index < BlastQueryInfo::num_queries) [in]
  * @param eff_searchsp the effective search space to use [in]
  */
+NCBI_XBLAST_EXPORT
 void
 BlastQueryInfoSetEffSearchSpace(BlastQueryInfo* qinfo,
                                 EBlastProgramType program,
@@ -127,6 +129,7 @@ BlastQueryInfoSetEffSearchSpace(BlastQueryInfo* qinfo,
  * (query_index < BlastQueryInfo::num_queries) [in]
  * @return the length of the query sequence requested
  */
+NCBI_XBLAST_EXPORT
 Int4 BlastQueryInfoGetQueryLength(const BlastQueryInfo* qinfo,
                                   EBlastProgramType program,
                                   Int4 query_index);
@@ -166,6 +169,7 @@ Int4 BSearchContextInfo(Int4 n, const BlastQueryInfo * A);
  * @param qinfo  Query info structure. [in/out]
  * @return Number of bytes for all queries and inter-query marks.
  */
+NCBI_XBLAST_EXPORT
 Uint4
 QueryInfo_GetSeqBufLen(const BlastQueryInfo* qinfo);
 

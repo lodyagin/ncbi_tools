@@ -3,7 +3,7 @@
 	ProjectType="Visual C++"
 	Version="8.00"
 	Name="demo_vecscreen"
-	ProjectGUID="{805D635B-FA95-4A2B-A5DD-1EC3667AE7B1}"
+	ProjectGUID="{B9B3203E-0C07-46DB-BABE-3024B22F923C}"
 	>
 	<Platforms>
 		<Platform

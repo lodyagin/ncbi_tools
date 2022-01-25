@@ -1,4 +1,4 @@
-/* $Id: blast_filter.h,v 1.39 2007/07/25 12:55:50 kazimird Exp $
+/* $Id: blast_filter.h,v 1.41 2007/12/20 22:55:46 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -47,8 +47,10 @@ extern "C" {
 #endif
 
 /** BLASTNA element used to mask bases in BLAST */
+NCBI_XBLAST_EXPORT
 extern const Uint1 kNuclMask;
 /** NCBISTDAA element used to mask residues in BLAST */
+NCBI_XBLAST_EXPORT
 extern const Uint1 kProtMask;
 
 /** Repeats filtering default options. */
@@ -86,6 +88,7 @@ BlastSeqLoc* BlastSeqLocNew(BlastSeqLoc** head, Int4 from, Int4 to);
  * @returns pointer to the second argument to this function (i.e.: tail of the
  * list)
  */
+NCBI_XBLAST_EXPORT
 BlastSeqLoc* BlastSeqLocAppend(BlastSeqLoc** head, BlastSeqLoc* node);
 
 /** Deallocate a single BlastSeqLoc structure and its contents, without
@@ -93,6 +96,7 @@ BlastSeqLoc* BlastSeqLocAppend(BlastSeqLoc** head, BlastSeqLoc* node);
  * @param node structure to deallocate [in]
  * @return NULL
  */
+NCBI_XBLAST_EXPORT
 BlastSeqLoc* BlastSeqLocNodeFree(BlastSeqLoc* node);
 
 /** Deallocate all BlastSeqLoc objects in a chain.
@@ -108,29 +112,25 @@ BlastSeqLoc* BlastSeqLocFree(BlastSeqLoc* loc);
  * @return NULL on NULL input or memory allocation failure, else a copy of the
  * list and its contents
  */
+NCBI_XBLAST_EXPORT
 BlastSeqLoc* BlastSeqLocListDup(BlastSeqLoc* head);
 
-/** Converts reverse strand coordinates to forward strand.
- * @param filter_in BlastSeqLoc to be reversed [in]
+/** Converts reverse strand coordinates to forward strand in place.
+ * @param masks BlastSeqLoc to be reversed [in|out]
  * @param query_length length of query [in]
- * @return reversed BlastSeqLoc
  */
 NCBI_XBLAST_EXPORT
-BlastSeqLoc* BlastSeqLocReverse(const BlastSeqLoc* filter_in, 
-                                Int4 query_length);
+void BlastSeqLocReverse(BlastSeqLoc* masks, Int4 query_length);
 
-/** Go through all mask locations in one sequence, 
- * combine any that overlap. Deallocate the memory for the locations that 
- * were on the list, produce a new (merged) list of locations. 
- * @param mask_loc The list of masks to be merged [in] 
+/** Go through all mask locations in one sequence and combine any that overlap,
+ * deallocating the unneeded locations.
+ * @param mask_loc The list of masks to be merged (in place) [in|out] 
  * @param link_value Largest gap size between locations for which they
  *                   should be linked together [in] 
- * @return The new (merged) list of masks or NULL if mask_loc is NULL or memory
- * allocation failure.
 */
 NCBI_XBLAST_EXPORT
-BlastSeqLoc*
-BlastSeqLocCombine(BlastSeqLoc* mask_loc, Int4 link_value);
+void
+BlastSeqLocCombine(BlastSeqLoc** mask_loc, Int4 link_value);
 
 /** Allocate memory for a BlastMaskLoc.
  * @param total number of contexts for which SSeqLocs should be allocated 
@@ -172,6 +172,7 @@ BlastMaskLoc* BlastMaskLocFree(BlastMaskLoc* mask_loc);
  * @note This function does NOT take into consideration the strands requested
  * to be searched, which is INCONSISTENT with what the C++ API does.
  */
+NCBI_XBLAST_EXPORT
 Int2 BlastMaskLocDNAToProtein(BlastMaskLoc* mask_loc, 
                               const BlastQueryInfo* query_info);
 
@@ -180,6 +181,7 @@ Int2 BlastMaskLocDNAToProtein(BlastMaskLoc* mask_loc,
  * @param mask_loc Mask locations structure [in|out]
  * @param query_info Query information structure, containing contexts data [in]
  */
+NCBI_XBLAST_EXPORT
 Int2 BlastMaskLocProteinToDNA(BlastMaskLoc* mask_loc, 
                               const BlastQueryInfo* query_info);
 
@@ -198,6 +200,7 @@ Int2 BlastMaskLocProteinToDNA(BlastMaskLoc* mask_loc,
  * @param complement_mask Linked list of SSeqRange*s in the concatenated 
  *                        sequence to be indexed in the lookup table . [out]
  */
+NCBI_XBLAST_EXPORT
 Int2 
 BLAST_ComplementMaskLocations(EBlastProgramType program_number, 
    const BlastQueryInfo* query_info, const BlastMaskLoc* mask_loc, 

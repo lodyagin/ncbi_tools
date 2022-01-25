@@ -1,4 +1,4 @@
-/* $Id: blast_driver.c,v 1.128 2007/05/04 15:37:10 papadopo Exp $
+/* $Id: blast_driver.c,v 1.129 2007/10/23 16:03:23 madden Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,10 +32,10 @@ Author: Ilya Dondoshansky
 Contents: Main function for running BLAST
 
 ******************************************************************************
- * $Revision: 1.128 $
+ * $Revision: 1.129 $
  * */
 
-static char const rcsid[] = "$Id: blast_driver.c,v 1.128 2007/05/04 15:37:10 papadopo Exp $";
+static char const rcsid[] = "$Id: blast_driver.c,v 1.129 2007/10/23 16:03:23 madden Exp $";
 
 #include <ncbi.h>
 #include <sqnutils.h>
@@ -313,11 +313,6 @@ s_FillOptions(SBlastOptions* options)
    else if (word_options->window_size == 0 &&
             lookup_options->mb_template_length > 0) {
       word_options->window_size = 40;
-   }
-
-   if (lookup_options->mb_template_length > 0) {
-      if (word_options->window_size > 0)
-          word_options->ungapped_extension = FALSE;
    }
 
    BLAST_FillExtensionOptions(ext_options, program_number, greedy_extension, 

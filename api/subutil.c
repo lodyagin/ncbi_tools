@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 11/3/93
 *
-* $Revision: 6.71 $
+* $Revision: 6.72 $
 *
 * File Description: Utilities for creating ASN.1 submissions
 *
@@ -37,339 +37,6 @@
 * --------------------------------------------------------------------------
 * Date	   Name        Description of modification
 * -------  ----------  -----------------------------------------------------
-*
-*
-* $Log: subutil.c,v $
-* Revision 6.71  2007/06/26 15:50:57  kans
-* cleanup GO: and GO_REF: prefixes on go id or go ref
-*
-* Revision 6.70  2007/06/08 14:48:46  kans
-* AddToGeneOntologyUserObject adds goref argument
-*
-* Revision 6.69  2007/05/07 13:28:35  kans
-* added casts for Seq-data.gap (SeqDataPtr, SeqGapPtr, ByteStorePtr)
-*
-* Revision 6.68  2007/04/05 19:14:13  bollin
-* Added function for adding a Pnt location to another location without creating
-* an intermediate SeqFeat.
-*
-* Revision 6.67  2006/09/22 15:00:56  kans
-* removed NCBI from StructuredCommentPrefix/Suffix
-*
-* Revision 6.66  2006/09/18 18:40:30  kans
-* special symbols for structured comment prefix, suffix, for parsing flatfile
-*
-* Revision 6.65  2006/07/13 17:06:39  bollin
-* use Uint4 instead of Uint2 for itemID values
-* removed unused variables
-* resolved compiler warnings
-*
-* Revision 6.64  2006/05/05 19:49:40  kans
-* added StructuredComment user object creation functions
-*
-* Revision 6.63  2006/03/23 19:35:55  kans
-* expand keywords with semicolons in AddGenBankBlockToEntry, not BSEC - already done in ParseTitleIntoGenBank
-*
-* Revision 6.62  2006/02/06 19:00:15  kans
-* added CreateFeatureFetchPolicyUserObject
-*
-* Revision 6.61  2006/01/23 20:57:04  kans
-* cosmetic change
-*
-* Revision 6.60  2006/01/23 16:39:57  kans
-* added CreateAnnotDescCommentPolicyUserObject
-*
-* Revision 6.59  2006/01/17 20:47:05  kans
-* fixed AddIDsToGenomeProjectsDBUserObject
-*
-* Revision 6.58  2006/01/17 18:25:06  kans
-* support for genomeprojectsdb user object
-*
-* Revision 6.57  2005/10/26 21:30:46  kans
-* bug fix in AddSecondaryAccnToEntry provided by Joe Carlson
-*
-* Revision 6.56  2005/03/30 21:13:49  bollin
-* added function AddIntToSeqLoc
-*
-* Revision 6.55  2003/10/16 17:16:33  mjohnson
-*
-* Added ORG_* and IS_ORG_* defines for origins. Use these constants
-* and macros instead of small integers.
-*
-* Revision 6.54  2003/10/08 16:46:44  kans
-* fix in AddCompleteness (KT)
-*
-* Revision 6.53  2003/07/11 18:22:45  kans
-* AddSourceToRefGeneTrackUserObject
-*
-* Revision 6.52  2002/11/05 17:01:55  kans
-* refgene tracking user object uses comment as name if accession is empty
-*
-* Revision 6.51  2002/09/30 16:31:36  kans
-* support for new BioseqseqSet_class_wgs_set
-*
-* Revision 6.50  2002/07/10 14:36:29  kans
-* fixed TpaAssembly user object - from and to were being placed at wrong level
-*
-* Revision 6.49  2002/07/09 16:25:45  kans
-* if from and to are 0, do not add those fields to TPA user object
-*
-* Revision 6.48  2002/07/09 16:17:35  kans
-* AddAccessionToTpaAssemblyUserObject takes from and to parameters
-*
-* Revision 6.47  2002/06/04 14:40:29  kans
-* added AddPntToSeqFeat
-*
-* Revision 6.46  2002/03/27 19:26:31  kans
-* AddToGeneOntologyUserObject takes string for GO id to keep leading zeroes
-*
-* Revision 6.45  2001/12/11 16:50:41  kans
-* added TpaAssembly user object creation functions
-*
-* Revision 6.44  2001/11/09 19:51:42  kans
-* fix in FindModelEvidenceField
-*
-* Revision 6.43  2001/11/09 15:12:21  kans
-* moved collaborator to separate function per user object
-*
-* Revision 6.42  2001/11/09 13:21:08  kans
-* added collaborator field to reftrack user object
-*
-* Revision 6.41  2001/11/09 12:54:47  kans
-* added model evidence user object functions
-*
-* Revision 6.40  2001/10/12 21:55:20  kans
-* convert nucleotide X to N
-*
-* Revision 6.39  2001/07/30 19:54:14  kans
-* forgot to set dbt->db to taxon
-*
-* Revision 6.38  2001/07/29 16:23:58  kans
-* added AddOrganismToEntryEx to allow entry of taxonID
-*
-* Revision 6.37  2001/02/14 23:58:42  kans
-* handle BioseqseqSet_class_eco_set
-*
-* Revision 6.36  2001/01/25 19:55:13  kans
-* added AddGenBankSetToSubmission for patents and other bulk submissions of unrelated sequences
-*
-* Revision 6.35  2000/11/15 23:17:59  kans
-* gene ontology user object functions
-*
-* Revision 6.34  2000/09/25 23:19:52  kans
-* mrna prot link user object now uses fasta long on the single best id, preferring refseq
-*
-* Revision 6.33  2000/09/20 12:32:53  kans
-* removed AddMethodToRefGeneTrackUserObject and AddSupportToRefGeneTrackUserObject
-*
-* Revision 6.32  2000/08/29 22:27:01  kans
-* reftrack support now has organism field
-*
-* Revision 6.31  2000/07/21 11:08:00  kans
-* place method after status and above accession or support user object fields
-*
-* Revision 6.30  2000/07/21 10:54:13  kans
-* added functions for adding Method and Support to RefGeneTrack user object
-*
-* Revision 6.29  2000/03/14 13:33:32  kans
-* NCBISubValidate sets indexing, adds AppProperty to shut off specific messages to be decided later
-*
-* Revision 6.28  2000/03/10 18:35:45  kans
-* added CreateContigCloneUserObject for genome contig RefSeq records
-*
-* Revision 6.27  2000/02/28 19:02:57  kans
-* AddSecondaryAccnToEntry does not need submission parameter set
-*
-* Revision 6.26  2000/02/28 18:46:12  kans
-* fixes for add phrap to seqlit
-*
-* Revision 6.25  2000/02/26 23:55:33  kans
-* added AddPhrapGraphToSeqLit, using internal extended SeqLit to track, readjust graphs to current position of seqlit in delta seq - may need to move fields to public SeqLit if problems arise
-*
-* Revision 6.24  2000/02/24 23:15:00  kans
-* added AddSecondaryAccnToEntry
-*
-* Revision 6.23  2000/02/23 19:25:53  kans
-* AddFakeGapToDeltaSeq returns SeqLitPtr so program can set fuzz after SpreadGapsInDeltaSeq is no longer being called
-*
-* Revision 6.22  2000/02/23 18:28:38  kans
-* added AddFakeGapToDeltaSeq to set fuzz even if nonzero length is passed in
-*
-* Revision 6.21  2000/02/07 16:48:07  ostell
-* added AddDeltaSeqToNucProtEntry()
-*
-* Revision 6.20  1999/12/23 17:26:29  kans
-* free old reftrack status string if replacing
-*
-* Revision 6.19  1999/12/20 20:35:12  kans
-* fixed problem with add refseq status field
-*
-* Revision 6.18  1999/12/20 19:57:44  kans
-* added AddStatusToRefGeneTrackUserObject
-*
-* Revision 6.17  1999/12/08 20:00:14  kans
-* AddOrgModToEntry calls OrgNameNew if necessary
-*
-* Revision 6.16  1999/10/05 17:24:54  kans
-* SeqDescrNew and SeqDescrAdd for new descriptors
-*
-* Revision 6.15  1999/08/05 20:43:44  kans
-* added CreateSubmissionUserObject (JP)
-*
-* Revision 6.14  1998/12/09 20:38:25  kans
-* changed compl to compr to avoid new c++ symbol collision
-*
-* Revision 6.13  1998/10/02 17:48:11  kans
-* new parameters to AddAccessionToRefGeneTrackUserObject, and added CreateMrnaProteinLinkUserObject
-*
-* Revision 6.12  1998/09/23 16:41:48  kans
-* removed from and to from AddAccessionToRefGeneTrackUserObject
-*
-* Revision 6.11  1998/08/20 20:36:58  kans
-* add comment parameter to reftrack user object function
-*
-* Revision 6.10  1998/08/11 22:27:25  kans
-* added CreateRefGeneTrackUserObject and AddAccessionToRefGeneTrackUserObject
-*
-* Revision 6.9  1998/05/27 20:42:05  kans
-* default hup is one year from the end of current month
-*
-* Revision 6.8  1998/03/02 17:19:15  kans
-* changed SixMonthsFromToday to DateAdvance
-*
-* Revision 6.7  1998/03/02 17:13:46  shavirin
-* ... and in the case when hold_until_publish == TRUE
-*
-* Revision 6.6  1998/03/02 17:08:39  shavirin
-* Added SixMonthsFromToday(NULL); in NCBISubCreate()
-*
-* Revision 6.5  1998/02/05 19:19:25  kans
-* added AddPhrapGraph
-*
-* Revision 6.4  1998/01/09 20:16:47  shavirin
-* Removed creation of Imprint in CitArtBuild () and CitSubUpdateBuild()
-*
-* Revision 6.3  1998/01/06 03:29:46  ostell
-* added AddGeneticCodetoEntry()
-*
-* Revision 6.2  1997/12/15 17:31:43  kans
-* backed out accidental checkin
-*
-* Revision 6.0  1997/08/25 18:07:35  madden
-* Revision changed to 6.0
-*
-* Revision 5.19  1997/08/19 17:15:11  kans
-* included utilpars.h
-*
-* Revision 5.18  1997/08/19 16:51:52  tatiana
-* added ValidAminoAcid() to MakeRNAFeature
-*
-* Revision 5.17  1997/07/11 18:23:24  kans
-* added Add[Pop/Phy/Mut]SetToSubmission
-*
-* Revision 5.16  1997/06/19 18:39:09  vakatov
-* [WIN32,MSVC++]  Adopted for the "NCBIOBJ.LIB" DLL'ization
-*
-* Revision 5.15  1997/05/16 19:13:57  ostell
-* moved prototype of NewDescrOnSeqEntry from subutil.c to subutil.h to make
-* it external.
-*
- * Revision 5.14  1996/09/05  20:20:28  ostell
- * added CitSubUpdateBuild()
- *
- * Revision 5.13  1996/09/04  22:33:06  ostell
- * added MakeCommentFeature()
- *
- * Revision 5.12  1996/08/30  13:17:01  ostell
- * made accession check allow 2+6 form
- *
- * Revision 5.11  1996/08/20  15:32:10  tatiana
- * static removed from AddBasesToByteStore and AddAAsToByteStore
- *
- * Revision 5.10  1996/08/15  20:29:19  ostell
- * in MaketRNAFeature() added support for 'U' in codon and for 'R'and 'Y' as
- * wobble bases
- *
- * Revision 5.9  1996/07/19  22:13:13  ostell
- * added SpreadGapsInDeltaSeq()
- *
- * Revision 5.8  1996/06/18  01:21:56  ostell
- * removed the step of adding exp-ev qualifier as well as etting flag in feat
- *
- * Revision 5.7  1996/06/14  19:01:54  ostell
- * minor fixes
- *
- * Revision 5.6  1996/06/14  19:00:06  ostell
- * fixed line wraps
- *
- * Revision 5.5  1996/06/14  18:07:38  ostell
- * added AddOrgModToEntry() and AddSubSourceToEntry()
- *
- * Revision 5.4  1996/06/14  17:14:55  ostell
- * fixed make of Dbtag
- *
- * Revision 5.3  1996/06/14  14:11:46  kans
- * fixed proper uninitialized seqlit variable (JO)
- *
- * Revision 5.2  1996/06/14  00:13:35  ostell
- * fixed unitnitialized variable
- *
- * Revision 5.1  1996/06/13  03:34:53  ostell
- * added support for delta seqs and submittor_key
- * fixed memory leak in AddAminoAcidsToBioseq()
- *
- * Revision 5.0  1996/05/28  13:23:23  ostell
- * Set to revision 5.0
- *
- * Revision 4.9  1996/03/12  13:48:41  ostell
- * added a cast
- *
- * Revision 4.8  1996/03/05  17:05:25  tatiana
- * change in NCBISubNewBioseq, moltype goes to MolInfo
- * ,
- *
- * Revision 4.7  1996/02/01  18:12:42  ostell
- * added curley braces to make gcc happy
- *
- * Revision 4.6  1996/01/31  02:35:00  ostell
- * added AddCodeBreakToCdRegion() and AddAntiCodonTotRNA()
- *
- * Revision 4.5  1995/10/05  14:48:29  tatiana
- * error msg added "Illegal character in Bioseq"
- *
- * Revision 4.4  1995/09/28  17:30:41  kans
- * added static to GetDNAConv and GetProteinConv
- *
- * Revision 4.3  1995/09/28  16:28:54  tatiana
- * a bug fixed in AddBasesToBioseq()
- *
- * Revision 4.2  1995/09/27  19:50:39  tatiana
- * check for illegal residues added
- *
- * Revision 4.1  1995/08/31  20:49:57  tatiana
- * strain length is set to 70 not to exeed the buffer length
- *
- * Revision 4.0  1995/07/26  13:49:01  ostell
- * force revision to 4.0
- *
- * Revision 1.20  1995/07/25  14:47:09  tatiana
- * remove static
- *
- * Revision 1.19  1995/07/20  19:37:31  tatiana
- * change SeqIdprint to SeqIdWrite
- *
- * Revision 1.18  1995/07/20  17:48:27  kans
- * removed static on AddModifierToEntry and AddPubToEntry
- *
- * Revision 1.17  1995/07/14  18:33:34  kans
- * added statics to functions, removed unused variables
- *
- * Revision 1.16  1995/07/14  18:08:43  tatiana
- * BioSource added
- *
- * Revision 1.11  1995/05/15  21:46:05  ostell
- * added Log line
- *
 *
 *
 * ==========================================================================
@@ -4551,6 +4218,43 @@ NLM_EXTERN void AddStatusToRefGeneTrackUserObject (UserObjectPtr uop, CharPtr st
   curr->data.ptrvalue = (Pointer) StringSave (status);
 }
 
+NLM_EXTERN void AddGeneratedToRefGeneTrackUserObject (UserObjectPtr uop, Boolean generated)
+
+{
+  UserFieldPtr  curr;
+  ObjectIdPtr   oip;
+  UserFieldPtr  prev = NULL;
+
+  if (uop == NULL) return;
+  oip = uop->type;
+  if (oip == NULL || StringICmp (oip->str, "RefGeneTracking") != 0) return;
+
+  for (curr = uop->data; curr != NULL; curr = curr->next) {
+    oip = curr->label;
+    if (oip != NULL && StringICmp (oip->str, "Generated") == 0) {
+      break;
+    }
+    prev = curr;
+  }
+
+  if (curr == NULL) {
+    curr = UserFieldNew ();
+    oip = ObjectIdNew ();
+    oip->str = StringSave ("Generated");
+    curr->label = oip;
+    curr->choice = 4; /* boolean */
+    curr->data.boolvalue = generated;
+
+    /* link source at end of list */
+
+    if (prev != NULL) {
+      prev->next = curr;
+    } else {
+      uop->data = curr;
+    }
+  }
+}
+
 NLM_EXTERN void AddCuratorToRefGeneTrackUserObject (UserObjectPtr uop, CharPtr collaborator)
 
 {
@@ -4640,10 +4344,8 @@ NLM_EXTERN void AddSourceToRefGeneTrackUserObject (UserObjectPtr uop, CharPtr ge
 }
 
 NLM_EXTERN void AddAccessionToRefGeneTrackUserObject (UserObjectPtr uop, CharPtr field,
-                                                      CharPtr accn, Int4 gi,
-                                                      Boolean sequenceChange,
-                                                      Boolean annotationChange,
-                                                      CharPtr comment)
+                                                      CharPtr accn, Int4 gi, Int4 from,
+                                                      Int4 to, CharPtr comment)
 
 {
   UserFieldPtr  curr;
@@ -4731,28 +4433,6 @@ NLM_EXTERN void AddAccessionToRefGeneTrackUserObject (UserObjectPtr uop, CharPtr
     last = ufp;
   }
 
-  if (sequenceChange) {
-    ufp = UserFieldNew ();
-    oip = ObjectIdNew ();
-    oip->str = StringSave ("sequenceChange");
-    ufp->label = oip;
-    ufp->choice = 4; /* Boolean */
-    ufp->data.boolvalue = sequenceChange;
-    last->next = ufp;
-    last = ufp;
-  }
-
-  if (annotationChange) {
-    ufp = UserFieldNew ();
-    oip = ObjectIdNew ();
-    oip->str = StringSave ("annotationChange");
-    ufp->label = oip;
-    ufp->choice = 4; /* Boolean */
-    ufp->data.boolvalue = annotationChange;
-    last->next = ufp;
-    last = ufp;
-  }
-
   if (comment != NULL && *comment != '\0') {
     ufp = UserFieldNew ();
     oip = ObjectIdNew ();
@@ -4763,6 +4443,27 @@ NLM_EXTERN void AddAccessionToRefGeneTrackUserObject (UserObjectPtr uop, CharPtr
     last->next = ufp;
     last = ufp;
   }
+
+  if (from == 0 && to == 0) return;
+  oip = curr->label;
+  if (oip == NULL || StringICmp (oip->str, "Assembly") != 0) return;
+
+  ufp = UserFieldNew ();
+  oip = ObjectIdNew ();
+  oip->str = StringSave ("from");
+  ufp->label = oip;
+  ufp->choice = 2; /* integer */
+  ufp->data.intvalue = from;
+  last->next = ufp;
+  last = ufp;
+
+  ufp = UserFieldNew ();
+  oip = ObjectIdNew ();
+  oip->str = StringSave ("to");
+  ufp->label = oip;
+  ufp->choice = 2; /* integer */
+  ufp->data.intvalue = to;
+  last->next = ufp;
 }
 
 NLM_EXTERN UserObjectPtr CreateMrnaProteinLinkUserObject (BioseqPtr bsp)

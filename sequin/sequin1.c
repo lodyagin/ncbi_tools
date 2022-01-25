@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.622 $
+* $Revision: 6.653 $
 *
 * File Description: 
 *
@@ -92,6 +92,7 @@ static char *time_of_compilation = "now";
 #include <tax3api.h>
 #include <validerr.h>
 #include <algo/blast/api/blast_api.h>
+#include <findrepl.h>
 
 /* USE_SMARTNET */
 #ifdef USE_SMARTNET
@@ -130,7 +131,7 @@ static char *time_of_compilation = "now";
 #include <Gestalt.h>
 #endif
 
-#define SEQ_APP_VER "7.70"
+#define SEQ_APP_VER "8.03"
 
 #ifndef CODECENTER
 static char* sequin_version_binary = "Sequin Indexer Services Version " SEQ_APP_VER " " __DATE__ " " __TIME__;
@@ -147,6 +148,7 @@ extern EnumFieldAssoc  biosource_genome_simple_alist [];
 Boolean  useDesktop = FALSE;
 Boolean  useEntrez = FALSE;
 Boolean  useSeqFetch = FALSE;
+Boolean  useIdLookup = FALSE;
 Boolean  useLocal = FALSE;
 Boolean  useBlast = FALSE;
 Boolean  useMedarch = FALSE;
@@ -306,7 +308,7 @@ static Boolean  strictLatLonCountry = FALSE;
 static Int4 SMWriteBioseqObj(VoidPtr bio_data, SMUserDataPtr sm_usr_data, 
                              VoidPtr data);
 static Int4 SMReadBioseqObj(VoidPtr data, CharPtr buffer, 
-                            Int4 length, Int4 fd);
+                            Int4 length, void* fd);
 #define SMART_KEY 1313
 #define DUMB_KEY 1314
 #endif
@@ -391,6 +393,9 @@ static void CheckForCookedBioseqs (SeqEntryPtr sep, Pointer mydata, Int4 index, 
   }
 }
 
+static void TaxonValidate (SeqEntryPtr sep, ValidStructPtr vsp);
+
+
 static Boolean OkayToWriteTheEntity (Uint2 entityID, ForM f)
 
 {
@@ -406,6 +411,9 @@ static Boolean OkayToWriteTheEntity (Uint2 entityID, ForM f)
   if (entityID < 1) return FALSE;
   sep = GetTopSeqEntryForEntityID (entityID);
   if (sep == NULL) return FALSE;
+
+  if (!FixSpecialCharacters (entityID)) return FALSE;
+
   if (GetSequinAppParam ("PREFERENCES", "ASKBEFOREVALIDATE", NULL, str, sizeof (str))) {
     if (StringICmp (str, "TRUE") == 0) {
       if (! (subtoolMode ||smartnetMode || backupMode) ) {
@@ -424,15 +432,34 @@ static Boolean OkayToWriteTheEntity (Uint2 entityID, ForM f)
     }
     if (indexerVersion) {
       vsp->alwaysRequireIsoJTA = TRUE;
+      if (smartnetMode) {
+        vsp->farFetchCDSproducts = TRUE;
+        vsp->farFetchMRNAproducts = TRUE;
+      }
     }
     oldErrSev = ErrSetMessageLevel (SEV_MAX);
     vsp->validateAlignments = TRUE;
     vsp->alignFindRemoteBsp = TRUE;
     vsp->doSeqHistAssembly = FALSE;
+    if (smartnetMode) {
+      vsp->doSeqHistAssembly = TRUE;
+      vsp->farIDsInAlignments = TRUE;
+      if (useEntrez) {
+        /*
+        LookupFarSeqIDs (sep, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE, FALSE);
+        vsp->inferenceAccnCheck = TRUE;
+        */
+      }
+      vsp->testLatLonSubregion = testLatLonSubregion;
+      vsp->strictLatLonCountry = strictLatLonCountry;
+    }
     for (j = 0; j < 6; j++) {
       vsp->errors [j] = 0;
     }
     ValidateSeqEntry (sep, vsp);
+    if (indexerVersion && useEntrez) {
+      TaxonValidate (sep, vsp);
+    }
     ErrSetMessageLevel (oldErrSev);
     ErrClear ();
     ErrShow ();
@@ -1269,6 +1296,10 @@ static void SmartnetDoneFunc (BaseFormPtr bfp)
         
         omudp = ObjMgrGetUserData(bfp->input_entityID, 0, 0, SMART_KEY);
         if (omudp == NULL) return;
+
+        /* for now set dirty flag to force validation in OkayToWriteTheEntity */
+        ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+
         omdp = ObjMgrGetData (bfp->input_entityID);
 
         sm_usr_data = (SMUserDataPtr) omudp->userdata.ptrvalue;
@@ -1558,6 +1589,9 @@ static void ProcessDoneButton (ForM f)
       vsp->errors [j] = 0;
     }
     ValidateSeqEntry (sep, vsp);
+    if (indexerVersion && useEntrez) {
+      TaxonValidate (sep, vsp);
+    }
     ErrSetMessageLevel (oldErrSev);
     ErrClear ();
     ErrShow ();
@@ -1603,6 +1637,9 @@ static void ProcessDoneButton (ForM f)
           }
           vsp->errfunc = ValidErrCallback;
           ValidateSeqEntry (sep, vsp);
+          if (indexerVersion && useEntrez) {
+            TaxonValidate (sep, vsp);
+          }
           ErrSetMessageLevel (oldErrSev);
           ErrSetHandler (oldErrHook);
           ErrClear ();
@@ -1828,8 +1865,10 @@ static void ReportBadSpecificHostValues (SeqEntryPtr sep, ValidStructPtr vsp)
 {
   ValNodePtr  bad_biop_list, vnp;
   ObjValNodePtr ovp;
+  BioSourcePtr  biop;
+  OrgModPtr     mod;
 
-  bad_biop_list = Taxon3CheckSpecificHostInSeqEntry (sep, TRUE);
+  bad_biop_list = Taxon3CheckSpecificHostInSeqEntry (sep, TRUE, FALSE);
 
   for (vnp = bad_biop_list; vnp != NULL; vnp = vnp->next)
   {
@@ -1837,6 +1876,8 @@ static void ReportBadSpecificHostValues (SeqEntryPtr sep, ValidStructPtr vsp)
     vsp->descr = NULL;
     vsp->bsp = NULL;
     vsp->bssp = NULL;
+    biop = NULL;
+    mod = NULL;
 
     if (vnp->choice == OBJ_SEQFEAT)
     {
@@ -1852,6 +1893,7 @@ static void ReportBadSpecificHostValues (SeqEntryPtr sep, ValidStructPtr vsp)
       {
         vsp->bssp = vsp->sfp->idx.parentptr;        
       }
+      biop = (BioSourcePtr) vsp->sfp->data.value.ptrvalue;
     } 
     else if (vnp->choice == OBJ_SEQDESC)
     {
@@ -1872,13 +1914,27 @@ static void ReportBadSpecificHostValues (SeqEntryPtr sep, ValidStructPtr vsp)
           vsp->bssp = ovp->idx.parentptr;        
         }
       }
+      biop = vsp->descr->data.ptrvalue;
     }
     
-    ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_TaxonomyLookupProblem, "Invalid value for specific host");
+    if (biop != NULL && biop->org != NULL && biop->org->orgname != NULL)
+    {
+      mod = biop->org->orgname->mod;
+      while (mod != NULL && mod->subtype != ORGMOD_nat_host)
+      {
+        mod = mod->next;
+      }
+      if (mod != NULL)
+      {      
+        ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_BadSpecificHost, "Invalid value for specific host: %s", mod->subname);
+      }
+    }
   }
   bad_biop_list = ValNodeFree (bad_biop_list);
 }
 
+static Boolean log_tax_asn = FALSE;
+static Boolean log_tax_set = FALSE;
 
 static void TaxonValidate (SeqEntryPtr sep, ValidStructPtr vsp)
 
@@ -1930,11 +1986,29 @@ static void TaxonValidate (SeqEntryPtr sep, ValidStructPtr vsp)
     last = vnp2;
   }
 
+#ifdef OS_UNIX
+  if (! log_tax_set) {
+    str = (CharPtr) getenv ("LOG_TAX_ASN");
+    if (StringDoesHaveText (str)) {
+      if (StringICmp (str, "TRUE") == 0) {
+        log_tax_asn = TRUE;
+      }
+    }
+    log_tax_set = TRUE;
+  }
+#endif
+
   sev = ErrSetMessageLevel (SEV_WARNING);
+  if (log_tax_asn) {
+    LaunchAsnTextViewer ((Pointer) t3rq, (AsnWriteFunc) Taxon3RequestAsnWrite, "tax3 request");
+  }
   t3ry = Tax3SynchronousQuery (t3rq);
   ErrSetMessageLevel (sev);
   Taxon3RequestFree (t3rq);
   if (t3ry == NULL) return;
+  if (log_tax_asn) {
+    LaunchAsnTextViewer ((Pointer) t3ry, (AsnWriteFunc) Taxon3ReplyAsnWrite, "tax3 result");
+  }
 
   for (trp = t3ry->reply, vnp = srclist.head;
        trp != NULL && vnp != NULL;
@@ -2038,7 +2112,7 @@ static void TaxonValidate (SeqEntryPtr sep, ValidStructPtr vsp)
   ReportBadSpecificHostValues (sep, vsp);
 }
 
-static void ValSeqEntryFormEx (ForM f, Boolean doAligns, Int2 limit)
+static void ValSeqEntryFormEx (ForM f, Boolean doAligns, Int2 limit, Boolean inferenceAccnCheck)
 
 {
   Boolean         allRawOrSeg = TRUE;
@@ -2102,7 +2176,7 @@ static void ValSeqEntryFormEx (ForM f, Boolean doAligns, Int2 limit)
             }
           }
         }
-        if (useEntrez) {
+        if (useEntrez && inferenceAccnCheck) {
           LookupFarSeqIDs (sep, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE, FALSE);
           vsp->inferenceAccnCheck = TRUE;
         }
@@ -2142,16 +2216,61 @@ static void ValSeqEntryFormEx (ForM f, Boolean doAligns, Int2 limit)
   }
 }
 
+static void CountInfAccnVer (SeqFeatPtr sfp, Pointer userdata)
+
+{
+  Int4Ptr    countP;
+  GBQualPtr  gbq;
+
+  if (sfp == NULL || userdata == NULL) return;
+  countP = (Int4Ptr) userdata;
+
+  for (gbq = sfp->qual; gbq != NULL; gbq = gbq->next) {
+    if (StringICmp (gbq->qual, "inference") == 0) {
+      (*countP)++;
+    }
+  }
+}
+
+static Boolean SmallInferenceAccnVer (ForM f)
+
+{
+  BaseFormPtr  bfp;
+  Int4         count = 0;
+  SeqEntryPtr  sep;
+
+  bfp = (BaseFormPtr) GetObjectExtra (f);
+  if (bfp == NULL) return FALSE;
+
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL) return FALSE;
+
+  VisitFeaturesInSep (sep, (Pointer) &count, CountInfAccnVer);
+
+  if (count < 100) return TRUE;
+
+  if (indexerVersion) {
+    Message (MSG_POST, "Validation skipping %ld inference accession.version tests",
+             (long) count);
+  }
+
+  return FALSE;
+}
+
 extern void ValSeqEntryForm (ForM f)
 
 {
-  ValSeqEntryFormEx (f, TRUE, VALIDATE_ALL);
+  Boolean  inferenceAccnCheck;
+
+  inferenceAccnCheck = SmallInferenceAccnVer (f);
+  ValSeqEntryFormEx (f, TRUE, VALIDATE_ALL, inferenceAccnCheck);
 }
 
 static void ValSeqEntryProc (IteM i)
 
 {
   BaseFormPtr  bfp;
+  Boolean      inferenceAccnCheck;
 
 #ifdef WIN_MAC
   bfp = (BaseFormPtr) currentFormDataPtr;
@@ -2159,7 +2278,8 @@ static void ValSeqEntryProc (IteM i)
   bfp = (BaseFormPtr) GetObjectExtra (i);
 #endif
   if (bfp != NULL) {
-    ValSeqEntryForm (bfp->form);
+    inferenceAccnCheck = SmallInferenceAccnVer (bfp->form);
+    ValSeqEntryFormEx (bfp->form, TRUE, VALIDATE_ALL, inferenceAccnCheck);
   }
 }
 
@@ -2174,7 +2294,22 @@ static void ValSeqEntryProcNoAln (IteM i)
   bfp = (BaseFormPtr) GetObjectExtra (i);
 #endif
   if (bfp != NULL) {
-    ValSeqEntryFormEx (bfp->form, FALSE, VALIDATE_ALL);
+    ValSeqEntryFormEx (bfp->form, FALSE, VALIDATE_ALL, FALSE);
+  }
+}
+
+static void ValSeqEntryProcInfAccn (IteM i)
+
+{
+  BaseFormPtr  bfp;
+
+#ifdef WIN_MAC
+  bfp = (BaseFormPtr) currentFormDataPtr;
+#else
+  bfp = (BaseFormPtr) GetObjectExtra (i);
+#endif
+  if (bfp != NULL) {
+    ValSeqEntryFormEx (bfp->form, FALSE, VALIDATE_ALL, TRUE);
   }
 }
 
@@ -2189,7 +2324,7 @@ static void ValSeqEntryProcSpec (IteM i, Int2 limit)
   bfp = (BaseFormPtr) GetObjectExtra (i);
 #endif
   if (bfp != NULL) {
-    ValSeqEntryFormEx (bfp->form, FALSE, limit);
+    ValSeqEntryFormEx (bfp->form, FALSE, limit, FALSE);
   }
 }
 
@@ -4021,7 +4156,7 @@ replaced by the actual characters from the first sequence.";
 const char *nucleotide_alphabet = "ABCDGHKMRSTUVWYabcdghkmrstuvwy";
 const char *protein_alphabet = "ABCDEFGHIKLMPQRSTUVWXYZabcdefghiklmpqrstuvwxyz";
 
-extern TSequenceInfoPtr GetDefaultSequenceInfo ()
+extern TSequenceInfoPtr GetDefaultSequenceInfo (void)
 {
   TSequenceInfoPtr sequence_info = SequenceInfoNew();
 
@@ -5661,76 +5796,13 @@ static void DuplicateViewProc (IteM i)
   }
 }
 
-extern SeqEntryPtr RestoreFromFile (CharPtr path);
-extern SeqEntryPtr RestoreFromFile (CharPtr path)
-
-{
-  BioseqPtr     bsp;
-  BioseqSetPtr  bssp;
-  Pointer       dataptr;
-  Uint2         datatype;
-  Uint2         entityID;
-  SeqEntryPtr   rsult;
-  SeqEntryPtr   sep;
-
-  rsult = NULL;
-  if (path != NULL && path [0] != '\0') {
-    dataptr = ObjMgrGenericAsnTextFileRead (path, &datatype, &entityID);
-    if (dataptr != NULL && entityID > 0) {
-      if (datatype == OBJ_SEQSUB || datatype == OBJ_SEQENTRY ||
-          datatype == OBJ_BIOSEQ || datatype == OBJ_BIOSEQSET) {
-        WatchCursor ();
-        sep = GetTopSeqEntryForEntityID (entityID);
-        if (sep == NULL) {
-          sep = SeqEntryNew ();
-          if (sep != NULL) {
-            if (datatype == OBJ_BIOSEQ) {
-              bsp = (BioseqPtr) dataptr;
-              sep->choice = 1;
-              sep->data.ptrvalue = bsp;
-              SeqMgrSeqEntry (SM_BIOSEQ, (Pointer) bsp, sep);
-            } else if (datatype == OBJ_BIOSEQSET) {
-              bssp = (BioseqSetPtr) dataptr;
-              sep->choice = 2;
-              sep->data.ptrvalue = bssp;
-              SeqMgrSeqEntry (SM_BIOSEQSET, (Pointer) bssp, sep);
-            } else {
-              sep = SeqEntryFree (sep);
-            }
-          }
-          sep = GetTopSeqEntryForEntityID (entityID);
-        }
-        if (sep != NULL) {
-          rsult = SeqEntryNew ();
-          if (rsult != NULL) {
-            rsult->choice = sep->choice;
-            rsult->data.ptrvalue = sep->data.ptrvalue;
-            sep->data.ptrvalue = NULL;
-            if (datatype == OBJ_SEQSUB) {
-              SeqSubmitFree ((SeqSubmitPtr) dataptr);
-            } else {
-              SeqEntryFree (sep);
-            }
-            /*Message (MSG_OK, "Call new object manager free function");*/
-          }
-        }
-        ArrowCursor ();
-      }
-      /*
-      ObjMgrDelete (entityID);
-      */
-    }
-  }
-  return rsult;
-}
 
 static void RestoreSeqEntryProc (IteM i)
 
 {
-  SeqEntryPtr  currsep;
   BaseFormPtr  bfp;
-  SeqEntryPtr  oldsep;
   Char         path [PATH_MAX];
+  Uint2        new_entityID;
 
 #ifdef WIN_MAC
   bfp = currentFormDataPtr;
@@ -5739,14 +5811,12 @@ static void RestoreSeqEntryProc (IteM i)
 #endif
   if (bfp != NULL && bfp->input_itemtype == OBJ_BIOSEQ) {
     if (GetInputFileName (path, sizeof (path), "", "TEXT")) {
-      SeqEntrySetScope (NULL);
-      oldsep = RestoreFromFile (path);
-      currsep = GetTopSeqEntryForEntityID (bfp->input_entityID);
-      ReplaceSeqEntryWithSeqEntry (currsep, oldsep, TRUE);
-      SeqEntrySetScope (NULL);
-      bfp->input_entityID = ObjMgrGetEntityIDForChoice (currsep);
-      ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
-      ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+      new_entityID = RestoreEntityIDFromFile (path, bfp->input_entityID);
+      if (new_entityID != 0) {
+        bfp->input_entityID = new_entityID;
+        ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+        ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+      }
     }
   }
 }
@@ -6686,6 +6756,8 @@ static void BioseqViewFormMenus (WindoW w)
       SetObjectExtra (i, bfp, NULL);
       i = CommandItem (sub, "Validate no Alignments/ A", ValSeqEntryProcNoAln);
       SetObjectExtra (i, bfp, NULL);
+      i = CommandItem (sub, "Validate check Inference", ValSeqEntryProcInfAccn);
+      SetObjectExtra (i, bfp, NULL);
       SeparatorItem (sub);
       i = CommandItem (sub, "Validate Inst", ValSeqEntryProcInst);
       SetObjectExtra (i, bfp, NULL);
@@ -7378,10 +7450,16 @@ static void SequinSeqViewFormMessage (ForM f, Int2 mssg)
   if (bfp != NULL) {
     switch (mssg) {
       case VIB_MSG_SAVE :
-        SaveSeqSubmitProc (bfp, FALSE);
+        if (FixSpecialCharacters (bfp->input_entityID))
+        {
+          SaveSeqSubmitProc (bfp, FALSE);
+        }
         break;
       case VIB_MSG_SAVE_AS :
-        SaveSeqSubmitProc (bfp, TRUE);
+        if (FixSpecialCharacters (bfp->input_entityID))
+        {
+          SaveSeqSubmitProc (bfp, TRUE);
+        }
         break;
       case VIB_MSG_CLOSE :
         CloseProc (bfp);
@@ -9077,6 +9155,7 @@ static void SetupMacMenus (void)
     validateMenu = SubMenu (m, "Validate");
     CommandItem (validateMenu, "Validate Record/ V", ValSeqEntryProc);
     CommandItem (validateMenu, "Validate no Alignments", ValSeqEntryProcNoAln);
+    CommandItem (validateMenu, "Validate check Inference", ValSeqEntryProcInfAccn);
     SeparatorItem (validateMenu);
     CommandItem (validateMenu, "Validate Inst", ValSeqEntryProcInst);
     CommandItem (validateMenu, "Validate Hist", ValSeqEntryProcHist);
@@ -9804,6 +9883,7 @@ static void ReadSettings (void)
   useDesktop = FALSE;
   useEntrez = FALSE;
   useLocal = FALSE;
+  useIdLookup = FALSE;
   useBlast = FALSE;
   useMedarch = FALSE;
   newMedarch = FALSE;
@@ -9820,6 +9900,7 @@ static void ReadSettings (void)
   useDesktop = TRUE;
   useEntrez = TRUE;
   useLocal = TRUE;
+  useIdLookup = TRUE;
   useBlast = TRUE;
   useMedarch = TRUE;
   newMedarch = TRUE;
@@ -9833,6 +9914,7 @@ static void ReadSettings (void)
       useDesktop = TRUE;
       useEntrez = TRUE;
       useLocal = TRUE;
+      useIdLookup = TRUE;
       useBlast = TRUE;
       useMedarch = TRUE;
       newMedarch = TRUE;
@@ -9845,6 +9927,7 @@ static void ReadSettings (void)
   useDesktop = TRUE;
   useEntrez = TRUE;
   useLocal = TRUE;
+  useIdLookup = TRUE;
   useBlast = TRUE;
   useMedarch = TRUE;
   newMedarch = TRUE;
@@ -9856,6 +9939,7 @@ static void ReadSettings (void)
       useDesktop = TRUE;
       useEntrez = TRUE;
       useLocal = TRUE;
+      useIdLookup = TRUE;
       useBlast = TRUE;
       useMedarch = TRUE;
       newMedarch = TRUE;
@@ -9939,6 +10023,22 @@ static void ReadSettings (void)
     if (StringICmp (str, "TRUE") == 0) {
       allowDownload = FALSE;
       useEntrez = FALSE;
+      useMedarch = FALSE;
+      useTaxon = FALSE;
+    }
+  }
+
+  useSeqFetch = useEntrez;
+
+  if (GetSequinAppParam ("SETTINGS", "SUPPRESSSEQFETCH", NULL, str, sizeof (str))) {
+    if (StringICmp (str, "TRUE") == 0) {
+      useSeqFetch = FALSE;
+    }
+  }
+
+  if (GetSequinAppParam ("SETTINGS", "SUPPRESSIDLOOKUP", NULL, str, sizeof (str))) {
+    if (StringICmp (str, "TRUE") == 0) {
+      useIdLookup = FALSE;
     }
   }
 
@@ -9949,6 +10049,12 @@ static void ReadSettings (void)
     if (StringICmp (str, "TRUE") == 0) {
       useLocal = TRUE;
     } else if (StringICmp (str, "FALSE") == 0) {
+      useLocal = FALSE;
+    }
+  }
+
+  if (GetSequinAppParam ("SETTINGS", "SUPPRESSLOCAL", NULL, str, sizeof (str))) {
+    if (StringICmp (str, "TRUE") == 0) {
       useLocal = FALSE;
     }
   }
@@ -10140,7 +10246,7 @@ extern Pointer ReadFromDirSub (CharPtr accn, Uint2Ptr datatype, Uint2Ptr entityI
 #endif
 #ifdef OS_MSWIN
   sprintf (cmmd, "%s %s -o %s", dirsubfetchcmd, accn, path);
-  system (cmmd);
+  RunSilent (cmmd);
 #endif
 
   fp = FileOpen (path, "r");
@@ -10197,7 +10303,7 @@ static Int2 LIBCALLBACK DirSubBioseqFetchFunc (Pointer data)
 #endif
 #ifdef OS_MSWIN
   sprintf (cmmd, "%s %s -o %s", dirsubfetchcmd, tsip->accession, path);
-  system (cmmd);
+  RunSilent (cmmd);
 #endif
 
   fp = FileOpen (path, "r");
@@ -10265,7 +10371,7 @@ extern Pointer ReadFromSmart (CharPtr accn, Uint2Ptr datatype, Uint2Ptr entityID
 #endif
 #ifdef OS_MSWIN
   sprintf (cmmd, "%s %s -o %s", smartfetchcmd, accn, path);
-  system (cmmd);
+  RunSilent (cmmd);
 #endif
 
   fp = FileOpen (path, "r");
@@ -10323,7 +10429,7 @@ static Int2 LIBCALLBACK SmartBioseqFetchFunc (Pointer data)
 #endif
 #ifdef OS_MSWIN
   sprintf (cmmd, "%s %s -o %s", smartfetchcmd, tsip->accession, path);
-  system (cmmd);
+  RunSilent (cmmd);
 #endif
 
   fp = FileOpen (path, "r");
@@ -10355,6 +10461,136 @@ static Boolean SmartFetchEnable (void)
   ObjMgrProcLoad (OMPROC_FETCH, smartfetchproc, smartfetchproc,
                   OBJ_SEQID, 0, OBJ_BIOSEQ, 0, NULL,
                   SmartBioseqFetchFunc, PROC_PRIORITY_DEFAULT);
+  return TRUE;
+}
+
+static CharPtr hupfetchproc = "HUPBioseqFetch";
+
+static CharPtr hupfetchcmd = NULL;
+
+extern Pointer ReadFromHUP (CharPtr accn, Uint2Ptr datatype, Uint2Ptr entityID);
+extern Pointer ReadFromHUP (CharPtr accn, Uint2Ptr datatype, Uint2Ptr entityID)
+
+{
+  Char     cmmd [256];
+  Pointer  dataptr;
+  FILE*    fp;
+  Char     path [PATH_MAX];
+
+  if (datatype != NULL) {
+    *datatype = 0;
+  }
+  if (entityID != NULL) {
+    *entityID = 0;
+  }
+  if (! dirsubMode) return NULL;
+  if (StringHasNoText (accn)) return NULL;
+
+  if (hupfetchcmd == NULL) {
+    if (GetAppParam ("SEQUIN", "HUP", "FETCHSCRIPT", NULL, cmmd, sizeof (cmmd))) {
+    	hupfetchcmd = StringSaveNoNull (cmmd);
+    }
+  }
+  if (hupfetchcmd == NULL) return NULL;
+
+  TmpNam (path);
+
+#ifdef OS_UNIX
+  sprintf (cmmd, "csh %s %s > %s", hupfetchcmd, accn, path);
+  system (cmmd);
+#endif
+#ifdef OS_MSWIN
+  sprintf (cmmd, "%s %s -o %s", hupfetchcmd, accn, path);
+  RunSilent (cmmd);
+#endif
+
+  fp = FileOpen (path, "r");
+  if (fp == NULL) {
+    FileRemove (path);
+    return NULL;
+  }
+  dataptr = ReadAsnFastaOrFlatFile (fp, datatype, entityID, FALSE, FALSE, TRUE, FALSE);
+  FileClose (fp);
+  FileRemove (path);
+  return dataptr;
+}
+
+
+static Int2 LIBCALLBACK HUPBioseqFetchFunc (Pointer data)
+
+{
+  BioseqPtr         bsp;
+  Char              cmmd [256];
+  Pointer           dataptr;
+  Uint2             datatype;
+  Uint2             entityID;
+  FILE*             fp;
+  OMProcControlPtr  ompcp;
+  ObjMgrProcPtr     ompp;
+  Char              path [PATH_MAX];
+  SeqEntryPtr       sep = NULL;
+  SeqIdPtr          sip;
+  TextSeqIdPtr      tsip;
+  OMUserDataPtr     omudp;
+
+  ompcp = (OMProcControlPtr) data;
+  if (ompcp == NULL) return OM_MSG_RET_ERROR;
+  ompp = ompcp->proc;
+  if (ompp == NULL) return OM_MSG_RET_ERROR;
+  sip = (SeqIdPtr) ompcp->input_data;
+  if (sip == NULL) return OM_MSG_RET_ERROR;
+
+  if (sip->choice != SEQID_GENBANK) return OM_MSG_RET_ERROR;
+  tsip = (TextSeqIdPtr) sip->data.ptrvalue;
+  if (tsip == NULL || StringHasNoText (tsip->accession)) return OM_MSG_RET_ERROR;
+
+  if (hupfetchcmd == NULL) {
+    if (GetAppParam ("SEQUIN", "HUP", "FETCHSCRIPT", NULL, cmmd, sizeof (cmmd))) {
+    	hupfetchcmd = StringSaveNoNull (cmmd);
+    }
+  }
+  if (hupfetchcmd == NULL) return OM_MSG_RET_ERROR;
+
+  TmpNam (path);
+
+#ifdef OS_UNIX
+  sprintf (cmmd, "csh %s %s > %s", hupfetchcmd, tsip->accession, path);
+  system (cmmd);
+#endif
+#ifdef OS_MSWIN
+  sprintf (cmmd, "%s %s -o %s", hupfetchcmd, tsip->accession, path);
+  RunSilent (cmmd);
+#endif
+
+  fp = FileOpen (path, "r");
+  if (fp == NULL) {
+    FileRemove (path);
+    return OM_MSG_RET_ERROR;
+  }
+  dataptr = ReadAsnFastaOrFlatFile (fp, &datatype, &entityID, FALSE, FALSE, TRUE, FALSE);
+  FileClose (fp);
+  FileRemove (path);
+
+  if (dataptr == NULL) return OM_MSG_RET_OK;
+
+  sep = GetTopSeqEntryForEntityID (entityID);
+  if (sep == NULL) return OM_MSG_RET_ERROR;
+  bsp = BioseqFindInSeqEntry (sip, sep);
+  ompcp->output_data = (Pointer) bsp;
+  ompcp->output_entityID = ObjMgrGetEntityIDForChoice (sep);
+
+  omudp = ObjMgrAddUserData(ompcp->output_entityID, ompp->procid, OMPROC_FETCH, 0);
+  
+
+  return OM_MSG_RET_DONE;
+}
+
+static Boolean HUPFetchEnable (void)
+
+{
+  ObjMgrProcLoad (OMPROC_FETCH, hupfetchproc, hupfetchproc,
+                  OBJ_SEQID, 0, OBJ_BIOSEQ, 0, NULL,
+                  HUPBioseqFetchFunc, PROC_PRIORITY_DEFAULT);
   return TRUE;
 }
 
@@ -10395,7 +10631,7 @@ extern Pointer ReadFromTPASmart (CharPtr accn, Uint2Ptr datatype, Uint2Ptr entit
 #endif
 #ifdef OS_MSWIN
   sprintf (cmmd, "%s %s -o %s", tpasmartfetchcmd, accn, path);
-  system (cmmd);
+  RunSilent (cmmd);
 #endif
 
   fp = FileOpen (path, "r");
@@ -10452,7 +10688,7 @@ static Int2 LIBCALLBACK TPASmartBioseqFetchFunc (Pointer data)
 #endif
 #ifdef OS_MSWIN
   sprintf (cmmd, "%s %s -o %s", tpasmartfetchcmd, tsip->accession, path);
-  system (cmmd);
+  RunSilent (cmmd);
 #endif
 
   fp = FileOpen (path, "r");
@@ -10547,7 +10783,7 @@ static void CountBioSources (BioSourcePtr biop, Pointer userdata)
   (*count)++;
 }
 
-static Int4 SMReadBioseqObj(VoidPtr data, CharPtr buffer, Int4 length, Int4 fd)
+static Int4 SMReadBioseqObj(VoidPtr data, CharPtr buffer, Int4 length, void* fd)
 {
     AsnIoMemPtr    aimp;
     BaseFormPtr    bfp;
@@ -10668,7 +10904,7 @@ static Int4 SMReadBioseqObj(VoidPtr data, CharPtr buffer, Int4 length, Int4 fd)
     }
     
     sm_user_data = MemNew(sizeof(SMUserData));
-    sm_user_data->fd = fd;
+    sm_user_data->fd = (void*) fd;
     sm_user_data->header = header;
 
     if(bio_data == NULL) {
@@ -11038,8 +11274,6 @@ Int2 Main (void)
   subtoolEntityID = 0;
   leaveAsOldAsn = FALSE;
 
-  useSeqFetch = useEntrez;
-
 #if defined(OS_UNIX) || defined(WIN_MOTIF)
   {{
     Nlm_Int4         argc = GetArgc();
@@ -11090,6 +11324,10 @@ Int2 Main (void)
           backupMode = TRUE;
         } else if (StringCmp (argv[i], "-noseqfetch") == 0) {
           useSeqFetch = FALSE;
+        } else if (StringCmp (argv[i], "-nolocalfetch") == 0) {
+          useLocal = FALSE;
+        } else if (StringCmp (argv[i], "-noseqidlookup") == 0) {
+          useIdLookup = FALSE;
         }
 #ifdef USE_SMARTNET
         else if (StringCmp (argv[i], "-ds") == 0) {
@@ -11127,6 +11365,10 @@ Int2 Main (void)
           nohelpMode = TRUE;
         else if (StringCmp (argv[i], "-noseqfetch") == 0)
           useSeqFetch = FALSE;
+        else if (StringCmp (argv[i], "-nolocalfetch") == 0)
+          useLocal = FALSE;
+        else if (StringCmp (argv[i], "-noseqidlookup") == 0)
+          useIdLookup = FALSE;
 #ifdef USE_SMARTNET
         else if (StringNCmp (argv[i], "-z", 2) == 0) {
           smartnetMode = TRUE;
@@ -11253,33 +11495,64 @@ Int2 Main (void)
   VSeqMgrInit (FALSE);
   WatchCursor ();
 
-#ifdef USE_SMARTNET
-  if (dirsubMode) {
-    DirSubFetchEnable ();
-    SmartFetchEnable ();
-    TPASmartFetchEnable ();
-  }
-#endif
+  /* register fetch functions */
 
-/*#ifdef USE_ENTREZ*/
   if (useEntrez) {
     /* EntrezBioseqFetchEnable ("Sequin", FALSE); */
     if (useSeqFetch) {
       /* ID1BioseqFetchEnable ("Sequin", FALSE); */
       PubSeqFetchEnable ();
       PubMedFetchEnable ();
-    } else {
+    } else if (useIdLookup) {
       PubSeqFetchEnableEx (FALSE, TRUE, TRUE, TRUE, TRUE);
       PubMedFetchEnable ();
     }
   }
-/*#endif*/
 
-/*#ifdef USE_LOCAL*/
+#ifdef USE_SMARTNET
+  if (dirsubMode) {
+    if (useSeqFetch) {
+      /* DirSubFetchEnable (); */
+      TPASmartFetchEnable ();
+      SmartFetchEnable ();
+      HUPFetchEnable ();
+    }
+  }
+#endif
+
   if (useLocal) {
     LocalSeqFetchInit (FALSE);
   }
-/*#endif*/
+
+/*
+#ifdef USE_SMARTNET
+  if (dirsubMode) {
+    if (only_use_smart) {
+      SmartFetchEnable ();
+    } else {
+      DirSubFetchEnable ();
+      SmartFetchEnable ();
+      TPASmartFetchEnable ();
+    }
+  }
+#endif
+
+  if (! only_use_smart) {
+    if (useEntrez) {
+      if (useSeqFetch) {
+        PubSeqFetchEnable ();
+        PubMedFetchEnable ();
+      } else {
+        PubSeqFetchEnableEx (FALSE, TRUE, TRUE, TRUE, TRUE);
+        PubMedFetchEnable ();
+      }
+    }
+
+    if (useLocal) {
+      LocalSeqFetchInit (FALSE);
+    }
+  }
+*/
 
 #ifdef WIN_MAC
   SetDeactivate (NULL, MacDeactProc);
@@ -11639,6 +11912,9 @@ Int2 Main (void)
   Remove (initSubmitForm);
   Remove (formatForm);
   Remove (helpForm);
+
+  FreeSqnTempFiles ();
+
   ArrowCursor ();
   Update ();
 
@@ -11732,7 +12008,7 @@ extern void MakeBadSpecificHostValueTable (IteM i)
   sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
   if (sep == NULL) return;
 
-  bad_biop_list = Taxon3CheckSpecificHostInSeqEntry (sep, TRUE);
+  bad_biop_list = Taxon3CheckSpecificHostInSeqEntry (sep, TRUE, FALSE);
 
   if (bad_biop_list == NULL)
   {
@@ -11747,3 +12023,300 @@ extern void MakeBadSpecificHostValueTable (IteM i)
   CloseLog (lip);
   lip = FreeLog (lip);
 }
+
+
+typedef struct updatefeaturesform {
+  FORM_MESSAGE_BLOCK
+  DialoG new_features;
+  ValNodePtr feat_list;
+  SeqAnnotPtr sap;
+} UpdateFeaturesFormData, PNTR UpdateFeaturesFormPtr;
+
+
+static void CleanupUpdateFeaturesForm (GraphiC g, VoidPtr data)
+{
+    UpdateFeaturesFormPtr f;
+
+    f = (UpdateFeaturesFormPtr) data;
+    if (f != NULL) {
+      f->feat_list = FreeClickableList (f->feat_list);
+      f->sap = SeqAnnotFree (f->sap);
+    }
+    StdCleanupFormProc (g, data);
+}
+
+
+
+static CharPtr GetNewItemDescription (SeqFeatPtr sfp)
+{
+  CharPtr location, label, row_text;
+  Char buf[129];
+  
+  location = SeqLocPrintUseBestID (sfp->location);
+  label = (CharPtr) FeatDefTypeLabel(sfp);
+
+  FeatDefLabel (sfp, buf, sizeof (buf) - 1, OM_LABEL_CONTENT);
+
+  row_text = (CharPtr) MemNew (sizeof (Char) * 
+                              (StringLen (label) 
+                              + StringLen (buf) 
+                              + StringLen (location) 
+                              + 6));
+  sprintf (row_text, "%s:%s:%s\n", label, buf, location);
+  location = MemFree (location);
+  return row_text;
+}
+
+
+static ClickableItemPtr PutFeaturesInOldItem (ValNodePtr item_list)
+{
+  ClickableItemPtr cip_olditems, cip;
+  ValNodePtr       vnp;
+
+  cip_olditems = (ClickableItemPtr) MemNew (sizeof (ClickableItemData));
+  if (item_list == NULL) {
+    cip_olditems->description = StringSave ("No old features found");
+    cip_olditems->chosen = FALSE;
+  } else {
+    for (vnp = item_list; vnp != NULL; vnp = vnp->next) {
+      cip = (ClickableItemPtr) MemNew (sizeof (ClickableItemData));
+      cip->description = GetNewItemDescription (vnp->data.ptrvalue);
+      cip->chosen = TRUE;
+      ValNodeAddPointer (&(cip->item_list), OBJ_SEQFEAT, vnp->data.ptrvalue);
+      ValNodeAddPointer (&(cip_olditems->subcategories), 0, cip);
+    }
+    cip_olditems->description = StringSave ("Old Features (check to delete)");
+    cip_olditems->chosen = TRUE;
+  }
+  return cip_olditems;
+}
+
+
+static void MarkChosenFeatures (ValNodePtr item_list, Boolean delete_marked)
+{
+  ClickableItemPtr cip;
+  ValNodePtr vnp;
+  SeqFeatPtr sfp;
+
+  while (item_list != NULL) {
+    cip = (ClickableItemPtr) item_list->data.ptrvalue;
+    if (cip != NULL) {
+      for (vnp = cip->item_list; vnp != NULL; vnp = vnp->next) {
+        if (vnp->choice == OBJ_SEQFEAT) {
+          sfp = (SeqFeatPtr) vnp->data.ptrvalue;
+          if ((cip->chosen && delete_marked) || (!cip->chosen && !delete_marked)) {
+            sfp->idx.deleteme = TRUE;
+          }
+        }
+      }
+    }
+    item_list = item_list->next;
+  }
+}
+
+
+static void MarkChosenFeaturesForBioseqs (ValNodePtr feat_list)
+{
+  ClickableItemPtr cip, cip_new, cip_old;
+
+  if (feat_list == NULL) return;
+  cip = (ClickableItemPtr) feat_list->data.ptrvalue;
+  if (cip->item_list != NULL && cip->item_list->choice == OBJ_BIOSEQ) {
+    if (cip->subcategories != NULL) {
+      cip_new = (ClickableItemPtr) cip->subcategories->data.ptrvalue;
+      MarkChosenFeatures (cip_new->subcategories, FALSE);
+      if (cip->subcategories->next != NULL) {
+        cip_old = (ClickableItemPtr) cip->subcategories->next->data.ptrvalue;
+        MarkChosenFeatures (cip_old->subcategories, TRUE);
+      }
+    }
+    MarkChosenFeaturesForBioseqs (feat_list->next);
+  } else if (feat_list->next != NULL && feat_list->next->next == NULL && cip->item_list == NULL) {
+    cip_new = (ClickableItemPtr) feat_list->data.ptrvalue;
+    cip_old = (ClickableItemPtr) feat_list->next->data.ptrvalue;
+    MarkChosenFeatures (cip_new->subcategories, FALSE);
+    MarkChosenFeatures (cip_old->subcategories, TRUE);
+  }
+}
+
+
+static void DoUpdateFeatures (ButtoN b)
+{
+  UpdateFeaturesFormPtr f;
+
+  f = (UpdateFeaturesFormPtr) GetObjectExtra (b);
+  if (f == NULL) return;
+
+  MarkChosenFeaturesForBioseqs (f->feat_list);
+  
+  SmartAttachSeqAnnotToSeqEntry (f->input_entityID, f->sap, NULL);
+  f->sap = NULL;
+
+  DeleteMarkedObjects (f->input_entityID, 0, NULL);
+  ObjMgrSetDirtyFlag (f->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, f->input_entityID, 0, 0);
+
+  Remove (f->form);
+}
+
+
+extern void UpdateFeatures (IteM i)
+{
+  BaseFormPtr  bfp;
+  SeqEntryPtr  sep;
+  Pointer        dataptr;
+  Uint2          datatype;
+  FILE           *fp;
+  Char           path [PATH_MAX];
+  SeqAnnotPtr    sap;
+  SeqFeatPtr     sfp;
+  ValNodePtr     new_feat_list = NULL, no_bsp_list = NULL, old_item_list;
+  Int4           leftmost = -1, rightmost = -1, new_left, new_right, tmp;
+  BioseqPtr      bsp, last_bsp = NULL;
+  ClickableItemPtr cip = NULL, cip_newitems = NULL, cip_olditems, cip_newfeat;
+  SeqLocPtr        slp;
+  WindoW           w;
+  GrouP            h, g, c;
+  ButtoN           b;
+  UpdateFeaturesFormPtr f;
+  Char             id [42];
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL) return;
+
+  path [0] = '\0';
+  if (!GetInputFileName (path, sizeof (path), "", "TEXT")) {
+    return;
+  }
+
+  fp = FileOpen (path, "r");
+  if (fp == NULL) {
+    Message (MSG_ERROR, "Unable to open file!");
+    return;
+  }
+  dataptr = ReadAsnFastaOrFlatFile (fp, &datatype, NULL, FALSE, FALSE,
+                                    TRUE, TRUE);
+  FileClose (fp);
+  if (dataptr == NULL || datatype != OBJ_SEQANNOT) {
+    Message (MSG_ERROR, "File does not contain feature table!");
+    return;
+  }
+
+  sap = (SeqAnnotPtr) dataptr;
+  if (sap->type != 1) {
+    Message (MSG_ERROR, "File does not contain feature table!");
+    sap = SeqAnnotFree (sap);
+    return;
+  }
+
+  // list features for each bioseq
+  for (sfp = sap->data; sfp != NULL; sfp = sfp->next) {
+    bsp = BioseqFindFromSeqLoc (sfp->location);
+    if (bsp == NULL) {    
+      ValNodeAddPointer (&no_bsp_list, OBJ_SEQFEAT, sfp);
+    } else {
+      if (bsp != last_bsp) {   
+        if (last_bsp != NULL) {
+          slp = SeqLocIntNew (leftmost, rightmost, Seq_strand_plus, SeqIdDup (SeqIdFindWorst (bsp->id)));
+          old_item_list = ListFeaturesOverlappingLocation (last_bsp, slp, 0, 0);
+          slp = SeqLocFree (slp);
+          cip_olditems = PutFeaturesInOldItem (old_item_list);
+          old_item_list = ValNodeFree (old_item_list);
+          ValNodeAddPointer (&(cip->subcategories), 0, cip_olditems);
+        }   
+        cip = (ClickableItemPtr) MemNew (sizeof (ClickableItemData));
+        ValNodeAddPointer (&(cip->item_list), OBJ_BIOSEQ, bsp);
+
+        SeqIdWrite (SeqIdFindBest (bsp->id, SEQID_GENBANK), id, PRINTID_FASTA_LONG, sizeof (id) - 1);
+        cip->description = StringSave (id);
+        cip_newitems = (ClickableItemPtr) MemNew (sizeof (ClickableItemData));
+        cip_newitems->description = StringSave ("New Features (check to import)");
+        cip_newitems->chosen = TRUE;
+        ValNodeAddPointer (&(cip->subcategories), 0, cip_newitems);
+        last_bsp = bsp;
+        ValNodeAddPointer (&new_feat_list, 0, cip);
+        leftmost = -1;
+        rightmost = -1;
+      }
+      cip_newfeat = (ClickableItemPtr) MemNew (sizeof (ClickableItemData));
+      cip_newfeat->description = GetNewItemDescription (sfp);      
+      cip_newfeat->chosen = TRUE;
+      ValNodeAddPointer (&(cip_newfeat->item_list), OBJ_SEQFEAT, sfp);
+      ValNodeAddPointer (&(cip_newitems->subcategories), 0, cip_newfeat);
+      new_left = SeqLocStart (sfp->location);
+      new_right = SeqLocStop (sfp->location);
+      if (new_left > new_right) {
+        tmp = new_left;
+        new_left = new_right;
+        new_right = tmp;
+      }
+      if (leftmost == -1 || new_left < leftmost) {
+        leftmost = new_left;
+      }
+      if (rightmost == -1 || new_right > rightmost) {
+        rightmost = new_right;
+      }
+    }
+  }
+  if (last_bsp != NULL) {
+    slp = SeqLocIntNew (leftmost, rightmost, Seq_strand_plus, SeqIdDup (SeqIdFindWorst (bsp->id)));
+    old_item_list = ListFeaturesOverlappingLocation (last_bsp, slp, 0, 0);
+    slp = SeqLocFree (slp);
+    cip_olditems = PutFeaturesInOldItem (old_item_list);
+    old_item_list = ValNodeFree (old_item_list);
+    ValNodeAddPointer (&(cip->subcategories), 0, cip_olditems);
+  }
+
+  if (no_bsp_list != NULL) {
+    Message (MSG_ERROR, "%d features in table are not found on a Bioseq in this record!", ValNodeLen (no_bsp_list));
+    no_bsp_list = ValNodeFree (no_bsp_list);
+  }
+ 
+  if (new_feat_list == NULL) {
+    Message (MSG_ERROR, "No features found!");
+    sap = SeqAnnotFree (sap);
+    return;
+  }
+  if (new_feat_list->next == NULL) {
+    no_bsp_list = new_feat_list;
+    cip = (ClickableItemPtr) new_feat_list->data.ptrvalue;
+    new_feat_list = cip->subcategories;
+    cip->subcategories = NULL;
+    no_bsp_list = FreeClickableList (no_bsp_list);
+  }  
+   
+
+  /* Now create dialog to allow user to select new features to import and existing features to delete */
+  f = (UpdateFeaturesFormPtr) MemNew (sizeof (UpdateFeaturesFormData));
+  w = FixedWindow (-50, -33, -10, -10, "Update Features", StdCloseWindowProc);
+  SetObjectExtra (w, f, CleanupUpdateFeaturesForm);
+  f->form = (ForM) w;
+  f->input_entityID = bfp->input_entityID;
+  f->feat_list = new_feat_list;
+  f->sap = sap;
+  h = HiddenGroup (w, -1, 0, NULL);
+  SetGroupSpacing (h, 10, 10);
+  g = HiddenGroup (h, 2, 0, NULL);
+  f->new_features = CreateClickableListDialog (g, "New Features (check to import)", "label1", NULL, NULL, NULL, GetDiscrepancyItemText);
+  PointerToDialog (f->new_features, new_feat_list);
+/*  f->old_features = CreateClickableListDialog (g, "Old Features", "label1",
+                                               ScrollToDiscrepancyItem, EditDiscrepancyItem, bfp,
+                                               GetDiscrepancyItemText); */
+  c = HiddenGroup (h, 4, 0, NULL);
+  b = PushButton (c, "Accept", DoUpdateFeatures);
+  SetObjectExtra (b, f, NULL);
+  PushButton (c, "Cancel", StdCancelButtonProc);
+  
+  AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) c, NULL);
+  Show (w);
+  Select (w);
+
+
+}
+

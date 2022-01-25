@@ -3,7 +3,7 @@
 	ProjectType="Visual C++"
 	Version="8.00"
 	Name="http_connector_hit"
-	ProjectGUID="{A73BBA44-40FF-4306-AF50-94737CD49839}"
+	ProjectGUID="{6266F193-8E41-4543-BB84-4DEA87146A44}"
 	>
 	<Platforms>
 		<Platform

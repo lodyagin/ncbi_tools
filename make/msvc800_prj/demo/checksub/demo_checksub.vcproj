@@ -3,7 +3,7 @@
 	ProjectType="Visual C++"
 	Version="8.00"
 	Name="demo_checksub"
-	ProjectGUID="{83D6FAB0-4A26-4EB6-9B0D-7E665CBE703C}"
+	ProjectGUID="{D6205067-CD94-494E-A553-C3706C7CFB3B}"
 	>
 	<Platforms>
 		<Platform

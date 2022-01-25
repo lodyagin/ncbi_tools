@@ -3,7 +3,7 @@
 	ProjectType="Visual C++"
 	Version="8.00"
 	Name="demo_cnsrt"
-	ProjectGUID="{487B891B-190D-4534-9B6F-120C53FB4BB9}"
+	ProjectGUID="{8D7875E5-8DC6-44CA-8B25-6501CC30C301}"
 	>
 	<Platforms>
 		<Platform

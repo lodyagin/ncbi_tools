@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/20/99
 *
-* $Revision: 6.462 $
+* $Revision: 6.469 $
 *
 * File Description: 
 *
@@ -2991,7 +2991,7 @@ ReplaceQualityScores
 }
 
 
-static void RemoveQualityScores 
+extern void RemoveQualityScores 
 (BioseqPtr bsp, 
  FILE      *log_fp,
  BoolPtr   data_in_log)
@@ -3025,6 +3025,243 @@ static void RemoveQualityScores
   score_list = ValNodeFree (score_list);
   DeleteMarkedObjects (0, OBJ_BIOSEQ, (Pointer) bsp);
 }
+
+
+#define SEQGRAPH_FloatHi    1
+#define SEQGRAPH_Int4       2
+#define SEQGRAPH_BS         3
+
+/* remove compression from SeqGraph */
+static Boolean ExpandSeqGraph (SeqGraphPtr sgp)
+{
+  Int4    oldpos = 0, newpos = 0, i;
+  Pointer new_values;
+  Int4    new_numval;
+  Int2    cur_byte;
+
+  if (sgp == NULL || sgp->compr == 0 || sgp->compr == 1) {
+    return TRUE;
+  } else if (sgp->compr < 0) {
+    return FALSE;
+  }
+
+  new_numval = sgp->numval * sgp->compr;
+
+  /* allocate space for new values */
+  switch (sgp->flags[2]) {
+    case SEQGRAPH_FloatHi:
+      new_values = MemNew (sizeof (FloatHi) * new_numval);
+      break;
+    case SEQGRAPH_Int4:
+      new_values = MemNew (sizeof (Int4) * new_numval);
+      break;
+    case SEQGRAPH_BS:
+      new_values = (Pointer) BSNew (new_numval);
+      BSSeek ((ByteStorePtr)new_values, 0, SEEK_SET);
+      BSSeek ((ByteStorePtr) sgp->values, 0, SEEK_SET);
+      break;
+  }
+
+  /* copy and expand */
+  while (oldpos < sgp->numval) {
+    if (sgp->flags[2] == SEQGRAPH_BS) {
+      cur_byte = BSGetByte ((ByteStorePtr) sgp->values);
+    }
+    for (i = 0; i < sgp->compr; i++) {
+      switch (sgp->flags[2]) {
+        case SEQGRAPH_FloatHi:
+          ((FloatHiPtr)new_values)[newpos++] = ((FloatHiPtr)sgp->values)[oldpos];
+          break;
+        case SEQGRAPH_Int4:
+          ((Int4Ptr)new_values)[newpos++] = ((Int4Ptr)sgp->values)[oldpos];
+          break;
+        case SEQGRAPH_BS:
+          BSPutByte ((ByteStorePtr) new_values, cur_byte);
+          break;
+      }
+    }
+    oldpos++;
+  }
+
+  /* free old values and replace with new */
+  if (sgp->flags[2] == SEQGRAPH_BS) {
+    sgp->values = BSFree ((ByteStorePtr) sgp->values);
+  } else {    
+    sgp->values = MemFree (sgp->values);    
+  }
+  sgp->values = new_values;
+  sgp->numval = new_numval;
+  sgp->compr = 0;
+
+  return TRUE;
+}
+
+static Boolean TruncateSeqGraphValues (SeqGraphPtr sgp, Int4 len, Boolean onleft)
+{
+  Int4    oldpos, newpos = 0;
+  Pointer new_values;
+  Int4    new_numval;
+  Int2    cur_byte;
+  Int4    imin, imax;
+  FloatHi fmin, fmax;
+
+  if (sgp == NULL) return TRUE;
+  if (!ExpandSeqGraph (sgp)) return FALSE;
+
+  new_numval = sgp->numval - len;
+
+  /* allocate space for new values */
+  switch (sgp->flags[2]) {
+    case SEQGRAPH_FloatHi:
+      new_values = MemNew (sizeof (FloatHi) * new_numval);
+      fmin = ((FloatHiPtr)sgp->values)[0];
+      fmax = fmin;
+      break;
+    case SEQGRAPH_Int4:
+      new_values = MemNew (sizeof (Int4) * new_numval);
+      imin = ((Int4Ptr)sgp->values)[0];
+      imax = imin;
+      break;
+    case SEQGRAPH_BS:
+      new_values = (Pointer) BSNew (new_numval);
+      BSSeek ((ByteStorePtr)new_values, 0, SEEK_SET);
+      if (onleft) {
+        BSSeek ((ByteStorePtr) sgp->values, len, SEEK_SET);
+      } else {
+        BSSeek ((ByteStorePtr) sgp->values, 0, SEEK_SET);
+      }
+      imin = BSGetByte ((ByteStorePtr) sgp->values);
+      imax = imin;
+      /* put pointer back */
+      if (onleft) {
+        BSSeek ((ByteStorePtr) sgp->values, len, SEEK_SET);
+      } else {
+        BSSeek ((ByteStorePtr) sgp->values, 0, SEEK_SET);
+      }
+      break;
+  }
+
+  /* copy */
+  if (onleft) {
+    oldpos = len;
+  } else {
+    oldpos = 0;
+  }
+  while (oldpos < sgp->numval && newpos < new_numval) {
+      switch (sgp->flags[2]) {
+        case SEQGRAPH_FloatHi:
+          ((FloatHiPtr)new_values)[newpos] = ((FloatHiPtr)sgp->values)[oldpos];
+          if (((FloatHiPtr)new_values)[newpos] > fmax) {
+            fmax = ((FloatHiPtr)new_values)[newpos];
+          }
+          if (((FloatHiPtr)new_values)[newpos] < fmin) {
+            fmin = ((FloatHiPtr)new_values)[newpos];
+          }
+          break;
+        case SEQGRAPH_Int4:
+          ((Int4Ptr)new_values)[newpos] = ((Int4Ptr)sgp->values)[oldpos];
+          if (((Int4Ptr)new_values)[newpos] > imax) {
+            imax = ((Int4Ptr)new_values)[newpos];
+          }
+          if (((Int4Ptr)new_values)[newpos] < imin) {
+            imin = ((Int4Ptr)new_values)[newpos];
+          }
+          break;
+        case SEQGRAPH_BS:
+          cur_byte = BSGetByte ((ByteStorePtr) sgp->values);
+          BSPutByte ((ByteStorePtr) new_values, cur_byte);
+          if (cur_byte > imax) {
+            imax = cur_byte;
+          }
+          if (cur_byte < imin) {
+            imin = cur_byte;
+          }
+          break;
+    }
+    oldpos++;
+    newpos++;
+  }
+
+  /* free old values and replace with new */
+  if (sgp->flags[2] == SEQGRAPH_BS) {
+    sgp->values = BSFree ((ByteStorePtr) sgp->values);
+  } else {    
+    sgp->values = MemFree (sgp->values);    
+  }
+  sgp->values = new_values;
+  sgp->numval = new_numval;
+
+  /* replace mins and maxes */
+  if (sgp->flags[2] == SEQGRAPH_FloatHi) {
+    sgp->max.realvalue = fmax;
+    sgp->min.realvalue = fmin;
+  } else {
+    sgp->max.intvalue = imax;
+    sgp->min.intvalue = imin;
+  }
+  return TRUE;  
+}
+
+  
+
+/* assume Bioseq has already been trimmed - length of old Bioseq was trim5 + bsp->length + trim3 */
+static Boolean 
+TrimQualityScoresForSequenceUpdate 
+(BioseqPtr bsp, 
+ Int4      trim5,
+ Int4      trim3,
+ FILE      *log_fp,
+ BoolPtr   data_in_log)
+{
+  ValNodePtr    score_list = NULL, vnp;
+  SeqGraphPtr   sgp;
+  SeqIntPtr     sip;
+  Int4          left, right;
+  Boolean       rval = FALSE;
+  Char          acc_str [256];
+
+  if (bsp == NULL) return FALSE;
+
+  VisitGraphsOnBsp (bsp, &score_list, ListPhrapGraphsCallback);
+  if (score_list == NULL) return FALSE;
+
+  for (vnp = score_list; vnp != NULL; vnp = vnp->next) {
+    sgp = vnp->data.ptrvalue;
+    if (sgp != NULL && sgp->loc != NULL && sgp->loc->choice == SEQLOC_INT) {
+      sip = (SeqIntPtr) sgp->loc->data.ptrvalue;
+      /* trim on right */
+      if (sip->from > trim5 + bsp->length) {
+        sgp->idx.deleteme = TRUE;
+        rval = TRUE;
+      } else if (sip->to > trim5 + bsp->length - 1) {
+        right = sip->to - trim5 - bsp->length + 1;
+        sip->to = trim5 + bsp->length - 1;
+        TruncateSeqGraphValues (sgp, right, FALSE);
+        rval = TRUE;
+      }
+      
+      sip->from -= trim5;
+      sip->to -= trim5;
+      if (sip->to < 0) {
+        sgp->idx.deleteme = TRUE;
+        rval = TRUE;
+      } else if (sip->from < 0) {
+        left = 0 - sip->from;
+        sip->from = 0;
+        TruncateSeqGraphValues (sgp, left, TRUE);
+        rval = TRUE;
+      }
+    }
+  }  
+
+  if (rval && log_fp != NULL && data_in_log != NULL) {
+    SeqIdWrite (bsp->id, acc_str, PRINTID_REPORT, sizeof (acc_str));
+    fprintf (log_fp, "Quality scores trimmed for %s\n", acc_str);
+    *data_in_log = TRUE;
+  }
+  return rval;
+}
+
 
 static Boolean AdjustAlignment (
   UpsDataPtr udp,
@@ -5170,15 +5407,16 @@ static CharPtr FixProteinString
   CharPtr      newprot;
   CharPtr      ptr;
   Char         ch;
-  Int4         start, stop, new_stop;
+  Int4         start, stop, new_stop, prot_len;
   Boolean      changed;
+  CdRegionPtr  crp;
   
   if (sfp == NULL || truncated == NULL 
       || contains_start == NULL
       || contains_stop == NULL) {
     return NULL;
   }
-  
+
   bs = ProteinFromCdRegionEx (sfp, TRUE, FALSE);
   if (bs == NULL) return NULL;
   newprot = BSMerge (bs, NULL);
@@ -5207,7 +5445,18 @@ static CharPtr FixProteinString
           if (nucBsp == NULL) return newprot;
           start = GetOffsetInBioseq (sfp->location, nucBsp, SEQLOC_START);
           stop = GetOffsetInBioseq (sfp->location, nucBsp, SEQLOC_STOP);
-          new_stop = FindNewCDSStop (sfp->location, nucBsp, (1 + ptr - newprot) * 3);
+          prot_len = (1 + ptr - newprot) * 3;
+          if (sfp->data.choice == SEQFEAT_CDREGION) {
+            crp = (CdRegionPtr) sfp->data.value.ptrvalue;
+            if (crp != NULL) {
+              if (crp->frame == 2) {
+                prot_len += 1;
+              } else if (crp->frame == 3) {
+                prot_len += 2;
+              }
+            }
+          }
+          new_stop = FindNewCDSStop (sfp->location, nucBsp, prot_len);
           if (strand == Seq_strand_minus) {
             sfp->location = SeqLocDelete (sfp->location, SeqLocId (sfp->location),
                           stop, new_stop - 1, FALSE, &changed);
@@ -5775,22 +6024,6 @@ AdjustCDSForUpdate
 }
 
   
-extern SeqLocPtr SeqLocWholeNew (BioseqPtr bsp)
-{
-  ValNodePtr vnp;
-
-  if (bsp == NULL) return NULL;
-
-  vnp = ValNodeNew (NULL);
-
-  if (vnp == NULL) return NULL;
-
-  vnp->choice = SEQLOC_WHOLE;
-  vnp->data.ptrvalue = (Pointer) SeqIdDup (SeqIdFindBest (bsp->id, 0));
-  return (SeqLocPtr)vnp;
-}
-
-
 static void WarnNoProteinUpdate (BioseqPtr bsp)
 {
   Char     acc_str [256];
@@ -10560,8 +10793,10 @@ typedef struct addtranslexceptdata {
 
   TexT        cds_comment;
   ButtoN      strict_checking_btn;
+  ButtoN      extend_btn;
   CharPtr     cds_comment_txt;
   Boolean     strict_checking;
+  Boolean     extend;
 } AddTranslExceptData, PNTR AddTranslExceptPtr; 
 
 
@@ -10589,7 +10824,92 @@ static SeqLocPtr SeqLocForTermination (SeqLocPtr slp, Int4 except_len)
 }
 
 
-extern void AddTranslExcept (SeqFeatPtr sfp, CharPtr cds_comment, Boolean use_strict)
+static Boolean DoesCodingRegionEndWithStopCodon (SeqFeatPtr sfp)
+{
+  ByteStorePtr bs;
+  CharPtr      prot_str;
+  Boolean      rval = FALSE;
+
+  bs = ProteinFromCdRegionEx (sfp, TRUE, FALSE);
+  prot_str = BSMerge (bs, NULL);
+  bs = BSFree (bs);
+  if (prot_str != NULL && prot_str[StringLen (prot_str) - 1] == '*') {
+    rval = TRUE;
+  }
+  prot_str = MemFree (prot_str);
+  return rval;
+}
+
+
+static Int4 AddTerminalExceptionLen (SeqFeatPtr sfp)
+{
+  BioseqPtr bsp;
+  Uint1     strand;
+  Int4      stop, len, except_len = 0, gene_stop;
+  Char      buf[4];
+  Int4      rval = 0;
+  SeqFeatPtr gene;
+
+  if (sfp == NULL || sfp->location == NULL) return FALSE;
+
+  bsp = BioseqFindFromSeqLoc (sfp->location);
+  if (bsp == NULL) return 0;
+  strand = SeqLocStrand (sfp->location);
+  if (strand == Seq_strand_minus) {
+    stop = SeqLocStart (sfp->location);
+    len = MIN (stop, 3);
+    if (len > 0) {
+      SeqPortStreamInt (bsp, stop - len, stop - 1,
+                        Seq_strand_minus,STREAM_EXPAND_GAPS | STREAM_CORRECT_INVAL,
+                        buf, NULL);
+    }
+  } else {
+    stop = SeqLocStop (sfp->location);
+    len = MIN (bsp->length - stop - 1, 3);
+    if (len > 0) {
+      SeqPortStreamInt (bsp, stop + 1, stop + len,
+                        Seq_strand_plus,STREAM_EXPAND_GAPS | STREAM_CORRECT_INVAL,
+                        buf, NULL);
+    }
+  }
+  if (len > 0) {
+    if (buf[0] == 'T') {
+      except_len++;
+      if (buf[1] == 'A') {
+        except_len++;
+        if (buf[2] == 'A') {
+          /* has real stop codon */
+          except_len++;
+        }
+      }
+    }
+    if (except_len < 3 && except_len > 0) {
+      gene = GetGeneForFeature (sfp);
+      if (strand == Seq_strand_minus) {
+        if (gene != NULL) {
+          gene_stop = SeqLocStart (gene->location);
+          if (gene_stop > stop - except_len) {
+            ExtendSeqLocToPosition (gene->location, FALSE, stop - except_len);
+          }
+        }
+        ExtendSeqLocToPosition (sfp->location, FALSE, stop - except_len);
+      } else {
+        if (gene != NULL) {
+          gene_stop = SeqLocStop (gene->location);
+          if (gene_stop < stop + except_len) {
+            ExtendSeqLocToPosition (gene->location, FALSE, stop + except_len);
+          }
+        }
+        ExtendSeqLocToPosition (sfp->location, FALSE, stop + except_len);
+      }
+      rval = except_len;
+    }
+  }
+  return rval;
+}
+
+
+extern void AddTranslExcept (SeqFeatPtr sfp, CharPtr cds_comment, Boolean use_strict, Boolean extend)
 
 {
   CdRegionPtr        crp;
@@ -10621,6 +10941,11 @@ extern void AddTranslExcept (SeqFeatPtr sfp, CharPtr cds_comment, Boolean use_st
   } else {
     except_len = dna_len % 3;
   }
+  if (except_len == 0 && extend && !DoesCodingRegionEndWithStopCodon(sfp)) {
+    except_len = AddTerminalExceptionLen (sfp);
+    dna_len = SeqLocLen (sfp->location);
+  }   
+
   if (except_len == 0) return;
 
   /* don't add code break if one already exists */
@@ -10739,6 +11064,7 @@ static void AddTranslExceptCallback (SeqFeatPtr sfp, Pointer userdata)
 {
   AddTranslExceptPtr ap;
   Boolean            use_strict = FALSE;
+  Boolean            extend = FALSE;
   CharPtr            cds_comment = NULL;
 
   ap = (AddTranslExceptPtr) userdata;
@@ -10746,9 +11072,10 @@ static void AddTranslExceptCallback (SeqFeatPtr sfp, Pointer userdata)
   {
     cds_comment = ap->cds_comment_txt;
   	use_strict = ap->strict_checking;
+    extend = ap->extend;
   }
 
-  AddTranslExcept (sfp, cds_comment, use_strict);
+  AddTranslExcept (sfp, cds_comment, use_strict, extend);
 }
 
 
@@ -10786,6 +11113,7 @@ static void DoAddTranslExceptWithComment (ButtoN b)
   oldscope = SeqEntrySetScope (sep);
   ap->cds_comment_txt = SaveStringFromText (ap->cds_comment);
   ap->strict_checking = GetStatus (ap->strict_checking_btn);
+  ap->extend = GetStatus (ap->extend_btn);
   if (StringHasNoText (ap->cds_comment_txt))
   {
   	ap->cds_comment_txt = MemFree (ap->cds_comment_txt);
@@ -10839,12 +11167,15 @@ extern void AddTranslExceptWithComment (IteM i)
   clear_btn = PushButton (h, "Clear Comment", ClearComment);
   SetObjectExtra (clear_btn, ap, NULL);
   ap->strict_checking_btn = CheckBox (h, "Overhang must be T or TA", NULL);
+  ap->extend_btn = CheckBox (h, "Extend for T/TA overhang", NULL);
 
   c = HiddenGroup (h, 4, 0, NULL);
   b = DefaultButton (c, "Accept", DoAddTranslExceptWithComment);
   SetObjectExtra (b, ap, NULL);
   PushButton (c, "Cancel", StdCancelButtonProc);
-  AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) clear_btn, (HANDLE) ap->strict_checking_btn, (HANDLE) c, NULL);
+  AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) clear_btn, 
+               (HANDLE) ap->strict_checking_btn,
+               (HANDLE) ap->extend_btn, (HANDLE) c, NULL);
   RealizeWindow (w);
   Show (w);
   Update ();
@@ -12814,6 +13145,32 @@ ReportBadUpdateType
   }
 }
 
+static Boolean OkToTrimQualityScores (UpdatePairPtr upp, UpdateAlignmentLengthsPtr ualp)
+{
+  CharPtr buf1, buf2;
+  Boolean rval = FALSE;
+
+  if (upp == NULL || upp->orig_bsp == NULL || upp->update_bsp == NULL 
+      || upp->update_bsp->length > upp->orig_bsp->length
+      || ualp == NULL || ualp->new5 > 0 || ualp->new3 > 0 || ualp->newa != ualp->olda || ualp->newa != upp->update_bsp->length) {
+    return FALSE;
+  }
+  buf1 = (CharPtr) MemNew (sizeof (Char) * (ualp->newa + 1));
+  MemSet (buf1, 0, sizeof (Char) * (ualp->newa + 1));
+  buf2= (CharPtr) MemNew (sizeof (Char) * (ualp->newa + 1));
+  MemSet (buf2, 0, sizeof (Char) * (ualp->newa + 1));
+
+  if (SeqPortStreamInt (upp->orig_bsp, ualp->old5, ualp->old5 + ualp->olda - 1, Seq_strand_plus, STREAM_EXPAND_GAPS, buf1, NULL) == upp->update_bsp->length
+      && SeqPortStreamInt (upp->update_bsp, 0, upp->update_bsp->length - 1, Seq_strand_plus, STREAM_EXPAND_GAPS, buf2, NULL) == upp->update_bsp->length
+      && StringCmp (buf1, buf2) == 0) {
+    rval = TRUE;
+  }
+  buf1 = MemFree (buf1);
+  buf2 = MemFree (buf2);
+  return rval;
+}
+
+
 static Boolean 
 UpdateOrExtendOneSequenceEx 
 (UpdatePairPtr             upp,
@@ -12836,6 +13193,7 @@ UpdateOrExtendOneSequenceEx
   Uint2        update_entityID;
   Char         id_txt [128];
   Boolean      deleted_features = FALSE;
+  Boolean      trim_quality_scores = FALSE;
 
   if (upp == NULL || upp->orig_bsp == NULL || upp->update_bsp == NULL
       || uop == NULL || uop->submitter_opts == NULL)
@@ -12905,6 +13263,7 @@ UpdateOrExtendOneSequenceEx
   switch (uop->submitter_opts->sequence_update_type)
   {
     case eSequenceUpdateReplace:
+      trim_quality_scores = OkToTrimQualityScores (upp, ualp);
       ReplaceOneSequence (upp->salp, upp->orig_bsp, upp->update_bsp);
       sequence_update_successful = TRUE;
       rval = sequence_update_successful;
@@ -12996,7 +13355,9 @@ UpdateOrExtendOneSequenceEx
     FixProtRefPtrs (prot_feat_list);        
   }
   
-  if (uop->indexer_opts != NULL && uop->indexer_opts->update_quality_scores
+  if (trim_quality_scores && (uop->indexer_opts == NULL || !uop->indexer_opts->update_quality_scores)) {
+    TrimQualityScoresForSequenceUpdate (upp->orig_bsp, ualp->old5, ualp->old3, log_fp, data_in_log);
+  } else if (uop->indexer_opts != NULL && uop->indexer_opts->update_quality_scores
       && uop->submitter_opts->sequence_update_type == eSequenceUpdateReplace)
   {
     ReplaceQualityScores (upp->orig_bsp, upp->update_bsp, 
@@ -17212,7 +17573,7 @@ static Boolean BioseqListHasFeatures (ValNodePtr bioseq_list)
 }
 
 
-static Boolean EntityIDAlreadyInList (Uint2 entityID, ValNodePtr entityIDList)
+extern Boolean EntityIDAlreadyInList (Uint2 entityID, ValNodePtr entityIDList)
 {
   while (entityIDList != NULL) {
     if ((Uint2)(entityIDList->data.intvalue) == entityID) {
@@ -17621,12 +17982,11 @@ static void LoadUpdateSequenceMapFileBtn (ButtoN b)
   }
 }
 
-extern SeqEntryPtr RestoreFromFile (CharPtr path);
 
 static void UndoUpdates (ButtoN b)
 {
   UpdateMultiSequenceFormPtr usfp;
-  SeqEntryPtr                oldsep, currsep;
+  Uint2                      new_entityID;
   
   usfp = (UpdateMultiSequenceFormPtr) GetObjectExtra (b);
   if (usfp == NULL)
@@ -17636,14 +17996,12 @@ static void UndoUpdates (ButtoN b)
   WatchCursor ();
   Update ();
 
-  SeqEntrySetScope (NULL);
-  oldsep = RestoreFromFile (usfp->undo_file);
-  currsep = GetTopSeqEntryForEntityID (usfp->input_entityID);
-  ReplaceSeqEntryWithSeqEntry (currsep, oldsep, TRUE);
-  SeqEntrySetScope (NULL);
-  usfp->input_entityID = ObjMgrGetEntityIDForChoice (currsep);
-  ObjMgrSetDirtyFlag (usfp->input_entityID, TRUE);
-  ObjMgrSendMsg (OM_MSG_UPDATE, usfp->input_entityID, 0, 0);
+  new_entityID = RestoreEntityIDFromFile (usfp->undo_file, usfp->input_entityID);
+  if (new_entityID != 0) {
+    usfp->input_entityID = new_entityID;
+    ObjMgrSetDirtyFlag (usfp->input_entityID, TRUE);
+    ObjMgrSendMsg (OM_MSG_UPDATE, usfp->input_entityID, 0, 0);
+  }
 
   usfp->num_successful = 0;
   usfp->num_failed = 0;

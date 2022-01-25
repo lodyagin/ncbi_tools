@@ -1,4 +1,4 @@
-/* $Id: blast_options.h,v 1.146 2007/05/22 20:55:36 kazimird Exp $
+/* $Id: blast_options.h,v 1.149 2008/01/24 21:25:45 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -132,7 +132,7 @@ extern "C" {
 /** default dropoff for the final gapped extension with traceback */
 #define BLAST_GAP_X_DROPOFF_FINAL_PROT 25 /**< default dropoff (all protein-
                                                based gapped extensions) */
-#define BLAST_GAP_X_DROPOFF_FINAL_NUCL 50 /**< default dropoff for nucleotide
+#define BLAST_GAP_X_DROPOFF_FINAL_NUCL 100 /**< default dropoff for nucleotide
                                                gapped extensions) */
 #define BLAST_GAP_X_DROPOFF_FINAL_TBLASTX 0 /**< default dropoff for tblastx */
 
@@ -184,8 +184,6 @@ typedef struct LookupTableOptions {
    Int4 mb_template_length; /**< Length of the discontiguous words */
    Int4 mb_template_type; /**< Type of a discontiguous word template */
    char* phi_pattern;  /**< PHI-BLAST pattern */
-   Int4 max_num_patterns; /**< Maximal number of patterns allowed for 
-                             PHI-BLAST */
    EBlastProgramType program_number; /**< indicates blastn, blastp, etc. */
 } LookupTableOptions;
 
@@ -243,8 +241,6 @@ typedef struct BlastInitialWordOptions {
    double gap_trigger; /**< Score in bits for starting gapped extension */
    Int4 window_size; /**< Maximal allowed distance between 2 hits in case 2 
                         hits are required to trigger the extension */
-   Boolean ungapped_extension; /**< Should the ungapped extension be 
-                                  performed? */
    double x_dropoff; /**< X-dropoff value (in bits) for the ungapped 
                          extension */
    EBlastProgramType program_number; /**< indicates blastn, blastp, etc. */
@@ -308,8 +304,6 @@ typedef struct BlastHitSavingOptions {
    Int4 hsp_num_max; /**< Maximal number of HSPs to save for one database 
                         sequence */
    Int4 total_hsp_limit; /**< Maximal total number of HSPs to keep */
-   Int4 hsp_range_max; /**< Maximal number of HSPs to save in a region: 
-                          used for culling only */
    Int4 culling_limit; /**< If the query range of an HSP is contained in
                             at least this many higher-scoring HSPs, throw
                             away the HSP as redundant (turned off if zero) */
@@ -441,24 +435,28 @@ typedef struct BlastDatabaseOptions {
  * @param dust_options object to free
  * @return NULL pointer
  */
+NCBI_XBLAST_EXPORT
 SDustOptions* SDustOptionsFree(SDustOptions* dust_options);
 
 /** Allocates memory for SDustOptions, fills in defaults.
  * @param dust_options options that are being returned [in|out]
  * @return zero on sucess
  */
+NCBI_XBLAST_EXPORT
 Int2 SDustOptionsNew(SDustOptions* *dust_options);
 
 /** Frees SSegOptions.
  * @param seg_options object to free [in]
  * @return NULL pointer
  */
+NCBI_XBLAST_EXPORT
 SSegOptions* SSegOptionsFree(SSegOptions* seg_options);
 
 /** Allocates memory for SSegOptions, fills in defaults. [in|out]
  * @param seg_options options that are being returned [in|out]
  * @return zero on sucess
  */
+NCBI_XBLAST_EXPORT
 Int2 SSegOptionsNew(SSegOptions* *seg_options);
 
 /** Resets name of db for repeat filtering.
@@ -466,24 +464,28 @@ Int2 SSegOptionsNew(SSegOptions* *seg_options);
  * @param dbname name of the database(s) [in]
  * @return zero on sucess
  */
+NCBI_XBLAST_EXPORT
 Int2 SRepeatFilterOptionsResetDB(SRepeatFilterOptions* *repeat_options, const char* dbname);
 
 /** Frees SRepeatFilterOptions.
  * @param repeat_options object to free [in]
  * @return NULL pointer
  */
+NCBI_XBLAST_EXPORT
 SRepeatFilterOptions* SRepeatFilterOptionsFree(SRepeatFilterOptions* repeat_options);
 
 /** Allocates memory for SRepeatFilterOptions, fills in defaults.
  * @param repeat_options options that are being returned [in|out]
  * @return zero on sucess
  */
+NCBI_XBLAST_EXPORT
 Int2 SRepeatFilterOptionsNew(SRepeatFilterOptions* *repeat_options);
 
 /** Frees SBlastFilterOptions and all subservient structures.
  * @param filter_options object to free
  * @return NULL pointer
  */
+NCBI_XBLAST_EXPORT
 SBlastFilterOptions* SBlastFilterOptionsFree(SBlastFilterOptions* filter_options);
 
 /**  Merges two sets of options together, taking the non-default one as preferred.  if
@@ -493,6 +495,7 @@ SBlastFilterOptions* SBlastFilterOptionsFree(SBlastFilterOptions* filter_options
  * @param opt2 second set of options [in]
  * @return zero on success. 
  */
+NCBI_XBLAST_EXPORT
 Int2 SBlastFilterOptionsMerge(SBlastFilterOptions** combined, const SBlastFilterOptions* opt1,
        const SBlastFilterOptions* opt2);
 
@@ -510,12 +513,14 @@ typedef enum EFilterOptions {
  * @param type specify either dust or seg (now) with EFilterOptions [in]
  * @return zero on sucess
  */
+NCBI_XBLAST_EXPORT
 Int2 SBlastFilterOptionsNew(SBlastFilterOptions* *filter_options, EFilterOptions type);
 
 /** Queries whether masking should be done only for the lookup table or for the entire search.
  * @param filter_options the object to be queried [in]
  * @return TRUE or FALSE, FALSE if filter_options is NULL.
  */
+NCBI_XBLAST_EXPORT
 Boolean SBlastFilterOptionsMaskAtHash(const SBlastFilterOptions* filter_options);
 
 /** Validates filter options to ensure that program and options are consistent
@@ -525,6 +530,7 @@ Boolean SBlastFilterOptionsMaskAtHash(const SBlastFilterOptions* filter_options)
  * @param blast_message error or warning (optional) [out] 
  * @return zero on success
  */
+NCBI_XBLAST_EXPORT
 Int2 SBlastFilterOptionsValidate(EBlastProgramType program_number, const SBlastFilterOptions* filter_options, 
        Blast_Message* *blast_message);
 
@@ -604,10 +610,11 @@ BlastExtensionOptionsFree(BlastExtensionOptions* options);
 /** Allocate memory for BlastExtensionOptions and fill with default values.
  * @param program Program number (blastn, blastp, etc.) [in]
  * @param options The options that are being returned [out]
+ * @param gapped The search is gapped [in]
 */
 NCBI_XBLAST_EXPORT
 Int2
-BlastExtensionOptionsNew(EBlastProgramType program, BlastExtensionOptions* *options);
+BlastExtensionOptionsNew(EBlastProgramType program, BlastExtensionOptions* *options, Boolean gapped);
 
 /** Fill non-default values in the BlastExtensionOptions structure.
  * @param options The options structure [in] [out]
@@ -688,6 +695,7 @@ Int2 BlastScoringOptionsDup(BlastScoringOptions* *new_opt, const BlastScoringOpt
  * @param matrix_name New matrix name. If NULL, old matrix name is left 
  *                    as is. [in]
  */
+NCBI_XBLAST_EXPORT
 Int2 BlastScoringOptionsSetMatrix(BlastScoringOptions* opts,
                                   const char* matrix_name);
 
@@ -902,6 +910,7 @@ Int2 BLAST_ValidateOptions(EBlastProgramType program_number,
  * @param threshold returns suggested value [in|out]
  * @return zero on success
  */
+NCBI_XBLAST_EXPORT
 Int2 BLAST_GetSuggestedThreshold(EBlastProgramType program_number, 
                                  const char* matrixName, 
                                  double* threshold);
@@ -914,6 +923,7 @@ Int2 BLAST_GetSuggestedThreshold(EBlastProgramType program_number,
  * @param window_size returns suggested value [in|out]
  * @return zero on success
  */
+NCBI_XBLAST_EXPORT
 Int2 BLAST_GetSuggestedWindowSize(EBlastProgramType program_number, 
                                  const char* matrixName, 
                                  Int4* window_size);

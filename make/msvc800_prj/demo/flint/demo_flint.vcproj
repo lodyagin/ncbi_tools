@@ -3,7 +3,7 @@
 	ProjectType="Visual C++"
 	Version="8.00"
 	Name="demo_flint"
-	ProjectGUID="{3EFBB872-C18C-4F90-BA06-286C205E8A8A}"
+	ProjectGUID="{00DEC39E-11F7-40B4-8840-0556F331A964}"
 	>
 	<Platforms>
 		<Platform

@@ -1,6 +1,6 @@
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] =
-    "$Id: blast_psi.c,v 1.33 2006/11/21 17:07:09 papadopo Exp $";
+    "$Id: blast_psi.c,v 1.34 2007/12/07 18:25:42 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 /* ===========================================================================
  *
@@ -181,7 +181,9 @@ PSICreatePssmWithDiagnostics(const PSIMsa* msap,                    /* [in] */
     }
 
     status = _PSIComputeFreqRatios(msa, seq_weights, sbp, aligned_block, 
-                                   options->pseudo_count, internal_pssm);
+                                   options->pseudo_count, 
+                                   options->nsg_compatibility_mode,
+                                   internal_pssm);
     if (status != PSI_SUCCESS) {
         s_PSICreatePssmCleanUp(pssm, packed_msa, msa, aligned_block, 
                                seq_weights, internal_pssm);

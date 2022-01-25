@@ -3,7 +3,7 @@
 	ProjectType="Visual C++"
 	Version="8.00"
 	Name="exe_sequin"
-	ProjectGUID="{002CC81D-C6AF-4AED-8624-301D0E13ED46}"
+	ProjectGUID="{86F47145-3ABB-45BA-8D51-89C24997882F}"
 	>
 	<Platforms>
 		<Platform

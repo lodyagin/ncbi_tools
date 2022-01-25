@@ -1,4 +1,4 @@
-/*  $Id: ncbi_core.c,v 6.17 2006/07/13 21:01:04 lavr Exp $
+/*  $Id: ncbi_core.c,v 6.18 2007/10/17 15:25:43 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -264,7 +264,9 @@ extern void LOG_WriteInternal
  int         line,
  const char* message,
  const void* raw_data,
- size_t      raw_size)
+ size_t      raw_size,
+ int         err_code,
+ int         err_subcode)
 {
     if ( lg ) {
         LOG_LOCK_READ;
@@ -274,13 +276,15 @@ extern void LOG_WriteInternal
         if ( lg->handler ) {
             SLOG_Handler call_data;
 
-            call_data.level    = level;
-            call_data.module   = module;
-            call_data.file     = file;
-            call_data.line     = line;
-            call_data.message  = message;
-            call_data.raw_data = raw_data;
-            call_data.raw_size = raw_size;
+            call_data.level       = level;
+            call_data.err_code    = err_code;
+            call_data.err_subcode = err_subcode;
+            call_data.module      = module;
+            call_data.file        = file;
+            call_data.line        = line;
+            call_data.message     = message;
+            call_data.raw_data    = raw_data;
+            call_data.raw_size    = raw_size;
 
             lg->handler(lg->user_data, &call_data);
         }
@@ -457,63 +461,3 @@ extern void REG_Set
         REG_UNLOCK;
     }
 }
-
-
-/*
- * ---------------------------------------------------------------------------
- * $Log: ncbi_core.c,v $
- * Revision 6.17  2006/07/13 21:01:04  lavr
- * Formatting and changing constants to have "k" prefix
- *
- * Revision 6.16  2006/04/20 13:58:46  lavr
- * Wrap registry retrievals
- *
- * Revision 6.15  2005/04/20 18:13:39  lavr
- * +"ncbi_assert.h"
- *
- * Revision 6.14  2003/08/28 18:47:51  ucko
- * Revert previous hack (now handled another way)
- *
- * Revision 6.13  2003/08/27 12:32:30  ucko
- * Yet another attempt to work around the WorkShop lossage with k*Timeout.
- *
- * Revision 6.12  2003/05/05 20:17:17  lavr
- * LOG_WriteInternal() to require data ptr only if data size is not zero
- *
- * Revision 6.11  2003/02/20 17:52:12  lavr
- * Status verbal names changed not to have caps in the middle
- *
- * Revision 6.10  2002/10/28 15:42:48  lavr
- * Use "ncbi_ansi_ext.h" privately and use strncpy0()
- *
- * Revision 6.9  2002/08/13 19:30:13  lavr
- * Verbal representation of eIO_Interrupt; log moved to end
- *
- * Revision 6.8  2001/08/09 16:24:29  lavr
- * Remove last (unneeded) parameter from LOG_Reset()
- *
- * Revision 6.7  2001/04/25 20:52:29  vakatov
- * LOG_WriteInternal() -- abort on "eLOG_Fatal" even if no logging is set
- *
- * Revision 6.6  2001/01/11 16:42:32  lavr
- * Registry Get/Set methods got the 'user_data' argument, forgotten earlier
- *
- * Revision 6.5  2000/10/18 20:29:43  vakatov
- * REG_Get::  pass in the default value (rather than '\0')
- *
- * Revision 6.4  2000/06/23 19:34:43  vakatov
- * Added means to log binary data
- *
- * Revision 6.3  2000/05/30 23:21:36  vakatov
- * LOG_WriteInternal():  exit/abort on "eLOG_Fatal"
- *
- * Revision 6.2  2000/03/24 23:12:07  vakatov
- * Starting the development quasi-branch to implement CONN API.
- * All development is performed in the NCBI C++ tree only, while
- * the NCBI C tree still contains "frozen" (see the last revision) code.
- *
- * Revision 6.1  2000/02/23 22:36:16  vakatov
- * Initial revision
- *
- * ===========================================================================
- */

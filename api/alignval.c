@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/3/99
 *
-* $Revision: 6.64 $
+* $Revision: 6.65 $
 *
 * File Description:  To validate sequence alignment.
 *
@@ -862,25 +862,26 @@ static void ValidateStrandInPack_DenseSeg(Pointer segs, Uint1 segtype, SeqAlignP
 { 
   DenseSegPtr dsp=NULL;
   PackSegPtr psp=NULL;
-  Int2         numseg, aligndim, dimnumseg, i, j, m;
+  Int4         numseg, aligndim, dimnumseg, i, j, m;
   SeqIdPtr     sip=NULL, siptemp;
   Uint1           strand1=0, strand2=0;
   Uint1Ptr strandptr=NULL;
         
   if(!segs)
+  {
     ValMessage (salp, Err_Null_Segs, SEV_ERROR, NULL, NULL, 0);
+  } 
   else if(segtype==2||segtype==4)
-    {
-      if(segtype==2)
+  {
+    if(segtype==2)
     {
       dsp=(DenseSegPtr)segs;
       strandptr=dsp->strands;
       sip=dsp->ids;
       numseg=dsp->numseg;
       aligndim=dsp->dim;
-    }
-      
-      else if(segtype==4)
+    }     
+    else if(segtype==4)
     {
       psp=(PackSegPtr)segs;
       strandptr=psp->strands;
@@ -888,44 +889,46 @@ static void ValidateStrandInPack_DenseSeg(Pointer segs, Uint1 segtype, SeqAlignP
       numseg=psp->numseg;
       aligndim=psp->dim;
     }
-      dimnumseg=numseg*aligndim;
-      if(strandptr)
-    {
-     
+
+    dimnumseg=numseg*aligndim;
+    if(strandptr)
+    {     
       /*go through id for each alignment sequence*/
       for(j=0; j<aligndim; j++)
-        {
-          /* first  strand value for each sequence*/ 
-          strand1=dsp->strands[j];
-          /* go through all strand values for each sequence*/  
-          for(i=j+aligndim; i<dimnumseg; i=i+aligndim)
+      {
+        /* first  strand value for each sequence*/ 
+        strand1=strandptr[j];
+        /* go through all strand values for each sequence*/  
+        for(i=j+aligndim; i<dimnumseg; i=i+aligndim)
         {          
-          strand2=dsp->strands[i];
+          strand2=strandptr[i];
           
           if(strand1==0||strand1==255)
-            {
-              strand1=strand2;
-              continue;
-            }
+          {
+            strand1=strand2;
+            continue;
+          }
           
           /*skip undefined strand*/
-          if(strand2!=0&&strand2!=255)
+          if(strand2!=0&&strand2!=255) 
+          {
             /*strand should be same for a given seq*/ 
             if(strand1!=strand2)
+            {
+              /*find current seqid*/
+            
+              siptemp=sip;
+              for(m=0; m<j&&siptemp!=NULL; m++)
               {
-            /*find current seqid*/
-            
-            siptemp=sip;
-            for(m=0; m<j&&siptemp!=NULL; m++)
-              siptemp=siptemp->next;
-            ValMessage (salp, Err_Strand_Rev, SEV_ERROR, siptemp, sip, i/aligndim+1);
-        
-            
+                siptemp=siptemp->next;
               }
+              ValMessage (salp, Err_Strand_Rev, SEV_ERROR, siptemp, sip, i/aligndim+1);
+            }
+          }
         }
-        }
+      }
     }
-    }
+  }
 }
 
 

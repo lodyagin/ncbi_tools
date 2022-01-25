@@ -40,130 +40,6 @@
 *
 * ==========================================================================
 *
-*
-* RCS Modification History:
-* -------------------------
-* $Log: findrepl.c,v $
-* Revision 6.25  2006/10/25 21:38:25  kans
-* adding source qualifier metagenomic
-*
-* Revision 6.24  2006/08/31 16:34:32  kans
-* FindReplAuthor handles consortium, properly replaces pid->data, not pNameStr, for string choices
-*
-* Revision 6.23  2006/07/13 21:06:52  kans
-* SearchForString passes strLen - (ptr - str) to FindSubString when looping for whole_word
-*
-* Revision 6.22  2006/07/13 17:06:38  bollin
-* use Uint4 instead of Uint2 for itemID values
-* removed unused variables
-* resolved compiler warnings
-*
-* Revision 6.21  2006/01/17 17:50:01  bollin
-* allow FindReplaceInEntity to search for a string made up of whitespace, as
-* long as whole_word is not specified
-*
-* Revision 6.20  2006/01/10 18:13:56  kans
-* FindReplAligns does not have case for SAS_DISC, since visit function recursively presents these components separately
-*
-* Revision 6.19  2006/01/09 21:15:03  bollin
-* allow punctuation to terminate a word in find replace
-*
-* Revision 6.18  2006/01/04 21:26:57  kans
-* FSA hit does not need code from validator unstructured source test, cleaned up variable names
-*
-* Revision 6.17  2006/01/04 20:39:41  kans
-* added FindStringsInEntity using finite state machine, general cleanup of code
-*
-* Revision 6.16  2005/12/29 21:42:06  kans
-* only call callback if text was found or replaced
-*
-* Revision 6.15  2005/12/29 20:54:41  kans
-* FindReplaceInEntity takes callback and userdata
-*
-* Revision 6.14  2005/09/21 14:39:09  bollin
-* fixed bug in FindReplace where if the whole-word flag was specified but
-* the substring was found in a not-whole-word context earlier in the string
-* the search terminated early with a null result
-*
-* Revision 6.13  2005/04/26 21:33:52  kans
-* added SEQID_GPIPE
-*
-* Revision 6.12  2004/04/01 13:43:05  lavr
-* Spell "occurred", "occurrence", and "occurring"
-*
-* Revision 6.11  2003/11/21 17:58:46  bollin
-* remove tax ref and common name when changing taxonomy name via ASN Find/Replace
-*
-* Revision 6.10  2003/07/31 20:54:54  kans
-* FindReplaceString does not need do_replace argument
-*
-* Revision 6.9  2003/07/31 18:18:03  kans
-* added FindReplaceString
-*
-* Revision 6.8  2003/05/11 21:12:50  kans
-* FindReplAligns loops through StdSegPtr chain, also does ssp->ids within
-*
-* Revision 6.7  2002/06/11 14:41:20  kans
-* added support for locus_tag
-*
-* Revision 6.6  2002/03/05 21:11:04  kans
-* do not replace ifp->key
-*
-* Revision 6.5  2001/12/12 17:38:38  kans
-* added new subsource qualifiers, four now have empty name
-*
-* Revision 6.4  2001/12/07 13:49:34  kans
-* workingBuffer needs to be large enough for terminal null byte
-*
-* Revision 6.3  2001/08/06 22:13:12  kans
-* using NUM_SEQID, added TPA ids to arrays
-*
-* Revision 6.2  2000/11/03 20:36:00  kans
-* FindReplaceInEntity replaces FindInEntity and FindInEntityX - complete redesign,
-* no longer using AsnExpOptExplore because of the difficulty of replacing with a
-* larger string (TF + JK)
-*
-* Revision 6.1  1999/03/05 23:31:07  kans
-* FindInEntityX was not initializing flen, replen
-*
-* Revision 6.0  1997/08/25 18:05:38  madden
-* Revision changed to 6.0
-*
-* Revision 5.3  1997/06/19 18:37:41  vakatov
-* [WIN32,MSVC++]  Adopted for the "NCBIOBJ.LIB" DLL'ization
-*
-* Revision 5.2  1997/03/17 23:44:39  kans
-* added whole_word parameter to FindInEntity and FindInEntityX, and protected
-* against multiple ObjMgrAlsoSelects on a single itemID
-*
-* Revision 5.1  1996/09/06  20:20:41  kans
-* keeps going even if ObjMgrTypeFind returns NULL (e.g., on OBJ_BIOSEQ_SEG),
-* and adds a case_counts parameter for case sensitive/insensitive searches.
-*
-* Revision 5.0  1996/05/28  13:23:23  ostell
-* Set to revision 5.0
-*
-* Revision 1.7  1996/02/28  04:53:06  ostell
-* fix to prevernt recursion on substring replaces
-*
-* Revision 1.6  1996/02/26  20:24:05  kans
-* replace needs MemCopy instead of StringMove (JO), and set dirty flag
-*
-* Revision 1.5  1996/01/03  23:06:32  ostell
-* support for longer replaces, controlled updating
-*
-* Revision 1.3  1996/01/02  18:40:07  ostell
-* simplified code.
-*
-* Revision 1.2  1996/01/01  00:05:14  kans
-* replaced StringStr with StringISearch to ignore case
-*
-* Revision 1.1  1995/12/31  18:13:14  kans
-* Initial revision
-*
-* Revision 1.1.1.1  1995/10/19 18:42:10  sad
-* Initial version
-*
 */
 
 #include <ncbi.h>
@@ -176,7 +52,6 @@
 #include <findrepl.h>
 
 /* callback type for search/replace functions */
-
 typedef void (*FindReplFunc) (CharPtr PNTR strp, Pointer fspdata);
 
 /* internal data structure */
@@ -186,6 +61,7 @@ typedef struct findstruct {
   FindReplFunc  func;
   FindReplProc  callback;
   Pointer       userdata;
+  StringActionFunc string_action;
 
   CharPtr       find_string;
   CharPtr       replace_string;
@@ -1009,7 +885,7 @@ static void FindReplPubdesc (
   }
 }
 
-static void RemoveTaxRef (OrgRefPtr orp)
+extern void RemoveTaxRef (OrgRefPtr orp)
 {
   ValNodePtr      vnp, next;
   ValNodePtr PNTR prev;
@@ -1702,7 +1578,514 @@ static void FindReplSubmitBlock (
   FindReplSendMessages (fsp, ssp->idx.itemID, ssp->idx.itemtype);
 }
 
+
+NLM_EXTERN CharPtr GetSpecialWinCharacterReplacement (unsigned char ch)
+{
+  CharPtr r = "#";
+
+  if (ch == 198 || ch == 196)
+  {
+    r = "Ae";
+  }
+  else if (ch == 230 || ch == 228)
+  {
+    r = "ae";
+  }
+  else if (ch == 197)
+  {
+    r = "Aa";
+  } 
+  else if (ch == 229)
+  {
+    r = "aa";
+  }
+  else if (ch == 220)
+  {
+    r = "Ue";
+  } 
+  else if (ch == 252)
+  {
+    r = "ue";
+  }
+  else if (ch == 214)
+  {
+    r = "Oe";
+  }
+  else if (ch == 246)
+  {
+    r = "oe";
+  }
+  else if (ch == 223)
+  {
+    r = "ss";
+  } 
+  else if (ch == 199)
+  {
+    r = "C";
+  }
+  else if (ch >= 200 && ch <= 203)
+  {
+    r = "E";
+  }
+  else if (ch >= 204 && ch <= 207)
+  {
+    r = "I";
+  }
+  else if (ch == 209)
+  {
+    r = "N";
+  }
+  else if ((ch >= 210 && ch <= 214) || ch == 216)
+  {
+    r = "O";
+  }
+  else if (ch >= 217 && ch <= 220)
+  {
+    r = "U";
+  }
+  else if (ch == 221)
+  {
+    r = "Y";
+  }
+  else if (ch >= 224 && ch <= 229)
+  {
+    r = "a";
+  }
+  else if (ch == 231)
+  {
+    r = "c";
+  }
+  else if (ch >= 232 && ch <= 235)
+  {
+    r = "e";
+  }
+  else if (ch >= 236 && ch <= 239)
+  {
+    r = "i";
+  }
+  else if (ch == 241)
+  {
+    r = "n";
+  }
+  else if ((ch >= 242 && ch <= 246) || ch == 248)
+  {
+    r = "o";
+  }
+  else if (ch >= 249 && ch <= 252)
+  {
+    r = "u";
+  }
+  else if (ch == 253 || ch == 255)
+  {
+    r = "y";
+  }
+  return r;
+}
+
+
+NLM_EXTERN CharPtr GetSpecialMacCharacterReplacement (unsigned char ch)
+{
+  CharPtr r = "#";
+
+  if (ch == 174 || ch == 128)
+  {
+    r = "Ae";
+  }
+  else if (ch == 190 || ch == 138)
+  {
+    r = "ae";
+  }
+  else if (ch == 129)
+  {
+    r = "Aa";
+  } 
+  else if (ch == 140)
+  {
+    r = "aa";
+  }
+  else if (ch == 134)
+  {
+    r = "Ue";
+  } 
+  else if (ch == 159)
+  {
+    r = "ue";
+  }
+  else if (ch == 133)
+  {
+    r = "Oe";
+  }
+  else if (ch == 154)
+  {
+    r = "oe";
+  }
+  else if (ch == 167)
+  {
+    r = "ss";
+  } 
+  else if (ch == 130)
+  {
+    r = "C";
+  }
+  else if (ch == 233 || ch == 131 || ch == 230 || ch == 232)
+  {
+    r = "E";
+  }
+  else if (ch == 237 || ch == 234 || ch == 235 || ch == 236)
+  {
+    r = "I";
+  }
+  else if (ch == 132)
+  {
+    r = "N";
+  }
+  else if (ch == 241 || ch == 238 || ch == 239 || ch == 205 || ch == 133 || ch == 175)
+  {
+    r = "O";
+  }
+  else if (ch == 244 || ch == 242 || ch == 243 || ch == 134)
+  {
+    r = "U";
+  }
+  else if (ch == 136 || ch == 135 || ch == 137 || ch == 139 || ch == 138)
+  {
+    r = "a";
+  }
+  else if (ch == 141)
+  {
+    r = "c";
+  }
+  else if (ch == 143 || ch == 142 || ch == 144 || ch == 145)
+  {
+    r = "e";
+  }
+  else if (ch == 147 || ch == 146 || ch == 148 || ch == 149)
+  {
+    r = "i";
+  }
+  else if (ch == 150)
+  {
+    r = "n";
+  }
+  else if (ch == 152 || ch == 151 || ch == 153 || ch == 155 || ch == 154 || ch == 190)
+  {
+    r = "o";
+  }
+  else if (ch == 157 || ch == 156 || ch == 158 || ch == 159)
+  {
+    r = "u";
+  }
+  else if (ch == 216)
+  {
+    r = "y";
+  }
+  return r;
+}
+
+
+NLM_EXTERN CharPtr GetSpecialCharacterReplacement (unsigned char ch)
+
+{
+#ifdef WIN_MAC
+  return GetSpecialMacCharacterReplacement (ch);
+#endif
+#ifdef WIN_MSWIN
+  return GetSpecialWinCharacterReplacement (ch);
+#endif
+  return NULL;
+}
+
+
+NLM_EXTERN void SpecialCharFind (CharPtr PNTR strp, Pointer userdata, BoolPtr did_find, BoolPtr did_change)
+{
+  CharPtr cp;
+  Boolean found_any = FALSE;
+
+  if (strp == NULL || *strp == NULL) return;
+
+  cp = *strp;
+  while (*cp != 0 && !found_any)
+  {
+    if (*cp < ' ' || *cp > '~')
+    {
+      found_any = TRUE;
+    }
+    cp++;
+  }
+  if (found_any && did_find != NULL)
+  {
+    *did_find = TRUE;
+  }
+}
+
+
+NLM_EXTERN void SpecialCharReplace (CharPtr PNTR strp, Pointer userdata, BoolPtr did_find, BoolPtr did_change)
+{
+  Int4 orig_len, new_len, repl_len;
+  CharPtr cp, cpy, dst, repl;
+  Boolean found_any = FALSE;
+
+  if (strp == NULL || *strp == NULL) return;
+
+  /* count all characters that need two replacement characters */
+  cp = *strp;
+  orig_len = StringLen (cp);
+  new_len = orig_len;
+  while (*cp != 0)
+  {
+    new_len += abs (StringLen (GetSpecialCharacterReplacement ((unsigned char)*cp)) - 1);
+    if (*cp < ' ' || *cp > '~')
+    {
+      found_any = TRUE;
+    }
+    cp++;
+  }
+  if (!found_any)
+  { 
+    return;
+  }
+
+  /* allocate memory for new string if necessary */
+  if (new_len > orig_len)
+  {
+    cpy = (CharPtr) MemNew (sizeof (Char) * (new_len + 1));
+  }
+  else
+  {
+    cpy = *strp;
+  }
+
+  /* copy in with replacements */
+  cp = *strp;
+  dst = cpy;
+  while (*cp != 0)
+  {
+    if ((unsigned char)*cp < ' ')
+    {
+      /* will replace with pound sign */
+      *dst = '#';
+      dst++;
+    }
+    else if ((unsigned char)*cp > '~')
+    {
+#if 0
+      repl = GetSpecialCharacterReplacement ((unsigned char)*cp);
+#else
+      repl = "#";
+#endif
+      repl_len = StringLen (repl);
+      StringNCpy (dst, repl, repl_len);
+      dst += repl_len;
+    }
+    else
+    {
+      *dst = *cp;
+      dst++;
+    }
+    cp++;
+  }
+  *dst = 0;
+
+  /* put new string in place of old string */
+  if (cpy != *strp)
+  {
+    *strp = MemFree (*strp);
+    *strp = cpy;
+  }
+  if (did_find != NULL)
+  {
+    *did_find = TRUE;
+  }
+  if (did_change != NULL)
+  {
+    *did_change = TRUE;
+  }
+}
+
+
+static void StringActionCallback (CharPtr PNTR strp, Pointer fspdata)
+{
+  FindStructPtr fsp;
+  
+  if (strp == NULL || fspdata == NULL) return;
+
+  fsp = (FindStructPtr) fspdata;
+
+  if (fsp->string_action == NULL) return;
+  (fsp->string_action)(strp, fsp->userdata, &(fsp->did_find), &(fsp->dirty));
+}
+
+
 /* EXTERNAL FIND-REPLACE FUNCTIONS */
+NLM_EXTERN void StringActionInEntity (
+  Uint2 entityID,
+  Boolean select_item,
+  Int2 send_update,
+  BoolPtr descFilter,
+  BoolPtr featFilter,
+  BoolPtr seqidFilter,
+  Boolean do_seqid_local,
+  StringActionFunc action_func,
+  FindReplProc callback,
+  Pointer userdata
+)
+
+{
+  FindStruct     fs;
+  ObjMgrDataPtr  omdp;
+  SeqEntryPtr    sep = NULL;
+  SeqSubmitPtr   ssp = NULL;
+
+  if (entityID == 0 || action_func == NULL) return;
+
+  omdp = ObjMgrGetData (entityID);
+  if (omdp != NULL) {
+    switch (omdp->datatype) {
+      case OBJ_SEQSUB :
+        ssp = (SeqSubmitPtr) omdp->dataptr;
+        if (ssp != NULL && ssp->datatype == 1) {
+          sep = (SeqEntryPtr) ssp->data;
+        }
+        break;
+      case OBJ_BIOSEQ :
+        sep = (SeqEntryPtr) omdp->choice;
+      case OBJ_BIOSEQSET :
+        sep = (SeqEntryPtr) omdp->choice;
+      default :
+        break;
+    }
+  }
+  /* sep = GetTopSeqEntryForEntityID (entityID); */
+  if (sep == NULL) return;
+
+  MemSet ((Pointer) &fs, 0, sizeof (FindStruct));
+
+  fs.entityID = entityID;
+  fs.func = StringActionCallback;
+  fs.callback = callback;
+  fs.userdata = userdata;
+  fs.string_action = action_func;
+
+  fs.select_item = select_item;
+  fs.send_update = send_update;
+  fs.dirty = FALSE;
+
+  /* if desc or feat filter arrays not supplied, default to all TRUE */
+
+  if (descFilter != NULL) {
+    MemCopy ((Pointer) &fs.descFilter, (Pointer) descFilter, sizeof (fs.descFilter));
+  } else {
+    MemSet ((Pointer) &fs.descFilter, (int) TRUE, sizeof (fs.descFilter));
+  }
+
+  if (featFilter != NULL) {
+    MemCopy ((Pointer) &fs.featFilter, (Pointer) featFilter, sizeof (fs.featFilter));
+  } else {
+    MemSet ((Pointer) &fs.featFilter, (int) TRUE, sizeof (fs.featFilter));
+  }
+
+  /* if seqid filter array not supplied, default to all FALSE */
+
+  if (seqidFilter != NULL) {
+    MemCopy ((Pointer) &fs.seqidFilter, (Pointer) seqidFilter, sizeof (fs.seqidFilter));
+  } else if (do_seqid_local) {
+    MemSet ((Pointer) &fs.seqidFilter, (int) FALSE, sizeof (fs.seqidFilter));
+    fs.seqidFilter [SEQID_LOCAL] = TRUE;
+  } else {
+    MemSet ((Pointer) &fs.seqidFilter, (int) FALSE, sizeof (fs.seqidFilter));
+  }
+
+  /* ensure feature subtype is set in sfp->idx block */
+
+  AssignIDsInEntity (entityID, 0, NULL);
+
+  /* visit callbacks that find/replace specific fields */
+
+  VisitBioseqsInSep (sep, (Pointer) &fs, FindReplBioseqs);
+
+  VisitFeaturesInSep (sep, (Pointer) &fs, FindReplFeats);
+
+  VisitAlignmentsInSep (sep, (Pointer) &fs, FindReplAligns);
+
+  VisitGraphsInSep (sep, (Pointer) &fs, FindReplGraphs);
+
+  VisitDescriptorsInSep (sep, (Pointer) &fs, FindReplDescs);
+
+  if (ssp != NULL) {
+    FindReplSubmitBlock (ssp, &fs);
+  }
+
+  /* send select message, if applicable */
+
+  if (fs.send_update == UPDATE_ONCE && fs.dirty) {
+    ObjMgrSetDirtyFlag (entityID, TRUE);
+    ObjMgrSendMsg (OM_MSG_UPDATE, entityID, 0, 0);
+  }
+}
+
+NLM_EXTERN void StringActionForObject (
+  Uint2   datatype,
+  Pointer objdata,
+  Uint2 entityID,
+  Boolean select_item,
+  Int2 send_update,
+  StringActionFunc action_func,
+  FindReplProc callback,
+  Pointer userdata
+)
+
+{
+  FindStruct     fs;
+
+  if (objdata == NULL || action_func == NULL) return;
+
+  MemSet ((Pointer) &fs, 0, sizeof (FindStruct));
+
+  fs.entityID = entityID;
+  fs.func = StringActionCallback;
+  fs.callback = callback;
+  fs.userdata = userdata;
+  fs.string_action = action_func;
+
+  fs.select_item = select_item;
+  fs.send_update = send_update;
+  fs.dirty = FALSE;
+
+  MemSet ((Pointer) &fs.descFilter, (int) TRUE, sizeof (fs.descFilter));
+
+  MemSet ((Pointer) &fs.featFilter, (int) TRUE, sizeof (fs.featFilter));
+
+  MemSet ((Pointer) &fs.seqidFilter, (int) FALSE, sizeof (fs.seqidFilter));
+
+  switch (datatype)
+  {
+    case OBJ_BIOSEQ:
+      FindReplBioseqs ((BioseqPtr) objdata, &fs);
+      break;
+    case OBJ_SEQFEAT:
+      FindReplFeats ((SeqFeatPtr) objdata, &fs);
+      break;
+    case OBJ_SEQALIGN:
+      FindReplAligns ((SeqAlignPtr) objdata, &fs);
+      break;
+    case OBJ_SEQGRAPH:
+      FindReplGraphs ((SeqGraphPtr) objdata, &fs);
+      break;
+    case OBJ_SEQDESC:
+      FindReplDescs ((SeqDescrPtr) objdata, &fs);
+      break;
+    case OBJ_SEQSUB:
+      FindReplSubmitBlock ((SeqSubmitPtr) objdata, &fs);
+      break;
+  }
+
+  /* send select message, if applicable */
+
+  if (fs.send_update == UPDATE_ONCE && fs.dirty) {
+    ObjMgrSetDirtyFlag (entityID, TRUE);
+    ObjMgrSendMsg (OM_MSG_UPDATE, entityID, 0, 0);
+  }
+}
 
 /*=======================================================================*/
 /*                                                                       */

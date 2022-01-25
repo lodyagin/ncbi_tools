@@ -1,4 +1,4 @@
---$Revision: 6.16 $
+--$Revision: 6.19 $
 --**********************************************************************
 --
 --  NCBI Sequence elements
@@ -27,7 +27,8 @@ IMPORTS Date, Int-fuzz, Dbtag, Object-id, User-object FROM NCBI-General
         EMBL-block FROM EMBL-General
         SP-block FROM SP-General
         PRF-block FROM PRF-General
-        PDB-block FROM PDB-General;
+        PDB-block FROM PDB-General
+        Seq-table FROM NCBI-SeqTable;
 
 --*** Sequence ********************************
 --*
@@ -102,6 +103,8 @@ MolInfo ::= SEQUENCE {
         cRNA (11) ,              -- viral RNA genome copy intermediate
         snoRNA (12) ,            -- small nucleolar RNA
         transcribed-RNA (13) ,   -- transcribed RNA other than existing classes
+        ncRNA (14) ,
+        tmRNA (15) ,
         other (255) } DEFAULT unknown ,
     tech INTEGER {
         unknown (0) ,
@@ -127,6 +130,7 @@ MolInfo ::= SEQUENCE {
         wgs (20) ,              -- whole genome shotgun sequencing
         barcode (21) ,          -- barcode of life project
         composite-wgs-htgs (22) , -- composite of WGS and HTGS
+        tsa (23) ,              -- transcriptome shotgun assembly
         other (255) }           -- use Source.techexp
                DEFAULT unknown ,
     techexp VisibleString OPTIONAL ,   -- explanation if tech not enough
@@ -145,7 +149,8 @@ MolInfo ::= SEQUENCE {
       no-ends (5) ,                    -- missing both ends
       has-left (6) ,                   -- 5' or NH3 end present
       has-right (7) ,                  -- 3' or COOH end present
-      other (255) } DEFAULT unknown }
+      other (255) } DEFAULT unknown ,
+    gbmoltype VisibleString OPTIONAL } -- identifies particular ncRNA
 
 
 GIBB-mol ::= ENUMERATED {       -- type of molecule represented
@@ -239,12 +244,12 @@ Pubdesc ::= SEQUENCE {              -- how sequence presented in pub
     seq-raw StringStore OPTIONAL ,  -- original sequence from paper
     align-group INTEGER OPTIONAL ,  -- this seq aligned with others in paper
     comment VisibleString OPTIONAL, -- any comment on this pub in context
-	reftype INTEGER {           -- type of reference in a GenBank record
-		seq (0) ,               -- refers to sequence
-		sites (1) ,             -- refers to unspecified features
-		feats (2) ,             -- refers to specified features
-		no-target (3) }         -- nothing specified (EMBL)
-		DEFAULT seq }
+    reftype INTEGER {           -- type of reference in a GenBank record
+        seq (0) ,               -- refers to sequence
+        sites (1) ,             -- refers to unspecified features
+        feats (2) ,             -- refers to specified features
+        no-target (3) }         -- nothing specified (EMBL)
+        DEFAULT seq }
 
 Heterogen ::= VisibleString       -- cofactor, prosthetic group, inhibitor, etc
 
@@ -433,8 +438,9 @@ Seq-annot ::= SEQUENCE {
         ftable SET OF Seq-feat ,
         align SET OF Seq-align ,
         graph SET OF Seq-graph ,
-        ids SET OF Seq-id ,        -- used for communication between tools
-        locs SET OF Seq-loc } }    -- used for communication between tools
+        ids SET OF Seq-id ,      -- used for communication between tools
+        locs SET OF Seq-loc ,    -- used for communication between tools
+        seq-table Seq-table } }  -- features in table form
 
 END
 

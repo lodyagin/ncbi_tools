@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: pseed3.c,v 6.51 2007/03/13 20:40:56 madden Exp $";
+static char const rcsid[] = "$Id: pseed3.c,v 6.53 2008/01/10 16:30:51 bollin Exp $";
 
-/* $Id: pseed3.c,v 6.51 2007/03/13 20:40:56 madden Exp $ */
+/* $Id: pseed3.c,v 6.53 2008/01/10 16:30:51 bollin Exp $ */
 /**************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -35,9 +35,15 @@ Maintainer: Alejandro Schaffer
  
 Contents: high-level routines for PHI-BLAST and pseed3
 
-$Revision: 6.51 $
+$Revision: 6.53 $
 
 $Log: pseed3.c,v $
+Revision 6.53  2008/01/10 16:30:51  bollin
+Moved variable declaration to top of code block
+
+Revision 6.52  2008/01/09 19:04:04  merezhuk
+add extra hitArraySz parameter and provide error message if number of hits exceed it.
+
 Revision 6.51  2007/03/13 20:40:56  madden
   - In seedEngineCore, the searchSpEff parameter should be a
     Nlm_FloatHi, not an Nlm_FloatLo
@@ -298,7 +304,7 @@ Char * LIBCALL get_a_pat(
    Uint1Ptr unfilter_seq, Uint1Ptr seq, Int4 len, Boolean is_dna,
    patternSearchItems *patternSearch, seedSearchItems * seedSearch,
    Boolean showDiagnostics, ValNodePtr * error_return, 
-   ValNodePtr PNTR info_vnp)
+   ValNodePtr PNTR info_vnp, Int4 hitArraySz)
 {
 
     Char line[BUF_SIZE]; /*line of pattern description read in*/
@@ -313,6 +319,7 @@ Char * LIBCALL get_a_pat(
                                 sequence*/
     Int4 linePlace; /*index for characters on a line*/
     Char buffer[512];
+    BlastErrorMsgPtr error_msg;
 
     if ((program_flag == PAT_SEED_FLAG) || (program_flag == PAT_MATCH_FLAG)) {
       while (get_pat(fp, seedSearch->pat_space, seedSearch->name_space)) {
@@ -341,6 +348,18 @@ Char * LIBCALL get_a_pat(
 
 	  if (twiceNumHits >0) {
 	    /* copy start and stop positions. */
+	    if( twiceNumHits >= hitArraySz ){
+	      sprintf(buffer,"\nERROR: number of hits %d is larger then hitsArray size: %d ",                        
+		      (int)twiceNumHits,(int)hitArraySz);
+	      //ErrPostEx(SEV_FATAL, 1, 0, buffer);
+		// provide BlastError error_return
+		error_msg = MemNew(sizeof(BlastErrorMsg));
+		error_msg->msg = Nlm_StringSave( buffer );		
+		error_msg->level = 3; /* FATAL */
+		ValNodeAddPointer(error_return, 0, error_msg);
+		
+	      return NULL;
+	    }
 	    for (hitIndex=0; hitIndex<twiceNumHits; hitIndex++)
 		fullHitArray[hitIndex] = hitArray[hitIndex];
 		
@@ -454,6 +473,7 @@ ValNodePtr LIBCALL seedEngineCore(BlastSearchBlkPtr search,
     GapAlignBlkPtr gap_align; /*local holder for gap_align*/
 
     Char buffer[512];
+    Int4 hitArraySz=0;
 
     /* --------------- The end of parameters definition --------------- */
 
@@ -469,8 +489,9 @@ ValNodePtr LIBCALL seedEngineCore(BlastSearchBlkPtr search,
                    patternSearch, &(search->error_return), info_vnp);
         return NULL;
     } 
-    occurArray = (Int4 *) ckalloc(sizeof(Int4)*search->sbp->query_length*2);
-    hitArray = (Int4 *) MemNew(sizeof(Int4)*search->sbp->query_length*2);
+    hitArraySz = search->sbp->query_length*2; /* this is original default */
+    occurArray = (Int4 *) ckalloc(sizeof(Int4)*hitArraySz);
+    hitArray = (Int4 *) MemNew(sizeof(Int4)*hitArraySz);
     
     dbLength = 0;
     readdb_get_totals(search->rdfp, &dbLength, &num_seq);
@@ -480,7 +501,7 @@ ValNodePtr LIBCALL seedEngineCore(BlastSearchBlkPtr search,
       pattern match cannot start*/
     
     
-    while (pattern = get_a_pat(patfp, &pname, occurArray, hitArray, &numPatOccur, &effectiveOccurrences, program_flag, unfilter_query, query, search->sbp->query_length, is_dna, patternSearch, seedSearch, showDiagnostics, &(search->error_return), info_vnp)) {
+    while (pattern = get_a_pat(patfp, &pname, occurArray, hitArray, &numPatOccur, &effectiveOccurrences, program_flag, unfilter_query, query, search->sbp->query_length, is_dna, patternSearch, seedSearch, showDiagnostics, &(search->error_return), info_vnp, hitArraySz)) {
         if (patternSearch->patternProbability > PAT_PROB_THRESH &&
             (patternSearch->patternProbability * (FloatHi) dbLength > EXPECT_MATCH_THRESH)) {
             sprintf(buffer, "Pattern %s is too likely to occur in the database to be informative\n", pname);

@@ -1,4 +1,4 @@
-/* $Id: ncbi_connector.c,v 6.7 2002/08/13 19:29:49 lavr Exp $
+/* $Id: ncbi_connector.c,v 6.9 2007/10/17 15:25:43 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -35,10 +35,12 @@
 #include <connect/ncbi_connector.h>
 
 
+#define NCBI_USE_ERRCODE_X  Connect_MetaConn
+
 /* Standard logging message
  */
-#define METACONN_LOG(level, descr)                      \
-  CORE_LOGF(level,                                      \
+#define METACONN_LOG(subcode, level, descr)             \
+  CORE_LOGF_X(subcode, level,                             \
             ("%s (connector \"%s\", error \"%s\")",     \
             descr, (*meta->get_type)(meta->c_get_type), \
             IO_StatusStr(status)))
@@ -51,12 +53,13 @@ extern EIO_Status METACONN_Remove
     if (connector) {
         CONNECTOR x_conn;
         
-        for (x_conn = meta->list; x_conn; x_conn = x_conn->next)
+        for (x_conn = meta->list;  x_conn;  x_conn = x_conn->next) {
             if (x_conn == connector)
                 break;
+        }
         if (!x_conn) {
             EIO_Status status = eIO_Unknown;
-            METACONN_LOG(eLOG_Error,
+            METACONN_LOG(1, eLOG_Error,
                          "[METACONN_Remove]  Connector is not in connection");
             return status;
         }
@@ -84,9 +87,9 @@ extern EIO_Status METACONN_Add
 {
     assert(connector && meta);
 
-    if (connector->next || !connector->setup) {
+    if (connector->next  ||  !connector->setup) {
         EIO_Status status = eIO_Unknown;
-        METACONN_LOG(eLOG_Error,
+        METACONN_LOG(2, eLOG_Error,
                      "[METACONN_Add]  Input connector is in use/uninitable");
         return status;
     }
@@ -98,32 +101,3 @@ extern EIO_Status METACONN_Add
 
     return eIO_Success;
 }
-
-
-/*
- * --------------------------------------------------------------------------
- * $Log: ncbi_connector.c,v $
- * Revision 6.7  2002/08/13 19:29:49  lavr
- * Log moved to end
- *
- * Revision 6.6  2002/04/26 16:31:06  lavr
- * Minor style changes in call-by-pointer functions
- *
- * Revision 6.5  2002/03/22 22:17:29  lavr
- * No <stdlib.h> needed in here, removed
- *
- * Revision 6.4  2001/03/02 20:07:56  lavr
- * Typo fixed
- *
- * Revision 6.3  2001/01/25 16:57:08  lavr
- * METACONN_Remove revoked call to free() with connector:
- * connector's DESTROY method is now (back) responsible to call free().
- *
- * Revision 6.2  2001/01/12 23:51:38  lavr
- * Message logging modified for use LOG facility only
- *
- * Revision 6.1  2000/12/29 17:49:29  lavr
- * Initial revision
- *
- * ==========================================================================
- */

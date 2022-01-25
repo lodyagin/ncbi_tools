@@ -3,7 +3,7 @@
 	ProjectType="Visual C++"
 	Version="8.00"
 	Name="exe_idfetch"
-	ProjectGUID="{BB120D1D-3A68-4107-A8A1-427E448DEA98}"
+	ProjectGUID="{67436D24-0D70-48D5-B1AE-6E8DFA978983}"
 	>
 	<Platforms>
 		<Platform

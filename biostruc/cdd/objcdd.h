@@ -20,7 +20,7 @@ extern "C" { /* } */
 /**************************************************
 *
 *    Generated objects for Module NCBI-Cdd
-*    Generated using ASNCODE Revision: 6.16 at Feb 8, 2006  1:12 PM
+*    Generated using ASNCODE Revision: 6.16 at Aug 27, 2007  9:39 AM
 *
 **************************************************/
 
@@ -364,6 +364,7 @@ typedef ValNode CddDescr;
 #define CddDescr_curation_status 14
 #define CddDescr_readonly_status 15
 #define CddDescr_book_ref 16
+#define CddDescr_attribution 17
 
 
 NLM_EXTERN CddDescrPtr LIBCALL CddDescrFree PROTO ((CddDescrPtr ));
@@ -507,6 +508,7 @@ typedef struct struct_Align_annot {
    ValNodePtr   location;
    CharPtr   description;
    ValNodePtr   evidence;
+   Int4   type;
 } AlignAnnot, PNTR AlignAnnotPtr;
 
 
@@ -591,6 +593,8 @@ typedef struct struct_Algorithm_type {
    Int4   gapScaleFactor;
    Int4   nTerminalExt;
    Int4   cTerminalExt;
+   Int4   tree_scope;
+   Int4   coloring_scope;
 } AlgorithmType, PNTR AlgorithmTypePtr;
 
 

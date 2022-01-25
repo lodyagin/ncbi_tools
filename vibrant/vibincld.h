@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.7 $
+* $Revision: 6.8 $
 *
 * File Description: 
 *       Vibrant inclusion of underlying windowing system toolbox functions,
@@ -40,86 +40,6 @@
 * --------------------------------------------------------------------------
 * Date     Name        Description of modification
 * -------  ----------  -----------------------------------------------------
-*
-*
-* $Log: vibincld.h,v $
-* Revision 6.7  2007/05/01 22:01:30  kans
-* changes in preparation for supporing Quartz on Macintosh
-*
-* Revision 6.6  2006/11/24 20:06:31  kans
-* include Carbon/Carbon.h if not MWERKS - attempting to simplify Xcode search paths
-*
-* Revision 6.5  2002/06/13 16:15:13  kans
-* fix includes for OS_UNIX_DARWIN with WIN_MAC (EN) - still bug in vibutils.c file dialog
-*
-* Revision 6.4  2000/07/08 20:44:14  vakatov
-* Get all "#include" out of the 'extern "C" { }' scope;  other cleanup...
-*
-* Revision 6.3  1999/06/22 15:14:54  lewisg
-* fix image library so that works on linux with > 8 bits
-*
-* Revision 6.2  1999/04/06 14:23:25  lewisg
-* add opengl replacement for viewer3d
-*
-* Revision 6.1  1998/07/14 16:44:27  vakatov
-* Added VibrantIsGUI() and <internal> Nlm_VibrantSetGUI()
-*
-* Revision 6.0  1997/08/25 18:57:08  madden
-* Revision changed to 6.0
-*
-* Revision 5.9  1997/07/23 19:36:12  vakatov
-* [WIN_MSWIN] +Nlm_GetPicWinHDC proto
-*
-* Revision 5.8  1997/07/10 21:49:30  vakatov
-* [WIN_X]  Now able to manage windows having different depths(and
-* different visuals and GC).
-*
-* Revision 5.7  1997/06/09 18:07:39  vakatov
-* Removed "Nlm_fontList" declaration(it's now static in "ncbidraw.c")
-* [WIN_MOTIF]  Added Nlm_XAllocColor() prototype
-*
-* Revision 5.6  1997/04/25 16:09:33  vakatov
-* [WIN_MOTIF,WIN_MSWIN]  Added functions to catch, convert(to Mac keycodes)
-* and process navigation and special keys
-*
- * Revision 5.5  1997/04/17  16:17:50  kans
- * InitForms and FreeForms added
- *
- * Revision 5.4  1997/02/13  21:34:37  vakatov
- * [WIN_MOTIF]  #define NLM_MOTIF_CASCADEB_BUG -- workaround the Motif bug
- *
- * Revision 5.3  1997/01/28  22:03:51  kans
- * changed <GestaltEqu.h> to <Gestalt.h> for CodeWarrior
- *
- * Revision 5.2  1996/10/28  19:31:19  vakatov
- * [WIN_MOTIF]  Added prototypes for functions Nlm_VibrantDefaultColormap()
- * and Nlm_XrmGetResource()
- *
- * Revision 5.1  1996/08/27  20:52:53  vakatov
- * Added Nlm_HorizScrollBar4() and Nlm_VertScrollBar4() prototypes -- to
- * create Int4-range scrollbars
- *
- * Revision 5.0  1996/05/28  13:45:08  ostell
- * Set to revision 5.0
- *
- * Revision 4.2  1996/03/12  22:34:37  epstein
- * add shellapi for Drag-And-Drop support
- *
- * Revision 4.1  1996/02/13  17:24:07  kans
- * accelerated set position prior to realization (Denis Vakatov)
- *
- * Revision 4.0  1995/07/26  13:51:04  ostell
- * force revision to 4.0
- *
- * Revision 2.21  1995/07/17  22:02:19  kans
- * Motif clipboard cut and paste supported (AS)
- *
- * Revision 2.20  1995/05/31  18:00:58  kans
- * added <Palettes.h>
- *
- * Revision 2.19  1995/05/17  15:15:14  kans
- * added Log line
- *
 *
 * ==========================================================================
 */
@@ -144,7 +64,13 @@ extern "C" {
 #define Nlm_HandleTool Handle
 #define Nlm_PointTool Point
 #define Nlm_RectTool Rect
+	
+#ifdef WIN_MAC_QUARTZ
+#define Nlm_RgnTool HIMutableShapeRef
+#else
 #define Nlm_RgnTool RgnHandle
+#endif
+
 #endif
 
 #ifdef WIN_MSWIN
@@ -288,12 +214,20 @@ typedef  struct  Nlm_boxrec {
 
 
 
-#if defined(WIN_MAC) || defined(WIN_MAC_QUARTZ)
+#if defined(WIN_MAC)
+#if defined(WIN_MAC_QUARTZ)
+#define Nlm_WindowTool  WindowPtr
+#define Nlm_PortTool    CGContextRef
+#define Nlm_ShellTool   Nlm_Handle
+#define Nlm_MainTool    Nlm_Handle
+#define Nlm_ColorMTool  PaletteHandle
+#else
 #define Nlm_WindowTool  WindowPtr
 #define Nlm_PortTool    GrafPtr
 #define Nlm_ShellTool   Nlm_Handle
 #define Nlm_MainTool    Nlm_Handle
 #define Nlm_ColorMTool  PaletteHandle
+#endif
 #endif
 
 #ifdef WIN_MSWIN
@@ -527,8 +461,10 @@ void        Nlm_GlobalToLocal PROTO((Nlm_PointPtr pt));
 void        Nlm_VibrantSetGUI PROTO((void));
 
 #if defined(WIN_MAC) && defined(WIN_MAC_QUARTZ)
-CGRect      Nlm_RecTToCGRect(Nlm_RectPtr r);
+CGRect      Nlm_RecTToCGRect(Nlm_RecT r);
 Nlm_RecT    Nlm_CGRectToRecT(CGRect cgr);
+CGRect      Nlm_RectQDToCG(Rect r);
+Rect        Nlm_RectCGToQD(CGRect r);
 CGPoint     Nlm_PoinTToCGPoint(Nlm_PoinT np);
 Nlm_PoinT   Nlm_CGPointToPoinT(CGPoint qp);
 #endif

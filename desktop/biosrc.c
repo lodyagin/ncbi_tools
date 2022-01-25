@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.85 $
+* $Revision: 6.87 $
 *
 * File Description: 
 *
@@ -72,6 +72,8 @@ static ENUM_ALIST(biosource_genome_alist)
   {"Proplastid",          18},
   {"Endogenous-virus",    19},
   {"Hydrogenosome",       20},
+  {"Chromosome",          21},
+  {"Chromatophore",       22},
 END_ENUM_ALIST
 
 extern EnumFieldAssoc  biosource_genome_simple_alist [];
@@ -98,6 +100,8 @@ ENUM_ALIST(biosource_genome_simple_alist)
   {"Proplastid",          18},
   {"Endogenous-virus",    19},
   {"Hydrogenosome",       20},
+  {"Chromosome",          21},
+  {"Chromatophore",       22},
 END_ENUM_ALIST
 
 extern EnumFieldAssoc  biosource_origin_alist [];
@@ -898,55 +902,6 @@ static CharPtr AllButFirstLinePrtProc (DoC d, Int2 item, Pointer ptr)
   } else {
     return NULL;
   }
-}
-
-static CharPtr MergeValNodeStrings (ValNodePtr list)
-
-{
-  size_t      len;
-  CharPtr     ptr;
-  CharPtr     str;
-  CharPtr     tmp;
-  ValNodePtr  vnp;
-
-
-  ptr = NULL;
-  if (list != NULL) {
-    vnp = list;
-    len = 0;
-    while (vnp != NULL) {
-      if (vnp->data.ptrvalue != NULL) {
-        len += StringLen ((CharPtr) vnp->data.ptrvalue) + 1;
-      }
-      vnp = vnp->next;
-    }
-    if (len > 0) {
-      ptr = MemNew (sizeof (Char) * (len + 2));
-      if (ptr != NULL) {
-        vnp = list;
-        tmp = NULL;
-        while (vnp != NULL) {
-          if (vnp->data.ptrvalue != NULL) {
-            if (tmp == NULL) {
-              tmp = ptr;
-            } else {
-              tmp = StringMove (tmp, "; ");
-            }
-            str = StringSave ((CharPtr) vnp->data.ptrvalue);
-            TrimSpacesAroundString (str);
-            len = StringLen (str);
-            if (len > 0 && str [len - 1] == ';') {
-              str [len - 1] = '\0';
-            }
-            tmp = StringMove (tmp, str);
-            MemFree (str);
-          }
-          vnp = vnp->next;
-        }
-      }
-    }
-  }
-  return ptr;
 }
 
 

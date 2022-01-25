@@ -1,6 +1,6 @@
 #   makefile for network demo programs and network entrez
 #
-#	$Id: makenet.unx,v 6.219 2007/04/18 15:52:34 kans Exp $
+#	$Id: makenet.unx,v 6.224 2008/01/25 19:56:25 ucko Exp $
 #   test, ignore
 #
 #   Sun with unbundled ANSI compiler [ make CC=acc RAN=ranlib ]
@@ -85,6 +85,7 @@ BLIB12 = libncbitax.a
 BLIB13 = libncbiid0.a
 #BLIB14 = libncbibls0.a
 BLIB19 = libncbispel.a
+BLIB22 = libncbimmdb.a
 BLIB23 = libncbitool.a
 BLIBCOMPADJ = libblastcompadj.a
 BLIB24 = libncbisugg.a
@@ -252,7 +253,7 @@ SRC27 = indexlist.c isamlist.c memmap.c miscutils.c
 
 SRC31 = netcnfg.c trmlst.c docsum.c
 
-SRC33 = smartnet.c
+SRC33 = smartnet.c namedpipe.c
 
 SRC35 = ssputil.c
 
@@ -300,7 +301,7 @@ OBJ27 = indexlist.o isamlist.o memmap.o miscutils.o
 
 OBJ31 = netcnfg.o trmlst.o docsum.o
 
-OBJ33 = smartnet.o
+OBJ33 = smartnet.o namedpipe.o
 
 OBJ35 = ssputil.o
 
@@ -366,6 +367,8 @@ SERV_SRC = $(SRCENTSRV)
 
 SERVERS = $(EXESUGGSRV) $(EXEQUERY) $(EXESEQUIN) $(EXEPSEQUIN) $(EXESBTEDIT) $(EXENQUERY)
 
+ALL_SRC = $(NET_LIBS_SRC) $(CLI_SRC) $(SERV_SRC)
+
 ## All things to make
 ##
 all : ln-if-absent copy .WAIT nocopy
@@ -378,7 +381,7 @@ nocopy : sources $(BLIB6) $(BLIB7) $(BLIB8) $(BLIB9) \
    $(DLIB31) $(DLIB33) $(NCBI_SHLIBS) $(CLIENTS) $(VIB) \
    $(DLIB42) $(DLIB43) $(DLIB44)
 
-sources : $(NET_LIBS_SRC) $(CLI_SRC)
+sources : $(ALL_SRC)
 
 servers : $(SERV_SRC) $(SERVERS)
 
@@ -386,7 +389,7 @@ utilities : $(EXEUTIL)
 
 vibutilities : $(EXEUTILVIB)
 
-.NO_PARALLEL:	copy nocopy Tentrez sequin Psequin sbtedit Ssequin elecpcr asn2fast asn2asn cleanasn Nbatch Nbatch3 Nentrcmd seqget idfetch test_ncbi_socket test_ncbi_dsock debug_server rtestval rasn2ff asn2gb asn2gb_psf asn2fsa asn2fsa_psf tbl2asn tbl2asn_psf asn2all gene2xml asnval asnval_psf asndisc asndisc_psf asnstrip flint gbseqget insdseqget trna2sap trna2tbl testent2 entrez2 spidey dotmatrix ingenue condense bl2seq
+.NO_PARALLEL:	copy nocopy Tentrez sequin Psequin sbtedit Ssequin elecpcr asn2fast asn2asn cleanasn cspeedtest Nbatch Nbatch3 Nentrcmd seqget idfetch test_ncbi_socket test_ncbi_dsock debug_server rtestval rasn2ff asn2gb asn2gb_psf asn2fsa asn2fsa_psf tbl2asn tbl2asn_psf raw2delt asn2all gene2xml asnval asnval_psf asndisc asndisc_psf asnmacro asnstrip flint gbseqget insdseqget trna2sap trna2tbl testent2 entrez2 spidey dotmatrix ingenue condense bl2seq
 
 .WAIT:
 	echo Waiting...go
@@ -450,6 +453,8 @@ shlib.alf :
 	cd ../shlib; make -f $(MAKESHLIB) `ls *.a | sed "s/\.a/.so/"` SH1="ld -o" SH2="-expect_unresolved '*' -shared *.o"
 	rm -f ../shlib/*.a
 
+
+$(ALL_SRC) : copy
 
 copy :
 	$(SRCCOPY) ../connect/test/*.c .
@@ -515,6 +520,7 @@ copy :
 	$(SRCCOPY) ../demo/asn2fast.c .
 	$(SRCCOPY) ../demo/asn2asn.c .
 	$(SRCCOPY) ../demo/cleanasn.c .
+	$(SRCCOPY) ../demo/cspeedtest.c .
 	$(SRCCOPY) ../demo/fetchent.c .
 	$(SRCCOPY) ../demo/udvmain.c .
 	$(SRCCOPY) ../demo/rtestval.c .
@@ -525,8 +531,10 @@ copy :
 	$(SRCCOPY) ../demo/gene2xml.c .
 	$(SRCCOPY) ../demo/asnval.c .
 	$(SRCCOPY) ../demo/asndisc.c .
+	$(SRCCOPY) ../demo/asnmacro.c .
 	$(SRCCOPY) ../demo/asnstrip.c .
 	$(SRCCOPY) ../demo/tbl2asn.c .
+	$(SRCCOPY) ../demo/raw2delt.c .
 	$(SRCCOPY) ../demo/flint.c .
 	$(SRCCOPY) ../demo/gbseqget.c .
 	$(SRCCOPY) ../demo/insdseqget.c .
@@ -694,6 +702,8 @@ docsum.o : docsum.c
 	$(CC) $(CFLAGS) docsum.c
 smartnet.o : smartnet.c
 	$(CC) $(CFLAGS) smartnet.c
+namedpipe.o : namedpipe.c
+	$(CC) $(CFLAGS) namedpipe.c
 ssputil.o : ssputil.c
 	$(CC) $(CFLAGS) ssputil.c
 objblst3.o : objblst3.c
@@ -986,7 +996,7 @@ asn2all :	asn2all.c
 # tbl2asn
 tbl2asn : tbl2asn.c 
 	$(CC) -o tbl2asn $(LDFLAGS) tbl2asn.c $(LIB23) $(LIBCOMPADJ) \
-		$(LIB2) $(NETCLILIB) $(LIB1) $(OTHERLIBS) 
+		$(LIB2) $(NETCLILIB) $(LIB1) $(OTHERLIBS)
 
 # tbl2asn_psf, uses PUBSEQBioseqFetchEnable instead of PubSeqFetchEnable
 # should be used only internally within NCBI.
@@ -994,6 +1004,11 @@ tbl2asn_psf : tbl2asn.c
 	$(CC) -DINTERNAL_NCBI_TBL2ASN -g -o tbl2asn_psf $(LDFLAGS) tbl2asn.c $(THREAD_OBJ) $(LIB_PS) \
 	$(LIB23) $(LIBCOMPADJ) $(LIB2) $(LIB1) $(NCBI_SYBLIBS_CT_r) \
 	$(OTHERLIBS) $(THREAD_OTHERLIBS)
+
+# raw2delt
+raw2delt : raw2delt.c 
+	$(CC) -o raw2delt $(LDFLAGS) raw2delt.c $(LIB22) $(LIBCOMPADJ) \
+		$(LIB2) $(NETCLILIB) $(LIB1) $(OTHERLIBS)
 
 # gene2xml program (gene2xml)
 gene2xml :	gene2xml.c
@@ -1032,10 +1047,15 @@ asndisc_psf :	asndisc.c
 	$(LIB23) $(LIBCOMPADJ) $(LIB2) $(LIB1) $(NCBI_SYBLIBS_CT_r) \
 	$(OTHERLIBS) $(THREAD_OTHERLIBS)
 
+# asnmacro
+asnmacro : asnmacro.c 
+	$(CC) -o asnmacro $(LDFLAGS) asnmacro.c $(LIB61) $(LIB60) $(LIB23) $(LIBCOMPADJ) \
+		$(LIB2) $(LIB1) $(OTHERLIBS)
+
 # asnstrip program (asnstrip)
 asnstrip : asnstrip.c 
 	$(CC) -o asnstrip $(LDFLAGS) asnstrip.c $(LIB23) $(LIBCOMPADJ) \
-		$(LIB2) $(NETCLILIB) $(LIB1) $(OTHERLIBS) 
+		$(LIB2) $(NETCLILIB) $(LIB1) $(OTHERLIBS)
 
 # flint program (flint)
 flint :	flint.c
@@ -1117,6 +1137,11 @@ asn2asn : asn2asn.c
 
 cleanasn : cleanasn.c
 	$(CC) -o cleanasn $(LDFLAGS) cleanasn.c $(LIB41) $(LIB23) $(LIB6) $(LIB2) $(LIB1) $(OTHERLIBS)
+
+# demo program (cspeedtest)
+
+cspeedtest : cspeedtest.c
+	$(CC) -o cspeedtest $(LDFLAGS) cspeedtest.c $(LIB41) $(LIB23) $(LIB6) $(LIB2) $(LIB1) $(OTHERLIBS)
 
 # demo program (fetchent)
 

@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_UTIL__H
 #define CONNECT___NCBI_UTIL__H
 
-/*  $Id: ncbi_util.h,v 6.28 2007/07/31 16:25:29 kazimird Exp $
+/*  $Id: ncbi_util.h,v 6.33 2008/02/29 00:25:42 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -54,6 +54,7 @@
  *
  * 4. Miscellaneous:
  *       UTIL_MatchesMask[Ex]()
+ *       UTIL_NcbiLocalHostName()
  *
  */
 
@@ -105,28 +106,31 @@ extern NCBI_XCONNECT_EXPORT MT_LOCK CORE_GetLOCK(void);
  * @sa
  *  LOG_WriteInternal
  */
-#define LOG_Write(lg,level,module,file,line,message) \
-  (void) (((lg)  ||  (level) == eLOG_Fatal) ?                         \
-  (LOG_WriteInternal(lg,level,module,file,line,message,0,0), 0) : 1)
-#define LOG_Data(lg,level,module,file,line,data,size,message) \
-  (void) (((lg)  ||  (level) == eLOG_Fatal) ?                         \
-  (LOG_WriteInternal(lg,level,module,file,line,message,data,size), 0) : 1)
+#define LOG_Write(lg,code,subcode,level,module,file,line,message) \
+  (void) (((lg)  ||  (level) == eLOG_Fatal) ?                     \
+  (LOG_WriteInternal(lg,level,module,file,line,message,0,0,       \
+                     code,subcode), 0) : 1)
+#define LOG_Data(lg,code,subcode,level,module,file,line,data,size,message) \
+  (void) (((lg)  ||  (level) == eLOG_Fatal) ?                              \
+  (LOG_WriteInternal(lg,level,module,file,line,message,data,size,          \
+                     code,subcode), 0) : 1)
 
 
 /** Auxiliary plain macros to write message (maybe, with raw data) to the log.
  * @sa
  *   LOG_Write, LOG_Data
  */
-#define  LOG_WRITE(lg, level, message) \
-  LOG_Write(lg, level, THIS_MODULE, THIS_FILE, __LINE__, message)
+#define  LOG_WRITE(lg, code, subcode, level, message)   \
+  LOG_Write(lg, code, subcode, level,                   \
+            THIS_MODULE, THIS_FILE, __LINE__, message)
 
 #ifdef   LOG_DATA
 /* AIX's <pthread.h> defines LOG_DATA to be an integer constant;
    we must explicitly drop such definitions to avoid trouble */
 #  undef LOG_DATA
 #endif
-#define  LOG_DATA(lg, data, size, message) \
-  LOG_Data(lg, eLOG_Trace, THIS_MODULE, THIS_FILE, __LINE__, \
+#define  LOG_DATA(lg, code, subcode, level, data, size, message)       \
+  LOG_Data(lg, code, subcode, level, THIS_MODULE, THIS_FILE, __LINE__, \
            data, size, message)
 
 
@@ -229,11 +233,12 @@ typedef enum {
     fLOG_Module        = 0x2,
     fLOG_FileLine      = 0x4,    /**< always here for eLOG_Trace level       */
     fLOG_DateTime      = 0x8,
+    fLOG_FullOctal     = 0x2000, /**< do not do reduction in octal data bytes*/
     fLOG_OmitNoteLevel = 0x4000, /**< do not add NOTE if eLOG_Note is level  */
     fLOG_None          = 0x8000  /**< nothing but spec'd parts, msg and data */
 } ELOG_Format;
 typedef unsigned int TLOG_FormatFlags; /**< binary OR of "ELOG_FormatFlags"  */
-#define fLOG_Short  (fLOG_Level)
+#define fLOG_Short   fLOG_Level
 #define fLOG_Full   (fLOG_Level | fLOG_Module | fLOG_FileLine)
 
 extern NCBI_XCONNECT_EXPORT TLOG_FormatFlags CORE_SetLOGFormatFlags
@@ -295,7 +300,7 @@ extern NCBI_XCONNECT_EXPORT void LOG_ToFILE
 
 
 /** Add current "errno" (and maybe its description) to the message:
- * <message> {errno=<errno>,<descr>}
+ * <message>[ {errno=[<errno>][,][<descr>]}]
  * @param message
  *  [in]  message text (can be NULL)
  * @param x_errno
@@ -305,13 +310,13 @@ extern NCBI_XCONNECT_EXPORT void LOG_ToFILE
  * @param buf
  *  [out] buffer to put the composed message to
  * @param buf_size
- *  [in]  maximal buffer size
+ *  [in]  buffer size available for use
  * @return
- *  Return "buf"
+ *  Return "buf" if composition occurred, else "message" (if non-empty) or ""
  * @sa
  *  LOG_ComposeMessage
  */
-extern NCBI_XCONNECT_EXPORT char* MessagePlusErrno
+extern NCBI_XCONNECT_EXPORT const char* MessagePlusErrno
 (const char*  message,
  int          x_errno,
  const char*  descr,
@@ -325,11 +330,14 @@ extern NCBI_XCONNECT_EXPORT char* MessagePlusErrno
  * @sa
  *  LOG_WRITE_ERRNO
  */
-#define LOG_WRITE_ERRNO_EX(lg, level, message, x_errno, x_descr)  do {   \
+#define LOG_WRITE_ERRNO_EX(lg, code, subcode, level, message,            \
+                           x_errno, x_descr)                             \
+do {                                                                     \
     if ((lg)  ||  (level) == eLOG_Fatal) {                               \
         char _buf[1024];                                                 \
-        LOG_WRITE(lg, level, MessagePlusErrno(message, x_errno, x_descr, \
-                                              _buf, sizeof(_buf)));      \
+        LOG_WRITE(lg, code, subcode, level,                              \
+                  MessagePlusErrno(message, x_errno, x_descr,            \
+                                   _buf, sizeof(_buf)));                 \
     }                                                                    \
 } while (0)
 
@@ -338,8 +346,41 @@ extern NCBI_XCONNECT_EXPORT char* MessagePlusErrno
  * @sa
  *   LOG_WRITE_ERRNO_EX
  */
-#define LOG_WRITE_ERRNO(lg, level, message)                              \
-     LOG_WRITE_ERRNO_EX(lg, level, message, errno, 0)
+#define LOG_WRITE_ERRNO(lg, code, subcode, level, message)               \
+     LOG_WRITE_ERRNO_EX(lg, code, subcode, level, message, errno, 0)
+
+
+/* Several defines brought here from ncbidiag.hpp. Names of macros slightly
+ * changed (added _C) because some sources include this header and
+ * ncbidiag.hpp simultaneously
+ */
+
+/** Defines global error code name with given value (err_code)
+ */
+#define NCBI_C_DEFINE_ERRCODE_X(name, err_code, max_err_subcode)        \
+    enum enum##name {                                                   \
+        eErrCodeX_##name = err_code                                     \
+        /* automatic subcode checking is not implemented in C code */   \
+    }
+
+/** Makes one identifier from 2 parts
+ */
+#define NCBI_C_CONCAT_IDENTIFIER(prefix, postfix) prefix##postfix
+
+/** Returns value of error code by its name defined by NCBI_DEFINE_ERRCODE_X
+ *
+ * @sa NCBI_C_DEFINE_ERRCODE_X
+ */
+#define NCBI_C_ERRCODE_X_NAME(name)   \
+    NCBI_C_CONCAT_IDENTIFIER(eErrCodeX_, name)
+
+/** Returns currently set default error code. Default error code is set by
+ *  definition of NCBI_USE_ERRCODE_X with name of error code as its value.
+ *
+ * @sa NCBI_DEFINE_ERRCODE_X
+ */
+#define NCBI_C_ERRCODE_X   NCBI_C_ERRCODE_X_NAME(NCBI_USE_ERRCODE_X)
+
 
 
 
@@ -452,11 +493,21 @@ extern NCBI_XCONNECT_EXPORT int/*bool*/ UTIL_MatchesMaskEx
  *  TODO!
  * @param mask
  *  TODO!
-*/
+ */
 extern NCBI_XCONNECT_EXPORT int/*bool*/ UTIL_MatchesMask
 (const char* name,
  const char* mask
 );
+
+
+/** Cut off well-known NCBI domain suffix out of the passed "hostname".
+ * @param hostname
+ *  Hostname to shorten (if possible)
+ * @return 0 if the hostname wasn't modified, otherwise return "hostname".
+ */
+extern char* UTIL_NcbiLocalHostName
+(char*       hostname
+ );
 
 
 #ifdef __cplusplus

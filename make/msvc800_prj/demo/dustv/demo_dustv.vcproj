@@ -3,7 +3,7 @@
 	ProjectType="Visual C++"
 	Version="8.00"
 	Name="demo_dustv"
-	ProjectGUID="{D3DCCB97-8DA8-4F61-BE14-F7078635FE43}"
+	ProjectGUID="{C19E4244-4CAD-40A7-900A-7942991DFB75}"
 	>
 	<Platforms>
 		<Platform

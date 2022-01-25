@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.75 $
+* $Revision: 1.81 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -418,6 +418,7 @@ static CharPtr GetStrForBankit (
 }
 
 static CharPtr reftxt0 = " The reference sequence was derived from ";
+static CharPtr reftxtg = " The reference sequence was generated based on analysis of ";
 static CharPtr reftxt1 = " This record is predicted by genome sequence analysis and is not yet supported by experimental evidence.";
 static CharPtr reftxt2 = " This record has not yet been subject to final NCBI review.";
 static CharPtr reftxt3 = " The mRNA record is supported by experimental evidence; however, the coding sequence is predicted.";
@@ -480,18 +481,19 @@ static void AddStrForRefTrack (
 )
 
 {
-  CharPtr       accn, curator = NULL, source = NULL, st;
+  CharPtr       accn, curator = NULL, name, source = NULL, st;
+  Char          buf [64];
   ObjectIdPtr   oip;
   UserFieldPtr  ufp, tmp, u, urf = NULL;
+  Int4          from, to;
   Int2          i = 0;
-  Int2          review = 0,len;
-  Boolean       is_accn;
+  Int2          review = 0;
+  Boolean       generated = FALSE;
 
   if ( uop == NULL || ffstring == NULL ) return;
   if ((oip = uop->type) == NULL) return;
   if (StringCmp (oip->str, "RefGeneTracking") != 0) return;
 
-  len = StringLen (reftxt0);
   for (ufp = uop->data; ufp != NULL; ufp = ufp->next) {
     oip = ufp->label;
     if (StringCmp(oip->str, "Assembly") == 0) {
@@ -516,6 +518,8 @@ static void AddStrForRefTrack (
       } else if (StringICmp (st, "Pipeline") == 0) {
         review = 8;
       }
+    } else if (StringCmp (oip->str, "Generated") == 0) {
+      generated = ufp->data.boolvalue;
     } else if (StringCmp (oip->str, "Collaborator") == 0) {
       st = (CharPtr) ufp->data.ptrvalue;
       if (! StringHasNoText (st)) {
@@ -575,33 +579,58 @@ static void AddStrForRefTrack (
   }
   if (source != NULL) {
     FFAddOneString (ffstring, reftxt9, FALSE, FALSE, TILDE_IGNORE);
-    FFAddOneString (ffstring, source, FALSE, FALSE, TILDE_IGNORE);
+    if (GetWWW (ajp) && ValidateAccn (source) == 0) {
+      FFAddTextToString(ffstring, "<a href=", link_seq, NULL, FALSE, FALSE, TILDE_IGNORE);
+      FFAddTextToString(ffstring, "val=", source, ">", FALSE, FALSE, TILDE_IGNORE);
+      FFAddOneString (ffstring, source, FALSE, FALSE, TILDE_IGNORE);
+      FFAddOneString (ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
+    } else {
+      FFAddOneString (ffstring, source, FALSE, FALSE, TILDE_IGNORE);
+    }
     FFAddOneString (ffstring, ").", FALSE, FALSE, TILDE_IGNORE);
   }
   if (i > 0) {
-    FFAddOneString (ffstring, reftxt0, FALSE, FALSE, TILDE_IGNORE);
+    if (generated) {
+      FFAddOneString (ffstring, reftxtg, FALSE, FALSE, TILDE_IGNORE);
+    } else {
+      FFAddOneString (ffstring, reftxt0, FALSE, FALSE, TILDE_IGNORE);
+    }
 
     for (tmp = urf->data.ptrvalue; tmp != NULL; tmp = tmp->next) {
-      is_accn = TRUE;
+      accn = NULL;
+      from = 0;
+      to = 0;
+      name = NULL;
       for (u = tmp->data.ptrvalue; u != NULL; u = u->next) {
         oip = u->label;
-        if (StringCmp (oip->str, "accession") == 0) break;
-        if (StringCmp (oip->str, "name") == 0) {
-          is_accn = FALSE;
-          break;
+        if (oip != NULL && oip->str != NULL) {
+          if (StringICmp (oip->str, "accession") == 0 && u->choice == 1) {
+            accn = (CharPtr) u->data.ptrvalue;
+          } else if (StringICmp (oip->str, "from") == 0 && u->choice == 2) {
+            from = u->data.intvalue;
+          } else if (StringICmp (oip->str, "to") == 0 && u->choice == 2) {
+            to = u->data.intvalue;
+          } else if (StringICmp (oip->str, "name") == 0 && u->choice == 1) {
+            name = (CharPtr) u->data.ptrvalue;
+          }
         }
       }
-      if (u == NULL) continue;
-      accn = (CharPtr) u->data.ptrvalue;
-      if (StringHasNoText (accn)) continue;
-      if (is_accn && GetWWW(ajp) ) {
-        FFAddTextToString(ffstring, "<a href=", link_seq, NULL, FALSE, FALSE, TILDE_IGNORE);
-        FFAddTextToString(ffstring, "val=", accn, ">", FALSE, FALSE, TILDE_IGNORE);
-        FFAddOneString (ffstring, accn, FALSE, FALSE, TILDE_IGNORE);
-        FFAddOneString (ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
-      } else {
-        FFAddOneString (ffstring, accn, FALSE, FALSE, TILDE_IGNORE);
-      }
+      if (StringDoesHaveText (accn)) {
+        if (GetWWW (ajp) && ValidateAccn (accn) == 0) {
+          FFAddTextToString(ffstring, "<a href=", link_seq, NULL, FALSE, FALSE, TILDE_IGNORE);
+          FFAddTextToString(ffstring, "val=", accn, ">", FALSE, FALSE, TILDE_IGNORE);
+          FFAddOneString (ffstring, accn, FALSE, FALSE, TILDE_IGNORE);
+          FFAddOneString (ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
+        } else {
+          FFAddOneString (ffstring, accn, FALSE, FALSE, TILDE_IGNORE);
+        }
+        if (from > 0 && to > 0) {
+          sprintf (buf, " (range: %ld-%ld)", (long) from, (long) to);
+          FFAddOneString (ffstring, buf, FALSE, FALSE, TILDE_IGNORE);
+        }
+      } else if (StringDoesHaveText (name)) {
+        FFAddOneString (ffstring, name, FALSE, FALSE, TILDE_IGNORE);
+      } else continue;
       if (tmp->next != NULL) {
         ufp = tmp->next;
         if (ufp->next != NULL) {
@@ -1491,6 +1520,148 @@ static void AddAltPrimaryBlock (
   FFRecycleString(ajp, ffstring);
 }
 
+static CharPtr GeStrForTSA (
+  UserObjectPtr uop
+)
+
+{
+  Int4          asf, ast, prf, prt;
+  Char          buf [80], tmp [80];
+  UserFieldPtr  curr;
+  Boolean       has_asf, has_ast, has_prf, has_prt;
+  ValNodePtr    head = NULL;
+  ObjectIdPtr   oip;
+  CharPtr       pid;
+  CharPtr       str;
+  UserFieldPtr  ufp;
+
+  if (uop == NULL) return NULL;
+  if ((oip = uop->type) == NULL) return NULL;
+  if (StringCmp (oip->str, "TSA") != 0) return NULL;
+
+  for (curr = uop->data; curr != NULL; curr = curr->next) {
+    if (curr->choice != 11) continue;
+    asf = 0;
+    ast = 0;
+    prf = 0;
+    prt = 0;
+    pid = NULL;
+    has_asf = FALSE;
+    has_ast = FALSE;
+    has_prf = FALSE;
+    has_prt = FALSE;
+    for (ufp = curr->data.ptrvalue; ufp != NULL; ufp = ufp->next) {
+      oip = ufp->label;
+      if (oip == NULL) continue;
+      if (StringICmp (oip->str, "assembly from") == 0 && ufp->choice == 2) {
+        asf = (Int4) ufp->data.intvalue;
+        has_asf = TRUE;
+      } else if (StringICmp (oip->str, "assembly to") == 0 && ufp->choice == 2) {
+        ast = (Int4) ufp->data.intvalue;
+        has_ast = TRUE;
+      } else if (StringICmp (oip->str, "primary from") == 0 && ufp->choice == 2) {
+        prf = (Int4) ufp->data.intvalue;
+        has_prf = TRUE;
+      } else if (StringICmp (oip->str, "primary to") == 0 && ufp->choice == 2) {
+        prt = (Int4) ufp->data.intvalue;
+        has_prt = TRUE;
+      } else if (StringICmp (oip->str, "primary ID") == 0 && ufp->choice == 1) {
+        pid = (CharPtr) ufp->data.ptrvalue;
+      }
+    }
+    if (has_asf && has_ast && has_prf && has_prt && pid != NULL) {
+      if (head == NULL) {
+        ValNodeCopyStr (&head, 0, "TSA_SPAN            PRIMARY_IDENTIFIER PRIMARY_SPAN        COMP");
+      }
+      StringCpy (buf, pid);
+      if (StringNCmp (pid, "gnl|ti|", 7) == 0) {
+        StringCpy (buf, "TI");
+        StringCat (buf, pid + 7);
+      }
+      sprintf (tmp, "~%ld-%ld                                        ",
+               (long) (asf + 1), (long) (ast + 1));
+      tmp [21] = '\0';
+      StringCat (buf, "                                        ");
+      buf [18] = '\0';
+      StringCat (tmp, buf);
+      sprintf (buf, " %ld-%ld                                        ",
+               (long) (prf + 1), (long) (prt + 1));
+      buf [21] = '\0';
+      StringCat (tmp, buf);
+      if (prf > prt) {
+        StringCat (tmp, "c");
+      }
+      ValNodeCopyStr (&head, 0, tmp);
+    }
+  }
+
+  if (head == NULL) return NULL;
+
+  str = MergeFFValNodeStrs (head);
+  ValNodeFreeData (head);
+
+  return str;
+}
+
+static void AddTsaBlock (
+  Asn2gbWorkPtr awp,
+  UserObjectPtr uop
+)
+
+{
+  IntAsn2gbJobPtr  ajp;
+  Asn2gbSectPtr    asp;
+  BaseBlockPtr     bbp = NULL;
+  BioseqPtr        bsp;
+  GBSeqPtr         gbseq;
+  CharPtr          str;
+  StringItemPtr    ffstring;
+
+  if (awp == NULL) return;
+  ajp = awp->ajp;
+  if (ajp == NULL) return;
+  bsp = awp->bsp;
+  if (bsp == NULL) return;
+  asp = awp->asp;
+  if (asp == NULL) return;
+
+  ffstring = FFGetString(ajp);
+  if ( ffstring == NULL ) return;
+
+  str = GeStrForTSA (uop);
+  if (str != NULL) {
+
+    bbp = (BaseBlockPtr) Asn2gbAddBlock (awp, PRIMARY_BLOCK, sizeof (BaseBlock));
+    if (bbp != NULL) {
+
+      FFStartPrint (ffstring, awp->format, 0, 12, "PRIMARY", 12, 5, 5, "PR", TRUE);
+
+      FFAddOneString (ffstring, str, FALSE, FALSE, TILDE_EXPAND);
+
+      bbp->string = FFEndPrint(ajp, ffstring, awp->format, 12, 12, 5, 5, "PR");
+
+      /* optionally populate gbseq for XML-ized GenBank format */
+
+      if (ajp->gbseq) {
+        gbseq = &asp->gbseq;
+      } else {
+        gbseq = NULL;
+      }
+
+      if (gbseq != NULL) {
+        gbseq->primary = StringSave (str);
+      }
+
+      if (awp->afp != NULL) {
+        DoImmediateFormat (awp->afp, (BaseBlockPtr) bbp);
+      }
+    }
+    MemFree (str);
+  }
+
+  FFRecycleString(ajp, ffstring);
+}
+
 NLM_EXTERN void AddPrimaryBlock (
   Asn2gbWorkPtr awp
 )
@@ -1503,6 +1674,7 @@ NLM_EXTERN void AddPrimaryBlock (
   SeqMgrDescContext  dcontext;
   GBSeqPtr           gbseq;
   Boolean            has_tpa_assembly = FALSE;
+  Boolean            has_tsa = FALSE;
   SeqHistPtr         hist;
   Boolean            isRefSeq = FALSE;
   ObjectIdPtr        oip;
@@ -1527,14 +1699,21 @@ NLM_EXTERN void AddPrimaryBlock (
       if (oip != NULL) {
         if (StringCmp (oip->str, "TpaAssembly") == 0) {
           has_tpa_assembly = TRUE;
+        } else if (StringCmp (oip->str, "TSA") == 0) {
+          has_tsa = TRUE;
         }
       }
     }
-    if (has_tpa_assembly) {
+    if (has_tpa_assembly || has_tsa) {
       sdp = NULL;
     } else {
       sdp = SeqMgrGetNextDescriptor (bsp, sdp, Seq_descr_user, &dcontext);
     }
+  }
+
+  if (has_tsa) {
+    AddTsaBlock (awp, uop);
+    return;
   }
 
   hist = bsp->hist;
@@ -1709,6 +1888,7 @@ NLM_EXTERN void AddCommentBlock (
   MolInfoPtr         mip;
   Boolean            mrnaEv = FALSE;
   CharPtr            name = NULL;
+  ObjectIdPtr        ncbifileID = NULL;
   ObjectIdPtr        oip;
   Boolean            okay;
   BioseqPtr          parent;
@@ -2130,6 +2310,8 @@ NLM_EXTERN void AddCommentBlock (
             DoImmediateFormat (awp->afp, (BaseBlockPtr) cbp);
           }
         }
+      } else if (dbt != NULL && StringCmp (dbt->db, "NCBIFILE") == 0 && dbt->tag != NULL) {
+        ncbifileID = dbt->tag;
       }
 
     } else if (sip->choice == SEQID_GI) {
@@ -2152,6 +2334,47 @@ NLM_EXTERN void AddCommentBlock (
           }
         } else {
           sprintf (buf, "LocalID: %ld", (long) localID->id);
+        }
+
+        cbp = (CommentBlockPtr) Asn2gbAddBlock (awp, COMMENT_BLOCK, sizeof (CommentBlock));
+        if (cbp != NULL) {
+
+          cbp->entityID = awp->entityID;
+          cbp->first = first;
+          first = FALSE;
+
+          if (cbp->first) {
+            FFStartPrint (ffstring, awp->format, 0, 12, "COMMENT", 12, 5, 5, "CC", TRUE);
+          } else {
+            FFStartPrint (ffstring, awp->format, 0, 12, NULL, 12, 5, 5, "CC", FALSE);
+          }
+
+          FFAddOneString (ffstring, buf, FALSE, FALSE, TILDE_EXPAND);
+
+          cbp->string = FFEndPrint(ajp, ffstring, awp->format, 12, 12,5, 5, "CC");
+          FFRecycleString(ajp, ffstring);
+          ffstring = FFGetString(ajp);
+
+          if (awp->afp != NULL) {
+            DoImmediateFormat (awp->afp, (BaseBlockPtr) cbp);
+          }
+        }
+      }
+    }
+  }
+
+  if (ncbifileID != NULL) {
+    if (is_tpa || is_collab) {
+      if (awp->mode == SEQUIN_MODE || awp->mode == DUMP_MODE) {
+        buf [0] = '\0';
+        if (! StringHasNoText (ncbifileID->str)) {
+          if (StringLen (ncbifileID->str) < 1000) {
+            sprintf (buf, "FileID: %s", ncbifileID->str);
+          } else {
+            sprintf (buf, "FileID string too large");
+          }
+        } else {
+          sprintf (buf, "FileID: %ld", (long) ncbifileID->id);
         }
 
         cbp = (CommentBlockPtr) Asn2gbAddBlock (awp, COMMENT_BLOCK, sizeof (CommentBlock));
@@ -3784,6 +4007,9 @@ NLM_EXTERN void AddSourceFeatBlock (
     }
 
     str = GetMolTypeQual (bsp);
+    if (StringICmp (str, "ncRNA") == 0) {
+      str = "other RNA";
+    }
     if (str == NULL) {
       switch (bsp->mol) {
         case Seq_mol_dna :

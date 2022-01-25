@@ -1,4 +1,4 @@
-/* $Id: blast_hits.h,v 1.106 2007/07/27 18:25:30 kazimird Exp $
+/* $Id: blast_hits.h,v 1.108 2008/02/14 15:55:42 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -263,35 +263,27 @@ Blast_HSPReevaluateWithAmbiguitiesUngapped(BlastHSP* hsp,
    const BlastInitialWordParameters* word_params, 
    BlastScoreBlk* sbp, Boolean translated);
 
-/** Calculate number of identities in an HSP.
+/** Calculate number of identities in an HSP and set the BlastHSP::num_ident
+ * field (unconditionally)
  * @param query The query sequence [in]
  * @param subject The uncompressed subject sequence [in]
- * @param hsp All information about the HSP [in]
- * @param num_ident_ptr Number of identities [out]
- * @param align_length_ptr The alignment length, including gaps [out]
+ * @param hsp All information about the HSP, the output of this function will
+ * be stored in its num_ident field [in|out]
+ * @param score_options Scoring options [in]
+ * @param align_length_ptr The alignment length, including gaps (optional) [out]
+ * @return 0 on success, -1 on invalid parameters or error
  */
 NCBI_XBLAST_EXPORT
 Int2
-Blast_HSPGetNumIdentities(Uint1* query, Uint1* subject, BlastHSP* hsp, 
-                          Int4* num_ident_ptr, Int4* align_length_ptr);
+Blast_HSPGetNumIdentities(const Uint1* query, 
+                          const Uint1* subject, 
+                          BlastHSP* hsp, 
+                          const BlastScoringOptions* score_options,
+                          Int4* align_length_ptr);
 
-/** Calculate number of identities in an HSP for an out-of-frame alignment.
- * @param query The query sequence [in]
- * @param subject The uncompressed subject sequence [in]
- * @param hsp All information about the HSP [in]
- * @param program BLAST program (blastx or tblastn) [in]
- * @param num_ident_ptr Number of identities [out]
- * @param align_length_ptr The alignment length, including gaps [out]
- */
-NCBI_XBLAST_EXPORT
-Int2
-Blast_HSPGetOOFNumIdentities(Uint1* query, Uint1* subject, BlastHSP* hsp, 
-                             EBlastProgramType program, Int4* num_ident_ptr, 
-                             Int4* align_length_ptr);
-
-/** Calculates number of identities and alignment lengths of an HSP and 
- * determines whether this HSP should be kept or deleted. The num_ident
- * field of the BlastHSP structure is filled here.
+/** Calculates number of identities and alignment lengths of an HSP via
+ * Blast_HSPGetNumIdentities and determines whether this HSP should be kept or
+ * deleted. 
  * @param program_number Type of BLAST program [in]
  * @param hsp An HSP structure [in] [out]
  * @param query Query sequence [in]
@@ -640,7 +632,7 @@ Int2 Blast_HitListUpdate(BlastHitList* hit_list, BlastHSPList* hsp_list);
  * represent alignments to the same query sequence
  * @param old_hit_list_ptr Pointer to original HitList, will be NULLed 
  *                          out on return [in|out]
- * @param combined_hsp_list_ptr Pointer to the combined list of HSPs [in|out]
+ * @param combined_hit_list_ptr Pointer to the combined HitList [in|out]
  * @param contexts_per_query The number of different contexts that can
  *             occur in hits from old_hit_list and combined_hit_list [in]
  * @param split_offsets the query offset that marks the boundary between
@@ -681,6 +673,10 @@ BlastHSPResults* Blast_HSPResultsFree(BlastHSPResults* results);
 /** Sort each hit list in the BLAST results by best e-value */
 NCBI_XBLAST_EXPORT
 Int2 Blast_HSPResultsSortByEvalue(BlastHSPResults* results);
+/** Sort each hit list in the BLAST results by best e-value, in reverse
+    order. */
+NCBI_XBLAST_EXPORT
+Int2 Blast_HSPResultsReverseSort(BlastHSPResults* results);
 
 /** Reverse order of HSP lists in each hit list in the BLAST results. 
  * This allows to return HSP lists from the end of the arrays when reading

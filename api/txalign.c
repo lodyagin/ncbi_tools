@@ -1,4 +1,4 @@
-/* $Id: txalign.c,v 6.94 2007/05/07 13:28:35 kans Exp $
+/* $Id: txalign.c,v 6.95 2008/01/07 23:20:06 bealer Exp $
 ***************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -27,13 +27,17 @@
 *
 * File Name:  txalign.c
 *
-* $Revision: 6.94 $
+* $Revision: 6.95 $
 * 
 * File Description:  Formating of text alignment for the BLAST output
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: txalign.c,v $
+* Revision 6.95  2008/01/07 23:20:06  bealer
+* - Fix condition found by valgrind - conditional statement on
+*   unassigned location.
+*
 * Revision 6.94  2007/05/07 13:28:35  kans
 * added casts for Seq-data.gap (SeqDataPtr, SeqGapPtr, ByteStorePtr)
 *
@@ -3760,6 +3764,8 @@ static Boolean ShowAlignNodeText2Ex(ValNodePtr anp_list, Int2 num_node, Int4 lin
                             as.target_sip = anp->sip;
                             as.is_aa = (m_bsp->mol == Seq_mol_aa);
                             as.ooframe = FALSE; /* Not supported */
+                            as.m_frame_set = FALSE;
+                            as.t_frame_set = FALSE;
                             asp = &as;
                         } else
                             asp = NULL;

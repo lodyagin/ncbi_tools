@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/30/07
 *
-* $Revision: 1.5 $
+* $Revision: 1.7 $
 *
 * File Description: 
 *
@@ -161,6 +161,11 @@ NLM_EXTERN void ChangeCitArtMLAuthorsToSTD (
 
 NLM_EXTERN void ChangeMlaBackMLAuthorsToSTD (
   MlaBackPtr mbp 
+);
+
+NLM_EXTERN Boolean Mla2IsEPubOnlyJournal (
+  CharPtr jta,
+  Int2Ptr starting_yearP
 );
 
 /*

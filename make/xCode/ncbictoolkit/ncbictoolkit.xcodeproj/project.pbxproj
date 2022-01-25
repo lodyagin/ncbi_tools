@@ -7,6 +7,14 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		3701072D0CCD3D410030B936 /* objtable.c in Sources */ = {isa = PBXBuildFile; fileRef = 3701072B0CCD3D410030B936 /* objtable.c */; };
+		3701072E0CCD3D410030B936 /* objtable.h in Headers */ = {isa = PBXBuildFile; fileRef = 3701072C0CCD3D410030B936 /* objtable.h */; };
+		371D8D6A0CFB6E3800170BF6 /* objmacro.c in Sources */ = {isa = PBXBuildFile; fileRef = 371D8D680CFB6E3800170BF6 /* objmacro.c */; };
+		371D8D6B0CFB6E3800170BF6 /* objmacro.h in Headers */ = {isa = PBXBuildFile; fileRef = 371D8D690CFB6E3800170BF6 /* objmacro.h */; };
+		371D8D6E0CFB6E7B00170BF6 /* macroapi.c in Sources */ = {isa = PBXBuildFile; fileRef = 371D8D6C0CFB6E7B00170BF6 /* macroapi.c */; };
+		371D8D6F0CFB6E7B00170BF6 /* macroapi.h in Headers */ = {isa = PBXBuildFile; fileRef = 371D8D6D0CFB6E7B00170BF6 /* macroapi.h */; };
+		371D8D720CFB6EBD00170BF6 /* macrodlg.c in Sources */ = {isa = PBXBuildFile; fileRef = 371D8D700CFB6EBD00170BF6 /* macrodlg.c */; };
+		371D8D730CFB6EBD00170BF6 /* macrodlg.h in Headers */ = {isa = PBXBuildFile; fileRef = 371D8D710CFB6EBD00170BF6 /* macrodlg.h */; };
 		373A56D80BA5EE190055ED6F /* split_query.c in Sources */ = {isa = PBXBuildFile; fileRef = 373A56D60BA5EE190055ED6F /* split_query.c */; };
 		373A56D90BA5EE190055ED6F /* split_query.h in Headers */ = {isa = PBXBuildFile; fileRef = 373A56D70BA5EE190055ED6F /* split_query.h */; };
 		37569ACC0B9E06AA00AD4AB8 /* objscoremat.c in Sources */ = {isa = PBXBuildFile; fileRef = 37569ACB0B9E06AA00AD4AB8 /* objscoremat.c */; };
@@ -16,6 +24,7 @@
 		377925DF0BBD631100A61171 /* index_ungapped.h in Headers */ = {isa = PBXBuildFile; fileRef = 377925DD0BBD631100A61171 /* index_ungapped.h */; };
 		377B18A50BA7302000CFED28 /* gencode_singleton.c in Sources */ = {isa = PBXBuildFile; fileRef = 377B18A30BA7302000CFED28 /* gencode_singleton.c */; };
 		377B18A60BA7302000CFED28 /* gencode_singleton.h in Headers */ = {isa = PBXBuildFile; fileRef = 377B18A40BA7302000CFED28 /* gencode_singleton.h */; };
+		379194780D2ED0700013E717 /* sqnutil4.c in Sources */ = {isa = PBXBuildFile; fileRef = 379194770D2ED0700013E717 /* sqnutil4.c */; };
 		379C4E2A0B4D973B0013063F /* netcnfg.c in Sources */ = {isa = PBXBuildFile; fileRef = 379C4E250B4D973B0013063F /* netcnfg.c */; };
 		379C4E2B0B4D973B0013063F /* netcnfg.h in Headers */ = {isa = PBXBuildFile; fileRef = 379C4E260B4D973B0013063F /* netcnfg.h */; };
 		37B126A90B6FF73000C686CA /* mla2api.c in Sources */ = {isa = PBXBuildFile; fileRef = 37B126A80B6FF73000C686CA /* mla2api.c */; };
@@ -1017,6 +1026,14 @@
 /* Begin PBXFileReference section */
 		089C1667FE841158C02AAC07 /* English */ = {isa = PBXFileReference; fileEncoding = 10; lastKnownFileType = text.plist.strings; name = English; path = English.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		08FB77AAFE841565C02AAC07 /* Carbon.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Carbon.framework; path = /System/Library/Frameworks/Carbon.framework; sourceTree = "<absolute>"; };
+		3701072B0CCD3D410030B936 /* objtable.c */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.c; name = objtable.c; path = ../../../object/objtable.c; sourceTree = SOURCE_ROOT; };
+		3701072C0CCD3D410030B936 /* objtable.h */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.h; name = objtable.h; path = ../../../object/objtable.h; sourceTree = SOURCE_ROOT; };
+		371D8D680CFB6E3800170BF6 /* objmacro.c */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.c; name = objmacro.c; path = ../../../object/objmacro.c; sourceTree = SOURCE_ROOT; };
+		371D8D690CFB6E3800170BF6 /* objmacro.h */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.h; name = objmacro.h; path = ../../../object/objmacro.h; sourceTree = SOURCE_ROOT; };
+		371D8D6C0CFB6E7B00170BF6 /* macroapi.c */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.c; name = macroapi.c; path = ../../../api/macroapi.c; sourceTree = SOURCE_ROOT; };
+		371D8D6D0CFB6E7B00170BF6 /* macroapi.h */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.h; name = macroapi.h; path = ../../../api/macroapi.h; sourceTree = SOURCE_ROOT; };
+		371D8D700CFB6EBD00170BF6 /* macrodlg.c */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.c; name = macrodlg.c; path = ../../../desktop/macrodlg.c; sourceTree = SOURCE_ROOT; };
+		371D8D710CFB6EBD00170BF6 /* macrodlg.h */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.h; name = macrodlg.h; path = ../../../desktop/macrodlg.h; sourceTree = SOURCE_ROOT; };
 		373A56D60BA5EE190055ED6F /* split_query.c */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.c; name = split_query.c; path = ../../../algo/blast/core/split_query.c; sourceTree = SOURCE_ROOT; };
 		373A56D70BA5EE190055ED6F /* split_query.h */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.h; name = split_query.h; path = ../../../algo/blast/core/split_query.h; sourceTree = SOURCE_ROOT; };
 		37569ACB0B9E06AA00AD4AB8 /* objscoremat.c */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.c; name = objscoremat.c; path = ../../../object/objscoremat.c; sourceTree = SOURCE_ROOT; };
@@ -1026,6 +1043,7 @@
 		377925DD0BBD631100A61171 /* index_ungapped.h */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.h; name = index_ungapped.h; path = ../../../algo/blast/core/index_ungapped.h; sourceTree = SOURCE_ROOT; };
 		377B18A30BA7302000CFED28 /* gencode_singleton.c */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.c; name = gencode_singleton.c; path = ../../../algo/blast/core/gencode_singleton.c; sourceTree = SOURCE_ROOT; };
 		377B18A40BA7302000CFED28 /* gencode_singleton.h */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.h; name = gencode_singleton.h; path = ../../../algo/blast/core/gencode_singleton.h; sourceTree = SOURCE_ROOT; };
+		379194770D2ED0700013E717 /* sqnutil4.c */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.c; name = sqnutil4.c; path = ../../../api/sqnutil4.c; sourceTree = SOURCE_ROOT; };
 		379C4E250B4D973B0013063F /* netcnfg.c */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.c; name = netcnfg.c; path = ../../../network/vibnet/netcnfg.c; sourceTree = SOURCE_ROOT; };
 		379C4E260B4D973B0013063F /* netcnfg.h */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.h; name = netcnfg.h; path = ../../../network/vibnet/netcnfg.h; sourceTree = SOURCE_ROOT; };
 		37B126A80B6FF73000C686CA /* mla2api.c */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.c; name = mla2api.c; path = ../../../access/mla2api.c; sourceTree = SOURCE_ROOT; };
@@ -2303,6 +2321,8 @@
 				37ED9A2B0B41B49B00BA3806 /* lookup_util.h */,
 				37ED9A2D0B41B49B00BA3806 /* lookup_wrap.h */,
 				37ED9A860B41B49B00BA3806 /* lsqfetch.h */,
+				371D8D6D0CFB6E7B00170BF6 /* macroapi.h */,
+				371D8D710CFB6EBD00170BF6 /* macrodlg.h */,
 				37ED9B170B41B49C00BA3806 /* mapcn3d.h */,
 				37ED9CBF0B41B49D00BA3806 /* mapgene.h */,
 				37ED9D7B0B41B49D00BA3806 /* mapmime.h */,
@@ -2427,6 +2447,7 @@
 				37ED9D930B41B49D00BA3806 /* objgen.h */,
 				37ED9D950B41B49D00BA3806 /* objinsdseq.h */,
 				37ED9D970B41B49D00BA3806 /* objloc.h */,
+				371D8D690CFB6E3800170BF6 /* objmacro.h */,
 				37ED9D990B41B49D00BA3806 /* objmdrs.h */,
 				37ED9D9B0B41B49D00BA3806 /* objmedli.h */,
 				37ED9A8E0B41B49B00BA3806 /* objmgr.h */,
@@ -2447,6 +2468,7 @@
 				37ED9D590B41B49D00BA3806 /* objspell.h */,
 				37ED9DAC0B41B49D00BA3806 /* objsset.h */,
 				37ED9DAE0B41B49D00BA3806 /* objsub.h */,
+				3701072C0CCD3D410030B936 /* objtable.h */,
 				37ED9D620B41B49D00BA3806 /* objtax1.h */,
 				37ED99910B41B49B00BA3806 /* objtax3.h */,
 				37ED9DB00B41B49D00BA3806 /* objtseq.h */,
@@ -2802,6 +2824,7 @@
 				37ED9A810B41B49B00BA3806 /* jzcoll.c */,
 				37ED9A830B41B49B00BA3806 /* jzmisc.c */,
 				37ED9A850B41B49B00BA3806 /* lsqfetch.c */,
+				371D8D6C0CFB6E7B00170BF6 /* macroapi.c */,
 				37ED9A870B41B49B00BA3806 /* maputil.c */,
 				37ED9A890B41B49B00BA3806 /* mconsist.c */,
 				37ED9A8B0B41B49B00BA3806 /* needleman.c */,
@@ -2824,6 +2847,7 @@
 				37ED9AB00B41B49C00BA3806 /* sqnutil1.c */,
 				37ED9AB10B41B49C00BA3806 /* sqnutil2.c */,
 				37ED9AB20B41B49C00BA3806 /* sqnutil3.c */,
+				379194770D2ED0700013E717 /* sqnutil4.c */,
 				37ED9AB40B41B49C00BA3806 /* subutil.c */,
 				37ED9AB60B41B49C00BA3806 /* tofasta.c */,
 				37ED9AB80B41B49C00BA3806 /* tofile.c */,
@@ -3046,6 +3070,7 @@
 				37ED9CB70B41B49D00BA3806 /* ingengraph.c */,
 				37ED9CB90B41B49D00BA3806 /* ingenwin.c */,
 				37ED9CBB0B41B49D00BA3806 /* layout.c */,
+				371D8D700CFB6EBD00170BF6 /* macrodlg.c */,
 				37ED9CBE0B41B49D00BA3806 /* mapgene.c */,
 				37ED9CC00B41B49D00BA3806 /* medview.c */,
 				37ED9CC20B41B49D00BA3806 /* prtgene.c */,
@@ -3257,6 +3282,7 @@
 				37ED9D920B41B49D00BA3806 /* objgen.c */,
 				37ED9D940B41B49D00BA3806 /* objinsdseq.c */,
 				37ED9D960B41B49D00BA3806 /* objloc.c */,
+				371D8D680CFB6E3800170BF6 /* objmacro.c */,
 				37ED9D980B41B49D00BA3806 /* objmdrs.c */,
 				37ED9D9A0B41B49D00BA3806 /* objmedli.c */,
 				37ED9D9C0B41B49D00BA3806 /* objmime.c */,
@@ -3269,6 +3295,7 @@
 				37ED9DA90B41B49D00BA3806 /* objseq.c */,
 				37ED9DAB0B41B49D00BA3806 /* objsset.c */,
 				37ED9DAD0B41B49D00BA3806 /* objsub.c */,
+				3701072B0CCD3D410030B936 /* objtable.c */,
 				37ED9DAF0B41B49D00BA3806 /* objtseq.c */,
 			);
 			name = object;
@@ -3941,6 +3968,10 @@
 				373A56D90BA5EE190055ED6F /* split_query.h in Headers */,
 				377B18A60BA7302000CFED28 /* gencode_singleton.h in Headers */,
 				377925DF0BBD631100A61171 /* index_ungapped.h in Headers */,
+				3701072E0CCD3D410030B936 /* objtable.h in Headers */,
+				371D8D6B0CFB6E3800170BF6 /* objmacro.h in Headers */,
+				371D8D6F0CFB6E7B00170BF6 /* macroapi.h in Headers */,
+				371D8D730CFB6EBD00170BF6 /* macrodlg.h in Headers */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -4167,6 +4198,7 @@
 				37ED9FF10B41B4A000BA3806 /* sqnutil1.c in Sources */,
 				37ED9FF20B41B4A000BA3806 /* sqnutil2.c in Sources */,
 				37ED9FF30B41B4A000BA3806 /* sqnutil3.c in Sources */,
+				379194780D2ED0700013E717 /* sqnutil4.c in Sources */,
 				37ED9FF50B41B4A000BA3806 /* subutil.c in Sources */,
 				37ED9FF70B41B4A000BA3806 /* tofasta.c in Sources */,
 				37ED9FF90B41B4A000BA3806 /* tofile.c in Sources */,
@@ -4520,6 +4552,10 @@
 				377B18A50BA7302000CFED28 /* gencode_singleton.c in Sources */,
 				377925DE0BBD631100A61171 /* index_ungapped.c in Sources */,
 				37DA1FCF0C639E5700223E99 /* ncbi_types.c in Sources */,
+				3701072D0CCD3D410030B936 /* objtable.c in Sources */,
+				371D8D6A0CFB6E3800170BF6 /* objmacro.c in Sources */,
+				371D8D6E0CFB6E7B00170BF6 /* macroapi.c in Sources */,
+				371D8D720CFB6EBD00170BF6 /* macrodlg.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

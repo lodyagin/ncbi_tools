@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.636 $
+* $Revision: 6.647 $
 *
 * File Description: 
 *
@@ -70,6 +70,7 @@
 #endif
 #include <actutils.h>
 #include <salpanel.h>
+#include <findrepl.h>
 
 extern EnumFieldAssoc  biosource_genome_simple_alist [];
 extern EnumFieldAssoc  biosource_origin_alist [];
@@ -86,7 +87,8 @@ static ENUM_ALIST(biomol_nucX_alist)
   {"Other-Genetic",            9},
   {"cRNA",                    11},
   {"Small nucleolar RNA",     12},
-  {"Transcribed RNA",         13},  
+  {"Transcribed RNA",         13}, 
+  {"Transfer-messenger RNA", MOLECULE_TYPE_TMRNA },
 END_ENUM_ALIST
 
 static ENUM_ALIST(biomol_nucGen_alist)
@@ -4231,6 +4233,45 @@ static Int4 FindLineForBadReadChar (FILE *fp, Char badchar)
 }
 
 
+static void CleanTitles (SeqEntryPtr sep, ValNodePtr PNTR special_list)
+{
+  BioseqPtr    bsp;
+  BioseqSetPtr bssp;
+  SeqDescrPtr  sdp = NULL;
+
+  while (sep != NULL)
+  {
+    sdp = NULL;
+    if (sep->choice == 1)
+    {
+      bsp = sep->data.ptrvalue;
+      if (bsp != NULL) 
+      {
+        sdp = bsp->descr;
+      }
+    }
+    else if (sep->choice == 2)
+    {
+      bssp = sep->data.ptrvalue;
+      if (bssp != NULL)
+      {
+        CleanTitles (bssp->seq_set, special_list);
+        sdp = bssp->descr;
+      }
+    }
+    while (sdp != NULL)
+    {
+      if (sdp->choice == Seq_descr_title)
+      {
+        SpecialCharFindWithContext ((CharPtr PNTR) &(sdp->data.ptrvalue), special_list, NULL, NULL);
+      }
+      sdp = sdp->next;
+    }
+    sep = sep->next;
+  }
+}
+
+
 static SeqEntryPtr ImportOnlyProteinSequences 
 (FILE            *fp,
  SeqEntryPtr     sep_list,
@@ -4245,6 +4286,7 @@ static SeqEntryPtr ImportOnlyProteinSequences
   Boolean       error_reading = FALSE;
   Int4          pos, bad_start;
   BioseqPtr     bsp;
+  ValNodePtr    special_list = NULL;
 
   oldscope = SeqEntrySetScope (NULL);
 
@@ -4306,6 +4348,15 @@ static SeqEntryPtr ImportOnlyProteinSequences
     Message (MSG_ERROR, "Unable to read file, starting at line %d!", bad_start);
     new_list = SeqEntryFree (new_list);
   }
+  else
+  {
+    CleanTitles (new_list, &special_list);
+    if (!FixSpecialCharactersForStringsInList (special_list, "Definition lines contain special characters.\nThe sequences cannot be imported unless the characters are replaced.", FALSE))
+    {
+      new_list = SeqEntryFree (new_list);
+    }
+    special_list = FreeContextList (special_list);
+  }
   
   lastsep = sep_list;
   while (lastsep != NULL && lastsep->next != NULL) 
@@ -4351,6 +4402,7 @@ ImportSequencesFromFile
   Boolean       this_chars_stripped = FALSE;
   Boolean       isASN = FALSE, isOnlyFASTA = FALSE;
   Int4          bad_start = 0, bad_line = 0;
+  ValNodePtr    special_list = NULL;
   
   if (chars_stripped != NULL)
   {
@@ -4569,6 +4621,15 @@ ImportSequencesFromFile
       Message (MSG_ERROR, "Unable to read file, starting at line %d (found bad character '%c' at line %d)!", bad_start, lastchar, bad_line);
     }
     new_sep_list = SeqEntryFree (new_sep_list);
+  }
+  else
+  {
+    CleanTitles (new_sep_list, &special_list);
+    if (!FixSpecialCharactersForStringsInList (special_list, "Definition lines contain special characters.\nThe sequences cannot be imported unless the characters are replaced.", FALSE))
+    {
+      new_sep_list = SeqEntryFree (new_sep_list);
+    }
+    special_list = FreeContextList (special_list);
   }
   
   last = sep_list;
@@ -7113,8 +7174,6 @@ extern BioSourcePtr ExtractFromDeflineToBioSource (CharPtr defline, BioSourcePtr
   
 }
 
-static void RemoveTaxRef (OrgRefPtr orp);
-
 extern Boolean ProcessOneNucleotideTitle (Int2 seqPackage,
                                           SeqEntryPtr nsep, SeqEntryPtr top);
                                           
@@ -8784,6 +8843,44 @@ PickCodingRegionLocationsForProteinNucleotidePairs
   return !errors_found;
 }
 
+
+static Int2 FindGeneticCodeForBioseq (BioseqPtr bsp, Int2 default_code)
+{
+  Int2         code = default_code;
+  BioSourcePtr biop;
+  SeqEntryPtr  nsep;
+  BioseqSetPtr bssp;
+  SeqDescrPtr  sdp = NULL;
+
+  if (bsp == NULL) return default_code;
+  nsep = GetBestTopParentForData (ObjMgrGetEntityIDForPointer (bsp), bsp);
+  if (nsep == NULL || nsep->data.ptrvalue == NULL) return default_code;
+  if (nsep->choice == 1)
+  {
+    bsp = nsep->data.ptrvalue;
+    sdp = bsp->descr;
+  }
+  else if (nsep->choice == 2)
+  {
+    bssp = nsep->data.ptrvalue;
+    sdp = bssp->descr;
+  }
+  while (sdp != NULL)
+  {
+    if (sdp->choice == Seq_descr_source && sdp->data.ptrvalue != NULL)
+    {
+      biop = (BioSourcePtr) sdp->data.ptrvalue;
+      if (biop->org != NULL && biop->org->orgname != NULL)
+      {
+        code = BioSourceToGeneticCode (biop);
+      }
+    }
+    sdp = sdp->next;
+  }
+  return code;
+}
+
+
 /* This function takes a ValNode list of coding region SeqLocs,
  * the list of nucleotide sequences, and the list of protein sequences
  * and creates the nuc-prot sets.
@@ -8803,6 +8900,7 @@ AssignProteinsToSelectedNucleotides
   BioseqPtr PNTR bsp_array;
   Int4           prot_num;
   ValNodePtr     descr = NULL;
+  Int2           genCode;
 
   if (assoc_list == NULL || nuc_list == NULL || prot_list == NULL)
   {
@@ -8856,10 +8954,12 @@ AssignProteinsToSelectedNucleotides
       {
         nsep = GetBestTopParentForData (ObjMgrGetEntityIDForPointer (nbsp), nbsp); 
       }
+      genCode = FindGeneticCodeForBioseq (nbsp, code);
       if (nsep != NULL && nsep->data.ptrvalue == nbsp) {
         descr = ExtractBioSourceAndPubs (nsep);
       }
-      AssignOneProtein (prot_sep, sqfp, nsep, vnp_assoc->loc, nbsp, code, makeMRNA);
+      AssignOneProtein (prot_sep, sqfp, nsep, vnp_assoc->loc, nbsp, 
+                        genCode, makeMRNA);
       if (descr != NULL) {
         ReplaceBioSourceAndPubs (nsep, descr);
       }
@@ -9051,14 +9151,13 @@ static void ReplaceDuplicateProteinIDs (SeqEntryPtr nuc_list, SeqEntryPtr prot_l
             if (cp != NULL) {
               *cp = 0;
             }
+            tmp_str = StringSave (tmp_str);
           
             iatep_prot->id_list [prot_seq_num_check] = MemFree (iatep_prot->id_list [prot_seq_num_check]);
             iatep_prot->id_list [prot_seq_num_check] = BuildProteinIDUniqueInIDAndTitleEdit (tmp_str,
                                                                                              iatep_nuc,
                                                                                              iatep_prot);
-            if (cp != NULL) {
-              *cp = '|';
-            }
+            tmp_str = MemFree (tmp_str);
           }
         }
       }
@@ -11645,12 +11744,16 @@ static CharPtr SuggestCorrectBracketing (CharPtr str)
               if (*next_next_next_token == '=')
               {
                 step_back = GetModNameStartFromEqLoc (next_next_next_token, next_next_token);
-                while (step_back > next_next_token + 1
-                       && isspace (*(step_back - 1)))
-                {
-                  step_back --;
+                if (step_back == next_next_token) {
+                  /* no name before second equals sign, put bracket after value */
+                } else {
+                  while (step_back > next_next_token + 1
+                        && isspace (*(step_back - 1)))
+                  {
+                    step_back --;
+                  }
+                  offset = step_back - new_str;
                 }
-                offset = step_back - new_str;
               }
             }
             tmp_new = InsertStringAtOffset (new_str, "]", offset);
@@ -26174,6 +26277,25 @@ extern void DownloadAndDisplay (Int4 uid)
   }
 }
 
+
+static Boolean IsAllDigits (CharPtr str)
+{
+  CharPtr cp;
+
+  if (StringHasNoText (str)) return FALSE;
+
+  cp = str;
+  while (*cp != 0 && isdigit (*cp)) {
+    cp++;
+  }
+  if (*cp == 0) {
+    return TRUE;
+  } else {
+    return FALSE;
+  }
+}
+
+
 static void DownloadProc (ButtoN b)
 
 {
@@ -26189,6 +26311,7 @@ static void DownloadProc (ButtoN b)
   Int2          handled;
   Boolean       idTypes [NUM_SEQID];
   Boolean       isReplaced = FALSE;
+  Boolean       isTrace = FALSE;
   SeqEntryPtr   sep;
   Char          str [32];
   Int4          uid;
@@ -26244,15 +26367,23 @@ static void DownloadProc (ButtoN b)
     }
     SeqIdFree (sip);
     */
-    uid = AccessionToGi (str);
-    accn = str;
+    if (StringNICmp (str, "ti|", 3) == 0 && IsAllDigits (str + 3)) {
+      if (! StrToLong (str + 3, &uid)) {
+        uid = 0;
+      } else {
+        isTrace = TRUE;
+      }
+    } else {      
+      uid = AccessionToGi (str);
+      accn = str;
+    }
   } else {
     if (! StrToLong (str, &uid)) {
      uid = 0;
     }
   }
   if (uid > 0) {
-    sep = PubSeqSynchronousQuery (uid, 0, -1);
+    sep = PubSeqSynchronousQueryEx (uid, 0, -1, isTrace);
     /* EntrezFini (); */
     if (sep == NULL) {
       ArrowCursor ();
@@ -26525,13 +26656,12 @@ static void CancelFetchProc (ButtoN b)
   Select (startupForm);
 }
 
+
 static void FetchTextProc (TexT t)
 
 {
   Boolean       alldigits;
-  Char          ch;
   FetchFormPtr  ffp;
-  CharPtr       ptr;
   Char          str [32];
 
   ffp = (FetchFormPtr) GetObjectExtra (t);
@@ -26542,16 +26672,7 @@ static void FetchTextProc (TexT t)
   } else {
     SafeEnable (ffp->accept);
     TrimSpacesAroundString (str);
-    alldigits = TRUE;
-    ptr = str;
-    ch = *ptr;
-    while (ch != '\0') {
-      if (! IS_DIGIT (ch)) {
-        alldigits = FALSE;
-      }
-      ptr++;
-      ch = *ptr;
-    }
+    alldigits = IsAllDigits (str);
     if (alldigits) {
       SafeSetValue (ffp->accntype, 2);
     } else {
@@ -27834,36 +27955,6 @@ extern ValNodePtr BuildFeatureValNodeList (
   return head;
 }
 
-static void RemoveTaxRef (OrgRefPtr orp)
-{
-  ValNodePtr      vnp, next;
-  ValNodePtr PNTR prev;
-  DbtagPtr        dbt;
-
-  if (orp == NULL)
-  {
-    return;
-  }
- 
-  vnp = orp->db;
-  if (vnp == NULL) return;
-  prev = (ValNodePtr PNTR) &(orp->db);
-  while (vnp != NULL) {
-    next = vnp->next;
-    dbt = (DbtagPtr) vnp->data.ptrvalue;
-    if (dbt != NULL && StringICmp ((CharPtr) dbt->db, "taxon") == 0) {
-      *prev = vnp->next;
-      vnp->next = NULL;
-      DbtagFree (dbt);
-      ValNodeFree (vnp);
-    } else {
-      prev = (ValNodePtr PNTR) &(vnp->next);
-    }
-    vnp = next;
-  }
-  
-}
-
 extern void RemoveOldName (OrgRefPtr orp)
 {
   OrgModPtr prev = NULL, curr, next_mod;
@@ -28739,6 +28830,9 @@ static LisT MakeAlignmentSequenceListControl (GrouP g, SeqEntryPtr sep, Nlm_LstA
 
 typedef struct removeseqfromaligndata {
   FORM_MESSAGE_BLOCK
+  DialoG      clickable_list_dlg;
+  DialoG      constraint_dlg;
+  ValNodePtr  seq_list;
   LisT        sequence_list_ctrl;
   SeqEntryPtr sep;
   Boolean     remove_all_from_alignments;
@@ -28929,21 +29023,14 @@ static void RemoveBioseqProducts (ValNodePtr product_feature_list, RemoveSeqFrom
   }
 }
 
-static void RemoveEmptyNucProtSet (SeqEntryPtr sep)
+static void RemoveNucProtSet (SeqEntryPtr sep)
 {
   BioseqSetPtr bssp;
-  BioseqPtr    bsp;
 
   if (sep == NULL || !IS_Bioseq_set (sep)) return;
   bssp = (BioseqSetPtr) sep->data.ptrvalue;
   if (bssp->_class != BioseqseqSet_class_nuc_prot) return;
 
-  for (sep = bssp->seq_set; sep != NULL; sep = sep->next)
-  {
-  	if (!IS_Bioseq (sep)) return;
-  	bsp = sep->data.ptrvalue;
-  	if (bsp != NULL && !bsp->idx.deleteme) return;
-  }
   bssp->idx.deleteme = TRUE;
 }
 
@@ -29002,66 +29089,6 @@ static void RemoveAlnOrProductNoAll (ButtoN b)
   Remove (rp->w);
   rp->done = TRUE;
 }
-
-static Boolean GetRemoveAlignments (RemoveSeqFromAlignPtr rp, CharPtr idstr)
-{
-  RemoveAlnOrProductAnsData rd;
-
-  GrouP                    g, h, c;
-  ButtoN                   b;
-  CharPtr                  prompt_fmt = "%s is part of an alignment - would you like to remove it from the alignment before deleting it?";
-  CharPtr                  prompt_str = NULL;
-  
-  if (rp == NULL || idstr == NULL) return FALSE;
-  if (rp->remove_all_from_alignments) return TRUE;
-  if (rp->no_remove_all_from_alignments) return FALSE;
-
-  prompt_str = (CharPtr) MemNew (sizeof (Char) * (StringLen (prompt_fmt) + StringLen (idstr)));
-  if (prompt_str == NULL) return FALSE;
-  sprintf (prompt_str, prompt_fmt, idstr);
-  rd.w = ModalWindow(-20, -13, -10, -10, NULL);
-  h = HiddenGroup(rd.w, -1, 0, NULL);
-  SetGroupSpacing (h, 10, 10);
-  rd.done = FALSE;
-  g = HiddenGroup (h, 1, 0, NULL);
-  StaticPrompt (g, prompt_str, 0, popupMenuHeight, programFont, 'l');
-  c = HiddenGroup (h, 4, 0, NULL);
-  b = PushButton(c, "Yes", RemoveAlnOrProductYes);
-  SetObjectExtra (b, &rd, NULL);
-  b = PushButton(c, "Remove All", RemoveAlnOrProductYesAll);
-  SetObjectExtra (b, &rd, NULL);
-  b = DefaultButton(c, "No", RemoveAlnOrProductNo);
-  SetObjectExtra (b, &rd, NULL);
-  b = DefaultButton(c, "Remove None", RemoveAlnOrProductNoAll);
-  SetObjectExtra (b, &rd, NULL);
-  AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) c, NULL);
-  prompt_str = MemFree (prompt_str);
-  
-  Show(rd.w); 
-  Select (rd.w);
-  rd.done = FALSE;
-  while (!rd.done)
-  {
-    ProcessExternalEvent ();
-    Update ();
-  }
-  ProcessAnEvent ();
-  if (rd.do_all)
-  {
-    if (rd.ans)
-    {
-  	  rp->remove_all_from_alignments = TRUE;
-  	  rp->no_remove_all_from_alignments = FALSE;
-    }
-    else
-    {
-  	  rp->remove_all_from_alignments = FALSE;
-  	  rp->no_remove_all_from_alignments = TRUE;
-    }
-  }
-  return rd.ans;
-}
-
 
 static Boolean GetRemoveProducts (RemoveSeqFromAlignPtr rp, CharPtr idstr)
 {
@@ -29135,10 +29162,22 @@ static void RemoveBioseq (BioseqPtr bsp, RemoveSeqFromAlignPtr rp)
 
   if (IsBioseqInAnyAlignment (bsp, rp->input_entityID))
   {
-    if (GetRemoveAlignments (rp, str))
+    if (!rp->remove_all_from_alignments && !rp->no_remove_all_from_alignments) 
     {
+	    if (ANS_YES == Message (MSG_YN, "This sequence is part of an alignment.  Would you like to remove it from the alignment?")) 
+      {
+        rp->remove_all_from_alignments = TRUE;
+      }
+      else
+      {
+        rp->no_remove_all_from_alignments = TRUE;
+      }
+    }
+
+    if (rp->remove_all_from_alignments) {
       RemoveSequenceFromAlignments (rp->sep, bsp->id);
     }
+
   }
   VisitFeaturesOnBsp (bsp, &product_feature_list, DoesBioseqHaveFeaturesWithProductsCallback);
   if (product_feature_list != NULL)
@@ -29150,10 +29189,11 @@ static void RemoveBioseq (BioseqPtr bsp, RemoveSeqFromAlignPtr rp)
   }
         
   bsp->idx.deleteme = TRUE;
-  /* remove nuc-prot set if we are deleting the nucleotide and its proteins */
-  sep = GetBestTopParentForData (rp->input_entityID, bsp);
-  RemoveEmptyNucProtSet (sep);
-
+  if (ISA_na (bsp->mol)) {
+    /* remove nuc-prot set if we are deleting the nucleotide */
+    sep = GetBestTopParentForData (rp->input_entityID, bsp);
+    RemoveNucProtSet (sep);
+  }
   ValNodeFree (product_feature_list);
   
 }
@@ -29163,9 +29203,10 @@ static void DoRemoveSequencesFromRecord (ButtoN b)
 {
   RemoveSeqFromAlignPtr    rp;
   WindoW                   w;
-  ValNodePtr               sip_list, vnp;
-  SeqIdPtr                 sip;
+  ValNodePtr               vnp, item_vnp;
   BioseqPtr                bsp;
+  ClickableItemPtr         cip;
+  Boolean                  any_removed = FALSE;
   
   if (b == NULL) return;
   rp = (RemoveSeqFromAlignPtr) GetObjectExtra (b);
@@ -29174,23 +29215,60 @@ static void DoRemoveSequencesFromRecord (ButtoN b)
   w = (WindoW) rp->form;
   Hide (w);
 
-  sip_list = GetSelectedSequenceList (rp->sequence_list_ctrl);
-  for (vnp = sip_list; vnp != NULL; vnp = vnp->next)
-  {
-    sip = (SeqIdPtr) vnp->data.ptrvalue;
-    bsp = BioseqFind (sip);
-	  if (bsp != NULL)
-	  {
-	    RemoveBioseq (bsp, rp);
-	  }
+  for (vnp = rp->seq_list; vnp != NULL; vnp = vnp->next) {
+    cip = (ClickableItemPtr) vnp->data.ptrvalue;
+    if (!cip->chosen) continue;
+    if (cip != NULL && cip->item_list != NULL) {
+      for (item_vnp = cip->item_list; item_vnp != NULL; item_vnp = item_vnp->next) {
+        if (item_vnp->choice == OBJ_BIOSEQ) {
+          bsp = item_vnp->data.ptrvalue;
+	        if (bsp != NULL) {
+	          RemoveBioseq (bsp, rp);
+            any_removed = TRUE;
+	        }
+        }
+      }
+    }
   }
-  ValNodeFree (sip_list);
+  if (!any_removed) {
+    Show (w);
+    Message (MSG_ERROR, "You have not selected any sequences for removal!\n(Mark the sequences you want to remove by checking the box next to the sequence or by using the Mark button next to the constraint.)");
+    return;
+  }
   
   DeleteMarkedObjects (rp->input_entityID, 0, NULL);
   ObjMgrSetDirtyFlag (rp->input_entityID, TRUE);
   ObjMgrSendMsg (OM_MSG_UPDATE, rp->input_entityID, 0, 0);
   Remove (rp->form);  
 }
+
+
+static void SelectSequenceIDsForRemoval (ButtoN b)
+{
+  RemoveSeqFromAlignPtr rp;
+  StringConstraintXPtr  scp;
+
+  rp = (RemoveSeqFromAlignPtr) GetObjectExtra (b);
+  if (rp == NULL) return;
+
+  scp = DialogToPointer (rp->constraint_dlg);
+  ChooseCategoriesByStringConstraint (rp->seq_list, scp, TRUE);
+  PointerToDialog (rp->clickable_list_dlg, rp->seq_list);
+  scp = StringConstraintXFree (scp);
+}
+
+
+static void UnselectAllSequences (ButtoN b)
+{
+  RemoveSeqFromAlignPtr rp;
+
+  rp = (RemoveSeqFromAlignPtr) GetObjectExtra (b);
+  if (rp != NULL) {
+    ChooseCategories (rp->seq_list, FALSE);
+    PointerToDialog (rp->clickable_list_dlg, rp->seq_list);
+  }
+}
+
 
 extern void RemoveSequencesFromRecord (IteM i)
 {
@@ -29199,6 +29277,9 @@ extern void RemoveSequencesFromRecord (IteM i)
   RemoveSeqFromAlignPtr    rp;
   GrouP                    h, k, c;
   ButtoN                   b;
+  SeqEntryPtr              sep;
+  StringConstraintData     scd;
+  PrompT                   ppt;
 
 #ifdef WIN_MAC
   bfp = currentFormDataPtr;
@@ -29233,16 +29314,43 @@ extern void RemoveSequencesFromRecord (IteM i)
   SetObjectExtra (w, rp, StdCleanupFormProc);
   
   h = HiddenGroup (w, -1, 0, NULL);
-  k = HiddenGroup (h, 2, 0, NULL);
 
-  rp->sequence_list_ctrl = MakeSequenceListControl (k, rp->sep, NULL, NULL, TRUE, TRUE);
+  rp->clickable_list_dlg = CreateClickableListDialogEx (h, "Sequences to Remove", "",
+                                                      "Use checkbox to mark sequences to remove",
+                                                      "Single click to navigate to sequence in record",
+                                                      ScrollToDiscrepancyItem, EditDiscrepancyItem, NULL,
+                                                      GetDiscrepancyItemText,
+                                                      stdCharWidth * 30,
+                                                      stdCharWidth * 30 + 5,
+                                                      TRUE, FALSE);
+
+  k = HiddenGroup (h, 2, 0, NULL);
+  rp->constraint_dlg =  StringConstraintDialogX (k, "Mark sequences where sequence ID", TRUE);
+  scd.insensitive = TRUE;
+  scd.match_location = eStringConstraintInList;
+  scd.match_text = NULL;
+  scd.not_present = FALSE;
+  scd.whole_word = FALSE;
+  PointerToDialog (rp->constraint_dlg, &scd);
+  b = PushButton (k, "Mark", SelectSequenceIDsForRemoval);
+  SetObjectExtra (b, rp, NULL);
+
+
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  VisitBioseqsInSep (sep, &(rp->seq_list), ListAllSequences);
+
+  PointerToDialog (rp->clickable_list_dlg, rp->seq_list);
+
+  ppt = StaticPrompt (h, "Warning - this will remove sequence from Sequin and SMART", 0, dialogTextHeight, programFont, 'c');
 
   c = HiddenGroup (h, 4, 0, NULL);
   b = DefaultButton (c, "Accept", DoRemoveSequencesFromRecord);
   SetObjectExtra (b, rp, NULL);
+  b = PushButton (c, "Unmark All Sequences", UnselectAllSequences);
+  SetObjectExtra (b, rp, NULL);
   b = PushButton (c, "Cancel", StdCancelButtonProc); 
   SetObjectExtra (b, rp, NULL);
-  AlignObjects (ALIGN_CENTER, (HANDLE) k, (HANDLE) c, NULL);
+  AlignObjects (ALIGN_CENTER, (HANDLE) rp->clickable_list_dlg, (HANDLE) k, (HANDLE) ppt, (HANDLE) c, NULL);
   RealizeWindow (w);
   Show (w);
   Update ();  

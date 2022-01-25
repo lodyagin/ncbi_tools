@@ -29,218 +29,14 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.44 $
+* $Revision: 6.45 $
 *
 * File Description:
 *       Vibrant slate (universal drawing environment) functions
 *
 * Modifications:
 * --------------------------------------------------------------------------
-* $Log: vibslate.c,v $
-* Revision 6.44  2006/09/14 14:45:38  kans
-* changes for 64-bit Windows (GC) plus a few CodeWarrior complaints (JK)
 *
-* Revision 6.43  2004/04/14 19:15:51  sinyakov
-* WIN_MSWIN: support X-Windows-like -bg color command line option
-*
-* Revision 6.42  2002/11/06 21:32:25  ucko
-* Nlm_LoadSlateData: initialize sptr->cMap to 0 rather than NULL, as it
-* is an integer rather than a pointer.
-*
-* Revision 6.41  2001/05/25 20:04:39  vakatov
-* Nested comment typo fixed
-*
-* Revision 6.40  2001/05/15 15:57:25  juran
-* Include glu.h instead of GL/glu.h on the Mac.
-*
-* Revision 6.39  2000/08/17 16:13:21  thiessen
-* fix X/OpenGL initialization bug
-*
-* Revision 6.38  2000/07/28 21:05:55  lewisg
-* more c++ fixes
-*
-* Revision 6.37  2000/03/13 15:58:18  thiessen
-* warn user about buggy 8-bit OpenGL
-*
-* Revision 6.36  2000/03/09 17:55:18  thiessen
-* changes to palette handling for 8-bit OpenGL
-*
-* Revision 6.35  2000/03/06 18:35:23  thiessen
-* fixes for 8-bit color
-*
-* Revision 6.34  2000/02/07 20:17:36  lewisg
-* minor bug fixes, use gui font for win32
-*
-* Revision 6.33  2000/02/03 22:29:15  lewisg
-* make windows version of vibrant use standard color
-*
-* Revision 6.32  2000/01/12 15:13:01  thiessen
-* fixed minor OpenGL memory leak
-*
-* Revision 6.31  2000/01/11 02:55:15  thiessen
-* working off-screen OpenGL rendering on Win32
-*
-* Revision 6.30  2000/01/07 19:37:06  thiessen
-* fix minor OpenGL problems
-*
-* Revision 6.29  2000/01/07 16:28:36  thiessen
-* fixed broken header conflicts
-*
-* Revision 6.28  2000/01/07 01:17:33  kans
-* needed to include ncbi.h first
-*
-* Revision 6.27  2000/01/07 00:22:46  thiessen
-* fixes for LessTif and OpenGL X visual selection
-*
-* Revision 6.26  2000/01/06 17:23:36  thiessen
-* various OpenGL improvements
-*
-* Revision 6.25  1999/12/07 19:18:58  thiessen
-* fixed font color problem in OpenGL on SGI
-*
-* Revision 6.24  1999/12/06 14:44:00  thiessen
-* made OpenGL font selection work in X/Motif
-*
-* Revision 6.23  1999/11/23 19:24:16  thiessen
-* better solution to OpenGL render rect setting on Mac
-*
-* Revision 6.22  1999/11/19 18:07:24  thiessen
-* added label capability for OpenGL version on Mac and Motif
-*
-* Revision 6.21  1999/11/03 15:38:04  thiessen
-* minor fix for Mac/OpenGL
-*
-* Revision 6.20  1999/10/27 20:18:11  thiessen
-* rearrangement of OpenGL color depth priorities
-*
-* Revision 6.19  1999/10/26 13:11:05  thiessen
-* added resize callback to Motif 3DSlate
-*
-* Revision 6.18  1999/10/25 19:40:46  thiessen
-* (temporary) fix so that Mac/OpenGL version correctly lets user resize window
-*
-* Revision 6.17  1999/10/05 17:35:23  thiessen
-* minor fix to glX initialization
-*
-* Revision 6.16  1999/10/04 14:27:17  thiessen
-* hacked partial compatibility with Mesa OpenGL implementation - does *not* work when rendering inside vibrant window in Motif
-*
-* Revision 6.15  1999/09/27 18:28:30  thiessen
-* Made 24-bit and doublebuffered OpenGL modes work on Mac; also should select
-* mode like X
-*
-* Revision 6.14  1999/09/27 16:28:41  thiessen
-* hacked in ability to use higher-than-8-bit color mode in OpenGL in a separate (non-vibrant) X-window
-*
-* Revision 6.13  1999/09/22 20:09:04  thiessen
-* port of OpenGL code to Macintosh
-*
-* Revision 6.12  1999/09/21 13:45:30  thiessen
-* port of Lewis's OpenGL code to X/Motif
-*
-* Revision 6.11  1999/09/20 20:12:56  lewisg
-* change typedefs for a colorcell, add triangle generator, fix incorrect return values
-*
-* Revision 6.10  1999/07/06 14:51:42  kans
-* resize scroll bar was one pixel too small
-*
-* Revision 6.9  1999/04/22 15:18:59  vakatov
-* Call XtUnrealizeWidget() before XtDestroyWidget() to make sure no
-* "post-mortem" callbacks(registered by XtAddEventHandler()) get
-* triggered for the destroyed widget. Reason: the widget may not be
-* immediately destroyed if XtDestroyWidget() was called in a nested
-* event dispatch loop.
-*
-* Revision 6.8  1999/04/06 14:23:26  lewisg
-* add opengl replacement for viewer3d
-*
-* Revision 6.7  1998/12/14 18:39:10  kans
-* okayToDrawContents extern, used to inhibit slate drawing
-*
-* Revision 6.6  1998/06/25 21:42:38  vakatov
-* Fixed(slightly) the slate scroll bar positioning
-* [WIN_MSWIN] Adjusted slate dimensions
-*
-* Revision 6.5  1997/12/18 16:51:43  vakatov
-* [WIN_X11]  setup "Nlm_updateRect" in Nlm_SlateDrawCallback()
-*
-* Revision 6.4  1997/11/26 21:30:39  vakatov
-* Fixed errors and warnings issued by C and C++ (GNU and Sun) compilers
-*
-* Revision 6.3  1997/10/01 21:51:48  vakatov
-* Trying to catch strayed Expose or MapNotify(for SetVisible(...)) event
-*
-* Revision 6.2  1997/09/08 18:49:47  vakatov
-* Nlm_SlateDrawCallback() -- before processing slate's Expose events process
-* StructureNotifyMask-masked events for both the slate and its parent window
-*
-* Revision 6.1  1997/08/27 14:22:26  vakatov
-* Nlm_SlateDrawCallback() -- check for the window mapping event before
-* the call of Nlm_DrawSlate() /see also "vibwndws.c" R5.70/
-*
-* Revision 6.0  1997/08/25 18:57:39  madden
-* Revision changed to 6.0
-*
-* Revision 5.10  1997/07/10 21:49:39  vakatov
-* [WIN_X]  Now able to manage windows having different depths(and
-* different visuals and GC).
-*
-* Revision 5.9  1997/06/06 21:01:35  vakatov
-* [WIN_MOTIF]  Refuse input focus if AUTO_FOCUS slate policy is not set
-*
-* Revision 5.8  1997/04/28 21:50:35  vakatov
-* Implemented AUTO_FOCUS and FOCUS_NAVIG slate policies(see comments
-* in "vibprocs.h" R5.11 for details)
-*
- * Revision 5.7  1997/04/25  21:22:00  vakatov
- * Made slate do not intercept input when the slate is not visible
- *
- * Revision 5.6  1997/04/25  16:12:13  vakatov
- * [WIN_MOTIF, WIN_MSWIN] Added slate navigation key handlers for the
- * slate input and gainFocus()
- * [WIN_MOTIF] DisCapture slate if it losed input focus
- * [WIN_MOTIF] Two slate input callbacks merged into one
- * Disabled automatic navig. key handling when the slate has captured
- * input focus and has user-defined keyProc != NULL
- * Extensive code cleaning and type casting
- *
- * Revision 5.5  1996/09/09  12:19:40  kans
- * NewSlate was getting the wrong horizontal scroll bar callback
- *
- * Revision 5.4  1996/09/09  00:15:01  kans
- * AutonomousPanel4 uses ScrollBar4 to have > 32K positions
- *
- * Revision 5.3  1996/08/27  21:03:48  vakatov
- * Nlm_RegisterRow() :  Nlm_SetValue() replaced by Nlm_CorrectBarValue() in
- * order to avoid undesirable recursion in the scrollbar action callback
- *
- * Revision 5.2  1996/07/25  14:52:01  epstein
- * add alignment variable for possibly improved portability
- *
- * Revision 5.1  1996/05/30  20:07:36  vakatov
- * [WIN_MSWIN]  <Shift> and <Ctrl> key status checking moved to MainProc()
- *
- * Revision 4.6  1996/04/25  17:50:55  vakatov
- * SlateProc()/WIN_MSWIN:  <Shift> and <Ctrl> key state error fixed
- *
- * Revision 4.5  1996/03/02  22:36:38  kans
- * reduction of X traffic (DV)
- *
- * Revision 4.4  1996/02/16  23:16:02  kans
- * set slate position always calls InvalSlate on all platforms
- *
- * Revision 4.3  1996/02/13  17:24:07  kans
- * accelerated set position prior to realization (Denis Vakatov)
- *
- * Revision 4.2  1995/09/06  20:30:24  kans
- * fixed bug due to GetWindowRect vs. GetClientRect (AS + GS)
- *
- * Revision 4.1  1995/08/14  21:38:37  kans
- * removal of remaining C str... functions
- *
- * Revision 2.37  1995/06/28  21:48:57  kans
- * added Add and Del SubwindowShell (Alex)
- *
 * ==========================================================================
 */
 
@@ -1256,7 +1052,11 @@ static void Nlm_ShowSlate (Nlm_GraphiC s, Nlm_Boolean setFlag, Nlm_Boolean saveP
     }
     h = Nlm_GetSlateHandle ((Nlm_SlatE) s);
 #ifdef WIN_MAC
+#ifdef WIN_MAC_QUARTZ
+	Nlm_SetGraphicNeedsDisplay (s);
+#else
     Nlm_DoDraw (s);
+#endif
 #endif
 #ifdef WIN_MSWIN
     ShowWindow (h, SW_SHOW);
@@ -1325,7 +1125,10 @@ static void Nlm_HideSlate (Nlm_GraphiC s, Nlm_Boolean setFlag, Nlm_Boolean saveP
   h = Nlm_GetSlateHandle ((Nlm_SlatE) s);
 #ifdef WIN_MAC
   if (Nlm_AllParentsButWindowVisible (s)) {
-    Nlm_GetRect (s, &r);
+#ifdef WIN_MAC_QUARTZ
+	Nlm_SetGraphicNeedsDisplay (s);
+#else
+	Nlm_GetRect (s, &r);
     if (vsb != NULL) {
       r.right += Nlm_vScrollBarWidth;
     }
@@ -1335,6 +1138,7 @@ static void Nlm_HideSlate (Nlm_GraphiC s, Nlm_Boolean setFlag, Nlm_Boolean saveP
     Nlm_InsetRect (&r, -1, -1);
     Nlm_EraseRect (&r);
     Nlm_ValidRect (&r);
+#endif
   }
 #endif
 #ifdef WIN_MSWIN
@@ -2109,7 +1913,7 @@ static void Nlm_PaintOrFormatChar (Nlm_GraphiC d, Nlm_Char ch, Nlm_Boolean saveP
   if (Nlm_GetVisible (d) && Nlm_AllParentsButWindowVisible (d)) {
     tempPort = Nlm_SavePortIfNeeded (d, savePort);
     Nlm_DoSelect (d, FALSE);
-#ifdef WIN_MAC
+#if defined(WIN_MAC) && !defined(WIN_MAC_QUARTZ)
     GetPenState (&state);
     PenNormal ();
 #endif
@@ -2152,7 +1956,7 @@ static void Nlm_PaintOrFormatChar (Nlm_GraphiC d, Nlm_Char ch, Nlm_Boolean saveP
         }
         break;
     }
-#ifdef WIN_MAC
+#if defined(WIN_MAC) && !defined(WIN_MAC_QUARTZ)
     SetPenState (&state);
 #endif
     Nlm_SelectFont (Nlm_systemFont);

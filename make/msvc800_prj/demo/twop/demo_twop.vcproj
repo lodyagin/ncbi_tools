@@ -3,7 +3,7 @@
 	ProjectType="Visual C++"
 	Version="8.00"
 	Name="demo_twop"
-	ProjectGUID="{C015E441-C32E-4F5F-9DCA-9B9329E3B7C0}"
+	ProjectGUID="{B592842F-6270-4C2E-8FBC-DBE1D5EF71D0}"
 	>
 	<Platforms>
 		<Platform

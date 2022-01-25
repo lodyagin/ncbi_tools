@@ -114,6 +114,8 @@
 #define ERR_SEQ_DESCR_LatLonValue  2,47
 #define ERR_SEQ_DESCR_LatLonCountry  2,48
 #define ERR_SEQ_DESCR_LatLonState  2,49
+#define ERR_SEQ_DESCR_BadSpecificHost  2,50
+#define ERR_SEQ_DESCR_RefGeneTrackingIllegalStatus  2,51
 #define ERR_GENERIC  3,0
 #define ERR_GENERIC_NonAsciiAsn  3,1
 #define ERR_GENERIC_Spell  3,2
@@ -292,6 +294,10 @@
 #define ERR_SEQ_FEAT_BadAnticodonAA  5,145
 #define ERR_SEQ_FEAT_BadAnticodonCodon  5,146
 #define ERR_SEQ_FEAT_BadAnticodonStrand  5,147
+#define ERR_SEQ_FEAT_UndesiredGeneSynonym  5,148
+#define ERR_SEQ_FEAT_UndesiredProteinName  5,149
+#define ERR_SEQ_FEAT_FeatureBeginsOrEndsInGap  5,150
+#define ERR_SEQ_FEAT_GeneOntologyTermMissingGOID  5,151
 #define ERR_SEQ_ALIGN  6,0
 #define ERR_SEQ_ALIGN_SeqIdProblem  6,1
 #define ERR_SEQ_ALIGN_StrandRev  6,2

@@ -3,7 +3,7 @@
 	ProjectType="Visual C++"
 	Version="8.00"
 	Name="demo_epi"
-	ProjectGUID="{DAF15754-B721-430A-A1B9-55D6D67C036D}"
+	ProjectGUID="{B487568D-8168-46AC-80AA-86F955301F21}"
 	>
 	<Platforms>
 		<Platform

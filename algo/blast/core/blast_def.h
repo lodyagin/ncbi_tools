@@ -1,4 +1,4 @@
-/* $Id: blast_def.h,v 1.79 2007/03/20 14:55:37 kazimird Exp $
+/* $Id: blast_def.h,v 1.83 2008/01/31 23:55:41 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -42,18 +42,18 @@ extern "C" {
 
 /****************************** Constants *********************************/
 
-extern const int kDustLevel;  /**< Level parameter used by dust. */
-extern const int kDustWindow; /**< Window parameter used by dust. */
-extern const int kDustLinker; /**< Parameter used by dust to link together close low-complexity segments. */
+NCBI_XBLAST_EXPORT extern const int kDustLevel;  /**< Level parameter used by dust. */
+NCBI_XBLAST_EXPORT extern const int kDustWindow; /**< Window parameter used by dust. */
+NCBI_XBLAST_EXPORT extern const int kDustLinker; /**< Parameter used by dust to link together close low-complexity segments. */
 
-extern const int kSegWindow;  /**< Window that SEG examines at once. */
-extern const double kSegLocut;   /**< Locut parameter for SEG. */
-extern const double kSegHicut;   /**< Hicut parameter for SEG. */
+NCBI_XBLAST_EXPORT extern const int kSegWindow;  /**< Window that SEG examines at once. */
+NCBI_XBLAST_EXPORT extern const double kSegLocut;   /**< Locut parameter for SEG. */
+NCBI_XBLAST_EXPORT extern const double kSegHicut;   /**< Hicut parameter for SEG. */
 
 /** Maximum number of HPSs to be saved in an ungapped search.
  * Value defined in blast_options.c
  */
-extern const int kUngappedHSPNumMax; 
+NCBI_XBLAST_EXPORT extern const int kUngappedHSPNumMax; 
 
 /******************** Preprocessor definitions ******************************/
 

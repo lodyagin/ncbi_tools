@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/28/95
 *
-* $Revision: 6.62 $
+* $Revision: 6.66 $
 *
 * File Description:
 *
@@ -46,6 +46,8 @@
 #include <utilpub.h>
 #include <explore.h>
 #include <toasn3.h>
+#include <mla2api.h>
+#include <dlogutil.h>
 
 #define FIRST_PAGE      0
 
@@ -714,6 +716,9 @@ static Pointer PubdescPageToPubdescPtr (DialoG d)
   Int2                  val;
   CitRetractPtr         crp;
   UIEnum                uieval;
+  /* for fixing special characters */
+  SeqDescrPtr           sdp_tmp;
+  Boolean               fixed_chars = FALSE;
 
   pdp = NULL;
   ppp = (PubdescPagePtr) GetObjectExtra (d);
@@ -959,6 +964,19 @@ static Pointer PubdescPageToPubdescPtr (DialoG d)
       }
     }
   }
+
+  /* fix special characters before returning */
+  sdp_tmp = SeqDescrNew(NULL);
+  sdp_tmp->choice = Seq_descr_pub;
+  sdp_tmp->data.ptrvalue = pdp;
+  FixSpecialCharactersForObject (OBJ_SEQDESC, sdp_tmp, "You may not include special characters in publication text.\nIf you do not choose replacement characters, these special characters will be replaced with '#'.", TRUE, &fixed_chars);
+  sdp_tmp->data.ptrvalue = NULL;
+  sdp_tmp = SeqDescrFree (sdp_tmp);
+  if (fixed_chars)
+  {
+    PointerToDialog (d, pdp);
+  }
+
   return (Pointer) pdp;
 }
 
@@ -1712,6 +1730,41 @@ static CitGenPtr ConvertCitArtToCitGen (CitArtPtr cap)
   return cgp;
 }
 
+static void FixEPubOnlyJournal (PubdescPagePtr ppp, Boolean only_if_ahead_of_print)
+
+{
+  Char    str [256];
+  Int2    starting_year;
+  UIEnum  val;
+  Int2    year = 0;
+
+  if (ppp == NULL) return;
+
+  GetTitle (ppp->year, str, sizeof (str));
+  if (StringDoesHaveText (str)) {
+    StrToInt (str, &year);
+    if (year < 1900) {
+      year = 0;
+    }
+  }
+
+  GetTitle (ppp->journal, str, sizeof (str) - 1);
+  if (StringHasNoText (str)) return;
+
+  if (! Mla2IsEPubOnlyJournal (str, &starting_year)) return;
+
+  if (starting_year > 0) {
+    if (year < starting_year) return;
+  }
+
+  if (only_if_ahead_of_print) {
+    if (GetEnumPopup (ppp->pubstatus, pubstatus_alist, &val) && val > 0) {
+      if ((Uint1) val != PUBSTATUS_aheadofprint) return;
+    }
+  }
+
+  SetEnumPopup (ppp->pubstatus, pubstatus_alist, (UIEnum) PUBSTATUS_epublish);
+}
 
 static ValNodePtr LookupAnArticle (PubEquivLookupProc lookup, ValNodePtr oldpep, Boolean byMuid)
 
@@ -1871,6 +1924,7 @@ static void LookupCommonProc (ButtoN b, Boolean byMuid, Boolean byPmid)
         PointerToDialog (ppp->dialog, (Pointer) pdp);
       }
       PubdescFree (pdp);
+      FixEPubOnlyJournal (ppp, FALSE);
       Select (ParentWindow (b));
       Update ();
     }
@@ -2000,12 +2054,14 @@ static void LookupISOJournalProc (ButtoN b)
         if (len > 1) {
           if (ChooseFromMultipleJournals (str, sizeof (str) - 1, allTitles)) {
             SetTitle (ppp->journal, str);
+            FixEPubOnlyJournal (ppp, FALSE);
           } else {
             Message (MSG_OK, "Unable to match journal");
           }
         } else if (len == 1 && StringDoesHaveText (allTitles->data.ptrvalue) &&
                    allTitles->choice == Cit_title_iso_jta) {
           SetTitle (ppp->journal, allTitles->data.ptrvalue);
+          FixEPubOnlyJournal (ppp, FALSE);
         } else {
           Message (MSG_OK, "Unable to match journal");
         }
@@ -2716,6 +2772,7 @@ static void PubdescAcceptFormButtonProc (ButtoN b)
     return;
   }
   pdp = (PubdescPtr) DialogToPointer (pfp->data);
+
   copy = AsnIoMemCopy ((Pointer) pdp,
                        (AsnReadFunc) PubdescAsnRead,
                        (AsnWriteFunc) PubdescAsnWrite); 
@@ -3352,6 +3409,7 @@ static Boolean ReplaceAllCallback (GatherObjectPtr gop)
       if (PubEquivMatch (pdp->pub, radp->deleteThis->pub) == 0) {
         serial_number = GetSerialNumber (pdp->pub);
         pdp->pub = PubEquivFree (pdp->pub);
+
         pdp->pub = AsnIoMemCopy (radp->replaceWith->pub, (AsnReadFunc) PubEquivAsnRead,
                                  (AsnWriteFunc) PubEquivAsnWrite);
         SetSerialNumber (pdp->pub, serial_number);
@@ -4355,14 +4413,12 @@ extern Int2 LIBCALLBACK PubdescGenFunc (Pointer data)
 
 typedef struct citart_inpress_struct {
 
-  FILE *logfile;	
   Boolean error;	
       
-  CharPtr   f_last_name, f_first_name, l_last_name, l_first_name; 
+  CharPtr   f_last_name, l_last_name; 
   CharPtr  jour_title, jour_volume,  jour_page, art_title;
 
   Int2 year;
-  Int1 rank;
 
   ByteStorePtr uids_bs;  /*pmids*/
 
@@ -4394,6 +4450,8 @@ typedef struct citationupdateform {
   TexT            art_title_text;
   ButtoN          Extra_Term;
   TexT            extra_term_text;
+
+  ButtoN          expand_year;
 
   PopuP           new_query;
   DoC             rdoc;          
@@ -4679,13 +4737,33 @@ static  void AddPage(Entrez2RequestPtr e2rp, CharPtr term, Boolean is_1st)
   EntrezAddToBooleanRequest (e2rp, NULL, 0, "PAGE",term, NULL, 0, 0, NULL, NULL, FALSE, FALSE);
 }
 
-static  void AddYear(Entrez2RequestPtr e2rp, CharPtr term, Boolean is_1st)
+static  void AddYear(Entrez2RequestPtr e2rp, CharPtr term, Boolean is_1st, Boolean expand)
 {
+  Int4 year;
+  Char year_buf[10];
   if (StringHasNoText (term)) return;
   if (!is_1st) {
     EntrezAddToBooleanRequest (e2rp, NULL, ENTREZ_OP_AND, NULL, NULL, NULL, 0, 0, NULL, NULL, FALSE, FALSE);  
   }
-  EntrezAddToBooleanRequest (e2rp, NULL, 0, "EDAT", term, NULL, 0, 0, NULL, NULL, FALSE, FALSE);
+  if (expand) {
+    year = atoi (term);
+    if (year > 0) {
+      EntrezAddToBooleanRequest (e2rp, NULL, ENTREZ_OP_LEFT_PAREN, NULL, NULL, NULL, 0, 0, NULL, NULL, FALSE, FALSE); 
+      sprintf (year_buf, "%d", year - 1);
+      EntrezAddToBooleanRequest (e2rp, NULL, 0, "EDAT", year_buf, NULL, 0, 0, NULL, NULL, FALSE, FALSE);
+      EntrezAddToBooleanRequest (e2rp, NULL, ENTREZ_OP_OR, NULL, NULL, NULL, 0, 0, NULL, NULL, FALSE, FALSE); 
+      sprintf (year_buf, "%d", year);
+      EntrezAddToBooleanRequest (e2rp, NULL, 0, "EDAT", year_buf, NULL, 0, 0, NULL, NULL, FALSE, FALSE);
+      EntrezAddToBooleanRequest (e2rp, NULL, ENTREZ_OP_OR, NULL, NULL, NULL, 0, 0, NULL, NULL, FALSE, FALSE); 
+      sprintf (year_buf, "%d", year + 1);
+      EntrezAddToBooleanRequest (e2rp, NULL, 0, "EDAT", year_buf, NULL, 0, 0, NULL, NULL, FALSE, FALSE);
+      EntrezAddToBooleanRequest (e2rp, NULL, ENTREZ_OP_RIGHT_PAREN, NULL, NULL, NULL, 0, 0, NULL, NULL, FALSE, FALSE);
+    } else {
+      EntrezAddToBooleanRequest (e2rp, NULL, 0, "EDAT", term, NULL, 0, 0, NULL, NULL, FALSE, FALSE);
+    }
+  } else {
+    EntrezAddToBooleanRequest (e2rp, NULL, 0, "EDAT", term, NULL, 0, 0, NULL, NULL, FALSE, FALSE);
+  }
 }
 
 static  void AddAll(Entrez2RequestPtr e2rp, CharPtr term, Boolean is_1st)
@@ -4698,72 +4776,62 @@ static  void AddAll(Entrez2RequestPtr e2rp, CharPtr term, Boolean is_1st)
 }
 
 
+static Entrez2RequestPtr QueryFromForm (CitationUpdateFormPtr cufp, Boolean use_all)
+{
+  Entrez2RequestPtr e2rp = NULL;
+  Boolean is_first_term = TRUE;
+  Char    val_str[256];
 
+  if (cufp == NULL) return NULL;
 
-/*****************************************************************************
-*
-*  Function:   FormDefaultQuery
-*              constructs entrez2 query from information passed in, execute
-*              the query, and get back the uids from entrezReplyPtr. 
-********************************pass uids back as bs of caipp. returns void.
-*  Argument:   CitArtInPressPtr
-*
-*  Returns:    void
-*
-*****************************************************************************/
-static void FormDefaultQuery (Entrez2RequestPtr e2rp, CitArtInPressPtr caipp) {
-
-  Char  year [16];
- 
-  if (caipp->year != -1) {
-    sprintf(year, "%d", (int) caipp->year); 
+  /* for new term in query, add to [all], then automatically go through Term mapping*/
+  /* add exta term (user supplied) as ALL, no specific field */
+  /* debug:  assuming this is a well-formed query string, let the add func. parse it*/
+  if ( !TextHasNoText (cufp->extra_term_text) && (use_all || GetStatus (cufp->Extra_Term))) {
+    GetTitle (cufp->extra_term_text, val_str, sizeof (val_str));
+    e2rp = EntrezCreateBooleanRequest (TRUE, FALSE, "PubMed", val_str, 0, 0, NULL, 20, 0); 
+    is_first_term = FALSE;
+  } else {
+    e2rp = EntrezCreateBooleanRequest (TRUE, FALSE, "PubMed", NULL, 0, 0, NULL, 20, 0);
   }
 
-  /* add all available fields as indicated by rank*/
-  if (caipp->rank == 10) {      /* add title, page, vol */
-
-    AddJournal(e2rp,  caipp->jour_title, TRUE);  /* add first term*/
-    AddVolume(e2rp,  caipp->jour_volume, FALSE);  
-    AddPage(e2rp,  caipp->jour_page, FALSE); 
+  if ( ! TextHasNoText (cufp->f_auth_text) && (use_all || GetStatus (cufp->First_Author))) {
+    GetTitle (cufp->f_auth_text, val_str, sizeof (val_str));
+    AddAuthor(e2rp, val_str, is_first_term);
+    is_first_term = FALSE;
   }
-  
-  else {    
-    
-    if (caipp->rank > 4) {    /* add author in all cases*/
 
-      /***** term  can be capital letter or lower case,  (ENTREZ_OP_NONE is 0)  */
-      AddAuthor(e2rp,  caipp->f_last_name, TRUE);  /* add first term */
+  if ( !TextHasNoText (cufp->l_auth_text) && (use_all || GetStatus (cufp->Last_Author))) {
+    GetTitle (cufp->l_auth_text, val_str, sizeof (val_str));
+    AddAuthor(e2rp, val_str, is_first_term);    
+    is_first_term = FALSE;
+  }
 
-      if(StringCmp(caipp->l_last_name, "null") && StringCmp(caipp->l_last_name, caipp->f_last_name)) {
-      AddAuthor(e2rp,  caipp->l_last_name, FALSE); 
-      }
-    }
-    
-    if (caipp->rank == 6) {  /* add year, takes StringSave(year-1900)?? */   
-      AddYear(e2rp,  year, FALSE);        
-    }     
+  if ( !TextHasNoText (cufp->journal_text) && (use_all || GetStatus (cufp->Journal))) {
+    GetTitle (cufp->journal_text, val_str, sizeof (val_str));
+    AddJournal(e2rp, val_str, is_first_term);
+    is_first_term = FALSE;
+  }
 
-    if (caipp->rank > 6) {  /* add jour_title */
-      AddJournal(e2rp,  caipp->jour_title, FALSE);  /* NOT first term*/
-    }
-    
-    if (caipp->rank == 9) {       /* add vol and year */
-      AddVolume(e2rp,  caipp->jour_volume, FALSE);  
-      AddYear(e2rp,  year, FALSE); 
-    }
+  if ( !TextHasNoText (cufp->volume_text) && (use_all || GetStatus (cufp->Volume))) {
+    GetTitle (cufp->volume_text, val_str, sizeof (val_str));
+    AddVolume(e2rp, val_str, is_first_term);
+    is_first_term = FALSE;
+  }
 
-    if (caipp->rank == 8) {  /* add year or volume */
-      
-      if (caipp->year != -1) {
-	AddYear(e2rp,  year, FALSE); 	
-      }
-      else {
-	AddVolume(e2rp,  caipp->jour_volume, FALSE);
-      }		       
-    }   /* end rank 8*/ 		     
-  }  
-}	
+  if ( !TextHasNoText (cufp->page_text) && (use_all || GetStatus (cufp->Page))) {
+    GetTitle (cufp->page_text, val_str, sizeof (val_str));
+    AddPage(e2rp, val_str, is_first_term);
+    is_first_term = FALSE;
+  }
 
+  if ( !TextHasNoText (cufp->year_text) && (use_all || GetStatus (cufp->Year))) {
+    GetTitle (cufp->year_text, val_str, sizeof (val_str));
+    AddYear(e2rp, val_str, is_first_term, GetStatus (cufp->expand_year));
+    is_first_term = FALSE;
+  }
+  return e2rp;  
+}
 
 
 /*****************************************************************************
@@ -4788,17 +4856,6 @@ static void SendQuery (ButtoN b)
   Entrez2RequestPtr  e2rp = NULL;
 
 
-  Char               f_auth [64];
-  Char               l_auth [64];
-  Char               journal [64];
-  Char               volume [64];
-  Char               page [64];
-  Char               year [64];
-  Char               new_term [256];
-
-  Boolean            is_first_term = TRUE;
-
-
   cufp = (CitationUpdateFormPtr) GetObjectExtra (b);
   if (cufp == NULL) return;
 
@@ -4813,74 +4870,7 @@ static void SendQuery (ButtoN b)
   /*** trick:  must make sure to add Op : AND, after the first term, can't
    add one before!! */
 
-  if (choice == 1) {               /* precess default query*/
-
-    e2rp = EntrezCreateBooleanRequest (TRUE, FALSE, "PubMed", NULL, 0, 0, NULL, 20, 0);
-
-    FormDefaultQuery (e2rp,  caipp);
-    
-
-    /* add exta term (user supplied) as ALL, no specific field */
-    if ( GetStatus (cufp->Extra_Term) ) {
-      GetTitle (cufp->extra_term_text, new_term, sizeof (f_auth));
-      AddAll(e2rp, new_term, FALSE);
-      is_first_term = FALSE;
-    }
-  }
-     
-  if (choice == 2) {        /*user specify query*/
-
-    /* for new term in query, add to [all], then automatically go through Term mapping*/
-    /* add exta term (user supplied) as ALL, no specific field */
-    /* debug:  assuming this is a well-formed query string, let the add func. parse it*/
-    if ( GetStatus (cufp->Extra_Term) ) {
-      GetTitle (cufp->extra_term_text, new_term, sizeof (f_auth));
-      e2rp = EntrezCreateBooleanRequest (TRUE, FALSE, "PubMed", new_term, 0, 0, NULL, 20, 0); 
-      is_first_term = FALSE;
-    }
-    else{
-      e2rp = EntrezCreateBooleanRequest (TRUE, FALSE, "PubMed", NULL, 0, 0, NULL, 20, 0);
-    }
-
-    if ( GetStatus (cufp->First_Author) ) {
-      GetTitle (cufp->f_auth_text, f_auth, sizeof (f_auth));
-      AddAuthor(e2rp, f_auth, is_first_term);
-      is_first_term = FALSE;
-    }
-
-    if ( GetStatus (cufp->Last_Author) ) {
-      GetTitle (cufp->l_auth_text, l_auth, sizeof (l_auth));
-      AddAuthor(e2rp, l_auth, is_first_term);    
-      is_first_term = FALSE;
-    }
-
-    if ( GetStatus (cufp->Journal) ) {
-      GetTitle (cufp->journal_text, journal, sizeof (journal));
-      AddJournal(e2rp, journal, is_first_term);
-      is_first_term = FALSE;
-    }
-
-    if ( GetStatus (cufp->Volume) ) {
-      GetTitle (cufp->volume_text, volume, sizeof (volume));
-      AddVolume(e2rp, volume, is_first_term);
-      is_first_term = FALSE;
-    }
-
-    if ( GetStatus (cufp->Page) ) {
-      GetTitle (cufp->page_text, volume, sizeof (page));
-      AddPage(e2rp, page, is_first_term);
-      is_first_term = FALSE;
-    }
-
-    if ( GetStatus (cufp->Year) ) {
-      GetTitle (cufp->year_text, year, sizeof (year));
-      AddYear(e2rp, year, is_first_term);
-      is_first_term = FALSE;
-    }      
-  }
-
-  SetValue (cufp->new_query, 2); /* reset the popup list to display customize item*/
-
+  e2rp = QueryFromForm (cufp, choice == 1);
 
   /* process query, get Uids, populate the caipp field*/
   GetUidListFromE2Request (caipp, e2rp, cufp->rdoc);
@@ -5029,6 +5019,26 @@ static void Quit (ButtoN b)
 }
 
 
+static void SetRequestType (ButtoN b)
+{
+  CitationUpdateFormPtr  cufp;
+
+  cufp = (CitationUpdateFormPtr) GetObjectExtra (b);
+  if (cufp == NULL) return;
+
+  if (GetStatus (cufp->First_Author)
+      || GetStatus (cufp->Last_Author)
+      || GetStatus (cufp->Journal)
+      || GetStatus (cufp->Volume)
+      || GetStatus (cufp->Page)
+      || GetStatus (cufp->Year)
+      || GetStatus (cufp->Extra_Term)) {
+    SetValue (cufp->new_query, 2);
+  } else {
+    SetValue (cufp->new_query, 1);
+  }  
+}
+
 
 /*****************************************************************************
 *  Function:     CreateCitationUpdateWindow_detail
@@ -5089,26 +5099,34 @@ static WindoW CreateCitationUpdateWindow_detail (Pointer userdata)
   authors = HiddenGroup (cit_fields, 4, 0, NULL);
   SetGroupSpacing (authors, 5, 3);
 
-  cufp->First_Author  = CheckBox (authors, "First Author", NULL);
+  cufp->First_Author  = CheckBox (authors, "First Author", SetRequestType);
+  SetObjectExtra (cufp->First_Author, cufp, NULL);
   cufp->f_auth_text = DialogText (authors,  "", 12, NULL);
 
-  cufp->Last_Author = CheckBox (authors, "Last Author", NULL);
+  cufp->Last_Author = CheckBox (authors, "Last Author", SetRequestType);
+  SetObjectExtra (cufp->Last_Author, cufp, NULL);
   cufp->l_auth_text = DialogText (authors,  "", 12, NULL);
 
   journal = HiddenGroup (cit_fields, 2, 0, NULL);
   SetGroupSpacing (journal, 5, 3);
 
-  cufp->Journal = CheckBox (journal, "Journal", NULL);
+  cufp->Journal = CheckBox (journal, "Journal", SetRequestType);
+  SetObjectExtra (cufp->Journal, cufp, NULL);
   cufp->journal_text = DialogText (journal,  "", 30, NULL);
 
-  imprint = HiddenGroup (cit_fields, 6, 0, NULL);
+  imprint = HiddenGroup (cit_fields, 7, 0, NULL);
   SetGroupSpacing (imprint, 5, 3);
 
-  cufp->Year = CheckBox (imprint, "Year", NULL);
+  cufp->Year = CheckBox (imprint, "Year", SetRequestType);
+  SetObjectExtra (cufp->Year, cufp, NULL);
   cufp->year_text = DialogText (imprint, "", 6, NULL);
-  cufp->Volume = CheckBox (imprint, "Volume", NULL);
+  cufp->expand_year = CheckBox (imprint, "+/- 1 Year", NULL);
+  SetStatus (cufp->expand_year, TRUE);
+  cufp->Volume = CheckBox (imprint, "Volume", SetRequestType);
+  SetObjectExtra (cufp->Volume, cufp, NULL);
   cufp->volume_text  = DialogText (imprint, "", 6, NULL);
-  cufp->Page = CheckBox (imprint, "Page", NULL);
+  cufp->Page = CheckBox (imprint, "Page", SetRequestType);
+  SetObjectExtra (cufp->Page, cufp, NULL);
   cufp->page_text = DialogText (imprint, "", 6, NULL);
 
 
@@ -5116,7 +5134,7 @@ static WindoW CreateCitationUpdateWindow_detail (Pointer userdata)
   SetGroupSpacing (title, 5, 3);
 
   StaticPrompt (title, "Article Title:", 0, dialogTextHeight, systemFont, 'l');
-  cufp->art_title_text = ScrollText (title, 30, 1, systemFont, TRUE, NULL);
+  cufp->art_title_text = ScrollText (title, 30, 2, systemFont, TRUE, NULL);
   SafeSetTitle (cufp->art_title_text, "");
 
   i = HiddenGroup (h, 2, 0, NULL);     /*3rd vertical item in h*/
@@ -5126,7 +5144,8 @@ static WindoW CreateCitationUpdateWindow_detail (Pointer userdata)
   StaticPrompt (i, " ", 0, popupMenuHeight, programFont, 'l');
   StaticPrompt (i, " ", 0, popupMenuHeight, programFont, 'l');
 
-  cufp->Extra_Term = CheckBox (i, "Add these terms to new query", NULL);
+  cufp->Extra_Term = CheckBox (i, "Add these terms to new query", SetRequestType);
+  SetObjectExtra (cufp->Extra_Term, cufp, NULL);
   cufp->extra_term_text = DialogText (i, "", 25, NULL);
 
 
@@ -5200,6 +5219,22 @@ static WindoW CreateCitationUpdateWindow_detail (Pointer userdata)
   return w;
 }
 
+
+static CharPtr GetLastNameFromPersonId (PersonIdPtr pid)
+{
+  NameStdPtr nsp;
+  CharPtr lname = NULL;
+
+  if (pid != NULL && pid->choice == 2) {		     
+		nsp = (NameStdPtr) pid->data;  
+		if (nsp->names != NULL) {    		
+      lname = nsp->names[0];
+    }
+  }
+  return lname;
+}
+
+
 /*****************************************************************************
 *  Function:     PopulateWindow
 *  Description:	 use pdp to populate a caipp structure. No default query!!
@@ -5224,29 +5259,21 @@ static void PopulateWindow( WindoW w, PubdescPtr pdp)
   CitJourPtr cjp;
   ImprintPtr ImpPtr;
   AuthListPtr alp;  
-  AuthorPtr f_author_p, l_author_p, ap;  /* first and last authors*/
-  PersonIdPtr pid_p, pid;
-  NameStdPtr nsp;
+  AuthorPtr f_author_p = NULL, l_author_p = NULL, ap;  /* first and last authors*/
+  PersonIdPtr pid;
 
   ValNodePtr title_vnp, auth_vnp, art_title_vnp;
 
-  /*could get rid of full names*/
-  CharPtr f_first_name = NULL, f_last_name = NULL, l_first_name = NULL, l_last_name = NULL;
-  CharPtr jour_title = NULL, jour_volume, jour_page, art_title = NULL;
+  CharPtr f_last_name = NULL, l_last_name = NULL;
+  CharPtr jour_title = NULL, jour_volume = NULL, jour_page = NULL, art_title = NULL;
   
-  Int2 year;
-  Int1 rank;
+  Int2 year = -1;
 
-  Boolean has_author, has_title, has_volume, has_page, has_year, is_article;
-  has_author =  has_title = has_volume = has_page = has_year = is_article = FALSE;
+  Boolean is_article = FALSE;;
 
   cufp = (CitationUpdateFormPtr) GetObjectExtra (w);
   if (cufp == NULL) return;
 
-
-  if ( (caipp = MemNew(sizeof(CitArtInPress))) == NULL) {
-    return;
-  }
 
   pubdesc = pdp;      /* don't really need this could use pubdesc*/   
   if(pubdesc == NULL) return;
@@ -5256,237 +5283,99 @@ static void PopulateWindow( WindoW w, PubdescPtr pdp)
 
   for (pub=pubdesc->pub, cap=NULL; pub; pub=pub->next) {
     if (pub->choice == PUB_Article) {
-
       is_article = TRUE;
       cap = (CitArtPtr) pub->data.ptrvalue;
       if (cap == NULL) return; 
       
       /* look for cit-art from journals only*/
-      if (cap->from ==1) {
-	
-	cjp = (CitJourPtr) cap->fromptr;
-	if (cjp == NULL) return; 
-	
-	ImpPtr =(ImprintPtr) cjp->imp;	      
-	if(ImpPtr == NULL) return; 
+      if (cap->from ==1) {	
+	      cjp = (CitJourPtr) cap->fromptr;
+	      if (cjp == NULL) return; 
+      	
+	      ImpPtr =(ImprintPtr) cjp->imp;	      
+	      if(ImpPtr == NULL) return; 
 	      
+	      /* get article title */
+	      for (art_title_vnp=cap->title; art_title_vnp; art_title_vnp=art_title_vnp->next) {
+	        /*could combine the four*/
+	        if((art_title_vnp->choice == Cit_title_name) || (art_title_vnp->choice == Cit_title_tsub)|| (art_title_vnp->choice == Cit_title_trans)) {
+	          art_title = art_title_vnp->data.ptrvalue;		    
+	        }
+	      }
 
-	  /* get article title */
-	  if( !cap->title ) { art_title = StringSave("No title was available"); }
-	  for (art_title_vnp=cap->title; art_title_vnp; art_title_vnp=art_title_vnp->next) {
-	    /*could combine the four*/
-	    if((art_title_vnp->choice == Cit_title_name) || (art_title_vnp->choice == Cit_title_tsub)|| (art_title_vnp->choice == Cit_title_trans)) {
-	      art_title = art_title_vnp->data.ptrvalue;		    
-	    }
-	  }	 
-
-	  /* get journal title */
-	  if( !cjp->title ) { jour_title = StringSave("null"); }
-	  for (title_vnp=cjp->title; title_vnp; title_vnp=title_vnp->next) {
-	    /*could combine the four*/
-	    if (title_vnp->choice == Cit_title_iso_jta) {
-	      jour_title = title_vnp->data.ptrvalue;		    
-	    }
-	    else if (title_vnp->choice == Cit_title_ml_jta) {
-	      jour_title = title_vnp->data.ptrvalue;
-	    }
-	    else if (title_vnp->choice == Cit_title_jta) {
-	      jour_title = title_vnp->data.ptrvalue;
-	    }
-	    else if (title_vnp->choice == Cit_title_name) {
-	      jour_title = title_vnp->data.ptrvalue;
-	      /* break;            don't need break ??? */
-	    }
-	    else { 
-	      jour_title = StringSave("this journal got a WEIRD title");
-	    }
-	    has_title = TRUE;  
-	  }
+	      /* get journal title */
+	      for (title_vnp=cjp->title; title_vnp; title_vnp=title_vnp->next) {
+	        /*could combine the four*/
+	        if (title_vnp->choice == Cit_title_iso_jta) {
+	          jour_title = title_vnp->data.ptrvalue;		    
+	        }
+	        else if (title_vnp->choice == Cit_title_ml_jta) {
+	          jour_title = title_vnp->data.ptrvalue;
+	        }
+	        else if (title_vnp->choice == Cit_title_jta) {
+	          jour_title = title_vnp->data.ptrvalue;
+	        }
+	        else if (title_vnp->choice == Cit_title_name) {
+	          jour_title = title_vnp->data.ptrvalue;
+	          /* break;            don't need break ??? */
+	        }
+	        else { 
+	          jour_title = "this journal got a WEIRD title";
+	        }
+	      }
 	  
 	  
-	  if (ImpPtr->volume) {
-	    jour_volume =  ImpPtr->volume;
-	    has_volume = TRUE;  
-	  }
-	  else {  jour_volume = StringSave("null"); }	 
-	  
-	  if (ImpPtr->pages) { 
-	    jour_page =  ImpPtr->pages;
-	    has_page = TRUE;  
-	  }
-	  else {  jour_page = StringSave("null"); }
+	      if (ImpPtr->volume) {
+	        jour_volume =  ImpPtr->volume;
+	      }
+    	  
+	      if (ImpPtr->pages) { 
+	        jour_page =  ImpPtr->pages;
+	      }
 	
 	  
-	  /* not ideal behavior, although date is required in imp*/
-	  if ((DatePtr)ImpPtr->date == NULL) { return; }
-	  
-		year = -1;
-		DateRead (ImpPtr->date, &year, NULL, NULL, NULL);
-		if (year != -1) { has_year = TRUE; }				
-		
-		alp = (AuthListPtr) cap->authors; 
-		if (alp == NULL) {
-		  
-		  if (caipp->logfile) {                   
- 
-		    fprintf(caipp->logfile,"|this in-press cit-art has no author| %s | %s| %s | %d\n", jour_title, jour_volume, jour_page, year);
-		  }
-		   return;
-		}		
-		 		 			
-		/*get ptr to both 1st and last author*/	 
-		auth_vnp = (ValNodePtr) alp->names; /*get the first node */ 
-		
-		f_author_p = (AuthorPtr)auth_vnp->data.ptrvalue;
-		l_author_p =(AuthorPtr)auth_vnp->data.ptrvalue;
-		
-		/* get the node for the last author, but ignore consortium */
-		while (auth_vnp->next) {
-		  auth_vnp = auth_vnp->next;
-		  ap = (AuthorPtr) auth_vnp->data.ptrvalue;
-		  if (ap != NULL) {
-		    pid = (PersonIdPtr) ap->name;
-		    if (pid != NULL) {
-		      if (pid->choice == 2) {
-		        l_author_p =(AuthorPtr)auth_vnp->data.ptrvalue;
-		      }
+	      /* not ideal behavior, although date is required in imp*/
+	      if ((DatePtr)ImpPtr->date != NULL) {	  
+		      DateRead (ImpPtr->date, &year, NULL, NULL, NULL);
 		    }
-		  }
-		}
-		
-		/* should be analyzing the value of alp->choice,  not alp->names->choice*/
-		if (alp->choice == 1) {   
-		  /*could make this (getting name from author_p) a function */		   
-		   pid_p = (PersonIdPtr) f_author_p->name;
-		   
-		   if (pid_p->choice ==2) { 			 
-		     
-		     nsp = (NameStdPtr) pid_p -> data;  
-		     
-		     /* why didnot this work?? * 			 
-			if (!( nsp->names[0])) */		    
-		     
-		     if (nsp->names[0] != NULL ) {
-		       
-		       f_last_name =  nsp->names[0];	
-		       has_author = TRUE;		       
-		       
-		       if (nsp->names[1]!= NULL) {
-			 f_first_name =  nsp->names[1];	
-		       }
-		       else { f_first_name = StringSave("null"); }		       	
-		       
-		     }
-		     /* set to null!! */
-		     else {  f_last_name = StringSave("null"); 
-		     f_first_name = StringSave("null");			     
-		     }
-		   }
-		   
-		   
-		   /*now do the last author */
-		   
-		   if (l_author_p->name == f_author_p->name) {  /*single author*/
-		     l_first_name = f_first_name;
-		     l_last_name =f_last_name;
-		   }
-		   else {
-		     
-		     pid_p = (PersonIdPtr) l_author_p->name;
-		     if (pid_p->choice ==2) { 			 
-		       nsp = (NameStdPtr) pid_p -> data;  
-		       
-		       if (nsp->names[0] != NULL ) {
-			 
-			 l_last_name =  nsp->names[0];	
-			 if (nsp->names[1]!= NULL) {
-			   l_first_name =  nsp->names[1];	
-			 }
-			 else { l_first_name = StringSave("null"); }
-		       }		      
-		       else {  l_last_name = StringSave("null"); 
-		       l_first_name = StringSave("null");	
-		       }
-		     }
-		   } /*end of last author */
-		 }  /* end alp-> choice is std */
-		 
-		 
-		 /* here, if author list is not std names */ 			      
-		 else if (alp->choice == 2) {  
-		   
-		   /* full name as last name*/	       
-		   f_last_name = (CharPtr)f_author_p;
-		   f_first_name = StringSave ("null");
-		   has_author = TRUE;	
 
-		   l_last_name = (CharPtr)l_author_p;
-		   l_first_name = StringSave ("null");
-		 }
-		 else {  
-		   /* full name as last name*/	       
-		   f_last_name = (CharPtr)f_author_p;
-		   f_first_name = StringSave ("null");
-		   has_author = TRUE;	
-
-		   l_last_name = (CharPtr)l_author_p;
-		   l_first_name = StringSave ("null");
-		 }	      		     		   
-		
-
-
-		rank = 0;
-		 /*caculate rank*/
-	
-		if (has_page && has_volume && has_title) {
-		   rank = 10;
-		}
-		else if (has_author) {
-		  if (has_title) {
-		    if(has_year && has_volume) { rank = 9; }
-		    else if (has_year || has_volume) { rank = 8; }
-		     else { rank = 7; }                /* auth + journal_title only*/
-		  }
-		  else if (has_year) { rank = 6; }   /* auth + year only*/
-		  else { rank = 5; } /* author  but no journal_title case */
-		}		 
-		else { rank = 0; }  /*ignore all other combo*/	     
-
-
-		rank = 0;
-		 /*caculate rank*/
-		/*   better set flags as key individual fields are collected!! 
-		 *    avoid many calls to StringCmp */
-		/* must have first author, or (journal_title, volume and page)*/
-		
-		if (has_page && has_volume && has_title) {
-		   rank = 10;
-		}
-		else if (has_author) {
-		  if (has_title) {
-		    if(has_year && has_volume) { rank = 9; }
-		    else if (has_year || has_volume) { rank = 8; }
-		     else { rank = 7; }                /* auth + journal_title only*/
-		  }
-		  else if (has_year) { rank = 6; }   /* auth + year only*/
-		  else { rank = 5; } /* author  but no journal_title case */
-		}		 
-		else { rank = 0; }  /*ignore all other combo*/	     
-
-
-		  /*  safe practice to save a new copy if the struct my go away. */     
-		  caipp->jour_title =  StringSave(jour_title);
-		  caipp->f_last_name = StringSave(f_last_name);
-		  caipp->f_first_name =StringSave(f_first_name);
-		  caipp->l_last_name = StringSave(l_last_name);
-		  caipp->l_first_name = StringSave(l_first_name);
-		  caipp->jour_volume = StringSave(jour_volume);
-		  caipp->jour_page = StringSave(jour_page);
-		  caipp->year = year;
-		  caipp->art_title = StringSave(art_title);
-		  caipp->rank = rank;
-			
-	/*}       end if prepub*/  	
+		    alp = (AuthListPtr) cap->authors; 
+		    if (alp != NULL) {		  		 		 			
+		      /*get ptr to both 1st and last author*/	 
+		      auth_vnp = (ValNodePtr) alp->names; /*get the first node */ 
+      		
+		      f_author_p = (AuthorPtr)auth_vnp->data.ptrvalue;
+		      l_author_p =(AuthorPtr)auth_vnp->data.ptrvalue;
+      		
+		      /* get the node for the last author, but ignore consortium */
+		      while (auth_vnp->next) {
+		        auth_vnp = auth_vnp->next;
+		        ap = (AuthorPtr) auth_vnp->data.ptrvalue;
+		        if (ap != NULL) {
+		          pid = (PersonIdPtr) ap->name;
+		          if (pid != NULL) {
+		            if (pid->choice == 2) {
+		              l_author_p =(AuthorPtr)auth_vnp->data.ptrvalue;
+		            }
+		          }
+		        }
+		      }
+    		
+		      /* should be analyzing the value of alp->choice,  not alp->names->choice*/
+		      if (alp->choice == 1) {
+            /* std */   
+            f_last_name = GetLastNameFromPersonId (f_author_p->name);
+		        l_last_name = GetLastNameFromPersonId (l_author_p->name);
+		      } else if (alp->choice == 2) {  		   
+            /* full name as last name*/	       
+		        f_last_name = (CharPtr)f_author_p;
+		        l_last_name = (CharPtr)l_author_p;
+		      } else {  
+		        /* full name as last name*/	       
+		        f_last_name = (CharPtr)f_author_p;
+		        l_last_name = (CharPtr)l_author_p;
+		      }	      		     		   
+		    }			
       }        /*end if cit-art*/      
     }          /*end if Pub_article*/    
   }  /* end for, looped through all valnodes of pub*/
@@ -5498,9 +5387,20 @@ static void PopulateWindow( WindoW w, PubdescPtr pdp)
     ArrowCursor ();
     Update ();
 
-    MemFree(caipp);
     return;
   }
+
+  if ( (caipp = MemNew(sizeof(CitArtInPress))) == NULL) {
+    return;
+  }
+
+	caipp->jour_title =  StringSave(jour_title);
+	caipp->f_last_name = StringSave(f_last_name);
+	caipp->l_last_name = StringSave(l_last_name);
+	caipp->jour_volume = StringSave(jour_volume);
+	caipp->jour_page = StringSave(jour_page);
+	caipp->year = year;
+	caipp->art_title = StringSave(art_title);
   
   cufp->caipp = caipp;
 
@@ -5532,17 +5432,45 @@ static void UpdateWindow( CitationUpdateFormPtr cufp, CitArtInPressPtr caipp)
 
   if (caipp == NULL) return;
 
-  year = MemNew(5);
-  sprintf(year, "%d", caipp->year); 
+  if (caipp->year > -1) {
+    year = MemNew(5);
+    sprintf(year, "%d", caipp->year); 
+    SafeSetTitle (cufp->year_text, year);
+  } else {
+    SetTitle (cufp->year_text, "");
+  }
 
-  SafeSetTitle (cufp->f_auth_text,caipp->f_last_name);
-  SafeSetTitle (cufp->l_auth_text,caipp->l_last_name);
-  SafeSetTitle (cufp->journal_text,caipp->jour_title);
-  SafeSetTitle (cufp->year_text, year);
-  SafeSetTitle (cufp->volume_text,caipp->jour_volume);
-  SafeSetTitle (cufp->page_text,caipp->jour_page);
+  if (caipp->f_last_name == NULL) {
+    SetTitle (cufp->f_auth_text, "");
+  } else {
+    SafeSetTitle (cufp->f_auth_text, caipp->f_last_name);
+  }
+  if (caipp->l_last_name == NULL) {
+    SetTitle (cufp->l_auth_text, "");
+  } else {
+    SafeSetTitle (cufp->l_auth_text,caipp->l_last_name);
+  }
+  if (caipp->jour_title == NULL) {
+    SetTitle (cufp->journal_text, "");
+  } else {
+    SafeSetTitle (cufp->journal_text,caipp->jour_title);
+  }
+  if (caipp->jour_volume == NULL) {
+    SetTitle (cufp->volume_text, "");
+  } else {
+    SafeSetTitle (cufp->volume_text,caipp->jour_volume);
+  }
+  if (caipp->jour_page== NULL) {
+    SetTitle (cufp->page_text, "");
+  } else {
+    SafeSetTitle (cufp->page_text,caipp->jour_page);
+  }
 
-  SafeSetTitle (cufp->art_title_text, caipp->art_title);
+  if (caipp->art_title == NULL) {
+    SetTitle (cufp->art_title_text, "");
+  } else {
+    SafeSetTitle (cufp->art_title_text, caipp->art_title);
+  }
   SafeSetTitle (cufp->extra_term_text, "");
 
   SetValue (cufp->new_query, 1); /* reset the popup to default query after an update*/

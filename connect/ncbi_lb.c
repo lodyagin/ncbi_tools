@@ -1,4 +1,4 @@
-/*  $Id: ncbi_lb.c,v 1.9 2007/06/07 11:25:52 kazimird Exp $
+/*  $Id: ncbi_lb.c,v 1.12 2008/02/14 16:25:55 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -33,6 +33,9 @@
 #include "ncbi_priv.h"
 #include <assert.h>
 #include <stdlib.h>
+
+
+#define NCBI_USE_ERRCODE_X   Connect_LB
 
 
 size_t LB_Select(SERV_ITER     iter,          void*  data,
@@ -82,8 +85,9 @@ size_t LB_Select(SERV_ITER     iter,          void*  data,
             const char* name = SERV_NameOfInfo(info);
             SOCK_HostPortToString(info->host, info->port, addr, sizeof(addr));
             CORE_LOGF(eLOG_Note,
-                      ("%d: %s %s\tR=%lf\tS=%lf\tT=%lf\tA=%lf\tP=%lf", (int) n,
-                       name, addr, info->rate, status, total, access, point));
+                      ("%d: %s %s\tR=%lf\tS=%lf\tT=%lf\tA=%lf\tP=%lf",
+                       (int) n, name, addr, info->rate, status, total,
+                       access, point));
         }}
 #endif /*NCBI_LB_DEBUG*/
     }
@@ -99,8 +103,10 @@ size_t LB_Select(SERV_ITER     iter,          void*  data,
                 p = SERV_Preference(iter->pref, access/total, n);
 #ifdef NCBI_LB_DEBUG
                 CORE_LOGF(eLOG_Note,
-                          ("(P=%lf,\tA=%lf,\tT=%lf,\tA/T=%lf,\tN=%d) -> P=%lf",
-                           iter->pref, access, total, access/total,(int)n, p));
+                          ("(P=%lf,\tA=%lf,\tT=%lf,\tA/T=%lf,\tN=%d) "
+                           "-> P=%lf",
+                           iter->pref, access, total, access/total,
+                           (int) n, p));
 #endif /*NCBI_LB_DEBUG*/
                 status = total * p;
                 p = total * (1.0 - p) / (total - access);
@@ -121,9 +127,10 @@ size_t LB_Select(SERV_ITER     iter,          void*  data,
                     status = cand->status;
                     SOCK_HostPortToString(info->host, info->port,
                                           addr, sizeof(addr));
-                    CORE_LOGF(eLOG_Note, ("%d: %s %s\tS=%lf\t%.2lf%%",
-                                          (int) i, SERV_NameOfInfo(info), addr,
-                                          p, p / total * 100.0));
+                    CORE_LOGF(eLOG_Note,
+                              ("%d: %s %s\tS=%lf\t%.2lf%%",
+                               (int) i, SERV_NameOfInfo(info), addr,
+                               p, p / total * 100.0));
                 }
 #endif /*NCBI_LB_DEBUG*/
             }

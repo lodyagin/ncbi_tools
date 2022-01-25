@@ -28,11 +28,11 @@
 * Author:  Karl Sirotkin, Tom Madden, Tatiana Tatusov, Jonathan Kans,
 *          Mati Shomrat
 *
-* $Id: asn2gnb1.c,v 1.135 2007/08/23 15:40:43 ludwigf Exp $
+* $Id: asn2gnb1.c,v 1.139 2007/12/04 18:55:29 kans Exp $
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.135 $
+* $Revision: 1.139 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -1020,7 +1020,9 @@ NLM_EXTERN void FFTrim (
 
 NLM_EXTERN int FFNextChar(
   StringItemPtr start_sip,
-  Int4 start_pos) {
+  Int4 start_pos
+)
+{
   if (start_pos < start_sip->pos-1) {
     return start_sip->buf[start_pos+1];
   }
@@ -1034,7 +1036,8 @@ NLM_EXTERN int FFNextChar(
 
 NLM_EXTERN void FFAdvanceChar(
   StringItemPtr* start_sip,
-  Int4* start_pos )
+  Int4* start_pos
+)
 {
   if (*start_pos < (*start_sip)->pos-1) {
     ++(*start_pos);
@@ -2623,8 +2626,8 @@ NLM_EXTERN void DoOneBioseq (
       if (bsp->idx.parenttype == OBJ_BIOSEQSET) {
         bssp = (BioseqSetPtr) bsp->idx.parentptr;
         if (bssp != NULL && bssp->_class == BioseqseqSet_class_nuc_prot) {
-          if (bsp->idx.parenttype == OBJ_BIOSEQSET) {
-            bssp = (BioseqSetPtr) bsp->idx.parentptr;
+          if (bssp->idx.parenttype == OBJ_BIOSEQSET) {
+            bssp = (BioseqSetPtr) bssp->idx.parentptr;
             if (bssp != NULL && bssp->_class == BioseqseqSet_class_gen_prod_set) {
               return;
             }

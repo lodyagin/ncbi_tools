@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/19/99
 *
-* $Revision: 6.10 $
+* $Revision: 6.15 $
 *
 * File Description: 
 *
@@ -50,6 +50,7 @@
 #include <sequtil.h>
 #include <sqnutils.h>
 #include <explore.h>
+#include <tofasta.h>
 #include <toasn3.h>
 #include <pmfapi.h>
 #include <tax3api.h>
@@ -57,7 +58,7 @@
 #include <accpubseq.h>
 #endif
 
-#define CLEANASN_APP_VER "1.4"
+#define CLEANASN_APP_VER "1.6"
 
 CharPtr CLEANASN_APPLICATION = CLEANASN_APP_VER;
 
@@ -71,7 +72,9 @@ typedef struct cleanflags {
   CharPtr       clean;
   CharPtr       link;
   CharPtr       feat;
+  CharPtr       mods;
   Boolean       taxon;
+  Boolean       pub;
   AsnModulePtr  amp;
   AsnTypePtr    atp_bss;
   AsnTypePtr    atp_bsss;
@@ -204,7 +207,156 @@ static void RemoveUnnecGeneXref (
   }
 }
 
-static void DoCleeanup (
+static void AddSpTaxnameToList (SeqDescrPtr sdp, Pointer userdata)
+{
+  BioSourcePtr biop;
+
+  if (sdp == NULL || sdp->choice != Seq_descr_source || userdata == NULL) return;
+
+  biop = (BioSourcePtr) sdp->data.ptrvalue;
+  if (biop == NULL || biop->org == NULL || !IsSpName (biop->org->taxname)) return;
+
+  ValNodeAddPointer ((ValNodePtr PNTR) userdata, 0, biop->org->taxname);
+}
+
+
+static Boolean ShouldExcludeSp (SeqEntryPtr sep)
+{
+  ValNodePtr name_list = NULL, vnp1, vnp2;
+  Boolean    all_diff = TRUE;
+
+  if (sep == NULL) return TRUE;
+  VisitDescriptorsInSep (sep, &name_list, AddSpTaxnameToList);
+
+  name_list = ValNodeSort (name_list, SortVnpByString);
+
+  if (name_list != NULL && name_list->next != NULL) {
+    for (vnp1 = name_list; vnp1 != NULL && vnp1->next != NULL && all_diff; vnp1 = vnp1->next) {
+      for (vnp2 = vnp1->next; vnp2 != NULL && all_diff; vnp2 = vnp2->next) {
+        if (StringCmp (vnp1->data.ptrvalue, vnp2->data.ptrvalue) == 0) {
+          all_diff = FALSE;
+        }
+      }
+    }
+  }
+
+  name_list = ValNodeFree (name_list);
+
+  return all_diff;
+}
+
+static void DoAutoDef (
+  SeqEntryPtr sep,
+  Uint2 entityID
+)
+
+{
+  ValNodePtr                    defline_clauses = NULL;
+  DeflineFeatureRequestList     feature_requests;
+  Int4                          index;
+  ValNodePtr                    modifier_indices = NULL;
+  ModifierItemLocalPtr          modList;
+  OrganismDescriptionModifiers  odmp;
+  SeqEntryPtr                   oldscope;
+
+  if (sep == NULL) return;
+  if (entityID < 1) return;
+
+  modList = MemNew (NumDefLineModifiers () * sizeof (ModifierItemLocalData));
+  if (modList == NULL) return;
+
+  InitFeatureRequests (&feature_requests);
+
+  SetRequiredModifiers (modList);
+  CountModifiers (modList, sep);
+
+  odmp.use_labels = TRUE;
+  odmp.max_mods = -99;
+  odmp.keep_paren = TRUE;
+  odmp.exclude_sp = ShouldExcludeSp (sep);
+  odmp.exclude_cf = FALSE;
+  odmp.exclude_aff = FALSE;
+  odmp.exclude_nr = FALSE;
+  odmp.include_country_extra = FALSE;
+  odmp.clone_isolate_HIV_rule_num = clone_isolate_HIV_rule_want_both;
+  odmp.use_modifiers = FALSE;
+  odmp.allow_semicolon_in_modifier = FALSE;
+
+
+  RemoveNucProtSetTitles (sep);  
+  oldscope = SeqEntrySetScope (sep);
+
+  BuildDefLineFeatClauseList (sep, entityID, &feature_requests,
+                              DEFAULT_ORGANELLE_CLAUSE, FALSE, FALSE,
+                              &defline_clauses);
+  if (AreFeatureClausesUnique (defline_clauses)) {
+    modifier_indices = GetModifierIndicesFromModList (modList);
+  } else {
+    modifier_indices = FindBestModifiers (sep, modList);
+  }
+
+  BuildDefinitionLinesFromFeatureClauseLists (defline_clauses, modList,
+                                              modifier_indices, &odmp);
+  DefLineFeatClauseListFree (defline_clauses);
+  if (modList != NULL) {
+    for (index = 0; index < NumDefLineModifiers (); index++) {
+      ValNodeFree (modList [index].values_seen);
+    }
+    MemFree (modList);
+  }
+  modifier_indices = ValNodeFree (modifier_indices);
+
+  ClearProteinTitlesInNucProts (entityID, NULL);
+  InstantiateProteinTitles (entityID, NULL);
+
+  SeqEntrySetScope (oldscope);
+}
+
+static void LookupPubdesc (
+  PubdescPtr pdp,
+  Pointer userdata
+)
+
+{
+  CitArtPtr        cap;
+  MedlineEntryPtr  mep;
+  PubmedEntryPtr   pep;
+  Int4             pmid = 0;
+  ValNodePtr       vnp;
+
+  if (pdp == NULL) return;
+
+  for (vnp = pdp->pub; vnp != NULL; vnp = vnp->next) {
+    switch (vnp->choice) {
+      case PUB_Muid :
+        /* ignore obsolete muids */
+        break;
+      case PUB_PMid :
+        pmid = vnp->data.intvalue;
+        break;
+      default :
+        /* return on real pub */
+        return;
+        break;
+    }
+  }
+
+  if (pmid == 0) return;
+
+  pep = GetPubMedForUid (pmid);
+  if (pep == NULL) return;
+  mep = (MedlineEntryPtr) pep->medent;
+  if (mep != NULL && mep->cit != NULL) {
+    cap = AsnIoMemCopy ((Pointer) mep->cit,
+                        (AsnReadFunc) CitArtAsnRead,
+                        (AsnWriteFunc) CitArtAsnWrite);
+    ValNodeAddPointer (&(pdp->pub), PUB_Article, (Pointer) cap);
+  }
+
+  PubmedEntryFree (pep);
+}
+
+static void DoCleanup (
   SeqEntryPtr sep,
   Uint2 entityID,
   CleanFlagPtr cfp
@@ -214,41 +366,50 @@ static void DoCleeanup (
   if (sep == NULL || cfp == NULL) return;
 
   if (StringChr (cfp->clean, 'b') != NULL) {
-	BasicSeqEntryCleanup (sep);
+    BasicSeqEntryCleanup (sep);
   }
   if (StringChr (cfp->clean, 's') != NULL) {
-	SeriousSeqEntryCleanup (sep, NULL, NULL);
+    SeriousSeqEntryCleanup (sep, NULL, NULL);
   }
 
   if (cfp->taxon) {
-	Taxon3ReplaceOrgInSeqEntry (sep, FALSE);
+    Taxon3ReplaceOrgInSeqEntry (sep, FALSE);
+  }
+
+  if (cfp->pub) {
+    VisitPubdescsInSep (sep, NULL, LookupPubdesc);
   }
 
   if (StringChr (cfp->link, 'o') != NULL) {
-	SeqMgrIndexFeatures (entityID, 0);
-	LinkCDSmRNAbyOverlap (sep);
+    SeqMgrIndexFeatures (entityID, 0);
+    LinkCDSmRNAbyOverlap (sep);
   }
   if (StringChr (cfp->link, 'p') != NULL) {
-	SeqMgrIndexFeatures (entityID, 0);
-	LinkCDSmRNAbyProduct (sep);
+    SeqMgrIndexFeatures (entityID, 0);
+    LinkCDSmRNAbyProduct (sep);
   }
   if (StringChr (cfp->link, 'r') != NULL) {
-	SeqMgrIndexFeatures (entityID, 0);
-	ReassignFeatureIDs (sep);
+    SeqMgrIndexFeatures (entityID, 0);
+    ReassignFeatureIDs (sep);
   }
   if (StringChr (cfp->link, 'c') != NULL) {
-	ClearFeatureIDs (sep);
+    ClearFeatureIDs (sep);
   }
 
   if (StringChr (cfp->feat, 'u') != NULL) {
-	VisitFeaturesInSep (sep, NULL, RemoveFeatUser);
+    VisitFeaturesInSep (sep, NULL, RemoveFeatUser);
   }
   if (StringChr (cfp->feat, 'd') != NULL) {
-	VisitFeaturesInSep (sep, NULL, RemoveFeatDbxref);
+    VisitFeaturesInSep (sep, NULL, RemoveFeatDbxref);
   }
   if (StringChr (cfp->feat, 'r') != NULL) {
-	SeqMgrIndexFeatures (entityID, 0);
-	VisitFeaturesInSep (sep, NULL, RemoveUnnecGeneXref);
+    SeqMgrIndexFeatures (entityID, 0);
+    VisitFeaturesInSep (sep, NULL, RemoveUnnecGeneXref);
+  }
+
+  if (StringChr (cfp->mods, 'd') != NULL) {
+    SeqMgrIndexFeatures (entityID, 0);
+    DoAutoDef (sep, entityID);
   }
 }
 
@@ -373,7 +534,7 @@ static void CleanupSingleRecord (
       sep = GetTopSeqEntryForEntityID (entityID);
       if (sep != NULL && StringDoesHaveText (path)) {
 
-        DoCleeanup (sep, entityID, cfp);
+        DoCleanup (sep, entityID, cfp);
 
         aop = AsnIoOpen (path, "w");
         if (aop != NULL) {
@@ -407,7 +568,6 @@ static void CleanupMultipleRecord (
   DataVal      av;
   BioseqPtr    bsp;
   Char         buf [41];
-  Char         cmmd [256];
   Uint2        entityID;
   FILE         *fp;
   SeqEntryPtr  fsep;
@@ -419,6 +579,7 @@ static void CleanupMultipleRecord (
   SeqEntryPtr  sep;
   time_t       starttime, stoptime, worsttime;
 #ifdef OS_UNIX
+  Char         cmmd [256];
   CharPtr      gzcatprog;
   int          ret;
   Boolean      usedPopen = FALSE;
@@ -541,7 +702,7 @@ static void CleanupMultipleRecord (
           }
 
           starttime = GetSecs ();
-          DoCleeanup (sep, entityID, cfp);
+          DoCleanup (sep, entityID, cfp);
           stoptime = GetSecs ();
 
           if (stoptime - starttime > worsttime) {
@@ -615,12 +776,14 @@ static void CleanupOneRecord (
 #define a_argType          6
 #define b_argBinary        7
 #define c_argCompressed    8
-#define l_argLogFile       9
+#define L_argLogFile       9
 #define R_argRemote       10
 #define K_argClean        11
 #define N_argLink         12
 #define F_argFeat         13
-#define T_argTaxonLookup  14
+#define M_argMods         14
+#define T_argTaxonLookup  15
+#define P_argPubLookup    16
 
 Args myargs [] = {
   {"Path to Files", NULL, NULL, NULL,
@@ -647,8 +810,8 @@ Args myargs [] = {
     TRUE, 'b', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Bioseq-set is Compressed", "F", NULL, NULL,
     TRUE, 'c', ARG_BOOLEAN, 0.0, 0, NULL},
-  {"Log fFile", NULL, NULL, NULL,
-    TRUE, 'l', ARG_FILE_OUT, 0.0, 0, NULL},
+  {"Log File", NULL, NULL, NULL,
+    TRUE, 'L', ARG_FILE_OUT, 0.0, 0, NULL},
   {"Remote Fetching from ID", "F", NULL, NULL,
     TRUE, 'R', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Cleanup\n"
@@ -666,8 +829,13 @@ Args myargs [] = {
    "      d Remove db_xref\n"
    "      r Remove Redundant Gene xref", NULL, NULL, NULL,
     TRUE, 'F', ARG_STRING, 0.0, 0, NULL},
+  {"Miscellaneous\n"
+   "      d Automatic Definition Line", NULL, NULL, NULL,
+    TRUE, 'M', ARG_STRING, 0.0, 0, NULL},
   {"Taxonomy Lookup", "F", NULL, NULL,
     TRUE, 'T', ARG_BOOLEAN, 0.0, 0, NULL},
+  {"Publication Lookup", "F", NULL, NULL,
+    TRUE, 'P', ARG_BOOLEAN, 0.0, 0, NULL},
 };
 
 Int2 Main (void)
@@ -772,7 +940,9 @@ Int2 Main (void)
   cfd.clean = myargs [K_argClean].strvalue;
   cfd.link = myargs [N_argLink].strvalue;
   cfd.feat = myargs [F_argFeat].strvalue;
+  cfd.mods = myargs [M_argMods].strvalue;
   cfd.taxon = (Boolean) myargs [T_argTaxonLookup].intvalue;
+  cfd.pub = (Boolean) myargs [P_argPubLookup].intvalue;
 
   cfd.amp = AsnAllModPtr ();
   cfd.atp_bss = AsnFind ("Bioseq-set");
@@ -781,7 +951,7 @@ Int2 Main (void)
   cfd.atp_bsc = AsnFind ("Bioseq-set.class");
   cfd.bssp_atp = AsnLinkType (NULL, cfd.atp_bss);
 
-  logfile = (CharPtr) myargs [l_argLogFile].strvalue;
+  logfile = (CharPtr) myargs [L_argLogFile].strvalue;
   if (StringDoesHaveText (logfile)) {
     cfd.logfp = FileOpen (logfile, "w");
   }
@@ -795,6 +965,10 @@ Int2 Main (void)
 #else
     PubSeqFetchEnable ();
 #endif
+  }
+
+  if (remote || cfd.pub) {
+    PubMedFetchEnable ();
   }
 
   starttime = GetSecs ();
@@ -817,6 +991,10 @@ Int2 Main (void)
   if (cfd.logfp != NULL) {
     fprintf (cfd.logfp, "Finished in %ld seconds\n", (long) runtime);
     FileClose (cfd.logfp);
+  }
+
+  if (remote || cfd.pub) {
+    PubMedFetchDisable ();
   }
 
   if (remote) {

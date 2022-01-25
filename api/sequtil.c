@@ -29,918 +29,15 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.225 $
+* $Revision: 6.241 $
 *
 * File Description:  Sequence Utilities for objseq and objsset
 *
 * Modifications:  
 * --------------------------------------------------------------------------
-* $Log: sequtil.c,v $
-* Revision 6.225  2007/08/08 15:59:04  kans
-* added EW to WHICH_db_accession as NCBI EST
+* Date       Name        Description of modification
+* -------  ----------  -----------------------------------------------------
 *
-* Revision 6.224  2007/07/03 16:41:30  kans
-* use EV for NCBI EST
-*
-* Revision 6.223  2007/06/21 19:15:22  kans
-* EU is NCBI direct submission prefix
-*
-* Revision 6.222  2007/05/30 15:45:57  kans
-* WHICH_db_accession uses ET for NCBI GSS
-*
-* Revision 6.221  2007/05/08 19:01:43  kans
-* set uninitialized variables, changed tabs to spaces
-*
-* Revision 6.220  2007/05/07 13:28:35  kans
-* added casts for Seq-data.gap (SeqDataPtr, SeqGapPtr, ByteStorePtr)
-*
-* Revision 6.219  2007/04/05 13:43:36  kans
-* DDBJ uses DI for patents
-*
-* Revision 6.218  2007/03/20 19:18:04  kans
-* added ES to WHICH_db_accession
-*
-* Revision 6.217  2007/03/13 18:03:45  kans
-* added FreeSeqLocSetComponents to free sequence records referenced in a chain of SeqLocs
-*
-* Revision 6.216  2007/03/06 16:06:20  kans
-* added ER to WHICH_db_accession as ncbi gss
-*
-* Revision 6.215  2007/03/05 20:01:19  kans
-* added new wgs scaffold segmented parent prefixes to WHICH_db_accession
-*
-* Revision 6.214  2007/02/21 17:23:59  bollin
-* Added IsSkippableDbtag function, to use when TMSMART, BankIt, and NCBIFILE
-* IDs should be ignored (for displays, formatting, etc.)
-*
-* Revision 6.213  2007/02/01 17:19:19  kans
-* added EL to WHICH_db_accession as NCBI EST
-*
-* Revision 6.212  2007/01/04 16:43:56  kans
-* added EJ and EK to WHICH_db_accession as NCBI GSS
-*
-* Revision 6.211  2006/12/20 14:55:40  kans
-* added DH for DDBJ GSS
-*
-* Revision 6.210  2006/11/22 15:24:22  kans
-* WHICH_db_accession uses EI for NCBI GSS
-*
-* Revision 6.209  2006/11/15 18:01:22  kans
-* added SeqLocPartialCheckEx to control fetching of far location
-*
-* Revision 6.208  2006/11/03 19:06:03  kans
-* another accession prefix in WHICH_db_accession
-*
-* Revision 6.207  2006/09/28 20:19:26  bollin
-* fixed buffer overrun problem in SeqPointWriteEx, increased size of buffer used
-* by SeqLocPrintProc
-*
-* Revision 6.206  2006/09/20 14:53:18  kans
-* ExtendSingleGeneOnMRNA and CorrectGeneFeatLocation look for origin artificial and taxname synthetic construct, do not extend gene
-*
-* Revision 6.205  2006/09/18 17:58:41  kans
-* added EG to WHICH_db_accession
-*
-* Revision 6.204  2006/08/21 20:02:31  kans
-* assign EF to NCBI dirsub in WHICH_db_accession
-*
-* Revision 6.203  2006/07/13 17:06:39  bollin
-* use Uint4 instead of Uint2 for itemID values
-* removed unused variables
-* resolved compiler warnings
-*
-* Revision 6.202  2006/07/06 15:05:02  kans
-* added EE to WHICH_db_accession as NCBI EST
-*
-* Revision 6.201  2006/06/29 20:31:19  kans
-* only AH may be segmented protein, CH, CM, DS are nucleotide
-*
-* Revision 6.200  2006/06/29 14:24:05  kans
-* added ED to WHICH_db_accession as NCBI GSS
-*
-* Revision 6.199  2006/06/20 20:49:21  kans
-* added CU to WHICH_db_accession as EMBL genome project data
-*
-* Revision 6.198  2006/05/30 14:54:06  kans
-* added EC as NCBI EST prefix
-*
-* Revision 6.197  2006/05/11 17:08:13  bollin
-* corrected problem in GetThePointForOffset for SeqLocStart and SeqLocStop for
-* all-minus strand interval locations
-*
-* Revision 6.196  2006/04/06 15:41:19  kans
-* added DG to WHICH_db_accession
-*
-* Revision 6.195  2006/04/05 16:45:01  bollin
-* special left-right end handling for circular topology in GetThePointForOffset
-*
-* Revision 6.194  2006/03/30 17:04:53  kans
-* DF is DDBJ CON accession prefix
-*
-* Revision 6.193  2006/03/23 18:31:32  kans
-* added EB as NCBI EST
-*
-* Revision 6.192  2006/03/10 17:27:14  bollin
-* make sure parentptr is BioseqSet in GetEarlierSeqIdPtr
-*
-* Revision 6.191  2006/03/10 17:13:45  bollin
-* changes to GetEarlierSeqIdPtr to handle the situation where one of the Bioseqs
-* has not been indexed.  Fixes bug reported by Serge Bazhin
-*
-* Revision 6.190  2006/02/16 17:19:14  kans
-* better handling of trans splicing in GetThePointForOffset, SeqLocStart (CB)
-*
-* Revision 6.189  2006/02/07 17:50:53  kans
-* support for pgp instead of pat for pre-grant publication in SeqIdWrite and SeqIdParse
-*
-* Revision 6.188  2006/02/01 21:53:44  kans
-* DZ and EA for ncbi patent in WHICH_db_accession
-*
-* Revision 6.187  2006/01/24 17:59:26  kans
-* use DY for NCBI EST
-*
-* Revision 6.186  2006/01/05 14:11:56  bollin
-* added SeqLocPrintUseBestID function, which prints out the sequence location
-* but uses the "best" sequence ID instead of the one actually stored in the
-* SeqLoc.
-*
-* Revision 6.185  2006/01/03 15:49:36  kans
-* added DX as ncbi gss to WHICH_db_accession
-*
-* Revision 6.184  2005/12/09 19:43:43  kans
-* added DW as NCBI EST
-*
-* Revision 6.183  2005/09/20 21:11:34  kans
-* added DV as NCBI EST
-*
-* Revision 6.182  2005/08/09 20:04:17  kans
-* added NW_ with 6 or 9 digits to WHICH_db_accession
-*
-* Revision 6.181  2005/07/28 18:33:31  kans
-* in WHICH_db_accession, DT is NCBI EST and DU is NCBI GSS
-*
-* Revision 6.180  2005/07/18 14:49:53  kans
-* fixed minor xcode compiler warnings
-*
-* Revision 6.179  2005/07/06 14:31:19  kans
-* DS is ncbi segmented set header (WGS CON scaffolds) in WHICH_db_accession
-*
-* Revision 6.178  2005/06/17 19:25:58  coulouri
-* correct pdb accession output
-*
-* Revision 6.177  2005/06/15 17:22:39  kans
-* added CT as embl genome to WHICH_db_accession
-*
-* Revision 6.176  2005/05/18 20:33:45  bollin
-* changed BSConvertSeq to handle transitions from nucleotide to protein and
-* protein to nucleotide
-*
-* Revision 6.175  2005/04/28 19:24:45  kans
-* DR prefix moved from STS to EST
-*
-* Revision 6.174  2005/04/27 17:24:21  kans
-* support seqid_gpipe in combination with a more public accession type
-*
-* Revision 6.173  2005/04/26 21:33:52  kans
-* added SEQID_GPIPE
-*
-* Revision 6.172  2005/04/05 15:25:30  kans
-* added DR as NCBI STS
-*
-* Revision 6.171  2005/03/29 14:46:42  papadopo
-* use a different start point when changing StdSeg-type seqalign offsets, if the underlying SeqLoc specifes the minus strand
-*
-* Revision 6.170  2005/03/22 20:42:03  kans
-* added DP and DQ accession prefixes
-*
-* Revision 6.169  2005/02/01 13:28:55  kans
-* added DN as NCBI EST accession prefix
-*
-* Revision 6.168  2005/01/25 18:13:47  kans
-* added CS as EMBL patent
-*
-* Revision 6.167  2004/12/08 19:44:52  kans
-* added CZ as NCBI GSS
-*
-* Revision 6.166  2004/12/08 15:14:51  kans
-* added ACCN_DDBJ_GSS, accession prefix DE
-*
-* Revision 6.165  2004/12/02 19:02:47  kans
-* added CY accession prefix
-*
-* Revision 6.164  2004/11/22 20:50:15  kans
-* added CX as NCBI EST
-*
-* Revision 6.163  2004/11/12 14:45:39  kans
-* added DD as DDBJ patent prefix
-*
-* Revision 6.162  2004/11/08 18:19:44  madden
-* GetScoreAndEvalue change to return number of hsps (in linked set) for most significant set.
-*
-* Revision 6.161  2004/10/13 16:46:52  kans
-* added DA, DB, DC as DDBJ_EST
-*
-* Revision 6.160  2004/09/21 22:34:36  dondosha
-* Get the number of linked HSPs for a DenDiag from the first segment, not from the largest linked set
-*
-* Revision 6.159  2004/09/15 13:02:02  kans
-* added CW to WHICH_db_accession as NCBI GSS
-*
-* Revision 6.158  2004/08/20 18:55:27  kans
-* SeqLocStrand skips NULL or EMPTY components of MIX to avoid giving incorrect unknown result
-*
-* Revision 6.157  2004/08/17 19:35:44  kans
-* BSPack uses BSRead instead of BSGetByte for significant speed increase
-*
-* Revision 6.156  2004/08/06 17:15:50  kans
-* added CV as NCBI EST
-*
-* Revision 6.155  2004/08/04 17:15:16  kans
-* added AccnInUniProt - still need AccnIsSWISSPROT for old style
-*
-* Revision 6.154  2004/07/21 18:05:00  rsmith
-* SeqLocStart and SeqLocStop were not handling SEQLOC_PACKED_PNTs properly
-*
-* Revision 6.153  2004/07/14 22:55:04  dondosha
-* Add version in GetAccessionVersionFromSeqId only if it is > 0
-*
-* Revision 6.152  2004/07/14 22:46:08  dondosha
-* Added GetAccessionVersionFromSeqId function to extract Accession.version from a Seq-id
-*
-* Revision 6.151  2004/07/14 19:09:19  kans
-* added CP for ACCN_NCBI_GENOME in WHICH_db_accession
-*
-* Revision 6.150  2004/06/04 17:31:34  kans
-* added CN and CO accession prefixes
-*
-* Revision 6.149  2004/05/27 15:37:31  kans
-* fixed typo in WHICH_db_accession - new 12-character RefSeq test used wrong comparison for underscore test
-*
-* Revision 6.148  2004/05/25 20:46:18  kans
-* WHICH_db_accession handles 12-character RefSeq accessions
-*
-* Revision 6.147  2004/03/30 20:29:33  kans
-* in static std_order array within SeqIdBestRank, demoted gibbsq, gibbmt, and patent
-*
-* Revision 6.146  2004/03/16 22:08:31  kans
-* added CL to WHICH_db_accession as NCBI EST
-*
-* Revision 6.145  2004/03/15 18:42:59  coulouri
-* Handle memory allocation failure gracefully with BSRebuildDNA_4na
-*
-* Revision 6.144  2004/01/16 16:37:01  kans
-* added CM as scaffold/CON record
-*
-* Revision 6.143  2003/12/18 19:35:53  kans
-* added CQ and CR prefixes
-*
-* Revision 6.142  2003/12/16 16:03:04  kans
-* added CL as ncbi gss
-*
-* Revision 6.141  2003/11/10 16:12:33  kans
-* added CK as genbank est
-*
-* Revision 6.140  2003/10/31 20:51:24  kans
-* added CI and CJ as DDBJ ESTs to WHICH_db_accession
-*
-* Revision 6.139  2003/10/24 14:36:12  kans
-* added CH as GenBank CONN to WHICH_db_accession
-*
-* Revision 6.138  2003/09/09 20:08:18  kans
-* SeqLocPartialCheck locks bioseq if seqloc_whole and far
-*
-* Revision 6.137  2003/09/02 15:11:50  kans
-* WHICH_db_accession takes ZP_ with 8 digits as refseq_prot_predicted
-*
-* Revision 6.136  2003/08/11 13:45:18  kans
-* added CG as ncbi gss
-*
-* Revision 6.135  2003/07/14 20:17:53  kans
-* added CF as ncbi est to WHICH_db_accession
-*
-* Revision 6.134  2003/07/02 14:35:21  kans
-* added CE as ncbi gss
-*
-* Revision 6.133  2003/05/20 22:15:24  yaschenk
-* SeqIdSelect loops indefinitely on corrupted memory
-*
-* Revision 6.132  2003/04/30 16:40:41  kans
-* added CD as GenBank EST
-*
-* Revision 6.131  2003/03/25 13:32:22  kans
-* added CC as ncbi gss accession prefix
-*
-* Revision 6.130  2003/03/24 19:41:56  kans
-* added tmsmart_order, use in SeqIdWrite to prevent TMSMART temporary ID from being used
-*
-* Revision 6.129  2003/02/20 19:05:31  ford
-* Modified MakeNewProteinSeqIdExMT() to create an ID of maximum length 30 instead of 20.
-*
-* Revision 6.128  2003/01/21 17:06:57  kans
-* implement PRINTID_FASTA_ALL SeqIdWrite
-*
-* Revision 6.127  2003/01/13 18:15:35  kans
-* added CB as NCBI EST prefix
-*
-* Revision 6.126  2002/11/05 18:50:31  kans
-* fixed bug in SeqLocPartialCheck
-*
-* Revision 6.125  2002/10/19 19:11:21  kans
-* added CA as GenBank EST
-*
-* Revision 6.124  2002/10/03 16:18:35  kans
-* added BZ as NCBI GSS
-*
-* Revision 6.123  2002/09/20 20:47:51  kans
-* added BY as DDBJ EST prefix
-*
-* Revision 6.122  2002/08/28 13:28:54  kans
-* added BX prefix
-*
-* Revision 6.121  2002/08/26 20:38:26  kans
-* added BW as ddbj est prefix
-*
-* Revision 6.120  2002/08/19 15:57:28  kans
-* BV is NCBI STS prefix
-*
-* Revision 6.119  2002/08/19 15:54:47  kans
-* added BU as NCBI EST prefix
-*
-* Revision 6.118  2002/07/12 18:47:46  kans
-* WHICH_db_accession was using the result of AccnIsSWISSPROT incorrectly
-*
-* Revision 6.117  2002/07/08 20:25:45  kans
-* added BT as FLI_cDNA type
-*
-* Revision 6.116  2002/06/28 14:48:03  kans
-* added BS as ddbj genome project prefix
-*
-* Revision 6.115  2002/06/20 18:38:43  kans
-* added FAA and GAA, ACCN_NCBI_WGS_PROT, ACCN_EMBL_WGS_PROT, ACCN_DDBJ_WGS_PROT, and ACCN_IS_WGS
-*
-* Revision 6.114  2002/06/19 17:13:48  kans
-* added ACCN_PDB, support for PDB in SeqIdFromAccessionDotVersion
-*
-* Revision 6.113  2002/06/10 18:06:16  kans
-* SeqLocLen use of smp->seq_len_lookup_func first checks sip for NULL
-*
-* Revision 6.112  2002/06/10 14:07:12  kans
-* SeqLocLen on whole tries new smp->seq_len_lookup_func registered function
-*
-* Revision 6.111  2002/05/29 19:19:53  bazhin
-* Added support for new EAA-EZZ protein's WGS accessions.
-*
-* Revision 6.110  2002/04/24 17:11:03  kans
-* added BR as DDBJ TPA accession prefix
-*
-* Revision 6.109  2002/04/02 18:19:56  kans
-* SeqLocPartialCheck fixes
-*
-* Revision 6.108  2002/03/26 18:11:26  kans
-* WHICH_db_accession WGS assignments - A*** NCBI, B*** DDBJ, C*** EMBL
-*
-* Revision 6.107  2002/03/12 17:08:32  kans
-* added BQ as NCBI EST
-*
-* Revision 6.106  2002/02/14 18:30:27  kans
-* SeqIdFromAccessionDotVersion defaults version to INT2_MIN
-*
-* Revision 6.105  2002/01/29 19:28:16  kans
-* SeqIdParse can parse type|accession.ver with no trailing vertical bars for RefSeq and DNA database types
-*
-* Revision 6.104  2002/01/22 18:49:15  kans
-* added ACCN_NCBI_WGS, ACCN_EMBL_WGS, and ACCN_DDBJ_WGS
-*
-* Revision 6.103  2002/01/17 13:49:32  kans
-* BP added as DDBJ EST accession prefix
-*
-* Revision 6.102  2002/01/16 16:59:38  camacho
-* Changed the type of buflen parameter in SeqIdWrite from Int2 to Uint4
-*
-* Revision 6.101  2001/11/29 14:04:29  kans
-* reverted GetThePointForOffset, deal with trans-splicing in feature indexing left/right extreme calculation itself
-*
-* Revision 6.100  2001/11/14 13:55:45  kans
-* added BN accession
-*
-* Revision 6.99  2001/11/08 13:49:45  kans
-* GetThePointForOffset on left or right end now handles trans-spliced mixed strands properly - still need to fix SeqLocMerge
-*
-* Revision 6.98  2001/10/23 14:04:18  kans
-* added BM and BL accession prefixes
-*
-* Revision 6.97  2001/09/28 22:42:49  vakatov
-* Renamed "new" to "x_new" -- to avoid clash with the C++ "operator new"
-*
-* Revision 6.96  2001/09/28 14:31:00  madden
-* Added functions BSCompressDNANew and GenericCompressDNAEx for long sequences with ambiguity
-*
-* Revision 6.95  2001/09/20 18:53:28  kans
-* changed SeqLocCompare matrices to handle artificial frameshifts
-*
-* Revision 6.94  2001/08/07 18:12:05  kans
-* added macros for EMBL and DDBJ TPA and TPA_PROT prefixes
-*
-* Revision 6.93  2001/08/06 22:13:12  kans
-* using NUM_SEQID, added TPA ids to arrays
-*
-* Revision 6.92  2001/08/06 20:07:53  ostell
-* added support for SEQID_TPG, TPE, TPD types
-*
-* Revision 6.91  2001/08/01 17:56:24  kans
-* in SeqLocGetSegLens on mix or equiv, ctr += changed to ctr = to avoid multiple increments
-*
-* Revision 6.90  2001/07/03 21:42:01  kans
-* added macros and accession prefixes for TPA (third-party annotation) records
-*
-* Revision 6.89  2001/06/06 17:53:42  kans
-* added BI and BJ accession prefixes
-*
-* Revision 6.88  2001/06/05 16:28:40  kans
-* restored logic of GetThePointForOffset, with comment that SeqLocStart returns sintp->from even on minus strand, different behavior than SEQLOC_START
-*
-* Revision 6.87  2001/06/04 19:31:14  kans
-* PDB lower case chain now represented by double upper case letter, modified SeqIdWrite, SeqIdParse, SeqIdComp, removed DeltaSeqsToSeqLoc call and variables from CheckPointInBioseq
-*
-* Revision 6.86  2001/06/04 19:07:48  kans
-* fixed buggy logic for minus strand LEFT_END/RIGHT_END in GetThePointForOffset
-*
-* Revision 6.85  2001/06/01 21:11:45  kans
-* CheckPointInBioseq now works for far delta sequences, calls SeqMgrMapPartToSegmentedBioseq, allowing NG propagation onto NT genomic records
-*
-* Revision 6.84  2001/05/30 22:47:23  kans
-* fixed Mac compiler warnings about unwanted assignments, moved function prototypes to header, removed unused variables
-*
-* Revision 6.83  2001/05/30 20:30:31  shoemake
-* Fixed bug in SeqIdParse for VB chain in SEQID_PDBs.
-*
-* Revision 6.82  2001/05/14 19:42:37  sicotte
-* Added BH prefix for ncbi GSS
-*
-* Revision 6.81  2001/05/04 22:09:45  dondosha
-* Small modification in GetAccessionFromSeqId for local id
-*
-* Revision 6.80  2001/04/27 15:46:20  madden
-* Add function RebuildDNA_4na
-*
-* Revision 6.79  2001/03/23 16:56:26  dondosha
-* Correction in function GetAccessionFromSeqId
-*
-* Revision 6.78  2001/01/30 18:11:13  kans
-* SeqIdParse for general and local counts digits, and any number > INT4_MAX will be stored as a string
-*
-* Revision 6.77  2000/12/20 20:59:58  sicotte
-* bug fix for AccnnIsSWISSPROT
-*
-* Revision 6.76  2000/12/07 16:34:42  sicotte
-* Updated WHICH_db_accession and corresponding macros: I* accessions can no longer be proteins (they were PIR) and have completed hardcoding of N000?? accessions which can belong to twoDB. Added SeqIdFromAccessionEx, ACCN_PIR_FORMAT, and AccnIsSWISSPROT functions
-*
-* Revision 6.75  2000/12/05 23:10:29  kans
-* SeqIdParse does not override default pdb chain if no tokens[1] content
-*
-* Revision 6.74  2000/11/20 17:13:47  kans
-* SeqIdParse uses SEQID_PARSE_BUF_SIZE instead of 40 character limit - needed to handle humongously long local IDs in genome annotation models, which will be removed when loaded into ID, but still need to be dealt with during processing
-*
-* Revision 6.73  2000/11/16 17:23:26  sicotte
-* IS_protdb_accession is now true for any 3 letter accession and IS_ntdb_accession is now also true for any unknown accession-looking accession number
-*
-* Revision 6.72  2000/11/14 20:49:48  sicotte
-* add XM_ refseq prefix
-*
-* Revision 6.71  2000/10/31 21:20:05  vakatov
-* [WIN32] DLL'zation
-*
-* Revision 6.70  2000/10/27 20:10:57  shavirin
-* Added new function MakeNewProteinSeqIdExMT for MT save operation.
-*
-* Revision 6.69  2000/10/26 15:28:58  dondosha
-* Do not adjust offsets for empty SeqLocs in AdjustOffSetsInSeqAlign
-*
-* Revision 6.68  2000/10/24 19:04:18  dondosha
-* Moved function UniqueLocalId from blast.c
-*
-* Revision 6.67  2000/10/11 21:59:35  kans
-* added PRINTID_FASTA_GENERAL
-*
-* Revision 6.66  2000/10/11 18:33:36  kans
-* SeqIdWrite fasta_order prefers SEQID_OTHER, then SEQID_GENERAL, then SEQID_LOCAL
-*
-* Revision 6.65  2000/10/03 16:51:07  cavanaug
-* Added BF accession prefix to WHICH_db_accession
-*
-* Revision 6.64  2000/10/02 14:30:48  sicotte
-* Added BE prefix for NCBI EST to WHICH_db_accession
-*
-* Revision 6.63  2000/10/02 14:29:16  sicotte
-* Added BE prefix for NCBI EST to WHICH_db_accession
-*
-* Revision 6.62  2000/09/28 15:08:31  dondosha
-* Corrected local id handling in GetAccessionFromSeqid - used in Mega BLAST
-*
-* Revision 6.61  2000/09/19 15:22:07  sicotte
-* fix BD and BE prefix
-*
-* Revision 6.60  2000/09/12 20:20:13  cavanaug
-* WHICH_db_accession : fixed missing paren
-*
-* Revision 6.59  2000/09/12 19:54:22  cavanaug
-* WHICH_db_accession now knows about BE accessions
-*
-* Revision 6.58  2000/08/02 21:26:15  kans
-* SeqIdWrite will not print version if release is used
-*
-* Revision 6.57  2000/07/11 15:01:50  kans
-* added SeqIdFromAccessionDotVersion for genome mapping project
-*
-* Revision 6.56  2000/06/08 14:30:07  dondosha
-* Fixed bug in GetAccessionFromSeqId for general id
-*
-* Revision 6.55  2000/05/22 17:37:01  sicotte
-* add BD prefix to WHICH_db_accession
-*
-* Revision 6.54  2000/05/17 17:20:43  dondosha
-* Added function GetAccessionFromSeqId, used in standalone programs blastclust and megablast
-*
-* Revision 6.53  2000/05/10 16:56:33  kans
-* SeqIdParse stops looking for expected_tokens when done is TRUE, avoids reading past end of string for ref|xxx| with two bars
-*
-* Revision 6.52  2000/05/05 13:24:50  kans
-* For SEQID_OTHER (RefSeq), SeqIdWrite will not print third vertical bar (originally for when there would be periodic releases - obsolete now that RefSeq is part of Entrez), and SeqIdParse will not upper case the tsip->name (LOCUS)
-*
-* Revision 6.51  2000/05/04 15:07:54  kans
-* SeqIdParse sends SEV_INFO, not SEV_ERROR, since blast uses it to test IDs for validity
-*
-* Revision 6.50  2000/05/03 17:56:05  sicotte
-* Added BC prefix ; changed refseq SeqID
-*
-* Revision 6.49  2000/03/29 15:53:50  sicotte
-* Added BB predix for DDBJ EST to WHICH_db_accession
-*
-* Revision 6.48  2000/02/17 17:29:52  sicotte
-* Added BA prefix for DDBJ CON division
-*
-* Revision 6.47  2000/02/11 21:09:52  madden
-* Check for NULL SeqAlignPtr before dereferencing
-*
-* Revision 6.46  2000/02/04 16:13:16  kans
-* added prefix parameter to MakeNewProteinSeqIdEx
-*
-* Revision 6.45  1999/12/22 15:46:19  sicotte
-* Added prefix AZ
-*
-* Revision 6.44  1999/11/22 17:28:01  kans
-* allow RefSeq ID to have two or (expected) three tokens
-*
-* Revision 6.43  1999/10/12 13:46:42  kans
-* AX and AY added to WHICH_db_accession
-*
-* Revision 6.42  1999/08/31 20:49:03  shavirin
-* Added case 5 (discontinous alignment) in function TxGetIdFromSeqAlign().
-*
-* Revision 6.41  1999/08/11 15:49:21  sicotte
-* Add AW prefix for NCBI EST in WHICH_db_accession
-*
-* Revision 6.40  1999/08/05 20:52:25  sicotte
-* fix in SeqIdFindBestAccession
-*
-* Revision 6.39  1999/08/03 20:00:34  sicotte
-* Add SeqIdFindBestAccession
-*
-* Revision 6.38  1999/07/30 09:28:17  sicotte
-* Transfered fns from salutil.c(chappey) AddSeqId,SeqIdDupList,SeqIdDupBestList,SeqIdListfromSeqLoc
-*
-* Revision 6.37  1999/06/24 20:39:21  kans
-* SeqIdPrint just calls SeqIdWrite, PRINTID_TEXTID_LOCUS uses accession (no version) if no locus name
-*
-* Revision 6.36  1999/05/24 22:22:25  sicotte
-* SeqIdFromAccession: Fix bug for embl/ddbj accessions
-*
-* Revision 6.35  1999/05/20 14:33:13  sicotte
-* SeqIdFromAccession: remove tsp->name to accomodate LOCUS names
-*
-* Revision 6.34  1999/04/22 14:52:34  tatiana
-* changes in MuskSeqIdWrite to print human chromosome Ids
-*
-* Revision 6.33  1999/04/20 14:34:53  sicotte
-* Add AV accession prefix for DDBJ EST in WHICH_db_accession
-*
-* Revision 6.32  1999/04/08 14:11:16  sicotte
-* Add SeqIdOrderInBioseqIdList (consider synomymous SeqIds)
-*
-* Revision 6.31  1999/04/02 17:31:59  vakatov
-* Added NLM_EXTERN for FindNuc() and FindProt() proto
-*
-* Revision 6.30  1999/04/01 17:41:20  sicotte
-* Added SeqIdInSeqLocList : Check if the Bioseq of SeqId sip is in list: may try to fetch the Bioseq
-*
-* Revision 6.29  1999/04/01 13:54:47  sicotte
-* Added SeqIdOrderInList(To find the position of a SeqId in a Chain)
-*       ExtractAccession ( To parse an accession into it's version and acc.)
-*       SeqIdFromAccession (To make the proper type of SeqId given an
-*                           accession string. (uses WHICH_db_accession)
-*       moved IS_ntdb_accession, IS_protdb_accession, WHICH_db_accession
-*          from accutils.ch to sequtil.ch
-*
-* Revision 6.28  1999/03/31 16:53:40  madden
-* Added FindNuc and FindProt functions for SeqEntryExplore
-*
-* Revision 6.27  1999/03/11 23:32:06  kans
-* sprintf casts
-*
-* Revision 6.26  1999/03/04 17:10:14  kans
-* check for tsip->release == NULL for showversion (JO)
-*
-* Revision 6.25  1999/02/22 15:34:22  kans
-* print version if > 0 (had erroneously been > 1)
-*
-* Revision 6.24  1999/02/09 20:15:00  kans
-* initialized version, release, in stack textseqid (JO)
-*
-* Revision 6.23  1999/02/02 21:38:12  kans
-* moved SHOWVERSION to header, SeqMgrAddIndexElement with and without version (JO)
-*
-* Revision 6.22  1999/02/01 18:41:02  ostell
-* added SHOWVER define to stop printing versions until ready
-*
-* Revision 6.21  1999/02/01 16:24:45  ostell
-* check for accession.version >0 not just non-zero
-*
-* Revision 6.20  1999/02/01 16:17:12  ostell
-* added version support for SeqIdWrite and SeqIdParse
-*
-* Revision 6.19  1999/01/12 18:00:18  kans
-* SeqIdComp now ignores version if < 1, and added PRINTID_TEXTID_ACC_VER and PRINTID_TEXTID_ACC_ONLY formats for SeqIdWrite
-*
-* Revision 6.18  1999/01/11 17:11:22  kans
-* SeqIdComp now checks version numbers
-*
-* Revision 6.17  1999/01/05 18:30:26  kans
-* SeqLocId ignores SEQLOC_NULL (Tatiana)
-*
-* Revision 6.16  1998/12/14 20:56:26  kans
-* dnaLoc_to_aaLoc takes allowTerminator parameter to handle stop codons created by polyA tail
-*
-* Revision 6.15  1998/11/24 20:15:05  kans
-* seqid other has better priority than local so refgene id is used preferentially
-*
-* Revision 6.14  1998/11/12 15:48:35  kans
-* SEQID_OTHER now prints as "ref" instead of "oth", though the latter is still detected by SeqIdParse as a special case
-*
-* Revision 6.13  1998/10/19 15:49:08  kans
-* SeqIdWrite now writes three fields for SEQID_OTHER in FASTA_SHORT
-*
-* Revision 6.12  1998/08/26 20:56:06  kans
-* got SeqIdComp test for general ID db strings wrong the first time
-*
-* Revision 6.11  1998/08/26 20:29:45  kans
-* SeqIdComp allows multiple general IDs with different db names
-*
-* Revision 6.10  1998/08/18 21:42:44  kans
-* SeqIdIn does not return on SIC_NO in order to handle multiple IDs of the same class (e.g., general)
-*
-* Revision 6.9  1998/08/13 22:31:48  kans
-* SeqMgrMapPartToSegmentedBioseq to speed up GetOffsetInBioseq, start of indexing segments, also index biosource by location for binary search (Wheelan)
-*
-* Revision 6.8  1998/07/28 16:41:08  kans
-* added MakeNewProteinSeqIdEx for faster creation of many new protein products
-*
-* Revision 6.7  1998/05/05 15:54:39  kans
-* SeqIdMatch now handles SEQID_OTHER (JO)
-*
-* Revision 6.6  1998/04/22 18:07:22  egorov
-* Make possible the second paramter (SeqLocPtr slp2) of AdjustOffSetsInSeqAlign to be NULL
-*
-* Revision 6.5  1998/02/27 17:10:01  vakatov
-* [WIN32 DLL]  Declared some functions as NLM_EXTERN(DLL-exportable)
-*
-* Revision 6.4  1998/02/26 19:14:03  madden
-* Added AdjustOffSetsInSeqAlign
-*
-* Revision 6.3  1998/01/26 17:25:30  madden
-* Added TxGetQueryIdFromSeqAlign function
-*
-* Revision 6.2  1997/10/15 14:43:18  ostell
-* changed SeqIdPrint, SeqIdWrite, SeqIdParse to convert PDB chain id '|' into VB
-*
-* Revision 6.1  1997/10/06 14:01:23  zjing
-* move TxGetSubjectId, GetScoreAndEvalue to sequtil.ch
-*
-* Revision 6.0  1997/08/25 18:07:20  madden
-* Revision changed to 6.0
-*
-* Revision 5.43  1997/08/19 17:07:09  kans
-* EntrezASN1Detected now explores all components
-*
-* Revision 5.42  1997/07/17 18:46:21  kans
-* SeqLocStrand now treats mixed unknown and plus as plus
-*
-* Revision 5.41  1997/06/19 18:38:56  vakatov
-* [WIN32,MSVC++]  Adopted for the "NCBIOBJ.LIB" DLL'ization
-*
-* Revision 5.40  1997/05/19 19:25:26  shavirin
-* Added function CorrectGeneFeatLocation()
-*
- * Revision 5.39  1997/04/09  18:43:01  tatiana
- * a typo in MolTypeForGi description fixed
- *
- * Revision 5.38  1997/04/09  18:00:10  tatiana
- * added MolTypeForGI()
- *
- * Revision 5.37  1997/04/08  17:27:51  shavirin
- * Fixed typecast warnings.
- *
- * Revision 5.36  1997/04/04  17:24:44  shavirin
- * Fixed position calculation in BSRebuildDNA_4na() function
- *
- * Revision 5.35  1997/03/28  21:18:10  shavirin
- * Added function BSRebuildDNA_4na()
- *
- * Revision 5.34  1997/03/18  23:22:25  kans
- * changed return NULL to return FALSE in GenericCompressDNA (detected by
- * CodeWarrior)
- *
- * Revision 5.33  1997/03/18  19:16:30  shavirin
- * Added error handling in GenericCompressDNA() function
- *
- * Revision 5.32  1997/03/18  15:26:31  ostell
- * made SeqIdComp case insensitive
- *
- * Revision 5.31  1997/03/06  22:56:31  kans
- * added include <seqport.h> for dnaLoc_to_aaLoc
- *
- * Revision 5.30  1997/03/06  22:46:50  shavirin
- * Moved SPCompress functions to seqport.c
- *
- * Revision 5.29  1997/03/06  21:27:30  shavirin
- * Added new set of functions: SPCompressDNA(), SPRebuildDNA(), SPCompressNew(),
- * SPCompressFree()
- *
- * Revision 5.28  1997/03/04  21:58:48  shavirin
- * Added function GenericCompressDNA()
- *
- * Revision 5.27  1997/03/04  19:57:03  epstein
- * fix minus strand problem for gatherCodingRegions()
- *
- * Revision 5.26  1997/03/04  03:51:32  shavirin
- * Fixed memory leak in BSCompressDNA()
- *
- * Revision 5.25  1997/03/03  22:34:09  shavirin
- * Changed IO Buffer from 100/1 to 1024/1024 in BSCompressDNA
- *
- * Revision 5.23  1997/02/26  20:14:16  shavirin
- * Removed RandomSeed initialization in SeqMapTableFind()
- *
- * Revision 5.22  1997/02/26  19:24:16  shavirin
- * Optimized by increasing IO buffers function BSConvertSeq()
- *
- * Revision 5.21  1997/02/03  20:56:24  ostell
- * added additional check to MakeNewProteinSeqId() for an existing id in
- * GenBank locus form.
- *
- * Revision 5.20  1997/01/08  22:24:26  zjing
- * changes in MuskSeqIdWrite to Print THC Ids
- *
- * Revision 5.19  1996/12/10  19:17:39  kans
- * *** empty log message ***
- *
- * Revision 5.18  1996/11/18  20:37:37  shavirin
- * "Pack" set of functions now will produce ncbieaa Seq_code
- * for proteins.
- *
- * Revision 5.17  1996/10/15  15:44:08  shavirin
- * *** empty log message ***
- *
- * Revision 5.16  1996/10/15  14:47:18  shavirin
- * Added new functions: BSCompressDNA() and BSRebuildDNA() to handle
- * ambiguity characters.
- *
- * Revision 5.15  1996/10/11  21:08:28  chappey
- * backed out changes to add extra byte at end of bytestore
- *
- * Revision 5.14  1996/10/10  21:06:01  shavirin
- * Implemented random conversion of ASCII and ncbi4na encoding
- * to ncbi2na in case of ambiguous bases.
- *
- * Revision 5.13  1996/10/09  19:01:37  shavirin
- * Changed format of last byte in BSConvertSeq() function.
- *
- * Revision 5.12  1996/10/04  19:07:31  shavirin
- * Rewritten function BSPack() with more efficient algorithm
- *
- * Revision 5.11  1996/09/26  01:51:37  ostell
- * fixed logic error in BioseqConvert()
- *
- * Revision 5.10  1996/08/26  14:07:52  madden
- * Changed try to tax_try in for compatability with DEC OS.
- *
- * Revision 5.9  1996/08/07  20:13:04  epstein
- * move MuskSeqIdWrite, seqid_name, local_id_make and update_seq_loc from jzmisc to sequtil, to untangle the desktop and tools libraries from one another
- *
- * Revision 5.8  1996/07/15  19:03:57  epstein
- * adapt to dnaLoc_to_aaLoc() change
- *
- * Revision 5.7  1996/07/15  15:57:23  kans
- * fixed a call to ISA_na, removed an unused variable
- *
- * Revision 5.6  1996/07/15  14:41:53  epstein
- * add SeqEntryContainsSeqIdOfMolType() and FindCodingRegion() and add performance improvements to FindSpliceSites()
- *
- * Revision 5.5  1996/07/11  16:25:31  kans
- * MakeNewProteinSeqId default string is now tmpseq_
- *
- * Revision 5.4  1996/06/27  19:58:39  epstein
- * return NULL from FindSpliceSites if there are no splice sites
- *
- * Revision 5.3  1996/06/24  18:38:24  epstein
- * move splicing functionality to sequtil.c
- *
- * Revision 5.2  1996/06/16  15:19:31  ostell
- * added delta seq support to SeqEntryPack
- *
- * Revision 5.1  1996/06/12  18:29:14  epstein
- * move SeqLocIntNew() and SeqLocPntNew() from edutil to sequtil
- *
- * Revision 5.0  1996/05/28  13:23:23  ostell
- * Set to revision 5.0
- *
- * Revision 4.18  1996/03/25  22:18:32  tatiana
- * *** empty log message ***
- *
- * Revision 4.17  1996/03/11  19:06:43  ostell
- * added MakeNewProteinSeqId()
- *
- * Revision 4.16  1996/02/28  04:53:06  ostell
- * fix for SeqLocFindNext and ..Part for head haveing next pointer
- *
- * Revision 4.15  1996/02/26  03:44:33  ostell
- * added support for SEQLOC_BOND to SeqLocStart, SeqLocStop, SeqLocID, SeqLocStrand
- *
- * Revision 4.14  1996/02/24  03:11:40  ostell
- * made GetResidueForSymbol ruturn INVALID=-RESIDUE when letter is 0
- *
- * Revision 4.13  1996/01/31  16:08:16  tatiana
- * StringForSeqTech() added by Tatiana
- *
- * Revision 4.12  1995/12/27  22:30:21  ostell
- * added support for delta seqs in BioseqGetSegs, ..GetGaps
- *
- * Revision 4.11  1995/12/22  20:18:10  ostell
- * fix to SeqIdWrite to fall though PRINTID_FASTA_LONG when no gi is present
- *
- * Revision 4.10  1995/12/05  21:43:13  ostell
- * changed SeqIdWrite to format a little nicer
- *
- * Revision 4.9  1995/10/19  02:30:31  ostell
- * fixed SeqLocFindNext() bug that caused early termination at the
- * end of nested locations.
- *
- * Revision 4.8  1995/10/17  04:15:37  ostell
- * added SeqLocFindPart()
- * made SeqLocFindNext() call it
- * added equiv_is_one to IS_one_loc()
- *
- * Revision 4.7  1995/10/12  18:11:23  kans
- * corrected SeqLocLen for SEQLOC_MIX (JO)
- *
- * Revision 4.6  1995/09/29  15:03:06  ostell
- * changed SeqIdParse() to retain first Seqid if failure only on second
- *
- * Revision 4.5  1995/09/28  20:51:13  tatiana
- * SeqLocLen changed to handle case SEQLOC_EQUIV
- *
- * Revision 4.3  1995/09/06  21:06:28  ostell
- * fixed logical condition in SeqLocPartialCheck() that looked at Int-fuzz
- * lim type >= 0 || <= 2 (for unk, gt, lt).. changed || to &&
- *
- * Revision 4.2  1995/08/24  20:15:31  tatiana
- * bug fixed in sequtil.c
- *
- * Revision 4.1  1995/08/09  17:00:15  tatiana
- * bug fixed in SeqIdWrite()
- *
- * Revision 2.80  1995/07/20  22:08:39  tatiana
- * change SeqIdprint to SeqIdWrite
- *
- * Revision 2.79  1995/07/18  19:53:22  tatiana
- * add SeqIdWrite() to replace SeqIdPrint()
- *
- * Revision 2.78  1995/06/27  20:39:58  kans
- * SeqIdForSameBioseq no longer fetches
- *
- * Revision 2.77  1995/06/14  16:31:59  kans
- * EntrezASN1Detected function added (to be used by Sequin and ID)
- *
- * Revision 2.76  1995/06/06  16:25:38  ostell
- * added support for MolInfo in SeqLocPartialCheck()
- *
- * Revision 2.75  1995/05/19  04:02:08  ostell
- * added SeqLocAinB()
- *
- * Revision 2.74  1995/05/09  18:10:09  ostell
- * changed to using NUM_SEQID
- *
- * Revision 2.74  1995/05/09  18:10:09  ostell
- * changed to using NUM_SEQID
 * ==========================================================================
 */
 
@@ -1506,7 +603,11 @@ NLM_EXTERN Boolean BioseqPack (BioseqPtr bsp)
   
   if (Bioseq_repr(bsp) != Seq_repr_delta)
     return FALSE;
+
+  /* not set up to compress delta proteins */
   
+  if (ISA_aa (bsp->mol)) return FALSE;
+
   /* go through the delta chain */
   
   for (vnp = (ValNodePtr)(bsp->seq_ext); vnp != NULL; vnp = vnp->next) {
@@ -3632,6 +2733,7 @@ NLM_EXTERN CharPtr SeqIdWrite (SeqIdPtr isip, CharPtr buf, Uint1 format, Uint4 b
     Char chainbuf[3];
     Char versionbuf[10];
     Int2 version = 0;
+    CharPtr release = NULL;
 
     buf[0] = '\0';
     buflen--;
@@ -3779,6 +2881,10 @@ NLM_EXTERN CharPtr SeqIdWrite (SeqIdPtr isip, CharPtr buf, Uint1 format, Uint4 b
             case SEQID_TPD:
             case SEQID_GPIPE:
                 tsip = (TextSeqIdPtr)sip->data.ptrvalue;
+                release = tsip->release;
+                if (sip->choice == SEQID_SWISSPROT) {
+                  release = NULL;
+                }
                 if ((format == PRINTID_TEXTID_LOCUS) && (tsip->name != NULL)) {
                     Nlm_LabelCopyNext(&tmp, tsip->name, &buflen);
                     return tmp;
@@ -3788,7 +2894,7 @@ NLM_EXTERN CharPtr SeqIdWrite (SeqIdPtr isip, CharPtr buf, Uint1 format, Uint4 b
                     return tmp;
                 } else if ((format == PRINTID_TEXTID_ACC_VER) 
                     && (tsip->accession != NULL)) {
-                    if (tsip->version > 0 && tsip->release == NULL) {
+                    if (tsip->version > 0 && release == NULL) {
                         sprintf(localbuf, "%s.%d", tsip->accession,
                             (int)(tsip->version));
                     } else {
@@ -3807,6 +2913,12 @@ NLM_EXTERN CharPtr SeqIdWrite (SeqIdPtr isip, CharPtr buf, Uint1 format, Uint4 b
     {
         if (sip->choice == SEQID_PATENT && is_us_pre_grant) {
             Nlm_LabelCopyNext(&tmp, "pgp", &buflen);
+        } else if (sip->choice == SEQID_SWISSPROT) {
+            tsip = (TextSeqIdPtr)sip->data.ptrvalue;
+            if (tsip->release && StringCmp(tsip->release, "unreviewed") == 0)
+                Nlm_LabelCopyNext(&tmp, "tr", &buflen);
+            else
+                Nlm_LabelCopyNext(&tmp, txtid[sip->choice], &buflen);
         } else {
             Nlm_LabelCopyNext(&tmp, txtid[sip->choice], &buflen);
         }
@@ -3844,12 +2956,16 @@ NLM_EXTERN CharPtr SeqIdWrite (SeqIdPtr isip, CharPtr buf, Uint1 format, Uint4 b
         case SEQID_TPE:
         case SEQID_TPD:
         case SEQID_GPIPE:
-           tsip = (TextSeqIdPtr)(sip->data.ptrvalue);
-       if (((tsip->version > 0) && (tsip->release == NULL)) && SHOWVERSION)
-        version = tsip->version;  /* show versions */
-       sprintf(versionbuf, ".%d", (int)version);
-        case SEQID_PIR:
         case SEQID_SWISSPROT:
+           tsip = (TextSeqIdPtr)(sip->data.ptrvalue);
+            release = tsip->release;
+            if (sip->choice == SEQID_SWISSPROT) {
+              release = NULL;
+            }
+           if (((tsip->version > 0) && (release == NULL)) && SHOWVERSION)
+             version = tsip->version;  /* show versions */
+           sprintf(versionbuf, ".%d", (int)version);
+        case SEQID_PIR:
         case SEQID_PRF:
             tsip = (TextSeqIdPtr)sip->data.ptrvalue;
             if (tsip->accession != NULL)
@@ -4101,6 +3217,7 @@ NLM_EXTERN SeqIdPtr SeqIdParse(CharPtr buf)
     d = *delim;   /* delimiter */
     while (! done)
     {
+        Boolean sp_prelim = FALSE;  /* Used to set release field in Swissprot TextSeqId */
                         /* set all tokens pointing to \0 */
         localbuf[SEQID_PARSE_BUF_SIZE + 1] = '\0';
         for (i = 0; i < 6; i++)
@@ -4132,6 +3249,12 @@ NLM_EXTERN SeqIdPtr SeqIdParse(CharPtr buf)
         if ((! type) && (! StringCmp(localbuf, "pgp"))) {
             type = SEQID_PATENT;
             is_us_pre_grant = TRUE;
+        }
+
+        /* Trembl ID is really Swissprot with release field of TextSeqId set to "unreviewed" */
+        if ((! type) && (! StringCmp(localbuf, "tr"))) {
+            type = SEQID_SWISSPROT;
+            sp_prelim = TRUE;
         }
 
         if (! type) goto erret;
@@ -4260,6 +3383,13 @@ NLM_EXTERN SeqIdPtr SeqIdParse(CharPtr buf)
                             tmp++;
                         }
                     }
+                }
+                if (type == SEQID_SWISSPROT)
+                {
+                     if (sp_prelim)
+                        tsip->release = StringSave("unreviewed");
+                     else
+                        tsip->release = StringSave("reviewed");
                 }
                 break;
             case SEQID_PATENT:
@@ -9542,7 +8672,12 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
           (StringICmp(temp,"EL") == 0) || 
           (StringICmp(temp,"ES") == 0) || 
           (StringICmp(temp,"EV") == 0) || 
-          (StringICmp(temp,"EW") == 0) ) {                /* NCBI EST */
+          (StringICmp(temp,"EW") == 0) || 
+          (StringICmp(temp,"EX") == 0) || 
+          (StringICmp(temp,"EY") == 0) || 
+          (StringICmp(temp,"FC") == 0) || 
+          (StringICmp(temp,"FD") == 0) || 
+          (StringICmp(temp,"FE") == 0) ) {                /* NCBI EST */
               retcode = ACCN_NCBI_EST;
           } else if ((StringICmp(temp,"BV") == 0)) {      /* NCBI STS */
               retcode = ACCN_NCBI_STS;
@@ -9567,7 +8702,8 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
                      (StringICmp(temp,"EM") == 0) ||
                      (StringICmp(temp,"EN") == 0) ||
                      (StringICmp(temp,"EP") == 0) ||
-                     (StringICmp(temp,"EQ") == 0)) {      /* NCBI segmented set header Bioseq */
+                     (StringICmp(temp,"EQ") == 0) ||
+                     (StringICmp(temp,"FA") == 0)) {      /* NCBI segmented set header Bioseq */
               retcode = ACCN_NCBI_SEGSET;
           } else if ((StringICmp(temp,"AS") == 0)) {      /* NCBI "other" */
               retcode = ACCN_NCBI_OTHER;
@@ -9603,12 +8739,15 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
           } else if((StringICmp(temp,"BK")==0) ||         /* NCBI third-party annotation */
                     (StringICmp(temp,"BL") == 0)) {
               retcode = ACCN_NCBI_TPA;
+          } else if((StringICmp(temp,"EZ") == 0)) {
+              retcode = ACCN_NCBI_TSA;
           } else if ((StringICmp(temp,"BN") == 0)) {      /* EMBL third-party annotation */
               retcode = ACCN_EMBL_TPA;
           } else if ((StringICmp(temp,"BR") == 0)) {      /* DDBJ third-party annotation */
               retcode = ACCN_DDBJ_TPA;
           } else if ((StringICmp(temp,"AJ") == 0) ||
-                     (StringICmp(temp,"AM") == 0)) {     /* EMBL direct submission */
+                     (StringICmp(temp,"AM") == 0) ||
+                     (StringICmp(temp,"FM") == 0)) {     /* EMBL direct submission */
               retcode = ACCN_EMBL_DIRSUB;
           } else if ((StringICmp(temp,"AL") == 0) ||
                      (StringICmp(temp,"BX") == 0)||
@@ -9620,7 +8759,8 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
               retcode = ACCN_EMBL_CON;
           } else if ((StringICmp(temp,"AX") == 0) ||
                      (StringICmp(temp,"CQ") == 0) ||
-                     (StringICmp(temp,"CS") == 0)) {      /* EMBL patent division */
+                     (StringICmp(temp,"CS") == 0) ||
+                     (StringICmp(temp,"FB") == 0)) {      /* EMBL patent division */
               retcode = ACCN_EMBL_PATENT;
           } else if ((StringICmp(temp,"AT") == 0) || 
                      (StringICmp(temp,"AU") == 0) ||
@@ -9650,7 +8790,8 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
               retcode = ACCN_DDBJ_CON;
           } else if ((StringICmp(temp,"BD") == 0) ||
                      (StringICmp(temp,"DD") == 0) || 
-                     (StringICmp(temp,"DI") == 0)) {      /* DDBJ patent division */
+                     (StringICmp(temp,"DI") == 0) || 
+                     (StringICmp(temp,"DJ") == 0)) {      /* DDBJ patent division */
               retcode = ACCN_DDBJ_PATENT;
           } else if ((StringICmp(temp,"DE") == 0) ||
                      (StringICmp(temp,"DH") == 0)) {      /* DDBJ GSS */
@@ -9683,7 +8824,7 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
       temp[1] = *s; s++;
       temp[2] = NULLB; s++;
       
-      if ((StringICmp(temp,"NP") == 0)) { 
+      if ((StringICmp(temp,"NP") == 0) || (StringICmp(temp,"AP") == 0)) { 
           retcode = ACCN_REFSEQ_PROT;
       } else if ((StringICmp(temp,"NM") == 0)) { 
           retcode = ACCN_REFSEQ_mRNA;
@@ -9697,8 +8838,10 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
           retcode = ACCN_REFSEQ_mRNA_PREDICTED;
       } else if ((StringICmp(temp,"XP") == 0)) { 
           retcode = ACCN_REFSEQ_PROT_PREDICTED;
-      } else if ((StringICmp(temp,"NG") == 0)) { 
+      } else if ((StringICmp(temp,"NG") == 0) || (StringICmp(temp,"AC") == 0)) { 
           retcode = ACCN_REFSEQ_GENOMIC;
+      } else if ((StringICmp(temp,"NS") == 0)) { 
+          retcode = ACCN_REFSEQ_ARTIFICIAL_ASSEMBLY;
       } else if (IS_ALPHA(*temp) && IS_ALPHA(*(temp+1))) {
           retcode =ACCN_REFSEQ | ACCN_AMBIGOUS_MOL;
       } else

@@ -1,6 +1,6 @@
 #	makefile for demo programs
 #
-#	$Id: makedemo.unx,v 6.87 2006/11/16 15:36:19 coulouri Exp $
+#	$Id: makedemo.unx,v 6.88 2008/01/25 19:56:25 ucko Exp $
 #
 #	Sun with unbundled ANSI compiler [ make CC=acc ]
 #	Sun with Gnu C [ make CC=gcc ]
@@ -149,6 +149,8 @@ clean :
 
 ## get all the source files
 ##
+
+$(SRC1) : copy
 
 copy :
 	$(SRCCOPY) ../demo/*.* .

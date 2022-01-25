@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/23/07
 *
-* $Revision: 1.2 $
+* $Revision: 1.3 $
 *
 * File Description:
 *
@@ -490,21 +490,6 @@ static ValNodePtr DoLockFarComponents (
   }
 
   return rsult;
-}
-
-static ValNodePtr FreeFilenameList (ValNodePtr filename_list)
-{
-  ValNodePtr vnp_next;
-  if (filename_list == NULL) return NULL;
-  vnp_next = filename_list->next;
-  filename_list->next = NULL;
-  if (filename_list->choice == 2) {
-    filename_list = ValNodeFreeData (filename_list);
-  } else {
-    filename_list = ValNodeFree (filename_list);
-  }
-  vnp_next = FreeFilenameList (vnp_next);
-  return NULL;
 }
 
 static void ProcessSeqEntryList (BRFlagPtr drfp, CharPtr filename)

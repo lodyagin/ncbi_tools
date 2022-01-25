@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# $Id: build.me64,v 6.2 2002/03/01 18:04:07 beloslyu Exp $
+# $Id: build.me64,v 6.3 2008/01/25 19:59:38 ucko Exp $
 #
 # W A R N I N G ! ! !
 # That script is intended for internal use in NCBI only
@@ -10,19 +10,23 @@ NCBI=/netopt/ncbi_tools/ncbi64
 PATH=/usr/bin:/bin:/sbin:/usr/sbin:/usr/ccs/bin:$NCBI/bin:$PATH
 export PATH NCBI
 
-#check that we're running withing NCBI
+#check that we're running within NCBI
 MYDOMAIN=`grep '^domain' /etc/resolv.conf |awk '{print $2}'`
-if [ "$MYDOMAIN" != "nlm.nih.gov" ] ; then
-	echo That script is intended for internal use in NCBI only
-	exit 1
+test -z "$MYDOMAIN"  &&  MYDOMAIN="`hostname --fqdn 2>/dev/null`"
+test -z "$MYDOMAIN"  &&  MYDOMAIN="`domainname`"
+if [ `echo "$MYDOMAIN" | grep -c 'nlm[.]nih[.]gov$'` != 1 ] ; then
+    echo That script is intended for internal use in NCBI only
+    exit 1
 fi
+
+SCRIPTDIR=/am/ncbiapdata/scripts/build
 
 echo "Building ASNs"
 ( cd asn; rm -f asn.all asnpub.all ; chmod +x *.unx; sh all.unx; sh allpub.unx)
 
 if [ ! -d "asnstat" ] ; then
 	mkdir asnstat; ( cd asnstat; sh ../asn/makestat.unx )
-	test -f /am/ncbiapdata/scripts/rebuild_asn && /am/ncbiapdata/scripts/rebuild_asn .
+	test -f $SCRIPTDIR/rebuild_asn && $SCRIPTDIR/rebuild_asn .
 fi
 
 rm -f data/*.val
@@ -50,7 +54,7 @@ fi
 
 echo "building the NCBI C toolkit on Solaris/Sparc in 64-bit mode"
 cd build
-dmake -j 3 -f /am/ncbiapdata/scripts/make.master LCL_TARGET=sol TARGET_INCLUDE=include \
+dmake -j 3 -f $SCRIPTDIR/make.master LCL_TARGET=sol TARGET_INCLUDE=include \
 	DBUGEXTRA=-KPIC DBUGEXTRA2=-g COPYBIN=bin CLLIB=cllib all
 
 exit 0

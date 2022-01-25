@@ -3,7 +3,7 @@
 	ProjectType="Visual C++"
 	Version="8.00"
 	Name="test_ncbi_socket_connector"
-	ProjectGUID="{BD7E75D1-DEDC-450E-A3E5-4823C06100D5}"
+	ProjectGUID="{9AAE2D3F-4D37-43B6-96EB-593DE7679811}"
 	>
 	<Platforms>
 		<Platform

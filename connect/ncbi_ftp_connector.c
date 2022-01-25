@@ -1,4 +1,4 @@
-/*  $Id: ncbi_ftp_connector.c,v 1.20 2007/01/23 22:31:29 kazimird Exp $
+/*  $Id: ncbi_ftp_connector.c,v 1.21 2007/10/17 15:25:43 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -44,6 +44,9 @@
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
+
+
+#define NCBI_USE_ERRCODE_X   Connect_FTP
 
 
 /***********************************************************************
@@ -307,7 +310,7 @@ static EIO_Status s_FTPAbort(SFTPConnector*  xxx,
             status = SOCK_Close(xxx->data);
         else {
             if (status == eIO_Timeout) {
-                CORE_LOG(eLOG_Warning,
+                CORE_LOG_X(1, eLOG_Warning,
                          "[FTP]  Timed out on data connection abort");
             }
             SOCK_Abort(xxx->data);
@@ -740,71 +743,3 @@ extern CONNECTOR FTP_CreateDownloadConnector(const char*    host,
 
     return ccc;
 }
-
-
-/*
- * --------------------------------------------------------------------------
- * $Log: ncbi_ftp_connector.c,v $
- * Revision 1.20  2007/01/23 22:31:29  kazimird
- * Synchronized with the C++ Toolkit.
- *
- * Revision 1.19  2006/12/07 16:21:02  lavr
- * Use minus sign in default password to try to turn off human-readable msgs
- *
- * Revision 1.18  2006/10/23 21:19:07  lavr
- * Empty while() extended with a dummy continue (to avoid misplaced ; warning)
- *
- * Revision 1.17  2006/01/27 17:01:19  lavr
- * Replace obsolete call names with current ones
- *
- * Revision 1.16  2006/01/11 20:21:32  lavr
- * Uniform creation/fill-up of connector structures
- *
- * Revision 1.15  2005/12/14 21:31:04  lavr
- * Two explicit (char*) casts added
- *
- * Revision 1.14  2005/06/08 20:42:05  lavr
- * Use safer memmove() instead of strcpy() in PASV parsing
- *
- * Revision 1.13  2005/06/02 17:52:31  lavr
- * s_VT_Write(): Unused variable "s" removed
- *
- * Revision 1.12  2005/05/20 13:02:13  lavr
- * s_VT_Write() not to cut '\r' -- instead, do this in s_FTPExecute()
- *
- * Revision 1.11  2005/05/20 12:11:00  lavr
- * ABOR sequence reimplemented to work even with buggy FTPDs
- *
- * Revision 1.10  2005/05/18 20:56:45  lavr
- * Use assert() to test flags for validity in constructor
- *
- * Revision 1.9  2005/05/18 18:16:41  lavr
- * Add EFCDC_Flags and TFCDC_Flags to better control underlying SOCK logs
- * Fix s_VT_Write() not to use strchr() -- memchr() must be used there!
- *
- * Revision 1.8  2005/05/11 20:00:25  lavr
- * Empty NLST result list bug fixed
- *
- * Revision 1.7  2005/04/20 18:15:59  lavr
- * +<assert.h>
- *
- * Revision 1.6  2005/01/27 18:59:52  lavr
- * Explicit cast of malloc()ed memory
- *
- * Revision 1.5  2005/01/05 17:40:13  lavr
- * FEAT extensions and fixes for protocol compliance
- *
- * Revision 1.4  2004/12/27 15:31:27  lavr
- * Implement telnet SYNCH and FTP ABORT according to the standard
- *
- * Revision 1.3  2004/12/08 21:03:26  lavr
- * Fixes for default ctor parameters
- *
- * Revision 1.2  2004/12/07 14:21:55  lavr
- * Init wbuf in ctor
- *
- * Revision 1.1  2004/12/06 17:48:38  lavr
- * Initial revision
- *
- * ==========================================================================
- */

@@ -68,7 +68,8 @@ Cayman Islands	CJ	-81.5	19.2	-81.1	19.4	-80.2	19.6	-79.7	19.8
 Central African Republic	CT	14.4	2.2	27.5	11.0
 Chad	CD	13.4	7.4	24.0	23.5
 Chile	CI	-75.8	-56.0	-66.4	-17.5
-China	CH	73.5	20.2	134.8	53.6
+China	CH	73.5	20.2	134.8	53.6	108.6	18.1	111.1	20.2
+China: Hainan	XX	108.6	18.1	111.1	20.2
 Christmas Island	KT	105.5	-10.6	105.7	-10.4
 Clipperton Island	IP	-109.3	10.2	-109.2	10.3
 Cocos Islands	CK	96.8	-12.2	96.9	-11.8
@@ -238,7 +239,6 @@ Sao Tome and Principe	TP	6.4	0.0	1.7	7.5
 Saudi Arabia	SA	34.4	15.6	55.7	32.2
 Senegal	SG	-17.6	12.3	-11.4	16.7
 Serbia	RB	18.8	41.8	23.1	46.2
-Serbia and Montenegro	YI	
 Seychelles	SE	50.7	-9.6	51.1	-9.2	52.7	-7.2	52.8	-7.0	53.0	-6.3	53.7	-5.1	55.2	-5.9	56.0	-3.7	56.2	-7.2	56.3	-7.1
 Sierra Leone	SL	-13.4	6.9	-10.3	10.0
 Singapore	SN	103.6	1.1	104.1	1.5
@@ -341,6 +341,5 @@ Wallis and Futuna	WF	-178.3	-14.4	-178.0	-14.2	-176.3	-13.4	-176.1	-13.2
 West Bank	WE	34.8	31.3	35.6	32.6
 Western Sahara	WI	-17.2	20.7	-8.7	27.7
 Yemen	YM	41.8	11.7	54.5	19.0
-Yugoslavia	XX	13.3	40.8	23.0	46.9
 Zambia	ZA	21.9	-18.1	33.7	-8.2
 Zimbabwe	ZI	25.2	-22.5	33.1	-15.6

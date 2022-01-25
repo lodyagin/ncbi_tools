@@ -1,4 +1,4 @@
-/* $Id: blast_options_api.c,v 1.24 2007/03/20 15:17:16 kans Exp $
+/* $Id: blast_options_api.c,v 1.25 2007/12/14 17:11:29 madden Exp $
 ***************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -322,6 +322,14 @@ Int2 SBlastOptionsSetDbGeneticCode(SBlastOptions* options, Int4 gc)
         return -1;
 
     options->db_options->genetic_code = gc;
+
+    if (GenCodeSingletonFind(gc) == NULL)
+    {
+       Uint1* gcode = NULL;
+       BLAST_GeneticCodeFind(options->db_options->genetic_code, &gcode);
+       GenCodeSingletonAdd(options->db_options->genetic_code, gcode);
+       free(gcode);
+    }
 
     return status;
     

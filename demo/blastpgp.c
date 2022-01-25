@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: blastpgp.c,v 6.137 2007/03/14 17:55:27 madden Exp $";
+static char const rcsid[] = "$Id: blastpgp.c,v 6.139 2008/01/02 20:16:11 madden Exp $";
 
-/* $Id: blastpgp.c,v 6.137 2007/03/14 17:55:27 madden Exp $ */
+/* $Id: blastpgp.c,v 6.139 2008/01/02 20:16:11 madden Exp $ */
 /**************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -26,8 +26,14 @@ static char const rcsid[] = "$Id: blastpgp.c,v 6.137 2007/03/14 17:55:27 madden 
 * appreciated.                                                            *
 *                                                                         *
 **************************************************************************
- * $Revision: 6.137 $ 
+ * $Revision: 6.139 $ 
  * $Log: blastpgp.c,v $
+ * Revision 6.139  2008/01/02 20:16:11  madden
+ * XML output respects -v and -b option, JIRA SB-30
+ *
+ * Revision 6.138  2008/01/02 14:02:06  madden
+ * Make composition-based score adjustments the default for blastp and tblastn
+ *
  * Revision 6.137  2007/03/14 17:55:27  madden
  *   - #include string.h to get a prototype for strcasecmp In
  *   - In tick_callback, suppress unused parameter warnings in tick_callback
@@ -712,17 +718,17 @@ static Args myargs[] = {
       NULL, NULL, NULL, TRUE, 'l', ARG_STRING, 0.0, 0, NULL},
     {"Use lower case filtering of FASTA sequence",                     /* ARG_LCASE */
      "F", NULL,NULL,TRUE,'U',ARG_BOOLEAN, 0.0,0,NULL},
-    { "Use composition based statistics\n"                             /* ARG_COMP_BASED_STATS */
+    { "Use composition based score adjustment\n"                             /* ARG_COMP_BASED_STATS */
       "As first character:\n"
       "0 or F or f: no composition-based statistics\n"
-      "1 or T or t: Composition-based statistics as in NAR  29:2994--3005, 2001\n"
-      "2: Composition-based score adjustment as in Bioinformatics 21:902-911, 2005, conditioned on sequence properties in round 1\n"
+      "2 or T or t: Composition-based score adjustment as in Bioinformatics 21:902-911, 2005, conditioned on sequence properties in round 1\n"
+      "1: Composition-based statistics as in NAR  29:2994--3005, 2001\n"
       "3: Composition-based score adjustment as in Bioinformatics 21:902-911, "
       "2005, unconditionally in round 1\n"
       "As second character, if first character is equivalent to 1, 2, or 3:\n"
       "U or u: unified p-value combining alignment p-value and "
       "compositional p-value in round 1 only\n",
-      "1", NULL, NULL, FALSE, 't', ARG_STRING, 0.0, 0, NULL},
+      "2", NULL, NULL, FALSE, 't', ARG_STRING, 0.0, 0, NULL},
     { "ASN.1 Scoremat input of checkpoint data:\n"
       "0: no scoremat input\n"
       "1: Restart is from ASCII scoremat checkpoint file,\n"
@@ -1126,13 +1132,11 @@ PGPBlastOptionsPtr PGPReadBlastOptions(void)
         break;
     case 'T':
     case 't':
+    case '2':
+        options->tweak_parameters = eCompositionMatrixAdjust;
+        break;
     case '1':
         options->tweak_parameters = eCompositionBasedStats;
-        break;
-    case '2':
-        ErrPostEx(SEV_WARNING, 1, 0, "the -t 2 argument "
-                  "is currently experimental\n");
-        options->tweak_parameters = eCompositionMatrixAdjust;
         break;
     case '3':
         ErrPostEx(SEV_WARNING, 1, 0, "the -t 3 argument "
@@ -1919,11 +1923,14 @@ Int2 Main (void)
                                !bop->options->gapped_calculation, thisPassNum,
                                "No hits found", search->mask);
                 } else {
-                    iterp = BXMLBuildOneIteration(head, other_returns,
+                    BlastPruneSapStructPtr prune =
+                        BlastPruneHitsFromSeqAlign(head, bop->number_of_alignments, NULL);
+                    iterp = BXMLBuildOneIteration(prune->sap, other_returns,
                                bop->options->is_ooframe,
                                !bop->options->gapped_calculation, thisPassNum,
                                (search->posConverged ? "CONVERGED" : NULL), 
                                search->mask);
+                    prune = BlastPruneSapStructDestruct(prune);
                 }
                 
                 IterationAsnWrite(iterp, psixp->aip, psixp->atp);

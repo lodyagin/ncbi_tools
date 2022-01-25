@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/5/97
 *
-* $Revision: 6.94 $
+* $Revision: 6.98 $
 *
 * File Description: 
 *
@@ -48,6 +48,7 @@
 #include <asn2gnbi.h>
 #include <tofasta.h>
 #include <explore.h>
+#include <subutil.h>
 
 static ParData ffParFmt = {FALSE, FALSE, FALSE, FALSE, TRUE, 0, 0};
 static ColData ffColFmt = {0, 0, 80, 0, NULL, 'l', FALSE, FALSE, FALSE, FALSE, TRUE};
@@ -548,24 +549,73 @@ static Uint2 MatchItemInFlatFile (Uint2 entityID, Uint4 itemID, CharPtr str,
   return ms.editItemID;
 }
 
+static CharPtr google_earth_1 =
+  "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" \
+  "<kml xmlns=\"http://earth.google.com/kml/2.2\">\n" \
+  "<Document>\n" \
+  "  <name>KmlFile</name>\n" \
+  "  <StyleMap id=\"default_copy0+nicon=http://maps.google.com/mapfiles/kml/pal3/icon60.png+hicon=http://maps.google.com/mapfiles/kml/pal3/icon52.png\">\n" \
+  "    <Pair>\n" \
+  "      <key>normal</key>\n" \
+  "      <styleUrl>#default_copy0+icon=http://maps.google.com/mapfiles/kml/pal3/icon60.png</styleUrl>\n" \
+  "    </Pair>\n" \
+  "    <Pair>\n" \
+  "      <key>highlight</key>\n" \
+  "      <styleUrl>#default_copy0+icon=http://maps.google.com/mapfiles/kml/pal3/icon52.png</styleUrl>\n" \
+  "    </Pair>\n" \
+  "  </StyleMap>\n" \
+  "  <Style id=\"default_copy0+icon=http://maps.google.com/mapfiles/kml/pal3/icon60.png\">\n" \
+  "    <IconStyle>\n" \
+  "      <Icon>\n" \
+  "        <href>http://maps.google.com/mapfiles/kml/pal3/icon60.png</href>\n" \
+  "      </Icon>\n" \
+  "    </IconStyle>\n" \
+  "  </Style>\n" \
+  "  <Placemark>\n";
+
+static CharPtr google_earth_2 =
+  "    <styleUrl>#default_copy0+nicon=http://maps.google.com/mapfiles/kml/pal3/icon60.png+hicon=http://maps.google.com/mapfiles/kml/pal3/icon52.png</styleUrl>\n" \
+  "    <Point>\n";
+
+static CharPtr google_earth_3 =
+  "    </Point>\n" \
+  "  </Placemark>\n" \
+  "</Document>\n" \
+  "</kml>\n";
+
 static void ReleaseIcon (DoC d, PoinT pt)
 
 {
-  BioseqViewPtr  bvp;
-  Char           ch;
-  CharPtr        dst;
-  Uint4          editItemID;
-  Uint2          entityID;
-  Int2           handled;
-  Int2           item;
-  Uint4          itemID;
-  Uint2          itemtype;
-  Int2           row;
-  SeqEntryPtr    sep;
-  Boolean        slashgene;
-  Boolean        slashproduct;
-  CharPtr        src;
-  CharPtr        str;
+  BioSourcePtr       biop;
+  BioseqViewPtr      bvp;
+  Char               ch;
+  SeqMgrDescContext  context;
+  CharPtr            dst;
+  Uint4              editItemID;
+  Uint2              entityID;
+  Boolean            format_ok = FALSE;
+  FILE               *fp;
+  Int2               handled;
+  Int2               item;
+  Uint4              itemID;
+  Uint2              itemtype;
+  FloatHi            lat = 0.0;
+  FloatHi            lon = 0.0;
+  CharPtr            lat_lon = NULL;
+  Boolean            lat_in_range = FALSE;
+  Boolean            lon_in_range = FALSE;
+  Char               path [PATH_MAX];
+  Int2               row;
+  SeqDescPtr         sdp;
+  SeqEntryPtr        sep;
+  Boolean            slashgene;
+  Boolean            slashproduct;
+  CharPtr            src;
+  SubSourcePtr       ssp;
+  CharPtr            str;
+#ifdef OS_UNIX
+  Char               cmmd [256];
+#endif
 
   bvp = (BioseqViewPtr) GetObjectExtra (d);
   if (bvp == NULL) return;
@@ -573,6 +623,56 @@ static void ReleaseIcon (DoC d, PoinT pt)
   if (row != 0 && item != 0 && item == bvp->itemClicked) {
     if (GetIDsFromDoc (d, item, &entityID, &itemID, &itemtype)) {
       if (bvp->wasDoubleClick) {
+
+        if (bvp->wasShiftKey) {
+          if (itemtype == OBJ_SEQDESC) {
+            sdp = SeqMgrGetDesiredDescriptor (entityID, NULL, itemID, 0, NULL, &context);
+            if (sdp != NULL && sdp->choice == Seq_descr_source) {
+              biop = (BioSourcePtr) sdp->data.ptrvalue;
+              if (biop != NULL) {
+                for (ssp = biop->subtype; ssp != NULL; ssp = ssp->next) {
+                  if (ssp->subtype != SUBSRC_lat_lon) continue;
+                  lat_lon = ssp->name;
+                  if (StringHasNoText (lat_lon)) continue;
+                  IsCorrectLatLonFormat (lat_lon, &format_ok, &lat_in_range, &lon_in_range);
+                  if (! format_ok) continue;
+                  if (! lat_in_range) continue;
+                  if (! lon_in_range) continue;
+                  if (! ParseLatLon (lat_lon, &lat, &lon)) continue;
+                  TmpNam (path);
+                  /* write to original temp file, so next temp file name will not collide */
+                  fp = FileOpen (path, "w");
+                  if (fp != NULL) {
+                    fprintf (fp, "\n");
+                    FileClose (fp);
+                    RememberSqnTempFile (path);
+                  }
+                  /* now append .kml extension so proper application is launched */
+                  StringCat (path, ".kml");
+                  fp = FileOpen (path, "w");
+                  if (fp != NULL) {
+                    fprintf (fp, "%s", google_earth_1);
+                    fprintf (fp, "    <name>%s</name>\n", lat_lon);
+                    fprintf (fp, "%s", google_earth_2);
+                    fprintf (fp, "      <coordinates>%lf,%lf</coordinates>\n", (double) lon, (double) lat);
+                    fprintf (fp, "%s", google_earth_3);
+                    FileClose (fp);
+                    RememberSqnTempFile (path);
+#ifdef OS_UNIX
+                    sprintf (cmmd, "open %s", path);
+                    system (cmmd);
+#endif
+#ifdef WIN_MSWIN
+                    Nlm_MSWin_OpenDocument (path);
+#endif
+                  }
+                  return;
+                }
+              }
+            }
+          }
+        }
+
         sep = GetTopSeqEntryForEntityID (entityID);
         if (bvp->launchSubviewers) {
           WatchCursor ();

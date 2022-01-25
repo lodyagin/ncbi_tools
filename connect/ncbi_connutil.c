@@ -1,4 +1,4 @@
-/*  $Id: ncbi_connutil.c,v 6.115 2007/04/05 12:26:02 kazimird Exp $
+/*  $Id: ncbi_connutil.c,v 6.119 2008/02/13 20:25:42 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -26,7 +26,7 @@
  * Author:  Denis Vakatov, Anton Lavrentiev
  *
  * File Description:
- *   Auxiliary API, mostly CONN-, URL-/BASE64-, and MIME-related
+ *   Auxiliary API, mostly CONN-, URL-, and MIME-related
  *   (see in "ncbi_connutil.h" for more details).
  *
  */
@@ -37,6 +37,8 @@
 #include <ctype.h>
 #include <errno.h>
 #include <stdlib.h>
+
+#define NCBI_USE_ERRCODE_X   Connect_Util
 
 
 extern const char* ConnNetInfo_GetValue(const char* service, const char* param,
@@ -68,7 +70,7 @@ extern const char* ConnNetInfo_GetValue(const char* service, const char* param,
         s += sizeof(DEF_CONN_REG_SECTION) - 1;
         *s++ = '_';
         memcpy(s, param, plen);
-        if ((val = getenv(strupr(buf))) != 0)
+        if ((val = getenv(buf)) != 0  ||  (val = getenv(strupr(buf))) != 0)
             return strncpy0(value, val, value_size - 1);
 
         /* Next, search for 'CONN_param' in '[service]' registry section */
@@ -268,8 +270,8 @@ extern int/*bool*/ ConnNetInfo_AdjustForHttpProxy(SConnNetInfo* info)
         return 0/*false*/;
 
     if (strlen(info->host) + 16 + strlen(info->path) >= sizeof(info->path)) {
-        CORE_LOG(eLOG_Error,
-                 "[ConnNetInfo_AdjustForHttpProxy]  Adjusted path too long");
+        CORE_LOG_X(1, eLOG_Error,
+                   "[ConnNetInfo_AdjustForHttpProxy]  Adjusted path too long");
         assert(0);
         return 0/*false*/;
     }
@@ -715,15 +717,20 @@ static int/*bool*/ s_IsSufficientAddress(const char* addr)
 }
 
 
-static const char* s_ClientAddress(const char* client_host, int/*bool*/ local)
+static const char* s_ClientAddress(const char* client_host,
+                                   int/*bool*/ local_host)
 {
+    const char* c = client_host;
     unsigned int ip;
-    char addr[64];
+    char addr[80];
     char* s;
 
     assert(client_host);
+    strncpy0(addr, client_host, sizeof(addr) - 1);
+    if (UTIL_NcbiLocalHostName(addr)  &&  (s = strdup(addr)) != 0)
+        client_host = s;
     if (s_IsSufficientAddress(client_host)                          ||
-        !(ip = *client_host  &&  !local
+        !(ip = *client_host  &&  !local_host
           ? SOCK_gethostbyname(client_host)
           : SOCK_GetLocalHostAddress(eDefault))                     ||
         SOCK_ntoa(ip, addr, sizeof(addr)) != 0                      ||
@@ -731,6 +738,8 @@ static const char* s_ClientAddress(const char* client_host, int/*bool*/ local)
         return client_host;
     }
     sprintf(s, "%s(%s)", client_host, addr);
+    if (c != client_host)
+        free((void*) client_host);
     return s;
 }
 
@@ -740,7 +749,7 @@ extern int/*bool*/ ConnNetInfo_SetupStandardArgs(SConnNetInfo* info)
     static const char service[]  = "service";
     static const char address[]  = "address";
     static const char platform[] = "platform";
-    int/*bool*/ local;
+    int/*bool*/ local_host;
     const char* arch;
     const char* addr;
 
@@ -755,12 +764,12 @@ extern int/*bool*/ ConnNetInfo_SetupStandardArgs(SConnNetInfo* info)
         ConnNetInfo_DeleteArg(info, platform);
     else
         ConnNetInfo_PreOverrideArg(info, platform, arch);
-    local = !info->client_host[0];
-    if (local  &&
+    local_host = !info->client_host[0];
+    if (local_host  &&
         !SOCK_gethostbyaddr(0, info->client_host, sizeof(info->client_host))) {
         SOCK_gethostname(info->client_host, sizeof(info->client_host));
     }
-    if (!(addr = s_ClientAddress(info->client_host, local))  ||  !*addr)
+    if (!(addr = s_ClientAddress(info->client_host, local_host))  ||  !*addr)
         ConnNetInfo_DeleteArg(info, address);
     else
         ConnNetInfo_PreOverrideArg(info, address, addr);
@@ -823,7 +832,8 @@ extern void ConnNetInfo_Log(const SConnNetInfo* info, LOG lg)
         return;
 
     if (!info) {
-        LOG_Write(lg, eLOG_Trace, 0, 0, 0, "ConnNetInfo_Log: NULL info");
+        LOG_Write(lg, NCBI_C_ERRCODE_X, 10, eLOG_Trace, 0, 0, 0,
+                  "ConnNetInfo_Log: NULL info");
         return;
     }
 
@@ -833,7 +843,8 @@ extern void ConnNetInfo_Log(const SConnNetInfo* info, LOG lg)
                               ? strlen(info->http_user_header) : 0) +
                              (info->http_referer
                               ? strlen(info->http_referer) : 0)))) {
-        LOG_WRITE(lg, eLOG_Error, "ConnNetInfo_Log: Cannot alloc temp buffer");
+        LOG_WRITE(lg, NCBI_C_ERRCODE_X, 11, eLOG_Error,
+                  "ConnNetInfo_Log: Cannot alloc temp buffer");
         return;
     }
 
@@ -881,7 +892,7 @@ extern void ConnNetInfo_Log(const SConnNetInfo* info, LOG lg)
     s_SaveBool      (s, "proxy_adjusted",  info->http_proxy_adjusted);
     strcat(s, "#################### [END] SConnNetInfo\n");
 
-    LOG_Write(lg, eLOG_Trace, 0, 0, 0, s);
+    LOG_Write(lg, NCBI_C_ERRCODE_X, 12, eLOG_Trace, 0, 0, 0, s);
     free(s);
 }
 
@@ -935,7 +946,7 @@ extern SOCK URL_Connect
     /* check the args */
     if (!host  ||  !*host  ||  !port  ||
         (user_hdr  &&  *user_hdr  &&  user_hdr[user_hdr_len - 1] != '\n')) {
-        CORE_LOG(eLOG_Error, "[URL_Connect]  Bad arguments");
+        CORE_LOG_X(2, eLOG_Error, "[URL_Connect]  Bad arguments");
         assert(0);
         return 0/*error*/;
     }
@@ -944,8 +955,8 @@ extern SOCK URL_Connect
     if (req_method == eReqMethod_Any) {
         req_method = content_length ? eReqMethod_Post : eReqMethod_Get;
     } else if (req_method == eReqMethod_Get  &&  content_length) {
-        CORE_LOG(eLOG_Warning,
-                 "[URL_Connect]  Content length ignored with method GET");
+        CORE_LOG_X(3, eLOG_Warning,
+                   "[URL_Connect]  Content length ignored with method GET");
         content_length = 0;
     }
     switch (req_method) {
@@ -956,8 +967,9 @@ extern SOCK URL_Connect
         x_req_r = "GET ";
         break;
     default:
-        CORE_LOGF(eLOG_Error, ("[URL_Connect]  Unrecognized request method"
-                               " (%d)", (int) req_method));
+        CORE_LOGF_X(4, eLOG_Error,
+                    ("[URL_Connect]  Unrecognized request method (%d)",
+                     (int) req_method));
         assert(0);
         return 0/*error*/;
     }
@@ -1007,9 +1019,10 @@ extern SOCK URL_Connect
               !BUF_Write(&buf, buffer, strlen(buffer))))      ||
 
         !BUF_Write(&buf, "\r\n", 2)) {
-        CORE_LOGF(eLOG_Error, ("[URL_Connect]  Error composing HTTP header for"
-                               " %s:%hu%s%s", host, port, errno ? ": " : "",
-                               errno ? strerror(errno) : ""));
+        CORE_LOGF_X(5, eLOG_Error,
+                    ("[URL_Connect]  Error composing HTTP header for"
+                     " %s:%hu%s%s", host, port, errno ? ": " : "",
+                     errno ? strerror(errno) : ""));
         BUF_Destroy(buf);
         if (x_args  &&  x_args != args)
             free((void*) x_args);
@@ -1020,9 +1033,10 @@ extern SOCK URL_Connect
 
     if (!(header = (char*) malloc(headersize = BUF_Size(buf))) ||
         BUF_Read(buf, header, headersize) != headersize) {
-        CORE_LOGF(eLOG_Error, ("[URL_Connect]  Error storing HTTP header for"
-                               " %s:%hu: %s", host, port,
-                               errno ? strerror(errno) : "Unknown error"));
+        CORE_LOGF_X(6, eLOG_Error,
+                    ("[URL_Connect]  Error storing HTTP header for"
+                     " %s:%hu: %s", host, port,
+                     errno ? strerror(errno) : "Unknown error"));
         if (header)
             free(header);
         BUF_Destroy(buf);
@@ -1034,15 +1048,15 @@ extern SOCK URL_Connect
     st = SOCK_CreateEx(host, port, c_timeout, &sock, header, headersize, log);
     free(header);
     if (st != eIO_Success) {
-        CORE_LOGF(eLOG_Error,
-                  ("[URL_Connect]  Socket connect to %s:%hu failed: %s",
-                   host, port, IO_StatusStr(st)));
+        CORE_LOGF_X(7, eLOG_Error,
+                    ("[URL_Connect]  Socket connect to %s:%hu failed: %s",
+                     host, port, IO_StatusStr(st)));
         return 0/*error*/;
     }
 
     /* setup I/O timeout for the connection */
     if (SOCK_SetTimeout(sock, eIO_ReadWrite, rw_timeout) != eIO_Success) {
-        CORE_LOG(eLOG_Error, "[URL_Connect]  Cannot set connection timeout");
+        CORE_LOG_X(8, eLOG_Error, "[URL_Connect]  Cannot set connection timeout");
         SOCK_Close(sock);
         return 0/*error*/;
     }
@@ -1258,7 +1272,7 @@ extern EIO_Status BUF_StripToPattern
 
 
 /****************************************************************************
- * URL- and BASE64- Encoding/Decoding
+ * URL- Encoding/Decoding
  */
 
 
@@ -1416,178 +1430,6 @@ extern void URL_Encode
     assert(src == (unsigned char*) src_buf + *src_read   );
     assert(dst == (unsigned char*) dst_buf + *dst_written);
 }
-
-
-extern void BASE64_Encode
-(const void* src_buf,
- size_t      src_size,
- size_t*     src_read,
- void*       dst_buf,
- size_t      dst_size,
- size_t*     dst_written,
- size_t*     line_len)
-{
-    static const char syms[] =
-        "ABCDEFGHIJKLMNOPQRSTUVWXYZ" /*26*/
-        "abcdefghijklmnopqrstuvwxyz" /*52*/
-        "0123456789+/";              /*64*/
-    const size_t max_len = line_len ? *line_len : 76;
-    const size_t max_src =
-        ((dst_size - (max_len ? dst_size/(max_len + 1) : 0)) >> 2) * 3;
-    unsigned char* src = (unsigned char*) src_buf;
-    unsigned char* dst = (unsigned char*) dst_buf;
-    size_t len = 0, i = 0, j = 0;
-    unsigned char temp = 0, c;
-    unsigned char shift = 2;
-    if (!max_src  ||  !src_size) {
-        *src_read    = 0;
-        *dst_written = 0;
-        if (dst_size > 0) {
-            *dst = '\0';
-        }
-        return;
-    }
-    if (src_size > max_src) {
-        src_size = max_src;
-    }
-    c = src[0];
-    for (;;) {
-        unsigned char bits = (c >> shift) & 0x3F;
-        if (max_len  &&  len >= max_len) {
-            dst[j++] = '\n';
-            len = 0;
-        }
-        assert((size_t)(temp | bits) < sizeof(syms) - 1);
-        dst[j++] = syms[temp | bits];
-        len++;
-        if (i >= src_size) {
-            break;
-        }
-        shift += 2;
-        shift &= 7;
-        temp = (c << (8 - shift)) & 0x3F;
-        if (shift) {
-            c = ++i < src_size ? src[i] : 0;
-        } else if (i + 1 == src_size) {
-            i++;
-        }
-    }
-    assert(j <= dst_size);
-    *src_read = i;
-    for (i = 0; i < (3 - src_size % 3) % 3; i++) {
-        if (max_len  &&  len >= max_len) {
-            dst[j++] = '\n';
-            len = 0;
-        }
-        dst[j++] = '=';
-        len++;
-    }
-    assert(j <= dst_size);
-    *dst_written = j;
-    if (j < dst_size) {
-        dst[j] = '\0';
-    }
-}
-
-
-extern int/*bool*/ BASE64_Decode
-(const void* src_buf,
- size_t      src_size,
- size_t*     src_read,
- void*       dst_buf,
- size_t      dst_size,
- size_t*     dst_written)
-{
-    unsigned char* src = (unsigned char*) src_buf;
-    unsigned char* dst = (unsigned char*) dst_buf;
-    size_t i = 0, j = 0, k = 0, l;
-    unsigned int temp = 0;
-    if (src_size < 4  ||  dst_size < 3) {
-        *src_read    = 0;
-        *dst_written = 0;
-        return 0/*false*/;
-    }
-    for (;;) {
-        int/*bool*/  ok = i < src_size ? 1/*true*/ : 0/*false*/;
-        unsigned char c = ok ? src[i++] : '=';
-        if (c == '=') {
-            c  = 64; /*end*/
-        } else if (c >= 'A'  &&  c <= 'Z') {
-            c -= 'A';
-        } else if (c >= 'a'  &&  c <= 'z') {
-            c -= 'a' - 26;
-        } else if (c >= '0'  &&  c <= '9') {
-            c -= '0' - 52;
-        } else if (c == '+') {
-            c  = 62;
-        } else if (c == '/') {
-            c  = 63;
-        } else {
-            continue;
-        }
-        temp <<= 6;
-        temp  |= c & 0x3F;
-        if (!(++k & 3)  ||  c == 64) {
-            if (c == 64) {
-                if (k < 2) {
-                    if (ok) {
-                        /* pushback leading '=' */
-                        --i;
-                    }
-                    break;
-                }
-                switch (k) {
-                case 2:
-                    temp >>= 4;
-                    break;
-                case 3:
-                    temp >>= 10;
-                    break;
-                case 4:
-                    temp >>= 8;
-                    break;
-                default:
-                    assert(0);
-                    break;
-                }
-                l = 4 - k;
-                while (l > 0) {
-                    /* eat up '='-padding */
-                    if (i >= src_size)
-                        break;
-                    if (src[i] == '=')
-                        l--;
-                    else if (src[i] != '\r'  &&  src[i] != '\n')
-                        break;
-                    i++;
-                }
-            } else {
-                k = 0;
-            }
-            switch (k) {
-            case 0:
-                dst[j++] = (temp & 0xFF0000) >> 16;
-                /*FALLTHRU*/;
-            case 4:
-                dst[j++] = (temp & 0xFF00) >> 8;
-                /*FALLTHRU*/
-            case 3:
-                dst[j++] = (temp & 0xFF);
-                break;
-            default:
-                break;
-            }
-            if (j + 3 >= dst_size  ||  c == 64) {
-                break;
-            }
-            temp = 0;
-        }
-    }
-    *src_read    = i;
-    *dst_written = j;
-    return i  &&  j ? 1/*true*/ : 0/*false*/;
-}
-
 
 
 /****************************************************************************

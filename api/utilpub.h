@@ -60,6 +60,8 @@ NLM_EXTERN ValNodePtr OrganizePubList PROTO((ValNodePtr vnp));
 
 NLM_EXTERN void cleanup_pub PROTO((ValNodePtr pub));
 
+NLM_EXTERN Boolean empty_citgen PROTO((CitGenPtr  cit));
+
 NLM_EXTERN void EntryStripSerialNumber PROTO((SeqEntryPtr sep));
 
 NLM_EXTERN void VnpHeapSort PROTO ((ValNodePtr PNTR vnp, int (LIBCALLBACK *compar )PROTO ((Nlm_VoidPtr, Nlm_VoidPtr ))));	

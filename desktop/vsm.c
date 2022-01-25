@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11-29-94
 *
-* $Revision: 6.31 $
+* $Revision: 6.37 $
 *
 * File Description: 
 *
@@ -561,6 +561,35 @@ Boolean LIBCALL VSMAddToMenu (MenU m, Int2 menutype)
 	return TRUE;
 }
 
+NLM_EXTERN Boolean OkToListFeatDefInRemainingFeatures (Uint2 subtype)
+{
+  if (subtype != FEATDEF_PUB &&
+      subtype != FEATDEF_IMP &&
+      subtype != FEATDEF_Imp_CDS &&
+      subtype != FEATDEF_misc_RNA &&
+      subtype != FEATDEF_precursor_RNA &&
+      subtype != FEATDEF_mat_peptide &&
+      subtype != FEATDEF_sig_peptide &&
+      subtype != FEATDEF_transit_peptide &&
+      subtype != FEATDEF_source &&
+      subtype != FEATDEF_virion &&
+      subtype != FEATDEF_mutation &&
+      subtype != FEATDEF_allele &&
+      subtype != FEATDEF_site_ref &&
+      subtype != FEATDEF_old_sequence &&
+      subtype != FEATDEF_5clip &&
+      subtype != FEATDEF_3clip &&
+      subtype != FEATDEF_repeat_unit &&
+      subtype != FEATDEF_snRNA &&
+      subtype != FEATDEF_scRNA &&
+      subtype != FEATDEF_snoRNA &&
+      subtype != FEATDEF_gap) {
+    return TRUE;
+  } else {
+    return FALSE;
+  }
+}
+
 /*****************************************************************************
 *
 *   VSMAddMenu(WindoW w, Int2 menutype)
@@ -694,36 +723,22 @@ Boolean LIBCALL VSMAddMenu (WindoW w, Int2 menutype)
 						}
 					}
 				}
-                sub2 = SubMenu (sub, "Remaining Features");
-                fdp = NULL;
-                while ((fdp = FeatDefFindNext (fdp, &key, &label, 0, FALSE)) != NULL) {
-                  if (key != FEATDEF_BAD) {
-                    ompp = NULL;
-                    while ((ompp = ObjMgrProcFindNext (omp, proctype,
-				            omtp->datatype, 0, ompp)) != NULL) {
+        sub2 = SubMenu (sub, "Remaining Features");
+        fdp = NULL;
+        while ((fdp = FeatDefFindNext (fdp, &key, &label, 0, FALSE)) != NULL) {
+          if (key != FEATDEF_BAD) {
+            ompp = NULL;
+            while ((ompp = ObjMgrProcFindNext (omp, proctype,
+				                                        omtp->datatype, 0, ompp)) != NULL) {
 				      subtype = ompp->subinputtype;
-                      if (subtype == fdp->featdef_key &&
-                          subtype != FEATDEF_PUB &&
-                          subtype != FEATDEF_IMP &&
-                          subtype != FEATDEF_Imp_CDS &&
-                          subtype != FEATDEF_misc_RNA &&
-                          subtype != FEATDEF_precursor_RNA &&
-                          subtype != FEATDEF_mat_peptide &&
-                          subtype != FEATDEF_sig_peptide &&
-                          subtype != FEATDEF_transit_peptide &&
-                          subtype != FEATDEF_source &&
-                          subtype != FEATDEF_virion &&
-                          subtype != FEATDEF_mutation &&
-                          subtype != FEATDEF_allele &&
-                          subtype != FEATDEF_site_ref &&
-                          subtype != FEATDEF_gap) {
-                        i = CommandItem (sub2, ompp->proclabel, VSeqMgrStdMenuProc);
-                        SetObjectExtra(i, (VoidPtr)ompp, NULL);
-                        ctr++;
-                      }
-                    }
-                  }
-                }
+              if (subtype == fdp->featdef_key && OkToListFeatDefInRemainingFeatures (subtype)) {
+                i = CommandItem (sub2, ompp->proclabel, VSeqMgrStdMenuProc);
+                SetObjectExtra(i, (VoidPtr)ompp, NULL);
+                ctr++;
+              }
+            }
+          }
+        }
 			} else {
 				sub = SubMenu (m, omtp->label);
 				do
@@ -966,7 +981,7 @@ static Boolean IsSeqEntryInAlignment (SeqAlignPtr salp, SeqEntryPtr sep)
 
 static void FindAlignmentCallback (SeqAnnotPtr sap, Pointer userdata)
 {
-    WarnIfAlignmentPtr wiap;
+  WarnIfAlignmentPtr wiap;
 	SeqAlignPtr        salp;
 
 	if (sap == NULL || sap->type != 2 || userdata == NULL) {
@@ -974,10 +989,32 @@ static void FindAlignmentCallback (SeqAnnotPtr sap, Pointer userdata)
 	}
 	wiap = (WarnIfAlignmentPtr) userdata;
 	if (wiap->found) return;
-    salp = (SeqAlignPtr) sap->data;
+  salp = (SeqAlignPtr) sap->data;
 	if (salp == NULL) return;
 	wiap->found = IsSeqEntryInAlignment (salp, wiap->lookingfor);
 }
+
+
+static void RemoveSeqEntryFromAlignments (SeqEntryPtr topsep, SeqEntryPtr sep)
+{
+	BioseqPtr bsp;
+	BioseqSetPtr bssp;
+	Boolean found = FALSE;
+	SeqEntryPtr this_sep;
+
+	if (IS_Bioseq (sep)) {
+		bsp = (BioseqPtr) sep->data.ptrvalue;
+    RemoveSequenceFromAlignments (topsep, bsp->id);
+	} else if (IS_Bioseq_set (sep)) {
+		bssp = (BioseqSetPtr) sep->data.ptrvalue;
+		for (this_sep = bssp->seq_set;
+			this_sep != NULL && !found;
+			this_sep = this_sep->next) {
+      RemoveSeqEntryFromAlignments (topsep, this_sep);
+	  }
+	}
+}
+
 
 static void WarnIfAlignment (Uint2 type, Pointer ptr, Uint2 input_entityID)
 {
@@ -996,7 +1033,9 @@ static void WarnIfAlignment (Uint2 type, Pointer ptr, Uint2 input_entityID)
 
 	VisitAnnotsInSep (topsep, &wiad, FindAlignmentCallback);
 	if (wiad.found) {
-	    Message (MSG_OK, "Warning - this sequence is part of an alignment.");
+	  if (ANS_YES == Message (MSG_YN, "This sequence is part of an alignment.  Would you like to remove it from the alignment?")) {
+      RemoveSeqEntryFromAlignments (topsep, sep);
+    }
 	}
 }
 

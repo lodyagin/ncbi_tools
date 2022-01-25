@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.12 $
+* $Revision: 6.13 $
 *
 * File Description: 
 *       Vibrant button functions
@@ -38,108 +38,6 @@
 * --------------------------------------------------------------------------
 * Date     Name        Description of modification
 * -------  ----------  -----------------------------------------------------
-*
-*
-* $Log: vibbutns.c,v $
-* Revision 6.12  2007/05/01 22:01:30  kans
-* changes in preparation for supporing Quartz on Macintosh
-*
-* Revision 6.11  2006/09/14 19:18:28  ivanov
-* Rollback last changes. All missed defines added to corelib/ncbiwin.h.
-*
-* Revision 6.10  2006/09/14 18:05:45  ivanov
-* Fixed compilation errors on MS Windows
-*
-* Revision 6.9  2006/09/14 14:45:38  kans
-* changes for 64-bit Windows (GC) plus a few CodeWarrior complaints (JK)
-*
-* Revision 6.8  2004/01/20 23:34:38  sinyakov
-* [WIN_MSWIN]: fixed to display '&' character in button text
-*
-* Revision 6.7  2002/03/07 19:18:21  kans
-* check box wid += 4 for Aqua
-*
-* Revision 6.6  2002/02/05 14:02:28  kans
-* adjust push button margins in Mac OS X Aqua
-*
-* Revision 6.5  2002/01/09 23:22:02  juran
-* Make buttons wider in Aqua.
-*
-* Revision 6.4  2000/02/07 20:17:35  lewisg
-* minor bug fixes, use gui font for win32
-*
-* Revision 6.3  1999/10/19 12:48:19  thiessen
-* minor hack to Nlm_RemoveDefaultButton to allow Cn3D to run under RH linux 6 with Lesstif library
-*
-* Revision 6.2  1997/12/12 21:08:28  kans
-* a number of symbols changed in the latest CodeWarrior release, now using headers from Apple
-*
-* Revision 6.1  1997/11/26 21:30:11  vakatov
-* Fixed errors and warnings issued by C and C++ (GNU and Sun) compilers
-*
-* Revision 6.0  1997/08/25 18:56:47  madden
-* Revision changed to 6.0
-*
-* Revision 5.6  1997/08/18 14:47:30  vakatov
-* [WIN_MOTIF]  Minor fix: Push/DefaultButton position adjustment
-*
-* Revision 5.5  1997/04/25 16:14:38  vakatov
-* [WIN_MOTIF,WIN_MSWIN] Catch and render(DoSendFocus) navigation key events
-*
- * Revision 5.4  1997/01/29  16:41:22  kans
- * using StringNCpy_0
- *
- * Revision 5.3  1996/07/03  18:55:16  vakatov
- * [WIN-MOTIF]  Let the MOTIF calculate the button's initial size automatically
- * (i.e. according to the MOTIF internal rules) rather than try to calculate
- * the button size using a vague guess on the used font size and the title length
- *
- * Revision 5.2  1996/06/11  16:06:10  vakatov
- * [WIN_MOTIF]  PushButton location/sizing adjustment
- *
- * Revision 5.1  1996/06/07  21:53:28  vakatov
- * [WIN_MOTIF] Default-/Push- buttons size alignment;  DefaultButton is not
- * mandatory the first button in the group
- *
- * Revision 5.0  1996/05/28  13:45:08  ostell
- * Set to revision 5.0
- *
- * Revision 4.8  1996/05/20  21:33:39  vakatov
- * [WIN_MOTIF]  All "Widget" / "NULL" comparisons and assignments replaced
- * by the "Widget" / "(Widget)0" these
- *
- * Revision 4.7  1996/05/06  19:20:51  vakatov
- * [WIN_MOTIF]  Nlm_SetButtonPosition() -- additional adjustment
- *
- * Revision 4.6  1996/05/06  19:06:07  kans
- * ifdef motif and prototype needed for newest functions
- *
- * Revision 4.5  1996/05/06  18:27:20  vakatov
- * Nlm_RemoveDefaultButton() corrected (set default button to NULL);
- * Nlm_SetButtonDefault() added to allow change button's "defaultBtn" flag;
- * [WIN_MOTIF] Nlm_PendingDefButton() trick-function added to avoid a strange
- * PushButton/DefaultButton size interference
- *
- * Revision 4.4  1996/04/30  21:50:03  vakatov
- * Since now push-buttons belonging to a group containing default button
- * have of the same size as if they were belonging to a group without a
- * default button (WIN_MOTIF feature only)
- *
- * Revision 4.3  1996/03/02  22:36:38  kans
- * reduction of X traffic (DV)
- *
- * Revision 4.2  1996/02/13  17:24:07  kans
- * accelerated set position prior to realization (Denis Vakatov)
- *
- * Revision 4.1  1995/12/25  16:03:50  kans
- * removed offset parameter for Motif push buttons
- *
- * Revision 4.0  1995/07/26  13:51:04  ostell
- * force revision to 4.0
- *
- * Revision 2.13  1995/05/17  15:15:14  kans
- * added Log line
- *
 *
 * ==========================================================================
 */
@@ -513,9 +411,9 @@ static void Nlm_DrawDefault (Nlm_GraphiC b)
     Nlm_GetRect (b, &r);
     Nlm_InsetRect (&r, -4, -4);
     if (Nlm_RectInRgn (&r, Nlm_updateRgn)) {
-      PenSize (3, 3);
+      Nlm_SetPenWidth (3);
       Nlm_FrameRoundRect (&r, 16, 16);
-      PenNormal ();
+      Nlm_SetPenWidth (1);
       c = Nlm_GetButtonHandle ((Nlm_ButtoN) b);
       Draw1Control (c);
     }

@@ -29,428 +29,13 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.73 $
+* $Revision: 6.75 $
 *
 * File Description:
 *       Vibrant miscellaneous functions
 *
 * Modifications:
 * --------------------------------------------------------------------------
-* $Log: vibutils.c,v $
-* Revision 6.73  2007/05/01 22:01:30  kans
-* changes in preparation for supporing Quartz on Macintosh
-*
-* Revision 6.72  2006/12/18 17:28:01  kans
-* include FullPath only if OS_UNIX_DARWIN not defined, i.e.,  CodeWarrior build for Mac OS 9
-*
-* Revision 6.71  2006/11/24 20:06:31  kans
-* include Carbon/Carbon.h if not MWERKS - attempting to simplify Xcode search paths
-*
-* Revision 6.70  2006/11/06 17:06:37  bollin
-* Turn off tooltips for Open File Dialog for Windows version - this prevents
-* a crash that was occurring when selecting files for opening or saving that
-* were located in the Desktop for Windows 2000.
-*
-* Revision 6.69  2005/11/08 19:38:55  bollin
-* don't translate the keypress for a backspace key into the NLM_BACK character -
-* windows will also send a WM_CHAR message with the NLM_BACK character in it.
-* Nlm_KeydownToChar should only be used for keypresses that don't issue WM_CHAR
-* messages, otherwise the keyproc function will be called twice for a single
-* keypress
-*
-* Revision 6.68  2005/09/23 20:30:10  kans
-* added NLM_BACK for backspace key, which is separate from delete, even though the label may be the same on a keyboard
-*
-* Revision 6.67  2005/09/14 18:34:22  kans
-* protect against VibMessageHook memory buffer allocation failure
-*
-* Revision 6.66  2005/07/18 15:15:18  kans
-* fixed minor xcode compiler warnings
-*
-* Revision 6.65  2005/04/29 15:12:05  kans
-* removed unused variable in WIN version of Nlm_GetOutputFileName
-*
-* Revision 6.64  2005/04/19 14:52:23  rsmith
-* handle unix style paths in Nlm_SendOpenDocAppleEventEx
-*
-* Revision 6.63  2004/05/28 20:10:32  sinyakov
-* WIN_MSWIN: by Yoon Choi:
-* Modified Nlm_GetOutputFileName to use Nlm_FileLengthEx instead
-* of Nlm-FileOpen/Nlm_FileClose to determine whether file exists or
-* not.  The old way popped up an info box when it did not find an
-* existing file.
-*
-* Revision 6.62  2004/05/04 16:34:23  shomrat
-* Remove file name restrictions for MSWIN
-*
-* Revision 6.61  2004/03/30 17:22:36  rsmith
-* Mac/Darwin (OSX) handle special case when converting an FSSpec to a path name when the file does not exist.
-*
-* Revision 6.60  2004/03/29 21:02:57  rsmith
-* use better system functions to convert FSSpec to a path on Darwin
-*
-* Revision 6.59  2004/02/24 16:51:13  sinyakov
-* [WIN_MSWIN] Nlm_GetInput/OutputFileName now use current working
-* directory as default (as Motif version does)
-*
-* Revision 6.58  2004/02/03 23:36:21  sinyakov
-* Nlm_CheckThisLevel(): call Nlm_GetNext() before calling Nlm_DoGainFocus()
-*
-* Revision 6.57  2003/11/17 17:03:30  kans
-* changed C++ style comments to C comments
-*
-* Revision 6.56  2003/11/07 16:06:58  rsmith
-* Changed Mac printing system calls from deprecated ones to modern ones primarily to ease building with precompiled headers.
-*
-* Revision 6.55  2003/05/05 12:38:07  rsmith
-* casts to make call to RegQueryValueEx safer in Nlm_GetExecPath. Needed by Codewarrior when compiling to Win32.
-*
-* Revision 6.54  2003/03/06 21:55:14  rsmith
-* for OS_UNIX_DARWIN update Nlm_LaunchAppEx and Nlm_SendURLAppleEvent to use new LaunchServices calls.
-*
-* Revision 6.53  2003/02/24 14:25:22  kans
-* undef PM_USE_SESSION_APIS if already defined, before redefining it
-*
-* Revision 6.52  2003/02/10 22:16:41  kans
-* MyNavTextFilterProc allows fdType of 0 for Darwin as well as TEXT
-*
-* Revision 6.51  2003/02/09 18:13:35  kans
-* Nlm_NavServGetInputFileName uses MyNavFilterProc for darwin even if TEXT requested, since not all desired files will have type set
-*
-* Revision 6.50  2003/01/24 20:55:43  rsmith
-* ConvertFilename now extern not static, renamed Nlm_* and only defined in vibutils.c
-*
-* Revision 6.49  2002/11/14 21:27:05  johnson
-* VibMonCreate no longer assigns focus to new window (on WIN_MOTIF)
-*
-* Revision 6.48  2002/10/28 02:47:56  kans
-* call PMPageSetupDialog for Carbon printing
-*
-* Revision 6.47  2002/06/25 18:51:42  kans
-* ConvertFilename puts null byte at str [fullPathLen]
-*
-* Revision 6.46  2002/06/17 16:12:05  kans
-* fix for full path on Darwin (EN)
-*
-* Revision 6.45  2002/06/13 16:15:13  kans
-* fix includes for OS_UNIX_DARWIN with WIN_MAC (EN) - still bug in vibutils.c file dialog
-*
-* Revision 6.44  2002/02/01 18:59:33  kans
-* ConvertFilename calls GetFullPath instead of FSMakePath
-*
-* Revision 6.43  2002/02/01 16:18:34  kans
-* if Carbon, call FSMakePath for input/output file name paths
-*
-* Revision 6.42  2002/01/31 19:01:44  kans
-* MyNavEventProc was deferencing NULL, crashed on Mac OS X (UNIX based), but not used anyway
-*
-* Revision 6.41  2001/11/01 14:25:53  kans
-* use times function for UNIX ComputerTime
-*
-* Revision 6.40  2001/05/17 17:52:34  juran
-* Implement Nlm_ClipPrintingRect() for Carbon.
-* General cleanup -- heed all warnings.
-*
-* Revision 6.39  2001/05/16 23:44:31  juran
-* Segregate Nlm_PrintingRect() into four functions, implement for Carbon.
-*
-* Revision 6.38  2001/05/14 20:36:46  juran
-* Refactor Mac scrap-thwapping code.
-*
-* Revision 6.37  2001/04/05 20:00:43  juran
-* Major Carbon changes.
-Most notably, we attempt to use the new Carbon Printing Manager under 
-Carbon, though this has not been tested.
-Pre-Carbon printing should work fine, though this has not been tested 
-either.
-*
-* Revision 6.36  2000/07/31 13:28:46  lewisg
-* Nlm_GetExecPath
-*
-* Revision 6.34  2000/07/25 19:18:36  lewisg
-* get pathname for executable on windows
-*
-* Revision 6.33  2000/07/14 22:28:59  lewisg
-* fix typo
-*
-* Revision 6.32  2000/07/14 20:30:41  kans
-* added Nlm_MSWin_OpenApplication (for launching Cn3D with a data file)
-*
-* Revision 6.31  2000/06/29 17:29:11  vakatov
-* [MSWIN]  Fixed printf format mismatches
-*
-* Revision 6.30  2000/02/23 16:21:55  kans
-* switched to Churchill fix for nav services file dialogs
-*
-* Revision 6.29  2000/02/22 16:47:59  kans
-* get input/output file name dialog accidentally failed for powerpc without nav services
-*
-* Revision 6.28  2000/01/07 00:22:47  thiessen
-* fixes for LessTif and OpenGL X visual selection
-*
-* Revision 6.27  1999/12/30 16:58:52  kans
-* Carbon changes - printing still not resolved (Churchill)
-*
-* Revision 6.26  1999/12/21 18:48:44  kans
-* rearranged mac get input/output filename functions, soon to expect nav services and to retire SFGetFile and SFPutFile as not Carbon compliant
-*
-* Revision 6.25  1999/08/23 19:36:39  vakatov
-* Nlm_VibMessageHook():  the error posting window should not disappear
-* momentarily on FATAL ERROR -- as we want user to see error message(s)
-*
-* Revision 6.24  1999/08/19 19:05:43  vakatov
-* Nlm_VibMessageHook():  always show the "caption" as a title
-*
-* Revision 6.23  1999/07/04 00:21:13  kans
-* Mac Navigation.h changes
-*
-* Revision 6.22  1999/03/21 18:44:05  kans
-* needed ampsersand before creatorType in MemSet
-*
-* Revision 6.19  1999/02/03 23:26:18  vakatov
-* Nlm_ProcessKeydown() to return "TRUE" when moving the input focus
-*
-* Revision 6.15  1999/01/13 20:49:37  vakatov
-* Nlm_Execv():  precations for the MT applications
-*
-* Revision 6.14  1999/01/13 18:03:24  kans
-* Nlm_Execv calls fork1 if SOLARIS_THREADS_AVAIL
-*
-* Revision 6.13  1999/01/11 18:59:05  kans
-* hidden Mac function Nlm_GetFileTypeAndCreator - did not solve MIME detection problem
-*
-* Revision 6.12  1999/01/07 22:32:38  kans
-* added Mac-specific Nlm_SendURLAppleEvent
-*
-* Revision 6.11  1999/01/06 20:13:00  kans
-* MyNavTextFilterProc for TEXT files
-*
-* Revision 6.10  1999/01/06 02:51:59  kans
-* support for Mac Navigation Services file selection dialogs
-*
-* Revision 6.9  1998/09/15 15:28:15  vakatov
-* [WIN_MSWIN]  GetOpen/SaveFileName():  removed OFN_NOCHANGEDIR flag
-*
-* Revision 6.8  1998/07/07 23:03:36  vakatov
-* Added Nlm_Execv() to spawn applications with cmd-line parameters;
-* now implemented for [OS_MSWIN, OS_UNIX].
-*
-* Revision 6.7  1998/03/27 14:01:57  kans
-* StrngPrintable on Mac now converts 015 from text object to newline for StringPrintable, then back to 015 to put in text
-*
-* Revision 6.6  1998/03/25 18:10:17  kans
-* VibMessageHook adds newline if post, on Mac it must be octal 15
-*
-* Revision 6.5  1998/03/22 03:01:04  kans
-* changed names to RegisterServiceProc and RegisterResultProc
-*
-* Revision 6.4  1998/03/22 02:33:22  kans
-* added request proc, result proc, message handlers to support, and send open doc event, launch app now work with file names or signatures
-*
-* Revision 6.3  1998/03/17 21:08:03  kans
-* added Nlm_SendOpenDocAppleEventEx, and private Nlm_LaunchAppEx
-*
-* Revision 6.2  1997/12/12 21:08:48  kans
-* a number of symbols changed in the latest CodeWarrior release, now using headers from Apple
-*
-* Revision 6.1  1997/11/26 21:30:47  vakatov
-* Fixed errors and warnings issued by C and C++ (GNU and Sun) compilers
-*
-* Revision 6.0  1997/08/25 18:57:53  madden
-* Revision changed to 6.0
-*
-* Revision 5.31  1997/08/25 16:43:04  vakatov
-* [WIN_MSWIN]  Nlm_StartPrinting() -- initialize unused DOCINFO fields
-* with 0(using sizeof(DOCINFO), thus avoid the use of preprocessor #ifdef
-*
-* Revision 5.30  1997/08/21 15:17:40  vakatov
-* [WIN_MSWIN]  Nlm_SetupPrinterDeviceContext() -- fixed Int2 overflow in
-* the display/printer scaling for 16-bit(Win16 and Win-95) SDK libraries
-*
-* Revision 5.29  1997/07/24 17:08:09  vakatov
-* [WIN_MOTIF]  Explicitly set visual, colormap and depth for FileDialog
-* rather than for its parent top-level shell
-*
-* Revision 5.28  1997/07/21 21:52:41  vakatov
-* [WIN_MOTIF] Added Nlm_[Un]RegisterIO() functions to wait for I/O
-* events and call(via X) user-defined callback(s)
-*
-* Revision 5.27  1997/07/16 20:09:52  vakatov
-* Added Nlm_StrngPrintable();  use that in Nlm_VibMessageHook() to
-* provide proper End-Of-Lines in the ScrolledText object
-*
-* Revision 5.26  1997/07/16 18:00:48  kans
-* VibMessageHook newline on Mac is 015
-*
-* Revision 5.25  1997/07/16 14:10:59  vakatov
-* [WIN_MAC] Nlm_VibMessageHook(KEY_NONE):  do not use '\r' before '\n'
-*
-* Revision 5.24  1997/07/15 17:13:48  vakatov
-* Nlm_VibMessageHook(KEY_NONE):  accumulate incoming messages in the
-* text object until the message box is(explicitly) closed by the user
-*
-* Revision 5.23  1997/07/15 12:24:07  kans
-* vibmessagehook len value increased
-*
-* Revision 5.22  1997/07/10 21:49:44  vakatov
-* [WIN_X]  Now able to manage windows having different depths(and
-* different visuals and GC).
-*
-* Revision 5.21  1997/06/23 22:14:18  vakatov
-* VibMessageHook() -- [key == KEY_NONE]  use scrolled text instead of
-* static prompt to provide printout of the whole message
-*
-* Revision 5.20  1997/05/27 21:55:32  vakatov
-* Use Nlm_PopupParentWindow() to avoid flicking on the message box pop-up
-*
-* Revision 5.19  1997/05/27 18:12:29  kans
-* use post message window if key_none, regardless of severity
-*
-* Revision 5.18  1997/05/19 21:48:11  vakatov
-* Do not deliver input focus to the [KEY_NONE,SEV_INFO] message box
-*
-* Revision 5.17  1997/04/28 14:05:39  vakatov
-* [WIN_MOTIF]  Replaced XK_Page_Up/Down(undef for SunOS X4) by XK_Prior/Next
-*
- * Revision 5.16  1997/04/25  16:10:42  vakatov
- * [WIN_MOTIF,WIN_MSWIN]  Added functions to catch, convert(to Mac keycodes)
- * and render navigation and special key events
- *
- * Revision 5.15  1997/04/10  20:23:54  kans
- * monitor only selects window to front on creation, not change value, to
- * allow user to work on other windows without constant focus change
- *
- * Revision 5.14  1997/04/04  22:37:11  vakatov
- * [WIN_MSWIN] In SetupPrinterDeviceContext(), set the window and viewport
- * extents with a more accurate way.
- *
- * Revision 5.13  1997/01/29  17:53:59  kans
- * minor changes due to StringNCpy_0 change
- *
- * Revision 5.12  1997/01/29  16:41:22  kans
- * using StringNCpy_0
- *
- * Revision 5.11  1997/01/16  21:59:20  vakatov
- * [WIN_MSWIN]  StartPicture() -- set picture origin coords(SetWindowOrgEx)
- *
- * Revision 5.10  1997/01/03  16:11:44  vakatov
- * Fixed inaccurate string copying -- <mostly potential> 1-byte exceeding of
- * the string size by StringNCat;  missing terminating '\0' by StringNCpy.
- *
- * Revision 5.9  1996/12/12  23:11:10  kans
- * added Nlm_ClipPrintingRect (DV)
- *
- * Revision 5.8  1996/12/04  19:54:20  vakatov
- * [WIN_MSWIN]  Nlm_CopyDefaultName():  fixed the cases resulting in "."
- *
- * Revision 5.7  1996/11/08  16:43:10  vakatov
- * Nlm_RemoveLink():  do not forget to re-assign "lastChild" when removing
- * the tailing link in the children list(...crash!).
- * Got rid of all compiler warnings.
- *
- * Revision 5.6  1996/10/28  21:21:51  vakatov
- * Nlm_CreateFileDialogShell():  colormap set to Nlm_VibrantDefaultColormap()
- *
- * Revision 5.5  1996/10/09  19:53:18  vakatov
- * [WIN_MOTIF]  Nlm_SelectMonitor() :  explicit call to XMapRaised() led to
- * a side effect causing X-error; -- now replaced by the call to Nlm_Select()
- *
- * Revision 5.4  1996/09/09  20:46:44  vakatov
- * [WIN_MSWIN]  GetOpen/SaveFileName():  added OFN_NOCHANGEDIR flag
- *
- * Revision 5.3  1996/08/30  18:44:09  kans
- * protect against NULL HandFree in SetTitle
- *
- * Revision 5.2  1996/07/05  16:27:45  kans
- * monitor now checks hasCancelBtn param in making cancel button
- *
- * Revision 5.1  1996/06/24  19:24:28  vakatov
- * [WIN_MOTIF]  Nlm_VibMessageHook() -- Set default buttons for the
- * pop-up messages
- *
- * Revision 5.0  1996/05/28  13:45:08  ostell
- * Set to revision 5.0
- *
- * Revision 4.17  1996/05/20  21:30:57  vakatov
- * [WIN_MOTIF]  All "Widget" / "NULL" comparisons and assignments replaced
- * by the "Widget" / "(Widget)0" these
- *
- * Revision 4.16  1996/05/03  21:03:43  kans
- * removed erroneous textscrapfull = FALSE lines
- *
- * Revision 4.15  1996/05/03  17:58:29  vakatov
- * [WIN_MSWIN only]  Check for the MS-Window version when operating with
- * the _DOCINFOA structure
- *
- * Revision 4.14  1996/04/24  21:22:39  vakatov
- * New function Nlm_WaitForXEvent( void ) added (for WIN_MOTIF only!)
- *
- * Revision 4.13  1996/03/02  22:36:38  kans
- * reduction of X traffic (DV)
- *
- * Revision 4.12  1996/02/21  19:46:19  kans
- * GetDriveType endif was in the wrong place
- *
- * Revision 4.11  1996/02/14  16:54:17  kans
- * hidden Nlm_GetDriveType function for entrezcf.c
- *
- * Revision 4.10  1996/02/13  19:49:04  kans
- * set realized calls get/set graphic data, because of gdata cache
- *
- * Revision 4.9  1996/02/13  17:24:07  kans
- * accelerated set position prior to realization (Denis Vakatov)
- *
- * Revision 4.8  1995/12/06  19:45:20  kans
- * removed ArrowCursor from Mac version of VibMessageHook
- *
- * Revision 4.7  1995/11/21  17:37:26  smirnov
- * Alex: Win95 printing problem
- *
- * Revision 4.6  1995/11/14  13:42:05  kans
- * fixes to FntGetFontStyle (VL)
- *
- * Revision 4.5  1995/11/08  23:30:31  kans
- * removed edit block fields, which belong in the application
- *
- * Revision 4.4  1995/10/06  16:46:51  epstein
- * break-out 'patient' modal-window loop into a new macro Nlm_WaitForCondition, and add function Nlm_FineGranularitySleep
- *
- * Revision 4.3  1995/09/12  17:59:35  ostell
- * fixes for MS windows text to metafile
- *
- * Revision 4.2  1995/08/29  18:19:09  kans
- * changes to clipboard functions under Motif (AS)
- *
- * Revision 4.1  1995/08/14  21:38:37  kans
- * removal of remaining C str... functions
- *
- * Revision 4.0  1995/07/26  13:51:04  ostell
- * force revision to 4.0
- *
- * Revision 2.80  1995/07/19  16:21:33  kans
- * fixed IRIX4 XmClipboardStartCopy complaint
- *
- * Revision 2.79  1995/07/17  22:02:19  kans
- * Motif clipboard cut and paste supported (AS)
- *
- * Revision 2.78  1995/07/05  14:23:19  kans
- * move #include <sys/select.h> to ncbilcl.r6k
- *
- * Revision 2.77  1995/06/08  15:46:15  kans
- * added special event loop to monitor functions for X responsiveness
- *
- * Revision 2.76  1995/06/07  20:14:13  kans
- * better performance of monitor, message loops
- *
- * Revision 2.75  1995/06/05  21:32:25  kans
- * added cancel button to progress monitor
- *
- * Revision 2.74  1995/05/31  18:00:58  kans
- * added SetColorMap (AS)
- *
- * Revision 2.73  1995/05/17  15:15:14  kans
- * added Log line
- *
 *
 * ==========================================================================
 */
@@ -3517,14 +3102,14 @@ extern void Nlm_RecTToRectTool (Nlm_RectPtr src, Nlm_RectTool PNTR dst)
 }
 
 #ifdef WIN_MAC_QUARTZ
-extern CGRect Nlm_RecTToCGRect(Nlm_RectPtr r)
+extern CGRect Nlm_RecTToCGRect(Nlm_RecT r)
 {
     CGRect cgr;
     
-    cgr.origin.x = r->left + 0.5f;
-    cgr.origin.y = r->top + 0.5;
-    cgr.size.width = r->right - r->left - 1.0f;
-    cgr.size.height = r->bottom - r->top - 1.0f;
+    cgr.origin.x = r.left;
+    cgr.origin.y = r.top;
+    cgr.size.width = r.right - r.left;
+    cgr.size.height = r.bottom - r.top;
     
     return cgr;
 }
@@ -3532,11 +3117,26 @@ extern CGRect Nlm_RecTToCGRect(Nlm_RectPtr r)
 extern Nlm_RecT Nlm_CGRectToRecT(CGRect cgr)
 {
     Nlm_RecT r;
-    r.left   = cgr.origin.x - 0.5f;
-    r.top    = cgr.origin.y - 0.5f;
-    r.right  = cgr.size.width  + cgr.origin.x + 1.0f;
-    r.bottom = cgr.size.height + cgr.origin.y + 1.0f; 
+    r.left   = cgr.origin.x;
+    r.top    = cgr.origin.y;
+    r.right  = cgr.size.width  + cgr.origin.x;
+    r.bottom = cgr.size.height + cgr.origin.y; 
     return r;
+}
+
+CGRect Nlm_RectQDToCG(Rect r)
+{
+    Nlm_RecT rt;
+    Nlm_RectToolToRecT (&r, &rt);
+    return Nlm_RecTToCGRect (rt);
+}
+
+Rect Nlm_RectCGToQD(CGRect r)
+{
+    Nlm_RecT rt = Nlm_CGRectToRecT (r);
+    Rect rq;
+    Nlm_RecTToRectTool (&rt, &rq);
+    return rq;
 }
 
 extern CGPoint Nlm_PoinTToCGPoint(Nlm_PoinT np)
@@ -3565,7 +3165,13 @@ extern void Nlm_LocalToGlobal (Nlm_PointPtr pt)
 
   if (pt != NULL) {
     Nlm_PoinTToPointTool (*pt, &ptool);
+#ifdef WIN_MAC_QUARTZ
+/* This function is deprecated on 10.4+ but there is no replacement
+   available until 10.5, so we have to use it anyway */
+    QDLocalToGlobalPoint (GetWindowPort(Nlm_GetQuartzCurrentWindow()), &ptool);
+#else
     LocalToGlobal (&ptool);
+#endif
     Nlm_PointToolToPoinT (ptool, pt);
   }
 #endif
@@ -3590,7 +3196,13 @@ extern void Nlm_GlobalToLocal (Nlm_PointPtr pt)
 
   if (pt != NULL) {
     Nlm_PoinTToPointTool (*pt, &ptool);
+#ifdef WIN_MAC_QUARTZ
+/* This function is deprecated on 10.4+ but there is no replacement
+   available until 10.5, so we have to use it anyway */
+    QDGlobalToLocalPoint (GetWindowPort(Nlm_GetQuartzCurrentWindow()), &ptool);
+#else
     GlobalToLocal (&ptool);
+#endif
     Nlm_PointToolToPoinT (ptool, pt);
   }
 #endif
@@ -3700,6 +3312,10 @@ extern HDC Nlm_GetPicWinHDC ( void )
 #endif
 
 
+#ifdef WIN_MAC_QUARTZ
+static CFMutableDataRef Nlm_PictureData = 0;
+#endif
+
 extern Nlm_WindoW Nlm_StartPicture (Nlm_RectPtr r)
 {
   Nlm_WindoW    w;
@@ -3712,8 +3328,19 @@ extern Nlm_WindoW Nlm_StartPicture (Nlm_RectPtr r)
     return w;
 
 #ifdef WIN_MAC
+#ifdef WIN_MAC_QUARTZ
+  CGRect cgr = CGRectMake (r->left, r->top, r->right - r->left, r->bottom - r->top);
+  Nlm_PictureData = CFDataCreateMutable (NULL, 0);
+  
+  CGDataConsumerRef consumer = CGDataConsumerCreateWithCFData (Nlm_PictureData);
+  CGContextRef ctx = CGPDFContextCreate (consumer, &cgr, NULL);
+  CGContextBeginPage (ctx, &cgr);
+  Nlm_PushPort (ctx);
+  CGDataConsumerRelease (consumer);
+#else
   Nlm_RecTToRectTool (r, &rtool);
   picHdl = OpenPicture (&rtool);
+#endif
 #endif
 #ifdef WIN_MSWIN
   picRect = *r;
@@ -3739,6 +3366,17 @@ extern void Nlm_EndPicture (Nlm_WindoW w)
 
 {
 #ifdef WIN_MAC
+#ifdef WIN_MAC_QUARTZ
+  CGContextRef ctx = Nlm_PopPort();
+  CGContextEndPage (ctx);
+  CGContextRelease (ctx);
+  
+  PasteboardRef pasteboard = 0;
+  PasteboardCreate (kPasteboardClipboard, &pasteboard);
+  PasteboardPutItemFlavor (pasteboard, (PasteboardItemID)1, CFSTR("com.adobe.pdf"), Nlm_PictureData, 0);
+  CFRelease (pasteboard);
+  CFRelease (Nlm_PictureData);
+#else
   long    len;
   PicPtr  picPtr;
 
@@ -3767,6 +3405,7 @@ extern void Nlm_EndPicture (Nlm_WindoW w)
     KillPicture (picHdl);
   }
   picHdl = NULL;
+#endif
 #endif
 #ifdef WIN_MSWIN
   GLOBALHANDLE    hGMem = NULL;
@@ -3842,6 +3481,21 @@ extern void Nlm_StringToClipboard (Nlm_CharPtr str)
 
 {
 #ifdef WIN_MAC
+#ifdef WIN_MAC_QUARTZ
+  PasteboardRef pasteboard = 0;
+  PasteboardCreate (kPasteboardClipboard, &pasteboard);
+  PasteboardClear (pasteboard);
+  
+  CFDataRef asciidata = CFDataCreate (NULL, (UInt8 *)str, (CFIndex)strlen (str));
+  CFStringRef cfstr = CFStringCreateFromExternalRepresentation (NULL, asciidata, kCFStringEncodingMacRoman);
+  CFDataRef data = CFStringCreateExternalRepresentation (NULL, cfstr, kCFStringEncodingUnicode, '?');
+  PasteboardPutItemFlavor (pasteboard, (PasteboardItemID)1, CFSTR("public.utf16-plain-text"), data, 0);
+  
+  CFRelease (data);
+  CFRelease (cfstr);
+  CFRelease (asciidata);
+  CFRelease (pasteboard);
+#else
   long    len;
   OSErr err;
 
@@ -3864,6 +3518,7 @@ extern void Nlm_StringToClipboard (Nlm_CharPtr str)
 # endif
     err = TEFromScrap ();
   }
+#endif
 #endif
 #ifdef WIN_MSWIN
   HGLOBAL  hMem;
@@ -3931,16 +3586,77 @@ extern void Nlm_StringToClipboard (Nlm_CharPtr str)
 #endif
 }
 
+#ifdef WIN_MAC_QUARTZ
+static CFDataRef Nlm_CopyClipboardTextData (void)
+{
+  PasteboardRef pasteboard = 0;
+  PasteboardCreate (kPasteboardClipboard, &pasteboard);
+  PasteboardSynchronize (pasteboard);
+  
+  ItemCount itemCount = 0;
+  PasteboardGetItemCount (pasteboard, &itemCount);
+  
+  CFDataRef flavorData = 0;
+  
+  UInt32 index;
+  for (index = 1; index <= itemCount && !flavorData; index++)
+  {
+    PasteboardItemID itemID = 0;
+    CFArrayRef flavorTypeArray = 0;
+    CFIndex flavorCount = 0;
+    
+    PasteboardGetItemIdentifier (pasteboard, index, &itemID);
+    PasteboardCopyItemFlavors (pasteboard, itemID, &flavorTypeArray);
+    flavorCount = CFArrayGetCount (flavorTypeArray);
+    CFIndex i;
+    for (i = 0; i < flavorCount; i++)
+    {
+      CFStringRef flavorType = (CFStringRef)CFArrayGetValueAtIndex (flavorTypeArray, i);
+      if (UTTypeConformsTo (flavorType, CFSTR("public.utf16-plain-text")))
+      {
+        PasteboardCopyItemFlavorData (pasteboard, itemID, flavorType, &flavorData);
+        break;
+      }
+    }
+  }
+  
+  if (flavorData)
+  {
+    CFStringRef cfstr = CFStringCreateFromExternalRepresentation (NULL, flavorData, kCFStringEncodingUnicode);
+    CFDataRef data = CFStringCreateExternalRepresentation (NULL, cfstr, kCFStringEncodingMacRoman, '?');
+    CFRelease (flavorData);
+    CFRelease (cfstr);
+    return data;
+  }
+  
+  return NULL;
+}
+#endif
+
 extern Nlm_Boolean Nlm_ClipboardHasString (void)
 
 {
 #ifdef WIN_MAC
+#ifdef WIN_MAC_QUARTZ
+  CFDataRef data = Nlm_CopyClipboardTextData();
+  if (data)
+    CFRelease (data);
+  return data != 0;
+#else
   long  len;
   OSErr err;
 
+# if TARGET_API_MAC_CARBON
+  OSStatus status;
+  ScrapRef scrap;
+  ScrapFlavorFlags flags = 0;
+  status = GetCurrentScrap(&scrap);
+  
   err = TEFromScrap();
   len = TEGetScrapLength();
   return (Nlm_Boolean) (len > 0);
+#endif
+#endif
 #endif
 
 #ifdef WIN_MSWIN
@@ -3980,6 +3696,18 @@ extern Nlm_CharPtr Nlm_ClipboardToString (void)
 
 {
 #ifdef WIN_MAC
+#ifdef WIN_MAC_QUARTZ
+  Nlm_CharPtr str = 0;
+  
+  CFDataRef data = Nlm_CopyClipboardTextData();
+  if (data)
+  {
+    str = Nlm_MemNew (CFDataGetLength (data));
+    CFDataGetBytes (data, CFRangeMake (0, CFDataGetLength (data)), (UInt8 *)str);
+    CFRelease (data);
+  }
+  return str;
+#else
   long         len;
   Nlm_CharPtr  str;
   Handle hdl;
@@ -4001,6 +3729,7 @@ extern Nlm_CharPtr Nlm_ClipboardToString (void)
     }
   }
   return str;
+#endif
 #endif
 #ifdef WIN_MSWIN
   HANDLE       hClip;
@@ -5890,7 +5619,7 @@ extern void Nlm_SendOpenDocAppleEventEx (Nlm_CharPtr datafile, Nlm_CharPtr sig, 
   AppleEvent theReply;
   OSType theSignature;
   AEDescList theList;
-  FSSpec fss;
+  CFURLRef cfurl;
   Nlm_Char  temp [256];
   ProcessSerialNumber  psn;
   Nlm_Boolean  okay = FALSE;
@@ -5920,20 +5649,11 @@ extern void Nlm_SendOpenDocAppleEventEx (Nlm_CharPtr datafile, Nlm_CharPtr sig, 
       if (theErr == noErr) {
         theErr = AECreateList(NULL, 0, FALSE, &theList);
         if (theErr == noErr) {
-          /*make fss from path */
-          if (datafile[0] == '/') {
-            FSRef fsref;
-            theErr = FSPathMakeRef((unsigned char *) datafile, &fsref, NULL);
-            if (theErr == noErr) {
-              theErr = FSGetCatalogInfo(&fsref, kFSCatInfoNone, NULL, NULL, &fss, NULL);
-            }
-          } else {
-            Nlm_StringNCpy_0(temp, datafile, sizeof(temp) - 1);
-            Nlm_CtoPstr ((Nlm_CharPtr) temp);
-            theErr = FSMakeFSSpec (0, 0, (ConstStr255Param) temp, &fss);
-          }
-          if (theErr == noErr) {
-            theErr = AECreateDesc(typeFSS, (Ptr)&fss, sizeof(fss), &docDesc);
+          cfurl = CFURLCreateFromFileSystemRepresentation (NULL, (const UInt8 *)datafile, strlen (datafile), 0);
+          if (cfurl) {
+            CFDataRef cfdata = CFURLCreateData (NULL, cfurl, kCFStringEncodingUTF8, 1);
+            theErr = AECreateDesc(typeFileURL, CFDataGetBytePtr (cfdata), CFDataGetLength (cfdata), &docDesc);
+            CFRelease (cfdata);
             if (theErr == noErr) {
               theErr = AEPutDesc(&theList, 0, &docDesc);
               if (theErr == noErr) {
@@ -5968,8 +5688,8 @@ extern void Nlm_SendURLAppleEvent (Nlm_CharPtr urlString, Nlm_CharPtr sig, Nlm_C
 
 {
 #ifdef OS_UNIX_DARWIN
-  OSStatus    err;
-  CFURLRef      urlRef;
+  OSStatus  err;
+  CFURLRef  urlRef;
   
   /* on OS X ignore the sig and prog and open the url with the default browser */
   urlRef = CFURLCreateWithBytes (NULL, (const UInt8 *) urlString, Nlm_StrLen( urlString),  kCFStringEncodingMacRoman, NULL);
@@ -6026,29 +5746,122 @@ extern void Nlm_SendURLAppleEvent (Nlm_CharPtr urlString, Nlm_CharPtr sig, Nlm_C
 #endif
 }
 
+
+/* Modified from http://developer.apple.com/qa/qa2001/qa1026.html */
+
+#if TARGET_API_MAC_CARBON 
+#ifdef __APPLE_CC__ 
+#include <Carbon/Carbon.h> 
+#else 
+#include <Carbon.h> 
+#endif 
+#else 
+#include <Types.h> 
+#include <OSA.h> 
+#include <AppleScript.h> 
+#endif 
+#include <string.h> 
+    /* LowRunAppleScript compiles and runs an AppleScript 
+    provided as text in the buffer pointed to by text.  textLength 
+    bytes will be compiled from this buffer and run as an AppleScript 
+    using all of the default environment and execution settings.  If 
+    resultData is not NULL, then the result returned by the execution 
+    command will be returned as typeChar in this descriptor record 
+    (or typeNull if there is no result information).  If the function 
+    returns errOSAScriptError, then resultData will be set to a 
+    descriptive error message describing the error (if one is 
+    available).  */ 
+
+static OSStatus LowRunAppleScript (
+  const void* text,
+  long textLength, 
+  AEDesc *resultData
+)
+
+{ 
+  ComponentInstance theComponent; 
+  AEDesc scriptTextDesc; 
+  OSStatus err; 
+  OSAID scriptID, resultID; 
+
+  /* set up locals to a known state */ 
+  theComponent = NULL; 
+  AECreateDesc (typeNull, NULL, 0, &scriptTextDesc); 
+  scriptID = kOSANullScript; 
+  resultID = kOSANullScript; 
+
+  /* open the scripting component */ 
+  theComponent = OpenDefaultComponent (kOSAComponentType, typeAppleScript); 
+  if (theComponent == NULL) {
+    err = paramErr;
+    goto bail;
+  } 
+
+  /* put the script text into an aedesc */ 
+  err = AECreateDesc (typeChar, text, textLength, &scriptTextDesc); 
+  if (err != noErr) goto bail; 
+
+  /* compile the script */ 
+  err = OSACompile (theComponent, &scriptTextDesc, kOSAModeNull, &scriptID); 
+  if (err != noErr) goto bail; 
+
+  /* run the script */ 
+  err = OSAExecute (theComponent, scriptID, kOSANullScript, kOSAModeNull, &resultID); 
+
+  /* collect the results - if any */ 
+  if (resultData != NULL) { 
+    AECreateDesc (typeNull, NULL, 0, resultData); 
+    if (err == errOSAScriptError) { 
+      OSAScriptError (theComponent, kOSAErrorMessage, typeChar, resultData); 
+    } else if (err == noErr && resultID != kOSANullScript) { 
+      OSADisplay (theComponent, resultID, typeChar, kOSAModeNull, resultData); 
+    } 
+  } 
+bail: 
+  AEDisposeDesc (&scriptTextDesc); 
+  if (scriptID != kOSANullScript) OSADispose (theComponent, scriptID); 
+  if (resultID != kOSANullScript) OSADispose (theComponent, resultID); 
+  if (theComponent != NULL) CloseComponent (theComponent); 
+  return err; 
+} 
+
+
+extern void Nlm_SendAppleScriptString (Nlm_CharPtr script)
+
+{
+  if (Nlm_StringHasNoText (script)) return;
+  LowRunAppleScript ((const char*) script, Nlm_StringLen (script), NULL); 
+} 
+
+
 extern void Nlm_GetFileTypeAndCreator (Nlm_CharPtr filename, Nlm_CharPtr type, Nlm_CharPtr creator);
 extern void Nlm_GetFileTypeAndCreator (Nlm_CharPtr filename, Nlm_CharPtr type, Nlm_CharPtr creator)
 {
-  OSType    fCreator;
-  Nlm_Int2  fError;
-  FInfo     fInfo;
-  OSType    fType;
-  Nlm_Char  temp [256];
-
-  if (type != NULL) {
-    *type = '\0';
-  }
-  if (creator != NULL) {
-    *creator = '\0';
-  }
-  Nlm_StringNCpy_0 (temp, filename, sizeof(temp));
-  Nlm_CtoPstr ((Nlm_CharPtr) temp);
-  fError = HGetFInfo ( 0, 0, (StringPtr) temp, &fInfo);
-  if (fError == 0) {
-    fType = fInfo.fdType;
-    fCreator = fInfo.fdCreator;
-    StringNCpy_0 (type, (Nlm_CharPtr) (&fType), 5);
-    StringNCpy_0 (creator, (Nlm_CharPtr) (&fCreator), 5);
+  OSStatus err;
+  
+  FSRef fsref;
+  err = FSPathMakeRef ((const UInt8 *)filename, &fsref, NULL);
+  if (err)
+    return;
+  
+  FSCatalogInfo catinfo;
+  err = FSGetCatalogInfo (&fsref, kFSCatInfoGettableInfo, &catinfo, NULL, NULL, NULL);
+  
+  if (err == noErr && (catinfo.nodeFlags & kFSNodeIsDirectoryMask) == 0)
+  {
+    FileInfo finfo;
+    memcpy(&finfo, &catinfo.finderInfo, sizeof(finfo));
+    
+    if (type)
+    {
+      *(Nlm_Int4 *)type = htonl (finfo.fileType);
+      type[4] = 0;
+    }
+    if (creator)
+    {
+      *(Nlm_Int4 *)creator = htonl (finfo.fileCreator);
+      creator[4] = 0;
+    }
   }
 }
 #endif
@@ -6261,33 +6074,39 @@ static void Nlm_FntDlgRedrawSample (void)
 /* alexs (01-16-95): add platform-dependent for MAC */
 #ifdef WIN_MAC
 
-static MenuHandle menuHforFontList = 0;
+MenuHandle menuHforFontList;
 
-static Nlm_Int2 Nlm_FntDlgGetSysFontList (Nlm_Boolean monoSpace )
+static Nlm_Int2 Nlm_FntDlgGetSysFontList (Nlm_Boolean monoSpace)
 {
-  int      curItemNum;
-  short    famId;
-  char     fontName[256];
-
-  menuHforFontList = NewMenu ( 100, (StringPtr) "" );
-  AppendResMenu ( menuHforFontList, 'FONT' );
-  if ( monoSpace ){
-    for (curItemNum = (Nlm_Int2)CountMenuItems(menuHforFontList);
-         curItemNum > 0; curItemNum-- ){
-      GetMenuItemText ( menuHforFontList, curItemNum, (StringPtr) fontName );
-      GetFNum((StringPtr) fontName, &famId);
-      TextSize (12);
-      TextFace (0);
-      TextFont (famId);
-      if ( (CharWidth('i') != CharWidth('M')) ||
-           (CharWidth('i') != CharWidth(' '))){
-        DeleteMenuItem (menuHforFontList,curItemNum);
-      }
-
+  CreateNewMenu (100, 0, &menuHforFontList);
+  CreateStandardFontMenu (menuHforFontList, 0, 0, 0, NULL);
+  
+  if (monoSpace)
+  {
+    int item;
+    for (item = CountMenuItems (menuHforFontList); item > 0; item--)
+    {
+      CFStringRef cfname = NULL;
+      CopyMenuItemTextAsCFString (menuHforFontList, item, &cfname);
+      
+      int size = CFStringGetMaximumSizeForEncoding (CFStringGetLength (cfname), kCFStringEncodingUTF8);
+      char *name = malloc (size + 1);
+      CFStringGetCString (cfname, name, size + 1, kCFStringEncodingUTF8);
+      
+      Nlm_FonT font = Nlm_GetFont (name, 12, 0, 0, 0, "");
+      
+      int i = Nlm_CharWidth ('i');
+      int M = Nlm_CharWidth ('M');
+      int s = Nlm_CharWidth (' ');
+      if( i != M || i != s )
+        DeleteMenuItem (menuHforFontList, item);
+      
+      free (name);
+      CFRelease (cfname);
     }
-    Nlm_SelectFont (Nlm_systemFont);
   }
-  return (Nlm_Int2)CountMenuItems(menuHforFontList);
+  
+  return CountMenuItems (menuHforFontList);
 }
 
 static void Nlm_FntDlgGetSysFontName (Nlm_Int2 n, Nlm_CharPtr buf,

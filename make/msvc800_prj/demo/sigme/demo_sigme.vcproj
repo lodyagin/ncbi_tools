@@ -3,7 +3,7 @@
 	ProjectType="Visual C++"
 	Version="8.00"
 	Name="demo_sigme"
-	ProjectGUID="{6C98CBEC-6EEF-472F-9BD2-80CF04B58E84}"
+	ProjectGUID="{2861713F-5EA6-486E-AE98-55CC4200305E}"
 	>
 	<Platforms>
 		<Platform

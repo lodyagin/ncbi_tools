@@ -1,4 +1,4 @@
-/*  $Id: ncbi_dispd.c,v 6.84 2007/05/01 20:55:29 kazimird Exp $
+/*  $Id: ncbi_dispd.c,v 6.87 2008/02/14 17:25:50 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -42,6 +42,8 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+
+#define NCBI_USE_ERRCODE_X   Connect_Dispd
 
 /* Lower bound of up-to-date/out-of-date ratio */
 #define DISPD_STALE_RATIO_OK  0.8
@@ -148,7 +150,7 @@ static int/*bool*/ s_Resolve(SERV_ITER iter)
     assert(!!net_info->stateless == !!iter->stateless);
     /* Obtain additional header information */
     if ((!(s = SERV_Print(iter, 0))
-         || ConnNetInfo_OverrideUserHeader(net_info, s))
+         ||  ConnNetInfo_OverrideUserHeader(net_info, s))
         &&
         ConnNetInfo_OverrideUserHeader(net_info,
                                        iter->ok_down  &&  iter->ok_suppressed
@@ -173,9 +175,9 @@ static int/*bool*/ s_Resolve(SERV_ITER iter)
         ConnNetInfo_DeleteUserHeader(net_info, s);
         free(s);
     }
-    if (!conn || CONN_Create(conn, &c) != eIO_Success) {
-        CORE_LOGF(eLOG_Error, ("[DISPATCHER]  Unable to create aux. %s",
-                               conn ? "connection" : "connector"));
+    if (!conn  ||  CONN_Create(conn, &c) != eIO_Success) {
+        CORE_LOGF_X(1, eLOG_Error, ("[DISPATCHER]  Unable to create aux. %s",
+                                    conn ? "connection" : "connector"));
         assert(0);
         return 0/*failed*/;
     }
@@ -246,8 +248,9 @@ static int/*bool*/ s_Update(SERV_ITER iter, const char* text, int code)
             text += sizeof(HTTP_DISP_FAILURES) - 1;
             while (*text  &&  isspace((unsigned char)(*text)))
                 text++;
-            CORE_LOGF(eLOG_Warning, ("[DISPATCHER %s]  %s",
-                                     failure ? "FAILURE" : "MESSAGE", text));
+            CORE_LOGF_X(2, eLOG_Warning,
+                        ("[DISPATCHER %s]  %s",
+                         failure ? "FAILURE" : "MESSAGE", text));
         }
 #endif /*_DEBUG && !NDEBUG*/
         if (failure)

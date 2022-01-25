@@ -3,7 +3,7 @@
 	ProjectType="Visual C++"
 	Version="8.00"
 	Name="demo_blastclust"
-	ProjectGUID="{1C14632F-22E1-40D3-B0C8-1E53C72ED92F}"
+	ProjectGUID="{61F9752D-4AE9-4B68-8D20-FF5CF31631A9}"
 	>
 	<Platforms>
 		<Platform

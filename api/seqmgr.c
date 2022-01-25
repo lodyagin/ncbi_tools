@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.291 $
+* $Revision: 6.293 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
@@ -8318,6 +8318,32 @@ static void SeqMgrBestOverlapSetContext (
   }
 }
 
+static Boolean TransSplicedStrandsMatch (Uint1 locstrand, SeqLocPtr slp, SMFeatItemPtr feat)
+
+{
+  Uint1       featstrand;
+  SeqLocPtr   loc;
+  SeqFeatPtr  sfp;
+
+  if (slp == NULL || feat == NULL) return FALSE;
+  sfp = feat->sfp;
+  if (sfp == NULL) return FALSE;
+
+  if (! sfp->excpt) return FALSE;
+  if (StringISearch (sfp->except_text, "trans-splicing") == NULL) return FALSE;
+
+  loc = SeqLocFindNext (sfp->location, NULL);
+  while (loc != NULL) {
+    if (SeqLocAinB (slp, loc) >= 0) {
+      featstrand = SeqLocStrand (loc);
+      if (StrandsMatch (featstrand, locstrand)) return TRUE;
+    }
+    loc = SeqLocFindNext (sfp->location, loc);
+  }
+
+  return FALSE;
+}
+
 static SeqFeatPtr SeqMgrGetBestOverlappingFeat (
   SeqLocPtr slp,
   Uint2 subtype,
@@ -8349,6 +8375,7 @@ static SeqFeatPtr SeqMgrGetBestOverlappingFeat (
   Int4            left;
   SeqLocPtr       loc;
   Int4            max = INT4_MAX;
+  Boolean         may_be_trans_spliced;
   Int4            mid;
   Int2            numivals = 0;
   SeqEntryPtr     oldscope;
@@ -8514,14 +8541,15 @@ static SeqFeatPtr SeqMgrGetBestOverlappingFeat (
 
       /* requires feature to be contained within gene, etc. */
 
-      if (special && (feat->bad_order || feat->mixed_strand)) {
+      may_be_trans_spliced = (Boolean) (special && (feat->bad_order || feat->mixed_strand));
+      if (may_be_trans_spliced) {
         diff = TestForOverlap (feat, slp, left, right, LOCATION_SUBSET, numivals, ivals);
       } else {
         diff = TestForOverlap (feat, slp, left, right, overlapType, numivals, ivals);
       }
       if (diff >= 0) {
 
-        if (StrandsMatch (feat->strand, strand)) {
+        if (StrandsMatch (feat->strand, strand) || (may_be_trans_spliced && TransSplicedStrandsMatch (strand, slp, feat))) {
 
           if (userfunc != NULL && context != NULL && goOn) {
             SeqMgrBestOverlapSetContext (feat, omdp, userdata, context);
@@ -8553,14 +8581,15 @@ static SeqFeatPtr SeqMgrGetBestOverlappingFeat (
     feat = array [hier];
     if (feat != NULL && ((! feat->ignore) || userfunc == NULL)) {
 
-      if (special && (feat->bad_order || feat->mixed_strand)) {
+      may_be_trans_spliced = (Boolean) (special && (feat->bad_order || feat->mixed_strand));
+      if (may_be_trans_spliced) {
         diff = TestForOverlap (feat, slp, left, right, LOCATION_SUBSET, numivals, ivals);
       } else {
         diff = TestForOverlap (feat, slp, left, right, overlapType, numivals, ivals);
       }
       if (diff >= 0) {
 
-        if (StrandsMatch (feat->strand, strand)) {
+        if (StrandsMatch (feat->strand, strand) || (may_be_trans_spliced && TransSplicedStrandsMatch (strand, slp, feat))) {
 
           if (userfunc != NULL && context != NULL && goOn) {
             SeqMgrBestOverlapSetContext (feat, omdp, userdata, context);
