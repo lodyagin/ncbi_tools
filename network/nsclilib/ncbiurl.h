@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/12/98
 *
-* $Revision: 6.1 $
+* $Revision: 6.4 $
 *
 * File Description: 
 *
@@ -75,15 +75,16 @@ extern "C" {
 *
 *****************************************************************************/
 
-typedef Nlm_Boolean (LIBCALLBACK *URLResultProc) (Nlm_CharPtr filename);
+typedef Nlm_Boolean (LIBCALLBACK *URLResultProc) (Nlm_CharPtr filename, Nlm_CharPtr format, Nlm_VoidPtr mydata);
 
-extern Nlm_Boolean SOCK_SendURLQuery (Nlm_CharPtr host_machine, Nlm_Uint2 host_port,
+NLM_EXTERN Nlm_Boolean SOCK_SendURLQuery (Nlm_CharPtr host_machine, Nlm_Uint2 host_port,
                                       Nlm_CharPtr host_path, Nlm_CharPtr query,
                                       Nlm_CharPtr arguments, Nlm_CharPtr data_file,
                                       URLResultProc resultproc, Nlm_Uint4 timeoutsec,
-                                      Nlm_Boolean sendBinary, Nlm_Boolean receiveBinary);
+                                      Nlm_Boolean sendBinary, Nlm_Boolean receiveBinary,
+                                      Nlm_CharPtr programName, Nlm_VoidPtr mydata);
 
-extern Nlm_Int4 SOCK_CheckURLQuery (void);
+NLM_EXTERN Nlm_Int4 SOCK_CheckURLQuery (void);
 
 #ifdef __cplusplus
 }

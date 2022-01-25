@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 98-01-01
 *
-* $Revision: 6.6 $
+* $Revision: 6.7 $
 *
 * File Description: sentinel graphs
 *
@@ -38,6 +38,9 @@
 * Date       Name        Description of modification
 * --------------------------------------------------------------------------
 * $Log: gphdraw.c,v $
+* Revision 6.7  1998/10/13 17:13:56  kuzio
+* colored superimposable graphs
+*
 * Revision 6.6  1998/09/16 19:00:35  kuzio
 * cvs logs
 *
@@ -49,7 +52,8 @@
 #include <gphdraw.h>
 
 static void PlotTheWorkingArray (Int4Ptr xp, Int4 len, Int4 scaleX,
-                                 Int4 gmin, RecT r)
+                                 Int4 gmin, RecT r, Uint1 uR, Uint1 uG,
+                                 Uint1 uB, AttPData PNTR curattrib)
 {
   PoinT          pt;
   Int4           i;
@@ -57,7 +61,22 @@ static void PlotTheWorkingArray (Int4Ptr xp, Int4 len, Int4 scaleX,
   Int4           max;
   Int4           min;
   Int4           val;
+  Uint1          curR, curG, curB;
 
+  if (curattrib != NULL)
+  {
+    curR = curattrib->color[0];
+    curG = curattrib->color[1];
+    curB = curattrib->color[2];
+  }
+  else
+  {
+    curR = 0;
+    curG = 0;
+    curB = 0;
+  }
+
+  SelectColor (uR, uG, uB);
   pt.x = r.left;
   i = 0;
   val = (Int4) *xp;
@@ -89,6 +108,7 @@ static void PlotTheWorkingArray (Int4Ptr xp, Int4 len, Int4 scaleX,
     LineTo (pt.x, pt.y);
     (pt.x)++;
   }
+  SelectColor (curR, curG, curB);
   return;
 }
 
@@ -226,7 +246,11 @@ static void GraphSentProc (BigScalar calldata, PrimDrawContext pdc)
     if (tmpscaleX > scaleX)
       scaleX = tmpscaleX;
   }
-  PlotTheWorkingArray (xpoints, len, scaleX, gsp->min, r);
+
+  PlotTheWorkingArray (xpoints, len, scaleX, gsp->min, r,
+                       gsp->red, gsp->green, gsp->blue,
+                       &(dInfoPtr->curattrib));
+
   MemFree (xpoints);
 }
 
@@ -240,7 +264,8 @@ static void CleanGSP (BigScalar calldata)
 
 extern GraphSentPtr AddGraphSentinelToPicture (SeqGraphPtr sgp, BioseqPtr bsp,
                                                SegmenT pict, Int4 scaleX,
-                                               Int4 top, Int2 start)
+                                               Int4 top, Int2 start,
+                                               Uint1Ptr uRGB)
 {
   Int4          axis;
   GraphSentPtr  gsp;
@@ -252,10 +277,24 @@ extern GraphSentPtr AddGraphSentinelToPicture (SeqGraphPtr sgp, BioseqPtr bsp,
   Char          str [32];
   Int4          leftoff, rightoff;
 
-  if (sgp == NULL || bsp == NULL || pict == NULL) return NULL;
+  if (sgp == NULL || bsp == NULL || pict == NULL)
+    return NULL;
   gsp = MemNew (sizeof (GraphSentData));
-  if (gsp == NULL) return NULL;
+  if (gsp == NULL)
+    return NULL;
   gsp->flagIsGUI = VibrantIsGUI ();
+  if (uRGB != NULL)
+  {
+    gsp->red   = uRGB[0];
+    gsp->green = uRGB[1];
+    gsp->blue  = uRGB[2];
+  }
+  else
+  {
+    gsp->red   = 0;
+    gsp->green = 0;
+    gsp->blue  = 0;
+  }
 
   leftoff = GetOffsetInBioseq (sgp->loc, bsp, SEQLOC_LEFT_END);
   rightoff = GetOffsetInBioseq (sgp->loc, bsp, SEQLOC_RIGHT_END);
@@ -378,7 +417,8 @@ extern SegmenT DrawSeqGraphSegment (SeqGraphPtr sgp, BioseqPtr bsp,
   if ((sgp->numval % xlen) != 0)
     scaleX++;
 
-  if ((gsp = AddGraphSentinelToPicture (sgp, bsp, pict, scaleX, top, start))
+  if ((gsp = AddGraphSentinelToPicture (sgp, bsp, pict, scaleX, top, start,
+                                        NULL))
       != NULL)
   {
     if (gsp->seg != NULL)
@@ -461,7 +501,8 @@ extern void DrawGraphToPanel (SeqGraphPtr sgp, Int4 Xscale,
 
   xp = xpoints = MakeWorkingSeqGraphInt4Array (sgp->values, sgp->flags[2],
                                                0, len, FALSE, sgp->a, sgp->b);
-  PlotTheWorkingArray (xpoints, len, Xscale, (Int4) sgp->min.realvalue, *rp);
+  PlotTheWorkingArray (xpoints, len, Xscale, (Int4) sgp->min.realvalue, *rp,
+                       0, 0, 0, NULL);
   MemFree (xpoints);
   return;
 }

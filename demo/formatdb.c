@@ -30,11 +30,14 @@
    
    Version Creation Date: 10/01/96
 
-   $Revision: 6.12 $
+   $Revision: 6.13 $
 
    File Description:  formats FASTA databases for use by BLAST
 
    $Log: formatdb.c,v $
+   Revision 6.13  1998/11/16 18:34:42  madden
+   Add return-value checks
+
    Revision 6.12  1998/07/13 15:32:17  egorov
    make error message more understandable
 
@@ -156,7 +159,7 @@
 
     /* static functions */
 
-static Int4		FormatDbUint4Write(Uint4 number, FILE *fp);
+static Boolean		FormatDbUint4Write(Uint4 number, FILE *fp);
 static Int4		UpdateLookupInfo(CharPtr defline, FASTALookupPtr lookup, 
                                          Int4 num_of_seqs, FILE *fd_stmp,
                                          Boolean ParseSeqid);
@@ -424,8 +427,10 @@ NLM_EXTERN Boolean BLASTFileFunc (BioseqPtr bsp, Int2 key, CharPtr buf, Uint4 bu
             fdbp->DefOffsetTable[fdbp->num_of_seqs] = ftell(fdbp->fd_def); 
             fdbp->SeqOffsetTable[fdbp->num_of_seqs] = ftell(fdbp->fd_seq);
             
-            FileWrite(buf, buflen, 1, fdbp->fd_def);
-            FileWrite(" ", 1, 1, fdbp->fd_def);
+            if (FileWrite(buf, buflen, 1, fdbp->fd_def) != (Uint4) 1)
+		return FALSE;
+            if (FileWrite(" ", 1, 1, fdbp->fd_def) != (Uint4) 1)
+		return FALSE;
 
                     /* Now adding new entried into lookup hash table */
             
@@ -436,15 +441,18 @@ NLM_EXTERN Boolean BLASTFileFunc (BioseqPtr bsp, Int2 key, CharPtr buf, Uint4 bu
             } 
             break;
         case FASTA_DEFLINE:
-	    FileWrite(buf, buflen, 1, fdbp->fd_def);
+	    if (FileWrite(buf, buflen, 1, fdbp->fd_def) != (Uint4) 1)
+		return FALSE;
 	    break;
         case FASTA_SEQLINE:
-            FileWrite(buf, buflen, 1, fdbp->fd_seq);
+            if (FileWrite(buf, buflen, 1, fdbp->fd_seq) != (Uint4) 1)
+		return FALSE;
             break;
         case FASTA_EOS:   /* end of sequence */
             if(fdbp->isProtein) {
                 i=0;
-                FileWrite(&i, 1, 1, fdbp->fd_seq);
+                if (FileWrite(&i, 1, 1, fdbp->fd_seq) != (Uint4) 1)
+			return FALSE;
             } else {
                     /* dump ambiguity characters. */
                 fdbp->AmbOffsetTable[fdbp->num_of_seqs] = ftell(fdbp->fd_seq); /* Anyway... */
@@ -455,7 +463,8 @@ NLM_EXTERN Boolean BLASTFileFunc (BioseqPtr bsp, Int2 key, CharPtr buf, Uint4 bu
                         /* The first Uint4 holds the total number of ambig. bp. */
                     total = (*(fdbp->AmbCharPtr))+1;
                     for (index=0; index<total; index++) {
-                        FormatDbUint4Write(fdbp->AmbCharPtr[index], fdbp->fd_seq);
+                        if (!FormatDbUint4Write(fdbp->AmbCharPtr[index], fdbp->fd_seq))
+				return FALSE;
                     }
                     MemFree(fdbp->AmbCharPtr);
                     fdbp->AmbCharPtr = NULL;
@@ -578,7 +587,8 @@ FormatDBPtr	FormatDBInit(const CharPtr dbname, const CharPtr dbtitle,
             dbname, fdbp->isProtein ? 'p' : 'n'); 
     fdbp->fd_seq = FileOpen(filenamebuf, "wb");        
     
-    FileWrite(&i, 1, 1, fdbp->fd_seq);	/* Sequence file started from NULLB */
+    if (FileWrite(&i, 1, 1, fdbp->fd_seq) != (Uint4) 1) /* Sequence file started from NULLB */
+	return NULL;
     
         /* Index file */
     
@@ -715,7 +725,8 @@ static	Int2	process_sep (SeqEntryPtr sep, FormatDBPtr fdbp)
     if(fdbp->ParseMode == FALSE) 
     {
         sprintf(tmpbuff, "%s%d ", NON_SEQID_PREFIX, fdbp->num_of_seqs);
-        FileWrite(tmpbuff, StringLen(tmpbuff), 1, fdbp->fd_def);
+        if (FileWrite(tmpbuff, StringLen(tmpbuff), 1, fdbp->fd_def) != (Uint4) 1)
+		return 1;
         defline = (CharPtr)bsp->descr->data.ptrvalue;
     }
     else
@@ -739,7 +750,8 @@ static	Int2	process_sep (SeqEntryPtr sep, FormatDBPtr fdbp)
         StringCpy(&buffer[id_length], BioseqGetTitle(bsp));
         defline = buffer;
     }
-    FileWrite(defline, StringLen(defline), 1, fdbp->fd_def);
+    if (FileWrite(defline, StringLen(defline), 1, fdbp->fd_def) != (Uint4) 1)
+	return 1;
     
         /* -------- Now adding new entried into lookup hash table */
     
@@ -787,11 +799,15 @@ static	Int2	process_sep (SeqEntryPtr sep, FormatDBPtr fdbp)
     BSSeek(bsp->seq_data, 0, SEEK_SET);
 
     while((len = BSRead(bsp->seq_data, tmpbuff, sizeof(tmpbuff))) != 0) 
-        FileWrite(tmpbuff, len, 1, fdbp->fd_seq);
+    {
+        if (FileWrite(tmpbuff, len, 1, fdbp->fd_seq) != (Uint4) 1)
+		return 1;
+    }
     
     if(fdbp->isProtein) {
         i=0;
-        FileWrite(&i, 1, 1, fdbp->fd_seq);
+        if (FileWrite(&i, 1, 1, fdbp->fd_seq) != (Uint4) 1)
+		return 1;
     } else {
             /* dump ambiguity characters. */
         fdbp->AmbOffsetTable[fdbp->num_of_seqs] = ftell(fdbp->fd_seq); /* Anyway... */
@@ -801,7 +817,8 @@ static	Int2	process_sep (SeqEntryPtr sep, FormatDBPtr fdbp)
         { /* The first Uint4 holds the total number of ambig. bp. */
             total = (*AmbCharPtr)+1;
             for (index=0; index<total; index++) {
-                FormatDbUint4Write(AmbCharPtr[index], fdbp->fd_seq);
+                if (!FormatDbUint4Write(AmbCharPtr[index], fdbp->fd_seq))
+			return 1;
             }
             MemFree(AmbCharPtr);
             AmbCharPtr = NULL;
@@ -853,39 +870,51 @@ static	Int2	finish_formatDB (FormatDBPtr fdbp)
     
         /* Information */
     
-    FormatDbUint4Write(FORMATDB_VER, fdbp->fd_ind);
-    FormatDbUint4Write(fdbp->isProtein, fdbp->fd_ind);
+    if (!FormatDbUint4Write(FORMATDB_VER, fdbp->fd_ind))
+	return 1;
+    if (!FormatDbUint4Write(fdbp->isProtein, fdbp->fd_ind))
+	return 1;
     
     if(fdbp->DbTitle != NULL)
         title_len = StringLen(fdbp->DbTitle);
     else
         title_len = 0;
     
-    FormatDbUint4Write(title_len, fdbp->fd_ind);
+    if (!FormatDbUint4Write(title_len, fdbp->fd_ind))
+	return 1;
     
     if (title_len != 0)
-        FileWrite(fdbp->DbTitle, title_len, 1, fdbp->fd_ind);
+        if (FileWrite(fdbp->DbTitle, title_len, 1, fdbp->fd_ind) != (Uint4) 1)
+		return 1;
     
     Nlm_DayTimeStr(dateTime, TRUE, TRUE);
-    FormatDbUint4Write(StringLen(dateTime), fdbp->fd_ind);
-    FileWrite(dateTime, StringLen(dateTime), 1, fdbp->fd_ind);
+    if (!FormatDbUint4Write(StringLen(dateTime), fdbp->fd_ind))
+	return 1;
+    if (FileWrite(dateTime, StringLen(dateTime), 1, fdbp->fd_ind) != 1)
+	return 1;
     
-    FormatDbUint4Write(fdbp->num_of_seqs, fdbp->fd_ind);
-    FormatDbUint4Write(fdbp->TotalLen, fdbp->fd_ind);
-    FormatDbUint4Write(fdbp->MaxSeqLen, fdbp->fd_ind);
+    if (!FormatDbUint4Write(fdbp->num_of_seqs, fdbp->fd_ind))
+	return 1;
+    if (!FormatDbUint4Write(fdbp->TotalLen, fdbp->fd_ind))
+	return 1;
+    if (!FormatDbUint4Write(fdbp->MaxSeqLen, fdbp->fd_ind))
+	return 1;
     
         /* Offset tables */
     
     for(i=0; i <= fdbp->num_of_seqs; i++) {
-        FormatDbUint4Write(fdbp->DefOffsetTable[i], fdbp->fd_ind);
+        if (!FormatDbUint4Write(fdbp->DefOffsetTable[i], fdbp->fd_ind))
+		return 1;
     }
     
     for(i=0; i <= fdbp->num_of_seqs; i++) {
-        FormatDbUint4Write(fdbp->SeqOffsetTable[i], fdbp->fd_ind);
+        if (!FormatDbUint4Write(fdbp->SeqOffsetTable[i], fdbp->fd_ind))
+		return 1;
     }
     if(!fdbp->isProtein) {
         for(i=0; i <= fdbp->num_of_seqs; i++) {
-            FormatDbUint4Write(fdbp->AmbOffsetTable[i], fdbp->fd_ind);
+            if (!FormatDbUint4Write(fdbp->AmbOffsetTable[i], fdbp->fd_ind))
+		return 1;
         }
     }
     
@@ -902,7 +931,8 @@ static	Int2	finish_formatDB (FormatDBPtr fdbp)
                  sizeof(Uint4)*2, ID_Compare); 
         
         for(i=0; i < fdbp->lookup->used; i++) {
-            FormatDbUint4Write(fdbp->lookup->table[i], fd_lookup);
+            if (!FormatDbUint4Write(fdbp->lookup->table[i], fd_lookup))
+		return 1;
         }
         
         FileClose(fd_lookup);
@@ -933,7 +963,10 @@ static	Int2	finish_formatDB (FormatDBPtr fdbp)
         /* String file sorting */
     
     if(fdbp->ParseMode)
-        FormatdbCreateStringIndex(fdbp->dbname, fdbp->isProtein);
+    {
+        if (!FormatdbCreateStringIndex(fdbp->dbname, fdbp->isProtein))
+		return 1;
+    }
     
     ErrLogPrintf("Formated %d sequences\n", fdbp->num_of_seqs);
 
@@ -968,10 +1001,16 @@ static Boolean FormatdbCreateStringIndex(const CharPtr FileName,
             FileName, ProteinType ? 'p' : 'n'); 
     
     if((fd_out = FileOpen(DBName, "w")) == NULL)
+    {
         return FALSE;
+    }
     files = filenamebuf;
     
-    SORTFiles(&files, 1, fd_out, sop);
+    if (SORTFiles(&files, 1, fd_out, sop) != SORTNoError)
+    {
+        ErrPostEx(SEV_ERROR, 0, 0, "SORTFiles failed");
+	return FALSE;
+    }
     SORTObjectFree(sop);
 
     FileClose(fd_out);
@@ -1066,7 +1105,7 @@ static Int4 UpdateLookupInfo(CharPtr defline,
 /* Size of variable that is manipulated, and swapped 
    for big/little endian stuff. */
 
-static Int4
+static Boolean
 FormatDbUint4Write(Uint4 number, FILE *fp)
   
 {
@@ -1074,7 +1113,10 @@ FormatDbUint4Write(Uint4 number, FILE *fp)
 
   /* If FORMATDB_SIZE changes, this must be changed. */
   value = Nlm_SwapUint4(number);	
-  return (Int4) FileWrite(&(value), FORMATDB_SIZE, 1, fp);
+  if (FileWrite(&(value), FORMATDB_SIZE, 1, fp) != (Uint4) 1)
+	return FALSE;
+
+  return TRUE;
 }
 
 static FASTALookupPtr FASTALookupNew(void) {

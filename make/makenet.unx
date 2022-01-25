@@ -17,6 +17,10 @@
 #   to the argument list.  Substitute the path to your Motif includes for
 #    /am/Motif/include.
 #
+#   The build for RedHat Linux 2.XX with X11R6 requires:
+#     CC="gcc -ansi"
+#     VIBLIBS="-L/usr/X11R6/lib -lXm -lXpm -lXmu -lXp -lXt -lX11 -lXext"
+#
 #   To build network services tools which support data encryption, add:
 #      NCBI_ENCR=E
 #   and see the discussion in network/encrypt/README for how to obtain
@@ -1140,8 +1144,8 @@ genget : genget.c
 id0test: id0test.c $(BNETCLILIB) $(BLIB13)
 	$(CC) -g -o id0test $(LDFLAGS) id0test.c $(LIB13) $(NETCLILIB) $(LIB2) $(LIB1) $(OTHERLIBS)
 
-idfetch: idfetch.c $(BNETCLILIB) $(BLIB13)
-	$(CC) -g -o idfetch $(LDFLAGS) idfetch.c $(LIB13) $(NETCLILIB) $(LIB2) $(LIB1) $(OTHERLIBS)
+idfetch: idfetch.c $(BNETCLILIB) $(BLIB41)
+	$(CC) -g -o idfetch $(LDFLAGS) idfetch.c $(LIB41) $(NETCLILIB) $(LIB2) $(LIB1) $(OTHERLIBS)
 
 # emulates standalone BLAST program
 # clients for blast2, "-DBLASTCLI_WITH_VIBRANT" for vibrant interface. 

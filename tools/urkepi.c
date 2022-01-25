@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 98-01-01
 *
-* $Revision: 6.16 $
+* $Revision: 6.17 $
 *
 * File Description: epi - low complexity
 *
@@ -38,6 +38,9 @@
 * Date       Name        Description of modification
 * --------------------------------------------------------------------------
 * $Log: urkepi.c,v $
+* Revision 6.17  1998/11/16 14:29:50  kuzio
+* flagBoundaryCondition
+*
 * Revision 6.16  1998/09/16 18:03:33  kuzio
 * cvs logging
 *
@@ -859,44 +862,82 @@ static void OptimizeEpiHP (CharPtr seq, Int4 window, SeqLocPtr slp,
 
 extern SeqLocPtr FilterEpi (EpiDatPtr epip, CharPtr seq, Int4 length,
                             SeqIdPtr sip, Boolean flagHighPass,
-                            Boolean flagIsAA)
+                            Boolean flagIsAA,
+                            Boolean flagBoundaryCondition)
 {
   Int4       i;
   Int4       start, stop;
   SeqLocPtr  nextslp, slp, slptmp, slphp, slph = NULL;
   SeqIntPtr  sint;
-  FloatHi    curscore;
+  FloatHi    curscore, lopr, hipr;
 
   if (epip == NULL || epip->score == NULL)
     return NULL;
 
-  for (i = 0; i < length; i++)
+  if (flagBoundaryCondition)
   {
-    if (epip->score[i] <= epip->percentcut)
-      break;
-  }
-  if (i == length)
-    return NULL;
-
-  while (i < length)
-  {
-    curscore = epip->score[i];
-    if (epip->score[i] <= epip->percentcut)
+    lopr = epip->percentcut * 0.85;
+    hipr = epip->percentcut + (epip->percentcut - lopr);
+    for (i = 0; i < length; i++)
     {
-      start = i;
-      while (epip->score[i] <= epip->percentcut && i < length)
+      if (epip->score[i] >= lopr && epip->score[i] <= hipr)
+        break;
+    }
+    if (i == length)
+      return NULL;
+
+    while (i < length)
+    {
+      curscore = epip->score[i];
+      if (epip->score[i] >= lopr && epip->score[i] <= hipr)
       {
-        if (epip->score[i] > curscore)
-          curscore = epip->score[i];
+        start = i;
+        while (epip->score[i] >= lopr && epip->score[i] <= hipr && i < length)
+        {
+          if (epip->score[i] > curscore)
+            curscore = epip->score[i];
+          i++;
+        }
+        stop = i - 1;
+        slp = SeqLocIntNew (start, stop, Seq_strand_unknown, sip);
+        ValNodeLink (&slph, slp);
+      }
+      else
+      {
         i++;
       }
-      stop = i - 1;
-      slp = SeqLocIntNew (start, stop, Seq_strand_unknown, sip);
-      ValNodeLink (&slph, slp);
     }
-    else
+  }
+  else
+  {
+    for (i = 0; i < length; i++)
     {
-      i++;
+      if (epip->score[i] <= epip->percentcut)
+        break;
+    }
+    if (i == length)
+      return NULL;
+
+    while (i < length)
+    {
+      curscore = epip->score[i];
+      if (epip->score[i] <= epip->percentcut)
+      {
+        start = i;
+        while (epip->score[i] <= epip->percentcut && i < length)
+        {
+          if (epip->score[i] > curscore)
+            curscore = epip->score[i];
+          i++;
+        }
+        stop = i - 1;
+        slp = SeqLocIntNew (start, stop, Seq_strand_unknown, sip);
+        ValNodeLink (&slph, slp);
+      }
+      else
+      {
+        i++;
+      }
     }
   }
 
@@ -968,7 +1009,8 @@ extern SeqLocPtr FilterEpi (EpiDatPtr epip, CharPtr seq, Int4 length,
 }
 
 extern SeqLocPtr FilterEpiBioseq (EpiDatPtr epip, BioseqPtr bsp,
-                                  Boolean flagHighPass)
+                                  Boolean flagHighPass,
+                                  Boolean flagBoundaryCondition)
 {
   Int4       i, chunk;
   SeqLocPtr  slp;
@@ -1003,11 +1045,12 @@ extern SeqLocPtr FilterEpiBioseq (EpiDatPtr epip, BioseqPtr bsp,
       SeqPortFree (spp);
     }
     slp = FilterEpi (epip, (CharPtr) epip->sequence, bsp->length, bsp->id,
-                     flagHighPass, flagIsAA);
+                     flagHighPass, flagIsAA, flagBoundaryCondition);
   }
   else
   {
-    slp = FilterEpi (epip, NULL, bsp->length, bsp->id, flagHighPass, flagIsAA);
+    slp = FilterEpi (epip, NULL, bsp->length, bsp->id, flagHighPass, flagIsAA,
+                     flagBoundaryCondition);
   }
 
   return slp;

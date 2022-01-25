@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.6 $
+* $Revision: 6.7 $
 *
 * File Description: 
 *
@@ -45,6 +45,10 @@
 /*************************************
 *
  * $Log: asn2ffg.h,v $
+ * Revision 6.7  1998/11/10 15:12:59  bazhin
+ * Macro NUM_OF_ESTIMATES and static array of integers "line_estimate"
+ * moved out to "asn2ff1.c".
+ *
  * Revision 6.6  1998/09/24 17:46:00  kans
  * fixed GetDBXrefFromGene problem (TT)
  *
@@ -376,26 +380,7 @@ typedef struct asn2ff_job {
 /*----------- Estimates for the number of lines returned for
 each of the following------------------------------------------*/
 
-#define NUM_OF_ESTIMATES 20
 #define NUM_SEQ_LINES 10
-
-static Int2 line_estimate[NUM_OF_ESTIMATES] = {
-1, /* 0; Locus, Segment, Base Count, Origin, Feature Header lines */
-1, /* 1; Definition line(s) */
-1, /* 2; Accession line(s) */
-1, /* 3; Keyword line(s) */
-2, /* 4; Source lines */
-6, /* 5; Reference (pub) lines */
-10, /* 6; GBComAndFH */
-11, /* 7; GBComAndXref */
-6, /* 8; Features */
-NUM_SEQ_LINES, /* 9; Sequence lines */
-2, /* 10; EMBL Date lines */
-2, /* 11; EMBL Organism lines */
-4, /* 12; DBSOURCE field */
-};
-
-
 
 typedef void (* FFPapFct) PROTO ((Asn2ffJobPtr ajp, GBEntryPtr gbp));
 

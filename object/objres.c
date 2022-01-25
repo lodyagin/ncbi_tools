@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.3 $
+* $Revision: 6.4 $
 *
 * File Description:  Object manager for module NCBI-Seqres
 *
@@ -41,6 +41,9 @@
 *
 *
 * $Log: objres.c,v $
+* Revision 6.4  1998/12/09 20:37:52  kans
+* changed compl to compr to avoid new c++ symbol collision
+*
 * Revision 6.3  1998/08/26 17:43:19  kans
 * fixed -v -fd warnings in label functions
 *
@@ -255,7 +258,7 @@ NLM_EXTERN Boolean LIBCALL SeqGraphAsnWrite (SeqGraphPtr sgp, AsnIoPtr aip, AsnT
     }
     if (sgp->flags[0])
     {
-        av.intvalue = sgp->compl;
+        av.intvalue = sgp->compr;
         if (! AsnWrite(aip, SEQ_GRAPH_comp, &av)) goto erret;
     }
     if (sgp->flags[1])
@@ -392,7 +395,7 @@ NLM_EXTERN SeqGraphPtr LIBCALL SeqGraphAsnRead (AsnIoPtr aip, AsnTypePtr orig)
 	if (atp == SEQ_GRAPH_comp)
     {
         if (AsnReadVal(aip, atp, &av) <= 0) goto erret;
-        sgp->compl = av.intvalue;
+        sgp->compr = av.intvalue;
         sgp->flags[0] = 1;
         atp = AsnReadId(aip, amp, atp); if (atp == NULL) goto erret;
     }

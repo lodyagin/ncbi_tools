@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/4/91
 *
-* $Revision: 6.2 $
+* $Revision: 6.4 $
 *
 * File Description: 
 *   	portable string routines
@@ -37,6 +37,12 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: ncbistr.c,v $
+* Revision 6.4  1998/11/23 00:09:47  kans
+* fixed bug in StringTokMT (found by Hugues)
+*
+* Revision 6.3  1998/10/07 19:09:00  kans
+* added Nlm_StringTokMT, multithread-safe version
+*
 * Revision 6.2  1997/11/26 21:26:25  vakatov
 * Fixed errors and warnings issued by C and C++ (GNU and Sun) compilers
 *
@@ -238,6 +244,42 @@ NLM_EXTERN Nlm_CharPtr LIBCALL  Nlm_StringStr (const char FAR *str1, const char 
 NLM_EXTERN Nlm_CharPtr LIBCALL  Nlm_StringTok (char FAR *str1, const char FAR *str2)
 {
     return str2 ? Nlm_StrTok(str1,str2) : 0;
+}
+
+NLM_EXTERN Nlm_CharPtr LIBCALL  Nlm_StringTokMT (char FAR *str1, const char FAR *str2, char FAR **tmp)
+{
+	char ch;
+	char FAR *ptr;
+	char FAR *rsult = NULL;
+
+	if (str2 == NULL || tmp == NULL) return NULL;
+	if (str1 != NULL) {
+  	  *tmp = str1;
+    }
+    ptr = *tmp;
+    if (ptr == NULL) return NULL;
+    ch = *ptr;
+    while (ch != '\0' && strchr (str2, ch) != NULL) {
+      ptr++;
+      ch = *ptr;
+    }
+    if (ch == '\0') {
+      *tmp = NULL;
+      return NULL;
+    }
+    rsult = ptr;
+    while (ch != '\0' && strchr (str2, ch) == NULL) {
+      ptr++;
+      ch = *ptr;
+    }
+    if (ch == '\0') {
+      *tmp = NULL;
+    } else {
+      *ptr = '\0';
+      ptr++;
+      *tmp = ptr;
+    }
+    return rsult; 
 }
 
 NLM_EXTERN Nlm_CharPtr LIBCALL  Nlm_StringMove (char FAR *to, const char FAR *from)
@@ -1401,7 +1443,7 @@ NLM_EXTERN size_t Nlm_stream2text(const Nlm_Char FAR PNTR str, size_t max_col,
   /* go to the beginning of the last completely fit word */
   for (sb = &str[len-1];
        sb != str  &&  !IS_WHITESP(*sb)  &&  !can_break(*sb, *(sb+1));
-       sb--);
+       sb--) continue;
   while (sb != str  &&  IS_WHITESP(*sb))
     sb--;
 
@@ -1416,8 +1458,8 @@ NLM_EXTERN size_t Nlm_stream2text(const Nlm_Char FAR PNTR str, size_t max_col,
   /* decide of whether and how to break the last alphabet word */
 
   /*  count the lead and the tail of the last non-fit word */
-  for (s = &str[len];  *s != '\0'  &&  IS_ALPHA(*s);  s++, n_tail++);
-  for (s = &str[len-1];  IS_ALPHA(*s);  s--, n_lead++);
+  for (s = &str[len];  *s != '\0'  &&  IS_ALPHA(*s);  s++, n_tail++) continue;
+  for (s = &str[len-1];  IS_ALPHA(*s);  s--, n_lead++) continue;
   ASSERT ( s > str );
 
   /* try to "move" symbols from lead in the sake of tail */
@@ -1455,7 +1497,7 @@ NLM_EXTERN Nlm_CharPtr LIBCALL Nlm_rule_line(const Nlm_Char FAR PNTR str,
     str++;
   if ( !*str )
     return s;
-  for (str_len = Nlm_StringLen( str );  IS_WHITESP(str[str_len-1]); str_len--);
+  for (str_len = Nlm_StringLen( str );  IS_WHITESP(str[str_len-1]); str_len--) continue;
 
 
   /* truncate the original string if doesn't fit */
@@ -1521,7 +1563,7 @@ NLM_EXTERN Nlm_CharPtr LIBCALL Nlm_rule_line(const Nlm_Char FAR PNTR str,
                     while ( n_add-- )
                       *_s++ = SPACE;
 
-                    for (_str++;  IS_WHITESP(*_str);  _str++);
+                    for (_str++;  IS_WHITESP(*_str);  _str++) continue;
                   }
                 else
                   break;

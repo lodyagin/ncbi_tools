@@ -29,6 +29,9 @@
  * Author: Ken Addess
  *
  * $Log: mkbioseqA.c,v $
+ * Revision 6.2  1998/12/01 15:13:29  addess
+ * cleaned up code to remove memory leaks
+ *
  * Revision 6.1  1998/07/17 18:54:26  madej
  * Created by Ken Addess.
  *
@@ -54,7 +57,7 @@ SeqEntryPtr LIBCALL CreateSeqEntry
 	Int2 month, day, year;
 	PdbBlockPtr pbp;
 	ValNodePtr vnp, tmp, pubcat, pubd, pubs;
-	CharPtr com, compound, source;
+	CharPtr com, compound = NULL, source = NULL;
 	PubdescPtr pdp;
 	CitSubPtr citsub;
 	CitArtPtr citart;
@@ -67,8 +70,6 @@ SeqEntryPtr LIBCALL CreateSeqEntry
 	/*** get the PdbBlock data ***************/
 
 	pbp = PdbBlockNew();
-	
-        pbp->deposition = DateNew();
 	pbp->deposition = bssp->database_entry_date;
         
         if (vnp = ValNodeFindNext(bsgp->descr, NULL, BiomolDescr_pdb_class))
@@ -89,7 +90,10 @@ SeqEntryPtr LIBCALL CreateSeqEntry
           pbp->source = tmp;
           tmp->data.ptrvalue = (Pointer)StringSave(source);
         }
-  
+        
+        MemFree(compound);
+        MemFree(source);
+
 	if (vnp = ValNodeFindNext(bsmp->descr, NULL, ModelDescr_pdb_method))
           pbp->exp_method = StringSave(vnp->data.ptrvalue);
         
@@ -299,7 +303,7 @@ ValNodePtr LIBCALL MakeBioseqDescr(MoleculeGraphPtr mgp, ValNodePtr bioseq_descr
   BioSourcePtr biossp = NULL;
   ResiduePtr rs;
   ResidueGraphPntrPtr rgpp;
-  CharPtr *resnam, rn, tmp;
+  CharPtr *resnam = NULL, rn, tmp;
   Int4 resnum, index, len;
   NumEnumPtr nep;
 
@@ -326,7 +330,7 @@ ValNodePtr LIBCALL MakeBioseqDescr(MoleculeGraphPtr mgp, ValNodePtr bioseq_descr
   }
   /* For descr->enum */
   resnum = CountNumOfResidues(mgp);
-  resnam = (CharPtr PNTR)MemNew(resnum * sizeof(CharPtr));
+  resnam = (CharPtr PNTR)MemNew((resnum + 1) * sizeof(CharPtr));
   
   for (rs = mgp->residue_sequence, index = 0 ; rs, index < resnum ; rs = rs->next, index++)
   {
@@ -367,6 +371,7 @@ ValNodePtr LIBCALL MakeBioseqDescr(MoleculeGraphPtr mgp, ValNodePtr bioseq_descr
     tmp += StrLen(resnam[index]) + 1;
   }
   
+  MemFree(resnam);
   return bioseq_descr;
 }
 

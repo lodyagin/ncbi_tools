@@ -57,8 +57,8 @@
 # default flags for compiling and loading
 #
 # $Log: make.vastsrv,v $
-# Revision 6.6  1998/07/17 18:45:18  madej
-# Add MULDEFS flag back to load flags.
+# Revision 6.7  1998/10/14 17:23:29  addess
+# includes prunebiostruc
 #
 # Revision 6.5  1998/06/11  19:14:28  madej
 # Allow compile of vastsrv on both SGI and Sun.
@@ -93,8 +93,12 @@ VIBFLAG= $(NCBI_VIBFLAG)
 INCPATH = $(NCBI_INCDIR)
 LIBPATH = $(NCBI_LIBDIR)
 DEF =
+#SRC = vastsrv.c vastlocl.c vast2mage.c vast2pdb.c vast2cn3d.c vastsubs.c \
+#	vastchkid.c # vast2salsa.c
 SRC = vastsrv.c vastlocl.c vast2mage.c vast2pdb.c vast2cn3d.c vastsubs.c \
-      vastchkid.c mkbioseq_vs.c mkbioseqA.c mkbioseqB.c bsannotvs.c # vast2salsa.c
+      vastchkid.c mkbioseq_vs.c mkbioseqA.c mkbioseqB.c bsannotvs.c \
+      prunebiostruc.c # mmdbapi.c mmdbapi1.c mmdbapi2.c mmdbapi3.c \
+#      mmdbapi4.c  # vast2salsa.c 
 EXE = vastsrv
 
 #

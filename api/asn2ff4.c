@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.18 $
+* $Revision: 6.20 $
 *
 * File Description: 
 *
@@ -1597,6 +1597,10 @@ static SeqFeatPtr CreateImpFeatFromProt(Uint1 format, SeqFeatPtr psfp, SeqFeatPt
 	} else {
 		sfp->location = aaFeatLoc_to_dnaFeatLoc(cds, psfp->location);
 	}
+	if (sfp->location == NULL) {
+		SeqFeatFree(sfp);
+		return NULL;
+	}
 	if (sfp->partial == FALSE) {
 		retval = SeqLocPartialCheck(sfp->location);
 		if (retval > SLP_COMPLETE && retval < SLP_NOSTART) {
@@ -2055,7 +2059,7 @@ NLM_EXTERN void MatchNAGeneToFeat (Boolean non_strict, OrganizeFeatPtr ofp, Sort
 	if (bind_to_feat == FALSE)
 		return;
 
-	best_gene_feat = SeqMgrGetOverlappingGene (sfp, NULL);
+	best_gene_feat = SeqMgrGetOverlappingGene (sfp->location, NULL);
 	if (best_gene_feat != NULL) {
 		grp = best_gene_feat->data.value.ptrvalue;
 		if (grp != NULL) {
@@ -2409,7 +2413,7 @@ NLM_EXTERN void OrganizeSeqFeat(Asn2ffJobPtr ajp, GBEntryPtr gbp)
 	if (/* is_mRNA_set(ajp->sep, bsp) && */ ajp->useSeqMgrIndexes) {
 		mrna = SeqMgrGetRNAgivenProduct(bsp, NULL);
 		if (mrna) {
-			gene = SeqMgrGetOverlappingGene(mrna, &fcontext);
+			gene = SeqMgrGetOverlappingGene(mrna->location, &fcontext);
 		}
 		if (gene) {
 			grp = (GeneRefPtr) gene->data.value.ptrvalue;

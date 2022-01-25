@@ -32,8 +32,11 @@ Contents: definitions and prototypes used by blastkar.c to calculate BLAST
 
 ******************************************************************************/
 
-/* $Revision: 6.10 $ */
+/* $Revision: 6.11 $ */
 /* $Log: blastkar.h,v $
+/* Revision 6.11  1998/12/31 18:17:05  madden
+/* Added strand option
+/*
  * Revision 6.10  1998/09/11 19:02:07  madden
  * Added paramC
  *
@@ -379,7 +382,7 @@ Int2 LIBCALL BlastResCompStr PROTO((BLAST_ScoreBlkPtr sbp, BLAST_ResCompPtr rcp,
 /* 
 Produces a Karlin Block, and parameters, with standard protein frequencies.
 */
-Int2 LIBCALL BlastKarlinBlkStandardCalc PROTO((BLAST_ScoreBlkPtr sbp, Int2 context_total));
+Int2 LIBCALL BlastKarlinBlkStandardCalc PROTO((BLAST_ScoreBlkPtr sbp, Int2 context_start, Int2 context_end));
 BLAST_KarlinBlkPtr LIBCALL BlastKarlinBlkStandardCalcEx PROTO((BLAST_ScoreBlkPtr sbp));
 
 

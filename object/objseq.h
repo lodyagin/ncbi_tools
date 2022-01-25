@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description:  Object manager interface for module NCBI-Seq
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: objseq.h,v $
+* Revision 6.2  1998/10/13 20:59:05  kans
+* Bioseq has new slot for omdp, to be used by SeqMgr indexing functions
+*
 * Revision 6.1  1998/06/29 20:31:32  kans
 * explicit defines for FEATDEF_MAX, SEQFEAT_MAX, and SEQDESCR_MAX Boolean array sizes
 *
@@ -405,6 +408,7 @@ typedef struct bioseq {
     Pointer seq_ext;
     SeqAnnotPtr annot;
 	SeqHistPtr hist;
+	Pointer omdp;           /* internal objmgrdataptr to speed up indexed functions */
 } Bioseq, PNTR BioseqPtr;
 
 NLM_EXTERN BioseqPtr LIBCALL BioseqNew PROTO((void));

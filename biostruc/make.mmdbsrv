@@ -3,6 +3,19 @@
 # default flags for compiling and loading
 #
 # $Log: make.mmdbsrv,v $
+# Revision 6.23  1998/11/06 18:59:07  kimelman
+# PubStruct loading transaction granularity changed
+#
+# Revision 6.22  1998/10/22 17:04:45  kimelman
+# tash cleaned
+# path to default production dirs added
+#
+# Revision 6.21  1998/10/07  21:54:10  kimelman
+# local ctutils dependencies thrown away - linking global ctlibutil now
+#
+# Revision 6.20  1998/10/05 17:49:10  kimelman
+# optimazation flags fixed
+#
 # Revision 6.19  1998/09/30 15:40:42  kimelman
 # no @s
 #
@@ -84,15 +97,12 @@ CC = $(NCBI_CC)
 CFLAGS1 = -c
 LDFLAGS1 = 
 OPTFLAG=$(NCBI_OPTFLAG)
-OTHERLIBS = -lm
-PUBMED_SYBASE = $NCBI_SYBASE
 INCPATH = $(NCBI_INCDIR)
-SYBINCLUDE = $(NCBI_SYBASE)/include 
 LIBPATH = $(NCBI_LIBDIR)
 SYBLIBRARY = $(NCBI_SYBLIBS_CT)
 #SYBLIBRARY = $(NCBI_SYBLIBS_CT_r)
-webdir=../qa
-localdir=bin
+webdir=/net/neptune/pubmed/WWW/live/www.server/cgi-bin/Entrez/Structure
+utildir=/net/vaster/usr/people2/bryant/MDB/Pubstruct
 
 DEF =
 # SYMBOLS FOR source, executables.
@@ -102,47 +112,12 @@ OBJ = $(SRC:.c=.o)
 OBJ_nodb = $(SRC_nodb:.c=.o)
 EXE = mmdbsrv
 
-CFLAGS =  -I. -Iinclude $(CFLAGS1) $(OPTFLAG) -I$(INCPATH) $(VIBFLAG) $(DEF) $(NCBI_SYBFLAGS) $(NCBI_SYBFLAG)
-LDFLAGS = $(OPTFLAG) -L$(LIBPATH) $(VIBFLAG) $(DEF)
+CFLAGS =  -I. $(CFLAGS1) $(OPTFLAG) -I$(INCPATH) $(VIBFLAG) $(DEF) $(NCBI_SYBFLAGS) $(NCBI_SYBFLAG)
+LDFLAGS = $(OPTFLAG) $(LDFLAGS1) -L$(LIBPATH) $(VIBFLAG) $(DEF)
 MTLDFLAGS = $(NCBI_THR_ALTOBJ) $(SYBLIBRARY) -L$(NCBI_ALTLIB)   -lncbiobj -lncbi -lnsl -lthread -ldl -lm
 
-
-
-# The current list of NCBI libraries copied from makenet.unx
-LIB1 = -lncbi
-LIB2 = -lncbiobj
-LIB3 = -lncbicdr
-LIB4 = -lvibrant
-LIB5 = -lncbiacc
-LIB6 = -lnetcli
-LIB7 = -lnetentr
-LIB8 = -lncbiNacc
-LIB9 = -lncbiCacc
-# LIB10 is reserved for NCSA socket library
-LIB10 =
-LIB11 = -lncbimla
-LIB12 = -lncbitax
-LIB13 = -lncbiid0
-#LIB14 = -lncbibls0
-LIB15 = -lnetcliE
-LIB16 = -lnetcliS
-LIB17 = -lnetcliES
-LIB19 = -lncbispel
-# LIB20 is for the NCBI desktop utilities
-LIB20 = -lncbidesk
-LIB21 = -lncbibls2
-LIB22 = -lncbimmdb
-LIB23 = -lncbitool
-LIB24 = -lncbisugg
-LIB25 = -lncbiwww
-LIB26 = -lncbitax1
-LIB27 = -lncbimsc1
-LIB29 = -lncbitxc1
-LIB30 = -lncbicn3d
-LIB31 = -lvibnet
-
-
-MMDBLIBS= $(LIB27) $(LIB22) $(LIB8) $(LIB7) $(LIB6) $(LIB3) $(LIB2) $(LIB1) $(NCBI_OTHERLIBS) -L$(NCBI_ALTLIB)
+MMDBLIBS= -lncbimmdb -lncbiNacc -lnetentr -lnetcli -lncbicdr -lncbiobj -lncbi $(NCBI_OTHERLIBS) -L$(NCBI_ALTLIB)
+LOADLIBS= -lncbimmdb -lncbiobj -lncbi $(NCBI_OTHERLIBS) -L$(NCBI_ALTLIB)
 
 ## Implicit actions
 ##
@@ -152,40 +127,37 @@ MMDBLIBS= $(LIB27) $(LIB22) $(LIB8) $(LIB7) $(LIB6) $(LIB3) $(LIB2) $(LIB1) $(NC
 .c.o :
 	$(CC) $(CFLAGS) $<
 
-
 ## Default thing to make will be "all"
 ##
 
-all: compile install
+all: compile
 
-install: install_local install_web
-# installlation of local utilities
-install_local: st_loader loader_check.sh index/st_configure.sh PubStruct_control.sh PubStruct.scr PubStruct_proc.scr
-	@[ -d $(localdir) ] || ( \
-          if [ x$(localdir) = xbin ] ; \
+install: install_util install_web
+# installlation of bin utilities
+install_util: st_loader loader_check.sh index/st_configure.sh PubStruct_control.sh PubStruct.scr PubStruct_proc.scr
+	@[ -d $(utildir) ] || ( \
+          if [ x$(utildir) = xbin ] ; \
           then mkdir bin ; \
           else \
-            echo "Error: local tool instalation failed - target directory \"$(localdir)\" doesn't exist"; exit 1 ; \
+            echo "Error: util tool installation failed - target directory \"$(utildir)\" doesn't exist"; exit 1 ; \
           fi )
-	cp st_loader $(localdir)
-	cp index/st_configure.sh $(localdir)
-	cp PubStruct_control.sh PubStruct.scr loader_check.sh PubStruct_proc.scr $(localdir)
-	chmod a+x $(localdir)/st_configure.sh $(localdir)/PubStruct_control.sh
-test_local: install_local
-	@echo "1" >.testset
-	$(localdir)/PubStruct_control.sh --DBserver MOZART_SYS10 --load_list .testset --download_list .testset --enforce
-	@ls -l mmdb
-	@rm -rf mmdb .testset
+	cp st_loader $(utildir)
+	cp index/st_configure.sh $(utildir)
+	cp PubStruct_control.sh PubStruct.scr loader_check.sh PubStruct_proc.scr $(utildir)
+	chmod a+x $(utildir)/st_configure.sh $(utildir)/PubStruct_control.sh
+	[ ! -f $(utildir)/.syb_set ] || ( cd $(utildir) ; rm -rf .syb_set )
+	SYBASE=$(NCBI_SYBASE) ; export SYBASE ; cd $(utildir) ; ./st_configure.sh
 # installation of mmdbsrv and playaround stuff
-install_web: $(webdir) $(webdir)/new mmdbsrv mmdbsrv.wrapper index/st_configure.sh
-	cp mmdbsrv $(webdir)/mmdbsrv.f
+install_web: $(webdir) mmdbsrv mmdbsrv.wrapper index/st_configure.sh
+	cp mmdbsrv $(webdir)/mmdbsrv.REAL
 	cp index/st_configure.sh $(webdir)
 	cp mmdbsrv.wrapper $(webdir)
 	chmod a+x $(webdir)/st_configure.sh $(webdir)/mmdbsrv.wrapper
 	cd $(webdir) ; [ -r mmdbsrv ] || ln -s mmdbsrv.wrapper mmdbsrv ;
-	[ ! -d $(webdir)/new ] || ( cd $(webdir)/new ; [ ! -f mmdbsrv.db ] || rm mmdbsrv.db ; ln -s ../mmdbsrv.f mmdbsrv.db; )
-test_web  :
-	cd $(webdir) ; [ -f mmdb.tester -a -f httpd_settings ] && ( echo "1" | ./mmdb.tester )
+	[ ! -d $(webdir)/new ] || ( cd $(webdir)/new ; [ ! -f mmdbsrv.db ] || rm mmdbsrv.db )
+	[ ! -d $(webdir)/new ] || ( cd $(webdir)/new ; ln -s ../mmdbsrv.REAL mmdbsrv.db; )
+	[ ! -f $(webdir)/.syb_set ] || ( cd $(webdir) ; rm -rf .syb_set )
+	SYBASE=$(NCBI_SYBASE) ; export SYBASE ; cd $(webdir) ; ./st_configure.sh
 
 compile : prolog $(EXE) st_loader
 
@@ -193,11 +165,7 @@ prolog : checks .recompile
 
 update: 
 	[ -d index   ] || cvs checkout -d index   internal/pubmed/pmentrez/scripts/indexing
-	[ -d src     ] || cvs checkout -d src     individual/yaschenk/MyUtils
-	[ -d include ] || cvs checkout -d include individual/yaschenk/include
-	[ -d lib ]     || mkdir lib
 	cvs update
-	( cd src; $(MAKE) libctutils.a )
 checks : .options
 	@echo "$(CFLAGS)" >..options
 #	diff ..options .options >/dev/null || cp ..options .options
@@ -213,6 +181,12 @@ checks : .options
 	@echo making '.options'
 	@echo "$(CFLAGS)" >.options
 
+mmdblocl.o : mmdblocl.c PubStructAsn.h
+
+PubStructAsn.o : PubStructAsn.c PubStructAsn.h
+
+loader.o : loader.c PubStructAsn.h
+
 ## make individual applications and components
 ##
 
@@ -223,59 +197,76 @@ st_loader : loader.$(DEF1)
 	rm -f $@
 	ln $? $@
 
-mmdbsrv. : $(OBJ)  lib/libctutils.a
-	$(CC) -o $@ -DX11 $(LDFLAGS) $(OBJ) -Llib -lnlmzip -lctutils  $(SYBLIBRARY) $(MMDBLIBS)
+#
+# Production mode (default)
+# 
 
-loader. : loader.o PubStructAsn.o lib/libctutils.a
-	$(PURIFY) $(CC) -g -o $@ $(LDFLAGS) loader.o  PubStructAsn.o -lnlmzip  \
-        -lctutils $(SYBLIBRARY)  $(MMDBLIBS)
+mmdbsrv. : $(OBJ)
+	$(CC) -o $@ -DX11 $(LDFLAGS) $(OBJ) -lnlmzip -lctutils  $(SYBLIBRARY) $(MMDBLIBS)
 
-# tested versions
-mmdbsrv.test : $(OBJ)  lib/libctutils.a
-	$(CC) -o $@ -g -Lcompr -DX11 $(LDFLAGS) $(OBJ) -lnlmzip -Llib -lctutils $(SYBLIBRARY) $(MMDBLIBS)
+loader. : loader.o PubStructAsn.o
+	$(CC) -o $@ $(LDFLAGS) loader.o PubStructAsn.o -lnlmzip -lctutils $(SYBLIBRARY) $(LOADLIBS)
 
-loader.test : loader.o PubStructAsn.o lib/libctutils.a
-	$(PURIFY) $(CC) -g -o $@ -Lcompr $(LDFLAGS) loader.o  PubStructAsn.o -lnlmzip -Llib \
-        -lctutils $(SYBLIBRARY) $(MMDBLIBS)
+#
+# NO DB mode
+#
 
-mmdbsrv.nodb : $(OBJ_nodb)  lib/libctutils.a
+standalone:
+	$(MAKE) -f make.mmdbsrv PURIFY=$(PURIFY) DEF="-D__NO_DB__" DEF1=nodb
+
+mmdbsrv.nodb : $(OBJ_nodb)
 	$(CC) -o $@ -DX11 $(LDFLAGS) $(OBJ_nodb) $(MMDBLIBS)
 
 loader.nodb : 
 #      just to make 'MAKE' happy :)
-	@echo "#! /bin/sh                                      " >$@
-	@echo "#                                               ">>$@
-	@echo "# `date`                                        ">>$@
-	@echo "#                                               ">>$@
-	@echo "echo \\$$0 - nothing to load in standalone version">>$@
-	@ chmod a+x $@
+	echo "#! /bin/sh                                      " >$@
+	echo "#                                               ">>$@
+	echo "# `date`                                        ">>$@
+	echo "#                                               ">>$@
+	echo "echo \\$$0 - there is no DB to load anything - it is a standalone version!">>$@
+	chmod a+x $@
 
-mmdblocl.o : mmdblocl.c PubStructAsn.h
-
-PubStructAsn.o : PubStructAsn.c PubStructAsn.h include/ctlibutils.h
-
-loader.o : loader.c PubStructAsn.h
-
-standalone:
-	$(MAKE) -f make.mmdbsrv PURIFY=$(PURIFY) DEF="-D__NO_DB__" DEF1=nodb
 #
-# DEBUGGING stuff
+# DEBUG mode
 #
+
+MAKEDEBUG=$(MAKE) -f make.mmdbsrv PURIFY=$(PURIFY) DEF="-DDEBUG_MODE" DEF1=test OPTFLAG="-g" \
+                  CFLAGS1="-c -Iinclude" LDFLAGS1=-Llib webdir=../qa utildir=bin
 
 debugc:
-	$(MAKE) -f make.mmdbsrv PURIFY=$(PURIFY) DEF="-DDEBUG_MODE" DEF1=test OPTFLAGS=-g
-
+	$(MAKEDEBUG) compile 
 debug_web :
-	$(MAKE) -f make.mmdbsrv PURIFY=$(PURIFY) DEF="-DDEBUG_MODE" DEF1=test OPTFLAGS=-g all test_web
+	$(MAKEDEBUG) compile install test_web
 debug_bin :
-	$(MAKE) -f make.mmdbsrv PURIFY=$(PURIFY) DEF="-DDEBUG_MODE" DEF1=test OPTFLAGS=-g all test_local
+	$(MAKEDEBUG) compile install test_util
 debug :
-	$(MAKE) -f make.mmdbsrv PURIFY=$(PURIFY) DEF="-DDEBUG_MODE" DEF1=test OPTFLAGS=-g all test_local test_web
+	$(MAKEDEBUG) compile install test_util test_web
+
+test_web  :
+	cd $(webdir) ; [ -f mmdb.tester -a -f httpd_settings ] && ( echo "1" | ./mmdb.tester )
+
+test_util: install_util
+	@echo "1" >.testset
+	$(utildir)/PubStruct_control.sh --DBserver MOZART_SYS10 --load_list .testset --download_list .testset --downpath ./mmdb --enforce --verbose
+	@ls -l mmdb
+	@rm -rf mmdb .testset
+
+mmdbsrv.test : $(OBJ)
+	$(PURIFY) $(CC) -o $@ -g -DX11 $(LDFLAGS) $(OBJ) -lnlmzip -lctutils $(SYBLIBRARY) $(MMDBLIBS)
+
+loader.test : loader.o PubStructAsn.o
+	$(PURIFY) $(CC) -g -o $@ $(LDFLAGS) loader.o  PubStructAsn.o -lnlmzip -lctutils $(SYBLIBRARY) $(LOADLIBS)
+
+#
+# service entries
+#
+
 enforce:
 
 clean:
-	@ for fn in st_loader loader loader. loader.test  ; do [ ! -f $$fn ] || rm -f $$fn ; done
-	@ for fn in mmdbsrv mmdbsrv. mmdbsrv.test  mmdbsrv.nodb ; do [ ! -f $$fn ] || rm -f $$fn ; done
+	for fn in st_loader loader loader. loader.test  ; do [ ! -f $$fn ] || rm -f $$fn ; done
+	for fn in mmdbsrv mmdbsrv. mmdbsrv.test  mmdbsrv.nodb ; do [ ! -f $$fn ] || rm -f $$fn ; done
 	- rm -f *.o *~ *% \#* *.a 
 purify :
 	$(MAKE) -f make.mmdbsrv PURIFY=purify $(target)
+

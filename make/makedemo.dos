@@ -28,6 +28,7 @@ ASN2FF_EXE   = asn2ff.___
 ASNDHUFF_EXE = asndhuff.___
 FA2HTGS_EXE  = fa2htgs.___
 FORMATDB_EXE  = formatdb.___
+FMERGE_EXE  = fmerge.___
 BLASTALL_EXE  = blastall.___
 BLASTPGP_EXE  = blastpgp.___
 SEEDTOP_EXE  = seedtop.___
@@ -38,6 +39,7 @@ SEEDTOP_EXE  = seedtop.___
 !undef BLASTPGP_EXE
 !undef SEEDTOP_EXE
 !undef FORMATDB_EXE
+!undef FMERGE_EXE
 !endif
 
 !ifdef B16
@@ -67,6 +69,7 @@ $(ASN2FF_EXE)   \
 $(ASNDHUFF_EXE) \
 $(FA2HTGS_EXE)	\
 $(FORMATDB_EXE)	\
+$(FMERGE_EXE)	\
 $(BLASTALL_EXE)	\
 $(BLASTPGP_EXE) \
 $(SEEDTOP_EXE)
@@ -260,6 +263,18 @@ $(FORMATDB_EXE):
 $(INCLUDE_GEN)
 TEST_NAME = formatdb
 TEST_OBJ = formatdb.obj
+TEST_LIB = $(LIB23) $(LIB4) $(LIB2) $(LIB1)
+RES = 1
+$(INCLUDE_EXE)
+<<
+!endif
+##########################################################
+!ifdef FMERGE_EXE
+$(FMERGE_EXE):
+	$(MAKE) -f <<
+$(INCLUDE_GEN)
+TEST_NAME = fmerge
+TEST_OBJ = fmerge.obj
 TEST_LIB = $(LIB23) $(LIB4) $(LIB2) $(LIB1)
 RES = 1
 $(INCLUDE_EXE)

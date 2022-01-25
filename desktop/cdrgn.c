@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.19 $
+* $Revision: 6.24 $
 *
 * File Description: 
 *
@@ -53,6 +53,7 @@
 #include <edutil.h>
 #include <bspview.h>
 #include <toasn3.h>
+#include <subutil.h>
 
 #define CODING_REGION_PAGE    0
 #define GENE_PAGE             0
@@ -349,7 +350,7 @@ static void ConvertToAACodeBreak (CdRgnFormPtr cfp, CdRegionPtr crp, CodeBreakPt
   sfp->location = DialogToPointer (cfp->location);
   sfp->product = DialogToPointer (cfp->product);
   while (cb != NULL) {
-    slp = dnaLoc_to_aaLoc (sfp, cb->loc, TRUE, NULL);
+    slp = dnaLoc_to_aaLoc (sfp, cb->loc, TRUE, NULL, TRUE);
     cb->loc = SeqLocFree (cb->loc);
     cb->loc = slp;
     cb = cb->next;
@@ -600,7 +601,7 @@ static void SetCdRgnImportExportItems (CdRgnFormPtr cfp)
       case CODING_REGION_PAGE :
         cpp = (CdRgnPagePtr) GetObjectExtra (cfp->data);
         if (cpp != NULL) {
-          if (cpp->currentPage == 3) {
+          if (cpp->currentPage == 0) {
             SafeSetTitle (importItm, "Import Protein FASTA...");
             SafeSetTitle (exportItm, "Export Protein FASTA...");
             SafeEnable (importItm);
@@ -637,7 +638,7 @@ static void SetCdRgnImportExportItems (CdRgnFormPtr cfp)
 }
 
 static CharPtr cdRgnTabs [] = {
-  "General", "Exceptions", "Protein", "Product", NULL
+  "Product", "Protein", "Exceptions", "Misc", NULL
 };
 
 static void ChangeCdRgnSubPage (VoidPtr data, Int2 newval, Int2 oldval)
@@ -1015,7 +1016,7 @@ typedef struct productpage {
   Handle        product;
   Boolean       usePopupForProduct;
   Int2          oldval;
-  Boolean       mRNAnotCDS;
+  Boolean       nucProducts;
   CdRgnFormPtr  cfp;
 } ProductPage, PNTR ProductPagePtr;
 
@@ -1056,7 +1057,7 @@ static void PopulateProductControl (Handle pr, ProductPagePtr ppp)
       if (sep != NULL && sep->choice == 1 && sep->data.ptrvalue != NULL) {
         bsp = (BioseqPtr) sep->data.ptrvalue;
         okay = FALSE;
-        if (ppp->mRNAnotCDS) {
+        if (ppp->nucProducts) {
           if (ISA_na (bsp->mol)) {
             okay = TRUE;
           }
@@ -1128,7 +1129,7 @@ static void SeqLocPtrToProduct (DialoG d, Pointer data)
             if (sep != NULL && sep->choice == 1 && sep->data.ptrvalue != NULL) {
               bsp = (BioseqPtr) sep->data.ptrvalue;
               okay = FALSE;
-              if (ppp->mRNAnotCDS) {
+              if (ppp->nucProducts) {
                 if (ISA_na (bsp->mol)) {
                   okay = TRUE;
                 }
@@ -1179,7 +1180,7 @@ static Pointer ProductToSeqLocPtr (DialoG d)
     }
   }
   if (ppp != NULL && ppp->bsptr != NULL) {
-    if (ppp->mRNAnotCDS) {
+    if (ppp->nucProducts) {
       if (! Visible (d)) return NULL; /* not an mRNA, do not make product */
     }
     val = GetValue (ppp->product) - 1;
@@ -1190,7 +1191,7 @@ static Pointer ProductToSeqLocPtr (DialoG d)
       if (sep != NULL && sep->choice == 1 && sep->data.ptrvalue != NULL) {
         bsp = (BioseqPtr) sep->data.ptrvalue;
         okay = FALSE;
-        if (ppp->mRNAnotCDS) {
+        if (ppp->nucProducts) {
           if (ISA_na (bsp->mol)) {
             okay = TRUE;
           }
@@ -1250,7 +1251,7 @@ static void ChangeProteinView (Handle obj)
 
   ppp = GetObjectExtra (obj);
   if (ppp != NULL && ppp->cfp != NULL) {
-    if (ppp->mRNAnotCDS) return; /* using for mRNA product */
+    if (ppp->nucProducts) return; /* using for mRNA product */
     ans = Message (MSG_OKC, "%s", protChangeMsg);
     if (ans == ANS_CANCEL) {
       SetValue (obj, ppp->oldval);
@@ -1289,7 +1290,8 @@ static void ChangeProteinView (Handle obj)
 }
 
 
-static DialoG CreateProteinOrMRNAProductDialog (GrouP h, CharPtr title, Boolean mRNAnotCDS,
+static DialoG CreateProteinOrMRNAProductDialog (GrouP h, CharPtr title,
+                                                CharPtr label, Boolean nucProducts,
                                                 SeqEntryPtr sep, CdRgnFormPtr cfp)
 
 {
@@ -1309,7 +1311,7 @@ static DialoG CreateProteinOrMRNAProductDialog (GrouP h, CharPtr title, Boolean 
     ppp->todialog = SeqLocPtrToProduct;
     ppp->fromdialog = ProductToSeqLocPtr;
     ppp->testdialog = NULL;
-    ppp->mRNAnotCDS = mRNAnotCDS;
+    ppp->nucProducts = nucProducts;
 
     if (title != NULL && title [0] != '\0') {
       s = NormalGroup (p, 0, -2, title, systemFont, NULL);
@@ -1321,7 +1323,7 @@ static DialoG CreateProteinOrMRNAProductDialog (GrouP h, CharPtr title, Boolean 
     SetGroupSpacing (m, 10, 10);
     */
 
-    StaticPrompt (m, "Product", 0, popupMenuHeight, programFont, 'l');
+    StaticPrompt (m, label, 0, popupMenuHeight, programFont, 'l');
     ppp->count = (Int2) BioseqCount (sep);
     ppp->bsptr = MemNew (sizeof (BioseqPtr) * ppp->count);
     if (ppp->bsptr != NULL) {
@@ -1858,140 +1860,25 @@ static DialoG CreateCdRgnDialog (GrouP h, CharPtr title, Int2 genCode,
     SetGroupSpacing (j, 10, 10);
     n = HiddenGroup (j, 0, 0, NULL);
 
-    cpp->cdRgnGrp [0] = HiddenGroup (n, -1, 0, NULL);
-    SetGroupSpacing (cpp->cdRgnGrp [0], 10, 20);
-    q = HiddenGroup (cpp->cdRgnGrp [0], -1, 0, NULL);
-    f = HiddenGroup (q, 0, -2, NULL);
+    cpp->cdRgnGrp [0] = HiddenGroup (k, -1, 0, NULL);
+    g = HiddenGroup (cpp->cdRgnGrp [0], -1, 0, NULL);
 
-    internalVersion = (Boolean) (GetAppProperty ("InternalNcbiSequin") != NULL);
-
-    /*
-    if (! internalVersion) {
-      StaticPrompt (f, "Genetic Code", 0, popupMenuHeight, programFont, 'l');
-      StaticPrompt (f, "Reading Frame", 0, popupMenuHeight, programFont, 'l');
-
-      cpp->geneticCode = PopupList (f, TRUE, NULL);
-      PopulateGeneticCodePopup (cpp->geneticCode);
-      SetValue (cpp->geneticCode, gcIdToIndex [genCode]);
-    }
-    */
-
-    g = HiddenGroup (f, 5, 0, NULL);
-
-    /*
-    if (! internalVersion) {
-      cpp->frame = PopupList (g, TRUE, NULL);
-      PopupItem (cpp->frame, " ");
-      PopupItem (cpp->frame, "One");
-      PopupItem (cpp->frame, "Two");
-      PopupItem (cpp->frame, "Three");
-      SetValue (cpp->frame, 1);
-    }
-    */
-
-    p2 = StaticPrompt (g, "Flags", 0, popupMenuHeight, programFont, 'l');
-    if (! internalVersion) {
-      Hide (p2);
-    }
-    cpp->conflict = CheckBox (g, "Conflict", NULL);
-    if (! internalVersion) {
-      Hide (cpp->conflict);
-    }
-    cpp->orf = CheckBox (g, "ORF", NULL);
-    Hide (cpp->orf);
-
-    AlignObjects (ALIGN_MIDDLE, (HANDLE) cpp->orf,
-                  (HANDLE) cpp->conflict, (HANDLE) cpp->frame, NULL);
-
-    cfp->conceptTransA = NULL;
-    if (internalVersion) {
-      cfp->conceptTransA = CheckBox (q, "Author-supplied conceptual translation", NULL);
-    }
-
-    StaticPrompt (q, "", 10, stdLineHeight, programFont, 'l');
-    cfp->convertToMiscFeat = CheckBox (q, "Non-functional CDS, convert to misc_feature", ConvMiscFeatWarn);
-    SetObjectExtra (cfp->convertToMiscFeat, cfp, NULL);
-    cfp->saveAsMiscFeat = FALSE;
-
-    cpp->cdRgnGrp [1] = HiddenGroup (n, -1, 0, NULL);
-    CreateCodeBreakAlist (cpp);
-    codebreak_widths [0] = 5;
-    f = HiddenGroup (cpp->cdRgnGrp [1], 4, 0, NULL);
-    StaticPrompt (f, "Position", 5 * stdCharWidth, 0, programFont, 'c');
-    p2 = StaticPrompt (f, "Amino Acid", 0, 0, programFont, 'c');
-    cpp->cdBrk = CreateTagListDialog (cpp->cdRgnGrp [1],
-                                      3, 2, 2, codebreak_types,
-                                      codebreak_widths, cpp->alists,
-                                      CodeBreakPtrToCodeBreakDialog,
-                                      CodeBreakDialogToCodeBreakPtr);
-    tlp = (TagListPtr) GetObjectExtra (cpp->cdBrk);
-    if (tlp != NULL) {
-      AlignObjects (ALIGN_JUSTIFY, (HANDLE) tlp->control [1], (HANDLE) p2, NULL);
-    }
-    Hide (cpp->cdRgnGrp [1]);
-
-    cpp->cdRgnGrp [2] = HiddenGroup (n, -1, 0, NULL);
-    f = HiddenGroup (cpp->cdRgnGrp [2], 0, 0, NULL);
-    cfp->protTextGrp = HiddenGroup (f, -1, 0, NULL);
-    x = HiddenGroup (cfp->protTextGrp, 2, 0, NULL);
-    SetGroupSpacing (x, 3, 5);
-    StaticPrompt (x, "Name", 0, dialogTextHeight, programFont, 'l');
-    cfp->protNameText = DialogText (x, "", 15, NULL);
-    StaticPrompt (x, "Description", 0, dialogTextHeight, programFont, 'l');
-    cfp->protDescText = DialogText (x, "", 15, NULL);
-    cfp->protPromptGrp = HiddenGroup (f, -1, 0, NULL);
-    StaticPrompt (cfp->protPromptGrp,
-                  "Press Edit Protein Feature to change protein name",
-                  0, 0, programFont, 'l');
-    Hide (cfp->protPromptGrp);
-    z = HiddenGroup (cpp->cdRgnGrp [2], 3, 0, NULL);
-    cfp->edProtBtn = PushButton (z, "Edit Protein Feature", LaunchProtFeatEd);
-    SetObjectExtra (cfp->edProtBtn, cfp, NULL);
-    Disable (cfp->edProtBtn);
-    cfp->launchBtn = PushButton (z, "Launch Product Viewer", LaunchProteinViewer);
-    SetObjectExtra (cfp->launchBtn, cfp, NULL);
-    Disable (cfp->launchBtn);
-    AlignObjects (ALIGN_CENTER, (HANDLE) cfp->protTextGrp, (HANDLE) cfp->protPromptGrp,
-                  (HANDLE) z, NULL);
-    Hide (cpp->cdRgnGrp [2]);
-
-    /*
-    cpp->commonGrp = HiddenGroup (j, -1, 0, NULL);
-    SetGroupSpacing (cpp->commonGrp, 3, 5);
-    y = HiddenGroup (cpp->commonGrp, 3, 0, NULL);
-    x = HiddenGroup (cpp->commonGrp, 2, 0, NULL);
-    b = CheckBox (x, "Retranslate on Accept", SetRetransProc);
-    SetObjectExtra (b, cfp, NULL);
-    cfp->autoRetranslate = FALSE;
-    b = CheckBox (x, "Synchronize Partials", SetSynchProc);
-    SetObjectExtra (b, cfp, NULL);
-    SetStatus (b, TRUE);
-    cfp->autoUpdatePartials = TRUE;
-    AlignObjects (ALIGN_CENTER, (HANDLE) x, (HANDLE) y, NULL);
-    */
-
-    cpp->cdRgnGrp [3] = HiddenGroup (k, -1, 0, NULL);
-    g = HiddenGroup (cpp->cdRgnGrp [3], -1, 0, NULL);
-
-    y = NULL;
-    /* if (internalVersion) { */
-      y = HiddenGroup (g, 0, -2, NULL);
-      StaticPrompt (y, "Genetic Code", 0, popupMenuHeight, programFont, 'l');
-      StaticPrompt (y, "Reading Frame", 0, popupMenuHeight, programFont, 'l');
-      cpp->geneticCode = PopupList (y, TRUE, NULL);
-      PopulateGeneticCodePopup (cpp->geneticCode);
-      SetValue (cpp->geneticCode, gcIdToIndex [genCode]);
-      cpp->frame = PopupList (y, TRUE, NULL);
-      PopupItem (cpp->frame, " ");
-      PopupItem (cpp->frame, "One");
-      PopupItem (cpp->frame, "Two");
-      PopupItem (cpp->frame, "Three");
-      SetValue (cpp->frame, 1);
-    /* } */
+    y = HiddenGroup (g, 0, -2, NULL);
+    StaticPrompt (y, "Genetic Code", 0, popupMenuHeight, programFont, 'l');
+    StaticPrompt (y, "Reading Frame", 0, popupMenuHeight, programFont, 'l');
+    cpp->geneticCode = PopupList (y, TRUE, NULL);
+    PopulateGeneticCodePopup (cpp->geneticCode);
+    SetValue (cpp->geneticCode, gcIdToIndex [genCode]);
+    cpp->frame = PopupList (y, TRUE, NULL);
+    PopupItem (cpp->frame, " ");
+    PopupItem (cpp->frame, "One");
+    PopupItem (cpp->frame, "Two");
+    PopupItem (cpp->frame, "Three");
+    SetValue (cpp->frame, 1);
 
     x = HiddenGroup (g, -1, 0, NULL);
     f = HiddenGroup (x, 4, 0, NULL);
-    cfp->product = CreateProteinOrMRNAProductDialog (f, NULL, FALSE, cfp->sep, cfp);
+    cfp->product = CreateProteinOrMRNAProductDialog (f, NULL, "Product", FALSE, cfp->sep, cfp);
     cfp->protSeqIdGrp = HiddenGroup (f, 2, 0, NULL);
     StaticPrompt (cfp->protSeqIdGrp, "SeqID", 0, dialogTextHeight, programFont, 'l');
     cfp->protSeqIdTxt = DialogText (cfp->protSeqIdGrp, "", 6, NULL);
@@ -2009,6 +1896,81 @@ static DialoG CreateCdRgnDialog (GrouP h, CharPtr title, Int2 genCode,
     Disable (cfp->edSeqBtn);
     AlignObjects (ALIGN_LEFT, (HANDLE) f, (HANDLE) cfp->protseq, NULL);
     AlignObjects (ALIGN_CENTER, (HANDLE) x, (HANDLE) c, (HANDLE) y, NULL);
+
+    cpp->cdRgnGrp [1] = HiddenGroup (n, -1, 0, NULL);
+    f = HiddenGroup (cpp->cdRgnGrp [1], 0, 0, NULL);
+    cfp->protTextGrp = HiddenGroup (f, -1, 0, NULL);
+    x = HiddenGroup (cfp->protTextGrp, 2, 0, NULL);
+    SetGroupSpacing (x, 3, 5);
+    StaticPrompt (x, "Name", 0, dialogTextHeight, programFont, 'l');
+    cfp->protNameText = DialogText (x, "", 15, NULL);
+    StaticPrompt (x, "Description", 0, dialogTextHeight, programFont, 'l');
+    cfp->protDescText = DialogText (x, "", 15, NULL);
+    cfp->protPromptGrp = HiddenGroup (f, -1, 0, NULL);
+    StaticPrompt (cfp->protPromptGrp,
+                  "Press Edit Protein Feature to change protein name",
+                  0, 0, programFont, 'l');
+    Hide (cfp->protPromptGrp);
+    z = HiddenGroup (cpp->cdRgnGrp [1], 3, 0, NULL);
+    cfp->edProtBtn = PushButton (z, "Edit Protein Feature", LaunchProtFeatEd);
+    SetObjectExtra (cfp->edProtBtn, cfp, NULL);
+    Disable (cfp->edProtBtn);
+    cfp->launchBtn = PushButton (z, "Launch Product Viewer", LaunchProteinViewer);
+    SetObjectExtra (cfp->launchBtn, cfp, NULL);
+    Disable (cfp->launchBtn);
+    AlignObjects (ALIGN_CENTER, (HANDLE) cfp->protTextGrp, (HANDLE) cfp->protPromptGrp,
+                  (HANDLE) z, NULL);
+    Hide (cpp->cdRgnGrp [1]);
+
+    cpp->cdRgnGrp [2] = HiddenGroup (n, -1, 0, NULL);
+    CreateCodeBreakAlist (cpp);
+    codebreak_widths [0] = 5;
+    f = HiddenGroup (cpp->cdRgnGrp [2], 4, 0, NULL);
+    StaticPrompt (f, "Position", 5 * stdCharWidth, 0, programFont, 'c');
+    p2 = StaticPrompt (f, "Amino Acid", 0, 0, programFont, 'c');
+    cpp->cdBrk = CreateTagListDialog (cpp->cdRgnGrp [2],
+                                      3, 2, 2, codebreak_types,
+                                      codebreak_widths, cpp->alists,
+                                      CodeBreakPtrToCodeBreakDialog,
+                                      CodeBreakDialogToCodeBreakPtr);
+    tlp = (TagListPtr) GetObjectExtra (cpp->cdBrk);
+    if (tlp != NULL) {
+      AlignObjects (ALIGN_JUSTIFY, (HANDLE) tlp->control [1], (HANDLE) p2, NULL);
+    }
+    Hide (cpp->cdRgnGrp [2]);
+
+    cpp->cdRgnGrp [3] = HiddenGroup (n, -1, 0, NULL);
+    SetGroupSpacing (cpp->cdRgnGrp [3], 10, 20);
+    q = HiddenGroup (cpp->cdRgnGrp [3], -1, 0, NULL);
+    f = HiddenGroup (q, 0, -2, NULL);
+
+    internalVersion = (Boolean) (GetAppProperty ("InternalNcbiSequin") != NULL);
+
+    g = HiddenGroup (f, 5, 0, NULL);
+
+    p2 = StaticPrompt (g, "Flags", 0, 0, programFont, 'l');
+    if (! internalVersion) {
+      Hide (p2);
+    }
+    cpp->conflict = CheckBox (g, "Conflict", NULL);
+    if (! internalVersion) {
+      Hide (cpp->conflict);
+    }
+    cpp->orf = CheckBox (g, "ORF", NULL);
+    Hide (cpp->orf);
+
+    AlignObjects (ALIGN_MIDDLE, (HANDLE) cpp->orf,
+                  (HANDLE) cpp->conflict, (HANDLE) p2, NULL);
+
+    cfp->conceptTransA = NULL;
+    if (internalVersion) {
+      cfp->conceptTransA = CheckBox (q, "Author-supplied conceptual translation", NULL);
+    }
+
+    StaticPrompt (q, "", 10, stdLineHeight, programFont, 'l');
+    cfp->convertToMiscFeat = CheckBox (q, "Non-functional CDS, convert to misc_feature", ConvMiscFeatWarn);
+    SetObjectExtra (cfp->convertToMiscFeat, cfp, NULL);
+    cfp->saveAsMiscFeat = FALSE;
     Hide (cpp->cdRgnGrp [3]);
 
     AlignObjects (ALIGN_CENTER, (HANDLE) cpp->cdRgnGrp [0],
@@ -2477,6 +2439,7 @@ extern ForM CreateCdRgnForm (Int2 left, Int2 top, CharPtr title,
   CdRgnFormPtr       cfp;
   SeqFeatPtr         copysfp;
   CdRgnPagePtr       cpp;
+  CharPtr            except_text;
   GrouP              g;
   GBQualPtr          gbq;
   Int2               genCode;
@@ -2533,6 +2496,7 @@ extern ForM CreateCdRgnForm (Int2 left, Int2 top, CharPtr title,
 
     s = HiddenGroup (h, -1, 0, NULL);
     copysfp = NULL;
+    except_text = NULL;
     if (sfp != NULL) {
       copysfp = AsnIoMemCopy ((Pointer) sfp,
                               (AsnReadFunc) SeqFeatAsnRead,
@@ -2544,6 +2508,7 @@ extern ForM CreateCdRgnForm (Int2 left, Int2 top, CharPtr title,
       }
     }
     if (copysfp != NULL) {
+      except_text = copysfp->except_text;
       if (GetAppProperty ("InternalNcbiSequin") != NULL) {
         qual = GBQualNew ();
         if (qual != NULL) {
@@ -2562,7 +2527,11 @@ extern ForM CreateCdRgnForm (Int2 left, Int2 top, CharPtr title,
         qual = GBQualNew ();
         if (qual != NULL) {
           qual->qual = StringSave ("exception");
-          qual->val = StringSave ("");
+          if (StringHasNoText (except_text)) {
+            qual->val = StringSave ("");
+          } else {
+            qual->val = StringSave (except_text);
+          }
           gbq = copysfp->qual;
           if (gbq != NULL) {
             while (gbq->next != NULL) {
@@ -4246,6 +4215,7 @@ typedef struct rnapage {
   ButtoN        pseudo;
   GrouP         nameGrp;
   PrompT        rrnaPrompt;
+  PrompT        ornaPrompt;
   TexT          name;
   GrouP         trnaGrp;
   PopuP         AAitem;
@@ -4271,6 +4241,97 @@ static Uint1 check_rna_type (Uint1 type)
 {
   if (type > 6 && type != 255) return 0;
   return type;
+}
+
+typedef struct mrnauserpage {
+  DIALOG_MESSAGE_BLOCK
+  DialoG        protein;
+} MrnaUserData, PNTR MrnaUserPtr;
+
+static void UserObjectPtrToProtein (DialoG d, Pointer data)
+
+{
+  MrnaUserPtr    mup;
+  ObjectIdPtr    oip;
+  SeqIdPtr       sip;
+  CharPtr        str;
+  UserFieldPtr   ufp;
+  UserObjectPtr  uop;
+  ValNode        vn;
+
+  mup = (MrnaUserPtr) GetObjectExtra (d);
+  uop = (UserObjectPtr) data;
+  if (mup != NULL) {
+    if (uop != NULL && uop->type != NULL && StringICmp (uop->type->str, "MrnaProteinLink") == 0) {
+      ufp = uop->data;
+      if (ufp != NULL && ufp->choice == 1) {
+        oip = ufp->label;
+        if (oip != NULL && oip->str != NULL && StringICmp (oip->str, "protein seqID") == 0) {
+          str = (CharPtr) ufp->data.intvalue;
+          if (str != NULL) {
+            sip = MakeSeqID (str);
+            if (sip != NULL) {
+              vn.choice = SEQLOC_WHOLE;
+              vn.data.ptrvalue = (Pointer) sip;
+              PointerToDialog (mup->protein, (Pointer) (&vn));
+              SeqIdFree (sip);
+              return;
+            }
+          }
+        }
+      }
+    }
+  }
+  PointerToDialog (mup->protein, NULL);
+}
+
+static Pointer ProteinToUserObjectPtr (DialoG d)
+
+{
+  BioseqPtr      bsp;
+  MrnaUserPtr    mup;
+  SeqIdPtr       sip;
+  SeqLocPtr      slp;
+  UserObjectPtr  uop;
+
+  uop = NULL;
+  mup = (MrnaUserPtr) GetObjectExtra (d);
+  if (mup != NULL) {
+    slp = DialogToPointer (mup->protein);
+    if (slp != NULL) {
+      sip = SeqLocId (slp);
+      if (sip != NULL) {
+        bsp = BioseqFind (sip);
+        if (bsp != NULL) {
+          uop = CreateMrnaProteinLinkUserObject (bsp);
+        }
+      }
+      SeqLocFree (slp);
+    }
+  }
+  return (Pointer) uop;
+}
+
+static DialoG CreateMrnaUserObjectDialog (GrouP h, CharPtr label, SeqEntryPtr sep)
+
+{
+  MrnaUserPtr  mup;
+  GrouP        p;
+
+  p = HiddenGroup (h, -1, 0, NULL);
+  SetGroupSpacing (p, 10, 10);
+
+  mup = (MrnaUserPtr) MemNew (sizeof (MrnaUserData));
+  if (mup != NULL) {
+    SetObjectExtra (p, mup, StdCleanupExtraProc);
+    mup->dialog = (DialoG) p;
+    mup->todialog = UserObjectPtrToProtein;
+    mup->fromdialog = ProteinToUserObjectPtr;
+    mup->testdialog = NULL;
+    mup->protein = CreateProteinOrMRNAProductDialog (p, NULL, label, FALSE, sep, NULL);
+  }
+
+  return (DialoG) p;
 }
 
 /* trna aa conversion modified from Tatiana Tatusov's code */
@@ -4303,11 +4364,13 @@ static void RnaRefPtrToRnaPage (DialoG d, Pointer data)
         SafeHide (rpp->trnaGrp);
         SafeHide (rpp->nameGrp);
         SafeHide (rpp->rrnaPrompt);
+        SafeHide (rpp->ornaPrompt);
         break;
       case 3 :
         SafeSetTitle (rpp->name, "");
         SafeHide (rpp->nameGrp);
         SafeHide (rpp->rrnaPrompt);
+        SafeHide (rpp->ornaPrompt);
         SafeSetValue (rpp->AAitem, 1);
         if (rrp->ext.choice == 2) {
           trna = rrp->ext.value.ptrvalue;
@@ -4384,7 +4447,19 @@ static void RnaRefPtrToRnaPage (DialoG d, Pointer data)
         } else {
           SafeSetTitle (rpp->name, "");
         }
+        SafeHide (rpp->ornaPrompt);
         SafeShow (rpp->rrnaPrompt);
+        SafeShow (rpp->nameGrp);
+        break;
+      case 255 :
+        SafeHide (rpp->trnaGrp);
+        if (rrp->ext.choice == 1 && rrp->ext.value.ptrvalue != NULL) {
+          SafeSetTitle (rpp->name, (CharPtr) rrp->ext.value.ptrvalue);
+        } else {
+          SafeSetTitle (rpp->name, "");
+        }
+        SafeHide (rpp->rrnaPrompt);
+        SafeShow (rpp->ornaPrompt);
         SafeShow (rpp->nameGrp);
         break;
       default :
@@ -4395,6 +4470,7 @@ static void RnaRefPtrToRnaPage (DialoG d, Pointer data)
           SafeSetTitle (rpp->name, "");
         }
         SafeHide (rpp->rrnaPrompt);
+        SafeHide (rpp->ornaPrompt);
         SafeShow (rpp->nameGrp);
         break;
     }
@@ -4404,6 +4480,7 @@ static void RnaRefPtrToRnaPage (DialoG d, Pointer data)
     SafeSetTitle (rpp->name, "");
     SafeHide (rpp->nameGrp);
     SafeHide (rpp->rrnaPrompt);
+    SafeHide (rpp->ornaPrompt);
     SafeSetValue (rpp->AAitem, 0);
     SafeHide (rpp->trnaGrp);
   }
@@ -4565,32 +4642,50 @@ static void ChangeRnaProc (PopuP p)
         case 0 :
           SafeHide (rpp->nameGrp);
           SafeHide (rpp->rrnaPrompt);
+          SafeHide (rpp->ornaPrompt);
           SafeHide (rpp->trnaGrp);
           SafeHide (rfp->product);
+          SafeHide (rfp->usrobjext);
           break;
         case 2 :
           SafeHide (rpp->trnaGrp);
           SafeHide (rpp->rrnaPrompt);
+          SafeHide (rpp->ornaPrompt);
           SafeShow (rpp->nameGrp);
           SafeShow (rfp->product);
+          SafeShow (rfp->usrobjext);
           break;
         case 3 :
           SafeHide (rpp->nameGrp);
           SafeHide (rpp->rrnaPrompt);
+          SafeHide (rpp->ornaPrompt);
           SafeShow (rpp->trnaGrp);
           SafeHide (rfp->product);
+          SafeHide (rfp->usrobjext);
           break;
         case 4 :
           SafeHide (rpp->trnaGrp);
+          SafeHide (rpp->ornaPrompt);
           SafeShow (rpp->rrnaPrompt);
           SafeShow (rpp->nameGrp);
           SafeHide (rfp->product);
+          SafeHide (rfp->usrobjext);
+          break;
+        case 255 :
+          SafeHide (rpp->trnaGrp);
+          SafeHide (rpp->rrnaPrompt);
+          SafeShow (rpp->ornaPrompt);
+          SafeShow (rpp->nameGrp);
+          SafeHide (rfp->product);
+          SafeHide (rfp->usrobjext);
           break;
         default :
           SafeHide (rpp->trnaGrp);
           SafeHide (rpp->rrnaPrompt);
+          SafeHide (rpp->ornaPrompt);
           SafeShow (rpp->nameGrp);
           SafeHide (rfp->product);
+          SafeHide (rfp->usrobjext);
           break;
       }
     }
@@ -4666,6 +4761,7 @@ static DialoG CreateRnaDialog (GrouP h, CharPtr title,
   Boolean     showpseudo;
   PrompT      t;
   DialoG      tbs;
+  GrouP       x;
 
   p = HiddenGroup (h, 1, 0, NULL);
   SetGroupSpacing (p, 10, 10);
@@ -4717,11 +4813,14 @@ static DialoG CreateRnaDialog (GrouP h, CharPtr title,
     q = HiddenGroup (rpp->nameGrp, -2, 0, NULL);
     StaticPrompt (q, "Name", 0, dialogTextHeight, programFont, 'l');
     rpp->name = DialogText (q, "", 20, NULL);
-    rpp->rrnaPrompt = StaticPrompt (rpp->nameGrp, "E.g., 16S ribosomal RNA", 0, 0, programFont, 'c');
-    if ((sfp != NULL && sfp->product != NULL) || indexerVersion) {
-      rfp->product = CreateProteinOrMRNAProductDialog (rpp->nameGrp, NULL, TRUE, sep, NULL);
+    x = HiddenGroup (rpp->nameGrp, 0, 0, NULL);
+    rpp->rrnaPrompt = StaticPrompt (x, "E.g., 16S ribosomal RNA", 0, 0, programFont, 'c');
+    rpp->ornaPrompt = StaticPrompt (x, "E.g., internal transcribed spacer 1", 0, 0, programFont, 'c');
+    if ((sfp != NULL && (sfp->product != NULL || sfp->ext != NULL)) || indexerVersion) {
+      rfp->product = CreateProteinOrMRNAProductDialog (rpp->nameGrp, NULL, "cDNA Product   ", TRUE, sep, NULL);
+      rfp->usrobjext = CreateMrnaUserObjectDialog (rpp->nameGrp, "Protein Product", sep);
     }
-    AlignObjects (ALIGN_CENTER, (HANDLE) q, (HANDLE) rpp->rrnaPrompt, NULL);
+    AlignObjects (ALIGN_CENTER, (HANDLE) q, (HANDLE) rpp->rrnaPrompt, (HANDLE) rpp->ornaPrompt, NULL);
     Hide (rpp->nameGrp);
 
     rpp->trnaGrp = HiddenGroup (g, -1, 0, NULL);
@@ -4756,32 +4855,50 @@ static DialoG CreateRnaDialog (GrouP h, CharPtr title,
       case 0 :
         SafeHide (rpp->nameGrp);
         SafeHide (rpp->rrnaPrompt);
+        SafeHide (rpp->ornaPrompt);
         SafeHide (rpp->trnaGrp);
         SafeHide (rfp->product);
+        SafeHide (rfp->usrobjext);
         break;
       case FEATDEF_mRNA :
         SafeHide (rpp->trnaGrp);
         SafeHide (rpp->rrnaPrompt);
+        SafeHide (rpp->ornaPrompt);
         SafeShow (rpp->nameGrp);
         SafeShow (rfp->product);
+        SafeShow (rfp->usrobjext);
         break;
       case FEATDEF_tRNA :
         SafeHide (rpp->nameGrp);
         SafeHide (rpp->rrnaPrompt);
+        SafeHide (rpp->ornaPrompt);
         SafeShow (rpp->trnaGrp);
         SafeHide (rfp->product);
+        SafeHide (rfp->usrobjext);
         break;
       case FEATDEF_rRNA :
         SafeHide (rpp->trnaGrp);
+        SafeHide (rpp->ornaPrompt);
         SafeShow (rpp->rrnaPrompt);
         SafeShow (rpp->nameGrp);
         SafeHide (rfp->product);
+        SafeHide (rfp->usrobjext);
+        break;
+      case FEATDEF_otherRNA :
+        SafeHide (rpp->trnaGrp);
+        SafeHide (rpp->rrnaPrompt);
+        SafeShow (rpp->ornaPrompt);
+        SafeShow (rpp->nameGrp);
+        SafeHide (rfp->product);
+        SafeHide (rfp->usrobjext);
         break;
       default :
         SafeHide (rpp->trnaGrp);
+        SafeHide (rpp->ornaPrompt);
         SafeHide (rpp->rrnaPrompt);
         SafeShow (rpp->nameGrp);
         SafeHide (rfp->product);
+        SafeHide (rfp->usrobjext);
         break;
     }
   }
@@ -5102,6 +5219,7 @@ extern ForM CreateRnaForm (Int2 left, Int2 top, CharPtr title,
     SendMessageToDialog (rfp->data, VIB_MSG_INIT);
     SendMessageToDialog (rfp->location, VIB_MSG_INIT);
     SendMessageToDialog (rfp->product, VIB_MSG_INIT);
+    SendMessageToDialog (rfp->usrobjext, VIB_MSG_INIT);
     Show (rfp->pages [rfp->currentPage]);
     SendMessageToDialog (rfp->data, VIB_MSG_ENTER);
     Update ();

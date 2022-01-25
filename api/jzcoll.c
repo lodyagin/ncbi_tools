@@ -997,7 +997,7 @@ NLM_EXTERN Uint2 get_bioseq_itemID(BioseqPtr bsp, Uint2 entityID)
 	MemSet((Pointer)(&gs), 0, sizeof(GatherScope));
 	MemSet((Pointer)(gs.ignore), (int)(TRUE), (size_t)OBJ_MAX * sizeof(Boolean));
 	gs.ignore[OBJ_BIOSEQ] = FALSE;
-	GatherEntity(entityID, &tb, bspcountfunc, NULL);
+	GatherEntity(entityID, &tb, bspcountfunc, &gs);
 
 	return tb.itemID;
 }

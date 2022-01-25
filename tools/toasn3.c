@@ -524,6 +524,63 @@ static void FixProtMolInfo (SeqEntryPtr sep, Pointer data, Int4 index, Int2 inde
 	}
 }
 
+static void FuseMolInfos (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
+
+{
+	BioseqPtr        bsp;
+	MolInfoPtr       first;
+	MolInfoPtr       mip;
+	ValNodePtr       next;
+	ValNodePtr PNTR  prev;
+	Boolean          remove;
+	ValNodePtr       vnp;
+
+	if (! IS_Bioseq(sep)) return;
+	bsp = (BioseqPtr) sep->data.ptrvalue;
+	if (bsp == NULL) return;
+	vnp = bsp->descr;
+	prev = &(bsp->descr);
+	first = NULL;
+	while (vnp != NULL) {
+		remove = FALSE;
+		next = vnp->next;
+		if (vnp->choice == Seq_descr_molinfo) {
+			mip = (MolInfoPtr) vnp->data.ptrvalue;
+			if (first == NULL) {
+				first = mip;
+			} else if (mip != NULL) {
+				if (first->biomol == 0) {
+					first->biomol = mip->biomol;
+				}
+				if (first->tech == 0) {
+					first->tech = mip->tech;
+				}
+				if (first->completeness == 0) {
+					first->completeness = mip->completeness;
+				}
+				if (first->biomol == mip->biomol &&
+					first->tech == mip->tech &&
+					first->completeness == mip->completeness) {
+					if (first->techexp == NULL) {
+						first->techexp = mip->techexp;
+						mip->techexp = NULL;
+					}
+					remove = TRUE;
+				}
+			}
+		}
+		if (remove) {
+			*prev = vnp->next;
+			vnp->next = NULL;
+			MolInfoFree (mip);
+			ValNodeFree (vnp);
+		} else {
+			prev = &(vnp->next);
+		}
+		vnp = next;
+	}
+}
+
 /*****************************************************************************
 *
 *  Build Biosource from descr-org and features
@@ -1025,6 +1082,7 @@ Int4 SeqEntryToAsn3Ex (SeqEntryPtr sep, Boolean strip_old, Boolean source_correc
 		EntryChangeImpFeat(sep); 
 		EntryChangeGBSource(sep); 
 		SeqEntryExplore (sep, NULL, FixProtMolInfo);
+		SeqEntryExplore (sep, NULL, FuseMolInfos);
 		SeqEntryExplore(sep, NULL, StripProtXref);
 		SeqEntryExplore(sep, (Pointer)(&qm), CheckMaps);
 		if (qm.same == TRUE) {
@@ -1089,6 +1147,7 @@ Int4 SeqEntryToAsn3Ex (SeqEntryPtr sep, Boolean strip_old, Boolean source_correc
 	EntryChangeImpFeat(sep); 
 	EntryChangeGBSource(sep); 
 	SeqEntryExplore (sep, NULL, FixProtMolInfo);
+	SeqEntryExplore (sep, NULL, FuseMolInfos);
 	SeqEntryExplore(sep, NULL, StripProtXref);
 	SeqEntryExplore(sep, (Pointer)(&qm), CheckMaps);
 	if (qm.same == TRUE) {
@@ -1343,7 +1402,7 @@ Int4 BSComparisonEx(BioSourcePtr one, BioSourcePtr two, Boolean clone)
 		}
 		if (StringNCmp(name2, organelle[i].name, 
 				StringLen(organelle[i].name)) == 0) {
-			name1 += StringLen(organelle[i].name);
+			name2 += StringLen(organelle[i].name);
 		}
 	}
 	for (; name1 != NULL && *name1 == ' '; name1++) continue;
@@ -3729,10 +3788,15 @@ static void CdEndCheck(SeqFeatPtr sfp, FILE *fp)
 	SeqIntPtr sip;
 	Int2 residue, residue2;
 	Char nuc[40];
+	CodeBreakPtr cbp;
+	Int4 pos1, pos2, pos;
+	SeqLocPtr tmpslp;
+	Int4 len2;
 
 
 	crp = (CdRegionPtr)(sfp->data.value.ptrvalue);
 	len = SeqLocLen(sfp->location);
+	len2 = len;
 	switch (crp->frame)
 	{
 		case 2:
@@ -3754,6 +3818,33 @@ static void CdEndCheck(SeqFeatPtr sfp, FILE *fp)
 	if (((protseq->length + 1) == aas) && /* correct length with termination */
 		(remainder == 0))
 		return;
+
+		cbp = crp->code_break;
+		while (cbp != NULL)
+		{
+			pos1 = INT4_MAX;
+			pos2 = -10;
+			tmpslp = NULL;
+			while ((tmpslp = SeqLocFindNext(cbp->loc, tmpslp)) != NULL)
+			{
+				pos = GetOffsetInLoc(tmpslp, sfp->location, 
+SEQLOC_START);
+				if (pos < pos1)
+					pos1 = pos;
+				pos = GetOffsetInLoc(tmpslp, sfp->location, 
+SEQLOC_STOP);
+				if (pos > pos2)
+					pos2 = pos;
+			}
+			pos = pos2 - pos1; /* codon length */
+			if (pos == 2 || (pos >= 0 && pos <= 1 && pos2 == len2 - 1))   /*  a codon */
+			/* allowing a partial codon at the end */
+			{
+				return;
+			}
+
+			cbp = cbp->next;
+		}
 
 	while ((curr = SeqLocFindNext(sfp->location, curr)) != NULL)
 	{
@@ -3970,8 +4061,8 @@ static void ImpFeatToProtRef(SeqFeatArr sfa)
 	Uint2 retval;
 	Int2 i;
 	Boolean lfree = FALSE;
-	CharPtr p;
-	CharPtr q;
+	CharPtr p, q;
+	GBQualPtr qu, qunext;
 	
 	for (tmp1 = sfa.pept; tmp1; tmp1 = tmp1->next) {
 		lfree = FALSE;
@@ -4005,7 +4096,7 @@ static void ImpFeatToProtRef(SeqFeatArr sfa)
 			"CDS for the peptide feature [%s] not found", p);
 			MemFree(p);
 		} else {
-			slp = dnaLoc_to_aaLoc(best_cds, f1->location, TRUE, &frame);
+			slp = dnaLoc_to_aaLoc(best_cds, f1->location, TRUE, &frame, FALSE);
 			if (slp == NULL) {
 			p = SeqLocPrint(f1->location);
 			q = SeqLocPrint(best_cds->location);
@@ -4017,19 +4108,35 @@ static void ImpFeatToProtRef(SeqFeatArr sfa)
 			ifp = (ImpFeatPtr) f1->data.value.ptrvalue;
 			sfp = SeqFeatNew();
 			sfp->location = slp;
+			if (f1->qual != NULL) {
+				sfp->qual = f1->qual;
+				f1->qual = NULL;
+			}
 			if (tmp1->choice == SEQFEAT_PROT) {
-				if (f1->comment != NULL) {
-					sfp->comment = StringSave(f1->comment);
-				}
 				sfp->data.choice = SEQFEAT_PROT;
 				prot = ProtRefNew();
 				sfp->data.value.ptrvalue = prot;
-				if (StringCmp(ifp->key, "mat_peptide") == 0)
+				if (StringCmp(ifp->key, "mat_peptide") == 0) {
 					prot->processed = 2;
+					for (qu=sfp->qual; qu; qu=qunext) {
+						qunext = qu->next;
+						if (StringCmp(qu->qual, "product") == 0) {
+							ValNodeAddStr(&(prot->name), 0,StringSave(qu->val));
+							sfp->qual = remove_qual(sfp->qual, qu); 
+						}
+					}
+				}
 				if (StringCmp(ifp->key, "sig_peptide") == 0)
 					prot->processed = 3;
 				if (StringCmp(ifp->key, "transit_peptide") == 0)
 					prot->processed = 4;
+				if (f1->comment != NULL) {
+					if (prot->processed == 2 || prot->name == NULL) {
+						ValNodeAddStr(&(prot->name), 0,StringSave(f1->comment));
+					} else {
+						sfp->comment = StringSave(f1->comment);
+					}
+				}
 			} else if (tmp1->choice == SEQFEAT_SITE) {
 				sfp->data.choice = SEQFEAT_SITE;
 				if ((i = FindStr(feat_site, num_site, f1->comment)) != -1) {
@@ -4045,10 +4152,6 @@ static void ImpFeatToProtRef(SeqFeatArr sfa)
 					sfp->data.value.intvalue = 255;
 				}
 			}
-			if (f1->qual != NULL) {
-				sfp->qual = f1->qual;
-				f1->qual = NULL;
-			}
 			if (f1->title)
 			{
 				if(sfp->comment != NULL)
@@ -4061,7 +4164,7 @@ static void ImpFeatToProtRef(SeqFeatArr sfa)
 			if(sfp->location)
 				SeqLocFree(sfp->location);
 			sfp->location = 
-				dnaLoc_to_aaLoc(best_cds, f1->location, TRUE, &frame);
+				dnaLoc_to_aaLoc(best_cds, f1->location, TRUE, &frame, FALSE);
 			if (sfp->location == NULL) {
 			p = SeqLocPrint(f1->location);
 			q = SeqLocPrint(best_cds->location);

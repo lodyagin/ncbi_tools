@@ -6,6 +6,10 @@
 #include <jzcoll.h>
 #include <picture.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 
 typedef struct globalbsp{               /*the map drawing unit for global view*/ 
 	BioseqPtr bsp;
@@ -129,5 +133,10 @@ SegmenT GlobalPictureUpdate PROTO((GlobalDrawPtr gdraw_p, ValNodePtr new_gene_li
 ValNodePtr find_map_pos PROTO((GlobalDrawPtr gdraw_p, PntInfo start_pnt, PntInfo stop_pnt));
 
 GeneDataPtr create_gene_data PROTO((ValNodePtr msp_list, ValNodePtr mark_list));
+
+#ifdef __cplusplus
+}
+#endif
+
 #endif
 

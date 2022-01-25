@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 98-01-01
 *
-* $Revision: 6.2 $
+* $Revision: 6.4 $
 *
 * File Description: sigme utilities
 *
@@ -38,6 +38,12 @@
 * Date       Name        Description of modification
 * --------------------------------------------------------------------------
 * $Log: urksigu.c,v $
+* Revision 6.4  1998/11/24 15:40:53  kuzio
+* refine boundary condition for multiple potential leader pepides
+*
+* Revision 6.3  1998/11/16 14:29:54  kuzio
+* flagBoundaryCondition
+*
 * Revision 6.2  1998/09/16 18:03:37  kuzio
 * cvs logging
 *
@@ -90,9 +96,12 @@ extern Int4 EndOfSig (SeqLocPtr slp)
 extern SeqLocPtr FilterSigSeq (BioseqPtr bsp,
                                ComProfPtr pppl, ComProfPtr pppc,
                                FloatHi leadcutoff, FloatHi cutcutoff,
-                               Int4 range, SeqIdPtr sip)
+                               Int4 range, SeqIdPtr sip,
+                               Boolean flagBoundaryCondition,
+                               Boolean flagReportIfAllFuzzyOnly)
 {
   Int4        lstart, lstop, cstart, cstop;
+  FloatHi     score;
   SeqAlignPtr sap1h, sap1, sap2h, sap2;
   StdSegPtr   ssp1, ssp2;
   SeqLocPtr   slp1, slp2;
@@ -101,8 +110,47 @@ extern SeqLocPtr FilterSigSeq (BioseqPtr bsp,
   if (bsp == NULL || pppl == NULL || pppc == NULL)
     return NULL;
 
-  sap1h = sap1 = ProfileMatchBioseq (bsp, pppl, NULL, leadcutoff);
-  sap2h = sap2 = ProfileMatchBioseq (bsp, pppc, NULL, cutcutoff);
+  sap1h = sap1 = ProfileMatchBioseq (bsp, pppl, NULL, leadcutoff,
+                                     flagBoundaryCondition);
+  sap2h = sap2 = ProfileMatchBioseq (bsp, pppc, NULL, cutcutoff,
+                                     flagBoundaryCondition);
+  if (flagReportIfAllFuzzyOnly)
+  {
+    score = leadcutoff * 0.9;
+    score = leadcutoff + (leadcutoff - score);
+    while (sap1 != NULL)
+    {
+      if (sap1->score->value.realvalue > score)
+      {
+        while (sap1h != NULL)
+        {
+          sap1 = sap1h->next;
+          SeqAlignFree (sap1h);
+          sap1h = sap1;
+        }
+        break;
+      }
+      sap1 = sap1->next;
+    }
+    score = cutcutoff * 0.9;
+    score = cutcutoff + (cutcutoff - score);
+    while (sap2 != NULL)
+    {
+      if (sap2->score->value.realvalue > score)
+      {
+        while (sap2h != NULL)
+        {
+          sap2 = sap2h->next;
+          SeqAlignFree (sap2h);
+          sap2h = sap2;
+        }
+        break;
+      }
+      sap2 = sap2->next;
+    }
+  }
+  sap1 = sap1h;
+  sap2 = sap2h;
   while (sap1 != NULL)
   {
     ssp1 = (StdSegPtr) sap1->segs;
@@ -126,13 +174,13 @@ extern SeqLocPtr FilterSigSeq (BioseqPtr bsp,
             if (cstop == SeqLocStop (slpt))
               break;
             slpt = slpt->next;
-	  }
+          }
           if (slpt == NULL)
           {
             slp = SeqLocIntNew (lstart, cstop, Seq_strand_unknown, sip);
             ValNodeLink (&slph, slp);
-	  }
-	}
+          }
+        }
         sap2 = sap2->next;
       }
     }

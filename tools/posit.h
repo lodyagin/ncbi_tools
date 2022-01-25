@@ -36,9 +36,9 @@ Contents: header file for position-based BLAST.
 *****************************************************************************/
 /* $Revision: 6.5 $ */
 /* $Log: posit.h,v $
- * Revision 6.5  1998/09/28 12:31:32  madden
- * Used BlastConstructErrorMessage
- *
+/* Revision 6.5  1998/09/28 12:31:32  madden
+/* Used BlastConstructErrorMessage
+/*
  * Revision 6.3  1998/04/24 19:29:50  madden
  * Added ideal values to compactSearch
  *

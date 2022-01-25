@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/3/98
 *
-* $Revision: 6.68 $
+* $Revision: 6.79 $
 *
 * File Description: 
 *
@@ -2424,6 +2424,13 @@ typedef struct refgeneuserform {
   SeqEntryPtr   sep;
 } RefgeneUserForm, PNTR RefgeneUserFormPtr;
 
+static ENUM_ALIST(changeflags_alist)
+  {" ",           0},
+  {"Sequence",    1},
+  {"Annotation",  2},
+  {"Both",        3},
+END_ENUM_ALIST
+
 static ENUM_ALIST(refgene_alist)
   {" ",          0},
   {"Assembly",   REFGENE_ASSEMBLY},
@@ -2434,15 +2441,15 @@ static ENUM_ALIST(refgene_alist)
 END_ENUM_ALIST
 
 static Uint2 refgene_types [] = {
-  TAGLIST_TEXT, TAGLIST_TEXT, TAGLIST_TEXT, TAGLIST_POPUP
+  TAGLIST_TEXT, TAGLIST_TEXT, TAGLIST_TEXT, TAGLIST_POPUP, TAGLIST_POPUP
 };
 
 static Uint2 refgene_widths [] = {
-  9, 7, 15, 0
+  9, 7, 15, 0, 0
 };
 
 static EnumFieldAssocPtr refgene_popups [] = {
-  NULL, NULL, NULL, refgene_alist
+  NULL, NULL, NULL, changeflags_alist, refgene_alist
 };
 
 static CharPtr refgene_labels [] = {
@@ -2450,23 +2457,26 @@ static CharPtr refgene_labels [] = {
 };
 
 static CharPtr refgene_fields [] = {
-  "Accession", "GI", "Comment", "Type", NULL
+  "Accession", "GI", "Comment", "Change", "Type", NULL
 };
 
 static void UserFieldPtrToVisStringDialog (DialoG d, Pointer data)
 
 {
   CharPtr       accession;
+  Boolean       annotChange;
   CharPtr       comment;
   UserFieldPtr  curr;
   UserFieldPtr  entry;
   Int2          field;
+  Int2          flags;
   Int4          from;
   Int4          gi;
   ValNodePtr    head;
   Int2          i;
   Int2          j;
   ObjectIdPtr   oip;
+  Boolean       seqChange;
   CharPtr       str;
   TagListPtr    tlp;
   Int4          to;
@@ -2495,6 +2505,8 @@ static void UserFieldPtrToVisStringDialog (DialoG d, Pointer data)
           gi = 0;
           from = 0;
           to = 0;
+          annotChange = FALSE;
+          seqChange = FALSE;
           ufp = (UserFieldPtr) entry->data.ptrvalue;
           while (ufp != NULL) {
             oip = ufp->label;
@@ -2507,6 +2519,10 @@ static void UserFieldPtrToVisStringDialog (DialoG d, Pointer data)
                 from = ufp->data.intvalue;
               } else if (StringICmp (oip->str, "to") == 0 && ufp->choice == 2) {
                 to = ufp->data.intvalue;
+              } else if (StringICmp (oip->str, "sequenceChange") == 0 && ufp->choice == 4) {
+                seqChange = ufp->data.boolvalue;
+              } else if (StringICmp (oip->str, "annotationChange") == 0 && ufp->choice == 4) {
+                annotChange = ufp->data.boolvalue;
               } else if (StringICmp (oip->str, "comment") == 0 && ufp->choice == 1) {
                 comment = (CharPtr) ufp->data.intvalue;
               }
@@ -2517,10 +2533,17 @@ static void UserFieldPtrToVisStringDialog (DialoG d, Pointer data)
             if (comment == NULL) {
               comment = "";
             }
+            flags = 0;
+            if (seqChange) {
+              flags++;
+            }
+            if (annotChange) {
+              flags += 2;
+            }
             if (gi != 0) {
-              sprintf (str, "%s\t%ld\t%s\t%d\n", accession, (long) gi, comment, (int) field);
+              sprintf (str, "%s\t%ld\t%s\t%d\t%d\n", accession, (long) gi, comment, (int) flags, (int) field);
             } else {
-              sprintf (str, "%s\t\t%s\t%d\n", accession, comment, (int) field);
+              sprintf (str, "%s\t\t%s\t%d\t%d\n", accession, comment, (int) flags, (int) field);
             }
             vnp = ValNodeNew (head);
             if (head == NULL) {
@@ -2572,6 +2595,7 @@ static void UserObjectPtrToRefGeneDialog (DialoG d, Pointer data)
 static Pointer RefGeneDialogToUserObjectPtr (DialoG d)
 
 {
+  Boolean               annotChange = FALSE;
   Char                  ch;
   Boolean               gotOne = FALSE;
   Int2                  i;
@@ -2580,6 +2604,7 @@ static Pointer RefGeneDialogToUserObjectPtr (DialoG d)
   Int4                  num [4];
   Boolean               okay;
   RefgeneUserDialogPtr  rdp;
+  Boolean               seqChange = FALSE;
   CharPtr               str;
   TagListPtr            tlp;
   CharPtr               txt [4];
@@ -2606,24 +2631,31 @@ static Pointer RefGeneDialogToUserObjectPtr (DialoG d)
         }
       }
       if (okay) {
-        for (j = 0; j < 4; j++) {
+        for (j = 0; j < 5; j++) {
           txt [j] = ExtractTagListColumn ((CharPtr) vnp->data.ptrvalue, j);
           num [j] = 0;
         }
-        for (j = 1; j < 2; j++) {
-          num [j] = 0;
-          if (txt [j] != NULL && sscanf (txt [j], "%ld", &val) == 1) {
-            num [j] = val;
+        for (j = 1; j < 5; j++) {
+          if (j != 2) {
+            num [j] = 0;
+            if (txt [j] != NULL && sscanf (txt [j], "%ld", &val) == 1) {
+              num [j] = val;
+            }
           }
         }
-        if (txt [3] != NULL && sscanf (txt [3], "%ld", &val) == 1) {
-          num [3] = val;
+        if (num [3] >= 2) {
+          annotChange = TRUE;
+          (num [3]) -= 2;
         }
-        i = num [3];
+        if (num [3] > 0) {
+          seqChange = TRUE;
+        }
+        i = num [4];
         if (i >= REFGENE_ASSEMBLY && i <= REFGENE_UNKNOWN) {
           if (! StringHasNoText (txt [0])) {
             AddAccessionToRefGeneTrackUserObject (uop, refgene_labels [i],
-                                                  txt [0], num [1], txt [2]);
+                                                  txt [0], num [1],
+                                                  seqChange, annotChange, txt [2]);
             gotOne = TRUE;
           }
           for (j = 0; j < 4; j++) {
@@ -2641,6 +2673,7 @@ static DialoG CreateRefGeneDialog (GrouP g)
 
 {
   Int2                  i;
+  PrompT                lastppt;
   GrouP                 p;
   PrompT                ppt;
   GrouP                 q;
@@ -2659,17 +2692,21 @@ static DialoG CreateRefGeneDialog (GrouP g)
   rdp->fromdialog = RefGeneDialogToUserObjectPtr;
 
   q = HiddenGroup (p, -6, 0, NULL);
-  for (i = 0; i < 4; i++) {
+  lastppt = NULL;
+  ppt = NULL;
+  for (i = 0; i < 5; i++) {
+    lastppt = ppt;
     ppt = StaticPrompt (q, refgene_fields [i], refgene_widths [i] * stdCharWidth, 0, systemFont, 'c');
   }
-  rdp->fields = CreateTagListDialog (p, 6, 4, STD_TAG_SPACING,
+  rdp->fields = CreateTagListDialog (p, 6, 5, STD_TAG_SPACING,
                                      refgene_types, refgene_widths, refgene_popups,
                                      UserFieldPtrToVisStringDialog,
                                      VisStringDialogToUserFieldPtr);
 
   tlp = (TagListPtr) GetObjectExtra (rdp->fields);
   if (tlp != NULL) {
-    AlignObjects (ALIGN_JUSTIFY, (HANDLE) tlp->control [3], (HANDLE) ppt, NULL);
+    AlignObjects (ALIGN_JUSTIFY, (HANDLE) tlp->control [3], (HANDLE) lastppt, NULL);
+    AlignObjects (ALIGN_JUSTIFY, (HANDLE) tlp->control [4], (HANDLE) ppt, NULL);
   }
   return (DialoG) p;
 }
@@ -2979,7 +3016,7 @@ static void DoChangeHistory (ButtoN b)
   MsgAnswer        ans;
   BioseqPtr        bsp;
   GBBlockPtr       gbp = NULL;
-  ValNodePtr       head1, head2;
+  ValNodePtr       head1 = NULL, head2 = NULL;
   HistoryFormPtr   hfp;
   SeqHistPtr       hist;
   CharPtr          last = NULL;
@@ -3527,10 +3564,22 @@ extern void SequinCheckSocketsProc (void)
   }
 }
 
-static Boolean LIBCALLBACK DemoModeResultProc (CharPtr path)
+static Boolean LIBCALLBACK DemoModeResultProc (CharPtr path, CharPtr format, VoidPtr mydata)
 
 {
   LaunchGeneralTextViewer (path, "QueueFastaQueryToURL results");
+  return TRUE;
+}
+
+static Boolean LIBCALLBACK SequinHandleURLResults (CharPtr path, CharPtr format, VoidPtr mydata)
+
+{
+  if (StringCmp (format, "pretty") == 0) {
+    return DemoModeResultProc (path, format, mydata);
+  }
+  if (! SequinHandleNetResults (path)) {
+    LaunchGeneralTextViewer (path, "QueueFastaQueryToURL failed");
+  }
   return TRUE;
 }
 
@@ -3538,15 +3587,19 @@ static void FinishURLProc (NewObjectPtr nop, CharPtr arguments, CharPtr path)
 
 {
   Boolean  posted = FALSE;
+  Char     str [64];
 
+  sprintf (str, "Sequin/%s", SEQUIN_APP_VERSION);
   if (nop->demomode) {
     posted = SOCK_SendURLQuery (nop->host_machine, nop->host_port,
                                 nop->host_path, nop->query, arguments,
-                                path, DemoModeResultProc, nop->timeoutsec, FALSE, FALSE);
+                                path, DemoModeResultProc, nop->timeoutsec,
+                                FALSE, FALSE, str, NULL);
   } else {
     posted = SOCK_SendURLQuery (nop->host_machine, nop->host_port,
                                 nop->host_path, nop->query, arguments,
-                                path, nop->resultproc, nop->timeoutsec, FALSE, FALSE);
+                                path, nop->resultproc, nop->timeoutsec,
+                                FALSE, FALSE, str, NULL);
   }
   if (posted) {
     pendingqueries++;
@@ -3669,7 +3722,8 @@ typedef struct urlargform {
 
   NewObjectPtr nop;
   BaseFormPtr  bfp;
-  ValNodePtr   texts;
+  ValNodePtr   controls;
+  ValNodePtr   helps;
   Int2         which;
 } UrlArgForm, PNTR UrlArgFormPtr;
 
@@ -3678,15 +3732,28 @@ static void AcceptArgumentFormProc (ButtoN b)
 {
   CharPtr        args = NULL;
   CharPtr        arguments = NULL;
+  ButtoN         btn;
+  Char           ch;
+  Int2           choice;
+  Char           cpy [256];
+  GrouP          grp;
   ValNodePtr     head = NULL;
+  Int2           i;
+  CharPtr        itms;
+  CharPtr        last;
   size_t         len;
+  LisT           lst;
   NewObjectPtr   nop;
   Boolean        notFirst = FALSE;
+  PopuP          pop;
   ValNodePtr     ppt;
+  CharPtr        ptr;
   CharPtr        str;
   Char           tmp [256];
   TexT           txt;
   UrlArgFormPtr  ufp;
+  UrlParamPtr    upp;
+  Int2           val;
   ValNodePtr     vnp;
 
   ufp = (UrlArgFormPtr) GetObjectExtra (b);
@@ -3695,17 +3762,141 @@ static void AcceptArgumentFormProc (ButtoN b)
   Update ();
   nop = ufp->nop;
   if (nop != NULL) {
-    for (vnp = ufp->texts, ppt = nop->paramlist;
+    for (vnp = ufp->controls, ppt = nop->paramlist;
          vnp != NULL && ppt != NULL;
          vnp = vnp->next, ppt = ppt->next) {
-      txt = (TexT) vnp->data.ptrvalue;
-      str = SaveStringFromText (txt);
-      if (str != NULL) {
-        sprintf (tmp, "%s=%s", (CharPtr) ppt->data.ptrvalue, str);
-        ValNodeCopyStr (&head, 0, tmp);
-        MemFree (str);
+      upp = (UrlParamPtr) ppt->data.ptrvalue;
+      if (upp == NULL) continue;
+      choice = vnp->choice;
+      switch (upp->type) {
+        case 1 :
+          txt = (TexT) vnp->data.ptrvalue;
+          str = SaveStringFromText (txt);
+          if (str != NULL) {
+            sprintf (tmp, "%s=%s", upp->param, str);
+            ValNodeCopyStr (&head, ppt->choice, tmp);
+            MemFree (str);
+          }
+          break;
+        case 2 :
+          btn = (ButtoN) vnp->data.ptrvalue;
+          if (GetStatus (btn)) {
+            sprintf (tmp, "%s=TRUE", upp->param);
+          } else {
+            sprintf (tmp, "%s=FALSE", upp->param);
+          }
+          ValNodeCopyStr (&head, ppt->choice, tmp);
+          break;
+        case 3 :
+          pop = (PopuP) vnp->data.ptrvalue;
+          val = GetValue (pop);
+          if (val > 0) {
+            i = 0;
+            itms = upp->choices;
+            StringNCpy_0 (tmp, itms, sizeof (tmp));
+            last = tmp;
+            ptr = last;
+            ch = *ptr;
+            while (ch != '\0') {
+              if (ch == ',') {
+                *ptr = '\0';
+                i++;
+                if (val == i) {
+                  sprintf (cpy, "%s=%s", upp->param, last);
+                  ValNodeCopyStr (&head, ppt->choice, cpy);
+                }
+                ptr++;
+                last = ptr;
+                ch = *ptr;
+              } else {
+                ptr++;
+                ch = *ptr;
+              }
+            }
+            if (! StringHasNoText (last)) {
+              i++;
+              if (val == i) {
+                sprintf (cpy, "%s=%s", upp->param, last);
+                ValNodeCopyStr (&head, ppt->choice, cpy);
+              }
+            }
+          }
+          break;
+        case 4 :
+          grp = (GrouP) vnp->data.ptrvalue;
+          val = GetValue (grp);
+          if (val > 0) {
+            i = 0;
+            itms = upp->choices;
+            StringNCpy_0 (tmp, itms, sizeof (tmp));
+            last = tmp;
+            ptr = last;
+            ch = *ptr;
+            while (ch != '\0') {
+              if (ch == ',') {
+                *ptr = '\0';
+                i++;
+                if (val == i) {
+                  sprintf (cpy, "%s=%s", upp->param, last);
+                  ValNodeCopyStr (&head, ppt->choice, cpy);
+                }
+                ptr++;
+                last = ptr;
+                ch = *ptr;
+              } else {
+                ptr++;
+                ch = *ptr;
+              }
+            }
+            if (! StringHasNoText (last)) {
+              i++;
+              if (val == i) {
+                sprintf (cpy, "%s=%s", upp->param, last);
+                ValNodeCopyStr (&head, ppt->choice, cpy);
+              }
+            }
+          }
+          break;
+        case 5 :
+          lst = (LisT) vnp->data.ptrvalue;
+          val = GetValue (lst);
+          if (val > 0) {
+            i = 0;
+            itms = upp->choices;
+            StringNCpy_0 (tmp, itms, sizeof (tmp));
+            last = tmp;
+            ptr = last;
+            ch = *ptr;
+            while (ch != '\0') {
+              if (ch == ',') {
+                *ptr = '\0';
+                i++;
+                if (val == i) {
+                  sprintf (cpy, "%s=%s", upp->param, last);
+                  ValNodeCopyStr (&head, ppt->choice, cpy);
+                }
+                ptr++;
+                last = ptr;
+                ch = *ptr;
+              } else {
+                ptr++;
+                ch = *ptr;
+              }
+            }
+            if (! StringHasNoText (last)) {
+              i++;
+              if (val == i) {
+                sprintf (cpy, "%s=%s", upp->param, last);
+                ValNodeCopyStr (&head, ppt->choice, cpy);
+              }
+            }
+          }
+          break;
+        default :
+          break;
       }
     }
+    head = SortValNode (head, SortByVnpChoice);
     for (len = 0, vnp = head; vnp != NULL; vnp = vnp->next) {
       len += StringLen ((CharPtr) vnp->data.ptrvalue) + 1;
     }
@@ -3730,6 +3921,34 @@ static void AcceptArgumentFormProc (ButtoN b)
     MemFree (args);
   }
   Remove (ufp->form);
+}
+
+static void ShowArgumentHelp (ButtoN b)
+
+{
+  NewObjectPtr   nop;
+  ValNodePtr     ppt;
+  CharPtr        str;
+  UrlArgFormPtr  ufp;
+  UrlParamPtr    upp;
+  ValNodePtr     vnp;
+
+  ufp = (UrlArgFormPtr) GetObjectExtra (b);
+  if (ufp == NULL) return;
+  nop = ufp->nop;
+  if (nop == NULL) return;
+  for (vnp = ufp->helps, ppt = nop->paramlist;
+         vnp != NULL && ppt != NULL;
+         vnp = vnp->next, ppt = ppt->next) {
+    upp = (UrlParamPtr) ppt->data.ptrvalue;
+    if (upp == NULL) continue;
+    if ((Pointer) b == (Pointer) vnp->data.ptrvalue) {
+      str = upp->help;
+      Message (MSG_OK, "%s", str);
+      return;
+    }
+  }
+  Beep ();
 }
 
 static void ArgumentFormMessage (ForM f, Int2 mssg)
@@ -3759,30 +3978,103 @@ static void CleanupArgumentForm (GraphiC g, VoidPtr data)
 
   ufp = (UrlArgFormPtr) data;
   if (ufp != NULL) {
-    ValNodeFree (ufp->texts);
+    ValNodeFree (ufp->controls);
+    ValNodeFree (ufp->helps);
   }
   StdCleanupFormProc (g, data);
+}
+
+static ValNodePtr RearrangeParamList (ValNodePtr paramlist)
+
+{
+  ValNodePtr       curr;
+  CharPtr          group;
+  ValNodePtr       head = NULL;
+  ValNodePtr       list;
+  ValNodePtr       next;
+  ValNodePtr PNTR  prev;
+  ValNodePtr       ppt;
+  UrlParamPtr      upp;
+
+  ppt = paramlist;
+  while (ppt != NULL) {
+    list = ppt->next;
+    ppt->next = NULL;
+    ValNodeLink (&head, ppt);
+    upp = (UrlParamPtr) ppt->data.ptrvalue;
+    if (upp == NULL) {
+      ppt = list;
+      continue;
+    }
+    group = upp->group;
+    curr = list;
+    prev = &list;
+    while (curr != NULL) {
+      next = curr->next;
+      upp = (UrlParamPtr) curr->data.ptrvalue;
+      if (upp == NULL) {
+        prev = &(curr->next);
+        curr = next;
+        continue;
+      }
+      if (StringICmp (upp->group, group) == 0) {
+        *prev = next;
+        curr->next = NULL;
+        ValNodeLink (&head, curr);
+      } else {
+        prev = &(curr->next);
+      }
+      curr = next;
+    }
+    ppt = list;
+  }
+  return head;
 }
 
 static void BuildArgumentForm (NewObjectPtr nop, BaseFormPtr bfp, Int2 which)
 
 {
   ButtoN             b;
+  ButtoN             btn;
   GrouP              c;
+  Char               ch;
   CharPtr            def;
-  ValNodePtr         dflt;
+  Int2               delta;
   TexT               first = NULL;
   GrouP              g;
+  GrouP              grp;
+  GrouP              h;
+  ValNodePtr         hlp;
+  Int2               i;
+  CharPtr            itms;
+  CharPtr            last;
+  CharPtr            lastGroup = " ";
+  LisT               lst;
+  GrouP              m;
+  Int2               max;
+  Int2               min;
+  ValNodePtr         moveMe = NULL;
+  Nlm_Handle         obj1, obj2;
+  PopuP              pop;
+  PrompT             prmpt;
+  ValNodePtr         ppt;
+  CharPtr            ptr;
+  RecT               r;
   StdEditorProcsPtr  sepp;
   CharPtr            str;
+  Char               tmp [128];
   TexT               txt;
   UrlArgFormPtr      ufp;
+  UrlParamPtr        upp;
+  Int2               val;
   ValNodePtr         vnp;
   WindoW             w;
 
   if (nop == NULL || bfp == NULL) return;
   ufp = (UrlArgFormPtr) MemNew (sizeof (UrlArgForm));
   if (ufp == NULL) return;
+
+  nop->paramlist = RearrangeParamList (nop->paramlist);
 
   w = FixedWindow (-50, -33, -10, -10, "Arguments", NULL);
   SetObjectExtra (w, ufp, CleanupArgumentForm);
@@ -3799,21 +4091,227 @@ static void BuildArgumentForm (NewObjectPtr nop, BaseFormPtr bfp, Int2 which)
   ufp->nop = nop;
   ufp->which = which;
 
-  g = HiddenGroup (w, 2, 0, NULL);
-  for (vnp = nop->promptlist, dflt = nop->dfaultlist;
-       vnp != NULL && dflt != NULL;
-       vnp = vnp->next, dflt = dflt->next) {
-    str = (CharPtr) vnp->data.ptrvalue;
-    StaticPrompt (g, str, 0, dialogTextHeight, programFont, 'l');
-    def = (CharPtr) dflt->data.ptrvalue;
-    if (StringHasNoText (def)) {
-      def = "";
+  m = HiddenGroup (w, 1, 0, NULL);
+
+  g = NULL;
+  for (ppt = nop->paramlist;
+       ppt != NULL;
+       ppt = ppt->next) {
+    upp = (UrlParamPtr) ppt->data.ptrvalue;
+    if (upp == NULL) continue;
+    if (StringICmp (upp->group, lastGroup) != 0) {
+      if (StringHasNoText (upp->group)) {
+        if (StringHasNoText (lastGroup)) {
+          g = HiddenGroup (m, 3, 0, NULL);
+        } else {
+          g = NormalGroup (m, 3, 0, "", programFont, NULL);
+        }
+      } else {
+        g = NormalGroup (m, 3, 0, upp->group, programFont, NULL);
+      }
+      lastGroup = upp->group;
     }
-    txt = DialogText (g, def, 10, NULL);
-    if (first == NULL) {
-      first = txt;
+    if (g == NULL) {
+      g = HiddenGroup (m, 3, 0, NULL);
     }
-    ValNodeAddPointer (&(ufp->texts), 0, (Pointer) txt);
+    switch (upp->type) {
+      case 1 :
+        str = upp->prompt;
+        StaticPrompt (g, str, 0, dialogTextHeight, programFont, 'l');
+        def = upp->dfault;
+        if (StringHasNoText (def)) {
+          def = "";
+        }
+        txt = DialogText (g, def, 10, NULL);
+        if (first == NULL) {
+          first = txt;
+        }
+        ValNodeAddPointer (&(ufp->controls), 1, (Pointer) txt);
+        ValNodeAddPointer (&moveMe, 0, (Pointer) txt);
+        b = PushButton (g, "?", ShowArgumentHelp);
+        SetObjectExtra (b, ufp, NULL);
+        ValNodeAddPointer (&(ufp->helps), 0, (Pointer) b);
+        break;
+      case 2 :
+        str = upp->prompt;
+        btn = CheckBox (g, str, NULL);
+        def = upp->dfault;
+        if (StringICmp (def, "TRUE") == 0) {
+          SetStatus (btn, TRUE);
+        }
+        prmpt = StaticPrompt (g, "", 0, 0, programFont, 'l');
+        ValNodeAddPointer (&moveMe, 0, (Pointer) prmpt);
+        ValNodeAddPointer (&(ufp->controls), 2, (Pointer) btn);
+        b = PushButton (g, "?", ShowArgumentHelp);
+        SetObjectExtra (b, ufp, NULL);
+        ValNodeAddPointer (&(ufp->helps), 0, (Pointer) b);
+        break;
+      case 3 :
+        str = upp->prompt;
+        StaticPrompt (g, str, 0, dialogTextHeight, programFont, 'l');
+        h = HiddenGroup (g, 1, 0, NULL);
+        pop = PopupList (h, TRUE, NULL);
+        def = upp->dfault;
+        val = 0;
+        i = 0;
+        itms = upp->choices;
+        StringNCpy_0 (tmp, itms, sizeof (tmp));
+        last = tmp;
+        ptr = last;
+        ch = *ptr;
+        while (ch != '\0') {
+          if (ch == ',') {
+            *ptr = '\0';
+            PopupItem (pop, last);
+            i++;
+            if (StringICmp (def, last) == 0) {
+              val = i;
+            }
+            ptr++;
+            last = ptr;
+            ch = *ptr;
+          } else {
+            ptr++;
+            ch = *ptr;
+          }
+        }
+        if (! StringHasNoText (last)) {
+          PopupItem (pop, last);
+          i++;
+          if (StringICmp (def, last) == 0) {
+            val = i;
+          }
+        }
+        if (val > 0) {
+          SetValue (pop, val);
+        }
+        ValNodeAddPointer (&(ufp->controls), 3, (Pointer) pop);
+        ValNodeAddPointer (&moveMe, 0, (Pointer) pop);
+        b = PushButton (g, "?", ShowArgumentHelp);
+        SetObjectExtra (b, ufp, NULL);
+        ValNodeAddPointer (&(ufp->helps), 0, (Pointer) b);
+        break;
+      case 4 :
+        str = upp->prompt;
+        StaticPrompt (g, str, 0, dialogTextHeight, programFont, 'l');
+        h = HiddenGroup (g, 1, 0, NULL);
+        grp = HiddenGroup (h, -3, 0, NULL);
+        def = upp->dfault;
+        val = 0;
+        i = 0;
+        itms = upp->choices;
+        StringNCpy_0 (tmp, itms, sizeof (tmp));
+        last = tmp;
+        ptr = last;
+        ch = *ptr;
+        while (ch != '\0') {
+          if (ch == ',') {
+            *ptr = '\0';
+            RadioButton (grp, last);
+            i++;
+            if (StringICmp (def, last) == 0) {
+              val = i;
+            }
+            ptr++;
+            last = ptr;
+            ch = *ptr;
+          } else {
+            ptr++;
+            ch = *ptr;
+          }
+        }
+        if (! StringHasNoText (last)) {
+          RadioButton (grp, last);
+          i++;
+          if (StringICmp (def, last) == 0) {
+            val = i;
+          }
+        }
+        if (val > 0) {
+          SetValue (grp, val);
+        }
+        ValNodeAddPointer (&(ufp->controls), 4, (Pointer) grp);
+        ValNodeAddPointer (&moveMe, 0, (Pointer) grp);
+        b = PushButton (g, "?", ShowArgumentHelp);
+        SetObjectExtra (b, ufp, NULL);
+        ValNodeAddPointer (&(ufp->helps), 0, (Pointer) b);
+        break;
+      case 5 :
+        str = upp->prompt;
+        StaticPrompt (g, str, 0, dialogTextHeight, programFont, 'l');
+        h = HiddenGroup (g, 1, 0, NULL);
+        lst = SingleList (h, 10, 3, NULL);
+        def = upp->dfault;
+        val = 0;
+        i = 0;
+        itms = upp->choices;
+        StringNCpy_0 (tmp, itms, sizeof (tmp));
+        last = tmp;
+        ptr = last;
+        ch = *ptr;
+        while (ch != '\0') {
+          if (ch == ',') {
+            *ptr = '\0';
+            ListItem (lst, last);
+            i++;
+            if (StringICmp (def, last) == 0) {
+              val = i;
+            }
+            ptr++;
+            last = ptr;
+            ch = *ptr;
+          } else {
+            ptr++;
+            ch = *ptr;
+          }
+        }
+        if (! StringHasNoText (last)) {
+          ListItem (lst, last);
+          i++;
+          if (StringICmp (def, last) == 0) {
+            val = i;
+          }
+        }
+        if (val > 0) {
+          SetValue (lst, val);
+        }
+        ValNodeAddPointer (&(ufp->controls), 5, (Pointer) lst);
+        ValNodeAddPointer (&moveMe, 0, (Pointer) lst);
+        b = PushButton (g, "?", ShowArgumentHelp);
+        SetObjectExtra (b, ufp, NULL);
+        ValNodeAddPointer (&(ufp->helps), 0, (Pointer) b);
+        break;
+      default :
+        break;
+    }
+  }
+
+  min = 0;
+  max = 0;
+  for (vnp = moveMe; vnp != NULL; vnp = vnp->next) {
+    obj1 = (Nlm_Handle) vnp->data.ptrvalue;
+    GetPosition (obj1, &r);
+    min = MAX (min, r.left);
+  }
+  for (vnp = moveMe; vnp != NULL; vnp = vnp->next) {
+    obj1 = (Nlm_Handle) vnp->data.ptrvalue;
+    GetPosition (obj1, &r);
+    delta = min - r.left;
+    OffsetRect (&r, delta, 0);
+    SetPosition (obj1, &r);
+    AdjustPrnt (obj1, &r, FALSE);
+    max = MAX (max, r.right);
+  }
+  max += 3;
+  for (vnp = moveMe, hlp = ufp->helps;
+       vnp != NULL && hlp != NULL;
+       vnp = vnp->next, hlp = hlp->next) {
+    obj2 = (Nlm_Handle) hlp->data.ptrvalue;
+    GetPosition (obj2, &r);
+    delta = max - r.left;
+    OffsetRect (&r, delta, 0);
+    SetPosition (obj2, &r);
+    AdjustPrnt (obj2, &r, TRUE);
   }
 
   c = HiddenGroup (w, 2, 0, NULL);
@@ -3822,7 +4320,7 @@ static void BuildArgumentForm (NewObjectPtr nop, BaseFormPtr bfp, Int2 which)
   SetObjectExtra (b, ufp, NULL);
   PushButton (c, "Cancel", StdCancelButtonProc);
 
-  AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) c, NULL);
+  AlignObjects (ALIGN_CENTER, (HANDLE) m, (HANDLE) c, NULL);
   RealizeWindow (w);
   Show (w);
   Select (w);
@@ -3925,14 +4423,24 @@ static void CleanupAnalysisExtraProc (GraphiC g, VoidPtr data)
 
 {
   NewObjectPtr  nop;
+  ValNodePtr    ppt;
+  UrlParamPtr   upp;
 
   nop = (NewObjectPtr) data;
   if (nop != NULL) {
     MemFree (nop->host_machine);
     MemFree (nop->host_path);
+    for (ppt = nop->paramlist; ppt != NULL; ppt = ppt->next) {
+      upp = (UrlParamPtr) ppt->data.ptrvalue;
+      if (upp == NULL) continue;
+      MemFree (upp->param);
+      MemFree (upp->prompt);
+      MemFree (upp->dfault);
+      MemFree (upp->choices);
+      MemFree (upp->group);
+      MemFree (upp->help);
+    }
     ValNodeFreeData (nop->paramlist);
-    ValNodeFreeData (nop->promptlist);
-    ValNodeFreeData (nop->dfaultlist);
   }
   MemFree (data);
 }
@@ -3948,18 +4456,19 @@ static void AddAnalysisItem (MenU m, BaseFormPtr bfp,
                              Boolean bspviewOK, Boolean docsumOK,
                              Boolean nucOK, Boolean protOK, Boolean onlyBspTarget,
                              CharPtr host_machine, Uint2 host_port,
-                             CharPtr host_path, CharPtr query,
+                             CharPtr host_path, CharPtr program,
                              Uint2 timeoutsec, Int2 format, Boolean demomode,
-                             ResultProc resultproc, ValNodePtr paramlist,
-                             ValNodePtr promptlist, ValNodePtr dfaultlist,
-                             CharPtr title, CharPtr submenu, ItmActnProc actn,
-                             NewObjectPtr PNTR head)
+                             URLResultProc resultproc, ValNodePtr paramlist,
+                             CharPtr title, CharPtr submenu,
+                             ItmActnProc actn, NewObjectPtr PNTR head)
 
 {
   IteM          i;
   NewObjectPtr  last;
+  size_t        len;
   NewObjectPtr  nop;
   SbstrucPtr    sbp;
+  CharPtr       tmp;
   ValNodePtr    vnp;
   MenU          x;
 
@@ -4000,15 +4509,27 @@ static void AddAnalysisItem (MenU m, BaseFormPtr bfp,
     nop->onlyBspTarget = onlyBspTarget;
     nop->host_machine = StrSaveNoNullEncodeSpaces (host_machine);
     nop->host_port = host_port;
+    len = StringLen (host_path);
+    tmp = MemNew (len + StringLen (program) + 5);
+    if (tmp != NULL) {
+      StringCpy (tmp, host_path);
+      if (len > 1 && tmp [len - 1] != '/') {
+        StringCat (tmp, "/");
+      }
+      StringCat (tmp, program);
+    }
+    nop->host_path = StrSaveNoNullEncodeSpaces (tmp);
+    MemFree (tmp);
+    nop->query = NULL;
+    /*
     nop->host_path = StrSaveNoNullEncodeSpaces (host_path);
-    nop->query = StrSaveNoNullEncodeSpaces (query);
+    nop->query = StrSaveNoNullEncodeSpaces (program);
+    */
     nop->timeoutsec = timeoutsec;
     nop->format = format;
     nop->demomode = demomode;
     nop->resultproc = resultproc;
     nop->paramlist = paramlist;
-    nop->promptlist = promptlist;
-    nop->dfaultlist = dfaultlist;
   }
   SetObjectExtra (i, (Pointer) nop, CleanupAnalysisExtraProc);
   if (head == NULL) return;
@@ -4035,30 +4556,42 @@ ORDER_1=tRNAscan
 ORDER_2=Seg
 
 [tRNAscan]
+PROGRAM=testcgi.cgi?request=trnascan
 HOST=www.myserver.myschool.edu
 PORT=80
 PATH=/MyServices/cgi-bin/testcgi.cgi
-QUERY=request=trnascan
-TITLE=tRNAscan-SE
 SUBMENU=Search
-FORMAT=FASTA
-FLAGS=SEQ,NUC,TRG,NET
+FORMATIN=FASTA
+FLAGS=SEQ,NUC,TRG
 TIMEOUT=30
 
 [Seg]
+PROGRAM=segify
 HOST=www.myserver.myschool.edu
 PORT=80
 PATH=/MyServices/cgi-bin/testcgi.cgi
-QUERY_1=request=seg
-TITLE_1=Seg default
-QUERY_2=request=seg&window=10&lowcut=1.0&hicut=1.5
-TITLE_2=Seg 10-1.0-1.5
-QUERY_3=request=seg&window=12&lowcut=2.3&hicut=2.6
-TITLE_3=Seg 12-2.3-2.6
-SUBMENU=Seg
-FORMAT=FASTA
-FLAGS=SEQ,DOC,PRT,TRG,NET
-TIMEOUT=30
+FORMATIN=fasta
+FLAGS=SEQ,DOC,PRT,TRG
+SUBMENU=Secondary structure prediction
+PROMPT_1=Window Size
+PARAM_1=window
+DESCRIPTION_1=window size for determining low-complexity segments
+TYPE_1=text
+DEFAULT_1=12
+REQUIRED_1=FALSE
+IMPORTANCE_1=
+GROUP_1=Algorithm
+HELP_1=window size for determining low-complexity segments
+PROMPT_2=Trigger Complexity
+PARAM_2=trigger
+DESCRIPTION_2=trigger complexity for determining low-complexity segments
+TYPE_2=text
+DEFAULT_2=2.2
+REQUIRED_2=FALSE
+IMPORTANCE_2=
+GROUP_2=Algorithm
+HELP_2=trigger complexity for determining low-complexity segments
+...
 
 [ENZYMES]
 ENZ_1=BamHI
@@ -4094,90 +4627,143 @@ static Int2 GetServiceParam (ValNodePtr head, CharPtr type, CharPtr buf, Int2 bu
   return 0;
 }
 
-static void GetConfigParamAndPromptLists (CharPtr sect,
-                                          ValNodePtr PNTR paramP,
-                                          ValNodePtr PNTR promptP,
-                                          ValNodePtr PNTR dfaultP)
+static ValNodePtr GetConfigParamAndPromptLists (CharPtr sect)
 
 {
-  ValNodePtr  dfaultlist = NULL;
-  Int2        i;
-  CharPtr     last;
-  ValNodePtr  paramlist = NULL;
-  ValNodePtr  promptlist = NULL;
-  Char        title [128];
-  Char        tmp [32];
+  Int2         i;
+  ValNodePtr   paramlist = NULL;
+  Uint1        paramtype;
+  Char         title [512];
+  Char         tmp [32];
+  UrlParamPtr  upp;
 
-  *paramP = NULL;
-  *promptP = NULL;
-  *dfaultP = NULL;
-  if (sect == NULL) return;
+  if (sect == NULL) return NULL;
   i = 1;
   sprintf (tmp, "PARAM_%d", (int) i);
   while (GetAppParam ("SEQNCGIS", sect, tmp, NULL, title, sizeof (title) - 1)) {
-    last = StringSave (title);
-    ValNodeAddStr (&paramlist, 0, last);
+    upp = (UrlParamPtr) MemNew (sizeof (UrlParamData));
+    if (upp == NULL) continue;
+    upp->param = StringSave (title);
+    sprintf (tmp, "TYPE_%d", (int) i);
+    paramtype = 1;
+    if (GetAppParam ("SEQNCGIS", sect, tmp, NULL, title, sizeof (title) - 1)) {
+      if (StringICmp (title, "text") == 0) {
+        paramtype = 1;
+      } else if (StringICmp (title, "checkbox") == 0) {
+        paramtype = 2;
+      } else if (StringICmp (title, "popup") == 0) {
+        paramtype = 3;
+      } else if (StringICmp (title, "radio") == 0) {
+        paramtype = 4;
+      } else if (StringICmp (title, "list") == 0) {
+        paramtype = 5;
+      }
+    }
+    upp->type = paramtype;
     sprintf (tmp, "PROMPT_%d", (int) i);
     if (GetAppParam ("SEQNCGIS", sect, tmp, NULL, title, sizeof (title) - 1)) {
-      ValNodeCopyStr (&promptlist, 0, title);
+      upp->prompt = StringSave (title);
     } else {
-      ValNodeCopyStr (&promptlist, 0, last);
+      upp->prompt = StringSave (upp->param);
     }
-    sprintf (tmp, "DFAULT_%d", (int) i);
+    sprintf (tmp, "DEFAULT_%d", (int) i);
     if (GetAppParam ("SEQNCGIS", sect, tmp, NULL, title, sizeof (title) - 1)) {
-      ValNodeCopyStr (&dfaultlist, 0, title);
+      upp->dfault = StringSave (title);
     } else {
-      ValNodeCopyStr (&dfaultlist, 0, " ");
+      upp->dfault = StringSave (" ");
     }
+    sprintf (tmp, "CHOICES_%d", (int) i);
+    if (GetAppParam ("SEQNCGIS", sect, tmp, NULL, title, sizeof (title) - 1)) {
+      upp->choices = StringSave (title);
+    } else {
+      upp->choices = StringSave (" ");
+    }
+    sprintf (tmp, "GROUP_%d", (int) i);
+    if (GetAppParam ("SEQNCGIS", sect, tmp, NULL, title, sizeof (title) - 1)) {
+      upp->group = StringSave (title);
+    } else {
+      upp->group = StringSave (" ");
+    }
+    sprintf (tmp, "HELP_%d", (int) i);
+    if (GetAppParam ("SEQNCGIS", sect, tmp, NULL, title, sizeof (title) - 1)) {
+      upp->help = StringSave (title);
+    } else {
+      upp->help = StringSave (" ");
+    }
+    ValNodeAddPointer (&paramlist, i, (Pointer) upp);
     i++;
     sprintf (tmp, "PARAM_%d", (int) i);
   }
-  *paramP = paramlist;
-  *promptP = promptlist;
-  *dfaultP = dfaultlist;
+  return paramlist;
 }
 
-static void GetServiceParamAndPromptLists (ValNodePtr list,
-                                           ValNodePtr PNTR paramP,
-                                           ValNodePtr PNTR promptP,
-                                           ValNodePtr PNTR dfaultP)
+static ValNodePtr GetServiceParamAndPromptLists (ValNodePtr list)
 
 {
-  ValNodePtr  dfaultlist = NULL;
-  Int2        i;
-  CharPtr     last;
-  ValNodePtr  paramlist = NULL;
-  ValNodePtr  promptlist = NULL;
-  Char        title [128];
-  Char        tmp [32];
+  Int2         i;
+  ValNodePtr   paramlist = NULL;
+  Uint1        paramtype;
+  Char         title [512];
+  Char         tmp [32];
+  UrlParamPtr  upp;
 
-  *paramP = NULL;
-  *promptP = NULL;
-  *dfaultP = NULL;
-  if (list == NULL) return;
+  if (list == NULL) return NULL;
   i = 1;
   sprintf (tmp, "PARAM_%d=", (int) i);
   while (GetServiceParam (list, tmp, title, sizeof (title) - 1)) {
-    last = StringSave (title);
-    ValNodeAddStr (&paramlist, 0, last);
+    if (upp == NULL) continue;
+    upp->param = StringSave (title);
+    sprintf (tmp, "TYPE_%d", (int) i);
+    paramtype = 1;
+    if (GetServiceParam (list, tmp, title, sizeof (title) - 1)) {
+      if (StringICmp (title, "text") == 0) {
+        paramtype = 1;
+      } else if (StringICmp (title, "checkbox") == 0) {
+        paramtype = 2;
+      } else if (StringICmp (title, "popup") == 0) {
+        paramtype = 3;
+      } else if (StringICmp (title, "radio") == 0) {
+        paramtype = 4;
+      } else if (StringICmp (title, "list") == 0) {
+        paramtype = 5;
+      }
+    }
+    upp->type = paramtype;
     sprintf (tmp, "PROMPT_%d=", (int) i);
     if (GetServiceParam (list, tmp, title, sizeof (title) - 1)) {
-      ValNodeCopyStr (&promptlist, 0, title);
+      upp->prompt = StringSave (title);
     } else {
-      ValNodeCopyStr (&promptlist, 0, last);
+      upp->prompt = StringSave (upp->param);
     }
-    sprintf (tmp, "DFAULT_%d=", (int) i);
+    sprintf (tmp, "DEFAULT_%d=", (int) i);
     if (GetServiceParam (list, tmp, title, sizeof (title) - 1)) {
-      ValNodeCopyStr (&dfaultlist, 0, title);
+      upp->dfault = StringSave (title);
     } else {
-      ValNodeCopyStr (&dfaultlist, 0, " ");
+      upp->dfault = StringSave (" ");
     }
+    sprintf (tmp, "CHOICES_%d=", (int) i);
+    if (GetServiceParam (list, tmp, title, sizeof (title) - 1)) {
+      upp->choices = StringSave (title);
+    } else {
+      upp->choices = StringSave (" ");
+    }
+    sprintf (tmp, "GROUP_%d=", (int) i);
+    if (GetServiceParam (list, tmp, title, sizeof (title) - 1)) {
+      upp->group = StringSave (title);
+    } else {
+      upp->group = StringSave (" ");
+    }
+    sprintf (tmp, "HELP_%d=", (int) i);
+    if (GetServiceParam (list, tmp, title, sizeof (title) - 1)) {
+      upp->help = StringSave (title);
+    } else {
+      upp->help = StringSave (" ");
+    }
+    ValNodeAddPointer (&paramlist, i, (Pointer) upp);
     i++;
     sprintf (tmp, "PARAM_%d=", (int) i);
   }
-  *paramP = paramlist;
-  *promptP = promptlist;
-  *dfaultP = dfaultlist;
+  return paramlist;
 }
 
 static void ReadAnalysisConfigFile (CharPtr sect, MenU m, BaseFormPtr bfp,
@@ -4186,40 +4772,38 @@ static void ReadAnalysisConfigFile (CharPtr sect, MenU m, BaseFormPtr bfp,
 
 {
   Boolean     demomode = FALSE;
-  ValNodePtr  dfaultlist = NULL;
   Int2        format = 1;
   Char        host [128];
-  Int2        i;
   Boolean     nucOK = FALSE;
   Boolean     onlyBspTarget = FALSE;
   ValNodePtr  paramlist = NULL;
-  ValNodePtr  promptlist = NULL;
+  Char        program [128];
   Char        path [256];
   Uint2       port = 80;
   Boolean     protOK = FALSE;
-  Char        query [256];
   Char        submenu [128];
   Uint2       timeoutsec = 30;
   Char        title [128];
   Char        tmp [32];
   unsigned    int  val;
 
+  StringNCpy_0 (title, sect, sizeof (title));
   if (GetAppParam ("SEQNCGIS", sect, "HOST", NULL, host, sizeof (host) - 1)) {
     if (GetAppParam ("SEQNCGIS", sect, "FLAGS", NULL, tmp, sizeof (tmp) - 1)) {
       if (StringStr (tmp, "SEQ") == NULL) {
-        bspviewOK= FALSE;
+        bspviewOK = FALSE;
       }
       if (StringStr (tmp, "DOC") == NULL) {
-        docsumOK= FALSE;
+        docsumOK = FALSE;
       }
       if (StringStr (tmp, "NUC") != NULL) {
-        nucOK= TRUE;
+        nucOK = TRUE;
       }
       if (StringStr (tmp, "PRT") != NULL) {
-        protOK= TRUE;
+        protOK = TRUE;
       }
       if (StringStr (tmp, "TRG") != NULL) {
-        onlyBspTarget= TRUE;
+        onlyBspTarget = TRUE;
       }
     }
 
@@ -4231,7 +4815,7 @@ static void ReadAnalysisConfigFile (CharPtr sect, MenU m, BaseFormPtr bfp,
     } else {
       port = 80;
     }
-    if (GetAppParam ("SEQNCGIS", sect, "FORMAT", NULL, tmp, sizeof (tmp) - 1)) {
+    if (GetAppParam ("SEQNCGIS", sect, "FORMATIN", NULL, tmp, sizeof (tmp) - 1)) {
       if (StringICmp (tmp, "FASTA") == 0) {
         format = 1;
       } else if (StringICmp (tmp, "ASN.1") == 0) {
@@ -4253,31 +4837,13 @@ static void ReadAnalysisConfigFile (CharPtr sect, MenU m, BaseFormPtr bfp,
     }
 
     if (GetAppParam ("SEQNCGIS", sect, "PATH", NULL, path, sizeof (path) - 1)) {
-      if (GetAppParam ("SEQNCGIS", sect, "TITLE", NULL, title, sizeof (title) - 1)) {
-        query [0] = '\0';
-        GetAppParam ("SEQNCGIS", sect, "QUERY", NULL, query, sizeof (query) - 1);
-        GetConfigParamAndPromptLists (sect, &paramlist, &promptlist, &dfaultlist);
+      if (GetAppParam ("SEQNCGIS", sect, "PROGRAM", NULL, program, sizeof (program) - 1)) {
+        paramlist = GetConfigParamAndPromptLists (sect);
         AddAnalysisItem (m, bfp, bspviewOK, docsumOK,
                          nucOK, protOK, onlyBspTarget,
-                         host, port, path, query, timeoutsec, format, demomode,
-                         SequinHandleNetResults, paramlist, promptlist, dfaultlist,
+                         host, port, path, program, timeoutsec, format, demomode,
+                         SequinHandleURLResults, paramlist,
                          title, submenu, DoURLProc, head);
-      } else {
-        i = 1;
-        sprintf (tmp, "TITLE_%d", (int) i);
-        while (GetAppParam ("SEQNCGIS", sect, tmp, NULL, title, sizeof (title) - 1)) {
-          query [0] = '\0';
-          sprintf (tmp, "QUERY_%d", (int) i);
-          GetAppParam ("SEQNCGIS", sect, tmp, NULL, query, sizeof (query) - 1);
-          GetConfigParamAndPromptLists (sect, &paramlist, &promptlist, &dfaultlist);
-          AddAnalysisItem (m, bfp, bspviewOK, docsumOK,
-                           nucOK, protOK, onlyBspTarget,
-                           host, port, path, query, timeoutsec, format, demomode,
-                           SequinHandleNetResults, paramlist, promptlist, dfaultlist,
-                           title, submenu, DoURLProc, head);
-          i++;
-          sprintf (tmp, "TITLE_%d", (int) i);
-        }
       }
     }
   }
@@ -4290,24 +4856,25 @@ static void ReadServiceConfigFile (CharPtr pathbase, ValNodePtr config,
 
 {
   Char          ch;
+  ValNodePtr    choicelist = NULL;
   Boolean       demomode = FALSE;
   ValNodePtr    dfaultlist = NULL;
   Int2          format = 1;
   FILE          *fp;
   Boolean       goOn = TRUE;
+  ValNodePtr    helplist = NULL;
   Char          host [128];
-  Int2          i;
   Boolean       keepGoing;
   ValNodePtr    list = NULL;
   Boolean       nucOK = FALSE;
   Boolean       onlyBspTarget = FALSE;
   ValNodePtr    paramlist = NULL;
+  Char          program [128];
   ValNodePtr    promptlist = NULL;
   Char          path [PATH_MAX];
   Uint2         port = 80;
   Boolean       protOK = FALSE;
   CharPtr       ptr;
-  Char          query [256];
   Boolean       seenBracket;
   Char          str [256];
   Char          submenu [128];
@@ -4335,7 +4902,14 @@ static void ReadServiceConfigFile (CharPtr pathbase, ValNodePtr config,
   FileClose (fp);
   while (goOn) {
     goOn = FALSE;
-    if (GetServiceParam (list, "HOST=", host, sizeof (host) - 1)) {
+    title [0] = '\0';
+    if (GetServiceParam (list, "[", title, sizeof (title) - 1)) {
+      ptr = StringChr (title, ']');
+      if (ptr != NULL) {
+        *ptr = '\0';
+      }
+    }
+    if (title [0] != '\0' && GetServiceParam (list, "HOST=", host, sizeof (host) - 1)) {
       if (GetServiceParam (list, "FLAGS=", tmp, sizeof (tmp) - 1)) {
         if (StringStr (tmp, "SEQ") == NULL) {
           bspviewOK= FALSE;
@@ -4362,7 +4936,7 @@ static void ReadServiceConfigFile (CharPtr pathbase, ValNodePtr config,
         } else {
           port = 80;
         }
-        if (GetServiceParam (list, "FORMAT=", tmp, sizeof (tmp) - 1)) {
+        if (GetServiceParam (list, "FORMATIN=", tmp, sizeof (tmp) - 1)) {
           if (StringICmp (tmp, "FASTA") == 0) {
             format = 1;
           } else if (StringICmp (tmp, "ASN.1") == 0) {
@@ -4384,33 +4958,13 @@ static void ReadServiceConfigFile (CharPtr pathbase, ValNodePtr config,
         }
 
         if (GetServiceParam (list, "PATH=", path, sizeof (path) - 1)) {
-          if (GetServiceParam (list, "TITLE=", title, sizeof (title) - 1)) {
-            query [0] = '\0';
-            GetServiceParam (list, "QUERY=", query, sizeof (query) - 1);
-            GetServiceParamAndPromptLists (list, &paramlist, &promptlist, &dfaultlist);
+          if (GetServiceParam (list, "PROGRAM=", program, sizeof (program) - 1)) {
+            paramlist = GetServiceParamAndPromptLists (list);
             AddAnalysisItem (m, bfp, bspviewOK, docsumOK,
                              nucOK, protOK, onlyBspTarget,
-                             host, port, path, query, timeoutsec, format, demomode,
-                             SequinHandleNetResults, paramlist, promptlist, dfaultlist,
+                             host, port, path, program, timeoutsec, format, demomode,
+                             SequinHandleURLResults, paramlist,
                              title, submenu, DoURLProc, head);
-            goOn = TRUE;
-          } else {
-            i = 1;
-            sprintf (tmp, "TITLE_%d=", (int) i);
-            while (GetServiceParam (list, tmp, title, sizeof (title) - 1)) {
-              query [0] = '\0';
-              sprintf (tmp, "QUERY_%d=", (int) i);
-              GetServiceParam (list, tmp, query, sizeof (query) - 1);
-              GetServiceParamAndPromptLists (list, &paramlist, &promptlist, &dfaultlist);
-              AddAnalysisItem (m, bfp, bspviewOK, docsumOK,
-                               nucOK, protOK, onlyBspTarget,
-                               host, port, path, query, timeoutsec, format, demomode,
-                               SequinHandleNetResults, paramlist, promptlist, dfaultlist,
-                               title, submenu, DoURLProc, head);
-              i++;
-              sprintf (tmp, "TITLE_%d=", (int) i);
-              goOn = TRUE;
-            }
           }
         }
 
@@ -4487,7 +5041,7 @@ extern MenU CreateAnalysisMenu (WindoW w, BaseFormPtr bfp, Boolean bspviewOK, Bo
   first = NULL;
   if (bspviewOK) {
     AddAnalysisItem (m, bfp, bspviewOK, FALSE, TRUE, FALSE, TRUE,
-                     NULL, 0, NULL, NULL, 0, 0, FALSE, NULL, NULL, NULL, NULL,
+                     NULL, 0, NULL, NULL, 0, 0, FALSE, NULL, NULL,
                      "Restriction Search", "Search",
                      SimpleRsiteProc, &first);
   }

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.30 $
+* $Revision: 6.43 $
 *
 * File Description: 
 *
@@ -53,7 +53,26 @@
 #include <edutil.h>
 #include <dlogutil.h>
 
-#define OBJ_VIRT 254
+#define SIDLAND          1
+#define SEQLAND          2
+#define BADLAND          3
+#define HOLDDNLAND       4
+#define HOLDUPLAND       5
+
+#define NOCLICK          0
+#define CLICKID_BIOSEQ   1
+#define CLICKID_SEQFEAT  2
+#define CLICKID_FEAT     3
+#define CLICKSEQ_BIOSEQ  4
+#define CLICKSEQ_SEQFEAT 5
+#define CLICKSEQ_FEAT    6
+
+#define MOUSE_NOACTION   0
+#define MOUSE_CLICK      1
+#define MOUSE_DRAG       2
+#define MOUSE_RELEASE    3
+
+/**********************************************************/
 
 static Int4    timerCount = 0;
 static Boolean typing_timerInUse   = FALSE;
@@ -63,32 +82,6 @@ static Char    strLog[128];
 
 static void click_caret (RecT *rp, Int4 position, SelStructPtr csp, SelStructPtr caret, EditAlignDataPtr adp, Int2 line);
 
-/************ CORE DUMP ON PC **********************/
-/***********
-  SelStructPtr ssp = NULL, next;
-  ssp = ObjMgrGetSelected ();
-  while (ssp != NULL)
-  {
-         next = ssp->next;
-         if ( checkssp_for_editor(ssp) && (ssp->itemtype == itemtype1
-         || ssp->itemtype == itemtype2 || ssp->itemtype == itemtype3)) {
-             ObjMgrDeSelect (ssp->entityID, ssp->itemID, ssp->itemtype, ssp->regiontype, ssp->region);
-         }
-         ssp = next;
-  }
-**********************************************/
-/****************************************************************
-     while ( spp != NULL ) 
-     {
-        ObjMgrDeSelect (spp->entityID, spp->itemID, spp->itemtype, spp->regiontype, spp->region);
-        spp = is_selectedbyID (csp->entityID, csp->itemID, csp->itemtype);
-     }
-******************************************************/
-static void deselect_all (void)
-{
-  ObjMgrDeSelectAll ();
-}
- 
 /*********************************************************
 ***
 ***  ??????
@@ -769,7 +762,7 @@ extern void to_update_prompt (PaneL pnl, SelStructPtr ssp, SeqAlignPtr salp, Val
   Int4      pos, posto;
   CharPtr   seqid=NULL;
   Char      str[255];
-  Char      tmp[52];
+  Char      tmp[252];
   CharPtr   strp;
   SeqLocPtr slp;
   SelStructPtr selp;
@@ -876,7 +869,7 @@ static void update_savefeatitem (PaneL pnl)
   if (adp->edit_mode == SEQ_EDIT || adp->edit_mode == ALIGN_EDIT) {
      wdp = (SeqEditViewFormPtr) GetObjectExtra (w);
      ResetClip ();
-     k = checkOMss_for_itemtype(OBJ_VIRT) +checkOMss_for_itemtype(OBJ_SEQFEAT);
+     k = checkOMss_for_itemtype(OBJ_SEQFEAT);
      if (k > 0) {
         Enable (wdp->savefeatitem);
         Enable (wdp->savefeatbt);
@@ -985,7 +978,7 @@ static void click_id (PaneL pnl, SelStructPtr csp, EditAlignDataPtr adp)
   Select (pnl);
   spp = is_selectedbyID (csp->entityID, csp->itemID, csp->itemtype); 
   if (spp != NULL) {
-     deselect_all ();
+     ObjMgrDeSelectAll ();
      if (! adp->display_panel)
         to_update_prompt (pnl, &(adp->caret), salp, adp->sqloc_list, FALSE, adp->printid); 
   } 
@@ -1061,40 +1054,6 @@ static void click_id (PaneL pnl, SelStructPtr csp, EditAlignDataPtr adp)
 }
 
 /******************************************************************/
-static void drag_id (PaneL pnl, SelStructPtr csp, EditAlignDataPtr adp)
-{
-  SelStructPtr     spp;
-  SeqIdPtr         sip;
-  Int4             from;
-  SeqAlignPtr      salp = (SeqAlignPtr) adp->sap_align->data;
-
-  if (csp == NULL) {
-         ErrPostEx (SEV_ERROR, 0, 0, "fail in drag_id [1]");
-         return;
-  }
-  spp = is_selectedbyID (csp->entityID, csp->itemID, csp->itemtype); 
-  if ( spp != NULL ) 
-  {
-     from = SeqLocStart((SeqLocPtr)spp->region);
-     sip = SeqLocId((SeqLocPtr)spp->region);
-     locate_region (&(adp->caret), from , from, sip, SeqLocStrand((SeqLocPtr)spp->region), FALSE);
-     if (!adp->display_panel)
-        to_update_prompt (pnl, &(adp->caret), salp, adp->sqloc_list, FALSE, adp->printid); 
-     ObjMgrDeSelect (spp->entityID, spp->itemID, spp->itemtype, spp->regiontype, spp->region);
-  }
-  else {
-     csp = change_to_seqpos (csp, salp, adp->sqloc_list);
-     if ( ctrlKey || shftKey ) 
-     {
-        ObjMgrAlsoSelect(csp->entityID,csp->itemID, csp->itemtype, csp->regiontype, csp->region);
-     }
-     else
-        ObjMgrSelect (csp->entityID, csp->itemID, csp->itemtype, csp->regiontype, csp->region); 
-  } 
-  return;
-}
-
-/******************************************************************/
 static void click_caret (RecT *rp, Int4 position, SelStructPtr csp, SelStructPtr caret, EditAlignDataPtr adp, Int2 line)
 {
   SeqIdPtr sip;
@@ -1105,7 +1064,6 @@ static void click_caret (RecT *rp, Int4 position, SelStructPtr csp, SelStructPtr
      sip = SeqIdDup (SeqLocId((SeqLocPtr)csp->region));
      replace_region (caret, csp->entityID, csp->itemID, csp->itemtype, position, position, sip, SeqLocStrand((SeqLocPtr)csp->region), FALSE);
      SeqIdFree (sip);
-     adp->caret_line = line;
      adp->caret_orig = position;
      adp->cur_pat = NULL;
      inval_selstructpos (adp, caret->entityID, caret->itemID, caret->itemtype, rp, position);
@@ -1161,153 +1119,103 @@ static void click_feat (PaneL pnl, Int4 position, SelStructPtr csp, EditAlignDat
 static void invalminmax (RecT *rp, SelStructPtr spp, Int4 position, EditAlignDataPtr adp)
 {
   SeqLocPtr  slp;
-  Int4       posmin, posmax;
+  Int4       pos, 
+             posmin, posmax;
 
   slp = (SeqLocPtr) spp->region;
   if ( position > adp->caret_orig ) 
   {
-     posmin = MIN((Int4)SeqLocStop(slp),(Int4) adp->edit_pos);
-     posmax = MAX((Int4)SeqLocStop(slp),(Int4) adp->edit_pos);
+     pos = MIN((Int4)SeqLocStart(slp),(Int4)SeqLocStop(slp));
+     posmin = MIN(pos,(Int4) adp->edit_pos);
+     posmax = MAX(pos,(Int4) adp->edit_pos);
      inval_selstructloc (adp, spp->entityID, spp->itemID, spp->itemtype, 255, rp, posmin, posmax);
   } 
   else if ( position < adp->caret_orig ) 
   {
-     posmin = MIN((Int4)SeqLocStart(slp),(Int4) adp->edit_pos);
-     posmax = MAX((Int4)SeqLocStart(slp),(Int4) adp->edit_pos);
+     pos = MAX((Int4)SeqLocStart(slp),(Int4)SeqLocStop(slp));
+     posmin = MIN(pos,(Int4) adp->edit_pos);
+     posmax = MAX(pos,(Int4) adp->edit_pos);
      inval_selstructloc (adp, spp->entityID, spp->itemID, spp->itemtype, 255, rp, posmin, posmax);
   }
 }
+
+
 /******************************************************************/
-static SelStructPtr CheckNewSelection1 (SelStructPtr pos)
-{
-  SelStructPtr ssp = NULL, 
-               this_ssp = NULL;
-  
-  if (pos == NULL) 
-     return NULL;
-  ssp = ObjMgrGetSelected();
-  if (ssp != NULL) 
-  {
-     for (; ssp != NULL; ssp = ssp->next)
-     {
-        if ( checkssp_for_editor (ssp) && is_sameId (ssp->entityID, ssp->itemID, ssp->itemtype, 255, 
-        pos->entityID, pos->itemID, pos->itemtype, 255) )
-        {
-           if (SeqLocCompare (pos->region, ssp->region) == SLC_A_IN_B) 
-           {
-              this_ssp = ssp;
-              break;
-           }
-        }
-     }
-  }
-  return this_ssp;
-}
-
-static SelStructPtr CheckNewSelection (SelStructPtr pos, Uint1 PNTR res)
-{
-  SelStructPtr ssp = NULL, 
-               this_ssp = NULL;
-  Int4         position;
-  Int4         val , valmin = INT4_MAX;
-  
-  *res = 0;
-  if (pos == NULL) 
-     return NULL;
-  position = SeqLocStart(pos->region);
-  ssp = ObjMgrGetSelected();
-  if (ssp != NULL) 
-  {
-     for (; ssp != NULL; ssp = ssp->next)
-     {
-        if ( checkssp_for_editor (ssp) && is_sameId (ssp->entityID, ssp->itemID, ssp->itemtype, 255, 
-        pos->entityID, pos->itemID, pos->itemtype, 255) )
-        {
-           if (SeqLocCompare (pos->region, ssp->region) == SLC_A_IN_B) 
-           {
-              *res = SLC_A_IN_B;
-              this_ssp = ssp;
-              break;
-           }        
-           val = (Int4)(ABS(SeqLocStart(ssp->region)-position)+ABS(SeqLocStop(ssp->region)-position));
-           if ( val < valmin ) 
-           {
-              this_ssp = ssp;
-              valmin = val;
-           }
-        }
-     }
-  }
-  return this_ssp;
-}
-
-
-static SelStructPtr whatselect (SelStructPtr caret, SeqAlignPtr salp, ValNodePtr sqloc_list)
+static SelStructPtr get_closest_selection (SelStructPtr caret, SeqAlignPtr salp, SelStructPtr current_point, ValNodePtr sqloc_list)
 {
   SelStructPtr ssp,
+               car,
                this_selection=NULL;
-  Uint1        res;
+  Int4         position;
+  Int4         val , valmin = INT4_MAX;
 
-  ssp = SelStructDup (caret);
-  ssp = change_to_seqpos (ssp, salp, sqloc_list);
-  this_selection = CheckNewSelection (ssp, &res);
-  if (res==SLC_A_IN_B)
+  car = SelStructDup (caret);
+  car = change_to_seqpos (car, salp, sqloc_list);
+  if (car)
   {
-     ObjMgrDeSelect(this_selection->entityID, this_selection->itemID, this_selection->itemtype, this_selection->regiontype, this_selection->region);
-    this_selection=NULL;
+     ssp = ObjMgrGetSelected();
+     if (ssp==NULL)
+        this_selection = current_point;
+     else 
+     {
+        position = SeqLocStart((SeqLocPtr)car->region);
+        for (; ssp != NULL; ssp = ssp->next)
+        {
+           if ( checkssp_for_editor (ssp) && is_sameId (ssp->entityID, ssp->itemID, ssp->itemtype, 255, car->entityID, car->itemID, car->itemtype, 255) )
+           {
+              val = (Int4)(ABS(SeqLocStart(ssp->region)-position)+ABS(SeqLocStop(ssp->region)-position));
+              if ( val < valmin ) 
+              {
+                 this_selection = ssp;
+                 valmin = val;
+              }
+           }
+        }
+     }
+     SelStructDel (car);
   }
-  SelStructDel (ssp);
   return this_selection;
 }
 
-/******************************************************************/
-static void dragcaret_selectrgn_firstcar (PaneL pnl, Int4 position, SelStructPtr PNTR csp, SelStructPtr caret, EditAlignDataPtr adp, Int2 line)
+
+/******************************************************************
+*** 
+*** Open and Extend this_selection by AlsoSeqlect
+***
+**************** *******************************************/
+static Boolean extend_selectregion (EditAlignDataPtr adp, SelStructPtr this_selection, Int4 position,Int4 old_caret_pos, Boolean IsOtherSel, PaneL pnl)
 {
-  SelStructPtr     spp = NULL,
-                   spp2,
-                   tmp;
+  SelStructPtr     spp = NULL;
   SeqIdPtr         sip;
+  SeqLocPtr        slp;
   SeqAlignPtr      salp;
-  RecT             rp;
-  Int4             from, to;
-  Int2             width;
-  
-  if ( *csp == NULL)  {
-         ErrPostEx (SEV_ERROR, 0, 0, "fail in dragcaret_selectrgn [1]");
-         return;
-  }
-  get_client_rect (pnl, &rp);
-  salp = (SeqAlignPtr) adp->sap_align->data;
-  sip = SeqLocId((SeqLocPtr) adp->caret.region);
-  adp->caret_line = line;
-  from = (Int4) MIN (adp->caret_orig , position);
-  to = (Int4) MAX (adp->caret_orig -1, position - 1);
-  spp = locate_region (*csp, from, to, sip, SeqLocStrand((SeqLocPtr) adp->caret.region), FALSE);
-  spp2 = SelStructDup (spp);
-  spp = change_to_seqpos (spp, salp, adp->sqloc_list);
-  tmp = CheckNewSelection1 (spp);
-  if (tmp==NULL) 
-  {
-     invalminmax (&rp, spp2, position, adp);
-     width = adp->visibleWidth;
-     if (adp->columnpcell > 0) 
-        width += (Int2) adp->visibleWidth / (Int2) adp->columnpcell;
-     if (!ctrlKey) {
-        deselect_all ();
-        ObjMgrSelect (spp->entityID,spp->itemID, spp->itemtype, spp->regiontype, spp->region);
-     }
-     else 
-     {
-        ObjMgrAlsoSelect (spp->entityID, spp->itemID, spp->itemtype, spp->regiontype, spp->region);
-     } 
-     if (! selecting_timerInUse) 
-     {
-        selecting_timerInUse = TRUE;
-        timerCount = 0;
-     }
-  SelStructDel (spp2);
-  }
+  Int4             from, to, itmp;  
+  Uint2            sspei, sspii, sspit, sspist;
+  Boolean          retval=FALSE;
+
+  sspei = (Uint2) adp->caret.entityID;
+  sspii = (Uint2) adp->caret.itemID;
+  sspit = (Uint2) adp->caret.itemtype;
+  sspist= (Uint2) adp->caret.regiontype;
+  if (is_sameId (this_selection->entityID, this_selection->itemID, this_selection->itemtype, 255, sspei, sspii, sspit, 255))
+  {  
+     salp = (SeqAlignPtr) adp->sap_align->data;
+	 sip = SeqLocId(adp->caret.region);	
+	 if (!IsOtherSel){/*no previous close selection*/
+	    		   /*Create a SelStruct between old_caret_pos and position*/
+		from = AlignCoordToSeqCoord (old_caret_pos, sip, salp, adp->sqloc_list, 0);
+		to = AlignCoordToSeqCoord (position, sip, salp, adp->sqloc_list, 0);
+		if (from > to){
+			itmp=to; to=from; from=itmp;
+		}
+		slp = SeqLocIntNew (from, to, Seq_strand_plus, sip);
+		retval=ObjMgrAlsoSelect (this_selection->entityID, this_selection->itemID, 
+                   this_selection->itemtype, OM_REGION_SEQLOC, slp);
+	 }
+ } 
+  return retval;
 }
+
 /******************************************************************/
 static void dragcaret_selectrgn (PaneL pnl, Int4 position, SelStructPtr spp, SelStructPtr caret, EditAlignDataPtr adp, Int2 line)
 {
@@ -1369,46 +1277,6 @@ static void dragcaret_selectrgn (PaneL pnl, Int4 position, SelStructPtr spp, Sel
   return;
 }
 
-static Boolean select_firstcar (EditAlignDataPtr adp, SelStructPtr ssp, Int4 position, Int2 line, PaneL pnl)
-{
-  SelStructPtr this_selection;
-  Uint2 sspei, sspii, sspit, sspist;
-
-  sspei = (Uint2) adp->caret.entityID;
-  sspii = (Uint2) adp->caret.itemID;
-  sspit = (Uint2) adp->caret.itemtype;
-  sspist= (Uint2) adp->caret.regiontype;
-  if (is_sameId (ssp->entityID, ssp->itemID, ssp->itemtype, 255, sspei, sspii, sspit, 255))
-  {
-     this_selection = SelStructDup (&(adp->caret));  
-     dragcaret_selectrgn_firstcar (pnl, position, &this_selection, &adp->caret, adp, line);
-     setposition_tossp (&(adp->caret), position, position);
-     adp->edit_pos = position;
-     return TRUE;
-  }
-  return FALSE;
-}
-
-static Boolean select_cars (EditAlignDataPtr adp, SelStructPtr this_selection, SelStructPtr ssp, Int4 position, Int2 line, PaneL pnl)
-{
-  Uint2 sspei, sspii, sspit, sspist;
-
-  if (this_selection != NULL) 
-  {
-     sspei = (Uint2) this_selection->entityID;
-     sspii = (Uint2) this_selection->itemID;
-     sspit = (Uint2) this_selection->itemtype;
-     sspist= (Uint2) this_selection->regiontype;
-     if (is_sameId (ssp->entityID, ssp->itemID, ssp->itemtype, 255, sspei, sspii, sspit, 255))
-     {   
-        dragcaret_selectrgn (pnl, position, this_selection, &adp->caret, adp, line);
-        setposition_tossp (&(adp->caret), position, position);
-        adp->edit_pos = position;             
-        return TRUE;
-     }
-  }
-  return FALSE;
-}
 
 
 /******************************************************************/
@@ -1606,7 +1474,7 @@ static void release_caret (PaneL pnl, Int4 position, SelStructPtr csp, SelStruct
          click_caret (&rp, position, csp, caret, adp, line);
          if (!adp->display_panel)
             to_update_prompt (pnl, &(adp->caret), (SeqAlignPtr) adp->sap_align->data, adp->sqloc_list, FALSE, adp->printid);
-         deselect_all ();
+         ObjMgrDeSelectAll ();
   }
   update_select_when_release (adp);
 }
@@ -1669,10 +1537,7 @@ static SelStructPtr make_bufssp (SelStructPtr csp, SelStructPtr bufhead, Int2 it
   Uint2            subtype, type;
   Boolean          locate = FALSE;
 
-  if (itemsubtype==FEATDEF_TRSL) {
-         subtype = SEQFEAT_CDREGION; type = OBJ_VIRT; 
-  }
-  else if (itemsubtype==SEQFEAT_CDREGION) {
+  if (itemsubtype==SEQFEAT_CDREGION) {
          subtype = SEQFEAT_CDREGION; type = OBJ_SEQFEAT; 
   }
   else if (itemsubtype==FEATDEF_CDS) {
@@ -1706,21 +1571,6 @@ static SelStructPtr make_bufssp (SelStructPtr csp, SelStructPtr bufhead, Int2 it
 ***  locate_point 
 ***
 **********************************************************/
-#define SIDLAND          1
-#define SEQLAND          2
-#define BADLAND          3
-#define HOLDDNLAND       4
-#define HOLDUPLAND       5
-
-#define NOCLICK          0
-#define CLICKID_BIOSEQ   1
-#define CLICKID_SEQFEAT  2
-#define CLICKID_FEAT     3
-#define CLICKSEQ_BIOSEQ  4
-#define CLICKSEQ_SEQFEAT 5
-#define CLICKSEQ_FEAT    6
-
-/**********************************************************/
 extern Uint1 locate_point (PoinT pt, RecT rp, Uint2 *item_id, Uint2 *the_entity_id, Uint2 *item_type, Uint2 *item_subtype, Int4 *position, Int2 *line, EditAlignDataPtr adp)
 {
   Uint2 itemid = 0, 
@@ -1733,8 +1583,6 @@ extern Uint1 locate_point (PoinT pt, RecT rp, Uint2 *item_id, Uint2 *the_entity_
   Int2  ligne = -1;
   Uint1 what = BADLAND;
 
-SelEdStructPtr tmp;
-
   *item_id = *the_entity_id = (Uint2) 0;
   *item_type= *item_subtype = (Uint2) 0;
   *position = (Int4) -1;
@@ -1746,21 +1594,6 @@ SelEdStructPtr tmp;
 	 seqEntityid = adp->seqEntity_id [ligne];
 	 itemtype = adp->itemtype [ligne];
 	 itemsubtype = adp->itemsubtype [ligne];
-     
-/********* TEMPO !!!!!!!!!!*/
-for (tmp=adp->seq_info; tmp!=NULL; tmp=tmp->next)
-{
-   if (tmp->entityID==seqEntityid && tmp->itemID==itemid && tmp->itemtype==itemtype) {
-      if (tmp->offset > 0)
-      {
-/**
-         Message (MSG_OK, "Residues in local alignment not selectable");
-**/
-         return BADLAND;
-      }
-   }
-}
-
   }
   if (ligne > adp->pnlLine) {
          return HOLDDNLAND;
@@ -1824,79 +1657,6 @@ for (tmp=adp->seq_info; tmp!=NULL; tmp=tmp->next)
   return what;
 }
 
-/**************************************
-***
-***  Click Menu Procedure
-***        1: click on ID : click_id
-***        2: click on sequence
-***
-***************************************/
-static void changeselectcolor (Uint2 entityID, Uint2 itemID, Int4 pos, ValNodePtr copyalign, Uint1 r, Uint1 g, Uint1 b)
-{
-  SelEdStructPtr sesp;
-  EditCellPtr    ecp;
-  ValNodePtr     vnp;
-
-  for (vnp=copyalign; vnp!=NULL; vnp=vnp->next) {
-     sesp = (SelEdStructPtr) vnp->data.ptrvalue;
-     if (sesp->entityID == entityID && sesp->itemID==itemID) {
-        ecp=(EditCellPtr)(sesp->data->data.ptrvalue);
-        if (ecp!=NULL) {
-           ecp[pos].r = r;
-           ecp[pos].g = g;
-           ecp[pos].b = b;
-        }
-     }
-  }
-}
-
-static void changeselectcolor_allpos (ValNodePtr linebuff, Uint2 entityID, Uint2 itemID, Int4 pos, ValNodePtr copyalign, Uint1 r, Uint1 g, Uint1 b)
-{
-  TextAlignBufPtr  tap;
-  ValNodePtr       vnp, vnp2;
-  CharPtr          buf;
-  SelEdStructPtr   sesp;
-  EditCellPtr      ecp;
-  Char             ch = ' ';
- 
-  for (vnp = linebuff; vnp != NULL; vnp = vnp->next)
-  {
-     tap = (TextAlignBufPtr) vnp->data.ptrvalue;
-     if (tap != NULL) {
-        if (OBJ_(tap->feattype) == OBJ_BIOSEQ) {
-           buf = (CharPtr) tap->buf;
-           if(tap->seqEntityID == entityID && tap->bsp_itemID == itemID)
-           {
-              ch = buf [pos];
-           }
-        }
-     }
-  }
-  if (ch == ' ')
-     return;
-  vnp2=copyalign;
-  for (vnp = linebuff; vnp != NULL; vnp = vnp->next)
-  {
-     tap = (TextAlignBufPtr) vnp->data.ptrvalue;
-     if (tap != NULL) {
-        if (OBJ_(tap->feattype) == OBJ_BIOSEQ) {
-           buf = (CharPtr) tap->buf;
-           if(buf [pos] == ch)
-           {
-              sesp = (SelEdStructPtr) vnp2->data.ptrvalue;
-              ecp=(EditCellPtr)(sesp->data->data.ptrvalue);
-              if (ecp!=NULL) {
-                 ecp[pos].r = r;
-                 ecp[pos].g = g;
-                 ecp[pos].b = b;
-              } 
-           } 
-           vnp2=vnp2->next;
-        } 
-     } 
-  } 
-}
-
 static DenseDiagPtr in_block (SeqAlignPtr salp, Int4 pos)
 {
   DenseDiagPtr ddp = NULL;
@@ -1933,7 +1693,6 @@ extern void on_click (PaneL pnl, PoinT pt)
   SelStruct        sp;
   SelStructPtr     ssp = NULL;
   SelStructPtr     this_selection = NULL;
-  DenseDiagPtr     ddp;
   RecT             rp;  
   Int4             position;
   Int4             pos_inseq;
@@ -1956,6 +1715,7 @@ extern void on_click (PaneL pnl, PoinT pt)
           return;
   }
   adp->select_block = NULL;
+  adp->mouse_mode = MOUSE_CLICK;
 /***
   WriteLog("click what %d  %d %d %d %d pos %d lin %d  \n", (int) what, 
     (int) sp.itemID, (int) sp.entityID, (int)sp.itemtype, (int)itemsubtype,
@@ -1998,14 +1758,6 @@ extern void on_click (PaneL pnl, PoinT pt)
                 adp->clickwhat = CLICKID_SEQFEAT;
              }
           }
-          else if ( sp.itemtype == OBJ_VIRT && (itemsubtype ==SEQFEAT_GENE
-               || itemsubtype ==SEQFEAT_RNA || itemsubtype ==SEQFEAT_CDREGION))
-          {
-             the_sip = get_featId_fromid(&sp, adp->feat, itemsubtype);
-             pos_inseq = AlignCoordToSeqCoord (position, the_sip, salp, adp->sqloc_list, 0);
-             ssp =make_featssp (&sp, adp->feat, itemsubtype, pos_inseq, -1, -1);
-             adp->clickwhat = CLICKID_FEAT;
-          }
           else if( itemsubtype >=EDITDEF_RF1 && itemsubtype<=EDITDEF_RF6 )
           {
              ssp = make_bufssp (&sp, adp->buffer, itemsubtype);
@@ -2018,39 +1770,26 @@ extern void on_click (PaneL pnl, PoinT pt)
     case SEQLAND: 
           if ( position >=0 ) {
              adp->clickwhat = CLICKSEQ_BIOSEQ;
-             if (adp->edit_mode == BLOCK_EDIT) {
-                if ( itemsubtype == FEATDEF_BAD ) {
-                   if ((ddp = selectblock (adp->blocks, position)) != NULL) {
-                      adp->select_block = ddp;
-                      adp->edit_pos = position;
-                      inval_panel (pnl, -1, -1); 
-                   }
-                }
-             }
-             else if(adp->edit_mode==SEQ_VIEW || adp->edit_mode==SEQ_EDIT || adp->edit_mode == ALIGN_EDIT) 
+             if(adp->edit_mode==SEQ_VIEW || adp->edit_mode==SEQ_EDIT || adp->edit_mode == ALIGN_EDIT) 
              {
-                if ( itemsubtype == FEATDEF_BAD ) {
-                   if ( ! shftKey ) 
+                if ( itemsubtype == FEATDEF_BAD ) 
+                {
+                   Int4 old_caret_pos=adp->caret_orig;
+				   ssp=make_bspssp (&sp, adp->anp_list, position, position);
+                   click_caret (&rp, position, ssp, &(adp->caret), adp, line);
+                   if (!adp->display_panel)
+                      to_update_prompt(pnl,&(adp->caret), salp, adp->sqloc_list, FALSE, adp->printid);
+		   if(shftKey) 
                    {
-                      ssp=make_bspssp (&sp, adp->anp_list, position, position);
-                      click_caret (&rp, position, ssp, &(adp->caret), adp, line);
-                      if (!adp->display_panel)
-                         to_update_prompt(pnl,&(adp->caret), salp, adp->sqloc_list, FALSE, adp->printid);
-                      if ( ! ctrlKey) {
-                         deselect_all ();
+                      this_selection = get_closest_selection(&(adp->caret),salp, &sp, adp->sqloc_list);
+                      if (this_selection!=NULL) {
+			 extend_selectregion (adp, this_selection, position, old_caret_pos, FALSE, pnl);
                       }
                    }
-                   else {
-                      this_selection = whatselect(&(adp->caret),salp, adp->sqloc_list);
-                      if (this_selection==NULL) {
-                         select_firstcar (adp, &sp, position, line, pnl);
-                      }
-                      else {
-                         select_cars (adp, this_selection, &(adp->caret), position, line, pnl);
-                      }
-                      setposition_tossp (&(adp->caret), position, position);
-                   }
+                   else  if (!ctrlKey)
+                      ObjMgrDeSelectAll ();
                    adp->edit_pos = position;
+                   adp->caret_line = line;
                 }
                 else if (sp.itemtype == OBJ_SEQFEAT)
                 {
@@ -2074,19 +1813,6 @@ extern void on_click (PaneL pnl, PoinT pt)
                       }
                    }
                 }
-                else if ( sp.itemtype ==OBJ_VIRT && (itemsubtype ==SEQFEAT_GENE 
-                    || itemsubtype==SEQFEAT_RNA || itemsubtype ==SEQFEAT_CDREGION)) 
-                {
-                   the_sip = get_featId_fromid(&sp, adp->feat, itemsubtype);
-                   pos_inseq =AlignCoordToSeqCoord (position, the_sip, salp, adp->sqloc_list, 0);
-                   ssp = make_featssp (&sp, adp->feat, itemsubtype, pos_inseq, -1, -1);
-                   if (ssp != NULL) 
-                   {
-                      click_feat (pnl, position, ssp, adp, line);
-                      adp->feat_pos = position;
-                      adp->clickwhat = CLICKSEQ_FEAT;
-                   }
-                }
              }
           } 
           break;
@@ -2100,10 +1826,37 @@ extern void on_click (PaneL pnl, PoinT pt)
 /**************************************
 *** 
 ***  Drag Procedure
-***        1: drag on ID : drag_id
 ***        2: drag on sequence
 ***
 ***************************************/
+/*if CtrlKey is pushed and the user clicks within a selected region,
+don't move the caret*/
+static Int4 getcurrentcaretpos (Int4 position, Uint2 eID, Uint2 iID, Uint2 itype, Boolean direction)
+{
+   SelStructPtr sspsel=NULL;
+
+ if (ctrlKey){
+	sspsel=ObjMgrGetSelected();	
+    	if (sspsel != NULL) 
+    	{
+       		for (; sspsel != NULL; sspsel = sspsel->next)
+       		{
+       		   if ( checkssp_for_editor (sspsel) && is_sameId (sspsel->entityID, sspsel->itemID, sspsel->itemtype, 255, eID, iID, itype, 255) )
+		 {
+            		  if ( (position>= SeqLocStart(sspsel->region)) && 
+				(position<= SeqLocStop(sspsel->region))){
+				if (direction)
+					return SeqLocStart(sspsel->region);
+				else 
+					return SeqLocStop(sspsel->region);
+			   }
+        	   }
+       		}
+    	}
+  }
+  return -1;
+}
+
 extern void on_drag (PaneL pnl, PoinT pt)
 {
   EditAlignDataPtr adp;
@@ -2113,12 +1866,17 @@ extern void on_drag (PaneL pnl, PoinT pt)
   SelStructPtr     ssp = NULL;
   SelStructPtr     this_selection = NULL;
   RecT             rp;  
-  Int4             start;
-  Int4             position, pos_inseq;
+  Int4             position;
   Int2             line;
   Uint2            itemsubtype;
   Uint1            what;
   Uint1            res = 0;
+
+  Int4             from, to,
+                   caret_origseq, new_caret_orig;
+  SeqLocPtr        slp;
+  Uint1            direction = Seq_strand_plus;
+  
   
   if ( ( adp = GetAlignDataPanel (pnl)) == NULL ) return;
   if ( adp->seqnumber == 0 ) return;
@@ -2141,85 +1899,48 @@ extern void on_drag (PaneL pnl, PoinT pt)
   switch ( adp->clickwhat ) 
   {
     case CLICKID_BIOSEQ: 
-          ssp = make_bspssp (&sp, adp->anp_list, 0, -2);
-          if (ssp != NULL) {
-             drag_id (pnl, ssp, adp);
-          }
           break;
     case CLICKID_SEQFEAT: 
-          if (sp.itemtype == OBJ_SEQFEAT) {
-             the_sip = get_featId_fromid(&sp, adp->seqfeat, itemsubtype);
-             pos_inseq = AlignCoordToSeqCoord (position, the_sip, salp, adp->sqloc_list, 0);
-             ssp = make_featssp (&sp, adp->seqfeat, itemsubtype, pos_inseq, -1, -1);
-          }
-          if (ssp != NULL) {
-             drag_id (pnl, ssp, adp);
-          }
           break;
     case CLICKID_FEAT: 
-          if (sp.itemtype == OBJ_VIRT && (itemsubtype == SEQFEAT_GENE 
-          || itemsubtype == SEQFEAT_RNA || itemsubtype == SEQFEAT_CDREGION) ) {
-             the_sip = get_featId_fromid(&sp, adp->feat, itemsubtype);
-             pos_inseq = AlignCoordToSeqCoord (position, the_sip, salp, adp->sqloc_list, 0);
-             ssp = make_featssp (&sp, adp->feat, itemsubtype, pos_inseq, -1, -1);
-          }
-          if (ssp != NULL) {
-             drag_id (pnl, ssp, adp);
-          }
           break;
     case CLICKSEQ_BIOSEQ: 
-          if (position>=0 && position != adp->edit_pos) {
-          if (adp->edit_mode==BLOCK_EDIT)
+          if (position>=0 && position != adp->edit_pos) 
           {
-             position--;
-             if (adp->select_block == NULL)
-             {
-                adp->blocks = SeqAlignDiagAdd (adp->blocks, position, 1);
-                adp->select_block = selectblock (adp->blocks, position);
-             } 
-             else { 
-                start = *(adp->select_block->starts);
+            this_selection = &sp;
+            if (is_sameId (this_selection->entityID, this_selection->itemID, 
+               this_selection->itemtype, 255, adp->caret.entityID, adp->caret.itemID, 
+               adp->caret.itemtype, 255))
+            {  
                 if (position < adp->edit_pos) {
-                   if (adp->edit_pos > start + (adp->select_block->len/2)) {
-                      adp->select_block->len -= (adp->edit_pos-position);
-                   }
-                   else if (adp->edit_pos <= start+(adp->select_block->len/2)) {
-                      *(adp->select_block->starts) -= (adp->edit_pos-position);
-                      adp->select_block->len += (adp->edit_pos-position);
+                   direction = Seq_strand_minus;
+                }
+                the_sip = SeqLocId(adp->caret.region);
+                caret_origseq = AlignCoordToSeqCoord (adp->caret_orig, the_sip, salp, adp->sqloc_list, 0);
+                if (adp->mouse_mode == MOUSE_CLICK)
+                {
+                   new_caret_orig = getcurrentcaretpos (caret_origseq, adp->caret.entityID, adp->caret.itemID, adp->caret.itemtype, (Boolean)(direction==Seq_strand_plus));
+                   if (new_caret_orig<0) 
+                     new_caret_orig=caret_origseq;
+                   else if (caret_origseq != new_caret_orig) {
+                      adp->caret_orig = SeqCoordToAlignCoord (new_caret_orig, the_sip, salp, 0, 0);
                    }
                 }
-                else if (position > adp->edit_pos) {
-                   if (adp->edit_pos > start + (adp->select_block->len/2)) {
-                      adp->select_block->len += (position-adp->edit_pos);
-                   }
-                   else if (adp->edit_pos<= start+(adp->select_block->len/2)) {
-                      *(adp->select_block->starts) += (position-adp->edit_pos);
-                      adp->select_block->len -= (position-adp->edit_pos);
-                   }
-                } 
+                else {
+                   new_caret_orig=caret_origseq;
+                }
+                from = new_caret_orig;
+                to = AlignCoordToSeqCoord (position, the_sip, salp, adp->sqloc_list, 0);
+                if (from > to) {
+                   from = to;
+                   to = new_caret_orig;
+                }
+                slp = SeqLocIntNew (from, to, direction, the_sip);
+                ObjMgrAlsoSelect (this_selection->entityID, this_selection->itemID, 
+                   this_selection->itemtype, OM_REGION_SEQLOC, slp);
+                adp->edit_pos = position;
+                adp->mouse_mode = MOUSE_DRAG;
              }
-             if (adp->select_block->len < 0) {
-                *(adp->select_block->starts) = MIN ((Int4)0, (Int4)(*(adp->select_block->starts)-adp->select_block->len));
-                adp->select_block->len = abs(adp->select_block->len);
-             }
-             inval_panel (pnl, -1, -1); 
-             adp->edit_pos = position;
-             position++;
-          }
-          if (!adp->ondrag) 
-          {
-             if (select_firstcar (adp, &sp, position, line, pnl)) {
-                adp->ondrag = TRUE;                
-             }
-          } 
-          else {
-             this_selection = whatselect (&(adp->caret), salp, adp->sqloc_list);
-             if (this_selection==NULL) {
-                select_firstcar (adp, &(adp->caret), position, line, pnl);
-             }
-             else 
-                select_cars (adp, this_selection, &sp, position, line, pnl);
-          }
           }
           break;
           
@@ -2255,39 +1976,6 @@ extern void on_drag (PaneL pnl, PoinT pt)
 **********************/
           break;
           
-    case CLICKSEQ_FEAT: 
-/******************************
-          if ( select != NULL ) 
-          {
-             sspei = (Uint2) select->entityID;
-             sspii = (Uint2) select->itemID;
-             sspit = (Uint2) select->itemtype;
-             sspist= (Uint2) select->regiontype;
-             if ( position >= 0 && position < adp->length 
-             && ( sspit == OBJ_VIRT && (sspist == SEQFEAT_GENE 
-             || sspist == SEQFEAT_RNA || sspist == SEQFEAT_CDREGION) ) )
-             {
-                ssp = is_selectedbyID (sspei, sspii, sspit); 
-                if ( ssp == NULL )  
-                {
-                   click_feat (pnl, position, adp->select, adp, line);
-                   ssp = is_selectedbyID (sspei, sspii, sspit); 
-                }
-                if ( ssp != NULL && position != adp->feat_pos )  
-                {
-                   prec = NULL; 
-                   pos_inseq = AlignCoordToSeqCoord (adp->feat_pos, SeqLocId((SeqLocPtr)ssp->region), salp, adp->sqloc_list, 0);
-                   feat = get_feat_fromid (adp->feat, sspist, sspei, sspii, pos_inseq, &prec);
-                   if ( feat != NULL ) 
-                   {
-                       drag_feat (pnl, position, feat, adp, line, sspist, prec, feat->next, ssp);
-                   }
-                   adp->feat_pos = position;
-                }
-             }
-          }
-****************************/
-          break;
     case NOCLICK: 
           break;
     default:
@@ -2334,14 +2022,14 @@ extern void on_hold (PaneL pnl, PoinT pt)
              position = adp->edit_pos + adp->visibleWidth;
              if (position > adp->length) position = adp->length;
              adp->caret_line++;
-             dragcaret_selectrgn (pnl, position, whatselect(&(adp->caret), salp, adp->sqloc_list), &(adp->caret), adp, adp->caret_line);
+             dragcaret_selectrgn (pnl, position, get_closest_selection(&(adp->caret), salp, NULL, adp->sqloc_list), &(adp->caret), adp, adp->caret_line);
              setposition_tossp (&(adp->caret), position, position);
              adp->edit_pos = position;
           }
           else if (adp->clickwhat== CLICKSEQ_SEQFEAT || adp->clickwhat == CLICKSEQ_FEAT)
           {
              prec = NULL; 
-             this_selection = whatselect(&(adp->caret), salp, adp->sqloc_list);
+             this_selection = get_closest_selection(&(adp->caret), salp, NULL, adp->sqloc_list);
              feat = get_feat_fromid (adp->feat, this_selection->regiontype, this_selection->entityID, this_selection->itemID, adp->feat_pos, &prec);
              if ( feat != NULL ) 
              {
@@ -2362,13 +2050,13 @@ extern void on_hold (PaneL pnl, PoinT pt)
              position = adp->edit_pos - adp->visibleWidth;
              if (position < 0) position = 0;
              adp->caret_line--;
-             dragcaret_selectrgn (pnl,position,whatselect(&(adp->caret), salp, adp->sqloc_list),&(adp->caret), adp, adp->caret_line);
+             dragcaret_selectrgn (pnl,position,get_closest_selection(&(adp->caret), salp, NULL, adp->sqloc_list),&(adp->caret), adp, adp->caret_line);
              setposition_tossp (&(adp->caret), position, position);
              adp->edit_pos = position;
           }
           else if (adp->clickwhat == CLICKSEQ_SEQFEAT || adp->clickwhat == CLICKSEQ_FEAT)
           {
-             this_selection = whatselect(&(adp->caret), salp, adp->sqloc_list);
+             this_selection = get_closest_selection(&(adp->caret), salp, NULL, adp->sqloc_list);
              feat = get_feat_fromid (adp->feat, this_selection->regiontype, this_selection->entityID, this_selection->itemID, adp->feat_pos, &prec);
              if ( feat != NULL ) 
              {
@@ -2420,51 +2108,22 @@ extern void on_release (PaneL pnl, PoinT pt)
     case CLICKID_BIOSEQ: 
           break;      
     case CLICKSEQ_BIOSEQ: 
-          if ( position >= 0 && adp->ondrag) {
+          if ( position >= 0 && adp->mouse_mode == MOUSE_DRAG) {
                 ssp = make_bspssp (&sp, adp->anp_list, position, position);
                 if (ssp != NULL) {
                    release_caret (pnl, position, ssp, &adp->caret, adp, line);
                    adp->edit_pos = position;
-                   adp->ondrag = FALSE;                
                 }
           }
-          break;
-    case CLICKSEQ_FEAT: 
-    case CLICKSEQ_SEQFEAT: 
-/*****************************
-          if ( position >= 0 && select != NULL ) {
-             sspei = (Uint2) select->entityID;
-             sspii = (Uint2) select->itemID;
-             sspit = (Uint2) select->itemtype;
-             sspist= (Uint2) select->regiontype;
-             if ( position >= 0 && position < adp->length 
-             && ( sspit == OBJ_VIRT && (sspist == SEQFEAT_GENE 
-             || sspist == SEQFEAT_RNA || sspist == SEQFEAT_CDREGION) ) )
-             {
-                ssp = is_selectedbyID (sspei, sspii, sspit); 
-                if ( ssp != NULL ) 
-                {
-                   if ( position != adp->feat_pos )  {
-                      prec = NULL; 
-                      pos_inseq = AlignCoordToSeqCoord (adp->feat_pos, SeqLocId((SeqLocPtr)ssp->region), salp, adp->sqloc_list, 0);
-                      feat = get_feat_fromid (adp->feat, sspist, sspei, sspii, pos_inseq, &prec);
-                      if ( feat != NULL )  {
-                         drag_feat (pnl, position, feat, adp, line, sspist, prec, feat->next, ssp);
-                      }
-                   }
-                }
-                adp->feat_pos = position;
-             }
-             adp->select = SelStructDel (adp->select);
-          }
-*************************/
           break;
     case NOCLICK: 
-          deselect_all ();
+          ObjMgrDeSelectAll ();
           break;
     default:
           break;
   }
+  adp->clickwhat = NOCLICK;
+  adp->mouse_mode = MOUSE_RELEASE;
   if (!adp->display_panel) {
      update_edititem (pnl);
      update_savefeatitem (pnl);  
@@ -2555,7 +2214,6 @@ extern void on_key (SlatE s, Char ch)
   PaneL            pnl;
   EditAlignDataPtr adp;
   SeqAlignPtr      salp;
-  BaR              vsb;
   RecT             rp;
   SeqLocPtr        slp;
   SeqLocPtr        slpcaret;
@@ -2758,10 +2416,10 @@ ssp->regiontype, ssp->region);
                       adp->edit_pos--;
                    else 
                       adp->edit_pos++;
-                   deselect_all ();
+                   ObjMgrDeSelectAll ();
                } 
                else {
-                   dragcaret_selectrgn (pnl, caretstart, whatselect(&(adp->caret), salp, adp->sqloc_list), &(adp->caret), adp, line);
+                   dragcaret_selectrgn (pnl, caretstart, get_closest_selection(&(adp->caret), salp, NULL, adp->sqloc_list), &(adp->caret), adp, line);
                    adp->edit_pos --;
                }
           }
@@ -2798,10 +2456,10 @@ ssp->regiontype, ssp->region);
                       adp->edit_pos += 1;
                    else 
                       adp->edit_pos -= 1;
-                   deselect_all ();
+                   ObjMgrDeSelectAll ();
                } 
                else {
-                   dragcaret_selectrgn (pnl, caretstart, whatselect(&(adp->caret), salp, adp->sqloc_list), &(adp->caret), adp, line);
+                   dragcaret_selectrgn (pnl, caretstart, get_closest_selection(&(adp->caret), salp, NULL, adp->sqloc_list), &(adp->caret), adp, line);
                    adp->edit_pos ++;
                }
           }
@@ -2830,10 +2488,10 @@ ssp->regiontype, ssp->region);
                       click_caret (&rp, pos, &(adp->caret), &(adp->caret), adp, adp->caret_line);
                       if (!adp->display_panel)
                          to_update_prompt (pnl, &(adp->caret), (SeqAlignPtr) adp->sap_align->data, adp->sqloc_list, FALSE, adp->printid);
-                      deselect_all ();
+                      ObjMgrDeSelectAll ();
                    } 
                    else {
-                      dragcaret_selectrgn (pnl, pos, whatselect(&(adp->caret), salp, adp->sqloc_list), &(adp->caret), adp, adp->caret_line);
+                      dragcaret_selectrgn (pnl, pos, get_closest_selection(&(adp->caret), salp, NULL, adp->sqloc_list), &(adp->caret), adp, adp->caret_line);
                       setposition_tossp (&(adp->caret), pos, pos);
                       adp->edit_pos = pos;
                    }
@@ -2882,10 +2540,10 @@ ssp->regiontype, ssp->region);
                       to_update_prompt (pnl, &(adp->caret), (SeqAlignPtr) adp->sap_align->data, adp->sqloc_list, FALSE, adp->printid);
                    adp->caret_orig = caretstart;
                    adp->edit_pos = caretstart;
-                   deselect_all ();
+                   ObjMgrDeSelectAll ();
                } 
                else {
-                   dragcaret_selectrgn (pnl, caretstart, whatselect(&(adp->caret), salp, adp->sqloc_list), &(adp->caret), adp, line);
+                   dragcaret_selectrgn (pnl, caretstart, get_closest_selection(&(adp->caret), salp, NULL, adp->sqloc_list), &(adp->caret), adp, line);
                    adp->edit_pos -= adp->visibleWidth;
                }
           } 
@@ -2914,10 +2572,10 @@ ssp->regiontype, ssp->region);
                       click_caret (&rp, pos, &(adp->caret), &(adp->caret), adp, adp->caret_line);
                       if (!adp->display_panel)
                          to_update_prompt (pnl, &(adp->caret), (SeqAlignPtr) adp->sap_align->data, adp->sqloc_list, FALSE, adp->printid);
-                      deselect_all ();
+                      ObjMgrDeSelectAll ();
                    }
                    else {
-                      dragcaret_selectrgn (pnl, pos, whatselect(&(adp->caret), salp, adp->sqloc_list), &(adp->caret), adp, adp->caret_line);
+                      dragcaret_selectrgn (pnl, pos, get_closest_selection(&(adp->caret), salp, NULL, adp->sqloc_list), &(adp->caret), adp, adp->caret_line);
                       setposition_tossp (&(adp->caret), pos, pos);
                       adp->edit_pos = pos;
                    }
@@ -2968,10 +2626,10 @@ ssp->regiontype, ssp->region);
                       to_update_prompt (pnl, &(adp->caret), (SeqAlignPtr) adp->sap_align->data, adp->sqloc_list, FALSE, adp->printid);
                    adp->caret_orig = caretstart;
                    adp->edit_pos = caretstart;
-                   deselect_all ();
+                   ObjMgrDeSelectAll ();
                } 
                else {
-                   dragcaret_selectrgn(pnl, caretstart, whatselect(&(adp->caret), salp, adp->sqloc_list), &(adp->caret),  adp, line);
+                   dragcaret_selectrgn(pnl, caretstart, get_closest_selection(&(adp->caret), salp, NULL, adp->sqloc_list), &(adp->caret),  adp, line);
                    adp->edit_pos += adp->visibleWidth;
                }
           } 
@@ -2996,4 +2654,3 @@ ssp->regiontype, ssp->region);
      update_edititem (pnl);
   Update ();
 }
-                   

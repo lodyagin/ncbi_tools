@@ -1,4 +1,4 @@
---$Revision: 1.4 $
+--$Revision: 1.7 $
 --********************************************************************
 --
 --  Network BLAST 
@@ -13,9 +13,9 @@
 NCBI-Blast DEFINITIONS ::=
 BEGIN
 
-EXPORTS	Blast-request,
-	Blast-response,
-	Blast-parameters;
+EXPORTS	Blast-search, Blast-request,
+	Blast-response, Blast-parameters,
+	Blast-dbinfo, Blast-mask, Blast-KABlk;
 
 	
 IMPORTS Bioseq FROM NCBI-Sequence
@@ -143,7 +143,9 @@ Blast-parameters ::= SEQUENCE {
 	gifile		VisibleString OPTIONAL,	-- file with list of gis on server side    
 
 	matrix		VisibleString OPTIONAL,	-- specifies a matrix to use
-	filter-string	VisibleString OPTIONAL	-- filtering commands to be executed
+	filter-string	VisibleString OPTIONAL,	-- filtering commands to be executed
+	entrez-query	VisibleString OPTIONAL,	-- query to Entrez
+	word-size	INTEGER OPTIONAL	-- word-size used in BLAST search.
 }
 
 				-- series of these when the request is queued

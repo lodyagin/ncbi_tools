@@ -3,6 +3,19 @@
 
 #include <id1arch.h>
 
+#undef NLM_EXTERN
+#ifdef NLM_IMPORT
+#define NLM_EXTERN NLM_IMPORT
+#else
+#define NLM_EXTERN extern
+#endif
+
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+
 NLM_EXTERN Boolean LIBCALL ID1Init PROTO((void));
 NLM_EXTERN void LIBCALL ID1Fini PROTO((void));
 
@@ -31,5 +44,18 @@ NLM_EXTERN SeqEntryPtr LIBCALL ID1SeqEntryGet PROTO((Int4 uid, Int2 retcode));
 *****************************************************************************/
 NLM_EXTERN Boolean LIBCALL ID1BioseqFetchEnable PROTO((CharPtr progname, Boolean now));
 NLM_EXTERN void LIBCALL ID1BioseqFetchDisable PROTO((void));
+
+#ifdef __cplusplus
+}
+#endif
+
+
+#undef NLM_EXTERN
+#ifdef NLM_EXPORT
+#define NLM_EXTERN NLM_EXPORT
+#else
+#define NLM_EXTERN
+#endif
+
 
 #endif

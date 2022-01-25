@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.10 $
+* $Revision: 6.16 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
@@ -40,6 +40,24 @@
 *
 *
 * $Log: objmgr.c,v $
+* Revision 6.16  1999/01/22 16:19:51  chappey
+* AlsoSelect does not Deselect anymore when selected region of an entityID is already selected. Only one selection remains
+*
+* Revision 6.15  1999/01/21 19:45:32  chappey
+* bug fixed in ObjMgrSelectFunc2, CheckRedondantSelect, ObjMgrRegionComp
+*
+* Revision 6.14  1998/12/02 01:56:24  kans
+* when recycling entityID, check to see if it is already in list, do not add second copy - will see why this is happening later
+*
+* Revision 6.13  1998/11/30 20:59:01  egorov
+* Add ObjMgrNextAvailableEntityID() to avoid overflowing
+*
+* Revision 6.12  1998/10/07 22:25:43  kans
+* reapextra, like freeextra, takes omdp, not omdp->extradata
+*
+* Revision 6.11  1998/10/07 21:20:14  kans
+* ObjMgrAlsoSelect changes (CC)
+*
 * Revision 6.10  1998/09/28 19:54:10  kans
 * made ObjMgrDump debugging function public, no longer conditionally compiled
 *
@@ -311,6 +329,45 @@ NLM_EXTERN ObjMgrDataPtr LIBCALL ObjMgrFindByData (ObjMgrPtr omp, Pointer ptr)
 	return NULL;
 }
 
+#define ENTITY_ID_STACK_SIZE  100
+
+static Uint2 recycledEntityIDs [ENTITY_ID_STACK_SIZE];
+static Int2  recycledIDStackPt = 0;
+
+static Uint2 ObjMgrNextAvailEntityID (ObjMgrPtr omp)
+
+{
+	Uint2      entityID = 0;
+	if (omp != NULL) {
+		if (recycledIDStackPt > 0) {
+			recycledIDStackPt--;
+			entityID = recycledEntityIDs [recycledIDStackPt];
+		} else {
+			entityID = ++(omp->HighestEntityID);
+		}
+	}
+	return entityID;
+}
+
+static void ObjMgrRecycleEntityID (Uint2 entityID, ObjMgrPtr omp)
+
+{
+
+	Int2  i;
+
+	if (entityID < 1) return;
+	if (omp != NULL) {
+		/* check to see if entity is already on stack (e.g., entity 1), abort if so */
+		for (i = 0; i < recycledIDStackPt; i++) {
+			if (entityID == recycledEntityIDs [i]) return;
+		}
+		if (recycledIDStackPt < ENTITY_ID_STACK_SIZE) {
+			recycledEntityIDs [recycledIDStackPt] = entityID;
+			recycledIDStackPt++;
+		}
+	}
+}
+
 NLM_EXTERN Uint2 LIBCALL ObjMgrAddEntityID (ObjMgrPtr omp, ObjMgrDataPtr omdp)
 {
 	if (omdp == NULL) return 0;
@@ -318,7 +375,8 @@ NLM_EXTERN Uint2 LIBCALL ObjMgrAddEntityID (ObjMgrPtr omp, ObjMgrDataPtr omdp)
 	if (omdp->EntityID)
 	   return omdp->EntityID;
 
-	omdp->EntityID = ++(omp->HighestEntityID);
+	/* omdp->EntityID = ++(omp->HighestEntityID); */
+	omdp->EntityID = ObjMgrNextAvailEntityID (omp);
 
 #ifdef DEBUG_OBJMGR
 	ObjMgrDump(NULL, "ObjMgrAddEntityID-A");
@@ -1378,11 +1436,13 @@ NLM_EXTERN Boolean LIBCALL ObjMgrDelete (Uint2 type, Pointer data)
 			ErrPostEx(SEV_ERROR, 0,0, "ObjMgrDelete: reducing tempcnt below 0");
 	}
 
-	if (omdp->EntityID != 0 && omdp->EntityID == omp->HighestEntityID)
-		omp->HighestEntityID--;
+	/* if (omdp->EntityID != 0 && omdp->EntityID == omp->HighestEntityID)
+		omp->HighestEntityID--; */
+	if (omdp->EntityID != 0)
+		ObjMgrRecycleEntityID (omdp->EntityID, omp);
 
 	if (omdp->extradata != NULL && omdp->freeextra != NULL) {
-		omdp->freeextra (omdp->extradata);
+		omdp->freeextra ((Pointer) omdp);
 	}
 
 	MemSet((Pointer)omdp, 0, sizeof(ObjMgrData));
@@ -1449,8 +1509,10 @@ NLM_EXTERN Boolean LIBCALL ObjMgrAddToClipBoard (Uint2 entityID, Pointer ptr)
 				ErrPostEx(SEV_ERROR,0,0,"AddToClipBoard: ParentPtr != NULL");
 				goto erret;
 			}
+			/* if (omdp->EntityID == 0)
+				omdp->EntityID = ++(omp->HighestEntityID); */
 			if (omdp->EntityID == 0)
-				omdp->EntityID = ++(omp->HighestEntityID);
+				omdp->EntityID = ObjMgrNextAvailEntityID (omp);
 		}
 	}
 	else
@@ -1590,9 +1652,10 @@ NLM_EXTERN Boolean LIBCALL ObjMgrConnectFunc (ObjMgrPtr omp, Uint2 type, Pointer
 		ObjMgrDeSelectFunc(omp, omdp->EntityID,0,0,0,NULL);
 		ObjMgrFreeUserDataFunc(omp, omdp->EntityID, 0, 0, 0);
 
-		if (omp->HighestEntityID == omdp->EntityID) {
+		/* if (omp->HighestEntityID == omdp->EntityID) {
 			(omp->HighestEntityID)--;
-		}
+		} */
+		ObjMgrRecycleEntityID (omdp->EntityID, omp);
 		omdp->EntityID = 0;   /* reset.. now has a parent */
 	}
 	omdp->parenttype = parenttype;
@@ -2268,7 +2331,7 @@ NLM_EXTERN Boolean LIBCALL ObjMgrReap (ObjMgrPtr omp)
 		/* null out feature pointers in seqmgr feature indices via reap function */
 
 		if (ditch->extradata != NULL && ditch->reapextra != NULL) {
-			ditch->reapextra (ditch->extradata);
+			ditch->reapextra ((Pointer) ditch);
 		}
 
 		if (ditch->choice != NULL)
@@ -3189,18 +3252,54 @@ NLM_EXTERN ObjMgrTypePtr LIBCALL ObjMgrTypeFindNext (ObjMgrPtr omp, ObjMgrTypePt
 *   Selection Functions for data objects
 *
 *****************************************************************************/
+static Boolean NEAR ObjMgrSendSelMsg (ObjMgrPtr omp, Uint2 entityID,
+         Uint2 itemID, Uint2 itemtype, Uint1 regiontype, Pointer region)
+{
+        ObjMgrDataPtr omdp;
+        OMMsgStruct ommds;
 
-static SelStructPtr NEAR ObjMgrAddSelStruct(ObjMgrPtr omp, Uint2 entityID,
-	 Uint2 itemID, Uint2 itemtype, Uint1 regiontype, Pointer region)
+        omdp = ObjMgrFindByEntityID(omp, entityID, NULL);
+        if (omdp == NULL)
+           return FALSE;
+
+        MemSet((Pointer)(&ommds), 0, sizeof(OMMsgStruct));
+        ommds.message = OM_MSG_SELECT;
+        ommds.entityID = entityID;
+        ommds.itemtype = itemtype;
+        ommds.itemID = itemID;
+        ommds.regiontype = regiontype;
+        ommds.region = region;
+
+        ObjMgrSendStructMsgFunc(omp, omdp, &ommds);
+	return TRUE;
+}
+
+static Boolean NEAR ObjMgrSendDeSelMsg (ObjMgrPtr omp, Uint2 entityID,
+         Uint2 itemID, Uint2 itemtype, Uint1 regiontype, Pointer region)
+{
+        ObjMgrDataPtr omdp;
+        OMMsgStruct ommds;
+
+        omdp = ObjMgrFindByEntityID(omp, entityID, NULL);
+        if (omdp == NULL)
+           return FALSE;
+
+        MemSet((Pointer)(&ommds), 0, sizeof(OMMsgStruct));
+        ommds.message = OM_MSG_DESELECT;
+        ommds.entityID = entityID;
+        ommds.itemtype = itemtype;
+        ommds.itemID = itemID;
+        ommds.regiontype = regiontype;
+        ommds.region = region;
+
+	ObjMgrSendStructMsgFunc(omp, omdp, &ommds);
+	return TRUE;
+}
+
+static SelStructPtr NEAR ObjMgrAddSelStruct (ObjMgrPtr omp, Uint2 entityID,
+		 Uint2 itemID, Uint2 itemtype, Uint1 regiontype, Pointer region)
 {
 	SelStructPtr ssp, tmp;
-	ObjMgrDataPtr omdp;
-	OMMsgStruct ommds;
-
-
-	omdp = ObjMgrFindByEntityID(omp, entityID, NULL);
-	if (omdp == NULL)
-		return NULL;
 
 	tmp = omp->sel;
 
@@ -3225,51 +3324,28 @@ static SelStructPtr NEAR ObjMgrAddSelStruct(ObjMgrPtr omp, Uint2 entityID,
 	ssp->regiontype = regiontype;
 	ssp->region = region;
 
-	MemSet((Pointer)(&ommds), 0, sizeof(OMMsgStruct));
-	ommds.message = OM_MSG_SELECT;
-	ommds.entityID = entityID;
-	ommds.itemtype = itemtype;
-	ommds.itemID = itemID;
-	ommds.regiontype = regiontype;
-	ommds.region = region;
-
-	ObjMgrSendStructMsgFunc(omp, omdp, &ommds);
-
 	return ssp;
 }
+
 
 static Boolean NEAR ObjMgrDeSelectStructFunc (ObjMgrPtr omp, SelStructPtr ssp)
 {
 	SelStructPtr next, prev;
-	ObjMgrDataPtr omdp;
-	OMMsgStruct ommds;
 
-	if (ssp == NULL) return FALSE;
+	if (ssp == NULL) 
+		return FALSE;
 
-	omdp = ObjMgrFindByEntityID(omp, ssp->entityID, NULL);
-
-	MemSet((Pointer)(&ommds), 0, sizeof(OMMsgStruct));
-	ommds.message = OM_MSG_DESELECT;
-	ommds.entityID = ssp->entityID;
-	ommds.itemtype = ssp->itemtype;
-	ommds.itemID = ssp->itemID;
-	ommds.regiontype = ssp->regiontype;
-	ommds.region = ssp->region;
-	                       /* take it out of the chain */
 	next = ssp->next;
 	prev = ssp->prev;
-
 	if (prev != NULL)
 		prev->next = next;
 	else
 		omp->sel = next;
-
 	if (next != NULL)
 		next->prev = prev;
 
-                                /* send the message */
-	ObjMgrSendStructMsgFunc(omp, omdp, &ommds);
-                                /* free the region */
+        ObjMgrSendDeSelMsg (omp, ssp->entityID, ssp->itemID, ssp->itemtype, ssp->regiontype, ssp->region);
+
 	ObjMgrRegionFree(omp, ssp->regiontype, ssp->region); /* free any region */
 
 	MemFree(ssp);
@@ -3458,13 +3534,264 @@ static Boolean NEAR ObjMgrSelectFunc (ObjMgrPtr omp, Uint2 entityID, Uint2 itemI
 		ssp = ObjMgrAddSelStruct(omp, entityID, itemID, itemtype, regiontype, region);
 
 		if (ssp != NULL)
-			retval = TRUE;
+			retval = ObjMgrSendSelMsg(omp, entityID, itemID, itemtype, regiontype, region);;
 	}
 
 erret:
 	return retval;
 
 }
+
+static SeqLocPtr SeqLocChangeIntervalle (SeqLocPtr slp, Int4 start, Int4 stop)
+{
+        SeqIntPtr sip;
+
+        sip = (SeqIntPtr)(slp->data.ptrvalue);
+        if (start > -1)
+                sip->from = start;
+        if (stop > -1)
+                sip->to = stop;
+        return slp;
+}
+
+static Int2 NEAR ObjMgrRegionComp (Pointer region1,Pointer region2, Boolean direction2_plus)
+{
+        SeqLocPtr slp1, slp2;
+
+        if ((region1 == NULL) || (region2 == NULL))      
+           return FALSE;
+
+        slp1 = (SeqLocPtr)region1;
+        slp2 = (SeqLocPtr)region2;
+        if (SeqLocCompare(slp1,slp2) == SLC_NO_MATCH)
+        {
+           if (SeqLocStop(slp1) == SeqLocStart(slp2)-1)
+              return 2;
+           if (SeqLocStart(slp1) == SeqLocStop(slp2)+1)
+              return 3;
+           return 0;
+        }
+        if (SeqLocCompare(slp1,slp2) == SLC_A_EQ_B)
+           return 1;
+        if (SeqLocCompare(slp1,slp2) == SLC_B_IN_A)
+        {
+	   if (SeqLocStart(slp1)==SeqLocStart(slp2))
+              return 5;
+           if (SeqLocStop(slp1)==SeqLocStop(slp2))
+              return 6;
+           if (direction2_plus)
+              return 5;
+           else
+              return 6;
+        }
+        if (SeqLocCompare(slp1,slp2) == SLC_A_IN_B)
+           return 4;
+        if (SeqLocCompare(slp1,slp2) == SLC_A_OVERLAP_B)
+        {
+           if (SeqLocStart(slp1) < SeqLocStart(slp2))
+              return 2;
+           if (SeqLocStart(slp1) > SeqLocStart(slp2))
+              return 3;
+        }
+        return 0;
+}
+
+
+static Boolean NEAR ObjMgrSelectFunc2 
+(ObjMgrPtr omp, Uint2 entityID, Uint2 itemID, Uint2 itemtype, Uint1 regiontype, Pointer region)
+{
+        SelStructPtr ssp, next;
+        Boolean      retval = FALSE;
+	SeqLocPtr    tmp = NULL,
+                     tmp2 = NULL;
+        Int2         res=0;
+	Boolean direction_plus = TRUE;
+
+        if (entityID == 0)    /* desktop */
+        {
+                ObjMgrDeSelectAllFunc(omp);
+                goto erret;
+        }
+        else if (region)
+        {
+/***** Colombe Patrick ****/
+/** send Seq_strand_minus seqloc of selection when the cursor moves to the left **/
+/** the Seq_strand_minus is now change to Seq_strand_plus     for ever **/
+
+           if (SeqLocStrand(region)==Seq_strand_minus)
+	   {
+SeqIntPtr sit;
+SeqLocPtr slp;
+      	      slp = (SeqLocPtr)region;
+	      sit = (SeqIntPtr)(slp->data.ptrvalue);
+	      sit->strand = Seq_strand_plus;
+              direction_plus=FALSE;
+	   }
+/***** Colombe Patrick ****/
+                ssp = omp->sel;
+                while (ssp != NULL && res == 0)
+                {
+                        next = ssp->next;
+                        if (ssp->entityID == entityID)
+                        {
+                                if ((ssp->itemID == itemID) || (! itemID))
+                                {
+                                        if ((ssp->itemtype == itemtype) || (! itemtype))
+                                        {
+                                                if (ssp->regiontype && regiontype)
+                                                {
+                                                        res = ObjMgrRegionComp (ssp->region, region, direction_plus);
+							if (res>0)
+								break;
+                                                }
+                                        }
+                                }
+                        }
+                        ssp = next;
+                }
+        }
+        if (res==2)  /* extend ssp->region to right */
+        {
+                SeqLocChangeIntervalle ((SeqLocPtr)ssp->region, -1, SeqLocStop(region));
+                retval=ObjMgrSendSelMsg (omp, entityID, itemID, itemtype, ssp->regiontype, ssp->region);
+        }
+        else if (res==3)   /* extend ssp->region to left */
+        {
+                SeqLocChangeIntervalle ((SeqLocPtr)ssp->region, SeqLocStart(region), -1);
+                retval=ObjMgrSendSelMsg (omp, entityID, itemID, itemtype, ssp->regiontype, ssp->region);
+        }
+        else if (res==4)   /* extend ssp->regiontype both sides */
+        {
+                SeqLocChangeIntervalle ((SeqLocPtr)ssp->region, SeqLocStart(region), SeqLocStop(region));
+                retval=ObjMgrSendSelMsg (omp, entityID, itemID, itemtype, ssp->regiontype, ssp->region);
+        }
+        else if (res==5)  /* shrink ssp->region from right */
+        {
+                tmp = SeqLocIntNew (SeqLocStart((SeqLocPtr)ssp->region), SeqLocStop((SeqLocPtr)region), 0, SeqLocId(region));
+                tmp2 = SeqLocIntNew (SeqLocStop((SeqLocPtr)region)+1, SeqLocStop((SeqLocPtr)ssp->region), 0, SeqLocId(region));
+                SeqLocChangeIntervalle ((SeqLocPtr)ssp->region, -1, (Int4)(SeqLocStop(region)));
+		ValNodeFree (tmp);
+                retval=ObjMgrSendDeSelMsg (omp, entityID, itemID, itemtype, OM_REGION_SEQLOC, tmp2);
+		ValNodeFree (tmp2);
+        }
+        else if (res==6) /* shrink ssp->region from left */
+        {
+                tmp = SeqLocIntNew (SeqLocStart((SeqLocPtr)region), SeqLocStop((SeqLocPtr)ssp->region), 0, SeqLocId(region));
+                tmp2 = SeqLocIntNew (SeqLocStart((SeqLocPtr)ssp->region), SeqLocStart((SeqLocPtr)region)-1, 0, SeqLocId(region));
+                SeqLocChangeIntervalle ((SeqLocPtr)ssp->region, (Int4)(SeqLocStart(region)), -1);
+		ValNodeFree (tmp);
+                retval=ObjMgrSendDeSelMsg (omp, entityID, itemID, itemtype, OM_REGION_SEQLOC, tmp2);
+		ValNodeFree (tmp2);
+        }
+        else if (res==0)
+        {
+                ssp = ObjMgrAddSelStruct(omp, entityID, itemID, itemtype, regiontype, region);
+                if (ssp != NULL)
+                        retval=ObjMgrSendSelMsg (omp, entityID, itemID, itemtype, regiontype, region);
+        }
+
+erret:
+        return (Boolean)(res>0);
+
+}
+
+static Boolean NEAR CheckRedondantSelect (ObjMgrPtr omp)
+{
+        SelStructPtr ssp1, 
+        		ssp2,
+        		next1,
+        		next2, pre2;
+        SeqLocPtr    tmp;
+        Boolean      retval = FALSE;
+        Int2         res=0;
+
+        if (omp!=NULL)   
+        {
+                ssp1 = omp->sel;
+                while (ssp1 != NULL && res==0)
+                {
+                   next1 = ssp1->next;
+                   ssp2=next1;
+                   pre2=ssp1;
+                   while (ssp2!=NULL && res==0)
+                   {
+                   	next2 = ssp2->next;
+                        if (ssp1->entityID == ssp2->entityID)
+                        {
+                                if (ssp1->itemID == ssp2->itemID)
+                                {
+                                        if (ssp1->itemtype == ssp2->itemtype)
+                                        {
+                                                if (ssp1->regiontype && ssp2->regiontype)
+                                                {
+                                                        res = ObjMgrRegionComp (ssp1->region, ssp2->region, TRUE);
+							if (res>0)
+								break;
+                                                }
+                                        }
+                                }
+                        }
+                        ssp2 = next2;
+                   }
+                   if (res==0)
+			ssp1 = next1;
+                }
+        }
+	if (res==1)
+	{
+       		pre2->next=next2;
+       		ssp2=MemFree(ssp2);
+                ObjMgrSendSelMsg (omp, ssp1->entityID, ssp1->itemID, ssp1->itemtype, 0, 0);
+                retval=TRUE;
+	}
+        else if (res==2)  /* extend ssp->regiontype to right */
+        {
+                SeqLocChangeIntervalle ((SeqLocPtr)ssp1->region, -1, SeqLocStop(ssp2->region));
+       		pre2->next=next2;
+       		ssp2=MemFree(ssp2);                
+                ObjMgrSendSelMsg (omp, ssp1->entityID, ssp1->itemID, ssp1->itemtype, 0, 0);
+                retval=TRUE;
+        }
+        else if (res==3)   /* extend ssp->regiontype to left */
+        {
+                SeqLocChangeIntervalle ((SeqLocPtr)ssp1->region, SeqLocStart(ssp2->region), -1);
+       		pre2->next=next2;
+       		ssp2=MemFree(ssp2);                
+                ObjMgrSendSelMsg (omp, ssp1->entityID, ssp1->itemID, ssp1->itemtype, 0, 0);
+                retval=TRUE;
+        }
+        else if (res==4)   /* extend ssp->regiontype both sides */
+        {
+                SeqLocChangeIntervalle ((SeqLocPtr)ssp1->region, SeqLocStart(ssp2->region), SeqLocStop(ssp2->region));
+       		pre2->next=next2;
+       		ssp2=MemFree(ssp2);                
+                ObjMgrSendSelMsg (omp, ssp1->entityID, ssp1->itemID, ssp1->itemtype, 0, 0);
+                retval=TRUE;
+        }
+        else if (res==5)  /* shrink ssp->region from right */
+        {
+		tmp = SeqLocIntNew (SeqLocStart((SeqLocPtr)ssp1->region), SeqLocStop(ssp2->region), 0, SeqLocId(ssp2->region));
+                SeqLocChangeIntervalle ((SeqLocPtr)ssp1->region, -1, SeqLocStop(ssp2->region));
+       		pre2->next=next2;
+       		ssp2=MemFree(ssp2);                
+                ObjMgrSendDeSelMsg (omp, ssp1->entityID, ssp1->itemID, ssp1->itemtype, 0, 0);
+		ValNodeFree (tmp);
+                retval=TRUE;
+        }
+        else if (res==6) /* shrink ssp->region from left */
+        {
+                tmp = SeqLocIntNew (SeqLocStart(ssp2->region), SeqLocStop((SeqLocPtr)ssp1->region), 0, SeqLocId(ssp2->region));
+                SeqLocChangeIntervalle ((SeqLocPtr)ssp1->region, SeqLocStart(ssp2->region), -1);
+       		pre2->next=next2;
+       		ssp2=MemFree(ssp2);                
+                ObjMgrSendDeSelMsg (omp, ssp1->entityID, ssp1->itemID, ssp1->itemtype, 0, 0);
+		ValNodeFree (tmp);
+                retval=TRUE;
+        }
+        return retval;
+}
+
+
 
 /*****************************************************************************
 *
@@ -3546,7 +3873,6 @@ static Boolean NEAR ObjMgrDeSelectFunc (ObjMgrPtr omp, Uint2 entityID, Uint2 ite
 	SelStructPtr tmp, next;
 	Boolean retval=FALSE, tret, do_it;
 
-
 	if (entityID == 0)
 	{
 		retval = ObjMgrDeSelectAllFunc(omp);
@@ -3582,6 +3908,7 @@ static Boolean NEAR ObjMgrDeSelectFunc (ObjMgrPtr omp, Uint2 entityID, Uint2 ite
 		}
 		tmp = next;
 	}
+
 erret:
 	return retval;
 }
@@ -3590,21 +3917,22 @@ NLM_EXTERN Boolean LIBCALL ObjMgrAlsoSelect (Uint2 entityID, Uint2 itemID,
 					 Uint2 itemtype, Uint1 regiontype, Pointer region)
 {
 	ObjMgrPtr omp;
-	SelStructPtr ssp;
-
-							/* if already selected, just deselect */
+	Boolean retval;
+				/* if already selected, just deselect */
+/**
 	if (ObjMgrDeSelect(entityID, itemID, itemtype, regiontype, region))
 		return FALSE;
-
+**/
 	omp = ObjMgrWriteLock();
 
-	ssp = ObjMgrAddSelStruct(omp, entityID, itemID, itemtype, regiontype, region);
+	retval = ObjMgrSelectFunc2 (omp, entityID, itemID, itemtype, regiontype, region);
+	if (retval) {
+		while (retval)
+			retval=CheckRedondantSelect (omp);
+	}
 	ObjMgrUnlock();
 
-	if (ssp == NULL)
-		return FALSE;
-	else
-		return TRUE;
+        return retval;
 
 }
 

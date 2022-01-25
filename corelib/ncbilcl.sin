@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/16/93
 *
-* $Revision: 6.0 $
+* $Revision: 6.1 $
 *
 * File Description:
 *		system dependent header
@@ -42,6 +42,9 @@
 *
 *
 * $Log: ncbilcl.sin,v $
+* Revision 6.1  1998/10/27 15:18:21  vakatov
+* +  #define OS_UNIX_SOL
+*
 * Revision 6.0  1997/08/25 18:16:17  madden
 * Revision changed to 6.0
 *
@@ -68,6 +71,7 @@
 
 #define COMP_SUNPRO
 #define OS_UNIX
+#define OS_UNIX_SOL
 #define OS_UNIX_SYSV
 #define PROC_I80X86
 #define WIN_DUMB

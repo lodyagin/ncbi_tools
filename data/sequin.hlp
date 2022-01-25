@@ -9,9 +9,14 @@
 
 <A NAME="Top"></A>
 
-<A HREF="http://www.ncbi.nlm.nih.gov/cgi-bin/imagemap/~wolfsber/TBar.Sequin.map"> 
-<IMG SRC="http://www.ncbi.nlm.nih.gov/Sequin/Imagemap/TBar.Sequin.gif" BORDER=0 ISMAP > 
-</A>
+<map name="sequin">
+<area shape="rect" coords="3,2 43,19" href="http://www.ncbi.nlm.nih.gov/">
+<area shape="rect" coords="424,2   506,19" href="http://www.ncbi.nlm.nih.gov/Sequin/">
+<area shape="default" nohref>
+</map>
+
+   <IMG SRC="/Sequin/Imagemap/TBar.Sequin.gif" BORDER=0 usemap="#sequin">
+
 
 <H1>Sequin help documentation</H1>
 
@@ -255,31 +260,17 @@ show up in the reference section of the record, with the title Direct Submission
 #Use this form to indicate the type of sequence you are submitting, as
 well as the format of the sequence.  
 
-#In addition to being able to process single nuceotide sequences, Sequin
-can also process sets of related sequences, for example, segmented
-sequences and sequences from phylogenetic, population, and mutation
-studies.  Although the sequences are handled as a single submission,
+#Sequin can process single nuceotide sequences as well as sets of "related" sequences.  If the sequences are closely related on a sequence level, they may be part of a phylogenetic, population, or mutation
+study.  If the sequences are related in terms of coming from the same publication, or the same organism, they may be candidates for a Batch submission.  Segmented sets consist of a collection of non-overlapping sequences covering a specific genetic region.  In all cases, although the sequences are handled as a single submission,
 each sequence in a set will receive its own database accession number
 and can be annotated independently.
 
-#Sequin, as well as
-<A HREF="http://www.ncbi.nlm.nih.gov/Entrez">
-Entrez,
-</A>
-http://www.ncbi.nlm.nih.gov/Entrez
-
-a sequence, structure, and citation browser available from the NCBI, are
-now both able to handle and display aligned sets of closely related
-sequences.  These alignments will not be visible in the standard
-GenBank, EMBL, or DDBJ database entries.  At this time, Sequin will
-accept sets of sequences from population, phylogenetic, and mutation
-studies which are in either FASTA, FASTA+GAP, PHYLIP, NEXUS contiguous,
-or NEXUS interleaved format.  If the sequences are in FASTA format,
+#Sequin can display the alignments of sequences which are submitted as part of an aligned phylogenetic, population, or mutation set.  Such sequences can be submitted in FASTA, Contiguous (FASTA+GAP, NEXUS, MACAW), or Interleaved (PHYLIP, NEXUS) formats.  If the sequences are in FASTA format,
 Sequin will generate an alignment. If the sequences have already been
-aligned in FASTA+GAP, PHYLIP or NEXUS, Sequin will not change the
-alignment. Single sequences must be in FASTA format; aligned, segmented sequences
-can be in FASTA or FASTA+GAP format.  FASTA format is explained below.
+aligned in FASTA+GAP, PHYLIP, MACAW, or NEXUS, Sequin will not change the
+alignment. 
 
+#Single sequences, segmented sequences, and batch submissions must be submitted in FASTA format.  Sequin will not attempt to align such sequences, even those that are submitted together in one set.
 
 *Submission type
 
@@ -287,7 +278,7 @@ can be in FASTA or FASTA+GAP format.  FASTA format is explained below.
 submissions you are creating:
 
 #-Single sequence:  Select this option if you are submitting a single
-sequence, such as a single mRNA or genomic DNA sequence.
+sequence, such as a single mRNA or genomic DNA sequence.  If you are submitting multiple sequences from the same publication, consider a Batch Submission.  If you decide to submit multiple Sequin files, each with one or more sequences, please send each file in a separate email message.
 
 #-Segmented sequence:  A segmented set of nucleotide sequences is a
 collection of non-overlapping sequences which cover a specified genetic
@@ -315,8 +306,7 @@ derived by sequencing multiple mutations in a single gene.  If you want
 the sequences to be part of an alignment, you can either import them in
 a pre-aligned format, or ask Sequin to align them.
 
-#-Batch submission:  Select this option if you are submitting a set of
-unrelated sequences.  Sequin will not attempt to align the sequences.
+#-Batch submission:  Select this option if you are submitting a set of related sequences which are not part of a population, mutation, or phylogenetic study. The sequences should be related in some way, such as coming from the same publication or organism.  You should plan that all sequences will be released to the public on the same date. Sequin will not attempt to align the sequences.
 
 *Sequence data format
 
@@ -328,7 +318,7 @@ mutation study, you have a choice of sequence formats.  You may submit
 the set as individual sequences in FASTA format.  However, if your
 sequences are already aligned, you can submit the sequences as part of
 an alignment.  Sequin currently accepts the alignment formats FASTA+GAP,
-PHYLIP, NEXUS Interleaved, and NEXUS Contiguous. All formats are
+PHYLIP, MACAW, NEXUS Interleaved, and NEXUS Contiguous. All formats are
 described in the
 
 <A HREF="#NucleotidePage">
@@ -545,8 +535,8 @@ complete coding sequence of a gene, do not check either box.
 
 **FASTA def line starts with sequence ID
 
-#This box will not be visible if you selected FASTA+GAP, PHYLIP NEXUS
-Interleaved, or NEXUS Contiguous format on the Sequence Format form.
+#This box will not be visible if you selected 
+Interleaved or Contiguous format on the Sequence Format form.
 
 #We suggest that for standard simple submissions you follow the
 instructions below for how to create a nucleotide sequence in FASTA
@@ -635,10 +625,10 @@ the first line of the nucleotide sequence.  These modifiers include
 chromosome, map, clone, subclone, haplotype, genotype, sex, cell-line,
 cell-type, tissue-type, clone-lib, dev-stage, frequency, germline,
 rearranged, lab-host, pop-variant, tissue-lib, plasmid-name,
-transposon-name, ins-sequence-name, plastid-name, strain, substrain,
+transposon-name, ins-sequence-name, plastid-name, country, strain, substrain,
 type, subtype, variety, serotype, serogroup, serovar, cultivar,
 pathovar, chemovar, biovar, biotype, group, subgroup, isolate, common,
-acronym, dosage, natural host, , and sub-species.  Complete descriptions
+acronym, dosage, natural host, sub-species, and specimen voucher.  Complete descriptions
 of these modifiers can be found in the 
 
 <A HREF="#SourceSubpage">
@@ -1234,16 +1224,17 @@ Protein page
 </A>
 , and is described above.  
 
-**Adding rRNA and CDS features to a set of sequences
+**Adding Gene, rRNA and CDS features to a set of sequences
 
 #The radio buttons at the top of the page allow you to choose which
-features to add to your sequences.  Any annotation you add on this page
-will be propagated to ALL sequences in the set.  If you want to add
+feature(s) to add to your sequences.  Any annotation you add on this page
+will be propagated to ALL sequences in the set, and will apply over the full length of each sequence.  If you want to add
 annotations only to selected sequences, you must add them manually later
 in the submission process.  You may only select one of these buttons.
 
-#-None:  Select none if you do not want to add a rRNA or CDS feature to
-all sequences in the set.
+#-Gene:  Select Gene to add a gene feature to all sequences in the set.  Once you mark the radio button, additional
+input lines will be displayed on the form.  If the gene is longer than the sequences in the submission, check Incomplete at 5' end or
+Incomplete at 3' end, or both.  Enter the gene symbol, and a comment if necessary.
 
 #-rRNA:  Select rRNA if you want to add an rRNA feature to all sequences
 in the set.  This rRNA will span the entire sequence, from the first
@@ -1251,7 +1242,7 @@ nucleotide to the last.  Once you mark the radio button, additional
 input lines will be displayed on the form.  If the sequence does not
 encode a complete rRNA molecule, check Incomplete at 5' end or
 Incomplete at 3' end, or both.  Enter the name of the rRNA, such as 16s
-rRNA.  If there is a gene symbol for the rRNA, enter it as well.  The
+rRNA.  The gene symbol box will be filled in automatically if you annotated a Gene feature.  The
 comment box allows you to enter any additional comments about the rRNA.
 
 #-CDS:  Select CDS if you want to add a coding sequence (amino acid
@@ -1267,6 +1258,9 @@ feature form.  Once you mark the radio button, additional input lines
 will be displayed on the form.  We encourage you to fill in the protein
 and gene name fields.  Entering information in the comment box is
 optional.
+
+#-None:  Select none if you do not want to add a rRNA or CDS feature to
+all sequences in the set.
 
 **Adding a title to a set of sequences
 
@@ -1304,7 +1298,7 @@ below.
 >Source Modifiers Form
 
 #You will only see this form if you are submitting sequences as part of
-a phylogenetic, mutation, or population study.  
+a phylogenetic, mutation, or population study, or as a batch submission.  
 
 #This form allows you to add or modify necessary information, such as
 the organism, and optional information, such as strain or chromosome, to
@@ -1316,7 +1310,7 @@ For example, if you select the Organism modifier, you might type Mus
 musculus in the first Value box, Homo sapiens in the second, etc.
 
 #If you have not already supplied the scientific name of the organism,
-enter it on this form.Do not use abbreviations.
+enter it on this form.  Do not use abbreviations.
 
 #Complete descriptions
 of these modifiers can be found in the 
@@ -2709,6 +2703,8 @@ the sequence was derived.
 
 #-Plastid-name:  Name of plastid from which the sequence was obtained.
 
+#-Country: The country of origin of DNA samples used for epidemiological or population studies
+
 **Organism Subpage
 
 #Choose a modifier from the pull-down menu on the left side of the page
@@ -2775,6 +2771,8 @@ name of the host species.
 #-Sub-species:  Sub-species of organism from which sequence was obtained.
 
 #-Old name:  Do not select this item.
+
+#-Specimen voucher: An identifier of the individual or collection of the source organism and the place where it is currently stored, usually an institution.
 
 *Miscellaneous Page
 
@@ -3163,9 +3161,9 @@ Sequin in
 Network Aware mode, 
 </A> 
 you can use
-Download Accession to import a record from Entrez.  Finally, if you have done a
+Download Accession to import a record from Entrez.  If you have done a
 PowerBLAST search, you can use Selected Alignment to import a sequence from the
-alignment that you have selected in the Graphic or Alignment view.
+alignment that you have selected in the Graphic or Alignment view.  Finally, if you are performing a batch update of a set of aligned sequences, choose FASTA set.  In this case, the new sequences should be in a single file in FASTA format; Sequin will update the original sequences with new ones that have the same accession number.
 
 #In all cases, the imported and original sequences must have a region of 
 sequence similarity which is high enough for the two sequences to be aligned by
@@ -3174,10 +3172,10 @@ BLAST using default parameters.
 #After you import the new sequence, a new window will open which
 displays a graphical view of the old (target) and new sequences and
 their associated features.  You can choose to Replace the target
-sequence with the new one, add the 5' end of the new sequence onto the
-target (Merge 5p), or add the 3' end of the new sequence onto the target
-(Merge 3p).  Choose Copy features to copy the features, but not the
-sequence, from the new sequence onto the target.  You may wish to
+sequence with the new one, Merge two sequences which overlap, or Copy Features from the new sequence to the old.  If you select the Replace button, a message will appear indicating the Sequence Identifiers of the old and new sequences.  If you select Merge, you will be able to choose the range of sequence to merge.  Choose Copy features to copy the features, but not the
+sequence, from the new sequence onto the target.  If you are copying features from a sequence which contains exons interspersed with introns, check the box which appears after you select Copy features.
+
+#You may wish to
 Preview alignment before making any changes to see the alignment of the
 two sequences.  If you are importing a Sequence Record, Downloading an
 Accession, or Selecting an Alignment, you will be asked whether you wish to
@@ -3398,24 +3396,13 @@ Configure under the Misc menu.  If you have already worked on a Sequin
 submission, and are looking at the record in the record viewer, select
 the Net Configure option from the Misc menu.
 
-#After selecting the net configure option from either location, click on
-"yes" when you are asked whether to enable network usage and to run the
-configuration program.  You will see a new page, entitled "Internet
-Setup Preferences" on which you must supply information for the network
-configuration program.  In most cases, the default settings already
-filled out on this page are sufficient.  If your computer must connect
-to the Internet through a firewall at your institution, you may need to
-check the box marked "Outgoing Connections Only."  In you select this
-option, your client computer will make only outgoing connections to the
-NCBI.  Next, fill out the page entitled "Dispatcher Internet Address." 
-Again, in most cases, the default dispatcher 130.14.25.211 is
-sufficient.  On the next page, "Entrez Service Selection," select the
-Entrez service to receive the broadest class of service.  If, after
-clicking on Next Page, you receive a message that Entrez service is not
-availabe, you may need to go back one page and select a different
-dispatcher.  Once your configuration is complete, click on Accept to
-save new new configuration.  You must restart the program for the
-changes to go into effect.  If you have problems setting up the network
+#Most users will be able to use the default (Normal) settings on the Network Configuration page; select Accept to complete the configuration process.  
+
+#If a "Normal" Connection does not work, you may need to select the Firewall Connection.  Contact your system administrator to determine what to enter into the Proxy and Port fields.  If you do not have access to domain name server (DNS), uncheck this box.
+
+#The Timeout pop-up selects the length of time which your local copy of Sequin will wait for a reply from the NCBI server.  You may need to set this number higher (i.e., 60 seconds or 5 minutes) if you are outside of the United States or have a bad internet connection.
+
+#If you have problems setting up the network
 configuration, contact
 
 <a href="mailto:info@ncbi.nlm.nih.gov"> 
@@ -3423,9 +3410,7 @@ info@ncbi.nlm.nih.gov
 </a>
 
 #If you wish to change Sequin back to its stand-alone mode, select Net
-Configure again from the Misc menu.  Click on "yes" when you are asked
-if you wish to disable network usage.  You must restart the program for
-the changes to go into effect.
+Configure again from the Misc menu.  Click on Connection: None.
 
 #The network-aware mode of Sequin allows you to perform a number of
 additional, important functions.  These functions all appear as
@@ -4220,7 +4205,7 @@ sequences and features.
 <HR> 
 
 
-<p>Revised May 4, 1998
+<p>January 22, 1999
 <p>Credits:  Tyra Wolfsberg
 
 

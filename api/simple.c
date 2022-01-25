@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/12/91
 *
-* $Revision: 6.0 $
+* $Revision: 6.1 $
 *
 * File Description:  Simple sequence loader
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: simple.c,v $
+* Revision 6.1  1999/01/11 16:07:00  kans
+* obj mgr type load OBJ_FASTA as SimpleSeq
+*
 * Revision 6.0  1997/08/25 18:07:30  madden
 * Revision changed to 6.0
 *
@@ -61,6 +64,30 @@
 */
 #include <simple.h>		   /* the pub interface */
 #include <all.h>        /* the AsnTool header */
+#include <objmgr.h>
+
+/*****************************************************************************
+*
+*   Bioseq ObjMgr Routines
+*
+*****************************************************************************/
+static CharPtr simplename = "Simple";
+
+static Pointer LIBCALLBACK SimpleSeqNewFunc (void)
+{
+	return (Pointer) SimpleSeqNew();
+}
+
+static Pointer LIBCALLBACK SimpleSeqFreeFunc (Pointer data)
+{
+	return (Pointer) SimpleSeqFree ((SimpleSeqPtr) data);
+}
+
+static Pointer LIBCALLBACK SimpleSeqAsnReadFunc (AsnIoPtr aip, AsnTypePtr atp)
+{
+	return (Pointer) SimpleSeqAsnRead (aip);
+}
+
 
 /*****************************************************************************
 *
@@ -71,12 +98,26 @@ NLM_EXTERN Boolean AllAsnLoad (void)
 
 {
     static Boolean loaded = FALSE;
+    AsnModulePtr  amp;
+    AsnTypePtr    atp;
 
     if (loaded)
         return TRUE;
     loaded = TRUE;
 
-    return AsnLoad();
+    if (! AsnLoad()) {
+        loaded = FALSE;
+        return FALSE;
+    }
+
+    amp = AsnAllModPtr ();
+    atp = AsnTypeFind (amp, "Bioseq");
+
+    ObjMgrTypeLoad(OBJ_FASTA, "Bioseq", simplename, "Simple Sequence",
+        atp, SimpleSeqNewFunc, SimpleSeqAsnReadFunc, NULL,
+        SimpleSeqFreeFunc, NULL, NULL);
+
+    return TRUE;
 }
 
 /*****************************************************************************

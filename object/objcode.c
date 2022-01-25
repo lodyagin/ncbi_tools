@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.1 $
+* $Revision: 6.5 $
 *
 * File Description:  Object manager for module NCBI-SeqCode
 *
@@ -41,6 +41,18 @@
 *
 *
 * $Log: objcode.c,v $
+* Revision 6.5  1999/01/19 19:38:57  vakatov
+* Typo fixed(WIN16 rather than WIN_16)
+*
+* Revision 6.4  1999/01/19 19:08:14  kans
+* text asn.1 for genetic code and sequence conversion tables only if not WIN_16
+*
+* Revision 6.3  1999/01/06 22:02:15  kans
+* load gen code and seq code tables from asn strings in static memory as last resort to avoid need for data directory for some programs
+*
+* Revision 6.2  1998/12/29 19:56:26  kans
+* more informative error message if FindPath fails
+*
 * Revision 6.1  1998/08/24 18:28:01  kans
 * removed solaris -v -fd warnings
 *
@@ -757,11 +769,245 @@ erret:
 
 /*****************************************************************************
 *
+*   seqCodeSetMemStr as last resort embedded version of seqcode.prt
+*
+*****************************************************************************/
+
+#ifndef WIN16
+static CharPtr seqCodeSetMemStr = "Seq-code-set ::= {\n" \
+"codes {\n" \
+"{ code iupacna , num 25 , one-letter TRUE , start-at 65 , table {\n" \
+"{ symbol \"A\", name \"Adenine\" },\n" \
+"{ symbol \"B\" , name \"G or T or C\" },\n" \
+"{ symbol \"C\", name \"Cytosine\" },\n" \
+"{ symbol \"D\", name \"G or A or T\" },\n" \
+"{ symbol \"\", name \"\" },\n" \
+"{ symbol \"\", name \"\" },\n" \
+"{ symbol \"G\", name \"Guanine\" },\n" \
+"{ symbol \"H\", name \"A or C or T\" } ,\n" \
+"{ symbol \"\", name \"\" },\n" \
+"{ symbol \"\", name \"\" },\n" \
+"{ symbol \"K\", name \"G or T\" },\n" \
+"{ symbol \"\", name \"\"},\n" \
+"{ symbol \"M\", name \"A or C\" },\n" \
+"{ symbol \"N\", name \"A or G or C or T\" } ,\n" \
+"{ symbol \"\", name \"\" },\n" \
+"{ symbol \"\", name \"\" },\n" \
+"{ symbol \"\", name \"\"},\n" \
+"{ symbol \"R\", name \"G or A\"},\n" \
+"{ symbol \"S\", name \"G or C\"},\n" \
+"{ symbol \"T\", name \"Thymine\"},\n" \
+"{ symbol \"\", name \"\"},\n" \
+"{ symbol \"V\", name \"G or C or A\"},\n" \
+"{ symbol \"W\", name \"A or T\" },\n" \
+"{ symbol \"\", name \"\"},\n" \
+"{ symbol \"Y\", name \"T or C\"} } ,\n" \
+"comps { 84, 86, 71, 72, 69, 70, 67, 68, 73, 74, 77, 76, 75, 78, 79, 80, 81, 89, 83, 65, 85, 66, 87, 88, 82 } } ,\n" \
+"{ code iupacaa , num 26 , one-letter TRUE , start-at 65 , table {\n" \
+"{ symbol \"A\", name \"Alanine\" },\n" \
+"{ symbol \"B\" , name \"Asp or Asn\" },\n" \
+"{ symbol \"C\", name \"Cysteine\" },\n" \
+"{ symbol \"D\", name \"Aspartic Acid\" },\n" \
+"{ symbol \"E\", name \"Glutamic Acid\" },\n" \
+"{ symbol \"F\", name \"Phenylalanine\" },\n" \
+"{ symbol \"G\", name \"Glycine\" },\n" \
+"{ symbol \"H\", name \"Histidine\"} ,\n" \
+"{ symbol \"I\", name \"Isoleucine\" },\n" \
+"{ symbol \"\", name \"\" },\n" \
+"{ symbol \"K\", name \"Lysine\" },\n" \
+"{ symbol \"L\", name \"Leucine\" },\n" \
+"{ symbol \"M\", name \"Methionine\" },\n" \
+"{ symbol \"N\", name \"Asparagine\"} ,\n" \
+"{ symbol \"\", name \"\" },\n" \
+"{ symbol \"P\", name \"Proline\" },\n" \
+"{ symbol \"Q\", name \"Glutamine\"},\n" \
+"{ symbol \"R\", name \"Arginine\"},\n" \
+"{ symbol \"S\", name \"Serine\"},\n" \
+"{ symbol \"T\", name \"Threonine\"},\n" \
+"{ symbol \"\", name \"\"},\n" \
+"{ symbol \"V\", name \"Valine\"},\n" \
+"{ symbol \"W\", name \"Tryptophan\" },\n" \
+"{ symbol \"X\", name \"Undetermined or atypical\"},\n" \
+"{ symbol \"Y\", name \"Tyrosine\"},\n" \
+"{ symbol \"Z\", name \"Glu or Gln\" } } } ,\n" \
+"{ code ncbieaa , num 49 , one-letter TRUE , start-at 42 , table {\n" \
+"{ symbol \"*\", name \"Termination\" } ,\n" \
+"{ symbol \"\", name \"\" } ,\n" \
+"{ symbol \"\", name \"\" } ,\n" \
+"{ symbol \"-\", name \"Gap\" } ,\n" \
+"{ symbol \"\", name \"\"} ,\n" \
+"{ symbol \"\", name \"\"} ,\n" \
+"{ symbol \"\", name \"\"} ,\n" \
+"{ symbol \"\", name \"\"} ,\n" \
+"{ symbol \"\", name \"\"} ,\n" \
+"{ symbol \"\", name \"\"} ,\n" \
+"{ symbol \"\", name \"\"} ,\n" \
+"{ symbol \"\", name \"\"} ,\n" \
+"{ symbol \"\", name \"\"} ,\n" \
+"{ symbol \"\", name \"\"} ,\n" \
+"{ symbol \"\", name \"\"} ,\n" \
+"{ symbol \"\", name \"\"} ,\n" \
+"{ symbol \"\", name \"\"} ,\n" \
+"{ symbol \"\", name \"\"} ,\n" \
+"{ symbol \"\", name \"\"} ,\n" \
+"{ symbol \"\", name \"\"} ,\n" \
+"{ symbol \"\", name \"\"} ,\n" \
+"{ symbol \"\", name \"\"} ,\n" \
+"{ symbol \"\", name \"\"} ,\n" \
+"{ symbol \"A\", name \"Alanine\" },\n" \
+"{ symbol \"B\" , name \"Asp or Asn\" },\n" \
+"{ symbol \"C\", name \"Cysteine\" },\n" \
+"{ symbol \"D\", name \"Aspartic Acid\" },\n" \
+"{ symbol \"E\", name \"Glutamic Acid\" },\n" \
+"{ symbol \"F\", name \"Phenylalanine\" },\n" \
+"{ symbol \"G\", name \"Glycine\" },\n" \
+"{ symbol \"H\", name \"Histidine\" } ,\n" \
+"{ symbol \"I\", name \"Isoleucine\" },\n" \
+"{ symbol \"\", name \"\" },\n" \
+"{ symbol \"K\", name \"Lysine\" },\n" \
+"{ symbol \"L\", name \"Leucine\" },\n" \
+"{ symbol \"M\", name \"Methionine\" },\n" \
+"{ symbol \"N\", name \"Asparagine\" } ,\n" \
+"{ symbol \"\", name \"\" },\n" \
+"{ symbol \"P\", name \"Proline\" },\n" \
+"{ symbol \"Q\", name \"Glutamine\"},\n" \
+"{ symbol \"R\", name \"Arginine\"},\n" \
+"{ symbol \"S\", name \"Serine\"},\n" \
+"{ symbol \"T\", name \"Threonine\"},\n" \
+"{ symbol \"U\", name \"Selenocysteine\"},\n" \
+"{ symbol \"V\", name \"Valine\"},\n" \
+"{ symbol \"W\", name \"Tryptophan\" },\n" \
+"{ symbol \"X\", name \"Undetermined or atypical\"},\n" \
+"{ symbol \"Y\", name \"Tyrosine\"},\n" \
+"{ symbol \"Z\", name \"Glu or Gln\" } } } ,\n" \
+"{ code iupacaa3 , num 26 , one-letter FALSE , table {\n" \
+"{ symbol \"---\", name \"Gap\" } ,\n" \
+"{ symbol \"Ala\", name \"Alanine\" },\n" \
+"{ symbol \"Asx\", name \"Asp or Asn\" },\n" \
+"{ symbol \"Cys\", name \"Cysteine\" },\n" \
+"{ symbol \"Asp\", name \"Aspartic Acid\" },\n" \
+"{ symbol \"Glu\", name \"Glutamic Acid\" },\n" \
+"{ symbol \"Phe\", name \"Phenylalanine\" },\n" \
+"{ symbol \"Gly\", name \"Glycine\" },\n" \
+"{ symbol \"His\", name \"Histidine\" } ,\n" \
+"{ symbol \"Ile\", name \"Isoleucine\" },\n" \
+"{ symbol \"Lys\", name \"Lysine\" },\n" \
+"{ symbol \"Leu\", name \"Leucine\" },\n" \
+"{ symbol \"Met\", name \"Methionine\" },\n" \
+"{ symbol \"Asn\", name \"Asparagine\" } ,\n" \
+"{ symbol \"Pro\", name \"Proline\" },\n" \
+"{ symbol \"Gln\", name \"Glutamine\"},\n" \
+"{ symbol \"Arg\", name \"Arginine\"},\n" \
+"{ symbol \"Ser\", name \"Serine\"},\n" \
+"{ symbol \"Thr\", name \"Threonine\"},\n" \
+"{ symbol \"Val\", name \"Valine\"},\n" \
+"{ symbol \"Trp\", name \"Tryptophan\" },\n" \
+"{ symbol \"Xxx\", name \"Undetermined or atypical\"},\n" \
+"{ symbol \"Tyr\", name \"Tyrosine\"},\n" \
+"{ symbol \"Glx\", name \"Glu or Gln\" },\n" \
+"{ symbol \"Sec\", name \"Selenocysteine\"},\n" \
+"{ symbol \"Ter\", name \"Termination\" } } } ,\n" \
+"{ code ncbistdaa , num 26 , one-letter TRUE , table {\n" \
+"{ symbol \"-\", name \"Gap\" } ,\n" \
+"{ symbol \"A\", name \"Alanine\" },\n" \
+"{ symbol \"B\" , name \"Asp or Asn\" },\n" \
+"{ symbol \"C\", name \"Cysteine\" },\n" \
+"{ symbol \"D\", name \"Aspartic Acid\" },\n" \
+"{ symbol \"E\", name \"Glutamic Acid\" },\n" \
+"{ symbol \"F\", name \"Phenylalanine\" },\n" \
+"{ symbol \"G\", name \"Glycine\" },\n" \
+"{ symbol \"H\", name \"Histidine\" } ,\n" \
+"{ symbol \"I\", name \"Isoleucine\" },\n" \
+"{ symbol \"K\", name \"Lysine\" },\n" \
+"{ symbol \"L\", name \"Leucine\" },\n" \
+"{ symbol \"M\", name \"Methionine\" },\n" \
+"{ symbol \"N\", name \"Asparagine\" } ,\n" \
+"{ symbol \"P\", name \"Proline\" },\n" \
+"{ symbol \"Q\", name \"Glutamine\"},\n" \
+"{ symbol \"R\", name \"Arginine\"},\n" \
+"{ symbol \"S\", name \"Serine\"},\n" \
+"{ symbol \"T\", name \"Threoine\"},\n" \
+"{ symbol \"V\", name \"Valine\"},\n" \
+"{ symbol \"W\", name \"Tryptophan\" },\n" \
+"{ symbol \"X\", name \"Undetermined or atypical\"},\n" \
+"{ symbol \"Y\", name \"Tyrosine\"},\n" \
+"{ symbol \"Z\", name \"Glu or Gln\" },\n" \
+"{ symbol \"U\", name \"Selenocysteine\"},\n" \
+"{ symbol \"*\", name \"Termination\" } } } ,\n" \
+"{ code ncbi2na , num 4 , one-letter TRUE , table {\n" \
+"{ symbol \"A\", name \"Adenine\" },\n" \
+"{ symbol \"C\", name \"Cytosine\" },\n" \
+"{ symbol \"G\", name \"Guanine\" },\n" \
+"{ symbol \"T\", name \"Thymine/Uracil\"} } ,\n" \
+"comps { 3, 2, 1, 0 } } ,\n" \
+"{ code ncbi4na , num 16 , one-letter TRUE , table {\n" \
+"{ symbol \"-\", name \"Gap\"} ,\n" \
+"{ symbol \"A\", name \"Adenine\" },\n" \
+"{ symbol \"C\", name \"Cytosine\" },\n" \
+"{ symbol \"M\", name \"A or C\" },\n" \
+"{ symbol \"G\", name \"Guanine\" },\n" \
+"{ symbol \"R\", name \"G or A\"},\n" \
+"{ symbol \"S\", name \"G or C\"},\n" \
+"{ symbol \"V\", name \"G or C or A\"},\n" \
+"{ symbol \"T\", name \"Thymine/Uracil\"},\n" \
+"{ symbol \"W\", name \"A or T\" },\n" \
+"{ symbol \"Y\", name \"T or C\"} ,\n" \
+"{ symbol \"H\", name \"A or C or T\" } ,\n" \
+"{ symbol \"K\", name \"G or T\" },\n" \
+"{ symbol \"D\", name \"G or A or T\" },\n" \
+"{ symbol \"B\" , name \"G or T or C\" },\n" \
+"{ symbol \"N\", name \"A or G or C or T\" } } ,\n" \
+"comps { 0 , 8 , 4 , 12, 2 , 10, 6 , 14, 1 , 9 , 5 , 13, 3 , 11, 7 , 15 } } , } ,\n" \
+"maps { { from iupacna , to ncbi2na , num 25 , start-at 65 ,\n" \
+"table { 0, 1, 1, 2, 255, 255, 2, 0, 255, 255, 2, 255, 1, 0, 255, 255, 255, 2, 1, 3, 255, 0, 3, 255, 3 } } ,\n" \
+"{ from iupacna , to ncbi4na , num 26 , start-at 64 ,\n" \
+"table { 0, 1, 14, 2, 13, 255, 255, 4, 11, 255, 255, 12, 255, 3, 15, 255, 255, 255, 5, 6, 8, 255, 7, 9, 255, 10 } } ,\n" \
+"{ from ncbi2na , to iupacna , num 4 ,\n" \
+"table { 65, 67, 71, 84 } } ,\n" \
+"{ from ncbi2na , to ncbi4na , num 4 ,\n" \
+"table { 1, 2, 4, 8 } } ,\n" \
+"{ from ncbi4na , to iupacna , num 16 ,\n" \
+"table { 78, 65, 67, 77, 71, 82, 83, 86, 84, 87, 89, 72, 75, 68, 66, 78 } } ,\n" \
+"{ from ncbi4na , to ncbi2na , num 16 ,\n" \
+"table { 3, 0, 1, 1, 2, 2, 1, 0, 3, 3, 3, 0, 2, 2, 1, 0 } } ,\n" \
+"{ from iupacaa , to ncbieaa , num 26 , start-at 65 ,\n" \
+"table { 65 , 66 , 67 , 68, 69, 70, 71, 72, 73, 255, 75, 76, 77, 78, 255, 80, 81, 82, 83, 84, 255, 86, 87, 88, 89, 90 } } ,\n" \
+"{ from ncbieaa , to iupacaa , num 49 , start-at 42 ,\n" \
+"table { 88 , 255, 255, 88, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,\n" \
+"65 , 66 , 67 , 68, 69, 70, 71, 72, 73, 255, 75, 76, 77, 78, 255, 80, 81, 82, 83, 84, 88, 86, 87, 88, 89, 90 } } ,\n" \
+"{ from iupacaa , to ncbistdaa , num 26 , start-at 65 ,\n" \
+"table { 1 , 2 , 3 , 4, 5, 6, 7, 8, 9, 255, 10, 11, 12, 13, 255, 14, 15, 16, 17, 18, 255, 19, 20, 21, 22, 23 } } ,\n" \
+"{ from ncbieaa , to ncbistdaa , num 49 , start-at 42 ,\n" \
+"table { 25, 255, 255, 0, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,\n" \
+"1 , 2 , 3 , 4, 5, 6, 7, 8, 9, 255, 10, 11, 12, 13, 255, 14, 15, 16, 17, 18, 24, 19, 20, 21, 22, 23 } } ,\n" \
+"{ from ncbistdaa , to ncbieaa , num 26 ,\n" \
+"table { 45 , 65 , 66 , 67 , 68, 69, 70, 71, 72, 73, 75, 76, 77, 78, 80, 81, 82, 83, 84, 86, 87, 88, 89, 90, 85, 42} } ,\n" \
+"{ from ncbistdaa , to iupacaa , num 26 ,\n" \
+"table { 255 , 65 , 66 , 67 , 68, 69, 70, 71, 72, 73, 75, 76, 77, 78, 80, 81, 82, 83, 84, 86, 87, 88, 89, 90, 88, 255} } } };\n";
+#endif
+
+/*****************************************************************************
+*
 *   SeqCodeSetPtr SeqCodeSetLoad()
 *       loads all current seqcodes
 *       looks for "seqcode.val" in the "data" directory
+*       now uses seqCodeSetMemStr if unable to find "data" directory
 *
 *****************************************************************************/
+static Boolean LoadSeqCodeFromLocalString (void)
+
+{
+#ifndef WIN16
+  AsnIoMemPtr aimp;
+
+  aimp = AsnIoMemOpen ("r", (BytePtr) seqCodeSetMemStr, (Int4) StringLen (seqCodeSetMemStr));
+  if (aimp == NULL || aimp->aip == NULL) return FALSE;
+  scspl = SeqCodeSetAsnRead (aimp->aip, NULL);
+  AsnIoMemClose (aimp);
+#endif
+  return (Boolean) (scspl != NULL);
+}
+
 NLM_EXTERN SeqCodeSetPtr LIBCALL SeqCodeSetLoad (void)
 {
     Char buf[80];
@@ -772,13 +1018,23 @@ NLM_EXTERN SeqCodeSetPtr LIBCALL SeqCodeSetLoad (void)
 
     if (! FindPath("ncbi", "ncbi", "data", buf, sizeof (buf)))
 	{
-		ErrPost(CTX_NCBIOBJ, 1, "FindPath failed");
+
+		if (LoadSeqCodeFromLocalString ()) {
+			return scspl;
+		}
+
+		ErrPost(CTX_NCBIOBJ, 1, "FindPath failed in SeqCodeSetLoad - ncbi configuration file missing or incorrect");
         return scspl;
 	}
 
     StringCat(buf, "seqcode.val");
     if ((aip = AsnIoOpen(buf, "rb")) == NULL)
 	{
+
+		if (LoadSeqCodeFromLocalString ()) {
+			return scspl;
+		}
+
 		ErrPost(CTX_NCBIOBJ, 1, "Couldn't open [%s]", buf);
         return scspl;
 	}

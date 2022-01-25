@@ -132,14 +132,14 @@ static void ZoomGraphView (PopuP p)
     {
       if (gvp->zoom > gip->localmaxzoom)
       {
-        sgp->compl = gip->localmaxzoom;
+        sgp->compr = gip->localmaxzoom;
         sgp->flags[0] = 1;
       }
       else
       {
-        sgp->compl = (Int4) tempvalue1;
-        if (tempvalue1 - (FloatHi) sgp->compl >= 0.5)
-          sgp->compl += 1;
+        sgp->compr = (Int4) tempvalue1;
+        if (tempvalue1 - (FloatHi) sgp->compr >= 0.5)
+          sgp->compr += 1;
         sgp->flags[0] = 1;
       }
 
@@ -147,7 +147,7 @@ static void ZoomGraphView (PopuP p)
                              graphpixelwidth, gip->graphpixelheight,
                              horiz_offset, gip->vert_offset);
 
-      gvp->s = XscaleX (gvp->s, (Int4) sgp->compl,
+      gvp->s = XscaleX (gvp->s, (Int4) sgp->compr,
                         (Int4) sgp->a, (Int4) sgp->b, 0, sgp->numval-1,
                         horiz_offset, gip->vert_offset);
 
@@ -158,7 +158,7 @@ static void ZoomGraphView (PopuP p)
         gvp->s = YscaleX (gvp->s, (Int4) sgp->a, (Int4) sgp->b,
                           sgp->min.realvalue,
                           sgp->max.realvalue,
-                          (Int4) sgp->compl, gip->graphpixelheight,
+                          (Int4) sgp->compr, gip->graphpixelheight,
                           0, sgp->numval-1,
                           horiz_offset, gip->vert_offset);
        case 2:
@@ -166,7 +166,7 @@ static void ZoomGraphView (PopuP p)
         gvp->s = YscaleX (gvp->s, (Int4) sgp->a, (Int4) sgp->b,
                           (FloatHi) sgp->min.intvalue,
                           (FloatHi) sgp->max.intvalue,
-                          (Int4) sgp->compl, gip->graphpixelheight,
+                          (Int4) sgp->compr, gip->graphpixelheight,
                           0, sgp->numval-1,
                           horiz_offset, gip->vert_offset);
       }
@@ -359,7 +359,7 @@ extern void GraphInfoPtrToGraphViewForm (ForM f, Pointer data)
         gvp->s = DrawGraphSGP (gvp->s, sgp, gip->graphtype,
                                gip->graphpixelwidth, gip->graphpixelheight,
                                gip->horiz_offset, gip->vert_offset);
-        gvp->s = XscaleX (gvp->s, (Int4) sgp->compl,
+        gvp->s = XscaleX (gvp->s, (Int4) sgp->compr,
                           (Int4) sgp->a, (Int4) sgp->b, 0, sgp->numval-1,
                           gip->horiz_offset, gip->vert_offset);
 
@@ -370,7 +370,7 @@ extern void GraphInfoPtrToGraphViewForm (ForM f, Pointer data)
           gvp->s = YscaleX (gvp->s, (Int4) sgp->a, (Int4) sgp->b,
                             sgp->min.realvalue,
                             sgp->max.realvalue,
-                            (Int4) sgp->compl, gip->graphpixelheight,
+                            (Int4) sgp->compr, gip->graphpixelheight,
                             0, sgp->numval-1,
                             gip->horiz_offset, gip->vert_offset);
          case 2:
@@ -378,7 +378,7 @@ extern void GraphInfoPtrToGraphViewForm (ForM f, Pointer data)
           gvp->s = YscaleX (gvp->s, (Int4) sgp->a, (Int4) sgp->b,
                             (FloatHi) sgp->min.intvalue,
                             (FloatHi) sgp->max.intvalue,
-                            (Int4) sgp->compl, gip->graphpixelheight,
+                            (Int4) sgp->compr, gip->graphpixelheight,
                             0, sgp->numval-1,
                             gip->horiz_offset, gip->vert_offset);
         }

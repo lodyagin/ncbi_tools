@@ -34,6 +34,12 @@
 *
 * RCS Modification History:
 * $Log: netblap3.h,v $
+* Revision 1.11  1999/01/12 21:05:58  victorov
+* server will now report an error if the ni-queue if full
+*
+* Revision 1.10  1998/12/14 19:38:31  egorov
+* add file #defines
+*
 * Revision 1.9  1998/09/22 16:14:07  egorov
 * Add prototype for parametersToOptions()
 *
@@ -62,6 +68,13 @@
 * Network support for gapped blast
 *
 */
+
+#ifndef _NETBLAP3_
+#define _NETBLAP3_ 1
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <ncbi.h>
 #include <sequtil.h>
@@ -117,7 +130,7 @@ BioseqPtr LIBCALL BlastGetBioseq PROTO((BlastNet3BlockPtr blnet3blkptr, SeqIdPtr
 
 */
 
-SeqAlignPtr LIBCALL BlastBioseq PROTO ((BlastNet3BlockPtr blnet3blkptr));
+SeqAlignPtr LIBCALL BlastBioseq PROTO ((BlastNet3BlockPtr blnet3blkptr, ValNodePtr *error_returns));
 
 BlastNet3BlockPtr LIBCALL BlastNet3BlockNew PROTO((CharPtr program, CharPtr dbname));
 
@@ -162,3 +175,9 @@ BlastMatrixPtr LIBCALL BlastMatrixToBlastNetMatrix PROTO((BLAST_MatrixPtr matrix
 
 BLAST_OptionsBlkPtr parametersToOptions (BlastParametersPtr parameters, CharPtr program,
 	ValNodePtr PNTR error_returns);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* NETBLAP3 */

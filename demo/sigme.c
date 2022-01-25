@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 98-01-01
 *
-* $Revision: 6.10 $
+* $Revision: 6.13 $
 *
 * File Description: signal peptide and transmembrane region prediction
 *
@@ -38,6 +38,15 @@
 * Date       Name        Description of modification
 * --------------------------------------------------------------------------
 * $Log: sigme.c,v $
+* Revision 6.13  1998/12/18 16:24:56  kuzio
+* big GIs
+*
+* Revision 6.12  1998/11/24 15:42:00  kuzio
+* refine boundary condition for multiple potential leader pepides
+*
+* Revision 6.11  1998/11/16 14:34:13  kuzio
+* flagBoundaryCondition
+*
 * Revision 6.10  1998/09/16 18:19:30  kuzio
 * cvs logging
 *
@@ -69,14 +78,16 @@ typedef struct gather_Bioseq
 
 Args myargs[] =
 {
-  { "nucleotide GI", "0", "0", "4000000", TRUE,
+  { "nucleotide GI", "0", "0", "9000000", TRUE,
     'g', ARG_INT, 0.0, 0, NULL},
   { "FastA file", NULL, NULL, NULL, TRUE,
     'f', ARG_STRING, 0.0, 0, NULL },
   { "gram negative signal peptide", "FALSE", "TRUE", "FALSE", TRUE,
     'n', ARG_BOOLEAN, 0.0, 0, NULL},
   { "gram positive signal peptide", "FALSE", "TRUE", "FALSE", TRUE,
-    'p', ARG_BOOLEAN, 0.0, 0, NULL}
+    'p', ARG_BOOLEAN, 0.0, 0, NULL},
+  { "Report boundary conditions", "FALSE", "TRUE", "FALSE", TRUE,
+    'B', ARG_BOOLEAN, 0.0, 0, NULL}
 };
 
 static Boolean GetBioseq (GatherContextPtr gcp)
@@ -137,6 +148,7 @@ Int2 Main (void)
 
   FloatHi     leadcut = 3.3;
   FloatHi     cutcut = 2.1;
+  Boolean     flagSPFuzz, flagBoundaryCondition;
   Int4        range = 40;
   Int4        ctermsig;
 
@@ -229,6 +241,7 @@ Int2 Main (void)
     leadprofile = ReadProfile ("KSesigl.mat");
     cutprofile = ReadProfile ("KSesigc.mat");
   }
+  flagBoundaryCondition = (Boolean) myargs[4].intvalue;
 
   while (sep != NULL)
   {
@@ -265,7 +278,7 @@ Int2 Main (void)
         flagTitle = FALSE;
         slph = slp = FilterSigSeq (gbsp->bsp, leadprofile, cutprofile,
                                    leadcut, cutcut, range,
-                                   gbsp->bsp->id);
+                                   gbsp->bsp->id, FALSE, FALSE);
         ctermsig = EndOfSig (slp);
         if (slp != NULL)
         {
@@ -289,6 +302,34 @@ Int2 Main (void)
           slph = slp->next;
           SeqLocFree (slp);
           slp = slph;
+        }
+/* determine fuzzy signal if requested */
+        if (flagBoundaryCondition)
+        {
+          slp = FilterSigSeq (gbsp->bsp, leadprofile, cutprofile,
+                              leadcut, cutcut, range,
+                              gbsp->bsp->id, TRUE, TRUE);
+          flagSPFuzz = FALSE;
+          if (slp != NULL)
+          {
+            flagSPFuzz = TRUE;
+            while (slp != NULL)
+            {
+              slph = slp->next;
+              SeqLocFree (slp);
+              slp = slph;
+            }
+          }
+          if (flagSPFuzz)
+          {
+            if (flagTitle == FALSE)
+            {
+              flagTitle = TRUE;
+              printf ("%s\n", title);
+              printf (" Signal Sequence\n");
+            }
+            printf (" signal peptide prediction is fuzzy\n");
+          }
         }
 
         fltp = FilterDatNew (AA_FILTER_COMP_KYTE, window);

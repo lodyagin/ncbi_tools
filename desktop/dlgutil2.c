@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.12 $
+* $Revision: 6.16 $
 *
 * File Description: 
 *
@@ -53,76 +53,6 @@
 #include <objfeat.h>
 #include <objseq.h>
 #include <toasn3.h>
-
-static void CollectGeneFeatures (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent)
-
-{
-  BioseqPtr        bsp;
-  BioseqSetPtr     bssp;
-  SeqAnnotPtr      sap;
-  SeqFeatPtr       sfp;
-  ValNodePtr PNTR  vnpp;
-
-  if (sep == NULL || sep->data.ptrvalue == NULL || mydata == NULL) return;
-  vnpp = (ValNodePtr PNTR) mydata;
-  sap = NULL;
-  if (IS_Bioseq (sep)) {
-    bsp = (BioseqPtr) sep->data.ptrvalue;
-    sap = bsp->annot;
-  } else if (IS_Bioseq_set (sep)) {
-    bssp = (BioseqSetPtr) sep->data.ptrvalue;
-    sap = bssp->annot;
-  } else return;
-  while (sap != NULL) {
-    if (sap->type == 1 && sap->data != NULL) {
-      sfp = (SeqFeatPtr) sap->data;
-      while (sfp != NULL) {
-        if (sfp->data.choice == SEQFEAT_GENE) {
-          ValNodeAddPointer (vnpp, 0, (Pointer) sfp);
-        }
-        sfp = sfp->next;
-      }
-    }
-    sap = sap->next;
-  }
-}
-
-static void ExtendGeneWithinNucProt (SeqEntryPtr sep)
-
-{
-  BioseqSetPtr  bssp;
-  ValNodePtr    vnp;
-
-  if (sep == NULL) return;
-  if (IS_Bioseq_set (sep)) {
-    bssp = (BioseqSetPtr) sep->data.ptrvalue;
-    if (bssp == NULL) return;
-    if (bssp->_class == 7 || bssp->_class == 13 ||
-        bssp->_class == 14 || bssp->_class == 15) {
-      for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
-        ExtendGeneWithinNucProt (sep);
-      }
-      return;
-    }
-  }
-  vnp = NULL;
-  SeqEntryExplore (sep, (Pointer) (&vnp), CollectGeneFeatures);
-  if (vnp != NULL && vnp->next == NULL) {
-    SeqEntryExplore (sep, NULL, CorrectGeneFeatLocation);
-  }
-  ValNodeFree (vnp);
-}
-
-extern void ExtendGeneFeatIfOnMRNA (Uint2 entityID, SeqEntryPtr sep)
-
-{
-  if (entityID < 1 && sep == NULL) return;
-  if (entityID > 0 && sep == NULL) {
-    sep = GetTopSeqEntryForEntityID (entityID);
-  }
-  if (sep == NULL) return;
-  ExtendGeneWithinNucProt (sep);
-}
 
 typedef struct datepage {
   DIALOG_MESSAGE_BLOCK
@@ -1036,6 +966,34 @@ static void GBQualPtrToFieldPage (DialoG d, Pointer data)
   }
 }
 
+extern void SeqFeatPtrToFieldPage (DialoG d, SeqFeatPtr sfp);
+extern void SeqFeatPtrToFieldPage (DialoG d, SeqFeatPtr sfp)
+
+{
+  FieldPagePtr  fpf;
+  Int2          i;
+
+  fpf = (FieldPagePtr) GetObjectExtra (d);
+  if (fpf != NULL && sfp != NULL) {
+        for (i = 0; i < fpf->numfields; i++) {
+          if (StringICmp ("exception", fpf->fields [i]) == 0) {
+            if (fpf->values [i] != NULL) {
+              if (sfp->except_text == NULL || *(sfp->except_text) == '\0') {
+                SetTitle (fpf->values [i], "");
+              } else {
+                SetTitle (fpf->values [i], sfp->except_text);
+              }
+            }
+          } else if (StringICmp ("pseudo", fpf->fields [i]) == 0) {
+            if (fpf->boxes [i] != NULL && (! GetStatus (fpf->boxes [i]))) {
+              SetStatus (fpf->boxes [i], sfp->pseudo);
+            }
+          }
+        }
+  }
+
+}
+
 static Pointer FieldPageToGBQualPtr (DialoG d)
 
 {
@@ -1162,6 +1120,9 @@ extern DialoG CreateImportFields (GrouP h, CharPtr name, SeqFeatPtr sfp, Boolean
           }
         }
       }
+    } else if (sfp != NULL && sfp->data.choice == SEQFEAT_CDREGION) {
+      seen [GBQUAL_exception] = LEGAL_FEATURE;
+      seen [GBQUAL_pseudo] = LEGAL_FEATURE;
     }
 
     while (gbq != NULL) {

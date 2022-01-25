@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/5/96
 *
-* $Revision: 6.7 $
+* $Revision: 6.10 $
 *
 * File Description: 
 *
@@ -70,32 +70,34 @@ extern "C" {
 
 typedef void (*EntrezRetrieveDocsProc) (ForM f, Int2 num, Int2 parents, Int4Ptr uids, Int2 db);
 typedef void (*EntrezProjectToFormProc) (ForM f, Pointer proj);
+typedef void (*EntrezSimpleSeqProc) (ForM f, ValNodePtr simpleSeqs);
 typedef void (*EntrezNamedUidListProc) (ForM f, CharPtr term, Int2 num, Int4Ptr uids, Int2 db);
 typedef void (*EntrezLaunchViewerProc) (ForM f, Int4 uid, Int2 numAlign, Int4Ptr alignuids, Int2 db);
 
 typedef struct entrezglobals {
-  IteM                    parentsPersist;
-  IteM                    alignWithChecked;
-  ChoicE                  seqComplex;
-  ChoicE                  strucComplex;
-  ChoicE                  strucModels;
-  FonT                    docsumFont;
+  IteM                     parentsPersist;
+  IteM                     alignWithChecked;
+  ChoicE                   seqComplex;
+  ChoicE                   strucComplex;
+  ChoicE                   strucModels;
+  FonT                     docsumFont;
 
-  Boolean                 persistDefault;
-  Boolean                 alignDefault;
-  Boolean                 popdownBehavior;
-  Boolean                 lookupDirect;
-  Boolean                 showAsn;
-  Boolean                 sortFields;
-  CharPtr                 initDatabase;
-  CharPtr                 initField;
-  CharPtr                 initMode;
+  Boolean                  persistDefault;
+  Boolean                  alignDefault;
+  Boolean                  popdownBehavior;
+  Boolean                  lookupDirect;
+  Boolean                  showAsn;
+  Boolean                  sortFields;
+  CharPtr                  initDatabase;
+  CharPtr                  initField;
+  CharPtr                  initMode;
 
-  WndActnProc             createTrmLstMenus;
-  WndActnProc             createDocSumMenus;
+  WndActnProc              createTrmLstMenus;
+  WndActnProc              createDocSumMenus;
 
   EntrezRetrieveDocsProc   retrieveDocsProc;
   EntrezProjectToFormProc  retrieveProjectProc;
+  EntrezSimpleSeqProc      retrieveSimpleProc;
   EntrezNamedUidListProc   loadNamedUidProc;
   EntrezLaunchViewerProc   launchViewerProc;
 } EntrezGlobals, PNTR EntrezGlobalsPtr;
@@ -110,6 +112,8 @@ extern ForM CreateDocSumForm (Int2 left, Int2 top, CharPtr title,
 
 extern void RetrieveDocuments (ForM f, Int2 num, Int2 parents, Int4Ptr uids, Int2 db);
 
+extern void RetrieveSimpleSeqs (ForM f, ValNodePtr simpleSeqs);
+
 extern void LoadNamedUidList (ForM f, CharPtr term, Int2 num, Int4Ptr uids, Int2 db);
 
 extern void LaunchRecordViewer (Int4 uid, Int2 numAlign, Int4Ptr alignuids, Int2 db);
@@ -119,6 +123,12 @@ extern void LaunchRecordViewer (Int4 uid, Int2 numAlign, Int4Ptr alignuids, Int2
 extern ChoicE CreateQueryTypeChoice (MenU m, BaseFormPtr bfp);
 extern IteM CreateClearUnusedItem (MenU m, BaseFormPtr bfp);
 extern Boolean UsingTextQuery (ForM f);
+
+/* The following functions are used to toggle between immediate/delayed neighbor styles */
+
+extern ChoicE CreateNeighborDelayChoice (MenU m, BaseFormPtr bfp);
+extern Boolean UsingDelayedNeighbor (ForM f);
+extern void UseDelayedNeighbor (ForM f, Boolean delayMode);
 
 /* The following functions are used when creating windows */
 

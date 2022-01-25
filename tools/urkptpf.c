@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 98-01-01
 *
-* $Revision: 6.29 $
+* $Revision: 6.31 $
 *
 * File Description: patterns and profiles
 *
@@ -38,6 +38,12 @@
 * Date       Name        Description of modification
 * --------------------------------------------------------------------------
 * $Log: urkptpf.c,v $
+* Revision 6.31  1998/12/23 21:34:03  kuzio
+* SeqPortStuff
+*
+* Revision 6.30  1998/11/16 14:29:53  kuzio
+* flagBoundaryCondition
+*
 * Revision 6.29  1998/09/21 14:38:24  kuzio
 * check for cr in comments
 *
@@ -77,7 +83,7 @@ static Uint1Ptr GetSeqChunk (SeqPortPtr spp, Int4 start, Int4 len,
   SeqPortSeek (spp, start, SEEK_SET);
   for (i = 0; i < size; i++)
     *sequence++ = (Uint1) SeqPortGetResidue (spp);
-  *sequence = '\0';
+  *sequence = 0;
 
   return seqhead;
 }
@@ -1950,19 +1956,23 @@ extern Int4 CatenateProfile (ComProfPtr ppphead, Int4 proflen, Int4 icount)
 }
 
 /*
- flagFirstInvocation *MUST* be TRUE on callers' invocation
-                     this sets prlnmx and scoremax
- flagFindAllMatches  if FALSE on intial invocation then
-                     just find the first hit
+ flagFirstInvocation   *MUST* be TRUE on callers' invocation
+                       this sets prlnmx and scoremax
+ flagFindAllMatches    if FALSE on intial invocation then
+                       just find the first hit
+ flagBoundaryCondition just finds the fuzzy entries and ignores
+                       the clear Yays and Nays
 */
 static SeqAlignPtr ProfileMatchX (Uint1Ptr seq, Int4 seqpos, FloatHi cutoff,
                                   Uint1 strand, SeqIdPtr sip, ComProfPtr ppp,
                                   FloatHi scoremax, FloatHi score,
                                   Int4 prlnmx, Int2 topology,
                                   Boolean flagFirstInvocation,
-                                  Boolean flagFindAllMatches)
+                                  Boolean flagFindAllMatches,
+                                  Boolean flagBoundaryCondition)
 {
   SeqAlignPtr  saphead = NULL, sap;
+  FloatHi      lowcut, highcut;
 
   if (ppp == NULL || *seq == 0)
     return saphead;
@@ -1983,14 +1993,27 @@ static SeqAlignPtr ProfileMatchX (Uint1Ptr seq, Int4 seqpos, FloatHi cutoff,
       seq++;
       seqpos++;
       sap = ProfileMatchX (seq, seqpos, cutoff, strand, sip, ppp->next,
-                           scoremax, score, prlnmx, topology, FALSE, FALSE);
+                           scoremax, score, prlnmx, topology, FALSE, FALSE,
+                           flagBoundaryCondition);
     }
     else
     {
-      if (score >= cutoff)
-        sap = ProfSeqAlign (seqpos, prlnmx, strand, score, sip, topology);
+      if (flagBoundaryCondition)
+      {
+        lowcut = cutoff * 0.90;
+        highcut = cutoff + (cutoff - (cutoff * 0.90));
+        if (score >= lowcut && score <= highcut)
+          sap = ProfSeqAlign (seqpos, prlnmx, strand, score, sip, topology);
+        else
+          sap = NULL;
+      }
       else
-        sap = NULL;
+      {
+        if (score >= cutoff)
+          sap = ProfSeqAlign (seqpos, prlnmx, strand, score, sip, topology);
+        else
+          sap = NULL;
+      }
     }
     if (flagFirstInvocation)
     {
@@ -2022,9 +2045,11 @@ static SeqAlignPtr ProfileMatchXInt (Uint1Ptr seq, Int4 seqpos,
                                      Int4 scoremax, Int4 score,
                                      Int4 prlnmx, Int2 topology,
                                      Boolean flagFirstInvocation,
-                                     Boolean flagFindAllMatches)
+                                     Boolean flagFindAllMatches,
+                                     Boolean flagBoundaryCondition)
 {
   SeqAlignPtr  saphead = NULL, sap;
+  FloatHi      lowcut, highcut;
 
   if (ppp == NULL || *seq == 0)
     return saphead;
@@ -2045,15 +2070,28 @@ static SeqAlignPtr ProfileMatchXInt (Uint1Ptr seq, Int4 seqpos,
       seqpos++;
       sap = ProfileMatchXInt (seq, seqpos, cutoff, strand, sip, ppp->next,
                               scoremax, score, prlnmx, topology,
-                              FALSE, FALSE);
+                              FALSE, FALSE, flagBoundaryCondition);
     }
     else
     {
-      if (score >= cutoff)
-        sap = ProfSeqAlign (seqpos, prlnmx, strand, (FloatHi) score, sip,
-                            topology);
+      if (flagBoundaryCondition)
+      {
+        lowcut = cutoff * 0.8;
+        highcut = cutoff + (cutoff - (cutoff * 0.8));
+        if (score >= lowcut && score <= highcut)
+          sap = ProfSeqAlign (seqpos, prlnmx, strand, (FloatHi) score, sip,
+                              topology);
+        else
+          sap = NULL;
+      }
       else
-        sap = NULL;
+      {
+        if (score >= cutoff)
+          sap = ProfSeqAlign (seqpos, prlnmx, strand, (FloatHi) score, sip,
+                              topology);
+        else
+          sap = NULL;
+      }
     }
     if (flagFirstInvocation)
     {
@@ -2081,14 +2119,17 @@ static SeqAlignPtr ProfileMatchXInt (Uint1Ptr seq, Int4 seqpos,
 
 extern SeqAlignPtr ProfileMatch (Uint1Ptr seq, Int4 seqpos, FloatHi cutoff,
                                  Uint1 strand, SeqIdPtr sip, ComProfPtr ppp,
-                                 Int2 topology, Boolean flagFindAllMatches)
+                                 Int2 topology, Boolean flagFindAllMatches,
+                                 Boolean flagBoundaryCondition)
 {
   return ProfileMatchX (seq, seqpos, cutoff, strand, sip, ppp,
-                        0.0, 0.0, 0, topology, TRUE, flagFindAllMatches);
+                        0.0, 0.0, 0, topology, TRUE, flagFindAllMatches,
+                        flagBoundaryCondition);
 }
 
 extern SeqAlignPtr ProfileMatchBioseq (BioseqPtr bsp, ComProfPtr ppp,
-                                       ComProfPtr ippp, FloatHi cutoff)
+                                       ComProfPtr ippp, FloatHi cutoff,
+                                       Boolean flagBoundaryCondition)
 {
   SeqAlignPtr saphead = NULL, sap;
   SeqPortPtr  spp;
@@ -2112,12 +2153,14 @@ extern SeqAlignPtr ProfileMatchBioseq (BioseqPtr bsp, ComProfPtr ppp,
                              seqchunk)) != NULL)
   {
     sap = ProfileMatchX (seq, start, cutoff, Seq_strand_plus, bsp->id,
-                         ppp, 0.0, 0.0, 0, bsp->topology, TRUE, TRUE);
+                         ppp, 0.0, 0.0, 0, bsp->topology, TRUE, TRUE,
+                         flagBoundaryCondition);
     SeqAlignLink (&saphead, sap);
     if (ippp != NULL)
     {
       sap = ProfileMatchX (seq, start, cutoff, Seq_strand_minus, bsp->id,
-                           ippp, 0.0, 0.0, 0, bsp->topology, TRUE, TRUE);
+                           ippp, 0.0, 0.0, 0, bsp->topology, TRUE, TRUE,
+                           flagBoundaryCondition);
       SeqAlignLink (&saphead, sap);
     }
     MemFree (seq);
@@ -2128,7 +2171,8 @@ extern SeqAlignPtr ProfileMatchBioseq (BioseqPtr bsp, ComProfPtr ppp,
 }
 
 extern SeqAlignPtr IntProfileMatchBioseq (BioseqPtr bsp, ComProfPtr ppp,
-                                          ComProfPtr ippp, Int4 cutoff)
+                                          ComProfPtr ippp, Int4 cutoff,
+                                          Boolean flagBoundaryCondition)
 {
   SeqAlignPtr saphead = NULL, sap;
   SeqPortPtr  spp;
@@ -2158,12 +2202,14 @@ extern SeqAlignPtr IntProfileMatchBioseq (BioseqPtr bsp, ComProfPtr ppp,
       seqtmp++;
     }
     sap = ProfileMatchXInt (seq, start, cutoff, Seq_strand_plus, bsp->id,
-                            ppp, 0, 0, 0, bsp->topology, TRUE, TRUE);
+                            ppp, 0, 0, 0, bsp->topology, TRUE, TRUE,
+                            flagBoundaryCondition);
     SeqAlignLink (&saphead, sap);
     if (ippp != NULL)
     {
       sap = ProfileMatchXInt (seq, start, cutoff, Seq_strand_minus, bsp->id,
-                              ippp, 0, 0, 0, bsp->topology, TRUE, TRUE);
+                              ippp, 0, 0, 0, bsp->topology, TRUE, TRUE,
+                              flagBoundaryCondition);
       SeqAlignLink (&saphead, sap);
     }
     MemFree (seq);

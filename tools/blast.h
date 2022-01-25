@@ -34,9 +34,9 @@ Contents: prototypes for "public" BLAST functions (ones that other utilitiles
 
 /* $Revision: 6.15 $ */
 /* $Log: blast.h,v $
- * Revision 6.15  1998/09/22 16:56:12  egorov
- * Add prototype for BlastErrorPrintExtra()
- *
+/* Revision 6.15  1998/09/22 16:56:12  egorov
+/* Add prototype for BlastErrorPrintExtra()
+/*
  * Revision 6.14  1998/09/14 15:11:14  egorov
  * Add support for Int8 length databases; remove unused variables
  *

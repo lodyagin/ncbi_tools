@@ -39,7 +39,7 @@ global ENCRYPTSOURCE
 
 global INCLUDEFILES
 global LIBRARIES
-global BUILD
+global BUILDTEST
 
 global DOENCRYPT
 
@@ -57,7 +57,7 @@ on DoSetGlobals()
 	tell application "Finder"
 		
 		set HARDDISK to startup disk as string
-		set METRO to HARDDISK & "Metrowerks:" as string
+		set METRO to HARDDISK & "CodeWarrior Pro 4:" as string
 		set METROWERKSCW to METRO & "Metrowerks CodeWarrior:" as string
 		
 		set NCBISOURCE to METRO & "ncbi:" as string
@@ -65,7 +65,7 @@ on DoSetGlobals()
 		
 		set INCLUDEFILES to NCBISOURCE & "include:" as string
 		set LIBRARIES to NCBISOURCE & "lib:" as string
-		set BUILD to NCBISOURCE & "build:" as string
+		set BUILDTEST to NCBISOURCE & "build:" as string
 		
 		if (exists (folder ENCRYPTSOURCE)) then
 			set DOENCRYPT to "TRUE"
@@ -76,15 +76,14 @@ on DoSetGlobals()
 	end tell
 end DoSetGlobals
 
-on DoSetPreferences()
-	tell application "CodeWarrior IDE 3.0"
+on DoSetPPC()
+	tell application "CodeWarrior IDE 3.2"
 		
 		(* ===== Panel Target ===== *)
-		if MASTER = "PPC" then
-			Set Preferences of panel "Target Settings" to {Linker:"MacOS PPC Linker"}
-		else if MASTER = "68K" then
-			Set Preferences of panel "Target Settings" to {Linker:"MacOS 68K Linker"}
-		end if
+		Set Preferences of panel "Target Settings" to {Linker:"MacOS PPC Linker"}
+		
+		(* ===== Panel PowerPC Project =====  *)
+		Set Preferences of panel "PPC Project" to {Project Type:library}
 		
 		(* ===== Panel C/C++ Language =====  *)
 		Set Preferences of panel "C/C++ Compiler" to Â
@@ -115,22 +114,16 @@ on DoSetPreferences()
 				, Extra Commas:true Â
 				, Extended Error Checking:true}
 		
-		(* ===== Panel PowerPC Project =====  *)
-		Set Preferences of panel "PPC Project" to {Project Type:library}
-		
 		(* ===== Panel PPC Processor =====  *)
 		Set Preferences of panel "PPC CodeGen" to Â
-			{Struct Alignment:PowerPC Â
-				, Make Strings ReadOnly:false Â
-				, Store Data in TOC:false Â
+			{Struct Alignment:Align_PPC Â
+				, Make Strings ReadOnly:true Â
+				, Store Data in TOC:true Â
 				, Use FMADD Instructions:false Â
 				, Use Profiler:false Â
-				, Traceback Tables:false Â
-				, Instruction Scheduling:off Â
-				, Optimize For Size:false Â
-				, Peephole Optimizer:false Â
-				, Global Optimization:false Â
-				, Optimization Level:1}
+				, Traceback Tables:TB_None Â
+				, Schedule:false Â
+				, Peephole Optimizer:false}
 		
 		(* ===== Panel PPC Linker ===== *)
 		Set Preferences of panel "PPC Linker" to Â
@@ -154,18 +147,55 @@ on DoSetPreferences()
 				, Expand Uninitialized Data:false Â
 				, Fragment Name:""}
 		
+		my DoSetPaths1()
+		
+	end tell
+end DoSetPPC
+
+on DoSet68K()
+	tell application "CodeWarrior IDE 3.2"
+		
+		(* ===== Panel Target ===== *)
+		Set Preferences of panel "Target Settings" to {Linker:"MacOS 68K Linker"}
+		
 		(* ===== Panel 68K Project =====  *)
 		Set Preferences of panel "68K Project" to {Project Type:library}
+		
+		(* ===== Panel C/C++ Language =====  *)
+		Set Preferences of panel "C/C++ Compiler" to Â
+			{Activate CPlusPlus:false Â
+				, ARM Conformance:false Â
+				, Exception Handling:true Â
+				, Inlining:inline_none Â
+				, RTTI:false Â
+				, Pool Strings:false Â
+				, Dont Reuse Strings:false Â
+				, Require Function Prototypes:true Â
+				, ANSI Strict:false Â
+				, ANSI Keywords Only:false Â
+				, Expand Trigraph Sequences:false Â
+				, MPW Newlines:false Â
+				, MPW Pointer Type Rules:false Â
+				, Enums Always Ints:false Â
+				, Prefix File:""}
+		
+		(* ===== Panel C/C++ Warnings ===== *)
+		Set Preferences of panel "C/C++ Warnings" to Â
+			{Treat Warnings As Errors:false Â
+				, Illegal Pragmas:true Â
+				, Empty Declarations:true Â
+				, Possible Errors:true Â
+				, Unused Variables:true Â
+				, Unused Arguments:false Â
+				, Extra Commas:true Â
+				, Extended Error Checking:true}
 		
 		(* ===== Panel 68K Processor =====  *)
 		Set Preferences of panel "68K CodeGen" to Â
 			{Code Model:large Â
-				, Struct Alignment:mc68k Â
+				, Struct Alignment:Align_68k Â
 				, MC68020 CodeGen:false Â
 				, Floating Point CodeGen:SANE Â
-				, Peephole Optimizer:false Â
-				, Enable Global Optimizations:false Â
-				, Optimize For Size:false Â
 				, PC Relative Strings:false Â
 				, Use Profiler:false Â
 				, Four Bytes Ints:true Â
@@ -190,10 +220,18 @@ on DoSetPreferences()
 		my DoSetPaths1()
 		
 	end tell
+end DoSet68K
+
+on DoSetPreferences()
+	if MASTER = "PPC" then
+		my DoSetPPC()
+	else if MASTER = "68K" then
+		my DoSet68K()
+	end if
 end DoSetPreferences
 
 on DoSetPaths1()
-	tell application "CodeWarrior IDE 3.0"
+	tell application "CodeWarrior IDE 3.2"
 		
 		(* ===== Panel Access Paths ===== *)
 		-- We need to be able to move the default system compiler folder to the end of the list
@@ -208,7 +246,7 @@ on DoSetPaths1()
 end DoSetPaths1
 
 on DoSetPaths2()
-	tell application "CodeWarrior IDE 3.0"
+	tell application "CodeWarrior IDE 3.2"
 		
 		-- After we have added all paths, reinsert compiler default at end of list
 		Set Preferences of panel "Access Paths" to {System Paths:{{name:":MacOS Support:Headers:", recursive:true, origin:shell relative}}}
@@ -219,7 +257,7 @@ on DoSetPaths2()
 end DoSetPaths2
 
 on DoCompileLibraries()
-	tell application "CodeWarrior IDE 3.0"
+	tell application "CodeWarrior IDE 3.2"
 		
 		open (LIBRARIES & "ncbi" & SUFFIX & ".µ")
 		Make Project
@@ -269,7 +307,7 @@ end DoCompileLibraries
 with timeout of 60000 seconds
 	my DoSetGlobals()
 	
-	tell application "CodeWarrior IDE 3.0"
+	tell application "CodeWarrior IDE 3.2"
 		
 		activate
 		
@@ -380,7 +418,8 @@ with timeout of 60000 seconds
 		Add Files {NCBISOURCE & "api:seqport.c"} To Segment 2
 		Add Files {NCBISOURCE & "api:sequtil.c"} To Segment 2
 		Add Files {NCBISOURCE & "api:simple.c"} To Segment 2
-		Add Files {NCBISOURCE & "api:sqnutils.c"} To Segment 2
+		Add Files {NCBISOURCE & "api:sqnutil1.c"} To Segment 2
+		Add Files {NCBISOURCE & "api:sqnutil2.c"} To Segment 2
 		Add Files {NCBISOURCE & "api:subutil.c"} To Segment 2
 		Add Files {NCBISOURCE & "api:tofasta.c"} To Segment 2
 		Add Files {NCBISOURCE & "api:tofile.c"} To Segment 2
@@ -611,6 +650,8 @@ with timeout of 60000 seconds
 		Add Files {NCBISOURCE & "tools:readdb.c"} To Segment 1
 		Add Files {NCBISOURCE & "tools:ncbisam.c"} To Segment 1
 		Add Files {NCBISOURCE & "tools:ncbisort.c"} To Segment 1
+		Add Files {NCBISOURCE & "tools:salpacc.c"} To Segment 1
+		Add Files {NCBISOURCE & "tools:salpedit.c"} To Segment 1
 		Add Files {NCBISOURCE & "tools:salsap.c"} To Segment 1
 		Add Files {NCBISOURCE & "tools:salstruc.c"} To Segment 1
 		Add Files {NCBISOURCE & "tools:salutil.c"} To Segment 1

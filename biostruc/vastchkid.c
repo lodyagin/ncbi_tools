@@ -31,7 +31,19 @@
  * Version Creation Date: 6/16/98
  *
  * $Log: vastchkid.c,v $
- * Revision 6.1  1998/07/17 18:42:33  madej
+ * Revision 6.5  1998/12/22 18:01:52  addess
+ * changes relevant to reading new type of annot-set data
+ *
+ * Revision 6.4  1998/11/27  16:54:05  addess
+ * made change to AssignLocaIdToSeqAlignMaster as suggested by Hugues
+ *
+ * Revision 6.3  1998/10/21  15:42:16  ywang
+ * to simplify extraction of vast alignment clique number
+ *
+ * Revision 6.2  1998/10/14  17:21:42  addess
+ * for sending aligned chains from vastsearch
+ *
+ * Revision 6.1  1998/07/17  18:42:33  madej
  * Handles local sequence IDs.
  *
  *
@@ -78,13 +90,36 @@ PDBSeqIdPtr GetPdbSeqId(SeqIdPtr sip)
 
   return(pdb_seq_id);
 }
+/***************************************************************************/                                                                       
+/*            GetLocalId() Ken                                            */
+/***************************************************************************/
+ObjectIdPtr GetLocalId(SeqIdPtr sip)
+{
+  ObjectIdPtr oip = NULL;
+  SeqIdPtr seq_id = NULL;
+ 
+  seq_id = sip;
+
+  while(seq_id != NULL)
+  {
+     if (seq_id->choice == 1)
+     {
+        oip = seq_id->data.ptrvalue;
+        break;
+     }
+     seq_id = seq_id->next;
+  }
+  
+  return oip;
+}
 /*---------------- remove redundancy sequences ---------------*/ 
-SeqEntryPtr ExtractThisSep(SeqEntryPtr sepThis, CharPtr PDBName, Char Chain)
+SeqEntryPtr ExtractThisSep(SeqEntryPtr sepThis, Char Chain)
 {
   SeqEntryPtr sepThisNew = NULL;
   BioseqPtr bsp = NULL;
   BioseqSetPtr bssp = NULL;
   PDBSeqIdPtr pdb_seq_id;
+  ObjectIdPtr object_id;
 
   Int2 choice;
   Char ThisChain;
@@ -103,9 +138,17 @@ SeqEntryPtr ExtractThisSep(SeqEntryPtr sepThis, CharPtr PDBName, Char Chain)
 
      while(sepThis != NULL){
         bsp = sepThis->data.ptrvalue;
-        pdb_seq_id = GetPdbSeqId(bsp->id);
-        if(pdb_seq_id->chain !=NULL) ThisChain = (Char) pdb_seq_id->chain;
-        else ThisChain = ' ';
+        if (bsp->id->choice == 15)
+        {
+          pdb_seq_id = GetPdbSeqId(bsp->id);
+          if(pdb_seq_id->chain !=NULL) ThisChain = (Char) pdb_seq_id->chain;
+          else ThisChain = ' ';
+        }
+        if (bsp->id->choice == 1)
+        {
+          object_id = GetLocalId(bsp->id);
+          if (object_id->str) ThisChain = object_id->str[5];
+        }
 
         if(ThisChain == Chain) {
            sepThisNew->data.ptrvalue = bsp;
@@ -126,8 +169,9 @@ NcbiMimeAsn1Ptr ScreenSequence( NcbiMimeAsn1Ptr pvnNcbi, CharPtr JobID)
   BiostrucFeaturePtr pbsfThis = NULL;
   SeqEntryPtr sepHead = NULL, sepHeadNew = NULL, sepThis = NULL;
 
-  Char PDBName[Local_max], Chain, Domain;
-  Char pSegmentSlave[Local_max];
+  /*Char PDBName[Local_max], */
+  Char Chain, Domain;
+  CharPtr pSegmentSlave;
 
   pbsaStruct = pvnNcbi->data.ptrvalue;
 
@@ -136,34 +180,36 @@ NcbiMimeAsn1Ptr ScreenSequence( NcbiMimeAsn1Ptr pvnNcbi, CharPtr JobID)
   pbsfThis = pbsfsThis->features;
 
   StringNCpy(pSegmentMaster, pbsfThis->name, 6);
-  StringNCpy(PDBName, pSegmentMaster, 4);
+ /* StringNCpy(PDBName, pSegmentMaster, 4); */
   Chain = pSegmentMaster[4];
   
   sepHead = pbsaStruct->sequences;
-  if(JobID){
+  /*if(JobID){
      sepThis = SeqEntryNew();
      sepThis->choice = 1;
      sepThis->data.ptrvalue = sepHead->data.ptrvalue;
    }
-  else sepThis = ExtractThisSep(sepHead, PDBName, Chain); 
+  else */
+  sepThis = ExtractThisSep(sepHead, Chain); 
   ValNodeLink(&sepHeadNew, sepThis);
 
   sepHead = sepHead->next;
   while(pbsfThis){
-     StringCpy(pSegmentSlave, pbsfThis->name + 7);
+     pSegmentSlave = StringSave(&pbsfThis->name[7]);
      pSegmentSlave[6]='\0';
 
-     StringNCpy(PDBName, pSegmentSlave, 4);
+     /*StringNCpy(PDBName, pSegmentSlave, 4);*/
      Chain = pSegmentSlave[4];
 
-     sepThis = ExtractThisSep(sepHead, PDBName, Chain);
+     sepThis = ExtractThisSep(sepHead, Chain);
      ValNodeLink(&sepHeadNew, sepThis);
 
      pbsfThis = pbsfThis->next;
      sepHead = sepHead->next; 
   }
 
-  pbsaStruct->sequences = sepHeadNew; 
+  pbsaStruct->sequences = sepHeadNew;
+  MemFree(pSegmentSlave); 
 
   return(pvnNcbi);
 }
@@ -302,18 +348,20 @@ void AssignLocaIdToSeqAlign(SeqIdPtr sip, Char *PDBName, Char Chain, SeqAlignPtr
 void AssignLocaIdToSeqAlignMaster(SeqIdPtr sip, SeqAlignPtr salpHead)
 {
 
-  DenseDiagPtr ddp = NULL;
+  DenseDiagPtr ddp;
   SeqIdPtr  sipTemp = NULL;
-  PDBSeqIdPtr pdb_seq_id;
-  Char ThisChain;
  
   ddp = salpHead->segs;
 
   while(ddp)
   {
-     sipTemp = ddp->id->next;
-     ddp->id = sip;
-     sip->next = sipTemp;
+     if(ddp->id!=NULL) {
+        sipTemp = ddp->id->next;
+        SeqIdFree(ddp->id);
+        ddp->id = AsnIoMemCopy(sip, (AsnReadFunc) SeqIdAsnRead, (AsnWriteFunc) SeqIdAsnWrite);
+        ddp->id->next = sipTemp;
+     } else
+	ErrPostEx(SEV_ERROR,0,0,"AssignLocalIdToSeqAlignMaster: No SeqId on SeqALign\n");
      ddp = ddp->next; 
   }
 
@@ -383,7 +431,7 @@ NcbiMimeAsn1Ptr CheckId(NcbiMimeAsn1Ptr pvnNcbi, CharPtr JobID)
   Int4 iCount1 = 0, iCount_ID = 0;
   Boolean IdChainFound = FALSE;
 
-  Char pSegmentSlave[Local_max];
+  CharPtr pSegmentSlave;
   Char PDBName[Local_max], Chain, Domain; 
 
   Char AlignIdStr[Local_max];
@@ -430,9 +478,7 @@ NcbiMimeAsn1Ptr CheckId(NcbiMimeAsn1Ptr pvnNcbi, CharPtr JobID)
       sipMaster = ValNodeNew(NULL);
       sipMaster->choice = SEQID_LOCAL;
       sipMaster->data.ptrvalue = oipMaster;
-      
-      sip_temp = AsnIoMemCopy(sipMaster, (AsnReadFunc) SeqIdAsnRead, (AsnWriteFunc) SeqIdAsnWrite);
-      AssignLocaIdToSeqAlignMaster(sip_temp, salpHead);
+      AssignLocaIdToSeqAlignMaster(sipMaster, salpHead);
     }
   }
     
@@ -443,12 +489,13 @@ NcbiMimeAsn1Ptr CheckId(NcbiMimeAsn1Ptr pvnNcbi, CharPtr JobID)
 
   iCount1 = 0;
   while(pbsfThis){
-     StringCpy(pSegmentSlave, pbsfThis->name + 7);
+     pSegmentSlave = StringSave(&pbsfThis->name[7]);
      pSegmentSlave[6]='\0';
 
      IdChainFound = FindIdSlave(pSegmentSlave, pbsaThis->features->features, iCount1);
      if(IdChainFound) iCount_ID++;
      iCount1++;
+     MemFree(pSegmentSlave);
      pbsfThis = pbsfThis->next;
   }
 
@@ -462,7 +509,7 @@ NcbiMimeAsn1Ptr CheckId(NcbiMimeAsn1Ptr pvnNcbi, CharPtr JobID)
   iCount1 = 0;
   while(pbsfThis){
 
-     StringCpy(pSegmentSlave, pbsfThis->name + 7);
+     pSegmentSlave = StringSave(&pbsfThis->name[7]);
      pSegmentSlave[6]='\0';
 
 /*   pSegmentSlave[0]=pbsfThis->name[7];
@@ -480,12 +527,10 @@ NcbiMimeAsn1Ptr CheckId(NcbiMimeAsn1Ptr pvnNcbi, CharPtr JobID)
         str[iCount_ID]->str[6] = ' '; str[iCount_ID]->str[7] = pSegmentSlave[5];
         str[iCount_ID]->str[8] = '\0';
         
-        AlignId = pbsfThis->id;
+        AlignId = (Int2) (pbsfThis->id % 10) ;  /* clique number */
         sprintf(AlignIdStr, "%d", AlignId);
-        if(StringLen(AlignIdStr) > 8) {
-           str[iCount_ID]->str[8] = ' '; str[iCount_ID]->str[9] = '\0';
-           StringCat(str[iCount_ID]->str, AlignIdStr + 8);
-        }           
+        str[iCount_ID]->str[8] = ' '; str[iCount_ID]->str[9] = '\0';
+        StringCat(str[iCount_ID]->str, AlignIdStr);
 
         sip_cpy = MakeLocalId(str[iCount_ID]->str);
         iCount_ID++;
@@ -506,7 +551,7 @@ NcbiMimeAsn1Ptr CheckId(NcbiMimeAsn1Ptr pvnNcbi, CharPtr JobID)
         AssignLocaIdToBioseq(sip_cpy, PDBName, Chain, sepHead);
         AssignLocaIdToSeqAlign(sip_cpy, PDBName, Chain, salpHead);     
      }   
-
+     MemFree(pSegmentSlave);
      pbsfThis = pbsfThis->next;
      iCount1++;
      if(pbsSlaveHead) pbsSlaveHead = pbsSlaveHead->next;

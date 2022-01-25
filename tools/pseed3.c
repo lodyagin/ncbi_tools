@@ -95,6 +95,56 @@ static void reentrant_tick_proc PROTO((threadInfoItems * threadInfo,
 
 static Boolean BlastSetLimits PROTO((Int4 cpu_limit, Int2 num_cpu));
 
+
+
+/*seedReturn is a list of lists of SeqAligns in which each list is shortened
+    to at most number_of_descriptions elements, the rest are deallocated
+   and the list of shortened lists is returned*/
+ValNodePtr  LIBCALL SeedPruneHitsFromSeedReturn(ValNodePtr seedReturn, Int4 number_of_descriptions)
+{
+  ValNodePtr returnList; /*list of SeqAlignPtrs to return*/
+  ValNodePtr thisValNode; /*scan down input list of ValNodes*/
+  SeqAlignPtr thisList; /*one list of seqAlignPtrs*/
+  Int4 counter; /*counter for SeqAligns*/
+  SeqAlignPtr prevSeqAlign = NULL, currentSeqAlign = NULL , nextSeqAlign = NULL; 
+  /*used to walk down list*/
+  DenseSegPtr curSegs, testSegs; /*Used to extract ids from curSeqAlign, testSeqAlign*/
+  SeqIdPtr curId, testId; /*Ids of target sequences in testSeqAlign*/
+
+  curId = NULL;
+  returnList = seedReturn;   
+  if (number_of_descriptions > 1) {
+    thisValNode = returnList;
+    while (NULL != thisValNode) {
+      thisList = thisValNode->data.ptrvalue;
+      counter = 0;
+      while ((thisList != NULL) && (counter < (number_of_descriptions + 1))) {
+	if (NULL != currentSeqAlign)
+	  prevSeqAlign = currentSeqAlign;
+	currentSeqAlign = thisList;
+	testSegs = (DenseSegPtr) currentSeqAlign->segs;
+	testId = testSegs->ids->next; 
+	if ((NULL == curId) || (!(SeqIdMatch(curId, testId)))) {
+	  counter++;
+	  curSegs = testSegs;
+	  curId = testId;
+	}
+	thisList = thisList->next;
+      }
+      if (counter == (number_of_descriptions + 1)) {
+	prevSeqAlign->next = NULL;
+	while(NULL != currentSeqAlign) {
+	  nextSeqAlign = currentSeqAlign->next;
+	  MemFree(currentSeqAlign);
+	  currentSeqAlign = nextSeqAlign;
+	}
+      }
+      thisValNode = thisValNode->next;
+    }
+  }
+  return(returnList);
+}
+
 ValNodePtr LIBCALL seedEngineCore(BlastSearchBlkPtr search, BLAST_OptionsBlkPtr options, 
  Uint1Ptr query, Uint1Ptr unfilter_query,
  CharPtr database, CharPtr patfile, Int4 program_flag, 
@@ -141,7 +191,7 @@ ValNodePtr LIBCALL seedEngineCore(BlastSearchBlkPtr search, BLAST_OptionsBlkPtr 
         patternSearch = (patternSearchItems *) ckalloc(sizeof(patternSearchItems));
 	rdpt = readdb_new(database, !is_dna);
 	if (program_flag == PATTERN_FLAG) {
-	    search_pat(rdpt, patfile, is_dna, seedSearch, patternSearch, &(search->error_return));
+	    search_pat(rdpt, patfile, is_dna, seedSearch, patternSearch, &(search->error_return), outfp);
 	    rdpt = readdb_destruct(rdpt);
 	    exit(1);
 	} 
@@ -224,7 +274,8 @@ ValNodePtr LIBCALL seedEngineCore(BlastSearchBlkPtr search, BLAST_OptionsBlkPtr 
 			    patternSearch, reverseDb, totalOccurrences, 
                             options->expect_value,  
                             search->query_id, posEThresh, posSearch, 
-                            matchIndex, &totalBelowEThresh, showDiagnostics);
+                            matchIndex, &totalBelowEThresh, showDiagnostics,
+                            outfp);
 
 		nextValNodePtr = (ValNodePtr) MemNew(sizeof(ValNode));
                 nextValNodePtr->data.ptrvalue = thisSeqAlign;
@@ -472,7 +523,7 @@ Char * LIBCALL get_a_pat(FILE *fp, Char **name, Int4Ptr hitArray, Int4Ptr fullHi
 	    twiceNumHits = find_hits(hitArray, seq, len, FALSE, patternSearch);
             twiceUnfilteredHits = find_hits(unfilterHitArray, unfilter_seq, len, FALSE, patternSearch);
             if ((twiceUnfilteredHits > twiceNumHits) && showDiagnostics )
-              printf("\nWARNING: SEG filtering has wiped out %d occurrence(s) of this pattern\n", ((twiceUnfilteredHits - twiceNumHits)/2));
+              fprintf(outfp,"\nWARNING: SEG filtering has wiped out %d occurrence(s) of this pattern\n", ((twiceUnfilteredHits - twiceNumHits)/2));
 
           }
           if (program_flag == PAT_SEED_FLAG)
@@ -862,7 +913,7 @@ SeqAlignPtr LIBCALL output_hits(ReadDBFILEPtr rdpt,
             Int4 numOccurences, Nlm_FloatHi eThresh,
             SeqIdPtr query_id, Nlm_FloatHi posEthresh, 
             posSearchItems *posSearch, Int4 numMatches,
-            Int4 * totalBelowEThresh, Boolean showDiagnostics)
+            Int4 * totalBelowEThresh, Boolean showDiagnostics, FILE * outfp)
 {
     store_ptr oneMatch;  /*one matching sequence, used as loop index*/
     hit_ptr oneHit; /*one hit reprsenting one place query matches 
@@ -928,10 +979,9 @@ SeqAlignPtr LIBCALL output_hits(ReadDBFILEPtr rdpt,
 
 	  if (eValueForMatch <= eThresh) {
 	    if (oneMatch->seqno != oldNumber) {
-	      printf("%d\t%s\n", oneMatch->seqno, buff);
-              (*totalBelowEThresh)++;
+	      fprintf(outfp,"%d\t%s\n", oneMatch->seqno, buff);
 	    }
-	    printf("%.3g Total Score %d Outside Pattern Score %d Match start in db seq %d\n       Extent in query seq %d %d Extent in db seq %d %d\n", eValueForMatch, 
+	    fprintf(outfp,"%.3g Total Score %d Outside Pattern Score %d Match start in db seq %d\n       Extent in query seq %d %d Extent in db seq %d %d\n", eValueForMatch, 
 		   oneHit->score, oneHit->l_score, oneHit->hit_pos,
 		   oneHit->bi+1, oneHit->ei, oneHit->bj+1, oneHit->ej);
 	  }
@@ -951,6 +1001,7 @@ SeqAlignPtr LIBCALL output_hits(ReadDBFILEPtr rdpt,
       if (posEthresh > 0.0) {
         if (posSearch->threshSequences) {
 	  totalNumMatches = posSearch->posNumSequences + numMatches;
+          posBaseIndex = posSearch->posNumSequences;
           tempPosThreshSequences = (Int4 *) 
 	    MemNew(totalNumMatches * sizeof(Int4));
           for (p = 0; p < posSearch->posNumSequences; p++)
@@ -964,6 +1015,7 @@ SeqAlignPtr LIBCALL output_hits(ReadDBFILEPtr rdpt,
 	    tempPosResultSequences[p] = posSearch->posResultSequences[p];
           MemFree(posSearch->posResultSequences);
           posSearch->posResultSequences = tempPosResultSequences;
+
         }
         else {
           posSearch->posNumSequences = 0;
@@ -1067,7 +1119,7 @@ SeqAlignPtr LIBCALL output_hits(ReadDBFILEPtr rdpt,
       }
     }
     if (eThreshWarning && showDiagnostics)
-      printf("WARNING: There may be more matching sequences with e-values below the threshold of %lf\n", eThresh);
+      fprintf(outfp, "WARNING: There may be more matching sequences with e-values below the threshold of %lf\n", eThresh);
     if (buffer)
       MemFree(buffer);
     return(seqAlignList);
@@ -1304,9 +1356,9 @@ static Int4 get_pat(FILE *fp, Char *stringForPattern, Char *pname)
 }
 
 /*write out a line with pattern ID pname and pattern content pat*/
-static void pat_write_head(char *pat, char *pname)
+static void pat_write_head(char *pat, char *pname, FILE *outfp)
 {
-    printf("\nID  %sPA  %s", pname, pat);
+    fprintf(outfp,"\nID  %sPA  %s", pname, pat);
 }
 
 
@@ -1314,7 +1366,7 @@ static void pat_write_head(char *pat, char *pname)
   patternFileName occurring the database pointed to by rdpt
   is_dna is true if and only if the sequences are DNA sequences*/
 void LIBCALL search_pat(ReadDBFILEPtr rdpt, Char *patternFileName, Boolean is_dna, seedSearchItems *seedSearch, patternSearchItems *patternSearch,
-ValNodePtr * error_return)
+ValNodePtr * error_return, FILE *outfp)
 {
     FILE *fp;  /*file descriptor for pattern file*/
     Char *pat; /*description of current pattern*/
@@ -1347,14 +1399,14 @@ ValNodePtr * error_return)
 	    if (sip)
 	      SeqIdWrite(sip, buff, PRINTID_FASTA_LONG, sizeof(buff));
 	    sip = SeqIdSetFree(sip);
-	    printf("seqno=%d\t%s\n", seqno, buff);
-	    pat_write_head(pat, pname);
+	    fprintf(outfp,"seqno=%d\t%s\n", seqno, buff);
+	    pat_write_head(pat, pname,outfp);
 	  }
 	  for (i = 0; i < numMatches; i+=2) {
             if (is_dna)
-              printf("HI (%d %d)\n", hitArray[i+1], hitArray[i]);
+              fprintf(outfp,"HI (%d %d)\n", hitArray[i+1], hitArray[i]);
 	    else
-	      pat_output(seq, hitArray[i+1], hitArray[i], patternSearch);
+	      pat_output(seq, hitArray[i+1], hitArray[i], patternSearch, outfp);
 	  }
 	}
       }

@@ -33,6 +33,19 @@
 #include <sequtil.h>
 #include <id1gen.h>
 
+#undef NLM_EXTERN
+#ifdef NLM_IMPORT
+#define NLM_EXTERN NLM_IMPORT
+#else
+#define NLM_EXTERN extern
+#endif
+
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+
 #define GI_IS_SUPPRESSED        0x100
 #define GI_IS_OVERRIDEN         0x200
 #define GI_IS_CONFIDENTIAL      0x400
@@ -51,4 +64,17 @@ void   id_print_gi_state(Int4 state,CharPtr buf,Uint1 len);
 
 /* # of retries to get a server */
 #define ID_SERV_RETRIES 2
+
+#ifdef __cplusplus
+}
+#endif
+
+
+#undef NLM_EXTERN
+#ifdef NLM_EXPORT
+#define NLM_EXTERN NLM_EXPORT
+#else
+#define NLM_EXTERN
+#endif
+
 #endif

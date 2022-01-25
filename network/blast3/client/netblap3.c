@@ -34,6 +34,21 @@
 *
 * RCS Modification History:
 * $Log: netblap3.c,v $
+* Revision 1.27  1999/01/12 21:05:58  victorov
+* server will now report an error if the ni-queue if full
+*
+* Revision 1.26  1998/12/09 15:27:05  madden
+* Add wordsize
+*
+* Revision 1.25  1998/11/03 21:46:19  egorov
+* Add support for entrez-query and org-name
+*
+* Revision 1.24  1998/10/26 19:42:57  madden
+* Check for NULL matrix or filter_string
+*
+* Revision 1.23  1998/10/06 18:28:07  egorov
+* Fix MT problem with dispatcher_lock
+*
 * Revision 1.22  1998/09/22 16:12:53  egorov
 * Use BlastErrorPrintExtra instead of BlastErrorPrint to redirect error messages both to log and to program output file
 *
@@ -249,23 +264,20 @@ static Boolean NetInit(void)
 {
 	Boolean retval = FALSE;
 
-	if (dispatcher_lock)
-		NlmMutexLockEx(&dispatcher_lock);
+	NlmMutexLockEx(&dispatcher_lock);
 
 	if(num_attached++ > 0)
 	{
-		if (dispatcher_lock)
-			NlmMutexUnlock(dispatcher_lock);
-		return TRUE;
+	    NlmMutexUnlock(dispatcher_lock);
+	    return TRUE;
 	}
-
+        
     	dispatcher = NI_GenericInit(NULL, NULL, TRUE, NULL, 0);
-	
+
 	if (dispatcher)
 		retval = TRUE;
 
-	if (dispatcher_lock)
-		NlmMutexUnlock(dispatcher_lock);
+	NlmMutexUnlock(dispatcher_lock);
 
 	return retval;
 }
@@ -281,14 +293,12 @@ static Boolean ForceNetInit(void)
 {
 	Boolean retval;
 
-	if (dispatcher_lock)
-		NlmMutexLockEx(&dispatcher_lock);
+	NlmMutexLockEx(&dispatcher_lock);
 
 	num_attached = 0; /* force re-attempt to contact dispatcher */
 	retval = NetInit();
 
-	if (dispatcher_lock)
-		NlmMutexUnlock(dispatcher_lock);
+	NlmMutexUnlock(dispatcher_lock);
 
 	return retval;
 }
@@ -305,8 +315,7 @@ static Boolean ForceNetInit(void)
 
 static Boolean NetFini(BlastNet3Hptr bl3hp, Boolean deallocate)
 {
-	if (dispatcher_lock)
-		NlmMutexLockEx(&dispatcher_lock);
+    NlmMutexLockEx(&dispatcher_lock);
 
 	if (num_attached > 0)
 		num_attached--;
@@ -324,8 +333,7 @@ static Boolean NetFini(BlastNet3Hptr bl3hp, Boolean deallocate)
 		}
 	}
 
-	if (dispatcher_lock)
-		NlmMutexUnlock(dispatcher_lock);
+	NlmMutexUnlock(dispatcher_lock);
 
     return TRUE;
 }
@@ -575,6 +583,8 @@ BlastOptionsToParameters (BLAST_OptionsBlkPtr options)
         parameters->gilist = options->gilist;
         parameters->matrix = StringSave(options->matrix);
         parameters->filter_string = StringSave(options->filter_string);
+	parameters->entrez_query = StringSave(options->entrez_query);
+        parameters->word_size = options->wordsize;
         
 	return parameters;
 }
@@ -961,12 +971,13 @@ BlastGetBioseq(BlastNet3BlockPtr blnet3blkptr, SeqIdPtr sip)
 */
 
 SeqAlignPtr LIBCALL
-BlastBioseq (BlastNet3BlockPtr blnet3blkptr)
+BlastBioseq (BlastNet3BlockPtr blnet3blkptr, ValNodePtr *error_returns)
 
 {
 	BlastRequestPtr request = NULL;
 	BlastSearchPtr search = NULL;
 	BlastResponsePtr response;
+	ValNodePtr node;
 	SeqAlignPtr seqalign=NULL;
 	Uint1 err_id;
 
@@ -988,9 +999,10 @@ BlastBioseq (BlastNet3BlockPtr blnet3blkptr)
 	SubmitRequest(blnet3blkptr->bl3hptr, request, &response, blnet3blkptr->callback);
 	
 	blnet3blkptr->response = response;
-	response = GetResponsePtr(response, BlastResponse_alignment);
-	if (response)
-		seqalign = response->data.ptrvalue;
+	node = GetResponsePtr(response, BlastResponse_alignment);
+	if (node)
+		seqalign = node->data.ptrvalue;
+	*error_returns = GetResponsePtr(response, BlastResponse_error);
 
 	/* These four are not allocated here. */
 	search->query = NULL;
@@ -1066,6 +1078,11 @@ SubmitRequest(BlastNet3Hptr bl3hptr, BlastRequestPtr blreqp, BlastResponsePtr PN
 /*
 	Status returned indicates a (potential) error.  if not done, this is an error.
 */
+#define PRINT_DEBUG_ASN 0
+#if PRINT_DEBUG_ASN	
+static	tmpi = 0;
+#endif 
+
 static Boolean
 RealSubmitRequest(BlastNet3Hptr bl3hptr, BlastRequestPtr blreqp, BlastResponsePtr PNTR response, NetProgressCallback callback)
 
@@ -1073,6 +1090,10 @@ RealSubmitRequest(BlastNet3Hptr bl3hptr, BlastRequestPtr blreqp, BlastResponsePt
 	AsnIoPtr asnin, asnout;
 	Boolean cancel, done;
 	BlastResponsePtr bllist, blresp, head;
+#if PRINT_DEBUG_ASN	
+        AsnIoPtr asnout_test;
+	Char buf[1024];
+#endif
 
 	if (bl3hptr == NULL)
 		return FALSE;
@@ -1083,10 +1104,20 @@ RealSubmitRequest(BlastNet3Hptr bl3hptr, BlastRequestPtr blreqp, BlastResponsePt
 	asnout = bl3hptr->svcp->waip;
 	asnin = bl3hptr->svcp->raip;
 
+#if PRINT_DEBUG_ASN	
+        sprintf(buf, "request.%d.out", ++tmpi);
+        asnout_test = AsnIoOpen(buf, "w");
+	BlastRequestAsnWrite(blreqp, asnout_test, NULL);
+#endif	
+
 	done = BlastRequestAsnWrite(blreqp, asnout, NULL);
 	if (done == FALSE)
 		return FALSE;
 
+#if PRINT_DEBUG_ASN	
+        AsnIoReset(asnout_test);
+        AsnIoClose(asnout_test);   
+#endif	
 	AsnIoReset(asnout);
 
 	head = NULL;
@@ -1452,7 +1483,7 @@ BlastBioseqNetCore(BlastNet3Hptr bl3hp, BioseqPtr bsp, CharPtr program, CharPtr 
 	blnet->bl3hptr = bl3hp;
 	blnet->blast_matrix = blast_matrix;
 
-	seqalign = BlastBioseq(blnet);
+	seqalign = BlastBioseq(blnet, error_returns);
 	if (other_returns)
 	{
 		*other_returns = NULL;
@@ -1588,15 +1619,19 @@ BlastSeqLocNetCore(BlastNet3Hptr bl3hp, SeqLocPtr slp, CharPtr program, CharPtr 
 	return seqalign;
 }
 
+#if EA
 FILE *global_fp;
+#endif
 
 static  Boolean LIBCALLBACK
 callback (BlastResponsePtr brp, Boolean PNTR cancel)
 
 {
 
+#if EA
         fprintf(global_fp, ".");
         fflush(global_fp);
+#endif	
 	return TRUE;
 }
 
@@ -1628,10 +1663,14 @@ TraditionalBlastReport(BioseqPtr bsp, BLAST_OptionsBlkPtr options, BlastNet3Hptr
 	if (bsp == NULL || bl3hp == NULL || program == NULL || database == NULL || outfp == NULL)
 		return FALSE;
 
+#if EA
 NlmMutexLockEx(&formating_mutex);
+#endif
 
 	align_type = BlastGetTypes(program, &query_is_na, &db_is_na);
+#if EA
 	global_fp = outfp;
+#endif
 
        	init_buff_ex(85);
 	dbinfo = BlastRequestDbInfo(bl3hp, database, !db_is_na);
@@ -1639,7 +1678,9 @@ NlmMutexLockEx(&formating_mutex);
        		PrintDbInformationBasic(database, !db_is_na, 70, dbinfo->definition, dbinfo->number_seqs, dbinfo->total_length, outfp, html);
 	dbinfo = BlastDbinfoFree(dbinfo);
        	free_buff();
+#if EA
 NlmMutexUnlock(formating_mutex);
+#endif
 
 	fprintf(outfp, "Searching");
 
@@ -1682,7 +1723,9 @@ NlmMutexUnlock(formating_mutex);
 			}
 	}	
 
+#if EA
 NlmMutexLockEx(&formating_mutex);
+#endif
 
 	if (seqalign)
 	{
@@ -1736,7 +1779,9 @@ NlmMutexLockEx(&formating_mutex);
                 free_buff();
 	}
 
+#if EA
 NlmMutexUnlock(formating_mutex);
+#endif
 	if (seqannot)
 		seqannot = SeqAnnotFree(seqannot);
 
@@ -1771,7 +1816,9 @@ TraditionalBlastReportLoc(SeqLocPtr slp, BLAST_OptionsBlkPtr options, BlastNet3H
 		return FALSE;
 
 	align_type = BlastGetTypes(program, &query_is_na, &db_is_na);
+#if EA
 	global_fp = outfp;
+#endif
 
        	init_buff_ex(85);
 	dbinfo = BlastRequestDbInfo(bl3hp, database, !db_is_na);
@@ -1944,8 +1991,15 @@ parametersToOptions (BlastParametersPtr parameters, CharPtr program, ValNodePtr 
                 
                 options->gifile = StringSave(parameters->gifile);
                 options->gilist = parameters->gilist;
-                options->matrix = StringSave(parameters->matrix);
-                options->filter_string = StringSave(parameters->filter_string);
+		if (parameters->matrix)
+                	options->matrix = StringSave(parameters->matrix);
+		if (parameters->filter_string)
+               		options->filter_string = StringSave(parameters->filter_string);
+                if (parameters->entrez_query)
+                    options->entrez_query = StringSave(parameters->entrez_query);
+                /* compensates for client not providing this.  Remove this at some point? */
+		if (parameters->word_size)
+                    options->wordsize = parameters->word_size;
         }
 
 	if (status = BLASTOptionValidateEx(options, program, error_return)) {

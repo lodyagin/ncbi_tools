@@ -1,4 +1,4 @@
-/*   $Id: PubStructAsn.c,v 6.14 1998/09/03 21:30:11 kimelman Exp $
+/*   $Id: PubStructAsn.c,v 6.18 1998/11/19 23:53:38 kimelman Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -30,6 +30,19 @@
  * Modifications:  
  * --------------------------------------------------------------------------
  * $Log: PubStructAsn.c,v $
+ * Revision 6.18  1998/11/19 23:53:38  kimelman
+ * ct_cancel problem workaround
+ *
+ * Revision 6.17  1998/11/06 18:59:05  kimelman
+ * PubStruct loading transaction granularity changed
+ *
+ * Revision 6.16  1998/10/22 15:23:21  kimelman
+ * Parallel loading fixes: common resourse access extracted to tiny independent
+ * transaction.
+ *
+ * Revision 6.15  1998/10/15  16:04:48  kimelman
+ * switch to public ctutils library
+ *
  * Revision 6.14  1998/09/03 21:30:11  kimelman
  * added number of retries to connect to DB server
  * added softer processing to server connection failure
@@ -87,6 +100,9 @@
  * ==========================================================================
  */
 
+#ifdef DEBUG_MODE
+# define CT_DEBUG_MODE
+#endif
 
 #include <PubStructAsn.h>
 #include <ctlibutils.h>
@@ -96,28 +112,6 @@
 #include <assert.h>
 
 #define DEF_SRV "BACH10:PubStruct=anyone,allowed"
-
-
-/*-------------------------------------------
- * SQL server return code processing macros *
- -------------------------------------------*/
-
-#ifdef DEBUG_MODE
-#define RRC(sb_cmd)  { ErrPostEx(SEV_INFO, ERR_SYBASE,0,"%s running", #sb_cmd);   \
-                       retcode = sb_cmd; }
-#else
-#define RRC(sb_cmd)  { retcode = sb_cmd; }
-#endif
-
-#define RC1(sb_cmd,level) {                                                             \
-  RRC(sb_cmd);                                                                          \
-  if(typecode(retcode,0)<level) {                                                       \
-    ErrPostEx(SEV_ERROR, ERR_SYBASE,0,"\n%s:%d:'%s' failed",__FILE__,__LINE__,#sb_cmd); \
-    typecode(retcode,1);                                                                \
-    goto errexit;                                                                       \
-} }
-
-#define RC(sb_cmd) RC1(sb_cmd,4)
 
 typedef enum {
   PS_NEW,
@@ -149,69 +143,7 @@ typedef struct {
 } DB_stream_t ;
 
 
-/*****************************************************************************
-*****************************************************************************/
-
-static int
-typecode(CS_RETCODE retcode,int enforce)
-{
-    switch(retcode)
-      {
-#ifdef DEBUG_MODE
-#define QQ(code,rc) case code: \
-        if (enforce>rc) { \
-          ErrPostEx(SEV_ERROR, ERR_SYBASE,0,"retcode = %d(%s)\n",retcode,#code); return (rc); \
-        } else { \
-          ErrPostEx(SEV_INFO , ERR_SYBASE,0,"retcode = %d(%s)\n",retcode,#code); return (rc); \
-        }
-#else
-#define QQ(code,rc) case code: \
-        if (enforce>rc) ErrPostEx(SEV_ERROR, ERR_SYBASE,0,"retcode = %d(%s)\n",retcode,#code); return (rc);
-#endif
-      QQ(CS_SUCCEED,4);
-      QQ(CS_END_ITEM,3);
-      QQ(CS_END_DATA,2);
-      QQ(CS_END_RESULTS,1);
-      QQ(CS_FAIL,0);    
-      QQ(CS_BUSY,0);    
-      QQ(CS_PENDING,0); 
-      QQ(CS_CANCELED,0);
-      default:
-        ErrPostEx(SEV_INFO, ERR_SYBASE,0,"retcode = %d(default)\n",retcode);
-      }
-#undef QQ
-    return 0;
-}
-
-#ifdef DEBUG_MODE
-static int
-typeres(CS_INT restype)
-{
-    switch(restype)
-      {
-#define QQ(code) case code: ErrPostEx(SEV_INFO, ERR_SYBASE,0,"res_type = %d(%s)\n",restype,#code); break;
-        QQ(CS_CMD_DONE);
-        QQ(CS_CMD_FAIL);
-        QQ(CS_CMD_SUCCEED);
-        QQ(CS_COMPUTE_RESULT);
-        QQ(CS_CURSOR_RESULT);
-        QQ(CS_PARAM_RESULT);
-        QQ(CS_ROW_RESULT);
-        QQ(CS_STATUS_RESULT);
-        QQ(CS_COMPUTEFMT_RESULT);
-        QQ(CS_ROWFMT_RESULT);
-        QQ(CS_MSG_RESULT);
-        QQ(CS_DESCRIBE_RESULT);
-      default:
-        ErrPostEx(SEV_INFO, ERR_SYBASE,0,"retcode = %d(default)\n",restype);
-      }
-#undef QQ
-    return 0;
-}
-#else
-#define typeres(rc)
-#endif
-
+/****************************************************************************/
 
 static struct ps_chunk *
 new_piece(int min_size, int max_size)
@@ -248,11 +180,22 @@ new_piece(int min_size, int max_size)
 static void
 pubstruct_db_close(DB_stream_t *db)
 {
-  CS_INT restype;
+  CS_INT     restype;
+  CS_RETCODE retcode;
+  
   if (!db)
     return; /*???? kind of assert */
   if (db->clu.ctcmd && db->action == PS_READ)
-    ct_cancel(db->clu.connection,NULL, CS_CANCEL_ALL);
+    {
+      do
+        {
+          CTRUN1( ct_cancel(NULL,db->clu.ctcmd, CS_CANCEL_CURRENT),0);
+          CTRUN1( ct_results(db->clu.ctcmd,&restype),0);
+          CTlib_TYPERES(restype);
+        }
+      while ( retcode == CS_SUCCEED );
+    }
+ errexit:
   db->clu.context = NULL; /* avoid cleaning context */
   CTLibDrop(&db->clu);
   while (db->top)
@@ -272,9 +215,9 @@ static DB_stream_t *
 pubstruct_db_open(char *server,ps_action_t action)
 {
   static int               done    = 0   ;
-  static int               retries = 0   ;
   static CS_CONTEXT PNTR   context = NULL;
          DB_stream_t      *db ;
+         int               retries = 0   ;
   
   if (!done)
     {
@@ -303,33 +246,27 @@ pubstruct_db_open(char *server,ps_action_t action)
       }
   }
   db->clu.context = context;
-  if(!CTLibInit(&db->clu,db->srv,NULL,NULL,NULL,0,NULL))
-    goto errexit;
-  
-  if(context==NULL)
-    {
-      CS_INT to = 60;
-      context=db->clu.context;
-      ct_config(context,CS_SET,CS_TIMEOUT,(CS_VOID*)&to,CS_UNUSED,NULL);
-    }
-  
-  if(action != PS_READ)
-    if(!CTLibSimpleSQL_Ex(db->clu.ctcmd,"begin transaction"))
-      goto errexit;
   db->action = action;
-  return db;
-errexit:
+
+  while(retries++<20)
+    {
+      if(!CTLibInit(&db->clu,db->srv,NULL,NULL,NULL,0,NULL))
+        {
+          sleep(60);
+          continue;
+        }
+      if(context==NULL)
+        {
+          CS_INT to = 60;
+          context=db->clu.context;
+          ct_config(context,CS_SET,CS_TIMEOUT,(CS_VOID*)&to,CS_UNUSED,NULL);
+        }
+      return db;
+    }
   pubstruct_db_close(db);
   db = NULL;
   ErrPostEx(SEV_ERROR,  ERR_SYBASE, 0,"Connection to %s - failed",server);
   ErrShow();
-  retries++;
-  if (retries < 20)
-    {
-      sleep(60);
-      db = pubstruct_db_open(server,action);
-    }
-  retries--;
   return db;
 }
 
@@ -349,8 +286,8 @@ dbio_read(Pointer ptr, CharPtr obuf, Int4 count)
 
   if (db->eos)
     return 0;
-  RRC(ct_get_data(cmd, 1,(CS_TEXT*)obuf,(CS_INT)count, &bytes));
-  typecode(retcode,2); /* print result code in debug mode */
+  CTRUN_POST (ct_get_data(cmd, 1,(CS_TEXT*)obuf,(CS_INT)count, &bytes));
+  CTRUN_TYPECODE (retcode,2); /* print result code in debug mode */
   if (bytes < count )
     db->eos = 1 ;
   return bytes;
@@ -396,8 +333,7 @@ dbio_write(Pointer ptr, CharPtr buf, Int4 count)
 
 /*****************************************************************************
 *
-*   AsnIoPtr AsnIo_PubStruct_Close (file_name, mode)
-*
+* parse asn blob = extract mmdb_id, pdb_id, create_date & pubstruct_parseasn(char *postupdate_cmd, Int4 acc, char* buf, int buflen)
 *****************************************************************************/
 
 static int
@@ -505,137 +441,12 @@ err:
   return 0;
 }
 
-static Int4 LIBCALLBACK
-pubstruct_closeasn(Pointer ptr,int commit)
-{
-  DB_stream_t *db = (DB_stream_t *)ptr;
-  CS_COMMAND PNTR cmd = db->clu.ctcmd;
-
-  switch(db->action)
-    { 
-    case PS_READ:
-      break;
-    case PS_STORE:
-      return commit;
-    case PS_NEW:
-    case PS_UPDATE:
-      {
-        CS_INT          count,restype;
-        Int4            status;
-        CS_RETCODE      retcode;
-        struct ps_chunk *piece;
-        Int4            expectation;
-        
-        char            postupdate_cmd[1024];
-        CS_INT          mmdb;
-        CS_CHAR         pdb[4];
-        
-        if(!commit)
-          goto errexit;
-
-        postupdate_cmd[0]=0;
-        if (db->action == PS_NEW)
-          if(pubstruct_parseasn(postupdate_cmd,db->acc,db->top->data,db->top->len)==0)
-            goto errexit;
-
-        db->action = PS_STORE;
-
-        assert(strlen(postupdate_cmd)< sizeof(postupdate_cmd));
-        {
-          struct ps_chunk *top; 
-          fci_t            compr;
-          int              cache_size       = 1024;
-          
-          top = db->top;
-          db->top = db->bottom = NULL;
-          
-          expectation=db->iodesc.total_txtlen;
-          db->iodesc.total_txtlen = 0;
-          
-          compr = compressor_open(dbio_open(db),30*1024,0);
-          
-          cache_size = 1024;
-          while (top)
-            {
-              Int4   len;
-              Int4   len1;
-              piece = top ;
-              expectation -= piece->len;
-              if ( expectation<0 )
-                goto errexit;
-              
-              for (piece->start = 0; piece->start < piece->len; piece->start += len1)
-                {
-                  len1 = piece->len - piece->start;
-                  if (len1>cache_size)
-                    len1 = cache_size;
-                  len = compr->proc_buf(compr->data, (CharPtr)piece->data+piece->start,len1);
-                  if (len!= len1)
-                    {
-                      compr->close(compr->data,0);
-		      MemFree(compr);
-                      goto errexit;
-                    }
-                  cache_size *=2;
-                  if (cache_size > piece->len)
-                    cache_size = piece->len;
-                }
-              top = top->next;
-              MemFree(piece->data);
-              MemFree(piece);
-            }
-          compr->close(compr->data,1);
-	  MemFree(compr);
-        }
-        /* flush data to DB */
-        expectation=db->iodesc.total_txtlen;
-        RC ( ct_data_info(cmd,CS_SET,CS_UNUSED,&db->iodesc) );
-        
-        while (db->top)
-          {
-            piece = db->top ;
-            expectation -= piece->len;
-            if ( expectation<0 )
-              goto errexit;
-            db->top = db->top->next;
-            RC(ct_send_data(cmd, (CS_VOID*)piece->data,(CS_INT)piece->len));
-            MemFree(piece->data);
-            MemFree(piece);
-          }
-        RC ( ct_send(cmd) );
-        RC ( ct_results(cmd,&restype));
-        if (restype == CS_CMD_FAIL)
-          goto errexit;
-        assert(restype == CS_PARAM_RESULT);
-        RC (ct_cancel(NULL,cmd, CS_CANCEL_ALL));
-        if (strlen(postupdate_cmd)>0)
-          if(!CTLibSimpleSQL_Ex(cmd,postupdate_cmd))
-            goto errexit;
-        if(!CTLibSimpleSQL_Ex(cmd,"commit transaction"))
-          goto errexit;
-        break;
-      default:
-        ErrPostEx(SEV_FATAL, 0, 0,"Internal error at %s:%d: action = %d",
-                  __FILE__,__LINE__,db->action);
-      }
-    }
-  pubstruct_db_close(db);
-  return 1;
-  
-errexit:
-  ErrPostEx(SEV_FATAL, 0, 0,"PubStruct update unsuccessfull");
-  CTLibSimpleSQL_Ex(cmd,"roolback transaction");
-  pubstruct_db_close(db);
-  return 0;
-}
-
 /*****************************************************************************
-*****************************************************************************/
-static AsnIoPtr LIBCALL
-pubstruct_openasn (DB_stream_t *db, CS_INT *accp,int *expectation,int mmdb_id)
+ *
+ ****************************************************************************/
+static int
+pubstruct_openblob (DB_stream_t *db, int mmdb_id)
 {
-  AsnIoPtr        aip     = NULL;
-  
   CS_COMMAND PNTR cmd;
   CS_INT          count,restype;
   Int4            status;
@@ -643,31 +454,31 @@ pubstruct_openasn (DB_stream_t *db, CS_INT *accp,int *expectation,int mmdb_id)
 
   char            buf[1024];
 
-  if (accp)
+  if (db->acc)
     {
-      assert(*accp> 0);
-      assert (!db->open_server);
-      db->acc = *accp;
+      assert(db->acc> 0);
       if (db->action == PS_READ)
         sprintf(buf,"exec id_get_asn 0,%d,10,0,0 ",(int)db->acc);
       else
-        sprintf(buf,"select blob from Struct where acc = %d",(int)db->acc);
+        {
+          assert (!db->open_server);
+          sprintf(buf,"select blob from Struct where acc = %d",(int)db->acc);
+        }
     }
   else
     {
       assert (mmdb_id > 0);
       assert (db->action == PS_READ);
-      db->acc = 0;
       sprintf(buf,"exec id_get_asn %d,0,10,0,0 ",mmdb_id);
     }
   cmd = db->clu.ctcmd;
 #ifdef DEBUG_MODE
   ErrPostEx(SEV_INFO,  ERR_SYBASE, 0,"execute(%s)",buf);
 #endif
-  RC ( ct_command(cmd,CS_LANG_CMD,(Pointer)buf,CS_NULLTERM,CS_UNUSED) );
-  RC ( ct_send(cmd) );
-  RC ( ct_results(cmd,&restype));
-  typeres(restype);
+  CTRUN ( ct_command(cmd,CS_LANG_CMD,(Pointer)buf,CS_NULLTERM,CS_UNUSED) );
+  CTRUN ( ct_send(cmd) );
+  CTRUN ( ct_results(cmd,&restype));
+  CTlib_TYPERES(restype);
 
   /* skip 'exec' status line */
   if (db->action == PS_READ)
@@ -687,27 +498,219 @@ pubstruct_openasn (DB_stream_t *db, CS_INT *accp,int *expectation,int mmdb_id)
             }
           if (restype == CS_STATUS_RESULT)
             goto errexit;
-          ct_cancel(NULL,db->clu.ctcmd, CS_CANCEL_CURRENT);
-          RC ( ct_results(cmd,&restype));
-          typeres(restype);
+          CTRUN1( ct_cancel(NULL,db->clu.ctcmd, CS_CANCEL_CURRENT),0);
+          CTRUN1 ( ct_results(cmd,&restype),0);
+          CTlib_TYPERES(restype);
         }
     }
 loopexit:
 
   /* we are ready to read the blob */
   assert(restype == CS_ROW_RESULT || restype == CS_PARAM_RESULT);
-  RC ( ct_fetch(cmd,CS_UNUSED,CS_UNUSED,CS_UNUSED,&count)) ;
+  CTRUN ( ct_fetch(cmd,CS_UNUSED,CS_UNUSED,CS_UNUSED,&count)) ;
 
-  retcode = ct_get_data(cmd,1,buf,(CS_INT)0,NULL);
-  if(!typecode(retcode,0))
+  CTRUN_POST (ct_get_data(cmd,1,buf,(CS_INT)0,NULL));
+  if(!CTRUN_TYPECODE (retcode,0))
     goto errexit;
 
-  RC ( ct_data_info(cmd,CS_GET,1,&db->iodesc) );
+  CTRUN ( ct_data_info(cmd,CS_GET,1,&db->iodesc) );
 
+  if ( db->action != PS_READ ) /* write case */
+    {
+      do
+        {
+          CTRUN1( ct_cancel(NULL,db->clu.ctcmd, CS_CANCEL_CURRENT),0);
+          CTRUN1( ct_results(db->clu.ctcmd,&restype),0);
+          CTlib_TYPERES(restype);
+        }
+      while ( retcode == CS_SUCCEED );
+    }
+  return 1;
+ errexit:
+  pubstruct_db_close(db);
+  return 0;
+}
+
+static Int4 LIBCALLBACK pubstruct_closeasn(Pointer ptr,int commit);
+
+/*
+ * comress blob - stored in db->top...db->bottom chain
+ */
+
+static int
+pack_blob(DB_stream_t    *db)
+{
+  struct ps_chunk *top; 
+  fci_t            compr;
+  int              cache_size       = 1024;
+  Int4             expectation;
+  struct ps_chunk *piece;
+          
+  top = db->top;
+  db->top = db->bottom = NULL;
+  expectation=db->iodesc.total_txtlen;
+  db->iodesc.total_txtlen = 0;
+          
+  compr = compressor_open(dbio_open(db),30*1024,0);
+          
+  while (top)
+    {
+      Int4   len;
+      Int4   len1;
+      piece = top ;
+      expectation -= piece->len;
+      if ( expectation<0 )
+        goto errexit;
+              
+      for (piece->start = 0; piece->start < piece->len; piece->start += len1)
+        {
+          len1 = piece->len - piece->start;
+          if (len1>cache_size)
+            len1 = cache_size;
+          len = compr->proc_buf(compr->data, (CharPtr)piece->data+piece->start,len1);
+          if (len!= len1)
+            {
+              compr->close(compr->data,0);
+              MemFree(compr);
+              goto errexit;
+            }
+          cache_size *=2;
+          if (cache_size > piece->len)
+            cache_size = piece->len;
+        }
+      top = top->next;
+      MemFree(piece->data);
+      MemFree(piece);
+    }
+  compr->close(compr->data,1);
+  MemFree(compr);
+  return 1;
+ errexit:
+  return 0;
+}
+
+static int
+store_blob(DB_stream_t    *db)
+{
+  CS_INT           count,restype;
+  CS_RETCODE       retcode;
+  struct ps_chunk *piece;
+  Int4             expectation;
+  Int4             expectationR;
+  CS_COMMAND PNTR  cmd = db->clu.ctcmd;
+  int attempt=0;
+
+  expectationR=expectation=db->iodesc.total_txtlen;
+ retry_trans:
+  if(!CTLibSimpleSQL_Ex(cmd,"begin transaction"))
+    /* looks like either handler, connection or server died */
+    return 0; /*come backj and retry the whole process */
+  if(!pubstruct_openblob (db, 0))
+    goto errexit;
+  db->iodesc.total_txtlen = expectation = expectationR ;
+  CTRUN ( ct_command(cmd,CS_SEND_DATA_CMD,NULL,CS_UNUSED,CS_COLUMN_DATA) );
+  CTRUN ( ct_data_info(cmd,CS_SET,CS_UNUSED,&db->iodesc) );
+  
+  for(piece = db->top ;piece ; piece = piece->next)
+    {
+      expectation -= piece->len;
+      if ( expectation<0 )
+        goto errexit;
+      CTRUN(ct_send_data(cmd, (CS_VOID*)piece->data,(CS_INT)piece->len));
+    }
+  CTRUN ( ct_send(cmd) );
+  CTRUN ( ct_results(cmd,&restype));
+  if (restype == CS_CMD_FAIL)
+    goto errexit;
+  assert(restype == CS_PARAM_RESULT);
+  CTRUN (ct_cancel(NULL,cmd, CS_CANCEL_ALL));
+  if(!CTLibSimpleSQL_Ex(cmd,"commit transaction"))
+    goto errexit;
+  /* free space */
+  while(db->top)
+    {
+      piece = db->top;
+      db->top = piece->next;
+      MemFree(piece->data);
+      MemFree(piece);
+    }
+  return 1;
+ errexit:
+  CTLibSimpleSQL_Ex(cmd,"rollback transaction");
+  if (attempt++ <20)
+    {
+      sleep(60);
+      goto retry_trans;
+    }
+  return 0;
+}
+
+static Int4 LIBCALLBACK
+pubstruct_closeasn(Pointer ptr,int commit)
+{
+  DB_stream_t    *db = (DB_stream_t *)ptr;
+
+  switch(db->action)
+    { 
+    case PS_READ:
+      break;
+    case PS_STORE:
+      return commit;
+    case PS_NEW:
+    case PS_UPDATE:
+      {
+        char            postupdate_cmd[1024];
+        
+        if(!commit)                 goto errexit;
+
+        postupdate_cmd[0]=0;
+        if (db->action == PS_NEW)
+          if(pubstruct_parseasn(postupdate_cmd,db->acc,db->top->data,db->top->len)==0)
+            goto errexit;
+        assert(strlen(postupdate_cmd)< sizeof(postupdate_cmd));
+
+        db->action = PS_STORE;
+
+        if(!pack_blob(db))          goto errexit;
+        
+        if(!store_blob(db))         goto errexit;
+        
+        if (strlen(postupdate_cmd)>0)
+          {
+            int retries=0;
+            /* we should expect transaction boundaries inside */
+            while(retries++<20 &&
+                  !CTLibSimpleSQL_Ex(db->clu.ctcmd,postupdate_cmd))
+              sleep(10);
+            if(retries>=20)
+              goto errexit;
+          }
+        break;
+      default:
+        ErrPostEx(SEV_FATAL, 0, 0,"Internal error at %s:%d: action = %d",
+                  __FILE__,__LINE__,db->action);
+      }
+    }
+  pubstruct_db_close(db);
+  return 1;
+  
+ errexit:
+  pubstruct_db_close(db);
+  ErrPostEx(SEV_FATAL, 0, 0,"PubStruct update unsuccessfull");
+  return 0;
+}
+
+/*****************************************************************************
+ *
+ ****************************************************************************/
+
+static AsnIoPtr
+pubstruct_openasnio(DB_stream_t *db)
+{
+  AsnIoPtr        aip     = NULL;
+  
   if ( db->action == PS_READ )
     {
-      if (expectation)
-        *expectation = db->iodesc.total_txtlen;
       aip = asnio2fci_open(1,compressor_open(cacher_open(dbio_open(db),100*1024,1
                                                          ),100*1024,1
                                              )
@@ -715,23 +718,35 @@ loopexit:
     }
   else /* write case */
     {
-      do  { ct_cancel(NULL,db->clu.ctcmd, CS_CANCEL_CURRENT); }
-      while ( ct_results(db->clu.ctcmd,&restype) == CS_SUCCEED);
-      RC ( ct_command(cmd,CS_SEND_DATA_CMD,NULL,CS_UNUSED,CS_COLUMN_DATA) );
-      if (expectation)
-        {
-          assert(*expectation > 0 );
-          db->iodesc.total_txtlen = *expectation;
-          RC ( ct_data_info(cmd,CS_SET,CS_UNUSED,&db->iodesc) );
-        }
-      else
-        db->iodesc.total_txtlen = 0;
+      db->iodesc.total_txtlen = 0;
       aip = asnio2fci_open(0,dbio_open(db));
     }
   return aip;
-errexit:
-  pubstruct_db_close(db);
-  return NULL;
+}
+
+
+/*****************************************************************************
+ *
+ ****************************************************************************/
+
+static AsnIoPtr
+pubstruct_openasn (DB_stream_t *db, CS_INT *accp,int mmdb_id)
+{
+  db->acc = 0;
+  if (accp)
+    {
+      assert(*accp> 0);
+      db->acc = *accp;
+    }
+  if ( db->action == PS_READ )
+    {
+      if (!pubstruct_openblob(db,mmdb_id))
+        {
+          pubstruct_db_close(db);
+          return NULL;
+        }
+    }
+  return pubstruct_openasnio(db);
 }
 
 /**
@@ -760,13 +775,20 @@ pubstruct_newasn (DB_stream_t *db, int state, Int4 *accp)
   char buffer[1024];
   CS_INT acc;
 
+  CTLibSimpleSQL_Ex(cmd,"begin transaction");
+  
   if (!accp)
     accp = &acc;
   sprintf(buffer,"exec new_struct %d",state);
   
-  if (CTlibSingleValueSelect(cmd,buffer,accp,sizeof(Int4)))
-    return pubstruct_openasn (db, accp,NULL,0) ;  /* SUCCESSFULL exit */
+  if (!CTlibSingleValueSelect(cmd,buffer,accp,sizeof(Int4)))
+    goto FATAL;
+  /* unlock parallel processing */
+  CTLibSimpleSQL_Ex(cmd,"commit transaction");
+  
+  return pubstruct_openasn (db, accp,0) ;  /* SUCCESSFULL exit */
 
+FATAL:
   /* FAILURE exit */
   ErrPostEx(SEV_FATAL, 0, 0,"PubStruct insert unsuccessfull");
   CTLibSimpleSQL_Ex(cmd,"roolback transaction");
@@ -792,7 +814,7 @@ PubStruct_readasn    (char *server,Int4 acc)
 {
   DB_stream_t     *db = pubstruct_db_open(server,PS_READ);
   if (db)
-    return pubstruct_openasn (db, &acc,NULL,0);
+    return pubstruct_openasn (db, &acc,0);
   return NULL;
 }
 
@@ -805,7 +827,7 @@ PubStruct_viewasn    (char *server,Int4 mmdbid)
 {
   DB_stream_t     *db = pubstruct_db_open(server,PS_READ);
   if (db)
-    return pubstruct_openasn (db, NULL,NULL,mmdbid);
+    return pubstruct_openasn (db, NULL,mmdbid);
   return NULL;
 }
 
@@ -827,7 +849,7 @@ PubStruct_updateasn  (char *server,Int4 acc, int newstate)
   cmd = db->clu.ctcmd;
   sprintf(buf,"exec push_struct_by_ticket %d,%d",acc,newstate);
   if(CTLibSimpleSQL_Ex(cmd,buf))
-    return pubstruct_openasn (db, &acc,NULL,0) ;
+    return pubstruct_openasn (db, &acc,0) ;
 
   /* FAIL way */
   pubstruct_db_close(db);
@@ -1043,29 +1065,29 @@ PubStruct_lookup(char *server,Int4 mmdb,int state)
 #ifdef DEBUG_MODE
   ErrPostEx(SEV_INFO,  ERR_SYBASE, 0,"execute(%s)",buf);
 #endif
-  RC ( ct_command(cmd,CS_LANG_CMD,(Pointer)buf,CS_NULLTERM,CS_UNUSED) );
-  RC ( ct_send(cmd) );
-  RC ( ct_results(cmd,&restype));
+  CTRUN ( ct_command(cmd,CS_LANG_CMD,(Pointer)buf,CS_NULLTERM,CS_UNUSED) );
+  CTRUN ( ct_send(cmd) );
+  CTRUN ( ct_results(cmd,&restype));
 
   /* skip 'exec' status line */
-  typeres(restype);
+  CTlib_TYPERES(restype);
   if (restype == CS_STATUS_RESULT)
     {
       ct_cancel(NULL,db->clu.ctcmd, CS_CANCEL_CURRENT);
-      RC ( ct_results(cmd,&restype));
-      typeres(restype);
+      CTRUN ( ct_results(cmd,&restype));
+      CTlib_TYPERES(restype);
     }
 
   if (!(restype == CS_ROW_RESULT || restype == CS_PARAM_RESULT))
     goto errexit;
   count = 0;
-  RC1 ( ct_fetch(cmd,CS_UNUSED,CS_UNUSED,CS_UNUSED,&count),2) ;
+  CTRUN1 ( ct_fetch(cmd,CS_UNUSED,CS_UNUSED,CS_UNUSED,&count),2) ;
   acc = 0;
   if (count==1)
     {    
       retcode = ct_get_data(cmd,1,buf,(CS_INT)sizeof(buf),NULL);
       retcode = ct_get_data(cmd,2,&acc,(CS_INT)sizeof(acc),NULL);
-      if(!typecode(retcode,0))
+      if(!CTRUN_TYPECODE (retcode,0))
         goto errexit;
     }
   pubstruct_db_close(db);

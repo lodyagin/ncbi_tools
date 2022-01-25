@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.76 $
+* $Revision: 6.87 $
 *
 * File Description: 
 *
@@ -93,26 +93,6 @@ static void salutil_seqalign_write (SeqAlignPtr salp, CharPtr name)
                         AsnIoClose(aip);
         }
   }
-}
-
-static Boolean salutil_seqentry_write (SeqEntryPtr sep, CharPtr path)
-{
-  AsnIoPtr     aip;
-  AsnTypePtr   atp;
-  AsnModulePtr amp;
-
-  if ( sep == NULL ) {
-    return 0;
-  }
-  amp = AsnAllModPtr ();
-  atp = AsnTypeFind (amp,"SeqEntry");
-  if ((aip = AsnIoOpen (path,"w")) == NULL) {
-    return 0;
-  }
-  if ( ! SeqEntryAsnWrite ( sep, aip, atp ) ) {
-  }
-  aip = AsnIoClose (aip);
-  return 1;
 }
 
 /****************************************************
@@ -190,7 +170,7 @@ extern CharPtr ReadBufferFromSap (CharPtr str, CharPtr buffer, SeqAlignPtr salp,
          ErrPostEx (SEV_ERROR, 0, 0, "fail in ReadBufferFromSap [1]\n");
          return NULL;
   }
-  if ( salp->segtype != 4 ) {
+  if ( salp->segtype != COMPSEG ) {
          ErrPostEx (SEV_ERROR, 0, 0, "fatal fail in ReadBufferFromSap"); 
          return NULL; 
   }
@@ -462,24 +442,6 @@ extern Boolean stringhasnocharplus (CharPtr str)
   return TRUE;
 }  
 
-extern Boolean stringhasnotext (CharPtr str)
- 
-{
-  Char  ch;
- 
-  if (str != NULL) {
-    ch = *str;
-    while (ch != '\0') {
-      if (ch > ' ' && ch <= '~') {
-        return FALSE;
-      }
-      str++;
-      ch = *str;
-    }
-  }
-  return TRUE;
-}  
-
 extern CharPtr purge_string (CharPtr *st)
 {
   CharPtr str;
@@ -625,7 +587,10 @@ extern CharPtr load_seq_data (SeqIdPtr sip, Int4 from, Int4 to, Boolean is_prot,
      if (to < 0 || to > bsp->length -1)
         to = bsp->length -1;
      BioseqUnlock (bsp);
-     slp = SeqLocIntNew (from, to, Seq_strand_plus, sip);
+     if (from < to)
+        slp = SeqLocIntNew (from, to, Seq_strand_plus, sip);
+     else 
+        slp = SeqLocIntNew (to, from, Seq_strand_minus, sip);
      if (is_prot)
         spp = SeqPortNewByLoc (slp, Seq_code_ncbieaa);
      else
@@ -699,7 +664,8 @@ extern SeqEntryPtr StringToSeqEntry (CharPtr str, SeqIdPtr sip, Int4 length_alig
                        BSPutByte ( bs, (Int2) ch );
                        bsp->length++;
                 }
-         } else {
+         } 
+         else {
                 if ( StringChr("JO-.", ch) == NULL ) { 
                        BSPutByte ( bs, (Int2) ch );
                        bsp->length++;
@@ -1068,26 +1034,28 @@ extern Uint1 StrandFromAlignNode (ValNodePtr anp_lst, Uint2 entityID, Uint2 item
 ***    SeqIdDupList : duplicate a list of SeqIdPtr
 ***
 **********************************************************/
-extern Boolean matching_seqid (SeqIdPtr sip1)
+extern CharPtr matching_seqid (SeqIdPtr sip1)
 {
   SeqIdPtr siptmp1, siptmp2;
-  Boolean first = TRUE;
-  Char    strLog[120];
+  Boolean  first = TRUE;
+  Char     strLog[120];
+  CharPtr  str;
 
   for (siptmp1 = sip1; siptmp1!=NULL; siptmp1=siptmp1->next) {
     first = TRUE;
     for (siptmp2 = sip1; siptmp2!=NULL; siptmp2=siptmp2->next) {
        if (SeqIdForSameBioseq(siptmp1, siptmp2))  {
-          if (first) first = FALSE;
+          if (first) 
+             first = FALSE;
           else {
              SeqIdWrite(siptmp1, strLog, PRINTID_FASTA_LONG, 120);
-             SeqIdWrite(siptmp2, strLog, PRINTID_FASTA_LONG, 120);
-             return TRUE;
+             str = StringSave(strLog);
+             return str;
           }
        }
     }
   }
-  return FALSE;
+  return NULL;
 }
 
 extern CharPtr check_seqid (Uint2 choice, CharPtr ptr)
@@ -1128,12 +1096,11 @@ extern SeqIdPtr AddSeqId (SeqIdPtr *sip_head, SeqIdPtr sip)
      while (sip_tmp->next != NULL) 
         sip_tmp = sip_tmp->next; 
      sip_tmp->next = sip_copy;
-     return (*sip_head);
   }  
   else {
      *sip_head = sip_copy;
   }
-  return sip_copy;
+  return (*sip_head);
 
 }
 
@@ -1243,15 +1210,21 @@ extern Int2 position_inIdlist (SeqIdPtr a, SeqIdPtr b)
 /******************************************************************/
 extern SeqIdPtr SeqIdReplaceID (SeqIdPtr head, SeqIdPtr pre, SeqIdPtr sip, SeqIdPtr next)
 {
+  SeqIdPtr tmp;
+
   if (pre == NULL)
   {
      head = SeqIdDup(sip);
      head->next = next;
      return head;
   }
+  tmp = pre->next;
+  pre->next = NULL;
+  tmp->next = NULL;
+  SeqIdFree (tmp);
   pre->next = SeqIdDup(sip);
   pre->next->next = next;
-  return pre->next;
+  return head;
 }
 
 typedef struct ccid {
@@ -1322,16 +1295,15 @@ static void FindSeqEntryForSeqIdCallback (SeqEntryPtr sep, Pointer mydata,
                                           Int4 index, Int2 indent)
 {
   BioseqPtr          bsp;
-  SeqIdPtr           sip;
   CcIdPtr            cip;
 
   if (sep != NULL && sep->data.ptrvalue && mydata != NULL) {
      cip = (CcIdPtr)mydata;
      if (cip->sep==NULL && IS_Bioseq(sep)) {
         bsp = (BioseqPtr) sep->data.ptrvalue;
-        if (bsp!=NULL && ISA_na (bsp->mol)) {
-           sip = SeqIdFindBest(bsp->id, 0);
-           if (SeqIdForSameBioseq(cip->sip, sip)) {
+        if (bsp!=NULL && ISA_na (bsp->mol)) 
+        {
+           if (SeqIdForSameBioseq(cip->sip, bsp->id)) {
               cip->sep = sep;
               cip->bsp = bsp;
            }
@@ -1526,8 +1498,6 @@ static void ListSeqEntryCallback (SeqEntryPtr sep, Pointer mydata,
 {
   BioseqPtr          bsp;
   SeqIdPtr           sip;
-  ValNodePtr         vnp,
-                     newvnp, tmp;
   SeqLocPtr          slp;
   CcId3Ptr           ccp;
 
@@ -2728,6 +2698,9 @@ extern Int4 SeqCoordToAlignCoord (Int4 position, SeqIdPtr sip, SeqAlignPtr salp,
 
   if (is_end == NO_RESIDUE)
      return position;
+  if (position < 0)
+     return position;
+
   dsp = (CompSegPtr) salp->segs;
   if (dsp == NULL) {
      return GAP_RESIDUE;
@@ -2766,12 +2739,17 @@ extern Int4 SeqCoordToAlignCoord (Int4 position, SeqIdPtr sip, SeqAlignPtr salp,
            lensplus = abs (position - from - seqlens);
         seen = TRUE;
      }
-     else if (*dspstart && position <= stop && is_end == APPEND_RESIDUE) {
-        if (dspstrand ==Seq_strand_minus)
-           lensplus = abs (from + seqlens - position);
-        else
-           lensplus = abs (position - from - seqlens);
-        seen = TRUE;
+     else if (*dspstart && position <= stop) {
+/**
+        if (is_end == APPEND_RESIDUE ) 
+**/
+        {
+           if (dspstrand ==Seq_strand_minus)
+              lensplus = abs (from + seqlens - position);
+           else
+              lensplus = abs (position - from - seqlens);
+           seen = TRUE;
+        }
      }
      else if ( numseg == dsp->numseg ) 
      {
@@ -2798,8 +2776,12 @@ extern Int4 SeqCoordToAlignCoord (Int4 position, SeqIdPtr sip, SeqAlignPtr salp,
      numseg++;
   }
   if ( !seen ) {
+     if (!(*dspstart))    /***** if after sequence 2 mais seq1 last segment***/
+         return seqlens; 
      return GAP_RESIDUE;
   }
+  if (position == APPEND_RESIDUE)
+     return position;
   position = sumlens + lensplus + intersalpwidth*inter_salp;
   return position;
 }
@@ -2840,6 +2822,9 @@ extern Int4 AlignCoordToSeqCoord (Int4 position, SeqIdPtr sip, SeqAlignPtr salp,
   dspstart = dsp->starts + index;
   dsplens = dsp->lens;
   if (dspstart == NULL || dsplens == NULL ) {
+     return (Int4)GAP_RESIDUE;
+  }
+  if (!(*dspstart) && (position < *dsplens)) {
      return (Int4)GAP_RESIDUE;
   }
   if (dsp->strands!=NULL)
@@ -2914,6 +2899,123 @@ extern Int4 AlignCoordToSeqCoord (Int4 position, SeqIdPtr sip, SeqAlignPtr salp,
   }
   return position;
 }
+
+extern Int4 AlignCoordToSeqCoord2 (Int4 position, SeqIdPtr sip, SeqAlignPtr salp,ValNodePtr sqloc_list, Int2 intersalpwidth)
+{
+  CompSegPtr  dsp;
+  BoolPtr     dspstart;
+  Int4Ptr     dsplens;
+  Int4        from;
+  Int4        sumlens = 0;
+  Int4        sumstart = 0;
+  Int4        seqlens = 0;
+  Int2        numseg = 0;
+  Int2        inter_salp = 0;
+  Int2        index;
+  Uint1       dspstrand = Seq_strand_unknown;
+  Boolean     seen = FALSE;
+
+  if (position == APPEND_RESIDUE)
+     return position;
+  dsp = (CompSegPtr) salp->segs;
+  if (dsp == NULL) 
+     return (Int4)GAP_RESIDUE;
+  index = position_inIdlist (sip, dsp->ids);
+  if (index == 0) 
+     return (Int4)GAP_RESIDUE;
+  index -= 1;
+  from = *(dsp->from + index);
+/*
+  if (position <= from) {
+     return from;
+  }
+*/
+  dspstart = dsp->starts + index;
+  dsplens = dsp->lens;
+  if (dspstart == NULL || dsplens == NULL ) {
+     return (Int4)GAP_RESIDUE;
+  }
+  if (!(*dspstart) && (position < *dsplens)) {
+     return (Int4)GAP_RESIDUE;
+  }
+  if (dsp->strands!=NULL)
+     dspstrand = *(dsp->strands + index);
+  numseg = 0;
+  sumlens = 0;
+  for (; dsplens != NULL && numseg < dsp->numseg; dsplens++, numseg++) 
+     sumlens += *dsplens;
+  dsplens = dsp->lens; 
+  if (position >= sumlens) {     
+     position = (Int4)APPEND_RESIDUE;
+/*****
+     sumlens = 0;
+     numseg = 0;
+     for (; dsplens != NULL && numseg < dsp->numseg; dsplens++, numseg++) {
+        if (*dspstart)  sumlens += *dsplens;
+        dspstart += dsp->dim; 
+     }
+    seen = TRUE;
+     if (dspstrand == Seq_strand_minus) {
+        position = from - sumlens;
+     } else {
+        position = from + sumlens;
+     }
+****/
+  }
+  else {
+        sumlens = 0;
+        numseg = 0;
+        while ( !seen && numseg < dsp->numseg ) {
+            numseg++;
+            if (position >=sumlens && position <sumlens +*dsplens ) {
+               if (*dspstart) 
+                  seqlens += abs (position - sumlens);
+               seen = TRUE;
+            }
+            else if ( numseg == dsp->numseg ) 
+            {
+               if ( salp->next == NULL ) break; 
+               else 
+               { 
+                  sumstart += sumlens + *dsplens;
+                  salp = salp->next;
+                  dsp = (CompSegPtr) salp->segs;
+                  from = *(dsp->from + index);
+                  dspstart = dsp->starts + index;
+                  dsplens = dsp->lens;
+                  inter_salp++;
+                  numseg = 0;
+               }
+            }
+            else 
+            {
+               if ( *dspstart ) 
+                  seqlens += *dsplens;
+               sumlens += *dsplens;
+               dspstart += dsp->dim; 
+               dsplens++;
+            }
+        }
+        if (seen) {
+           if (dspstrand == Seq_strand_minus) {
+              position = from - seqlens - sumstart;
+           } else {
+              if (!(*dspstart)) {
+                 position =chkloc (sip, position, sqloc_list, &from);
+                 if (position==0) 
+                    position = (Int4)GAP_RESIDUE;
+              }
+              else
+                 position = from + seqlens - sumstart;
+           }
+     }
+  }
+  if ( !seen ) { 
+     position =chkloc (sip, position, sqloc_list, &from);
+  }
+  return position;
+}
+
 
 extern Boolean GetAlignCoordFromSeqLoc (SeqLocPtr slp, SeqAlignPtr salp, Int4 *start, Int4 *stop)
 {
@@ -3520,8 +3622,8 @@ extern MashPtr MashNew (Boolean is_prot)
      msp->rg1_open =0; 
      msp->rg2_open =0; 
      msp->blast_threshold = 80;
-     msp->choice_blastfilter = 1;
-     msp->splicing = FALSE;
+     msp->choice_blastfilter = 2;      /* 1 */
+     msp->splicing = TRUE;              /*FALSE;*/
      msp->map_align = FALSE;
      return msp;
 }
@@ -3700,7 +3802,7 @@ static SeqAlignPtr try_insert_seqalign (SeqAlignPtr salplst, SeqAlignPtr salp, U
   start2= SeqAlignStart (tmp, 1);
   stop2 = SeqAlignStop (tmp, 1);
   if (choice == 1)
-     goOn = (Boolean) (precede(stopi, start, st1) && precede(stopi2, start2, st2));
+     goOn =(Boolean) (precede(stopi, start, st1) && precede(stopi2, start2, st2));
   else if (choice == 2)
      goOn = (Boolean) (precede(stopi, start, st1) && precede(starti2, start2, st2) && precede(stopi2, stop2, st2));
   else if (choice == 3)
@@ -3780,7 +3882,7 @@ static SeqAlignPtr SortBlastHits (SeqAlignPtr salp, Int4 threshold, Uint1 choice
   Nlm_FloatHi evalue;
   Int4        score, 
               number,
-              totalvalmax = (Int4)99999, 
+              totalvalmax = INT4_MAX, 
               valmax;
   Int4        gap_count = 0, 
               gap_count1= 0;
@@ -4097,33 +4199,6 @@ static SeqLocPtr TranslateSeqLoc (SeqLocPtr slp, Int2 genCode, Uint1 *frame)
 ***                    should select several if any
 ***
 **************************************************************/
-static Boolean checkalignement (SeqAlignPtr salp)
-{
-  DenseSegPtr dsp;
-  Int2        j;
-  Int4Ptr    startp, start2p, start1p;
-
-  if (salp!=NULL) {
-     dsp = (DenseSegPtr) salp->segs;
-     if (dsp->starts != NULL) {
-        startp = dsp->starts;
-        for (j=0; j<dsp->numseg-1; j++) {
-           start2p = (startp+dsp->dim+1);
-           if (*startp == -1 && *start2p == -1)
-              break;
-           start1p = startp+1;
-           start2p = (startp+dsp->dim);
-           if (*start1p == -1 && *start2p == -1)
-              break;
-           startp += dsp->dim;
-        } 
-        if (j==dsp->numseg-1)
-           return TRUE;
-     }
-  }
-  return FALSE;
-}
-
 static SeqAlignPtr AlignExtreme5 (SeqAlignPtr salp, MashPtr msp, Int4 slpstart1, Int4 start1, Int4 slpstart2, Int4 slpstop2, Int4 start2, SeqIdPtr sip1, SeqIdPtr sip2, Uint1 strand1, Uint1 strand2)
 {
   SeqAlignPtr salp2;
@@ -4252,7 +4327,7 @@ static SeqAlignPtr align_extrem (SeqAlignPtr salp, SeqLocPtr slp1, SeqLocPtr slp
               slpstop1, slpstop2;
   Uint1       strand1, strand2;
   
-  salp = check_salp_forstrand (salp);
+  CleanStrandsSeqAlign (salp);
   sip1 = SeqLocId(slp1);
   sip2 = SeqLocId(slp2);
   strand1 = SeqAlignStrand (salp, 0);
@@ -4281,12 +4356,92 @@ static SeqAlignPtr align_extrem (SeqAlignPtr salp, SeqLocPtr slp1, SeqLocPtr slp
   return salp;
 }
 
+/******************************************************
 static Boolean is_intron (CharPtr str, Int4 len)
 {
   if (str[0]=='G' && str[1]=='T' && str[len-2]=='A' && str[len-1]=='G')
      return TRUE;
   return FALSE;
 }
+*********************************************************/
+static FloatHi is_donor (CharPtr str, Int4 len)
+{
+  FloatHi one[4]={0.35, 0.35, 0.19, 0.11};
+  FloatHi two[4]={0.59, 0.13, 0.14, 0.14};
+  FloatHi three[4]={0.08, 0.02, 0.82, 0.08};
+  FloatHi four[4]={0.01, 0.01, 1.00, 0.01};
+  FloatHi five[4]={0.01, 0.01, 0.01, 1.00};
+  FloatHi six[4]={0.51, 0.03, 0.43, 0.03};
+  FloatHi seven[4]={0.71, 0.08, 0.12, 0.09};
+  FloatHi eight[4]={0.06, 0.05, 0.84, 0.05};
+  FloatHi nine[4]={0.15, 0.16, 0.17, 0.52};
+  FloatHi score =1.000;
+  Int4   i;
+  Int4  PNTR num=NULL;
+
+  if ((num = MemNew(len*sizeof(Int4)))==NULL) {
+    /* memory error */
+    return(-1);
+  }
+
+  for (i = 0; i <= len; i++){
+    if (str[i]=='A')
+      num[i] = 0;
+    if (str[i]=='C')
+      num[i] = 1;
+    if (str[i]=='G')
+      num[i] = 2;
+    if (str[i]=='T')
+      num[i] = 3;
+  }
+  score *= one[num[0]];
+  score *= two[num[1]];
+  score *= three[num[2]];
+  score *= four[num[3]];
+  score *= five[num[4]];
+  score *= six[num[5]];
+  score *= seven[num[6]];
+  score *= eight[num[7]];
+  score *= nine[num[8]];
+
+  MemFree(num);
+  num=NULL;
+
+  return score;
+}
+
+static Int4 getSplicePos (CharPtr str)
+{
+  Int4     offset = -1;
+  Int4     xcursor = 0;
+  Int4     c;
+  FloatHi  topscore = -FLT_MAX,
+           score;
+  Char     tmpstr[9];
+  Int4     length;
+
+  if (str == NULL)
+    return -1;
+  length = MIN(StringLen(str)/2-10, 10);
+  while (xcursor <= length)
+  {
+      for (c = 0; c < 9; c++)
+      {
+        tmpstr[c] = str[xcursor+c];
+      }
+      if ((score=is_donor(tmpstr, 8)) > topscore)
+      {
+        topscore = score;
+        offset = xcursor;
+      }
+      xcursor += 1;
+  }
+  if (topscore > 0.000010 && offset >=0)
+    return offset+3;
+  return -1;
+}
+
+
 
 static SeqAlignPtr align_btwhits (SeqAlignPtr salp, SeqIdPtr sip1, SeqIdPtr sip2, MashPtr msp)
 {
@@ -4298,7 +4453,7 @@ static SeqAlignPtr align_btwhits (SeqAlignPtr salp, SeqIdPtr sip1, SeqIdPtr sip2
   Int4        len;
   Int4        offset;
   Uint1       st1, st2;
-  CharPtr     tmpstr, str;
+  CharPtr     str;
   Boolean     search_intron = FALSE;
 
   if (salp == NULL) return NULL;
@@ -4316,6 +4471,7 @@ static SeqAlignPtr align_btwhits (SeqAlignPtr salp, SeqIdPtr sip1, SeqIdPtr sip2
      y2 = SeqAlignStart (tmp, 1);
      st1= SeqAlignStrand (newtmp, 0);
      st2= SeqAlignStrand (newtmp, 1);
+
      if (x1 + 1 == y1) {
         if (y2 == x2 + 1)
         {
@@ -4323,40 +4479,41 @@ static SeqAlignPtr align_btwhits (SeqAlignPtr salp, SeqIdPtr sip1, SeqIdPtr sip2
            tmp = tmp->next;
         }
         else if (x2 >= y2) {
-           SeqAlignTrunc (newtmp, 0, -(x2-y2+1));
+           SeqAlignTrunc2 (newtmp, 0, -(abs(x2-y2+1)));
         }
         else {
-           y1 -= 1;
-           y2 -= 1;
+           if(st1!=Seq_strand_minus) y1 -= 1; else y1+=1;
+           if(st2!=Seq_strand_minus) y2 -= 1; else y2+=1;
            newtmp = SeqAlignEndExtend (newtmp, -1, -1, y1, y2, -1, -1, x1, x2, st1, st2);
            newtmp = SeqAlignMerge (newtmp, tmp, TRUE);
            tmp = tmp->next;
         }
      }
      else if (x1 >= y1) {
-        SeqAlignTrunc (newtmp, -(x1-y1+1), 0);
+        SeqAlignTrunc2 (newtmp, +(abs(x1-y1+1)), 0);
      }
      else
      {
-        if (y2 == x2 + 1) 
+        if ((st2!=Seq_strand_minus && y2 == x2 + 1) || (st2==Seq_strand_minus && x2 == y2+1))
         {
-           if (search_intron) {
-              str = load_seq_data (sip1, x1+1, y1-1, FALSE, &len);
-              offset = 0; 
-              if ((tmpstr=StringStr(str, "GT"))!=NULL) {
-                 offset = (tmpstr - str);
-              }
-              if (offset>0 && offset<len-1) {
-                 SeqAlignTrunc (newtmp, 0, offset); 
-                 SeqAlignTrunc (tmp, offset, 0);
-              }
-              else if (!is_intron (str, len)) {
-                 SeqAlignTrunc (newtmp, 0, 1); 
-                 SeqAlignTrunc (tmp, 1, 0);
-              } 
-              else {
-                 y1 -= 1;
-                 y2 -= 1;
+           if (search_intron) 
+           {
+              str =load_seq_data(sip1, x1-5, y1+1, FALSE, &len);
+              offset = getSplicePos (str);
+              if (offset>= -1 && offset<len-1) 
+              {
+                 offset -= 6;
+                 if ((offset>=-6 && offset<0) || (offset>0)) 
+                 {
+                    SeqAlignTrunc2 (newtmp, 0, abs(offset));
+                    SeqAlignTrunc2 (tmp, abs(offset), 0);
+                 }
+                 x1 = SeqAlignStop (newtmp, 0);
+                 y1 = SeqAlignStart (tmp, 0);
+                 x2 = SeqAlignStop (newtmp, 1);
+                 y2 = SeqAlignStart (tmp, 1);
+                 if(st1!=Seq_strand_minus) y1 -= 1; else y1+=1;
+                 if(st2!=Seq_strand_minus) y2 -= 1; else y2+=1;
                  newtmp=SeqAlignEndExtend (newtmp,-1,-1,y1, y2, -1, -1, x1, x2, st1, st2);
                  newtmp = SeqAlignMerge (newtmp, tmp, TRUE);
                  tmp = tmp->next;
@@ -4364,19 +4521,25 @@ static SeqAlignPtr align_btwhits (SeqAlignPtr salp, SeqIdPtr sip1, SeqIdPtr sip2
               MemFree (str);
            } 
            else  {
-              y1 -= 1;
-              y2 -= 1;
+              if(st1!=Seq_strand_minus) y1 -= 1; else y1+=1; 
+              if(st2!=Seq_strand_minus) y2 -= 1; else y2+=1; 
               newtmp=SeqAlignEndExtend (newtmp, -1, -1, y1, y2, -1, -1, x1, x2, st1, st2);
               newtmp = SeqAlignMerge (newtmp, tmp, TRUE);
               tmp = tmp->next;
            }
         }
-        else if (x2 >= y2) {
-            SeqAlignTrunc (newtmp, 0, -(x2-y2+1));
+        else if (st2!=Seq_strand_minus && x2 >= y2) {
+            SeqAlignTrunc2 (newtmp, 0, -(abs(x2-y2+1)));
+        }
+        else if (st2==Seq_strand_minus && y2 >= x2) {
+            SeqAlignTrunc2 (tmp, abs(y2-x2+1), 0);
         }
         else {
            slp1 = SeqLocIntNew (x1+1, y1-1, st1, sip1);
-           slp2 = SeqLocIntNew (x2+1, y2-1, st2, sip2);
+           if (st2!=Seq_strand_minus)
+              slp2 = SeqLocIntNew (x2+1, y2-1, st2, sip2);
+           else 
+              slp2 = SeqLocIntNew (y2+1, x2-1, st2, sip2);
            newsalp = BandAlignTwoSeqLocs (slp1, slp2, msp);
            if (newsalp != NULL) 
            {
@@ -4394,6 +4557,7 @@ static SeqAlignPtr align_btwhits (SeqAlignPtr salp, SeqIdPtr sip1, SeqIdPtr sip2
 typedef struct nodehit
 {
   Int2        index;
+  Boolean     open;
   SeqAlignPtr salp;
   Int4        score;
   Nlm_FloatHi bit_score;
@@ -4458,6 +4622,7 @@ static NodeHitPtr CreateGraph (SeqAlignPtr salp, Uint1 choice)
   {
      newnode = (NodeHitPtr) MemNew (sizeof(NodeHit));
      newnode->index = j;
+     newnode->open = TRUE;
      newnode->salp = tmp1;
      newnode->child = NULL;
      newnode->next = NULL;
@@ -4477,6 +4642,8 @@ static NodeHitPtr CreateGraph (SeqAlignPtr salp, Uint1 choice)
      {
         if (possible_child (tmp1, tmp2, choice)) {
            newnode = (NodeHitPtr) MemNew (sizeof(NodeHit));
+           newnode->index = -1;
+           newnode->open = TRUE;
            newnode->salp = NULL;
            newnode->child = node2;
            newnode->next = NULL;
@@ -4494,6 +4661,36 @@ static NodeHitPtr CreateGraph (SeqAlignPtr salp, Uint1 choice)
   }
   return headnode;
 }
+
+static NodeHitPtr SimplifyGraph (NodeHitPtr headnode)
+{
+  NodeHitPtr node1, node2, node3, node4, node5;
+  Int2       gdchild;
+
+  for (node1 = headnode; node1!=NULL; node1 = node1->next)
+  {
+     for (node2=node1->child; node2!=NULL; node2 = node2->next)
+     {
+        node3=node2->child;
+        if (node3) {
+           for (node4=node3->child; node4!=NULL; node4=node4->next)
+           {
+              gdchild = node4->child->index;
+              for (node5=node1->child; node5!=NULL; node5 = node5->next)
+              {
+                 if (node5->child->index == gdchild)
+                 {
+                    node5->open = FALSE;
+                    break;
+                 }
+              }
+           }
+        }
+     }
+  }
+  return headnode;
+}
+
 
 static SeqAlignPtr link_solution (ValNodePtr vnp, NodeHitPtr head, Int2 total)
 {
@@ -4558,7 +4755,7 @@ static ValNodePtr find_maxsolution (ValNodePtr vnp, NodeHitPtr head, Int2 total,
   Int4        bestlen = 0;
   float       bestscore = -100.00;
   float       intronlg;
-  float       bestintron = 9999999.0;
+  float       bestintron = FLT_MAX;
   Int2        j;
   Boolean     first=TRUE;
 
@@ -4584,7 +4781,7 @@ static ValNodePtr find_maxsolution (ValNodePtr vnp, NodeHitPtr head, Int2 total,
                   start1 = start;
                }
                stop = SeqAlignStop(salp,0);
-               alignlen += (stop - start);
+               alignlen += abs(stop - start);
 /***
 WriteLog ("%ld..%ld %ld %ld ", start, stop, alignlen, (long)sum);
 ***/
@@ -4592,7 +4789,7 @@ WriteLog ("%ld..%ld %ld %ld ", start, stop, alignlen, (long)sum);
          }
       }
       else {
-         intronlg = (float)((stop - start1) - alignlen)/(float)(j-1);
+         intronlg = (float)(abs(stop - start1) - alignlen)/(float)(j-1);
          if (sum > bestscore) {
             bestscore = sum;
          }
@@ -4663,18 +4860,18 @@ static ValNodePtr get_solutions (ValNodePtr vnp, NodeHitPtr head, Int2 total, In
                   start1 = start;
                }
                stop = SeqAlignStop(salp,0);
-               alignlens += (stop - start);
+               alignlens += abs(stop - start);
             }
          }
       }
       else {
-         intronlg = (float)((stop - start1) - alignlens)/(float)(j-1);
+         intronlg = (float)(abs(stop - start1) - alignlens)/(float)(j-1);
          x = (float)sum / (float)maxscore;
          y = (float)intronlg / (float)minintron; 
          z = (float)alignlens / (float)maxalignlens;
          if ((Int4)(1000*x*z) > bestratio1 && (float)(x*z/y) > (float)bestratio) {
 /****
-WriteLog ("FFF %ld %ld =%f / %f %d = %f/  %d %d  %f    %f   %f %ld  ++ %d %d %d %d  %f  %f\n", (long)sum, (long)maxscore, x, intronlg, j-1, y, alignlens, maxalignlens, z, (float)((x*z)/y), (float)bestratio, (long)bestratio1, (stop - start1), alignlens, start1, stop, (float)((stop - start1) - alignlens), (float)minintron );
+WriteLog ("FFF %ld %ld =%f / %f %d = %f/  %d %d  %f    %f   %f %ld  ++ %d %d %d %d  %f  %f\n", (long)sum, (long)maxscore, x, intronlg, j-1, y, alignlens, maxalignlens, z, (float)((x*z)/y), (float)bestratio, (long)bestratio1, abs(stop - start1), alignlens, start1, stop, (float)(abs(stop - start1) - alignlens), (float)minintron );
 *****/
             bestratio1 = (Int4) 1000*(x*z);
             bestratio = (float)(x*z/y);
@@ -4691,7 +4888,7 @@ WriteLog ("FFF %ld %ld =%f / %f %d = %f/  %d %d  %f    %f   %f %ld  ++ %d %d %d 
   return bestvnp;
 }
 
-static ValNodePtr traverseGraph (NodeHitPtr head, NodeHitPtr node, Int2 total, Int2 level, Int2Ptr tab, ValNodePtr vnp)
+static ValNodePtr traverseGraph (NodeHitPtr head, NodeHitPtr node, Int2 total, Int2 level, Int2Ptr tab, ValNodePtr vnp, Boolean * change)	
 {
   NodeHitPtr  child,
               tmp;
@@ -4700,15 +4897,17 @@ static ValNodePtr traverseGraph (NodeHitPtr head, NodeHitPtr node, Int2 total, I
  
   child = node->child;
   tab[level] = node->index;
+  *change = TRUE;
+ 
   while (child!=NULL) 
   {
      tmp = child->child;
-     if (tmp!=NULL) {
-        vnp = traverseGraph(head, tmp, total, level+1, tab, vnp);
+     if (child->open && tmp!=NULL) {
+        vnp = traverseGraph(head, tmp, total, level+1, tab, vnp, change);
      }
      child = child->next;
   }
-  if (level > 0) 
+  if (level > 0 && *change) 
   {
      tab2 = MemNew ((size_t)((total+2)*sizeof(Int2)));
      for (j=0; j<=level; j++) {
@@ -4718,9 +4917,44 @@ static ValNodePtr traverseGraph (NodeHitPtr head, NodeHitPtr node, Int2 total, I
         tab2 [j] = -1;
      ValNodeAddPointer (&vnp, 0, (Pointer)tab2);
      tab[level] = -1;
+     *change = FALSE;
   }
   return vnp;
 }
+
+static SeqAlignPtr seqalign_reverse_sorting (SeqAlignPtr salp)
+{
+  SeqAlignPtr tmp, tmp2,next,
+              tail,
+              new=NULL;
+
+  tmp = salp;
+  while (tmp->next)
+  {
+     tmp2=tmp; 
+     next = tmp2->next;
+     while (next->next) {
+        tmp2=tmp2->next;
+        next=next->next;
+     }
+     if (tmp2->next!=NULL) {
+        if (new==NULL) {
+           new = tmp2->next;
+           tail = new;
+        } else  {
+           tail->next = tmp2->next;
+           tail = tail->next;
+        }
+        tmp2->next = NULL;
+     }
+  }
+  if (tmp)
+  {
+     tail->next = tmp;
+  }
+  return new;
+}
+
 
 /*************************************/
 static SeqAlignPtr BlastBandAlignTwoSeqLocs (SeqLocPtr slp1, SeqLocPtr slp2, SeqAlignPtr salp, Boolean is_prot, MashPtr msp)
@@ -4734,7 +4968,8 @@ static SeqAlignPtr BlastBandAlignTwoSeqLocs (SeqLocPtr slp1, SeqLocPtr slp2, Seq
   ValNodePtr  bestsol;
   Int2Ptr     tab;
   Int2        j, total;
-  
+  Boolean     change;
+ 
   if (salp != NULL) {
      if (msp == NULL) {
         msp = MashNew (FALSE);
@@ -4753,6 +4988,7 @@ static SeqAlignPtr BlastBandAlignTwoSeqLocs (SeqLocPtr slp1, SeqLocPtr slp2, Seq
         if (newsalp != NULL && (msp->splicing)) 
         {
            headnode = CreateGraph (newsalp, msp->choice_blastfilter);
+           headnode = SimplifyGraph (headnode);
            for(total=1, node=headnode; node!=NULL; node=node->next) 
               total++; 
            tab = MemNew ((size_t)((total+2)*sizeof(Int2)));
@@ -4760,14 +4996,18 @@ static SeqAlignPtr BlastBandAlignTwoSeqLocs (SeqLocPtr slp1, SeqLocPtr slp2, Seq
               tab[j] = -1;
            vnp = NULL;
            for (node=headnode; node!=NULL; node=node->next) {
-              vnp = traverseGraph (node, node, total, 0, tab, vnp);
+              vnp = traverseGraph (node, node, total, 0, tab, vnp, &change);
            }
            bestsol = get_solutions (vnp, headnode, total, SeqLocLen(slp2));
            newsalp = link_solution (bestsol, headnode, total);
         }
-        if (newsalp != NULL) {
+        if (newsalp != NULL) 
+        {
            if ((strand=SeqAlignStrand(newsalp, 0)) == Seq_strand_minus)
+           {
               newsalp = seqalign_reverse_strand (newsalp);
+              newsalp = seqalign_reverse_sorting (newsalp);
+           }
            newsalp = align_btwhits (newsalp, SeqLocId(slp1), SeqLocId(slp2), msp);
         }
      }
@@ -5087,7 +5327,8 @@ COMMENT    salpnew = SIM4ALN_choice (master_slp, slp, 1000, 8); */
         } 
         else if (choice == 10) { 
            salpblast = BlastTwoSeqLocs (master_slp, slp, is_prot, msp); 
-           if (salpblast!=NULL) {
+           if (salpblast!=NULL) 
+           {
               salpnew = BlastBandAlignTwoSeqLocs (master_slp, slp, salpblast, is_prot, msp);
               if (salpnew==NULL)
                  SeqAlignFree (salpblast);
@@ -5126,7 +5367,6 @@ COMMENT    salpnew = SIM4ALN_choice (master_slp, slp, 1000, 8); */
         }
         if (salpnew != NULL) 
         {
-           check_salp_forlength (salpnew);
            if (msp->translate_prot) {
               master_slp = slptmp1;
               salpna = aaSeqAlign_to_dnaSeqAlignFunc (&salpna, salpnew, sqloc_list, framep);
@@ -5149,7 +5389,7 @@ COMMENT    salpnew = SIM4ALN_choice (master_slp, slp, 1000, 8); */
   }
   if (salphead != NULL) {
      if (msp->map_align)
-        salphead = SeqAlignMap (salphead);
+        salphead = SeqAlignMapOnFirstSeq (salphead);
      if (seq_number > 2 && msp->multidim)
         salphead = PairSeqAlign2MultiSeqAlign (salphead);
   }
@@ -5177,7 +5417,7 @@ static SeqAlignPtr AlignmRNA2genomicToSeqAlign (SeqLocPtr slp1, SeqLocPtr slp2, 
      }
      if (msp!=NULL) {
         msp->splicing = TRUE;
-        msp->choice_blastfilter = 5;
+        msp->choice_blastfilter = 2;
         salp = BlastBandAlignTwoSeqLocs (slp1, slp2, salpblast, FALSE, msp);
         if (delete_mash)
            MemFree (msp);

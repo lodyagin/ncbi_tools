@@ -10,6 +10,7 @@
 #include <pblproc.h>
 #include <lsqfetch.h>
 #include <accentr.h>
+#include <sqnutils.h>
 
 
 /* for the input file name or sequences from cut and paste */
@@ -903,83 +904,6 @@ static void LoadSeqData ( TexT t)
 }
 
 
-static Boolean FileExists (CharPtr dirname, CharPtr subname, CharPtr filename)
-{
-  Char  path [PATH_MAX];
-
-  StringNCpy (path, dirname, sizeof (path));
-  FileBuildPath (path, subname, NULL);
-  FileBuildPath (path, NULL, filename);
-  return (Boolean) (FileLength (path) > 0);
-}
-
-static Boolean CheckAsnloadPath (CharPtr dirname, CharPtr subdir)
-
-{
-#ifdef ASNLOAD_NEEDED
-  Char  fname [16];
-  int   i;
-
-  for (i = 60; i <= 69; ++i) {
-    sprintf (fname, "asnmedli.l%02d", (int) i);
-    if (FileExists (dirname, subdir, fname)) {
-      return TRUE;
-    }
-  }
-  return FALSE;
-#else
-  return TRUE;
-#endif
-}
-
-
-static Boolean CheckDataPath (CharPtr dirname, CharPtr subdir)
-
-{
-  return (Boolean) (FileExists (dirname, subdir, "seqcode.val"));
-}
-
-static Boolean CheckErrMsgPath (CharPtr dirname, CharPtr subdir)
-
-{
-  return (Boolean) (FileExists (dirname, subdir, "valid.msg"));
-}
-
-static void SetTransientPath (CharPtr dirname, CharPtr subname, CharPtr file,
-                              CharPtr section, CharPtr type)
-
-{
-  Char  path [PATH_MAX];
-
-  StringNCpy (path, dirname, sizeof (path));
-  FileBuildPath (path, subname, NULL);
-  TransientSetAppParam (file, section, type, path);
-}
-
-static Boolean UseLocalAsnloadAndData (void)
-
-{
-  Boolean  asnFound;
-  Boolean  dataFound;
-  Char     path [PATH_MAX];
-  CharPtr  ptr;
-
-  ProgramPath (path, sizeof (path));
-  ptr = StringRChr (path, DIRDELIMCHR);
-  if (ptr != NULL) {
-    *ptr = '\0';
-  }
-  asnFound = CheckAsnloadPath (path, "asnload");
-  dataFound = CheckDataPath (path, "data");
-  if (asnFound && dataFound) {
-    SetTransientPath (path, "asnload", "NCBI", "NCBI", "ASNLOAD");
-    SetTransientPath (path, "data", "NCBI", "NCBI", "DATA");
-    return TRUE;
-  }
-  return FALSE;
-}
-
-
 static void SearchFunc(ButtoN b)
 {
 	PBlastOptionPtr pbop;
@@ -1075,7 +999,7 @@ Int2 Main (void)
 	ObjMgrPtr            omp;
 	IteM			i;
 
-	if(!UseLocalAsnloadAndData ())
+	if(!UseLocalAsnloadDataAndErrMsg ())
 	{
 		if(!SeqEntryLoad())
 			return 1;

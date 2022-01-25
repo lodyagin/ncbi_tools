@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.8 $
+* $Revision: 6.9 $
 *
 * File Description: 
 *
@@ -45,6 +45,9 @@
 /*************************************
 *
  * $Log: asn2ff5.c,v $
+ * Revision 6.9  1998/12/09 18:45:09  tatiana
+ * a bug fixed in GetAuthors()
+ *
  * Revision 6.8  1998/06/17 21:41:24  tatiana
  * Null pointer protection added to ValidatePub()
  *
@@ -198,7 +201,7 @@ NLM_EXTERN CharPtr format_book PROTO ((Uint1 format, ValNodePtr the_pub, Boolean
 NLM_EXTERN ValNodePtr GetAuthors (Asn2ffJobPtr ajp, ValNodePtr the_pub)
 {
 
-	AuthListPtr ap;
+	AuthListPtr ap = NULL;
 	CharPtr tmp;
 	CitArtPtr ca;
 	CitBookPtr cb;
@@ -226,7 +229,7 @@ NLM_EXTERN ValNodePtr GetAuthors (Asn2ffJobPtr ajp, ValNodePtr the_pub)
 		if ( the_pub -> choice == PUB_Medline){
 			ml = (MedlineEntryPtr) the_pub -> data.ptrvalue;
 			ca = (CitArtPtr) ml -> cit;
-		}else{
+		} else{
 			ca = (CitArtPtr) the_pub -> data.ptrvalue;
 		}
 		ap = ca -> authors;
@@ -247,31 +250,26 @@ NLM_EXTERN ValNodePtr GetAuthors (Asn2ffJobPtr ajp, ValNodePtr the_pub)
 		break;
 	}
 
-	if (ap){
+	if (ap) {
 		if (ap->choice != 1){   /* just strings */
 			for (spare = ap->names, namehead = NULL; 
-					spare; spare = spare -> next){
+					spare; spare = spare -> next) {
 				this_name = ValNodeNew(namehead);
 				if (namehead == NULL)
 					namehead = this_name;
 				this_name -> data.ptrvalue = StringSave(spare -> data.ptrvalue);
 				if (ajp->format == EMBL_FMT || ajp->format == PSEUDOEMBL_FMT ||
-					ajp->format == EMBLPEPT_FMT)
-				{
+					ajp->format == EMBLPEPT_FMT) {
 					for (tmp=(CharPtr) this_name->data.ptrvalue; 
-						*tmp != '\0'; tmp++)
-					{
-						if (*tmp == ',')
-						{
+						*tmp != '\0'; tmp++) {
+						if (*tmp == ',') {
 							*tmp = ' ';
 							break;
 						}
 					}
 				}
 			}
-		} 
-		else                  /* structured names */
-		{
+		}  else {               /* structured names */
 			namehead = GBGetAuthNames(ajp->format, ap);
 		}
 	}

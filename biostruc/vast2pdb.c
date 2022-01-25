@@ -31,7 +31,10 @@
  * Version Creation Date: 03/12/98
  *
  * $Log: vast2pdb.c,v $
- * Revision 6.5  1998/07/17 18:47:44  madej
+ * Revision 6.6  1998/10/14 17:18:42  addess
+ * sending aligned chains to RASMOL
+ *
+ * Revision 6.5  1998/07/17  18:47:44  madej
  * Allow files to be seen with Vast Search.
  *
  * Revision 6.4  1998/06/11  19:10:39  madej
@@ -67,7 +70,6 @@ static FILE *OutputFile = NULL;
 static char OutputName[200];
 
 
-
 /* Generate a PDB-format file with the reference protein rotated in the frame
  * of the master.  This file can then be loaded, e.g. into Kinemage, and the
  * structural alignment with the master protein displayed.
@@ -80,7 +82,7 @@ Boolean LIBCALL VastToPDB(WWWInfoPtr www_info)
   Char pcBuf[100];
   CharPtr pcTest;
   Int4 GetGi, Fid, Fsid;
-  Int4 iFileExists = 0, indx;
+  Int4 iFileExists = 0, indx, complexity;
   Char pcLine[256];
   CharPtr pcL1 = NULL, www_arg;
   CharPtr JobID = NULL, pcPass;
@@ -92,7 +94,6 @@ Boolean LIBCALL VastToPDB(WWWInfoPtr www_info)
   AsnIoPtr aip = NULL; 
   Char giBuf[20], URL[200];
   char *IPAddress = getenv("REMOTE_HOST");
-
 
  
   if ((indx = WWWFindName(www_info, "uid")) < 0) {
@@ -175,7 +176,16 @@ Boolean LIBCALL VastToPDB(WWWInfoPtr www_info)
        printf("<h3>Non-numeric master alignment code - no results</h3>\n"); 
        return 0;
    }
+   if ((indx = WWWFindName(www_info, "chn_complexity")) < 0)
+            Chain = TRUE;
+   else
+   {
+     www_arg = WWWGetValueByIndex(www_info, indx);
+     complexity =(Int2)atoi(www_arg);
 
+     if (complexity) Chain = TRUE;
+     else Chain = FALSE;
+   }
   /* action == 0 indicates MIME; action == 1 is text; action == 2 is save */
   if ((indx = WWWFindName(www_info, "action")) < 0)
     iPDB = 0;
@@ -231,7 +241,7 @@ Boolean LIBCALL VastToPDB(WWWInfoPtr www_info)
    AsnIoClose(aip);
  */
  
-  if (JobID == NULL)
+  if ((JobID == NULL) && (Chain == FALSE))
      InstBSAnnotSet(pbsaShort);
   else
      InstBSAnnotSetVS(pbsaShort, JobID);

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/7/94
 *
-* $Revision: 6.0 $
+* $Revision: 6.1 $
 *
 * File Description: 
 *
@@ -39,6 +39,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: gather.h,v $
+* Revision 6.1  1999/01/13 23:34:20  kans
+* added GatherSpecificProcLaunch
+*
 * Revision 6.0  1997/08/25 18:05:51  madden
 * Revision changed to 6.0
 *
@@ -502,6 +505,15 @@ NLM_EXTERN Boolean LIBCALL ReplaceDataForProc PROTO((OMProcControlPtr ompcp, Boo
 NLM_EXTERN Int2 GatherProcLaunch PROTO((Uint2 proctype, Boolean sel, Uint2 entityID, Uint2 itemID,
                     Uint2 itemtype, Uint2 inputtype, Uint2 subinputtype, Uint2 outputtype, Uint2 suboutputtype));
 
+/*****************************************************************************
+*
+*   GatherSpecificProcLaunch(procid, procname, proctype, sel, entityID, itemID, itemtype)
+*
+*   	Launches specific viewer or editor
+*
+*****************************************************************************/
+NLM_EXTERN Int2 GatherSpecificProcLaunch PROTO((Uint2 procid, CharPtr procname, Uint2 proctype,
+                                          Boolean sel, Uint2 entityID, Uint2 itemID, Uint2 itemtype));
 
 /*****************************************************************
 *

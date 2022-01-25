@@ -31,7 +31,13 @@
  * Version Creation Date: 03/18/98
  *
  * $Log: vast2cn3d.c,v $
- * Revision 6.8  1998/07/17 18:46:30  madej
+ * Revision 6.10  1998/11/20 20:03:55  addess
+ * related to platform independence of VAST Search
+ *
+ * Revision 6.9  1998/10/14  17:16:35  addess
+ * sending aligned chains to Cn3D
+ *
+ * Revision 6.8  1998/07/17  18:46:30  madej
  * Various changes, e.g. to support local IDs.
  *
  * Revision 6.7  1998/06/17  20:52:06  madej
@@ -69,8 +75,6 @@ static FILE *OutputFile = NULL;
 static char OutputName[200];
 #define CPUTIME_MAX 120
 
-#define VSPATH "/net/vaster/usr/people7/addess/vastsearch/"
-
 /* Display a structural alignment in Cn3D. */
 
 Boolean LIBCALL VastToCn3D(WWWInfoPtr www_info)
@@ -92,8 +96,8 @@ Boolean LIBCALL VastToCn3D(WWWInfoPtr www_info)
 	Char *IPAddress = getenv("REMOTE_HOST");
         Int4 NumLabels, iMMDBId;
 	ValNode * pbsidThis;
-	BiostrucPtr pbsMaster, pbsSlave, pbsSlaveHead = NULL, pbsSlaveTail;
-	Char szName[5];
+	BiostrucPtr pbsMaster, pbsSlave, pbsSlaveHead = NULL, pbsSlaveTail, pbsTemp;
+	Char szName[5], chain[2];
 	Char * szTemp;
   SeqAnnotPtr psaAlignHead = NULL, psaAlignTail;
   SeqAlignPtr salpHead, salpTail;
@@ -113,6 +117,7 @@ Boolean LIBCALL VastToCn3D(WWWInfoPtr www_info)
  Char AsnName[10];
  Int2 ret, complexity;
  Int4 iFidCount = 0;
+ Boolean Chain;
 
  /*    SeqAsnLoad();
     
@@ -217,8 +222,19 @@ Boolean LIBCALL VastToCn3D(WWWInfoPtr www_info)
 		printf("<h3>Non-numeric master alignment code - no results.</h3>\n");
 		return 0;
 	}
+        
+        if ((indx = WWWFindName(www_info, "chn_complexity")) < 0)
+            Chain = TRUE;
+        else
+        {
+          www_arg = WWWGetValueByIndex(www_info, indx);
+          complexity =(Int2)atoi(www_arg);
 
-	if ((indx = WWWFindName(www_info, "complexity")) < 0)
+          if (complexity) Chain = TRUE;
+          else Chain = FALSE;
+        }
+  
+	if ((indx = WWWFindName(www_info, "atm_complexity")) < 0)
 		/* select alpha Carbons only by default */
 		complexity = ONECOORDRES;
 	else {
@@ -321,6 +337,7 @@ Boolean LIBCALL VastToCn3D(WWWInfoPtr www_info)
 	  printf("<h3> Unable to load master structure.</h3>\n");
 	  return 0;
 	}
+       
         /* Load in Standard Dictionary to make sequences - Ken */
         aipr = NULL;
         aipr = AsnIoOpen("bstdt", "rb");
@@ -347,6 +364,18 @@ Boolean LIBCALL VastToCn3D(WWWInfoPtr www_info)
          return 0;
        } 
        ValNodeLink(&(pbsaStruct->sequences), sep);
+       /* PruneBiostruc if Aligned Chain Options has been chosen */
+       if (Chain)
+       {
+         if (szTemp[4] != ' ')
+         {
+           chain[0] = szTemp[4];
+           chain[1] = '\0';
+           pbsTemp = (BiostrucPtr)PruneBiostruc(pbsMaster, chain);
+           pbsMaster = NULL;
+           pbsMaster = pbsTemp;
+         }
+       }
     
         /* Make a linked list of Biostrucs of the slave structures*/   
          while (pbsf)
@@ -378,6 +407,18 @@ Boolean LIBCALL VastToCn3D(WWWInfoPtr www_info)
 		  return 0;
 	        } 
                 ValNodeLink(&(pbsaStruct->sequences), sep);
+                /* PruneBiostruc if Aligned Chain Options has been chosen */
+                if (Chain)
+                {
+                  if (szTemp[11] != ' ')
+                  {
+                    chain[0] = szTemp[11];
+                    chain[1] = '\0';
+                    pbsTemp = (BiostrucPtr)PruneBiostruc(pbsSlaveHead, chain);
+                    pbsSlaveHead = NULL;
+                    pbsSlaveHead = pbsTemp;
+                  }
+                }   
                 pbsSlaveTail = pbsSlaveHead;
 	    }
             else
@@ -400,6 +441,18 @@ Boolean LIBCALL VastToCn3D(WWWInfoPtr www_info)
 		  return 0;
 	        } 
                 ValNodeLink(&(pbsaStruct->sequences), sep);
+                /* PruneBiostruc if Aligned Chain Options has been chosen */
+                if (Chain)
+                {
+                  if (szTemp[11] != ' ')
+                  {
+                    chain[0] = szTemp[11];
+                    chain[1] = '\0';
+                    pbsTemp = (BiostrucPtr)PruneBiostruc(pbsSlave, chain);
+                    pbsSlave = NULL;
+                    pbsSlave = pbsTemp;
+                  }
+                }
                 pbsSlaveTail->next = pbsSlave;
                 pbsSlaveTail = pbsSlaveTail->next;
                 pbsSlaveTail->next = NULL;

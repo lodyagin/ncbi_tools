@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.18 $
+* $Revision: 6.21 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
@@ -40,6 +40,15 @@
 *
 *
 * $Log: seqmgr.h,v $
+* Revision 6.21  1998/11/24 22:21:25  kans
+* index mRNA and CDS by position, allow arbitrary sorted feature array index
+*
+* Revision 6.20  1998/10/22 23:41:51  kans
+* feat context has bsp, partial flags, far location flag, GetDesired functions can work on entity entity if using itemID
+*
+* Revision 6.19  1998/10/22 16:05:56  kans
+* removed labeltype parameter from SeqMgrIndexFeatures, changed index parameter/field to Uint2
+*
 * Revision 6.18  1998/09/22 16:55:53  kans
 * added SeqMgrGetDesiredFeature and position index field
 *
@@ -694,21 +703,25 @@ NLM_EXTERN Int4 LIBCALL GetUniGeneIDForSeqId PROTO((SeqIdPtr sip));
 typedef struct smfeatitem {
   SeqFeatPtr   sfp;      /* freed when TL_CACHED, later will implement reassignment when reloaded */
   SeqAnnotPtr  sap;      /* SeqAnnot containing SeqFeat, same reap/reload criteria as above */
-  CharPtr      label;
+  BioseqPtr    bsp;      /* Bioseq on which this feature is indexed */
+  CharPtr      label;    /* featdef content label */
   Int4         left;     /* extreme left on bioseq (first copy spanning origin is < 1) */
   Int4         right;    /* extreme right on bioseq (second copy spanning origin is > length) */
-  Int4Ptr      ivals;    /* not yet implemented */
-  Int2         numivals; /* not yet implemented */
-  Uint1        strand;
-  Uint2        subtype;  /* featdef subtype */
+  Int4Ptr      ivals;    /* array of start/stop pairs */
+  Int2         numivals; /* number of start/stop pairs in ivals array */
+  Boolean      partialL; /* left end is partial */
+  Boolean      partialR; /* right end is partial */
+  Boolean      farloc;   /* location has an accession not packaged in entity */
+  Uint1        strand;   /* strand (mapped to segmented bioseq if segmented) */
+  Uint1        subtype;  /* featdef subtype */
   Uint2        itemID;   /* storing itemID so no need to gather again */
   Boolean      ignore;   /* ignore this second copy of a feature spanning the origin */
-  Int2         index;    /* position index needed for SeqMgrGetDesiredFeature */
+  Uint2        index;    /* position index needed for SeqMgrGetDesiredFeature */
 } SMFeatItem, PNTR SMFeatItemPtr;
 
 typedef struct smfeatblock {
   struct smfeatblock PNTR  next;   /* pointer to next block of chunks */
-  Int2                     index;  /* latest offset within this block */
+  Uint2                    index;  /* latest offset within this block */
   SMFeatItemPtr            data;   /* allocated block for this chunk */
 } SMFeatBlock, PNTR SMFeatBlockPtr;
 
@@ -738,6 +751,8 @@ typedef struct bioseqextra {
   SMFeatItemPtr PNTR  featsByPos;     /* array of all features on bioseq sorted by location */
 
   SMFeatItemPtr PNTR  genesByPos;     /* subset of featsByPos array containing only gene features */
+  SMFeatItemPtr PNTR  mRNAsByPos;     /* subset of featsByPos array containing only mRNA features */
+  SMFeatItemPtr PNTR  CDSsByPos;      /* subset of featsByPos array containing only CDS features */
   SMFeatItemPtr PNTR  pubsByPos;      /* subset of featsByPos array containing only publication features */
   SMFeatItemPtr PNTR  orgsByPos;      /* subset of featsByPos array containing only biosource features */
 
@@ -749,6 +764,8 @@ typedef struct bioseqextra {
 
   Int4                numfeats;       /* number of elements in featsByID, featsByPos and featsBySfp arrays */
   Int4                numgenes;       /* number of elements in genesByPos array */
+  Int4                nummRNAs;       /* number of elements in mRNAsByPos array */
+  Int4                numCDSs;        /* number of elements in CDSsByPos array */
   Int4                numpubs;        /* number of elements in pubsByPos array */
   Int4                numorgs;        /* number of elements in orgsByPos array */
 
@@ -778,13 +795,15 @@ NLM_EXTERN Pointer LIBCALLBACK SeqMgrFreeBioseqExtraFunc PROTO((Pointer data));
 /*****************************************************************************
 *
 *   SeqMgrFindSMFeatItemPtr and SeqMgrFindSMFeatItemByID return SMFeatItemPtr
-*     to access internal fields
+*     to access internal fields, passing entityID and not bsp uses list attached
+*     to top of entity containing index to all feature itemIDs regardless of
+*     what bioseq they are indexed on
 *   SeqMgrGetDesiredFeature in explore.h is the preferred public function
 *
 *****************************************************************************/
 
 NLM_EXTERN SMFeatItemPtr LIBCALL SeqMgrFindSMFeatItemPtr PROTO((SeqFeatPtr sfp));
-NLM_EXTERN SMFeatItemPtr LIBCALL SeqMgrFindSMFeatItemByID PROTO((BioseqPtr bsp, Uint2 itemID));
+NLM_EXTERN SMFeatItemPtr LIBCALL SeqMgrFindSMFeatItemByID PROTO((Uint2 entityID, BioseqPtr bsp, Uint2 itemID));
 
 /*****************************************************************************
 *

@@ -34,6 +34,15 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: algorend.h,v $
+* Revision 6.12  1998/11/04 00:06:23  ywang
+* add function for modeling: change render/color for special residue(s)
+*
+ * Revision 6.11  1998/10/28  19:29:03  ywang
+ * add C_BYSEQCONS macro
+ *
+ * Revision 6.10  1998/10/28  19:02:07  kans
+ * added two prototypes
+ *
 * Revision 6.8  1998/06/16 18:00:28  lewisg
 * moved rendering menus and created a reset presentation menu item
 *
@@ -100,6 +109,7 @@
 #define _ALGOREND_ 1
 
 #include <viewer3d.h>
+#include <cn3dmain.h>
 
 
 #ifdef __cplusplus
@@ -151,7 +161,8 @@ extern "C" {
 #define C_BYOBJECT 246
 #define C_BYDOMAIN 247
 #define C_BYALIGN 248	/* color by alignment */
-#define C_BYCONS 249 /* color by conservation */
+#define C_BYCONS 249 /* color by structure conservation */
+#define C_BYSEQCONS 250 /* color by sequence conservation */
 
 /* the number of colors available to color aligned structures */
 #define NUM_SLAVES 8
@@ -411,6 +422,8 @@ extern void Cn3D_ColHydro  PROTO ((IteM i));
 extern void Cn3D_ColTemp   PROTO ((IteM i));
 extern void Cn3D_ColAlign   PROTO ((IteM i));
 extern void Cn3D_ColCons   PROTO ((IteM i));
+extern void Cn3D_ColSeqCons PROTO ((IteM i));
+extern void Cn3D_DoColSeqCons PROTO ((void));
 
 
 #ifdef __cplusplus

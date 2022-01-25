@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/93
 *
-* $Revision: 6.0 $
+* $Revision: 6.1 $
 *
 * File Description:  Object Print Utilities
 *
@@ -40,6 +40,9 @@
 * 04-24-94 Kans        Template sought first in program, then DATA directory
 *
 * $Log: prtutil.c,v $
+* Revision 6.1  1998/12/29 19:55:53  kans
+* more informative error message if FindPath fails
+*
 * Revision 6.0  1997/08/25 18:06:54  madden
 * Revision changed to 6.0
 *
@@ -151,7 +154,7 @@ NLM_EXTERN Boolean PrintTemplateSetLoad ( CharPtr path )
 					return FALSE;
 				}
 			} else {
-				ErrPost(CTX_NCBIOBJ, 1, "FindPath failed");
+				ErrPost(CTX_NCBIOBJ, 1, "FindPath failed in PrintTemplateSetLoad - ncbi configuration file missing or incorrect");
 				return FALSE;
 			}
 		} else {

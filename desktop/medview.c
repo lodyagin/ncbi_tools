@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/30/95
 *
-* $Revision: 6.3 $
+* $Revision: 6.7 $
 *
 * File Description: 
 *
@@ -48,6 +48,9 @@
 #include <objmgr.h>
 #include <accentr.h>
 #include <prtutil.h>
+#ifdef WIN_MOTIF
+#include <netscape.h>
+#endif
 
 #define NUM_PAGES  6
 
@@ -732,11 +735,65 @@ static void MedlineViewFormActivate (WindoW w)
   }
 }
 
+static void LaunchPubMedArticle (ButtoN b)
+
+{
+#ifndef WIN_MAC
+  CharPtr             argv [8];
+#endif
+  CharPtr             browser;
+  MedlineViewFormPtr  mfp;
+  Char                str [256];
+#ifdef WIN_MOTIF
+  NS_Window          window = NULL;
+#endif
+
+  mfp = (MedlineViewFormPtr) GetObjectExtra (b);
+  if (mfp == NULL) return;
+  if (mfp->docuid < 1) return;
+  browser = GetAppProperty ("MedviewBrowserPath");
+  sprintf (str,
+           "http://www.ncbi.nlm.nih.gov/htbin-post/Entrez/query?db=m&form=6&uid=%ld&Dopt=r",
+           (long) mfp->docuid);
+#ifdef WIN_MAC
+  if (browser == NULL || StringHasNoText (browser)) {
+    Nlm_SendURLAppleEvent (str, "MOSS", NULL);
+  } else {
+    Nlm_SendURLAppleEvent (str, NULL, browser);
+  }
+#endif
+#ifdef WIN_MSWIN
+  argv [0] = str;
+  argv [1] = NULL;
+  if (browser == NULL || StringHasNoText (browser)) {
+    browser = "netscape";
+  }
+  if (! Execv (browser, argv)) {
+    Message (MSG_POST, "Unable to launch %s", browser);
+  }
+#endif
+#ifdef WIN_MOTIF
+  argv [0] = str;
+  argv [1] = NULL;
+  if (browser != NULL && (! StringHasNoText (browser))) {
+    if (! Execv (browser, argv)) {
+      Message (MSG_POST, "Unable to launch %s", browser);
+    }
+  } else {
+    if (! NS_OpenURL (&window, str, NULL, TRUE)) {
+      Message (MSG_POST, "Unable to launch netscape");
+    }
+    NS_WindowFree (window);
+  }
+#endif
+}
+
 extern ForM LIBCALL CreateMedlineViewForm (Int2 left, Int2 top, CharPtr title,
                                            MedlineEntryPtr mep,
                                            MedlineViewProcsPtr mvpp)
 
 {
+  ButtoN               b;
   WndActnProc          close;
   FonT                 fnt;
   GrouP                g;
@@ -846,7 +903,7 @@ extern ForM LIBCALL CreateMedlineViewForm (Int2 left, Int2 top, CharPtr title,
           }
           break;
         case CHANGE_VIEW_RADIOBUTTONS :
-          k = HiddenGroup (g, -2, 0, NULL);
+          k = HiddenGroup (g, -3, 0, NULL);
           ppt = StaticPrompt (k, "Format:", 0, 0, programFont, 'l');
           rads = HiddenGroup (k, 8, 0, ChangeMedlineViewGroup);
           SetObjectExtra (rads, (Pointer) mfp, NULL);
@@ -859,11 +916,13 @@ extern ForM LIBCALL CreateMedlineViewForm (Int2 left, Int2 top, CharPtr title,
           if (pixwidth < minwid) {
             pixwidth = minwid;
           }
-          AlignObjects (ALIGN_MIDDLE, (HANDLE) ppt, (HANDLE) rads, NULL);
+          b = PushButton (k, "PubMed", LaunchPubMedArticle);
+          SetObjectExtra (b, (Pointer) mfp, NULL);
+          AlignObjects (ALIGN_MIDDLE, (HANDLE) ppt, (HANDLE) rads, (HANDLE) b, NULL);
           break;
         case CHANGE_VIEW_POPUP :
-          k = HiddenGroup (g, -2, 0, NULL);
-          StaticPrompt (k, "Display Format", 0, popupMenuHeight, programFont, 'l');
+          k = HiddenGroup (g, -3, 0, NULL);
+          ppt = StaticPrompt (k, "Display Format", 0, popupMenuHeight, programFont, 'l');
           pops = PopupList (k, TRUE, ChangeMedlineViewPopup);
           SetObjectExtra (pops, (Pointer) mfp, NULL);
           for (j = 0; medlineViewFormTabs [j] != NULL; j++) {
@@ -875,6 +934,9 @@ extern ForM LIBCALL CreateMedlineViewForm (Int2 left, Int2 top, CharPtr title,
           if (pixwidth < minwid) {
             pixwidth = minwid;
           }
+          b = PushButton (k, "PubMed", LaunchPubMedArticle);
+          SetObjectExtra (b, (Pointer) mfp, NULL);
+          AlignObjects (ALIGN_MIDDLE, (HANDLE) ppt, (HANDLE) pops, (HANDLE) b, NULL);
           break;
         default :
           break;

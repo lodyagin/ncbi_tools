@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/5/97
 *
-* $Revision: 6.39 $
+* $Revision: 6.40 $
 *
 * File Description:
 *
@@ -721,7 +721,8 @@ static void PopulateSimpleGraphic (BioseqViewPtr bvp)
       SegmentBox (bvp->pict, &box);
       for (vnp = graphs; vnp != NULL; vnp = vnp->next) {
         sgp = (SeqGraphPtr) vnp->data.ptrvalue;
-        AddGraphSentinelToPicture (sgp, bsp, bvp->pict, scaleX, box.bottom - 10, 0);
+        AddGraphSentinelToPicture (sgp, bsp, bvp->pict, scaleX,
+                                   box.bottom - 10, 0, NULL);
       }
     }
 
@@ -928,7 +929,8 @@ static void GenomicSentinelProc (BigScalar calldata, PrimDrawContext pdc)
     SegmentBox (pic, &box);
     for (vnp = graphs; vnp != NULL; vnp = vnp->next) {
       sgp = (SeqGraphPtr) vnp->data.ptrvalue;
-      AddGraphSentinelToPicture (sgp, bsp, pic, scaleX, box.bottom - 10, /* sp->start */ 0);
+      AddGraphSentinelToPicture (sgp, bsp, pic, scaleX,
+                                 box.bottom - 10, /* sp->start */ 0, NULL);
     }
   }
 

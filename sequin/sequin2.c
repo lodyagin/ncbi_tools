@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.57 $
+* $Revision: 6.62 $
 *
 * File Description: 
 *
@@ -135,7 +135,7 @@ static void ResetFastaPage (FastaPagePtr fpp)
   }
 }
 
-static void MakeSearchStringFromAlist (CharPtr str, CharPtr name)
+extern void MakeSearchStringFromAlist (CharPtr str, CharPtr name)
 
 {
   Char     ch;
@@ -994,7 +994,7 @@ static Boolean ImportPhylipDialog (DialoG d, CharPtr filename)
       head = NULL;
       fp = FileOpen (path, "r");
       if (fp != NULL) {
-        if (ppp->format >= SEQ_FMT_PHYLIP && ppp->format <= SEQ_FMT_PAUP) {
+        if (ppp->format >= SEQ_FMT_CONTIGUOUS && ppp->format <= SEQ_FMT_INTERLEAVE) {
           while (fgets (str, sizeof (str), fp) != NULL) {
             if (str [0] == '>') {
               ptr = str;
@@ -1011,20 +1011,14 @@ static Boolean ImportPhylipDialog (DialoG d, CharPtr filename)
         FileClose (fp);
         format = 0;
         switch (ppp->format) {
-          case SEQ_FMT_FASTAGAP :
-            format = SALSA_FASTGAP;
+          case SEQ_FMT_CONTIGUOUS :
+            format = SALSA_CONTIGUOUS;
             break;
-          case SEQ_FMT_PHYLIP :
-            format = SALSA_PHYLIP;
-            break;
-          case SEQ_FMT_NEXUS :
-            format = SALSA_NEXUS;
-            break;
-          case SEQ_FMT_PAUP :
-            format = SALSA_PAUP;
+          case SEQ_FMT_INTERLEAVE :
+            format = SALSA_INTERLEAVE;
             break;
           default :
-            format = SALSA_FASTGAP;
+            format = SALSA_ND;
             break;
         }
         if (format > 0) {
@@ -1096,19 +1090,13 @@ static void CleanupPhylipDialog (GraphiC g, VoidPtr data)
 static CharPtr  phylipNucMsg = "\
 \nPlease enter information about the nucleotide \
 sequence in the spaces above.  Then click on \
-'Import Nucleotide PHYLIP' to read a PHYLIP file that \
+'Import Nucleotide Contiguous' to read a file that \
 contains the sequences.";
 
 static CharPtr  nexusNucMsg = "\
 \nPlease enter information about the nucleotide \
 sequence in the spaces above.  Then click on \
-'Import Nucleotide NEXUS' to read a NEXUS file that \
-contains the sequences.";
-
-static CharPtr  paupNucMsg =  "\
-\nPlease enter information about the nucleotide \
-sequence in the spaces above.  Then click on \
-'Import Nucleotide NEXUS' to read a NEXUS file that \
+'Import Nucleotide Interleaved' to read a file that \
 contains the sequences.";
 
 static DialoG CreatePhylipDialog (GrouP h, CharPtr title, CharPtr text,
@@ -1328,6 +1316,7 @@ static ENUM_ALIST(combined_subtype_alist)
   {"Chromosome",           4},
   {"Clone",                5},
   {"Clone-lib",            6},
+  {"Country",             29},
   {"Cultivar",             7},
   {"Dev-stage",            8},
   {"Haplotype",            9},
@@ -1338,10 +1327,12 @@ static ENUM_ALIST(combined_subtype_alist)
   {"Map",                 12},
   {"Molecule",            24},
   {"Natural-host",        13},
+  {"Old Name",            28},
   {"Organism",             1},
   {"Plasmid-name",        14},
   {"Plastid-name",        15},
   {"Sex",                 16},
+  {"Specimen-voucher",    27},
   {"Strain",              17},
   {"Sub-species",         18},
   {"Tissue-lib",          19},
@@ -2218,7 +2209,7 @@ extern void ConfirmSequencesFormParsing (ForM f, FormActnFunc putItAllTogether)
         if (fpp != NULL) {
           sqfp->currConfirmSeq = fpp->list;
         }
-      } else if (sqfp->seqFormat >= SEQ_FMT_FASTAGAP && sqfp->seqFormat <= SEQ_FMT_PAUP) {
+      } else if (sqfp->seqFormat >= SEQ_FMT_CONTIGUOUS && sqfp->seqFormat <= SEQ_FMT_INTERLEAVE) {
         ppp = (PhylipPagePtr) GetObjectExtra (sqfp->dnaseq);
         if (ppp != NULL) {
           sep = ppp->sep;
@@ -2235,7 +2226,7 @@ extern void ConfirmSequencesFormParsing (ForM f, FormActnFunc putItAllTogether)
   }
 }
 
-static void AddToSubSource (BioSourcePtr biop, CharPtr title, CharPtr label, Uint1 subtype)
+extern void AddToSubSource (BioSourcePtr biop, CharPtr title, CharPtr label, Uint1 subtype)
 
 {
   CharPtr       ptr;
@@ -2269,7 +2260,7 @@ static void AddToSubSource (BioSourcePtr biop, CharPtr title, CharPtr label, Uin
   }
 }
 
-static void AddToOrgMod (BioSourcePtr biop, CharPtr title, CharPtr label, Uint1 subtype)
+extern void AddToOrgMod (BioSourcePtr biop, CharPtr title, CharPtr label, Uint1 subtype)
 
 {
   OrgModPtr   mod;
@@ -2365,7 +2356,7 @@ static Boolean AutomaticNucleotideProcess (SequencesFormPtr sqfp, SeqEntryPtr ns
     if (vnp != NULL && vnp->data.ptrvalue != NULL) {
       title = (CharPtr) vnp->data.ptrvalue;
       needbiop = FALSE;
-      if (sqfp->seqPackage >= SEQ_PKG_POPULATION && sqfp->seqPackage <= SEQ_PKG_MUTATION) {
+      if (sqfp->seqPackage >= SEQ_PKG_POPULATION && sqfp->seqPackage <= SEQ_PKG_GENBANK) {
         needbiop = TRUE;
         if (GetAppParam ("SEQUIN", "PREFERENCES", "BIOSRCONALL", NULL, str, sizeof (str))) {
           if (StringICmp (str, "FALSE") == 0) {
@@ -2589,6 +2580,41 @@ static Boolean AutomaticNucleotideProcess (SequencesFormPtr sqfp, SeqEntryPtr ns
           } else if (IS_Bioseq_set (top)) {
             bssp = (BioseqSetPtr) top->data.ptrvalue;
             ValNodeLink (&(bssp->descr), vnp);
+          }
+        }
+      }
+    }
+  } else {
+    needbiop = FALSE;
+    if (sqfp->seqPackage >= SEQ_PKG_POPULATION && sqfp->seqPackage <= SEQ_PKG_GENBANK) {
+      needbiop = TRUE;
+      if (GetAppParam ("SEQUIN", "PREFERENCES", "BIOSRCONALL", NULL, str, sizeof (str))) {
+        if (StringICmp (str, "FALSE") == 0) {
+          needbiop = FALSE;
+        }
+      }
+    }
+    if (needbiop && masterbiop != NULL) {
+      masterorp = masterbiop->org;
+      if (masterorp != NULL) {
+        biop = NULL;
+        if (SetBioSourceDialogTaxName (sqfp->genbio, masterorp->taxname)) {
+          biop = (BioSourcePtr) DialogToPointer (sqfp->genbio);
+        } else {
+          biop = BioSourceNew ();
+          if (biop != NULL) {
+            orp = OrgRefNew ();
+            biop->org = orp;
+            if (orp != NULL) {
+              orp->taxname = StringSave (masterorp->taxname);
+              orp->common = StringSave (masterorp->common);
+            }
+          }
+        }
+        if (biop != NULL) {
+          vnp = CreateNewDescriptor (nsep, Seq_descr_source);
+          if (vnp != NULL) {
+            vnp->data.ptrvalue = (Pointer) biop;
           }
         }
       }
@@ -3402,7 +3428,7 @@ static Pointer FastaSequencesFormToSeqEntryPtr (ForM f)
       }
     }
     if (sqfp->seqPackage >= SEQ_PKG_POPULATION &&
-        sqfp->seqPackage <= SEQ_PKG_MUTATION) {
+        sqfp->seqPackage <= SEQ_PKG_GENBANK) {
       if (! TextHasNoText (sqfp->defline)) {
         ApplyAnnotationToAll (ADD_TITLE, sep, sqfp->partialLft, sqfp->partialRgt,
                               NULL, NULL, NULL, NULL, sqfp->defline);
@@ -3551,7 +3577,7 @@ static Pointer FastaSequencesFormToSeqEntryPtr (ForM f)
       }
     }
     if (sqfp->seqPackage >= SEQ_PKG_POPULATION &&
-        sqfp->seqPackage <= SEQ_PKG_MUTATION) {
+        sqfp->seqPackage <= SEQ_PKG_GENBANK) {
         if (GetStatus (sqfp->makeAlign)) {
         sap = SeqEntryToSeqAlign (sep, Seq_mol_na);
         if (sap != NULL && sap->type == 2) {
@@ -3810,7 +3836,7 @@ static Pointer PhylipSequencesFormToSeqEntryPtr (ForM f)
       }
     }
     if (sqfp->seqPackage >= SEQ_PKG_POPULATION &&
-        sqfp->seqPackage <= SEQ_PKG_MUTATION) {
+        sqfp->seqPackage <= SEQ_PKG_GENBANK) {
       if (! TextHasNoText (sqfp->defline)) {
         ApplyAnnotationToAll (ADD_TITLE, sep, sqfp->partialLft, sqfp->partialRgt,
                               NULL, NULL, NULL, NULL, sqfp->defline);
@@ -3966,17 +3992,11 @@ static void SetOrgNucProtImportExportItems (SequencesFormPtr sqfp)
               SafeSetTitle (importItm, "Import Nucleotide FASTA...");
             }
             break;
-          case SEQ_FMT_FASTAGAP :
-            SafeSetTitle (importItm, "Import Nucleotide FASTA+GAP...");
+          case SEQ_FMT_CONTIGUOUS :
+            SafeSetTitle (importItm, "Import Nucleotide Contiguous...");
             break;
-          case SEQ_FMT_PHYLIP :
-            SafeSetTitle (importItm, "Import Nucleotide PHYLIP...");
-            break;
-          case SEQ_FMT_NEXUS :
-            SafeSetTitle (importItm, "Import Nucleotide NEXUS...");
-            break;
-          case SEQ_FMT_PAUP :
-            SafeSetTitle (importItm, "Import Nucleotide NEXUS...");
+          case SEQ_FMT_INTERLEAVE :
+            SafeSetTitle (importItm, "Import Nucleotide Interleaved...");
             break;
           default :
             SafeSetTitle (importItm, "Import Nucleotide FASTA...");
@@ -4129,7 +4149,7 @@ static void SequencesFormDeleteProc (Pointer formDataPtr)
             SafeShow (fpp->instructions);
             Update ();
           }
-        } else if (sqfp->seqFormat >= SEQ_FMT_FASTAGAP && sqfp->seqFormat <= SEQ_FMT_PAUP) {
+        } else if (sqfp->seqFormat >= SEQ_FMT_CONTIGUOUS && sqfp->seqFormat <= SEQ_FMT_INTERLEAVE) {
           ppp = (PhylipPagePtr) GetObjectExtra (sqfp->dnaseq);
           if (ppp != NULL) {
             ResetPhylipPage (ppp);
@@ -4401,7 +4421,7 @@ static CharPtr  phyloOrgFastaMsg = "\
 organism names in the individual nucleotide sequence \
 FASTA definition lines. These should be of the \
 following form:\n\n\
->ID [org=scientific name] title\n\n\
+>[org=scientific name]\n\n\
 Additional information, e.g., [strain=name], \
 can also be included. See the help documentation for \
 full details";
@@ -4409,9 +4429,9 @@ full details";
 static CharPtr  phyloOrgPhylipMsg = "\
 \nFor phylogenetic studies, you should encode the \
 organism names FASTA-like definition lines after \
-the normal PHYLIP or NEXUS file. These should be of \
-the following form:\n\n\
->ID [org=scientific name] title\n\n\
+the normal PHYLIP, NEXUS or MACAW file. These should \
+be of the following form:\n\n\
+>[org=scientific name]\n\n\
 Additional information, e.g., [strain=name], \
 can also be included. See the help documentation for \
 full details";
@@ -4482,7 +4502,7 @@ extern ForM CreateInitOrgNucProtForm (Int2 left, Int2 top, CharPtr title,
     if (sqfp->seqFormat == SEQ_FMT_FASTA) {
       sqfp->fromform = FastaSequencesFormToSeqEntryPtr;
       sqfp->testform = FastaTestSequencesForm;
-    } else if (sqfp->seqFormat >= SEQ_FMT_FASTAGAP && sqfp->seqFormat <= SEQ_FMT_PAUP) {
+    } else if (sqfp->seqFormat >= SEQ_FMT_CONTIGUOUS && sqfp->seqFormat <= SEQ_FMT_INTERLEAVE) {
       sqfp->fromform = PhylipSequencesFormToSeqEntryPtr;
       sqfp->testform = PhylipTestSequencesForm;
     }
@@ -4526,9 +4546,9 @@ extern ForM CreateInitOrgNucProtForm (Int2 left, Int2 top, CharPtr title,
     if (sqfp->seqPackage == SEQ_PKG_PHYLOGENETIC) {
       p = HiddenGroup (q, -1, 0, NULL);
       SetGroupSpacing (p, 10, 20);
-      if (sqfp->seqFormat == SEQ_FMT_FASTA || sqfp->seqFormat == SEQ_FMT_FASTAGAP) {
+      if (sqfp->seqFormat == SEQ_FMT_FASTA) {
         mult = MultiLinePrompt (p, phyloOrgFastaMsg, 27 * stdCharWidth, programFont);
-      } else if (sqfp->seqFormat >= SEQ_FMT_PHYLIP && sqfp->seqFormat <= SEQ_FMT_PAUP) {
+      } else if (sqfp->seqFormat >= SEQ_FMT_CONTIGUOUS && sqfp->seqFormat <= SEQ_FMT_INTERLEAVE) {
         mult = MultiLinePrompt (p, phyloOrgPhylipMsg, 27 * stdCharWidth, programFont);
       } else {
         mult = MultiLinePrompt (p, phyloOrgFastaMsg, 27 * stdCharWidth, programFont);
@@ -4546,7 +4566,7 @@ extern ForM CreateInitOrgNucProtForm (Int2 left, Int2 top, CharPtr title,
       ReplaceBioSourceGenomePopup (sqfp->genbio, sqfp->genome);
 
       f2 = HiddenGroup (f3, 3, 0, NULL);
-      StaticPrompt (f2, "Default Genetic Code", 0, popupMenuHeight, programFont, 'l');
+      StaticPrompt (f2, "Genetic Code for Translation", 0, popupMenuHeight, programFont, 'l');
       sqfp->gencode = PopupList (f2, TRUE, NULL);
       PopulateGeneticCodePopup (sqfp->gencode);
       SetValue (sqfp->gencode, 1);
@@ -4626,21 +4646,13 @@ extern ForM CreateInitOrgNucProtForm (Int2 left, Int2 top, CharPtr title,
         b = PushButton (g, "Import Nucleotide FASTA", ImportBtnProc);
       }
       SetObjectExtra (b, sqfp, NULL);
-    } else if (sqfp->seqFormat == SEQ_FMT_FASTAGAP) {
-      sqfp->dnaseq = CreatePhylipDialog (k, "", fastaNucMsg, sqfp->seqFormat, ".fsa");
-      b = PushButton (g, "Import Nucleotide FASTA", ImportBtnProc);
+    } else if (sqfp->seqFormat == SEQ_FMT_CONTIGUOUS) {
+      sqfp->dnaseq = CreatePhylipDialog (k, "", phylipNucMsg, sqfp->seqFormat, "");
+      b = PushButton (g, "Import Nucleotide Contiguous", ImportBtnProc);
       SetObjectExtra (b, sqfp, NULL);
-    } else if (sqfp->seqFormat == SEQ_FMT_PHYLIP) {
-      sqfp->dnaseq = CreatePhylipDialog (k, "", phylipNucMsg, sqfp->seqFormat, ".phy");
-      b = PushButton (g, "Import Nucleotide PHYLIP", ImportBtnProc);
-      SetObjectExtra (b, sqfp, NULL);
-    } else if (sqfp->seqFormat == SEQ_FMT_NEXUS) {
-      sqfp->dnaseq = CreatePhylipDialog (k, "", nexusNucMsg, sqfp->seqFormat, ".nex");
-      b = PushButton (g, "Import Nucleotide NEXUS", ImportBtnProc);
-      SetObjectExtra (b, sqfp, NULL);
-    } else if (sqfp->seqFormat == SEQ_FMT_PAUP) {
-      sqfp->dnaseq = CreatePhylipDialog (k, "", paupNucMsg, sqfp->seqFormat, ".nex");
-      b = PushButton (g, "Import Nucleotide NEXUS", ImportBtnProc);
+    } else if (sqfp->seqFormat == SEQ_FMT_INTERLEAVE) {
+      sqfp->dnaseq = CreatePhylipDialog (k, "", nexusNucMsg, sqfp->seqFormat, "");
+      b = PushButton (g, "Import Nucleotide Interleaved", ImportBtnProc);
       SetObjectExtra (b, sqfp, NULL);
     }
     if (sqfp->makeAlign != NULL) {
@@ -4740,11 +4752,12 @@ extern ForM CreateInitOrgNucProtForm (Int2 left, Int2 top, CharPtr title,
       SetGroupSpacing (q, 10, 10);
       ppt1 = StaticPrompt (q, "Add feature across full length of all sequences",
                           0, 0, programFont, 'l');
-      sqfp->annotType = HiddenGroup (q, 3, 0, ChangeAnnotType);
+      sqfp->annotType = HiddenGroup (q, 5, 0, ChangeAnnotType);
       SetObjectExtra (sqfp->annotType, sqfp, NULL);
       RadioButton (sqfp->annotType, "Gene");
       RadioButton (sqfp->annotType, "rRNA");
       RadioButton (sqfp->annotType, "CDS");
+      RadioButton (sqfp->annotType, "None");
       SetValue (sqfp->annotType, 1);
       sqfp->annotGrp = HiddenGroup (q, -1, 0, NULL);
       SetGroupSpacing (sqfp->annotGrp, 10, 10);

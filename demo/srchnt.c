@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 98-01-01
 *
-* $Revision: 6.13 $
+* $Revision: 6.14 $
 *
 * File Description: nucleotide pattern match
 *
@@ -38,6 +38,9 @@
 * Date       Name        Description of modification
 * --------------------------------------------------------------------------
 * $Log: srchnt.c,v $
+* Revision 6.14  1998/12/18 16:24:57  kuzio
+* big GIs
+*
 * Revision 6.13  1998/09/21 14:48:54  kuzio
 * cmdln pattern option
 *
@@ -113,7 +116,7 @@ typedef struct gather_Nuc_Bioseq
 
 Args myargs[] =
 {
-  { "nucleotide GI", "0", "0", "4000000", TRUE,
+  { "nucleotide GI", "0", "0", "9000000", TRUE,
     'g', ARG_INT, 0.0, 0, NULL},
   { "FastA file", NULL, NULL, NULL, TRUE,
     'f', ARG_STRING, 0.0, 0, NULL },

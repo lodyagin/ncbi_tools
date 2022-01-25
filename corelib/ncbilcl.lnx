@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/1/94
 *
-* $Revision: 6.0 $
+* $Revision: 6.1 $
 *
 * File Description:
 *		system dependent header
@@ -41,6 +41,9 @@
 * -------  ----------    ---------------------------------------------------
 *
 * $Log: ncbilcl.lnx,v $
+* Revision 6.1  1998/12/10 17:04:07  vakatov
+* Fixed to compile under LINUX(Red Hat 2.XX, gcc, with POSIX threads)
+*
 * Revision 6.0  1997/08/25 18:16:01  madden
 * Revision changed to 6.0
 *
@@ -75,7 +78,8 @@ added Log line
 /*      Desired or available feature list                               */
 /*----------------------------------------------------------------------*/
 #define SYSV_IPC_AVAIL	/* System V Interprocess Communication available */
-
+#define _POSIX_C_SOURCE 199309L
+#define _REENTRANT
 
 /*----------------------------------------------------------------------*/
 /*      #includes                                                       */
@@ -94,6 +98,12 @@ added Log line
 #include <errno.h>
 #include <float.h>
 #include <unistd.h>
+
+/* Check if there are POSIX threads available */
+#ifdef _POSIX_THREADS
+#define POSIX_THREADS_AVAIL
+#endif
+
 
 /*----------------------------------------------------------------------*/
 /*      Missing ANSI-isms                                               */

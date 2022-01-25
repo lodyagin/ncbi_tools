@@ -35,6 +35,12 @@
  * Modifications:  
  * --------------------------------------------------------------------------
  * $Log: acccn3ds.c,v $
+ * Revision 6.2  1999/01/15 19:52:49  kans
+ * needed to add vibrant typedefs
+ *
+ * Revision 6.1  1999/01/15 19:41:32  kans
+ * Cn3DWin_Entrez stub needed new parameters
+ *
  * Revision 6.0  1997/08/25 18:12:23  madden
  * Revision changed to 6.0
  *
@@ -70,7 +76,13 @@ NLM_EXTERN void LIBCALL Cn3D_SetQueryCallback(BeepHook queryFunc, VoidPtr w)
 {
 }
 
-NLM_EXTERN Handle LIBCALL Cn3DWin_Entrez(void)
+typedef  struct  Nlm_item {
+  Nlm_VoidPtr  dummy;
+} HNDL Nlm_IteM;
+
+typedef  void  (*Nlm_ItmActnProc) PROTO((Nlm_IteM));
+
+NLM_EXTERN Handle LIBCALL Cn3DWin_Entrez(Nlm_ItmActnProc netconfig, Boolean usingEntrez)
 {
   return NULL;
 }

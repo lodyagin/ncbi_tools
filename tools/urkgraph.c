@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 98-01-01
 *
-* $Revision: 6.5 $
+* $Revision: 6.6 $
 *
 * File Description: graph utilities
 *
@@ -38,6 +38,9 @@
 * Date       Name        Description of modification
 * --------------------------------------------------------------------------
 * $Log: urkgraph.c,v $
+* Revision 6.6  1998/12/09 20:38:45  kans
+* changed compl to compr to avoid new c++ symbol collision
+*
 * Revision 6.5  1998/09/16 18:03:35  kuzio
 * cvs logging
 *
@@ -299,9 +302,9 @@ extern SeqGraphPtr DevelopGraphX (Uint1 yvaluetype, Pointer score,
     sgp->values = score;
 /* number of values, compression, scaling and transformation */
     sgp->numval = stop - start + 1;
-    sgp->compl = (Int4) (sgp->numval / graphpixelwidth);
+    sgp->compr = (Int4) (sgp->numval / graphpixelwidth);
     if ((sgp->numval%graphpixelwidth) != 0)
-      sgp->compl += 1;
+      sgp->compr += 1;
 /* will always check compression */
     sgp->flags[0] = 1;
 /* will always check scaling and transformation */
@@ -382,7 +385,7 @@ extern SegmenT DrawGraphSGPAsIs (SegmenT seg, SeqGraphPtr sgp,
   if (sgp->flags[0] == 0)
   {
     sgp->flags[0] = 1;
-    sgp->compl = 1;
+    sgp->compr = 1;
   }
   if (sgp->flags[1] == 0)
   {
@@ -435,9 +438,9 @@ extern SegmenT DrawGraphSGP (SegmenT seg, SeqGraphPtr sgp, Int4 graphtype,
   if (sgp == NULL)
     return seg;
 
-  sgp->compl = (Int4) (sgp->numval / graphpixelwidth);
+  sgp->compr = (Int4) (sgp->numval / graphpixelwidth);
   if ((sgp->numval%graphpixelwidth) != 0)
-    sgp->compl += 1;
+    sgp->compr += 1;
   sgp->flags[0] = 1;
 
   sgp->a = 1;                 /* scale factor */
@@ -508,8 +511,8 @@ extern SegmenT DrawGraphX (SegmenT seg, SeqGraphPtr sgp,
     break;
   }
 
-  if (sgp->compl > 0)
-    compression = (Int4) sgp->compl;
+  if (sgp->compr > 0)
+    compression = (Int4) sgp->compr;
   else
     compression = 1;
 
@@ -686,7 +689,7 @@ extern SegmenT Xscale (SegmenT seg, SeqGraphPtr sgp, GraphInfoPtr gip)
   if (sgp == NULL || gip == NULL)
     return seg;
 
-  seg = XscaleX (seg, (Int4) sgp->compl, (Int4) sgp->a, (Int4) sgp->b,
+  seg = XscaleX (seg, (Int4) sgp->compr, (Int4) sgp->a, (Int4) sgp->b,
                  gip->startplot, gip->stopplot,
                  gip->horiz_offset, gip->vert_offset);
   return seg;
@@ -714,7 +717,7 @@ extern SegmenT Yscale (SegmenT seg, SeqGraphPtr sgp, GraphInfoPtr gip)
   }
 
   seg = YscaleX (seg, (Int4) sgp->a, (Int4) sgp->b, minVal, maxVal,
-                 (Int4) sgp->compl, gip->graphpixelheight,
+                 (Int4) sgp->compr, gip->graphpixelheight,
                  gip->startplot, gip->stopplot,
                  gip->horiz_offset, gip->vert_offset);
   return seg;

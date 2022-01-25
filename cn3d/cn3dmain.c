@@ -34,6 +34,15 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cn3dmain.c,v $
+* Revision 6.30  1999/01/20 18:21:19  ywang
+* include salmedia.h due to the move around of MediaInfo from cn3dmsg.h to the new created salmedia.h
+*
+* Revision 6.29  1999/01/14 19:07:16  kans
+* network availability is configurable
+*
+* Revision 6.28  1998/12/08 16:53:09  kans
+* new params to ShowNetConfigForm to simplify configuration
+*
 * Revision 6.27  1998/08/03 18:33:12  lewisg
 * added netentcf to cn3d
 *
@@ -139,9 +148,11 @@
 #include <algorend.h>
 #include <cn3dopen.h>
 #include <cn3dmsg.h>
+#include <salmedia.h>
 #include <sqnutils.h>
 
 extern Boolean viewalign_only;
+static Boolean useEntrez = FALSE;
 
 static Boolean LIBCALLBACK OpenMimeFile(CharPtr filename)
 {
@@ -158,103 +169,69 @@ static Boolean LIBCALLBACK OpenMimeFile(CharPtr filename)
 static SeqEditViewProcs    seqedprocs;
 /******** END ************/
 
-/* used by netentcf */
-
-static IteM  cutItem = NULL;
-static IteM  copyItem = NULL;
-static IteM  pasteItem = NULL;
-static IteM  deleteItem = NULL;
-
-/* no idea what this mac stuff is for */
-#ifdef WIN_MAC
-static void ConfigFormActivated (WindoW w)
-
-{
-  currentFormDataPtr = (VoidPtr) GetObjectExtra (w);
-  RepeatProcOnHandles (Enable,
-                   (HANDLE) cutItem,
-                   (HANDLE) copyItem,
-                   (HANDLE) pasteItem,
-                   (HANDLE) deleteItem,
-                   NULL);
-}
-#endif
-
-#ifndef WIN_MAC
-#define ConfigFormActivated NULL
-#endif
-
-static void ConfigFormMessage (ForM f, Int2 mssg)
-
-{
-  BaseFormPtr  bfp;
-
-  bfp = (BaseFormPtr) GetObjectExtra (f);
-  if (bfp != NULL) {
-    switch (mssg) {
-      case VIB_MSG_CUT :
-        StdCutTextProc (NULL);
-        break;
-      case VIB_MSG_COPY :
-        StdCopyTextProc (NULL);
-        break;
-      case VIB_MSG_PASTE :
-        StdPasteTextProc (NULL);
-        break;
-      case VIB_MSG_DELETE :
-        StdDeleteTextProc (NULL);
-        break;
-      default :
-        break;
-    }
-  }
-}
-
 static void ConfigAccepted (void)
 
 {
-  Message (MSG_OK, "Please rerun Cn3D now that it is configured");
-  QuitProgram ();
+  SetAppParam ("CN3D", "SETTINGS", "NETWORKAVAILABLE", "TRUE");
+  Message (MSG_OK, "Setting will take affect when you restart Cn3D");
 }
 
 static void ConfigCancelled (void)
 
 {
-  Message (MSG_OK, "Configuration cancelled.  Exiting program.");
-  QuitProgram ();
+  Message (MSG_OK, "No changes to the network configuration have been made");
 }
 
-static CharPtr configMessage =
-"Entrez cannot find ncbi configuration file.\n\
-Do you wish to run the configuration program?";
+static void ConfigTurnedOff (void)
 
-/* end of stuff used by netentcf */
+{
+  SetAppParam ("CN3D", "SETTINGS", "NETWORKAVAILABLE", "FALSE");
+  Message (MSG_OK, "Setting will take affect when you restart Cn3D");
+}
 
+static void NetConfigureProc (IteM i)
 
+{
+  Boolean  netCurrentlyOn = FALSE;
+  Char     str [32];
+
+  if (GetAppParam ("CN3D", "SETTINGS", "NETWORKAVAILABLE", NULL, str, sizeof (str))) {
+    if (StringICmp (str, "TRUE") == 0) {
+      netCurrentlyOn = TRUE;
+    }
+  }
+  if (useEntrez) {
+    netCurrentlyOn = TRUE;
+  }
+  ShowNetConfigForm (NULL, NULL,
+                     ConfigAccepted, ConfigCancelled,
+                     ConfigTurnedOff, netCurrentlyOn);
+}
 
 Int2 Main(void)
 {
   char buffer [PATH_MAX];
   WindoW www;
-  Char           str [16];
+  Boolean  netCurrentlyOn = FALSE;
+  Char     str [32];
 
 
 
   ErrSetFatalLevel( SEV_MAX );
 
-if (! GetAppParam ("NCBI", "NCBI", NULL, NULL, str, sizeof (str) - 1)) {
-    if (Message (MSG_YN, configMessage) == ANS_YES) {
-      ShowNetConfigForm (ConfigFormActivated, ConfigFormMessage,
-                         ConfigAccepted, ConfigCancelled);
-      ProcessEvents ();
-      return 0;
-    }
-}
-
-
   UseLocalAsnloadDataAndErrMsg();
   if ( !OpenMMDBAPI(0, NULL) )
     return 1;
+
+  if (GetAppParam ("CN3D", "SETTINGS", "NETWORKAVAILABLE", NULL, str, sizeof (str))) {
+    if (StringICmp (str, "TRUE") == 0) {
+      useEntrez = TRUE;
+    }
+  }
+
+  if (useEntrez) {
+    EntrezBioseqFetchEnable ("Cn3D", FALSE);
+  }
 
 /******* SEQUENCE EDITOR *********/
   MemSet ((Pointer) (&seqedprocs), 0, sizeof (SeqEditViewProcs));
@@ -266,7 +243,7 @@ if (! GetAppParam ("NCBI", "NCBI", NULL, NULL, str, sizeof (str) - 1)) {
     DeskAccGroup( AppleMenu( NULL ) );
 #endif
 
-  www = Cn3DWin(NULL, NULL);
+  www = Cn3DWin(NULL, NULL, NetConfigureProc, useEntrez);
   if ( www )
     {
       if (GetAppParam("Cn3D","demo","mandatory_file","", buffer, sizeof(buffer)) > 0)
@@ -295,13 +272,13 @@ if (! GetAppParam ("NCBI", "NCBI", NULL, NULL, str, sizeof (str) - 1)) {
 
   CloseMMDBAPI();
   
-  if(Cn3D_fEntrezOn)
-  {
-    EntrezBioseqFetchDisable();
-/*  BioseqFetchDisable();
-    EntrezFini();   */
+  if (useEntrez) {
+    EntrezBioseqFetchDisable ();
+    if (EntrezIsInited ()) {
+      EntrezFini ();
+    }
   }
-  
+
   return 0;
 }
 

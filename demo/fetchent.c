@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/10/98
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description: 
 *
@@ -61,7 +61,8 @@
 *   At some point in the future, a new Entrez network access API will use
 *   strings, not hard-coded numbers, to refer to the database.  For now,
 *   the database is passed in as a string (ML, AA, or NT), which map to
-*   TYP_ML, TYP_AA, and TYP_NT.
+*   TYP_ML, TYP_AA, and TYP_NT.  (M, P, or N, used for the Web Entrez URL
+*   query, can now be used here as well.)
 *
 * Modifications:  
 * --------------------------------------------------------------------------
@@ -79,6 +80,8 @@
 #include <objacces.h>
 #include <tomedlin.h>
 #include <asn2ff.h>
+#include <tofasta.h>
+#include <explore.h>
 #include <sqnutils.h>
 
 static void ReadPubMedRecords (LinkSetPtr lsp, FILE *fp)
@@ -113,10 +116,57 @@ static void ReadPubMedRecords (LinkSetPtr lsp, FILE *fp)
   }
 }
 
-static void ReadPubSeqRecords (LinkSetPtr lsp, Int2 db, FILE *fp)
+static Boolean LIBCALLBACK ExtractCodingRegions (BioseqPtr bsp, SeqMgrBioseqContextPtr bcontext)
+
+{
+  Char               buf [255];
+  SeqFeatPtr         cds;
+  SeqMgrFeatContext  fcontext;
+  FILE               *fp;
+  SeqPortPtr         spp;
+
+  if (! ISA_na (bsp->mol)) return TRUE;
+  fp = (FILE *) bcontext->userdata;
+  BioseqLock (bsp);
+
+  cds = SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_CDREGION, 0, &fcontext);
+  while (cds != NULL) {
+    /*
+    spp = FastaSeqPort (bsp, TRUE, FALSE, Seq_code_iupacna);
+    */
+    spp = SeqPortNewByLoc (cds->location, Seq_code_iupacna);
+    if (spp != NULL) {
+
+      /*
+      if (FastaId (bsp, buf, sizeof (buf) - 1)) {
+        FastaFileFunc (bsp, FASTA_ID, buf, StringLen (buf), (Pointer) fp);
+      }
+      if (CreateDefLine (NULL, bsp, buf, sizeof (buf) - 1, 0, NULL, NULL)) {
+        FastaFileFunc (bsp, FASTA_DEFLINE, buf, StringLen (buf), (Pointer) fp);
+      }
+      */
+      SeqLocLabel (cds->location, buf, sizeof (buf), OM_LABEL_CONTENT);
+      FastaFileFunc (bsp, FASTA_ID, buf, StringLen (buf), (Pointer) fp);
+      FastaFileFunc (bsp, FASTA_DEFLINE, fcontext.label, StringLen (fcontext.label), (Pointer) fp);
+      while (FastaSeqLine (spp, buf, 80, TRUE)) {
+        FastaFileFunc (bsp, FASTA_SEQLINE, buf, StringLen (buf), (Pointer) fp);
+      }
+      FastaFileFunc (bsp, FASTA_EOS, buf, StringLen (buf), (Pointer) fp);
+
+      SeqPortFree (spp);
+    }
+    cds = SeqMgrGetNextFeature (bsp, cds, SEQFEAT_CDREGION, 0, &fcontext);
+  }
+
+  BioseqUnlock (bsp);
+  return TRUE;
+}
+
+static void ReadPubSeqRecords (LinkSetPtr lsp, Int2 db, Boolean makeCDS, FILE *fp)
 
 {
   Int4              count;
+  Uint2             entityID;
   Uint1             format = TYP_NT;
   Int2              num;
   SeqEntryPtr PNTR  list;  /* see <objsset.h> */
@@ -138,9 +188,21 @@ static void ReadPubSeqRecords (LinkSetPtr lsp, Int2 db, FILE *fp)
     for (count = 0; count < num; count++) {
       sep = list [count];
       if (sep != NULL) {
+
+        /* indexing of features */
+        entityID = SeqMgrIndexFeatures (0, sep);
+
+        if (makeCDS && db == TYP_NT) {
+
+          /* uses new explore functions to extract coding regions */
+          SeqMgrExploreBioseqs (entityID, NULL, (Pointer) fp, ExtractCodingRegions, TRUE, FALSE, FALSE);
+
+        } else {
+
         /* the following call saves the record in GenBank or GenPept format */
-        if (SeqEntryToFlat (sep, fp, format, RELEASE_MODE)) {
-          fprintf (fp, "\n\n");
+          if (SeqEntryToFlat (sep, fp, format, RELEASE_MODE)) {
+            fprintf (fp, "\n\n");
+          }
         }
       }
     }
@@ -152,7 +214,7 @@ static void ReadPubSeqRecords (LinkSetPtr lsp, Int2 db, FILE *fp)
   }
 }
 
-static Int2 ProcessQuery (Int2 db, CharPtr query, FILE *fp)
+static Int2 ProcessQuery (Int2 db, CharPtr query, Boolean makeCDS, FILE *fp)
 
 {
   Int4        count;
@@ -179,7 +241,7 @@ static Int2 ProcessQuery (Int2 db, CharPtr query, FILE *fp)
   if (db == TYP_ML) {
     ReadPubMedRecords (lsp, fp);
   } else if (db == TYP_AA || db == TYP_NT) {
-    ReadPubSeqRecords (lsp, db, fp);
+    ReadPubSeqRecords (lsp, db, makeCDS, fp);
   }
 
   LinkSetFree (lsp);
@@ -189,7 +251,7 @@ static Int2 ProcessQuery (Int2 db, CharPtr query, FILE *fp)
 #ifdef NUMARG
 #undef NUMARG
 #endif
-#define NUMARG 3
+#define NUMARG 4
 
 Args myargs [NUMARG] = {
   {"Database (ML/AA/NT)", "ML", NULL, NULL,
@@ -198,10 +260,14 @@ Args myargs [NUMARG] = {
     FALSE, 'q', ARG_STRING, 0.0, 0, NULL},
   {"Output File Name", "stdout", NULL, NULL,
     FALSE, 'o', ARG_FILE_OUT, 0.0, 0, NULL},
+  {"Extract Coding Regions", "F", NULL, NULL,
+    TRUE, 'c', ARG_BOOLEAN, 0.0, 0, NULL},
 };
 
+/* databases can now also be single letter 'M', 'P', or 'N' */
+
 static CharPtr databases [] = {
-  "ML", "AA", "NT", NULL
+  "ML", "AA", "NT", "M", "P", "N", NULL
 };
 
 Int2 Main (void)
@@ -209,6 +275,7 @@ Int2 Main (void)
 {
   Int2     db = -1;
   Int2     i;
+  Boolean  makeCDS;
   Char     path [PATH_MAX];
   CharPtr  progname;
   FILE     *fp;
@@ -221,6 +288,14 @@ Int2 Main (void)
 
   if (! AllObjLoad ()) {
     Message (MSG_FATAL, "AllObjLoad failed");
+    return 1;
+  }
+  if (! SeqCodeSetLoad ()) {
+    Message (MSG_FATAL, "SeqCodeSetLoad failed");
+    return 1;
+  }
+  if (! GeneticCodeTableLoad ()) {
+    Message (MSG_FATAL, "GeneticCodeTableLoad failed");
     return 1;
   }
 
@@ -244,6 +319,10 @@ Int2 Main (void)
       db = i;
     }
   }
+  /* Convert M, P, or N alternative database symbols to proper code */
+  if (db >= 3 && db <= 5) {
+    db -= 3;
+  }
   if (db < 0 || db > 2) {
     Message (MSG_FATAL, "Database must be ML, AA, or NT");
     return 1;
@@ -260,7 +339,13 @@ Int2 Main (void)
     return 1;
   }
 
-  rsult = ProcessQuery (db, myargs [1].strvalue, fp);
+  makeCDS = (Boolean) myargs [3].intvalue;
+  if (makeCDS && db != TYP_NT) {
+    Message (MSG_ERROR, "Coding region extraction inappropriate");
+    makeCDS = FALSE;
+  }
+
+  rsult = ProcessQuery (db, myargs [1].strvalue, makeCDS, fp);
 
   FileClose (fp);
   EntrezFini ();

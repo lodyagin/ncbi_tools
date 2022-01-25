@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   05/16/95
 *
-* $Revision: 1.6 $
+* $Revision: 1.9 $
 *
 * File Description: 
 *       Simulates "traditional" BLAST output
@@ -44,6 +44,15 @@
 *
 * RCS Modification History:
 * $Log: blastcl3.c,v $
+* Revision 1.9  1999/01/03 22:33:20  kans
+* now calls UseLocalAsnloadDataAndErrMsg
+*
+* Revision 1.8  1998/12/09 15:27:04  madden
+* Add wordsize
+*
+* Revision 1.7  1998/11/05 17:55:25  madden
+* Removed unused global_fp
+*
 * Revision 1.6  1998/05/02 20:39:38  kans
 * global_fp is extern, removed unused callback function, removed unused variables, added newlines in long prompts
 *
@@ -74,6 +83,7 @@
 #include <dust.h>
 #include <txalign.h>
 #include <accentr.h>
+#include <sqnutils.h>
 
 
 static Boolean LIBCALL
@@ -158,7 +168,6 @@ static int LIBCALLBACK UNIXMontiorHook(Nlm_MonitorPtr mon, MonCode code)
 
 }
 
-extern FILE *global_fp;
 
 static void
 PrintMotd(CharPtr string, FILE *fp, Boolean html_format)
@@ -208,7 +217,7 @@ PrintMotd(CharPtr string, FILE *fp, Boolean html_format)
 }
 
 
-#define NUMARGS 24
+#define NUMARGS 25
 
 static Args myargs [NUMARGS] = {
  { "Program Name",
@@ -255,6 +264,8 @@ static Args myargs [NUMARGS] = {
         NULL, NULL, NULL, TRUE, 'O', ARG_FILE_OUT, 0.0, 0, NULL},
   { "Believe the query defline",
 	    "F", NULL, NULL, FALSE, 'J', ARG_BOOLEAN, 0.0, 0, NULL},
+  { "Word size, default if zero",
+        "0", NULL, NULL, FALSE, 'W', ARG_INT, 0.0, 0, NULL},
   { "Start of the sequence", 
         "1", NULL, NULL, FALSE, 'A', ARG_INT, 0.0, 0, NULL},
   { "End of the  sequence (-1 is entire sequence)", 
@@ -298,6 +309,8 @@ Int2 Main (void)
         {
                 return (1);
         }
+
+	UseLocalAsnloadDataAndErrMsg ();
 
 	if (! SeqEntryLoad())
 		return 1;
@@ -393,6 +406,9 @@ Int2 Main (void)
 	options->genetic_code = myargs[17].intvalue;
 	options->db_genetic_code = myargs[18].intvalue;
 	options->number_of_cpus = myargs[19].intvalue;
+        if (myargs[22].intvalue != 0)
+                options->wordsize = myargs[22].intvalue;
+
 
         print_options = 0;
         align_options = 0;
@@ -424,7 +440,6 @@ Int2 Main (void)
                         align_options += TXALIGN_MATRIX_VAL;
                         align_options += TXALIGN_SHOW_QS;
 	}
-	global_fp = outfp;
 
 	if (! BlastInit("blastcl3", &bl3hp, &response)) {
 	      ErrPostEx(SEV_FATAL, 0, 0, "Unable to initialize BLAST service");
@@ -456,11 +471,11 @@ Int2 Main (void)
 		SeqEntryExplore(sep, &query_bsp, query_is_na? FindNuc : FindProt);
 
 		/* Read boundaries of location */
-		startloc = myargs[22].intvalue - 1;
-		if (myargs[23].intvalue == -1)
+		startloc = myargs[23].intvalue - 1;
+		if (myargs[24].intvalue == -1)
 		    endloc = query_bsp->length - 1;
 		else
-		    endloc = myargs[23].intvalue - 1;
+		    endloc = myargs[24].intvalue - 1;
 
 		/* Create the SeqLoc */
 		slp = SeqLocIntNew(startloc, endloc, Seq_strand_both, query_bsp->id);

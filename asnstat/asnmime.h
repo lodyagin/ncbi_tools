@@ -9,7 +9,7 @@
 #include <asn.h>
 #endif
 
-static char * asnfilename = "asnmime.h63";
+static char * asnfilename = "asnmime.h64";
 static AsnValxNode avnx[13] = {
     {20,"docsum" ,1,0.0,&avnx[1] } ,
     {20,"genbank" ,2,0.0,&avnx[2] } ,
@@ -25,7 +25,7 @@ static AsnValxNode avnx[13] = {
     {20,"pdb" ,12,0.0,&avnx[12] } ,
     {20,"kinemage" ,13,0.0,NULL } };
 
-static AsnType atx[45] = {
+static AsnType atx[52] = {
   {401, "Ncbi-mime-asn1" ,1,0,0,0,0,1,0,0,NULL,&atx[16],&atx[1],0,&atx[13]} ,
   {0, "entrez" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[22]} ,
   {407, "Entrez-general" ,1,0,0,0,0,0,0,0,NULL,&atx[21],&atx[3],0,&atx[23]} ,
@@ -44,7 +44,7 @@ static AsnType atx[45] = {
   {403, "Biostruc-annot-set" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[9]} ,
   {315, "CHOICE" ,0,-1,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} ,
   {0, "style" ,128,2,0,0,0,0,0,0,NULL,&atx[18],NULL,0,&atx[20]} ,
-  {411, "Entrez-style" ,1,0,0,0,0,0,0,0,NULL,&atx[19],&avnx[0],0,NULL} ,
+  {412, "Entrez-style" ,1,0,0,0,0,0,0,0,NULL,&atx[19],&avnx[0],0,NULL} ,
   {310, "ENUMERATED" ,0,10,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} ,
   {0, "location" ,128,3,0,1,0,0,0,0,NULL,&atx[4],NULL,0,NULL} ,
   {311, "SEQUENCE" ,0,16,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} ,
@@ -66,14 +66,21 @@ static AsnType atx[45] = {
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[9],NULL,0,NULL} ,
   {0, "seqalign" ,128,1,0,0,0,0,0,0,NULL,&atx[27],&atx[39],0,NULL} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[33],NULL,0,NULL} ,
-  {0, "strucseq" ,128,3,0,0,0,0,0,0,NULL,&atx[41],NULL,0,NULL} ,
-  {410, "Biostruc-seq" ,1,0,0,0,0,0,0,0,NULL,&atx[21],&atx[42],0,&atx[18]} ,
+  {0, "strucseq" ,128,3,0,0,0,0,0,0,NULL,&atx[41],NULL,0,&atx[45]} ,
+  {410, "Biostruc-seq" ,1,0,0,0,0,0,0,0,NULL,&atx[21],&atx[42],0,&atx[46]} ,
   {0, "structure" ,128,0,0,0,0,0,0,0,NULL,&atx[13],NULL,0,&atx[43]} ,
   {0, "sequences" ,128,1,0,0,0,0,0,0,NULL,&atx[27],&atx[44],0,NULL} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[9],NULL,0,NULL} };
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[9],NULL,0,NULL} ,
+  {0, "strucseqs" ,128,4,0,0,0,0,0,0,NULL,&atx[46],NULL,0,NULL} ,
+  {411, "Biostruc-seqs" ,1,0,0,0,0,0,0,0,NULL,&atx[21],&atx[47],0,&atx[18]} ,
+  {0, "structure" ,128,0,0,0,0,0,0,0,NULL,&atx[13],NULL,0,&atx[48]} ,
+  {0, "sequences" ,128,1,0,0,0,0,0,0,NULL,&atx[27],&atx[49],0,&atx[50]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[9],NULL,0,NULL} ,
+  {0, "seqalign" ,128,2,0,0,0,0,0,0,NULL,&atx[27],&atx[51],0,NULL} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[33],NULL,0,NULL} };
 
 static AsnModule ampx[1] = {
-  { "NCBI-Mime" , "asnmime.h63",&atx[0],NULL,NULL,0,0} };
+  { "NCBI-Mime" , "asnmime.h64",&atx[0],NULL,NULL,0,0} };
 
 static AsnValxNodePtr avn = avnx;
 static AsnTypePtr at = atx;
@@ -92,6 +99,7 @@ static AsnModulePtr amp = ampx;
 #define NCBI_MIME_ASN1_alignstruc &at[22]
 #define NCBI_MIME_ASN1_alignseq &at[34]
 #define NCBI_MIME_ASN1_strucseq &at[40]
+#define NCBI_MIME_ASN1_strucseqs &at[45]
 
 #define ENTREZ_GENERAL &at[2]
 #define ENTREZ_GENERAL_title &at[3]
@@ -125,5 +133,12 @@ static AsnModulePtr amp = ampx;
 #define BIOSTRUC_SEQ_structure &at[42]
 #define BIOSTRUC_SEQ_sequences &at[43]
 #define BIOSTRUC_SEQ_sequences_E &at[44]
+
+#define BIOSTRUC_SEQS &at[46]
+#define BIOSTRUC_SEQS_structure &at[47]
+#define BIOSTRUC_SEQS_sequences &at[48]
+#define BIOSTRUC_SEQS_sequences_E &at[49]
+#define BIOSTRUC_SEQS_seqalign &at[50]
+#define BIOSTRUC_SEQS_seqalign_E &at[51]
 
 #define ENTREZ_STYLE &at[18]

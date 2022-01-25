@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 98-01-01
 *
-* $Revision: 6.5 $
+* $Revision: 6.6 $
 *
 * File Description: codon bias
 *
@@ -38,6 +38,9 @@
 * Date       Name        Description of modification
 * --------------------------------------------------------------------------
 * $Log: urkbias.c,v $
+* Revision 6.6  1998/09/30 21:46:45  kuzio
+* no need to reverse bias score
+*
 * Revision 6.5  1998/09/16 18:03:31  kuzio
 * cvs logging
 *
@@ -723,10 +726,7 @@ extern FloatHiPtr BiasScoreBioseq (BioseqPtr bsp, Int4Ptr tableGlobal,
   sint->strand = xstrand;
   cutp = CodonTableFromSeqLoc (bsp, slp);
 
-  if (xstrand == Seq_strand_plus)
-    iscore = 0;
-  else
-    iscore = xstop;
+  iscore = 0;
 
   xstop = bsp->length - 3;
   for (start = stop + 1; start <= xstop; start += 3)
@@ -734,10 +734,7 @@ extern FloatHiPtr BiasScoreBioseq (BioseqPtr bsp, Int4Ptr tableGlobal,
     sint->from = start;
     sint->to = start + 2;
     AddSeqLocToCodonTable (cutp, bsp, slp, TRUE);
-    if (xstrand != Seq_strand_minus)
-      score[iscore++] = Confide (cutp, tableGlobal);
-    else
-      score[iscore--] = Confide (cutp, tableGlobal);
+    score[iscore++] = Confide (cutp, tableGlobal);
     sint->from -= xwindow;
     sint->to -= xwindow;
     AddSeqLocToCodonTable (cutp, bsp, slp, FALSE);
@@ -746,6 +743,5 @@ extern FloatHiPtr BiasScoreBioseq (BioseqPtr bsp, Int4Ptr tableGlobal,
   FreeCodonTable (cutp);
   slp->data.ptrvalue = (Pointer) SeqIntFree (sint);
   SeqLocFree (slp);
-
   return score;
 }

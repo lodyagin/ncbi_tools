@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 98-01-01
 *
-* $Revision: 6.3 $
+* $Revision: 6.4 $
 *
 * File Description: consort - codon usage
 *
@@ -38,6 +38,9 @@
 * Date       Name        Description of modification
 * --------------------------------------------------------------------------
 * $Log: cnsrt.c,v $
+* Revision 6.4  1998/12/18 16:24:53  kuzio
+* big GIs
+*
 * Revision 6.3  1998/09/16 18:19:27  kuzio
 * cvs logging
 *
@@ -59,7 +62,7 @@ static char _this_file[] = __FILE__;
 
 Args myargs[] =
 {
-  { "nucleotide GI", "0", "0", "4000000", TRUE,
+  { "nucleotide GI", "0", "0", "9000000", TRUE,
     'g', ARG_INT, 0.0, 0, NULL},
   { "ASN.1 SeqEntry", NULL, NULL, NULL, TRUE,
     'f', ARG_STRING, 0.0, 0, NULL}

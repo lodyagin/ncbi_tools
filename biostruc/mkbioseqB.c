@@ -29,6 +29,9 @@
  * Author: Ken Addess
  *
  * $Log: mkbioseqB.c,v $
+ * Revision 6.2  1998/12/01 15:13:36  addess
+ * cleaned up code to remove memory leaks
+ *
  * Revision 6.1  1998/07/17 18:54:37  madej
  * Created by Ken Addess.
  *
@@ -222,7 +225,7 @@ ResidueGraphPtr LIBCALL getNstdResGraph(Int4 rgid, BiostrucGraphPtr bsgp)
 
 CharPtr LIBCALL rmvSpace(CharPtr str)
 {
-   CharPtr newstr;
+   CharPtr newstr = NULL;
    Int4 len, i, j;
    Boolean allBlank = TRUE;
 
@@ -238,7 +241,7 @@ CharPtr LIBCALL rmvSpace(CharPtr str)
 
    if (!allBlank)
    {
-      newstr = MemNew((len+1) * sizeof(char));
+      newstr = (CharPtr)MemNew((len+1) * sizeof(CharPtr));
 
       for (i=0, j=0; i<len; i++)
       {
@@ -249,7 +252,8 @@ CharPtr LIBCALL rmvSpace(CharPtr str)
 
       return newstr;
    }
-
+   
+   MemFree(newstr);
    return StringSave(" ");
 }
 

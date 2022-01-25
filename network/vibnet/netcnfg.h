@@ -26,7 +26,7 @@
  *
  * ===========================================================================
  *
- * RCS $Id: netcnfg.h,v 6.1 1998/08/12 23:36:43 vakatov Exp $
+ * RCS $Id: netcnfg.h,v 6.2 1998/12/08 16:51:00 kans Exp $
  *
  * Author:  Kans
  *
@@ -55,7 +55,9 @@ extern "C" {
 NLM_EXTERN void ShowNetConfigForm(WndActnProc     activate,
                                   FormMessageFunc messages,
                                   VoidProc        accepted,
-                                  VoidProc        cancelled);
+                                  VoidProc        cancelled,
+                                  VoidProc        turnedOff,
+                                  Boolean         netCurrentlyOn);
 
 #ifdef __cplusplus
 }

@@ -1,4 +1,4 @@
-/* $Id: mmdbsrv.c,v 6.10 1998/07/17 18:45:53 madej Exp $
+/* $Id: mmdbsrv.c,v 6.11 1998/11/06 16:25:31 addess Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,15 +29,18 @@
 *
 * Version Creation Date: 6 January 1997
 *
-* $Revision: 6.10 $
+* $Revision: 6.11 $
 *
 * File Description:
 *        MMDB WWW-server 
 *
 * $Log: mmdbsrv.c,v $
-* Revision 6.10  1998/07/17 18:45:53  madej
-* Got rid of some unused URLs.
+* Revision 6.11  1998/11/06 16:25:31  addess
+* added features for layer-1 and PDB TITLE records
 *
+ * Revision 6.10  1998/07/17  18:45:53  madej
+ * Got rid of some unused URLs.
+ *
  * Revision 6.9  1998/06/11  19:12:53  madej
  * Changes in a message type for Cn3D by Yanli.
  *
@@ -585,6 +588,42 @@ static Int4 GetOptionValue(CharPtr Value, Int4 NumElements, CharPtr *ElementText
 
 #define EntrezLink	"<A HREF=\"%s?uid=%ld&form=6&db=%c&dopt=%c\">%s</A>"
 
+/************ Added by Ken for Layer One PDB releases ************/
+
+static void My_StringNCpy(CharPtr str1, CharPtr str2, Int4 len)
+{
+  StringNCpy(str1,str2,len);
+  str1[len] = '\0';
+} 
+
+static Boolean IsLayerOne(ValNodePtr pvn)
+{
+  Boolean Layer = FALSE;
+  CharPtr comment_txt;
+  CharPtr LayerOne = {"This is Layer 1 Release"};
+  CharPtr temp_string;
+  Int4 len;
+  
+  while (pvn)
+  {
+     if (pvn->choice == BiostrucDescr_pdb_comment)
+     {
+        comment_txt = (CharPtr)pvn->data.ptrvalue;
+        temp_string = StringSave(LayerOne);
+        len = StringLen(LayerOne);
+        My_StringNCpy(temp_string, &comment_txt[18], len);
+        if (!StringICmp(temp_string, LayerOne))
+        {
+          Layer = TRUE;
+          break;
+        }
+     }
+     pvn = pvn->next;
+   }
+   
+   return Layer;
+}
+/***** End of functions added by Ken ********************/
 static void
 PrintMolecularContents(PDNMS ModelStruc, FILE *gdf)
 {
@@ -687,9 +726,12 @@ PrintStructureInfo(PDNMS ModelStruc,  FILE *File, CharPtr tax_save)
   fprintf(File, "<font size=+2>");
   fprintf(File, "MMDB Id: <A HREF=\"%s%s?uid=%ld&form=6&db=t&Dopt=s\">%ld</A>&nbsp ",
 	URLcgi, "mmdbsrv", (long) pmsdThis->iMMDBid, (long) pmsdThis->iMMDBid);
-  fprintf(File, "PDB Id: <A HREF=\"%s?oPDBid=%s\">%s</a></font><BR>\n", TDBurl,
+  fprintf(File, "PDB Id: <A HREF=\"%s?oPDBid=%s\">%s</a>\n", TDBurl,
 	pmsdThis->pcPDBName, pmsdThis->pcPDBName);
-  fprintf(File, "<BR>\n");
+  if (IsLayerOne(pmsdThis->pbsBS->descr))
+    fprintf(File, " - Warning: <A HREF=\"http://www.pdb.bnl.gov/pdb-docs/what_is_LR.html\">Not validated!</A>\n");
+  fprintf(File, "</font>");  
+  fprintf(File, "<BR>\n<BR>\n");
   fprintf(File, "<TABLE>\n");
   PrintMolecularContents(ModelStruc, File);
   fprintf(File, "<TR>\n<TD VALIGN=TOP NOWRAP>");
@@ -728,8 +770,11 @@ PrintStructureInfo(PDNMS ModelStruc,  FILE *File, CharPtr tax_save)
   }
   
   fprintf(File, "<TR>\n<TD VALIGN=TOP NOWRAP>");
-  fprintf(File, "<strong>PDB Compound</strong>:</TD>\n<TD>%s</TD>\n</TR>\n", pmsdThis->pcChemName);
-
+  pvnThis = ValNodeFindNext(pmsdThis->pGraphDescr,NULL,BiomolDescr_pdb_comment);
+  if (pvnThis)
+    fprintf(File, "<strong>PDB Title</strong>:</TD>\n<TD>%s</TD>\n</TR>\n", pmsdThis->pcChemName);
+  else
+    fprintf(File, "<strong>PDB Compound</strong>:</TD>\n<TD>%s</TD>\n</TR>\n", pmsdThis->pcChemName);
   /* insert a blank row in the table, for spacing */
   fprintf(File, "<TR>\n<TD VALIGN=TOP NOWRAP> </TD>\n<TD><BR></TD>\n</TR>\n");
 
@@ -744,7 +789,9 @@ static void
 PrintStructureView(PDNMS ModelStruc, FILE *File)
 {
 	PMSD pmsd;
- 
+      
+        if (ModelStruc == NULL) return;         
+
 	pmsd = (PMSD) ModelStruc->data.ptrvalue;
 	fprintf(File, "<FORM METHOD=POST ACTION=\"%s%s\">\n", URLcgi, CGIName);
 	fprintf(File, "<INPUT TYPE=HIDDEN NAME=uid VALUE=%ld>\n", (long) pmsd->iMMDBid);
@@ -1689,7 +1736,6 @@ Int2 Main ()
        printf("MMDBSERV: EntrezInit Failed.<p>\n");
        return;
      }       
-
                                                    /* yanli */
 /*if( !BioseqFetchInit(TRUE))                    
     {

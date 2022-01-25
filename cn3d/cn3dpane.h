@@ -33,7 +33,7 @@ extern "C" {
 #endif
   
 extern  Boolean Cn3D_fAlignOn, Cn3D_fUnalignOn; 
-extern GrouP LIBCALL AlignControls PROTO((Nlm_GrouP prnt));
+extern GrouP LIBCALL AlignControls_bak PROTO((Nlm_GrouP prnt));
 extern void LIBCALL ResetAlignCtrls(void);
 
 

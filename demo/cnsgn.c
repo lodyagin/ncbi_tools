@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 98-01-01
 *
-* $Revision: 6.6 $
+* $Revision: 6.9 $
 *
 * File Description: consign - codon biased orf selection
 *
@@ -38,6 +38,15 @@
 * Date       Name        Description of modification
 * --------------------------------------------------------------------------
 * $Log: cnsgn.c,v $
+* Revision 6.9  1998/12/18 16:24:53  kuzio
+* big GIs
+*
+* Revision 6.8  1998/11/16 14:34:10  kuzio
+* flagBoundaryCondition
+*
+* Revision 6.7  1998/10/13 17:15:13  kuzio
+* preliminary Markov
+*
 * Revision 6.6  1998/09/28 16:42:18  kuzio
 * no met orf check
 *
@@ -67,7 +76,7 @@
 #include <urkbias.h>
 
 #define TOP_ERROR 1
-static char _this_module[] = "consign";
+static char _this_module[] = "cnsgn";
 #undef  THIS_MODULE
 #define THIS_MODULE _this_module
 static char _this_file[] = __FILE__;
@@ -86,7 +95,7 @@ Args myargs[] =
 {
   { "FastA file", NULL, NULL, NULL, TRUE,
     'f', ARG_STRING, 0.0, 0, NULL},
-  { "nucleotide GI", "0", "0", "4000000", TRUE,
+  { "nucleotide GI", "0", "0", "9000000", TRUE,
     'g', ARG_INT, 0.0, 0, NULL},
   { "percent stdev shift", "50.0", "0.0", "100.0", TRUE,
     'd', ARG_FLOAT, 0.0, 0, NULL},
@@ -109,7 +118,10 @@ Args myargs[] =
   { "codon usage scan window", "360", "150", "3000", TRUE,
     'w', ARG_INT, 0.0, 0, NULL},
   { "codon usage scan score cutoff", "1.8", "0.0", "10.0", TRUE,
-    's', ARG_FLOAT, 0.0, 0, NULL}
+    's', ARG_FLOAT, 0.0, 0, NULL},
+  { "show Markov statistics for seed ORFs (not used for selection yet)",
+    "FALSE", "TRUE", "FALSE", TRUE,
+    'm', ARG_BOOLEAN, 0.0, 0, NULL}
 };
 
 static Boolean GetBioseq (GatherContextPtr gcp)
@@ -536,6 +548,14 @@ Int2 Main (void)
   TextSeqIdPtr   tsip;
   Char           name[256];
 
+  Boolean        flagShowMarkov;
+  FreqPtr        frqp;
+  CharPtr        bases = "ACGT";
+  CharPtr        pattern;
+  Int4           codons, number, resn, res, i, n;
+  Int4Ptr        adjcdnf0, adjcdnf1, adjcdnf2;
+  FloatHiPtr     adjcdns0, adjcdns1, adjcdns2;
+
   Int4           argnum, argoff;
 
 #ifndef NO_BLS_NET
@@ -545,7 +565,7 @@ Int2 Main (void)
 #endif
 
   argcount = sizeof (myargs) / sizeof (Args);
-  if (!GetArgs ("consign", argcount, myargs))
+  if (!GetArgs ("cnsgn", argcount, myargs))
     return 1;
 
   gi = myargs[1].intvalue;
@@ -557,7 +577,7 @@ Int2 Main (void)
   if (myargs[1].intvalue == 0 && myargs[0].strvalue == NULL)
   {
     ErrPostEx (SEV_ERROR, TOP_ERROR, 100,
-               "No gi or FastA file given :: for help :   cnsgn -");
+               "No gi or FastA file given : for help : cnsgn -");
     ErrShow ();
     exit (1);
   }
@@ -575,14 +595,14 @@ Int2 Main (void)
 
   if (gi > 0)
   {
-    if (!EntrezInit ("consign", FALSE, &flagHaveNet))
+    if (!EntrezInit ("cnsgn", FALSE, &flagHaveNet))
     {
       ErrPostEx (SEV_ERROR, TOP_ERROR, 101,
                  "Entrez init failed");
       ErrShow ();
       exit (1);
     }
-    if (!EntrezBioseqFetchEnable ("consign", TRUE))
+    if (!EntrezBioseqFetchEnable ("cnsgn", TRUE))
     {
       ErrPostEx (SEV_ERROR, TOP_ERROR, 101,
                "Entrez fetch enable failed");
@@ -817,7 +837,7 @@ Int2 Main (void)
         bspaa = gbsp->bsp;
         epip = EpiDatNew ();
         epip->score = PredictEpiBioseq (bspaa, 0, bspaa->length-1, epip);
-        slpepi = FilterEpiBioseq (epip, bspaa, FALSE);
+        slpepi = FilterEpiBioseq (epip, bspaa, FALSE, FALSE);
         EpiDatFree (epip);
         flagGap = TRUE;
         bl3op = BLASTOptionNew (blast_program, flagGap);
@@ -1004,6 +1024,211 @@ Int2 Main (void)
   gsp->ignore[OBJ_BIOSEQ] = TRUE;
   gsp->ignore[OBJ_SEQANNOT] = FALSE;
 
+  argnum = 10;
+  flagShowMarkov = (Boolean) myargs[argnum+argoff].intvalue;
+
+  if (flagShowMarkov)
+  {
+    printf ("\n!!!!!!!!      Markov      !!!!!!!!\n\n");
+
+    frqp = ConKovTrainCDS (bspnt, slpg);
+
+    printf ("Encoding codon triplets (only if non-zero in any frame)\n");
+    codons = 9;
+    pattern = (CharPtr) MemNew ((size_t) (sizeof (Char) * (codons+1)));
+    number = (Int4) pow (4, codons);
+    for (i = 0; i < number; i++)
+    {
+      resn = i;
+      for (n = 0; n < codons; n++)
+      {
+        res = resn % 4;
+        pattern[codons-n-1] = bases[res];
+        resn /= 4;
+      }
+      if (frqp->frame0trip[i] != 0 ||
+          frqp->frame1trip[i] != 0 ||
+          frqp->frame2trip[i] != 0)
+      {
+        printf ("%8d %s %6d %6d %6d\n", i, pattern, frqp->frame0trip[i],
+                                                    frqp->frame1trip[i],
+                                                    frqp->frame2trip[i]);
+      }
+    }
+    MemFree (pattern);
+    printf ("Codon usage in 3 frames of CDS\n");
+    codons = 3;
+    pattern = (CharPtr) MemNew ((size_t) (sizeof (Char) * (codons+1)));
+    number = (Int4) pow (4, codons);
+    for (i = 0; i < number; i++)
+    {
+      resn = i;
+      for (n = 0; n < codons; n++)
+      {
+        res = resn % 4;
+        pattern[codons-n-1] = bases[res];
+        resn /= 4;
+      }
+      printf ("%8d %s       %6d %6d %6d\n", i, pattern, frqp->frame0cdnobs[i],
+                                                        frqp->frame1cdnobs[i],
+                                                        frqp->frame2cdnobs[i]);
+    }
+    MemFree (pattern);
+    printf ("std encoding non-zero triplets in frame 0 (in-frame)\n");
+    codons = 9;
+    pattern = (CharPtr) MemNew ((size_t) (sizeof (Char) * (codons+1)));
+    number = (Int4) pow (4, codons);
+    for (i = 0; i < number; i++)
+    {
+      resn = i;
+      for (n = 0; n < codons; n++)
+      {
+        res = resn % 4;
+        pattern[codons-n-1] = bases[res];
+        resn /= 4;
+      }
+      if (frqp->frame0trip[i] != 0)
+      {
+        printf ("%8d %s %8.4f %8.4f %8.4f\n", i, pattern, frqp->frame0std[i],
+                                                          frqp->frame1std[i],
+                                                          frqp->frame2std[i]);
+      }
+    }
+    MemFree (pattern);
+    printf ("std encoding non-zero triplets in frame 1 (out of frame)\n");
+    codons = 9;
+    pattern = (CharPtr) MemNew ((size_t) (sizeof (Char) * (codons+1)));
+    number = (Int4) pow (4, codons);
+    for (i = 0; i < number; i++)
+    {
+      resn = i;
+      for (n = 0; n < codons; n++)
+      {
+        res = resn % 4;
+        pattern[codons-n-1] = bases[res];
+        resn /= 4;
+      }
+      if (frqp->frame1trip[i] != 0)
+      {
+        printf ("%8d %s %8.4f %8.4f %8.4f\n", i, pattern, frqp->frame0std[i],
+                                                          frqp->frame1std[i],
+                                                          frqp->frame2std[i]);
+      }
+    }
+    MemFree (pattern);
+    printf ("std encoding non-zero triplets in frame 2 (out of frame)\n");
+    codons = 9;
+    pattern = (CharPtr) MemNew ((size_t) (sizeof (Char) * (codons+1)));
+    number = (Int4) pow (4, codons);
+    for (i = 0; i < number; i++)
+    {
+      resn = i;
+      for (n = 0; n < codons; n++)
+      {
+        res = resn % 4;
+        pattern[codons-n-1] = bases[res];
+        resn /= 4;
+      }
+      if (frqp->frame2trip[i] != 0)
+      {
+        printf ("%8d %s %8.4f %8.4f %8.4f\n", i, pattern, frqp->frame0std[i],
+                                                          frqp->frame1std[i],
+                                                          frqp->frame2std[i]);
+      }
+    }
+    MemFree (pattern);
+    printf ("Adjusted 3-frame codon usage\n");
+    adjcdnf0 = (Int4Ptr) MemNew ((size_t) (sizeof (Int4) * 64));
+    adjcdnf1 = (Int4Ptr) MemNew ((size_t) (sizeof (Int4) * 64));
+    adjcdnf2 = (Int4Ptr) MemNew ((size_t) (sizeof (Int4) * 64));
+    adjcdns0 = (FloatHiPtr) MemNew ((size_t) (sizeof (FloatHi) * 64));
+    adjcdns1 = (FloatHiPtr) MemNew ((size_t) (sizeof (FloatHi) * 64));
+    adjcdns2 = (FloatHiPtr) MemNew ((size_t) (sizeof (FloatHi) * 64));
+    codons = 9;
+    number = (Int4) pow (4, codons);
+    res = (Int4) pow (4, 3);
+    for (i = 0; i < number; i++)
+    {
+      if (frqp->frame0std[i] >= 2.5)
+      {
+        n = i;
+        resn = n % res;
+        n /= res;
+        resn = n % res;
+        adjcdnf0[resn] += frqp->frame0trip[i];
+      }
+      if (frqp->frame1std[i] >= 2.5)
+      {
+        n = i;
+        resn = n % res;
+        n /= res;
+        resn = n % res;
+        adjcdnf1[resn] += frqp->frame1trip[i];
+      }
+      if (frqp->frame2std[i] >= 2.5)
+      {
+        n = i;
+        resn = n % res;
+        n /= res;
+        resn = n % res;
+        adjcdnf2[resn] += frqp->frame2trip[i];
+      }
+    }
+    codons = 3;
+    pattern = (CharPtr) MemNew ((size_t) (sizeof (Char) * (codons+1)));
+    number = (Int4) pow (4, codons);
+    for (i = 0; i < number; i++)
+    {
+      resn = i;
+      for (n = 0; n < codons; n++)
+      {
+        res = resn % 4;
+        pattern[codons-n-1] = bases[res];
+        resn /= 4;
+      }
+      printf ("%8d %s       %6d %6d %6d\n", i, pattern, adjcdnf0[i],
+                                                        adjcdnf1[i],
+                                                        adjcdnf2[i]);
+    }
+    MemFree (pattern);
+    codons = 3;
+    pattern = (CharPtr) MemNew ((size_t) (sizeof (Char) * (codons+1)));
+    number = (Int4) pow (4, codons);
+    for (i = 0; i < number; i++)
+    {
+      resn = i;
+      for (n = 0; n < codons; n++)
+      {
+        res = resn % 4;
+        pattern[codons-n-1] = bases[res];
+        resn /= 4;
+      }
+      if (adjcdnf0[i] == 0)
+        adjcdnf0[i] = 1;
+      if (adjcdnf1[i] == 0)
+        adjcdnf1[i] = 1;
+      if (adjcdnf2[i] == 0)
+        adjcdnf2[i] = 1;
+      adjcdns0[i] = (FloatHi) (frqp->frame0cdnobs[i] - adjcdnf0[i]) /
+                    (FloatHi) sqrt ((FloatHi) adjcdnf0[i]);
+      adjcdns1[i] = (FloatHi) (frqp->frame1cdnobs[i] - adjcdnf1[i]) /
+                    (FloatHi) sqrt ((FloatHi) adjcdnf1[i]);
+      adjcdns2[i] = (FloatHi) (frqp->frame2cdnobs[i] - adjcdnf2[i]) /
+                    (FloatHi) sqrt ((FloatHi) adjcdnf2[i]);
+      printf ("%8d %s %8.4f %8.4f %8.4f\n", i, pattern, adjcdns0[i],
+                                                        adjcdns1[i],
+                                                        adjcdns2[i]);
+    }
+    MemFree (pattern);
+    MemFree (adjcdnf0);
+    MemFree (adjcdnf1);
+    MemFree (adjcdnf2);
+    MemFree (adjcdns0);
+    MemFree (adjcdns1);
+    MemFree (adjcdns2);
+    FreqFree (frqp);
+  }
+
   printf ("\n!!!!!!!!     All ORFs     !!!!!!!!\n\n");
   SortByLocOrfs (&slpa);
   NameTagOrfs (slpa);
@@ -1049,7 +1274,7 @@ Int2 Main (void)
   if (!flagKeepInternalOrfs)
     RemoveInternalOrfs (&slp);
 
-  printf ("\n!!!! All Found ORFs With CU Bias To Seed ORFs !!!!\n\n");
+  printf ("\n!! Seed ORFs plus ORFs With CU Bias To Seed ORFs !\n\n");
   TransferNameTags (slp, slpa);
   gcdsp->slpHit = slp;
   ShowAllFoundOrfs (slp);

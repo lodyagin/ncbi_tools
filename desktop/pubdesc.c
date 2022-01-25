@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/28/95
 *
-* $Revision: 6.10 $
+* $Revision: 6.13 $
 *
 * File Description:
 *
@@ -39,6 +39,15 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: pubdesc.c,v $
+* Revision 6.13  1998/12/14 22:36:21  kans
+* trim spaces around muid string
+*
+* Revision 6.12  1998/11/30 17:31:13  kans
+* kludge to save authors if lookup by article
+*
+* Revision 6.11  1998/10/20 15:33:59  kans
+* citsub now allows affil phone, fax, e-mail to be set
+*
 * Revision 6.10  1998/06/12 00:24:52  kans
 * fixed problems detected by unix compiler
 *
@@ -473,6 +482,7 @@ static ValNodePtr NewPMuidFromText (TexT idtext, Int2 choice)
 
   idnode = NULL;
   GetTitle (idtext, str, sizeof (str));
+  TrimSpacesAroundString (str);
   if (str[0] != '\0')
   {
     StrToLong (str, &id);
@@ -1619,10 +1629,8 @@ static CharPtr  labels3 [] = {
   "Pages", "Year", NULL};
 static CharPtr AuthTabs[] = {
   "Names", "Affiliation", NULL};
-/*
-static CharPtr AuthTabs[] = {
+static CharPtr CitSubAuthTabs[] = {
   "Names", "Affiliation", "Contact", NULL};
-*/
 
 static void ChangeAuthPage (VoidPtr data, Int2 newval, Int2 oldval)
 {
@@ -1784,6 +1792,24 @@ static ValNodePtr LookupAnArticle (PubEquivLookupProc lookup, ValNodePtr oldpep,
       pub = lookup (pep);
       PubEquivFree (pep);
       if (pub != NULL) {
+        if (! byMuid) {
+          pep = AsnIoMemCopy (oldpep, (AsnReadFunc) PubEquivAsnRead,
+                              (AsnWriteFunc) PubEquivAsnWrite);
+          if (pep != NULL && pep->choice == PUB_Article) {
+            cap = (CitArtPtr) pep->data.ptrvalue;
+            if (cap != NULL) {
+              cgp = ConvertCitArtToCitGen (cap);
+              if (cgp != NULL) {
+                pep->choice = PUB_Gen;
+                pep->data.ptrvalue = cgp;
+                CitArtFree (cap);
+              }
+            }
+            for (vnp = pep; vnp->next != NULL; vnp = vnp->next) continue;
+            vnp->next = pub;
+            pub = pep;
+          }
+        }
         cap = NULL;
         cap2 = NULL;
         cgp = NULL;
@@ -1872,6 +1898,7 @@ static void LookupCommonProc (ButtoN b, Boolean byMuid)
         PointerToDialog (ppp->dialog, (Pointer) pdp);
       }
       PubdescFree (pdp);
+      Select (ParentWindow (b));
       Update ();
     }
   }
@@ -2098,7 +2125,13 @@ static DialoG CreatePubdescDialog (GrouP h, CharPtr title, GrouP PNTR pages,
 
     g1 = HiddenGroup (pages[thispage], -1, 0, NULL);
     SetGroupSpacing (g1, 10, 10);
-    if (ppp->pub_choice != PUB_BOOK && ppp->pub_choice != PUB_PROC)
+    if (ppp->pub_choice == PUB_SUB)
+    {
+      m1 = (GrouP) CreateFolderTabs (g1, CitSubAuthTabs, 0, 0, 0,
+                         PROGRAM_FOLDER_TAB,
+                         ChangeAuthPage, (Pointer) ppp);
+    }
+    else if (ppp->pub_choice != PUB_BOOK && ppp->pub_choice != PUB_PROC)
     {
       m1 = (GrouP) CreateFolderTabs (g1, AuthTabs, 0, 0, 0,
                          PROGRAM_FOLDER_TAB,

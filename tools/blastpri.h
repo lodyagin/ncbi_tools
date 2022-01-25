@@ -32,8 +32,17 @@ Contents: prototypes for "private" BLAST functions, these should not be called
 
 ******************************************************************************/
 
-/* $Revision: 6.37 $ */
+/* $Revision: 6.40 $ */
 /* $Log: blastpri.h,v $
+/* Revision 6.40  1999/01/19 13:26:47  madden
+/* Change to HspArrayPurge
+/*
+ * Revision 6.39  1999/01/08 22:08:43  madden
+ * BlastScaleMatrix returns factor as FloatHi
+ *
+ * Revision 6.38  1998/12/18 16:19:58  madden
+ * Make BLASTSetUpSearchWithReadDbInternal public, add BlastSearchBlkNewExtra
+ *
  * Revision 6.37  1998/09/17 19:53:03  madden
  * Added fillCandLambda
  *
@@ -504,7 +513,12 @@ BlastSearchBlkPtr LIBCALL BlastSearchBlkDuplicate PROTO((BlastSearchBlkPtr searc
 
 BlastSearchBlkPtr LIBCALL BlastSearchBlkNew PROTO((Int2 wordsize, Int4 qlen, CharPtr dbname, Boolean multiple_hits, BLAST_Score threshold_first, BLAST_Score threshold_second, Int4 result_size, CharPtr prog_name, BlastAllWordPtr all_words, Int2 first_context, Int2 last_context));
 
+/* Allocates a search Block, except it only attaches to the rdfp, does not allocate it. */
+BlastSearchBlkPtr LIBCALL BlastSearchBlkNewExtra PROTO((Int2 wordsize, Int4 qlen, CharPtr dbname, Boolean multiple_hits, BLAST_Score threshold_first, BLAST_Score threshold_second, Int4 result_size, CharPtr prog_name, BlastAllWordPtr all_words, Int2 first_context, Int2 last_context, ReadDBFILEPtr rdfp));
+
 BlastSearchBlkPtr LIBCALL BlastSearchBlkDestruct PROTO((BlastSearchBlkPtr search));
+
+BlastSearchBlkPtr BLASTSetUpSearchWithReadDbInternal PROTO((SeqLocPtr query_slp, BioseqPtr query_bsp, CharPtr prog_name, Int4 qlen, CharPtr dbname, BLAST_OptionsBlkPtr options, int (LIBCALLBACK *callback)PROTO((Int4 done, Int4 positives)), SeqIdPtr seqid_list, BlastDoubleInt4Ptr gi_list, Int4 gi_list_total, ReadDBFILEPtr rdfp));
 
 
 
@@ -554,7 +568,7 @@ Int2 LIBCALL BlastPreliminaryGappedScore PROTO((BlastSearchBlkPtr search, Uint1P
 
 Int2 LIBCALL BlastHitListPurge PROTO((BLAST_HitListPtr hitlist));
 
-Int2 LIBCALL HspArrayPurge PROTO((BLAST_HSPPtr PNTR hsp_array, Int2 hspcnt));
+Int4 LIBCALL HspArrayPurge PROTO((BLAST_HSPPtr PNTR hsp_array, Int4 hspcnt));
 
 
 void BlastSaveCurrentHsp PROTO((BlastSearchBlkPtr search, BLAST_Score score, Int4 q_offset, Int4 s_offset, Int4 length, Int2 context));
@@ -621,7 +635,7 @@ BlastGiListPtr BlastGiListNew PROTO((BlastDoubleInt4Ptr gi_list, BlastDoubleInt4
 
 ScorePtr LIBCALL GetScoreSetFromBlastResultHsp PROTO((BLASTResultHspPtr hsp, SeqIdPtr gi_list));
 
-void BlastScaleMatrix PROTO((BlastMatrixRescalePtr matrix_rescale, Boolean position_dependent));
+Nlm_FloatHi BlastScaleMatrix PROTO((BlastMatrixRescalePtr matrix_rescale, Boolean position_dependent));
 
 BlastMatrixRescalePtr BlastMatrixRescaleNew PROTO((Int4 alphabet_size, Int4 query_length, Uint1Ptr query,  Nlm_FloatHiPtr standardProb, Int4Ptr *matrix, Int4Ptr *private_matrix, BLAST_KarlinBlkPtr *kbp_std, BLAST_KarlinBlkPtr *kbp_psi, BLAST_KarlinBlkPtr *kbp_gap_std, BLAST_KarlinBlkPtr *kbp_gap_psi, Nlm_FloatHi lambda_ideal,  Nlm_FloatHi K_ideal));
 
@@ -651,6 +665,8 @@ ValNodePtr convertSeqAlignListToValNodeList(SeqAlignPtr seqAlignList, SeqAlignPt
 SeqAlignPtr convertValNodeListToSeqAlignList(ValNodePtr seqAlignDoubleList, SeqAlignPtr ** lastSeqAligns, Int4 * numLastSeqAligns);
 
 void LIBCALL fillCandLambda(seedSearchItems * seedSearch, Char *matrixName, BLAST_OptionsBlkPtr options);
+
+Int2 RealBlastGetGappedAlignmentTraceback(BlastSearchBlkPtr search, Uint1Ptr subject, Int4 subject_length, Uint1Ptr rev_subject, Int4 rev_subject_length, SeqIdPtr subject_id, BLAST_HSPPtr *hsp_array, Int4 hspcnt, SeqAlignPtr *head, BlastHitRangePtr bhrp, Int4 min_score_to_keep, Boolean reverse, Int4 ordinal_id, Boolean do_traceback);
 
 #ifdef __cplusplus
 }

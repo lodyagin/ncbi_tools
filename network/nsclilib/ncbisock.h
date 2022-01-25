@@ -1,7 +1,7 @@
 #ifndef NCBISOCK__H
 #define NCBISOCK__H
 
-/*  $RCSfile: ncbisock.h,v $  $Revision: 4.5 $  $Date: 1998/08/12 13:12:43 $
+/*  $RCSfile: ncbisock.h,v $  $Revision: 4.7 $  $Date: 1999/01/22 22:05:00 $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -33,6 +33,12 @@
 *
 * --------------------------------------------------------------------------
 * $Log: ncbisock.h,v $
+* Revision 4.7  1999/01/22 22:05:00  vakatov
+* Uint4toInaddr() to take address in the network byte order
+*
+* Revision 4.6  1998/12/15 17:22:24  vakatov
+* + SOCK_Address() -- to get the socket peer's host and port
+*
 * Revision 4.5  1998/08/12 13:12:43  kans
 * moved high level query functions to ncbiurl.[ch]
 *
@@ -230,6 +236,19 @@ NLM_EXTERN ESOCK_ErrCode SOCK_Write
  Nlm_Uint4  *n_written
  );
 
+
+/* Get host address and port of the socket peer
+ * If "network_byte_order" is true then return them in the network byte order
+ * NOTE:  "host" or "port" can be NULL
+ */
+NLM_EXTERN void SOCK_Address
+(SOCK         sock,
+ Nlm_Uint4   *host,
+ Nlm_Uint2   *port,
+ Nlm_Boolean  network_byte_order
+ );
+
+
 /* Destroy internal data used by this module
  * NOTE: no function from this API can be used after the call to SOCK_Destroy
  */
@@ -246,7 +265,7 @@ NLM_EXTERN Nlm_Boolean GetHostName
 
 #define Uint4toInaddr Nlm_Uint4toInaddr
 NLM_EXTERN Nlm_Boolean Uint4toInaddr
-(Nlm_Uint4   ui4_addr,  /* NOTE: must be in the local host byte order  */
+(Nlm_Uint4   ui4_addr,  /* NOTE: must be in the network byte-order  */
  Nlm_CharPtr buf,       /* to be filled by smth. like "123.45.67.89\0" */
  Nlm_Uint4   buf_len
  );

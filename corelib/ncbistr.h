@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/1/91
 *
-* $Revision: 6.0 $
+* $Revision: 6.2 $
 *
 * File Description:
 *   	prototypes for portable string routines
@@ -37,6 +37,13 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ncbistr.h,v $
+* Revision 6.2  1998/11/27 19:08:59  vakatov
+* Removed proto of StringAppend() -- it is not implemented anyway, and
+* there are more standard functions from the "String[N]Cat" family
+*
+* Revision 6.1  1998/10/07 19:09:01  kans
+* added Nlm_StringTokMT, multithread-safe version
+*
 * Revision 6.0  1997/08/25 18:17:10  madden
 * Revision changed to 6.0
 *
@@ -132,6 +139,7 @@ NLM_EXTERN size_t LIBCALL Nlm_StringSpn PROTO((const char FAR *str1, const char 
 NLM_EXTERN size_t LIBCALL Nlm_StringCSpn PROTO((const char FAR *str1, const char FAR *str2));
 NLM_EXTERN Nlm_CharPtr LIBCALL Nlm_StringStr PROTO((const char FAR *str1, const char FAR *str2));
 NLM_EXTERN Nlm_CharPtr LIBCALL Nlm_StringTok PROTO((char FAR *str1, const char FAR *str2));
+NLM_EXTERN Nlm_CharPtr LIBCALL  Nlm_StringTokMT PROTO((char FAR *str1, const char FAR *str2, char FAR **tmp));
 NLM_EXTERN Nlm_CharPtr LIBCALL Nlm_StringMove PROTO((char FAR *to, const char FAR *from));
 NLM_EXTERN Nlm_CharPtr LIBCALL Nlm_StringSave PROTO((const char FAR *from));
 NLM_EXTERN Nlm_CharPtr LIBCALL Nlm_StringSaveNoNull PROTO((const char FAR *from));
@@ -194,7 +202,6 @@ NLM_EXTERN Nlm_Boolean LIBCALL StringSub PROTO ((char FAR *String, char Find, ch
 NLM_EXTERN Nlm_Boolean LIBCALL StringSubSet PROTO ((char FAR *String,char FAR *FindSet, char Replace));
 NLM_EXTERN Nlm_Boolean LIBCALL StringSubString PROTO ((char FAR *String, char FAR *Find, char FAR *Replace, Nlm_Int4 MaxLength));
 NLM_EXTERN Nlm_CharPtr LIBCALL StringEnd PROTO ((char FAR *String));
-NLM_EXTERN Nlm_CharPtr LIBCALL StringAppend PROTO ((char FAR *String, char FAR *Append));
 NLM_EXTERN Int4 LIBCALL CountChar PROTO ((char FAR *String, char Char));
 NLM_EXTERN Int4 LIBCALL CountStrings PROTO ((char FAR *String, char FAR *Find));
 NLM_EXTERN Nlm_CharPtr LIBCALL StripSpaces PROTO ((char FAR *Line));
@@ -345,6 +352,7 @@ NLM_EXTERN char * LIBCALL Nlm_StrLower PROTO((char *string));
 #define StringCSpn  Nlm_StringCSpn
 #define StringStr   Nlm_StringStr
 #define StringTok   Nlm_StringTok
+#define StringTokMT Nlm_StringTokMT
 #define StringMove	Nlm_StringMove
 #define StringSave	Nlm_StringSave
 #define StringSaveNoNull Nlm_StringSaveNoNull

@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 98-01-01
 *
-* $Revision: 6.6 $
+* $Revision: 6.7 $
 *
 * File Description: filter
 *
@@ -38,6 +38,9 @@
 * Date       Name        Description of modification
 * --------------------------------------------------------------------------
 * $Log: urkfltr.c,v $
+* Revision 6.7  1998/12/23 21:34:04  kuzio
+* SeqPortStuff
+*
 * Revision 6.6  1998/09/16 18:03:34  kuzio
 * cvs logging
 *
@@ -287,10 +290,8 @@ extern FloatHiPtr FilterSeqPort (SeqPortPtr spp,
 
     SeqPortSeek (spp, this_start, SEEK_SET);
     for (i = this_start; i <= this_end; i++)
-    {
-      *seq = SeqPortGetResidue (spp);
-      seq++;
-    }
+      *seq++ = (Char) SeqPortGetResidue (spp);
+    *seq = '\0';
     fltscr = urkFilterSeq (seqhead, this_start, this_end, fltp);
     MemFree (seqhead);
     if (this_start == start && this_end == end)
@@ -301,7 +302,7 @@ extern FloatHiPtr FilterSeqPort (SeqPortPtr spp,
     if (this_end == end)
     {
       flthead = Realloc (flthead,
-                (size_t) ((loop * (MAXSEQCHUNK)) +
+                (size_t) ((loop * MAXSEQCHUNK) +
                  (sizeof (FloatHi) * (this_end-this_start+1))));
       i = fltp->window/2;
       if (!(fltp->window/2))
@@ -325,11 +326,11 @@ extern FloatHiPtr FilterSeqPort (SeqPortPtr spp,
       fltmp = flthead + (loop * (MAXSEQCHUNK-i));
       for (i = this_start; i <= this_end; i++)
         *fltmp++ = *fltscr++;
-      this_start = this_end+1-fltp->window;
-      this_end = this_start + MAXSEQCHUNK;
-      if (this_end > end)
-        this_end = end;
     }
+    this_start = this_end+1-fltp->window;
+    this_end = this_start + MAXSEQCHUNK;
+    if (this_end > end)
+      this_end = end;
     loop++;
   }
   return flthead;

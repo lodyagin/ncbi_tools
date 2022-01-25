@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.6 $
+* $Revision: 6.7 $
 *
 * File Description: 
 *       Vibrant procedure definitions
@@ -37,6 +37,9 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: vibprocs.h,v $
+* Revision 6.7  1999/01/07 22:32:36  kans
+* added Mac-specific Nlm_SendURLAppleEvent
+*
 * Revision 6.6  1998/07/07 23:03:34  vakatov
 * Added Nlm_Execv() to spawn applications with cmd-line parameters;
 * now implemented for [OS_MSWIN, OS_UNIX].
@@ -1116,6 +1119,7 @@ Nlm_VoidPtr Nlm_GetObject PROTO((Nlm_GraphiC a));
 #ifdef WIN_MAC
 extern void Nlm_SendOpenDocAppleEvent PROTO((Nlm_CharPtr datafile, Nlm_CharPtr sig));
 extern void Nlm_SendOpenDocAppleEventEx PROTO((Nlm_CharPtr datafile, Nlm_CharPtr sig, Nlm_CharPtr prog, Nlm_Boolean wantReply));
+extern void Nlm_SendURLAppleEvent (Nlm_CharPtr urlString, Nlm_CharPtr sig, Nlm_CharPtr prog);
 #endif
 
 #ifdef WIN_MOTIF

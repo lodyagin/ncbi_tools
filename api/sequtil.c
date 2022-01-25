@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.12 $
+* $Revision: 6.19 $
 *
 * File Description:  Sequence Utilities for objseq and objsset
 *
@@ -39,6 +39,27 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: sequtil.c,v $
+* Revision 6.19  1999/01/12 18:00:18  kans
+* SeqIdComp now ignores version if < 1, and added PRINTID_TEXTID_ACC_VER and PRINTID_TEXTID_ACC_ONLY formats for SeqIdWrite
+*
+* Revision 6.18  1999/01/11 17:11:22  kans
+* SeqIdComp now checks version numbers
+*
+* Revision 6.17  1999/01/05 18:30:26  kans
+* SeqLocId ignores SEQLOC_NULL (Tatiana)
+*
+* Revision 6.16  1998/12/14 20:56:26  kans
+* dnaLoc_to_aaLoc takes allowTerminator parameter to handle stop codons created by polyA tail
+*
+* Revision 6.15  1998/11/24 20:15:05  kans
+* seqid other has better priority than local so refgene id is used preferentially
+*
+* Revision 6.14  1998/11/12 15:48:35  kans
+* SEQID_OTHER now prints as "ref" instead of "oth", though the latter is still detected by SeqIdParse as a special case
+*
+* Revision 6.13  1998/10/19 15:49:08  kans
+* SeqIdWrite now writes three fields for SEQID_OTHER in FASTA_SHORT
+*
 * Revision 6.12  1998/08/26 20:56:06  kans
 * got SeqIdComp test for general ID db strings wrong the first time
 *
@@ -308,6 +329,7 @@ static char *this_file = __FILE__;
 #include <sequtil.h>
 #include <gather.h>
 #include <seqport.h>
+#include <sqnutils.h> /* prototype for SeqIdFindWorst */
 
 /****  Static variables used for randomized sequence conversions ****/
 
@@ -2417,7 +2439,7 @@ NLM_EXTERN Int2 SeqIdBestRank (Uint1Ptr buf, Int2 num)
 	60, /* 7 = pir */
 	60, /* 8 = swissprot */
 	55,  /* 9 = patent */
-	80, /* 10 = other TextSeqId */
+	65, /* 10 = other TextSeqId */
 	80, /* 11 = general Dbtag */
 	51,  /* 12 = gi */
 	60, /* 13 = ddbj */
@@ -2536,7 +2558,7 @@ NLM_EXTERN SeqIdPtr SeqIdSelect (SeqIdPtr sip, Uint1Ptr order, Int2 num)
 		"pir",		/* pir = pir|accession|name */
 		"sp",		/* swissprot = sp|accession|name */
 		"pat",		/* patent = pat|country|patent number (string)|seq number (integer) */
-		"oth",		/* other = oth|accession|name|release */
+		"ref",		/* other = ref|accession|name|release - changed from oth to ref */
 		"gnl",		/* general = gnl|database(string)|id (string or number) */
 		"gi",		/* gi = gi|integer */
 		"dbj",		/* ddbj = dbj|accession|locus */
@@ -2792,7 +2814,7 @@ NLM_EXTERN CharPtr SeqIdWrite (SeqIdPtr isip, CharPtr buf, Uint1 format, Int2 bu
 
 {
 	SeqIdPtr sip;
-    char localbuf[15];    /* for MS Windows */
+    char localbuf[32];    /* for MS Windows */
 	char *ldelim;
 	char d [2];
     CharPtr tmp;
@@ -2877,8 +2899,12 @@ NLM_EXTERN CharPtr SeqIdWrite (SeqIdPtr isip, CharPtr buf, Uint1 format, Int2 bu
 		sip = isip;          /* only one id processed */
 
 							 /* deal with LOCUS and ACCESSION */
-	if ((format == PRINTID_TEXTID_ACCESSION) || (format == PRINTID_TEXTID_LOCUS))
+	if ((format == PRINTID_TEXTID_ACCESSION) || (format == PRINTID_TEXTID_LOCUS) ||
+		(format == PRINTID_TEXTID_ACC_VER) || (format == PRINTID_TEXTID_ACC_ONLY))
 	{
+		if (format == PRINTID_TEXTID_ACCESSION) {
+			format = PRINTID_TEXTID_ACC_ONLY;     /* current default */
+		}
 		switch (sip->choice)   /* get the real TextSeqId types */
 		{
 	        case SEQID_GENBANK:
@@ -2892,9 +2918,19 @@ NLM_EXTERN CharPtr SeqIdWrite (SeqIdPtr isip, CharPtr buf, Uint1 format, Int2 bu
 				if ((format == PRINTID_TEXTID_LOCUS) && (tsip->name != NULL)) {
 					Nlm_LabelCopyNext(&tmp, tsip->name, &buflen);
 					return tmp;
-                } else if ((format == PRINTID_TEXTID_ACCESSION) 
+                } else if ((format == PRINTID_TEXTID_ACC_ONLY) 
 					&& (tsip->accession != NULL)) {
 					Nlm_LabelCopyNext(&tmp, tsip->accession, &buflen);
+					return tmp;
+                } else if ((format == PRINTID_TEXTID_ACC_VER) 
+					&& (tsip->accession != NULL)) {
+					if (tsip->version > 1) {
+						sprintf(localbuf, "%s.%d", tsip->accession,
+							(int)(tsip->version));
+					} else {
+						sprintf(localbuf, "%s", tsip->accession);
+					}
+					Nlm_LabelCopyNext(&tmp, localbuf, &buflen);
 					return tmp;
                 }
 				break;
@@ -2950,6 +2986,11 @@ NLM_EXTERN CharPtr SeqIdWrite (SeqIdPtr isip, CharPtr buf, Uint1 format, Int2 bu
 				Nlm_LabelCopyNext(&tmp, ldelim, &buflen);
 			if (tsip->name != NULL)
 				Nlm_LabelCopyNext(&tmp, tsip->name, &buflen);
+			if (sip->choice == SEQID_OTHER) {
+				Nlm_LabelCopyNext(&tmp, ldelim, &buflen);
+				if (tsip->release != NULL)
+					Nlm_LabelCopyNext(&tmp, tsip->release, &buflen);
+			}
             break;
         case SEQID_PATENT:
 			patsip = (PatentSeqIdPtr)(sip->data.ptrvalue);
@@ -3027,7 +3068,7 @@ NLM_EXTERN SeqIdPtr SeqIdParse(CharPtr buf)
 	char d;
 	long num;
 	CharPtr tp;
-	Int2 numtoken, i, type, j, ctr=0; /* ctr is number of OK ids done */
+	Int2 numtoken, i, type = 0, j, ctr=0; /* ctr is number of OK ids done */
 	SeqIdPtr sip = NULL, head = NULL, last = NULL, tmpsip;
 	ObjectIdPtr oip;
 	DbtagPtr dp;
@@ -3082,6 +3123,11 @@ NLM_EXTERN SeqIdPtr SeqIdParse(CharPtr buf)
 				type = j;
 				break;
 			}
+		}
+
+		/* oth now ref, but still want to parse old style */
+		if ((! type) && (! StringCmp(localbuf, "oth"))) {
+			type = SEQID_OTHER;
 		}
 
 		if (! type) goto erret;
@@ -3383,22 +3429,34 @@ NLM_EXTERN Uint1 SeqIdComp (SeqIdPtr a, SeqIdPtr b)
 		case SEQID_PIR:
 		case SEQID_SWISSPROT:
 		case SEQID_PRF:
-                case SEQID_OTHER:
+		case SEQID_OTHER:
             at = (TextSeqIdPtr)a->data.ptrvalue;
             bt = (TextSeqIdPtr)b->data.ptrvalue;
             if ((at->accession != NULL) && (bt->accession != NULL))
             {
-                if (! StringICmp(at->accession, bt->accession))
+                if (! StringICmp(at->accession, bt->accession)) {
+                    if (at->version > 0 &&
+                        bt->version > 0 &&
+                        at->version != bt->version) {
+                        return SIC_NO;
+                    }
                     return SIC_YES;
-                else
+                } else {
                     return SIC_NO;
+                }
             }
             else if ((at->name != NULL) && (bt->name != NULL))
             {
-                if (! StringICmp(at->name, bt->name))
+                if (! StringICmp(at->name, bt->name)) {
+                    if (at->version > 0 &&
+                        bt->version > 0 &&
+                        at->version != bt->version) {
+                        return SIC_NO;
+                    }
                     return SIC_YES;
-                else
+                } else {
                     return SIC_NO;
+                }
             }
             else
                 return SIC_DIFF;
@@ -3800,6 +3858,10 @@ NLM_EXTERN SeqIdPtr SeqLocId (SeqLocPtr anp)
 			loc = (SeqLocPtr)anp->data.ptrvalue;
 			while (loc != NULL)
 			{
+				if (loc->choice == SEQLOC_NULL) {
+					loc = loc->next;
+					continue;
+				}
 				currseqid =	SeqLocId(loc);
 				if (seqid == NULL)
 					seqid = currseqid;
@@ -6383,7 +6445,7 @@ static Boolean gatherCodingRegions(GatherContextPtr gcp)
 		if (sip->findOnProtein)
 		{
 		    /* find the corresponding location on the protein */
-		    protSlp = dnaLoc_to_aaLoc(sfp, slp, TRUE, NULL);
+		    protSlp = dnaLoc_to_aaLoc(sfp, slp, TRUE, NULL, FALSE);
 
 		    protSlp->next = NULL;
 		    SeqLocFree(slp);
@@ -6652,32 +6714,6 @@ NLM_EXTERN SeqIdPtr local_id_make(CharPtr name)
 *	do_entrez_find. if TRUE, if the id is a gi, find the printable id
 *
 ***************************************************************/	
-
-#define NUM_ORDER 16
-
-static SeqIdPtr SeqIdFindWorst (SeqIdPtr sip)
-
-{
-  Uint1  order [NUM_ORDER];
-
-  SeqIdBestRank (order, NUM_ORDER);
-  order [SEQID_LOCAL] = 10;
-  order [SEQID_GENERAL] = 15;
-  order [SEQID_GENBANK] = 5;
-  order [SEQID_EMBL] = 5;
-  order [SEQID_PIR] = 5;
-  order [SEQID_SWISSPROT] = 5;
-  order [SEQID_DDBJ] = 5;
-  order [SEQID_PRF] = 5;
-  order [SEQID_PDB] = 5;
-  order [SEQID_PATENT] = 10;
-  order [SEQID_OTHER] = 10;
-  order [SEQID_GIBBSQ] = 15;
-  order [SEQID_GIBBMT] = 15;
-  order [SEQID_GIIM] = 20;
-  order [SEQID_GI] = 20;
-  return SeqIdSelect (sip, order, NUM_ORDER);
-}
 
 /* a kludge function to make the special formatting for 
    TIGRs THC sequences

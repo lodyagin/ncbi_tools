@@ -41,9 +41,9 @@ Detailed Contents:
 ******************************************************************************/
 
 /* $Log: blastasn.c,v $
- * Revision 6.3  1998/04/15 20:13:00  madden
- * MakeBLAST0Result is non-NULL if results are NULL
- *
+/* Revision 6.3  1998/04/15 20:13:00  madden
+/* MakeBLAST0Result is non-NULL if results are NULL
+/*
  * Revision 6.2  1998/03/26 14:15:47  madden
  * Added second (NULL) argument to GetScoreSetFromBlastResultHsp
  *

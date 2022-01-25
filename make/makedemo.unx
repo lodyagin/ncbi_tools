@@ -25,8 +25,10 @@
 # LIB4=-lvibrant
 # VIBFLAG="-I/netopt/X11R5/include -I/netopt/Motif1.2.2/include -DWIN_MOTIF"
 #
-#  (lines wrapped for readability)	
-#	
+#   The build for RedHat Linux 2.XX with X11R6 requires:
+#     CC="gcc -ansi"
+#     VIBLIBS="-L/usr/X11R6/lib -lXm -lXpm -lXmu -lXp -lXt -lX11 -lXext"
+#
 #   NOTE: It is now possible to build using shared libraries, which 
 #     consumes significantly less disk space.  To date, this has only
 #     been tested using Solaris.  To use shared libraries, try:
@@ -88,14 +90,14 @@ EXE1 = testcore makeset \
 	dosimple asn2ff getseq getfeat checksub asndhuff \
 	entrcmd asn2fast errhdr cdscan findspl \
 	ncbisort fa2htgs fastacmd formatdb blastall blastpgp \
-	testval seedtop
+	testval seedtop fmerge
 
 SRC1 = testcore.c makeset.c \
     getmesh.c indexpub.c getpub.c testobj.c seqtest.c dosimple.c asn2ff.c \
     getseq.c getfeat.c checksub.c asndhuff.c \
     entrcmd.c asn2fast.c errhdr.c cdscan.c findspl.c \
     ncbisort.c fa2htgs.c fastacmd.c formatdb.c blastall.c blastpgp.c \
-    testval.c seedtop.c
+    testval.c seedtop.c fmerge.c
 
 INTERNAL = testgen
 
@@ -250,6 +252,11 @@ fastacmd : fastacmd.c
 
 formatdb : formatdb.c
 	$(CC) -o formatdb $(LDFLAGS) formatdb.c $(LIB23) $(LIB2) $(LIB1) $(OTHERLIBS)
+
+# fmerge
+
+fmerge : fmerge.c
+	$(CC) -o fmerge $(LDFLAGS) fmerge.c $(LIB23) $(LIB2) $(LIB1) $(OTHERLIBS)
 
 # blastall
 

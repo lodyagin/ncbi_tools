@@ -1,4 +1,4 @@
-/* $Id: ncbithr.c,v 6.18 1998/09/22 14:50:58 vakatov Exp $ */
+/* $Id: ncbithr.c,v 6.19 1998/12/10 17:04:08 vakatov Exp $ */
 /*****************************************************************************
 
     Name: ncbithr.c
@@ -35,6 +35,9 @@
  Modification History:
 -----------------------------------------------------------------------------
 * $Log: ncbithr.c,v $
+* Revision 6.19  1998/12/10 17:04:08  vakatov
+* Fixed to compile under LINUX(Red Hat 2.XX, gcc, with POSIX threads)
+*
 * Revision 6.18  1998/09/22 14:50:58  vakatov
 * Use "s_TlsMutex" to protect the TLS key creation in "init_exit_arr()"
 * -- instead of former "s_Key_mutex"
@@ -677,7 +680,7 @@ NLM_EXTERN TNlmThread NlmThreadCreateEx(TNlmThreadStart  theStartFunction,
 
 #elif defined(POSIX_THREADS_AVAIL)
   {{
-#ifndef PTHREAD_CREATE_JOINABLE
+#if !defined(PTHREAD_CREATE_JOINABLE)  &&  defined(PTHREAD_CREATE_UNDETACHED)
 #define PTHREAD_CREATE_JOINABLE PTHREAD_CREATE_UNDETACHED
 #endif
     pthread_attr_t attr;

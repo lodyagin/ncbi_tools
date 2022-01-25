@@ -31,7 +31,10 @@
  * Version Creation Date: 03/12/98
  *
  * $Log: vast2mage.c,v $
- * Revision 6.5  1998/07/17 18:47:15  madej
+ * Revision 6.6  1998/10/14 17:17:35  addess
+ * sending aligned chains to MAGE
+ *
+ * Revision 6.5  1998/07/17  18:47:15  madej
  * Allow Mage to work with Vast Search.
  *
  * Revision 6.4  1998/06/11  19:11:20  madej
@@ -71,7 +74,6 @@ extern CharPtr KineColors[];
 extern Int1 ColorNumKinBB[];
 extern Int1 ColorNumKinSC[];
 extern Int1 ColorNumKinAC[];
-
  
 
 void LIBCALLBACK AlignKinVirt(PFB pfbThis, Int4 iModel,  Int4 iIndex, Pointer ptr)
@@ -367,7 +369,7 @@ Boolean LIBCALL VastToMage(WWWInfoPtr www_info)
 	Char pcBuf[100], pcLine[256], giBuf[20], URL[200];
 	CharPtr pcTest, pcL1 = NULL, www_arg;
 	CharPtr JobID = NULL, pcPass;
-	Int4 GetGi, Fid, Fsid, iFileExists = 0, indx;
+	Int4 GetGi, Fid, Fsid, iFileExists = 0, indx, complexity;
 	BiostrucAnnotSetPtr pbsa = NULL; 
 	BiostrucAnnotSetPtr pbsaShort = NULL;
 	PDNMS pdnmsMaster = NULL, pdnmsSlave = NULL;
@@ -459,8 +461,19 @@ Boolean LIBCALL VastToMage(WWWInfoPtr www_info)
 		printf("<h3>Non-numeric master alignment code - no results.</h3>\n");
 		return 0;
 	}
+        
+        if ((indx = WWWFindName(www_info, "chn_complexity")) < 0)
+            Chain = TRUE;
+        else
+        {
+          www_arg = WWWGetValueByIndex(www_info, indx);
+          complexity =(Int2)atoi(www_arg);
 
-	/* action == 0 indicates MIME; action == 1 is text; action == 2 is save */
+          if (complexity) Chain = TRUE;
+          else Chain = FALSE;
+        }
+	
+        /* action == 0 indicates MIME; action == 1 is text; action == 2 is save */
 	if ((indx = WWWFindName(www_info, "action")) < 0)
 		iPDB = 0;
 	else {
@@ -523,7 +536,7 @@ Boolean LIBCALL VastToMage(WWWInfoPtr www_info)
 	 * between the two.  It looks like the slaves are loaded in the latter routine.
 	 * InstBSAnnotSet calls BiostrucAddFeature.
 	 */
-	if (JobID == NULL)
+	if ((JobID == NULL) && (Chain == FALSE))
           InstBSAnnotSet(pbsaShort);
         else
           InstBSAnnotSetVS(pbsaShort, JobID);

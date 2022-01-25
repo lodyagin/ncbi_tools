@@ -34,13 +34,13 @@ void decrementsv(Int4Ptr sv, Int4 class);
 void incrementsv(Int4Ptr sv, Int4 class);
 static void appendseg(SegPtr segs, SegPtr seg);
 static Boolean hasdash(SequencePtr win);
-
 AlphaPtr AA20alpha (void);
 AlphaPtr NA4alpha (void);
 void AlphaFree(AlphaPtr palpha);
 AlphaPtr AlphaCopy(AlphaPtr palpha);
 
 SeqLocPtr SegsToSeqLoc(BioseqPtr bsp, SegPtr segs);
+SeqLocPtr SeqlocSegsToSeqLoc(SeqLocPtr slp, SegPtr segs);
 
 /*------------------------------------------------------------(BioseqSeg)---*/
 
@@ -141,10 +141,22 @@ SeqLocPtr BioseqSegNa (BioseqPtr bsp, SegParamsPtr sparamsp)
 
    index = 0;
    while ((residue=SeqPortGetResidue(spp)) != SEQPORT_EOF)
-   {
-       seq[index] = residue;
-       index++;
-   }
+     {
+      if (IS_residue(residue))
+        {
+         seq[index] = residue;
+         index++;
+        }
+      else if (residue == SEQPORT_EOS)
+        {
+         continue; /*[Segment boundary]*/
+        }
+      else if (residue == SEQPORT_VIRT)
+        {
+         continue; /*[Virtual Sequence]*/
+        } 
+     }
+
    seq[index] = NULLB;
 
    seqwin = SeqNew();
@@ -235,10 +247,22 @@ SeqLocPtr BioseqSegAa (BioseqPtr bsp, SegParamsPtr sparamsp)
 
    index = 0;
    while ((residue=SeqPortGetResidue(spp)) != SEQPORT_EOF)
-   {
-       seq[index] = residue;
-       index++;
-   }
+     {
+      if (IS_residue(residue))
+        {
+         seq[index] = residue;
+         index++;
+        }
+      else if (residue == SEQPORT_EOS)
+        {
+         continue; /*[Segment boundary]*/
+        }
+      else if (residue == SEQPORT_VIRT)
+        {
+         continue; /*[Virtual Sequence]*/
+        } 
+     }
+
    seq[index] = NULLB;
 
 
@@ -255,6 +279,125 @@ SeqLocPtr BioseqSegAa (BioseqPtr bsp, SegParamsPtr sparamsp)
 /* convert segs to seqlocs */
 
    slp = SegsToSeqLoc(bsp, segs);   
+
+/* clean up & return */
+
+   SeqFree (seqwin);
+   SegFree (segs);
+   SeqPortFree(spp);
+   return (slp);
+  }
+
+/*----------------------------------------------------------(SeqlocSegAa)---*/
+
+SeqLocPtr SeqlocSegAa (SeqLocPtr slpin, SegParamsPtr sparamsp)
+
+  {
+   SeqPortPtr	spp=NULL;
+   SeqLocPtr	slp = NULL;
+   SequencePtr seqwin;
+   SegPtr segs;
+   Int4 index, len;
+   Int4 start, stop, temp;
+   CharPtr seq;
+   Uint1       residue;
+
+/* error msg stuff */
+
+   ErrSetOptFlags (EO_MSG_CODES);
+   SegParamsCheck (sparamsp);
+
+/* bail on null bioseq */
+
+   if (!slpin)
+     {
+       ErrPostEx (SEV_ERROR, 0, 0, "no seqloc");
+       ErrShow ();
+       return (slp);
+     }
+
+/* only simple intervals */
+
+   if (slpin->choice != SEQLOC_INT &&
+       slpin->choice != SEQLOC_WHOLE) return(slp);
+
+/* get coordinate range */
+
+   start = SeqLocStart(slpin);
+   stop = SeqLocStop(slpin);
+   if (stop<start)
+     {
+      temp = start;
+      start = stop;
+      stop = temp;
+     }
+
+   len = stop - start + 1;
+
+/* check seg parameters */
+
+   if (!sparamsp)
+     {
+      sparamsp = SegParamsNewAa();
+      SegParamsCheck (sparamsp);
+      if (!sparamsp)
+        {
+         ErrPostEx (SEV_WARNING, 0, 0, "null parameters object");
+         ErrShow();
+         return(slp);
+        }
+     }
+
+/* make an old-style genwin sequence window object */
+
+   seq = (CharPtr) MemNew((len+1)*sizeof(Char));
+   spp = SeqPortNewByLoc(slpin, Seq_code_ncbieaa);
+   if (spp == NULL) {
+      ErrPostEx (SEV_ERROR, 0, 0, "SeqPortNew failure");
+      ErrShow();
+   }
+
+   if (!seq)
+   {
+      ErrPostEx (SEV_ERROR, 0, 0, "memory allocation failure");
+      ErrShow();
+	  SeqPortFree(spp);
+      return(slp);
+   }
+
+   index = 0;
+   while ((residue=SeqPortGetResidue(spp)) != SEQPORT_EOF)
+     {
+      if (IS_residue(residue))
+        {
+         seq[index] = residue;
+         index++;
+        }
+      else if (residue == SEQPORT_EOS)
+        {
+         continue; /*[Segment boundary]*/
+        }
+      else if (residue == SEQPORT_VIRT)
+        {
+         continue; /*[Virtual Sequence]*/
+        } 
+     }
+
+   seq[index] = NULLB;
+
+   seqwin = SeqNew();
+   seqwin->seq = (CharPtr) seq;
+   seqwin->length = len;
+   seqwin->palpha = AlphaCopy(sparamsp->palpha);
+   
+/* seg the sequence */
+
+   segs = (SegPtr) NULL;
+   SegSeq (seqwin, sparamsp, &segs, 0);
+
+/* convert segs to seqlocs */
+
+   slp = SeqlocSegsToSeqLoc(slpin, segs);   
 
 /* clean up & return */
 
@@ -306,6 +449,75 @@ SeqLocPtr SegsToSeqLoc(BioseqPtr bsp, SegPtr segs)
       sip->to = segs->end;
       sip->strand = bsp->strand;
       sip->id = SeqIdDup(bsp->id);
+
+      slp_next->data.ptrvalue = sip;
+      slp_last->next = slp_next;
+      slp_last = slp_next;
+     }
+
+   slp_last->next = NULL;
+
+   slp_packed = (SeqLocPtr) ValNodeNew(NULL);
+   slp_packed->choice = SEQLOC_PACKED_INT;
+   slp_packed->data.ptrvalue = slp;
+   slp_packed->next = NULL;
+
+   return(slp_packed);
+  }
+
+/*---------------------------------------------------(SeqlocSegsToSeqLoc)---*/
+
+SeqLocPtr SeqlocSegsToSeqLoc(SeqLocPtr slpin, SegPtr segs)
+
+  {
+   SeqLocPtr slp, slp_last, slp_next, slp_packed;
+   SeqIntPtr sip;
+   Int4 start, stop;
+   Uint1 strand;
+   SeqIdPtr id;
+
+   if (slpin==NULL || segs==NULL) return ((SeqLocPtr) NULL);
+   if (slpin->choice != SEQLOC_INT &&
+       slpin->choice != SEQLOC_WHOLE) return ((SeqLocPtr) NULL);
+
+   start = SeqLocStart(slpin);
+   stop = SeqLocStop(slpin);
+   if (stop < start) return ((SeqLocPtr) NULL);
+   strand = SeqLocStrand(slpin);
+   id = SeqLocId(slpin);
+
+   slp = (SeqLocPtr) ValNodeNew(NULL);
+   slp->choice = SEQLOC_INT;
+
+   sip = SeqIntNew();
+   sip->from = segs->begin + start;
+   sip->to = segs->end + start;
+   sip->strand = strand;
+   sip->id = SeqIdDup(id);
+
+   slp->data.ptrvalue = sip;
+
+/*---                             SEQLOC_INT for a single segment  ---*/
+
+   if (segs->next==NULL)
+     {
+      slp->next = NULL;
+      return(slp);
+     }
+
+/*---                     SEQLOC_PACKED_INT for multiple segments  ---*/
+
+   slp_last = slp;
+   for (segs=segs->next; segs!=NULL; segs=segs->next)
+     {
+      slp_next = (SeqLocPtr) ValNodeNew(NULL);
+      slp_next->choice = SEQLOC_INT;
+
+      sip = SeqIntNew();
+      sip->from = segs->begin + start;
+      sip->to = segs->end + start;
+      sip->strand = strand;
+      sip->id = SeqIdDup(id);
 
       slp_next->data.ptrvalue = sip;
       slp_last->next = slp_next;

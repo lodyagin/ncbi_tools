@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.9 $
+* $Revision: 6.10 $
 *
 * File Description: 
 *
@@ -186,7 +186,7 @@ static Uint1 fasta_order[NUM_ORDER] = {
 10, /* 7 = pir */
 10, /* 8 = swissprot */
 15,  /* 9 = patent */
-20, /* 10 = other TextSeqId */
+18, /* 10 = other TextSeqId */
 20, /* 11 = general Dbtag */
 31,  /* 12 = gi */
 10, /* 13 = ddbj */

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/31/96
 *
-* $Revision: 6.22 $
+* $Revision: 6.29 $
 *
 * File Description: Cn3d file opening routines 
 *                   
@@ -39,9 +39,30 @@
 * Date     Name        Description of modification
 * -------  ----------  -----------------------------------------------------
 * $Log: cn3dopen.c,v $
-* Revision 6.22  1998/09/23 18:38:50  ywang
-* add functions to control display on domain level
+* Revision 6.29  1999/01/20 18:21:20  ywang
+* include salmedia.h due to the move around of MediaInfo from cn3dmsg.h to the new created salmedia.h
 *
+* Revision 6.28  1999/01/19 23:42:48  ywang
+* fix bugs over improving color msg
+*
+* Revision 6.27  1999/01/14 19:07:17  kans
+* network availability is configurable
+*
+* Revision 6.26  1998/12/22 15:40:32  ywang
+* restore sequences pointer for strucseq
+*
+ * Revision 6.25  1998/12/21  18:47:37  addess
+ * fixed strucseq bug found by Aron
+ *
+ * Revision 6.24  1998/12/16  17:02:57  ywang
+ * pick up strucseqs mime type
+ *
+ * Revision 6.23  1998/10/21  15:49:21  ywang
+ * attach the whole vast alignment data to master structure
+ *
+ * Revision 6.22  1998/09/23  18:38:50  ywang
+ * add functions to control display on domain level
+ *
  * Revision 6.21  1998/06/30  23:29:22  ywang
  * fix bugs regarding to read in more structures
  *
@@ -139,6 +160,7 @@
 #include <cn3dmain.h>
 #include <algorend.h>
 #include <cn3dmsg.h>
+#include <salmedia.h>
 #include <cn3dmodl.h>
 
 
@@ -158,6 +180,7 @@ static GrouP	Cn3D_gBinAscii;
 Boolean viewalign_only = FALSE;
 Boolean Mime_ReadIn = FALSE;
 
+Int2 Cn3DMime = 0;
 
 /**********
 fnMarkAlignedResidue()
@@ -241,6 +264,7 @@ Boolean OpenMimeFileWithDeletion(CharPtr filename, Boolean removeIt)
     EntrezGeneralPtr egp;
     BiostrucAlignPtr pbsaThis;
     BiostrucSeqPtr   bssp;
+    BiostrucSeqsPtr   bsssp;
     PDNMS pdnms = NULL;
     PMSD  pmsdThis = NULL;
     PDNML pdnmlThis = NULL;
@@ -269,6 +293,9 @@ Boolean OpenMimeFileWithDeletion(CharPtr filename, Boolean removeIt)
     mime = NcbiMimeAsn1AsnRead(aip, NULL);
     AsnIoClose( aip );
     if (!mime ) break; /* THROW */
+
+    Cn3DMime = mime->choice;
+
     switch (mime->choice) {
       
     case NcbiMimeAsn1_entrez:
@@ -334,13 +361,48 @@ Boolean OpenMimeFileWithDeletion(CharPtr filename, Boolean removeIt)
 
         if (pmldOne  &&  pmldAll)
           pmldOne->bSelected &= (Byte)0xFE;
+
+        pmsdThis->pseSequences = bssp->sequences;
+
         Cn3D_ObjMgrOpen = FALSE;
 
         Cn3D_ResetActiveStrucProc();
 
         Mime_ReadIn = TRUE;
         break;
-        
+
+      case NcbiMimeAsn1_strucseqs:
+        bsssp = (BiostrucSeqsPtr)mime->data.ptrvalue;
+        pdnms = MakeAModelstruc( (BiostrucPtr)bsssp->structure);
+        if ( !pdnms ) break;
+
+        pmsdThis = (PMSD)pdnms->data.ptrvalue;
+        pdnmlThis = pmsdThis->pdnmlModels;
+        /* set up for doing one model or animation */
+        while ( pdnmlThis )
+        {
+          pmldThis = (PMLD)pdnmlThis->data.ptrvalue;
+          if (pmldThis->iType == Model_type_ncbi_backbone)
+            pmldOne = pmldThis;
+          if (pmldThis->iType == Model_type_ncbi_all_atom)
+            pmldAll = pmldThis;
+          pdnmlThis = pdnmlThis->next;
+        }
+
+        if (pmldOne  &&  pmldAll)
+          pmldOne->bSelected &= (Byte)0xFE;
+
+        pmsdThis->pseSequences = bsssp->sequences;
+        pmsdThis->psaAlignment = bsssp->seqalign;
+        pmsdThis->pseqaSeqannot = bsssp->seqalign;
+
+        Cn3D_ObjMgrOpen = FALSE;
+
+        Cn3D_ResetActiveStrucProc();
+
+        Mime_ReadIn = TRUE;
+        break;
+
       case NcbiMimeAsn1_alignseq:
         pbsasThis = (BiostrucAlignSeqPtr) mime->data.ptrvalue;
         sap = pbsasThis->seqalign;
@@ -385,6 +447,7 @@ Boolean OpenMimeFileWithDeletion(CharPtr filename, Boolean removeIt)
 
 
         /* add the alignment seq annot ptr, etc. */
+        pmsdMaster->psaStrucAlignment = pbsaThis->alignments;
         pmsdMaster->psaAlignment = pbsaThis->seqalign;
         pmsdMaster->pseSequences = pbsaThis->sequences;  
         pmsdMaster->pseqaSeqannot = pbsaThis->seqalign;
@@ -399,7 +462,7 @@ Boolean OpenMimeFileWithDeletion(CharPtr filename, Boolean removeIt)
         pbsThis =  (BiostrucPtr)pbsaThis->slaves;
         pbsfThis = (BiostrucFeaturePtr)pbsaThis->alignments->features->features;
         pvnAlignment = NULL;
-	pmsdMaster->pdnsfFeatures = DValNodeAddPointer(NULL, 0, pbsfThis); /* tack the alignments onto the master model struct. */
+/*	pmsdMaster->pdnsfFeatures = DValNodeAddPointer(NULL, 0, pbsfThis); */ /* tack the alignments onto the master model struct. */
 	TraverseGraphs( pdnmsMaster, 0, 0, NULL, (pNodeFunc) fnClearMarkedResidues);
 
         while(pbsThis) 
@@ -767,6 +830,9 @@ static void Cn3D_OpenAcceptProc(ButtoN b)
       Cn3D_Open_InUse = FALSE;
       return;
     }  
+
+  Cn3D_ResetActiveStrucProc();
+
   } /* switch between mime and non-mime */
   Remove(Cn3D_wOpen);
   Cn3D_EnableFileOps();
@@ -775,7 +841,7 @@ static void Cn3D_OpenAcceptProc(ButtoN b)
 
   Cn3D_ObjMgrOpen = FALSE;
 
-  Cn3D_ResetActiveStrucProc();
+/*Cn3D_ResetActiveStrucProc(); */
 
   if(!Mime_ReadIn){
      Cn3dObjRegister();
@@ -841,13 +907,16 @@ static void Cn3D_NeighborProc(IteM i)
 
 
 
-MenU LIBCALL Cn3D_OpenSub (MenU m)
+MenU LIBCALL Cn3D_OpenSub (MenU m, Boolean usingEntrez)
 {
   IteM i;
   MenU s;
 
   s = SubMenu (m, "Open");
   i = CommandItem (s, "Biostruc - MMDB/N", Cn3D_NetOpenBiostruc);
+  if (! usingEntrez) {
+    Disable (i);
+  }
   i = CommandItem (s, "Biostruc - Local/B", Cn3D_OpenBiostruc);
 /* i = CommandItem (s, "Feature-set/F", Cn3D_OpenFeature); */
  

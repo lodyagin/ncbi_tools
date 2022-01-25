@@ -1,4 +1,4 @@
-/*  $Id: cn3dentr.c,v 6.2 1998/05/29 22:12:59 kans Exp $
+/*  $Id: cn3dentr.c,v 6.5 1999/01/20 18:21:18 ywang Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,6 +32,15 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cn3dentr.c,v $
+* Revision 6.5  1999/01/20 18:21:18  ywang
+* include salmedia.h due to the move around of MediaInfo from cn3dmsg.h to the new created salmedia.h
+*
+* Revision 6.4  1999/01/14 19:07:16  kans
+* network availability is configurable
+*
+* Revision 6.3  1998/11/24 17:01:01  kans
+* put render/label/view/model controls in separate window
+*
 * Revision 6.2  1998/05/29 22:12:59  kans
 * needed to include cn3dmsg.h
 *
@@ -54,6 +63,7 @@
 #include <cn3dmain.h>
 #include <cn3dentr.h>
 #include <cn3dmsg.h>
+#include <salmedia.h>
 
 
 /* QUERY data and callbacks
@@ -73,6 +83,7 @@ static void Cn3D_ItemQueryCB(IteM i)
 /* CLOSE callbacks
  */
 
+extern void Cn3D_HideCtrl (WindoW w);
 static void Cn3D_MyClose(WindoW www)
 {
   if (Cn3D_query_window  &&  !Visible( Cn3D_query_window ))
@@ -85,6 +96,7 @@ static void Cn3D_MyClose(WindoW www)
       Cn3D_Redraw( TRUE );
       Cn3dObjMgrGetSelected();
       Hide( www );
+      Cn3D_HideCtrl (NULL);
     }
 }
 
@@ -124,10 +136,10 @@ NLM_EXTERN void LIBCALL Cn3D_SetQueryCallback(BeepHook queryFunc, VoidPtr queryW
 /* Attach CN3D to Entrez
  */
 
-NLM_EXTERN Handle LIBCALL Cn3DWin_Entrez(void)
+NLM_EXTERN Handle LIBCALL Cn3DWin_Entrez(ItmActnProc netconfig, Boolean usingEntrez)
 {
   MenU   menu = NULL;
-  WindoW www  = Cn3DWin(Cn3D_OnCloseCB, &menu);
+  WindoW www  = Cn3DWin(Cn3D_OnCloseCB, &menu, netconfig, usingEntrez);
 
   SetObjectExtra(CommandItem(menu, "Close/C", Cn3D_ItemCloseCB), www, NULL);
 

@@ -32,8 +32,17 @@ Author: Gennadiy Savchuk, Jinqhui Zhang, Tom Madden
 Contents: Functions to perform a gapped alignment on two sequences.
 
 ****************************************************************************/
-/* $Revision: 6.8 $ */
+/* $Revision: 6.11 $ */
 /* $Log: gapxdrop.c,v $
+/* Revision 6.11  1998/12/18 16:20:42  madden
+/* Removed unnecessary memsets
+/*
+ * Revision 6.10  1998/11/19 14:03:38  madden
+ * minor efficiency
+ *
+ * Revision 6.9  1998/11/17 13:39:03  madden
+ * Made ALIGN non-static
+ *
  * Revision 6.8  1998/09/24 15:26:40  egorov
  * Fix lint complaints
  *
@@ -305,7 +314,8 @@ GapXDropStateDestroy(GapXDropStateArrayStructPtr state_struct)
 	return NULL;
 }
 
-static Int4 ALIGN(Uint1Ptr A, Uint1Ptr B, Int4 M, Int4 N,
+Int4 LIBCALL 
+ALIGN(Uint1Ptr A, Uint1Ptr B, Int4 M, Int4 N,
 		Int4Ptr S, Int4Ptr pei, Int4Ptr pej, Int4Ptr PNTR sapp, 
 		GapAlignBlkPtr gap_align, Int4 query_offset, Boolean reversed)
 	
@@ -346,9 +356,9 @@ static Int4 ALIGN(Uint1Ptr A, Uint1Ptr B, Int4 M, Int4 N,
   GapXDropPurgeState(gap_align->state_struct);
 
   j = (N + 2) * sizeof(dp_node);
-  dyn_prog = (dp_ptr)MemNew(j);
+  dyn_prog = (dp_ptr)Nlm_Malloc(j);
 
-  state = MemNew(sizeof(Uint1Ptr)*(M+1));
+  state = Nlm_Malloc(sizeof(Uint1Ptr)*(M+1));
   dyn_prog[0].CC = 0;
   dyn_prog[0].FF = -m;
   c = dyn_prog[0].DD = -m;
@@ -773,12 +783,12 @@ static Int4
 reverse_seq(Uint1Ptr seq, Uint1Ptr pos, Uint1Ptr target) 
 {
     Uint1Ptr c;
-    Int4 i;
 
-    for (c = pos, i = 0; c >= seq; c--, i++) 
+    for (c = pos; c >= seq; c--) 
 	*target++ = *c;
     *target = '\0';
-    return i;
+
+    return (Int4) (pos-c);
 }
 /*
 	Destruct Function for GapAlignBlk.  If "state" is not NULL, then
@@ -844,8 +854,8 @@ PerformGappedAlignment(GapAlignBlkPtr gap_align)
 	if (gap_align->q_start != 0 && gap_align->s_start != 0)
 	{
 		found_start = TRUE;
-		q_left = (Uint1Ptr) MemNew((gap_align->q_start+2)*sizeof(Uint1));
-		s_left = (Uint1Ptr) MemNew((gap_align->s_start+2)*sizeof(Uint1));
+		q_left = (Uint1Ptr) Nlm_Malloc((gap_align->q_start+2)*sizeof(Uint1));
+		s_left = (Uint1Ptr) Nlm_Malloc((gap_align->s_start+2)*sizeof(Uint1));
 
 		q_length = reverse_seq(query, query+gap_align->q_start, q_left);
 		s_length = reverse_seq(subject, subject+gap_align->s_start, s_left);
@@ -927,15 +937,15 @@ PerformGappedAlignmentWithTraceback(GapAlignBlkPtr gap_align)
 	query = gap_align->query;
 	subject = gap_align->subject;
 
-	tback = tback1 = MemNew((gap_align->subject_length+gap_align->query_length)*sizeof(Int4));
+	tback = tback1 = Nlm_Malloc((gap_align->subject_length+gap_align->query_length)*sizeof(Int4));
 	include_query = gap_align->include_query;
 
 	score_left = 0;
 	if (gap_align->q_start != 0 && gap_align->s_start != 0)
 	{
 		found_start = TRUE;
-		q_left = (Uint1Ptr) MemNew((gap_align->q_start+2)*sizeof(Uint1));
-		s_left = (Uint1Ptr) MemNew((gap_align->s_start+2)*sizeof(Uint1));
+		q_left = (Uint1Ptr) Nlm_Malloc((gap_align->q_start+2)*sizeof(Uint1));
+		s_left = (Uint1Ptr) Nlm_Malloc((gap_align->s_start+2)*sizeof(Uint1));
 
 		q_length = reverse_seq(query, query+gap_align->q_start, q_left);
 		s_length = reverse_seq(subject, subject+gap_align->s_start, s_left);

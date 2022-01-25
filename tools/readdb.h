@@ -41,7 +41,7 @@ Contents: defines and prototypes used by readdb.c and formatdb.c.
 *
 * Version Creation Date:   3/21/95
 *
-* $Revision: 6.21 $
+* $Revision: 6.23 $
 *
 * File Description: 
 *       Functions to rapidly read databases from files produced by formatdb.
@@ -56,6 +56,12 @@ Contents: defines and prototypes used by readdb.c and formatdb.c.
 *
 * RCS Modification History:
 * $Log: readdb.h,v $
+* Revision 6.23  1998/12/14 21:49:23  egorov
+* new max gi number memeber in CommonIndexHead structure and therefore no need for COMMON_INDEX_TABLE_SIZE
+*
+* Revision 6.22  1998/12/14 16:05:36  egorov
+* *** empty log message ***
+*
 * Revision 6.21  1998/09/14 15:11:19  egorov
 * Add support for Int8 length databases; remove unused variables
 *
@@ -353,8 +359,6 @@ typedef	struct	CommonIndexResult {
     struct CommonIndexResult *next;	/* make a list */
 } CommonIndexResult, *CommonIndexResultPtr;
 
-#define COMMON_INDEX_TABLE_SIZE         4000000
- 
 /* Data bases */
  
 typedef struct	DataBaseID {
@@ -368,6 +372,7 @@ typedef struct	CommonIndexHead {
     Nlm_MemMapPtr	memmap;
     Int2		num_of_DBs;
     DataBaseIDPtr	dbids;
+    Int4		maxgi; /* maximum GI number permited */
 } CommonIndexHead, *CommonIndexHeadPtr;
 
 /* Function prototypes */

@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 98-01-01
 *
-* $Revision: 6.8 $
+* $Revision: 6.10 $
 *
 * File Description: profile search
 *
@@ -38,6 +38,12 @@
 * Date       Name        Description of modification
 * --------------------------------------------------------------------------
 * $Log: mts.c,v $
+* Revision 6.10  1998/12/18 16:24:55  kuzio
+* big GIs
+*
+* Revision 6.9  1998/11/16 14:34:12  kuzio
+* flagBoundaryCondition
+*
 * Revision 6.8  1998/09/28 16:34:27  kuzio
 * cmdln phrasing
 *
@@ -74,7 +80,7 @@ Args myargs[] =
     'm', ARG_STRING, 0.0, 0, NULL},
   { "integer matrix", "FALSE", "TRUE", "FALSE", TRUE,
     'M', ARG_BOOLEAN, 0.0, 0, NULL},
-  { "GI", "0", "0", "4000000", TRUE,
+  { "GI", "0", "0", "9000000", TRUE,
     'g', ARG_INT, 0.0, 0, NULL},
   { "UID (GI) list", NULL, NULL, NULL, TRUE,
     'G', ARG_STRING, 0.0, 0, NULL},
@@ -318,10 +324,10 @@ Int2 Main (void)
       title = FastaTitle (bsp, ">", NULL);
       if (myargs[1].intvalue)
         saph = sap = IntProfileMatchBioseq (gbsp->bsp, profile, invprofile,
-                                            (Int4) cutoff);
+                                            (Int4) cutoff, FALSE);
       else
         saph = sap = ProfileMatchBioseq (gbsp->bsp, profile, invprofile,
-                                         cutoff);
+                                         cutoff, FALSE);
       if (sap != NULL)
         fprintf (fout, "%s\n", title);
       MemFree (title);

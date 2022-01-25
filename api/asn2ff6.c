@@ -29,13 +29,22 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.10 $
+* $Revision: 6.13 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: asn2ff6.c,v $
+* Revision 6.13  1999/01/12 16:57:55  kans
+* SeqToAwp checks for null ep before dereferencing
+*
+* Revision 6.12  1998/11/24 20:15:03  kans
+* seqid other has better priority than local so refgene id is used preferentially
+*
+* Revision 6.11  1998/10/30 01:12:00  kans
+* GetPubsAwp GatherEntity filters out OBJ_SEQALIGN - this was being hit many times on big records, and there is no need for asn2ff to see alignments
+*
 * Revision 6.10  1998/09/24 17:46:00  kans
 * fixed GetDBXrefFromGene problem (TT)
 *
@@ -196,7 +205,7 @@ static Uint1 fasta_order[NUM_ORDER] = {
 10, /* 7 = pir */
 10, /* 8 = swissprot */
 15,  /* 9 = patent */
-20, /* 10 = other TextSeqId */
+18, /* 10 = other TextSeqId */
 20, /* 11 = general Dbtag */
 32,  /* 12 = gi */
 10, /* 13 = ddbj */
@@ -2135,6 +2144,10 @@ NLM_EXTERN Int4 GetPubsAwp (Asn2ffJobPtr ajp, GBEntryPtr gbp)
 	gs.ignore[OBJ_SEQFEAT] = FALSE;
 	gs.ignore[OBJ_SEQSUB] = FALSE;
 	gs.ignore[OBJ_SEQSUB_CIT] = FALSE;*/
+
+	MemSet ((Pointer) (gs.ignore), (int)(FALSE), (size_t) (OBJ_MAX * sizeof(Boolean)));
+	gs.ignore[OBJ_SEQALIGN] = TRUE; /* this was being hit many times on big records */
+
 	if (ajp->slp == NULL) {
 		slp = ValNodeNew(NULL);
 		slp->choice = SEQLOC_WHOLE;
@@ -3111,13 +3124,15 @@ NLM_EXTERN Boolean SeqToAwp (GatherContextPtr gcp)
 			bssp = (BioseqSetPtr) gcp->thisitem;
 			if (bssp->_class == 4) {/*parts*/
 				ep = bssp->seq_set;
-				bsp = ep->data.ptrvalue;
-				if (ISA_na(bsp->mol) && (format == GENBANK_FMT ||
-					format == EMBL_FMT || format == PSEUDOEMBL_FMT)) {
-					awp->parts = bssp;
-				} else if (ISA_aa(bsp->mol) && 
-					(format == GENPEPT_FMT || format == EMBLPEPT_FMT)) {
-					awp->parts = bssp;
+				if (ep != NULL) {
+					bsp = ep->data.ptrvalue;
+					if (ISA_na(bsp->mol) && (format == GENBANK_FMT ||
+						format == EMBL_FMT || format == PSEUDOEMBL_FMT)) {
+						awp->parts = bssp;
+					} else if (ISA_aa(bsp->mol) && 
+						(format == GENPEPT_FMT || format == EMBLPEPT_FMT)) {
+						awp->parts = bssp;
+					}
 				}
 			}
 			break;

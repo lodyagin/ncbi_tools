@@ -34,9 +34,57 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: algorend.c,v $
-* Revision 6.37  1998/09/24 15:52:49  kans
-* included cn3dmodl.h
+* Revision 6.53  1999/01/20 22:57:24  ywang
+* customize color for secondary structure & rearrange Option menu
 *
+ * Revision 6.52  1998/12/23  19:40:56  ywang
+ * fix layer bug while drawing user-defined feature
+ *
+ * Revision 6.51  1998/12/16  19:44:00  kans
+ * improvements to labels - combine name, letter, pdb controls into single popup
+ *
+* Revision 6.50  1998/12/16 01:32:08  kans
+* first pass at improving label controls
+*
+* Revision 6.49  1998/12/14 18:39:55  kans
+* enumerated alists to limit render and color choices
+*
+* Revision 6.48  1998/12/10 15:51:07  kans
+* improved layout of render controls, safe set value/status to avoid flicker
+*
+* Revision 6.47  1998/12/10 01:32:06  kans
+* first pass at improved render dialog
+*
+* Revision 6.46  1998/11/09 22:03:32  ywang
+* fix bugs for modeling
+*
+ * Revision 6.45  1998/11/06  23:01:06  ywang
+ * fix bugs for modeling
+ *
+ * Revision 6.44  1998/11/04  00:06:21  ywang
+ * add function for modeling: change render/color for special residue(s)
+ *
+ * Revision 6.43  1998/10/28  19:02:46  kans
+ * included salparam.h
+ *
+* Revision 6.42  1998/10/27 15:56:55  ywang
+* add functions for testing color by sequence conservation
+*
+ * Revision 6.41  1998/10/21  21:18:00  ywang
+ * color salsa by cycle_molecule  and by residue
+ *
+ * Revision 6.40  1998/10/21  15:51:28  ywang
+ * reset residue color for salsa before cn3d redraws so that residues shown in salsa will become black if they are not shown in cn3d window
+ *
+ * Revision 6.39  1998/10/01  21:55:40  ywang
+ * put function for object display control
+ *
+ * Revision 6.38  1998/09/30  22:10:47  ywang
+ * control display on three levels: structure, chain, domain
+ *
+ * Revision 6.37  1998/09/24  15:52:49  kans
+ * included cn3dmodl.h
+ *
 * Revision 6.36  1998/09/23 22:04:04  ywang
 * synchronize show/hide between cn3d and salsa when display complexity is changed
 *
@@ -197,12 +245,96 @@
 #include <cn3dpane.h>
 #include <cn3dmsg.h>
 #include <cn3dmodl.h>
+#include <saledit.h>
+#include <salparam.h>
+
+static ENUM_ALIST(empty_alist)
+  {"              ",     1},
+END_ENUM_ALIST
+
+static ENUM_ALIST(all_render_alist)
+  {"Wireframe",          1},
+  {"Tubes",              2},
+  {"Ball & Stick",       3},
+  {"Fat Tubes",          4},
+  {"Space Fill   ",      5},
+END_ENUM_ALIST
+
+static ENUM_ALIST(ions_render_alist)
+  {"Fat Tubes",          4},
+  {"Space Fill   ",      5},
+END_ENUM_ALIST
+
+static ENUM_ALIST(connections_render_alist)
+  {"Wireframe",          1},
+  {"Tubes",              2},
+  {"Ball & Stick",       3},
+END_ENUM_ALIST
+
+static ENUM_ALIST(solvents_render_alist)
+  {"Ball & Stick",       3},
+  {"Fat Tubes",          4},
+  {"Space Fill   ",      5},
+END_ENUM_ALIST
+
+static ENUM_ALIST(all_color_alist)
+  {"Molecule Cycle",     1},
+  {"Sec. Structure",     2},
+  {"Domain",             3},
+  {"Residue",            4},
+  {"Hydrophobicity",     5},
+  {"CPK",                6},
+  {"Temperature",        7},
+  {"Object Cycle",       8},
+  {"Structure",          9},
+  {"Neighbor",          10},
+END_ENUM_ALIST
+
+static ENUM_ALIST(heterogen_color_alist)
+  {"Molecule Cycle",     1},
+  {"Residue",            4},
+  {"Hydrophobicity",     5},
+  {"CPK",                6},
+  {"Temperature",        7},
+  {"Object Cycle",       8},
+  {"Structure",          9},
+END_ENUM_ALIST
+
+static ENUM_ALIST(ions_color_alist)
+  {"Molecule Cycle",     1},
+  {"Residue",            4},
+  {"Hydrophobicity",     5},
+  {"CPK",                6},
+  {"Temperature",        7},
+  {"Structure",          9},
+END_ENUM_ALIST
+
+static ENUM_ALIST(solvents_color_alist)
+  {"Molecule Cycle",     1},
+  {"Residue",            4},
+  {"Hydrophobicity",     5},
+  {"CPK",                6},
+  {"Temperature",        7},
+  {"Object Cycle",       8},
+END_ENUM_ALIST
+
+static ENUM_ALIST(objects_color_alist)
+  {"Molecule Cycle",     1},
+  {"Sec. Structure",     2},
+  {"Domain",             3},
+  {"Object Cycle",       8},
+  {"Structure",          9},
+END_ENUM_ALIST
+
+
 
 /*define DEBUG_N 1 */
 
 #define VIEWSCALE 1000000.0
 
 static Picture3D pic = NULL;
+
+static Int2 Cn3d_ParsNow = 0;
 
 static Int2 Cn3d_RenderNow = 0;
 static Uint1 Cn3d_LabelNow = 1;
@@ -212,31 +344,42 @@ static Boolean Cn3d_DoHydrogens = FALSE;
 static Boolean Cn3d_CopyToNode = FALSE;
 static Boolean Cn3d_ColorPass = FALSE;  /* gathering unique colors for palette */
 static Boolean Cn3d_AnyPrim = FALSE;
-static PARS parsColor = NULL;  /* holds pointer to PARS for gathering colors */
+PARS parsColor = NULL;  /* holds pointer to PARS for gathering colors */
 static int Cn3d_lSlaveNum = 0;  /* which slave being iterated over 0=master */
 
 
-static LisT 	Cn3D_lOnOff;   		/* pieces parts to draw */
-static LisT     Cn3D_lCurrModel;  	/* model(s) on in viewer */
-static PopuP    Cn3D_pupPBB;   		/* protein backbone options */
-static PopuP	Cn3D_pupNABB;  		/* nucl. acid bb options */
-static PopuP    Cn3D_pupStyleItem;
-static PopuP    Cn3D_pupRenderStyle;
-static PopuP    Cn3D_pupColorStyle;
-static ButtoN   Cn3D_bRedraw;  		/* the button to redraw */
+static PopuP    Cn3D_pupPBB;   		/* protein backbone options and on/off */
+static PopuP	Cn3D_pupNABB;  		/* nucl. acid bb options and on/off */
+static ButtoN 	Cn3D_lOnOffItem [10]; /* pieces parts to draw - first 2 empty */
 
-static LisT     Cn3D_lOnOffLabel;
+static PopuP    Cn3D_pupRenderStyle [10];
+static PopuP    Cn3D_pupColorStyle [10];
+static EnumFieldAssocPtr renderAlist [10] =
+  {all_render_alist, all_render_alist, all_render_alist, all_render_alist,
+   all_render_alist, ions_render_alist, connections_render_alist,
+   solvents_render_alist, empty_alist, empty_alist};
+static EnumFieldAssocPtr colorAlist [10] =
+  {all_color_alist, all_color_alist, all_color_alist, all_color_alist,
+   heterogen_color_alist, ions_color_alist, empty_alist, solvents_color_alist,
+   objects_color_alist, empty_alist};
+static Int2 renderDefaults [10] = {1, 1, 1, 1, 1, 5, 1, 5, 1, 1};
+static Int2 colorDefaults [10] = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+
+
+static ButtoN   Cn3D_bRedraw;  		/* the button to redraw */
+static ButtoN   Cn3D_immediateRedraw;
+
+static ButtoN   Cn3D_lOnOffLabel [4];
 static PopuP    Cn3D_pupLabelAA;
 static PopuP    Cn3D_pupLabelNT;
-static PopuP    Cn3D_pupLabelItem;
-static ButtoN   Cn3D_bLName;
-static GrouP    Cn3D_gLNameCode;
-static ButtoN   Cn3D_bLNum;
-static ButtoN   Cn3D_bLPDB;
-static ButtoN   Cn3D_bLTop;
-static ButtoN   Cn3D_bLWhite;
-static PopuP    Cn3D_pupLabelSize;
+static PopuP    Cn3D_bLName [4];
+static ButtoN   Cn3D_bLNum [4];
+static ButtoN   Cn3D_bLTop [4];
+static ButtoN   Cn3D_bLWhite [4];
+static PopuP    Cn3D_pupLabelSize [4];
+
 static ButtoN   Cn3D_bLRedraw;
+static ButtoN   Cn3D_LimmediateRedraw;
 
 extern CharPtr NCBIstdaaUC;
 extern CharPtr NCBI4naUC;
@@ -255,6 +398,9 @@ extern Int1 ThermKine[];
 extern Int4 TempsKine[];
 extern Uint1 Cn3d_IndexRGB[];
 extern Nlm_RGBColoR Cn3d_PaletteRGB[];   /* yanli */
+extern SpecialFeaturePtr sfp;
+SpecialFeaturePtr sfpThis = NULL;
+SpecialFeatureInfoPtr sfipThis = NULL;
 
 
 Int1 bColorAlignments[NUM_SLAVES] = {C_sea, C_sky, C_brown, C_cyan, C_blue, C_gray, C_purple, C_green};  /* alignment colors */
@@ -264,9 +410,28 @@ Int1 PhobeAAColor[MAX_NCBIstdaa] = {21,20,14,
 	9,12,12,20,21,4,20,4,20,20,14,14,14,4,14,14,20,20,21,20,14,10,1 };
 /* PINK RED BLUE YELLOW GOLD selcys BROWN GREY 26 */
 
-
+Int1 ColorSS[4] = {8, 10, 11, 6};
 
 /***********************************/
+
+Int2 LIBCALL ColorFromSS(PMGD pmgdThis)
+{
+  Int2 rsult = 0;
+
+  switch ((int) (pmgdThis->bNCBISecStru)) {
+     case SS_HELIX:
+        return ColorSS[0];
+     case SS_SHEET:
+     case SS_STRAND:
+        return ColorSS[1];
+     case SS_TURN:
+        return ColorSS[2];
+     default:
+        rsult = ColorSS[3];
+  }
+  return rsult;
+
+}
 
 void LIBCALL SetDefaultAlgorRender(PARS pars)
 {
@@ -439,6 +604,25 @@ void LIBCALL FreeAlgorRenderSet(PARS pars)
 }
 
 
+static PARS GetThisSpecialAlgorRenderSet(Int2 choice)
+{
+   SpecialFeaturePtr sfpThis = NULL;
+   SpecialFeatureInfoPtr sfipThis = NULL;
+   PARS pars = NULL;
+
+   sfpThis = sfp;
+   while(sfpThis){
+      if(sfpThis->choice == choice){
+         sfipThis = sfpThis->data.ptrvalue;
+         pars = sfipThis->parsSpecial;
+         return(pars);
+      }
+      sfpThis = sfpThis->next;
+   }
+
+   return(pars);
+}
+
 PARS LIBCALL GetAlgorRenderSet(PDNMS pdnmsThis)
 /* returns rendering information stucture.  lyg */
 {
@@ -456,12 +640,15 @@ PARS LIBCALL GetAlgorRenderSet(PDNMS pdnmsThis)
 }
 
 
+static void fnCn3D_RedrawWrapper(ButtoN b);
 
-static void OnOffProc(LisT l)
+static void MasterChangeRenderProc (void)
 {
+  Int2 i, j, k;
   PARS pars = NULL;
   PMSD pmsdThis = NULL;
   PDNMS pdnmsThis = NULL;
+  UIEnum val;
 
  /* fetch the active structure */
   pdnmsThis = GetSelectedModelstruc();
@@ -473,41 +660,20 @@ static void OnOffProc(LisT l)
   pars = GetAlgorRenderSet(pdnmsThis);
   if (!pars) return;
 
-  pars->PResiduesOn = GetItemStatus(Cn3D_lOnOff, 1);
-  pars->NTResiduesOn = GetItemStatus(Cn3D_lOnOff, 2);
-  pars->HeterogensOn = GetItemStatus(Cn3D_lOnOff, 3  );
-  pars->IonsOn = GetItemStatus(Cn3D_lOnOff, 4 );
-  pars->ConnectOn = GetItemStatus(Cn3D_lOnOff, 5 );
-  pars->SolventOn = GetItemStatus(Cn3D_lOnOff, 6);
-  pars->HydrogensOn = GetItemStatus(Cn3D_lOnOff, 7);
-  pars->ObjectOn = GetItemStatus(Cn3D_lOnOff, 8 );
-  return;
-}
-
-static void PBBOnOffProc(PopuP p)
-/* used to set rending option based upon protein backbone rendering options */
-{
-
-  Int2 i;
-  PARS pars = NULL;
-  PMSD pmsdThis = NULL;
-  PDNMS pdnmsThis = NULL;
-
- /* fetch the active structure */
-  pdnmsThis = GetSelectedModelstruc();
-
-  if (!pdnmsThis) return;
-
-  pmsdThis = (PMSD) pdnmsThis->data.ptrvalue;
-
-  pars = GetAlgorRenderSet(pdnmsThis);
-  if (!pars) return;
+  pars->PResiduesOn = GetStatus (Cn3D_lOnOffItem [2]);
+  pars->NTResiduesOn = GetStatus (Cn3D_lOnOffItem [3]);
+  pars->HeterogensOn = GetStatus (Cn3D_lOnOffItem [4]);
+  pars->IonsOn = GetStatus (Cn3D_lOnOffItem [5]);
+  pars->ConnectOn = GetStatus (Cn3D_lOnOffItem [6]);
+  pars->SolventOn = GetStatus (Cn3D_lOnOffItem [7]);
+  pars->ObjectOn = GetStatus (Cn3D_lOnOffItem [8]);
+  pars->HydrogensOn = GetStatus (Cn3D_lOnOffItem [9]);
 
   pars->PVirtualBBOn = FALSE;
   pars->PRealBBOn = FALSE;
   pars->PExtraBBOn = FALSE;
-  i = GetValue(Cn3D_pupPBB);
 
+  i = GetValue (Cn3D_pupPBB);
   switch (i)
    {
    	case 1:
@@ -521,32 +687,13 @@ static void PBBOnOffProc(PopuP p)
            break;
         default: ; /* none */
    }
-  return;
-}
-
-static void NTBBOnOffProc(PopuP p)
-{
-  Int2 i;
-  PARS pars = NULL;
-  PMSD pmsdThis = NULL;
-  PDNMS pdnmsThis = NULL;
-
- /* fetch the active structure */
-  pdnmsThis = GetSelectedModelstruc();
-
-  if (!pdnmsThis) return;
-
-  pmsdThis = (PMSD) pdnmsThis->data.ptrvalue;
-
-  pars = GetAlgorRenderSet(pdnmsThis);
-  if (!pars) return;
 
   pars->NTVirtualBBOn = FALSE;
   pars->NTRealBBOn = FALSE;
   pars->NTExtraBBOn = FALSE;
-  i = GetValue(Cn3D_pupNABB);
 
-  switch (i)
+  j = GetValue (Cn3D_pupNABB);
+  switch (j)
    {
    	case 1:
     	   pars->NTVirtualBBOn = TRUE;
@@ -559,29 +706,14 @@ static void NTBBOnOffProc(PopuP p)
            break;
         default: ;
    }
-  return;
-}
 
-static void Cn3D_SetColorStyle(PopuP p)
-{
-  Int2 i,  j, k;
-  PARS pars = NULL;
-  PMSD pmsdThis = NULL;
-  PDNMS pdnmsThis = NULL;
-
-
- /* fetch the active structure */
-
-  pdnmsThis = GetSelectedModelstruc();
-
-  if (!pdnmsThis) return;
-
-  pmsdThis = (PMSD) pdnmsThis->data.ptrvalue;
-
-  pars = GetAlgorRenderSet(pdnmsThis);
-  if (!pars) return;
-  i = GetValue(Cn3D_pupStyleItem);
-  j = GetValue(Cn3D_pupColorStyle);
+  for (i = 0; i < 9; i++) {
+  if (GetEnumPopup (Cn3D_pupColorStyle [i], colorAlist [i], &val)) {
+    j = (Int2) val;
+  } else {
+    j = 1;
+  }
+  /* j = GetValue (Cn3D_pupColorStyle [i]); */
    switch (j)
 	  {
             case 1:
@@ -619,38 +751,115 @@ static void Cn3D_SetColorStyle(PopuP p)
 	  }
   switch (i)
     {
-     case 1: /* prot bb */
+     case 0: /* prot bb */
          pars->PBBColor = k;
          break;
+     case 1: /* na bb */
+         pars->NTBBColor = k;
+		 break;
      case 2: /* prot sc */
           pars->PResColor = k;
           break;
-     case 3: /* na bb */
-         pars->NTBBColor = k;
-	 break;
-     case 4: /* na sc */
+     case 3: /* na sc */
          pars->NTResColor = k;
-	 break;
-     case 5: /* hets */
+         break;
+     case 4: /* hets */
          pars->HetColor = k;
-	 break;
-     case 6: /* ions */
+         break;
+     case 5: /* ions */
          pars->IonColor = k;
-	 break;
-     case 7: /* connections */
-         pars->ConnectColor = k;
-	 break;
-     case 8: /* solvent */
+         break;
+     case 6: /* connections */
+         /* pars->ConnectColor = k; */
+         pars->ConnectColor = C_yellow;
+         break;
+     case 7: /* solvent */
          pars->SolventColor = k;
-	 break;
-     case 9: /* object */
+         break;
+     case 8: /* object */
          pars->ObjectColor = k;
      default:
      ;
    }
-  return;
+   }
+
+  for (i = 0; i < 9; i++) {
+  if (GetEnumPopup (Cn3D_pupRenderStyle [i], renderAlist [i], &val)) {
+    j = (Int2) val;
+  } else {
+    j = 1;
+  }
+  /* j = GetValue(Cn3D_pupRenderStyle [i]); */
+  switch (j)
+	 {
+	   case 1:
+	     k =  R_WIRE;
+	     break;
+	   case 2:
+	     k = R_STICK;
+	     break;
+	   case 3:
+	     k = R_BALLNSTICK;
+	     break;
+	   case 4:
+	     k = R_THICKWIRE;
+	     break;
+	   case 5:
+	     k = R_SPACE;
+	    break;
+     default:
+     ;
+	  }
+  switch (i)
+    {
+     case 0: /* prot bb */
+         pars->PBBRender = k;
+         break;
+     case 1: /* na bb */
+         pars->NTBBRender = k;
+         break;
+     case 2: /* prot sc */
+          pars->PResRender = k;
+          break;
+     case 3: /* na sc */
+         pars->NTResRender = k;
+         break;
+     case 4: /* hets */
+         pars->HetRender = k;
+         break;
+     case 5: /* ions */
+         pars->IonRender = k;
+         break;
+     case 6: /* connections */
+         pars->ConnectRender = k;
+         break;
+     case 7: /* solvent */
+         pars->SolventRender = k;
+         break;
+     case 8: /* object */
+         /* pars->ObjectRender = k; */
+         pars->ObjectRender = R_DEFAULT;
+     default:
+	   ;
+   }
+   }
+
+  if (GetStatus (Cn3D_immediateRedraw)) {
+    fnCn3D_RedrawWrapper (Cn3D_bRedraw);
+  }
 }
 
+static void ButtonOnOffProc (ButtoN b)
+
+{
+  MasterChangeRenderProc ();
+}
+
+static void PopupOnOffProc (PopuP p)
+
+{
+  MasterChangeRenderProc ();
+}
 
 void Cn3D_RenStruc(IteM i)
 {
@@ -996,6 +1205,7 @@ void Cn3D_ColCPK(IteM i)
 	pars->IonColor = C_CPK;
 	pars->SolventColor = C_CPK;
   ResetRenderCtrls();
+  ResetSalsaColor(); 
   Cn3D_Redraw(FALSE);
   Cn3dObjMgrGetSelected();
   Cn3D_ReColor = FALSE;
@@ -1123,6 +1333,44 @@ void Cn3D_ColCons(IteM i)  /* menu function for setting up color by conservation
   return;
 }
 
+void Cn3D_ColSeqCons(IteM i)  /* menu function for setting up color by conservation */
+{
+  
+  SeqEditViewProcsPtr svpp;
+  IteM  conscolor;
+  IteM  iByAlign;
+
+  Cn3D_ColAlign(iByAlign);
+
+  svpp = (SeqEditViewProcsPtr) GetAppProperty ("SeqEditDisplayForm");
+  conscolor = svpp->conscolor;
+  ColorIdentityDialogItem ( conscolor );
+  
+  return;
+}
+
+void Cn3D_DoColSeqCons(void)
+{  PARS pars = NULL;
+  PDNMS pdnmsThis = NULL;
+ 
+  Cn3D_ReColor = TRUE;
+
+  /* fetch the active structure */
+  pdnmsThis = GetSelectedModelstruc();
+
+  if (!pdnmsThis) return;
+  pars = GetAlgorRenderSet(pdnmsThis);
+  if (!pars) return;
+        pars->PBBColor = C_BYSEQCONS;
+    pars->PResColor = C_BYSEQCONS;
+  ResetRenderCtrls();
+
+  Cn3D_Redraw(FALSE);
+  Cn3dObjMgrGetSelected();
+  Cn3D_ReColor = FALSE;
+  return;
+}
+
 void Cn3D_ColRes(IteM i)
 {
   PARS pars = NULL;
@@ -1194,6 +1442,7 @@ void Cn3D_ColTemp(IteM i)
 	pars->IonColor = C_BYTEMP;
 	pars->SolventColor = C_BYTEMP;
   ResetRenderCtrls();
+  ResetSalsaColor(); 
   Cn3D_Redraw(FALSE);
   Cn3dObjMgrGetSelected();
   Cn3D_ReColor = FALSE;
@@ -1220,199 +1469,9 @@ void Cn3D_ColTemp(IteM i)
 }
 */
 
-static void Cn3D_SetRenderStyle(PopuP p)
-{
-  Int2 i,  j, k;
-  PARS pars = NULL;
-  PMSD pmsdThis = NULL;
-  PDNMS pdnmsThis = NULL;
-
-
- /* fetch the active structure */
-  pdnmsThis = GetSelectedModelstruc();
-
-  if (!pdnmsThis) return;
-
-  pmsdThis = (PMSD) pdnmsThis->data.ptrvalue;
-
-  pars = GetAlgorRenderSet(pdnmsThis);
-  if (!pars) return;
-  i = GetValue(Cn3D_pupStyleItem);
-  j = GetValue(Cn3D_pupRenderStyle);
-  switch (j)
-	 {
-	   case 5:
-	     k = R_SPACE;
-	    break;
-	   case 2:
-	     k = R_STICK;
-	     break;
-	   case 3:
-	     k = R_BALLNSTICK;
-	     break;
-	   case 4:
-	     k = R_THICKWIRE;
-	     break;
-	   case 1:
-	     k =  R_WIRE;
-	  }
-
-
-  switch (i)
-    {
-     case 1: /* prot bb */
-         pars->PBBRender = k;
-         break;
-     case 2: /* prot sc */
-          pars->PResRender = k;
-          break;
-     case 3: /* na bb */
-         pars->NTBBRender = k;
-	 break;
-     case 4: /* na sc */
-         pars->NTResRender = k;
-	 break;
-     case 5: /* hets */
-         pars->HetRender = k;
-	 break;
-     case 6: /* ions */
-         pars->IonRender = k;
-	 break;
-     case 7: /* connections */
-         pars->ConnectRender = k;
-	 break;
-     case 8: /* solvent */
-         pars->SolventRender = k;
-         break;
-     case 9: /* object */
-         pars->ObjectRender = k;
-     default:
-	   ;
-   }
-  return;
-}
-
-
-static void Cn3D_SetStyle(PopuP p)
-{
-
-  Int2 i,  j,  k;
-  PARS pars = NULL;
-  PMSD pmsdThis = NULL;
-  PDNMS pdnmsThis = NULL;
-
-  if(Cn3D_ObjMgrOpen && Cn3D_ReColor) ResetSalsaColor();    /* yanli */
-
- /* fetch the active structure */
-  pdnmsThis = GetSelectedModelstruc();
-
-  if (!pdnmsThis) return;
-
-  pmsdThis = (PMSD) pdnmsThis->data.ptrvalue;
-
-  pars = GetAlgorRenderSet(pdnmsThis);
-  if (!pars) return;
-  i = GetValue(Cn3D_pupStyleItem);
-  j = k = 0;
-  switch (i)
-    {
-     case 1: /* prot bb */
-         j = pars->PBBRender;
-	 k = pars->PBBColor;
-       break;
-     case 2: /* prot sc */
-         j = pars->PResRender;
-	 k = pars->PResColor;
-       break;
-     case 3: /* na bb */
-         j = pars->NTBBRender;
-	 k = pars->NTBBColor;
-       break;
-     case 4: /* na sc */
-         j = pars->NTResRender;
-	 k = pars->NTResColor;
-       break;
-     case 5: /* hets */
-         j = pars->HetRender;
-	 k = pars->HetColor;
-       break;
-     case 6: /* ions */
-         j = pars->IonRender;
-	 k = pars->IonColor;
-       break;
-     case 7: /* connections */
-         j = pars->ConnectRender;
-	 k = pars->ConnectColor;
-       break;
-     case 8: /* solvent */
-         j = pars->SolventRender;
-	 k = pars->SolventColor;
-     case 9: /* object */
-         j = pars->ObjectRender;
-	 k = pars->ObjectColor;
-   }
-
-  switch (j)
-	 {
-	   case R_SPACE:
-	     SetValue(Cn3D_pupRenderStyle, 5);
-	    break;
-	   case R_STICK:
-	     SetValue(Cn3D_pupRenderStyle, 2);
-	    break;
-	   case R_BALLNSTICK:
-	     SetValue(Cn3D_pupRenderStyle, 3);
-	    break;
-	   case R_THICKWIRE:
-	     SetValue(Cn3D_pupRenderStyle, 4);
-	    break;
-	   case R_DEFAULT:
-	   case R_WIRE:
-	     SetValue(Cn3D_pupRenderStyle, 1);
-	  }
-
-   switch (k)
-	  {
-	    case C_BYCHAIN:
-	      SetValue(Cn3D_pupColorStyle, 1);
-	      break;
-	    case C_BYSSTRU:
-	      SetValue(Cn3D_pupColorStyle,  2);
-	      break;
-	    case C_BYDOMAIN:
-	      SetValue(Cn3D_pupColorStyle,  3);
-	      break;
-	    case C_BYRES:
-	      SetValue(Cn3D_pupColorStyle,  4);
-	      break;
-	    case C_BYHYDRO:
-	      SetValue(Cn3D_pupColorStyle,  5);
-	      break;
-	    case C_CPK:
-	      SetValue(Cn3D_pupColorStyle,  6);
-	      break;
-	    case C_BYTEMP:
-	      SetValue(Cn3D_pupColorStyle,  7);
-	      break;
-	    case C_BYOBJECT:
-	      SetValue(Cn3D_pupColorStyle,  8);
-	      break;
-		case C_BYALIGN:
-	      SetValue(Cn3D_pupColorStyle,  9);
-	      break;
-		case C_BYCONS:
-	      SetValue(Cn3D_pupColorStyle,  10);
-	      break;
-	    default:
-	      SetValue(Cn3D_pupColorStyle, 1);
-	  }
-  return;
-
-}
-
-
 void LIBCALL ResetRenderCtrls(void)
 {
+  Int2 i, j, k;
   PARS pars = NULL;
   PMSD pmsdThis = NULL;
   PDNMS pdnmsThis = NULL;
@@ -1431,32 +1490,32 @@ void LIBCALL ResetRenderCtrls(void)
   if (!pars)
    {
     setout:
-      SetItemStatus(Cn3D_lOnOff, 1, FALSE);
-      SetItemStatus(Cn3D_lOnOff, 2, FALSE);
-      SetItemStatus(Cn3D_lOnOff, 3, FALSE);
-      SetItemStatus(Cn3D_lOnOff, 4, FALSE);
-      SetItemStatus(Cn3D_lOnOff, 5, FALSE);
-      SetItemStatus(Cn3D_lOnOff, 6, FALSE);
-      SetItemStatus(Cn3D_lOnOff, 7, FALSE);
-      SetItemStatus(Cn3D_lOnOff, 8, FALSE);
+      for (k = 2; k < 10; k++) {
+        SafeSetStatus (Cn3D_lOnOffItem [k], FALSE);
+      }
 
-      SetValue(Cn3D_pupPBB, 4);
-      SetValue(Cn3D_pupNABB, 4);
-      SetValue(Cn3D_pupStyleItem, 1);
-      SetValue(Cn3D_pupRenderStyle, 1);
-      SetValue(Cn3D_pupColorStyle, 1);
+      SafeSetValue(Cn3D_pupPBB, 4);
+      SafeSetValue(Cn3D_pupNABB, 4);
+      for (k = 0; k < 9; k++) {
+        SetEnumPopup (Cn3D_pupRenderStyle [k], renderAlist [k], (UIEnum) renderDefaults [k]);
+        SetEnumPopup (Cn3D_pupColorStyle [k], colorAlist [k], (UIEnum) colorDefaults [k]);
+        /*
+        SafeSetValue(Cn3D_pupRenderStyle [k], 1);
+        SafeSetValue(Cn3D_pupColorStyle [k], 1);
+        */
+      }
 
       return;
    }
 
-  SetItemStatus(Cn3D_lOnOff, 1, pars->PResiduesOn);
-  SetItemStatus(Cn3D_lOnOff, 2, pars->NTResiduesOn);
-  SetItemStatus(Cn3D_lOnOff, 3, pars->HeterogensOn);
-  SetItemStatus(Cn3D_lOnOff, 4, pars->IonsOn);
-  SetItemStatus(Cn3D_lOnOff, 5, pars->ConnectOn);
-  SetItemStatus(Cn3D_lOnOff, 6, pars->SolventOn);
-  SetItemStatus(Cn3D_lOnOff, 7, pars->HydrogensOn);
-  SetItemStatus(Cn3D_lOnOff, 8, pars->ObjectOn);
+  SafeSetStatus (Cn3D_lOnOffItem [2], pars->PResiduesOn);
+  SafeSetStatus (Cn3D_lOnOffItem [3], pars->NTResiduesOn);
+  SafeSetStatus (Cn3D_lOnOffItem [4], pars->HeterogensOn);
+  SafeSetStatus (Cn3D_lOnOffItem [5], pars->IonsOn);
+  SafeSetStatus (Cn3D_lOnOffItem [6], pars->ConnectOn);
+  SafeSetStatus (Cn3D_lOnOffItem [7], pars->SolventOn);
+  SafeSetStatus (Cn3D_lOnOffItem [8], pars->ObjectOn);
+  SafeSetStatus (Cn3D_lOnOffItem [9], pars->HydrogensOn);
 
 /* yanli added */
 /* alpha C trace only control */
@@ -1465,39 +1524,134 @@ void LIBCALL ResetRenderCtrls(void)
   if(pmldThis->iType == Model_type_ncbi_backbone) {
      pars->PVirtualBBOn = TRUE;    
      pars->NTVirtualBBOn = TRUE;
-     SetValue(Cn3D_pupPBB, 1);
-     SetValue(Cn3D_pupNABB, 1);
+     SafeSetValue(Cn3D_pupPBB, 1);
+     SafeSetValue(Cn3D_pupNABB, 1);
   }
     
 
 /*BACKBONE controls */
-  if (pars->PVirtualBBOn)  SetValue(Cn3D_pupPBB, 1);
+  if (pars->PVirtualBBOn)  SafeSetValue(Cn3D_pupPBB, 1);
   else
-  if (pars->PRealBBOn) SetValue(Cn3D_pupPBB, 2);
+  if (pars->PRealBBOn) SafeSetValue(Cn3D_pupPBB, 2);
   else
-  if (pars->PExtraBBOn) SetValue(Cn3D_pupPBB, 3);
-  else SetValue(Cn3D_pupPBB, 4);
+  if (pars->PExtraBBOn) SafeSetValue(Cn3D_pupPBB, 3);
+  else SafeSetValue(Cn3D_pupPBB, 4);
 
 /* set status of BB items from PARS */
-  if (pars->NTVirtualBBOn)  SetValue(Cn3D_pupNABB, 1);
+  if (pars->NTVirtualBBOn)  SafeSetValue(Cn3D_pupNABB, 1);
   else
-  if (pars->NTRealBBOn) SetValue(Cn3D_pupNABB, 2);
+  if (pars->NTRealBBOn) SafeSetValue(Cn3D_pupNABB, 2);
   else
-  if (pars->NTExtraBBOn) SetValue(Cn3D_pupNABB, 3);
-  else SetValue(Cn3D_pupNABB, 4);
+  if (pars->NTExtraBBOn) SafeSetValue(Cn3D_pupNABB, 3);
+  else SafeSetValue(Cn3D_pupNABB, 4);
 
 
-  SetValue(Cn3D_pupStyleItem, 1);
-  Cn3D_SetStyle(NULL);
+  for (i = 0; i < 9; i++) {
+  j = k = 0;
+  switch (i)
+    {
+     case 0: /* prot bb */
+         j = pars->PBBRender;
+	   k = pars->PBBColor;
+       break;
+     case 1: /* na bb */
+         j = pars->NTBBRender;
+         k = pars->NTBBColor;
+       break;
+     case 2: /* prot sc */
+         j = pars->PResRender;
+         k = pars->PResColor;
+       break;
+     case 3: /* na sc */
+         j = pars->NTResRender;
+         k = pars->NTResColor;
+       break;
+     case 4: /* hets */
+         j = pars->HetRender;
+         k = pars->HetColor;
+       break;
+     case 5: /* ions */
+         j = pars->IonRender;
+         k = pars->IonColor;
+       break;
+     case 6: /* connections */
+         j = pars->ConnectRender;
+         k = pars->ConnectColor;
+       break;
+     case 7: /* solvent */
+         j = pars->SolventRender;
+         k = pars->SolventColor;
+        break;
+     case 8: /* object */
+         j = pars->ObjectRender;
+         k = pars->ObjectColor;
+       break;
+   }
 
+  switch (j)
+	 {
+	   case R_SPACE:
+	     SetEnumPopup (Cn3D_pupRenderStyle [i], renderAlist [i], (UIEnum) 5);
+	    break;
+	   case R_STICK:
+	     SetEnumPopup (Cn3D_pupRenderStyle [i], renderAlist [i], (UIEnum) 2);
+	    break;
+	   case R_BALLNSTICK:
+	     SetEnumPopup (Cn3D_pupRenderStyle [i], renderAlist [i], (UIEnum) 3);
+	    break;
+	   case R_THICKWIRE:
+	     SetEnumPopup (Cn3D_pupRenderStyle [i], renderAlist [i], (UIEnum) 4);
+	    break;
+	   case R_DEFAULT:
+	   case R_WIRE:
+	     SetEnumPopup (Cn3D_pupRenderStyle [i], renderAlist [i], (UIEnum) 1);
+	  }
 
- return;
+   switch (k)
+	  {
+	    case C_BYCHAIN:
+	      SetEnumPopup (Cn3D_pupColorStyle [i], colorAlist [i], (UIEnum) 1);
+	      break;
+	    case C_BYSSTRU:
+	      SetEnumPopup (Cn3D_pupColorStyle [i],  colorAlist [i], (UIEnum) 2);
+	      break;
+	    case C_BYDOMAIN:
+	      SetEnumPopup (Cn3D_pupColorStyle [i],  colorAlist [i], (UIEnum) 3);
+	      break;
+	    case C_BYRES:
+	      SetEnumPopup (Cn3D_pupColorStyle [i],  colorAlist [i], (UIEnum) 4);
+	      break;
+	    case C_BYHYDRO:
+	      SetEnumPopup (Cn3D_pupColorStyle [i],  colorAlist [i], (UIEnum) 5);
+	      break;
+	    case C_CPK:
+	      SetEnumPopup (Cn3D_pupColorStyle [i],  colorAlist [i], (UIEnum) 6);
+	      break;
+	    case C_BYTEMP:
+	      SetEnumPopup (Cn3D_pupColorStyle [i],  colorAlist [i], (UIEnum) 7);
+	      break;
+	    case C_BYOBJECT:
+	      SetEnumPopup (Cn3D_pupColorStyle [i],  colorAlist [i], (UIEnum) 8);
+	      break;
+		case C_BYALIGN:
+	      SetEnumPopup (Cn3D_pupColorStyle [i],  colorAlist [i], (UIEnum) 9);
+	      break;
+		case C_BYCONS:
+	      SetEnumPopup (Cn3D_pupColorStyle [i],  colorAlist [i], (UIEnum) 10);
+	      break;
+	    default:
+	      SetEnumPopup (Cn3D_pupColorStyle [i], colorAlist [i], (UIEnum) 1);
+	  }
+  }
 
 }
 
 
-static void Cn3D_LabelAAProc(PopuP p)
+static void MasterChangeLabelsProc (void)
 {
+  Int2 i, k, nameval;
+  Uint1 codeval;
+  Boolean NumOn, NameOn, PDBOn, WhiteOn, TopOn;
   PARS pars = NULL;
   PMSD pmsdThis = NULL;
   PDNMS pdnmsThis = NULL;
@@ -1514,381 +1668,187 @@ static void Cn3D_LabelAAProc(PopuP p)
   if (!pars) return;
 
   pars->PBBLabelOn = (Uint1) GetValue(Cn3D_pupLabelAA);
-  return;
-}
-
-
-static void Cn3D_LabelNAProc(PopuP p)
-{
-  PARS pars = NULL;
-  PMSD pmsdThis = NULL;
-  PDNMS pdnmsThis = NULL;
-
-
- /* fetch the active structure */
-  pdnmsThis = GetSelectedModelstruc();
-
-  if (!pdnmsThis) return;
-
-  pmsdThis = (PMSD) pdnmsThis->data.ptrvalue;
-
-  pars = GetAlgorRenderSet(pdnmsThis);
-  if (!pars) return;
-
   pars->NTBBLabelOn = (Uint1) GetValue(Cn3D_pupLabelNT);
-  return;
-}
 
-
-static void Cn3D_SetLabelStyle(PopuP p)		/*set the label style from label panel*/
-{
-
-  Int2 i;
-  int k;
-  Uint1 style,  just;
-  Int2 scale;
-  PARS pars = NULL;
-  PMSD pmsdThis = NULL;
-  PDNMS pdnmsThis = NULL;
-
-
- /* fetch the active structure */
-  pdnmsThis = GetSelectedModelstruc();
-
-  if (!pdnmsThis) return;
-
-  pmsdThis = (PMSD) pdnmsThis->data.ptrvalue;
-
-  pars = GetAlgorRenderSet(pdnmsThis);
-  if (!pars) return;
-  i = GetValue(Cn3D_pupLabelItem);
-  k = 0;
-  switch (i)
-    {
-     case 1: /* aa */
-       style = pars->PBBLabelStyle;
-       just  = pars->PBBLabelJust;
-       scale = pars->PBBLabelScale;
-       break;
-     case 2:  /* na   */
-       style = pars->NTBBLabelStyle;
-       just  = pars->NTBBLabelJust;
-       scale = pars->NTBBLabelScale;
-       break;
-     case 3: /* term prot*/
-       style = pars->PTermLabelStyle;
-       just  = pars->PTermLabelJust;
-        scale = pars->PTermLabelScale;
-       break;
-     case 4:  /* term nt   */
-       style = pars->NTTermLabelStyle;
-       just  = pars->NTTermLabelJust;
-       scale = pars->NTTermLabelScale;
-       break;
-     default:
-       style = 0;
-       just = 0;
-       scale = 1;
-   }
-
-
-    if (style &  L_NAME) SetStatus(Cn3D_bLName, TRUE);
-    else   SetStatus(Cn3D_bLName, FALSE);
-
-    if (style &  L_NUM) SetStatus(Cn3D_bLNum, TRUE);
-    else   SetStatus(Cn3D_bLNum, FALSE);
-
-    if (style &  L_PDB) SetStatus(Cn3D_bLPDB, TRUE);
-    else   SetStatus(Cn3D_bLPDB, FALSE);
-
-    if (style & L_3LETR) SetValue( Cn3D_gLNameCode, 1);
-
-   if (style & L_1LETR) SetValue( Cn3D_gLNameCode, 2);
-
-   if (just & LA_FRONT) SetValue(Cn3D_bLTop, TRUE);
-    else SetStatus(Cn3D_bLTop, FALSE);
-
-   if (style & L_WHITE) SetStatus(Cn3D_bLWhite, TRUE);
-    else SetStatus(Cn3D_bLWhite, FALSE);
-
-  if (scale < 0) scale = 1;
-  if (scale > 10) scale = 10;
-  SetValue(Cn3D_pupLabelSize, scale);
-
-  return;
-
-}
-
-static void Cn3D_NameCodeProc(GrouP g)
-{
-
-  Int2 i ;
-  Uint1 codeval;
-  PARS pars = NULL;
-  PMSD pmsdThis = NULL;
-  PDNMS pdnmsThis = NULL;
-
-
- /* fetch the active structure */
-  pdnmsThis = GetSelectedModelstruc();
-
-  if (!pdnmsThis) return;
-
-  pmsdThis = (PMSD) pdnmsThis->data.ptrvalue;
-
-  pars = GetAlgorRenderSet(pdnmsThis);
-  if (!pars) return;
-  i = GetValue(Cn3D_pupLabelItem);
-  if (GetValue(Cn3D_gLNameCode) == 2) codeval = (Uint1) L_1LETR;
+  for (i = 0; i < 4; i++) {
+  nameval = GetValue(Cn3D_bLName [i]);
+  if (nameval == 3) codeval = (Uint1) L_1LETR;
   else codeval = (Uint1) L_3LETR;
   switch (i)
     {
-     case 1: /* aa */
+     case 0: /* aa */
           /* clear bits */
          pars->PBBLabelStyle =  pars->PBBLabelStyle & ~((Uint1)( L_3LETR | L_1LETR)) ;
           /* set bit */
          pars->PBBLabelStyle = pars->PBBLabelStyle | (Uint1) codeval;
         break;
-     case 2:  /* na   */
+     case 1:  /* na   */
          pars->NTBBLabelStyle =  pars->NTBBLabelStyle & ~((Uint1)( L_3LETR | L_1LETR)) ;
          pars->NTBBLabelStyle = pars->NTBBLabelStyle | (Uint1) codeval;
         break;
-     case 3: /* term prot*/
+     case 2: /* term prot*/
          pars->PTermLabelStyle =  pars->PTermLabelStyle & ~((Uint1)( L_3LETR | L_1LETR)) ;
          pars->PTermLabelStyle = pars->PTermLabelStyle  | (Uint1) codeval;
         break;
-     case 4:  /* term nt   */
+     case 3:  /* term nt   */
          pars->NTTermLabelStyle =  pars->NTTermLabelStyle& ~((Uint1)( L_3LETR | L_1LETR)) ;
          pars->NTTermLabelStyle = pars->NTTermLabelStyle  | (Uint1) codeval;
         break;
      default: ;
     }
 
-  return;
-}
-
-static void Cn3D_LabelNumProc(ButtoN b)
-{
-  Boolean NumOn;
-  Int2 i;
-  PARS pars = NULL;
-  PMSD pmsdThis = NULL;
-  PDNMS pdnmsThis = NULL;
-
-
- /* fetch the active structure */
-  pdnmsThis = GetSelectedModelstruc();
-
-  if (!pdnmsThis) return;
-
-  pmsdThis = (PMSD) pdnmsThis->data.ptrvalue;
-
-  pars = GetAlgorRenderSet(pdnmsThis);
-  if (!pars) return;
-  i = GetValue(Cn3D_pupLabelItem);
-  NumOn = GetStatus(Cn3D_bLNum);
+  NumOn = GetStatus(Cn3D_bLNum [i]);
   switch (i)
     {
-     case 1: /* aa */
+     case 0: /* aa */
          if (NumOn) pars->PBBLabelStyle =  pars->PBBLabelStyle | (Uint1) L_NUM;
          else pars->PBBLabelStyle = pars->PBBLabelStyle & (Uint1) ~L_NUM;
         break;
-     case 2:  /* na   */
+     case 1:  /* na   */
          if (NumOn) pars->NTBBLabelStyle =  pars->NTBBLabelStyle | (Uint1) L_NUM;
          else pars->NTBBLabelStyle = pars->NTBBLabelStyle & (Uint1) ~L_NUM;
         break;
-     case 3: /* term prot*/
+     case 2: /* term prot*/
          if (NumOn) pars->PTermLabelStyle =  pars->PTermLabelStyle | (Uint1) L_NUM;
          else pars->PTermLabelStyle = pars->PTermLabelStyle & (Uint1) ~L_NUM;
         break;
-     case 4:  /* term nt   */
+     case 3:  /* term nt   */
           if (NumOn) pars->NTTermLabelStyle =  pars->NTTermLabelStyle | (Uint1) L_NUM;
          else pars->NTTermLabelStyle = pars->NTTermLabelStyle & (Uint1) ~L_NUM;
         break;
      default: ;
     }
-
-
-  return;
-}
-
-
-
-static void Cn3D_LabelNameProc(ButtoN b)
-{
-  Boolean NameOn;
-  Int2 i;
-  PARS pars = NULL;
-  PMSD pmsdThis = NULL;
-  PDNMS pdnmsThis = NULL;
-
-
- /* fetch the active structure */
-  pdnmsThis = GetSelectedModelstruc();
-
-  if (!pdnmsThis) return;
-
-  pmsdThis = (PMSD) pdnmsThis->data.ptrvalue;
-
-  pars = GetAlgorRenderSet(pdnmsThis);
-  if (!pars) return;
-  i = GetValue(Cn3D_pupLabelItem);
-  NameOn = GetStatus(Cn3D_bLName);
+  NameOn = (Boolean) (nameval > 1);
   switch (i)
     {
-     case 1: /* aa */
+     case 0: /* aa */
          if (NameOn) pars->PBBLabelStyle =  pars->PBBLabelStyle | (Uint1) L_NAME;
          else pars->PBBLabelStyle = pars->PBBLabelStyle & (Uint1) ~L_NAME;
         break;
-     case 2:  /* na   */
+     case 1:  /* na   */
          if (NameOn) pars->NTBBLabelStyle =  pars->NTBBLabelStyle | (Uint1) L_NAME;
          else pars->NTBBLabelStyle = pars->NTBBLabelStyle & (Uint1) ~L_NAME;
         break;
-     case 3: /* term prot*/
+     case 2: /* term prot*/
          if (NameOn) pars->PTermLabelStyle =  pars->PTermLabelStyle | (Uint1) L_NAME;
          else pars->PTermLabelStyle = pars->PTermLabelStyle & (Uint1) ~L_NAME;
         break;
-     case 4:  /* term nt   */
+     case 3:  /* term nt   */
           if (NameOn) pars->NTTermLabelStyle =  pars->NTTermLabelStyle | (Uint1) L_NAME;
          else pars->NTTermLabelStyle = pars->NTTermLabelStyle & (Uint1) ~L_NAME;
         break;
      default: ;
     }
-  return;
-}
-
-
-static void Cn3D_LabelPDBProc(ButtoN b) /* use PDB for the labels? */
-{
-  Boolean PDBOn;
-  Int2 i;
-  PARS pars = NULL;
-  PMSD pmsdThis = NULL;
-  PDNMS pdnmsThis = NULL;
-
-
- /* fetch the active structure */
-  pdnmsThis = GetSelectedModelstruc();
-
-  if (!pdnmsThis) return;
-
-  pmsdThis = (PMSD) pdnmsThis->data.ptrvalue;
-
-  pars = GetAlgorRenderSet(pdnmsThis);
-  if (!pars) return;
-  i = GetValue(Cn3D_pupLabelItem);
-  PDBOn = GetStatus(Cn3D_bLPDB);
+  PDBOn = (Boolean) (nameval == 4);
   switch (i)
     {
-     case 1: /* aa */
+     case 0: /* aa */
          if (PDBOn) pars->PBBLabelStyle =  pars->PBBLabelStyle | (Uint1) L_PDB;
          else pars->PBBLabelStyle = pars->PBBLabelStyle & (Uint1) ~L_PDB;
         break;
-     case 2:  /* na   */
+     case 1:  /* na   */
          if (PDBOn) pars->NTBBLabelStyle =  pars->NTBBLabelStyle | (Uint1) L_PDB;
          else pars->NTBBLabelStyle = pars->NTBBLabelStyle & (Uint1) ~L_PDB;
         break;
-     case 3: /* term prot*/
+     case 2: /* term prot*/
          if (PDBOn) pars->PTermLabelStyle =  pars->PTermLabelStyle | (Uint1) L_PDB;
          else pars->PTermLabelStyle = pars->PTermLabelStyle & (Uint1) ~L_PDB;
         break;
-     case 4:  /* term nt   */
+     case 3:  /* term nt   */
           if (PDBOn) pars->NTTermLabelStyle =  pars->NTTermLabelStyle | (Uint1) L_PDB;
          else pars->NTTermLabelStyle = pars->NTTermLabelStyle & (Uint1) ~L_PDB;
         break;
      default: ;
     }
-  return;
-}
-
-static void Cn3D_LabelWhiteProc(ButtoN b)  /* should the labels be white? */
-{
-  Boolean WhiteOn;
-  Int2 i;
-  PARS pars = NULL;
-  PMSD pmsdThis = NULL;
-  PDNMS pdnmsThis = NULL;
-
-
- /* fetch the active structure */
-  pdnmsThis = GetSelectedModelstruc();
-
-  if (!pdnmsThis) return;
-
-  pmsdThis = (PMSD) pdnmsThis->data.ptrvalue;
-
-  pars = GetAlgorRenderSet(pdnmsThis);
-  if (!pars) return;
-  i = GetValue(Cn3D_pupLabelItem);
-  WhiteOn = GetStatus(Cn3D_bLWhite);
+  WhiteOn = GetStatus(Cn3D_bLWhite [i]);
   switch (i)
     {
-     case 1: /* aa */
+     case 0: /* aa */
          if (WhiteOn) pars->PBBLabelStyle =  pars->PBBLabelStyle | (Uint1) L_WHITE;
          else pars->PBBLabelStyle = pars->PBBLabelStyle & (Uint1) ~L_WHITE;
         break;
-     case 2:  /* na   */
+     case 1:  /* na   */
          if (WhiteOn) pars->NTBBLabelStyle =  pars->NTBBLabelStyle | (Uint1) L_WHITE;
          else pars->NTBBLabelStyle = pars->NTBBLabelStyle & (Uint1) ~L_WHITE;
         break;
-     case 3: /* term prot*/
+     case 2: /* term prot*/
          if (WhiteOn) pars->PTermLabelStyle =  pars->PTermLabelStyle | (Uint1) L_WHITE;
          else pars->PTermLabelStyle = pars->PTermLabelStyle & (Uint1) ~L_WHITE;
         break;
-     case 4:  /* term nt   */
+     case 3:  /* term nt   */
           if (WhiteOn) pars->NTTermLabelStyle =  pars->NTTermLabelStyle | (Uint1) L_WHITE;
          else pars->NTTermLabelStyle = pars->NTTermLabelStyle & (Uint1) ~L_WHITE;
         break;
      default: ;
     }
-  return;
-}
-
-static void Cn3D_LabelTopProc(ButtoN b)  /* should the label be on top? */
-{
-  Boolean TopOn;
-  Int2 i;
-  PARS pars = NULL;
-  PMSD pmsdThis = NULL;
-  PDNMS pdnmsThis = NULL;
-
-
- /* fetch the active structure */
-  pdnmsThis = GetSelectedModelstruc();
-
-  if (!pdnmsThis) return;
-
-  pmsdThis = (PMSD) pdnmsThis->data.ptrvalue;
-
-  pars = GetAlgorRenderSet(pdnmsThis);
-  if (!pars) return;
-  i = GetValue(Cn3D_pupLabelItem);
-  TopOn = GetStatus(Cn3D_bLTop);
+  TopOn = GetStatus(Cn3D_bLTop [i]);
   switch (i)
     {
-     case 1: /* aa */
+     case 0: /* aa */
          if (TopOn) pars->PBBLabelJust =  pars->PBBLabelJust | (Uint1) LA_FRONT;
          else pars->PBBLabelJust = pars->PBBLabelJust & (Uint1) ~LA_FRONT;
         break;
-     case 2:  /* na   */
+     case 1:  /* na   */
          if (TopOn) pars->NTBBLabelJust =  pars->NTBBLabelJust | (Uint1) LA_FRONT;
          else pars->NTBBLabelJust = pars->NTBBLabelJust & (Uint1) ~LA_FRONT;
         break;
-     case 3: /* term prot*/
+     case 2: /* term prot*/
          if (TopOn) pars->PTermLabelJust =  pars->PTermLabelJust | (Uint1) LA_FRONT;
          else pars->PTermLabelJust = pars->PTermLabelJust & (Uint1) ~LA_FRONT;
         break;
-     case 4:  /* term nt   */
+     case 3:  /* term nt   */
           if (TopOn) pars->NTTermLabelJust =  pars->NTTermLabelJust | (Uint1) LA_FRONT;
          else pars->NTTermLabelJust = pars->NTTermLabelJust & (Uint1) ~LA_FRONT;
         break;
      default: ;
     }
-  return;
+  k = (Int2) GetValue(Cn3D_pupLabelSize [i]);
+   switch (i)
+    {
+     case 0: /* prot bb */
+         pars->PBBLabelScale = k;
+         break;
+     case 1: /* na bb */
+         pars->NTBBLabelScale = k;
+         break;
+     case 2: /* prot term */
+         pars->PTermLabelScale = k;
+         break;
+     case 3: /* na term */
+         pars->NTTermLabelScale = k;
+         break;
+     default:
+     ;
+   }
+  }
+
+
+  if (GetStatus (Cn3D_LimmediateRedraw)) {
+    Cn3D_RedrawProc (Cn3D_bLRedraw);
+  }
+}
+
+static void LabelPopupOnOffProc (PopuP p)
+
+{
+  MasterChangeLabelsProc ();
+}
+
+static void LabelButtonOnOffProc (ButtoN b)
+
+{
+  MasterChangeLabelsProc ();
+}
+
+static void LabelGroupOnOffProc (GrouP g)
+
+{
+  MasterChangeLabelsProc ();
 }
 
 void LIBCALL ResetLabelCtrls(void)
 {
+  Int2 i, val, style, size;
   PARS pars = NULL;
   PMSD pmsdThis = NULL;
   PDNMS pdnmsThis = NULL;
@@ -1905,42 +1865,74 @@ void LIBCALL ResetLabelCtrls(void)
    {
     setout:
 
-      SetValue(Cn3D_pupLabelAA, 1);
-      SetValue(Cn3D_pupLabelNT, 1);
+      SafeSetValue(Cn3D_pupLabelAA, 1);
+      SafeSetValue(Cn3D_pupLabelNT, 1);
 
-      SetItemStatus(Cn3D_lOnOffLabel, 1, FALSE);
-      SetItemStatus(Cn3D_lOnOffLabel, 2, FALSE);
-      SetItemStatus(Cn3D_lOnOffLabel, 3, FALSE);
+      SafeSetStatus(Cn3D_lOnOffLabel [2], FALSE);
+      SafeSetStatus(Cn3D_lOnOffLabel [3], FALSE);
 
-      SetValue(Cn3D_pupLabelItem, 1);
-
-      SetStatus(Cn3D_bLName, FALSE);
-      SetStatus(Cn3D_bLNum, FALSE);
-      SetStatus(Cn3D_bLPDB, FALSE);
-      SetStatus(Cn3D_bLTop, FALSE);
-      SetStatus(Cn3D_bLWhite, FALSE);
-      SetValue( Cn3D_gLNameCode, 1);
-
-      SetValue(Cn3D_pupLabelSize, 1);
+      for (i = 0; i < 4; i++) {
+        SafeSetValue(Cn3D_bLName [i], 1);
+        SafeSetStatus(Cn3D_bLNum [i], FALSE);
+        SafeSetStatus(Cn3D_bLTop [i], FALSE);
+        SafeSetStatus(Cn3D_bLWhite [i], FALSE);
+        SafeSetValue(Cn3D_pupLabelSize [i], 1);
+      }
 
       return;
    }
 
-  SetValue(Cn3D_pupLabelAA, pars->PBBLabelOn);
-  SetValue(Cn3D_pupLabelNT, pars->NTBBLabelOn);
+  SafeSetValue(Cn3D_pupLabelAA, pars->PBBLabelOn);
+  SafeSetValue(Cn3D_pupLabelNT, pars->NTBBLabelOn);
 
-  SetItemStatus(Cn3D_lOnOffLabel, 1, pars->PTermLabelOn);
-  SetItemStatus(Cn3D_lOnOffLabel, 2, pars->NTTermLabelOn);
+  SafeSetStatus(Cn3D_lOnOffLabel [2], pars->PTermLabelOn);
+  SafeSetStatus(Cn3D_lOnOffLabel [3], pars->NTTermLabelOn);
 
-  SetValue(Cn3D_pupLabelItem, 1);
-
-  Cn3D_SetLabelStyle(NULL);
-  return;
+  for (i = 0; i < 4; i++) {
+    val = 1;
+    style = 1;
+    size = 1;
+    switch (i) {
+      case 0 :
+        style = pars->PBBLabelStyle;
+        size = pars->PBBLabelScale;
+        break;
+      case 1 :
+        style = pars->NTBBLabelStyle;
+        size = pars->NTBBLabelScale;
+        break;
+      case 2 :
+        style = pars->PTermLabelStyle;
+        size = pars->PTermLabelScale;
+        break;
+      case 3 :
+        style = pars->NTTermLabelStyle;
+        size = pars->NTTermLabelScale;
+        break;
+      default :
+        break;
+    }
+    if (! (Boolean) (style & (Uint1) (L_NAME))) {
+      val = 1;
+    } else if ((Boolean) (style & (Uint1) (L_3LETR))) {
+      val = 2;
+    } else if ((Boolean) (style & (Uint1) (L_1LETR))) {
+      val = 3;
+    } else if ((Boolean) (style & (Uint1) L_PDB)) {
+      val = 4;
+    }
+    SafeSetValue(Cn3D_bLName [i], val);
+    SafeSetStatus(Cn3D_bLNum [i], (Boolean) (style & (Uint1) L_NUM));
+    SafeSetStatus(Cn3D_bLTop [i], (Boolean) (style & (Uint1) LA_FRONT));
+    SafeSetStatus(Cn3D_bLWhite [i], (Boolean) (style & (Uint1) ~L_WHITE));
+    SafeSetValue(Cn3D_pupLabelSize [i], size);
+  }
 }
 
 
 void Cn3D_RedrawProc(ButtoN b)
 {
+  Int2 k;
   PARS pars = NULL;
   PMSD pmsdThis = NULL;
   PDNMS pdnmsThis = NULL;
@@ -1959,20 +1951,20 @@ void Cn3D_RedrawProc(ButtoN b)
   if (!pars)
    {
     setout:
-      SetItemStatus(Cn3D_lOnOff, 1, FALSE);
-      SetItemStatus(Cn3D_lOnOff, 2, FALSE);
-      SetItemStatus(Cn3D_lOnOff, 3, FALSE);
-      SetItemStatus(Cn3D_lOnOff, 4, FALSE);
-      SetItemStatus(Cn3D_lOnOff, 5, FALSE);
-      SetItemStatus(Cn3D_lOnOff, 6, FALSE);
-      SetItemStatus(Cn3D_lOnOff, 7, FALSE);
-      SetItemStatus(Cn3D_lOnOff, 8, FALSE);
+      for (k = 2; k < 10; k++) {
+        SafeSetStatus (Cn3D_lOnOffItem [k], FALSE);
+      }
 
-      SetValue(Cn3D_pupPBB, 4);
-      SetValue(Cn3D_pupNABB, 4);
-      SetValue(Cn3D_pupStyleItem, 1);
-      SetValue(Cn3D_pupRenderStyle, 1);
-      SetValue(Cn3D_pupColorStyle, 1);
+      SafeSetValue(Cn3D_pupPBB, 4);
+      SafeSetValue(Cn3D_pupNABB, 4);
+      for (k = 0; k < 9; k++) {
+        SetEnumPopup (Cn3D_pupRenderStyle [k], renderAlist [k], (UIEnum) renderDefaults [k]);
+        SetEnumPopup (Cn3D_pupColorStyle [k], colorAlist [k], (UIEnum) colorDefaults [k]);
+        /*
+        SafeSetValue(Cn3D_pupRenderStyle [k], 1);
+        SafeSetValue(Cn3D_pupColorStyle [k], 1);
+        */
+      }
 
       return;
    }
@@ -1982,9 +1974,34 @@ void Cn3D_RedrawProc(ButtoN b)
   pmldThis = (PMLD)pdnmlThis->data.ptrvalue;
   if(pmldThis->iType == Model_type_ncbi_backbone) {
      pars->PVirtualBBOn = TRUE;
+     pars->PRealBBOn = FALSE;
+     pars->PExtraBBOn = FALSE;
+
      pars->NTVirtualBBOn = TRUE;
-     SetValue(Cn3D_pupPBB, 1);
-     SetValue(Cn3D_pupNABB, 1);
+     pars->NTRealBBOn = FALSE;
+     pars->NTExtraBBOn = FALSE;
+
+     SafeSetValue(Cn3D_pupPBB, 1);
+     SafeSetValue(Cn3D_pupNABB, 1);
+
+     sfpThis = sfp;
+     while(sfpThis){
+        sfipThis = sfpThis->data.ptrvalue;
+        pars = sfipThis->parsSpecial;
+
+        pars->PVirtualBBOn = TRUE;
+        pars->PRealBBOn = FALSE;
+        pars->PExtraBBOn = FALSE;
+
+        pars->NTVirtualBBOn = TRUE;
+        pars->NTRealBBOn = FALSE;
+        pars->NTExtraBBOn = FALSE;
+
+/*      SafeSetValue(Cn3D_pupModelPBB, 1);
+        SafeSetValue(Cn3D_pupModelNABB, 1);  */
+
+        sfpThis = sfpThis->next;
+     }
   }
 
   Cn3D_Redraw(FALSE);
@@ -1992,76 +2009,33 @@ void Cn3D_RedrawProc(ButtoN b)
 }
 
 
-static void Cn3D_LabelOnOffProc(LisT l)
+static void AlignLabelButtons (Handle master, Handle slave)
+
 {
-  PARS pars = NULL;
-  PMSD pmsdThis = NULL;
-  PDNMS pdnmsThis = NULL;
+  RecT pptPos, btnPos;
+  Int2 delta;
 
- /* fetch the active structure */
-  pdnmsThis = GetSelectedModelstruc();
-
-  if (!pdnmsThis) return;
-
-  pmsdThis = (PMSD) pdnmsThis->data.ptrvalue;
-
-  pars = GetAlgorRenderSet(pdnmsThis);
-  if (!pars) return;
-
-  pars->PTermLabelOn = GetItemStatus(Cn3D_lOnOffLabel, 1);
-  pars->NTTermLabelOn = GetItemStatus(Cn3D_lOnOffLabel, 2);
-  return;
+  GetPosition (master, &pptPos);
+  GetPosition (slave, &btnPos);
+  delta = (pptPos.bottom + pptPos.top) / 2 - (btnPos.bottom + btnPos.top) / 2;
+  if (delta != 0) {
+    OffsetRect (&btnPos, 0, delta);
+    SetPosition (slave, &btnPos);
+    AdjustPrnt ((Nlm_GraphiC) slave, &btnPos, FALSE);
+  }
 }
-
-
-
-static void Cn3D_SetLabelSize(PopuP p)
-{
-  Int2 i;
-  Int2 k;
-  PARS pars = NULL;
-  PMSD pmsdThis = NULL;
-  PDNMS pdnmsThis = NULL;
-
-
- /* fetch the active structure */
-  pdnmsThis = GetSelectedModelstruc();
-
-  if (!pdnmsThis) return;
-
-  pmsdThis = (PMSD) pdnmsThis->data.ptrvalue;
-
-  pars = GetAlgorRenderSet(pdnmsThis);
-  if (!pars) return;
-  i = GetValue(Cn3D_pupLabelItem);
-  k = (Int2) GetValue(Cn3D_pupLabelSize);
-   switch (i)
-    {
-     case 1: /* prot bb */
-         pars->PBBLabelScale = k;
-         break;
-     case 2: /* na bb */
-         pars->NTBBLabelScale = k;
-         break;
-     case 3: /* prot term */
-         pars->PTermLabelScale = k;
-         break;
-     case 4: /* na term */
-         pars->NTTermLabelScale = k;
-         break;
-     default:
-     ;
-   }
-}
-
-
 
 GrouP LIBCALL LabelControls ( Nlm_GrouP prnt)
 {
-  GrouP g , h, i, j, k;
+  GrouP g, h;
+  Int2  k;
+  PrompT ppt [4];
+  PrompT ppt1, ppt2, ppt3, ppt4, ppt7, ppt8, ppt9;
 
-  g = NormalGroup ( prnt, 1, 0, "Labels", systemFont, NULL );
+  g = HiddenGroup ( prnt, -1, 0, NULL );
   if (!g) return NULL;
+  SetGroupSpacing ( g, 3, 9 );
+/*
 #ifdef WIN_MOTIF
       SetGroupMargins ( g, 4, 1 );
       SetGroupSpacing ( g, 2, 1 );
@@ -2069,71 +2043,106 @@ GrouP LIBCALL LabelControls ( Nlm_GrouP prnt)
       SetGroupMargins ( g, 1, 1 );
       SetGroupSpacing ( g, 0, 0 );
 #endif
+*/
 
+  h = HiddenGroup (g, 0, -5, NULL);
+  SetGroupSpacing (h, 5, 3);
+
+  Cn3D_lOnOffLabel [0] = NULL; /* Cn3D_pupLabelAA includes off setting */
+  Cn3D_lOnOffLabel [1] = NULL; /* Cn3D_pupLabelNT includes off setting */
+
+  ppt1 = StaticPrompt (h, "Category", 0, stdLineHeight + 5, systemFont, 'c');
+  ppt [0] = StaticPrompt (h, "Amino Acid", 0, popupMenuHeight, programFont, 'l');
+  ppt [1] = StaticPrompt (h, "Nucleic Acid", 0, popupMenuHeight, programFont, 'l');
+  ppt [2] = StaticPrompt (h, "N & C Termini", 0, popupMenuHeight, programFont, 'l');
+  ppt [3] = StaticPrompt (h, "5' & 3' Termini", 0, popupMenuHeight, programFont, 'l');
+  AlignObjects (ALIGN_CENTER, (HANDLE) ppt1, (HANDLE) ppt [3], NULL);
+
+  ppt2 = StaticPrompt (h, "On/Off", 0, stdLineHeight + 5, systemFont, 'c');
+  Cn3D_pupLabelAA = PopupList(h, FALSE, LabelPopupOnOffProc);
+  PopupItem(Cn3D_pupLabelAA, "none");
+  PopupItem(Cn3D_pupLabelAA, "every AA");
+  PopupItem(Cn3D_pupLabelAA, "every 5");
+  PopupItem(Cn3D_pupLabelAA, "every 10");
+  PopupItem(Cn3D_pupLabelAA, "every 20");
+  PopupItem(Cn3D_pupLabelAA, "every 50");
+  Cn3D_pupLabelNT= PopupList(h, FALSE, LabelPopupOnOffProc);
+  PopupItem(Cn3D_pupLabelNT, "none");
+  PopupItem(Cn3D_pupLabelNT, "every NA");
+  PopupItem(Cn3D_pupLabelNT, "every 5");
+  PopupItem(Cn3D_pupLabelNT, "every 10");
+  PopupItem(Cn3D_pupLabelNT, "every 20");
+  PopupItem(Cn3D_pupLabelNT, "every 50");
+  Cn3D_lOnOffLabel [2] = CheckBox (h ,"", LabelButtonOnOffProc);
+  Cn3D_lOnOffLabel [3] = CheckBox (h ,"", LabelButtonOnOffProc);
+  AlignObjects (ALIGN_CENTER, (HANDLE) ppt2, (HANDLE) Cn3D_pupLabelAA, (HANDLE) Cn3D_pupLabelNT,
+                (HANDLE) Cn3D_lOnOffLabel [2], (HANDLE) Cn3D_lOnOffLabel [3], NULL);
+
+  ppt3 = StaticPrompt (h, "Name", 0, stdLineHeight + 5, systemFont, 'c');
+  for (k = 0; k < 4; k++) {
+    Cn3D_bLName [k] = PopupList (h, FALSE, LabelPopupOnOffProc);
+    PopupItem (Cn3D_bLName [k], "none");
+    PopupItem (Cn3D_bLName [k], "3 letter");
+    PopupItem (Cn3D_bLName [k], "1 letter");
+    PopupItem (Cn3D_bLName [k], "PDB");
+  }
+  AlignObjects (ALIGN_CENTER, (HANDLE) ppt3, (HANDLE) Cn3D_bLName [0], (HANDLE) Cn3D_bLName [1],
+                (HANDLE) Cn3D_bLName [2], (HANDLE) Cn3D_bLName [3], NULL);
+
+  ppt4 = StaticPrompt (h, "Num", 0, stdLineHeight + 5, systemFont, 'c');
+  for (k = 0; k < 4; k++) {
+    Cn3D_bLNum [k] = CheckBox(h, "", LabelButtonOnOffProc );
+  }
+  AlignObjects (ALIGN_CENTER, (HANDLE) ppt4, (HANDLE) Cn3D_bLNum [0], (HANDLE) Cn3D_bLNum [1],
+                (HANDLE) Cn3D_bLNum [2], (HANDLE) Cn3D_bLNum [3], NULL);
+
+  ppt7 = StaticPrompt (h, "On Top", 0, stdLineHeight + 5, systemFont, 'c');
+  for (k = 0; k < 4; k++) {
+    Cn3D_bLTop [k] = CheckBox(h, "", LabelButtonOnOffProc );
+  }
+  AlignObjects (ALIGN_CENTER, (HANDLE) ppt7, (HANDLE) Cn3D_bLTop [0], (HANDLE) Cn3D_bLTop [1],
+                (HANDLE) Cn3D_bLTop [2], (HANDLE) Cn3D_bLTop [3], NULL);
+
+  ppt8 = StaticPrompt (h, "White", 0, stdLineHeight + 5, systemFont, 'c');
+  for (k = 0; k < 4; k++) {
+    Cn3D_bLWhite [k] = CheckBox(h, "",  LabelButtonOnOffProc  );
+  }
+  AlignObjects (ALIGN_CENTER, (HANDLE) ppt8, (HANDLE) Cn3D_bLWhite [0], (HANDLE) Cn3D_bLWhite [1],
+                (HANDLE) Cn3D_bLWhite [2], (HANDLE) Cn3D_bLWhite [3], NULL);
+
+  ppt9 = StaticPrompt (h, "Size", 0, stdLineHeight + 5, systemFont, 'c');
+  for (k = 0; k < 4; k++) {
+    Cn3D_pupLabelSize [k] = PopupList(h, FALSE, LabelPopupOnOffProc);
+    PopupItem(Cn3D_pupLabelSize [k], "1");
+    PopupItem(Cn3D_pupLabelSize [k], "2");
+    PopupItem(Cn3D_pupLabelSize [k], "3");
+    PopupItem(Cn3D_pupLabelSize [k], "4");
+    PopupItem(Cn3D_pupLabelSize [k], "5");
+    PopupItem(Cn3D_pupLabelSize [k], "6");
+    PopupItem(Cn3D_pupLabelSize [k], "7");
+    PopupItem(Cn3D_pupLabelSize [k], "8");
+    PopupItem(Cn3D_pupLabelSize [k], "9");
+    PopupItem(Cn3D_pupLabelSize [k], "10");
+  }
+  AlignObjects (ALIGN_CENTER, (HANDLE) ppt9, (HANDLE) Cn3D_pupLabelSize [0], (HANDLE) Cn3D_pupLabelSize [1],
+                (HANDLE) Cn3D_pupLabelSize [2], (HANDLE) Cn3D_pupLabelSize [3], NULL);
+
+
+  Cn3D_LimmediateRedraw = CheckBox (g, "Immediate Redraw on Every Change", NULL);
 
   Cn3D_bLRedraw = PushButton(g, "Apply!", Cn3D_RedrawProc);
 
-   StaticPrompt (g, "On/Off",0,0, Nlm_systemFont, 'l');
+  AlignLabelButtons (Cn3D_pupLabelSize [2], Cn3D_lOnOffLabel [2]);
+  AlignLabelButtons (Cn3D_pupLabelSize [3], Cn3D_lOnOffLabel [3]);
+  for (k = 0; k < 4; k++) {
+    AlignLabelButtons (Cn3D_pupLabelSize [k], Cn3D_bLName [k]);
+    AlignLabelButtons (Cn3D_pupLabelSize [k], Cn3D_bLNum [k]);
+    AlignLabelButtons (Cn3D_pupLabelSize [k], Cn3D_bLTop [k]);
+    AlignLabelButtons (Cn3D_pupLabelSize [k], Cn3D_bLWhite [k]);
+  }
 
-  Cn3D_pupLabelAA = PopupList(g, FALSE, Cn3D_LabelAAProc);
-  PopupItem(Cn3D_pupLabelAA, "no AA labels");
-  PopupItem(Cn3D_pupLabelAA, "every AA");
-  PopupItem(Cn3D_pupLabelAA, "every 5 AA");
-  PopupItem(Cn3D_pupLabelAA, "every 10 AA");
-  PopupItem(Cn3D_pupLabelAA, "every 20 AA");
-  PopupItem(Cn3D_pupLabelAA, "every 50 AA");
-
-
-  Cn3D_pupLabelNT= PopupList(g, FALSE, Cn3D_LabelNAProc);
-  PopupItem(Cn3D_pupLabelNT, "no NA labels");
-  PopupItem(Cn3D_pupLabelNT, "every NA");
-  PopupItem(Cn3D_pupLabelNT, "every 5 NA");
-  PopupItem(Cn3D_pupLabelNT, "every 10 NA");
-  PopupItem(Cn3D_pupLabelNT, "every 20 NA");
-  PopupItem(Cn3D_pupLabelNT, "every 50 NA");
-
-  Cn3D_lOnOffLabel = MultiList(g ,10, 3,  Cn3D_LabelOnOffProc);
-  ListItem(Cn3D_lOnOffLabel, "N & C Termini");
-  ListItem(Cn3D_lOnOffLabel, "5' & 3' Termini");
-
-  StaticPrompt (g, "------", 0,0, Nlm_systemFont, 'c');
-  StaticPrompt (g, "Label Style of", 0,0, Nlm_systemFont, 'l');
-  Cn3D_pupLabelItem = PopupList(g, FALSE, Cn3D_SetLabelStyle);
-  PopupItem(Cn3D_pupLabelItem, "Amino Acids,");
-  PopupItem(Cn3D_pupLabelItem, "Nucl. Acids,");
-  PopupItem(Cn3D_pupLabelItem, "N & C Termini");
-  PopupItem(Cn3D_pupLabelItem, "5' & 3' Termini");
-
-  h = HiddenGroup(g, 2,0, NULL);
-  Cn3D_bLName = CheckBox(h, "Name", Cn3D_LabelNameProc );
-  Cn3D_gLNameCode = HiddenGroup(h, 2, 0,  Cn3D_NameCodeProc   );
-  RadioButton(Cn3D_gLNameCode,"3");
-  RadioButton(Cn3D_gLNameCode,"1");
-
-  i = HiddenGroup(g, 2, 0, NULL);
-  Cn3D_bLNum = CheckBox(i, "Num.", Cn3D_LabelNumProc );
-  Cn3D_bLPDB = CheckBox(i, "PDB",  Cn3D_LabelPDBProc  );
-
-
-  j = HiddenGroup(g, 2, 0, NULL);
-  Cn3D_bLTop = CheckBox(j, "On top", Cn3D_LabelTopProc );
-  Cn3D_bLWhite = CheckBox(j, "White",  Cn3D_LabelWhiteProc  );
-
-  k = HiddenGroup(g, 2, 0, NULL);
-  StaticPrompt(k, "Size",0,popupMenuHeight,Nlm_systemFont,'r');
-  Cn3D_pupLabelSize = PopupList(k, FALSE, Cn3D_SetLabelSize);
-  PopupItem(Cn3D_pupLabelSize, "1");
-  PopupItem(Cn3D_pupLabelSize, "2");
-  PopupItem(Cn3D_pupLabelSize, "3");
-  PopupItem(Cn3D_pupLabelSize, "4");
-  PopupItem(Cn3D_pupLabelSize, "5");
-  PopupItem(Cn3D_pupLabelSize, "6");
-  PopupItem(Cn3D_pupLabelSize, "7");
-  PopupItem(Cn3D_pupLabelSize, "8");
-  PopupItem(Cn3D_pupLabelSize, "9");
-  PopupItem(Cn3D_pupLabelSize, "10");
-
-
+  AlignObjects (ALIGN_CENTER, (HANDLE) Cn3D_bLRedraw,
+                (HANDLE) Cn3D_LimmediateRedraw, (HANDLE) h, NULL);
 
   ResetLabelCtrls();
   return g;
@@ -2146,13 +2155,71 @@ static void fnCn3D_RedrawWrapper(ButtoN b)
   Cn3D_ReColor = FALSE;
 }
 
+static CharPtr categorynames [] = {
+  "", "", "Protein Sidechains", "Nucleotide Sidechains", "Heterogen",
+  "Ions", "Connections", "Solvents", "3D Objects", "Hydrogens"
+};
+
+static PopuP RenderStyle (GrouP h, Int2 i)
+
+{
+  PopuP  p;
+
+  if (renderAlist [i] != empty_alist) {
+    p = PopupList (h, FALSE, PopupOnOffProc);
+  } else {
+    p = PopupList (h, FALSE, NULL);
+  }
+  InitEnumPopup (p, renderAlist [i], NULL);
+  /*
+  PopupItem (p, "Wireframe");
+  PopupItem (p, "Tubes");
+  PopupItem (p, "Ball&Stick");
+  PopupItem (p, "Fat Tubes");
+  PopupItem (p, "SpaceFill");
+  */
+  return p;
+}
+
+static PopuP ColorStyle (GrouP h, Int2 i)
+
+{
+  PopuP  p;
+
+  if (colorAlist [i] != empty_alist) {
+    p = PopupList (h, FALSE, PopupOnOffProc);
+  } else {
+    p = PopupList (h, FALSE, NULL);
+  }
+  InitEnumPopup (p, colorAlist [i], NULL);
+  /*
+  PopupItem (p, "Molecule Cycle");
+  PopupItem (p, "Sec. Structure");
+  PopupItem (p, "Domain");
+  PopupItem (p, "Residue");
+  PopupItem (p, "Hydrophobicity");
+  PopupItem (p, "CPK");
+  PopupItem (p, "Temperature");
+  PopupItem (p, "Object Cycle");
+  PopupItem (p, "Structure");
+  PopupItem (p, "Neighbor");
+  */
+  return p;
+}
+
 GrouP LIBCALL  RenderControls ( Nlm_GrouP prnt)
 {
-  GrouP g;
+  GrouP g, h;
+  Int2  k;
+  PrompT ppt [10];
+  PrompT ppt1, ppt2, ppt3, ppt4;
+  RecT pptPos, btnPos;
+  Int2 delta;
 
-
-  g = NormalGroup ( prnt, 1, 0, "Render", systemFont, NULL );
+  g = HiddenGroup ( prnt, -1, 0, NULL );
   if (!g) return NULL;
+  SetGroupSpacing ( g, 3, 9 );
+/*
 #ifdef WIN_MOTIF
       SetGroupMargins ( g, 4, 1 );
       SetGroupSpacing ( g, 2, 1 );
@@ -2160,91 +2227,95 @@ GrouP LIBCALL  RenderControls ( Nlm_GrouP prnt)
       SetGroupMargins ( g, 1, 1 );
       SetGroupSpacing ( g, 0, 0 );
 #endif
+*/
 
+  h = HiddenGroup (g, 0, -11, NULL);
+  SetGroupSpacing (h, 5, 3);
 
-  Cn3D_bRedraw = PushButton(g, "Apply!", fnCn3D_RedrawWrapper);
+  Cn3D_lOnOffItem [0] = NULL; /* Cn3D_pupPBB includes off setting */
+  Cn3D_lOnOffItem [1] = NULL; /* Cn3D_pupNABB includes off setting */
 
+  ppt1 = StaticPrompt (h, "Category", 0, stdLineHeight + 5, systemFont, 'c');
+  ppt [0] = StaticPrompt (h, "Protein Backbone", 0, popupMenuHeight, programFont, 'l');
+  ppt [1] = StaticPrompt (h, "Nucleotide Backbone", 0, popupMenuHeight, programFont, 'l');
+  for (k = 2; k < 10; k++) {
+    ppt [k] = StaticPrompt (h, categorynames [k], 0, popupMenuHeight, programFont, 'l');
+  }
+  AlignObjects (ALIGN_CENTER, (HANDLE) ppt1, (HANDLE) ppt [1], NULL);
 
-
-/*BACKBONE controls */
-  StaticPrompt (g, "Prot. Backbone",0,0,Nlm_systemFont,'l');
-  Cn3D_pupPBB = PopupList(g, FALSE, PBBOnOffProc);
+  ppt2 = StaticPrompt (h, "On/Off", 0, stdLineHeight + 5, systemFont, 'c');
+  Cn3D_pupPBB = PopupList(h, FALSE, PopupOnOffProc);
   PopupItem(Cn3D_pupPBB, "alpha C trace");
   PopupItem(Cn3D_pupPBB, "partial atom");
   PopupItem(Cn3D_pupPBB, "all atoms");
   PopupItem(Cn3D_pupPBB, "none");
-
-  StaticPrompt (g, "Nucl. Acid BBone",0,0,Nlm_systemFont,'l');
-  Cn3D_pupNABB = PopupList(g, FALSE, NTBBOnOffProc);
+  Cn3D_pupNABB = PopupList(h, FALSE, PopupOnOffProc);
   PopupItem(Cn3D_pupNABB, "P trace");
   PopupItem(Cn3D_pupNABB, "partial atom");
   PopupItem(Cn3D_pupNABB, "all atoms");
   PopupItem(Cn3D_pupNABB, "none");
+  for (k = 2; k < 10; k++) {
+    Cn3D_lOnOffItem [k] = CheckBox (h, "", ButtonOnOffProc);
+  }
+  AlignObjects (ALIGN_CENTER, (HANDLE) ppt2, (HANDLE) Cn3D_pupPBB, NULL);
 
-  StaticPrompt (g, "On/Off", 0,0, Nlm_systemFont, 'l');
-  Cn3D_lOnOff = MultiList(g ,10,3, OnOffProc);
-  ListItem(Cn3D_lOnOff, "Prot. Sidechains");
-  ListItem(Cn3D_lOnOff, "Nucl. Acid Bases");
-  ListItem(Cn3D_lOnOff, "Heterogen");
-  ListItem(Cn3D_lOnOff, "Ions");
-  ListItem(Cn3D_lOnOff, "Connections");
-  ListItem(Cn3D_lOnOff, "Solvent");
-  ListItem(Cn3D_lOnOff, "Hydrogens");
-  ListItem(Cn3D_lOnOff, "3D Objects");
+  ppt3 = StaticPrompt (h, "Render", 0, stdLineHeight + 5, systemFont, 'c');
+  Cn3D_pupRenderStyle [0] = RenderStyle (h, 0);
+  Cn3D_pupRenderStyle [1] = RenderStyle (h, 1);
+  for (k = 2; k < 10; k++) {
+    if (k != 8 && k != 9) {
+      Cn3D_pupRenderStyle [k] = RenderStyle (h, k);
+    } else {
+      StaticPrompt (h, " ", 0, popupMenuHeight, programFont, 'l');
+      Cn3D_pupRenderStyle [k] = NULL;
+    }
+  }
+  AlignObjects (ALIGN_CENTER, (HANDLE) ppt3, (HANDLE) Cn3D_pupRenderStyle [0], NULL);
 
+  ppt4 = StaticPrompt (h, "Color", 0, stdLineHeight + 5, systemFont, 'c');
+  Cn3D_pupColorStyle [0] = ColorStyle (h, 0);
+  Cn3D_pupColorStyle [1] = ColorStyle (h, 1);
+  for (k = 2; k < 10; k++) {
+    if (k != 6 && k != 9) {
+      Cn3D_pupColorStyle [k] = ColorStyle (h, k);
+    } else {
+      StaticPrompt (h, " ", 0, popupMenuHeight, programFont, 'l');
+      Cn3D_pupColorStyle [k] = NULL;
+    }
+  }
+  AlignObjects (ALIGN_CENTER, (HANDLE) ppt4, (HANDLE) Cn3D_pupColorStyle [0], NULL);
 
-  StaticPrompt(g, "-------",0,0,Nlm_systemFont,'c');
+  Cn3D_pupRenderStyle [9] = NULL; /* not for hydrogens */
+  Cn3D_pupColorStyle [9] = NULL; /* not for hydrogens */
 
-  StaticPrompt(g, "Style Detail:",0,0,Nlm_systemFont,'l');
+  Cn3D_immediateRedraw = CheckBox (g, "Immediate Redraw on Every Change", NULL);
 
-  Cn3D_pupStyleItem = PopupList(g, FALSE,  Cn3D_SetStyle );
-  PopupItem(Cn3D_pupStyleItem, "Prot. Backbone,");
-  PopupItem(Cn3D_pupStyleItem, "Prot. Sidechains,");
-  PopupItem(Cn3D_pupStyleItem, "Nucl. Acid BBone,");
-  PopupItem(Cn3D_pupStyleItem, "Nucl. Acid Bases,");
-  PopupItem(Cn3D_pupStyleItem, "Heterogens,");
-  PopupItem(Cn3D_pupStyleItem, "Ions,");
-  PopupItem(Cn3D_pupStyleItem, "Connections,");
-  PopupItem(Cn3D_pupStyleItem, "Solvent,");
-  PopupItem(Cn3D_pupStyleItem, "3D Objects,");
+  Cn3D_bRedraw = PushButton (g, "Apply!", fnCn3D_RedrawWrapper);
 
+  for (k = 2; k < 10; k++) {
+    GetPosition (Cn3D_lOnOffItem [k], &btnPos);
+    GetPosition (ppt [k], &pptPos);
+    delta = (pptPos.bottom + pptPos.top) / 2 - (btnPos.bottom + btnPos.top) / 2;
+    if (delta != 0) {
+      OffsetRect (&btnPos, 0, delta);
+      SetPosition (Cn3D_lOnOffItem [k], &btnPos);
+      AdjustPrnt ((Nlm_GraphiC) Cn3D_lOnOffItem [k], &btnPos, FALSE);
+    }
+  }
 
-   StaticPrompt(g, "   drawn with",0,0,Nlm_systemFont,'l');
-  Cn3D_pupRenderStyle = PopupList(g , FALSE,  Cn3D_SetRenderStyle);
-  PopupItem(Cn3D_pupRenderStyle, "Wireframe,");
-  PopupItem(Cn3D_pupRenderStyle, "Tubes,");
-  PopupItem(Cn3D_pupRenderStyle, "Ball&Stick,");
-  PopupItem(Cn3D_pupRenderStyle, "Fat Tubes,");
-  PopupItem(Cn3D_pupRenderStyle, "SpaceFill,");
+  AlignObjects (ALIGN_CENTER, (HANDLE) Cn3D_pupPBB, (HANDLE) Cn3D_pupNABB,
+                (HANDLE) Cn3D_lOnOffItem [2], (HANDLE) Cn3D_lOnOffItem [3],
+                (HANDLE) Cn3D_lOnOffItem [4], (HANDLE) Cn3D_lOnOffItem [5],
+                (HANDLE) Cn3D_lOnOffItem [6], (HANDLE) Cn3D_lOnOffItem [7],
+                (HANDLE) Cn3D_lOnOffItem [8], (HANDLE) Cn3D_lOnOffItem [9],
+                NULL);
 
-
-
-  StaticPrompt(g, "   and colored by ",0,0,Nlm_systemFont,'l');
-  Cn3D_pupColorStyle = PopupList(g, FALSE,   Cn3D_SetColorStyle );
-  PopupItem(Cn3D_pupColorStyle, "Molecule Cycle.");
-  PopupItem(Cn3D_pupColorStyle, "Sec. Structure.");
-  PopupItem(Cn3D_pupColorStyle,  "Domain.");
-  PopupItem(Cn3D_pupColorStyle, "Residue.");
-  PopupItem(Cn3D_pupColorStyle, "Hydrophobicity.");
-  PopupItem(Cn3D_pupColorStyle, "CPK.");
-  PopupItem(Cn3D_pupColorStyle, "Temperature.");
-  PopupItem(Cn3D_pupColorStyle, "Object Cycle.");
-  PopupItem(Cn3D_pupColorStyle, "Structure.");
-  PopupItem(Cn3D_pupColorStyle, "Neighbor.");
+  AlignObjects (ALIGN_CENTER, (HANDLE) Cn3D_bRedraw,
+                (HANDLE) Cn3D_immediateRedraw, (HANDLE) h, NULL);
 
   ResetRenderCtrls();
   return g;
 }
-
-
-
-
-
-
-
-
-
-
 
 
 /****************************************************************************/
@@ -2371,7 +2442,10 @@ void LIBCALL RenderObject(PVNMO pvnmoThis)
     if (!pvnmoThis) return;
     pmodThis = (PMOD) pvnmoThis->data.ptrvalue;
     if (!pmodThis) return;
+
     if (!pmodThis->ppflObject) return;
+    if(!pmodThis->bVisible) return;
+
     pmsdThis = ToMSDParent((PFB)pmodThis);
     if (!pmsdThis) return;
     
@@ -2420,7 +2494,7 @@ void LIBCALL RenderObject(PVNMO pvnmoThis)
           {
             pmgdThis = (PMGD) pfbParent;
             if (Cn3d_ColorNow == C_BYSSTRU)
-              iColor = (Int2) KinColorFromSS(pmgdThis);
+              iColor = (Int2) ColorFromSS(pmgdThis);
             if (Cn3d_ColorNow == C_BYDOMAIN)
               iColor = (Int2) ColorNumKinBB[(pmgdThis->iDomain % KIN_COLOR_NUM)];
           }
@@ -3057,6 +3131,7 @@ static void LIBCALLBACK RenderGraph(PFB pfbThis, Int4 iModel,  Int4 iIndex, Poin
   Byte bReservedThis = 0;
   Uint1Ptr rgb;
 
+  SpecialFeatureInfoPtr sfipThis = NULL;
 
   prKeep = (PRK) ptr;
   if (!prKeep) return;
@@ -3067,6 +3142,11 @@ static void LIBCALLBACK RenderGraph(PFB pfbThis, Int4 iModel,  Int4 iIndex, Poin
   if (!(pfbThis->bWhat & prKeep->NodeWhat)) goto cyalater;
   pdnmgThis =  DNFromPFB(pfbThis);
   pmgdThis = (PMGD) pfbThis;
+
+  if(Cn3d_ParsNow == 0 && pmgdThis->FeatureOn > 0) goto cyalater;
+  if(Cn3d_ParsNow > 0) {
+     if( pmgdThis->iFeature == 0 || pmgdThis->FeatureOn == 0 || pmgdThis->iFeature != Cn3d_ParsNow) goto cyalater; 
+  }
 
   if(pmgdThis->bVisible != 1) goto cyalater;
      /* control display show/off on MG level-- Yanli */
@@ -3080,34 +3160,54 @@ static void LIBCALLBACK RenderGraph(PFB pfbThis, Int4 iModel,  Int4 iIndex, Poin
   {
     if(pmsdThis->bMaster) 
     {
-      if (pmgdThis->bReserved && (pmgdThis->bReserved == pmsdThis->bAligned) && !Cn3D_fAlignOn) goto cyalater;
-      if ((!(pmgdThis->bReserved) || (pmgdThis->bReserved != pmsdThis->bAligned)) && !Cn3D_fUnalignOn) goto cyalater;
+      if (pmgdThis->bReserved && (pmgdThis->bReserved == pmsdThis->bAligned) && !Cn3D_fAlignOn && pmgdThis->iFeature != Cn3d_ParsNow) goto cyalater;
+      if ((!(pmgdThis->bReserved) || (pmgdThis->bReserved != pmsdThis->bAligned)) && !Cn3D_fUnalignOn&& pmgdThis->iFeature != Cn3d_ParsNow) goto cyalater;
     }
     else
     {
       if (pmgdThis->bReserved)
       {
-        if ( (*(pmgdThis->pbMasterReserved) == *(pmsdThis->pbAligned)) && !Cn3D_fAlignOn) goto cyalater;
-        if ( (*(pmgdThis->pbMasterReserved) != *(pmsdThis->pbAligned)) && !Cn3D_fUnalignOn) goto cyalater;
+        if ( (*(pmgdThis->pbMasterReserved) == *(pmsdThis->pbAligned)) && !Cn3D_fAlignOn && pmgdThis->iFeature != Cn3d_ParsNow) goto cyalater;
+        if ( (*(pmgdThis->pbMasterReserved) != *(pmsdThis->pbAligned)) && !Cn3D_fUnalignOn && pmgdThis->iFeature != Cn3d_ParsNow) goto cyalater;
       }
-      if (!(pmgdThis->bReserved) && !Cn3D_fUnalignOn) goto cyalater;
+      if (!(pmgdThis->bReserved) && !Cn3D_fUnalignOn && pmgdThis->iFeature != Cn3d_ParsNow) goto cyalater;
     }
   }
   
   /* else if (pmgdThis->bReserved)
   {
-    if ((*(pmgdThis->pbMasterReserved) == *(pmsdThis->pbAligned)) && !Cn3D_fAlignOn) goto cyalater;
+    if ((*(pmgdThis->pbMasterReserved) == *(pmsdThis->pbAligned)) && !Cn3D_fAlignOn && pmgdThis->iFeature != Cn3d_ParsNow) goto cyalater;
   }
-  else if ((!(pmgdThis->bReserved) || (*(pmgdThis->pbMasterReserved) != *(pmsdThis->pbAligned))) && !Cn3D_fUnalignOn) goto cyalater;
+  else if ((!(pmgdThis->bReserved) || (*(pmgdThis->pbMasterReserved) != *(pmsdThis->pbAligned))) && !Cn3D_fUnalignOn && pmgdThis->iFeature != Cn3d_ParsNow) goto cyalater;
 */
   /* set the color */
-  if (Cn3d_ColorNow == C_BYRES)
+
+  if(Cn3d_ParsNow != 0 && pmgdThis->iFeature == Cn3d_ParsNow && pmgdThis->FeatureOn > 0){
+     if (IsGraphAminoAcid(pmgdThis)) {
+        prkNew->Color = (Int2) Cn3d_ColorNow;
+        if (Cn3d_ColorPass) { parsColor->IndexRGB[prkNew->Color] = 1; goto cyalater; }
+        if( Cn3D_ReColor ){
+           if(!Cn3d_ColorPass && Cn3D_ObjMgrOpen && !Salsa_BioseqUpdate){
+              rgb = (Uint1Ptr) GetRGB((Int2) prkNew->Color);
+              ColorSalsa_BYMG(pmgdThis, rgb);
+           }
+        }
+     }
+  }
+  else if (Cn3d_ColorNow == C_BYRES)
   {
     if IsGraphAminoAcid(pmgdThis)
     {
       iResId = GetGraphNCBIstdaa(pmgdThis);
       prkNew->Color = (Int2)  KinAAColor[iResId];
       if (Cn3d_ColorPass) { parsColor->IndexRGB[prkNew->Color] = 1; goto cyalater; }
+      if( Cn3D_ReColor ){
+         if(!Cn3d_ColorPass && Cn3D_ObjMgrOpen && !Salsa_BioseqUpdate){
+            rgb = (Uint1Ptr) GetRGB((Int2) prkNew->Color);
+            ColorSalsa_BYMG(pmgdThis, rgb);
+         }                    /* yanli */
+      }
+      if(Salsa_BioseqUpdate) Salsa_BioseqUpdate = FALSE;
     }
     else
       if IsGraphNABase(pmgdThis)
@@ -3126,10 +3226,10 @@ static void LIBCALLBACK RenderGraph(PFB pfbThis, Int4 iModel,  Int4 iIndex, Poin
   if (Cn3d_ColorPass) {  parsColor->IndexRGB[prkNew->Color]= 1 ; goto cyalater; }
   }
   */
-  if (Cn3d_ColorNow == C_BYSSTRU)
+  else if (Cn3d_ColorNow == C_BYSSTRU)
   {
     if (!IsGraphAminoAcid(pmgdThis)) goto cyalater;
-    prkNew->Color = (Int2) KinColorFromSS(pmgdThis);
+    prkNew->Color = (Int2) ColorFromSS(pmgdThis);
     if (Cn3d_ColorPass) {  parsColor->IndexRGB[prkNew->Color] = 1; goto cyalater; }
     if( Cn3D_ReColor ){
        if(!Cn3d_ColorPass && Cn3D_ObjMgrOpen && !Salsa_BioseqUpdate){
@@ -3140,7 +3240,7 @@ static void LIBCALLBACK RenderGraph(PFB pfbThis, Int4 iModel,  Int4 iIndex, Poin
     if(Salsa_BioseqUpdate) Salsa_BioseqUpdate = FALSE;
   }
   /*set the color for alignment.  skip nucleic acids. */
-  if (Cn3d_ColorNow == C_BYALIGN)
+  else if (Cn3d_ColorNow == C_BYALIGN)
   {
     if (!IsGraphAminoAcid(pmgdThis)) goto cyalater;
     prkNew->Color = (Int2) bColorAlignments[(Cn3d_lSlaveNum % NUM_SLAVES)];
@@ -3154,7 +3254,7 @@ static void LIBCALLBACK RenderGraph(PFB pfbThis, Int4 iModel,  Int4 iIndex, Poin
     if(Salsa_BioseqUpdate) Salsa_BioseqUpdate = FALSE;
   }
 
-  if (Cn3d_ColorNow == C_BYCONS)
+  else if (Cn3d_ColorNow == C_BYCONS)
   {
     if (!IsGraphAminoAcid(pmgdThis)) goto cyalater;
 /*    if (pmgdThis->pbMasterReserved) bReservedThis = *(pmgdThis->pbMasterReserved);
@@ -3206,7 +3306,20 @@ static void LIBCALLBACK RenderGraph(PFB pfbThis, Int4 iModel,  Int4 iIndex, Poin
     if(Salsa_BioseqUpdate) Salsa_BioseqUpdate = FALSE;
   }
   
-  if (Cn3d_ColorNow == C_BYDOMAIN)
+  else if (Cn3d_ColorNow == C_BYSEQCONS)
+  {
+    if(pmgdThis->bReserved) {
+       prkNew->Color = GetColorIndexForMG(pmgdThis);
+    }
+    else
+    {
+       prkNew->Color = (Int2) bColorAlignments[(Cn3d_lSlaveNum % NUM_SLAVES)];
+    }
+    if (Cn3d_ColorPass) {  parsColor->IndexRGB[prkNew->Color] = 1; goto cyalater; }
+    if(Salsa_BioseqUpdate) Salsa_BioseqUpdate = FALSE;
+  }
+
+  else if (Cn3d_ColorNow == C_BYDOMAIN)
   {
     if (!IsGraphAminoAcid(pmgdThis)) goto cyalater;
     prkNew->Color = (Int2) ColorNumKinBB[(pmgdThis->iDomain % KIN_COLOR_NUM)] ;
@@ -3220,7 +3333,7 @@ static void LIBCALLBACK RenderGraph(PFB pfbThis, Int4 iModel,  Int4 iIndex, Poin
     }
     if(Salsa_BioseqUpdate) Salsa_BioseqUpdate = FALSE;
   }
-  if (Cn3d_ColorNow == C_BYHYDRO)
+  else if (Cn3d_ColorNow == C_BYHYDRO)
   {
     if IsGraphAminoAcid(pmgdThis)
     {
@@ -3243,7 +3356,16 @@ static void LIBCALLBACK RenderGraph(PFB pfbThis, Int4 iModel,  Int4 iIndex, Poin
         if (Cn3d_ColorPass) { parsColor->IndexRGB[prkNew->Color] = 1; goto cyalater; }
       }
   }
-
+  else if (Cn3d_ColorNow == C_BYCHAIN)
+  {
+    if( Cn3D_ReColor ){
+       if(!Cn3d_ColorPass && Cn3D_ObjMgrOpen && !Salsa_BioseqUpdate){
+          rgb = (Uint1Ptr) GetRGB((Int2) prkNew->Color);
+          ColorSalsa_BYMG(pmgdThis, rgb);
+       }                    /* yanli */
+    }
+    if(Salsa_BioseqUpdate) Salsa_BioseqUpdate = FALSE;
+  }
 
    /* do the labeling */
 
@@ -3395,6 +3517,7 @@ static void LIBCALLBACK RenderGraph(PFB pfbThis, Int4 iModel,  Int4 iIndex, Poin
 
    /* do the rendering */
    /* deal with setting the NodeType/NodeWhat for virtual/backbone/realbb/residues */
+
    if ((prkNew->Bond == HALF_BOND) || (prkNew->Atom != ATOM_NONE))
        {  /* draw atoms or half-bonds */
          prkNew->NodeType = (Byte) AM_MAD;
@@ -3449,7 +3572,7 @@ static void LIBCALLBACK RenderGraph(PFB pfbThis, Int4 iModel,  Int4 iIndex, Poin
 	  }
       }
 
-  cyalater:
+     cyalater:
      FreeRenderKeep(prkNew);
      return;
 
@@ -3646,9 +3769,17 @@ static void SwitchRender(PDNMS pdnmsThis, Int2 iModel,
 
     Int2 iTest;
     if (!pdnmsThis) return;
-    pmsdThis = (PMSD) pdnmsThis->data.ptrvalue;
-    pars = GetAlgorRenderSet(pdnmsThis);
-    if (!pars) return;
+    
+    if(Cn3d_ParsNow == 0){
+       pmsdThis = (PMSD) pdnmsThis->data.ptrvalue;
+       pars = GetAlgorRenderSet(pdnmsThis);
+       if (!pars) return;
+    }
+    else {
+        pars = GetThisSpecialAlgorRenderSet(Cn3d_ParsNow);
+        if(!pars) return;
+    }
+
     prKeep = NewRenderKeep();
     if (!prKeep) return;
     if (iBackType == CONNECTON)
@@ -3820,13 +3951,19 @@ void LIBCALL MakePaletteModel(PDNMS pdnmsThis, Int2 iModel )
   if (!pdnmsThis) return;
 
   pmsdThis = (PMSD) pdnmsThis->data.ptrvalue;
+  if(Cn3d_ParsNow == 0){
+     pars = GetAlgorRenderSet(pdnmsThis);
+     if (!pars) return;  /* cannot render */
+  }
+  else {
+     pars = GetThisSpecialAlgorRenderSet(Cn3d_ParsNow);
+     if(!pars) return;
+  }
 
-
-  pars = GetAlgorRenderSet(pdnmsThis);
-  if (!pars) return;  /* cannot render */
-
-  parsColor = pars;
-
+/*parsColor = pars;   */   /* this has to be changed since we have multiple */
+                          /* pars now, instead parsColor will be accocated */
+                          /* at the beginning of the redraw process, and */
+                          /* freed at the end of the redraw process */
 
 #ifdef DEBUG_N
 printf("traversing to make palette\n");
@@ -4000,7 +4137,15 @@ void LIBCALL fnMSPLoop (PDNMS pdnmsThis)
 
 
   pmsdThis = (PMSD) pdnmsThis->data.ptrvalue;
-  pars = GetAlgorRenderSet(pdnmsThis);
+
+  if(Cn3d_ParsNow == 0){
+     pars = GetAlgorRenderSet(pdnmsThis);
+     if(!pars) return;
+  }
+  else {
+     pars = GetThisSpecialAlgorRenderSet(Cn3d_ParsNow);
+     if(!pars) return;
+  }
 
   pdnmlThis = pmsdThis->pdnmlModels;
 
@@ -4010,8 +4155,7 @@ void LIBCALL fnMSPLoop (PDNMS pdnmsThis)
      pmldThis = (PMLD) pdnmlThis->data.ptrvalue;
      if (pmldThis->bSelected & (Byte) 0x01)
        {
-          if (!pdnmlFirst)
-	    {
+          if (!pdnmlFirst) {
 	      pdnmlFirst = pdnmlThis;
 	      MakePaletteModel( pdnmsThis, pdnmlThis->choice );
 	    }
@@ -4042,13 +4186,23 @@ void LIBCALL MakeStrucPalette(void)
   if (!pars) return;  /* cannot render */
 
   /* clear out the static list of colors used */
-    for (i=0; i< CN3D_COLOR_MAX; i++)
-      pars->IndexRGB[i] = 0;
+    for (i=0; i< CN3D_COLOR_MAX; i++) pars->IndexRGB[i] = 0;
 
   Cn3d_ColorPass = TRUE;
+
   Cn3d_lSlaveNum = 0;  /* go over the master */
  
+  Cn3d_ParsNow = 0;
+
   fnMSPLoop (pdnmsThis);
+
+  sfpThis = sfp;
+  while(sfpThis){
+    Cn3d_ParsNow = sfpThis->choice;
+    sfipThis = sfpThis->data.ptrvalue;
+    if(sfipThis->On) fnMSPLoop (pdnmsThis);
+    sfpThis = sfpThis->next;
+  }
 
   if(AreNeighborsOn())
   {
@@ -4056,7 +4210,20 @@ void LIBCALL MakeStrucPalette(void)
     while(pdnmsThisSlave) 
     {
       Cn3d_lSlaveNum++; 
-      if(((PMSD)(pdnmsThisSlave->data.ptrvalue))->bVisible) fnMSPLoop(pdnmsThisSlave);
+      if(((PMSD)(pdnmsThisSlave->data.ptrvalue))->bVisible) {
+
+         Cn3d_ParsNow = 0;
+
+         fnMSPLoop(pdnmsThisSlave);
+
+         sfpThis = sfp;
+         while(sfpThis){
+            Cn3d_ParsNow = sfpThis->choice;
+            sfipThis = sfpThis->data.ptrvalue;
+            if(sfipThis->On) fnMSPLoop(pdnmsThisSlave);
+            sfpThis = sfpThis->next;
+         }
+      }
      pdnmsThisSlave = pdnmsThisSlave->next;
     }
   }
@@ -4153,9 +4320,14 @@ printf("in AlgorithmicRendering\n");
 
   pmsdThis = (PMSD) pdnmsThis->data.ptrvalue;
 
-
-  pars = GetAlgorRenderSet(pdnmsThis);
-/*  if (!pars) return NULL; */ /* cannot render */
+  if(Cn3d_ParsNow == 0){
+     pars = GetAlgorRenderSet(pdnmsThis);
+     if (!pars) return; 
+  }
+  else {
+      pars = GetThisSpecialAlgorRenderSet(Cn3d_ParsNow);
+      if(!pars) return;
+  }
 
 #ifdef DEBUG_N
 printf("got render set\n");
@@ -4164,10 +4336,12 @@ printf("got render set\n");
   /* else we are appending to a pic that is in progress */
 
 
-   iTest = TraverseModels( pdnmsThis,
+   if(Cn3d_ParsNow == 0){
+      iTest = TraverseModels( pdnmsThis,
                                 TRAVERSE_ATOM,
                                 0,NULL,
                                 DoGraphicNull);
+   }
 
    pdnmlThis = pmsdThis->pdnmlModels;
    /* set up for doing one model or animation */
@@ -4354,6 +4528,7 @@ Picture3D LIBCALL AlgorithmicRendering(Picture3D p3d)
   PDNMS pdnmsThis = NULL, pdnmsThisSlave = NULL;
   PARS pars = NULL;
   PMSD pmsdThis = NULL;
+  Int2 Cn3d_LayerNow_sofar = 0;
 
   Int2 i = 0;
 
@@ -4373,18 +4548,54 @@ Picture3D LIBCALL AlgorithmicRendering(Picture3D p3d)
 
 
   /* clear out the static list of colors used */
-  for (i=0; i< CN3D_COLOR_MAX; i++)
-    pars->IndexRGB[i] = 0;
+  for (i=0; i< CN3D_COLOR_MAX; i++) pars->IndexRGB[i] = 0;
 
-  fnARLoop(pdnmsThis);
+  if(pmsdThis->bVisible) {
+
+     Cn3d_ParsNow = 0;
+
+     Cn3d_LayerNow_sofar = Cn3d_LayerNow;
+     fnARLoop(pdnmsThis);
+
+     sfpThis = sfp;
+     while(sfpThis){
+        sfipThis = sfpThis->data.ptrvalue;
+        if(sfipThis->On) {
+           Cn3d_LayerNow = Cn3d_LayerNow_sofar;
+           Cn3d_ParsNow = sfpThis->choice;
+           fnARLoop (pdnmsThis);
+        }
+        sfpThis = sfpThis->next;
+     }
+  }
+
+        /* control master structure diaplsy */
 
   if(AreNeighborsOn())
   {
     pdnmsThisSlave = pmsdThis->pdnmsSlaves; /* go through the slave structures */
+
     while(pdnmsThisSlave) 
     {
       Cn3d_lSlaveNum++;
-      if(((PMSD)(pdnmsThisSlave->data.ptrvalue))->bVisible) fnARLoop(pdnmsThisSlave);
+      if(((PMSD)(pdnmsThisSlave->data.ptrvalue))->bVisible) {
+
+         Cn3d_ParsNow = 0;
+
+         Cn3d_LayerNow_sofar = Cn3d_LayerNow;
+         fnARLoop(pdnmsThisSlave);
+   
+         sfpThis = sfp;
+         while(sfpThis){
+            sfipThis = sfpThis->data.ptrvalue;
+            if(sfipThis->On) {
+               Cn3d_LayerNow = Cn3d_LayerNow_sofar;
+               Cn3d_ParsNow = sfpThis->choice;
+               fnARLoop(pdnmsThisSlave);
+            }
+            sfpThis = sfpThis->next;
+         }
+      }
       pdnmsThisSlave = pdnmsThisSlave->next;
     }
   }

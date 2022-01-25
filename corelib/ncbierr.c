@@ -23,9 +23,9 @@
 *
 * ===========================================================================
 *
-* $Id: ncbierr.c,v 6.11 1998/09/29 16:20:53 vakatov Exp $
+* $Id: ncbierr.c,v 6.13 1998/12/29 06:16:21 vakatov Exp $
 *
-* $Revision: 6.11 $
+* $Revision: 6.13 $
 *
 * Authors:  Schuler, Sirotkin (UserErr stuff)
 *
@@ -71,6 +71,12 @@
 * 03-06-95 Schuler     Fixed problem with ErrMsgRoot_fopen
 *
 * $Log: ncbierr.c,v $
+* Revision 6.13  1998/12/29 06:16:21  vakatov
+* Nlm_ErrPostStr() -- Check for the severity code validity
+*
+* Revision 6.12  1998/10/22 16:52:40  shavirin
+* Added function *Nlm_GetErrLongText able to retrieve long error messages
+*
 * Revision 6.11  1998/09/29 16:20:53  vakatov
 * Nlm_AssertionFailed():  printout the module name and file/line in Message
 *
@@ -361,7 +367,11 @@ NLM_EXTERN int LIBCALL Nlm_ErrPostStr (ErrSev sev, int lev1, int lev2, const cha
   ErrMsgRoot *root  = NULL;
   ErrMsgNode *node1 = NULL;
   ErrMsgNode *node2 = NULL;
-  int severity = sev;
+
+  int severity;
+  if (sev < 0  ||  SEV_MAX < sev)
+    sev = SEV_FATAL;
+  severity = sev;
 
   if (info->busy & AEI_BUSY_2)
     {
@@ -2018,5 +2028,33 @@ NLM_EXTERN void LIBCALL Nlm_ErrPathReset (void)
     if (GetAppParam(_file, _section, "MsgPath", "",
                     info->msgpath, PATH_MAX-2))
       FileBuildPath(info->msgpath, NULL, NULL);
+}
+
+NLM_EXTERN char *Nlm_GetErrLongText (char *module, 
+                                     int errcode, int subcode)
+{
+    ErrMsgRoot *root  = NULL;
+    ErrMsgNode *node1 = NULL;
+    ErrMsgNode *node2 = NULL;
+    ErrMsgNode *the_node = NULL;
+    char *text = NULL;
+    
+    if (module != NULL) {
+        root = (ErrMsgRoot*) ErrGetMsgRoot(module);
+        for (node1=root->list; node1; node1=node1->next) {
+            if (node1->code == errcode) {
+                for (node2=node1->list; node2; node2=node2->next)
+                    if (node2->code == subcode)
+                        break;
+                break;
+            }
+        }
+    }
+    
+    the_node = node2 ? node2 : node1;
+    
+    text = (char *) ErrGetExplanation(root, the_node);
+    
+    return text;
 }
 

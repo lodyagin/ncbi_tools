@@ -29,18 +29,32 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.9 $
+* $Revision: 6.15 $
 *
 * File Description:
 *       Vibrant miscellaneous functions
 *
 * Modifications:
 * --------------------------------------------------------------------------
-* Date     Name        Description of modification
-* -------  ----------  -----------------------------------------------------
-*
-*
 * $Log: vibutils.c,v $
+* Revision 6.15  1999/01/13 20:49:37  vakatov
+* Nlm_Execv():  precations for the MT applications
+*
+* Revision 6.14  1999/01/13 18:03:24  kans
+* Nlm_Execv calls fork1 if SOLARIS_THREADS_AVAIL
+*
+* Revision 6.13  1999/01/11 18:59:05  kans
+* hidden Mac function Nlm_GetFileTypeAndCreator - did not solve MIME detection problem
+*
+* Revision 6.12  1999/01/07 22:32:38  kans
+* added Mac-specific Nlm_SendURLAppleEvent
+*
+* Revision 6.11  1999/01/06 20:13:00  kans
+* MyNavTextFilterProc for TEXT files
+*
+* Revision 6.10  1999/01/06 02:51:59  kans
+* support for Mac Navigation Services file selection dialogs
+*
 * Revision 6.9  1998/09/15 15:28:15  vakatov
 * [WIN_MSWIN]  GetOpen/SaveFileName():  removed OFN_NOCHANGEDIR flag
 *
@@ -273,6 +287,11 @@
 #include <vibincld.h>
 #include <ncbiport.h>
 
+/*
+#ifdef WIN_MAC
+#include <Navigation.h>
+#endif
+*/
 
 #ifdef WIN_MAC
 Nlm_Int2     Nlm_nextIdNumber = 2;
@@ -334,6 +353,7 @@ static Nlm_Boolean  fileBoxRsult;
 static Nlm_Char     filePath [256];
 #endif
 
+extern Nlm_Boolean Nlm_usesMacNavServices;
 
 extern Nlm_CharPtr Nlm_StrngPrintable(const Nlm_Char PNTR str)
 {
@@ -4161,6 +4181,186 @@ static void Nlm_FileMapCallback (Widget fs, XtPointer client_data, XtPointer cal
 }
 #endif
 
+#ifdef WIN_MAC
+/* AppleEvent handlers modified from Roger Sayle's RasMol code */
+static void ConvertFilename ( FSSpec *fss, Nlm_CharPtr filename )
+
+{
+  register char *src;
+  register char *dst;
+  register int i;
+  char buffer [256];
+  
+  Str255 dirname;
+  DirInfo dinfo;
+  
+  src = buffer;
+  dinfo.ioDrParID = fss->parID;
+  dinfo.ioNamePtr = dirname;
+  do {
+    dinfo.ioVRefNum = fss->vRefNum;
+    dinfo.ioFDirIndex = -1;
+    dinfo.ioDrDirID = dinfo.ioDrParID;
+    PBGetCatInfo ((CInfoPBPtr) &dinfo, 0);
+    
+    *src++ = ':';
+    for ( i=dirname[0]; i; i-- )
+      *src++ = dirname [i];
+  } while ( dinfo.ioDrDirID != 2 );
+  
+  /* Reverse the file path! */
+  dst = filename;
+  while ( src != buffer )
+    *dst++ = *(--src);
+  for( i = 1; i <= fss->name [0]; i++ )
+    *dst++ = fss->name [i];
+  *dst = '\0';
+}
+#endif
+
+#ifndef OS_MAC /* these ifdefs guarantee this block is not compiled */
+#ifdef WIN_MAC
+static pascal void MyNavEventProc (NavEventCallbackMessage callBackSelector,
+                                   NavCBRecPtr callBackParms,
+                                   NavCallBackUserData callBackUD)
+
+{
+  WindowPtr window = (WindowPtr) callBackParms->eventData.event->message;
+  switch (callBackSelector) {
+    case kNavCBEvent:
+      switch (callBackParms->eventData.event->what) {
+        case updateEvt:
+          /*
+          MyHandleUpdateEvent (window, (EventRecord*) callBackParms->eventData.event);
+          */
+          break;
+      }
+      break;
+  }
+}
+
+static pascal Boolean MyNavTextFilterProc (AEDesc* theItem, void* info,
+                                           NavCallBackUserData callBackUD,
+                                           NavFilterModes filterMode)
+
+{
+    OSErr theErr = noErr;
+    Boolean display = true;
+    NavFileOrFolderInfo* theInfo = (NavFileOrFolderInfo*)info;
+
+    if (theItem->descriptorType == typeFSS)
+        if (!theInfo->isFolder)
+            if (theInfo->fileAndFolder.fileInfo.finderInfo.fdType
+                != 'TEXT')
+                display = false;
+    return display;
+}
+
+static pascal Boolean MyNavFilterProc (AEDesc* theItem, void* info,
+                                       NavCallBackUserData callBackUD,
+                                       NavFilterModes filterMode)
+
+{
+  return true;
+}
+#endif
+#endif
+
+#ifndef OS_MAC /* these ifdefs guarantee this block is not compiled */
+#ifdef WIN_MAC
+static Nlm_Boolean Nlm_NavServGetInputFileName (Nlm_CharPtr fileName, size_t maxsize,
+                                                Nlm_CharPtr extType, Nlm_CharPtr macType)
+
+{
+    NavDialogOptions    dialogOptions;
+    AEDesc              defaultLocation;
+    NavEventUPP         eventProc = NewNavEventProc(MyNavEventProc);
+    NavObjectFilterUPP  filterProc;
+    OSErr               anErr = noErr;
+    FSSpec              fss;
+	char                filename [256];
+	Nlm_Boolean         rsult = FALSE;
+
+    if (StringCmp (macType, "TEXT") == 0) {
+        filterProc = NewNavObjectFilterProc(MyNavTextFilterProc);
+    } else {
+        filterProc = NewNavObjectFilterProc(MyNavFilterProc);
+    }
+
+    //  Specify default options for dialog box
+    anErr = NavGetDefaultDialogOptions(&dialogOptions);
+    if (anErr == noErr)
+    {
+        //  Adjust the options to fit our needs
+        //  Set this option
+        dialogOptions.dialogOptionFlags |= kNavSelectDefaultLocation;
+        //  Clear this one
+        dialogOptions.dialogOptionFlags ^= kNavAllowPreviews;
+
+        anErr = AECreateDesc(typeFSS, &fss,
+                             sizeof(fss),
+                             &defaultLocation );
+        if (anErr == noErr)
+        {
+            // Get 'open' resource. A nil handle being returned is OK,
+            // this simply means no automatic file filtering.
+            NavTypeListHandle typeList = (NavTypeListHandle)GetResource(
+                                        'open', 128);
+            NavReplyRecord reply;
+
+            anErr = NavChooseFile (&defaultLocation, &reply, &dialogOptions,
+                                   eventProc, nil, filterProc,
+                                   typeList, 0);
+            if (anErr == noErr && reply.validRecord)
+            {
+                //  Deal with multiple file selection
+                long    count;
+
+                anErr = AECountItems(&(reply.selection), &count);
+                if (count > 1) {
+                  count = 1;  /* force to 1 */
+                }
+                if (anErr == noErr)
+                {
+                    long index;
+
+                    for (index = 1; index <= count; index++)
+                    {
+                        AEKeyword   theKeyword;
+                        DescType    actualType;
+                        Size        actualSize;
+                        FSSpec      documentFSSpec;
+
+                        anErr = AEGetNthPtr(&(reply.selection), index,
+                                            typeFSS, &theKeyword,
+                                            &actualType,&documentFSSpec,
+                                            sizeof(documentFSSpec),
+                                            &actualSize);
+                        if (anErr == noErr)
+                        {
+                            ConvertFilename (&documentFSSpec, filename);
+                            Nlm_StringNCpy_0 (fileName, filename, maxsize);
+                            rsult = TRUE;
+                        }
+                    }
+                }
+                //  Dispose of NavReplyRecord, resources, descriptors
+                anErr = NavDisposeReply(&reply);
+            }
+            if (typeList != NULL)
+            {
+                ReleaseResource( (Handle)typeList);
+            }
+            (void) AEDisposeDesc(&defaultLocation);
+        }
+    }
+    DisposeRoutineDescriptor(eventProc);
+    DisposeRoutineDescriptor(filterProc);
+    return rsult;
+}
+#endif
+#endif
+
 extern Nlm_Boolean Nlm_GetInputFileName (Nlm_CharPtr fileName, size_t maxsize,
                                          Nlm_CharPtr extType, Nlm_CharPtr macType)
 
@@ -4182,6 +4382,11 @@ extern Nlm_Boolean Nlm_GetInputFileName (Nlm_CharPtr fileName, size_t maxsize,
   Nlm_Char       str [5];
   Nlm_PoinT      where;
 
+  /*
+  if (Nlm_usesMacNavServices) {
+    return Nlm_NavServGetInputFileName (fileName, maxsize, extType, macType);
+  }
+  */
   where.x = 90;
   where.y = 100;
   lengthTypes = sizeof (fileTypes);
@@ -4405,6 +4610,90 @@ static void Nlm_CopyDefaultName (Nlm_CharPtr dst, Nlm_CharPtr src)
 }
 #endif
 
+#ifndef OS_MAC /* these ifdefs guarantee this block is not compiled */
+#ifdef WIN_MAC
+static Nlm_Boolean Nlm_NavServGetOutputFileName (Nlm_CharPtr fileName, size_t maxsize,
+                                                 Nlm_CharPtr dfault)
+
+{
+    OSErr               anErr = noErr;
+    NavReplyRecord      reply;
+    NavDialogOptions    dialogOptions;
+    AEDesc              defaultLocation;
+    FSSpec              fss;
+    OSType              fileTypeToSave = 'TEXT';
+    OSType              creatorType = '????';
+    NavEventUPP         eventProc = NewNavEventProc (MyNavEventProc);
+	char                filename [256];
+	Nlm_Boolean         rsult = FALSE;
+
+    anErr = NavGetDefaultDialogOptions (&dialogOptions);
+    if (anErr == noErr)
+    {
+        //  Adjust the options to fit our needs
+        //  Set this option
+        dialogOptions.dialogOptionFlags |= kNavNoTypePopup;
+        //  Clear this one
+        dialogOptions.dialogOptionFlags ^= kNavAllowStationery;
+
+        anErr = AECreateDesc(typeFSS, &fss,
+                             sizeof(fss),
+                             &defaultLocation );
+        if (anErr == noErr) {
+
+            //  One way to get the name for the file to be saved.
+            Nlm_StringNCpy_0 ((Nlm_CharPtr) dialogOptions.savedFileName, dfault, 255);
+            Nlm_CtoPstr ((Nlm_CharPtr) dialogOptions.savedFileName);
+
+            anErr = NavPutFile( &defaultLocation, &reply, &dialogOptions, eventProc,
+                                fileTypeToSave, creatorType, 0 );
+            if (anErr == noErr && reply.validRecord)
+            {
+                AEKeyword   theKeyword;
+                DescType    actualType;
+                Size        actualSize;
+                FSSpec      documentFSSpec;
+
+                anErr = AEGetNthPtr(&(reply.selection), 1, typeFSS,
+                                    &theKeyword, &actualType,
+                                    &documentFSSpec, sizeof(documentFSSpec),
+                                    &actualSize );
+                if (anErr == noErr)
+                {
+                    if (reply.replacing)
+                    {
+                        // Make sure you save a temporary file
+                        // so you can check for problems before replacing
+                        // an existing file. Once the save is confirmed,
+                        // swap the files and delete the original.
+                        ConvertFilename (&documentFSSpec, filename);
+                        Nlm_StringNCpy_0 (fileName, filename, maxsize);
+                        rsult = TRUE;
+                    }
+                    else
+                    {
+                        ConvertFilename (&documentFSSpec, filename);
+                        Nlm_StringNCpy_0 (fileName, filename, maxsize);
+                        rsult = TRUE;
+                    }
+
+                    if ( anErr == noErr)
+                    {
+                        // DO NOT call NavCompleteSave() to complete
+                        /* anErr = NavCompleteSave(&reply,
+                                                kNavTranslateInPlace); */
+                    }
+                }
+                (void) NavDisposeReply(&reply);
+            }
+        }
+        (void) AEDisposeDesc(&defaultLocation);
+        DisposeRoutineDescriptor(eventProc);
+    }
+    return rsult;
+}
+#endif
+#endif
 
 extern Nlm_Boolean Nlm_GetOutputFileName (Nlm_CharPtr fileName, size_t maxsize,
                                           Nlm_CharPtr dfault)
@@ -4424,6 +4713,11 @@ extern Nlm_Boolean Nlm_GetOutputFileName (Nlm_CharPtr fileName, size_t maxsize,
   PenState       state;
   Nlm_PoinT      where;
 
+  /*
+  if (Nlm_usesMacNavServices) {
+    return Nlm_NavServGetOutputFileName (fileName, maxsize, dfault);
+  }
+  */
   where.x = 90;
   where.y = 100;
   GetPenState (&state);
@@ -4677,6 +4971,7 @@ extern Nlm_Boolean Nlm_LaunchAppEx (Nlm_CharPtr fileName, Nlm_VoidPtr serialNumP
         psnp = (ProcessSerialNumberPtr) serialNumPtr;
         *psnp = myLaunchParams.launchProcessSN;
       }
+      SetFrontProcess (&myLaunchParams.launchProcessSN);
     }
   }
   return rsult;
@@ -4799,21 +5094,40 @@ extern Nlm_Boolean Nlm_Execv(const Nlm_Char* path, Nlm_Char *const *argv)
 
 #elif defined(OS_UNIX)
   {{
-    int fork_code = fork();
-    if (fork_code == -1) {
-      Nlm_Message(MSG_FATAL, "Nlm_Execv() failed: cannot fork()");
-      return FALSE;
-    }
+    int fork_code;
+    /* Attention!
+     * -- do not move this code to the "child part";
+     *    it's tempting, but dangerous in the case of MT applications!
+     */
+    int x_argc;
+    char **x_argv;
+    for (x_argc = 0;  argv[x_argc];  x_argc++);
+    x_argv = (char**)Nlm_MemNew((1 + x_argc + 1) * sizeof(char*));
+    x_argv[0] = (char *)path;
+    Nlm_MemCpy(&x_argv[1], &argv[0], (x_argc + 1) * sizeof(char*));
+
+    /* Fork the process
+     */
+#ifdef SOLARIS_THREADS_AVAIL
+    fork_code = fork1();
+#else
+    fork_code = fork();
+#endif
+
+    /* Child
+     */
     if (fork_code == 0) {
-      int x_argc;
-      char **x_argv;
-      for (x_argc = 0;  argv[x_argc];  x_argc++);
-      x_argv = (char**)Nlm_MemNew((1 + x_argc + 1) * sizeof(char*));
-      x_argv[0] = (char *)path;
-      Nlm_MemCpy(&x_argv[1], &argv[0], (x_argc + 1) * sizeof(char*));
       execv(path, x_argv);
       Nlm_Message(MSG_FATAL, "Nlm_Execv() failed: cannot execv()");
       ASSERT( 0 );
+      return FALSE;
+    }
+
+    /* Parent
+     */
+    Nlm_MemFree(x_argv);
+    if (fork_code == -1) {
+      Nlm_Message(MSG_ERROR, "Nlm_Execv() failed: cannot fork()");
       return FALSE;
     }
     return TRUE;
@@ -4923,6 +5237,85 @@ extern void Nlm_SendOpenDocAppleEvent (Nlm_CharPtr datafile, Nlm_CharPtr sig)
 
 {
   Nlm_SendOpenDocAppleEventEx (datafile, sig, NULL, FALSE);
+}
+
+extern void Nlm_SendURLAppleEvent (Nlm_CharPtr urlString, Nlm_CharPtr sig, Nlm_CharPtr prog)
+
+{
+  long gval;
+  OSErr theErr = noErr;
+  AEAddressDesc theAddress;
+  AEDesc urlEvent;
+  AppleEvent theEvent;
+  AppleEvent theReply;
+  OSType theSignature;
+  ProcessSerialNumber  psn;
+  Nlm_Boolean  okay = FALSE;
+
+  if (Gestalt (gestaltSystemVersion, &gval) == noErr && (short) gval >= 7 * 256) {
+    theSignature = 'RSML';
+    if (sig != NULL && sig [0] != '\0') {
+      theSignature = *(OSType*) sig;
+    }
+    if (prog != NULL && prog [0] != '\0') {
+      if (Nlm_LaunchAppEx (prog, (Nlm_VoidPtr) &psn, NULL)) {
+        theErr = AECreateDesc(typeProcessSerialNumber, (Ptr)&psn,
+                              sizeof(psn), &theAddress);
+        okay = (Nlm_Boolean) (theErr == noErr);
+      }
+    } else if (sig != NULL && sig [0] != '\0') {
+      if (Nlm_LaunchAppEx (prog, NULL, sig)) {
+        theSignature = *(OSType*) sig;
+        theErr = AECreateDesc(typeApplSignature, (Ptr)&theSignature,
+                              sizeof(theSignature), &theAddress);
+        okay = (Nlm_Boolean) (theErr == noErr);
+      }
+    }
+    if (okay) {
+      theErr = AECreateAppleEvent('WWW!', 'OURL', &theAddress,
+                                  kAutoGenerateReturnID, kAnyTransactionID, &theEvent);
+      if (theErr == noErr) {
+        theErr = AECreateDesc(typeChar, urlString, Nlm_StringLen (urlString), &urlEvent);
+        if (theErr == noErr) {
+          theErr = AEPutParamDesc(&theEvent, keyDirectObject, &urlEvent);
+          if (theErr == noErr) {
+            AESend (&theEvent, &theReply, kAEWaitReply, kAEHighPriority, 500, NULL, NULL);
+            AEDisposeDesc(&theReply);
+          }
+          AEDisposeDesc(&urlEvent);
+        }
+        AEDisposeDesc(&theEvent);
+      }
+      AEDisposeDesc(&theAddress);
+    }
+  }
+}
+
+extern void Nlm_GetFileTypeAndCreator (Nlm_CharPtr filename, Nlm_CharPtr type, Nlm_CharPtr creator);
+extern void Nlm_GetFileTypeAndCreator (Nlm_CharPtr filename, Nlm_CharPtr type, Nlm_CharPtr creator)
+
+{
+  OSType    fCreator;
+  Nlm_Int2  fError;
+  FInfo     fInfo;
+  OSType    fType;
+  Nlm_Char  temp [256];
+
+  if (type != NULL) {
+    *type = '\0';
+  }
+  if (creator != NULL) {
+    *creator = '\0';
+  }
+  Nlm_StringNCpy_0 (temp, filename, sizeof(temp));
+  Nlm_CtoPstr ((Nlm_CharPtr) temp);
+  fError = GetFInfo ((StringPtr) temp, 0, &fInfo);
+  if (fError == 0) {
+    fType = fInfo.fdType;
+    fCreator = fInfo.fdCreator;
+    StringNCpy_0 (type, (Nlm_CharPtr) (&fType), 5);
+    StringNCpy_0 (creator, (Nlm_CharPtr) (&fCreator), 5);
+  }
 }
 #endif
 

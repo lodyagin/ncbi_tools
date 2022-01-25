@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.49 $
+* $Revision: 6.60 $
 *
 * File Description: 
 *
@@ -54,129 +54,233 @@
 #include <satutil.h>
 #include <tofasta.h>
 #include <objacces.h>
-#include <accutils.h>
 #include <seqmgr.h>
 
 #define MAXSTR          512
 #define OBJ_VIRT        254
+#define SALSA_PHYLIP_MARGIN 11
+#define SALSA_CLUSTALV_MARGIN 17
 
+extern SeqEntryPtr ReadLocalAlignment (Uint1 format, CharPtr path);
 
-static void FindBioseqCB3 (SeqEntryPtr sep, Pointer mydata,
-                                          Int4 index, Int2 indent)
+/**********************************************************/
+static CharPtr FGetLine (FILE *fp)
 {
-  ValNodePtr  vnp;
+  ValNodePtr charp=NULL, 
+             vnp; 
+  CharPtr    buffer = NULL;
+  Char       c;
+  Int4       j, len=0;
 
-  if (sep != NULL && sep->data.ptrvalue && mydata != NULL) {
-     if (IS_Bioseq(sep)) {
-        vnp = (ValNodePtr)mydata;
-        if (vnp->data.ptrvalue==NULL)
+  c = (Char)fgetc(fp);
+  while (c!=EOF && c!='\0' && c!='\n') 
+  {
+     if (c!='\t') {
+        ValNodeAddInt (&charp, 1, (Int4)c);
+        len++;
+     }
+     c = (Char)fgetc(fp);
+  }
+  if (charp) {
+     buffer = (CharPtr)MemNew((size_t)((len+5)*sizeof(Char))); 
+     for (j=0, vnp=charp; vnp!=NULL; vnp=vnp->next, j++)
+        buffer[j] = (Char) vnp->data.intvalue;
+     buffer[j]='\0';
+     ValNodeFree (charp);
+  }
+  else if (c=='\0' || c=='\n') {
+     buffer = (CharPtr)MemNew((size_t)(sizeof(Char)));
+     buffer[0]='\0';
+  }
+  return buffer;
+}
+
+/**********************************************************/
+static ValNodePtr new_sequence_vectors (Int2 n_seq, Int4 lens)
+{
+  ValNodePtr seqvnp = NULL;
+  CharPtr    tmp;
+  Int4       strlens;
+  Int2       j;
+
+  for (j = 0; j < n_seq; j++) {
+     tmp = (CharPtr) MemNew((size_t) ((lens + 1) * sizeof(Char)));
+     for (strlens = 0; strlens < lens; strlens++) 
+         tmp [strlens] = ' ';
+     tmp [lens] = '\0';
+     ValNodeAddPointer (&seqvnp, 0, (Pointer)tmp);
+  }
+  return seqvnp;
+}
+
+/**********************************************************/
+static Boolean stringhasnotext (CharPtr str)
+
+{
+  Char  ch;
+
+  if (str != NULL) {
+    ch = *str;
+    while (ch != '\0') {
+      if (ch > ' ' && ch <= '~') {
+        return FALSE;
+      }
+      str++;
+      ch = *str;
+    }
+  }
+  return TRUE;
+}
+
+/**********************************************************/
+static CharPtr get_first_notemptyline (FILE *fp)
+{
+  CharPtr str;
+  str = FGetLine (fp);
+  while (str) {
+     if (! stringhasnotext (str)) {
+        if (StringLen (str) > 0)
+           break;
+     }
+     str = FGetLine (fp);
+  }
+  return str;
+}
+
+/**********************************************************/
+static SeqEntryPtr make_seqentry_for_seqentry (SeqEntryPtr sep)
+{
+  SeqEntryPtr  sep1 = NULL,
+               tmp;
+  BioseqPtr    bsp;
+  BioseqSetPtr bssp;
+  
+  if (sep != NULL) {
+     if (IS_Bioseq(sep))
+     {
+        if (sep->next)
         {
-           vnp->data.ptrvalue=(BioseqPtr) sep->data.ptrvalue;
+           bssp = BioseqSetNew ();
+           if (bssp)
+           {
+              bssp->_class = 14;
+              bssp->seq_set = sep;
+              sep1 = SeqEntryNew ();
+              sep1->choice = 2;
+              sep1->data.ptrvalue = bssp;
+              SeqMgrLinkSeqEntry (sep1, 0, NULL);
+           
+              for (tmp = bssp->seq_set; tmp!=NULL; tmp=tmp->next) {
+                 if (IS_Bioseq(tmp))
+                 {
+                    bsp = (BioseqPtr) tmp->data.ptrvalue;
+                    ObjMgrConnect (OBJ_BIOSEQ, (Pointer) bsp, OBJ_BIOSEQSET, (Pointer) bssp);
+                 }
+              }
+           }
+           else sep1=sep;
+        }
+        else sep1=sep;
+     }
+     else sep1=sep;
+  }
+  return sep1;
+}
+
+/**********************************************************/
+static void seqannot_add_inseqentry (SeqEntryPtr sep, SeqAnnotPtr sap)
+{
+  BioseqSetPtr bssp;
+  BioseqPtr    bsp;
+
+  if (sap!=NULL && sep != NULL)
+  {
+     if (sap->data !=NULL) 
+     {
+        if (IS_Bioseq(sep)) 
+        {
+           bsp=(BioseqPtr)sep->data.ptrvalue;
+           bsp->annot = sap;
+        }
+        else if (IS_Bioseq_set(sep)) 
+        {
+           bssp = (BioseqSetPtr)sep->data.ptrvalue;
+           bssp->annot = sap;
         }
      }
   }
 }
- 
-static SelEdStructPtr is_sip_inseqinfo (SeqIdPtr sip, SelEdStructPtr seq_info)
-{
-  SelEdStructPtr tmp;
-  SeqLocPtr      slp;
 
-  for (tmp=seq_info; tmp!=NULL; tmp=tmp->next)
+/**********************************************************/
+static SeqEntryPtr strings_to_seqentry (ValNodePtr seqvnp, Uint1 mol_type, SeqIdPtr seqsip, SeqAnnotPtr sap)
+{
+  SeqEntryPtr sep,
+              pre_sep = NULL,
+              sep_list = NULL;
+  ValNodePtr  vnp;
+  SeqIdPtr    sip;
+  CharPtr     str;
+  Int4        lens;
+
+  for (vnp=seqvnp, sip=seqsip; vnp!=NULL && sip!=NULL; vnp=vnp->next, sip=sip->next) 
   {
-     slp=(SeqLocPtr)tmp->region;
-     if (SeqIdForSameBioseq (sip, SeqLocId(slp)))
+     str = (CharPtr) vnp->data.ptrvalue;
+     if (str)
      {
-        return tmp;
+        lens = (Int4) StringLen (str);
+        sep = StringToSeqEntry (str, sip, lens, mol_type);
+        if (sep != NULL) {
+           if (sep_list == NULL) 
+              sep_list = sep;
+           else 
+              pre_sep->next = sep;
+           pre_sep = sep;
+        }
      }
   }
-  return NULL;
+  sep_list = make_seqentry_for_seqentry (sep_list);
+  seqannot_add_inseqentry (sep_list, sap);
+  return sep_list;
 }
 
-extern ValNodePtr CCReadAnythingLoop (CharPtr filename, SelEdStructPtr seq_info)
+/*******************************************************************
+***    
+***   FastaRead
+***	returns a SeqEntryPtr given a path name, and the mol_type 
+***   NewFastaRead
+***	calls FastaToSeqEntryInternal
+***   FastaReadAdvanced
+***	calls NewFastaRead
+***	makes a SeqEntryPtr-BioseqSet if 2 sequences or more
+***
+********************************************************************/
+extern SeqEntryPtr FastaRead (CharPtr path, Uint2 mol_type)
 {
-  Char         name [PATH_MAX];
-  Pointer      dataptr;
-  FILE         *fp;
-  BioseqPtr    bsp;
-  SeqEntryPtr  sep;
-  SeqLocPtr    slp;
-  ValNodePtr   head = NULL,
-               vnp,
-               slphead = NULL;
-  Uint2        datatype; 
-  Uint2        entityID;
+  Char         name[PATH_MAX];
+  SeqEntryPtr  sep_list = NULL, sep = NULL, pre_sep = NULL;
+  FILE         *fpin;
 
-  ValNode      vn;
-
-SelEdStructPtr tmp;
-SeqIdPtr new_sip;
-
-  if (filename == NULL) 
-  {
+  if (path == NULL) {
      if (! GetInputFileName (name, PATH_MAX,"","TEXT"))  {
         return NULL;
      }
-     filename = name;
+     path = name;
   }
-  fp = FileOpen (filename, "r");
-  if (fp != NULL) {
-    while ((dataptr = ReadAsnFastaOrFlatFile (fp, &datatype, NULL, FALSE, FALSE, TRUE)) != NULL) {
-      ValNodeAddPointer (&head, datatype, dataptr);
-    }
-    FileClose (fp);
-    for (vnp = head; vnp != NULL; vnp = vnp->next) {
-      datatype = vnp->choice;
-      dataptr = vnp->data.ptrvalue;
-      entityID = ObjMgrRegister (datatype, dataptr);
-      if (datatype == OBJ_BIOSEQ)
-      {
-         bsp=(BioseqPtr)vnp->data.ptrvalue;
-         slp = SeqLocIntNew (0, bsp->length-1, Seq_strand_plus, SeqIdFindBest (bsp->id, 0));
-
-if (seq_info) {
- if ((tmp=is_sip_inseqinfo(bsp->id, seq_info)) != NULL) {
-   sep=SeqEntryNew ();
-   sep->choice=1;
-   sep->data.ptrvalue = (Pointer)bsp; 
-   SeqEntryReplaceSeqID (sep, SeqLocId(slp));
-   ValNodeFree(slp);
-   slp = SeqLocIntNew(0, bsp->length-1, Seq_strand_plus, bsp->id);
-   sep->data.ptrvalue = NULL;
-   SeqEntryFree(sep);
- }
-}
-         ValNodeAddPointer (&slphead, 0, (Pointer) slp);
-      }
-      else if (datatype == OBJ_SEQENTRY)
-      {
-         sep=(SeqEntryPtr)vnp->data.ptrvalue;
-         vn.data.ptrvalue=NULL;
-         SeqEntryExplore (sep, &vn, FindBioseqCB3);
-         if (vn.data.ptrvalue!=NULL) {
-            bsp=(BioseqPtr)vn.data.ptrvalue;
-            slp = SeqLocIntNew (0, bsp->length-1, Seq_strand_plus, SeqIdFindBest (bsp->id, 0));
-
-if (seq_info) {
- if ((tmp=is_sip_inseqinfo(bsp->id, seq_info)) != NULL) {
-   SeqEntryReplaceSeqID (sep, SeqLocId(slp));
-   ValNodeFree(slp);
-   slp = SeqLocIntNew(0, bsp->length-1, Seq_strand_plus, bsp->id);
- }
-}
-            ValNodeAddPointer (&slphead, 0, (Pointer) slp);
-         }
-      }
-    }
+  if ( (fpin = FileOpen (path, "r")) != NULL)  {
+     while ((sep = FastaToSeqEntry (fpin, (Boolean)ISA_na (mol_type) ) ) != NULL)
+     {
+        if (sep_list==NULL) 
+           sep_list = sep;
+        else  
+           pre_sep->next = sep;
+        pre_sep = sep;
+     }
+     FileClose(fpin);
+     sep_list = make_seqentry_for_seqentry (sep_list);
   }
-  return slphead;
+  return sep_list;
 }
 
-/*************************************************
-***   Sequence: 
-***       FastaRead
-***
-*************************************************/
 NLM_EXTERN SeqEntryPtr FastaToSeqEntryInternal
 (
  VoidPtr input,          /* input pointer (file or memory) */
@@ -188,6 +292,30 @@ NLM_EXTERN SeqEntryPtr FastaToSeqEntryInternal
  CharPtr special_symbol     /* Returns special symbol if no SeqEntry */
  );
 
+static SeqIdPtr new_local_sip (Int2 count, Boolean is_na)
+{
+  SeqIdPtr sip = NULL;
+  ObjectIdPtr   oid = NULL;
+  Char          str [32];
+  
+  oid = ObjectIdNew ();
+  if (oid != NULL) {
+     if (is_na) {
+                    sprintf (str, "nuc %ld", (long) count);
+                  } else {
+                    sprintf (str, "prot %ld", (long) count);
+                  }
+                  oid->str = StringSave (str);
+                  sip = ValNodeNew (NULL);
+     if (sip != NULL) {
+                    sip->choice = SEQID_LOCAL;
+                    sip->data.ptrvalue = (Pointer) oid;
+     }
+  } else {
+     ObjectIdFree (oid);
+  }
+  return sip;
+}
 
 static SeqEntryPtr NewFastaRead (FILE *fp, Boolean is_na, Boolean parseSeqId, Int2 *seqnumber, Int2 *segnumber, SeqIdPtr PNTR siplst, Int4 *lengthmax)
 {
@@ -202,20 +330,21 @@ static SeqEntryPtr NewFastaRead (FILE *fp, Boolean is_na, Boolean parseSeqId, In
   ObjectIdPtr   oid = NULL;
   SeqIdPtr      sip;
   SeqIdPtr      siphead = NULL, 
-                siptmp;
-  Char          str [32];
+                siptmp = NULL;
+  SeqIdPtr      segsip=NULL, lastsegsip=NULL;
   ValNodePtr    vnp;
   Int4          count;
-  Int4          lensmax = 0;
+  Int4          lensmax = 0,
+                lens;
   Int2          nseq = 0;
   Int2          segcount = 0, 
-                segtotal = 0;
+                segtotal = 0,
+                j;
   Boolean       insegset;
   Boolean       isLocalUnknownID;
   
   SeqEntryPtr sepnuc;
   BioseqPtr   segbsp;
-  SeqIdPtr    segsip=NULL, lastsegsip=NULL;
 
   count = 0;
   last = sep;
@@ -238,25 +367,33 @@ static SeqEntryPtr NewFastaRead (FILE *fp, Boolean is_na, Boolean parseSeqId, In
                 }
               }
               if ((! parseSeqId) || isLocalUnknownID) {
-                oid = ObjectIdNew ();
-                if (oid != NULL) {
-                  if (is_na) {
-                    sprintf (str, "nuc %ld", (long) count);
-                  } else {
-                    sprintf (str, "prot %ld", (long) count);
-                  }
-                  oid->str = StringSave (str);
-                  sip = ValNodeNew (NULL);
-                  if (sip != NULL) {
-                    sip->choice = SEQID_LOCAL;
-                    sip->data.ptrvalue = (Pointer) oid;
-                    bsp->id = SeqIdFree (bsp->id);
-                    bsp->id = sip;
-                    SeqMgrReplaceInBioseqIndex (bsp);
-                  } else {
-                    ObjectIdFree (oid);
-                  }
+                sip = new_local_sip (count, is_na);
+                if (sip != NULL) {
+                   bsp->id = SeqIdFree (bsp->id);
+                   bsp->id = sip;
+                   SeqMgrReplaceInBioseqIndex (bsp);
                 }
+              }
+              j=position_inIdlist(sip,siphead);
+              if (j > 0) {
+                 siptmp = NULL;
+                 if (sip != NULL && sip->choice == SEQID_LOCAL) {
+                    oid = (ObjectIdPtr) sip->data.ptrvalue;
+                    if (oid != NULL && oid->str != NULL) {
+                       lens = MIN(StringLen(oid->str), (Int4)7);
+                       oid->str[lens] = '\0';
+                    }
+                 }
+                 siptmp = MakeNewProteinSeqId (NULL, sip); 
+                 if (siptmp == NULL)
+                    siptmp = new_local_sip (count, is_na);
+                 if (siptmp!=NULL) {
+                    siptmp->next = NULL;
+                    bsp->id = SeqIdFree (bsp->id);
+                    bsp->id = siptmp;
+                    SeqMgrReplaceInBioseqIndex (bsp);
+                    sip = bsp->id;
+                 }
               }
             }
             SeqEntryPack (nextsep);
@@ -272,12 +409,11 @@ static SeqEntryPtr NewFastaRead (FILE *fp, Boolean is_na, Boolean parseSeqId, In
                      segbsp=(BioseqPtr)sepnuc->data.ptrvalue;
                      segsip=segbsp->id;
                      if (segsip != NULL) {
-                       if (lastsegsip==NULL || !SeqIdMatch(segsip,lastsegsip)) 
-                       {
+                       
                           siptmp = SeqIdDup (segsip);
                           siphead = AddSeqId (&siphead, siptmp);
                           lastsegsip = segsip;
-                       }
+
                      }
                   }
                 } 
@@ -298,12 +434,11 @@ static SeqEntryPtr NewFastaRead (FILE *fp, Boolean is_na, Boolean parseSeqId, In
                 if (segcount > segtotal)
                   segtotal = segcount;
                 nseq++;
-                if (lastsegsip==NULL || !SeqIdMatch(sip,lastsegsip)) 
-                {
-                  siptmp = SeqIdDup (sip);
-                  siphead = AddSeqId (&siphead, siptmp);
-                  lastsegsip = sip;
-                }
+                
+                siptmp = SeqIdDup (sip);
+                siphead = AddSeqId (&siphead, siptmp);
+                lastsegsip = sip;
+                
               }
             } 
             else {
@@ -323,12 +458,11 @@ static SeqEntryPtr NewFastaRead (FILE *fp, Boolean is_na, Boolean parseSeqId, In
                 if (segcount > segtotal)
                   segtotal = segcount;
                 nseq++;
-                if (lastsegsip==NULL || !SeqIdMatch(sip,lastsegsip)) 
-                {
-                  siptmp = SeqIdDup (sip);
-                  siphead = AddSeqId (&siphead, siptmp);
-                  lastsegsip = sip;
-                }
+                
+                siptmp = SeqIdDup (sip);
+                siphead = AddSeqId (&siphead, siptmp);
+                lastsegsip = sip;
+                
               }
             }
             vnp = ValNodeNew (head);
@@ -360,126 +494,35 @@ static SeqEntryPtr NewFastaRead (FILE *fp, Boolean is_na, Boolean parseSeqId, In
   return sep;
 }
 
-static ValNodePtr ReadAlignmentToStrings (CharPtr path, Int4 length, Int2 segnumber)
+static SeqEntryPtr FastaReadAdvanced (CharPtr path, Uint2 mol_type, Int2 *seqnumber, Int2 *segnumber, SeqIdPtr PNTR sip, Int4 *lengthmax)
 {
   Char         name[PATH_MAX];
-  FILE         *fp;
-  ValNodePtr   vnpal, tmp, vnp;
-  Char         str[255]; 
-  CharPtr      strp,
-               seqstr;
-  Int4         strlens, 
-               lmax=0,
-               lgseq=0;
-  Int2         inseg = 0;
-  Boolean       insegb = FALSE;
-  Boolean      goOn,
-               startp;
-  
-  
-  Int2         j = 0;   
-  Int2         nseq = 0;
-  
+  SeqEntryPtr  sep = NULL;
+  FILE         *fpin;
+   
   if (path == NULL) {
      if (! GetInputFileName (name, PATH_MAX,"","TEXT"))  {
         return NULL;
      }
      path = name;
   }
-  vnpal = ValNodeNew (NULL);
-  tmp = vnpal;
-  for (j=1; j<segnumber; j++) {
-     vnp = ValNodeNew (NULL);
-     tmp->next = vnp;
-     tmp = tmp->next;
-  }
-  if ( (fp = FileOpen (path, "r")) == NULL)  {
-     ValNodeFree (vnpal);
-     return NULL;
-  }
-  vnp=NULL;
-  lmax = length + length/2;
-  goOn = (Boolean)(fgets(str, sizeof(str), fp)!=NULL);
-  if (goOn) {
-     strp = str;
-     while (*strp == ' ' && *strp!='\0' && *strp!='\n')
-        strp++;
-     if (*strp!='\0' && *strp!='\n')
-        strlens = StringLen (strp);
+  if ( (fpin = FileOpen (path, "r")) != NULL)  {
+     if (segnumber != NULL)
+        sep = NewFastaRead (fpin, (Boolean)ISA_na (mol_type), TRUE, seqnumber, segnumber, sip, lengthmax);
      else 
-        goOn=FALSE;
+        sep = NewFastaRead (fpin, (Boolean)ISA_na (mol_type), TRUE, NULL, NULL, NULL, NULL);
+     FileClose (fpin);
+     sep = make_seqentry_for_seqentry (sep);
   }
-  while (goOn) 
-  {
-     if (strlens > 0) {
-        if (*strp == '>') {
-           if (!insegb) {
-              vnp = vnpal;
-           }
-           else {
-              inseg++;
-              if (inseg==1)
-                 vnp = vnpal;
-              else
-                 vnp = vnp->next;
-           }
-           startp = FALSE;
-        }
-        else if (StringStr(strp, "[")!= NULL) {
-           if (vnp!=NULL) {
-           }
-           insegb = TRUE;
-           inseg = 0;
-           startp= FALSE;
-        } 
-        else if (StringStr(strp, "]")!= NULL) {
-           insegb = FALSE;
-           inseg = 0;
-           startp= FALSE;
-        } 
-        else {
-           if (!startp) {
-              seqstr=(CharPtr)MemNew((size_t)((lmax + 1) * sizeof(Char)));
-              for (strlens=0; strlens<lmax; strlens++) 
-                 seqstr[strlens] = ' ';
-              if (vnp->data.ptrvalue==NULL) {
-                 tmp = NULL;
-                 ValNodeAddPointer (&tmp, 0, (Pointer)seqstr);
-                 vnp->data.ptrvalue = (Pointer) tmp;
-              } else {
-                 tmp = (ValNodePtr)vnp->data.ptrvalue;
-                 ValNodeAddPointer (&tmp, 0, (Pointer)seqstr);
-              }
-              lgseq = 0;
-              startp = TRUE;
-           }              
-           for (j=0; j<strlens; j++)
-           {
-              if (strp[j]=='\n' || strp[j]=='\0' || strp[j]=='\r' )
-                 break;
-              strp[j] = TO_UPPER(strp[j]);
-              if (StringChr("ABCDEFGHIKLMNPQRSTUVWXYZ-*", strp[j]) != NULL) {
-                 seqstr [lgseq] = strp[j];
-                 lgseq++;
-              }
-           }
-           seqstr [lgseq] = '\0';
-        }
-     }
-     goOn = (Boolean)(fgets(str, sizeof(str), fp)!=NULL);
-     if (goOn) {
-        strp = str;
-        while (*strp == ' ' && *strp!='\0' && *strp!='\n')
-           strp++;
-        if (*strp!='\0' && *strp!='\n')
-           strlens = StringLen (strp);
-        else 
-           goOn=FALSE;
-     }
-  }
-  fclose (fp);
-  return vnpal;
+  return sep;
 }
+
+/*******************************************************************
+***
+***   LocalAlignsToSeqAnnotDimn
+***   LocalAlign1ToSeqAnnotDimn
+***
+*************************************************************************/
 
 static ValNodePtr get_lens_fromseqalign (SeqAlignPtr salp)
 {
@@ -593,121 +636,149 @@ static SeqAnnotPtr LocalAlignsToSeqAnnotDimn (ValNodePtr vnpal, SeqIdPtr seqsip,
   return sap1;
 }  
 
-/*************************************************
-***   Sequence:
-***       FastaRead
-***
-*************************************************/
-extern SeqEntryPtr FastaRead (CharPtr path, Uint2 mol_type)
-{
-  Char         name[PATH_MAX];
-  SeqEntryPtr  sep_list = NULL, sep = NULL, pre_sep = NULL;
-  BioseqSetPtr bssp;
-  BioseqPtr    bsp;
-  FILE         *fpin;
-  Int2         j = 0;
-
-  if (path == NULL) {
-     if (! GetInputFileName (name, PATH_MAX,"","TEXT"))  {
-        return NULL;
-     }
-     path = name;
-  }
-  if ( (fpin = FileOpen (path, "r")) == NULL)  {
-     return NULL;
-  }
-  while ((sep = FastaToSeqEntry (fpin, (Boolean)ISA_na (mol_type) ) ) != NULL)
-  {
-     if (j == 0) sep_list = sep;
-     else  pre_sep->next = sep;
-     pre_sep = sep;
-     j++;
-  }
-  FileClose(fpin);
-  if ( j == 0 )  {
-     return NULL;
-  }
-  else if (j == 1) {
-     sep_list->choice = 1;
-     return sep_list;
-  }
-  bssp = BioseqSetNew ();
-  if ( bssp == NULL )
-     return NULL;
-  bssp->_class = 14;
-  bssp->seq_set = sep_list;
-  for (sep = sep_list; sep!=NULL; sep=sep->next) {
-     bsp = (BioseqPtr) sep->data.ptrvalue;
-     ObjMgrConnect (OBJ_BIOSEQ, (Pointer) bsp, OBJ_BIOSEQSET, (Pointer) bssp);
-  }
-  sep = SeqEntryNew ();
-  if ( sep  == NULL )
-     return NULL;
-  sep->choice = 2;
-  sep->data.ptrvalue = (Pointer) bssp;
-  SeqMgrSeqEntry (SM_BIOSEQ, (Pointer) bssp, sep);
-  return sep;
-}
-
-static SeqEntryPtr FastaReadAdvanced (CharPtr path, Uint2 mol_type, Int2 *seqnumber, Int2 *segnumber, SeqIdPtr PNTR sip, Int4 *lengthmax)
-{
-  Char         name[PATH_MAX];
-  SeqEntryPtr  sep = NULL, 
-               sep1 = NULL;
-  BioseqSetPtr bssp;
-  FILE         *fpin;
-   
-  if (path == NULL) {
-     if (! GetInputFileName (name, PATH_MAX,"","TEXT"))  {
-        return NULL;
-     }
-     path = name;
-  }
-  if ( (fpin = FileOpen (path, "r")) == NULL)  {
-     return NULL;
-  }
-  if (segnumber != NULL)
-     sep = NewFastaRead (fpin, (Boolean)ISA_na (mol_type), TRUE, seqnumber, segnumber, sip, lengthmax);
-  else 
-     sep = NewFastaRead (fpin, (Boolean)ISA_na (mol_type), TRUE, NULL, NULL, NULL, NULL);
-  FileClose (fpin);
-  if (sep != NULL) {
-     bssp = BioseqSetNew ();
-     bssp->_class = 14;
-     bssp->seq_set = sep;
-     sep1 = SeqEntryNew ();
-     sep1->choice = 2;
-     sep1->data.ptrvalue = bssp;
-     SeqMgrLinkSeqEntry (sep1, 0, NULL);
-  }
-  return sep1;
-}
-
 /*****************************************************
-*** GapFastaRead
-***    first read the sequences as FASTA
-***    2d read the sequence text with the gaps (-)
+***   GapFastaRead
+***    1) reads the sequences as FASTA: FastaReadAdvanced
+***    2) reads the sequence text with the gaps (-): ReadAlignmentToStrings
 ***       the max length allocated for the char array
-***       that is the max length of the sequences plus
-***       a 1/2 of gaps.
+***       that is the max length of the sequences plus a 1/2 of gaps.
 ***
+***   ConvertPaupToFastaGap
+***	
 ******************************************************/
-extern SeqEntryPtr GapFastaRead (CharPtr path, Uint2 mol_type)
+static ValNodePtr ReadAlignmentToStrings (CharPtr path, Int4 length, Int2 segnumber)
+{
+  Char         name[PATH_MAX];
+  FILE         *fp;
+  ValNodePtr   vnpal, tmp, vnp;
+  CharPtr      str; 
+  CharPtr      strp,
+               seqstr;
+  Int4         strlens, 
+               lmax=0,
+               lgseq=0;
+  Int2         inseg = 0;
+  Boolean      insegb = FALSE;
+  Boolean      startp;
+  
+  
+  Int2         j = 0;   
+  Int2         nseq = 0;
+  
+  if (path == NULL) {
+     if (! GetInputFileName (name, PATH_MAX,"","TEXT"))  {
+        return NULL;
+     }
+     path = name;
+  }
+  vnpal = ValNodeNew (NULL);
+  tmp = vnpal;
+  for (j=1; j<segnumber; j++) {
+     vnp = ValNodeNew (NULL);
+     tmp->next = vnp;
+     tmp = tmp->next;
+  }
+  if ( (fp = FileOpen (path, "r")) == NULL)  {
+     ValNodeFree (vnpal);
+     return NULL;
+  }
+  vnp=NULL;
+  lmax = length + length/2;
+  str = FGetLine (fp);
+  if (str) {
+     strp = str;
+     while (*strp == ' ' && *strp!='\0' && *strp!='\n')
+        strp++;
+     if (*strp!='\0' && *strp!='\n')
+        strlens = StringLen (strp);
+     else 
+        str=NULL;   /*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*/
+  }
+  while (str) 
+  {
+     if (strlens > 0) {
+        if (*strp == '>') {
+           if (!insegb) {
+              vnp = vnpal;
+           }
+           else {
+              inseg++;
+              if (inseg==1)
+                 vnp = vnpal;
+              else
+                 vnp = vnp->next;
+           }
+           startp = FALSE;
+        }
+        else if (StringStr(strp, "[")!= NULL) {
+           if (vnp!=NULL) {
+           }
+           insegb = TRUE;
+           inseg = 0;
+           startp= FALSE;
+        } 
+        else if (StringStr(strp, "]")!= NULL) {
+           insegb = FALSE;
+           inseg = 0;
+           startp= FALSE;
+        } 
+        else {
+           if (!startp) {
+              seqstr=(CharPtr)MemNew((size_t)((lmax + 1) * sizeof(Char)));
+              for (strlens=0; strlens<lmax; strlens++) 
+                 seqstr[strlens] = ' ';
+              if (vnp->data.ptrvalue==NULL) {
+                 tmp = NULL;
+                 ValNodeAddPointer (&tmp, 0, (Pointer)seqstr);
+                 vnp->data.ptrvalue = (Pointer) tmp;
+              } else {
+                 tmp = (ValNodePtr)vnp->data.ptrvalue;
+                 ValNodeAddPointer (&tmp, 0, (Pointer)seqstr);
+              }
+              lgseq = 0;
+              startp = TRUE;
+           }              
+           for (j=0; j<strlens; j++)
+           {
+              if (strp[j]=='\n' || strp[j]=='\0' || strp[j]=='\r' )
+                 break;
+              strp[j] = TO_UPPER(strp[j]);
+              if (StringChr("ABCDEFGHIKLMNPQRSTUVWXYZ-*", strp[j]) != NULL) {
+                 seqstr [lgseq] = strp[j];
+                 lgseq++;
+              }
+           }
+           seqstr [lgseq] = '\0';
+        }
+     }
+     str = FGetLine(fp);
+     if (str) {
+        strp = str;
+        while (*strp == ' ' && *strp!='\0' && *strp!='\n')
+           strp++;
+        if (*strp!='\0' && *strp!='\n')
+           strlens = StringLen (strp);
+        else 
+           str=NULL;            /****!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*/
+     }
+  }
+  fclose (fp);
+  return vnpal;
+}
+
+static SeqEntryPtr GapFastaRead (CharPtr path, Uint2 mol_type)
 {
   Char         name[PATH_MAX];
   SeqAnnotPtr  sap = NULL;
-  SeqEntryPtr  sephead = NULL;
   SeqEntryPtr  sep = NULL;
-  BioseqSetPtr bssp;
-  BioseqPtr    bsp;
-  ValNodePtr   vnp;
-  SeqIdPtr     sip1 = NULL,
-               sipnew = NULL,
+  ValNodePtr   vnp = NULL;
+  SeqIdPtr     sip = NULL,
                siptmp = NULL;
   Int4         lmax;
   Int2         nseq = 0,
                seqnumber = 0,
                segnumber;
+  CharPtr      str;
 
   if (path == NULL) {
      if (! GetInputFileName (name, PATH_MAX,"","TEXT"))  {
@@ -715,58 +786,40 @@ extern SeqEntryPtr GapFastaRead (CharPtr path, Uint2 mol_type)
      }
      path = name;
   }
-  sephead = FastaReadAdvanced (path, mol_type, &seqnumber, &segnumber, &sip1, &lmax);
-  if (sephead == NULL) {
+  sep = FastaReadAdvanced (path, mol_type, &seqnumber, &segnumber, &sip, &lmax);
+  if (sep == NULL) {
      return NULL;
   }
   nseq=0;
-  for (siptmp=sip1; siptmp!=NULL; siptmp=siptmp->next) {
+  for (siptmp=sip; siptmp!=NULL; siptmp=siptmp->next) {
      nseq++;
   }
+  str=matching_seqid (sip);  
   if (nseq != seqnumber) {
-     ErrPostEx (SEV_ERROR, 0, 0, "The submission contains an error");
-     return NULL;
+     ErrPostEx (SEV_ERROR, 0, 0, "The submission contains %d identical sequence names", (seqnumber-nseq+1));
+     SeqEntryFree (sep);
   }
-  if (matching_seqid (sip1)) {
-     ErrPostEx (SEV_ERROR, 0, 0, "The submission contains identical sequence IDs");
-     return NULL;
+  else if (str) {
+     ErrPostEx (SEV_ERROR, 0, 0, "The submission contains several sequences with the same name \"%s\"", str);
+     MemFree (str);
+     SeqEntryFree (sep);
   } 
-  vnp = ReadAlignmentToStrings (path, lmax, segnumber);
-  if (segnumber > 1)
-     sap=LocalAlignsToSeqAnnotDimn(vnp,sip1,NULL,seqnumber,segnumber, 0, NULL, FALSE);
-  else  
-     sap=LocalAlign1ToSeqAnnotDimn (vnp, sip1, NULL, seqnumber, 0, NULL, FALSE);
-  if (sap!=NULL && sap->data !=NULL) {
-     if (IS_Bioseq(sephead)) {
-        bsp=(BioseqPtr)sephead->data.ptrvalue;
-        bsp->annot = sap;
-     }
-     else if (IS_Bioseq_set(sephead)) {
-        bssp = (BioseqSetPtr)sephead->data.ptrvalue;
-        bssp->annot = sap;
-     }
+  else {
+     vnp = ReadAlignmentToStrings (path, lmax, segnumber);
+     if (segnumber > 1)
+        sap=LocalAlignsToSeqAnnotDimn(vnp,sip,NULL,seqnumber,segnumber, 0, NULL, FALSE);
+     else  
+        sap=LocalAlign1ToSeqAnnotDimn (vnp, sip, NULL, seqnumber, 0, NULL, FALSE);
+     if (sap)
+        seqannot_add_inseqentry (sep, sap);
   }
-  return sephead;
+  if (vnp)
+     ValNodeFree (vnp);
+  SeqIdFree (sip);
+  return sep;
 }
 
-static Boolean seq_char (Char car, Char missingchar, Char gapchar)
-{
-  if (car == 'A') return TRUE;
-  if (car == 'T') return TRUE;
-  if (car == 'G') return TRUE;
-  if (car == 'C') return TRUE;
-  if (car == 'U') return TRUE;
-  if (car == 'a') return TRUE;
-  if (car == 't') return TRUE;
-  if (car == 'g') return TRUE;
-  if (car == 'c') return TRUE;
-  if (car == 'u') return TRUE;
-  if (car == missingchar) return TRUE;
-  if (car == gapchar) return TRUE;
-  if (car == '*') return TRUE;
-  return FALSE;
-}
-
+/********************************************************************/
 static Boolean has_extrachar (CharPtr str, Char missingchar, Char gapchar)
 {
   Int2     j;
@@ -791,6 +844,7 @@ static Boolean has_extrachar (CharPtr str, Char missingchar, Char gapchar)
   return ret;
 }
 
+/********************************************************************/
 static Char nexustoseq (Char car, Char missingchar, Char gapchar)
 {
   if (car == ':')
@@ -806,11 +860,12 @@ static Char nexustoseq (Char car, Char missingchar, Char gapchar)
   return ('\0');
 }
 
+/********************************************************************/
 static Boolean ConvertPaupToFastaGap (CharPtr path, CharPtr tmpfile)
 {
   FILE       *fp, *fpout;
   CharPtr    tmp;
-  Char       str [MAXSTR];
+  CharPtr    str;
   Char       str2 [MAXSTR];
   Char       gapchar = '-';
   Char       missingchar = '?';
@@ -822,24 +877,24 @@ static Boolean ConvertPaupToFastaGap (CharPtr path, CharPtr tmpfile)
   Int4       j, j1, 
              k, 
              k1=0;
-  Boolean    goOn, first_line;
+  Boolean    first_line;
  
   if ( (fp = FileOpen (path, "r")) == NULL) {
      return FALSE;
   }
-  goOn=(Boolean)(fgets (str, sizeof (str), fp) != NULL);
-  while (goOn) {
+  str = FGetLine (fp);
+  while (str) {
      if (! stringhasnotext (str)) {
         if (StringLen (str) > 0 && str [0] != '>')
            break;
      }   
-     goOn=(Boolean)(fgets (str, sizeof (str), fp) != NULL);
+     str = FGetLine (fp);
   }
-  if (!goOn) {
+  if (!str) {
     FileClose(fp); 
     return FALSE;
   }
-  while (goOn) {
+  while (str) {
         tmp = StringStr(str, "INTERLEAVE");
         if (tmp == NULL)
            tmp = StringStr(str, "interleave");
@@ -903,21 +958,21 @@ static Boolean ConvertPaupToFastaGap (CharPtr path, CharPtr tmpfile)
         if (tmp!=NULL) {
            break;
         }   
-        goOn = (Boolean)(fgets (str, MAXSTR, fp) != NULL);
+        str = FGetLine (fp);
   }   
-  if (n_seq == 0 || lg_seq == 0) {
+  if (n_seq == 0 || lg_seq == -1) {
      FileClose(fp); 
      return FALSE;
   }
-  while (goOn) {
+  while (str) {
      tmp = StringStr(str, "MATRIX");
      if (tmp == NULL)
         tmp = StringStr(str, "matrix");
      if (tmp != NULL)
         break;
-     goOn = (Boolean)(fgets (str, MAXSTR, fp) != NULL);
+     str = FGetLine (fp);
   }
-  if (!goOn) {
+  if (!str) {
      FileClose(fp); 
      return FALSE;
   }
@@ -925,11 +980,11 @@ static Boolean ConvertPaupToFastaGap (CharPtr path, CharPtr tmpfile)
      FileClose(fp); 
      return FALSE;
   }
-  goOn=(Boolean)(fgets (str, sizeof (str), fp) != NULL);
+  str = FGetLine (fp);
   first_line = TRUE;
   n_tmp = 0;
   k=0;
-  while (goOn) {
+  while (str) {
      strlens = StringLen (str);
      if (strlens > 0) {
         if (str[0] == ';')
@@ -1006,7 +1061,7 @@ static Boolean ConvertPaupToFastaGap (CharPtr path, CharPtr tmpfile)
         }
      }      
      k1=0;
-     goOn = (Boolean)(fgets (str, MAXSTR, fp) != NULL);
+     str = FGetLine (fp);
   }    
   FileClose(fp);
   fprintf(fpout, "\n");
@@ -1014,630 +1069,253 @@ static Boolean ConvertPaupToFastaGap (CharPtr path, CharPtr tmpfile)
   return TRUE;
 }
 
-/*************************************************
-***   Sequence: 
-***       IdRead
-***
-*************************************************/
-extern ValNodePtr IdRead (CharPtr path)
+static ValNodePtr SequenceMacawRead (CharPtr path, Int2 n_seq)
 {
-  Char         name[PATH_MAX];
-  FILE        *fp;
-  ValNodePtr   sqloc_list = NULL;
-  SeqLocPtr    slp = NULL,
-               slpnew = NULL;
-  BioseqPtr    bsp;
-  SeqIdPtr     sip = NULL;
-  SeqIntPtr    sit = NULL;
-  Char         str [256];
-  Int4         pos, 
-               from ,to;
-  Boolean      goOn;
-  Boolean      stop;
-  CharPtr      ptr;
-  CharPtr      chptr;
-  Char         ch;
-
-  Uint2        choice = SEQID_GI;
-
-  if (path == NULL) {
-     if (! GetInputFileName (name, PATH_MAX,"","TEXT"))  {
-        return NULL;
-     }
-     path = name;
+  FILE     *fp;
+  ValNodePtr vnp, seqvnp;
+  Char     lenstr[8];
+  CharPtr  seq,
+           str, 
+           tmp;
+  Int4     lens = 0;
+  Int2     j;
+  Boolean  worksheet=FALSE;
+  
+  if ( (fp = FileOpen (path, "r")) == NULL) {
+     return FALSE;
   }
-  if ( (fp = FileOpen (path, "r")) == NULL)  {
-      return NULL;
-  }
-  if (fp != NULL) {
-    str [0] = '\0';
-    pos = ftell(fp);
-    goOn = (Boolean)(fgets (str, sizeof (str), fp) != NULL);
-    if (!goOn) {
-      FileClose (fp);
-      return NULL; 
-    }
-    if (StringLen(str) == 0) {
-      FileClose (fp);
-      return NULL; 
-    }
-    while (goOn) {
-      ptr = str;
-      ch = *ptr;
-      while (ch != '\n' && ch != '\r' && ch != '\0') {
-        ptr++;
-        ch = *ptr;
-      }
-      *ptr = '\0';
-      if (str [0] == '&') {
-        goOn = FALSE;
-      } else if (str [0] != '?') {
-              if (str [0] == '>')           
-                ptr = str + 1;
-              else 
-                ptr = str;
-              while (*ptr == ' ' || *ptr == '?') {
-                ptr++;
-              }
-              stop = FALSE;
-              if (*ptr == '"') {
-                ptr++;
-                chptr = StringChr (ptr, '"');
-              } else {
-                chptr = StringChr (ptr, ' ');
-              }
-              if (chptr != NULL) {
-                *chptr = '\0';
-                chptr++;
-                if (choice != 0) ptr = check_seqid (choice, ptr);
-                sip = MakeSeqID (ptr);
-              } else if (*ptr != '\0') {
-                if (choice != 0) ptr = check_seqid (choice, ptr);
-                sip = MakeSeqID (ptr);
-                stop = TRUE;
-              } else {
-                sip = MakeSeqID ("lcl|unknown");
-                stop = TRUE;
-              }
-              from = to = -1;
-              if ( !stop ) {
-               from = to = -1;
-               if ( *chptr != '\0' ) {
-                  while ( *chptr != '\0' && *chptr == ' ' ) chptr++;
-               }
-               if ( *chptr != '\0' ) {
-                  ptr = chptr;
-                  while ( *chptr != ' ' && *chptr != '\0' ) chptr++;
-                  *chptr = '\0';
-                  chptr++;
-                  from = (Int4) atoi (ptr);
-               }
-               if ( from >= 0 ) {
-                  while ( *chptr != '\0' && *chptr == ' ' ) chptr++;
-               }
-               if ( *chptr != '\0' ) {
-                  ptr = chptr;
-                  while ( *chptr != ' ' && *chptr != '\0' ) chptr++;
-                  *chptr = '\0';
-                  chptr++;
-                  to = (Int4) atoi (ptr);
-               }
-              }
-              if (from >= 0 && to >= 0) {
-                 slp = SeqLocIntNew (from, to, Seq_strand_plus, sip);
-                 ValNodeAddPointer (&sqloc_list, 0, (Pointer) slp);
-              } else {
-                 bsp = BioseqLockById (sip);
-                 if (bsp!=NULL) {
-                    slp = SeqLocIntNew (0, bsp->length-1, Seq_strand_plus, sip);
-                    BioseqUnlock (bsp);
-                    ValNodeAddPointer (&sqloc_list, 0, (Pointer) slp);
-                 }
-              }
-      }
-      str [0] = '\0';
-      pos = ftell(fp);
-      goOn = (Boolean) (goOn && (fgets (str, sizeof (str), fp) != NULL));
-    }
-  }
-  FileClose(fp);
-  return sqloc_list;
-}
-
-/*******************************************************
-*** AsnReadForSalsa
-***   copied from Jonathan's code
-***   without the following lines:
-***
-          rsult = SeqEntryNew ();
-          if (rsult != NULL) {
-            rsult->choice = sep->choice;
-            rsult->data.ptrvalue = sep->data.ptrvalue;
-            sep->data.ptrvalue = NULL;
-            if (datatype == OBJ_SEQSUB) {
-              SeqSubmitFree ((SeqSubmitPtr) dataptr);
-            } else {
-              SeqEntryFree (sep);
-            }
-            if (!ObjMgrRegister (OBJ_SEQENTRY, (Pointer) rsult))
-               rsult = SeqEntryFree (rsult);
-          }  
-***********************************************************/
-extern SeqEntryPtr AsnReadForSalsa (CharPtr path)
-{
-  Char         name[PATH_MAX];
-  BioseqPtr     bsp;
-  BioseqSetPtr  bssp;
-  Pointer       dataptr;
-  Uint2         datatype;
-  Uint2         entityID;
-  SeqEntryPtr   rsult;
-  SeqEntryPtr   sep;
-
-  rsult = NULL;
-  if (path == NULL) {
-     if (! GetInputFileName (name, PATH_MAX,"","TEXT"))  {
-        return NULL;
-     }
-     path = name;
-  }
-  if (path != NULL && path [0] != '\0') {
-    dataptr = ObjMgrGenericAsnTextFileRead (path, &datatype, &entityID);
-    if (dataptr != NULL && entityID > 0) {
-      if (datatype == OBJ_SEQSUB || datatype == OBJ_SEQENTRY ||
-          datatype == OBJ_BIOSEQ || datatype == OBJ_BIOSEQSET) {
-        sep = GetTopSeqEntryForEntityID (entityID);
-        if (sep == NULL) {
-          sep = SeqEntryNew ();
-          if (sep != NULL) {
-            if (datatype == OBJ_BIOSEQ) {
-              bsp = (BioseqPtr) dataptr;
-              sep->choice = 1;
-              sep->data.ptrvalue = bsp;
-              SeqMgrSeqEntry (SM_BIOSEQ, (Pointer) bsp, sep);
-            } else if (datatype == OBJ_BIOSEQSET) {
-              bssp = (BioseqSetPtr) dataptr;
-              sep->choice = 2;
-              sep->data.ptrvalue = bssp;
-              SeqMgrSeqEntry (SM_BIOSEQSET, (Pointer) bssp, sep);
-            } else {
-              sep = SeqEntryFree (sep);
-            }
-          }  
-          sep = GetTopSeqEntryForEntityID (entityID);
-        }
-        if (sep != NULL) {
-           rsult = sep;
-        }
-      }
-    }
-  }
-  return rsult;
-}
-
-/*************************************************
-***  Sequence
-***     BioseqSetFileWrite
-***
-*************************************************/
-extern Int2 BioseqSetFileWrite (BioseqSetPtr bssp)
-{
-  AsnIoPtr     aip;
-  AsnTypePtr   atp;
-  AsnModulePtr amp;
-  Char         path [PATH_MAX]; 
-
-  if ( bssp == NULL ) {
-    return 0;
-  }
-  if (! GetInputFileName (path, PATH_MAX,"","TEXT"))  {
-    return 0;
-  }
-  amp = AsnAllModPtr ();
-  atp = AsnTypeFind (amp,"Bioseq-set");
-  if ((aip = AsnIoOpen (path,"w")) == NULL) {
-    return 0;
-  }
-  if ( ! BioseqSetAsnWrite ( bssp, aip, atp ) ) {
-  }
-  aip = AsnIoClose (aip);
-  return 1;
-}
-
-/*************************************************
-***  Sequence
-***     BioseqFileWrite
-***
-*************************************************/
-extern Int2 BioseqFileWrite (BioseqPtr bsp)
-{
-  AsnIoPtr     aip;
-  AsnTypePtr   atp;
-  AsnModulePtr amp;
-  Char         path [PATH_MAX]; 
-
-  if ( bsp == NULL ) {
-    return 0;
-  }
-  if (! GetInputFileName (path, PATH_MAX,"","TEXT"))  {
-    return 0;
-  }
-  amp = AsnAllModPtr ();
-  atp = AsnTypeFind (amp,"Bioseq");
-  if ((aip = AsnIoOpen (path,"w")) == NULL) {
-    return 0;
-  }
-  if ( ! BioseqAsnWrite ( bsp, aip, atp ) ) {
-  }
-  aip = AsnIoClose (aip);
-  return 1;
-}
-
-/*************************************************
-***  Sequence
-***     seqentry_read
-***     seqentry_write
-***
-*************************************************/
-extern SeqEntryPtr seqentry_read (CharPtr path)
-{
-  Char         name[PATH_MAX];
-  AsnIoPtr     aip;
-  AsnTypePtr   atp;
-  AsnModulePtr amp;
-  SeqEntryPtr  sep;
-
-  if (path == NULL )
+  str = FGetLine (fp);
+  while (!worksheet)
   {
-     if (! GetInputFileName (name, PATH_MAX,"","TEXT"))  {
-        return NULL;
+     tmp = StringStr(str, "worksheet");
+     if (tmp) {
+        worksheet=TRUE;
+        break;
      }
-     path = name;
+     str = FGetLine (fp);
   }
-  amp = AsnAllModPtr ();
-  atp = AsnTypeFind (amp,"SeqEntry");
-  if ((aip = AsnIoOpen (path,"r")) == NULL) {
-    return NULL;
+  if (worksheet)
+  {
+     while (str) {
+        tmp = StringStr(str, "num-cols");
+        if (tmp) {
+           while (*tmp!=' ' && *tmp!='\0' && *tmp!='\n')
+              tmp++;
+           while (!isdigit (*tmp) && *tmp!='\0' && *tmp!='\n')
+              tmp++;
+           j=0;
+           lenstr[0]='\0';
+           while (isdigit (*tmp) && *tmp!='\0' && *tmp!='\n') {
+              lenstr[j]=*tmp;
+              tmp++;
+              j++;
+           }
+           lens = (Int4) atol (lenstr);
+           break;
+        }
+        str = FGetLine (fp);
+     }
+     if (lens > 0) 
+     { 
+        seqvnp = new_sequence_vectors (n_seq, lens);
+        vnp = seqvnp;
+        while (str) {
+           tmp = StringStr(str, "gap-seq");
+           if (tmp) {
+              while (*tmp!='"' && *tmp!='\0' && *tmp!='\n')
+                 tmp++;
+              if (*tmp=='"') 
+              {
+                 tmp++;
+                 seq = (CharPtr)vnp->data.ptrvalue;
+                 j=0;
+                 seq[0]='\0';
+                 while (*tmp!='"')
+                 {
+                    if (*tmp=='\0' || *tmp=='\n') {
+                       str = FGetLine (fp);
+                       tmp = str;
+                    }
+                    else {
+                       seq[j] = *tmp;
+                       tmp++;
+                       j++;
+                    }
+                 }
+                 if (*tmp=='"')
+                    vnp=vnp->next;
+              }
+           }
+           str = FGetLine (fp);
+        }     
+     }
   }
-  sep = SeqEntryAsnRead ( aip, atp );
-  aip = AsnIoClose (aip);
+  FileClose (fp);
+  return seqvnp;
+}
+
+static SeqIdPtr NameMacawRead (CharPtr path)
+{
+  FILE     *fp;
+  Char     name [255];
+  CharPtr  str, tmp;
+  SeqIdPtr siphead=NULL,
+           sip;
+  Int2     j;
+  
+  if ( (fp = FileOpen (path, "r")) == NULL) {
+     return FALSE;
+  }
+  str = FGetLine (fp);
+  while (str) {
+     tmp = StringStr(str, "name");
+     if (tmp) {
+        while (*tmp!='"' && *tmp!='\0' && *tmp!='\n')
+           tmp++;
+        if (*tmp=='"') 
+        {
+           tmp++;
+           j=0;
+           name[0]='\0';
+           while (*tmp!='"' && *tmp!='\0' && *tmp!='\n' && j<254) {
+              name[j] = *tmp;
+              tmp++;
+              j++;
+           }
+           name[j]='\0';
+           if (StringLen(name) > 0) {
+              sip = MakeSeqID (name);
+              if (sip) {
+                 siphead = AddSeqId (&siphead, sip);
+              }
+           }
+        }
+     }
+     str = FGetLine (fp);
+     tmp = StringStr(str, "worksheet");
+     if (tmp) {
+        break;
+     }
+  }
+  return siphead;
+}
+
+static SeqEntryPtr MacawRead (CharPtr path, SeqIdPtr seqid, Boolean save_seqentry, Boolean save_sap)
+{
+  SeqEntryPtr sep = NULL;
+  ValNodePtr  seqvnp=NULL,
+              vnp = NULL;
+  SeqAnnotPtr sap;
+  SeqIdPtr    sip;
+  Int4        n_seq=0;
+  CharPtr     str;
+ 
+  if (seqid == NULL)
+     seqid = NameMacawRead (path);
+  if (seqid == NULL)
+     return NULL;
+  str=matching_seqid (seqid);
+  if (str)
+  {
+     ErrPostEx (SEV_ERROR, 0, 0, "The submission contains several sequences with the same name \"%s\"", str);
+     MemFree (str);
+     SeqIdFree (seqid);
+     return NULL;
+  }
+  for (sip=seqid; sip!=NULL; sip=sip->next) 
+     n_seq++;
+  seqvnp = SequenceMacawRead (path, n_seq);
+  if (seqvnp == NULL)
+  {
+     SeqIdFree (seqid);
+     return NULL;
+  }
+  if ( save_sap )
+     sap = LocalAlignToSeqAnnotDimn (seqvnp, seqid, NULL, n_seq, 0, NULL, FALSE);
+  if ( save_seqentry )
+     sep = strings_to_seqentry (seqvnp, Seq_mol_na, seqid, sap);
+  ValNodeFree (seqvnp);
+  SeqIdFree (seqid);
   return sep;
 }
 
-extern Boolean seqentry_write (SeqEntryPtr sep, CharPtr path)
-{
-  Char         name[PATH_MAX];
-  AsnIoPtr     aip;
-  AsnTypePtr   atp;
-  AsnModulePtr amp;
-
-  if ( sep == NULL ) {
-    return 0;
-  }
-  if (path == NULL )
-  {
-     if (! GetInputFileName (name, PATH_MAX,"","TEXT"))  {
-        return 0;
-     }
-     path = name;
-  }
-  amp = AsnAllModPtr ();
-  atp = AsnTypeFind (amp,"SeqEntry");
-  if ((aip = AsnIoOpen (path,"w")) == NULL) {
-    return 0;
-  }
-  if ( ! SeqEntryAsnWrite ( sep, aip, atp ) ) {
-  }
-  aip = AsnIoClose (aip);
-  return 1;
-}
-
-/*************************************************
-***  Sequence
-***     WriteSeqToFasta
+/*******************************************************
+***   ReadAlignmentFunc
+***	called for PHYLIP, NEXUS interleave formats
+***	calls ReadLocalAlign
+***	      ReadLocalName
+***           LocalAlignToSeqAnnotDimn
+***	returns a SeqEntryPtr sep_list including a SeqAnnotPtr
 ***
-*************************************************/
-static void selalignnode_tofasta (CharPtr path, ValNodePtr anp_list, Int2 Width_Page, Uint2 mol_type, Boolean writeseq)
-{
-  AlignNodePtr     anp;
-  SelStructPtr     ssp;
-  SeqLocPtr        slp;
-  SeqPortPtr       spp;
-  Char             buffer[128];
-  CharPtr          str, str2;
-  Int4             j;
-  FILE             *fout;
-  Char    strLog[128];
-
-  if ( (fout = FileOpen (path, "w")) == NULL) {
-    return;
-  }
-  ssp = ObjMgrGetSelected();  
-  for (; ssp != NULL; ssp = ssp->next) 
-     if ( checkssp_for_editor (ssp) ) 
-     {
-         anp = (AlignNodePtr) AlignNodeFind (anp_list, ssp->entityID, ssp->itemID, ssp->itemtype);
-         if ( anp != NULL ) {
-                slp = CollectSeqLocFromAlignNode (anp);
-                SeqIdWrite ( SeqLocId (slp), strLog, PRINTID_FASTA_LONG, 120);
-                str = strLog;
-                str2 = StringStr(str,"lcl|");
-                if ( str2 != NULL ) str+=4;
-                fprintf (fout, "> %s   length %ld  from %ld to %ld \n", strLog,
-                            (long) (SeqLocStop (slp) - SeqLocStart (slp)), 
-                            (long) SeqLocStart (slp), (long) SeqLocStop (slp) );
-                if (writeseq)
-                {
-                   if ( mol_type == Seq_mol_aa )
-                       spp = SeqPortNewByLoc (slp, Seq_code_ncbieaa);
-                   else
-                       spp = SeqPortNewByLoc (slp, Seq_code_iupacna);
-                   j = 0;
-                   while ( j < (SeqLocStop (slp) - SeqLocStart (slp)) ) 
-                   {
-                       j +=ReadBufferFromSep (spp, buffer, j, j +Width_Page, 0);
-                       fprintf(fout, "%s\n", buffer); 
-                   }
-                   SeqPortFree (spp);
-                }
-         }
-     }
-  FileClose (fout);
-}
-
-/*************************************************
-***  Sequence
-***     BioseqSetToFasta 
-***
-*************************************************/
-extern void EditBioseqToFasta (BioseqPtr bsp, FILE *fout, Boolean is_na, Int4 from, Int4 to)
-{
-  SeqLocPtr        slp;
-  SeqPortPtr       spp;
-  Char             buffer[128];
-  Char             str [128];
-  Int4             txt_out;
-  Int4             Width_Page = 60;
-  Int4             j;
-
-  if (bsp == NULL) 
-     return;
-  if (fout == NULL)
-     return; 
-  SeqIdWrite (SeqIdFindBest(bsp->id, 0), str, PRINTID_FASTA_LONG, 120);
-  if (from < 0) 
-     from = 0;
-  if (to < 0) 
-     to =  bsp->length-1;
-  fprintf (fout, ">%s   (%ld - %ld)\n", str, (long)(from+1), (long)(to+1));
-  slp = SeqLocIntNew (from, to, Seq_strand_plus, SeqIdFindBest(bsp->id, 0));
-  if ( bsp->mol == Seq_mol_aa )
-     spp = SeqPortNewByLoc (slp, Seq_code_ncbieaa);
-  else
-     spp = SeqPortNewByLoc (slp, Seq_code_iupacna);
-  j = 0;
-  while ( j < SeqLocStop (slp) - SeqLocStart (slp) +1)
-  {
-     txt_out = ReadBufferFromSep (spp, buffer, j, j +Width_Page, 0);
-     if (txt_out == 0) break;
-     j += txt_out;
-     fprintf(fout, "%s\n", buffer);
-  }
-  SeqPortFree (spp);
-  return;
-}
-
-static Boolean BioseqSetToFasta (BioseqSetPtr bssp, Boolean firstout)
-{
-  SeqEntryPtr      sep;
-  BioseqPtr        bsp;
-  FILE             *fout;
-  Int2             count = 0;
-
-  if ( (fout = FileOpen ("ffile", "w")) != NULL) {
-     sep = bssp->seq_set;
-     while (sep != NULL)
-     {
-         count++;
-         if (count == 1 && !firstout) {}
-         else {
-            bsp = (BioseqPtr) sep->data.ptrvalue;
-            EditBioseqToFasta (bsp, fout, (Boolean)ISA_na(bsp->mol), -1, -1);
-         }
-         sep = sep->next;
-     }
-     FileClose (fout);
-     return TRUE;
-  }
-  return FALSE;
-}
-
-/*************************************************
-***  SeqAnnot
-***
-*************************************************/
-extern SeqAnnotPtr seqannot_read (CharPtr path)
-{
-  AsnIoPtr     aip;
-  AsnTypePtr   atp;
-  AsnModulePtr amp;
-  SeqAnnotPtr  sap_head = NULL, pre_sap = NULL, sap;
-  Boolean      first =  TRUE;
-
-  amp = AsnAllModPtr ();
-  atp = AsnTypeFind (amp,"Seq-annot");
-  if ((aip = AsnIoOpen(path,"r")) == NULL) {
-         return NULL;
-  }
-  while ((atp = AsnReadId (aip, amp, atp)) != NULL) 
-  {
-         sap = SeqAnnotNew ();
-         if ((sap = SeqAnnotAsnRead (aip, atp)) == NULL) 
-         {
-                return NULL;
-         }
-         if ( first ) {
-                sap_head = sap;
-                first = FALSE;
-         } else pre_sap->next = sap;
-         pre_sap = sap;
-  }
-  aip = AsnIoClose (aip);
-  return sap_head;
-}
-
-/*************************************************
-***  SeqAnnot
-***
-*************************************************/
-extern Int2 seqannot_write (SeqAnnotPtr sap, CharPtr path)
-{
-  Char         name[PATH_MAX];
-  AsnIoPtr     aip;
-  AsnTypePtr   atp;
-  AsnModulePtr amp;
-  SeqAnnotPtr  saptmp;
-  SeqAlignPtr  salp;
-
-  if ( sap == NULL ) {
-         return 0;
-  }
-  if ( ( salp = (SeqAlignPtr) sap->data ) == NULL ) {
-         return 0;
-  }
-  if ( salp->segtype == 4 ) {
-         saptmp = SeqAnnotBoolSegToDenseSeg (sap); 
-  }
-  else   saptmp = sap;
-  if (path == NULL) {
-     if (! GetInputFileName (name, PATH_MAX,"","TEXT"))  {
-        return 0;
-     }
-     path = name;
-  }
-  amp = AsnAllModPtr ();
-  atp = AsnTypeFind (amp,"Seq-annot");
-  if ((aip = AsnIoOpen (path, "w")) == NULL) {
-         return 0;
-  }
-  while ( sap != NULL ) {
-         if ( ! SeqAnnotAsnWrite ( sap, aip, atp ) ) {
-                break;
-         }
-         sap = sap->next;
-  }
-  AsnIoReset(aip);
-  aip = AsnIoClose (aip);
-  if ( salp->segtype == 4 ) CompSeqAnnotFree (saptmp);
-  return 1;
-}
-
-extern void seqalign_write (SeqAlignPtr salp, CharPtr path)
-{
-  SeqAnnotPtr  sap;
-
-  if (salp!=NULL) {
-     sap = SeqAnnotNew (); 
-     if (sap != NULL) {
-        sap->type = 2; 
-        sap->data = (Pointer) salp; 
-        seqannot_write (sap, path); 
-        sap->data = NULL; 
-        sap = SeqAnnotFree (sap); 
-     }
-  }
-}
-
-/*************************************************
-***  SeqAnnot
-***     SeqAnnotFileRead
-***
-*************************************************/
-extern SeqAnnotPtr SeqAnnotFileRead (void)
-{
-  Char         path [PATH_MAX];  /* path+filename */ 
-  SeqAnnotPtr  sap_head = NULL;
-  SeqAlignPtr  salp;
-  DenseSegPtr  dsp;
-  DenseDiagPtr ddp;
-   
-  if (!GetInputFileName (path, PATH_MAX, "", "TEXT")) 
-     return NULL;
-  sap_head = seqannot_read (path);
-
-  if ( sap_head->type == 2 ) 
-  {
-         salp = (SeqAlignPtr) sap_head->data;
-         if ( salp == NULL ) return NULL;
-         if ( salp->dim < 2 || salp->type == 0 )
-                return NULL;
-         if ( salp->segtype == 1 ) {
-                ddp = (DenseDiagPtr) salp->segs;
-                if ( ddp->dim < 2 ){
-                       SeqAnnotFree (sap_head);
-                       return NULL;
-                }
-         } 
-         else if ( salp->segtype == 2 ) {
-                dsp = (DenseSegPtr) salp->segs;
-                if ( dsp->dim < 2 ){
-                       SeqAnnotFree (sap_head);
-                       return NULL;
-                }
-         }
-         else return NULL;
-  }
-  else {
-         return NULL; 
-  }
-  return (sap_head);
-}
-
-/*************************************************
-***
-***  Alignment
-***              
-*************************************************/
+**********************************************************/
 static Boolean seq_line (CharPtr str)
 {
-  Int4 lens;
-  Int4 val1, val2, j;
+  CharPtr  str2;
+  Int4     lens;
+  Int4     val1, 
+           val2, 
+           j;
 
-  if (str != NULL) {
-     lens = StringLen(str);
+  if (str != NULL) 
+  {
+     str2 = StringSave (str);
+     lens = StringLen(str2);
      val1 = 0;
      val2 = 0;
-     for (j = lens; j > 0; j--) {
-        str[j] = TO_UPPER(str[j]);
-        if (str[j] >= 'A' && str[j] <= 'Z') {
+     for (j = lens; j > 0; j--) 
+     {
+        str2[j] = TO_UPPER(str2[j]);
+        if (str2[j] >= 'A' && str2[j] <= 'Z') 
+        {
            val1++;
-           if (str[j]=='A' || str[j]=='C' || str[j]=='T' || str[j]=='G')
+           if (str2[j]=='A' || str2[j]=='C' || str2[j]=='T' || str2[j]=='G')
               val2++;
         }
      }
+     MemFree(str2);
      if (val2 > (2*val1/3))
         return TRUE;
   }
   return FALSE;
 }
 
-static ValNodePtr ReadLocalAlign (CharPtr path, Int2 align_format, Int2 n_seq)
+static Boolean seq_char (Char car, Char missingchar, Char gapchar)
+{
+  if (car == 'A') return TRUE;
+  if (car == 'T') return TRUE;
+  if (car == 'G') return TRUE;
+  if (car == 'C') return TRUE;
+  if (car == 'U') return TRUE;
+  if (car == 'a') return TRUE;
+  if (car == 't') return TRUE;
+  if (car == 'g') return TRUE;
+  if (car == 'c') return TRUE;
+  if (car == 'u') return TRUE;
+  if (car == missingchar) return TRUE;
+  if (car == gapchar) return TRUE;
+  if (car == '*') return TRUE;
+  return FALSE;
+}
+
+
+static ValNodePtr ReadLocalAlign (CharPtr path, Int2 align_format, Int2 n_seq, Int2 *offset, Int2 *offset_line)
+
 {
   FILE       *fp;
   ValNodePtr seqvnp = NULL, vnp;
   CharPtr    tmp,
              tmp1;
-  Char       str [MAXSTR];
+  CharPtr    str;
   Int4 PNTR  lgseq;
   Int4       lmax;
   Int4       strlens;
   Int2       i_seq, j;	
   Int2       leftmargin;
+  Int2       top_lines=0;
   Int4       lg_seq = 0;
   int        val1;
   long       val2;
   Boolean    found_seq;
-  Boolean    goOn;
   Boolean    first;
   Char       gapchar = '-';
   Char       missingchar = '?';
@@ -1645,30 +1323,31 @@ static ValNodePtr ReadLocalAlign (CharPtr path, Int2 align_format, Int2 n_seq)
   if ( (fp = FileOpen (path, "r")) == NULL) {
          return NULL;
   }
-  goOn=(Boolean)(fgets (str, sizeof (str), fp) != NULL);
-  while (goOn) {
+  str = FGetLine (fp); 
+  while (str) {
      if (! stringhasnotext (str)) {
         if (StringLen (str) > 0 && str [0] != '>') 
            break;
      }
-     goOn=(Boolean)(fgets (str, sizeof (str), fp) != NULL);
+     top_lines++;
+     str = FGetLine (fp);
   }
   if (align_format == SALSAA_GCG){
      n_seq = 1;
-     goOn=(Boolean)(fgets (str, sizeof (str), fp) != NULL);
-     while (goOn) {
+     str = FGetLine (fp);
+     while (str) {
         n_seq++;
-        goOn=(Boolean)(fgets (str, sizeof (str), fp) != NULL);
+        str = FGetLine (fp);
      } 
      FileClose(fp);
      fp = FileOpen (path, "r");
-     goOn=(Boolean)(fgets (str, sizeof (str), fp) != NULL);
-     while (goOn) {
+     str = FGetLine (fp);
+     while (str) {
         if (! stringhasnotext (str)) {
            if (StringLen (str) > 0 && str [0] != '>')
               break;
         }   
-        goOn=(Boolean)(fgets (str, sizeof (str), fp) != NULL);
+        str = FGetLine (fp);
      }
      leftmargin = SALSAA_GCG;
   }
@@ -1676,7 +1355,7 @@ static ValNodePtr ReadLocalAlign (CharPtr path, Int2 align_format, Int2 n_seq)
      found_seq = FALSE;
      lg_seq = 0;
      n_seq = 0;
-     while (goOn) {
+     while (str) {
         if (n_seq == 0) {
            tmp = StringStr(str, "NTAX");
            if (tmp == NULL)  
@@ -1725,7 +1404,7 @@ static ValNodePtr ReadLocalAlign (CharPtr path, Int2 align_format, Int2 n_seq)
            if (*tmp!='\0' && *tmp!='\n')
               missingchar = *tmp;
         }
-        if (n_seq>0 && lg_seq>0 && seq_line (str)) {
+        if (n_seq>0 && lg_seq>-1 && seq_line (str)) {
            if (seq_char(str[0], missingchar, gapchar) 
            && seq_char(str[1], missingchar, gapchar) 
            && seq_char(str[2], missingchar, gapchar)) {
@@ -1742,27 +1421,33 @@ static ValNodePtr ReadLocalAlign (CharPtr path, Int2 align_format, Int2 n_seq)
            }
            break;
         }
-        goOn = (Boolean)(fgets (str, MAXSTR, fp) != NULL);
+        top_lines++;
+        str = FGetLine (fp);
      }
      if (!found_seq) 
         n_seq = 0;
+     else
+        leftmargin++;
   }
   else if (align_format == SALSA_PHYLIP) {
      if (sscanf (str, "%d %ld", &val1, &val2) == 2) {
         n_seq = (Int2) val1;
         lg_seq = (Int4) val2;
      }
-     goOn = (Boolean)(fgets (str, MAXSTR, fp) != NULL);
-     leftmargin = SALSA_PHYLIP;
+     str = FGetLine (fp);
+     leftmargin = SALSA_PHYLIP_MARGIN;
+     top_lines++;
   }
   else if (align_format == SALSA_CLUSTALV) {
      if (n_seq == 0) {
         FileClose(fp);
         return NULL;
      }
-     for ( j =0; j < 4; j++) 
-         goOn = (Boolean)(fgets (str, MAXSTR, fp) != NULL);
-     leftmargin = SALSA_CLUSTALV;
+     for ( j =0; j < 4; j++) {
+        str = FGetLine (fp);
+        top_lines++;
+     }
+     leftmargin = SALSA_CLUSTALV_MARGIN;
   }
   if (n_seq == 0) {
      FileClose(fp);
@@ -1773,13 +1458,9 @@ static ValNodePtr ReadLocalAlign (CharPtr path, Int2 align_format, Int2 n_seq)
   else 
      lmax = lg_seq;
   
-  for (j = 0; j < n_seq; j++) {
-     tmp = (CharPtr) MemNew((size_t) ((lmax + 1) * sizeof(Char)));
-     for (strlens = 0; strlens < lmax; strlens++) 
-         tmp [strlens] = ' ';
-     tmp [lmax] = '\0';
-     ValNodeAddPointer (&seqvnp, 0, (Pointer)tmp);
-  }
+  *offset = leftmargin;
+  seqvnp = new_sequence_vectors (n_seq, lmax);
+
   lgseq = (Int4Ptr) MemNew((size_t) ((n_seq + 1) * sizeof(Int4)));
   for (j = 0; j < n_seq; j++) lgseq [j] = 0; 
   
@@ -1787,7 +1468,7 @@ static ValNodePtr ReadLocalAlign (CharPtr path, Int2 align_format, Int2 n_seq)
   i_seq = 0;
   vnp = seqvnp;
   first = TRUE;
-  while (goOn)
+  while (str)
   {
      strlens = StringLen (str);
      if (strlens > 0) {
@@ -1835,9 +1516,9 @@ static ValNodePtr ReadLocalAlign (CharPtr path, Int2 align_format, Int2 n_seq)
                    }
                 } 
                 else vnp = vnp->next;
-            }
+           }
      }
-     goOn = (Boolean)(fgets (str, MAXSTR, fp) != NULL);
+     str = FGetLine (fp);
   }
   FileClose(fp);
   for (lmax = 0, j = 0; j < n_seq; j++) 
@@ -1856,70 +1537,28 @@ static ValNodePtr ReadLocalAlign (CharPtr path, Int2 align_format, Int2 n_seq)
         Message(MSG_OK, "Length in file %d != alignment length %d", (int) lg_seq, (int) lmax);
      lg_seq = lmax;
   }
+  *offset_line = top_lines;
   return seqvnp;  
 }
 
-/*************************************************
-***  Alignment
-***              
-*************************************************/
-static SeqIdPtr ReadLocalName (CharPtr path, Int2 nbseq, Int2 format)
+static SeqIdPtr ReadLocalName (CharPtr path, Int2 nbseq, Int2 leftmargin, Int2 offset_lines)
 {
   FILE       *fp;
   SeqIdPtr   sip1 = NULL,
              sipnew = NULL, siptmp;
-  Char       str [MAXSTR];
-  Int2       leftmargin;
-  Int2       j;
-  int        i_seq = 0;	
-  Boolean    found_seq;
-  Boolean    goOn;
-  Char       gapchar = '-';
-  Char       missingchar = '?';
+  CharPtr    str;
+  Int2       j,
+             i_seq = 0;	
 
-  if ( (fp = FileOpen (path, "r")) == NULL) {
-    return NULL;
-  }
-  goOn = (Boolean)(fgets (str, MAXSTR, fp) != NULL);
-  while (goOn) {
-     if (! stringhasnotext (str)) {
-        if (StringLen (str) > 0 && str [0] != '>') 
-           break;
+  if ( (fp = FileOpen (path, "r")) != NULL) {
+     j=0;
+     str = FGetLine (fp);
+     while (str && j<offset_lines) {
+        str = FGetLine (fp);
+        j++;
      }
-     goOn = (Boolean)(fgets (str, MAXSTR, fp) != NULL);
-  }
-  if (format == SALSA_NEXUS) {
-     found_seq = FALSE;
-     while (goOn) {
-        if (seq_line (str)) {
-           for (j = 0; j<MAXSTR-1; j++) {
-              if (str[j] == ' ' 
-              && seq_char(str[j+1], missingchar, gapchar)) {
-                 found_seq = TRUE;
-                 break;
-              }
-           }
-           break;
-        }
-        goOn = (Boolean)(fgets (str, MAXSTR, fp) != NULL);
-     }
-     if (!found_seq) 
-        return NULL;
-     leftmargin = j;
-  }
-  else if (format == SALSA_PHYLIP)  {
-     goOn = (Boolean)(fgets (str, MAXSTR, fp) != NULL);
-     leftmargin = SALSA_PHYLIP;
-  }
-  else if (format == SALSA_CLUSTALV) {
-     for ( j =0; j < 4; j++) 
-         fgets (str, MAXSTR, fp);
-     leftmargin = SALSA_CLUSTALV;
-  }
-  else 
-     leftmargin = format;
-  while (goOn && i_seq < nbseq ) 
-  {
+     while (str && i_seq < nbseq ) 
+     {
          if ( StringLen (str) > 0 ) 
          {                        
                 str [leftmargin] = '\0';
@@ -1932,88 +1571,29 @@ static SeqIdPtr ReadLocalName (CharPtr path, Int2 nbseq, Int2 format)
                    siptmp->next = sipnew;
                 siptmp = sipnew;
          }
-         goOn = (Boolean)(fgets (str, MAXSTR, fp) != NULL);
+         str = FGetLine (fp);
          ++i_seq;
+     }
+     FileClose(fp);
   }
-  FileClose(fp);
-  if (matching_seqid (sip1))
-     ErrPostEx (SEV_ERROR, 0, 0, "MATCHING SEQIDs");
   return sip1;
 }
 
-/*************************************************
-***  Alignment
-***      ReadAlignmentFunc
-***              
-*************************************************/
-extern void ReadAlignView (BioseqPtr target_bsp, Uint2 import_format)
+static SeqEntryPtr ReadAlignmentFunc (CharPtr path, Uint1 mol_type, Uint1 format, 
+        Int2 n_seq, Boolean save_seqentry, Boolean save_sap, SeqIdPtr seqsip) 
 {
-  ValNodePtr  vnp=NULL;
-  SeqLocPtr   slp=NULL;
-  SeqLocPtr   source_slp;
-  SeqIdPtr    sip;
-  SeqAlignPtr salp;
-  BioseqPtr   source_bsp = NULL;
-  SeqEntryPtr source_sep = NULL;
-
-  if (target_bsp==NULL)
-     return;
-  switch (import_format) {
-     case SALSA_FASTA:
-        source_sep = FastaRead (NULL, Seq_mol_na);
-        break;
-     case SALSA_ASN1:
-        source_sep = AsnReadForSalsa (NULL);
-        break;
-     default:
-        break;
-  }
-  if (source_sep!=NULL) {
-     if (IS_Bioseq_set(source_sep))
-        source_sep = FindNucSeqEntry(source_sep);
-     if (IS_Bioseq(source_sep))
-     {
-        sip = SeqIdFindBest(target_bsp->id, 0);
-        slp = SeqLocIntNew (0, target_bsp->length - 1, Seq_strand_plus, sip);
-        ValNodeAddPointer(&vnp, 0, (Pointer)slp);
-        source_bsp = (BioseqPtr)source_sep->data.ptrvalue;
-        source_slp = SeqLocIntNew (0, source_bsp->length-1, Seq_strand_plus, source_bsp->id);
-        ValNodeAddPointer(&vnp, 0, (Pointer)source_slp);
-        salp = SeqLocListToSeqAlign (vnp, PRGALIGNDEFAULT, NULL);
-        if (salp != NULL) {
-           LaunchAlignViewer (salp);
-        }
-     }
-  }
-  return;
-}
-
-
-extern SeqEntryPtr ReadAlignmentFunc (CharPtr path, Uint1 mol_type, Uint1 format, Int2 n_seq, Boolean save_seqentry, Boolean save_sap, SeqIdPtr sqloc_list)
-{
-  SeqEntryPtr  sep_list, 
-               sep, 
-               pre_sep = NULL;
-  BioseqSetPtr bssp;
-  BioseqPtr    bsp;
+  SeqEntryPtr  sep = NULL;
   ValNodePtr   seqvnp , vnp;
-  SeqIdPtr     seqsip , sip; 
   SeqAnnotPtr  sap;
-  Int4         lens;
-  Int2         k;
+  Int2         leftmargin,
+               offset_lines,
+               k;
+  CharPtr      str;
 
-         /************************************
-         **  read sequences into Charptr seqvnp 
-         **  read names into Charptr seqsip 
-         *************************************/
-  seqvnp = ReadLocalAlign (path, format, n_seq);
+  seqvnp = ReadLocalAlign (path, format, n_seq, &leftmargin, &offset_lines);
   if (seqvnp == NULL)
-  {
-         ValNodeFree (seqvnp);
-         return NULL;
-  }
-  k = 0;
-  for (vnp=seqvnp; vnp!=NULL; vnp=vnp->next) k++;
+     return NULL;
+  for (k=0, vnp=seqvnp; vnp!=NULL; vnp=vnp->next) k++;
   if (n_seq == 0)
      n_seq = k;
   else 
@@ -2021,66 +1601,150 @@ extern SeqEntryPtr ReadAlignmentFunc (CharPtr path, Uint1 mol_type, Uint1 format
          ValNodeFree (seqvnp);
          return NULL;
      }
-
-  if (sqloc_list != NULL)
-         seqsip = sqloc_list;
-  else 
-         seqsip = ReadLocalName (path, n_seq, format); 
-
-         /************************************
-         **  sequences + names into SeqEntry    
-         *************************************/
-  if ( save_seqentry )
+  if (seqsip== NULL)
+     seqsip = ReadLocalName (path, n_seq, leftmargin, offset_lines);
+  if (seqsip == NULL)
   {
-         bssp = BioseqSetNew ();
-         if (bssp == NULL) 
-         {
-                ValNodeFree (seqvnp);
-                return NULL;
-         }
-         bssp->_class = 14;     
-         vnp = seqvnp;
-         sip = seqsip;
-         for (k = 0; k < n_seq && vnp!=NULL && sip!=NULL; k++, vnp=vnp->next) 
-         {
-                lens = (Int4) StringLen ((CharPtr) vnp->data.ptrvalue);
-                sep = StringToSeqEntry ((CharPtr) vnp->data.ptrvalue, sip, lens, mol_type);
-                if (sep != NULL) {
-                       if (pre_sep == NULL) bssp->seq_set = sep;
-                       else pre_sep->next = sep;
-                       pre_sep = sep;
-                }
-                sip = sip->next;
-         }
-         sep_list = SeqEntryNew ();
-         if ( sep_list  == NULL ) {
-                ValNodeFree (seqvnp);
-                return NULL;
-         }
-         sep_list->choice = 2;
-         sep_list->data.ptrvalue = (Pointer) bssp; 
-         SeqMgrSeqEntry (SM_BIOSEQ, (Pointer) bssp, sep_list);
-
-         for (sep = bssp->seq_set; sep!=NULL; sep=sep->next) {
-                bsp = (BioseqPtr) sep->data.ptrvalue;
-                ObjMgrConnect (OBJ_BIOSEQ, (Pointer) bsp, OBJ_BIOSEQSET, (Pointer) bssp);
-         }
+     ValNodeFree (seqvnp);
+     return NULL;
   }
-
-         /*********************************
-         **  alignment annot into sap 
-         *********************************/
-  if ( save_sap )
+  str=matching_seqid (seqsip);
+  if (str)
   {
-         sap = LocalAlignToSeqAnnotDimn (seqvnp, seqsip, NULL, n_seq, 0, NULL, FALSE);
-         if ( sap==NULL ) {
-                ValNodeFree (seqvnp);
-                return NULL;
-         }
-         bssp->annot = sap;
+     ErrPostEx (SEV_ERROR, 0, 0, "The submission contains several sequences with the same name \"%s\"", str); 
+     MemFree (str);
+  }
+  else {
+     if ( save_sap )
+        sap = LocalAlignToSeqAnnotDimn (seqvnp, seqsip, NULL, n_seq, 0, NULL, FALSE);
+     if ( save_seqentry )
+        sep = strings_to_seqentry (seqvnp, Seq_mol_na, seqsip, sap);
   }
   ValNodeFree (seqvnp);
-  return sep_list;
+  SeqIdFree (seqsip);
+  return sep;
+}
+
+
+/************************************************************
+***  ReadLocalAlignment
+***	called by sequin2.c 
+***	calls ReadInterleaveAlign, ReadContiguouseAlign
+***  ReadInterleaveAlign
+***	reads formats: Phylip, NEXUS Interleave
+***  ReadContiguouseAlign
+***	reads formats: Fasta+gaps, NEXUS Contiguous, Macaw
+***  ReadAnyAlignment
+***	calls first ReadInterleaveAlign
+***     if NULL is returned, calls ReadContiguouseAlign
+***
+************************************************************/
+extern SeqEntryPtr ReadInterleaveAlign (CharPtr path, Uint1 mol_type)
+{
+  FILE        *fp;
+  SeqEntryPtr sep=NULL;
+  Char        name [PATH_MAX];
+  CharPtr     tmp;
+  CharPtr     str = NULL;
+  int         val1;
+  long        val2;
+  
+  if (path == NULL)
+  {
+     if (! GetInputFileName (name, PATH_MAX,"","TEXT"))  {
+        return NULL;
+     }   
+     path = name;
+  }
+  if ( (fp = FileOpen (path, "r")) != NULL) {
+     str = get_first_notemptyline (fp);
+     FileClose (fp);     
+  }
+  if (str==NULL)
+     return NULL;
+  tmp = StringStr(str, "NEXUS");
+  if (tmp == NULL)
+     tmp = StringStr(str, "nexus");
+  if (tmp)
+  {
+     if (ISA_aa(mol_type))
+        sep = ReadLocalAlignment (SALSAA_NEXUS, path);
+     else
+        sep = ReadLocalAlignment (SALSA_NEXUS, path);
+     return sep;
+  }
+  if (sscanf (str, "%d %ld", &val1, &val2) == 2) {
+     if (val1 > 0 && val2 > -1)
+     {
+        if (ISA_aa(mol_type))
+           sep = ReadLocalAlignment (SALSAA_PHYLIP, path);
+        else 
+           sep = ReadLocalAlignment (SALSA_PHYLIP, path);
+     } 
+     return sep;
+  }
+  return NULL;
+}
+
+extern SeqEntryPtr ReadContiguouseAlign (CharPtr path, Uint1 mol_type)
+{
+  FILE        *fp;
+  SeqEntryPtr sep=NULL;
+  Char        name [PATH_MAX];
+  CharPtr     tmp;
+  CharPtr     str = NULL;
+  
+  if (path == NULL)
+  {
+     if (! GetInputFileName (name, PATH_MAX,"","TEXT"))  {
+        return NULL;
+     }   
+     path = name;
+  }
+  if ( (fp = FileOpen (path, "r")) != NULL) {
+     str = get_first_notemptyline (fp);
+     FileClose (fp);     
+  }
+  if (str==NULL)
+     return NULL;
+
+  if (str[0] == '>')
+  {
+     if (ISA_aa(mol_type))
+        sep = ReadLocalAlignment (SALSAA_FASTGAP, path);
+     else 
+        sep = ReadLocalAlignment (SALSA_FASTGAP, path);
+     return sep;
+  }
+  tmp = StringStr(str, "NEXUS");
+  if (tmp == NULL)
+     tmp = StringStr(str, "nexus");
+  if (tmp)
+  {
+     if (!ISA_aa(mol_type))
+        sep = ReadLocalAlignment (SALSA_PAUP, path);
+     return sep;
+  }
+  tmp = StringStr(str, "MACAWDATAFILE");
+  if (tmp == NULL)
+     tmp = StringStr(str, "MacawDataFile");
+  if (tmp)
+  {
+     if (!ISA_aa(mol_type))
+        sep = ReadLocalAlignment (SALSA_MACAW, path);
+     return sep;
+  }
+  return NULL;  
+}
+
+extern SeqEntryPtr ReadAnyAlignment (Boolean is_prot, CharPtr path)
+{
+  SeqEntryPtr sep = NULL;
+ 
+  sep = ReadInterleaveAlign (path, Seq_mol_na);
+  if (sep==NULL)
+     sep = ReadContiguouseAlign (path, Seq_mol_na);
+  return sep;
 }
 
 
@@ -2099,6 +1763,21 @@ extern SeqEntryPtr ReadLocalAlignment (Uint1 format, CharPtr path)
   }
   switch (format) 
   {
+     case SALSA_ND:
+            sep = ReadAnyAlignment (FALSE, path);
+            break;
+            
+     case SALSA_INTERLEAVE:
+            sep = ReadInterleaveAlign (path, Seq_mol_na);
+            break;
+     case SALSA_CONTIGUOUS:
+            sep = ReadContiguouseAlign (path, Seq_mol_na);
+            break;
+
+     case SALSA_FASTA:
+            sep = FastaReadAdvanced (path, Seq_mol_aa, NULL, NULL, NULL, NULL); 
+            break;
+
      case SALSA_FASTGAP:
             sep = GapFastaRead (path, Seq_mol_na);
             break;
@@ -2110,13 +1789,15 @@ extern SeqEntryPtr ReadLocalAlignment (Uint1 format, CharPtr path)
                FileRemove (tmpfile);
             }
             break;
+     case SALSA_MACAW :
+            sep = MacawRead (path, NULL, TRUE, TRUE);
+            break;
+
      case SALSA_PHYLIP:
      case SALSA_NEXUS:
             sep = ReadAlignmentFunc (path, Seq_mol_na, format, 0, TRUE, TRUE, NULL);
             break;
-     case SALSA_FASTA:
-            sep = FastaReadAdvanced (path, Seq_mol_aa, NULL, NULL, NULL, NULL); 
-            break;
+
      case SALSAA_FASTGAP:
             sep = GapFastaRead (path, Seq_mol_aa);
             break;
@@ -2132,101 +1813,6 @@ extern SeqEntryPtr ReadLocalAlignment (Uint1 format, CharPtr path)
   return sep;
 }
 
-extern SeqEntryPtr ReadAnyAlignment (Boolean is_prot, CharPtr path)
-{
-  FILE        *fp;
-  SeqEntryPtr sep = NULL;
-  Char        name [PATH_MAX];
-  CharPtr     tmp;
-  Char        str [MAXSTR];
-  Boolean     goOn;
-  int         val1;
-  long        val2;
- 
-  if (path == NULL)
-  {
-     if (! GetInputFileName (name, PATH_MAX,"","TEXT"))  {
-        return NULL;
-     }   
-     path = name;
-  }
-  if ( (fp = FileOpen (path, "r")) == NULL) {
-    return NULL;
-  }
-  goOn = (Boolean)(fgets (str, MAXSTR, fp) != NULL);
-  while (goOn) {
-     if (! stringhasnotext (str)) {
-        if (StringLen (str) > 0)
-           break;
-     }
-     goOn = (Boolean)(fgets (str, MAXSTR, fp) != NULL);
-  }
-  FileClose (fp);     
-
-  if (str[0] == '>')
-  {
-     if (is_prot)
-        sep = ReadLocalAlignment (SALSAA_FASTGAP, path);
-     else 
-        sep = ReadLocalAlignment (SALSA_FASTGAP, path);
-     return sep;
-  }
-  tmp = StringStr(str, "NEXUS");
-  if (tmp == NULL)
-     tmp = StringStr(str, "nexus");
-  if (tmp)
-  {
-     if (is_prot)
-        sep = ReadLocalAlignment (SALSAA_NEXUS, path);
-     else
-        sep = ReadLocalAlignment (SALSA_NEXUS, path);
-     return sep;
-  }
-  if (sscanf (str, "%d %ld", &val1, &val2) == 2) {
-     if (val1 > 0 && val2 > 0)
-     {
-        if (is_prot)
-           sep = ReadLocalAlignment (SALSAA_PHYLIP, path);
-        else 
-           sep = ReadLocalAlignment (SALSA_PHYLIP, path);
-     } 
-     return sep;
-  }
-  return sep;
-}
-
-extern void showtextalign_fromalign (SeqAlignPtr salp, CharPtr path, FILE *fp)
-{
-  Char        name [PATH_MAX];
-  SeqAnnotPtr sap;
-  Int4        line = 80;     
-  Uint4       option = TXALIGN_MASTER;
-  Boolean     do_close = TRUE;
-
-  if (salp == NULL)
-     return;
-  if (path == NULL && fp == NULL) 
-  {
-     if (! GetInputFileName (name, PATH_MAX,"","TEXT"))  {
-        return;
-     }
-     path = name;
-  }
-  if (path != NULL && fp == NULL) {
-     fp = FileOpen (path, "w");
-  }
-  else
-     do_close = FALSE;
-  if (fp != NULL) {
-     sap = SeqAnnotForSeqAlign (salp);  
-     ShowTextAlignFromAnnot (sap, line, fp, NULL, NULL, option, NULL, NULL, NULL);
-     if (do_close) {
-        FileClose(fp);
-     }
-     sap->data = NULL;
-     SeqAnnotFree (sap);
-  } 
-}
 
 /***********************************************************
 ***
@@ -2301,7 +1887,7 @@ extern SeqAlignPtr ImportFromFile (EditAlignDataPtr adp)
 }
 
 /*------------------------------------------------------------*/
-typedef struct fetchform {
+typedef struct salfilesfetchform {
   FORM_MESSAGE_BLOCK
   GrouP           accntype;
   TexT            accession;
@@ -2349,26 +1935,6 @@ static void FetchTextProc (TexT t)
   } else {
     SafeEnable (ffp->accept);
   }
-}
-
-static Int4 CCAccessionToGi (CharPtr string, Int2 seqtype)
-{
-   CharPtr str;
-   LinkSetPtr lsp;
-   Int4 gi;
-
-   str = MemNew (StringLen (string) + 10);
-   sprintf (str, "\"%s\" [ACCN]", string);
-   lsp = EntrezTLEvalString (str, seqtype, -1, NULL, NULL);
-   MemFree (str);
-   if (lsp == NULL) return 0;
-   if (lsp->num <= 0) {
-       LinkSetFree (lsp);
-       return 0;
-   }
-   gi = lsp->uids [0];
-   LinkSetFree (lsp);
-   return gi;
 }
 
 static SeqAlignPtr align_this (SeqEntryPtr sep, SeqLocPtr master, SeqAnnotPtr sap, WindoW editor_window, EditAlignDataPtr adp)
@@ -2461,23 +2027,22 @@ static SeqEntryPtr SeqEntryNewForBioseq (BioseqPtr bsp)
 static void CCDownloadProc (ButtoN b)
 
 {
+  CharPtr       accn;
   BioseqPtr     bsp;
-  BioseqSetPtr  bssp;
-  CharPtr       dbname;
   Uint2         entityID;
   FetchFormPtr  ffp;
-  Boolean       idTypes [NUM_SEQID];
-  SeqEntryPtr   sep=NULL;
-  ValNodePtr    sip2=NULL;
-  SeqIdPtr      sip;
+  SeqEntryPtr   sep;
   Char          str [32];
   Int4          uid;
   ForM          w;
-  Boolean       is_prot,
+  Boolean       is_na,
                 is_newbsp=FALSE;
+  SeqEditViewProcsPtr  svpp;
 
   ffp = (FetchFormPtr) GetObjectExtra (b);
   if (ffp == NULL) return;
+  svpp = (SeqEditViewProcsPtr) GetAppProperty ("SeqEditDisplayForm");
+  if (svpp == NULL || svpp->download == NULL) return;
   w = ffp->form;
   Hide (w);
   Update ();
@@ -2489,23 +2054,23 @@ static void CCDownloadProc (ButtoN b)
     Select (ffp->accession);
     return;
   }
-  is_prot = (Boolean) (ISA_aa(ffp->adp->mol_type));
+  is_na = (Boolean) (ISA_na(ffp->adp->mol_type));
   WatchCursor ();
   sep = NULL;
   uid = 0;
-/**/
+  accn = NULL;
+/*
   EntrezInit("Salsa", TRUE, NULL);
-/**/
+*/
   if (GetValue (ffp->accntype) == 1) {
-    if (is_prot)
-       uid = CCAccessionToGi (str, TYP_AA);
-    else 
-       uid = CCAccessionToGi (str, TYP_NT);
+    accn = &(str [0]);
   } else {
     if (! StrToLong (str, &uid)) {
      uid = 0;
     }
   }
+  sep = svpp->download ("Salsa", accn, uid, is_na, &is_newbsp);
+  /*
   if (uid > 0) {
     ValNodeAddInt (&sip2, SEQID_GI, (Int4) uid);
     bsp=BioseqLockById(sip2);
@@ -2517,9 +2082,10 @@ static void CCDownloadProc (ButtoN b)
        sep = EntrezSeqEntryGet (uid, -2);
        is_newbsp=(Boolean) (sep!=NULL);
     }
-/**/
+    */
+/*
     EntrezFini (); 
-/**/
+*/
     if (sep == NULL) {
       Message (MSG_OK, "Unable to find this record in the database.");
     }
@@ -2550,11 +2116,13 @@ static void CCDownloadProc (ButtoN b)
           SeqEntryFree (sep); 
        } 
     } 
+/*
   }
   else {
     EntrezFini (); 
     Message (MSG_OK, "Unable to find this record in the database.");
   }
+*/
   ArrowCursor ();
   Show (w);
   Select (w);
@@ -2606,14 +2174,168 @@ static void CCCommonFetchFromNet (BtnActnProc actn, BtnActnProc cancel, EditAlig
     Update ();
   }
 }
+
 extern void CCFetchFromNet (EditAlignDataPtr adp, WindoW editor_window)
 {
   CCCommonFetchFromNet (CCDownloadProc, StdCancelButtonProc, adp, editor_window);
 }
 
-/*******************
+
+/************************************************************
+***  EditBioseqToFasta called by salparam.c
+SHOULD BE SEQ-ENTRY /Bioseq, Bioseqet
+
+  if ( (fout = FileOpen ("ffile", "w")) != NULL) {
+     sep = bssp->seq_set;
+     while (sep != NULL)
+     {
+         count++;
+         if (count == 1 && !firstout) {}
+         else {
+            bsp = (BioseqPtr) sep->data.ptrvalue;
+            EditBioseqToFasta (bsp, fout, -1, -1);
+         }
+         sep = sep->next;
+     }
+     FileClose (fout);
+     return TRUE;
+  }
+************************************************************/
+extern void EditBioseqToFasta (BioseqPtr bsp, FILE *fout, Int4 from, Int4 to)
+{
+  SeqLocPtr        slp;
+  SeqPortPtr       spp;
+  Char             buffer[128];
+  Char             str [128];
+  Int4             txt_out;
+  Int4             Width_Page = 60;
+  Int4             j;
+
+  if (bsp == NULL) 
+     return;
+  if (fout == NULL)
+     return; 
+  SeqIdWrite (SeqIdFindBest(bsp->id, 0), str, PRINTID_FASTA_LONG, 120);
+  if (from < 0) 
+     from = 0;
+  if (to < 0) 
+     to =  bsp->length-1;
+  fprintf (fout, ">%s   (%ld - %ld)\n", str, (long)(from+1), (long)(to+1));
+  slp = SeqLocIntNew (from, to, Seq_strand_plus, SeqIdFindBest(bsp->id, 0));
+  if ( bsp->mol == Seq_mol_aa )
+     spp = SeqPortNewByLoc (slp, Seq_code_ncbieaa);
+  else
+     spp = SeqPortNewByLoc (slp, Seq_code_iupacna);
+  j = 0;
+  while ( j < SeqLocStop (slp) - SeqLocStart (slp) +1)
+  {
+     txt_out = ReadBufferFromSep (spp, buffer, j, j +Width_Page, 0);
+     if (txt_out == 0) break;
+     j += txt_out;
+     fprintf(fout, "%s\n", buffer);
+  }
+  SeqPortFree (spp);
+  return;
+}
+
+/************************************************************/
+extern Int2 seqannot_write (SeqAnnotPtr sap, CharPtr path)
+{
+  Char         name[PATH_MAX];
+  AsnIoPtr     aip;
+  AsnTypePtr   atp;
+  AsnModulePtr amp;
+  SeqAnnotPtr  saptmp;
+  SeqAlignPtr  salp;
+
+  if ( sap == NULL ) {
+         return 0;
+  }
+  if ( ( salp = (SeqAlignPtr) sap->data ) == NULL ) {
+         return 0;
+  }
+  if ( salp->segtype == COMPSEG ) {
+         saptmp = SeqAnnotBoolSegToDenseSeg (sap); 
+  }
+  else   saptmp = sap;
+  if (path == NULL) {
+     if (! GetInputFileName (name, PATH_MAX,"","TEXT"))  {
+        return 0;
+     }
+     path = name;
+  }
+  amp = AsnAllModPtr ();
+  atp = AsnTypeFind (amp,"Seq-annot");
+  if ((aip = AsnIoOpen (path, "w")) == NULL) {
+         return 0;
+  }
+  while ( sap != NULL ) {
+         if ( ! SeqAnnotAsnWrite ( sap, aip, atp ) ) {
+                break;
+         }
+         sap = sap->next;
+  }
+  AsnIoReset(aip);
+  aip = AsnIoClose (aip);
+  if ( salp->segtype == COMPSEG ) CompSeqAnnotFree (saptmp);
+  return 1;
+}
+
+/************************************************************/
+extern void seqalign_write (SeqAlignPtr salp, CharPtr path)
+{
+  SeqAnnotPtr  sap;
+
+  if (salp!=NULL) {
+     sap = SeqAnnotNew (); 
+     if (sap != NULL) {
+        sap->type = 2; 
+        sap->data = (Pointer) salp; 
+        seqannot_write (sap, path); 
+        sap->data = NULL; 
+        sap = SeqAnnotFree (sap); 
+     }
+  }
+}
+
+/************************************************************
+*************************************************************
+*************************************************************
+*************************************************************
 *** FEATURES
-********************/
+*********************************************************
+*************************************************************
+*************************************************************
+*************************************************************
+*************************************************************
+**********************************************************/
+static Boolean seqentry_write (SeqEntryPtr sep, CharPtr path)
+{
+  Char         name[PATH_MAX];
+  AsnIoPtr     aip;
+  AsnTypePtr   atp;
+  AsnModulePtr amp;
+
+  if ( sep == NULL ) {
+    return 0;
+  }
+  if (path == NULL )
+  {
+     if (! GetInputFileName (name, PATH_MAX,"","TEXT"))  {
+        return 0;
+     }
+     path = name;
+  }
+  amp = AsnAllModPtr ();
+  atp = AsnTypeFind (amp,"SeqEntry");
+  if ((aip = AsnIoOpen (path,"w")) == NULL) {
+    return 0;
+  }
+  if ( ! SeqEntryAsnWrite ( sep, aip, atp ) ) {
+  }
+  aip = AsnIoClose (aip);
+  return 1;
+}
 
 static void get_client_rect (PaneL p, RectPtr prc)
 {
@@ -4025,4 +3747,225 @@ extern void TranslateAllBioseq (PaneL pnl,  EditAlignDataPtr adp)
   }
   return;
 }
+/**************************************/
+/**************************************/
+/**************************************/
+/**************************************/
+/**************************************/
+
+static void FindBioseqCB3 (SeqEntryPtr sep, Pointer mydata,
+                                          Int4 index, Int2 indent)
+{
+  ValNodePtr  vnp;
+
+  if (sep != NULL && sep->data.ptrvalue && mydata != NULL) {
+     if (IS_Bioseq(sep)) {
+        vnp = (ValNodePtr)mydata;
+        if (vnp->data.ptrvalue==NULL)
+        {
+           vnp->data.ptrvalue=(BioseqPtr) sep->data.ptrvalue;
+        }
+     }
+  }
+}
+ 
+static SelEdStructPtr is_sip_inseqinfo (SeqIdPtr sip, SelEdStructPtr seq_info)
+{
+  SelEdStructPtr tmp;
+  SeqLocPtr      slp;
+
+  for (tmp=seq_info; tmp!=NULL; tmp=tmp->next)
+  {
+     slp=(SeqLocPtr)tmp->region;
+     if (SeqIdForSameBioseq (sip, SeqLocId(slp)))
+     {
+        return tmp;
+     }
+  }
+  return NULL;
+}
+
+extern ValNodePtr CCReadAnythingLoop (CharPtr filename, SelEdStructPtr seq_info)
+{
+  Char         name [PATH_MAX];
+  Pointer      dataptr;
+  FILE         *fp;
+  BioseqPtr    bsp;
+  SeqEntryPtr  sep;
+  SeqLocPtr    slp;
+  ValNodePtr   head = NULL,
+               vnp,
+               slphead = NULL;
+  Uint2        datatype; 
+  Uint2        entityID;
+
+  ValNode      vn;
+
+SelEdStructPtr tmp;
+
+  if (filename == NULL) 
+  {
+     if (! GetInputFileName (name, PATH_MAX,"","TEXT"))  {
+        return NULL;
+     }
+     filename = name;
+  }
+  fp = FileOpen (filename, "r");
+  if (fp != NULL) {
+    while ((dataptr = ReadAsnFastaOrFlatFile (fp, &datatype, NULL, FALSE, FALSE, TRUE, FALSE)) != NULL) {
+      ValNodeAddPointer (&head, datatype, dataptr);
+    }
+    FileClose (fp);
+    for (vnp = head; vnp != NULL; vnp = vnp->next) {
+      datatype = vnp->choice;
+      dataptr = vnp->data.ptrvalue;
+      entityID = ObjMgrRegister (datatype, dataptr);
+      if (datatype == OBJ_BIOSEQ)
+      {
+         bsp=(BioseqPtr)vnp->data.ptrvalue;
+         slp = SeqLocIntNew (0, bsp->length-1, Seq_strand_plus, SeqIdFindBest (bsp->id, 0));
+
+if (seq_info) {
+ if ((tmp=is_sip_inseqinfo(bsp->id, seq_info)) != NULL) {
+   sep=SeqEntryNew ();
+   sep->choice=1;
+   sep->data.ptrvalue = (Pointer)bsp; 
+   SeqEntryReplaceSeqID (sep, SeqLocId(slp));
+   ValNodeFree(slp);
+   slp = SeqLocIntNew(0, bsp->length-1, Seq_strand_plus, bsp->id);
+   sep->data.ptrvalue = NULL;
+   SeqEntryFree(sep);
+ }
+}
+         ValNodeAddPointer (&slphead, 0, (Pointer) slp);
+      }
+      else if (datatype == OBJ_SEQENTRY)
+      {
+         sep=(SeqEntryPtr)vnp->data.ptrvalue;
+         vn.data.ptrvalue=NULL;
+         SeqEntryExplore (sep, &vn, FindBioseqCB3);
+         if (vn.data.ptrvalue!=NULL) {
+            bsp=(BioseqPtr)vn.data.ptrvalue;
+            slp = SeqLocIntNew (0, bsp->length-1, Seq_strand_plus, SeqIdFindBest (bsp->id, 0));
+
+if (seq_info) {
+ if ((tmp=is_sip_inseqinfo(bsp->id, seq_info)) != NULL) {
+   SeqEntryReplaceSeqID (sep, SeqLocId(slp));
+   ValNodeFree(slp);
+   slp = SeqLocIntNew(0, bsp->length-1, Seq_strand_plus, bsp->id);
+ }
+}
+            ValNodeAddPointer (&slphead, 0, (Pointer) slp);
+         }
+      }
+    }
+  }
+  return slphead;
+}
+
+
+
+
+
+
+
+/*******************************************************
+*** AsnReadForSalsa
+***   copied from Jonathan's code
+***   without the following lines:
+***
+          rsult = SeqEntryNew ();
+          if (rsult != NULL) {
+            rsult->choice = sep->choice;
+            rsult->data.ptrvalue = sep->data.ptrvalue;
+            sep->data.ptrvalue = NULL;
+            if (datatype == OBJ_SEQSUB) {
+              SeqSubmitFree ((SeqSubmitPtr) dataptr);
+            } else {
+              SeqEntryFree (sep);
+            }
+            if (!ObjMgrRegister (OBJ_SEQENTRY, (Pointer) rsult))
+               rsult = SeqEntryFree (rsult);
+          }  
+***********************************************************/
+extern SeqEntryPtr AsnReadForSalsa (CharPtr path)
+{
+  Char         name[PATH_MAX];
+  BioseqPtr     bsp;
+  BioseqSetPtr  bssp;
+  Pointer       dataptr;
+  Uint2         datatype;
+  Uint2         entityID;
+  SeqEntryPtr   rsult;
+  SeqEntryPtr   sep;
+
+  rsult = NULL;
+  if (path == NULL) {
+     if (! GetInputFileName (name, PATH_MAX,"","TEXT"))  {
+        return NULL;
+     }
+     path = name;
+  }
+  if (path != NULL && path [0] != '\0') {
+    dataptr = ObjMgrGenericAsnTextFileRead (path, &datatype, &entityID);
+    if (dataptr != NULL && entityID > 0) {
+      if (datatype == OBJ_SEQSUB || datatype == OBJ_SEQENTRY ||
+          datatype == OBJ_BIOSEQ || datatype == OBJ_BIOSEQSET) {
+        sep = GetTopSeqEntryForEntityID (entityID);
+        if (sep == NULL) {
+          sep = SeqEntryNew ();
+          if (sep != NULL) {
+            if (datatype == OBJ_BIOSEQ) {
+              bsp = (BioseqPtr) dataptr;
+              sep->choice = 1;
+              sep->data.ptrvalue = bsp;
+              SeqMgrSeqEntry (SM_BIOSEQ, (Pointer) bsp, sep);
+            } else if (datatype == OBJ_BIOSEQSET) {
+              bssp = (BioseqSetPtr) dataptr;
+              sep->choice = 2;
+              sep->data.ptrvalue = bssp;
+              SeqMgrSeqEntry (SM_BIOSEQSET, (Pointer) bssp, sep);
+            } else {
+              sep = SeqEntryFree (sep);
+            }
+          }  
+          sep = GetTopSeqEntryForEntityID (entityID);
+        }
+        if (sep != NULL) {
+           rsult = sep;
+        }
+      }
+    }
+  }
+  return rsult;
+}
+
+extern SeqEntryPtr seqentry_read (CharPtr path)
+{
+  Char         name[PATH_MAX];
+  AsnIoPtr     aip;
+  AsnTypePtr   atp;
+  AsnModulePtr amp;
+  SeqEntryPtr  sep;
+
+  if (path == NULL )
+  {
+     if (! GetInputFileName (name, PATH_MAX,"","TEXT"))  {
+        return NULL;
+     }
+     path = name;
+  }
+  amp = AsnAllModPtr ();
+  atp = AsnTypeFind (amp,"SeqEntry");
+  if ((aip = AsnIoOpen (path,"r")) == NULL) {
+    return NULL;
+  }
+  sep = SeqEntryAsnRead ( aip, atp );
+  aip = AsnIoClose (aip);
+  return sep;
+}
+
+
+
+
 

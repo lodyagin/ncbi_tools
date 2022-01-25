@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 98-01-01
 *
-* $Revision: 6.12 $
+* $Revision: 6.17 $
 *
 * File Description: consort
 *
@@ -38,6 +38,21 @@
 * Date       Name        Description of modification
 * --------------------------------------------------------------------------
 * $Log: urkcnsrt.c,v $
+* Revision 6.17  1998/10/20 16:07:40  kuzio
+* one pass: hash-sort-count for Markov
+*
+* Revision 6.16  1998/10/20 14:33:37  kuzio
+* var name readability
+*
+* Revision 6.15  1998/10/19 18:23:25  kuzio
+* SeqPortRead in chunks
+*
+* Revision 6.14  1998/10/13 17:16:36  kuzio
+* additional Markov setup
+*
+* Revision 6.13  1998/10/05 13:35:15  kuzio
+* start markov chains and codon bias
+*
 * Revision 6.12  1998/09/28 16:36:10  kuzio
 * no met orf check
 *
@@ -168,8 +183,6 @@ static FloatHi findtot (Int4Ptr fq, Int4 index)
     score = fq[62] + fq[63];
     break;
   }
-  if (score == 0)
-    score = 1;
   return (FloatHi) score;
 }
 
@@ -966,23 +979,30 @@ extern FloatHi Confide (Int4Ptr cutgene, Int4Ptr cutgbl)
 {
   Int4    i;
   FloatHi st1, st2, fr1, fr2, frq, score;
+  Boolean flagCheck;
 
   if (cutgene == NULL || cutgbl == NULL)
     return 0.0;
 
+  flagCheck = FALSE;
   score = 0.0;
   for (i = 0; i < 64; i++)
   {
     st1 = findtot (cutgene, i);
-    if (st1 == 0)
-      st1 = 1;
     st2 = findtot (cutgbl, i);
-    if (st2 == 0)
-      st2 = 1;
-    fr1 = cutgene[i]/st1;
-    fr2 = cutgbl[i]/st2;
-    frq = fr1 - fr2;
-    score += ((FloatHi) frq * (FloatHi) frq);
+    if (st1 != 0 || (st1 == 0 && flagCheck))
+    {
+      if (st1 != 0)
+        fr1 = cutgene[i]/st1;
+      else
+        fr1 = 1;
+      if (st2 != 0)
+        fr2 = cutgbl[i]/st2;
+      else
+        fr2 = 1;
+      frq = fr1 - fr2;
+      score += ((FloatHi) frq * (FloatHi) frq);
+    }
   }
 
   return score;
@@ -1045,7 +1065,7 @@ extern ValNodePtr ClearNonMetOrfs (ValNodePtr orflist)
   ValNodePtr orfhead = NULL;
   ValNodePtr orfold = NULL;
   ValNodePtr orfnext;
-  SeqLocPtr  slp;
+  SeqLocPtr  slp, slpn;
 
   while (orflist != NULL)
   {
@@ -1057,8 +1077,13 @@ extern ValNodePtr ClearNonMetOrfs (ValNodePtr orflist)
       orfnext = orflist->next;
       orflist->next = NULL;
       ValNodeFree (orflist);
-      SeqLocFree (slp);
       orflist = orfnext;
+      while (slp != NULL)
+      {
+        slpn = slp->next;
+        SeqLocFree (slp);
+        slp = slpn;
+      }
       continue;
     }
     if (orfhead == NULL)
@@ -1067,4 +1092,473 @@ extern ValNodePtr ClearNonMetOrfs (ValNodePtr orflist)
     orflist = orflist->next;
   }
   return orfhead;
+}
+
+/* Markovianisms */
+
+extern FreqPtr FreqNew (void)
+{
+  FreqPtr frqp;
+  Int4    number;
+
+  if ((frqp = (FreqPtr) MemNew (sizeof (Freq))) == NULL)
+    return NULL;
+
+/* no mem alloc checks ! */
+  number = (Int4) pow (4, 9);
+  frqp->frame0exp = (FloatHiPtr)
+                     MemNew ((size_t) (sizeof (FloatHi) * number));
+  frqp->frame1exp = (FloatHiPtr)
+                     MemNew ((size_t) (sizeof (FloatHi) * number));
+  frqp->frame2exp = (FloatHiPtr)
+                     MemNew ((size_t) (sizeof (FloatHi) * number));
+  frqp->frame0std = (FloatHiPtr)
+                     MemNew ((size_t) (sizeof (FloatHi) * number));
+  frqp->frame1std = (FloatHiPtr)
+                     MemNew ((size_t) (sizeof (FloatHi) * number));
+  frqp->frame2std = (FloatHiPtr)
+                     MemNew ((size_t) (sizeof (FloatHi) * number));
+  frqp->frame0trip = (Int4Ptr)
+                      MemNew ((size_t) (sizeof (Int4) * number));
+  frqp->frame1trip = (Int4Ptr)
+                      MemNew ((size_t) (sizeof (Int4) * number));
+  frqp->frame2trip = (Int4Ptr)
+                      MemNew ((size_t) (sizeof (Int4) * number));
+  number = (Int4) pow (4, 3);
+  frqp->frame0cdnobs = (Int4Ptr)
+                      MemNew ((size_t) (sizeof (Int4) * number));
+  frqp->frame1cdnobs = (Int4Ptr)
+                      MemNew ((size_t) (sizeof (Int4) * number));
+  frqp->frame2cdnobs = (Int4Ptr)
+                      MemNew ((size_t) (sizeof (Int4) * number));
+  frqp->frame0cdn = (Int4Ptr)
+                     MemNew ((size_t) (sizeof (Int4) * number));
+  frqp->frame1cdn = (Int4Ptr)
+                     MemNew ((size_t) (sizeof (Int4) * number));
+  frqp->frame2cdn = (Int4Ptr)
+                     MemNew ((size_t) (sizeof (Int4) * number));
+  frqp->globalcdnobs = (Int4Ptr)
+                        MemNew ((size_t) (sizeof (Int4) * number));
+  number = (Int4) pow (4, 6);
+  frqp->frame0leftdi = (Int4Ptr)
+                        MemNew ((size_t) (sizeof (Int4) * number));
+  frqp->frame1leftdi = (Int4Ptr)
+                        MemNew ((size_t) (sizeof (Int4) * number));
+  frqp->frame2leftdi = (Int4Ptr)
+                        MemNew ((size_t) (sizeof (Int4) * number));
+  frqp->frame0rightdi = (Int4Ptr)
+                         MemNew ((size_t) (sizeof (Int4) * number));
+  frqp->frame1rightdi = (Int4Ptr)
+                         MemNew ((size_t) (sizeof (Int4) * number));
+  frqp->frame2rightdi = (Int4Ptr)
+                         MemNew ((size_t) (sizeof (Int4) * number));
+  return frqp;
+}
+
+extern FreqPtr FreqFree (FreqPtr frqp)
+{
+  if (frqp == NULL)
+    return frqp;
+
+  frqp->frame0exp = (FloatHiPtr) MemFree (frqp->frame0exp);
+  frqp->frame1exp = (FloatHiPtr) MemFree (frqp->frame1exp);
+  frqp->frame2exp = (FloatHiPtr) MemFree (frqp->frame2exp);
+  frqp->frame0std = (FloatHiPtr) MemFree (frqp->frame0std);
+  frqp->frame1std = (FloatHiPtr) MemFree (frqp->frame1std);
+  frqp->frame2std = (FloatHiPtr) MemFree (frqp->frame2std);
+  frqp->frame0trip = (Int4Ptr) MemFree (frqp->frame0trip);
+  frqp->frame1trip = (Int4Ptr) MemFree (frqp->frame1trip);
+  frqp->frame2trip = (Int4Ptr) MemFree (frqp->frame2trip);
+  frqp->frame0cdnobs = (Int4Ptr) MemFree (frqp->frame0cdnobs);
+  frqp->frame1cdnobs = (Int4Ptr) MemFree (frqp->frame1cdnobs);
+  frqp->frame2cdnobs = (Int4Ptr) MemFree (frqp->frame2cdnobs);
+  frqp->frame0cdn = (Int4Ptr) MemFree (frqp->frame0cdn);
+  frqp->frame1cdn = (Int4Ptr) MemFree (frqp->frame1cdn);
+  frqp->frame2cdn = (Int4Ptr) MemFree (frqp->frame2cdn);
+  frqp->globalcdnobs = (Int4Ptr) MemFree (frqp->globalcdnobs);
+  frqp->frame0leftdi = (Int4Ptr) MemFree (frqp->frame0leftdi);
+  frqp->frame1leftdi = (Int4Ptr) MemFree (frqp->frame1leftdi);
+  frqp->frame2leftdi = (Int4Ptr) MemFree (frqp->frame2leftdi);
+  frqp->frame0rightdi = (Int4Ptr) MemFree (frqp->frame0rightdi);
+  frqp->frame1rightdi = (Int4Ptr) MemFree (frqp->frame1rightdi);
+  frqp->frame2rightdi = (Int4Ptr) MemFree (frqp->frame2rightdi);
+
+  return (FreqPtr) MemFree (frqp);
+}
+
+static void ScanFrame (BioseqPtr bsp, SeqLocPtr slp, Int4 frame,
+                       Int4Ptr count, Int4 residues)
+{
+  SeqLocPtr   slpThis;
+  SeqPortPtr  spp;
+  Int4        i, n, start, stop, length, chunk;
+  Uint1Ptr    seq, sq, sqq;
+  Int4        number, numb, iframe;
+
+  if (bsp == NULL || slp == NULL || count == NULL)
+    return;
+
+  while (slp != NULL)
+  {
+    if (slp->choice == SEQLOC_MIX)
+      slpThis = (SeqLocPtr) slp->data.ptrvalue;
+    else
+      slpThis = slp;
+    seq = (Uint1Ptr) MemNew (sizeof (Uint1));
+    while (slpThis != NULL)
+    {
+      start = SeqLocStart (slpThis);
+      stop = SeqLocStop (slpThis);
+      length = stop - start + 1;
+      sqq = sq = (Uint1Ptr) MemNew ((size_t) (sizeof (Uint1) * (length+1)));
+      if ((spp = SeqPortNew (bsp, start, stop, SeqLocStrand (slpThis),
+                             Seq_code_iupacna)) != NULL)
+      {
+        i = start;
+        chunk = 4096;
+        while (i <= stop)
+        {
+          SeqPortRead (spp, sq, (Int2) chunk);
+          sq += chunk;
+          i += chunk;
+        }
+        SeqPortFree (spp);
+      }
+      sqq[length] = 0;
+      seq = Realloc (seq, ((size_t) (sizeof (Uint1) * (length+1))));
+      StrCat ((CharPtr) seq, (CharPtr) sqq);
+      MemFree (sqq);
+      if (slp->choice == SEQLOC_MIX)
+        slpThis = slpThis->next;
+      else
+        slpThis = NULL;
+    }
+    numb = (Int4) pow (4, residues-1);
+    number = 0;
+    for (n = 0; n < residues-1; n++)
+    {
+      switch ((Char) seq[n])
+      {
+       case 'A':
+        number += 0;
+        break;
+/* standard code no contribution to start stop */
+       default:
+       case 'C':
+        number += 1;
+        break;
+       case 'G':
+        number += 2;
+        break;
+       case 'T':
+        number += 3;
+        break;
+      }
+      number *= 4;
+    }
+    iframe = residues;
+    iframe %= 3;
+    for (i = n; i < length; i++)
+    {
+      switch ((Char) seq[i])
+      {
+       case 'A':
+        number += 0;
+        break;
+/* standard code no contribution to start stop */
+       default:
+       case 'C':
+        number += 1;
+        break;
+       case 'G':
+        number += 2;
+        break;
+       case 'T':
+        number += 3;
+        break;
+      }
+      if (iframe == frame)
+        count[number]++;
+      number %= numb;
+      number *= 4;
+      iframe++;
+      iframe %= 3;
+    }
+    MemFree (seq);
+    slp = slp->next;
+  }
+  return;
+}
+
+static void Scan3Frames (BioseqPtr bsp, SeqLocPtr slp, Int4Ptr count0,
+                         Int4Ptr count1, Int4Ptr count2, Int4 residues)
+{
+  SeqLocPtr   slpThis;
+  SeqPortPtr  spp;
+  Int4        i, n, start, stop, length, chunk;
+  Uint1Ptr    seq, sq, sqq;
+  Int4        number, numb, iframe;
+
+  if (bsp == NULL || slp == NULL ||
+      count0 == NULL || count1 == NULL || count2 == NULL)
+    return;
+
+  while (slp != NULL)
+  {
+    if (slp->choice == SEQLOC_MIX)
+      slpThis = (SeqLocPtr) slp->data.ptrvalue;
+    else
+      slpThis = slp;
+    seq = (Uint1Ptr) MemNew (sizeof (Uint1));
+    while (slpThis != NULL)
+    {
+      start = SeqLocStart (slpThis);
+      stop = SeqLocStop (slpThis);
+/* try to include start and stop codons in freq count */
+      if (start-3 >= 0)
+        start -= 3;
+      if (stop+3 < bsp->length)
+        stop += 3;
+      length = stop - start + 1;
+      sqq = sq = (Uint1Ptr) MemNew ((size_t) (sizeof (Uint1) * (length+1)));
+      if ((spp = SeqPortNew (bsp, start, stop, SeqLocStrand (slpThis),
+                             Seq_code_iupacna)) != NULL)
+      {
+        i = start;
+        chunk = 4096;
+        while (i <= stop)
+        {
+          SeqPortRead (spp, sq, (Int2) chunk);
+          sq += chunk;
+          i += chunk;
+        }
+        SeqPortFree (spp);
+      }
+      sqq[length] = 0;
+      seq = Realloc (seq, ((size_t) (sizeof (Uint1) * (length+1))));
+      StrCat ((CharPtr) seq, (CharPtr) sqq);
+      MemFree (sqq);
+      if (slp->choice == SEQLOC_MIX)
+        slpThis = slpThis->next;
+      else
+        slpThis = NULL;
+    }
+    numb = (Int4) pow (4, residues-1);
+    number = 0;
+    for (n = 0; n < residues-1; n++)
+    {
+      switch ((Char) seq[n])
+      {
+       case 'A':
+        number += 0;
+        break;
+/* standard code no contribution to start stop */
+       default:
+       case 'C':
+        number += 1;
+        break;
+       case 'G':
+        number += 2;
+        break;
+       case 'T':
+        number += 3;
+        break;
+      }
+      number *= 4;
+    }
+    iframe = residues;
+    iframe %= 3;
+    for (i = n; i < length; i++)
+    {
+      switch ((Char) seq[i])
+      {
+       case 'A':
+        number += 0;
+        break;
+/* standard code no contribution to start stop */
+       default:
+       case 'C':
+        number += 1;
+        break;
+       case 'G':
+        number += 2;
+        break;
+       case 'T':
+        number += 3;
+        break;
+      }
+      switch (iframe)
+      {
+       case 0:
+        count0[number]++;
+        break;
+       case 1:
+        count1[number]++;
+        break;
+       case 2:
+        count2[number]++;
+        break;
+      }
+      number %= numb;
+      number *= 4;
+      iframe++;
+      iframe %= 3;
+    }
+    MemFree (seq);
+    slp = slp->next;
+  }
+  return;
+}
+
+extern FreqPtr ConKovCDSNtFreqs (BioseqPtr bsp, SeqLocPtr slp)
+{
+  FreqPtr frqp;
+  Int4    i, number;
+
+  if (bsp == NULL || slp == NULL)
+    return NULL;
+  if ((frqp = FreqNew ()) == NULL)
+    return NULL;
+
+  Scan3Frames (bsp, slp, frqp->frame0trip, frqp->frame1trip,
+               frqp->frame2trip, 9);
+
+  number = (Int4) pow (4, 9);
+  for (i = 0; i < number; i++)
+  {
+    if (frqp->frame0trip[i] != 0)
+    {
+      frqp->frame0leftdi[i/64] += frqp->frame0trip[i];
+      frqp->frame0rightdi[i%4096] += frqp->frame0trip[i];
+      frqp->frame0cdnobs[(i/64)%64] += frqp->frame0trip[i];
+    }
+    if (frqp->frame1trip[i] != 0)
+    {
+      frqp->frame1leftdi[i/64] += frqp->frame1trip[i];
+      frqp->frame1rightdi[i%4096] += frqp->frame1trip[i];
+      frqp->frame1cdnobs[(i/64)%64] += frqp->frame1trip[i];
+    }
+    if (frqp->frame2trip[i] != 0)
+    {
+      frqp->frame2leftdi[i/64] += frqp->frame2trip[i];
+      frqp->frame2rightdi[i%4096] += frqp->frame2trip[i];
+      frqp->frame2cdnobs[(i/64)%64] += frqp->frame2trip[i];
+    }
+  }
+
+  number = (Int4) pow (4, 6);
+  for (i = 0; i < number; i++)
+  {
+    if (frqp->frame0leftdi[i] == 0)
+      frqp->frame0leftdi[i] = 1;
+    if (frqp->frame1leftdi[i] == 0)
+      frqp->frame1leftdi[i] = 1;
+    if (frqp->frame2leftdi[i] == 0)
+      frqp->frame2leftdi[i] = 1;
+    if (frqp->frame0rightdi[i] == 0)
+      frqp->frame0rightdi[i] = 1;
+    if (frqp->frame1rightdi[i] == 0)
+      frqp->frame1rightdi[i] = 1;
+    if (frqp->frame2rightdi[i] == 0)
+      frqp->frame2rightdi[i] = 1;
+  }
+  number = (Int4) pow (4, 3);
+  for (i = 0; i < number; i++)
+  {
+    frqp->frame0cdn[i] = frqp->frame0cdnobs[i];
+    frqp->frame1cdn[i] = frqp->frame1cdnobs[i];
+    frqp->frame2cdn[i] = frqp->frame2cdnobs[i];
+    if (frqp->frame0cdn[i] == 0)
+      frqp->frame0cdn[i] = 1;
+    if (frqp->frame1cdn[i] == 0)
+      frqp->frame1cdn[i] = 1;
+    if (frqp->frame2cdn[i] == 0)
+      frqp->frame2cdn[i] = 1;
+  }
+
+  return frqp;
+}
+
+extern Boolean ConKovCDSGlobalNtFreqs (BioseqPtr bsp, FreqPtr frqp)
+{
+  SeqLocPtr slp1, slp2;
+  Int4      i, number;
+
+  if (bsp == NULL || frqp == NULL)
+    return FALSE;
+
+  slp1 = SeqLocIntNew (0, bsp->length-1, Seq_strand_plus, bsp->id);
+  slp2 = SeqLocIntNew (0, bsp->length-1, Seq_strand_minus, bsp->id);
+  if (slp1 == NULL || slp2 == NULL)
+  {
+    SeqLocFree (slp1);
+    SeqLocFree (slp2);
+    return FALSE;
+  }
+
+  Scan3Frames (bsp, slp1, frqp->globalcdnobs, frqp->globalcdnobs,
+               frqp->globalcdnobs, 3);
+  Scan3Frames (bsp, slp2, frqp->globalcdnobs, frqp->globalcdnobs,
+               frqp->globalcdnobs, 3);
+  SeqLocFree (slp1);
+  SeqLocFree (slp2);
+
+  number = (Int4) pow (4, 3);
+  for (i = 0; i < number; i++)
+  {
+    if (frqp->globalcdnobs[i] == 0)
+      frqp->globalcdnobs[i] = 1;
+  }
+
+  return TRUE;
+}
+
+extern FreqPtr ConKovTrainCDS (BioseqPtr bsp, SeqLocPtr slp)
+{
+  FreqPtr frqp;
+  Int4    residues, number, i, y, loop;
+
+  if (bsp == NULL || slp == NULL)
+    return NULL;
+
+  if ((frqp = ConKovCDSNtFreqs (bsp, slp)) != NULL)
+  {
+    residues = 6;
+    number = (Int4) pow (4, residues);
+    loop = 0;
+    for (i = 0; i < number; i++)
+    {
+      for (y = 0; y < number; y++)
+      {
+        if (i%64 == y/64)
+        {
+          frqp->frame0exp[loop] = (((FloatHi) frqp->frame0leftdi[i] *
+                                    (FloatHi) frqp->frame0rightdi[y]) /
+                                    (FloatHi) frqp->frame0cdn[i%64]);
+          frqp->frame1exp[loop] = (((FloatHi) frqp->frame1leftdi[i] *
+                                    (FloatHi) frqp->frame1rightdi[y]) /
+                                    (FloatHi) frqp->frame1cdn[i%64]);
+          frqp->frame2exp[loop] = (((FloatHi) frqp->frame2leftdi[i] *
+                                    (FloatHi) frqp->frame2rightdi[y]) /
+                                    (FloatHi) frqp->frame2cdn[i%64]);
+          loop++;
+        }
+      }
+    }
+    residues = 9;
+    number = (Int4) pow (4, residues);
+    for (i = 0; i < number; i++)
+    {
+      frqp->frame0std[i] = ((FloatHi) frqp->frame0trip[i] -
+                                      frqp->frame0exp[i]) /
+                            (FloatHi) sqrt (frqp->frame0exp[i]);
+      frqp->frame1std[i] = ((FloatHi) frqp->frame1trip[i] -
+                                      frqp->frame1exp[i]) /
+                            (FloatHi) sqrt (frqp->frame1exp[i]);
+      frqp->frame2std[i] = ((FloatHi) frqp->frame2trip[i] -
+                                      frqp->frame2exp[i]) /
+                            (FloatHi) sqrt (frqp->frame2exp[i]);
+    }
+  }
+  return frqp;
 }

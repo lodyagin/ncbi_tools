@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.0 $
+* $Revision: 6.1 $
 *
 * File Description:  Object manager interface for module NCBI-Seqres
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: objres.h,v $
+* Revision 6.1  1998/12/09 20:37:53  kans
+* changed compl to compr to avoid new c++ symbol collision
+*
 * Revision 6.0  1997/08/25 18:50:41  madden
 * Revision changed to 6.0
 *
@@ -103,7 +106,7 @@ typedef struct seqgraph {
     CharPtr titlex,
         titley;
     Uint1 flags[3];   /* [0]-comp used?,[1]-a,b used?, [2] graphtype */
-    Int4 compl;                       /* 1=real, 2=int, 3=byte */
+    Int4 compr;                       /* 1=real, 2=int, 3=byte */
     FloatHi a, b;
     Int4 numval;
     DataVal max,

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.4 $
+* $Revision: 6.6 $
 *
 * File Description: 
 *
@@ -497,7 +497,7 @@ static ValNodePtr TestCitsubDialog (DialoG d)
 }
 
 static CharPtr citsubTabs [] = {
-  "Names", "Affiliation", "Description", NULL, NULL
+  "Names", "Affiliation", "Contact", "Description", NULL, NULL
 };
 
 static void ChangeCitsubSubPage (VoidPtr data, Int2 newval, Int2 oldval)
@@ -549,20 +549,20 @@ extern DialoG CreateCitSubDialog (GrouP h, CharPtr title, CitSubPtr csp)
     m = HiddenGroup (s, -1, 0, NULL);
     SetGroupSpacing (m, 10, 10);
 
-    citsubTabs [3] = NULL;
+    citsubTabs [4] = NULL;
     if (csp != NULL) {
       if (csp->date != NULL) {
-        citsubTabs [3] = "Date";
+        citsubTabs [4] = "Date";
       } else if (csp->imp != NULL && csp->imp->date != NULL) {
-        citsubTabs [3] = "Date";
+        citsubTabs [4] = "Date";
       } else if (GetAppProperty ("InternalNcbiSequin") != NULL) {
-        citsubTabs [3] = "Date";
+        citsubTabs [4] = "Date";
       }
     }
     tbs = CreateFolderTabs (m, citsubTabs, 0, 0, 0,
                             PROGRAM_FOLDER_TAB,
                             ChangeCitsubSubPage, (Pointer) cpp);
-    citsubTabs [3] = NULL;
+    citsubTabs [4] = NULL;
     k = HiddenGroup (m, 0, 0, NULL);
 
     cpp->citsubGrp [0] = HiddenGroup (k, -1, 0, NULL);
@@ -570,19 +570,19 @@ extern DialoG CreateCitSubDialog (GrouP h, CharPtr title, CitSubPtr csp)
 
     cpp->affil = CreateExtAffilDialog (k, NULL,
                                        &(cpp->citsubGrp [1]),
-                                       &(cpp->citsubGrp [4]));
+                                       &(cpp->citsubGrp [2]));
 
-    cpp->citsubGrp [2] = HiddenGroup (k, 0, 2, NULL);
-    StaticPrompt (cpp->citsubGrp [2], "Description", 0, 0, programFont, 'c');
-    cpp->descr = ScrollText (cpp->citsubGrp [2], 30, 4, programFont, TRUE, NULL);
-    Hide (cpp->citsubGrp [2]);
-
-    cpp->citsubGrp [3] = HiddenGroup (k, -1, 0, NULL);
-    cpp->date = CreateDateDialog (cpp->citsubGrp [3], NULL);
+    cpp->citsubGrp [3] = HiddenGroup (k, 0, 2, NULL);
+    StaticPrompt (cpp->citsubGrp [3], "Description", 0, 0, programFont, 'c');
+    cpp->descr = ScrollText (cpp->citsubGrp [3], 30, 4, programFont, TRUE, NULL);
     Hide (cpp->citsubGrp [3]);
 
+    cpp->citsubGrp [4] = HiddenGroup (k, -1, 0, NULL);
+    cpp->date = CreateDateDialog (cpp->citsubGrp [4], NULL);
+    Hide (cpp->citsubGrp [4]);
+
     AlignObjects (ALIGN_CENTER, (HANDLE) tbs, (HANDLE) cpp->authors,
-                  (HANDLE) cpp->citsubGrp [2], (HANDLE) cpp->date,
+                  (HANDLE) cpp->citsubGrp [3], (HANDLE) cpp->date,
                   (HANDLE) cpp->affil, NULL);
   }
 
@@ -924,6 +924,7 @@ static void SubmitBlockPtrToSubmitForm (ForM f, Pointer data)
 static Pointer SubmitFormToSubmitBlockPtr (ForM f)
 
 {
+  CitSubPtr       csp;
   SubmitFormPtr   sbfp;
   SubmitBlockPtr  sbp;
 
@@ -936,6 +937,10 @@ static Pointer SubmitFormToSubmitBlockPtr (ForM f)
       sbp->cit = (CitSubPtr) DialogToPointer (sbfp->citsub);
       if (sbp->contact == NULL || sbp->cit == NULL) {
         sbp = SubmitBlockFree (sbp);
+      }
+      csp = sbp->cit;
+      if (csp->date == NULL) {
+        csp->date = DateCurr ();
       }
     }
   }
@@ -1101,11 +1106,54 @@ static Boolean ExportSubmitForm (ForM f, CharPtr filename)
   return FALSE;
 }
 
+static void CopyContactToCitAuthors (SubmitFormPtr sbfp)
+
+{
+  AuthListPtr     alp;
+  AuthorPtr       ap;
+  ContactInfoPtr  cip;
+  CitsubPagePtr   cpp;
+  ValNodePtr      names;
+
+  if (sbfp == NULL) return;
+  cpp = (CitsubPagePtr) GetObjectExtra (sbfp->citsub);
+  if (cpp == NULL) return;
+  cip = (ContactInfoPtr) DialogToPointer (sbfp->contact);
+  if (cip == NULL) return;
+  ap = NULL;
+  if (cip->contact != NULL) {
+    ap = (AuthorPtr) AsnIoMemCopy (cip->contact,
+                                   (AsnReadFunc) AuthorAsnRead,
+                                   (AsnWriteFunc) AuthorAsnWrite);
+  }
+  ContactInfoFree (cip);
+  if (ap == NULL) return;
+  alp = AuthListNew ();
+  if (alp != NULL) {
+    alp->choice = 1;
+    names = ValNodeNew (NULL);
+    alp->choice = 1;
+    alp->names = names;
+    if (names != NULL) {
+      names->choice = 1;
+      names->data.ptrvalue = ap;
+    }
+    if (ap == NULL) {
+      alp = AuthListFree (alp);
+    }
+    if (alp != NULL) {
+       PointerToDialog (cpp->authors, (Pointer) alp);
+    }
+  }
+  alp = AuthListFree (alp);
+}
+
 static void SetSubmitBlockImportExportItems (SubmitFormPtr sbfp)
 
 {
-  IteM  exportItm;
-  IteM  importItm;
+  CitSubPtr  csp;
+  IteM       exportItm;
+  IteM       importItm;
 
   if (sbfp != NULL) {
     importItm = FindFormMenuItem ((BaseFormPtr) sbfp, VIB_MSG_IMPORT);
@@ -1124,6 +1172,11 @@ static void SetSubmitBlockImportExportItems (SubmitFormPtr sbfp)
         SafeEnable (exportItm);
         break;
       case CITATION_PAGE :
+        csp = (CitSubPtr) DialogToPointer (sbfp->citsub);
+        if (csp == NULL) {
+          CopyContactToCitAuthors (sbfp);
+        }
+        CitSubFree (csp);
         SafeSetTitle (importItm, "Import Citation...");
         SafeSetTitle (exportItm, "Export Citation...");
         SafeEnable (importItm);

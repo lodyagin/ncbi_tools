@@ -1,5 +1,8 @@
 #!/bin/csh -f
 #
+# $Id: showmake.csh,v 1.2 1999/01/08 18:04:57 coremake Exp $
+#
+#
 # Show how to make the NCBI toolkit 
 #
 sed -f $NCBI/mk.csh.sed < $NCBI/ncbi.mk > ncbi.source.me

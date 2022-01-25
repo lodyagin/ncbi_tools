@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 11/3/93
 *
-* $Revision: 6.12 $
+* $Revision: 6.14 $
 *
 * File Description: Utilities for creating ASN.1 submissions
 *
@@ -40,6 +40,12 @@
 *
 *
 * $Log: subutil.c,v $
+* Revision 6.14  1998/12/09 20:38:25  kans
+* changed compl to compr to avoid new c++ symbol collision
+*
+* Revision 6.13  1998/10/02 17:48:11  kans
+* new parameters to AddAccessionToRefGeneTrackUserObject, and added CreateMrnaProteinLinkUserObject
+*
 * Revision 6.12  1998/09/23 16:41:48  kans
 * removed from and to from AddAccessionToRefGeneTrackUserObject
 *
@@ -3782,7 +3788,7 @@ static Boolean AddPhrapGraphInternal (
 		min = MIN (min, (Int2) val);
 	}
 	sgp->flags [0] = 0;
-	sgp->compl = 1;
+	sgp->compr = 1;
 	sgp->flags [1] = 0;
 	sgp->flags [2] = 3;
 	sgp->axis.intvalue = 0;
@@ -3881,7 +3887,10 @@ NLM_EXTERN UserObjectPtr CreateRefGeneTrackUserObject (void)
 }
 
 NLM_EXTERN void AddAccessionToRefGeneTrackUserObject (UserObjectPtr uop, CharPtr field,
-                                                      CharPtr accn, Int4 gi, CharPtr comment)
+                                                      CharPtr accn, Int4 gi,
+                                                      Boolean sequenceChange,
+                                                      Boolean annotationChange,
+                                                      CharPtr comment)
 
 {
   UserFieldPtr  curr;
@@ -3956,6 +3965,28 @@ NLM_EXTERN void AddAccessionToRefGeneTrackUserObject (UserObjectPtr uop, CharPtr
     last = ufp;
   }
 
+  if (sequenceChange) {
+    ufp = UserFieldNew ();
+    oip = ObjectIdNew ();
+    oip->str = StringSave ("sequenceChange");
+    ufp->label = oip;
+    ufp->choice = 4; /* Boolean */
+    ufp->data.boolvalue = sequenceChange;
+    last->next = ufp;
+    last = ufp;
+  }
+
+  if (annotationChange) {
+    ufp = UserFieldNew ();
+    oip = ObjectIdNew ();
+    oip->str = StringSave ("annotationChange");
+    ufp->label = oip;
+    ufp->choice = 4; /* Boolean */
+    ufp->data.boolvalue = annotationChange;
+    last->next = ufp;
+    last = ufp;
+  }
+
   if (comment != NULL && *comment != '\0') {
     ufp = UserFieldNew ();
     oip = ObjectIdNew ();
@@ -3966,5 +3997,36 @@ NLM_EXTERN void AddAccessionToRefGeneTrackUserObject (UserObjectPtr uop, CharPtr
     last->next = ufp;
     last = ufp;
   }
+}
+
+NLM_EXTERN UserObjectPtr CreateMrnaProteinLinkUserObject (BioseqPtr bsp)
+
+{
+  Char           buf [80];
+  ObjectIdPtr    oip;
+  SeqIdPtr       sip;
+  UserFieldPtr   ufp;
+  UserObjectPtr  uop;
+
+  if (bsp == NULL) return NULL;
+
+  uop = UserObjectNew ();
+  oip = ObjectIdNew ();
+  oip->str = StringSave ("MrnaProteinLink");
+  uop->type = oip;
+
+  sip = SeqIdFindBest (bsp->id, 0);
+  SeqIdWrite(sip, buf, PRINTID_FASTA_SHORT, 79);
+
+  ufp = UserFieldNew ();
+  oip = ObjectIdNew ();
+  oip->str = StringSave ("protein seqID");
+  ufp->label = oip;
+  ufp->choice = 1; /* visible string */
+  ufp->data.ptrvalue = (Pointer) StringSave (buf);
+
+  uop->data = ufp;
+
+  return uop;
 }
 

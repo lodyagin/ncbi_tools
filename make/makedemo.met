@@ -37,7 +37,7 @@ global ENCRYPTSOURCE
 
 global INCLUDEFILES
 global LIBRARIES
-global BUILDHERE
+global BUILDTEST
 
 global DOENCRYPT
 
@@ -48,7 +48,6 @@ with timeout of 60000 seconds
 	DoSetGlobals()
 	
 	CreateNENTREZ()
-	CreateNETENTCF()
 	
 	CreateSEQUIN()
 	CreateCn3D()
@@ -76,7 +75,7 @@ on DoSetGlobals()
 	tell application "Finder"
 		
 		set HARDDISK to startup disk as string
-		set METRO to HARDDISK & "Metrowerks:" as string
+		set METRO to HARDDISK & "CodeWarrior Pro 4:" as string
 		set METROWERKSCW to METRO & "Metrowerks CodeWarrior:" as string
 		
 		set NCBISOURCE to METRO & "ncbi:" as string
@@ -84,7 +83,7 @@ on DoSetGlobals()
 		
 		set INCLUDEFILES to NCBISOURCE & "include:" as string
 		set LIBRARIES to NCBISOURCE & "lib:" as string
-		set BUILDHERE to NCBISOURCE & "build:" as string
+		set BUILDTEST to NCBISOURCE & "build:" as string
 		
 		if (exists (folder ENCRYPTSOURCE)) then
 			set DOENCRYPT to "TRUE"
@@ -95,15 +94,11 @@ on DoSetGlobals()
 	end tell
 end DoSetGlobals
 
-on SetDefaultPreferences()
-	tell application "CodeWarrior IDE 3.0"
+on DoSetPPC()
+	tell application "CodeWarrior IDE 3.2"
 		
 		(* ===== Panel Target ===== *)
-		if MASTER = "PPC" then
-			Set Preferences of panel "Target Settings" to {Linker:"MacOS PPC Linker"}
-		else if MASTER = "68K" then
-			Set Preferences of panel "Target Settings" to {Linker:"MacOS 68K Linker"}
-		end if
+		Set Preferences of panel "Target Settings" to {Linker:"MacOS PPC Linker"}
 		
 		(* ===== Panel PowerPC Project =====  *)
 		Set Preferences of panel "PPC Project" to {Project Type:standard application}
@@ -139,17 +134,14 @@ on SetDefaultPreferences()
 		
 		(* ===== Panel PPC Processor =====  *)
 		Set Preferences of panel "PPC CodeGen" to Â
-			{Struct Alignment:PowerPC Â
-				, Make Strings ReadOnly:false Â
-				, Store Data in TOC:false Â
+			{Struct Alignment:Align_PPC Â
+				, Make Strings ReadOnly:true Â
+				, Store Data in TOC:true Â
 				, Use FMADD Instructions:false Â
 				, Use Profiler:false Â
-				, Traceback Tables:false Â
-				, Instruction Scheduling:off Â
-				, Optimize For Size:false Â
-				, Peephole Optimizer:false Â
-				, Global Optimization:false Â
-				, Optimization Level:1}
+				, Traceback Tables:TB_None Â
+				, Schedule:false Â
+				, Peephole Optimizer:false}
 		
 		(* ===== Panel PPC Linker ===== *)
 		Set Preferences of panel "PPC Linker" to Â
@@ -173,18 +165,55 @@ on SetDefaultPreferences()
 				, Expand Uninitialized Data:false Â
 				, Fragment Name:""}
 		
+		my DoSetPaths1()
+		
+	end tell
+end DoSetPPC
+
+on DoSet68K()
+	tell application "CodeWarrior IDE 3.2"
+		
+		(* ===== Panel Target ===== *)
+		Set Preferences of panel "Target Settings" to {Linker:"MacOS 68K Linker"}
+		
 		(* ===== Panel 68K Project =====  *)
 		Set Preferences of panel "68K Project" to {Project Type:standard application}
+		
+		(* ===== Panel C/C++ Language =====  *)
+		Set Preferences of panel "C/C++ Compiler" to Â
+			{Activate CPlusPlus:false Â
+				, ARM Conformance:false Â
+				, Exception Handling:true Â
+				, Inlining:inline_none Â
+				, RTTI:false Â
+				, Pool Strings:false Â
+				, Dont Reuse Strings:false Â
+				, Require Function Prototypes:true Â
+				, ANSI Strict:false Â
+				, ANSI Keywords Only:false Â
+				, Expand Trigraph Sequences:false Â
+				, MPW Newlines:false Â
+				, MPW Pointer Type Rules:false Â
+				, Enums Always Ints:false Â
+				, Prefix File:""}
+		
+		(* ===== Panel C/C++ Warnings ===== *)
+		Set Preferences of panel "C/C++ Warnings" to Â
+			{Treat Warnings As Errors:false Â
+				, Illegal Pragmas:true Â
+				, Empty Declarations:true Â
+				, Possible Errors:true Â
+				, Unused Variables:true Â
+				, Unused Arguments:false Â
+				, Extra Commas:true Â
+				, Extended Error Checking:true}
 		
 		(* ===== Panel 68K Processor =====  *)
 		Set Preferences of panel "68K CodeGen" to Â
 			{Code Model:large Â
-				, Struct Alignment:mc68k Â
+				, Struct Alignment:Align_68k Â
 				, MC68020 CodeGen:false Â
 				, Floating Point CodeGen:SANE Â
-				, Peephole Optimizer:false Â
-				, Enable Global Optimizations:false Â
-				, Optimize For Size:false Â
 				, PC Relative Strings:false Â
 				, Use Profiler:false Â
 				, Four Bytes Ints:true Â
@@ -206,13 +235,21 @@ on SetDefaultPreferences()
 				, Fast Link:true Â
 				, Merge Compiler Glue:false}
 		
-		my SetDefaultPaths1()
+		my DoSetPaths1()
 		
 	end tell
-end SetDefaultPreferences
+end DoSet68K
 
-on SetDefaultPaths1()
-	tell application "CodeWarrior IDE 3.0"
+on DoSetPreferences()
+	if MASTER = "PPC" then
+		my DoSetPPC()
+	else if MASTER = "68K" then
+		my DoSet68K()
+	end if
+end DoSetPreferences
+
+on DoSetPaths1()
+	tell application "CodeWarrior IDE 3.2"
 		
 		(* ===== Panel Access Paths ===== *)
 		-- We need to be able to move the default system compiler folder to the end of the list
@@ -224,25 +261,26 @@ on SetDefaultPaths1()
 		Set Preferences of panel "Access Paths" to {System Paths:{{name:INCLUDEFILES, recursive:false, origin:absolute}}} -- Added for speed
 		
 	end tell
-end SetDefaultPaths1
+end DoSetPaths1
 
-on SetDefaultPaths2()
-	tell application "CodeWarrior IDE 3.0"
+on DoSetPaths2()
+	tell application "CodeWarrior IDE 3.2"
 		
 		-- After we have added all paths, reinsert compiler default at end of list
 		Set Preferences of panel "Access Paths" to {System Paths:{{name:":MacOS Support:Headers:", recursive:true, origin:shell relative}}}
 		Set Preferences of panel "Access Paths" to {System Paths:{{name:":MacOS Support:Libraries:", recursive:true, origin:shell relative}}}
 		Set Preferences of panel "Access Paths" to {System Paths:{{name:":Metrowerks Standard Library:MSL C:", recursive:true, origin:shell relative}}}
 	end tell
-end SetDefaultPaths2
+end DoSetPaths2
 
 on AddLibraries()
-	tell application "CodeWarrior IDE 3.0"
+	tell application "CodeWarrior IDE 3.2"
 		
 		if MASTER = "PPC" then
 			Add Files {METROWERKSCW & "Metrowerks Standard Library:MSL C:Bin:MSL C.PPC.Lib"} To Segment 1
 			Add Files {METROWERKSCW & "Metrowerks Standard Library:MSL C:Bin:MSL SIOUX.PPC.Lib"} To Segment 1
 			Add Files {METROWERKSCW & "MacOS Support:Libraries:MacOS Common:InterfaceLib"} To Segment 1
+			Add Files {METROWERKSCW & "MacOS Support:Libraries:MacOS Common:NavigationLib"} To Segment 1
 			Add Files {METROWERKSCW & "MacOS Support:Libraries:MacOS Common:MathLib"} To Segment 1
 			Add Files {METROWERKSCW & "MacOS Support:Libraries:Runtime:Runtime PPC:MSL RuntimePPC.Lib"} To Segment 1
 		else if MASTER = "68K" then
@@ -250,31 +288,32 @@ on AddLibraries()
 			Add Files {METROWERKSCW & "Metrowerks Standard Library:MSL C:Bin:MSL C.68K Fa(4i_8d).Lib"} To Segment 1
 			Add Files {METROWERKSCW & "Metrowerks Standard Library:MSL C:Bin:MSL SIOUX.68K.Lib"} To Segment 1
 			Add Files {METROWERKSCW & "MacOS Support:Libraries:MacOS 68K:MacOS.lib"} To Segment 1
+			Add Files {METROWERKSCW & "MacOS Support:Libraries:MacOS 68K:MacOS Files:Navigation.far.o"} To Segment 1
 			Add Files {METROWERKSCW & "MacOS Support:Libraries:MacOS 68K:MathLib68K:MathLib68K (Model Far):MathLib68K Fa(4i_8d).Lib"} To Segment 1
 		end if
 	end tell
 end AddLibraries
 
 on CompilePrograms()
-	tell application "CodeWarrior IDE 3.0"
+	tell application "CodeWarrior IDE 3.2"
 		
-		open (BUILDHERE & "nentrez" & SUFFIX & ".µ")
+		open (BUILDTEST & "nentrez" & SUFFIX & ".µ")
 		Make Project
 		Close Project
 		
-		open (BUILDHERE & "netentcf" & SUFFIX & ".µ")
+		open (BUILDTEST & "sequin" & SUFFIX & ".µ")
 		Make Project
 		Close Project
 		
-		open (BUILDHERE & "sequin" & SUFFIX & ".µ")
+		open (BUILDTEST & "cn3d" & SUFFIX & ".µ")
 		Make Project
 		Close Project
 		
-		open (BUILDHERE & "powblast" & SUFFIX & ".µ")
+		open (BUILDTEST & "powblast" & SUFFIX & ".µ")
 		Make Project
 		Close Project
 		
-		open (BUILDHERE & "blastcl3" & SUFFIX & ".µ")
+		open (BUILDTEST & "blastcl3" & SUFFIX & ".µ")
 		Make Project
 		Close Project
 		
@@ -284,11 +323,11 @@ end CompilePrograms
 (* ==== This section populates the programs ==== *)
 
 on CreateNENTREZ()
-	tell application "CodeWarrior IDE 3.0"
+	tell application "CodeWarrior IDE 3.2"
 		
-		Create Project {BUILDHERE & "nentrez" & SUFFIX & ".µ"}
+		Create Project {BUILDTEST & "nentrez" & SUFFIX & ".µ"}
 		
-		my SetDefaultPreferences()
+		my DoSetPreferences()
 		Set Preferences of panel "C/C++ Compiler" to {Prefix File:"net.pfx"}
 		
 		if MASTER = "PPC" then
@@ -304,7 +343,7 @@ on CreateNENTREZ()
 		Set Preferences of panel "Access Paths" to {System Paths:{{name:LIBRARIES, origin:absolute}}}
 		Set Preferences of panel "Access Paths" to {System Paths:{{name:NCBISOURCE & "cdromlib:", origin:absolute}}}
 		Set Preferences of panel "Access Paths" to {System Paths:{{name:NCBISOURCE & "demo:", origin:absolute}}}
-		my SetDefaultPaths2()
+		my DoSetPaths2()
 		
 		set segmentCounter to 1
 		
@@ -340,64 +379,12 @@ on CreateNENTREZ()
 	end tell
 end CreateNENTREZ
 
-on CreateNETENTCF()
-	tell application "CodeWarrior IDE 3.0"
-		
-		Create Project {BUILDHERE & "netentcf" & SUFFIX & ".µ"}
-		
-		my SetDefaultPreferences()
-		Set Preferences of panel "C/C++ Compiler" to {Prefix File:"net.pfx"}
-		
-		if MASTER = "PPC" then
-			Set Preferences of panel "PPC Project" to {Project Type:standard application, File Name:"netentcf"}
-			Set Preferences of panel "PPC Project" to {SIZE Flags:22720, File Creator:"NCBI", File Type:"APPL"}
-			Set Preferences of panel "PPC Project" to {Preferred Size:5000, Minimum Size:5000, Stack Size:64}
-		else if MASTER = "68K" then
-			Set Preferences of panel "68K Project" to {Project Type:standard application, File Name:"netentcf"}
-			Set Preferences of panel "68K Project" to {SIZE Flags:22720, File Creator:"NCBI", File Type:"APPL"}
-			Set Preferences of panel "68K Project" to {Preferred Size:5000, Minimum Size:5000, Stack Size:64}
-		end if
-		
-		Set Preferences of panel "Access Paths" to {System Paths:{{name:LIBRARIES, origin:absolute}}}
-		Set Preferences of panel "Access Paths" to {System Paths:{{name:NCBISOURCE & "demo:", origin:absolute}}}
-		my SetDefaultPaths2()
-		
-		set segmentCounter to 1
-		
-		my AddLibraries()
-		
-		set segmentCounter to segmentCounter + 1
-		
-		Add Files (LIBRARIES & "ncbi" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "ncbiobj" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "ncbicdr" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "vibrant" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "ncbidesk" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "ncsasock" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "netcli" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "netentr" & SUFFIX) To Segment segmentCounter
-		Add Files (LIBRARIES & "vibnet" & SUFFIX) To Segment segmentCounter
-		
-		set segmentCounter to segmentCounter + 1
-		
-		Add Files (LIBRARIES & "ncbiNacc" & SUFFIX) To Segment segmentCounter
-		
-		set segmentCounter to segmentCounter + 1
-		
-		Add Files (NCBISOURCE & "demo:netentcf.c") To Segment segmentCounter
-		
-		Reset File Paths
-		Close Project
-		
-	end tell
-end CreateNETENTCF
-
 on CreateSEQUIN()
-	tell application "CodeWarrior IDE 3.0"
+	tell application "CodeWarrior IDE 3.2"
 		
-		Create Project {BUILDHERE & "sequin" & SUFFIX & ".µ"}
+		Create Project {BUILDTEST & "sequin" & SUFFIX & ".µ"}
 		
-		my SetDefaultPreferences()
+		my DoSetPreferences()
 		Set Preferences of panel "C/C++ Compiler" to {Prefix File:"net.pfx"}
 		
 		if MASTER = "PPC" then
@@ -413,7 +400,7 @@ on CreateSEQUIN()
 		Set Preferences of panel "Access Paths" to {System Paths:{{name:LIBRARIES, origin:absolute}}}
 		Set Preferences of panel "Access Paths" to {System Paths:{{name:NCBISOURCE & "cdromlib:", origin:absolute}}}
 		Set Preferences of panel "Access Paths" to {System Paths:{{name:NCBISOURCE & "sequin:", origin:absolute}}}
-		my SetDefaultPaths2()
+		my DoSetPaths2()
 		
 		set segmentCounter to 1
 		
@@ -461,11 +448,11 @@ on CreateSEQUIN()
 end CreateSEQUIN
 
 on CreateCn3D()
-	tell application "CodeWarrior IDE 3.0"
+	tell application "CodeWarrior IDE 3.2"
 		
-		Create Project {BUILDHERE & "cn3d" & SUFFIX & ".µ"}
+		Create Project {BUILDTEST & "cn3d" & SUFFIX & ".µ"}
 		
-		my SetDefaultPreferences()
+		my DoSetPreferences()
 		Set Preferences of panel "C/C++ Compiler" to {Prefix File:"net.pfx"}
 		
 		if MASTER = "PPC" then
@@ -481,7 +468,7 @@ on CreateCn3D()
 		Set Preferences of panel "Access Paths" to {System Paths:{{name:LIBRARIES, origin:absolute}}}
 		Set Preferences of panel "Access Paths" to {System Paths:{{name:NCBISOURCE & "cdromlib:", origin:absolute}}}
 		Set Preferences of panel "Access Paths" to {System Paths:{{name:NCBISOURCE & "cn3d:", origin:absolute}}}
-		my SetDefaultPaths2()
+		my DoSetPaths2()
 		
 		set segmentCounter to 1
 		
@@ -518,11 +505,11 @@ on CreateCn3D()
 end CreateCn3D
 
 on CreatePOWBLAST()
-	tell application "CodeWarrior IDE 3.0"
+	tell application "CodeWarrior IDE 3.2"
 		
-		Create Project {BUILDHERE & "powblast" & SUFFIX & ".µ"}
+		Create Project {BUILDTEST & "powblast" & SUFFIX & ".µ"}
 		
-		my SetDefaultPreferences()
+		my DoSetPreferences()
 		Set Preferences of panel "C/C++ Compiler" to {Prefix File:""}
 		
 		if MASTER = "PPC" then
@@ -537,7 +524,7 @@ on CreatePOWBLAST()
 		
 		Set Preferences of panel "Access Paths" to {System Paths:{{name:LIBRARIES, origin:absolute}}}
 		Set Preferences of panel "Access Paths" to {System Paths:{{name:NCBISOURCE & "demo:", origin:absolute}}}
-		my SetDefaultPaths2()
+		my DoSetPaths2()
 		
 		set segmentCounter to 1
 		
@@ -569,11 +556,11 @@ on CreatePOWBLAST()
 end CreatePOWBLAST
 
 on CreateBLASTCL3()
-	tell application "CodeWarrior IDE 3.0"
+	tell application "CodeWarrior IDE 3.2"
 		
-		Create Project {BUILDHERE & "blastcl3" & SUFFIX & ".µ"}
+		Create Project {BUILDTEST & "blastcl3" & SUFFIX & ".µ"}
 		
-		my SetDefaultPreferences()
+		my DoSetPreferences()
 		Set Preferences of panel "C/C++ Compiler" to {Prefix File:""}
 		
 		if MASTER = "PPC" then
@@ -588,7 +575,7 @@ on CreateBLASTCL3()
 		
 		Set Preferences of panel "Access Paths" to {System Paths:{{name:LIBRARIES, origin:absolute}}}
 		Set Preferences of panel "Access Paths" to {System Paths:{{name:NCBISOURCE & "network:blast3:client:", origin:absolute}}}
-		my SetDefaultPaths2()
+		my DoSetPaths2()
 		
 		set segmentCounter to 1
 		

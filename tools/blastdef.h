@@ -31,8 +31,23 @@ Contents: #defines and definitions for structures used by BLAST.
 
 ******************************************************************************/
 
-/* $Revision: 6.38 $ */
+/* $Revision: 6.43 $ */
 /* $Log: blastdef.h,v $
+/* Revision 6.43  1999/01/05 13:57:19  madden
+/* Changed version and release date
+/*
+ * Revision 6.42  1998/12/31 18:17:03  madden
+ * Added strand option
+ *
+ * Revision 6.41  1998/12/29 17:45:06  madden
+ * Add do_sum_stats flag
+ *
+ * Revision 6.40  1998/12/21 13:09:53  madden
+ * Changed version and release date
+ *
+ * Revision 6.39  1998/11/04 01:36:05  egorov
+ * Add support for entrez-query and org-name to blast3
+ *
  * Revision 6.38  1998/09/16 18:58:57  madden
  * Changed release number and date
  *
@@ -512,8 +527,8 @@ extern "C" {
 #include <gapxdrop.h>
 
 /* the version of BLAST. */
-#define BLAST_ENGINE_VERSION "2.0.6"
-#define BLAST_RELEASE_DATE "Sept-16-1998"
+#define BLAST_ENGINE_VERSION "2.0.8"
+#define BLAST_RELEASE_DATE "Jan-05-1999"
 
 /* Defines for program numbers. (Translated in BlastGetProgramNumber). */
 #define blast_type_undefined 0
@@ -522,6 +537,11 @@ extern "C" {
 #define blast_type_blastx 3
 #define blast_type_tblastn 4
 #define blast_type_tblastx 5
+
+/* defines for strand_option, determines which strand of query to compare. */
+#define BLAST_TOP_STRAND 1
+#define BLAST_BOTTOM_STRAND 2
+#define BLAST_BOTH_STRAND 3
 
 /* Defines that specify whether or not BLAST should delete some memory, or
 	leave it up to the caller.
@@ -630,6 +650,7 @@ typedef struct _blast_optionsblk {
 	Int2	number_of_cpus;	/* How many CPU's. */
 	CharPtr matrix;		/* name of matrix to use. */
 	Boolean old_stats; /* Use old stats (option may disappear later) */
+	Boolean do_sum_stats;   /* Should sum statistics be used? */
 	Boolean use_large_gaps; /* Use only large gaps for linking HSP's with sum stats. */
 	Int2	wordsize;	/* size of word used to find hits. */
 	Int2	penalty, reward; /* penalty and reward, only for blastn */
@@ -674,6 +695,9 @@ typedef struct _blast_optionsblk {
 		are set to zero, then the entire database is examined. */
 	Int4		first_db_seq,		/* 1st sequence in db to be compared. */
 			final_db_seq;		/* Final sequence to be compared. */
+	CharPtr		entrez_query;	/* user specified Entrez query to make selection from databases */
+	CharPtr		org_name;	/* user specified name of organizm;  corresponding .gil file will be used */
+	Uint1		strand_option;	/* BLAST_TOP_STRAND, BLAST_BOTTOM_STRAND, or BLAST_BOTH_STRAND.  used by blast[nx] and tblastx */
 	} BLAST_OptionsBlk, PNTR BLAST_OptionsBlkPtr;
 
 /****************************************************************************
@@ -719,6 +743,7 @@ typedef struct _blast_parameterblk {
 	Nlm_FloatHi	gap_decay_rate; /* prob. of only one HSP */
 	Int2		process_num;	/* max # processrs permitted (for MP).*/
 	Boolean		old_stats;	/* Use "old" stats if TRUE. */
+	Boolean 	do_sum_stats;   /* Should sum statistics be used? */
 	Boolean         use_large_gaps; /* Use only large gaps for linking HSP's with sum stats. */
 	Boolean		two_pass_method; /* should two passes be used? */
 	Boolean		multiple_hits_only; /* Only the multiple hits alg. used. */

@@ -1,4 +1,4 @@
-/*  $Id: cn3dentr.h,v 6.0 1997/08/25 18:13:29 madden Exp $
+/*  $Id: cn3dentr.h,v 6.1 1999/01/14 19:07:16 kans Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,6 +32,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cn3dentr.h,v $
+* Revision 6.1  1999/01/14 19:07:16  kans
+* network availability is configurable
+*
 * Revision 6.0  1997/08/25 18:13:29  madden
 * Revision changed to 6.0
 *
@@ -67,7 +70,7 @@ NLM_EXTERN void   LIBCALL Cn3D_SetQueryCallback(BeepHook, VoidPtr);
 
 /* Create CN3D window with some Entrez specifics;  return the created WindoW
  */
-NLM_EXTERN Handle LIBCALL Cn3DWin_Entrez(void);
+NLM_EXTERN Handle LIBCALL Cn3DWin_Entrez(ItmActnProc netconfig, Boolean usingEntrez);
 
 #ifdef __cplusplus
 }

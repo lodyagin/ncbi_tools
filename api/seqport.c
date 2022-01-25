@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/13/91
 *
-* $Revision: 6.5 $
+* $Revision: 6.10 $
 *
 * File Description:  Ports onto Bioseqs
 *
@@ -39,6 +39,21 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: seqport.c,v $
+* Revision 6.10  1998/12/14 20:56:25  kans
+* dnaLoc_to_aaLoc takes allowTerminator parameter to handle stop codons created by polyA tail
+*
+* Revision 6.9  1998/11/18 14:17:05  kans
+* fix to take curpos into account on bottom strand (Kuzio found problem)
+*
+* Revision 6.8  1998/11/16 17:20:30  kans
+* nextBase in codon fsa is Uint1, cast state array index to int in macros
+*
+* Revision 6.7  1998/11/14 00:30:20  kans
+* added TransTableInit and macros for 6-frame translation and orf-finding finite state machine
+*
+* Revision 6.6  1998/11/05 17:33:16  kans
+* curpos was not being incremented for virtual sequence (Joel found this)
+*
 * Revision 6.5  1998/09/25 19:47:31  kans
 * added SeqPortQuickGetResidue and support functions, currently 2na or 4na to iupacna, later 2na to 4na
 *
@@ -1205,8 +1220,8 @@ static Uint1 SeqPortQuickGetResidue (SeqPortPtr spp, SPCacheQPtr spcpq, Boolean 
           }
         }
       } else {
-        if (pos == (spp->stop / (Int4) (spp->bc))) {
-          diff = (spp->stop + 1) % (Int4) (spp->bc);
+        if (pos == (curpos / (Int4) (spp->bc))) {
+          diff = (curpos + 1) % (Int4) (spp->bc);
           if (diff > 0) {
             spcpq->total -= (Int4) (spp->bc) - diff;
           }
@@ -1411,6 +1426,7 @@ byte */
         }
         else
         {
+			spp->curpos++;
             return SEQPORT_VIRT;
         }
     }
@@ -1659,6 +1675,7 @@ NLM_EXTERN ByteStorePtr ProteinFromCdRegionEx(SeqFeatPtr sfp, Boolean include_st
 		return NULL;
 
 	crp = (CdRegionPtr) sfp->data.value.ptrvalue;
+	len = SeqLocLen(sfp->location);
 
 	num_code_break = 0;
 	if (crp->code_break != NULL)
@@ -1690,7 +1707,9 @@ SEQLOC_STOP);
 				if (pos > pos2)
 					pos2 = pos;
 			}
-			if ((pos2 - pos1) == 2)   /*  a codon */
+			pos = pos2 - pos1; /* codon length */
+			if (pos == 2 || (pos >= 0 && pos <= 1 && pos2 == len - 1))   /*  a codon */
+			/* allowing a partial codon at the end */
 			{
 				the_breaks[num_code_break] = pos1;
 				the_residues[num_code_break] = (Uint1) 
@@ -1769,7 +1788,7 @@ starts */
 	if (spp == NULL)
 		goto erret;
 
-	len = SeqLocLen(sfp->location);    /* size of coding region */
+	/* len = SeqLocLen(sfp->location); - saved above */    /* size of coding region */
 	len /= 3;						   /* size of 
 protein */
 	len += 1;						   /* allow 
@@ -2560,7 +2579,7 @@ Boolean first));
 *
 ******************************************************************/
 NLM_EXTERN SeqLocPtr LIBCALL dnaLoc_to_aaLoc(SeqFeatPtr sfp, SeqLocPtr dna_loc, Boolean 
-merge, Int4Ptr frame)
+merge, Int4Ptr frame, Boolean allowTerminator)
 {
 	SeqLocPtr aa_loc = NULL, loc;
 	CdRegionPtr crp;
@@ -2624,7 +2643,7 @@ codons */
 */
 			}
 
-			if (aa_from <= aa_to)
+			if (aa_from <= aa_to || (allowTerminator && aa_from == aa_to + 1))
 			{
 				if(loc != NULL)
 				{
@@ -3157,3 +3176,155 @@ NLM_EXTERN SPCompressPtr SPCompressDNA(SeqPortPtr spp)
   spc->type = Seq_code_ncbi2na;
   return spc;
 }
+
+/*****************************************************************************
+*
+*   TransTableInit (TransTable PNTR tbl, Int2 genCode);
+*       Initializes TransTable finite state machine for 6-frame translation
+*       and open reading frame search
+*
+*****************************************************************************/
+
+static Boolean SetGenCode (Int2 genCode, CharPtr PNTR ncbieaa, CharPtr PNTR sncbieaa)
+
+{
+  GeneticCodePtr  codes;
+  GeneticCodePtr  gcp;
+  Int4            id;
+  ValNodePtr      vnp;
+
+  if (ncbieaa == NULL || sncbieaa == NULL) return FALSE;
+
+  if (genCode == 7) {
+    genCode = 4;
+  } else if (genCode == 8) {
+    genCode = 1;
+  } else if (genCode == 0) {
+    genCode = 1;
+  }
+
+  codes = GeneticCodeTableLoad ();
+  if (codes == NULL) return FALSE;
+  for (gcp = codes; gcp != NULL; gcp = gcp->next) {
+    id = 0;
+    *ncbieaa = NULL;
+    *sncbieaa = NULL;
+    for (vnp = (ValNodePtr) gcp->data.ptrvalue; vnp != NULL; vnp = vnp->next) {
+      switch (vnp->choice) {
+        case 2 :
+          id = vnp->data.intvalue;
+          break;
+        case 3 :
+          *ncbieaa = (CharPtr) vnp->data.ptrvalue;
+          break;
+        case 6 :
+          *sncbieaa = (CharPtr) vnp->data.ptrvalue;
+          break;
+        default :
+          break;
+      }
+    }
+    if (genCode == id) return TRUE;
+  }
+
+  return FALSE;
+}
+
+#define BASE_A    0
+#define BASE_C    1
+#define BASE_G    2
+#define BASE_T    3
+#define BASE_N    4
+
+NLM_EXTERN Boolean TransTableInit (TransTable PNTR tbl, Int2 genCode)
+
+{
+  Int2     i, j, k, st, nx, cd;
+  Int2     codonidx [4] = {2, 1, 3, 0};  /* in genetic code table, T = 0, C = 1, A = 2, G = 3, */
+  Int2     complidx [4] = {0, 3, 1, 2};  /* and index = (base1 * 16) + (base2 * 4) + base3 */
+  CharPtr  ncbieaa = NULL, sncbieaa = NULL;
+
+  if (tbl == NULL) return FALSE;
+  MemSet ((Pointer) tbl, 0, sizeof (TransTable));
+
+  if ((! SetGenCode (genCode, &ncbieaa, &sncbieaa)) || ncbieaa == NULL || sncbieaa == NULL) {
+    ncbieaa = "FFLLSSSSYY**CC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG";
+    sncbieaa = "---M---------------M---------------M----------------------------";
+  }
+
+  /* table to convert any ASCII character to BASE_x integer from 0 through 4 */
+  for (i = 0; i < 256; i++) {
+    tbl->basesToIdx [i] = BASE_N;
+  }
+  tbl->basesToIdx [(int) 'A'] = BASE_A;
+  tbl->basesToIdx [(int) 'C'] = BASE_C;
+  tbl->basesToIdx [(int) 'G'] = BASE_G;
+  tbl->basesToIdx [(int) 'T'] = BASE_T;
+
+  /* add tbl->basesToIdx [(int) ch] to tbl->nextBase [state] to get next state */
+
+  /* state 0 is original state */
+  tbl->nextBase [0] = 1;
+
+  /* states 1 through 5 are single letter states (A, C, G, T, N) */
+  for (i = 0, st = 1, nx = 6; i < 5; i++, st++, nx += 5) {
+    tbl->nextBase [st] = nx;
+  }
+
+  /* states 6 through 30 are double letter states (AA, AC, ..., NT, NN) */
+  for (i = 0, st = 6, nx = 31; i < 5; i++) {
+    for (j = 0; j < 5; j++, st++, nx += 5) {
+      tbl->nextBase [st] = nx;
+    }
+  }
+
+  /* states 31 through 155 are triple letter states (AAA, AAC, ..., NNT, NNN) */
+  for (i = 0, st = 31; i < 5; i++) {
+    for (j = 0, nx = 31; j < 5; j++) {
+      for (k = 0; k < 5; k++, st++, nx += 5) {
+        tbl->nextBase [st] = nx;
+      }
+    }
+  }
+
+  /* tbl->aminoAcid [state] [strand] contains amino acid encoded by state */
+
+  /* single and double letter states do not represent a complete codon */
+  for (st = 0; st < 31; st++) {
+    tbl->aminoAcid [st] [TOP_STRAND] = '\0';
+    tbl->aminoAcid [st] [BOT_STRAND] = '\0';
+    tbl->orfStart [st] [TOP_STRAND] = FALSE;
+    tbl->orfStart [st] [BOT_STRAND] = FALSE;
+  }
+
+  /* initialize remaining states to return unknown amino acid X */
+  for (st = 31; st < 156; st++) {
+    tbl->aminoAcid [st] [TOP_STRAND] = 'X';
+    tbl->aminoAcid [st] [BOT_STRAND] = 'X';
+    tbl->orfStart [st] [TOP_STRAND] = FALSE;
+    tbl->orfStart [st] [BOT_STRAND] = FALSE;
+  }
+
+  /* lookup amino acid for each codon in genetic code table */
+  for (i = 0, st = 31; i < 4; i++, st += 5) {
+    for (j = 0; j < 4; j++, st++) {
+      for (k = 0; k < 4; k++, st++) {
+        /* st = 25 * i + 5 * j + k + 31; */
+
+        /* lookup amino acid for codon IJK */
+        cd = 16 * codonidx [i] + 4 * codonidx [j] + codonidx [k];
+        tbl->aminoAcid [st] [TOP_STRAND] = ncbieaa [cd];
+        tbl->orfStart [st] [TOP_STRAND] = (Boolean) (sncbieaa [cd] != '-');
+
+        /* lookup amino acid for complement of reversed KJI */
+        cd = 16 * complidx [k] + 4 * complidx [j] + complidx [i];
+        tbl->aminoAcid [st] [BOT_STRAND] = ncbieaa [cd];
+        tbl->orfStart [st] [BOT_STRAND] = (Boolean) (sncbieaa [cd] != '-');
+      }
+    }
+  }
+
+  /* finite state machine for 6-frame translation and ORF search is now initialized */
+  return TRUE;
+}
+

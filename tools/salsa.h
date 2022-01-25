@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.21 $
+* $Revision: 6.25 $
 *
 * File Description: 
 *
@@ -50,6 +50,8 @@
 #include <objmgr.h>
 #include <objfdef.h>
 #include <gather.h>
+
+#define COMPSEG           6
 
 #define TypeEmpty         0
 #define TypeSeqInt        1 
@@ -92,24 +94,22 @@
 #define SEQ_NUM2          2
 
 #define SALSA_ND          0
-#define SALSA_GBFF        1
-#define SALSA_GBFFG       2
-#define SALSA_FASTA       3
-#define SALSA_FASTGAP     4
-#define SALSA_IDS         5
-#define SALSA_MASE        6
-#define SALSA_ASN1        7
-#define SALSA_SHWTXT      8 
-#define SALSA_PAUP        9
-#define SALSAA_FASTGAP   10 
-#define SALSA_PHYLIP     11
+#define SALSA_FASTA       1  
+#define SALSA_ASN1        2 
+#define SALSA_CONTIGUOUS  3 
+#define SALSA_FASTGAP     4 
+#define SALSA_PAUP        5 
+#define SALSA_MACAW       6
+#define SALSA_INTERLEAVE  7 
+#define SALSA_NEXUS       8 
+#define SALSA_PHYLIP      9 
+#define SALSA_SHWTXT     10 
+#define SALSAA_FASTA     11 
 #define SALSAA_PHYLIP    12
-#define SALSAA_FASTA     13 
-#define SALSA_MACAW      15
-#define SALSA_CLUSTALV   16
-#define SALSA_NEXUS      17
-#define SALSAA_NEXUS     18
-#define SALSAA_GCG       19 
+#define SALSA_CLUSTALV   13
+#define SALSAA_FASTGAP   14 
+#define SALSAA_NEXUS     15
+#define SALSAA_GCG       16 
 
 #define PRG_ANYALIGN      0
 #define PRG_FASTA_IMPORT  1 
@@ -152,12 +152,6 @@
 /******************************
 **  Types define  
 *******************************/
-typedef struct editcell
-{
-	Uint1 r, g, b;
-}
-EditCell, PNTR EditCellPtr;
-
 typedef struct seledstruct 
 {
         Boolean    dirty;
@@ -278,7 +272,6 @@ typedef struct editaligndata {
   Int2            charw;
   Int2            lineheight;
   Uint4           colorRefs[256];
-  EditCell        col[10];
   Int2            popcolor[10];
   Int2            scaleheight;      /* scale height= 2 x lineheight */
   Int2            interline;        /* space between lines          */
@@ -297,10 +290,6 @@ typedef struct editaligndata {
   Int2            editbuffer;       /* length of edit buffer        */
   Int4Ptr         colonne;          /* seq position in the buffer   */
  
-  /*  set colors */
-
-  ValNodePtr      copyalign;
-
   /*   visible part of the buffer - buffer coordinates */
 
   Int2            visibleWidth;     /* alignt length per line in Panel*/
@@ -331,7 +320,7 @@ typedef struct editaligndata {
   Int4            start_select;
   Uint1           click_feat;
   Uint1           clickwhat;
-  Boolean         ondrag;
+  Uint1           mouse_mode;
   DenseDiagPtr    select_block;
   SelStruct       caret;            /* cursor within alignment */
   Uint2           caret_line;

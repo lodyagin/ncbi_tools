@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 1/1/94
 *
-* $Revision: 6.38 $
+* $Revision: 6.48 $
 *
 * File Description:  Sequence editing utilities
 *
@@ -39,6 +39,36 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: valid.c,v $
+* Revision 6.48  1999/01/05 23:20:50  kans
+* SpliceCheckEx does not check exon junction if partial
+*
+* Revision 6.47  1998/12/14 22:27:28  kans
+* CdTransCheck now deals with termination by polyA
+*
+* Revision 6.46  1998/12/07 20:00:56  kans
+* meant to set bcp = NULL, not bsp = NULL, crashed with segmented protein
+*
+* Revision 6.45  1998/10/26 20:57:45  kans
+* check gene and prot db fields for IllegalDbXref
+*
+* Revision 6.44  1998/10/23 15:25:57  kans
+* added FarLocation warning
+*
+* Revision 6.43  1998/10/22 16:05:57  kans
+* removed labeltype parameter from SeqMgrIndexFeatures, changed index parameter/field to Uint2
+*
+* Revision 6.42  1998/10/21 14:32:11  kans
+* on invalid feature for bioseq, restore itemid itemid and itemtype to avoid weird(er) click association - need to rewrite valid with new index functions, which will give proper items
+*
+* Revision 6.41  1998/10/20 20:18:10  kans
+* mRNA feature is invalid on an mRNA (cDNA) bioseq
+*
+* Revision 6.40  1998/10/20 18:12:54  kans
+* invalid for type (e.g., intron on mRNA) now coerces gcp to have feature itemtype, itemID for selection
+*
+* Revision 6.39  1998/10/15 17:29:18  kans
+* import feature of mat_, sig_, and transit_peptide now flagged as invalid for type
+*
 * Revision 6.38  1998/09/22 13:12:01  kans
 * locationFilter parameter to explore features function
 *
@@ -645,7 +675,7 @@ NLM_EXTERN Boolean ValidateSeqEntry(SeqEntryPtr sep, ValidStructPtr vsp)
 
 			/* do not trust SeqMgrFeaturesAreIndexed time, always reindex */
 
-			SeqMgrIndexFeatures (entityID, NULL, OM_LABEL_CONTENT);
+			SeqMgrIndexFeatures (entityID, NULL);
 		}
 
       	GatherSeqEntry(sep, (Pointer)vsp, Valid1GatherProc, &gs);
@@ -1234,7 +1264,7 @@ static void ValidateBioseqInst (GatherContextPtr gcp)
 		vsp->bsp_partial_val = SeqLocPartialCheck((SeqLocPtr)(&head));
 		if ((vsp->bsp_partial_val) && (ISA_aa(bsp->mol)))
 		{
-			bsp = NULL;
+			bcp = NULL;
 			vnp = NULL;
 			got_partial = FALSE;
 			if (vsp->useSeqMgrIndexes) {
@@ -1596,12 +1626,26 @@ typedef struct bioseqvalid {
 *
 *****************************************************************************/
 static Boolean ValidateSeqFeatCommon (SeqFeatPtr sfp, BioseqValidStrPtr bvsp, ValidStructPtr vsp,
-                                      Int4 left, Int4 right)
+                                      Int4 left, Int4 right, Uint2 featitemid, Boolean farloc)
 {
+	GatherContextPtr gcp = NULL;
 	ImpFeatPtr ifp;
+	Uint2 olditemtype;
+	Uint2 olditemid;
+	RnaRefPtr rrp;
 
 	vsp->descr = NULL;
 	vsp->sfp = sfp;
+
+	if (featitemid > 0) {
+		gcp = vsp->gcp;
+		if (gcp != NULL) {
+			olditemid = gcp->itemID;
+			olditemtype = gcp->thistype;
+			gcp->itemID = featitemid;
+			gcp->thistype = OBJ_SEQFEAT;
+		}
+	}
 
 	if (bvsp->is_aa)
 	{
@@ -1641,6 +1685,12 @@ static Boolean ValidateSeqFeatCommon (SeqFeatPtr sfp, BioseqValidStrPtr bvsp, Va
 
 	if (bvsp->is_mrna) {
 		switch (sfp->data.choice) {
+			case SEQFEAT_RNA:
+				rrp = (RnaRefPtr) sfp->data.value.ptrvalue;
+				if (rrp != NULL && rrp->type == 2) {
+					ValidErr(vsp, SEV_ERROR, ERR_SEQ_FEAT_InvalidForType, "mRNA feature is invalid on an mRNA (cDNA) Bioseq.");
+				}
+				break;
 			case SEQFEAT_IMP:
 				ifp = (ImpFeatPtr) sfp->data.value.ptrvalue;
 				if (ifp != NULL && ifp->key != NULL && (! HasNoText (ifp->key))) {
@@ -1668,10 +1718,19 @@ static Boolean ValidateSeqFeatCommon (SeqFeatPtr sfp, BioseqValidStrPtr bvsp, Va
 		}
 	}
 
+	if (farloc) {
+		ValidErr(vsp, SEV_WARNING, ERR_SEQ_FEAT_FarLocation, "Feature has 'far' location - accession not packaged in record");
+	}
+
 	if ((sfp->data.choice == SEQFEAT_PUB) ||
 		(sfp->cit != NULL))
 		bvsp->got_a_pub = TRUE;
 
+
+	if (gcp != NULL) {
+		gcp->itemID = olditemid;
+		gcp->thistype = olditemtype;
+	}
 
 	return TRUE;
 }
@@ -1684,7 +1743,7 @@ static Boolean LIBCALLBACK ValidateSeqFeatIndexed (SeqFeatPtr sfp, SeqMgrFeatCon
 	bvsp = (BioseqValidStrPtr) context->userdata;
 	vsp = bvsp->vsp;
 
-	return ValidateSeqFeatCommon (sfp, bvsp, vsp, context->left, context->right);
+	return ValidateSeqFeatCommon (sfp, bvsp, vsp, context->left, context->right, context->itemID, context->farloc);
 }
 
 static void ValidateSeqFeatContext (GatherContextPtr gcp)
@@ -1697,7 +1756,7 @@ static void ValidateSeqFeatContext (GatherContextPtr gcp)
 	vsp = bvsp->vsp;
 	sfp = (SeqFeatPtr)(gcp->thisitem);
 
-	ValidateSeqFeatCommon (sfp, bvsp, vsp, gcp->extremes.left, gcp->extremes.right);
+	ValidateSeqFeatCommon (sfp, bvsp, vsp, gcp->extremes.left, gcp->extremes.right, 0, FALSE);
 }
 
 /*****************************************************************************
@@ -2331,6 +2390,12 @@ static void ValidateImpFeat (ValidStructPtr vsp, GatherContextPtr gcp, SeqFeatPt
       ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_UnknownImpFeatKey, "NULL feature key");
     }
   }
+  if (StringICmp (key, "mat_peptide") == 0 ||
+      StringICmp (key, "sig_peptide") == 0 ||
+      StringICmp (key, "transit_peptide") == 0) {
+    ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_InvalidForType,
+              "Peptide processing feature should be converted to the appropriate protein feature subtype");
+  }
   for (gbqual = sfp->qual; gbqual != NULL; gbqual = gbqual->next) {
     if (StringCmp (gbqual->qual, "gsdb_id") == 0) {
       continue;
@@ -2618,6 +2683,22 @@ NLM_EXTERN void ValidateSeqFeat( GatherContextPtr gcp)
 			  	ValidErr(vsp, SEV_WARNING, ERR_SEQ_FEAT_GeneRefHasNoData,
 				        "There is a gene feature where all fields are empty");
 			  }
+			for (vnp = grp->db; vnp != NULL; vnp = vnp->next) {
+				id = -1;
+				db = vnp->data.ptrvalue;
+				if (db && db->db) {
+					for (i =0; i < DBNUM; i++) {
+						if (StringCmp(db->db, dbtag[i]) == 0) {
+							id = i;
+							break;
+						}
+					}
+					if (id == -1 || (type != SEQFEAT_CDREGION && id < 4)) {
+						ValidErr(vsp, SEV_WARNING, ERR_SEQ_FEAT_IllegalDbXref,
+							     "Illegal db_xref type %s", db->db);
+					}
+				}
+			}
 			}
 			break;
 		case 2:        /* Org-ref */
@@ -2713,6 +2794,22 @@ NLM_EXTERN void ValidateSeqFeat( GatherContextPtr gcp)
 					"There is a protein feature where all fields are empty");
 			    }
 			  }
+			for (vnp = prp->db; vnp != NULL; vnp = vnp->next) {
+				id = -1;
+				db = vnp->data.ptrvalue;
+				if (db && db->db) {
+					for (i =0; i < DBNUM; i++) {
+						if (StringCmp(db->db, dbtag[i]) == 0) {
+							id = i;
+							break;
+						}
+					}
+					if (id == -1 || (type != SEQFEAT_CDREGION && id < 4)) {
+						ValidErr(vsp, SEV_WARNING, ERR_SEQ_FEAT_IllegalDbXref,
+							     "Illegal db_xref type %s", db->db);
+					}
+				}
+			}
 			}
 			break;
 		case 5:        /* RNA-ref */
@@ -2838,6 +2935,9 @@ NLM_EXTERN void CdTransCheck(ValidStructPtr vsp, SeqFeatPtr sfp)
 	int gccode = 0;
 	Boolean transl_except = FALSE, prot_ok = TRUE;
 	CharPtr nuclocstr;
+	CodeBreakPtr cbp;
+	Int4 pos1, pos2, pos;
+	SeqLocPtr tmp;
 
 	if (sfp == NULL) return;
 
@@ -2910,6 +3010,35 @@ NLM_EXTERN void CdTransCheck(ValidStructPtr vsp, SeqFeatPtr sfp)
 		if (crp->frame > 1)
 			len -= (Int4)(crp->frame - 1);
 		ragged = (Int2)(len % (Int4)(3));
+		if (ragged) {
+		len = SeqLocLen(sfp->location);
+		cbp = crp->code_break;
+		while (cbp != NULL)
+		{
+			pos1 = INT4_MAX;
+			pos2 = -10;
+			tmp = NULL;
+			while ((tmp = SeqLocFindNext(cbp->loc, tmp)) != NULL)
+			{
+				pos = GetOffsetInLoc(tmp, sfp->location, 
+SEQLOC_START);
+				if (pos < pos1)
+					pos1 = pos;
+				pos = GetOffsetInLoc(tmp, sfp->location, 
+SEQLOC_STOP);
+				if (pos > pos2)
+					pos2 = pos;
+			}
+			pos = pos2 - pos1; /* codon length */
+			if (pos >= 0 && pos <= 1 && pos2 == len - 1)   /*  a codon */
+			/* allowing a partial codon at the end */
+			{
+				ragged = 0;
+			}
+
+			cbp = cbp->next;
+		}
+		}
 	}
 	if (crp->frame > 1) {
 		if (! (part_loc & SLP_START)) {
@@ -3129,7 +3258,7 @@ erret:
 
 static void SpliceCheckEx(ValidStructPtr vsp, SeqFeatPtr sfp, Boolean checkAll)
 {
-	SeqLocPtr slp, head;
+	SeqLocPtr slp, nxt, head;
 	Uint1 strand = Seq_strand_unknown;
 	SeqPortPtr spp=NULL;
 	SeqIdPtr last_sip=NULL, sip;
@@ -3138,8 +3267,9 @@ static void SpliceCheckEx(ValidStructPtr vsp, SeqFeatPtr sfp, Boolean checkAll)
 	Int4 strt, stp, len = 0, donor, acceptor;
 	Int2 residue1, residue2;
 	Char tbuf[40];
-	Boolean reportAsError;
+	Boolean reportAsError, first, last, firstPartial, lastPartial;
 	int severity;
+	Uint2 partialflag;
 
 	if (sfp == NULL) return;
 
@@ -3176,8 +3306,19 @@ static void SpliceCheckEx(ValidStructPtr vsp, SeqFeatPtr sfp, Boolean checkAll)
 	slp = NULL;
 	ctr = 0;
 
-	while ((slp = SeqLocFindPart(head, slp, EQUIV_IS_ONE)) != NULL)
+	first = TRUE;
+	last = FALSE;
+	firstPartial = FALSE;
+	lastPartial = FALSE;
+
+	slp = SeqLocFindPart(head, slp, EQUIV_IS_ONE);
+	while (slp != NULL)
 	{
+		nxt = SeqLocFindPart(head, slp, EQUIV_IS_ONE);
+		last = (Boolean) (nxt == NULL);
+		partialflag = SeqLocPartialCheck (slp);
+		firstPartial = (Boolean) (first && (partialflag & SLP_START));
+		lastPartial = (Boolean) (last && (partialflag & SLP_STOP));
 		ctr++;
 		sip = SeqLocId(slp);
 		if (sip == NULL) break;
@@ -3209,7 +3350,7 @@ static void SpliceCheckEx(ValidStructPtr vsp, SeqFeatPtr sfp, Boolean checkAll)
 			strt = len - acceptor - 1;
 		}
 
-		if ((checkAll || ctr < total) && (stp < (len - 2)))   /* check donor on all but last exon and on sequence */
+		if (((checkAll && (! lastPartial)) || ctr < total) && (stp < (len - 2)))   /* check donor on all but last exon and on sequence */
 		{
 			SeqPortSeek(spp, (stp+1), SEEK_SET);
 			residue1 = SeqPortGetResidue(spp);
@@ -3243,7 +3384,7 @@ static void SpliceCheckEx(ValidStructPtr vsp, SeqFeatPtr sfp, Boolean checkAll)
 			}
 		}
 
-		if ((checkAll || ctr != 1) && (strt > 1))
+		if (((checkAll && (! firstPartial))  || ctr != 1) && (strt > 1))
 		{
 			SeqPortSeek(spp, (strt - 2), SEEK_SET);
 			residue1 = SeqPortGetResidue(spp);
@@ -3268,6 +3409,8 @@ static void SpliceCheckEx(ValidStructPtr vsp, SeqFeatPtr sfp, Boolean checkAll)
 				}
 			}
 		}
+		first = FALSE;
+		slp = nxt;
 	}
 
 	SeqPortFree(spp);

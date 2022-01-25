@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   07/24/95
 *
-* $Revision: 6.2 $
+* $Revision: 6.3 $
 *
 * File Description:
 *
@@ -44,9 +44,12 @@
 * 95/08/30 C. Hogue    Moved globals into mmdbapi2.c.
 *
 * $Log: mmdbapi2.c,v $
-* Revision 6.2  1998/08/26 18:02:41  kans
-* fixed -v -fd warnings
+* Revision 6.3  1998/12/31 17:04:08  ywang
+* work around reassign protein or NA as ion problem
 *
+ * Revision 6.2  1998/08/26  18:02:41  kans
+ * fixed -v -fd warnings
+ *
 * Revision 6.1  1998/03/06 23:17:21  lewisg
 * codewarrior fixes
 *
@@ -1771,12 +1774,13 @@ void LIBCALLBACK SetIons(PFB pfbThis,  Int4 iModel,  Int4 iIndex,  Pointer ptr)
 		   break;
 		 }
 	     }
-	  if (bIon)
-	     {
-		pmmdThis->bWhat = (Byte) (AM_ION);
-		pmadThis->bUpdate = (Byte) (pmadThis->bUpdate | AM_ION);
-		pmsdThis->bWhat = (Byte) (pmsdThis->bWhat | AM_ION);
+	  if (bIon) {
+         if(pmmdThis->bWhat != AM_PROT && pmmdThis->bWhat != AM_DNA && pmmdThis->bWhat != AM_RNA){
+		    pmmdThis->bWhat = (Byte) (AM_ION);
+		    pmadThis->bUpdate = (Byte) (pmadThis->bUpdate | AM_ION);
+		    pmsdThis->bWhat = (Byte) (pmsdThis->bWhat | AM_ION);
 	     }
+      }
       }
    return;
 }

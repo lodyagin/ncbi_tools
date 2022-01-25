@@ -29,13 +29,34 @@
 *
 * Version Creation Date:   9/13/96
 *
-* $Revision: 6.32 $
+* $Revision: 6.39 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: docsum.c,v $
+* Revision 6.39  1999/01/14 19:18:46  kans
+* new parameters for Cn3DWin_Entrez
+*
+* Revision 6.38  1999/01/13 19:26:46  kans
+* added RetrieveSimpleSeqs, switched from tracking SeqEntry to SimpleSeq, to allow lower case, avoid Bioseq ID collision
+*
+* Revision 6.37  1999/01/11 16:25:49  kans
+* forgot to add parameter to ReadAsnFastaOrFlatFile
+*
+* Revision 6.36  1998/11/20 19:01:06  kans
+* set refine button count if setting retrieve button to evaluate
+*
+* Revision 6.35  1998/11/18 16:21:29  kans
+* added UseDelayedNeighbor to control from preference
+*
+* Revision 6.34  1998/11/18 15:55:06  kans
+* added controls for user to change immediate/delayed neighbor mode
+*
+* Revision 6.33  1998/11/18 15:14:02  kans
+* added retrieveMode to Evaluate neighbors/links only on command
+*
 * Revision 6.32  1998/08/14 16:23:01  kans
 * AddBlastAlignment now passed proper query bioseq
 *
@@ -181,6 +202,7 @@
 #include <asn2ff.h>
 #include <tomedlin.h>
 #include <tofasta.h>
+#include <simple.h>
 #include <dlogutil.h>
 #include <objproj.h>
 #include <mmdbapi.h>
@@ -204,6 +226,9 @@
 
 #define MAX_DBS 6
 
+#define FETCH_MODE        1
+#define EVAL_MODE         2
+
 typedef struct docsumstatedata {
   Boolean            checked     : 1;
   Boolean            hasAbstract : 1;
@@ -224,13 +249,16 @@ typedef struct summformdata {
   Int2               dsClickCol;
   Boolean            wasDoubleClick;
 
+  Boolean            usingDelay;
+  Int2               retrieveMode;
+
   ButtoN             retrieve;
   ButtoN             refine;
 
   EnumFieldAssocPtr  dbalist;
 
   Int4Ptr            uids;
-  SeqEntryPtr PNTR   seqentry;
+  SimpleSeqPtr PNTR  simple;
   StateDataPtr       state;
   Int2               numUids;
   Int2               numParents;
@@ -478,13 +506,13 @@ static void DrawUidCheck (SummFormPtr sfp, RectPtr r, Int2 item, Int2 frst, Bool
 static void DrawLocalCheck (SummFormPtr sfp, RectPtr r, Int2 item, Int2 frst, Boolean docsum)
 
 {
-  SeqEntryPtr  sep;
+  SimpleSeqPtr  ssp;
 
-  if (sfp == NULL || sfp->seqentry == NULL || sfp->state == NULL) return;
+  if (sfp == NULL || sfp->simple == NULL || sfp->state == NULL) return;
   if (item < 1) return;
   if (item > sfp->numUids) return;
-  sep = sfp->seqentry [item - 1];
-  if (sep == NULL) return;
+  ssp = sfp->simple [item - 1];
+  if (ssp == NULL) return;
   DoDrawCheck (sfp, r, item, frst, docsum);
 }
 
@@ -559,12 +587,11 @@ static void DrawLocalSum (DoC d, RectPtr r, Int2 item, Int2 frst)
 static CharPtr SetDefaultFailureMessage (SummFormPtr sfp, Int2 item, CharPtr prefix)
 
 {
-  BioseqPtr    bsp;
-  Char         buf [40];
-  CharPtr      dbname = NULL;
-  SeqEntryPtr  sep;
-  Char         tmp [64];
-  Int4         uid;
+  Char          buf [40];
+  CharPtr       dbname = NULL;
+  SimpleSeqPtr  ssp;
+  Char          tmp [64];
+  Int4          uid;
 
   tmp [0] = '\0';
   if (prefix == NULL) {
@@ -579,20 +606,22 @@ static CharPtr SetDefaultFailureMessage (SummFormPtr sfp, Int2 item, CharPtr pre
   }
   if (item < 1) {
     sprintf (tmp, "%sItem < 1 for database %s", prefix, dbname);
-  } else if (sfp->uids != NULL && sfp->seqentry == NULL) {
+  } else if (sfp->uids != NULL && sfp->simple == NULL) {
     uid = sfp->uids [item - 1];
     if (uid < 1) {
       sprintf (tmp, "%sID < 1 for database %s", prefix, dbname);
     } else {
       sprintf (tmp, "%sFailure for ID %ld in %s database", prefix, (long) uid, dbname);
     }
-  } else if (sfp->seqentry != NULL && sfp->uids == NULL) {
-    sep = sfp->seqentry [item - 1];
-    if (sep == NULL || sep->data.ptrvalue == NULL || (! IS_Bioseq (sep))) {
+  } else if (sfp->simple != NULL && sfp->uids == NULL) {
+    ssp = sfp->simple [item - 1];
+    if (ssp == NULL) {
       sprintf ("%sIncorrect seq-entry for database %s", prefix, dbname);
     } else {
-      bsp = (BioseqPtr) sep->data.ptrvalue;
-      SeqIdWrite (bsp->id, buf, PRINTID_FASTA_LONG, sizeof (buf) - 1);
+      StringCpy (buf, "?");
+      if (ssp->numid > 0 && ssp->bestid < ssp->numid) {
+        StringNCpy_0 (buf, ssp->id [ssp->bestid], sizeof (buf));
+      }
       sprintf ("%sProblem with sequence %s in %s database", prefix, buf, dbname);
     }
   } else {
@@ -1062,29 +1091,23 @@ static CharPtr FetchPDB (DoC d, Int2 item, Pointer ptr)
 static CharPtr FetchLocalBioseq (DoC d, Int2 item, Pointer ptr)
 
 {
-  BioseqPtr    bsp;
-  CharPtr      failed;
-  FILE         *fp;
-  Boolean      is_na;
-  Char         path [PATH_MAX];
-  SeqEntryPtr  sep;
-  SummFormPtr  sfp;
-  CharPtr      str;
+  CharPtr       failed;
+  FILE          *fp;
+  Char          path [PATH_MAX];
+  SummFormPtr   sfp;
+  SimpleSeqPtr  ssp;
+  CharPtr       str;
 
   sfp = (SummFormPtr) GetObjectExtra (d);
   failed = SetDefaultFailureMessage (sfp, item, NULL);
-  if (sfp == NULL || sfp->seqentry == NULL || sfp->state == NULL) return failed;
+  if (sfp == NULL || sfp->simple == NULL || sfp->state == NULL) return failed;
   if (item < 1) return failed;
-  sep = sfp->seqentry [item - 1];
-  if (sep == NULL || (! IS_Bioseq (sep))) return failed;
-  bsp = (BioseqPtr) sep->data.ptrvalue;
-  if (bsp == NULL) return failed;
-  is_na = (Boolean) (ISA_na (bsp->mol));
-  str = NULL;
+  ssp = sfp->simple [item - 1];
+  if (ssp == NULL) return failed;
   TmpNam (path);
   fp = FileOpen (path, "w");
   if (fp != NULL) {
-    if (SeqEntrysToFasta (sep, fp, is_na, 0)) {
+    if (SimpleSeqPrint (ssp, fp, TRUE)) {
       FileClose (fp);
       str = FileToString (path);
     } else {
@@ -1154,7 +1177,7 @@ static void RepopulateDocSum (SummFormPtr sfp, Boolean needToReset)
   colFmt = docsumColFmt;
   estLines = 3;
   font = sfp->docsumFont;
-  if (sfp->seqentry != NULL) {
+  if (sfp->simple != NULL) {
     proc = FetchLocalBioseq;
     ddp = DrawLocalSum;
     colFmt = textColFmt;
@@ -1237,11 +1260,11 @@ static void RetrieveGeneration (SummFormPtr sfp, Int2 num, Int2 parents, Int4Ptr
   SetDocShade (sfp->docsum, NULL, NULL, NULL, NULL);
   SetDocCache (sfp->docsum, NULL, NULL, NULL);
   sfp->uids = MemFree (sfp->uids);
-  if (sfp->seqentry != NULL) {
+  if (sfp->simple != NULL) {
     for (i = 0; i < sfp->numUids; i++) {
-      SeqEntryFree (sfp->seqentry [i]);
+      SimpleSeqFree (sfp->simple [i]);
     }
-    sfp->seqentry = MemFree (sfp->seqentry);
+    sfp->simple = MemFree (sfp->simple);
   }
   sfp->state = MemFree (sfp->state);
   sfp->numUids = 0;
@@ -1540,6 +1563,57 @@ static void NextProc (ButtoN b)
   SetDocSumImportExportItems (sfp);
 }
 
+extern Boolean UsingDelayedNeighbor (ForM f)
+
+{
+  SummFormPtr  sfp;
+
+  sfp = (SummFormPtr) GetObjectExtra (f);
+  if (sfp == NULL) return FALSE;
+  return sfp->usingDelay;
+}
+
+extern void UseDelayedNeighbor (ForM f, Boolean delayMode)
+
+{
+  SummFormPtr  sfp;
+
+  sfp = (SummFormPtr) GetObjectExtra (f);
+  if (sfp == NULL) return;
+  sfp->usingDelay = delayMode;
+}
+
+static void NeighborDelayProc (ChoicE c)
+
+{
+  SummFormPtr  sfp;
+
+#ifdef WIN_MAC
+  sfp = (SummFormPtr) currentFormDataPtr;
+#else
+  sfp = (SummFormPtr) GetObjectExtra (c);
+#endif
+  if (sfp == NULL) return;
+  if (GetValue (c) == 1) {
+    sfp->usingDelay = FALSE;
+  } else {
+    sfp->usingDelay = TRUE;
+  }
+}
+
+extern ChoicE CreateNeighborDelayChoice (MenU m, BaseFormPtr bfp)
+
+{
+  ChoicE  c;
+
+  c = ChoiceGroup (m, NeighborDelayProc);
+  SetObjectExtra (c, bfp, NULL);
+  ChoiceItem (c, "Immediate");
+  ChoiceItem (c, "Delayed");
+  SetValue (c, 1);
+  return c;
+}
+
 static void RecalculateDocSum (SummFormPtr sfp)
 
 {
@@ -1569,6 +1643,7 @@ static void RecalculateDocSum (SummFormPtr sfp)
   sfp->neighbors = MemFree (sfp->neighbors);
   sfp->numNeighbors = 0;
   sfp->neighborDb = targetDb;
+
   uids = NULL;
   num = 0;
   for (i = 0; i < sfp->numUids; i++) {
@@ -1576,6 +1651,32 @@ static void RecalculateDocSum (SummFormPtr sfp)
       num++;
     }
   }
+
+  if (sfp->retrieveMode == EVAL_MODE && sfp->usingDelay) {
+    if (num == 0) {
+      if (targetDb == sfp->currDb) {
+        SafeSetTitle (sfp->retrieve,  "Neighbor 0");
+       } else {
+        SafeSetTitle (sfp->retrieve, "Lookup 0");
+       }
+       SafeDisable (sfp->retrieve);
+    } else {
+      SafeSetTitle (sfp->retrieve, "Evaluate");
+      SafeEnable (sfp->retrieve);
+    }
+    if (num == 0) {
+      num = sfp->numUids;
+    }
+    sprintf (title, "Refine %d", (int) num);
+    SafeSetTitle (sfp->refine, title);
+    if (num > 0) {
+      SafeEnable (sfp->refine);
+    } else {
+      SafeDisable (sfp->refine);
+    }
+    return;
+  }
+
   if (num > 0) {
     uids = MemNew ((size_t) (num + 1) * sizeof (DocUid));
     if (uids != NULL) {
@@ -1629,6 +1730,7 @@ static void ChangeTarget (PopuP p)
 
   sfp = (SummFormPtr) GetObjectExtra (p);
   if (sfp == NULL) return;
+  sfp->retrieveMode = EVAL_MODE;
   RecalculateDocSum (sfp);
 }
 
@@ -1676,6 +1778,15 @@ static void RetrieveNeighbors (ButtoN b)
 
   sfp = (SummFormPtr) GetObjectExtra (b);
   if (sfp == NULL) return;
+  if (sfp->retrieveMode == EVAL_MODE && sfp->usingDelay) {
+    WatchCursor ();
+    Update ();
+    sfp->retrieveMode = FETCH_MODE;
+    RecalculateDocSum (sfp);
+    ArrowCursor ();
+    Update ();
+    return;
+  }
   egp = (EntrezGlobalsPtr) GetAppProperty ("EntrezGlobals");
   if (egp == NULL || egp->retrieveDocsProc == NULL) return;
   persist = FALSE;
@@ -1903,13 +2014,14 @@ static void ReleaseDocSum (DoC d, PoinT pt)
       ResetClip ();
       WatchCursor ();
       Update ();
+      sfp->retrieveMode = EVAL_MODE;
       RecalculateDocSum (sfp);
       ArrowCursor ();
       Update ();
       return;
     }
   }
-  if (sfp->wasDoubleClick && sfp->uids != NULL && sfp->seqentry == NULL) {
+  if (sfp->wasDoubleClick && sfp->uids != NULL && sfp->simple == NULL) {
     db = sfp->currDb;
     uid = sfp->uids [item - 1];
     uids = GetCheckedUids (sfp, &num);
@@ -1933,6 +2045,7 @@ static void RefreshAndRecalculateDocSum (SummFormPtr sfp)
   ResetClip ();
   WatchCursor ();
   Update ();
+  sfp->retrieveMode = EVAL_MODE;
   RecalculateDocSum (sfp);
   ArrowCursor ();
   Update ();
@@ -2069,21 +2182,18 @@ static void ProcessProjectAsn (ProjectPtr proj)
 static Boolean ImportDocSumForm (ForM f, CharPtr filename)
 
 {
-  ValNodePtr   bioseqs;
-  BioseqPtr    bsp;
-  Uint1        choice = 0;
-  Pointer      dataptr;
-  Uint2        datatype;
-  FILE         *fp;
-  ValNodePtr   head = NULL;
-  Boolean      is_na = TRUE;
-  Char         path [PATH_MAX];
-  ValNodePtr   pip;
-  ProjectPtr   proj;
-  SeqEntryPtr  sep;
-  SeqEntryPtr  sephead = NULL;
-  SummFormPtr  sfp;
-  ValNodePtr   vnp;
+  Uint1             choice = 0;
+  Pointer           dataptr;
+  Uint2             datatype;
+  EntrezGlobalsPtr  egp;
+  FILE              *fp;
+  ValNodePtr        head = NULL;
+  Boolean           is_na = TRUE;
+  Char              path [PATH_MAX];
+  SeqEntryPtr       sephead = NULL;
+  ValNodePtr        simples;
+  SummFormPtr       sfp;
+  ValNodePtr        vnp;
 
   path [0] = '\0';
   StringNCpy_0 (path, filename, sizeof (path));
@@ -2092,52 +2202,19 @@ static Boolean ImportDocSumForm (ForM f, CharPtr filename)
     if (path [0] != '\0' || GetInputFileName (path, sizeof (path), "", "TEXT")) {
       fp = FileOpen (path, "r");
       if (fp != NULL) {
-        while ((dataptr = ReadAsnFastaOrFlatFile (fp, &datatype, NULL, FALSE, FALSE, FALSE)) != NULL) {
+        while ((dataptr = ReadAsnFastaOrFlatFile (fp, &datatype, NULL, FALSE,
+                                                  FALSE, TRUE, TRUE)) != NULL) {
           ValNodeAddPointer (&head, datatype, dataptr);
         }
         FileClose (fp);
-        bioseqs = ValNodeExtractList (&head, OBJ_BIOSEQ);
-        if (bioseqs != NULL) {
-          sephead = NULL;
-          for (vnp = bioseqs; vnp != NULL; vnp = vnp->next) {
-            bsp = (BioseqPtr) vnp->data.ptrvalue;
-            if (bsp != NULL) {
-              sep = SeqMgrGetSeqEntryForData (bsp);
-              if (sep == NULL) {
-                sep = SeqEntryNew ();
-                if (sep != NULL) {
-                  sep->choice = 1;
-                  sep->data.ptrvalue = bsp;
-                  SeqMgrSeqEntry (SM_BIOSEQ, (Pointer) bsp, sep);
-                }
-              }
-              if (sep != NULL) {
-                ValNodeLink (&sephead, sep);
-              }
-            }
-          }
-          proj = ProjectNew ();
-          if (proj != NULL) {
-            pip = ValNodeNew (NULL);
-            if (pip != NULL) {
-              bsp = (BioseqPtr) bioseqs->data.ptrvalue;
-              if (bsp != NULL) {
-                is_na = (Boolean) ISA_na (bsp->mol);
-              }
-              if (is_na) {
-                choice = ProjectItem_nucent;
-              } else {
-                choice = ProjectItem_protent;
-              }
-              pip->choice = choice;
-              proj->data = pip;
-              pip->data.ptrvalue = (Pointer) sephead;
-              bioseqs = NULL;
-              ProcessProjectAsn (proj);
-            }
+        simples = ValNodeExtractList (&head, OBJ_FASTA);
+        if (simples != NULL) {
+          egp = (EntrezGlobalsPtr) GetAppProperty ("EntrezGlobals");
+          if (egp != NULL && egp->retrieveSimpleProc != NULL) {
+            egp->retrieveSimpleProc (NULL, simples);
           }
         }
-        ValNodeFree (bioseqs);
+        ValNodeFree (simples);
         if (head != NULL) {
           for (vnp = head; vnp != NULL; vnp = vnp->next) {
             datatype = vnp->choice;
@@ -2186,7 +2263,7 @@ static Boolean ExportDocSumForm (ForM f, CharPtr filename)
       if (fp != NULL) {
         WatchCursor ();
         Update ();
-        if (sfp->seqentry != NULL) {
+        if (sfp->simple != NULL) {
         } else if (sfp->currDb >= 0 && sfp->currDb < MAX_DBS) {
           labels = radioLabels [sfp->currDb];
           val = GetValue (sfp->formats [sfp->currDb]);
@@ -2447,14 +2524,13 @@ extern void DisplayFontChangeProc (IteM i)
 extern Boolean DocSumCanSaveFasta (ForM f, Boolean nucs, Boolean prots)
 
 {
-  BioseqPtr    bsp;
-  Int2         i;
-  SeqEntryPtr  sep;
-  SummFormPtr  sfp;
+  Int2          i;
+  SummFormPtr   sfp;
+  SimpleSeqPtr  ssp;
 
   sfp = (SummFormPtr) GetObjectExtra (f);
   if (sfp == NULL) return FALSE;
-  if (sfp->uids != NULL && sfp->seqentry == NULL) {
+  if (sfp->uids != NULL && sfp->simple == NULL) {
     switch (sfp->currDb) {
       case 1 :
         if (prots) return TRUE;
@@ -2466,18 +2542,14 @@ extern Boolean DocSumCanSaveFasta (ForM f, Boolean nucs, Boolean prots)
       default :
         break;
     }
-  } else if (sfp->seqentry != NULL && sfp->uids == NULL) {
+  } else if (sfp->simple != NULL && sfp->uids == NULL) {
     for (i = 0; i < sfp->numUids; i++) {
-      sep = sfp->seqentry [i];
-      if (sep != NULL && (IS_Bioseq	(sep))) {
-        bsp = (BioseqPtr) sep->data.ptrvalue;
-        if (bsp != NULL) {
-          if (ISA_na (bsp->mol) && nucs) return TRUE;
-          if (ISA_aa (bsp->mol) && prots) return TRUE;
-        }
+      ssp = sfp->simple [i];
+      if (ssp != NULL) {
+        return TRUE;
       }
     }
-    return TRUE;
+    return FALSE;
   }
   return FALSE;
 }
@@ -2485,18 +2557,19 @@ extern Boolean DocSumCanSaveFasta (ForM f, Boolean nucs, Boolean prots)
 extern Boolean ExportDocSumFasta (ForM f, CharPtr filename, Boolean nucs, Boolean prots)
 
 {
-  BioseqPtr    bsp;
-  Boolean      fastaOK = FALSE;
-  Boolean      fastaNucOK;
-  Boolean      fastaPrtOK;
-  FILE         *fp;
-  Uint1        group_segs;
-  Int2         i;
-  Int2         num;
-  Char         path [PATH_MAX];
-  SeqEntryPtr  sep;
-  SummFormPtr  sfp;
-  Int4         uid;
+  BioseqPtr     bsp;
+  Boolean       fastaOK = FALSE;
+  Boolean       fastaNucOK;
+  Boolean       fastaPrtOK;
+  FILE          *fp;
+  Uint1         group_segs;
+  Int2          i;
+  Int2          num;
+  Char          path [PATH_MAX];
+  SeqEntryPtr   sep;
+  SummFormPtr   sfp;
+  SimpleSeqPtr  ssp;
+  Int4          uid;
 
   path [0] = '\0';
   StringNCpy_0 (path, filename, sizeof (path));
@@ -2525,7 +2598,7 @@ extern Boolean ExportDocSumFasta (ForM f, CharPtr filename, Boolean nucs, Boolea
           fastaNucOK = FALSE;
           fastaPrtOK = FALSE;
           if (sfp->state [i].checked || num == 0) {
-            if (sfp->uids != NULL && sfp->seqentry == NULL) {
+            if (sfp->uids != NULL && sfp->simple == NULL) {
               uid = sfp->uids [i];
               bsp = BioseqLockByGi (uid);
               if (bsp != NULL) {
@@ -2546,24 +2619,10 @@ extern Boolean ExportDocSumFasta (ForM f, CharPtr filename, Boolean nucs, Boolea
                 }
               }
               BioseqUnlockByGi (uid);
-            } else if (sfp->seqentry != NULL && sfp->uids == NULL) {
-              sep = sfp->seqentry [i];
-              if (sep != NULL && (IS_Bioseq	(sep))) {
-                bsp = (BioseqPtr) sep->data.ptrvalue;
-                if (bsp != NULL) {
-                  if (ISA_na (bsp->mol) && nucs) {
-                    group_segs = 0;
-                    if (bsp->repr == Seq_repr_seg) {
-                      group_segs = 1;
-                    } else if (bsp->repr == Seq_repr_delta) {
-                      group_segs = 3;
-                    }
-                    fastaNucOK = SeqnSeqEntrysToFasta (sep, fp, TRUE, group_segs);
-                  }
-                  if (ISA_aa (bsp->mol) && prots) {
-                    fastaPrtOK = SeqnSeqEntrysToFasta (sep, fp, FALSE, 0);
-                  }
-                }
+            } else if (sfp->simple != NULL && sfp->uids == NULL) {
+              ssp = sfp->simple [i];
+              if (ssp != NULL) {
+                SimpleSeqPrint (ssp, fp, TRUE);
               }
             }
           }
@@ -2579,9 +2638,92 @@ extern Boolean ExportDocSumFasta (ForM f, CharPtr filename, Boolean nucs, Boolea
   return FALSE;
 }
 
+extern void RetrieveSimpleSeqs (ForM f, ValNodePtr simpleSeqs)
+
+{
+  Int4         i;
+  Int4         num;
+  SummFormPtr  sfp;
+  ValNodePtr   vnp;
+
+  sfp = (SummFormPtr) GetObjectExtra (f);
+  if (sfp == NULL) return;
+  Reset (sfp->docsum);
+  SetDocShade (sfp->docsum, NULL, NULL, NULL, NULL);
+  SetDocCache (sfp->docsum, NULL, NULL, NULL);
+  sfp->uids = MemFree (sfp->uids);
+  if (sfp->simple != NULL) {
+    for (i = 0; i < sfp->numUids; i++) {
+      SimpleSeqFree (sfp->simple [i]);
+    }
+    sfp->simple = MemFree (sfp->simple);
+  }
+  sfp->state = MemFree (sfp->state);
+  sfp->numUids = 0;
+  sfp->numParents = 0;
+  sfp->neighbors = MemFree (sfp->neighbors);
+  sfp->numNeighbors = 0;
+  SafeSetTitle (sfp->retrieve, "Neighbor 0");
+  SafeDisable (sfp->retrieve);
+  SafeSetTitle (sfp->refine, "Refine 0");
+  SafeDisable (sfp->refine);
+  SafeHide (sfp->target);
+  SetValue (sfp->target, 0);
+  SetPrevAndNextButtons (sfp);
+  Update ();
+  for (i = 0; i < MAX_DBS; i++) {
+    Hide (sfp->formats [i]);
+  }
+  Show (sfp->formats [MAX_DBS]);
+  if (simpleSeqs == NULL) return;
+  num = ValNodeLen (simpleSeqs);
+  if (num > 0) {
+    sfp->simple = MemNew ((size_t) (num * sizeof (SimpleSeqPtr)));
+    if (sfp->simple == NULL) {
+      Show (sfp->form);
+      Select (sfp->form);
+      SendMessageToForm (sfp->form, VIB_MSG_CHANGE);
+#ifdef WIN_MAC
+      if (sfp->activate != NULL) {
+        sfp->activate ((WindoW) sfp->form);
+      }
+#endif
+      return;
+    }
+    sfp->state = MemNew (sizeof (StateData) * (size_t) num);
+    if (sfp->state == NULL) return;
+    for (i = 0, vnp = simpleSeqs; i < 32766 && vnp != NULL; i++, vnp = vnp->next) {
+      sfp->simple [i] = (SimpleSeqPtr) vnp->data.ptrvalue;
+    }
+    sfp->numUids = num;
+    sfp->numParents = 0;
+    sfp->currDb = -1;
+    Show (sfp->form);
+    Select (sfp->form);
+    RepopulateDocSum (sfp, FALSE);
+    SetDocSumImportExportItems (sfp);
+    SendMessageToForm (sfp->form, VIB_MSG_CHANGE);
+#ifdef WIN_MAC
+    if (sfp->activate != NULL) {
+      sfp->activate ((WindoW) sfp->form);
+    }
+#endif
+  } else {
+    Show (sfp->form);
+    Select (sfp->form);
+#ifdef WIN_MAC
+    if (sfp->activate != NULL) {
+      sfp->activate ((WindoW) sfp->form);
+    }
+#endif
+  }
+  Update ();
+}
+
 static void ProjectPtrToDocSumForm (ForM f, Pointer data)
 
 {
+  /*
   Int4         i;
   ValNodePtr   list;
   Int4         num;
@@ -2596,11 +2738,11 @@ static void ProjectPtrToDocSumForm (ForM f, Pointer data)
   SetDocShade (sfp->docsum, NULL, NULL, NULL, NULL);
   SetDocCache (sfp->docsum, NULL, NULL, NULL);
   sfp->uids = MemFree (sfp->uids);
-  if (sfp->seqentry != NULL) {
+  if (sfp->simple != NULL) {
     for (i = 0; i < sfp->numUids; i++) {
-      SeqEntryFree (sfp->seqentry [i]);
+      SimpleSeqFree (sfp->simple [i]);
     }
-    sfp->seqentry = MemFree (sfp->seqentry);
+    sfp->simple = MemFree (sfp->simple);
   }
   sfp->state = MemFree (sfp->state);
   sfp->numUids = 0;
@@ -2628,15 +2770,15 @@ static void ProjectPtrToDocSumForm (ForM f, Pointer data)
   num = ValNodeLen (list);
   if (num > 0) {
     if (pip->choice >= ProjectItem_protent && pip->choice <= ProjectItem_genomeent) {
-      sfp->seqentry = MemNew ((size_t) (num * sizeof (SeqEntryPtr)));
+      sfp->simple = MemNew ((size_t) (num * sizeof (SimpleSeqPtr)));
       if (sfp->seqentry == NULL) {
         Show (sfp->form);
         Select (sfp->form);
         SendMessageToForm (sfp->form, VIB_MSG_CHANGE);
 #ifdef WIN_MAC
-      if (sfp->activate != NULL) {
-        sfp->activate ((WindoW) sfp->form);
-      }
+        if (sfp->activate != NULL) {
+          sfp->activate ((WindoW) sfp->form);
+        }
 #endif
         return;
       }
@@ -2677,11 +2819,13 @@ static void ProjectPtrToDocSumForm (ForM f, Pointer data)
 #endif
   }
   Update ();
+  */
 }
 
 static Pointer DocSumFormToProjectPtr (ForM f)
 
 {
+  /*
   BioseqPtr    bsp;
   Char         buf [40];
   Char         ch;
@@ -2778,6 +2922,8 @@ static Pointer DocSumFormToProjectPtr (ForM f)
     }
   }
   return (Pointer) proj;
+  */
+  return NULL;
 }
 
 static Boolean SaveDocsumProject (BaseFormPtr bfp, Boolean saveAs)
@@ -2900,11 +3046,11 @@ static void CleanupEntrezDocSumForm (GraphiC g, VoidPtr data)
   sfp = (SummFormPtr) data;
   if (sfp != NULL) {
     MemFree (sfp->uids);
-    if (sfp->seqentry != NULL) {
+    if (sfp->simple != NULL) {
       for (j = 0; j < sfp->numUids; j++) {
-        SeqEntryFree (sfp->seqentry [j]);
+        SimpleSeqFree (sfp->simple [j]);
       }
-      sfp->seqentry = MemFree (sfp->seqentry);
+      sfp->simple = MemFree (sfp->simple);
     }
     MemFree (sfp->state);
     MemFree (sfp->neighbors);
@@ -2993,7 +3139,7 @@ static void SetDocSumImportExportItems (SummFormPtr sfp)
   exportItm = FindFormMenuItem ((BaseFormPtr) sfp, VIB_MSG_EXPORT);
   if (exportItm == NULL) return;
   sfp->label = medRadios [0];
-  if (sfp->seqentry != NULL) {
+  if (sfp->simple != NULL) {
     sfp->label = localBioseqRadios [0];
   } else if (sfp->currDb >= 0 && sfp->currDb < MAX_DBS) {
     labels = radioLabels [sfp->currDb];
@@ -3120,6 +3266,8 @@ extern ForM CreateDocSumForm (Int2 left, Int2 top, CharPtr title,
     SetObjectExtra (sfp->refine , sfp, NULL);
     SetTitle (sfp->refine, "Refine");
     Disable (sfp->refine);
+    sfp->retrieveMode = FETCH_MODE;
+    sfp->usingDelay = FALSE;
 
     sfp->neighbors = NULL;
     sfp->numNeighbors = 0;
@@ -3884,7 +4032,7 @@ static void LaunchStructureViewer (Int4 uid, Int2 numAlign, Int4Ptr alignuids, I
     Message (MSG_OK, "Unable to convert this biostruc to a modelstruc.");
     return;
   }
-  w = (WindoW) Cn3DWin_Entrez();
+  w = (WindoW) Cn3DWin_Entrez(NULL, TRUE);
   if (w != NULL) {
     Cn3D_ResetActiveStrucProc ();
     Show (w);

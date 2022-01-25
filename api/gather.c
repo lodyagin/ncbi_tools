@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/7/94
 *
-* $Revision: 6.7 $
+* $Revision: 6.8 $
 *
 * File Description: 
 *
@@ -39,6 +39,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: gather.c,v $
+* Revision 6.8  1999/01/13 23:34:19  kans
+* added GatherSpecificProcLaunch
+*
 * Revision 6.7  1998/08/24 18:27:07  kans
 * removed solaris -v -fd warnings
 *
@@ -5601,6 +5604,57 @@ NLM_EXTERN Int2 GatherProcLaunch (Uint2 proctype, Boolean sel, Uint2 entityID, U
 				}
 			}
 		}
+	}
+
+all_done:
+	return procval;
+
+}
+
+NLM_EXTERN Int2 GatherSpecificProcLaunch (Uint2 procid, CharPtr procname, Uint2 proctype,
+                                          Boolean sel, Uint2 entityID, Uint2 itemID, Uint2 itemtype)
+{
+	ObjMgrPtr omp;
+	OMProcControl ompc;
+	ObjMgrProcPtr ompp=NULL;
+	Boolean retval;
+	Int2 procval = OM_MSG_RET_NOPROC;
+
+	omp = ObjMgrGet ();
+
+	MemSet((Pointer)(&ompc), 0, sizeof(OMProcControl));
+
+	ompc.input_entityID = entityID;
+	ompc.input_itemID = itemID;
+	ompc.input_itemtype = itemtype;
+
+	retval = GatherDataForProc(&ompc, sel);
+
+	if (sel && (! retval))
+		return OM_MSG_RET_ERROR;
+
+	if (entityID && (! retval))
+		return OM_MSG_RET_ERROR;
+
+	ompp = ObjMgrProcFind (omp, procid, procname, proctype);
+	if (ompp == NULL)
+		return OM_MSG_RET_ERROR;
+
+	ompc.proc = ompp;
+	procval = (*(ompp->func))((Pointer)&ompc);
+	switch (procval)
+	{
+		case OM_MSG_RET_ERROR:
+			ErrShow();
+			break;
+		case OM_MSG_RET_DEL:
+			break;
+		case OM_MSG_RET_OK:
+			break;
+		case OM_MSG_RET_DONE:
+			goto all_done;
+		default:
+			break;
 	}
 
 all_done:

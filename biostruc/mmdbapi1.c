@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   03/14/95
 *
-* $Revision: 6.16 $
+* $Revision: 6.21 $
 *
 * File Description: 
 *
@@ -44,9 +44,24 @@
 * 95/08/30 C. Hogue    Minor changes.
 *
 * $Log: mmdbapi1.c,v $
-* Revision 6.16  1998/09/22 17:52:20  ywang
-* add flag for display control on MM and MG level
+* Revision 6.21  1998/12/16 19:30:12  ywang
+* add flag for highlight status to MGD
 *
+ * Revision 6.20  1998/11/06  23:02:01  ywang
+ * add FeatureOn to MGD for feature on/off control
+ *
+ * Revision 6.19  1998/11/04  00:53:39  ywang
+ * add iFeature to MGD for modeling control
+ *
+ * Revision 6.18  1998/10/21  15:43:21  ywang
+ * attach the whole vast alignment data to master structure
+ *
+ * Revision 6.17  1998/10/01  21:56:33  ywang
+ * set display flag for object
+ *
+ * Revision 6.16  1998/09/22  17:52:20  ywang
+ * add flag for display control on MM and MG level
+ *
  * Revision 6.15  1998/08/26  18:02:39  kans
  * fixed -v -fd warnings
  *
@@ -216,6 +231,8 @@ PMOD LIBCALL NewMOD(void)
      {
       pmodNew->bMe = (Byte) AM_MOD;
       pmodNew->bUpdate = (Byte) (REG_STYLE | SHOW_ME );
+      pmodNew->bVisible = 1;  
+                   /* turn on object by default -- Yanli */
       }
     return pmodNew;
 }
@@ -277,6 +294,9 @@ PMGD LIBCALL NewMGD(void)
       pmgdNew->bUpdate = (Byte) (REG_STYLE | SHOW_ME );
       pmgdNew->bReserved = 0;
       pmgdNew->bVisible = 1;   /* be displayed by default */
+      pmgdNew->bHighlighted = 0;   /* be displayed by default */
+      pmgdNew->iFeature = 0;
+      pmgdNew->FeatureOn = 0;
                                /* Yanli */
       pmgdNew->pbMasterReserved = NULL;
 
@@ -633,7 +653,8 @@ printf("in FreeMSD ");
 	if (pmsdThis->pdnmlModels) FreeListDNML(pmsdThis->pdnmlModels);
 	if (pmsdThis->pvnmoHead) FreeListVNMO(pmsdThis->pvnmoHead);
 	if (pmsdThis->pvnmdHead) FreeListVNMD(pmsdThis->pvnmdHead);
-        if (pmsdThis->pdnsfFeatures) FreeListDNSF(pmsdThis->pdnsfFeatures);
+/*      if (pmsdThis->pdnsfFeatures) FreeListDNSF(pmsdThis->pdnsfFeatures); */
+        if (pmsdThis->psaStrucAlignment) BiostrucAnnotSetFree(pmsdThis->psaStrucAlignment);
         if (pmsdThis->ppflRotate) FLMatrixFree(pmsdThis->ppflRotate,0,0);
         if (pmsdThis->pdnsfsHead) FreeListDNSFS(pmsdThis->pdnsfsHead);
         if (pmsdThis->pflTranslate) FLVectorFree(pmsdThis->pflTranslate,0);

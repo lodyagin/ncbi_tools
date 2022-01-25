@@ -592,8 +592,8 @@ static SegmenT DrawSeqGraph (SeqGraphPtr sgp, Int4 window, Uint1 graphtype,
     break;
   }
 
-  if (sgp->compl != 0)
-    compression = (Int4) sgp->compl;
+  if (sgp->compr != 0)
+    compression = (Int4) sgp->compr;
   else
     compression = 1;
 
@@ -1205,7 +1205,7 @@ static void InitZoomPopup (GraphViewFormPtr gvp, SeqGraphPtr sgp)
   {
     SafeHide (gvp->scale);
     Reset (gvp->scale);
-    maxzoom = (Int2) sgp->compl;
+    maxzoom = (Int2) sgp->compr;
     i = 2;
     while (maxzoom > 0)
     {
@@ -1220,7 +1220,7 @@ static void InitZoomPopup (GraphViewFormPtr gvp, SeqGraphPtr sgp)
     {
       if (i == maxzoom-1)
       {
-        gvp->zoom = (Int2) sgp->compl;
+        gvp->zoom = (Int2) sgp->compr;
         sprintf (buf, "%ld", (long) gvp->zoom);
       }
       else
@@ -1259,10 +1259,10 @@ static void ScaleGraphView (PopuP p)
   i = GetValue (gvp->scale);
   if (i > 0)
   {
-    if ((Int2) pow (2, (i-1)) < (Int2) gvp->sgp->compl)
+    if ((Int2) pow (2, (i-1)) < (Int2) gvp->sgp->compr)
       gvp->zoom = (Int2) pow (2, (i-1));
     else
-      gvp->zoom = (Int2) gvp->sgp->compl;
+      gvp->zoom = (Int2) gvp->sgp->compr;
   }
   else
   {
@@ -1340,7 +1340,7 @@ extern void BioseqPtrToGraphViewForm (ForM f, Pointer data)
       minVal = (FloatHi) sgp->min.intvalue;
       break;
     }
-    gvp->width = (Int4) (sgp->numval/sgp->compl);
+    gvp->width = (Int4) (sgp->numval/sgp->compr);
     gvp->height = (((Int4) maxVal - (Int4) minVal) *
                   (Int4) sgp->a) + (Int4) sgp->b;
 

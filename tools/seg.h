@@ -29,7 +29,7 @@
  *
  * Version Creation Date: 4/24/98
  *
- * $Revision: 6.5 $
+ * $Revision: 6.6 $
  *
  * File Description:  low-complexity filter 'seg'
  *
@@ -113,6 +113,8 @@ typedef struct sequence
 SeqLocPtr BioseqSeg (BioseqPtr bsp, SegParamsPtr sparamsp);
 SeqLocPtr BioseqSegNa (BioseqPtr bsp, SegParamsPtr sparamsp);
 SeqLocPtr BioseqSegAa (BioseqPtr bsp, SegParamsPtr sparamsp);
+SeqLocPtr SeqlocSegNa (SeqLocPtr slp, SegParamsPtr sparamsp);
+SeqLocPtr SeqlocSegAa (SeqLocPtr slp, SegParamsPtr sparamsp);
 SegParamsPtr SegParamsNewAa(void);
 SegParamsPtr SegParamsNewNa(void);
 void SegParamsCheck (SegParamsPtr sparamsp);

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/26/97
 *
-* $Revision: 6.99 $
+* $Revision: 6.102 $
 *
 * File Description:
 *
@@ -154,31 +154,6 @@ static void CommonLaunchBioseqViewer (SeqEntryPtr sep, CharPtr path, Boolean dir
   }
 }
 
-extern void ReadFastaNucProc (IteM i)
-/*
-static void ReadFastaProc (void)
-*/
-
-{
-  FILE         *fp;
-  Char         path [PATH_MAX];
-  SeqEntryPtr  sep;
-
-/*
-#ifdef WIN_MAC
-  bfp = currentFormDataPtr;
-#else
-  bfp = GetObjectExtra (i);
-#endif
-*/
-  if (! GetInputFileName (path, sizeof (path), "", "TEXT")) return;
-  fp = FileOpen (path, "r");
-  if (fp == NULL) return;
-  sep = SequinFastaToSeqEntryEx (fp, TRUE, NULL, TRUE, NULL);
-  FileClose (fp);
-  CommonLaunchBioseqViewer (sep, path, FALSE);
-}
-
 extern void FastaNucDirectToSeqEdProc (IteM i)
 
 {
@@ -192,58 +167,6 @@ extern void FastaNucDirectToSeqEdProc (IteM i)
   sep = SequinFastaToSeqEntryEx (fp, TRUE, NULL, TRUE, NULL);
   FileClose (fp);
   CommonLaunchBioseqViewer (sep, path, TRUE);
-}
-
-extern void ReadSeqNucProc (IteM i)
-
-{
-  MsgAnswer     ans;
-  BioseqSetPtr  bssp;
-  Pointer       dataptr;
-  Uint2         datatype;
-  FILE          *fp;
-  SeqEntryPtr   list = NULL;
-  SeqEntryPtr   next;
-  Char          path [PATH_MAX];
-  SeqEntryPtr   sep;
-
-  if (! GetInputFileName (path, sizeof (path), "", "TEXT")) return;
-  fp = FileOpen (path, "r");
-  if (fp == NULL) return;
-  while ((dataptr = ReadAsnFastaOrFlatFile (fp, &datatype, NULL, FALSE, FALSE, TRUE)) != NULL) {
-    if (datatype == OBJ_BIOSEQ) {
-      sep = SeqMgrGetSeqEntryForData (dataptr);
-      ValNodeLink (&list, sep);
-    }
-  }
-  FileClose (fp);
-  if (list == NULL) return;
-  sep = NULL;
-  if (list->next != NULL) {
-    ans = Message (MSG_YN, "Should the records be segmented?");
-    if (ans == ANS_NO) {
-      bssp = BioseqSetNew ();
-      if (bssp != NULL) {
-        bssp->_class = 7;
-        sep = SeqEntryNew ();
-        if (sep != NULL) {
-          sep->choice = 2;
-          sep->data.ptrvalue = (Pointer) bssp;
-        }
-      }
-    }
-  }
-  while (list != NULL) {
-    next = list->next;
-    list->next = NULL;
-    if (sep != NULL) {
-      AddSeqEntryToSeqEntry (sep, list, TRUE);
-    } else {
-      sep = list;
-    }
-    list = next;
-  }
-  CommonLaunchBioseqViewer (sep, path, FALSE);
 }
 
 #define BUFSIZE 128
@@ -1210,6 +1133,46 @@ static ValNodePtr nrSeqIdAdd (ValNodePtr vnp, SeqIdPtr sip)
 ***   local copy of IS_ntdb_accession & IS_protdb_accession
 ***          Thanks to Mark for this useful function! 
 **********************************************************/
+static void showtextalign_fromalign (SeqAlignPtr salp, CharPtr path, FILE *fp)
+{
+  Char        name [PATH_MAX];
+  SeqAnnotPtr sap;
+  Int4        line = 80;     
+  Uint4       option = 0;
+  Boolean     do_close = TRUE;
+
+  if (salp == NULL)
+     return;
+  if (path == NULL && fp == NULL) 
+  {
+    name[0]='\0';
+    do 
+    {
+     if (! GetInputFileName (name, PATH_MAX,"","TEXT"))  {
+        return;
+     }
+    }
+    while (StringLen(name) > 1);
+    path = name;
+  }
+  if (path != NULL && fp == NULL) {
+     fp = FileOpen (path, "a");
+  }
+  else
+     do_close = FALSE;
+  if (fp != NULL) {
+     sap = SeqAnnotForSeqAlign (salp);  
+     option += TXALIGN_MASTER;
+     option += TXALIGN_MISMATCH;
+     ShowTextAlignFromAnnot (sap, line, fp, NULL, NULL, option, NULL, NULL, NULL);
+     if (do_close) {
+        FileClose(fp);
+     }
+     sap->data = NULL;
+     SeqAnnotFree (sap);
+  } 
+}
+
 static ValNodePtr CCNormalizeSeqAlignId (SeqAlignPtr salp, ValNodePtr vnp)
 {
   BLAST_OptionsBlkPtr options;
@@ -1234,6 +1197,8 @@ static ValNodePtr CCNormalizeSeqAlignId (SeqAlignPtr salp, ValNodePtr vnp)
   Boolean             ok, 
                       found;
   
+  Char                strLog[50];
+
   EntrezInit ("Sequin", FALSE, NULL);
 
   if (salp!=NULL) {
@@ -1278,8 +1243,6 @@ static ValNodePtr CCNormalizeSeqAlignId (SeqAlignPtr salp, ValNodePtr vnp)
                  dbsip->choice = SEQID_GI;
                  dbsip->data.intvalue = (Int4)gi;
                  totlendb = getlengthforid(dbsip); 
-                 
-                 sip->next = NULL;
                  lclsip=SeqIdDup(sip);
                  totlenlcl = getlengthforid(lclsip);
                   
@@ -1296,7 +1259,8 @@ static ValNodePtr CCNormalizeSeqAlignId (SeqAlignPtr salp, ValNodePtr vnp)
                  if (bestsalp) 
                  {
                     ArrowCursor ();
-                    ans = Message (MSG_OKC, "This SeqAlign contains SeqIds that are already in the databases. \nDo you want to normalize it?");
+                    SeqIdWrite (lclsip, strLog, PRINTID_TEXTID_ACCESSION, 50);
+                    ans = Message (MSG_OKC, "This alignment contains \"%s\" that is already in GenBank. \nDo you wish to replace it?", strLog);
                     WatchCursor ();
                     if (ans != ANS_CANCEL) 
                     {
@@ -1306,7 +1270,11 @@ static ValNodePtr CCNormalizeSeqAlignId (SeqAlignPtr salp, ValNodePtr vnp)
                        else
                           strand=Seq_strand_plus;
                        SeqAlignStartUpdate (salp, lclsip, offset, strand);
-                       sip = SeqIdReplaceID(dsp->ids, presip, dbsip, next); 
+                       dsp->ids = SeqIdReplaceID(dsp->ids, presip, dbsip, next); 
+                       if (presip)
+                          sip = presip->next;
+                       else
+                          sip = dsp->ids;
                        SeqAlignReplaceId (lclsip, dbsip, salp);
                        vnp = nrSeqIdAdd (vnp, lclsip);
                        found = TRUE;
@@ -1314,17 +1282,25 @@ static ValNodePtr CCNormalizeSeqAlignId (SeqAlignPtr salp, ValNodePtr vnp)
                  }
                  else {
                     ArrowCursor ();
-                    ans = Message (MSG_OKC, "This SeqAlign contains SeqIds that are already in the databases. \n They can not be normalized because the sequence does not match the sequence in the database.\nDo you want to save the alignment ? ");	
+                    SeqIdWrite (lclsip, strLog, PRINTID_TEXTID_ACCESSION, 50);
+                    ans = Message (MSG_OKC, "This alignment contains \"%s\" that is already in GenBank. \nIt can not be replaced because the sequence does not match the sequence in the database.\nDo you wish to save the alignment (err.aln)? ", strLog);
                     WatchCursor ();
                     if (ans != ANS_CANCEL) 
                     {
-                       seqalign_write(seqalign, NULL);
+                       showtextalign_fromalign (seqalign, "err.aln", NULL);
                     }
                     sip->next = next;
                  }
                  if (seqalign)
                     seqalign = SeqAlignFree (seqalign);
               } 
+              else {
+                 ArrowCursor ();
+                 SeqIdWrite (sip, strLog, PRINTID_TEXTID_ACCESSION, 50);
+                 ans = Message (MSG_OK, "This alignment contains \"%s\" that can not be found in GenBank.\nPlease check the accession number.\n", strLog);
+                 WatchCursor ();
+                 sip->next = next;
+              }
            }
            presip = sip;
            sip = next;

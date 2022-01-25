@@ -1,4 +1,4 @@
-# $Id: makeall.dos,v 6.37 1998/09/22 18:43:37 vakatov Exp $
+# $Id: makeall.dos,v 6.40 1999/01/05 00:09:44 kans Exp $
 ##################################################
 ###  Makefile for non-network-based libraries + asntool
 #####
@@ -33,7 +33,7 @@ OBJ2 = +objacces.obj +objalign.obj +objall.obj +objbibli.obj \
 	+wprint.obj +satutil.obj +seqmgr.obj +gather.obj +objmgr.obj \
 	+accmmdbs.obj +acccn3ds.obj +lsqfetch.obj +findrepl.obj \
 	+jzcoll.obj +jzmisc.obj +maputil.obj +mconsist.obj +codon.obj \
-	+txalign.obj +sqnutils.obj
+	+txalign.obj +sqnutil1.obj +sqnutil2.obj
 OBJ3  = +cdentrez.obj +cdromlib.obj +cdnewlib.obj +casn.obj +cdconfig.obj \
 	+objentr.obj
 
@@ -79,7 +79,7 @@ OBJ23 = +csim.obj +db_slist.obj +dust.obj +falign.obj +g_any.obj \
 	+posit.obj +ncbisam.obj \
 	+bandalg0.obj +bandalg1.obj +bandalg2.obj +bandalg3.obj \
 	+bandalg4.obj +bandalg5.obj +bandalgn.obj +ncbisort.obj \
-	+salsap.obj +salstruc.obj +salutil.obj \
+	+salpacc.obj +salpedit.obj +salsap.obj +salstruc.obj +salutil.obj \
 	+urkutil.obj +urkpcc.obj +urkptpf.obj \
 	+urkepi.obj +urkfltr.obj +urkdust.obj +urksigu.obj +seg.obj \
 	+urkbias.obj +urkcnsrt.obj +urktree.obj +pseed3.obj +pattern1.obj

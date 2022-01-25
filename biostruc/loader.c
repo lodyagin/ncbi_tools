@@ -1,4 +1,4 @@
-/*   $Id: loader.c,v 6.8 1998/09/03 22:05:26 kimelman Exp $
+/*   $Id: loader.c,v 6.13 1998/11/20 22:46:00 kimelman Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -30,6 +30,21 @@
  * Modifications:  
  * --------------------------------------------------------------------------
  * $Log: loader.c,v $
+ * Revision 6.13  1998/11/20 22:46:00  kimelman
+ * fix loader return code
+ *
+ * Revision 6.12  1998/11/06 18:59:07  kimelman
+ * PubStruct loading transaction granularity changed
+ *
+ * Revision 6.11  1998/10/22 17:01:20  kimelman
+ * fix default dump directory
+ *
+ * Revision 6.10  1998/10/22  15:24:28  kimelman
+ * fixed path to check_loader & default dump area
+ *
+ * Revision 6.9  1998/10/05  17:50:20  kimelman
+ * processing fixed for "file not found" on load case
+ *
  * Revision 6.8  1998/09/03 22:05:26  kimelman
  * added cycles to retry on failes and
  * wait for unhappy server to recover
@@ -70,12 +85,12 @@
 
 #define LOAD_IN_STATE 1
 
-char MMDB[PATH_MAX];
-char outdir[PATH_MAX];
-char bindir[PATH_MAX];
-char *server=NULL;
-int  state = -1;
-int  enforce = 0;
+static char  MMDB[PATH_MAX];
+static char  outdir[PATH_MAX];
+static char  bindir[PATH_MAX];
+static char *server=NULL;
+static int   state = -1;
+static int   enforce = 0;
 
 int
 remove_struct(int uid)
@@ -97,6 +112,7 @@ load(int uid)
   AsnIoPtr aip;
   FILE *p;
   int acc = 0;
+  int pipe = 1;
   
   sprintf(fname, "%s%ld.val.gz",MMDB,uid);
   p = fopen(fname,"r");
@@ -111,14 +127,21 @@ load(int uid)
     {
       sprintf(fname, "%s%ld.val",MMDB,uid);
       p = fopen(fname,"r");
+      pipe = 0;
     }
   if(p)
     {
       acc = PubStruct_load(p,(enforce?-state-1:state),server);
-      pclose(p);
+      if(pipe)
+        pclose(p);
+      else
+        fclose(p);
       return acc;
     }
-#if 0
+#if 1
+  fprintf(stderr, "Can't open file: %s%d.val(.gz) ",MMDB,uid);
+  return -2;
+#else
   sprintf(fname, "%s%ld.txt",MMDB,uid);
   p = fopen(fname,"r");
   if(!p)
@@ -140,8 +163,8 @@ load(int uid)
     
     if (!commit)  acc = 0;
   }
-#endif
   return acc;
+#endif
 }
 
 int
@@ -185,7 +208,7 @@ check(int uid)
 {
   char cmd[1024];
   
-  sprintf(cmd, "sh ./loader_check.sh %s %ld.val.gz %s", MMDB, uid, outdir);
+  sprintf(cmd, "sh %s/loader_check.sh %s %ld.val.gz %s", bindir, MMDB, uid, outdir);
   system(cmd);
 }
 
@@ -210,11 +233,12 @@ main(int argc, char**argv)
 {
   int mode = 0;
   int pack = 0;
+  int failed = 0; 
   int uid;
   unsigned long flags;
   setbuf(stdout,NULL);
   strcpy(MMDB,"/net/vaster/mmdb/mmdb/data/");
-  strcpy(outdir,"./mmdb");
+  strcpy(outdir,"/tmp");
   {
     FILE *f = fopen(argv[0],"r");
     char *p; 
@@ -327,15 +351,19 @@ main(int argc, char**argv)
       if (rc == -1 )
         printf(";\n");
       else
-        printf("%s ;\n",rc ?"ok":"FAILED");
+        {
+          printf("%s ;\n",rc ?"ok":"FAILED");
+          if (rc==0)
+            failed = 1;
+        }
       ErrShow();
     }
-  return 0;
+  return (failed?1:0);
 errexit:
   printf("usage: %s [ --load | --remove | --download [ --checks | --pack ] ] \n"
          "                 [ --path=mmdb_files_dir ] [ --downpath=dump_mmdb_files_dir  ] [ --state=<to_state> ] \n"
          "                 [ --verbose | -v ] [ --enforce ] \n"
          "                 [ --dbpath=servername:DBname=username:password ]\n",
          argv[0]);
-  return 1;
+  return 2;
 }

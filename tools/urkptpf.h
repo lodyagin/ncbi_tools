@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 98-01-01
 *
-* $Revision: 6.18 $
+* $Revision: 6.19 $
 *
 * File Description: patterns and profiles header
 *
@@ -38,6 +38,9 @@
 * Date       Name        Description of modification
 * --------------------------------------------------------------------------
 * $Log: urkptpf.h,v $
+* Revision 6.19  1998/11/16 14:29:54  kuzio
+* flagBoundaryCondition
+*
 * Revision 6.18  1998/09/16 17:46:46  kuzio
 * cvs logging
 *
@@ -138,11 +141,14 @@ extern Int4 CatenateProfile (ComProfPtr ppp, Int4 proflen, Int4 icount);
 
 extern SeqAlignPtr ProfileMatch (Uint1Ptr seq, Int4 seqpos, FloatHi cutoff,
                                  Uint1 strand, SeqIdPtr sip, ComProfPtr ppp,
-                                 Int2 topology, Boolean flagFindAllMatches);
+                                 Int2 topology, Boolean flagFindAllMatches,
+                                 Boolean flagBoundaryCondition);
 extern SeqAlignPtr ProfileMatchBioseq (BioseqPtr bsp, ComProfPtr ppp,
-                                       ComProfPtr ippp, FloatHi cutoff);
+                                       ComProfPtr ippp, FloatHi cutoff,
+                                       Boolean flagBoundaryCondition);
 extern SeqAlignPtr IntProfileMatchBioseq (BioseqPtr bsp, ComProfPtr ppp,
-                                          ComProfPtr ippp, Int4 cutoff);
+                                          ComProfPtr ippp, Int4 cutoff,
+                                          Boolean flagBoundaryCondition);
 
 /* SeqAligns SeqLocs */
 

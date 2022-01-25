@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/19/97
 *
-* $Revision: 6.14 $
+* $Revision: 6.22 $
 *
 * File Description: 
 *
@@ -64,6 +64,8 @@ typedef struct seqeditview {
   PrompT           pos;
   TexT             gototxt,
                    lookattxt;
+  TexT             fromtxt, totxt;
+
   ButtoN           gotobt,
                    lookatbt;
 
@@ -74,6 +76,7 @@ typedef struct seqeditview {
   ButtoN           refreshbt;
   ButtoN           closebt;
   ButtoN           svclosebt;
+  ButtoN           gap_choicebn;
 
   MenU             menu_align;
   IteM             editmodeitem,
@@ -105,6 +108,10 @@ typedef struct seqeditview {
   IteM             codonstitem;
   IteM             savefeatitem;
 
+  GrouP            replaceMergeCopyGroup;
+  GrouP            rmcExtra [3];
+  ButtoN           acceptBtn;
+
   Boolean          extended_align_menu;
   Boolean          extended_dist_menu;
   Boolean          extended_tree_menu;
@@ -135,6 +142,8 @@ typedef struct dialogboxdata
 *  for a given application.
 */
 
+typedef SeqEntryPtr (LIBCALLBACK *SeqEdDwnloadProc) (CharPtr program, CharPtr accession, Int4 uid, Boolean is_na, BoolPtr is_new);
+
 typedef struct seqeditviewprocs {
 
   WndActnProc      activateForm;
@@ -154,6 +163,14 @@ typedef struct seqeditviewprocs {
   Boolean          extended_align_menu;
   Boolean          extended_dist_menu;
   Boolean          extended_tree_menu;
+
+  SeqEdDwnloadProc download; /* application links to Entrez network service */
+
+  Boolean          Cn3D_On; 
+  IteM             conscolor;
+  Uint1            colorR_HL, colorG_HL, colorB_HL; /* yanli added to store highlight color */
+  ValNodePtr       seqinfo;   /* yanli added */
+                       /* data initially filled by cn3d to store SeqId, entityID, itemID, visible status and color arrays for those sequences loaded into memory by cn3d. seqinfo->data.ptrvalue is MediaInfoPtr(see "cn3dmsg.h"), each node is for one sequence */  
 
 } SeqEditViewProcs, PNTR SeqEditViewProcsPtr;
 

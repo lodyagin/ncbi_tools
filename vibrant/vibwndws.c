@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.14 $
+* $Revision: 6.20 $
 *
 * File Description:
 *       Vibrant main, event loop, and window functions
@@ -37,6 +37,24 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: vibwndws.c,v $
+* Revision 6.20  1999/01/21 23:58:32  kans
+* Mac navigation services code ifdefed out because is available function does not appear to work properly
+*
+* Revision 6.19  1999/01/06 02:52:00  kans
+* support for Mac Navigation Services file selection dialogs
+*
+* Revision 6.18  1998/12/14 18:39:11  kans
+* okayToDrawContents extern, used to inhibit slate drawing
+*
+* Revision 6.17  1998/12/10 21:28:50  kans
+* okayToDrawContents accessed only in WIN_MAC section
+*
+* Revision 6.16  1998/12/10 17:45:09  kans
+* okayToDrawContents to suppress drawing after return from Main
+*
+* Revision 6.15  1998/12/01 17:41:58  vakatov
+* Use just "0" instead of "(caddr_t)NULL" -- (a compilation fix)
+*
 * Revision 6.14  1998/07/14 16:44:29  vakatov
 * Added VibrantIsGUI() and <internal> Nlm_VibrantSetGUI()
 *
@@ -485,6 +503,13 @@
 #include <vibprocs.h>
 #include <vibincld.h>
 
+/*
+#ifdef WIN_MAC
+#include <Appearance.h>
+#include <Navigation.h>
+#endif
+*/
+
 #if defined(WIN_MOTIF) && defined(_DEBUG)
 #include <X11/Xmu/Editres.h>
 #endif
@@ -604,6 +629,12 @@ Nlm_WindoW   Nlm_systemWindow;
 Nlm_RecT     Nlm_screenRect;
 
 Nlm_WindoW   Nlm_theWindow;
+
+extern Nlm_Boolean okayToDrawContents;
+Nlm_Boolean okayToDrawContents = TRUE; /* set to false by CleanUpWindows */
+
+extern Nlm_Boolean Nlm_usesMacNavServices;
+Nlm_Boolean Nlm_usesMacNavServices = FALSE;
 
 #ifdef WIN_MAC
 EventRecord  Nlm_currentEvent;
@@ -4198,22 +4229,26 @@ static void Nlm_DrawWindow (Nlm_GraphiC w, Nlm_Boolean drawGrowIcon)
   Nlm_SetUpdateRegion (wptr);
   Nlm_RectToolToRecT (&(wptr->portRect), &r);
   Nlm_EraseRect (&r);
-  if (drawGrowIcon) {
-    Nlm_DrawGrowIcon (w, FALSE, TRUE);
+
+  if (okayToDrawContents) {
+    if (drawGrowIcon) {
+      Nlm_DrawGrowIcon (w, FALSE, TRUE);
+    }
+    mb = Nlm_GetWindowMenuBar ((Nlm_WindoW) w);
+    if (mb != NULL) {
+      Nlm_DoDraw ((Nlm_GraphiC) mb);
+    }
+    g = Nlm_GetChild (w);
+    while (g != NULL) {
+      n = Nlm_GetNext (g);
+      Nlm_DoDraw (g);
+      g = n;
+    }
+    if (drawGrowIcon) {
+      Nlm_DrawGrowIcon (w, TRUE, FALSE);
+    }
   }
-  mb = Nlm_GetWindowMenuBar ((Nlm_WindoW) w);
-  if (mb != NULL) {
-    Nlm_DoDraw ((Nlm_GraphiC) mb);
-  }
-  g = Nlm_GetChild (w);
-  while (g != NULL) {
-    n = Nlm_GetNext (g);
-    Nlm_DoDraw (g);
-    g = n;
-  }
-  if (drawGrowIcon) {
-    Nlm_DrawGrowIcon (w, TRUE, FALSE);
-  }
+
   EndUpdate (wptr);
   Nlm_ResetDrawingTools ();
   Nlm_ResetClip ();
@@ -5786,8 +5821,8 @@ static Nlm_Boolean Nlm_SetupWindows (void)
   {{
 #define disp_opTable_SIZE 2
     static XrmOptionDescRec disp_opTable[disp_opTable_SIZE] = {
-      {"-display", ".display", XrmoptionSepArg, (caddr_t)NULL},
-      {"-dpy",     ".display", XrmoptionSepArg, (caddr_t)NULL}
+      {"-display", ".display", XrmoptionSepArg, 0},
+      {"-dpy",     ".display", XrmoptionSepArg, 0}
     };
     XrmString type_str;
     XrmDatabase disp_db = NULL;
@@ -6068,6 +6103,8 @@ static void Nlm_CleanUpWindows (void)
   Nlm_GraphiC  n;
   Nlm_WindoW   w;
 
+  okayToDrawContents = FALSE; /* suppress all further slate content drawing */
+
   Nlm_RemoveDyingWindows();
 
 #ifdef WIN_MSWIN
@@ -6162,6 +6199,19 @@ main ()
 #endif
   }
 
+  Nlm_usesMacNavServices = FALSE;
+  /*
+  err = Gestalt (gestaltAppleEventsAttr, &gval);
+  if (err == noErr && ((short) gval & (1 << gestaltAppearanceExists)) != 0) {
+    if (NavServicesAvailable ()) {
+      Nlm_usesMacNavServices = TRUE;
+    }
+  }
+  if (Nlm_usesMacNavServices) {
+    NavLoad ();
+  }
+  */
+
   Nlm_InitVibrantHooks ();
 
   Nlm_InitWindows ();
@@ -6204,6 +6254,11 @@ main ()
   Nlm_FreeTexts ();
   Nlm_FreeConfigStruct ();
   Nlm_ErrSetLogfile (NULL,0);
+  /*
+  if (Nlm_usesMacNavServices) {
+    NavUnload ();
+  }
+  */
   ExitToShell ();
 }
 #endif

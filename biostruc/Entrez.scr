@@ -1,10 +1,16 @@
 /*
- * $Id: Entrez.scr,v 6.3 1998/07/27 19:35:57 kimelman Exp $
+ * $Id: Entrez.scr,v 6.5 1998/10/26 20:53:43 kimelman Exp $
  * 
  * This file contains the additions to PubStruct Database on Public 
  * Entrez Servers
  *
  * $Log: Entrez.scr,v $
+ * Revision 6.5  1998/10/26 20:53:43  kimelman
+ * bugfix: timerounding to minutes before comparision and print format fioxes
+ *
+ * Revision 6.4  1998/10/05 17:47:03  kimelman
+ * Fix for dates problem
+ *
  * Revision 6.3  1998/07/27 19:35:57  kimelman
  * fresh & full lists 2 index reordered in according to 'entrez' modification dates
  *
@@ -164,29 +170,33 @@ as
    select @pdb_id=pdb_id
    from   pdb
    where  mmdb_id = @mmdb_id
+
+   /* create date */
+   select @create_date=min(date)
+   from   Struct
+   where  state = 0 and mmdb_id in (select mmdb_id from pdb where pdb_id = @pdb_id)
    
-   select @mod_date=min(i.date_entrez)
+   select @create_date=isnull(min(i.date_entrez),@create_date)
    from   Struct s, EntrezControl..SatKeyInfo i(1)
-   where  s.mmdb_id = @mmdb_id and s.acc = i.sat_key and i.sat = 10 
+   where  s.state = 0 and s.mmdb_id in (select mmdb_id from pdb where pdb_id = @pdb_id)
+     and  s.acc = i.sat_key and i.sat = 10
+
+   /* Modificatio Date */   
+   select @mod_date=min(date)
+   from   Struct s
+   where  s.state = 0 and s.mmdb_id = @mmdb_id 
 
    select @mod_date=isnull(min(i.date_entrez),@mod_date)
    from   Struct s, EntrezControl..SatKeyInfo i(1)
-   where  s.mmdb_id = @mmdb_id and s.state = 0 and s.acc = i.sat_key and i.sat = 10 
+   where  s.state = 0 and s.mmdb_id = @mmdb_id 
+      and s.acc = i.sat_key and i.sat = 10
 
+   /* Entrez Publication Date */
    select @date_entrez=min(i.date_entrez)
    from   Struct s, EntrezControl..SatKeyInfo i(1)
    where  s.mmdb_id = @mmdb_id and s.state = 0 and s.acc = i.sat_key and i.sat = 10 
           and i.date_entrez is not null 
 
-   select @create_date=min(date)
-   from   Struct 
-   where  mmdb_id in (select mmdb_id from pdb where pdb_id = @pdb_id)
-   
-   select @create_date=isnull(min(i.date_entrez),@create_date)
-   from   Struct s, EntrezControl..SatKeyInfo i(1)
-   where  s.state = 0 and s.acc = i.sat_key and i.sat = 10 and i.date_entrez is not null and
-          s.mmdb_id in (select mmdb_id from pdb where pdb_id = @pdb_id)
-   
    select gi         =@mmdb_id,
           create_date=@create_date,
           mod_date   =@mod_date,
@@ -270,11 +280,43 @@ post_index(@index_key int, @minutes int = null)
 as
   declare @acc int
   declare @date datetime
-  
+  declare @mod_date datetime
+  declare @mmdb_id        int
+
   if ( @minutes is null )
     select @date = getdate()
   else
-    select @date = dateadd(minute,@minutes,'Jan 1 1900')
+    begin
+        select @date = dateadd(minute,@minutes,'Jan 1 1900')
+        if ( @date < getdate() )
+          begin
+            /* we come to this cased only if we update mmdb entry or just reindex it */
+            /* make sure the date we got is the same we sent to e2index */
+            select @mmdb_id= mmdb_id
+            from   Struct
+            where  acc = @index_key
+            
+            select @mod_date=min(date)
+            from   Struct s
+            where  s.state = 0 and s.mmdb_id = @mmdb_id 
+            
+            select @mod_date=isnull(min(i.date_entrez),@mod_date)
+            from   Struct s, EntrezControl..SatKeyInfo i(1)
+            where  s.state = 0 and s.mmdb_id = @mmdb_id 
+            and s.acc = i.sat_key and i.sat = 10
+
+            /* round time to minutes */
+            select @minutes = datediff(minute,'Jan 1 1900',@mod_date)
+            select @mod_date = dateadd(minute,@minutes,'Jan 1 1900')
+
+            if ( @mod_date is not null and @mod_date != @date )
+              begin
+                print "Post_index: modification dates incosistence: db=%1!, entrez=%2! ", @mod_date, @date
+                return 100
+              end
+            select @date = getdate()
+          end
+    end
 
   update EntrezControl..SatKeyInfo
   set dumped4entrez = 0
@@ -286,6 +328,7 @@ as
   set dumped4entrez = 1, date_entrez = isnull(date_entrez,@date)
   where sat = 10 and sat_key = @index_key
 go
+
 /*****        Grant and Revoke permissions post_index               *****/
 go
 GRANT EXECUTE ON post_index  TO anyone

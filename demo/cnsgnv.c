@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 98-01-01
 *
-* $Revision: 6.6 $
+* $Revision: 6.9 $
 *
 * File Description: consign - codon biased orf assignment
 *
@@ -38,6 +38,15 @@
 * Date       Name        Description of modification
 * --------------------------------------------------------------------------
 * $Log: cnsgnv.c,v $
+* Revision 6.9  1998/10/13 17:15:26  kuzio
+* colored graph opt
+*
+* Revision 6.8  1998/10/01 16:43:54  kuzio
+* rewrite framing
+*
+* Revision 6.7  1998/09/30 19:09:39  kuzio
+* more strand frame fixes
+*
 * Revision 6.6  1998/09/28 16:42:20  kuzio
 * no met orf check
 *
@@ -587,7 +596,7 @@ static void ConsignParamProc (ButtoN b)
 
   g1 = HiddenGroup (h1, 1, 0, NULL);
   g = HiddenGroup (g1, 1, 0, NULL);
-  StaticPrompt (g, "CU win", StringWidth ("12345678"), dialogTextHeight,
+  StaticPrompt (g, "CU cut", StringWidth ("12345678"), dialogTextHeight,
                 NULL, 'c');
   g = HiddenGroup (g1, 2, 0, NULL);
   AddScrollControl (&ssdp, g, (Int2) xosp->cutoff,
@@ -595,7 +604,7 @@ static void ConsignParamProc (ButtoN b)
 
   g1 = HiddenGroup (h1, 1, 0, NULL);
   g = HiddenGroup (g1, 1, 0, NULL);
-  StaticPrompt (g, "CU cut", StringWidth ("12345678"), dialogTextHeight,
+  StaticPrompt (g, "CU win", StringWidth ("12345678"), dialogTextHeight,
                 NULL, 'c');
   g = HiddenGroup (g1, 2, 0, NULL);
   AddScrollControl (&ssdp, g, (Int2) xosp->window,
@@ -658,9 +667,10 @@ static void AddOrfClass (SeqLocPtr slp, SegmenT seg,
 {
   SeqLocPtr slpThis, slpHead;
   Uint1     strandThis;
-  Int4      start, stop, startorig, startthis;
+  Int4      start, stop, startorig, startthis, stopthis;
+  Int4      len, runlen, extraframe;
   Int4      top, topold, startold, stopold;
-  Int4      framethis, frameshift, framedelta;
+  Int4      framethis;
   Boolean   flagRTL;
 
   while (slp != NULL)
@@ -674,11 +684,13 @@ static void AddOrfClass (SeqLocPtr slp, SegmenT seg,
         (strandThis == Seq_strand_unknown && strand == Seq_strand_plus))
     {
       flagRTL = TRUE;
+      runlen = 0;
       startold = -1;
       stopold = -1;
       topold = -1;
       slpHead = slpThis;
-      if (strandThis == Seq_strand_minus)
+      if (strandThis != Seq_strand_plus &&
+          strandThis != Seq_strand_unknown)
       {
         if (slp->choice == SEQLOC_MIX)
         {
@@ -693,7 +705,8 @@ static void AddOrfClass (SeqLocPtr slp, SegmenT seg,
           }
         }
       }
-      if (strandThis == Seq_strand_minus)
+      if (strandThis != Seq_strand_plus &&
+          strandThis != Seq_strand_unknown)
         startorig = SeqLocStop (slpHead) - 2;
       else
         startorig = SeqLocStart (slpHead);
@@ -703,41 +716,31 @@ static void AddOrfClass (SeqLocPtr slp, SegmenT seg,
         {
           start = SeqLocStart (slpThis);
           stop = SeqLocStop (slpThis);
-          if (strandThis == Seq_strand_minus)
-            startthis = SeqLocStop (slpThis) - 2;
-          else
-            startthis = SeqLocStart (slpThis);
-          framedelta = startorig - startthis;
-          if (framedelta < 0)
-            framedelta *= -1;
-          frameshift = framedelta % 3;
-          switch (frame)
+          if (strandThis != Seq_strand_plus &&
+              strandThis != Seq_strand_unknown)
           {
-           case 0:
-            framethis = iframe + frameshift;
-            break;
-           default:
-           case 1:
-            if (frameshift == 2)
-              frameshift = -1;
-            framethis = iframe + frameshift;
-            break;
-           case 2:
-            switch (frameshift)
-            {
-             case 0:
-              break;
-             case 1:
-              frameshift = 2;
-              break;
-             case 2:
-              frameshift = 1;
-              break;
-            }
-            framethis = iframe - frameshift;
-            break;
+            startthis = SeqLocStop (slpThis) - 2;
+            stopthis = SeqLocStart (slpThis) - 2;
           }
+          else
+          {
+            startthis = SeqLocStart (slpThis);
+            stopthis = SeqLocStop (slpThis);
+          }
+          framethis = startthis % 3;
+          extraframe = runlen % 3;
+          framethis += extraframe;
+          framethis %= 3;
+          if (iframe > 2)
+            framethis = 3 + framethis;
           top = orftop[framethis] - shift;
+
+          len = stopthis - startthis;
+          if (len < 0)
+            len *= -1;
+          len += 1;
+          runlen += len;
+
           if (stopold >= 0)
           {
             AddAttribute (seg, (COLOR_ATT|STYLE_ATT|SHADING_ATT|WIDTH_ATT),
@@ -987,7 +990,7 @@ static void ConsignProc (ButtoN b)
     if (seg == NULL)
       seg = CreatePicture ();
     if ((gsp = AddGraphSentinelToPicture (sgp, xosp->bsp, seg, 0,
-                                          top, 0)) != NULL)
+                                          top, 0, NULL)) != NULL)
     {
       sprintf (numberbuffer, "%ld", 1L);
       AddLabel (seg, gsp->box.left, gsp->bottom-20,
@@ -1056,7 +1059,8 @@ static void ConsignProc (ButtoN b)
     AddAttribute (seg, (COLOR_ATT|STYLE_ATT|SHADING_ATT|WIDTH_ATT),
                   BLACK_COLOR, SOLID_LINE, SOLID_SHADING, STD_PEN_WIDTH,
                   0);
-    AddLabel (seg, stop+(20*XScale), top, "All Met-init'd ORFs",
+    AddLabel (seg, stop+(20*XScale), top,
+              "All Met-init'd ORFs equal to or greater than 50 codons",
               SMALL_TEXT, 0, MIDDLE_RIGHT, 0);
   }
   if (xosp->slpk != NULL)

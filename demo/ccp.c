@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 98-01-01
 *
-* $Revision: 6.12 $
+* $Revision: 6.14 $
 *
 * File Description: coiled-coil prediction
 *
@@ -38,6 +38,12 @@
 * Date       Name        Description of modification
 * --------------------------------------------------------------------------
 * $Log: ccp.c,v $
+* Revision 6.14  1998/12/18 16:24:52  kuzio
+* big GIs
+*
+* Revision 6.13  1998/11/16 14:34:09  kuzio
+* flagBoundaryCondition
+*
 * Revision 6.12  1998/09/16 18:19:26  kuzio
 * cvs logging
 *
@@ -71,7 +77,7 @@ typedef struct gather_Prot_Bioseq
 
 Args myargs[] =
 {
-  { "protein GI", "0", "0", "4000000", TRUE,
+  { "protein GI", "0", "0", "9000000", TRUE,
     'g', ARG_INT, 0.0, 0, NULL},
   { "FastA file", NULL, NULL, NULL, TRUE,
     'f', ARG_STRING, 0.0, 0, NULL},
@@ -94,7 +100,9 @@ Args myargs[] =
   { "output line length", "50", "40", "160", TRUE,
     'l', ARG_INT, 0.0, 0, NULL},
   { "data file 0=KSpcc 1=KSmtk 2=KSmtidk", "0", "0", "2", TRUE,
-    'd', ARG_INT, 0.0, 0, NULL}
+    'd', ARG_INT, 0.0, 0, NULL},
+  { "Filter boundary condition hits only", "FALSE", "FALSE", "TRUE", TRUE,
+    'B', ARG_BOOLEAN, 0.0, 0, NULL}
 };
 
 static Boolean GetProteinBioseq (GatherContextPtr gcp)
@@ -375,17 +383,20 @@ Int2 Main (void)
             if (myargs[9].intvalue)
             {
               slpn = FilterCCVS (pccscore, 40, gpbsp->bsp->length, 32,
-                                 gpbsp->bsp->id);
+                                 gpbsp->bsp->id,
+                                 (Boolean) myargs[12].intvalue);
             }
             else if (myargs[8].intvalue)
             {
               slpn = FilterCCVS (pccscore, 50, gpbsp->bsp->length, 24,
-                                 gpbsp->bsp->id);
+                                 gpbsp->bsp->id,
+                                 (Boolean) myargs[12].intvalue);
             }
             else
             {
               slpn = FilterCC (pccscore, 50, gpbsp->bsp->length, 0,
-                               gpbsp->bsp->id);
+                               gpbsp->bsp->id,
+                               (Boolean) myargs[12].intvalue);
             }
             slp = slpn;
             while (slp != NULL)

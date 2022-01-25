@@ -1,4 +1,4 @@
-/*  $RCSfile: ncbisock.c,v $  $Revision: 4.10 $  $Date: 1998/08/12 13:12:42 $
+/*  $RCSfile: ncbisock.c,v $  $Revision: 4.12 $  $Date: 1999/01/22 22:04:59 $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -30,6 +30,12 @@
 *
 * --------------------------------------------------------------------------
 * $Log: ncbisock.c,v $
+* Revision 4.12  1999/01/22 22:04:59  vakatov
+* Uint4toInaddr() to take address in the network byte order
+*
+* Revision 4.11  1998/12/15 17:22:22  vakatov
+* + SOCK_Address() -- to get the socket peer's host and port
+*
 * Revision 4.10  1998/08/12 13:12:42  kans
 * moved high level query functions to ncbiurl.[ch]
 *
@@ -202,6 +208,8 @@ typedef struct Nlm_SOCKtag
   struct timeval *w_timeout;
   struct timeval rr_timeout;
   struct timeval ww_timeout;
+  Nlm_Uint4 host;  /* peer host (in the network byte order) */
+  Nlm_Uint2 port;  /* peer port (in the network byte order) */
 #ifdef SOCK_NCBI_PEEK
   BUF buf;
 #endif
@@ -618,6 +626,8 @@ NLM_EXTERN ESOCK_ErrCode LSOCK_Accept(LSOCK           lsock,
                                       SOCK           *sock)
 {
   Nlm_Socket x_sock;
+  Nlm_Uint4  x_host;
+  Nlm_Uint2  x_port;
 
   {{ /* wait for the connection(up to timeout) */
     ESOCK_ErrCode code;
@@ -632,6 +642,7 @@ NLM_EXTERN ESOCK_ErrCode LSOCK_Accept(LSOCK           lsock,
 
   {{ /* accept next connection */
     struct sockaddr addr;
+    struct sockaddr_in *x_addr = (struct sockaddr_in *)&addr;
 #ifdef OS_MAC
     long addrlen = sizeof(addr);
 #else
@@ -642,6 +653,8 @@ NLM_EXTERN ESOCK_ErrCode LSOCK_Accept(LSOCK           lsock,
                 "[LSOCK_Accept]  accept():  errno = %d", (int)SOCK_ERRNO);
       return eSOCK_EUnknown;
     }
+    x_host = x_addr->sin_addr.s_addr;
+    x_port = x_addr->sin_port;
   }}
 
   /* success:  create new SOCK structure */
@@ -649,6 +662,8 @@ NLM_EXTERN ESOCK_ErrCode LSOCK_Accept(LSOCK           lsock,
   (*sock)->sock = x_sock;
   VERIFY ( SOCK_SetTimeout(*sock, eSOCK_OnReadWrite, 0, 0, 0)
            == eSOCK_ESuccess );
+  (*sock)->host = x_host;
+  (*sock)->port = x_port;
   return eSOCK_ESuccess;
 }
 
@@ -682,6 +697,8 @@ NLM_EXTERN ESOCK_ErrCode SOCK_Create(const Nlm_Char *host,
                                      SOCK           *sock)
 {
   Nlm_Socket x_sock;
+  Nlm_Uint4  x_host;
+  Nlm_Uint2  x_port;
 
   struct sockaddr_in server;
   Nlm_MemSet(&server, '\0', sizeof(server));
@@ -689,34 +706,32 @@ NLM_EXTERN ESOCK_ErrCode SOCK_Create(const Nlm_Char *host,
   /* Initialize internals */
   VERIFY ( s_Initialize() == eSOCK_ESuccess );
 
-  /* Get the remote host address, fill out the "server" struct */
-  {{
-    Nlm_Uint4 inaddr;
-    inaddr = inet_addr(host);
-    if (inaddr != INADDR_NONE) {
-      Nlm_MemCpy((void *)&server.sin_addr, (void *)&inaddr, sizeof(inaddr));
-    }
-    else {
-      struct hostent *hp;
+  /* Get address of the remote host */
+  x_host = inet_addr(host);
+  if (x_host == INADDR_NONE) {
+    struct hostent *hp;
 #ifdef OS_UNIX_SOL
-      struct hostent x_hp;
-      char x_buf[1024];
-      int  x_err;
-      hp = gethostbyname_r(host, &x_hp, x_buf, sizeof(x_buf), &x_err);
+    struct hostent x_hp;
+    char x_buf[1024];
+    int  x_err;
+    hp = gethostbyname_r(host, &x_hp, x_buf, sizeof(x_buf), &x_err);
 #else
-      hp = gethostbyname(host);
+    hp = gethostbyname(host);
 #endif
-      if ( !hp ) {
-        ErrPostEx(SEV_ERROR, SOCK_ERRCODE, 1,
-                  "[SOCK_Create]  Cannot resolve network address(\"%s\")",
-                  host);
-        return eSOCK_EUnknown;
-      }
-      Nlm_MemCpy((void *)&server.sin_addr, (void *)hp->h_addr, hp->h_length);
+    if ( !hp ) {
+      ErrPostEx(SEV_ERROR, SOCK_ERRCODE, 1,
+                "[SOCK_Create]  Cannot resolve network address(\"%s\")",
+                host);
+      return eSOCK_EUnknown;
     }
-    server.sin_family = AF_INET;
-    server.sin_port = htons(port);
-  }}
+    Nlm_MemCpy((void *)&x_host, (void *)hp->h_addr, sizeof(x_host));
+  }
+  x_port = htons(port);
+
+  /* Fill out the "server" struct */
+  Nlm_MemCpy((void *)&server.sin_addr, (void *)&x_host, sizeof(x_host));
+  server.sin_family = AF_INET;
+  server.sin_port = x_port;
 
   /* Create new socket */
   if ((x_sock = socket(AF_INET, SOCK_STREAM, 0)) == SOCK_INVALID) {
@@ -748,6 +763,8 @@ NLM_EXTERN ESOCK_ErrCode SOCK_Create(const Nlm_Char *host,
   (*sock)->sock = x_sock;
   VERIFY ( SOCK_SetTimeout(*sock, eSOCK_OnReadWrite, 0, 0, 0)
            == eSOCK_ESuccess );
+  (*sock)->host = x_host;
+  (*sock)->port = x_port;
 
   return eSOCK_ESuccess;
 }
@@ -891,6 +908,17 @@ NLM_EXTERN ESOCK_ErrCode SOCK_Write(SOCK        sock,
 }
 
 
+NLM_EXTERN void SOCK_Address(SOCK         sock,
+                             Nlm_Uint4   *host,
+                             Nlm_Uint2   *port,
+                             Nlm_Boolean  network_byte_order) {
+  if ( host )
+    *host = network_byte_order ? sock->host : (Nlm_Uint4)ntohl(sock->host);
+  if ( port )
+    *port = network_byte_order ? sock->port : (Nlm_Uint2)ntohs(sock->port);
+}
+
+
 NLM_EXTERN Nlm_Boolean GetHostName(Nlm_Char *name,
                                    Nlm_Uint4 namelen)
 {
@@ -919,7 +947,7 @@ NLM_EXTERN Nlm_Boolean Uint4toInaddr(Nlm_Uint4 ui4_addr,
   if ( !buf )
     return FALSE;
 
-  addr_struct.s_addr = htonl(ui4_addr);
+  addr_struct.s_addr = ui4_addr;
   addr_string = inet_ntoa(addr_struct);
   if (!addr_string  ||  StrLen(addr_string) >= buf_len) {
     ErrPostEx(SEV_ERROR, SOCK_ERRCODE, 0,

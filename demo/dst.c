@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 98-01-01
 *
-* $Revision: 6.6 $
+* $Revision: 6.7 $
 *
 * File Description: a dust utility
 *
@@ -38,6 +38,9 @@
 * Date       Name        Description of modification
 * --------------------------------------------------------------------------
 * $Log: dst.c,v $
+* Revision 6.7  1998/12/18 16:24:54  kuzio
+* big GIs
+*
 * Revision 6.6  1998/09/16 18:19:28  kuzio
 * cvs logging
 *
@@ -72,7 +75,7 @@ Args myargs[] =
 {
   { "FastA file", NULL, NULL, NULL, TRUE,
     'f', ARG_STRING, 0.0, 0, NULL},
-  { "nucleotide GI", "0", "0", "4000000", TRUE,
+  { "nucleotide GI", "0", "0", "9000000", TRUE,
     'g', ARG_INT, 0.0, 0, NULL},
   { "dust window", "64", "16", "256", TRUE,
     'w', ARG_INT, 0.0, 0, NULL},

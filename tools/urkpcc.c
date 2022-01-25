@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 98-01-01
 *
-* $Revision: 6.11 $
+* $Revision: 6.12 $
 *
 * File Description: coiled-coils
 *
@@ -38,6 +38,9 @@
 * Date       Name        Description of modification
 * --------------------------------------------------------------------------
 * $Log: urkpcc.c,v $
+* Revision 6.12  1998/11/16 14:29:49  kuzio
+* flagBoundaryCondition
+*
 * Revision 6.11  1998/09/16 18:03:35  kuzio
 * cvs logging
 *
@@ -347,10 +350,12 @@ extern FloatHiPtr PredictCCSeqLoc (SeqLocPtr slp,
 }
 
 extern SeqLocPtr FilterCC (FloatHiPtr score, FloatHi percentcut,
-                           Int4 length, Int4 linker, SeqIdPtr sip)
+                           Int4 length, Int4 linker, SeqIdPtr sip,
+                           Boolean flagBoundaryCondition)
 {
   Int4       i;
   Int4       start, stop;
+  FloatHi    lopr, hipr;
   SeqLocPtr  nextslp, slp, slph = NULL;
   SeqIntPtr  sint;
 
@@ -358,34 +363,74 @@ extern SeqLocPtr FilterCC (FloatHiPtr score, FloatHi percentcut,
     return NULL;
 
   percentcut /= 100.0;
+  lopr = percentcut * 0.80;
+  hipr = percentcut + (percentcut - lopr);
 
-  for (i = 0; i < length; i++)
+  if (flagBoundaryCondition)
   {
-    if (*score > percentcut)
-      break;
-    score++;
+    for (i = 0; i < length; i++)
+    {
+      if (*score >= lopr && *score <= hipr)
+        break;
+      score++;
+    }
+  }
+  else
+  {
+    for (i = 0; i < length; i++)
+    {
+      if (*score > percentcut)
+        break;
+      score++;
+    }
   }
   if (i == length)
     return NULL;
 
-  while (i < length)
+  if (flagBoundaryCondition)
   {
-    if (*score > percentcut)
+    while (i < length)
     {
-      start = i;
-      while (*score > percentcut && i < length)
+      if (*score >= lopr && *score <= hipr)
+      {
+        start = i;
+        while (*score >= lopr && *score <= hipr && i < length)
+        {
+          score++;
+          i++;
+        }
+        stop = i - 1;
+        slp = SeqLocIntNew (start, stop, Seq_strand_unknown, sip);
+        ValNodeLink (&slph, slp);
+      }
+      else
       {
         score++;
         i++;
       }
-      stop = i - 1;
-      slp = SeqLocIntNew (start, stop, Seq_strand_unknown, sip);
-      ValNodeLink (&slph, slp);
     }
-    else
+  }
+  else
+  {
+    while (i < length)
     {
-      score++;
-      i++;
+      if (*score > percentcut)
+      {
+        start = i;
+        while (*score > percentcut && i < length)
+        {
+          score++;
+          i++;
+        }
+        stop = i - 1;
+        slp = SeqLocIntNew (start, stop, Seq_strand_unknown, sip);
+        ValNodeLink (&slph, slp);
+      }
+      else
+      {
+        score++;
+        i++;
+      }
     }
   }
 
@@ -417,10 +462,13 @@ extern SeqLocPtr FilterCC (FloatHiPtr score, FloatHi percentcut,
 }
 
 extern SeqLocPtr FilterCCVS (FloatHiPtr score, FloatHi percentcut,
-                             Int4 length, Int4 linker, SeqIdPtr sip)
+                             Int4 length, Int4 linker, SeqIdPtr sip,
+                             Boolean flagBoundaryCondition)
+
 {
   Int4       i;
   Int4       start, stop;
+  FloatHi    lopr, hipr;
   SeqLocPtr  nextslp, slp, slph = NULL;
   SeqIntPtr  sint;
   Int4       cccount;
@@ -429,34 +477,74 @@ extern SeqLocPtr FilterCCVS (FloatHiPtr score, FloatHi percentcut,
     return NULL;
 
   percentcut /= 100.0;
+  lopr = percentcut * 0.80;
+  hipr = percentcut + (percentcut - lopr);
 
-  for (i = 0; i < length; i++)
+  if (flagBoundaryCondition)
   {
-    if (*score > percentcut)
-      break;
-    score++;
+    for (i = 0; i < length; i++)
+    {
+      if (*score >= lopr && *score <= hipr)
+        break;
+      score++;
+    }
+  }
+  else
+  {
+    for (i = 0; i < length; i++)
+    {
+      if (*score > percentcut)
+        break;
+      score++;
+    }
   }
   if (i == length)
     return NULL;
 
-  while (i < length)
+  if (flagBoundaryCondition)
   {
-    if (*score > percentcut)
+    while (i < length)
     {
-      start = i;
-      while (*score > percentcut && i < length)
+      if (*score >= lopr && *score <= hipr)
+      {
+        start = i;
+        while (*score >= lopr && *score <= hipr && i < length)
+        {
+          score++;
+          i++;
+        }
+        stop = i - 1;
+        slp = SeqLocIntNew (start, stop, Seq_strand_unknown, sip);
+        ValNodeLink (&slph, slp);
+      }
+      else
       {
         score++;
         i++;
       }
-      stop = i - 1;
-      slp = SeqLocIntNew (start, stop, Seq_strand_unknown, sip);
-      ValNodeLink (&slph, slp);
     }
-    else
+  }
+  else
+  {
+    while (i < length)
     {
-      score++;
-      i++;
+      if (*score > percentcut)
+      {
+        start = i;
+        while (*score > percentcut && i < length)
+        {
+          score++;
+          i++;
+        }
+        stop = i - 1;
+        slp = SeqLocIntNew (start, stop, Seq_strand_unknown, sip);
+        ValNodeLink (&slph, slp);
+      }
+      else
+      {
+        score++;
+        i++;
+      }
     }
   }
 

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.13 $
+* $Revision: 6.14 $
 *
 * File Description: 
 *
@@ -57,55 +57,31 @@
 /****************
 *** Format Sequence
 ******************/
+extern SeqEntryPtr FastaRead (CharPtr path, Uint2 mol_type);
+extern SeqEntryPtr ReadInterleaveAlign (CharPtr path, Uint1 mol_type);
+extern SeqEntryPtr ReadContiguouseAlign (CharPtr path, Uint1 mol_type);
+extern SeqEntryPtr ReadAnyAlignment (Boolean is_prot, CharPtr path);
+extern SeqEntryPtr ReadLocalAlignment (Uint1 format, CharPtr path);
+extern SeqAlignPtr ImportFromFile (EditAlignDataPtr adp);
+extern void CCFetchFromNet (EditAlignDataPtr adp, WindoW editor_window);
+extern void EditBioseqToFasta (BioseqPtr bsp, FILE *fout, Int4 from, Int4 to);
+extern Int2 seqannot_write (SeqAnnotPtr sap, CharPtr path);
+extern void seqalign_write (SeqAlignPtr salp, CharPtr path);
+extern Boolean sesp_to_pept (SelEdStructPtr cds, SeqAlignPtr salp, ValNodePtr sqlocs, Boolean partial);
+extern void CdRgnToProtProc (PaneL pnl,  EditAlignDataPtr adp);
+extern void UntranslateFunc (PaneL pnl,  EditAlignDataPtr adp);
+extern Boolean ShowFeatureFunc (EditAlignDataPtr adp);
+extern Boolean HideFeatureFunc (EditAlignDataPtr adp);
+extern Boolean ResetFeatureFunc (EditAlignDataPtr adp);
+extern void PropagateFeatDialog (IteM i);
+extern ValNodePtr update_featpept (EditAlignDataPtr adp, ValNodePtr feathead, RecT *rp, SelStructPtr ssp, Int4 changevalue, Uint2 itemsubtype);
+extern void ShowFeatureProc (PaneL pnl, Boolean invalidate);
+extern void SaveFeatProc (PaneL pnl);
+extern void SaveAllFeatProc (PaneL pnl);
+extern void MakeFeatProc (PaneL pnl, Uint2 itemsubtype, Uint1 strand);
+extern void TranslateAllBioseq (PaneL pnl,  EditAlignDataPtr adp);
+
 extern ValNodePtr CCReadAnythingLoop (CharPtr filename, SelEdStructPtr seq_info);
-
-extern SeqEntryPtr  FastaRead (CharPtr path, Uint2 mol_type);
-extern SeqEntryPtr  GapFastaRead (CharPtr path, Uint2 mol_type);
-extern ValNodePtr   IdRead (CharPtr path);
-extern SeqEntryPtr  AsnReadForSalsa (CharPtr path);
-
-extern void         EditBioseqToFasta (BioseqPtr bsp, FILE *fout, Boolean is_na, Int4 from, Int4 to);
-extern Int2         BioseqSetFileWrite (BioseqSetPtr bssp);
-extern Int2         BioseqFileWrite (BioseqPtr bsp);
-extern SeqEntryPtr  seqentry_read (CharPtr path);
-extern Boolean      seqentry_write (SeqEntryPtr sep, CharPtr path);
-
-/****************
-*** Format SeqAnnot
-******************/
-extern SeqAnnotPtr  seqannot_read (CharPtr path);
-extern Int2         seqannot_write (SeqAnnotPtr sap, CharPtr path);
-extern void         seqalign_write (SeqAlignPtr salp, CharPtr path);
-extern SeqAnnotPtr  SeqAnnotFileRead (void);
-
-/****************
-*** Format Alignment
-******************/
-extern void         ReadAlignView (BioseqPtr target_bsp, Uint2 import_format);
-extern SeqEntryPtr  ReadAlignmentFunc (CharPtr path, Uint1 mol_type, Uint1 format, Int2 n_seq, Boolean save_seqentry, Boolean save_sap, SeqIdPtr sqloc_list);
-extern SeqEntryPtr  ReadLocalAlignment (Uint1 format, CharPtr path);
-extern SeqEntryPtr  ReadAnyAlignment (Boolean is_prot, CharPtr path);
-extern void         showtextalign_fromalign (SeqAlignPtr salp, CharPtr path, FILE *fp);
-
-extern SeqAlignPtr  ImportFromFile (EditAlignDataPtr adp);
-extern void         CCFetchFromNet  (EditAlignDataPtr adp, WindoW editor_window);
-
-/*****************
-*** Features
-******************/
-extern Boolean      sesp_to_pept (SelEdStructPtr cds, SeqAlignPtr salp, ValNodePtr sqlocs, Boolean partial);
-extern void         CdRgnToProtProc (PaneL pnl,  EditAlignDataPtr adp);
-extern void         UntranslateFunc (PaneL pnl,  EditAlignDataPtr adp);
-extern Boolean      ShowFeatureFunc (EditAlignDataPtr adp);
-extern Boolean      HideFeatureFunc (EditAlignDataPtr adp);
-extern Boolean      ResetFeatureFunc (EditAlignDataPtr adp);
-
-extern void         PropagateFeatDialog (IteM i);
-extern ValNodePtr   update_featpept (EditAlignDataPtr adp, ValNodePtr feathead, RecT *rp, SelStructPtr ssp, Int4 changevalue, Uint2 itemsubtype);
-extern void         ShowFeatureProc (PaneL pnl, Boolean invalidate);
-extern void         SaveFeatProc (PaneL pnl);
-extern void         SaveAllFeatProc (PaneL pnl);
-extern void         MakeFeatProc (PaneL pnl, Uint2 itemsubtype, Uint1 strand);
-extern void         TranslateAllBioseq (PaneL pnl,  EditAlignDataPtr adp);
-
+extern SeqEntryPtr AsnReadForSalsa (CharPtr path);
+extern SeqEntryPtr seqentry_read (CharPtr path);
 #endif

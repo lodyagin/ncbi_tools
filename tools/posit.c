@@ -34,8 +34,11 @@ Contents: utilities for position-based BLAST.
 
 
 *****************************************************************************/
-/* $Revision: 6.21 $ */
+/* $Revision: 6.22 $ */
 /* $Log: posit.c,v $
+/* Revision 6.22  1998/12/09 18:51:51  madden
+/* fixed counting bug in posCancel
+/*
  * Revision 6.21  1998/09/28 12:31:31  madden
  * Used BlastConstructErrorMessage
  *
@@ -620,10 +623,6 @@ static void posCancel(posSearchItems *posSearch, compactSearchItems * compactSea
   Boolean stillNeeded;
 
   for(c = matchStart, i = 0; i < intervalLength; i++, c++) {
-    if (posSearch->posDescMatrix[second][c].used) {
-      posSearch->posCount[c]--; 
-      posSearch->posC[c][posSearch->posDescMatrix[second][c].letter]--;
-    } 
     posSearch->posDescMatrix[second][c].used = FALSE;
     posSearch->posDescMatrix[second][c].letter = 0;
   }

@@ -1,12 +1,18 @@
 #! /bin/sh
 #
-# $Id: mmdbsrv.wrapper,v 6.8 1998/06/09 19:16:07 kimelman Exp $
+# $Id: mmdbsrv.wrapper,v 6.9 1998/10/07 21:58:16 kimelman Exp $
 #
 # this is CGI handler wrapper. It works as a membrane between httpd and actual
 # cgi program and allow to run new technological version of such program in 
 # parallel to old one and compare results in "real life" condition. 
 #
 # $Log: mmdbsrv.wrapper,v $
+# Revision 6.9  1998/10/07 21:58:16  kimelman
+# code cleaned & madeeasy to read.
+# check for directory access permission added
+# binaries expected names changed
+# this version of script is expected to work on public servers
+#
 # Revision 6.8  1998/06/09 19:16:07  kimelman
 # extra bracket removed.
 #
@@ -15,20 +21,18 @@
 #
 #
 
-MMDBSRVs_to_try="./mmdbsrv.old ./mmdbsrv.f new/mmdbsrv.db"
+MMDBSRVs_to_try="./mmdbsrv.REAL ./mmdbsrv.NEW new/mmdbsrv.db"
 
 progname=$0
 progdir=`dirname $progname`
 options="$*"
 
-TMPdir=/tmp/mmdbsrv.wrapper/$$
-[ -d /tmp/mmdbsrv.wrapper ] || mkdir -p /tmp/mmdbsrv.wrapper
-[ -d $TMPdir ] || mkdir -p $TMPdir 
-# just to make sure
-chmod a+rw /tmp/mmdbsrv.wrapper
-chmod a+rw $TMPdir
+TMPtop=/tmp/mmdbsrv
+TMPdir=$TMPtop/$$
+awk_prg=$TMPtop/awkp
+STATs_to_try="./stats log/statistics.mmdbsrv $TMPtop/stats"
 
-. ./st_configure.sh
+check_executables() {
 
 MMDBSRVs=
 for fexec in $MMDBSRVs_to_try ; do
@@ -37,13 +41,32 @@ done
 
 if [ "x$MMDBSRVs" = x ]; then
      mail $THEvictim <<EOF
-Subject mmdbsrv.wrapper : can find binaries to run
+Subject ${progname} : can find binaries to run
 
 `ls -al`
 
 EOF
     exit 1
 fi
+}
+
+check_stats() {
+    stats=
+    for stats_file in $STATs_to_try ; do
+        if [ -w $stats -a -w `dirname $stats` ]; then
+            stats=$stats_file
+            break
+        fi
+    done
+    if [ x$stats = x ] ; then 
+        for stats_file in $STATs_to_try ; do
+            if [ -w `dirname $stats` ]; then
+                stats=$stats_file
+                break
+            fi
+        done
+    fi
+}
 
 res_name() {
   res_fname=${TMPdir}/`echo "$1" | tr '/.' '__'`
@@ -68,42 +91,8 @@ run_cgi() {
   waitedID="$waitedID $!"
 }
 
-#-------------------------------------------------------------------
-#-------------------------------------------------------------------
-#  MAIN program 
-#-------------------------------------------------------------------
 
-# create tmp directory
-[ -d $TMPdir ] || mkdir -p $TMPdir
-# store input stream
-res_name input
-input_file=$res_fname
-cat >$input_file
-
-#
-# run all cgi programs in parallel
-#
-
-for texec in $MMDBSRVs ; do
-  run_cgi $texec
-done
-
-
-#
-# compare results now
-#
-stats=./stats
-awk_prg=$TMPdir/awkp
-cat >$awk_prg <<EOF
-BEGIN   { real=0 ; user=0 ; sys=0 }
-/real/  { real=\$2 }
-/user/  { user=\$2 }
-/sys/   { sys=\$2  }
-        { if ( \$1 == fn ) { real+=\$2 ;  user+=\$3 ; sys +=\$4 } }
-END     { print fn, real, user, sys }
-EOF
-
-lock_problem() {
+report_lock_problem() {
      mail $THEvictim <<EOF
 Subject mmdbsrv.wrapper locking problem
 
@@ -121,13 +110,12 @@ EOF
 }
 
 timing() {
-  dd=$$
-  while [ -f $stats.lock ] ; do sleep 1 ; done
-  echo $dd >$stats.lock
-  [ -f $stats ] || echo '! Stats file' >$stats
-  if [ -w $stats ] ; then
+    dd=$$
+    while [ -f $stats.lock ] ; do sleep 1 ; done
+    echo $dd >$stats.lock
+    [ -f $stats ] || echo '! Stats file' >$stats
     if [ -f $stats.lock -a "$dd" != "`cat $stats.lock`" ] ; then
-      lock_problem
+        report_lock_problem
     fi
     grep -v "^$fn " $stats > $res_fname.3
     grep "^$fn " $stats | cat $res_fname.2 -  >$res_fname.4
@@ -135,15 +123,94 @@ timing() {
     cat $res_fname.3 >$stats
     rm $res_fname.3
     [ ! -f ${stats}.lock ] || rm ${stats}.lock
-  fi
 }
 
 proc_res() {
   res_name $1
   fn=`basename $res_fname`
   # echo "proc_res: $1 --> $fn"
-  timing
+  if [ "x$rcode" != x -a $rcode -eq 0 -a x$stats != x ]; then
+    timing
+  fi
 }
+
+create_stats_prog() {
+cat >$awk_prg <<EOF
+BEGIN   { real=0 ; user=0 ; sys=0 ; cnt=0 ; }
+/real/  { real=\$2 }
+/user/  { user=\$2 }
+/sys/   { sys=\$2  }
+        { if ( \$1 == fn ) { cnt=\$5 ; real+=\$2 * cnt ;  user+=\$3 *cnt ; sys +=\$4 * cnt ;  } }
+END     { cnt+=1 ; print fn, real/cnt, user/cnt, sys/cnt, cnt }
+EOF
+}
+
+report_failure() { # $execname $rcode $res_fname $res_fname.2
+    mail $THEvictim <<EOF
+Subject: $1 failed with status $2
+
+====================================================================
+Log:
+`cat $3`
+
+Log.2:
+`cat $4`
+
+====================================================================
+Input file:
+`cat $input_file`
+
+====================================================================
+----------- Environment:----------------
+
+`env`
+
+EOF
+}
+
+atexit() {
+    rm -rf $TMPdir
+}
+#-------------------------------------------------------------------
+#-------------------------------------------------------------------
+#  MAIN program 
+#-------------------------------------------------------------------
+
+[ -d $TMPtop ] || mkdir -p $TMPtop
+[ -d $TMPdir ] || mkdir -p $TMPdir 
+# just to make sure
+chmod a+rw $TMPtop
+chmod a+rw $TMPdir
+
+trap atexit 0,1
+
+# configuration
+
+check_executables
+check_stats
+
+if [ x$stats != x ] ; then
+    sybase_settings_fname=`dirname $stats`/.syb_set
+fi
+
+. ${progdir}/st_configure.sh
+
+if [ ! -r $awk_prg ] ; then
+    create_stats_prog
+fi
+
+# store input stream
+res_name input
+input_file=$res_fname
+cat >$input_file
+
+#
+# run all cgi programs in parallel
+#
+
+for texec in $MMDBSRVs ; do
+  run_cgi $texec
+done
 
 #
 # wait for termination of all of them
@@ -157,61 +224,24 @@ for execname in $MMDBSRVs ; do
   rcode=$?
   proc_res $execname
   if [ $rcode -ne 0 ] ; then
-    mail $THEvictim <<EOF
-Subject: $execname failed with status $rcode
-
-====================================================================
-Log:
-`cat $res_fname`
-
-Log.2:
-`cat $res_fname.2`
-
-====================================================================
-Input file:
-`cat $input_file`
-
-====================================================================
------------ Environment:----------------
-
-`env`
-
-EOF
+    # report mmdbsrv.REAL failure
+    report_failure $execname $rcode $res_fname $res_fname.2 
     continue
   fi 
   if [ x$main_result = x ] ; then
     main_result=$res_fname
-    cat $main_result  ## /test
+    # output result of first program
+    cat $main_result
     continue
   fi
+  #
+  # compare results now
+  #
   diff -c $main_result $res_fname >$res_fname.diff
-  if [ $? -gt 0 ]
-  then
-    mail $THEvictim <<EOF
-Subject: $execname failed
-
-====================================================================
-Log:
-`cat $res_fname.diff`
-
-====================================================================
-Input file:
-`cat $input_file`
-
-====================================================================
------------ Environment:----------------
-
-`env`
-
------------ Settings:   ----------------
-`set`
-
-EOF
+  if [ $? -gt 0 ] ; then
+    report_failure $execname $rcode $res_fname.diff $res_fname.2
   fi
-
 done
-
-rm -rf $TMPdir
 
 #
 # The end

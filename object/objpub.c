@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description:  Object manager for module NCBI-Pub
 *
@@ -41,6 +41,11 @@
 *
 *
 * $Log: objpub.c,v $
+* Revision 6.2  1998/12/30 20:28:34  ostell
+* fixed bug in PubLabelUnique() for author list. If alp->names is NULL,
+* diff was not initialized. So operations using diff moved inside
+* if (vnp2 != NULL)
+*
 * Revision 6.1  1998/08/24 18:28:08  kans
 * removed solaris -v -fd warnings
 *
@@ -1536,9 +1541,9 @@ cit_book:   imp = cbp->imp;
 			}
 			else
 				diff = LabelCopy(buf, (CharPtr)(vnp2->data.ptrvalue), buflen);
-		}
 		buflen -= diff;
 		buf += diff;
+		}
 	}
 
 	if (dp != NULL)

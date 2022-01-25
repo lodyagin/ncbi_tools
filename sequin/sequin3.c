@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.81 $
+* $Revision: 6.90 $
 *
 * File Description: 
 *
@@ -305,280 +305,6 @@ static void ForceLocusFixup (IteM i)
   ErrShow ();
 }
 
-static void CollectPseudoCdsProducts (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent)
-
-{
-  BioseqPtr        bsp;
-  BioseqSetPtr     bssp;
-  BioseqPtr        product;
-  Boolean          pseudo;
-  GBQualPtr        gbqual;
-  SeqAnnotPtr      sap;
-  SeqFeatPtr       sfp;
-  ValNodePtr PNTR  vnpp;
-
-  if (sep == NULL || sep->data.ptrvalue == NULL) return;
-  vnpp = (ValNodePtr PNTR) mydata;
-  if (vnpp == NULL) return;
-  if (IS_Bioseq (sep)) {
-    bsp = (BioseqPtr) sep->data.ptrvalue;
-    sap = bsp->annot;
-  } else if (IS_Bioseq_set (sep)) {
-    bssp = (BioseqSetPtr) sep->data.ptrvalue;
-    sap = bssp->annot;
-  } else return;
-  while (sap != NULL) {
-    if (sap->type == 1) {
-      sfp = (SeqFeatPtr) sap->data;
-      while (sfp != NULL) {
-        if (sfp->data.choice == SEQFEAT_CDREGION) {
-          pseudo = sfp->pseudo;
-          if (! pseudo) {
-            gbqual = sfp->qual;
-            while (gbqual != NULL) {
-              if (StringICmp (gbqual->qual, "pseudo") == 0) {
-                pseudo = TRUE;
-              }
-              gbqual = gbqual->next;
-            }
-          }
-          if (pseudo) {
-            product = BioseqFind (SeqLocId (sfp->product));
-            if (product != NULL) {
-              ValNodeAddPointer (vnpp, 0, (Pointer) product);
-              sfp->product = SeqLocFree (sfp->product);
-            }
-          }
-        }
-        sfp = sfp->next;
-      }
-    }
-    sap = sap->next;
-  }
-}
-
-static void CleanUpPseudoProducts (Uint2 entityID, SeqEntryPtr sep)
-
-{
-  BioseqPtr      bsp;
-  Uint2          itemID;
-  ValNodePtr     list;
-  OMProcControl  ompc;
-  ValNodePtr     vnp;
-
-  list = NULL;
-  SeqEntryExplore (sep, &list, CollectPseudoCdsProducts);
-  for (vnp = list; vnp != NULL; vnp = vnp->next) {
-    bsp = (BioseqPtr) vnp->data.ptrvalue;
-    itemID = GetItemIDGivenPointer (entityID, OBJ_BIOSEQ, (Pointer) bsp);
-    if (itemID > 0) {
-      MemSet ((Pointer) (&ompc), 0, sizeof (OMProcControl));
-      ompc.do_not_reload_from_cache = TRUE;
-      ompc.input_entityID = entityID;
-      ompc.input_itemID = itemID;
-      ompc.input_itemtype = OBJ_BIOSEQ;
-      if (! DetachDataForProc (&ompc, FALSE)) {
-        Message (MSG_POSTERR, "DetachDataForProc failed");
-      }
-    }
-  }
-  ValNodeFree (list);
-}
-
-static void CleanupGenbankCallback (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent)
-
-{
-  BaseFormPtr    bfp;
-  BioseqPtr      bsp;
-  BioseqSetPtr   bssp;
-  Boolean        empty;
-  GBBlockPtr     gbp;
-  ValNodePtr     nextsdp;
-  Pointer PNTR   prevsdp;
-  ValNodePtr     sdp;
-
-  if (mydata == NULL) return;
-  if (sep == NULL || sep->data.ptrvalue == NULL) return;
-  bfp = (BaseFormPtr) mydata;
-  if (bfp == NULL) return;
-  if (IS_Bioseq (sep)) {
-    bsp = (BioseqPtr) sep->data.ptrvalue;
-    sdp = bsp->descr;
-    prevsdp = (Pointer PNTR) &(bsp->descr);
-  } else if (IS_Bioseq_set (sep)) {
-    bssp = (BioseqSetPtr) sep->data.ptrvalue;
-    sdp = bssp->descr;
-    prevsdp = (Pointer PNTR) &(bssp->descr);
-  } else return;
-  while (sdp != NULL) {
-    nextsdp = sdp->next;
-    empty = FALSE;
-    if (sdp->choice == Seq_descr_genbank && sdp->data.ptrvalue != NULL) {
-      gbp = (GBBlockPtr) sdp->data.ptrvalue;
-      gbp->source = MemFree (gbp->source);
-      gbp->origin = MemFree (gbp->origin);
-      gbp->taxonomy = MemFree (gbp->taxonomy);
-      if (gbp->extra_accessions == NULL && gbp->source == NULL &&
-          gbp->keywords == NULL && gbp->origin == NULL &&
-          gbp->date == NULL && gbp->entry_date == NULL &&
-          gbp->div == NULL && gbp->taxonomy == NULL) {
-        empty = TRUE;
-      }
-    }
-    if (empty) {
-      *(prevsdp) = sdp->next;
-      sdp->next = NULL;
-      SeqDescFree (sdp);
-    } else {
-      prevsdp = (Pointer PNTR) &(sdp->next);
-    }
-    sdp = nextsdp;
-  }
-}
-
-static Boolean EmptyOrNullString (CharPtr str)
-
-{
-  Char  ch;
-
-  if (str == NULL) return TRUE;
-  ch = *str;
-  while (ch != '\0') {
-    if (ch > ' ' && ch <= '~') return FALSE;
-    str++;
-    ch = *str;
-  }
-  return TRUE;
-}
-
-static void MergeAdjacentAnnotsCallback (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent)
-
-{
-  BioseqPtr     bsp;
-  BioseqSetPtr  bssp;
-  SeqAnnotPtr   nextsap;
-  SeqAnnotPtr   sap;
-  SeqFeatPtr    sfp;
-
-  if (sep == NULL || sep->data.ptrvalue == NULL) return;
-  if (IS_Bioseq (sep)) {
-    bsp = (BioseqPtr) sep->data.ptrvalue;
-    sap = bsp->annot;
-  } else if (IS_Bioseq_set (sep)) {
-    bssp = (BioseqSetPtr) sep->data.ptrvalue;
-    sap = bssp->annot;
-  } else return;
-  while (sap != NULL) {
-    nextsap = sap->next;
-    if (sap->type == 1 && nextsap != NULL && nextsap->type == 1) {
-      if (sap->id == NULL && nextsap->id == NULL &&
-          sap->name == NULL && nextsap->name == NULL &&
-          sap->db == 0 && nextsap->db == 0 &&
-          sap->desc == NULL && nextsap->desc == NULL &&
-          sap->data != NULL && nextsap->data != NULL) {
-        sfp = (SeqFeatPtr) sap->data;
-        while (sfp->next != NULL) {
-          sfp = sfp->next;
-        }
-        sfp->next = (SeqFeatPtr) nextsap->data;
-        nextsap->data = NULL;
-        sap->next = nextsap->next;
-        SeqAnnotFree (nextsap);
-        nextsap = sap->next;
-      }
-    }
-    sap = nextsap;
-  }
-}
-
-extern void CleanupEmptyFeatCallback (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent);
-extern void CleanupEmptyFeatCallback (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent)
-
-{
-  BioseqPtr      bsp;
-  BioseqSetPtr   bssp;
-  Boolean        empty;
-  GeneRefPtr     grp;
-  SeqAnnotPtr    nextsap;
-  SeqFeatPtr     nextsfp;
-  Pointer PNTR   prevsap;
-  Pointer PNTR   prevsfp;
-  ProtRefPtr     prp;
-  SeqAnnotPtr    sap;
-  SeqFeatPtr     sfp;
-  ValNodePtr     vnp;
-
-  if (sep == NULL || sep->data.ptrvalue == NULL) return;
-  if (IS_Bioseq (sep)) {
-    bsp = (BioseqPtr) sep->data.ptrvalue;
-    sap = bsp->annot;
-    prevsap = (Pointer PNTR) &(bsp->annot);
-  } else if (IS_Bioseq_set (sep)) {
-    bssp = (BioseqSetPtr) sep->data.ptrvalue;
-    sap = bssp->annot;
-    prevsap = (Pointer PNTR) &(bssp->annot);
-  } else return;
-  while (sap != NULL) {
-    nextsap = sap->next;
-    if (sap->type == 1) {
-      sfp = (SeqFeatPtr) sap->data;
-      prevsfp = (Pointer PNTR) &(sap->data);
-      while (sfp != NULL) {
-        nextsfp = sfp->next;
-        empty = FALSE;
-        if (sfp->data.choice == SEQFEAT_GENE && sfp->data.value.ptrvalue != NULL) {
-          grp = (GeneRefPtr) sfp->data.value.ptrvalue;
-          if (EmptyOrNullString (grp->locus)) {
-            grp->locus = MemFree (grp->locus);
-          }
-          if (EmptyOrNullString (grp->allele)) {
-            grp->allele = MemFree (grp->allele);
-          }
-          if (EmptyOrNullString (grp->desc)) {
-            grp->desc = MemFree (grp->desc);
-          }
-          if (EmptyOrNullString (grp->maploc)) {
-            grp->maploc = MemFree (grp->maploc);
-          }
-          if (EmptyOrNullString (grp->locus) &&
-			  EmptyOrNullString (grp->allele) &&
-			  EmptyOrNullString (grp->desc) &&
-			  EmptyOrNullString (grp->maploc) &&
-			  grp->db == NULL && grp->syn == NULL) {
-            empty = TRUE;
-          }
-        } else if (sfp->data.choice == SEQFEAT_PROT && sfp->data.value.ptrvalue != NULL) {
-          prp = (ProtRefPtr) sfp->data.value.ptrvalue;
-          if (prp->processed != 3 && prp->processed != 4) {
-            vnp = prp->name;
-            if ((vnp == NULL || EmptyOrNullString ((CharPtr) vnp->data.ptrvalue)) &&
-                EmptyOrNullString (prp->desc) &&
-                prp->ec == NULL && prp->activity == NULL && prp->db == NULL) {
-              empty = TRUE;
-			}
-          }
-        }
-        if (empty) {
-          *(prevsfp) = sfp->next;
-          sfp->next = NULL;
-          SeqFeatFree (sfp);
-        } else {
-          prevsfp = (Pointer PNTR) &(sfp->next);
-        }
-        sfp = nextsfp;
-      }
-    }
-    if (sap->data == NULL) {
-      *(prevsap) = sap->next;
-      sap->next = NULL;
-      SeqAnnotFree (sap);
-    } else {
-      prevsap = (Pointer PNTR) &(sap->next);
-    }
-    sap = nextsap;
-  }
-}
-
 extern void GetRidOfRedundantSourceNotes (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent);
 
 static void ForceCleanupBtn (IteM i, ButtoN b, Boolean validate)
@@ -656,6 +382,25 @@ static void ForceTaxonFixup (IteM i)
   ForceTaxonFixupBtn (i, NULL);
 }
 
+static void DupFeatRemovalWarning (SeqFeatPtr sfp)
+
+{
+  Char     buf [81];
+  CharPtr  ctmp;
+  CharPtr  loclbl;
+
+  if (sfp == NULL) return;
+  FeatDefLabel (sfp, buf, sizeof (buf) - 1, OM_LABEL_CONTENT);
+  ctmp = SeqLocPrint (sfp->location);
+  loclbl = ctmp;
+  if (loclbl == NULL) {
+    loclbl = "?";
+  }
+  Message (MSG_POST, "Deleting duplicate feature: Feature: %s - Location [%s]",
+             buf, loclbl);
+  MemFree (ctmp);
+}
+
 static Boolean LIBCALLBACK RemoveDupGenesOnBioseqs (BioseqPtr bsp, SeqMgrBioseqContextPtr bcontext)
 
 {
@@ -665,8 +410,11 @@ static Boolean LIBCALLBACK RemoveDupGenesOnBioseqs (BioseqPtr bsp, SeqMgrBioseqC
   CharPtr            label;
   Boolean            leave;
   Int2               left;
+  size_t             len;
   Int2               right;
+  SeqAnnotPtr        sap;
   SeqFeatPtr         sfp;
+  CharPtr            str;
   Uint1              strand;
 
   sfp = SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_GENE, 0, &fcontext);
@@ -677,7 +425,8 @@ static Boolean LIBCALLBACK RemoveDupGenesOnBioseqs (BioseqPtr bsp, SeqMgrBioseqC
         if (fcontext.strand == strand ||
             strand == Seq_strand_unknown ||
             fcontext.strand == Seq_strand_unknown) {
-          if (StringICmp (fcontext.label, label) == 0) {
+          if (StringICmp (fcontext.label, label) == 0 && fcontext.sap == sap) {
+            DupFeatRemovalWarning (sfp);
             grp1 = (GeneRefPtr) last->data.value.ptrvalue;
             grp2 = (GeneRefPtr) sfp->data.value.ptrvalue;
             if (grp1 != NULL && grp2 != NULL) {
@@ -710,6 +459,16 @@ static Boolean LIBCALLBACK RemoveDupGenesOnBioseqs (BioseqPtr bsp, SeqMgrBioseqC
               if (last->comment == NULL) {
                 last->comment = sfp->comment;
                 sfp->comment = NULL;
+              } else if (sfp->comment != NULL && StringCmp (last->comment, sfp->comment) != 0) {
+                len = StringLen (last->comment) + StringLen (sfp->comment);
+                str = MemNew (sizeof (Char) * len + 5);
+                if (str != NULL) {
+                  StringCpy (str, last->comment);
+                  StringCat (str, "; ");
+                  StringCat (str, sfp->comment);
+                  last->comment = MemFree (last->comment);
+                  last->comment = str;
+                }
               }
               if (last->qual == NULL) {
                 last->qual = sfp->qual;
@@ -739,6 +498,7 @@ static Boolean LIBCALLBACK RemoveDupGenesOnBioseqs (BioseqPtr bsp, SeqMgrBioseqC
       right = fcontext.right;
       label = fcontext.label;
       strand = fcontext.strand;
+      sap = fcontext.sap;
     }
     sfp = SeqMgrGetNextFeature (bsp, sfp, SEQFEAT_GENE, 0, &fcontext);
   }
@@ -761,9 +521,113 @@ static void RemoveDuplicateGenes (IteM i)
   if (bfp == NULL) return;
   sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
   if (sep == NULL) return;
-  entityID = SeqMgrIndexFeatures (bfp->input_entityID, NULL, OM_LABEL_BOTH);
+  entityID = SeqMgrIndexFeatures (bfp->input_entityID, NULL);
   if (entityID < 1) return;
   SeqMgrExploreBioseqs (entityID, 0, NULL, RemoveDupGenesOnBioseqs, TRUE, TRUE, TRUE);
+  SeqEntryExplore (sep, NULL, CleanupEmptyFeatCallback);
+  SeqEntryExplore (sep, NULL, MergeAdjacentAnnotsCallback);
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+}
+
+static Boolean LIBCALLBACK RemoveDupFeatsOnBioseqs (BioseqPtr bsp, SeqMgrBioseqContextPtr bcontext)
+
+{
+  SeqMgrFeatContext  fcontext;
+  Uint2              featdeftype;
+  SeqFeatPtr         last = NULL;
+  CharPtr            label;
+  Boolean            leave;
+  Int2               left;
+  size_t             len;
+  Int2               right;
+  SeqAnnotPtr        sap;
+  SeqFeatPtr         sfp;
+  CharPtr            str;
+  Uint1              strand;
+
+  sfp = SeqMgrGetNextFeature (bsp, NULL, 0, 0, &fcontext);
+  while (sfp != NULL) {
+    leave = TRUE;
+    if (last != NULL) {
+      if (fcontext.left == left && fcontext.right == right &&
+          fcontext.featdeftype == featdeftype) {
+        if (fcontext.strand == strand ||
+            strand == Seq_strand_unknown ||
+            fcontext.strand == Seq_strand_unknown) {
+          if (StringICmp (fcontext.label, label) == 0 && fcontext.sap == sap) {
+            DupFeatRemovalWarning (sfp);
+            SeqFeatDataFree (&sfp->data);             /* free duplicate feature data */
+            sfp->data.choice = SEQFEAT_GENE;         /* fake as empty gene, to be removed */
+            sfp->data.value.ptrvalue = GeneRefNew ();
+            if (last->comment == NULL) {
+              last->comment = sfp->comment;
+              sfp->comment = NULL;
+            } else if (sfp->comment != NULL && StringCmp (last->comment, sfp->comment) != 0) {
+              len = StringLen (last->comment) + StringLen (sfp->comment);
+              str = MemNew (sizeof (Char) * len + 5);
+              if (str != NULL) {
+                StringCpy (str, last->comment);
+                StringCat (str, "; ");
+                StringCat (str, sfp->comment);
+                last->comment = MemFree (last->comment);
+                last->comment = str;
+              }
+            }
+            if (last->qual == NULL) {
+              last->qual = sfp->qual;
+              sfp->qual = NULL;
+            }
+            if (last->cit == NULL) {
+              last->cit = sfp->cit;
+              sfp->cit = NULL;
+            }
+            if (last->xref == NULL) {
+              last->xref = sfp->xref;
+              sfp->xref = NULL;
+            }
+            if (last->dbxref == NULL) {
+              last->dbxref = sfp->dbxref;
+              sfp->dbxref = NULL;
+            }
+            leave = FALSE;
+          }
+        }
+      }
+    }
+    if (leave) {
+      last = sfp;
+      left = fcontext.left;
+      right = fcontext.right;
+      label = fcontext.label;
+      strand = fcontext.strand;
+      featdeftype = fcontext.featdeftype;
+      sap = fcontext.sap;
+    }
+    sfp = SeqMgrGetNextFeature (bsp, sfp, 0, 0, &fcontext);
+  }
+
+  return TRUE;
+}
+
+static void RemoveDuplicateFeats (IteM i)
+
+{
+  BaseFormPtr  bfp;
+  Uint2        entityID;
+  SeqEntryPtr  sep;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL) return;
+  entityID = SeqMgrIndexFeatures (bfp->input_entityID, NULL);
+  if (entityID < 1) return;
+  SeqMgrExploreBioseqs (entityID, 0, NULL, RemoveDupFeatsOnBioseqs, TRUE, TRUE, TRUE);
   SeqEntryExplore (sep, NULL, CleanupEmptyFeatCallback);
   SeqEntryExplore (sep, NULL, MergeAdjacentAnnotsCallback);
   ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
@@ -879,12 +743,16 @@ static void GenSpecTaxonFixup (IteM i)
 static Boolean MergePartsCallback (GatherContextPtr gcp)
 
 {
-  BioseqPtr   bsp;
-  Boolean     noLeft;
-  Boolean     noRight;
-  SeqFeatPtr  sfp;
-  SeqIdPtr    sip;
-  SeqLocPtr   slp;
+  BioseqPtr     bsp;
+  CodeBreakPtr  cbp;
+  CdRegionPtr   crp;
+  Boolean       noLeft;
+  Boolean       noRight;
+  RnaRefPtr     rrp;
+  SeqFeatPtr    sfp;
+  SeqIdPtr      sip;
+  SeqLocPtr     slp;
+  tRNAPtr       trna;
 
   if (gcp->thistype != OBJ_SEQFEAT) return TRUE;
   sfp = (SeqFeatPtr) gcp->thisitem;
@@ -902,6 +770,37 @@ static Boolean MergePartsCallback (GatherContextPtr gcp)
   FreeAllFuzz (sfp->location);
   SetSeqLocPartial (sfp->location, noLeft, noRight);
   sfp->partial = (sfp->partial || noLeft || noRight);
+  switch (sfp->data.choice) {
+    case SEQFEAT_CDREGION :
+      crp = (CdRegionPtr) sfp->data.value.ptrvalue;
+      if (crp != NULL && crp->code_break != NULL) {
+        for (cbp = crp->code_break; cbp != NULL; cbp = cbp->next) {
+          slp = SegLocToParts (bsp, cbp->loc);
+          if (slp != NULL) {
+            cbp->loc = SeqLocFree (cbp->loc);
+            cbp->loc = slp;
+            FreeAllFuzz (cbp->loc);
+          }
+        }
+      }
+      break;
+    case SEQFEAT_RNA :
+      rrp = (RnaRefPtr) sfp->data.value.ptrvalue;
+      if (rrp != NULL && rrp->type == 3 && rrp->ext.choice == 2) {
+        trna = rrp->ext.value.ptrvalue;
+        if (trna != NULL && trna->anticodon != NULL) {
+          slp = SegLocToParts (bsp, trna->anticodon);
+          if (slp != NULL) {
+            trna->anticodon = SeqLocFree (trna->anticodon);
+            trna->anticodon = slp;
+            FreeAllFuzz (trna->anticodon);
+          }
+        }
+      }
+      break;
+    default :
+      break;
+  }
   return TRUE;
 }
 
@@ -950,12 +849,16 @@ static void MergeToParts (IteM i)
 static Boolean MergeSegSeqCallback (GatherContextPtr gcp)
 
 {
-  BioseqPtr    bsp;
-  Boolean      noLeft;
-  Boolean      noRight;
-  SeqEntryPtr  sep;
-  SeqFeatPtr   sfp;
-  SeqLocPtr    slp;
+  BioseqPtr     bsp;
+  CodeBreakPtr  cbp;
+  CdRegionPtr   crp;
+  Boolean       noLeft;
+  Boolean       noRight;
+  RnaRefPtr     rrp;
+  SeqEntryPtr   sep;
+  SeqFeatPtr    sfp;
+  SeqLocPtr     slp;
+  tRNAPtr       trna;
 
   if (gcp->thistype != OBJ_SEQFEAT) return TRUE;
   sfp = (SeqFeatPtr) gcp->thisitem;
@@ -979,6 +882,37 @@ static Boolean MergeSegSeqCallback (GatherContextPtr gcp)
   FreeAllFuzz (sfp->location);
   SetSeqLocPartial (sfp->location, noLeft, noRight);
   sfp->partial = (sfp->partial || noLeft || noRight);
+  switch (sfp->data.choice) {
+    case SEQFEAT_CDREGION :
+      crp = (CdRegionPtr) sfp->data.value.ptrvalue;
+      if (crp != NULL && crp->code_break != NULL) {
+        for (cbp = crp->code_break; cbp != NULL; cbp = cbp->next) {
+          slp = SeqLocMerge (bsp, cbp->loc, NULL, FALSE, TRUE, FALSE);
+          if (slp != NULL) {
+            cbp->loc = SeqLocFree (cbp->loc);
+            cbp->loc = slp;
+            FreeAllFuzz (cbp->loc);
+          }
+        }
+      }
+      break;
+    case SEQFEAT_RNA :
+      rrp = (RnaRefPtr) sfp->data.value.ptrvalue;
+      if (rrp != NULL && rrp->type == 3 && rrp->ext.choice == 2) {
+        trna = rrp->ext.value.ptrvalue;
+        if (trna != NULL && trna->anticodon != NULL) {
+          slp = SeqLocMerge (bsp, trna->anticodon, NULL, FALSE, TRUE, FALSE);
+          if (slp != NULL) {
+            trna->anticodon = SeqLocFree (trna->anticodon);
+            trna->anticodon = slp;
+            FreeAllFuzz (trna->anticodon);
+          }
+        }
+      }
+      break;
+    default :
+      break;
+  }
   return TRUE;
 }
 
@@ -1647,7 +1581,7 @@ static void CommonTransformProc (IteM i, Uint2 targettype)
     Message (MSG_ERROR, "Unable to find DNA bioseq for this feature");
     return;
   }
-  slp = dnaLoc_to_aaLoc (cds, sfp->location, TRUE, NULL);
+  slp = dnaLoc_to_aaLoc (cds, sfp->location, TRUE, NULL, FALSE);
   if (slp == NULL) {
     Message (MSG_ERROR, "Unable to convert to protein coordinate");
     return;
@@ -2719,6 +2653,8 @@ typedef struct sourceformdata {
   PopuP          toorg;
   PopuP          fromgen;
   PopuP          togen;
+  PopuP          fromref;
+  PopuP          toref;
   TexT           findthis;
   TexT           replacewith;
 
@@ -3210,10 +3146,10 @@ static void DoProcessSource (ButtoN b)
       sfp->toval = (Int2) val;
     }
   } else if (sfp->choice == 4) {
-    if (GetEnumPopup (sfp->fromgen, orgref_textfield_alist, &val)) {
+    if (GetEnumPopup (sfp->fromref, orgref_textfield_alist, &val)) {
       sfp->fromval = (Int2) val;
     }
-    if (GetEnumPopup (sfp->togen, orgref_textfield_alist, &val)) {
+    if (GetEnumPopup (sfp->toref, orgref_textfield_alist, &val)) {
       sfp->toval = (Int2) val;
     }
   }
@@ -3522,26 +3458,26 @@ static void ProcessSource (IteM i, Int2 type)
   switch (type) {
     case REMOVE_SOURCE :
       StaticPrompt (sfp->refGrp, "Remove", 0, popupMenuHeight, programFont, 'l');
-      sfp->fromgen = PopupList (sfp->refGrp, TRUE, NULL);
-      InitEnumPopup (sfp->fromgen, orgref_textfield_alist, NULL);
-      SetEnumPopup (sfp->fromgen, orgref_textfield_alist, 0);
+      sfp->fromref = PopupList (sfp->refGrp, TRUE, NULL);
+      InitEnumPopup (sfp->fromref, orgref_textfield_alist, NULL);
+      SetEnumPopup (sfp->fromref, orgref_textfield_alist, 0);
       break;
     case CONVERT_SOURCE :
       StaticPrompt (sfp->refGrp, "From", 0, popupMenuHeight, programFont, 'l');
-      sfp->fromgen = PopupList (sfp->refGrp, TRUE, NULL);
-      InitEnumPopup (sfp->fromgen, orgref_textfield_alist, NULL);
-      SetEnumPopup (sfp->fromgen, orgref_textfield_alist, 0);
+      sfp->fromref = PopupList (sfp->refGrp, TRUE, NULL);
+      InitEnumPopup (sfp->fromref, orgref_textfield_alist, NULL);
+      SetEnumPopup (sfp->fromref, orgref_textfield_alist, 0);
 
       StaticPrompt (sfp->refGrp, "To", 0, popupMenuHeight, programFont, 'l');
-      sfp->togen = PopupList (sfp->refGrp, TRUE, NULL);
-      InitEnumPopup (sfp->togen, orgref_textfield_alist, NULL);
-      SetEnumPopup (sfp->togen, orgref_textfield_alist, 0);
+      sfp->toref = PopupList (sfp->refGrp, TRUE, NULL);
+      InitEnumPopup (sfp->toref, orgref_textfield_alist, NULL);
+      SetEnumPopup (sfp->toref, orgref_textfield_alist, 0);
       break;
     case EDIT_SOURCE :
       StaticPrompt (sfp->refGrp, "Type", 0, popupMenuHeight, programFont, 'l');
-      sfp->fromgen = PopupList (sfp->refGrp, TRUE, NULL);
-      InitEnumPopup (sfp->fromgen, orgref_textfield_alist, NULL);
-      SetEnumPopup (sfp->fromgen, orgref_textfield_alist, 0);
+      sfp->fromref = PopupList (sfp->refGrp, TRUE, NULL);
+      InitEnumPopup (sfp->fromref, orgref_textfield_alist, NULL);
+      SetEnumPopup (sfp->fromref, orgref_textfield_alist, 0);
       break;
     case ADD_SOURCE :
       break;
@@ -6232,6 +6168,8 @@ extern void SetupSpecialMenu (MenU m, BaseFormPtr bfp)
   SetObjectExtra (i, bfp, NULL);
   SeparatorItem (s);
   i = CommandItem (s, "Remove Duplicate Genes", RemoveDuplicateGenes);
+  SetObjectExtra (i, bfp, NULL);
+  i = CommandItem (s, "Remove Duplicate Feats", RemoveDuplicateFeats);
   SetObjectExtra (i, bfp, NULL);
   SeparatorItem (s);
   i = CommandItem (s, "Clear GenBank Components", (ItmActnProc) EditGenbankElements);

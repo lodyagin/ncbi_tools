@@ -23,7 +23,7 @@
  *
  * ===========================================================================
  *
- * RCS $Id: netentcf.c,v 6.0 1997/08/25 18:20:24 madden Exp $
+ * RCS $Id: netentcf.c,v 6.1 1998/12/08 16:52:42 kans Exp $
  *
  * Author:  Kans
  *
@@ -120,7 +120,7 @@ Int2 Main (void)
 #endif
 
   ShowNetConfigForm (StandaloneFormActivated, StandaloneFormMessage,
-                     ConfigAccepted, ConfigCancelled);
+                     ConfigAccepted, ConfigCancelled, NULL, FALSE);
   ProcessEvents ();
   return 0;
 }

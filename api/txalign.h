@@ -1,4 +1,4 @@
-/* $Id: txalign.h,v 6.9 1998/09/01 13:27:02 madden Exp $
+/* $Id: txalign.h,v 6.13 1999/01/13 21:52:43 victorov Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 03/13/94
 *
-* $Revision: 6.9 $
+* $Revision: 6.13 $
 *
 * File Description:
 *         External include file for various alignments
@@ -38,6 +38,18 @@
 *
 *
 * $Log: txalign.h,v $
+* Revision 6.13  1999/01/13 21:52:43  victorov
+* added links to incomplete genomes in hit details
+*
+* Revision 6.12  1999/01/06 22:51:00  victorov
+* added hyperlinks for incomplete sequences
+*
+* Revision 6.11  1999/01/05 14:52:04  madden
+* Add frame and strand information
+*
+* Revision 6.10  1998/11/09 19:06:47  vakatov
+* Added "NLM_EXTERN" to the ShowTextAlignFromAnnotExtra() prototype
+*
 * Revision 6.9  1998/09/01 13:27:02  madden
 * PrintDefLinesExtra function
 *
@@ -175,6 +187,12 @@ typedef struct align_summary {
 	SeqIdPtr master_sip;	/*the Seq-id of the master sequence*/
 	SeqIdPtr target_sip;	/*the Seq-id for the target sequence*/
 	Boolean is_aa;		/*are the sequences nucleotide or protein?*/
+	Uint1 	m_strand,	/* strand of the query. */
+		t_strand;	/* strand of the database sequence. */
+	Int4	m_frame,	/* Frame of the query. */
+		t_frame;	/* Frame of the database sequence. */
+	Boolean	m_frame_set,	/* query frame was set. */
+		t_frame_set;	/* database sequence frame was set. */
 }AlignSum, PNTR AlignSumPtr;
 
 typedef struct align_stat_option { /*options for printing the statistics*/
@@ -192,6 +210,12 @@ typedef struct align_stat_option { /*options for printing the statistics*/
 	Int4 positive;	        /*number of the positive residues*/
 	Int4 align_len;	  /*the length of the alignment. EXCLUDE the GAPS*/
 	Boolean follower; /* If TRUE, this is NOT the first alignment for this sequences. */
+	Uint1 	m_strand,	/* strand of the query. */
+		t_strand;	/* strand of the database sequence. */
+	Int2	m_frame,	/* Frame of the query. */
+		t_frame;	/* Frame of the database sequence. */
+	Int4 start, stop; /* hit start/stop positions */
+	CharPtr db_name; /* searched databases list */
 }AlignStatOption, PNTR AlignStatOptionPtr;
 
 /****************************************************************************/
@@ -234,7 +258,7 @@ NLM_EXTERN int LIBCALLBACK FormatScoreFunc PROTO((AlignStatOptionPtr asop));
 *
 *************************************************************************************/
 
-Boolean LIBCALL ShowTextAlignFromAnnotExtra PROTO((BioseqPtr bsp, ValNodePtr vnp, SeqLocPtr seqloc,
+NLM_EXTERN Boolean LIBCALL ShowTextAlignFromAnnotExtra PROTO((BioseqPtr bsp, ValNodePtr vnp, SeqLocPtr seqloc,
         Int4 line_len, FILE *fp,
         Uint1Ptr featureOrder, Uint1Ptr groupOrder, Uint4 option, Int4Ptr PNTR matrix,
         ValNodePtr mask_loc, int (LIBCALLBACK *fmt_score_func)PROTO((AlignStatOptionPtr))));
@@ -262,6 +286,20 @@ NLM_EXTERN Boolean ShowTextAlignFromAnnot PROTO((
                     Int4Ptr PNTR matrix, ValNodePtr mask_loc,
                     int (LIBCALLBACK *fmt_score_func)
                     PROTO((AlignStatOptionPtr))
+                    ));
+/**
+ * same as ShowTextAlignFromAnnot
+ * the db_name argument is used to make links to
+ * incomplete genomes
+ */
+NLM_EXTERN Boolean ShowTextAlignFromAnnot2 PROTO((
+                    SeqAnnotPtr hannot, Int4 line_len, 
+                    FILE *fp, Uint1Ptr featureOrder, 
+                    Uint1Ptr groupOrder, Uint4 option, 
+                    Int4Ptr PNTR matrix, ValNodePtr mask_loc,
+                    int (LIBCALLBACK *fmt_score_func)
+                    PROTO((AlignStatOptionPtr)),
+                    CharPtr db_name
                     ));
 
 
@@ -294,6 +332,16 @@ NLM_EXTERN Boolean ShowAlignNodeText PROTO((
                      Int4Ptr PNTR u_matrix, 
                      int (LIBCALLBACK *fmt_score_func)
                      PROTO((AlignStatOptionPtr))
+                     ));
+
+NLM_EXTERN Boolean ShowAlignNodeText2 PROTO((
+                     ValNodePtr anp_list, Int2 num_node, 
+                     Int4 line_len, FILE *fp, Int4 left, 
+                     Int4 right, Uint4 option, 
+                     Int4Ptr PNTR u_matrix, 
+                     int (LIBCALLBACK *fmt_score_func)
+                     PROTO((AlignStatOptionPtr)),
+                     CharPtr db_name
                      ));
 
 /***********************************************************************
@@ -355,6 +403,17 @@ NLM_EXTERN Boolean LIBCALL PrintDefLinesFromSeqAlignEx PROTO((
 		    Int4 mode, 
 		    Int2Ptr marks, 
 		    Int4 number_of_descriptions
+		    ));
+
+NLM_EXTERN Boolean LIBCALL PrintDefLinesFromSeqAlignEx2 PROTO((
+		    SeqAlignPtr seqalign, 
+		    Int4 line_length, 
+		    FILE *outfp, 
+		    Uint4 options, 
+		    Int4 mode, 
+		    Int2Ptr marks, 
+		    Int4 number_of_descriptions,
+		    CharPtr db_name
 		    ));
 
 /*

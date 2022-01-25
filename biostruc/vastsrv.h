@@ -37,7 +37,13 @@
  * -------  ----------  -----------------------------------------------------
  *
  * $Log: vastsrv.h,v $
- * Revision 6.4  1998/05/19 20:24:06  madej
+ * Revision 6.6  1998/11/20 20:03:19  addess
+ * related to platform independence of VAST Search
+ *
+ * Revision 6.5  1998/10/14  17:12:55  addess
+ * pagination and aligned chain
+ *
+ * Revision 6.4  1998/05/19  20:24:06  madej
  * Modify external declarations to pass WWWInfoPtr.
  *
  * Revision 6.3  1998/03/30  19:12:03  madej
@@ -72,6 +78,10 @@ BiostrucAnnotSetPtr LIBCALL LocalGetBiostrucAnnotSet(Int4 mmdbid, CharPtr JobID)
 BiostrucAnnotSetPtr LIBCALL LocalGetFeatureSet(Int4 mmdbid, Int4 feature_set_id, CharPtr JobID);
 Int2 LIBCALL Check_VastSearch_Password(CharPtr pcPassNew, CharPtr JobID);
 BiostrucAnnotSetPtr LIBCALL PruneBiostrucAnnotHits(BiostrucAnnotSetPtr basp, Int4 FSID, ValNodePtr pvnFids);
+extern Boolean Chain;
+extern Char SlaveChain[2];
+extern Char MasterChain[2];
+extern Char VSPATH[PATH_MAX];
 
 #ifdef __cplusplus
 }

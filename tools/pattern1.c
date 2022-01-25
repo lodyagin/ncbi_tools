@@ -1500,7 +1500,7 @@ Int4 LIBCALL align_of_pattern(Uint1 *querySeq, Uint1 *dbSeq, Int4 lenQuerySeq,
 /*print output for sequence seq starting at offset begin and
 ending at offset end
 called once for each match*/
-void LIBCALL pat_output(Uint1 *seq, Int4 begin, Int4 end, patternSearchItems *patternSearch)
+void LIBCALL pat_output(Uint1 *seq, Int4 begin, Int4 end, patternSearchItems *patternSearch, FILE * outfp)
 {
     Int4 startSeqMatch, endSeqMatch; /*positions in seq where
                                        pattern match starts and ends*/
@@ -1514,7 +1514,7 @@ void LIBCALL pat_output(Uint1 *seq, Int4 begin, Int4 end, patternSearchItems *pa
     Int4 numPlacesInWord[MAX_WORDS_IN_PATTERN]; /*number of places in each word
                                                 of the pattern*/
 
-    printf("HI "); /*Fixed printing command here*/
+    fprintf(outfp, "HI "); /*Fixed printing command here*/
     if (patternSearch->flagPatternLength == ONE_WORD_PATTERN) {
       get_pat(seq+begin, end-begin+1, &startSeqMatch, &endSeqMatch, patternSearch);
     }
@@ -1537,10 +1537,10 @@ void LIBCALL pat_output(Uint1 *seq, Int4 begin, Int4 end, patternSearchItems *pa
 	}
 	position = begin;
 	for (wordIndex = 0; wordIndex < patternSearch->numWords; wordIndex++) {
-	  printf("(%d %d)", position, position+numPlacesInWord[wordIndex]-1);
+	  fprintf(outfp, "(%d %d)", position, position+numPlacesInWord[wordIndex]-1);
 	  position += numPlacesInWord[wordIndex]+spacingArray[wordIndex+1];
 	} 
-	printf("\n");
+	fprintf(outfp, "\n");
 	return;
       } 
     nextMatchStart  = 0;
@@ -1549,15 +1549,15 @@ void LIBCALL pat_output(Uint1 *seq, Int4 begin, Int4 end, patternSearchItems *pa
 	i++;
       } 
       else {
-	printf("(%d %d) ", begin+nextMatchStart, begin+i-1);
+	fprintf(outfp, "(%d %d) ", begin+nextMatchStart, begin+i-1);
 	for (; patternSearch->inputPatternMasked[i] == allone && i <= endSeqMatch; i++) ;
 	nextMatchStart = i;
       }
     }
     if (nextMatchStart != i)  /*last match*/
-      printf("(%d %d)\n", begin+nextMatchStart, begin+i-1);
+      fprintf(outfp,"(%d %d)\n", begin+nextMatchStart, begin+i-1);
     else 
-      printf("\n");
+      fprintf(outfp, "\n");
 }
 
 /*find the places where the pattern matches seq;

@@ -1,4 +1,4 @@
-/*  $RCSfile: ncbicli.c,v $  $Revision: 4.11 $  $Date: 1998/09/08 17:59:03 $
+/*  $RCSfile: ncbicli.c,v $  $Revision: 4.14 $  $Date: 1999/01/22 22:04:58 $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -31,6 +31,16 @@
 *
 * --------------------------------------------------------------------------
 * $Log: ncbicli.c,v $
+* Revision 4.14  1999/01/22 22:04:58  vakatov
+* Uint4toInaddr() to take address in the network byte order
+*
+* Revision 4.13  1998/12/15 17:26:53  vakatov
+* + Handle the case of connecting through a CERN-like non-transparent proxy
+*
+* Revision 4.12  1998/10/13 20:51:14  vakatov
+* Added to HTTP header:  &platform=<Nlm_PlatformName()> -- to report
+* the client's platform
+*
 * Revision 4.11  1998/09/08 17:59:03  vakatov
 * Added WWW/Firewall network interface
 *
@@ -73,9 +83,9 @@ typedef struct Nlm_NICtag
 {
   SOCK    sock;
   CharPtr client_host;
-  Uint4   server_host;
-  Uint2   server_port;
-  Uint4   ticket;
+  Uint4   server_host;  /* local   byte-order */
+  Uint2   server_port;  /* local   byte-order */
+  Uint4   ticket;       /* network byte-order */
 } Nlm_NICstruct;
 
 
@@ -92,7 +102,8 @@ static Boolean s_SendHeaderWWW
   static char X_POST_1[] = "POST ";
   static char X_POST_2[] = "?service=";
   static char X_POST_3[] = "&address=";
-  static char X_POST_4[] = " HTTP/1.0\n";
+  static char X_POST_4[] = "&platform=";
+  static char X_POST_E[] = " HTTP/1.0\n";
   static char X_AGENT_1[] = "User-Agent: ";
   static char X_AGENT_2[] = " from ";
 
@@ -110,6 +121,10 @@ static Boolean s_SendHeaderWWW
       SOCK_Write(sock, (const void *)client_host,
                  StrLen(client_host), 0) != eSOCK_ESuccess  ||
       SOCK_Write(sock, (const void *)X_POST_4,  StrLen(X_POST_4 ), 0)
+      != eSOCK_ESuccess  ||
+      SOCK_Write(sock, (const void *)Nlm_PlatformName(),
+                 StrLen(Nlm_PlatformName()), 0) != eSOCK_ESuccess  ||
+      SOCK_Write(sock, (const void *)X_POST_E,  StrLen(X_POST_E ), 0)
       != eSOCK_ESuccess  ||
       SOCK_Write(sock, (const void *)X_AGENT_1, StrLen(X_AGENT_1), 0)
       != eSOCK_ESuccess  ||
@@ -180,7 +195,8 @@ static Uint4 s_NIC_SockSkip(SOCK sock, Uint4 n_skip)
 /* Get and process reply from dispatcher(WWW Special-Client agent)
  */
 static Boolean s_ProcessReply_WWWClient(NIC nic, const STimeout *timeout,
-                                        Boolean debug_printout)
+                                        Boolean debug_printout,
+                                        Boolean cern_nontransparent_proxy)
 {
   Uint4         buf_read;
   Char          buffer[1024];
@@ -223,6 +239,9 @@ static Boolean s_ProcessReply_WWWClient(NIC nic, const STimeout *timeout,
       }
 
       /* the dispatcher's reply has been parsed successfully */
+      if ( cern_nontransparent_proxy ) { /* substitute server host */
+        SOCK_Address(nic->sock, &server_host, 0, FALSE);
+      }
       nic->server_host = server_host;
       nic->server_port = (Uint2)server_port;
       nic->ticket      = Nlm_htonl((Uint4)ticket);
@@ -245,7 +264,8 @@ static Boolean s_ProcessReply_WWWClient(NIC nic, const STimeout *timeout,
     return FALSE; /* i.e. the reply is bad or missing */
 
   {{ /* Connect to the "real" server and send back the ticket */
-    VERIFY( Uint4toInaddr(nic->server_host, buffer, sizeof(buffer)) );
+    VERIFY( Uint4toInaddr(Nlm_htonl(nic->server_host),
+                          buffer, sizeof(buffer)) );
     if (SOCK_Create(buffer, nic->server_port, &nic->sock) != eSOCK_ESuccess) {
       ErrPostEx(SEV_ERROR, NIC_ERROR, 7,
                 "[WWW Special] Cannot connect to server \"%s\", port %u",
@@ -382,8 +402,10 @@ NLM_EXTERN NIC NIC_GetService
         break;
 
       /* process reply from the dispatcher */
-      if (!s_ProcessReply_WWWClient
-          (nic, timeout, (Boolean)(flags & NIC_DEBUG_PRINTOUT)) )
+      if ( !s_ProcessReply_WWWClient
+           (nic, timeout,
+            (Boolean)(flags & NIC_DEBUG_PRINTOUT),
+            (Boolean)(flags & NIC_CERN_PROXY)) )
         break;
     } else { /* i.e. eNIC_WWWDirect */
       /* send HTTP header(along with the bytestore content, if any) */

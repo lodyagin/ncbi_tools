@@ -1,4 +1,4 @@
-/*  $RCSfile: ni_www.c,v $  $Revision: 4.16 $  $Date: 1998/09/08 17:59:08 $
+/*  $RCSfile: ni_www.c,v $  $Revision: 4.18 $  $Date: 1998/12/15 17:28:52 $
 * ==========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -31,6 +31,14 @@
 *
 * --------------------------------------------------------------------------
 * $Log: ni_www.c,v $
+* Revision 4.18  1998/12/15 17:28:52  vakatov
+* Added config parameter "SRV_PROXY_TRANSPARENT" -- to indicate the use
+* of transparent/non-transparent CERN-like proxy
+*
+* Revision 4.17  1998/12/08 17:03:58  vakatov
+* Look for SRV_*** connection parameters in #SRV_SECTION(="NET_SERV")
+* rather than in "configSection"(service-specific)
+*
 * Revision 4.16  1998/09/08 17:59:08  vakatov
 * Added WWW/Firewall network interface
 *
@@ -86,11 +94,16 @@
 /* Hard-coded constants, environment parameter names & defaults
  */
 
+#define SRV_SECTION         "NET_SERV"
+
 #define ENV_PROXY_HOST      "SRV_PROXY_HOST"
 #define DEF_PROXY_HOST      ""
 
 #define ENV_PROXY_PORT      "SRV_PROXY_PORT"
 #define DEF_PROXY_PORT      80
+
+#define ENV_PROXY_TRANSPARENT  "SRV_PROXY_TRANSPARENT"
+#define DEF_PROXY_TRANSPARENT  ""
 
 #define ENV_ENGINE_HOST     "SRV_ENGINE_HOST"
 #define DEF_ENGINE_HOST     "www.ncbi.nlm.nih.gov"
@@ -329,33 +342,33 @@ static NI_HandPtr s_GenericGetService
   }}
 
   /* alternate the dispatcher's host name */
-  NI_GetEnvParam(configFile, configSection, ENV_ENGINE_HOST,
+  NI_GetEnvParam(configFile, SRV_SECTION, ENV_ENGINE_HOST,
                  sinfo->disp_host, sizeof(sinfo->disp_host), DEF_ENGINE_HOST);
 
   {{ /* alternate the dispatcher's port */
     Char str[32];
     int  val;
-    NI_GetEnvParam(configFile, configSection, ENV_ENGINE_PORT,
+    NI_GetEnvParam(configFile, SRV_SECTION, ENV_ENGINE_PORT,
                    str, sizeof(str), "");
     val = atoi(str);
     sinfo->disp_port = (Uint2)(val > 0 ? val : DEF_ENGINE_PORT);
   }}
 
   /* alternate the dispatcher's CGI path */
-  NI_GetEnvParam(configFile, configSection, ENV_ENGINE_URL,
+  NI_GetEnvParam(configFile, SRV_SECTION, ENV_ENGINE_URL,
                  sinfo->disp_path, sizeof(sinfo->disp_path), DEF_ENGINE_URL);
 
-  {{
+  {{ /* CERN-like firewall proxy server? */
     Char proxy_host[sizeof(sinfo->disp_host)];
     /* get the PROXY server name, if specified */
-    NI_GetEnvParam(configFile, configSection, ENV_PROXY_HOST,
+    NI_GetEnvParam(configFile, SRV_SECTION, ENV_PROXY_HOST,
                    proxy_host, sizeof(proxy_host), DEF_PROXY_HOST);
 
     if ( *proxy_host ) { /* use PROXY server */
       Char str[32 + sizeof(sinfo->disp_host) + sizeof(sinfo->disp_path)];
       int  val;
       Uint2 proxy_port;
-      NI_GetEnvParam(configFile, configSection, ENV_PROXY_PORT,
+      NI_GetEnvParam(configFile, SRV_SECTION, ENV_PROXY_PORT,
                      str, sizeof(str), "");
       val = atoi(str);
       proxy_port = (Uint2)(val > 0 ? val : DEF_PROXY_PORT);
@@ -364,13 +377,24 @@ static NI_HandPtr s_GenericGetService
       StringNCpy_0(sinfo->disp_host, proxy_host, sizeof(sinfo->disp_host));
       sinfo->disp_port = proxy_port;
       StringNCpy_0(sinfo->disp_path, str, sizeof(sinfo->disp_path));
+
+      /* non-transparent proxy? */
+      NI_GetEnvParam(configFile, SRV_SECTION, ENV_PROXY_TRANSPARENT,
+                     str, sizeof(str), DEF_PROXY_TRANSPARENT);
+      if (!*str  ||  (StringICmp(str, "1"   )  &&
+                      StringICmp(str, "true")  &&
+                      StringICmp(str, "yes" )))
+        sinfo->flags |= NIC_CERN_PROXY;
+
+      /* auto-set to FIREWALL mode */
+      sinfo->flags |= NIC_FIREWALL;
     }
   }}
 
   {{ /* alternate the connection timeout */
     Char   str[32];
     double val;
-    NI_GetEnvParam(configFile, configSection, ENV_CONN_TIMEOUT,
+    NI_GetEnvParam(configFile, SRV_SECTION, ENV_CONN_TIMEOUT,
                    str, sizeof(str), "");
     val = atof(str);
     if (val <= 0)
@@ -382,7 +406,7 @@ static NI_HandPtr s_GenericGetService
   {{ /* alternate the max. number of attemts to establish a connection */
     Char str[32];
     int  val;
-    NI_GetEnvParam(configFile, configSection, ENV_CONN_TRY,
+    NI_GetEnvParam(configFile, SRV_SECTION, ENV_CONN_TRY,
                    str, sizeof(str), "");
     val = atoi(str);
     sinfo->conn_try = (Uint4)((val > 0) ? val : DEF_CONN_TRY);
@@ -390,7 +414,7 @@ static NI_HandPtr s_GenericGetService
 
   {{ /* alternate the connection flags */
     Char  str[32];
-    NI_GetEnvParam(configFile, configSection, ENV_DEBUG_PRINTOUT,
+    NI_GetEnvParam(configFile, SRV_SECTION, ENV_DEBUG_PRINTOUT,
                    str, sizeof(str), DEF_DEBUG_PRINTOUT);
     if (*str  &&  (!StringICmp(str, "1"   )  ||
                    !StringICmp(str, "true")  ||
@@ -401,7 +425,7 @@ static NI_HandPtr s_GenericGetService
 #ifdef LB_DIRECT
   {{ /* if to prohibit the use of local "nsdaemon" info */
     Char  str[32];
-    NI_GetEnvParam(configFile, configSection, ENV_NO_LB_DIRECT,
+    NI_GetEnvParam(configFile, SRV_SECTION, ENV_NO_LB_DIRECT,
                    str, sizeof(str), "");
     sinfo->no_lb_direct = (Boolean)
       (*str  &&  StringICmp(str, "0")  &&

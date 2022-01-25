@@ -23,7 +23,7 @@
  *
  * ===========================================================================
  *
- * RCS $Id: accentr.c,v 6.3 1998/06/12 19:19:06 kans Exp $
+ * RCS $Id: accentr.c,v 6.5 1999/01/06 14:18:35 grisha Exp $
  *
  * Author:  Ostell
  *
@@ -48,6 +48,12 @@
  *                      modification comments.
  *
  * Revision $Log: accentr.c,v $
+ * Revision Revision 6.5  1999/01/06 14:18:35  grisha
+ * Revision add defines to switch ID0/ID1 usage
+ * Revision
+ * Revision Revision 6.4  1998/12/08 20:38:47  kans
+ * Revision EntrezGIForSeqIdFunc aborts on local, other, general, gi, notset before connecting to Entrez network server
+ * Revision
  * Revision Revision 6.3  1998/06/12 19:19:06  kans
  * Revision fixed unix compiler warnings
  * Revision
@@ -271,7 +277,7 @@
  * ==========================================================================
  */
 
-#define REVISION_STR "$Revision: 6.3 $"
+#define REVISION_STR "$Revision: 6.5 $"
 
 #include <accentr.h>
 #include <seqmgr.h>
@@ -284,13 +290,18 @@
 #ifdef _MBENTREZ_
 #include <mbentrez.h>
 #define USE_ID0 1
+#define USE_IDxARCH 1
 #endif
 #ifdef _PMENTREZ_
 #include <pmentrez.h>
-#define USE_ID0 1
+#define USE_ID1 1
+#define USE_IDxARCH 1
 #endif
 #ifdef USE_ID0
 #include <id0arch.h>
+#endif
+#ifdef USE_ID1
+#include <id1arch.h>
 #endif
 #ifndef _CDENTREZ_
 #include <cdentrez.h>      /* support cdrom access */
@@ -306,6 +317,21 @@
 #define ADAPTIVE_MATRIX_INITIAL_CONDITION 8
 
 #define HIERARCHY_CACHE_SIZE 200
+
+#ifdef USE_IDxARCH
+#ifdef USE_ID0
+#define IDxArchInit ID0ArchInit
+#define IDxArchFini ID0ArchFini
+#define IDxArchSeqEntryGet ID0ArchSeqEntryGet
+#define IDxArchGIGet ID0ArchGIGet
+#endif
+#ifdef USE_ID1
+#define IDxArchInit ID1ArchInit
+#define IDxArchFini ID1ArchFini
+#define IDxArchSeqEntryGet ID1ArchSeqEntryGet
+#define IDxArchGIGet ID1ArchGIGet
+#endif
+#endif /* USE_IDxARCH */
 
 #ifdef _NETENTREZ_
 Uint1 AdaptiveDocSumMatrix[MAX_CHUNK_IN_ADAPTIVE_MATRIX+1][MAX_SECS_IN_ADAPTIVE_MATRIX+1] = {
@@ -336,7 +362,7 @@ static CharPtr        CombinedInfo = NULL;
 static DocType        lastTermType;
 static Int2           lastBooleanMediaType;
 static Int2           entrezInitCount = 0;
-#ifdef USE_ID0
+#ifdef USE_IDxARCH
 static Boolean        idConnected = FALSE;
 static Boolean        idCantConnect= FALSE;
 static void DisconnID(void);
@@ -493,7 +519,7 @@ NLM_EXTERN void LIBCALL EntrezFini (void)
     if (--entrezInitCount > 0)
         return;
 
-#ifdef USE_ID0
+#ifdef USE_IDxARCH
     DisconnID ();
 #endif
 #ifdef _CDENTREZ_
@@ -1180,13 +1206,13 @@ NLM_EXTERN ByteStorePtr LIBCALL EntrezTLEvalX (ValNodePtr elst)
 }
 
 
-#ifdef USE_ID0
+#ifdef USE_IDxARCH
 static Boolean
 ConnectID(void)
 {
     if (!idConnected && !idCantConnect)
     {
-        if (ID0ArchInit())
+        if (IDxArchInit())
         {
             idConnected = TRUE;
         } else {
@@ -1201,11 +1227,11 @@ static void
 DisconnID(void)
 {
     if (idConnected)
-        ID0ArchFini();
+        IDxArchFini();
     idConnected = FALSE;
     idCantConnect = FALSE;
 }
-#endif /* USE_ID0 */
+#endif /* USE_IDxARCH */
 
 /*****************************************************************************
 *
@@ -1240,7 +1266,7 @@ NLM_EXTERN DocSumPtr LIBCALL EntrezDocSum (DocType type, DocUid uid)
 #endif
             if ((dsp = CdDocSum (type, uid)) != NULL)
                 return dsp;
-#ifdef USE_ID0
+#ifdef USE_IDxARCH
             if (type != TYP_ST && type != TYP_CH && ConnectID())
             {
                 SeqEntryPtr sep;
@@ -1248,7 +1274,7 @@ NLM_EXTERN DocSumPtr LIBCALL EntrezDocSum (DocType type, DocUid uid)
                 AsnIoPtr aip;
                 DocSumPtr dsp = NULL;
 
-                if ((sep = ID0ArchSeqEntryGet(uid, NULL, 0)) != NULL)
+                if ((sep = IDxArchSeqEntryGet(uid, NULL, 0)) != NULL)
                 {
                     TmpNam(fname);
                     aip = AsnIoOpen(fname, "w");
@@ -1262,7 +1288,7 @@ NLM_EXTERN DocSumPtr LIBCALL EntrezDocSum (DocType type, DocUid uid)
                     return dsp;
                 }
             }
-#endif /* USE_ID0 */
+#endif /* USE_IDxARCH */
             break;
 #endif
 #ifdef _NETENTREZ_
@@ -2240,7 +2266,7 @@ NLM_EXTERN Int2 LIBCALL EntrezSeqEntryListGet (SeqEntryPtr PNTR result, Int2 num
             else
                 obtained_ids += CdEntSeqEntryListGet (res, numuid, local_uids,
                                                       retcode, TRUE);
-#ifdef USE_ID0
+#ifdef USE_IDxARCH
             if (retcode != -1 && obtained_ids < numuid && ConnectID())
             {
                 Int2 i;
@@ -2253,7 +2279,7 @@ NLM_EXTERN Int2 LIBCALL EntrezSeqEntryListGet (SeqEntryPtr PNTR result, Int2 num
                 {
                     if (res[i] == NULL)
                     {
-                        if ((res[i] = ID0ArchSeqEntryGet(ABS(local_uids[i]),
+                        if ((res[i] = IDxArchSeqEntryGet(ABS(local_uids[i]),
 							 NULL, retcode))
                              != NULL)
                         {
@@ -2263,7 +2289,7 @@ NLM_EXTERN Int2 LIBCALL EntrezSeqEntryListGet (SeqEntryPtr PNTR result, Int2 num
                     }
                 }
             }
-#endif /* USE_ID0 */
+#endif /* USE_IDxARCH */
         break;
 #endif
 #ifdef _NETENTREZ_
@@ -2380,7 +2406,7 @@ NLM_EXTERN Int4 LIBCALL EntrezFindSeqId (SeqIdPtr sip)
     case MEDIUM_CD:
     case MEDIUM_DISK:
         uid = CdEntrezFindSeqId(sip);
-#ifdef USE_ID0
+#ifdef USE_IDxARCH
         if (uid == 0 && ConnectID())
         {
  	    TextSeqIdPtr tsip;
@@ -2423,7 +2449,7 @@ NLM_EXTERN Int4 LIBCALL EntrezFindSeqId (SeqIdPtr sip)
             default:
                 break;
             }
-            uid = ID0ArchGIGet(sip);
+            uid = IDxArchGIGet(sip);
         }
 #endif    
         return uid;
@@ -2648,13 +2674,13 @@ NLM_EXTERN Int2 LIBCALL EntrezSeqSumListGet (DocSumPtr PNTR result, Int2 numuid,
 
         for (unmatched = 0, i = 0; i < numuid; i++)
         {
-#ifdef USE_ID0
+#ifdef USE_IDxARCH
             if (res[i] == NULL) /* missing this one, try again */
 	    {
                 if ((res[i] = EntrezDocSum (type, local_uids [i])) != NULL)
                     obtained_ids++;
 	    }
-#endif /* USE_ID0 */
+#endif /* USE_IDxARCH */
             if (res[i] != NULL) /* found this one */
             {
                 if (first_time)
@@ -3195,6 +3221,24 @@ static Int2 LIBCALLBACK EntrezGIForSeqIdFunc (Pointer data)
 		  Boolean result;
 
         ompcp = (OMProcControlPtr)data;
+		if (ompcp == NULL)
+                return OM_MSG_RET_ERROR;
+
+        sip = (SeqIdPtr)(ompcp->input_data);
+        if (sip == NULL)
+            return OM_MSG_RET_ERROR;
+
+		switch (sip->choice) {
+			case SEQID_NOT_SET:
+			case SEQID_LOCAL:
+			case SEQID_OTHER:
+			case SEQID_GENERAL:
+			case SEQID_GI:
+				return OM_MSG_RET_ERROR;
+			default:
+				break;
+		}
+
         ompp = ompcp->proc;
         efsp = (EntrezFetchStructPtr)(ompp->procdata);
 
@@ -3212,13 +3256,6 @@ static Int2 LIBCALLBACK EntrezGIForSeqIdFunc (Pointer data)
 
         if (efsp->EntrezBioseqFetchState != EBFS_READY)
                 return OM_MSG_RET_ERROR;
-
-        sip = (SeqIdPtr)(ompcp->input_data);
-        if (sip == NULL)
-                return OM_MSG_RET_ERROR;
-
-		  if (sip->choice == SEQID_GI)
-					 return OM_MSG_RET_ERROR;
 
 		  gi = EntrezFindSeqId(sip);
         if (! gi) return OM_MSG_RET_OK;

@@ -31,7 +31,7 @@
 *   
 * Version Creation Date: 11/3/93
 *
-* $Revision: 6.9 $
+* $Revision: 6.10 $
 *
 * File Description: Utilities for creating ASN.1 submissions
 *
@@ -42,6 +42,9 @@
 *
 *
 * $Log: subutil.h,v $
+* Revision 6.10  1998/10/02 17:48:12  kans
+* new parameters to AddAccessionToRefGeneTrackUserObject, and added CreateMrnaProteinLinkUserObject
+*
 * Revision 6.9  1998/09/29 15:34:20  kans
 * added comment for new choices in molinfo.completeness
 *
@@ -1325,7 +1328,14 @@ NLM_EXTERN Boolean AddPhrapGraph (
 /* internal functions for reference gene project */
 NLM_EXTERN UserObjectPtr CreateRefGeneTrackUserObject (void);
 NLM_EXTERN void AddAccessionToRefGeneTrackUserObject (UserObjectPtr uop, CharPtr field,
-                                                      CharPtr accn, Int4 gi, CharPtr comment);
+                                                      CharPtr accn, Int4 gi,
+                                                      Boolean sequenceChange,
+                                                      Boolean annotationChange,
+                                                      CharPtr comment);
+
+/* experimental function to associate mRNA with protein product in cases of alt splicing */
+NLM_EXTERN UserObjectPtr CreateMrnaProteinLinkUserObject (BioseqPtr protbsp);
+
 #ifdef __cplusplus
 }
 #endif

@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 98-01-01
 *
-* $Revision: 6.4 $
+* $Revision: 6.5 $
 *
 * File Description: sentinel graph header
 *
@@ -38,6 +38,9 @@
 * Date       Name        Description of modification
 * --------------------------------------------------------------------------
 * $Log: gphdraw.h,v $
+* Revision 6.5  1998/10/13 17:13:55  kuzio
+* colored superimposable graphs
+*
 * Revision 6.4  1998/09/16 19:00:36  kuzio
 * cvs logs
 *
@@ -67,11 +70,13 @@ typedef struct graphsentdata {
   FloatHi        a;
   FloatHi        b;
   SeqGraphPtr    sgp;
+  Uint1          red, green, blue;
 } GraphSentData, PNTR GraphSentPtr;
 
 extern GraphSentPtr AddGraphSentinelToPicture (SeqGraphPtr sgp, BioseqPtr bsp,
                                                SegmenT pict, Int4 scaleX,
-                                               Int4 top, Int2 start);
+                                               Int4 top, Int2 start,
+                                               Uint1Ptr uRGB);
 
 extern SegmenT DrawSeqGraphSegment (SeqGraphPtr sgp, BioseqPtr bsp,
                                     Int4 xlen, Int4 top, Int2 start,

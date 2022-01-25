@@ -118,7 +118,7 @@ ID1BioseqFetchEnable(CharPtr progname, Boolean now)
 	if(ifsp->state == ID1BFS_READY)  /* nothing more to do */
 		return TRUE;
         if(now){
-                if ((result = ID1Init())==NULL){
+                if ((result = ID1Init())==FALSE){
                         return result;
                 }
                 ifsp->state = ID1BFS_READY;

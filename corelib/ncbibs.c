@@ -29,7 +29,7 @@
 *
 * Version Creation Date:  3/4/91
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description:
 *   ByteStore functions
@@ -56,6 +56,9 @@
 * 04-15-93 Schuler     Changed _cdecl to LIBCALL
 *
 * $Log: ncbibs.c,v $
+* Revision 6.2  1999/01/21 20:08:37  ostell
+* added SwitchUint2 and 4, added integer bytestores
+*
 * Revision 6.1  1998/06/11 18:59:58  shavirin
 * Fixed some compiler warnings.
 *
@@ -857,3 +860,110 @@ NLM_EXTERN Nlm_ByteStorePtr LIBCALL Nlm_BSDup (Nlm_ByteStorePtr source)
   }
   return dest;
 }
+
+/****************************************************************************
+*
+*   Integer storage utilities
+*      These assume integers are store in BIG_ENDIAN order in the ByteStore
+*      They read and write Uint2 or Uint4 in the NATIVE endian order
+*      All work with UNSIGNED 2 or 4 byte integers
+*         (you should cast to make them signed)
+*      These are just helper functions. They do no internal consistency
+*         checking.
+*      They are primarily to facilitate encoding SEQUENCE OF INTEGER as
+*         OCTET STRING for ASN.1
+*
+****************************************************************************/
+
+NLM_EXTERN Nlm_Uint2 LIBCALL Nlm_BSGetUint2 (Nlm_ByteStorePtr bsp)
+{
+	Nlm_Uint2 retval = 0;
+
+	Nlm_BSRead(bsp, (Nlm_VoidPtr)(&retval), (Nlm_Int4)2);
+	Nlm_SwapUint2(retval);
+
+	return retval;
+}
+
+NLM_EXTERN Nlm_Uint4 LIBCALL Nlm_BSGetUint4 (Nlm_ByteStorePtr bsp)
+{
+	Nlm_Uint4 retval = 0;
+
+	Nlm_BSRead(bsp, (Nlm_VoidPtr)(&retval), (Nlm_Int4)4);
+	Nlm_SwapUint4(retval);
+
+	return retval;
+}
+
+NLM_EXTERN Nlm_Int2 LIBCALL Nlm_BSPutUint2 (Nlm_ByteStorePtr bsp, Nlm_Uint2 value)
+{
+#ifdef IS_LITTLE_ENDIAN
+	Nlm_SwitchUint2(value);
+#endif
+	if (Nlm_BSWrite(bsp, (Nlm_VoidPtr)(&value), (Nlm_Int4)2) == (Nlm_Int2)2)
+		return (Nlm_Int2)1;
+	else
+		return (Nlm_Int2)0;
+}
+
+NLM_EXTERN Nlm_Int2 LIBCALL Nlm_BSPutUint4 (Nlm_ByteStorePtr bsp, Nlm_Uint4 value)
+{
+#ifdef IS_LITTLE_ENDIAN
+	Nlm_SwitchUint4(value);
+#endif
+	if (Nlm_BSWrite(bsp, (Nlm_VoidPtr)(&value), (Nlm_Int4)4) == (Nlm_Int2)4)
+		return (Nlm_Int2)1;
+	else
+		return (Nlm_Int2)0;
+}
+
+       /* In functions below, size is 2 or 4 */
+       /* Integers are converted from ByteStore to native endian (BSUintXRead)
+	   /*   or from native endian to ByteStore (BSUintXWrite)
+	   /* len is number of INTEGERS, not number of bytes
+	   /* returns count of integers put in ptr
+	   /* WARNING: On LITTLE_ENDIAN machines the data in ptr is changed to BIG_ENDIAN in the
+	   /*   XXWrite functions and LEFT THAT WAY
+	   */
+NLM_EXTERN Nlm_Int4 LIBCALL Nlm_BSUint4Read (Nlm_ByteStorePtr bsp, Nlm_Uint4Ptr ptr, Nlm_Int4 len)
+{
+	Nlm_Int4 len2;
+
+	len2 = Nlm_BSRead(bsp, (Nlm_VoidPtr)ptr, (len * 4));
+	len2 /= 4;
+	Nlm_SwapUint4Buff(ptr, len2);
+	return len2;
+}
+
+NLM_EXTERN Nlm_Int4 LIBCALL Nlm_BSUint4Write (Nlm_ByteStorePtr bsp, Nlm_Uint4Ptr ptr, Nlm_Int4 len)
+{
+	Nlm_Int4 len2;
+
+#ifdef IS_LITTLE_ENDIAN
+	Nlm_SwitchUint4Buff(ptr, len);
+#endif
+	len2 = Nlm_BSWrite(bsp, (Nlm_VoidPtr)ptr, (len * 4));
+	return (len2 / 4);
+}
+
+NLM_EXTERN Nlm_Int4 LIBCALL Nlm_BSUint2Read (Nlm_ByteStorePtr bsp, Nlm_Uint2Ptr ptr, Nlm_Int4 len)
+{
+	Nlm_Int4 len2;
+
+	len2 = Nlm_BSRead(bsp, (Nlm_VoidPtr)ptr, (len * 2));
+	len2 /= 2;
+	Nlm_SwapUint2Buff(ptr, len2);
+	return len2;
+}
+
+NLM_EXTERN Nlm_Int4 LIBCALL Nlm_BSUint2Write (Nlm_ByteStorePtr bsp, Nlm_Uint2Ptr ptr, Nlm_Int4 len)
+{
+	Nlm_Int4 len2;
+
+#ifdef IS_LITTLE_ENDIAN
+	Nlm_SwitchUint2Buff(ptr, len);
+#endif
+	len2 = Nlm_BSWrite(bsp, (Nlm_VoidPtr)ptr, (len * 2));
+	return (len2 / 2);
+}
+

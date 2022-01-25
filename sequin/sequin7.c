@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/3/98
 *
-* $Revision: 6.38 $
+* $Revision: 6.44 $
 *
 * File Description: 
 *
@@ -141,6 +141,7 @@ typedef struct startupform {
 static void ChangeDestination (GrouP g)
 
 {
+  Char  str [64];
   Int2  val;
 
   val = GetValue (g);
@@ -148,7 +149,13 @@ static void ChangeDestination (GrouP g)
     case 1 :
       RemoveAppProperty ("SequinUseEMBLStyle");
       RemoveAppProperty ("SequinUseDDBJStyle");
-      SetAppParam ("SEQUIN", "PREFERENCES", "DATABASE", "GenBank");
+      if (GetAppParam ("SEQUIN", "PREFERENCES", "DATABASE", NULL, str, sizeof (str))) {
+        if (! StringHasNoText (str)) {
+          if (StringICmp (str, "GenBank") != 0) {
+            SetAppParam ("SEQUIN", "PREFERENCES", "DATABASE", "GenBank");
+          }
+        }
+      }
       break;
     case 2 :
       SetAppProperty ("SequinUseEMBLStyle", (void *) 1024);
@@ -405,8 +412,6 @@ typedef struct formatform {
 
   GrouP           package;
   GrouP           format;
-  ButtoN          fastaPlusButton;
-  ButtoN          phylipButton;
   ButtoN          nexusButton;
   ButtoN          paupButton;
   TexT            numseqs;
@@ -434,20 +439,14 @@ static void FormatBlockPtrToFormatForm (ForM f, Pointer data)
         SafeSetValue (ffp->package, fbp->seqPackage);
       }
       if (fbp->seqPackage <= SEQ_PKG_GENOMICCDNA || fbp->seqPackage == SEQ_PKG_GENBANK) {
-        SafeDisable (ffp->fastaPlusButton);
-        SafeDisable (ffp->phylipButton);
         SafeDisable (ffp->nexusButton);
         SafeDisable (ffp->paupButton);
       } else {
-        SafeEnable (ffp->fastaPlusButton);
-        SafeEnable (ffp->phylipButton);
         SafeEnable (ffp->nexusButton);
         SafeEnable (ffp->paupButton);
       }
     } else {
       SafeSetValue (ffp->package, SEQ_PKG_SINGLE);
-      SafeDisable (ffp->fastaPlusButton);
-      SafeDisable (ffp->phylipButton);
       SafeDisable (ffp->nexusButton);
       SafeDisable (ffp->paupButton);
     }
@@ -464,8 +463,6 @@ static void FormatBlockPtrToFormatForm (ForM f, Pointer data)
     }
   } else {
     SafeSetValue (ffp->package, SEQ_PKG_SINGLE);
-    SafeDisable (ffp->fastaPlusButton);
-    SafeDisable (ffp->phylipButton);
     SafeDisable (ffp->nexusButton);
     SafeDisable (ffp->paupButton);
     SafeSetValue (ffp->format, SEQ_FMT_FASTA);
@@ -514,20 +511,16 @@ static void EnableOrDisableFormats (GrouP g)
     val++;
   }
   if (val <= SEQ_PKG_GENOMICCDNA || val == SEQ_PKG_GENBANK) {
-    if (Enabled (ffp->phylipButton)) {
+    if (Enabled (ffp->nexusButton)) {
       ffp->restoreFormatTo = GetValue (ffp->format);
     }
     SafeSetValue (ffp->format, SEQ_FMT_FASTA);
-    SafeDisable (ffp->fastaPlusButton);
-    SafeDisable (ffp->phylipButton);
     SafeDisable (ffp->nexusButton);
     SafeDisable (ffp->paupButton);
   } else {
-    if (! Enabled (ffp->phylipButton)) {
+    if (! Enabled (ffp->nexusButton)) {
       SafeSetValue (ffp->format, ffp->restoreFormatTo);
     }
-    SafeEnable (ffp->fastaPlusButton);
-    SafeEnable (ffp->phylipButton);
     SafeEnable (ffp->nexusButton);
     SafeEnable (ffp->paupButton);
   }
@@ -594,15 +587,11 @@ extern ForM CreateFormatForm (Int2 left, Int2 top, CharPtr title,
     g2 = HiddenGroup (h, 2, 0, NULL);
 
     ppt = StaticPrompt (g2, "Sequence data format", 0, 0, programFont, 'l');
-    ffp->format = HiddenGroup (g2, -3, 0, NULL);
+    ffp->format = HiddenGroup (g2, -1, 0, NULL);
     SetObjectExtra (ffp->format, ffp, NULL);
     RadioButton (ffp->format, "FASTA");
-    ffp->fastaPlusButton = RadioButton (ffp->format, "FASTA+GAP");
-    ffp->phylipButton = RadioButton (ffp->format, "PHYLIP");
-    ffp->nexusButton = RadioButton (ffp->format, "NEXUS Interleaved");
-    ffp->paupButton = RadioButton (ffp->format, "NEXUS Contiguous");
-    Disable (ffp->fastaPlusButton);
-    Disable (ffp->phylipButton);
+    ffp->paupButton = RadioButton (ffp->format, "Contiguous (FASTA+GAP, NEXUS, MACAW)");
+    ffp->nexusButton = RadioButton (ffp->format, "Interleaved (PHYLIP, NEXUS)");
     Disable (ffp->nexusButton);
     Disable (ffp->paupButton);
     SetValue (ffp->format, SEQ_FMT_FASTA);
@@ -772,7 +761,9 @@ static void CreateGeneAndProtFeats (SeqEntryPtr nsep, SeqEntryPtr psep,
                                     CharPtr best, size_t maxsize, CharPtr PNTR ttl)
 
 {
+  Char        activity [256];
   BioseqPtr   bsp;
+  Char        ec [32];
   GeneRefPtr  grp;
   SeqLocPtr   gslp;
   Boolean     hasNulls;
@@ -845,6 +836,24 @@ static void CreateGeneAndProtFeats (SeqEntryPtr nsep, SeqEntryPtr psep,
             }
           }
         }
+        activity [0] = '\0';
+        ec [0] = '\0';
+        ptr = StringStr (title, "[function=");
+        if (ptr != NULL) {
+          StringNCpy_0 (activity, ptr + 10, sizeof (str));
+          ptr = StringChr (activity, ']');
+          if (ptr != NULL) {
+            *ptr = '\0';
+          }
+        }
+        ptr = StringStr (title, "[EC_number=");
+        if (ptr != NULL) {
+          StringNCpy_0 (ec, ptr + 11, sizeof (str));
+          ptr = StringChr (ec, ']');
+          if (ptr != NULL) {
+            *ptr = '\0';
+          }
+        }
         ptr = StringStr (title, "[prot=");
         if (ptr != NULL) {
           StringNCpy_0 (str, ptr + 6, sizeof (str));
@@ -860,7 +869,7 @@ static void CreateGeneAndProtFeats (SeqEntryPtr nsep, SeqEntryPtr psep,
             if (StringHasNoText (best)) {
               StringNCpy_0 (best, ptr, maxsize);
             }
-            prp = CreateNewProtRef (str, ptr, NULL, NULL);
+            prp = CreateNewProtRef (str, ptr, ec, activity);
             if (prp != NULL) {
               sfp = CreateNewFeature (psep, NULL, SEQFEAT_PROT, NULL);
               if (sfp != NULL) {
@@ -880,6 +889,17 @@ static void CreateGeneAndProtFeats (SeqEntryPtr nsep, SeqEntryPtr psep,
           if (ptr != NULL) {
             *ptr = '\0';
             if (ttl != NULL) {
+              *ttl = StringSave (str);
+            }
+          }
+        }
+        ptr = StringStr (title, "[note=");
+        if (ptr != NULL) {
+          StringNCpy_0 (str, ptr + 6, sizeof (str));
+          ptr = StringChr (str, ']');
+          if (ptr != NULL) {
+            *ptr = '\0';
+            if (ttl != NULL && *ttl == NULL) {
               *ttl = StringSave (str);
             }
           }
@@ -913,12 +933,24 @@ static SeqLocPtr AskForInterval (SeqEntryPtr sep, BioseqPtr nuc, BioseqPtr prot)
   DialoG      d;
   GrouP       g;
   GrouP       m;
+  SeqIdPtr    sip;
   SeqLocPtr   slp;
+  Char        str [128];
   ValNodePtr  vnp;
   WindoW      w;
 
   slp = NULL;
   if (sep == NULL || nuc == NULL || prot == NULL) return NULL;
+
+  if (GetAppParam ("SEQUIN", "PREFERENCES", "ASKIFSUGGESTFAILED", NULL, str, sizeof (str))) {
+    if (StringICmp (str, "FALSE") == 0) {
+      sip = SeqIdFindWorst (prot->id);
+      SeqIdWrite (sip, str, PRINTID_REPORT, sizeof (str));
+      Message (MSG_POSTERR, "Suggest failure for %s", str);
+      return NULL;
+    }
+  }
+
   w = MovableModalWindow (-50, -33, -10, -10, "Enter coding region interval", NULL);
   g = HiddenGroup (w, -1, 0, NULL);
   m = NULL;
@@ -998,8 +1030,11 @@ extern Boolean AutomaticProteinProcess (SeqEntryPtr esep, SeqEntryPtr psep,
         CreateGeneAndProtFeats (nsep, psep, slp, crp, vnpstr, mRnaName, sizeof (mRnaName), &ttl);
         ExciseString (vnpstr, "[gene=", "]");
         ExciseString (vnpstr, "[prot=", "]");
+        ExciseString (vnpstr, "[function=", "]");
+        ExciseString (vnpstr, "[EC_number=", "]");
         ExciseString (vnpstr, "[orf", "]");
         ExciseString (vnpstr, "[comment", "]");
+        ExciseString (vnpstr, "[note", "]");
         TrimSpacesAroundString (vnpstr);
         if (StringHasNoText (vnpstr)) {
           ValNodeExtract (&(pbsp->descr), Seq_descr_title);
@@ -5260,102 +5295,6 @@ static void ConvertAccInDefToLocalIdProc (SeqEntryPtr sep)
   ValNodeFree (head);
 }
 
-static void RemoveBioSourceOnPopSet (SeqEntryPtr sep, OrgRefPtr master)
-
-{
-  BioSourcePtr  biop;
-  BioseqSetPtr  bssp;
-  OrgRefPtr     orp;
-  ValNodePtr    sdp;
-
-  if (sep == NULL) return;
-  if (IS_Bioseq_set (sep)) {
-    bssp = (BioseqSetPtr) sep->data.ptrvalue;
-    if (bssp == NULL) return;
-    if (bssp->_class == 13 || bssp->_class == 14 || bssp->_class == 15) { /* now on phy and mut sets */
-      sdp = SeqEntryGetSeqDescr (sep, Seq_descr_source, NULL);
-      if (sdp == NULL) return;
-      biop = (BioSourcePtr) sdp->data.ptrvalue;
-      if (biop == NULL) return;
-      orp = biop->org;
-      if (orp == NULL) return;
-      for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
-        RemoveBioSourceOnPopSet (sep, orp);
-      }
-      sdp = ValNodeExtract (&(bssp->descr), Seq_descr_source);
-      SeqDescrFree (sdp);
-      return;
-    }
-    /* if (bssp->_class == 7 || bssp->_class == 13 || bssp->_class == 15) return; */
-    if (bssp->_class == 7) { /* also handle genbank supersets */
-      for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
-        RemoveBioSourceOnPopSet (sep, NULL);
-      }
-      return;
-    }
-  }
-  if (master == NULL) return;
-  sdp = SeqEntryGetSeqDescr (sep, Seq_descr_source, NULL);
-  if (sdp != NULL) return;
-  biop = BioSourceNew ();
-  if (biop == NULL) return;
-  orp = OrgRefNew ();
-  if (orp == NULL) return;
-  biop->org = orp;
-  orp->taxname = StringSave (master->taxname);
-  orp->common = StringSave (master->common);
-  sdp = CreateNewDescriptor (sep, Seq_descr_source);
-  if (sdp == NULL) return;
-  sdp->data.ptrvalue = (Pointer) biop;
-}
-
-static Boolean NoBiosourceOrTaxonId (SeqEntryPtr sep)
-
-{
-  BioSourcePtr  biop;
-  BioseqSetPtr  bssp;
-  DbtagPtr      dbt;
-  ObjectIdPtr   oid;
-  OrgRefPtr     orp;
-  ValNodePtr    sdp;
-  ValNodePtr    vnp;
-
-  if (sep == NULL) return TRUE;
-  if (IS_Bioseq_set (sep)) {
-    bssp = (BioseqSetPtr) sep->data.ptrvalue;
-    if (bssp != NULL && (bssp->_class == 7 || bssp->_class == 13 ||
-                         bssp->_class == 14 || bssp->_class == 15)) {
-      for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
-        if (NoBiosourceOrTaxonId (sep)) return TRUE;
-      }
-      return FALSE;
-    }
-  }
-  sdp = SeqEntryGetSeqDescr (sep, Seq_descr_source, NULL);
-  if (sdp == NULL) return TRUE;
-  biop = (BioSourcePtr) sdp->data.ptrvalue;
-  if (biop == NULL) return TRUE;
-  orp = biop->org;
-  if (orp == NULL) return TRUE;
-  vnp = orp->db;
-  if (vnp == NULL) return TRUE;
-  while (vnp != NULL) {
-    dbt = (DbtagPtr) vnp->data.ptrvalue;
-    if (dbt != NULL) {
-      if (StringCmp (dbt->db, "taxon") == 0) {
-        oid = dbt->tag;
-        if (oid != NULL) {
-          if (oid->str == NULL && oid->id > 0) {
-            return FALSE;
-          }
-        }
-      }
-    }
-    vnp = vnp->next;
-  }
-  return TRUE;
-}
-
 static Int2  taxonCount;
 
 static Int4 DoSeqEntryToAsn3 (SeqEntryPtr sep, Boolean strip, Boolean correct,
@@ -5494,12 +5433,13 @@ extern Int4 MySeqEntryToAsn3Ex (SeqEntryPtr sep, Boolean strip, Boolean correct,
 
   rsult = 0;
   sev = ErrSetMessageLevel (SEV_FATAL);
+  BasicSeqEntryCleanup (sep);
   EntryChangeImpFeat(sep);     /* change any CDS ImpFeat to real CdRegion */
-  NormalizePeriodsOnInitials (sep); /* put periods on author initials */
-  MoveRnaGBQualProductToName (sep); /* move rna gbqual product to rna-ref.ext.name */
-  MoveProtGBQualProductToName (sep); /* move prot gbqual product to prot-ref.name */
-  MoveCdsGBQualProductToName (sep); /* move cds gbqual product to prot-ref.name */
-  MoveFeatGBQualsToFields (sep); /* move feature partial, exception to fields */
+  /* NormalizePeriodsOnInitials (sep); */ /* put periods on author initials */
+  /* MoveRnaGBQualProductToName (sep); */ /* move rna gbqual product to rna-ref.ext.name */
+  /* MoveProtGBQualProductToName (sep); */ /* move prot gbqual product to prot-ref.name */
+  /* MoveCdsGBQualProductToName (sep); */ /* move cds gbqual product to prot-ref.name */
+  /* MoveFeatGBQualsToFields (sep); */ /* move feature partial, exception to fields */
   if (indexerVersion) {
     StripTitleFromProtsInNucProts (sep);
     move_cds (sep); /* move CDS features to nuc-prot set */
@@ -5517,10 +5457,10 @@ extern Int4 MySeqEntryToAsn3Ex (SeqEntryPtr sep, Boolean strip, Boolean correct,
   }
   SeqEntryExplore (sep, NULL, CheckSeqAlignCallback); /* remove alignments with single dimension */
   if ((! force) && (! NoBiosourceOrTaxonId (sep))) {
-    EntryStripSerialNumber(sep); /* strip citation serial numbers */
+    /* EntryStripSerialNumber(sep); */ /* strip citation serial numbers */
     EntryChangeGBSource (sep);   /* at least remove redundant information in GBBlocks */
     EntryCheckGBBlock (sep);
-    SeqEntryMoveDbxrefs (sep); /* db_xref gbqual to sfp->dbxref */
+    /* SeqEntryMoveDbxrefs (sep); */ /* db_xref gbqual to sfp->dbxref */
     EntryMergeDupBioSources (sep);
     GetRidOfEmptyFeatsDescStrings (0, sep);
     GetRidOfLocusInSeqIds (0, sep);
@@ -5562,10 +5502,10 @@ extern Int4 MySeqEntryToAsn3Ex (SeqEntryPtr sep, Boolean strip, Boolean correct,
     Update ();
   }
 /*#endif*/
-  EntryStripSerialNumber(sep); /* strip citation serial numbers */
+  /* EntryStripSerialNumber(sep); */ /* strip citation serial numbers */
   EntryChangeGBSource (sep);   /* remove redundant information in GBBlocks again */
   EntryCheckGBBlock (sep);
-  SeqEntryMoveDbxrefs (sep); /* db_xref gbqual to sfp->dbxref */
+  /* SeqEntryMoveDbxrefs (sep); */ /* db_xref gbqual to sfp->dbxref */
   EntryMergeDupBioSources (sep);
   GetRidOfEmptyFeatsDescStrings (0, sep);
   GetRidOfLocusInSeqIds (0, sep);

@@ -23,9 +23,9 @@
 *
 * ===========================================================================
 *
-* $Id: ncbierr.h,v 6.2 1997/11/04 19:08:36 ostell Exp $
+* $Id: ncbierr.h,v 6.3 1998/10/22 16:52:41 shavirin Exp $
 *
-* $Revision: 6.2 $
+* $Revision: 6.3 $
 *
 * Authors:  Schuler, Sirotkin (UserErr stuff)
 *
@@ -44,6 +44,9 @@
 *                       of functions from int to ErrSev to eliminate warnings
 *
 * $Log: ncbierr.h,v $
+* Revision 6.3  1998/10/22 16:52:41  shavirin
+* Added function *Nlm_GetErrLongText able to retrieve long error messages
+*
 * Revision 6.2  1997/11/04 19:08:36  ostell
 * added ErrGetUserStrings() to eliminate direct access to ErrDesc.userstr
 * so this could become a thread specific chain
@@ -278,7 +281,8 @@ NLM_EXTERN unsigned long LIBCALL ErrTestOptFlags PROTO((unsigned long flags));
 NLM_EXTERN void LIBCALL ErrSaveOptions PROTO((ErrOpts *opts));
 NLM_EXTERN void LIBCALL ErrRestoreOptions PROTO((const ErrOpts *opts));
 NLM_EXTERN void LIBCALL Nlm_ErrPathReset PROTO((void));
-
+NLM_EXTERN char *Nlm_GetErrLongText (char *module, 
+                                     int errcode, int subcode);
 /* Error Option (EO) flags */
 #define EO_LOG_SEVERITY  0x00000001L
 #define EO_LOG_CODES     0x00000002L

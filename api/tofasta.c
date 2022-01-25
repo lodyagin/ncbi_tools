@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/12/91
 *
-* $Revision: 6.22 $
+* $Revision: 6.25 $
 *
 * File Description:  various sequence objects to fasta output
 *
@@ -39,6 +39,15 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: tofasta.c,v $
+* Revision 6.25  1998/11/03 21:43:57  kans
+* call SeqMapTableConvert to map asterisk to appropriate alphabet - BLAST is using ncbistdaa, not ncbieaa or iupacaa
+*
+* Revision 6.24  1998/10/26 22:35:53  kans
+* filter out terminal asterisk in protein sequence
+*
+* Revision 6.23  1998/10/06 21:04:43  tatiana
+* a bug fixed in CreateDefline()
+*
 * Revision 6.22  1998/09/04 13:09:22  volodya
 * fix the memory bug and the memory leaks in CreateDefLine()
 *
@@ -1184,7 +1193,7 @@ static Boolean FastaReadSequenceInternal
     Int4           in_index, out_index, total_read, badchars = 0;
     Int4           total_length = 0;
     Char           tmp[32];
-    Boolean        Second, skip_to_eol;
+    Boolean        Second, skip_to_eol, last_was_star;
     
     if (input == NULL)     /* empty input */
         return FALSE;
@@ -1222,6 +1231,7 @@ static Boolean FastaReadSequenceInternal
 
     Second = FALSE;
     skip_to_eol = FALSE;
+    last_was_star = FALSE;
     in_index = out_index = total_read = 0;
 
     while(TRUE) {
@@ -1236,17 +1246,32 @@ static Boolean FastaReadSequenceInternal
 	  
             in_index = 0;
 	}
-        
-        byte_from = in_buff[in_index];
-        in_index++;
-        
-        if(byte_from != ';' && !skip_to_eol) {
+      	byte_from = in_buff[in_index];
+      	in_index++;
+        if ((! is_na) && (! last_was_star) && byte_from == '*') {
+        	last_was_star = TRUE;
+        } else if(byte_from != ';' && !skip_to_eol) {
             byte_from = TO_UPPER (byte_from);
                 
             if (is_na && byte_from == 'U') byte_from = 'T';
                 
             if((uch = SeqMapTableConvert(smtp, byte_from)) != 
                INVALID_RESIDUE) {
+                if (last_was_star) {
+                	total_length++;
+                	out_buff[out_index] = SeqMapTableConvert(smtp, '*');
+                	out_index++;
+                	if(out_index == FTSE_BUFF_CHUNK) {
+                		if(BSWrite(*bs_out, out_buff, out_index) != out_index) {
+                			MemFree (badchar);
+                			MemFree(in_buff);
+                			MemFree(out_buff);                
+                			return FALSE;                
+                		}
+                		out_index = 0;
+                	}
+                	last_was_star = FALSE;
+                }
                 total_length++;
                 if(is_na) {
                     if(!Second) {
@@ -2160,20 +2185,20 @@ NLM_EXTERN Boolean CreateDefLine (ItemInfoPtr iip, BioseqPtr bsp, CharPtr buf, I
 	vnp=GatherDescrOnBioseq(iip, bsp, Seq_descr_title);
 	if (vnp != NULL) {
 		title = StringSave((CharPtr)vnp->data.ptrvalue);
-		if (tech == MI_TECH_htgs_1 || tech == MI_TECH_htgs_2) {
-			if (title == NULL || *title == '\0') {
-				title = UseOrgMods(bsp);
-			}
-			if (StringStr(title, "*** SEQUENCING IN PROGRESS *** ") == NULL) {
-				diff = LabelCopy(buf, 
-								"*** SEQUENCING IN PROGRESS *** ", buflen);
-				buflen -= diff;
-				buf += diff;
-			}
-		} else if (tech == MI_TECH_est || tech == MI_TECH_sts || tech == MI_TECH_survey) {
-			if (title == NULL || *title == '\0') {
-				title = UseOrgMods(bsp);
-			}
+	}
+	if (tech == MI_TECH_htgs_1 || tech == MI_TECH_htgs_2) {
+		if (title == NULL || *title == '\0') {
+			title = UseOrgMods(bsp);
+		}
+		if (StringStr(title, "*** SEQUENCING IN PROGRESS *** ") == NULL) {
+			diff = LabelCopy(buf, 
+							"*** SEQUENCING IN PROGRESS *** ", buflen);
+			buflen -= diff;
+			buf += diff;
+		}
+	} else if (tech == MI_TECH_est || tech == MI_TECH_sts || tech == MI_TECH_survey) {
+		if (title == NULL || *title == '\0') {
+			title = UseOrgMods(bsp);
 		}
 	}
 /* some titles may have zero length */

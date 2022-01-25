@@ -23,7 +23,7 @@
  *
  * ===========================================================================
  *
- * RCS $Id: accutils.c,v 6.6 1998/06/12 19:19:10 kans Exp $
+ * RCS $Id: accutils.c,v 6.7 1999/01/06 14:18:36 grisha Exp $
  *
  * Author:  J. Epstein
  *
@@ -35,6 +35,9 @@
  * Modifications:  
  * --------------------------------------------------------------------------
  * $Log: accutils.c,v $
+ * Revision 6.7  1999/01/06 14:18:36  grisha
+ * add defines to switch ID0/ID1 usage
+ *
  * Revision 6.6  1998/06/12 19:19:10  kans
  * fixed unix compiler warnings
  *
@@ -110,7 +113,7 @@
  * ==========================================================================
  */
 
-#define REVISION_STR "$Revision: 6.6 $"
+#define REVISION_STR "$Revision: 6.7 $"
 
 #include <accutils.h>
 #ifndef _CDROMLIB_
@@ -1145,7 +1148,7 @@ NLM_EXTERN DocField LIBCALL EntrezStringToField(DocType db, CharPtr str)
 
 #ifdef _PMENTREZ_
     return PMEntrezStringToField(db,str);
-#endif
+#else
 
     if (EntrezIsInited())
     {
@@ -1196,6 +1199,7 @@ NLM_EXTERN DocField LIBCALL EntrezStringToField(DocType db, CharPtr str)
     if (StringICmp(str, "SUBS") == 0)
         return FLD_SUBS;
     return -1;
+#endif
 }
 
 

@@ -165,7 +165,7 @@ NLM_EXTERN SeqIdPtr find_sip(SeqIdPtr sip)
   Uint1  order [NUM_ORDER];
 
   SeqIdBestRank (order, NUM_ORDER);
-  order [SEQID_LOCAL] = 1;
+  order [SEQID_LOCAL] = 2;
   order [SEQID_GENBANK] = 5;
   order [SEQID_EMBL] = 5;
   order [SEQID_PIR] = 5;
@@ -174,7 +174,7 @@ NLM_EXTERN SeqIdPtr find_sip(SeqIdPtr sip)
   order [SEQID_PRF] = 5;
   order [SEQID_PDB] = 5;
   order [SEQID_PATENT] = 10;
-  order [SEQID_OTHER] = 10;
+  order [SEQID_OTHER] = 1;
   order [SEQID_GENERAL] = 10;
   order [SEQID_GIBBSQ] = 15;
   order [SEQID_GIBBMT] = 15;
@@ -2083,7 +2083,7 @@ NLM_EXTERN Int2 get_vnp_num(ValNodePtr vnp)
 ###################################################################*/
 typedef struct seqid_count{
 	SeqIdPtr sip;
-	Uint2 count;
+	Uint4 count;
 }SeqIdCount, PNTR SeqIdCountPtr;
 
 static ValNodePtr find_repeat(ValNodePtr head, SeqIdPtr sip)
@@ -2110,7 +2110,7 @@ static ValNodePtr find_repeat(ValNodePtr head, SeqIdPtr sip)
 
 static SeqIdPtr find_max(ValNodePtr vnp)
 {
-	Uint2 max;
+	Uint4 max;
 	SeqIdPtr sip= NULL;
 	SeqIdCountPtr sicp;
 

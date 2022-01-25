@@ -29,7 +29,16 @@
  * Author: Ken Addess
  *
  * $Log: bsannotvs.c,v $
- * Revision 6.1  1998/07/17 18:51:13  madej
+ * Revision 6.4  1998/11/20 20:04:39  addess
+ * related to platform independence of VAST Search
+ *
+ * Revision 6.3  1998/11/13  15:22:47  addess
+ * removed some uneeded code related to align chains
+ *
+ * Revision 6.2  1998/10/14  17:44:56  addess
+ * for sending aligned chains from vastsearch
+ *
+ * Revision 6.1  1998/07/17  18:51:13  madej
  * Allows Vast Search results to be viewed with RasMol and Kinemage.
  *
  */
@@ -58,7 +67,6 @@
 #include <objmime.h>
 #include <strimprt.h>
 
-#define VSPATH "/usr/people7/addess/vastsearch/"
 
 Boolean InstBSAnnotSetVS(BiostrucAnnotSetPtr pbsasThis, CharPtr JobID)
 {
@@ -66,7 +74,7 @@ Boolean InstBSAnnotSetVS(BiostrucAnnotSetPtr pbsasThis, CharPtr JobID)
   Int4 iMMDBId;
   PDNMS pdnmsThis = NULL;
   PMSD  pmsdThis = NULL;
-  BiostrucPtr pbsThis = NULL;
+  BiostrucPtr pbsThis = NULL, pbsTemp = NULL;
   BiostrucIdPtr pbsidThis = NULL;
   BiostrucFeatureSetPtr pbsfsThis = NULL;
   BiostrucFeaturePtr pbsfThis = NULL;
@@ -97,16 +105,46 @@ Boolean InstBSAnnotSetVS(BiostrucAnnotSetPtr pbsasThis, CharPtr JobID)
   szName[3] = szTemp[3];
   szName[4] = '\0';
   
-  AsnName[0]='\0';
-  StringCpy(AsnName, "/b");
-  StringCat(AsnName, szName);
+  MasterChain[0] = ' ';
+  MasterChain[1] = '\0';
+  SlaveChain[0] = ' ';
+  SlaveChain[1] = '\0';
+  
+  if (Chain)
+  {
+    MasterChain[0] = szTemp[4];
+    MasterChain[1] = '\0';
+  }
+
+  if (JobID)
+  {
+    AsnName[0]='\0';
+    StringCpy(AsnName, "/b");
+    StringCat(AsnName, szName);
 	
-  AsnPath[0]='\0';
-  StringCpy(AsnPath, VSPATH);
-  StringCat(AsnPath, JobID);
-  StringCat(AsnPath, AsnName);
-   
-  pbsThis = FetchBS(AsnPath, 0, ALLSIMPLEMDL, 3, POWER_VIEW);
+    AsnPath[0]='\0';
+    StringCpy(AsnPath, VSPATH);
+    StringCat(AsnPath, JobID);
+    StringCat(AsnPath, AsnName);
+    pbsThis = FetchBS(AsnPath, 0, ALLSIMPLEMDL, 3, POWER_VIEW);
+
+/* This is dead code. Don't need it. Ken                           */
+/*    if (MasterChain[0] != ' ')                                   */
+/*    {                                                            */
+/*      pbsTemp = (BiostrucPtr)PruneBiostruc(pbsThis, MasterChain);*/
+/*      pbsThis = NULL;                                            */
+/*      pbsThis = pbsTemp;                                         */
+/*    }                                                            */
+  }
+  else
+  { 
+    pbsThis = FetchBiostrucPDB(szName, ALLSIMPLEMDL, 3);
+    SlaveChain[0] = szTemp[11];
+    SlaveChain[1] = '\0';
+    MasterChain[0] = ' ';
+    MasterChain[1] = '\0';
+  }
+
   /*pbsThis = MMDBBiostrucGet(iMMDBId, ALLSIMPLEMDL, 3);*/
   if (!pbsThis) goto nogomem;
   pdnmsThis =  MakeAModelstruc(pbsThis);

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/23/91
 *
-* $Revision: 6.1 $
+* $Revision: 6.6 $
 *
 * File Description:
 *   	prototypes of miscellaneous functions
@@ -43,6 +43,21 @@
 * 06-15-93 Schuler     Added macros for Gestalt functins.
 *
 * $Log: ncbimisc.h,v $
+* Revision 6.6  1999/01/21 20:08:37  ostell
+* added SwitchUint2 and 4, added integer bytestores
+*
+* Revision 6.5  1999/01/07 20:18:51  victorov
+* MD5 functions declarations fixed
+*
+* Revision 6.4  1999/01/07 15:20:58  victorov
+* added Nlm_ prefix to MD5 functions to avoid conflicts
+*
+* Revision 6.3  1999/01/06 22:49:27  victorov
+* added MD5 hash calculator
+*
+* Revision 6.2  1998/10/13 20:49:40  vakatov
+* + Nlm_PlatformName()
+*
 * Revision 6.1  1998/04/08 16:49:59  kans
 * ValNodeLen returns Int4
 *
@@ -107,6 +122,9 @@ NLM_EXTERN char * LIBCALL Nlm_Ultostr PROTO((unsigned long x, int opts));
 
 /* Sorting */
 NLM_EXTERN void LIBCALL Nlm_HeapSort PROTO((VoidPtr base, size_t nel, size_t width, int (LIBCALLBACK *cmp) (VoidPtr, VoidPtr) ));
+
+/* Platform name */
+NLM_EXTERN const Nlm_Char* Nlm_PlatformName(void);
 
 
 /*****************************************************************************
@@ -302,13 +320,35 @@ NLM_EXTERN void Nlm_CtoPstr PROTO((Nlm_CharPtr str));
 NLM_EXTERN void Nlm_PtoCstr PROTO((Nlm_CharPtr str));
 #endif
 
+/*** these functions reverse byte order in integers 
+/*** calling the same function a second time switches it back
+/*** the native ENDIAN nature of the machine is not considered
+*/
+NLM_EXTERN Uint2 Nlm_SwitchUint2 PROTO ((Uint2 value));
+NLM_EXTERN void Nlm_SwitchUint2Buff PROTO ((Uint2 *buff, int count));
+NLM_EXTERN unsigned long  Nlm_SwitchLong PROTO ((unsigned long value));
+NLM_EXTERN void Nlm_SwitchLongBuff PROTO ((unsigned long *buff, int count));
+NLM_EXTERN Uint4  Nlm_SwitchUint4 PROTO ((Uint4 value));
+NLM_EXTERN void Nlm_SwitchUint4Buff PROTO ((Uint4 *buff, int count));
+
+#define SwitchUint2 Nlm_SwitchUint2
+#define SwitchUint2Buff Nlm_SwitchUint2Buff
+#define SwitchLong Nlm_SwitchLong
+#define SwitchLongBuff Nlm_SwitchLongBuff
+#define SwitchUint4 Nlm_SwitchUint4
+#define SwitchUint4Buff Nlm_SwitchUint4Buff
+
+/** The following defines ALWAYS assume the value to switched is
+    BIG_ENDIAN. This is used to allow portable use of binary integers
+	in some NCBI applications such as BLAST and some indexes ****/
+
 #ifdef IS_LITTLE_ENDIAN
-NLM_EXTERN Uint2 Nlm_SwapUint2 PROTO ((Uint2 value));
-NLM_EXTERN void Nlm_SwapUint2Buff PROTO ((Uint2 *buff, int count));
-NLM_EXTERN unsigned long  Nlm_SwapLong PROTO ((unsigned long value));
-NLM_EXTERN void Nlm_SwapLongBuff PROTO ((unsigned long *buff, int count));
-NLM_EXTERN Uint4  Nlm_SwapUint4 PROTO ((Uint4 value));
-NLM_EXTERN void Nlm_SwapUint4Buff PROTO ((Uint4 *buff, int count));
+#define Nlm_SwapUint2(value)		Nlm_SwitchUint2(value)
+#define Nlm_SwapUint2Buff(buff, count) Nlm_SwitchUint2Buff(buff, count)
+#define Nlm_SwapLong(value)		Nlm_SwitchLong(value)
+#define Nlm_SwapLongBuff(buff, count) Nlm_SwitchLongBuff(buff, count)
+#define Nlm_SwapUint4(value)		Nlm_SwitchUint4(value)
+#define Nlm_SwapUint4Buff(buff, count) Nlm_SwitchUint4Buff(buff, count)
 #else
 #define Nlm_SwapUint2(value)		(value)
 #define Nlm_SwapUint2Buff(buff, count)
@@ -317,6 +357,7 @@ NLM_EXTERN void Nlm_SwapUint4Buff PROTO ((Uint4 *buff, int count));
 #define Nlm_SwapUint4(value)		(value)
 #define Nlm_SwapUint4Buff(buff, count)
 #endif
+
 #define SwapUint2 Nlm_SwapUint2
 #define SwapUint2Buff Nlm_SwapUint2Buff
 #define SwapLong Nlm_SwapLong
@@ -324,6 +365,27 @@ NLM_EXTERN void Nlm_SwapUint4Buff PROTO ((Uint4 *buff, int count));
 #define SwapUint4 Nlm_SwapUint4
 #define SwapUint4Buff Nlm_SwapUint4Buff
 
+
+/**
+ * MD5 stuff
+ */
+typedef struct md5context_ {
+	Nlm_Uint4 buf[4];
+	Nlm_Uint4 bits[2];
+	Nlm_Uchar in[64];
+} Nlm_MD5Context, PNTR Nlm_MD5ContextPtr;
+
+NLM_EXTERN void LIBCALL Nlm_MD5Init PROTO((Nlm_MD5ContextPtr context));
+NLM_EXTERN void LIBCALL Nlm_MD5Update PROTO((Nlm_MD5ContextPtr context, Nlm_UcharPtr buf, Nlm_Uint4 len));
+NLM_EXTERN void LIBCALL Nlm_MD5Final PROTO((Nlm_MD5ContextPtr context, Nlm_Uchar digest[16]));
+NLM_EXTERN void LIBCALL Nlm_MD5Transform PROTO((Nlm_Uint4 buf[4], Nlm_Uint4 in[16]));
+
+#define MD5Context Nlm_MD5Context
+#define MD5ContextPtr Nlm_MD5ContextPtr
+#define MD5Init Nlm_MD5Init
+#define MD5Update Nlm_MD5Update
+#define MD5Final Nlm_MD5Final
+#define MD5Transform Nlm_MD5Transform
 
 /* Error codes for the CTX_NCBIMISC context */
 
@@ -338,6 +400,7 @@ NLM_EXTERN void Nlm_SwapUint4Buff PROTO ((Uint4 *buff, int count));
 #else
 #define NLM_EXTERN
 #endif
+
 
 #endif /* !_NCBIMISC_ */
 

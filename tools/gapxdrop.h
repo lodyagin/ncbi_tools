@@ -31,8 +31,11 @@ Author: Gennadiy Savchuk, Jinqhui Zhang, Tom Madden
 Contents: prototypes to perform a gapped alignment on two sequences.
 
 ****************************************************************************/
-/* $Revision: 6.3 $ */
+/* $Revision: 6.4 $ */
 /* $Log: gapxdrop.h,v $
+/* Revision 6.4  1998/11/17 13:39:03  madden
+/* Made ALIGN non-static
+/*
  * Revision 6.3  1998/08/26 18:51:08  kans
  * fixed -v -fd warning
  *
@@ -251,6 +254,10 @@ Int4 SEMI_G_ALIGN PROTO((Uint1Ptr A, Uint1Ptr B, Int4 M, Int4 N,
                 Int4Ptr S, Int4Ptr pei, Int4Ptr pej,
                 Boolean score_only, Int4Ptr PNTR sapp, GapAlignBlkPtr gap_align,
                 Int4 query_offset, Boolean reversed));
+
+Int4 LIBCALL ALIGN PROTO((Uint1Ptr A, Uint1Ptr B, Int4 M, Int4 N,
+                Int4Ptr S, Int4Ptr pei, Int4Ptr pej, Int4Ptr PNTR sapp,
+                GapAlignBlkPtr gap_align, Int4 query_offset, Boolean reversed));
 
 #ifdef __cplusplus
 }

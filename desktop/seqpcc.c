@@ -108,9 +108,9 @@ static SeqGraphPtr PCCGraph (SeqPortPtr spp, Int4 start, Int4 end, Int4 window,
   {
 /* type and number of values and compression */
     sgp->numval = end + 1;
-    sgp->compl = (Int4) (sgp->numval / gwidth);
+    sgp->compr = (Int4) (sgp->numval / gwidth);
     if ((sgp->numval%gwidth) != 0)
-      sgp->compl += 1;
+      sgp->compr += 1;
 /* graph type */
     sgp->flags[2] = 1;
     sgp->values = (Pointer) MemNew ((sizeof (FloatHi)) * sgp->numval);

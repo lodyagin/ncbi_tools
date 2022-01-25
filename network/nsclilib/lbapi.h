@@ -11,7 +11,7 @@
 #ifndef LBAPI__H
 #define LBAPI__H
 
-/* $Id: lbapi.h,v 1.8 1998/05/08 15:26:58 vakatov Exp $
+/* $Id: lbapi.h,v 1.9 1999/01/22 22:02:38 vakatov Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -42,12 +42,15 @@
 *
 * Initial Version Creation Date: 03/24/1997
 *
-* $Revision: 1.8 $
+* $Revision: 1.9 $
 *
 * File Description:
 *        Definitions for the load-balancing API.
 *
 * $Log: lbapi.h,v $
+* Revision 1.9  1999/01/22 22:02:38  vakatov
+* Added important NOTE for LBGetIPAddress()
+*
 * Revision 1.8  1998/05/08 15:26:58  vakatov
 * [LB_DIRECT]  now can skip IP addresses(for the dispatcher hosts) which
 * were already offered by the load-balancing daemon but failed by some reason
@@ -101,6 +104,7 @@ extern int LBPrintTable(void);
  * host with IP address = "preferred_ip".
  * Do not consider first "n_skip" hosts enlisted in the "skip_ip" array.
  * On any error, return zero.
+ * NOTE:  all IP addresses here are in the network byte order
  */
 extern unsigned LBGetIPAddress
 (const char* service,

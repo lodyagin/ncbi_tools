@@ -25,6 +25,24 @@
 **************************************************************************/
 /* $Revision 1.0$ */ 
 /* $Log: blastpgp.c,v $
+/* Revision 6.39  1999/01/22 17:24:51  madden
+/* added line breaks for alignment views
+/*
+/* Revision 6.38  1998/12/29 20:03:14  kans
+/* calls UseLocalAsnloadDataAndErrMsg at startup
+/*
+ * Revision 6.37  1998/12/17 21:54:39  madden
+ * Added call to BlastPruneHitsFromSeqAlign for other than first round
+ *
+ * Revision 6.36  1998/12/16 14:13:36  madden
+ * Fix for more than one pattern in query
+ *
+ * Revision 6.35  1998/11/19 14:04:34  madden
+ * Changed message level to SEV_WARNING
+ *
+ * Revision 6.34  1998/11/16 16:29:41  madden
+ * Added ErrSetMessageLevel(SEV_INFO) and fixed call to PrintKAParametersExtra
+ *
  * Revision 6.33  1998/09/28 12:33:02  madden
  * Used BlastErrorPrint
  *
@@ -207,6 +225,7 @@
 #include <gapxdrop.h>
 #include <posit.h>
 #include <seed.h>
+#include <sqnutils.h>
 
 /* Used by the callback function. */
 FILE *global_fp=NULL;
@@ -286,7 +305,7 @@ static Args myargs [NUMARG] = {
 	"11", NULL, NULL, FALSE, 'f', ARG_INT, 0.0, 0, NULL},
   { "Expectation value (E)", 
 	"10.0", NULL, NULL, FALSE, 'e', ARG_FLOAT, 0.0, 0, NULL},
-  { "alignment view options: 0 = pairwise, 1 = master-slave showing identities, 2 = master-slave no identities, 3 = flat master-slave, show identities, 4 = flat master-slave, no identities, 5 = master-slave no identities and blunt ends, 6 = flat master-slave, no identities and blunt ends", 
+  { "alignment view options:\n0 = pairwise,\n1 = master-slave showing identities,\n2 = master-slave no identities,\n3 = flat master-slave, show identities,\n4 = flat master-slave, no identities,\n5 = master-slave no identities and blunt ends,\n6 = flat master-slave, no identities and blunt ends", 
         "0", NULL, NULL, FALSE, 'm', ARG_INT, 0.0, 0, NULL},
   { "Output File for Alignment", 
 	"stdout", NULL, NULL, TRUE, 'o', ARG_FILE_OUT, 0.0, 0, NULL},
@@ -401,11 +420,13 @@ Int2 Main (void)
         ValNodePtr seedReturn; /*return value from seedEngineCore, which
                                  is a list of lists of SeqAligns, one
                                  list of SeqAligns per pattern occurrence*/
+        ValNodePtr pruneSeed;  /*possibly reduced version of seedReturn*/
         SeqAlignPtr * lastSeqAligns; /*keeps track of the last SeqAlign in
                                      each list of seedReturn so that the
                                      2-level list can be converted to a 1-level
                                      list and then back to 2-level*/
         Int4 numLastSeqAligns;
+        Int4 alignCount;
         
 
 
@@ -414,8 +435,13 @@ Int2 Main (void)
                 return (1);
         }
 
+
+	UseLocalAsnloadDataAndErrMsg ();
+
 	if (! SeqEntryLoad())
 		return 1;
+
+	ErrSetMessageLevel(SEV_WARNING);
 
         blast_database = myargs [0].strvalue;
         blast_inputfile = myargs [1].strvalue;
@@ -834,22 +860,25 @@ print_options += TXALIGN_HTML_RELATIVE;
 			        if (1 != search->pbp->maxNumPasses)
 				  fprintf(outfp, "\nResults from round %d\n", thisPassNum);
 
-				prune = BlastPruneHitsFromSeqAlign(head, number_of_descriptions, NULL);
+
 				ObjMgrSetHold();
                                 init_buff_ex(85);
 				if (1 == thisPassNum)
 				  search->positionBased = FALSE;
 				if (1 == thisPassNum) {
-                                  if (!options->isPatternSearch)
+                                  if (!options->isPatternSearch) {
+				    prune = BlastPruneHitsFromSeqAlign(head, number_of_descriptions, NULL);
 				    PrintDefLinesFromSeqAlign(prune->sap, 80, outfp, print_options, FIRST_PASS, NULL);
+				  }
                                   else {
-				    seedReturn = convertSeqAlignListToValNodeList(prune->sap,lastSeqAligns, numLastSeqAligns);
+				    seedReturn = convertSeqAlignListToValNodeList(head,lastSeqAligns, numLastSeqAligns);
 
-
-				    PrintDefLinesExtra(seedReturn, 80, outfp, print_options, FIRST_PASS, NULL, seqloc_duplicate);
+                                    pruneSeed = SeedPruneHitsFromSeedReturn(seedReturn, number_of_descriptions);
+				    PrintDefLinesExtra(pruneSeed, 80, outfp, print_options, FIRST_PASS, NULL, seqloc_duplicate);
 				  }
 				}
                                 else {
+				  prune = BlastPruneHitsFromSeqAlign(head, number_of_descriptions, NULL);
                                   if (ALL_ROUNDS) {
 				    PrintDefLinesFromSeqAlign(prune->sap, 80, outfp, print_options, NOT_FIRST_PASS_REPEATS, posSearch->posRepeatSequences);
 				    PrintDefLinesFromSeqAlign(prune->sap, 80, outfp, print_options, NOT_FIRST_PASS_NEW, posSearch->posRepeatSequences);
@@ -860,19 +889,23 @@ print_options += TXALIGN_HTML_RELATIVE;
 				if (ALL_ROUNDS && search->posConverged)
 				  fprintf(outfp, "\nCONVERGED!\n");
 				free_buff();
-				prune = BlastPruneHitsFromSeqAlign(head, number_of_alignments, prune);
-				seqannot->data = prune->sap;
+
                                 if (!(options->isPatternSearch)) {
+				  prune = BlastPruneHitsFromSeqAlign(head, number_of_alignments, prune);
+
+				  seqannot->data = prune->sap;
 				  if (myargs[5].intvalue != 0)
 				    ShowTextAlignFromAnnot(seqannot, 60, outfp, featureOrder, groupOrder, align_options, NULL, search->mask, NULL);
 				  else
 				    ShowTextAlignFromAnnot(seqannot, 60, outfp, featureOrder, groupOrder, align_options, NULL, search->mask, FormatScoreFunc);
 				}
                                 else {
+                                  if (number_of_alignments < number_of_descriptions)
+                                    pruneSeed = SeedPruneHitsFromSeedReturn(pruneSeed, number_of_alignments);
 				  if (myargs[5].intvalue != 0) 
-				    ShowTextAlignFromAnnotExtra(query_bsp, seedReturn, seqloc_duplicate, 60, outfp, featureOrder, groupOrder, align_options, NULL, search->mask, NULL);
+				    ShowTextAlignFromAnnotExtra(query_bsp, pruneSeed, seqloc_duplicate, 60, outfp, featureOrder, groupOrder, align_options, NULL, search->mask, NULL);
                                   else
-				    ShowTextAlignFromAnnotExtra(query_bsp, seedReturn, seqloc_duplicate, 60, outfp, featureOrder, groupOrder, align_options, NULL, search->mask, FormatScoreFunc);
+				    ShowTextAlignFromAnnotExtra(query_bsp, pruneSeed, seqloc_duplicate, 60, outfp, featureOrder, groupOrder, align_options, NULL, search->mask, FormatScoreFunc);
 				    }
 				seqannot->data = head;
 				prune = BlastPruneSapStructDestruct(prune);
@@ -951,9 +984,9 @@ print_options += TXALIGN_HTML_RELATIVE;
 		if (ka_params_gap)
 		{
 			if (options->isPatternSearch)
-                		PrintKAParametersExtra(ka_params->Lambda, ka_params->K, ka_params->H, seedSearch->paramC, 70, outfp, FALSE);
+                		PrintKAParametersExtra(ka_params_gap->Lambda, ka_params_gap->K, ka_params_gap->H, seedSearch->paramC, 70, outfp, FALSE);
 			else
-                		PrintKAParameters(ka_params->Lambda, ka_params->K, ka_params->H, 70, outfp, FALSE);
+                		PrintKAParameters(ka_params_gap->Lambda, ka_params_gap->K, ka_params_gap->H, 70, outfp, FALSE);
 			MemFree(ka_params_gap);
 		}
 

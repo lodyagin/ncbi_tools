@@ -1,7 +1,16 @@
 /*
- * $Id: PubStruct_proc.scr,v 6.10 1998/08/08 04:49:45 kimelman Exp $
+ * $Id: PubStruct_proc.scr,v 6.13 1998/11/06 18:59:06 kimelman Exp $
  *
  * $Log: PubStruct_proc.scr,v $
+ * Revision 6.13  1998/11/06 18:59:06  kimelman
+ * PubStruct loading transaction granularity changed
+ *
+ * Revision 6.12  1998/10/28 23:14:45  kimelman
+ * id_get_asn synced to OS
+ *
+ * Revision 6.11  1998/10/20 15:58:31  kimelman
+ * synchronization bugfix
+ *
  * Revision 6.10  1998/08/08 04:49:45  kimelman
  * bugfix: state type and processing for negative values
  *
@@ -61,8 +70,7 @@ create proc
 pdb2mmdb(@pdb_id char(4))
 as
      select gi=p.mmdb_id from pdb p where p.pdb_id = @pdb_id and exists
-     (select * from Struct s where s.mmdb_id = p.mmdb_id and state = 0 and suppressed in (0,255))
- 
+     (select * from Struct s where s.mmdb_id = p.mmdb_id and state = 0 and suppressed = 0 )
 go
 /*****        Grant and Revoke permissions pdb2mmdb                 *****/
 go
@@ -148,7 +156,6 @@ as
   select asn=blob
     from Struct
    where @sat_key = acc
- 
 go
 /*****        Grant and Revoke permissions id_get_asnblob           *****/
 go
@@ -183,7 +190,6 @@ as
    if(@sat != 10)
      return 100
 
-   
    select @mmdb_id= mmdb_id
    from   Struct
    where  acc = @sat_key
@@ -265,7 +271,10 @@ as
         return 100
     end
 
-  exec id_get_asnprop @sat_key
+  select sat_key=@sat_key, sat=10, state=100, confidential, suppress=suppressed, override=convert(tinyint,0)
+  from  Struct
+  where  acc = @sat_key
+
   exec id_get_asnblob @sat_key
         
   if(@outfmt=100)
@@ -388,13 +397,12 @@ PRINT '/*****           PROCEDURE    new_entry                     *****/'
 go
 
 create proc
-new_entry(@state_out tinyint=1, @acc int = null output)
+new_entry(@acc int = null output)
 as
-   select @acc=ticket from acc where kind = 1
-   update acc set ticket=ticket+1 where kind = 1
-   insert into Struct(acc ,mmdb_id , state    , date    , suppressed, confidential, blob)
-               values(@acc,0       ,@state_out,getdate(), 0         , 0           , null)
-   update Struct set blob = null where acc = @acc
+   begin transaction new_entry_1
+     update acc set ticket=ticket+1 where kind = 1
+     select @acc=ticket-1 from acc where kind = 1
+   commit transaction new_entry_1
 go
 /*****        Grant and Revoke permissions new_struct               *****/
 go
@@ -417,9 +425,14 @@ new_struct(@state_out tinyint=1)
 as
    declare @acc int
 
-   exec new_entry @state_out=@state_out,@acc=@acc output
+   exec new_entry @acc=@acc output
+
+   begin transaction new_struct_1
+   insert into Struct(acc ,mmdb_id , state    , date    , suppressed, confidential, blob)
+               values(@acc,0       ,@state_out,getdate(), 0         , 0           , null)
+   update Struct set blob = null where acc = @acc
    select @acc
- 
+   commit transaction new_struct_1
 go
 GRANT EXECUTE ON new_struct  TO public
 go
@@ -449,17 +462,23 @@ new_struct1(
 as
    declare @state_out tinyint
    /* QA */
+
    if ( select count(*) from pdb where mmdb_id = @mmdb ) = 0
-     insert into pdb(mmdb_id,pdb_id) values(@mmdb,isnull(@pdb_id,str(@mmdb)))
+     begin
+       begin transaction new_struct1_QA
+       insert into pdb(mmdb_id,pdb_id) values(@mmdb,isnull(@pdb_id,str(@mmdb)))
+       commit transaction new_struct1_QA
+     end
    else if ( select count(*) from pdb where mmdb_id = @mmdb and pdb_id = @pdb_id ) != 1
      begin
        declare @msg char
        select @msg = 'pdb identifier ['+@pdb_id+'changed for given mmdb ('+str(@mmdb)+')'
        raiserror 18001 @msg
-       rollback transaction
        return -1
      end
    
+   begin transaction
+
    update Struct
    set    mmdb_id = @mmdb
    where acc = @acc
@@ -469,12 +488,17 @@ as
    where acc = @acc
    
    exec push_struct @acc,@state_out
+
+   commit transaction
+
    /* check for initial loading */
    if ( (select count(*) from Struct where mmdb_id = @mmdb ) = 1 and @date is not null )
      begin
-       exec new_entry @state_out=0,@acc=@acc output
-       update Struct set mmdb_id = @mmdb , state = 0 , suppressed = 1, date = @date
-       where acc = @acc
+       exec new_entry @acc=@acc output
+       begin  transaction
+       insert into Struct(acc ,mmdb_id , state    , date    , suppressed, confidential, blob)
+                   values(@acc,@mmdb   , 0        , @date   , 1         , 0           , null)
+       commit transaction
    end
 go
 /*****        Grant and Revoke permissions new_struct1              *****/
@@ -536,4 +560,3 @@ as
 
   update statistics Struct
 go
-

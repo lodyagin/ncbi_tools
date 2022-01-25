@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 98-01-01
 *
-* $Revision: 6.2 $
+* $Revision: 6.3 $
 *
 * File Description: sentinal trees
 *
@@ -38,6 +38,9 @@
 * Date       Name        Description of modification
 * --------------------------------------------------------------------------
 * $Log: gtrdraw.c,v $
+* Revision 6.3  1998/10/01 16:37:10  kuzio
+* cast
+*
 * Revision 6.2  1998/09/16 19:00:36  kuzio
 * cvs logs
 *
@@ -100,7 +103,7 @@ static void PlotTheTreePlot (Int4Ptr epa, Int4 numval, ValNodePtr vnp,
         name[8] = '\0';
       width = StringWidth (name);
       height = FontHeight ();
-      PaintStringEx (name, point2.x - (width/2), point2.y + height);
+      PaintStringEx (name,(Int2)(point2.x-(width/2)),(Int2)(point2.y+height));
       SelectColor (curR, curG, curB);
     }
     vnp = vnp->next;

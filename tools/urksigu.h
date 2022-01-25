@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 98-01-01
 *
-* $Revision: 6.2 $
+* $Revision: 6.4 $
 *
 * File Description: sigme utilities header
 *
@@ -38,6 +38,12 @@
 * Date       Name        Description of modification
 * --------------------------------------------------------------------------
 * $Log: urksigu.h,v $
+* Revision 6.4  1998/11/24 15:40:54  kuzio
+* refine boundary condition for multiple potential leader pepides
+*
+* Revision 6.3  1998/11/16 14:29:55  kuzio
+* flagBoundaryCondition
+*
 * Revision 6.2  1998/09/16 17:46:47  kuzio
 * cvs logging
 *
@@ -62,7 +68,9 @@ extern Int4 EndOfSig (SeqLocPtr slp);
 extern SeqLocPtr FilterSigSeq (BioseqPtr bsp,
                                ComProfPtr pppl, ComProfPtr pppc,
                                FloatHi leadcutoff, FloatHi cutcutoff,
-                               Int4 range, SeqIdPtr sip);
+                               Int4 range, SeqIdPtr sip,
+                               Boolean flagBoundaryCondition,
+                               Boolean flagReportIfAllFuzzyOnly);
 
 #ifdef __cplusplus
 }

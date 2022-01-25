@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 6/30/98
 *
-* $Revision: 6.15 $
+* $Revision: 6.21 $
 *
 * File Description:  Reengineered and optimized exploration functions
 *                      to be used for future code
@@ -77,7 +77,7 @@ typedef struct seqmgrbioseqcontext {
   Pointer       userdata;
                           /* the following fields are for internal use only */
   Pointer       omdp;
-  Int2          index;
+  Uint2         index;
 } SeqMgrBioseqContext, PNTR SeqMgrBioseqContextPtr;
 
 typedef struct seqmgrsegmentcontext {
@@ -92,7 +92,7 @@ typedef struct seqmgrsegmentcontext {
   Pointer       userdata;
                           /* the following fields are for internal use only */
   Pointer       omdp;
-  Int2          index;
+  Uint2         index;
 } SeqMgrSegmentContext, PNTR SeqMgrSegmentContextPtr;
 
 typedef struct seqmgrdesccontext {
@@ -100,11 +100,12 @@ typedef struct seqmgrdesccontext {
   Uint2         itemID;
   ValNodePtr    sdp;
   SeqEntryPtr   sep;
+  Uint2         level;
   Uint1         seqdesctype;
   Pointer       userdata;
                           /* the following fields are for internal use only */
   Pointer       omdp;
-  Int2          index;
+  Uint2         index;
 } SeqMgrDescContext, PNTR SeqMgrDescContextPtr;
 
 typedef struct seqmgrfeatcontext {
@@ -112,18 +113,22 @@ typedef struct seqmgrfeatcontext {
   Uint2         itemID;
   SeqFeatPtr    sfp;
   SeqAnnotPtr   sap;
+  BioseqPtr     bsp;
   CharPtr       label;
-  Int2          left;
-  Int2          right;
+  Int4          left;
+  Int4          right;
+  Boolean       partialL;
+  Boolean       partialR;
+  Boolean       farloc;
   Uint1         strand;
-  Uint2         seqfeattype;
-  Uint2         featdeftype;
+  Uint1         seqfeattype;
+  Uint1         featdeftype;
   Int2          numivals;
   Int4Ptr       ivals;
   Pointer       userdata;
                           /* the following fields are for internal use only */
   Pointer       omdp;
-  Int2          index;
+  Uint2         index;
 } SeqMgrFeatContext, PNTR SeqMgrFeatContextPtr;
 
 /*****************************************************************************
@@ -135,7 +140,7 @@ typedef struct seqmgrfeatcontext {
 *
 *****************************************************************************/
 
-NLM_EXTERN Uint2 LIBCALL SeqMgrIndexFeatures PROTO((Uint2 entityID, Pointer ptr, Uint1 labeltype));
+NLM_EXTERN Uint2 LIBCALL SeqMgrIndexFeatures PROTO((Uint2 entityID, Pointer ptr));
 
 /*****************************************************************************
 *
@@ -158,7 +163,8 @@ NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetRNAgivenProduct PROTO((BioseqPtr bsp,
 /*****************************************************************************
 *
 *   To find the best gene feature, first call SeqMgrGetGeneXref, and if it is not
-*     NULL call SeqMgrGeneIsSuppressed, otherwise call SeqMgrGetOverlappingGene
+*     NULL call SeqMgrGeneIsSuppressed, otherwise call SeqMgrGetOverlappingGene,
+*     passing sfp->location
 *   If desired, place a SeqMgrFeatContext data structure on the stack, and pass
 *     in &context as the second parameter to SeqMgrGetOverlappingGene
 *
@@ -168,29 +174,28 @@ NLM_EXTERN GeneRefPtr LIBCALL SeqMgrGetGeneXref PROTO((SeqFeatPtr sfp));
 
 NLM_EXTERN Boolean LIBCALL SeqMgrGeneIsSuppressed PROTO((GeneRefPtr grp));
 
-NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetOverlappingGene PROTO((SeqFeatPtr sfp,
+NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetOverlappingGene PROTO((SeqLocPtr slp,
                                                               SeqMgrFeatContext PNTR context));
 
 /*****************************************************************************
 *
-*   SeqMgrGetOverlappingPub returns the overlapping publication feature
+*   SeqMgrGetOverlappingXXX returns the overlapping mRNA/CDS/publication/biosource
+*     feature
 *   If desired, place a SeqMgrFeatContext data structure on the stack, and pass
-*     in &context as the second parameter to SeqMgrGetOverlappingPub
+*     in &context as the second parameter
 *
 *****************************************************************************/
 
-NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetOverlappingPub PROTO((SeqFeatPtr sfp,
+NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetOverlappingmRNA PROTO((SeqLocPtr slp,
+                                                              SeqMgrFeatContext PNTR context));
+
+NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetOverlappingCDS PROTO((SeqLocPtr slp,
                                                              SeqMgrFeatContext PNTR context));
 
-/*****************************************************************************
-*
-*   SeqMgrGetOverlappingSource returns the overlapping biosource feature
-*   If desired, place a SeqMgrFeatContext data structure on the stack, and pass
-*     in &context as the second parameter to SeqMgrGetOverlappingSource
-*
-*****************************************************************************/
+NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetOverlappingPub PROTO((SeqLocPtr slp,
+                                                             SeqMgrFeatContext PNTR context));
 
-NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetOverlappingSource PROTO((SeqFeatPtr sfp,
+NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetOverlappingSource PROTO((SeqLocPtr slp,
                                                                 SeqMgrFeatContext PNTR context));
 
 /*****************************************************************************
@@ -277,12 +282,33 @@ NLM_EXTERN Boolean LIBCALL SeqMgrExploreFeatures PROTO((BioseqPtr bsp, Pointer u
 *
 *****************************************************************************/
 
-NLM_EXTERN ValNodePtr LIBCALL SeqMgrGetDesiredDescriptor PROTO((BioseqPtr bsp, Uint2 itemID,
-                                                                Int2 index, ValNodePtr sdp,
+NLM_EXTERN ValNodePtr LIBCALL SeqMgrGetDesiredDescriptor PROTO((Uint2 entityID, BioseqPtr bsp,
+                                                                Uint2 itemID, Uint2 index, ValNodePtr sdp,
                                                                 SeqMgrDescContext PNTR context));
 
-NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetDesiredFeature PROTO((BioseqPtr bsp, Uint2 itemID,
-                                                             Int2 index, SeqFeatPtr sfp,
+NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetDesiredFeature PROTO((Uint2 entityID, BioseqPtr bsp,
+                                                             Uint2 itemID, Uint2 index, SeqFeatPtr sfp,
+                                                             SeqMgrFeatContext PNTR context));
+
+/*****************************************************************************
+*
+*   SeqMgrBuildFeatureIndex builds a sorted array index for any feature type
+*     (gene, mRNA, CDS, publication, and biosource have built-in arrays)
+*   SeqMgrGetOverlappingFeature uses the array to find feature overlap,
+*     returning the position in the index
+*   SeqMgrGetFeatureInIndex gets an arbitrary feature indexed by the array
+*
+*****************************************************************************/
+
+NLM_EXTERN VoidPtr LIBCALL SeqMgrBuildFeatureIndex PROTO((BioseqPtr bsp, Int4Ptr num,
+                                                          Uint1 seqFeatChoice, Uint1 featDefChoice));
+
+NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetOverlappingFeature PROTO((SeqLocPtr slp, VoidPtr featarray,
+                                                                 Int4 numfeats, Int4Ptr position,
+                                                                 SeqMgrFeatContext PNTR context));
+
+NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetFeatureInIndex PROTO((BioseqPtr bsp, VoidPtr featarray,
+                                                             Int4 numfeats, Uint2 index,
                                                              SeqMgrFeatContext PNTR context));
 
 /* the following functions are not frequently called by applications */

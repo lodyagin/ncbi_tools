@@ -1,7 +1,7 @@
 #ifndef NCBICLI__H
 #define NCBICLI__H
 
-/*  $RCSfile: ncbicli.h,v $  $Revision: 4.3 $  $Date: 1998/09/08 17:59:05 $
+/*  $RCSfile: ncbicli.h,v $  $Revision: 4.4 $  $Date: 1998/12/15 17:24:58 $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -34,6 +34,9 @@
 *
 * --------------------------------------------------------------------------
 * $Log: ncbicli.h,v $
+* Revision 4.4  1998/12/15 17:24:58  vakatov
+* +NIC_CERN_PROXY flag(to indicate the use of CERN-like non-transparent proxy)
+*
 * Revision 4.3  1998/09/08 17:59:05  vakatov
 * Added WWW/Firewall network interface
 *
@@ -92,6 +95,8 @@ typedef enum {
 #define NIC_DEBUG_PRINTOUT 0x1
 /* use an NCBI firewall daemon to make a connection */
 #define NIC_FIREWALL       0x2
+/* non-transparent CERN-like proxy */
+#define NIC_CERN_PROXY     0x4
 
 
 NLM_EXTERN NIC NIC_GetService

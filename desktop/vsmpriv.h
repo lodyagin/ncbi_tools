@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11-29-94
 *
-* $Revision: 6.0 $
+* $Revision: 6.1 $
 *
 * File Description: Internal data structures used by VSM routines
 *
@@ -81,6 +81,7 @@ typedef struct vsmwin {
 		populated,
 		shown,
 		dblclick,
+		shftkey,
 		marquee,          /* marquee active */
 		dragged;
 	RecT rv,              /* viewer rect */

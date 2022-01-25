@@ -25,6 +25,21 @@
 **************************************************************************/
 /* $Revision 1.0$ */ 
 /* $Log: blastall.c,v $
+/* Revision 6.28  1999/01/22 17:24:51  madden
+/* added line breaks for alignment views
+/*
+ * Revision 6.27  1998/12/31 18:18:27  madden
+ * Added strand option
+ *
+ * Revision 6.26  1998/12/29 20:03:14  kans
+ * calls UseLocalAsnloadDataAndErrMsg at startup
+ *
+ * Revision 6.25  1998/11/19 14:04:34  madden
+ * Changed message level to SEV_WARNING
+ *
+ * Revision 6.24  1998/11/16 16:29:19  madden
+ * Added ErrSetMessageLevel(SEV_INFO)
+ *
  * Revision 6.23  1998/07/17 15:41:36  madden
  * Added effective search space flag
  *
@@ -131,6 +146,7 @@
 #include <simutil.h>
 #include <txalign.h>
 #include <gapxdrop.h>
+#include <sqnutils.h>
 
 
 #define DEFLINE_BUF 255
@@ -199,7 +215,7 @@ static void FindProt(SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
     }
 }
 
-#define NUMARG 28
+#define NUMARG 29
 
 static Args myargs [NUMARG] = {
  { "Program Name",
@@ -210,7 +226,7 @@ static Args myargs [NUMARG] = {
 	"stdin", NULL, NULL, FALSE, 'i', ARG_FILE_IN, 0.0, 0, NULL},
   { "Expectation value (E)", 
 	"10.0", NULL, NULL, FALSE, 'e', ARG_FLOAT, 0.0, 0, NULL},
-  { "alignment view options: 0 = pairwise, 1 = master-slave showing identities, 2 = master-slave no identities, 3 = flat master-slave, show identities, 4 = flat master-slave, no identities, 5 = master-slave no identities and blunt ends, 6 = flat master-slave, no identities and blunt ends", 
+  { "alignment view options:\n0 = pairwise,\n1 = master-slave showing identities,\n2 = master-slave no identities,\n3 = flat master-slave, show identities,\n4 = flat master-slave, no identities,\n5 = master-slave no identities and blunt ends,\n6 = flat master-slave, no identities and blunt ends", 
         "0", NULL, NULL, FALSE, 'm', ARG_INT, 0.0, 0, NULL},
   { "BLAST report Output File", 
 	"stdout", NULL, NULL, TRUE, 'o', ARG_FILE_OUT, 0.0, 0, NULL},
@@ -257,7 +273,9 @@ static Args myargs [NUMARG] = {
   { "Length of region used to judge hits",
         "20", NULL, NULL, FALSE, 'L', ARG_INT, 0.0, 0, NULL},
   { "Effective length of the search space (use zero for the real size)",
-        "0", NULL, NULL, FALSE, 'Y', ARG_FLOAT, 0.0, 0, NULL}
+        "0", NULL, NULL, FALSE, 'Y', ARG_FLOAT, 0.0, 0, NULL},
+  { "Query strands to search against database (for blast[nx], and tblastx).  3 is both, 1 is top, 2 is bottom",
+        "3", NULL, NULL, FALSE, 'S', ARG_INT, 0.0, 0, NULL},
 };
 
 Int2 Main (void)
@@ -292,8 +310,12 @@ Int2 Main (void)
                 return (1);
         }
 
+	UseLocalAsnloadDataAndErrMsg ();
+
 	if (! SeqEntryLoad())
 		return 1;
+
+	ErrSetMessageLevel(SEV_WARNING);
 
 	blast_program = myargs [0].strvalue;
         blast_database = myargs [1].strvalue;
@@ -401,6 +423,8 @@ Int2 Main (void)
         options->block_width  = myargs[26].intvalue;
         if (myargs[27].floatvalue)
                  options->searchsp_eff = (Nlm_FloatHi) myargs[27].floatvalue;
+
+	options->strand_option = myargs[28].intvalue;
 
 
         print_options = 0;

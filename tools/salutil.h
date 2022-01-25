@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.27 $
+* $Revision: 6.30 $
 *
 * File Description: 
 *
@@ -104,7 +104,6 @@ extern Boolean not_empty_string (CharPtr str, Int4 lens);
 extern Int1    getgapsfromstring (CharPtr str,Int4 from,Int4 to, BoolPtr *gapline);
 extern Boolean stringhasnochar (CharPtr str, Int4 from, Int4 to);
 extern Boolean stringhasnocharplus (CharPtr str);
-extern Boolean stringhasnotext (CharPtr str);
 extern CharPtr purge_string (CharPtr *str);
 extern CharPtr reverse_string (CharPtr str);
 extern CharPtr to_lower (CharPtr str);
@@ -148,7 +147,7 @@ extern Uint1 StrandFromAlignNode (ValNodePtr anp_lst, Uint2 entityID, Uint2 item
 ***    SeqIdDupList : duplicate a list of SeqIdPtr
 ***
 **********************************************************/
-extern Boolean      matching_seqid (SeqIdPtr sip1);
+extern CharPtr      matching_seqid (SeqIdPtr sip1);
 extern CharPtr      check_seqid (Uint2 choice, CharPtr ptr);
 extern SeqIdPtr     AddSeqId (SeqIdPtr *sip_head, SeqIdPtr sip);
 extern SeqIdPtr     SeqIdDupList (SeqIdPtr id_list);
@@ -271,6 +270,7 @@ extern Boolean  locate_in_seqalignds  (Int4 pos, Int2 dim, Int2 dspnumseg, Int4P
 extern Boolean  locate_in_seqalign (Int4 pos, Int2 dim, Int2 dspnumseg, BoolPtr *dspstart, Int4Ptr *dsplens, Int2 *numseg_before, Int2 *subdsplens, Int4 *sumdsplens_before);
 extern Int4 SeqCoordToAlignCoord (Int4 position, SeqIdPtr sip, SeqAlignPtr salp, Int2 intersalpwidth, Int2 is_end);
 extern Int4 AlignCoordToSeqCoord (Int4 position, SeqIdPtr sip, SeqAlignPtr salp, ValNodePtr sqloc_list, Int2 intersalpwidth);
+extern Int4 AlignCoordToSeqCoord2 (Int4 position, SeqIdPtr sip, SeqAlignPtr salp,ValNodePtr sqloc_list, Int2 intersalpwidth);
 extern Boolean GetAlignCoordFromSeqLoc (SeqLocPtr slp, SeqAlignPtr salp, Int4 *start, Int4 *stop);
 extern Boolean  SeqPosToLineColumn (Uint2 itemID, Uint2 entityID, Uint2 itemtype, Int4 pos, Int2 *line, Int2 *column, Int4 hoffset, EditAlignDataPtr adp);
 extern Boolean  SeqPosInLineColumn (Int4 pos, Int2 alignline, Int2 *column, Int4 hoffset, EditAlignDataPtr adp);

@@ -33,9 +33,33 @@
 *
 * Modifications:
 * $Log: cn3dmsg.h,v $
-* Revision 6.26  1998/09/23 22:09:42  ywang
-* to record checkin log
+* Revision 6.34  1999/01/20 22:57:25  ywang
+* customize color for secondary structure & rearrange Option menu
 *
+* Revision 6.33  1999/01/20 16:06:48  durand
+* move mediainfo to salmedia.h
+*
+* Revision 6.32  1998/12/16 22:49:39  ywang
+* fix compiling warnings on Win32
+*
+ * Revision 6.31  1998/12/16  19:32:56  ywang
+ * improve highlight residues function when rerendering
+ *
+ * Revision 6.30  1998/10/27  15:55:52  ywang
+ * add functions for testing color by sequence conservation
+ *
+ * Revision 6.29  1998/10/19  20:16:06  ywang
+ * add function FillSeqinfoForSeqEditViewProcs so that salsa can get color array
+ *
+ * Revision 6.28  1998/10/19  17:43:03  kans
+ * prototype needed for RealColorSalsa
+ *
+* Revision 6.27  1998/10/16 22:06:08  ywang
+* make global color array for sequence display
+*
+ * Revision 6.26  1998/09/23  22:09:42  ywang
+ * to record checkin log
+ *
 * ===========================================================================  */
 
 #ifndef _CN3DMSG_
@@ -48,6 +72,7 @@
 #include <gather.h>
 #include <vibrant.h>
 #include <salsa.h>
+#include <salmedia.h>
 #include <viewer3d.h>
 #include <mmdbapi1.h>
 
@@ -67,12 +92,6 @@ extern Boolean Mime_ReadIn;
 
 extern Uint2 sap_entityID, sap_itemID;
 
-typedef struct mediainfo{
-SeqIdPtr sip;
-Int4 Gi, length;
-Uint2 entityID, itemID;
-Byte bVisible;
-} MediaInfo, PNTR MediaInfoPtr;
 
 /* extern MediaInfo mediadata[MaxObj];  */
 extern MediaInfo **mediadata;  /* put no limitation on mediadata size in principle */
@@ -103,12 +122,16 @@ extern void ColorSalsa(Uint2 entityID, Uint2 itemID, SeqIdPtr sip, Int4 from, In
 extern void ColorSalsa_BYMG(PMGD pmgdThis, Uint1Ptr rgb);
 extern void ResetSalsaColor(void);
 extern Uint1Ptr GetRGB(Int2 iColor);
+extern void RealColorSalsa(void);
 extern void Cn3dObjRegister(void);
 extern void PrepareColorMsg(Int4 iCount, Int4 from, Int4 to, Uint1Ptr rgb);
 extern void Cn3dObjMgrGetSelected(void);
 extern void DoMediaHL(PMMD  pmmdThis, Int4 from, Int4 to, Boolean highlight);
 extern void LaunchSequenceWindow(void);
 extern void Cn3DLaunchAnnotAlignEditor (SeqAnnotPtr sap);
+extern Int2 GetColorIndexForMG(PMGD pmgdThis);
+extern Int2 GetColorIndex(Uint1 colorR, Uint1 colorG,Uint1 colorB);
+extern void LIBCALLBACK Cn3DCheckHighlight PROTO((PFB pfbThis,Int4 iModel, Int4 iIndex, Pointer ptr));
 #ifdef __cplusplus
 }
 #endif

@@ -34,9 +34,12 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: cn3dslct.c,v $
-* Revision 6.7  1998/06/30 19:30:39  ywang
-* fix bugs for launching salsa when active structure changed
+* Revision 6.8  1999/01/20 18:21:20  ywang
+* include salmedia.h due to the move around of MediaInfo from cn3dmsg.h to the new created salmedia.h
 *
+ * Revision 6.7  1998/06/30  19:30:39  ywang
+ * fix bugs for launching salsa when active structure changed
+ *
  * Revision 6.6  1998/06/19  15:26:42  kans
  * needed to include cn3dmsg.h
  *
@@ -86,6 +89,7 @@
 #include <cn3dslct.h>
 #include <cn3dmain.h>
 #include <cn3dmsg.h>
+#include <salmedia.h>
 #include <algorend.h>
 
 

@@ -2225,7 +2225,7 @@ SeqAnnotPtr  sim_for_blast(SeqAnnotPtr blast_sap, SeqIdPtr query_id, Int4 which_
 
         if (which_sim == RUN_BANDALGN) 
 	{
-	   vnp = WholeSeqLocListFromSeqAlign (align);
+	   vnp = SeqLocListOfBioseqsFromSeqAlign (align);
 	   msp = MashNew (is_aa);
            align = SeqLocListToSeqAlign (vnp, PRGALIGNDEFAULT, msp); 
 	   annot = SeqAnnotForSeqAlign (align);

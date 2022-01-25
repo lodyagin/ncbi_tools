@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/13/91
 *
-* $Revision: 6.3 $
+* $Revision: 6.7 $
 *
 * File Description:  Ports onto Bioseqs
 *
@@ -40,6 +40,18 @@
 *
 *
 * $Log: seqport.h,v $
+* Revision 6.7  1998/12/14 20:56:24  kans
+* dnaLoc_to_aaLoc takes allowTerminator parameter to handle stop codons created by polyA tail
+*
+* Revision 6.6  1998/11/16 21:10:08  kans
+* added IsATGStart and IsAltStart macros
+*
+* Revision 6.5  1998/11/16 17:20:31  kans
+* nextBase in codon fsa is Uint1, cast state array index to int in macros
+*
+* Revision 6.4  1998/11/14 00:30:21  kans
+* added TransTableInit and macros for 6-frame translation and orf-finding finite state machine
+*
 * Revision 6.3  1998/09/16 21:40:42  kans
 * added SPCacheQ for rapid 2na/4na to iupacna conversion
 *
@@ -349,16 +361,17 @@ NLM_EXTERN Int2 GetFrameFromLoc PROTO((SeqLocPtr slp));
 
 /******************************************************************
 *
-*	dnaLoc_to_aaLoc(sfp, dna_loc, merge, frame)
+*	dnaLoc_to_aaLoc(sfp, dna_loc, merge, frame, allowTerminator)
 *	map a SeqLoc on the DNA sequence
 *       to a Seq-loc in the	protein sequence
 *       through a CdRegion feature
 *   if (merge) adjacent intervals on the amino acid sequence
 *      are merged into one. This should be the usual case.
 *   We try to report the frame if the caller provides a suitable pointer
+*   If allowTerminator, can map the termination codon as a legal location
 *
 ******************************************************************/
-NLM_EXTERN SeqLocPtr LIBCALL dnaLoc_to_aaLoc(SeqFeatPtr sfp, SeqLocPtr dna_loc, Boolean merge, Int4Ptr frame);
+NLM_EXTERN SeqLocPtr LIBCALL dnaLoc_to_aaLoc(SeqFeatPtr sfp, SeqLocPtr dna_loc, Boolean merge, Int4Ptr frame, Boolean allowTerminator);
 
 /******************************************************************
 *
@@ -461,6 +474,34 @@ NLM_EXTERN SPCompressPtr SPCompressDNA(SeqPortPtr spp);
 *
 *****************************************************************************/
 NLM_EXTERN Boolean SPRebuildDNA(SPCompressPtr spc);
+
+/*****************************************************************************
+*
+*   TransTableInit (TransTable PNTR tbl, Int2 genCode);
+*       Initializes TransTable finite state machine for 6-frame translation
+*       and open reading frame search
+*
+*****************************************************************************/
+
+typedef struct fsatranstable {
+  Uint1    nextBase [156];
+  Char     aminoAcid [156] [2];
+  Boolean  orfStart [156] [2];
+  Char     basesToIdx [256];
+} TransTable, PNTR TransTablePtr;
+
+#define TOP_STRAND  0
+#define BOT_STRAND  1
+
+#define NextCodonState(tbl,cur,ch) (tbl->nextBase [(int) cur] + tbl->basesToIdx [(int) ch])
+#define GetCodonResidue(tbl,cur,stnd) (tbl->aminoAcid [(int) cur] [stnd])
+#define IsOrfStart(tbl,cur,stnd) (tbl->orfStart [(int) cur] [stnd])
+#define IsATGStart(tbl,cur,stnd) ((Boolean) (IsOrfStart(tbl,cur,stnd) && (stnd ? (cur == 59) : (cur == 48))))
+#define IsAltStart(tbl,cur,stnd) ((Boolean) (IsOrfStart(tbl,cur,stnd) && (stnd ? (cur != 59) : (cur != 48))))
+#define IsOrfStop(tbl,cur,stnd) ((Boolean) (GetCodonResidue(tbl,cur,stnd) == '*'))
+
+NLM_EXTERN Boolean TransTableInit (TransTable PNTR tbl, Int2 genCode);
+
 
 #ifdef __cplusplus
 }

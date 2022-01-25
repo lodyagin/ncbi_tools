@@ -218,9 +218,9 @@ extern SeqGraphPtr FilterSeq (SeqPortPtr spp, Int4 start, Int4 end,
     {
 /* type and number of values and compression */
       sgp->numval = end - start + 1;
-      sgp->compl = (Int4) (sgp->numval / gwidth);
+      sgp->compr = (Int4) (sgp->numval / gwidth);
       if ((sgp->numval%gwidth) != 0)
-        sgp->compl += 1;
+        sgp->compr += 1;
 /* graph type */
       sgp->flags[2] = 1;
 /* scaling */

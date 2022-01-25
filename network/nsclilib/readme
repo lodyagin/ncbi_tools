@@ -15,8 +15,8 @@ SRV_CONN_MODE -- to specify which one of the now available network
 Value:
    DISPATCHER -- old NCBI dispatcher
    WWW        -- Web-based dispatcher in the stateful connection mode [default]
-   FIREWALL   -- just like "WWW" but the data connection goes through the
-                 NCBI firewall daemon that listens at a well-known host/port
+   FIREWALL   -- just like "WWW" but the data connection goes through the NCBI
+                 firewall daemon that listens at one of well-known hosts/ports
    STATELESS  -- Web-based dispatcher in the stateless connection mode
    DEBUG      -- direct client-to-server connection(bypass dispatchers)
 
@@ -32,11 +32,20 @@ SRV_ENGINE_PORT:  [default = 80]
 SRV_ENGINE_URL:   [default = /Service/nph-dispd.cgi]
 
 
-SRV_PROXY_****:  to use a PROXY HTTPD server
+SRV_PROXY_****:  to connect via a CERN-like proxy server
 [default = n/a]
 
-SRV_PROXY_HOST:  [default = n/a]
-SRV_PROXY_PORT:  [default = 80]
+SRV_PROXY_HOST:         [default = n/a]
+SRV_PROXY_PORT:         [default = 80]
+
+SRV_PROXY_TRANSPARENT:  [default = "no"]
+Value:
+   "1", "yes", "true" (case-insensitive) -- transparent CERN-like proxy
+   otherwise -- non-transparent [default]
+
+Notes:
+ 1) SRV_PROXY_PORT has no sense if SRV_PROXY_HOST is not specified
+ 2) If SRV_PROXY_HOST is set in WWW mode then auto-switch to FIREWALL mode
 
 
 SRV_DEBUG_PRINTOUT:  to printout messages sent by dispatcher when
@@ -130,4 +139,4 @@ Solaris or IRIX. Then, the client must run on the host that:
 a) belongs to one of NCBI subnets and
 b) has "lbdaemon"(load-balance daemon) application running on it.
 
-$Date: 1998/09/08 18:00:35 $
+$Date: 1998/12/15 17:40:51 $

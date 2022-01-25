@@ -104,7 +104,7 @@ static void IndexASeqEntry (SeqEntryPtr sep, Boolean useSeqMgrIndexes)
     SeqEntryExplore (sep, (Pointer) (&allRawOrSeg), CheckForCookedBioseqs);
     if (allRawOrSeg) {
       entityID = ObjMgrGetEntityIDForChoice (sep);
-      SeqMgrIndexFeatures (entityID, NULL, OM_LABEL_CONTENT);
+      SeqMgrIndexFeatures (entityID, NULL);
     }
     sep = sep->next;
   }

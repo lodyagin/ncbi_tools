@@ -79,5 +79,6 @@
 #define ERR_SEQ_FEAT_MissingQualOnImpFeat  5,26
 #define ERR_SEQ_FEAT_PsuedoCdsHasProduct  5,27
 #define ERR_SEQ_FEAT_IllegalDbXref  5,28
+#define ERR_SEQ_FEAT_FarLocation  5,29
 
 #endif

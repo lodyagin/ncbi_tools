@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/31/96
 *
-* $Revision: 6.3 $
+* $Revision: 6.4 $
 *
 * File Description: Cn3d file opening routines 
 *                   
@@ -39,6 +39,9 @@
 * Date     Name        Description of modification
 * -------  ----------  -----------------------------------------------------
 * $Log: cn3dopen.h,v $
+* Revision 6.4  1999/01/14 19:07:17  kans
+* network availability is configurable
+*
 * Revision 6.3  1998/06/29 19:28:02  lewisg
 * on the fly update of conservation color
 *
@@ -73,7 +76,7 @@ extern "C" {
 #define MAX_MDLNO 1000
 #define PRINT_FORM_MIME_NAME "Ncbi-mime-asn1"
  
-extern MenU LIBCALL Cn3D_OpenSub PROTO((MenU m));
+extern MenU LIBCALL Cn3D_OpenSub PROTO((MenU m, Boolean usingEntrez));
 extern Boolean OpenMimeFileWithDeletion PROTO((CharPtr filename, Boolean removeIt));
 extern void LIBCALLBACK fnClearMarkedResidues PROTO((PFB pfbThis,Int4 iModel, Int4 iIndex, Pointer ptr));
 extern ValNodePtr fnMarkAlignedResidues PROTO((PDNMS pdnmsMaster, PDNMS pdnmsSlave, BiostrucFeaturePtr pbsfThis));

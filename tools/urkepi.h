@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 98-01-01
 *
-* $Revision: 6.7 $
+* $Revision: 6.8 $
 *
 * File Description: epi header
 *
@@ -38,6 +38,9 @@
 * Date       Name        Description of modification
 * --------------------------------------------------------------------------
 * $Log: urkepi.h,v $
+* Revision 6.8  1998/11/16 14:29:51  kuzio
+* flagBoundaryCondition
+*
 * Revision 6.7  1998/09/16 17:46:45  kuzio
 * cvs logging
 *
@@ -93,10 +96,11 @@ extern FloatHiPtr PredictEpiSeqLoc (SeqLocPtr slp,
 
 extern SeqLocPtr FilterEpi (EpiDatPtr pepi, CharPtr aa, Int4 length,
                             SeqIdPtr sip, Boolean flagHighPass,
-                            Boolean flagIsAA);
+                            Boolean flagIsAA,
+                            Boolean flagBoundaryCondition);
 extern SeqLocPtr FilterEpiBioseq (EpiDatPtr pepi, BioseqPtr bsp,
-                                  Boolean flagHighPass);
-
+                                  Boolean flagHighPass,
+                                  Boolean flagBoundaryCondition);
 #ifdef __cplusplus
 }
 #endif

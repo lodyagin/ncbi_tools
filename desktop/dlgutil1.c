@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.9 $
+* $Revision: 6.11 $
 *
 * File Description: 
 *
@@ -551,6 +551,8 @@ static Boolean GeneMatchFunc (GatherContextPtr gcp)
   return TRUE;
 }
 
+extern void SeqFeatPtrToFieldPage (DialoG d, SeqFeatPtr sfp);
+
 extern void SeqFeatPtrToCommon (FeatureFormPtr ffp, SeqFeatPtr sfp)
 
 {
@@ -655,6 +657,8 @@ extern void SeqFeatPtrToCommon (FeatureFormPtr ffp, SeqFeatPtr sfp)
       PointerToDialog (ffp->featcits, sfp->cit);
       PointerToDialog (ffp->dbxrefs, sfp->dbxref);
       PointerToDialog (ffp->gbquals, sfp->qual);
+      SeqFeatPtrToFieldPage (ffp->gbquals, sfp);
+      PointerToDialog (ffp->usrobjext, sfp->ext);
     } else {
       SetTitle (ffp->comment, "");
       SetValue (ffp->evidence, 1);
@@ -667,6 +671,7 @@ extern void SeqFeatPtrToCommon (FeatureFormPtr ffp, SeqFeatPtr sfp)
       PointerToDialog (ffp->featcits, NULL);
       PointerToDialog (ffp->dbxrefs, NULL);
       PointerToDialog (ffp->gbquals, NULL);
+      PointerToDialog (ffp->usrobjext, NULL);
     }
   }
 }
@@ -699,7 +704,9 @@ static Boolean ReplaceFeatureExtras (GatherContextPtr gcp)
         sfp->qual = old->qual;
         old->qual = NULL;
       }
-      if (sfp->ext == NULL) {
+      if (ffp->usrobjext != NULL) {
+        sfp->ext = DialogToPointer (ffp->usrobjext);
+      } else if (sfp->ext == NULL) {
         sfp->ext = old->ext;
         old->ext = NULL;
       }
@@ -914,6 +921,7 @@ extern Boolean FeatFormReplaceWithoutUpdateProc (ForM f)
       ompc.output_data = (Pointer) sfp;
       if (ompc.input_entityID == 0) {
         sfp->qual = DialogToPointer (ffp->gbquals);
+        sfp->ext = DialogToPointer (ffp->usrobjext);
         if (HasExceptionGBQual (sfp)) {
           sfp->excpt = TRUE;
         }
@@ -924,6 +932,7 @@ extern Boolean FeatFormReplaceWithoutUpdateProc (ForM f)
         return TRUE;
       } else if (ompc.input_itemtype != OBJ_SEQFEAT) {
         sfp->qual = DialogToPointer (ffp->gbquals);
+        sfp->ext = DialogToPointer (ffp->usrobjext);
         if (HasExceptionGBQual (sfp)) {
           sfp->excpt = TRUE;
         }

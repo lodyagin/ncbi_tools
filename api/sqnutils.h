@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/2/97
 *
-* $Revision: 6.23 $
+* $Revision: 6.25 $
 *
 * File Description: 
 *
@@ -215,10 +215,18 @@ allowed. */
 NLM_EXTERN SeqEntryPtr ReadContigList (FILE *fp, Boolean coordinatesOnMaster);
 
 /* ReadAsnFastaOrFlatFile reads object manager-registered ASN.1, FASTA, GenBank, EMBL, GenPept,
-Feature table, Restriction table, or saved UID list */
+Feature table, Restriction table, Contig table, Message response, or saved UID list, with the
+option of saving FASTA results as OBJ_FASTA (SimpleSeq) to avoid ID collisions */
 
 NLM_EXTERN Pointer ReadAsnFastaOrFlatFile (FILE *fp, Uint2Ptr datatypeptr, Uint2Ptr entityIDptr,
-                                           Boolean forceNuc, Boolean forceProt, Boolean parseFastaSeqId);
+                                           Boolean forceNuc, Boolean forceProt,
+                                           Boolean parseFastaSeqId, Boolean fastaAsSimpleSeq);
+
+/* BasicSeqEntryCleanup cleans up strings, moves gbquals to the appropriate field, and
+does several other conversions, all without changing the itemID structure (which would
+require reindexing) */
+
+NLM_EXTERN void BasicSeqEntryCleanup (SeqEntryPtr sep);
 
 #ifdef __cplusplus
 }

@@ -304,7 +304,7 @@ Int2 Main(void)
 	}
 	rdpt = readdb_new(database, !is_dna);
 	if (program_flag == PATTERN_FLAG) {
-	    search_pat(rdpt, patfile, is_dna, seedSearch, patternSearch, &error_returns);
+	    search_pat(rdpt, patfile, is_dna, seedSearch, patternSearch, &error_returns, outfp);
             BlastErrorPrint(error_returns);
 	    rdpt = readdb_destruct(rdpt);
 	    return(0);
@@ -327,7 +327,7 @@ Int2 Main(void)
           BlastErrorPrint(error_returns);
           if (patternSearch->patternProbability > PAT_PROB_THRESH &&
 	      (patternSearch->patternProbability * dbLength > EXPECT_MATCH_THRESH)) {
-             printf("Pattern %s is too likely to occur in the database to be informative\n",pname);
+             fprintf(outfp,"Pattern %s is too likely to occur in the database to be informative\n",pname);
           }
           else {
 
@@ -336,11 +336,11 @@ Int2 Main(void)
 	    for (occurIndex = 0; occurIndex < numPatOccur; occurIndex++) {
 	      seed = occurArray[occurIndex];
               totalOccurrences = 0;
-	      printf("Name  %sPattern %s At position %d of query sequence\n",
+	      fprintf(outfp,"Name  %sPattern %s At position %d of query sequence\n",
 		     pname, pattern, seed);
 	      if ((twiceNumMatches=find_hits(list, &query[seed-1], queryLength-seed+1, FALSE, patternSearch)) < 2 || 
 		  list[1] != 0) {
-		printf("twiceNumMatches=%d list[1]=%d\n", i, list[1]);
+		fprintf(outfp,"twiceNumMatches=%d list[1]=%d\n", i, list[1]);
 		ErrPostEx(SEV_FATAL, 0, 0, "pattern does not match the query at the place\n");
 		return 1;
 	      }
@@ -378,13 +378,13 @@ Int2 Main(void)
 		}
 		if (matchIndex > 0) 
 		  quicksort_hits(matchIndex, seedResults);
-		printf("\nNumber of occurrences of pattern in the database is %d\n", totalOccurrences);
+		fprintf(outfp,"\nNumber of occurrences of pattern in the database is %d\n", totalOccurrences);
 		/*Note: for stand-alone program, score only will be shown*/
 		output_hits(rdpt, TRUE, query, query_seq, 
 			    lenPatMatch, adjustdbLength, gap_align, is_dna, 
 			    effectiveOccurrences, seedSearch, seedResults,
 			    patternSearch, FALSE, totalOccurrences, eThresh,
-                            NULL, 0.0, NULL, matchIndex, NULL, TRUE);
+                            NULL, 0.0, NULL, matchIndex, NULL, TRUE, outfp);
 		seed_free_all(seedResults);
 	      }
 	    }

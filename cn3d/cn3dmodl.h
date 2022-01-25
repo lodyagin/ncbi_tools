@@ -22,9 +22,27 @@
 *  purpose.
 *
 * $Log: cn3dmodl.h,v $
-* Revision 6.2  1998/09/23 18:38:49  ywang
-* add functions to control display on domain level
+* Revision 6.8  1998/12/16 22:49:38  ywang
+* fix compiling warnings on Win32
 *
+ * Revision 6.7  1998/11/04  00:06:20  ywang
+ * add function for modeling: change render/color for special residue(s)
+ *
+ * Revision 6.6  1998/10/21  15:48:24  ywang
+ * rearrange View Control menu
+ *
+ * Revision 6.5  1998/10/20  17:50:38  ywang
+ * fix MMDB/VAST domain number inconsistency problem
+ *
+ * Revision 6.4  1998/10/07  23:10:45  ywang
+ * merge align control with general display control
+ *
+ * Revision 6.3  1998/09/30  22:10:46  ywang
+ * control display on three levels: structure, chain, domain
+ *
+ * Revision 6.2  1998/09/23  18:38:49  ywang
+ * add functions to control display on domain level
+ *
  * Revision 6.1  1998/09/22  18:02:54  ywang
  * panels and functions for display control
  *
@@ -42,13 +60,27 @@ typedef struct domain_info{
 Char pcPDBName[20];      /* PDB code */
 Char pcMolName[2];     /* Chain Id   */
 Int2 iDomain;       /* domain number */
+Int4 iStrucIndex, iChainIndex;       /* domain number */
+Boolean bVisible, bVisibleParent, bAligned;
 } DomainInfo, PNTR DomainInfoPtr;
+
+typedef struct special_feature_info {
+PARS parsSpecial;
+PRK  prkSpecial; 
+CharPtr title;
+Boolean On;
+} SpecialFeatureInfo, PNTR SpecialFeatureInfoPtr;
+
+typedef ValNodePtr SpecialFeaturePtr;
 
 extern DomainInfo **domaindata; 
 
 extern GrouP LIBCALL DisplayControls PROTO((Nlm_GrouP prnt));  
+extern GrouP LIBCALL ModelControls PROTO((Nlm_GrouP prnt));  
 extern void LIBCALL ResetDisplayCtrls(void);
+extern void LIBCALL ResetModelCtrls(void);
 extern void LIBCALL Cn3D_CountDomainProc(void);
+extern void LIBCALLBACK DoLinkSpecialFeatureWithMGD  PROTO((PFB pfbThis,Int4 iModel, Int4 iIndex, Pointer ptr));
 
 #ifdef __cplusplus
 }

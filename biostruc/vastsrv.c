@@ -29,7 +29,25 @@
  * Version Creation Date: 10 March 1998
  *
  * $Log: vastsrv.c,v $
- * Revision 6.9  1998/08/06 17:48:52  madej
+ * Revision 6.15  1998/12/22 18:01:51  addess
+ * changes relevant to reading new type of annot-set data
+ *
+ * Revision 6.14  1998/12/01  15:12:56  addess
+ * removed unused variable pbsaShort
+ *
+ * Revision 6.13  1998/11/20  20:03:08  addess
+ * related to platform independence of VAST Search
+ *
+ * Revision 6.12  1998/10/23  19:48:50  addess
+ * fix pagination bug
+ *
+ * Revision 6.11  1998/10/21  14:07:13  addess
+ * add error statement related to NR subset filtering
+ *
+ * Revision 6.10  1998/10/14  17:12:54  addess
+ * pagination and aligned chain
+ *
+ * Revision 6.9  1998/08/06  17:48:52  madej
  * Fix Display/Show hits button for Vast Search.
  *
  * Revision 6.8  1998/07/27  16:08:15  madej
@@ -94,9 +112,8 @@
 #define VIEW_ALIGNMENT		4		/* selects action "View Alignment" */
 #define LOG10_500		2.69897		/* -log10(500); database size correction */
 #define LOG_10			2.302585	/* log(10.0) */
-#define VSPATH			"/usr/people7/addess/vastsearch/"
-
-
+#define NUM_HITS_PER_PAGE       20
+#define DEFAULT_PAGE            1
 
 static Char URLBase[PATH_MAX];
 static Char URLcgi[PATH_MAX];
@@ -110,8 +127,10 @@ static Char MMDBpath[PATH_MAX];
 static Int2 SortOn = 0;
 static Int4 cnt_MMDBid;
 static long save_MMDBid[MAX_MMDBIDS];
-
-
+Boolean Chain;
+Char VSPATH[PATH_MAX];
+Char SlaveChain[2];
+Char MasterChain[2];
  
 static void
 VnpHeapSort (ValNodePtr PNTR vnp, int (LIBCALLBACK *compar )PROTO ((Nlm_VoidPtr, Nlm_VoidPtr )))	
@@ -213,8 +232,12 @@ VastPageHeader(FILE *table, CharPtr pcPDB, Char cChain, int iDomain, Int4 iMMDBi
  */
 
 static void
-VastTableBegin(FILE *table, CharPtr pcPDB, CharPtr JobID, CharPtr pcPass, Char cChain, int iDomain, Int4 iMMDBid, Int4 iFSID, Int2 iFull)
+VastTableBegin (FILE *table, CharPtr pcPDB, CharPtr JobID, CharPtr pcPass, 
+ Char cChain, int iDomain, Int4 iMMDBid, Int4 iFSID, 
+ Int2 iFull, Int4 numhits, Int4 upper, Int4 lower, Int4 numpages, Int4 HitsPerPage, Int4 pagenum)
 {
+    Int4 DisplayOpt;
+
     VastPageHeader(table, pcPDB, cChain, iDomain, iMMDBid, JobID);
     fprintf(table,"<FORM METHOD=\"POST\" ACTION=\"%svastsrv\">\n", URLcgi);
     fprintf(table,"<INPUT TYPE=\"hidden\" NAME=\"uid\" VALUE=\"%ld\">\n", (long)iMMDBid);
@@ -234,8 +257,9 @@ VastTableBegin(FILE *table, CharPtr pcPDB, CharPtr JobID, CharPtr pcPass, Char c
     fprintf(table, "&nbsp<img src=\"/Structure/new.gif\" alt=\"New\">\n");
     fprintf(table, "&nbsp<a href=\"/Structure/cn3d.html\"><B><I>Get Cn3D 2.0 Now!</I></B></a></TH></TR>");
     fprintf(table, "<tr><td colspan = 1><strong>Options:</strong></td>\n");
-    fprintf(table, "<td colspan = 1><strong>Viewer:</strong></td>\n");
-    fprintf(table, "<td colspan = 1><strong>Cn3D Complexity:</strong></td></tr>\n");
+    fprintf(table, "<td colspan = 1><strong>Viewer:</strong></td>\n"); 
+    fprintf(table, "<td colspan = 2><strong>Complexity:</strong></td></tr>\n");
+    /*fprintf(table, "<td colspan = 1><strong>Cn3D Atom Complexity:</strong></td></tr>\n");*/
     fprintf(table,"<TD VALIGN=TOP NOWRAP>\n");
     fprintf(table,"<INPUT TYPE=\"radio\" NAME=\"action\" value=\"0\"CHECKED> Launch Viewer<BR>\n");
     fprintf(table,"<INPUT TYPE=\"radio\" NAME=\"action\" value=\"1\"> See File<BR>\n");
@@ -245,10 +269,18 @@ VastTableBegin(FILE *table, CharPtr pcPDB, CharPtr JobID, CharPtr pcPass, Char c
     fprintf(table,"<INPUT TYPE=\"radio\" NAME=\"calltype\" value=\"m\"> Mage (Kinemage)<BR>\n");
     fprintf(table,"<INPUT TYPE=\"radio\" NAME=\"calltype\" value=\"p\"> (PDB)<BR></TD>\n");
     fprintf(table, "<TD VALIGN=TOP NOWRAP>\n");
-    fprintf(table, "<INPUT TYPE=\"radio\" NAME=\"complexity\" value=\"1\"CHECKED> Alpha Carbons only<BR>\n");
-    fprintf(table, "<INPUT TYPE=\"radio\" NAME=\"complexity\" value=\"0\"> All Atoms<BR></TD>\n");
+    fprintf(table, "<INPUT TYPE=\"radio\" NAME=\"chn_complexity\" value=\"1\"CHECKED> Aligned Chains only<BR>\n");
+    fprintf(table, "<INPUT TYPE=\"radio\" NAME=\"chn_complexity\" value=\"0\"> All Chains<BR></TD>\n");
+    fprintf(table, "<TD VALIGN=TOP NOWRAP>\n");
+    fprintf(table, "<INPUT TYPE=\"radio\" NAME=\"atm_complexity\" value=\"1\"CHECKED> Alpha Carbons only<BR>\n");
+    fprintf(table, "<INPUT TYPE=\"radio\" NAME=\"atm_complexity\" value=\"0\"> All Atoms<BR></TD>\n");
     fprintf(table, "</TR>\n</TABLE>\n");
-
+    
+    DisplayOpt = upper - lower;
+    if (!DisplayOpt)
+      fprintf(table, "<H4>Structure neighbor %d out of %d displayed. Page %d of %d.</H4>\n", lower, numhits, pagenum, numpages);
+    else
+      fprintf(table, "<H4>Structure neighbors %d-%d out of %d displayed. Page %d of %d.</H4>\n", lower, upper, numhits, pagenum, numpages);
     /* VAST data table begins here */
     fprintf(table,"<table cellspacing=3 cellpadding=2 width=100%% border=1>\n");
     fprintf(table,"<tr valign=middle>\n");
@@ -280,86 +312,35 @@ VastTableBegin(FILE *table, CharPtr pcPDB, CharPtr JobID, CharPtr pcPass, Char c
 
 
 static void
-VastTableRows(FILE *table, BiostrucFeatureSetPtr pbsfs, Int4 iMMDBid1, Int4 iFSID, Int4 subsetnum, Int2 iFull)
+VastTableRows(FILE *table, BiostrucFeatureSetPtr pbsfs, Int4 iMMDBid1, Int4 iFSID, Int2 iFull, ValNodePtr pvnBools)
 {
    BiostrucFeaturePtr pbsf = NULL;
    ChemGraphAlignmentPtr pcga = NULL;
    BiostrucIdPtr pbsidThis = NULL;
    AlignStatsPtr pasp = NULL;
    ValNodePtr pvn =  NULL;
-   DocSumPtr dsp = NULL;
+   DocSumPtr dsp = NULL;  
    CharPtr pcPDB;
-   Int4 h, i, n, iMMDBid;
-   Char cChain, domid[DOMID_SIZE + 1];
+   CharPtr pcSlaveName;
+   Int4 iMMDBid;
+   Char cChain;
    int iDomain;
-   Int4 iAlign, gn, gr, hcnt, *min_ranks, *group_num, *group_rank;
+   Int4 iAlign;
    float f;
-
-
-
-   /* The next bit of code is used for filtering the hit lists.  When we go through a hit
-    * list we skip domains that do not belong to the subset of interest, or which belong to
-    * the subset but for which a group representative has already been encountered.
-    */
-   for (i = 0; i <= DOMID_SIZE; i++)
-	domid[i] = '\0';
-
-   n = GetNumberOfDomains();
-   min_ranks = (Int4 *) MemNew(n*sizeof(Int4));
-   group_num = (Int4 *) MemNew(n*sizeof(Int4));
-   group_rank = (Int4 *) MemNew(n*sizeof(Int4));
-
-   /* use a first pass to select those hits belonging to the specified subset */
-   if (group_rank != NULL) {
-      /* initializations */
-      for (i = 0; i < n; i++) {
-         min_ranks[i] = n + 1;
-         group_num[i] = 0;
-         group_rank[i] = n + 1;
-      }
-
-      for (pbsf = pbsfs->features, hcnt = 0; pbsf != NULL; pbsf = pbsf->next, hcnt++) {
-         /* copy domain identifier into domid[] */
-         domid[0] = pbsf->name[7];
-         domid[1] = pbsf->name[8];
-         domid[2] = pbsf->name[9];
-         domid[3] = pbsf->name[10];
-         domid[4] = pbsf->name[11];
-         domid[5] = pbsf->name[12];
-
-         if (domid[5] == '0') domid[5] = ' ';
-
-         /* skip over domains that do not belong to the subset */
-         if (BelongsToSubset(domid, subsetnum, &gn, &gr) <= 0)
-            continue;
-
-         /* record group data for this hit */
-         group_num[hcnt] = gn;
-         group_rank[hcnt] = gr;
-
-         /* is this the minimum group rank for this group? */
-         if (gr < min_ranks[gn - 1])
-	    min_ranks[gn - 1] = gr;
-      }
-   }
+   Boolean page;
 
    /* use cnt_MMDBid and save_MMDBid[] for docsum display of the correct subset hits */
    cnt_MMDBid = 0;
 
-   for (pbsf = pbsfs->features, hcnt = 0; pbsf != NULL; pbsf = pbsf->next, hcnt++) {
-      if (group_rank != NULL) {
-	 /* subset filtering done here */
-         if (group_num[hcnt] == 0)
-	    continue;
-
-         gn = group_num[hcnt];
-
-         if (group_rank[hcnt] != min_ranks[gn - 1])
-	    continue;
-      }
-
-      /* get the embedded PDB code of the hit */
+   for (pbsf = pbsfs->features; pbsf != NULL, pvnBools != NULL; pbsf = pbsf->next, pvnBools = pvnBools->next) {
+       /* Filter Hits By Page*/
+       page = pvnBools->data.boolvalue;
+       if (page == FALSE) continue;
+  
+       /* get the embedded PDB code of the hit */
        pcPDB = StringSave(PDBNAME_DEFAULT);
+       pcSlaveName = NULL;
+       if (pbsf->name[14] != '\0') pcSlaveName = StringSave(&pbsf->name[14]);
        iDomain = 0;
        cChain = '-';
        if (StringLen(pbsf->name) >= 13)
@@ -492,43 +473,48 @@ VastTableRows(FILE *table, BiostrucFeatureSetPtr pbsfs, Int4 iMMDBid1, Int4 iFSI
 
       /* get the Entrez docsum */
        fprintf(table,"<td VALIGN=top>\n");
-       dsp = NULL;
-       dsp = NetDocSum(TYP_ST, (DocUid) iMMDBid);
-       if (dsp)
-        {
-         if (dsp->title)
+      /* Names are read directly from Annot-set. DocSums are used no longer */
+       if(StringLen(pbsf->name) <= 13)
+       {
+         dsp = NULL;
+         dsp = NetDocSum(TYP_ST, (DocUid) iMMDBid);
+         if (dsp)
+         {
+           if (dsp->title)
  	   {
 	    fprintf(table,"%s" , dsp->title);
 	   }
-	 else
+	   else
 	   {
 	     fprintf(table,"  ");
 	   }
-	 DocSumFree(dsp);
-        } 
-       else
-        {
+	   DocSumFree(dsp);
+         } 
+         else
           fprintf(table, "   ");
-        }  
-       
+       }  
+       else
+       {
+         if (pcSlaveName) 
+          fprintf(table,"%s" , pcSlaveName);
+         else
+          fprintf(table, "   ");
+       }
        fprintf(table,"<BR>\n");
        fprintf(table,"</td>\n</tr>\n");
        fflush(table);
        MemFree(pcPDB);
+       MemFree(pcSlaveName);
 
     } /* end of for */
  
-    MemFree(min_ranks);
-    MemFree(group_num);
-    MemFree(group_rank);
-
 } /* end of VastTableRows */
 
 
 
 static void
 VastTableEnd(FILE *table, Int4 iMMDBid, Int4 FSID, BiostrucAnnotSetPtr pbsas, Int4 subsetnum,
-	Int4 iSort, Int2 iFull, CharPtr JobID, CharPtr pcPass)
+	Int4 iSort, Int2 iFull, CharPtr JobID, CharPtr pcPass, Int4 numpages, Int4 pagenum, Int4 HitsPerPage)
 {
     BiostrucFeatureSetPtr pbsfs = NULL;
     BiostrucFeaturePtr pbsf = NULL;
@@ -536,8 +522,6 @@ VastTableEnd(FILE *table, Int4 iMMDBid, Int4 FSID, BiostrucAnnotSetPtr pbsas, In
     BiostrucIdPtr pbsidThis = NULL;
     ValNodePtr pvn = NULL;
     Int4 i, n;
-
-
 
     fprintf(table,"</table><hr>\n");
     fprintf(table,"</form>\n\n");
@@ -550,7 +534,28 @@ VastTableEnd(FILE *table, Int4 iMMDBid, Int4 FSID, BiostrucAnnotSetPtr pbsas, In
       fprintf(table,"<INPUT TYPE=\"hidden\" NAME=\"pass\" VALUE=\"%s\">\n", pcPass);
     } 
     fprintf(table, "<TABLE CELLPADDING=0 CELLSPACING=4>\n");
-    fprintf(table, "<TR><TH COLSPAN=3 ALIGN=LEFT> <strong><INPUT TYPE=SUBMIT VALUE=\"Display / Sort Hits\"></strong></TH></TR>\n");
+    fprintf(table, "<TR><TD COLSPAN=3 ALIGN=LEFT> <strong><INPUT TYPE=SUBMIT VALUE=\"Display / Sort Hits\"></strong>\n");
+    fprintf(table, "    &nbsp &nbsp page number:\n");
+    fprintf(table, "<SELECT name=\"doclistpage\">\n");
+    pagenum++;
+    for (i = 1; i<= numpages; i++) {
+      if (pagenum < numpages) {
+        if (i == pagenum)
+          fprintf(table,"<OPTION VALUE = \"%d\" SELECTED>%d\n", i, i);
+        else 
+          fprintf(table,"<OPTION VALUE = \"%d\">%d\n", i, i);
+      }
+      else {
+        if (i == numpages)  
+          fprintf(table,"<OPTION VALUE = \"%d\" SELECTED>%d\n", i, i);
+        else 
+          fprintf(table,"<OPTION VALUE = \"%d\">%d\n", i, i);
+      }
+    }
+
+    fprintf(table, "</SELECT>\n");
+    fprintf(table, "&nbsp <small>Hits to display per page:\n");
+    fprintf(table, "<INPUT name = \"dispmax\" size=6 Value=%d> choose between 20-100 neighbors per page.</small></TD></TR>\n", HitsPerPage);
     fprintf(table, "<TR>\n");
     fprintf(table, "<TD><a href=\"%svastfaq.html#NRSet\"><strong>Display Subset:</strong></a></TD>\n",
 	URLBase);
@@ -630,21 +635,178 @@ VastTableEnd(FILE *table, Int4 iMMDBid, Int4 FSID, BiostrucAnnotSetPtr pbsas, In
 
 } /* end of VastTableEnd */
 
- 
- 
-static void
-MakeVastTable(Int4 FSID, BiostrucAnnotSetPtr pbsas, Int2 iSort, Int4 subsetnum, Int2 iFull, CharPtr JobID, CharPtr pcPass)
+/* I decided to filter by domain subset first because it make writing the pagination code much easier Ken */
+
+static BiostrucFeaturePtr FilterHitsByDomainSubset(BiostrucFeaturePtr pbsf, Int4 subsetnum)
 {
-  BiostrucFeatureSetPtr pbsfs = NULL;
+  BiostrucFeaturePtr current, pbsfHead = NULL, pbsfTail;
+  Int4 h, i, n;
+  Int4 gn, gr, hcnt, *min_ranks, *group_num, *group_rank;
+  Char domid[DOMID_SIZE + 1];
+ 
+/* The next bit of code is used for filtering the hit lists.  When we go through a hit
+ * list we skip domains that do not belong to the subset of interest, or which belong to
+ * the subset but for which a group representative has already been encountered.
+*/
+  for (i = 0; i <= DOMID_SIZE; i++)
+    domid[i] = '\0';
+
+  n = GetNumberOfDomains();
+  min_ranks = (Int4 *) MemNew(n*sizeof(Int4));
+  group_num = (Int4 *) MemNew(n*sizeof(Int4));
+  group_rank = (Int4 *) MemNew(n*sizeof(Int4));
+
+/* use a first pass to select those hits belonging to the specified subset */
+  if (group_rank != NULL) {
+      /* initializations */
+    for (i = 0; i < n; i++) {
+         min_ranks[i] = n + 1;
+         group_num[i] = 0;
+         group_rank[i] = n + 1;
+    }
+
+    for (current = pbsf, hcnt = 0; current != NULL; current = current->next, hcnt++) {
+       /* copy domain identifier into domid[] */
+       domid[0] = current->name[7];
+       domid[1] = current->name[8];
+       domid[2] = current->name[9];
+       domid[3] = current->name[10];
+       domid[4] = current->name[11];
+       domid[5] = current->name[12];
+
+       if (domid[5] == '0') domid[5] = ' ';
+
+       /* skip over domains that do not belong to the subset */
+       if (BelongsToSubset(domid, subsetnum, &gn, &gr) <= 0)
+          continue;
+
+       /* record group data for this hit */
+       group_num[hcnt] = gn;
+       group_rank[hcnt] = gr;
+
+       /* is this the minimum group rank for this group? */
+       if (gr < min_ranks[gn - 1])
+	  min_ranks[gn - 1] = gr;
+    }
+  }
+  current = pbsf;
+  hcnt = 0;
+  while (current) {
+    if (group_rank != NULL) 
+    {
+      /* subset filtering done here */
+      if (group_num[hcnt] == 0)
+      {
+        hcnt++;
+        current = current->next;
+        continue;
+      }
+   
+      gn = group_num[hcnt];
+
+      if (group_rank[hcnt] != min_ranks[gn - 1])
+      {
+        hcnt++;
+        current = current->next;
+        continue;
+      }
+    }
+    
+    if (pbsfHead == NULL)
+    {
+      pbsfHead = BiostrucFeatureNew();
+      pbsfHead = current;
+      pbsfTail = pbsfHead;
+      hcnt++;
+      current = current->next;
+      pbsfTail->next = NULL;
+    }
+    else
+    {
+      pbsfTail->next = current;
+      pbsfTail = current;
+      hcnt++;
+      current = current->next;
+      pbsfTail->next = NULL;
+    }
+  }
+  
+  MemFree(min_ranks);
+  MemFree(group_num);
+  MemFree(group_rank);
+  return pbsfHead;
+}
+ 
+static ValNodePtr FilterHitsByPage(BiostrucFeatureSetPtr pbsfs, Int4 PageNum, Int4 HitsPerPage, Int4 *numhits, Int4 *numpages, Int4 *upper, Int4 *lower)
+{
+  
+  BiostrucFeaturePtr pbsf;
+  Int4 index, FidCount, RemainFids, CompleteFidSet; 
+  Int4 UpperLimit, LowerLimit;
+  ValNodePtr pvnBools = NULL;
+  float n;
+  
+  pbsf = pbsfs->features;
+  FidCount = 0;
+  
+  while (pbsf)
+  {
+    FidCount++;
+    pbsf = pbsf->next;
+  }
+  *numhits = FidCount;
+
+  if (FidCount <= HitsPerPage) 
+    *numpages = 1;
+  else
+  { 
+    RemainFids = FidCount % HitsPerPage;
+  
+    if (RemainFids)
+    {
+     CompleteFidSet = FidCount - RemainFids;
+     *numpages = (CompleteFidSet/HitsPerPage) + 1;
+    }
+    else *numpages = FidCount/HitsPerPage;
+  }
+  
+  UpperLimit = HitsPerPage * PageNum;
+  LowerLimit = UpperLimit - HitsPerPage + 1;
+    
+  if ((FidCount < HitsPerPage ) || (LowerLimit > FidCount)) {
+    UpperLimit = FidCount;
+    LowerLimit = 1;
+  }
+  
+  if (UpperLimit > FidCount) UpperLimit = FidCount;
+  
+  *lower = LowerLimit;
+  *upper = UpperLimit;
+  
+  for (index = 1; index <= FidCount; index++)
+  {
+    if ((index >= LowerLimit) && (index <= UpperLimit)) ValNodeAddBoolean(&pvnBools, 0, TRUE);
+    else ValNodeAddBoolean(&pvnBools, 0, FALSE);
+  }
+  
+  return pvnBools;
+}
+
+static void
+MakeVastTable(Int4 FSID, BiostrucAnnotSetPtr pbsas, Int2 iSort, Int4 subsetnum, Int4 pagenum, Int4 HitsPerPage, Int2 iFull, CharPtr JobID, CharPtr pcPass)
+{
+  BiostrucFeatureSetPtr pbsfs = NULL, pbsfs2 = NULL;
   FILE *table = NULL;
   char tableName[200];
   CharPtr pcPDB = NULL;
   char cChain = '-';
   int iDomain = 0;
   Int4 iMMDBid = 0;
+  Int4 numhits, numpages, upper, lower;
   BiostrucIdPtr pbsidThis = NULL;
   BiostrucDescrPtr pbsdrThis = NULL;
   CharPtr pcVast = NULL;
+  ValNodePtr pvnBools;
 
   if ((!pbsas) || (!FSID) ) return;
 	
@@ -707,10 +869,27 @@ MakeVastTable(Int4 FSID, BiostrucAnnotSetPtr pbsas, Int2 iSort, Int4 subsetnum, 
 	   }  
 
         if (pbsfs->features != NULL) {
-	    VastTableSort(pbsfs, iSort);
- 	    VastTableBegin(table, pcPDB, JobID, pcPass, cChain, iDomain, iMMDBid, FSID, iFull);
- 	    VastTableRows(table, pbsfs, iMMDBid, FSID, subsetnum, iFull);
-            VastTableEnd(table, iMMDBid, FSID, pbsas, subsetnum, iSort, iFull, JobID, pcPass);
+            pbsfs2 = BiostrucFeatureSetNew();
+            pbsfs2->id = pbsfs->id;
+            pbsfs->id = NULL;
+            pbsfs2->descr = pbsfs->descr;
+            pbsfs->descr = NULL;
+            pbsfs2->features = FilterHitsByDomainSubset(pbsfs->features, subsetnum);
+            if (pbsfs2->features == NULL)
+            {
+              printf("Content-type: text/html\n\n");
+	      printf("<h2>Error</h2>\n");
+	      printf("VASTSERV: Hits are not present in non-redundant subset<p>\n");
+              goto oot;
+            }  
+            pbsfs->features = NULL;
+            pvnBools = ValNodeNew(NULL);
+            pvnBools = FilterHitsByPage(pbsfs2, pagenum, HitsPerPage, &numhits, &numpages, &upper, &lower);
+            if ((numhits < HitsPerPage) || (lower > numhits)) pagenum = DEFAULT_PAGE;
+            VastTableSort(pbsfs2, iSort);
+ 	    VastTableBegin(table, pcPDB, JobID, pcPass, cChain, iDomain, iMMDBid, FSID, iFull, numhits, upper, lower, numpages, HitsPerPage, pagenum);
+ 	    VastTableRows(table, pbsfs2, iMMDBid, FSID, iFull, pvnBools);
+            VastTableEnd(table, iMMDBid, FSID, pbsas, subsetnum, iSort, iFull, JobID, pcPass, numpages, pagenum, HitsPerPage);
 	}
 	else {
 	    VastPageHeader(table, pcPDB, cChain, iDomain, iMMDBid, JobID);
@@ -785,8 +964,12 @@ LocalGetFeatureSet(Int4 mmdbid, Int4 feature_set_id, CharPtr JobID)
     
     if (IsVASTData(mmdbid))
        basp = VASTBsAnnotSetGet(mmdbid);
+    else if (IsVASTData(feature_set_id)) {
+       basp = VASTBsAnnotSetGet(feature_set_id);
+       if (basp != NULL) return basp;
+    } 
     else if (JobID)
-	basp = LocalGetBiostrucAnnotSet(mmdbid, JobID);
+       basp = LocalGetBiostrucAnnotSet(mmdbid, JobID);
 
     if (basp == NULL)
 	return NULL;
@@ -1008,7 +1191,7 @@ MMDBBiostrucGet(DocUid uid, Int4 mdlLvl, Int4 maxModels)
    Char pcId[20];    
    Int2 iFileExists = 0;
    int  iAvail = 1;
-   BiostrucPtr pbs = NULL;
+   BiostrucPtr pbs = NULL, pbsTemp = NULL;
 
    sprintf(pcId, "%ld", (long) uid);
    path[0] = '\0';
@@ -1038,7 +1221,25 @@ MMDBBiostrucGet(DocUid uid, Int4 mdlLvl, Int4 maxModels)
        pbs = BiostrucAsnGet(aip, NULL,  mdlLvl,  maxModels);
        AsnIoClose (aip);
      }
-
+    /* Chain, MasterChain and SlaveChain are external variables, which I hate. But I would rather   */
+    /* do this than modify mmdbapi, which I may have to do eventually                  */
+    
+    if (Chain == TRUE)
+    {
+      if (MasterChain[0] != ' ') 
+      {
+        pbsTemp = (BiostrucPtr)PruneBiostruc(pbs, MasterChain);
+        pbs = NULL;
+        pbs = pbsTemp;
+      }
+      
+      if (SlaveChain[0] != ' ')
+      {
+        pbsTemp = (BiostrucPtr)PruneBiostruc(pbs, SlaveChain);
+        pbs = NULL;
+        pbs = pbsTemp;
+      }
+    } 
     FileRemove(tempfile);
 
     if (!pbs) return NULL;  
@@ -1105,7 +1306,14 @@ GetVastParams()
 		return FALSE;
 	}
  
-	return TRUE;
+	 GetAppParam("vast", "VASTSRV", "VSPATH", "", VSPATH, PATH_MAX);
+
+        if (VSPATH[0] == '\0') {
+		ErrPostEx(SEV_FATAL, 0, 0, "VAST config file\nVASTSRV section has no VAST Search path...\n");
+		return FALSE;
+	}
+        
+        return TRUE;
 
 } /* end GetVastParams */
 
@@ -1118,14 +1326,14 @@ Main()
 	Char pcBuf[100];
 	CharPtr pcTest, pcL1 = NULL;
 	Int4 GetGi, Fid, Fsid, iFileExists = 0, NumLabels = 0;
-	BiostrucAnnotSetPtr pbsa = NULL, pbsaShort = NULL;
+	BiostrucAnnotSetPtr pbsa = NULL;
 	PDNMS pdnmsMaster = NULL, pdnmsSlave = NULL;
 	AsnIoPtr aip = NULL;
 	Int2 iTest = 0, iPDB = 0, iSort = 0, action = 0, viewer = 0, level = 0;
 	CharPtr Name, Value, IPAddress = getenv("REMOTE_HOST");
 	struct rlimit rl;
 	ValNodePtr pvnFid = NULL, pvnFids = NULL;
-	Int4 iFidCount = 0, count = 0, subsetnum, indx;
+	Int4 iFidCount = 0, count = 0, subsetnum, pagenum, HitsPerPage, indx;
 	Char subsetname[256];
 	CharPtr JobID = NULL, pcPass, www_arg;
 	Int2 ret, iFull = 0;
@@ -1277,7 +1485,34 @@ Main()
 		subsetnum = GetSubsetNum(subsetname);
 	}
 
-	if ((indx = WWWFindName(www_info, "sort")) < 0)
+	if ((indx = WWWFindName(www_info, "doclistpage")) < 0)
+		pagenum = DEFAULT_PAGE;
+	else {
+		www_arg = WWWGetValueByIndex(www_info, indx);
+		if (isdigit(www_arg[0]))
+                  pagenum = (Int4) atoi(www_arg);
+                else
+                  pagenum = DEFAULT_PAGE;
+        }
+           
+        if ((indx = WWWFindName(www_info, "dispmax")) < 0)
+		HitsPerPage = NUM_HITS_PER_PAGE;
+	else {
+		www_arg = WWWGetValueByIndex(www_info, indx);
+		if (isdigit(www_arg[0])) {
+                  HitsPerPage = (Int4) atoi(www_arg);
+                  if ((HitsPerPage < NUM_HITS_PER_PAGE) || (HitsPerPage > 100)) {
+                    printf("Content-type: text/html\n\n");
+		    printf("<h2>VASTSERV Error</h2>\n");
+		    printf("<h3>Can only display between 20 and 100 neighbors per page!</h3>");
+		    exit(1);
+                  }
+                } 
+                else
+                  HitsPerPage = NUM_HITS_PER_PAGE;
+	}
+
+        if ((indx = WWWFindName(www_info, "sort")) < 0)
 		iSort = 0;
 	else {
 		www_arg = WWWGetValueByIndex(www_info, indx);
@@ -1304,7 +1539,7 @@ Main()
 		iFull = ABRIDGED_DISPLAY;
 
 	if ((indx = WWWFindName(www_info, "hit")) < 0) {
-		MakeVastTable(Fsid, pbsa, iSort, subsetnum, iFull, JobID, pcPass);
+		MakeVastTable(Fsid, pbsa, iSort, subsetnum, pagenum, HitsPerPage, iFull, JobID, pcPass);
 		BiostrucAnnotSetFree(pbsa);
 		exit(0);
 	}

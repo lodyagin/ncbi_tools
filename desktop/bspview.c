@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/30/95
 *
-* $Revision: 6.54 $
+* $Revision: 6.58 $
 *
 * File Description: 
 *
@@ -65,6 +65,9 @@
 #include <blast.h>
 #include <blastpri.h>
 #include <explore.h>
+#ifdef WIN_MOTIF
+#include <netscape.h>
+#endif
 
 extern ForM smartBioseqViewForm;
 ForM smartBioseqViewForm = NULL;
@@ -76,6 +79,7 @@ typedef struct bioseqviewform {
   BioseqPagePtr   bioseqNucPageList;
   BioseqPagePtr   bioseqProtPageList;
   BioseqPagePtr   currentBioseqPage;
+  ButtoN          pubseq;
 
   Int2            currentNucPage;
   Int2            currentProtPage;
@@ -1244,6 +1248,11 @@ static void BioseqPtrToBioseqForm (ForM f, Pointer data)
     */
     bfp->bvd.bsp = bsp;
     bfp->docuid = GetUidFromBsp (bsp);
+    if (bfp->docuid > 0) {
+      SafeShow (bfp->pubseq);
+    } else {
+      SafeHide (bfp->pubseq);
+    }
     if (ISA_na (bsp->mol)) {
       bfp->doctype = TYP_NT;
     } else if (ISA_aa (bsp->mol)) {
@@ -1283,7 +1292,7 @@ static void BioseqPtrToBioseqForm (ForM f, Pointer data)
           sep = GetTopSeqEntryForEntityID (entityID);
           SeqEntryExplore (sep, (Pointer) (&allRawOrSeg), CheckForCookedBioseqs);
           if (allRawOrSeg) {
-            SeqMgrIndexFeatures (entityID, NULL, OM_LABEL_CONTENT);
+            SeqMgrIndexFeatures (entityID, NULL);
           }
         }
         BioseqLock (bsp);
@@ -2086,6 +2095,59 @@ static void BioseqFormMessage (ForM f, Int2 mssg)
   }
 }
 
+static void LaunchPubSeqArticle (ButtoN b)
+
+{
+#ifndef WIN_MAC
+  CharPtr            argv [8];
+#endif
+  BioseqViewFormPtr  bfp;
+  CharPtr            browser;
+  Char               str [256];
+#ifdef WIN_MOTIF
+  NS_Window          window = NULL;
+#endif
+
+  bfp = (BioseqViewFormPtr) GetObjectExtra (b);
+  if (bfp == NULL) return;
+  if (bfp->docuid < 1) return;
+  browser = GetAppProperty ("MedviewBrowserPath");
+  sprintf (str,
+           "http://www.ncbi.nlm.nih.gov/htbin-post/Entrez/query?db=s&form=6&uid=%ld&Dopt=g",
+           (long) bfp->docuid);
+#ifdef WIN_MAC
+  if (browser == NULL || StringHasNoText (browser)) {
+    Nlm_SendURLAppleEvent (str, "MOSS", NULL);
+  } else {
+    Nlm_SendURLAppleEvent (str, NULL, browser);
+  }
+#endif
+#ifdef WIN_MSWIN
+  argv [0] = str;
+  argv [1] = NULL;
+  if (browser == NULL || StringHasNoText (browser)) {
+    browser = "netscape";
+  }
+  if (! Execv (browser, argv)) {
+    Message (MSG_POST, "Unable to launch %s", browser);
+  }
+#endif
+#ifdef WIN_MOTIF
+  argv [0] = str;
+  argv [1] = NULL;
+  if (browser != NULL && (! StringHasNoText (browser))) {
+    if (! Execv (browser, argv)) {
+      Message (MSG_POST, "Unable to launch %s", browser);
+    }
+  } else {
+    if (! NS_OpenURL (&window, str, NULL, TRUE)) {
+      Message (MSG_POST, "Unable to launch netscape");
+    }
+    NS_WindowFree (window);
+  }
+#endif
+}
+
 static Handle CreateViewControl (GrouP g, BioseqViewFormPtr bfp,
                                  SeqViewProcsPtr svpp, BioseqPagePtr bpp,
                                  Int2 page, Int2 pixwidth)
@@ -2129,7 +2191,7 @@ static Handle CreateViewControl (GrouP g, BioseqViewFormPtr bfp,
                               ChangeBioseqViewTabs, (Pointer) bfp);
         return (Handle) tbs;
       case CHANGE_VIEW_RADIOBUTTONS :
-        k = HiddenGroup (g, -2, 0, NULL);
+        k = HiddenGroup (g, -3, 0, NULL);
         ppt = StaticPrompt (k, "Format:", 0, 0, programFont, 'l');
         SelectFont (programFont);
         pixwidth -= StringWidth ("Format:");
@@ -2157,14 +2219,15 @@ static Handle CreateViewControl (GrouP g, BioseqViewFormPtr bfp,
         AlignObjects (ALIGN_MIDDLE, (HANDLE) ppt, (HANDLE) rads, NULL);
         return (Handle) rads;
       case CHANGE_VIEW_POPUP :
-        k = HiddenGroup (g, -2, 0, NULL);
-        StaticPrompt (k, "Display Format", 0, popupMenuHeight, programFont, 'l');
+        k = HiddenGroup (g, -3, 0, NULL);
+        ppt = StaticPrompt (k, "Display Format", 0, 0, programFont, 'l');
         pops = PopupList (k, TRUE, ChangeBioseqViewPopup);
         SetObjectExtra (pops, (Pointer) bfp, NULL);
         for (j = 0; titles [j] != NULL; j++) {
           PopupItem (pops, titles [j]);
         }
         SetValue (pops, page + 1);
+        AlignObjects (ALIGN_MIDDLE, (HANDLE) ppt, (HANDLE) pops, NULL);
         return (Handle) pops;
       default :
         break;
@@ -2320,6 +2383,7 @@ static ForM LIBCALL CreateNewSeqEntryViewFormEx (Int2 left, Int2 top, CharPtr ti
     /*
     BioseqLock (bsp);
     */
+    bfp->pubseq = NULL;
   
     if (svpp != NULL) {
       bfp->cleanupObjectPtr = svpp->cleanupObjectPtr;
@@ -2427,12 +2491,22 @@ static ForM LIBCALL CreateNewSeqEntryViewFormEx (Int2 left, Int2 top, CharPtr ti
         SetObjectExtra (bfp->targetControl, (Pointer) bfp, NULL);
         val = PopulateTarget (bfp);
         SetValue (bfp->targetControl, val + 1);
+        bfp->pubseq = PushButton (k, "PubMed", LaunchPubSeqArticle);
+        SetObjectExtra (bfp->pubseq, (Pointer) bfp, NULL);
+        Hide (bfp->pubseq);
         if (svpp->hasDoneButton) {
           b = PushButton (k, "Done", StdSendAcceptButtonMessageProc);
           SetObjectExtra (b, bfp, NULL);
         }
         AlignObjects (ALIGN_VERTICAL, (HANDLE) ppt, (HANDLE) bfp->targetControl, NULL);
         GetPosition (bfp->targetControl, &r1);
+        GetPosition (bfp->pubseq, &r2);
+        delta = (r1.bottom - r1.top) - (r2.bottom - r2.top);
+        if (delta > 0) {
+          OffsetRect (&r2, 0, delta / 2);
+          SetPosition (bfp->pubseq, &r2);
+          AdjustPrnt (bfp->pubseq, &r2, FALSE);
+        }
         GetPosition (b, &r2);
         delta = (r1.bottom - r1.top) - (r2.bottom - r2.top);
         if (delta > 0) {
@@ -2583,13 +2657,26 @@ static ForM LIBCALL CreateNewSeqEntryViewFormEx (Int2 left, Int2 top, CharPtr ti
     Hide (bfp->bvd.findGeneGrp);
 
     if (b != NULL) {
-      GetPosition (b, &r1);
       GetPosition (bfp->bvd.scale, &r2);
+      GetPosition (b, &r1);
       delta = r2.left - r1.left;
       if (delta > 0) {
         OffsetRect (&r1, delta, 0);
         SetPosition (b, &r1);
         AdjustPrnt (b, &r1, FALSE);
+        GetPosition (bfp->pubseq, &r1);
+        OffsetRect (&r1, delta, 0);
+        SetPosition (bfp->pubseq, &r1);
+        AdjustPrnt (bfp->pubseq, &r1, FALSE);
+      }
+    } else {
+      GetPosition (bfp->bvd.scale, &r2);
+      GetPosition (bfp->pubseq, &r1);
+      delta = r2.left - r1.left;
+      if (delta > 0) {
+        OffsetRect (&r1, delta, 0);
+        SetPosition (bfp->pubseq, &r1);
+        AdjustPrnt (bfp->pubseq, &r1, FALSE);
       }
     }
 
@@ -2796,8 +2883,10 @@ static Boolean SetClickmeTitle (GatherContextPtr gcp)
 {
   BioseqViewFormPtr  bfp;
   Char               buf [80];
+  CharPtr            label = NULL;
   ObjMgrPtr          omp;
-  ObjMgrTypePtr      omtp;
+  ObjMgrTypePtr      omtp = NULL;
+  Char               str [100];
 
   if (gcp == NULL || gcp->thisitem == NULL) {
     return FALSE;
@@ -2808,6 +2897,9 @@ static Boolean SetClickmeTitle (GatherContextPtr gcp)
   omp = ObjMgrGet ();
   if (omp != NULL) {
     omtp = ObjMgrTypeFind (omp, gcp->thistype, NULL, NULL);
+    if (omtp != NULL && omtp->label != NULL) {
+      label = omtp->label;
+    }
     if (omtp != NULL && omtp->labelfunc != NULL) {
       (*(omtp->labelfunc)) (gcp->thisitem, buf, sizeof (buf) - 1, OM_LABEL_BOTH);
     } else if (gcp->thistype == OBJ_BIOSEQ_SEG) {
@@ -2815,7 +2907,15 @@ static Boolean SetClickmeTitle (GatherContextPtr gcp)
     }
   }
   if (! StringHasNoText (buf)) {
-     SafeSetTitle (bfp->bvd.clickMe, buf);
+    str [0] = '\0';
+    if (GetAppProperty ("InternalNcbiSequin") != NULL) {
+      if (label == NULL) {
+        label = "?";
+      }
+      sprintf (str, "%s %d - ", label, (int) gcp->itemID);
+    }
+    StringCat (str, buf);
+    SafeSetTitle (bfp->bvd.clickMe, str);
     return TRUE;
   }
   /* SafeSetTitle (bfp->bvd.clickMe, "Double click on an item to launch the appropriate editor."); */

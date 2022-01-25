@@ -488,7 +488,7 @@ static AsnValxNode avnx[476] = {
     {20,"revision" ,3,0.0,&avnx[475] } ,
     {20,"other" ,255,0.0,NULL } };
 
-static AsnType atx[1259] = {
+static AsnType atx[1266] = {
   {401, "Link-set" ,1,0,0,0,0,1,0,0,NULL,&atx[8],&atx[1],0,NULL} ,
   {0, "num" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[3]} ,
   {302, "INTEGER" ,0,2,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} ,
@@ -905,7 +905,7 @@ static AsnType atx[1259] = {
   {0, "dim" ,128,1,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[414]} ,
   {0, "score" ,128,2,0,1,0,0,0,0,NULL,&atx[25],&atx[415],0,&atx[422]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[416],NULL,0,NULL} ,
-  {402, "Score" ,1,0,0,0,0,1,0,0,NULL,&atx[8],&atx[417],0,&atx[1192]} ,
+  {402, "Score" ,1,0,0,0,0,1,0,0,NULL,&atx[8],&atx[417],0,&atx[1199]} ,
   {0, "id" ,128,0,0,1,0,0,0,0,NULL,&atx[418],NULL,0,&atx[419]} ,
   {408, "Object-id" ,1,0,0,0,0,0,1,0,NULL,&atx[39],NULL,0,&atx[425]} ,
   {0, "value" ,128,1,0,0,0,0,0,0,NULL,&atx[24],&atx[420],0,NULL} ,
@@ -1287,7 +1287,7 @@ static AsnType atx[1259] = {
   {0, "sncbistdaa" ,128,7,0,0,0,0,0,0,NULL,&atx[213],NULL,0,NULL} ,
   {0, "code-break" ,128,6,0,1,0,0,0,0,NULL,&atx[5],&atx[797],0,&atx[805]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[798],NULL,0,NULL} ,
-  {425, "Code-break" ,1,0,0,0,0,0,0,0,NULL,&atx[8],&atx[799],0,&atx[1218]} ,
+  {425, "Code-break" ,1,0,0,0,0,0,0,0,NULL,&atx[8],&atx[799],0,&atx[1225]} ,
   {0, "loc" ,128,0,0,0,0,0,0,0,NULL,&atx[800],NULL,0,&atx[801]} ,
   {409, "Seq-loc" ,1,0,0,0,0,0,1,0,NULL,&atx[462],NULL,0,&atx[507]} ,
   {0, "aa" ,128,1,0,0,0,0,0,0,NULL,&atx[24],&atx[802],0,NULL} ,
@@ -1545,7 +1545,7 @@ static AsnType atx[1259] = {
   {0, "strucAnnot" ,128,5,0,0,0,0,0,0,NULL,&atx[1054],NULL,0,NULL} ,
   {403, "Biostruc-annot-set" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[292]} ,
   {0, "style" ,128,2,0,0,0,0,0,0,NULL,&atx[1056],NULL,0,&atx[1057]} ,
-  {411, "Entrez-style" ,1,0,0,0,0,0,0,0,NULL,&atx[54],&avnx[445],0,NULL} ,
+  {412, "Entrez-style" ,1,0,0,0,0,0,0,0,NULL,&atx[54],&avnx[445],0,NULL} ,
   {0, "location" ,128,3,0,1,0,0,0,0,NULL,&atx[14],NULL,0,NULL} ,
   {0, "alignstruc" ,128,1,0,0,0,0,0,0,NULL,&atx[1059],NULL,0,&atx[1069]} ,
   {408, "Biostruc-align" ,1,0,0,0,0,0,0,0,NULL,&atx[8],&atx[1060],0,&atx[1070]} ,
@@ -1564,190 +1564,197 @@ static AsnType atx[1259] = {
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[292],NULL,0,NULL} ,
   {0, "seqalign" ,128,1,0,0,0,0,0,0,NULL,&atx[25],&atx[1074],0,NULL} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1068],NULL,0,NULL} ,
-  {0, "strucseq" ,128,3,0,0,0,0,0,0,NULL,&atx[1076],NULL,0,NULL} ,
-  {410, "Biostruc-seq" ,1,0,0,0,0,0,0,0,NULL,&atx[8],&atx[1077],0,&atx[1056]} ,
+  {0, "strucseq" ,128,3,0,0,0,0,0,0,NULL,&atx[1076],NULL,0,&atx[1080]} ,
+  {410, "Biostruc-seq" ,1,0,0,0,0,0,0,0,NULL,&atx[8],&atx[1077],0,&atx[1081]} ,
   {0, "structure" ,128,0,0,0,0,0,0,0,NULL,&atx[1052],NULL,0,&atx[1078]} ,
   {0, "sequences" ,128,1,0,0,0,0,0,0,NULL,&atx[25],&atx[1079],0,NULL} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[292],NULL,0,NULL} ,
-  {401, "PrintTemplate" ,1,0,0,0,0,1,0,0,NULL,&atx[8],&atx[1081],0,&atx[1114]} ,
-  {0, "name" ,128,0,0,0,0,0,0,0,NULL,&atx[1082],NULL,0,&atx[1083]} ,
-  {403, "TemplateName" ,1,0,0,0,0,0,0,0,NULL,&atx[14],NULL,0,&atx[1085]} ,
-  {0, "labelfrom" ,128,1,0,1,0,0,0,0,NULL,&atx[14],NULL,0,&atx[1084]} ,
-  {0, "format" ,128,2,0,0,0,0,0,0,NULL,&atx[1085],NULL,0,NULL} ,
-  {404, "PrintFormat" ,1,0,0,0,0,0,0,0,NULL,&atx[8],&atx[1086],0,&atx[1091]} ,
-  {0, "asn1" ,128,0,0,0,0,0,0,0,NULL,&atx[14],NULL,0,&atx[1087]} ,
-  {0, "label" ,128,1,0,1,0,0,0,0,NULL,&atx[14],NULL,0,&atx[1088]} ,
-  {0, "prefix" ,128,2,0,1,0,0,0,0,NULL,&atx[14],NULL,0,&atx[1089]} ,
-  {0, "suffix" ,128,3,0,1,0,0,0,0,NULL,&atx[14],NULL,0,&atx[1090]} ,
-  {0, "form" ,128,4,0,0,0,0,0,0,NULL,&atx[1091],NULL,0,NULL} ,
-  {405, "PrintForm" ,1,0,0,0,0,0,0,0,NULL,&atx[24],&atx[1092],0,&atx[1093]} ,
-  {0, "block" ,128,0,0,0,0,0,0,0,NULL,&atx[1093],NULL,0,&atx[1097]} ,
-  {406, "PrintFormBlock" ,1,0,0,0,0,0,0,0,NULL,&atx[8],&atx[1094],0,&atx[1098]} ,
-  {0, "separator" ,128,0,0,1,0,0,0,0,NULL,&atx[14],NULL,0,&atx[1095]} ,
-  {0, "components" ,128,1,0,0,0,0,0,0,NULL,&atx[5],&atx[1096],0,NULL} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1085],NULL,0,NULL} ,
-  {0, "boolean" ,128,1,0,0,0,0,0,0,NULL,&atx[1098],NULL,0,&atx[1101]} ,
-  {407, "PrintFormBoolean" ,1,0,0,0,0,0,0,0,NULL,&atx[8],&atx[1099],0,&atx[1102]} ,
-  {0, "true" ,128,0,0,1,0,0,0,0,NULL,&atx[14],NULL,0,&atx[1100]} ,
+  {0, "strucseqs" ,128,4,0,0,0,0,0,0,NULL,&atx[1081],NULL,0,NULL} ,
+  {411, "Biostruc-seqs" ,1,0,0,0,0,0,0,0,NULL,&atx[8],&atx[1082],0,&atx[1056]} ,
+  {0, "structure" ,128,0,0,0,0,0,0,0,NULL,&atx[1052],NULL,0,&atx[1083]} ,
+  {0, "sequences" ,128,1,0,0,0,0,0,0,NULL,&atx[25],&atx[1084],0,&atx[1085]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[292],NULL,0,NULL} ,
+  {0, "seqalign" ,128,2,0,0,0,0,0,0,NULL,&atx[25],&atx[1086],0,NULL} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1068],NULL,0,NULL} ,
+  {401, "PrintTemplate" ,1,0,0,0,0,1,0,0,NULL,&atx[8],&atx[1088],0,&atx[1121]} ,
+  {0, "name" ,128,0,0,0,0,0,0,0,NULL,&atx[1089],NULL,0,&atx[1090]} ,
+  {403, "TemplateName" ,1,0,0,0,0,0,0,0,NULL,&atx[14],NULL,0,&atx[1092]} ,
+  {0, "labelfrom" ,128,1,0,1,0,0,0,0,NULL,&atx[14],NULL,0,&atx[1091]} ,
+  {0, "format" ,128,2,0,0,0,0,0,0,NULL,&atx[1092],NULL,0,NULL} ,
+  {404, "PrintFormat" ,1,0,0,0,0,0,0,0,NULL,&atx[8],&atx[1093],0,&atx[1098]} ,
+  {0, "asn1" ,128,0,0,0,0,0,0,0,NULL,&atx[14],NULL,0,&atx[1094]} ,
+  {0, "label" ,128,1,0,1,0,0,0,0,NULL,&atx[14],NULL,0,&atx[1095]} ,
+  {0, "prefix" ,128,2,0,1,0,0,0,0,NULL,&atx[14],NULL,0,&atx[1096]} ,
+  {0, "suffix" ,128,3,0,1,0,0,0,0,NULL,&atx[14],NULL,0,&atx[1097]} ,
+  {0, "form" ,128,4,0,0,0,0,0,0,NULL,&atx[1098],NULL,0,NULL} ,
+  {405, "PrintForm" ,1,0,0,0,0,0,0,0,NULL,&atx[24],&atx[1099],0,&atx[1100]} ,
+  {0, "block" ,128,0,0,0,0,0,0,0,NULL,&atx[1100],NULL,0,&atx[1104]} ,
+  {406, "PrintFormBlock" ,1,0,0,0,0,0,0,0,NULL,&atx[8],&atx[1101],0,&atx[1105]} ,
+  {0, "separator" ,128,0,0,1,0,0,0,0,NULL,&atx[14],NULL,0,&atx[1102]} ,
+  {0, "components" ,128,1,0,0,0,0,0,0,NULL,&atx[5],&atx[1103],0,NULL} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1092],NULL,0,NULL} ,
+  {0, "boolean" ,128,1,0,0,0,0,0,0,NULL,&atx[1105],NULL,0,&atx[1108]} ,
+  {407, "PrintFormBoolean" ,1,0,0,0,0,0,0,0,NULL,&atx[8],&atx[1106],0,&atx[1109]} ,
+  {0, "true" ,128,0,0,1,0,0,0,0,NULL,&atx[14],NULL,0,&atx[1107]} ,
   {0, "false" ,128,1,0,1,0,0,0,0,NULL,&atx[14],NULL,0,NULL} ,
-  {0, "enum" ,128,2,0,0,0,0,0,0,NULL,&atx[1102],NULL,0,&atx[1105]} ,
-  {408, "PrintFormEnum" ,1,0,0,0,0,0,0,0,NULL,&atx[8],&atx[1103],0,&atx[1106]} ,
-  {0, "values" ,128,0,0,1,0,0,0,0,NULL,&atx[5],&atx[1104],0,NULL} ,
+  {0, "enum" ,128,2,0,0,0,0,0,0,NULL,&atx[1109],NULL,0,&atx[1112]} ,
+  {408, "PrintFormEnum" ,1,0,0,0,0,0,0,0,NULL,&atx[8],&atx[1110],0,&atx[1113]} ,
+  {0, "values" ,128,0,0,1,0,0,0,0,NULL,&atx[5],&atx[1111],0,NULL} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[14],NULL,0,NULL} ,
-  {0, "text" ,128,3,0,0,0,0,0,0,NULL,&atx[1106],NULL,0,&atx[1108]} ,
-  {409, "PrintFormText" ,1,0,0,0,0,0,0,0,NULL,&atx[8],&atx[1107],0,&atx[1110]} ,
+  {0, "text" ,128,3,0,0,0,0,0,0,NULL,&atx[1113],NULL,0,&atx[1115]} ,
+  {409, "PrintFormText" ,1,0,0,0,0,0,0,0,NULL,&atx[8],&atx[1114],0,&atx[1117]} ,
   {0, "textfunc" ,128,0,0,1,0,0,0,0,NULL,&atx[14],NULL,0,NULL} ,
-  {0, "use-template" ,128,4,0,0,0,0,0,0,NULL,&atx[1082],NULL,0,&atx[1109]} ,
-  {0, "user" ,128,5,0,0,0,0,0,0,NULL,&atx[1110],NULL,0,&atx[1113]} ,
-  {410, "UserFormat" ,1,0,0,0,0,0,0,0,NULL,&atx[8],&atx[1111],0,NULL} ,
-  {0, "printfunc" ,128,0,0,0,0,0,0,0,NULL,&atx[14],NULL,0,&atx[1112]} ,
+  {0, "use-template" ,128,4,0,0,0,0,0,0,NULL,&atx[1089],NULL,0,&atx[1116]} ,
+  {0, "user" ,128,5,0,0,0,0,0,0,NULL,&atx[1117],NULL,0,&atx[1120]} ,
+  {410, "UserFormat" ,1,0,0,0,0,0,0,0,NULL,&atx[8],&atx[1118],0,NULL} ,
+  {0, "printfunc" ,128,0,0,0,0,0,0,0,NULL,&atx[14],NULL,0,&atx[1119]} ,
   {0, "defaultfunc" ,128,1,0,1,0,0,0,0,NULL,&atx[14],NULL,0,NULL} ,
   {0, "null" ,128,6,0,0,0,0,0,0,NULL,&atx[464],NULL,0,NULL} ,
-  {402, "PrintTemplateSet" ,1,0,0,0,0,1,0,0,NULL,&atx[5],&atx[1115],0,&atx[1082]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1080],NULL,0,NULL} ,
-  {401, "Project" ,1,0,0,0,0,1,0,0,NULL,&atx[8],&atx[1117],0,&atx[1133]} ,
-  {0, "descr" ,128,0,0,1,0,0,0,0,NULL,&atx[1118],NULL,0,&atx[1132]} ,
-  {411, "Project-descr" ,1,0,0,0,0,0,0,0,NULL,&atx[8],&atx[1119],0,&atx[1121]} ,
-  {0, "id" ,128,0,0,0,0,0,0,0,NULL,&atx[25],&atx[1120],0,&atx[1122]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1121],NULL,0,NULL} ,
-  {412, "Project-id" ,1,0,0,0,0,0,0,0,NULL,&atx[14],NULL,0,&atx[1125]} ,
-  {0, "name" ,128,1,0,1,0,0,0,0,NULL,&atx[14],NULL,0,&atx[1123]} ,
-  {0, "descr" ,128,2,0,1,0,0,0,0,NULL,&atx[25],&atx[1124],0,NULL} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1125],NULL,0,NULL} ,
-  {413, "Projdesc" ,1,0,0,0,0,0,0,0,NULL,&atx[24],&atx[1126],0,NULL} ,
-  {0, "pub" ,128,0,0,0,0,0,0,0,NULL,&atx[1127],NULL,0,&atx[1128]} ,
-  {408, "Pubdesc" ,1,0,0,0,0,0,1,0,NULL,&atx[575],NULL,0,&atx[1176]} ,
-  {0, "date" ,128,1,0,0,0,0,0,0,NULL,&atx[1129],NULL,0,&atx[1130]} ,
-  {403, "Date" ,1,0,0,0,0,0,1,0,NULL,&atx[85],NULL,0,&atx[1148]} ,
-  {0, "comment" ,128,2,0,0,0,0,0,0,NULL,&atx[14],NULL,0,&atx[1131]} ,
+  {402, "PrintTemplateSet" ,1,0,0,0,0,1,0,0,NULL,&atx[5],&atx[1122],0,&atx[1089]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1087],NULL,0,NULL} ,
+  {401, "Project" ,1,0,0,0,0,1,0,0,NULL,&atx[8],&atx[1124],0,&atx[1140]} ,
+  {0, "descr" ,128,0,0,1,0,0,0,0,NULL,&atx[1125],NULL,0,&atx[1139]} ,
+  {411, "Project-descr" ,1,0,0,0,0,0,0,0,NULL,&atx[8],&atx[1126],0,&atx[1128]} ,
+  {0, "id" ,128,0,0,0,0,0,0,0,NULL,&atx[25],&atx[1127],0,&atx[1129]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1128],NULL,0,NULL} ,
+  {412, "Project-id" ,1,0,0,0,0,0,0,0,NULL,&atx[14],NULL,0,&atx[1132]} ,
+  {0, "name" ,128,1,0,1,0,0,0,0,NULL,&atx[14],NULL,0,&atx[1130]} ,
+  {0, "descr" ,128,2,0,1,0,0,0,0,NULL,&atx[25],&atx[1131],0,NULL} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1132],NULL,0,NULL} ,
+  {413, "Projdesc" ,1,0,0,0,0,0,0,0,NULL,&atx[24],&atx[1133],0,NULL} ,
+  {0, "pub" ,128,0,0,0,0,0,0,0,NULL,&atx[1134],NULL,0,&atx[1135]} ,
+  {408, "Pubdesc" ,1,0,0,0,0,0,1,0,NULL,&atx[575],NULL,0,&atx[1183]} ,
+  {0, "date" ,128,1,0,0,0,0,0,0,NULL,&atx[1136],NULL,0,&atx[1137]} ,
+  {403, "Date" ,1,0,0,0,0,0,1,0,NULL,&atx[85],NULL,0,&atx[1155]} ,
+  {0, "comment" ,128,2,0,0,0,0,0,0,NULL,&atx[14],NULL,0,&atx[1138]} ,
   {0, "title" ,128,3,0,0,0,0,0,0,NULL,&atx[14],NULL,0,NULL} ,
-  {0, "data" ,128,1,0,0,0,0,0,0,NULL,&atx[1133],NULL,0,NULL} ,
-  {402, "Project-item" ,1,0,0,0,0,1,0,0,NULL,&atx[24],&atx[1134],0,&atx[1129]} ,
-  {0, "pmuid" ,128,0,0,0,0,0,0,0,NULL,&atx[25],&atx[1135],0,&atx[1136]} ,
+  {0, "data" ,128,1,0,0,0,0,0,0,NULL,&atx[1140],NULL,0,NULL} ,
+  {402, "Project-item" ,1,0,0,0,0,1,0,0,NULL,&atx[24],&atx[1141],0,&atx[1136]} ,
+  {0, "pmuid" ,128,0,0,0,0,0,0,0,NULL,&atx[25],&atx[1142],0,&atx[1143]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
-  {0, "protuid" ,128,1,0,0,0,0,0,0,NULL,&atx[25],&atx[1137],0,&atx[1138]} ,
+  {0, "protuid" ,128,1,0,0,0,0,0,0,NULL,&atx[25],&atx[1144],0,&atx[1145]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
-  {0, "nucuid" ,128,2,0,0,0,0,0,0,NULL,&atx[25],&atx[1139],0,&atx[1140]} ,
+  {0, "nucuid" ,128,2,0,0,0,0,0,0,NULL,&atx[25],&atx[1146],0,&atx[1147]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
-  {0, "sequid" ,128,3,0,0,0,0,0,0,NULL,&atx[25],&atx[1141],0,&atx[1142]} ,
+  {0, "sequid" ,128,3,0,0,0,0,0,0,NULL,&atx[25],&atx[1148],0,&atx[1149]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
-  {0, "genomeuid" ,128,4,0,0,0,0,0,0,NULL,&atx[25],&atx[1143],0,&atx[1144]} ,
+  {0, "genomeuid" ,128,4,0,0,0,0,0,0,NULL,&atx[25],&atx[1150],0,&atx[1151]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
-  {0, "structuid" ,128,5,0,0,0,0,0,0,NULL,&atx[25],&atx[1145],0,&atx[1146]} ,
+  {0, "structuid" ,128,5,0,0,0,0,0,0,NULL,&atx[25],&atx[1152],0,&atx[1153]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
-  {0, "pmid" ,128,6,0,0,0,0,0,0,NULL,&atx[25],&atx[1147],0,&atx[1149]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1148],NULL,0,NULL} ,
-  {404, "PubMedId" ,1,0,0,0,0,0,1,0,NULL,&atx[163],NULL,0,&atx[1151]} ,
-  {0, "protid" ,128,7,0,0,0,0,0,0,NULL,&atx[25],&atx[1150],0,&atx[1152]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1151],NULL,0,NULL} ,
-  {405, "Seq-id" ,1,0,0,0,0,0,1,0,NULL,&atx[300],NULL,0,&atx[1189]} ,
-  {0, "nucid" ,128,8,0,0,0,0,0,0,NULL,&atx[25],&atx[1153],0,&atx[1154]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1151],NULL,0,NULL} ,
-  {0, "seqid" ,128,9,0,0,0,0,0,0,NULL,&atx[25],&atx[1155],0,&atx[1156]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1151],NULL,0,NULL} ,
-  {0, "genomeid" ,128,10,0,0,0,0,0,0,NULL,&atx[25],&atx[1157],0,&atx[1158]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1151],NULL,0,NULL} ,
-  {0, "structid" ,128,11,0,0,0,0,0,0,NULL,&atx[464],NULL,0,&atx[1159]} ,
-  {0, "pment" ,128,12,0,0,0,0,0,0,NULL,&atx[25],&atx[1160],0,&atx[1174]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1161],NULL,0,NULL} ,
-  {410, "Pubmed-entry" ,1,0,0,0,0,0,1,0,NULL,&atx[1162],NULL,0,&atx[1118]} ,
-  {401, "Pubmed-entry" ,1,0,0,0,0,1,0,0,NULL,&atx[8],&atx[1163],0,&atx[1170]} ,
-  {0, "pmid" ,128,0,0,0,0,0,0,0,NULL,&atx[1164],NULL,0,&atx[1165]} ,
-  {403, "PubMedId" ,1,0,0,0,0,0,1,0,NULL,&atx[163],NULL,0,&atx[1166]} ,
-  {0, "medent" ,128,1,0,1,0,0,0,0,NULL,&atx[1166],NULL,0,&atx[1167]} ,
+  {0, "pmid" ,128,6,0,0,0,0,0,0,NULL,&atx[25],&atx[1154],0,&atx[1156]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1155],NULL,0,NULL} ,
+  {404, "PubMedId" ,1,0,0,0,0,0,1,0,NULL,&atx[163],NULL,0,&atx[1158]} ,
+  {0, "protid" ,128,7,0,0,0,0,0,0,NULL,&atx[25],&atx[1157],0,&atx[1159]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1158],NULL,0,NULL} ,
+  {405, "Seq-id" ,1,0,0,0,0,0,1,0,NULL,&atx[300],NULL,0,&atx[1196]} ,
+  {0, "nucid" ,128,8,0,0,0,0,0,0,NULL,&atx[25],&atx[1160],0,&atx[1161]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1158],NULL,0,NULL} ,
+  {0, "seqid" ,128,9,0,0,0,0,0,0,NULL,&atx[25],&atx[1162],0,&atx[1163]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1158],NULL,0,NULL} ,
+  {0, "genomeid" ,128,10,0,0,0,0,0,0,NULL,&atx[25],&atx[1164],0,&atx[1165]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1158],NULL,0,NULL} ,
+  {0, "structid" ,128,11,0,0,0,0,0,0,NULL,&atx[464],NULL,0,&atx[1166]} ,
+  {0, "pment" ,128,12,0,0,0,0,0,0,NULL,&atx[25],&atx[1167],0,&atx[1181]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1168],NULL,0,NULL} ,
+  {410, "Pubmed-entry" ,1,0,0,0,0,0,1,0,NULL,&atx[1169],NULL,0,&atx[1125]} ,
+  {401, "Pubmed-entry" ,1,0,0,0,0,1,0,0,NULL,&atx[8],&atx[1170],0,&atx[1177]} ,
+  {0, "pmid" ,128,0,0,0,0,0,0,0,NULL,&atx[1171],NULL,0,&atx[1172]} ,
+  {403, "PubMedId" ,1,0,0,0,0,0,1,0,NULL,&atx[163],NULL,0,&atx[1173]} ,
+  {0, "medent" ,128,1,0,1,0,0,0,0,NULL,&atx[1173],NULL,0,&atx[1174]} ,
   {404, "Medline-entry" ,1,0,0,0,0,0,1,0,NULL,&atx[237],NULL,0,NULL} ,
-  {0, "publisher" ,128,2,0,1,0,0,0,0,NULL,&atx[14],NULL,0,&atx[1168]} ,
-  {0, "urls" ,128,3,0,1,0,0,0,0,NULL,&atx[25],&atx[1169],0,&atx[1173]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1170],NULL,0,NULL} ,
-  {402, "Pubmed-url" ,1,0,0,0,0,1,0,0,NULL,&atx[8],&atx[1171],0,&atx[1164]} ,
-  {0, "location" ,128,0,0,1,0,0,0,0,NULL,&atx[14],NULL,0,&atx[1172]} ,
+  {0, "publisher" ,128,2,0,1,0,0,0,0,NULL,&atx[14],NULL,0,&atx[1175]} ,
+  {0, "urls" ,128,3,0,1,0,0,0,0,NULL,&atx[25],&atx[1176],0,&atx[1180]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1177],NULL,0,NULL} ,
+  {402, "Pubmed-url" ,1,0,0,0,0,1,0,0,NULL,&atx[8],&atx[1178],0,&atx[1171]} ,
+  {0, "location" ,128,0,0,1,0,0,0,0,NULL,&atx[14],NULL,0,&atx[1179]} ,
   {0, "url" ,128,1,0,0,0,0,0,0,NULL,&atx[14],NULL,0,NULL} ,
   {0, "pubid" ,128,4,0,1,0,0,0,0,NULL,&atx[14],NULL,0,NULL} ,
-  {0, "protent" ,128,13,0,0,0,0,0,0,NULL,&atx[25],&atx[1175],0,&atx[1177]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1176],NULL,0,NULL} ,
-  {409, "Seq-entry" ,1,0,0,0,0,0,1,0,NULL,&atx[293],NULL,0,&atx[1161]} ,
-  {0, "nucent" ,128,14,0,0,0,0,0,0,NULL,&atx[25],&atx[1178],0,&atx[1179]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1176],NULL,0,NULL} ,
-  {0, "seqent" ,128,15,0,0,0,0,0,0,NULL,&atx[25],&atx[1180],0,&atx[1181]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1176],NULL,0,NULL} ,
-  {0, "genomeent" ,128,16,0,0,0,0,0,0,NULL,&atx[25],&atx[1182],0,&atx[1183]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1176],NULL,0,NULL} ,
-  {0, "structent" ,128,17,0,0,0,0,0,0,NULL,&atx[464],NULL,0,&atx[1184]} ,
-  {0, "seqannot" ,128,18,0,0,0,0,0,0,NULL,&atx[25],&atx[1185],0,&atx[1187]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1186],NULL,0,NULL} ,
-  {407, "Seq-annot" ,1,0,0,0,0,0,1,0,NULL,&atx[959],NULL,0,&atx[1127]} ,
-  {0, "loc" ,128,19,0,0,0,0,0,0,NULL,&atx[25],&atx[1188],0,&atx[1190]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1189],NULL,0,NULL} ,
-  {406, "Seq-loc" ,1,0,0,0,0,0,1,0,NULL,&atx[462],NULL,0,&atx[1186]} ,
-  {0, "proj" ,128,20,0,0,0,0,0,0,NULL,&atx[25],&atx[1191],0,NULL} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1116],NULL,0,NULL} ,
-  {403, "Score-set" ,1,0,0,0,0,1,0,0,NULL,&atx[25],&atx[1193],0,&atx[530]} ,
+  {0, "protent" ,128,13,0,0,0,0,0,0,NULL,&atx[25],&atx[1182],0,&atx[1184]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1183],NULL,0,NULL} ,
+  {409, "Seq-entry" ,1,0,0,0,0,0,1,0,NULL,&atx[293],NULL,0,&atx[1168]} ,
+  {0, "nucent" ,128,14,0,0,0,0,0,0,NULL,&atx[25],&atx[1185],0,&atx[1186]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1183],NULL,0,NULL} ,
+  {0, "seqent" ,128,15,0,0,0,0,0,0,NULL,&atx[25],&atx[1187],0,&atx[1188]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1183],NULL,0,NULL} ,
+  {0, "genomeent" ,128,16,0,0,0,0,0,0,NULL,&atx[25],&atx[1189],0,&atx[1190]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1183],NULL,0,NULL} ,
+  {0, "structent" ,128,17,0,0,0,0,0,0,NULL,&atx[464],NULL,0,&atx[1191]} ,
+  {0, "seqannot" ,128,18,0,0,0,0,0,0,NULL,&atx[25],&atx[1192],0,&atx[1194]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1193],NULL,0,NULL} ,
+  {407, "Seq-annot" ,1,0,0,0,0,0,1,0,NULL,&atx[959],NULL,0,&atx[1134]} ,
+  {0, "loc" ,128,19,0,0,0,0,0,0,NULL,&atx[25],&atx[1195],0,&atx[1197]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1196],NULL,0,NULL} ,
+  {406, "Seq-loc" ,1,0,0,0,0,0,1,0,NULL,&atx[462],NULL,0,&atx[1193]} ,
+  {0, "proj" ,128,20,0,0,0,0,0,0,NULL,&atx[25],&atx[1198],0,NULL} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1123],NULL,0,NULL} ,
+  {403, "Score-set" ,1,0,0,0,0,1,0,0,NULL,&atx[25],&atx[1200],0,&atx[530]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[416],NULL,0,NULL} ,
-  {401, "Seq-code-table" ,1,0,0,0,0,1,0,0,NULL,&atx[8],&atx[1195],0,&atx[1206]} ,
-  {0, "code" ,128,0,0,0,0,0,0,0,NULL,&atx[1196],NULL,0,&atx[1197]} ,
+  {401, "Seq-code-table" ,1,0,0,0,0,1,0,0,NULL,&atx[8],&atx[1202],0,&atx[1213]} ,
+  {0, "code" ,128,0,0,0,0,0,0,0,NULL,&atx[1203],NULL,0,&atx[1204]} ,
   {404, "Seq-code-type" ,1,0,0,0,0,0,0,0,NULL,&atx[54],&avnx[458],0,NULL} ,
-  {0, "num" ,128,1,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1198]} ,
-  {0, "one-letter" ,128,2,0,0,0,0,0,0,NULL,&atx[71],NULL,0,&atx[1199]} ,
-  {0, "start-at" ,128,3,0,0,1,0,0,0,&avnx[469],&atx[2],NULL,0,&atx[1200]} ,
-  {0, "table" ,128,4,0,0,0,0,0,0,NULL,&atx[5],&atx[1201],0,&atx[1204]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[8],&atx[1202],0,NULL} ,
-  {0, "symbol" ,128,0,0,0,0,0,0,0,NULL,&atx[14],NULL,0,&atx[1203]} ,
+  {0, "num" ,128,1,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1205]} ,
+  {0, "one-letter" ,128,2,0,0,0,0,0,0,NULL,&atx[71],NULL,0,&atx[1206]} ,
+  {0, "start-at" ,128,3,0,0,1,0,0,0,&avnx[469],&atx[2],NULL,0,&atx[1207]} ,
+  {0, "table" ,128,4,0,0,0,0,0,0,NULL,&atx[5],&atx[1208],0,&atx[1211]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[8],&atx[1209],0,NULL} ,
+  {0, "symbol" ,128,0,0,0,0,0,0,0,NULL,&atx[14],NULL,0,&atx[1210]} ,
   {0, "name" ,128,1,0,0,0,0,0,0,NULL,&atx[14],NULL,0,NULL} ,
-  {0, "comps" ,128,5,0,1,0,0,0,0,NULL,&atx[5],&atx[1205],0,NULL} ,
+  {0, "comps" ,128,5,0,1,0,0,0,0,NULL,&atx[5],&atx[1212],0,NULL} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
-  {402, "Seq-map-table" ,1,0,0,0,0,1,0,0,NULL,&atx[8],&atx[1207],0,&atx[1213]} ,
-  {0, "from" ,128,0,0,0,0,0,0,0,NULL,&atx[1196],NULL,0,&atx[1208]} ,
-  {0, "to" ,128,1,0,0,0,0,0,0,NULL,&atx[1196],NULL,0,&atx[1209]} ,
-  {0, "num" ,128,2,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1210]} ,
-  {0, "start-at" ,128,3,0,0,1,0,0,0,&avnx[470],&atx[2],NULL,0,&atx[1211]} ,
-  {0, "table" ,128,4,0,0,0,0,0,0,NULL,&atx[5],&atx[1212],0,NULL} ,
+  {402, "Seq-map-table" ,1,0,0,0,0,1,0,0,NULL,&atx[8],&atx[1214],0,&atx[1220]} ,
+  {0, "from" ,128,0,0,0,0,0,0,0,NULL,&atx[1203],NULL,0,&atx[1215]} ,
+  {0, "to" ,128,1,0,0,0,0,0,0,NULL,&atx[1203],NULL,0,&atx[1216]} ,
+  {0, "num" ,128,2,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1217]} ,
+  {0, "start-at" ,128,3,0,0,1,0,0,0,&avnx[470],&atx[2],NULL,0,&atx[1218]} ,
+  {0, "table" ,128,4,0,0,0,0,0,0,NULL,&atx[5],&atx[1219],0,NULL} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
-  {403, "Seq-code-set" ,1,0,0,0,0,1,0,0,NULL,&atx[8],&atx[1214],0,&atx[1196]} ,
-  {0, "codes" ,128,0,0,1,0,0,0,0,NULL,&atx[25],&atx[1215],0,&atx[1216]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1194],NULL,0,NULL} ,
-  {0, "maps" ,128,1,0,1,0,0,0,0,NULL,&atx[25],&atx[1217],0,NULL} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1206],NULL,0,NULL} ,
-  {426, "Genetic-code-table" ,1,0,0,0,0,0,0,0,NULL,&atx[25],&atx[1219],0,NULL} ,
+  {403, "Seq-code-set" ,1,0,0,0,0,1,0,0,NULL,&atx[8],&atx[1221],0,&atx[1203]} ,
+  {0, "codes" ,128,0,0,1,0,0,0,0,NULL,&atx[25],&atx[1222],0,&atx[1223]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1201],NULL,0,NULL} ,
+  {0, "maps" ,128,1,0,1,0,0,0,0,NULL,&atx[25],&atx[1224],0,NULL} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1213],NULL,0,NULL} ,
+  {426, "Genetic-code-table" ,1,0,0,0,0,0,0,0,NULL,&atx[25],&atx[1226],0,NULL} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[786],NULL,0,NULL} ,
-  {401, "Seq-submit" ,1,0,0,0,0,1,0,0,NULL,&atx[8],&atx[1221],0,&atx[1241]} ,
-  {0, "sub" ,128,0,0,0,0,0,0,0,NULL,&atx[1222],NULL,0,&atx[1249]} ,
-  {409, "Submit-block" ,1,0,0,0,0,0,0,0,NULL,&atx[8],&atx[1223],0,&atx[1224]} ,
-  {0, "contact" ,128,0,0,0,0,0,0,0,NULL,&atx[1224],NULL,0,&atx[1240]} ,
-  {410, "Contact-info" ,1,0,0,0,0,0,0,0,NULL,&atx[8],&atx[1225],0,NULL} ,
-  {0, "name" ,128,0,0,1,0,0,0,0,NULL,&atx[14],NULL,0,&atx[1226]} ,
-  {0, "address" ,128,1,0,1,0,0,0,0,NULL,&atx[5],&atx[1227],0,&atx[1228]} ,
+  {401, "Seq-submit" ,1,0,0,0,0,1,0,0,NULL,&atx[8],&atx[1228],0,&atx[1248]} ,
+  {0, "sub" ,128,0,0,0,0,0,0,0,NULL,&atx[1229],NULL,0,&atx[1256]} ,
+  {409, "Submit-block" ,1,0,0,0,0,0,0,0,NULL,&atx[8],&atx[1230],0,&atx[1231]} ,
+  {0, "contact" ,128,0,0,0,0,0,0,0,NULL,&atx[1231],NULL,0,&atx[1247]} ,
+  {410, "Contact-info" ,1,0,0,0,0,0,0,0,NULL,&atx[8],&atx[1232],0,NULL} ,
+  {0, "name" ,128,0,0,1,0,0,0,0,NULL,&atx[14],NULL,0,&atx[1233]} ,
+  {0, "address" ,128,1,0,1,0,0,0,0,NULL,&atx[5],&atx[1234],0,&atx[1235]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[14],NULL,0,NULL} ,
-  {0, "phone" ,128,2,0,1,0,0,0,0,NULL,&atx[14],NULL,0,&atx[1229]} ,
-  {0, "fax" ,128,3,0,1,0,0,0,0,NULL,&atx[14],NULL,0,&atx[1230]} ,
-  {0, "email" ,128,4,0,1,0,0,0,0,NULL,&atx[14],NULL,0,&atx[1231]} ,
-  {0, "telex" ,128,5,0,1,0,0,0,0,NULL,&atx[14],NULL,0,&atx[1232]} ,
-  {0, "owner-id" ,128,6,0,1,0,0,0,0,NULL,&atx[1233],NULL,0,&atx[1234]} ,
-  {405, "Object-id" ,1,0,0,0,0,0,1,0,NULL,&atx[39],NULL,0,&atx[1255]} ,
-  {0, "password" ,128,7,0,1,0,0,0,0,NULL,&atx[213],NULL,0,&atx[1235]} ,
-  {0, "last-name" ,128,8,0,1,0,0,0,0,NULL,&atx[14],NULL,0,&atx[1236]} ,
-  {0, "first-name" ,128,9,0,1,0,0,0,0,NULL,&atx[14],NULL,0,&atx[1237]} ,
-  {0, "middle-initial" ,128,10,0,1,0,0,0,0,NULL,&atx[14],NULL,0,&atx[1238]} ,
-  {0, "contact" ,128,11,0,1,0,0,0,0,NULL,&atx[1239],NULL,0,NULL} ,
-  {403, "Author" ,1,0,0,0,0,0,1,0,NULL,&atx[31],NULL,0,&atx[1244]} ,
-  {0, "cit" ,128,1,0,0,0,0,0,0,NULL,&atx[1241],NULL,0,&atx[1242]} ,
-  {402, "Cit-sub" ,1,0,0,0,0,0,1,0,NULL,&atx[164],NULL,0,&atx[1239]} ,
-  {0, "hup" ,128,2,0,0,1,0,0,0,&avnx[471],&atx[71],NULL,0,&atx[1243]} ,
-  {0, "reldate" ,128,3,0,1,0,0,0,0,NULL,&atx[1244],NULL,0,&atx[1245]} ,
-  {404, "Date" ,1,0,0,0,0,0,1,0,NULL,&atx[85],NULL,0,&atx[1233]} ,
-  {0, "subtype" ,128,4,0,1,0,0,0,0,NULL,&atx[2],&avnx[472],0,&atx[1246]} ,
-  {0, "tool" ,128,5,0,1,0,0,0,0,NULL,&atx[14],NULL,0,&atx[1247]} ,
-  {0, "user-tag" ,128,6,0,1,0,0,0,0,NULL,&atx[14],NULL,0,&atx[1248]} ,
+  {0, "phone" ,128,2,0,1,0,0,0,0,NULL,&atx[14],NULL,0,&atx[1236]} ,
+  {0, "fax" ,128,3,0,1,0,0,0,0,NULL,&atx[14],NULL,0,&atx[1237]} ,
+  {0, "email" ,128,4,0,1,0,0,0,0,NULL,&atx[14],NULL,0,&atx[1238]} ,
+  {0, "telex" ,128,5,0,1,0,0,0,0,NULL,&atx[14],NULL,0,&atx[1239]} ,
+  {0, "owner-id" ,128,6,0,1,0,0,0,0,NULL,&atx[1240],NULL,0,&atx[1241]} ,
+  {405, "Object-id" ,1,0,0,0,0,0,1,0,NULL,&atx[39],NULL,0,&atx[1262]} ,
+  {0, "password" ,128,7,0,1,0,0,0,0,NULL,&atx[213],NULL,0,&atx[1242]} ,
+  {0, "last-name" ,128,8,0,1,0,0,0,0,NULL,&atx[14],NULL,0,&atx[1243]} ,
+  {0, "first-name" ,128,9,0,1,0,0,0,0,NULL,&atx[14],NULL,0,&atx[1244]} ,
+  {0, "middle-initial" ,128,10,0,1,0,0,0,0,NULL,&atx[14],NULL,0,&atx[1245]} ,
+  {0, "contact" ,128,11,0,1,0,0,0,0,NULL,&atx[1246],NULL,0,NULL} ,
+  {403, "Author" ,1,0,0,0,0,0,1,0,NULL,&atx[31],NULL,0,&atx[1251]} ,
+  {0, "cit" ,128,1,0,0,0,0,0,0,NULL,&atx[1248],NULL,0,&atx[1249]} ,
+  {402, "Cit-sub" ,1,0,0,0,0,0,1,0,NULL,&atx[164],NULL,0,&atx[1246]} ,
+  {0, "hup" ,128,2,0,0,1,0,0,0,&avnx[471],&atx[71],NULL,0,&atx[1250]} ,
+  {0, "reldate" ,128,3,0,1,0,0,0,0,NULL,&atx[1251],NULL,0,&atx[1252]} ,
+  {404, "Date" ,1,0,0,0,0,0,1,0,NULL,&atx[85],NULL,0,&atx[1240]} ,
+  {0, "subtype" ,128,4,0,1,0,0,0,0,NULL,&atx[2],&avnx[472],0,&atx[1253]} ,
+  {0, "tool" ,128,5,0,1,0,0,0,0,NULL,&atx[14],NULL,0,&atx[1254]} ,
+  {0, "user-tag" ,128,6,0,1,0,0,0,0,NULL,&atx[14],NULL,0,&atx[1255]} ,
   {0, "comment" ,128,7,0,1,0,0,0,0,NULL,&atx[14],NULL,0,NULL} ,
-  {0, "data" ,128,1,0,0,0,0,0,0,NULL,&atx[24],&atx[1250],0,NULL} ,
-  {0, "entrys" ,128,0,0,0,0,0,0,0,NULL,&atx[25],&atx[1251],0,&atx[1253]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1252],NULL,0,NULL} ,
-  {408, "Seq-entry" ,1,0,0,0,0,0,1,0,NULL,&atx[293],NULL,0,&atx[1222]} ,
-  {0, "annots" ,128,1,0,0,0,0,0,0,NULL,&atx[25],&atx[1254],0,&atx[1256]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1255],NULL,0,NULL} ,
-  {406, "Seq-annot" ,1,0,0,0,0,0,1,0,NULL,&atx[959],NULL,0,&atx[1258]} ,
-  {0, "delete" ,128,2,0,0,0,0,0,0,NULL,&atx[25],&atx[1257],0,NULL} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1258],NULL,0,NULL} ,
-  {407, "Seq-id" ,1,0,0,0,0,0,1,0,NULL,&atx[300],NULL,0,&atx[1252]} };
+  {0, "data" ,128,1,0,0,0,0,0,0,NULL,&atx[24],&atx[1257],0,NULL} ,
+  {0, "entrys" ,128,0,0,0,0,0,0,0,NULL,&atx[25],&atx[1258],0,&atx[1260]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1259],NULL,0,NULL} ,
+  {408, "Seq-entry" ,1,0,0,0,0,0,1,0,NULL,&atx[293],NULL,0,&atx[1229]} ,
+  {0, "annots" ,128,1,0,0,0,0,0,0,NULL,&atx[25],&atx[1261],0,&atx[1263]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1262],NULL,0,NULL} ,
+  {406, "Seq-annot" ,1,0,0,0,0,0,1,0,NULL,&atx[959],NULL,0,&atx[1265]} ,
+  {0, "delete" ,128,2,0,0,0,0,0,0,NULL,&atx[25],&atx[1264],0,NULL} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1265],NULL,0,NULL} ,
+  {407, "Seq-id" ,1,0,0,0,0,0,1,0,NULL,&atx[300],NULL,0,&atx[1259]} };
 
 static AsnModule ampx[32] = {
   { "NCBI-Access" , "all.h60",&atx[0],NULL,&ampx[1],0,0} ,
@@ -1757,10 +1764,10 @@ static AsnModule ampx[32] = {
   { "NCBI-Medlars" , NULL,&atx[227],NULL,&ampx[5],0,0} ,
   { "NCBI-Medline" , NULL,&atx[237],NULL,&ampx[6],0,0} ,
   { "NCBI-Mime" , NULL,&atx[284],NULL,&ampx[7],0,0} ,
-  { "NCBI-ObjPrt" , NULL,&atx[1080],NULL,&ampx[8],0,0} ,
-  { "NCBI-Project" , NULL,&atx[1116],NULL,&ampx[9],0,0} ,
+  { "NCBI-ObjPrt" , NULL,&atx[1087],NULL,&ampx[8],0,0} ,
+  { "NCBI-Project" , NULL,&atx[1123],NULL,&ampx[9],0,0} ,
   { "NCBI-Pub" , NULL,&atx[580],NULL,&ampx[10],0,0} ,
-  { "NCBI-PubMed" , NULL,&atx[1162],NULL,&ampx[11],0,0} ,
+  { "NCBI-PubMed" , NULL,&atx[1169],NULL,&ampx[11],0,0} ,
   { "NCBI-Sequence" , NULL,&atx[296],NULL,&ampx[12],0,0} ,
   { "NCBI-Seqalign" , NULL,&atx[411],NULL,&ampx[13],0,0} ,
   { "EMBL-General" , NULL,&atx[657],NULL,&ampx[14],0,0} ,
@@ -1769,7 +1776,7 @@ static AsnModule ampx[32] = {
   { "GenBank-General" , NULL,&atx[562],NULL,&ampx[17],0,0} ,
   { "PRF-General" , NULL,&atx[668],NULL,&ampx[18],0,0} ,
   { "PDB-General" , NULL,&atx[680],NULL,&ampx[19],0,0} ,
-  { "NCBI-SeqCode" , NULL,&atx[1194],NULL,&ampx[20],0,0} ,
+  { "NCBI-SeqCode" , NULL,&atx[1201],NULL,&ampx[20],0,0} ,
   { "NCBI-Seqfeat" , NULL,&atx[759],NULL,&ampx[21],0,0} ,
   { "NCBI-Rsite" , NULL,&atx[852],NULL,&ampx[22],0,0} ,
   { "NCBI-RNA" , NULL,&atx[822],NULL,&ampx[23],0,0} ,
@@ -1781,7 +1788,7 @@ static AsnModule ampx[32] = {
   { "NCBI-Seqloc" , NULL,&atx[300],NULL,&ampx[29],0,0} ,
   { "NCBI-Seqres" , NULL,&atx[995],NULL,&ampx[30],0,0} ,
   { "NCBI-Seqset" , NULL,&atx[1032],NULL,&ampx[31],0,0} ,
-  { "NCBI-Submit" , NULL,&atx[1220],NULL,NULL,0,0} };
+  { "NCBI-Submit" , NULL,&atx[1227],NULL,NULL,0,0} };
 
 static AsnValxNodePtr avn = avnx;
 static AsnTypePtr at = atx;
@@ -2153,6 +2160,7 @@ static AsnModulePtr amp = ampx;
 #define NCBI_MIME_ASN1_alignstruc &at[1058]
 #define NCBI_MIME_ASN1_alignseq &at[1069]
 #define NCBI_MIME_ASN1_strucseq &at[1075]
+#define NCBI_MIME_ASN1_strucseqs &at[1080]
 
 #define ENTREZ_GENERAL &at[286]
 #define ENTREZ_GENERAL_title &at[287]
@@ -2187,6 +2195,13 @@ static AsnModulePtr amp = ampx;
 #define BIOSTRUC_SEQ_sequences &at[1078]
 #define BIOSTRUC_SEQ_sequences_E &at[1079]
 
+#define BIOSTRUC_SEQS &at[1081]
+#define BIOSTRUC_SEQS_structure &at[1082]
+#define BIOSTRUC_SEQS_sequences &at[1083]
+#define BIOSTRUC_SEQS_sequences_E &at[1084]
+#define BIOSTRUC_SEQS_seqalign &at[1085]
+#define BIOSTRUC_SEQS_seqalign_E &at[1086]
+
 #define ENTREZ_STYLE &at[1056]
 
 
@@ -2196,51 +2211,51 @@ static AsnModulePtr amp = ampx;
 *
 **************************************************/
 
-#define PRINTTEMPLATE &at[1080]
-#define PRINTTEMPLATE_name &at[1081]
-#define PRINTTEMPLATE_labelfrom &at[1083]
-#define PRINTTEMPLATE_format &at[1084]
+#define PRINTTEMPLATE &at[1087]
+#define PRINTTEMPLATE_name &at[1088]
+#define PRINTTEMPLATE_labelfrom &at[1090]
+#define PRINTTEMPLATE_format &at[1091]
 
-#define PRINTTEMPLATESET &at[1114]
-#define PRINTTEMPLATESET_E &at[1115]
+#define PRINTTEMPLATESET &at[1121]
+#define PRINTTEMPLATESET_E &at[1122]
 
-#define TEMPLATENAME &at[1082]
+#define TEMPLATENAME &at[1089]
 
-#define PRINTFORMAT &at[1085]
-#define PRINTFORMAT_asn1 &at[1086]
-#define PRINTFORMAT_label &at[1087]
-#define PRINTFORMAT_prefix &at[1088]
-#define PRINTFORMAT_suffix &at[1089]
-#define PRINTFORMAT_form &at[1090]
+#define PRINTFORMAT &at[1092]
+#define PRINTFORMAT_asn1 &at[1093]
+#define PRINTFORMAT_label &at[1094]
+#define PRINTFORMAT_prefix &at[1095]
+#define PRINTFORMAT_suffix &at[1096]
+#define PRINTFORMAT_form &at[1097]
 
-#define PRINTFORM &at[1091]
-#define PRINTFORM_block &at[1092]
-#define PRINTFORM_boolean &at[1097]
-#define PRINTFORM_enum &at[1101]
-#define PRINTFORM_text &at[1105]
-#define PRINTFORM_use_template &at[1108]
-#define PRINTFORM_user &at[1109]
-#define PRINTFORM_null &at[1113]
+#define PRINTFORM &at[1098]
+#define PRINTFORM_block &at[1099]
+#define PRINTFORM_boolean &at[1104]
+#define PRINTFORM_enum &at[1108]
+#define PRINTFORM_text &at[1112]
+#define PRINTFORM_use_template &at[1115]
+#define PRINTFORM_user &at[1116]
+#define PRINTFORM_null &at[1120]
 
-#define PRINTFORMBLOCK &at[1093]
-#define PRINTFORMBLOCK_separator &at[1094]
-#define PRINTFORMBLOCK_components &at[1095]
-#define PRINTFORMBLOCK_components_E &at[1096]
+#define PRINTFORMBLOCK &at[1100]
+#define PRINTFORMBLOCK_separator &at[1101]
+#define PRINTFORMBLOCK_components &at[1102]
+#define PRINTFORMBLOCK_components_E &at[1103]
 
-#define PRINTFORMBOOLEAN &at[1098]
-#define PRINTFORMBOOLEAN_true &at[1099]
-#define PRINTFORMBOOLEAN_false &at[1100]
+#define PRINTFORMBOOLEAN &at[1105]
+#define PRINTFORMBOOLEAN_true &at[1106]
+#define PRINTFORMBOOLEAN_false &at[1107]
 
-#define PRINTFORMENUM &at[1102]
-#define PRINTFORMENUM_values &at[1103]
-#define PRINTFORMENUM_values_E &at[1104]
+#define PRINTFORMENUM &at[1109]
+#define PRINTFORMENUM_values &at[1110]
+#define PRINTFORMENUM_values_E &at[1111]
 
-#define PRINTFORMTEXT &at[1106]
-#define PRINTFORMTEXT_textfunc &at[1107]
+#define PRINTFORMTEXT &at[1113]
+#define PRINTFORMTEXT_textfunc &at[1114]
 
-#define USERFORMAT &at[1110]
-#define USERFORMAT_printfunc &at[1111]
-#define USERFORMAT_defaultfunc &at[1112]
+#define USERFORMAT &at[1117]
+#define USERFORMAT_printfunc &at[1118]
+#define USERFORMAT_defaultfunc &at[1119]
 
 
 /**************************************************
@@ -2249,66 +2264,66 @@ static AsnModulePtr amp = ampx;
 *
 **************************************************/
 
-#define PROJECT &at[1116]
-#define PROJECT_descr &at[1117]
-#define PROJECT_data &at[1132]
+#define PROJECT &at[1123]
+#define PROJECT_descr &at[1124]
+#define PROJECT_data &at[1139]
 
-#define PROJECT_ITEM &at[1133]
-#define PROJECT_ITEM_pmuid &at[1134]
-#define PROJECT_ITEM_pmuid_E &at[1135]
-#define PROJECT_ITEM_protuid &at[1136]
-#define PROJECT_ITEM_protuid_E &at[1137]
-#define PROJECT_ITEM_nucuid &at[1138]
-#define PROJECT_ITEM_nucuid_E &at[1139]
-#define PROJECT_ITEM_sequid &at[1140]
-#define PROJECT_ITEM_sequid_E &at[1141]
-#define PROJECT_ITEM_genomeuid &at[1142]
-#define PROJECT_ITEM_genomeuid_E &at[1143]
-#define PROJECT_ITEM_structuid &at[1144]
-#define PROJECT_ITEM_structuid_E &at[1145]
-#define PROJECT_ITEM_pmid &at[1146]
-#define PROJECT_ITEM_pmid_E &at[1147]
-#define PROJECT_ITEM_protid &at[1149]
-#define PROJECT_ITEM_protid_E &at[1150]
-#define PROJECT_ITEM_nucid &at[1152]
-#define PROJECT_ITEM_nucid_E &at[1153]
-#define PROJECT_ITEM_seqid &at[1154]
-#define PROJECT_ITEM_seqid_E &at[1155]
-#define PROJECT_ITEM_genomeid &at[1156]
-#define PROJECT_ITEM_genomeid_E &at[1157]
-#define PROJECT_ITEM_structid &at[1158]
-#define PROJECT_ITEM_pment &at[1159]
-#define PROJECT_ITEM_pment_E &at[1160]
-#define PROJECT_ITEM_protent &at[1174]
-#define PROJECT_ITEM_protent_E &at[1175]
-#define PROJECT_ITEM_nucent &at[1177]
-#define PROJECT_ITEM_nucent_E &at[1178]
-#define PROJECT_ITEM_seqent &at[1179]
-#define PROJECT_ITEM_seqent_E &at[1180]
-#define PROJECT_ITEM_genomeent &at[1181]
-#define PROJECT_ITEM_genomeent_E &at[1182]
-#define PROJECT_ITEM_structent &at[1183]
-#define PROJECT_ITEM_seqannot &at[1184]
-#define PROJECT_ITEM_seqannot_E &at[1185]
-#define PROJECT_ITEM_loc &at[1187]
-#define PROJECT_ITEM_loc_E &at[1188]
-#define PROJECT_ITEM_proj &at[1190]
-#define PROJECT_ITEM_proj_E &at[1191]
+#define PROJECT_ITEM &at[1140]
+#define PROJECT_ITEM_pmuid &at[1141]
+#define PROJECT_ITEM_pmuid_E &at[1142]
+#define PROJECT_ITEM_protuid &at[1143]
+#define PROJECT_ITEM_protuid_E &at[1144]
+#define PROJECT_ITEM_nucuid &at[1145]
+#define PROJECT_ITEM_nucuid_E &at[1146]
+#define PROJECT_ITEM_sequid &at[1147]
+#define PROJECT_ITEM_sequid_E &at[1148]
+#define PROJECT_ITEM_genomeuid &at[1149]
+#define PROJECT_ITEM_genomeuid_E &at[1150]
+#define PROJECT_ITEM_structuid &at[1151]
+#define PROJECT_ITEM_structuid_E &at[1152]
+#define PROJECT_ITEM_pmid &at[1153]
+#define PROJECT_ITEM_pmid_E &at[1154]
+#define PROJECT_ITEM_protid &at[1156]
+#define PROJECT_ITEM_protid_E &at[1157]
+#define PROJECT_ITEM_nucid &at[1159]
+#define PROJECT_ITEM_nucid_E &at[1160]
+#define PROJECT_ITEM_seqid &at[1161]
+#define PROJECT_ITEM_seqid_E &at[1162]
+#define PROJECT_ITEM_genomeid &at[1163]
+#define PROJECT_ITEM_genomeid_E &at[1164]
+#define PROJECT_ITEM_structid &at[1165]
+#define PROJECT_ITEM_pment &at[1166]
+#define PROJECT_ITEM_pment_E &at[1167]
+#define PROJECT_ITEM_protent &at[1181]
+#define PROJECT_ITEM_protent_E &at[1182]
+#define PROJECT_ITEM_nucent &at[1184]
+#define PROJECT_ITEM_nucent_E &at[1185]
+#define PROJECT_ITEM_seqent &at[1186]
+#define PROJECT_ITEM_seqent_E &at[1187]
+#define PROJECT_ITEM_genomeent &at[1188]
+#define PROJECT_ITEM_genomeent_E &at[1189]
+#define PROJECT_ITEM_structent &at[1190]
+#define PROJECT_ITEM_seqannot &at[1191]
+#define PROJECT_ITEM_seqannot_E &at[1192]
+#define PROJECT_ITEM_loc &at[1194]
+#define PROJECT_ITEM_loc_E &at[1195]
+#define PROJECT_ITEM_proj &at[1197]
+#define PROJECT_ITEM_proj_E &at[1198]
 
-#define PROJECT_DESCR &at[1118]
-#define PROJECT_DESCR_id &at[1119]
-#define PROJECT_DESCR_id_E &at[1120]
-#define PROJECT_DESCR_name &at[1122]
-#define PROJECT_DESCR_descr &at[1123]
-#define PROJECT_DESCR_descr_E &at[1124]
+#define PROJECT_DESCR &at[1125]
+#define PROJECT_DESCR_id &at[1126]
+#define PROJECT_DESCR_id_E &at[1127]
+#define PROJECT_DESCR_name &at[1129]
+#define PROJECT_DESCR_descr &at[1130]
+#define PROJECT_DESCR_descr_E &at[1131]
 
-#define PROJECT_ID &at[1121]
+#define PROJECT_ID &at[1128]
 
-#define PROJDESC &at[1125]
-#define PROJDESC_pub &at[1126]
-#define PROJDESC_date &at[1128]
-#define PROJDESC_comment &at[1130]
-#define PROJDESC_title &at[1131]
+#define PROJDESC &at[1132]
+#define PROJDESC_pub &at[1133]
+#define PROJDESC_date &at[1135]
+#define PROJDESC_comment &at[1137]
+#define PROJDESC_title &at[1138]
 
 
 /**************************************************
@@ -2358,17 +2373,17 @@ static AsnModulePtr amp = ampx;
 *
 **************************************************/
 
-#define PUBMED_ENTRY &at[1162]
-#define PUBMED_ENTRY_pmid &at[1163]
-#define PUBMED_ENTRY_medent &at[1165]
-#define PUBMED_ENTRY_publisher &at[1167]
-#define PUBMED_ENTRY_urls &at[1168]
-#define PUBMED_ENTRY_urls_E &at[1169]
-#define PUBMED_ENTRY_pubid &at[1173]
+#define PUBMED_ENTRY &at[1169]
+#define PUBMED_ENTRY_pmid &at[1170]
+#define PUBMED_ENTRY_medent &at[1172]
+#define PUBMED_ENTRY_publisher &at[1174]
+#define PUBMED_ENTRY_urls &at[1175]
+#define PUBMED_ENTRY_urls_E &at[1176]
+#define PUBMED_ENTRY_pubid &at[1180]
 
-#define PUBMED_URL &at[1170]
-#define PUBMED_URL_location &at[1171]
-#define PUBMED_URL_url &at[1172]
+#define PUBMED_URL &at[1177]
+#define PUBMED_URL_location &at[1178]
+#define PUBMED_URL_url &at[1179]
 
 
 /**************************************************
@@ -2622,8 +2637,8 @@ static AsnModulePtr amp = ampx;
 #define SCORE_value_real &at[420]
 #define SCORE_value_int &at[421]
 
-#define SCORE_SET &at[1192]
-#define SCORE_SET_E &at[1193]
+#define SCORE_SET &at[1199]
+#define SCORE_SET_E &at[1200]
 
 #define SEQ_ALIGN_SET &at[530]
 #define SEQ_ALIGN_SET_E &at[531]
@@ -2821,33 +2836,33 @@ static AsnModulePtr amp = ampx;
 *
 **************************************************/
 
-#define SEQ_CODE_TABLE &at[1194]
-#define SEQ_CODE_TABLE_code &at[1195]
-#define SEQ_CODE_TABLE_num &at[1197]
-#define SEQ_CODE_TABLE_one_letter &at[1198]
-#define SEQ_CODE_TABLE_start_at &at[1199]
-#define SEQ_CODE_TABLE_table &at[1200]
-#define SEQ_CODE_TABLE_table_E &at[1201]
-#define SEQ_CODE_TABLE_table_E_symbol &at[1202]
-#define SEQ_CODE_TABLE_table_E_name &at[1203]
-#define SEQ_CODE_TABLE_comps &at[1204]
-#define SEQ_CODE_TABLE_comps_E &at[1205]
+#define SEQ_CODE_TABLE &at[1201]
+#define SEQ_CODE_TABLE_code &at[1202]
+#define SEQ_CODE_TABLE_num &at[1204]
+#define SEQ_CODE_TABLE_one_letter &at[1205]
+#define SEQ_CODE_TABLE_start_at &at[1206]
+#define SEQ_CODE_TABLE_table &at[1207]
+#define SEQ_CODE_TABLE_table_E &at[1208]
+#define SEQ_CODE_TABLE_table_E_symbol &at[1209]
+#define SEQ_CODE_TABLE_table_E_name &at[1210]
+#define SEQ_CODE_TABLE_comps &at[1211]
+#define SEQ_CODE_TABLE_comps_E &at[1212]
 
-#define SEQ_MAP_TABLE &at[1206]
-#define SEQ_MAP_TABLE_from &at[1207]
-#define SEQ_MAP_TABLE_to &at[1208]
-#define SEQ_MAP_TABLE_num &at[1209]
-#define SEQ_MAP_TABLE_start_at &at[1210]
-#define SEQ_MAP_TABLE_table &at[1211]
-#define SEQ_MAP_TABLE_table_E &at[1212]
+#define SEQ_MAP_TABLE &at[1213]
+#define SEQ_MAP_TABLE_from &at[1214]
+#define SEQ_MAP_TABLE_to &at[1215]
+#define SEQ_MAP_TABLE_num &at[1216]
+#define SEQ_MAP_TABLE_start_at &at[1217]
+#define SEQ_MAP_TABLE_table &at[1218]
+#define SEQ_MAP_TABLE_table_E &at[1219]
 
-#define SEQ_CODE_SET &at[1213]
-#define SEQ_CODE_SET_codes &at[1214]
-#define SEQ_CODE_SET_codes_E &at[1215]
-#define SEQ_CODE_SET_maps &at[1216]
-#define SEQ_CODE_SET_maps_E &at[1217]
+#define SEQ_CODE_SET &at[1220]
+#define SEQ_CODE_SET_codes &at[1221]
+#define SEQ_CODE_SET_codes_E &at[1222]
+#define SEQ_CODE_SET_maps &at[1223]
+#define SEQ_CODE_SET_maps_E &at[1224]
 
-#define SEQ_CODE_TYPE &at[1196]
+#define SEQ_CODE_TYPE &at[1203]
 
 
 /**************************************************
@@ -2947,8 +2962,8 @@ static AsnModulePtr amp = ampx;
 #define CODE_BREAK_aa_ncbi8aa &at[803]
 #define CODE_BREAK_aa_ncbistdaa &at[804]
 
-#define GENETIC_CODE_TABLE &at[1218]
-#define GENETIC_CODE_TABLE_E &at[1219]
+#define GENETIC_CODE_TABLE &at[1225]
+#define GENETIC_CODE_TABLE_E &at[1226]
 
 
 /**************************************************
@@ -3297,37 +3312,37 @@ static AsnModulePtr amp = ampx;
 *
 **************************************************/
 
-#define SEQ_SUBMIT &at[1220]
-#define SEQ_SUBMIT_sub &at[1221]
-#define SEQ_SUBMIT_data &at[1249]
-#define SEQ_SUBMIT_data_entrys &at[1250]
-#define SEQ_SUBMIT_data_entrys_E &at[1251]
-#define SEQ_SUBMIT_data_annots &at[1253]
-#define SEQ_SUBMIT_data_annots_E &at[1254]
-#define SEQ_SUBMIT_data_delete &at[1256]
-#define SEQ_SUBMIT_data_delete_E &at[1257]
+#define SEQ_SUBMIT &at[1227]
+#define SEQ_SUBMIT_sub &at[1228]
+#define SEQ_SUBMIT_data &at[1256]
+#define SEQ_SUBMIT_data_entrys &at[1257]
+#define SEQ_SUBMIT_data_entrys_E &at[1258]
+#define SEQ_SUBMIT_data_annots &at[1260]
+#define SEQ_SUBMIT_data_annots_E &at[1261]
+#define SEQ_SUBMIT_data_delete &at[1263]
+#define SEQ_SUBMIT_data_delete_E &at[1264]
 
-#define SUBMIT_BLOCK &at[1222]
-#define SUBMIT_BLOCK_contact &at[1223]
-#define SUBMIT_BLOCK_cit &at[1240]
-#define SUBMIT_BLOCK_hup &at[1242]
-#define SUBMIT_BLOCK_reldate &at[1243]
-#define SUBMIT_BLOCK_subtype &at[1245]
-#define SUBMIT_BLOCK_tool &at[1246]
-#define SUBMIT_BLOCK_user_tag &at[1247]
-#define SUBMIT_BLOCK_comment &at[1248]
+#define SUBMIT_BLOCK &at[1229]
+#define SUBMIT_BLOCK_contact &at[1230]
+#define SUBMIT_BLOCK_cit &at[1247]
+#define SUBMIT_BLOCK_hup &at[1249]
+#define SUBMIT_BLOCK_reldate &at[1250]
+#define SUBMIT_BLOCK_subtype &at[1252]
+#define SUBMIT_BLOCK_tool &at[1253]
+#define SUBMIT_BLOCK_user_tag &at[1254]
+#define SUBMIT_BLOCK_comment &at[1255]
 
-#define CONTACT_INFO &at[1224]
-#define CONTACT_INFO_name &at[1225]
-#define CONTACT_INFO_address &at[1226]
-#define CONTACT_INFO_address_E &at[1227]
-#define CONTACT_INFO_phone &at[1228]
-#define CONTACT_INFO_fax &at[1229]
-#define CONTACT_INFO_email &at[1230]
-#define CONTACT_INFO_telex &at[1231]
-#define CONTACT_INFO_owner_id &at[1232]
-#define CONTACT_INFO_password &at[1234]
-#define CONTACT_INFO_last_name &at[1235]
-#define CONTACT_INFO_first_name &at[1236]
-#define CONTACT_INFO_middle_initial &at[1237]
-#define CONTACT_INFO_contact &at[1238]
+#define CONTACT_INFO &at[1231]
+#define CONTACT_INFO_name &at[1232]
+#define CONTACT_INFO_address &at[1233]
+#define CONTACT_INFO_address_E &at[1234]
+#define CONTACT_INFO_phone &at[1235]
+#define CONTACT_INFO_fax &at[1236]
+#define CONTACT_INFO_email &at[1237]
+#define CONTACT_INFO_telex &at[1238]
+#define CONTACT_INFO_owner_id &at[1239]
+#define CONTACT_INFO_password &at[1241]
+#define CONTACT_INFO_last_name &at[1242]
+#define CONTACT_INFO_first_name &at[1243]
+#define CONTACT_INFO_middle_initial &at[1244]
+#define CONTACT_INFO_contact &at[1245]

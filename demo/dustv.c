@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 98-01-01
 *
-* $Revision: 6.6 $
+* $Revision: 6.7 $
 *
 * File Description: a dust utility
 *
@@ -38,6 +38,9 @@
 * Date       Name        Description of modification
 * --------------------------------------------------------------------------
 * $Log: dustv.c,v $
+* Revision 6.7  1998/11/12 20:04:11  kuzio
+* .
+*
 * Revision 6.6  1998/09/16 18:40:35  kuzio
 * cvs logging
 *
@@ -544,7 +547,7 @@ static void DustProc (ButtoN b)
           }
           xisp->Yscale = Yscale;
         }
-	sgp->max.realvalue = maxscore;
+        sgp->max.realvalue = maxscore;
         sgp->min.realvalue = minscore;
 
         w = FixedWindow (-50, -50, -10, -10, "Dust", CloseGraphWindowProc);

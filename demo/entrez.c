@@ -29,13 +29,37 @@
 *
 * Version Creation Date:   8/5/96
 *
-* $Revision: 6.14 $
+* $Revision: 6.22 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: entrez.c,v $
+* Revision 6.22  1999/01/14 19:07:51  kans
+* new parameters to Cn3DWin_Entrez
+*
+* Revision 6.21  1999/01/13 20:09:18  kans
+* added neighbor policy control
+*
+* Revision 6.20  1999/01/08 18:27:35  kans
+* commented out makerpt.prt load - not used
+*
+* Revision 6.19  1999/01/03 22:47:05  kans
+* raised version number
+*
+* Revision 6.18  1998/12/08 16:52:41  kans
+* new params to ShowNetConfigForm to simplify configuration
+*
+* Revision 6.17  1998/12/08 03:19:56  kans
+* changes for web dispatcher only config form
+*
+* Revision 6.16  1998/12/04 23:35:45  kans
+* comment out requirement for ncbi config file, now that cdconfig.c is kludged with hard-coded values to psrventr
+*
+* Revision 6.15  1998/11/11 02:06:31  kans
+* set browser path from config file for PubMed launch
+*
 * Revision 6.14  1998/05/04 15:46:06  kans
 * obsoleted load/save uid list, in favor of import/export
 *
@@ -145,7 +169,7 @@
 
 #include <entrez.h>
 
-#define ENTREZ_APP_VERSION "6.40"
+#define ENTREZ_APP_VERSION "6.60"
 
 static ForM  termListForm = NULL;
 static ForM  docSumForm = NULL;
@@ -172,6 +196,7 @@ static IteM  preferencesItem = NULL;
 static IteM  clearUnusedItem = NULL;
 static IteM  legendItem = NULL;
 static ChoicE  queryChoice = NULL;
+static ChoicE  neighborChoice = NULL;
 
 static Boolean  termListUp = FALSE;
 static Boolean  docSumUp = FALSE;
@@ -368,6 +393,11 @@ static void DocumentSummaryActivateProc (WindoW w)
 {
   docSumUp = TRUE;
   currentFormDataPtr = (VoidPtr) GetObjectExtra (w);
+  if (UsingDelayedNeighbor ((ForM) w)) {
+    SafeSetValue (neighborChoice, 2);
+  } else {
+    SafeSetValue (neighborChoice, 1);
+  }
   RepeatProcOnHandles (Enable,
                    (HANDLE) closeItem,
                    (HANDLE) importItem,
@@ -376,6 +406,7 @@ static void DocumentSummaryActivateProc (WindoW w)
                    (HANDLE) copyItem,
                    (HANDLE) docsumfontItem,
                    (HANDLE) preferencesItem,
+                   (HANDLE) neighborChoice,
                    (HANDLE) loadUidItem,
                    (HANDLE) saveUidItem,
                    NULL);
@@ -414,6 +445,7 @@ static void MacDeactProc (WindoW w)
   SafeSetTitle (exportItem, "Export...");
   SafeSetTitle (importItem, "Import...");
   SafeSetValue (queryChoice, 0);
+  SafeSetValue (neighborChoice, 0);
   RepeatProcOnHandles (Disable,
                    (HANDLE) closeItem,
                    (HANDLE) duplicateItem,
@@ -429,6 +461,7 @@ static void MacDeactProc (WindoW w)
                    (HANDLE) preferencesItem,
                    (HANDLE) queryChoice,
                    (HANDLE) clearUnusedItem,
+                   (HANDLE) neighborChoice,
                    (HANDLE) legendItem,
                    (HANDLE) loadUidItem,
                    (HANDLE) saveUidItem,
@@ -766,7 +799,7 @@ static void Cn3DWinShowProc (IteM i)
 {
   WindoW  w;
 
-  w = Cn3DWin_Entrez();
+  w = Cn3DWin_Entrez(NULL, TRUE);
   if (w == NULL) return;
   Show (w);
   Select (w);
@@ -936,6 +969,9 @@ static void DocSumFormMenus (WindoW w)
     FormCommandItem (m, COPY_MENU_ITEM, bfp, VIB_MSG_COPY);
 
     m = PulldownMenu (w, "Options");
+    sub = SubMenu (m, "Neighbor Policy");
+    CreateNeighborDelayChoice (sub, bfp);
+    SeparatorItem (m);
     LoadDocsumOptionsMenu (m);
     seqviewprocs.alignWithChecked = entrezglobals.alignWithChecked;
 
@@ -1255,6 +1291,10 @@ static void SetupAppProperties (void)
     entrezglobals.initMode = StringSaveNoNull (str);
   }
 
+  if (GetEntrezAppParam ("SETTINGS", "BROWSER", NULL, str, sizeof (str))) {
+    SetAppProperty ("MedviewBrowserPath", (void *) StringSave (str));
+  }
+
   MemSet ((Pointer) (&stdedprocs), 0, sizeof (StdEditorProcs));
 #ifdef WIN_MAC
   stdedprocs.activateForm = StdEditorFormActivated;
@@ -1410,6 +1450,9 @@ static void SetupMacMenus (void)
   queryChoice = CreateQueryTypeChoice (sub, NULL);
   clearUnusedItem = CreateClearUnusedItem (m, NULL);
   SeparatorItem (m);
+  sub = SubMenu (m, "Neighbor Policy");
+  neighborChoice = CreateNeighborDelayChoice (sub, NULL);
+  SeparatorItem (m);
   LoadDocsumOptionsMenu (m);
   seqviewprocs.alignWithChecked = entrezglobals.alignWithChecked;
 
@@ -1487,8 +1530,14 @@ static void ConfigCancelled (void)
   QuitProgram ();
 }
 
+/*
 static CharPtr configMessage =
 "Entrez cannot find ncbi configuration file.\n\
+Do you wish to run the configuration program?";
+*/
+
+static CharPtr configMessage =
+"Entrez cannot connect to the data server.\n\
 Do you wish to run the configuration program?";
 
 Int2 Main (void)
@@ -1509,6 +1558,7 @@ Int2 Main (void)
   ErrClearOptFlags (EO_SHOW_USERSTR);
   ProcessUpdatesFirst (FALSE);
 
+  /*
   if (! GetAppParam ("NCBI", "NCBI", NULL, NULL, str, sizeof (str) - 1)) {
     if (Message (MSG_YN, configMessage) == ANS_YES) {
       ShowNetConfigForm (ConfigFormActivated, ConfigFormMessage,
@@ -1525,6 +1575,7 @@ Int2 Main (void)
     Message (MSG_FATAL, "Entrez cannot find ncbi configuration file");
     return 0;
   }
+  */
 
   UseLocalAsnloadDataAndErrMsg ();
   SetupAppProperties ();
@@ -1550,7 +1601,15 @@ Int2 Main (void)
   SetTitle (w, "Finding Entrez Data");
   if (! EntrezBioseqFetchEnable ("Entrez", TRUE)) {
     ArrowCursor ();
-    Message (MSG_FATAL, "Unable to connect to Entrez databases");
+    /* Message (MSG_FATAL, "Unable to connect to Entrez databases"); */
+    if (Message (MSG_YN, configMessage) == ANS_YES) {
+      ShowNetConfigForm (ConfigFormActivated, ConfigFormMessage,
+                         ConfigAccepted, ConfigCancelled, NULL, TRUE);
+      ProcessEvents ();
+      return 0;
+    } else {
+      Message (MSG_FATAL, "Entrez cannot run connection to the data server");
+    }
     return 0;
   }
   LocalSeqFetchInit (FALSE);
@@ -1603,11 +1662,13 @@ Int2 Main (void)
     Message (MSG_FATAL, "PrintTemplateSetLoad asn2ff.prt failed");
     return 0;
   }
+  /*
   if (! PrintTemplateSetLoad ("makerpt.prt")) {
     ArrowCursor ();
     Message (MSG_FATAL, "PrintTemplateSetLoad makerpt.prt failed");
     return 0;
   }
+  */
 
   SetTitle (w, "Loading sequence alphabet converter");
   if (! SeqCodeSetLoad ()) {
@@ -1633,7 +1694,7 @@ Int2 Main (void)
   SetTitle (w, "Loading structure dictionary");
   if (OpenMMDBAPI ((POWER_VIEW ^ FETCH_ENTREZ), NULL)) {
     prgdDict = GetPRGDDictionary ();
-    Cn3DWin_Entrez();
+    Cn3DWin_Entrez(NULL, TRUE);
   }
 #endif
 

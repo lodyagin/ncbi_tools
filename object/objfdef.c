@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.10 $
+* $Revision: 6.11 $
 *
 * File Description:  Object manager for feature definitions
 *
@@ -641,7 +641,7 @@ NLM_EXTERN FeatDefPtr LIBCALL FeatDefSetLoad (void)
 
 	if (! FindPath("ncbi", "ncbi", "data", buf, sizeof (buf)))
 	{
-		ErrPost(CTX_NCBIOBJ, 1, "FindPath failed in FeatDefSetTableLoad");
+		ErrPost(CTX_NCBIOBJ, 1, "FindPath failed in FeatDefSetTableLoad - ncbi configuration file missing or incorrect");
         return featdefp;
 	}
 

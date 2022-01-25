@@ -33,9 +33,36 @@
 *
 * Modifications:
 * $Log: cn3dmsg.c,v $
-* Revision 6.32  1998/09/23 22:08:42  ywang
-* to record checkin log
+* Revision 6.41  1999/01/20 18:21:20  ywang
+* include salmedia.h due to the move around of MediaInfo from cn3dmsg.h to the new created salmedia.h
 *
+* Revision 6.40  1999/01/14 19:07:17  kans
+* network availability is configurable
+*
+* Revision 6.39  1999/01/14 14:15:16  kans
+* do not call EntrezBioseqFetchEnable/Disable, calls GatherSpecificProcLaunch for Seq-Struc Communication
+*
+* Revision 6.38  1998/12/16 20:13:33  ywang
+* remove return warning for FillSeqinfoForSeqEditViewProcs
+*
+ * Revision 6.37  1998/12/09  20:41:18  ywang
+ * get rid of GetGIForSeqId
+ *
+ * Revision 6.36  1998/10/27  15:55:52  ywang
+ * add functions for testing color by sequence conservation
+ *
+ * Revision 6.35  1998/10/21  21:16:07  ywang
+ * put highlight RGB in the application property structure
+ *
+ * Revision 6.34  1998/10/19  20:16:05  ywang
+ * add function FillSeqinfoForSeqEditViewProcs so that salsa can get color array
+ *
+ * Revision 6.33  1998/10/16  22:06:08  ywang
+ * make global color array for sequence display
+ *
+ * Revision 6.32  1998/09/23  22:08:42  ywang
+ * to record checkin log
+ *
 * ===========================================================================  */
 
 #include <vibrant.h>
@@ -47,6 +74,7 @@
 #include <saledit.h>
 #include <objmgr.h>
 #include <cn3dmsg.h>
+#include <salmedia.h>
 #include <mmdbapi.h>
 #include <accentr.h>
 #include <lsqfetch.h>
@@ -64,8 +92,6 @@ Int4 Num_ActiveSlave;
 MediaInfo **mediadata;
 Uint2 sap_entityID, sap_itemID;
 
-extern Boolean Cn3D_fEntrezOn;
-
 /*-----------------------------------------*/
 void LaunchMediaViewer(BioseqPtr bsp)
 {
@@ -81,7 +107,8 @@ void LaunchMediaViewer(BioseqPtr bsp)
       options = ObjMgrGetOptions(entityID);
       options |= OM_OPT_FREE_IF_NO_VIEW;
       ObjMgrSetOptions(options, entityID);
-      handled = GatherProcLaunch (OMPROC_VIEW, FALSE, entityID, 1, OBJ_BIOSEQ, 0, 0, OBJ_BIOSEQ, 0);
+      /* handled = GatherProcLaunch (OMPROC_VIEW, FALSE, entityID, 1, OBJ_BIOSEQ, 0, 0, OBJ_BIOSEQ, 0); */
+      handled = GatherSpecificProcLaunch (0, "Seq-Struc Communication", OMPROC_VIEW, FALSE, entityID, 1, OBJ_BIOSEQ);
       BioseqUnlock( bsp );
    }
 }
@@ -109,6 +136,48 @@ static SeqIdPtr make_sip(Int4 id) {
      sip->data.intvalue = id;
   }
   return sip;
+}
+/*-----------------------------------------*/
+static void FillSeqinfoForSeqEditViewProcs(void)
+{
+  SeqEditViewProcsPtr svpp;
+
+  Int4 iCount = 0;
+
+  svpp = (SeqEditViewProcsPtr) GetAppProperty ("SeqEditDisplayForm");
+  if(svpp != NULL){
+     for(iCount = 0; iCount < Num_Bioseq; iCount++){
+        ValNodeAddPointer(&svpp->seqinfo, iCount + 1, (MediaInfoPtr) mediadata[iCount]);
+     }
+
+     svpp->colorR_HL = 255; svpp->colorG_HL = 255; svpp->colorB_HL = 0;
+  }
+
+}
+/*-----------------------------------------*/
+static ResidueColorCellPtr NewRGB(void)
+{
+  ResidueColorCellPtr rgbNew;
+
+  rgbNew = (ResidueColorCellPtr) MemNew(sizeof(ResidueColorCell));
+  return rgbNew;
+}
+/*------------------------------------------*/
+void Cn3DAddMediaDataColorTable()
+{
+  Int2 iCount = 0, length;
+  ResidueColorCellPtr rgbNew;
+
+  for(iCount = 0; iCount < Num_Bioseq; iCount++){
+     for(length = 0; length < mediadata[iCount]->length; length++){ 
+        rgbNew = NewRGB(); 
+        rgbNew->rgb[0] = 255; rgbNew->rgb[1] = 255; rgbNew->rgb[2] = 255;
+        ValNodeAddPointer(&mediadata[iCount]->seq_color, length+1, (Pointer) rgbNew);   
+     }
+
+  }
+
+  FillSeqinfoForSeqEditViewProcs();
 }
 /*-----------------------------------------*/
 extern void MediaDataLoad2(PDNMM pdnmmHead)
@@ -162,13 +231,45 @@ extern void MediaDataLoad2(PDNMM pdnmmHead)
      entityID = BioseqFindEntity(sip, &itemID);
      mediadata[iCount]->entityID = entityID;
      mediadata[iCount]->itemID = itemID;
+     mediadata[iCount]->itemtype = OBJ_BIOSEQ;
      mediadata[iCount]->bVisible = 1;
      iCount++;
      errot:
      pdnmmHead = pdnmmHead->next;
   }
 
+  Cn3DAddMediaDataColorTable(); 
   Num_ActiveSlave = iCount - 1;
+}
+/*-----------------------------------------*/
+Int4 Cn3DGetGIForSeqId(SeqIdPtr sid)
+{                                 /* used to avoid network connection */
+    BioseqPtr bsp = NULL;
+    SeqIdPtr sip;
+    Int4 gi = 0;
+
+    if (sid == NULL)
+        return gi;
+
+    while(sid){
+       if (sid->choice == SEQID_GI) {
+          return sid->data.intvalue;
+       }
+       sid = sid->next;
+    }
+
+    bsp = BioseqFindCore(sid);
+    if (bsp != NULL)
+    {
+        for (sip = bsp->id; sip != NULL; sip = sip->next)
+        {
+            if (sip->choice == SEQID_GI)
+                return sip->data.intvalue;
+        }
+    }
+
+    return gi;
+
 }
 /*-----------------------------------------*/
 extern void MediaDataLoad(SeqAlignPtr salp)
@@ -211,8 +312,8 @@ extern void MediaDataLoad(SeqAlignPtr salp)
        if(!FirstNode) sip2 = sip2->next;
        for(sip = sip2; sip != NULL; sip = sip->next){
           mediadata[iCount]->sip = sip;
-          mediadata[iCount]->Gi = GetGIForSeqId(sip);
-                    /* GetGIForSeqId(sip) is 0 if no Gi found */
+          mediadata[iCount]->Gi = Cn3DGetGIForSeqId(sip);
+                 /* NCBI general GetGIForSeqId(sip) can go to EntrezInit eventually */
           mediadata[iCount]->bVisible = TRUE; 
           iCount++;
           FirstNode = FALSE;
@@ -232,9 +333,11 @@ extern void MediaDataLoad(SeqAlignPtr salp)
      entityID = BioseqFindEntity(mediadata[iCount]->sip, &itemID);
      mediadata[iCount]->entityID = entityID;
      mediadata[iCount]->itemID = itemID;
+     mediadata[iCount]->itemtype = OBJ_BIOSEQ;
      mediadata[iCount]->bVisible = 1;
   }  
   
+  Cn3DAddMediaDataColorTable(); 
 }
 /*-----------------------------------------*/
 extern void MediaRegister(void)
@@ -243,6 +346,8 @@ extern void MediaRegister(void)
 
 }
 /*-----------------------------------------*/
+static Boolean Cn3D_alreadyRegistered = FALSE; /* used to keep entrez and objmgr from being restarted */
+
 extern void Cn3dObjRegister(void)
 {
   PDNMS pdnmsMaster = NULL;
@@ -254,25 +359,12 @@ extern void Cn3dObjRegister(void)
 
   ObjMgrPtr omp;
 
-               /* turn off/on dispatcher here */
-  if(Cn3D_fEntrezOn){
-     EntrezBioseqFetchDisable();        
-
-            /* hard lesson here: once FetchBS is used, cn3d can not get bsp by BioseqLockById though "EntrezBioseqFetchEnable" is called before "FetchBS" , as a result I have to do "EntrezBioseqFetchDisable", then "EntrezBioseqFetchEnable" again to be able to get bsp */ 
-
-   }
-/* if(!EntrezBioseqFetchEnable("Cn3D", FALSE)) ErrPostEx (SEV_ERROR, 0, 0, " EntrezBioseqFetchEnable failed!\n");   */
-   EntrezBioseqFetchEnable("Cn3D", FALSE);
-  
-/* if(!EntrezInit("Cn3D", FALSE, NULL)) ErrPostEx (SEV_ERROR, 0, 0, " EntrezInit failed!\n");     
-   if(!BioseqFetchInit(TRUE)) ErrPostEx (SEV_ERROR, 0, 0, " BioseqFetchInit failed!\n");     */      /* not neccessary */
-
-  if(!Cn3D_fEntrezOn){
+  if(!Cn3D_alreadyRegistered){
                             /* to add the ability to open salsa */
      MediaRegister();                      
      SalsaRegister();
 
-     Cn3D_fEntrezOn = TRUE;
+     Cn3D_alreadyRegistered = TRUE;
 
      omp = ObjMgrGet();
      omp->maxtemp = 60;
@@ -449,6 +541,6 @@ extern Int2 LIBCALLBACK SeqStrucMediaFunc(Pointer data)
       }
   }
 
-  return OM_MSG_RET_DONE;
+  return OM_MSG_RET_OK;
 
 }

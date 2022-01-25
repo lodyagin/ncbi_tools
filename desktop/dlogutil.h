@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.8 $
+* $Revision: 6.9 $
 *
 * File Description: 
 *
@@ -105,7 +105,8 @@ extern ValNodePtr AddStringToValNodeChain (ValNodePtr head, CharPtr str, Uint1 c
   DialoG          product;          \
   DialoG          featcits;         \
   DialoG          dbxrefs;          \
-  DialoG          gbquals;
+  DialoG          gbquals;          \
+  DialoG          usrobjext;
 
 typedef struct descform {
   DESCRIPTOR_FORM_BLOCK

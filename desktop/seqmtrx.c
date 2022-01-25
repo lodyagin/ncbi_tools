@@ -334,9 +334,9 @@ extern SeqGraphPtr MatrixSeq (BioseqPtr bsp, SeqGraphPtr sgptr,
     {
 /* type and number of values and compression */
       sgp->numval = bsp->length;
-      sgp->compl = (Int4) (bsp->length / gwidth);
+      sgp->compr = (Int4) (bsp->length / gwidth);
       if ((bsp->length%gwidth) != 0)
-        sgp->compl += 1;
+        sgp->compr += 1;
 /* graph type */
       sgp->flags[2] = 1;
       sgp->values = (Pointer) MemNew ((sizeof (FloatHi)) * sgp->numval);

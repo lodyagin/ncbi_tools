@@ -1,12 +1,13 @@
 @echo off
-rem  $Revision: 6.5 $
+rem  $Revision: 6.7 $
 rem  +++++ Denis Vakatov, NCBI // vakatov@peony.nlm.nih.gov +++++
 
 echo  *** Running:  %0  ***
 
 if "%__PATH_16%"==""  set __PATH_16=c:\msvc
 rem if "%__PATH_32%"==""  set __PATH_32=c:\msdev
-if "%__PATH_32%"==""  set __PATH_32=D:\Program Files\DevStudio\SharedIDE\bin;D:\Program Files\DevStudio\VC
+rem if "%__PATH_32%"==""  set __PATH_32=C:\Program Files\DevStudio\SharedIDE\bin;C:\Program Files\DevStudio\VC
+if "%__PATH_32%"==""  set __PATH_32=C:\Program Files\Microsoft Visual Studio\Common\MSDev98\Bin;C:\Program Files\Microsoft Visual Studio\Vc98
 if "%__PATH_BOR%"==""  set __PATH_BOR=c:\bc45
 
 

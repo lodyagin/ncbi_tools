@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/24/98
 *
-* $Revision: 6.16 $
+* $Revision: 6.17 $
 *
 * File Description: 
 *
@@ -508,16 +508,16 @@ main (int argc, char *argv[])
     return 1;
   }
 
-/* ensure that the GET method is being sent from the HTTPD server */
+/* ensure that the POST method is being sent from the HTTPD server */
 
-  if (strcmp (method, "GET") != 0) {
+  if (strcmp (method, "POST") != 0) {
     printf ("Content-type: text/html\n\n");
-    printf (">Message\nFAILURE - Method (%s) must be GET\n", method);
+    printf (">Message\nFAILURE - Method (%s) must be POST\n", method);
     fflush (stdout);
     return 1;
   }
 
-/* parse GET query into tag and val arrays */
+/* parse POST query into tag and val arrays */
 
   if (! ParseQuery (TRUE)) {
     fflush (stdout);

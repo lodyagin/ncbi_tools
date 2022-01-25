@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 98-01-01
 *
-* $Revision: 6.4 $
+* $Revision: 6.5 $
 *
 * File Description: coiled-coil header
 *
@@ -38,6 +38,9 @@
 * Date       Name        Description of modification
 * --------------------------------------------------------------------------
 * $Log: urkpcc.h,v $
+* Revision 6.5  1998/11/16 14:29:50  kuzio
+* flagBoundaryCondition
+*
 * Revision 6.4  1998/09/16 17:46:46  kuzio
 * cvs logging
 *
@@ -95,10 +98,12 @@ extern FloatHiPtr PredictCCSeqLoc (SeqLocPtr slp,
                                    PccDatPtr pccp);
 
 extern SeqLocPtr FilterCC (FloatHiPtr score, FloatHi percentcut,
-                           Int4 length, Int4 linker, SeqIdPtr sip);
+                           Int4 length, Int4 linker, SeqIdPtr sip,
+                           Boolean flagBoundaryCondition);
 
 extern SeqLocPtr FilterCCVS (FloatHiPtr score, FloatHi percentcut,
-                             Int4 length, Int4 linker, SeqIdPtr sip);
+                             Int4 length, Int4 linker, SeqIdPtr sip,
+                             Boolean flagBoundaryCondition);
 
 #ifdef __cplusplus
 }

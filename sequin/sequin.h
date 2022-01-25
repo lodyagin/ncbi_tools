@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.36 $
+* $Revision: 6.43 $
 *
 * File Description: 
 *
@@ -89,6 +89,7 @@ extern "C" {
 #include <dlogutil.h>
 #include <bspview.h>
 #include <objproj.h>
+#include <ncbiurl.h>
 
 #define SEQ_PKG_SINGLE        1
 #define SEQ_PKG_SEGMENTED     2
@@ -100,11 +101,16 @@ extern "C" {
 #define NUM_SEQ_PKG           8
 
 #define SEQ_FMT_FASTA         1
+#define SEQ_FMT_CONTIGUOUS    2 
+#define SEQ_FMT_INTERLEAVE    3 
+#define NUM_SEQ_FMT           3 
+
+/*
 #define SEQ_FMT_FASTAGAP      2
 #define SEQ_FMT_PHYLIP        3
 #define SEQ_FMT_NEXUS         4
 #define SEQ_FMT_PAUP          5
-#define NUM_SEQ_FMT           5
+*/
 
 typedef struct fmtblk {
   Int2         seqPackage;
@@ -203,6 +209,16 @@ The linked list is used solely to enable and disable new feature menu items
 by the target bsp->mol, or to enable and disable analysis menu items by the
 ability to produce FASTA (bioseq viewer or docsum window). */
 
+typedef struct urlparamdata {
+  Uint1          type;     /* 1 = text, 2 = checkbox, 3 = popup, 4 = radio, 5 = list */
+  CharPtr        param;
+  CharPtr        prompt;   /* if no prompt, use param */
+  CharPtr        dfault;
+  CharPtr        choices;  /* choices if param is popup */
+  CharPtr        group;    /* used for grouping related controls */
+  CharPtr        help;
+} UrlParamData, PNTR UrlParamPtr;
+
 typedef struct newobjectdata {
   Int2           kind;   /* 1 = feature creation, 2 = analysis */
   ObjMgrProcPtr  ompp;
@@ -223,10 +239,8 @@ typedef struct newobjectdata {
   Uint4          timeoutsec;
   Int2           format;     /* 1 = FASTA, 2 = ASN.1 */
   Boolean        demomode;
-  ResultProc     resultproc;
-  ValNodePtr     paramlist;
-  ValNodePtr     promptlist; /* if no prompt, use param */
-  ValNodePtr     dfaultlist;
+  URLResultProc  resultproc;
+  ValNodePtr     paramlist; /* data.ptrvalue points to UrlParamData block */
   struct newobjectdata PNTR next;
 } NewObjectData, PNTR NewObjectPtr;
 
@@ -403,6 +417,9 @@ extern void FindFlatfileProc (IteM i);
 extern Boolean SaveSeqSubmitProc (BaseFormPtr bfp, Boolean saveAs);
 
 extern void ExciseString (CharPtr str, CharPtr from, CharPtr to);
+extern void MakeSearchStringFromAlist (CharPtr str, CharPtr name);
+extern void AddToSubSource (BioSourcePtr biop, CharPtr title, CharPtr label, Uint1 subtype);
+extern void AddToOrgMod (BioSourcePtr biop, CharPtr title, CharPtr label, Uint1 subtype);
 extern Boolean AutomaticProteinProcess (SeqEntryPtr esep, SeqEntryPtr psep,
                                         Int2 code, Boolean makeMRNA);
 
@@ -423,8 +440,6 @@ extern void AddSubmitBlockToSeqEntry (ForM f);
 extern void SqnReadAlignView (BioseqPtr target_bsp, SeqEntryPtr source_sep);
 extern void DownloadAndUpdateProc (ButtoN b);
 
-extern void ReadFastaNucProc (IteM i);
-extern void ReadSeqNucProc (IteM i);
 extern void FastaNucDirectToSeqEdProc (IteM i);
 
 extern void RemoveAlignment (IteM i);

@@ -48,8 +48,11 @@ Detailed Contents:
 
 ******************************************************************************/
 
-/* $Revision: 6.28 $ */
+/* $Revision: 6.29 $ */
 /* $Log: blastkar.c,v $
+/* Revision 6.29  1998/12/31 18:17:04  madden
+/* Added strand option
+/*
  * Revision 6.28  1998/09/28 12:28:50  madden
  * Protection for a DEC Alpha problem with HUGE_VAL
  *
@@ -1151,7 +1154,7 @@ BlastKarlinBlkStandardCalcEx(BLAST_ScoreBlkPtr sbp)
 }
 
 Int2 LIBCALL
-BlastKarlinBlkStandardCalc(BLAST_ScoreBlkPtr sbp, Int2 context_total)
+BlastKarlinBlkStandardCalc(BLAST_ScoreBlkPtr sbp, Int2 context_start, Int2 context_end)
 {
 
 	BLAST_KarlinBlkPtr kbp_ideal, kbp;
@@ -1159,7 +1162,7 @@ BlastKarlinBlkStandardCalc(BLAST_ScoreBlkPtr sbp, Int2 context_total)
 
 	kbp_ideal = BlastKarlinBlkStandardCalcEx(sbp);
 /* Replace the calculated values with ideal ones for blastx, tblastx. */
-	for (index=0; index<context_total; index++)
+	for (index=context_start; index<=context_end; index++)
 	{
 		kbp = sbp->kbp[index];	
 		if (kbp->Lambda >= kbp_ideal->Lambda)

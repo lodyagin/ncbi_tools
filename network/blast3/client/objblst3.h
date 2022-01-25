@@ -17,12 +17,41 @@ extern "C" { /* } */
 /**************************************************
 *
 *    Generated objects for Module NCBI-Blast
-*    Generated using ASNCODE Revision: 6.0 at Jul 17, 1998  3:34 PM
+*    Generated using ASNCODE Revision: 6.0 at Dec 21, 1998  9:44 AM
 *
 **************************************************/
 
 NLM_EXTERN Boolean LIBCALL
 objblst3AsnLoad PROTO((void));
+
+
+/**************************************************
+*
+*    BlastSearch
+*
+**************************************************/
+typedef struct struct_Blast_search {
+   Uint2   program;
+   /* following #defines are for enumerated type, not used by object loaders */
+#define Blast_search_program_blastn 0
+#define Blast_search_program_blastp 1
+#define Blast_search_program_blastx 2
+#define Blast_search_program_tblastn 3
+#define Blast_search_program_tblastx 4
+
+   struct struct_Bioseq PNTR   query;
+   CharPtr   database;
+   struct struct_Blast_parameters PNTR   parameters;
+   ValNodePtr   mask;
+   struct struct_Blast_matrix PNTR   matrix;
+} BlastSearch, PNTR BlastSearchPtr;
+
+
+NLM_EXTERN BlastSearchPtr LIBCALL BlastSearchFree PROTO ((BlastSearchPtr ));
+NLM_EXTERN BlastSearchPtr LIBCALL BlastSearchNew PROTO (( void ));
+NLM_EXTERN BlastSearchPtr LIBCALL BlastSearchAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL BlastSearchAsnWrite PROTO (( BlastSearchPtr , AsnIoPtr, AsnTypePtr));
+
 typedef ValNodePtr BlastRequestPtr;
 typedef ValNode BlastRequest;
 #define BlastRequest_init 1
@@ -98,6 +127,8 @@ typedef struct struct_Blast_parameters {
    CharPtr   gifile;
    CharPtr   matrix;
    CharPtr   filter_string;
+   CharPtr   entrez_query;
+   Int4   word_size;
 } BlastParameters, PNTR BlastParametersPtr;
 
 
@@ -148,6 +179,76 @@ static Boolean LIBCALL Cutoff_cutoffAsnWrite PROTO (( Cutoff_cutoffPtr , AsnIoPt
 
 /**************************************************
 *
+*    BlastDbinfo
+*
+**************************************************/
+typedef struct struct_Blast_dbinfo {
+   struct struct_Blast_dbinfo PNTR next;
+   Uint1   is_protein;
+   CharPtr   name;
+   CharPtr   definition;
+   CharPtr   date;
+   Int4   total_length;
+   Int4   number_seqs;
+} BlastDbinfo, PNTR BlastDbinfoPtr;
+
+
+NLM_EXTERN BlastDbinfoPtr LIBCALL BlastDbinfoFree PROTO ((BlastDbinfoPtr ));
+NLM_EXTERN BlastDbinfoPtr LIBCALL BlastDbinfoNew PROTO (( void ));
+NLM_EXTERN BlastDbinfoPtr LIBCALL BlastDbinfoAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL BlastDbinfoAsnWrite PROTO (( BlastDbinfoPtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    BlastMask
+*
+**************************************************/
+typedef struct struct_Blast_mask {
+   ValNodePtr   location;
+   Uint2   frame;
+   /* following #defines are for enumerated type, not used by object loaders */
+#define Blast_mask_frame_notset 0
+#define Blast_mask_frame_plus1 1
+#define Blast_mask_frame_plus2 2
+#define Blast_mask_frame_plus3 3
+#define Blast_mask_frame_minus1 4
+#define Blast_mask_frame_minus2 5
+#define Blast_mask_frame_minus3 6
+
+} BlastMask, PNTR BlastMaskPtr;
+
+
+NLM_EXTERN BlastMaskPtr LIBCALL BlastMaskFree PROTO ((BlastMaskPtr ));
+NLM_EXTERN BlastMaskPtr LIBCALL BlastMaskNew PROTO (( void ));
+NLM_EXTERN BlastMaskPtr LIBCALL BlastMaskAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL BlastMaskAsnWrite PROTO (( BlastMaskPtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    BlastKABlk
+*
+**************************************************/
+typedef struct struct_Blast_KABlk {
+   FloatHi   lambda;
+   FloatHi   k;
+   FloatHi   h;
+   Uint1   gapped;
+} BlastKABlk, PNTR BlastKABlkPtr;
+
+
+NLM_EXTERN BlastKABlkPtr LIBCALL BlastKABlkFree PROTO ((BlastKABlkPtr ));
+NLM_EXTERN BlastKABlkPtr LIBCALL BlastKABlkNew PROTO (( void ));
+NLM_EXTERN BlastKABlkPtr LIBCALL BlastKABlkAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL BlastKABlkAsnWrite PROTO (( BlastKABlkPtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
 *    BlastDbinfoGet
 *
 **************************************************/
@@ -166,35 +267,6 @@ NLM_EXTERN BlastDbinfoGetPtr LIBCALL BlastDbinfoGetFree PROTO ((BlastDbinfoGetPt
 NLM_EXTERN BlastDbinfoGetPtr LIBCALL BlastDbinfoGetNew PROTO (( void ));
 NLM_EXTERN BlastDbinfoGetPtr LIBCALL BlastDbinfoGetAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
 NLM_EXTERN Boolean LIBCALL BlastDbinfoGetAsnWrite PROTO (( BlastDbinfoGetPtr , AsnIoPtr, AsnTypePtr));
-
-
-
-/**************************************************
-*
-*    BlastSearch
-*
-**************************************************/
-typedef struct struct_Blast_search {
-   Uint2   program;
-   /* following #defines are for enumerated type, not used by object loaders */
-#define Blast_search_program_blastn 0
-#define Blast_search_program_blastp 1
-#define Blast_search_program_blastx 2
-#define Blast_search_program_tblastn 3
-#define Blast_search_program_tblastx 4
-
-   struct struct_Bioseq PNTR   query;
-   CharPtr   database;
-   struct struct_Blast_parameters PNTR   parameters;
-   ValNodePtr   mask;
-   struct struct_Blast_matrix PNTR   matrix;
-} BlastSearch, PNTR BlastSearchPtr;
-
-
-NLM_EXTERN BlastSearchPtr LIBCALL BlastSearchFree PROTO ((BlastSearchPtr ));
-NLM_EXTERN BlastSearchPtr LIBCALL BlastSearchNew PROTO (( void ));
-NLM_EXTERN BlastSearchPtr LIBCALL BlastSearchAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-NLM_EXTERN Boolean LIBCALL BlastSearchAsnWrite PROTO (( BlastSearchPtr , AsnIoPtr, AsnTypePtr));
 
 
 
@@ -242,29 +314,6 @@ NLM_EXTERN Boolean LIBCALL BlastMatrixAsnWrite PROTO (( BlastMatrixPtr , AsnIoPt
 
 /**************************************************
 *
-*    BlastDbinfo
-*
-**************************************************/
-typedef struct struct_Blast_dbinfo {
-   struct struct_Blast_dbinfo PNTR next;
-   Uint1   is_protein;
-   CharPtr   name;
-   CharPtr   definition;
-   CharPtr   date;
-   Int4   total_length;
-   Int4   number_seqs;
-} BlastDbinfo, PNTR BlastDbinfoPtr;
-
-
-NLM_EXTERN BlastDbinfoPtr LIBCALL BlastDbinfoFree PROTO ((BlastDbinfoPtr ));
-NLM_EXTERN BlastDbinfoPtr LIBCALL BlastDbinfoNew PROTO (( void ));
-NLM_EXTERN BlastDbinfoPtr LIBCALL BlastDbinfoAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-NLM_EXTERN Boolean LIBCALL BlastDbinfoAsnWrite PROTO (( BlastDbinfoPtr , AsnIoPtr, AsnTypePtr));
-
-
-
-/**************************************************
-*
 *    BlastQueued
 *
 **************************************************/
@@ -299,26 +348,6 @@ NLM_EXTERN Boolean LIBCALL BlastProgressAsnWrite PROTO (( BlastProgressPtr , Asn
 
 /**************************************************
 *
-*    BlastKABlk
-*
-**************************************************/
-typedef struct struct_Blast_KABlk {
-   FloatHi   lambda;
-   FloatHi   k;
-   FloatHi   h;
-   Uint1   gapped;
-} BlastKABlk, PNTR BlastKABlkPtr;
-
-
-NLM_EXTERN BlastKABlkPtr LIBCALL BlastKABlkFree PROTO ((BlastKABlkPtr ));
-NLM_EXTERN BlastKABlkPtr LIBCALL BlastKABlkNew PROTO (( void ));
-NLM_EXTERN BlastKABlkPtr LIBCALL BlastKABlkAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-NLM_EXTERN Boolean LIBCALL BlastKABlkAsnWrite PROTO (( BlastKABlkPtr , AsnIoPtr, AsnTypePtr));
-
-
-
-/**************************************************
-*
 *    BlastDefline
 *
 **************************************************/
@@ -333,33 +362,6 @@ NLM_EXTERN BlastDeflinePtr LIBCALL BlastDeflineFree PROTO ((BlastDeflinePtr ));
 NLM_EXTERN BlastDeflinePtr LIBCALL BlastDeflineNew PROTO (( void ));
 NLM_EXTERN BlastDeflinePtr LIBCALL BlastDeflineAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
 NLM_EXTERN Boolean LIBCALL BlastDeflineAsnWrite PROTO (( BlastDeflinePtr , AsnIoPtr, AsnTypePtr));
-
-
-
-/**************************************************
-*
-*    BlastMask
-*
-**************************************************/
-typedef struct struct_Blast_mask {
-   ValNodePtr   location;
-   Uint2   frame;
-   /* following #defines are for enumerated type, not used by object loaders */
-#define Blast_mask_frame_notset 0
-#define Blast_mask_frame_plus1 1
-#define Blast_mask_frame_plus2 2
-#define Blast_mask_frame_plus3 3
-#define Blast_mask_frame_minus1 4
-#define Blast_mask_frame_minus2 5
-#define Blast_mask_frame_minus3 6
-
-} BlastMask, PNTR BlastMaskPtr;
-
-
-NLM_EXTERN BlastMaskPtr LIBCALL BlastMaskFree PROTO ((BlastMaskPtr ));
-NLM_EXTERN BlastMaskPtr LIBCALL BlastMaskNew PROTO (( void ));
-NLM_EXTERN BlastMaskPtr LIBCALL BlastMaskAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-NLM_EXTERN Boolean LIBCALL BlastMaskAsnWrite PROTO (( BlastMaskPtr , AsnIoPtr, AsnTypePtr));
 
 
 

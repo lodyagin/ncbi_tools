@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.31 $
+* $Revision: 6.34 $
 *
 * File Description: 
 *
@@ -47,6 +47,7 @@
 #include <salfiles.h>
 #include <salstruc.h>
 #include <fstyle.h>
+#include <salmedia.h>
 
 #define OBJ_VIRT 254
 
@@ -1363,7 +1364,26 @@ static void draw_caret (EditAlignDataPtr adp, SelEdStructPtr sesp, PoinT pt, Int
 /*********************************************************************
 ***      PaintSubseq : paint visible sequence  
 **********************************************************************/
-static void PaintSubseq (Int4 k, Int4 lg, Int4 from, PoinT *pt, CharPtr vstr, Boolean invert, EditAlignDataPtr adp, Boolean draw_diff, CharPtr *masterstr, Boolean cmplt, EditCellPtr ecp) 
+/*browse a structure to find out the colour number idx (zero-based)
+ seq_color is a field in MediaInfo structure; see cn3dmsg.h*/
+
+static ResidueColorCellPtr GiveClrFromIdx(Int4 idx,ValNodePtr seq_color)
+{
+Int4  i;
+
+	i=0;
+	while(seq_color){
+		if (i==idx) {
+			return((ResidueColorCellPtr)seq_color->data.ptrvalue);	
+		}
+		seq_color=seq_color->next;
+		i++;
+	}
+
+   return NULL;
+}
+
+static void PaintSubseq (Int4 k, Int4 lg, Int4 from, PoinT *pt, CharPtr vstr, Boolean invert, EditAlignDataPtr adp, Boolean draw_diff, CharPtr *masterstr, Boolean cmplt, ValNodePtr seq_color,SeqIdPtr sip) 
 {
   CharPtr      strPtr;
   Char         str[512];
@@ -1375,28 +1395,61 @@ static void PaintSubseq (Int4 k, Int4 lg, Int4 from, PoinT *pt, CharPtr vstr, Bo
   Int4         lg2 = MIN (lg, adp->visibleWidth); 
   Uint4        blackColor = GetColorRGB(0,0,0),
                newColor;
-  Boolean      pretty = (Boolean) (ecp!=NULL);
 
+	Boolean      pretty = (Boolean) (seq_color!=NULL);
+	ResidueColorCellPtr rgb;
+	Int4 from2;	
+	
   dashedstring ((CharPtr) str, 512);
   strPtr = str;
+
   if (pretty) {
-     curColor = GetColorRGB (ecp[from].r, ecp[from].g, ecp[from].b);
+  	from2=AlignCoordToSeqCoord (from, sip, 
+			(SeqAlignPtr)adp->sap_align->data, adp->sqloc_list, 0);	
+
+	if (from2!=GAP_RESIDUE)
+		rgb=GiveClrFromIdx(from2,seq_color);
+	else rgb=NULL;
+
+    
+	if(rgb != NULL ){
+	   curColor = GetColorRGB (rgb->rgb[0], rgb->rgb[1],rgb->rgb[2]);
+    }
+    else curColor =blackColor;
   }
   else {
      curColor = adp->colorRefs[(Uint1)(vstr[k] - '*')];
   } 
+  if (curColor == (Uint4)172)
+     curColor = blackColor;
+
   if (masterstr != NULL) {
      if (*masterstr != NULL) 
         masterstrptr = *masterstr;
   }
+
   while ( k < to ) 
   {
      if (pretty) {
-        newColor = GetColorRGB (ecp[k+from].r, ecp[k+from].g, ecp[k+from].b);
+		from2=AlignCoordToSeqCoord (k+from, sip, 
+				(SeqAlignPtr)adp->sap_align->data, adp->sqloc_list, 0);	
+
+		if (from2!=GAP_RESIDUE)
+			rgb=GiveClrFromIdx(from2,seq_color);
+		else rgb=NULL;
+		
+    	if(rgb != NULL ){
+		   newColor= GetColorRGB (rgb->rgb[0], rgb->rgb[1],rgb->rgb[2]);
+    	}
+    	else newColor=blackColor ;
+		if (vstr[k] == '-') newColor=blackColor ;
      }
      else {
         newColor = adp->colorRefs[(Uint1)(vstr[k] - '*')];
      }
+     if (newColor == (Uint4)172)
+        newColor = blackColor;
+
      if ( adp->colonne [from +k -adp->bufferstart] < 0 ) 
      {
         *strPtr = 0;
@@ -1404,7 +1457,7 @@ static void PaintSubseq (Int4 k, Int4 lg, Int4 from, PoinT *pt, CharPtr vstr, Bo
         if (cmplt) 
            strPtr = complement_string (strPtr);
         MoveTo ((Int2)(pt->x +adp->margin.left), (Int2)(pt->y + adp->ascent));
-        PaintString (strPtr);
+	PaintString (strPtr);
         pt->x += caret_color * adp->charw;
         caret_color = 1;
         strPtr = str;
@@ -1673,9 +1726,6 @@ static Int4 getnextpos (ValNodePtr vnp, Int4 *stop)
 
 static void draw_seq (EditAlignDataPtr adp, SelEdStructPtr sesp, Int4 from, Int4 drw_width, PoinT ptlh, CharPtr drw_str, Boolean draw_diff, CharPtr masterstr, Boolean cplmt, Uint2 itemtype, Boolean check_selection)
 {
-  ValNodePtr    vnp;
-  SelEdStructPtr sesp2;
-  EditCellPtr   ecp;
   SelStructPtr  ssptmp;
   SeqIdPtr      sip;
   Int4          start, stop;
@@ -1689,7 +1739,14 @@ static void draw_seq (EditAlignDataPtr adp, SelEdStructPtr sesp, Int4 from, Int4
   Int2          iCount = 0;
   SeqLocPtr     slp;
   ValNodePtr    startp = NULL;
-  
+
+	SeqEditViewProcsPtr svpp;
+	ValNodePtr          vnp_seqinfo;
+	ValNodePtr          vnp_color = NULL;
+	SeqIdPtr            vnpcn3d_sip = NULL;
+	MediaInfoPtr        MIPtr;
+
+
   ptx = ptlh.x +adp->margin.left;
   pty = ptlh.y;
   adp->start_select = -1;
@@ -1721,20 +1778,21 @@ static void draw_seq (EditAlignDataPtr adp, SelEdStructPtr sesp, Int4 from, Int4
     }
   }
 
-  ecp = NULL;
-  if (itemtype == OBJ_BIOSEQ && adp->copyalign!=NULL) {
-     for (vnp=adp->copyalign; vnp!=NULL; vnp=vnp->next) {
-        sesp2 = (SelEdStructPtr) vnp->data.ptrvalue;
-        if (sesp2->entityID==sesp->entityID && sesp2->itemID==sesp->itemID) 
-        {
-           ecp=(EditCellPtr)(sesp2->data->data.ptrvalue);
-           if (ecp!=NULL) {
-              break;
-           }
-        }   
-     }
+
+  svpp = (SeqEditViewProcsPtr) GetAppProperty ("SeqEditDisplayForm");
+  if (svpp->Cn3D_On) {
+	vnp_seqinfo = svpp->seqinfo;
+	while(vnp_seqinfo){
+		MIPtr=(MediaInfoPtr)vnp_seqinfo->data.ptrvalue;
+		if (MIPtr->entityID==sesp->entityID && MIPtr->itemID==sesp->itemID){
+			vnp_color=MIPtr->seq_color;
+                        vnpcn3d_sip = MIPtr->sip;
+			break;
+		}
+		vnp_seqinfo=vnp_seqinfo->next;
+	}
   }
- 
+
   if (iCount > 0) {
      k = 0;
      k1 = from;
@@ -1746,7 +1804,7 @@ static void draw_seq (EditAlignDataPtr adp, SelEdStructPtr sesp, Int4 from, Int4
            left = (Int4) k1;
            right= start;
            seg_lg = MIN (right - left, drw_width);
-           PaintSubseq (k, seg_lg, from, &ptlh, drw_str, FALSE, adp, draw_diff, &masterstr, cplmt, ecp);
+           PaintSubseq (k, seg_lg, from, &ptlh, drw_str, FALSE, adp, draw_diff, &masterstr, cplmt, vnp_color,vnpcn3d_sip);
            k += seg_lg;
         } 
         else if ( k +from >= start && k +from < stop + 1) 
@@ -1754,7 +1812,7 @@ static void draw_seq (EditAlignDataPtr adp, SelEdStructPtr sesp, Int4 from, Int4
            left = (Int4) MAX (k1, start);
            right= (Int4) MIN (from + drw_width, stop + 1);
            seg_lg = MIN (right - left, drw_width);
-           PaintSubseq (k, seg_lg, from,  &ptlh, drw_str, TRUE, adp, draw_diff, &masterstr, cplmt, ecp);
+           PaintSubseq (k, seg_lg, from,  &ptlh, drw_str, TRUE, adp, draw_diff, &masterstr, cplmt, vnp_color,vnpcn3d_sip);
            k += seg_lg;
            k1 = stop + 1;
            start = getnextpos (startp, &stop);
@@ -1765,11 +1823,11 @@ static void draw_seq (EditAlignDataPtr adp, SelEdStructPtr sesp, Int4 from, Int4
         left = (Int4) k1;
         right= (Int4) from + drw_width;
         seg_lg = MIN (right - left, drw_width);
-        PaintSubseq (k, seg_lg, from,  &ptlh, drw_str, FALSE, adp, draw_diff, &masterstr, cplmt, ecp);
+        PaintSubseq (k, seg_lg, from,  &ptlh, drw_str, FALSE, adp, draw_diff, &masterstr, cplmt, vnp_color,vnpcn3d_sip);
      }
   }
   else {
-     PaintSubseq (0, drw_width, from, &ptlh, drw_str, FALSE, adp, draw_diff, &masterstr, cplmt, ecp);
+     PaintSubseq (0, drw_width, from, &ptlh, drw_str, FALSE, adp, draw_diff, &masterstr, cplmt, vnp_color,vnpcn3d_sip);
   }
   if (startp != NULL)
      ValNodeFree (startp);

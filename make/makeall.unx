@@ -34,7 +34,10 @@
 #     
 #   (this can be sourced from ncbi/make/viball.sol)
 #   again, you must set the paths to the Motif libs properly for your system
-#	
+#
+#   The build for RedHat Linux 2.XX with X11R6 requires:
+#     CC="gcc -ansi"
+#     VIBLIBS="-L/usr/X11R6/lib -lXm -lXpm -lXmu -lXp -lXt -lX11 -lXext"
 #
 #   NOTE: It is now possible to build using shared libraries, which
 #     consumes significantly less disk space.  To use shared libraries, try:
@@ -148,8 +151,8 @@ SRC2 =	objacces.c objalign.c objall.c objbibli.c \
 	objsub.c objprt.c objfdef.c objmime.c objpubme.c objmdrs.c objproj.c \
 	seqport.c sequtil.c prtutil.c \
 	simple.c tofasta.c tofile.c tomedlin.c \
-	valid.c sqnutils.c subutil.c edutil.c asn2ff1.c asn2ff2.c asn2ff3.c \
-	asn2ff4.c asn2ff5.c asn2ff6.c ftusrstr.c gbfeat.c gbftglob.c \
+	valid.c sqnutil1.c sqnutil2.c subutil.c edutil.c asn2ff1.c asn2ff2.c \
+	asn2ff3.c asn2ff4.c asn2ff5.c asn2ff6.c ftusrstr.c gbfeat.c gbftglob.c \
 	gbparint.c utilpars.c utilpub.c ffprint.c wprint.c satutil.c \
 	seqmgr.c objmgr.c gather.c accmmdbs.c acccn3ds.c lsqfetch.c findrepl.c \
 	apparam.c codon.c jzcoll.c jzmisc.c maputil.c mconsist.c txalign.c
@@ -197,7 +200,8 @@ SRC23 = csim.c db_slist.c dust.c falign.c g_any.c sim2.c sim3.c sim4.c \
 	blast.c blastutl.c blastool.c splutil.c gapxdrop.c bandalg0.c bandalg1.c \
 	bandalg2.c bandalg3.c bandalg4.c bandalg5.c bandalgn.c blastkar.c \
 	posit.c lookup.c readdb.c ncbisam.c ncbisort.c \
-	salsap.c salstruc.c salutil.c urkutil.c urkpcc.c urkptpf.c urkepi.c \
+	salpacc.c salpedit.c salsap.c salstruc.c salutil.c \
+	urkutil.c urkpcc.c urkptpf.c urkepi.c \
 	urkfltr.c urkdust.c urksigu.c seg.c urkbias.c urkcnsrt.c urktree.c \
 	pseed3.c pattern1.c
 
@@ -232,8 +236,8 @@ OBJ2 =	objacces.o objalign.o objall.o objbibli.o objfeat.o \
 	objmime.o objpubme.o objmdrs.o objproj.o \
 	seqport.o sequtil.o prtutil.o simple.o tofasta.o \
 	tofile.o tomedlin.o \
-	valid.o sqnutils.o subutil.o edutil.o asn2ff1.o asn2ff2.o asn2ff3.o \
-	asn2ff4.o asn2ff5.o asn2ff6.o ftusrstr.o gbfeat.o gbftglob.o \
+	valid.o sqnutil1.o sqnutil2.o subutil.o edutil.o asn2ff1.o asn2ff2.o \
+	asn2ff3.o asn2ff4.o asn2ff5.o asn2ff6.o ftusrstr.o gbfeat.o gbftglob.o \
 	gbparint.o utilpars.o utilpub.o ffprint.o wprint.o satutil.o \
 	seqmgr.o objmgr.o gather.o accmmdbs.o acccn3ds.o lsqfetch.o findrepl.o \
 	apparam.o codon.o jzcoll.o jzmisc.o maputil.o mconsist.o txalign.o
@@ -281,7 +285,8 @@ OBJ23 = csim.o db_slist.o dust.o falign.o g_any.o sim2.o sim3.o sim4.o \
 	blast.o blastutl.o blastool.o splutil.o gapxdrop.o bandalg0.o bandalg1.o \
 	bandalg2.o bandalg3.o bandalg4.o bandalg5.o bandalgn.o blastkar.o \
 	posit.o lookup.o readdb.o ncbisam.o ncbisort.o \
-	salsap.o salstruc.o salutil.o urkutil.o urkpcc.o urkptpf.o urkepi.o \
+	salpacc.o salpedit.o salsap.o salstruc.o salutil.o \
+	urkutil.o urkpcc.o urkptpf.o urkepi.o \
 	urkfltr.o urkdust.o urksigu.o seg.o urkbias.o urkcnsrt.o urktree.o \
 	pseed3.o pattern1.o
 

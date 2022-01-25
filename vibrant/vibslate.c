@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.6 $
+* $Revision: 6.7 $
 *
 * File Description: 
 *       Vibrant slate (universal drawing environment) functions
@@ -37,6 +37,9 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: vibslate.c,v $
+* Revision 6.7  1998/12/14 18:39:10  kans
+* okayToDrawContents extern, used to inhibit slate drawing
+*
 * Revision 6.6  1998/06/25 21:42:38  vakatov
 * Fixed(slightly) the slate scroll bar positioning
 * [WIN_MSWIN] Adjusted slate dimensions
@@ -242,6 +245,8 @@ static XtIntervalId     slateTimer;
 static Nlm_Boolean      slateTimerUsed = FALSE;
 static Nlm_PoinT        currentMousePos;
 #endif
+
+extern Nlm_Boolean okayToDrawContents;
 
 extern void Nlm_AddSubwindowShell (Nlm_WindoW w, Nlm_ShellTool shell );
 extern void Nlm_DelSubwindowShell (Nlm_WindoW w, Nlm_ShellTool shell );
@@ -908,7 +913,7 @@ static void Nlm_DrawSlate (Nlm_GraphiC s)
   Nlm_RecT         r;
   Nlm_BaR          vsb;
 
-  if (Nlm_GetVisible (s) && Nlm_GetAllParentsVisible (s)) {
+  if (Nlm_GetVisible (s) && Nlm_GetAllParentsVisible (s) && okayToDrawContents) {
     Nlm_GetRect (s, &r);
     vsb = Nlm_GetSlateVScrollBar ((Nlm_SlatE) s);
     hsb = Nlm_GetSlateHScrollBar ((Nlm_SlatE) s);
@@ -2220,7 +2225,7 @@ static void Nlm_DrawSlate (Nlm_SlatE s)
   Nlm_PanelData    pdata;
   Nlm_RecT         r;
 
-  if (Nlm_GetVisible ((Nlm_GraphiC) s) && Nlm_GetAllParentsVisible ((Nlm_GraphiC) s)) {
+  if (Nlm_GetVisible ((Nlm_GraphiC) s) && Nlm_GetAllParentsVisible ((Nlm_GraphiC) s) && okayToDrawContents) {
     h = Nlm_GetSlateHandle ((Nlm_SlatE) s);
     if (h != NULL) {
       Nlm_GetRect ((Nlm_GraphiC) s, &r);
@@ -3151,7 +3156,7 @@ static void Nlm_DrawSlate (Nlm_SlatE s)
   Nlm_PanelData    pdata;
   Nlm_RecT         r;
 
-  if (Nlm_GetVisible ((Nlm_GraphiC) s) && Nlm_GetAllParentsVisible ((Nlm_GraphiC) s)) {
+  if (Nlm_GetVisible ((Nlm_GraphiC) s) && Nlm_GetAllParentsVisible ((Nlm_GraphiC) s) && okayToDrawContents) {
     h = Nlm_GetSlateHandle ((Nlm_SlatE) s);
     if (h != NULL && IsWindowVisible (h)) {
       Nlm_GetRect ((Nlm_GraphiC) s, &r);

@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 98-01-01
 *
-* $Revision: 6.11 $
+* $Revision: 6.12 $
 *
 * File Description: peptide pattern match
 *
@@ -38,6 +38,9 @@
 * Date       Name        Description of modification
 * --------------------------------------------------------------------------
 * $Log: srchaa.c,v $
+* Revision 6.12  1998/12/18 16:24:56  kuzio
+* big GIs
+*
 * Revision 6.11  1998/09/21 14:48:54  kuzio
 * cmdln pattern option
 *
@@ -115,7 +118,7 @@ typedef struct gather_Prot_Bioseq
 
 Args myargs[] =
 {
-  { "protein GI", "0", "0", "4000000", TRUE,
+  { "protein GI", "0", "0", "9000000", TRUE,
     'g', ARG_INT, 0.0, 0, NULL},
   { "FastA file", NULL, NULL, NULL, TRUE,
     'f', ARG_STRING, 0.0, 0, NULL },

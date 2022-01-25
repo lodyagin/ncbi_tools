@@ -29,6 +29,33 @@
 * Version Creation Date:   1/27/96
 *
 * $Log: salstruc.c,v $
+* Revision 6.55  1999/01/25 17:21:49  durand
+* .
+*
+* Revision 6.54  1999/01/24 19:32:41  chappey
+* MergeFunc
+*
+* Revision 6.53  1999/01/23 22:14:26  chappey
+* bug in MergeFunc and related functions
+*
+* Revision 6.52  1999/01/19 03:26:18  chappey
+* Merge function allows to specify the intervalle to merge
+*
+* Revision 6.51  1999/01/18 22:47:55  chappey
+* merge update functions Merge3Func and Merge5Func
+*
+* Revision 6.50  1998/12/26 20:09:10  chappey
+* .
+*
+* Revision 6.49  1998/12/02 07:00:38  chappey
+* Copy Feature copies now all the names from the SeqFeat of the protein Bioseq
+*
+* Revision 6.48  1998/11/09 05:13:57  chappey
+* renamed SeqAlign functions
+*
+* Revision 6.47  1998/10/29 19:07:06  chappey
+* Feature propagation now extend CDS until the 1st stop codon
+*
 * Revision 6.46  1998/09/29 03:00:57  chappey
 * Propagation of SEQFEAT_BOND, SEQFEAT_SITE
 *
@@ -268,6 +295,24 @@
 #include <gather.h>
 #include <satutil.h>
 #include <sqnutils.h>
+
+static Boolean stringhasnotext (CharPtr str)
+
+{
+  Char  ch;
+
+  if (str != NULL) {
+    ch = *str;
+    while (ch != '\0') {
+      if (ch > ' ' && ch <= '~') {
+        return FALSE;
+      }
+      str++;
+      ch = *str;
+    }
+  }
+  return TRUE;
+}
 
 extern SelStructPtr BufferFree (SelStructPtr ssp)
 {
@@ -823,7 +868,7 @@ static CharPtr SeqAlignTranslate (SeqAlignPtr salp, Uint2 entityID, Int4 from, I
   BioseqPtr    bsq;
 
   if ( salp == NULL ) return NULL; 
-  if ( salp->segtype != 4 ) {
+  if ( salp->segtype != COMPSEG ) {
      return NULL; 
   }
   start= (Int4) AlignCoordToSeqCoord (from, sip, salp, sqlocs, 0);
@@ -1189,30 +1234,6 @@ WriteLog ("ARRANGFEATE %d %d   %d %d %d %d  %d   %d  \n", entityID, itemID, tdp-
 }
 
 
-static ValNodePtr CreateCopyAlign (ValNodePtr anp_list, Int4 length)
-{
-  ValNodePtr     copyalign = NULL;
-  SelEdStructPtr sesp;
-  EditCellPtr    ecp;
-  AlignNodePtr   anp;
-  ValNodePtr     vnp;
-  Int4           k;
-
-  for (vnp = anp_list; vnp!=NULL; vnp=vnp->next) {
-     anp = (AlignNodePtr)vnp->data.ptrvalue;
-     if (anp!=NULL) {
-        ecp= (EditCellPtr)MemNew ((size_t)((length+100)*sizeof(EditCell)));
-        for (k=0; k < (length+100); k++) {
-           ecp[k].r=0;
-           ecp[k].g=0;
-           ecp[k].b=0;
-        }
-        sesp = new_seledstruct (anp->seq_entityID, anp->bsp_itemID, OBJ_BIOSEQ,  anp->bsp_itemID, 0, 0, anp->sip, Seq_strand_plus, FALSE, NULL, (Pointer) ecp, 0, 0);  
-        ValNodeAddPointer (&(copyalign), 0, (Pointer)sesp);
-     }
-  }
-  return copyalign;
-}
 static Boolean update_fromalignnode (EditAlignDataPtr adp)
 {
   AlignNodePtr  anp;
@@ -1326,9 +1347,6 @@ SelEdStructPtr tmp;
          return FALSE;
   } 
   GetPerCol (adp, adp->bufferstart);
-  if (adp->copyalign==NULL && (ISA_aa(adp->mol_type))) {
-     adp->copyalign = CreateCopyAlign (adp->anp_list, adp->length); 
-  }
   return TRUE;
 }
 
@@ -2704,7 +2722,7 @@ typedef struct applyformdata {
   Boolean        noLeft;
   Boolean        noRight;
   CharPtr        geneName;
-  CharPtr        protName;
+  ValNodePtr     protName;
   CharPtr        rnaName;
   CharPtr        featcomment;
   CharPtr        defline;
@@ -2714,7 +2732,7 @@ typedef struct applyformdata {
 } ApplyFormData, PNTR ApplyFormPtr;
 
 
-static SeqLocPtr find_termination (CharPtr str, SeqIdPtr sip)
+static SeqLocPtr find_termination_before (CharPtr str, SeqIdPtr sip)
 {
   Int4 strlens;
   Int4 j;
@@ -2726,10 +2744,74 @@ static SeqLocPtr find_termination (CharPtr str, SeqIdPtr sip)
            break;
      }
      if (j<strlens) {
-        return (SeqLocPtr)SeqLocIntNew(j, j, Seq_strand_plus, sip);
+        return (SeqLocPtr)SeqLocIntNew(j, j, Seq_strand_plus, sip); 
      }
   }
   return NULL;
+}
+
+static SeqFeatPtr find_termination_after (SeqFeatPtr sfp, Int4 stop, BioseqPtr bsp)
+{
+  ByteStorePtr bs;
+  SeqLocPtr    slp,
+               slp_tmp;
+  Boolean      include_stop = FALSE;
+ 
+  slp_tmp = sfp->location;
+  sfp->location = NULL;
+  slp = SeqLocIntNew (SeqLocStart(slp_tmp), stop, SeqLocStrand (slp_tmp), SeqLocId(slp_tmp)); 
+  sfp->location = slp;
+  bs = ProteinFromCdRegion (sfp, include_stop);
+  if (bs && bsp) {
+     if (bsp->seq_data)
+        bsp->seq_data = BSFree (bsp->seq_data);
+     bsp->seq_data = bs;
+     bsp->length = BSLen (bs);
+     bs = NULL;
+     ValNodeFree (slp_tmp);
+     slp = sfp->location;
+     stop = SeqLocStart(slp) + (3*bsp->length) + 2;
+     slp_tmp=SeqLocIntNew (SeqLocStart(slp), stop, SeqLocStrand (slp), SeqLocId(slp));  
+     sfp->location = slp_tmp;
+     ValNodeFree (slp);
+  } 
+  else  {
+     slp = sfp->location;
+     sfp->location = slp_tmp;
+     ValNodeFree (slp);
+  }
+  return sfp;
+}
+
+static ValNodePtr get_names_from_prot (ValNodePtr sfp_product)
+{
+  BioseqPtr bsp;
+  SeqAnnotPtr annot;
+  SeqFeatPtr sfpp;
+  ProtRefPtr prp;
+  ValNodePtr vnp,
+           new_vnp=NULL;
+  CharPtr    name;
+
+  bsp=BioseqLockById (SeqLocId(sfp_product));
+  if (bsp){
+     if (bsp->annot){
+        for (annot=bsp->annot;annot!=NULL;annot=annot->next){
+           if (annot->type==1){
+              sfpp=annot->data;
+              if (sfpp->data.choice==SEQFEAT_PROT) {
+                 prp=(ProtRefPtr)sfpp->data.value.ptrvalue;
+                 for (vnp = prp->name;vnp!=NULL;vnp=vnp->next){
+                    name = StringSave((CharPtr)vnp->data.ptrvalue); 
+                    ValNodeAddPointer(&new_vnp, 0, name);
+                 }
+              }
+           }
+        } 
+    }
+    BioseqUnlock(bsp);
+  } 
+  return new_vnp;
 }
 
 static void ApplyBioFeatToSeqEntry (SeqEntryPtr sep, ApplyFormPtr afp, SeqLocPtr slp, Uint1 frame, Boolean include_stop, Boolean stoptransl, SeqFeatPtr sfp_source)
@@ -2737,25 +2819,27 @@ static void ApplyBioFeatToSeqEntry (SeqEntryPtr sep, ApplyFormPtr afp, SeqLocPtr
 {
   ByteStorePtr  bs;
   BioseqPtr     bsp;
+  BioseqPtr     nbsp;
   CdRegionPtr   crp;
   ValNodePtr    descr;
   GeneRefPtr    grp;
-  Int2          i;
   MolInfoPtr    mip;
   SeqEntryPtr   nsep;
   SeqEntryPtr   old;
   CharPtr       prot;
   ProtRefPtr    prp;
   SeqEntryPtr   psep;
-  CharPtr       ptr;
   ValNodePtr    sdp;
   SeqFeatPtr    sfp;
   SeqFeatPtr    sfp2;
   ValNodePtr    vnp;
 
-  SeqLocPtr     cbloc, 
-                dnaloc,
-                newloc;
+  SeqIdPtr sfp_sip;
+  ByteStorePtr bs2;
+  Int4 strlens;
+  Int4 start, stop, j;
+  SeqLocPtr slp_tmp;
+  Boolean   changed;
 
   if (sep == NULL || afp == NULL) return;
   nsep = FindNucSeqEntry (sep);
@@ -2794,25 +2878,80 @@ static void ApplyBioFeatToSeqEntry (SeqEntryPtr sep, ApplyFormPtr afp, SeqLocPtr
      if (! stringhasnotext(afp->featcomment)) {
         sfp->comment = (Pointer) StringSave (afp->featcomment);
      }
-     if (afp->type == ADD_CDS) { 
+     if (afp->type == ADD_CDS) 
+     { 
         crp = (CdRegionPtr) (sfp->data.value.ptrvalue);
         crp->frame = frame;
         bs = ProteinFromCdRegion (sfp, include_stop);
-        if (bs != NULL) {
-          prot = BSMerge (bs, NULL);
-          if (prot != NULL) 
+        if (bs != NULL) 
+        {
+{
+          if (stoptransl && include_stop && sfp->product!=NULL)
           {
-            i = (Int2) StringLen (prot);
-            if (i > 0 && prot [i - 1] == '*') {
-              prot [i - 1] = '\0';
-              ptr = prot;
-              bs = BSFree (bs);
-              bs = BSNew (StringLen (ptr));
-              BSWrite (bs, (VoidPtr) ptr, (Int4) StringLen (ptr)); 
+            prot = BSMerge (bs, NULL);
+            strlens = StringLen (prot);
+            if (prot)
+            {
+             if (prot[(Int4)(strlens-1)] == '*')
+             {
+               prot [(Int4)(strlens-1)] = '\0';
+               bs = BSFree (bs);
+               bs = BSNew (StringLen (prot)+5);
+               BSWrite (bs, (VoidPtr) prot, (Int4) StringLen (prot));
+             }
+             else {
+               for (j=0; j<strlens; j++) {
+                 if (prot[j] == '*')
+                   break;
+               }
+               if (j<strlens) 
+               {
+                 prot [(Int4)(j)] = '\0';
+                 bs = BSFree (bs);
+                 bs = BSNew (StringLen (prot)+5);
+                 BSWrite (bs, (VoidPtr) prot, (Int4) StringLen (prot));
+               }
+               else {
+                 nbsp=(BioseqPtr)nsep->data.ptrvalue;
+                 slp_tmp = sfp->location;
+                 stop = (Int4)(nbsp->length-1);
+                 j = stop-SeqLocStop(slp_tmp);
+                 if (j>0) 
+                 {
+                  sfp->location = NULL;
+                  sfp_sip = SeqLocId(slp_tmp);
+                  slp=AsnIoMemCopy ((Pointer) slp_tmp, (AsnReadFunc) SeqLocAsnRead, (AsnWriteFunc) SeqLocAsnWrite);
+                  slp = SeqLocInsert (slp, sfp_sip, SeqLocStop(slp_tmp), j, FALSE, NULL); 
+                  sfp->location = slp;
+                  bs2 = ProteinFromCdRegion (sfp, FALSE);
+                  if (bs2)
+                  {
+                    bs = BSFree (bs);
+                    bs = bs2;
+                    ValNodeFree (slp_tmp);
+                    slp = sfp->location;
+                    j=(3*BSLen(bs))+3;
+                    if (j<SeqLocLen(slp)) {
+                       start=stop-(SeqLocLen(slp)-j)+1;
+                       slp=SeqLocDelete(slp, sfp_sip, start, stop, FALSE, &changed);
+                    }
+                  }
+                  else {
+                    ValNodeFree (sfp->location);
+                    sfp->location=slp_tmp;
+                  }
+                 }
+                 bs2=NULL;
+               }
+             }
             }
+            MemFree (prot);
           }
+
+}
           bsp = BioseqNew ();
-          if (bsp != NULL) {
+          if (bsp != NULL) 
+          {
             bsp->repr = Seq_repr_raw;
             bsp->mol = Seq_mol_aa;
             bsp->seq_data_type = Seq_code_ncbieaa;
@@ -2849,12 +2988,22 @@ static void ApplyBioFeatToSeqEntry (SeqEntryPtr sep, ApplyFormPtr afp, SeqLocPtr
               AddSeqEntryToSeqEntry (sep, psep, FALSE);
               */
               AddSeqEntryToSeqEntry (sep, psep, TRUE);
-              nsep = FindNucSeqEntry (sep);
               ReplaceBioSourceAndPubs (sep, descr);
               SetSeqFeatProduct (sfp, bsp);
-              if (! stringhasnotext(afp->protName)) {
-                prp = CreateNewProtRef (afp->protName, NULL, NULL, NULL);
+
+              if (afp->protName)
+              {
+               vnp=afp->protName;
+               prot = (CharPtr)vnp->data.ptrvalue;
+               if (! stringhasnotext(prot))  
+               {
+                prp = CreateNewProtRef (prot, NULL, NULL, NULL);
                 if (prp != NULL) {
+                  vnp=vnp->next;
+                  while (vnp) {
+                    ValNodeAddPointer (&(prp->name), 0, (CharPtr)vnp->data.ptrvalue);
+                    vnp=vnp->next;
+                  }
                   sfp2 = CreateNewFeature (psep, NULL, SEQFEAT_PROT, NULL);
                   if (sfp2 != NULL) {
                     sfp2->data.value.ptrvalue = (Pointer) prp;
@@ -2862,35 +3011,11 @@ static void ApplyBioFeatToSeqEntry (SeqEntryPtr sep, ApplyFormPtr afp, SeqLocPtr
                     sfp2->partial = (afp->noLeft || afp->noRight);
                   }
                 }
+               }
               }
             }
           }
         }
-        if (stoptransl && include_stop && sfp->product != NULL && prot!=NULL) 
-        {
-           cbloc = find_termination (prot, SeqLocId(sfp->product));
-           if (cbloc != NULL) {
-              dnaloc = aaLoc_to_dnaLoc (sfp, cbloc);
-              if (dnaloc != NULL) {
-                 if (SeqLocStrand (sfp->location) == Seq_strand_minus)
-                    newloc = SeqLocIntNew (SeqLocStart(sfp->location), SeqLocStart(dnaloc)-1, SeqLocStrand (sfp->location), SeqLocId(sfp->location));
-                 else 
-                    newloc = SeqLocIntNew (SeqLocStop(dnaloc)+1, SeqLocStop(sfp->location), Seq_strand_minus, SeqLocId(sfp->location));
-                 sfp->location = SeqLocSubtract (sfp->location, newloc);
-                 bs = ProteinFromCdRegion (sfp, FALSE);
-                 if (bs != NULL) {
-                    bsp->seq_data = BSFree (bsp->seq_data);
-                    bsp->seq_data = bs;
-                    bsp->length = BSLen (bs);
-                    bs = NULL;
-                 } 
-                 MemFree (prot);
-                 return;
-              }
-           }
-        }
-        if (prot!=NULL)
-           MemFree (prot);
      }
      if (afp->type==ADD_CDS || afp->type==ADD_RRNA || afp->type==ADD_IMP) {
       if (! stringhasnotext (afp->geneName)) {
@@ -2969,7 +3094,6 @@ extern Boolean ApplyNewSeqFeat (ValNodePtr vnpfeat, ValNodePtr vnpsfp, Boolean s
                  }
                  else if (sesp->itemtype == FEATDEF_CDS) {
                     af.type = ADD_CDS;
-                    af.protName = sesp->label;
                     sfp=(SeqFeatPtr)(vnps->data.ptrvalue);
 /*
                     if (sfp->data.value.ptrvalue!=NULL){
@@ -2979,10 +3103,16 @@ extern Boolean ApplyNewSeqFeat (ValNodePtr vnpfeat, ValNodePtr vnpsfp, Boolean s
 */
                     if (sfp->data.choice == SEQFEAT_CDREGION) {
                        crp = (CdRegionPtr) sfp->data.value.ptrvalue;
-                       if (crp->code_break !=NULL)
+                       if (crp->code_break !=NULL) {
                           for (cbp=crp->code_break; cbp!=NULL; cbp=cbp->next)
                              cbp->loc = SeqLocReplaceID (cbp->loc, SeqLocId(new_slp));
+                       }
+                       if (sfp->product!=NULL)
+                          af.protName = get_names_from_prot (sfp->product);
+                       
                     }
+                    if (af.protName==NULL && sesp->label)
+                       ValNodeAddPointer (&(af.protName), 0, sesp->label);
                  }
                  else if (sesp->itemtype == FEATDEF_preRNA ) {
                     af.type = ADD_RRNA;
@@ -3257,120 +3387,103 @@ source_id);
   return;
 }
 
-extern void Merge5Func (SeqIdPtr target_id, SeqIdPtr source_id, SeqAlignPtr salp, Boolean spliteditmode)
+static Int4 map_position_seqalign (SeqAlignPtr salp, Int4 pos, ValNodePtr sqlocs)
 {
-  BioseqPtr     source_bsp;
-  SeqLocPtr     source_slp;
-  CompSegPtr    csp;
-  Int4Ptr       lens,
-                from;
-  BoolPtr       starts,
-                start1;
-  Int4          from1, from2;
-  Int4          insert_before,
-                overlapp = 0,
-                from_insert,
-                to_insert;
-  Boolean       ok;
-
-  if (target_id==NULL || source_id == NULL)
-     return;
-  if (salp->segtype == 4) {
-     csp = (CompSegPtr) salp->segs;
-     lens = csp->lens;
-     from = csp->from;
-     from1 = *from;
-     from++;
-     from2 = *from;
-     starts = csp->starts;
-     if ( !(*starts)) {
-        start1 = starts;
-        starts++;
-        if (*starts) {
-           insert_before = 0;
-           overlapp = 0;
-           from_insert = from2;
-           to_insert = from2 + *lens -1;
-           source_slp=SeqLocIntNew (from_insert, to_insert, Seq_strand_plus, source_id);
-           if (overlapp > 0) {
-              SeqDeleteByLoc (source_slp, TRUE, spliteditmode);
-              SeqLocFree (source_slp);
-           }
-           source_bsp = BioseqCopy (NULL, source_id, from_insert, to_insert, Seq_strand_plus, TRUE);
-
-           if (source_bsp!=NULL)
-           {
-              ok = BioseqInsert (source_bsp->id, FIRST_RESIDUE, LAST_RESIDUE, Seq_strand_plus, target_id, from1, TRUE, TRUE, spliteditmode);
-              if (ok)
-              {  
-                 *start1 = TRUE;
-              }  
-           }
-        }
-     }   
-  }
+  SeqIdPtr sip1, sip2;
+  Int4     tmp_pos;
+  
+  sip1 = SeqAlignId (salp, 0);
+  sip2 = SeqAlignId (salp, 1);
+  tmp_pos = SeqCoordToAlignCoord (pos, sip2, salp, 0, 0);
+  tmp_pos = (Int4) AlignCoordToSeqCoord2 (tmp_pos, sip1, salp, sqlocs, 0);
+  return tmp_pos;
 }
 
-extern void Merge3Func (SeqIdPtr target_id, SeqIdPtr source_id, SeqAlignPtr salp, Boolean spliteditmode)
+extern Boolean MergeFunc (SeqIdPtr target_id, SeqIdPtr source_id, SeqAlignPtr salp, Int4 fromseq2, Int4 toseq2, ValNodePtr sqlocs, Boolean spliteditmode)
 {
-  BioseqPtr     source_bsp;
-  SeqLocPtr     source_slp;
-  CompSegPtr    csp;
-  SeqIdPtr      sip1, sip2;
-  Int4Ptr       lens,
-                from;
-  BoolPtr       starts,
-                start1;
-  Int4          from1, from2;
-  Int4          insert_after,
-                overlapp,
-                from_insert,
-                to_insert;
-  Int2          j;
-  Boolean ok;
- 
-  if (salp!=NULL && salp->segtype==4) {
-     csp = (CompSegPtr) salp->segs;
-     sip1 = csp->ids;
-     sip2 = sip1->next;
-     lens = csp->lens;
-     from = csp->from;
-     from1 = *from;
-     from++;
-     from2 = *from;
-     starts = csp->starts;
-     for (j=0; j<csp->numseg-1; j++) {
-        if (*(starts+1))
-           from2 += *lens;
-        starts += csp->dim;
-        lens++;
-     }
-     if (!(*starts)) {
-        start1 = starts;
-        starts++;
-        if (*starts) {
-           insert_after = APPEND_RESIDUE;
-           overlapp = 0;
-           from_insert = from2;
-           to_insert = from2 + *lens -1;
-           if (overlapp > 0) {
-              source_slp=SeqLocIntNew (from_insert, to_insert, Seq_strand_plus, source_id);
-              SeqDeleteByLoc (source_slp, TRUE, spliteditmode);
-              SeqLocFree(source_slp);
-           }
-           source_bsp = BioseqCopy (NULL, source_id, from_insert, to_insert, Seq_strand_plus, TRUE);
-           if (source_bsp!=NULL)
-           {
-              ok = BioseqInsert (source_bsp->id, FIRST_RESIDUE, LAST_RESIDUE, Seq_strand_plus, target_id, insert_after, TRUE, TRUE, spliteditmode);
-              if (ok)
-              {
-                 *start1 = TRUE;
-              }
-           }   
+  BioseqPtr     bsp,
+                bsp_target;
+  SeqLocPtr     target_slp;
+  Int4          fromseq1, toseq1,
+                from1seq1, to1seq1,
+                from_overlapp, to_overlapp;
+  Int4          caret = -1, 
+                overlapp=0;
+  Boolean       ok = TRUE;
+
+  if (target_id==NULL || source_id == NULL || toseq2 < fromseq2)
+     return FALSE;
+  
+  bsp = BioseqCopy (NULL, source_id, fromseq2, toseq2, Seq_strand_plus, TRUE);
+  if (bsp!=NULL) 
+  {
+     fromseq1= map_position_seqalign(salp,fromseq2, sqlocs);
+     toseq1  = map_position_seqalign(salp,toseq2, sqlocs);
+     from1seq1= map_position_seqalign(salp,fromseq2-1, sqlocs);
+     to1seq1  = map_position_seqalign(salp,toseq2+1, sqlocs);
+     overlapp = 0;
+     if (toseq1>-1) {
+        if (fromseq1>-1) {
+           overlapp=toseq1-fromseq1 + 1;
+           from_overlapp = fromseq1; 
+           to_overlapp = toseq1;
+        } else {
+           overlapp=toseq1 + 1;
+           from_overlapp = 0; 
+           to_overlapp = toseq1;
         }
      }
+     else if (to1seq1 > -1) {
+        if (fromseq1>-1) {
+           overlapp = to1seq1 - fromseq1;
+           from_overlapp = fromseq1; 
+           to_overlapp = to1seq1-1;
+        } else if (from1seq1>-1) {
+           overlapp = to1seq1 - from1seq1 -1;
+           from_overlapp = from1seq1+1; 
+           to_overlapp = to1seq1-1;
+        }
+     }
+     else if (toseq1==-2 && to1seq1 ==-2)
+     {
+        if (fromseq1 > -1 || from1seq1 > -1) {
+           if (fromseq1 < 0)
+              fromseq1 = from1seq1+1;
+           bsp_target = BioseqLockById (target_id);
+           if (bsp_target) {
+              if (bsp_target->length > fromseq1+1) {
+                 overlapp = bsp_target->length - fromseq1;
+                 from_overlapp = fromseq1;
+                 to_overlapp = bsp_target->length-1;
+              }
+              BioseqUnlock (bsp_target);
+           }
+           else ok = FALSE;
+        }
+        else ok = FALSE;
+     }
+     if (to1seq1 == -2) 
+        caret = -2;
+     else if (to1seq1 == 0)
+        caret = 0;
+     else if (overlapp <= to1seq1) {
+        if (overlapp == 0)
+           caret = to1seq1;
+        else 
+           caret = to1seq1 - overlapp;
+     }
+     if (ok) {
+        if (overlapp > 0) 
+        { 
+           target_slp=SeqLocIntNew (from_overlapp, to_overlapp, Seq_strand_plus, target_id);
+           SeqDeleteByLoc (target_slp, TRUE, spliteditmode);
+           SeqLocFree (target_slp);
+        }
+        ok = BioseqInsert (bsp->id, FIRST_RESIDUE, LAST_RESIDUE, Seq_strand_plus, target_id, caret, TRUE, TRUE, spliteditmode);
+     }
   }
-}    
+  return ok;
+}
 
 extern void CopyFeatFunc (SeqIdPtr target_id, SeqIdPtr source_id, SeqAlignPtr salp, Uint1 gap_choice, Boolean stoptransl)
 {
@@ -4053,8 +4166,7 @@ extern SeqAlignPtr PairSeqAlign2MultiSeqAlign (SeqAlignPtr salp)
   {
    if (is_dim2seqalign (salp)) 
    {
-     salp = check_salp_forlength (salp);
-     salp = check_salp_forstrand (salp);
+     CleanStrandsSeqAlign (salp);
      sap = multseqalign_from_pairseqalign (salp);
      if (sap!=NULL && sap->type==2) 
      {

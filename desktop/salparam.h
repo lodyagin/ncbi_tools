@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.4 $
+* $Revision: 6.5 $
 *
 * File Description: 
 *
@@ -76,9 +76,6 @@ extern void rf10ItemProc (IteM i);
 ***    Dialog Boxes
 *************************************/
 
-extern void SelectSequenceFormat (PopuP p);
-extern void SelectAlignFormat (PopuP p);
-extern void SelectMolType (PopuP p);
 extern void FileInProc (ButtoN b);
 extern void DefinePanelDialog (IteM i);
 /*

@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 98-01-01
 *
-* $Revision: 6.4 $
+* $Revision: 6.6 $
 *
 * File Description: signal peptides and transmembrane regions
 *
@@ -38,6 +38,12 @@
 * Date       Name        Description of modification
 * --------------------------------------------------------------------------
 * $Log: sigmev.c,v $
+* Revision 6.6  1998/11/24 15:42:01  kuzio
+* refine boundary condition for multiple potential leader pepides
+*
+* Revision 6.5  1998/11/16 14:35:14  kuzio
+* flagBoundaryCondition
+*
 * Revision 6.4  1998/09/16 18:40:36  kuzio
 * cvs logging
 *
@@ -84,6 +90,7 @@ typedef struct xtrobj
   BioseqPtr      bsp;
   ComProfPtr     leadprofile, cutprofile;
   FloatHi        leadcutoff, cutcutoff;
+  Boolean        flagBoundaryCondition;
   Int4           sigrange;
   FloatHi        sigscale;
   CharPtr        leadmat;
@@ -563,7 +570,8 @@ static void SigMeProc (ButtoN b)
       {
 /* hydrophobic leader */
         sap = ProfileMatchBioseq (xosp->bsp, xosp->leadprofile,
-                                  NULL, xosp->leadcutoff);
+                                  NULL, xosp->leadcutoff,
+                                  xosp->flagBoundaryCondition);
         scorelead = ScoreArrayFromAlign (sap, xosp->bsp->length);
         while (sap != NULL)
         {
@@ -584,7 +592,8 @@ static void SigMeProc (ButtoN b)
 
 /* cut site */
         sap = ProfileMatchBioseq (xosp->bsp, xosp->cutprofile,
-                                  NULL, xosp->cutcutoff);
+                                  NULL, xosp->cutcutoff,
+                                  xosp->flagBoundaryCondition);
         scorecut = ScoreArrayFromAlign (sap, xosp->bsp->length);
         while (sap != NULL)
         {
@@ -622,7 +631,8 @@ static void SigMeProc (ButtoN b)
 /* determine if sigpep exists */
         slpsig = FilterSigSeq (xosp->bsp, xosp->leadprofile, xosp->cutprofile,
                                xosp->leadcutoff, xosp->cutcutoff,
-                               xosp->sigrange, xosp->bsp->id);
+                               xosp->sigrange, xosp->bsp->id,
+                               xosp->flagBoundaryCondition, FALSE);
         ctermsig = EndOfSig (slpsig);
 
 /* determine if tm region exists with no overlap with sigpep */
@@ -826,6 +836,7 @@ static XOSPtr SetUp (void)
   xosp->cutprofile = ReadProfile (xosp->cutmat);
   xosp->leadcutoff = 3.3;
   xosp->cutcutoff = 2.1;
+  xosp->flagBoundaryCondition = FALSE;
   xosp->sigrange = 40;
   xosp->sigscale = 2;
 

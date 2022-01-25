@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 98-01-01
 *
-* $Revision: 6.5 $
+* $Revision: 6.6 $
 *
 * File Description: region of best blast identity
 *
@@ -38,6 +38,9 @@
 * Date       Name        Description of modification
 * --------------------------------------------------------------------------
 * $Log: twopv.c,v $
+* Revision 6.6  1998/12/18 16:24:58  kuzio
+* big GIs
+*
 * Revision 6.5  1998/09/16 18:40:36  kuzio
 * cvs logging
 *
@@ -400,10 +403,7 @@ static void TwopParamProc (ButtoN b)
   w = FixedWindow (-75, -10, -10, -10,
                    "Blast 2 Proteins Parameters", CloseParamWindowProc);
   h = HiddenGroup (w, 1, 0, NULL);
-
-  h1 = HiddenGroup (h, 1, 0, NULL);
   h1 = HiddenGroup (h, 2, 0, NULL);
-
   g1 = HiddenGroup (h1, 1, 0, NULL);
   g = HiddenGroup (g1, 1, 0, NULL);
   StaticPrompt (g, "win cut", StringWidth ("12345678"), dialogTextHeight,

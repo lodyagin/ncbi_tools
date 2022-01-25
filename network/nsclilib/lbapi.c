@@ -1,4 +1,4 @@
-/* $Id: lbapi.c,v 1.8 1998/09/22 17:22:57 yaschenk Exp $
+/* $Id: lbapi.c,v 1.9 1998/12/07 19:01:50 shavirin Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,15 @@
 *
 * Initial Version Creation Date: 03/24/1997
 *
-* $Revision: 1.8 $
+* $Revision: 1.9 $
 *
 * File Description:
 *        Utilities for the load balancing client library
 *
 * $Log: lbapi.c,v $
+* Revision 1.9  1998/12/07 19:01:50  shavirin
+* Added complience with little-big endian platforms.
+*
 * Revision 1.8  1998/09/22 17:22:57  yaschenk
 * LBCalculateStatus: changed additive constant 1 which is very high to 0.01
 *
@@ -96,10 +99,10 @@ typedef struct LBStatus {
 
 static LBUserInfo theinfo;
 
-
 static float LBCalculateStatus(LB_MessagePtr msgp)
 {
-  return (0.01 + 25600*msgp->load[1] / (float)(msgp->load[0]*msgp->load[2] + 1));
+    return (0.01 + 25600*ntohl(msgp->load[1]) / 
+            (float)(ntohl(msgp->load[0])*ntohl(msgp->load[2]) + 1));
 }
 
 static int LBClientInit(void)
@@ -122,44 +125,43 @@ static int LBClientInit(void)
 
 extern int LBPrintTable(void)
 {
-  int i, j;
-  struct sockaddr_in sin;
-  struct hostent    *hp;
-  float status;
-  LB_MessagePtr lbtable;
-
-  if((lbtable = theinfo.lbtable) == NULL) {
-    if(LBClientInit() < 0)
-      return -1;
-    lbtable = theinfo.lbtable;
-  }
+    int i, j;
+    struct sockaddr_in sin;
+    struct hostent    *hp;
+    float status;
+    LB_MessagePtr lbtable;
+    
+    if((lbtable = theinfo.lbtable) == NULL) {
+        if(LBClientInit() < 0)
+            return -1;
+        lbtable = theinfo.lbtable;
+    }
     
   for(j = 0; j < MAX_NUM_HOSTS; j++) {
-    if(lbtable[j].address != 0) {
-      sin.sin_addr.s_addr = lbtable[j].address;
-            
-            
-      hp = gethostbyaddr((char *)&sin.sin_addr, 
-                         sizeof (sin.sin_addr), AF_INET);
-      printf("%-15s: ", 
-             hp == NULL? inet_ntoa(sin.sin_addr) : hp->h_name);
-            
-      status = LBCalculateStatus(&lbtable[j]);
-      printf("%-10.2f ", status);
-            
-      for(i = 0; i < NUM_LOAD_PARAMETERS; i++)
-        printf("%5d ", lbtable[j].load[i]);
-            
-      for(i = 0; i < MAX_NUM_SERVICES; i++) {
-        if(*lbtable[j].service[i] != '\0')
-          printf("%s ", lbtable[j].service[i]);
+      if(lbtable[j].address != 0) {
+          sin.sin_addr.s_addr = lbtable[j].address;
+                    
+          hp = gethostbyaddr((char *)&sin.sin_addr, 
+                             sizeof (sin.sin_addr), AF_INET);
+          printf("%-15s: ", 
+                 hp == NULL? inet_ntoa(sin.sin_addr) : hp->h_name);
+          
+          status = LBCalculateStatus(&lbtable[j]);
+          printf("%-10.2f ", status);
+          
+          for(i = 0; i < NUM_LOAD_PARAMETERS; i++)
+              printf("%5d ", ntohl(lbtable[j].load[i]));
+          
+          for(i = 0; i < MAX_NUM_SERVICES; i++) {
+              if(*lbtable[j].service[i] != '\0')
+                  printf("%s ", lbtable[j].service[i]);
+          }
+          printf("\n");
+          fflush(stdout);
       }
-      printf("\n");
-      fflush(stdout);
-    }
   }
   printf("----\n");
-
+  
   return 0;
 }
 

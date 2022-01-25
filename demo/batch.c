@@ -1,4 +1,4 @@
-/* $Id: batch.c,v 6.13 1998/07/07 13:43:41 shavirin Exp $
+/* $Id: batch.c,v 6.14 1998/12/15 17:56:05 vakatov Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,15 @@
 *
 * Version Creation Date: 12/16/1996
 *
-* $Revision: 6.13 $
+* $Revision: 6.14 $
 *
 * File Description:
 *         Main file for WWW and Command Line BatchEntrez programs
 *
 * $Log: batch.c,v $
+* Revision 6.14  1998/12/15 17:56:05  vakatov
+* Fixed a tyny C++ compilation bug
+*
 * Revision 6.13  1998/07/07 13:43:41  shavirin
 * Fixed warning of tough compiler setting.
 *
@@ -498,7 +501,7 @@ BGenBankPtr BGenBankInit(void)
     NCBI_Date       date={{0,0,0,0},NULL};
     DataVal dv;
 
-    bgbp = MemNew(sizeof(BGenBank));
+    bgbp = (BGenBank*)MemNew(sizeof(BGenBank));
     bgbp->aip = AsnIoNew(ASNIO_TEXT_OUT, stdout, NULL, NULL, NULL);
     
     amp = AsnAllModPtr();

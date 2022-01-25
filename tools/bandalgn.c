@@ -32,9 +32,9 @@ Contents: Functions to perform both local and global banded alignments.
 ****************************************************************************/
 /* $Revision: 6.11 $ */
 /* $Log: bandalgn.c,v $
- * Revision 6.11  1998/08/24 20:20:32  kans
- * fixed -v -fd warnings
- *
+/* Revision 6.11  1998/08/24 20:20:32  kans
+/* fixed -v -fd warnings
+/*
  * Revision 6.10  1998/05/04 19:58:21  tatiana
  * change SEV_ERROR to SEV_WARNING
  *

@@ -1,3 +1,44 @@
+/*  objmime.h
+* ===========================================================================
+*
+*                            PUBLIC DOMAIN NOTICE
+*               National Center for Biotechnology Information
+*
+*  This software/database is a "United States Government Work" under the
+*  terms of the United States Copyright Act.  It was written as part of
+*  the author's official duties as a United States Government employee and
+*  thus cannot be copyrighted.  This software/database is freely available
+*  to the public for use. The National Library of Medicine and the U.S.
+*  Government have not placed any restriction on its use or reproduction.
+*
+*  Although all reasonable efforts have been taken to ensure the accuracy
+*  and reliability of the software and data, the NLM and the U.S.
+*  Government do not and cannot warrant the performance or results that
+*  may be obtained by using this software or data. The NLM and the U.S.
+*  Government disclaim all warranties, express or implied, including
+*  warranties of performance, merchantability or fitness for any particular
+*  purpose.
+*
+*  Please cite the author in any work or product based on this material.
+*
+* ===========================================================================
+*
+* File Name:  objmime.h
+*
+* Modifications:
+* --------------------------------------------------------------------------
+* Date     Name        Description of modification
+* -------  ----------  -----------------------------------------------------
+*
+* $Log: objmime.h,v $
+* Revision 6.5  1998/12/07 17:41:05  kans
+* restored hand changes from struct_Seq_annot to seqannot - needed because of limitation of asncode
+*
+* Revision 6.4  1998/12/07 16:29:29  ywang
+* add object loaded for mime type Biostruc-seqs
+*
+* ==========================================================================
+*/
 #ifndef _objmime_ 
 #define _objmime_ 
 
@@ -17,7 +58,7 @@ extern "C" { /* } */
 /**************************************************
 *
 *    Generated objects for Module NCBI-Mime
-*    Generated using ASNCODE Revision: 6.1 at Mar 23, 1998  6:44 PM
+*    Generated using ASNCODE Revision: 6.5 at Dec 4, 1998  2:11 PM
 *
 **************************************************/
 
@@ -27,8 +68,9 @@ typedef ValNodePtr NcbiMimeAsn1Ptr;
 typedef ValNode NcbiMimeAsn1;
 #define NcbiMimeAsn1_entrez 1
 #define NcbiMimeAsn1_alignstruc 2
-#define NcbiMimeAsn1_alignseq 3
-#define NcbiMimeAsn1_strucseq 4
+#define NcbiMimeAsn1_alignseq 3     /* yanli added */
+#define NcbiMimeAsn1_strucseq 4     /* yanli added */
+#define NcbiMimeAsn1_strucseqs 5    /* yanli added */
 
 
 NLM_EXTERN NcbiMimeAsn1Ptr LIBCALL NcbiMimeAsn1Free PROTO ((NcbiMimeAsn1Ptr ));
@@ -125,7 +167,7 @@ NLM_EXTERN Boolean LIBCALL BiostrucAlignSeqAsnWrite PROTO (( BiostrucAlignSeqPtr
 *
 **************************************************/
 typedef struct struct_Biostruc_seq {
-   struct struct_Biostruc PNTR  structure; 
+   struct struct_Biostruc PNTR   structure;
    ValNodePtr   sequences;
 } BiostrucSeq, PNTR BiostrucSeqPtr;
 
@@ -134,6 +176,25 @@ NLM_EXTERN BiostrucSeqPtr LIBCALL BiostrucSeqFree PROTO ((BiostrucSeqPtr ));
 NLM_EXTERN BiostrucSeqPtr LIBCALL BiostrucSeqNew PROTO (( void ));
 NLM_EXTERN BiostrucSeqPtr LIBCALL BiostrucSeqAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
 NLM_EXTERN Boolean LIBCALL BiostrucSeqAsnWrite PROTO (( BiostrucSeqPtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    BiostrucSeqs
+*
+**************************************************/
+typedef struct struct_Biostruc_seqs {
+   struct struct_Biostruc PNTR   structure;
+   ValNodePtr   sequences;
+   struct seqannot PNTR   seqalign;   /* hand change struct -- lyg */
+} BiostrucSeqs, PNTR BiostrucSeqsPtr;
+
+
+NLM_EXTERN BiostrucSeqsPtr LIBCALL BiostrucSeqsFree PROTO ((BiostrucSeqsPtr ));
+NLM_EXTERN BiostrucSeqsPtr LIBCALL BiostrucSeqsNew PROTO (( void ));
+NLM_EXTERN BiostrucSeqsPtr LIBCALL BiostrucSeqsAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL BiostrucSeqsAsnWrite PROTO (( BiostrucSeqsPtr , AsnIoPtr, AsnTypePtr));
 
 /* following #defines are for enumerated type, not used by object loaders */
 #define Entrez_style_docsum 1

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.29 $
+* $Revision: 6.36 $
 *
 * File Description: 
 *
@@ -284,9 +284,6 @@ static void ChangeMarginPopup (PopuP p)
          adp->marginleft = SALSA_PHYLIP;
          break;
       case 3:
-         adp->marginleft = SALSA_CLUSTALV;
-         break;
-      case 4:
          adp->marginleft = SALSA_MACAW;
          break;
       default:
@@ -797,73 +794,6 @@ extern void rf10ItemProc (IteM i) {
    SetRfFunc ((PaneL)GetPanelFromWindow((WindoW)ParentWindow (i)), (Uint2)9);
 }
 
-/***************************************************
-***   Dialog Proc
-***     read number of sequences and length 
-***       to allocate the rigth size       
-***       SALSA_PHYLIP: read in the file
-***       others: read from a dialog box            
-****************************************************/
-extern void SelectSequenceFormat (PopuP p)
-{
-  WindoW           wdialog;        
-  DialogBoxDataPtr dbdp;
-
-  wdialog = ParentWindow (p);
-  dbdp = (DialogBoxDataPtr) GetObjectExtra (wdialog);
-  switch ( (Int2) GetValue (p) ) {
-      case 1:
-         dbdp->align_format = SALSA_FASTA;
-         break;
-      case 2:
-         dbdp->align_format = SALSA_IDS;
-         break;
-      case 3:
-         dbdp->align_format = SALSA_GBFF;
-         break;
-      default:
-         break;
-  }
-  return;
-}
-
-extern void SelectAlignFormat (PopuP p)
-{
-  WindoW           wdialog;        
-  DialogBoxDataPtr dbdp;
-
-  wdialog = ParentWindow (p);
-  dbdp = (DialogBoxDataPtr) GetObjectExtra (wdialog);
-  dbdp->align_format = (Int2) GetValue (p);
-  return;
-}
-
-extern void SelectMolType (PopuP p)
-{
-  WindoW           wdialog;        
-  DialogBoxDataPtr dbdp;
-
-  wdialog = ParentWindow (p);
-  dbdp = (DialogBoxDataPtr) GetObjectExtra (wdialog);
-  switch ( (Int2) GetValue (p) ) {
-      case 1:
-         dbdp->mol_type = Seq_mol_dna;
-         break;
-      case 2:
-         dbdp->mol_type = Seq_mol_rna;
-         break;
-      case 3:
-         dbdp->mol_type = Seq_mol_aa;
-         break;
-      case 4:
-         dbdp->mol_type = Seq_mol_na;
-         break;
-      default:
-         break;
-  }
-  return;
-}
-
 extern void FileInProc (ButtoN b)
 {
   WindoW           wdialog;
@@ -952,7 +882,6 @@ extern void DefinePanelDialog (IteM i)
   popf = PopupList (g, TRUE, ChangeMarginPopup);
   PopupItem (popf, " ");
   PopupItem (popf, "PHYLIP");
-  PopupItem (popf, "ClustalV");
   PopupItem (popf, "Macaw");
   SetValue  (popf, 1);
 
@@ -1420,7 +1349,6 @@ static void mergelst (ButtoN b)
   LisT             lst;
   EditAlignDataPtr adp;
   ValNodePtr       vnp=NULL;
-  SeqParamPtr      prm;
   Int2             j, jmax;
   Boolean          val;
 
@@ -1442,8 +1370,6 @@ static void unmergelst (ButtoN b)
 {
   DialogBoxDataPtr dbdp;
   EditAlignDataPtr adp;
-  ValNodePtr       vnp;
-  SeqParamPtr      prm;
 
   dbdp = (DialogBoxDataPtr) GetObjectExtra (ParentWindow (b));
   if ( ( adp = GetAlignEditData (dbdp->w) ) != NULL ) {
@@ -1548,324 +1474,6 @@ static void BoolButton (GrouP g)
   dbdp->bool = (Boolean)((GetValue (g)) == 1);
   return;
 }
-
-/******************************************************************
-static void SelectMatrixPopup (PopuP p)
-{
-  WindoW           wdialog;        
-  DialogBoxDataPtr dbdp;
-
-  wdialog = ParentWindow (p);
-  dbdp = (DialogBoxDataPtr) GetObjectExtra (wdialog);
-  dbdp->matrix = GetValue (p);
-  return;
-}
-
-static void AlignToFasta2Button (ButtoN b)
-{
-  WindoW             wdialog;        
-  DialogBoxDataPtr   dbdp;
-  EditAlignDataPtr   adp;
-  SeqEntryPtr        sep;
-  ValNodePtr         sqloc_out;
-  SeqAlignPtr        salp;
-  Int2               nseq;
-  Boolean            new;
-
-  WatchCursor ();
-  wdialog = ParentWindow (b);
-  Hide (wdialog);
-  Update();
-  dbdp = (DialogBoxDataPtr) GetObjectExtra (wdialog);
-  if ( ( adp = GetAlignEditData (dbdp->w) ) == NULL ) return;
-  sep = FastaRead (NULL, adp->mol_type);
-  if (sep != NULL) {
-     sqloc_out = SeqEntryToSeqLoc (sep, &nseq, adp->mol_type);
-     if (sqloc_out != NULL) {
-        salp = AlignToFunc(adp, sqloc_out, dbdp->bool, 2);
-        LaunchAlignEditor(salp);
-     }
-  }
-  Remove (wdialog);
-  Update ();
-  ArrowCursor ();
-  return;
-}
-
-static void AlignTogi2Button (ButtoN b)
-{
-  WindoW             wdialog;        
-  DialogBoxDataPtr   dbdp;
-  EditAlignDataPtr   adp;
-  ValNodePtr         sqloc_out;
-  SeqAlignPtr        salp;
-  Boolean            new;
-
-  WatchCursor ();
-  wdialog = ParentWindow (b);
-  Hide (wdialog);
-  Update();
-  dbdp = (DialogBoxDataPtr) GetObjectExtra (wdialog);
-  if ( ( adp = GetAlignEditData (dbdp->w) ) == NULL ) return;
-  sqloc_out = IdRead (NULL);
-  if (sqloc_out != NULL) {
-     salp = AlignToFunc (adp, sqloc_out, dbdp->bool, 2);
-     LaunchAlignEditor(salp);
-  }
-  Remove (wdialog);
-  Update ();
-  ArrowCursor ();
-  return;
-}
-
-static void AlignToAsn2Button (ButtoN b)
-{
-  WindoW             wdialog;        
-  DialogBoxDataPtr   dbdp;
-  EditAlignDataPtr   adp;
-  SeqEntryPtr        sep;
-  ValNodePtr         sqloc_out;
-  SeqAlignPtr        salp;
-  Int2               nseq;
-  Boolean            new;
-
-  WatchCursor ();
-  wdialog = ParentWindow (b);
-  Hide (wdialog);
-  Update();
-  dbdp = (DialogBoxDataPtr) GetObjectExtra (wdialog);
-  if ( ( adp = GetAlignEditData (dbdp->w) ) == NULL ) return;
-  sep = seqentry_read (NULL);
-  if (sep != NULL) { 
-     sqloc_out = SeqEntryToSeqLoc (sep, &nseq, adp->mol_type);
-     if (sqloc_out != NULL) {
-        salp = AlignToFunc(adp, sqloc_out, dbdp->bool, 2);
-        LaunchAlignEditor(salp);
-     }
-  }
-  Remove (wdialog);
-  Update ();
-  ArrowCursor ();
-  return;
-}
-
-static void AlignToFasta3Button (ButtoN b)
-{
-  WindoW             wdialog;        
-  DialogBoxDataPtr   dbdp;
-  EditAlignDataPtr   adp;
-  SeqEntryPtr        sep;
-  ValNodePtr         sqloc_out;
-  SeqAlignPtr        salp;
-  Int2               nseq;
-  Boolean            new;
-
-  WatchCursor ();
-  wdialog = ParentWindow (b);
-  Hide (wdialog);
-  Update();
-  dbdp = (DialogBoxDataPtr) GetObjectExtra (wdialog);
-  if ( ( adp = GetAlignEditData (dbdp->w) ) == NULL ) return;
-  sep = FastaRead (NULL, adp->mol_type);
-  if (sep != NULL) {
-     sqloc_out = SeqEntryToSeqLoc (sep, &nseq, adp->mol_type);
-     if (sqloc_out != NULL) {
-        salp = AlignToFunc(adp, sqloc_out, dbdp->bool, 3);
-        LaunchAlignEditor(salp);
-     }
-  }
-  Remove (wdialog);
-  Update ();
-  ArrowCursor ();
-  return;
-}
-
-static void AlignTogi3Button (ButtoN b)
-{
-  WindoW             wdialog;        
-  DialogBoxDataPtr   dbdp;
-  EditAlignDataPtr   adp;
-  ValNodePtr         sqloc_out;
-  SeqAlignPtr        salp;
-  Boolean            new;
-
-  WatchCursor ();
-  wdialog = ParentWindow (b);
-  Hide (wdialog);
-  Update();
-  dbdp = (DialogBoxDataPtr) GetObjectExtra (wdialog);
-  if ( ( adp = GetAlignEditData (dbdp->w) ) == NULL ) return;
-  sqloc_out = IdRead (NULL);
-  if (sqloc_out != NULL) {
-     salp = AlignToFunc (adp, sqloc_out, dbdp->bool, 3);
-     LaunchAlignEditor(salp);
-  }
-  Remove (wdialog);
-  Update ();
-  ArrowCursor ();
-  return;
-}
-
-static void AlignToAsn3Button (ButtoN b)
-{
-  WindoW             wdialog;        
-  DialogBoxDataPtr   dbdp;
-  EditAlignDataPtr   adp;
-  SeqEntryPtr        sep;
-  ValNodePtr         sqloc_out;
-  SeqAlignPtr        salp;
-  Int2               nseq;
-  Boolean            new;
-
-  WatchCursor ();
-  wdialog = ParentWindow (b);
-  Hide (wdialog);
-  Update();
-  dbdp = (DialogBoxDataPtr) GetObjectExtra (wdialog);
-  if ( ( adp = GetAlignEditData (dbdp->w) ) == NULL ) return;
-  sep = seqentry_read (NULL);
-  if (sep != NULL) { 
-     sqloc_out = SeqEntryToSeqLoc (sep, &nseq, adp->mol_type);
-     if (sqloc_out != NULL) {
-        salp = AlignToFunc(adp, sqloc_out, dbdp->bool, 3);
-        LaunchAlignEditor(salp);
-     }
-  }
-  Remove (wdialog);
-  Update ();
-  ArrowCursor ();
-  return;
-}
-
-static void BandAlignButton (ButtoN b)
-{
-  WindoW             wdialog;        
-  DialogBoxDataPtr   dbdp;
-  EditAlignDataPtr   adp;
-  ValNodePtr         sqloc_out=NULL;
-  SeqAlignPtr        salp;
-  Boolean            new;
-
-  WatchCursor ();
-  wdialog = ParentWindow (b);
-  Hide (wdialog);
-  Update();
-  dbdp = (DialogBoxDataPtr) GetObjectExtra (wdialog);
-  if ( ( adp = GetAlignEditData (dbdp->w) ) != NULL ) { 
-     salp = AlignToFunc (adp, sqloc_out, dbdp->bool, 5);
-     if (new) 
-        LaunchAlignEditor(salp);
-     else
-        repopulate_panel (dbdp->w, adp, salp);
-  }
-  Remove (wdialog);
-  Update ();
-  ArrowCursor ();
-  return;
-}
-
-extern void AlignDialog (IteM i)
-{
-  WindoW           w, wdialog;
-  SeqEditViewFormPtr wdp;
-  DialogBoxDataPtr dbdp;
-  GrouP            g1, g2, g3, g4, g5;
-  GrouP            sg1, sg2;
-  PrompT           p;
-  PopuP            popf;
-#ifdef SALSA_DEBUG
-  ButtoN           b;
-#endif
-
-  w = ParentWindow (i);
-  wdp = (SeqEditViewFormPtr) GetObjectExtra (w);
-  wdialog = FixedWindow (-50, -33, -10, -10, "Alignment", StdCloseWindowProc);
-  dbdp = (DialogBoxDataPtr) MemNew (sizeof (DialogBoxData));
-  SetObjectExtra (wdialog, (Pointer) dbdp, StdCleanupExtraProc);
-  dbdp->w = w;
-  dbdp->bool = TRUE;
-  dbdp->separator = 2;
-  dbdp->matrix = 4;
-
-  g3 = HiddenGroup (wdialog, 1, 0, NULL);
-  StaticPrompt (g3, "Recompute alignment of selected sequences", 0, dialogTextHeight, systemFont, 'l');
-
-  g5 = HiddenGroup (wdialog, 2, 0, NULL);
-  StaticPrompt (g5, "Similar nucleotide seq.", 0, dialogTextHeight, systemFont, 'l');  
-  PushButton (g5, "Sim3", Sim3Button);
-  StaticPrompt(g5,"Divergent nucleotide seq.", 0, dialogTextHeight, systemFont, 'l');
-  PushButton (g5, "Sim2", Sim2Button);
-  StaticPrompt (g5, "Stringent method ", 0, dialogTextHeight, systemFont, 'l');  
-  PushButton (g5, "Sim", SimButton);
-  StaticPrompt (g5, "Align translation ", 0, dialogTextHeight, systemFont, 'l'); 
-  PushButton (g5, "Sim", SimThruProtButton);
-#ifdef SALSA_DEBUG
-  if (wdp->extended_align_menu) {
-     b = PushButton (g5, "ClustalW", ClustalwButton);
-     b = PushButton (g5, "ClustalW translation", ClustalwProtButton);
-  }
-#endif
-
-  g3 = HiddenGroup (wdialog, 1, 0, NULL);
-  StaticPrompt (g3, "Import and recompute alignment", 0, dialogTextHeight, systemFont, 'l');
-
-  g5 = HiddenGroup (wdialog, 3, 0, NULL);
-  StaticPrompt (g5, "Import FASTA", 0, dialogTextHeight, systemFont, 'l'); 
-  PushButton (g5, "Sim2", AlignToFasta2Button);
-  PushButton (g5, "Sim3", AlignToFasta3Button);
-  StaticPrompt (g5, "Import NCBI SeqID", 0, dialogTextHeight, systemFont, 'l'); 
-  PushButton (g5, "Sim2", AlignTogi2Button);
-  PushButton (g5, "Sim3", AlignTogi3Button);
-  StaticPrompt (g5, "Import ASN.1", 0, dialogTextHeight, systemFont, 'l'); 
-  PushButton (g5, "Sim2", AlignToAsn2Button);
-  PushButton (g5, "Sim3", AlignToAsn3Button);
-#ifdef SALSA_DEBUG
-  PushButton (g5, "BandAlign", BandAlignButton);
-#endif
-  g4 = HiddenGroup (wdialog, 2, 0, NULL);
-  sg1 = HiddenGroup (g4, 1, 0, NULL);
-  p = StaticPrompt (sg1, "Add extremities", 0, dialogTextHeight, systemFont, 'c');  
-  sg2 = HiddenGroup (g4, 2, 0, BoolButton);
-  RadioButton (sg2, "yes");
-  RadioButton (sg2, "no");
-  SetValue (sg2, 1);
-
-  g1 = HiddenGroup (wdialog, 1, 0, NULL);
-  StaticPrompt (g1, "Protein alignment", 0, dialogTextHeight, systemFont, 'l');
-
-  g1 = HiddenGroup (wdialog, 2, 0, NULL);
-  p = StaticPrompt (g1, "Matrix", 0, dialogTextHeight, systemFont, 'c');
-  popf = PopupList (g1, TRUE, SelectMatrixPopup);
-  PopupItem (popf, "identity");
-  PopupItem (popf, "Blosum30");
-  PopupItem (popf, "Blosum40");
-  PopupItem (popf, "Blosum62");
-  PopupItem (popf, "Blosum80");
-  PopupItem (popf, "pam60");
-  PopupItem (popf, "pam120");
-  PopupItem (popf, "pam250");
-  PopupItem (popf, "pam350");
-  PopupItem (popf, "gonnet80");
-  PopupItem (popf, "gonnet250");
-  PopupItem (popf, "gonnet350");
-  SetValue  (popf, dbdp->matrix);
-
-  g2 = HiddenGroup (wdialog, 2, 0, NULL);
-  sg1 = HiddenGroup (g2, 0, 1, NULL);
-  p = StaticPrompt (sg1, "Separator", 0, dialogTextHeight, systemFont, 'c');  
-  sg2 = HiddenGroup (g2, 0, 3, NULL);
-  RadioButton (sg2, "space");
-  RadioButton (sg2, "comma");
-  RadioButton (sg2, "tab");
-  SetValue (sg2, dbdp->separator);
-  g3 = HiddenGroup (wdialog, 1, 0, NULL);
-  PushButton (g3, "Dismiss", StdCancelButtonProc);
-
-  RealizeWindow (wdialog);
-  Show (wdialog);
-  return;
-}
-******************************************************************/
 
 /*******************************************************
 ***
@@ -2419,6 +2027,14 @@ extern void ExportTextFunc (ButtoN b)
   }
   start1 = adp->int4value - 1;
   stop1 = adp->int4value2 - 1;   
+  if (adp->align_format == SALSA_ASN1) {
+     sap = SeqAnnotBoolSegToDenseSeg (adp->sap_align);
+     if (sap != NULL) {
+        seqannot_write (sap, namep);
+        SeqAnnotFree (sap);
+     }
+     return;
+  }
   fout = FileOpen (namep, "w");
   if (fout != NULL) {
         if (adp->align_format == SALSA_SHWTXT) {
@@ -2434,7 +2050,7 @@ extern void ExportTextFunc (ButtoN b)
                     if (bsp!=NULL) {
                        start = AlignCoordToSeqCoord (start1, bsp->id, salp, adp->sqloc_list, 0);
                        stop = AlignCoordToSeqCoord (stop1, bsp->id, salp, adp->sqloc_list, 0);
-                       EditBioseqToFasta (bsp, fout, (Boolean)ISA_na(adp->mol_type), start, stop);
+                       EditBioseqToFasta (bsp, fout, start, stop);
                     }
                  }
               }
@@ -2446,7 +2062,7 @@ extern void ExportTextFunc (ButtoN b)
                     if (bsp != NULL) {
                        start = AlignCoordToSeqCoord (start1, bsp->id, salp, adp->sqloc_list, 0);
                        stop = AlignCoordToSeqCoord (stop1, bsp->id, salp, adp->sqloc_list, 0);
-                       EditBioseqToFasta (bsp, fout, (Boolean)ISA_na(adp->mol_type), start, stop);
+                       EditBioseqToFasta (bsp, fout, start, stop);
                     }
                  }
               }
@@ -2458,13 +2074,6 @@ extern void ExportTextFunc (ButtoN b)
         }
         else if (adp->align_format == SALSA_PHYLIP) {
            ShowAlignmentText (fout, adp, ssphead, 11, start1, stop1, FALSE);
-        }
-        else if (adp->align_format == SALSA_ASN1) {
-           sap = SeqAnnotBoolSegToDenseSeg (adp->sap_align);
-           if (sap != NULL) {
-              seqannot_write (sap, namep);
-              SeqAnnotFree (sap);
-           }
         }
         FileClose (fout);
   }
@@ -2552,7 +2161,7 @@ extern void SalsaExportDialog (IteM i)
   Show (wdialog);
   return;
 }
-
+/******* ???????????
 static void SelectVisibleSeq (CharPtr str, Int4 start, Int4 stop, Boolean show, EditAlignDataPtr adp)
 {
   SeqParamPtr      prm;
@@ -2562,7 +2171,7 @@ static void SelectVisibleSeq (CharPtr str, Int4 start, Int4 stop, Boolean show, 
   CharPtr          tmp,
                    tmp2;
   Int4             j=0;
-/******* ???????????
+
   curr = adp->anp_list;
   for (vnp = adp->params; vnp != NULL; vnp = vnp = vnp->next) {
      anp = (AlignNodePtr) curr->data.ptrvalue;
@@ -2576,9 +2185,10 @@ static void SelectVisibleSeq (CharPtr str, Int4 start, Int4 stop, Boolean show, 
      }
      curr = curr->next;
   }
-******/
+
   return; 
 }
+******/
 
 static void SelectSeqFunc (ButtoN b)
 {
@@ -2608,7 +2218,7 @@ static void SelectSeqFunc (ButtoN b)
   }
   str = load_seq_data (SeqLocId(slp), SeqLocStart(slp), SeqLocStop(slp), (Boolean)ISA_aa(adp->mol_type), &j);
   adp->extra_data = NULL;
-  SelectVisibleSeq(str,  SeqLocStart(slp), SeqLocStop(slp), dbdp->bool, adp);
+  /*SelectVisibleSeq(str,  SeqLocStart(slp), SeqLocStop(slp), dbdp->bool, adp);*/
   data_collect_arrange (adp, TRUE);
   temport = SavePort (wdp->pnl);
   Select (wdp->pnl);
@@ -2755,13 +2365,15 @@ extern void SelectSeqDialog (IteM i)
   Show (wdialog);
   return;
 }
+
 static void SelectRegionFunc (ButtoN b)
 {
   WindoW           w;      /* window from where the region is selected */
   WindoW           wdialog;/* window of the dialog box */
   DialogBoxDataPtr dbdp;   /*        extra data */
   EditAlignDataPtr adp;
-  SeqAlignPtr      salp;
+  SeqAlignPtr      salp1,
+                   salp2;
   Char             str[16];
   Int4             left, right;
 
@@ -2770,17 +2382,21 @@ static void SelectRegionFunc (ButtoN b)
   w = dbdp->w;
   if ( ( adp = GetAlignEditData (w) ) == NULL ) return;
   GetTitle (dbdp->txt2, str, 16);
-  left = (Int4) atol (str) - 1;
+  left = (Int4) (atol (str) - 1);
   GetTitle (dbdp->txt3, str, 16);
-  right = (Int4) atol (str);
-  if (left > 0 && right < adp->length)
+  right = (Int4) (atol (str)-1);
+  if ((left > 0 || right < adp->length) && left < right-2)
   {
      Hide (wdialog);
      Update();
      if ( adp->seqnumber == 0 ) return;
-     salp = SeqAlignTrunc ((SeqAlignPtr) adp->sap_align->data, left, right);
-     if (salp != NULL) {
-        LaunchAlignEditor (salp);
+     salp1 = SeqAlignBoolSegToDenseSeg ((SeqAlignPtr) adp->sap_align->data); 
+     if (salp1) 
+     {
+        salp2 = SeqAlignTrunc (salp1, left, right);
+        if (salp2)
+           repopulate_panel (w, adp, salp2);
+        SeqAlignFree (salp1);
      }
      Remove (wdialog);
   }
@@ -2819,135 +2435,6 @@ extern void SelectRegionDialog (IteM i)
   PushButton (g, "Cancel", StdCancelButtonProc);
   Show (wdialog);
   return;
-}
-
-
-
-static void ColorIdentity (ButtoN b)
-{
-  WindoW           w;      /* window from where the region is selected */
-  WindoW           wdialog;/* window of the dialog box */
-  WindoW           temport;
-  DialogBoxDataPtr dbdp;   /*        extra data */
-  SeqEditViewFormPtr wdp;
-  EditAlignDataPtr adp;
-  CharPtr PNTR     buf;
-  ValNodePtr       vnp;
-  SelEdStructPtr   sesp;
-  EditCellPtr      ecp;
-  Int2             seqnumber;
-  Int2             quorump[256];
-  Int2             quorum;
-  Int4             pos;
-  Int2             k, kmax, max;
-
-  wdialog = (WindoW) ParentWindow (b);
-  Hide (wdialog);
-  Update();
-  dbdp = (DialogBoxDataPtr) GetObjectExtra (wdialog);
-  w = dbdp->w;
-  wdp = (SeqEditViewFormPtr) GetObjectExtra (w);
-  if ( ( adp = GetAlignDataPanel (wdp->pnl) ) == NULL ) return;
-  if ( adp->seqnumber == 0 || adp->edit_mode != PRETTY_EDIT) 
-     return;
-  for (k=0; k<10; k++) {
-     adp->popcolor[k] = GetValue (dbdp->color[k]);
-     if (adp->popcolor[k] == 1) {
-        adp->col[k].r = adp->col[k].g = adp->col[k].b = 0;
-     } else if (adp->popcolor[k] == 2) {
-        adp->col[k].r = adp->col[k].g = adp->col[k].b = 0;
-     } else if (adp->popcolor[k] == 3) {
-        adp->col[k].r = 183; adp->col[k].g = 199; adp->col[k].b = 242;
-     } else if (adp->popcolor[k] == 4) {
-        adp->col[k].r = 0; adp->col[k].g = adp->col[k].b = 255;
-     } else if (adp->popcolor[k] == 5) {
-        adp->col[k].r = 255; adp->col[k].g = adp->col[k].b = 0;
-     } else if (adp->popcolor[k] == 6) {
-        adp->col[k].r = adp->col[k].g = 255; adp->col[k].b = 0;
-     } else if (adp->popcolor[k] == 7) {
-        adp->col[k].r = 0; adp->col[k].g = 255; adp->col[k].b = 0;
-     }
-  }
-  buf = buf2array (adp->linebuff, 0, adp->seqnumber);
-  if (buf!=NULL) { 
-     for (pos=0; pos<adp->bufferlength; pos++) {
-        for (k=0; k<256; k++) 
-           quorump [k]=0;
-        for (k=0; k<adp->seqnumber; k++) {
-           quorump [(int)buf[k][pos]] ++;
-        }
-        max=0;
-        for (k=0; k<256; k++) {
-           if (k != '-' && quorump[k]>max) {
-              max = quorump[k];
-              kmax=k;
-           }
-        }
-        seqnumber = adp->seqnumber - quorump[(int)('-')]; 
-        if (seqnumber > 1 && max > 0) 
-        {
-           vnp=adp->copyalign;
-           for (k=0; k<adp->seqnumber; k++) 
-           {
-              if (buf[k][pos] == (char)kmax) {
-                 sesp = (SelEdStructPtr) vnp->data.ptrvalue;
-                 ecp=(EditCellPtr)(sesp->data->data.ptrvalue); 
-                 if (ecp!=NULL) { 
-                  quorum = 1000*max/seqnumber;
-                  if(quorum > 900) {
-                    ecp[pos].r = adp->col[9].r; 
-                    ecp[pos].g = adp->col[9].g; ecp[pos].b = adp->col[9].b;
-                  }
-                  else if(quorum > 800) {
-                    ecp[pos].r = adp->col[8].r; 
-                    ecp[pos].g = adp->col[8].g; ecp[pos].b = adp->col[8].b;
-                  }
-                  else if(quorum > 700) {
-                    ecp[pos].r = adp->col[7].r; 
-                    ecp[pos].g = adp->col[7].g; ecp[pos].b = adp->col[7].b;
-                  }
-                  else if(quorum > 600) {
-                    ecp[pos].r = adp->col[6].r; 
-                    ecp[pos].g = adp->col[6].g; ecp[pos].b = adp->col[6].b;
-                  }
-                  else if(quorum > 500) {
-                    ecp[pos].r = adp->col[5].r; 
-                    ecp[pos].g = adp->col[5].g; ecp[pos].b = adp->col[5].b;
-                  }
-                  else if(quorum > 400) {
-                    ecp[pos].r = adp->col[4].r; 
-                    ecp[pos].g = adp->col[4].g; ecp[pos].b = adp->col[4].b;
-                  }
-                  else if(quorum > 300) {
-                    ecp[pos].r = adp->col[3].r; 
-                    ecp[pos].g = adp->col[3].g; ecp[pos].b = adp->col[3].b;
-                  }
-                  else if(quorum > 200) {
-                    ecp[pos].r = adp->col[2].r; 
-                    ecp[pos].g = adp->col[2].g; ecp[pos].b = adp->col[2].b;
-                  }
-                  else if(quorum > 100) {
-                    ecp[pos].r = adp->col[1].r; 
-                    ecp[pos].g = adp->col[1].g; ecp[pos].b = adp->col[1].b;
-                  }
-                  else { 
-                    ecp[pos].r = adp->col[0].r; 
-                    ecp[pos].g =  adp->col[0].g; ecp[pos].b =  adp->col[0].b;
-                  }
-                 }  
-              }
-              vnp=vnp->next;
-           }
-        }
-     }
-  }
-  temport = SavePort(w);
-  Select (wdp->pnl);
-  inval_panel (wdp->pnl, -1 ,-1);
-  RestorePort (temport);
-  Update ();
-  Remove (wdialog);
-  Update ();
 }
 
 extern void ColorIdentityDialog (WindoW w)
@@ -2991,7 +2478,7 @@ extern void ColorIdentityDialog (WindoW w)
      } 
   }
   g2 = HiddenGroup (wdialog, 2, 0, NULL);
-  PushButton (g2, "Accept", ColorIdentity);
+  PushButton (g2, "Accept", StdCancelButtonProc);
   PushButton (g2, "Dismiss", StdCancelButtonProc);
   Show (wdialog);
   return;

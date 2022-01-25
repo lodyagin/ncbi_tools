@@ -29,13 +29,18 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.5 $
+* $Revision: 6.6 $
 *
 * File Description:  Header file for asn2gb files.
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: asn2ff.h,v $
+* Revision 6.6  1998/11/05 16:12:17  bazhin
+* Added 4th parameter "Boolean show_gi" to SeqEntryToGBFlatNoSeq()
+* function. It will say do or does not print GI number into output
+* flatfile. Same for error messages related to missing GIs.
+*
 * Revision 6.5  1998/09/14 16:37:46  tatiana
 * SeqEntryToFlatAjp added
 *
@@ -133,7 +138,7 @@ NLM_EXTERN Asn2ffJobPtr Asn2ffJobCreate PROTO ((SeqEntryPtr sep, SeqSubmitPtr ss
 NLM_EXTERN Boolean SeqEntryToFlatAjp PROTO ((Asn2ffJobPtr ajp, SeqEntryPtr sep, FILE *fp, Uint1 format, Uint1 mode));
 NLM_EXTERN Boolean SeqEntryToFlat PROTO ((SeqEntryPtr sep, FILE *fp, Uint1 format, Uint1 mode));
 NLM_EXTERN Boolean SeqEntryToFlatEx PROTO ((SeqEntryPtr sep, FILE *fp, Uint1 format, Uint1 mode, SeqIdPtr seqid, Uint1 type));
-NLM_EXTERN Boolean SeqEntryToGBFlatNoSeq PROTO ((SeqEntryPtr sep, FILE *fp, Uint1 mode));
+NLM_EXTERN Boolean SeqEntryToGBFlatNoSeq PROTO ((SeqEntryPtr sep, FILE *fp, Uint1 mode, Boolean show_gi));
 NLM_EXTERN Boolean SeqSubmitToFlat  PROTO ((SeqSubmitPtr ssp, FILE *fp, Uint1 mode, Boolean show_gi, Uint1 format, Boolean show_gene));
 NLM_EXTERN Boolean SeqGenomeToFlat PROTO ((SeqEntryPtr sep, FILE *fp, Uint1 format, Uint1 mode));
 NLM_EXTERN Boolean SeqEntryToPartRpt PROTO ((SeqEntryPtr sep, FILE *fp));

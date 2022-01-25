@@ -35,6 +35,9 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: asn2ff3.c,v $
+* Revision 6.41  1998/10/19 15:57:35  tatiana
+* UniGene added to dbtag array
+*
 * Revision 6.40  1998/09/24 17:45:57  kans
 * fixed GetDBXrefFromGene problem (TT)
 *
@@ -469,7 +472,7 @@ ORGMOD orgmod_subtype[25] = {
 	{"note", 255}, { NULL, 0 }
 };
 
-CharPtr dbtag[DBNUM] = {"PIDe", "PIDd", "PIDg", "PID", "FLYBASE", "GDB", "MIM", "SGD", "SWISS-PROT", "CK", "SPTREMBL", "ATCC", "ATCC (inhost)", "ATCC (dna)", "taxon", "BDGP_EST", "dbEST", "dbSTS", "MGD", "PIR", "GI", "RiceGenes"};
+CharPtr dbtag[DBNUM] = {"PIDe", "PIDd", "PIDg", "PID", "FLYBASE", "GDB", "MIM", "SGD", "SWISS-PROT", "CK", "SPTREMBL", "ATCC", "ATCC (inhost)", "ATCC (dna)", "taxon", "BDGP_EST", "dbEST", "dbSTS", "MGD", "PIR", "GI", "RiceGenes", "UniGene"};
 
 
 /*************************************************************************

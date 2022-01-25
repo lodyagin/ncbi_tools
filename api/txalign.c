@@ -1,5 +1,6 @@
 #include <txalign.h>
 #include <codon.h>
+#include <ncbimisc.h>
 
 #define BUFFER_LENGTH 512
 #define MIN_INS_SPACE 50
@@ -11,6 +12,7 @@
 */
 typedef struct _txdfline_struct {
         struct _txdfline_struct *next;
+        SeqAlignPtr seqalign;
         SeqIdPtr id;
         Char *buffer_id;
         Char *title;
@@ -30,6 +32,8 @@ static Int4 get_num_empty_space(Boolean compress)
 	return (compress ? (8+5 +1) : B_SPACE+POS_SPACE+STRAND_SPACE +1);
 }
 
+static Int4 SeqAlignStart(SeqAlignPtr salp, Int2 index);
+static Int4 SeqAlignStop(SeqAlignPtr salp, Int2 index);
 
 
 static ValNodePtr ProcessTextInsertion PROTO((AlignNodePtr anp, Int4 m_left, Int4 m_right, BioseqPtr bsp, Int4 line_len, Int1 frame));
@@ -367,7 +371,7 @@ static Int1 get_alignment_frame(ValNodePtr anp_list, BioseqPtr m_bsp)
 *
 *************************************************************************************/
 
-Boolean LIBCALL
+NLM_EXTERN Boolean LIBCALL
 ShowTextAlignFromAnnotExtra(BioseqPtr bsp, ValNodePtr vnp, SeqLocPtr seqloc,
         Int4 line_len, FILE *fp,
         Uint1Ptr featureOrder, Uint1Ptr groupOrder, Uint4 option, Int4Ptr PNTR matrix,
@@ -434,6 +438,15 @@ static AlignNodePtr get_master_align_node PROTO((ValNodePtr anp_list));
 NLM_EXTERN Boolean ShowTextAlignFromAnnot(SeqAnnotPtr hannot, Int4 line_len, FILE *fp, 
 	Uint1Ptr featureOrder, Uint1Ptr groupOrder, Uint4 option, Int4Ptr PNTR matrix, 
 	ValNodePtr mask_loc, int (LIBCALLBACK *fmt_score_func)PROTO((AlignStatOptionPtr)))
+{
+	return ShowTextAlignFromAnnot2(hannot, line_len, fp, featureOrder,
+		groupOrder, option, matrix, mask_loc, fmt_score_func, NULL);
+}
+
+NLM_EXTERN Boolean ShowTextAlignFromAnnot2(SeqAnnotPtr hannot, Int4 line_len, FILE *fp, 
+	Uint1Ptr featureOrder, Uint1Ptr groupOrder, Uint4 option, Int4Ptr PNTR matrix, 
+	ValNodePtr mask_loc, int (LIBCALLBACK *fmt_score_func)PROTO((AlignStatOptionPtr)),
+	CharPtr db_name)
 {
 	SeqAlignPtr align, h_align, n_align, prev;
 	SeqLocPtr m_loc;
@@ -598,7 +611,7 @@ NLM_EXTERN Boolean ShowTextAlignFromAnnot(SeqAnnotPtr hannot, Int4 line_len, FIL
 				m_bsp->seq_data_type = code;
 			}
 		}
-		retval = ShowAlignNodeText(anp_node, -1, line_len, fp, -1, -1, option, matrix, fmt_score_func);
+		retval = ShowAlignNodeText2(anp_node, -1, line_len, fp, -1, -1, option, matrix, fmt_score_func, db_name);
 		FreeAlignNode(anp_node);
 	}
 	else
@@ -643,12 +656,12 @@ NLM_EXTERN Boolean ShowTextAlignFromAnnot(SeqAnnotPtr hannot, Int4 line_len, FIL
 
 					if(annot_head != NULL)
 					{
-						retval = ShowAlignNodeText(annot_head, -1, line_len, fp, -1, -1, option, matrix, fmt_score_func);
+						retval = ShowAlignNodeText2(annot_head, -1, line_len, fp, -1, -1, option, matrix, fmt_score_func, db_name);
 						annot_head->next = NULL;
 					}
 					
 					else
-						retval = ShowAlignNodeText(curr_list, -1, line_len, fp, -1, -1, option, matrix, fmt_score_func);
+						retval = ShowAlignNodeText2(curr_list, -1, line_len, fp, -1, -1, option, matrix, fmt_score_func, db_name);
 					if(retval == TRUE)
 						fprintf(fp, "\n\n");
 					FreeAlignNode(curr_list);
@@ -1605,6 +1618,9 @@ static Boolean load_align_sum_for_DenseDiag(DenseDiagPtr ddp, AlignSumPtr asp)
 	if(m_order == -1 || t_order == -1)
 		return FALSE;
 
+	asp->m_frame_set = FALSE;
+	asp->t_frame_set = FALSE;
+
 	for(i = 0; i<dim; ++i)
 	{
 		if(i == m_order || i == t_order)
@@ -1620,6 +1636,25 @@ static Boolean load_align_sum_for_DenseDiag(DenseDiagPtr ddp, AlignSumPtr asp)
 				si.strand = ddp->strands[i];
 			else
 				si.strand = 0;
+
+			
+			if (asp->is_aa)
+			{
+				asp->m_strand = Seq_strand_unknown;
+				asp->t_strand = Seq_strand_unknown;
+			}
+			else
+			{
+				if(i == m_order)
+				{
+					asp->m_strand = si.strand;
+				}
+				else
+				{
+					asp->t_strand = si.strand;
+				}
+			}
+
 			sl.choice = SEQLOC_INT;
 			sl.data.ptrvalue = &si;
 
@@ -1668,6 +1703,7 @@ static Boolean load_align_sum_for_DenseSeg(DenseSegPtr dsp, AlignSumPtr asp)
 	Int2 i, k;
 	Int2 dim;
 	Int2 m_order, t_order;	/*order of the master and the target sequence*/
+	Int4 index;
 	Int4 j, val, t_val;
 	Uint1 m_res, t_res;
 	SeqIdPtr sip;
@@ -1717,6 +1753,19 @@ static Boolean load_align_sum_for_DenseSeg(DenseSegPtr dsp, AlignSumPtr asp)
 		}
 	}
 
+	if (asp->is_aa)
+	{
+		asp->m_strand = Seq_strand_unknown;
+		asp->t_strand = Seq_strand_unknown;
+	}
+	else
+	{
+		asp->m_strand = dsp->strands[m_order];
+		asp->t_strand = dsp->strands[t_order];
+	}
+	asp->m_frame_set = FALSE;
+	asp->t_frame_set = FALSE;
+
 	sl.choice = SEQLOC_INT;
 	sl.data.ptrvalue = &msi;
 	m_spp = SeqPortNewByLoc(&sl, (asp->is_aa) ? Seq_code_ncbieaa : Seq_code_iupacna);
@@ -1733,9 +1782,23 @@ static Boolean load_align_sum_for_DenseSeg(DenseSegPtr dsp, AlignSumPtr asp)
 		{
 			asp->gaps += dsp->lens[i];
 			if(val != -1)
-				SeqPortSeek(m_spp, dsp->lens[i], SEEK_CUR);
+			{
+				index = dsp->lens[i];
+				while (index > 0)
+				{
+					index--;
+					m_res = SeqPortGetResidue(m_spp);
+				}
+			}
 			if(t_val != -1)
-				SeqPortSeek(t_spp, dsp->lens[i], SEEK_CUR);
+			{
+				index = dsp->lens[i];
+				while (index > 0)
+				{
+					index--;
+					t_res = SeqPortGetResidue(t_spp);
+				}
+			}
 		}
 		else
 		{
@@ -1807,6 +1870,7 @@ NLM_EXTERN Uint1 AAForCodon (Uint1Ptr codon, CharPtr codes);
 static Boolean load_align_sum_for_StdSeg(StdSegPtr ssp, AlignSumPtr asp)
 {
 	Boolean master_is_translated=FALSE, both_translated=FALSE;
+	BioseqPtr bsp;
 	CharPtr genetic_code1, genetic_code2;
 	SeqPortPtr spp1, spp2;
 	Uint1 codon[4], residue1, residue2;
@@ -1837,6 +1901,45 @@ static Boolean load_align_sum_for_StdSeg(StdSegPtr ssp, AlignSumPtr asp)
 	else
 	{
 		genetic_code1 = GetGeneticCodeFromSeqId(ssp->ids->next);
+	}
+
+	asp->m_frame_set = FALSE;
+	asp->t_frame_set = FALSE;
+
+	if (master_is_translated || both_translated)
+	{
+		asp->m_strand = SeqLocStrand(ssp->loc);
+		asp->m_frame = SeqLocStart(ssp->loc);
+		if (SeqLocStrand(ssp->loc) == Seq_strand_minus)
+		{
+			bsp = BioseqLockById(SeqLocId(ssp->loc));
+			asp->m_frame += SeqLocLen(ssp->loc);
+			asp->m_frame = -(1+(bsp->length - asp->m_frame)%3);
+			asp->m_frame_set = TRUE;
+			BioseqUnlock(bsp);
+		}
+		else
+		{
+			asp->m_frame_set = TRUE;
+		}
+	}
+
+	if (!master_is_translated || both_translated)
+	{
+		asp->t_strand = SeqLocStrand(ssp->loc->next);
+		asp->t_frame = SeqLocStart(ssp->loc->next);
+		if (SeqLocStrand(ssp->loc->next) == Seq_strand_minus)
+		{
+			bsp = BioseqLockById(SeqLocId(ssp->loc->next));
+			asp->t_frame += SeqLocLen(ssp->loc->next);
+			asp->t_frame = -(1+(bsp->length - asp->t_frame)%3);
+			asp->t_frame_set = TRUE;
+			BioseqUnlock(bsp);
+		}
+		else
+		{
+			asp->t_frame_set = TRUE;
+		}
 	}
 
 	while (ssp)
@@ -2480,6 +2583,15 @@ NLM_EXTERN Boolean ShowAlignNodeText(ValNodePtr anp_list, Int2 num_node, Int4 li
 						  FILE *fp, Int4 left, Int4 right, Uint4 option, Int4Ptr PNTR matrix, 
 						  int (LIBCALLBACK *fmt_score_func)PROTO((AlignStatOptionPtr)))
 {
+	return ShowAlignNodeText2(anp_list, num_node, line_len, fp, left, right,
+		option, matrix, fmt_score_func, NULL);
+}
+
+NLM_EXTERN Boolean ShowAlignNodeText2(ValNodePtr anp_list, Int2 num_node, Int4 line_len, 
+						  FILE *fp, Int4 left, Int4 right, Uint4 option, Int4Ptr PNTR matrix, 
+						  int (LIBCALLBACK *fmt_score_func)PROTO((AlignStatOptionPtr)),
+						  CharPtr db_name)
+{
 
 	CharPtr bar, sep_bar;
 	CharPtr num_str;
@@ -2704,12 +2816,39 @@ NLM_EXTERN Boolean ShowAlignNodeText(ValNodePtr anp_list, Int2 num_node, Int4 li
 							aso.follower = anp->follower;
 							aso.bsp = bsp;
 							aso.sp = sp;
+							aso.start = SeqAlignStart(align, 1);
+							aso.stop = SeqAlignStop(align, 1);
+							aso.db_name = db_name;
 							if(asp != NULL)
 							{
 								aso.gaps = asp->gaps;
 								aso.positive = asp->positive;
 								aso.identical = asp->identical;
 								aso.align_len = asp->totlen;
+								if (asp->m_frame_set)
+								{
+								    if (asp->m_strand == Seq_strand_minus)
+									aso.m_frame = asp->m_frame;
+								    else
+									aso.m_frame = 1+(asp->m_frame)%3;
+								}
+								else
+								{
+									aso.m_frame = 255;
+								}
+								if (asp->t_frame_set)
+								{
+								    if (asp->t_strand == Seq_strand_minus)
+									aso.t_frame = asp->t_frame;
+								    else
+									aso.t_frame = 1+(asp->t_frame)%3;
+								}
+								else
+								{
+									aso.t_frame = 255;
+								}
+								aso.m_strand = asp->m_strand;
+								aso.t_strand = asp->t_strand;
 							}
 							else
 								aso.align_len = 0;
@@ -4116,7 +4255,7 @@ SeqIdPtr LIBCALL
 GetUseThisGi(SeqAlignPtr seqalign)
 
 {
-	Boolean local_retval, retval=FALSE;
+	Boolean retval=FALSE;
         DenseDiagPtr ddp;
         DenseSegPtr dsp;
         ScorePtr sp;
@@ -4362,7 +4501,213 @@ PrintDefLinesExtra(ValNodePtr vnp, Int4 line_length, FILE *outfp, Uint4 options,
 
 NLM_EXTERN Boolean LIBCALL
 PrintDefLinesFromSeqAlignEx(SeqAlignPtr seqalign, Int4 line_length, FILE *outfp, Uint4 options,
-                            Int4 mode, Int2Ptr marks, Int4 number_of_descriptions)
+		Int4 mode, Int2Ptr marks, Int4 number_of_descriptions)
+{
+	return PrintDefLinesFromSeqAlignEx2(seqalign, line_length, outfp, options,
+			mode, marks, number_of_descriptions, (CharPtr)NULL);
+}
+
+static
+CharPtr
+MakeURLSafe(CharPtr src, CharPtr buf, Int4 buflen)
+{
+	static Char HEXDIGS[] = "0123456789ABCDEF";
+	Char c;
+
+	if (src == NULL || buf == NULL || buflen <= 0) {
+		return NULL;
+	}
+	for (; (c = *(src++)) != '\0'; ) {
+		switch (c) {
+		default:
+			if (c < '0' || (c > '9' && c < 'A') ||
+					(c > 'Z' && c < 'a') || c > 'z') {
+				if ((buflen -= 3) <= 0) {
+					goto out;
+				}
+				*(buf++) = '%';
+				*(buf++) = HEXDIGS[(c >> 4) & 0xf];
+				*(buf++) = HEXDIGS[c & 0xf];
+				break;
+			}
+		case '-': case '_': case '.': case '!': case '~':
+		case '*': case '\'': case '(': case ')':
+			if (--buflen <= 0) {
+				goto out;
+			}
+			*(buf++) = c;
+		}
+	}
+out:
+	*buf = '\0';
+	return buf;
+}
+
+/**
+ * these three are only local copies to avoid package dependencies
+ * TODO: SeqAlignStart/Stop/Strand should go to ncbi/api package
+ * in the future
+ */
+static
+Uint1
+SeqAlignStrand (SeqAlignPtr salp, Int2 index)
+{
+  DenseDiagPtr ddp;
+  DenseSegPtr  dsp;
+  Int4         j = (Int4)index;
+  Uint1        strand = Seq_strand_unknown;
+
+  if (salp == NULL)
+     return 0;
+  if (salp->segtype == 1)
+  {
+     ddp = (DenseDiagPtr) salp->segs;
+     if (ddp != NULL) {
+        if ((Boolean)(ddp->strands != NULL))
+           strand = *(ddp->strands);
+     }
+  }
+  else if (salp->segtype == 2)
+  {
+     dsp = (DenseSegPtr) salp->segs;
+     if (dsp!=NULL)
+     {
+        if ((Boolean)(dsp->strands != NULL)) {
+           strand = (dsp->strands)[j];
+           while (strand!=Seq_strand_plus && strand!=Seq_strand_minus) {
+              j+=dsp->dim;
+              if (j >= (Int4)(dsp->dim*dsp->numseg))
+                 break;
+              strand = (dsp->strands)[j];
+           }
+        }
+     }
+  }
+  return strand;
+}
+
+static
+Int4
+SeqAlignStart(SeqAlignPtr salp, Int2 index)
+{
+  DenseDiagPtr  ddp;
+  DenseSegPtr   dsp;
+  /*CompSegPtr    csp;*/
+  Int4Ptr       startp;
+  Int4          j, 
+                val = (Int4)-1;
+  Uint1         strand;
+  
+  if (salp == NULL)
+     return -1;
+  if (salp->segtype == 1) 
+  {
+     ddp = (DenseDiagPtr) salp->segs;
+     if (ddp != NULL) {
+        startp = ddp->starts;
+        if (index > 0)
+           startp += index;
+        val = *startp;
+     }
+  } 
+  else if (salp->segtype == 2) 
+  {
+     strand = SeqAlignStrand (salp, index);
+     dsp = (DenseSegPtr) salp->segs;
+     if (dsp!=NULL) 
+     {
+        startp = dsp->starts;
+        if (index > 0)
+           startp += index;
+        for (j = 0; j < dsp->numseg; j++, startp += dsp->dim) 
+           if (*startp > -1)
+              break;
+        if (j < dsp->numseg) {
+           if (strand == Seq_strand_minus)
+              val = *startp + dsp->lens[j] - 1;
+           else
+              val = *startp;              
+        }
+     }
+  }
+  /*
+  else if (salp->segtype == COMPSEG)
+  {
+     csp = (CompSegPtr) salp->segs;
+     val = csp->from[index];
+  }
+  */
+  return val;
+}
+
+static
+Int4
+SeqAlignStop(SeqAlignPtr salp, Int2 index)
+{
+  DenseDiagPtr  ddp;
+  DenseSegPtr   dsp;
+  /*CompSegPtr    csp;*/
+  Int4Ptr       startp;
+  /*BoolPtr       startb;*/
+  Int4          j, 
+                val = (Int4)-1;
+  Uint1         strand;
+  
+  if (salp == NULL)
+     return -1;
+  if (salp->segtype == 1) 
+  {
+     ddp = (DenseDiagPtr) salp->segs;
+     if (ddp != NULL) {
+        startp = ddp->starts;
+        if (index > 0)
+           startp += index;
+        val = *startp + ddp->len;
+     }
+  } 
+  else if (salp->segtype == 2) 
+  {
+     dsp = (DenseSegPtr) salp->segs;
+     if (dsp!=NULL) 
+     {
+        if ((Boolean)(dsp->strands != NULL))
+           strand = dsp->strands[index];
+        else
+           strand = Seq_strand_plus;
+        startp = dsp->starts + ((dsp->dim * dsp->numseg) - dsp->dim);
+        if (index > 0)
+           startp += index;
+        for (j = dsp->numseg-1; j >= 0; j--, startp-=dsp->dim) 
+           if (*startp > -1)
+              break;
+        if (j >= 0) {
+           if (strand == Seq_strand_minus)
+              val = *startp;
+           else
+              val = *startp + dsp->lens[j] - 1;              
+        }
+     }
+  }
+  /*
+  else if (salp->segtype == COMPSEG)
+  {
+     csp = (CompSegPtr) salp->segs;
+     val = csp->from[index];
+     startb=csp->starts;
+     for (j=0; j<csp->numseg; j++)
+     {
+        if (*startb)
+           val+=csp->lens[j]; 
+        startb+=csp->dim;
+     } 
+  }
+  */
+  return val;
+}
+
+NLM_EXTERN Boolean LIBCALL
+PrintDefLinesFromSeqAlignEx2(SeqAlignPtr seqalign, Int4 line_length, FILE *outfp, Uint4 options,
+		Int4 mode, Int2Ptr marks, Int4 number_of_descriptions, CharPtr db_name)
 
 {
 	BioseqPtr bsp;
@@ -4378,8 +4723,8 @@ PrintDefLinesFromSeqAlignEx(SeqAlignPtr seqalign, Int4 line_length, FILE *outfp,
 	Boolean retval = FALSE;
 	Boolean	firstnew = TRUE;
 	Int4	countdescr = number_of_descriptions;
-
 	Int4	numalign;
+	Char passwd[128];
 
 	if (outfp == NULL)
 	{
@@ -4501,6 +4846,7 @@ PrintDefLinesFromSeqAlignEx(SeqAlignPtr seqalign, Int4 line_length, FILE *outfp,
 				txsp->is_na = FALSE;
 				txsp->id = subject_id;
 			}
+			txsp->seqalign = seqalign;
 			txsp->buffer_id = StringSave(buffer);
 			txsp->score = score;
 			txsp->bit_score = bit_score;
@@ -4529,8 +4875,8 @@ PrintDefLinesFromSeqAlignEx(SeqAlignPtr seqalign, Int4 line_length, FILE *outfp,
 		return FALSE;
 
 
-
 	txsp = txsp_head;
+	GetAppParam("NCBI", "DUMPGNL", "PASSWD", "", passwd, sizeof(passwd));
 	while (txsp)
 	{
 		found_next_one = FALSE;
@@ -4597,6 +4943,56 @@ PrintDefLinesFromSeqAlignEx(SeqAlignPtr seqalign, Int4 line_length, FILE *outfp,
 				    }
 				}
 				fprintf(outfp, "%s", HTML_buffer);
+				make_link = TRUE;
+			}
+			else if (bestid != NULL && bestid->choice == SEQID_GENERAL)
+			{
+				/**
+				 * victorov: links to incomplete genomes
+				 */
+				Char str[256], gnl[256];
+				Uchar buf[32];
+				Int4 length;
+				Int4 start, stop;
+				MD5Context context;
+
+				start = SeqAlignStart(txsp->seqalign, 1);
+				stop = SeqAlignStop(txsp->seqalign, 1);
+				/*
+				 * Need to protect start and stop positions
+				 * to avoid web users sending us hand-made URLs
+				 * to retrive full sequences
+				 */
+				MD5Init(&context);
+				length = StringLen(passwd);
+				MD5Update(&context, (UcharPtr)passwd, (Uint4)length);
+				SeqIdWrite(bestid, gnl, PRINTID_FASTA_SHORT, sizeof(gnl));
+				MD5Update(&context, (UcharPtr)gnl, (Uint4)StringLen(gnl));
+				sprintf(str, "%ld", (long)start);
+				MD5Update(&context, (UcharPtr)str, (Uint4)StringLen(str));
+				sprintf(str, "%ld", (long)stop);
+				MD5Update(&context, (UcharPtr)str, (Uint4)StringLen(str));
+				MD5Update(&context, (UcharPtr)passwd, (Uint4)length);
+				MD5Final(&context, (UcharPtr)buf);
+
+				MakeURLSafe(db_name == NULL ? "nr" : db_name, str, sizeof(str));
+				fprintf(outfp,
+					"<a href=\"http://www3.ncbi.nlm.nih.gov/"
+					"htbin-post/nph-dumpgnl?db=%s&na=%d&",
+					/* debug:
+					"<a href=\"http://ray:6224/"
+					"cgi-bin/BLAST/nph-dumpgnl?db=%s&na=%d&",
+					*/
+					str, txsp->is_na);
+				MakeURLSafe(gnl, str, sizeof(str));
+				fprintf(outfp,
+					"gnl=%s&start=%ld&stop=%ld&seal=%02X%02X%02X%02X"
+					"%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X\">",
+					str, (long)start, (long)stop,
+					buf[0], buf[1], buf[2], buf[3],
+					buf[4], buf[5], buf[6], buf[7],
+					buf[8], buf[9], buf[10], buf[11],
+					buf[12], buf[13], buf[14], buf[15]);
 				make_link = TRUE;
 			}
 		}
@@ -4882,12 +5278,34 @@ PrintDefLinesFromSeqAlign(SeqAlignPtr seqalign, Int4 line_length, FILE *outfp, U
     return retval;
 }
 
+/* 
+	Converts a number into a frame.
+*/
+static CharPtr 
+NumToFrame(Int2 frame, CharPtr buffer)
+{
+	if (buffer)
+	{
+		if (frame > 0)
+		{
+			sprintf(buffer, "+%d", frame);
+		}
+		else
+		{
+			sprintf(buffer, "%d", frame);
+		}
+	}
+
+	return buffer;
+}
+
 NLM_EXTERN int LIBCALLBACK FormatScoreFunc(AlignStatOptionPtr asop)
 
 {
 	BioseqPtr bsp;
 	Boolean allocated, found_gnl_id, found_next_one, make_link=FALSE;
 	CharPtr defline, ptr, eval_buff_ptr;
+	Char buf1[5], buf2[5];
 	Char buffer[BUFFER_LENGTH+1], eval_buff[10], bit_score_buff[10];
 	Char HTML_buffer[BUFFER_LENGTH+1], HTML_database[3], id_buffer[BUFFER_LENGTH+1];
 	Nlm_FloatHi bit_score, evalue; 
@@ -4938,7 +5356,7 @@ NLM_EXTERN int LIBCALLBACK FormatScoreFunc(AlignStatOptionPtr asop)
 			make_link = FALSE;
 			gi = 0;
 			if (bestid != NULL)
-			{ 
+			{
 				if (bestid->choice == SEQID_GI)
 				{
 					gi = bestid->data.intvalue;
@@ -4950,16 +5368,66 @@ NLM_EXTERN int LIBCALLBACK FormatScoreFunc(AlignStatOptionPtr asop)
 					sprintf(id_buffer, "%s", buffer);
 				}
 
-       	          		sprintf(HTML_buffer, "<a name = %s> </a>", id_buffer);
-				fprintf(asop->fp, "%s", HTML_buffer);
+       	          		fprintf(asop->fp, "<a name = %s> </a>", id_buffer);
 				if (make_link)
 				{
-       	          			sprintf(HTML_buffer, "<a href=\""
+       	          			fprintf(asop->fp, "<a href=\""
                          		"%s/htbin-post/Entrez/query?form=6&dopt=g&db=%s&"
                             		"uid=%08ld\">", 
 					asop->html_hot_link_relative == TRUE ? "" : TXALIGN_HREF,
 					HTML_database,  (long) gi);
-					fprintf(asop->fp, "%s", HTML_buffer);
+				}
+				else if (bestid->choice == SEQID_GENERAL)
+				{
+					/**
+					 * victorov: links to incomplete genomes
+					 */
+					Char str[256], gnl[256];
+					Uchar buf[32];
+					Int4 length;
+					Int4 start, stop;
+					MD5Context context;
+					Char passwd[128];
+	
+					start = asop->start;
+					stop = asop->stop;
+					GetAppParam("NCBI", "DUMPGNL", "PASSWD", "", passwd, sizeof(passwd));
+					/*
+					 * Need to protect start and stop positions
+					 * to avoid web users sending us hand-made URLs
+					 * to retrive full sequences
+					 */
+					MD5Init(&context);
+					length = StringLen(passwd);
+					MD5Update(&context, (UcharPtr)passwd, (Uint4)length);
+					SeqIdWrite(bestid, gnl, PRINTID_FASTA_SHORT, sizeof(gnl));
+					MD5Update(&context, (UcharPtr)gnl, (Uint4)StringLen(gnl));
+					sprintf(str, "%ld", (long)start);
+					MD5Update(&context, (UcharPtr)str, (Uint4)StringLen(str));
+					sprintf(str, "%ld", (long)stop);
+					MD5Update(&context, (UcharPtr)str, (Uint4)StringLen(str));
+					MD5Update(&context, (UcharPtr)passwd, (Uint4)length);
+					MD5Final(&context, (UcharPtr)buf);
+
+					MakeURLSafe(asop->db_name == NULL ? "nr" : asop->db_name, str, sizeof(str));
+					fprintf(asop->fp,
+						"<a href=\"http://www3.ncbi.nlm.nih.gov/"
+						"htbin-post/nph-dumpgnl?db=%s&na=%d&",
+						/* debug:
+						"<a href=\"http://ray:6224/"
+						"cgi-bin/BLAST/nph-dumpgnl?db=%s&na=%d&",
+						*/
+						str, bsp->mol != Seq_mol_aa);
+					MakeURLSafe(gnl, str, sizeof(str));
+					fprintf(asop->fp,
+						"gnl=%s&start=%ld&stop=%ld&seal=%02X%02X%02X%02X"
+						"%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X\">",
+						str, (long)start, (long)stop,
+						buf[0], buf[1], buf[2], buf[3],
+						buf[4], buf[5], buf[6], buf[7],
+						buf[8], buf[9], buf[10], buf[11],
+						buf[12], buf[13], buf[14], buf[15]);
+					make_link = TRUE;
 				}
 			}
 		}
@@ -5175,7 +5643,12 @@ NLM_EXTERN int LIBCALLBACK FormatScoreFunc(AlignStatOptionPtr asop)
 	{
 	   percent_identical = (100*asop->identical)/ (asop->align_len);
 	   percent_positive = (100*asop->positive)/ (asop->align_len);
-	   sprintf(buffer, " Identities = %ld/%ld (%ld%%), Positives = %ld/%ld (%ld%%)", (long) asop->identical, (long) asop->align_len, percent_identical, (long) (asop->positive+asop->identical), (long) asop->align_len, (percent_identical+percent_positive));
+		/* Don't show positives for blastn, which has these set to 255. */
+	   if (asop->m_frame == 255 && asop->t_frame == 255 &&
+		asop->m_strand != Seq_strand_unknown && asop->t_strand != Seq_strand_unknown)
+	   	sprintf(buffer, " Identities = %ld/%ld (%ld%%)", (long) asop->identical, (long) asop->align_len, percent_identical);
+	   else
+	   	sprintf(buffer, " Identities = %ld/%ld (%ld%%), Positives = %ld/%ld (%ld%%)", (long) asop->identical, (long) asop->align_len, percent_identical, (long) (asop->positive+asop->identical), (long) asop->align_len, (percent_identical+percent_positive));
 	   ff_AddString(buffer);
 	   if (asop->gaps > 0)
 	   {
@@ -5185,6 +5658,34 @@ NLM_EXTERN int LIBCALLBACK FormatScoreFunc(AlignStatOptionPtr asop)
 		ff_AddString(buffer);
 	   }
 	   NewContLine();
+/* for testing. */
+	   if (asop->m_frame != 255 || asop->t_frame != 255)
+	   {
+		if (asop->m_frame != 255 && asop->t_frame != 255)
+		{
+			sprintf(buffer, " Frame = %s / %s", NumToFrame(asop->m_frame, buf1), NumToFrame(asop->t_frame, buf2));
+		}
+		else if (asop->m_frame != 255)
+		{
+			sprintf(buffer, " Frame = %s", NumToFrame(asop->m_frame, buf2));
+		}
+		else if (asop->t_frame != 255)
+		{
+			sprintf(buffer, " Frame = %s", NumToFrame(asop->t_frame, buf2));
+		}
+		ff_AddString(buffer);
+	   	NewContLine();
+	   }
+	   else if (asop->m_strand != Seq_strand_unknown && asop->t_strand != Seq_strand_unknown)
+	   {
+		if (asop->m_strand == Seq_strand_minus)
+			sprintf(buffer, " Strand = Plus / Minus");
+		else
+			sprintf(buffer, " Strand = Plus / Plus");
+		ff_AddString(buffer);
+	   	NewContLine();
+	   }
+/* for testing. */
 	}
 	ff_EndPrint();
 	

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11-29-94
 *
-* $Revision: 6.3 $
+* $Revision: 6.5 $
 *
 * File Description: 
 *
@@ -1104,6 +1104,7 @@ static void VSeqMgrClickProc (VieweR v, SegmenT s, PoinT p)
 	}
 	
 	vsmwp->dblclick = dblClick;
+	vsmwp->shftkey = shftKey;
 	vsmwp->dragged = FALSE;
 	if (dblClick)
 	{
@@ -1176,13 +1177,6 @@ static void VSeqMgrReleaseProc (VieweR v, SegmenT s, PoinT p)
 		vsmwp->marquee = FALSE;
 	}
 		
-	/*
-	if (vsmwp->dblclick)
-	{
-		Message(MSG_OK,"DoubleClick");
-		return;
-	}
-	*/
 	sp = FindSegment(v, p, &segID, &primID, &primCt);
 	if (sp == NULL)
 	{
@@ -1234,8 +1228,13 @@ static void VSeqMgrReleaseProc (VieweR v, SegmenT s, PoinT p)
         	else if (itemID == VSM_PICT_DOWN_BUTTON)
         		expand = -1;
         		
-        	if (! expand)
-				ObjMgrSelect(entityID, itemID, itemtype,0,NULL);
+        	if (! expand) {
+        		if (vsmwp->shftkey) {
+					ObjMgrAlsoSelect(entityID, itemID, itemtype,0,NULL);
+        		} else {
+					ObjMgrSelect(entityID, itemID, itemtype,0,NULL);
+				}
+			}
 			else
 			{
 				WatchCursor();
@@ -2092,6 +2091,10 @@ static Boolean VSMGatherPictProc (GatherContextPtr gcp)
 	SeqFeatPtr sfp;
 	SeqAnnotPtr annot;
 	ValNodePtr desc;
+	ObjectIdPtr oip;
+	SeqIdPtr sip;
+	UserFieldPtr ufp;
+	UserObjectPtr uop;
 
 	vsmgp = (VSMGatherProcSTPtr)(gcp->userdata);
 	vsmp = vsmgp->vsmp;
@@ -2323,6 +2326,35 @@ static Boolean VSMGatherPictProc (GatherContextPtr gcp)
 						maxwidth = width;
 					AddTextLabel(seg, left + (2*vsmp->charw), (top-lineheight*2), buf, vsmp->font,0, LOWER_RIGHT,(Uint2)(gcp->itemID));
 					vsmgp->currline--;
+				}
+				if (vsmp != NULL && vsmp->extraLevel && sfp->data.choice == SEQFEAT_RNA && sfp->ext != NULL) {
+					uop = sfp->ext;
+					if (uop->type != NULL && StringICmp (uop->type->str, "MrnaProteinLink") == 0) {
+						ufp = uop->data;
+						if (ufp != NULL && ufp->choice == 1) {
+							oip = ufp->label;
+							if (oip != NULL && oip->str != NULL && StringICmp (oip->str, "protein seqID") == 0) {
+								tmp = (CharPtr) ufp->data.intvalue;
+								if (tmp != NULL) {
+									sip = MakeSeqID (tmp);
+									if (sip != NULL) {
+										vn.choice = SEQLOC_WHOLE;
+										vn.data.ptrvalue = (Pointer) sip;
+										k++;
+										StringCpy (buf, "protein ");
+										SeqLocLabel(&vn, buf + 8, buflen - 8, OM_LABEL_CONTENT);
+										SelectFont(vsmp->font);
+										width = StringWidth(buf) + (3 * vsmp->charw);
+										if (width > maxwidth)
+											maxwidth = width;
+										AddTextLabel(seg, left + (2*vsmp->charw), (top-lineheight*(k-1)), buf, vsmp->font,0, LOWER_RIGHT,(Uint2)(gcp->itemID));
+										vsmgp->currline--;
+										SeqIdFree (sip);
+									}
+								}
+							}
+						}
+					}
 				}
 			}
 			add_frame(seg, left, top-2, (left+width), (top-(k*lineheight)+2), (Uint2)(gcp->itemID));

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   03/14/95
 *
-* $Revision: 6.10 $
+* $Revision: 6.15 $
 *
 * File Description: 
 *
@@ -43,9 +43,24 @@
 *		       Model nodes and Dictionaries altered...
 *
 * $Log: mmdbapi1.h,v $
-* Revision 6.10  1998/09/22 17:52:21  ywang
-* add flag for display control on MM and MG level
+* Revision 6.15  1998/12/16 19:30:14  ywang
+* add flag for highlight status to MGD
 *
+ * Revision 6.14  1998/11/06  23:02:02  ywang
+ * add FeatureOn to MGD for feature on/off control
+ *
+ * Revision 6.13  1998/11/04  00:53:41  ywang
+ * add iFeature to MGD for modeling control
+ *
+ * Revision 6.12  1998/10/21  15:43:22  ywang
+ * attach the whole vast alignment data to master structure
+ *
+ * Revision 6.11  1998/10/01  21:56:37  ywang
+ * set display flag for object
+ *
+ * Revision 6.10  1998/09/22  17:52:21  ywang
+ * add flag for display control on MM and MG level
+ *
  * Revision 6.9  1998/05/12  21:46:24  lewisg
  * stricter conservation coloring
  *
@@ -595,7 +610,8 @@ typedef struct Nlm_msd
      Int4 iHashChange; /* iModels+iFeatures+iObjCount+iDensCount + #ALD's */
 /* data block */
      PDNML pdnmlModels; /* contains PMLD with Models that are */ 
-     PDNSF pdnsfFeatures;   /*  BiostrucFeatureSetPtrs */ 
+/*   PDNSF pdnsfFeatures; */  /*  BiostrucFeatureSetPtrs */ 
+                     /* moved to psastrucAlignment */
      PDNSFS pdnsfsHead;  /* the feature registry for this structure */ 
      PDNMM pdnmmHead; /* the list of molecules (children) */          
      PVNMB pvnmbIMBHead;  /* Inter-molecule bonds in structure (children) */
@@ -608,6 +624,7 @@ typedef struct Nlm_msd
 	/* temporarily added until features turned on */
      void PNTR pExtra;
      PDNMS pdnmsSlaves;  /* slave structures in multiple alignments */
+     BiostrucAnnotSetPtr psaStrucAlignment; 
      SeqAnnotPtr psaAlignment;  /* if this is a slave, here is the alignment to the master */
      SeqEntryPtr pseSequences;  /* the sequences for the master and slaves */
      SeqAnnotPtr pseqaSeqannot; /* the seq annot pointers containing the seq aligns */
@@ -669,6 +686,7 @@ typedef struct Nlm_mgd
   	Byte bUpdate;  
         Byte bReserved;
     Byte bVisible;     /* control display at residue level */
+    Byte bHighlighted;
                         /* Yanli */
  	Int4Ptr pI4vFeatID;  
   	PointerPtr ppvFeatData; 
@@ -683,6 +701,8 @@ typedef struct Nlm_mgd
      Byte bNCBISecStru;
      Byte bPDBSecStru;
      PDNMG pdnmgLink;
+     Int2 FeatureOn;
+     Int2 iFeature;
      Int2 iDomain;   /* NCBI assigned domain number */
      CharPtr pcGraphName;  /* PDB 3-letter code */
      CharPtr pcGraphNum; /* the PDB numbering string e.g . 38A */
@@ -850,6 +870,8 @@ typedef struct Nlm_mod
      FloatLo flRadius;     
      Int2Ptr pi2vColor;  /* colors for each triangle */
     
+     Byte bVisible;   /* control object display to synchronize with its partner display -- Yanli  */
+
      /* cast a matrix Floating pt N x 3 for data */
      /* length 0 for sphere */
      /*        1 for cylinder */

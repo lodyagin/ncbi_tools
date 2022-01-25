@@ -23,7 +23,7 @@
  *
  * ===========================================================================
  *
- * RCS $Id: cdconfig.c,v 6.0 1997/08/25 18:12:45 madden Exp $
+ * RCS $Id: cdconfig.c,v 6.1 1998/12/04 23:35:07 kans Exp $
  *
  * Author:   Jonathan Epstein
  * 
@@ -45,6 +45,9 @@
  *                      modification comments.
  *
  * Revision $Log: cdconfig.c,v $
+ * Revision Revision 6.1  1998/12/04 23:35:07  kans
+ * Revision KludgeCdromlibGetAppParam supplies ncbi config values for psrventr
+ * Revision
  * Revision Revision 6.0  1997/08/25 18:12:45  madden
  * Revision Revision changed to 6.0
  * Revision
@@ -67,10 +70,80 @@
  * ==========================================================================
  */
 
-#define REVISION_STR  "$Revision: 6.0 $"
+#define REVISION_STR  "$Revision: 6.1 $"
 
 #include <ncbi.h>
 #include <cdromlib.h>
+
+/*****************************************************************************
+*
+*   Kludge to eliminate need for old entries in ncbi config file
+*
+*****************************************************************************/
+
+static CharPtr kludgecdromstrings [] = {
+  "ENTR_LINK.CHANNELS", "LINKS_FROM_NET",
+  "ENTR_REF.CHANNELS", "REFERENCE_FROM_NET",
+  "ENTR_SEQ.CHANNELS", "SEQUENCE_FROM_NET",
+  "ENTREZ_NET.FORMAL_NAME", "",
+  "ENTREZ_NET.RESOURCE_NAME", "Entrez",
+  "ENTREZ_NET.RESOURCE_TYPE", "Entrez",
+  "ENTREZ_NET.SERVICE_NAME", "Entrez",
+  "ENTREZ_NET.TYPE", "NET",
+  "LINKS_FROM_NET.ENTR_REF__ENTR_REF", "1",
+  "LINKS_FROM_NET.ENTR_REF__ENTR_SEQ", "1",
+  "LINKS_FROM_NET.ENTR_SEQ__ENTR_REF", "1",
+  "LINKS_FROM_NET.ENTR_SEQ__ENTR_SEQ", "1",
+  "LINKS_FROM_NET.INFO", "1",
+  "LINKS_FROM_NET.MEDIA", "ENTREZ_NET",
+  "NCBI.MEDIA", "ENTREZ_NET",
+  "REFERENCE_FROM_NET.BOOLEANS", "1",
+  "REFERENCE_FROM_NET.DOCSUMS", "1",
+  "REFERENCE_FROM_NET.MEDIA", "ENTREZ_NET",
+  "REFERENCE_FROM_NET.RECORDS", "1",
+  "REFERENCE_FROM_NET.TERMS", "1",
+  "SEQUENCE_FROM_NET.BOOLEANS", "1",
+  "SEQUENCE_FROM_NET.DOCSUMS", "1",
+  "SEQUENCE_FROM_NET.MEDIA", "ENTREZ_NET",
+  "SEQUENCE_FROM_NET.RECORDS", "1",
+  "SEQUENCE_FROM_NET.TERMS", "1",
+  NULL, NULL
+};
+
+/*
+#include <stdarg.h>
+void CDECL   Nlm_WriteLog VPROTO((char *format, ...));
+*/
+
+static Int2 KludgeCdromlibGetAppParam (CharPtr file, CharPtr section, CharPtr type,
+                                       CharPtr dflt, CharPtr buf, Int2 buflen)
+
+{
+  Int2  i;
+  Char  str [256];
+
+  if (buf == NULL || buflen < 1) return 0;
+  *buf = '\0';
+  if (dflt != NULL) {
+    StringNCpy_0 (buf, dflt, buflen);
+  }
+  if (StringICmp (file, "NCBI") != 0) return 0;
+  if (StringLen (section) > 127 || StringLen (type) > 127) return 0;
+  StringCpy (str, section);
+  StringCat (str, ".");
+  StringCat (str, type);
+  for (i = 0; kludgecdromstrings [i] != NULL; i += 2) {
+    if (StringICmp (kludgecdromstrings [i], str) == 0) {
+      StringNCpy_0 (buf, kludgecdromstrings [i + 1], buflen);
+      return StringLen (buf);
+    }
+  }
+  /*
+  GetAppParam (file, section, type, dflt, buf, buflen);
+  Nlm_WriteLog ("  \"%s.%s\", \"%s\",\n", section, type, buf);
+  */
+  return StringLen (buf);
+}
 
 /*  =========================================================================
  *      VARIABLES
@@ -203,7 +276,7 @@ static DataSourceDbPtr LoadDataSourceInfo (CharPtr section, CharPtr field1,
         return dsdp;
     }
 
-    if (GetAppParam("NCBI", section, "CHANNELS", "", channels, 
+    if (KludgeCdromlibGetAppParam("NCBI", section, "CHANNELS", "", channels, 
                         sizeof(channels)) == 0)
     {
         return NULL; /* can't find CHANNELS keyword */
@@ -243,7 +316,7 @@ static DataSourceDbPtr LoadDataSourceInfo (CharPtr section, CharPtr field1,
         word = d2;
         d2 = d1 + 1;
         d2 += StringSpn(d2, " \t"); /* remove leading spaces and tabs from next word */
-        GetAppParam("NCBI", word, field, field2 == NULL ? "1" : "0", buf, sizeof(buf));
+        KludgeCdromlibGetAppParam("NCBI", word, field, field2 == NULL ? "1" : "0", buf, sizeof(buf));
         no_drastic_action = FALSE;
         
         /* Fields with field2 != NULL represent an NxN matrix of values; therefore,  */
@@ -271,7 +344,7 @@ static DataSourceDbPtr LoadDataSourceInfo (CharPtr section, CharPtr field1,
                 no_drastic_action = TRUE;
         }
             
-        if (GetAppParam("NCBI", channel, "MEDIA", "", buf, sizeof(buf)) == 0)
+        if (KludgeCdromlibGetAppParam("NCBI", channel, "MEDIA", "", buf, sizeof(buf)) == 0)
         {
             return NULL; /* media not specified */
         }
@@ -808,7 +881,7 @@ static Boolean IsDrasticAction(MediaPtr fromMedia, MediaPtr toMedia)
     d = (DrasticActionsPtr) MemNew(sizeof(DrasticActions));
     d->from_media = fromMedia;
     d->to_media = toMedia;
-    d->is_drastic = GetAppParam("NCBI", fromMedia->media_alias, drastic_to,
+    d->is_drastic = KludgeCdromlibGetAppParam("NCBI", fromMedia->media_alias, drastic_to,
                                      "", buf, sizeof(buf)) > 0;
     d->next = DrasticList;
     DrasticList = d;
@@ -928,7 +1001,7 @@ NLM_EXTERN MediaPtr PreInitMedia (CharPtr mediaName)
             return m; /* already have it */
     }
 
-    if (GetAppParam("NCBI", mediaName, "TYPE", "", buf, sizeof(buf)) == 0 && !SoleMedia)
+    if (KludgeCdromlibGetAppParam("NCBI", mediaName, "TYPE", "", buf, sizeof(buf)) == 0 && !SoleMedia)
         return NULL;
 
     m = (MediaPtr) MemNew(sizeof(Media));
@@ -944,7 +1017,7 @@ NLM_EXTERN MediaPtr PreInitMedia (CharPtr mediaName)
     if (StrCmp(buf, "HARDDISK") == 0)
         m->media_type = MEDIUM_DISK;
     
-    if (GetAppParam("NCBI", mediaName, "FORMAL_NAME", "", buf, sizeof(buf)) != 0)
+    if (KludgeCdromlibGetAppParam("NCBI", mediaName, "FORMAL_NAME", "", buf, sizeof(buf)) != 0)
     {
         m->formal_name = StringSave(buf);
     }
@@ -1352,7 +1425,7 @@ NLM_EXTERN Int2 ParseMedia(ConfCtlProc initfunc, Int2 media_mask)
     MediaPtr mp;
     Int2 numProcessed = 0;
 
-    GetAppParam ("ncbi", "NCBI", "MEDIA", "", media, sizeof media);
+    KludgeCdromlibGetAppParam ("ncbi", "NCBI", "MEDIA", "", media, sizeof media);
 
     /* This is a work-around to provide backwards compatibility for old       */
     /* config files which do not specify MEDIA                                */

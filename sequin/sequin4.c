@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/28/96
 *
-* $Revision: 6.87 $
+* $Revision: 6.93 $
 *
 * File Description: 
 *
@@ -121,6 +121,8 @@
 #define REGISTER_OPENALED4 ObjMgrProcLoadEx (OMPROC_FILTER,"Open Align Editor 4","Open protein FASTA", 0,0,0,0,NULL,LaunchAlignEditorFromDesktop4, PROC_PRIORITY_DEFAULT, "Alignment")
 
 #define REGISTER_MAKEEXONINTRON ObjMgrProcLoadEx (OMPROC_FILTER,"Make Exons and Introns","MakeExonIntron",OBJ_SEQFEAT,0,OBJ_SEQFEAT,0,NULL,MakeExonIntron,PROC_PRIORITY_DEFAULT, "Misc")
+
+#define REGISTER_PROT_IDS_TO_GENE_SYN ObjMgrProcLoadEx (OMPROC_FILTER,"Protein SeqID to Gene Synonym","ProtLocalIDtoGeneSyn",0,0,0,0,NULL,ProtLocalIDtoGeneSyn,PROC_PRIORITY_DEFAULT, "Indexer")
 
 #define REGISTER_DESKTOP_REPORT ObjMgrProcLoadEx (OMPROC_FILTER, "Desktop Report", "DesktopReport", 0, 0, 0, 0, NULL, DesktopReportFunc, PROC_PRIORITY_DEFAULT, "Indexer")
 
@@ -426,6 +428,7 @@ static Int2 DoOneSegFixup (SeqEntryPtr sep)
     uss.segset = NULL;
     UpdateSegExplore (sep, (Pointer) &uss, FindSegSetComponentsCallback);
     if (uss.segseq != NULL && uss.parts != NULL && uss.segset != NULL) {
+      DoUpdateSegSet (uss.segseq, uss.parts);
       MoveSegSetMolInfo (uss.segseq, uss.parts, uss.segset);
     }
     return count;
@@ -1287,6 +1290,89 @@ static Int2 LIBCALLBACK MakeExonIntron (Pointer data)
   }
   else
     return OM_MSG_RET_ERROR;
+}
+
+static Int2 LIBCALLBACK ProtLocalIDtoGeneSyn (Pointer data)
+
+{
+  BioseqPtr          bsp = NULL;
+  Char               buf [41];
+  SeqMgrFeatContext  ccontext;
+  SeqFeatPtr         cds;
+  SeqMgrFeatContext  gcontext;
+  SeqFeatPtr         gene;
+  GeneRefPtr         grp;
+  OMProcControlPtr   ompcp;
+  BioseqPtr          pbsp;
+  SeqEntryPtr        sep;
+  SeqIdPtr           sip;
+
+  ompcp = (OMProcControlPtr) data;
+  if (ompcp == NULL || ompcp->input_itemtype == 0 || ompcp->input_data == NULL)
+    return OM_MSG_RET_ERROR;
+
+  switch (ompcp->input_itemtype)
+  {
+    case OBJ_BIOSEQ:
+      bsp = (BioseqPtr) ompcp->input_data;
+      break;
+    default:
+      return OM_MSG_RET_ERROR;
+  }
+
+  if (bsp == NULL) {
+    return OM_MSG_RET_ERROR;
+  }
+  sep = SeqMgrGetSeqEntryForData (bsp);
+  if (sep == NULL) {
+    return OM_MSG_RET_ERROR;
+  }
+
+  cds = NULL;
+  while ((cds = SeqMgrGetNextFeature (bsp, cds, SEQFEAT_CDREGION, 0, &ccontext)) != NULL) {
+    sip = SeqLocId (cds->product);
+    if (sip != NULL) {
+      pbsp = BioseqFind (sip);
+      if (pbsp != NULL) {
+        sip = SeqIdFindBest (pbsp->id, SEQID_LOCAL);
+        if (sip != NULL) {
+          SeqIdWrite (sip, buf, PRINTID_REPORT, sizeof (buf) - 1);
+          grp = SeqMgrGetGeneXref (cds);
+          if (grp != NULL && SeqMgrGeneIsSuppressed (grp)) {
+            continue;
+          }
+          if (grp == NULL) {
+            gene = SeqMgrGetOverlappingGene (cds->location, &gcontext);
+            if (gene == NULL) {
+              gene = CreateNewFeature (sep, NULL, SEQFEAT_GENE, NULL);
+              if (gene != NULL) {
+                grp = GeneRefNew ();
+                gene->data.value.ptrvalue = (Pointer) grp;
+                gene->location = SeqLocFree (gene->location);
+                gene->location = AsnIoMemCopy ((Pointer) cds->location,
+                                               (AsnReadFunc) SeqLocAsnRead,
+                                               (AsnWriteFunc) SeqLocAsnWrite);
+              }
+            }
+            if (gene != NULL) {
+              grp = (GeneRefPtr) gene->data.value.ptrvalue;
+            }
+          }
+          if (grp != NULL) {
+            ValNodeCopyStr (&(grp->syn), 0, buf);
+          }
+        }
+      }
+    }
+  }
+
+  BasicSeqEntryCleanup (sep);
+  SeriousSeqEntryCleanup (sep, NULL, NULL);
+
+  ObjMgrSetDirtyFlag (ompcp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, ompcp->input_entityID, ompcp->input_itemID,
+                 ompcp->input_itemtype);
+  return OM_MSG_RET_DONE;
 }
 
 #define BLACK     0
@@ -2808,7 +2894,7 @@ static Int2 LIBCALLBACK MapToProtFunc (Pointer data)
                                      ompcp->input_itemtype);
   cds = FindBestCds (ompcp->input_entityID, sfp->location, NULL, scope);
   if (cds != NULL) {
-    slp = dnaLoc_to_aaLoc (cds, sfp->location, TRUE, NULL);
+    slp = dnaLoc_to_aaLoc (cds, sfp->location, TRUE, NULL, FALSE);
     if (slp != NULL) {
       ObjMgrRegister (OBJ_SEQLOC, (Pointer) slp);
     }
@@ -3998,7 +4084,7 @@ static void DoBioseqReport (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 in
                (int) featcontext.itemID, (int) featcontext.index, str);
     }
     if (featcontext.seqfeattype != SEQFEAT_GENE) {
-      gene = SeqMgrGetOverlappingGene (sfp, NULL);
+      gene = SeqMgrGetOverlappingGene (sfp->location, NULL);
       if (gene != NULL) {
         if (FeatDefLabel (gene, str, sizeof (str) - 1, OM_LABEL_BOTH)) {
           fprintf (fp, ", gene %s", str);
@@ -4043,7 +4129,7 @@ static Int2 LIBCALLBACK DoBioseqIndexing (Pointer data)
     Message (MSG_ERROR, "Please select a Bioseq");
     return OM_MSG_RET_ERROR;
   }
-  entityID = SeqMgrIndexFeatures (ompcp->input_entityID, NULL, OM_LABEL_BOTH);
+  entityID = SeqMgrIndexFeatures (ompcp->input_entityID, NULL);
   if (entityID == 0) {
     Message (MSG_ERROR, "SeqMgrReindexBioseqExtraData failed");
     return OM_MSG_RET_ERROR;
@@ -4343,6 +4429,7 @@ extern void SetupSequinFilters (void)
     REGISTER_SEQUIN_CACHE_ACCN;
     REGISTER_SEQUIN_GI_TO_ACCN;
     REGISTER_REFGENEUSER_DESC_EDIT;
+    REGISTER_PROT_IDS_TO_GENE_SYN;
   }
 
   if (indexerVersion) {
@@ -4983,19 +5070,20 @@ static void FinishAutoDefProc (Uint2 entityID, SeqEntryPtr sep,
         } else if (dfp->subtype == FEATDEF_LTR) {
           if (! StringHasNoText (sfp->comment)) {
             StringNCpy_0 (str, sfp->comment, sizeof (str));
+            ptr = StringStr (str, " long terminal repeat");
+            if (ptr != NULL) {
+              *ptr = '\0';
+            }
+            ptr = StringStr (str, " long terminal repeat");
+            if (ptr != NULL) {
+              *ptr = '\0';
+            }
+            if (! StringHasNoText (str)) {
+              StringCat (str, " long terminal repeat");
+            }
           } else {
-            StringCpy (str, "uncharacterized");
-          }
-          ptr = StringStr (str, " LTR");
-          if (ptr != NULL) {
-            *ptr = '\0';
-          }
-          ptr = StringStr (str, " long terminal repeat");
-          if (ptr != NULL) {
-            *ptr = '\0';
-          }
-          if (! StringHasNoText (str)) {
-            StringCat (str, " long terminal repeat");
+            /* StringCpy (str, "uncharacterized"); */
+            StringCpy (str, "long terminal repeat");
           }
           if (dfp->lastInGroup || dfp->lastInType) {
             if (dfp->sfp->partial) {

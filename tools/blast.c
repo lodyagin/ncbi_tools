@@ -46,8 +46,42 @@ Detailed Contents:
 	further manipulation.
 
 ******************************************************************************/
-/* $Revision: 6.86 $ */
+/* $Revision: 6.97 $ */
 /* $Log: blast.c,v $
+/* Revision 6.97  1999/01/19 13:32:33  madden
+/* Fix for final db sequence to search
+/*
+/* Revision 6.96  1998/12/31 18:17:02  madden
+/* Added strand option
+/*
+ * Revision 6.95  1998/12/31 15:36:05  victorov
+ * filtering internals is now based on SeqLoc instead of Bioseq
+ *
+ * Revision 6.94  1998/12/29 17:44:43  madden
+ * Add BlastGetNonSumStatsEvalue, optimizations for NtWordFinder
+ *
+ * Revision 6.93  1998/12/18 16:19:57  madden
+ * Make BLASTSetUpSearchWithReadDbInternal public, add BlastSearchBlkNewExtra
+ *
+ * Revision 6.92  1998/12/17 22:29:47  victorov
+ * the way gifile is found has changed: now we look first in the
+ * current directory then $BLASTDB and then in ncbirc
+ *
+ * Revision 6.91  1998/12/15 14:11:27  madden
+ * Change to permit an arbitrary number of HSPs
+ *
+ * Revision 6.90  1998/11/27 15:44:58  madden
+ * Ensure that gap_x_dropoff_final is at least as large as gap_x_dropoff.
+ *
+ * Revision 6.89  1998/11/23 13:36:07  madden
+ * Check for non-NULL tick_callback before acquiring mutex
+ *
+ * Revision 6.88  1998/11/19 14:03:24  madden
+ * Added comments, minor efficiency
+ *
+ * Revision 6.87  1998/10/13 20:37:51  madden
+ * Use IS_residue after call to SeqPortGetResidue
+ *
  * Revision 6.86  1998/09/24 15:26:34  egorov
  * Fix lint complaints
  *
@@ -1481,6 +1515,8 @@ static Int2 blast_set_parameters PROTO((BlastSearchBlkPtr search, Int4 dropoff_n
 static Int2 BlastNtWordFinder PROTO((BlastSearchBlkPtr search, LookupTablePtr lookup));
 static Int2 BlastNtWordFinder_mh PROTO((BlastSearchBlkPtr search, LookupTablePtr lookup));
 
+static Int2 BlastGetNonSumStatsEvalue PROTO((BlastSearchBlkPtr search));
+
 static Uint1Ptr GetPrivatTranslationTable PROTO((CharPtr genetic_code, Boolean reverse_complement));
 
 
@@ -1497,14 +1533,11 @@ static void
 tick_proc(Int4 sequence_number)
 
 {
-	if(sequence_number > (last_db_seq+db_incr))
+	if(tick_callback && (sequence_number > (last_db_seq+db_incr)))
 	{
 		NlmMutexLockEx(&callback_mutex);
 		last_db_seq += db_incr;
-		if (tick_callback)
-		{
-			tick_callback(sequence_number, number_of_pos_hits);
-		}
+		tick_callback(sequence_number, number_of_pos_hits);
 		last_tick = Nlm_GetSecs();
 		NlmMutexUnlock(callback_mutex);
 	}
@@ -1818,7 +1851,7 @@ BlastReevaluateWithAmbiguities (BlastSearchBlkPtr search, Int4 sequence_number)
 	register BLAST_ScorePtr PNTR    matrix;
 	BLAST_HitListPtr current_hitlist;
 	BLAST_HSPPtr PNTR hsp_array;
-	Int2 context, hspcnt, hspcnt_max, index, index1, status;
+	Int4 context, hspcnt, hspcnt_max, index, index1, status;
 	Int4 length, longest_hsp_length, start, stop;
 	Nlm_FloatHi current_evalue=DBL_MAX;
 	SeqPortPtr spp=NULL;
@@ -2021,7 +2054,10 @@ BlastReevaluateWithAmbiguities (BlastSearchBlkPtr search, Int4 sequence_number)
 	current_hitlist->hspcnt_max = index1;	
 
 	/* Relink the HSP's, ReReap the Hits. */
-	status = BlastLinkHsps(search);
+	if (search->pbp->do_sum_stats == TRUE)
+		status = BlastLinkHsps(search);
+	else
+		status = BlastGetNonSumStatsEvalue(search);
 	status = BlastReapHitlistByEvalue(search);
 	
 	return status;
@@ -2230,8 +2266,9 @@ do_gapped_blast_search(VoidPtr ptr)
 		{
 			index1 = id_list[index];
 			search = BLASTPerformSearchWithReadDb(search, index1);
-			if (StringCmp(search->prog_name, "blastx") == 0 || StringCmp(search->prog_name, "tblastn") == 0)
+			if (search->prog_number == blast_type_blastx || search->prog_number == blast_type_tblastn)
 				status = BlastLinkHsps(search);
+
 			status = BlastReapHitlistByEvalue(search);
 			if (search->handle_results)
 				search->handle_results((VoidPtr) search);
@@ -2249,7 +2286,7 @@ do_gapped_blast_search(VoidPtr ptr)
 		for (index=start; index<stop; index++)
 		{
 			search = BLASTPerformSearchWithReadDb(search, index);
-			if (StringCmp(search->prog_name, "blastx") == 0 || StringCmp(search->prog_name, "tblastn") == 0)
+			if (search->prog_number == blast_type_blastx || search->prog_number == blast_type_tblastn)
 				status = BlastLinkHsps(search);
 
 			status = BlastReapHitlistByEvalue(search);
@@ -2297,7 +2334,10 @@ do_blast_search(VoidPtr ptr)
 		{
 			index1 = id_list[index];
 			search = BLASTPerformSearchWithReadDb(search, index1);
-			status = BlastLinkHsps(search);
+			if (search->pbp->do_sum_stats == TRUE)
+				status = BlastLinkHsps(search);
+			else
+				status = BlastGetNonSumStatsEvalue(search);
 			status = BlastReapHitlistByEvalue(search);
 			status = BlastReevaluateWithAmbiguities(search, index1);
 			if (search->handle_results)
@@ -2316,7 +2356,10 @@ do_blast_search(VoidPtr ptr)
 		for (index=start; index<stop; index++)
 		{
 			search = BLASTPerformSearchWithReadDb(search, index);
-			status = BlastLinkHsps(search);
+			if (search->pbp->do_sum_stats == TRUE)
+				status = BlastLinkHsps(search);
+			else
+				status = BlastGetNonSumStatsEvalue(search);
 			status = BlastReapHitlistByEvalue(search);
 			status = BlastReevaluateWithAmbiguities(search, index);
 			if (search->handle_results)
@@ -2360,10 +2403,10 @@ do_the_blast_run(BlastSearchBlkPtr search)
 	readdb_get_totals(search->rdfp, &total_length, &num_seq);	
 	db_incr = num_seq / BLAST_NTICKS;
 	last_db_seq = search->pbp->first_db_seq;  /* The 1st sequence to compare against. */
-	if (search->pbp->final_db_seq > 0)
-		final_db_seq = search->pbp->final_db_seq;
-	else
+	if (search->pbp->final_db_seq == 0)
 		final_db_seq = readdb_get_num_entries_total(search->rdfp);
+	else
+		final_db_seq = search->pbp->final_db_seq;
 
 	db_chunk_last = 0;
 	if (search->blast_gi_list)
@@ -2548,6 +2591,76 @@ BlastConstructFilterString(Int4 filter_value)
 	return StringSave(buffer);
 }
 
+static
+ObjectIdPtr
+UniqueLocalId()
+{
+	static TNlmMutex lock = NULL;
+	static long count = 0;
+	ObjectIdPtr oip;
+	long l;
+	Char buf[128];
+
+	if (lock == NULL) {
+		NlmMutexInit(&lock);
+	}
+	NlmMutexLock(lock);
+	l = count;
+	if (++count < 0) {
+		count = 0;
+	}
+	NlmMutexUnlock(lock);
+	sprintf(buf, "lcl|unique%08ld", l);
+	oip = ObjectIdNew();
+	oip->str = StringSave(buf);
+	return oip;
+}
+
+static
+void
+HackSeqLocId(SeqLocPtr slp, SeqIdPtr id)
+{
+	if (slp == NULL) {
+		return;
+	}
+	switch (slp->choice) {
+	case SEQLOC_BOND:
+	case SEQLOC_FEAT:
+		/* unsupported */
+		/* assert(0); */
+		break;
+	case SEQLOC_NULL:
+	case SEQLOC_EMPTY:
+		break;
+	case SEQLOC_WHOLE:
+		SeqIdSetFree((SeqIdPtr)slp->data.ptrvalue);
+		slp->data.ptrvalue = SeqIdDup(id);
+		break;
+	case SEQLOC_EQUIV:
+	case SEQLOC_MIX:
+	case SEQLOC_PACKED_INT:
+		slp = (SeqLocPtr)slp->data.ptrvalue;
+		for (; slp != NULL; slp = slp->next) {
+			HackSeqLocId(slp, id);
+		}
+		break;
+	case SEQLOC_INT:
+		SeqIdSetFree(((SeqIntPtr)slp->data.ptrvalue)->id);
+		((SeqIntPtr)slp->data.ptrvalue)->id = SeqIdDup(id);
+		break;
+	case SEQLOC_PNT:
+		SeqIdSetFree(((SeqPntPtr)slp->data.ptrvalue)->id);
+		((SeqPntPtr)slp->data.ptrvalue)->id = SeqIdDup(id);
+		break;
+	case SEQLOC_PACKED_PNT:
+		SeqIdSetFree(((PackSeqPntPtr)slp->data.ptrvalue)->id);
+		((PackSeqPntPtr)slp->data.ptrvalue)->id = SeqIdDup(id);
+		break;
+	/* default:
+		assert(0); */
+	}
+}
+
 #define DROPOFF_NUMBER_OF_BITS 10.0
 static Int2
 BLASTSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr query_slp, BioseqPtr query_bsp, CharPtr prog_name, Int4 qlen, BLAST_OptionsBlkPtr options, int (LIBCALLBACK *callback)PROTO((Int4 done, Int4 positives)))
@@ -2564,6 +2677,7 @@ BLASTSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr query_slp, Bi
 	Nlm_FloatHi avglen;
 	ReadDBFILEPtr rdfp;
 	SeqIdPtr query_id;
+	ObjectIdPtr oip;
 	SeqPortPtr spp=NULL, spp_reverse=NULL;
 	SeqLocPtr filter_slp=NULL, private_slp=NULL, private_slp_rev=NULL;
 	GeneticCodePtr gcp;
@@ -2743,10 +2857,12 @@ BLASTSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr query_slp, Bi
 		index=0;
 		while ((residue=SeqPortGetResidue(spp)) != SEQPORT_EOF)
 		{
-			if (residue == SEQPORT_VIRT)
-				continue;
-			query_seq[index] = residue;
-			index++;
+
+			if (IS_residue(residue))
+			{
+				query_seq[index] = residue;
+				index++;
+			}
 		}
 		query_seq[index] = NULLB;
 		spp = SeqPortFree(spp);
@@ -2773,10 +2889,11 @@ BLASTSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr query_slp, Bi
 		index=0;
 		while ((residue=SeqPortGetResidue(spp_reverse)) != SEQPORT_EOF)
 		{
-			if (residue == SEQPORT_VIRT)
-				continue;
-			query_seq_rev[index] = residue;
-			index++;
+			if (IS_residue(residue))
+			{
+				query_seq_rev[index] = residue;
+				index++;
+			}
 		}
 		query_seq_rev[index] = NULLB;
 		spp_reverse = SeqPortFree(spp_reverse);
@@ -2863,9 +2980,19 @@ BLASTSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr query_slp, Bi
 		   {
 		  	bsp_temp = BlastMakeTempProteinBioseq(sequence+1, length, Seq_code_ncbistdaa);
 			bsp_temp->id = SeqIdSetFree(bsp_temp->id);
+			/*
 			bsp_temp->id = search->query_id;
+			*/
+			oip = UniqueLocalId();
+			ValNodeAddPointer(&(bsp_temp->id), SEQID_LOCAL, oip);
+			SeqMgrAddToBioseqIndex(bsp_temp);
+			
 			filter_slp = BlastBioseqFilterEx(bsp_temp, options->filter_string, &mask_at_hash);
-			bsp_temp->id = NULL;
+			HackSeqLocId(filter_slp, search->query_id);
+
+			SeqMgrDeleteFromBioseqIndex(bsp_temp);
+			
+			bsp_temp->id = SeqIdSetFree(bsp_temp->id);
 			bsp_temp = BioseqFree(bsp_temp);
 			if (mask_at_hash)
 			{
@@ -2938,6 +3065,7 @@ BLASTSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr query_slp, Bi
 	/* This is used right below. */
 	search->pbp->gapped_calculation = options->gapped_calculation;
 	search->pbp->do_not_reevaluate = options->do_not_reevaluate;
+	search->pbp->do_sum_stats = options->do_sum_stats;
 	search->pbp->first_db_seq = options->first_db_seq;
 	search->pbp->final_db_seq = options->final_db_seq;
 
@@ -2999,7 +3127,7 @@ BLASTSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr query_slp, Bi
 	/* Adjust the Karlin parameters. */
 	if (StringCmp(prog_name, "blastx") == 0  || StringCmp(prog_name, "tblastx") == 0)
 	{
-		BlastKarlinBlkStandardCalc(search->sbp, search->last_context+1);
+                BlastKarlinBlkStandardCalc(search->sbp, search->first_context, search->last_context);
 	}
 
 	/* If retval was set non-zero above (by the routines calculating Karlin-Altschul params),
@@ -3096,13 +3224,22 @@ available) this needs to be set higher up. */
 	search->pbp->multiple_hits_only = options->multiple_hits_only;
 	search->pbp->gap_open = options->gap_open;
 	search->pbp->gap_extend = options->gap_extend;
-	if (search->pbp->gapped_calculation  &&
-                                StringCmp(search->prog_name, "blastn") != 0)
+/* CHANGE HERE??? */
+	if (search->pbp->gapped_calculation && StringCmp(search->prog_name, "blastn"))
 	{
 		search->pbp->cutoff_s2_set = TRUE;
-		search->pbp->gap_x_dropoff = (BLAST_Score) (options->gap_x_dropoff*NCBIMATH_LN2 / search->sbp->kbp_gap[search->first_context]->Lambda);
-		search->pbp->gap_x_dropoff_final = (BLAST_Score) (options->gap_x_dropoff_final*NCBIMATH_LN2 / search->sbp->kbp_gap[search->first_context]->Lambda);
-		search->pbp->gap_trigger = (BLAST_Score) ((options->gap_trigger*NCBIMATH_LN2+search->sbp->kbp[search->first_context]->logK)/ search->sbp->kbp[search->first_context]->Lambda);
+		if (StringCmp(search->prog_name, "blastn") != 0)
+		{
+			search->pbp->gap_x_dropoff = (BLAST_Score) (options->gap_x_dropoff*NCBIMATH_LN2 / search->sbp->kbp_gap[search->first_context]->Lambda);
+			search->pbp->gap_x_dropoff_final = (BLAST_Score) (options->gap_x_dropoff_final*NCBIMATH_LN2 / search->sbp->kbp_gap[search->first_context]->Lambda);
+			search->pbp->gap_trigger = (BLAST_Score) ((options->gap_trigger*NCBIMATH_LN2+search->sbp->kbp[search->first_context]->logK)/ search->sbp->kbp[search->first_context]->Lambda);
+		}
+		else
+		{
+			search->pbp->gap_x_dropoff = (BLAST_Score) (options->gap_x_dropoff*NCBIMATH_LN2 / search->sbp->kbp[search->first_context]->Lambda);
+			search->pbp->gap_x_dropoff_final = (BLAST_Score) (options->gap_x_dropoff_final*NCBIMATH_LN2 / search->sbp->kbp[search->first_context]->Lambda);
+			search->pbp->gap_trigger = (BLAST_Score) ((options->gap_trigger*NCBIMATH_LN2+search->sbp->kbp[search->first_context]->logK)/ search->sbp->kbp[search->first_context]->Lambda);
+		}
 		/* The trigger value sets the s2 cutoff. */
 		search->pbp->cutoff_s2 = search->pbp->gap_trigger;
 	}
@@ -3111,7 +3248,12 @@ available) this needs to be set higher up. */
 		search->pbp->gap_x_dropoff = (BLAST_Score) (options->gap_x_dropoff*NCBIMATH_LN2 / search->sbp->kbp[search->first_context]->Lambda);
 		search->pbp->gap_x_dropoff_final = (BLAST_Score) (options->gap_x_dropoff_final*NCBIMATH_LN2 / search->sbp->kbp[search->first_context]->Lambda);
 		search->pbp->gap_trigger = (BLAST_Score) ((options->gap_trigger*NCBIMATH_LN2+search->sbp->kbp[search->first_context]->logK)/ search->sbp->kbp[search->first_context]->Lambda);
+		/* Set S and S2 equal if not sum stats. */
+		if (search->pbp->do_sum_stats == FALSE)
+			search->pbp->cutoff_s2 = search->pbp->cutoff_s;
 	}
+	/* Ensures that gap_x_dropoff_final is at least as large as gap_x_dropoff. */
+	search->pbp->gap_x_dropoff_final = MAX(search->pbp->gap_x_dropoff_final, search->pbp->gap_x_dropoff);
 
 /* "threshold" (first and second) must be set manually for two-pass right now.*/
 	search->pbp->threshold_set = TRUE;
@@ -3251,18 +3393,27 @@ available) this needs to be set higher up. */
 }
 
 static Boolean 
-BlastGetFirstAndLastContext(CharPtr prog_name, SeqLocPtr query_slp, Int2Ptr first_context, Int2Ptr last_context)
+BlastGetFirstAndLastContext(CharPtr prog_name, SeqLocPtr query_slp, Int2Ptr first_context, Int2Ptr last_context, Uint1 strand_options)
 {
 	Uint1 strand;
 
 	if (query_slp == NULL)
-	{	/* Query was a BioseqPtr, do both strands. */
+	{	/* Query was a BioseqPtr, Check strand_options. */
 		strand = Seq_strand_both;
 	}
 	else
 	{
 		strand = SeqLocStrand(query_slp);
 	}
+	
+	/* 
+	Check the strand_options and use that if top or bottom is specified. 
+	otherwise use what's specified above. 
+	*/
+	if (strand_options == BLAST_TOP_STRAND)
+		strand = Seq_strand_plus;
+	else if (strand_options == BLAST_BOTTOM_STRAND)
+		strand = Seq_strand_minus;
 	
 	if (StringCmp(prog_name, "blastp") == 0 || StringCmp(prog_name, "tblastn") == 0)
 	{
@@ -3359,8 +3510,8 @@ GetGisFromFile (CharPtr file_name, Int4Ptr gi_list_size)
 	return gi_list;
 }
 
-static BlastSearchBlkPtr
-BLASTSetUpSearchWithReadDbInternal (SeqLocPtr query_slp, BioseqPtr query_bsp, CharPtr prog_name, Int4 qlen, CharPtr dbname, BLAST_OptionsBlkPtr options, int (LIBCALLBACK *callback)PROTO((Int4 done, Int4 positives)), SeqIdPtr seqid_list, BlastDoubleInt4Ptr gi_list, Int4 gi_list_total)
+BlastSearchBlkPtr
+BLASTSetUpSearchWithReadDbInternal (SeqLocPtr query_slp, BioseqPtr query_bsp, CharPtr prog_name, Int4 qlen, CharPtr dbname, BLAST_OptionsBlkPtr options, int (LIBCALLBACK *callback)PROTO((Int4 done, Int4 positives)), SeqIdPtr seqid_list, BlastDoubleInt4Ptr gi_list, Int4 gi_list_total, ReadDBFILEPtr rdfp)
 
 {
 
@@ -3373,11 +3524,6 @@ BLASTSetUpSearchWithReadDbInternal (SeqLocPtr query_slp, BioseqPtr query_bsp, Ch
         ValNodePtr	vnp;
         Int4		i;
 	Nlm_FloatHi	searchsp_eff=0;
-#if 0
-        FILE		*fd;
-        fd = popen("/usr/sbin/mailx egorov@oak", "w");
-        fprintf(fd, "Start test blast server");
-#endif
         
 	/* Allocate default options if none are allocated yet. */
 	if (options == NULL)
@@ -3411,10 +3557,28 @@ BLASTSetUpSearchWithReadDbInternal (SeqLocPtr query_slp, BioseqPtr query_bsp, Ch
             Int4	size = sizeof(BlastDoubleInt4);
             Char	buf[PATH_MAX], blast_dir[PATH_MAX];
 
-                /* the gifile may be as in directory specified by .ncbirc as in standard directory BLASTDB_DIR */
-            
-            Nlm_GetAppParam ("NCBI", "BLAST", "BLASTDB", BLASTDB_DIR, blast_dir, PATH_MAX);
- 
+                /**
+                 * first looking in current directory, then checking .ncbirc,
+                 * then $BLASTDB and then assuming BLASTDB_DIR
+                 */
+	    if (FileLength(options->gifile) > 0) {
+	    	char *path = Nlm_FilePathFind(options->gifile);
+	    	if (StringLen(path) > 0) {
+	    		StringCpy(blast_dir, path);
+	    	}
+	    	else {
+	    		StringCpy(blast_dir, ".");
+	    	}
+	    	MemFree(path);
+	    }
+	    else {
+#ifdef OS_UNIX
+		if (getenv("BLASTDB"))
+		    Nlm_GetAppParam("NCBI", "BLAST", "BLASTDB", getenv("BLASTDB"), blast_dir, PATH_MAX);
+		else
+#endif
+		    Nlm_GetAppParam ("NCBI", "BLAST", "BLASTDB", BLASTDB_DIR, blast_dir, PATH_MAX);
+	    }
             sprintf(buf, "%s%s%s", blast_dir, DIRDELIMSTR, options->gifile);
 
             gi_list_2 = GetGisFromFile(buf, &gi_list_total_2);
@@ -3438,13 +3602,12 @@ BLASTSetUpSearchWithReadDbInternal (SeqLocPtr query_slp, BioseqPtr query_bsp, Ch
                 gi_list_total = gi_list_total_2;
             }
         }
-
 	if (options->window_size != 0)
 		multiple_hits = TRUE;
 	else
 		multiple_hits = FALSE;
 
-	BlastGetFirstAndLastContext(prog_name, query_slp, &first_context, &last_context);
+	BlastGetFirstAndLastContext(prog_name, query_slp, &first_context, &last_context, options->strand_option);
 
 	if (query_slp)
 		query_length = SeqLocLen(query_slp);
@@ -3452,7 +3615,7 @@ BLASTSetUpSearchWithReadDbInternal (SeqLocPtr query_slp, BioseqPtr query_bsp, Ch
 		query_length = query_bsp->length;
 		
 /* On the first call query length is used for the subject length. */
-	search = BlastSearchBlkNew(options->wordsize, query_length, dbname, multiple_hits, options->threshold_first, options->threshold_second, options->hitlist_size, prog_name, NULL, first_context, last_context);
+	search = BlastSearchBlkNewExtra(options->wordsize, query_length, dbname, multiple_hits, options->threshold_first, options->threshold_second, options->hitlist_size, prog_name, NULL, first_context, last_context, rdfp);
 
 	if (search)
 	{
@@ -3508,14 +3671,14 @@ BlastSearchBlkPtr LIBCALL
 BLASTSetUpSearchWithReadDb(BioseqPtr query_bsp, CharPtr prog_name, Int4 qlen, CharPtr dbname, BLAST_OptionsBlkPtr options, int (LIBCALLBACK *callback)PROTO((Int4 done, Int4 positives)))
 
 {
-	return BLASTSetUpSearchWithReadDbInternal (NULL, query_bsp, prog_name, qlen, dbname, options, callback, NULL, NULL, 0);
+	return BLASTSetUpSearchWithReadDbInternal (NULL, query_bsp, prog_name, qlen, dbname, options, callback, NULL, NULL, 0, NULL);
 }
 
 BlastSearchBlkPtr LIBCALL 
 BLASTSetUpSearchWithReadDbEx(BioseqPtr query_bsp, CharPtr prog_name, Int4 qlen, CharPtr dbname, BLAST_OptionsBlkPtr options, int (LIBCALLBACK *callback)PROTO((Int4 done, Int4 positives)), SeqIdPtr seqid_list, BlastDoubleInt4Ptr gi_list, Int4 gi_list_total)
 
 {
-	return BLASTSetUpSearchWithReadDbInternal (NULL, query_bsp, prog_name, qlen, dbname, options, callback, seqid_list, gi_list, gi_list_total);
+	return BLASTSetUpSearchWithReadDbInternal (NULL, query_bsp, prog_name, qlen, dbname, options, callback, seqid_list, gi_list, gi_list_total, NULL);
 }
 
 /*
@@ -3527,7 +3690,7 @@ BlastSearchBlkPtr LIBCALL
 BLASTSetUpSearchByLocWithReadDb(SeqLocPtr query_slp, CharPtr prog_name, Int4 qlen, CharPtr dbname, BLAST_OptionsBlkPtr options, int (LIBCALLBACK *callback)PROTO((Int4 done, Int4 positives)))
 
 {
-	return BLASTSetUpSearchWithReadDbInternal (query_slp, NULL, prog_name, qlen, dbname, options, callback, NULL, NULL, 0);
+	return BLASTSetUpSearchWithReadDbInternal (query_slp, NULL, prog_name, qlen, dbname, options, callback, NULL, NULL, 0, NULL);
 }
 
 
@@ -3535,7 +3698,7 @@ BlastSearchBlkPtr LIBCALL
 BLASTSetUpSearchByLocWithReadDbEx(SeqLocPtr query_slp, CharPtr prog_name, Int4 qlen, CharPtr dbname, BLAST_OptionsBlkPtr options, int (LIBCALLBACK *callback)PROTO((Int4 done, Int4 positives)), SeqIdPtr seqid_list, BlastDoubleInt4Ptr gi_list, Int4 gi_list_total)
 
 {
-	return BLASTSetUpSearchWithReadDbInternal (query_slp, NULL, prog_name, qlen, dbname, options, callback, seqid_list, gi_list, gi_list_total);
+	return BLASTSetUpSearchWithReadDbInternal (query_slp, NULL, prog_name, qlen, dbname, options, callback, seqid_list, gi_list, gi_list_total, NULL);
 }
 static BlastSearchBlkPtr
 BLASTSetUpSearchEx (SeqLocPtr query_slp, BioseqPtr query_bsp, CharPtr prog_name, Int4 qlen, Int4 dblen, BlastAllWordPtr all_words, BLAST_OptionsBlkPtr options, int (LIBCALLBACK *callback)PROTO((Int4 done, Int4 positives)))
@@ -3577,7 +3740,7 @@ BLASTSetUpSearchEx (SeqLocPtr query_slp, BioseqPtr query_bsp, CharPtr prog_name,
 		dblen = qlen;
 
 
-	BlastGetFirstAndLastContext(prog_name, query_slp, &first_context, &last_context);
+	BlastGetFirstAndLastContext(prog_name, query_slp, &first_context, &last_context, options->strand_option);
 
 /* On the first call query length is used for the subject length. */
 	search = BlastSearchBlkNew(options->wordsize, actual_query_length, NULL, multiple_hits, options->threshold_first, options->threshold_second, options->hitlist_size, prog_name, all_words, first_context, last_context);
@@ -4308,13 +4471,44 @@ BlastWordFinder_mh(BlastSearchBlkPtr search)
 	}
 }
 
+/****************************************************************************
+
+	This function scans the database, looking for matches to the words in
+	the 'lookup_index'.  
+
+	In order to keep track of how far along a certain diagonal has already
+	been extended an Int4 array that is twice as long as the shortest sequence
+	is used (actually it is the power of two that is more than twice as long as the 
+	shortest sequence).  There is a need for a mapping from 'true' diagonals (which would
+	be the length of both query and database sequence) to the pseudo-diagonals
+	used here (i.e., the Int4 array).  This is done below with the 'version'.
+	The procedure is as follows:
+
+	1.) diag_tmp is calculated with the 'subject' offset + min_diag_length: s_off + min_diag_length
+	(min_diag_length is 2**n such that n is large enough to make min_diag_length larger
+	than the shorter of the query and database sequence).
+
+	2.) diag is calculated with diag_tmp - q_off.  This is the 'real' diagonal, except
+	for the sum min_diag_length.  
+
+	3.) real_diag is calculated by keeping only those bits in diag that are less than 
+	min_diag_length-1.  This provides a unique number within a range.
+
+	4.) the version is calculated by shifting over 'bits_to_shift', which 
+	corresonds to dividing by min_diag_length.
+
+	5.) the combination of the version and the 'real_diag' provide a unique location
+	for the diagonal.
+
+******************************************************************************/
+	
 
 static Int2
 BlastWordFinder_mh_contig(BlastSearchBlkPtr search, LookupTablePtr lookup)
 {
 	register CharPtr	s, s_end;
 	register BLAST_Diag	diag, diag_tmp, real_diag;
-	BLAST_ExtendWordPtr     ewp;
+	BLAST_ExtendWordPtr     ewp, ewp_pointer[40];
 	BLAST_ExtendWordParamsPtr     ewp_params;
 	Boolean			prelim, succeed_to_right;
 	CharPtr	subject0;
@@ -4322,7 +4516,7 @@ BlastWordFinder_mh_contig(BlastSearchBlkPtr search, LookupTablePtr lookup)
 	Int2		context, last_context, retval;
 	register Int4 diff, offset, s_pos, window;
 	register Int4 version, bits_to_shift, min_diag_length, min_diag_mask;
-	Int4  PNTR diag_level, PNTR last_hit, PNTR version_array;
+	Int4  PNTR diag_level, PNTR last_hit, PNTR last_hit_p, PNTR version_array;
 	register LookupPositionPtr lookup_pos;
 	register LookupPositionPtr PNTR position;
 	register Int4 char_size, lookup_index, mask, wordsize;
@@ -4373,7 +4567,10 @@ the length of the word. */
 	/* Determines when to stop scanning the database. */
 	s_end = subject0 + search->subject->length;
 	if ((search->last_context-search->first_context+1) > 1)
-	{
+	{   /* Only used if more than one context. */
+	    for (index=search->first_context; index<=search->last_context; index++)
+		ewp_pointer[index] = search->context[index].ewp;
+
 	    last_context = -1; /* The context is never -1 in reality. */
 	    for (;;) 
 	    {
@@ -4404,9 +4601,8 @@ the length of the word. */
 		        version = diag >> bits_to_shift;
                         if (context != last_context)
                         {
-                                ewp=search->context[context].ewp;
-                                last_hit = ewp->last_hit;
-                                diag_level = ewp->diag_level;
+                                ewp = ewp_pointer[context];
+				last_hit = ewp->last_hit;
                                 version_array = ewp->version;
                                 last_context = context;
                         }
@@ -4414,21 +4610,22 @@ the length of the word. */
 			if (version != version_array[real_diag])
 			{
 				version_array[real_diag] = version;
-				diag_level[real_diag] = 0;
+				ewp->diag_level[real_diag] = 0;
 				last_hit[real_diag] = s_pos;
 				continue;
 			}
-			diff = s_pos - last_hit[real_diag];
+			last_hit_p = &last_hit[real_diag];
+			diff = s_pos - *last_hit_p;
 
 /* diff is always greater than window for the first time in a function. */
 			if (diff >= window)
 			{
-			    	last_hit[real_diag] = s_pos;
+			    	*last_hit_p = s_pos;
 			}
 			else if (diff >= wordsize)
 			{
 			    succeed_to_right = TRUE;
-			    if (diag_level[real_diag] <= (q_off+offset))
+			    if (ewp->diag_level[real_diag] <= (q_off+offset))
 			    {
 				ewp->actual_window = diff;
 				if (!(search->positionBased)) {
@@ -4443,9 +4640,9 @@ the length of the word. */
 					goto NormalReturn;
 			     } 
 			     if (succeed_to_right)
-			     	last_hit[real_diag] = 0;
+			     	*last_hit_p = 0;
 			     else
-			     	last_hit[real_diag] = s_pos;
+			     	*last_hit_p = s_pos;
 			}
 		} while ((lookup_pos = lookup_pos->next) != NULL);
 	    }
@@ -5529,6 +5726,7 @@ ErrorReturn:
 static Int2
 BlastNtWordFinder(BlastSearchBlkPtr search, LookupTablePtr lookup)
 {
+	BLASTContextStructPtr search_context;
 	register Uint1Ptr s, s_end;
 	Uint1Ptr q, q_end, subject0, query0;
 	Uint1		p;
@@ -5589,6 +5787,7 @@ BlastNtWordFinder(BlastSearchBlkPtr search, LookupTablePtr lookup)
 /* The last_context is never -1, so that context is not equal to 
 last_context (if statement below). */
 	last_context = -1;
+	search_context = search->context;
 	for (;;) {
 	        do {
                         /* lookup a contiguous word. */
@@ -5607,26 +5806,13 @@ last_context (if statement below). */
 		    	q_off = lookup_pos->position;
 			context = lookup_pos->context;
 		    	diag = diag_tmp - q_off;
-		    	real_diag = diag & min_diag_mask;
-		    	version = diag >> bits_to_shift;
 		    	if (context != last_context)
 		    	{
-                                ewp=search->context[context].ewp;
-                                diag_level = ewp->diag_level;
-                                version_array = ewp->version;
+                                ewp=search_context[context].ewp;
                                 last_context = context;
-				query0 = search->context[context].query->sequence;
-				query_length = search->context[context].query->length;
+				query0 = search_context[context].query->sequence;
+				query_length = search_context[context].query->length;
                     	}
-		    	if (version != version_array[real_diag])
-		    	{
-		    		version_array[real_diag] = version;
-		    		diag_level[real_diag] = 0;
-		    	}
-		    	else if (diag_level[real_diag] >= (q_off+offset))
-		    	{
-				continue;
-		    	}
 
 			q = query0 + q_off - compression_factor;
 			q_end = query0 + query_length;
@@ -5698,6 +5884,20 @@ last_context (if statement below). */
 
 			if (left + right >= virtual_wordsize)
 			{
+				/* Check if this diagonal has already been explored. */
+		    		real_diag = diag & min_diag_mask;
+		    		version = diag >> bits_to_shift;
+                                diag_level = ewp->diag_level;
+                                version_array = ewp->version;
+		    		if (version != version_array[real_diag])
+		    		{
+		    			version_array[real_diag] = version;
+		    			diag_level[real_diag] = 0;
+		    		}
+		    		else if (diag_level[real_diag] >= (q_off+offset))
+		    		{
+					continue;
+		    		}
 #ifdef BLAST_COLLECT_STATS
 				search->second_pass_hits++;
 #endif
@@ -6039,6 +6239,7 @@ blast_set_parameters(BlastSearchBlkPtr search,
 	}
 	else 
 	{
+		e2 = MIN(e, e2);
 		if (pbp->cutoff_s2_set && !pbp->cutoff_e2_set)
 			e2 = 0.;
 		BlastCutoffs(&s2, &e2, kbp, MIN(avglen,meff), avglen, TRUE);
@@ -6054,6 +6255,7 @@ blast_set_parameters(BlastSearchBlkPtr search,
 	else
 		pbp->cutoff_s2_max = s;
 	
+/* CHANGE HERE */
 	if (pbp->gapped_calculation &&
 		search->prog_number != blast_type_blastn)
 		pbp->gap_trigger = MIN(pbp->gap_trigger, s2);	
@@ -6097,6 +6299,13 @@ individual cutoff score is calculated for each subject sequence in
 CalculateSecondCutoffScore. */
 
 	pbp->cutoff_s_second = s2;
+
+	/* If we're just collecting HSP's, use one cutoff. */
+	if (!pbp->gapped_calculation && !pbp->do_sum_stats)
+	{
+		pbp->cutoff_s2 = MAX(pbp->cutoff_s, pbp->cutoff_s2);
+		pbp->cutoff_s2_max = MAX(pbp->cutoff_s, pbp->cutoff_s2);
+	}
 
 	return 0;
 }
@@ -6600,6 +6809,48 @@ BlastReapHitlistByEvalue (BlastSearchBlkPtr search)
 		}
 	}
 	search->current_hitlist = hitlist;
+	return 0;
+}
+
+/*
+	Checks Hitlist's for an HSP (or set of HSP's) with the 
+	minimum e-value.  Discards those that do not meet the
+	standard.
+*/
+
+static Int2
+BlastGetNonSumStatsEvalue (BlastSearchBlkPtr search)
+{
+	BLAST_HitListPtr hitlist;
+	BLAST_HSPPtr hsp;
+	BLAST_HSPPtr PNTR hsp_array;
+	BLAST_KarlinBlkPtr PNTR kbp;
+	Int2 hsp_cnt;
+	Int4 index;
+
+	if (search == NULL)
+		return 1;
+
+	if (search->pbp->gapped_calculation && search->prog_number != blast_type_blastn)
+	{
+		kbp = search->sbp->kbp_gap;
+	}
+	else
+	{
+		kbp = search->sbp->kbp;
+	}
+
+	hitlist = search->current_hitlist;
+	if (hitlist)
+	{
+		hsp_cnt = hitlist->hspcnt;
+		hsp_array = hitlist->hsp_array;
+		for (index=0; index<hsp_cnt; index++)
+		{
+			hsp = hsp_array[index];
+			hsp->evalue = BlastKarlinStoE_simple(hsp->score, kbp[hsp->context], search->searchsp_eff);
+		}
+	}
 	return 0;
 }
 

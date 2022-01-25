@@ -1,3 +1,42 @@
+/*  objmime.c
+* ===========================================================================
+*
+*                            PUBLIC DOMAIN NOTICE
+*               National Center for Biotechnology Information
+*
+*  This software/database is a "United States Government Work" under the
+*  terms of the United States Copyright Act.  It was written as part of
+*  the author's official duties as a United States Government employee and
+*  thus cannot be copyrighted.  This software/database is freely available
+*  to the public for use. The National Library of Medicine and the U.S.
+*  Government have not placed any restriction on its use or reproduction.
+*
+*  Although all reasonable efforts have been taken to ensure the accuracy
+*  and reliability of the software and data, the NLM and the U.S.
+*  Government do not and cannot warrant the performance or results that
+*  may be obtained by using this software or data. The NLM and the U.S.
+*  Government disclaim all warranties, express or implied, including
+*  warranties of performance, merchantability or fitness for any particular
+*  purpose.
+*
+*  Please cite the author in any work or product based on this material.
+*
+* ===========================================================================
+*
+* File Name:  objmime.c
+*
+* Modifications:
+* --------------------------------------------------------------------------
+* Date     Name        Description of modification
+* -------  ----------  -----------------------------------------------------
+*
+* $Log: objmime.c,v $
+* Revision 6.4  1998/12/07 16:29:28  ywang
+* add object loaded for mime type Biostruc-seqs
+*
+* ==========================================================================
+*/
+
 #include <asn.h>
 
 #define NLM_GENERATED_CODE_PROTO
@@ -8,7 +47,7 @@
 
 static Boolean loaded = FALSE;
 
-/*hand change from ncbimime.h -- lyg */
+/*hand change from ncbimime.h -- lyg & yanli */
 #include <asnmime.h>
 
 #ifndef NLM_EXTERN_LOADS
@@ -34,7 +73,7 @@ objmimeAsnLoad(void)
 
 /**************************************************
 *    Generated object loaders for Module NCBI-Mime
-*    Generated using ASNCODE Revision: 6.1 at Mar 23, 1998  6:44 PM
+*    Generated using ASNCODE Revision: 6.5 at Dec 4, 1998  2:11 PM
 *
 **************************************************/
 
@@ -71,7 +110,10 @@ NcbiMimeAsn1Free(ValNodePtr anp)
    case NcbiMimeAsn1_strucseq:
       BiostrucSeqFree(anp -> data.ptrvalue);
       break;
-   }      
+   case NcbiMimeAsn1_strucseqs:
+      BiostrucSeqsFree(anp -> data.ptrvalue);
+      break;
+   }
    return MemFree(anp);
 }
 
@@ -142,6 +184,10 @@ NcbiMimeAsn1AsnRead(AsnIoPtr aip, AsnTypePtr orig)
    else if (atp == NCBI_MIME_ASN1_strucseq) {
       choice = NcbiMimeAsn1_strucseq;
       func = (AsnReadFunc) BiostrucSeqAsnRead;
+   }
+   else if (atp == NCBI_MIME_ASN1_strucseqs) {
+      choice = NcbiMimeAsn1_strucseqs;
+      func = (AsnReadFunc) BiostrucSeqsAsnRead;
    }
    anp->choice = choice;
    if (func != NULL)
@@ -219,6 +265,10 @@ NcbiMimeAsn1AsnWrite(NcbiMimeAsn1Ptr anp, AsnIoPtr aip, AsnTypePtr orig)
    case NcbiMimeAsn1_strucseq:
       writetype = NCBI_MIME_ASN1_strucseq;
       func = (AsnWriteFunc) BiostrucSeqAsnWrite;
+      break;
+   case NcbiMimeAsn1_strucseqs:
+      writetype = NCBI_MIME_ASN1_strucseqs;
+      func = (AsnWriteFunc) BiostrucSeqsAsnWrite;
       break;
    }
    if (writetype != NULL) {
@@ -1004,7 +1054,7 @@ erret:
 *    BiostrucSeqNew()
 *
 **************************************************/
-NLM_EXTERN
+NLM_EXTERN 
 BiostrucSeqPtr LIBCALL
 BiostrucSeqNew(void)
 {
@@ -1020,7 +1070,7 @@ BiostrucSeqNew(void)
 *    BiostrucSeqFree()
 *
 **************************************************/
-NLM_EXTERN
+NLM_EXTERN 
 BiostrucSeqPtr LIBCALL
 BiostrucSeqFree(BiostrucSeqPtr ptr)
 {
@@ -1039,7 +1089,7 @@ BiostrucSeqFree(BiostrucSeqPtr ptr)
 *    BiostrucSeqAsnRead()
 *
 **************************************************/
-NLM_EXTERN
+NLM_EXTERN 
 BiostrucSeqPtr LIBCALL
 BiostrucSeqAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
@@ -1115,10 +1165,10 @@ erret:
 
 /**************************************************
 *
-*    BiostrucAlignAsnWrite()
+*    BiostrucSeqAsnWrite()
 *
 **************************************************/
-NLM_EXTERN Boolean LIBCALL
+NLM_EXTERN Boolean LIBCALL 
 BiostrucSeqAsnWrite(BiostrucSeqPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;
@@ -1151,7 +1201,6 @@ BiostrucSeqAsnWrite(BiostrucSeqPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
          goto erret;
       }
    }
-/* SeqEntryAsnWrite(ptr->sequences, aip, NULL); */
    AsnGenericChoiceSeqOfAsnWrite(ptr -> sequences, (AsnWriteFunc) SeqEntryAsnWrite, aip, BIOSTRUC_SEQ_sequences, BIOSTRUC_SEQ_sequences_E);
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
@@ -1162,3 +1211,178 @@ erret:
    AsnUnlinkType(orig);       /* unlink local tree */
    return retval;
 }
+
+
+
+/**************************************************
+*
+*    BiostrucSeqsNew()
+*
+**************************************************/
+NLM_EXTERN 
+BiostrucSeqsPtr LIBCALL
+BiostrucSeqsNew(void)
+{
+   BiostrucSeqsPtr ptr = MemNew((size_t) sizeof(BiostrucSeqs));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    BiostrucSeqsFree()
+*
+**************************************************/
+NLM_EXTERN 
+BiostrucSeqsPtr LIBCALL
+BiostrucSeqsFree(BiostrucSeqsPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   BiostrucFree(ptr -> structure);
+   AsnGenericChoiceSeqOfFree(ptr -> sequences, (AsnOptFreeFunc) SeqEntryFree);
+   AsnGenericUserSeqOfFree(ptr -> seqalign, (AsnOptFreeFunc) SeqAnnotFree);
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    BiostrucSeqsAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+BiostrucSeqsPtr LIBCALL
+BiostrucSeqsAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   BiostrucSeqsPtr ptr;
+
+   if (! loaded)
+   {
+      if (! objmimeAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* BiostrucSeqs ::= (self contained) */
+      atp = AsnReadId(aip, amp, BIOSTRUC_SEQS);
+   } else {
+      atp = AsnLinkType(orig, BIOSTRUC_SEQS);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = BiostrucSeqsNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == BIOSTRUC_SEQS_structure) {
+      ptr -> structure = BiostrucAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == BIOSTRUC_SEQS_sequences) {
+      ptr -> sequences = AsnGenericChoiceSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) SeqEntryAsnRead, (AsnOptFreeFunc) SeqEntryFree);
+      if (isError && ptr -> sequences == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == BIOSTRUC_SEQS_seqalign) {
+      ptr -> seqalign = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) SeqAnnotAsnRead, (AsnOptFreeFunc) SeqAnnotFree);
+      if (isError && ptr -> seqalign == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = BiostrucSeqsFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    BiostrucSeqsAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+BiostrucSeqsAsnWrite(BiostrucSeqsPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! objmimeAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, BIOSTRUC_SEQS);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   if (ptr -> structure != NULL) {
+      if ( ! BiostrucAsnWrite(ptr -> structure, aip, BIOSTRUC_SEQS_structure)) {
+         goto erret;
+      }
+   }
+   AsnGenericChoiceSeqOfAsnWrite(ptr -> sequences, (AsnWriteFunc) SeqEntryAsnWrite, aip, BIOSTRUC_SEQS_sequences, BIOSTRUC_SEQS_sequences_E);
+   AsnGenericUserSeqOfAsnWrite(ptr -> seqalign, (AsnWriteFunc) SeqAnnotAsnWrite, aip, BIOSTRUC_SEQS_seqalign, BIOSTRUC_SEQS_seqalign_E);
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+

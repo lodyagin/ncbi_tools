@@ -29,7 +29,7 @@
 *
 * Version Creation Date:  1/1/91
 *
-* $Revision: 6.0 $
+* $Revision: 6.1 $
 *
 * File Description:
 *   ByteStore typedefs, prototypes, and defines
@@ -42,6 +42,9 @@
 *
 *
 * $Log: ncbibs.h,v $
+* Revision 6.1  1999/01/21 20:38:16  ostell
+* added support for integer bytestores
+*
 * Revision 6.0  1997/08/25 18:15:16  madden
 * Revision changed to 6.0
 *
@@ -119,6 +122,39 @@ NLM_EXTERN Nlm_ByteStorePtr LIBCALL Nlm_BSDup PROTO((Nlm_ByteStorePtr source));
 *
 *****************************************************************************/
 NLM_EXTERN Nlm_Int4 LIBCALL Nlm_BSAdd PROTO((Nlm_ByteStorePtr bsp, Nlm_Int4 len, Nlm_Boolean use_min_size));
+
+/****************************************************************************
+*
+*   Integer storage utilities
+*      These assume integers are store in BIG_ENDIAN order in the ByteStore
+*      They read and write Uint2 or Uint4 in the NATIVE endian order
+*      All work with UNSIGNED 2 or 4 byte integers
+*         (you should cast to make them signed)
+*      These are just helper functions. They do no internal consistency
+*         checking.
+*      They are primarily to facilitate encoding SEQUENCE OF INTEGER as
+*         OCTET STRING for ASN.1
+*
+****************************************************************************/
+
+NLM_EXTERN Nlm_Uint2 LIBCALL Nlm_BSGetUint2 (Nlm_ByteStorePtr bsp);
+NLM_EXTERN Nlm_Uint4 LIBCALL Nlm_BSGetUint4 (Nlm_ByteStorePtr bsp);
+NLM_EXTERN Nlm_Int2 LIBCALL Nlm_BSPutUint2 (Nlm_ByteStorePtr bsp, Nlm_Uint2 value);
+NLM_EXTERN Nlm_Int2 LIBCALL Nlm_BSPutUint4 (Nlm_ByteStorePtr bsp, Nlm_Uint4 value);
+
+       /* In functions below, size is 2 or 4 */
+       /* Integers are converted from ByteStore to native endian (BSUintXRead)
+	   /*   or from native endian to ByteStore (BSUintXWrite)
+	   /* len is number of INTEGERS, not number of bytes
+	   /* returns count of integers put in ptr
+	   /* WARNING: On LITTLE_ENDIAN machines the data in ptr is changed to BIG_ENDIAN in the
+	   /*   XXWrite functions and LEFT THAT WAY
+	   */
+NLM_EXTERN Nlm_Int4 LIBCALL Nlm_BSUint4Read (Nlm_ByteStorePtr bsp, Nlm_Uint4Ptr ptr, Nlm_Int4 len);
+NLM_EXTERN Nlm_Int4 LIBCALL Nlm_BSUint4Write (Nlm_ByteStorePtr bsp, Nlm_Uint4Ptr ptr, Nlm_Int4 len);
+NLM_EXTERN Nlm_Int4 LIBCALL Nlm_BSUint2Read (Nlm_ByteStorePtr bsp, Nlm_Uint2Ptr ptr, Nlm_Int4 len);
+NLM_EXTERN Nlm_Int4 LIBCALL Nlm_BSUint2Write (Nlm_ByteStorePtr bsp, Nlm_Uint2Ptr ptr, Nlm_Int4 len);
+
 
 
 #define ByteStore Nlm_ByteStore

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.11 $
+* $Revision: 6.13 $
 *
 * File Description: 
 *
@@ -45,6 +45,12 @@
 /*************************************
 *
  * $Log: wprint.c,v $
+ * Revision 6.13  1998/11/23 17:05:35  tatiana
+ * a bug fixed in SP link in www_db_xref()
+ *
+ * Revision 6.12  1998/10/08 15:14:52  tatiana
+ * link to SWISSPROT - expasy.hcuge.ch removed
+ *
  * Revision 6.11  1998/08/19 18:42:08  tatiana
  * hot link to RiceGenes added
  *
@@ -530,9 +536,9 @@ NLM_EXTERN Boolean LIBCALL www_dbsource(CharPtr str, Boolean first, Uint1 choice
 	CharPtr	s, prefix=NULL, p, text, link=NULL;
 	
 	if(www) {
-		if (choice == SEQID_PIR || choice == SEQID_SWISSPROT) {
-			link = link_sp;
-			prefix = "<a href=%s%s>";
+		if (choice == SEQID_PIR /*|| choice == SEQID_SWISSPROT*/) {
+			link = link_seq;
+			prefix = "<a href=%suid=gb|%s|&form=6&db=p&Dopt=g>";
 		} else if (choice == SEQID_PDB || choice == SEQID_PRF) {
 			link = link_seq;
 			prefix = "<a href=%suid=gb|%s|&form=6&db=p&Dopt=g>";
@@ -691,8 +697,8 @@ NLM_EXTERN Boolean LIBCALL www_db_xref(CharPtr str)
 		if (( p = StringStr(str, "SWISS-PROT:")) != NULL) {
 			nothing = FALSE;
 			p += StringLen("SWISS-PROT:");
-			l = StringLen(link_sp) + StringLen(p);
-			prefix = "<a href=%s%s>"; 
+			l = StringLen(link_seq) + StringLen(p);
+			prefix = "<a href=%suid=%s&form=6&db=p&Dopt=g>"; 
 			ll = StringLen(prefix); 
 			s = MemNew(l + ll);
 			ss = MemNew(p-str+1);
@@ -701,7 +707,7 @@ NLM_EXTERN Boolean LIBCALL www_db_xref(CharPtr str)
 			MemFree(ss);
 			while (*p == ' ')
 				p++;
-			sprintf(s, prefix, link_sp, p);
+			sprintf(s, prefix, link_seq, p);
 			AddLink(s);
 			MemFree(s);
 			ff_AddString(p);
@@ -930,7 +936,7 @@ NLM_EXTERN Boolean LIBCALL www_xref_button(FILE *fp, CharPtr str, Uint1 xref_cla
 		StringCpy(ss, str);
 		if (xref_class == 5) {
 			link = link_seq;  /* link_sp */
-			prefix = "<a href=%suid=sp|%s|&form=6&db=n&Dopt=r>"; 
+			prefix = "<a href=%suid=sp|%s|&form=6&db=s&Dopt=r>"; 
 		} else if (xref_class == 8) {
 			link = link_seq;  /* link_epd */
 			prefix = "";
@@ -957,7 +963,7 @@ NLM_EXTERN Boolean LIBCALL www_xref_button(FILE *fp, CharPtr str, Uint1 xref_cla
 					break; 
 				case SEQID_SWISSPROT:
 					link = link_seq;
-					prefix = "<a href=%suid=sp|%s|&form=6&db=n&Dopt=g>"; 
+					prefix = "<a href=%suid=sp|%s|&form=6&db=s&Dopt=g>"; 
 					break; 
 				case SEQID_DDBJ:
 					link = link_seq;
@@ -1092,8 +1098,8 @@ NLM_EXTERN Boolean LIBCALL PrintSPBlock (Asn2ffJobPtr ajp, GBEntryPtr gbp)
 					has_link = FALSE;
 					break; 
 				case SEQID_SWISSPROT:
-					link = link_sp;
-					prefix = "<a href=%s%s>"; 
+					link = link_seq;
+					prefix = "<a href=%suid=dbj|%s|&form=6&db=s&Dopt=g>"; 
 					if (first == FALSE) {
 						ff_AddString(", ");
 					}

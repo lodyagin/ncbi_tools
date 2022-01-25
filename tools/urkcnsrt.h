@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 98-01-01
 *
-* $Revision: 6.6 $
+* $Revision: 6.8 $
 *
 * File Description: consort header
 *
@@ -38,6 +38,12 @@
 * Date       Name        Description of modification
 * --------------------------------------------------------------------------
 * $Log: urkcnsrt.h,v $
+* Revision 6.8  1998/10/13 17:16:37  kuzio
+* additional Markov setup
+*
+* Revision 6.7  1998/10/05 13:35:16  kuzio
+* start markov chains and codon bias
+*
 * Revision 6.6  1998/09/28 16:36:11  kuzio
 * no met orf check
 *
@@ -61,6 +67,18 @@ extern "C" {
 
 #define CONMATSIZE    512
 
+typedef struct FrequencyStructure
+{
+  Int4Ptr    frame0trip,    frame1trip,    frame2trip;
+  Int4Ptr    frame0cdnobs,  frame1cdnobs,  frame2cdnobs;
+  Int4Ptr    frame0cdn,     frame1cdn,     frame2cdn;
+  Int4Ptr    frame0leftdi,  frame1leftdi,  frame2leftdi;
+  Int4Ptr    frame0rightdi, frame1rightdi, frame2rightdi;
+  FloatHiPtr frame0exp,     frame1exp,     frame2exp;
+  FloatHiPtr frame0std,     frame1std,     frame2std;
+  Int4Ptr    globalcdnobs;
+} Freq, PNTR FreqPtr;
+
 /* codon usage tree from genome */
 
 extern TreeNodePtr ConsortSeqEntry (SeqEntryPtr sep);
@@ -79,6 +97,13 @@ extern FloatHi Confide (Int4Ptr cutgene, Int4Ptr cutgbl);
 extern void Conform (Int4Ptr freq, FILE *fn);
 
 extern ValNodePtr ClearNonMetOrfs (ValNodePtr orflist);
+
+extern FreqPtr FreqNew (void);
+extern FreqPtr FreqFree (FreqPtr frqp);
+
+extern FreqPtr ConKovCDSNtFreqs (BioseqPtr bsp, SeqLocPtr slp);
+extern Boolean ConKovCDSGlobalNtFreqs (BioseqPtr bsp, FreqPtr frqp);
+extern FreqPtr ConKovTrainCDS (BioseqPtr bsp, SeqLocPtr slp);
 
 #ifdef __cplusplus
 }

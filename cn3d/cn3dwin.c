@@ -1,4 +1,4 @@
-/*  $Id: cn3dwin.c,v 6.56 1998/09/23 18:38:50 ywang Exp $
+/*  $Id: cn3dwin.c,v 6.71 1999/01/20 22:57:23 ywang Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,9 +32,54 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cn3dwin.c,v $
-* Revision 6.56  1998/09/23 18:38:50  ywang
-* add functions to control display on domain level
+* Revision 6.71  1999/01/20 22:57:23  ywang
+* customize color for secondary structure & rearrange Option menu
 *
+* Revision 6.70  1999/01/20 18:21:20  ywang
+* include salmedia.h due to the move around of MediaInfo from cn3dmsg.h to the new created salmedia.h
+*
+* Revision 6.69  1999/01/14 19:07:17  kans
+* network availability is configurable
+*
+* Revision 6.68  1998/12/16 19:32:19  ywang
+* improve highlight residues function when rerendering
+*
+ * Revision 6.67  1998/11/24  17:01:01  kans
+ * put render/label/view/model controls in separate window
+ *
+* Revision 6.66  1998/11/06 23:01:05  ywang
+* fix bugs for modeling
+*
+ * Revision 6.65  1998/11/04  00:06:24  ywang
+ * add function for modeling: change render/color for special residue(s)
+ *
+ * Revision 6.64  1998/10/30  19:42:38  ywang
+ * turn animation on by default
+ *
+ * Revision 6.63  1998/10/27  15:55:53  ywang
+ * add functions for testing color by sequence conservation
+ *
+ * Revision 6.62  1998/10/21  21:16:56  ywang
+ * update highlight RGB in the global application property data structure
+ *
+ * Revision 6.61  1998/10/21  15:51:27  ywang
+ * reset residue color for salsa before cn3d redraws so that residues shown in salsa will become black if they are not shown in cn3d window
+ *
+ * Revision 6.60  1998/10/16  22:06:09  ywang
+ * make global color array for sequence display
+ *
+ * Revision 6.59  1998/10/07  23:10:46  ywang
+ * merge align control with general display control
+ *
+ * Revision 6.58  1998/10/05  21:24:36  ywang
+ * re-arrange menu
+ *
+ * Revision 6.57  1998/09/30  22:10:48  ywang
+ * control display on three levels: structure, chain, domain
+ *
+ * Revision 6.56  1998/09/23  18:38:50  ywang
+ * add functions to control display on domain level
+ *
  * Revision 6.55  1998/09/22  17:53:13  ywang
  * add menu for display control
  *
@@ -347,17 +392,19 @@
 #include <lsqfetch.h>
 #include <salutil.h>
 #include <cn3dmsg.h>
+#include <salmedia.h>
 #include <cn3dmodl.h>
 
 static Uint2    Cn3D_Vy, Cn3D_Rx;
 static MenU	Cn3D_sOpen;
 static IteM	Cn3D_iSelStruc;
 static IteM	Cn3D_iClearStruc;
-static IteM     Cn3D_iRendCtrl;
-static IteM     Cn3D_iLabelCtrl;
-static IteM Cn3D_iAlignCtrl;
-static IteM     Cn3D_iDisplayCtrl;     /* For display control, Yanli */
-static IteM     Cn3D_iViewCtrl;
+static IteM     Cn3D_iRendCtrl = NULL;
+static IteM     Cn3D_iLabelCtrl = NULL;
+static IteM Cn3D_iAlignCtrl = NULL;
+static IteM     Cn3D_iDisplayCtrl = NULL;     /* For display control, Yanli */
+static IteM     Cn3D_iViewCtrl = NULL;
+static IteM     Cn3D_iModelCtrl = NULL;
 static MenU	Cn3D_sExport;
 static WindoW 	Cn3D_w = NULL;
 static MenU  	Cn3D_ma_group_menu;
@@ -367,6 +414,7 @@ static MenU	Cn3D_sSave;
 static MenU     Cn3D_mRender;
 static MenU     Cn3D_mColor;
 static MenU     Cn3D_mControls;
+static WindoW   Cn3D_wCtrls = NULL;
 
 static Uint1   errNum;
 static Int1    errType;
@@ -381,12 +429,16 @@ static GrouP    Cn3D_gRendCtrl;
 static GrouP    Cn3D_gLabelCtrl;
 static GrouP Cn3D_gAlignCtrl;
 static GrouP    Cn3D_gDisplayCtrl;    /* For display control, Yanli  */
+static GrouP    Cn3D_gModelCtrl;    /* For modeling, Yanli  */
 static GrouP    Cn3D_gViewCtrl;
 
 static Nlm_Controls3D Cn3D_left;
 
 Uint1 Cn3d_IndexRGB[CN3D_COLOR_MAX];
 ValNodePtr Cn3d_ColorNames = NULL; /* choice holds table number */
+
+extern PARS parsColor;
+extern Int1 ColorSS[];
 
 
 Nlm_RGBColoR Cn3d_PaletteRGB[CN3D_COLOR_MAX] =
@@ -563,7 +615,7 @@ void LIBCALL Cn3D_EnableMenus(void)
 static void Cn3D_AboutProc(IteM i)
 {
   MsgAlert(KEY_OK, SEV_INFO, "About Cn3D",
-"Cn3D\n\nA 3-D Viewer for MMDB\nthe Molecular Modelling Database\nVersion 2.01.0000\n\nThe National Center for Biotechnology Information\ninfo@ncbi.nlm.nih.gov");
+"Cn3D\n\nA 3-D Viewer for MMDB\nthe Molecular Modelling Database\nVersion 2.50\n\nThe National Center for Biotechnology Information\ninfo@ncbi.nlm.nih.gov");
 }
 
 
@@ -596,6 +648,13 @@ static void Cn3D_MoveCB(IteM i)
 (see also Image/Mouse3D_Groups)");
 }
 
+static void Cn3D_Default_BgColor(IteM i)
+{
+
+    if(Cn3D_v3d != NULL) Nlm_SetBackground3D(Cn3D_v3d, 0, 0, 0);
+
+}
+
 static void Cn3D_BgColor(IteM i)
 {
 
@@ -603,13 +662,89 @@ static void Cn3D_BgColor(IteM i)
 
 }
 
+static void Cn3D_Default_HLColor(IteM i)
+{
+    SeqEditViewProcsPtr svpp;
+
+    Uint1 colorR, colorG, colorB;
+
+    colorR = 255; colorG = 255; colorB = 0;
+    SetHLColor3D(Cn3D_v3d, colorR, colorG, colorB);
+
+    svpp = (SeqEditViewProcsPtr) GetAppProperty ("SeqEditDisplayForm");
+    if(svpp != NULL){
+       svpp->colorR_HL = colorR; svpp->colorG_HL = colorG; svpp->colorB_HL = colorB;
+    }
+}
+
 static void Cn3D_HLColor(IteM i)
 {
+    SeqEditViewProcsPtr svpp;
 
     Uint1 colorR, colorG, colorB;
 
     ChooseColorDialog(&colorR, &colorG, &colorB,0);
     SetHLColor3D(Cn3D_v3d, colorR, colorG, colorB);
+
+    svpp = (SeqEditViewProcsPtr) GetAppProperty ("SeqEditDisplayForm");
+    if(svpp != NULL){
+       svpp->colorR_HL = colorR; svpp->colorG_HL = colorG; svpp->colorB_HL = colorB;
+    }
+}
+
+static void Cn3D_Default_SSColor(IteM i)
+{
+
+  ColorSS[0] = 8; ColorSS[1] = 10; ColorSS[2] = 11; ColorSS[3] = 6; 
+
+}
+
+static void Cn3D_HelixColor(IteM i)
+{
+
+    Uint1 colorR, colorG, colorB;
+    Int2 iColor;
+ 
+    ChooseColorDialog(&colorR, &colorG, &colorB,0);
+    iColor = GetColorIndex(colorR, colorG, colorB);
+    if(iColor > 0) ColorSS[0] = iColor - 1;
+    else ErrPostEx (SEV_ERROR, 0, 0, " this color does not exist in Cn3d_PaletteRGB, default color will be used!\n");
+}
+
+static void Cn3D_StrandColor(IteM i)
+{
+
+    Uint1 colorR, colorG, colorB;
+    Int2 iColor;
+ 
+    ChooseColorDialog(&colorR, &colorG, &colorB,0);
+    iColor = GetColorIndex(colorR, colorG, colorB);
+    if(iColor > 0) ColorSS[1] = iColor - 1;
+    else ErrPostEx (SEV_ERROR, 0, 0, " this color does not exist in Cn3d_PaletteRGB, default color will be used!\n");
+}
+
+static void Cn3D_TurnColor(IteM i)
+{
+
+    Uint1 colorR, colorG, colorB;
+    Int2 iColor;
+ 
+    ChooseColorDialog(&colorR, &colorG, &colorB,0);
+    iColor = GetColorIndex(colorR, colorG, colorB);
+    if(iColor > 0) ColorSS[2] = iColor - 1;
+    else ErrPostEx (SEV_ERROR, 0, 0, " this color does not exist in Cn3d_PaletteRGB, default color will be used!\n");
+}
+
+static void Cn3D_CoilColor(IteM i)
+{
+
+    Uint1 colorR, colorG, colorB;
+    Int2 iColor;
+ 
+    ChooseColorDialog(&colorR, &colorG, &colorB,0);
+    iColor = GetColorIndex(colorR, colorG, colorB);
+    if(iColor > 0) ColorSS[3] = iColor - 1;
+    else ErrPostEx (SEV_ERROR, 0, 0, " this color does not exist in Cn3d_PaletteRGB, default color will be used!\n");
 }
 
 
@@ -698,7 +833,7 @@ static void LogoProc(Nlm_ButtoN b)
 
   if ( readErrors() )
     return;
-  SetHLColor3D(Cn3D_v3d, 0, 0, 0);
+  SetHLColor3D(Cn3D_v3d, 255, 255, 0);  /* use yellow color for highlight by default */
 
   AttachPicture3D(Cn3D_v3d, Cn3D_pMain, NULL);
 
@@ -749,13 +884,15 @@ static void Cn3d_MergePalette(void)
   Int2 i;
 
   /* fetch the active structure */
-  PDNMS pdnmsThis = GetSelectedModelstruc();
+/*PDNMS pdnmsThis = GetSelectedModelstruc();
   if ( !pdnmsThis )
     return;
 
   pars = GetAlgorRenderSet( pdnmsThis );
   if ( !pars )
-    return;
+    return;   */
+
+  pars = parsColor;
 
   for (i = 0;  i < CN3D_COLOR_MAX;  i++)
     {
@@ -810,6 +947,8 @@ NLM_EXTERN void LIBCALL Cn3D_Redraw(Boolean  New)
   /* fetch the active structure */
   PARS pars = NULL;
   PDNMS pdnmsThis = GetSelectedModelstruc();
+  Int2 i;
+
   if (pdnmsThis == NULL  ||  (pars = GetAlgorRenderSet(pdnmsThis)) == NULL)
     {
       LogoProc( NULL );
@@ -836,12 +975,24 @@ NLM_EXTERN void LIBCALL Cn3D_Redraw(Boolean  New)
     return;
 
   Cn3d_ResetPalette();  /* clear global palette */
+
+  parsColor = NewAlgorRenderSet();
+  for (i=0; i< CN3D_COLOR_MAX; i++) parsColor->IndexRGB[i] = 0;
+
   MakeStrucPalette();  /* make palette  for the active structure */
   Cn3d_MergePalette(); /* merge it to global palette */
   Cn3d_Lock3DPalette( Cn3D_pMain ); /* Allocates the Picture3D palette  */
 
+  if(Cn3D_ReColor) ResetSalsaColor();
+
   ProgMon( "Rendering Structure..." );
   Cn3D_pMain = AlgorithmicRendering( Cn3D_pMain );
+
+  if(Cn3D_pMain != NULL){
+     RealColorSalsa();
+                     /*  RealColorSalsa  */
+  }
+
   if ( readErrors() )
     return;
   if (Cn3D_pMain == NULL)
@@ -857,15 +1008,17 @@ NLM_EXTERN void LIBCALL Cn3D_Redraw(Boolean  New)
       Cn3d_Lock3DPalette( Cn3D_pMain ); /* Allocates the Picture3D palette  */
       Cn3D_pMain = Do3DOrigin( Cn3D_pMain ); /* make the origin */
     }
-  SetHLColor3D(Cn3D_v3d, 255, 255, 0);   /* use yellow for highlight */
+/*SetHLColor3D(Cn3D_v3d, 255, 255, 0);*/ /* use yellow for highlight */
 
   ProgMon( "Redrawing 3D image ..." );
   AttachPicture3D(Cn3D_v3d, Cn3D_pMain, (Camera3DPtr)pars);
   readErrors();
   Cn3D_EnableFileOps();
   ArrowCursor();
-}
 
+  FreeAlgorRenderSet(parsColor);
+  
+}
 
 /* Mouse Action Callbacks
  */
@@ -1021,11 +1174,18 @@ void fnCHLresidue(PDNMG pdnmgThis, Viewer3D  vvv, Boolean highlight)
 /*--------------------- yanli --------------------*/
 void fnPreCHLresidue(PDNMG pdnmgThis, Boolean highlight)
 {
-
-   Segment3D seg;   /* dead code */
+    PMGD pmgdThis = NULL;
+   
+   /* Segment3D seg; */   /* dead code */
 
 /* seg = (Segment3D)paldThis->pGraphic;  */   /* dead code */
       fnCHLresidue(pdnmgThis,  Cn3D_v3d, highlight);
+   
+      pmgdThis = pdnmgThis->data.ptrvalue;
+      if(pmgdThis){
+          if(highlight) pmgdThis->bHighlighted = 1;
+          else pmgdThis->bHighlighted = 0;
+      }
 }
 /*-----------------------------------------------*/
 static void fnHLresidue (PDNMG pdnmgThis, PALD paldThis, Viewer3D  vvv)
@@ -1205,17 +1365,117 @@ static Boolean Cn3D_InitMA(MAPtr ma, VoidPtr data)
 
 
 
+static void Cn3D_ViewerCtrlProc(IteM i);
+static void Cn3D_ShowCtrlProc (IteM i);
+
+/*
 static void Cn3D_RenderCtrlProc(IteM i);
 static void Cn3D_LabelCtrlProc(IteM i);
 static void Cn3D_AlignCtrlProc(IteM i);
 static void Cn3D_DisplayCtrlProc(IteM i);
-static void Cn3D_ViewerCtrlProc(IteM i);
+static void Cn3D_ModelCtrlProc(IteM i);
+*/
 
-static GrouP Viewer3DGroups(WindoW w, Uint2Ptr width, Uint2 height)
+static CharPtr  cn3dControlFormTabs [] = {
+  "Render", "Label", "Display", "Model", NULL
+};
+
+static void ChangeCn3DCtrlPage (VoidPtr data, Int2 newval, Int2 oldval)
+
+{
+  SafeHide (Cn3D_gRendCtrl);
+  SafeHide (Cn3D_gLabelCtrl);
+  SafeHide (Cn3D_gDisplayCtrl);
+  SafeHide (Cn3D_gModelCtrl);
+  SafeHide (Cn3D_gAlignCtrl);
+  switch (newval) {
+    case 0 :
+      SafeShow (Cn3D_gRendCtrl);
+      break;
+    case 1 :
+      SafeShow (Cn3D_gLabelCtrl);
+      break;
+    case 2 :
+      SafeShow (Cn3D_gDisplayCtrl);
+      break;
+    case 3 :
+      SafeShow (Cn3D_gModelCtrl);
+      break;
+    default :
+      break;
+  }
+}
+
+static GrouP Viewer3DGroups(WindoW w)
+{
+  Int2  groups = 0;
+  /* PoinT pnt; */
+  RecT  Cn3D_rRC;
+  GrouP g, h;
+  DialoG tabs;
+
+  h = HiddenGroup (w, 1, 0, NULL);
+  tabs = CreateFolderTabs (h, cn3dControlFormTabs, 0, 0, 0,
+                           SYSTEM_FOLDER_TAB, ChangeCn3DCtrlPage, NULL);
+
+  g = HiddenGroup(w, 0, 0, NULL);
+
+#ifdef WIN_MOTIF
+  SetGroupMargins(g, 0, 0);
+  SetGroupSpacing(g, 8, 1);
+#else
+  SetGroupMargins (g, 1, 1);
+  SetGroupSpacing (g, 0, 0);
+#endif
+
+  Cn3D_gRendCtrl = RenderControls( g );
+  GetPosition(Cn3D_gRendCtrl, &Cn3D_rRC);
+  Cn3D_Rx = (Uint2)(Cn3D_rRC.right - Cn3D_rRC.left + 10);
+
+  /*
+  pnt.x = Cn3D_rRC.left;
+  pnt.y = Cn3D_rRC.top;
+  SetNextPosition(g, pnt);
+  */
+  Cn3D_gLabelCtrl = LabelControls( g );
+  Hide (Cn3D_gLabelCtrl);
+
+/*GetPosition(Cn3D_gLabelCtrl, &Cn3D_rRC);     
+  pnt.x = Cn3D_rRC.left;
+  pnt.y = Cn3D_rRC.top;
+  SetNextPosition(g, pnt);
+  Cn3D_gAlignCtrl = AlignControls( g );
+  Hide (Cn3D_gAlignCtrl);  */
+
+  /*
+  GetPosition(Cn3D_gLabelCtrl, &Cn3D_rRC);
+  pnt.x = Cn3D_rRC.left;
+  pnt.y = Cn3D_rRC.top;
+  SetNextPosition(g, pnt);
+  */
+  Cn3D_gDisplayCtrl = DisplayControls( g );
+  Hide (Cn3D_gDisplayCtrl);
+
+  /*
+  GetPosition(Cn3D_gLabelCtrl, &Cn3D_rRC);
+  pnt.x = Cn3D_rRC.left;
+  pnt.y = Cn3D_rRC.top;
+  SetNextPosition(g, pnt);
+  */
+  Cn3D_gModelCtrl = ModelControls( g );
+  Hide (Cn3D_gModelCtrl);
+
+  AlignObjects (ALIGN_CENTER, (HANDLE) tabs, (HANDLE) g, NULL);
+
+  return w;
+}
+
+
+static GrouP Viewer3DViewer(WindoW w, Uint2Ptr width, Uint2 height)
 {
   Int2  groups = 0;
   PoinT pnt;
-  RecT  Cn3D_rRC, Cn3D_rVC;
+  RecT  Cn3D_rVC;
 
   GrouP g = HiddenGroup(w, 0, 0, NULL);
 
@@ -1227,34 +1487,20 @@ static GrouP Viewer3DGroups(WindoW w, Uint2Ptr width, Uint2 height)
   SetGroupSpacing (g, 0, 0);
 #endif
 
+  /*
   Cn3D_gViewCtrl = NormalGroup(g, 0, 0, "Viewer", systemFont, NULL);
+  */
+  Cn3D_gViewCtrl = HiddenGroup(g, 0, 0, NULL);
+
+  GetPosition(Cn3D_gViewCtrl, &Cn3D_rVC);
+  Cn3D_Vy = (Uint2)(Cn3D_rVC.bottom - Cn3D_rVC.top + 10);
 
   Cn3D_left = CreateControls3D(Cn3D_gViewCtrl, FALSE, TRUE, NULL);
+  Hide( Cn3D_gViewCtrl );
 
   GetPosition(Cn3D_gViewCtrl, &Cn3D_rVC);
   Cn3D_Vy = (Uint2)(Cn3D_rVC.bottom - Cn3D_rVC.top + 10);
   Break( g );
-
-  Cn3D_gRendCtrl = RenderControls( g );
-  GetPosition(Cn3D_gRendCtrl, &Cn3D_rRC);
-  Cn3D_Rx = (Uint2)(Cn3D_rRC.right - Cn3D_rRC.left + 10);
-
-  pnt.x = Cn3D_rRC.left;
-  pnt.y = Cn3D_rRC.top;
-  SetNextPosition(g, pnt);
-  Cn3D_gLabelCtrl = LabelControls( g );
-
-  GetPosition(Cn3D_gLabelCtrl, &Cn3D_rRC);
-  pnt.x = Cn3D_rRC.left;
-  pnt.y = Cn3D_rRC.top;
-  SetNextPosition(g, pnt);
-  Cn3D_gAlignCtrl = AlignControls( g );
-
-  GetPosition(Cn3D_gLabelCtrl, &Cn3D_rRC);
-  pnt.x = Cn3D_rRC.left;
-  pnt.y = Cn3D_rRC.top;
-  SetNextPosition(g, pnt);
-  Cn3D_gDisplayCtrl = DisplayControls( g );
 
   pnt.x = 10;
   pnt.y = 15;
@@ -1285,11 +1531,14 @@ void Cn3DResizeProc(WindoW w)
 
   InsetRect(&r, 5, 5);
 
+  /*
   if ((GetStatus(Cn3D_iRendCtrl ) == TRUE)  ||
       (GetStatus(Cn3D_iLabelCtrl) == TRUE)  ||
       (GetStatus(Cn3D_iAlignCtrl) == TRUE)  ||
+      (GetStatus(Cn3D_iModelCtrl) == TRUE)  ||
       (GetStatus(Cn3D_iDisplayCtrl) == TRUE ))
     r.left += Cn3D_Rx;
+  */
 
 #ifdef WIN_MAC
   {{
@@ -1393,8 +1642,6 @@ static void Cn3D_AboutSize(WindoW w)
   Update();
 }
 
-Boolean Cn3D_fEntrezOn; /* global */
-
 static void Cn3D_AlignEdit(IteM i)
 /* launches the sequin editor, salsa */
 {
@@ -1422,6 +1669,7 @@ static void Cn3D_AlignEdit(IteM i)
      svpp->minPixelWidth = 650;
      svpp->minPixelHeight = 120;
      svpp->viewer_mode = TRUE;
+     svpp->Cn3D_On = TRUE;
   }
 /************************/
   pdnmsMaster = GetSelectedModelstruc();
@@ -1547,16 +1795,16 @@ static void Cn3D_AboutStruc(IteM i)
 /* Create the generic CN3D menu system;
  * return handler to the "File" top menu
  */
-static MenU Cn3D_Menus(WindoW w)
+static MenU Cn3D_Menus(WindoW w, ItmActnProc netconfig, Boolean usingEntrez)
 {
-  MenU file_menu, menu;
+  MenU file_menu, color_menu, color_submenu, color_submenu2, menu;
 
   /* FILE top menu
    */
 
   file_menu = menu = PulldownMenu(w, "File/F");
 
-  Cn3D_sOpen = Cn3D_OpenSub( menu );  /* Open submenu(see cn3dopen.c) */
+  Cn3D_sOpen = Cn3D_OpenSub( menu, usingEntrez );  /* Open submenu(see cn3dopen.c) */
   /* Import menu item would go here */
   Cn3D_sSave = Cn3D_SaveSub( menu );
 
@@ -1575,41 +1823,57 @@ static MenU Cn3D_Menus(WindoW w)
   /* EDIT top menu
    */
 
-  menu = PulldownMenu(w, "Edit/E");
+  menu = PulldownMenu(w, "View/V");
 #ifdef WIN_MSWIN
   CommandItem(menu, "Copy/C", Cn3D_ImageCopyProc);
   SeparatorItem( menu );
 #endif
+
+  Cn3D_iViewCtrl = StatusItem(menu,
+                              "Animation Controls/A", Cn3D_ViewerCtrlProc);
+  SeparatorItem( menu );
+
+  Cn3D_iDisplayCtrl = StatusItem(menu, "Cn3D Controls/N", Cn3D_ShowCtrlProc);
+  SeparatorItem( menu );
+
+/*Cn3D_iDisplayCtrl = StatusItem(menu, "View Controls/N", Cn3D_DisplayCtrlProc);
+  SeparatorItem( menu );
+
   Cn3D_iRendCtrl = StatusItem(menu,
                               "Rendering Settings/R", Cn3D_RenderCtrlProc);
   Cn3D_iLabelCtrl = StatusItem(menu,
-                               "Label Settings/L", Cn3D_LabelCtrlProc);
+                               "Label Settings/L", Cn3D_LabelCtrlProc); */
+/*Cn3D_iAlignCtrl = StatusItem(menu, "Neighbor Controls/N", Cn3D_AlignCtrlProc);
+  SeparatorItem( menu ); */
 
-  Cn3D_iAlignCtrl = StatusItem(menu, "Neighbor Controls/N", Cn3D_AlignCtrlProc);
+  CommandItem(menu, "Sequence Window/S", Cn3D_AlignEdit);
+  SeparatorItem( menu );
 
-  Cn3D_iDisplayCtrl = StatusItem(menu, "Display Controls/N", Cn3D_DisplayCtrlProc);
-                      /* Yanli */
+  CommandItem(menu, "Reset",  Cn3D_AllCB );
 
-  Cn3D_ma_group_menu  = SubMenu(menu, "Mouse Settings/M" );
-  Cn3D_ma_action_menu = NULL /* SubMenu(menu, "Mouse3D Actions")*/;
-
+/*CommandItem(menu, "Reset Perspective/P",  Cn3D_AllCB );
+  CommandItem(menu, "Reset Presentation/N",      Cn3D_RenDefault); */
 
 
   /* View top menu
    */
 
-  menu = PulldownMenu(w, "View/V");
+/*menu = PulldownMenu(w, "View/V");
 
   CommandItem(menu, "Sequence Window/S", Cn3D_AlignEdit);
   Cn3D_iViewCtrl = StatusItem(menu,
                               "Animation Controls/A", Cn3D_ViewerCtrlProc);
-  CommandItem(menu, "Structure Info/I", Cn3D_AboutStruc);
 
-  SeparatorItem( menu );
+  SeparatorItem( menu );     
 
   CommandItem(menu, "Reset Perspective/P",  Cn3D_AllCB );
-  CommandItem(menu, "Reset Presentation/N",      Cn3D_RenDefault);
+  CommandItem(menu, "Reset Presentation/N",      Cn3D_RenDefault); */
 
+  /*
+  menu = PulldownMenu(w, "Model/E");
+
+  Cn3D_iModelCtrl = StatusItem(menu, "Add Feature/A", Cn3D_ModelCtrlProc); 
+  */  
 
 
   /* RENDER top menu
@@ -1638,6 +1902,7 @@ static MenU Cn3D_Menus(WindoW w)
   CommandItem(menu, "CPK/K",            Cn3D_ColCPK);
   CommandItem(menu, "Temperature/T",    Cn3D_ColTemp);
   CommandItem(menu, "Neighbor/O",    Cn3D_ColCons);
+  CommandItem(menu, "SeqConservation/S",  Cn3D_ColSeqCons);
   CommandItem(menu, "Structure/U",    Cn3D_ColAlign);
 
  /* OPTIONS top menu 
@@ -1645,9 +1910,31 @@ static MenU Cn3D_Menus(WindoW w)
 
   menu = PulldownMenu(w, "Option/O");
  
-  CommandItem(menu, "Background Color/B", Cn3D_BgColor);
+  if (netconfig != NULL) {
+    SeparatorItem(menu);
+    CommandItem(menu, "Net Configure...", netconfig);
+  }
+
+  color_menu = SubMenu(menu, "Color Settings");
+  color_submenu = SubMenu(color_menu, "Background/B");
+  CommandItem(color_submenu, "Default", Cn3D_Default_BgColor);
+  CommandItem(color_submenu, "User Defined", Cn3D_BgColor);
+  SeparatorItem(color_menu);
+  color_submenu = SubMenu(color_menu,  "Highlight"); 
+  CommandItem(color_submenu, "Default", Cn3D_Default_HLColor);
+  CommandItem(color_submenu, "User Defined", Cn3D_HLColor);
+  SeparatorItem(color_menu);
+  color_submenu = SubMenu(color_menu,  "Secondary Structure");
+  CommandItem(color_submenu, "Default", Cn3D_Default_SSColor);
+  color_submenu2 = SubMenu(color_submenu, "UserDefined");
+  CommandItem(color_submenu2, "Helix", Cn3D_HelixColor);
+  CommandItem(color_submenu2, "Strand/Sheet", Cn3D_StrandColor);
+  CommandItem(color_submenu2, "Turn", Cn3D_TurnColor);
+  CommandItem(color_submenu2, "Coil", Cn3D_CoilColor);
+  Cn3D_ma_group_menu  = SubMenu(menu, "Mouse Settings/M" );
+  Cn3D_ma_action_menu = NULL /* SubMenu(menu, "Mouse3D Actions")*/;
   SeparatorItem(menu);
-  CommandItem(menu, "Highlight Color/H", Cn3D_HLColor);
+  CommandItem(menu, "Structure Info/I", Cn3D_AboutStruc);
   
   /* CONTROLS top menu
    */
@@ -1666,148 +1953,16 @@ static MenU Cn3D_Menus(WindoW w)
 }
 
 
-static void Cn3D_RenderCtrlProc(IteM i)
+static void Cn3D_ShowCtrlProc (IteM i)
+
 {
-  /* use hide/show */
-  if (i == NULL)
-    {
-      SetStatus(Cn3D_iRendCtrl, FALSE);
-      Hide( Cn3D_gRendCtrl );
-      Update();
-      return;
-    }
-
-  if (GetStatus(Cn3D_iRendCtrl) == TRUE)
-    {
-     Hide( Cn3D_gLabelCtrl );
-     Hide( Cn3D_gAlignCtrl );
-     Hide( Cn3D_gDisplayCtrl );
-     Show( Cn3D_gRendCtrl );
-     Update();
-     if ( GetStatus(Cn3D_iLabelCtrl) == TRUE || GetStatus(Cn3D_iAlignCtrl) == TRUE || GetStatus(Cn3D_iDisplayCtrl) == TRUE)
-       {
-         SetStatus(Cn3D_iLabelCtrl, FALSE);
-         SetStatus(Cn3D_iAlignCtrl, FALSE);
-         SetStatus(Cn3D_iDisplayCtrl, FALSE);
-         return;
-       }
-    }
-  else
-    {
-     Hide( Cn3D_gRendCtrl );
-     Update();
-    }
-
-  Cn3DResizeProc( Cn3D_w );
-}
-
-
-
-static void Cn3D_LabelCtrlProc(IteM i)
-{
-  /* use hide/show */
-  if (i == NULL)
-    {
-      SetStatus(Cn3D_iLabelCtrl, FALSE);
-      Hide( Cn3D_gLabelCtrl );
-      Update();
-      return;
-    }
-
-  if (GetStatus(Cn3D_iLabelCtrl) == TRUE)
-    {
-     Hide( Cn3D_gRendCtrl );
-     Hide( Cn3D_gAlignCtrl );
-     Hide( Cn3D_gDisplayCtrl );
-     Show( Cn3D_gLabelCtrl );
-     Update();
-     if (GetStatus(Cn3D_iRendCtrl) == TRUE || GetStatus(Cn3D_iAlignCtrl) == TRUE || GetStatus(Cn3D_iDisplayCtrl) == TRUE)
-        {
-          SetStatus(Cn3D_iRendCtrl, FALSE);
-          SetStatus(Cn3D_iAlignCtrl, FALSE);
-          SetStatus(Cn3D_iDisplayCtrl, FALSE);
-          return;
-        }
-    }
-  else
-    {
-     Hide( Cn3D_gLabelCtrl );
-     Update();
-    }
-
-  Cn3DResizeProc( Cn3D_w );
-}
-
-static void Cn3D_AlignCtrlProc(IteM i)
-{
-  /* use hide/show */
-  if (i == NULL)
-    {
-      SetStatus(Cn3D_iAlignCtrl, FALSE);
-      Hide( Cn3D_gAlignCtrl );
-      Update();
-      return;
-    }
-
-  if (GetStatus(Cn3D_iAlignCtrl) == TRUE)
-    {
-     Hide( Cn3D_gRendCtrl );
-     Hide(Cn3D_gLabelCtrl);
-     Hide(Cn3D_gDisplayCtrl);
-     Show( Cn3D_gAlignCtrl );
-     Update();
-     if (GetStatus(Cn3D_iRendCtrl) == TRUE || GetStatus(Cn3D_iLabelCtrl) == TRUE || GetStatus(Cn3D_iDisplayCtrl) == TRUE)
-        {
-          SetStatus(Cn3D_iRendCtrl, FALSE);
-          SetStatus(Cn3D_iLabelCtrl, FALSE);
-          SetStatus(Cn3D_iDisplayCtrl, FALSE);
-          return;
-        }
-     
-    }
-  else
-    {
-     Hide( Cn3D_gAlignCtrl );
-     Update();
-    }
-
-  Cn3DResizeProc( Cn3D_w );
-}
-
-static void Cn3D_DisplayCtrlProc(IteM i)
-{
-  /* use hide/show */
-  if (i == NULL)
-    {
-      SetStatus(Cn3D_iDisplayCtrl, FALSE);
-      Hide( Cn3D_gDisplayCtrl );
-      Update();
-      return;
-    }
-
-  if (GetStatus(Cn3D_iDisplayCtrl) == TRUE)
-    {
-     Hide( Cn3D_gRendCtrl );
-     Hide( Cn3D_gLabelCtrl );
-     Hide( Cn3D_gAlignCtrl );
-     Show( Cn3D_gDisplayCtrl );
-     Update();
-     if (GetStatus(Cn3D_iRendCtrl) == TRUE || GetStatus(Cn3D_iLabelCtrl) == TRUE || GetStatus(Cn3D_iAlignCtrl) == TRUE)
-        {
-          SetStatus(Cn3D_iRendCtrl, FALSE);
-          SetStatus(Cn3D_iLabelCtrl, FALSE);
-          SetStatus(Cn3D_iAlignCtrl, FALSE);
-          return;
-        }
-
-    }
-  else
-    {
-     Hide( Cn3D_gDisplayCtrl );
-     Update();
-    }
-
-  Cn3DResizeProc( Cn3D_w );
+  if (GetStatus (i)) {
+    SafeShow (Cn3D_wCtrls);
+    Select (Cn3D_wCtrls);
+  } else {
+    SafeHide (Cn3D_wCtrls);
+  }
+  Update ();
 }
 
 
@@ -1836,14 +1991,13 @@ static void Cn3D_ViewerCtrlProc(IteM i)
   Cn3DResizeProc( Cn3D_w );
 }
 
+extern void Cn3D_HideCtrl (WindoW w);
+extern void Cn3D_HideCtrl (WindoW w)
 
-static void ControlsShowing(void)
 {
-  Cn3D_RenderCtrlProc( NULL );
-  Cn3D_LabelCtrlProc ( NULL );
-  Cn3D_AlignCtrlProc(NULL);
-  Cn3D_DisplayCtrlProc(NULL);
-  Cn3D_ViewerCtrlProc( NULL );
+  SetStatus (Cn3D_iDisplayCtrl, FALSE);
+  SafeHide (Cn3D_wCtrls); /* w may be NULL if called from cn3dentr.c */
+  Update ();
 }
 
 
@@ -1863,7 +2017,7 @@ static void Cn3D_Quit(WindoW w)
 
 /* Create a complete CN3D window and GUI environment
  */
-extern WindoW LIBCALL Cn3DWin(WndActnProc on_close, MenU *file_menu)
+extern WindoW LIBCALL Cn3DWin(WndActnProc on_close, MenU *file_menu, ItmActnProc netconfig, Boolean usingEntrez)
 {
   static Boolean Cn3D_Window_Alive = FALSE;
 
@@ -1894,12 +2048,12 @@ extern WindoW LIBCALL Cn3DWin(WndActnProc on_close, MenU *file_menu)
 
     /* CN3d window and menubar
      */
-    Cn3D_w = DocumentWindow(-33, -10, -10, -10, "Cn3D 2.01",
+    Cn3D_w = DocumentWindow(-33, -10, -10, -10, "Cn3D 2.50",
                             (on_close ? on_close : Cn3D_Quit), NULL);
 
     /* CN3D general menu set
      */
-    menu = Cn3D_Menus( Cn3D_w );
+    menu = Cn3D_Menus( Cn3D_w, netconfig, usingEntrez );
 
     if ( file_menu )
       *file_menu = menu;
@@ -1921,7 +2075,7 @@ extern WindoW LIBCALL Cn3DWin(WndActnProc on_close, MenU *file_menu)
       Cn3D_size = 400;
 
     Cn3D_uSize = (Uint2)Cn3D_size;
-    Cn3D_gWinGP = Viewer3DGroups(Cn3D_w, &Cn3D_uSize, Cn3D_uSize);
+    Cn3D_gWinGP = Viewer3DViewer(Cn3D_w, &Cn3D_uSize, Cn3D_uSize);
   }}
 
   ProcessUpdatesFirst( FALSE );
@@ -1929,13 +2083,16 @@ extern WindoW LIBCALL Cn3DWin(WndActnProc on_close, MenU *file_menu)
     return (Handle)NULL;
 
   Cn3D_EnableFileOps();
-  ControlsShowing();
   RealizeWindow( Cn3D_w );
   Cn3D_Redraw( TRUE );
   Cn3dObjMgrGetSelected();
   SetResize(Cn3D_w, Cn3DResizeProc);
   Cn3DResizeProc( Cn3D_w );
   Cn3D_Window_Alive = TRUE;
+
+  Cn3D_wCtrls = FixedWindow (-10, -33, -10, -10, "Viewer Controls", Cn3D_HideCtrl);
+  Cn3D_gWinGP = Viewer3DGroups(Cn3D_wCtrls);
+  RealizeWindow( Cn3D_wCtrls );
 
   return Cn3D_w;
 }

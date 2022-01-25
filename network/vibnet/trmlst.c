@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/5/96
 *
-* $Revision: 6.22 $
+* $Revision: 6.23 $
 *
 * File Description: 
 *
@@ -1204,6 +1204,7 @@ static void ScrollToText (TermFormPtr tfp, CharPtr str, Int2 page,
   if (page == 0) return;
   StringNCpy_0 (temp, str, sizeof (temp));
   ChangeUnderscoreToSpace (temp);
+  ChangeMeshSlashSymbol (temp);
   text = GetDocText (tfp->avail, page, 0, 1); /* forces format if not before */
   GetItemParams4 (tfp->avail, page, &startsAt, NULL, NULL, NULL, NULL);
   GetDocParams4 (tfp->avail, NULL, &numLines);

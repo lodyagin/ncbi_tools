@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.5 $
+* $Revision: 6.6 $
 *
 * File Description:  Sequence Utilities for objseq and objsset
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: sequtil.h,v $
+* Revision 6.6  1999/01/12 18:00:19  kans
+* SeqIdComp now ignores version if < 1, and added PRINTID_TEXTID_ACC_VER and PRINTID_TEXTID_ACC_ONLY formats for SeqIdWrite
+*
 * Revision 6.5  1998/07/28 16:41:09  kans
 * added MakeNewProteinSeqIdEx for faster creation of many new protein products
 *
@@ -500,7 +503,9 @@ NLM_EXTERN Boolean SeqEntryConvert PROTO((SeqEntryPtr sep, Uint1 newcode));
 #define PRINTID_FASTA_LONG ( (Uint1)2)
 #define PRINTID_TEXTID_LOCUS ( (Uint1)3)
 #define PRINTID_TEXTID_ACCESSION ( (Uint1)4)
-#define PRINTID_REPORT ((Uint1)5)
+#define PRINTID_REPORT ( (Uint1)5)
+#define PRINTID_TEXTID_ACC_VER ( (Uint1)6)
+#define PRINTID_TEXTID_ACC_ONLY ( (Uint1)7)
 
 
 /*****************************************************************************

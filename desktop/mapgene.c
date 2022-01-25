@@ -2244,8 +2244,10 @@ Boolean map_gene_location (GlobalDrawPtr gdraw_p, ValNodePtr g_list, GeneDataPtr
 		if(gdata == NULL)
 		{
 			str = g_list->data.ptrvalue;
-			ErrPostEx(SEV_ERROR, 0, 0, "Fail to find gene %s", str);
-			ValNodeFreeData(g_list);
+			if (!is_html) {
+				ErrPostEx(SEV_ERROR, 0, 0, "Fail to find gene %s", str);
+			}
+			/*ValNodeFreeData(g_list); */
 			return FALSE;
 		}
 
@@ -2254,8 +2256,10 @@ Boolean map_gene_location (GlobalDrawPtr gdraw_p, ValNodePtr g_list, GeneDataPtr
 		{
 			GeneDataFree(gdata);
 			str = g_list->data.ptrvalue;
-			ErrPostEx(SEV_ERROR, 0, 0, "Fail to find location for gene %s", str);
-			ValNodeFreeData(g_list);
+			if (!is_html) {
+				ErrPostEx(SEV_ERROR, 0, 0, "Fail to find location for gene %s", str);
+			}
+		/*	ValNodeFreeData(g_list);*/
 			return FALSE;
 		}
 		*pgdata = gdata;
@@ -2281,7 +2285,9 @@ Boolean map_gene_location (GlobalDrawPtr gdraw_p, ValNodePtr g_list, GeneDataPtr
 			if(gdata == NULL)
 			{
 				str = g_list->data.ptrvalue;
-				ErrPostEx(SEV_ERROR, 0, 0, "Fail to find gene %s", str);
+				if (!is_html) {
+					ErrPostEx(SEV_ERROR, 0, 0, "Fail to find gene %s", str);
+				}
 			}
 			else
 			{
@@ -2290,7 +2296,9 @@ Boolean map_gene_location (GlobalDrawPtr gdraw_p, ValNodePtr g_list, GeneDataPtr
 				{
 					GeneDataFree(gdata);
 					str = curr->data.ptrvalue;
-					ErrPostEx(SEV_ERROR, 0, 0, "Fail to find location for gene %s", str);
+					if (!is_html) {
+						ErrPostEx(SEV_ERROR, 0, 0, "Fail to find location for gene %s", str);
+					}
 				}
 				else
 					link_gene_data(pgdata, gdata);
@@ -2305,7 +2313,7 @@ Boolean map_gene_location (GlobalDrawPtr gdraw_p, ValNodePtr g_list, GeneDataPtr
 
 		if(msp_1_list == NULL && msp_2_list == NULL)
 		{
-			ValNodeFreeData(g_list);
+			/*ValNodeFreeData(g_list);*/
 			return FALSE;
 		}
 

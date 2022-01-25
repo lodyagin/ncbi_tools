@@ -31,8 +31,26 @@ Author: Tom Madden
 Contents: Utilities for BLAST
 
 ******************************************************************************/
-/* $Revision: 6.34 $ */
+/* $Revision: 6.40 $ */
 /* $Log: blastool.c,v $
+/* Revision 6.40  1999/01/08 22:08:42  madden
+/* BlastScaleMatrix returns factor as FloatHi
+/*
+ * Revision 6.39  1998/12/31 18:17:06  madden
+ * Added strand option
+ *
+ * Revision 6.38  1998/12/29 17:45:07  madden
+ * Add do_sum_stats flag
+ *
+ * Revision 6.37  1998/12/03 15:19:32  madden
+ * Changes to speed up BlastFreeHeap and InsertToHeap
+ *
+ * Revision 6.36  1998/11/04 01:36:06  egorov
+ * Add support for entrez-query and org-name to blast3
+ *
+ * Revision 6.35  1998/10/13 22:06:24  madden
+ * Fixed AdjustDbNumbers
+ *
  * Revision 6.34  1998/09/28 12:29:24  madden
  * Check for problem in rescaling code
  *
@@ -880,14 +898,22 @@ BLASTOptionNew(CharPtr progname, Boolean gapped)
 
 	options->block_width = 20;
 	options->hsp_range_max = 100;
+	options->entrez_query = NULL;
+	options->gifile = NULL;
+	options->gilist = NULL;
 
 	if (gapped)
 	{
 		options->gapped_calculation = TRUE;
+		/* for testing
+		options->do_sum_stats = FALSE;
+		*/
+		options->do_sum_stats = TRUE;
 	}
 	else
 	{
 		options->gapped_calculation = FALSE;
+		options->do_sum_stats = TRUE;
 	}
 
 	options->discontinuous = FALSE;	/* discontinuous is default. */
@@ -917,6 +943,8 @@ BLASTOptionNew(CharPtr progname, Boolean gapped)
 		options->gap_extend  = 2;
 		options->gap_x_dropoff  = 50;
 		options->gap_x_dropoff_final  = 50;
+		options->gap_trigger  = 25.0;
+		options->strand_option  = BLAST_BOTH_STRAND;
 	}
 	else
 	{
@@ -963,6 +991,8 @@ BLASTOptionNew(CharPtr progname, Boolean gapped)
 			options->genetic_code = 1;
 			options->threshold_first = 12;
 			options->threshold_second = 12;
+			options->do_sum_stats = TRUE;
+			options->strand_option  = BLAST_BOTH_STRAND;
 		}
 		else if (StringICmp(progname, "tblastn") == 0)
 		{
@@ -970,6 +1000,7 @@ BLASTOptionNew(CharPtr progname, Boolean gapped)
 			options->db_genetic_code = 1;
 			options->threshold_first = 13;
 			options->threshold_second = 13;
+			options->do_sum_stats = TRUE;
 		}
 		else if (StringICmp(progname, "tblastx") == 0)
 		{
@@ -983,6 +1014,8 @@ BLASTOptionNew(CharPtr progname, Boolean gapped)
 			options->gap_x_dropoff  = 0;
 			options->gap_x_dropoff_final  = 0;
 			options->gapped_calculation = FALSE;
+			options->do_sum_stats = TRUE;
+			options->strand_option  = BLAST_BOTH_STRAND;
 		}
 	}
 
@@ -1080,6 +1113,12 @@ BLASTOptionValidateEx (BLAST_OptionsBlkPtr options, CharPtr progname, ValNodePtr
 			return 1;
 		}
 
+		if ((options->strand_option | BLAST_BOTH_STRAND) == 0)
+		{
+			BlastConstructErrorMessage("BLASTOptionValidateEx", "invalid strand specified", 1, error_return);
+			return 1;
+		}
+
 /*
 		if (options->multiple_hits_only == TRUE)
 		{
@@ -1090,6 +1129,14 @@ BLASTOptionValidateEx (BLAST_OptionsBlkPtr options, CharPtr progname, ValNodePtr
 	}
 	else
 	{
+		if (StringICmp(progname, "blastx") == 0 || StringICmp(progname, "tblastx") == 0)
+		{
+			if ((options->strand_option | BLAST_BOTH_STRAND) == 0)
+			{
+				BlastConstructErrorMessage("BLASTOptionValidateEx", "invalid strand specified", 1, error_return);
+				return 1;
+			}
+		}
 		if (options->wordsize < 2 || options->wordsize > 3)
 		{
 			BlastConstructErrorMessage("BLASTOptionValidateEx", "Valid wordsize range is 2 to 3", 1, error_return);
@@ -1312,7 +1359,7 @@ BlastAdjustDbNumbers (ReadDBFILEPtr rdfp, Int8Ptr db_length, Int4Ptr db_number, 
 
 {
 	Int4 count, db_number_start, index, ordinal_id;
-        Int8	db_length_start;
+        Int8	db_length_private, db_length_start;
 	SeqIdPtr sip;
 
 		
@@ -1325,6 +1372,7 @@ BlastAdjustDbNumbers (ReadDBFILEPtr rdfp, Int8Ptr db_length, Int4Ptr db_number, 
 	}
 
 	count = 0;
+	db_length_private = 0;
 	if (gi_list)
 	{
 		for (index=0; index<gi_list_total; index++)
@@ -1332,6 +1380,7 @@ BlastAdjustDbNumbers (ReadDBFILEPtr rdfp, Int8Ptr db_length, Int4Ptr db_number, 
 			if (gi_list[index].ordinal_id >= 0)
 				continue;
 			gi_list[index].ordinal_id = readdb_gi2seq(rdfp, gi_list[index].gi);
+			db_length_private += readdb_get_sequence_length(rdfp, gi_list[index].ordinal_id);
 			gi_list_pointers[index] = &(gi_list[index]);
 			if (gi_list[index].ordinal_id >= 0)
 				count++;
@@ -1350,7 +1399,10 @@ BlastAdjustDbNumbers (ReadDBFILEPtr rdfp, Int8Ptr db_length, Int4Ptr db_number, 
 	}
 
 
-	*db_length = count*(db_length_start/db_number_start);
+	if (db_length_private > 0)
+		*db_length = db_length_private;
+	else
+		*db_length = count*(db_length_start/db_number_start);
 	*db_number = count;
 
 	return TRUE;
@@ -1483,7 +1535,7 @@ static void updateLambdaK(BlastMatrixRescalePtr matrix_rescale, Boolean position
   sfp = BlastScoreFreqDestruct(sfp);
 }
 
-void 
+Nlm_FloatHi 
 BlastScaleMatrix(BlastMatrixRescalePtr matrix_rescale, Boolean position_dependent)
 {
    Int4 dim1, dim2;
@@ -1604,6 +1656,8 @@ BlastScaleMatrix(BlastMatrixRescalePtr matrix_rescale, Boolean position_dependen
 
    for(a = 0; a < matrix_rescale->alphabet_size; a++) 
      matrix[dim1][a] = BLAST_SCORE_MIN;
+
+	return factor;
 }
 
 
@@ -1984,8 +2038,9 @@ Int2
 BlastInsertList2Heap(BlastSearchBlkPtr search, BLASTResultHitlistPtr result_hitlist)
 {
     BLASTResultHspPtr PNTR heap, hsp;
+    BLASTResultHspPtr hsp_array;
     Int4 index, hsp_range_max;
-    Int4 begin, end;
+    Int4 begin, end, hspcnt;
     Boolean hsp_deleted, new_inserted;
     BLASTHeapPtr hp;
 
@@ -1994,8 +2049,11 @@ BlastInsertList2Heap(BlastSearchBlkPtr search, BLASTResultHitlistPtr result_hitl
 
     hsp_deleted = new_inserted  = FALSE;  
     hsp_range_max = search->pbp->hsp_range_max;
-    for (index = 0; index < result_hitlist->hspcnt; index++) {
-      hsp = &result_hitlist->hsp_array[index];    
+    hspcnt = result_hitlist->hspcnt;
+    hsp_array = result_hitlist->hsp_array;
+
+    for (index = 0; index < hspcnt; index++) {
+      hsp = &hsp_array[index];    
       begin = hsp->query_offset;
       end = (hsp->query_offset+hsp->query_length-1);
       for (hp = search->result_struct->heap_ptr; hp; hp = hp->next) 
@@ -2058,8 +2116,9 @@ void
 BlastFreeHeap(BlastSearchBlkPtr search, BLASTResultHitlistPtr result_hitlist)
 { 
     BLASTResultHspPtr PNTR heap, hsp;
+    BLASTResultHspPtr hsp_array;
     Int4 index, block_width, hsp_range_max;
-    Int4 begin, end, i;
+    Int4 begin, end, i, hspcnt;
     BLASTHeapPtr hp;
 
     if (search->pbp->perform_culling == FALSE)  /* Culling is turned off. */
@@ -2067,8 +2126,11 @@ BlastFreeHeap(BlastSearchBlkPtr search, BLASTResultHitlistPtr result_hitlist)
 
     block_width = search->pbp->block_width;  
     hsp_range_max = search->pbp->hsp_range_max;
-    for (index = 0; index < result_hitlist->hspcnt; index++) {
-      hsp = &result_hitlist->hsp_array[index];
+    hspcnt = result_hitlist->hspcnt;
+    hsp_array = result_hitlist->hsp_array;
+
+    for (index = 0; index < hspcnt; index++) {
+      hsp = &hsp_array[index];
       begin = hsp->query_offset;
       end = hsp->query_offset+hsp->query_length-1;
       if (hsp->back_left) {

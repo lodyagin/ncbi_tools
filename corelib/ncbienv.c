@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/7/91
 *
-* $Revision: 6.5 $
+* $Revision: 6.6 $
 *
 * File Description:
 *       portable environment functions, companions for ncbimain.c
@@ -37,6 +37,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ncbienv.c,v $
+* Revision 6.6  1998/12/10 17:04:06  vakatov
+* Fixed to compile under LINUX(Red Hat 2.XX, gcc, with POSIX threads)
+*
 * Revision 6.5  1997/11/26 21:26:10  vakatov
 * Fixed errors and warnings issued by C and C++ (GNU and Sun) compilers
 *
@@ -416,8 +419,8 @@ static Nlm_Boolean Nlm_CacheAppParam_ST(Nlm_Boolean value)
 
 
 #ifdef OS_UNIX
-#define NLM_POSIX1C (_POSIX1C || \
-                     (_POSIX_C_SOURCE - 0 >= 199506L) || \
+#define NLM_POSIX1B (_POSIX1B || _POSIX1C || \
+                     (_POSIX_C_SOURCE - 0 >= 199309L) || \
                      defined(_POSIX_PTHREAD_SEMANTICS))
 
 /*****************************************************************************
@@ -448,15 +451,19 @@ static Nlm_Boolean Nlm_GetHome (Nlm_CharPtr buf, Nlm_Int2 buflen)
 #if  defined(SOLARIS_THREADS_AVAIL)  ||  defined(POSIX_THREADS_AVAIL)
       struct passwd pwd;
 #ifndef LOGNAME_MAX
+#if defined(MAXLOGNAME)
 #define LOGNAME_MAX MAXLOGNAME
+#elif defined(_POSIX_LOGIN_NAME_MAX)
+#define LOGNAME_MAX _POSIX_LOGIN_NAME_MAX
 #endif
+#endif /* ndef LOGNAME_MAX */
       Nlm_Char      login_name[LOGNAME_MAX + 1];
       Nlm_Char      pwd_buffer[LOGNAME_MAX + PATH_MAX + 1024 + 1];
-      Nlm_Boolean   ok = (getlogin_r(login_name, sizeof(login_name))
-#if NLM_POSIX1C
-                        == 0);
+      Nlm_Boolean   ok = getlogin_r(login_name, sizeof(login_name)) ?
+#if NLM_POSIX1B
+                        FALSE : TRUE;
 #else
-                        != NULL);
+                        TRUE : FALSE;
 #endif
 #else
 
@@ -470,7 +477,7 @@ static Nlm_Boolean Nlm_GetHome (Nlm_CharPtr buf, Nlm_Int2 buflen)
 #if  defined(SOLARIS_THREADS_AVAIL)  ||  defined(POSIX_THREADS_AVAIL)
           pwd_ptr = &pwd;
           ok = (getpwnam_r(login_name, pwd_ptr, pwd_buffer, sizeof(pwd_buffer)
-#if NLM_POSIX1C
+#if NLM_POSIX1B
                            , &pwd_ptr) == 0);
 #else
                            ) != NULL);
@@ -487,7 +494,7 @@ static Nlm_Boolean Nlm_GetHome (Nlm_CharPtr buf, Nlm_Int2 buflen)
 #if  defined(SOLARIS_THREADS_AVAIL)  ||  defined(POSIX_THREADS_AVAIL)
           pwd_ptr = &pwd;
           ok = (getpwuid_r(getuid(), pwd_ptr, pwd_buffer, sizeof(pwd_buffer)
-#if NLM_POSIX1C
+#if NLM_POSIX1B
                            , &pwd_ptr) == 0);
 #else
                            ) != NULL);

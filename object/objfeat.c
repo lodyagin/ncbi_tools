@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.3 $
+* $Revision: 6.7 $
 *
 * File Description:  Object manager for module NCBI-SeqFeat
 *
@@ -1507,7 +1507,7 @@ erret:
     goto ret;
 }
 
-static GeneticCodePtr genetic_codes;    /* array of ValNodes */
+static GeneticCodePtr genetic_codes = NULL;    /* array of ValNodes */
 static Boolean GeneticCodeAdd PROTO((GeneticCodePtr gc));
 
 /*****************************************************************************
@@ -1777,11 +1777,78 @@ ret:
 
 /*****************************************************************************
 *
+*   genCodeTblMemStr as last resort embedded version of gc.prt
+*
+*****************************************************************************/
+
+#ifndef WIN16
+static CharPtr genCodeTblMemStr = "Genetic-code-table ::= {\n" \
+"{ name \"Standard\" , name \"SGC0\" , id 1 ,\n" \
+"ncbieaa  \"FFLLSSSSYY**CC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG\",\n" \
+"sncbieaa \"---M---------------M---------------M----------------------------\" } ,\n" \
+"{ name \"Vertebrate Mitochondrial\" , name \"SGC1\" , id 2 ,\n" \
+"ncbieaa  \"FFLLSSSSYY**CCWWLLLLPPPPHHQQRRRRIIMMTTTTNNKKSS**VVVVAAAADDEEGGGG\",\n" \
+"sncbieaa \"--------------------------------MMMM---------------M------------\" } ,\n" \
+"{ name \"Yeast Mitochondrial\" , name \"SGC2\" , id 3 ,\n" \
+"ncbieaa  \"FFLLSSSSYY**CCWWTTTTPPPPHHQQRRRRIIMMTTTTNNKKSSRRVVVVAAAADDEEGGGG\",\n" \
+"sncbieaa \"-----------------------------------M----------------------------\" } ,\n" \
+"{ name \"Mold Mitochondrial; Protozoan Mitochondrial; Coelenterate\n" \
+"Mitochondrial; Mycoplasma; Spiroplasma\" ,\n" \
+"name \"SGC3\" , id 4 ,\n" \
+"ncbieaa  \"FFLLSSSSYY**CCWWLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG\",\n" \
+"sncbieaa \"--MM---------------M------------MMMM---------------M------------\" } ,\n" \
+"{ name \"Invertebrate Mitochondrial\" , name \"SGC4\" , id 5 ,\n" \
+"ncbieaa  \"FFLLSSSSYY**CCWWLLLLPPPPHHQQRRRRIIMMTTTTNNKKSSSSVVVVAAAADDEEGGGG\",\n" \
+"sncbieaa \"---M----------------------------MMMM---------------M------------\" } ,\n" \
+"{ name \"Ciliate Nuclear; Dasycladacean Nuclear; Hexamita Nuclear\" ,\n" \
+"name \"SGC5\" , id 6 ,\n" \
+"ncbieaa  \"FFLLSSSSYYQQCC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG\",\n" \
+"sncbieaa \"-----------------------------------M----------------------------\" } ,\n" \
+"{ name \"Echinoderm Mitochondrial\" , name \"SGC8\" , id 9 ,\n" \
+"ncbieaa  \"FFLLSSSSYY**CCWWLLLLPPPPHHQQRRRRIIIMTTTTNNNKSSSSVVVVAAAADDEEGGGG\",\n" \
+"sncbieaa \"-----------------------------------M----------------------------\" } ,\n" \
+"{ name \"Euplotid Nuclear\" , name \"SGC9\" , id 10 ,\n" \
+"ncbieaa  \"FFLLSSSSYY**CCCWLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG\",\n" \
+"sncbieaa \"-----------------------------------M----------------------------\" } ,\n" \
+"{ name \"Bacterial\" , id 11 ,\n" \
+"ncbieaa  \"FFLLSSSSYY**CC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG\",\n" \
+"sncbieaa \"---M---------------M------------MMMM---------------M------------\" } ,\n" \
+"{ name \"Alternative Yeast Nuclear\" , id 12 ,\n" \
+"ncbieaa  \"FFLLSSSSYY**CC*WLLLSPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG\",\n" \
+"sncbieaa \"-------------------M---------------M----------------------------\" } ,\n" \
+"{ name \"Ascidian Mitochondrial\" , id 13 ,\n" \
+"ncbieaa  \"FFLLSSSSYY**CCWWLLLLPPPPHHQQRRRRIIMMTTTTNNKKSSGGVVVVAAAADDEEGGGG\",\n" \
+"sncbieaa \"-----------------------------------M----------------------------\" } ,\n" \
+"{ name \"Flatworm Mitochondrial\" , id 14 ,\n" \
+"ncbieaa  \"FFLLSSSSYYY*CCWWLLLLPPPPHHQQRRRRIIIMTTTTNNNKSSSSVVVVAAAADDEEGGGG\",\n" \
+"sncbieaa \"-----------------------------------M----------------------------\" } ,\n" \
+"{ name \"Blepharisma Macronuclear\" , id 15 ,\n" \
+"ncbieaa  \"FFLLSSSSYY*QCC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG\",\n" \
+"sncbieaa \"-----------------------------------M----------------------------\" } };\n";
+#endif
+
+/*****************************************************************************
+*
 *   GeneticCodePtr GeneticCodeTableLoad()
 *       loads all current genetic codes
 *       looks for "gc.val" in the "data" directory
+*       now uses genCodeTblMemStr if unable to find "data" directory
 *
 *****************************************************************************/
+static Boolean LoadGenCodeFromLocalString (void)
+
+{
+#ifndef WIN16
+  AsnIoMemPtr aimp;
+
+  aimp = AsnIoMemOpen ("r", (BytePtr) genCodeTblMemStr, (Int4) StringLen (genCodeTblMemStr));
+  if (aimp == NULL || aimp->aip == NULL) return FALSE;
+  GeneticCodeTableAsnRead (aimp->aip, NULL);
+  AsnIoMemClose (aimp);
+#endif
+  return (Boolean) (genetic_codes != NULL);
+}
+
 NLM_EXTERN GeneticCodePtr LIBCALL GeneticCodeTableLoad (void)
 {
     Char buf[80];
@@ -1792,13 +1859,23 @@ NLM_EXTERN GeneticCodePtr LIBCALL GeneticCodeTableLoad (void)
 
     if (! FindPath("ncbi", "ncbi", "data", buf, sizeof (buf)))
 	{
-		ErrPostEx(SEV_WARNING, 0, 0, "FindPath failed in GeneticCodeTableLoad");
+
+		if (LoadGenCodeFromLocalString ()) {
+			return genetic_codes;
+		}
+
+		ErrPostEx(SEV_WARNING, 0, 0, "FindPath failed in GeneticCodeTableLoad - ncbi configuration file missing or incorrect");
         return genetic_codes;
 	}
 
     StringCat(buf, "gc.val");
     if ((aip = AsnIoOpen(buf, "rb")) == NULL)
 	{
+
+		if (LoadGenCodeFromLocalString ()) {
+			return genetic_codes;
+		}
+
 		ErrPostEx(SEV_WARNING, 0, 0, "Couldn't open [%s]", buf);
         return genetic_codes;
 	}

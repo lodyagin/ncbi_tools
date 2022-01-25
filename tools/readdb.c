@@ -47,7 +47,7 @@ Detailed Contents:
 *
 * Version Creation Date:   3/22/95
 *
-* $Revision: 6.35 $
+* $Revision: 6.37 $
 *
 * File Description: 
 *       Functions to rapidly read databases from files produced by formatdb.
@@ -62,6 +62,12 @@ Detailed Contents:
 *
 * RCS Modification History:
 * $Log: readdb.c,v $
+* Revision 6.37  1999/01/07 14:35:01  madden
+* Fix for readdb_acc2fasta for multiple databases
+*
+* Revision 6.36  1998/12/14 21:50:15  egorov
+* new max gi number memeber in CommonIndexHead structure and therefore no need for COMMON_INDEX_TABLE_SIZE
+*
 * Revision 6.35  1998/09/24 15:26:41  egorov
 * Fix lint complaints
 *
@@ -1523,7 +1529,7 @@ readdb_acc2fasta(ReadDBFILEPtr rdfp, CharPtr string)
   	  if(error != ISAMNotFound) {
        		 Value = atol(data);
        		 MemFree(data);
-       		 return Value;
+       		 return Value + rdfp->start;
     	}
 
     /* Now trying LOCUS */
@@ -1542,7 +1548,7 @@ readdb_acc2fasta(ReadDBFILEPtr rdfp, CharPtr string)
   	  if(error != ISAMNotFound) {
        		 Value = atol(data);
        		 MemFree(data);
-       		 return Value;
+       		 return Value + rdfp->start;
     	}
 
     /* Now trying string */
@@ -2935,6 +2941,7 @@ CommonIndexHeadPtr	CommonIndexInit(CharPtr indexfilename) {
 	return NULL;
     }
 
+    cihp->maxgi = FileLength(indexfilename) / sizeof(CommonIndex);
     cihp->memmap = mmpindx;
     cihp->ci = (CommonIndexPtr) mmpindx->mmp_begin;
 
@@ -3049,7 +3056,7 @@ Int4    GI2OID(CommonIndexHeadPtr cih, Int4 gi, Int4 dbmask, Int2 *dbid)
     CommonIndexResultPtr cir;
     Int4		retval;
  
-    if (gi >= COMMON_INDEX_TABLE_SIZE) {
+    if (gi >= cih->maxgi) {
 	ErrPostEx(SEV_ERROR, 0, 0, "Too large GI number: %d\n", gi);
         return 0;
     }

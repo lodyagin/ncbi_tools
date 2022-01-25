@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.8 $
+* $Revision: 6.9 $
 *
 * File Description: 
 *
@@ -45,6 +45,9 @@
 /*************************************
 *
  * $Log: asn2ffp.h,v $
+ * Revision 6.9  1998/10/19 15:57:04  tatiana
+ * DBNUM increased for UniGene tag
+ *
  * Revision 6.8  1998/08/19 18:40:03  tatiana
  * DBNUM increased to add RiceGenes dbrag
  *
@@ -126,6 +129,9 @@
 /*************************************
 *
 * $Log: asn2ffp.h,v $
+* Revision 6.9  1998/10/19 15:57:04  tatiana
+* DBNUM increased for UniGene tag
+*
 * Revision 6.8  1998/08/19 18:40:03  tatiana
 * DBNUM increased to add RiceGenes dbrag
 *
@@ -237,7 +243,7 @@ NLM_EXTERN  Boolean asn2ff_flags[13];
 #define ASN2FF_SHOW_ERROR_MSG	        asn2ff_flags[11]
 #define ASN2FF_SHOW_GB_STYLE	        asn2ff_flags[12]
 
-#define DBNUM 22
+#define DBNUM 23
 NLM_EXTERN CharPtr dbtag[DBNUM];
 
 NLM_EXTERN void FlatSpliceOff PROTO((SeqEntryPtr the_set, ValNodePtr desc));

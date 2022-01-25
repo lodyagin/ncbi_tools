@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/23/94
 *
-* $Revision: 6.0 $
+* $Revision: 6.1 $
 *
 * File Description: 
 *
@@ -199,6 +199,10 @@ Any feature| SEGMENT    |    | *  |    | *  |    |    | *1 |    | *  |    |   |
 /**************************************************************************/
 /* FUNCTION PROTOTYPES */
 /**************************************************************************/
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 extern void   LIBCALL     Nlm_InitMuskStyles   (void);
 extern void   LIBCALL     Nlm_ExitMuskStyles   (void);
 extern void   LIBCALL     Nlm_MuskStyleManager (void);
@@ -218,6 +222,10 @@ extern BigScalar   Nlm_GetMuskCParamEd  (Nlm_Int2 p_class, Nlm_Int2 p_subclass,
                                          Nlm_Int2 p_type); 
 extern void        Nlm_FreeMuskStyleEd  (Nlm_Boolean save);
 extern Nlm_FonT        Nlm_LoadMuskFont     ( Nlm_FontSpecPtr fsp, Int2 fnum, Int2Ptr fsize);
+
+#ifdef __cplusplus
+}
+#endif
 
 /**************************************************************************/
 /* FUNCTION NAME DEFINITION */

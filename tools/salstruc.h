@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.10 $
+* $Revision: 6.13 $
 *
 * File Description: 
 *
@@ -118,8 +118,7 @@ extern void PropagateFeatureBySeqLock (SeqAnnotPtr sap, Uint2 source_bspitemID, 
 ***   gap_choice = IGNORE_GAP_CHOICE...
 **********************************************************************/
 extern void ReplaceBioseq (SeqIdPtr target_id, SeqIdPtr source_id, SeqAlignPtr salp, Uint1 gap_choice, Boolean stoptransl);
-extern void Merge5Func (SeqIdPtr target_id, SeqIdPtr source_id, SeqAlignPtr salp, Boolean spliteditmode);
-extern void Merge3Func (SeqIdPtr target_id, SeqIdPtr source_id, SeqAlignPtr salp, Boolean spliteditmode);
+extern Boolean MergeFunc (SeqIdPtr target_id, SeqIdPtr source_id, SeqAlignPtr salp, Int4 fromseq2, Int4 toseq2, ValNodePtr sqlocs, Boolean spliteditmode);
 extern void CopyFeatFunc (SeqIdPtr target_id, SeqIdPtr source_id, SeqAlignPtr salp, Uint1 gap_choice, Boolean stoptransl);
 
 

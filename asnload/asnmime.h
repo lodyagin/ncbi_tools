@@ -9,7 +9,7 @@
 #include <asn.h>
 #endif
 
-static char * asnfilename = "asnmime.l63";
+static char * asnfilename = "asnmime.l64";
 static AsnValxNodePtr avn;
 static AsnTypePtr at;
 static AsnModulePtr amp;
@@ -26,6 +26,7 @@ static AsnModulePtr amp;
 #define NCBI_MIME_ASN1_alignstruc &at[22]
 #define NCBI_MIME_ASN1_alignseq &at[34]
 #define NCBI_MIME_ASN1_strucseq &at[40]
+#define NCBI_MIME_ASN1_strucseqs &at[45]
 
 #define ENTREZ_GENERAL &at[2]
 #define ENTREZ_GENERAL_title &at[3]
@@ -59,5 +60,12 @@ static AsnModulePtr amp;
 #define BIOSTRUC_SEQ_structure &at[42]
 #define BIOSTRUC_SEQ_sequences &at[43]
 #define BIOSTRUC_SEQ_sequences_E &at[44]
+
+#define BIOSTRUC_SEQS &at[46]
+#define BIOSTRUC_SEQS_structure &at[47]
+#define BIOSTRUC_SEQS_sequences &at[48]
+#define BIOSTRUC_SEQS_sequences_E &at[49]
+#define BIOSTRUC_SEQS_seqalign &at[50]
+#define BIOSTRUC_SEQS_seqalign_E &at[51]
 
 #define ENTREZ_STYLE &at[18]

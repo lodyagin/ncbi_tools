@@ -1,5 +1,5 @@
 #! /bin/sh
-#    $Id: PubStruct_control.sh,v 6.17 1998/09/30 15:58:59 kimelman Exp $
+#    $Id: PubStruct_control.sh,v 6.21 1998/11/19 23:52:42 kimelman Exp $
 #  ===========================================================================
 # 
 #                             PUBLIC DOMAIN NOTICE
@@ -31,6 +31,19 @@
 #  Modifications:  
 #  --------------------------------------------------------------------------
 #  $Log: PubStruct_control.sh,v $
+#  Revision 6.21  1998/11/19 23:52:42  kimelman
+#  dust cleaning
+#
+#  Revision 6.20  1998/11/06 18:59:06  kimelman
+#  PubStruct loading transaction granularity changed
+#
+#  Revision 6.19  1998/10/22 17:03:02  kimelman
+#  user args check added
+#  downpath is configurable now.
+#
+# Revision 6.18  1998/10/16  05:42:22  kimelman
+# parallel asn loading
+#
 #  Revision 6.17  1998/09/30 15:58:59  kimelman
 #  *** empty log message ***
 #
@@ -123,7 +136,7 @@ enforce=no
 verbose=no
 stubfile=st_loader.run.$$
 
-RLOADER="${progdir}/st_loader"
+RLOADER="run_parallel guess ${progdir}/st_loader"
 
 stub_loader() {
     echo "$RLOADER $* <<EOF"   >>$stubfile
@@ -148,6 +161,8 @@ options:
                     - delete Structures with mmdb_id listed in <filename>
     --path <path_to_gzipped_files>   (default $FILEpath)
                     - set path to directory contained gzipped asns
+    --downpath <path_to_download>   (default $downpath)
+                    - set path to downloading directory
     --load_list <filename>    
                     - load to database structures with mmdb_id listed in <filename>
                       special cases for <filename>
@@ -181,10 +196,20 @@ Examples:
   agate{kml}pubstruct> $progname --delete_list ../deleted --load_list ../updated
 
 EOF
-
+    exit $1
 }
 
 while [ $# -gt 0 ]; do
+  has_param=no
+  if [ $# -ge 2 ] ; then
+    case "$2" in 
+        "--*")
+            ;;
+        *)
+            has_param=yes
+            ;;
+    esac
+  fi
   case "$1" in
     ## remove everything in DB and createw it from scrath
     "--reload_schema" )
@@ -195,40 +220,54 @@ while [ $# -gt 0 ]; do
         reload_proc=yes
     ;;
     "--load_list" )
+        [ $has_param = yes ] || usage 1
         load_list="$2"
         shift
     ;;
     "--download_list" )
+        [ $has_param = yes ] || usage 1
         download_list="$2"
         shift
     ;;
     "--delete_list" )
+        [ $has_param = yes ] || usage 1
         delete_list="$2"
         shift
     ;;
     "--path" ) ## path to directory with *.val.gz files
+        [ $has_param = yes ] || usage 1
         FILEpath="$2"
         shift
     ;;
+    "--downpath" ) ## path to directory with *.val.gz files
+        [ $has_param = yes ] || usage 1
+        downpath="$2"
+        shift
+    ;;
     "--DBserver" )
+        [ $has_param = yes ] || usage 1
         DBserver="$2"
         shift
     ;;
     "--DBname" )
+        [ $has_param = yes ] || usage 1
         DBname="$2"
         shift
     ;;
     "--DBuser" )
+        [ $has_param = yes ] || usage 1
         DBuser="$2"
         shift
     ;;
     "--DBpasswd" )
+        [ $has_param = yes ] || usage 1
         DBpasswrd="$2"
         shift
     ;;
 
     "--SYBASE" )
         SYBASE="$2"
+        [ $has_param = yes ] || usage 1
         export SYBASE
         shift
     ;;
@@ -246,7 +285,8 @@ while [ $# -gt 0 ]; do
         echo "#! /bin/sh"                       >$stubfile
         echo "# $stubfile - created at `date`" >>$stubfile
         echo "### HEADERS ###"                 >>$stubfile
-        cat ${progdir}/st_configure.sh         >>$stubfile
+        echo "progdir=${progdir} "             >>$stubfile
+        echo ". ${progdir}/st_configure.sh"    >>$stubfile
         echo "### EXECUTION PART ###"          >>$stubfile
     ;;
     "--enforce" | "-ef" )
@@ -254,8 +294,7 @@ while [ $# -gt 0 ]; do
     ;;
     * )
         echo "${progname}: Unrecognized argument: $1" 
-        usage
-        exit 1
+        usage 1
     ;;
   esac
   shift
@@ -267,15 +306,13 @@ if [ $reload_proc != yes -a $reload_schema != yes -a $load_list = empty -a \
      $download_list = empty -a  $delete_list = empty ] ; then
   echo "WARNING: No action specified!!!"
   echo "${progname}: ${options}" 
-  usage
-  exit 0
+  usage 0
 fi
 
 if [  $reload_schema = yes -a $delete_list != empty ] ; then
   echo "WARNING: 'delete_list' option is useless with 'reload_schema', exit - NO ACTION TAKEN"
   echo "${progname}: ${options}"
-  usage
-  exit 1
+  usage 1
 fi
 
 # QA passed
@@ -363,7 +400,7 @@ if [ $reload_proc = yes ] ; then
    $ISQL <PubStruct_proc.scr
 fi
 
-trap atexit 0,1
+trap atexit 0 1
 
 if [ $load_list = all ] ; then
   ## prepare list of files to load
@@ -450,7 +487,9 @@ if [ $load_list != empty ] ; then
     remove_list=$tempname.rm
     cook_deletelist  $remove_list
     ${LOADER} --load              --state=0 $OPTS <$load_list
-    ${LOADER} --download --checks --state=0 $OPTS --downpath=/tmp <$load_list
+    if [ $? -eq 0 ] ; then
+        ${LOADER} --download --checks --state=0 $OPTS --downpath=/tmp <$load_list
+    fi
   else
     echo "input file <$load_list> doesnt exist - loading failed"
   fi
@@ -489,7 +528,7 @@ fi
 
 if [ $download_list != empty ] ; then
   if [ -r $download_list ] ; then
-    ${LOADER} --download $OPTS <$download_list
+    ${LOADER} --download $OPTS --downpath=$downpath <$download_list
   else
     echo "input file <$download_list> doesnt exist - downloading failed"
   fi

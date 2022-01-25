@@ -263,7 +263,7 @@ Int4 LIBCALL init_pattern PROTO((Uint1 *pattern, Boolean is_dna, patternSearchIt
 
 Int4 LIBCALL align_of_pattern PROTO((Uint1 *querySeq, Uint1 *dbSeq, Int4 lenQuerySeq,  Int4 lenDbSeq, Int4 *alignScript,  Int4 **tback,  GapAlignBlkPtr gap_align, Int4 *useful_score,  Nlm_FloatHi *multiple, patternSearchItems *patternSearch, seedSearchItems * seedSearch));
 
-void LIBCALL pat_output PROTO((Uint1 *seq, Int4 begin, Int4 end, patternSearchItems *patternSearch));
+void LIBCALL pat_output PROTO((Uint1 *seq, Int4 begin, Int4 end, patternSearchItems *patternSearch, FILE * outfp));
 
 qseq_ptr LIBCALL split_target_seq PROTO((Uint1 *seq, Int4 seed, Int4 len_pat, Int4 len_query));
 
@@ -272,7 +272,7 @@ hit_ptr LIBCALL get_hits PROTO((qseq_ptr qp, Int4 len_of_pat,
 		 Boolean is_dna, patternSearchItems * patternSearch,
                  seedSearchItems * seedSearch, Int4 * newOccurrences));
 void LIBCALL search_pat PROTO((ReadDBFILEPtr rdpt, Char *patternFileName, Boolean is_dna, seedSearchItems *seedSearch, patternSearchItems *patternSearch,
-ValNodePtr * error_return));
+ValNodePtr * error_return, FILE * outfp));
 
 SeqAlignPtr LIBCALL output_hits PROTO((ReadDBFILEPtr rdpt,
 	    Boolean score_only, Uint1 *seq1, qseq_ptr qp, 
@@ -282,7 +282,7 @@ SeqAlignPtr LIBCALL output_hits PROTO((ReadDBFILEPtr rdpt,
             Int4 numOccurrences, Nlm_FloatHi eThresh,
             SeqIdPtr query_id, Nlm_FloatHi posEthresh, 
             posSearchItems *posSearch, Int4 numMatches, 
-            Int4 *totalBelowEThresh, Boolean showDiagnostics));
+            Int4 *totalBelowEThresh, Boolean showDiagnostics, FILE *outfp));
 
 Char*  LIBCALL get_a_pat PROTO((FILE *fp, Char **name, Int4Ptr hitArray, Int4Ptr fullHitArray, 
    Int4 * numPatOccur, Int4 *numEffectiveOccurrences, Int4 program_flag, 
@@ -301,6 +301,9 @@ void LIBCALL storeOneMatch PROTO((hit_ptr hit_list, Int4 seqno, Uint1Ptr seq,
 	      seedResultItems *seedResults));
 
 void LIBCALL seed_free_all PROTO((seedResultItems *seedResults));
+
+ValNodePtr  LIBCALL SeedPruneHitsFromSeedReturn PROTO((ValNodePtr seedReturn, Int4 number_of_descriptions));
+
 
 
 #endif /*define SEED__H*/

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.162 $
+* $Revision: 6.191 $
 *
 * File Description: 
 *
@@ -83,6 +83,7 @@
 #include <mmdbapi.h>
 #ifndef WIN16
 #include <cn3dentr.h>
+#include <cn3dopen.h>
 #endif
 
 #include <entrez.h>
@@ -106,7 +107,11 @@
 #endif
 #endif
 
-CharPtr SEQUIN_APP_VERSION = "2.70";
+extern EnumFieldAssoc  orgmod_subtype_alist [];
+extern EnumFieldAssoc  subsource_subtype_alist [];
+extern EnumFieldAssoc  biosource_genome_simple_alist [];
+
+CharPtr SEQUIN_APP_VERSION = "2.80";
 
 Boolean  useDesktop = FALSE;
 Boolean  useEntrez = FALSE;
@@ -171,6 +176,7 @@ static IteM  editseqalignitem = NULL;
 static IteM  editseqsubitem = NULL;
 static IteM  edithistoryitem = NULL;
 static MenU  updateSeqMenu = NULL;
+static MenU  addSeqMenu = NULL;
 static IteM  updalignitem = NULL;
 
 static IteM  docsumfontItem = NULL;
@@ -179,6 +185,7 @@ static IteM  preferencesItem = NULL;
 static IteM  clearUnusedItem = NULL;
 static IteM  legendItem = NULL;
 static ChoicE  queryChoice = NULL;
+static ChoicE  neighborChoice = NULL;
 #endif
 
 static Int2  startupStyle = 0;
@@ -1274,7 +1281,7 @@ static void Cn3DWinShowProc (IteM i)
   if (! EntrezIsInited ()) {
     SequinEntrezInit ("Sequin", FALSE, NULL);
   }
-  w = Cn3DWin_Entrez();
+  w = Cn3DWin_Entrez(NULL, useEntrez);
   if (w == NULL) return;
   Show (w);
   Select (w);
@@ -1766,7 +1773,7 @@ static Boolean HandleOneNewAsnProc (BaseFormPtr bfp, Boolean removeold, Boolean 
           WatchCursor ();
           Update ();
           w = CreateSubmitBlockForm (-50, -33, "Submitting Authors",
-                                     FALSE, FALSE, NULL, JustRegisterSeqEntryBtn,
+                                     FALSE, TRUE, NULL, JustRegisterSeqEntryBtn,
                                      AddSubmitBlockToSeqEntry);
           ArrowCursor ();
           if (w != NULL) {
@@ -2028,6 +2035,17 @@ static void ProcessMultipleBioseqs (BaseFormPtr bfp, CharPtr filename, Boolean r
   Update ();
 }
 
+static void ProcessMultipleSimpleSeqs (BaseFormPtr bfp, CharPtr filename, Boolean removeold,
+                                       Boolean askForSubmit, ValNodePtr simples)
+
+{
+  EntrezGlobalsPtr  egp;
+
+  egp = (EntrezGlobalsPtr) GetAppProperty ("EntrezGlobals");
+  if (egp == NULL || egp->retrieveSimpleProc == NULL) return;
+  egp->retrieveSimpleProc (NULL, simples);
+}
+
 static Boolean HandledAnnotatedProteins (BaseFormPtr bfp, ValNodePtr bioseqs)
 
 {
@@ -2092,7 +2110,8 @@ static Boolean HandledAnnotatedProteins (BaseFormPtr bfp, ValNodePtr bioseqs)
 }
 
 static Boolean DoReadAnythingLoop (BaseFormPtr bfp, CharPtr filename, CharPtr path,
-                                   Boolean removeold, Boolean askForSubmit, Boolean alwaysMult)
+                                   Boolean removeold, Boolean askForSubmit, Boolean alwaysMult,
+                                   Boolean parseFastaSeqId, Boolean fastaAsSimpleSeq)
 
 {
   ValNodePtr   bioseqs;
@@ -2107,18 +2126,21 @@ static Boolean DoReadAnythingLoop (BaseFormPtr bfp, CharPtr filename, CharPtr pa
   Boolean      rsult;
   SeqEntryPtr  sep;
   SeqEntryPtr  sephead = NULL;
+  ValNodePtr   simples;
   ValNodePtr   vnp;
 
   if (filename == NULL) return FALSE;
   fp = FileOpen (filename, "r");
   if (fp != NULL) {
     rsult = FALSE;
-    while ((dataptr = ReadAsnFastaOrFlatFile (fp, &datatype, NULL, FALSE, FALSE, FALSE)) != NULL) {
+    while ((dataptr = ReadAsnFastaOrFlatFile (fp, &datatype, NULL, FALSE, FALSE,
+                                              parseFastaSeqId, fastaAsSimpleSeq)) != NULL) {
       ValNodeAddPointer (&head, datatype, dataptr);
     }
     FileClose (fp);
     bioseqs = ValNodeExtractList (&head, OBJ_BIOSEQ);
     projects = ValNodeExtractList (&head, OBJ_PROJECT);
+    simples = ValNodeExtractList (&head, OBJ_FASTA);
     for (vnp = head; vnp != NULL; vnp = vnp->next) {
       datatype = vnp->choice;
       dataptr = vnp->data.ptrvalue;
@@ -2180,6 +2202,11 @@ static Boolean DoReadAnythingLoop (BaseFormPtr bfp, CharPtr filename, CharPtr pa
       }
     }
     ValNodeFree (bioseqs);
+    if (simples != NULL) {
+      ProcessMultipleSimpleSeqs (bfp, filename, removeold, askForSubmit, simples);
+      rsult = TRUE;
+    }
+    ValNodeFree (simples);
     return rsult;
   }
   return FALSE;
@@ -2201,7 +2228,7 @@ static Boolean CommonReadNewAsnProc (Handle obj, Boolean removeold, Boolean askF
   path [0] = '\0';
   if (path [0] != '\0' || GetInputFileName (path, sizeof (path), "", "TEXT")) {
     Update ();
-    rsult = DoReadAnythingLoop (bfp, path, path, removeold, askForSubmit, FALSE);
+    rsult = DoReadAnythingLoop (bfp, path, path, removeold, askForSubmit, FALSE, FALSE, FALSE);
   }
   ArrowCursor ();
   return rsult;
@@ -2223,15 +2250,27 @@ extern Boolean LIBCALLBACK SequinOpenMimeFile (CharPtr filename)
 
 {
   Boolean  rsult = FALSE;
+  Handle   www_cn3d;
 
 #ifdef WIN_MAC
   SafeHide (startupForm); /* if just Hide, triggers MacDeactProc, does not reactivate */
   Update ();
 #endif
-  rsult = DoReadAnythingLoop (NULL, filename, filename, FALSE, FALSE, FALSE);
+  rsult = DoReadAnythingLoop (NULL, filename, filename, FALSE, FALSE, FALSE, FALSE, FALSE);
   if (! rsult) {
+#ifndef WIN16
+    if (BiostrucAvail () && OpenMimeFileWithDeletion (filename, FALSE)) {
+      www_cn3d = Cn3DWin_Entrez(NULL, useEntrez);
+      Show (www_cn3d);
+      Select (www_cn3d);
+    } else {
+      Show (startupForm);
+      Select (startupForm);
+    }
+#else
     Show (startupForm);
     Select (startupForm);
+#endif
   }
 #ifdef OS_MAC
   /* the Web browsers on other platforms get upset if you delete the file, */
@@ -2245,13 +2284,13 @@ extern Boolean LIBCALLBACK SequinOpenMimeFile (CharPtr filename)
 extern Boolean LIBCALLBACK SequinOpenResultFile (CharPtr filename)
 
 {
-  return DoReadAnythingLoop (NULL, filename, NULL, FALSE, FALSE, FALSE);
+  return DoReadAnythingLoop (NULL, filename, NULL, FALSE, FALSE, FALSE, FALSE, FALSE);
 }
 
 extern Boolean LIBCALLBACK SequinHandleNetResults (CharPtr filename)
 
 {
-  return DoReadAnythingLoop (NULL, filename, NULL, FALSE, FALSE, TRUE);
+  return DoReadAnythingLoop (NULL, filename, NULL, FALSE, FALSE, TRUE, TRUE, TRUE);
 }
 
 #ifdef WIN_MAC
@@ -2349,18 +2388,17 @@ static void EnableEditAlignItem (BaseFormPtr bfp)
         (sel->itemtype == OBJ_SEQALIGN || sel->itemtype == OBJ_SEQHIST_ALIGN)) {
       Enable (editalign);
       Enable (editupwthaln);
-    } else if (sel == NULL) {
-      /* sep = GetTopSeqEntryForEntityID (bfp->input_entityID); */
+    } else /* if (sel == NULL) */ {
       if (FindSeqAlignInSeqEntry (sep, OBJ_SEQALIGN) != NULL) {
         Enable (editalign);
       } else {
         Disable (editalign);
       }
       Disable (editupwthaln);
-    } else {
+    } /* else {
       Disable (editalign);
       Disable (editupwthaln);
-    }
+    } */
   } else {
     Disable (editalign);
     Disable (editupwthaln);
@@ -2377,34 +2415,58 @@ static void EnableEditSeqAlignAndSubItems (BaseFormPtr bfp)
 
 {
   BioseqPtr      bsp;
+  BioseqSetPtr   bssp;
   IteM           editseq;
   IteM           editsub;
   MenU           editupd;
+  MenU           editadd;
+  Int2           mssgadd;
   Int2           mssgseq;
   Int2           mssgsub;
   Int2           mssgupd;
   ObjMgrDataPtr  omdp;
+  SeqEntryPtr    sep;
 
   if (bfp == NULL && bfp->input_entityID != 0) return;
   mssgseq = RegisterFormMenuItemName ("SequinEditSequenceItem");
   mssgsub = RegisterFormMenuItemName ("SequinEditSubmitterItem");
   mssgupd = RegisterFormMenuItemName ("SequinUpdateSeqSubmenu");
+  mssgadd = RegisterFormMenuItemName ("SequinAddSeqSubmenu");
   editseq = FindFormMenuItem (bfp, mssgseq);
   editsub = FindFormMenuItem (bfp, mssgsub);
   editupd = (MenU) FindFormMenuItem (bfp, mssgupd);
+  editadd = (MenU) FindFormMenuItem (bfp, mssgadd);
   bsp =  GetBioseqGivenIDs (bfp->input_entityID, bfp->input_itemID, bfp->input_itemtype);
   if (bsp != NULL) {
     Enable (editseq);
     Enable (editupd);
+    sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+    if (sep != NULL && IS_Bioseq_set (sep)) {
+      bssp = (BioseqSetPtr) sep->data.ptrvalue;
+      if (bssp != NULL && (bssp->_class == 7 || (bssp->_class >= 13 && bssp->_class <= 15))) {
+        Enable (editadd);
+      } else {
+        Disable (editadd);
+      }
+    } else {
+      Disable (editadd);
+    }
   } else {
     Disable (editseq);
     Disable (editupd);
+    Disable (editadd);
   }
   omdp = ObjMgrGetData (bfp->input_entityID);
   if (omdp != NULL && omdp->datatype == OBJ_SEQSUB) {
     Enable (editsub);
+#ifdef WIN_MAC
+    Enable (prepareItem);
+#endif
   } else {
     Disable (editsub);
+#ifdef WIN_MAC
+    Disable (prepareItem);
+#endif
   }
   EnableEditAlignItem (bfp);
 }
@@ -2499,6 +2561,11 @@ static void DocumentSummaryActivateProc (WindoW w)
   docSumUp = TRUE;
   currentFormDataPtr = (VoidPtr) GetObjectExtra (w);
   initialFormsActive = FALSE;
+  if (UsingDelayedNeighbor ((ForM) w)) {
+    SafeSetValue (neighborChoice, 2);
+  } else {
+    SafeSetValue (neighborChoice, 1);
+  }
   RepeatProcOnHandles (Enable,
                    (HANDLE) saveAsItem,
                    (HANDLE) closeItem,
@@ -2507,6 +2574,7 @@ static void DocumentSummaryActivateProc (WindoW w)
                    (HANDLE) printItem,
                    (HANDLE) copyItem,
                    (HANDLE) preferencesItem,
+                   (HANDLE) neighborChoice,
                    (HANDLE) docsumfontItem,
                    (HANDLE) analysisMenu,
                    NULL);
@@ -2690,6 +2758,7 @@ static void MacDeactProc (WindoW w)
   SafeSetTitle (importItem, "Import...");
   SafeSetTitle (exportItem, "Export...");
   SafeSetValue (queryChoice, 0);
+  SafeSetValue (neighborChoice, 0);
   RepeatProcOnHandles (Disable,
                    (HANDLE) saveItem,
                    (HANDLE) saveAsItem,
@@ -2717,6 +2786,7 @@ static void MacDeactProc (WindoW w)
                    (HANDLE) editseqsubitem,
                    (HANDLE) edithistoryitem,
                    (HANDLE) updateSeqMenu,
+                   (HANDLE) addSeqMenu,
                    (HANDLE) updalignitem,
                    NULL);
   Disable (vectorScreenItem);
@@ -2725,6 +2795,7 @@ static void MacDeactProc (WindoW w)
   Disable (docsumfontItem);
   Disable (queryChoice);
   Disable (clearUnusedItem);
+  Disable (neighborChoice);
   Disable (legendItem);
   Disable (duplicateItem);
   Disable (printItem);
@@ -3445,6 +3516,13 @@ static void ConfigCancelled (void)
   Message (MSG_OK, "No changes to the network configuration have been made");
 }
 
+static void ConfigTurnedOff (void)
+
+{
+  SetAppParam ("SEQUIN", "SETTINGS", "PUBLICNETWORKSEQUIN", "FALSE");
+  Message (MSG_OK, "Setting will take affect when you restart Sequin");
+}
+
 typedef struct prefsform {
   FORM_MESSAGE_BLOCK
   DialoG             prefs;
@@ -3553,30 +3631,21 @@ static void PreferencesProc (IteM i)
 void NetConfigureProc (IteM i)
 
 {
-  MsgAnswer  ans;
-  Char       str [32];
+  Boolean  netCurrentlyOn = FALSE;
+  Char     str [32];
 
   if (GetAppParam ("SEQUIN", "SETTINGS", "PUBLICNETWORKSEQUIN", NULL, str, sizeof (str))) {
     if (StringICmp (str, "TRUE") == 0) {
-      ans = Message (MSG_YN, "Do you wish to disable the network usage?");
-      if (ans == ANS_YES) {
-        SetAppParam ("SEQUIN", "SETTINGS", "PUBLICNETWORKSEQUIN", "FALSE");
-        Message (MSG_OK, "Setting will take affect when you restart Sequin");
-      }
-      return;
+      netCurrentlyOn = TRUE;
     }
   }
-  ans = Message (MSG_YN, "Do you wish to enable the network usage?");
-  if (ans == ANS_NO) return;
-  ans = Message (MSG_YN, "Do you wish to run the configuration program?");
-  if (ans == ANS_YES) {
-    SendHelpScrollMessage (helpForm, "Misc Menu", "Net Configure");
-    ShowNetConfigForm (ConfigFormActivated, ConfigFormMessage,
-                       ConfigAccepted, ConfigCancelled);
-  } else {
-    SetAppParam ("SEQUIN", "SETTINGS", "PUBLICNETWORKSEQUIN", "TRUE");
-    Message (MSG_OK, "Setting will take affect when you restart Sequin");
+  if (useEntrez) {
+    netCurrentlyOn = TRUE;
   }
+  SendHelpScrollMessage (helpForm, "Misc Menu", "Net Configure");
+  ShowNetConfigForm (ConfigFormActivated, ConfigFormMessage,
+                     ConfigAccepted, ConfigCancelled,
+                     ConfigTurnedOff, netCurrentlyOn);
 }
 
 /*
@@ -3901,6 +3970,228 @@ static void DoUpdatesSeq (IteM i)
   Updates (sep, source_sep);
 }
 
+static void CommonAddSeq (IteM i, Int2 type)
+
+{
+  EnumFieldAssocPtr  ap;
+  BaseFormPtr        bfp;
+  BioSourcePtr       biop = NULL;
+  BioseqPtr          bsp;
+  BioseqSetPtr       bssp;
+  Pointer            dataptr;
+  Uint2              datatype;
+  FILE               *fp;
+  MolInfoPtr         mip;
+  MolInfoPtr         molinf = NULL;
+  OrgRefPtr          orp;
+  SeqEntryPtr        nuc;
+  Char               path [PATH_MAX];
+  CharPtr            ptr;
+  SeqEntryPtr        sep;
+  BioSourcePtr       src = NULL;
+  Char               str [128];
+  CharPtr            tax = NULL;
+  CharPtr            title = NULL;
+  SeqEntryPtr        top;
+  ValNodePtr         vnp;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+  top = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (top == NULL) return;
+  if (type == 1 || type == 2) {
+    if (! GetInputFileName (path, sizeof (path),"","TEXT")) return;
+    fp = FileOpen (path, "r");
+    if (fp == NULL) return;
+    if (IS_Bioseq_set (top)) {
+      bssp = (BioseqSetPtr) top->data.ptrvalue;
+      if (bssp != NULL && bssp->_class != BioseqseqSet_class_phy_set) {
+        sep = bssp->seq_set;
+        vnp = SeqEntryGetSeqDescr (top, Seq_descr_source, NULL);
+        if (vnp != NULL) {
+          src = (BioSourcePtr) vnp->data.ptrvalue;
+          if (src != NULL) {
+            orp = biop->org;
+            if (orp != NULL) {
+              tax = orp->taxname;
+            }
+          }
+        }
+      }
+    }
+    nuc = FindNucSeqEntry (top);
+    vnp = SeqEntryGetSeqDescr (nuc, Seq_descr_molinfo, NULL);
+    if (vnp != NULL) {
+      molinf = (MolInfoPtr) vnp->data.ptrvalue;
+    }
+    while ((dataptr = ReadAsnFastaOrFlatFile (fp, &datatype, NULL, FALSE, FALSE, TRUE, FALSE)) != NULL) {
+      if (datatype == OBJ_BIOSEQ || datatype == OBJ_BIOSEQSET) {
+        bsp = NULL;
+        bssp = NULL;
+        sep = SeqMgrGetSeqEntryForData (dataptr);
+        if (sep == NULL) {
+          sep = SeqEntryNew ();
+          if (datatype == OBJ_BIOSEQ) {
+            bsp = (BioseqPtr) dataptr;
+            sep->choice = 1;
+            sep->data.ptrvalue = bsp;
+            SeqMgrSeqEntry (SM_BIOSEQ, (Pointer) bsp, sep);
+          } else if (datatype == OBJ_BIOSEQSET) {
+            bssp = (BioseqSetPtr) dataptr;
+            sep->choice = 2;
+            sep->data.ptrvalue = bssp;
+            SeqMgrSeqEntry (SM_BIOSEQSET, (Pointer) bssp, sep);
+          } else {
+            sep = SeqEntryFree (sep);
+          }
+        }
+        if (sep != NULL) {
+          AddSeqEntryToSeqEntry (top, sep, TRUE);
+          title = SeqEntryGetTitle (sep);
+          vnp = SeqEntryGetSeqDescr (sep, Seq_descr_source, NULL);
+          if (vnp == NULL || title != NULL) {
+            ptr = StringStr (title, "[org=");
+            StringNCpy_0 (str, ptr + 5, sizeof (str));
+            ptr = StringChr (str, ']');
+            if (ptr != NULL) {
+              *ptr = '\0';
+              biop = BioSourceNew ();
+              if (biop != NULL) {
+                orp = OrgRefNew ();
+                biop->org = orp;
+                if (orp != NULL) {
+                  orp->taxname = StringSave (str);
+                }
+                vnp = CreateNewDescriptor (sep, Seq_descr_source);
+                if (vnp != NULL) {
+                  vnp->data.ptrvalue = (Pointer) biop;
+                }
+              }
+            }
+          }
+          if (vnp == NULL && tax != NULL) {
+            biop = BioSourceNew ();
+            if (biop != NULL) {
+              orp = OrgRefNew ();
+              biop->org = orp;
+              if (orp != NULL) {
+                orp->taxname = StringSave (tax);
+              }
+              vnp = CreateNewDescriptor (sep, Seq_descr_source);
+              if (vnp != NULL) {
+                vnp->data.ptrvalue = (Pointer) biop;
+              }
+            }
+          }
+          vnp = SeqEntryGetSeqDescr (sep, Seq_descr_source, NULL);
+          if (vnp != NULL) {
+            biop = (BioSourcePtr) vnp->data.ptrvalue;
+          }
+          if (biop != NULL && title != NULL) {
+            for (ap = orgmod_subtype_alist; ap->name != NULL; ap++) {
+              MakeSearchStringFromAlist (str, ap->name);
+              AddToOrgMod (biop, title, str, (Int2) ap->value);
+              ExciseString (title, str, "]");
+            }
+            for (ap = subsource_subtype_alist; ap->name != NULL; ap++) {
+              MakeSearchStringFromAlist (str, ap->name);
+              AddToSubSource (biop, title, str, (Int2) ap->value);
+              ExciseString (title, str, "]");
+            }
+            AddToOrgMod (biop, title, "[note=", 255);
+            ExciseString (title, "[note=", "]");
+            AddToSubSource (biop, title, "[subsource=", 255);
+            ExciseString (title, "[subsource=", "]");
+            ExciseString (title, "[org=", "]");
+            if (bsp != NULL) {
+              ptr = StringStr (title, "[molecule=");
+              if (ptr != NULL) {
+                StringNCpy_0 (str, ptr + 10, sizeof (str));
+                ptr = StringChr (str, ']');
+                if (ptr != NULL) {
+                  *ptr = '\0';
+                  if (StringCmp (str, "dna") == 0) {
+                    bsp->mol = Seq_mol_dna;
+                  } else if (StringCmp (str, "rna") == 0) {
+                    bsp->mol = Seq_mol_rna;
+                  }
+                }
+              }
+            }
+            ptr = StringStr (title, "[location=");
+            if (ptr != NULL) {
+              StringNCpy_0 (str, ptr + 10, sizeof (str));
+              ptr = StringChr (str, ']');
+              if (ptr != NULL) {
+                *ptr = '\0';
+                if (StringICmp (str, "Mitochondrial") == 0) { /* alternative spelling */
+                  biop->genome = 5;
+                }
+                for (ap = biosource_genome_simple_alist; ap->name != NULL; ap++) {
+                  if (StringICmp (str, ap->name) == 0) {
+                    biop->genome = (Uint1) ap->value;
+                  }
+                }
+              }
+            }
+          }
+          ExciseString (title, "[molecule=", "]");
+          ExciseString (title, "[location=", "]");
+          TrimSpacesAroundString (title);
+          if (title != NULL && StringHasNoText (title)) {
+            vnp = NULL;
+            if (IS_Bioseq (sep)) {
+              bsp = (BioseqPtr) sep->data.ptrvalue;
+              vnp = ValNodeExtract (&(bsp->descr), Seq_descr_title);
+            } else if (IS_Bioseq_set (sep)) {
+              bssp = (BioseqSetPtr) sep->data.ptrvalue;
+              vnp = ValNodeExtract (&(bssp->descr), Seq_descr_title);
+            }
+            if (vnp != NULL && StringHasNoText ((CharPtr) vnp->data.ptrvalue)) {
+              vnp = ValNodeFreeData (vnp);
+            }
+          }
+          sep = FindNucSeqEntry (sep);
+          vnp = SeqEntryGetSeqDescr (sep, Seq_descr_molinfo, NULL);
+          if (vnp == NULL && molinf != NULL) {
+            mip = MolInfoNew ();
+            if (mip != NULL) {
+              vnp = CreateNewDescriptor (sep, Seq_descr_molinfo);
+              if (vnp != NULL) {
+                vnp->data.ptrvalue = (Pointer) mip;
+                mip->biomol = molinf->biomol;
+                mip->tech = molinf->tech;
+                mip->completeness = molinf->completeness;
+              }
+            }
+          }
+        }
+      }
+    }
+    FileClose (fp);
+    ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+    ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+    Update ();
+  } else {
+    Message (MSG_OK, "Not yet implemented");
+  }
+}
+
+static void AddSeqWithFASTA (IteM i)
+
+{
+  CommonAddSeq (i, 1);
+}
+
+static void AddSeqWithRec (IteM i)
+
+{
+  CommonAddSeq (i, 2);
+}
 
 /*#ifdef ALLOW_DOWNLOAD*/
 extern BioseqPtr  updateTargetBspKludge = NULL;
@@ -3972,16 +4263,18 @@ static void MedlineViewFormMenus (WindoW w)
 static void BioseqViewFormMenus (WindoW w)
 
 {
-  BaseFormPtr  bfp;
-  IteM         i;
-  MenU         m;
-  Int2         mssgalign;
-  Int2         mssgdup;
-  Int2         mssgseq;
-  Int2         mssgsub;
-  Int2         mssgupd;
-  Int2         mssgupwthaln;
-  MenU         sub;
+  BaseFormPtr    bfp;
+  IteM           i;
+  MenU           m;
+  Int2           mssgadd;
+  Int2           mssgalign;
+  Int2           mssgdup;
+  Int2           mssgseq;
+  Int2           mssgsub;
+  Int2           mssgupd;
+  Int2           mssgupwthaln;
+  ObjMgrDataPtr  omdp;
+  MenU           sub;
 
   bfp = (BaseFormPtr) GetObjectExtra (w);
   if (bfp != NULL) {
@@ -4005,20 +4298,6 @@ static void BioseqViewFormMenus (WindoW w)
     }
 /*#endif*/
     AddAboutAndHelpMenuItems (m);
-    /*
-    sub = SubMenu (m, "Open");
-    if (indexerVersion) {
-      i = CommandItem (sub, "FASTA Nucleotide Direct to Sequence Editor", FastaNucDirectToSeqEdProc);
-      SetObjectExtra (i, bfp, NULL);
-      SeparatorItem (sub);
-    }
-    i = CommandItem (sub, "ASN.1 Text File...", ReadNewAsnProc);
-    SetObjectExtra (i, bfp, NULL);
-    i = CommandItem (sub, "FASTA Nucleotide File", ReadFastaNucProc);
-    SetObjectExtra (i, bfp, NULL);
-    i = CommandItem (sub, "Nucleotide Flat File", ReadSeqNucProc);
-    SetObjectExtra (i, bfp, NULL);
-    */
     i = CommandItem (m, "Open...", ReadNewAsnProc);
     SetObjectExtra (i, bfp, NULL);
     if (indexerVersion) {
@@ -4043,6 +4322,10 @@ static void BioseqViewFormMenus (WindoW w)
       SeparatorItem (m);
       i = CommandItem (m, "Prepare Submission...", PrepareSeqSubmitProc);
       SetObjectExtra (i, bfp, NULL);
+      omdp = ObjMgrGetData (bfp->input_entityID);
+      if (omdp != NULL && omdp->datatype != OBJ_SEQSUB) {
+        Disable (i);
+      }
     }
 /*#ifdef INTERNAL_NCBI_SEQUIN*/
     if (indexerVersion) {
@@ -4111,6 +4394,7 @@ static void BioseqViewFormMenus (WindoW w)
     mssgalign = RegisterFormMenuItemName ("SequinEditAlignmentItem");
     mssgsub = RegisterFormMenuItemName ("SequinEditSubmitterItem");
     mssgupd = RegisterFormMenuItemName ("SequinUpdateSeqSubmenu");
+    mssgadd = RegisterFormMenuItemName ("SequinAddSeqSubmenu");
     FormCommandItem (m, "Edit Sequence...", bfp, mssgseq);
     FormCommandItem (m, "Edit Alignment...", bfp, mssgalign);
     FormCommandItem (m, "Edit Submitter Info...", bfp, mssgsub);
@@ -4147,6 +4431,13 @@ static void BioseqViewFormMenus (WindoW w)
       i = CommandItem (sub, "FASTA Set", DoUpdatesSeq);
       SetObjectExtra (i, bfp, NULL);
     }
+    SeparatorItem (m);
+    sub = SubMenu (m, "Add Sequence");
+    SetFormMenuItem (bfp, mssgadd, (IteM) sub);
+    i = CommandItem (sub, "Add FASTA File...", AddSeqWithFASTA);
+    SetObjectExtra (i, bfp, NULL);
+    i = CommandItem (sub, "Add Sequence Record...", AddSeqWithRec);
+    SetObjectExtra (i, bfp, NULL);
 
     m = PulldownMenu (w, "Search/ R");
     i = CommandItem (m, "Find ASN.1.../ F", FindStringProc);
@@ -4297,6 +4588,7 @@ static void DocSumFormMenus (WindoW w)
 
 {
   BaseFormPtr  bfp;
+  ChoicE       c;
   IteM         i;
   MenU         m;
   MenU         sub;
@@ -4336,6 +4628,10 @@ static void DocSumFormMenus (WindoW w)
     i = CommandItem (sub, "Display Font...", DisplayFontChangeProc);
     SetObjectExtra (i, bfp, NULL);
     */
+    SeparatorItem (m);
+    sub = SubMenu (m, "Neighbor Policy");
+    c = CreateNeighborDelayChoice (sub, bfp);
+    SetValue (c, 2); /* UseDelayedNeighbor */
     SeparatorItem (m);
     LoadDocsumOptionsMenu (m);
     seqviewprocs.alignWithChecked = entrezglobals.alignWithChecked;
@@ -4803,7 +5099,9 @@ static void SequinSeqViewFormMessage (ForM f, Int2 mssg)
   Int2          mssgsub;
   Int2          mssgupwthaln;
   SeqEntryPtr   oldsep;
-  SeqAlignPtr   salp;
+/******** COLOMBE
+  SeqAlignPtr   salp; ********COLOMBE END*/
+  SeqAnnotPtr   sap;
   SelStructPtr  sel;
   SeqEntryPtr   sep;
 
@@ -4909,8 +5207,9 @@ static void SequinSeqViewFormMessage (ForM f, Int2 mssg)
                               sel->itemtype, 0, 0, sel->itemtype, 0);
             ArrowCursor ();
             Update ();
-          } else if (sel == NULL) {
+          } else /* if (sel == NULL) */ {
             sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+/******** COLOMBE
             salp = FindSeqAlignInSeqEntry (sep, OBJ_SEQALIGN);
             if (salp != NULL) {
               itemID = GetItemIDGivenPointer (bfp->input_entityID, OBJ_SEQALIGN, (Pointer) salp);
@@ -4919,6 +5218,18 @@ static void SequinSeqViewFormMessage (ForM f, Int2 mssg)
                 Update ();
                 GatherProcLaunch (OMPROC_EDIT, FALSE, bfp->input_entityID, itemID,
                                   OBJ_SEQALIGN, 0, 0, OBJ_SEQALIGN, 0);
+                ArrowCursor ();
+                Update ();
+              }
+            }
+COLOMBE END *******************/
+            sap  = (SeqAnnotPtr)FindSeqAlignInSeqEntry (sep, OBJ_SEQANNOT);
+            if (sap) {
+              itemID = GetItemIDGivenPointer (bfp->input_entityID, OBJ_SEQANNOT, (Pointer)sap);
+              if (itemID != 0) {
+                WatchCursor ();
+                Update ();
+                GatherProcLaunch (OMPROC_EDIT, FALSE, bfp->input_entityID, itemID, OBJ_SEQANNOT, 0, 0, OBJ_SEQANNOT, 0);
                 ArrowCursor ();
                 Update ();
               }
@@ -4966,6 +5277,50 @@ static void SequinSeqEditFormMessage (ForM f, Int2 mssg)
         break;
     }
   }
+}
+
+/* from salfiles.c */
+static SeqEntryPtr LIBCALLBACK SeqEdDownload (CharPtr program, CharPtr accession,
+                                              Int4 uid, Boolean is_na, BoolPtr is_new)
+
+{
+  BioseqPtr    bsp;
+  LinkSetPtr   lsp;
+  SeqEntryPtr  sep = NULL;
+  Int2         seqtype;
+  SeqId        sid;
+  Char         str [64];
+
+  EntrezInit (program, TRUE, NULL);
+  if (! StringHasNoText (accession)) {
+    if (is_na) {
+      seqtype = TYP_NT;
+    } else {
+      seqtype = TYP_AA;
+    }
+    sprintf (str, "\"%s\" [ACCN]", accession);
+    lsp = EntrezTLEvalString (str, seqtype, -1, NULL, NULL);
+    if (lsp != NULL) {
+      uid = lsp->uids [0];
+    }
+    LinkSetFree (lsp);
+  }
+  if (uid > 0) {
+    sid.choice = SEQID_GI;
+    sid.data.intvalue = uid;
+    sid.next = NULL;
+    bsp = BioseqLockById (&sid);
+    if (bsp != NULL) {
+      sep = SeqMgrGetSeqEntryForData (bsp);
+    } else {
+      sep = EntrezSeqEntryGet (uid, -2);
+      if (is_new != NULL) {
+        *is_new = TRUE;
+      }
+    }
+  }
+  EntrezFini ();
+  return sep;
 }
 
 static void SequinStdEditorFormMessage (ForM f, Int2 mssg)
@@ -5030,6 +5385,9 @@ static void MakeDocSumForm (void)
   docSumForm = CreateDocSumForm (-10, -90, "Document",
                                  DocumentSummaryActivateProc,
                                  DocumentSummaryFormMessage);
+  /* if (indexerVersion) { */
+  UseDelayedNeighbor (docSumForm, TRUE);
+  /* } */
 }
 
 void EntrezQueryProc (IteM i)
@@ -5065,6 +5423,16 @@ static void DoRetrieveProject (ForM f, Pointer proj)
     MakeDocSumForm ();
   }
   PointerToForm (docSumForm, proj);
+}
+
+static void DoRetrieveSimple (ForM f, ValNodePtr simpleSeqs)
+
+{
+  if (useEntrez) {
+    MakeTermListForm ();
+    MakeDocSumForm ();
+  }
+  RetrieveSimpleSeqs (docSumForm, simpleSeqs);
 }
 
 static void DoLoadNamedUidList (ForM f, CharPtr term, Int2 num, Int4Ptr uids, Int2 db)
@@ -5373,7 +5741,7 @@ static void SetupDesktop (void)
   Char        proclabel [64];
   Char        procname [64];
   Boolean     readOnlyDbTags;
-  Char        str [32];
+  Char        str [PATH_MAX];
   Uint2       subtype;
   Int2        val;
   Boolean     validateExons;
@@ -5460,6 +5828,10 @@ static void SetupDesktop (void)
   seqedprocs.extended_dist_menu = FALSE;
   seqedprocs.extended_tree_menu = FALSE;
 
+  if (useEntrez) {
+    seqedprocs.download = SeqEdDownload;
+  }
+
   seqedprocs.col1r=seqedprocs.col1g=seqedprocs.col1b=0;
   seqedprocs.col2r=seqedprocs.col2g=seqedprocs.col2b=0;
   seqedprocs.col3r=seqedprocs.col3g=seqedprocs.col3b=0;
@@ -5537,6 +5909,10 @@ static void SetupDesktop (void)
 
   if (readOnlyDbTags) {
     SetAppProperty ("ReadOnlyDbTags", (void *) 1024);
+  }
+
+  if (GetSequinAppParam ("SETTINGS", "BROWSER", NULL, str, sizeof (str))) {
+    SetAppProperty ("MedviewBrowserPath", (void *) StringSave (str));
   }
 
   if (GetSequinAppParam ("PREFERENCES", "MINPIXELWIDTH", NULL, str, sizeof (str))) {
@@ -5816,6 +6192,7 @@ static void SetupDesktop (void)
   MemSet ((Pointer) (&entrezglobals), 0, sizeof (EntrezGlobals));
   entrezglobals.retrieveDocsProc = DoRetrieveDocuments;
   entrezglobals.retrieveProjectProc = DoRetrieveProject;
+  entrezglobals.retrieveSimpleProc = DoRetrieveSimple;
   entrezglobals.loadNamedUidProc = DoLoadNamedUidList;
   entrezglobals.launchViewerProc = DoLaunchRecordViewer;
 #ifndef WIN_MAC
@@ -6057,6 +6434,7 @@ static void SetupMacMenus (void)
 
 {
   MenU  m;
+  Int2  mssgadd;
   Int2  mssgalign;
   Int2  mssgdup;
   Int2  mssgseq;
@@ -6070,12 +6448,6 @@ static void SetupMacMenus (void)
   DeskAccGroup (m);
 
   m = PulldownMenu (NULL, "File");
-  /*
-  openMenu = SubMenu (m, "Open");
-  CommandItem (openMenu, "ASN.1 Text File.../O", MacReadNewAsnProc);
-  CommandItem (openMenu, "FASTA Nucleotide File", ReadFastaNucProc);
-  CommandItem (openMenu, "Nucleotide Flat File", ReadSeqNucProc);
-  */
   openItem = CommandItem (m, "Open.../O", MacReadNewAsnProc);
   closeItem = FormCommandItem (m, "Close", NULL, VIB_MSG_CLOSE);
   SeparatorItem (m);
@@ -6122,6 +6494,7 @@ static void SetupMacMenus (void)
   mssgalign = RegisterFormMenuItemName ("SequinEditAlignmentItem");
   mssgsub = RegisterFormMenuItemName ("SequinEditSubmitterItem");
   mssgupd = RegisterFormMenuItemName ("SequinUpdateSeqSubmenu");
+  mssgadd = RegisterFormMenuItemName ("SequinAddSeqSubmenu");
   editsequenceitem = FormCommandItem (m, "Edit Sequence...", NULL, mssgseq);
   editseqalignitem = FormCommandItem (m, "Edit Alignment...", NULL, mssgalign);
   editseqsubitem = FormCommandItem (m, "Edit Submitter Info...", NULL, mssgsub);
@@ -6149,6 +6522,11 @@ static void SetupMacMenus (void)
     SeparatorItem (updateSeqMenu);
     CommandItem (updateSeqMenu, "FASTA Set", DoUpdatesSeq);
   }
+  SeparatorItem (m);
+  addSeqMenu = SubMenu (m, "Add Sequence");
+  SetFormMenuItem (NULL, mssgadd, (IteM) addSeqMenu);
+  CommandItem (addSeqMenu, "Add FASTA File...", AddSeqWithFASTA);
+  CommandItem (addSeqMenu, "Add Sequence Record...", AddSeqWithRec);
 
   m = PulldownMenu (NULL, "Search");
   findItem = CommandItem (m, "Find ASN.1.../F", FindStringProc);
@@ -6190,6 +6568,9 @@ static void SetupMacMenus (void)
   sub = SubMenu (m, "Query Style");
   queryChoice = CreateQueryTypeChoice (sub, NULL);
   clearUnusedItem = CreateClearUnusedItem (m, NULL);
+  SeparatorItem (m);
+  sub = SubMenu (m, "Neighbor Policy");
+  neighborChoice = CreateNeighborDelayChoice (sub, NULL);
   SeparatorItem (m);
   LoadDocsumOptionsMenu (m);
   seqviewprocs.alignWithChecked = entrezglobals.alignWithChecked;
@@ -7231,7 +7612,6 @@ Int2 Main (void)
   }}
 #endif
 
-#ifdef WIN_MAC
   if (GetAppParam ("SEQUIN", "SETTINGS", "STDINMODE", NULL, str, sizeof (str))) {
     if (StringICmp (str, "TRUE") == 0) {
       stdinMode = TRUE;
@@ -7242,7 +7622,6 @@ Int2 Main (void)
       nohelpMode = TRUE;
     }
   }
-#endif
 
   WatchCursor ();
 
@@ -7274,11 +7653,13 @@ Int2 Main (void)
     Message (MSG_FATAL, "PrintTemplateSetLoad asn2ff.prt failed");
     return 0;
   }
+  /*
   if (! PrintTemplateSetLoad ("makerpt.prt")) {
     ArrowCursor ();
     Message (MSG_FATAL, "PrintTemplateSetLoad makerpt.prt failed");
     return 0;
   }
+  */
 
   SetTitle (w, "Loading sequence alphabet converter");
   if (! SeqCodeSetLoad ()) {
@@ -7320,7 +7701,7 @@ Int2 Main (void)
   if (OpenMMDBAPI ((POWER_VIEW ^ FETCH_ENTREZ), NULL)) {
     prgdDict = GetPRGDDictionary ();
     if (BiostrucAvail ()) {
-      Cn3DWin_Entrez();
+      Cn3DWin_Entrez(NULL, useEntrez);
     }
   }
 #endif
@@ -7621,13 +8002,14 @@ Int2 Main (void)
     }
   }
 
-  CleanupSequin ();
-
   Remove (startupForm);
   Remove (initSubmitForm);
   Remove (formatForm);
   Remove (helpForm);
   ArrowCursor ();
+  Update ();
+
+  CleanupSequin ();
 
   return 0;
 }

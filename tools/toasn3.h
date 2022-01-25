@@ -163,5 +163,19 @@ void GetRidOfEmptyFeatsDescCallback (SeqEntryPtr sep, Pointer mydata, Int4 index
 
 Uint2 move_cds PROTO((SeqEntryPtr sep));
 
+/* more functions moved from Sequin, placed in toporg.c */
+
+extern void CleanUpPseudoProducts (Uint2 entityID, SeqEntryPtr sep);
+extern void CleanupGenbankCallback (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent);
+extern void MergeAdjacentAnnotsCallback (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent);
+extern void CleanupEmptyFeatCallback (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent);
+extern void RemoveBioSourceOnPopSet (SeqEntryPtr sep, OrgRefPtr master);
+extern Boolean NoBiosourceOrTaxonId (SeqEntryPtr sep);
+extern void ExtendGeneFeatIfOnMRNA (Uint2 entityID, SeqEntryPtr sep);
+
+/* SeriousSeqEntryCleanup combines many of the above cleanups */
+
+extern void SeriousSeqEntryCleanup (SeqEntryPtr sep, SeqEntryFunc taxfun, SeqEntryFunc taxmerge);
+
 #endif
 

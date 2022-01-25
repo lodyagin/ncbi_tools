@@ -57,7 +57,7 @@ typedef struct FMergeID {
 
 Uint4Ptr GetIndexFromFasta(FILE *fd, Uint4Ptr MaxIndexCount);
 Uint4Ptr GetIndexFromIndex(FILE *fd, Uint4Ptr MaxIndexCount);
-static int intcompare(VoidPtr i, VoidPtr j);
+
 static  FMergeIDPtr NextFastaFromFasta(FILE *fd);
 Boolean IfGiInIndex(Uint4Ptr index, Uint4 MaxIndexCount, Uint4 gi);
 Int4 MergeFMergeID(FMergeIDPtr fasta, 
@@ -102,6 +102,18 @@ Args dump_args[NUMARG] = {
 #define INDEX_MODE  1
 #define UPDATE_MODE 2
 #define FULL_MODE   3
+
+/* ------------------------------------------------------------------
+                This is handler for HeapSort function
+   ------------------------------------------------------------------*/
+static int LIBCALLBACK intcompare(VoidPtr i, VoidPtr j)
+{
+  if (*(int *)i > *(int *)j)
+    return (1);
+  if (*(int *)i < *(int *)j)
+    return (-1);
+  return (0);
+}
 
 Int2 Main(void) 
 {
@@ -432,14 +444,3 @@ void FMergeIDFree(FMergeIDPtr fasta)
   MemFree(fasta);
 }
 
-/* ------------------------------------------------------------------
-                This is handler for HeapSort function
-   ------------------------------------------------------------------*/
-static int LIBCALLBACK intcompare(VoidPtr i, VoidPtr j)
-{
-  if (*(int *)i > *(int *)j)
-    return (1);
-  if (*(int *)i < *(int *)j)
-    return (-1);
-  return (0);
-}

@@ -29,13 +29,28 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.41 $
+* $Revision: 6.45 $
 *
 * File Description:  files that go with "asn2ff"
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: asn2ff1.c,v $
+* Revision 6.45  1998/11/10 15:14:00  bazhin
+* Macro NUM_OF_ESTIMATES and static array of integers "line_estimate"
+* moved in from "asn2ffg.h".
+*
+* Revision 6.44  1998/11/05 16:12:46  bazhin
+* Added 4th parameter "Boolean show_gi" to SeqEntryToGBFlatNoSeq()
+* function. It will say do or does not print GI number into output
+* flatfile. Same for error messages related to missing GIs.
+*
+* Revision 6.43  1998/10/14 16:47:56  tatiana
+* check for Seq_repr_seg in SeqEntryToFlatEx()
+*
+* Revision 6.42  1998/10/08 15:53:26  tatiana
+* check for NULL added in get_pubs()
+*
 * Revision 6.41  1998/09/28 18:17:12  bazhin
 * Added new function
 * "CharPtr PNTR SeqEntryToStrArray(SeqEntryPtr sep, Uint1 format, Uint1 mode)",
@@ -404,6 +419,24 @@
 #ifdef ENABLE_ENTREZ
 #include <accentr.h>
 #endif
+
+#define NUM_OF_ESTIMATES 20
+
+static Int2 line_estimate[NUM_OF_ESTIMATES] = {
+1, /* 0; Locus, Segment, Base Count, Origin, Feature Header lines */
+1, /* 1; Definition line(s) */
+1, /* 2; Accession line(s) */
+1, /* 3; Keyword line(s) */
+2, /* 4; Source lines */
+6, /* 5; Reference (pub) lines */
+10, /* 6; GBComAndFH */
+11, /* 7; GBComAndXref */
+6, /* 8; Features */
+NUM_SEQ_LINES, /* 9; Sequence lines */
+2, /* 10; EMBL Date lines */
+2, /* 11; EMBL Organism lines */
+4, /* 12; DBSOURCE field */
+};
 
 /* The following corresponds to NUM_SEQ_LINES lines each with 60 
 residues/basepairs */
@@ -1010,8 +1043,8 @@ NLM_EXTERN Boolean SeqEntryToFlatAjp (Asn2ffJobPtr ajp, SeqEntryPtr sep, FILE *f
 /**************************************************************************
  *	Prints out flat file in GenBank format WITHOUT Sequence
  **************************************************************************/
-NLM_EXTERN Boolean SeqEntryToGBFlatNoSeq (SeqEntryPtr sep, 
-                                          FILE *fp, Uint1 mode)
+NLM_EXTERN Boolean SeqEntryToGBFlatNoSeq(SeqEntryPtr sep, FILE *fp,
+                                         Uint1 mode, Boolean show_gi)
 {
     Boolean	  rsult;
     Asn2ffJobPtr  ajp;
@@ -1026,7 +1059,7 @@ NLM_EXTERN Boolean SeqEntryToGBFlatNoSeq (SeqEntryPtr sep,
     	if (bssp != NULL && (bssp->_class == 7 || bssp->_class == 13 ||
                              bssp->_class == 14 || bssp->_class == 15)) {
             for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
-                rsult = SeqEntryToFlat (sep, fp, GENBANK_FMT, mode);
+                rsult = SeqEntryToGBFlatNoSeq(sep, fp, mode, show_gi);
             }
             return rsult;
         }
@@ -1038,6 +1071,7 @@ NLM_EXTERN Boolean SeqEntryToGBFlatNoSeq (SeqEntryPtr sep,
         return FALSE;
     
     ajp->show_seq = FALSE; /* This is the point */
+    ajp->show_gi = show_gi;
     
     rsult = asn2ff_print(ajp);
     MemFree(ajp);
@@ -1061,7 +1095,7 @@ NLM_EXTERN Boolean SeqEntryToGBFlatNoSeq (SeqEntryPtr sep,
 
 NLM_EXTERN Boolean SeqEntryToFlatEx (SeqEntryPtr sep, FILE *fp, Uint1 format, Uint1 mode, SeqIdPtr seqid, Uint1 type)
 {
-	Boolean				rsult, repr = FALSE;
+	Boolean				rsult=FALSE;
 	Asn2ffJobPtr		ajp;
 	StdPrintOptionsPtr	Spop = NULL;
 	BioseqPtr 			bsp;
@@ -1103,10 +1137,7 @@ NLM_EXTERN Boolean SeqEntryToFlatEx (SeqEntryPtr sep, FILE *fp, Uint1 format, Ui
 		ajp->gb_style = FALSE;
 		ajp->id_print = seqid;
 		bsp = BioseqFind(seqid);
-    	if (ISA_na (bsp->mol) && bsp->repr == Seq_repr_seg) {
-    		repr = TRUE;
-    	}
-		if (repr) {
+    	if (bsp->repr == Seq_repr_seg) {
 			if (type == FF_REGULAR) {
 				ajp->gb_style = TRUE;
 				ajp->id_print = NULL;
@@ -1124,7 +1155,7 @@ NLM_EXTERN Boolean SeqEntryToFlatEx (SeqEntryPtr sep, FILE *fp, Uint1 format, Ui
 			}
 			ajp->sep = sep;
 		} else {
-		ajp->sep = SeqMgrGetSeqEntryForData((Pointer)bsp);
+			ajp->sep = SeqMgrGetSeqEntryForData((Pointer)bsp);
 		}
 	} else {
 		ajp->sep = sep;
@@ -1581,7 +1612,7 @@ Boolean get_pubs (GatherContextPtr gcp)
 			if (sfp->data.choice == SEQFEAT_PUB) {
 				slp = sfp->location;
 				bsp = BioseqFindCore(SeqLocId(slp));
-				if (check_whole(sfp, bsp->length)) {
+				if (bsp && check_whole(sfp, bsp->length)) {
 					tmp = ValNodeNew(NULL);
 					tmp->choice = Seq_descr_pub;
 					tmp->data.ptrvalue = (PubdescPtr) sfp->data.value.ptrvalue;

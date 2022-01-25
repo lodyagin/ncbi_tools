@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/31/96
 *
-* $Revision: 6.6 $
+* $Revision: 6.7 $
 *
 * File Description: Main entry point for Cn3d 
 *                   
@@ -37,6 +37,9 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: cn3dmain.h,v $
+* Revision 6.7  1999/01/14 19:07:17  kans
+* network availability is configurable
+*
 * Revision 6.6  1998/08/26 18:28:37  kans
 * fixed -v -fd warnings
 *
@@ -114,7 +117,6 @@
 extern "C" {
 #endif
 
-extern Boolean Cn3D_fEntrezOn;   /* used to keep entrez and objmgr from being restarted */
 extern Viewer3D Cn3D_v3d;  /* the 3d view pane */
 
 extern void LIBCALL Cn3D_EnableFileOps(void);
@@ -125,7 +127,7 @@ extern Boolean LIBCALL readErrors (void);
 extern void LIBCALL Cn3D_SaveActiveCam(void);
 NLM_EXTERN void LIBCALL Cn3D_Redraw(Boolean New); 
 NLM_EXTERN void LIBCALL Cn3D_ResetActiveStrucProc(void);
-extern WindoW LIBCALL Cn3DWin(WndActnProc on_close, MenU *file_menu);
+extern WindoW LIBCALL Cn3DWin(WndActnProc on_close, MenU *file_menu, ItmActnProc netconfig, Boolean usingEntrez);
 
 /*extern void LaunchAlignViewer (SeqAlignPtr salp);*/
 extern Boolean LIBCALL VASTInit (void);

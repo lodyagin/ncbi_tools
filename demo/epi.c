@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 98-01-01
 *
-* $Revision: 6.19 $
+* $Revision: 6.21 $
 *
 * File Description: epi - protein and nucleic acid low complexity
 *
@@ -38,6 +38,12 @@
 * Date       Name        Description of modification
 * --------------------------------------------------------------------------
 * $Log: epi.c,v $
+* Revision 6.21  1998/12/18 16:24:55  kuzio
+* big GIs
+*
+* Revision 6.20  1998/11/16 14:34:11  kuzio
+* flagBoundaryCondition
+*
 * Revision 6.19  1998/09/16 18:19:29  kuzio
 * cvs logging
 *
@@ -67,7 +73,7 @@ typedef struct gather_Bioseq
 
 Args myargs[] =
 {
-  { "protein GI", "0", "0", "4000000", TRUE,
+  { "protein GI", "0", "0", "9000000", TRUE,
     'g', ARG_INT, 0.0, 0, NULL},
   { "FastA file", NULL, NULL, NULL, TRUE,
     'f', ARG_STRING, 0.0, 0, NULL},
@@ -99,7 +105,9 @@ Args myargs[] =
     "FALSE", "FALSE", "TRUE", TRUE,
     'F', ARG_BOOLEAN, 0.0, 0, NULL},
   { "print raw Epi scores", "FALSE", "FALSE", "TRUE", TRUE,
-    'P', ARG_BOOLEAN, 0.0, 0, NULL}
+    'P', ARG_BOOLEAN, 0.0, 0, NULL},
+  { "Filter boundary condition hits only", "FALSE", "FALSE", "TRUE", TRUE,
+    'B', ARG_BOOLEAN, 0.0, 0, NULL}
 };
 
 static Boolean GetProteinBioseq (GatherContextPtr gcp)
@@ -249,9 +257,10 @@ Int2 Main (void)
           for (i = 0; i < gbsp->bsp->length; i++)
             printf ("%8ld %lf\n", (long) (i+1), (double) epip->score[i]);
           exit (0);
-	}
+        }
         slpn = FilterEpiBioseq (epip, gbsp->bsp,
-                                (Boolean) myargs[8].intvalue);
+                                (Boolean) myargs[8].intvalue,
+                                (Boolean) myargs[16].intvalue);
         flagIsAA = ISA_aa (gbsp->bsp->mol);
         if (myargs[10].intvalue == TRUE)
         {
