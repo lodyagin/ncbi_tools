@@ -384,6 +384,11 @@ rpsblast : rpsblast.c $(THREAD_OBJ)
 asn2xml : asn2xml.c $(THREAD_OBJ)
 	$(CC) -o asn2xml $(LDFLAGS) asn2xml.c $(LIB2) $(LIB1) $(OTHERLIBS)
 
+# asn2text
+
+asn2asn : asn2asn.c $(THREAD_OBJ)
+	$(CC) -o asn2asn $(LDFLAGS) asn2asn.c $(LIB2) $(LIB1) $(OTHERLIBS)
+
 # regexp demos
 
 test_regexp : pcretest.c
