@@ -194,7 +194,7 @@ case GNU/Linux:
 		set platform=linux-power
 		breaksw
 	default:
-		if (-d /usr/X11R6/lib64) then
+		if (-d /lib64) then
 			set platform=linux64
 		else
 			set platform=linux
