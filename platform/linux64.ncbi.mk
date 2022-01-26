@@ -15,10 +15,10 @@ NCBI_LIBDIR = /home/coremake/ncbi/lib
 NCBI_ALTLIB = /home/coremake/ncbi/altlib
 #will work only when you have Motif installed!
 NCBI_VIBFLAG = -I/usr/X11R6/include -L/usr/X11R6/lib64 -L/usr/X11R6/lib -DWIN_MOTIF
-NCBI_VIBLIBS = -lXmu -lXm -lXt -lSM -lICE -lXext -lXp -lX11 -ldl
+NCBI_VIBLIBS = -lXmu -lXm -lXt -lSM -lICE -lXext -lX11 -ldl
 #warning! If you have only dynamic version of Motif or Lesstif
 #you should delete -Wl,-Bstatic sentence from the next line:
-NCBI_DISTVIBLIBS = -L/usr/X11R6/lib64 -L/usr/X11R6/lib -lXmu -Wl,-Bstatic -lXm -Wl,-Bdynamic -lXft -lfontconfig -ljpeg -lpng -lXt -lSM -lICE -lXext -lXp -lX11 -ldl
+NCBI_DISTVIBLIBS = -L/usr/X11R6/lib64 -L/usr/X11R6/lib -lXmu -Wl,-Bstatic -lXm -Wl,-Bdynamic -lXft -lfontconfig -ljpeg -lpng -lXt -lSM -lICE -lXext -lX11 -ldl
 NCBI_OTHERLIBS = -lm
 NCBI_RANLIB = ranlib
 # Used by makedis.csh
