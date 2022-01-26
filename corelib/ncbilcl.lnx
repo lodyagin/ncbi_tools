@@ -141,7 +141,7 @@
 #endif
 
 /* good for the EGCS C/C++ compiler on Linux(e.g. putenv(), tempnam() proto) */
-#define _SVID_SOURCE 1
+#define _DEFAULT_SOURCE 1
 #define _GNU_SOURCE 1
 
 /*----------------------------------------------------------------------*/
